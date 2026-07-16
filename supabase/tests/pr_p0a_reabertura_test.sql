@@ -1,22 +1,32 @@
 -- PR-P1-GOV-REABERTURA-P0A — Teste transacional de fn_reabrir_p1_operacional.
 -- Executar SOMENTE apos aplicar as 4 migrations. Roda em BEGIN...ROLLBACK:
---   NADA persiste. Fixture 100% sintetica (UUIDs gerados na transacao).
+--   NADA persiste. Dados de negocio 100% sinteticos; apenas a IDENTIDADE e real.
 -- Santa Rita e referenciada apenas por NOME ('Santa Rita Agro') — nunca por ID.
 --
--- FIXTURE x SCHEMA REAL:
+-- NOMES RUN-UNIQUE: um token aleatorio por execucao (gen_random_uuid) e guardado no
+--   GUC de sessao app.p0a_test_tag ANTES do BEGIN (sobrevive ao ROLLBACK) e embutido
+--   em todos os nomes sinteticos. Os asserts pos-rollback casam exatamente esse token,
+--   sem depender de nomes genericos que eventualmente ja existam.
+--
+-- FIXTURE x SCHEMA REAL (triggers permanecem ATIVOS durante todo o teste):
 --   - fazendas tem AFTER INSERT trigger auto_add_owner_as_membro, que insere em
---     fazenda_membros(NEW.id, NEW.owner_id, 'dono'); fazenda_membros.user_id tem FK
---     para auth.users(id). Uma fazenda sintetica dispararia esse trigger e falharia
---     (owner_id NULL viola NOT NULL; UUID sintetico viola a FK). Solucao: desabilitar
---     triggers durante o SETUP via session_replication_role='replica' (transacional,
---     revertido no ROLLBACK) e REABILITAR antes das chamadas da RPC, para que a RPC
---     exercite os triggers reais (guard bypass, invalidate AFTER UPDATE).
---   - cliente_membros NAO tem FK nem trigger -> membership sintetica e valida.
---   - get_user_cliente_ids filtra ativo=true e nao checa perfil -> autoriza.
+--     fazenda_membros(NEW.id, NEW.owner_id, 'dono'); fazenda_membros.user_id e
+--     fazendas.owner_id tem FK para auth.users(id). Por isso a fixture usa como
+--     owner_id um USUARIO REAL ja existente e autorizado (admin global, selecionado
+--     dinamicamente de cliente_membros x auth.users). O trigger cria o vinculo
+--     naturalmente, sem desabilitar triggers e sem session_replication_role.
+--   - fechamento_pastos.pasto_id tem FK para pastos(id): a fixture cria pastos
+--     sinteticos e usa seus ids (nao gen_random_uuid avulso).
+--   - cliente_membros.user_id NAO tem FK; como o usuario e admin global,
+--     is_admin_agroinblue(uid)=true autoriza a RPC sem membership sintetica.
+--   - NENHUMA linha de auth.users e criada, alterada ou excluida. Os vinculos criados
+--     pelo trigger apontam SOMENTE para as fazendas sinteticas e somem no ROLLBACK.
 --
 -- Casos: T1 primeira execucao, T2 idempotencia, T3 (fazenda propria) no-op de mes
---   inelegivel com mes POSTERIOR ainda validado — prova que competencia arbitraria
---   nao quebra a cadeia.
+--   inelegivel com mes POSTERIOR ainda validado, T4 formato invalido (22007).
+
+-- Token run-unique (autocommit, ANTES do BEGIN -> sobrevive ao ROLLBACK).
+SELECT set_config('app.p0a_test_tag', replace(gen_random_uuid()::text, '-', ''), false) AS run_tag;
 
 -- ============================================================================
 -- BASELINE SANTA RITA — ANTES (fora de transacao; por nome, sem IDs)
@@ -40,10 +50,12 @@ BEGIN;
 
 DO $fix$
 DECLARE
+  v_tag   text := current_setting('app.p0a_test_tag');  -- token run-unique
+  v_user  uuid;                        -- IDENTIDADE REAL (admin global)
   v_cli   uuid := gen_random_uuid();
   v_faz   uuid := gen_random_uuid();   -- T1/T2
   v_faz3  uuid := gen_random_uuid();   -- T3 (independente)
-  v_user  uuid := gen_random_uuid();
+  v_pasto uuid;
   v_mes     text := '2020-01';  -- alvo T1/T2
   v_mes_seg text := '2020-02';  -- seguinte (cadeia) T1/T2
   v_alvo3   text := '2020-01';  -- alvo T3: SEM estado elegivel
@@ -52,42 +64,55 @@ DECLARE
   r1 jsonb; r2 jsonb; r3 jsonb;
   v_t1 timestamptz;
   v_n int;
+  v_real_fm_before int;
 BEGIN
-  -- ==== SETUP com triggers desabilitados (evita auto_add_owner_as_membro/FK auth.users) ====
-  -- is_local=true: escopo TRANSACIONAL. Se uma excecao ocorrer antes do reset, o abort
-  -- da transacao restaura automaticamente para o valor anterior — a sessao NUNCA fica em replica.
-  PERFORM set_config('session_replication_role', 'replica', true);
+  -- Selecionar um admin global REAL presente em auth.users (identidade da fixture).
+  SELECT cm.user_id INTO v_user
+  FROM cliente_membros cm
+  WHERE cm.perfil='admin_agroinblue' AND cm.ativo=true
+    AND EXISTS (SELECT 1 FROM auth.users u WHERE u.id=cm.user_id)
+  ORDER BY cm.user_id
+  LIMIT 1;
+  IF v_user IS NULL THEN
+    RAISE EXCEPTION 'fixture: nenhum admin global valido (cliente_membros x auth.users) encontrado';
+  END IF;
 
-  INSERT INTO clientes (id, nome) VALUES (v_cli, 'CLIENTE_TESTE_P0A');
-  INSERT INTO fazendas (id, cliente_id, nome) VALUES
-    (v_faz,  v_cli, 'FAZENDA_TESTE_P0A_T12'),
-    (v_faz3, v_cli, 'FAZENDA_TESTE_P0A_T3');
-  INSERT INTO cliente_membros (user_id, cliente_id, perfil, ativo)
-    VALUES (v_user, v_cli, 'gestor_cliente', true);
+  -- Snapshot das memberships REAIS do usuario (para provar que nao sao alteradas).
+  SELECT count(*) INTO v_real_fm_before FROM fazenda_membros WHERE user_id=v_user;
 
-  -- Fixture T1/T2 (v_faz): 64 cards fechado + P2 fechado + realizado validado (alvo e seguinte)
+  -- ---- Fixture sintetica (triggers ATIVOS); nomes carregam o token run-unique ----
+  INSERT INTO clientes (id, nome) VALUES (v_cli, 'CLIENTE_TESTE_P0A_'||v_tag);
+  -- owner_id = usuario real -> auto_add_owner_as_membro cria fazenda_membros valido
+  INSERT INTO fazendas (id, cliente_id, nome, owner_id) VALUES
+    (v_faz,  v_cli, 'FAZENDA_TESTE_P0A_T12_'||v_tag, v_user),
+    (v_faz3, v_cli, 'FAZENDA_TESTE_P0A_T3_'||v_tag,  v_user);
+
+  -- T1/T2 (v_faz): 64 pastos sinteticos + 64 cards fechado (pasto_id respeita a FK)
   FOR i IN 1..64 LOOP
+    INSERT INTO pastos (fazenda_id, cliente_id, nome)
+      VALUES (v_faz, v_cli, 'PASTO_TESTE_P0A_'||v_tag||'_'||i) RETURNING id INTO v_pasto;
     INSERT INTO fechamento_pastos (pasto_id, fazenda_id, cliente_id, ano_mes, status)
-      VALUES (gen_random_uuid(), v_faz, v_cli, v_mes, 'fechado');
+      VALUES (v_pasto, v_faz, v_cli, v_mes, 'fechado');
   END LOOP;
   INSERT INTO valor_rebanho_fechamento (fazenda_id, cliente_id, ano_mes, status)
     VALUES (v_faz, v_cli, v_mes, 'fechado');
   INSERT INTO valor_rebanho_realizado_validado (fazenda_id, cliente_id, ano_mes, status)
     VALUES (v_faz, v_cli, v_mes, 'validado'), (v_faz, v_cli, v_mes_seg, 'validado');
 
-  -- Fixture T3 (v_faz3): alvo SEM qualquer estado; posterior validado.
+  -- T3 (v_faz3): alvo SEM qualquer estado; posterior validado.
   INSERT INTO valor_rebanho_realizado_validado (fazenda_id, cliente_id, ano_mes, status)
     VALUES (v_faz3, v_cli, v_pos3, 'validado');
 
-  -- ==== REABILITAR triggers e impersonar usuario sintetico ====
-  PERFORM set_config('session_replication_role', 'origin', true);
+  -- Prova de identidade: o trigger vinculou o usuario APENAS as fazendas sinteticas,
+  -- e as memberships reais preexistentes permanecem inalteradas.
+  IF (SELECT count(*) FROM fazenda_membros WHERE user_id=v_user AND fazenda_id IN (v_faz, v_faz3)) <> 2
+     THEN RAISE EXCEPTION 'fixture: trigger nao criou os 2 vinculos sinteticos esperados'; END IF;
+  IF (SELECT count(*) FROM fazenda_membros WHERE user_id=v_user AND fazenda_id NOT IN (v_faz, v_faz3)) <> v_real_fm_before
+     THEN RAISE EXCEPTION 'fixture: memberships REAIS do usuario foram alteradas'; END IF;
+
+  -- Impersonar o mesmo usuario real (auth.uid()); admin global -> autoriza a RPC.
   PERFORM set_config('request.jwt.claims',
     json_build_object('sub', v_user::text, 'role', 'authenticated')::text, true);
-
-  -- Guard de fixture: garantir triggers reativados ANTES de qualquer RPC.
-  IF current_setting('session_replication_role') <> 'origin' THEN
-    RAISE EXCEPTION 'fixture insegura: session_replication_role nao restaurado para origin';
-  END IF;
 
   -- ======================= T1 — primeira execucao =======================
   r1 := public.fn_reabrir_p1_operacional(v_faz, v_mes, 'teste T1');
@@ -141,7 +166,6 @@ BEGIN
   RAISE NOTICE 'T2 OK';
 
   -- ======================= T3 — mes inelegivel NAO quebra cadeia (fazenda independente) =======================
-  -- Pre-condicao: v_faz3 tem posterior (v_pos3) validado e NENHUM estado no alvo (v_alvo3).
   IF (SELECT status FROM valor_rebanho_realizado_validado WHERE fazenda_id=v_faz3 AND ano_mes=v_pos3) <> 'validado'
      THEN RAISE EXCEPTION 'T3 pre-condicao: posterior deveria estar validado'; END IF;
 
@@ -173,7 +197,6 @@ BEGIN
     WHEN SQLSTATE '22007' THEN
       NULL;  -- rejeicao esperada
   END;
-  -- nenhum efeito: posterior da fixture T3 continua validado; nada de log/cabecalho novo
   IF (SELECT status FROM valor_rebanho_realizado_validado WHERE fazenda_id=v_faz3 AND ano_mes=v_pos3) <> 'validado'
      THEN RAISE EXCEPTION 'T4 posterior deixou de ser validado'; END IF;
   IF EXISTS (SELECT 1 FROM public.fechamento_p1 WHERE fazenda_id=v_faz3)
@@ -186,6 +209,28 @@ BEGIN
 END $fix$;
 
 ROLLBACK;
+
+-- ============================================================================
+-- POS-ROLLBACK — ausencia de qualquer linha sintetica DESTA execucao (por token)
+-- ============================================================================
+DO $post$
+DECLARE v_tag text := current_setting('app.p0a_test_tag');
+BEGIN
+  IF EXISTS (SELECT 1 FROM clientes WHERE nome LIKE '%'||v_tag)
+     THEN RAISE EXCEPTION 'POS-ROLLBACK: cliente sintetico persistiu'; END IF;
+  IF EXISTS (SELECT 1 FROM fazendas WHERE nome LIKE '%'||v_tag)
+     THEN RAISE EXCEPTION 'POS-ROLLBACK: fazenda sintetica persistiu'; END IF;
+  IF EXISTS (SELECT 1 FROM pastos WHERE nome LIKE '%'||v_tag)
+     THEN RAISE EXCEPTION 'POS-ROLLBACK: pasto sintetico persistiu'; END IF;
+  IF EXISTS (SELECT 1 FROM fazenda_membros fm JOIN fazendas f ON f.id=fm.fazenda_id WHERE f.nome LIKE '%'||v_tag)
+     THEN RAISE EXCEPTION 'POS-ROLLBACK: fazenda_membros sintetico persistiu'; END IF;
+  IF EXISTS (SELECT 1 FROM fechamento_p1)
+     THEN RAISE EXCEPTION 'POS-ROLLBACK: fechamento_p1 nao esta vazia'; END IF;
+  RAISE NOTICE 'POS-ROLLBACK OK: nenhuma linha sintetica persistiu; fechamento_p1 vazia';
+END $post$;
+
+-- Limpeza do token de sessao.
+SELECT set_config('app.p0a_test_tag', '', false) AS run_tag_reset;
 
 -- ============================================================================
 -- BASELINE SANTA RITA — DEPOIS (fora de transacao; deve ser IDENTICO ao ANTES)
