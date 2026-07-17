@@ -106,6 +106,8 @@ export function ClientesTab() {
         cliente_id: clienteId,
         tem_pecuaria: false,
         owner_id: userId!,
+        codigo: 'ADM',
+        codigo_importacao: 'ADM',
       }).select(),
       supabase.from('cliente_membros').insert({
         cliente_id: clienteId,

@@ -609,6 +609,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     () => new Map(fazOperacionais.map(f => [f.id, f.nome])),
     [fazOperacionais],
   );
+  const fazendaCodigoMap = useMemo(
+    () => new Map(fazOperacionais.map(f => [f.id, f.codigo])),
+    [fazOperacionais],
+  );
 
   // Derive atividade from escopo_negocio (official field from plano de contas)
   const getAtividade = (l: LancamentoV2): string => {
@@ -1433,7 +1437,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                         </td>
                         <td className="truncate px-1 py-1 align-middle text-[11px] font-medium leading-tight text-muted-foreground" title={l.macro_custo || ''}>{l.macro_custo || '-'}</td>
                         <td className="truncate px-1 py-1 align-middle text-[11px] font-medium leading-tight" title={l.centro_custo || ''}>{l.centro_custo || '-'}</td>
-                        <td className="truncate px-1 py-1 align-middle text-[11px] font-medium leading-tight text-muted-foreground" title={fazendaNameMap.get(l.fazenda_id) || ''}>{fazendaNameMap.get(l.fazenda_id) || '-'}</td>
+                        <td className="truncate px-1 py-1 align-middle text-[11px] font-medium leading-tight text-muted-foreground" title={fazendaNameMap.get(l.fazenda_id) || ''}>{fazendaCodigoMap.get(l.fazenda_id) || '-'}</td>
                         <td className={`text-right font-semibold whitespace-nowrap px-1 py-1 align-middle text-[12px] leading-tight ${l.sinal > 0 ? 'text-success' : 'text-destructive'}`}>
                           {fmtValor(l.valor, l.sinal)}
                         </td>

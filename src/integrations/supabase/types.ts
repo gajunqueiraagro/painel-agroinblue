@@ -983,6 +983,7 @@ export type Database = {
       fazendas: {
         Row: {
           cliente_id: string
+          codigo: string | null
           codigo_importacao: string | null
           created_at: string
           id: string
@@ -992,6 +993,7 @@ export type Database = {
         }
         Insert: {
           cliente_id: string
+          codigo?: string | null
           codigo_importacao?: string | null
           created_at?: string
           id?: string
@@ -1001,6 +1003,7 @@ export type Database = {
         }
         Update: {
           cliente_id?: string
+          codigo?: string | null
           codigo_importacao?: string | null
           created_at?: string
           id?: string

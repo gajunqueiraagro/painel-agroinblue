@@ -9,6 +9,7 @@ export interface Fazenda {
   nome: string;
   owner_id: string;
   cliente_id: string;
+  codigo?: string | null;
   codigo_importacao?: string | null;
   tem_pecuaria?: boolean;
   papel?: string;
@@ -27,7 +28,7 @@ interface FazendaContextType {
   fazendasComPecuaria: Fazenda[];
   fazendaAtual: Fazenda | null;
   setFazendaAtual: (f: Fazenda) => void;
-  criarFazenda: (nome: string, codigoImportacao?: string) => Promise<Fazenda | null>;
+  criarFazenda: (nome: string, codigo: string) => Promise<Fazenda | null>;
   loading: boolean;
   reloadFazendas: () => Promise<void>;
   isGlobal: boolean;
@@ -67,7 +68,7 @@ export function FazendaProvider({ children }: { children: ReactNode }) {
       console.log('[FazendaContext] query fazendas START');
       const { data: fazendasCliente, error: errFaz } = await supabase
         .from('fazendas')
-        .select('id, nome, owner_id, cliente_id, codigo_importacao, tem_pecuaria')
+        .select('id, nome, codigo, owner_id, cliente_id, codigo_importacao, tem_pecuaria')
         .eq('cliente_id', clienteAtual.id);
       console.log(`[FazendaContext] query fazendas END (${(performance.now() - _tQ1).toFixed(0)}ms)`, { rows: fazendasCliente?.length ?? 0, error: errFaz });
 
@@ -137,10 +138,11 @@ export function FazendaProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const criarFazenda = async (nome: string, codigoImportacao?: string): Promise<Fazenda | null> => {
+  const criarFazenda = async (nome: string, codigo: string): Promise<Fazenda | null> => {
     if (!user || !clienteAtual) return null;
-    const payload: any = { nome, owner_id: user.id, cliente_id: clienteAtual.id };
-    if (codigoImportacao) payload.codigo_importacao = codigoImportacao;
+    if (!codigo?.trim()) { toast.error('Código da fazenda é obrigatório.'); return null; }
+    const cod = codigo.trim().toUpperCase();
+    const payload: any = { nome, owner_id: user.id, cliente_id: clienteAtual.id, codigo: cod, codigo_importacao: cod };
     const { data, error } = await supabase
       .from('fazendas')
       .insert(payload)
