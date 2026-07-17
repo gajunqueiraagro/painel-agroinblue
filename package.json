@@ -4,11 +4,12 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/run-vite-safe.mjs dev proto",
+    "dev:proto": "node scripts/run-vite-safe.mjs dev proto",
     "build": "vite build",
-    "build:dev": "vite build --mode development",
+    "build:proto": "node scripts/run-vite-safe.mjs build proto",
     "lint": "eslint .",
-    "preview": "vite preview",
+    "preview:proto": "node scripts/run-vite-safe.mjs preview proto",
     "test": "vitest run",
     "test:watch": "vitest",
     "audit:classificador": "tsx scripts/auditClassificadorFinanceiro.ts"
