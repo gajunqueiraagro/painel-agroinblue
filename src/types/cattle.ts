@@ -60,6 +60,7 @@ export interface Lancamento {
   observacao?: string;
   motivo?: string;
   rendimento?: number;
+  rendimentoCarcaca?: number;
   // legado — remover apenas após Z5/Z6 estabilizados.
   // Coexiste com fornecedorId/fornecedorNomeSnapshot durante a transição.
   compradorFornecedor?: string;
@@ -94,6 +95,7 @@ export interface Lancamento {
   tipoVenda?: string;
   // Abate realizado — identification fields
   frigorifico?: string;
+  abateFrigorifico?: string;
   pedido?: string;
   instrucao?: string;
   docAcerto?: string;

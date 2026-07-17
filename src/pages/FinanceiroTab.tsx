@@ -232,11 +232,20 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
   const snapshotValido = (nome?: string | null): string | null =>
     nome && nome.trim() && nome.trim() !== '[nao informado]' ? nome.trim() : null;
 
+  // Rendimento de carcaça exibido: prioriza rendimentoCarcaca; rendimento é
+  // fallback legado. Guarda de plausibilidade 0 < r < 100 descarta zeros/sujeira.
+  const rendimentoPlausivel = (r?: number): number | null =>
+    r != null && r > 0 && r < 100 ? r : null;
+  const getRendimentoExibido = (l: Lancamento): number | null =>
+    rendimentoPlausivel(l.rendimentoCarcaca) ?? rendimentoPlausivel(l.rendimento);
+
   const getContraparteZoo = (l: Lancamento, subTipo: string): string => {
     if (subTipo === 'abate') {
       return snapshotValido(l.fornecedorNomeSnapshot)
-        || (l as any).abateFrigorifico
-        || l.compradorFornecedor
+        || snapshotValido(l.frigorifico)
+        || snapshotValido(l.abateFrigorifico)
+        || snapshotValido(l.fazendaDestino)
+        || snapshotValido(l.compradorFornecedor)
         || '—';
     }
     if (subTipo === 'venda') {
@@ -279,6 +288,7 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
         {rows.map(({ l, c }) => {
           const cat = CATEGORIAS.find(ca => ca.value === l.categoria)?.label ?? l.categoria;
           const tipoInfo = SUB_ABA_LABELS[l.tipo as SubAba];
+          const rendimentoExibido = getRendimentoExibido(l);
           return (
             <tr key={l.id} className="border-b border-border/70 leading-none hover:bg-muted/30">
               <td className={`${TABLE_BODY_CELL} text-[9px] sticky left-0 z-20 bg-card border-r border-border/60 md:static md:border-r-0`}>{format(parseISO(l.data), 'dd/MM/yy')}</td>
@@ -291,7 +301,7 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
               {showOrigemDestinoCol && <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{getFazendaCellValue(l, fMap)}</td>}
               {isGlobal && <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{showTipo ? (fMap.get(l.fazendaId || '') || '-') : getFazendaCellValue(l, fMap)}</td>}
               <td className={`${TABLE_BODY_CELL} text-right text-[9px]`}>{l.pesoMedioKg != null ? l.pesoMedioKg.toFixed(2) : '-'}</td>
-              {showRendimento && <td className={`${TABLE_BODY_CELL} text-right text-[9px] text-muted-foreground`}>{l.rendimento ? `${l.rendimento.toFixed(1)}%` : '-'}</td>}
+              {showRendimento && <td className={`${TABLE_BODY_CELL} text-right text-[9px] text-muted-foreground`}>{rendimentoExibido != null ? `${rendimentoExibido.toFixed(1)}%` : '-'}</td>}
               <td className={`${TABLE_BODY_CELL} text-right text-[9px] text-muted-foreground`}>{c.pesoArroba ? c.pesoArroba.toFixed(2) : '-'}</td>
               <td className={`${TABLE_BODY_CELL} text-right font-bold text-[9px] text-primary`}>{fmtValor(c.valorFinal)}</td>
               <td className={`${TABLE_BODY_CELL} text-right text-[9px]`}>{fmtValor(c.liqArroba)}</td>

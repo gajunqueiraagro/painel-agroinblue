@@ -91,6 +91,7 @@ function mapRowToLancamento(l: any, profileMap: Record<string, string>): Lancame
     motivo: (l as any).motivo ?? undefined,
     abateFrigorifico: (l as any).abate_frigorifico ?? undefined,
     rendimento: l.rendimento ?? undefined,
+    rendimentoCarcaca: l.rendimento_carcaca ?? undefined,
     compradorFornecedor: l.comprador_fornecedor ?? undefined,
     fornecedorId: l.fornecedor_id ?? undefined,
     // Sentinel '[nao informado]' → undefined (ausência semântica na UI).
