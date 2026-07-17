@@ -17,6 +17,12 @@ export interface Pasto {
   observacoes: string | null;
   ordem_exibicao: number;
   data_inicio: string | null;
+  /**
+   * Fim de vigência (inclusivo). null/ausente = sem fim conhecido.
+   * Opcional: a coluna é criada pela migration desta frente e só existirá em
+   * types.ts após a regeneração — que não pertence a este PR.
+   */
+  data_fim?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -217,7 +223,10 @@ export function usePastos() {
     return true;
   }, [loadPastos, pastos, fazendaAtual, clienteId]);
 
-  const editarPasto = useCallback(async (id: string, updates: Partial<Pasto>) => {
+  // Omit data_fim: a coluna nasce na migration desta frente e so entra em
+  // types.ts na regeneracao, fora deste PR. Nenhum caller a envia hoje; o campo
+  // e leitura na grade. Ao regenerar types.ts, remover o Omit.
+  const editarPasto = useCallback(async (id: string, updates: Partial<Omit<Pasto, 'data_fim'>>) => {
     if (clienteId) invalidatePastosForCliente(clienteId);
     const { error } = await supabase.from('pastos').update(updates).eq('id', id);
     if (error) { toast.error('Erro ao atualizar pasto'); console.error(error); return false; }
