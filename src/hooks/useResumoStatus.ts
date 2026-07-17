@@ -10,6 +10,7 @@
  */
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchAllPaginated, MAX_ROWS } from '@/lib/supabase/fetchAllPaginated';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import { Lancamento, SaldoInicial } from '@/types/cattle';
@@ -146,11 +147,18 @@ export function useResumoStatus(
           : Promise.resolve({ data: [] }),
         // Fechamento pastos — only pecuária farms (inclui pasto_id para filtragem por data_inicio)
         idsZoo.length > 0
-          ? supabase
-              .from('fechamento_pastos')
-              .select('ano_mes, status, fazenda_id, pasto_id')
-              .in('fazenda_id', idsZoo)
-              .in('ano_mes', mesesRange)
+          ? fetchAllPaginated<{ id: string; ano_mes: string; status: string; fazenda_id: string; pasto_id: string }>({
+              query: () =>
+                supabase
+                  .from('fechamento_pastos')
+                  .select('id, ano_mes, status, fazenda_id, pasto_id')
+                  .in('fazenda_id', idsZoo)
+                  .in('ano_mes', mesesRange)
+                  .order('id', { ascending: true }),
+              getKey: (r) => r.id,
+              maxRows: MAX_ROWS,
+              context: 'useResumoStatus/fechamento_pastos',
+            })
           : Promise.resolve({ data: [] }),
         // Financeiro — ALL farms (including ADM)
         idsFin.length > 0

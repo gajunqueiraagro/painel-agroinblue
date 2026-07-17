@@ -16,6 +16,7 @@ import { calcUA, calcUAHa, calcPesoMedioPonderado } from '@/lib/calculos/zootecn
 import { formatNum } from '@/lib/calculos/formatters';
 import { tipoUsoLabel } from '@/lib/calculos/labels';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchAllPaginated, MAX_ROWS } from '@/lib/supabase/fetchAllPaginated';
 import { toast } from 'sonner';
 import { isOperacionalPecuaria, grupoDoTipoUso } from '@/lib/pastos/tiposUso';
 
@@ -133,19 +134,36 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial }: Ma
 
   useEffect(() => {
     if (!fazendaAtual || fazendaAtual.id === '__global__') return;
-    supabase
-      .from('fechamento_pastos')
-      .select('ano_mes')
-      .eq('fazenda_id', fazendaAtual.id)
-      .then(({ data }) => {
-        if (!data) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await fetchAllPaginated<{ id: string; ano_mes: string }>({
+          query: () =>
+            supabase
+              .from('fechamento_pastos')
+              .select('id, ano_mes')
+              .eq('fazenda_id', fazendaAtual.id)
+              .order('id', { ascending: true }),
+          getKey: (r) => r.id,
+          maxRows: MAX_ROWS,
+          context: 'MapaPastosTab/anos-disponiveis',
+          shouldAbort: () => cancelled,
+        });
+        if (cancelled) return;
         const anos = new Set<string>();
         for (let y = curYear; y >= curYear - 3; y--) anos.add(String(y));
         data.forEach(r => {
           if (r.ano_mes) anos.add(r.ano_mes.substring(0, 4));
         });
         setAnosDisp(Array.from(anos).sort().reverse());
-      });
+      } catch (e) {
+        // Mecanismo preservado: antes, erro chegava como data=null e o efeito
+        // apenas retornava, mantendo os 4 anos default do dropdown. O helper
+        // lanca, entao o catch reproduz esse silencio — sem toast novo.
+        console.error('[MapaPastosTab] anos disponiveis:', e);
+      }
+    })();
+    return () => { cancelled = true; };
   }, [fazendaAtual?.id, curYear]);
 
   const [anoFiltro, setAnoFiltro] = useState(filtroAnoInicial || String(curYear));

@@ -7,6 +7,12 @@
  */
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import {
+  fetchAllPaginated,
+  fetchAllPaginatedEmLotes,
+  ID_LOTE_SIZE,
+  MAX_ROWS,
+} from '@/lib/supabase/fetchAllPaginated';
 import { useCliente } from '@/contexts/ClienteContext';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
 import type { Pendencia, StatusGeral } from '@/hooks/useStatusZootecnico';
@@ -57,12 +63,19 @@ export function useStatusFechamentosAno(
           .eq('fazenda_id', fazendaId)
           .eq('ativo', true)
           .eq('entra_conciliacao', true),
-        supabase
-          .from('fechamento_pastos')
-          .select('id, status, pasto_id, ano_mes, updated_at')
-          .eq('fazenda_id', fazendaId)
-          .gte('ano_mes', anoInicio)
-          .lte('ano_mes', anoFim),
+        fetchAllPaginated<{ id: string; status: string; pasto_id: string; ano_mes: string; updated_at: string }>({
+          query: () =>
+            supabase
+              .from('fechamento_pastos')
+              .select('id, status, pasto_id, ano_mes, updated_at')
+              .eq('fazenda_id', fazendaId)
+              .gte('ano_mes', anoInicio)
+              .lte('ano_mes', anoFim)
+              .order('id', { ascending: true }),
+          getKey: (r) => r.id,
+          maxRows: MAX_ROWS,
+          context: 'useStatusFechamentosAno/fechamento_pastos',
+        }),
         supabase
           .from('valor_rebanho_mensal')
           .select('ano_mes, categoria')
@@ -103,12 +116,22 @@ export function useStatusFechamentosAno(
       let itensData: Array<{ fechamento_id: string; quantidade: number; categoria_id: string }> = [];
 
       if (fpIds.length > 0) {
-        const { data: itens } = await supabase
-          .from('fechamento_pasto_itens')
-          .select('fechamento_id, quantidade, categoria_id')
-          .in('fechamento_id', fpIds)
-          .gt('quantidade', 0);
-        itensData = itens || [];
+        itensData = await fetchAllPaginatedEmLotes<{ id: string; fechamento_id: string; quantidade: number; categoria_id: string }>(
+          fpIds,
+          ID_LOTE_SIZE,
+          {
+            query: (lote) =>
+              supabase
+                .from('fechamento_pasto_itens')
+                .select('id, fechamento_id, quantidade, categoria_id')
+                .in('fechamento_id', lote)
+                .gt('quantidade', 0)
+                .order('id', { ascending: true }),
+            getKey: (r) => r.id,
+            maxRows: MAX_ROWS,
+            context: 'useStatusFechamentosAno/fechamento_pasto_itens',
+          },
+        );
       }
 
       // Pastos com data_inicio para filtragem por mês

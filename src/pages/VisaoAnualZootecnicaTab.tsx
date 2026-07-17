@@ -12,6 +12,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ArrowLeft } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import {
+  fetchAllPaginated,
+  fetchAllPaginatedEmLotes,
+  ID_LOTE_SIZE,
+  MAX_ROWS,
+} from '@/lib/supabase/fetchAllPaginated';
 import { useAnosDisponiveis } from '@/hooks/useAnosDisponiveis';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -97,15 +103,19 @@ export function VisaoAnualZootecnicaTab({ lancamentos, saldosIniciais, onBack, o
         // Pastos ativos
         fq(supabase.from('pastos').select('id, data_inicio').eq('ativo', true).eq('entra_conciliacao', true)),
         // Fechamento pastos — mesma base operacional da tela Fechamento de Pastos
-        fq(
-          supabase
-            .from('fechamento_pastos')
-            .select('id, status, pasto_id, ano_mes, updated_at, created_at')
-            .gte('ano_mes', anoMeses[0])
-            .lte('ano_mes', anoMeses[11])
-            .order('created_at', { ascending: true })
-            .order('id', { ascending: true })
-        ),
+        fetchAllPaginated<{ id: string; status: string; pasto_id: string; ano_mes: string; updated_at: string }>({
+          query: () =>
+            fq(
+              supabase
+                .from('fechamento_pastos')
+                .select('id, status, pasto_id, ano_mes, updated_at, created_at')
+                .gte('ano_mes', anoMeses[0])
+                .lte('ano_mes', anoMeses[11]),
+            ).order('id', { ascending: true }),
+          getKey: (r) => r.id,
+          maxRows: MAX_ROWS,
+          context: 'VisaoAnualZootecnicaTab/fechamento_pastos',
+        }),
         // Valor rebanho mensal
         fq(supabase.from('valor_rebanho_mensal').select('categoria, ano_mes')
           .gte('ano_mes', anoMeses[0]).lte('ano_mes', anoMeses[11])),
@@ -157,12 +167,22 @@ export function VisaoAnualZootecnicaTab({ lancamentos, saldosIniciais, onBack, o
       const fpIds = fpAll.map(f => f.id);
       let itensAll: any[] = [];
       if (fpIds.length > 0) {
-        const { data } = await supabase
-          .from('fechamento_pasto_itens')
-          .select('fechamento_id, quantidade, categoria_id')
-          .in('fechamento_id', fpIds)
-          .gt('quantidade', 0);
-        itensAll = data || [];
+        itensAll = await fetchAllPaginatedEmLotes<{ id: string; fechamento_id: string; quantidade: number; categoria_id: string }>(
+          fpIds,
+          ID_LOTE_SIZE,
+          {
+            query: (lote) =>
+              supabase
+                .from('fechamento_pasto_itens')
+                .select('id, fechamento_id, quantidade, categoria_id')
+                .in('fechamento_id', lote)
+                .gt('quantidade', 0)
+                .order('id', { ascending: true }),
+            getKey: (r) => r.id,
+            maxRows: MAX_ROWS,
+            context: 'VisaoAnualZootecnicaTab/fechamento_pasto_itens',
+          },
+        );
       }
 
       // Build lookups

@@ -36,8 +36,27 @@
  * - Em erro do supabase, **lança Error** com `context` no message — nunca
  *   retorna parcial silencioso. Caller decide como tratar (try/catch, toast,
  *   limpar estado). Sem fallback automático.
+ * - `getKey` opcional: paginação por OFFSET só é correta sob ordenação total e
+ *   determinística. Se a mesma chave voltar em páginas diferentes, a premissa
+ *   foi violada (ordenação não-total ou escrita concorrente) e o resultado é
+ *   inconfiável. Nesse caso **lança Error** — nunca deduplica em silêncio, para
+ *   não mascarar o problema nem eventual duplicidade real de dado.
  */
-export interface FetchAllPaginatedOptions {
+/**
+ * Teto anti-runaway. NÃO é limite funcional: fica ordens de grandeza acima de
+ * qualquer volume real (fechamento_pastos inteiro ~20k linhas). Só existe para
+ * que um filtro mal aplicado falhe alto em vez de paginar indefinidamente.
+ */
+export const MAX_ROWS = 200_000;
+
+/**
+ * Valores por lote em filtros `.in(...)`. Cada UUID custa ~37 chars na URL;
+ * 150 => ~5,5 KB, ~30% de folga sobre o `urlLengthLimit` de 8000 do
+ * postgrest-js (que não faz fallback para POST — a request simplesmente falha).
+ */
+export const ID_LOTE_SIZE = 150;
+
+export interface FetchAllPaginatedOptions<T = any> {
   /** Factory que retorna um builder Supabase **sem** `.range()`/`.limit()` aplicado. */
   query: () => any;
   /** Tamanho da página (default 1000). */
@@ -48,6 +67,8 @@ export interface FetchAllPaginatedOptions {
   context?: string;
   /** Avaliado entre páginas; se true, aborta sem erro. */
   shouldAbort?: () => boolean;
+  /** Extrai a chave única da linha. Chave repetida entre páginas => Error. */
+  getKey?: (row: T) => string | null | undefined;
 }
 
 export interface FetchAllPaginatedResult<T> {
@@ -60,10 +81,11 @@ export interface FetchAllPaginatedResult<T> {
 }
 
 export async function fetchAllPaginated<T = any>(
-  opts: FetchAllPaginatedOptions,
+  opts: FetchAllPaginatedOptions<T>,
 ): Promise<FetchAllPaginatedResult<T>> {
   const pageSize = opts.pageSize ?? 1000;
   const data: T[] = [];
+  const seen = opts.getKey ? new Set<string>() : null;
   let from = 0;
   let pages = 0;
 
@@ -83,6 +105,20 @@ export async function fetchAllPaginated<T = any>(
 
     if (!page || page.length === 0) break;
 
+    if (seen && opts.getKey) {
+      for (const row of page as T[]) {
+        const key = opts.getKey(row);
+        if (key == null) continue;
+        if (seen.has(key)) {
+          const ctx = opts.context ? ` (${opts.context})` : '';
+          throw new Error(
+            `fetchAllPaginated recebeu a chave "${key}" em mais de uma página${ctx}: ordenação não é total/determinística ou houve escrita concorrente; resultado descartado.`,
+          );
+        }
+        seen.add(key);
+      }
+    }
+
     data.push(...(page as T[]));
     pages++;
 
@@ -98,4 +134,35 @@ export async function fetchAllPaginated<T = any>(
   }
 
   return { data, aborted: false, pages };
+}
+
+/**
+ * fetchAllPaginatedEmLotes — mesmo contrato de `fetchAllPaginated`, aplicado uma
+ * vez por lote de `valores`.
+ *
+ * MOTIVAÇÃO
+ * ─────────
+ * Filtros do tipo `.in('col', valores)` colocam cada valor na URL. O
+ * postgrest-js corta em `urlLengthLimit` (default 8000 chars) e proxies também
+ * limitam — lista grande vira request abortado/414. Quebrar em lotes resolve a
+ * URL, mas **cada lote continua sujeito ao corte de 1.000 linhas**: N valores
+ * podem devolver muito mais que N linhas. Por isso cada lote é paginado.
+ *
+ * Genérico por design: não conhece tabela, coluna nem regra de negócio — recebe
+ * uma lista opaca de valores e uma factory que monta a query daquele lote.
+ * Erro em qualquer lote/página aborta tudo (o Error sobe) — nunca parcial.
+ */
+export async function fetchAllPaginatedEmLotes<T = any>(
+  valores: readonly string[],
+  loteSize: number,
+  opts: Omit<FetchAllPaginatedOptions<T>, 'query'> & { query: (lote: string[]) => any },
+): Promise<T[]> {
+  const out: T[] = [];
+  for (let i = 0; i < valores.length; i += loteSize) {
+    const lote = valores.slice(i, i + loteSize);
+    const res = await fetchAllPaginated<T>({ ...opts, query: () => opts.query(lote) });
+    if (res.aborted) return out;
+    out.push(...res.data);
+  }
+  return out;
 }

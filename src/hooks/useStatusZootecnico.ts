@@ -10,6 +10,12 @@
  */
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import {
+  fetchAllPaginated,
+  fetchAllPaginatedEmLotes,
+  ID_LOTE_SIZE,
+  MAX_ROWS,
+} from '@/lib/supabase/fetchAllPaginated';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
@@ -141,7 +147,18 @@ export function useStatusZootecnico(
         // 1. Pastos ativos com conciliação (filtra por data_inicio: só inclui pastos que existiam no mês)
         fqPec(supabase.from('pastos').select('id, fazenda_id').eq('ativo', true).eq('entra_conciliacao', true).or(`data_inicio.is.null,data_inicio.lte.${primeiroDiaMes}`)),
         // 2. Fechamento de pastos no período
-        fqPec(supabase.from('fechamento_pastos').select('id, status, pasto_id, fazenda_id, updated_at').eq('ano_mes', anoMes)),
+        fetchAllPaginated<{ id: string; status: string; pasto_id: string; fazenda_id: string; updated_at: string }>({
+          query: () =>
+            fqPec(
+              supabase
+                .from('fechamento_pastos')
+                .select('id, status, pasto_id, fazenda_id, updated_at')
+                .eq('ano_mes', anoMes),
+            ).order('id', { ascending: true }),
+          getKey: (r) => r.id,
+          maxRows: MAX_ROWS,
+          context: 'useStatusZootecnico/fechamento_pastos',
+        }),
         // 3. Valor rebanho
         fqPec(supabase.from('valor_rebanho_mensal').select('categoria').eq('ano_mes', anoMes)),
         // 4. Financeiro fechamentos
@@ -295,12 +312,22 @@ export function useStatusZootecnico(
       let temItensPastos = false;
 
       if (fechIds.length > 0) {
-        const { data: itensData } = await supabase
-          .from('fechamento_pasto_itens')
-          .select('quantidade, categoria_id')
-          .in('fechamento_id', fechIds)
-          .gt('quantidade', 0);
-        const itens = itensData || [];
+        const itens = await fetchAllPaginatedEmLotes<{ id: string; quantidade: number; categoria_id: string }>(
+          fechIds,
+          ID_LOTE_SIZE,
+          {
+            query: (lote) =>
+              supabase
+                .from('fechamento_pasto_itens')
+                .select('id, quantidade, categoria_id')
+                .in('fechamento_id', lote)
+                .gt('quantidade', 0)
+                .order('id', { ascending: true }),
+            getKey: (r) => r.id,
+            maxRows: MAX_ROWS,
+            context: 'useStatusZootecnico/fechamento_pasto_itens',
+          },
+        );
         temItensPastos = itens.length > 0;
 
         if (itens.length > 0) {

@@ -12,6 +12,12 @@ import { useStatusZootecnico } from '@/hooks/useStatusZootecnico';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { TabId } from '@/components/BottomNav';
 import { supabase } from '@/integrations/supabase/client';
+import {
+  fetchAllPaginated,
+  fetchAllPaginatedEmLotes,
+  ID_LOTE_SIZE,
+  MAX_ROWS,
+} from '@/lib/supabase/fetchAllPaginated';
 import { useCliente } from '@/contexts/ClienteContext';
 import {
   statusFinanceiro as calcStatusFinanceiro,
@@ -116,7 +122,18 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
       const primeiroDiaMes = `${anoMes}-01`;
       const [pastosRes, fpRes, vrRes, catsRes, finFechRes, viewRes] = await Promise.all([
         supabase.from('pastos').select('id, fazenda_id, data_inicio').eq('ativo', true).eq('entra_conciliacao', true).in('fazenda_id', fIds).or(`data_inicio.is.null,data_inicio.lte.${primeiroDiaMes}`),
-        supabase.from('fechamento_pastos').select('id, status, pasto_id, fazenda_id, updated_at').eq('ano_mes', anoMes).in('fazenda_id', fIds),
+        fetchAllPaginated<{ id: string; status: string; pasto_id: string; fazenda_id: string; updated_at: string }>({
+          query: () =>
+            supabase
+              .from('fechamento_pastos')
+              .select('id, status, pasto_id, fazenda_id, updated_at')
+              .eq('ano_mes', anoMes)
+              .in('fazenda_id', fIds)
+              .order('id', { ascending: true }),
+          getKey: (r) => r.id,
+          maxRows: MAX_ROWS,
+          context: 'StatusZootecnicoTab/mes/fechamento_pastos',
+        }),
         supabase.from('valor_rebanho_mensal').select('categoria, fazenda_id').eq('ano_mes', anoMes).in('fazenda_id', fIds),
         supabase.from('categorias_rebanho').select('id, codigo'),
         clienteAtual?.id
@@ -137,9 +154,22 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
       const fpIds = (fpRes.data || []).map(f => f.id);
       let itensAll: any[] = [];
       if (fpIds.length > 0) {
-        const { data } = await supabase.from('fechamento_pasto_itens')
-          .select('fechamento_id, quantidade, categoria_id').in('fechamento_id', fpIds).gt('quantidade', 0);
-        itensAll = data || [];
+        itensAll = await fetchAllPaginatedEmLotes<{ id: string; fechamento_id: string; quantidade: number; categoria_id: string }>(
+          fpIds,
+          ID_LOTE_SIZE,
+          {
+            query: (lote) =>
+              supabase
+                .from('fechamento_pasto_itens')
+                .select('id, fechamento_id, quantidade, categoria_id')
+                .in('fechamento_id', lote)
+                .gt('quantidade', 0)
+                .order('id', { ascending: true }),
+            getKey: (r) => r.id,
+            maxRows: MAX_ROWS,
+            context: 'StatusZootecnicoTab/mes/fechamento_pasto_itens',
+          },
+        );
       }
       const idToCodigo = new Map((catsRes.data || []).map(c => [c.id, c.codigo]));
       const finFechAll = (finFechRes as any).data || [];
@@ -295,15 +325,19 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
 
       const [pastosRes, fpRes, vrRes, catsRes, finFechRes, viewYearRes] = await Promise.all([
         fq(supabase.from('pastos').select('id, data_inicio').eq('ativo', true).eq('entra_conciliacao', true)),
-        fq(
-          supabase
-            .from('fechamento_pastos')
-            .select('id, status, pasto_id, ano_mes, updated_at, created_at')
-            .gte('ano_mes', anoMeses[0])
-            .lte('ano_mes', anoMeses[11])
-            .order('created_at', { ascending: true })
-            .order('id', { ascending: true })
-        ),
+        fetchAllPaginated<{ id: string; status: string; pasto_id: string; ano_mes: string; updated_at: string }>({
+          query: () =>
+            fq(
+              supabase
+                .from('fechamento_pastos')
+                .select('id, status, pasto_id, ano_mes, updated_at, created_at')
+                .gte('ano_mes', anoMeses[0])
+                .lte('ano_mes', anoMeses[11]),
+            ).order('id', { ascending: true }),
+          getKey: (r) => r.id,
+          maxRows: MAX_ROWS,
+          context: 'StatusZootecnicoTab/ano/fechamento_pastos',
+        }),
         fq(supabase.from('valor_rebanho_mensal').select('categoria, ano_mes')
           .gte('ano_mes', anoMeses[0]).lte('ano_mes', anoMeses[11])),
         supabase.from('categorias_rebanho').select('id, codigo'),
@@ -329,9 +363,22 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
       const fpIds = fpAll.map(f => f.id);
       let itensAll: any[] = [];
       if (fpIds.length > 0) {
-        const { data } = await supabase.from('fechamento_pasto_itens')
-          .select('fechamento_id, quantidade, categoria_id').in('fechamento_id', fpIds).gt('quantidade', 0);
-        itensAll = data || [];
+        itensAll = await fetchAllPaginatedEmLotes<{ id: string; fechamento_id: string; quantidade: number; categoria_id: string }>(
+          fpIds,
+          ID_LOTE_SIZE,
+          {
+            query: (lote) =>
+              supabase
+                .from('fechamento_pasto_itens')
+                .select('id, fechamento_id, quantidade, categoria_id')
+                .in('fechamento_id', lote)
+                .gt('quantidade', 0)
+                .order('id', { ascending: true }),
+            getKey: (r) => r.id,
+            maxRows: MAX_ROWS,
+            context: 'StatusZootecnicoTab/ano/fechamento_pasto_itens',
+          },
+        );
       }
 
       // Group data by month
