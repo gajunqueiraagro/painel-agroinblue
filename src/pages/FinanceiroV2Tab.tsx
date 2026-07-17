@@ -23,12 +23,10 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useFinanceiroV2, type LancamentoV2, type FiltrosV2 } from '@/hooks/useFinanceiroV2';
-import { useFechamentoMensal } from '@/hooks/useFechamentoMensal';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
 import { ModoRapidoGrid } from '@/components/financeiro-v2/ModoRapidoGrid';
 import { FinanceiroV2ExportMenu } from '@/components/financeiro-v2/FinanceiroV2ExportMenu';
 import { CorrecaoTransferenciasBanner } from '@/components/financeiro-v2/CorrecaoTransferenciasBanner';
-import { FechamentoMensalBanner } from '@/components/financeiro/FechamentoMensalBanner';
 import { format, parseISO } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -182,7 +180,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const [pageSize] = useState(getInitialPageSize);
   const [currentPage, setCurrentPage] = useState(0);
   const hook = useFinanceiroV2(pageSize);
-  const fechamentoHook = useFechamentoMensal();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const currentYear = new Date().getFullYear();
@@ -485,39 +482,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     }
   }, [fazendaAtual]);
 
-  // Load fechamentos when fazenda changes
-  useEffect(() => {
-    const fId = fazendaId !== '__all__' ? fazendaId : undefined;
-    fechamentoHook.loadFechamentos(fId);
-  }, [fazendaId, fechamentoHook.loadFechamentos]);
-
-  // Determine which months are currently selected and if any are closed
-  const mesesAtivos = useMemo(() => {
-    if (mesesSelecionados.length > 0) return mesesSelecionados.map(m => `${ano}-${m}`);
-    return [];
-  }, [ano, mesesSelecionados]);
-
-  const mesFechadoAtivo = useMemo(() => {
-    if (fazendaId === '__all__' || !fazendaId) return false;
-    if (mesesAtivos.length === 1) return fechamentoHook.isMesFechado(fazendaId, mesesAtivos[0]);
-    // If multiple months or "todos", check all - show banner if ANY is closed
-    if (mesesAtivos.length === 0) {
-      // "Todos" - check all 12 months
-      for (let m = 1; m <= 12; m++) {
-        const am = `${ano}-${String(m).padStart(2, '0')}`;
-        if (fechamentoHook.isMesFechado(fazendaId, am)) return true;
-      }
-      return false;
-    }
-    return mesesAtivos.some(am => fechamentoHook.isMesFechado(fazendaId, am));
-  }, [fazendaId, mesesAtivos, ano, fechamentoHook.isMesFechado]);
-
-  // Single month selected -> show precise banner
-  const singleMonthSelected = mesesSelecionados.length === 1 ? `${ano}-${mesesSelecionados[0]}` : null;
-  const singleMonthStatus = singleMonthSelected && fazendaId !== '__all__'
-    ? fechamentoHook.getStatus(fazendaId, singleMonthSelected)
-    : 'aberto';
-
   const filtros: FiltrosV2 = useMemo(() => ({
     fazenda_id: fazendaId !== '__all__' ? fazendaId : undefined,
     ano: ano,
@@ -776,15 +740,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
 
   const selectedLancamentos = useMemo(() => hook.lancamentos.filter(l => selectedIds.has(l.id)), [hook.lancamentos, selectedIds]);
   const bloqueadosInfo = useMemo(() => {
-    const bloqueadosMesFechado = selectedLancamentos.filter(l =>
-      fazendaId !== '__all__' && fechamentoHook.isMesFechado(l.fazenda_id, l.ano_mes)
-    );
-    const deletaveis = selectedLancamentos.filter(l =>
-      !(fazendaId !== '__all__' && fechamentoHook.isMesFechado(l.fazenda_id, l.ano_mes))
-    );
+    // Fechamento mensal financeiro descontinuado: nenhum lançamento é bloqueado
+    // por mês fechado. Todos os selecionados são deletáveis.
+    const deletaveis = selectedLancamentos;
     const origens = new Set(selectedLancamentos.map(l => l.origem_lancamento));
-    return { bloqueadosMesFechado, deletaveis, origens: Array.from(origens) };
-  }, [selectedLancamentos, fazendaId, fechamentoHook.isMesFechado]);
+    return { deletaveis, origens: Array.from(origens) };
+  }, [selectedLancamentos]);
 
   const handleBulkDelete = async () => {
     setBulkDeleting(true);
@@ -913,11 +874,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const actionButtons = (
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-1">
-        {!mesFechadoAtivo && (
-          <Button size="sm" onClick={() => { setEditingLanc(null); setDialogOpen(true); }} className="h-6 text-[10px] gap-0.5 px-1.5 bg-[#E7C873] text-foreground hover:bg-[#D9B95F]" title="Novo Lançamento">
-            <Plus className="h-3 w-3" /> Novo
-          </Button>
-        )}
+        <Button size="sm" onClick={() => { setEditingLanc(null); setDialogOpen(true); }} className="h-6 text-[10px] gap-0.5 px-1.5 bg-[#E7C873] text-foreground hover:bg-[#D9B95F]" title="Novo Lançamento">
+          <Plus className="h-3 w-3" /> Novo
+        </Button>
         <FinanceiroV2ExportMenu
           lancamentos={sortedLancamentos}
           fornecedores={hook.fornecedores}
@@ -1364,18 +1323,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         </CardContent>
       </Card>
 
-      {/* Fechamento mensal banner */}
-      {!modoIntensivo && singleMonthSelected && fazendaId !== '__all__' && (
-        <FechamentoMensalBanner
-          anoMes={singleMonthSelected}
-          status={singleMonthStatus as 'aberto' | 'fechado'}
-          podFechar={fechamentoHook.podFechar}
-          podReabrir={fechamentoHook.podReabrir}
-          onFechar={() => fechamentoHook.fecharMes(fazendaId, singleMonthSelected)}
-          onReabrir={() => fechamentoHook.reabrirMes(fazendaId, singleMonthSelected)}
-        />
-      )}
-
       {(!queryFazendaId && fazendaId !== '__all__') && (
         <div className="text-center text-muted-foreground py-6 text-[10px]">
           Selecione uma fazenda e um ano para carregar os lançamentos.
@@ -1386,7 +1333,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         <div className="text-center text-muted-foreground py-4 text-[10px] animate-pulse">Carregando...</div>
       )}
 
-      {mode === 'rapido' && !mesFechadoAtivo && (fazendaId === '__all__' || fazendaId) && (
+      {mode === 'rapido' && (fazendaId === '__all__' || fazendaId) && (
         <ModoRapidoGrid
           fazendaId={fazendaId !== '__all__' ? fazendaId : fazOperacionais[0]?.id || ''}
           contas={hook.contasBancarias}
@@ -1460,13 +1407,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     const isHistoricoReadOnly = l.origem_lancamento === 'importacao_historica';
                     const isParcelaFinanciamento = l.origem_lancamento === 'parcela_financiamento' || (l as any).origem_tipo === 'financiamento_captacao' || (l.origem_lancamento === 'financiamento' && !!(l as any).financiamento_id);
                     const isImported = !!l.lote_importacao_id;
-                    const rowMesFechado = fazendaId !== '__all__' && fechamentoHook.isMesFechado(l.fazenda_id, l.ano_mes);
-                    const canEditRow = !isHistoricoReadOnly && !isParcelaFinanciamento && !rowMesFechado;
+                    const canEditRow = !isHistoricoReadOnly && !isParcelaFinanciamento;
 
                     return (
                       <tr key={l.id} className={`border-b italic !h-auto hover:bg-muted/50 transition-colors ${selectedIds.has(l.id) ? 'bg-primary/5' : ''}`}>
                         <td className="px-1 py-1 align-middle text-center sticky left-0 z-10 bg-background">
-                          <Checkbox checked={selectedIds.has(l.id)} onCheckedChange={() => toggleSelect(l.id)} disabled={rowMesFechado || isParcelaFinanciamento} className="h-3 w-3" />
+                          <Checkbox checked={selectedIds.has(l.id)} onCheckedChange={() => toggleSelect(l.id)} disabled={isParcelaFinanciamento} className="h-3 w-3" />
                         </td>
                         <td className="font-mono px-0.5 py-1 align-middle text-[12px] font-medium leading-tight sticky left-[28px] z-10 bg-background text-center">{fmtDate(l.data_competencia)}</td>
                         <td className="font-mono px-0.5 py-1 align-middle text-[12px] font-medium leading-tight sticky left-[73px] z-10 bg-background text-center">{fmtDate(l.data_pagamento)}</td>
@@ -1510,11 +1456,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                                   <ExternalLink className="h-4 w-4" />
                                 </button>
                             ) : (
-                              <Button variant="ghost" size="icon" className="h-5 w-5 rounded-sm" onClick={() => openEdit(l)} disabled={!canEditRow} title={rowMesFechado ? 'Mês fechado' : isHistoricoReadOnly ? 'Histórico antigo: somente leitura' : 'Editar'}>
+                              <Button variant="ghost" size="icon" className="h-5 w-5 rounded-sm" onClick={() => openEdit(l)} disabled={!canEditRow} title={isHistoricoReadOnly ? 'Histórico antigo: somente leitura' : 'Editar'}>
                                 <Pencil className="h-2.5 w-2.5" />
                               </Button>
                             )}
-                            <Button variant="ghost" size="icon" className="h-5 w-5 rounded-sm" onClick={() => handleDuplicate(l)} disabled={rowMesFechado || isParcelaFinanciamento} title={rowMesFechado ? 'Mês fechado' : isParcelaFinanciamento ? 'Parcela de financiamento — não duplicável' : 'Duplicar'}>
+                            <Button variant="ghost" size="icon" className="h-5 w-5 rounded-sm" onClick={() => handleDuplicate(l)} disabled={isParcelaFinanciamento} title={isParcelaFinanciamento ? 'Parcela de financiamento — não duplicável' : 'Duplicar'}>
                               <Copy className="h-2.5 w-2.5" />
                             </Button>
                           </div>
@@ -1573,11 +1519,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
             <AlertDialogDescription asChild>
               <div className="space-y-2 text-sm">
                 <p><strong>{selectedIds.size}</strong> lançamento{selectedIds.size !== 1 ? 's' : ''} selecionado{selectedIds.size !== 1 ? 's' : ''}.</p>
-                {bloqueadosInfo.bloqueadosMesFechado.length > 0 && (
-                  <p className="text-destructive font-semibold">
-                    🔒 {bloqueadosInfo.bloqueadosMesFechado.length} lançamento{bloqueadosInfo.bloqueadosMesFechado.length !== 1 ? 's' : ''} de mês fechado — não {bloqueadosInfo.bloqueadosMesFechado.length !== 1 ? 'podem' : 'pode'} ser excluído{bloqueadosInfo.bloqueadosMesFechado.length !== 1 ? 's' : ''}.
-                  </p>
-                )}
                 <p><strong>{bloqueadosInfo.deletaveis.length}</strong> lançamento{bloqueadosInfo.deletaveis.length !== 1 ? 's serão' : ' será'} cancelado{bloqueadosInfo.deletaveis.length !== 1 ? 's' : ''} (exclusão lógica).</p>
                 <p className="text-[11px] text-muted-foreground">Origens: {bloqueadosInfo.origens.join(', ')}</p>
               </div>
