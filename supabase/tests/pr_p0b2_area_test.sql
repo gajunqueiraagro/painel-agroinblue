@@ -81,13 +81,16 @@ BEGIN
   SELECT versao INTO v_ver1 FROM public.fechamento_area_snapshot WHERE id=v_area;
   RAISE NOTICE 'T1 OK';
 
-  -- ======================= T1b — snapshot vigente ja existente -> reutiliza =======================
+  -- ======================= T1b — reexecucao com snapshot vigente reutilizado -> area PRESERVADA (PR1) =======================
+  -- PR1 (20260717150000): fn_gerar_area_de_snapshot passou a PRESERVAR area existente.
+  -- Contrato antigo (versao++) foi substituido por decisao de negocio: reexecucao
+  -- do fechamento nao pode reescrever a fotografia historica.
   v_area := public.gerar_snapshot_area(v_faz, v_mes_date, v_user);
   IF (SELECT count(*) FROM public.fechamento_p1_snapshot s JOIN public.fechamento_p1 p ON p.id=s.fechamento_p1_id WHERE p.fazenda_id=v_faz AND p.ano_mes=v_mes) <> 1 THEN RAISE EXCEPTION 'T1b criou novo snapshot (deveria reutilizar)'; END IF;
   IF (SELECT fechamento_p1_snapshot_id FROM public.fechamento_area_snapshot WHERE id=v_area) <> v_snap1 THEN RAISE EXCEPTION 'T1b area nao vinculada ao vigente reutilizado'; END IF;
   SELECT versao INTO v_ver_b FROM public.fechamento_area_snapshot WHERE id=v_area;
-  IF v_ver_b <= v_ver1 THEN RAISE EXCEPTION 'T1b versao nao incrementou (%->%)', v_ver1, v_ver_b; END IF;
-  RAISE NOTICE 'T1b OK';
+  IF v_ver_b <> v_ver1 THEN RAISE EXCEPTION 'T1b PR1: versao deveria PRESERVAR, nao mudar (%->%)', v_ver1, v_ver_b; END IF;
+  RAISE NOTICE 'T1b OK (area preservada, versao inalterada)';
 
   -- ======================= T2 — diagnostico (pendencia P_25) =======================
   v_diag := public.fn_gerar_area_de_snapshot(v_snap1);
@@ -108,16 +111,29 @@ BEGIN
   IF (SELECT count(*) FROM public.fn_area_vigente_mes(v_faz, v_mes_date)) <> 0 THEN RAISE EXCEPTION 'T4 vigente_mes<>0 (voltou ao legado?)'; END IF;
   RAISE NOTICE 'T4 OK';
 
-  -- ======================= T5 — regravar apos invalidacao -> novo vigente, nova area vinculada =======================
+  -- ======================= T5 — apos invalidacao, refechar -> novo vigente de CONJUNTO, area PRESERVADA (PR1) =======================
+  -- CONTRATO (aprovado): a area preservada mantem sua origem historica ORIGINAL,
+  -- mesmo que o conjunto P1 seja posteriormente rematerializado. A rematerializacao
+  -- do conjunto NAO atualiza a area, NAO incrementa versao, NAO altera fechado_em e
+  -- NAO revincula a area ao novo snapshot. A area pertence a fotografia em que foi
+  -- capturada, nao ao ultimo conjunto — revincular seria enganoso.
+  --
+  -- IMPLICACAO PARA O FUTURO: um redesenho de get_status_pilares_fechamento NAO
+  -- podera exigir que fechamento_area_snapshot.fechamento_p1_snapshot_id seja igual
+  -- ao snapshot vigente mais recente do conjunto. Devera verificar EXISTENCIA e
+  -- VALIDADE dos artefatos por mes, nao identidade absoluta entre suas versoes.
+  --
+  -- Aqui: conjunto rematerializado (novo vigente v_snap_new) mas area vinculada
+  -- ao ORIGINAL (v_snap1), versao preservada.
   v_area := public.gerar_snapshot_area(v_faz, v_mes_date, v_user);
   SELECT s.id INTO v_snap_new FROM public.fechamento_p1_snapshot s JOIN public.fechamento_p1 p ON p.id=s.fechamento_p1_id
     WHERE p.fazenda_id=v_faz AND p.ano_mes=v_mes AND s.status='vigente'::public.snapshot_status;
-  IF v_snap_new IS NULL OR v_snap_new = v_snap1 THEN RAISE EXCEPTION 'T5 nao criou novo vigente'; END IF;
+  IF v_snap_new IS NULL OR v_snap_new = v_snap1 THEN RAISE EXCEPTION 'T5 nao criou novo vigente de conjunto'; END IF;
   IF (SELECT count(*) FROM public.fechamento_p1_snapshot s JOIN public.fechamento_p1 p ON p.id=s.fechamento_p1_id WHERE p.fazenda_id=v_faz AND p.ano_mes=v_mes AND s.status='vigente'::public.snapshot_status) <> 1 THEN RAISE EXCEPTION 'T5 vigente<>1'; END IF;
-  IF (SELECT fechamento_p1_snapshot_id FROM public.fechamento_area_snapshot WHERE id=v_area) <> v_snap_new THEN RAISE EXCEPTION 'T5 area nao vinculada ao novo snapshot'; END IF;
+  IF (SELECT fechamento_p1_snapshot_id FROM public.fechamento_area_snapshot WHERE id=v_area) <> v_snap1 THEN RAISE EXCEPTION 'T5 PR1: area preservada deveria permanecer vinculada ao snapshot ORIGINAL (v_snap1)'; END IF;
   SELECT versao INTO v_ver5 FROM public.fechamento_area_snapshot WHERE id=v_area;
-  IF v_ver5 <= v_ver_b THEN RAISE EXCEPTION 'T5 versao nao incrementou'; END IF;
-  RAISE NOTICE 'T5 OK';
+  IF v_ver5 <> v_ver_b THEN RAISE EXCEPTION 'T5 PR1: versao deveria PRESERVAR, nao mudar'; END IF;
+  RAISE NOTICE 'T5 OK (conjunto novo, area preservada e vinculada ao original)';
 
   -- ======================= T6 — autoria invalida (42501) =======================
   BEGIN
