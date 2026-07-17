@@ -23,6 +23,7 @@
 import { useMemo } from 'react';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchAllPaginated, MAX_ROWS } from '@/lib/supabase/fetchAllPaginated';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import {
@@ -371,22 +372,39 @@ export function useRebanhoOficial({ ano, cenario, global, enabled = true }: UseR
       if (!resolvedGlobal && !fazendaId) return [];
       if (resolvedGlobal && !clienteId) return [];
 
-      // Query única: itens com join no fechamento_pastos (evita .in() massivo)
-      let query = supabase
-        .from('fechamento_pasto_itens')
-        .select('categoria_id, quantidade, peso_medio_kg, fechamento_pastos!inner(ano_mes, status, fazenda_id, cliente_id)')
-        .eq('fechamento_pastos.status', 'fechado')
-        .gte('fechamento_pastos.ano_mes', `${ano - 1}-12`)
-        .lte('fechamento_pastos.ano_mes', `${ano}-12`);
+      // Query única: itens com join no fechamento_pastos (evita .in() massivo).
+      // Paginada: sem .range() o PostgREST corta em 1.000 linhas sem erro, e a
+      // janela é de 13 meses x todo o cliente. `id` entra no select apenas para
+      // dar ordem total à paginação e detectar chave repetida — não é consumido.
+      // Factory: o builder do supabase-js é mutável, cada página remonta a query.
+      const { data: itens } = await fetchAllPaginated<{
+        id: string;
+        categoria_id: string;
+        quantidade: number;
+        peso_medio_kg: number | null;
+        fechamento_pastos: unknown;
+      }>({
+        query: () => {
+          let q = supabase
+            .from('fechamento_pasto_itens')
+            .select('id, categoria_id, quantidade, peso_medio_kg, fechamento_pastos!inner(ano_mes, status, fazenda_id, cliente_id)')
+            .eq('fechamento_pastos.status', 'fechado')
+            .gte('fechamento_pastos.ano_mes', `${ano - 1}-12`)
+            .lte('fechamento_pastos.ano_mes', `${ano}-12`);
 
-      if (resolvedGlobal) {
-        query = query.eq('fechamento_pastos.cliente_id', clienteId);
-      } else {
-        query = query.eq('fechamento_pastos.fazenda_id', fazendaId);
-      }
+          if (resolvedGlobal) {
+            q = q.eq('fechamento_pastos.cliente_id', clienteId);
+          } else {
+            q = q.eq('fechamento_pastos.fazenda_id', fazendaId);
+          }
 
-      const { data: itens, error: itensError } = await query;
-      if (itensError || !itens?.length) return [];
+          return q.order('id', { ascending: true });
+        },
+        getKey: (r) => r.id,
+        maxRows: MAX_ROWS,
+        context: 'useRebanhoOficial/fechamento-overlay',
+      });
+      if (!itens.length) return [];
 
       // Consolidar por fazenda_id + ano_mes + categoria_id
       const agg = new Map<string, { qtd: number; pesoTotal: number }>();
