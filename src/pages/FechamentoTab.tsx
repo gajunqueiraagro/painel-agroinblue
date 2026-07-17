@@ -617,28 +617,18 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
 
       const errosMsgs: string[] = [];
 
-      // 1) Batch insert: criar fechamentos faltantes em uma única chamada
+      // 1) DUP-3B: criação idempotente via RPC de lote (all-or-nothing).
+      // cliente_id é derivado do banco e tipo_uso_mes de pastos.tipo_uso pela
+      // RPC; p_status_inicial omitido preserva o default 'fechado'.
       if (pastosParaCriar.length > 0) {
-        const rowsToInsert = pastosParaCriar.map(pastoId => {
-          const pasto = pastosAtivos.find(p => p.id === pastoId)!;
-          return {
-            pasto_id: pastoId,
-            fazenda_id: fazendaAtual!.id,
-            cliente_id: fazendaAtual!.cliente_id!,
-            ano_mes: anoMes,
-            status: 'fechado',
-            tipo_uso_mes: pasto.tipo_uso || null,
-            responsavel_nome: FECHAMENTO_GLOBAL_MARKER,
-          };
+        const { error } = await (supabase as any).rpc('fn_obter_ou_criar_fechamentos_lote', {
+          p_fazenda_id: fazendaAtual!.id,
+          p_pasto_ids: pastosParaCriar,
+          p_ano_mes: anoMes,
+          p_responsavel_nome: FECHAMENTO_GLOBAL_MARKER,
         });
-
-        const BATCH_SIZE = 500;
-        for (let i = 0; i < rowsToInsert.length; i += BATCH_SIZE) {
-          const batch = rowsToInsert.slice(i, i + BATCH_SIZE);
-          const { error } = await supabase.from('fechamento_pastos').insert(batch);
-          if (error) {
-            errosMsgs.push(`Criar: ${error.message}`);
-          }
+        if (error) {
+          errosMsgs.push(`Criar: ${error.message}`);
         }
       }
 

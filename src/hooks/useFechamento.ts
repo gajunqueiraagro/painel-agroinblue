@@ -57,16 +57,13 @@ export function useFechamento() {
   ) => {
     if (!fazendaId) return null;
 
-    const { data, error } = await supabase
-      .from('fechamento_pastos')
-      .insert({
-        pasto_id: pastoId,
-        fazenda_id: fazendaId,
-        cliente_id: fazendaAtual?.cliente_id!,
-        ano_mes: anoMes,
-      })
-      .select()
-      .single();
+    // DUP-3B: criacao idempotente via RPC. cliente_id e derivado do banco pela
+    // RPC; p_status_inicial omitido preserva o default 'aberto'.
+    const { data, error } = await (supabase as any).rpc('fn_obter_ou_criar_fechamento_pasto', {
+      p_fazenda_id: fazendaId,
+      p_pasto_id: pastoId,
+      p_ano_mes: anoMes,
+    });
     if (error) { toast.error('Erro ao criar fechamento'); console.error(error); return null; }
     return data;
   }, [fazendaId]);

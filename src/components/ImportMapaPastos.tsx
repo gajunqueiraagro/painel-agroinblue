@@ -75,29 +75,24 @@ export function ImportMapaPastos({ open, onOpenChange, pastos, categorias, fazen
         const first = items[0];
 
         if (!fechId) {
-          const { data, error } = await supabase
-            .from('fechamento_pastos')
-            .insert({
-              pasto_id: pastoId,
-              fazenda_id: fazendaId,
-              cliente_id: clienteId,
-              ano_mes: itemAnoMes,
-              lote_mes: first.lote,
-              tipo_uso_mes: first.atividade,
-              qualidade_mes: first.qualidade,
-            })
-            .select('id')
-            .single();
+          // DUP-3B: criação idempotente via RPC. cliente_id é derivado do banco
+          // pela RPC; p_status_inicial omitido preserva o default 'aberto'.
+          // Os campos importados são aplicados pelo UPDATE unificado abaixo.
+          const { data, error } = await (supabase as any).rpc('fn_obter_ou_criar_fechamento_pasto', {
+            p_fazenda_id: fazendaId,
+            p_pasto_id: pastoId,
+            p_ano_mes: itemAnoMes,
+          });
           if (error) throw error;
           fechId = data.id;
-        } else {
-          const updates: Record<string, unknown> = {};
-          if (first.atividade) updates.tipo_uso_mes = first.atividade;
-          if (first.lote) updates.lote_mes = first.lote;
-          if (first.qualidade !== null) updates.qualidade_mes = first.qualidade;
-          if (Object.keys(updates).length > 0) {
-            await supabase.from('fechamento_pastos').update(updates as any).eq('id', fechId);
-          }
+        }
+
+        const updates: Record<string, unknown> = {};
+        if (first.atividade) updates.tipo_uso_mes = first.atividade;
+        if (first.lote) updates.lote_mes = first.lote;
+        if (first.qualidade !== null) updates.qualidade_mes = first.qualidade;
+        if (Object.keys(updates).length > 0) {
+          await supabase.from('fechamento_pastos').update(updates as any).eq('id', fechId);
         }
 
         await supabase.from('fechamento_pasto_itens').delete().eq('fechamento_id', fechId);
