@@ -78,3 +78,23 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - Hierarquia documental: Constituicao > ADRs > specs/modules/
   runbooks > codigo. CLAUDE.md rege a execucao; a Constituicao rege
   a arquitetura.
+- Convivencia dos checklists constitucionais:
+  (a) ENCAIXE ARQUITETURAL (Constituicao n. 1, Titulo IV) aplica-se
+  a QUALQUER alteracao de fonte, contrato, componente, calculo,
+  integracao, regra ou arquitetura;
+  (b) o checklist do Art. 19 da Constituicao n. 2
+  (docs/constituicao/CONSTITUICAO-2-INTELIGENCIA-GERENCIAL.md)
+  aplica-se as superficies apresentadas como analise: dashboard,
+  painel, card analitico, resumo executivo, relatorio
+  interpretativo, projecao, cenario, alerta ou recomendacao
+  condicional;
+  (c) quando ambos se aplicarem, responder de forma complementar,
+  podendo compartilhar a mesma evidencia por referencia cruzada,
+  sem repeticao literal desnecessaria. Briefing analitico sem o
+  checklist do Art. 19 e sem os artigos atendidos (Art. 22):
+  PARAR e solicitar.
+- Sentinelas de dado (exibicao e relatorios):
+  "—" significa dado ausente, desconhecido ou indisponivel;
+  "confere", "mantem" ou equivalente significa que existem dados
+  validos e coincidentes; zero e valor real e nunca substitui dado
+  ausente; dado conciliado nunca deve aparentar ausencia.

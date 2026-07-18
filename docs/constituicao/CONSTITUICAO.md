@@ -9,6 +9,16 @@
 > specs, módulos e ao código.
 > Vigência: aprovada em 04/07/2026. Emendas: ver Título VII.
 
+## Documentos constitucionais
+Este documento é a Constituição nº 1 (Técnica): rege arquitetura,
+fontes soberanas e metodologia. A Constituição nº 2 — Produto e
+Inteligência Gerencial
+(docs/constituicao/CONSTITUICAO-2-INTELIGENCIA-GERENCIAL.md) rege
+propósito, pilares e regras de inteligência. São irmãs, sem
+precedência entre si: conflito aparente é erro de interpretação e
+deve ser levado à deliberação. A hierarquia "Constituição > ADRs >
+..." lê-se, a partir de 18/07/2026, "Constituições > ADRs > ...".
+
 ## Título I — Hierarquia de fontes
 1. A verdade técnica vive no repositório (esta Constituição, ADRs,
    specs, módulos, runbooks, código) e no banco em tempo real.
