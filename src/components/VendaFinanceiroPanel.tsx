@@ -566,7 +566,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
             .in('id', oldIds);
           if (cancelErr) {
             console.error('[VendaFinanceiro] falha ao cancelar financeiros antigos — abort antes do INSERT', cancelErr);
-            toast.error('Não foi possível cancelar o financeiro vinculado para substituição. Operação abortada.');
+            toast.error(`Não foi possível substituir o financeiro existente: ${cancelErr.message}`);
             setGerando(false);
             return false;
           }

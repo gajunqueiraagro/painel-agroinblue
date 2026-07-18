@@ -255,7 +255,12 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
         const oldIds = (oldRecords || []).map(r => r.id);
         if (oldIds.length > 0) {
           const userId = (await supabase.auth.getUser()).data.user?.id;
-          await supabase
+          // CONTENÇÃO TEMPORÁRIA HOTFIX-Z6: captura o erro do cancelamento e aborta
+          // ANTES do audit e de qualquer INSERT. Sem isto, o guard do banco
+          // (trg_guard_zoo_financeiro_cancelamento_realizado, P0001) abortava o UPDATE,
+          // mas o código seguia gravando audit de cancelamento não confirmado e
+          // inserindo novos registros por cima — duplicação financeira.
+          const { error: cancelErr } = await supabase
             .from('financeiro_lancamentos_v2')
             .update({
               cancelado: true,
@@ -263,6 +268,11 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
               cancelado_por: userId || null,
             })
             .in('id', oldIds);
+          if (cancelErr) {
+            toast.error(`Não foi possível substituir o financeiro existente: ${cancelErr.message}`);
+            setGerando(false);
+            return false;
+          }
 
           // DESATIVADO (Opção A — eliminar espelhos auto em planejamento_financeiro):
           // await deleteMetaPlanejamentoByMovimentacao(targetLancamentoId, clienteAtual.id);

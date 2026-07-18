@@ -2019,6 +2019,20 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       ? { ...lancamentoDados, fornecedorId: fornecedorIdPorTipo, fornecedorNomeSnapshot: fornecedorNomePorTipo }
       : lancamentoDados;
 
+    // HOTFIX-Z6: diff zootécnico da edição, calculado SEMPRE (mês aberto ou
+    // fechado). Alimenta a contenção de duplicação financeira. Sem snapshot
+    // original (orig=null) => false (fail-safe: não é tratada como comercial).
+    const origZ6 = editOriginalRef.current;
+    const edicaoSomenteComercial = !!editingAbateId && !!origZ6 && !(
+      String(origZ6.data) !== String(data) ||
+      String(origZ6.tipo) !== String(tipo) ||
+      Number(origZ6.quantidade) !== parseNumericValue(quantidade) ||
+      Number(origZ6.pesoMedioKg || 0) !== parseNumericValue(pesoKg) ||
+      String(origZ6.categoria) !== String(categoria) ||
+      String(origZ6.fazendaOrigem || '') !== String(fazendaOrigem || '') ||
+      String(origZ6.fazendaDestino || '') !== String(fazendaDestino || '')
+    );
+
     setSubmitting(true);
     try {
       if (editingAbateId) {
@@ -2036,16 +2050,37 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         // fazia retentativas pós-erro caírem em zooChanged=true (orig=null) e
         // serem bloqueadas como "alteração zootécnica" mesmo sem mudança zoo.
         editOriginalRef.current = null;
+
+        // CONTENÇÃO TEMPORÁRIA HOTFIX-Z6 — remoção prevista na arquitetura de
+        // operação comercial (vínculo soberano + idempotência).
+        const { count: finAtivos, error: finAtivosError } = await supabase
+          .from('financeiro_lancamentos_v2')
+          .select('id', { count: 'exact', head: true })
+          .eq('movimentacao_rebanho_id', editingAbateId)
+          .eq('cancelado', false);
+
+        let pularRegeneracaoFinanceira = false;
+        if (finAtivosError) {
+          // Fail-safe: na dúvida, não regenerar — regenerar sem saber se já existe
+          // financeiro pode duplicar registros.
+          console.error('[HOTFIX-Z6] falha ao verificar financeiro vinculado', finAtivosError);
+          toast.error(`Movimentação atualizada, mas não foi possível verificar o financeiro vinculado: ${finAtivosError.message}`);
+          pularRegeneracaoFinanceira = true;
+        } else if (edicaoSomenteComercial && (finAtivos ?? 0) > 0) {
+          toast.info('Movimentação atualizada. O financeiro existente não foi recriado para evitar duplicidade. Ajustes no financeiro devem ser feitos pelo Financeiro Oficial.');
+          pularRegeneracaoFinanceira = true;
+        }
+
         if (isAbate) {
           // Delegação total: o painel decide se gera (guards internos de formaReceb/parcelas).
-          if (abateFinanceiroRef.current) {
+          if (!pularRegeneracaoFinanceira && abateFinanceiroRef.current) {
             await abateFinanceiroRef.current.generateFinanceiro(editingAbateId, {
               valorLiquido: calc.valorLiquido,
               totalDescontos: calc.totalDescontos,
               formaReceb: abateDetalhes?.formaReceb || 'avista',
               parcelas: abateDetalhes?.parcelas || [],
             });
-          } else {
+          } else if (!pularRegeneracaoFinanceira) {
             console.warn('[LancamentosTab] AbateFinanceiroPanel ref ausente na edição de abate');
           }
           setEditingAbateId(null);
@@ -2064,7 +2099,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           // nunca bloqueia o finalize do zoo. O VendaFinanceiroPanel emite os
           // próprios erros/avisos (desde PR-STAB-01A) — não duplicar mensagem aqui.
           try {
-            if (vendaFinanceiroRef.current) {
+            if (!pularRegeneracaoFinanceira && vendaFinanceiroRef.current) {
               await vendaFinanceiroRef.current.generateFinanceiro(editingAbateId);
             }
           } catch (e: any) {
