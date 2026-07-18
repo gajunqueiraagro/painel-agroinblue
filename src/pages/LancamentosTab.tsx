@@ -1697,9 +1697,22 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     if (!fazendaId || !dateStr) return;
     const p_ano = Number(dateStr.slice(0, 4));
     const args = mes ? { p_fazenda_id: fazendaId, p_ano, p_mes: mes } : { p_fazenda_id: fazendaId, p_ano };
-    supabase.rpc('refresh_zoot_cache' as any, args).catch(() => {});
+    // CONTENÇÃO TEMPORÁRIA (follow-up aberto: FUP-CACHE-RPC-REFRESH decide o
+    // destino deste refresh). O PostgrestBuilder é thenable mas NÃO implementa
+    // .catch — a chamada abaixo lança TypeError síncrono, que antes abortava o
+    // restante do bloco pós-save dos chamadores (modal ficava aberto/resetado,
+    // contexto de origem não era restaurado). O try/catch preserva o
+    // comportamento de rede atual (o builder é lazy: sem .then, o RPC nunca é
+    // despachado). NÃO converter .catch em .then/await sem homologar a
+    // ativação do RPC refresh_zoot_cache — isso mudaria o mecanismo de
+    // sustentação do cache sem investigação.
+    try {
+      supabase.rpc('refresh_zoot_cache' as any, args).catch(() => {});
+    } catch (e) { console.warn('[LancamentosTab] refresh_zoot_cache não despachado — contenção temporária FUP-CACHE-RPC-REFRESH:', e); }
     if (includeReclassificacao) {
-      supabase.rpc('refresh_zoot_cache_reclassificacao' as any, { p_fazenda_id: fazendaId, p_ano }).catch(() => {});
+      try {
+        supabase.rpc('refresh_zoot_cache_reclassificacao' as any, { p_fazenda_id: fazendaId, p_ano }).catch(() => {});
+      } catch (e) { console.warn('[LancamentosTab] refresh_zoot_cache_reclassificacao não despachado — contenção temporária FUP-CACHE-RPC-REFRESH:', e); }
     }
   };
 
@@ -1715,6 +1728,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     // descontos, forma de pagamento, documento). Só bloqueia se houve mudança
     // em campo ZOOTÉCNICO que afeta saldo físico/peso/rebanho. O critério
     // espelha o gate P1 em handleRequestRegister para manter coerência.
+    // Edição comercial-only sob P1 fechado: quando o gate abaixo confirma que
+    // nenhum campo zootécnico mudou, o payload do update envia apenas campos
+    // comerciais/financeiros (ver poda após lancamentoDados) para não colidir
+    // com o guard seletivo do banco (trg_guard_lancamento_mes_fechado_p1).
+    let p1ComercialOnly = false;
     if (data && !isCenarioMeta && !masterLock.isMaster) {
       const anoMesData = data.slice(0, 7); // 'YYYY-MM'
       if (!masterLock.isUnlocked(anoMesData)) {
@@ -1746,7 +1764,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             return;
           }
           // Apenas financeiro mudou: deixa o save seguir para o resto do
-          // handleSubmit (snapshot zoo e P1 permanecem intactos).
+          // handleSubmit (snapshot zoo e P1 permanecem intactos). O payload
+          // será podado para conter somente campos comerciais.
+          p1ComercialOnly = true;
         }
       }
     }
@@ -1963,13 +1983,48 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       })(),
     };
 
+    // Edição comercial-only sob P1 fechado: remove do payload os campos
+    // estruturais vigiados pelo guard do banco (data, tipo, quantidade,
+    // categoria, categoria_destino, fazendas) e derivados físicos. Em
+    // particular, fazenda_destino: no abate ela carrega o NOME do frigorífico
+    // (derivado do fornecedor selecionado) — reenviá-la ao trocar a
+    // contraparte dispara o guard como se fosse mudança estrutural. O vínculo
+    // comercial novo segue por fornecedor_id, frigorifico (texto) e
+    // detalhes_snapshot, todos livres no guard; o snapshot fazenda_destino
+    // permanece com o valor histórico até reabertura do período.
+    if (p1ComercialOnly) {
+      delete lancamentoDados.data;
+      delete lancamentoDados.tipo;
+      delete lancamentoDados.quantidade;
+      delete lancamentoDados.categoria;
+      delete lancamentoDados.categoriaDestino;
+      delete lancamentoDados.fazendaOrigem;
+      delete lancamentoDados.fazendaDestino;
+      delete lancamentoDados.pesoMedioKg;
+      delete lancamentoDados.pesoMedioArrobas;
+      delete lancamentoDados.pesoTotal;
+    }
+
+    // Contraparte soberana por tipo — usada tanto no update quanto no create,
+    // para que a edição também persista fornecedor_id/snapshot na coluna
+    // (antes o update gravava o vínculo apenas dentro de detalhes_snapshot).
+    const fornecedorIdPorTipo = isCompra ? compraFornecedorId
+      : isAbate ? abateFornecedorId
+      : isVenda ? vendaDestinoFornecedorId
+      : null;
+    const fornecedorNomePorTipo = fornecedorIdPorTipo
+      ? (abateFornecedores.find(f => f.id === fornecedorIdPorTipo)?.nome ?? null)
+      : null;
+    const lancamentoDadosComForn = fornecedorIdPorTipo
+      ? { ...lancamentoDados, fornecedorId: fornecedorIdPorTipo, fornecedorNomeSnapshot: fornecedorNomePorTipo }
+      : lancamentoDados;
+
     setSubmitting(true);
     try {
       if (editingAbateId) {
-        editOriginalRef.current = null;
         setP1BloqueioMsg(null);
         try {
-          const editOk = await onEditar(editingAbateId, lancamentoDados);
+          const editOk = await onEditar(editingAbateId, lancamentoDadosComForn);
           if (editOk === false) { setSubmitting(false); return; }
         } catch (e: any) {
           console.error('[LancamentosTab] falha ao salvar venda (zoo) — abortando', e);
@@ -1977,6 +2032,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setSubmitting(false);
           return;
         }
+        // Só descarta o snapshot original após sucesso: zerá-lo antes do save
+        // fazia retentativas pós-erro caírem em zooChanged=true (orig=null) e
+        // serem bloqueadas como "alteração zootécnica" mesmo sem mudança zoo.
+        editOriginalRef.current = null;
         if (isAbate) {
           // Delegação total: o painel decide se gera (guards internos de formaReceb/parcelas).
           if (abateFinanceiroRef.current) {
@@ -2069,16 +2128,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         // "abate", é populada sem filtro de tipo via query em financeiro_fornecedores
         // WHERE cliente_id=X AND ativo=true) — segura para resolver nome de
         // compra/abate/venda. Confirmado em Z5a audit Task 0.
-        const fornecedorIdPorTipo = isCompra ? compraFornecedorId
-          : isAbate ? abateFornecedorId
-          : isVenda ? vendaDestinoFornecedorId
-          : null;
-        const fornecedorNomePorTipo = fornecedorIdPorTipo
-          ? (abateFornecedores.find(f => f.id === fornecedorIdPorTipo)?.nome ?? null)
-          : null;
-        const lancamentoDadosComForn = fornecedorIdPorTipo
-          ? { ...lancamentoDados, fornecedorId: fornecedorIdPorTipo, fornecedorNomeSnapshot: fornecedorNomePorTipo }
-          : lancamentoDados;
         const returnedId = await onAdicionar(lancamentoDadosComForn as Omit<Lancamento, 'id'>);
 
         if (isCompra && returnedId) {

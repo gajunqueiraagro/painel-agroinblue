@@ -548,7 +548,11 @@ export function useLancamentos(arg: UseLancamentosArg = 'realizado') {
     const { error } = await supabase.from('lancamentos').update(update).eq('id', id);
     if (error) {
       console.error('[useLancamentos] editarLancamento falhou', error);
-      toast.error('Não foi possível salvar o lançamento.');
+      // Exibe a causa real quando disponível (ex.: mensagem do guard de mês
+      // fechado no banco) — o texto genérico escondia o motivo do bloqueio.
+      toast.error(error?.message
+        ? `Não foi possível salvar: ${error.message}`
+        : 'Não foi possível salvar o lançamento.');
       return false;
     }
     // Otimista: atualiza item no cache.
