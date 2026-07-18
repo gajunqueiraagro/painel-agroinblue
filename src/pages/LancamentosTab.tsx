@@ -1571,13 +1571,27 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
     let cancelled = false;
 
-    supabase
-      .from('financeiro_fornecedores')
-      .select('id, nome, nome_normalizado, aliases')
-      .eq('cliente_id', clienteAtual.id)
-      .eq('ativo', true)
-      .order('nome')
-      .then(({ data, error }) => {
+    // Paginação obrigatória: sem .range(), o PostgREST aplica teto default de
+    // 1000 linhas e clientes com mais contrapartes ativas (ex.: NJ, 6.6k) têm
+    // a lista truncada — fornecedores após o corte alfabético ficam
+    // inselecionáveis no dropdown. Tiebreaker por id garante ordenação estável
+    // entre páginas quando há nomes duplicados; dedup por id como salvaguarda.
+    const FORNECEDORES_PAGE_SIZE = 1000;
+
+    (async () => {
+      const acumulado: { id: string; nome: string; nome_normalizado: string | null; aliases: string[] | null }[] = [];
+      let from = 0;
+
+      while (true) {
+        const { data, error } = await supabase
+          .from('financeiro_fornecedores')
+          .select('id, nome, nome_normalizado, aliases')
+          .eq('cliente_id', clienteAtual.id)
+          .eq('ativo', true)
+          .order('nome')
+          .order('id')
+          .range(from, from + FORNECEDORES_PAGE_SIZE - 1);
+
         if (cancelled) return;
         if (error) {
           console.error('Erro ao carregar fornecedores ativos', error);
@@ -1585,13 +1599,24 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           return;
         }
 
-        setAbateFornecedores(((data as any[]) || []).map(item => ({
+        const page = (data as any[]) || [];
+        acumulado.push(...page);
+        if (page.length < FORNECEDORES_PAGE_SIZE) break;
+        from += FORNECEDORES_PAGE_SIZE;
+      }
+
+      if (cancelled) return;
+
+      const vistos = new Set<string>();
+      setAbateFornecedores(acumulado
+        .filter(item => (vistos.has(item.id) ? false : (vistos.add(item.id), true)))
+        .map(item => ({
           id: item.id,
           nome: item.nome,
           nomeNormalizado: item.nome_normalizado ?? null,
           aliases: item.aliases ?? null,
         })));
-      });
+    })();
 
     return () => {
       cancelled = true;

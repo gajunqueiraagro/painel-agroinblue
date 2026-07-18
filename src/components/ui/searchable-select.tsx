@@ -43,13 +43,23 @@ export function SearchableSelect({
     return options.filter(o => o.label.toLowerCase().includes(q));
   }, [options, search]);
 
+  // Cap de render: sem virtualização, listas grandes (milhares de contrapartes)
+  // geravam DOM gigante e travavam o dropdown. Limite de 50 itens visíveis,
+  // mesmo padrão do FornecedorSelect (Z3); acima disso o excedente é anunciado
+  // e o usuário refina a busca. A busca continua operando sobre a lista
+  // completa — o cap afeta apenas o DOM. Para listas pequenas, comportamento
+  // idêntico ao anterior.
+  const RENDER_CAP = 50;
+  const filteredVisiveis = useMemo(() => filtered.slice(0, RENDER_CAP), [filtered]);
+  const excedente = filtered.length - filteredVisiveis.length;
+
   const selectableItems = useMemo(() => {
-    return [{ value: allValue, label: allLabel }, ...filtered];
-  }, [filtered, allValue, allLabel]);
+    return [{ value: allValue, label: allLabel }, ...filteredVisiveis];
+  }, [filteredVisiveis, allValue, allLabel]);
 
   useEffect(() => {
-    setHighlightIdx(filtered.length > 0 ? 1 : 0);
-  }, [filtered]);
+    setHighlightIdx(filteredVisiveis.length > 0 ? 1 : 0);
+  }, [filteredVisiveis]);
 
   useEffect(() => {
     const el = itemRefs.current[highlightIdx];
@@ -83,7 +93,7 @@ export function SearchableSelect({
       setOpenUp(spaceBelow < 160);
     }
     setOpen(true);
-    setHighlightIdx(filtered.length > 0 ? 1 : 0);
+    setHighlightIdx(filteredVisiveis.length > 0 ? 1 : 0);
     setTimeout(() => inputRef.current?.focus(), 0);
   };
 
@@ -208,6 +218,11 @@ export function SearchableSelect({
             ))}
             {filtered.length === 0 && (
               <div className="text-[9px] text-muted-foreground px-1 py-0.5">Nenhum resultado</div>
+            )}
+            {excedente > 0 && (
+              <div className="text-[9px] text-muted-foreground px-1 py-0.5 border-t border-border/50">
+                +{excedente} resultado{excedente === 1 ? '' : 's'} — refine a busca
+              </div>
             )}
           </div>
         </div>
