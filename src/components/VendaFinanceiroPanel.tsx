@@ -633,7 +633,16 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
         return false;
       }
 
-      const clasReceita = planoReceita.find(p => subcentroCandidates.indexOf(p.subcentro!) >= 0) || planoReceita[0];
+      // O desempate da classificação deve respeitar a ordem de prioridade de
+      // subcentroCandidates (candidato preferido primeiro), não a ordem do
+      // resultset do banco: ordenado por ordem_exibicao, "Venda de Desmama
+      // Fêmeas" venceria "Venda de Fêmeas Adultas" para vacas/novilhas.
+      const clasReceita =
+        subcentroCandidates
+          .map((subcentro) =>
+            planoReceita.find((plano) => plano.subcentro === subcentro)
+          )
+          .find(Boolean) || planoReceita[0];
       const statusFin = 'programado';
 
       const baseRecord: Record<string, any> = {
