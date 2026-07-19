@@ -46,6 +46,7 @@ import { AbateExportDialog } from '@/components/AbateExportMenu';
 import { AbateFinanceiroPanel, AbateFinanceiroPanelRef } from '@/components/AbateFinanceiroPanel';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { NovoFornecedorDialog } from '@/components/financeiro-v2/NovoFornecedorDialog';
+import { NovaCompraModal } from '@/components/operacao-comercial/NovaCompraModal';
 import { supabase } from '@/integrations/supabase/client';
 import { VendaFinanceiroPanel, VendaFinanceiroPanelRef } from '@/components/VendaFinanceiroPanel';
 import { useAnosDisponiveis } from '@/hooks/useAnosDisponiveis';
@@ -2443,6 +2444,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
     return (
       <div className="space-y-2 mb-2">
+        {/* PR-OC-03: entrada do novo fluxo (motor Operação Comercial), coexiste com o legado */}
+        <div className="flex justify-end">
+          <NovaCompraModal />
+        </div>
         {TIPO_CARDS_GROUPS.map(g => (
           <div key={g.grupo}>
             <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">
