@@ -2,7 +2,8 @@ import { supabase } from '@/integrations/supabase/client';
 
 // Envelope de retorno das RPCs oc_* (motor transacional PR-OC-02). O React apenas
 // coleta dados, envia payload, interpreta este retorno e atualiza a UI — nenhuma
-// regra de negócio vive aqui; tudo permanece no banco.
+// regra de negócio vive aqui; tudo permanece no banco. Toda escrita OC passa
+// EXCLUSIVAMENTE por estas RPCs (proibido escrever direto nas tabelas zoo_*).
 export interface OcEnvelope {
   ok: boolean;
   operacao_id: string;
@@ -14,34 +15,71 @@ export interface OcEnvelope {
   motivo?: string;
 }
 
+// Uma parte da composição financeira. componente = codigo do catálogo global
+// (zoo_componentes_financeiros) — identidade estável. sequencia_parcela e
+// quantidade_parcelas NÃO são enviadas: o motor (PR-OC-04A) as computa por
+// componente no servidor. Idem valor_bruto/descontos/acrescimos/valor_total, que
+// são DERIVADOS das partes na RPC — o frontend não envia resumos.
 export interface OcPartePayload {
   natureza: 'principal' | 'deducao' | 'acrescimo';
-  componente?: string;
-  sequencia_parcela?: number;
-  quantidade_parcelas?: number;
+  componente: string;
   valor: number;
   data_vencimento?: string | null;
   descricao?: string | null;
+  incluso_no_total?: boolean;
+  plano_conta_id?: string | null;
+  macro_custo?: string | null;
+  grupo_custo?: string | null;
+  centro_custo?: string | null;
+  subcentro?: string | null;
 }
 
+// Payload da RPC soberana oc_salvar_rascunho (upsert). Só o que a RPC lê: dados de
+// negociação + movimentações (Lote, ignoradas no update) + partes. Responsável é
+// resolvido no servidor (snapshot); resumos e seq/qtd são derivados no motor.
 export interface OcRascunhoPayload {
   tipo_operacao: 'compra' | 'venda' | 'abate';
   data_operacao: string;
   contraparte_id?: string | null;
   tipo_precificacao?: string | null;
+  preco_unitario?: number | null;
   condicao_pagamento?: string | null;
   data_pagamento_prevista?: string | null;
-  valor_total?: number | null;
-  // Forward-compat: identificador da NF (documento da operação). A RPC atual IGNORA
-  // esta chave (ainda não há coluna) e a NF NÃO é persistida neste MVP — quando a
-  // coluna numero_nf existir em zoo_operacoes_comerciais, basta a RPC passar a lê-la,
-  // sem alterar o frontend. Não misturar com observacoes (texto livre).
-  numero_nf?: string | null;
   observacoes?: string | null;
-  // Lote (Ordem de Compra): uma ou mais movimentações. Nesta etapa o modal envia
-  // um único lote — a estrutura de lotes será formalizada depois sem quebrar isto.
+  // Lote (Ordem de Compra): uma ou mais movimentações. Consideradas só na criação.
   movimentacoes: string[];
   partes: OcPartePayload[];
+}
+
+// Estado completo de uma operação existente (modo edição) — leitura direta (RLS
+// isola por cliente). Nenhuma escrita aqui.
+export interface OcOperacaoRow {
+  id: string;
+  cliente_id: string;
+  tipo_operacao: string;
+  data_operacao: string;
+  responsavel: string | null;
+  cenario: string;
+  contraparte_id: string | null;
+  tipo_precificacao: string | null;
+  preco_unitario: number | null;
+  condicao_pagamento: string | null;
+  data_pagamento_prevista: string | null;
+  valor_bruto: number | null;
+  descontos: number | null;
+  acrescimos: number | null;
+  valor_total: number | null;
+  observacoes: string | null;
+  status_comercial: string;
+  status_financeiro: string;
+  versao: number;
+}
+
+export interface OcEstado {
+  operacao: OcOperacaoRow;
+  partes: Record<string, unknown>[];
+  movimentacoes: Record<string, unknown>[];
+  eventos: Record<string, unknown>[];
 }
 
 // (supabase as any).rpc é o idioma vigente para RPCs ainda não presentes em types.ts.
@@ -52,8 +90,19 @@ async function callRpc(fn: string, args: Record<string, unknown>): Promise<OcEnv
 }
 
 export function useOperacaoComercial() {
-  const criarRascunho = (clienteId: string, payload: OcRascunhoPayload) =>
-    callRpc('oc_criar_rascunho', { p_cliente_id: clienteId, p_payload: payload });
+  // RPC soberana única: p_operacao_id NULL => cria (versao NULL); preenchido =>
+  // atualiza (exige rascunho + versao). Substitui criar/editar/alterar-parcelas.
+  const salvarRascunho = (
+    operacaoId: string | null, clienteId: string, versaoEsperada: number | null, payload: OcRascunhoPayload,
+  ) =>
+    callRpc('oc_salvar_rascunho', {
+      p_operacao_id: operacaoId, p_cliente_id: clienteId, p_versao_esperada: versaoEsperada, p_payload: payload,
+    });
+
+  const reabrir = (operacaoId: string, clienteId: string, versaoEsperada: number, motivo: string) =>
+    callRpc('oc_reabrir', {
+      p_operacao_id: operacaoId, p_cliente_id: clienteId, p_versao_esperada: versaoEsperada, p_motivo: motivo,
+    });
 
   const confirmar = (operacaoId: string, clienteId: string, versaoEsperada: number) =>
     callRpc('oc_confirmar', {
@@ -65,5 +114,32 @@ export function useOperacaoComercial() {
       p_operacao_id: operacaoId, p_cliente_id: clienteId, p_versao_esperada: versaoEsperada,
     });
 
-  return { criarRascunho, confirmar, sincronizar };
+  const cancelar = (operacaoId: string, clienteId: string, versaoEsperada: number, motivo: string) =>
+    callRpc('oc_cancelar', {
+      p_operacao_id: operacaoId, p_cliente_id: clienteId, p_versao_esperada: versaoEsperada, p_motivo: motivo,
+    });
+
+  // Leitura do estado completo (modo edição). Somente SELECT; RLS isola por cliente.
+  // (supabase as any).from — mesmo idioma do .rpc: as tabelas zoo_operacao_* ainda
+  // não estão no types.ts gerado.
+  const carregarOperacao = async (operacaoId: string, clienteId: string): Promise<OcEstado | null> => {
+    const { data: operacao, error: eOp } = await (supabase as any)
+      .from('zoo_operacoes_comerciais').select('*')
+      .eq('id', operacaoId).eq('cliente_id', clienteId).maybeSingle();
+    if (eOp) throw new Error(eOp.message);
+    if (!operacao) return null;
+    const [pr, mv, ev] = await Promise.all([
+      (supabase as any).from('zoo_operacao_partes').select('*').eq('operacao_id', operacaoId).order('created_at'),
+      (supabase as any).from('zoo_operacao_movimentacoes').select('*').eq('operacao_id', operacaoId).order('created_at'),
+      (supabase as any).from('zoo_operacao_eventos').select('*').eq('operacao_id', operacaoId).order('created_at'),
+    ]);
+    return {
+      operacao,
+      partes: pr.data ?? [],
+      movimentacoes: mv.data ?? [],
+      eventos: ev.data ?? [],
+    };
+  };
+
+  return { salvarRascunho, reabrir, confirmar, sincronizar, cancelar, carregarOperacao };
 }
