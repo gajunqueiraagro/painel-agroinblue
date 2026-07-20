@@ -8,6 +8,7 @@ export type V2Section =
   | 'home'
   // rebanho
   | 'rebanho-home' | 'pastos' | 'chuvas' | 'chuvas-lancamento' | 'lancamentos-zoot'
+  | 'operacoes-comerciais'
   | 'mapa-pastos' | 'fechamento' | 'meta-gmd' | 'mapa-geo-pastos'
   | 'conferencia-lancamentos' | 'conferencia-mensal'
   | 'resumo-pastos' | 'evolucao-categoria' | 'auditoria-tecnica'
@@ -79,8 +80,9 @@ export const NAV_GRUPOS: NavGrupo[] = [
       {
         titulo: 'Operação',
         itens: [
-          { id: 'lancamentos-zoot', label: 'Lançamentos de Movimentações', status: 'ready', primary: true },
-          { id: 'fechamento',       label: 'Fechamento Pastos',       status: 'ready', primary: true },
+          { id: 'lancamentos-zoot',    label: 'Lançamentos de Movimentações', status: 'ready', primary: true },
+          { id: 'operacoes-comerciais', label: 'Operações Comerciais',        status: 'ready', primary: true },
+          { id: 'fechamento',          label: 'Fechamento Pastos',            status: 'ready', primary: true },
         ],
       },
       {

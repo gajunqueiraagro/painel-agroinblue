@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { LancamentosTab } from '@/pages/LancamentosTab';
+import { CentralOperacoesComerciais } from '@/components/operacao-comercial/central/CentralOperacoesComerciais';
 import { useLancamentos } from '@/hooks/useLancamentos';
 import { useLancamento } from '@/hooks/useLancamento';
 import type { Lancamento } from '@/types/cattle';
@@ -693,6 +694,9 @@ export default function V2Index() {
         filtroAnoInicial={ano}
         filtroMesInicial={mes === '0' ? undefined : Number(mes)}
       />
+    );
+    if (section === 'operacoes-comerciais') return (
+      <CentralOperacoesComerciais />
     );
     if (section === 'lancamentos-zoot') return (
       <V2LancamentosWrapper
