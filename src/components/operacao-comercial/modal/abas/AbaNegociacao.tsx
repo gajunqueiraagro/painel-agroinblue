@@ -54,6 +54,39 @@ export function AbaNegociacao({ ctx }: { ctx: ModalOCCtx }) {
         </div>
       </div>
 
+      <div className="mt-3 grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="space-y-1">
+          <Label className="text-xs">Quantidade negociada <span className="text-destructive">*</span></Label>
+          <Input type="number" inputMode="numeric" value={draft.qtd_negociada} onChange={e => patch({ qtd_negociada: e.target.value })} className="h-9" placeholder="0" />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Categoria negociada <span className="text-destructive">*</span></Label>
+          <Input value={draft.categoria_negociada} onChange={e => patch({ categoria_negociada: e.target.value })} className="h-9" placeholder="Ex.: Boi gordo" />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Peso negociado (kg)</Label>
+          <Input type="number" inputMode="decimal" value={draft.peso_negociado_kg} onChange={e => patch({ peso_negociado_kg: e.target.value })} className="h-9" placeholder="0,00" />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Peso soberano</Label>
+          <Select value={draft.peso_negociado_soberano} onValueChange={v => patch({ peso_negociado_soberano: v as 'medio' | 'total' })}>
+            <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="medio">Médio (por cabeça)</SelectItem>
+              <SelectItem value="total">Total</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Valor estimado (R$)</Label>
+          <Input type="number" inputMode="decimal" value={draft.valor_estimado} onChange={e => patch({ valor_estimado: e.target.value })} className="h-9" placeholder="0,00" />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Valor acordado (R$)</Label>
+          <Input type="number" inputMode="decimal" value={draft.valor_acordado} onChange={e => patch({ valor_acordado: e.target.value })} className="h-9" placeholder="0,00" />
+        </div>
+      </div>
+
       <p className="mt-2 text-[10px] text-muted-foreground">
         O tipo e o preço registram o contrato de precificação. O valor da operação é composto pelas
         parcelas na aba Financeiro (fonte única); a conversão entre unidades, quando houver, é resolvida
@@ -75,9 +108,9 @@ export function AbaNegociacao({ ctx }: { ctx: ModalOCCtx }) {
 
       <div className="mt-4 space-y-1">
         <Label className="text-xs">Observações</Label>
-        <textarea value={draft.negociacao_obs} onChange={e => patch({ negociacao_obs: e.target.value.slice(0, 300) })}
+        <textarea value={draft.observacoes} onChange={e => patch({ observacoes: e.target.value.slice(0, 300) })}
           placeholder="Observações sobre as condições de negociação..." className="w-full min-h-[80px] rounded-md border bg-background px-3 py-2 text-sm" />
-        <div className="text-right text-[10px] text-muted-foreground">{draft.negociacao_obs.length}/300</div>
+        <div className="text-right text-[10px] text-muted-foreground">{draft.observacoes.length}/300</div>
       </div>
     </div>
   );

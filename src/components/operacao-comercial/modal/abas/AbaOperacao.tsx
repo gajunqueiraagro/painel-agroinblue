@@ -40,7 +40,8 @@ export function AbaOperacao({ ctx }: { ctx: ModalOCCtx }) {
         </div>
         <div className="space-y-1">
           <Label className="text-xs">Fazenda</Label>
-          <Select value={draft.fazendaScopeId ?? '__all__'} onValueChange={(v) => patch({ fazendaScopeId: v === '__all__' ? null : v })}>
+          <Select value={draft.fazendaScopeId ?? '__all__'}
+            onValueChange={(v) => { const id = v === '__all__' ? null : v; patch({ fazendaScopeId: id, fazenda_id: id }); }}>
             <SelectTrigger className="h-9"><SelectValue placeholder="Todas" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="__all__">Todas as fazendas</SelectItem>
@@ -50,7 +51,11 @@ export function AbaOperacao({ ctx }: { ctx: ModalOCCtx }) {
         </div>
         <div className="space-y-1">
           <Label className="text-xs">Responsável</Label>
-          <Input value="Definido pelo sistema (executor)" disabled className="h-9 bg-muted" title="O responsável é o usuário autenticado, resolvido e registrado no servidor no momento da criação." />
+          <Input value={ctx.responsavelSnapshot ?? 'Definido pelo sistema (executor)'} disabled className="h-9 bg-muted" title="O responsável é o usuário autenticado, resolvido e registrado no servidor no momento da criação." />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Número do documento (NF)</Label>
+          <Input value={draft.numero_documento} onChange={e => patch({ numero_documento: e.target.value })} className="h-9" placeholder="NF-000" />
         </div>
       </div>
 

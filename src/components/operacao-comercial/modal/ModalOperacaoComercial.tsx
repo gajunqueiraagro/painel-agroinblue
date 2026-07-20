@@ -5,7 +5,7 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Wallet, Lock, X, Check, ChevronLeft, ChevronRight, Trash2, Bookmark, Sparkles, Calendar, Building2, RotateCcw } from 'lucide-react';
-import { useOperacaoComercial, type OcEnvelope, type OcPartePayload } from '@/hooks/useOperacaoComercial';
+import { useOperacaoComercial, type OcEnvelope, type OcPartePayload, type OcRascunhoPayload } from '@/hooks/useOperacaoComercial';
 import { usePlanoContasOC } from '@/hooks/usePlanoContasOC';
 import { useComponentesFinanceiros } from '@/hooks/useComponentesFinanceiros';
 import type { DraftOC, ModalOCCtx, MovOption } from './tipos';
@@ -29,18 +29,23 @@ const WIZARD = [
 const draftInicial = (): DraftOC => ({
   tipo_operacao: 'compra',
   data_operacao: new Date().toISOString().slice(0, 10),
-  responsavel: '',
   contraparte_id: null,
   contraparte_nome: null,
   observacoes: '',
-  numero_nf: '',
+  numero_documento: '',
   fazendaScopeId: null,
+  fazenda_id: null,
   movimentacoes: [],
   tipo_precificacao: 'arroba_viva',
   preco_unitario: '',
   condicao_pagamento: '',
   data_pagamento_prevista: '',
-  negociacao_obs: '',
+  qtd_negociada: '',
+  categoria_negociada: '',
+  peso_negociado_kg: '',
+  peso_negociado_soberano: 'medio',
+  valor_estimado: '',
+  valor_acordado: '',
   parcelas: [],
 });
 
@@ -62,6 +67,7 @@ export function ModalOperacaoComercial({ open, onOpenChange }: { open: boolean; 
   const [saving, setSaving] = useState(false);
   const [movs, setMovs] = useState<MovOption[]>([]);
   const [eventos, setEventos] = useState<Record<string, unknown>[]>([]);
+  const [responsavelSnapshot, setResponsavelSnapshot] = useState<string | null>(null);
 
   const patch = useCallback((p: Partial<DraftOC>) => setDraft(prev => ({ ...prev, ...p })), []);
 
@@ -71,6 +77,7 @@ export function ModalOperacaoComercial({ open, onOpenChange }: { open: boolean; 
     setStep(1);
     setMovs([]);
     setEventos([]);
+    setResponsavelSnapshot(null);
   }, []);
 
   // Movimentações candidatas do tipo escolhido (o vínculo é feito na criação).
@@ -135,46 +142,89 @@ export function ModalOperacaoComercial({ open, onOpenChange }: { open: boolean; 
       macro_custo: p.macro_custo, grupo_custo: p.grupo_custo, centro_custo: p.centro_custo, subcentro: p.subcentro,
     }));
 
-  const rascunhoPayload = () => ({
-    tipo_operacao: draft.tipo_operacao,
-    data_operacao: draft.data_operacao,
-    contraparte_id: draft.contraparte_id,
-    tipo_precificacao: draft.tipo_precificacao || null,
-    preco_unitario: num(draft.preco_unitario) || null,
-    condicao_pagamento: draft.condicao_pagamento || null,
-    data_pagamento_prevista: draft.data_pagamento_prevista || null,
-    // Unificação temporária (homologada): observação operacional + comercial numa única
-    // coluna `observacoes`. Separar comercial/operacional fica para PR próprio de evolução.
-    observacoes: [draft.observacoes.trim(), draft.negociacao_obs.trim()].filter(Boolean).join('\n\n') || null,
-    movimentacoes: draft.movimentacoes,
-    partes: partesPayload(),
-  });
+  // Payload no contrato vigente (§3). Chaves omitidas preservam o valor no banco (padrão
+  // 02A); os 7 campos de abate (02B) NÃO são enviados. observacoes é fonte única (aba 1 e
+  // aba Negociação escrevem no mesmo campo). peso: só o soberano leva o valor; o outro fica
+  // NULL e o motor concilia. cenario fixo 'realizado' (fluxo atual do modal).
+  const rascunhoPayload = (): OcRascunhoPayload => {
+    const qtd = Math.trunc(num(draft.qtd_negociada));
+    const peso = num(draft.peso_negociado_kg) || null;
+    return {
+      tipo_operacao: draft.tipo_operacao,
+      data_operacao: draft.data_operacao,
+      cenario: 'realizado',
+      fazenda_id: draft.fazenda_id,
+      contraparte_id: draft.contraparte_id,
+      qtd_negociada: qtd > 0 ? qtd : null,
+      categoria_negociada: draft.categoria_negociada.trim() || null,
+      peso_medio_negociado_kg: peso != null && draft.peso_negociado_soberano === 'medio' ? peso : null,
+      peso_total_negociado_kg: peso != null && draft.peso_negociado_soberano === 'total' ? peso : null,
+      peso_negociado_soberano: peso != null ? draft.peso_negociado_soberano : null,
+      tipo_precificacao: draft.tipo_precificacao || null,
+      preco_unitario: num(draft.preco_unitario) || null,
+      condicao_pagamento: draft.condicao_pagamento || null,
+      data_pagamento_prevista: draft.data_pagamento_prevista || null,
+      valor_estimado: num(draft.valor_estimado) || null,
+      valor_acordado: num(draft.valor_acordado) || null,
+      numero_documento: draft.numero_documento.trim() || null,
+      observacoes: draft.observacoes.trim() || null,
+      movimentacoes: draft.movimentacoes,
+      partes: partesPayload(),
+    };
+  };
 
-  const recarregarEventos = useCallback(async (operacaoId: string) => {
+  // Campos do cadastro mínimo (§5) vazios no formulário — SÓ para a mensagem do aviso do
+  // §8.4; a decisão de completude é sempre o `rascunho` do envelope, nunca este cálculo.
+  const camposMinimosFaltantes = (): string[] => {
+    const f: string[] = [];
+    if (!draft.tipo_operacao) f.push('Tipo da operação');
+    if (!draft.data_operacao) f.push('Data da operação');
+    if (!draft.fazenda_id) f.push('Fazenda');
+    if (!draft.contraparte_id) f.push('Contraparte');
+    if (!(Math.trunc(num(draft.qtd_negociada)) > 0)) f.push('Quantidade negociada');
+    if (!draft.categoria_negociada.trim()) f.push('Categoria negociada');
+    if (!draft.tipo_precificacao) f.push('Tipo de precificação');
+    if (!(num(draft.preco_unitario) > 0)) f.push('Preço unitário');
+    return f;
+  };
+
+  const recarregarEstado = useCallback(async (operacaoId: string) => {
     const estado = await rpc.carregarOperacao(operacaoId, clienteId).catch(() => null);
-    if (estado) setEventos(estado.eventos);
+    if (estado) {
+      setEventos(estado.eventos);
+      setResponsavelSnapshot(estado.operacao.responsavel_nome_snapshot ?? null);
+    }
   }, [rpc, clienteId]);
 
-  // Salvar rascunho: upsert transacional único (oc_salvar_rascunho). Cria quando não há
-  // operação (versão NULL); atualiza no lugar caso contrário (exige versão + rascunho).
-  const salvarRascunho = async (): Promise<OcEnvelope | null> => {
+  // Núcleo de persistência (passos 1–2 do §8): salva o rascunho, readota o envelope soberano
+  // (setOp) e recarrega o estado. Não gerencia `saving` nem toast de sucesso — quem chama
+  // decide (salvarRascunho: toast; concluir: encadeia o confirmar).
+  const persistirRascunho = async (): Promise<OcEnvelope | null> => {
     if (!clienteId) return null;
-    setSaving(true);
     try {
       const env = await rpc.salvarRascunho(op?.operacao_id ?? null, clienteId, op?.versao ?? null, rascunhoPayload());
       setOp(env);
-      await recarregarEventos(env.operacao_id);
-      toast.success('Rascunho salvo.');
+      await recarregarEstado(env.operacao_id);
       return env;
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Falha ao salvar rascunho.');
       return null;
+    }
+  };
+
+  // Ação "Salvar rascunho" (separada): executa apenas os passos 1–2 do §8.
+  const salvarRascunho = async (): Promise<OcEnvelope | null> => {
+    setSaving(true);
+    try {
+      const env = await persistirRascunho();
+      if (env) toast.success('Rascunho salvo.');
+      return env;
     } finally {
       setSaving(false);
     }
   };
 
-  // Reabrir: confirmada -> rascunho. Bloqueada pelo motor se houver título soberano
+  // Reabrir: fechada -> programada. Bloqueada pelo motor se houver título soberano
   // (realizado/agendado/conciliado) — nesse caso a mensagem da RPC é exibida sem mutação.
   const reabrirOperacao = async () => {
     if (!op) return;
@@ -182,8 +232,8 @@ export function ModalOperacaoComercial({ open, onOpenChange }: { open: boolean; 
     try {
       const env = await rpc.reabrir(op.operacao_id, clienteId, op.versao, 'Reaberta pelo operador');
       setOp(env);
-      await recarregarEventos(env.operacao_id);
-      if (env.status_comercial === 'rascunho') toast.success('Operação reaberta para edição.');
+      await recarregarEstado(env.operacao_id);
+      if (env.status_comercial === 'programada') toast.success('Operação reaberta para edição.');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Falha ao reabrir a operação.');
     } finally {
@@ -191,23 +241,24 @@ export function ModalOperacaoComercial({ open, onOpenChange }: { open: boolean; 
     }
   };
 
-  // Concluir: garantir salvo, confirmar e sincronizar — tratando comercial e financeiro
-  // separadamente (sem "sucesso integral" se a sincronização vier divergente/erro).
+  // Concluir (§8): 1 clique = salvar → readotar envelope → se completo (rascunho=false),
+  // confirmar com a versão readotada e recarregar; se incompleto, aviso dos faltantes e NÃO
+  // confirma. A decisão é SEMPRE o envelope; a lista de faltantes é só client-side para a
+  // mensagem. Não chama sincronizar (fora do §8). Erro do motor no confirmar é exibido
+  // verbatim (mensagem do P0001), sem retry.
   const concluir = async () => {
     setSaving(true);
     try {
-      let env = op;
-      if (!env) { env = await salvarRascunho(); if (!env) return; }
-      const conf = await rpc.confirmar(env.operacao_id, clienteId, env.versao);
-      setOp(conf);
-      if (!conf.ok) { toast.error('Não foi possível confirmar a operação.'); return; }
-      const sinc = await rpc.sincronizar(conf.operacao_id, clienteId, conf.versao);
-      setOp(sinc);
-      await recarregarEventos(sinc.operacao_id);
-      if (sinc.status_financeiro === 'sincronizado') {
-        toast.success('Operação concluída e financeiro sincronizado.');
+      const env = await persistirRascunho();
+      if (!env) return;
+      if (env.rascunho === false) {
+        const conf = await rpc.confirmar(env.operacao_id, clienteId, env.versao);
+        setOp(conf);
+        if (!conf.ok) { toast.error('Não foi possível confirmar a operação.'); return; }
+        await recarregarEstado(conf.operacao_id);
+        toast.success('Operação concluída (fechada).');
       } else {
-        toast.warning(`Operação confirmada, mas o financeiro ficou "${sinc.status_financeiro}". Verifique.`);
+        toast.warning(`Cadastro mínimo incompleto. Faltam: ${camposMinimosFaltantes().join(', ')}.`);
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Falha ao concluir.');
@@ -232,7 +283,7 @@ export function ModalOperacaoComercial({ open, onOpenChange }: { open: boolean; 
   };
 
   const ctx: ModalOCCtx = {
-    clienteId, draft, patch, op, saving,
+    clienteId, draft, patch, op, saving, responsavelSnapshot,
     movsReadonly: !!op, movs, eventos, plano, componentes,
     fazendaLabel, fazendasDoLote, valorBruto,
     totalDescontos, totalAcrescimos, totalLiquido,
@@ -303,7 +354,7 @@ export function ModalOperacaoComercial({ open, onOpenChange }: { open: boolean; 
               <div className="flex justify-between"><dt className="text-muted-foreground">Fazenda</dt><dd className="font-medium">{fazendaLabel}</dd></div>
               <div className="flex justify-between"><dt className="text-muted-foreground">Contraparte</dt><dd className="font-medium truncate max-w-[160px]">{draft.contraparte_nome ?? '—'}</dd></div>
               <div className="flex justify-between items-center"><dt className="text-muted-foreground">Status</dt>
-                <dd><span className="rounded-full bg-green-100 text-green-700 px-2 py-0.5 text-xs">{op?.status_comercial ?? 'rascunho'}</span></dd></div>
+                <dd><span className="rounded-full bg-green-100 text-green-700 px-2 py-0.5 text-xs">{op?.status_comercial ?? 'programada'}</span></dd></div>
             </dl>
             <div className="my-3 border-t" />
             {(totalDescontos > 0 || totalAcrescimos > 0) && (
@@ -326,12 +377,12 @@ export function ModalOperacaoComercial({ open, onOpenChange }: { open: boolean; 
           </Button>
           <div className="flex items-center gap-2">
             <Button variant="ghost" onClick={() => { onOpenChange(false); reset(); }} className="text-white hover:bg-white/10">Fechar</Button>
-            {op?.status_comercial === 'confirmada' && (
+            {op?.status_comercial === 'fechada' && (
               <Button variant="secondary" onClick={reabrirOperacao} disabled={saving} className="gap-1.5">
                 <RotateCcw className="h-4 w-4" /> {saving ? 'Reabrindo…' : 'Reabrir'}
               </Button>
             )}
-            <Button variant="secondary" onClick={salvarRascunho} disabled={saving || op?.status_comercial === 'confirmada'} className="gap-1.5">
+            <Button variant="secondary" onClick={salvarRascunho} disabled={saving || op?.status_comercial === 'fechada'} className="gap-1.5">
               <Bookmark className="h-4 w-4" /> {saving ? 'Salvando…' : 'Salvar rascunho'}
             </Button>
             {!isLast ? (

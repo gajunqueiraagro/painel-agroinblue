@@ -4,12 +4,18 @@ import { supabase } from '@/integrations/supabase/client';
 // coleta dados, envia payload, interpreta este retorno e atualiza a UI — nenhuma
 // regra de negócio vive aqui; tudo permanece no banco. Toda escrita OC passa
 // EXCLUSIVAMENTE por estas RPCs (proibido escrever direto nas tabelas zoo_*).
+// status_comercial vigente: 'programada' | 'fechada' | 'cancelada' (o texto real vem do
+// banco). `rascunho` é FLAG técnica separada do status. `rascunho` e `valor_total` só vêm
+// no envelope de oc_salvar_rascunho; `status_financeiro` só em oc_sincronizar — por isso
+// opcionais no envelope compartilhado pelas 6 RPCs.
 export interface OcEnvelope {
   ok: boolean;
   operacao_id: string;
   versao: number;
   status_comercial: string;
-  status_financeiro: string;
+  rascunho?: boolean;
+  valor_total?: number | null;
+  status_financeiro?: string;
   idempotente?: boolean;
   multi_fazenda?: boolean;
   motivo?: string;
@@ -34,17 +40,28 @@ export interface OcPartePayload {
   subcentro?: string | null;
 }
 
-// Payload da RPC soberana oc_salvar_rascunho (upsert). Só o que a RPC lê: dados de
-// negociação + movimentações (Lote, ignoradas no update) + partes. Responsável é
-// resolvido no servidor (snapshot); resumos e seq/qtd são derivados no motor.
+// Payload da RPC soberana oc_salvar_rascunho (upsert) no contrato vigente (§3 do UX-03A).
+// Chaves omitidas preservam o valor no banco (padrão 02A): o modal envia só o que coleta;
+// os 7 campos de abate (02B) NÃO entram aqui (UX-03B). Responsável é resolvido no servidor
+// (snapshot); resumos e seq/qtd são derivados no motor.
 export interface OcRascunhoPayload {
   tipo_operacao: 'compra' | 'venda' | 'abate';
   data_operacao: string;
+  cenario: 'realizado' | 'meta';
+  fazenda_id?: string | null;
   contraparte_id?: string | null;
+  qtd_negociada?: number | null;
+  categoria_negociada?: string | null;
+  peso_medio_negociado_kg?: number | null;
+  peso_total_negociado_kg?: number | null;
+  peso_negociado_soberano?: 'medio' | 'total' | null;
   tipo_precificacao?: string | null;
   preco_unitario?: number | null;
   condicao_pagamento?: string | null;
   data_pagamento_prevista?: string | null;
+  valor_estimado?: number | null;
+  valor_acordado?: number | null;
+  numero_documento?: string | null;
   observacoes?: string | null;
   // Lote (Ordem de Compra): uma ou mais movimentações. Consideradas só na criação.
   movimentacoes: string[];
@@ -59,6 +76,9 @@ export interface OcOperacaoRow {
   tipo_operacao: string;
   data_operacao: string;
   responsavel: string | null;
+  // Snapshot soberano do nome do responsável (server-side; resolver_nome_usuario).
+  // Leitura derivada — o modal exibe read-only; NUNCA é enviado no payload.
+  responsavel_nome_snapshot: string | null;
   cenario: string;
   contraparte_id: string | null;
   tipo_precificacao: string | null;

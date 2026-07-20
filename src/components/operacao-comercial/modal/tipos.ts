@@ -39,19 +39,24 @@ export interface MovOption {
 export interface DraftOC {
   tipo_operacao: TipoOperacaoOC;
   data_operacao: string;
-  responsavel: string;
   contraparte_id: string | null;
-  contraparte_nome: string | null;
-  observacoes: string;
-  numero_nf: string;
-  fazendaScopeId: string | null; // contexto de UI; NÃO persistido (E1)
-  movimentacoes: string[]; // Lote 1 — ids de lancamentos
+  contraparte_nome: string | null; // só display local do painel; NUNCA enviado no payload
+  observacoes: string;             // fonte única (aba 1 e aba Negociação leem/gravam aqui)
+  numero_documento: string;        // NF (chave 02A); coletado como cabeçalho na aba 1
+  fazendaScopeId: string | null;   // filtro de UI consumido por AbaLotes (NÃO renomear)
+  fazenda_id: string | null;       // espelha a seleção da aba 1; PERSISTIDO no payload
+  movimentacoes: string[];         // Lote 1 — ids de lancamentos
   // negociação
   tipo_precificacao: string;
   preco_unitario: string;
   condicao_pagamento: string;
   data_pagamento_prevista: string;
-  negociacao_obs: string;
+  qtd_negociada: string;
+  categoria_negociada: string;
+  peso_negociado_kg: string;                       // valor do peso soberano digitado
+  peso_negociado_soberano: 'medio' | 'total';      // qual peso é soberano (médio↔total)
+  valor_estimado: string;
+  valor_acordado: string;
   // financeiro — FONTE ÚNICA da composição financeira. descontos/acréscimos NÃO vivem
   // aqui como estado independente: derivam SEMPRE das parcelas (natureza deducao/acrescimo).
   parcelas: ParcelaDraft[];
@@ -64,6 +69,7 @@ export interface ModalOCCtx {
   patch: (p: Partial<DraftOC>) => void;
   op: OcEnvelope | null;
   saving: boolean;
+  responsavelSnapshot: string | null; // derivado read-only (responsavel_nome_snapshot)
   movsReadonly: boolean; // após a criação, o vínculo de movimentações é read-only
   movs: MovOption[];
   eventos: Record<string, unknown>[];
