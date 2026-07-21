@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { DatePicker } from '@/components/ui/date-picker';
-import { Plus, Edit, Lock, ShoppingCart, X } from 'lucide-react';
+import { Plus, Edit, Lock, ShoppingCart, X, Trash2, Calendar, Building2 } from 'lucide-react';
 import { STATUS_LABEL, META_VISUAL, type StatusOperacional } from '@/lib/statusOperacional';
 import { CompraResumoPanel } from './CompraResumoPanel';
 import { CompraDetalhesDialog, EMPTY_COMPRA_DETALHES, type CompraDetalhes } from './CompraDetalhesDialog';
@@ -90,24 +90,33 @@ export function CompraModalShell(api: CompraModalShellProps) {
   const cenarioAtual = CENARIO_UI[api.statusOp] ?? CENARIO_UI.realizado;
   const fornecedorNome = api.fornecedores.find(f => f.id === api.compraFornecedorId)?.nome || '';
   const canOpenModal = !!(api.data && api.quantidadeNum > 0 && api.pesoKgNum > 0 && api.categoria);
-  const pesoMedioDerivado = api.quantidadeNum > 0 && api.pesoKgNum > 0
-    ? (api.pesoKgNum / api.quantidadeNum).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  // Peso Total = derivado de exibição (Peso Médio × Quantidade). O estado legado `pesoKg`
+  // JÁ é o peso médio (vira pesoMedioKg no payload); portanto nada é escrito de volta.
+  const pesoTotalDerivado = api.quantidadeNum > 0 && api.pesoKgNum > 0
+    ? (api.pesoKgNum * api.quantidadeNum).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     : '—';
+  const dataLabel = api.data ? api.data.split('-').reverse().join('/') : '—';
 
   return (
-    <div className="flex flex-col w-full min-w-0">
-      {/* HEADER azul (identidade do modal original) */}
-      <div className="bg-primary text-primary-foreground px-5 py-3 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="text-2xl leading-none">🛒</span>
-          <h2 className="text-lg font-bold leading-tight">Compra de Animais</h2>
-          {api.editingId && (
-            <span className="rounded border border-white/40 px-2 py-0.5 text-[11px] font-bold">Editando #{api.editingId.slice(0, 8)}</span>
-          )}
+    <div className="flex flex-col">
+      {/* HEADER — template do modal aprovado (bg-primary, px-6 py-4, duas linhas) */}
+      <div className="bg-primary text-primary-foreground px-6 py-4 flex items-start justify-between">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-xl leading-none">🛒</span>
+            <h2 className="text-lg font-bold leading-tight">Compra de Animais</h2>
+            {api.editingId && (
+              <span className="rounded-md border border-white/40 px-2 py-0.5 text-xs">Editando #{api.editingId.slice(0, 8)}</span>
+            )}
+          </div>
+          <div className="mt-1 flex items-center gap-3 text-xs text-white/80">
+            <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> {dataLabel}</span>
+            <span className="flex items-center gap-1"><Building2 className="h-3.5 w-3.5" /> {api.fazendaAtualNome || '—'}</span>
+          </div>
         </div>
         <div className="flex items-center gap-3 shrink-0">
           {api.mesFechadoMsg && (
-            <span className="rounded-md border border-yellow-400 text-yellow-400 px-2 py-1 text-[11px] font-medium flex items-center gap-1" title={api.mesFechadoMsg}>
+            <span className="rounded-md border border-yellow-400 text-yellow-400 px-2 py-1 text-xs flex items-center gap-1" title={api.mesFechadoMsg}>
               <Lock className="h-3 w-3" /> Mês fechado
             </span>
           )}
@@ -115,8 +124,8 @@ export function CompraModalShell(api: CompraModalShellProps) {
         </div>
       </div>
 
-      {/* ABAS */}
-      <div className="bg-card border-b px-5 flex items-center gap-1 overflow-x-auto">
+      {/* BARRA DE ABAS — template (bg-card, border-b, px-6 py-3) */}
+      <div className="bg-card border-b px-6 py-3 flex items-center gap-1 overflow-x-auto">
         {ABAS.map(a => {
           const active = a.key === abaAtiva && a.enabled;
           return (
@@ -126,7 +135,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
               disabled={!a.enabled}
               onClick={() => a.enabled && setAbaAtiva(a.key)}
               title={a.enabled ? undefined : 'em breve'}
-              className={`shrink-0 px-3 py-2 text-[12px] font-semibold border-b-2 -mb-px transition-colors ${
+              className={`shrink-0 px-3 py-1 text-[12px] font-semibold border-b-2 -mb-px transition-colors ${
                 active ? 'border-primary text-primary'
                 : a.enabled ? 'border-transparent text-muted-foreground hover:text-foreground'
                 : 'border-transparent text-muted-foreground/40 cursor-not-allowed'
@@ -138,14 +147,14 @@ export function CompraModalShell(api: CompraModalShellProps) {
         })}
       </div>
 
-      {/* CORPO — conteúdo a 6px da barra de abas */}
-      <div className="pt-1.5 px-5 pb-4 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_18rem] gap-3 items-start bg-muted/20">
+      {/* CORPO — template (grid [1fr_320px], gap-4, p-6, max-h-[62vh] overflow-y-auto); só o corpo rola */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 p-6 max-h-[62vh] overflow-y-auto bg-muted/30">
         <div className="space-y-3 min-w-0">
           {/* CARD 1 — Identificação da Compra */}
-          <div className="rounded-md border bg-card p-4 shadow-sm space-y-2.5 min-w-0">
+          <div className="rounded-md border bg-card p-3 shadow-sm space-y-1.5 min-w-0">
             <div className="text-[12px] font-semibold text-muted-foreground">Identificação da Compra</div>
-            {/* Linha 1: Status · Data · Fazenda */}
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5">
+            {/* Linha 1: Status (largura fixa ~180px) · Data · Fazenda */}
+            <div className="grid grid-cols-1 lg:grid-cols-[180px_minmax(0,1fr)_minmax(0,1fr)] gap-2">
               <div>
                 <Label className="font-bold text-[11px]">Status</Label>
                 <Select value={api.statusOp} onValueChange={(v) => api.setStatusOp(v as StatusOperacional | 'meta')}>
@@ -178,7 +187,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
               </div>
             </div>
             {/* Linha 2: Fornecedor · Propriedade de origem */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
               <div className="min-w-0">
                 <Label className="font-bold text-[11px]">Fornecedor <span className="text-destructive">*</span></Label>
                 <div className="flex items-center gap-1 mt-0.5">
@@ -210,41 +219,44 @@ export function CompraModalShell(api: CompraModalShellProps) {
             </div>
           </div>
 
-          {/* CARD 2 — Animais da Compra (estrutura visual; 1ª linha reutiliza estados legados) */}
-          <div className="rounded-md border bg-card p-4 shadow-sm space-y-2 min-w-0">
-            <div className="text-[12px] font-semibold text-muted-foreground">Animais da Compra</div>
+          {/* CARD 2 — Animais da Compra */}
+          <div className="rounded-md border bg-card p-3 shadow-sm space-y-1.5 min-w-0">
+            {/* Header do card: título + botão à direita (norma: topo, não abaixo da tabela) */}
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-[12px] font-semibold text-muted-foreground">Animais da Compra</div>
+              <Button type="button" variant="outline" size="sm" disabled className="h-7 text-[11px] gap-1 opacity-60 cursor-not-allowed" title="em breve">
+                <Plus className="h-3 w-3" /> Adicionar categoria <span className="text-[9px] uppercase">em breve</span>
+              </Button>
+            </div>
             <div className="overflow-x-auto">
               <div className="min-w-[520px]">
-                <div className="grid grid-cols-[2fr_1fr_1fr_1fr_0.6fr] gap-2 px-1 pb-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                <div className="grid grid-cols-[2fr_1fr_1fr_1fr_0.6fr] gap-2 px-1 pb-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
                   <span>Categoria</span><span className="text-right">Quantidade</span><span className="text-right">Peso Médio</span><span className="text-right">Peso Total</span><span className="text-center">Ações</span>
                 </div>
-                <div className="grid grid-cols-[2fr_1fr_1fr_1fr_0.6fr] gap-2 items-center rounded-md border bg-muted/20 px-1 py-1.5">
+                <div className="grid grid-cols-[2fr_1fr_1fr_1fr_0.6fr] gap-2 items-center rounded-md border bg-muted/20 px-1 py-1">
                   <Select value={api.categoria} onValueChange={v => api.setCategoria(v)}>
-                    <SelectTrigger className="h-8 text-[12px]"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                    <SelectTrigger className="h-7 text-[12px]"><SelectValue placeholder="Selecione..." /></SelectTrigger>
                     <SelectContent className="max-h-52 overflow-y-auto">
                       {api.categoriasDisponiveis.map(c => <SelectItem key={c.value} value={c.value} className="text-[12px] py-1.5">{c.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
-                  <Input type="text" inputMode="numeric" value={api.qtdInput.displayValue} onChange={api.qtdInput.onChange} onBlur={api.qtdInput.onBlur} onFocus={api.qtdInput.onFocus} placeholder="0" className="h-8 text-[12px] text-right font-bold tabular-nums" />
-                  {/* Peso Médio: derivado somente de exibição (Peso Total ÷ Quantidade) */}
-                  <Input value={pesoMedioDerivado} readOnly tabIndex={-1} className="h-8 text-[12px] text-right tabular-nums bg-muted cursor-default" />
-                  {/* Peso Total: reutiliza o estado legado de peso (semântica atual = total digitado) */}
-                  <Input type="text" inputMode="decimal" value={api.pesoInput.displayValue} onChange={api.pesoInput.onChange} onBlur={api.pesoInput.onBlur} onFocus={api.pesoInput.onFocus} placeholder="0,00" className="h-8 text-[12px] text-right tabular-nums" />
+                  <Input type="text" inputMode="numeric" value={api.qtdInput.displayValue} onChange={api.qtdInput.onChange} onBlur={api.qtdInput.onBlur} onFocus={api.qtdInput.onFocus} placeholder="0" className="h-7 text-[12px] text-right font-bold tabular-nums" />
+                  {/* Peso Médio: input legado (o estado pesoKg É o peso médio → pesoMedioKg no payload) */}
+                  <Input type="text" inputMode="decimal" value={api.pesoInput.displayValue} onChange={api.pesoInput.onChange} onBlur={api.pesoInput.onBlur} onFocus={api.pesoInput.onFocus} placeholder="0,00" className="h-7 text-[12px] text-right tabular-nums" />
+                  {/* Peso Total: derivado somente de exibição (Peso Médio × Quantidade) — read-only */}
+                  <Input value={pesoTotalDerivado} readOnly tabIndex={-1} className="h-7 text-[12px] text-right tabular-nums bg-muted cursor-default" />
                   <div className="text-center text-muted-foreground/40 text-[11px]">—</div>
                 </div>
               </div>
             </div>
-            <Button type="button" variant="outline" size="sm" disabled className="h-7 text-[11px] gap-1 opacity-60 cursor-not-allowed" title="em breve">
-              <Plus className="h-3 w-3" /> Adicionar categoria <span className="text-[9px] uppercase">em breve</span>
-            </Button>
           </div>
         </div>
 
-        {/* RESUMO LATERAL — reorganização visual; painel financeiro intocável reutilizado */}
+        {/* RESUMO LATERAL — coluna de 320px do template; painel financeiro intocável reutilizado */}
         <div className="space-y-2 self-start">
           <div className="bg-card rounded-md border shadow-sm p-2 space-y-0.5 text-[10px] leading-tight">
             <div className="flex justify-between"><span className="text-muted-foreground">Situação</span><strong>{cenarioAtual.icon} {cenarioAtual.label}</strong></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Fazenda</span><strong className="truncate max-w-[120px]">{api.fazendaAtualNome || '—'}</strong></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Fazenda</span><strong className="truncate max-w-[150px]">{api.fazendaAtualNome || '—'}</strong></div>
           </div>
           <CompraResumoPanel
             quantidade={api.quantidadeNum}
@@ -263,20 +275,25 @@ export function CompraModalShell(api: CompraModalShellProps) {
         </div>
       </div>
 
-      {/* RODAPÉ azul (identidade do modal original) */}
-      <div className="bg-primary px-5 py-3 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
+      {/* RODAPÉ — template do modal aprovado (bg-primary, px-6 py-3), FIXO (fora do scroll do corpo) */}
+      <div className="bg-primary px-6 py-3 flex items-center justify-between gap-3">
+        <div>
           {api.editingId && (
-            <Button type="button" variant="ghost" onClick={api.handleCancelEdit} disabled={api.submitting} className="text-white hover:bg-white/10">Cancelar</Button>
+            <Button variant="outline" onClick={api.handleCancelEdit} disabled={api.submitting}
+              className="border-destructive text-destructive hover:bg-destructive/10 gap-1.5 bg-transparent">
+              <Trash2 className="h-4 w-4" /> Cancelar operação
+            </Button>
           )}
         </div>
         <div className="flex items-center gap-2">
-          {api.compraDetalhes && (
-            <Button type="button" variant="secondary" onClick={() => api.setCompraDialogOpen(true)} disabled={api.submitting} className="gap-1.5">
+          <Button variant="ghost" onClick={api.onClose} className="text-white hover:bg-white/10">Fechar</Button>
+          {/* Editar Financeiro: só em edição e quando aplicável (composição aprovada do rodapé) */}
+          {api.editingId && api.compraDetalhes && (
+            <Button variant="secondary" onClick={() => api.setCompraDialogOpen(true)} disabled={api.submitting} className="gap-1.5">
               <Edit className="h-4 w-4" /> Editar Financeiro
             </Button>
           )}
-          <Button type="button" onClick={api.handleRequestRegister} disabled={api.submitting || !api.compraDetalhes} className="bg-white text-primary hover:bg-white/90 font-bold gap-1.5">
+          <Button onClick={api.handleRequestRegister} disabled={api.submitting || !api.compraDetalhes} className="bg-white text-primary hover:bg-white/90 font-bold gap-1.5">
             <ShoppingCart className="h-4 w-4" />
             {api.submitting ? 'Registrando...' : api.editingId ? 'Salvar Alterações' : 'Registrar Compra'}
           </Button>

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { format, parse } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Calendar as CalendarIcon } from 'lucide-react';
@@ -8,7 +9,7 @@ import { cn } from '@/lib/utils';
 
 // DatePicker de apresentação (Popover + Calendar shadcn, pt-BR, dd/mm/aaaa).
 //   Liga no MESMO estado string 'yyyy-MM-dd' usado hoje (value/onChange) — sem alterar
-//   persistência. Uso restrito ao campo "Data da Compra" nesta rodada.
+//   persistência. Fecha automaticamente ao selecionar; identidade azul e células compactas.
 interface DatePickerProps {
   value: string;                 // 'yyyy-MM-dd'
   onChange: (v: string) => void; // devolve 'yyyy-MM-dd'
@@ -17,10 +18,11 @@ interface DatePickerProps {
 }
 
 export function DatePicker({ value, onChange, className, placeholder = 'dd/mm/aaaa' }: DatePickerProps) {
+  const [open, setOpen] = useState(false);
   const parsed = value ? parse(value, 'yyyy-MM-dd', new Date()) : undefined;
   const valid = parsed && !Number.isNaN(parsed.getTime());
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
           type="button"
@@ -35,9 +37,20 @@ export function DatePicker({ value, onChange, className, placeholder = 'dd/mm/aa
         <Calendar
           mode="single"
           selected={valid ? parsed : undefined}
-          onSelect={(d) => { if (d) onChange(format(d, 'yyyy-MM-dd')); }}
+          onSelect={(d) => { if (d) { onChange(format(d, 'yyyy-MM-dd')); setOpen(false); } }}
           locale={ptBR}
           initialFocus
+          className="p-2"
+          classNames={{
+            // Faixa superior completa em azul (mês + setas com contraste)
+            caption: 'relative flex items-center justify-center bg-primary text-primary-foreground -mx-2 -mt-2 mb-1.5 px-3 py-2 rounded-t-md',
+            caption_label: 'text-[13px] font-semibold',
+            nav_button: 'h-6 w-6 bg-transparent p-0 border-0 text-primary-foreground opacity-80 hover:opacity-100',
+            // Células compactas
+            head_cell: 'text-muted-foreground rounded-md w-8 font-normal text-[0.7rem]',
+            cell: 'h-8 w-8 text-center text-[12px] p-0 relative [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20',
+            day: 'h-8 w-8 p-0 font-normal text-[12px] aria-selected:opacity-100',
+          }}
         />
       </PopoverContent>
     </Popover>

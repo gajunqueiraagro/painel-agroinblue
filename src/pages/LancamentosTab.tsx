@@ -3552,7 +3552,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       <DialogContent
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
-        className={`max-w-full sm:max-w-5xl w-full h-screen sm:h-auto sm:max-h-[92vh] overflow-y-auto ${isCompra ? 'p-0 [&>button.absolute]:hidden' : 'p-4 sm:p-5'}`}
+        className={isCompra
+          ? 'max-w-6xl p-0 gap-0 overflow-hidden [&>button.absolute]:hidden'
+          : 'max-w-full sm:max-w-5xl w-full h-screen sm:h-auto sm:max-h-[92vh] overflow-y-auto p-4 sm:p-5'}
       >
       {isCompra ? (
         <CompraModalShell {...compraFormApi} />
