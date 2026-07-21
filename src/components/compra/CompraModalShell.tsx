@@ -75,8 +75,8 @@ export interface CompraModalShellProps {
 export const DARK_SELECT_CONTENT =
   'bg-zinc-950/80 backdrop-blur-xl border-zinc-700/50 text-zinc-100 ' +
   '[&_[role=option]]:text-zinc-100 ' +
-  '[&_[role=option]]:focus:!bg-white/10 [&_[role=option]]:focus:!text-white ' +
-  '[&_[role=option]]:data-[state=checked]:!bg-white/20 [&_[role=option]]:data-[state=checked]:!text-white [&_[role=option]]:data-[state=checked]:font-semibold';
+  '[&_[role=option]:focus]:!bg-white/10 [&_[role=option]:focus]:!text-white ' +
+  '[&_[role=option][data-state=checked]]:!bg-white/20 [&_[role=option][data-state=checked]]:!text-white [&_[role=option][data-state=checked]]:font-semibold';
 
 const ABAS = [
   { key: 'compra', label: 'Compra', enabled: true },
