@@ -153,8 +153,8 @@ export function CompraModalShell(api: CompraModalShellProps) {
           {/* CARD 1 — Identificação da Compra */}
           <div className="rounded-md border bg-card p-3 shadow-sm space-y-1.5 min-w-0">
             <div className="text-[12px] font-semibold text-muted-foreground">Identificação da Compra</div>
-            {/* Linha 1: Status (largura fixa ~180px) · Data · Fazenda */}
-            <div className="grid grid-cols-1 lg:grid-cols-[180px_minmax(0,1fr)_minmax(0,1fr)] gap-2">
+            {/* Linha 1: Status · Data · Fazenda · Observações (larguras justas; Obs ocupa o resto) */}
+            <div className="grid grid-cols-1 lg:grid-cols-[170px_150px_180px_minmax(0,1fr)] gap-2">
               <div>
                 <Label className="font-bold text-[11px]">Status</Label>
                 <Select value={api.statusOp} onValueChange={(v) => api.setStatusOp(v as StatusOperacional | 'meta')}>
@@ -185,6 +185,10 @@ export function CompraModalShell(api: CompraModalShellProps) {
                   </SelectContent>
                 </Select>
               </div>
+              <div>
+                <Label className="font-bold text-[11px]">Observações</Label>
+                <Input value={api.observacao} onChange={e => api.setObservacao(e.target.value)} placeholder="Opcional" className="mt-0.5 h-8 text-[12px]" />
+              </div>
             </div>
             {/* Linha 2: Fornecedor · Propriedade de origem */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
@@ -212,11 +216,6 @@ export function CompraModalShell(api: CompraModalShellProps) {
                 <Input value={api.fazendaOrigem} onChange={e => api.setFazendaOrigem(e.target.value)} placeholder="Ex: Faz. Boa Vista" className="mt-0.5 h-8 text-[12px]" />
               </div>
             </div>
-            {/* Linha 3: Observações (fonte menor) */}
-            <div>
-              <Label className="font-bold text-[11px]">Observações</Label>
-              <Input value={api.observacao} onChange={e => api.setObservacao(e.target.value)} placeholder="Opcional" className="mt-0.5 h-7 text-[11px]" />
-            </div>
           </div>
 
           {/* CARD 2 — Animais da Compra */}
@@ -233,19 +232,19 @@ export function CompraModalShell(api: CompraModalShellProps) {
                 <div className="grid grid-cols-[2fr_1fr_1fr_1fr_0.6fr] gap-2 px-1 pb-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
                   <span>Categoria</span><span className="text-right">Quantidade</span><span className="text-right">Peso Médio</span><span className="text-right">Peso Total</span><span className="text-center">Ações</span>
                 </div>
-                <div className="grid grid-cols-[2fr_1fr_1fr_1fr_0.6fr] gap-2 items-center rounded-md border bg-muted/20 px-1 py-1">
+                <div className="grid grid-cols-[2fr_1fr_1fr_1fr_0.6fr] gap-2 items-center rounded-md border bg-muted/20 px-1 py-0.5">
                   <Select value={api.categoria} onValueChange={v => api.setCategoria(v)}>
-                    <SelectTrigger className="h-7 text-[12px]"><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                    <SelectContent className="max-h-52 overflow-y-auto">
-                      {api.categoriasDisponiveis.map(c => <SelectItem key={c.value} value={c.value} className="text-[12px] py-1.5">{c.label}</SelectItem>)}
+                    <SelectTrigger className="h-6 text-[11px]"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                    <SelectContent className="max-h-40 overflow-y-auto">
+                      {api.categoriasDisponiveis.map(c => <SelectItem key={c.value} value={c.value} className="text-[11px] py-1">{c.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
-                  <Input type="text" inputMode="numeric" value={api.qtdInput.displayValue} onChange={api.qtdInput.onChange} onBlur={api.qtdInput.onBlur} onFocus={api.qtdInput.onFocus} placeholder="0" className="h-7 text-[12px] text-right font-bold tabular-nums" />
+                  <Input type="text" inputMode="numeric" value={api.qtdInput.displayValue} onChange={api.qtdInput.onChange} onBlur={api.qtdInput.onBlur} onFocus={api.qtdInput.onFocus} placeholder="0" className="h-6 text-[11px] text-right font-bold tabular-nums" />
                   {/* Peso Médio: input legado (o estado pesoKg É o peso médio → pesoMedioKg no payload) */}
-                  <Input type="text" inputMode="decimal" value={api.pesoInput.displayValue} onChange={api.pesoInput.onChange} onBlur={api.pesoInput.onBlur} onFocus={api.pesoInput.onFocus} placeholder="0,00" className="h-7 text-[12px] text-right tabular-nums" />
+                  <Input type="text" inputMode="decimal" value={api.pesoInput.displayValue} onChange={api.pesoInput.onChange} onBlur={api.pesoInput.onBlur} onFocus={api.pesoInput.onFocus} placeholder="0,00" className="h-6 text-[11px] text-right tabular-nums" />
                   {/* Peso Total: derivado somente de exibição (Peso Médio × Quantidade) — read-only */}
-                  <Input value={pesoTotalDerivado} readOnly tabIndex={-1} className="h-7 text-[12px] text-right tabular-nums bg-muted cursor-default" />
-                  <div className="text-center text-muted-foreground/40 text-[11px]">—</div>
+                  <Input value={pesoTotalDerivado} readOnly tabIndex={-1} className="h-6 text-[11px] text-right tabular-nums bg-muted cursor-default" />
+                  <div className="text-center text-muted-foreground/40 text-[10px]">—</div>
                 </div>
               </div>
             </div>
