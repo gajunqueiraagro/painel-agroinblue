@@ -34,6 +34,7 @@ import { CompraDetalhesDialog, CompraDetalhes, EMPTY_COMPRA_DETALHES } from '@/c
 import { CompraResumoPanel } from '@/components/compra/CompraResumoPanel';
 import { CompraModalShell } from '@/components/compra/CompraModalShell';
 import { gerarFinanceiroCompra } from '@/components/compra/gerarFinanceiroCompra';
+import { useOperacaoComercial } from '@/hooks/useOperacaoComercial';
 import { AbateDetalhesDialog, AbateDetalhes, EMPTY_ABATE_DETALHES } from '@/components/abate/AbateDetalhesDialog';
 import { AbateResumoPanel } from '@/components/abate/AbateResumoPanel';
 import { TransferenciaDetalhesDialog, TransferenciaDetalhes, EMPTY_TRANSFERENCIA_DETALHES } from '@/components/transferencia/TransferenciaDetalhesDialog';
@@ -271,6 +272,19 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   // ─── Master lock: bloqueia submit em meses completamente fechados ───
   const masterLock = useMasterLock();
+
+  // ── Ponte Compra→OC (modo OC ISOLADO; NÃO é o fluxo principal) ──
+  //   Opt-in explícito por ?oc_compra=1 (teste); OFF por padrão (comportamento legado intacto).
+  //   Em modo OC, "Registrar Compra" cria/atualiza a operação comercial (zoo_operacoes_comerciais)
+  //   via oc_salvar_rascunho e guarda operacao_id/versao; NUNCA executa onAdicionar nem
+  //   gerarFinanceiroCompra (sem dupla escrita). Lotes/físico/financeiro ficam para PRs seguintes.
+  const ocRpc = useOperacaoComercial();
+  const modoOCCompra = useMemo(
+    () => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('oc_compra') === '1',
+    [],
+  );
+  const [ocOperacaoId, setOcOperacaoId] = useState<string | null>(null);
+  const [ocVersao, setOcVersao] = useState<number | null>(null);
 
   const outrasFazendas = useMemo(() => {
     return fazendas.filter(f => f.id !== fazendaAtual?.id && f.id !== '__global__' && f.tem_pecuaria !== false);
@@ -1626,7 +1640,45 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   }, [clienteAtual?.id]);
 
   // Validate form and open confirmation dialog
+  // Reset da ponte OC ao fechar o modal (higiene de estado).
+  useEffect(() => {
+    if (!lancModalOpen) { setOcOperacaoId(null); setOcVersao(null); }
+  }, [lancModalOpen]);
+
+  // Modo OC: cria/atualiza a operação comercial (só identificação) e guarda operacao_id/versao.
+  //   Sem lotes (COM-3), sem físico (onAdicionar) e sem financeiro (gerarFinanceiroCompra).
+  const salvarOperacaoOC = async () => {
+    const clienteId = clienteAtual?.id;
+    if (!clienteId) { toast.error('Cliente não selecionado.'); return; }
+    if (!data) { toast.error('Informe a data da compra.'); return; }
+    setSubmitting(true);
+    try {
+      const env = await ocRpc.salvarRascunho(ocOperacaoId, clienteId, ocVersao, {
+        tipo_operacao: 'compra',
+        data_operacao: data,
+        cenario: isCenarioMeta ? 'meta' : 'realizado',
+        fazenda_id: fazendaAtual?.id ?? null,
+        contraparte_id: compraFornecedorId || null,
+        numero_documento: compraDetalhes?.notaFiscal || null,
+        observacoes: observacao || null,
+        movimentacoes: [],
+        partes: [],
+      });
+      setOcOperacaoId(env.operacao_id);
+      setOcVersao(env.versao);
+      toast.success(`Operação comercial salva (rascunho) — #${env.operacao_id.slice(0, 8)} v${env.versao}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Falha ao salvar a operação comercial.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleRequestRegister = () => {
+    // ── Ponte Compra→OC (modo OC isolado): salva a operação e RETORNA antes de qualquer
+    //    caminho legado — não abre o confirm dialog, então handleSubmit (onAdicionar +
+    //    gerarFinanceiroCompra) nunca roda. Sem dupla escrita. ──
+    if (modoOCCompra && isCompra) { void salvarOperacaoOC(); return; }
     // ── P1 governance: selective block (NÃO se aplica ao cenário META) ──
     if (p1Oficial && !isCenarioMeta) {
       const isEditing = !!editingAbateId;
@@ -3493,6 +3545,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     submitting,
     editingId: editingAbateId,
     mesFechadoMsg: p1BloqueioMsg,
+    modoOC: modoOCCompra,
+    ocOperacaoId,
     onClose: () => setLancModalOpen(false),
   };
 

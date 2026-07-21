@@ -64,6 +64,9 @@ export interface CompraModalShellProps {
   editingId: string | null;
   // apresentação do gate P1 já computado (bloqueio real permanece no handleRequestRegister)
   mesFechadoMsg: string | null;
+  // ponte Compra→OC (modo OC isolado; opt-in). Off por padrão → comportamento legado.
+  modoOC?: boolean;
+  ocOperacaoId?: string | null;
   onClose: () => void;
 }
 
@@ -120,6 +123,11 @@ export function CompraModalShell(api: CompraModalShellProps) {
             <h2 className="text-lg font-bold leading-tight">Compra de Animais</h2>
             {api.editingId && (
               <span className="rounded-md border border-white/40 px-2 py-0.5 text-xs">Editando #{api.editingId.slice(0, 8)}</span>
+            )}
+            {api.modoOC && (
+              <span className="rounded-md border border-yellow-400 text-yellow-400 px-2 py-0.5 text-xs" title="Modo OC (isolado) — não cria lançamento nem financeiro">
+                OC{api.ocOperacaoId ? ` #${api.ocOperacaoId.slice(0, 8)}` : ' (novo)'}
+              </span>
             )}
           </div>
           <div className="mt-1 flex items-center gap-3 text-xs text-white/80">
@@ -326,9 +334,9 @@ export function CompraModalShell(api: CompraModalShellProps) {
               <ShoppingCart className="h-4 w-4" /> Salvar Negociação
             </Button>
           ) : (
-            <Button onClick={api.handleRequestRegister} disabled={api.submitting || !api.compraDetalhes} className="bg-white text-primary hover:bg-white/90 font-bold gap-1.5">
+            <Button onClick={api.handleRequestRegister} disabled={api.submitting || (!api.modoOC && !api.compraDetalhes)} className="bg-white text-primary hover:bg-white/90 font-bold gap-1.5">
               <ShoppingCart className="h-4 w-4" />
-              {api.submitting ? 'Registrando...' : api.editingId ? 'Salvar Alterações' : 'Registrar Compra'}
+              {api.submitting ? 'Salvando...' : api.modoOC ? 'Salvar Operação (OC)' : api.editingId ? 'Salvar Alterações' : 'Registrar Compra'}
             </Button>
           )}
         </div>
