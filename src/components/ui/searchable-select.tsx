@@ -12,6 +12,9 @@ interface SearchableSelectProps {
   allValue?: string;
   disabled?: boolean;
   className?: string;
+  /** Densidade opt-in (usada só pela Compra): itens ~12px, busca sticky, lista mais alta.
+   *  Default false → visual idêntico ao atual nos demais fluxos (Abate/Venda/Mapa/FinV2). */
+  dense?: boolean;
 }
 
 export function SearchableSelect({
@@ -23,6 +26,7 @@ export function SearchableSelect({
   allValue = '__all__',
   disabled = false,
   className,
+  dense = false,
 }: SearchableSelectProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -185,20 +189,23 @@ export function SearchableSelect({
 
       {open && (
         <div className={cn("absolute z-50 w-full min-w-[140px] rounded-md border bg-popover shadow-md", openUp ? "bottom-full mb-0.5" : "top-full mt-0.5")}>
-          <div className="px-0.5 pt-0.5 pb-0">
+          <div className={cn('px-0.5 pt-0.5 pb-0', dense && 'sticky top-0 z-10 bg-popover px-1 pt-1 pb-1')}>
             <input
               ref={inputRef}
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder={placeholder}
-              className="w-full h-4 text-[9px] px-1 rounded border border-input bg-background outline-none focus:ring-1 focus:ring-ring"
+              className={cn(
+                'w-full rounded border border-input bg-background outline-none focus:ring-1 focus:ring-ring',
+                dense ? 'h-6 text-[11px] px-1.5' : 'h-4 text-[9px] px-1',
+              )}
               onKeyDown={handleKeyDown}
               autoCorrect="off"
               autoCapitalize="none"
               spellCheck={false}
             />
           </div>
-          <div ref={listRef} className="max-h-[120px] overflow-y-auto px-0.5 pb-0.5">
+          <div ref={listRef} className={cn('overflow-y-auto', dense ? 'max-h-[300px] px-1 pb-1' : 'max-h-[120px] px-0.5 pb-0.5')}>
             {selectableItems.map((o, idx) => (
               <button
                 key={o.value}
@@ -207,7 +214,8 @@ export function SearchableSelect({
                 onClick={() => handleSelect(o.value)}
                 onMouseEnter={() => setHighlightIdx(idx)}
                 className={cn(
-                  'w-full text-left px-1 py-[1.5px] text-[9px] leading-tight rounded-sm cursor-pointer truncate',
+                  'w-full text-left leading-tight rounded-sm cursor-pointer truncate',
+                  dense ? 'px-2 py-1 text-[12px]' : 'px-1 py-[1.5px] text-[9px]',
                   idx === highlightIdx && 'bg-accent text-accent-foreground',
                   idx !== highlightIdx && 'hover:bg-accent/50',
                   value === o.value && 'font-semibold',

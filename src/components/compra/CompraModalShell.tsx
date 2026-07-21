@@ -215,7 +215,8 @@ export function CompraModalShell(api: CompraModalShellProps) {
                       placeholder="Selecione ou cadastre o fornecedor"
                       allLabel="Nenhum selecionado"
                       allValue="__all__"
-                      className="[&_button]:h-8 [&_button]:text-[12px] [&_button]:px-2"
+                      dense
+                      className="[&>button]:h-8 [&>button]:text-[12px] [&>button]:px-2"
                     />
                   </div>
                   <Button type="button" variant="outline" size="icon" className="h-8 w-8 shrink-0" aria-label="Novo fornecedor" onClick={() => api.setNovoFornecedorCompraOpen(true)}>
