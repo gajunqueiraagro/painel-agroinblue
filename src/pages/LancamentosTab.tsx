@@ -3480,6 +3480,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     observacao, setObservacao,
     fazendaOrigem, setFazendaOrigem,
     fazendaAtualNome: nomeFazenda,
+    fazendaAtualId: fazendaAtual?.id ?? null,
+    fazendas,
     compraFornecedorId, setCompraFornecedorId,
     fornecedores: abateFornecedores,
     setNovoFornecedorCompraOpen,
@@ -3550,7 +3552,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       <DialogContent
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
-        className="max-w-full sm:max-w-5xl w-full h-screen sm:h-auto sm:max-h-[92vh] overflow-y-auto p-4 sm:p-5"
+        className={`max-w-full sm:max-w-5xl w-full h-screen sm:h-auto sm:max-h-[92vh] overflow-y-auto ${isCompra ? 'p-0 [&>button.absolute]:hidden' : 'p-4 sm:p-5'}`}
       >
       {isCompra ? (
         <CompraModalShell {...compraFormApi} />
