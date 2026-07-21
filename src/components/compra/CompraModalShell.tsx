@@ -8,6 +8,7 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { Plus, Edit, Lock, ShoppingCart, X, Trash2, Calendar, Building2 } from 'lucide-react';
 import { STATUS_LABEL, META_VISUAL, type StatusOperacional } from '@/lib/statusOperacional';
 import { AbaNegociacaoLotes } from './AbaNegociacaoLotes';
+import type { CompraLotesApi } from '@/hooks/useCompraLotes';
 import { CompraResumoPanel } from './CompraResumoPanel';
 import { CompraDetalhesDialog, EMPTY_COMPRA_DETALHES, type CompraDetalhes } from './CompraDetalhesDialog';
 
@@ -67,6 +68,7 @@ export interface CompraModalShellProps {
   // ponte Compra→OC (modo OC isolado; opt-in). Off por padrão → comportamento legado.
   modoOC?: boolean;
   ocOperacaoId?: string | null;
+  lotesApi?: CompraLotesApi;   // COM-3: estado/handlers dos lotes (só em modo OC)
   onClose: () => void;
 }
 
@@ -179,6 +181,9 @@ export function CompraModalShell(api: CompraModalShellProps) {
               quantidadeNum={api.quantidadeNum}
               pesoKgNum={api.pesoKgNum}
               darkSelectClass={DARK_SELECT_CONTENT}
+              modoOC={api.modoOC}
+              operacaoPronta={!!api.ocOperacaoId}
+              lotesApi={api.lotesApi}
             />
           ) : (
           <>
@@ -330,8 +335,12 @@ export function CompraModalShell(api: CompraModalShellProps) {
           {abaAtiva === 'negociacao' ? (
             // Ação da aba Negociação: apenas visual nesta rodada (sem handler). O fluxo de
             // Registrar Compra da aba Compra permanece inalterado.
-            <Button type="button" disabled className="bg-white text-primary font-bold gap-1.5 opacity-60 cursor-not-allowed" title="em breve">
-              <ShoppingCart className="h-4 w-4" /> Salvar Negociação
+            <Button type="button"
+              disabled={!api.modoOC || !api.ocOperacaoId || !!api.lotesApi?.saving}
+              onClick={() => api.lotesApi?.salvar()}
+              className={`bg-white text-primary font-bold gap-1.5 ${(!api.modoOC || !api.ocOperacaoId) ? 'opacity-60 cursor-not-allowed' : 'hover:bg-white/90'}`}
+              title={api.modoOC ? (api.ocOperacaoId ? undefined : 'Salve a operação na aba Compra primeiro') : 'em breve'}>
+              <ShoppingCart className="h-4 w-4" /> {api.lotesApi?.saving ? 'Salvando...' : 'Salvar Negociação'}
             </Button>
           ) : (
             <Button onClick={api.handleRequestRegister} disabled={api.submitting || (!api.modoOC && !api.compraDetalhes)} className="bg-white text-primary hover:bg-white/90 font-bold gap-1.5">

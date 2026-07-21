@@ -35,6 +35,7 @@ import { CompraResumoPanel } from '@/components/compra/CompraResumoPanel';
 import { CompraModalShell } from '@/components/compra/CompraModalShell';
 import { gerarFinanceiroCompra } from '@/components/compra/gerarFinanceiroCompra';
 import { useOperacaoComercial } from '@/hooks/useOperacaoComercial';
+import { useCompraLotes } from '@/hooks/useCompraLotes';
 import { AbateDetalhesDialog, AbateDetalhes, EMPTY_ABATE_DETALHES } from '@/components/abate/AbateDetalhesDialog';
 import { AbateResumoPanel } from '@/components/abate/AbateResumoPanel';
 import { TransferenciaDetalhesDialog, TransferenciaDetalhes, EMPTY_TRANSFERENCIA_DETALHES } from '@/components/transferencia/TransferenciaDetalhesDialog';
@@ -285,6 +286,14 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   );
   const [ocOperacaoId, setOcOperacaoId] = useState<string | null>(null);
   const [ocVersao, setOcVersao] = useState<number | null>(null);
+  // COM-3: estado/handlers dos lotes comerciais (só em modo OC; fonte única = camada OC).
+  const lotesApi = useCompraLotes({
+    operacaoId: ocOperacaoId,
+    clienteId: clienteAtual?.id ?? null,
+    versao: ocVersao,
+    onVersaoChange: setOcVersao,
+    enabled: modoOCCompra,
+  });
 
   const outrasFazendas = useMemo(() => {
     return fazendas.filter(f => f.id !== fazendaAtual?.id && f.id !== '__global__' && f.tem_pecuaria !== false);
@@ -3547,6 +3556,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     mesFechadoMsg: p1BloqueioMsg,
     modoOC: modoOCCompra,
     ocOperacaoId,
+    lotesApi,
     onClose: () => setLancModalOpen(false),
   };
 

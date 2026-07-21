@@ -1,71 +1,164 @@
 import { useState } from 'react';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Plus, Trash2 } from 'lucide-react';
+import { parseNumericValue } from '@/lib/calculos/abate';
+import type { CompraLotesApi, CriterioValor } from '@/hooks/useCompraLotes';
 
-// Aba Negociação — casca VISUAL. Lê os lotes da Compra a partir do formApi (read-only: a
-// Compra é dona de Categoria/Quantidade/Peso) e acrescenta os campos comerciais por lote.
-// Estado local é SOMENTE de exibição (não persiste, não altera payload) — mesma natureza do
-// dropdown de Fazenda visual. Nenhuma fonte de dados nova, nenhum estado funcional duplicado.
+// Aba Negociação.
+//   • Modo OC (lotesApi): grade EDITÁVEL de múltiplos lotes — fonte única = camada OC
+//     (zoo_operacao_lotes via oc_salvar_lotes). Totais derivados só no frontend. Sem lancamentos.
+//   • Modo legado (sem lotesApi): mantém a linha read-only atual (Compra é dona dos dados).
 interface Props {
+  // legado (read-only)
   categoria: string;
   categoriasDisponiveis: { value: string; label: string }[];
   quantidadeNum: number;
-  pesoKgNum: number; // peso médio (o estado legado pesoKg = pesoMedioKg)
-  darkSelectClass: string; // padrão escuro único da casca (centralizado no CompraModalShell)
+  pesoKgNum: number;
+  darkSelectClass: string;
+  // modo OC (COM-3)
+  modoOC?: boolean;
+  operacaoPronta?: boolean;      // já existe operacao_id (salvo na aba Compra)
+  lotesApi?: CompraLotesApi;
 }
 
-const CRITERIOS = [
-  { value: 'por_kg', label: 'Por kg', unidade: 'R$/kg' },
-  { value: 'por_cab', label: 'Por cabeça', unidade: 'R$/cabeça' },
+const CRITERIOS: { value: CriterioValor; label: string; unidade: string }[] = [
+  { value: 'kg', label: 'Por kg', unidade: 'R$/kg' },
+  { value: 'cabeca', label: 'Por cabeça', unidade: 'R$/cabeça' },
   { value: 'total', label: 'Valor total', unidade: 'Valor total' },
 ];
 
-const GRID = 'grid grid-cols-[1.3fr_0.7fr_0.9fr_1fr_1.1fr_1fr_1fr] gap-2';
+const GRID_LEG = 'grid grid-cols-[1.3fr_0.7fr_0.9fr_1fr_1.1fr_1fr_1fr] gap-2';
+const GRID_OC = 'grid grid-cols-[1.2fr_0.7fr_0.8fr_0.9fr_1fr_1fr_1fr_0.5fr] gap-2';
 
-export function AbaNegociacaoLotes({ categoria, categoriasDisponiveis, quantidadeNum, pesoKgNum, darkSelectClass }: Props) {
-  const [criterio, setCriterio] = useState('por_kg');
+const brl = (n: number) => (n > 0 ? n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'R$ —');
+const fmtKg = (n: number) => (n > 0 ? `${n.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} kg` : '—');
+
+function loteTotal(criterio: CriterioValor, quantidade: string, pesoMedioKg: string, valorInformado: string): number {
+  const q = parseNumericValue(quantidade) || 0;
+  const pm = parseNumericValue(pesoMedioKg) || 0;
+  const v = parseNumericValue(valorInformado) || 0;
+  const pt = q * pm;
+  return criterio === 'kg' ? pt * v : criterio === 'cabeca' ? q * v : v;
+}
+
+export function AbaNegociacaoLotes({
+  categoria, categoriasDisponiveis, quantidadeNum, pesoKgNum, darkSelectClass,
+  modoOC, operacaoPronta, lotesApi,
+}: Props) {
+  // ── MODO OC: grade editável de múltiplos lotes ──
+  if (modoOC && lotesApi) {
+    const { lotes, adicionarLote, editarLote, removerLote, totais, loading } = lotesApi;
+    return (
+      <div className="rounded-md border bg-card p-2 shadow-sm space-y-1 min-w-0">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <div className="text-[12px] font-semibold text-foreground">Negociação dos Lotes</div>
+            <div className="text-[11px] text-muted-foreground">Cadastre, edite e precifique cada lote da compra.</div>
+          </div>
+          <Button type="button" variant="outline" size="sm" disabled={!operacaoPronta} onClick={adicionarLote}
+            className="h-7 text-[11px] gap-1" title={operacaoPronta ? undefined : 'Salve a operação na aba Compra primeiro'}>
+            <Plus className="h-3 w-3" /> Adicionar lote
+          </Button>
+        </div>
+
+        {!operacaoPronta ? (
+          <div className="rounded-md border border-dashed bg-muted/10 px-3 py-4 text-center text-[11px] text-muted-foreground">
+            Salve a operação na aba <span className="font-semibold">Compra</span> ("Salvar Operação (OC)") para cadastrar os lotes.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <div className="min-w-[680px]">
+              <div className={`${GRID_OC} px-1 pb-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground`}>
+                <span>Categoria</span><span className="text-right">Qtde</span><span className="text-right">Peso Méd.</span>
+                <span className="text-right">Peso Tot.</span><span>Critério</span><span className="text-right">Valor</span>
+                <span className="text-right">Total</span><span className="text-center">Ações</span>
+              </div>
+              {lotes.length === 0 ? (
+                <div className="rounded-md border border-dashed bg-muted/10 px-3 py-3 text-center text-[11px] text-muted-foreground">
+                  {loading ? 'Carregando lotes…' : 'Nenhum lote. Clique em "Adicionar lote".'}
+                </div>
+              ) : lotes.map(l => {
+                const pt = (parseNumericValue(l.quantidade) || 0) * (parseNumericValue(l.pesoMedioKg) || 0);
+                const unidade = CRITERIOS.find(c => c.value === l.criterioValor)?.unidade || 'Valor';
+                return (
+                  <div key={l.idLocal} className={`${GRID_OC} items-center rounded-md border bg-muted/20 px-1 py-0.5`}>
+                    <Select value={l.categoria || undefined} onValueChange={v => editarLote(l.idLocal, { categoria: v })}>
+                      <SelectTrigger className="h-6 text-[11px]"><SelectValue placeholder="Categoria" /></SelectTrigger>
+                      <SelectContent className={`${darkSelectClass} max-h-[70vh] overflow-y-auto`}>
+                        {categoriasDisponiveis.map(c => <SelectItem key={c.value} value={c.value} className="text-[11px] py-1">{c.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <Input inputMode="numeric" value={l.quantidade} onChange={e => editarLote(l.idLocal, { quantidade: e.target.value })} placeholder="0" className="h-6 text-[11px] text-right tabular-nums" />
+                    <Input inputMode="decimal" value={l.pesoMedioKg} onChange={e => editarLote(l.idLocal, { pesoMedioKg: e.target.value })} placeholder="0,00" className="h-6 text-[11px] text-right tabular-nums" />
+                    <div className="text-[11px] text-right tabular-nums text-muted-foreground">{fmtKg(pt)}</div>
+                    <Select value={l.criterioValor} onValueChange={v => editarLote(l.idLocal, { criterioValor: v as CriterioValor })}>
+                      <SelectTrigger className="h-6 text-[11px]"><SelectValue /></SelectTrigger>
+                      <SelectContent className={darkSelectClass}>
+                        {CRITERIOS.map(c => <SelectItem key={c.value} value={c.value} className="text-[11px] py-1">{c.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <Input inputMode="decimal" value={l.valorInformado} onChange={e => editarLote(l.idLocal, { valorInformado: e.target.value })} placeholder={unidade} className="h-6 text-[11px] text-right tabular-nums" />
+                    <div className="text-[11px] text-right tabular-nums font-semibold">{brl(loteTotal(l.criterioValor, l.quantidade, l.pesoMedioKg, l.valorInformado))}</div>
+                    <div className="text-center">
+                      <button type="button" onClick={() => removerLote(l.idLocal)} className="text-muted-foreground/60 hover:text-destructive" aria-label="Remover lote">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 pt-1">
+          <div className="rounded-md border bg-muted/20 px-2 py-1"><div className="text-[10px] text-muted-foreground">Lotes</div><div className="font-bold text-[12px]">{totais.lotes || '—'}</div></div>
+          <div className="rounded-md border bg-muted/20 px-2 py-1"><div className="text-[10px] text-muted-foreground">Animais</div><div className="font-bold text-[12px]">{totais.animais || '—'}</div></div>
+          <div className="rounded-md border bg-muted/20 px-2 py-1"><div className="text-[10px] text-muted-foreground">Peso total</div><div className="font-bold text-[12px]">{fmtKg(totais.pesoTotal)}</div></div>
+          <div className="rounded-md border bg-muted/20 px-2 py-1"><div className="text-[10px] text-muted-foreground">Valor total negociado</div><div className="font-bold text-[12px] text-primary">{brl(totais.valorNegociado)}</div></div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── MODO LEGADO: linha read-only (inalterado) ──
+  return <NegociacaoLegado categoria={categoria} categoriasDisponiveis={categoriasDisponiveis} quantidadeNum={quantidadeNum} pesoKgNum={pesoKgNum} darkSelectClass={darkSelectClass} />;
+}
+
+function NegociacaoLegado({ categoria, categoriasDisponiveis, quantidadeNum, pesoKgNum, darkSelectClass }: Pick<Props, 'categoria' | 'categoriasDisponiveis' | 'quantidadeNum' | 'pesoKgNum' | 'darkSelectClass'>) {
+  const [criterio, setCriterio] = useState<CriterioValor>('kg');
   const [valorInformado, setValorInformado] = useState('');
-
   const catLabel = categoriasDisponiveis.find(c => c.value === categoria)?.label || '—';
   const pesoTotal = quantidadeNum > 0 && pesoKgNum > 0 ? quantidadeNum * pesoKgNum : 0;
-  const fmt = (n: number) => (n > 0 ? n.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : '—');
-  const criterioUnidade = CRITERIOS.find(c => c.value === criterio)?.unidade || 'Valor';
+  const unidade = CRITERIOS.find(c => c.value === criterio)?.unidade || 'Valor';
   const temLote = quantidadeNum > 0 && !!categoria;
-
   return (
     <div className="rounded-md border bg-card p-2 shadow-sm space-y-1 min-w-0">
       <div>
         <div className="text-[12px] font-semibold text-foreground">Negociação dos Lotes</div>
         <div className="text-[11px] text-muted-foreground">Defina o critério e o valor negociado para cada lote da compra.</div>
       </div>
-
       <div className="overflow-x-auto">
         <div className="min-w-[640px]">
-          <div className={`${GRID} px-1 pb-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground`}>
-            <span>Categoria</span>
-            <span className="text-right">Qtde</span>
-            <span className="text-right">Peso Méd.</span>
-            <span className="text-right">Peso Tot.</span>
-            <span>Critério</span>
-            <span className="text-right">Valor</span>
-            <span className="text-right">Total</span>
+          <div className={`${GRID_LEG} px-1 pb-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground`}>
+            <span>Categoria</span><span className="text-right">Qtde</span><span className="text-right">Peso Méd.</span>
+            <span className="text-right">Peso Tot.</span><span>Critério</span><span className="text-right">Valor</span><span className="text-right">Total</span>
           </div>
-
           {temLote ? (
-            <div className={`${GRID} items-center rounded-md border bg-muted/20 px-1 py-0.5`}>
-              {/* Referência read-only — dono é a aba Compra */}
+            <div className={`${GRID_LEG} items-center rounded-md border bg-muted/20 px-1 py-0.5`}>
               <div className="text-[11px] truncate">{catLabel}</div>
               <div className="text-[11px] text-right tabular-nums">{quantidadeNum}</div>
-              <div className="text-[11px] text-right tabular-nums">{fmt(pesoKgNum)} kg</div>
-              <div className="text-[11px] text-right tabular-nums">{fmt(pesoTotal)} kg</div>
-              {/* Campos comerciais (visual nesta rodada) */}
-              <Select value={criterio} onValueChange={setCriterio}>
+              <div className="text-[11px] text-right tabular-nums">{fmtKg(pesoKgNum)}</div>
+              <div className="text-[11px] text-right tabular-nums">{fmtKg(pesoTotal)}</div>
+              <Select value={criterio} onValueChange={v => setCriterio(v as CriterioValor)}>
                 <SelectTrigger className="h-6 text-[11px]"><SelectValue /></SelectTrigger>
                 <SelectContent className={darkSelectClass}>
                   {CRITERIOS.map(c => <SelectItem key={c.value} value={c.value} className="text-[11px] py-1">{c.label}</SelectItem>)}
                 </SelectContent>
               </Select>
-              <Input value={valorInformado} onChange={e => setValorInformado(e.target.value)} inputMode="decimal" placeholder={criterioUnidade} className="h-6 text-[11px] text-right tabular-nums" />
+              <Input value={valorInformado} onChange={e => setValorInformado(e.target.value)} inputMode="decimal" placeholder={unidade} className="h-6 text-[11px] text-right tabular-nums" />
               <Input value="R$ —" readOnly tabIndex={-1} className="h-6 text-[11px] text-right tabular-nums bg-muted cursor-default" />
             </div>
           ) : (
@@ -75,12 +168,10 @@ export function AbaNegociacaoLotes({ categoria, categoriasDisponiveis, quantidad
           )}
         </div>
       </div>
-
-      {/* Totais da Negociação (somente visual nesta rodada) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 pt-1">
         <div className="rounded-md border bg-muted/20 px-2 py-1"><div className="text-[10px] text-muted-foreground">Lotes</div><div className="font-bold text-[12px]">{temLote ? 1 : '—'}</div></div>
         <div className="rounded-md border bg-muted/20 px-2 py-1"><div className="text-[10px] text-muted-foreground">Animais</div><div className="font-bold text-[12px]">{quantidadeNum > 0 ? quantidadeNum : '—'}</div></div>
-        <div className="rounded-md border bg-muted/20 px-2 py-1"><div className="text-[10px] text-muted-foreground">Peso total</div><div className="font-bold text-[12px]">{pesoTotal > 0 ? `${fmt(pesoTotal)} kg` : '—'}</div></div>
+        <div className="rounded-md border bg-muted/20 px-2 py-1"><div className="text-[10px] text-muted-foreground">Peso total</div><div className="font-bold text-[12px]">{fmtKg(pesoTotal)}</div></div>
         <div className="rounded-md border bg-muted/20 px-2 py-1"><div className="text-[10px] text-muted-foreground">Valor total negociado</div><div className="font-bold text-[12px] text-primary">R$ —</div></div>
       </div>
     </div>
