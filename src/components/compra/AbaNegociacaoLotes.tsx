@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { DARK_GLASS_CONTENT } from '@/components/shared/ContaBancariaSelect';
 
 // Aba Negociação — casca VISUAL. Lê os lotes da Compra a partir do formApi (read-only: a
 // Compra é dona de Categoria/Quantidade/Peso) e acrescenta os campos comerciais por lote.
@@ -12,6 +11,7 @@ interface Props {
   categoriasDisponiveis: { value: string; label: string }[];
   quantidadeNum: number;
   pesoKgNum: number; // peso médio (o estado legado pesoKg = pesoMedioKg)
+  darkSelectClass: string; // padrão escuro único da casca (centralizado no CompraModalShell)
 }
 
 const CRITERIOS = [
@@ -22,7 +22,7 @@ const CRITERIOS = [
 
 const GRID = 'grid grid-cols-[1.3fr_0.7fr_0.9fr_1fr_1.1fr_1fr_1fr] gap-2';
 
-export function AbaNegociacaoLotes({ categoria, categoriasDisponiveis, quantidadeNum, pesoKgNum }: Props) {
+export function AbaNegociacaoLotes({ categoria, categoriasDisponiveis, quantidadeNum, pesoKgNum, darkSelectClass }: Props) {
   const [criterio, setCriterio] = useState('por_kg');
   const [valorInformado, setValorInformado] = useState('');
 
@@ -61,7 +61,7 @@ export function AbaNegociacaoLotes({ categoria, categoriasDisponiveis, quantidad
               {/* Campos comerciais (visual nesta rodada) */}
               <Select value={criterio} onValueChange={setCriterio}>
                 <SelectTrigger className="h-6 text-[11px]"><SelectValue /></SelectTrigger>
-                <SelectContent className={DARK_GLASS_CONTENT}>
+                <SelectContent className={darkSelectClass}>
                   {CRITERIOS.map(c => <SelectItem key={c.value} value={c.value} className="text-[11px] py-1">{c.label}</SelectItem>)}
                 </SelectContent>
               </Select>

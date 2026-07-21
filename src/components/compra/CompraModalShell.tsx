@@ -7,7 +7,6 @@ import { SearchableSelect } from '@/components/ui/searchable-select';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Plus, Edit, Lock, ShoppingCart, X, Trash2, Calendar, Building2 } from 'lucide-react';
 import { STATUS_LABEL, META_VISUAL, type StatusOperacional } from '@/lib/statusOperacional';
-import { DARK_GLASS_CONTENT } from '@/components/shared/ContaBancariaSelect';
 import { AbaNegociacaoLotes } from './AbaNegociacaoLotes';
 import { CompraResumoPanel } from './CompraResumoPanel';
 import { CompraDetalhesDialog, EMPTY_COMPRA_DETALHES, type CompraDetalhes } from './CompraDetalhesDialog';
@@ -67,6 +66,17 @@ export interface CompraModalShellProps {
   mesFechadoMsg: string | null;
   onClose: () => void;
 }
+
+// Padrão ESCURO único dos dropdowns dos modais da casca (Compra + Negociação). Corrige o
+// contraste do item selecionado/hover: o SelectItem do shadcn traz focus:bg-accent (tema
+// claro) — aqui sobrescrevemos com !important (branco translúcido + texto branco) para o
+// selecionado/hover ficarem legíveis e nunca herdarem o accent claro. Container = mesmo look
+// glass do FinV2 (não editamos o DARK_GLASS compartilhado; esta é a regra da casca).
+export const DARK_SELECT_CONTENT =
+  'bg-zinc-950/80 backdrop-blur-xl border-zinc-700/50 text-zinc-100 ' +
+  '[&_[role=option]]:text-zinc-100 ' +
+  '[&_[role=option]]:focus:!bg-white/10 [&_[role=option]]:focus:!text-white ' +
+  '[&_[role=option]]:data-[state=checked]:!bg-white/20 [&_[role=option]]:data-[state=checked]:!text-white [&_[role=option]]:data-[state=checked]:font-semibold';
 
 const ABAS = [
   { key: 'compra', label: 'Compra', enabled: true },
@@ -159,6 +169,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
               categoriasDisponiveis={api.categoriasDisponiveis}
               quantidadeNum={api.quantidadeNum}
               pesoKgNum={api.pesoKgNum}
+              darkSelectClass={DARK_SELECT_CONTENT}
             />
           ) : (
           <>
@@ -173,7 +184,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
                   <SelectTrigger className={`mt-0.5 h-8 text-[12px] font-semibold border-2 gap-1 ${cenarioAtual.chip}`}>
                     <span className="flex items-center gap-1"><span>{cenarioAtual.icon}</span><span>{cenarioAtual.label}</span></span>
                   </SelectTrigger>
-                  <SelectContent className={DARK_GLASS_CONTENT}>
+                  <SelectContent className={DARK_SELECT_CONTENT}>
                     {cenarioOptions.map(v => {
                       const ui = CENARIO_UI[v];
                       const disabled = (api.cenariosPermitidos ? !api.cenariosPermitidos.includes(v) : false)
@@ -191,7 +202,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
                 <Label className="font-bold text-[11px]">Fazenda</Label>
                 <Select value={fazendaSel} onValueChange={setFazendaSel}>
                   <SelectTrigger className="mt-0.5 h-8 text-[12px]"><SelectValue placeholder={api.fazendaAtualNome || 'Selecione'} /></SelectTrigger>
-                  <SelectContent className={DARK_GLASS_CONTENT}>
+                  <SelectContent className={DARK_SELECT_CONTENT}>
                     {api.fazendaAtualId && <SelectItem value={api.fazendaAtualId} className="text-[12px]">{api.fazendaAtualNome}</SelectItem>}
                     {api.fazendas.filter(f => f.id !== api.fazendaAtualId).map(f => <SelectItem key={f.id} value={f.id} className="text-[12px]">{f.nome}</SelectItem>)}
                   </SelectContent>
@@ -248,7 +259,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
                 <div className="grid grid-cols-[1.4fr_0.8fr_0.9fr_1.3fr_1fr] gap-2 items-center rounded-md border bg-muted/20 px-1 py-0.5">
                   <Select value={api.categoria} onValueChange={v => api.setCategoria(v)}>
                     <SelectTrigger className="h-6 text-[11px]"><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                    <SelectContent className={`${DARK_GLASS_CONTENT} max-h-[70vh] overflow-y-auto`}>
+                    <SelectContent className={`${DARK_SELECT_CONTENT} max-h-[70vh] overflow-y-auto`}>
                       {api.categoriasDisponiveis.map(c => <SelectItem key={c.value} value={c.value} className="text-[11px] py-1">{c.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
