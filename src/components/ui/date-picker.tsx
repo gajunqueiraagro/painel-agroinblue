@@ -40,16 +40,19 @@ export function DatePicker({ value, onChange, className, placeholder = 'dd/mm/aa
           onSelect={(d) => { if (d) { onChange(format(d, 'yyyy-MM-dd')); setOpen(false); } }}
           locale={ptBR}
           initialFocus
-          className="p-2"
+          className="p-1.5"
           classNames={{
+            // Espaçamento vertical enxuto entre cabeçalho azul, dias da semana e grade
+            month: 'space-y-1',
+            row: 'flex w-full mt-0.5',
             // Faixa superior completa em azul (mês + setas com contraste)
-            caption: 'relative flex items-center justify-center bg-primary text-primary-foreground -mx-2 -mt-2 mb-1.5 px-3 py-2 rounded-t-md',
-            caption_label: 'text-[13px] font-semibold',
-            nav_button: 'h-6 w-6 bg-transparent p-0 border-0 text-primary-foreground opacity-80 hover:opacity-100',
-            // Células compactas
-            head_cell: 'text-muted-foreground rounded-md w-8 font-normal text-[0.7rem]',
-            cell: 'h-8 w-8 text-center text-[12px] p-0 relative [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20',
-            day: 'h-8 w-8 p-0 font-normal text-[12px] aria-selected:opacity-100',
+            caption: 'relative flex items-center justify-center bg-primary text-primary-foreground -mx-1.5 -mt-1.5 mb-1 px-3 py-1.5 rounded-t-md',
+            caption_label: 'text-[12px] font-semibold',
+            nav_button: 'h-5 w-5 bg-transparent p-0 border-0 text-primary-foreground opacity-80 hover:opacity-100',
+            // Células compactas (menor altura)
+            head_cell: 'text-muted-foreground rounded-md w-7 font-normal text-[0.65rem]',
+            cell: 'h-7 w-7 text-center text-[11px] p-0 relative [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20',
+            day: 'h-7 w-7 p-0 font-normal text-[11px] aria-selected:opacity-100',
           }}
         />
       </PopoverContent>

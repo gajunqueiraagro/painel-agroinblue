@@ -7,6 +7,7 @@ import { SearchableSelect } from '@/components/ui/searchable-select';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Plus, Edit, Lock, ShoppingCart, X, Trash2, Calendar, Building2 } from 'lucide-react';
 import { STATUS_LABEL, META_VISUAL, type StatusOperacional } from '@/lib/statusOperacional';
+import { DARK_GLASS_CONTENT } from '@/components/shared/ContaBancariaSelect';
 import { CompraResumoPanel } from './CompraResumoPanel';
 import { CompraDetalhesDialog, EMPTY_COMPRA_DETALHES, type CompraDetalhes } from './CompraDetalhesDialog';
 
@@ -151,7 +152,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 p-6 max-h-[62vh] overflow-y-auto bg-muted/30">
         <div className="space-y-3 min-w-0">
           {/* CARD 1 — Identificação da Compra */}
-          <div className="rounded-md border bg-card p-3 shadow-sm space-y-1.5 min-w-0">
+          <div className="rounded-md border bg-card p-2 shadow-sm space-y-1 min-w-0">
             <div className="text-[12px] font-semibold text-muted-foreground">Identificação da Compra</div>
             {/* Linha 1: Status · Data · Fazenda · Observações (larguras justas; Obs ocupa o resto) */}
             <div className="grid grid-cols-1 lg:grid-cols-[170px_150px_180px_minmax(0,1fr)] gap-2">
@@ -161,7 +162,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
                   <SelectTrigger className={`mt-0.5 h-8 text-[12px] font-semibold border-2 gap-1 ${cenarioAtual.chip}`}>
                     <span className="flex items-center gap-1"><span>{cenarioAtual.icon}</span><span>{cenarioAtual.label}</span></span>
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className={DARK_GLASS_CONTENT}>
                     {cenarioOptions.map(v => {
                       const ui = CENARIO_UI[v];
                       const disabled = (api.cenariosPermitidos ? !api.cenariosPermitidos.includes(v) : false)
@@ -179,14 +180,14 @@ export function CompraModalShell(api: CompraModalShellProps) {
                 <Label className="font-bold text-[11px]">Fazenda</Label>
                 <Select value={fazendaSel} onValueChange={setFazendaSel}>
                   <SelectTrigger className="mt-0.5 h-8 text-[12px]"><SelectValue placeholder={api.fazendaAtualNome || 'Selecione'} /></SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className={DARK_GLASS_CONTENT}>
                     {api.fazendaAtualId && <SelectItem value={api.fazendaAtualId} className="text-[12px]">{api.fazendaAtualNome}</SelectItem>}
                     {api.fazendas.filter(f => f.id !== api.fazendaAtualId).map(f => <SelectItem key={f.id} value={f.id} className="text-[12px]">{f.nome}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label className="font-bold text-[11px]">Observações</Label>
+                <Label className="font-bold text-[11px]">Observações/Lote</Label>
                 <Input value={api.observacao} onChange={e => api.setObservacao(e.target.value)} placeholder="Opcional" className="mt-0.5 h-8 text-[12px]" />
               </div>
             </div>
@@ -219,7 +220,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
           </div>
 
           {/* CARD 2 — Animais da Compra */}
-          <div className="rounded-md border bg-card p-3 shadow-sm space-y-1.5 min-w-0">
+          <div className="rounded-md border bg-card p-2 shadow-sm space-y-1 min-w-0">
             {/* Header do card: título + botão à direita (norma: topo, não abaixo da tabela) */}
             <div className="flex items-center justify-between gap-2">
               <div className="text-[12px] font-semibold text-muted-foreground">Animais da Compra</div>
@@ -229,13 +230,13 @@ export function CompraModalShell(api: CompraModalShellProps) {
             </div>
             <div className="overflow-x-auto">
               <div className="min-w-[520px]">
-                <div className="grid grid-cols-[2fr_1fr_1fr_1fr_0.6fr] gap-2 px-1 pb-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                <div className="grid grid-cols-[1.4fr_0.8fr_0.9fr_1.3fr_1fr] gap-2 px-1 pb-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
                   <span>Categoria</span><span className="text-right">Quantidade</span><span className="text-right">Peso Médio</span><span className="text-right">Peso Total</span><span className="text-center">Ações</span>
                 </div>
-                <div className="grid grid-cols-[2fr_1fr_1fr_1fr_0.6fr] gap-2 items-center rounded-md border bg-muted/20 px-1 py-0.5">
+                <div className="grid grid-cols-[1.4fr_0.8fr_0.9fr_1.3fr_1fr] gap-2 items-center rounded-md border bg-muted/20 px-1 py-0.5">
                   <Select value={api.categoria} onValueChange={v => api.setCategoria(v)}>
                     <SelectTrigger className="h-6 text-[11px]"><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                    <SelectContent className="max-h-40 overflow-y-auto">
+                    <SelectContent className={`${DARK_GLASS_CONTENT} max-h-[70vh] overflow-y-auto`}>
                       {api.categoriasDisponiveis.map(c => <SelectItem key={c.value} value={c.value} className="text-[11px] py-1">{c.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
