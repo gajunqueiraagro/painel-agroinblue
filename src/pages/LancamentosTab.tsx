@@ -32,6 +32,7 @@ import { ReclassificacaoFormFields, useReclassificacaoState } from '@/components
 import { ReclassificacaoResumoPanel } from '@/components/ReclassificacaoResumoPanel';
 import { CompraDetalhesDialog, CompraDetalhes, EMPTY_COMPRA_DETALHES } from '@/components/compra/CompraDetalhesDialog';
 import { CompraResumoPanel } from '@/components/compra/CompraResumoPanel';
+import { CompraModalShell } from '@/components/compra/CompraModalShell';
 import { gerarFinanceiroCompra } from '@/components/compra/gerarFinanceiroCompra';
 import { AbateDetalhesDialog, AbateDetalhes, EMPTY_ABATE_DETALHES } from '@/components/abate/AbateDetalhesDialog';
 import { AbateResumoPanel } from '@/components/abate/AbateResumoPanel';
@@ -3464,6 +3465,35 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     </div>
   );
 
+  // formApi — referências dos estados/setters/handlers existentes para a casca de Compra
+  // (PR-COMPRA-SHELL-01). Sem estado novo; apenas display-derivations (statusDescription,
+  // quantidadeNum, pesoKgNum) e o wrapper de setCategoria (mesmo idioma do Select legado).
+  const compraFormApi = {
+    statusOp, setStatusOp,
+    statusDescription: getStatusDescription(tipo, statusOp),
+    cenariosPermitidos: cenariosPermitidos ?? null,
+    canEditMeta,
+    data, setData,
+    qtdInput, pesoInput,
+    categoria, setCategoria: (v: string) => setCategoria(v as Categoria),
+    categoriasDisponiveis,
+    observacao, setObservacao,
+    fazendaOrigem, setFazendaOrigem,
+    fazendaAtualNome: nomeFazenda,
+    compraFornecedorId, setCompraFornecedorId,
+    fornecedores: abateFornecedores,
+    setNovoFornecedorCompraOpen,
+    compraDetalhes, setCompraDetalhes, setNotaFiscal,
+    compraDialogOpen, setCompraDialogOpen,
+    quantidadeNum: parseNumericValue(quantidade) || 0,
+    pesoKgNum: parseNumericValue(pesoKg) || 0,
+    handleRequestRegister, handleCancelEdit,
+    submitting,
+    editingId: editingAbateId,
+    mesFechadoMsg: p1BloqueioMsg,
+    onClose: () => setLancModalOpen(false),
+  };
+
   return (
     <div className="p-4 animate-fade-in pb-20 max-w-7xl mx-auto">
       {onBackToConciliacao && aba !== 'reclassificacao' && (
@@ -3522,6 +3552,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         onInteractOutside={(e) => e.preventDefault()}
         className="max-w-full sm:max-w-5xl w-full h-screen sm:h-auto sm:max-h-[92vh] overflow-y-auto p-4 sm:p-5"
       >
+      {isCompra ? (
+        <CompraModalShell {...compraFormApi} />
+      ) : (
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_22rem] gap-4 items-start overflow-visible">
         {/* Center: Form or Historico */}
         {aba === 'reclassificacao' ? (
@@ -3902,6 +3935,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           </>
         )}
       </div>
+      )}
       </DialogContent>
       </Dialog>
 
