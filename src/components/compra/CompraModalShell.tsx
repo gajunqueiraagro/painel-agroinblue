@@ -8,6 +8,7 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { Plus, Edit, Lock, ShoppingCart, X, Trash2, Calendar, Building2 } from 'lucide-react';
 import { STATUS_LABEL, META_VISUAL, type StatusOperacional } from '@/lib/statusOperacional';
 import { DARK_GLASS_CONTENT } from '@/components/shared/ContaBancariaSelect';
+import { AbaNegociacaoLotes } from './AbaNegociacaoLotes';
 import { CompraResumoPanel } from './CompraResumoPanel';
 import { CompraDetalhesDialog, EMPTY_COMPRA_DETALHES, type CompraDetalhes } from './CompraDetalhesDialog';
 
@@ -69,6 +70,7 @@ export interface CompraModalShellProps {
 
 const ABAS = [
   { key: 'compra', label: 'Compra', enabled: true },
+  { key: 'negociacao', label: 'Negociação', enabled: true },
   { key: 'recebimento', label: 'Recebimento', enabled: false },
   { key: 'financeiro', label: 'Financeiro', enabled: false },
   { key: 'documentos', label: 'Documentos', enabled: false },
@@ -151,6 +153,15 @@ export function CompraModalShell(api: CompraModalShellProps) {
       {/* CORPO — template (grid [1fr_320px], gap-4, p-6, max-h-[62vh] overflow-y-auto); só o corpo rola */}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 p-6 max-h-[62vh] overflow-y-auto bg-muted/30">
         <div className="space-y-3 min-w-0">
+          {abaAtiva === 'negociacao' ? (
+            <AbaNegociacaoLotes
+              categoria={api.categoria}
+              categoriasDisponiveis={api.categoriasDisponiveis}
+              quantidadeNum={api.quantidadeNum}
+              pesoKgNum={api.pesoKgNum}
+            />
+          ) : (
+          <>
           {/* CARD 1 — Identificação da Compra */}
           <div className="rounded-md border bg-card p-2 shadow-sm space-y-1 min-w-0">
             <div className="text-[12px] font-semibold text-muted-foreground">Identificação da Compra</div>
@@ -250,6 +261,8 @@ export function CompraModalShell(api: CompraModalShellProps) {
               </div>
             </div>
           </div>
+          </>
+          )}
         </div>
 
         {/* RESUMO LATERAL — coluna de 320px do template; painel financeiro intocável reutilizado */}
@@ -293,10 +306,18 @@ export function CompraModalShell(api: CompraModalShellProps) {
               <Edit className="h-4 w-4" /> Editar Financeiro
             </Button>
           )}
-          <Button onClick={api.handleRequestRegister} disabled={api.submitting || !api.compraDetalhes} className="bg-white text-primary hover:bg-white/90 font-bold gap-1.5">
-            <ShoppingCart className="h-4 w-4" />
-            {api.submitting ? 'Registrando...' : api.editingId ? 'Salvar Alterações' : 'Registrar Compra'}
-          </Button>
+          {abaAtiva === 'negociacao' ? (
+            // Ação da aba Negociação: apenas visual nesta rodada (sem handler). O fluxo de
+            // Registrar Compra da aba Compra permanece inalterado.
+            <Button type="button" disabled className="bg-white text-primary font-bold gap-1.5 opacity-60 cursor-not-allowed" title="em breve">
+              <ShoppingCart className="h-4 w-4" /> Salvar Negociação
+            </Button>
+          ) : (
+            <Button onClick={api.handleRequestRegister} disabled={api.submitting || !api.compraDetalhes} className="bg-white text-primary hover:bg-white/90 font-bold gap-1.5">
+              <ShoppingCart className="h-4 w-4" />
+              {api.submitting ? 'Registrando...' : api.editingId ? 'Salvar Alterações' : 'Registrar Compra'}
+            </Button>
+          )}
         </div>
       </div>
 
