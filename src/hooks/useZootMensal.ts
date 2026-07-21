@@ -70,13 +70,21 @@ export function useZootMensal({ ano, cenario }: UseZootMensalParams) {
           hint: (error as any).hint,
           fazendaId, ano, cenario,
         });
-        return [];
+        // Circuit breaker: falha da view é falha DE VERDADE — propaga o erro (isError=true)
+        // em vez de mascarar com []. A UI de erro fica para o PR-ZOOT-ERROR-UI.
+        throw error;
       }
 
       return (data as unknown as ZootMensal[]) || [];
     },
     enabled: Boolean(fazendaId) && fazendaId !== '__global__',
     staleTime: 30_000,
+    // Circuit breaker: 1 retry com backoff exponencial e SEM re-marteladas automáticas
+    // (remount/foco não refazem; só invalidação explícita ou refetch() manual).
+    retry: 1,
+    retryDelay: (attempt) => Math.min(2000 * 2 ** attempt, 10000),
+    retryOnMount: false,
+    refetchOnWindowFocus: false,
     // Mantém dados anteriores durante troca de fazenda/ano para evitar flash vazio
     // (react-query v5).
     placeholderData: (previousData) => previousData,
