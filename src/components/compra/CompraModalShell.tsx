@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent } from 'react';
+import { useState, useEffect, useRef, type ChangeEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -101,6 +101,15 @@ const CENARIO_UI: Record<string, { icon: string; label: string; chip: string }> 
 
 export function CompraModalShell(api: CompraModalShellProps) {
   const [abaAtiva, setAbaAtiva] = useState<string>('compra');
+  // Modo OC: ao CRIAR a operação (ocOperacaoId passa de vazio→preenchido), navega
+  // automaticamente para a aba Negociação (informar os lotes).
+  const prevOcRef = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (api.modoOC && api.ocOperacaoId && !prevOcRef.current) {
+      setAbaAtiva('negociacao');
+    }
+    prevOcRef.current = api.ocOperacaoId ?? null;
+  }, [api.modoOC, api.ocOperacaoId]);
   // Seleção visual de fazenda destino (nesta rodada não altera payload/persistência).
   const [fazendaSel, setFazendaSel] = useState<string>(api.fazendaAtualId ?? '__atual__');
 
@@ -184,6 +193,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
               modoOC={api.modoOC}
               operacaoPronta={!!api.ocOperacaoId}
               lotesApi={api.lotesApi}
+              onVoltarCompra={() => setAbaAtiva('compra')}
             />
           ) : (
           <>
@@ -348,7 +358,9 @@ export function CompraModalShell(api: CompraModalShellProps) {
           ) : (
             <Button onClick={api.handleRequestRegister} disabled={api.submitting || (!api.modoOC && !api.compraDetalhes)} className="bg-white text-primary hover:bg-white/90 font-bold gap-1.5">
               <ShoppingCart className="h-4 w-4" />
-              {api.submitting ? 'Salvando...' : api.modoOC ? 'Salvar Operação (OC)' : api.editingId ? 'Salvar Alterações' : 'Registrar Compra'}
+              {api.submitting ? 'Salvando...'
+                : api.modoOC ? (api.ocOperacaoId ? 'Salvar alterações' : 'Salvar e continuar para Negociação')
+                : api.editingId ? 'Salvar Alterações' : 'Registrar Compra'}
             </Button>
           )}
         </div>

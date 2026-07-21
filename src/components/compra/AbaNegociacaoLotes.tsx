@@ -21,6 +21,7 @@ interface Props {
   modoOC?: boolean;
   operacaoPronta?: boolean;      // já existe operacao_id (salvo na aba Compra)
   lotesApi?: CompraLotesApi;
+  onVoltarCompra?: () => void;   // navegar de volta à aba Compra
 }
 
 const CRITERIOS: { value: CriterioValor; label: string; unidade: string }[] = [
@@ -45,7 +46,7 @@ function loteTotal(criterio: CriterioValor, quantidade: string, pesoMedioKg: str
 
 export function AbaNegociacaoLotes({
   categoria, categoriasDisponiveis, quantidadeNum, pesoKgNum, darkSelectClass,
-  modoOC, operacaoPronta, lotesApi,
+  modoOC, operacaoPronta, lotesApi, onVoltarCompra,
 }: Props) {
   // ── MODO OC: grade editável de múltiplos lotes ──
   if (modoOC && lotesApi) {
@@ -64,8 +65,9 @@ export function AbaNegociacaoLotes({
         </div>
 
         {!operacaoPronta ? (
-          <div className="rounded-md border border-dashed bg-muted/10 px-3 py-4 text-center text-[11px] text-muted-foreground">
-            Salve a operação na aba <span className="font-semibold">Compra</span> ("Salvar Operação (OC)") para cadastrar os lotes.
+          <div className="rounded-md border border-dashed bg-muted/10 px-3 py-5 text-center space-y-2">
+            <div className="text-[11px] text-muted-foreground">Salve a identificação da compra para adicionar os lotes da negociação.</div>
+            <Button type="button" variant="outline" size="sm" className="h-7 text-[11px]" onClick={onVoltarCompra}>Voltar para Compra</Button>
           </div>
         ) : (
           <div className="overflow-x-auto">

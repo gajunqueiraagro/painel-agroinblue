@@ -1660,6 +1660,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     const clienteId = clienteAtual?.id;
     if (!clienteId) { toast.error('Cliente não selecionado.'); return; }
     if (!data) { toast.error('Informe a data da compra.'); return; }
+    const criandoOperacao = !ocOperacaoId;
     setSubmitting(true);
     try {
       const env = await ocRpc.salvarRascunho(ocOperacaoId, clienteId, ocVersao, {
@@ -1675,7 +1676,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       });
       setOcOperacaoId(env.operacao_id);
       setOcVersao(env.versao);
-      toast.success(`Operação comercial salva (rascunho) — #${env.operacao_id.slice(0, 8)} v${env.versao}`);
+      toast.success(criandoOperacao ? 'Operação criada. Agora informe os lotes negociados.' : 'Alterações salvas.');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Falha ao salvar a operação comercial.');
     } finally {
