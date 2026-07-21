@@ -54,9 +54,11 @@ interface UseZootCategoriaMensalParams {
   cenario: 'realizado' | 'meta';
   /** Se true, busca todas as fazendas do cliente (visão global) */
   global?: boolean;
+  /** Gate do caller (default true). Composto com o guard interno — nunca substitui. */
+  enabled?: boolean;
 }
 
-export function useZootCategoriaMensal({ ano, cenario, global = false }: UseZootCategoriaMensalParams) {
+export function useZootCategoriaMensal({ ano, cenario, global = false, enabled = true }: UseZootCategoriaMensalParams) {
   const { fazendaAtual, fazendas } = useFazenda();
   const { clienteAtual } = useCliente();
   const fazendaId = fazendaAtual?.id;
@@ -206,8 +208,11 @@ export function useZootCategoriaMensal({ ano, cenario, global = false }: UseZoot
       return [] as unknown as ZootCategoriaMensal[];
     },
     // Guard: se NÃO é global e fazendaId é o sentinel, desliga a query.
-    enabled: effectiveGlobal ? (!!clienteId && fazendaIdsReais.length > 0) : (!!fazendaId && fazendaId !== '__global__'),
-    staleTime: 0,
+    enabled: enabled && (effectiveGlobal ? (!!clienteId && fazendaIdsReais.length > 0) : (!!fazendaId && fazendaId !== '__global__')),
+    // staleTime alinhado ao padrão do useZootMensal (30s): a RPC recursiva
+    // fn_zoot_categoria_mensal não deve refazer a cada remontagem. Invalidações
+    // explícitas (fn_zoot_cache_rebuild / troca de fazenda·ano·cenario na key) seguem valendo.
+    staleTime: 30_000,
   });
 }
 

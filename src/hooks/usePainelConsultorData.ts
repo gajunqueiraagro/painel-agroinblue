@@ -469,6 +469,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     isGlobal ? undefined : fazendaId,
     isGlobal,
     clienteAtual?.id,
+    enabled,
   );
 
   // Área do ano anterior — necessária para deltaAno de UA/ha e kg vivo/ha.
@@ -479,6 +480,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     isGlobal ? undefined : fazendaId,
     isGlobal,
     clienteAtual?.id,
+    enabled,
   );
 
   // C4 — Área META oficial (dado estrutural; não acumula).
@@ -487,6 +489,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     isGlobal ? null : fazendaId ?? null,
     ano,
     isGlobal,
+    enabled,
   );
 
   // C4 / C4.2 — Derivações por cenário (movidas pra cá para serem consumidas
@@ -581,6 +584,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
   const _planFinInterno = usePlanejamentoFinanceiro(
     ano,
     isGlobal ? undefined : fazendaId,
+    enabled,
   );
   const _gridMetaBaseInterno = useMemo(
     () => _planFinInterno.buildGrid(),
@@ -664,6 +668,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
   const [valorRebanhoMes, setValorRebanhoMes] = useState<number[]>(() => Array(13).fill(NaN));
 
   useEffect(() => {
+    if (!enabled) { setValorRebanhoMes(Array(13).fill(NaN)); return; }
     let cancelled = false;
     const cid = clienteAtual?.id;
 
@@ -721,7 +726,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
 
     load();
     return () => { cancelled = true; };
-  }, [ano, isGlobal, fazendaId, clienteAtual?.id]);
+  }, [enabled, ano, isGlobal, fazendaId, clienteAtual?.id]);
 
   // Valor do Rebanho ano anterior (apenas quando incluirComparativos=true).
   const [valorRebanhoMesAnoAnt, setValorRebanhoMesAnoAnt] = useState<number[]>(() => Array(13).fill(NaN));
@@ -850,6 +855,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
   // saidas externas META (inclui morte/transfer).
   const [desfruteMetaMes12, setDesfruteMetaMes12] = useState<number[]>(() => Array(12).fill(0));
   useEffect(() => {
+    if (!enabled) { setDesfruteMetaMes12(Array(12).fill(0)); return; }
     let cancelled = false;
     const cid = clienteAtual?.id;
     if (!cid && !fazendaId) {
@@ -910,7 +916,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     };
     load();
     return () => { cancelled = true; };
-  }, [ano, isGlobal, fazendaId, clienteAtual?.id]);
+  }, [enabled, ano, isGlobal, fazendaId, clienteAtual?.id]);
 
   // Pec ano-1 (cenario='realizado', TIPOS_DESFRUTE) — agrega Σ valor_total e Σ arrobas
   // (abate: peso_carcaca_kg/15; venda/consumo: peso_medio_kg/30) por mês.
@@ -1157,6 +1163,11 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
   const [valorRebanhoMetaMes, setValorRebanhoMetaMes] = useState<number[]>(() => Array(12).fill(NaN));
   const [pesoMedioFinMetaSnap12, setPesoMedioFinMetaSnap12] = useState<number[]>(() => Array(12).fill(NaN));
   useEffect(() => {
+    if (!enabled) {
+      setValorRebanhoMetaMes(Array(12).fill(NaN));
+      setPesoMedioFinMetaSnap12(Array(12).fill(NaN));
+      return;
+    }
     const cid = clienteAtual?.id;
     if (!cid) {
       setValorRebanhoMetaMes(Array(12).fill(NaN));
@@ -1206,7 +1217,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       setPesoMedioFinMetaSnap12(pTot.map((pt, i) => (tem[i] && cab[i] > 0) ? pt / cab[i] : NaN));
     });
     return () => { cancelled = true; };
-  }, [ano, isGlobal, fazendaId, clienteAtual?.id]);
+  }, [enabled, ano, isGlobal, fazendaId, clienteAtual?.id]);
 
   // META — GMD previsto por (fazenda × ano_mes × categoria_codigo)
   // Fonte oficial: meta_gmd_mensal. Defensivo: dedup por updated_at DESC.
@@ -1249,7 +1260,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
 
   const mesRef = mes === 0 ? 12 : mes;
   const mesStr = `${ano}-${String(mesRef).padStart(2, '0')}`;
-  const { status: statusPilares } = useStatusPilares(fazendaId, mesStr);
+  const { status: statusPilares } = useStatusPilares(fazendaId, mesStr, enabled);
 
   const monthlyData = useMemo(
     () =>

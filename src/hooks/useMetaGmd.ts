@@ -11,7 +11,7 @@ export interface MetaGmdRow {
   meses: Record<string, number>; // '01'..'12' -> gmd value
 }
 
-export function useMetaGmd(ano: string) {
+export function useMetaGmd(ano: string, enabled = true) {
   const { fazendaAtual } = useFazenda();
   const { clienteAtual } = useCliente();
   const fazendaId = fazendaAtual?.id;
@@ -21,7 +21,7 @@ export function useMetaGmd(ano: string) {
 
   const { data: queryData, isLoading: loading, refetch } = useQuery({
     queryKey: ['meta-gmd', clienteId, fazendaId ?? 'global', ano],
-    enabled: !!clienteId,
+    enabled: enabled && !!clienteId,
     staleTime: 5 * 60 * 1000,
     // Mantém dados anteriores na troca de fazenda/cliente/ano para evitar flash vazio
     // (react-query v5).

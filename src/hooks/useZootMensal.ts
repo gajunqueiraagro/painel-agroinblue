@@ -43,9 +43,11 @@ export interface ZootMensal {
 interface UseZootMensalParams {
   ano: number;
   cenario: 'realizado' | 'meta';
+  /** Gate do caller (default true). Composto com o guard interno — nunca substitui. */
+  enabled?: boolean;
 }
 
-export function useZootMensal({ ano, cenario }: UseZootMensalParams) {
+export function useZootMensal({ ano, cenario, enabled = true }: UseZootMensalParams) {
   const { fazendaAtual } = useFazenda();
   const fazendaId = fazendaAtual?.id;
 
@@ -77,7 +79,7 @@ export function useZootMensal({ ano, cenario }: UseZootMensalParams) {
 
       return (data as unknown as ZootMensal[]) || [];
     },
-    enabled: Boolean(fazendaId) && fazendaId !== '__global__',
+    enabled: enabled && Boolean(fazendaId) && fazendaId !== '__global__',
     staleTime: 30_000,
     // Circuit breaker: 1 retry com backoff exponencial e SEM re-marteladas automáticas
     // (remount/foco não refazem; só invalidação explícita ou refetch() manual).

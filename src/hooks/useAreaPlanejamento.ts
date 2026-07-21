@@ -141,6 +141,8 @@ export function useAreaPlanejamento(
   fazendaId: string | null | undefined,
   ano: number,
   isGlobal: boolean,
+  /** Gate do caller (default true). enabled=false → não consulta e zera o estado. */
+  enabled = true,
 ): UseAreaPlanejamentoResult {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -151,7 +153,7 @@ export function useAreaPlanejamento(
   const refresh = useCallback(() => setReloadKey(k => k + 1), []);
 
   useEffect(() => {
-    if (!clienteId) {
+    if (!enabled || !clienteId) {
       setData(null);
       setLoading(false);
       return;
@@ -224,7 +226,7 @@ export function useAreaPlanejamento(
     };
     fetch();
     return () => { cancelled = true; };
-  }, [clienteId, fazendaId, ano, isGlobal, reloadKey]);
+  }, [enabled, clienteId, fazendaId, ano, isGlobal, reloadKey]);
 
   const upsertAno = useCallback(async (linhas: UpsertLinhaArea[]) => {
     if (isGlobal) {

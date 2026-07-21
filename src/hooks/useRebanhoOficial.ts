@@ -352,14 +352,14 @@ export function useRebanhoOficial({ ano, cenario, global, enabled = true }: UseR
   const resolvedGlobal = global ?? isGlobalContext;
   const fazendaId = fazendaAtual?.id === '__global__' ? undefined : fazendaAtual?.id;
   const clienteId = clienteAtual?.id;
-  const { rows: metaGmdRows } = useMetaGmd(String(ano));
+  const { rows: metaGmdRows } = useMetaGmd(String(ano), enabled);
   const { pastos } = usePastos();
 
   const {
     data: categoriasData,
     isLoading: loadingCategorias,
     error: errorCategorias,
-  } = useZootCategoriaMensal({ ano, cenario, global: resolvedGlobal });
+  } = useZootCategoriaMensal({ ano, cenario, global: resolvedGlobal, enabled });
 
   // ── Fechamento oficial: dados consolidados por categoria para meses fechados ──
   // Busca itens via join direto (evita .in() com centenas de IDs que estoura URL do PostgREST)
@@ -447,7 +447,7 @@ export function useRebanhoOficial({ ano, cenario, global, enabled = true }: UseR
     data: fazendaData,
     isLoading: loadingFazenda,
     error: errorFazenda,
-  } = useZootMensal({ ano, cenario });
+  } = useZootMensal({ ano, cenario, enabled });
 
   const loading = loadingCategorias || loadingFechamento || (resolvedGlobal ? false : loadingFazenda);
   const error = errorCategorias || (resolvedGlobal ? null : errorFazenda);

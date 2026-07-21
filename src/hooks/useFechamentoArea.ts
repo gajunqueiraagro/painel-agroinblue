@@ -25,6 +25,8 @@ export function useSnapshotAreaAnual(
   fazendaId: string | undefined,
   isGlobal: boolean,
   clienteId: string | undefined,
+  /** Gate do caller (default true). enabled=false → não consulta e zera o estado. */
+  enabled = true,
 ): UseSnapshotAreaAnualResult {
   const [areaMensal, setAreaMensal] = useState<number[]>(Array(12).fill(0));
   const [snapshots, setSnapshots] = useState<SnapshotAreaMes[]>([]);
@@ -36,7 +38,7 @@ export function useSnapshotAreaAnual(
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!clienteId) {
+    if (!enabled || !clienteId) {
       setAreaMensal(Array(12).fill(0));
       setSnapshots([]);
       setTotalFazendasAtivas(0);
@@ -306,7 +308,7 @@ export function useSnapshotAreaAnual(
 
     fetch();
     return () => { cancelled = true; };
-  }, [ano, fazendaId, isGlobal, clienteId]);
+  }, [enabled, ano, fazendaId, isGlobal, clienteId]);
 
   return { areaMensal, snapshots, totalFazendasAtivas, fazendasAtivasCarregadas, fazendasComSnapPorMes, fazendasComP1PorMes, temP1FechadoPorMes, loading };
 }

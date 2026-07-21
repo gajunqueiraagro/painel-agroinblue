@@ -44,13 +44,13 @@ function parsePilar(raw: unknown): PilarInfo {
   };
 }
 
-export function useStatusPilares(fazendaId: string | undefined, anoMes: string | undefined) {
+export function useStatusPilares(fazendaId: string | undefined, anoMes: string | undefined, enabled = true) {
   const [data, setData] = useState<StatusPilares>(DEFAULT_STATUS);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const refetch = useCallback(async () => {
-    if (!fazendaId || !anoMes || fazendaId === '__global__') {
+    if (!enabled || !fazendaId || !anoMes || fazendaId === '__global__') {
       setData(DEFAULT_STATUS);
       return;
     }
@@ -86,7 +86,7 @@ export function useStatusPilares(fazendaId: string | undefined, anoMes: string |
     } finally {
       setLoading(false);
     }
-  }, [fazendaId, anoMes]);
+  }, [enabled, fazendaId, anoMes]);
 
   useEffect(() => {
     refetch();

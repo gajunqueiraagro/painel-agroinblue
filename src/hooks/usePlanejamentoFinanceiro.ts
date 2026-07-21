@@ -78,7 +78,7 @@ function mapRebanhoSubcentro(tipo: string, categoria: string, hasBoitel: boolean
   return null;
 }
 
-export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
+export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string, enabled = true) {
   const { clienteAtual } = useCliente();
   const clienteId = clienteAtual?.id;
   const { fazendas } = useFazenda();
@@ -114,6 +114,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
       if (error) throw error;
       return ((rows || []) as PlanoContasRow[]);
     },
+    enabled,
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
   });
@@ -131,7 +132,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
       if (error) throw error;
       return (rows || []).map(r => ({ id: r.id, nome: r.nome }));
     },
-    enabled: !!clienteId,
+    enabled: enabled && !!clienteId,
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
   });
@@ -154,7 +155,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
       const total = (rows || []).reduce((s: number, r: any) => s + (r.saldo_final || 0), 0);
       return Math.round(total * 100) / 100;
     },
-    enabled: !!clienteId,
+    enabled: enabled && !!clienteId,
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
   });
@@ -188,7 +189,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
       }
       return result;
     },
-    enabled: !!clienteId,
+    enabled: enabled && !!clienteId,
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
   });
@@ -222,7 +223,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
       );
       return savedRows;
     },
-    enabled: !!clienteId,
+    enabled: enabled && !!clienteId,
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
   });
@@ -398,7 +399,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
       }
       return result;
     },
-    enabled: !!clienteId,
+    enabled: enabled && !!clienteId,
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
   });
@@ -417,7 +418,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
 
   // ─── Load parcelas de financiamento (pendentes, ano META) ─
   const loadFinanciamentos = useCallback(async () => {
-    if (!clienteId) { setLancamentosFinanciamento(new Map()); return; }
+    if (!enabled || !clienteId) { setLancamentosFinanciamento(new Map()); return; }
     // Financiamentos são exclusivos do ADM — não mostrar em fazendas operacionais
     if (isValidFazenda(fazendaId) && !isAdmFazenda(fazendaId)) {
       setLancamentosFinanciamento(new Map());
@@ -488,7 +489,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
       console.error('Erro ao carregar financiamentos para META:', e);
       setLancamentosFinanciamento(new Map());
     }
-  }, [clienteId, fazendaId, fazendas, ano]);
+  }, [enabled, clienteId, fazendaId, fazendas, ano]);
 
   useEffect(() => { loadFinanciamentos(); }, [loadFinanciamentos]);
 
@@ -646,7 +647,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
 
   // ─── Load parametros de nutrição + rebanho META → calcular linhas ──
   const loadNutricao = useCallback(async () => {
-    if (!clienteId) { setLancamentosNutricao(new Map()); return; }
+    if (!enabled || !clienteId) { setLancamentosNutricao(new Map()); return; }
 
     // Global: consolidar todas as fazendas operacionais
     if (!isValidFazenda(fazendaId)) {
@@ -673,7 +674,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
       console.error('Erro ao calcular nutrição:', e);
       setLancamentosNutricao(new Map());
     }
-  }, [clienteId, fazendaId, fazendas, ano]);
+  }, [enabled, clienteId, fazendaId, fazendas, ano]);
 
   useEffect(() => { loadNutricao(); }, [loadNutricao]);
 
