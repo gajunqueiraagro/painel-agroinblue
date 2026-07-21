@@ -256,7 +256,9 @@ export function CompraModalShell(api: CompraModalShellProps) {
             </div>
           </div>
 
-          {/* CARD 2 — Animais da Compra */}
+          {/* CARD 2 — Animais da Compra. Em modo OC os animais/lotes vivem na aba Negociação;
+              aqui o card só existe no fluxo legado (PR-COMPRA-01). */}
+          {!api.modoOC && (
           <div className="rounded-md border bg-card p-2 shadow-sm space-y-1 min-w-0">
             {/* Header do card: título + botão à direita (norma: topo, não abaixo da tabela) */}
             <div className="flex items-center justify-between gap-2">
@@ -287,6 +289,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
               </div>
             </div>
           </div>
+          )}
           </>
           )}
         </div>
