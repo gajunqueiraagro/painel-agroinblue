@@ -160,8 +160,9 @@ export function CompraModalShell(api: CompraModalShellProps) {
         })}
       </div>
 
-      {/* CORPO — template (grid [1fr_320px], gap-4, p-6, max-h-[62vh] overflow-y-auto); só o corpo rola */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 p-6 max-h-[62vh] overflow-y-auto bg-muted/30">
+      {/* CORPO — altura FIXA (h-[62vh]) para a casca não mudar de tamanho entre abas; só o
+          corpo rola (header/barra de abas/rodapé permanecem fixos fora do scroll). */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 p-6 h-[62vh] overflow-y-auto bg-muted/30">
         <div className="space-y-3 min-w-0">
           {abaAtiva === 'negociacao' ? (
             <AbaNegociacaoLotes
