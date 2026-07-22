@@ -37,6 +37,7 @@ import { gerarFinanceiroCompra } from '@/components/compra/gerarFinanceiroCompra
 import { useOperacaoComercial } from '@/hooks/useOperacaoComercial';
 import { useCompraLotes } from '@/hooks/useCompraLotes';
 import { useOperacaoRecebimento } from '@/hooks/useOperacaoRecebimento';
+import { useOperacaoDocumentos } from '@/hooks/useOperacaoDocumentos';
 import { AbateDetalhesDialog, AbateDetalhes, EMPTY_ABATE_DETALHES } from '@/components/abate/AbateDetalhesDialog';
 import { AbateResumoPanel } from '@/components/abate/AbateResumoPanel';
 import { TransferenciaDetalhesDialog, TransferenciaDetalhes, EMPTY_TRANSFERENCIA_DETALHES } from '@/components/transferencia/TransferenciaDetalhesDialog';
@@ -307,6 +308,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     onVersaoChange: setOcVersao,
     onStatusChange: setOcStatusComercial,
     onEntregaChange: setOcEntregaEncerrada,
+    enabled: modoOCCompra,
+  });
+  const documentosApi = useOperacaoDocumentos({
+    operacaoId: ocOperacaoId,
+    clienteId: clienteAtual?.id ?? null,
     enabled: modoOCCompra,
   });
 
@@ -3579,6 +3585,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     ocOperacaoId,
     lotesApi,
     recebimentoApi,
+    documentosApi,
     ocStatusComercial,
     ocEntregaEncerrada,
     onClose: () => setLancModalOpen(false),

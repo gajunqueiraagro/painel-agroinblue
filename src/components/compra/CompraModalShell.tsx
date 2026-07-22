@@ -9,8 +9,10 @@ import { Plus, Edit, Lock, ShoppingCart, X, Trash2, Calendar, Building2, Check }
 import { STATUS_LABEL, META_VISUAL, type StatusOperacional } from '@/lib/statusOperacional';
 import { AbaNegociacaoLotes } from './AbaNegociacaoLotes';
 import { AbaRecebimentoLotes } from './AbaRecebimentoLotes';
+import { AbaDocumentosOC } from './AbaDocumentosOC';
 import type { CompraLotesApi } from '@/hooks/useCompraLotes';
 import type { RecebimentoApi } from '@/hooks/useOperacaoRecebimento';
+import type { DocumentosApi } from '@/hooks/useOperacaoDocumentos';
 import { CompraResumoPanel } from './CompraResumoPanel';
 import { CompraDetalhesDialog, EMPTY_COMPRA_DETALHES, type CompraDetalhes } from './CompraDetalhesDialog';
 
@@ -74,6 +76,7 @@ export interface CompraModalShellProps {
   ocOperacaoId?: string | null;
   lotesApi?: CompraLotesApi;   // COM-3: estado/handlers dos lotes (só em modo OC)
   recebimentoApi?: RecebimentoApi;      // RECEB-01: recebimento por lote (só em modo OC)
+  documentosApi?: DocumentosApi;        // DOC-UI-01: documentos fiscais (só em modo OC)
   ocStatusComercial?: string | null;    // 'programada' | 'fechada' | 'cancelada'
   ocEntregaEncerrada?: boolean;
   onClose: () => void;
@@ -163,8 +166,8 @@ export function CompraModalShell(api: CompraModalShellProps) {
       {/* BARRA DE ABAS — template (bg-card, border-b, px-6 py-3) */}
       <div className="bg-card border-b px-6 py-3 flex items-center gap-1 overflow-x-auto">
         {ABAS.map(a => {
-          // Recebimento habilita no modo OC (RECEB-01); demais "em breve" seguem como estão.
-          const enabled = a.enabled || (a.key === 'recebimento' && !!api.modoOC);
+          // Recebimento e Documentos habilitam no modo OC; demais "em breve" seguem como estão.
+          const enabled = a.enabled || ((a.key === 'recebimento' || a.key === 'documentos') && !!api.modoOC);
           const active = a.key === abaAtiva && enabled;
           return (
             <button
@@ -210,6 +213,8 @@ export function CompraModalShell(api: CompraModalShellProps) {
               isCompra
               onVoltarNegociacao={() => setAbaAtiva('negociacao')}
             />
+          ) : abaAtiva === 'documentos' && api.documentosApi ? (
+            <AbaDocumentosOC api={api.documentosApi} operacaoPronta={!!api.ocOperacaoId} />
           ) : (
           <>
           {/* CARD 1 — Identificação da Compra */}
@@ -367,7 +372,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
               <Check className="h-4 w-4" /> Concluir negociação
             </Button>
           )}
-          {abaAtiva === 'recebimento' ? null : abaAtiva === 'negociacao' ? (
+          {(abaAtiva === 'recebimento' || abaAtiva === 'documentos') ? null : abaAtiva === 'negociacao' ? (
             // Ação da aba Negociação: apenas visual nesta rodada (sem handler). O fluxo de
             // Registrar Compra da aba Compra permanece inalterado.
             <Button type="button"
