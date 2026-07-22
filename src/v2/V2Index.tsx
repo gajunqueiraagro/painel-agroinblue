@@ -655,6 +655,7 @@ export default function V2Index() {
             onEditar={editarLancamento}
             onEditarAbate={(l) => setZooEditId(l.id)}
             onEditarVenda={(l) => setZooEditId(l.id)}
+            onVerOperacoes={() => setSection('operacoes-comerciais')}
           />
         )}
       </V2ZootWrapper>

@@ -14,6 +14,7 @@ import { fmtValor, formatMoeda, formatKg, formatArroba, formatPercent, formatCab
 import { MESES_OPTIONS } from '@/lib/calculos/labels';
 import { calcIndicadoresLancamento } from '@/lib/calculos/economicos';
 import { useAnosDisponiveis } from '@/hooks/useAnosDisponiveis';
+import { useOperacoesComerciaisEmAndamento } from '@/hooks/useOperacoesComerciaisEmAndamento';
 
 type StatusFiltro = 'todos' | 'realizado' | 'programado' | 'meta';
 type SortDir = 'asc' | 'desc' | null;
@@ -38,6 +39,8 @@ interface Props {
   onEditarReclass?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; anoFiltro: string; mesFiltro: string }) => void;
   onEditarMorte?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; anoFiltro: string; mesFiltro: string }) => void;
   onEditarConsumo?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; anoFiltro: string; mesFiltro: string }) => void;
+  /** Alerta contextual → navega para a Central de Operações Comerciais. */
+  onVerOperacoes?: () => void;
 }
 
 export type SubAba = 'nascimento' | 'compra' | 'transferencia_entrada' | 'abate' | 'venda' | 'transferencia_saida' | 'consumo' | 'morte' | 'historico';
@@ -477,8 +480,9 @@ function getTopTabFromSubAba(subAba?: SubAba): TopTab {
   return 'entradas';
 }
 
-export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial, modoMovimentacao, filtroAnoInicial, filtroMesInicial, filtroStatusInicial, filtroCategoriaInicial, onBack, drillDownLabel, onEditarAbate, onEditarVenda, onEditarCompra, onEditarTransferencia, onEditarReclass, onEditarMorte, onEditarConsumo }: Props) {
+export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial, modoMovimentacao, filtroAnoInicial, filtroMesInicial, filtroStatusInicial, filtroCategoriaInicial, onBack, drillDownLabel, onEditarAbate, onEditarVenda, onEditarCompra, onEditarTransferencia, onEditarReclass, onEditarMorte, onEditarConsumo, onVerOperacoes }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
+  const { count: opsEmAndamento } = useOperacoesComerciaisEmAndamento();
   const fazendaMap = useMemo(() => {
     const m = new Map<string, string>();
     fazendas.forEach(f => m.set(f.id, f.nome));
@@ -799,6 +803,24 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
 
   return (
     <div className="w-full max-w-full animate-fade-in pb-20">
+      {/* Alerta contextual — operações comerciais em andamento (link p/ Central).
+          Rascunho comercial NÃO é misturado na tabela de movimentações. */}
+      {onVerOperacoes && opsEmAndamento > 0 && (
+        <div className="flex items-center justify-between gap-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 mb-2 text-xs text-blue-700">
+          <div className="flex items-center gap-2 min-w-0">
+            <Info className="h-3.5 w-3.5 shrink-0" />
+            <div className="min-w-0">
+              <div className="font-medium">
+                {opsEmAndamento} {opsEmAndamento === 1 ? 'operação comercial em andamento' : 'operações comerciais em andamento'}
+              </div>
+              <div className="text-blue-600/80">Consulte rascunhos e operações ainda não concluídas.</div>
+            </div>
+          </div>
+          <Button size="sm" variant="outline" className="h-7 shrink-0 border-blue-300 text-blue-700 hover:bg-blue-100" onClick={onVerOperacoes}>
+            Ver Operações Comerciais
+          </Button>
+        </div>
+      )}
       {/* ── Top panel ── */}
       <div className="bg-primary text-primary-foreground px-3 py-2 space-y-1.5">
         {(onBack || drillDownLabel) && (

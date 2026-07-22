@@ -187,7 +187,7 @@ export function CentralOperacoesComerciais() {
         </Select>
         <Button variant={mostrarRascunhos ? 'secondary' : 'outline'} size="sm" className="h-9 gap-1"
           onClick={() => setMostrarRascunhos(v => !v)}>
-          <Filter className="h-3.5 w-3.5" /> Rascunhos incompletos
+          <Filter className="h-3.5 w-3.5" /> Mostrar rascunhos
         </Button>
       </div>
 
