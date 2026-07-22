@@ -20,6 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useCliente } from '@/contexts/ClienteContext';
 import { supabase } from '@/integrations/supabase/client';
+import { montarPayloadConta } from '@/lib/financeiro/contaPayload';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -180,7 +181,8 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
           valor: Number(editForm.valor_total),
           data_competencia: editForm.data_contrato,
           data_pagamento: editForm.data_contrato,
-          conta_bancaria_id: editForm.conta_bancaria_id || null,
+          // Convenção soberana (PR-K): 1-Entradas → conta_destino_id; conta_bancaria_id null.
+          ...montarPayloadConta('1-Entradas', editForm.conta_bancaria_id || null),
           favorecido_id: editForm.credor_id || null,
           plano_conta_id: novoPlanoCap,
           ano_mes: anoMes,
@@ -197,7 +199,8 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
             cliente_id: (fin as any)?.cliente_id,
             fazenda_id: (fin as any)?.fazenda_id,
             financiamento_id: id!,
-            conta_bancaria_id: editForm.conta_bancaria_id || null,
+            // Convenção soberana (PR-K): 1-Entradas → conta_destino_id; conta_bancaria_id null.
+            ...montarPayloadConta('1-Entradas', editForm.conta_bancaria_id || null),
             favorecido_id: editForm.credor_id || null,
             tipo_operacao: '1-Entradas',
             sinal: 1,
@@ -232,7 +235,17 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
 
     toast.success('Financiamento atualizado');
     setEditOpen(false);
+    // Invalidações RQ pós-sucesso — atualização "sem F5" das superfícies React Query.
+    // (Superfícies imperativas — modal Lançamentos/useFinanceiroV2 e Conciliação/
+    // useConciliacaoBancariaItens — atualizam só no remount; ver gate inicial.)
     qc.invalidateQueries({ queryKey: ['financiamento-detalhe', id] });
+    qc.invalidateQueries({ queryKey: ['financiamentos-lista'] });
+    qc.invalidateQueries({ queryKey: ['financiamento-parcelas', id] });
+    qc.invalidateQueries({ queryKey: ['saldo-sistema-conta'] });
+    qc.invalidateQueries({ queryKey: ['saldo-caixa-mensal'] });
+    qc.invalidateQueries({ queryKey: ['painel-financiamentos'] });
+    qc.invalidateQueries({ queryKey: ['auditoria-saldo-anterior'] });
+    qc.invalidateQueries({ queryKey: ['auditoria-saldo-extrato-real'] });
   };
 
   const excluirFinanciamento = async () => {
