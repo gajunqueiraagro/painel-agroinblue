@@ -825,9 +825,11 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
           </div>
         )}
 
-        {/* Top tabs + aviso inline de operações comerciais (mesma linha, à direita —
-            sem criar linha nova nem aumentar a altura do painel). */}
-        <div className="flex items-center justify-between gap-3">
+        {/* Top tabs (largura intrínseca preservada — nunca encolhem/quebram, idênticas ao
+            pré-UX1) + aviso de operações comerciais como bloco à direita (multi-linha, sem
+            truncate; pode crescer a altura DO PRÓPRIO painel, jamais comprimir as abas). */}
+        <div className="flex items-start gap-3">
+        <div className="shrink-0">
         <div className={`grid gap-0.5 rounded-md bg-card p-0.5 max-w-md ${modoMovimentacao ? 'grid-cols-2' : `grid-cols-${topTabs.length}`}`}>
           {topTabs.map(t => (
             <button
@@ -841,13 +843,16 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
             </button>
           ))}
         </div>
+        </div>
           {onVerOperacoes && opsEmAndamento > 0 && (
-            <div className="hidden md:flex items-center gap-2 min-w-0">
-              <Info className="h-3.5 w-3.5 shrink-0 text-primary-foreground/80" />
-              <span className="min-w-0 truncate text-[11px] text-primary-foreground/90">
-                <span className="font-semibold">{opsEmAndamento} {opsEmAndamento === 1 ? 'operação comercial em andamento' : 'operações comerciais em andamento'}</span>
-                <span className="text-primary-foreground/60"> — Consulte rascunhos e operações ainda não concluídas.</span>
-              </span>
+            <div className="hidden md:flex ml-auto max-w-sm flex-col items-end gap-1 text-right">
+              <div className="flex items-start gap-1.5">
+                <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary-foreground/80" />
+                <span className="text-[11px] leading-snug text-primary-foreground/90">
+                  <span className="font-semibold">{opsEmAndamento} {opsEmAndamento === 1 ? 'operação comercial em andamento' : 'operações comerciais em andamento'}</span>
+                  <span className="text-primary-foreground/70"> — Consulte rascunhos e operações ainda não concluídas.</span>
+                </span>
+              </div>
               <Button size="sm" variant="secondary" className="h-6 shrink-0 px-2 text-[11px]" onClick={onVerOperacoes}>
                 Ver Operações Comerciais
               </Button>
