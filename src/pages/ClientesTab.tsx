@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -28,6 +29,7 @@ interface EditingState {
 }
 
 export function ClientesTab() {
+  const qc = useQueryClient();
   const { isAdmin } = useCliente();
   const { isManager } = usePermissions();
   const [clientes, setClientes] = useState<ClienteRow[]>([]);
@@ -126,6 +128,12 @@ export function ClientesTab() {
       toast.success('Cliente criado e configurado com sucesso!');
     }
 
+    // Cadastro de fazenda → invalida a lista pecuária e a área snapshot do cliente.
+    if (!fazRes.error) {
+      await qc.invalidateQueries({ queryKey: ['fazendas-pecuaria-ativas', clienteId] });
+      await qc.invalidateQueries({ queryKey: ['snapshot-area-anual', clienteId] });
+    }
+
     setNome('');
     setSlug('');
     setShowForm(false);
@@ -191,6 +199,9 @@ export function ClientesTab() {
     if (error) {
       toast.error('Erro ao apagar cliente: ' + error.message);
     } else {
+      // Exclusão de fazendas do cliente → invalida a lista pecuária e a área snapshot.
+      await qc.invalidateQueries({ queryKey: ['fazendas-pecuaria-ativas', clienteId] });
+      await qc.invalidateQueries({ queryKey: ['snapshot-area-anual', clienteId] });
       toast.success('Cliente apagado com sucesso!');
       setEditing(null);
       setConfirmDelete('');

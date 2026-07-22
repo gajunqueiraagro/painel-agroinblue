@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { isOperacionalPecuaria } from '@/lib/pastos/tiposUso';
+import { useFazendasPecuariaAtivas } from '@/hooks/useFazendasPecuariaAtivas';
 
 export interface SnapshotAreaMes {
   mes: number;              // 1–12
@@ -20,6 +21,19 @@ export interface UseSnapshotAreaAnualResult {
   loading: boolean;
 }
 
+// Payload interno da query — as 7 saídas do contrato (loading fica fora, é da query).
+type SnapshotAreaData = Omit<UseSnapshotAreaAnualResult, 'loading'>;
+
+const EMPTY_SNAPSHOT: SnapshotAreaData = {
+  areaMensal: Array(12).fill(0),
+  snapshots: [],
+  totalFazendasAtivas: 0,
+  fazendasAtivasCarregadas: false,
+  fazendasComSnapPorMes: Array(12).fill(0),
+  fazendasComP1PorMes: Array(12).fill(0),
+  temP1FechadoPorMes: Array(12).fill(false),
+};
+
 export function useSnapshotAreaAnual(
   ano: number,
   fazendaId: string | undefined,
@@ -28,37 +42,38 @@ export function useSnapshotAreaAnual(
   /** Gate do caller (default true). enabled=false → não consulta e zera o estado. */
   enabled = true,
 ): UseSnapshotAreaAnualResult {
-  const [areaMensal, setAreaMensal] = useState<number[]>(Array(12).fill(0));
-  const [snapshots, setSnapshots] = useState<SnapshotAreaMes[]>([]);
-  const [totalFazendasAtivas, setTotalFazendasAtivas] = useState(0);
-  const [fazendasAtivasCarregadas, setFazendasAtivasCarregadas] = useState(false);
-  const [fazendasComSnapPorMes, setFazendasComSnapPorMes] = useState<number[]>(Array(12).fill(0));
-  const [fazendasComP1PorMes, setFazendasComP1PorMes] = useState<number[]>(Array(12).fill(0));
-  const [temP1FechadoPorMes, setTemP1FechadoPorMes] = useState<boolean[]>(Array(12).fill(false));
-  const [loading, setLoading] = useState(false);
+  // Lista de fazendas pecuárias ativas — SOMENTE global; fonte React Query dedicada
+  // (dedup por ['fazendas-pecuaria-ativas', clienteId]).
+  const fazendasEnabled = enabled && !!clienteId && isGlobal;
+  const fazendasQuery = useFazendasPecuariaAtivas(clienteId, fazendasEnabled);
+  const fazendasData = fazendasQuery.data ?? [];
+  // "Resolvida" = concluída com SUCESSO. Em erro da lista de fazendas, snapshot
+  // permanece disabled (data=EMPTY_SNAPSHOT) e NÃO grava sucesso-vazio no cache;
+  // retry/refetch da lista recupera o fluxo (evita o antipattern sucesso-vazio).
+  const fazendasReady = !isGlobal || fazendasQuery.isSuccess;
 
-  useEffect(() => {
-    if (!enabled || !clienteId) {
-      setAreaMensal(Array(12).fill(0));
-      setSnapshots([]);
-      setTotalFazendasAtivas(0);
-      setFazendasAtivasCarregadas(false);
-      setFazendasComSnapPorMes(Array(12).fill(0));
-      setFazendasComP1PorMes(Array(12).fill(0));
-      setTemP1FechadoPorMes(Array(12).fill(false));
-      return;
-    }
+  const fazendaIdsGlobal = isGlobal ? fazendasData.map(f => f.id) : [];
+  const totalFazAtivas = isGlobal ? fazendasData.length : 0;
 
-    let cancelled = false;
+  // enabled composto: nunca roda global antes da lista de fazendas resolver
+  // (evita gravar lista vazia transitória como definitiva no cache).
+  const snapshotEnabled =
+    enabled &&
+    !!clienteId &&
+    Number.isFinite(ano) &&
+    (isGlobal ? fazendasReady : (!!fazendaId && fazendaId !== '__global__'));
 
-    const fetch = async () => {
-      setLoading(true);
-
-      // Montar as 3 queries em paralelo
+  const query = useQuery<SnapshotAreaData>({
+    queryKey: ['snapshot-area-anual', clienteId, isGlobal ? 'global' : fazendaId, ano],
+    enabled: snapshotEnabled,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    queryFn: async (): Promise<SnapshotAreaData> => {
+      // Montar as queries em paralelo
       let snapshotsQuery = supabase
         .from('fechamento_area_snapshot')
         .select('fazenda_id, ano_mes, area_pecuaria_ha, area_agricultura_ha, area_produtiva_ha')
-        .eq('cliente_id', clienteId)
+        .eq('cliente_id', clienteId!)
         .gte('ano_mes', `${ano}-01-01`)
         .lte('ano_mes', `${ano}-12-31`);
 
@@ -66,22 +81,13 @@ export function useSnapshotAreaAnual(
         snapshotsQuery = snapshotsQuery.eq('fazenda_id', fazendaId);
       }
 
-      const fazendasAtivasQuery = isGlobal
-        ? supabase
-            .from('fazendas')
-            .select('id')
-            .eq('cliente_id', clienteId)
-            .eq('status_operacional', 'ativa')
-            .eq('tem_pecuaria', true)
-        : Promise.resolve({ data: null as null, error: null });
-
       // Query paralela: pastos fechados + relacao cadastral, para recalculo de area_pecuaria_ha
       // usando isOperacionalPecuaria sobre tipo_uso_efetivo = COALESCE(tipo_uso_mes, tipo_uso).
       // Snapshots historicos ficam intactos; apenas a leitura do hook usa a regra oficial nova.
       let pastosQuery = supabase
         .from('fechamento_pastos')
         .select('fazenda_id, ano_mes, tipo_uso_mes, pasto:pastos!inner(area_produtiva_ha, tipo_uso)')
-        .eq('cliente_id', clienteId)
+        .eq('cliente_id', clienteId!)
         .eq('status', 'fechado')
         .gte('ano_mes', `${ano}-01`)
         .lte('ano_mes', `${ano}-12`);
@@ -113,13 +119,10 @@ export function useSnapshotAreaAnual(
         return { data: out, error: null };
       };
 
-      const [snapRes, fazRes, pastosRes] = await Promise.all([
+      const [snapRes, pastosRes] = await Promise.all([
         snapshotsQuery,
-        fazendasAtivasQuery,
         fetchPastosRowsPaginado(pastosQuery),
       ]);
-
-      const fazendaIdsGlobal = isGlobal ? (fazRes.data ?? []).map((f: any) => f.id) : [];
 
       // Paginar igual a pastosQuery: PostgREST trunca em 1000 rows sem .range().
       // NJ Global 2025 (1.296 rows pos backfill Sta. Luzia) ficava com meses
@@ -146,18 +149,9 @@ export function useSnapshotAreaAnual(
             )
           : { data: null as null, error: null };
 
-      if (cancelled) return;
-
       // Tratar erro de snapshots — crítico
       if (snapRes.error || !snapRes.data) {
-        setAreaMensal(Array(12).fill(0));
-        setSnapshots([]);
-        setTotalFazendasAtivas(0);
-        setFazendasAtivasCarregadas(false);
-        setFazendasComSnapPorMes(Array(12).fill(0));
-        setTemP1FechadoPorMes(Array(12).fill(false));
-        setLoading(false);
-        return;
+        return EMPTY_SNAPSHOT;
       }
 
       // Flag explicita de sucesso da query de pastos. NAO usar Map.size como proxy:
@@ -254,15 +248,13 @@ export function useSnapshotAreaAnual(
         }
       }
 
-      setAreaMensal(arr);
-      setSnapshots(snaps);
-
       // Processar fazendas ativas (global) — erro não-crítico
       let totalAtivas = 0;
+      let fazendasAtivasCarregadas = false;
       const comSnapPorMes = Array(12).fill(0);
       if (isGlobal) {
-        totalAtivas = fazRes.data?.length ?? 0;
-        setFazendasAtivasCarregadas(true);
+        totalAtivas = totalFazAtivas;
+        fazendasAtivasCarregadas = true;
 
         const porMes = new Map<number, Set<string>>();
         for (const row of data) {
@@ -274,8 +266,6 @@ export function useSnapshotAreaAnual(
           comSnapPorMes[mes] = faz.size;
         }
       }
-      setTotalFazendasAtivas(totalAtivas);
-      setFazendasComSnapPorMes(comSnapPorMes);
 
       // Processar fazendas com P1 fechado por mês (global)
       const comP1PorMes = Array(12).fill(0);
@@ -292,7 +282,6 @@ export function useSnapshotAreaAnual(
           comP1PorMes[mes] = faz.size;
         }
       }
-      setFazendasComP1PorMes(comP1PorMes);
 
       // Processar P1 (fazenda específica) — erro não-crítico
       const p1Mensal = Array(12).fill(false);
@@ -302,13 +291,23 @@ export function useSnapshotAreaAnual(
           if (mesIdx >= 0 && mesIdx < 12) p1Mensal[mesIdx] = true;
         }
       }
-      setTemP1FechadoPorMes(p1Mensal);
-      setLoading(false);
-    };
 
-    fetch();
-    return () => { cancelled = true; };
-  }, [enabled, ano, fazendaId, isGlobal, clienteId]);
+      return {
+        areaMensal: arr,
+        snapshots: snaps,
+        totalFazendasAtivas: totalAtivas,
+        fazendasAtivasCarregadas,
+        fazendasComSnapPorMes: comSnapPorMes,
+        fazendasComP1PorMes: comP1PorMes,
+        temP1FechadoPorMes: p1Mensal,
+      };
+    },
+  });
 
-  return { areaMensal, snapshots, totalFazendasAtivas, fazendasAtivasCarregadas, fazendasComSnapPorMes, fazendasComP1PorMes, temP1FechadoPorMes, loading };
+  const data = query.data ?? EMPTY_SNAPSHOT;
+  // loading cobre todo o pipeline: espera da lista de fazendas (global) + fetch do snapshot.
+  // Sem keepPreviousData — troca de chave não mistura escopos; os callers escondem sob loading.
+  const loading = (fazendasEnabled && fazendasQuery.isFetching) || query.isFetching;
+
+  return { ...data, loading };
 }

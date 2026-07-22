@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { toast } from 'sonner';
@@ -33,6 +34,7 @@ export interface FechamentoItem {
 
 export function useFechamento() {
   const { fazendaAtual } = useFazenda();
+  const qc = useQueryClient();
   const [fechamentos, setFechamentos] = useState<FechamentoPasto[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -108,16 +110,19 @@ export function useFechamento() {
   const fecharPasto = useCallback(async (fechamentoId: string) => {
     const { error } = await supabase.from('fechamento_pastos').update({ status: 'fechado' }).eq('id', fechamentoId);
     if (error) { toast.error('Erro ao fechar pasto'); return false; }
+    // fechar/reabrir muda o conjunto de pastos fechados → invalida a área snapshot.
+    await qc.invalidateQueries({ queryKey: ['snapshot-area-anual'] });
     toast.success('Pasto fechado');
     return true;
-  }, []);
+  }, [qc]);
 
   const reabrirPasto = useCallback(async (fechamentoId: string) => {
     const { error } = await supabase.from('fechamento_pastos').update({ status: 'rascunho' }).eq('id', fechamentoId);
     if (error) { toast.error('Erro ao reabrir pasto'); return false; }
+    await qc.invalidateQueries({ queryKey: ['snapshot-area-anual'] });
     toast.success('Pasto reaberto');
     return true;
-  }, []);
+  }, [qc]);
 
   const atualizarCamposMensais = useCallback(async (
     fechamentoId: string,
@@ -125,8 +130,10 @@ export function useFechamento() {
   ) => {
     const { error } = await supabase.from('fechamento_pastos').update(campos).eq('id', fechamentoId);
     if (error) { console.error(error); return false; }
+    // tipo_uso_mes altera o recálculo de área pecuária → invalida a área snapshot.
+    await qc.invalidateQueries({ queryKey: ['snapshot-area-anual'] });
     return true;
-  }, []);
+  }, [qc]);
 
   const setPesoAtualizadoPasto = useCallback(async (fechamentoId: string, value: boolean) => {
     const { error } = await supabase

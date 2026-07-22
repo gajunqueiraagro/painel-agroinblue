@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -21,6 +22,7 @@ interface Props {
 }
 
 export function ImportMapaPastos({ open, onOpenChange, pastos, categorias, fazendaId, clienteId, anoMes, onImported }: Props) {
+  const qc = useQueryClient();
   const [result, setResult] = useState<MapaImportResult | null>(null);
   const [importing, setImporting] = useState(false);
   const [done, setDone] = useState(false);
@@ -115,6 +117,8 @@ export function ImportMapaPastos({ open, onOpenChange, pastos, categorias, fazen
         totalPastos++;
       }
 
+      // Importação altera fechamento_pastos (tipo_uso_mes/status) → invalida a área snapshot do cliente.
+      await qc.invalidateQueries({ queryKey: ['snapshot-area-anual', clienteId] });
       toast.success(`Importação concluída: ${result.validas.length} registros em ${totalPastos} pastos (${meses.length} mês(es))`);
       setDone(true);
       onImported();
