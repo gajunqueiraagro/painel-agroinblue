@@ -70,7 +70,6 @@ export const META_VISUAL = {
 /** Opções operacionais para módulo zootécnico (sem Meta): Realizado, Programado */
 export const STATUS_OPTIONS_ZOOTECNICO: { value: StatusZootecnico; label: string; labelCurto: string; color: string; bg: string; description: string }[] = [
   { value: 'realizado', label: 'Realizado', labelCurto: 'Realizado', color: 'text-green-800 dark:text-green-400', bg: 'bg-green-700', description: STATUS_DESCRIPTION.realizado },
-  { value: 'programado', label: 'Programado', labelCurto: 'Programado', color: 'text-blue-700 dark:text-blue-400', bg: 'bg-blue-500', description: STATUS_DESCRIPTION.programado },
 ];
 
 /** Opções para módulo financeiro: Realizado, Agendado, Programado, Meta */
@@ -87,9 +86,22 @@ export const STATUS_OPTIONS = STATUS_OPTIONS_FINANCEIRO;
 /** Opções completas para módulo zootécnico: Realizado, Programado, Meta */
 export const STATUS_OPTIONS_ZOOTECNICO_COM_META: { value: StatusZootecnico | 'meta'; label: string; labelCurto: string; color: string; bg: string; description: string }[] = [
   { value: 'realizado', label: 'Realizado', labelCurto: 'Realizado', color: 'text-green-800 dark:text-green-400', bg: 'bg-green-700', description: STATUS_DESCRIPTION.realizado },
-  { value: 'programado', label: 'Programado', labelCurto: 'Programado', color: 'text-blue-700 dark:text-blue-400', bg: 'bg-blue-500', description: STATUS_DESCRIPTION.programado },
   { value: 'meta', label: META_VISUAL.label, labelCurto: META_VISUAL.labelCurto, color: META_VISUAL.color, bg: META_VISUAL.bg, description: META_VISUAL.description },
 ];
+
+// ── PR-0C: guard de escrita zootécnica (fail-closed) ──────────────────────
+// programado/agendado deixaram de ser status zootécnicos graváveis. Esta
+// validação REJEITA (não coage, não remove) qualquer payload com esses valores
+// antes de qualquer insert/update em `lancamentos` — inclusive replay offline e
+// payload antigo. NÃO afeta 'realizado', null (Meta) nem futuros status de
+// aprovação (que não sejam um dos dois valores proibidos).
+export function assertStatusZootGravavel(status: unknown): void {
+  if (status === 'programado' || status === 'agendado') {
+    throw new Error(
+      `status_operacional zootécnico '${String(status)}' não é mais aceito (PR-0C: writers programado/agendado removidos). Use 'realizado' ou Meta (status null).`,
+    );
+  }
+}
 
 // ── Getters ──
 

@@ -3002,13 +3002,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         </h2>
       </div>
 
-      {/* STATUS — destaque forte: Realizado / Programado / META */}
+      {/* STATUS — destaque forte: Realizado / META (programado removido no PR-0C) */}
       <div className="space-y-2">
         <div className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">Status</div>
         <div className="grid grid-cols-3 gap-2">
           {([
             { value: 'realizado' as const, label: STATUS_LABEL.realizado, dot: 'bg-green-600', activeBorder: 'border-green-500', activeBg: 'bg-green-50 dark:bg-green-950/30', activeText: 'text-green-800 dark:text-green-300' },
-            { value: 'programado' as const, label: STATUS_LABEL.programado, dot: 'bg-blue-500', activeBorder: 'border-blue-500', activeBg: 'bg-blue-50 dark:bg-blue-950/30', activeText: 'text-blue-800 dark:text-blue-300' },
             { value: 'meta' as const, label: META_VISUAL.label, dot: META_VISUAL.dot, activeBorder: META_VISUAL.activeBorder, activeBg: META_VISUAL.activeBg, activeText: 'text-orange-800 dark:text-orange-300' },
           ]).map(s => {
             const selected = statusOp === s.value;

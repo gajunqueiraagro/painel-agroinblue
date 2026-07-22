@@ -85,7 +85,7 @@ export function VendaDadosZootecnicos({
   const pesoMedio = Number(form.pesoMedioKg) || 0;
   const pesoTotal = qtd * pesoMedio;
 
-  const statusOpcoes: VendaStatusMode[] = canEditMeta ? ['meta'] : ['programado', 'realizado'];
+  const statusOpcoes: VendaStatusMode[] = canEditMeta ? ['meta'] : ['realizado'];
 
   // ─── Peso Médio kg (input formatado) ──────────────────────────────
   const [pesoMedioStr, setPesoMedioStr] = useState<string>(() =>

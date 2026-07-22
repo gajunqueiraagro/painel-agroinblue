@@ -92,10 +92,9 @@ const ABAS = [
   { key: 'auditoria', label: 'Auditoria', enabled: false },
 ] as const;
 
-// Indicador de cenário (norma: [✓ Realizado] / [🟡 Programado] / [🔵 Meta], sem texto).
+// Indicador de cenário (norma: [✓ Realizado] / [🔵 Meta], sem texto). Programado removido no PR-0C.
 const CENARIO_UI: Record<string, { icon: string; label: string; chip: string }> = {
   realizado: { icon: '✓', label: STATUS_LABEL.realizado, chip: 'border-green-500 bg-green-50 text-green-800 dark:bg-green-950/30 dark:text-green-300' },
-  programado: { icon: '🟡', label: STATUS_LABEL.programado, chip: 'border-amber-500 bg-amber-50 text-amber-800 dark:bg-amber-950/30 dark:text-amber-300' },
   meta: { icon: '🔵', label: META_VISUAL.label, chip: 'border-blue-500 bg-blue-50 text-blue-800 dark:bg-blue-950/30 dark:text-blue-300' },
 };
 
@@ -113,7 +112,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
   // Seleção visual de fazenda destino (nesta rodada não altera payload/persistência).
   const [fazendaSel, setFazendaSel] = useState<string>(api.fazendaAtualId ?? '__atual__');
 
-  const cenarioOptions: (StatusOperacional | 'meta')[] = ['realizado', 'programado', 'meta'];
+  const cenarioOptions: (StatusOperacional | 'meta')[] = ['realizado', 'meta'];
   const cenarioAtual = CENARIO_UI[api.statusOp] ?? CENARIO_UI.realizado;
   const fornecedorNome = api.fornecedores.find(f => f.id === api.compraFornecedorId)?.nome || '';
   const canOpenModal = !!(api.data && api.quantidadeNum > 0 && api.pesoKgNum > 0 && api.categoria);

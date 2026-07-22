@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { getQueue, removeFromQueue, QueuedLancamento } from '@/lib/offlineQueue';
+import { assertStatusZootGravavel } from '@/lib/statusOperacional';
 import { toast } from 'sonner';
 
 export function useOfflineSync(fazendaId: string | undefined, onSyncComplete: () => void) {
@@ -57,9 +58,14 @@ export function useOfflineSync(fazendaId: string | undefined, onSyncComplete: ()
             fornecedor_nome_snapshot:
               typeof snap === 'string' && snap.trim() ? snap : '[nao informado]',
           };
+          // PR-0C fail-closed: replay não pode gravar programado/agendado. Throw
+          // cai no catch → item permanece na fila (não sincronizado, não descartado).
+          // (item.data é Record<string, any>; safeData só sobrescreve fornecedor_nome_snapshot.)
+          assertStatusZootGravavel(item.data.status_operacional);
           const { error } = await supabase.from('lancamentos').insert(safeData as any);
           if (error) throw error;
         } else if (item.action === 'update') {
+          assertStatusZootGravavel(item.data.status_operacional);
           const { error } = await supabase.from('lancamentos')
             .update(item.data as any)
             .eq('id', item.data.id);

@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import { Lancamento, SaldoInicial, Categoria } from '@/types/cattle';
+import { assertStatusZootGravavel } from '@/lib/statusOperacional';
 import type { StatusOperacional } from '@/lib/statusOperacional';
 import { addToQueue, isOnline } from '@/lib/offlineQueue';
 import { toast } from 'sonner';
@@ -383,6 +384,10 @@ export function useLancamentos(arg: UseLancamentosArg = 'realizado') {
       fornecedor_nome_snapshot: lancamento.fornecedorNomeSnapshot?.trim() || '[nao informado]',
     };
 
+    // PR-0C fail-closed: rejeita programado/agendado ANTES de enfileirar (offline)
+    // ou inserir (online). Sem coerção, sem remoção silenciosa.
+    assertStatusZootGravavel(insertData.status_operacional);
+
     if (!isOnline()) {
       addToQueue({
         id: `offline-${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -516,6 +521,8 @@ export function useLancamentos(arg: UseLancamentosArg = 'realizado') {
     if (dados.tipoPeso !== undefined) update.tipo_peso = dados.tipoPeso;
     if (dados.cenario !== undefined) update.cenario = dados.cenario;
     if (dados.statusOperacional !== undefined) {
+      // PR-0C fail-closed: rejeita programado/agendado antes do update.
+      assertStatusZootGravavel(dados.statusOperacional);
       update.status_operacional = dados.statusOperacional;
       if (dados.cenario === undefined) {
         update.cenario = dados.statusOperacional === null

@@ -42,7 +42,7 @@ export function CompraDadosZootecnicos({
   const precoCabeca = qtd > 0 ? valorMovimentacao / qtd : 0;
   const precoKg = pesoTotal > 0 ? valorMovimentacao / pesoTotal : 0;
 
-  const statusOpcoes: CompraStatusMode[] = canEditMeta ? ['meta'] : ['programado', 'realizado'];
+  const statusOpcoes: CompraStatusMode[] = canEditMeta ? ['meta'] : ['realizado'];
 
   // ── PR-V2E.1: state local para inputs monetários formatados ─────
   // Peso Médio kg
