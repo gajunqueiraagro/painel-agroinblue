@@ -40,10 +40,12 @@ export interface CompraModalShellProps {
   setObservacao: (v: string) => void;
   fazendaOrigem: string;
   setFazendaOrigem: (v: string) => void;
-  // fazenda destino (dropdown visual nesta rodada; persistência = filtro principal, intacta)
+  // fazenda destino (persistida no salvamento OC via fazendaDestinoId)
   fazendaAtualNome: string;
   fazendaAtualId: string | null;
   fazendas: { id: string; nome: string }[];
+  fazendaDestinoId: string;
+  setFazendaDestinoId: (v: string) => void;
   // fornecedor
   compraFornecedorId: string;
   setCompraFornecedorId: (v: string) => void;
@@ -109,9 +111,6 @@ export function CompraModalShell(api: CompraModalShellProps) {
     }
     prevOcRef.current = api.ocOperacaoId ?? null;
   }, [api.modoOC, api.ocOperacaoId]);
-  // Seleção visual de fazenda destino (nesta rodada não altera payload/persistência).
-  const [fazendaSel, setFazendaSel] = useState<string>(api.fazendaAtualId ?? '__atual__');
-
   const cenarioOptions: (StatusOperacional | 'meta')[] = ['realizado', 'meta'];
   const cenarioAtual = CENARIO_UI[api.statusOp] ?? CENARIO_UI.realizado;
   const fornecedorNome = api.fornecedores.find(f => f.id === api.compraFornecedorId)?.nome || '';
@@ -146,7 +145,8 @@ export function CompraModalShell(api: CompraModalShellProps) {
           </div>
         </div>
         <div className="flex items-center gap-3 shrink-0">
-          {api.mesFechadoMsg && (
+          {/* Badge de mês fechado NÃO se aplica ao fluxo OC (rascunho/negociação não são bloqueados pelo P1). */}
+          {!api.modoOC && api.mesFechadoMsg && (
             <span className="rounded-md border border-yellow-400 text-yellow-400 px-2 py-1 text-xs flex items-center gap-1" title={api.mesFechadoMsg}>
               <Lock className="h-3 w-3" /> Mês fechado
             </span>
@@ -223,7 +223,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
               </div>
               <div>
                 <Label className="font-bold text-[11px]">Fazenda</Label>
-                <Select value={fazendaSel} onValueChange={setFazendaSel}>
+                <Select value={api.fazendaDestinoId} onValueChange={api.setFazendaDestinoId}>
                   <SelectTrigger className="mt-0.5 h-8 text-[12px]"><SelectValue placeholder={api.fazendaAtualNome || 'Selecione'} /></SelectTrigger>
                   <SelectContent className={DARK_SELECT_CONTENT}>
                     {api.fazendaAtualId && <SelectItem value={api.fazendaAtualId} className="text-[12px]">{api.fazendaAtualNome}</SelectItem>}

@@ -286,6 +286,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   );
   const [ocOperacaoId, setOcOperacaoId] = useState<string | null>(null);
   const [ocVersao, setOcVersao] = useState<number | null>(null);
+  // Fazenda destino selecionada dentro do modal OC (default = fazenda do filtro atual).
+  const [ocFazendaDestinoId, setOcFazendaDestinoId] = useState<string>(fazendaAtual?.id ?? '__atual__');
   // COM-3: estado/handlers dos lotes comerciais (só em modo OC; fonte única = camada OC).
   const lotesApi = useCompraLotes({
     operacaoId: ocOperacaoId,
@@ -1667,7 +1669,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         tipo_operacao: 'compra',
         data_operacao: data,
         cenario: isCenarioMeta ? 'meta' : 'realizado',
-        fazenda_id: fazendaAtual?.id ?? null,
+        // Fazenda selecionada dentro do modal; só cai no filtro atual se nada foi escolhido.
+        fazenda_id: (ocFazendaDestinoId && ocFazendaDestinoId !== '__atual__')
+          ? ocFazendaDestinoId
+          : (fazendaAtual?.id ?? null),
         contraparte_id: compraFornecedorId || null,
         numero_documento: compraDetalhes?.notaFiscal || null,
         observacoes: observacao || null,
@@ -3543,6 +3548,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     fazendaAtualNome: nomeFazenda,
     fazendaAtualId: fazendaAtual?.id ?? null,
     fazendas,
+    fazendaDestinoId: ocFazendaDestinoId,
+    setFazendaDestinoId: setOcFazendaDestinoId,
     compraFornecedorId, setCompraFornecedorId,
     fornecedores: abateFornecedores,
     setNovoFornecedorCompraOpen,
