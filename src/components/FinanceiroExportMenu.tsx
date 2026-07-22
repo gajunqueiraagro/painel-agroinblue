@@ -183,8 +183,6 @@ function inferCenarioLabel(lancs: Lancamento[]): string {
   if (allMeta) return 'META';
   const allRealizado = lancs.every(l => l.statusOperacional === 'realizado');
   if (allRealizado) return 'Realizado';
-  const allProgramado = lancs.every(l => l.statusOperacional === 'programado');
-  if (allProgramado) return 'Programado';
   return 'Misto';
 }
 

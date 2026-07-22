@@ -115,12 +115,6 @@ export function getStatus(l: Lancamento): StatusOperacional | undefined {
   return l.statusOperacional as StatusOperacional | undefined;
 }
 
-/** Retorna o label de UI para um valor interno */
-export function getStatusLabel(value: StatusOperacional | string | undefined | null): string {
-  if (!value) return 'Meta';
-  return STATUS_LABEL[value as StatusOperacional] || value;
-}
-
 // ── Predicados ──
 
 /** Lançamento é META (cenario='meta')? */
@@ -138,24 +132,9 @@ export function isConciliado(l: Lancamento): boolean {
   return isRealizado(l);
 }
 
-/** Lançamento é Programado? */
-export function isProgramado(l: Lancamento): boolean {
-  return getCenario(l) === 'realizado' && l.statusOperacional === 'programado';
-}
-
 /** @deprecated Status 'previsto' foi migrado para 'meta'. Use isMeta instead. */
 export function isPrevisto(l: Lancamento): boolean {
   return isMeta(l);
-}
-
-/** Lançamento é Agendado (financeiro operacional)? */
-export function isAgendado(l: Lancamento): boolean {
-  return getCenario(l) === 'realizado' && l.statusOperacional === 'agendado';
-}
-
-/** @deprecated Use isProgramado instead */
-export function isConfirmado(l: Lancamento): boolean {
-  return isProgramado(l);
 }
 
 // ── Filtros ──
@@ -181,15 +160,12 @@ export function filtrarMeta(lancamentos: Lancamento[]): Lancamento[] {
  */
 export function filtrarPorCenario(
   lancamentos: Lancamento[],
-  cenario: 'todos' | 'realizado' | 'meta' | 'programado' | 'previsto' | 'agendado' | 'confirmado',
+  cenario: 'todos' | 'realizado' | 'meta' | 'previsto',
 ): Lancamento[] {
   switch (cenario) {
     case 'realizado': return filtrarRealizados(lancamentos);
     case 'meta':
     case 'previsto': return filtrarMeta(lancamentos); // previsto migrado → meta
-    case 'programado': return lancamentos.filter(isProgramado);
-    case 'agendado': return lancamentos.filter(isAgendado);
-    case 'confirmado': return lancamentos.filter(isProgramado); // backward compat
     case 'todos': return lancamentos;
   }
 }
@@ -201,13 +177,6 @@ export function getStatusBadge(l: Lancamento) {
   if (isMeta(l)) {
     return { label: 'Meta', cls: META_VISUAL.badgeCls };
   }
-  const st = l.statusOperacional;
-  switch (st) {
-    case 'programado':
-      return { label: 'Programado', cls: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400' };
-    case 'agendado':
-      return { label: 'Agendado', cls: 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-400' };
-    default:
-      return { label: 'Realizado', cls: 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-400' };
-  }
+  // programado/agendado removidos (PR-0D): badge zootécnico é Meta (acima) ou Realizado.
+  return { label: 'Realizado', cls: 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-400' };
 }
