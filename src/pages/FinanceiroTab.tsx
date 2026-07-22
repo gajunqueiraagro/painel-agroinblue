@@ -16,7 +16,7 @@ import { calcIndicadoresLancamento } from '@/lib/calculos/economicos';
 import { useAnosDisponiveis } from '@/hooks/useAnosDisponiveis';
 import { useOperacoesComerciaisEmAndamento } from '@/hooks/useOperacoesComerciaisEmAndamento';
 
-type StatusFiltro = 'todos' | 'realizado' | 'programado' | 'meta';
+type StatusFiltro = 'todos' | 'realizado' | 'meta';
 type SortDir = 'asc' | 'desc' | null;
 
 interface Props {
@@ -68,7 +68,7 @@ const TABLE_FOOT_CELL = 'px-[3px] py-1.5 whitespace-nowrap text-[10px] font-bold
 
 function normalizeStatusFiltro(value?: string): StatusFiltro {
   if (value === 'previsto') return 'meta';
-  if (value === 'realizado' || value === 'programado' || value === 'meta') return value;
+  if (value === 'realizado' || value === 'meta') return value;
   return 'todos';
 }
 
@@ -81,16 +81,6 @@ function normalizeZooLancamento(lancamento: Lancamento): Lancamento {
     };
   }
 
-  // Zootécnico não tem status "Agendado" — é semântica financeira.
-  // Lançamentos zoot com statusOperacional='agendado' viraram badge "Agendado"
-  // por engano. Normaliza para 'programado' (operação futura/programada).
-  if (lancamento.statusOperacional === 'agendado') {
-    return {
-      ...lancamento,
-      statusOperacional: 'programado',
-    };
-  }
-
   return lancamento;
 }
 
@@ -98,8 +88,6 @@ function getStatusFiltroLabel(statusFiltro: StatusFiltro): string {
   switch (statusFiltro) {
     case 'realizado':
       return 'Realizado';
-    case 'programado':
-      return 'Programado';
     case 'meta':
       return 'Meta';
     default:
@@ -107,9 +95,8 @@ function getStatusFiltroLabel(statusFiltro: StatusFiltro): string {
   }
 }
 
-function getStatusOrdenacao(lancamento: Lancamento): 'realizado' | 'programado' | 'meta' {
+function getStatusOrdenacao(lancamento: Lancamento): 'realizado' | 'meta' {
   if (lancamento.cenario === 'meta') return 'meta';
-  if (lancamento.statusOperacional === 'programado') return 'programado';
   return 'realizado';
 }
 
@@ -536,7 +523,6 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
           if (!tiposFilter.includes(l.tipo)) return false;
           const st = l.statusOperacional || 'realizado';
           if (statusFiltro === 'realizado' && (l.cenario !== 'realizado' || st !== 'realizado')) return false;
-          if (statusFiltro === 'programado' && (l.cenario !== 'realizado' || st !== 'programado')) return false;
           if (statusFiltro === 'meta' && l.cenario !== 'meta') return false;
           if (categoriaFiltro !== 'todas' && l.categoria !== categoriaFiltro) return false;
           return true;
@@ -598,7 +584,6 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
       .filter(l => {
         const st = l.statusOperacional || 'realizado';
         if (statusFiltro === 'realizado' && (l.cenario !== 'realizado' || st !== 'realizado')) return false;
-        if (statusFiltro === 'programado' && (l.cenario !== 'realizado' || st !== 'programado')) return false;
         if (statusFiltro === 'meta' && l.cenario !== 'meta') return false;
         if (categoriaFiltro !== 'todas' && l.categoria !== categoriaFiltro) return false;
         return true;
@@ -664,7 +649,6 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
             <div className="flex gap-px rounded border border-primary-foreground/20 bg-primary-foreground/5 p-px">
               {([
                 { value: 'realizado' as StatusFiltro, label: 'Realizado', activeClass: 'bg-success text-success-foreground' },
-                { value: 'programado' as StatusFiltro, label: 'Programado', activeClass: 'bg-secondary text-secondary-foreground' },
                 { value: 'meta' as StatusFiltro, label: 'Meta', activeClass: 'bg-warning text-warning-foreground' },
               ]).map(s => (
                 <button
@@ -920,7 +904,6 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
           <div className="flex gap-px rounded border border-primary-foreground/20 bg-primary-foreground/5 p-px">
             {([
               { value: 'realizado' as StatusFiltro, label: 'Realizado', activeClass: 'bg-success text-success-foreground' },
-              { value: 'programado' as StatusFiltro, label: 'Programado', activeClass: 'bg-secondary text-secondary-foreground' },
               { value: 'meta' as StatusFiltro, label: 'Meta', activeClass: 'bg-warning text-warning-foreground' },
             ]).map(s => (
               <button
