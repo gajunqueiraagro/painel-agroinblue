@@ -803,24 +803,6 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
 
   return (
     <div className="w-full max-w-full animate-fade-in pb-20">
-      {/* Alerta contextual — operações comerciais em andamento (link p/ Central).
-          Rascunho comercial NÃO é misturado na tabela de movimentações. */}
-      {onVerOperacoes && opsEmAndamento > 0 && (
-        <div className="flex items-center justify-between gap-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 mb-2 text-xs text-blue-700">
-          <div className="flex items-center gap-2 min-w-0">
-            <Info className="h-3.5 w-3.5 shrink-0" />
-            <div className="min-w-0">
-              <div className="font-medium">
-                {opsEmAndamento} {opsEmAndamento === 1 ? 'operação comercial em andamento' : 'operações comerciais em andamento'}
-              </div>
-              <div className="text-blue-600/80">Consulte rascunhos e operações ainda não concluídas.</div>
-            </div>
-          </div>
-          <Button size="sm" variant="outline" className="h-7 shrink-0 border-blue-300 text-blue-700 hover:bg-blue-100" onClick={onVerOperacoes}>
-            Ver Operações Comerciais
-          </Button>
-        </div>
-      )}
       {/* ── Top panel ── */}
       <div className="bg-primary text-primary-foreground px-3 py-2 space-y-1.5">
         {(onBack || drillDownLabel) && (
@@ -843,7 +825,9 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
           </div>
         )}
 
-        {/* Top tabs */}
+        {/* Top tabs + aviso inline de operações comerciais (mesma linha, à direita —
+            sem criar linha nova nem aumentar a altura do painel). */}
+        <div className="flex items-center justify-between gap-3">
         <div className={`grid gap-0.5 rounded-md bg-card p-0.5 max-w-md ${modoMovimentacao ? 'grid-cols-2' : `grid-cols-${topTabs.length}`}`}>
           {topTabs.map(t => (
             <button
@@ -856,6 +840,19 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
               {t.icon} {t.label}
             </button>
           ))}
+        </div>
+          {onVerOperacoes && opsEmAndamento > 0 && (
+            <div className="hidden md:flex items-center gap-2 min-w-0">
+              <Info className="h-3.5 w-3.5 shrink-0 text-primary-foreground/80" />
+              <span className="min-w-0 truncate text-[11px] text-primary-foreground/90">
+                <span className="font-semibold">{opsEmAndamento} {opsEmAndamento === 1 ? 'operação comercial em andamento' : 'operações comerciais em andamento'}</span>
+                <span className="text-primary-foreground/60"> — Consulte rascunhos e operações ainda não concluídas.</span>
+              </span>
+              <Button size="sm" variant="secondary" className="h-6 shrink-0 px-2 text-[11px]" onClick={onVerOperacoes}>
+                Ver Operações Comerciais
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Sub-type tabs */}
