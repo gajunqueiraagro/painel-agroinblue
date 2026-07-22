@@ -5,10 +5,12 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { DatePicker } from '@/components/ui/date-picker';
-import { Plus, Edit, Lock, ShoppingCart, X, Trash2, Calendar, Building2 } from 'lucide-react';
+import { Plus, Edit, Lock, ShoppingCart, X, Trash2, Calendar, Building2, Check } from 'lucide-react';
 import { STATUS_LABEL, META_VISUAL, type StatusOperacional } from '@/lib/statusOperacional';
 import { AbaNegociacaoLotes } from './AbaNegociacaoLotes';
+import { AbaRecebimentoLotes } from './AbaRecebimentoLotes';
 import type { CompraLotesApi } from '@/hooks/useCompraLotes';
+import type { RecebimentoApi } from '@/hooks/useOperacaoRecebimento';
 import { CompraResumoPanel } from './CompraResumoPanel';
 import { CompraDetalhesDialog, EMPTY_COMPRA_DETALHES, type CompraDetalhes } from './CompraDetalhesDialog';
 
@@ -71,6 +73,9 @@ export interface CompraModalShellProps {
   modoOC?: boolean;
   ocOperacaoId?: string | null;
   lotesApi?: CompraLotesApi;   // COM-3: estado/handlers dos lotes (só em modo OC)
+  recebimentoApi?: RecebimentoApi;      // RECEB-01: recebimento por lote (só em modo OC)
+  ocStatusComercial?: string | null;    // 'programada' | 'fechada' | 'cancelada'
+  ocEntregaEncerrada?: boolean;
   onClose: () => void;
 }
 
@@ -158,21 +163,23 @@ export function CompraModalShell(api: CompraModalShellProps) {
       {/* BARRA DE ABAS — template (bg-card, border-b, px-6 py-3) */}
       <div className="bg-card border-b px-6 py-3 flex items-center gap-1 overflow-x-auto">
         {ABAS.map(a => {
-          const active = a.key === abaAtiva && a.enabled;
+          // Recebimento habilita no modo OC (RECEB-01); demais "em breve" seguem como estão.
+          const enabled = a.enabled || (a.key === 'recebimento' && !!api.modoOC);
+          const active = a.key === abaAtiva && enabled;
           return (
             <button
               key={a.key}
               type="button"
-              disabled={!a.enabled}
-              onClick={() => a.enabled && setAbaAtiva(a.key)}
-              title={a.enabled ? undefined : 'em breve'}
+              disabled={!enabled}
+              onClick={() => enabled && setAbaAtiva(a.key)}
+              title={enabled ? undefined : 'em breve'}
               className={`shrink-0 px-3 py-1 text-[12px] font-semibold border-b-2 -mb-px transition-colors ${
                 active ? 'border-primary text-primary'
-                : a.enabled ? 'border-transparent text-muted-foreground hover:text-foreground'
+                : enabled ? 'border-transparent text-muted-foreground hover:text-foreground'
                 : 'border-transparent text-muted-foreground/40 cursor-not-allowed'
               }`}
             >
-              {a.label}{!a.enabled && <span className="ml-1 text-[9px] uppercase tracking-wide">em breve</span>}
+              {a.label}{!enabled && <span className="ml-1 text-[9px] uppercase tracking-wide">em breve</span>}
             </button>
           );
         })}
@@ -193,6 +200,15 @@ export function CompraModalShell(api: CompraModalShellProps) {
               operacaoPronta={!!api.ocOperacaoId}
               lotesApi={api.lotesApi}
               onVoltarCompra={() => setAbaAtiva('compra')}
+            />
+          ) : abaAtiva === 'recebimento' && api.recebimentoApi ? (
+            <AbaRecebimentoLotes
+              api={api.recebimentoApi}
+              operacaoPronta={!!api.ocOperacaoId}
+              concluida={api.ocStatusComercial === 'fechada'}
+              encerrada={!!api.ocEntregaEncerrada}
+              isCompra
+              onVoltarNegociacao={() => setAbaAtiva('negociacao')}
             />
           ) : (
           <>
@@ -344,7 +360,14 @@ export function CompraModalShell(api: CompraModalShellProps) {
               <Edit className="h-4 w-4" /> Editar Financeiro
             </Button>
           )}
-          {abaAtiva === 'negociacao' ? (
+          {/* Concluir negociação (oc_confirmar) — só comercial; habilita o Recebimento (RECEB-01). */}
+          {api.modoOC && api.ocOperacaoId && api.ocStatusComercial !== 'fechada' && api.recebimentoApi && (
+            <Button type="button" variant="secondary" disabled={api.recebimentoApi.saving}
+              onClick={() => api.recebimentoApi?.concluirNegociacao()} className="gap-1.5">
+              <Check className="h-4 w-4" /> Concluir negociação
+            </Button>
+          )}
+          {abaAtiva === 'recebimento' ? null : abaAtiva === 'negociacao' ? (
             // Ação da aba Negociação: apenas visual nesta rodada (sem handler). O fluxo de
             // Registrar Compra da aba Compra permanece inalterado.
             <Button type="button"

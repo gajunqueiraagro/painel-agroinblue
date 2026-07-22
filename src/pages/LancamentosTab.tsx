@@ -36,6 +36,7 @@ import { CompraModalShell } from '@/components/compra/CompraModalShell';
 import { gerarFinanceiroCompra } from '@/components/compra/gerarFinanceiroCompra';
 import { useOperacaoComercial } from '@/hooks/useOperacaoComercial';
 import { useCompraLotes } from '@/hooks/useCompraLotes';
+import { useOperacaoRecebimento } from '@/hooks/useOperacaoRecebimento';
 import { AbateDetalhesDialog, AbateDetalhes, EMPTY_ABATE_DETALHES } from '@/components/abate/AbateDetalhesDialog';
 import { AbateResumoPanel } from '@/components/abate/AbateResumoPanel';
 import { TransferenciaDetalhesDialog, TransferenciaDetalhes, EMPTY_TRANSFERENCIA_DETALHES } from '@/components/transferencia/TransferenciaDetalhesDialog';
@@ -288,12 +289,24 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [ocVersao, setOcVersao] = useState<number | null>(null);
   // Fazenda destino selecionada dentro do modal OC (default = fazenda do filtro atual).
   const [ocFazendaDestinoId, setOcFazendaDestinoId] = useState<string>(fazendaAtual?.id ?? '__atual__');
+  // Estado comercial/entrega da operação OC (para gate do Recebimento — RECEB-01).
+  const [ocStatusComercial, setOcStatusComercial] = useState<string | null>(null);
+  const [ocEntregaEncerrada, setOcEntregaEncerrada] = useState<boolean>(false);
   // COM-3: estado/handlers dos lotes comerciais (só em modo OC; fonte única = camada OC).
   const lotesApi = useCompraLotes({
     operacaoId: ocOperacaoId,
     clienteId: clienteAtual?.id ?? null,
     versao: ocVersao,
     onVersaoChange: setOcVersao,
+    enabled: modoOCCompra,
+  });
+  const recebimentoApi = useOperacaoRecebimento({
+    operacaoId: ocOperacaoId,
+    clienteId: clienteAtual?.id ?? null,
+    versao: ocVersao,
+    onVersaoChange: setOcVersao,
+    onStatusChange: setOcStatusComercial,
+    onEntregaChange: setOcEntregaEncerrada,
     enabled: modoOCCompra,
   });
 
@@ -1681,6 +1694,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       });
       setOcOperacaoId(env.operacao_id);
       setOcVersao(env.versao);
+      if (env.status_comercial) setOcStatusComercial(env.status_comercial);
       toast.success(criandoOperacao ? 'Operação criada. Agora informe os lotes negociados.' : 'Alterações salvas.');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Falha ao salvar a operação comercial.');
@@ -3564,6 +3578,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     modoOC: modoOCCompra,
     ocOperacaoId,
     lotesApi,
+    recebimentoApi,
+    ocStatusComercial,
+    ocEntregaEncerrada,
     onClose: () => setLancModalOpen(false),
   };
 
