@@ -14,6 +14,7 @@ interface Props {
   concluida: boolean;           // status_comercial='fechada' (negociação concluída)
   encerrada: boolean;           // entrega_encerrada
   isCompra: boolean;
+  somenteLeitura?: boolean;     // OPEN-01: abertura de operação existente — aba read-only
   onVoltarNegociacao?: () => void;
 }
 
@@ -28,9 +29,11 @@ const LABEL: Record<EstadoRecebimento, string> = {
   nao_iniciado: 'Não iniciado', parcial: 'Parcial', completo: 'Completo', excedente: 'Excedente',
 };
 
-export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada, isCompra, onVoltarNegociacao }: Props) {
+export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada, isCompra, somenteLeitura, onVoltarNegociacao }: Props) {
   const [qtd, setQtd] = useState<Record<string, string>>({});
   const [peso, setPeso] = useState<Record<string, string>>({});
+  // OPEN-01: abertura existente = read-only (equivale ao "encerrada" para fins de escrita/exibição).
+  const readOnly = encerrada || somenteLeitura;
 
   if (!operacaoPronta) {
     return (
@@ -70,10 +73,10 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
         <div>
           <div className="text-[12px] font-semibold text-foreground">Recebimento por lote</div>
           <div className="text-[11px] text-muted-foreground">
-            {encerrada ? 'Recebimento encerrado — somente leitura.' : 'Registre a quantidade efetivamente recebida por lote.'}
+            {encerrada ? 'Recebimento encerrado — somente leitura.' : somenteLeitura ? 'Somente leitura.' : 'Registre a quantidade efetivamente recebida por lote.'}
           </div>
         </div>
-        {!encerrada && (
+        {!readOnly && (
           <Button type="button" variant="outline" size="sm" className="h-7 text-[11px] gap-1" disabled={api.saving} onClick={() => void api.receberTodos()}>
             <Check className="h-3 w-3" /> Receber todos conforme negociado
           </Button>
@@ -85,7 +88,7 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
           <div className={`${GRID} px-1 pb-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground`}>
             <span>#</span><span>Categoria</span><span className="text-right">Negociado</span>
             <span className="text-right">Recebido</span><span className="text-right">Diferença</span>
-            <span>{encerrada ? 'Estado' : 'Receber (qtd · peso méd.)'}</span><span className="text-center">Ações</span>
+            <span>{readOnly ? 'Estado' : 'Receber (qtd · peso méd.)'}</span><span className="text-center">Ações</span>
           </div>
           {api.lotes.length === 0 ? (
             <div className="rounded-md border border-dashed bg-muted/10 px-3 py-3 text-center text-[11px] text-muted-foreground">
@@ -98,7 +101,7 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
               <div className="text-[11px] text-right tabular-nums">{l.qtdNegociada ?? '—'}</div>
               <div className="text-[11px] text-right tabular-nums font-semibold">{l.qtdRecebida}</div>
               <div className={`text-[11px] text-right tabular-nums ${l.diferenca !== 0 ? 'text-amber-600' : ''}`}>{l.diferenca}</div>
-              {encerrada ? (
+              {readOnly ? (
                 <div><span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${TONE[l.estado]}`}>{LABEL[l.estado]}</span></div>
               ) : (
                 <div className="flex items-center gap-1">
@@ -111,7 +114,7 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
                 </div>
               )}
               <div className="text-center">
-                {!encerrada && (
+                {!readOnly && (
                   <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-[10px]" disabled={api.saving} onClick={() => registrar(l.loteId, l.categoria)}>
                     Receber
                   </Button>
@@ -130,7 +133,7 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
           {movsAtivas.map(m => (
             <div key={m.id} className="flex items-center justify-between gap-2 rounded border bg-muted/10 px-2 py-0.5 text-[11px]">
               <span className="tabular-nums">{m.data ? m.data.split('-').reverse().join('/') : '—'} · {m.categoria ?? '—'} · {m.quantidade} cab{m.pesoMedio ? ` · ${m.pesoMedio} kg` : ''}</span>
-              {!encerrada && (
+              {!readOnly && (
                 <Button type="button" variant="ghost" size="sm" className="h-5 px-1.5 text-[10px] text-muted-foreground hover:text-destructive gap-1"
                   disabled={api.saving} onClick={() => void api.estornar(m.id, 'estorno pela aba Recebimento')}>
                   <Undo2 className="h-3 w-3" /> Estornar
@@ -141,7 +144,7 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
         </div>
       )}
 
-      {!encerrada && (
+      {!readOnly && (
         <div className="flex justify-end pt-1">
           <Button type="button" variant="outline" size="sm" className="h-7 text-[11px] gap-1" disabled={api.saving}
             onClick={() => void api.encerrar('encerramento pela aba Recebimento')}>

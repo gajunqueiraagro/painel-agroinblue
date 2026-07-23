@@ -230,8 +230,16 @@ export function CentralOperacoesComerciais() {
                       <Button variant="ghost" size="icon" className="h-7 w-7"><MoreVertical className="h-4 w-4" /></Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                      {/* OPEN-01: "Abrir" leva ao CompraModalShell (fluxo ?oc_compra=1&oc_id) — só Compra. */}
+                      {r.tipo_operacao === 'compra' ? (
+                        <DropdownMenuItem onSelect={() => {
+                          try { sessionStorage.setItem('v2:autoSection', 'lancamentos-zoot'); } catch { /* sessionStorage indisponível */ }
+                          window.location.assign(`/v2?oc_compra=1&oc_id=${encodeURIComponent(r.id)}`);
+                        }}><Eye className="h-4 w-4 mr-2" /> Abrir</DropdownMenuItem>
+                      ) : (
+                        <DropdownMenuItem disabled><Eye className="h-4 w-4 mr-2" /> Abrir (disponível só para Compra)</DropdownMenuItem>
+                      )}
                       <DropdownMenuLabel className="text-[10px] text-muted-foreground">Em breve</DropdownMenuLabel>
-                      <DropdownMenuItem disabled><Eye className="h-4 w-4 mr-2" /> Abrir (edição nos próximos passos)</DropdownMenuItem>
                       <DropdownMenuItem disabled>Registrar movimentação</DropdownMenuItem>
                       <DropdownMenuItem disabled>Registrar liquidação</DropdownMenuItem>
                       <DropdownMenuItem disabled>Marcar fechado</DropdownMenuItem>

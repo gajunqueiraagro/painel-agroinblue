@@ -82,6 +82,7 @@ export interface CompraModalShellProps {
   liquidacaoApi?: LiquidacaoApi;        // LIQ-UI-01: obrigações e liquidação (só em modo OC)
   ocStatusComercial?: string | null;    // 'programada' | 'fechada' | 'cancelada'
   ocEntregaEncerrada?: boolean;
+  somenteLeitura?: boolean;             // OPEN-01: abertura de operação existente — cabeçalho read-only
   onClose: () => void;
 }
 
@@ -118,11 +119,13 @@ export function CompraModalShell(api: CompraModalShellProps) {
   // automaticamente para a aba Negociação (informar os lotes).
   const prevOcRef = useRef<string | null | undefined>(undefined);
   useEffect(() => {
-    if (api.modoOC && api.ocOperacaoId && !prevOcRef.current) {
+    // Ao CRIAR (ocOperacaoId vazio→preenchido) navega para Negociação. Na ABERTURA de operação
+    // existente (somente leitura) permanece na aba Compra para conferência do cabeçalho (OPEN-01).
+    if (api.modoOC && api.ocOperacaoId && !prevOcRef.current && !api.somenteLeitura) {
       setAbaAtiva('negociacao');
     }
     prevOcRef.current = api.ocOperacaoId ?? null;
-  }, [api.modoOC, api.ocOperacaoId]);
+  }, [api.modoOC, api.ocOperacaoId, api.somenteLeitura]);
   const cenarioOptions: (StatusOperacional | 'meta')[] = ['realizado', 'meta'];
   const cenarioAtual = CENARIO_UI[api.statusOp] ?? CENARIO_UI.realizado;
   const fornecedorNome = api.fornecedores.find(f => f.id === api.compraFornecedorId)?.nome || '';
@@ -206,6 +209,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
               modoOC={api.modoOC}
               operacaoPronta={!!api.ocOperacaoId}
               lotesApi={api.lotesApi}
+              somenteLeitura={api.somenteLeitura}
               onVoltarCompra={() => setAbaAtiva('compra')}
             />
           ) : abaAtiva === 'recebimento' && api.recebimentoApi ? (
@@ -215,15 +219,17 @@ export function CompraModalShell(api: CompraModalShellProps) {
               concluida={api.ocStatusComercial === 'fechada'}
               encerrada={!!api.ocEntregaEncerrada}
               isCompra
+              somenteLeitura={api.somenteLeitura}
               onVoltarNegociacao={() => setAbaAtiva('negociacao')}
             />
           ) : abaAtiva === 'documentos' && api.documentosApi ? (
-            <AbaDocumentosOC api={api.documentosApi} operacaoPronta={!!api.ocOperacaoId} />
+            <AbaDocumentosOC api={api.documentosApi} operacaoPronta={!!api.ocOperacaoId} somenteLeitura={api.somenteLeitura} />
           ) : abaAtiva === 'liquidacao' && api.liquidacaoApi ? (
             <AbaLiquidacaoOC
               api={api.liquidacaoApi}
               operacaoPronta={!!api.ocOperacaoId}
               darkSelectClass={DARK_SELECT_CONTENT}
+              somenteLeitura={api.somenteLeitura}
               onIrParaDocumentos={() => setAbaAtiva('documentos')}
             />
           ) : (
@@ -235,7 +241,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
             <div className="grid grid-cols-1 lg:grid-cols-[170px_150px_180px_minmax(0,1fr)] gap-2">
               <div>
                 <Label className="font-bold text-[11px]">Status</Label>
-                <Select value={api.statusOp} onValueChange={(v) => api.setStatusOp(v as StatusOperacional | 'meta')}>
+                <Select value={api.statusOp} onValueChange={(v) => api.setStatusOp(v as StatusOperacional | 'meta')} disabled={api.somenteLeitura}>
                   <SelectTrigger className={`mt-0.5 h-8 text-[12px] font-semibold border-2 gap-1 ${cenarioAtual.chip}`}>
                     <span className="flex items-center gap-1"><span>{cenarioAtual.icon}</span><span>{cenarioAtual.label}</span></span>
                   </SelectTrigger>
@@ -251,11 +257,13 @@ export function CompraModalShell(api: CompraModalShellProps) {
               </div>
               <div>
                 <Label className="font-bold text-[11px]">Data da Compra</Label>
-                <DatePicker value={api.data} onChange={api.setData} className="mt-0.5" />
+                <div className={api.somenteLeitura ? 'pointer-events-none opacity-60' : ''}>
+                  <DatePicker value={api.data} onChange={api.setData} className="mt-0.5" />
+                </div>
               </div>
               <div>
                 <Label className="font-bold text-[11px]">Fazenda</Label>
-                <Select value={api.fazendaDestinoId} onValueChange={api.setFazendaDestinoId}>
+                <Select value={api.fazendaDestinoId} onValueChange={api.setFazendaDestinoId} disabled={api.somenteLeitura}>
                   <SelectTrigger className="mt-0.5 h-8 text-[12px]"><SelectValue placeholder={api.fazendaAtualNome || 'Selecione'} /></SelectTrigger>
                   <SelectContent className={DARK_SELECT_CONTENT}>
                     {api.fazendaAtualId && <SelectItem value={api.fazendaAtualId} className="text-[12px]">{api.fazendaAtualNome}</SelectItem>}
@@ -265,7 +273,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
               </div>
               <div>
                 <Label className="font-bold text-[11px]">Observações/Lote</Label>
-                <Input value={api.observacao} onChange={e => api.setObservacao(e.target.value)} placeholder="Opcional" className="mt-0.5 h-8 text-[12px]" />
+                <Input value={api.observacao} onChange={e => api.setObservacao(e.target.value)} placeholder="Opcional" className="mt-0.5 h-8 text-[12px]" disabled={api.somenteLeitura} />
               </div>
             </div>
             {/* Linha 2: Fornecedor · Propriedade de origem */}
@@ -282,17 +290,19 @@ export function CompraModalShell(api: CompraModalShellProps) {
                       allLabel="Nenhum selecionado"
                       allValue="__all__"
                       dense
+                      disabled={api.somenteLeitura}
                       className="[&>button]:h-8 [&>button]:text-[12px] [&>button]:px-2"
                     />
                   </div>
-                  <Button type="button" variant="outline" size="icon" className="h-8 w-8 shrink-0" aria-label="Novo fornecedor" onClick={() => api.setNovoFornecedorCompraOpen(true)}>
+                  <Button type="button" variant="outline" size="icon" className="h-8 w-8 shrink-0" aria-label="Novo fornecedor" disabled={api.somenteLeitura} onClick={() => api.setNovoFornecedorCompraOpen(true)}>
                     <Plus className="h-3.5 w-3.5" />
                   </Button>
                 </div>
               </div>
               <div>
                 <Label className="font-bold text-[11px]">Propriedade de origem</Label>
-                <Input value={api.fazendaOrigem} onChange={e => api.setFazendaOrigem(e.target.value)} placeholder="Ex: Faz. Boa Vista" className="mt-0.5 h-8 text-[12px]" />
+                {/* OPEN-01: sem coluna persistida no modelo — no modo leitura, vazio e desabilitado (não inferir). */}
+                <Input value={api.somenteLeitura ? '' : api.fazendaOrigem} onChange={e => api.setFazendaOrigem(e.target.value)} placeholder={api.somenteLeitura ? '—' : 'Ex: Faz. Boa Vista'} className="mt-0.5 h-8 text-[12px]" disabled={api.somenteLeitura} />
               </div>
             </div>
           </div>
@@ -349,6 +359,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
             detalhes={api.compraDetalhes}
             detalhesPreenchidos={!!api.compraDetalhes}
             canOpenModal={canOpenModal}
+            somenteLeitura={api.somenteLeitura}
             onOpenModal={() => api.setCompraDialogOpen(true)}
             onRequestRegister={api.handleRequestRegister}
             submitting={api.submitting}
@@ -377,13 +388,16 @@ export function CompraModalShell(api: CompraModalShellProps) {
             </Button>
           )}
           {/* Concluir negociação (oc_confirmar) — só comercial; habilita o Recebimento (RECEB-01). */}
-          {api.modoOC && api.ocOperacaoId && api.ocStatusComercial !== 'fechada' && api.recebimentoApi && (
+          {!api.somenteLeitura && api.modoOC && api.ocOperacaoId && api.ocStatusComercial !== 'fechada' && api.recebimentoApi && (
             <Button type="button" variant="secondary" disabled={api.recebimentoApi.saving}
               onClick={() => api.recebimentoApi?.concluirNegociacao()} className="gap-1.5">
               <Check className="h-4 w-4" /> Concluir negociação
             </Button>
           )}
-          {(abaAtiva === 'recebimento' || abaAtiva === 'documentos' || abaAtiva === 'liquidacao') ? null : abaAtiva === 'negociacao' ? (
+          {/* OPEN-01: abertura de operação existente = somente leitura → nenhum save no rodapé. */}
+          {api.somenteLeitura ? (
+            <span className="text-white/80 text-xs flex items-center gap-1"><Lock className="h-3.5 w-3.5" /> Somente leitura</span>
+          ) : (abaAtiva === 'recebimento' || abaAtiva === 'documentos' || abaAtiva === 'liquidacao') ? null : abaAtiva === 'negociacao' ? (
             // Ação da aba Negociação: apenas visual nesta rodada (sem handler). O fluxo de
             // Registrar Compra da aba Compra permanece inalterado.
             <Button type="button"

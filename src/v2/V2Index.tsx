@@ -280,6 +280,13 @@ export default function V2Index() {
         return auto;
       }
     } catch { /* sessionStorage indisponível */ }
+    // OPEN-01: URL com ?oc_compra=1 (abertura/hidratação de operação OC) força a seção de
+    //   Lançamentos, garantindo que o RELOAD da URL reabra a mesma operação (oc_id no query).
+    try {
+      if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('oc_compra') === '1') {
+        return 'lancamentos-zoot';
+      }
+    } catch { /* URL indisponível */ }
     return 'home';
   })();
   const [section, setSection] = useState<V2Section>(sectionInicial);

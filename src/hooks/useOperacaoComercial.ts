@@ -75,6 +75,10 @@ export interface OcOperacaoRow {
   cliente_id: string;
   tipo_operacao: string;
   data_operacao: string;
+  // Hidratação do cabeçalho ao abrir operação existente (PR-OC-COMPRA-OPEN-01).
+  // `select('*')` já traz ambos do banco; aqui só os tipamos (compatíveis com o schema).
+  fazenda_id: string | null;
+  numero_documento: string | null;
   responsavel: string | null;
   // Snapshot soberano do nome do responsável (server-side; resolver_nome_usuario).
   // Leitura derivada — o modal exibe read-only; NUNCA é enviado no payload.

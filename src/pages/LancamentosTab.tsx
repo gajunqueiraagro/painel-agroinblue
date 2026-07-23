@@ -294,6 +294,17 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   // Estado comercial/entrega da operação OC (para gate do Recebimento — RECEB-01).
   const [ocStatusComercial, setOcStatusComercial] = useState<string | null>(null);
   const [ocEntregaEncerrada, setOcEntregaEncerrada] = useState<boolean>(false);
+  // Abrir/hidratar operação EXISTENTE pela Central (PR-OC-COMPRA-OPEN-01). oc_id na URL =>
+  //   abertura (não criação). ocAberturaExistente => cabeçalho SOMENTE LEITURA (writer não
+  //   atualiza numero_documento/cenario; edição de programada é PR posterior).
+  const ocIdParam = useMemo(
+    () => (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('oc_id') : null),
+    [],
+  );
+  const [ocAberturaExistente, setOcAberturaExistente] = useState<boolean>(false);
+  const [ocHidratando, setOcHidratando] = useState<boolean>(false);
+  const [ocHidratacaoErro, setOcHidratacaoErro] = useState<string | null>(null);
+  const ocHidratadoRef = useRef<boolean>(false);
   // COM-3: estado/handlers dos lotes comerciais (só em modo OC; fonte única = camada OC).
   const lotesApi = useCompraLotes({
     operacaoId: ocOperacaoId,
@@ -457,6 +468,66 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   // Compra fornecedor state
   const [compraFornecedorId, setCompraFornecedorId] = useState('');
   const [novoFornecedorCompraOpen, setNovoFornecedorCompraOpen] = useState(false);
+
+  // Reset ÚNICO e completo do contexto OC (PR-OC-COMPRA-OPEN-01): evita vazamento de estado
+  //   entre operações (A→B) e ao alternar criação/abertura. Não toca banco, não chama RPC.
+  const resetContextoOC = useCallback(() => {
+    setOcOperacaoId(null); setOcVersao(null); setOcStatusComercial(null); setOcEntregaEncerrada(false);
+    setOcFazendaDestinoId(fazendaAtual?.id ?? '__atual__');
+    setData(format(new Date(), 'yyyy-MM-dd')); setCompraFornecedorId(''); setObservacao('');
+    setStatusOp('realizado'); setCompraDetalhes(null); setNotaFiscal(''); setFazendaOrigem('');
+    setOcAberturaExistente(false); setOcHidratacaoErro(null);
+  }, [fazendaAtual?.id]);
+
+  // Hidratação de operação de Compra EXISTENTE a partir de ?oc_id (abertura pela Central).
+  //   Roda UMA vez (ref-guard). Reset preventivo → carregarOperacao (RLS isola por cliente) →
+  //   valida pertencimento/tipo → hidrata cabeçalho + ocOperacaoId/ocVersao/status → abre o modal.
+  //   As 4 subabas re-hidratam sozinhas por operacaoId (não duplicar leitura aqui).
+  useEffect(() => {
+    if (!modoOCCompra || !ocIdParam || !clienteAtual?.id) return;
+    if (ocHidratadoRef.current) return;
+    ocHidratadoRef.current = true;
+    let cancelado = false;
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    (async () => {
+      resetContextoOC();
+      if (!UUID_RE.test(ocIdParam)) {
+        setOcHidratacaoErro('Identificador de operação malformado.');
+        toast.error('Identificador de operação malformado.');
+        return;
+      }
+      setOcHidratando(true);
+      try {
+        const estado = await ocRpc.carregarOperacao(ocIdParam, clienteAtual.id);
+        if (cancelado) return;
+        if (!estado) throw new Error('Operação não encontrada ou inacessível a este cliente.');
+        const op = estado.operacao;
+        if (op.tipo_operacao !== 'compra') throw new Error('Esta operação não é uma Compra e não pode ser aberta aqui.');
+        setData(op.data_operacao ?? format(new Date(), 'yyyy-MM-dd'));
+        setCompraFornecedorId(op.contraparte_id ?? '');
+        setOcFazendaDestinoId(op.fazenda_id ?? (fazendaAtual?.id ?? '__atual__'));
+        setObservacao(op.observacoes ?? '');
+        setStatusOp(op.cenario === 'meta' ? 'meta' : 'realizado');
+        if (op.numero_documento) setNotaFiscal(op.numero_documento);
+        setOcOperacaoId(op.id);
+        setOcVersao(op.versao);
+        setOcStatusComercial(op.status_comercial);
+        setOcAberturaExistente(true);
+        setTipo('compra');            // abre o CompraModalShell (isCompra), não o modal default.
+        setLancModalOpen(true);
+      } catch (e) {
+        if (cancelado) return;
+        resetContextoOC();
+        const msg = e instanceof Error ? e.message : 'Falha ao abrir a operação.';
+        setOcHidratacaoErro(msg);
+        toast.error(msg);
+      } finally {
+        if (!cancelado) setOcHidratando(false);
+      }
+    })();
+    return () => { cancelado = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modoOCCompra, ocIdParam, clienteAtual?.id]);
 
   // Venda destino fornecedor state
   const [vendaDestinoFornecedorId, setVendaDestinoFornecedorId] = useState('');
@@ -1678,8 +1749,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   // Validate form and open confirmation dialog
   // Reset da ponte OC ao fechar o modal (higiene de estado).
   useEffect(() => {
-    if (!lancModalOpen) { setOcOperacaoId(null); setOcVersao(null); }
-  }, [lancModalOpen]);
+    if (!lancModalOpen) {
+      // Modo OC: reset completo (evita vazamento de estado entre operações A→B). Legado: só a ponte OC.
+      if (modoOCCompra) resetContextoOC();
+      else { setOcOperacaoId(null); setOcVersao(null); }
+    }
+  }, [lancModalOpen, modoOCCompra, resetContextoOC]);
 
   // Modo OC: cria/atualiza a operação comercial (só identificação) e guarda operacao_id/versao.
   //   Sem lotes (COM-3), sem físico (onAdicionar) e sem financeiro (gerarFinanceiroCompra).
@@ -1719,7 +1794,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     // ── Ponte Compra→OC (modo OC isolado): salva a operação e RETORNA antes de qualquer
     //    caminho legado — não abre o confirm dialog, então handleSubmit (onAdicionar +
     //    gerarFinanceiroCompra) nunca roda. Sem dupla escrita. ──
-    if (modoOCCompra && isCompra) { void salvarOperacaoOC(); return; }
+    if (modoOCCompra && isCompra) {
+      // OPEN-01: operação existente aberta pela Central abre em modo leitura — nenhum write no cabeçalho.
+      if (ocAberturaExistente) { toast.info('Operação aberta em modo leitura. Edição de programada será uma frente própria.'); return; }
+      void salvarOperacaoOC(); return;
+    }
     // ── P1 governance: selective block (NÃO se aplica ao cenário META) ──
     if (p1Oficial && !isCenarioMeta) {
       const isEditing = !!editingAbateId;
@@ -3595,6 +3674,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     liquidacaoApi,
     ocStatusComercial,
     ocEntregaEncerrada,
+    // Abertura de operação existente (Central): cabeçalho somente leitura + saves suprimidos.
+    somenteLeitura: ocAberturaExistente,
     onClose: () => setLancModalOpen(false),
   };
 

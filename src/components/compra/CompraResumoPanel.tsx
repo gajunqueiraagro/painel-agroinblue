@@ -14,6 +14,7 @@ interface Props {
   detalhes: CompraDetalhes | null;
   detalhesPreenchidos: boolean;
   canOpenModal: boolean;
+  somenteLeitura?: boolean;   // OPEN-01: abertura de operação existente — sem ação de escrita
   onOpenModal: () => void;
   onRequestRegister: () => void;
   submitting: boolean;
@@ -23,7 +24,7 @@ interface Props {
 
 export function CompraResumoPanel({
   quantidade, pesoKg, categoria, fornecedorNome,
-  detalhes, detalhesPreenchidos, canOpenModal,
+  detalhes, detalhesPreenchidos, canOpenModal, somenteLeitura,
   onOpenModal, onRequestRegister, submitting, registerLabel, onCancelEdit,
 }: Props) {
   const catLabel = CATEGORIAS.find(c => c.value === categoria)?.label || categoria || '-';
@@ -67,11 +68,11 @@ export function CompraResumoPanel({
             <AlertTriangle className="h-3 w-3 shrink-0" />
             <span className="font-medium">Financeiro não preenchido</span>
           </div>
-          <Button type="button" variant="outline" className="w-full h-7 text-[11px] font-bold gap-1.5" disabled={!canOpenModal} onClick={onOpenModal}>
+          <Button type="button" variant="outline" className="w-full h-7 text-[11px] font-bold gap-1.5" disabled={!canOpenModal || somenteLeitura} onClick={onOpenModal}>
             <ShoppingCart className="h-3 w-3" />
             Completar Compra
           </Button>
-          {!canOpenModal && (
+          {!somenteLeitura && !canOpenModal && (
             <p className="text-[9px] text-muted-foreground text-center leading-tight">Preencha Data, Quantidade, Peso e Categoria</p>
           )}
         </>

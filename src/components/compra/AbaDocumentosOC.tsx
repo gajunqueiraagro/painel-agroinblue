@@ -10,7 +10,7 @@ import type {
 
 // Aba Documentos (PR-OC-DOC-UI-01). Rótulos amigáveis; totalização usa a fórmula da view
 //   (líquido = acréscimos − descontos − retenções − despesas; informativo não altera). Sem upload.
-interface Props { api: DocumentosApi; operacaoPronta: boolean; }
+interface Props { api: DocumentosApi; operacaoPronta: boolean; somenteLeitura?: boolean; }
 
 const ESPECIE_LABEL: Record<EspecieDoc, string> = { nf_principal: 'NF principal', nf_complementar: 'NF complementar', outro: 'Outro documento' };
 const ESPECIES: EspecieDoc[] = ['nf_principal', 'nf_complementar', 'outro'];
@@ -40,7 +40,7 @@ const FORM_VAZIO: FormState = {
   observacao: '', url: '', documentoOrigemId: '', componentes: [{ tipo: 'valor_bruto', natureza: 'acrescimo', valor: '', descricao: '' }], loteIds: [],
 };
 
-export function AbaDocumentosOC({ api, operacaoPronta }: Props) {
+export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura }: Props) {
   const [modo, setModo] = useState<'lista' | 'form'>('lista');
   const [form, setForm] = useState<FormState>(FORM_VAZIO);
   const [cancelId, setCancelId] = useState<string | null>(null);
@@ -90,6 +90,7 @@ export function AbaDocumentosOC({ api, operacaoPronta }: Props) {
     setForm(f => ({ ...f, loteIds: f.loteIds.includes(id) ? f.loteIds.filter(x => x !== id) : [...f.loteIds, id] }));
 
   const salvar = async () => {
+    if (somenteLeitura) return;   // guarda defensiva (além da UI)
     const payload: DocumentoPayload = {
       especie: form.especie,
       numero: form.numero || undefined, serie: form.serie || undefined, chaveAcesso: form.chaveAcesso || undefined,
@@ -107,6 +108,7 @@ export function AbaDocumentosOC({ api, operacaoPronta }: Props) {
   };
 
   const confirmarCancelamento = async () => {
+    if (somenteLeitura) return;   // guarda defensiva (além da UI)
     if (!cancelId || !cancelMotivo.trim()) return;
     const ok = await api.cancelar(cancelId, cancelMotivo.trim());
     if (ok) { setCancelId(null); setCancelMotivo(''); }
@@ -206,7 +208,7 @@ export function AbaDocumentosOC({ api, operacaoPronta }: Props) {
 
         <div className="flex justify-end gap-2 pt-1">
           <Button type="button" variant="ghost" size="sm" className="h-7 text-[11px]" onClick={() => setModo('lista')}>Cancelar</Button>
-          <Button type="button" size="sm" className="h-7 text-[11px] gap-1" disabled={api.saving} onClick={() => void salvar()}>
+          <Button type="button" size="sm" className="h-7 text-[11px] gap-1" disabled={api.saving || somenteLeitura} onClick={() => void salvar()}>
             <FileText className="h-3 w-3" /> {api.saving ? 'Salvando…' : (form.documentoId ? 'Salvar alterações' : 'Registrar documento')}
           </Button>
         </div>
@@ -219,7 +221,9 @@ export function AbaDocumentosOC({ api, operacaoPronta }: Props) {
     <div className="rounded-md border bg-card p-2 shadow-sm space-y-2 min-w-0">
       <div className="flex items-center justify-between">
         <div className="text-[12px] font-semibold text-foreground">Documentos da operação</div>
-        <Button type="button" variant="outline" size="sm" className="h-7 text-[11px] gap-1" onClick={abrirNovo}><Plus className="h-3 w-3" /> Novo documento</Button>
+        {!somenteLeitura && (
+          <Button type="button" variant="outline" size="sm" className="h-7 text-[11px] gap-1" onClick={abrirNovo}><Plus className="h-3 w-3" /> Novo documento</Button>
+        )}
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-[11px]">
@@ -253,7 +257,7 @@ export function AbaDocumentosOC({ api, operacaoPronta }: Props) {
                   </span>
                 </td>
                 <td className="text-right whitespace-nowrap">
-                  {!d.cancelado && (
+                  {!somenteLeitura && !d.cancelado && (
                     <span className="inline-flex gap-1">
                       <Button type="button" variant="ghost" size="sm" className="h-6 px-1.5 text-[10px] gap-1" onClick={() => void abrirEdicao(d.documentoId)}><Pencil className="h-3 w-3" /> Editar</Button>
                       <Button type="button" variant="ghost" size="sm" className="h-6 px-1.5 text-[10px] gap-1 text-muted-foreground hover:text-destructive" onClick={() => { setCancelId(d.documentoId); setCancelMotivo(''); }}><Ban className="h-3 w-3" /> Cancelar</Button>
@@ -273,7 +277,7 @@ export function AbaDocumentosOC({ api, operacaoPronta }: Props) {
           <Input value={cancelMotivo} onChange={e => setCancelMotivo(e.target.value)} placeholder="Motivo do cancelamento (obrigatório)" className="h-7 text-[11px]" />
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" size="sm" className="h-6 text-[11px]" onClick={() => { setCancelId(null); setCancelMotivo(''); }}>Voltar</Button>
-            <Button type="button" variant="destructive" size="sm" className="h-6 text-[11px]" disabled={api.saving || !cancelMotivo.trim()} onClick={() => void confirmarCancelamento()}>Confirmar cancelamento</Button>
+            <Button type="button" variant="destructive" size="sm" className="h-6 text-[11px]" disabled={api.saving || !cancelMotivo.trim() || somenteLeitura} onClick={() => void confirmarCancelamento()}>Confirmar cancelamento</Button>
           </div>
         </div>
       )}

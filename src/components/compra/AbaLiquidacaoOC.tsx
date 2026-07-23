@@ -55,10 +55,11 @@ interface Props {
   api: LiquidacaoApi;
   operacaoPronta: boolean;
   darkSelectClass: string;
+  somenteLeitura?: boolean;   // OPEN-01: abertura de operação existente — nenhuma ação de escrita
   onIrParaDocumentos?: () => void;
 }
 
-export function AbaLiquidacaoOC({ api, operacaoPronta, darkSelectClass, onIrParaDocumentos }: Props) {
+export function AbaLiquidacaoOC({ api, operacaoPronta, darkSelectClass, somenteLeitura, onIrParaDocumentos }: Props) {
   const [modal, setModal] = useState<ModalState>(null);
   const [detalheId, setDetalheId] = useState<string | null>(null);
 
@@ -112,9 +113,11 @@ export function AbaLiquidacaoOC({ api, operacaoPronta, darkSelectClass, onIrPara
           <Button type="button" size="sm" variant="outline" className="h-7 text-[11px] gap-1" onClick={() => api.recarregar()} disabled={api.loading}>
             <RefreshCw className={`h-3 w-3 ${api.loading ? 'animate-spin' : ''}`} /> Atualizar
           </Button>
-          <Button type="button" size="sm" className="h-7 text-[11px] gap-1" onClick={() => setModal({ type: 'gerar' })} disabled={api.saving}>
-            <Plus className="h-3 w-3" /> Gerar obrigação
-          </Button>
+          {!somenteLeitura && (
+            <Button type="button" size="sm" className="h-7 text-[11px] gap-1" onClick={() => setModal({ type: 'gerar' })} disabled={api.saving}>
+              <Plus className="h-3 w-3" /> Gerar obrigação
+            </Button>
+          )}
         </div>
       </div>
 
@@ -179,8 +182,8 @@ export function AbaLiquidacaoOC({ api, operacaoPronta, darkSelectClass, onIrPara
                         <Button type="button" variant="ghost" size="icon" className="h-6 w-6"><MoreHorizontal className="h-3.5 w-3.5" /></Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="text-[12px]">
-                        <DropdownMenuItem disabled={!podeLiquidar} onClick={() => setModal({ type: 'liquidar', obr: o })}>Registrar liquidação</DropdownMenuItem>
-                        <DropdownMenuItem disabled={!podeCancelar} className="text-destructive" onClick={() => setModal({ type: 'cancelar', obr: o })}>Cancelar obrigação</DropdownMenuItem>
+                        <DropdownMenuItem disabled={!podeLiquidar || somenteLeitura} onClick={() => setModal({ type: 'liquidar', obr: o })}>Registrar liquidação</DropdownMenuItem>
+                        <DropdownMenuItem disabled={!podeCancelar || somenteLeitura} className="text-destructive" onClick={() => setModal({ type: 'cancelar', obr: o })}>Cancelar obrigação</DropdownMenuItem>
                         <DropdownMenuItem onClick={() => setDetalheId(o.obrigacaoId)}>Ver detalhe</DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -208,7 +211,7 @@ export function AbaLiquidacaoOC({ api, operacaoPronta, darkSelectClass, onIrPara
               {onIrParaDocumentos && <button type="button" className="ml-2 text-primary hover:underline" onClick={onIrParaDocumentos}>abrir aba Documentos</button>}
             </div>
           )}
-          <LiquidacoesDetalhe api={api} obr={detalhe} onEstornar={(liqId, label) => setModal({ type: 'estornar', liqId, label })} onLiquidar={() => setModal({ type: 'liquidar', obr: detalhe })} />
+          <LiquidacoesDetalhe api={api} obr={detalhe} somenteLeitura={somenteLeitura} onEstornar={(liqId, label) => setModal({ type: 'estornar', liqId, label })} onLiquidar={() => setModal({ type: 'liquidar', obr: detalhe })} />
         </div>
       )}
 
@@ -251,15 +254,15 @@ function ResumoItem({ rotulo, valor, destaque }: { rotulo: string; valor: string
   );
 }
 
-function LiquidacoesDetalhe({ api, obr, onEstornar, onLiquidar }: {
-  api: LiquidacaoApi; obr: ObrigacaoLinha; onEstornar: (liqId: string, label: string) => void; onLiquidar: () => void;
+function LiquidacoesDetalhe({ api, obr, somenteLeitura, onEstornar, onLiquidar }: {
+  api: LiquidacaoApi; obr: ObrigacaoLinha; somenteLeitura?: boolean; onEstornar: (liqId: string, label: string) => void; onLiquidar: () => void;
 }) {
   const eventos = obr.tituloId ? (api.liquidacoesPorTitulo[obr.tituloId] ?? []) : [];
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between">
         <div className="text-[11px] font-semibold text-muted-foreground">Liquidações</div>
-        {!obr.cancelada && obr.tituloId && obr.estado !== 'quitada' && (
+        {!somenteLeitura && !obr.cancelada && obr.tituloId && obr.estado !== 'quitada' && (
           <Button type="button" size="sm" variant="outline" className="h-6 text-[11px] gap-1" onClick={onLiquidar}><Plus className="h-3 w-3" /> Registrar</Button>
         )}
       </div>
@@ -283,7 +286,7 @@ function LiquidacoesDetalhe({ api, obr, onEstornar, onLiquidar }: {
                     <td className="px-1 py-0.5 truncate max-w-[180px]">{ev.descricao || (ev.permutaTipoBem ? `permuta: ${ev.permutaTipoBem}` : '—')}</td>
                     <td className="px-1 py-0.5 text-center">{ev.estornado ? <Badge variant="destructive" className="text-[9px]">estornada</Badge> : <Badge variant="secondary" className="text-[9px]">válida</Badge>}</td>
                     <td className="px-1 py-0.5 text-right">
-                      {!ev.estornado && (
+                      {!somenteLeitura && !ev.estornado && (
                         <Button type="button" variant="ghost" size="icon" className="h-5 w-5" title="Estornar"
                           onClick={() => onEstornar(ev.id, `${ev.forma} ${brl(ev.valor)}`)}><Undo2 className="h-3 w-3" /></Button>
                       )}

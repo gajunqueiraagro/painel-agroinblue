@@ -21,6 +21,7 @@ interface Props {
   modoOC?: boolean;
   operacaoPronta?: boolean;      // já existe operacao_id (salvo na aba Compra)
   lotesApi?: CompraLotesApi;
+  somenteLeitura?: boolean;      // OPEN-01: abertura de operação existente — grade read-only
   onVoltarCompra?: () => void;   // navegar de volta à aba Compra
 }
 
@@ -46,7 +47,7 @@ function loteTotal(criterio: CriterioValor, quantidade: string, pesoMedioKg: str
 
 export function AbaNegociacaoLotes({
   categoria, categoriasDisponiveis, quantidadeNum, pesoKgNum, darkSelectClass,
-  modoOC, operacaoPronta, lotesApi, onVoltarCompra,
+  modoOC, operacaoPronta, lotesApi, somenteLeitura, onVoltarCompra,
 }: Props) {
   // ── MODO OC: grade editável de múltiplos lotes ──
   if (modoOC && lotesApi) {
@@ -58,10 +59,12 @@ export function AbaNegociacaoLotes({
             <div className="text-[12px] font-semibold text-foreground">Negociação dos Lotes</div>
             <div className="text-[11px] text-muted-foreground">Cadastre, edite e precifique cada lote da compra.</div>
           </div>
-          <Button type="button" variant="outline" size="sm" disabled={!operacaoPronta} onClick={adicionarLote}
-            className="h-7 text-[11px] gap-1" title={operacaoPronta ? undefined : 'Salve a operação na aba Compra primeiro'}>
-            <Plus className="h-3 w-3" /> Adicionar lote
-          </Button>
+          {!somenteLeitura && (
+            <Button type="button" variant="outline" size="sm" disabled={!operacaoPronta} onClick={adicionarLote}
+              className="h-7 text-[11px] gap-1" title={operacaoPronta ? undefined : 'Salve a operação na aba Compra primeiro'}>
+              <Plus className="h-3 w-3" /> Adicionar lote
+            </Button>
+          )}
         </div>
 
         {!operacaoPronta ? (
@@ -86,27 +89,29 @@ export function AbaNegociacaoLotes({
                 const unidade = CRITERIOS.find(c => c.value === l.criterioValor)?.unidade || 'Valor';
                 return (
                   <div key={l.idLocal} className={`${GRID_OC} items-center rounded-md border bg-muted/20 px-1 py-0.5`}>
-                    <Select value={l.categoria || undefined} onValueChange={v => editarLote(l.idLocal, { categoria: v })}>
+                    <Select value={l.categoria || undefined} onValueChange={v => editarLote(l.idLocal, { categoria: v })} disabled={somenteLeitura}>
                       <SelectTrigger className="h-6 text-[11px]"><SelectValue placeholder="Categoria" /></SelectTrigger>
                       <SelectContent className={`${darkSelectClass} max-h-[70vh] overflow-y-auto`}>
                         {categoriasDisponiveis.map(c => <SelectItem key={c.value} value={c.value} className="text-[11px] py-1">{c.label}</SelectItem>)}
                       </SelectContent>
                     </Select>
-                    <Input inputMode="numeric" value={l.quantidade} onChange={e => editarLote(l.idLocal, { quantidade: e.target.value })} placeholder="0" className="h-6 text-[11px] text-right tabular-nums" />
-                    <Input inputMode="decimal" value={l.pesoMedioKg} onChange={e => editarLote(l.idLocal, { pesoMedioKg: e.target.value })} placeholder="0,00" className="h-6 text-[11px] text-right tabular-nums" />
+                    <Input inputMode="numeric" value={l.quantidade} onChange={e => editarLote(l.idLocal, { quantidade: e.target.value })} placeholder="0" disabled={somenteLeitura} className="h-6 text-[11px] text-right tabular-nums" />
+                    <Input inputMode="decimal" value={l.pesoMedioKg} onChange={e => editarLote(l.idLocal, { pesoMedioKg: e.target.value })} placeholder="0,00" disabled={somenteLeitura} className="h-6 text-[11px] text-right tabular-nums" />
                     <div className="text-[11px] text-right tabular-nums text-muted-foreground">{fmtKg(pt)}</div>
-                    <Select value={l.criterioValor} onValueChange={v => editarLote(l.idLocal, { criterioValor: v as CriterioValor })}>
+                    <Select value={l.criterioValor} onValueChange={v => editarLote(l.idLocal, { criterioValor: v as CriterioValor })} disabled={somenteLeitura}>
                       <SelectTrigger className="h-6 text-[11px]"><SelectValue /></SelectTrigger>
                       <SelectContent className={darkSelectClass}>
                         {CRITERIOS.map(c => <SelectItem key={c.value} value={c.value} className="text-[11px] py-1">{c.label}</SelectItem>)}
                       </SelectContent>
                     </Select>
-                    <Input inputMode="decimal" value={l.valorInformado} onChange={e => editarLote(l.idLocal, { valorInformado: e.target.value })} placeholder={unidade} className="h-6 text-[11px] text-right tabular-nums" />
+                    <Input inputMode="decimal" value={l.valorInformado} onChange={e => editarLote(l.idLocal, { valorInformado: e.target.value })} placeholder={unidade} disabled={somenteLeitura} className="h-6 text-[11px] text-right tabular-nums" />
                     <div className="text-[11px] text-right tabular-nums font-semibold">{brl(loteTotal(l.criterioValor, l.quantidade, l.pesoMedioKg, l.valorInformado))}</div>
                     <div className="text-center">
-                      <button type="button" onClick={() => removerLote(l.idLocal)} className="text-muted-foreground/60 hover:text-destructive" aria-label="Remover lote">
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                      {!somenteLeitura && (
+                        <button type="button" onClick={() => removerLote(l.idLocal)} className="text-muted-foreground/60 hover:text-destructive" aria-label="Remover lote">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
