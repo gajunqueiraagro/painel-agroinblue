@@ -10,9 +10,11 @@ import { STATUS_LABEL, META_VISUAL, type StatusOperacional } from '@/lib/statusO
 import { AbaNegociacaoLotes } from './AbaNegociacaoLotes';
 import { AbaRecebimentoLotes } from './AbaRecebimentoLotes';
 import { AbaDocumentosOC } from './AbaDocumentosOC';
+import { AbaLiquidacaoOC } from './AbaLiquidacaoOC';
 import type { CompraLotesApi } from '@/hooks/useCompraLotes';
 import type { RecebimentoApi } from '@/hooks/useOperacaoRecebimento';
 import type { DocumentosApi } from '@/hooks/useOperacaoDocumentos';
+import type { LiquidacaoApi } from '@/hooks/useOperacaoLiquidacao';
 import { CompraResumoPanel } from './CompraResumoPanel';
 import { CompraDetalhesDialog, EMPTY_COMPRA_DETALHES, type CompraDetalhes } from './CompraDetalhesDialog';
 
@@ -77,6 +79,7 @@ export interface CompraModalShellProps {
   lotesApi?: CompraLotesApi;   // COM-3: estado/handlers dos lotes (só em modo OC)
   recebimentoApi?: RecebimentoApi;      // RECEB-01: recebimento por lote (só em modo OC)
   documentosApi?: DocumentosApi;        // DOC-UI-01: documentos fiscais (só em modo OC)
+  liquidacaoApi?: LiquidacaoApi;        // LIQ-UI-01: obrigações e liquidação (só em modo OC)
   ocStatusComercial?: string | null;    // 'programada' | 'fechada' | 'cancelada'
   ocEntregaEncerrada?: boolean;
   onClose: () => void;
@@ -99,6 +102,7 @@ const ABAS = [
   { key: 'recebimento', label: 'Recebimento', enabled: false },
   { key: 'financeiro', label: 'Financeiro', enabled: false },
   { key: 'documentos', label: 'Documentos', enabled: false },
+  { key: 'liquidacao', label: 'Liquidação', enabled: false },
   { key: 'auditoria', label: 'Auditoria', enabled: false },
 ] as const;
 
@@ -166,8 +170,8 @@ export function CompraModalShell(api: CompraModalShellProps) {
       {/* BARRA DE ABAS — template (bg-card, border-b, px-6 py-3) */}
       <div className="bg-card border-b px-6 py-3 flex items-center gap-1 overflow-x-auto">
         {ABAS.map(a => {
-          // Recebimento e Documentos habilitam no modo OC; demais "em breve" seguem como estão.
-          const enabled = a.enabled || ((a.key === 'recebimento' || a.key === 'documentos') && !!api.modoOC);
+          // Recebimento, Documentos e Liquidação habilitam no modo OC; demais "em breve" seguem como estão.
+          const enabled = a.enabled || ((a.key === 'recebimento' || a.key === 'documentos' || a.key === 'liquidacao') && !!api.modoOC);
           const active = a.key === abaAtiva && enabled;
           return (
             <button
@@ -215,6 +219,13 @@ export function CompraModalShell(api: CompraModalShellProps) {
             />
           ) : abaAtiva === 'documentos' && api.documentosApi ? (
             <AbaDocumentosOC api={api.documentosApi} operacaoPronta={!!api.ocOperacaoId} />
+          ) : abaAtiva === 'liquidacao' && api.liquidacaoApi ? (
+            <AbaLiquidacaoOC
+              api={api.liquidacaoApi}
+              operacaoPronta={!!api.ocOperacaoId}
+              darkSelectClass={DARK_SELECT_CONTENT}
+              onIrParaDocumentos={() => setAbaAtiva('documentos')}
+            />
           ) : (
           <>
           {/* CARD 1 — Identificação da Compra */}
@@ -372,7 +383,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
               <Check className="h-4 w-4" /> Concluir negociação
             </Button>
           )}
-          {(abaAtiva === 'recebimento' || abaAtiva === 'documentos') ? null : abaAtiva === 'negociacao' ? (
+          {(abaAtiva === 'recebimento' || abaAtiva === 'documentos' || abaAtiva === 'liquidacao') ? null : abaAtiva === 'negociacao' ? (
             // Ação da aba Negociação: apenas visual nesta rodada (sem handler). O fluxo de
             // Registrar Compra da aba Compra permanece inalterado.
             <Button type="button"
