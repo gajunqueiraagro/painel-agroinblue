@@ -1,0 +1,35 @@
+{
+  "_MODELO": "Estrutura de exemplo do backup privado do DUP-1 (dedup de cards duplicados). NAO contem dados reais de cliente. O backup real e gerado em scratchpad/ (fora do Git) pelo runbook.",
+  "sig_frozen": "<md5 do CONJUNTO_CONGELADO: string_agg(id|fazenda_id|pasto_id|ano_mes|status|tipo_uso_mes|lote_mes|observacao_mes|qualidade_mes|created_at ORDER BY id)>",
+  "n_cards": 1167,
+  "cards": [
+    {
+      "id": "<uuid do card excedente a remover>",
+      "pasto_id": "<uuid>",
+      "fazenda_id": "<uuid>",
+      "status": "fechado|rascunho|aberto",
+      "created_at": "<timestamptz>",
+      "ano_mes": "YYYY-MM",
+      "cliente_id": "<uuid>",
+      "updated_at": "<timestamptz>",
+      "lote_mes": null,
+      "observacao_mes": null,
+      "qualidade_mes": null,
+      "responsavel_nome": "<texto ou null>",
+      "tipo_uso_mes": "<texto ou null>"
+    }
+  ],
+  "item": {
+    "id": "<uuid do item exclusivo do card incorreto do Capivara>",
+    "fechamento_id": "<uuid do card incorreto>",
+    "categoria_id": "<uuid>",
+    "quantidade": 0,
+    "peso_total": 0,
+    "created_at": "<timestamptz>",
+    "peso_medio_kg": 0,
+    "origem_dado": "<texto ou null>",
+    "observacoes": null,
+    "lote": null,
+    "peso_atualizado": false
+  }
+}

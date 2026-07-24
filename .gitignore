@@ -26,3 +26,6 @@ dist-ssr
 # Variaveis de ambiente locais (nunca versionar)
 .env
 .env.local
+
+# Diretorio de trabalho local (backups, scripts, gates) — nunca versionar
+scratchpad/
