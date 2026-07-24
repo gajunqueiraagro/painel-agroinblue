@@ -28,6 +28,7 @@ import { toast } from 'sonner';
 import {
   buildMovSummary,
   calcConciliacaoMensal,
+  roundCurrency,
   STATUS_REALIZADOS,
   type ConciliacaoLancamentoBase,
   type MovimentoResumo,
@@ -585,8 +586,11 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
       return;
     }
 
-    const saldoInicialVal = parseBRL(saldoInicial);
-    const saldoFinalVal = parseBRL(saldoFinal);
+    // PR-FIX-SALDO-CHAIN — arredondamento na fonte (defesa): cobre payload principal
+    // e a propagação do próximo mês (saldo_inicial := saldoFinalVal). O banco também
+    // normaliza via trigger normalize_round; aqui é defesa adicional no write.
+    const saldoInicialVal = roundCurrency(parseBRL(saldoInicial));
+    const saldoFinalVal = roundCurrency(parseBRL(saldoFinal));
     const origemInicialFinal = autoSaldoInicial !== null ? 'automatico' : 'manual';
 
     const resolvedContaId = editing ? resolveContaPersistId(editing) : contaId;

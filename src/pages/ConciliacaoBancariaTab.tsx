@@ -591,7 +591,9 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
       const parsed = Number(normalized);
       return Number.isFinite(parsed) ? parsed : null;
     };
-    const val = parseFloat(editValue.replace(/\./g,'').replace(',','.'));
+    // PR-FIX-SALDO-CHAIN — arredondamento na fonte (defesa): cobre update (saldo_final)
+    // e insert (saldo_final). r2 já existe neste arquivo. Banco também normaliza via trigger.
+    const val = r2(parseFloat(editValue.replace(/\./g,'').replace(',','.')));
     if (isNaN(val)) { toast.error('Valor inválido'); return; }
     setSavingSaldo(true);
     try {
