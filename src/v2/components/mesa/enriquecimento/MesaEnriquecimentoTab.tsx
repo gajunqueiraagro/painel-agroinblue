@@ -345,6 +345,9 @@ export function MesaEnriquecimentoTab() {
       </div>
 
       {/* PR-MESA-RESOLUCAO-01 / -GRUPO-01 — faixa de decisão humana da linha selecionada. */}
+      {/* PR-ENR-01 — slot estrutural: min-height reserva o espaço da maior faixa e mantém a área
+          abaixo fixa mesmo sem faixa ativa (as 4 são mutuamente exclusivas). Sem cálculo de altura em JS. */}
+      <div className="md:shrink-0 min-h-[34px]">
       {selecionado?.status === 'candidatos_proximos' && (
         <div className="flex items-center justify-between gap-2 rounded-md border border-violet-300 bg-violet-50 px-2 py-1 text-[11px] md:shrink-0">
           <span className="text-violet-800">
@@ -385,6 +388,7 @@ export function MesaEnriquecimentoTab() {
           </Button>
         </div>
       )}
+      </div>
 
       <EnriquecimentoActions
         posicao={posicao}

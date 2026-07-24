@@ -3,7 +3,7 @@
 // A UI é BURRA: só apresenta strings/flags já prontos. Nenhuma regra de negócio,
 // nenhum SELECT, nenhum formato aqui — tudo vem do adapter puro enriquecimentoView.
 // ============================================================================
-// PR-MESA-RESOLUCAO-01 — +'candidatos_proximos' (janela ±3d, PR-MESA-DATA-01) e
+// PR-MESA-RESOLUCAO-01 — +'candidatos_proximos' (janela ±10d, PR-MESA-DATA-01) e
 // +'resolvido_manual' (escolha humana gravada por fn_classificacao_resolver_proximos).
 export type EnriqStatus = 'exato' | 'ambiguo' | 'sem_match' | 'ja_classificado' | 'divergente' | 'ambiguo_resolvido' | 'candidatos_proximos' | 'resolvido_manual' | 'resolvido_grupo';
 

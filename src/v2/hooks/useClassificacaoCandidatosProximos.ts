@@ -1,5 +1,5 @@
 /**
- * useClassificacaoCandidatosProximos — busca os candidatos da JANELA ±3 dias para
+ * useClassificacaoCandidatosProximos — busca os candidatos da JANELA ±10 dias para
  * uma staging row marcada como 'candidatos_proximos' (PR-MESA-DATA-01 / -RESOLUCAO-01).
  *
  * Espelho de useClassificacaoCandidatos, chamando a RPC irmã

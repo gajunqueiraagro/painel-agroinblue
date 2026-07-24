@@ -25,7 +25,8 @@ export interface EnriquecimentoDetalheProps {
 }
 
 // Larguras FIXAS — "Resultado" é a mais larga (coração da tela).
-const COLS = '68px minmax(0,1fr) minmax(0,1.05fr) minmax(0,1.75fr)';
+// PR-ENR-01 — ordem visual Excel | Sistema atual | Resultado (cada coluna mantém sua largura).
+const COLS = '68px minmax(0,1.05fr) minmax(0,1fr) minmax(0,1.75fr)';
 
 export function EnriquecimentoDetalhe({ row, classificacoes, fornecedores, fazendas, clienteId, hideBanco, onEditar, onCriarFornecedor }: EnriquecimentoDetalheProps) {
   if (!row) {
@@ -45,8 +46,8 @@ export function EnriquecimentoDetalhe({ row, classificacoes, fornecedores, fazen
         {/* Cabeçalhos fortes + identidade de coluna (P0-4 / P0-6) — compactados (BUG1). */}
         <div className="grid gap-x-2" style={{ gridTemplateColumns: COLS }}>
           <span />
-          <span className="text-[9px] font-bold uppercase tracking-wide text-slate-500 border-t border-slate-300">Sistema atual</span>
           <span className="text-[9px] font-bold uppercase tracking-wide text-blue-600 border-t border-blue-300">Excel</span>
+          <span className="text-[9px] font-bold uppercase tracking-wide text-slate-500 border-t border-slate-300">Sistema atual</span>
           <span className="text-[9px] font-bold uppercase tracking-wide text-emerald-600 border-t border-emerald-400">Resultado</span>
         </div>
 
@@ -59,8 +60,8 @@ export function EnriquecimentoDetalhe({ row, classificacoes, fornecedores, fazen
             return (
             <div key={c.campo} className="grid gap-x-2 items-start" style={{ gridTemplateColumns: COLS }}>
               <span className="text-[9px] text-muted-foreground truncate pt-0.5" title={c.campo}>{c.campo}</span>
-              <span className={`text-[10px] pt-0.5 ${wrap ? 'break-words' : 'truncate'}`} title={c.sistema}>{c.sistema}</span>
               <span className={`text-[10px] text-blue-700/90 pt-0.5 ${wrap ? 'break-words' : 'truncate'}`} title={c.excel}>{c.excel}</span>
+              <span className={`text-[10px] pt-0.5 ${wrap ? 'break-words' : 'truncate'}`} title={c.sistema}>{c.sistema}</span>
               <div className="min-w-0">
                 {/* PR-U2d-1 — editor só enquanto !aplicado; aplicada recua para o badge (valor final na coluna Sistema). */}
                 {!row.aplicado && c.campo === 'Subcentro' && onEditar && classificacoes ? (

@@ -90,6 +90,9 @@ export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
     // P0-5 — Documento: Sistema = numero_documento do lançamento; Excel = excel_documento; Resultado = proposta.
     { campo: 'Documento', sistema: fmtTexto(row.lanc_numero_documento), excel: fmtTexto(row.excel_documento), ...resultadoEditavel(row.lanc_numero_documento, row.excel_documento, row.proposto_numero_documento) },
     // P0-3 — linha "Descrição" separada removida (unificada em "Produto / Descrição").
+    // PR-ENR-01 — OBS read-only: observação do lançamento espelhada no Resultado. Não há fonte
+    // Excel ('—') nem proposta/apply; Resultado preserva o valor do Sistema ('—' só quando vazio).
+    { campo: 'OBS', sistema: fmtTexto(row.lanc_observacao), excel: '—', resultado: fmtTexto(row.lanc_observacao), tom: 'neutro' },
   ];
 
   // D3 — descritores LEGADO (PR-U2b), NÃO renderizados: o detalhe usa editores hardcoded
