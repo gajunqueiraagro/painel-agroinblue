@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { MetaLancamentoPanel, useMetaValidacaoBloqueios, type EvolucaoSugestao, type MetaStepState } from '@/components/MetaLancamentoPanel';
 import { EvolucaoAssistidaDialog } from '@/components/EvolucaoAssistidaDialog';
 import { formatMoeda } from '@/lib/calculos/formatters';
@@ -283,10 +284,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   //   via oc_salvar_rascunho e guarda operacao_id/versao; NUNCA executa onAdicionar nem
   //   gerarFinanceiroCompra (sem dupla escrita). Lotes/físico/financeiro ficam para PRs seguintes.
   const ocRpc = useOperacaoComercial();
-  const modoOCCompra = useMemo(
-    () => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('oc_compra') === '1',
-    [],
-  );
+  // PR-FIX-OC-OPEN-01 — fonte REATIVA da URL. O useMemo(…, []) anterior congelava
+  //   window.location.search do 1º render; em mount com URL transitória, modoOCCompra/ocIdParam
+  //   ficavam false/null para sempre — desligando a hidratação E o enabled das 4 subabas OC.
+  const [ocSearchParams] = useSearchParams();
+  const modoOCCompra = ocSearchParams.get('oc_compra') === '1';
   const [ocOperacaoId, setOcOperacaoId] = useState<string | null>(null);
   const [ocVersao, setOcVersao] = useState<number | null>(null);
   // Fazenda destino selecionada dentro do modal OC (default = fazenda do filtro atual).
@@ -297,10 +299,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   // Abrir/hidratar operação EXISTENTE pela Central (PR-OC-COMPRA-OPEN-01). oc_id na URL =>
   //   abertura (não criação). ocAberturaExistente => cabeçalho SOMENTE LEITURA (writer não
   //   atualiza numero_documento/cenario; edição de programada é PR posterior).
-  const ocIdParam = useMemo(
-    () => (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('oc_id') : null),
-    [],
-  );
+  const ocIdParam = ocSearchParams.get('oc_id');
   const [ocAberturaExistente, setOcAberturaExistente] = useState<boolean>(false);
   const [ocHidratando, setOcHidratando] = useState<boolean>(false);
   const [ocHidratacaoErro, setOcHidratacaoErro] = useState<string | null>(null);
@@ -1774,7 +1773,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           ? ocFazendaDestinoId
           : (fazendaAtual?.id ?? null),
         contraparte_id: compraFornecedorId || null,
-        numero_documento: compraDetalhes?.notaFiscal || null,
+        // PR-FIX-OC-OPEN-01 — notaFiscal (estado do input) é soberano: hidratado de compraDetalhes
+        //   quando este chega e captura edições posteriores. compraDetalhes?.notaFiscal só como fallback.
+        numero_documento: notaFiscal || compraDetalhes?.notaFiscal || null,
         observacoes: observacao || null,
         movimentacoes: [],
         partes: [],
