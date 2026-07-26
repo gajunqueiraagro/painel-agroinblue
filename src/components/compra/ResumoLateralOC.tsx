@@ -72,15 +72,27 @@ const DOT_CLASS: Record<Sinal, string> = {
   ok: 'bg-success', atencao: 'bg-warning', divergencia: 'bg-destructive', neutro: 'bg-muted-foreground/40',
 };
 
+// Blocos de conteúdo (hierarquia visual — apresentação pura, sem novo dado):
+//   Principal = dado-chave da etapa (13px semibold) · Ctx = contexto secundário (11px muted).
+function Principal({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return <div className={`text-[13px] font-semibold text-foreground leading-tight break-words ${className}`}>{children}</div>;
+}
+function Ctx({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return <div className={`text-[11px] text-muted-foreground leading-tight break-words ${className}`}>{children}</div>;
+}
+
 // aria-label = estado textual da etapa (acessibilidade); passado explicitamente por seção.
-function Secao({ sinal, estadoLabel, titulo, children }: { sinal: Sinal; estadoLabel: string; titulo: string; children: ReactNode }) {
+//   Cabeçalho = dot + TÍTULO 11px semibold uppercase. Separação entre blocos: hairline curta (divisor),
+//   nunca separator de largura total. Cada Secao é um "mini-card invisível" (sem borda/caixa).
+function Secao({ sinal, estadoLabel, titulo, divisor, children }: { sinal: Sinal; estadoLabel: string; titulo: string; divisor?: boolean; children: ReactNode }) {
   return (
     <div>
-      <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-foreground/80 leading-tight">
+      {divisor && <div className="w-8 border-t border-border/40 mb-2" />}
+      <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-foreground/70 leading-none">
         <span role="img" aria-label={estadoLabel} className={`inline-block h-2 w-2 shrink-0 rounded-full ${DOT_CLASS[sinal]}`} />
         {titulo}
       </div>
-      <div className="pl-[14px] text-[11px] leading-tight text-foreground">{children}</div>
+      <div className="pl-3.5 mt-1 space-y-0.5">{children}</div>
     </div>
   );
 }
@@ -146,82 +158,77 @@ export function ResumoLateralOC({
     : 'Saldo em aberto';
 
   return (
-    <div className="bg-card rounded-md border shadow-sm p-1.5 space-y-1 self-start">
-      <h3 className="text-[11px] font-semibold text-foreground leading-none">Resumo da Operação</h3>
+    <div className="bg-card rounded-md border shadow-sm p-2 space-y-2 self-start">
+      <h3 className="text-[11px] font-semibold text-foreground leading-none">Resumo</h3>
 
       <Secao sinal={compraSinal} estadoLabel={compraEstadoLabel} titulo="Compra">
-        <div>{dataLabel}</div>
-        <div className="break-words">{fornecedorNome || '—'}</div>
-        <div className="break-words">{fazendaNome || '—'}</div>
-        <div>{compraEstadoLabel}</div>
+        <Principal>{fornecedorNome || '—'}</Principal>
+        <Ctx>{dataLabel}{fazendaNome ? ` • ${fazendaNome}` : ''}</Ctx>
+        <Ctx>{compraEstadoLabel}</Ctx>
       </Secao>
 
-      <Secao sinal={negSinal} estadoLabel={negSinal === 'ok' ? 'Negociada' : 'Não iniciada'} titulo="Negociação">
+      <Secao sinal={negSinal} estadoLabel={negSinal === 'ok' ? 'Negociada' : 'Não iniciada'} titulo="Negociação" divisor>
         {negociacaoTotais && negociacaoTotais.lotes > 0 ? (
           <>
-            <div>{nOr(negociacaoTotais.animais)} cab • {kgOr(negociacaoTotais.pesoTotal)}</div>
-            <div className="font-semibold text-primary">{moneyOr(negociacaoTotais.valorNegociado)}</div>
+            <Principal className="text-primary">{moneyOr(negociacaoTotais.valorNegociado)}</Principal>
+            <Ctx>{nOr(negociacaoTotais.animais)} cab • {kgOr(negociacaoTotais.pesoTotal)}</Ctx>
           </>
         ) : (
-          <div className="text-muted-foreground">Não iniciada</div>
+          <Ctx>Não iniciada</Ctx>
         )}
       </Secao>
 
-      <Secao sinal={recSinal} estadoLabel={recEstadoLabel} titulo="Recebimento">
+      <Secao sinal={recSinal} estadoLabel={recEstadoLabel} titulo="Recebimento" divisor>
         {rec.estadoGeral == null || rec.estadoGeral === 'nao_iniciado' ? (
-          <div className="text-muted-foreground">Não iniciado</div>
-        ) : rec.estadoGeral === 'completo' ? (
-          <div>Completo{entregaEncerrada ? ' • encerrado' : ''}</div>
+          <Ctx>Não iniciado</Ctx>
         ) : (
           <>
-            <div>{nOr(rec.recebido)} / {nOr(rec.negociado)} cab</div>
-            <div className={rec.estadoGeral === 'excedente' ? 'text-destructive' : 'text-foreground'}>
-              {rec.estadoGeral === 'excedente' ? 'Excedente' : 'Diferença'}: {rec.diferenca == null ? '—' : Math.abs(rec.diferenca).toLocaleString('pt-BR')}
-            </div>
+            <Principal className={rec.estadoGeral === 'excedente' ? 'text-destructive' : ''}>{recEstadoLabel}</Principal>
+            {rec.estadoGeral === 'completo' ? (
+              <Ctx>{nOr(rec.recebido)} / {nOr(rec.negociado)} cab{entregaEncerrada ? ' • encerrado' : ''}</Ctx>
+            ) : (
+              <Ctx>{nOr(rec.recebido)} / {nOr(rec.negociado)} cab • {rec.estadoGeral === 'excedente' ? 'Excedente' : 'Diferença'}: {rec.diferenca == null ? '—' : Math.abs(rec.diferenca).toLocaleString('pt-BR')}</Ctx>
+            )}
           </>
         )}
       </Secao>
 
-      <Secao sinal={docSinal} estadoLabel={docEstadoLabel} titulo="Documentos">
+      <Secao sinal={docSinal} estadoLabel={docEstadoLabel} titulo="Documentos" divisor>
         {!doc || doc.total === 0 ? (
-          <div className="text-muted-foreground">Sem documentos</div>
+          <Ctx>Sem documentos</Ctx>
         ) : (
           <>
-            <div>{doc.total.toLocaleString('pt-BR')} documento{doc.total === 1 ? '' : 's'}</div>
-            <div>
+            <Principal>{doc.total.toLocaleString('pt-BR')} documento{doc.total === 1 ? '' : 's'}</Principal>
+            <Ctx>
               {doc.cancelados === 0
                 ? 'Ativos'
                 : `${doc.ativos} ativo${doc.ativos === 1 ? '' : 's'} • ${doc.cancelados} cancelado${doc.cancelados === 1 ? '' : 's'}`}
-            </div>
+            </Ctx>
             {doc.valorLiquidoTotal != null && doc.valorLiquidoTotal > 0 && (
-              <div className="text-muted-foreground">{moneyOr(doc.valorLiquidoTotal)}</div>
+              <Ctx>Líq. {moneyOr(doc.valorLiquidoTotal)}</Ctx>
             )}
           </>
         )}
       </Secao>
 
-      <Secao sinal={finSinal} estadoLabel={finEstadoLabel} titulo="Financeiro">
+      <Secao sinal={finSinal} estadoLabel={finEstadoLabel} titulo="Financeiro" divisor>
         {!financeiroResumo ? (
-          <div className="text-muted-foreground">—</div>
+          <Ctx>—</Ctx>
         ) : financeiroResumo.estadoLiquidacao === 'quitada' ? (
           <>
-            <div className="font-semibold">Liquidado • {moneyOr(financeiroResumo.totalLiquidadoValido)}</div>
+            <Principal>Liquidado • {moneyOr(financeiroResumo.totalLiquidadoValido)}</Principal>
             {obrigacoesCount != null && (
-              <div className="text-muted-foreground">{obrigacoesCount} título{obrigacoesCount === 1 ? '' : 's'}</div>
+              <Ctx>{obrigacoesCount} título{obrigacoesCount === 1 ? '' : 's'}</Ctx>
             )}
           </>
         ) : (
           <>
-            <div className="font-semibold">Saldo {moneyOr(financeiroResumo.saldoOperacao)}</div>
+            <Principal className={financeiroResumo.estadoLiquidacao === 'excedente' ? 'text-destructive' : ''}>Saldo {moneyOr(financeiroResumo.saldoOperacao)}</Principal>
             {obrigacoesCount != null && (
-              <div className="text-muted-foreground">{obrigacoesCount} título{obrigacoesCount === 1 ? '' : 's'}</div>
+              <Ctx>{obrigacoesCount} título{obrigacoesCount === 1 ? '' : 's'}</Ctx>
             )}
           </>
         )}
-      </Secao>
-
-      <Secao sinal="neutro" estadoLabel="Em desenvolvimento" titulo="Auditoria">
-        <div className="text-muted-foreground italic">Em desenvolvimento</div>
       </Secao>
     </div>
   );
