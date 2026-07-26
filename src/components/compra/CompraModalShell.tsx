@@ -16,6 +16,7 @@ import type { RecebimentoApi } from '@/hooks/useOperacaoRecebimento';
 import type { DocumentosApi } from '@/hooks/useOperacaoDocumentos';
 import type { LiquidacaoApi } from '@/hooks/useOperacaoLiquidacao';
 import { CompraResumoPanel } from './CompraResumoPanel';
+import { ResumoLateralOC } from './ResumoLateralOC';
 import { CompraDetalhesDialog, EMPTY_COMPRA_DETALHES, type CompraDetalhes } from './CompraDetalhesDialog';
 
 // Controlador de input mascarado (retorno de useIntegerInput/useDecimalInput no monólito).
@@ -344,28 +345,46 @@ export function CompraModalShell(api: CompraModalShellProps) {
           )}
         </div>
 
-        {/* RESUMO LATERAL — coluna de 320px do template; painel financeiro intocável reutilizado */}
-        <div className="space-y-2 self-start">
-          <div className="bg-card rounded-md border shadow-sm p-2 space-y-0.5 text-[10px] leading-tight">
-            <div className="flex justify-between"><span className="text-muted-foreground">Situação</span><strong>{cenarioAtual.icon} {cenarioAtual.label}</strong></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Fazenda</span><strong className="truncate max-w-[150px]">{api.fazendaAtualNome || '—'}</strong></div>
-          </div>
-          <CompraResumoPanel
-            quantidade={api.quantidadeNum}
-            pesoKg={api.pesoKgNum}
-            categoria={api.categoria}
+        {/* RESUMO LATERAL — coluna de 320px. Modo OC: resumo PERMANENTE das 6 etapas
+            (ResumoLateralOC, consumindo as fontes oficiais já montadas). Não-OC (legado):
+            mini-card Situação/Fazenda + CompraResumoPanel preservado (outros callers). */}
+        {api.modoOC ? (
+          <ResumoLateralOC
             fornecedorNome={fornecedorNome}
-            detalhes={api.compraDetalhes}
-            detalhesPreenchidos={!!api.compraDetalhes}
-            canOpenModal={canOpenModal}
-            somenteLeitura={api.somenteLeitura}
-            onOpenModal={() => api.setCompraDialogOpen(true)}
-            onRequestRegister={api.handleRequestRegister}
-            submitting={api.submitting}
-            registerLabel={api.editingId ? 'Salvar Alterações' : 'Registrar Compra'}
-            onCancelEdit={api.editingId ? api.handleCancelEdit : undefined}
+            fazendaNome={api.fazendaAtualNome}
+            situacaoLabel={`${cenarioAtual.icon} ${cenarioAtual.label}`}
+            ocId={api.ocOperacaoId ?? null}
+            statusComercial={api.ocStatusComercial ?? null}
+            negociacaoTotais={api.lotesApi?.totais ?? null}
+            recebimentoLotes={api.recebimentoApi?.lotes ?? null}
+            entregaEncerrada={!!api.ocEntregaEncerrada}
+            documentos={api.documentosApi?.documentos ?? null}
+            financeiroResumo={api.liquidacaoApi?.resumo ?? null}
+            obrigacoesCount={api.liquidacaoApi?.obrigacoes.length ?? null}
           />
-        </div>
+        ) : (
+          <div className="space-y-2 self-start">
+            <div className="bg-card rounded-md border shadow-sm p-2 space-y-0.5 text-[10px] leading-tight">
+              <div className="flex justify-between"><span className="text-muted-foreground">Situação</span><strong>{cenarioAtual.icon} {cenarioAtual.label}</strong></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Fazenda</span><strong className="truncate max-w-[150px]">{api.fazendaAtualNome || '—'}</strong></div>
+            </div>
+            <CompraResumoPanel
+              quantidade={api.quantidadeNum}
+              pesoKg={api.pesoKgNum}
+              categoria={api.categoria}
+              fornecedorNome={fornecedorNome}
+              detalhes={api.compraDetalhes}
+              detalhesPreenchidos={!!api.compraDetalhes}
+              canOpenModal={canOpenModal}
+              somenteLeitura={api.somenteLeitura}
+              onOpenModal={() => api.setCompraDialogOpen(true)}
+              onRequestRegister={api.handleRequestRegister}
+              submitting={api.submitting}
+              registerLabel={api.editingId ? 'Salvar Alterações' : 'Registrar Compra'}
+              onCancelEdit={api.editingId ? api.handleCancelEdit : undefined}
+            />
+          </div>
+        )}
       </div>
 
       {/* RODAPÉ — template do modal aprovado (bg-primary, px-6 py-3), FIXO (fora do scroll do corpo) */}
