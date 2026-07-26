@@ -43,7 +43,7 @@ export interface RecebimentoApi {
   movimentacoes: MovimentacaoOC[];
   loading: boolean;
   saving: boolean;
-  concluirNegociacao: () => Promise<void>;
+  concluirNegociacao: (opts?: { versaoOverride?: number; silent?: boolean }) => Promise<boolean>;
   receberTodos: () => Promise<void>;
   registrar: (loteId: string, dados: RegistroRecebimento) => Promise<void>;
   estornar: (movimentacaoId: string, motivo: string) => Promise<void>;
@@ -115,20 +115,25 @@ export function useOperacaoRecebimento({ operacaoId, clienteId, versao, onVersao
     return true;
   };
 
-  const concluirNegociacao = useCallback(async () => {
-    if (!guardOp()) return;
+  // Retorna true/false (permite encadear após salvar). `versaoOverride`: usa a versão fresca vinda
+  //   do salvar (evita conflito de lock otimista); ausente → versão atual. `silent`: só controla toast.
+  //   RPC/payload inalterados além da versão oficial enviada.
+  const concluirNegociacao = useCallback(async (opts?: { versaoOverride?: number; silent?: boolean }): Promise<boolean> => {
+    if (!guardOp()) return false;
     setSaving(true);
     try {
       const { data, error } = await (supabase as any).rpc('oc_confirmar', {
-        p_operacao_id: operacaoId, p_cliente_id: clienteId, p_versao_esperada: versao,
+        p_operacao_id: operacaoId, p_cliente_id: clienteId, p_versao_esperada: opts?.versaoOverride ?? versao,
       });
       if (error) throw new Error(error.message);
       if (data?.versao != null) onVersaoChange(data.versao);
       if (data?.status_comercial && onStatusChange) onStatusChange(data.status_comercial);
-      toast.success('Negociação concluída (fechada).');
+      if (!opts?.silent) toast.success('Negociação concluída (fechada).');
       await carregar();
+      return true;
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Falha ao concluir negociação.');
+      return false;
     } finally { setSaving(false); }
   }, [operacaoId, clienteId, versao, onVersaoChange, onStatusChange, carregar]);
 

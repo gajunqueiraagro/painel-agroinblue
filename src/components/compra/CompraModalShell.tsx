@@ -5,7 +5,9 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { DatePicker } from '@/components/ui/date-picker';
-import { Plus, Edit, Lock, ShoppingCart, X, Trash2, Calendar, Building2, Check } from 'lucide-react';
+import { Plus, Edit, Lock, ShoppingCart, X, Trash2, Calendar, Building2, Check, ArrowRight } from 'lucide-react';
+import { toast } from 'sonner';
+import { parseNumericValue } from '@/lib/calculos/abate';
 import { STATUS_LABEL, META_VISUAL, type StatusOperacional } from '@/lib/statusOperacional';
 import { AbaNegociacaoLotes } from './AbaNegociacaoLotes';
 import { AbaRecebimentoLotes } from './AbaRecebimentoLotes';
@@ -115,6 +117,31 @@ const CENARIO_UI: Record<string, { icon: string; label: string; chip: string }> 
 
 export function CompraModalShell(api: CompraModalShellProps) {
   const [abaAtiva, setAbaAtiva] = useState<string>('compra');
+  const [fluxoNeg, setFluxoNeg] = useState<null | 'salvando' | 'concluindo'>(null);   // fluxo "Concluir lotes e continuar"
+
+  // Guarda de completude (UI) — orienta o fluxo; NÃO substitui a validação oficial do backend nem
+  //   duplica fórmula: verifica só se há ao menos um lote preenchido (ignora linha-fantasma).
+  const loteCompleto = (l: CompraLotesApi['lotes'][number]) =>
+    !!l.categoria && (parseNumericValue(l.quantidade) || 0) > 0 && (parseNumericValue(l.pesoMedioKg) || 0) > 0
+    && !!l.criterioValor && (parseNumericValue(l.valorInformado) || 0) > 0;
+
+  const handleConcluirLotesContinuar = async () => {
+    if (fluxoNeg) return;                                    // anti-duplo-clique / concorrência
+    const lotesAtuais = api.lotesApi?.lotes ?? [];
+    if (!lotesAtuais.some(loteCompleto)) {
+      toast.error('Adicione ao menos um lote completo (categoria, quantidade, peso, critério e valor) para concluir.');
+      return;
+    }
+    setFluxoNeg('salvando');
+    const novaVersao = await api.lotesApi?.salvar({ silent: true });      // 1) salva
+    if (novaVersao == null) { setFluxoNeg(null); return; }                //    falha → permanece
+    setFluxoNeg('concluindo');
+    const ok = await api.recebimentoApi?.concluirNegociacao({ versaoOverride: novaVersao, silent: true });  // 2) conclui c/ versão fresca
+    if (!ok) { setFluxoNeg(null); return; }                               //    falha → permanece
+    toast.success('Lotes concluídos. Continue com o recebimento.');
+    setFluxoNeg(null);
+    setAbaAtiva('recebimento');                                           // 3) avança
+  };
   // Modo OC: ao CRIAR a operação (ocOperacaoId passa de vazio→preenchido), navega
   // automaticamente para a aba Negociação (informar os lotes).
   const prevOcRef = useRef<string | null | undefined>(undefined);
@@ -400,7 +427,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
           )}
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" onClick={api.onClose} className="text-white hover:bg-white/10">Fechar</Button>
+          <Button variant="ghost" onClick={api.onClose} disabled={fluxoNeg !== null} className="text-white hover:bg-white/10">Fechar</Button>
           {/* Editar Financeiro: só em edição e quando aplicável (composição aprovada do rodapé) */}
           {api.editingId && api.compraDetalhes && (
             <Button variant="secondary" onClick={() => api.setCompraDialogOpen(true)} disabled={api.submitting} className="gap-1.5">
@@ -408,7 +435,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
             </Button>
           )}
           {/* Concluir negociação (oc_confirmar) — só comercial; habilita o Recebimento (RECEB-01). */}
-          {!api.somenteLeitura && api.modoOC && api.ocOperacaoId && api.ocStatusComercial !== 'fechada' && api.recebimentoApi && (
+          {!api.somenteLeitura && api.modoOC && api.ocOperacaoId && api.ocStatusComercial !== 'fechada' && api.recebimentoApi && abaAtiva !== 'negociacao' && (
             <Button type="button" variant="secondary" disabled={api.recebimentoApi.saving}
               onClick={() => api.recebimentoApi?.concluirNegociacao()} className="gap-1.5">
               <Check className="h-4 w-4" /> Concluir negociação
@@ -418,15 +445,23 @@ export function CompraModalShell(api: CompraModalShellProps) {
           {api.somenteLeitura ? (
             <span className="text-white/80 text-xs flex items-center gap-1"><Lock className="h-3.5 w-3.5" /> Somente leitura</span>
           ) : (abaAtiva === 'recebimento' || abaAtiva === 'documentos' || abaAtiva === 'financeiro') ? null : abaAtiva === 'negociacao' ? (
-            // Ação da aba Negociação: apenas visual nesta rodada (sem handler). O fluxo de
-            // Registrar Compra da aba Compra permanece inalterado.
-            <Button type="button"
-              disabled={!api.modoOC || !api.ocOperacaoId || !!api.lotesApi?.saving}
-              onClick={() => api.lotesApi?.salvar()}
-              className={`bg-white text-primary font-bold gap-1.5 ${(!api.modoOC || !api.ocOperacaoId) ? 'opacity-60 cursor-not-allowed' : 'hover:bg-white/90'}`}
-              title={api.modoOC ? (api.ocOperacaoId ? undefined : 'Salve a operação na aba Compra primeiro') : 'em breve'}>
-              <ShoppingCart className="h-4 w-4" /> {api.lotesApi?.saving ? 'Salvando...' : 'Salvar Negociação'}
-            </Button>
+            // Fluxo único da Negociação: Salvar rascunho (secundário) + Concluir lotes e continuar (principal).
+            <>
+              <Button type="button" variant="secondary"
+                disabled={!api.modoOC || !api.ocOperacaoId || !!api.lotesApi?.saving || fluxoNeg !== null}
+                onClick={() => api.lotesApi?.salvar()}
+                className="gap-1.5"
+                title={api.modoOC ? (api.ocOperacaoId ? undefined : 'Salve a operação na aba Compra primeiro') : 'em breve'}>
+                {(api.lotesApi?.saving && fluxoNeg === null) ? 'Salvando...' : 'Salvar rascunho'}
+              </Button>
+              <Button type="button"
+                disabled={!api.modoOC || !api.ocOperacaoId || fluxoNeg !== null || !!api.lotesApi?.saving || !!api.recebimentoApi?.saving}
+                onClick={handleConcluirLotesContinuar}
+                className={`bg-white text-primary font-bold gap-1.5 ${(!api.modoOC || !api.ocOperacaoId) ? 'opacity-60 cursor-not-allowed' : 'hover:bg-white/90'}`}
+                title={api.modoOC ? (api.ocOperacaoId ? undefined : 'Salve a operação na aba Compra primeiro') : 'em breve'}>
+                {fluxoNeg === 'salvando' ? 'Salvando lotes...' : fluxoNeg === 'concluindo' ? 'Concluindo...' : (<>Concluir lotes e continuar <ArrowRight className="h-4 w-4" /></>)}
+              </Button>
+            </>
           ) : (
             <Button onClick={api.handleRequestRegister} disabled={api.submitting || (!api.modoOC && !api.compraDetalhes)} className="bg-white text-primary hover:bg-white/90 font-bold gap-1.5">
               <ShoppingCart className="h-4 w-4" />

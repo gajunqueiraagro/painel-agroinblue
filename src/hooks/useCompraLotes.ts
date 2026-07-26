@@ -25,7 +25,7 @@ export interface CompraLotesApi {
   adicionarLote: () => void;
   editarLote: (idLocal: string, patch: Partial<LoteForm>) => void;
   removerLote: (idLocal: string) => void;
-  salvar: () => Promise<void>;
+  salvar: (opts?: { silent?: boolean }) => Promise<number | null>;   // retorna a nova versão oficial | null em falha
   totais: { lotes: number; animais: number; pesoTotal: number; valorNegociado: number };
 }
 
@@ -87,8 +87,10 @@ export function useCompraLotes({ operacaoId, clienteId, versao, onVersaoChange, 
     setLotes(prev => prev.filter(l => l.idLocal !== idLocal).map((l, i) => ({ ...l, ordem: i + 1 })));
   }, []);
 
-  const salvar = useCallback(async () => {
-    if (!operacaoId || !clienteId) { toast.error('Operação não iniciada (salve a operação na aba Compra).'); return; }
+  // Retorna a NOVA versão oficial da operação em sucesso, null em falha (permite encadear
+  //   salvar → concluir sem versão stale). `silent` controla APENAS o toast — não muda regra/persistência.
+  const salvar = useCallback(async (opts?: { silent?: boolean }): Promise<number | null> => {
+    if (!operacaoId || !clienteId) { toast.error('Operação não iniciada (salve a operação na aba Compra).'); return null; }
     setSaving(true);
     try {
       const payload = lotes.map(l => {
@@ -106,11 +108,14 @@ export function useCompraLotes({ operacaoId, clienteId, versao, onVersaoChange, 
         p_operacao_id: operacaoId, p_cliente_id: clienteId, p_versao_esperada: versao, p_lotes: payload,
       });
       if (error) throw new Error(error.message);
+      const novaVersao: number = data?.versao != null ? data.versao : versao;
       if (data?.versao != null) onVersaoChange(data.versao);
-      toast.success(`Negociação salva — ${data?.lotes ?? payload.length} lote(s).`);
+      if (!opts?.silent) toast.success('Rascunho dos lotes salvo.');
       await carregar();
+      return novaVersao;
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Falha ao salvar negociação.');
+      return null;
     } finally {
       setSaving(false);
     }
