@@ -134,7 +134,7 @@ BEGIN
     RAISE EXCEPTION 'T16 FAIL'; EXCEPTION WHEN others THEN IF SQLERRM LIKE 'T16 FAIL%' THEN RAISE; END IF; RAISE NOTICE 'T16 PASS (cancelada)'; END;
   -- T15 rascunho -> rejeitada
   INSERT INTO public.zoo_operacoes_comerciais (cliente_id,tipo_operacao,data_operacao,status_comercial,rascunho,valor_total,valor_acordado,contraparte_id,observacoes,created_by,updated_by)
-    VALUES (v_cli,'compra',DATE '2026-06-19','rascunho',true,0,27062.50,v_fav,v_tag,v_admin,v_admin) RETURNING id,versao INTO v_op2,v_ver2;
+    VALUES (v_cli,'compra',DATE '2026-06-19','programada',true,0,27062.50,v_fav,v_tag,v_admin,v_admin) RETURNING id,versao INTO v_op2,v_ver2;
   BEGIN PERFORM public.oc_gerar_obrigacoes(v_op2,v_cli,v_ver2, jsonb_set(v_pay,'{obrigacoes,0,chave_idempotencia}', to_jsonb('oc:'||v_op2||':principal:principal:parcela:1')));
     RAISE EXCEPTION 'T15 FAIL'; EXCEPTION WHEN others THEN IF SQLERRM LIKE 'T15 FAIL%' THEN RAISE; END IF; RAISE NOTICE 'T15 PASS (rascunho)'; END;
 
