@@ -3,6 +3,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Check, Undo2, Lock, FileText } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { DatePicker } from '@/components/ui/date-picker';
 import { parseNumericValue } from '@/lib/calculos/abate';
 import type { RecebimentoApi, EstadoRecebimento, LoteRecebimento } from '@/hooks/useOperacaoRecebimento';
 import type { DocumentosApi } from '@/hooks/useOperacaoDocumentos';
@@ -124,8 +125,8 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
               {readOnly ? (
                 <div className="text-[11px] text-center text-muted-foreground">—</div>
               ) : (
-                <Input type="date" value={dataReb[l.loteId] ?? hoje} onChange={e => setDataReb(s => ({ ...s, [l.loteId]: e.target.value }))}
-                  className="h-6 w-full text-[10px] tabular-nums" />
+                <DatePicker value={dataReb[l.loteId] ?? hoje} onChange={v => setDataReb(s => ({ ...s, [l.loteId]: v }))}
+                  className="h-6 text-[10px]" />
               )}
               {/* Qtd. a receber */}
               {readOnly ? (
