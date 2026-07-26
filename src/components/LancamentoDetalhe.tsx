@@ -191,6 +191,21 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
   // modal mostra placeholder honesto (TODO Fase A7/A8). Demais tipos abrem
   // os Edit*Sheets existentes reroteados pelo modal.
   const handleEditClick = () => {
+    // Fonte única de edição de Compra (PR-OC-ENTRYPOINT-UNIFY-01): decisão pelo VÍNCULO OFICIAL da
+    //   ponte (operacaoId), nunca por heurística. Com OC → CompraModalShell (modal novo), mesma
+    //   navegação da Central. Sem OC → editor legado atual.
+    if (lancamento.tipo === 'compra') {
+      if (lancamento.operacaoId) {
+        window.location.assign(`/v2?oc_compra=1&oc_id=${lancamento.operacaoId}`);
+        return;
+      }
+      if (lancamento.origemRegistro === 'operacao_comercial') {
+        // Sinalizada como OC mas sem vínculo na ponte (ausente/inconsistente): NÃO abrir o legado —
+        //   reabriria o risco de divergência que este PR elimina. Permanece na tela.
+        toast.error('Não foi possível localizar a Operação Comercial de origem.');
+        return;
+      }
+    }
     setZooModalOpen(true);
   };
 

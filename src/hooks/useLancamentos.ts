@@ -240,7 +240,32 @@ export function useLancamentos(arg: UseLancamentosArg = 'realizado') {
           }
         }
 
-        const lancamentos = lancData.map((l: any) => mapRowToLancamento(l, profileMap));
+        // Vínculo OFICIAL OC ↔ movimentação (ponte zoo_operacao_movimentacoes) — busca em LOTE
+        //   por cliente (conjunto pequeno: só movimentações originadas de OC), sem N+1. Só leitura.
+        //   movimentacao_id → operacao_id é 1:1; >1 OC para a mesma movimentação = inconsistência → null
+        //   (nunca escolher arbitrariamente). Ausência de vínculo → null. Sem fallback heurístico.
+        const ocByMov: Record<string, string | null> = {};
+        if (clienteId) {
+          const { data: vinc } = await (supabase as any)
+            .from('zoo_operacao_movimentacoes')
+            .select('operacao_id, movimentacao_id')
+            .eq('cliente_id', clienteId);
+          for (const v of (vinc ?? []) as { operacao_id: string; movimentacao_id: string }[]) {
+            if (v.movimentacao_id in ocByMov) {
+              if (ocByMov[v.movimentacao_id] !== v.operacao_id) {
+                console.warn(`[useLancamentos] movimentação ${v.movimentacao_id} vinculada a mais de uma OC — tratada como inconsistente (operacaoId=null).`);
+                ocByMov[v.movimentacao_id] = null;
+              }
+            } else {
+              ocByMov[v.movimentacao_id] = v.operacao_id;
+            }
+          }
+        }
+
+        const lancamentos = lancData.map((l: any) => ({
+          ...mapRowToLancamento(l, profileMap),
+          operacaoId: ocByMov[l.id] ?? null,
+        }));
 
         const saldosIniciais: SaldoInicial[] = saldoRes.data
           ? saldoRes.data.map(s => ({

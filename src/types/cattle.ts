@@ -115,6 +115,7 @@ export interface Lancamento {
   clienteId?: string;
   origemRegistro?: string;
   loteImportacaoId?: string;
+  operacaoId?: string | null;   // vínculo oficial à OC (ponte zoo_operacao_movimentacoes); null = sem OC
 }
 
 export interface SaldoInicial {
