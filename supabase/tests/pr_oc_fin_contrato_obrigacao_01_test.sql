@@ -15,7 +15,7 @@ DECLARE
   v_fav uuid; v_fav2 uuid; v_fav_outro uuid; v_plano uuid;
   v_op uuid; v_ver int; v_res jsonb;
   v_macro text; v_grupo text; v_centro text; v_sub text; v_chave text;
-  v_cnt int; v_titulo uuid; v_fav_tit uuid; v_faz_tit uuid; v_val numeric; v_contra uuid;
+  v_cnt int; v_titulo uuid; v_fav_tit uuid; v_faz_tit uuid; v_val numeric; v_contra uuid; v_plano_res uuid;
   v_pay jsonb;
   -- auxiliares por caso
   v_op2 uuid; v_ver2 int; v_op3 uuid; v_ver3 int; v_doc uuid; v_tit_leg uuid;
@@ -92,6 +92,9 @@ BEGIN
   SELECT valor, favorecido_id, financeiro_lancamento_id INTO v_val, v_fav_tit, v_titulo FROM public.zoo_operacao_partes WHERE operacao_id=v_op AND chave_idempotencia=v_chave;
   IF v_val<>27062.50 THEN RAISE EXCEPTION 'T5 FAIL valor=%',v_val; END IF;
   IF v_fav_tit<>v_fav THEN RAISE EXCEPTION 'T33 FAIL fav parte=%',v_fav_tit; END IF;
+  -- T40: regressão do max(uuid) — o plano (UUID) é resolvido sem erro 42883 e persistido na parte.
+  SELECT plano_conta_id INTO v_plano_res FROM public.zoo_operacao_partes WHERE operacao_id=v_op AND chave_idempotencia=v_chave;
+  IF v_plano_res IS DISTINCT FROM v_plano THEN RAISE EXCEPTION 'T40 FAIL plano_conta_id resolvido=% esperado=%',v_plano_res,v_plano; END IF;
   SELECT favorecido_id, fazenda_id INTO v_fav_tit, v_faz_tit FROM public.financeiro_lancamentos_v2 WHERE id=v_titulo;
   IF v_fav_tit<>v_fav THEN RAISE EXCEPTION 'T34 FAIL fav titulo=%',v_fav_tit; END IF;
   SELECT contraparte_id INTO v_contra FROM public.zoo_operacoes_comerciais WHERE id=v_op;
