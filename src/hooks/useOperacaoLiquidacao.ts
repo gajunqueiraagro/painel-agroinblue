@@ -75,12 +75,17 @@ export interface GerarObrigacaoInput {
   favorecidoId?: string | null;
   documentoId?: string | null;
   documentoComponenteId?: string | null;
+  // Classificação oficial (financeiro_plano_contas) — obrigatória; validada e resolvida no servidor.
+  macroCusto?: string | null;
+  grupoCusto?: string | null;
+  centroCusto?: string | null;
+  subcentro?: string | null;
+  planoContaId?: string | null;
   semMovimentacaoCaixa: boolean;
   materializar: boolean;
   quantidadeParcelas: number;   // >= 1
   primeiroVencimento?: string | null;  // ISO
   intervaloDias: number;        // usado quando parcelas > 1
-  chaveBase: string;            // semente estável de idempotência (gerada no front)
 }
 
 export interface RegistrarLiquidacaoInput {
@@ -103,6 +108,8 @@ export interface LiquidacaoApi {
   fornecedores: { id: string; nome: string }[];
   tipoOperacao: string | null;
   naturezaFluxo: NaturezaFluxo | null;
+  clienteId: string | null;        // para a cascata de classificação (usePlanoContasOC)
+  contraparteId: string | null;    // favorecido default (não altera a contraparte comercial)
   loading: boolean;
   saving: boolean;
   gerarObrigacoes: (input: GerarObrigacaoInput) => Promise<boolean>;
@@ -140,7 +147,7 @@ interface ParteMetaRow { id: string; descricao: string | null; }
 interface DocRow { id: string; especie: string | null; numero: string | null; serie: string | null; }
 interface CompRow { natureza: string; codigo: string; nome: string | null; categoria: string | null; }
 interface FornRow { id: string; nome: string | null; }
-interface OpMetaRow { tipo_operacao: string; versao: number; }
+interface OpMetaRow { tipo_operacao: string; versao: number; contraparte_id: string | null; }
 
 function docLabelOf(d: DocRow): string {
   const esp = (d.especie ?? '').replace('nf_', 'NF ').trim();
@@ -164,13 +171,14 @@ export function useOperacaoLiquidacao({ operacaoId, clienteId, enabled }: Params
   const [componentes, setComponentes] = useState<ComponenteCatalogo[]>([]);
   const [fornecedores, setFornecedores] = useState<{ id: string; nome: string }[]>([]);
   const [tipoOperacao, setTipoOperacao] = useState<string | null>(null);
+  const [contraparteId, setContraparteId] = useState<string | null>(null);   // favorecido default (não altera a contraparte comercial)
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const carregar = useCallback(async () => {
     if (!enabled || !operacaoId || !clienteId) {
       setResumo(null); setObrigacoes([]); setLiquidacoesPorTitulo({});
-      setDocumentos([]); setComponentes([]); setFornecedores([]); setTipoOperacao(null);
+      setDocumentos([]); setComponentes([]); setFornecedores([]); setTipoOperacao(null); setContraparteId(null);
       return;
     }
     setLoading(true);
@@ -183,7 +191,7 @@ export function useOperacaoLiquidacao({ operacaoId, clienteId, enabled }: Params
         (supabase as any).from('zoo_operacao_documentos').select('id, especie, numero, serie').eq('operacao_id', operacaoId).eq('cancelado', false),
         (supabase as any).from('zoo_componentes_financeiros').select('natureza, codigo, nome, categoria').eq('ativo', true).order('natureza').order('ordem_exibicao'),
         (supabase as any).from('financeiro_fornecedores').select('id, nome').eq('cliente_id', clienteId).order('nome'),
-        (supabase as any).from('zoo_operacoes_comerciais').select('tipo_operacao, versao').eq('id', operacaoId).maybeSingle(),
+        (supabase as any).from('zoo_operacoes_comerciais').select('tipo_operacao, versao, contraparte_id').eq('id', operacaoId).maybeSingle(),
       ]);
       for (const r of [res, obr, liq, partes, docs, comps, forns, opMeta]) {
         if (r.error) throw new Error(r.error.message);
@@ -238,7 +246,9 @@ export function useOperacaoLiquidacao({ operacaoId, clienteId, enabled }: Params
       setDocumentos(docRows.map(d => ({ id: d.id, label: docLabelOf(d) })));
       setComponentes(((comps.data ?? []) as CompRow[]).map(c => ({ natureza: c.natureza, codigo: c.codigo, nome: c.nome ?? c.codigo, categoria: c.categoria })));
       setFornecedores(fornRows.map(f => ({ id: f.id, nome: f.nome ?? '' })));
-      setTipoOperacao((opMeta.data as OpMetaRow | null)?.tipo_operacao ?? null);
+      const opMetaRow = opMeta.data as OpMetaRow | null;   // idioma existente p/ tipar o retorno (supabase as any)
+      setTipoOperacao(opMetaRow?.tipo_operacao ?? null);
+      setContraparteId(opMetaRow?.contraparte_id ?? null);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Falha ao carregar a liquidação.');
     } finally {
@@ -284,11 +294,18 @@ export function useOperacaoLiquidacao({ operacaoId, clienteId, enabled }: Params
           favorecido_id: input.favorecidoId ?? null,
           documento_id: input.documentoId ?? null,
           documento_componente_id: input.documentoComponenteId ?? null,
+          // classificação oficial (o servidor valida/resolve e é a autoridade sobre plano_conta_id)
+          macro_custo: input.macroCusto ?? null,
+          grupo_custo: input.grupoCusto ?? null,
+          centro_custo: input.centroCusto ?? null,
+          subcentro: input.subcentro ?? null,
+          plano_conta_id: input.planoContaId ?? null,
           incluso_no_total: false,
           sem_movimentacao_caixa: input.semMovimentacaoCaixa,
           materializar: input.semMovimentacaoCaixa ? false : input.materializar,
-          // chave estável: mesma submissão => mesma chave por parcela => idempotente.
-          chave_idempotencia: `${input.chaveBase}:${i + 1}`,
+          // chave DETERMINÍSTICA (operacao+natureza+componente+sequência): repetição idêntica = idempotente;
+          //   distingue sequências futuras (1/3, 2/3, 3/3). Sem semente aleatória.
+          chave_idempotencia: `oc:${operacaoId}:${input.natureza}:${input.componente}:parcela:${i + 1}`,
         };
       });
 
@@ -369,9 +386,9 @@ export function useOperacaoLiquidacao({ operacaoId, clienteId, enabled }: Params
 
   return useMemo(() => ({
     resumo, obrigacoes, liquidacoesPorTitulo, documentos, componentes, fornecedores,
-    tipoOperacao, naturezaFluxo, loading, saving,
+    tipoOperacao, naturezaFluxo, clienteId, contraparteId, loading, saving,
     gerarObrigacoes, cancelarObrigacao, registrarLiquidacao, estornarLiquidacao, recarregar: carregar,
   }), [resumo, obrigacoes, liquidacoesPorTitulo, documentos, componentes, fornecedores,
-    tipoOperacao, naturezaFluxo, loading, saving,
+    tipoOperacao, naturezaFluxo, clienteId, contraparteId, loading, saving,
     gerarObrigacoes, cancelarObrigacao, registrarLiquidacao, estornarLiquidacao, carregar]);
 }

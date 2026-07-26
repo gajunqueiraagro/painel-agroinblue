@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { RefreshCw, Plus, MoreHorizontal, FileText, Undo2, Ban } from 'lucide-react';
 import { parseNumericValue } from '@/lib/calculos/abate';
+import { usePlanoContasOC, planoTipoOperacao } from '@/hooks/usePlanoContasOC';
 import type {
   LiquidacaoApi, ObrigacaoLinha, FormaLiquidacao, GerarObrigacaoInput, RegistrarLiquidacaoInput,
 } from '@/hooks/useOperacaoLiquidacao';
@@ -301,129 +302,156 @@ function LiquidacoesDetalhe({ api, obr, somenteLeitura, onEstornar, onLiquidar }
   );
 }
 
+// PR-OC-FIN-CONTRATO-OBRIGACAO-01 — geração da obrigação PRINCIPAL INTEGRAL e classificada.
+//   Somente principal 1/1 nesta frente (permuta/liquidação/parcelamento avançado = frentes futuras).
+//   Valor = base negociada (bloqueado); classificação obrigatória via financeiro_plano_contas
+//   (usePlanoContasOC); favorecido default = contraparte; bloqueia quando já há principal ativa.
 function GerarObrigacaoDialog({ api, darkSelectClass, onClose }: { api: LiquidacaoApi; darkSelectClass: string; onClose: () => void }) {
-  const [chaveBase] = useState(() => (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `k${Date.now()}`));
-  const [origem, setOrigem] = useState<'manual' | 'documento'>('manual');
-  const [documentoId, setDocumentoId] = useState<string>('');
-  const [compSel, setCompSel] = useState<string>(''); // "natureza:codigo"
-  const [favorecidoId, setFavorecidoId] = useState<string>('');
-  const [descricao, setDescricao] = useState('');
-  const [valor, setValor] = useState('');
-  const [qtdParcelas, setQtdParcelas] = useState('1');
-  const [primeiroVenc, setPrimeiroVenc] = useState('');
-  const [intervalo, setIntervalo] = useState('30');
-  const [semCaixa, setSemCaixa] = useState(false);
-  const [materializar, setMaterializar] = useState(true);
-
+  const plano = usePlanoContasOC(api.clienteId ?? undefined);
   const fluxo = api.naturezaFluxo;
-  const podeSubmeter = !!compSel && parseNumericValue(valor) > 0 && !!fluxo && !api.saving
-    && (origem === 'manual' || !!documentoId);
+  const tipoOC: 'compra' | 'venda' | 'abate' | null =
+    api.tipoOperacao === 'compra' ? 'compra'
+    : api.tipoOperacao === 'venda' ? 'venda'
+    : api.tipoOperacao === 'abate' ? 'abate' : null;
+  const planoTipo = tipoOC ? planoTipoOperacao(tipoOC, 'principal') : null;   // compra → '2-Saídas'
+  const compPrincipal = api.componentes.find(c => c.natureza === 'principal');
+
+  // Referência da base negociada e obrigações principais ativas.
+  const base = api.resumo?.base ?? null;
+  const principaisAtivas = api.obrigacoes.filter(o => o.natureza === 'principal' && !o.cancelada);
+  const totalPrincipal = principaisAtivas.reduce((s, o) => s + o.valorNominal, 0);
+  const diferenca = base != null ? base - totalPrincipal : null;
+  const jaExistePrincipal = totalPrincipal > 0;
+  const incompativel = jaExistePrincipal && base != null && Math.abs(totalPrincipal - base) > 0.005;
+
+  const [macro, setMacro] = useState('');
+  const [grupo, setGrupo] = useState('');
+  const [centro, setCentro] = useState('');
+  const [subcentro, setSubcentro] = useState('');
+  const [favorecidoId, setFavorecidoId] = useState<string>(api.contraparteId ?? '');
+  const [primeiroVenc, setPrimeiroVenc] = useState('');
+  const [descricao, setDescricao] = useState('');
+
+  useEffect(() => { if (api.contraparteId) setFavorecidoId(prev => prev || api.contraparteId!); }, [api.contraparteId]);
+
+  const macros = planoTipo ? plano.cascata.macros(planoTipo) : [];
+  const grupos = planoTipo && macro ? plano.cascata.grupos(planoTipo, macro) : [];
+  const centros = planoTipo && macro && grupo ? plano.cascata.centros(planoTipo, macro, grupo) : [];
+  const subcentros = planoTipo && macro && grupo && centro ? plano.cascata.subcentros(planoTipo, macro, grupo, centro) : [];
+  const resolucao = plano.resolvePlanoConta(planoTipo ?? '', macro || null, grupo || null, centro || null, subcentro || null);
+  const planoContaId = resolucao.status === 'ok' ? resolucao.item.id : null;
+
+  const baseValida = base != null && base > 0;
+  const podeSubmeter = !!fluxo && !!planoTipo && !!compPrincipal && baseValida
+    && !!subcentro && resolucao.status === 'ok' && !!planoContaId
+    && !!favorecidoId && !!primeiroVenc && !jaExistePrincipal && !api.saving;
 
   const submit = async () => {
-    if (!podeSubmeter || !fluxo) return;
-    const [natureza, componente] = compSel.split(':');
+    if (!podeSubmeter || !fluxo || !compPrincipal || base == null) return;
     const input: GerarObrigacaoInput = {
-      naturezaFluxo: fluxo, natureza, componente,
-      valor: parseNumericValue(valor),
+      naturezaFluxo: fluxo, natureza: 'principal', componente: compPrincipal.codigo,
+      valor: base,                                          // valor INTEGRAL da base (bloqueado)
       descricao: descricao || undefined,
       favorecidoId: favorecidoId || null,
-      documentoId: origem === 'documento' ? (documentoId || null) : null,
-      semMovimentacaoCaixa: semCaixa,
-      materializar: semCaixa ? false : materializar,
-      quantidadeParcelas: Math.max(1, Math.trunc(parseNumericValue(qtdParcelas) || 1)),
-      primeiroVencimento: primeiroVenc || null,
-      intervaloDias: Math.max(0, Math.trunc(parseNumericValue(intervalo) || 0)),
-      chaveBase,
+      documentoId: null,
+      macroCusto: macro || null, grupoCusto: grupo || null, centroCusto: centro || null,
+      subcentro: subcentro || null, planoContaId,
+      semMovimentacaoCaixa: false, materializar: true,
+      quantidadeParcelas: 1, primeiroVencimento: primeiroVenc || null, intervaloDias: 0,
     };
     const ok = await api.gerarObrigacoes(input);
     if (ok) onClose();
   };
 
+  const selCls = 'h-8 text-[12px]';
   return (
     <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent className="max-w-lg max-h-[90vh] flex flex-col gap-2">
         <DialogHeader className="shrink-0"><DialogTitle>Gerar obrigação financeira</DialogTitle></DialogHeader>
         <div className="grid grid-cols-2 gap-2 text-[12px] overflow-y-auto min-h-0 pr-1">
-          <div>
-            <Label className="text-[11px]">Origem</Label>
-            <Select value={origem} onValueChange={(v) => setOrigem(v as 'manual' | 'documento')}>
-              <SelectTrigger className="h-8 text-[12px]"><SelectValue /></SelectTrigger>
-              <SelectContent className={darkSelectClass}>
-                <SelectItem value="manual" className="text-[12px]">Manual</SelectItem>
-                <SelectItem value="documento" className="text-[12px]">Documento</SelectItem>
-              </SelectContent>
+          {/* RESUMO DE REFERÊNCIA — base integral (Negociação) × obrigações principais ativas */}
+          <div className="col-span-2 rounded-md border bg-muted/30 p-2 text-[11px] space-y-0.5">
+            <div className="flex justify-between"><span className="text-muted-foreground">Valor negociado (Negociação)</span><strong className="tabular-nums">{base != null ? brl(base) : '—'}</strong></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Obrigações principais ativas</span><span className="tabular-nums">{brl(totalPrincipal)}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Diferença</span><span className="tabular-nums">{diferenca != null ? brl(diferenca) : '—'}</span></div>
+            {incompativel && (
+              <div className="text-destructive font-medium pt-0.5">Obrigação incompatível com a negociação. Saneamento necessário.</div>
+            )}
+            {!incompativel && jaExistePrincipal && (
+              <div className="text-muted-foreground pt-0.5">Obrigação principal já existente para esta operação.</div>
+            )}
+            {!baseValida && (
+              <div className="text-destructive font-medium pt-0.5">Base negociada ausente ou inválida.</div>
+            )}
+          </div>
+
+          {/* CLASSIFICAÇÃO OFICIAL (obrigatória) — cascata financeiro_plano_contas */}
+          <div><Label className="text-[11px]">Macro</Label>
+            <Select value={macro} onValueChange={(v) => { setMacro(v); setGrupo(''); setCentro(''); setSubcentro(''); }}>
+              <SelectTrigger className={selCls}><SelectValue placeholder="Macro" /></SelectTrigger>
+              <SelectContent className={`${darkSelectClass} max-h-[50vh]`}>{macros.map(m => <SelectItem key={m} value={m} className="text-[12px]">{m}</SelectItem>)}</SelectContent>
             </Select>
           </div>
+          <div><Label className="text-[11px]">Grupo</Label>
+            <Select value={grupo} onValueChange={(v) => { setGrupo(v); setCentro(''); setSubcentro(''); }} disabled={!macro}>
+              <SelectTrigger className={selCls}><SelectValue placeholder="Grupo" /></SelectTrigger>
+              <SelectContent className={`${darkSelectClass} max-h-[50vh]`}>{grupos.map(g => <SelectItem key={g} value={g} className="text-[12px]">{g}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <div><Label className="text-[11px]">Centro</Label>
+            <Select value={centro} onValueChange={(v) => { setCentro(v); setSubcentro(''); }} disabled={!grupo}>
+              <SelectTrigger className={selCls}><SelectValue placeholder="Centro" /></SelectTrigger>
+              <SelectContent className={`${darkSelectClass} max-h-[50vh]`}>{centros.map(c => <SelectItem key={c} value={c} className="text-[12px]">{c}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <div><Label className="text-[11px]">Subcentro *</Label>
+            <Select value={subcentro} onValueChange={setSubcentro} disabled={!centro}>
+              <SelectTrigger className={selCls}><SelectValue placeholder="Subcentro" /></SelectTrigger>
+              <SelectContent className={`${darkSelectClass} max-h-[50vh]`}>{subcentros.map(s => <SelectItem key={s} value={s} className="text-[12px]">{s}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          {subcentro && resolucao.status === 'ambiguous' && (
+            <div className="col-span-2 text-[11px] text-destructive">Há mais de um plano aplicável. Selecione o plano correto.</div>
+          )}
+          {subcentro && resolucao.status === 'none' && (
+            <div className="col-span-2 text-[11px] text-destructive">Classificação não vinculável ao plano de contas. Ajuste os filtros.</div>
+          )}
+
+          {/* OBRIGAÇÃO — valor integral (bloqueado), favorecido, vencimento */}
           <div>
             <Label className="text-[11px]">Fluxo</Label>
             <Input readOnly value={fluxo === 'pagar' ? 'A pagar' : fluxo === 'receber' ? 'A receber' : '—'} className="h-8 text-[12px] bg-muted" />
           </div>
-          {origem === 'documento' && (
-            <div className="col-span-2">
-              <Label className="text-[11px]">Documento</Label>
-              <Select value={documentoId} onValueChange={setDocumentoId}>
-                <SelectTrigger className="h-8 text-[12px]"><SelectValue placeholder="Selecione o documento" /></SelectTrigger>
-                <SelectContent className={darkSelectClass}>
-                  {api.documentos.map(d => <SelectItem key={d.id} value={d.id} className="text-[12px]">{d.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-          <div className="col-span-2">
-            <Label className="text-[11px]">Natureza / componente</Label>
-            <Select value={compSel} onValueChange={setCompSel}>
-              <SelectTrigger className="h-8 text-[12px]"><SelectValue placeholder="Selecione o componente" /></SelectTrigger>
-              <SelectContent className={`${darkSelectClass} max-h-[50vh]`}>
-                {api.componentes.map(c => (
-                  <SelectItem key={`${c.natureza}:${c.codigo}`} value={`${c.natureza}:${c.codigo}`} className="text-[12px]">
-                    {c.natureza} · {c.nome}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div>
+            <Label className="text-[11px]">Valor da obrigação (integral)</Label>
+            <Input readOnly value={base != null ? brl(base) : '—'} className="h-8 text-[12px] text-right tabular-nums bg-muted" title="Bloqueado: a obrigação principal corresponde ao valor integral negociado" />
           </div>
           <div className="col-span-2">
-            <Label className="text-[11px]">Favorecido</Label>
+            <Label className="text-[11px]">Favorecido *</Label>
             <SearchableSelect
-              value={favorecidoId || '__all__'}
-              onValueChange={(v) => setFavorecidoId(v === '__all__' ? '' : v)}
+              value={favorecidoId || '__none__'}
+              onValueChange={(v) => setFavorecidoId(v === '__none__' ? '' : v)}
               options={api.fornecedores.map(f => ({ value: f.id, label: f.nome }))}
-              placeholder="Opcional (padrão = contraparte da operação)"
-              allLabel="Padrão da operação" allValue="__all__" dense
+              placeholder="Selecione o favorecido"
+              allLabel="— selecione —" allValue="__none__" dense
               className="[&>button]:h-8 [&>button]:text-[12px]"
             />
           </div>
           <div>
-            <Label className="text-[11px]">Valor por parcela</Label>
-            <Input inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="0,00" className="h-8 text-[12px] text-right tabular-nums" />
-          </div>
-          <div>
-            <Label className="text-[11px]">Qtd. parcelas</Label>
-            <Input inputMode="numeric" value={qtdParcelas} onChange={(e) => setQtdParcelas(e.target.value)} className="h-8 text-[12px] text-right tabular-nums" />
-          </div>
-          <div>
-            <Label className="text-[11px]">1º vencimento</Label>
+            <Label className="text-[11px]">1º vencimento *</Label>
             <Input type="date" value={primeiroVenc} onChange={(e) => setPrimeiroVenc(e.target.value)} className="h-8 text-[12px]" />
           </div>
           <div>
-            <Label className="text-[11px]">Intervalo (dias)</Label>
-            <Input inputMode="numeric" value={intervalo} onChange={(e) => setIntervalo(e.target.value)} disabled={(parseNumericValue(qtdParcelas) || 1) <= 1} className="h-8 text-[12px] text-right tabular-nums" />
+            <Label className="text-[11px]">Parcelas</Label>
+            <Input readOnly value="1 / 1" className="h-8 text-[12px] text-right tabular-nums bg-muted" />
           </div>
           <div className="col-span-2"><Label className="text-[11px]">Descrição</Label>
             <Textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={2} className="text-[12px]" placeholder="Opcional" />
           </div>
-          <label className="col-span-2 flex items-center gap-2 text-[11px]">
-            <input type="checkbox" checked={semCaixa} onChange={(e) => setSemCaixa(e.target.checked)} />
-            Retenção sem movimentação de caixa (não gera título bancário)
-          </label>
-          <label className={`col-span-2 flex items-center gap-2 text-[11px] ${semCaixa ? 'opacity-50' : ''}`}>
-            <input type="checkbox" checked={semCaixa ? false : materializar} disabled={semCaixa} onChange={(e) => setMaterializar(e.target.checked)} />
-            Materializar título financeiro (despesa com desembolso)
-          </label>
         </div>
         <DialogFooter className="shrink-0">
           <Button type="button" variant="ghost" onClick={onClose}>Cancelar</Button>
-          <Button type="button" onClick={submit} disabled={!podeSubmeter}>{api.saving ? 'Gerando…' : 'Gerar'}</Button>
+          <Button type="button" onClick={submit} disabled={!podeSubmeter}>{api.saving ? 'Gerando…' : 'Gerar obrigação integral'}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
