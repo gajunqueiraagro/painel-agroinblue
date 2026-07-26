@@ -32,7 +32,7 @@ const CRITERIOS: { value: CriterioValor; label: string; unidade: string }[] = [
 ];
 
 const GRID_LEG = 'grid grid-cols-[1.3fr_0.7fr_0.9fr_1fr_1.1fr_1fr_1fr] gap-2';
-const GRID_OC = 'grid grid-cols-[1.2fr_0.7fr_0.8fr_0.9fr_1fr_1fr_1fr_0.5fr] gap-2';
+const GRID_OC = 'grid grid-cols-[1.2fr_0.7fr_0.8fr_0.9fr_1.5fr_1fr_1fr_0.5fr] gap-2';
 
 const brl = (n: number) => (n > 0 ? n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'R$ —');
 const fmtKg = (n: number) => (n > 0 ? `${n.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} kg` : '—');
@@ -43,6 +43,38 @@ function loteTotal(criterio: CriterioValor, quantidade: string, pesoMedioKg: str
   const v = parseNumericValue(valorInformado) || 0;
   const pt = q * pm;
   return criterio === 'kg' ? pt * v : criterio === 'cabeca' ? q * v : v;
+}
+
+// Resumo compacto por lote — indicadores DERIVADOS dos dados já existentes (reusa loteTotal; sem
+//   novo cálculo de negócio, sem alterar totais). Cada indicador só aparece quando sua base existe;
+//   ausência nunca vira zero (parte omitida). String vazia → nenhuma linha (não aumenta a altura).
+function resumoLote(criterio: CriterioValor, quantidade: string, pesoMedioKg: string, valorInformado: string): string {
+  const q = parseNumericValue(quantidade) || 0;
+  const pm = parseNumericValue(pesoMedioKg) || 0;
+  const pt = q * pm;
+  const total = loteTotal(criterio, quantidade, pesoMedioKg, valorInformado);
+  const parts: string[] = [];
+  if (q > 0 && total > 0) parts.push(`${brl(total / q)}/cab`);
+  if (pt > 0 && total > 0) parts.push(`${brl(total / pt)}/kg`);
+  if (pm > 0) parts.push(`${pm.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} kg/cab`);
+  return parts.join(' • ');
+}
+
+// Campo Valor — apresentação monetária pt-BR SEM prejudicar a edição (format-on-blur):
+//   foco → string crua editável (a que é persistida); blur → exibe brl(valor). O valor persistido
+//   (valorInformado) NUNCA é reformatado; cursor, arredondamento, unidade e cálculo permanecem intactos.
+function ValorInput({ value, onChange, disabled, placeholder }: {
+  value: string; onChange: (v: string) => void; disabled?: boolean; placeholder?: string;
+}) {
+  const [focused, setFocused] = useState(false);
+  const num = parseNumericValue(value) || 0;
+  const display = focused ? value : (num > 0 ? brl(num) : '');
+  return (
+    <Input inputMode="decimal" value={display} onChange={e => onChange(e.target.value)}
+      onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
+      placeholder={placeholder} disabled={disabled}
+      className="h-6 text-[11px] text-right tabular-nums" />
+  );
 }
 
 export function AbaNegociacaoLotes({
@@ -74,11 +106,11 @@ export function AbaNegociacaoLotes({
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <div className="min-w-[680px]">
+            <div className="min-w-[720px]">
               <div className={`${GRID_OC} px-1 pb-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground`}>
-                <span>Categoria</span><span className="text-right">Qtde</span><span className="text-right">Peso Méd.</span>
-                <span className="text-right">Peso Tot.</span><span>Critério</span><span className="text-right">Valor</span>
-                <span className="text-right">Total</span><span className="text-center">Ações</span>
+                <span className="text-center">Categoria</span><span className="text-center">Qtde</span><span className="text-center">Peso Méd.</span>
+                <span className="text-center">Peso Tot.</span><span className="text-center">Critério</span><span className="text-center">Valor</span>
+                <span className="text-center">Total</span><span className="text-center">Ações</span>
               </div>
               {lotes.length === 0 ? (
                 <div className="rounded-md border border-dashed bg-muted/10 px-3 py-3 text-center text-[11px] text-muted-foreground">
@@ -87,32 +119,36 @@ export function AbaNegociacaoLotes({
               ) : lotes.map(l => {
                 const pt = (parseNumericValue(l.quantidade) || 0) * (parseNumericValue(l.pesoMedioKg) || 0);
                 const unidade = CRITERIOS.find(c => c.value === l.criterioValor)?.unidade || 'Valor';
+                const resumo = resumoLote(l.criterioValor, l.quantidade, l.pesoMedioKg, l.valorInformado);
                 return (
-                  <div key={l.idLocal} className={`${GRID_OC} items-center rounded-md border bg-muted/20 px-1 py-0.5`}>
-                    <Select value={l.categoria || undefined} onValueChange={v => editarLote(l.idLocal, { categoria: v })} disabled={somenteLeitura}>
-                      <SelectTrigger className="h-6 text-[11px]"><SelectValue placeholder="Categoria" /></SelectTrigger>
-                      <SelectContent className={`${darkSelectClass} max-h-[70vh] overflow-y-auto`}>
-                        {categoriasDisponiveis.map(c => <SelectItem key={c.value} value={c.value} className="text-[11px] py-1">{c.label}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                    <Input inputMode="numeric" value={l.quantidade} onChange={e => editarLote(l.idLocal, { quantidade: e.target.value })} placeholder="0" disabled={somenteLeitura} className="h-6 text-[11px] text-right tabular-nums" />
-                    <Input inputMode="decimal" value={l.pesoMedioKg} onChange={e => editarLote(l.idLocal, { pesoMedioKg: e.target.value })} placeholder="0,00" disabled={somenteLeitura} className="h-6 text-[11px] text-right tabular-nums" />
-                    <div className="text-[11px] text-right tabular-nums text-muted-foreground">{fmtKg(pt)}</div>
-                    <Select value={l.criterioValor} onValueChange={v => editarLote(l.idLocal, { criterioValor: v as CriterioValor })} disabled={somenteLeitura}>
-                      <SelectTrigger className="h-6 text-[11px]"><SelectValue /></SelectTrigger>
-                      <SelectContent className={darkSelectClass}>
-                        {CRITERIOS.map(c => <SelectItem key={c.value} value={c.value} className="text-[11px] py-1">{c.label}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                    <Input inputMode="decimal" value={l.valorInformado} onChange={e => editarLote(l.idLocal, { valorInformado: e.target.value })} placeholder={unidade} disabled={somenteLeitura} className="h-6 text-[11px] text-right tabular-nums" />
-                    <div className="text-[11px] text-right tabular-nums font-semibold">{brl(loteTotal(l.criterioValor, l.quantidade, l.pesoMedioKg, l.valorInformado))}</div>
-                    <div className="text-center">
-                      {!somenteLeitura && (
-                        <button type="button" onClick={() => removerLote(l.idLocal)} className="text-muted-foreground/60 hover:text-destructive" aria-label="Remover lote">
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      )}
+                  <div key={l.idLocal} className="rounded-md border bg-muted/20 px-1 py-0.5">
+                    <div className={`${GRID_OC} items-center`}>
+                      <Select value={l.categoria || undefined} onValueChange={v => editarLote(l.idLocal, { categoria: v })} disabled={somenteLeitura}>
+                        <SelectTrigger className="h-6 text-[11px]"><SelectValue placeholder="Categoria" /></SelectTrigger>
+                        <SelectContent className={`${darkSelectClass} max-h-[70vh] overflow-y-auto`}>
+                          {categoriasDisponiveis.map(c => <SelectItem key={c.value} value={c.value} className="text-[11px] py-1">{c.label}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <Input inputMode="numeric" value={l.quantidade} onChange={e => editarLote(l.idLocal, { quantidade: e.target.value })} placeholder="0" disabled={somenteLeitura} className="h-6 text-[11px] text-right tabular-nums" />
+                      <Input inputMode="decimal" value={l.pesoMedioKg} onChange={e => editarLote(l.idLocal, { pesoMedioKg: e.target.value })} placeholder="0,00" disabled={somenteLeitura} className="h-6 text-[11px] text-right tabular-nums" />
+                      <div className="text-[11px] text-right tabular-nums text-muted-foreground">{fmtKg(pt)}</div>
+                      <Select value={l.criterioValor} onValueChange={v => editarLote(l.idLocal, { criterioValor: v as CriterioValor })} disabled={somenteLeitura}>
+                        <SelectTrigger className="h-6 text-[11px]"><SelectValue /></SelectTrigger>
+                        <SelectContent className={darkSelectClass}>
+                          {CRITERIOS.map(c => <SelectItem key={c.value} value={c.value} className="text-[11px] py-1">{c.label}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <ValorInput value={l.valorInformado} onChange={v => editarLote(l.idLocal, { valorInformado: v })} placeholder={unidade} disabled={somenteLeitura} />
+                      <div className="text-[11px] text-right tabular-nums font-semibold">{brl(loteTotal(l.criterioValor, l.quantidade, l.pesoMedioKg, l.valorInformado))}</div>
+                      <div className="text-center">
+                        {!somenteLeitura && (
+                          <button type="button" onClick={() => removerLote(l.idLocal)} className="text-muted-foreground/60 hover:text-destructive" aria-label="Remover lote">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </div>
+                    {resumo && <div className="text-[10px] text-muted-foreground leading-tight pl-1 pt-0.5">{resumo}</div>}
                   </div>
                 );
               })}
