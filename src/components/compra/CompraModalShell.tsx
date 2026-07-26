@@ -219,6 +219,8 @@ export function CompraModalShell(api: CompraModalShellProps) {
               concluida={api.ocStatusComercial === 'fechada'}
               encerrada={!!api.ocEntregaEncerrada}
               isCompra
+              categoriasDisponiveis={api.categoriasDisponiveis}
+              documentosApi={api.documentosApi}
               somenteLeitura={api.somenteLeitura}
               onVoltarNegociacao={() => setAbaAtiva('negociacao')}
             />

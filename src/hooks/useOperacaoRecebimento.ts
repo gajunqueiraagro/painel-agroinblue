@@ -17,6 +17,7 @@ export interface LoteRecebimento {
   qtdRecebida: number;
   diferenca: number;
   estado: EstadoRecebimento;
+  pesoMedioNegociadoKg: number | null;   // referência (só inicializa o input Peso méd.; vínculo por loteId)
 }
 
 export interface MovimentacaoOC {
@@ -62,6 +63,7 @@ interface Params {
 interface LoteRecRow {
   lote_id: string; ordem: number; categoria_negociada: string | null;
   qtd_negociada: number | null; qtd_recebida: number; diferenca: number; estado_recebimento: EstadoRecebimento;
+  peso_medio_negociado_kg: number | null;
 }
 interface MovRow {
   id: string; operacao_lote_id: string;
@@ -89,6 +91,7 @@ export function useOperacaoRecebimento({ operacaoId, clienteId, versao, onVersao
       setLotes(((rec.data ?? []) as LoteRecRow[]).map(r => ({
         loteId: r.lote_id, ordem: r.ordem, categoria: r.categoria_negociada,
         qtdNegociada: r.qtd_negociada, qtdRecebida: r.qtd_recebida, diferenca: r.diferenca, estado: r.estado_recebimento,
+        pesoMedioNegociadoKg: r.peso_medio_negociado_kg ?? null,
       })));
       setMovimentacoes(((mov.data ?? []) as MovRow[]).map(m => ({
         id: m.id, loteId: m.operacao_lote_id,
