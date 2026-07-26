@@ -350,11 +350,11 @@ export function CompraModalShell(api: CompraModalShellProps) {
             mini-card Situação/Fazenda + CompraResumoPanel preservado (outros callers). */}
         {api.modoOC ? (
           <ResumoLateralOC
+            dataLabel={dataLabel}
+            statusComercial={api.ocStatusComercial ?? null}
             fornecedorNome={fornecedorNome}
             fazendaNome={api.fazendaAtualNome}
-            situacaoLabel={`${cenarioAtual.icon} ${cenarioAtual.label}`}
             ocId={api.ocOperacaoId ?? null}
-            statusComercial={api.ocStatusComercial ?? null}
             negociacaoTotais={api.lotesApi?.totais ?? null}
             recebimentoLotes={api.recebimentoApi?.lotes ?? null}
             entregaEncerrada={!!api.ocEntregaEncerrada}
