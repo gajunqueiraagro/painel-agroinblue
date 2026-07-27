@@ -162,12 +162,22 @@ BEGIN
   BEGIN PERFORM public.oc_gerar_obrigacoes(v_op2,v_cli,v_ver2, jsonb_set(jsonb_set(jsonb_set(jsonb_set(jsonb_set(v_pay,'{obrigacoes,0,chave_idempotencia}', to_jsonb('oc:'||v_op2||':principal:principal:parcela:1')),'{obrigacoes,0,macro_custo}', to_jsonb(v_tag||'-o')),'{obrigacoes,0,grupo_custo}', to_jsonb(v_tag||'-o')),'{obrigacoes,0,centro_custo}', to_jsonb(v_tag||'-o')),'{obrigacoes,0,subcentro}', to_jsonb(v_tag||'-outro')));
     RAISE EXCEPTION 'T9 FAIL'; EXCEPTION WHEN others THEN IF SQLERRM LIKE 'T9 FAIL%' THEN RAISE; END IF; RAISE NOTICE 'T9 PASS (plano de outro cliente)'; END;
 
-  -- T12 AMBÍGUO: duas linhas (global + cliente) mesma hierarquia -> rejeita
+  -- T12 — ambiguidade IMPEDIDA pela uq_plano_contas_global (teste ESTRUTURAL de constraint; NÃO chama a RPC).
+  --   Duas linhas de mesma hierarquia normalizada não coexistem → o ramo v_plano_cnt>1 (ambiguous) da RPC
+  --   é defensivo e inalcançável por escrita regular. Confirma-se via SQLSTATE 23505 + contagem = 1.
   INSERT INTO public.financeiro_plano_contas (cliente_id,tipo_operacao,macro_custo,grupo_custo,centro_custo,subcentro,escopo_negocio,ativo,ordem_exibicao)
-    VALUES (NULL,'2-Saídas',v_tag||'-a',v_tag||'-a',v_tag||'-a',v_tag||'-amb','pecuaria',true,1),
-           (v_cli,'2-Saídas',v_tag||'-a',v_tag||'-a',v_tag||'-a',v_tag||'-amb','pecuaria',true,2);
-  BEGIN PERFORM public.oc_gerar_obrigacoes(v_op2,v_cli,v_ver2, jsonb_set(jsonb_set(jsonb_set(jsonb_set(jsonb_set(v_pay,'{obrigacoes,0,chave_idempotencia}', to_jsonb('oc:'||v_op2||':principal:principal:parcela:1')),'{obrigacoes,0,macro_custo}', to_jsonb(v_tag||'-a')),'{obrigacoes,0,grupo_custo}', to_jsonb(v_tag||'-a')),'{obrigacoes,0,centro_custo}', to_jsonb(v_tag||'-a')),'{obrigacoes,0,subcentro}', to_jsonb(v_tag||'-amb')));
-    RAISE EXCEPTION 'T12 FAIL'; EXCEPTION WHEN others THEN IF SQLERRM LIKE 'T12 FAIL%' THEN RAISE; END IF; RAISE NOTICE 'T12 PASS (ambiguo)'; END;
+    VALUES (v_cli,'2-Saídas',v_tag||'-a',v_tag||'-a',v_tag||'-a',v_tag||'-amb','pecuaria',true,1);
+  BEGIN
+    INSERT INTO public.financeiro_plano_contas (cliente_id,tipo_operacao,macro_custo,grupo_custo,centro_custo,subcentro,escopo_negocio,ativo,ordem_exibicao)
+      VALUES (NULL,'2-Saídas',v_tag||'-a',v_tag||'-a',v_tag||'-a',v_tag||'-amb','pecuaria',true,2);
+    RAISE EXCEPTION 'T12 FAIL: 2a linha de mesma hierarquia deveria violar uq_plano_contas_global';
+  EXCEPTION
+    WHEN unique_violation THEN NULL;   -- 23505 esperado (ambiguidade impedida pelo schema)
+    WHEN others THEN IF SQLERRM LIKE 'T12 FAIL%' THEN RAISE; ELSE RAISE EXCEPTION 'T12 FAIL SQLSTATE inesperado=%', SQLSTATE; END IF;
+  END;
+  SELECT count(*) INTO v_cnt FROM public.financeiro_plano_contas
+   WHERE tipo_operacao='2-Saídas' AND macro_custo=v_tag||'-a' AND centro_custo=v_tag||'-a' AND subcentro=v_tag||'-amb';
+  IF v_cnt<>1 THEN RAISE EXCEPTION 'T12 FAIL: hierarquia com % linhas (esperado 1)', v_cnt; END IF; v_pass:=v_pass+1;
 
   -- T10 plano GLOBAL válido -> ACEITO
   INSERT INTO public.financeiro_plano_contas (cliente_id,tipo_operacao,macro_custo,grupo_custo,centro_custo,subcentro,escopo_negocio,ativo,ordem_exibicao)
