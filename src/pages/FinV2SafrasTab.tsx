@@ -296,11 +296,12 @@ export function FinV2SafrasTab() {
 
       {/* ─── Dialog Criar/Editar ─── */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
+        <DialogContent className="flex flex-col gap-0 p-0 w-[calc(100vw-2rem)] max-w-2xl max-h-[calc(100dvh-2rem)] overflow-hidden">
+          <DialogHeader className="flex-shrink-0 px-6 pt-6 pb-3">
             <DialogTitle>{editing ? 'Editar Safra' : 'Nova Safra'}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
+          {/* Corpo rolável: só esta área rola; cabeçalho e rodapé permanecem fixos. */}
+          <div className="flex-1 min-h-0 overflow-y-auto px-6 py-1 space-y-3">
             <div>
               <Label>Nome *</Label>
               <Input value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Safra 25/26 Soja" />
@@ -336,18 +337,18 @@ export function FinV2SafrasTab() {
             </div>
             <div>
               <Label>Descrição</Label>
-              <Textarea value={descricao} onChange={e => setDescricao(e.target.value)} rows={2} className="resize-none" />
+              <Textarea value={descricao} onChange={e => setDescricao(e.target.value)} rows={3} className="resize-none min-h-0" />
             </div>
             <div>
               <Label>Observações</Label>
-              <Textarea value={observacoes} onChange={e => setObservacoes(e.target.value)} rows={2} className="resize-none" />
+              <Textarea value={observacoes} onChange={e => setObservacoes(e.target.value)} rows={3} className="resize-none min-h-0" />
             </div>
             <div className="flex items-center gap-2">
               <Switch checked={ativa} onCheckedChange={setAtiva} />
               <Label>Safra ativa</Label>
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="flex-shrink-0 px-6 py-4 border-t">
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
             <Button onClick={save} disabled={isSaving}>{isSaving ? 'Salvando...' : (editing ? 'Salvar' : 'Criar')}</Button>
           </DialogFooter>
