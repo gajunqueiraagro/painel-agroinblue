@@ -20,6 +20,7 @@ DECLARE
   -- auxiliares por caso
   v_op2 uuid; v_ver2 int; v_op3 uuid; v_ver3 int; v_doc uuid; v_tit_leg uuid;
   v_leg_val numeric; v_leg_status text; v_st text; v_pay3 jsonb;
+  v_plano2 uuid; v_sub2 text; v_pay_nc jsonb;
 BEGIN
   v_tag := current_setting('app.ocfin01_tag');
   SELECT cm.user_id, cm.cliente_id INTO v_admin, v_cli FROM public.cliente_membros cm
@@ -177,7 +178,7 @@ BEGIN
   END;
   SELECT count(*) INTO v_cnt FROM public.financeiro_plano_contas
    WHERE tipo_operacao='2-Saídas' AND macro_custo=v_tag||'-a' AND centro_custo=v_tag||'-a' AND subcentro=v_tag||'-amb';
-  IF v_cnt<>1 THEN RAISE EXCEPTION 'T12 FAIL: hierarquia com % linhas (esperado 1)', v_cnt; END IF; v_pass:=v_pass+1;
+  IF v_cnt<>1 THEN RAISE EXCEPTION 'T12 FAIL: hierarquia com % linhas (esperado 1)', v_cnt; END IF; RAISE NOTICE 'T12 PASS (unicidade da classificacao; ambiguidade impedida pelo schema)';
 
   -- T10 plano GLOBAL válido -> ACEITO
   INSERT INTO public.financeiro_plano_contas (cliente_id,tipo_operacao,macro_custo,grupo_custo,centro_custo,subcentro,escopo_negocio,ativo,ordem_exibicao)
@@ -244,6 +245,69 @@ BEGIN
   PERFORM public.oc_gerar_obrigacoes(v_op3,v_cli,v_ver3,v_pay3);
   SELECT count(*) INTO v_cnt FROM public.zoo_operacao_partes WHERE operacao_id=v_op3 AND natureza='principal' AND cancelada IS NOT TRUE;
   IF v_cnt<>3 THEN RAISE EXCEPTION 'T25 FAIL 1/N cnt=%',v_cnt; END IF; RAISE NOTICE 'T25 PASS (1/N somando a base)';
+
+  -- ============ OPÇÃO (a): N OBRIGAÇÕES PRINCIPAIS POR CLASSIFICAÇÃO (operação mista) ============
+  --   2º plano/subcentro representa a 2ª classificação (ex.: Machos × Fêmeas). A RPC já aceita N
+  --   principais no MESMO payload desde que Σ = valor_acordado (exato) e chaves distintas; cada item
+  --   cria sua própria parte + título com classificação própria. Nenhuma alteração de contrato da RPC.
+  v_sub2 := v_tag||'-sub2';
+  INSERT INTO public.financeiro_plano_contas (cliente_id,tipo_operacao,macro_custo,grupo_custo,centro_custo,subcentro,escopo_negocio,ativo,ordem_exibicao)
+    VALUES (v_cli,'2-Saídas',v_macro,v_grupo,v_centro,v_sub2,'pecuaria',true,2) RETURNING id INTO v_plano2;
+
+  INSERT INTO public.zoo_operacoes_comerciais (cliente_id,tipo_operacao,data_operacao,status_comercial,rascunho,valor_total,valor_acordado,contraparte_id,observacoes,created_by,updated_by)
+    VALUES (v_cli,'compra',DATE '2026-06-19','fechada',false,0,27062.50,v_fav,v_tag,v_admin,v_admin) RETURNING id,versao INTO v_op2,v_ver2;
+  v_pay_nc := jsonb_build_object('obrigacoes', jsonb_build_array(
+    jsonb_build_object('natureza_fluxo','pagar','natureza','principal','componente','principal','valor',17000.00,'sequencia_parcela',1,'quantidade_parcelas',1,'data_vencimento','2026-12-31','favorecido_id',v_fav::text,'macro_custo',v_macro,'grupo_custo',v_grupo,'centro_custo',v_centro,'subcentro',v_sub,'plano_conta_id',v_plano::text,'chave_idempotencia','oc:'||v_op2||':principal:principal:macho:parcela:1','sem_movimentacao_caixa',false,'materializar',true),
+    jsonb_build_object('natureza_fluxo','pagar','natureza','principal','componente','principal','valor',10062.50,'sequencia_parcela',1,'quantidade_parcelas',1,'data_vencimento','2026-12-31','favorecido_id',v_fav::text,'macro_custo',v_macro,'grupo_custo',v_grupo,'centro_custo',v_centro,'subcentro',v_sub2,'plano_conta_id',v_plano2::text,'chave_idempotencia','oc:'||v_op2||':principal:principal:femea:parcela:1','sem_movimentacao_caixa',false,'materializar',true)));
+
+  -- NC1: 2 classificações distintas, chaves distintas, soma exata (17000 + 10062.50 = 27062.50) -> ACEITO
+  PERFORM public.oc_gerar_obrigacoes(v_op2,v_cli,v_ver2, v_pay_nc);
+  SELECT count(*) INTO v_cnt FROM public.zoo_operacao_partes WHERE operacao_id=v_op2 AND natureza='principal' AND cancelada IS NOT TRUE;
+  IF v_cnt<>2 THEN RAISE EXCEPTION 'NC1 FAIL partes=%',v_cnt; END IF;
+  SELECT count(*) INTO v_cnt FROM public.financeiro_lancamentos_v2 t JOIN public.zoo_operacao_partes p ON p.financeiro_lancamento_id=t.id WHERE p.operacao_id=v_op2 AND p.natureza='principal';
+  IF v_cnt<>2 THEN RAISE EXCEPTION 'NC1 FAIL titulos=%',v_cnt; END IF;
+  -- NC6: cada obrigação persiste subcentro/plano próprios e vincula título próprio à MESMA operação
+  SELECT plano_conta_id, financeiro_lancamento_id INTO v_plano_res, v_titulo FROM public.zoo_operacao_partes WHERE operacao_id=v_op2 AND subcentro=v_sub AND natureza='principal';
+  IF v_plano_res IS DISTINCT FROM v_plano OR v_titulo IS NULL THEN RAISE EXCEPTION 'NC6 FAIL grupo1 plano=% tit=%',v_plano_res,v_titulo; END IF;
+  SELECT subcentro, plano_conta_id INTO v_st, v_plano_res FROM public.financeiro_lancamentos_v2 WHERE id=v_titulo;
+  IF v_st<>v_sub OR v_plano_res IS DISTINCT FROM v_plano THEN RAISE EXCEPTION 'NC6 FAIL titulo grupo1 sub=% plano=%',v_st,v_plano_res; END IF;
+  SELECT plano_conta_id, financeiro_lancamento_id INTO v_plano_res, v_titulo FROM public.zoo_operacao_partes WHERE operacao_id=v_op2 AND subcentro=v_sub2 AND natureza='principal';
+  IF v_plano_res IS DISTINCT FROM v_plano2 OR v_titulo IS NULL THEN RAISE EXCEPTION 'NC6 FAIL grupo2 plano=% tit=%',v_plano_res,v_titulo; END IF;
+  SELECT subcentro, plano_conta_id INTO v_st, v_plano_res FROM public.financeiro_lancamentos_v2 WHERE id=v_titulo;
+  IF v_st<>v_sub2 OR v_plano_res IS DISTINCT FROM v_plano2 THEN RAISE EXCEPTION 'NC6 FAIL titulo grupo2 sub=% plano=%',v_st,v_plano_res; END IF;
+  RAISE NOTICE 'NC1/NC6 PASS (2 classificacoes: 2 partes + 2 titulos; subcentro/plano proprios; mesma operacao)';
+
+  -- NC2: reenvio idêntico -> idempotente (continua 2 partes e 2 títulos)
+  PERFORM public.oc_gerar_obrigacoes(v_op2,v_cli,v_ver2, v_pay_nc);
+  SELECT count(*) INTO v_cnt FROM public.zoo_operacao_partes WHERE operacao_id=v_op2 AND natureza='principal' AND cancelada IS NOT TRUE;
+  IF v_cnt<>2 THEN RAISE EXCEPTION 'NC2 FAIL partes dup=%',v_cnt; END IF;
+  SELECT count(*) INTO v_cnt FROM public.financeiro_lancamentos_v2 t JOIN public.zoo_operacao_partes p ON p.financeiro_lancamento_id=t.id WHERE p.operacao_id=v_op2 AND p.natureza='principal';
+  IF v_cnt<>2 THEN RAISE EXCEPTION 'NC2 FAIL titulos dup=%',v_cnt; END IF;
+  RAISE NOTICE 'NC2 PASS (reenvio idempotente, sem duplicar partes/titulos)';
+
+  -- op limpa para as rejeições NC3/NC4/NC5 (todas abortam antes de inserir)
+  INSERT INTO public.zoo_operacoes_comerciais (cliente_id,tipo_operacao,data_operacao,status_comercial,rascunho,valor_total,valor_acordado,contraparte_id,observacoes,created_by,updated_by)
+    VALUES (v_cli,'compra',DATE '2026-06-19','fechada',false,0,27062.50,v_fav,v_tag,v_admin,v_admin) RETURNING id,versao INTO v_op2,v_ver2;
+
+  -- NC3: soma MENOR que valor_acordado (17000 + 10000 = 27000 < 27062.50) -> rejeitada
+  BEGIN PERFORM public.oc_gerar_obrigacoes(v_op2,v_cli,v_ver2, jsonb_build_object('obrigacoes', jsonb_build_array(
+      jsonb_build_object('natureza_fluxo','pagar','natureza','principal','componente','principal','valor',17000.00,'sequencia_parcela',1,'quantidade_parcelas',1,'data_vencimento','2026-12-31','favorecido_id',v_fav::text,'macro_custo',v_macro,'grupo_custo',v_grupo,'centro_custo',v_centro,'subcentro',v_sub,'plano_conta_id',v_plano::text,'chave_idempotencia','oc:'||v_op2||':principal:principal:macho:parcela:1','sem_movimentacao_caixa',false,'materializar',true),
+      jsonb_build_object('natureza_fluxo','pagar','natureza','principal','componente','principal','valor',10000.00,'sequencia_parcela',1,'quantidade_parcelas',1,'data_vencimento','2026-12-31','favorecido_id',v_fav::text,'macro_custo',v_macro,'grupo_custo',v_grupo,'centro_custo',v_centro,'subcentro',v_sub2,'plano_conta_id',v_plano2::text,'chave_idempotencia','oc:'||v_op2||':principal:principal:femea:parcela:1','sem_movimentacao_caixa',false,'materializar',true))));
+    RAISE EXCEPTION 'NC3 FAIL'; EXCEPTION WHEN others THEN IF SQLERRM LIKE 'NC3 FAIL%' THEN RAISE; END IF; RAISE NOTICE 'NC3 PASS (soma < valor_acordado rejeitada)'; END;
+
+  -- NC4: soma MAIOR que valor_acordado (17000 + 11000 = 28000 > 27062.50) -> rejeitada
+  BEGIN PERFORM public.oc_gerar_obrigacoes(v_op2,v_cli,v_ver2, jsonb_build_object('obrigacoes', jsonb_build_array(
+      jsonb_build_object('natureza_fluxo','pagar','natureza','principal','componente','principal','valor',17000.00,'sequencia_parcela',1,'quantidade_parcelas',1,'data_vencimento','2026-12-31','favorecido_id',v_fav::text,'macro_custo',v_macro,'grupo_custo',v_grupo,'centro_custo',v_centro,'subcentro',v_sub,'plano_conta_id',v_plano::text,'chave_idempotencia','oc:'||v_op2||':principal:principal:macho:parcela:1','sem_movimentacao_caixa',false,'materializar',true),
+      jsonb_build_object('natureza_fluxo','pagar','natureza','principal','componente','principal','valor',11000.00,'sequencia_parcela',1,'quantidade_parcelas',1,'data_vencimento','2026-12-31','favorecido_id',v_fav::text,'macro_custo',v_macro,'grupo_custo',v_grupo,'centro_custo',v_centro,'subcentro',v_sub2,'plano_conta_id',v_plano2::text,'chave_idempotencia','oc:'||v_op2||':principal:principal:femea:parcela:1','sem_movimentacao_caixa',false,'materializar',true))));
+    RAISE EXCEPTION 'NC4 FAIL'; EXCEPTION WHEN others THEN IF SQLERRM LIKE 'NC4 FAIL%' THEN RAISE; END IF; RAISE NOTICE 'NC4 PASS (soma > valor_acordado rejeitada)'; END;
+
+  -- NC5: duas classificações com a MESMA chave (soma = base) -> rejeitada (chaves duplicadas no payload)
+  BEGIN PERFORM public.oc_gerar_obrigacoes(v_op2,v_cli,v_ver2, jsonb_build_object('obrigacoes', jsonb_build_array(
+      jsonb_build_object('natureza_fluxo','pagar','natureza','principal','componente','principal','valor',17000.00,'sequencia_parcela',1,'quantidade_parcelas',1,'data_vencimento','2026-12-31','favorecido_id',v_fav::text,'macro_custo',v_macro,'grupo_custo',v_grupo,'centro_custo',v_centro,'subcentro',v_sub,'plano_conta_id',v_plano::text,'chave_idempotencia','oc:'||v_op2||':principal:principal:x:parcela:1','sem_movimentacao_caixa',false,'materializar',true),
+      jsonb_build_object('natureza_fluxo','pagar','natureza','principal','componente','principal','valor',10062.50,'sequencia_parcela',1,'quantidade_parcelas',1,'data_vencimento','2026-12-31','favorecido_id',v_fav::text,'macro_custo',v_macro,'grupo_custo',v_grupo,'centro_custo',v_centro,'subcentro',v_sub2,'plano_conta_id',v_plano2::text,'chave_idempotencia','oc:'||v_op2||':principal:principal:x:parcela:1','sem_movimentacao_caixa',false,'materializar',true))));
+    RAISE EXCEPTION 'NC5 FAIL'; EXCEPTION WHEN others THEN IF SQLERRM LIKE 'NC5 FAIL%' THEN RAISE; END IF; RAISE NOTICE 'NC5 PASS (mesma chave em 2 classificacoes rejeitada)'; END;
+  SELECT count(*) INTO v_cnt FROM public.zoo_operacao_partes WHERE operacao_id=v_op2 AND natureza='principal' AND cancelada IS NOT TRUE;
+  IF v_cnt<>0 THEN RAISE EXCEPTION 'NC3/4/5 FAIL: rejeicoes deixaram % partes',v_cnt; END IF;
 
   RAISE NOTICE '=== oc_gerar_obrigacoes: TODOS os casos executáveis PASS ===';
 END $t$;

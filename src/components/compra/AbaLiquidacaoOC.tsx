@@ -19,6 +19,7 @@ import {
 import { RefreshCw, Plus, MoreHorizontal, FileText, Undo2, Ban } from 'lucide-react';
 import { parseNumericValue } from '@/lib/calculos/abate';
 import { usePlanoContasOC, planoTipoOperacao } from '@/hooks/usePlanoContasOC';
+import { classificarLotesCompra } from '@/hooks/useOperacaoLiquidacao';
 import type {
   LiquidacaoApi, ObrigacaoLinha, FormaLiquidacao, GerarObrigacaoInput, RegistrarLiquidacaoInput,
 } from '@/hooks/useOperacaoLiquidacao';
@@ -28,6 +29,7 @@ import type {
 
 const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const fmtData = (iso: string | null) => (iso ? iso.split('-').reverse().join('/') : '—');
+const round2 = (n: number) => Math.round(n * 100) / 100;
 
 const ESTADO_LABEL: Record<string, string> = {
   nao_liquidada: 'aberta', parcial: 'parcial', quitada: 'quitada',
@@ -217,7 +219,7 @@ export function AbaLiquidacaoOC({ api, operacaoPronta, darkSelectClass, somenteL
       )}
 
       {modal?.type === 'gerar' && (
-        <GerarObrigacaoDialog api={api} darkSelectClass={darkSelectClass} onClose={() => setModal(null)} />
+        <GerarObrigacaoDialog api={api} onClose={() => setModal(null)} />
       )}
       {modal?.type === 'liquidar' && (
         <RegistrarLiquidacaoDialog api={api} darkSelectClass={darkSelectClass} obr={modal.obr} onClose={() => setModal(null)} />
@@ -302,11 +304,14 @@ function LiquidacoesDetalhe({ api, obr, somenteLeitura, onEstornar, onLiquidar }
   );
 }
 
-// PR-OC-FIN-CONTRATO-OBRIGACAO-01 — geração da obrigação PRINCIPAL INTEGRAL e classificada.
-//   Somente principal 1/1 nesta frente (permuta/liquidação/parcelamento avançado = frentes futuras).
-//   Valor = base negociada (bloqueado); classificação obrigatória via financeiro_plano_contas
-//   (usePlanoContasOC); favorecido default = contraparte; bloqueia quando já há principal ativa.
-function GerarObrigacaoDialog({ api, darkSelectClass, onClose }: { api: LiquidacaoApi; darkSelectClass: string; onClose: () => void }) {
+// PR-OC-FIN-CONTRATO-OBRIGACAO-01 (+ corretivo classificação automática, opção a completa) —
+//   geração da(s) obrigação(ões) PRINCIPAL(is) integrais e classificadas. Sexo único ⇒ 1 obrigação;
+//   operação mista ⇒ N obrigações (uma por classificação/sexo), cada uma com sua classificação e
+//   valor derivado dos seus lotes (fórmula oficial); a SOMA = valor_acordado (exata). Classificação
+//   AUTOMÁTICA (sem seleção manual), resolvida no plano real (2-Saídas + subcentro). Favorecido
+//   default = contraparte. Bloqueia quando já há principal ativa, sem categoria/plano, valor não
+//   derivável ou soma incoerente. Envio em UMA única chamada à RPC.
+function GerarObrigacaoDialog({ api, onClose }: { api: LiquidacaoApi; onClose: () => void }) {
   const plano = usePlanoContasOC(api.clienteId ?? undefined);
   const fluxo = api.naturezaFluxo;
   const tipoOC: 'compra' | 'venda' | 'abate' | null =
@@ -324,46 +329,71 @@ function GerarObrigacaoDialog({ api, darkSelectClass, onClose }: { api: Liquidac
   const jaExistePrincipal = totalPrincipal > 0;
   const incompativel = jaExistePrincipal && base != null && Math.abs(totalPrincipal - base) > 0.005;
 
-  const [macro, setMacro] = useState('');
-  const [grupo, setGrupo] = useState('');
-  const [centro, setCentro] = useState('');
-  const [subcentro, setSubcentro] = useState('');
   const [favorecidoId, setFavorecidoId] = useState<string>(api.contraparteId ?? '');
   const [primeiroVenc, setPrimeiroVenc] = useState('');
   const [descricao, setDescricao] = useState('');
 
   useEffect(() => { if (api.contraparteId) setFavorecidoId(prev => prev || api.contraparteId!); }, [api.contraparteId]);
 
-  const macros = planoTipo ? plano.cascata.macros(planoTipo) : [];
-  const grupos = planoTipo && macro ? plano.cascata.grupos(planoTipo, macro) : [];
-  const centros = planoTipo && macro && grupo ? plano.cascata.centros(planoTipo, macro, grupo) : [];
-  const subcentros = planoTipo && macro && grupo && centro ? plano.cascata.subcentros(planoTipo, macro, grupo, centro) : [];
-  const resolucao = plano.resolvePlanoConta(planoTipo ?? '', macro || null, grupo || null, centro || null, subcentro || null);
-  const planoContaId = resolucao.status === 'ok' ? resolucao.item.id : null;
-
+  // CLASSIFICAÇÃO AUTOMÁTICA (sem seleção manual): os lotes são agrupados por classificação
+  // financeira (sexo→subcentro) pela regra oficial; sexo único ⇒ 1 obrigação, misto ⇒ N. O valor
+  // de cada grupo vem da fórmula oficial de valor por lote; o plano_conta_id real é resolvido por
+  // (tipo_operacao '2-Saídas' + subcentro). A soma dos grupos é ancorada em valor_acordado.
   const baseValida = base != null && base > 0;
-  const podeSubmeter = !!fluxo && !!planoTipo && !!compPrincipal && baseValida
-    && !!subcentro && resolucao.status === 'ok' && !!planoContaId
+  const acordado = api.valorAcordado;
+  const classificacao = useMemo(() => classificarLotesCompra(api.lotes), [api.lotes]);
+  const preparo = useMemo(() => {
+    if (classificacao.status !== 'ok') return { status: 'classif' as const };
+    if (!planoTipo) return { status: 'sem_tipo' as const };
+    if (plano.loading) return { status: 'carregando' as const };
+    if (acordado == null || acordado <= 0) return { status: 'sem_acordado' as const };
+    const resolvidos = classificacao.grupos.map(g => ({
+      grupo: g, cand: plano.rows.filter(r => r.tipo_operacao === planoTipo && r.subcentro === g.subcentro),
+    }));
+    const semPlano = resolvidos.filter(r => r.cand.length === 0).map(r => r.grupo.subcentro);
+    if (semPlano.length) return { status: 'sem_plano' as const, subcentros: semPlano };
+    const ambiguo = resolvidos.filter(r => r.cand.length > 1).map(r => r.grupo.subcentro);
+    if (ambiguo.length) return { status: 'ambiguo' as const, subcentros: ambiguo };
+    // Rateio: só prossegue se a soma bruta dos grupos coincidir com valor_acordado a menos de
+    // arredondamento (senão a diferença NÃO é mascarada — bloqueia e reporta).
+    const somaBruta = resolvidos.reduce((s, r) => s + r.grupo.valorBruto, 0);
+    if (Math.abs(round2(somaBruta) - acordado) > 0.01) {
+      return { status: 'soma_incoerente' as const, soma: round2(somaBruta), acordado };
+    }
+    // Valores por grupo: arredonda todos menos o último; o último absorve o resíduo de centavos
+    // para garantir Σ = valor_acordado EXATO (exigência da RPC, sem tolerância).
+    const n = resolvidos.length;
+    let acc = 0;
+    const itens = resolvidos.map((r, i) => {
+      const valor = i < n - 1 ? round2(r.grupo.valorBruto) : round2(acordado - acc);
+      acc += valor;
+      return { grupo: r.grupo, plano: r.cand[0], valor };
+    });
+    return { status: 'ok' as const, itens };
+  }, [classificacao, planoTipo, plano.rows, plano.loading, acordado]);
+
+  const podeSubmeter = !!fluxo && !!compPrincipal && preparo.status === 'ok'
     && !!favorecidoId && !!primeiroVenc && !jaExistePrincipal && !api.saving;
 
   const submit = async () => {
-    if (!podeSubmeter || !fluxo || !compPrincipal || base == null) return;
-    const input: GerarObrigacaoInput = {
+    if (!podeSubmeter || preparo.status !== 'ok' || !fluxo || !compPrincipal) return;
+    const inputs: GerarObrigacaoInput[] = preparo.itens.map(it => ({
       naturezaFluxo: fluxo, natureza: 'principal', componente: compPrincipal.codigo,
-      valor: base,                                          // valor INTEGRAL da base (bloqueado)
+      chaveDiscriminador: it.grupo.sexo,                    // distingue a chave por classificação
+      valor: it.valor,                                      // valor da classificação (soma = valor_acordado)
       descricao: descricao || undefined,
       favorecidoId: favorecidoId || null,
       documentoId: null,
-      macroCusto: macro || null, grupoCusto: grupo || null, centroCusto: centro || null,
-      subcentro: subcentro || null, planoContaId,
+      // classificação resolvida automaticamente (registro real do plano de contas)
+      macroCusto: it.plano.macro_custo, grupoCusto: it.plano.grupo_custo, centroCusto: it.plano.centro_custo,
+      subcentro: it.plano.subcentro, planoContaId: it.plano.id,
       semMovimentacaoCaixa: false, materializar: true,
       quantidadeParcelas: 1, primeiroVencimento: primeiroVenc || null, intervaloDias: 0,
-    };
-    const ok = await api.gerarObrigacoes(input);
+    }));
+    const ok = await api.gerarObrigacoes(inputs);
     if (ok) onClose();
   };
 
-  const selCls = 'h-8 text-[12px]';
   return (
     <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent className="max-w-lg max-h-[90vh] flex flex-col gap-2">
@@ -385,37 +415,35 @@ function GerarObrigacaoDialog({ api, darkSelectClass, onClose }: { api: Liquidac
             )}
           </div>
 
-          {/* CLASSIFICAÇÃO OFICIAL (obrigatória) — cascata financeiro_plano_contas */}
-          <div><Label className="text-[11px]">Macro</Label>
-            <Select value={macro} onValueChange={(v) => { setMacro(v); setGrupo(''); setCentro(''); setSubcentro(''); }}>
-              <SelectTrigger className={selCls}><SelectValue placeholder="Macro" /></SelectTrigger>
-              <SelectContent className={`${darkSelectClass} max-h-[50vh]`}>{macros.map(m => <SelectItem key={m} value={m} className="text-[12px]">{m}</SelectItem>)}</SelectContent>
-            </Select>
+          {/* CLASSIFICAÇÃO FINANCEIRA — automática por lote (1 ou N obrigações), não editável */}
+          <div className="col-span-2 rounded-md border bg-muted/30 p-2 text-[11px] space-y-0.5">
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Classificação financeira (automática)</div>
+            {preparo.status === 'ok' ? (
+              <div className="space-y-0.5">
+                {preparo.itens.map(it => (
+                  <div key={it.grupo.subcentro} className="flex justify-between gap-2">
+                    <span className="font-medium text-foreground truncate">{[it.plano.macro_custo, it.plano.grupo_custo, it.plano.centro_custo, it.plano.subcentro].filter(Boolean).join(' → ')}</span>
+                    <span className="tabular-nums shrink-0">{brl(it.valor)}</span>
+                  </div>
+                ))}
+                <div className="flex justify-between gap-2 border-t pt-0.5 font-semibold">
+                  <span>Total{preparo.itens.length > 1 ? ` · ${preparo.itens.length} obrigações` : ''}</span>
+                  <span className="tabular-nums">{brl(preparo.itens.reduce((s, it) => s + it.valor, 0))}</span>
+                </div>
+              </div>
+            ) : (
+              <div className="text-destructive font-medium">
+                {classificacao.status === 'sem_categoria' && 'Operação sem lote com categoria negociada válida. Cadastre os lotes na negociação antes de gerar a obrigação.'}
+                {classificacao.status === 'categoria_invalida' && `Categoria sem correspondência de classificação: ${classificacao.categorias.join(', ')}. Geração bloqueada.`}
+                {classificacao.status === 'valor_nao_derivavel' && `Valor não derivável dos lotes (categorias: ${classificacao.categorias.join(', ')}). Informe critério e valor na negociação.`}
+                {preparo.status === 'carregando' && 'Carregando classificação…'}
+                {preparo.status === 'sem_acordado' && 'Valor negociado (valor_acordado) ausente ou inválido. Feche a negociação antes de gerar a obrigação.'}
+                {preparo.status === 'sem_plano' && `Não há plano de contas ativo (2-Saídas) para: ${preparo.subcentros.join('; ')}. Geração bloqueada.`}
+                {preparo.status === 'ambiguo' && `Há mais de um plano ativo para: ${preparo.subcentros.join('; ')}. Geração bloqueada.`}
+                {preparo.status === 'soma_incoerente' && `Soma dos lotes (${brl(preparo.soma)}) diverge do valor negociado (${brl(preparo.acordado)}) além de arredondamento. Saneie a negociação antes de gerar.`}
+              </div>
+            )}
           </div>
-          <div><Label className="text-[11px]">Grupo</Label>
-            <Select value={grupo} onValueChange={(v) => { setGrupo(v); setCentro(''); setSubcentro(''); }} disabled={!macro}>
-              <SelectTrigger className={selCls}><SelectValue placeholder="Grupo" /></SelectTrigger>
-              <SelectContent className={`${darkSelectClass} max-h-[50vh]`}>{grupos.map(g => <SelectItem key={g} value={g} className="text-[12px]">{g}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-          <div><Label className="text-[11px]">Centro</Label>
-            <Select value={centro} onValueChange={(v) => { setCentro(v); setSubcentro(''); }} disabled={!grupo}>
-              <SelectTrigger className={selCls}><SelectValue placeholder="Centro" /></SelectTrigger>
-              <SelectContent className={`${darkSelectClass} max-h-[50vh]`}>{centros.map(c => <SelectItem key={c} value={c} className="text-[12px]">{c}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-          <div><Label className="text-[11px]">Subcentro *</Label>
-            <Select value={subcentro} onValueChange={setSubcentro} disabled={!centro}>
-              <SelectTrigger className={selCls}><SelectValue placeholder="Subcentro" /></SelectTrigger>
-              <SelectContent className={`${darkSelectClass} max-h-[50vh]`}>{subcentros.map(s => <SelectItem key={s} value={s} className="text-[12px]">{s}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-          {subcentro && resolucao.status === 'ambiguous' && (
-            <div className="col-span-2 text-[11px] text-destructive">Há mais de um plano aplicável. Selecione o plano correto.</div>
-          )}
-          {subcentro && resolucao.status === 'none' && (
-            <div className="col-span-2 text-[11px] text-destructive">Classificação não vinculável ao plano de contas. Ajuste os filtros.</div>
-          )}
 
           {/* OBRIGAÇÃO — valor integral (bloqueado), favorecido, vencimento */}
           <div>
@@ -423,8 +451,8 @@ function GerarObrigacaoDialog({ api, darkSelectClass, onClose }: { api: Liquidac
             <Input readOnly value={fluxo === 'pagar' ? 'A pagar' : fluxo === 'receber' ? 'A receber' : '—'} className="h-8 text-[12px] bg-muted" />
           </div>
           <div>
-            <Label className="text-[11px]">Valor da obrigação (integral)</Label>
-            <Input readOnly value={base != null ? brl(base) : '—'} className="h-8 text-[12px] text-right tabular-nums bg-muted" title="Bloqueado: a obrigação principal corresponde ao valor integral negociado" />
+            <Label className="text-[11px]">Valor total (integral)</Label>
+            <Input readOnly value={acordado != null ? brl(acordado) : '—'} className="h-8 text-[12px] text-right tabular-nums bg-muted" title="Bloqueado: soma das obrigações principais = valor integral negociado" />
           </div>
           <div className="col-span-2">
             <Label className="text-[11px]">Favorecido *</Label>

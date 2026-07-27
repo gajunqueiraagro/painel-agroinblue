@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { CATEGORIAS } from '@/types/cattle';
 
 // Liquidação da Operação Comercial (PR-OC-LIQ-UI-01). Consome EXCLUSIVAMENTE os contratos
 //   homologados no PR-OC-LIQ-MODEL-01: views vw_oc_operacao_liquidacao / vw_oc_obrigacoes /
@@ -12,6 +13,71 @@ import { toast } from 'sonner';
 export type FormaLiquidacao =
   | 'dinheiro' | 'pix' | 'transferencia' | 'boleto' | 'cheque' | 'permuta' | 'compensacao' | 'outro';
 export type NaturezaFluxo = 'pagar' | 'receber';
+
+// Classificação AUTOMÁTICA do principal da compra na OC. Espelha EXATAMENTE a regra legada de
+// gerarFinanceiroCompra.ts (categoria feminina → subcentro Fêmeas; demais categorias válidas →
+// Machos), como fonte única no fluxo OC — sem seleção manual. Operação de sexo único gera UMA
+// obrigação; operação mista gera N (uma por classificação), cada uma com valor derivado dos seus
+// lotes pela fórmula oficial de valor. O plano_conta_id real é resolvido no componente por
+// (tipo_operacao '2-Saídas' + subcentro). Frete/Comissão (subcentro dedicado) = escopo futuro.
+export const SUBCENTRO_PRINCIPAL_COMPRA_FEMEAS = 'Investimento Compra Bovinos Fêmeas';
+export const SUBCENTRO_PRINCIPAL_COMPRA_MACHOS = 'Investimento Compra Bovinos Machos';
+const CATEGORIAS_FEMEAS_COMPRA = new Set<string>(['mamotes_f', 'desmama_f', 'novilhas', 'vacas']);
+const CATEGORIAS_VALIDAS = new Set<string>(CATEGORIAS.map(c => c.value));
+
+// Lote da negociação com os campos necessários à classificação e ao valor oficial.
+export interface LoteOC {
+  categoria: string;
+  qtd: number | null;
+  pesoMedioKg: number | null;
+  criterio: string | null;   // 'kg' | 'cabeca' | 'total'
+  valorInformado: number | null;
+}
+
+// VALOR OFICIAL do lote — fórmula idêntica a oc_salvar_lotes (backend) e useCompraLotes (front):
+//   kg → qtd × peso_medio × valor/kg; cabeca → qtd × valor/cab; total → valor. Não derivável
+//   (retorna null) quando falta critério ou valor_informado.
+export function valorLoteOC(l: LoteOC): number | null {
+  if (!l.criterio || l.valorInformado == null) return null;
+  const q = l.qtd ?? 0, p = l.pesoMedioKg ?? 0, v = l.valorInformado;
+  switch (l.criterio) {
+    case 'kg': return q * p * v;
+    case 'cabeca': return q * v;
+    case 'total': return v;
+    default: return null;
+  }
+}
+
+const sexoDaCategoria = (c: string): 'macho' | 'femea' => (CATEGORIAS_FEMEAS_COMPRA.has(c) ? 'femea' : 'macho');
+const subcentroDoSexo = (s: 'macho' | 'femea') => (s === 'femea' ? SUBCENTRO_PRINCIPAL_COMPRA_FEMEAS : SUBCENTRO_PRINCIPAL_COMPRA_MACHOS);
+
+export interface GrupoClassificacao { sexo: 'macho' | 'femea'; subcentro: string; valorBruto: number; }
+export type ClassificacaoLotes =
+  | { status: 'ok'; grupos: GrupoClassificacao[] }        // 1 ou 2 grupos (macho antes de femea)
+  | { status: 'sem_categoria' }
+  | { status: 'categoria_invalida'; categorias: string[] }
+  | { status: 'valor_nao_derivavel'; categorias: string[] };
+
+// Agrupa os lotes por classificação financeira (sexo→subcentro), somando o valor OFICIAL de cada
+// lote por grupo. Não escolhe majoritário nem primeiro lote: sexo misto ⇒ 2 grupos. Bloqueia
+// (sem fallback) quando falta categoria, categoria fora do enum, ou valor de lote não derivável.
+export function classificarLotesCompra(lotes: LoteOC[]): ClassificacaoLotes {
+  const validos = lotes.filter(l => (l.categoria ?? '').trim().length > 0);
+  if (validos.length === 0) return { status: 'sem_categoria' };
+  const invalidas = Array.from(new Set(validos.map(l => l.categoria).filter(c => !CATEGORIAS_VALIDAS.has(c))));
+  if (invalidas.length > 0) return { status: 'categoria_invalida', categorias: invalidas };
+  const naoDeriv = Array.from(new Set(validos.filter(l => valorLoteOC(l) == null).map(l => l.categoria)));
+  if (naoDeriv.length > 0) return { status: 'valor_nao_derivavel', categorias: naoDeriv };
+  const acc = new Map<'macho' | 'femea', number>();
+  for (const l of validos) {
+    const s = sexoDaCategoria(l.categoria);
+    acc.set(s, (acc.get(s) ?? 0) + (valorLoteOC(l) ?? 0));
+  }
+  const grupos: GrupoClassificacao[] = (['macho', 'femea'] as const)
+    .filter(s => acc.has(s))
+    .map(s => ({ sexo: s, subcentro: subcentroDoSexo(s), valorBruto: acc.get(s)! }));
+  return { status: 'ok', grupos };
+}
 
 export interface ResumoLiquidacao {
   valorTotal: number;
@@ -70,6 +136,9 @@ export interface GerarObrigacaoInput {
   naturezaFluxo: NaturezaFluxo;
   natureza: string;
   componente: string;
+  // Discriminador de idempotência quando várias obrigações compartilham natureza+componente
+  // (ex.: principal por classificação/sexo numa operação mista). Compõe a chave determinística.
+  chaveDiscriminador?: string;
   valor: number;          // valor POR parcela
   descricao?: string;
   favorecidoId?: string | null;
@@ -110,9 +179,11 @@ export interface LiquidacaoApi {
   naturezaFluxo: NaturezaFluxo | null;
   clienteId: string | null;        // para a cascata de classificação (usePlanoContasOC)
   contraparteId: string | null;    // favorecido default (não altera a contraparte comercial)
+  lotes: LoteOC[];                 // lotes negociados (classificação automática + valor oficial)
+  valorAcordado: number | null;    // âncora exata da soma das obrigações principais (valor_acordado)
   loading: boolean;
   saving: boolean;
-  gerarObrigacoes: (input: GerarObrigacaoInput) => Promise<boolean>;
+  gerarObrigacoes: (inputs: GerarObrigacaoInput[]) => Promise<boolean>;
   cancelarObrigacao: (parteId: string, motivo: string) => Promise<boolean>;
   registrarLiquidacao: (input: RegistrarLiquidacaoInput) => Promise<boolean>;
   estornarLiquidacao: (liquidacaoId: string, motivo: string) => Promise<boolean>;
@@ -147,7 +218,11 @@ interface ParteMetaRow { id: string; descricao: string | null; }
 interface DocRow { id: string; especie: string | null; numero: string | null; serie: string | null; }
 interface CompRow { natureza: string; codigo: string; nome: string | null; categoria: string | null; }
 interface FornRow { id: string; nome: string | null; }
-interface OpMetaRow { tipo_operacao: string; versao: number; contraparte_id: string | null; }
+interface OpMetaRow { tipo_operacao: string; versao: number; contraparte_id: string | null; valor_acordado: number | null; }
+interface LoteRow {
+  categoria_negociada: string | null; qtd_negociada: number | null;
+  peso_medio_negociado_kg: number | null; criterio_valor: string | null; valor_informado: number | null;
+}
 
 function docLabelOf(d: DocRow): string {
   const esp = (d.especie ?? '').replace('nf_', 'NF ').trim();
@@ -172,6 +247,8 @@ export function useOperacaoLiquidacao({ operacaoId, clienteId, enabled }: Params
   const [fornecedores, setFornecedores] = useState<{ id: string; nome: string }[]>([]);
   const [tipoOperacao, setTipoOperacao] = useState<string | null>(null);
   const [contraparteId, setContraparteId] = useState<string | null>(null);   // favorecido default (não altera a contraparte comercial)
+  const [lotes, setLotes] = useState<LoteOC[]>([]);
+  const [valorAcordado, setValorAcordado] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -179,11 +256,12 @@ export function useOperacaoLiquidacao({ operacaoId, clienteId, enabled }: Params
     if (!enabled || !operacaoId || !clienteId) {
       setResumo(null); setObrigacoes([]); setLiquidacoesPorTitulo({});
       setDocumentos([]); setComponentes([]); setFornecedores([]); setTipoOperacao(null); setContraparteId(null);
+      setLotes([]); setValorAcordado(null);
       return;
     }
     setLoading(true);
     try {
-      const [res, obr, liq, partes, docs, comps, forns, opMeta] = await Promise.all([
+      const [res, obr, liq, partes, docs, comps, forns, opMeta, lotesRes] = await Promise.all([
         (supabase as any).from('vw_oc_operacao_liquidacao').select('*').eq('operacao_id', operacaoId).maybeSingle(),
         (supabase as any).from('vw_oc_obrigacoes').select('*').eq('operacao_id', operacaoId).order('sequencia_parcela'),
         (supabase as any).from('zoo_operacao_liquidacoes').select('id, data, natureza, forma, valor, descricao, financeiro_lancamento_id, estornado, estorno_motivo, permuta_tipo_bem, permuta_valor_atribuido').eq('operacao_id', operacaoId).order('data'),
@@ -191,9 +269,10 @@ export function useOperacaoLiquidacao({ operacaoId, clienteId, enabled }: Params
         (supabase as any).from('zoo_operacao_documentos').select('id, especie, numero, serie').eq('operacao_id', operacaoId).eq('cancelado', false),
         (supabase as any).from('zoo_componentes_financeiros').select('natureza, codigo, nome, categoria').eq('ativo', true).order('natureza').order('ordem_exibicao'),
         (supabase as any).from('financeiro_fornecedores').select('id, nome').eq('cliente_id', clienteId).order('nome'),
-        (supabase as any).from('zoo_operacoes_comerciais').select('tipo_operacao, versao, contraparte_id').eq('id', operacaoId).maybeSingle(),
+        (supabase as any).from('zoo_operacoes_comerciais').select('tipo_operacao, versao, contraparte_id, valor_acordado').eq('id', operacaoId).maybeSingle(),
+        (supabase as any).from('zoo_operacao_lotes').select('categoria_negociada, qtd_negociada, peso_medio_negociado_kg, criterio_valor, valor_informado').eq('operacao_id', operacaoId),
       ]);
-      for (const r of [res, obr, liq, partes, docs, comps, forns, opMeta]) {
+      for (const r of [res, obr, liq, partes, docs, comps, forns, opMeta, lotesRes]) {
         if (r.error) throw new Error(r.error.message);
       }
 
@@ -249,6 +328,14 @@ export function useOperacaoLiquidacao({ operacaoId, clienteId, enabled }: Params
       const opMetaRow = opMeta.data as OpMetaRow | null;   // idioma existente p/ tipar o retorno (supabase as any)
       setTipoOperacao(opMetaRow?.tipo_operacao ?? null);
       setContraparteId(opMetaRow?.contraparte_id ?? null);
+      setValorAcordado(opMetaRow?.valor_acordado == null ? null : Number(opMetaRow.valor_acordado));
+      setLotes(((lotesRes.data ?? []) as LoteRow[]).map(l => ({
+        categoria: l.categoria_negociada ?? '',
+        qtd: l.qtd_negociada == null ? null : Number(l.qtd_negociada),
+        pesoMedioKg: l.peso_medio_negociado_kg == null ? null : Number(l.peso_medio_negociado_kg),
+        criterio: l.criterio_valor,
+        valorInformado: l.valor_informado == null ? null : Number(l.valor_informado),
+      })));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Falha ao carregar a liquidação.');
     } finally {
@@ -267,8 +354,12 @@ export function useOperacaoLiquidacao({ operacaoId, clienteId, enabled }: Params
     ? (tipoOperacao === 'compra' ? 'pagar' : 'receber')
     : null;
 
-  const gerarObrigacoes = useCallback(async (input: GerarObrigacaoInput): Promise<boolean> => {
+  // Recebe N obrigações (ex.: principal por classificação numa operação mista) e envia TODAS numa
+  // ÚNICA chamada à RPC (sem writer paralelo, sem chamadas por classificação). A coerência de base
+  // (Σ principais = valor_acordado) é validada pelo servidor.
+  const gerarObrigacoes = useCallback(async (inputs: GerarObrigacaoInput[]): Promise<boolean> => {
     if (!guard()) return false;
+    if (inputs.length === 0) return false;
     setSaving(true);
     try {
       // Lê a versão fresca (oc_gerar_obrigacoes não a incrementa; evita 40001 por staleness).
@@ -277,36 +368,40 @@ export function useOperacaoLiquidacao({ operacaoId, clienteId, enabled }: Params
       const versao = (opMeta.data as { versao: number } | null)?.versao;
       if (versao === undefined || versao === null) throw new Error('Operação não encontrada.');
 
-      const n = Math.max(1, Math.trunc(input.quantidadeParcelas));
-      const obrigacoesPayload = Array.from({ length: n }, (_, i) => {
-        const venc = input.primeiroVencimento
-          ? (n > 1 ? addDaysIso(input.primeiroVencimento, input.intervaloDias * i) : input.primeiroVencimento)
-          : null;
-        return {
-          natureza_fluxo: input.naturezaFluxo,
-          natureza: input.natureza,
-          componente: input.componente,
-          valor: input.valor,
-          data_vencimento: venc,
-          sequencia_parcela: i + 1,
-          quantidade_parcelas: n,
-          descricao: input.descricao ?? null,
-          favorecido_id: input.favorecidoId ?? null,
-          documento_id: input.documentoId ?? null,
-          documento_componente_id: input.documentoComponenteId ?? null,
-          // classificação oficial (o servidor valida/resolve e é a autoridade sobre plano_conta_id)
-          macro_custo: input.macroCusto ?? null,
-          grupo_custo: input.grupoCusto ?? null,
-          centro_custo: input.centroCusto ?? null,
-          subcentro: input.subcentro ?? null,
-          plano_conta_id: input.planoContaId ?? null,
-          incluso_no_total: false,
-          sem_movimentacao_caixa: input.semMovimentacaoCaixa,
-          materializar: input.semMovimentacaoCaixa ? false : input.materializar,
-          // chave DETERMINÍSTICA (operacao+natureza+componente+sequência): repetição idêntica = idempotente;
-          //   distingue sequências futuras (1/3, 2/3, 3/3). Sem semente aleatória.
-          chave_idempotencia: `oc:${operacaoId}:${input.natureza}:${input.componente}:parcela:${i + 1}`,
-        };
+      const obrigacoesPayload = inputs.flatMap((input) => {
+        const n = Math.max(1, Math.trunc(input.quantidadeParcelas));
+        // Discriminador (ex.: sexo) distingue obrigações que compartilham natureza+componente.
+        const disc = input.chaveDiscriminador ? `:${input.chaveDiscriminador}` : '';
+        return Array.from({ length: n }, (_, i) => {
+          const venc = input.primeiroVencimento
+            ? (n > 1 ? addDaysIso(input.primeiroVencimento, input.intervaloDias * i) : input.primeiroVencimento)
+            : null;
+          return {
+            natureza_fluxo: input.naturezaFluxo,
+            natureza: input.natureza,
+            componente: input.componente,
+            valor: input.valor,
+            data_vencimento: venc,
+            sequencia_parcela: i + 1,
+            quantidade_parcelas: n,
+            descricao: input.descricao ?? null,
+            favorecido_id: input.favorecidoId ?? null,
+            documento_id: input.documentoId ?? null,
+            documento_componente_id: input.documentoComponenteId ?? null,
+            // classificação oficial (o servidor valida/resolve e é a autoridade sobre plano_conta_id)
+            macro_custo: input.macroCusto ?? null,
+            grupo_custo: input.grupoCusto ?? null,
+            centro_custo: input.centroCusto ?? null,
+            subcentro: input.subcentro ?? null,
+            plano_conta_id: input.planoContaId ?? null,
+            incluso_no_total: false,
+            sem_movimentacao_caixa: input.semMovimentacaoCaixa,
+            materializar: input.semMovimentacaoCaixa ? false : input.materializar,
+            // chave DETERMINÍSTICA (operacao+natureza+componente[+discriminador]+sequência):
+            //   repetição idêntica = idempotente; discriminador distingue classificações distintas.
+            chave_idempotencia: `oc:${operacaoId}:${input.natureza}:${input.componente}${disc}:parcela:${i + 1}`,
+          };
+        });
       });
 
       const { error } = await (supabase as any).rpc('oc_gerar_obrigacoes', {
@@ -314,7 +409,7 @@ export function useOperacaoLiquidacao({ operacaoId, clienteId, enabled }: Params
         p_payload: { obrigacoes: obrigacoesPayload },
       });
       if (error) throw new Error(error.message);
-      toast.success(n > 1 ? `${n} obrigações geradas.` : 'Obrigação gerada.');
+      toast.success(obrigacoesPayload.length > 1 ? `${obrigacoesPayload.length} obrigações geradas.` : 'Obrigação gerada.');
       await carregar();
       return true;
     } catch (e) {
@@ -386,9 +481,9 @@ export function useOperacaoLiquidacao({ operacaoId, clienteId, enabled }: Params
 
   return useMemo(() => ({
     resumo, obrigacoes, liquidacoesPorTitulo, documentos, componentes, fornecedores,
-    tipoOperacao, naturezaFluxo, clienteId, contraparteId, loading, saving,
+    tipoOperacao, naturezaFluxo, clienteId, contraparteId, lotes, valorAcordado, loading, saving,
     gerarObrigacoes, cancelarObrigacao, registrarLiquidacao, estornarLiquidacao, recarregar: carregar,
   }), [resumo, obrigacoes, liquidacoesPorTitulo, documentos, componentes, fornecedores,
-    tipoOperacao, naturezaFluxo, clienteId, contraparteId, loading, saving,
+    tipoOperacao, naturezaFluxo, clienteId, contraparteId, lotes, valorAcordado, loading, saving,
     gerarObrigacoes, cancelarObrigacao, registrarLiquidacao, estornarLiquidacao, carregar]);
 }
