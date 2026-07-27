@@ -31,6 +31,8 @@ Registro oficial das decisões arquiteturais do projeto.
 | [ADR-2026-15](./ADR-2026-15-rollout-anti-deny-all.md) | Rollout anti-deny-all | Aceito | 14/07/2026 |
 | [ADR-2026-16](./ADR-2026-16-operacao-comercial-arquitetura-oficial.md) | **Arquitetura Oficial da Operação Comercial (v1)** | Aceito · BASELINE v1 congelada | 20/07/2026 |
 | [ADR-2026-17](./ADR-2026-17-operacoes-comerciais-v2.md) | Arquitetura Operacional das Operações Comerciais V2 | Aceito | 22/07/2026 |
+| [ADR-2026-18](./ADR-2026-18-soberania-financeira-fronteira-oc-financeiro.md) | Soberania Financeira e Fronteira entre Operação Comercial e Financeiro | Aceito | 27/07/2026 |
+| [ADR-2026-19](./ADR-2026-19-liquidacao-operacional-satisfacao-obrigacoes.md) | Liquidação Operacional e Satisfação das Obrigações | Aceito | 27/07/2026 |
 
 Nota: a numeração desta pasta inicia em 04; os números 01–03 não possuem
 arquivo nesta pasta (histórico anterior à padronização).

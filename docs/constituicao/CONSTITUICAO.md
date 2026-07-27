@@ -81,6 +81,7 @@ violação, mesmo que os números batam.
 | Contraparte (zoo) | Estado explícito de maturidade da contraparte | Ausência de contraparte é estado do domínio, não ambiguidade | docs/specs/P0-Z0-status-contraparte.md |
 | Classificação financeira (vocabulário) | Plano de contas padrão | Subcentros exclusivamente do plano | docs/runbooks/importacao-financeira.md |
 | Regras de acesso | Policies de acesso (RLS) | RLS é regra de negócio; resultado vazio pode ser policy | docs/adr/ADR-2026-04-rls-incidente-deny-all.md |
+| Fato monetário × negócio × satisfação | Financeiro (fatos monetários) · Operação Comercial (fatos negociais e operacionais) · Liquidação (satisfação das obrigações) | Financeiro é soberano do dinheiro; a OC organiza o negócio e pode originar lançamentos, sem estado monetário independente; a Liquidação registra a satisfação das obrigações e não cria verdade monetária própria | docs/adr/ADR-2026-18-soberania-financeira-fronteira-oc-financeiro.md; docs/adr/ADR-2026-19-liquidacao-operacional-satisfacao-obrigacoes.md |
 
 ## Título IV — Metodologia
 1. Fases: FASE 0 (investigação empírica) → FASE 1 (briefing
