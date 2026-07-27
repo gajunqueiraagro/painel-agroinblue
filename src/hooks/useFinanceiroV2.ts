@@ -7,6 +7,7 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { sincronizarVinculosDoLancamento, recomputarStatusExtrato } from '@/lib/financeiro/conciliacaoSync';
+import { isTituloOC, detectarViolacoesEstruturaisOC } from '@/lib/financeiro/protecaoTituloOC';
 
 
 export interface LancamentoV2 {
@@ -525,6 +526,70 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
 
   const editarLancamento = useCallback(async (id: string, form: LancamentoV2Form) => {
     if (!clienteId || !user) return false;
+
+    // PR-SAFE-0 — proteção de títulos originados da Operação Comercial. Detecção
+    //   ESTRUTURAL (marcador de proveniência persistido + vínculo reverso em
+    //   zoo_operacao_partes), nunca por texto de UI. Campos que compõem a obrigação
+    //   são preservados; tentativa de alteração estrutural é recusada de forma observável.
+    {
+      const { data: atual, error: loadErr } = await (supabase as any)
+        .from('financeiro_lancamentos_v2')
+        .select('origem_lancamento, origem_tipo, valor, favorecido_id, tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro, data_competencia')
+        .eq('id', id)
+        .maybeSingle();
+      if (loadErr || !atual) {
+        toast.error('Erro ao carregar o lançamento para edição');
+        console.error('[FinV2] editarLancamento LOAD ERROR', loadErr);
+        return false;
+      }
+      let vinculoOC = false;
+      if (!isTituloOC(atual)) {
+        const { data: parteVinc } = await (supabase as any)
+          .from('zoo_operacao_partes')
+          .select('id')
+          .eq('financeiro_lancamento_id', id)
+          .limit(1)
+          .maybeSingle();
+        vinculoOC = !!parteVinc?.id;
+      }
+
+      if (isTituloOC(atual, vinculoOC)) {
+        // Recusa OBSERVÁVEL de alteração de campos estruturais (compõem a obrigação).
+        const viol = detectarViolacoesEstruturaisOC(form, atual);
+        if (viol.length > 0) {
+          toast.error(`Título da Operação Comercial: ${viol.join(', ')} não pode ser editado aqui. Ajuste pela Operação Comercial.`);
+          return false;
+        }
+
+        // Payload RESTRITO — só campos permitidos; estruturais preservados por OMISSÃO
+        //   (valor, favorecido, classificação, tipo/sinal, origem, data_competencia e ano_mes da OC
+        //   NÃO são tocados). data_pagamento (data prevista) e status_transacao permanecem editáveis
+        //   (a frente de pagamento é PR próprio).
+        const restrito: Record<string, unknown> = {
+          conta_bancaria_id: form.conta_bancaria_id || null,
+          conta_destino_id: form.conta_destino_id || null,
+          data_pagamento: form.data_pagamento || null,
+          descricao: form.descricao || null,
+          observacao: form.observacao || null,
+          numero_documento: form.numero_documento || null,
+          tipo_documento: form.tipo_documento || null,
+          forma_pagamento: form.forma_pagamento || null,
+          dados_pagamento: form.dados_pagamento || null,
+          editado_manual: true,
+          updated_by: user.id,
+        };
+        if (form.status_transacao) restrito.status_transacao = form.status_transacao;
+
+        const { error } = await (supabase as any).from('financeiro_lancamentos_v2').update(restrito).eq('id', id);
+        if (error) {
+          toast.error('Erro ao editar lançamento');
+          console.error('[FinV2] editarLancamento (OC) ERROR', error);
+          return false;
+        }
+        toast.success('Lançamento atualizado');
+        return true;
+      }
+    }
 
     const anoMes = form.data_pagamento
       ? form.data_pagamento.substring(0, 7)

@@ -254,6 +254,11 @@ export function LancamentoV2Dialog({
   const { clienteAtual } = useCliente();
   const navigate = useNavigate();
   const isEdit = !!lancamento;
+  // PR-SAFE-0 — título originado da Operação Comercial: valor/favorecido/classificação/tipo
+  //   são somente leitura (edição estrutural pertence à OC). Detecção ESTRUTURAL pelo marcador
+  //   de proveniência persistido (origem_lancamento), nunca por texto de UI. O writer
+  //   (useFinanceiroV2.editarLancamento) aplica a mesma proteção de forma independente.
+  const isOCTitulo = isEdit && lancamento?.origem_lancamento === 'operacao_comercial';
   // Store the editing ID in a ref so it can't become stale during async save
   const editingIdRef = useRef<string | null>(null);
   useEffect(() => {
@@ -975,13 +980,25 @@ export function LancamentoV2Dialog({
               </div>
             )}
 
+            {/* PR-SAFE-0 — aviso de origem Operação Comercial: campos estruturais são somente leitura. */}
+            {isOCTitulo && (
+              <div className="rounded-md border border-sky-200 dark:border-sky-800 bg-sky-50/60 dark:bg-sky-950/30 p-3 mb-2">
+                <p className="text-[12px] font-semibold text-sky-800 dark:text-sky-300">Origem: Operação Comercial</p>
+                <p className="text-[11px] text-sky-700 dark:text-sky-400 leading-snug">
+                  Valor, favorecido, classificação, tipo e competência pertencem à obrigação da Operação
+                  Comercial e são somente leitura aqui. Ajuste-os pela Operação Comercial. Data prevista,
+                  conta, descrição, observação e documento continuam editáveis.
+                </p>
+              </div>
+            )}
+
             {/* ── BLOCO 1 — Tipo e Datas ── */}
             <section className={sectionClass}>
               <p className={sectionTitleClass}><CalendarDays className="h-3.5 w-3.5" /> Tipo e Datas</p>
               <div className="grid grid-cols-4 gap-2">
                 <div>
                   <Label className="text-[10px]">Tipo Operação *</Label>
-                  <Select value={tipoOperacao} onValueChange={v => { setTipoOperacao(v); setSubcentro(''); setMacroCusto(''); setCentroCusto(''); setSubcentroSearch(''); }} disabled={lockedFields?.includes('tipo_operacao')}>
+                  <Select value={tipoOperacao} onValueChange={v => { setTipoOperacao(v); setSubcentro(''); setMacroCusto(''); setCentroCusto(''); setSubcentroSearch(''); }} disabled={lockedFields?.includes('tipo_operacao') || isOCTitulo}>
                     <SelectTrigger ref={firstFieldRef} tabIndex={1} className={cn("h-8", fieldBg)}><SelectValue /></SelectTrigger>
                     <SelectContent className={DARK_GLASS_CONTENT}>
                       {TIPOS_OPERACAO.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
@@ -990,7 +1007,7 @@ export function LancamentoV2Dialog({
                 </div>
                 <div>
                   <Label className="text-[10px]">Data Competência *</Label>
-                  <Input tabIndex={2} type="date" value={dataCompetencia} onChange={e => setDataCompetencia(e.target.value)} className={cn("h-8", fieldBg)} />
+                  <Input tabIndex={2} type="date" value={dataCompetencia} onChange={e => setDataCompetencia(e.target.value)} className={cn("h-8", fieldBg)} disabled={isOCTitulo} />
                 </div>
                 <div>
                   <Label className="text-[10px]">Data Pagamento *</Label>
@@ -1041,6 +1058,7 @@ export function LancamentoV2Dialog({
                   label="Fornecedor *"
                   triggerClassName={fieldBg}
                   tabIndex={6}
+                  disabled={isOCTitulo}
                 />
 
                 {/* Fazenda — PR-U2c-1B: extraído para <FazendaSelect /> (fonte única) */}
@@ -1137,7 +1155,7 @@ export function LancamentoV2Dialog({
               <div className="grid grid-cols-[140px_1fr] gap-x-2 gap-y-1.5">
                 <div>
                   <Label className="text-[10px]">Valor (R$) *</Label>
-                  <Input tabIndex={10} value={valorDisplay} onChange={handleValorChange} onFocus={e => e.target.select()} className={cn("h-8 text-right font-mono", fieldBg)} placeholder="0,00" inputMode="numeric" disabled={lockedFields?.includes('valor')} />
+                  <Input tabIndex={10} value={valorDisplay} onChange={handleValorChange} onFocus={e => e.target.select()} className={cn("h-8 text-right font-mono", fieldBg)} placeholder="0,00" inputMode="numeric" disabled={lockedFields?.includes('valor') || isOCTitulo} />
                 </div>
                 {/* Subcentro — PR-U2c-1D: extraído para <PlanoSubcentroSelect /> (fonte única) */}
                 <div>
@@ -1158,6 +1176,7 @@ export function LancamentoV2Dialog({
                     label="Subcentro *"
                     triggerClassName={fieldBg}
                     tabIndex={11}
+                    disabled={isOCTitulo}
                   />
                 </div>
               </div>
