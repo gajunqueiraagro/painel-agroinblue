@@ -24,7 +24,7 @@ export type V2Section =
   | 'financiamentos' | 'painel-financiamentos'
   // financeiro — cadastros
   | 'contas-bancarias' | 'fornecedores' | 'plano-contas' | 'dividendos'
-  | 'subcentro-aliases'
+  | 'subcentro-aliases' | 'safras'
   // financeiro — análise
   | 'analise-trimestral' | 'financeiro-caixa' | 'fluxo-anual'
   // planejamento (IDs legados preservados)
@@ -204,6 +204,7 @@ export const NAV_GRUPOS: NavGrupo[] = [
           { id: 'contas-bancarias',  label: 'Contas Bancárias',    status: 'needs-wrapper' },
           { id: 'fornecedores',      label: 'Fornecedores',        status: 'needs-wrapper' },
           { id: 'plano-contas',      label: 'Plano de Contas',     status: 'needs-wrapper' },
+          { id: 'safras',            label: 'Safras',              status: 'ready' },
           { id: 'subcentro-aliases', label: 'Aliases de Subcentro', status: 'needs-wrapper' },
           { id: 'dividendos',        label: 'Dividendos',          status: 'needs-wrapper' },
         ],
@@ -264,6 +265,7 @@ export const SECTION_TO_GROUP: Partial<Record<V2Section, string>> = {
   'contas-bancarias':  'cadastros',
   'fornecedores':      'cadastros',
   'plano-contas':      'cadastros',
+  'safras':            'cadastros',
   'subcentro-aliases': 'cadastros',
   'dividendos':        'cadastros',
 
