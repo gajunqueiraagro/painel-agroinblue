@@ -102,7 +102,7 @@ export function PlanoSubcentroSelect({
       <Popover open={open} onOpenChange={v => { setOpen(v); if (!v) { onSearchChange(''); setHighlight(0); } }}>
         <PopoverTrigger asChild>
           <Button tabIndex={tabIndex} variant="outline" role="combobox" aria-expanded={open} disabled={disabled} className={cn("w-full h-8 justify-between font-normal text-xs", triggerClassName)}>
-            <span className="truncate">{value || 'Selecione o subcentro...'}</span>
+            <span className="truncate" title={value || undefined}>{value || 'Selecione o subcentro...'}</span>
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>

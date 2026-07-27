@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { Button } from '@/components/ui/button';
@@ -63,7 +63,13 @@ function BadgeDerivadoPlaceholder({ dica }: { dica: string }) {
   );
 }
 
-export function CentralOperacoesComerciais() {
+interface CentralOperacoesComerciaisProps {
+  /** FIN-MODAL-FECHO-01 item 2 — contrato genérico: ao receber um oc_id (via ?oc_id=),
+   *  a Central localiza a operação (do próprio tenant) e a abre pela rotina soberana por tipo. */
+  initialOcId?: string;
+}
+
+export function CentralOperacoesComerciais({ initialOcId }: CentralOperacoesComerciaisProps = {}) {
   const { clienteAtual } = useCliente();
   const clienteId = clienteAtual?.id ?? '';
 
@@ -134,6 +140,25 @@ export function CentralOperacoesComerciais() {
   const nomeContraparte = (r: OpRow) => (r.contraparte_id ? contrapartes[r.contraparte_id] ?? '—' : '—');
   const nomeFazenda = (r: OpRow) => (r.fazenda_id ? fazendas[r.fazenda_id] ?? '—' : '—');
   const abrir = () => setModalOpen(true);
+
+  // FIN-MODAL-FECHO-01 item 2 — rotina soberana de abertura por tipo (reutilizada pelo menu e pelo ?oc_id).
+  //   Compra: reabre no fluxo existente (?oc_compra=1&oc_id). Venda/abate: abertura ainda indisponível
+  //   na Central → permanece estável (sem navegação); a operação continua visível na lista.
+  const abrirOperacaoPorTipo = (r: OpRow) => {
+    if (r.tipo_operacao === 'compra') {
+      try { sessionStorage.setItem('v2:autoSection', 'lancamentos-zoot'); } catch { /* sessionStorage indisponível */ }
+      window.location.assign(`/v2?oc_compra=1&oc_id=${encodeURIComponent(r.id)}`);
+    }
+  };
+
+  // Contrato genérico ?oc_id=<id>: age só após as linhas do tenant carregarem. Operação inexistente
+  //   ou inacessível ao tenant (fora de `rows`, que já filtra por cliente_id + RLS) → Central estável.
+  const ocIdHandledRef = useRef(false);
+  useEffect(() => {
+    if (!initialOcId || loading || ocIdHandledRef.current) return;
+    const r = rows.find(x => x.id === initialOcId);
+    if (r) { ocIdHandledRef.current = true; abrirOperacaoPorTipo(r); }
+  }, [initialOcId, loading, rows]);
 
   return (
     <div className="space-y-3">
@@ -232,10 +257,7 @@ export function CentralOperacoesComerciais() {
                     <DropdownMenuContent align="end">
                       {/* OPEN-01: "Abrir" leva ao CompraModalShell (fluxo ?oc_compra=1&oc_id) — só Compra. */}
                       {r.tipo_operacao === 'compra' ? (
-                        <DropdownMenuItem onSelect={() => {
-                          try { sessionStorage.setItem('v2:autoSection', 'lancamentos-zoot'); } catch { /* sessionStorage indisponível */ }
-                          window.location.assign(`/v2?oc_compra=1&oc_id=${encodeURIComponent(r.id)}`);
-                        }}><Eye className="h-4 w-4 mr-2" /> Abrir</DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => abrirOperacaoPorTipo(r)}><Eye className="h-4 w-4 mr-2" /> Abrir</DropdownMenuItem>
                       ) : (
                         <DropdownMenuItem disabled><Eye className="h-4 w-4 mr-2" /> Abrir (disponível só para Compra)</DropdownMenuItem>
                       )}

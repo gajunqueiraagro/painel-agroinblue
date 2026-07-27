@@ -24,6 +24,14 @@ export interface FavorecidoSelectProps {
   triggerClassName?: string;              // ex.: fieldBg
   tabIndex?: number;
   disabled?: boolean;
+  showCpfCnpj?: boolean;                  // exibe "Nome (CPF/CNPJ)" — default false (demais telas inalteradas)
+}
+
+/** Rótulo de exibição do favorecido. Com showCpfCnpj + documento presente → "Nome (CPF/CNPJ)";
+ *  sem documento (ou desabilitado) → apenas o nome. Não altera valor/seleção/identidade. */
+function favorecidoLabel(f: Pick<FornecedorV2, 'nome' | 'cpf_cnpj'>, showCpfCnpj: boolean): string {
+  const doc = (f.cpf_cnpj ?? '').trim();
+  return showCpfCnpj && doc ? `${f.nome} (${doc})` : f.nome;
 }
 
 function normalizeSearch(s: string): string {
@@ -33,7 +41,7 @@ function normalizeSearch(s: string): string {
 export function FavorecidoSelect({
   value, onChange, onSelected, fornecedores,
   search, onSearchChange, onCriarNovo,
-  label, triggerClassName, tabIndex, disabled,
+  label, triggerClassName, tabIndex, disabled, showCpfCnpj = false,
 }: FavorecidoSelectProps) {
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
@@ -86,8 +94,9 @@ export function FavorecidoSelect({
 
   const selectedNome = useMemo(() => {
     if (!value) return '';
-    return fornecedores.find(f => f.id === value)?.nome || '';
-  }, [value, fornecedores]);
+    const f = fornecedores.find(x => x.id === value);
+    return f ? favorecidoLabel(f, showCpfCnpj) : '';
+  }, [value, fornecedores, showCpfCnpj]);
 
   return (
     <div>
@@ -128,7 +137,7 @@ export function FavorecidoSelect({
                   onMouseEnter={() => setHighlight(idx)}
                 >
                   <Check className={cn("mr-2 h-4 w-4", value === f.id ? "opacity-100" : "opacity-0")} />
-                  <span className="truncate">{f.nome}</span>
+                  <span className="truncate">{favorecidoLabel(f, showCpfCnpj)}</span>
                 </button>
               ))}
             </div>

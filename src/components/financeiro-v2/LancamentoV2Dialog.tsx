@@ -56,6 +56,7 @@ interface Props {
     favorecido_id?: string;
     subcentro?: string;
     macro_custo?: string;
+    grupo_custo?: string;
     centro_custo?: string;
     plano_conta_id?: string;
   };
@@ -300,7 +301,15 @@ export function LancamentoV2Dialog({
   const [favorecidoId, setFavorecidoId] = useState('');
   const [subcentro, setSubcentro] = useState('');
   const [macroCusto, setMacroCusto] = useState('');
+  const [grupoCusto, setGrupoCusto] = useState('');
   const [centroCusto, setCentroCusto] = useState('');
+  // FIN-MODAL-FECHO-01 item 2 — operacao_id + tipo resolvidos pelo vínculo zoo_operacao_partes
+  // (somente leitura). O link "Abrir operação" só é exibido para tipos que possuem fluxo soberano
+  // de abertura implementado (hoje: compra — CompraModalShell/PR-OC-COMPRA-OPEN-01). Venda/abate
+  // ainda não têm abridor de operação OC → botão NÃO é exibido (evita botão morto).
+  const [operacaoId, setOperacaoId] = useState<string | null>(null);
+  const [operacaoTipo, setOperacaoTipo] = useState<string | null>(null);
+  const operacaoAbrivel = !!operacaoId && operacaoTipo === 'compra';
   const [escopoNegocio, setEscopoNegocio] = useState('');
   const [tipoOperacao, setTipoOperacao] = useState('2-Saídas');
   const [statusTransacao, setStatusTransacao] = useState('meta');
@@ -337,6 +346,7 @@ export function LancamentoV2Dialog({
       setFavorecidoId(lancamento.favorecido_id || '');
       setSubcentro(lancamento.subcentro || '');
       setMacroCusto(lancamento.macro_custo || '');
+      setGrupoCusto(lancamento.grupo_custo || '');
       setCentroCusto(lancamento.centro_custo || '');
       setEscopoNegocio(lancamento.escopo_negocio || '');
       setTipoOperacao(lancamento.tipo_operacao);
@@ -398,6 +408,7 @@ export function LancamentoV2Dialog({
       setFavorecidoId(prefill.favorecido_id ?? '');
       setSubcentro(prefill.subcentro ?? '');
       setMacroCusto(prefill.macro_custo ?? '');
+      setGrupoCusto(prefill.grupo_custo ?? '');
       setCentroCusto(prefill.centro_custo ?? '');
       setEscopoNegocio('');
       setTipoDocumento('');
@@ -421,6 +432,7 @@ export function LancamentoV2Dialog({
       setFavorecidoId('');
       setSubcentro('');
       setMacroCusto('');
+      setGrupoCusto('');
       setCentroCusto('');
       setEscopoNegocio('');
       setTipoOperacao('2-Saídas');
@@ -443,6 +455,37 @@ export function LancamentoV2Dialog({
     setSubcentroSearch('');
     setFornecedorSearch('');
   }, [open, lancamento, defaultFazendaId, prefill, lockedFields]);
+
+  // FIN-MODAL-FECHO-01 item 2 — resolve o operacao_id do título OC pelo vínculo
+  // zoo_operacao_partes.financeiro_lancamento_id (leitura). Só quando o modal está
+  // aberto sobre um título de origem OC. Não altera o título nem permite edição estrutural.
+  useEffect(() => {
+    let cancelled = false;
+    setOperacaoId(null);
+    setOperacaoTipo(null);
+    if (!open || !isOCTitulo || !lancamento?.id) return;
+    (async () => {
+      // 1) resolve a operação pelo vínculo soberano (parte → operacao_id)
+      const { data: parte } = await (supabase as any)
+        .from('zoo_operacao_partes')
+        .select('operacao_id')
+        .eq('financeiro_lancamento_id', lancamento.id)
+        .limit(1)
+        .maybeSingle();
+      const opId: string | null = parte?.operacao_id ?? null;
+      if (cancelled || !opId) return;
+      // 2) resolve o tipo da operação (define se há fluxo soberano de abertura)
+      const { data: op } = await (supabase as any)
+        .from('zoo_operacoes_comerciais')
+        .select('tipo_operacao')
+        .eq('id', opId)
+        .maybeSingle();
+      if (cancelled) return;
+      setOperacaoId(opId);
+      setOperacaoTipo(op?.tipo_operacao ?? null);
+    })();
+    return () => { cancelled = true; };
+  }, [open, isOCTitulo, lancamento?.id]);
 
   // Regenerate parcela rows when key inputs change
   const valorNum = parseBRL(valorDisplay);
@@ -989,6 +1032,19 @@ export function LancamentoV2Dialog({
                   Comercial e são somente leitura aqui. Ajuste-os pela Operação Comercial. Data prevista,
                   conta, descrição, observação e documento continuam editáveis.
                 </p>
+                {/* item 2 — link só aparece quando o vínculo resolve E o tipo tem fluxo soberano de
+                    abertura (compra). Venda/abate ainda não têm abridor de operação OC → sem botão
+                    morto. Contrato genérico ?oc_id=<id>; a Central abre a operação pela rotina soberana. */}
+                {operacaoAbrivel && (
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="h-auto p-0 mt-1 text-[11px] font-medium text-sky-800 dark:text-sky-300"
+                    onClick={() => window.location.assign(`/v2?oc_id=${encodeURIComponent(operacaoId!)}`)}
+                  >
+                    Abrir operação →
+                  </Button>
+                )}
               </div>
             )}
 
@@ -998,7 +1054,7 @@ export function LancamentoV2Dialog({
               <div className="grid grid-cols-4 gap-2">
                 <div>
                   <Label className="text-[10px]">Tipo Operação *</Label>
-                  <Select value={tipoOperacao} onValueChange={v => { setTipoOperacao(v); setSubcentro(''); setMacroCusto(''); setCentroCusto(''); setSubcentroSearch(''); }} disabled={lockedFields?.includes('tipo_operacao') || isOCTitulo}>
+                  <Select value={tipoOperacao} onValueChange={v => { setTipoOperacao(v); setSubcentro(''); setMacroCusto(''); setGrupoCusto(''); setCentroCusto(''); setSubcentroSearch(''); }} disabled={lockedFields?.includes('tipo_operacao') || isOCTitulo}>
                     <SelectTrigger ref={firstFieldRef} tabIndex={1} className={cn("h-8", fieldBg)}><SelectValue /></SelectTrigger>
                     <SelectContent className={DARK_GLASS_CONTENT}>
                       {TIPOS_OPERACAO.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
@@ -1059,6 +1115,7 @@ export function LancamentoV2Dialog({
                   triggerClassName={fieldBg}
                   tabIndex={6}
                   disabled={isOCTitulo}
+                  showCpfCnpj
                 />
 
                 {/* Fazenda — PR-U2c-1B: extraído para <FazendaSelect /> (fonte única) */}
@@ -1165,6 +1222,7 @@ export function LancamentoV2Dialog({
                     onSelected={(_sub, cls) => {
                       if (cls) {
                         setMacroCusto(cls.macro_custo);
+                        setGrupoCusto(cls.grupo_custo || '');
                         setCentroCusto(cls.centro_custo);
                         setEscopoNegocio(cls.escopo_negocio || '');
                       }
@@ -1180,14 +1238,20 @@ export function LancamentoV2Dialog({
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <Label className="text-[10px] text-muted-foreground">Centro Custo (auto)</Label>
-                  <Input value={centroCusto} readOnly disabled className="h-8 bg-muted/60 dark:bg-muted border-border/20 text-muted-foreground cursor-default text-xs" />
-                </div>
+              {/* Hierarquia derivada (somente leitura): Macro › Grupo › Centro.
+                  title = valor integral (leitura por hover, sem truncar informação). */}
+              <div className="grid grid-cols-3 gap-2">
                 <div>
                   <Label className="text-[10px] text-muted-foreground">Macro Custo (auto)</Label>
-                  <Input value={macroCusto} readOnly disabled className="h-8 bg-muted/60 dark:bg-muted border-border/20 text-muted-foreground cursor-default text-xs" />
+                  <Input value={macroCusto} readOnly disabled title={macroCusto} className="h-8 bg-muted/60 dark:bg-muted border-border/20 text-muted-foreground cursor-default text-xs" />
+                </div>
+                <div>
+                  <Label className="text-[10px] text-muted-foreground">Grupo Custo (auto)</Label>
+                  <Input value={grupoCusto} readOnly disabled title={grupoCusto} className="h-8 bg-muted/60 dark:bg-muted border-border/20 text-muted-foreground cursor-default text-xs" />
+                </div>
+                <div>
+                  <Label className="text-[10px] text-muted-foreground">Centro Custo (auto)</Label>
+                  <Input value={centroCusto} readOnly disabled title={centroCusto} className="h-8 bg-muted/60 dark:bg-muted border-border/20 text-muted-foreground cursor-default text-xs" />
                 </div>
               </div>
 

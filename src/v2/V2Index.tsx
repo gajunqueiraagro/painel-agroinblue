@@ -284,8 +284,13 @@ export default function V2Index() {
     // OPEN-01: URL com ?oc_compra=1 (abertura/hidratação de operação OC) força a seção de
     //   Lançamentos, garantindo que o RELOAD da URL reabra a mesma operação (oc_id no query).
     try {
-      if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('oc_compra') === '1') {
-        return 'lancamentos-zoot';
+      if (typeof window !== 'undefined') {
+        const qs = new URLSearchParams(window.location.search);
+        // Rota legada preservada: ?oc_compra=1 (&oc_id) reabre a operação de Compra em Lançamentos.
+        if (qs.get('oc_compra') === '1') return 'lancamentos-zoot';
+        // FIN-MODAL-FECHO-01 item 2 — contrato genérico ?oc_id=<id> abre a Central de Operações
+        // Comerciais, que localiza e abre a operação por tipo (compra hoje; venda/abate estáveis).
+        if (qs.get('oc_id')) return 'operacoes-comerciais';
       }
     } catch { /* URL indisponível */ }
     return 'home';
@@ -708,7 +713,7 @@ export default function V2Index() {
       />
     );
     if (section === 'operacoes-comerciais') return (
-      <CentralOperacoesComerciais />
+      <CentralOperacoesComerciais initialOcId={(() => { try { return new URLSearchParams(window.location.search).get('oc_id') ?? undefined; } catch { return undefined; } })()} />
     );
     if (section === 'lancamentos-zoot') return (
       <V2LancamentosWrapper
