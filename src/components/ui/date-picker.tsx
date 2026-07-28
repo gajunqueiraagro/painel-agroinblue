@@ -53,6 +53,13 @@ export function DatePicker({ value, onChange, className, placeholder = 'dd/mm/aa
           onSelect={(d) => { if (d) { onChange(format(d, 'yyyy-MM-dd')); setOpen(false); } }}
           locale={ptBR}
           initialFocus
+          // PR-UI-CAMPOS-STD-01 (adendo) — ESTABILIDADE POSICIONAL: grade SEMPRE com 6 semanas
+          // (fixedWeeks) preenchidas com dias adjacentes (showOutsideDays). Altura total constante
+          // entre meses de 4/5/6 linhas ⇒ cabeçalho azul, título e setas NÃO se deslocam ao navegar;
+          // sem translateY por mês, sem exceção por mês. Correção na causa (grade variável), no
+          // componente compartilhado — vale para o DatePicker normal e o compact.
+          fixedWeeks
+          showOutsideDays
           className="p-1.5"
           classNames={{
             // Espaçamento vertical enxuto entre cabeçalho azul, dias da semana e grade

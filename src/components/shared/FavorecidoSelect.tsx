@@ -109,12 +109,12 @@ export function FavorecidoSelect({
               <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-            <div className="flex items-center border-b px-3 py-2">
+          <PopoverContent className="w-[--radix-popover-trigger-width] p-0 bg-zinc-950/55 backdrop-blur-xl border-zinc-700/40 text-zinc-100" align="start">
+            <div className="flex items-center border-b border-zinc-700/40 px-3 py-2">
               <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
               <input
                 ref={inputRef}
-                className="flex h-7 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                className="flex h-7 w-full bg-transparent text-sm text-zinc-100 outline-none placeholder:text-zinc-400"
                 placeholder="Buscar fornecedor..."
                 value={search}
                 onChange={e => onSearchChange(e.target.value)}
@@ -123,15 +123,16 @@ export function FavorecidoSelect({
               />
             </div>
             <div className="max-h-48 overflow-y-auto p-1">
-              {filtered.length === 0 && <p className="p-2 text-center text-sm text-muted-foreground">Nenhum fornecedor encontrado</p>}
+              {filtered.length === 0 && <p className="p-2 text-center text-sm text-zinc-400">Nenhum fornecedor encontrado</p>}
               {filtered.map((f, idx) => (
                 <button
                   key={f.id}
                   ref={el => { itemRefs.current[idx] = el; }}
                   className={cn(
                     "relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none",
-                    idx === highlight ? "bg-accent text-accent-foreground" : "hover:bg-accent/50",
-                    value === f.id && idx !== highlight && "bg-accent/30",
+                    "text-zinc-100",
+                    idx === highlight ? "bg-zinc-800/60 text-zinc-100" : "hover:bg-zinc-800/45",
+                    value === f.id && idx !== highlight && "bg-zinc-800/40",
                   )}
                   onClick={() => handleSelect(f.id)}
                   onMouseEnter={() => setHighlight(idx)}

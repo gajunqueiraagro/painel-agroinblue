@@ -106,12 +106,12 @@ export function PlanoSubcentroSelect({
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className={cn("w-[--radix-popover-trigger-width] p-0", contentClassName)} align="start">
-          <div className="flex items-center border-b px-3 py-2">
+        <PopoverContent className={cn("w-[--radix-popover-trigger-width] p-0 bg-zinc-950/55 backdrop-blur-xl border-zinc-700/40 text-zinc-100", contentClassName)} align="start">
+          <div className="flex items-center border-b border-zinc-700/40 px-3 py-2">
             <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
             <input
               ref={searchInputRef}
-              className="flex h-7 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+              className="flex h-7 w-full bg-transparent text-sm text-zinc-100 outline-none placeholder:text-zinc-400"
               placeholder="Buscar subcentro..."
               value={search}
               onChange={e => { onSearchChange(e.target.value); setHighlight(0); }}
@@ -120,15 +120,16 @@ export function PlanoSubcentroSelect({
             />
           </div>
           <div className="max-h-48 overflow-y-auto p-1">
-            {filtered.length === 0 && <p className="p-2 text-center text-sm text-muted-foreground">Nenhum subcentro encontrado</p>}
+            {filtered.length === 0 && <p className="p-2 text-center text-sm text-zinc-400">Nenhum subcentro encontrado</p>}
             {filtered.map((sc, idx) => (
               <button
                 key={sc.subcentro || idx}
                 ref={el => { itemRefs.current[idx] = el; }}
                 className={cn(
                   "relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none",
-                  idx === highlight ? "bg-accent text-accent-foreground" : "hover:bg-accent/50",
-                  value === sc.subcentro && idx !== highlight && "bg-accent/30",
+                  "text-zinc-100",
+                  idx === highlight ? "bg-zinc-800/60 text-zinc-100" : "hover:bg-zinc-800/45",
+                  value === sc.subcentro && idx !== highlight && "bg-zinc-800/40",
                   itemClassName,
                 )}
                 onClick={() => handleSelect(sc.subcentro || '')}
