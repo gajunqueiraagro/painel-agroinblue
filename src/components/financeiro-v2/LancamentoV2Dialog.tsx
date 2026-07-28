@@ -194,18 +194,20 @@ function ExcelCtxConta({
 // Faixa horizontal discreta de título (ocupa toda a largura interna do aside — que não tem
 // padding horizontal; as linhas é que recebem px-3). Fundo distinto do corpo, altura mínima.
 function ResumoBlocoHead({ titulo }: { titulo: string }) {
-  // PR-FIN-MODAL-02F — faixa compactada (py/margens/leading menores). MESMA aparência
-  // e hierarquia visual: bg-primary/10, borda e tipografia 9px bold uppercase inalteradas.
+  // PR-FIN-MODAL-02F/02G — faixa compacta com respiro SUTIL (02G: py-[1px]→py-0.5,
+  // mb-0→mb-0.5). MESMA aparência e hierarquia: bg-primary/10, borda e tipografia
+  // 9px bold uppercase inalteradas.
   return (
-    <div className="bg-primary/10 border-y border-primary/15 px-3 py-[1px] mt-0.5 first:mt-0 mb-0">
+    <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 first:mt-0 mb-0.5">
       <span className="text-[9px] font-bold uppercase tracking-wide text-primary/90 leading-none">{titulo}</span>
     </div>
   );
 }
 function ResumoRow({ label, value, valueClassName }: { label: string; value: string | null; valueClassName?: string }) {
-  // PR-FIN-MODAL-02F — linha compactada (gap/leading menores) p/ densidade estilo ERP.
+  // PR-FIN-MODAL-02F/02G — linha densa estilo ERP; 02G alivia o line-height
+  // (leading-none→leading-tight) p/ conforto visual, MANTENDO a fonte (text-[10px]).
   return (
-    <div className="flex items-baseline justify-between gap-1.5 leading-none">
+    <div className="flex items-baseline justify-between gap-1.5 leading-tight">
       <span className="text-muted-foreground shrink-0">{label}</span>
       <span className={cn("font-medium text-right truncate", valueClassName)}>{value || '—'}</span>
     </div>
@@ -1005,7 +1007,11 @@ export function LancamentoV2Dialog({
                   dentro do aside e recupera altura útil. Rótulo NÃO interativo (não é um
                   TabsTrigger) → não entra no foco/teclado das tabs. Só no fluxo normal. */}
               {!excelContext && (
-                <span className="ml-auto w-[300px] shrink-0 self-stretch border-l border-border flex items-center px-3 text-[10px] font-bold uppercase tracking-wide text-primary">
+                // PR-FIN-MODAL-02G — `-mr-2` cancela o padding direito (px-2) da TabsList,
+                // deixando a célula flush à borda direita do modal como o <aside> (w-[300px]
+                // + border-l + px-3). Alinha o início do título EXATAMENTE ao início do
+                // conteúdo do resumo (antes ~8px deslocado à esquerda).
+                <span className="ml-auto -mr-2 w-[300px] shrink-0 self-stretch border-l border-border flex items-center px-3 text-[10px] font-bold uppercase tracking-wide text-primary">
                   Resumo do lançamento
                 </span>
               )}
@@ -1613,7 +1619,7 @@ export function LancamentoV2Dialog({
               {/* PR-FIN-MODAL-02F — título movido para a faixa das tabs; aside começa direto
                   nos blocos, com tipografia e espaçamentos compactados (densidade estilo ERP). */}
               <ResumoBlocoHead titulo="Identificação" />
-              <div className="px-3 space-y-px">
+              <div className="px-3 space-y-0.5">
                 <ResumoRow label="Tipo" value={resumoTipoLabel} valueClassName={resumoTipoCor} />
                 <ResumoRow label="Produto" value={descricao} />
                 <ResumoRow label="Data Competência" value={resumoFmtData(dataCompetencia)} />
@@ -1622,7 +1628,7 @@ export function LancamentoV2Dialog({
               </div>
 
               <ResumoBlocoHead titulo="Financeiro" />
-              <div className="px-3 space-y-px">
+              <div className="px-3 space-y-0.5">
                 <ResumoRow label="Valor" value={valorNum > 0 ? formatMoeda(valorNum) : null} />
                 {!isEntrada && <ResumoRow label="Conta origem" value={resumoContaOrigem} />}
                 {(isEntrada || isTransferencia) && <ResumoRow label="Conta destino" value={resumoContaDestino} />}
@@ -1630,14 +1636,14 @@ export function LancamentoV2Dialog({
               </div>
 
               <ResumoBlocoHead titulo="Classificação" />
-              <div className="px-3 space-y-px">
+              <div className="px-3 space-y-0.5">
                 <ResumoRow label="Safra" value={resumoSafra} />
                 <ResumoRow label="Centro" value={centroCusto} />
                 <ResumoRow label="Subcentro" value={subcentro} />
               </div>
 
               <ResumoBlocoHead titulo="Pagamento" />
-              <div className="px-3 space-y-px">
+              <div className="px-3 space-y-0.5">
                 <ResumoRow label="Pagamento" value={resumoFmtData(dataPagamento)} />
                 <ResumoRow label="Forma" value={formaPgto} />
                 <ResumoRow label="Modalidade" value={!isEdit ? (formaPagamentoParc === 'parcelada' ? 'Parcelada' : 'À vista') : null} />
@@ -1646,7 +1652,7 @@ export function LancamentoV2Dialog({
               </div>
 
               <ResumoBlocoHead titulo="Documento" />
-              <div className="px-3 space-y-px">
+              <div className="px-3 space-y-0.5">
                 <ResumoRow label="Tipo" value={tipoDocumento || null} />
                 <ResumoRow label="Número" value={notaFiscalDisplay || null} />
               </div>
