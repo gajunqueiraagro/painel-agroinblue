@@ -990,8 +990,11 @@ export function LancamentoV2Dialog({
         )}>
           {/* Header */}
           {/* PR-FIN-MODAL-02H — no grid (fluxo normal) o header ocupa as 2 colunas na linha 1;
-              no fluxo Excel (flex-col) as classes de grid são inertes. */}
-          <DialogHeader className={cn("px-5 pt-3 pb-2.5 border-b border-primary/20 bg-primary", !excelContext && "col-span-2 row-start-1")}>
+              no fluxo Excel (flex-col) as classes de grid são inertes.
+              PR-FIN-MODAL-02J — padding vertical simétrico (py-2.5) p/ centrar o título em relação
+              ao X, e pr-10 de folga p/ o título/subtítulo nunca correrem sob o botão X (que é fixo
+              no ui/dialog.tsx compartilhado — não movido nesta frente). Identidade (barra azul) mantida. */}
+          <DialogHeader className={cn("px-5 py-2.5 pr-10 border-b border-primary/20 bg-primary", !excelContext && "col-span-2 row-start-1")}>
             <DialogTitle className="text-[13px] font-bold tracking-tight text-primary-foreground">{isEdit ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
             {excelContext && (
               <div className="text-[10px] font-normal text-primary-foreground/80 mt-0.5">
@@ -1011,11 +1014,41 @@ export function LancamentoV2Dialog({
           <Tabs value={abaAtiva} onValueChange={v => setAbaAtiva(v as AbaFinanceira)} className={cn("flex flex-col min-h-0", excelContext ? "flex-1" : "col-start-1 row-start-2")}>
             <TabsList className="w-full justify-start gap-0.5 rounded-none border-b border-border bg-accent/40 px-2 h-8 shrink-0">
               {ABAS_TAB.map(({ value, label }) => (
-                <TabsTrigger key={value} value={value} className="h-6 px-2.5 text-[11px] gap-1.5 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                // PR-FIN-MODAL-02J — restyle das abas (ERP moderno): inativa discreta
+                // (font-medium/muted, hover suave), ativa evidente sem borda grossa —
+                // fundo background, cantos sup. arredondados, borda fininha, sombra leve e
+                // UNDERLINE primário de 1px via `after:` (pseudo-elemento), evitando somar duas
+                // bordas inferiores (linha de 2px). `relative` sustenta o badge no canto.
+                <TabsTrigger
+                  key={value}
+                  value={value}
+                  className={cn(
+                    "relative h-6 px-3 text-[12px] font-medium text-muted-foreground rounded-b-none rounded-t-md",
+                    "hover:bg-background/60 hover:text-foreground",
+                    "data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:font-semibold",
+                    "data-[state=active]:border data-[state=active]:border-border data-[state=active]:border-b-transparent data-[state=active]:shadow-sm",
+                    "data-[state=active]:after:absolute data-[state=active]:after:inset-x-0 data-[state=active]:after:-bottom-px data-[state=active]:after:h-px data-[state=active]:after:bg-primary",
+                  )}
+                >
                   {label}
-                  {abaComErro(value) && <span className="inline-block h-1.5 w-1.5 rounded-full bg-destructive" aria-label="pendência" />}
+                  {abaComErro(value) && (
+                    <span
+                      className="absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-destructive"
+                      aria-label="pendência"
+                    />
+                  )}
                 </TabsTrigger>
               ))}
+              {/* PR-FIN-MODAL-02J — previsão visual da futura aba "Auditoria": elemento INERTE,
+                  FORA do maquinário do Tabs (sem value/ABAS_TAB/activeTab/abaComErro/badge/TabsContent).
+                  Aparência de aba desabilitada + tooltip nativo. Sem hook/consulta/dado. */}
+              <span
+                aria-disabled="true"
+                title="Disponível em breve"
+                className="h-6 px-3 inline-flex items-center text-[12px] font-medium text-muted-foreground/50 cursor-not-allowed select-none"
+              >
+                Auditoria
+              </span>
             </TabsList>
           {/* PR-Mesa-ExcelContext: com contexto Excel, corpo vira 2 colunas
               (form + painel). Sem contexto, wrapper usa `contents` (não gera
@@ -1154,9 +1187,10 @@ export function LancamentoV2Dialog({
                 apenas reposicionamento visual. O espaçamento vertical entre as linhas vem
                 do `space-y-2` do próprio TabsContent. */}
 
-            {/* ── LINHA 1 — Tipo, Datas e Status ──
-                Estrutura preparada para a futura Data de Vencimento (PR-FIN-DATAS-01):
-                Tipo | Competência | Vencimento | Pagamento | Status. NÃO criar o campo agora. */}
+            {/* ── LINHA 1 — Tipo | Competência | Vencimento | Pagamento | Status (grid 3/2/2/2/3 = 12) ──
+                PR-FIN-MODAL-02J: Vencimento é APENAS um placeholder "Em breve" (recurso futuro —
+                PR-FIN-DATAS-01). Competência e Pagamento seguem com o MESMO DatePicker compartilhado,
+                inalterado (a densificação do gatilho fica p/ a frente de calendário). */}
             <div className="grid grid-cols-12 gap-2">
               <div className="col-span-3">
                 <Label className="text-[10px]">Tipo Operação *</Label>
@@ -1167,11 +1201,18 @@ export function LancamentoV2Dialog({
                   </SelectContent>
                 </Select>
               </div>
-              <div className="col-span-3">
+              <div className="col-span-2">
                 <Label className="text-[10px]">Data Competência *</Label>
                 <DatePicker value={dataCompetencia} onChange={setDataCompetencia} disabled={isOCTitulo} tabIndex={2} className={fieldBg} />
               </div>
-              <div className="col-span-3">
+              {/* Data Vencimento — PLACEHOLDER "Em breve" (PR-FIN-MODAL-02J). Campo desabilitado,
+                  discreto, mesma altura (h-8). SEM DatePicker/estado/valor/validação/payload — apenas
+                  reserva visual do futuro campo (PR-FIN-DATAS-01). */}
+              <div className="col-span-2">
+                <Label className="text-[10px] text-muted-foreground">Data Vencimento</Label>
+                <Input value="" readOnly disabled aria-disabled="true" tabIndex={-1} placeholder="Em breve" className="h-8 bg-muted/60 dark:bg-muted border-border/20 text-muted-foreground cursor-not-allowed text-xs" />
+              </div>
+              <div className="col-span-2">
                 <Label className="text-[10px]">Data Pagamento *</Label>
                 <DatePicker value={dataPagamento} onChange={handleDataPagamentoChange} disabled={lockedFields?.includes('data_pagamento')} tabIndex={3} className={fieldBg} />
               </div>
@@ -1662,7 +1703,7 @@ export function LancamentoV2Dialog({
             <aside className="col-start-2 row-start-2 row-span-2 border-l border-border bg-muted/20 flex flex-col overflow-hidden">
               {/* Faixa de título: mesma altura/borda/fundo da TabsList (h-8, border-b, bg-accent/40)
                   → alinha perfeitamente à faixa das abas na coluna da esquerda. */}
-              <div className="h-8 shrink-0 border-b border-border bg-accent/40 flex items-center px-3 text-[10px] font-bold uppercase tracking-wide text-primary">
+              <div className="h-8 shrink-0 border-b border-border bg-accent/40 flex items-center px-3 text-[11px] font-bold uppercase tracking-wide text-primary">
                 Resumo do lançamento
               </div>
               {/* Corpo do resumo: SEM padding superior — o primeiro bloco (Identificação) encosta
