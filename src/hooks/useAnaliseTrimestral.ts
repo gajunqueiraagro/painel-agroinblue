@@ -19,6 +19,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { isLancamentoDRERealizada } from '@/lib/financeiro/dreRealizada';
 
 export type Trimestre = 1 | 2 | 3 | 4;
 
@@ -73,9 +74,9 @@ export function useAnaliseTrimestral({ clienteId, ano, trimestre }: Params) {
           .eq('cliente_id', clienteId).eq('ano', ano).eq('cenario', 'meta').in('mes', meses),
         supabase.from('zoot_mensal_cache' as any).select('*')
           .eq('cliente_id', clienteId).eq('ano', anoPrev).eq('cenario', 'realizado').in('mes', meses),
-        supabase.from('financeiro_lancamentos_v2').select('ano_mes, valor, tipo_operacao, macro_custo, grupo_custo, subcentro, centro_custo')
+        supabase.from('financeiro_lancamentos_v2').select('ano_mes, valor, tipo_operacao, macro_custo, grupo_custo, subcentro, centro_custo, compoe_dre')
           .eq('cliente_id', clienteId).eq('cancelado', false).in('ano_mes', anoMesTri),
-        supabase.from('financeiro_lancamentos_v2').select('ano_mes, valor, tipo_operacao, macro_custo, grupo_custo')
+        supabase.from('financeiro_lancamentos_v2').select('ano_mes, valor, tipo_operacao, macro_custo, grupo_custo, compoe_dre')
           .eq('cliente_id', clienteId).eq('cancelado', false).in('ano_mes', anoMesTriPrev),
         supabase.from('financeiro_saldos_bancarios_v2').select('ano_mes, saldo_inicial, saldo_final, total_entradas, total_saidas')
           .eq('cliente_id', clienteId).in('ano_mes', anoMesTri),
@@ -171,26 +172,34 @@ export function useAnaliseTrimestral({ clienteId, ano, trimestre }: Params) {
         }
         return out;
       };
+      // Agregador de LINHA da DRE: aplica o GATE oficial de pertencimento (FIN-FLAGS-01B,
+      // compoe_dre===true) ANTES do predicado de linha. matchSum "puro" permanece para itens
+      // financeiros/caixa NÃO-DRE (amortizações, dividendos, aporte pessoal).
+      const matchSumDRE = (pred: (l: any) => boolean): Arr3 =>
+        matchSum(l => isLancamentoDRERealizada(l) && pred(l));
 
-      const custoFixoPec = matchSum(l => l.grupo_custo === 'Custo Fixo Pecuária');
-      const custoVariavelPec = matchSum(l => l.grupo_custo === 'Custo Variável Pecuária');
-      const jurosPec = matchSum(l => l.grupo_custo === 'Juros de Financiamento Pecuária');
-      const deducoesPec = matchSum(l => l.macro_custo === 'Deduções de Receitas' && l.grupo_custo === 'Deduções Pecuária');
+      const custoFixoPec = matchSumDRE(l => l.grupo_custo === 'Custo Fixo Pecuária');
+      const custoVariavelPec = matchSumDRE(l => l.grupo_custo === 'Custo Variável Pecuária');
+      const jurosPec = matchSumDRE(l => l.grupo_custo === 'Juros de Financiamento Pecuária');
+      const deducoesPec = matchSumDRE(l => l.macro_custo === 'Deduções de Receitas' && l.grupo_custo === 'Deduções Pecuária');
       const custoProducaoPec: Arr3 = [0, 1, 2].map(i => custoFixoPec[i] + custoVariavelPec[i] + jurosPec[i] + deducoesPec[i]) as Arr3;
       const rCabMes: Arr3 = [0, 1, 2].map(i => rebanhoMedio[i] > 0 ? custoProducaoPec[i] / rebanhoMedio[i] : 0) as Arr3;
 
-      const custoFixoAgr = matchSum(l => l.grupo_custo === 'Custo Fixo Agricultura');
-      const custoVarAgr = matchSum(l => l.grupo_custo === 'Custo Variável Agricultura');
-      const investPec = matchSum(l => l.grupo_custo === 'Investimento Pecuária');
-      const investAgr = matchSum(l => l.macro_custo === 'Investimento na Fazenda' && l.grupo_custo === 'Investimento Agricultura');
+      const custoFixoAgr = matchSumDRE(l => l.grupo_custo === 'Custo Fixo Agricultura');
+      const custoVarAgr = matchSumDRE(l => l.grupo_custo === 'Custo Variável Agricultura');
+      const investPec = matchSumDRE(l => l.grupo_custo === 'Investimento Pecuária');
+      const investAgr = matchSumDRE(l => l.macro_custo === 'Investimento na Fazenda' && l.grupo_custo === 'Investimento Agricultura');
+      const compraBovinos = matchSumDRE(l => l.grupo_custo === 'Compra de Bovinos');
+      // NÃO-DRE (financiamento/distribuição/aporte): compoe_dre=false; usados em detalhamentoSaidas/aportes.
       const amortizacoes = matchSum(l => l.macro_custo === 'Saída Financeira' && l.grupo_custo === 'Amortizações');
-      const compraBovinos = matchSum(l => l.grupo_custo === 'Compra de Bovinos');
       const dividendos = matchSum(l => l.tipo_operacao === '2-Saídas' && l.macro_custo === 'Dividendos');
       const aportePessoal = matchSum(l => l.tipo_operacao === '1-Entradas' && l.subcentro === 'Aporte Pessoal');
 
-      const receitaPec = matchSum(l => l.tipo_operacao === '1-Entradas' && l.grupo_custo === 'Receita Pecuária');
-      const receitaTotal = matchSum(l => l.tipo_operacao === '1-Entradas' && l.macro_custo === 'Receita Operacional');
-      const faturamentoTotal = matchSum(l => l.tipo_operacao === '1-Entradas' && l.macro_custo !== 'Entrada Financeira');
+      const receitaPec = matchSumDRE(l => l.tipo_operacao === '1-Entradas' && l.grupo_custo === 'Receita Pecuária');
+      const receitaTotal = matchSumDRE(l => l.tipo_operacao === '1-Entradas' && l.macro_custo === 'Receita Operacional');
+      // Faturamento: a exclusão manual de 'Entrada Financeira' deixa de ser regra de pertencimento —
+      // o gate oficial resolve (para 1-Entradas, compoe_dre=false ⟺ Entrada Financeira; NULL=0 → equivalente).
+      const faturamentoTotal = matchSumDRE(l => l.tipo_operacao === '1-Entradas');
 
       const lucroBrutoPec: Arr3 = [0, 1, 2].map(i => receitaPec[i] - custoProducaoPec[i]) as Arr3;
       const margemPct: Arr3 = [0, 1, 2].map(i => receitaPec[i] > 0 ? (lucroBrutoPec[i] / receitaPec[i]) * 100 : 0) as Arr3;
@@ -256,12 +265,15 @@ export function useAnaliseTrimestral({ clienteId, ano, trimestre }: Params) {
       const finRowsPrev = (finLancsPrev.data as any[]) || [];
       const sumPrev = (pred: (l: any) => boolean): number =>
         finRowsPrev.filter(pred).reduce((s, l) => s + Math.abs(Number(l.valor) || 0), 0);
-      const prevFatura = sumPrev(l => l.tipo_operacao === '1-Entradas' && l.grupo_custo === 'Receita Pecuária');
-      const prevCustoFixo = sumPrev(l => l.grupo_custo === 'Custo Fixo Pecuária');
-      const prevCustoVar = sumPrev(l => l.grupo_custo === 'Custo Variável Pecuária');
+      // Ref DRE ano-1: mesmo gate oficial (compoe_dre===true) antes do predicado de linha.
+      const sumPrevDRE = (pred: (l: any) => boolean): number =>
+        sumPrev(l => isLancamentoDRERealizada(l) && pred(l));
+      const prevFatura = sumPrevDRE(l => l.tipo_operacao === '1-Entradas' && l.grupo_custo === 'Receita Pecuária');
+      const prevCustoFixo = sumPrevDRE(l => l.grupo_custo === 'Custo Fixo Pecuária');
+      const prevCustoVar = sumPrevDRE(l => l.grupo_custo === 'Custo Variável Pecuária');
       const prevDesemb = prevCustoFixo + prevCustoVar;
-      const prevReposicao = sumPrev(l => l.grupo_custo === 'Compra de Bovinos');
-      const prevJuros = sumPrev(l => l.grupo_custo === 'Juros de Financiamento Pecuária');
+      const prevReposicao = sumPrevDRE(l => l.grupo_custo === 'Compra de Bovinos');
+      const prevJuros = sumPrevDRE(l => l.grupo_custo === 'Juros de Financiamento Pecuária');
       const prevLucroBruto = prevFatura - prevDesemb;
       const prevMesFinTri = anoMesTriPrev[2];
       const prevVarFinal = vrfValor(prevMesFinTri);
@@ -359,10 +371,10 @@ export function useAnaliseDREPeriodo({ clienteId, ano, ateMes }: DREPeriodoParam
 
       const [fin, finPrev, compras, zootAtu, vrf] = await Promise.all([
         supabase.from('financeiro_lancamentos_v2')
-          .select('ano_mes, valor, tipo_operacao, macro_custo, grupo_custo')
+          .select('ano_mes, valor, tipo_operacao, macro_custo, grupo_custo, compoe_dre')
           .eq('cliente_id', clienteId).eq('cancelado', false).in('ano_mes', anoMes),
         supabase.from('financeiro_lancamentos_v2')
-          .select('ano_mes, valor, tipo_operacao, macro_custo, grupo_custo')
+          .select('ano_mes, valor, tipo_operacao, macro_custo, grupo_custo, compoe_dre')
           .eq('cliente_id', clienteId).eq('cancelado', false).in('ano_mes', anoMesPrev),
         supabase.from('lancamentos')
           .select('data, tipo, valor_total, quantidade, peso_total')
@@ -396,10 +408,13 @@ export function useAnaliseDREPeriodo({ clienteId, ano, ateMes }: DREPeriodoParam
         return out;
       };
 
-      const faturamento = sumByMes(finRows, l => l.tipo_operacao === '1-Entradas' && l.grupo_custo === 'Receita Pecuária');
-      const custoFixo = sumByMes(finRows, l => l.grupo_custo === 'Custo Fixo Pecuária');
-      const custoVar = sumByMes(finRows, l => l.grupo_custo === 'Custo Variável Pecuária');
-      const juros = sumByMes(finRows, l => l.grupo_custo === 'Juros de Financiamento Pecuária');
+      // Gate oficial de pertencimento à DRE (FIN-FLAGS-01B) antes de cada predicado de linha.
+      const sumByMesDRE = (rows: any[], pred: (l: any) => boolean): number[] =>
+        sumByMes(rows, l => isLancamentoDRERealizada(l) && pred(l));
+      const faturamento = sumByMesDRE(finRows, l => l.tipo_operacao === '1-Entradas' && l.grupo_custo === 'Receita Pecuária');
+      const custoFixo = sumByMesDRE(finRows, l => l.grupo_custo === 'Custo Fixo Pecuária');
+      const custoVar = sumByMesDRE(finRows, l => l.grupo_custo === 'Custo Variável Pecuária');
+      const juros = sumByMesDRE(finRows, l => l.grupo_custo === 'Juros de Financiamento Pecuária');
 
       const desembolso: number[] = meses.map((_, i) => custoFixo[i] + custoVar[i]);
       const lucroBruto: number[] = meses.map((_, i) => faturamento[i] - desembolso[i]);
@@ -458,7 +473,7 @@ export function useAnaliseDREPeriodo({ clienteId, ano, ateMes }: DREPeriodoParam
 
       // Ref ano anterior (mesmo período)
       const sumPrev = (pred: (l: any) => boolean) =>
-        finRowsPrev.filter(pred).reduce((s, l) => s + Math.abs(Number(l.valor) || 0), 0);
+        finRowsPrev.filter(l => isLancamentoDRERealizada(l) && pred(l)).reduce((s, l) => s + Math.abs(Number(l.valor) || 0), 0);
       const prevFat = sumPrev(l => l.tipo_operacao === '1-Entradas' && l.grupo_custo === 'Receita Pecuária');
       const prevFixo = sumPrev(l => l.grupo_custo === 'Custo Fixo Pecuária');
       const prevVar = sumPrev(l => l.grupo_custo === 'Custo Variável Pecuária');

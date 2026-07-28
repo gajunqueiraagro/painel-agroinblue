@@ -92,6 +92,9 @@ export interface FinanceiroLancamento {
   lote_importacao_id?: string | null;
   cancelado?: boolean;
   editado_manual?: boolean;
+  /** Flag oficial de pertencimento à DRE (FIN-FLAGS-01A). Materializada no banco;
+   *  autoridade única via isLancamentoDRERealizada. true=entra, false/null=fora. */
+  compoe_dre?: boolean | null;
   /** FK para `lancamentos.id` quando o registro foi gerado a partir de uma
    *  movimentação zootécnica (compra/abate/venda). Read-only — usado para
    *  indicador visual nas listagens financeiras. */
@@ -240,6 +243,7 @@ export function mapV2ToLancamento(r: any): FinanceiroLancamento {
     cancelado: r.cancelado,
     editado_manual: r.editado_manual,
     movimentacao_rebanho_id: r.movimentacao_rebanho_id ?? null,
+    compoe_dre: r.compoe_dre ?? null,
   };
 }
 

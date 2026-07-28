@@ -16,6 +16,7 @@
  */
 
 import type { FinanceiroLancamento } from '@/hooks/useFinanceiro';
+import { isLancamentoDRERealizada } from '@/lib/financeiro/dreRealizada';
 import {
   MACROS_ENTRADA,
   MACROS_SAIDA,
@@ -200,12 +201,15 @@ function serieLanc(
 // FILTROS DE NEGÓCIO
 // ─────────────────────────────────────────────────────────────
 
-const isCustoFixoPec = (l: FinanceiroLancamento) => l.grupo_custo === 'Custo Fixo Pecuária';
-const isCustoVarPec  = (l: FinanceiroLancamento) => l.grupo_custo === 'Custo Variável Pecuária';
-const isJurosPec     = (l: FinanceiroLancamento) => l.grupo_custo === 'Juros de Financiamento Pecuária';
+// Predicados de LINHA da DRE (seção DRE do Fechamento V2). Cada um aplica o GATE oficial de
+// pertencimento (FIN-FLAGS-01B, compoe_dre===true) antes do critério de linha. Usados apenas na
+// seção DRE (somaLanc/serieLanc); a seção de CAIXA usa isLancEntradaCaixa/SaidaCaixa (não gateados).
+const isCustoFixoPec = (l: FinanceiroLancamento) => isLancamentoDRERealizada(l) && l.grupo_custo === 'Custo Fixo Pecuária';
+const isCustoVarPec  = (l: FinanceiroLancamento) => isLancamentoDRERealizada(l) && l.grupo_custo === 'Custo Variável Pecuária';
+const isJurosPec     = (l: FinanceiroLancamento) => isLancamentoDRERealizada(l) && l.grupo_custo === 'Juros de Financiamento Pecuária';
 const isCusteioPec   = (l: FinanceiroLancamento) => isCustoFixoPec(l) || isCustoVarPec(l);
 const isReceitaPec   = (l: FinanceiroLancamento) =>
-  l.grupo_custo === 'Receita Pecuária' && l.tipo_operacao === '1-Entradas';
+  isLancamentoDRERealizada(l) && l.grupo_custo === 'Receita Pecuária' && l.tipo_operacao === '1-Entradas';
 
 const isMetaCustoFixoPec = (r: MetaGridRow) => r.grupo_custo === 'Custo Fixo Pecuária';
 const isMetaCustoVarPec  = (r: MetaGridRow) => r.grupo_custo === 'Custo Variável Pecuária';
@@ -217,7 +221,8 @@ const isMetaReceitaPec   = (r: MetaGridRow) => r.grupo_custo === 'Receita Pecuá
 // Usa grupo_custo='Investimento Pecuária' (mais robusto que macro+escopo
 // porque meta_projetos_investimento entra no metaGrid sem escopo_negocio).
 const isInvFazendaPec = (l: FinanceiroLancamento) =>
-  l.tipo_operacao === '2-Saídas'
+  isLancamentoDRERealizada(l)
+  && l.tipo_operacao === '2-Saídas'
   && l.grupo_custo === 'Investimento Pecuária';
 
 const isMetaInvFazendaPec = (r: MetaGridRow) =>

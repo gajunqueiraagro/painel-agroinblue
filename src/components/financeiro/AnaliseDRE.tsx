@@ -31,6 +31,7 @@ import {
   isReposicaoBovinos,
   isRealizado as isRealizadoHelper,
 } from "./analiseHelpers";
+import { isLancamentoDRERealizada } from "@/lib/financeiro/dreRealizada";
 import { VariacaoEstoqueExplicacao } from "./VariacaoEstoqueExplicacao";
 import { supabase } from "@/integrations/supabase/client";
 import type { FinanceiroLancamento, RateioADM } from "@/hooks/useFinanceiro";
@@ -266,7 +267,7 @@ export function DREAtividade({
     // Reposição only for this month
     const mesKey = String(mesNum).padStart(2, "0");
     const lancsDoMes = lancConciliadosPorMes.get(mesKey) || [];
-    const repMes = lancsDoMes.filter(l => isReposicaoBovinos(l)).reduce((s, l) => s + Math.abs(l.valor), 0);
+    const repMes = lancsDoMes.filter(l => isLancamentoDRERealizada(l) && isReposicaoBovinos(l)).reduce((s, l) => s + Math.abs(l.valor), 0);
 
     return valFinal - valAnterior - repMes;
   }, [precosMap, saldosIniciais, lancConciliadosPorMes, anoFiltro, anoNum, mesNum, rebanho, pesosReaisInicial]);
@@ -281,7 +282,10 @@ export function DREAtividade({
       lancsAcum.push(...(lancConciliadosPorMes.get(k) || []));
     }
 
-    const calc = (list: FinanceiroLancamento[]) => {
+    const calc = (listRaw: FinanceiroLancamento[]) => {
+      // GATE oficial de pertencimento à DRE (FIN-FLAGS-01B): só compoe_dre===true entra;
+      // os predicados abaixo apenas DISTRIBUEM os remanescentes nas linhas existentes.
+      const list = listRaw.filter(isLancamentoDRERealizada);
       const receitas = somaAbs(list.filter((l) => isReceitaMacro(l)));
       const deducoes = somaAbs(list.filter((l) => isDeducaoReceita(l)));
       const receitaLiq = receitas - deducoes;

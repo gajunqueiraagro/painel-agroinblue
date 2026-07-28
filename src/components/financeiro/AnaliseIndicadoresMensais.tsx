@@ -9,6 +9,7 @@ import { StandardTooltip } from '@/lib/chartConfig';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { MESES_NOMES } from '@/lib/calculos/labels';
 import { isCusteioProdutivo, isSaida, somaAbs } from './analiseHelpers';
+import { isLancamentoDRERealizada } from '@/lib/financeiro/dreRealizada';
 import type { FinanceiroLancamento, RateioADM } from '@/hooks/useFinanceiro';
 import type { IndicadoresZootecnicos } from '@/hooks/useIndicadoresZootecnicos';
 
@@ -70,7 +71,8 @@ export function IndicadoresMensais({
       const mesKey = String(m).padStart(2, '0');
       const lancs = lancConciliadosPorMes.get(mesKey) || [];
 
-      const custeioProd = lancs.filter(l => isCusteioProdutivo(l) && isSaida(l));
+      // Indicador de CUSTO (derivado da DRE): gate oficial compoe_dre (FIN-FLAGS-01B).
+      const custeioProd = lancs.filter(l => isLancamentoDRERealizada(l) && isCusteioProdutivo(l) && isSaida(l));
       const desembolsoMes = somaAbs(custeioProd);
 
       const rateioMes = rateioADM
@@ -79,6 +81,8 @@ export function IndicadoresMensais({
 
       const desembolsoMesTotal = desembolsoMes + rateioMes;
 
+      // Indicador de DESEMBOLSO/CAIXA (NÃO é DRE): total de saídas financeiras de caixa —
+      // inclui Saída Financeira/Dividendos/Amortizações. NÃO recebe o gate de DRE (bloco misto).
       const saidasMes = somaAbs(lancs.filter(isSaida));
       acumSaidas += saidasMes;
       acumDesembolso += desembolsoMesTotal;

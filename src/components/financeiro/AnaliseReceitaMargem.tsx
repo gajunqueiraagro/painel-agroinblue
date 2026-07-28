@@ -9,6 +9,7 @@ import { StandardTooltip } from '@/lib/chartConfig';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { MESES_NOMES } from '@/lib/calculos/labels';
 import { isCusteioProdutivo, isReceitaMacro, isDeducaoReceita, isSaida, isEntrada, somaAbs } from './analiseHelpers';
+import { isLancamentoDRERealizada } from '@/lib/financeiro/dreRealizada';
 import { calcArrobasSafe } from '@/lib/calculos/economicos';
 import type { FinanceiroLancamento, RateioADM } from '@/hooks/useFinanceiro';
 import type { Lancamento } from '@/types/cattle';
@@ -67,7 +68,9 @@ export function ReceitaCustoMargem({
 
     for (let m = 1; m <= mesLimite; m++) {
       const mesKey = String(m).padStart(2, '0');
-      const lancs = lancConciliadosPorMes.get(mesKey) || [];
+      // GATE oficial de pertencimento à DRE (FIN-FLAGS-01B): só compoe_dre===true entra;
+      // os predicados de linha (receita/deduções/custo) apenas distribuem os remanescentes.
+      const lancs = (lancConciliadosPorMes.get(mesKey) || []).filter(isLancamentoDRERealizada);
 
       // Receita = macro_custo "Receitas" (entradas)
       const receitaMes = somaAbs(lancs.filter(l => isReceitaMacro(l)));

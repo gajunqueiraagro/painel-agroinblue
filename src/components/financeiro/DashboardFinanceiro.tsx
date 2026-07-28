@@ -22,6 +22,7 @@ import {
   datePagtoAnoMes as datePagtoAnoMesCentral,
   isDesembolsoProdutivo as isDesembolsoProdutivoCentral,
 } from '@/lib/financeiro/classificacao';
+import { isLancamentoDRERealizada } from '@/lib/financeiro/dreRealizada';
 
 // ---------------------------------------------------------------------------
 // Agrupamento por macro_custo oficial (plano de contas)
@@ -65,10 +66,9 @@ export interface DrillDownPayload {
   periodo: 'mes' | 'acum';
 }
 
-const MACROS_EXCLUIDOS_DRE = new Set(['Transferências', 'Entre Contas']);
-/** Lançamento elegível para DRE (exclui transferências e não classificados) */
-const isDRE = (l: FinanceiroLancamento) =>
-  l.macro_custo != null && !MACROS_EXCLUIDOS_DRE.has(l.macro_custo.trim());
+/** Pertencimento à DRE = flag oficial compoe_dre (FIN-FLAGS-01B). Sem heurística de macro.
+ *  A separação entrada/saída e a linha continuam nos predicados isEntrada/isSaida. */
+const isDRE = (l: FinanceiroLancamento) => isLancamentoDRERealizada(l);
 
 interface Props {
   lancamentos: FinanceiroLancamento[];
