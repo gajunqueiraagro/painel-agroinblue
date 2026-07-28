@@ -17,6 +17,10 @@ export interface LancamentoV2 {
   conta_bancaria_id: string | null;
   data_competencia: string;
   data_pagamento: string | null;
+  // PR-FIN-DATAS-01 — eixo de vencimento (aditivo). Data em que a obrigação é devida
+  // (pagar/receber). Nullable: meta/planejamento/legado. Ainda NÃO lido/escrito por
+  // nenhum consumidor — só existe no contrato de tipos.
+  data_vencimento: string | null;
   valor: number;
   sinal: number;
   tipo_operacao: string;
@@ -62,6 +66,9 @@ export interface LancamentoV2Form {
   conta_destino_id?: string | null;
   data_competencia: string;
   data_pagamento?: string | null;
+  // PR-FIN-DATAS-01 — eixo de vencimento (aditivo, OPCIONAL). Nenhum writer/onSave escreve
+  // este campo nesta etapa; existe só para o contrato futuro sem forçar alteração de consumidores.
+  data_vencimento?: string | null;
   valor: number;
   tipo_operacao: string;
   status_transacao?: string;

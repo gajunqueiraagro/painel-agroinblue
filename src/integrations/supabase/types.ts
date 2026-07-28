@@ -2466,6 +2466,7 @@ export type Database = {
           dados_pagamento: string | null
           data_competencia: string
           data_pagamento: string | null
+          data_vencimento: string | null
           descricao: string | null
           documento: string | null
           duplicado_de_id: string | null
@@ -2519,6 +2520,7 @@ export type Database = {
           dados_pagamento?: string | null
           data_competencia: string
           data_pagamento?: string | null
+          data_vencimento?: string | null
           descricao?: string | null
           documento?: string | null
           duplicado_de_id?: string | null
@@ -2572,6 +2574,7 @@ export type Database = {
           dados_pagamento?: string | null
           data_competencia?: string
           data_pagamento?: string | null
+          data_vencimento?: string | null
           descricao?: string | null
           documento?: string | null
           duplicado_de_id?: string | null
