@@ -15,6 +15,8 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { computeValidacaoModal, type AbaFinanceira } from './lancamentoDialogTabs';
 import { AlertCircle, AlertTriangle, Copy, KeyRound, RefreshCw, CalendarDays, User, DollarSign, FileText, Beef } from 'lucide-react';
 import { LancamentoZooModal } from '@/v2/components/edicao/LancamentoZooModal';
 import { toast } from 'sonner';
@@ -91,6 +93,14 @@ const TIPOS_OPERACAO = [
   { value: '1-Entradas', label: 'Entradas' },
   { value: '2-Saídas', label: 'Saídas' },
   { value: '3-Transferências', label: 'Transferências' },
+];
+
+// PR-FIN-MODAL-02B — abas do modal (labels compactos para a TabsList).
+const ABAS_TAB: { value: AbaFinanceira; label: string }[] = [
+  { value: 'geral', label: 'Geral' },
+  { value: 'classificacao', label: 'Classificação' },
+  { value: 'pagamento', label: 'Pagamento' },
+  { value: 'documentos', label: 'Documentos' },
 ];
 
 const STATUS_OPTIONS = [
@@ -266,6 +276,9 @@ export function LancamentoV2Dialog({
     editingIdRef.current = lancamento?.id ?? null;
   }, [lancamento]);
   const [saving, setSaving] = useState(false);
+  // PR-FIN-MODAL-02B — aba ativa (Tabs controlado). Vive no pai; nenhum estado de campo é
+  // duplicado por aba. Redefinida para 'geral' na hidratação (abrir/trocar de registro).
+  const [abaAtiva, setAbaAtiva] = useState<AbaFinanceira>('geral');
   const [fornecedorDialogOpen, setFornecedorDialogOpen] = useState(false);
   // FASE 1 zoo-fin: aviso de origem zootécnica + navegação para LancamentoZooModal.
   // zooModalId é capturado ao clicar no link âmbar; abre só após o V2Dialog
@@ -454,6 +467,7 @@ export function LancamentoV2Dialog({
     }
     setSubcentroSearch('');
     setFornecedorSearch('');
+    setAbaAtiva('geral');
   }, [open, lancamento, defaultFazendaId, prefill, lockedFields]);
 
   // FIN-MODAL-FECHO-01 item 2 — resolve o operacao_id do título OC pelo vínculo
@@ -631,18 +645,20 @@ export function LancamentoV2Dialog({
     [fazendas],
   );
 
-  // Validation
-  const contaOrigemValid = isTransferencia || !isEntrada ? !!contaOrigemId && contaOrigemId !== '__none__' : true;
-  const contaDestinoValid = isTransferencia || isEntrada ? !!contaDestinoId && contaDestinoId !== '__none__' : true;
-  const contaSimpleValid = !isTransferencia
-    ? (isEntrada ? contaDestinoValid : contaOrigemValid)
-    : (contaOrigemValid && contaDestinoValid);
-
-  const parceladaValid = formaPagamentoParc === 'avista' || (numParcelas >= 2 && numParcelas <= 24 && parcelaRows.length === numParcelas);
-  const recorrenteValid = frequencia === 'pontual' || recorrenciaRows.length > 0;
-  const canSave = !!fazendaId && !!dataCompetencia && !!dataPagamento && !!descricao
-    && !!subcentro && !!tipoOperacao && !!statusTransacao && valorNum > 0
-    && contaSimpleValid && parceladaValid && recorrenteValid;
+  // Validation — FONTE ÚNICA via helper puro (PR-FIN-MODAL-02B). Reproduz EXATAMENTE as
+  // fórmulas anteriores (contaSimpleValid/parceladaValid/recorrenteValid/canSave) e expõe
+  // as pendências por aba para os badges e o "Ver pendência". canSave permanece idêntico.
+  const validacao = computeValidacaoModal({
+    fazendaId, dataCompetencia, dataPagamento, descricao, tipoOperacao, statusTransacao,
+    valorNum, contaOrigemId, contaDestinoId, subcentro,
+    formaPagamentoParc, numParcelas, parcelaRowsLength: parcelaRows.length,
+    frequencia, recorrenciaRowsLength: recorrenciaRows.length,
+  });
+  const canSave = validacao.canSave;
+  const abaComErro = (aba: AbaFinanceira) => validacao.abasInvalidas.includes(aba);
+  const handleVerPendencia = () => {
+    if (validacao.primeiraAbaInvalida) setAbaAtiva(validacao.primeiraAbaInvalida);
+  };
 
   const handleSubmit = async () => {
     if (!canSave) return;
@@ -920,12 +936,27 @@ export function LancamentoV2Dialog({
             )}
           </DialogHeader>
 
+          {/* PR-FIN-MODAL-02B — Tabs CONTROLADO. Header e footer ficam FORA do Tabs (estáveis);
+              a TabsList fica logo abaixo do header e o corpo rolável abriga o TabsContent ativo.
+              Todo o estado dos campos permanece no componente pai (sem cópia por aba). */}
+          <Tabs value={abaAtiva} onValueChange={v => setAbaAtiva(v as AbaFinanceira)} className="flex-1 flex flex-col min-h-0">
+            <TabsList className="w-full justify-start gap-1 rounded-none border-b border-border bg-accent/40 px-3 h-9 shrink-0">
+              {ABAS_TAB.map(({ value, label }) => (
+                <TabsTrigger key={value} value={value} className="h-7 px-3 text-[11px] gap-1.5 data-[state=active]:bg-background">
+                  {label}
+                  {abaComErro(value) && <span className="inline-block h-1.5 w-1.5 rounded-full bg-destructive" aria-label="pendência" />}
+                </TabsTrigger>
+              ))}
+            </TabsList>
           {/* PR-Mesa-ExcelContext: com contexto Excel, corpo vira 2 colunas
               (form + painel). Sem contexto, wrapper usa `contents` (não gera
               caixa) → body volta a ser filho direto, layout 100% idêntico. */}
           <div className={excelContext ? "flex-1 flex min-h-0 overflow-hidden" : "contents"}>
           {/* Scrollable body */}
           <div className="flex-1 overflow-y-auto px-5 py-3 space-y-2 bg-background">
+
+            {/* ═══ ABA GERAL ═══ */}
+            <TabsContent value="geral" className="mt-0 space-y-2 focus-visible:outline-none">
 
             {/* PR2.2 — Box informativo da referência operacional que originou
                 esta criação. Read-only, não bloqueia nada. Operador continua
@@ -1118,6 +1149,13 @@ export function LancamentoV2Dialog({
                   showCpfCnpj
                 />
 
+                {/* Valor — realocado da aba Classificação para GERAL (PR-FIN-MODAL-02B).
+                    Mesmo state/máscara/handleValorChange/tabIndex/disabled; só mudou de aba. */}
+                <div>
+                  <Label className="text-[10px]">Valor (R$) *</Label>
+                  <Input tabIndex={10} value={valorDisplay} onChange={handleValorChange} onFocus={e => e.target.select()} className={cn("h-8 text-right font-mono", fieldBg)} placeholder="0,00" inputMode="numeric" disabled={lockedFields?.includes('valor') || isOCTitulo} />
+                </div>
+
                 {/* Fazenda — PR-U2c-1B: extraído para <FazendaSelect /> (fonte única) */}
                 <FazendaSelect
                   value={fazendaId}
@@ -1128,21 +1166,6 @@ export function LancamentoV2Dialog({
                   triggerClassName={fieldBg}
                   tabIndex={7}
                 />
-
-                {/* Safra (opcional) */}
-                <div>
-                  <Label className="text-[10px]">Safra</Label>
-                  <Select
-                    value={safraId || '__none_safra__'}
-                    onValueChange={v => setSafraId(v === '__none_safra__' ? '' : v)}
-                  >
-                    <SelectTrigger className={cn("h-8", fieldBg)}><SelectValue placeholder="Sem safra" /></SelectTrigger>
-                    <SelectContent className={DARK_GLASS_CONTENT}>
-                      <SelectItem value="__none_safra__">Sem safra</SelectItem>
-                      {(safras ?? []).map(s => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
 
                 {/* Conta Bancária — PR-H2: ContaBancariaSelect compartilhado
                     (agrupado por tipo_conta + dark/glass). Sentinela '__none__'
@@ -1206,14 +1229,15 @@ export function LancamentoV2Dialog({
               </div>
             </section>
 
+            </TabsContent>
+            {/* ═══ fim ABA GERAL ═══ */}
+
+            {/* ═══ ABA CLASSIFICAÇÃO ═══ */}
+            <TabsContent value="classificacao" className="mt-0 space-y-2 focus-visible:outline-none">
             {/* ── BLOCO 3 — Valor e Classificação ── */}
             <section className={sectionClass}>
-              <p className={sectionTitleClass}><DollarSign className="h-3.5 w-3.5" /> Valor e Classificação</p>
-              <div className="grid grid-cols-[140px_1fr] gap-x-2 gap-y-1.5">
-                <div>
-                  <Label className="text-[10px]">Valor (R$) *</Label>
-                  <Input tabIndex={10} value={valorDisplay} onChange={handleValorChange} onFocus={e => e.target.select()} className={cn("h-8 text-right font-mono", fieldBg)} placeholder="0,00" inputMode="numeric" disabled={lockedFields?.includes('valor') || isOCTitulo} />
-                </div>
+              <p className={sectionTitleClass}><DollarSign className="h-3.5 w-3.5" /> Classificação</p>
+              <div className="grid grid-cols-1 gap-x-2 gap-y-1.5">
                 {/* Subcentro — PR-U2c-1D: extraído para <PlanoSubcentroSelect /> (fonte única) */}
                 <div>
                   <PlanoSubcentroSelect
@@ -1252,6 +1276,76 @@ export function LancamentoV2Dialog({
                 <div>
                   <Label className="text-[10px] text-muted-foreground">Centro Custo (auto)</Label>
                   <Input value={centroCusto} readOnly disabled title={centroCusto} className="h-8 bg-muted/60 dark:bg-muted border-border/20 text-muted-foreground cursor-default text-xs" />
+                </div>
+              </div>
+              {/* Safra (opcional) — realocada de GERAL para CLASSIFICAÇÃO (PR-FIN-MODAL-02B).
+                  Mesmo safraId/opções/disabled/payload; só mudou de aba. Opcional: NÃO gera pendência. */}
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <Label className="text-[10px]">Safra</Label>
+                  <Select
+                    value={safraId || '__none_safra__'}
+                    onValueChange={v => setSafraId(v === '__none_safra__' ? '' : v)}
+                  >
+                    <SelectTrigger className={cn("h-8", fieldBg)}><SelectValue placeholder="Sem safra" /></SelectTrigger>
+                    <SelectContent className={DARK_GLASS_CONTENT}>
+                      <SelectItem value="__none_safra__">Sem safra</SelectItem>
+                      {(safras ?? []).map(s => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </section>
+            </TabsContent>
+            {/* ═══ fim ABA CLASSIFICAÇÃO ═══ */}
+
+            {/* ═══ ABA PAGAMENTO ═══ */}
+            <TabsContent value="pagamento" className="mt-0 space-y-2 focus-visible:outline-none">
+            <section className={sectionClass}>
+              <p className={sectionTitleClass}><DollarSign className="h-3.5 w-3.5" /> Pagamento</p>
+
+              {/* Forma / Dados de Pagamento — realocados do antigo bloco "Complementares"
+                  (PR-FIN-MODAL-02B). Campos e handlers idênticos; só mudou a aba. */}
+              <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">
+                <div>
+                  <Label className="text-[10px]">Forma de Pagamento</Label>
+                  <Select value={formaPgto || '__none_fp__'} onValueChange={handleFormaPgtoChange}>
+                    <SelectTrigger tabIndex={13} className={cn("h-8", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    <SelectContent className={DARK_GLASS_CONTENT}>
+                      <SelectItem value="__none_fp__">Nenhuma</SelectItem>
+                      <SelectItem value="PIX">PIX</SelectItem>
+                      <SelectItem value="Cartão">Cartão</SelectItem>
+                      <SelectItem value="Boleto">Boleto</SelectItem>
+                      <SelectItem value="Débito Automático">Débito Automático</SelectItem>
+                      <SelectItem value="Débito">Débito</SelectItem>
+                      <SelectItem value="Transferência">Transferência</SelectItem>
+                      <SelectItem value="Dinheiro">Dinheiro</SelectItem>
+                      <SelectItem value="Outro">Outro</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-0.5">
+                    <Label className="text-[10px]">Dados Pagamento</Label>
+                    <div className="flex gap-1">
+                      {formaPgto === 'PIX' && dadosPagamento && (() => {
+                        const chaveMatch = dadosPagamento.match(/Chave:\s*(.+)/i);
+                        return chaveMatch ? (
+                          <Button type="button" variant="ghost" size="sm" className="h-5 px-1.5 text-[9px] gap-0.5 text-primary hover:text-primary"
+                            onClick={() => { navigator.clipboard.writeText(chaveMatch[1].trim()); toast.success('Chave PIX copiada'); }}>
+                            <KeyRound className="h-2.5 w-2.5" /> PIX
+                          </Button>
+                        ) : null;
+                      })()}
+                      {dadosPagamento && (
+                        <Button type="button" variant="ghost" size="sm" className="h-5 px-1.5 text-[9px] gap-0.5 text-muted-foreground hover:text-foreground"
+                          onClick={() => { navigator.clipboard.writeText(dadosPagamento); toast.success('Dados copiados'); }}>
+                          <Copy className="h-2.5 w-2.5" /> Copiar
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  <Textarea tabIndex={14} value={dadosPagamento} onChange={e => setDadosPagamento(e.target.value)} rows={1} placeholder="Chave PIX, dados bancários..." className={cn("text-xs resize-none min-h-[32px]", fieldBg)} />
                 </div>
               </div>
 
@@ -1364,10 +1458,15 @@ export function LancamentoV2Dialog({
               )}
             </section>
 
-            {/* ── BLOCO 4 — Complementares ── */}
+            </TabsContent>
+            {/* ═══ fim ABA PAGAMENTO ═══ */}
+
+            {/* ═══ ABA DOCUMENTOS ═══ */}
+            <TabsContent value="documentos" className="mt-0 space-y-2 focus-visible:outline-none">
+            {/* ── BLOCO 4 — Documentos ── */}
             <section className={sectionClass}>
-              <p className={sectionTitleClass}><FileText className="h-3.5 w-3.5" /> Complementares</p>
-              <div className="grid grid-cols-[130px_120px_1fr_1fr] gap-x-2 gap-y-1.5">
+              <p className={sectionTitleClass}><FileText className="h-3.5 w-3.5" /> Documentos</p>
+              <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">
                 <div>
                   <Label className="text-[10px]">Tipo Documento</Label>
                   <Select value={tipoDocumento || '__none_td__'} onValueChange={v => { setTipoDocumento(v === '__none_td__' ? '' : v as TipoDocumento); if (v !== 'Nota Fiscal') { /* keep raw */ } }}>
@@ -1389,52 +1488,14 @@ export function LancamentoV2Dialog({
                     placeholder={tipoDocumento === 'Nota Fiscal' ? '000.000.000' : 'Número'}
                   />
                 </div>
-                <div>
-                  <Label className="text-[10px]">Forma de Pagamento</Label>
-                  <Select value={formaPgto || '__none_fp__'} onValueChange={handleFormaPgtoChange}>
-                    <SelectTrigger tabIndex={13} className={cn("h-8", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
-                    <SelectContent className={DARK_GLASS_CONTENT}>
-                      <SelectItem value="__none_fp__">Nenhuma</SelectItem>
-                      <SelectItem value="PIX">PIX</SelectItem>
-                      <SelectItem value="Cartão">Cartão</SelectItem>
-                      <SelectItem value="Boleto">Boleto</SelectItem>
-                      <SelectItem value="Débito Automático">Débito Automático</SelectItem>
-                      <SelectItem value="Débito">Débito</SelectItem>
-                      <SelectItem value="Transferência">Transferência</SelectItem>
-                      <SelectItem value="Dinheiro">Dinheiro</SelectItem>
-                      <SelectItem value="Outro">Outro</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <div className="flex items-center justify-between mb-0.5">
-                    <Label className="text-[10px]">Dados Pagamento</Label>
-                    <div className="flex gap-1">
-                      {formaPgto === 'PIX' && dadosPagamento && (() => {
-                        const chaveMatch = dadosPagamento.match(/Chave:\s*(.+)/i);
-                        return chaveMatch ? (
-                          <Button type="button" variant="ghost" size="sm" className="h-5 px-1.5 text-[9px] gap-0.5 text-primary hover:text-primary"
-                            onClick={() => { navigator.clipboard.writeText(chaveMatch[1].trim()); toast.success('Chave PIX copiada'); }}>
-                            <KeyRound className="h-2.5 w-2.5" /> PIX
-                          </Button>
-                        ) : null;
-                      })()}
-                      {dadosPagamento && (
-                        <Button type="button" variant="ghost" size="sm" className="h-5 px-1.5 text-[9px] gap-0.5 text-muted-foreground hover:text-foreground"
-                          onClick={() => { navigator.clipboard.writeText(dadosPagamento); toast.success('Dados copiados'); }}>
-                          <Copy className="h-2.5 w-2.5" /> Copiar
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                  <Textarea tabIndex={14} value={dadosPagamento} onChange={e => setDadosPagamento(e.target.value)} rows={1} placeholder="Chave PIX, dados bancários..." className={cn("text-xs resize-none min-h-[32px]", fieldBg)} />
-                </div>
               </div>
               <div>
                 <Label className="text-[10px]">Observação</Label>
                 <Textarea tabIndex={15} value={observacao} onChange={e => setObservacao(e.target.value)} rows={2} placeholder="Observações adicionais" className={cn("text-xs min-h-[48px]", fieldBg)} />
               </div>
             </section>
+            </TabsContent>
+            {/* ═══ fim ABA DOCUMENTOS ═══ */}
           </div>
           {/* PR-Mesa-ExcelContext: painel lateral read-only "Contexto Excel /
               Sugestão". Scroll próprio, não some ao rolar o formulário. */}
@@ -1474,10 +1535,24 @@ export function LancamentoV2Dialog({
             </aside>
           )}
           </div>
+          </Tabs>
 
           {/* Sticky footer */}
           <div className="px-5 py-2.5 border-t border-border bg-accent flex items-center gap-2">
             <Button variant="outline" onClick={onClose} className="px-5" tabIndex={16}>Cancelar</Button>
+            {/* PR-FIN-MODAL-02B — indicação compacta de pendência + navegação p/ a 1ª aba inválida.
+                Só aparece quando canSave=false E há aba identificável (o clique no Salvar
+                desabilitado não ocorre, então a navegação é oferecida aqui). */}
+            {!canSave && validacao.primeiraAbaInvalida && (
+              <button
+                type="button"
+                onClick={handleVerPendencia}
+                className="flex items-center gap-1 text-[11px] font-medium text-destructive hover:underline"
+              >
+                <AlertCircle className="h-3.5 w-3.5" />
+                Ver pendência
+              </button>
+            )}
             <div className="flex-1" />
             {isEdit && onDelete && (
               <Button
