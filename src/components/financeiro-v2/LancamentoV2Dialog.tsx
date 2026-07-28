@@ -194,20 +194,21 @@ function ExcelCtxConta({
 // Faixa horizontal discreta de título (ocupa toda a largura interna do aside — que não tem
 // padding horizontal; as linhas é que recebem px-3). Fundo distinto do corpo, altura mínima.
 function ResumoBlocoHead({ titulo }: { titulo: string }) {
-  // PR-FIN-MODAL-02F/02G — faixa compacta com respiro SUTIL (02G: py-[1px]→py-0.5,
-  // mb-0→mb-0.5). MESMA aparência e hierarquia: bg-primary/10, borda e tipografia
+  // PR-FIN-MODAL-02F/02G/02H — faixa com respiro entre blocos (02H: mt-0.5→mt-1, após ganho
+  // de altura estrutural). MESMA aparência e hierarquia: bg-primary/10, borda e tipografia
   // 9px bold uppercase inalteradas.
   return (
-    <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 first:mt-0 mb-0.5">
+    <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-1 first:mt-0 mb-0.5">
       <span className="text-[9px] font-bold uppercase tracking-wide text-primary/90 leading-none">{titulo}</span>
     </div>
   );
 }
 function ResumoRow({ label, value, valueClassName }: { label: string; value: string | null; valueClassName?: string }) {
-  // PR-FIN-MODAL-02F/02G — linha densa estilo ERP; 02G alivia o line-height
-  // (leading-none→leading-tight) p/ conforto visual, MANTENDO a fonte (text-[10px]).
+  // PR-FIN-MODAL-02H — reversão PARCIAL da compactação (02F/02G): leading-snug + gap-2 p/
+  // conforto de leitura, sem voltar ao layout original. A fonte (text-[11px]) volta ao nível
+  // pré-02F via base do aside; nenhum campo é escondido.
   return (
-    <div className="flex items-baseline justify-between gap-1.5 leading-tight">
+    <div className="flex items-baseline justify-between gap-2 leading-snug">
       <span className="text-muted-foreground shrink-0">{label}</span>
       <span className={cn("font-medium text-right truncate", valueClassName)}>{value || '—'}</span>
     </div>
@@ -978,9 +979,20 @@ export function LancamentoV2Dialog({
           // PR-FIN-MODAL-02D — modal 2-colunas (form + painel de resumo à direita) também no fluxo
           // normal; largura acomoda a coluna de ~300px sem aumentar a altura (h-[92vh] fixo).
           "max-w-5xl",
+          // PR-FIN-MODAL-02H — no fluxo normal (sem Excel), o modal vira GRID 2 colunas × 3 linhas:
+          //   linha1: [header] ocupa as 2 colunas;
+          //   linha2: [Tabs + formulário | RESUMO];
+          //   linha3: [rodapé          | RESUMO].
+          // O painel de resumo (col 2) faz SPAN das linhas 2-3 → ocupa TODA a coluna direita,
+          // inclusive ao lado do rodapé, devolvendo ~1 altura de rodapé ao corpo do resumo
+          // (fim da compactação forçada). `grid` sobrepõe `flex` (mesmo grupo display no twMerge);
+          // o fluxo Excel permanece flex-col idêntico.
+          !excelContext && "grid grid-cols-[1fr_300px] grid-rows-[auto_minmax(0,1fr)_auto]",
         )}>
           {/* Header */}
-          <DialogHeader className="px-5 pt-3 pb-2.5 border-b border-primary/20 bg-primary">
+          {/* PR-FIN-MODAL-02H — no grid (fluxo normal) o header ocupa as 2 colunas na linha 1;
+              no fluxo Excel (flex-col) as classes de grid são inertes. */}
+          <DialogHeader className={cn("px-5 pt-3 pb-2.5 border-b border-primary/20 bg-primary", !excelContext && "col-span-2 row-start-1")}>
             <DialogTitle className="text-[13px] font-bold tracking-tight text-primary-foreground">{isEdit ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
             {excelContext && (
               <div className="text-[10px] font-normal text-primary-foreground/80 mt-0.5">
@@ -994,7 +1006,10 @@ export function LancamentoV2Dialog({
           {/* PR-FIN-MODAL-02B — Tabs CONTROLADO. Header e footer ficam FORA do Tabs (estáveis);
               a TabsList fica logo abaixo do header e o corpo rolável abriga o TabsContent ativo.
               Todo o estado dos campos permanece no componente pai (sem cópia por aba). */}
-          <Tabs value={abaAtiva} onValueChange={v => setAbaAtiva(v as AbaFinanceira)} className="flex-1 flex flex-col min-h-0">
+          {/* PR-FIN-MODAL-02H — no grid (fluxo normal) o Tabs+form fica na col 1 / linha 2;
+              no fluxo Excel mantém flex-1 (flex-col). O título do resumo saiu daqui e passou
+              a ser a faixa de topo do próprio painel (col 2), alinhada a esta TabsList. */}
+          <Tabs value={abaAtiva} onValueChange={v => setAbaAtiva(v as AbaFinanceira)} className={cn("flex flex-col min-h-0", excelContext ? "flex-1" : "col-start-1 row-start-2")}>
             <TabsList className="w-full justify-start gap-0.5 rounded-none border-b border-border bg-accent/40 px-2 h-8 shrink-0">
               {ABAS_TAB.map(({ value, label }) => (
                 <TabsTrigger key={value} value={value} className="h-6 px-2.5 text-[11px] gap-1.5 data-[state=active]:bg-background data-[state=active]:shadow-sm">
@@ -1002,19 +1017,6 @@ export function LancamentoV2Dialog({
                   {abaComErro(value) && <span className="inline-block h-1.5 w-1.5 rounded-full bg-destructive" aria-label="pendência" />}
                 </TabsTrigger>
               ))}
-              {/* PR-FIN-MODAL-02F — título do resumo integrado à MESMA faixa das tabs, alinhado
-                  sobre a coluna do resumo (w-[300px]). Elimina a linha exclusiva antes usada
-                  dentro do aside e recupera altura útil. Rótulo NÃO interativo (não é um
-                  TabsTrigger) → não entra no foco/teclado das tabs. Só no fluxo normal. */}
-              {!excelContext && (
-                // PR-FIN-MODAL-02G — `-mr-2` cancela o padding direito (px-2) da TabsList,
-                // deixando a célula flush à borda direita do modal como o <aside> (w-[300px]
-                // + border-l + px-3). Alinha o início do título EXATAMENTE ao início do
-                // conteúdo do resumo (antes ~8px deslocado à esquerda).
-                <span className="ml-auto -mr-2 w-[300px] shrink-0 self-stretch border-l border-border flex items-center px-3 text-[10px] font-bold uppercase tracking-wide text-primary">
-                  Resumo do lançamento
-                </span>
-              )}
             </TabsList>
           {/* PR-Mesa-ExcelContext: com contexto Excel, corpo vira 2 colunas
               (form + painel). Sem contexto, wrapper usa `contents` (não gera
@@ -1611,58 +1613,13 @@ export function LancamentoV2Dialog({
             </aside>
           )}
 
-          {/* PR-FIN-MODAL-02D — Painel lateral de RESUMO (fluxo normal, sem Contexto Excel).
-              Read-only, espelha o formulário em tempo real; coluna fixa (~300px), sem rolagem
-              própria, mesma identidade visual, alta densidade. Nenhuma lógica/estado/validação. */}
-          {!excelContext && (
-            <aside className="w-[300px] shrink-0 border-l border-border bg-muted/20 py-1 text-[10px] overflow-hidden">
-              {/* PR-FIN-MODAL-02F — título movido para a faixa das tabs; aside começa direto
-                  nos blocos, com tipografia e espaçamentos compactados (densidade estilo ERP). */}
-              <ResumoBlocoHead titulo="Identificação" />
-              <div className="px-3 space-y-0.5">
-                <ResumoRow label="Tipo" value={resumoTipoLabel} valueClassName={resumoTipoCor} />
-                <ResumoRow label="Produto" value={descricao} />
-                <ResumoRow label="Data Competência" value={resumoFmtData(dataCompetencia)} />
-                <ResumoRow label="Favorecido" value={resumoFavorecido} />
-                <ResumoRow label="Fazenda" value={resumoFazenda} />
-              </div>
-
-              <ResumoBlocoHead titulo="Financeiro" />
-              <div className="px-3 space-y-0.5">
-                <ResumoRow label="Valor" value={valorNum > 0 ? formatMoeda(valorNum) : null} />
-                {!isEntrada && <ResumoRow label="Conta origem" value={resumoContaOrigem} />}
-                {(isEntrada || isTransferencia) && <ResumoRow label="Conta destino" value={resumoContaDestino} />}
-                <ResumoRow label="Status" value={resumoStatusLabel} />
-              </div>
-
-              <ResumoBlocoHead titulo="Classificação" />
-              <div className="px-3 space-y-0.5">
-                <ResumoRow label="Safra" value={resumoSafra} />
-                <ResumoRow label="Centro" value={centroCusto} />
-                <ResumoRow label="Subcentro" value={subcentro} />
-              </div>
-
-              <ResumoBlocoHead titulo="Pagamento" />
-              <div className="px-3 space-y-0.5">
-                <ResumoRow label="Pagamento" value={resumoFmtData(dataPagamento)} />
-                <ResumoRow label="Forma" value={formaPgto} />
-                <ResumoRow label="Modalidade" value={!isEdit ? (formaPagamentoParc === 'parcelada' ? 'Parcelada' : 'À vista') : null} />
-                <ResumoRow label="Frequência" value={!isEdit ? (frequencia === 'recorrente' ? 'Recorrente' : 'Pontual') : null} />
-                <ResumoRow label="Nº de Parcelas" value={!isEdit && formaPagamentoParc === 'parcelada' ? `${numParcelas}` : null} />
-              </div>
-
-              <ResumoBlocoHead titulo="Documento" />
-              <div className="px-3 space-y-0.5">
-                <ResumoRow label="Tipo" value={tipoDocumento || null} />
-                <ResumoRow label="Número" value={notaFiscalDisplay || null} />
-              </div>
-            </aside>
-          )}
           </div>
           </Tabs>
 
           {/* Sticky footer */}
-          <div className="px-5 py-2.5 border-t border-border bg-accent flex items-center gap-2">
+          {/* PR-FIN-MODAL-02H — no grid (fluxo normal) o rodapé fica na col 1 / linha 3 (sob o
+              formulário); o painel de resumo o ladeia. No fluxo Excel permanece full-width. */}
+          <div className={cn("px-5 py-2.5 border-t border-border bg-accent flex items-center gap-2", !excelContext && "col-start-1 row-start-3")}>
             <Button variant="outline" onClick={onClose} className="px-5" tabIndex={16}>Cancelar</Button>
             {/* PR-FIN-MODAL-02B — indicação compacta de pendência + navegação p/ a 1ª aba inválida.
                 Só aparece quando canSave=false E há aba identificável (o clique no Salvar
@@ -1696,6 +1653,63 @@ export function LancamentoV2Dialog({
               {getSubmitLabel()}
             </Button>
           </div>
+
+          {/* PR-FIN-MODAL-02H — Painel lateral de RESUMO (fluxo normal, sem Contexto Excel).
+              Coluna DIREITA do grid (col 2), fazendo SPAN das linhas 2-3 → ocupa toda a altura
+              da coluna, do topo (faixa de título alinhada às tabs) até o rodapé. Read-only,
+              espelha o formulário em tempo real. Sem rolagem própria, sem acordeão, sem "ver mais".
+              Nenhuma lógica/estado/validação — só apresentação. */}
+          {!excelContext && (
+            <aside className="col-start-2 row-start-2 row-span-2 border-l border-border bg-muted/20 flex flex-col overflow-hidden">
+              {/* Faixa de título: mesma altura/borda/fundo da TabsList (h-8, border-b, bg-accent/40)
+                  → alinha perfeitamente à faixa das abas na coluna da esquerda. */}
+              <div className="h-8 shrink-0 border-b border-border bg-accent/40 flex items-center px-3 text-[10px] font-bold uppercase tracking-wide text-primary">
+                Resumo do lançamento
+              </div>
+              {/* Corpo do resumo: densidade CONFORTÁVEL (reversão parcial de 02F/02G) após o
+                  ganho de altura estrutural — fonte text-[11px], sem esconder campos. */}
+              <div className="flex-1 overflow-hidden py-1.5 text-[11px]">
+                <ResumoBlocoHead titulo="Identificação" />
+                <div className="px-3 space-y-0.5">
+                  <ResumoRow label="Tipo" value={resumoTipoLabel} valueClassName={resumoTipoCor} />
+                  <ResumoRow label="Produto" value={descricao} />
+                  <ResumoRow label="Data Competência" value={resumoFmtData(dataCompetencia)} />
+                  <ResumoRow label="Favorecido" value={resumoFavorecido} />
+                  <ResumoRow label="Fazenda" value={resumoFazenda} />
+                </div>
+
+                <ResumoBlocoHead titulo="Financeiro" />
+                <div className="px-3 space-y-0.5">
+                  <ResumoRow label="Valor" value={valorNum > 0 ? formatMoeda(valorNum) : null} />
+                  {!isEntrada && <ResumoRow label="Conta origem" value={resumoContaOrigem} />}
+                  {(isEntrada || isTransferencia) && <ResumoRow label="Conta destino" value={resumoContaDestino} />}
+                  <ResumoRow label="Status" value={resumoStatusLabel} />
+                </div>
+
+                <ResumoBlocoHead titulo="Classificação" />
+                <div className="px-3 space-y-0.5">
+                  <ResumoRow label="Safra" value={resumoSafra} />
+                  <ResumoRow label="Centro" value={centroCusto} />
+                  <ResumoRow label="Subcentro" value={subcentro} />
+                </div>
+
+                <ResumoBlocoHead titulo="Pagamento" />
+                <div className="px-3 space-y-0.5">
+                  <ResumoRow label="Pagamento" value={resumoFmtData(dataPagamento)} />
+                  <ResumoRow label="Forma" value={formaPgto} />
+                  <ResumoRow label="Modalidade" value={!isEdit ? (formaPagamentoParc === 'parcelada' ? 'Parcelada' : 'À vista') : null} />
+                  <ResumoRow label="Frequência" value={!isEdit ? (frequencia === 'recorrente' ? 'Recorrente' : 'Pontual') : null} />
+                  <ResumoRow label="Nº de Parcelas" value={!isEdit && formaPagamentoParc === 'parcelada' ? `${numParcelas}` : null} />
+                </div>
+
+                <ResumoBlocoHead titulo="Documento" />
+                <div className="px-3 space-y-0.5">
+                  <ResumoRow label="Tipo" value={tipoDocumento || null} />
+                  <ResumoRow label="Número" value={notaFiscalDisplay || null} />
+                </div>
+              </div>
+            </aside>
+          )}
         </DialogContent>
       </Dialog>
 
