@@ -18,7 +18,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { computeValidacaoModal, type AbaFinanceira } from './lancamentoDialogTabs';
-import { AlertCircle, AlertTriangle, Copy, KeyRound, RefreshCw, CalendarDays, User, DollarSign, FileText, Beef } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Copy, KeyRound, RefreshCw, DollarSign, FileText, Beef } from 'lucide-react';
 import { LancamentoZooModal } from '@/v2/components/edicao/LancamentoZooModal';
 import { toast } from 'sonner';
 import type { LancamentoV2, LancamentoV2Form, ContaBancariaV2, ClassificacaoItem, FornecedorV2, Safra } from '@/hooks/useFinanceiroV2';
@@ -97,9 +97,13 @@ const TIPOS_OPERACAO = [
 ];
 
 // PR-FIN-MODAL-02B — abas do modal (labels compactos para a TabsList).
+// PR-FIN-MODAL-02E — a aba visual "Classificação" foi INCORPORADA à aba "Geral"
+// (Linha 4). A validação por aba (helper puro) segue com 'classificacao' como
+// dimensão lógica; aqui ela apenas não é mais uma aba visível. Evolução futura:
+// Geral | Pagamento | Documentos | Auditoria — a aba Auditoria só será criada
+// quando houver conteúdo real (nada de tab vazia agora).
 const ABAS_TAB: { value: AbaFinanceira; label: string }[] = [
   { value: 'geral', label: 'Geral' },
-  { value: 'classificacao', label: 'Classificação' },
   { value: 'pagamento', label: 'Pagamento' },
   { value: 'documentos', label: 'Documentos' },
 ];
@@ -187,18 +191,20 @@ function ExcelCtxConta({
 //   Camada EXCLUSIVAMENTE de apresentação: apenas reflete os valores atuais do formulário.
 //   NÃO infere status/completude (sem semáforo/bolinhas) — indicador de pendência só quando existir
 //   fonte oficial e única de validação (frente futura). Títulos de bloco neutros; vazio → "—".
+// Faixa horizontal discreta de título (ocupa toda a largura interna do aside — que não tem
+// padding horizontal; as linhas é que recebem px-3). Fundo distinto do corpo, altura mínima.
 function ResumoBlocoHead({ titulo }: { titulo: string }) {
   return (
-    <div className="mt-2 first:mt-0 mb-0.5">
-      <span className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">{titulo}</span>
+    <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-1 first:mt-0 mb-0.5">
+      <span className="text-[9px] font-bold uppercase tracking-wide text-primary/90">{titulo}</span>
     </div>
   );
 }
-function ResumoRow({ label, value }: { label: string; value: string | null }) {
+function ResumoRow({ label, value, valueClassName }: { label: string; value: string | null; valueClassName?: string }) {
   return (
     <div className="flex items-baseline justify-between gap-2 leading-tight">
       <span className="text-muted-foreground shrink-0">{label}</span>
-      <span className="font-medium text-right truncate">{value || '—'}</span>
+      <span className={cn("font-medium text-right truncate", valueClassName)}>{value || '—'}</span>
     </div>
   );
 }
@@ -664,6 +670,8 @@ export function LancamentoV2Dialog({
   const resumoContaDestino = (() => { const c = contas.find(x => x.id === contaDestinoId); return c ? (c.nome_exibicao ?? c.nome_conta) : null; })();
   const resumoSafra = (safras ?? []).find(s => s.id === safraId)?.nome ?? null;
   const resumoTipoLabel = TIPOS_OPERACAO.find(t => t.value === tipoOperacao)?.label ?? tipoOperacao;
+  // Cor semântica SÓ do valor do Tipo (categorias reais do form): saída=vermelho, entrada=azul, transferência=cinza.
+  const resumoTipoCor = isTransferencia ? 'text-zinc-400' : isEntrada ? 'text-blue-500' : 'text-red-500';
   const resumoStatusLabel = STATUS_OPTIONS.find(s => s.value === statusTransacao)?.label ?? statusTransacao;
 
   // PR-U2c-1C: fornecedoresList/normalizeSearch/filteredFornecedores/effects/keyDown/
@@ -686,9 +694,14 @@ export function LancamentoV2Dialog({
     frequencia, recorrenciaRowsLength: recorrenciaRows.length,
   });
   const canSave = validacao.canSave;
-  const abaComErro = (aba: AbaFinanceira) => validacao.abasInvalidas.includes(aba);
+  // PR-FIN-MODAL-02E — a aba Classificação foi INCORPORADA à aba Geral. A validação
+  // (helper puro/computeValidacaoModal) permanece IDÊNTICA — mesmas regras, mensagens e
+  // critérios; muda apenas o DESTINO VISUAL: pendência de 'classificacao' aponta para
+  // 'geral'. Colapso exclusivamente de apresentação (nenhuma regra nova).
+  const abaVisual = (aba: AbaFinanceira): AbaFinanceira => (aba === 'classificacao' ? 'geral' : aba);
+  const abaComErro = (aba: AbaFinanceira) => validacao.abasInvalidas.some(a => abaVisual(a) === aba);
   const handleVerPendencia = () => {
-    if (validacao.primeiraAbaInvalida) setAbaAtiva(validacao.primeiraAbaInvalida);
+    if (validacao.primeiraAbaInvalida) setAbaAtiva(abaVisual(validacao.primeiraAbaInvalida));
   };
 
   const handleSubmit = async () => {
@@ -1116,56 +1129,59 @@ export function LancamentoV2Dialog({
               </div>
             )}
 
-            {/* ── BLOCO 1 — Tipo e Datas ── */}
-            <section className={sectionClass}>
-              <p className={sectionTitleClass}><CalendarDays className="h-3.5 w-3.5" /> Tipo e Datas</p>
-              <div className="grid grid-cols-4 gap-2">
-                <div>
-                  <Label className="text-[10px]">Tipo Operação *</Label>
-                  <Select value={tipoOperacao} onValueChange={v => { setTipoOperacao(v); setSubcentro(''); setMacroCusto(''); setGrupoCusto(''); setCentroCusto(''); setSubcentroSearch(''); }} disabled={lockedFields?.includes('tipo_operacao') || isOCTitulo}>
-                    <SelectTrigger ref={firstFieldRef} tabIndex={1} className={cn("h-8", fieldBg)}><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {TIPOS_OPERACAO.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-[10px]">Data Competência *</Label>
-                  <DatePicker value={dataCompetencia} onChange={setDataCompetencia} disabled={isOCTitulo} tabIndex={2} className={fieldBg} />
-                </div>
-                <div>
-                  <Label className="text-[10px]">Data Pagamento *</Label>
-                  <DatePicker value={dataPagamento} onChange={handleDataPagamentoChange} disabled={lockedFields?.includes('data_pagamento')} tabIndex={3} className={fieldBg} />
-                </div>
-                <div>
-                  <Label className="text-[10px]">Status *</Label>
-                  <Select value={statusTransacao} onValueChange={setStatusTransacao}>
-                    <SelectTrigger tabIndex={4} className={cn("h-8", fieldBg)}><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {STATUS_OPTIONS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
+            {/* PR-FIN-MODAL-02E — aba Geral reorganizada em LINHAS operacionais densas
+                (sem card por grupo). A antiga aba Classificação foi INCORPORADA aqui
+                (Linha 4). Todos os campos/estados/ids/handlers/validações preservados —
+                apenas reposicionamento visual. O espaçamento vertical entre as linhas vem
+                do `space-y-2` do próprio TabsContent. */}
+
+            {/* ── LINHA 1 — Tipo, Datas e Status ──
+                Estrutura preparada para a futura Data de Vencimento (PR-FIN-DATAS-01):
+                Tipo | Competência | Vencimento | Pagamento | Status. NÃO criar o campo agora. */}
+            <div className="grid grid-cols-12 gap-2">
+              <div className="col-span-3">
+                <Label className="text-[10px]">Tipo Operação *</Label>
+                <Select value={tipoOperacao} onValueChange={v => { setTipoOperacao(v); setSubcentro(''); setMacroCusto(''); setGrupoCusto(''); setCentroCusto(''); setSubcentroSearch(''); }} disabled={lockedFields?.includes('tipo_operacao') || isOCTitulo}>
+                  <SelectTrigger ref={firstFieldRef} tabIndex={1} className={cn("h-8", fieldBg)}><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {TIPOS_OPERACAO.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
-            </section>
+              <div className="col-span-3">
+                <Label className="text-[10px]">Data Competência *</Label>
+                <DatePicker value={dataCompetencia} onChange={setDataCompetencia} disabled={isOCTitulo} tabIndex={2} className={fieldBg} />
+              </div>
+              <div className="col-span-3">
+                <Label className="text-[10px]">Data Pagamento *</Label>
+                <DatePicker value={dataPagamento} onChange={handleDataPagamentoChange} disabled={lockedFields?.includes('data_pagamento')} tabIndex={3} className={fieldBg} />
+              </div>
+              <div className="col-span-3">
+                <Label className="text-[10px]">Status *</Label>
+                <Select value={statusTransacao} onValueChange={setStatusTransacao}>
+                  <SelectTrigger tabIndex={4} className={cn("h-8", fieldBg)}><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {STATUS_OPTIONS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
 
-            {/* ── BLOCO 2 — Identificação ── */}
-            <section className={sectionClass}>
-              <p className={sectionTitleClass}><User className="h-3.5 w-3.5" /> Identificação</p>
-              <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">
-                {/* Produto — PR-U2c-1A: extraído para <ProdutoAutocomplete /> (fonte única) */}
-                <ProdutoAutocomplete
-                  value={descricao}
-                  onChange={setDescricao}
-                  clienteId={clienteAtual?.id}
-                  label="Produto / Descrição *"
-                  className="col-span-2"
-                  inputClassName={fieldBg}
-                  tabIndex={5}
-                  placeholder="Descrição do produto"
-                />
-
-                {/* Fornecedor — PR-U2c-1C: extraído para <FavorecidoSelect /> (fonte única) */}
+            {/* ── LINHA 2 — Produto e Favorecido ── */}
+            <div className="grid grid-cols-12 gap-2">
+              {/* Produto — PR-U2c-1A: <ProdutoAutocomplete /> (fonte única) */}
+              <ProdutoAutocomplete
+                value={descricao}
+                onChange={setDescricao}
+                clienteId={clienteAtual?.id}
+                label="Produto / Descrição *"
+                className="col-span-7"
+                inputClassName={fieldBg}
+                tabIndex={5}
+                placeholder="Descrição do produto"
+              />
+              {/* Fornecedor — PR-U2c-1C: <FavorecidoSelect /> (fonte única) */}
+              <div className="col-span-5">
                 <FavorecidoSelect
                   value={favorecidoId}
                   onChange={setFavorecidoId}
@@ -1185,72 +1201,35 @@ export function LancamentoV2Dialog({
                   disabled={isOCTitulo}
                   showCpfCnpj
                 />
+              </div>
+            </div>
 
-                {/* Valor — realocado da aba Classificação para GERAL (PR-FIN-MODAL-02B).
-                    Mesmo state/máscara/handleValorChange/tabIndex/disabled; só mudou de aba. */}
-                <div>
-                  <Label className="text-[10px]">Valor (R$) *</Label>
-                  <Input tabIndex={10} value={valorDisplay} onChange={handleValorChange} onFocus={e => e.target.select()} className={cn("h-8 text-right font-mono", fieldBg)} placeholder="0,00" inputMode="numeric" disabled={lockedFields?.includes('valor') || isOCTitulo} />
-                </div>
-
-                {/* Fazenda — PR-U2c-1B: extraído para <FazendaSelect /> (fonte única) */}
-                <FazendaSelect
-                  value={fazendaId}
-                  onChange={setFazendaId}
-                  fazendas={fazendas}
-                  forcaAdministrativo={macroCusto === 'Dividendos'}
-                  label="Fazenda *"
-                  triggerClassName={fieldBg}
-                  tabIndex={7}
-                />
-
-                {/* Conta Bancária — PR-H2: ContaBancariaSelect compartilhado
-                    (agrupado por tipo_conta + dark/glass). Sentinela '__none__'
-                    preservada na semântica interna do dialog. */}
-                {isTransferencia ? (
-                  <>
-                    <div>
-                      <Label className="text-[10px]">Conta Origem *</Label>
-                      <ContaBancariaSelect
-                        value={contaOrigemId}
-                        onValueChange={setContaOrigemId}
-                        contas={contas}
-                        placeholder="Selecione"
-                        disabled={lockedFields?.includes('conta_bancaria_id')}
-                        prependItems={[{ value: '__none__', label: 'Nenhuma' }]}
-                        excluirIds={contaDestinoId && contaDestinoId !== '__none__' ? [contaDestinoId] : undefined}
-                        className={cn("h-8", fieldBg)}
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-[10px]">Conta Destino *</Label>
-                      <ContaBancariaSelect
-                        value={contaDestinoId}
-                        onValueChange={setContaDestinoId}
-                        contas={contas}
-                        placeholder="Selecione"
-                        disabled={lockedFields?.includes('conta_destino_id')}
-                        prependItems={[{ value: '__none__', label: 'Nenhuma' }]}
-                        excluirIds={contaOrigemId && contaOrigemId !== '__none__' ? [contaOrigemId] : undefined}
-                        className={cn("h-8", fieldBg)}
-                      />
-                    </div>
-                  </>
-                ) : isEntrada ? (
-                  <div>
-                    <Label className="text-[10px]">Conta Destino *</Label>
-                    <ContaBancariaSelect
-                      value={contaDestinoId}
-                      onValueChange={setContaDestinoId}
-                      contas={contas}
-                      placeholder="Selecione"
-                      disabled={lockedFields?.includes('conta_destino_id')}
-                      prependItems={[{ value: '__none__', label: 'Nenhuma' }]}
-                      className={cn("h-8", fieldBg)}
-                    />
-                  </div>
-                ) : (
-                  <div>
+            {/* ── LINHA 3 — Valor, Fazenda e Conta(s) ──
+                Valor COMPACTO (col-span-2); na Transferência os 4 campos ficam na MESMA
+                linha (Valor 2 · Fazenda 4 · Origem 3 · Destino 3), sem quebra. Saída/Entrada
+                usam a conta aplicável em col-span-6 (contrato de contas inalterado). */}
+            <div className="grid grid-cols-12 gap-2">
+              {/* Valor — mesmo state/máscara/handleValorChange/tabIndex/disabled; só reposicionado. */}
+              <div className="col-span-2">
+                <Label className="text-[10px]">Valor (R$) *</Label>
+                <Input tabIndex={10} value={valorDisplay} onChange={handleValorChange} onFocus={e => e.target.select()} className={cn("h-8 text-right font-mono", fieldBg)} placeholder="0,00" inputMode="numeric" disabled={lockedFields?.includes('valor') || isOCTitulo} />
+              </div>
+              {/* Fazenda — PR-U2c-1B: <FazendaSelect /> (fonte única) */}
+              <FazendaSelect
+                value={fazendaId}
+                onChange={setFazendaId}
+                fazendas={fazendas}
+                forcaAdministrativo={macroCusto === 'Dividendos'}
+                label="Fazenda *"
+                className="col-span-4"
+                triggerClassName={fieldBg}
+                tabIndex={7}
+              />
+              {/* Conta Bancária — PR-H2: ContaBancariaSelect compartilhado (agrupado por
+                  tipo_conta + dark/glass). Sentinela '__none__' preservada na semântica interna. */}
+              {isTransferencia ? (
+                <>
+                  <div className="col-span-3">
                     <Label className="text-[10px]">Conta Origem *</Label>
                     <ContaBancariaSelect
                       value={contaOrigemId}
@@ -1259,97 +1238,124 @@ export function LancamentoV2Dialog({
                       placeholder="Selecione"
                       disabled={lockedFields?.includes('conta_bancaria_id')}
                       prependItems={[{ value: '__none__', label: 'Nenhuma' }]}
+                      excluirIds={contaDestinoId && contaDestinoId !== '__none__' ? [contaDestinoId] : undefined}
                       className={cn("h-8", fieldBg)}
                     />
                   </div>
-                )}
+                  <div className="col-span-3">
+                    <Label className="text-[10px]">Conta Destino *</Label>
+                    <ContaBancariaSelect
+                      value={contaDestinoId}
+                      onValueChange={setContaDestinoId}
+                      contas={contas}
+                      placeholder="Selecione"
+                      disabled={lockedFields?.includes('conta_destino_id')}
+                      prependItems={[{ value: '__none__', label: 'Nenhuma' }]}
+                      excluirIds={contaOrigemId && contaOrigemId !== '__none__' ? [contaOrigemId] : undefined}
+                      className={cn("h-8", fieldBg)}
+                    />
+                  </div>
+                </>
+              ) : isEntrada ? (
+                <div className="col-span-6">
+                  <Label className="text-[10px]">Conta Destino *</Label>
+                  <ContaBancariaSelect
+                    value={contaDestinoId}
+                    onValueChange={setContaDestinoId}
+                    contas={contas}
+                    placeholder="Selecione"
+                    disabled={lockedFields?.includes('conta_destino_id')}
+                    prependItems={[{ value: '__none__', label: 'Nenhuma' }]}
+                    className={cn("h-8", fieldBg)}
+                  />
+                </div>
+              ) : (
+                <div className="col-span-6">
+                  <Label className="text-[10px]">Conta Origem *</Label>
+                  <ContaBancariaSelect
+                    value={contaOrigemId}
+                    onValueChange={setContaOrigemId}
+                    contas={contas}
+                    placeholder="Selecione"
+                    disabled={lockedFields?.includes('conta_bancaria_id')}
+                    prependItems={[{ value: '__none__', label: 'Nenhuma' }]}
+                    className={cn("h-8", fieldBg)}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* ── LINHA 4 — Classificação INCORPORADA: Safra + Subcentro ──
+                Resumo automático (Macro · Grupo · Centro) SOMENTE LEITURA abaixo do Subcentro,
+                a partir dos derivados já existentes. Mesmos estados/ids/handlers/validação da
+                antiga aba Classificação (movida verbatim). */}
+            <div className="grid grid-cols-12 gap-2 items-start">
+              {/* Safra (opcional) — NÃO gera pendência. Mesmo safraId/opções/payload. */}
+              <div className="col-span-4">
+                <Label className="text-[10px]">Safra</Label>
+                <Select
+                  value={safraId || '__none_safra__'}
+                  onValueChange={v => setSafraId(v === '__none_safra__' ? '' : v)}
+                >
+                  <SelectTrigger className={cn("h-8", fieldBg)}><SelectValue placeholder="Sem safra" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none_safra__">Sem safra</SelectItem>
+                    {(safras ?? []).map(s => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
-            </section>
+              {/* Subcentro — PR-U2c-1D: <PlanoSubcentroSelect /> (fonte única) */}
+              <div className="col-span-8">
+                <PlanoSubcentroSelect
+                  value={subcentro}
+                  onChange={setSubcentro}
+                  onSelected={(_sub, cls) => {
+                    if (cls) {
+                      setMacroCusto(cls.macro_custo);
+                      setGrupoCusto(cls.grupo_custo || '');
+                      setCentroCusto(cls.centro_custo);
+                      setEscopoNegocio(cls.escopo_negocio || '');
+                    }
+                  }}
+                  classificacoes={classificacoes}
+                  tipoOperacao={tipoOperacao}
+                  search={subcentroSearch}
+                  onSearchChange={setSubcentroSearch}
+                  label="Subcentro *"
+                  triggerClassName={fieldBg}
+                  tabIndex={11}
+                  disabled={isOCTitulo}
+                />
+                {/* Resumo automático dos derivados (Macro › Grupo › Centro). Somente leitura;
+                    sem estado novo, sem recálculo, sem edição. "—" quando não houver derivação. */}
+                <div className="mt-1 text-[10px] leading-snug text-muted-foreground">
+                  {(macroCusto || grupoCusto || centroCusto) ? (
+                    <>
+                      Macro: <span className="font-medium text-foreground/70">{macroCusto || '—'}</span>
+                      {' · '}Grupo: <span className="font-medium text-foreground/70">{grupoCusto || '—'}</span>
+                      {' · '}Centro: <span className="font-medium text-foreground/70">{centroCusto || '—'}</span>
+                    </>
+                  ) : '—'}
+                </div>
+              </div>
+            </div>
+
+            {/* PR-FIN-MODAL-02C #6 — "Compõe DRE" (SOMENTE LEITURA), preservado da antiga aba
+                Classificação. Consome apenas a flag já materializada (compoe_dre). Só na EDIÇÃO —
+                na criação a flag ainda não existe. Não cria regra nem recalcula. */}
+            {isEdit && (() => {
+              const cd = (lancamento as any)?.compoe_dre;
+              const label = cd === true ? '✔ Sim' : cd === false ? 'Não' : '—';
+              return (
+                <div className="flex items-center gap-2 rounded-md border border-border/40 bg-muted/30 px-2.5 py-1">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Compõe DRE</span>
+                  <span className={cn("text-[11px] font-medium", cd === true ? "text-success" : "text-muted-foreground")}>{label}</span>
+                </div>
+              );
+            })()}
 
             </TabsContent>
             {/* ═══ fim ABA GERAL ═══ */}
-
-            {/* ═══ ABA CLASSIFICAÇÃO ═══ */}
-            <TabsContent value="classificacao" className="mt-0 space-y-2 focus-visible:outline-none">
-            {/* ── BLOCO 3 — Valor e Classificação ── */}
-            <section className={sectionClass}>
-              <p className={sectionTitleClass}><DollarSign className="h-3.5 w-3.5" /> Classificação</p>
-              <div className="grid grid-cols-1 gap-x-2 gap-y-1.5">
-                {/* Subcentro — PR-U2c-1D: extraído para <PlanoSubcentroSelect /> (fonte única) */}
-                <div>
-                  <PlanoSubcentroSelect
-                    value={subcentro}
-                    onChange={setSubcentro}
-                    onSelected={(_sub, cls) => {
-                      if (cls) {
-                        setMacroCusto(cls.macro_custo);
-                        setGrupoCusto(cls.grupo_custo || '');
-                        setCentroCusto(cls.centro_custo);
-                        setEscopoNegocio(cls.escopo_negocio || '');
-                      }
-                    }}
-                    classificacoes={classificacoes}
-                    tipoOperacao={tipoOperacao}
-                    search={subcentroSearch}
-                    onSearchChange={setSubcentroSearch}
-                    label="Subcentro *"
-                    triggerClassName={fieldBg}
-                    tabIndex={11}
-                    disabled={isOCTitulo}
-                  />
-                </div>
-              </div>
-              {/* Hierarquia derivada (somente leitura): Macro › Grupo › Centro.
-                  title = valor integral (leitura por hover, sem truncar informação). */}
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <Label className="text-[10px] text-muted-foreground">Macro Custo (auto)</Label>
-                  <Input value={macroCusto} readOnly disabled title={macroCusto} className="h-8 bg-muted/60 dark:bg-muted border-border/20 text-muted-foreground cursor-default text-xs" />
-                </div>
-                <div>
-                  <Label className="text-[10px] text-muted-foreground">Grupo Custo (auto)</Label>
-                  <Input value={grupoCusto} readOnly disabled title={grupoCusto} className="h-8 bg-muted/60 dark:bg-muted border-border/20 text-muted-foreground cursor-default text-xs" />
-                </div>
-                <div>
-                  <Label className="text-[10px] text-muted-foreground">Centro Custo (auto)</Label>
-                  <Input value={centroCusto} readOnly disabled title={centroCusto} className="h-8 bg-muted/60 dark:bg-muted border-border/20 text-muted-foreground cursor-default text-xs" />
-                </div>
-              </div>
-              {/* Safra (opcional) — realocada de GERAL para CLASSIFICAÇÃO (PR-FIN-MODAL-02B).
-                  Mesmo safraId/opções/disabled/payload; só mudou de aba. Opcional: NÃO gera pendência. */}
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <Label className="text-[10px]">Safra</Label>
-                  <Select
-                    value={safraId || '__none_safra__'}
-                    onValueChange={v => setSafraId(v === '__none_safra__' ? '' : v)}
-                  >
-                    <SelectTrigger className={cn("h-8", fieldBg)}><SelectValue placeholder="Sem safra" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none_safra__">Sem safra</SelectItem>
-                      {(safras ?? []).map(s => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {/* PR-FIN-MODAL-02C #6 — "Compõe DRE" (SOMENTE LEITURA). Consome apenas a flag
-                  já materializada no lançamento (compoe_dre). Só na EDIÇÃO — na criação a flag
-                  ainda não existe (materializada ao salvar). "Linha DRE" não é exibida porque
-                  esse dado NÃO chega ao modal hoje. Não cria regra nem recalcula. */}
-              {isEdit && (() => {
-                const cd = (lancamento as any)?.compoe_dre;
-                const label = cd === true ? '✔ Sim' : cd === false ? 'Não' : '—';
-                return (
-                  <div className="flex items-center gap-2 rounded-md border border-border/40 bg-muted/30 px-2.5 py-1">
-                    <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Compõe DRE</span>
-                    <span className={cn("text-[11px] font-medium", cd === true ? "text-success" : "text-muted-foreground")}>{label}</span>
-                  </div>
-                );
-              })()}
-            </section>
-            </TabsContent>
-            {/* ═══ fim ABA CLASSIFICAÇÃO ═══ */}
 
             {/* ═══ ABA PAGAMENTO ═══ */}
             <TabsContent value="pagamento" className="mt-0 space-y-2 focus-visible:outline-none">
@@ -1591,38 +1597,47 @@ export function LancamentoV2Dialog({
               Read-only, espelha o formulário em tempo real; coluna fixa (~300px), sem rolagem
               própria, mesma identidade visual, alta densidade. Nenhuma lógica/estado/validação. */}
           {!excelContext && (
-            <aside className="w-[300px] shrink-0 border-l border-border bg-muted/20 p-3 text-[11px] space-y-0.5 overflow-hidden">
-              <div className="text-[10px] font-bold uppercase tracking-wide text-primary mb-1.5">Resumo do lançamento</div>
+            <aside className="w-[300px] shrink-0 border-l border-border bg-muted/20 py-2 text-[11px] overflow-hidden">
+              <div className="px-3 text-[10px] font-bold uppercase tracking-wide text-primary mb-1">Resumo do lançamento</div>
 
               <ResumoBlocoHead titulo="Identificação" />
-              <ResumoRow label="Tipo" value={resumoTipoLabel} />
-              <ResumoRow label="Produto" value={descricao} />
-              <ResumoRow label="Favorecido" value={resumoFavorecido} />
-              <ResumoRow label="Fazenda" value={resumoFazenda} />
+              <div className="px-3 space-y-0.5">
+                <ResumoRow label="Tipo" value={resumoTipoLabel} valueClassName={resumoTipoCor} />
+                <ResumoRow label="Produto" value={descricao} />
+                <ResumoRow label="Data Competência" value={resumoFmtData(dataCompetencia)} />
+                <ResumoRow label="Favorecido" value={resumoFavorecido} />
+                <ResumoRow label="Fazenda" value={resumoFazenda} />
+              </div>
 
               <ResumoBlocoHead titulo="Financeiro" />
-              <ResumoRow label="Valor" value={valorNum > 0 ? formatMoeda(valorNum) : null} />
-              {!isEntrada && <ResumoRow label="Conta origem" value={resumoContaOrigem} />}
-              {(isEntrada || isTransferencia) && <ResumoRow label="Conta destino" value={resumoContaDestino} />}
-              <ResumoRow label="Status" value={resumoStatusLabel} />
+              <div className="px-3 space-y-0.5">
+                <ResumoRow label="Valor" value={valorNum > 0 ? formatMoeda(valorNum) : null} />
+                {!isEntrada && <ResumoRow label="Conta origem" value={resumoContaOrigem} />}
+                {(isEntrada || isTransferencia) && <ResumoRow label="Conta destino" value={resumoContaDestino} />}
+                <ResumoRow label="Status" value={resumoStatusLabel} />
+              </div>
 
               <ResumoBlocoHead titulo="Classificação" />
-              <ResumoRow label="Macro" value={macroCusto} />
-              <ResumoRow label="Grupo" value={grupoCusto} />
-              <ResumoRow label="Centro" value={centroCusto} />
-              <ResumoRow label="Subcentro" value={subcentro} />
-              <ResumoRow label="Safra" value={resumoSafra} />
+              <div className="px-3 space-y-0.5">
+                <ResumoRow label="Safra" value={resumoSafra} />
+                <ResumoRow label="Centro" value={centroCusto} />
+                <ResumoRow label="Subcentro" value={subcentro} />
+              </div>
 
               <ResumoBlocoHead titulo="Pagamento" />
-              <ResumoRow label="Competência" value={resumoFmtData(dataCompetencia)} />
-              <ResumoRow label="Pagamento" value={resumoFmtData(dataPagamento)} />
-              {!isEdit && <ResumoRow label="Frequência" value={frequencia === 'recorrente' ? 'Recorrente' : 'Pontual'} />}
-              <ResumoRow label="Forma" value={formaPgto} />
-              {!isEdit && <ResumoRow label="Parcelas" value={formaPagamentoParc === 'parcelada' ? `${numParcelas}x` : 'À vista'} />}
+              <div className="px-3 space-y-0.5">
+                <ResumoRow label="Pagamento" value={resumoFmtData(dataPagamento)} />
+                <ResumoRow label="Forma" value={formaPgto} />
+                <ResumoRow label="Modalidade" value={!isEdit ? (formaPagamentoParc === 'parcelada' ? 'Parcelada' : 'À vista') : null} />
+                <ResumoRow label="Frequência" value={!isEdit ? (frequencia === 'recorrente' ? 'Recorrente' : 'Pontual') : null} />
+                <ResumoRow label="Nº de Parcelas" value={!isEdit && formaPagamentoParc === 'parcelada' ? `${numParcelas}` : null} />
+              </div>
 
               <ResumoBlocoHead titulo="Documento" />
-              <ResumoRow label="Tipo" value={tipoDocumento || null} />
-              <ResumoRow label="Número" value={notaFiscalDisplay || null} />
+              <div className="px-3 space-y-0.5">
+                <ResumoRow label="Tipo" value={tipoDocumento || null} />
+                <ResumoRow label="Número" value={notaFiscalDisplay || null} />
+              </div>
             </aside>
           )}
           </div>
