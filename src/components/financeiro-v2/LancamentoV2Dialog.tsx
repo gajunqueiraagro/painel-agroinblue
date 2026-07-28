@@ -194,21 +194,20 @@ function ExcelCtxConta({
 // Faixa horizontal discreta de título (ocupa toda a largura interna do aside — que não tem
 // padding horizontal; as linhas é que recebem px-3). Fundo distinto do corpo, altura mínima.
 function ResumoBlocoHead({ titulo }: { titulo: string }) {
-  // PR-FIN-MODAL-02F/02G/02H — faixa com respiro entre blocos (02H: mt-0.5→mt-1, após ganho
-  // de altura estrutural). MESMA aparência e hierarquia: bg-primary/10, borda e tipografia
-  // 9px bold uppercase inalteradas.
+  // PR-FIN-MODAL-02I — densidade funcional do 02G: separação MÍNIMA entre blocos (mt-0.5),
+  // primeiro cabeçalho sem mt (first:mt-0). Altura mínima suficiente (py-0.5). MESMA aparência
+  // e hierarquia: bg-primary/10, borda e tipografia 9px bold uppercase inalteradas.
   return (
-    <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-1 first:mt-0 mb-0.5">
+    <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 first:mt-0 mb-0.5">
       <span className="text-[9px] font-bold uppercase tracking-wide text-primary/90 leading-none">{titulo}</span>
     </div>
   );
 }
 function ResumoRow({ label, value, valueClassName }: { label: string; value: string | null; valueClassName?: string }) {
-  // PR-FIN-MODAL-02H — reversão PARCIAL da compactação (02F/02G): leading-snug + gap-2 p/
-  // conforto de leitura, sem voltar ao layout original. A fonte (text-[11px]) volta ao nível
-  // pré-02F via base do aside; nenhum campo é escondido.
+  // PR-FIN-MODAL-02I — o ganho de altura do 02H é usado p/ CABER tudo, não p/ tipografia:
+  // volta à densidade do 02G (gap-1.5 + leading-tight; fonte text-[10px] via base do aside).
   return (
-    <div className="flex items-baseline justify-between gap-2 leading-snug">
+    <div className="flex items-baseline justify-between gap-1.5 leading-tight">
       <span className="text-muted-foreground shrink-0">{label}</span>
       <span className={cn("font-medium text-right truncate", valueClassName)}>{value || '—'}</span>
     </div>
@@ -1666,9 +1665,10 @@ export function LancamentoV2Dialog({
               <div className="h-8 shrink-0 border-b border-border bg-accent/40 flex items-center px-3 text-[10px] font-bold uppercase tracking-wide text-primary">
                 Resumo do lançamento
               </div>
-              {/* Corpo do resumo: densidade CONFORTÁVEL (reversão parcial de 02F/02G) após o
-                  ganho de altura estrutural — fonte text-[11px], sem esconder campos. */}
-              <div className="flex-1 overflow-hidden py-1.5 text-[11px]">
+              {/* Corpo do resumo: SEM padding superior — o primeiro bloco (Identificação) encosta
+                  na faixa do título (causa do espaço branco no 02H era o py-1.5 do topo). Densidade
+                  funcional do 02G: text-[10px]; ganho de altura do 02H usado p/ caber todo o conteúdo. */}
+              <div className="flex-1 overflow-hidden pb-1 text-[10px]">
                 <ResumoBlocoHead titulo="Identificação" />
                 <div className="px-3 space-y-0.5">
                   <ResumoRow label="Tipo" value={resumoTipoLabel} valueClassName={resumoTipoCor} />
