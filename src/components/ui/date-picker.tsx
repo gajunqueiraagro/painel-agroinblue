@@ -15,21 +15,34 @@ interface DatePickerProps {
   onChange: (v: string) => void; // devolve 'yyyy-MM-dd'
   className?: string;
   placeholder?: string;
+  disabled?: boolean;            // aditivo (PR-FIN-MODAL-02C): campos travados/OC. Default false.
+  tabIndex?: number;
+  // Variante COMPACTA (PR-FIN-MODAL-02C) para grids densos (parcelas/recorrência). SÓ apresentação:
+  //   reduz altura do trigger, padding, fonte e ícone. NÃO altera parsing/formatação/timezone/valor/handlers.
+  size?: 'default' | 'compact';
 }
 
-export function DatePicker({ value, onChange, className, placeholder = 'dd/mm/aaaa' }: DatePickerProps) {
+export function DatePicker({ value, onChange, className, placeholder = 'dd/mm/aaaa', disabled, tabIndex, size = 'default' }: DatePickerProps) {
   const [open, setOpen] = useState(false);
   const parsed = value ? parse(value, 'yyyy-MM-dd', new Date()) : undefined;
   const valid = parsed && !Number.isNaN(parsed.getTime());
+  const compact = size === 'compact';
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={o => { if (!disabled) setOpen(o); }}>
       <PopoverTrigger asChild>
         <Button
           type="button"
           variant="outline"
-          className={cn('h-8 w-full justify-start text-left font-normal text-[12px]', !valid && 'text-muted-foreground', className)}
+          disabled={disabled}
+          tabIndex={tabIndex}
+          className={cn(
+            'w-full justify-start text-left font-normal',
+            compact ? 'h-6 px-2 text-[11px]' : 'h-8 text-[12px]',
+            !valid && 'text-muted-foreground',
+            className,
+          )}
         >
-          <CalendarIcon className="mr-2 h-3.5 w-3.5 shrink-0" />
+          <CalendarIcon className={cn('shrink-0', compact ? 'mr-1 h-3 w-3' : 'mr-2 h-3.5 w-3.5')} />
           {valid ? format(parsed as Date, 'dd/MM/yyyy', { locale: ptBR }) : placeholder}
         </Button>
       </PopoverTrigger>

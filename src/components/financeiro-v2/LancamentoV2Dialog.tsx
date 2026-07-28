@@ -5,7 +5,8 @@ import { normalizeStatusTransacao } from '@/lib/financeiro/v2Transferencia';
 import { TIPOS_DOCUMENTO, formatNFNumber, extractNFDigits, type TipoDocumento } from '@/lib/financeiro/documentoHelper';
 import { useCliente } from '@/contexts/ClienteContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ContaBancariaSelect, DARK_GLASS_CONTENT } from '@/components/shared/ContaBancariaSelect';
+import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
+import { DatePicker } from '@/components/ui/date-picker';
 import { ProdutoAutocomplete } from '@/components/shared/ProdutoAutocomplete';
 import { FazendaSelect } from '@/components/shared/FazendaSelect';
 import { FavorecidoSelect } from '@/components/shared/FavorecidoSelect';
@@ -913,7 +914,8 @@ export function LancamentoV2Dialog({
     }
   }, [open]);
 
-  const sectionClass = "rounded-lg border border-[hsl(var(--border))] bg-[hsl(210_33%_97%)] dark:bg-muted/20 px-3.5 py-2 space-y-1.5";
+  // PR-FIN-MODAL-02C #10 — densidade dos blocos: padding/espaçamento reduzidos (~20% menos altura).
+  const sectionClass = "rounded-lg border border-[hsl(var(--border))] bg-[hsl(210_33%_97%)] dark:bg-muted/20 px-3 py-1.5 space-y-1";
   const sectionTitleClass = "flex items-center gap-1.5 text-[11px] font-bold text-primary uppercase tracking-[0.08em]";
   const fieldBg = "bg-background border-[hsl(210_20%_80%)] focus-visible:border-primary focus-visible:ring-primary/20 focus-visible:shadow-[0_0_0_3px_hsl(var(--primary)/0.08)]";
 
@@ -921,7 +923,10 @@ export function LancamentoV2Dialog({
     <>
       <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
         <DialogContent className={cn(
-          "flex flex-col p-0 bg-card dark:bg-card rounded-xl shadow-2xl border border-border overflow-hidden max-h-[92vh]",
+          // PR-FIN-MODAL-02C #1 — ALTURA FIXA (h-[92vh]) além do max: o modal não muda de
+          // altura ao trocar de aba; só a região central (TabsContent) rola. Padrão aprovado
+          // (MesaPareamentoModal). Header/TabsList/footer permanecem estáveis.
+          "flex flex-col p-0 bg-card dark:bg-card rounded-xl shadow-2xl border border-border overflow-hidden h-[92vh] max-h-[92vh]",
           excelContext ? "max-w-5xl" : "max-w-3xl",
         )}>
           {/* Header */}
@@ -940,9 +945,9 @@ export function LancamentoV2Dialog({
               a TabsList fica logo abaixo do header e o corpo rolável abriga o TabsContent ativo.
               Todo o estado dos campos permanece no componente pai (sem cópia por aba). */}
           <Tabs value={abaAtiva} onValueChange={v => setAbaAtiva(v as AbaFinanceira)} className="flex-1 flex flex-col min-h-0">
-            <TabsList className="w-full justify-start gap-1 rounded-none border-b border-border bg-accent/40 px-3 h-9 shrink-0">
+            <TabsList className="w-full justify-start gap-0.5 rounded-none border-b border-border bg-accent/40 px-2 h-8 shrink-0">
               {ABAS_TAB.map(({ value, label }) => (
-                <TabsTrigger key={value} value={value} className="h-7 px-3 text-[11px] gap-1.5 data-[state=active]:bg-background">
+                <TabsTrigger key={value} value={value} className="h-6 px-2.5 text-[11px] gap-1.5 data-[state=active]:bg-background data-[state=active]:shadow-sm">
                   {label}
                   {abaComErro(value) && <span className="inline-block h-1.5 w-1.5 rounded-full bg-destructive" aria-label="pendência" />}
                 </TabsTrigger>
@@ -953,7 +958,7 @@ export function LancamentoV2Dialog({
               caixa) → body volta a ser filho direto, layout 100% idêntico. */}
           <div className={excelContext ? "flex-1 flex min-h-0 overflow-hidden" : "contents"}>
           {/* Scrollable body */}
-          <div className="flex-1 overflow-y-auto px-5 py-3 space-y-2 bg-background">
+          <div className="flex-1 overflow-y-auto px-4 py-2 space-y-1.5 bg-background">
 
             {/* ═══ ABA GERAL ═══ */}
             <TabsContent value="geral" className="mt-0 space-y-2 focus-visible:outline-none">
@@ -1087,24 +1092,24 @@ export function LancamentoV2Dialog({
                   <Label className="text-[10px]">Tipo Operação *</Label>
                   <Select value={tipoOperacao} onValueChange={v => { setTipoOperacao(v); setSubcentro(''); setMacroCusto(''); setGrupoCusto(''); setCentroCusto(''); setSubcentroSearch(''); }} disabled={lockedFields?.includes('tipo_operacao') || isOCTitulo}>
                     <SelectTrigger ref={firstFieldRef} tabIndex={1} className={cn("h-8", fieldBg)}><SelectValue /></SelectTrigger>
-                    <SelectContent className={DARK_GLASS_CONTENT}>
+                    <SelectContent>
                       {TIPOS_OPERACAO.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
                   <Label className="text-[10px]">Data Competência *</Label>
-                  <Input tabIndex={2} type="date" value={dataCompetencia} onChange={e => setDataCompetencia(e.target.value)} className={cn("h-8", fieldBg)} disabled={isOCTitulo} />
+                  <DatePicker value={dataCompetencia} onChange={setDataCompetencia} disabled={isOCTitulo} tabIndex={2} className={fieldBg} />
                 </div>
                 <div>
                   <Label className="text-[10px]">Data Pagamento *</Label>
-                  <Input tabIndex={3} type="date" value={dataPagamento} onChange={e => handleDataPagamentoChange(e.target.value)} className={cn("h-8", fieldBg)} disabled={lockedFields?.includes('data_pagamento')} />
+                  <DatePicker value={dataPagamento} onChange={handleDataPagamentoChange} disabled={lockedFields?.includes('data_pagamento')} tabIndex={3} className={fieldBg} />
                 </div>
                 <div>
                   <Label className="text-[10px]">Status *</Label>
                   <Select value={statusTransacao} onValueChange={setStatusTransacao}>
                     <SelectTrigger tabIndex={4} className={cn("h-8", fieldBg)}><SelectValue /></SelectTrigger>
-                    <SelectContent className={DARK_GLASS_CONTENT}>
+                    <SelectContent>
                       {STATUS_OPTIONS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -1288,13 +1293,28 @@ export function LancamentoV2Dialog({
                     onValueChange={v => setSafraId(v === '__none_safra__' ? '' : v)}
                   >
                     <SelectTrigger className={cn("h-8", fieldBg)}><SelectValue placeholder="Sem safra" /></SelectTrigger>
-                    <SelectContent className={DARK_GLASS_CONTENT}>
+                    <SelectContent>
                       <SelectItem value="__none_safra__">Sem safra</SelectItem>
                       {(safras ?? []).map(s => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
               </div>
+
+              {/* PR-FIN-MODAL-02C #6 — "Compõe DRE" (SOMENTE LEITURA). Consome apenas a flag
+                  já materializada no lançamento (compoe_dre). Só na EDIÇÃO — na criação a flag
+                  ainda não existe (materializada ao salvar). "Linha DRE" não é exibida porque
+                  esse dado NÃO chega ao modal hoje. Não cria regra nem recalcula. */}
+              {isEdit && (() => {
+                const cd = (lancamento as any)?.compoe_dre;
+                const label = cd === true ? '✔ Sim' : cd === false ? 'Não' : '—';
+                return (
+                  <div className="flex items-center gap-2 rounded-md border border-border/40 bg-muted/30 px-2.5 py-1">
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Compõe DRE</span>
+                    <span className={cn("text-[11px] font-medium", cd === true ? "text-success" : "text-muted-foreground")}>{label}</span>
+                  </div>
+                );
+              })()}
             </section>
             </TabsContent>
             {/* ═══ fim ABA CLASSIFICAÇÃO ═══ */}
@@ -1311,7 +1331,7 @@ export function LancamentoV2Dialog({
                   <Label className="text-[10px]">Forma de Pagamento</Label>
                   <Select value={formaPgto || '__none_fp__'} onValueChange={handleFormaPgtoChange}>
                     <SelectTrigger tabIndex={13} className={cn("h-8", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
-                    <SelectContent className={DARK_GLASS_CONTENT}>
+                    <SelectContent>
                       <SelectItem value="__none_fp__">Nenhuma</SelectItem>
                       <SelectItem value="PIX">PIX</SelectItem>
                       <SelectItem value="Cartão">Cartão</SelectItem>
@@ -1357,7 +1377,7 @@ export function LancamentoV2Dialog({
                       <Label className="text-[10px]">Frequência</Label>
                       <Select value={frequencia} onValueChange={(v: 'pontual' | 'recorrente') => setFrequencia(v)}>
                         <SelectTrigger className={cn("h-8", fieldBg)}><SelectValue /></SelectTrigger>
-                        <SelectContent className={DARK_GLASS_CONTENT}>
+                        <SelectContent>
                           <SelectItem value="pontual">Pontual</SelectItem>
                           <SelectItem value="recorrente">Recorrente</SelectItem>
                         </SelectContent>
@@ -1368,7 +1388,7 @@ export function LancamentoV2Dialog({
                         <Label className="text-[10px]">Modalidade</Label>
                         <Select value={formaPagamentoParc} onValueChange={(v: 'avista' | 'parcelada') => setFormaPagamentoParc(v)}>
                           <SelectTrigger className={cn("h-8", fieldBg)}><SelectValue /></SelectTrigger>
-                          <SelectContent className={DARK_GLASS_CONTENT}>
+                          <SelectContent>
                             <SelectItem value="avista">À vista</SelectItem>
                             <SelectItem value="parcelada">Parcelada</SelectItem>
                           </SelectContent>
@@ -1400,10 +1420,10 @@ export function LancamentoV2Dialog({
                       </div>
                       <div className="divide-y divide-border/20">
                         {parcelaRows.map((row, idx) => (
-                          <div key={idx} className="grid grid-cols-[48px_1fr_1fr] gap-1 px-3 py-1.5 items-center">
-                            <span className="text-xs font-semibold text-muted-foreground">{idx + 1}/{numParcelas}</span>
-                            <Input type="date" value={row.dataPagamento} onChange={e => handleParcelaDateChange(idx, e.target.value)} className="h-7 text-xs bg-background dark:bg-card border-border/30" />
-                            <Input value={row.valorDisplay} onChange={e => handleParcelaValorChange(idx, e)} onFocus={e => e.target.select()} inputMode="numeric" className="h-7 text-xs bg-background dark:bg-card border-border/30 text-right font-mono" />
+                          <div key={idx} className="grid grid-cols-[48px_1fr_1fr] gap-1 px-2 py-0.5 items-center">
+                            <span className="text-[11px] font-semibold text-muted-foreground">{idx + 1}/{numParcelas}</span>
+                            <DatePicker value={row.dataPagamento} onChange={v => handleParcelaDateChange(idx, v)} size="compact" className="bg-background dark:bg-card border-border/30" />
+                            <Input value={row.valorDisplay} onChange={e => handleParcelaValorChange(idx, e)} onFocus={e => e.target.select()} inputMode="numeric" className="h-6 text-[11px] bg-background dark:bg-card border-border/30 text-right font-mono" />
                           </div>
                         ))}
                       </div>
@@ -1433,11 +1453,11 @@ export function LancamentoV2Dialog({
                       </div>
                       <div className="divide-y divide-border/20 max-h-52 overflow-y-auto">
                         {recorrenciaRows.map((row, idx) => (
-                          <div key={idx} className="grid grid-cols-[60px_1fr_1fr_100px] gap-1 px-3 py-1.5 items-center">
+                          <div key={idx} className="grid grid-cols-[60px_1fr_1fr_100px] gap-1 px-2 py-0.5 items-center">
                             <span className="text-[10px] font-semibold text-muted-foreground capitalize">{row.mesLabel}</span>
-                            <Input type="date" value={row.dataCompetencia} onChange={e => handleRecorrenciaCompChange(idx, e.target.value)} className="h-7 text-xs bg-background dark:bg-card border-border/30" />
-                            <Input type="date" value={row.dataPagamento} onChange={e => handleRecorrenciaPgtoChange(idx, e.target.value)} className="h-7 text-xs bg-background dark:bg-card border-border/30" />
-                            <Input value={row.valorDisplay} onChange={e => handleRecorrenciaValorChange(idx, e)} onFocus={e => e.target.select()} inputMode="numeric" className="h-7 text-xs bg-background dark:bg-card border-border/30 text-right font-mono" />
+                            <DatePicker value={row.dataCompetencia} onChange={v => handleRecorrenciaCompChange(idx, v)} size="compact" className="bg-background dark:bg-card border-border/30" />
+                            <DatePicker value={row.dataPagamento} onChange={v => handleRecorrenciaPgtoChange(idx, v)} size="compact" className="bg-background dark:bg-card border-border/30" />
+                            <Input value={row.valorDisplay} onChange={e => handleRecorrenciaValorChange(idx, e)} onFocus={e => e.target.select()} inputMode="numeric" className="h-6 text-[11px] bg-background dark:bg-card border-border/30 text-right font-mono" />
                           </div>
                         ))}
                       </div>
@@ -1471,7 +1491,7 @@ export function LancamentoV2Dialog({
                   <Label className="text-[10px]">Tipo Documento</Label>
                   <Select value={tipoDocumento || '__none_td__'} onValueChange={v => { setTipoDocumento(v === '__none_td__' ? '' : v as TipoDocumento); if (v !== 'Nota Fiscal') { /* keep raw */ } }}>
                     <SelectTrigger tabIndex={12} className={cn("h-8 text-xs", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
-                    <SelectContent className={DARK_GLASS_CONTENT}>
+                    <SelectContent>
                       <SelectItem value="__none_td__">Nenhum</SelectItem>
                       {TIPOS_DOCUMENTO.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
                     </SelectContent>
@@ -1568,7 +1588,7 @@ export function LancamentoV2Dialog({
                 Excluir
               </Button>
             )}
-            <Button tabIndex={17} onClick={handleSubmit} disabled={saving || !canSave} className="px-8 font-semibold">
+            <Button tabIndex={17} onClick={handleSubmit} disabled={saving || !canSave} className="px-8 font-semibold shadow-md shadow-primary/25 ring-1 ring-primary/20">
               {getSubmitLabel()}
             </Button>
           </div>
