@@ -194,15 +194,18 @@ function ExcelCtxConta({
 // Faixa horizontal discreta de título (ocupa toda a largura interna do aside — que não tem
 // padding horizontal; as linhas é que recebem px-3). Fundo distinto do corpo, altura mínima.
 function ResumoBlocoHead({ titulo }: { titulo: string }) {
+  // PR-FIN-MODAL-02F — faixa compactada (py/margens/leading menores). MESMA aparência
+  // e hierarquia visual: bg-primary/10, borda e tipografia 9px bold uppercase inalteradas.
   return (
-    <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-1 first:mt-0 mb-0.5">
-      <span className="text-[9px] font-bold uppercase tracking-wide text-primary/90">{titulo}</span>
+    <div className="bg-primary/10 border-y border-primary/15 px-3 py-[1px] mt-0.5 first:mt-0 mb-0">
+      <span className="text-[9px] font-bold uppercase tracking-wide text-primary/90 leading-none">{titulo}</span>
     </div>
   );
 }
 function ResumoRow({ label, value, valueClassName }: { label: string; value: string | null; valueClassName?: string }) {
+  // PR-FIN-MODAL-02F — linha compactada (gap/leading menores) p/ densidade estilo ERP.
   return (
-    <div className="flex items-baseline justify-between gap-2 leading-tight">
+    <div className="flex items-baseline justify-between gap-1.5 leading-none">
       <span className="text-muted-foreground shrink-0">{label}</span>
       <span className={cn("font-medium text-right truncate", valueClassName)}>{value || '—'}</span>
     </div>
@@ -997,6 +1000,15 @@ export function LancamentoV2Dialog({
                   {abaComErro(value) && <span className="inline-block h-1.5 w-1.5 rounded-full bg-destructive" aria-label="pendência" />}
                 </TabsTrigger>
               ))}
+              {/* PR-FIN-MODAL-02F — título do resumo integrado à MESMA faixa das tabs, alinhado
+                  sobre a coluna do resumo (w-[300px]). Elimina a linha exclusiva antes usada
+                  dentro do aside e recupera altura útil. Rótulo NÃO interativo (não é um
+                  TabsTrigger) → não entra no foco/teclado das tabs. Só no fluxo normal. */}
+              {!excelContext && (
+                <span className="ml-auto w-[300px] shrink-0 self-stretch border-l border-border flex items-center px-3 text-[10px] font-bold uppercase tracking-wide text-primary">
+                  Resumo do lançamento
+                </span>
+              )}
             </TabsList>
           {/* PR-Mesa-ExcelContext: com contexto Excel, corpo vira 2 colunas
               (form + painel). Sem contexto, wrapper usa `contents` (não gera
@@ -1597,11 +1609,11 @@ export function LancamentoV2Dialog({
               Read-only, espelha o formulário em tempo real; coluna fixa (~300px), sem rolagem
               própria, mesma identidade visual, alta densidade. Nenhuma lógica/estado/validação. */}
           {!excelContext && (
-            <aside className="w-[300px] shrink-0 border-l border-border bg-muted/20 py-2 text-[11px] overflow-hidden">
-              <div className="px-3 text-[10px] font-bold uppercase tracking-wide text-primary mb-1">Resumo do lançamento</div>
-
+            <aside className="w-[300px] shrink-0 border-l border-border bg-muted/20 py-1 text-[10px] overflow-hidden">
+              {/* PR-FIN-MODAL-02F — título movido para a faixa das tabs; aside começa direto
+                  nos blocos, com tipografia e espaçamentos compactados (densidade estilo ERP). */}
               <ResumoBlocoHead titulo="Identificação" />
-              <div className="px-3 space-y-0.5">
+              <div className="px-3 space-y-px">
                 <ResumoRow label="Tipo" value={resumoTipoLabel} valueClassName={resumoTipoCor} />
                 <ResumoRow label="Produto" value={descricao} />
                 <ResumoRow label="Data Competência" value={resumoFmtData(dataCompetencia)} />
@@ -1610,7 +1622,7 @@ export function LancamentoV2Dialog({
               </div>
 
               <ResumoBlocoHead titulo="Financeiro" />
-              <div className="px-3 space-y-0.5">
+              <div className="px-3 space-y-px">
                 <ResumoRow label="Valor" value={valorNum > 0 ? formatMoeda(valorNum) : null} />
                 {!isEntrada && <ResumoRow label="Conta origem" value={resumoContaOrigem} />}
                 {(isEntrada || isTransferencia) && <ResumoRow label="Conta destino" value={resumoContaDestino} />}
@@ -1618,14 +1630,14 @@ export function LancamentoV2Dialog({
               </div>
 
               <ResumoBlocoHead titulo="Classificação" />
-              <div className="px-3 space-y-0.5">
+              <div className="px-3 space-y-px">
                 <ResumoRow label="Safra" value={resumoSafra} />
                 <ResumoRow label="Centro" value={centroCusto} />
                 <ResumoRow label="Subcentro" value={subcentro} />
               </div>
 
               <ResumoBlocoHead titulo="Pagamento" />
-              <div className="px-3 space-y-0.5">
+              <div className="px-3 space-y-px">
                 <ResumoRow label="Pagamento" value={resumoFmtData(dataPagamento)} />
                 <ResumoRow label="Forma" value={formaPgto} />
                 <ResumoRow label="Modalidade" value={!isEdit ? (formaPagamentoParc === 'parcelada' ? 'Parcelada' : 'À vista') : null} />
@@ -1634,7 +1646,7 @@ export function LancamentoV2Dialog({
               </div>
 
               <ResumoBlocoHead titulo="Documento" />
-              <div className="px-3 space-y-0.5">
+              <div className="px-3 space-y-px">
                 <ResumoRow label="Tipo" value={tipoDocumento || null} />
                 <ResumoRow label="Número" value={notaFiscalDisplay || null} />
               </div>
