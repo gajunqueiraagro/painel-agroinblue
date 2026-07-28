@@ -183,6 +183,26 @@ function ExcelCtxConta({
   );
 }
 
+// ─── PR-FIN-MODAL-02D — Painel lateral de RESUMO (SOMENTE LEITURA; ESPELHA o LancamentoV2Form) ───
+//   Camada EXCLUSIVAMENTE de apresentação: apenas reflete os valores atuais do formulário.
+//   NÃO infere status/completude (sem semáforo/bolinhas) — indicador de pendência só quando existir
+//   fonte oficial e única de validação (frente futura). Títulos de bloco neutros; vazio → "—".
+function ResumoBlocoHead({ titulo }: { titulo: string }) {
+  return (
+    <div className="mt-2 first:mt-0 mb-0.5">
+      <span className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">{titulo}</span>
+    </div>
+  );
+}
+function ResumoRow({ label, value }: { label: string; value: string | null }) {
+  return (
+    <div className="flex items-baseline justify-between gap-2 leading-tight">
+      <span className="text-muted-foreground shrink-0">{label}</span>
+      <span className="font-medium text-right truncate">{value || '—'}</span>
+    </div>
+  );
+}
+
 /** Add N days to a date string (YYYY-MM-DD) */
 function addDays(dateStr: string, days: number): string {
   const d = new Date(dateStr + 'T00:00:00');
@@ -636,6 +656,16 @@ export function LancamentoV2Dialog({
 
   const contasDisponiveis = contas;
 
+  // PR-FIN-MODAL-02D — valores espelhados no painel de resumo (só apresentação; sem estado novo).
+  const resumoFmtData = (d: string) => (d ? d.split('-').reverse().join('/') : null);
+  const resumoFavorecido = fornecedores.find(f => f.id === favorecidoId)?.nome ?? null;
+  const resumoFazenda = fazendas.find(f => f.id === fazendaId)?.nome ?? null;
+  const resumoContaOrigem = (() => { const c = contas.find(x => x.id === contaOrigemId); return c ? (c.nome_exibicao ?? c.nome_conta) : null; })();
+  const resumoContaDestino = (() => { const c = contas.find(x => x.id === contaDestinoId); return c ? (c.nome_exibicao ?? c.nome_conta) : null; })();
+  const resumoSafra = (safras ?? []).find(s => s.id === safraId)?.nome ?? null;
+  const resumoTipoLabel = TIPOS_OPERACAO.find(t => t.value === tipoOperacao)?.label ?? tipoOperacao;
+  const resumoStatusLabel = STATUS_OPTIONS.find(s => s.value === statusTransacao)?.label ?? statusTransacao;
+
   // PR-U2c-1C: fornecedoresList/normalizeSearch/filteredFornecedores/effects/keyDown/
   // selectedFornecedorNome migraram para <FavorecidoSelect />.
 
@@ -927,7 +957,9 @@ export function LancamentoV2Dialog({
           // altura ao trocar de aba; só a região central (TabsContent) rola. Padrão aprovado
           // (MesaPareamentoModal). Header/TabsList/footer permanecem estáveis.
           "flex flex-col p-0 bg-card dark:bg-card rounded-xl shadow-2xl border border-border overflow-hidden h-[92vh] max-h-[92vh]",
-          excelContext ? "max-w-5xl" : "max-w-3xl",
+          // PR-FIN-MODAL-02D — modal 2-colunas (form + painel de resumo à direita) também no fluxo
+          // normal; largura acomoda a coluna de ~300px sem aumentar a altura (h-[92vh] fixo).
+          "max-w-5xl",
         )}>
           {/* Header */}
           <DialogHeader className="px-5 pt-3 pb-2.5 border-b border-primary/20 bg-primary">
@@ -956,7 +988,7 @@ export function LancamentoV2Dialog({
           {/* PR-Mesa-ExcelContext: com contexto Excel, corpo vira 2 colunas
               (form + painel). Sem contexto, wrapper usa `contents` (não gera
               caixa) → body volta a ser filho direto, layout 100% idêntico. */}
-          <div className={excelContext ? "flex-1 flex min-h-0 overflow-hidden" : "contents"}>
+          <div className="flex-1 flex min-h-0 overflow-hidden">
           {/* Scrollable body */}
           <div className="flex-1 overflow-y-auto px-4 py-2 space-y-1.5 bg-background">
 
@@ -1552,6 +1584,45 @@ export function LancamentoV2Dialog({
                   {excelContext.mensagemDivergencia}
                 </div>
               )}
+            </aside>
+          )}
+
+          {/* PR-FIN-MODAL-02D — Painel lateral de RESUMO (fluxo normal, sem Contexto Excel).
+              Read-only, espelha o formulário em tempo real; coluna fixa (~300px), sem rolagem
+              própria, mesma identidade visual, alta densidade. Nenhuma lógica/estado/validação. */}
+          {!excelContext && (
+            <aside className="w-[300px] shrink-0 border-l border-border bg-muted/20 p-3 text-[11px] space-y-0.5 overflow-hidden">
+              <div className="text-[10px] font-bold uppercase tracking-wide text-primary mb-1.5">Resumo do lançamento</div>
+
+              <ResumoBlocoHead titulo="Identificação" />
+              <ResumoRow label="Tipo" value={resumoTipoLabel} />
+              <ResumoRow label="Produto" value={descricao} />
+              <ResumoRow label="Favorecido" value={resumoFavorecido} />
+              <ResumoRow label="Fazenda" value={resumoFazenda} />
+
+              <ResumoBlocoHead titulo="Financeiro" />
+              <ResumoRow label="Valor" value={valorNum > 0 ? formatMoeda(valorNum) : null} />
+              {!isEntrada && <ResumoRow label="Conta origem" value={resumoContaOrigem} />}
+              {(isEntrada || isTransferencia) && <ResumoRow label="Conta destino" value={resumoContaDestino} />}
+              <ResumoRow label="Status" value={resumoStatusLabel} />
+
+              <ResumoBlocoHead titulo="Classificação" />
+              <ResumoRow label="Macro" value={macroCusto} />
+              <ResumoRow label="Grupo" value={grupoCusto} />
+              <ResumoRow label="Centro" value={centroCusto} />
+              <ResumoRow label="Subcentro" value={subcentro} />
+              <ResumoRow label="Safra" value={resumoSafra} />
+
+              <ResumoBlocoHead titulo="Pagamento" />
+              <ResumoRow label="Competência" value={resumoFmtData(dataCompetencia)} />
+              <ResumoRow label="Pagamento" value={resumoFmtData(dataPagamento)} />
+              {!isEdit && <ResumoRow label="Frequência" value={frequencia === 'recorrente' ? 'Recorrente' : 'Pontual'} />}
+              <ResumoRow label="Forma" value={formaPgto} />
+              {!isEdit && <ResumoRow label="Parcelas" value={formaPagamentoParc === 'parcelada' ? `${numParcelas}x` : 'À vista'} />}
+
+              <ResumoBlocoHead titulo="Documento" />
+              <ResumoRow label="Tipo" value={tipoDocumento || null} />
+              <ResumoRow label="Número" value={notaFiscalDisplay || null} />
             </aside>
           )}
           </div>
