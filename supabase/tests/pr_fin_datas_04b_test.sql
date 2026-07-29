@@ -31,8 +31,13 @@ DECLARE
   v_def     text;
   v_hascol  int;
 BEGIN
-  -- (1)(2) função existe + assinatura oficial
-  v_args := pg_get_function_identity_arguments(v_oid);
+  -- (1)(2) função existe + assinatura oficial (por TIPOS, imune a nomes/formatação de identity_arguments)
+  SELECT string_agg(format_type(a.arg_type, NULL), ', ' ORDER BY a.ord)
+    INTO v_args
+    FROM pg_proc AS p
+    CROSS JOIN LATERAL unnest(p.proargtypes::oid[])
+      WITH ORDINALITY AS a(arg_type, ord)
+   WHERE p.oid = v_oid;
   IF v_args IS DISTINCT FROM 'uuid, uuid, integer, jsonb' THEN
     RAISE EXCEPTION 'PR-FIN-DATAS-04B A2: assinatura inesperada = %', v_args; END IF;
 
@@ -118,8 +123,8 @@ BEGIN
   INSERT INTO public.clientes (id, nome, slug)
     VALUES (v_cliente, 'OC04B Cliente Teste', 'oc04b-'||replace(v_cliente::text,'-',''));
 
-  INSERT INTO public.fazendas (id, nome, owner_id, cliente_id)
-    VALUES (v_fazenda, 'OC04B Fazenda Teste', v_actor, v_cliente);
+  INSERT INTO public.fazendas (id, nome, codigo, owner_id, cliente_id)
+    VALUES (v_fazenda, 'OC04B Fazenda Teste', 'OC04B', v_actor, v_cliente);
 
   INSERT INTO public.cliente_membros (cliente_id, user_id, perfil, ativo)
     VALUES (v_cliente, v_actor, 'gestor_cliente', true);
