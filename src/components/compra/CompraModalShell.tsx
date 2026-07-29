@@ -92,6 +92,7 @@ export interface CompraModalShellProps {
   // PR-OC-EDIT-01B — ações de ciclo (RPCs oficiais) da operação existente.
   ocTemTitulo?: boolean;                // título financeiro materializado ativo (explicação + gating)
   ocRascunho?: boolean;                 // rascunho técnico (cadastro incompleto) → "Confirmar" desabilitado
+  ocFazendaValida?: boolean;            // PR-NAV-CONTEXTO-FAZENDA-01A — há fazenda real p/ persistir (bloqueia Salvar)
   acaoOcLoading?: 'confirmar' | 'cancelar' | 'reabrir' | null;
   onConfirmarOC?: () => void;
   onCancelarOC?: (motivo: string) => void;
@@ -308,14 +309,19 @@ export function CompraModalShell(api: CompraModalShellProps) {
                 </div>
               </div>
               <div>
-                <Label className="font-bold text-[11px]">Fazenda</Label>
+                <Label className="font-bold text-[11px]">Fazenda <span className="text-destructive">*</span></Label>
+                {/* PR-NAV-CONTEXTO-FAZENDA-01A — `api.fazendas` já vem filtrada ao domínio pecuário na
+                    origem (critério único isFazendaPecuaria: sem Global, sem administrativas, só aptas).
+                    A fazenda gravada só aparece selecionada se continuar válida para o domínio. */}
                 <Select value={api.fazendaDestinoId} onValueChange={api.setFazendaDestinoId} disabled={api.somenteLeitura}>
-                  <SelectTrigger className="mt-0.5 h-8 text-[12px]"><SelectValue placeholder={api.fazendaAtualNome || 'Selecione'} /></SelectTrigger>
+                  <SelectTrigger className="mt-0.5 h-8 text-[12px]"><SelectValue placeholder="Selecione a fazenda" /></SelectTrigger>
                   <SelectContent className={DARK_SELECT_CONTENT}>
-                    {api.fazendaAtualId && <SelectItem value={api.fazendaAtualId} className="text-[12px]">{api.fazendaAtualNome}</SelectItem>}
-                    {api.fazendas.filter(f => f.id !== api.fazendaAtualId).map(f => <SelectItem key={f.id} value={f.id} className="text-[12px]">{f.nome}</SelectItem>)}
+                    {api.fazendas.map(f => <SelectItem key={f.id} value={f.id} className="text-[12px]">{f.nome}</SelectItem>)}
                   </SelectContent>
                 </Select>
+                {api.modoOC && !api.somenteLeitura && api.ocFazendaValida === false && (
+                  <p className="mt-0.5 text-[10px] text-destructive">Selecione a fazenda da operação.</p>
+                )}
               </div>
               <div>
                 <Label className="font-bold text-[11px]">Observações/Lote</Label>
@@ -493,8 +499,8 @@ export function CompraModalShell(api: CompraModalShellProps) {
                       {api.lotesApi?.saving ? 'Salvando...' : 'Salvar rascunho'}
                     </Button>
                   ) : (abaAtiva === 'recebimento' || abaAtiva === 'documentos' || abaAtiva === 'financeiro') ? null : (
-                    <Button onClick={api.handleRequestRegister} disabled={api.submitting || !!api.acaoOcLoading}
-                      className="bg-white text-primary hover:bg-white/90 font-bold gap-1.5">
+                    <Button onClick={api.handleRequestRegister} disabled={api.submitting || !!api.acaoOcLoading || !api.ocFazendaValida}
+                      className="bg-white text-primary hover:bg-white/90 font-bold gap-1.5 disabled:opacity-60">
                       <ShoppingCart className="h-4 w-4" /> {api.submitting ? 'Salvando...' : 'Salvar alterações'}
                     </Button>
                   )}
@@ -544,7 +550,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
               </Button>
             </>
           ) : (
-            <Button onClick={api.handleRequestRegister} disabled={api.submitting || (!api.modoOC && !api.compraDetalhes)} className="bg-white text-primary hover:bg-white/90 font-bold gap-1.5">
+            <Button onClick={api.handleRequestRegister} disabled={api.submitting || (!api.modoOC && !api.compraDetalhes) || (!!api.modoOC && !api.ocFazendaValida)} className="bg-white text-primary hover:bg-white/90 font-bold gap-1.5 disabled:opacity-60">
               <ShoppingCart className="h-4 w-4" />
               {api.submitting ? 'Salvando...'
                 : api.modoOC ? (api.ocOperacaoId ? 'Salvar alterações' : 'Salvar e continuar para Negociação')

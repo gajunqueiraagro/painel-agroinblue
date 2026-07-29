@@ -58,7 +58,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { VendaFinanceiroPanel, VendaFinanceiroPanelRef } from '@/components/VendaFinanceiroPanel';
 import { useAnosDisponiveis } from '@/hooks/useAnosDisponiveis';
 import { ConfirmacaoRegistroDialog } from '@/components/ConfirmacaoRegistroDialog';
-import { useFazenda } from '@/contexts/FazendaContext';
+import { useFazenda, isFazendaPecuaria } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useIntegerInput, useDecimalInput, parseDecimalInput } from '@/hooks/useFormattedNumber';
 import { toast } from 'sonner';
@@ -347,6 +347,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const outrasFazendas = useMemo(() => {
     return fazendas.filter(f => f.id !== fazendaAtual?.id && f.id !== '__global__' && f.tem_pecuaria !== false);
   }, [fazendas, fazendaAtual]);
+
+  // PR-NAV-CONTEXTO-FAZENDA-01A — seletor de Fazenda do envelope OC (CompraModalShell): critério ÚNICO
+  //   do domínio pecuário (isFazendaPecuaria) — sem Global, sem administrativas, apenas aptas. Inclui a
+  //   fazenda atual quando ela própria é válida; a atual gravada só permanece se continuar no domínio.
+  const fazendasOC = useMemo(() => fazendas.filter(isFazendaPecuaria), [fazendas]);
 
   const [aba, setAba] = useState<Aba>(abaInicial || 'entrada');
   // Etapa 1 — modal envolve o formulário; aberto por clique nos cards de tipo.
@@ -1773,12 +1778,22 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     }
   }, [lancModalOpen, modoOCCompra, resetContextoOC]);
 
+  // PR-NAV-CONTEXTO-FAZENDA-01A — fazenda REAL da OC (nunca '__global__'/'__atual__'). Null => a fazenda
+  //   precisa ser escolhida no modal antes de persistir (em Global não há fazenda implícita válida).
+  const ocFazendaId: string | null = (
+    ocFazendaDestinoId && ocFazendaDestinoId !== '__atual__' && ocFazendaDestinoId !== '__global__'
+  )
+    ? ocFazendaDestinoId
+    : (fazendaAtual?.id && fazendaAtual.id !== '__global__' ? fazendaAtual.id : null);
+
   // Modo OC: cria/atualiza a operação comercial (só identificação) e guarda operacao_id/versao.
   //   Sem lotes (COM-3), sem físico (onAdicionar) e sem financeiro (gerarFinanceiroCompra).
   const salvarOperacaoOC = async () => {
     const clienteId = clienteAtual?.id;
     if (!clienteId) { toast.error('Cliente não selecionado.'); return; }
     if (!data) { toast.error('Informe a data da compra.'); return; }
+    // PR-NAV-CONTEXTO-FAZENDA-01A — exige fazenda real; nunca envia '__global__'/'__atual__' como UUID.
+    if (!ocFazendaId) { toast.error('Selecione a fazenda da operação antes de salvar.'); return; }
     const criandoOperacao = !ocOperacaoId;
     setSubmitting(true);
     try {
@@ -1786,10 +1801,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         tipo_operacao: 'compra',
         data_operacao: data,
         cenario: isCenarioMeta ? 'meta' : 'realizado',
-        // Fazenda selecionada dentro do modal; só cai no filtro atual se nada foi escolhido.
-        fazenda_id: (ocFazendaDestinoId && ocFazendaDestinoId !== '__atual__')
-          ? ocFazendaDestinoId
-          : (fazendaAtual?.id ?? null),
+        // PR-NAV-CONTEXTO-FAZENDA-01A — fazenda REAL resolvida (nunca '__global__'/'__atual__').
+        fazenda_id: ocFazendaId,
         contraparte_id: compraFornecedorId || null,
         // PR-FIX-OC-OPEN-01 — notaFiscal (estado do input) é soberano: hidratado de compraDetalhes
         //   quando este chega e captura edições posteriores. compraDetalhes?.notaFiscal só como fallback.
@@ -2758,9 +2771,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   // editingReclassId é o state da reclassificação.
   // Em edição com lançamento carregado, liberar UI APENAS quando em Global.
   // Administrativo NUNCA libera (nem edição), por design conceitual.
-  const isEditingExisting = editingAbateId !== null || editingReclassId !== null;
+  // PR-NAV-CONTEXTO-FAZENDA-01A — Global deixa de substituir a tela por "Lançamento bloqueado":
+  //   a fazenda passa a ser exigida na PERSISTÊNCIA (formulário/save), não na abertura. Fazendas
+  //   administrativas (tem_pecuaria=false) seguem bloqueadas por design (não fazem zootécnico).
   if (
-    (isAdministrativo || (isGlobal && !isEditingExisting)) &&
+    isAdministrativo &&
     (aba === 'entrada' || aba === 'saida' || aba === 'reclassificacao')
   ) {
     return (
@@ -2777,9 +2792,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             <h3 className="font-semibold text-foreground text-sm">Lançamento bloqueado</h3>
           </div>
           <p className="text-[11px] text-muted-foreground leading-snug">
-            {isGlobal
-              ? 'Selecione uma fazenda específica para realizar lançamentos. O modo Global é apenas para consulta.'
-              : 'Fazendas administrativas não permitem lançamentos zootécnicos.'}
+            Fazendas administrativas não permitem lançamentos zootécnicos.
           </p>
         </div>
       </div>
@@ -3741,7 +3754,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     fazendaOrigem, setFazendaOrigem,
     fazendaAtualNome: nomeFazenda,
     fazendaAtualId: fazendaAtual?.id ?? null,
-    fazendas,
+    fazendas: fazendasOC,
     fazendaDestinoId: ocFazendaDestinoId,
     setFazendaDestinoId: setOcFazendaDestinoId,
     compraFornecedorId, setCompraFornecedorId,
@@ -3773,6 +3786,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     somenteLeitura: ocAberturaExistente
       && (ocStatusComercial === 'fechada' || ocStatusComercial === 'cancelada' || ocTemTitulo),
     aberturaExistente: ocAberturaExistente,
+    // PR-NAV-CONTEXTO-FAZENDA-01A — há fazenda real para persistir a OC? (Global exige escolha no modal).
+    ocFazendaValida: !!ocFazendaId,
     // PR-OC-EDIT-01B — ações de ciclo (RPCs oficiais) + título materializado (explicação/gating).
     ocTemTitulo,
     ocRascunho,

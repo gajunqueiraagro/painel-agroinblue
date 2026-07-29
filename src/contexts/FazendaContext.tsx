@@ -23,6 +23,15 @@ export const GLOBAL_FAZENDA: Fazenda = {
   papel: 'viewer',
 };
 
+// PR-NAV-CONTEXTO-FAZENDA-01A — critério ÚNICO do domínio pecuário para os seletores de Fazenda do
+//   envelope da Operação Comercial (Compra, Venda em pé, Abate, Boitel): nunca o sentinel Global e
+//   apenas fazendas reais aptas (tem_pecuaria === true — administrativas e "sem pecuária" ficam de
+//   fora). Escolher uma retorna sempre um UUID válido para persistir. NÃO confundir com
+//   `fazendasComPecuaria` (`!== false`), que serve a dashboards/fechamento e mantém sua semântica.
+export function isFazendaPecuaria(f: Pick<Fazenda, 'id' | 'tem_pecuaria'>): boolean {
+  return f.id !== '__global__' && f.tem_pecuaria === true;
+}
+
 interface FazendaContextType {
   fazendas: Fazenda[];
   fazendasComPecuaria: Fazenda[];

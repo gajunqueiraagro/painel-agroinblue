@@ -3,18 +3,22 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FornecedorSelect } from '@/components/shared/FornecedorSelect';
+import { useFazenda, isFazendaPecuaria } from '@/contexts/FazendaContext';
 import type { ModalOCCtx, TipoOperacaoOC } from '../tipos';
 import { TIPO_OC_LABEL } from '../tipos';
 
 export function AbaOperacao({ ctx }: { ctx: ModalOCCtx }) {
   const { draft, patch, op } = ctx;
   const bloqueadoTipo = !!op; // tipo não muda após criar (afeta candidatas/direção)
+  const { fazendas: fazendasTenant } = useFazenda();
 
-  const fazendas = useMemo(() => {
-    const m = new Map<string, string>();
-    ctx.movs.forEach(mv => { if (mv.fazendaId) m.set(mv.fazendaId, mv.fazendaNome ?? mv.fazendaId); });
-    return Array.from(m, ([id, nome]) => ({ id, nome }));
-  }, [ctx.movs]);
+  // PR-NAV-CONTEXTO-FAZENDA-01A — critério ÚNICO do domínio pecuário (isFazendaPecuaria): sem o sentinel
+  //   '__global__' e apenas fazendas reais aptas (tem_pecuaria === true). Escolher uma retorna sempre um
+  //   UUID válido; a persistência exige fazenda (gate no ModalOperacaoComercial). Independe da sidebar.
+  const fazendas = useMemo(
+    () => fazendasTenant.filter(isFazendaPecuaria).map(f => ({ id: f.id, nome: f.nome })),
+    [fazendasTenant],
+  );
 
   return (
     <div className="rounded-lg border bg-card p-5">
@@ -39,15 +43,20 @@ export function AbaOperacao({ ctx }: { ctx: ModalOCCtx }) {
           <Input type="date" value={draft.data_operacao} onChange={e => patch({ data_operacao: e.target.value })} className="h-9" />
         </div>
         <div className="space-y-1">
-          <Label className="text-xs">Fazenda</Label>
-          <Select value={draft.fazendaScopeId ?? '__all__'}
-            onValueChange={(v) => { const id = v === '__all__' ? null : v; patch({ fazendaScopeId: id, fazenda_id: id }); }}>
-            <SelectTrigger className="h-9"><SelectValue placeholder="Todas" /></SelectTrigger>
+          <Label className="text-xs">Fazenda <span className="text-destructive">*</span></Label>
+          {/* PR-NAV-CONTEXTO-FAZENDA-01A — sem opção sentinela "Todas as fazendas" (Global é contexto de
+              sidebar, não valor de registro): o campo inicia vazio e exige a escolha de uma fazenda real.
+              fazendaScopeId acompanha fazenda_id (filtro de candidatas em AbaLotes). */}
+          <Select value={draft.fazendaScopeId ?? ''}
+            onValueChange={(v) => patch({ fazendaScopeId: v, fazenda_id: v })}>
+            <SelectTrigger className="h-9"><SelectValue placeholder="Selecione a fazenda" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="__all__">Todas as fazendas</SelectItem>
               {fazendas.map(f => <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>)}
             </SelectContent>
           </Select>
+          {!draft.fazenda_id && (
+            <p className="text-[10px] text-destructive">Selecione a fazenda da operação para salvar.</p>
+          )}
         </div>
         <div className="space-y-1">
           <Label className="text-xs">Responsável</Label>

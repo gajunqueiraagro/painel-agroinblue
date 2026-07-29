@@ -201,6 +201,9 @@ export function ModalOperacaoComercial({ open, onOpenChange }: { open: boolean; 
   // decide (salvarRascunho: toast; concluir: encadeia o confirmar).
   const persistirRascunho = async (): Promise<OcEnvelope | null> => {
     if (!clienteId) return null;
+    // PR-NAV-CONTEXTO-FAZENDA-01A — fazenda REAL obrigatória para persistir (Global abre normalmente,
+    //   mas não cria registro órfão). draft.fazenda_id é null ou UUID válido — nunca '__global__'/'__atual__'.
+    if (!draft.fazenda_id) { toast.error('Selecione a fazenda da operação antes de salvar.'); return null; }
     try {
       const env = await rpc.salvarRascunho(op?.operacao_id ?? null, clienteId, op?.versao ?? null, rascunhoPayload());
       setOp(env);
@@ -382,7 +385,10 @@ export function ModalOperacaoComercial({ open, onOpenChange }: { open: boolean; 
                 <RotateCcw className="h-4 w-4" /> {saving ? 'Reabrindo…' : 'Reabrir'}
               </Button>
             )}
-            <Button variant="secondary" onClick={salvarRascunho} disabled={saving || op?.status_comercial === 'fechada'} className="gap-1.5">
+            {/* PR-NAV-CONTEXTO-FAZENDA-01A — sem fazenda real não persiste (evita registro órfão em Global);
+                a mensagem fica no hint do campo Fazenda (padrão do projeto). */}
+            <Button variant="secondary" onClick={salvarRascunho} disabled={saving || op?.status_comercial === 'fechada' || !draft.fazenda_id}
+              className="gap-1.5 disabled:opacity-60">
               <Bookmark className="h-4 w-4" /> {saving ? 'Salvando…' : 'Salvar rascunho'}
             </Button>
             {!isLast ? (
@@ -391,7 +397,7 @@ export function ModalOperacaoComercial({ open, onOpenChange }: { open: boolean; 
                 <Button variant="ghost" size="sm" onClick={() => setStep(s => Math.min(6, s + 1))} className="gap-1 text-primary">Próximo <ChevronRight className="h-4 w-4" /></Button>
               </div>
             ) : (
-              <Button onClick={concluir} disabled={saving} className="bg-white text-primary hover:bg-white/90 gap-1.5">
+              <Button onClick={concluir} disabled={saving || !draft.fazenda_id} className="bg-white text-primary hover:bg-white/90 gap-1.5 disabled:opacity-60">
                 Concluir operação <Check className="h-4 w-4" />
               </Button>
             )}
