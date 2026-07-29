@@ -85,7 +85,8 @@ export interface CompraModalShellProps {
   liquidacaoApi?: LiquidacaoApi;        // LIQ-UI-01: obrigações e liquidação (só em modo OC)
   ocStatusComercial?: string | null;    // 'programada' | 'fechada' | 'cancelada'
   ocEntregaEncerrada?: boolean;
-  somenteLeitura?: boolean;             // OPEN-01: abertura de operação existente — cabeçalho read-only
+  somenteLeitura?: boolean;             // read-only TOTAL (fechada/cancelada OU título materializado)
+  aberturaExistente?: boolean;          // PR-OC-EDIT-01A — edição de operação existente (01A: sem lifecycle/downstream)
   onClose: () => void;
 }
 
@@ -117,6 +118,10 @@ const CENARIO_UI: Record<string, { icon: string; label: string; chip: string }> 
 
 export function CompraModalShell(api: CompraModalShellProps) {
   const [abaAtiva, setAbaAtiva] = useState<string>('compra');
+  // PR-OC-EDIT-01A — Recebimento/Documentos/Financeiro seguem somente leitura na edição de operação
+  //   existente (01A: writes ficam para frentes próprias); cabeçalho/Negociação usam api.somenteLeitura
+  //   (que já é TOTAL em fechada/cancelada OU título materializado).
+  const roDownstream = !!(api.somenteLeitura || api.aberturaExistente);
   const [fluxoNeg, setFluxoNeg] = useState<null | 'salvando' | 'concluindo'>(null);   // fluxo "Concluir lotes e continuar"
 
   // Guarda de completude (UI) — orienta o fluxo; NÃO substitui a validação oficial do backend nem
@@ -148,11 +153,11 @@ export function CompraModalShell(api: CompraModalShellProps) {
   useEffect(() => {
     // Ao CRIAR (ocOperacaoId vazio→preenchido) navega para Negociação. Na ABERTURA de operação
     // existente (somente leitura) permanece na aba Compra para conferência do cabeçalho (OPEN-01).
-    if (api.modoOC && api.ocOperacaoId && !prevOcRef.current && !api.somenteLeitura) {
+    if (api.modoOC && api.ocOperacaoId && !prevOcRef.current && !api.somenteLeitura && !api.aberturaExistente) {
       setAbaAtiva('negociacao');
     }
     prevOcRef.current = api.ocOperacaoId ?? null;
-  }, [api.modoOC, api.ocOperacaoId, api.somenteLeitura]);
+  }, [api.modoOC, api.ocOperacaoId, api.somenteLeitura, api.aberturaExistente]);
   const cenarioOptions: (StatusOperacional | 'meta')[] = ['realizado', 'meta'];
   const cenarioAtual = CENARIO_UI[api.statusOp] ?? CENARIO_UI.realizado;
   const fornecedorNome = api.fornecedores.find(f => f.id === api.compraFornecedorId)?.nome || '';
@@ -248,17 +253,17 @@ export function CompraModalShell(api: CompraModalShellProps) {
               isCompra
               categoriasDisponiveis={api.categoriasDisponiveis}
               documentosApi={api.documentosApi}
-              somenteLeitura={api.somenteLeitura}
+              somenteLeitura={roDownstream}
               onVoltarNegociacao={() => setAbaAtiva('negociacao')}
             />
           ) : abaAtiva === 'documentos' && api.documentosApi ? (
-            <AbaDocumentosOC api={api.documentosApi} operacaoPronta={!!api.ocOperacaoId} somenteLeitura={api.somenteLeitura} />
+            <AbaDocumentosOC api={api.documentosApi} operacaoPronta={!!api.ocOperacaoId} somenteLeitura={roDownstream} />
           ) : abaAtiva === 'financeiro' && api.liquidacaoApi ? (
             <AbaFinanceiroOC
               api={api.liquidacaoApi}
               operacaoPronta={!!api.ocOperacaoId}
               darkSelectClass={DARK_SELECT_CONTENT}
-              somenteLeitura={api.somenteLeitura}
+              somenteLeitura={roDownstream}
               onIrParaDocumentos={() => setAbaAtiva('documentos')}
             />
           ) : (
@@ -434,8 +439,9 @@ export function CompraModalShell(api: CompraModalShellProps) {
               <Edit className="h-4 w-4" /> Editar Financeiro
             </Button>
           )}
-          {/* Concluir negociação (oc_confirmar) — só comercial; habilita o Recebimento (RECEB-01). */}
-          {!api.somenteLeitura && api.modoOC && api.ocOperacaoId && api.ocStatusComercial !== 'fechada' && api.recebimentoApi && abaAtiva !== 'negociacao' && (
+          {/* Concluir negociação (oc_confirmar) — só comercial; habilita o Recebimento (RECEB-01).
+              PR-OC-EDIT-01A: NÃO exposto na edição de operação existente (Confirmar = PR-OC-EDIT-01B). */}
+          {!api.somenteLeitura && !api.aberturaExistente && api.modoOC && api.ocOperacaoId && api.ocStatusComercial !== 'fechada' && api.recebimentoApi && abaAtiva !== 'negociacao' && (
             <Button type="button" variant="secondary" disabled={api.recebimentoApi.saving}
               onClick={() => api.recebimentoApi?.concluirNegociacao()} className="gap-1.5">
               <Check className="h-4 w-4" /> Concluir negociação
@@ -446,6 +452,8 @@ export function CompraModalShell(api: CompraModalShellProps) {
             <span className="text-white/80 text-xs flex items-center gap-1"><Lock className="h-3.5 w-3.5" /> Somente leitura</span>
           ) : (abaAtiva === 'recebimento' || abaAtiva === 'documentos' || abaAtiva === 'financeiro') ? null : abaAtiva === 'negociacao' ? (
             // Fluxo único da Negociação: Salvar rascunho (secundário) + Concluir lotes e continuar (principal).
+            //   PR-OC-EDIT-01A: esta aba só renderiza quando editável (somenteLeitura=false); a edição de
+            //   operação existente oculta "Concluir lotes e continuar" (Confirmar = PR-OC-EDIT-01B).
             <>
               <Button type="button" variant="secondary"
                 disabled={!api.modoOC || !api.ocOperacaoId || !!api.lotesApi?.saving || fluxoNeg !== null}
@@ -454,6 +462,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
                 title={api.modoOC ? (api.ocOperacaoId ? undefined : 'Salve a operação na aba Compra primeiro') : 'em breve'}>
                 {(api.lotesApi?.saving && fluxoNeg === null) ? 'Salvando...' : 'Salvar rascunho'}
               </Button>
+              {!api.aberturaExistente && (
               <Button type="button"
                 disabled={!api.modoOC || !api.ocOperacaoId || fluxoNeg !== null || !!api.lotesApi?.saving || !!api.recebimentoApi?.saving}
                 onClick={handleConcluirLotesContinuar}
@@ -461,6 +470,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
                 title={api.modoOC ? (api.ocOperacaoId ? undefined : 'Salve a operação na aba Compra primeiro') : 'em breve'}>
                 {fluxoNeg === 'salvando' ? 'Salvando lotes...' : fluxoNeg === 'concluindo' ? 'Concluindo...' : (<>Concluir lotes e continuar <ArrowRight className="h-4 w-4" /></>)}
               </Button>
+              )}
             </>
           ) : (
             <Button onClick={api.handleRequestRegister} disabled={api.submitting || (!api.modoOC && !api.compraDetalhes)} className="bg-white text-primary hover:bg-white/90 font-bold gap-1.5">

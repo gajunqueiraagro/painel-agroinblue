@@ -306,6 +306,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   //   atualiza numero_documento/cenario; edição de programada é PR posterior).
   const ocIdParam = ocSearchParams.get('oc_id');
   const [ocAberturaExistente, setOcAberturaExistente] = useState<boolean>(false);
+  // PR-OC-EDIT-01A — existe título financeiro materializado nesta operação? (parte ativa com
+  //   financeiro_lancamento_id). Bloqueia a edição da base econômica (ADR Soberania Financeira).
+  const [ocTemTitulo, setOcTemTitulo] = useState<boolean>(false);
   const [ocHidratando, setOcHidratando] = useState<boolean>(false);
   const [ocHidratacaoErro, setOcHidratacaoErro] = useState<string | null>(null);
   const ocHidratadoRef = useRef<boolean>(false);
@@ -480,7 +483,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setOcFazendaDestinoId(fazendaAtual?.id ?? '__atual__');
     setData(format(new Date(), 'yyyy-MM-dd')); setCompraFornecedorId(''); setObservacao('');
     setStatusOp('realizado'); setCompraDetalhes(null); setNotaFiscal(''); setFazendaOrigem('');
-    setOcAberturaExistente(false); setOcHidratacaoErro(null);
+    setOcAberturaExistente(false); setOcTemTitulo(false); setOcHidratacaoErro(null);
   }, [fazendaAtual?.id]);
 
   // Hidratação de operação de Compra EXISTENTE a partir de ?oc_id (abertura pela Central).
@@ -512,10 +515,15 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         setOcFazendaDestinoId(op.fazenda_id ?? (fazendaAtual?.id ?? '__atual__'));
         setObservacao(op.observacoes ?? '');
         setStatusOp(op.cenario === 'meta' ? 'meta' : 'realizado');
-        if (op.numero_documento) setNotaFiscal(op.numero_documento);
+        setNotaFiscal(op.numero_documento ?? '');   // PR-OC-EDIT-01A — hidrata sempre (evita valor legado no salvar).
         setOcOperacaoId(op.id);
         setOcVersao(op.versao);
         setOcStatusComercial(op.status_comercial);
+        // PR-OC-EDIT-01A — título financeiro materializado = parte ativa com financeiro_lancamento_id.
+        const temTitulo = (estado.partes ?? []).some(
+          (p) => Boolean(p.financeiro_lancamento_id) && p.cancelada !== true,
+        );
+        setOcTemTitulo(temTitulo);
         setOcAberturaExistente(true);
         setTipo('compra');            // abre o CompraModalShell (isCompra), não o modal default.
         setLancModalOpen(true);
@@ -1801,8 +1809,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     //    caminho legado — não abre o confirm dialog, então handleSubmit (onAdicionar +
     //    gerarFinanceiroCompra) nunca roda. Sem dupla escrita. ──
     if (modoOCCompra && isCompra) {
-      // OPEN-01: operação existente aberta pela Central abre em modo leitura — nenhum write no cabeçalho.
-      if (ocAberturaExistente) { toast.info('Operação aberta em modo leitura. Edição de programada será uma frente própria.'); return; }
+      // PR-OC-EDIT-01A — fechada/cancelada permanecem somente leitura; programada/rascunho salvam
+      //   o cabeçalho via oc_salvar_rascunho (que já bloqueia fechada/cancelada e não toca o FINV2).
+      if (ocAberturaExistente && (ocStatusComercial === 'fechada' || ocStatusComercial === 'cancelada')) {
+        toast.info('Operação fechada ou cancelada — somente leitura.'); return;
+      }
       void salvarOperacaoOC(); return;
     }
     // ── P1 governance: selective block (NÃO se aplica ao cenário META) ──
@@ -3680,8 +3691,16 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     liquidacaoApi,
     ocStatusComercial,
     ocEntregaEncerrada,
-    // Abertura de operação existente (Central): cabeçalho somente leitura + saves suprimidos.
-    somenteLeitura: ocAberturaExistente,
+    // PR-OC-EDIT-01A — editabilidade por estado real (ADR Soberania Financeira):
+    //   somenteLeitura TOTAL em: fechada, cancelada OU programada/rascunho COM título materializado.
+    //   Havendo título, a OC fica integralmente somente leitura (inclusive Observação): sem salvamento
+    //   parcial, nenhuma alteração econômica possível e o FINV2 soberano é preservado.
+    //   programada/rascunho SEM título abrem editáveis (cabeçalho + Negociação/Lotes).
+    //   aberturaExistente sinaliza edição de operação existente (01A não expõe Confirmar/Cancelar/
+    //     Reabrir nem os writes de Recebimento/Documentos/Financeiro — ficam para PRs próprios).
+    somenteLeitura: ocAberturaExistente
+      && (ocStatusComercial === 'fechada' || ocStatusComercial === 'cancelada' || ocTemTitulo),
+    aberturaExistente: ocAberturaExistente,
     // PR-OC-NAV-01 — fechar em modo OC retorna à Central e limpa a URL; fora do modo OC, apenas fecha.
     onClose: () => { setLancModalOpen(false); if (modoOCCompra) onFecharOperacaoOC?.(); },
   };
