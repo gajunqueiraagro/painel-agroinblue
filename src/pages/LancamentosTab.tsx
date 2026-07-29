@@ -104,6 +104,11 @@ interface Props {
    */
   onNavegarChuvas?: () => void;
   /**
+   * PR-OC-NAV-01 — fecho do modo Operação Comercial (Compra): o parent (V2Index) retorna à Central
+   * e limpa os parâmetros ?oc_compra/?oc_id da URL. Acionado só quando o modal está em modo OC.
+   */
+  onFecharOperacaoOC?: () => void;
+  /**
    * Cenário inicial padrão da tela: 'realizado' (default) ou 'meta'.
    * Usado APENAS como valor inicial do `statusOp`. O usuário pode trocar
    * manualmente depois — comportamento atual (resets pós-save voltam a
@@ -268,7 +273,7 @@ function matchFornecedor(options: FornecedorOption[], params: { id?: string | nu
   });
 }
 
-export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar, vendaParaEditar, compraParaEditar, transferenciaParaEditar, reclassParaEditar, morteParaEditar, consumoParaEditar, onReturnFromEdit, initialAnoFiltro, initialMesFiltro, initialReclassCenario, onNavegarChuvas, cenarioInicial, cenariosPermitidos }: Props) {
+export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar, vendaParaEditar, compraParaEditar, transferenciaParaEditar, reclassParaEditar, morteParaEditar, consumoParaEditar, onReturnFromEdit, initialAnoFiltro, initialMesFiltro, initialReclassCenario, onNavegarChuvas, onFecharOperacaoOC, cenarioInicial, cenariosPermitidos }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const { clienteAtual } = useCliente();
   const nomeFazenda = fazendaAtual?.nome || '';
@@ -3677,7 +3682,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     ocEntregaEncerrada,
     // Abertura de operação existente (Central): cabeçalho somente leitura + saves suprimidos.
     somenteLeitura: ocAberturaExistente,
-    onClose: () => setLancModalOpen(false),
+    // PR-OC-NAV-01 — fechar em modo OC retorna à Central e limpa a URL; fora do modo OC, apenas fecha.
+    onClose: () => { setLancModalOpen(false); if (modoOCCompra) onFecharOperacaoOC?.(); },
   };
 
   return (
@@ -3732,7 +3738,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         - Submit: handlers continuam idênticos; modal NÃO fecha após salvar
           (auto-close será endereçado na Etapa 2).
       */}
-      <Dialog open={lancModalOpen} onOpenChange={setLancModalOpen}>
+      <Dialog open={lancModalOpen} onOpenChange={(open) => { setLancModalOpen(open); if (!open && modoOCCompra) onFecharOperacaoOC?.(); }}>
       <DialogContent
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}

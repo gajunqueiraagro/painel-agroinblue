@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { LancamentosTab } from '@/pages/LancamentosTab';
 import { CentralOperacoesComerciais } from '@/components/operacao-comercial/central/CentralOperacoesComerciais';
 import { useLancamentos } from '@/hooks/useLancamentos';
@@ -141,8 +141,10 @@ interface V2LancamentosWrapperProps {
   cenarioInicial?: 'realizado' | 'meta';
   /** Restringe cenários disponíveis no seletor de Status (ex.: ['meta']). */
   cenariosPermitidos?: Array<'realizado' | 'programado' | 'meta'>;
+  /** PR-OC-NAV-01 — fecho do modal de Operação Comercial: retorna à Central e limpa a URL. */
+  onFecharOperacaoOC?: () => void;
 }
-function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEdit, onNavegarChuvas, onNavegarMapaRebanho, cenarioInicial, cenariosPermitidos }: V2LancamentosWrapperProps = {}) {
+function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEdit, onNavegarChuvas, onNavegarMapaRebanho, cenarioInicial, cenariosPermitidos, onFecharOperacaoOC }: V2LancamentosWrapperProps = {}) {
   const navigate = useNavigate();
   const { isGlobal } = useFazenda();
   const { canEdit, canEditMeta } = usePermissions();
@@ -265,6 +267,7 @@ function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEd
         cenarioInicial={cenarioInicial}
         cenariosPermitidos={cenariosPermitidos}
         abaInicial={(abateParaEditar || vendaParaEditar) ? 'saida' : undefined}
+        onFecharOperacaoOC={onFecharOperacaoOC}
       />
     </div>
   );
@@ -391,6 +394,24 @@ export default function V2Index() {
   };
 
   const [searchParams, setSearchParams] = useSearchParams();
+  // PR-OC-NAV-01 — navegação SPA soberana da Central de Operações Comerciais (sem window.location.assign,
+  //   sem sessionStorage). Abertura intencional (botão "Abrir" da Central ou link direto ?oc_id) sinaliza o
+  //   modal de Compra (?oc_compra=1&oc_id) e troca a seção para Lançamentos, onde o CompraModalShell vive.
+  const abrirOperacaoOC = useCallback((ocId: string) => {
+    const p = new URLSearchParams(window.location.search);
+    p.set('oc_compra', '1');
+    p.set('oc_id', ocId);
+    setSearchParams(p, { replace: true });
+    setSection('lancamentos-zoot');
+  }, [setSearchParams]);
+  // Fecho do modal OC: limpa os parâmetros transitórios (sem resíduo) e retorna à Central.
+  const fecharOperacaoOC = useCallback(() => {
+    const p = new URLSearchParams(window.location.search);
+    p.delete('oc_compra');
+    p.delete('oc_id');
+    setSearchParams(p, { replace: true });
+    setSection('operacoes-comerciais');
+  }, [setSearchParams]);
   // ID alvo lido da URL (?edit=...&tipo=...). Quando o lançamento carrega
   // pelo useLancamento, useEffect roteia. Limpa-se ao consumir.
   const [editFromUrlId, setEditFromUrlId] = useState<string | null>(null);
@@ -713,13 +734,17 @@ export default function V2Index() {
       />
     );
     if (section === 'operacoes-comerciais') return (
-      <CentralOperacoesComerciais initialOcId={(() => { try { return new URLSearchParams(window.location.search).get('oc_id') ?? undefined; } catch { return undefined; } })()} />
+      <CentralOperacoesComerciais
+        initialOcId={(() => { try { return new URLSearchParams(window.location.search).get('oc_id') ?? undefined; } catch { return undefined; } })()}
+        onAbrirOperacao={abrirOperacaoOC}
+      />
     );
     if (section === 'lancamentos-zoot') return (
       <V2LancamentosWrapper
         abateParaEditar={abateParaEditar}
         vendaParaEditar={vendaParaEditar}
         cenariosPermitidos={['realizado']}
+        onFecharOperacaoOC={fecharOperacaoOC}
         onReturnFromEdit={() => {
           limparEdicaoAvancada();
           setSection('conferencia-lancamentos');

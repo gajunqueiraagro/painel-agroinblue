@@ -67,9 +67,12 @@ interface CentralOperacoesComerciaisProps {
   /** FIN-MODAL-FECHO-01 item 2 — contrato genérico: ao receber um oc_id (via ?oc_id=),
    *  a Central localiza a operação (do próprio tenant) e a abre pela rotina soberana por tipo. */
   initialOcId?: string;
+  /** PR-OC-NAV-01 — abertura SPA soberana (sem reload). O parent (V2Index) troca a seção para
+   *  Lançamentos e sinaliza o modal de Compra. Ausente = abertura indisponível (Central estável). */
+  onAbrirOperacao?: (ocId: string) => void;
 }
 
-export function CentralOperacoesComerciais({ initialOcId }: CentralOperacoesComerciaisProps = {}) {
+export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: CentralOperacoesComerciaisProps = {}) {
   const { clienteAtual } = useCliente();
   const clienteId = clienteAtual?.id ?? '';
 
@@ -141,13 +144,13 @@ export function CentralOperacoesComerciais({ initialOcId }: CentralOperacoesCome
   const nomeFazenda = (r: OpRow) => (r.fazenda_id ? fazendas[r.fazenda_id] ?? '—' : '—');
   const abrir = () => setModalOpen(true);
 
-  // FIN-MODAL-FECHO-01 item 2 — rotina soberana de abertura por tipo (reutilizada pelo menu e pelo ?oc_id).
-  //   Compra: reabre no fluxo existente (?oc_compra=1&oc_id). Venda/abate: abertura ainda indisponível
-  //   na Central → permanece estável (sem navegação); a operação continua visível na lista.
+  // PR-OC-NAV-01 — rotina soberana de abertura por tipo (reutilizada pelo botão "Abrir" e pelo ?oc_id).
+  //   Compra: abertura SPA via parent (sem window.location.assign, sem sessionStorage, sem reload).
+  //   Venda/abate: abertura ainda indisponível na Central → permanece estável (sem navegação);
+  //   a operação continua visível na lista.
   const abrirOperacaoPorTipo = (r: OpRow) => {
     if (r.tipo_operacao === 'compra') {
-      try { sessionStorage.setItem('v2:autoSection', 'lancamentos-zoot'); } catch { /* sessionStorage indisponível */ }
-      window.location.assign(`/v2?oc_compra=1&oc_id=${encodeURIComponent(r.id)}`);
+      onAbrirOperacao?.(r.id);
     }
   };
 
