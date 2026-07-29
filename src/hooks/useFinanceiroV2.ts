@@ -130,6 +130,11 @@ export interface FornecedorV2 {
   observacao_pagamento: string | null;
 }
 
+// PR-FIN-GRADE-DATAS-03 — dimensão temporal soberana da grade. 'financeira' = COALESCE(data_pagamento,
+//   data_vencimento) (contrato de PR-FIN-OC-CONTRATO-01); as demais recortam pela coluna homônima.
+//   Ausência do campo em FiltrosV2 é tratada como 'financeira' (default preserva o comportamento atual).
+export type DimensaoDataFinanceiro = 'financeira' | 'competencia' | 'vencimento' | 'pagamento';
+
 export interface FiltrosV2 {
   fazenda_id?: string;
   ano?: string;
@@ -143,6 +148,7 @@ export interface FiltrosV2 {
   grupo_custo?: string;
   centro_custo?: string;
   subcentro?: string;
+  dimensao?: DimensaoDataFinanceiro;   // PR-FIN-GRADE-DATAS-03 — default 'financeira'
 }
 
 export interface ClassificacaoItem {
@@ -179,19 +185,60 @@ function mesesDoRecorte(filtros: FiltrosV2): string[] {
 //   pagamento efetivo quando há; senão o vencimento (título OC aberto). Ramo OR server-side (PostgREST):
 //   (pago na faixa) OU (não pago E vencimento na faixa). Legado (data_pagamento preenchida) cai sempre no
 //   1º ramo → comportamento idêntico ao de hoje. Sem carregar a base para filtrar client-side.
+//   IMPORTANTE: o pagamento é soberano — se há pagamento fora da faixa, a linha NÃO entra pelo vencimento
+//   (o 2º ramo exige data_pagamento IS NULL). Ex.: pag=10/09, venc=10/08, recorte=agosto → fora.
 function ramoDerivado(ini: string, fim: string): string {
   return `and(data_pagamento.gte.${ini},data_pagamento.lt.${fim}),`
        + `and(data_pagamento.is.null,data_vencimento.gte.${ini},data_vencimento.lt.${fim})`;
 }
 
+// PR-FIN-GRADE-DATAS-03 — segmento OR de UMA faixa [ini,fim) para a dimensão selecionada.
+//   'financeira' delega ao ramoDerivado (contrato acima); as demais recortam pela coluna homônima.
+//   gte/lt sobre coluna NULL não corresponde → linhas sem a data da dimensão ficam fora (contrato do PR).
+function ramoDimensao(dimensao: DimensaoDataFinanceiro, ini: string, fim: string): string {
+  switch (dimensao) {
+    case 'competencia': return `and(data_competencia.gte.${ini},data_competencia.lt.${fim})`;
+    case 'vencimento':  return `and(data_vencimento.gte.${ini},data_vencimento.lt.${fim})`;
+    case 'pagamento':   return `and(data_pagamento.gte.${ini},data_pagamento.lt.${fim})`;
+    case 'financeira':
+    default:            return ramoDerivado(ini, fim);
+  }
+}
+
+// PR-FIN-GRADE-DATAS-03 — "Todos os anos + Todos os meses": sem faixa, mas a dimensão continua soberana.
+//   A linha só permanece se a data da dimensão for não-NULL (financeira = pagamento OU vencimento não-NULL).
+function aplicarNaoNuloDimensao<Q extends { or: (f: string) => Q; not: (c: string, op: string, v: unknown) => Q }>(
+  query: Q, dimensao: DimensaoDataFinanceiro,
+): Q {
+  switch (dimensao) {
+    case 'competencia': return query.not('data_competencia', 'is', null);
+    case 'vencimento':  return query.not('data_vencimento', 'is', null);
+    case 'pagamento':   return query.not('data_pagamento', 'is', null);
+    case 'financeira':
+    default:            return query.or('data_pagamento.not.is.null,data_vencimento.not.is.null');
+  }
+}
+
+// PR-FIN-GRADE-DATAS-03 — data da dimensão para um lançamento (client-side). 'financeira' = COALESCE.
+export function dataDaDimensao(l: LancamentoV2, dimensao: DimensaoDataFinanceiro): string | null {
+  switch (dimensao) {
+    case 'competencia': return l.data_competencia ?? null;
+    case 'vencimento':  return l.data_vencimento ?? null;
+    case 'pagamento':   return l.data_pagamento ?? null;
+    case 'financeira':
+    default:            return l.data_pagamento ?? l.data_vencimento ?? null;
+  }
+}
+
 // Resíduo client-side APENAS para "Todos os anos + meses específicos": "mês em qualquer ano" não é
-//   expressável como faixa contínua. Usa a data derivada (pagamento ?? vencimento); nunca competência/ano_mes.
-function residualPagamentoTodosAnos(filtros: FiltrosV2): ((l: LancamentoV2) => boolean) | null {
+//   expressável como faixa contínua. Usa a data da dimensão selecionada; linhas sem essa data ficam fora.
+function residualDimensaoTodosAnos(filtros: FiltrosV2): ((l: LancamentoV2) => boolean) | null {
   const isTodosAnos = !filtros.ano || filtros.ano === '__todos__';
   const meses = mesesDoRecorte(filtros);
   if (!isTodosAnos || meses.length === 0) return null;
+  const dimensao = filtros.dimensao ?? 'financeira';
   const set = new Set(meses.map(m => m.padStart(2, '0')));
-  return (l) => { const df = l.data_pagamento ?? l.data_vencimento; return !!df && set.has(df.substring(5, 7)); };
+  return (l) => { const d = dataDaDimensao(l, dimensao); return !!d && set.has(d.substring(5, 7)); };
 }
 
 export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
@@ -328,22 +375,29 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       query = query.eq('fazenda_id', filtros.fazenda_id);
     }
 
-    // PR-FIN-OC-CONTRATO-01 — recorte temporal pela data financeira DERIVADA (COALESCE(data_pagamento,
-    //   data_vencimento)), NUNCA por ano_mes. Faixas [1º dia, 1º dia do mês/ano seguinte) via ramoDerivado
-    //   (OR server-side). Sem data financeira (ambas null) → fora de qualquer faixa (só em "Todos").
-    //   "Todos os anos + meses" é resíduo client-side em fetchAllLancamentos (mês em qualquer ano não é faixa).
+    // PR-FIN-GRADE-DATAS-03 — recorte temporal pela DIMENSÃO selecionada (default 'financeira' =
+    //   COALESCE(data_pagamento, data_vencimento), contrato de PR-FIN-OC-CONTRATO-01), NUNCA por ano_mes.
+    //   Faixas [1º dia, 1º dia do mês/ano seguinte) via ramoDimensao (OR server-side). Linha sem a data da
+    //   dimensão → fora de qualquer faixa. "Todos os anos + meses" é resíduo client-side em
+    //   fetchAllLancamentos (mês em qualquer ano não é faixa contínua); "Todos os anos + todos os meses"
+    //   mantém a dimensão soberana exigindo a data não-NULL (aplicarNaoNuloDimensao).
+    const dimensao: DimensaoDataFinanceiro = filtros.dimensao ?? 'financeira';
     const isTodosAnos = !filtros.ano || filtros.ano === '__todos__';
     const mesesRecorte = mesesDoRecorte(filtros);
 
     if (isTodosAnos) {
-      // Todos os anos: sem meses → sem recorte (mantém nulos); com meses → resíduo client-side.
+      if (mesesRecorte.length === 0) {
+        // Todos os anos + todos os meses: sem faixa, mas a dimensão continua soberana (exige data não-NULL).
+        query = aplicarNaoNuloDimensao(query, dimensao);
+      }
+      // Todos os anos + meses específicos: resíduo client-side (mês em qualquer ano) em fetchAllLancamentos.
     } else if (mesesRecorte.length > 0) {
       const anoNum = Number(filtros.ano);
       const faixas = mesesRecorte.map(m => faixaMes(anoNum, Number(m)));
-      query = query.or(faixas.map(([ini, fim]) => ramoDerivado(ini, fim)).join(','));
+      query = query.or(faixas.map(([ini, fim]) => ramoDimensao(dimensao, ini, fim)).join(','));
     } else {
       const anoNum = Number(filtros.ano);
-      query = query.or(ramoDerivado(`${anoNum}-01-01`, `${anoNum + 1}-01-01`));
+      query = query.or(ramoDimensao(dimensao, `${anoNum}-01-01`, `${anoNum + 1}-01-01`));
     }
 
     const contaOrigemId = filtros.conta_bancaria_id?.trim();
@@ -379,8 +433,8 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     const all: LancamentoV2[] = [];
     let from = 0;
     const batchSize = 1000;
-    // PR-FIN-FILTRO-PGTO-01 — resíduo por data_pagamento só para "Todos os anos + meses" (ver hook util).
-    const residual = residualPagamentoTodosAnos(filtros);
+    // PR-FIN-GRADE-DATAS-03 — resíduo pela data da dimensão só para "Todos os anos + meses" (ver hook util).
+    const residual = residualDimensaoTodosAnos(filtros);
 
     while (true) {
       const { data, error } = await buildLancamentosQuery(filtros)

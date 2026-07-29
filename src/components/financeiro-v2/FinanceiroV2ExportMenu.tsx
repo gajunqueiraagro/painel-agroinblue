@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format, parseISO } from 'date-fns';
-import type { LancamentoV2 } from '@/hooks/useFinanceiroV2';
+import type { LancamentoV2, DimensaoDataFinanceiro } from '@/hooks/useFinanceiroV2';
 import { triggerXlsxDownload } from '@/lib/xlsxDownload';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { formatDocumento } from '@/lib/financeiro/documentoHelper';
@@ -16,12 +16,21 @@ interface FornecedorMap {
   nome: string;
 }
 
+// PR-FIN-GRADE-DATAS-03 — rótulo humano da dimensão temporal soberana usada no recorte da grade.
+const DIMENSAO_LABEL: Record<DimensaoDataFinanceiro, string> = {
+  financeira: 'Financeira',
+  competencia: 'Competência',
+  vencimento: 'Vencimento',
+  pagamento: 'Pagamento',
+};
+
 interface Props {
   lancamentos: LancamentoV2[];
   fornecedores: FornecedorMap[];
   ano: string;
   fazendaNome?: string;
   totalCount: number;
+  dimensao: DimensaoDataFinanceiro;   // PR-FIN-GRADE-DATAS-03 — dimensão usada; identificada no arquivo
 }
 
 function fmtDate(d: string | null) {
@@ -39,8 +48,10 @@ function buildRows(lancamentos: LancamentoV2[], fornecedores: FornecedorMap[]) {
     const doc = formatDocumento((l as any).tipo_documento, l.numero_documento);
     return {
       comp: fmtDate(l.data_competencia),
-      // PR-FIN-OC-CONTRATO-01 — data financeira derivada (vencimento p/ aberto; pagamento p/ realizado).
-      pgto: fmtDate(l.data_pagamento ?? l.data_vencimento),
+      // PR-FIN-GRADE-DATAS-03 — VENC. e PGTO. exportadas como colunas independentes (cada uma a sua coluna
+      //   real; nunca fundidas; nunca a data financeira derivada). fmtDate(null) → '' (padrão do formato).
+      venc: fmtDate(l.data_vencimento),
+      pgto: fmtDate(l.data_pagamento),
       produto: l.descricao || '',
       fornecedor: forn,
       valor,
@@ -55,11 +66,13 @@ function buildRows(lancamentos: LancamentoV2[], fornecedores: FornecedorMap[]) {
   });
 }
 
-function exportExcel(lancamentos: LancamentoV2[], fornecedores: FornecedorMap[], ano: string, fazendaNome?: string) {
+function exportExcel(lancamentos: LancamentoV2[], fornecedores: FornecedorMap[], ano: string, dimensao: DimensaoDataFinanceiro, fazendaNome?: string) {
   const rows = buildRows(lancamentos, fornecedores);
   const data = rows.map(r => ({
+    // PR-FIN-GRADE-DATAS-03 — Comp. | Venc. | Pgto. em colunas separadas.
     'Comp.': r.comp,
-    'Venc./Pgto': r.pgto,
+    'Venc.': r.venc,
+    'Pgto.': r.pgto,
     'Produto': r.produto,
     'Fornecedor': r.fornecedor,
     'Valor': r.valor,
@@ -78,16 +91,26 @@ function exportExcel(lancamentos: LancamentoV2[], fornecedores: FornecedorMap[],
         name: 'Lançamentos',
         rows: data,
         cols: [
-          { wch: 12 }, { wch: 12 }, { wch: 30 }, { wch: 25 },
+          { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 30 }, { wch: 25 },
           { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 20 },
           { wch: 18 }, { wch: 18 },
         ],
+      },
+      // PR-FIN-GRADE-DATAS-03 — aba de metadado simples identificando a dimensão temporal do recorte.
+      {
+        name: 'Filtro',
+        mode: 'aoa',
+        rows: [
+          ['Data por', DIMENSAO_LABEL[dimensao]],
+          ['Ano', ano],
+        ],
+        cols: [{ wch: 12 }, { wch: 18 }],
       },
     ],
   });
 }
 
-function exportPDF(lancamentos: LancamentoV2[], fornecedores: FornecedorMap[], ano: string, fazendaNome?: string) {
+function exportPDF(lancamentos: LancamentoV2[], fornecedores: FornecedorMap[], ano: string, dimensao: DimensaoDataFinanceiro, fazendaNome?: string) {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const pageW = doc.internal.pageSize.getWidth();
 
@@ -100,22 +123,27 @@ function exportPDF(lancamentos: LancamentoV2[], fornecedores: FornecedorMap[], a
     doc.text(fazendaNome, pageW / 2, y, { align: 'center' });
     y += 5;
   }
+  // PR-FIN-GRADE-DATAS-03 — identifica a dimensão temporal do recorte (subtítulo simples).
+  doc.setFontSize(9);
+  doc.text(`Data por: ${DIMENSAO_LABEL[dimensao]}`, pageW / 2, y, { align: 'center' });
+  y += 4;
   doc.setFontSize(8);
   doc.text(`${lancamentos.length} lançamentos`, pageW / 2, y, { align: 'center' });
   y += 4;
 
   const rows = buildRows(lancamentos, fornecedores);
-  const head = [['Comp.', 'Venc./Pgto', 'Produto', 'Fornecedor', 'Valor', 'Documento', 'Status']];
+  // PR-FIN-GRADE-DATAS-03 — Comp. | Venc. | Pgto. como colunas independentes.
+  const head = [['Comp.', 'Venc.', 'Pgto.', 'Produto', 'Fornecedor', 'Valor', 'Documento', 'Status']];
   const body = rows.map(r => [
-    r.comp, r.pgto, r.produto, r.fornecedor,
+    r.comp, r.venc, r.pgto, r.produto, r.fornecedor,
     formatMoeda(r.sinal >= 0 ? Math.abs(r.valor) : -Math.abs(r.valor)),
     r.documento, r.status,
   ]);
 
   const totalEnt = rows.filter(r => r.sinal > 0).reduce((s, r) => s + Math.abs(r.valor), 0);
   const totalSai = rows.filter(r => r.sinal < 0).reduce((s, r) => s + Math.abs(r.valor), 0);
-  body.push(['', '', '', 'ENTRADAS', formatMoeda(totalEnt), '', '']);
-  body.push(['', '', '', 'SAÍDAS', formatMoeda(-totalSai), '', '']);
+  body.push(['', '', '', '', 'ENTRADAS', formatMoeda(totalEnt), '', '']);
+  body.push(['', '', '', '', 'SAÍDAS', formatMoeda(-totalSai), '', '']);
 
   autoTable(doc, {
     startY: y,
@@ -131,7 +159,7 @@ function exportPDF(lancamentos: LancamentoV2[], fornecedores: FornecedorMap[], a
   doc.save(`financeiro_v2_${ano}${faz}.pdf`);
 }
 
-export function FinanceiroV2ExportMenu({ lancamentos, fornecedores, ano, fazendaNome, totalCount }: Props) {
+export function FinanceiroV2ExportMenu({ lancamentos, fornecedores, ano, fazendaNome, totalCount, dimensao }: Props) {
   const [open, setOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
 
@@ -141,9 +169,9 @@ export function FinanceiroV2ExportMenu({ lancamentos, fornecedores, ano, fazenda
     setExporting(true);
     try {
       if (type === 'excel') {
-        exportExcel(lancamentos, fornecedores, ano, fazendaNome);
+        exportExcel(lancamentos, fornecedores, ano, dimensao, fazendaNome);
       } else {
-        exportPDF(lancamentos, fornecedores, ano, fazendaNome);
+        exportPDF(lancamentos, fornecedores, ano, dimensao, fazendaNome);
         toast.success(`PDF exportado! (${lancamentos.length} lançamentos)`);
       }
     } catch {

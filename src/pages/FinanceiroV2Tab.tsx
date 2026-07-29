@@ -22,7 +22,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useFazenda } from '@/contexts/FazendaContext';
-import { useFinanceiroV2, type LancamentoV2, type FiltrosV2 } from '@/hooks/useFinanceiroV2';
+import { useFinanceiroV2, dataDaDimensao, type LancamentoV2, type FiltrosV2, type DimensaoDataFinanceiro } from '@/hooks/useFinanceiroV2';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
 import { ModoRapidoGrid } from '@/components/financeiro-v2/ModoRapidoGrid';
 import { FinanceiroV2ExportMenu } from '@/components/financeiro-v2/FinanceiroV2ExportMenu';
@@ -243,6 +243,15 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const [produtoFiltro, setProdutoFiltro] = useState(defaults.produtoFiltro);
   const [fornecedorFiltro, setFornecedorFiltro] = useState(defaults.fornecedorFiltro);
   const [atividadeFiltro, setAtividadeFiltro] = useState(defaults.atividadeFiltro);
+  // PR-FIN-GRADE-DATAS-03 — dimensão temporal soberana da grade. Estado dura só enquanto a tela está
+  //   montada (sem localStorage/sessionStorage/URL/preferência persistida). Padrão 'financeira'.
+  const [dataPor, setDataPor] = useState<DimensaoDataFinanceiro>('financeira');
+  // Estreitamento por control-flow (sem cast): valida a string do Select contra a união.
+  const handleDataPorChange = (v: string) => {
+    if (v === 'financeira' || v === 'competencia' || v === 'vencimento' || v === 'pagamento') {
+      setDataPor(v);
+    }
+  };
 
   // ── Restauração de filtros ao voltar de FinanciamentoDetalhe ──
   useEffect(() => {
@@ -338,7 +347,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
   // Sorting state
-   type SortField = 'default' | 'data' | 'pgto' | 'valor' | 'produto' | 'fornecedor' | 'centro' | 'status';
+   // PR-FIN-GRADE-DATAS-03 — 'data' = competência; 'venc' e 'pgto' são colunas independentes (nunca fundidas).
+   type SortField = 'default' | 'data' | 'venc' | 'pgto' | 'valor' | 'produto' | 'fornecedor' | 'centro' | 'status';
   type SortDir = 'asc' | 'desc';
    const [sortField, setSortField] = useState<SortField>('default');
    const [sortDir, setSortDir] = useState<SortDir>('asc');
@@ -495,7 +505,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     grupo_custo: grupoFiltro !== '__all__' ? grupoFiltro : undefined,
     centro_custo: centroFiltro !== '__all__' ? centroFiltro : undefined,
     subcentro: subcentroFiltro !== '__all__' ? subcentroFiltro : undefined,
-  }), [fazendaId, ano, mesesSelecionados, contaOrigem, contaDestino, tipoOperacao, statusTransacao, macroFiltro, grupoFiltro, centroFiltro, subcentroFiltro]);
+    dimensao: dataPor,   // PR-FIN-GRADE-DATAS-03 — dimensão temporal soberana (default 'financeira')
+  }), [fazendaId, ano, mesesSelecionados, contaOrigem, contaDestino, tipoOperacao, statusTransacao, macroFiltro, grupoFiltro, centroFiltro, subcentroFiltro, dataPor]);
 
   useEffect(() => {
     hook.loadLancamentos(filtros, 0);
@@ -663,25 +674,20 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   }, [hook.lancamentos, contaOrigem, contaDestino, produtoFiltro, fornecedorFiltro, atividadeFiltro, grupoFiltro, centroToGrupo]);
 
   const compareDefaultOrder = useCallback((a: LancamentoV2, b: LancamentoV2) => {
-    // PR-FIN-OC-CONTRATO-01 — ordena pela data financeira derivada (pagamento ?? vencimento).
-    const pagamentoA = a.data_pagamento || a.data_vencimento || '9999-12-31';
-    const pagamentoB = b.data_pagamento || b.data_vencimento || '9999-12-31';
-    const pagamentoCmp = pagamentoA.localeCompare(pagamentoB);
-    if (pagamentoCmp !== 0) return pagamentoCmp;
+    // PR-FIN-GRADE-DATAS-03 — a ordenação padrão acompanha a dimensão selecionada (Data por). Chave
+    //   primária = data da dimensão (financeira = COALESCE(pagamento, vencimento)); linhas sem essa data
+    //   vão para o fim ('9999-12-31'). Desempate estável e temporal: data_competencia → id (sem fornecedor/
+    //   produto/valor, para garantir estabilidade determinística do contrato aprovado).
+    const dataA = dataDaDimensao(a, dataPor) || '9999-12-31';
+    const dataB = dataDaDimensao(b, dataPor) || '9999-12-31';
+    const dataCmp = dataA.localeCompare(dataB);
+    if (dataCmp !== 0) return dataCmp;
 
-    const fornecedorA = fornecedoresMap.get(a.favorecido_id || '') || '';
-    const fornecedorB = fornecedoresMap.get(b.favorecido_id || '') || '';
-    const fornecedorCmp = fornecedorA.localeCompare(fornecedorB, 'pt-BR');
-    if (fornecedorCmp !== 0) return fornecedorCmp;
-
-    const produtoCmp = (a.descricao || '').localeCompare(b.descricao || '', 'pt-BR');
-    if (produtoCmp !== 0) return produtoCmp;
-
-    const valorCmp = (b.valor * b.sinal) - (a.valor * a.sinal);
-    if (valorCmp !== 0) return valorCmp;
+    const compCmp = (a.data_competencia || '').localeCompare(b.data_competencia || '');
+    if (compCmp !== 0) return compCmp;
 
     return a.id.localeCompare(b.id);
-  }, [fornecedoresMap]);
+  }, [dataPor]);
 
   // Sorted lancamentos
   const sortedLancamentos = useMemo(() => {
@@ -698,8 +704,13 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         case 'data':
           primary = dir * a.data_competencia.localeCompare(b.data_competencia);
           break;
+        case 'venc':
+          // PR-FIN-GRADE-DATAS-03 — coluna VENC. ordena SÓ por data_vencimento (nunca fundido com pagamento).
+          primary = dir * ((a.data_vencimento || '').localeCompare(b.data_vencimento || ''));
+          break;
         case 'pgto':
-          primary = dir * ((a.data_pagamento || a.data_vencimento || '').localeCompare(b.data_pagamento || b.data_vencimento || ''));
+          // PR-FIN-GRADE-DATAS-03 — coluna PGTO. ordena SÓ por data_pagamento (nunca fundido com vencimento).
+          primary = dir * ((a.data_pagamento || '').localeCompare(b.data_pagamento || ''));
           break;
         case 'valor':
           primary = dir * ((a.valor * a.sinal) - (b.valor * b.sinal));
@@ -841,6 +852,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     setFornecedorFiltro('__all__');
     setAtividadeFiltro('__all__');
     setMacroLocked(false);
+    setDataPor('financeira');   // PR-FIN-GRADE-DATAS-03 — volta à dimensão padrão ao limpar filtros
     setSortField('default');
     setSortDir('asc');
     setCurrentPage(0);
@@ -888,6 +900,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
           ano={ano}
           fazendaNome={fazOperacionais.find(f => f.id === fazendaId)?.nome}
           totalCount={totalLancamentosFiltrados}
+          dimensao={dataPor}
         />
       </div>
       <div className="flex items-center gap-1">
@@ -917,8 +930,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         <CardContent className="p-2 space-y-1">
           {isMobile ? (
             <>
-              {/* MOBILE: Row 1 — Ano | Mês | Tipo | Status */}
-              <div className="grid grid-cols-4 gap-1 items-end">
+              {/* MOBILE: Row 1 — Ano | Mês | Data por | Tipo | Status */}
+              <div className="grid grid-cols-5 gap-1 items-end">
                 <div>
                   <label className={lblCls}>Ano</label>
                   <Select value={ano} onValueChange={setAno}>
@@ -953,6 +966,19 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       </div>
                     </PopoverContent>
                   </Popover>
+                </div>
+                {/* PR-FIN-GRADE-DATAS-03 — Data por (mobile): mesma dimensão temporal soberana do desktop. */}
+                <div>
+                  <label className={lblCls}>Data por</label>
+                  <Select value={dataPor} onValueChange={handleDataPorChange}>
+                    <SelectTrigger className={`${selCls} w-full bg-white border-[#C9D4E2]`}><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="financeira" className={itemCls}>Financeira</SelectItem>
+                      <SelectItem value="competencia" className={itemCls}>Competência</SelectItem>
+                      <SelectItem value="vencimento" className={itemCls}>Vencimento</SelectItem>
+                      <SelectItem value="pagamento" className={itemCls}>Pagamento</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
                   <label className={lblCls}>Tipo</label>
@@ -1131,8 +1157,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
             </>
           ) : (
             <>
-              {/* DESKTOP: LINE 1 — Ano | Mês | Tipo | Status | Fazenda | Atividade */}
-              <div className="grid grid-cols-[62px_77px_106px_106px_0.35fr_110px] gap-1.5 items-end">
+              {/* DESKTOP: LINE 1 — Ano | Mês | Data por | Tipo | Status | Fazenda | Atividade */}
+              <div className="grid grid-cols-[62px_77px_92px_106px_106px_0.35fr_110px] gap-1.5 items-end">
                 <div>
                   <label className={lblCls}>Ano</label>
                   <Select value={ano} onValueChange={setAno}>
@@ -1167,6 +1193,20 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       </div>
                     </PopoverContent>
                   </Popover>
+                </div>
+                {/* PR-FIN-GRADE-DATAS-03 — Data por: dimensão temporal soberana da grade. Trocar preserva
+                    Ano/Mês/demais filtros; recarrega pela nova dimensão sem redefinir o período. */}
+                <div>
+                  <label className={lblCls}>Data por</label>
+                  <Select value={dataPor} onValueChange={handleDataPorChange}>
+                    <SelectTrigger className={`${selCls} w-full bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F]`}><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="financeira" className={itemCls}>Financeira</SelectItem>
+                      <SelectItem value="competencia" className={itemCls}>Competência</SelectItem>
+                      <SelectItem value="vencimento" className={itemCls}>Vencimento</SelectItem>
+                      <SelectItem value="pagamento" className={itemCls}>Pagamento</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
                   <label className={lblCls}>Tipo</label>
@@ -1366,13 +1406,16 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
               */}
               <colgroup>
                 <col style={{ width: 28 }} />
+                {/* PR-FIN-GRADE-DATAS-03 — COMP. | VENC. | PGTO. (3 colunas de data, 45px cada).
+                    Os ~45px da nova coluna VENC. são compensados SÓ em Produto (−35) e Fazenda (−10). */}
                 <col style={{ width: 45 }} />
                 <col style={{ width: 45 }} />
-                <col style={{ width: modoIntensivo ? 280 : 210 }} />
+                <col style={{ width: 45 }} />
+                <col style={{ width: modoIntensivo ? 245 : 175 }} />
                 <col style={{ width: 140 }} />
                 <col style={{ width: 80 }} />
                 <col style={{ width: 80 }} />
-                <col style={{ width: 60 }} />
+                <col style={{ width: 50 }} />
                 <col style={{ width: 90 }} />
                 <col style={{ width: modoIntensivo ? 110 : 70 }} />
                 <col style={{ width: 58 }} />
@@ -1384,7 +1427,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     <Checkbox checked={allSelected} onCheckedChange={toggleSelectAll} className="h-3 w-3 border-primary-foreground data-[state=checked]:bg-primary-foreground data-[state=checked]:text-primary" />
                   </th>
                   <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[28px] z-30 bg-primary" onClick={() => toggleSort('data')}>Comp.<SortIndicator field="data" /></th>
-                  <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[73px] z-30 bg-primary" onClick={() => toggleSort('pgto')}>Venc./Pgto<SortIndicator field="pgto" /></th>
+                  {/* PR-FIN-GRADE-DATAS-03 — VENC. e PGTO. colunas independentes; sticky em 73px (28+45) e 118px (28+45+45). */}
+                  <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[73px] z-30 bg-primary" onClick={() => toggleSort('venc')}>Venc.<SortIndicator field="venc" /></th>
+                  <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[118px] z-30 bg-primary" onClick={() => toggleSort('pgto')}>Pgto.<SortIndicator field="pgto" /></th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('produto')}>Produto<SortIndicator field="produto" /></th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('fornecedor')}>Fornecedor<SortIndicator field="fornecedor" /></th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground">Macro</th>
@@ -1399,7 +1444,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
               <tbody className="[&_tr:last-child]:border-0">
                 {totalLancamentosFiltrados === 0 ? (
                   <tr className="border-b">
-                    <td colSpan={12} className="text-center text-muted-foreground py-4 text-[10px]">
+                    <td colSpan={13} className="text-center text-muted-foreground py-4 text-[10px]">
                       Nenhum lançamento encontrado.
                     </td>
                   </tr>
@@ -1420,9 +1465,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                           <Checkbox checked={selectedIds.has(l.id)} onCheckedChange={() => toggleSelect(l.id)} disabled={isParcelaFinanciamento} className="h-3 w-3" />
                         </td>
                         <td className="font-mono px-0.5 py-1 align-middle text-[12px] font-medium leading-tight sticky left-[28px] z-10 bg-background text-center">{fmtDate(l.data_competencia)}</td>
-                        {/* PR-FIN-OC-CONTRATO-01 — coluna transitória Venc./Pgto: data financeira derivada
-                            (vencimento quando aberto; pagamento efetivo quando realizado). Split em 2 colunas → PR-3. */}
-                        <td className="font-mono px-0.5 py-1 align-middle text-[12px] font-medium leading-tight sticky left-[73px] z-10 bg-background text-center">{fmtDate(l.data_pagamento ?? l.data_vencimento)}</td>
+                        {/* PR-FIN-GRADE-DATAS-03 — VENC. e PGTO. em colunas separadas, cada uma a sua coluna real
+                            (nunca fundidas, nunca a data financeira derivada). fmtDate(null) já rende o sentinela '-'.
+                            VENC. permanece visível mesmo quando há PGTO. */}
+                        <td className="font-mono px-0.5 py-1 align-middle text-[12px] font-medium leading-tight sticky left-[73px] z-10 bg-background text-center">{fmtDate(l.data_vencimento)}</td>
+                        <td className="font-mono px-0.5 py-1 align-middle text-[12px] font-medium leading-tight sticky left-[118px] z-10 bg-background text-center">{fmtDate(l.data_pagamento)}</td>
                         <td className="truncate px-2 py-1 align-middle text-[12px] font-medium leading-tight" title={isParcelaFinanciamento ? `Parcela de financiamento (origem automática) — ${l.descricao || ''}` : (l.descricao || '')}>
                           {isParcelaFinanciamento && <span className="mr-1" title="Parcela de financiamento">🏦</span>}
                           {l.descricao || '-'}
