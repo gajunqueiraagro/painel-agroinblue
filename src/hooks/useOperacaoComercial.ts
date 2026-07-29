@@ -96,6 +96,9 @@ export interface OcOperacaoRow {
   observacoes: string | null;
   status_comercial: string;
   status_financeiro: string;
+  // PR-OC-EDIT-01B — rascunho TÉCNICO (cadastro incompleto). `select('*')` já o traz; usado no
+  //   gate do "Confirmar" (o backend permanece soberano com sua própria validação).
+  rascunho: boolean;
   versao: number;
 }
 

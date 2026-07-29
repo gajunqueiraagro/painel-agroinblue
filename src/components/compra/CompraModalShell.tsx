@@ -5,6 +5,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { DatePicker } from '@/components/ui/date-picker';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 import { Plus, Edit, Lock, ShoppingCart, X, Trash2, Calendar, Building2, Check, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { parseNumericValue } from '@/lib/calculos/abate';
@@ -87,6 +89,13 @@ export interface CompraModalShellProps {
   ocEntregaEncerrada?: boolean;
   somenteLeitura?: boolean;             // read-only TOTAL (fechada/cancelada OU título materializado)
   aberturaExistente?: boolean;          // PR-OC-EDIT-01A — edição de operação existente (01A: sem lifecycle/downstream)
+  // PR-OC-EDIT-01B — ações de ciclo (RPCs oficiais) da operação existente.
+  ocTemTitulo?: boolean;                // título financeiro materializado ativo (explicação + gating)
+  ocRascunho?: boolean;                 // rascunho técnico (cadastro incompleto) → "Confirmar" desabilitado
+  acaoOcLoading?: 'confirmar' | 'cancelar' | 'reabrir' | null;
+  onConfirmarOC?: () => void;
+  onCancelarOC?: (motivo: string) => void;
+  onReabrirOC?: (motivo: string) => void;
   onClose: () => void;
 }
 
@@ -118,6 +127,9 @@ const CENARIO_UI: Record<string, { icon: string; label: string; chip: string }> 
 
 export function CompraModalShell(api: CompraModalShellProps) {
   const [abaAtiva, setAbaAtiva] = useState<string>('compra');
+  // PR-OC-EDIT-01B — diálogo de confirmação das ações de ciclo (motivo obrigatório no cancelamento).
+  const [acaoConfirm, setAcaoConfirm] = useState<null | 'confirmar' | 'cancelar' | 'reabrir'>(null);
+  const [motivoAcao, setMotivoAcao] = useState('');
   // PR-OC-EDIT-01A — Recebimento/Documentos/Financeiro seguem somente leitura na edição de operação
   //   existente (01A: writes ficam para frentes próprias); cabeçalho/Negociação usam api.somenteLeitura
   //   (que já é TOTAL em fechada/cancelada OU título materializado).
@@ -423,16 +435,23 @@ export function CompraModalShell(api: CompraModalShellProps) {
 
       {/* RODAPÉ — template do modal aprovado (bg-primary, px-6 py-3), FIXO (fora do scroll do corpo) */}
       <div className="bg-primary px-6 py-3 flex items-center justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           {api.editingId && (
             <Button variant="outline" onClick={api.handleCancelEdit} disabled={api.submitting}
               className="border-destructive text-destructive hover:bg-destructive/10 gap-1.5 bg-transparent">
               <Trash2 className="h-4 w-4" /> Cancelar operação
             </Button>
           )}
+          {/* PR-OC-EDIT-01B — título materializado: negociação bloqueada (ADR Soberania Financeira). */}
+          {api.aberturaExistente && api.ocTemTitulo && (
+            <span className="text-white/80 text-[11px] flex items-center gap-1.5 max-w-xl leading-tight">
+              <Lock className="h-3.5 w-3.5 shrink-0" />
+              Esta operação possui título financeiro materializado. Para preservar a consistência financeira, a negociação não pode ser alterada.
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" onClick={api.onClose} disabled={fluxoNeg !== null} className="text-white hover:bg-white/10">Fechar</Button>
+          <Button variant="ghost" onClick={api.onClose} disabled={fluxoNeg !== null || !!api.acaoOcLoading} className="text-white hover:bg-white/10">Fechar</Button>
           {/* Editar Financeiro: só em edição e quando aplicável (composição aprovada do rodapé) */}
           {api.editingId && api.compraDetalhes && (
             <Button variant="secondary" onClick={() => api.setCompraDialogOpen(true)} disabled={api.submitting} className="gap-1.5">
@@ -447,13 +466,67 @@ export function CompraModalShell(api: CompraModalShellProps) {
               <Check className="h-4 w-4" /> Concluir negociação
             </Button>
           )}
-          {/* OPEN-01: abertura de operação existente = somente leitura → nenhum save no rodapé. */}
-          {api.somenteLeitura ? (
+          {api.aberturaExistente ? (
+            // === PR-OC-EDIT-01B — ações de ciclo da OPERAÇÃO EXISTENTE (visíveis pelo estado real) ===
+            //   Confirmar/Cancelar/Reabrir via RPCs oficiais; título materializado bloqueia tudo (só
+            //   leitura + explicação, à esquerda). Sem "Concluir lotes e continuar" (fluxo de criação).
+            <>
+              {api.ocStatusComercial === 'fechada' && !api.ocTemTitulo && (
+                <Button type="button" variant="secondary" disabled={!!api.acaoOcLoading}
+                  onClick={() => { setMotivoAcao(''); setAcaoConfirm('reabrir'); }} className="gap-1.5">
+                  {api.acaoOcLoading === 'reabrir' ? 'Reabrindo...' : 'Reabrir operação'}
+                </Button>
+              )}
+              {(api.ocStatusComercial === 'programada' || api.ocStatusComercial === 'fechada') && !api.ocTemTitulo && (
+                <Button type="button" variant="outline" disabled={!!api.acaoOcLoading}
+                  onClick={() => { setMotivoAcao(''); setAcaoConfirm('cancelar'); }}
+                  className="border-red-300/60 text-red-100 hover:bg-red-500/20 bg-transparent gap-1.5">
+                  {api.acaoOcLoading === 'cancelar' ? 'Cancelando...' : 'Cancelar operação'}
+                </Button>
+              )}
+              {api.ocStatusComercial === 'programada' && !api.ocTemTitulo && (
+                <>
+                  {abaAtiva === 'negociacao' ? (
+                    <Button type="button" variant="secondary"
+                      disabled={!api.ocOperacaoId || !!api.lotesApi?.saving || !!api.acaoOcLoading}
+                      onClick={() => api.lotesApi?.salvar()} className="gap-1.5">
+                      {api.lotesApi?.saving ? 'Salvando...' : 'Salvar rascunho'}
+                    </Button>
+                  ) : (abaAtiva === 'recebimento' || abaAtiva === 'documentos' || abaAtiva === 'financeiro') ? null : (
+                    <Button onClick={api.handleRequestRegister} disabled={api.submitting || !!api.acaoOcLoading}
+                      className="bg-white text-primary hover:bg-white/90 font-bold gap-1.5">
+                      <ShoppingCart className="h-4 w-4" /> {api.submitting ? 'Salvando...' : 'Salvar alterações'}
+                    </Button>
+                  )}
+                  {/* PR-OC-EDIT-01B — desabilitado em rascunho técnico; motivo via Tooltip padrão do projeto
+                      (span envolve o botão para o hover funcionar mesmo desabilitado). */}
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="inline-flex">
+                          <Button type="button"
+                            disabled={!!api.acaoOcLoading || !!api.lotesApi?.saving || !!api.ocRascunho}
+                            onClick={() => setAcaoConfirm('confirmar')}
+                            className="bg-white text-primary font-bold gap-1.5 hover:bg-white/90 disabled:opacity-60">
+                            <Check className="h-4 w-4" /> {api.acaoOcLoading === 'confirmar' ? 'Confirmando...' : 'Confirmar negociação'}
+                          </Button>
+                        </span>
+                      </TooltipTrigger>
+                      {api.ocRascunho && (
+                        <TooltipContent>Complete os dados obrigatórios da negociação antes de confirmar.</TooltipContent>
+                      )}
+                    </Tooltip>
+                  </TooltipProvider>
+                </>
+              )}
+              {api.somenteLeitura && (
+                <span className="text-white/80 text-xs flex items-center gap-1"><Lock className="h-3.5 w-3.5" /> Somente leitura</span>
+              )}
+            </>
+          ) : api.somenteLeitura ? (
             <span className="text-white/80 text-xs flex items-center gap-1"><Lock className="h-3.5 w-3.5" /> Somente leitura</span>
           ) : (abaAtiva === 'recebimento' || abaAtiva === 'documentos' || abaAtiva === 'financeiro') ? null : abaAtiva === 'negociacao' ? (
-            // Fluxo único da Negociação: Salvar rascunho (secundário) + Concluir lotes e continuar (principal).
-            //   PR-OC-EDIT-01A: esta aba só renderiza quando editável (somenteLeitura=false); a edição de
-            //   operação existente oculta "Concluir lotes e continuar" (Confirmar = PR-OC-EDIT-01B).
+            // Fluxo de CRIAÇÃO (Negociação): Salvar rascunho + Concluir lotes e continuar.
             <>
               <Button type="button" variant="secondary"
                 disabled={!api.modoOC || !api.ocOperacaoId || !!api.lotesApi?.saving || fluxoNeg !== null}
@@ -462,7 +535,6 @@ export function CompraModalShell(api: CompraModalShellProps) {
                 title={api.modoOC ? (api.ocOperacaoId ? undefined : 'Salve a operação na aba Compra primeiro') : 'em breve'}>
                 {(api.lotesApi?.saving && fluxoNeg === null) ? 'Salvando...' : 'Salvar rascunho'}
               </Button>
-              {!api.aberturaExistente && (
               <Button type="button"
                 disabled={!api.modoOC || !api.ocOperacaoId || fluxoNeg !== null || !!api.lotesApi?.saving || !!api.recebimentoApi?.saving}
                 onClick={handleConcluirLotesContinuar}
@@ -470,7 +542,6 @@ export function CompraModalShell(api: CompraModalShellProps) {
                 title={api.modoOC ? (api.ocOperacaoId ? undefined : 'Salve a operação na aba Compra primeiro') : 'em breve'}>
                 {fluxoNeg === 'salvando' ? 'Salvando lotes...' : fluxoNeg === 'concluindo' ? 'Concluindo...' : (<>Concluir lotes e continuar <ArrowRight className="h-4 w-4" /></>)}
               </Button>
-              )}
             </>
           ) : (
             <Button onClick={api.handleRequestRegister} disabled={api.submitting || (!api.modoOC && !api.compraDetalhes)} className="bg-white text-primary hover:bg-white/90 font-bold gap-1.5">
@@ -482,6 +553,48 @@ export function CompraModalShell(api: CompraModalShellProps) {
           )}
         </div>
       </div>
+
+      {/* PR-OC-EDIT-01B — confirmação das ações de ciclo. Cancelamento exige motivo (contrato oc_cancelar). */}
+      <Dialog open={acaoConfirm !== null} onOpenChange={(o) => { if (!o) setAcaoConfirm(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {acaoConfirm === 'confirmar' ? 'Confirmar negociação'
+                : acaoConfirm === 'cancelar' ? 'Cancelar operação'
+                : 'Reabrir operação'}
+            </DialogTitle>
+            <DialogDescription>
+              {acaoConfirm === 'confirmar' ? 'A operação será fechada. Após confirmar, a negociação passa a somente leitura.'
+                : acaoConfirm === 'cancelar' ? 'O cancelamento afeta a operação comercial e não é desfeito por edição. Informe o motivo.'
+                : 'A operação fechada volta para programada e poderá ser editada novamente pelas regras vigentes.'}
+            </DialogDescription>
+          </DialogHeader>
+          {(acaoConfirm === 'cancelar' || acaoConfirm === 'reabrir') && (
+            <textarea
+              value={motivoAcao}
+              onChange={(e) => setMotivoAcao(e.target.value)}
+              rows={3}
+              placeholder={acaoConfirm === 'cancelar' ? 'Motivo do cancelamento (obrigatório)' : 'Motivo (opcional)'}
+              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+            />
+          )}
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setAcaoConfirm(null)}>Voltar</Button>
+            <Button
+              disabled={acaoConfirm === 'cancelar' && motivoAcao.trim() === ''}
+              onClick={() => {
+                const a = acaoConfirm;
+                setAcaoConfirm(null);
+                if (a === 'confirmar') api.onConfirmarOC?.();
+                else if (a === 'cancelar') api.onCancelarOC?.(motivoAcao.trim());
+                else if (a === 'reabrir') api.onReabrirOC?.(motivoAcao.trim());
+              }}
+              className={acaoConfirm === 'cancelar' ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90' : ''}>
+              {acaoConfirm === 'confirmar' ? 'Confirmar' : acaoConfirm === 'cancelar' ? 'Cancelar operação' : 'Reabrir'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Diálogo financeiro intocável (Completar Compra) — wiring byte a byte via setters */}
       <CompraDetalhesDialog

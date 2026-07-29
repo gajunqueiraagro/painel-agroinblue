@@ -309,6 +309,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   // PR-OC-EDIT-01A — existe título financeiro materializado nesta operação? (parte ativa com
   //   financeiro_lancamento_id). Bloqueia a edição da base econômica (ADR Soberania Financeira).
   const [ocTemTitulo, setOcTemTitulo] = useState<boolean>(false);
+  // PR-OC-EDIT-01B — flag real de rascunho técnico (cadastro incompleto). Desabilita "Confirmar".
+  const [ocRascunho, setOcRascunho] = useState<boolean>(false);
+  // PR-OC-EDIT-01B — ação de ciclo em andamento (impede clique duplo e desabilita conflitantes).
+  const [acaoOcLoading, setAcaoOcLoading] = useState<null | 'confirmar' | 'cancelar' | 'reabrir'>(null);
   const [ocHidratando, setOcHidratando] = useState<boolean>(false);
   const [ocHidratacaoErro, setOcHidratacaoErro] = useState<string | null>(null);
   const ocHidratadoRef = useRef<boolean>(false);
@@ -483,7 +487,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setOcFazendaDestinoId(fazendaAtual?.id ?? '__atual__');
     setData(format(new Date(), 'yyyy-MM-dd')); setCompraFornecedorId(''); setObservacao('');
     setStatusOp('realizado'); setCompraDetalhes(null); setNotaFiscal(''); setFazendaOrigem('');
-    setOcAberturaExistente(false); setOcTemTitulo(false); setOcHidratacaoErro(null);
+    setOcAberturaExistente(false); setOcTemTitulo(false); setOcRascunho(false); setOcHidratacaoErro(null);
   }, [fazendaAtual?.id]);
 
   // Hidratação de operação de Compra EXISTENTE a partir de ?oc_id (abertura pela Central).
@@ -524,6 +528,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           (p) => Boolean(p.financeiro_lancamento_id) && p.cancelada !== true,
         );
         setOcTemTitulo(temTitulo);
+        setOcRascunho(op.rascunho);
         setOcAberturaExistente(true);
         setTipo('compra');            // abre o CompraModalShell (isCompra), não o modal default.
         setLancModalOpen(true);
@@ -1801,6 +1806,73 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       toast.error(e instanceof Error ? e.message : 'Falha ao salvar a operação comercial.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // PR-OC-EDIT-01B — recarrega a OP aberta pelo backend (SOBERANO) após uma ação de ciclo, sem fechar
+  //   o modal. Re-hidrata status/versão/título → a editabilidade volta a ser derivada pelas regras do 01A.
+  const recarregarOperacaoOC = async () => {
+    const clienteId = clienteAtual?.id;
+    if (!ocOperacaoId || !clienteId) return;
+    const estado = await ocRpc.carregarOperacao(ocOperacaoId, clienteId);
+    if (!estado) return;
+    const op = estado.operacao;
+    setData(op.data_operacao ?? format(new Date(), 'yyyy-MM-dd'));
+    setCompraFornecedorId(op.contraparte_id ?? '');
+    setOcFazendaDestinoId(op.fazenda_id ?? (fazendaAtual?.id ?? '__atual__'));
+    setObservacao(op.observacoes ?? '');
+    setStatusOp(op.cenario === 'meta' ? 'meta' : 'realizado');
+    setNotaFiscal(op.numero_documento ?? '');
+    setOcVersao(op.versao);
+    setOcStatusComercial(op.status_comercial);
+    setOcRascunho(op.rascunho);
+    setOcTemTitulo((estado.partes ?? []).some(
+      (p) => Boolean(p.financeiro_lancamento_id) && p.cancelada !== true,
+    ));
+  };
+
+  // PR-OC-EDIT-01B — ações de ciclo (RPCs oficiais; backend soberano). Erro real do backend é exibido
+  //   e o modal permanece aberto; nunca há atualização otimista. Sem escrita direta em tabela/FINV2.
+  const confirmarOperacaoOC = async () => {
+    const clienteId = clienteAtual?.id;
+    if (!ocOperacaoId || !clienteId || ocVersao == null || acaoOcLoading) return;
+    setAcaoOcLoading('confirmar');
+    try {
+      await ocRpc.confirmar(ocOperacaoId, clienteId, ocVersao);
+      await recarregarOperacaoOC();
+      toast.success('Negociação confirmada — operação fechada.');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Falha ao confirmar a negociação.');
+    } finally {
+      setAcaoOcLoading(null);
+    }
+  };
+  const cancelarOperacaoOC = async (motivo: string) => {
+    const clienteId = clienteAtual?.id;
+    if (!ocOperacaoId || !clienteId || ocVersao == null || acaoOcLoading) return;
+    setAcaoOcLoading('cancelar');
+    try {
+      await ocRpc.cancelar(ocOperacaoId, clienteId, ocVersao, motivo);
+      await recarregarOperacaoOC();
+      toast.success('Operação cancelada.');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Falha ao cancelar a operação.');
+    } finally {
+      setAcaoOcLoading(null);
+    }
+  };
+  const reabrirOperacaoOC = async (motivo: string) => {
+    const clienteId = clienteAtual?.id;
+    if (!ocOperacaoId || !clienteId || ocVersao == null || acaoOcLoading) return;
+    setAcaoOcLoading('reabrir');
+    try {
+      await ocRpc.reabrir(ocOperacaoId, clienteId, ocVersao, motivo);
+      await recarregarOperacaoOC();
+      toast.success('Operação reaberta — voltou para programada.');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Falha ao reabrir a operação.');
+    } finally {
+      setAcaoOcLoading(null);
     }
   };
 
@@ -3701,6 +3773,13 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     somenteLeitura: ocAberturaExistente
       && (ocStatusComercial === 'fechada' || ocStatusComercial === 'cancelada' || ocTemTitulo),
     aberturaExistente: ocAberturaExistente,
+    // PR-OC-EDIT-01B — ações de ciclo (RPCs oficiais) + título materializado (explicação/gating).
+    ocTemTitulo,
+    ocRascunho,
+    acaoOcLoading,
+    onConfirmarOC: confirmarOperacaoOC,
+    onCancelarOC: cancelarOperacaoOC,
+    onReabrirOC: reabrirOperacaoOC,
     // PR-OC-NAV-01 — fechar em modo OC retorna à Central e limpa a URL; fora do modo OC, apenas fecha.
     onClose: () => { setLancModalOpen(false); if (modoOCCompra) onFecharOperacaoOC?.(); },
   };
