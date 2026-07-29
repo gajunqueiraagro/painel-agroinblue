@@ -39,7 +39,8 @@ function buildRows(lancamentos: LancamentoV2[], fornecedores: FornecedorMap[]) {
     const doc = formatDocumento((l as any).tipo_documento, l.numero_documento);
     return {
       comp: fmtDate(l.data_competencia),
-      pgto: fmtDate(l.data_pagamento),
+      // PR-FIN-OC-CONTRATO-01 — data financeira derivada (vencimento p/ aberto; pagamento p/ realizado).
+      pgto: fmtDate(l.data_pagamento ?? l.data_vencimento),
       produto: l.descricao || '',
       fornecedor: forn,
       valor,
@@ -58,7 +59,7 @@ function exportExcel(lancamentos: LancamentoV2[], fornecedores: FornecedorMap[],
   const rows = buildRows(lancamentos, fornecedores);
   const data = rows.map(r => ({
     'Comp.': r.comp,
-    'Pgto': r.pgto,
+    'Venc./Pgto': r.pgto,
     'Produto': r.produto,
     'Fornecedor': r.fornecedor,
     'Valor': r.valor,
@@ -104,7 +105,7 @@ function exportPDF(lancamentos: LancamentoV2[], fornecedores: FornecedorMap[], a
   y += 4;
 
   const rows = buildRows(lancamentos, fornecedores);
-  const head = [['Comp.', 'Pgto', 'Produto', 'Fornecedor', 'Valor', 'Documento', 'Status']];
+  const head = [['Comp.', 'Venc./Pgto', 'Produto', 'Fornecedor', 'Valor', 'Documento', 'Status']];
   const body = rows.map(r => [
     r.comp, r.pgto, r.produto, r.fornecedor,
     formatMoeda(r.sinal >= 0 ? Math.abs(r.valor) : -Math.abs(r.valor)),

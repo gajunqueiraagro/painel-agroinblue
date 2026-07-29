@@ -175,15 +175,23 @@ function mesesDoRecorte(filtros: FiltrosV2): string[] {
   return [];
 }
 
+// PR-FIN-OC-CONTRATO-01 — data financeira DERIVADA = COALESCE(data_pagamento, data_vencimento):
+//   pagamento efetivo quando há; senão o vencimento (título OC aberto). Ramo OR server-side (PostgREST):
+//   (pago na faixa) OU (não pago E vencimento na faixa). Legado (data_pagamento preenchida) cai sempre no
+//   1º ramo → comportamento idêntico ao de hoje. Sem carregar a base para filtrar client-side.
+function ramoDerivado(ini: string, fim: string): string {
+  return `and(data_pagamento.gte.${ini},data_pagamento.lt.${fim}),`
+       + `and(data_pagamento.is.null,data_vencimento.gte.${ini},data_vencimento.lt.${fim})`;
+}
+
 // Resíduo client-side APENAS para "Todos os anos + meses específicos": "mês em qualquer ano" não é
-//   expressável como faixa contínua sobre data_pagamento. Exclui data_pagamento null (mês específico),
-//   sem cair em competência/ano_mes.
+//   expressável como faixa contínua. Usa a data derivada (pagamento ?? vencimento); nunca competência/ano_mes.
 function residualPagamentoTodosAnos(filtros: FiltrosV2): ((l: LancamentoV2) => boolean) | null {
   const isTodosAnos = !filtros.ano || filtros.ano === '__todos__';
   const meses = mesesDoRecorte(filtros);
   if (!isTodosAnos || meses.length === 0) return null;
   const set = new Set(meses.map(m => m.padStart(2, '0')));
-  return (l) => !!l.data_pagamento && set.has(l.data_pagamento.substring(5, 7));
+  return (l) => { const df = l.data_pagamento ?? l.data_vencimento; return !!df && set.has(df.substring(5, 7)); };
 }
 
 export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
@@ -320,10 +328,10 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       query = query.eq('fazenda_id', filtros.fazenda_id);
     }
 
-    // PR-FIN-FILTRO-PGTO-01 — recorte temporal por data_pagamento (dimensão do PGTO), NUNCA por ano_mes.
-    //   Faixas [1º dia, 1º dia do mês/ano seguinte) sobre a coluna date; data_pagamento null cai fora de
-    //   qualquer faixa (só aparece sem recorte, em "Todos"). "Todos os anos + meses" é aplicado como
-    //   resíduo client-side em fetchAllLancamentos (mês em qualquer ano não é faixa contínua).
+    // PR-FIN-OC-CONTRATO-01 — recorte temporal pela data financeira DERIVADA (COALESCE(data_pagamento,
+    //   data_vencimento)), NUNCA por ano_mes. Faixas [1º dia, 1º dia do mês/ano seguinte) via ramoDerivado
+    //   (OR server-side). Sem data financeira (ambas null) → fora de qualquer faixa (só em "Todos").
+    //   "Todos os anos + meses" é resíduo client-side em fetchAllLancamentos (mês em qualquer ano não é faixa).
     const isTodosAnos = !filtros.ano || filtros.ano === '__todos__';
     const mesesRecorte = mesesDoRecorte(filtros);
 
@@ -332,17 +340,10 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     } else if (mesesRecorte.length > 0) {
       const anoNum = Number(filtros.ano);
       const faixas = mesesRecorte.map(m => faixaMes(anoNum, Number(m)));
-      if (faixas.length === 1) {
-        query = query.gte('data_pagamento', faixas[0][0]).lt('data_pagamento', faixas[0][1]);
-      } else {
-        const orExpr = faixas
-          .map(([ini, fim]) => `and(data_pagamento.gte.${ini},data_pagamento.lt.${fim})`)
-          .join(',');
-        query = query.or(orExpr);
-      }
+      query = query.or(faixas.map(([ini, fim]) => ramoDerivado(ini, fim)).join(','));
     } else {
       const anoNum = Number(filtros.ano);
-      query = query.gte('data_pagamento', `${anoNum}-01-01`).lt('data_pagamento', `${anoNum + 1}-01-01`);
+      query = query.or(ramoDerivado(`${anoNum}-01-01`, `${anoNum + 1}-01-01`));
     }
 
     const contaOrigemId = filtros.conta_bancaria_id?.trim();
