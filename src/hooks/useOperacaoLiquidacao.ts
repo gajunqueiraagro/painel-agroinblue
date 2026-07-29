@@ -27,6 +27,7 @@ const CATEGORIAS_VALIDAS = new Set<string>(CATEGORIAS.map(c => c.value));
 
 // Lote da negociação com os campos necessários à classificação e ao valor oficial.
 export interface LoteOC {
+  id: string;                 // PR-FIN-OC-COMPOSICAO-02 — identidade estrutural do lote (parte.lote_id)
   categoria: string;
   qtd: number | null;
   pesoMedioKg: number | null;
@@ -51,15 +52,17 @@ export function valorLoteOC(l: LoteOC): number | null {
 const sexoDaCategoria = (c: string): 'macho' | 'femea' => (CATEGORIAS_FEMEAS_COMPRA.has(c) ? 'femea' : 'macho');
 const subcentroDoSexo = (s: 'macho' | 'femea') => (s === 'femea' ? SUBCENTRO_PRINCIPAL_COMPRA_FEMEAS : SUBCENTRO_PRINCIPAL_COMPRA_MACHOS);
 
-export interface GrupoClassificacao { sexo: 'macho' | 'femea'; subcentro: string; valorBruto: number; }
+// PR-FIN-OC-COMPOSICAO-02 — um item POR LOTE (identidade comercial = lote/categoria). O sexo/subcentro
+//   é só classificação GERENCIAL derivada; NUNCA chave de consolidação. valorBruto = valor oficial do lote.
+export interface LoteClassificado { lote: LoteOC; sexo: 'macho' | 'femea'; subcentro: string; valorBruto: number; }
 export type ClassificacaoLotes =
-  | { status: 'ok'; grupos: GrupoClassificacao[] }        // 1 ou 2 grupos (macho antes de femea)
+  | { status: 'ok'; itens: LoteClassificado[] }          // um item por LOTE (sem agrupar por sexo)
   | { status: 'sem_categoria' }
   | { status: 'categoria_invalida'; categorias: string[] }
   | { status: 'valor_nao_derivavel'; categorias: string[] };
 
-// Agrupa os lotes por classificação financeira (sexo→subcentro), somando o valor OFICIAL de cada
-// lote por grupo. Não escolhe majoritário nem primeiro lote: sexo misto ⇒ 2 grupos. Bloqueia
+// Classifica CADA lote individualmente: deriva sexo→subcentro (classificação gerencial) e o valor
+// OFICIAL do lote, sem somar/agrupar. DM e G (ambos machos) permanecem itens distintos. Bloqueia
 // (sem fallback) quando falta categoria, categoria fora do enum, ou valor de lote não derivável.
 export function classificarLotesCompra(lotes: LoteOC[]): ClassificacaoLotes {
   const validos = lotes.filter(l => (l.categoria ?? '').trim().length > 0);
@@ -68,15 +71,11 @@ export function classificarLotesCompra(lotes: LoteOC[]): ClassificacaoLotes {
   if (invalidas.length > 0) return { status: 'categoria_invalida', categorias: invalidas };
   const naoDeriv = Array.from(new Set(validos.filter(l => valorLoteOC(l) == null).map(l => l.categoria)));
   if (naoDeriv.length > 0) return { status: 'valor_nao_derivavel', categorias: naoDeriv };
-  const acc = new Map<'macho' | 'femea', number>();
-  for (const l of validos) {
-    const s = sexoDaCategoria(l.categoria);
-    acc.set(s, (acc.get(s) ?? 0) + (valorLoteOC(l) ?? 0));
-  }
-  const grupos: GrupoClassificacao[] = (['macho', 'femea'] as const)
-    .filter(s => acc.has(s))
-    .map(s => ({ sexo: s, subcentro: subcentroDoSexo(s), valorBruto: acc.get(s)! }));
-  return { status: 'ok', grupos };
+  const itens: LoteClassificado[] = validos.map(l => {
+    const sexo = sexoDaCategoria(l.categoria);
+    return { lote: l, sexo, subcentro: subcentroDoSexo(sexo), valorBruto: valorLoteOC(l) ?? 0 };
+  });
+  return { status: 'ok', itens };
 }
 
 export interface ResumoLiquidacao {
@@ -136,9 +135,9 @@ export interface GerarObrigacaoInput {
   naturezaFluxo: NaturezaFluxo;
   natureza: string;
   componente: string;
-  // Discriminador de idempotência quando várias obrigações compartilham natureza+componente
-  // (ex.: principal por classificação/sexo numa operação mista). Compõe a chave determinística.
-  chaveDiscriminador?: string;
+  // PR-FIN-OC-COMPOSICAO-02 — lote de origem: identidade e vínculo estrutural da obrigação. NULL para
+  //   componentes GERAIS da OC (frete/comissão). Compõe a chave determinística por lote (nunca por sexo).
+  loteId?: string | null;
   valor: number;          // valor POR parcela
   descricao?: string;
   favorecidoId?: string | null;
@@ -220,6 +219,7 @@ interface CompRow { natureza: string; codigo: string; nome: string | null; categ
 interface FornRow { id: string; nome: string | null; }
 interface OpMetaRow { tipo_operacao: string; versao: number; contraparte_id: string | null; valor_acordado: number | null; }
 interface LoteRow {
+  id: string;
   categoria_negociada: string | null; qtd_negociada: number | null;
   peso_medio_negociado_kg: number | null; criterio_valor: string | null; valor_informado: number | null;
 }
@@ -270,7 +270,7 @@ export function useOperacaoLiquidacao({ operacaoId, clienteId, enabled }: Params
         (supabase as any).from('zoo_componentes_financeiros').select('natureza, codigo, nome, categoria').eq('ativo', true).order('natureza').order('ordem_exibicao'),
         (supabase as any).from('financeiro_fornecedores').select('id, nome').eq('cliente_id', clienteId).order('nome'),
         (supabase as any).from('zoo_operacoes_comerciais').select('tipo_operacao, versao, contraparte_id, valor_acordado').eq('id', operacaoId).maybeSingle(),
-        (supabase as any).from('zoo_operacao_lotes').select('categoria_negociada, qtd_negociada, peso_medio_negociado_kg, criterio_valor, valor_informado').eq('operacao_id', operacaoId),
+        (supabase as any).from('zoo_operacao_lotes').select('id, categoria_negociada, qtd_negociada, peso_medio_negociado_kg, criterio_valor, valor_informado').eq('operacao_id', operacaoId),
       ]);
       for (const r of [res, obr, liq, partes, docs, comps, forns, opMeta, lotesRes]) {
         if (r.error) throw new Error(r.error.message);
@@ -330,6 +330,7 @@ export function useOperacaoLiquidacao({ operacaoId, clienteId, enabled }: Params
       setContraparteId(opMetaRow?.contraparte_id ?? null);
       setValorAcordado(opMetaRow?.valor_acordado == null ? null : Number(opMetaRow.valor_acordado));
       setLotes(((lotesRes.data ?? []) as LoteRow[]).map(l => ({
+        id: l.id,
         categoria: l.categoria_negociada ?? '',
         qtd: l.qtd_negociada == null ? null : Number(l.qtd_negociada),
         pesoMedioKg: l.peso_medio_negociado_kg == null ? null : Number(l.peso_medio_negociado_kg),
@@ -370,8 +371,8 @@ export function useOperacaoLiquidacao({ operacaoId, clienteId, enabled }: Params
 
       const obrigacoesPayload = inputs.flatMap((input) => {
         const n = Math.max(1, Math.trunc(input.quantidadeParcelas));
-        // Discriminador (ex.: sexo) distingue obrigações que compartilham natureza+componente.
-        const disc = input.chaveDiscriminador ? `:${input.chaveDiscriminador}` : '';
+        // PR-FIN-OC-COMPOSICAO-02 — discriminador de identidade = LOTE (ou 'geral' p/ componente geral da OC).
+        const loteKey = input.loteId ?? 'geral';
         return Array.from({ length: n }, (_, i) => {
           const venc = input.primeiroVencimento
             ? (n > 1 ? addDaysIso(input.primeiroVencimento, input.intervaloDias * i) : input.primeiroVencimento)
@@ -380,6 +381,7 @@ export function useOperacaoLiquidacao({ operacaoId, clienteId, enabled }: Params
             natureza_fluxo: input.naturezaFluxo,
             natureza: input.natureza,
             componente: input.componente,
+            lote_id: input.loteId ?? null,
             valor: input.valor,
             data_vencimento: venc,
             sequencia_parcela: i + 1,
@@ -397,9 +399,9 @@ export function useOperacaoLiquidacao({ operacaoId, clienteId, enabled }: Params
             incluso_no_total: false,
             sem_movimentacao_caixa: input.semMovimentacaoCaixa,
             materializar: input.semMovimentacaoCaixa ? false : input.materializar,
-            // chave DETERMINÍSTICA (operacao+natureza+componente[+discriminador]+sequência):
-            //   repetição idêntica = idempotente; discriminador distingue classificações distintas.
-            chave_idempotencia: `oc:${operacaoId}:${input.natureza}:${input.componente}${disc}:parcela:${i + 1}`,
+            // chave DETERMINÍSTICA por LOTE (operacao:lote:natureza:componente:parcela):
+            //   repetição idêntica = idempotente; lotes distintos = obrigações distintas (nunca por sexo).
+            chave_idempotencia: `oc:${operacaoId}:${loteKey}:${input.natureza}:${input.componente}:parcela:${i + 1}`,
           };
         });
       });

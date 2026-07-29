@@ -20,6 +20,7 @@ import { RefreshCw, Plus, MoreHorizontal, FileText, Undo2, Ban } from 'lucide-re
 import { parseNumericValue } from '@/lib/calculos/abate';
 import { usePlanoContasOC, planoTipoOperacao } from '@/hooks/usePlanoContasOC';
 import { classificarLotesCompra } from '@/hooks/useOperacaoLiquidacao';
+import { produtoOCPrincipal, siglaCategoria } from '@/lib/financeiro/produtoOC';
 import type {
   LiquidacaoApi, ObrigacaoLinha, FormaLiquidacao, GerarObrigacaoInput, RegistrarLiquidacaoInput,
 } from '@/hooks/useOperacaoLiquidacao';
@@ -347,27 +348,29 @@ function GerarObrigacaoDialog({ api, onClose }: { api: LiquidacaoApi; onClose: (
     if (!planoTipo) return { status: 'sem_tipo' as const };
     if (plano.loading) return { status: 'carregando' as const };
     if (acordado == null || acordado <= 0) return { status: 'sem_acordado' as const };
-    const resolvidos = classificacao.grupos.map(g => ({
-      grupo: g, cand: plano.rows.filter(r => r.tipo_operacao === planoTipo && r.subcentro === g.subcentro),
+    // PR-FIN-OC-COMPOSICAO-02 — um item por LOTE; plano resolvido pela classificação gerencial (subcentro).
+    //   DM e G (mesmo subcentro Machos) permanecem itens/obrigações distintos.
+    const resolvidos = classificacao.itens.map(it => ({
+      item: it, cand: plano.rows.filter(r => r.tipo_operacao === planoTipo && r.subcentro === it.subcentro),
     }));
-    const semPlano = resolvidos.filter(r => r.cand.length === 0).map(r => r.grupo.subcentro);
+    const semPlano = Array.from(new Set(resolvidos.filter(r => r.cand.length === 0).map(r => r.item.subcentro)));
     if (semPlano.length) return { status: 'sem_plano' as const, subcentros: semPlano };
-    const ambiguo = resolvidos.filter(r => r.cand.length > 1).map(r => r.grupo.subcentro);
+    const ambiguo = Array.from(new Set(resolvidos.filter(r => r.cand.length > 1).map(r => r.item.subcentro)));
     if (ambiguo.length) return { status: 'ambiguo' as const, subcentros: ambiguo };
-    // Rateio: só prossegue se a soma bruta dos grupos coincidir com valor_acordado a menos de
+    // Rateio: só prossegue se a soma bruta dos LOTES coincidir com valor_acordado a menos de
     // arredondamento (senão a diferença NÃO é mascarada — bloqueia e reporta).
-    const somaBruta = resolvidos.reduce((s, r) => s + r.grupo.valorBruto, 0);
+    const somaBruta = resolvidos.reduce((s, r) => s + r.item.valorBruto, 0);
     if (Math.abs(round2(somaBruta) - acordado) > 0.01) {
       return { status: 'soma_incoerente' as const, soma: round2(somaBruta), acordado };
     }
-    // Valores por grupo: arredonda todos menos o último; o último absorve o resíduo de centavos
+    // Valores por LOTE: arredonda todos menos o último; o último absorve o resíduo de centavos
     // para garantir Σ = valor_acordado EXATO (exigência da RPC, sem tolerância).
     const n = resolvidos.length;
     let acc = 0;
     const itens = resolvidos.map((r, i) => {
-      const valor = i < n - 1 ? round2(r.grupo.valorBruto) : round2(acordado - acc);
+      const valor = i < n - 1 ? round2(r.item.valorBruto) : round2(acordado - acc);
       acc += valor;
-      return { grupo: r.grupo, plano: r.cand[0], valor };
+      return { item: r.item, plano: r.cand[0], valor };
     });
     return { status: 'ok' as const, itens };
   }, [classificacao, planoTipo, plano.rows, plano.loading, acordado]);
@@ -376,15 +379,17 @@ function GerarObrigacaoDialog({ api, onClose }: { api: LiquidacaoApi; onClose: (
     && !!favorecidoId && !!primeiroVenc && !jaExistePrincipal && !api.saving;
 
   const submit = async () => {
-    if (!podeSubmeter || preparo.status !== 'ok' || !fluxo || !compPrincipal) return;
+    if (!podeSubmeter || preparo.status !== 'ok' || !fluxo || !compPrincipal || !tipoOC) return;
+    // PR-FIN-OC-COMPOSICAO-02 — uma obrigação principal POR LOTE (identidade por lote_id, nunca por sexo).
+    //   Produto DERIVADO estruturalmente (qtd/categoria do lote + parcela); fornecedor não entra.
     const inputs: GerarObrigacaoInput[] = preparo.itens.map(it => ({
       naturezaFluxo: fluxo, natureza: 'principal', componente: compPrincipal.codigo,
-      chaveDiscriminador: it.grupo.sexo,                    // distingue a chave por classificação
-      valor: it.valor,                                      // valor da classificação (soma = valor_acordado)
-      descricao: descricao || undefined,
+      loteId: it.item.lote.id,                              // identidade e vínculo estrutural por lote
+      valor: it.valor,                                      // valor do lote (soma = valor_acordado)
+      descricao: produtoOCPrincipal(tipoOC, it.item.lote.qtd ?? 0, it.item.lote.categoria, 1, 1),
       favorecidoId: favorecidoId || null,
       documentoId: null,
-      // classificação resolvida automaticamente (registro real do plano de contas)
+      // classificação gerencial resolvida automaticamente (registro real do plano de contas)
       macroCusto: it.plano.macro_custo, grupoCusto: it.plano.grupo_custo, centroCusto: it.plano.centro_custo,
       subcentro: it.plano.subcentro, planoContaId: it.plano.id,
       semMovimentacaoCaixa: false, materializar: true,
@@ -421,8 +426,11 @@ function GerarObrigacaoDialog({ api, onClose }: { api: LiquidacaoApi; onClose: (
             {preparo.status === 'ok' ? (
               <div className="space-y-0.5">
                 {preparo.itens.map(it => (
-                  <div key={it.grupo.subcentro} className="flex justify-between gap-2">
-                    <span className="font-medium text-foreground truncate">{[it.plano.macro_custo, it.plano.grupo_custo, it.plano.centro_custo, it.plano.subcentro].filter(Boolean).join(' → ')}</span>
+                  <div key={it.item.lote.id} className="flex justify-between gap-2">
+                    <span className="font-medium text-foreground truncate">
+                      <span className="text-primary">{it.item.lote.qtd ?? '—'} {siglaCategoria(it.item.lote.categoria)}</span>
+                      {' · '}{[it.plano.macro_custo, it.plano.grupo_custo, it.plano.centro_custo, it.plano.subcentro].filter(Boolean).join(' → ')}
+                    </span>
                     <span className="tabular-nums shrink-0">{brl(it.valor)}</span>
                   </div>
                 ))}
