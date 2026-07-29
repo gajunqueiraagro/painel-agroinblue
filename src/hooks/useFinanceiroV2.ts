@@ -475,6 +475,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       conta_bancaria_id: form.conta_bancaria_id || null,
       conta_destino_id: form.conta_destino_id || null,
       data_competencia: form.data_competencia,
+      data_vencimento: form.data_vencimento || null,   // PR-FIN-MODAL-VENCIMENTO-02B — grava o vencimento; nunca em data_pagamento
       data_pagamento: form.data_pagamento || null,
       valor: form.valor,
       sinal,
@@ -666,6 +667,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       conta_bancaria_id: form.conta_bancaria_id || null,
       conta_destino_id: form.conta_destino_id || null,
       data_competencia: form.data_competencia,
+      data_vencimento: form.data_vencimento || null,   // PR-FIN-MODAL-VENCIMENTO-02B — grava o vencimento; nunca em data_pagamento
       data_pagamento: form.data_pagamento || null,
       valor: form.valor,
       sinal,

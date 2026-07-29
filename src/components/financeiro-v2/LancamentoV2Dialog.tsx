@@ -341,6 +341,7 @@ export function LancamentoV2Dialog({
   const [fazendaId, setFazendaId] = useState('');
   const [safraId, setSafraId] = useState('');
   const [dataCompetencia, setDataCompetencia] = useState('');
+  const [dataVencimento, setDataVencimento] = useState('');   // PR-FIN-MODAL-VENCIMENTO-02B
   const [dataPagamento, setDataPagamento] = useState('');
   const [descricao, setDescricao] = useState('');
   const [favorecidoId, setFavorecidoId] = useState('');
@@ -386,6 +387,7 @@ export function LancamentoV2Dialog({
       setFazendaId(lancamento.fazenda_id);
       setSafraId(lancamento.safra_id ?? '');
       setDataCompetencia(lancamento.data_competencia);
+      setDataVencimento(lancamento.data_vencimento || '');   // PR-FIN-MODAL-VENCIMENTO-02B — carrega o vencimento real
       setDataPagamento(lancamento.data_pagamento || '');
       setDescricao(lancamento.descricao || '');
       setFavorecidoId(lancamento.favorecido_id || '');
@@ -433,6 +435,7 @@ export function LancamentoV2Dialog({
       setFazendaId(prefill.fazenda_id ?? defaultFazendaId ?? '');
       setSafraId('');
       setDataCompetencia(prefill.data_competencia ?? prefill.data_pagamento ?? today);
+      setDataVencimento('');   // PR-FIN-MODAL-VENCIMENTO-02B — prefill não traz vencimento; abre vazio (sem auto-preencher)
       setDataPagamento(prefill.data_pagamento ?? today);
       setStatusTransacao(prefill.status_transacao ?? 'realizado');
       setTipoOperacao(prefill.tipo_operacao ?? '2-Saídas');
@@ -471,6 +474,7 @@ export function LancamentoV2Dialog({
       setFazendaId(defaultFazendaId || '');
       setSafraId('');
       setDataCompetencia(today);
+      setDataVencimento('');   // PR-FIN-MODAL-VENCIMENTO-02B — novo lançamento abre com vencimento vazio
       setDataPagamento(today);
       setStatusTransacao(deriveStatus(today));
       setDescricao('');
@@ -831,6 +835,7 @@ export function LancamentoV2Dialog({
           conta_bancaria_id: contaBancariaId,
           conta_destino_id: contaDestinoFinal,
           data_competencia: row.dataCompetencia,
+          data_vencimento: dataVencimento || null,   // PR-FIN-MODAL-VENCIMENTO-02B
           data_pagamento: row.dataPagamento || null,
           valor: recVal,
           tipo_operacao: tipoOperacao,
@@ -868,6 +873,7 @@ export function LancamentoV2Dialog({
           conta_bancaria_id: contaBancariaId,
           conta_destino_id: contaDestinoFinal,
           data_competencia: dataCompetencia,
+          data_vencimento: dataVencimento || null,   // PR-FIN-MODAL-VENCIMENTO-02B
           data_pagamento: row.dataPagamento || dataPagamento,
           valor: parcelaVal,
           tipo_operacao: tipoOperacao,
@@ -900,6 +906,7 @@ export function LancamentoV2Dialog({
       conta_bancaria_id: contaBancariaId,
       conta_destino_id: contaDestinoFinal,
       data_competencia: dataCompetencia,
+      data_vencimento: dataVencimento || null,   // PR-FIN-MODAL-VENCIMENTO-02B
       data_pagamento: dataPagamento || null,
       valor: Math.abs(valorNum),
       tipo_operacao: tipoOperacao,
@@ -1188,9 +1195,9 @@ export function LancamentoV2Dialog({
                 do `space-y-2` do próprio TabsContent. */}
 
             {/* ── LINHA 1 — Tipo | Competência | Vencimento | Pagamento | Status (grid 3/2/2/2/3 = 12) ──
-                PR-FIN-MODAL-02J: Vencimento é APENAS um placeholder "Em breve" (recurso futuro —
-                PR-FIN-DATAS-01). Competência e Pagamento seguem com o MESMO DatePicker compartilhado,
-                inalterado (a densificação do gatilho fica p/ a frente de calendário). */}
+                PR-FIN-MODAL-VENCIMENTO-02B: Vencimento agora é um DatePicker FUNCIONAL (mesmo componente
+                compartilhado de Competência/Pagamento), read-only para título OC. Grava em data_vencimento,
+                nunca em data_pagamento; o contrato de Data Pagamento do lançamento manual permanece inalterado. */}
             <div className="grid grid-cols-12 gap-2">
               <div className="col-span-3">
                 <Label className="text-[10px]">Tipo Operação *</Label>
@@ -1205,12 +1212,13 @@ export function LancamentoV2Dialog({
                 <Label className="text-[10px]">Data Competência *</Label>
                 <DatePicker value={dataCompetencia} onChange={setDataCompetencia} disabled={isOCTitulo} tabIndex={2} className={fieldBg} />
               </div>
-              {/* Data Vencimento — PLACEHOLDER "Em breve" (PR-FIN-MODAL-02J). Campo desabilitado,
-                  discreto, mesma altura (h-8). SEM DatePicker/estado/valor/validação/payload — apenas
-                  reserva visual do futuro campo (PR-FIN-DATAS-01). */}
+              {/* Data Vencimento — PR-FIN-MODAL-VENCIMENTO-02B: campo funcional (mesmo DatePicker de
+                  Competência/Pagamento). Editável em lançamento manual; read-only para título OC
+                  (governado pela Operação Comercial). Grava SEMPRE em data_vencimento, nunca em
+                  data_pagamento. Contrato de Data Pagamento do manual permanece inalterado. */}
               <div className="col-span-2">
-                <Label className="text-[10px] text-muted-foreground">Data Vencimento</Label>
-                <Input value="" readOnly disabled aria-disabled="true" tabIndex={-1} placeholder="Em breve" className="h-8 bg-muted/60 dark:bg-muted border-border/20 text-muted-foreground cursor-not-allowed text-xs" />
+                <Label className="text-[10px]">Data Vencimento</Label>
+                <DatePicker value={dataVencimento} onChange={setDataVencimento} disabled={isOCTitulo} className={fieldBg} />
               </div>
               <div className="col-span-2">
                 <Label className="text-[10px]">Data Pagamento *</Label>
