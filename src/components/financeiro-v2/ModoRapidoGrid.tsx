@@ -9,7 +9,13 @@ import { Input } from '@/components/ui/input';
 import { Save, Plus, Trash2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import type { LancamentoV2Form, ContaBancariaV2, ClassificacaoItem } from '@/hooks/useFinanceiroV2';
-import { STATUS_LABEL as STATUS_LABEL_MAP } from '@/lib/statusOperacional';
+// PR-FIN-STATUS-UX-03A-2A — domínio financeiro oficial (dono único). Modo Rápido deixa de gravar o
+//   legado 'meta' e de importar statusOperacional (eixo cenario/compartilhado).
+import {
+  STATUS_FINANCEIRO_INICIAL,
+  STATUS_FINANCEIRO_OPCOES_MODAL,
+  deriveStatusFinanceiro as deriveStatus,
+} from '@/lib/financeiro/statusFinanceiro';
 
 interface RowData {
   id: string;
@@ -35,23 +41,18 @@ interface Props {
 }
 
 const TIPOS = ['1-Entradas', '2-Saídas', '3-Transferências'];
-const STATUS_LIST = ['meta', 'agendado', 'programado', 'realizado'];
-const STATUS_UI_LABEL: Record<string, string> = { meta: STATUS_LABEL_MAP.meta, agendado: 'Agendado', programado: STATUS_LABEL_MAP.programado, realizado: STATUS_LABEL_MAP.realizado };
+// PR-FIN-STATUS-UX-03A-2A — opções do dropdown vêm do domínio oficial (previsto/agendado/programado/
+//   realizado); sem 'meta', sem Conciliado. deriveStatus é o helper oficial (importado como alias).
+const STATUS_LIST = STATUS_FINANCEIRO_OPCOES_MODAL.map(o => o.value);
+const STATUS_UI_LABEL: Record<string, string> = Object.fromEntries(
+  STATUS_FINANCEIRO_OPCOES_MODAL.map(o => [o.value, o.label]),
+);
 
 const COLS = ['data_competencia', 'data_pagamento', 'tipo_operacao', 'conta_bancaria_id', 'descricao', 'valor', 'subcentro', 'status_transacao'] as const;
 type ColKey = typeof COLS[number];
 
 let rowCounter = 0;
 function newRowId() { return `row_${++rowCounter}_${Date.now()}`; }
-
-function deriveStatus(dataPagamento: string): string {
-  if (!dataPagamento) return 'meta';
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const d = new Date(dataPagamento + 'T00:00:00');
-  if (d > today) return 'agendado';
-  return 'programado';
-}
 
 function createEmptyRow(inherit?: Partial<RowData>): RowData {
   return {
@@ -63,7 +64,7 @@ function createEmptyRow(inherit?: Partial<RowData>): RowData {
     descricao: '',
     valor: '',
     subcentro: inherit?.subcentro || '',
-    status_transacao: inherit?.status_transacao || 'meta',
+    status_transacao: inherit?.status_transacao || STATUS_FINANCEIRO_INICIAL,   // PR-FIN-STATUS-UX-03A-2A — herda válido ou 'previsto' (era 'meta')
     macro_custo: inherit?.macro_custo || '',
     centro_custo: inherit?.centro_custo || '',
   };
@@ -193,7 +194,7 @@ export function ModoRapidoGrid({ fazendaId, contas, classificacoes, onSaveBatch,
         data_pagamento: r.data_pagamento || null,
         valor: Math.abs(parseFloat(r.valor)),
         tipo_operacao: r.tipo_operacao || '2-Saídas',
-        status_transacao: r.status_transacao || 'meta',
+        status_transacao: r.status_transacao || STATUS_FINANCEIRO_INICIAL,   // PR-FIN-STATUS-UX-03A-2A — 'previsto' (era 'meta')
         descricao: r.descricao,
         macro_custo: r.macro_custo,
         centro_custo: r.centro_custo,
