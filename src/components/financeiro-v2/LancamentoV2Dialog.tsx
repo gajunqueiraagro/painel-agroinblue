@@ -1,7 +1,15 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { normalizeStatusTransacao } from '@/lib/financeiro/v2Transferencia';
+// PR-FIN-STATUS-UX-03A-1 — domínio financeiro (dono único). normalizeStatusTransacao
+//   (v2Transferencia, compartilhado) mapeava 'previsto'→'meta'; o modal passa a usar o
+//   normalizador próprio do domínio (normalizeStatusModal), sem tocar o compartilhado.
+import {
+  STATUS_FINANCEIRO_OPCOES_MODAL,
+  STATUS_FINANCEIRO_INICIAL,
+  deriveStatusFinanceiro as deriveStatus,
+  normalizeStatusModal,
+} from '@/lib/financeiro/statusFinanceiro';
 import { TIPOS_DOCUMENTO, formatNFNumber, extractNFDigits, type TipoDocumento } from '@/lib/financeiro/documentoHelper';
 import { useCliente } from '@/contexts/ClienteContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -25,7 +33,6 @@ import type { LancamentoV2, LancamentoV2Form, ContaBancariaV2, ClassificacaoItem
 import type { Fazenda } from '@/contexts/FazendaContext';
 import { NovoFornecedorDialog } from './NovoFornecedorDialog';
 import { formatMoeda } from '@/lib/calculos/formatters';
-import { STATUS_LABEL } from '@/lib/statusOperacional';
 import { cn } from '@/lib/utils';
 import type { ExcelContext } from '@/v2/lib/mesa/buildExcelContext';
 
@@ -108,21 +115,9 @@ const ABAS_TAB: { value: AbaFinanceira; label: string }[] = [
   { value: 'documentos', label: 'Documentos' },
 ];
 
-const STATUS_OPTIONS = [
-  { value: 'meta', label: STATUS_LABEL.meta },
-  { value: 'agendado', label: 'Agendado' },
-  { value: 'programado', label: STATUS_LABEL.programado },
-  { value: 'realizado', label: STATUS_LABEL.realizado },
-];
-
-function deriveStatus(dataPagamento: string): string {
-  if (!dataPagamento) return 'meta';
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const d = new Date(dataPagamento + 'T00:00:00');
-  if (d > today) return 'agendado';
-  return 'programado';
-}
+// PR-FIN-STATUS-UX-03A-1 — opções do modal e deriveStatus vêm do domínio único
+//   (statusFinanceiro.ts): previsto/agendado/programado/realizado; sem Meta, sem Conciliado.
+const STATUS_OPTIONS = STATUS_FINANCEIRO_OPCOES_MODAL;
 
 function formatNotaFiscal(raw: string): string {
   const digits = raw.replace(/\D/g, '').slice(0, 9);
@@ -358,7 +353,13 @@ export function LancamentoV2Dialog({
   const operacaoAbrivel = !!operacaoId && operacaoTipo === 'compra';
   const [escopoNegocio, setEscopoNegocio] = useState('');
   const [tipoOperacao, setTipoOperacao] = useState('2-Saídas');
-  const [statusTransacao, setStatusTransacao] = useState('meta');
+  const [statusTransacao, setStatusTransacao] = useState<string>(STATUS_FINANCEIRO_INICIAL);   // PR-FIN-STATUS-UX-03A-1 — inicial 'previsto' (era 'meta')
+  // PR-FIN-STATUS-UX-03A-1 — anti-reclassificação silenciosa do legado 'meta':
+  //   statusOriginalRef = valor de status_transacao REALMENTE persistido no registro carregado (null p/ novo);
+  //   statusTouchedRef  = o usuário escolheu explicitamente outro valor no Select nesta abertura?
+  //   Ambos resetados a cada abertura no effect de init; statusTouchedRef só é ligado no onValueChange do Select.
+  const statusOriginalRef = useRef<string | null>(null);
+  const statusTouchedRef = useRef(false);
   const [valorDisplay, setValorDisplay] = useState('0,00');
   const [contaOrigemId, setContaOrigemId] = useState('');
   const [contaDestinoId, setContaDestinoId] = useState('');
@@ -383,6 +384,11 @@ export function LancamentoV2Dialog({
   // PR-U2c-1D: classMap + filteredSubcentros migraram para <PlanoSubcentroSelect />.
 
   useEffect(() => {
+    // PR-FIN-STATUS-UX-03A-1 — reset por abertura: guarda o status original persistido e zera o marcador
+    //   de interação ANTES de hidratar o formulário (a hidratação usa setStatusTransacao direto, nunca o
+    //   onValueChange do Select, então não é contada como escolha do usuário).
+    statusOriginalRef.current = lancamento?.status_transacao ?? null;
+    statusTouchedRef.current = false;
     if (lancamento) {
       setFazendaId(lancamento.fazenda_id);
       setSafraId(lancamento.safra_id ?? '');
@@ -397,7 +403,7 @@ export function LancamentoV2Dialog({
       setCentroCusto(lancamento.centro_custo || '');
       setEscopoNegocio(lancamento.escopo_negocio || '');
       setTipoOperacao(lancamento.tipo_operacao);
-      setStatusTransacao(normalizeStatusTransacao(lancamento.status_transacao));
+      setStatusTransacao(normalizeStatusModal(lancamento.status_transacao));   // PR-FIN-STATUS-UX-03A-1 — legado 'meta' exibe como 'previsto' (sem gravar)
       setValorDisplay(toBRL(Math.abs(lancamento.valor)));
       // For transfers: origin = conta_bancaria_id, destination = conta_destino_id
       // For entries: destination = conta_bancaria_id
@@ -485,7 +491,7 @@ export function LancamentoV2Dialog({
       setCentroCusto('');
       setEscopoNegocio('');
       setTipoOperacao('2-Saídas');
-      setStatusTransacao('meta');
+      setStatusTransacao(STATUS_FINANCEIRO_INICIAL);   // PR-FIN-STATUS-UX-03A-1 — era 'meta'
       setValorDisplay('0,00');
       setContaOrigemId('');
       setContaDestinoId('');
@@ -901,6 +907,14 @@ export function LancamentoV2Dialog({
     }
 
     // --- Single save (à vista) or EDIT ---
+    // PR-FIN-STATUS-UX-03A-1 — anti-reclassificação: se o registro carregado era legado 'meta' e o usuário
+    //   NÃO escolheu explicitamente outro valor no Select (a normalização visual meta→Previsto e mudanças
+    //   implícitas por outros campos NÃO contam), preserva 'meta' no payload. Escolha explícita de
+    //   Agendado/Programado/Realizado persiste o valor oficial (conversão permitida). Reescolher "Previsto"
+    //   (mesmo valor exibido) não dispara onValueChange no Select → mantém 'meta' (conversão dedicada futura).
+    const statusPersistido = (statusOriginalRef.current === 'meta' && !statusTouchedRef.current)
+      ? 'meta'
+      : statusTransacao;
     const form: LancamentoV2Form = {
       fazenda_id: fazendaIdEfetivo,
       conta_bancaria_id: contaBancariaId,
@@ -910,7 +924,7 @@ export function LancamentoV2Dialog({
       data_pagamento: dataPagamento || null,
       valor: Math.abs(valorNum),
       tipo_operacao: tipoOperacao,
-      status_transacao: statusTransacao,
+      status_transacao: statusPersistido,
       descricao,
       macro_custo: macroCusto,
       centro_custo: centroCusto,
@@ -973,6 +987,11 @@ export function LancamentoV2Dialog({
   const sectionClass = "rounded-lg border border-[hsl(var(--border))] bg-[hsl(210_33%_97%)] dark:bg-muted/20 px-3 py-1.5 space-y-1";
   const sectionTitleClass = "flex items-center gap-1.5 text-[11px] font-bold text-primary uppercase tracking-[0.08em]";
   const fieldBg = "bg-background border-[hsl(210_20%_80%)] focus-visible:border-primary focus-visible:ring-primary/20 focus-visible:shadow-[0_0_0_3px_hsl(var(--primary)/0.08)]";
+  // PR-FIN-STATUS-UX-03A-1 — fonte reduzida SÓ nos 3 DatePickers da Linha 1 (Competência/Vencimento/
+  //   Pagamento) para o ano caber (dd/MM/yyyy). text-[10px] vence o text-[12px] padrão do DatePicker
+  //   via twMerge (11px ainda encostava o ano no ícone); largura/grid/padding/altura/ícone inalterados;
+  //   componente compartilhado intocado.
+  const dateFieldCls = cn(fieldBg, "text-[10px]");
 
   return (
     <>
@@ -1210,7 +1229,7 @@ export function LancamentoV2Dialog({
               </div>
               <div className="col-span-2">
                 <Label className="text-[10px]">Data Competência *</Label>
-                <DatePicker value={dataCompetencia} onChange={setDataCompetencia} disabled={isOCTitulo} tabIndex={2} className={fieldBg} />
+                <DatePicker value={dataCompetencia} onChange={setDataCompetencia} disabled={isOCTitulo} tabIndex={2} className={dateFieldCls} />
               </div>
               {/* Data Vencimento — PR-FIN-MODAL-VENCIMENTO-02B: campo funcional (mesmo DatePicker de
                   Competência/Pagamento). Editável em lançamento manual; read-only para título OC
@@ -1218,15 +1237,15 @@ export function LancamentoV2Dialog({
                   data_pagamento. Contrato de Data Pagamento do manual permanece inalterado. */}
               <div className="col-span-2">
                 <Label className="text-[10px]">Data Vencimento</Label>
-                <DatePicker value={dataVencimento} onChange={setDataVencimento} disabled={isOCTitulo} className={fieldBg} />
+                <DatePicker value={dataVencimento} onChange={setDataVencimento} disabled={isOCTitulo} className={dateFieldCls} />
               </div>
               <div className="col-span-2">
                 <Label className="text-[10px]">Data Pagamento *</Label>
-                <DatePicker value={dataPagamento} onChange={handleDataPagamentoChange} disabled={lockedFields?.includes('data_pagamento')} tabIndex={3} className={fieldBg} />
+                <DatePicker value={dataPagamento} onChange={handleDataPagamentoChange} disabled={lockedFields?.includes('data_pagamento')} tabIndex={3} className={dateFieldCls} />
               </div>
               <div className="col-span-3">
                 <Label className="text-[10px]">Status *</Label>
-                <Select value={statusTransacao} onValueChange={setStatusTransacao}>
+                <Select value={statusTransacao} onValueChange={(v) => { statusTouchedRef.current = true; setStatusTransacao(v); }}>
                   <SelectTrigger tabIndex={4} className={cn("h-8", fieldBg)}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {STATUS_OPTIONS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}

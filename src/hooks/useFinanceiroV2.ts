@@ -8,6 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { sincronizarVinculosDoLancamento, recomputarStatusExtrato } from '@/lib/financeiro/conciliacaoSync';
 import { isTituloOC, detectarViolacoesEstruturaisOC } from '@/lib/financeiro/protecaoTituloOC';
+import { STATUS_FINANCEIRO_INICIAL, type StatusFiltroFinanceiro } from '@/lib/financeiro/statusFinanceiro';
 
 
 export interface LancamentoV2 {
@@ -143,7 +144,7 @@ export interface FiltrosV2 {
   conta_bancaria_id?: string;
   conta_destino_id?: string;
   tipo_operacao?: string;
-  status_transacao?: string;
+  status_transacoes?: StatusFiltroFinanceiro[];   // PR-FIN-STATUS-UX-03A-1 — multisseleção; vazio/ausente = Todos
   macro_custo?: string;
   grupo_custo?: string;
   centro_custo?: string;
@@ -418,7 +419,12 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       if (filtros.tipo_operacao) query = query.eq('tipo_operacao', filtros.tipo_operacao);
     }
 
-    if (filtros.status_transacao) query = query.eq('status_transacao', filtros.status_transacao);
+    // PR-FIN-STATUS-UX-03A-1 — filtro Status multisseleção: cada opção mapeia 1:1 ao valor persistido
+    //   (previsto/agendado/programado/realizado e o legado 'meta'). Vazio/ausente = Todos (sem restrição
+    //   de status). A exclusão estrutural `.neq('conciliado')` (acima) permanece intocada.
+    if (filtros.status_transacoes && filtros.status_transacoes.length > 0) {
+      query = query.in('status_transacao', filtros.status_transacoes);
+    }
     if (filtros.macro_custo) query = query.eq('macro_custo', filtros.macro_custo);
     if (filtros.grupo_custo) query = query.eq('grupo_custo', filtros.grupo_custo);
     if (filtros.centro_custo) query = query.eq('centro_custo', filtros.centro_custo);
@@ -534,7 +540,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       valor: form.valor,
       sinal,
       tipo_operacao: form.tipo_operacao,
-      status_transacao: form.status_transacao || 'meta',
+      status_transacao: form.status_transacao || STATUS_FINANCEIRO_INICIAL,   // PR-FIN-STATUS-UX-03A-1 — novo nasce 'previsto' (era 'meta')
       descricao: form.descricao || null,
       macro_custo: form.macro_custo || null,
       centro_custo: form.centro_custo || null,
@@ -726,7 +732,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       valor: form.valor,
       sinal,
       tipo_operacao: form.tipo_operacao,
-      status_transacao: form.status_transacao || 'meta',
+      status_transacao: form.status_transacao || STATUS_FINANCEIRO_INICIAL,   // PR-FIN-STATUS-UX-03A-1 — novo nasce 'previsto' (era 'meta')
       descricao: form.descricao || null,
       macro_custo: resolvedMacro,
       grupo_custo: resolvedGrupo,
@@ -979,7 +985,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       valor: lanc.valor,
       sinal: lanc.sinal,
       tipo_operacao: lanc.tipo_operacao,
-      status_transacao: 'meta',
+      status_transacao: STATUS_FINANCEIRO_INICIAL,   // PR-FIN-STATUS-UX-03A-1 — cópia nasce 'previsto' (era 'meta')
       descricao: lanc.descricao ? `(Cópia) ${lanc.descricao}` : '(Cópia)',
       macro_custo: lanc.macro_custo,
       centro_custo: lanc.centro_custo,

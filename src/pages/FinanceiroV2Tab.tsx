@@ -1,6 +1,13 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { formatMoeda } from '@/lib/calculos/formatters';
-import { STATUS_LABEL as CENTRAL_STATUS_LABEL } from '@/lib/statusOperacional';
+// PR-FIN-STATUS-UX-03A-1 — domínio financeiro (dono único); statusOperacional (compartilhado) não é mais usado aqui.
+import {
+  STATUS_FINANCEIRO_OPCOES_FILTRO,
+  STATUS_FILTRO_LABEL,
+  STATUS_FILTRO_COR,
+  isStatusFiltroFinanceiro,
+  type StatusFiltroFinanceiro,
+} from '@/lib/financeiro/statusFinanceiro';
 import { isTransferenciaTipo } from '@/lib/financeiro/v2Transferencia';
 import { validarLancamento } from '@/lib/financeiro/validacaoLancamento';
 import { formatDocumento } from '@/lib/financeiro/documentoHelper';
@@ -106,18 +113,9 @@ const MESES_LIST = [
   { value: '11', label: 'Nov' }, { value: '12', label: 'Dez' },
 ];
 
-const STATUS_LABELS: Record<string, string> = {
-  meta: CENTRAL_STATUS_LABEL.meta,
-  agendado: 'Agendado',
-  programado: CENTRAL_STATUS_LABEL.programado,
-  realizado: CENTRAL_STATUS_LABEL.realizado,
-};
-const STATUS_TEXT_COLORS: Record<string, string> = {
-  previsto: 'text-cyan-600 dark:text-cyan-400',
-  agendado: 'text-purple-600 dark:text-purple-400',
-  programado: 'text-blue-600 dark:text-blue-400',
-  realizado: 'text-green-700 dark:text-green-400 font-bold',
-};
+// PR-FIN-STATUS-UX-03A-1 — labels/cores da coluna Status vêm do domínio único
+//   (statusFinanceiro.ts): STATUS_FILTRO_LABEL / STATUS_FILTRO_COR. 'meta' legado exibe
+//   "Meta (legado)" muted (valor persistido NÃO é mascarado nem agrupado em Previsto).
 
 function fmtValor(v: number, sinal: number) {
   return formatMoeda(Math.abs(v) * (sinal >= 0 ? 1 : -1));
@@ -215,7 +213,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     fazendaId: defaultFazendaId,
     ano: filtroAnoInicial || String(currentYear),
     mesesSelecionados: filtroMesInicial ? [String(filtroMesInicial).padStart(2, '0')] : [] as string[],
-    statusTransacao: '__all__',
+    statusSelecionados: [],   // PR-FIN-STATUS-UX-03A-1 — multisseleção; vazio = Todos (never[] → StatusFiltroFinanceiro[])
     tipoOperacao: '__all__',
     contaOrigem: '__all__',
     contaDestino: '__all__',
@@ -232,7 +230,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const [fazendaId, setFazendaId] = useState(defaults.fazendaId);
   const [ano, setAno] = useState(defaults.ano);
   const [mesesSelecionados, setMesesSelecionados] = useState<string[]>(defaults.mesesSelecionados);
-  const [statusTransacao, setStatusTransacao] = useState(defaults.statusTransacao);
+  const [statusSelecionados, setStatusSelecionados] = useState<StatusFiltroFinanceiro[]>(defaults.statusSelecionados);
+  const [statusPopoverOpen, setStatusPopoverOpen] = useState(false);
   const [tipoOperacao, setTipoOperacao] = useState(defaults.tipoOperacao);
   const [contaOrigem, setContaOrigem] = useState(defaults.contaOrigem);
   const [contaDestino, setContaDestino] = useState(defaults.contaDestino);
@@ -262,7 +261,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
       if (f.fazendaId !== undefined) setFazendaId(f.fazendaId);
       if (f.ano !== undefined) setAno(f.ano);
       if (Array.isArray(f.mesesSelecionados)) setMesesSelecionados(f.mesesSelecionados);
-      if (f.statusTransacao !== undefined) setStatusTransacao(f.statusTransacao);
+      if (Array.isArray(f.statusSelecionados)) setStatusSelecionados(f.statusSelecionados.filter(isStatusFiltroFinanceiro));
       if (f.tipoOperacao !== undefined) setTipoOperacao(f.tipoOperacao);
       if (f.contaOrigem !== undefined) setContaOrigem(f.contaOrigem);
       if (f.contaDestino !== undefined) setContaDestino(f.contaDestino);
@@ -454,7 +453,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     if (drillFilters.ano) setAno(drillFilters.ano);
     if (drillFilters.mes) setMesesSelecionados([String(drillFilters.mes).padStart(2, '0')]);
     if (drillFilters.tipo) setTipoOperacao(drillFilters.tipo);
-    if (drillFilters.statusTransacao) setStatusTransacao(drillFilters.statusTransacao);
+    if (drillFilters.statusTransacao && isStatusFiltroFinanceiro(drillFilters.statusTransacao)) setStatusSelecionados([drillFilters.statusTransacao]);
     if (drillFilters.macro) setMacroFiltro(drillFilters.macro);
     if (drillFilters.grupo) setGrupoFiltro(drillFilters.grupo);
     if (drillFilters.centro) setCentroFiltro(drillFilters.centro);
@@ -500,13 +499,13 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     conta_bancaria_id: contaOrigem !== '__all__' ? contaOrigem : undefined,
     conta_destino_id: contaDestino !== '__all__' ? contaDestino : undefined,
     tipo_operacao: tipoOperacao !== '__all__' ? tipoOperacao : undefined,
-    status_transacao: statusTransacao !== '__all__' ? statusTransacao : undefined,
+    status_transacoes: statusSelecionados.length > 0 ? statusSelecionados : undefined,   // PR-FIN-STATUS-UX-03A-1
     macro_custo: macroFiltro !== '__all__' ? macroFiltro : undefined,
     grupo_custo: grupoFiltro !== '__all__' ? grupoFiltro : undefined,
     centro_custo: centroFiltro !== '__all__' ? centroFiltro : undefined,
     subcentro: subcentroFiltro !== '__all__' ? subcentroFiltro : undefined,
     dimensao: dataPor,   // PR-FIN-GRADE-DATAS-03 — dimensão temporal soberana (default 'financeira')
-  }), [fazendaId, ano, mesesSelecionados, contaOrigem, contaDestino, tipoOperacao, statusTransacao, macroFiltro, grupoFiltro, centroFiltro, subcentroFiltro, dataPor]);
+  }), [fazendaId, ano, mesesSelecionados, contaOrigem, contaDestino, tipoOperacao, statusSelecionados, macroFiltro, grupoFiltro, centroFiltro, subcentroFiltro, dataPor]);
 
   useEffect(() => {
     hook.loadLancamentos(filtros, 0);
@@ -835,11 +834,24 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
       ? mesesSelecionados.map(m => MESES_LIST.find(x => x.value === m)?.label).join(', ')
       : `${mesesSelecionados.length} meses`;
 
+  // PR-FIN-STATUS-UX-03A-1 — filtro Status multisseleção (mesmo padrão inline do filtro de meses).
+  const toggleStatus = (val: StatusFiltroFinanceiro) => {
+    setStatusSelecionados(prev =>
+      prev.includes(val) ? prev.filter(s => s !== val) : [...prev, val]
+    );
+  };
+
+  const statusLabel = statusSelecionados.length === 0
+    ? 'Todos'
+    : statusSelecionados.length === 1
+      ? STATUS_FILTRO_LABEL[statusSelecionados[0]]
+      : `${statusSelecionados.length} selecionados`;
+
   const handleLimparFiltros = () => {
     const d = getDefaults();
     setAno(d.ano);
     setMesesSelecionados([]);
-    setStatusTransacao('__all__');
+    setStatusSelecionados([]);   // PR-FIN-STATUS-UX-03A-1 — Todos
     setFazendaId(d.fazendaId);
     setTipoOperacao('__all__');
     setContaOrigem('__all__');
@@ -994,16 +1006,29 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 </div>
                 <div>
                   <label className={lblCls}>Status</label>
-                  <Select value={statusTransacao} onValueChange={setStatusTransacao}>
-                    <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2]`}><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__all__" className={itemCls}>Todos</SelectItem>
-                      <SelectItem value="realizado" className={itemCls}>{CENTRAL_STATUS_LABEL.realizado}</SelectItem>
-                      <SelectItem value="agendado" className={itemCls}>Agendado</SelectItem>
-                      <SelectItem value="programado" className={itemCls}>{CENTRAL_STATUS_LABEL.programado}</SelectItem>
-                      <SelectItem value="previsto" className={itemCls}>Previsto</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  {/* PR-FIN-STATUS-UX-03A-1 — Status multisseleção (mesmo padrão do filtro de meses). */}
+                  <Popover open={statusPopoverOpen} onOpenChange={setStatusPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="h-6 text-[10px] justify-between font-normal px-1.5 w-full bg-white border-[#C9D4E2]">
+                        {statusLabel}
+                        <ChevronsUpDown className="h-2.5 w-2.5 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-44 p-1.5" align="start">
+                      <div className="flex justify-between mb-0.5">
+                        <button className="text-[9px] text-primary hover:underline" onClick={() => setStatusSelecionados([])}>Todos</button>
+                        <button className="text-[9px] text-primary hover:underline" onClick={() => setStatusSelecionados(STATUS_FINANCEIRO_OPCOES_FILTRO.map(o => o.value))}>Marcar todos</button>
+                      </div>
+                      <div className="grid grid-cols-1 gap-0.5">
+                        {STATUS_FINANCEIRO_OPCOES_FILTRO.map(o => (
+                          <label key={o.value} className="flex items-center gap-0.5 text-[10px] cursor-pointer hover:bg-muted rounded px-0.5 py-0.5">
+                            <Checkbox checked={statusSelecionados.includes(o.value)} onCheckedChange={() => toggleStatus(o.value)} className="h-2.5 w-2.5" />
+                            {o.label}
+                          </label>
+                        ))}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                 </div>
               </div>
 
@@ -1222,16 +1247,29 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 </div>
                 <div>
                   <label className={lblCls}>Status</label>
-                  <Select value={statusTransacao} onValueChange={setStatusTransacao}>
-                    <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F]`}><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__all__" className={itemCls}>Todos</SelectItem>
-                      <SelectItem value="realizado" className={itemCls}>{CENTRAL_STATUS_LABEL.realizado}</SelectItem>
-                      <SelectItem value="agendado" className={itemCls}>Agendado</SelectItem>
-                      <SelectItem value="programado" className={itemCls}>{CENTRAL_STATUS_LABEL.programado}</SelectItem>
-                      <SelectItem value="previsto" className={itemCls}>Previsto</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  {/* PR-FIN-STATUS-UX-03A-1 — Status multisseleção (mesmo padrão do filtro de meses). */}
+                  <Popover open={statusPopoverOpen} onOpenChange={setStatusPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="h-6 text-[10px] justify-between font-normal px-1.5 w-full bg-white border-[#C9D4E2] hover:border-[#AFC2D8]">
+                        {statusLabel}
+                        <ChevronsUpDown className="h-2.5 w-2.5 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-44 p-1.5" align="start">
+                      <div className="flex justify-between mb-0.5">
+                        <button className="text-[9px] text-primary hover:underline" onClick={() => setStatusSelecionados([])}>Todos</button>
+                        <button className="text-[9px] text-primary hover:underline" onClick={() => setStatusSelecionados(STATUS_FINANCEIRO_OPCOES_FILTRO.map(o => o.value))}>Marcar todos</button>
+                      </div>
+                      <div className="grid grid-cols-1 gap-0.5">
+                        {STATUS_FINANCEIRO_OPCOES_FILTRO.map(o => (
+                          <label key={o.value} className="flex items-center gap-0.5 text-[10px] cursor-pointer hover:bg-muted rounded px-0.5 py-0.5">
+                            <Checkbox checked={statusSelecionados.includes(o.value)} onCheckedChange={() => toggleStatus(o.value)} className="h-2.5 w-2.5" />
+                            {o.label}
+                          </label>
+                        ))}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                 </div>
                 <div>
                   <label className={lblCls}>Fazenda</label>
@@ -1452,8 +1490,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                   sortedLancamentos.map(l => {
                     const fornNome = fornecedoresMap.get(l.favorecido_id || '');
                     const stKey = (l.status_transacao || '').toLowerCase();
-                    const stLabel = STATUS_LABELS[stKey] || l.status_transacao || '-';
-                    const stColor = STATUS_TEXT_COLORS[stKey] || 'text-muted-foreground';
+                    const stLabel = STATUS_FILTRO_LABEL[stKey] || l.status_transacao || '-';
+                    const stColor = STATUS_FILTRO_COR[stKey] || 'text-muted-foreground';
                     const isHistoricoReadOnly = l.origem_lancamento === 'importacao_historica';
                     const isParcelaFinanciamento = l.origem_lancamento === 'parcela_financiamento' || (l as any).origem_tipo === 'financiamento_captacao' || (l.origem_lancamento === 'financiamento' && !!(l as any).financiamento_id);
                     const isImported = !!l.lote_importacao_id;
