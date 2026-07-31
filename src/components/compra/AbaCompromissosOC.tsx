@@ -3,7 +3,6 @@ import type { OcCompromissosApi, CompromissoResumo, ParcelaMaterializacao, Criar
 import { classificarLotesCompra, type LoteOC } from '@/hooks/useOperacaoLiquidacao';
 import { usePlanoContasOC } from '@/hooks/usePlanoContasOC';
 import { useComponentesFinanceiros } from '@/hooks/useComponentesFinanceiros';
-import { parseNumericValue, formatCurrencyInput } from '@/lib/calculos/abate';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -15,12 +14,66 @@ import { SearchableSelect } from '@/components/ui/searchable-select';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Plus, AlertTriangle, Trash2 } from 'lucide-react';
 
-// PR-OC-UI-FIN-VIEW / FIX-01 — aba Financeiro do modelo de compromissos (Blocos A/B/C). Consome APENAS
-//   useOcCompromissos (totais/flags/modo soberanos da view; React nunca soma). Escrita via os 3 writers
-//   homologados, com oc.versao SEMPRE explícita. Sem estorno/renegociação/materialização em lote.
+// PR-OC-UI-FIN-VIEW / FIX-01 / FIX-01b — aba Financeiro do modelo de compromissos (Blocos A/B/C).
+//   Consome APENAS useOcCompromissos (totais/flags/modo soberanos da view; React nunca soma). Escrita
+//   via os 3 writers homologados, com oc.versao SEMPRE explícita. Sem estorno/renegociação/lote.
 
-const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtData = (iso: string | null) => (iso ? iso.split('-').reverse().join('/') : '—');
+const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+
+// FIX-01b — parser monetário NATURAL: não força centavos durante a digitação. Retorna null p/ vazio/inválido
+//   (nunca NaN). Regra de separadores: último separador = decimal quando há '.' e ','; só ',' = decimal;
+//   só '.' = decimal se 1-2 dígitos após, senão milhar (ex.: 10.000). Arredonda só na normalização final.
+function parseMoeda(raw: string | null | undefined): number | null {
+  if (raw == null) return null;
+  const s = raw.replace(/[^\d.,]/g, '');           // remove R$, espaços, letras — mantém dígitos . ,
+  if (s === '') return null;
+  const hasDot = s.includes('.'), hasComma = s.includes(',');
+  let intRaw = '', decRaw = '';
+  if (hasDot && hasComma) {
+    const last = Math.max(s.lastIndexOf('.'), s.lastIndexOf(','));
+    intRaw = s.slice(0, last).replace(/[.,]/g, '');
+    decRaw = s.slice(last + 1).replace(/[.,]/g, '');
+  } else if (hasComma) {
+    const i = s.lastIndexOf(',');
+    intRaw = s.slice(0, i).replace(/,/g, '');
+    decRaw = s.slice(i + 1).replace(/,/g, '');
+  } else if (hasDot) {
+    const i = s.lastIndexOf('.');
+    const dec = s.slice(i + 1);
+    if (dec.length === 1 || dec.length === 2) { intRaw = s.slice(0, i).replace(/\./g, ''); decRaw = dec; }
+    else { intRaw = s.replace(/\./g, ''); decRaw = ''; }
+  } else {
+    intRaw = s;
+  }
+  if (intRaw === '' && decRaw === '') return null;
+  const n = Number(`${intRaw === '' ? '0' : intRaw}.${decRaw === '' ? '0' : decRaw}`);
+  return Number.isFinite(n) ? n : null;
+}
+
+// Campo monetário: texto de edição livre enquanto foca; normaliza p/ BRL (2 casas) no blur; emite o número.
+function CampoMoeda({ valor, onChange, placeholder, className }: {
+  valor: number | null; onChange: (n: number | null) => void; placeholder?: string; className?: string;
+}) {
+  const [texto, setTexto] = useState(valor != null ? brl(valor) : '');
+  const [editando, setEditando] = useState(false);
+  useEffect(() => { if (!editando) setTexto(valor != null ? brl(valor) : ''); }, [valor, editando]);
+  return (
+    <Input
+      inputMode="decimal" value={texto} placeholder={placeholder} className={className}
+      onFocus={() => setEditando(true)}
+      onChange={(e) => { setTexto(e.target.value); onChange(parseMoeda(e.target.value)); }}
+      onBlur={() => {
+        setEditando(false);
+        const n = parseMoeda(texto);
+        const r = n != null ? round2(n) : null;
+        onChange(r);
+        setTexto(r != null ? brl(r) : '');
+      }}
+    />
+  );
+}
 
 interface Props {
   ocApi: OcCompromissosApi;
@@ -28,11 +81,11 @@ interface Props {
   clienteId: string | null;
   tipoOperacao: string | null;        // 'compra'
   fornecedores: { id: string; nome: string }[];
-  valorAcordado: number | null;       // FIX item 3 — default do principal
-  lotes: LoteOC[];                     // FIX item 4 — sugestão de subcentro por categorias
+  valorAcordado: number | null;       // default do principal
+  lotes: LoteOC[];                     // sugestão de subcentro por categorias
   contraparteId: string | null;       // descrição rica
-  dataOperacao: string | null;        // FIX item 6 — data da compra
-  dataChegada: string | null;         // FIX item 6 — data de chegada (recebimento)
+  dataOperacao: string | null;        // contexto: data da compra
+  dataChegada: string | null;         // contexto: data de chegada (recebimento)
   darkSelectClass: string;
 }
 
@@ -47,7 +100,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
   const [programarAberto, setProgramarAberto] = useState(false);
   const [confirmarParcela, setConfirmarParcela] = useState<ParcelaMaterializacao | null>(null);
 
-  // Seleção ESTÁVEL por compromisso_id (item 9): preserva o selecionado após refetch; senão 1º não-cancelado.
+  // Seleção ESTÁVEL por compromisso_id: preserva o selecionado após refetch; senão 1º não-cancelado.
   useEffect(() => {
     if (compromissos.length === 0) { if (selectedId !== null) setSelectedId(null); return; }
     if (!compromissos.some(c => c.compromissoId === selectedId)) {
@@ -63,7 +116,6 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
   );
   const podeEscrever = !bloqueado && versao != null && !saving;
 
-  // Sugestão de subcentro do principal (item 4): derivada das categorias dos lotes (1 sexo → subcentro; misto → nenhum).
   const sugestaoSubcentro = useMemo(() => {
     const c = classificarLotesCompra(lotes);
     if (c.status !== 'ok') return '';
@@ -71,7 +123,6 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
     return subs.size === 1 ? Array.from(subs)[0] : '';
   }, [lotes]);
 
-  // Descrição rica default (bônus): "Compra <qtd> <categorias> — <contraparte>".
   const descricaoDefault = useMemo(() => {
     const qtd = lotes.reduce((s, l) => s + (l.qtd ?? 0), 0);
     const cats = Array.from(new Set(lotes.map(l => l.categoria).filter(Boolean)));
@@ -97,16 +148,15 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
   }
   async function materializar(p: ParcelaMaterializacao) {
     if (versao == null || !p.programacaoId || !p.parcelaId) return;
-    setConfirmarParcela(null);                       // item 1 — fecha JÁ (nunca congela)
+    setConfirmarParcela(null);                       // fecha JÁ (nunca congela)
     try {
       await ocApi.materializarParcela(versao, p.programacaoId, p.parcelaId);
-      setRecemMaterializada(p.parcelaId);            // item 9 — destaque da recém-materializada
+      setRecemMaterializada(p.parcelaId);            // destaque da recém-materializada
     } catch { /* toast pelo hook */ }
   }
 
   return (
     <div className="space-y-2 min-w-0 text-[12px]">
-      {/* Contexto (item 6) + Resumo soberano da view (zero soma em React) */}
       {resumoOperacao && (
         <div className="rounded-md border bg-card p-1.5 shadow-sm">
           <div className="flex items-center justify-between mb-1">
@@ -134,7 +184,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
         </div>
       )}
 
-      {/* ===== BLOCO A — COMPROMISSOS ===== */}
+      {/* ===== BLOCO A — COMPROMISSOS (FIX-01b: densidade p/ notebook 13", sem scroll horizontal) ===== */}
       <div className="rounded-md border bg-card p-1.5 shadow-sm">
         <div className="flex items-center justify-between mb-1">
           <div className="text-[11px] font-semibold text-muted-foreground">Compromissos</div>
@@ -152,37 +202,40 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-[11px] tabular-nums">
+            <table className="w-full text-[10px] tabular-nums">
               <thead>
-                <tr className="text-left text-[10px] text-muted-foreground border-b">
-                  <th className="py-0.5 pr-2">Natureza/Comp.</th>
-                  <th className="py-0.5 pr-2">Favorecido</th>
-                  <th className="py-0.5 pr-2 text-right">Valor</th>
-                  <th className="py-0.5 pr-2 text-right">Program.</th>
-                  <th className="py-0.5 pr-2 text-right">A prog.</th>
-                  <th className="py-0.5 pr-2 text-right">Materializ.</th>
-                  <th className="py-0.5 pr-2 text-right">Liquid.</th>
-                  <th className="py-0.5 pr-2 text-right">Saldo fin.</th>
-                  <th className="py-0.5 pr-2">Status</th>
-                  <th className="py-0.5 pr-1"></th>
+                <tr className="text-left text-[9px] text-muted-foreground border-b">
+                  <th className="py-0.5 pr-1.5">Nat./Comp.</th>
+                  <th className="py-0.5 pr-1.5">Favorecido</th>
+                  <th className="py-0.5 pr-1.5 text-right whitespace-nowrap">Valor</th>
+                  <th className="py-0.5 pr-1.5 text-right whitespace-nowrap">Prog.</th>
+                  <th className="py-0.5 pr-1.5 text-right whitespace-nowrap">A prog.</th>
+                  <th className="py-0.5 pr-1.5 text-right whitespace-nowrap">Mat.</th>
+                  <th className="py-0.5 pr-1.5 text-right whitespace-nowrap">Liq.</th>
+                  <th className="py-0.5 pr-1.5 text-right whitespace-nowrap">Saldo</th>
+                  <th className="py-0.5 pr-1.5">Status</th>
+                  <th className="py-0.5 pr-0.5"></th>
                 </tr>
               </thead>
               <tbody>
-                {compromissos.map(c => (
-                  <tr key={c.compromissoId ?? ''} onClick={() => setSelectedId(c.compromissoId)}
-                    className={`border-b cursor-pointer hover:bg-muted/50 ${selectedId === c.compromissoId ? 'bg-muted' : ''}`}>
-                    <td className="py-0.5 pr-2">{c.natureza ?? '—'}/{c.componente ?? '—'}</td>
-                    <td className="py-0.5 pr-2">{fornecedores.find(f => f.id === c.favorecidoId)?.nome ?? (c.favorecidoId ? '—' : '')}</td>
-                    <td className="py-0.5 pr-2 text-right">{brl(c.valorCompromisso)}</td>
-                    <td className="py-0.5 pr-2 text-right">{brl(c.totalProgramado)}</td>
-                    <td className="py-0.5 pr-2 text-right">{brl(c.saldoAProgramar)}</td>
-                    <td className="py-0.5 pr-2 text-right">{brl(c.totalMaterializado)}</td>
-                    <td className="py-0.5 pr-2 text-right">{brl(c.totalLiquidado)}</td>
-                    <td className="py-0.5 pr-2 text-right">{brl(c.saldoFinanceiro)}</td>
-                    <td className="py-0.5 pr-2"><Badge variant={badgeStatusCompromisso(c.status)} className="text-[9px] px-1">{c.status}</Badge></td>
-                    <td className="py-0.5 pr-1 text-right">{c.temDivergencia && <AlertTriangle className="h-3 w-3 text-amber-600 inline" aria-label="divergência" />}</td>
-                  </tr>
-                ))}
+                {compromissos.map(c => {
+                  const favNome = fornecedores.find(f => f.id === c.favorecidoId)?.nome ?? (c.favorecidoId ? '—' : '');
+                  return (
+                    <tr key={c.compromissoId ?? ''} onClick={() => setSelectedId(c.compromissoId)}
+                      className={`border-b cursor-pointer hover:bg-muted/50 ${selectedId === c.compromissoId ? 'bg-muted' : ''}`}>
+                      <td className="py-0.5 pr-1.5 whitespace-nowrap">{c.natureza ?? '—'}/{c.componente ?? '—'}</td>
+                      <td className="py-0.5 pr-1.5 max-w-[110px] truncate" title={favNome}>{favNome}</td>
+                      <td className="py-0.5 pr-1.5 text-right whitespace-nowrap">{brl(c.valorCompromisso)}</td>
+                      <td className="py-0.5 pr-1.5 text-right whitespace-nowrap">{brl(c.totalProgramado)}</td>
+                      <td className="py-0.5 pr-1.5 text-right whitespace-nowrap">{brl(c.saldoAProgramar)}</td>
+                      <td className="py-0.5 pr-1.5 text-right whitespace-nowrap">{brl(c.totalMaterializado)}</td>
+                      <td className="py-0.5 pr-1.5 text-right whitespace-nowrap">{brl(c.totalLiquidado)}</td>
+                      <td className="py-0.5 pr-1.5 text-right whitespace-nowrap">{brl(c.saldoFinanceiro)}</td>
+                      <td className="py-0.5 pr-1.5"><Badge variant={badgeStatusCompromisso(c.status)} className="text-[9px] px-1">{c.status}</Badge></td>
+                      <td className="py-0.5 pr-0.5 text-right">{c.temDivergencia && <AlertTriangle className="h-3 w-3 text-amber-600 inline" aria-label="divergência" />}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -224,7 +277,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
                     <tr key={p.parcelaId ?? ''} className={`border-b ${recemMaterializada === p.parcelaId ? 'bg-green-50 dark:bg-green-950/30' : ''}`}>
                       <td className="py-0.5 pr-2">{p.sequencia}</td>
                       <td className="py-0.5 pr-2">{fmtData(p.vencimento)}</td>
-                      <td className="py-0.5 pr-2 text-right">{brl(p.valor)}</td>
+                      <td className="py-0.5 pr-2 text-right whitespace-nowrap">{brl(p.valor)}</td>
                       <td className="py-0.5 pr-2"><Badge variant={badgeStatusParcela(p.status)} className="text-[9px] px-1">{p.status}</Badge></td>
                       <td className="py-0.5 pr-2">
                         {p.tituloId
@@ -279,7 +332,7 @@ function ResumoCard({ rotulo, valor }: { rotulo: string; valor: number }) {
   return (
     <div className="rounded border bg-muted/30 px-1.5 py-0.5">
       <div className="text-[9px] text-muted-foreground">{rotulo}</div>
-      <div className="text-[12px] font-semibold tabular-nums">{brl(valor)}</div>
+      <div className="text-[12px] font-semibold tabular-nums whitespace-nowrap">{brl(valor)}</div>
     </div>
   );
 }
@@ -294,20 +347,20 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
   const comps = useComponentesFinanceiros();
   const [natureza, setNatureza] = useState<'principal' | 'obrigacao'>('principal');
   const [componente, setComponente] = useState('');
-  const [valor, setValor] = useState('');
+  const [valor, setValor] = useState<number | null>(null);
   const [subcentro, setSubcentro] = useState('');
   const [favorecidoId, setFavorecidoId] = useState('');
   const [descricao, setDescricao] = useState('');
 
-  // Defaults por natureza: principal pré-carrega valor acordado (item 3), subcentro sugerido (item 4) e descrição rica.
+  // Defaults por natureza: principal pré-carrega valor acordado, subcentro sugerido e descrição rica.
   useEffect(() => {
     setComponente('');
     if (natureza === 'principal') {
-      setValor(valorAcordado != null ? formatCurrencyInput(valorAcordado) : '');
+      setValor(valorAcordado);
       setSubcentro(sugestaoSubcentro);
       setDescricao(descricaoDefault);
     } else {
-      setValor(''); setSubcentro(''); setDescricao('');
+      setValor(null); setSubcentro(''); setDescricao('');
     }
   }, [natureza, valorAcordado, sugestaoSubcentro, descricaoDefault]);
 
@@ -319,8 +372,7 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
     return Array.from(set).sort().map(s => ({ value: s, label: s }));
   }, [plano.rows, planoTipo]);
 
-  const valorNum = parseNumericValue(valor);
-  const podeSubmeter = !!componente && valorNum > 0 && !!subcentro && !saving;
+  const podeSubmeter = !!componente && valor != null && valor > 0 && !!subcentro && !saving;
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
@@ -359,7 +411,7 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
           <div className="grid grid-cols-2 gap-2">
             <div>
               <Label className="text-[11px]">Valor total *</Label>
-              <Input inputMode="decimal" value={valor} onChange={(e) => setValor(formatCurrencyInput(e.target.value))} placeholder="R$ 0,00" className="mt-0.5 h-8 text-[12px]" />
+              <CampoMoeda valor={valor} onChange={setValor} placeholder="R$ 0,00" className="mt-0.5 h-8 text-[12px]" />
             </div>
             <div>
               <Label className="text-[11px]">Favorecido</Label>
@@ -378,7 +430,7 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
         <DialogFooter>
           <Button variant="outline" size="sm" onClick={onClose}>Cancelar</Button>
           <Button size="sm" disabled={!podeSubmeter}
-            onClick={() => onSubmit({ natureza, componente, valor_total: valorNum, subcentro, favorecido_id: favorecidoId || null, descricao: descricao || null })}>
+            onClick={() => { if (componente && valor != null && valor > 0 && subcentro) onSubmit({ natureza, componente, valor_total: valor, subcentro, favorecido_id: favorecidoId || null, descricao: descricao || null }); }}>
             Criar
           </Button>
         </DialogFooter>
@@ -392,22 +444,21 @@ function ProgramarDialog({ onClose, onSubmit, saving, valorCompromisso, valorAco
   onClose: () => void; onSubmit: (p: ProgramarParcelaInput[]) => void; saving: boolean;
   valorCompromisso: number; valorAcordado: number | null; totalComprometido: number;
 }) {
-  const [linhas, setLinhas] = useState<{ valor: string; vencimento: string }[]>([{ valor: '', vencimento: '' }]);
+  const [linhas, setLinhas] = useState<{ valor: number | null; vencimento: string }[]>([{ valor: null, vencimento: '' }]);
 
-  const soma = useMemo(() => Math.round(linhas.reduce((s, l) => s + (parseNumericValue(l.valor) || 0), 0) * 100) / 100, [linhas]);
-  const todasComValor = linhas.length > 0 && linhas.every(l => parseNumericValue(l.valor) > 0);
-  const podeSubmeter = todasComValor && soma <= Math.round(valorCompromisso * 100) / 100 && !saving;
-  const restanteOC = (valorAcordado ?? 0) - totalComprometido;   // item 5
+  const soma = useMemo(() => round2(linhas.reduce((s, l) => s + (l.valor ?? 0), 0)), [linhas]);
+  const todasComValor = linhas.length > 0 && linhas.every(l => l.valor != null && l.valor > 0);
+  const podeSubmeter = todasComValor && soma <= round2(valorCompromisso) && !saving;
+  const restanteOC = (valorAcordado ?? 0) - totalComprometido;
 
-  const setLinha = (i: number, campo: 'valor' | 'vencimento', v: string) =>
-    setLinhas(prev => prev.map((l, idx) => (idx === i ? { ...l, [campo]: v } : l)));
+  const setValorLinha = (i: number, n: number | null) => setLinhas(prev => prev.map((l, idx) => (idx === i ? { ...l, valor: n } : l)));
+  const setVencLinha = (i: number, v: string) => setLinhas(prev => prev.map((l, idx) => (idx === i ? { ...l, vencimento: v } : l)));
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="max-w-md">
         <DialogHeader><DialogTitle>Programar parcelas</DialogTitle></DialogHeader>
         <div className="space-y-2">
-          {/* item 5 — resumo OC × comprometido × restante, além do Σ parcelas × compromisso */}
           <div className="grid grid-cols-2 gap-1.5 text-[11px]">
             <div className="rounded border bg-muted/30 px-1.5 py-0.5"><span className="text-muted-foreground">OC (acordado): </span><b>{valorAcordado != null ? brl(valorAcordado) : '—'}</b></div>
             <div className="rounded border bg-muted/30 px-1.5 py-0.5"><span className="text-muted-foreground">Comprometido: </span><b>{brl(totalComprometido)}</b></div>
@@ -419,11 +470,11 @@ function ProgramarDialog({ onClose, onSubmit, saving, valorCompromisso, valorAco
               <div className="text-[11px] text-muted-foreground pb-2">{i + 1}</div>
               <div>
                 <Label className="text-[10px]">Valor</Label>
-                <Input inputMode="decimal" value={l.valor} onChange={(e) => setLinha(i, 'valor', formatCurrencyInput(e.target.value))} placeholder="R$ 0,00" className="mt-0.5 h-8 text-[12px]" />
+                <CampoMoeda valor={l.valor} onChange={(n) => setValorLinha(i, n)} placeholder="R$ 0,00" className="mt-0.5 h-8 text-[12px]" />
               </div>
               <div>
                 <Label className="text-[10px]">Vencimento</Label>
-                <DatePicker value={l.vencimento} onChange={(v) => setLinha(i, 'vencimento', v)} size="compact" />
+                <DatePicker value={l.vencimento} onChange={(v) => setVencLinha(i, v)} size="compact" />
               </div>
               <Button variant="ghost" size="sm" className="h-8 w-8 p-0" disabled={linhas.length === 1}
                 onClick={() => setLinhas(prev => prev.filter((_, idx) => idx !== i))} aria-label="remover parcela">
@@ -431,17 +482,17 @@ function ProgramarDialog({ onClose, onSubmit, saving, valorCompromisso, valorAco
               </Button>
             </div>
           ))}
-          <Button variant="outline" size="sm" className="h-7 text-[12px]" onClick={() => setLinhas(prev => [...prev, { valor: '', vencimento: '' }])}>
+          <Button variant="outline" size="sm" className="h-7 text-[12px]" onClick={() => setLinhas(prev => [...prev, { valor: null, vencimento: '' }])}>
             <Plus className="h-3.5 w-3.5 mr-1" /> Adicionar parcela
           </Button>
-          {soma > Math.round(valorCompromisso * 100) / 100 && (
+          {soma > round2(valorCompromisso) && (
             <div className="text-[11px] text-destructive">A soma das parcelas excede o valor do compromisso.</div>
           )}
         </div>
         <DialogFooter>
           <Button variant="outline" size="sm" onClick={onClose}>Cancelar</Button>
           <Button size="sm" disabled={!podeSubmeter}
-            onClick={() => onSubmit(linhas.map((l, i) => ({ sequencia: i + 1, valor: parseNumericValue(l.valor), vencimento: l.vencimento || null })))}>
+            onClick={() => { if (podeSubmeter) onSubmit(linhas.map((l, i) => ({ sequencia: i + 1, valor: l.valor ?? 0, vencimento: l.vencimento || null }))); }}>
             Programar
           </Button>
         </DialogFooter>
