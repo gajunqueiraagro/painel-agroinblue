@@ -3775,6 +3775,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     documentosApi,
     liquidacaoApi,
     ocStatusComercial,
+    ocDataOperacao: data,   // FIX-01 item 6 — data da compra p/ contexto da aba Financeiro nova
     ocEntregaEncerrada,
     // PR-OC-EDIT-01A — editabilidade por estado real (ADR Soberania Financeira):
     //   somenteLeitura TOTAL em: fechada, cancelada OU programada/rascunho COM título materializado.

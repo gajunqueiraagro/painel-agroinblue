@@ -86,6 +86,7 @@ export interface CompraModalShellProps {
   documentosApi?: DocumentosApi;        // DOC-UI-01: documentos fiscais (só em modo OC)
   liquidacaoApi?: LiquidacaoApi;        // LIQ-UI-01: obrigações e liquidação (só em modo OC)
   ocStatusComercial?: string | null;    // 'programada' | 'fechada' | 'cancelada'
+  ocDataOperacao?: string | null;       // FIX-01 item 6 — data da compra (contexto da aba Financeiro nova)
   ocEntregaEncerrada?: boolean;
   somenteLeitura?: boolean;             // read-only TOTAL (fechada/cancelada OU título materializado)
   aberturaExistente?: boolean;          // PR-OC-EDIT-01A — edição de operação existente (01A: sem lifecycle/downstream)
@@ -135,6 +136,8 @@ export function CompraModalShell(api: CompraModalShellProps) {
   //   existente (01A: writes ficam para frentes próprias); cabeçalho/Negociação usam api.somenteLeitura
   //   (que já é TOTAL em fechada/cancelada OU título materializado).
   const roDownstream = !!(api.somenteLeitura || api.aberturaExistente);
+  // FIX-01 item 6 — data de chegada = 1ª movimentação de recebimento (referência de contexto).
+  const dataChegada = (api.recebimentoApi?.movimentacoes ?? []).map(m => m.data).filter(Boolean).sort()[0] ?? null;
   const [fluxoNeg, setFluxoNeg] = useState<null | 'salvando' | 'concluindo'>(null);   // fluxo "Concluir lotes e continuar"
 
   // Guarda de completude (UI) — orienta o fluxo; NÃO substitui a validação oficial do backend nem
@@ -282,6 +285,8 @@ export function CompraModalShell(api: CompraModalShellProps) {
               clienteId={api.liquidacaoApi.clienteId}
               rascunho={api.ocRascunho}
               statusComercial={api.ocStatusComercial ?? null}
+              dataOperacao={api.ocDataOperacao ?? null}
+              dataChegada={dataChegada}
             />
           ) : (
           <>

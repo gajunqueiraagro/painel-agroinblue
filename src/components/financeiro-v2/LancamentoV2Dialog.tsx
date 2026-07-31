@@ -1184,24 +1184,20 @@ export function LancamentoV2Dialog({
 
             {/* PR-SAFE-0 — aviso de origem Operação Comercial: campos estruturais são somente leitura. */}
             {isOCTitulo && (
-              <div className="rounded-md border border-sky-200 dark:border-sky-800 bg-sky-50/60 dark:bg-sky-950/30 p-3 mb-2">
-                <p className="text-[12px] font-semibold text-sky-800 dark:text-sky-300">Origem: Operação Comercial</p>
-                <p className="text-[11px] text-sky-700 dark:text-sky-400 leading-snug">
-                  Valor, favorecido, classificação, tipo e competência pertencem à obrigação da Operação
-                  Comercial e são somente leitura aqui. Ajuste-os pela Operação Comercial. Data prevista,
-                  conta, descrição, observação e documento continuam editáveis.
+              <div className="rounded-md border border-sky-200 dark:border-sky-800 bg-sky-50/60 dark:bg-sky-950/30 px-2 py-1 mb-2 flex items-start gap-2">
+                <p className="text-[10px] text-sky-700 dark:text-sky-400 leading-tight flex-1">
+                  <span className="font-semibold text-sky-800 dark:text-sky-300">Origem: Operação Comercial.</span>{' '}
+                  Valor, favorecido, classificação, tipo e competência são somente leitura (ajuste na OC); data prevista, conta, descrição, observação e documento continuam editáveis.
                 </p>
-                {/* item 2 — link só aparece quando o vínculo resolve E o tipo tem fluxo soberano de
-                    abertura (compra). Venda/abate ainda não têm abridor de operação OC → sem botão
-                    morto. Contrato genérico ?oc_id=<id>; a Central abre a operação pela rotina soberana. */}
+                {/* link só aparece quando o vínculo resolve E o tipo tem fluxo soberano de abertura (compra). */}
                 {operacaoAbrivel && (
                   <Button
                     variant="link"
                     size="sm"
-                    className="h-auto p-0 mt-1 text-[11px] font-medium text-sky-800 dark:text-sky-300"
+                    className="h-auto p-0 text-[10px] font-medium text-sky-800 dark:text-sky-300 shrink-0"
                     onClick={() => window.location.assign(`/v2?oc_id=${encodeURIComponent(operacaoId!)}`)}
                   >
-                    Abrir operação →
+                    Abrir →
                   </Button>
                 )}
               </div>

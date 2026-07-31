@@ -21,6 +21,8 @@ interface Props {
   clienteId?: string | null;
   rascunho?: boolean;
   statusComercial?: string | null;
+  dataOperacao?: string | null;   // FIX item 6 — data da compra
+  dataChegada?: string | null;    // FIX item 6 — data de chegada (recebimento)
 }
 
 export function AbaFinanceiroOC(props: Props) {
@@ -53,13 +55,17 @@ export function AbaFinanceiroOC(props: Props) {
         <div className="rounded-md border border-amber-500 bg-amber-50 dark:bg-amber-950/30 p-2 text-[12px] text-amber-800 dark:text-amber-200 flex items-center gap-2">
           <AlertTriangle className="h-4 w-4 shrink-0" /> Operação inconsistente (compromissos e partes legadas). Visão somente leitura.
         </div>
-        <AbaCompromissosOC ocApi={ocApi} bloqueado clienteId={clienteId} tipoOperacao={api.tipoOperacao} fornecedores={api.fornecedores} darkSelectClass={props.darkSelectClass} />
+        <AbaCompromissosOC ocApi={ocApi} bloqueado clienteId={clienteId} tipoOperacao={api.tipoOperacao} fornecedores={api.fornecedores}
+          valorAcordado={api.valorAcordado} lotes={api.lotes} contraparteId={api.contraparteId} dataOperacao={props.dataOperacao ?? null} dataChegada={props.dataChegada ?? null}
+          darkSelectClass={props.darkSelectClass} />
       </div>
     );
   }
   // nova_vazia | novo_modelo — gate do modelo novo: rascunho/cancelada bloqueiam; 'fechada' permite.
   const bloqueado = rascunho === true || statusComercial === 'cancelada';
   return (
-    <AbaCompromissosOC ocApi={ocApi} bloqueado={bloqueado} clienteId={clienteId} tipoOperacao={api.tipoOperacao} fornecedores={api.fornecedores} darkSelectClass={props.darkSelectClass} />
+    <AbaCompromissosOC ocApi={ocApi} bloqueado={bloqueado} clienteId={clienteId} tipoOperacao={api.tipoOperacao} fornecedores={api.fornecedores}
+      valorAcordado={api.valorAcordado} lotes={api.lotes} contraparteId={api.contraparteId} dataOperacao={props.dataOperacao ?? null} dataChegada={props.dataChegada ?? null}
+      darkSelectClass={props.darkSelectClass} />
   );
 }
