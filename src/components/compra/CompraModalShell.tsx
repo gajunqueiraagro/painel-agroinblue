@@ -278,6 +278,10 @@ export function CompraModalShell(api: CompraModalShellProps) {
               darkSelectClass={DARK_SELECT_CONTENT}
               somenteLeitura={roDownstream}
               onIrParaDocumentos={() => setAbaAtiva('documentos')}
+              operacaoId={api.ocOperacaoId ?? null}
+              clienteId={api.liquidacaoApi.clienteId}
+              rascunho={api.ocRascunho}
+              statusComercial={api.ocStatusComercial ?? null}
             />
           ) : (
           <>
