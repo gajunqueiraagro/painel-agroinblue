@@ -150,8 +150,12 @@ export function CompraModalShell(api: CompraModalShellProps) {
   const somenteLeituraDownstream = !!(api.somenteLeitura || api.aberturaExistente);
   const permissoes: CompraPermissoesPorEixo = {
     negociacaoReadOnly: !!api.somenteLeitura,
-    recebimentoReadOnly: somenteLeituraDownstream,
-    documentosReadOnly: somenteLeituraDownstream,
+    // PR-OC-CONSOLIDACAO-A2 — Recebimento opera em operação existente elegível: gate depende SÓ do eixo
+    //   próprio (cancelada = RO). As demais travas (sem operação salva, status ≠ 'fechada', entrega
+    //   encerrada) já são aplicadas dentro de AbaRecebimentoLotes; título materializado NÃO bloqueia a
+    //   chegada física. Não reusa aberturaExistente/somenteLeitura/ocTemTitulo.
+    recebimentoReadOnly: api.ocStatusComercial === 'cancelada',
+    documentosReadOnly: somenteLeituraDownstream,          // A3 fará o mesmo desacoplamento p/ Documentos
     financeiroLegadoReadOnly: somenteLeituraDownstream,
     financeiroNovoReadOnly: api.ocRascunho === true || api.ocStatusComercial === 'cancelada',
   };
@@ -479,7 +483,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
           {api.aberturaExistente && api.ocTemTitulo && (
             <span className="text-white/80 text-[11px] flex items-center gap-1.5 max-w-xl leading-tight">
               <Lock className="h-3.5 w-3.5 shrink-0" />
-              Esta operação possui título financeiro materializado. Para preservar a consistência financeira, a negociação não pode ser alterada. Ajustes nos valores materializados dependerão dos fluxos de estorno ou renegociação.
+              Esta operação possui títulos financeiros materializados. A negociação está protegida para preservar a consistência financeira. O Recebimento permanece disponível conforme o estado da entrega. Ajustes nos valores materializados dependerão dos fluxos de estorno ou renegociação.
             </span>
           )}
         </div>
