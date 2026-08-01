@@ -1,8 +1,11 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import type { OcCompromissosApi, CompromissoResumo, ParcelaMaterializacao, CriarCompromissoPayload, ProgramarParcelaInput } from '@/hooks/useOcCompromissos';
 import { classificarLotesCompra, type LoteOC } from '@/hooks/useOperacaoLiquidacao';
 import { usePlanoContasOC } from '@/hooks/usePlanoContasOC';
 import { useComponentesFinanceiros } from '@/hooks/useComponentesFinanceiros';
+import { useContasBancariasLeves, rotuloContaLeve } from '@/hooks/useContasBancariasLeves';
+import { produtoOCCompromisso } from '@/lib/financeiro/produtoOC';
+import { CATEGORIAS } from '@/types/cattle';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -126,10 +129,13 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
   const descricaoDefault = useMemo(() => {
     const qtd = lotes.reduce((s, l) => s + (l.qtd ?? 0), 0);
     const cats = Array.from(new Set(lotes.map(l => l.categoria).filter(Boolean)));
+    const catLabel = cats.map(slug => CATEGORIAS.find(c => c.value === slug)?.label ?? slug).join('/');
     const contraparte = fornecedores.find(f => f.id === contraparteId)?.nome ?? '';
-    const base = qtd > 0 ? `Compra ${qtd} ${cats.join('/')}`.trim() : 'Compra principal';
-    return contraparte ? `${base} — ${contraparte}` : base;
-  }, [lotes, fornecedores, contraparteId]);
+    // Formato soberano do compromisso principal (fonte única produtoOC.ts): "Compra 007 Garrotes — Contraparte".
+    // Sem lotes classificados (qtd 0), mantém o fallback simples p/ não exibir "Compra 000".
+    if (qtd <= 0) return contraparte ? `Compra principal — ${contraparte}` : 'Compra principal';
+    return produtoOCCompromisso(tipoOperacao ?? 'compra', qtd, catLabel, contraparte || null);
+  }, [lotes, fornecedores, contraparteId, tipoOperacao]);
 
   async function criar(payload: CriarCompromissoPayload) {
     if (versao == null) return;
@@ -259,9 +265,9 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
               {selecionado.status === 'aberto' ? 'Compromisso aberto — clique em "Programar".' : 'Sem programação ativa.'}
             </div>
           ) : (
-            <table className="w-full text-[11px] tabular-nums">
+            <table className="w-full text-[10px] tabular-nums">
               <thead>
-                <tr className="text-left text-[10px] text-muted-foreground border-b">
+                <tr className="text-left text-[9px] text-muted-foreground border-b">
                   <th className="py-0.5 pr-2">Seq</th>
                   <th className="py-0.5 pr-2">Vencimento</th>
                   <th className="py-0.5 pr-2 text-right">Valor</th>
@@ -308,7 +314,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
       {programarAberto && selecionado && (
         <ProgramarDialog
           onClose={() => setProgramarAberto(false)} onSubmit={programar} saving={saving}
-          valorCompromisso={selecionado.valorCompromisso}
+          clienteId={clienteId} valorCompromisso={selecionado.valorCompromisso}
           valorAcordado={valorAcordado} totalComprometido={resumoOperacao?.obrigacaoTotal ?? 0}
         />
       )}
@@ -351,18 +357,22 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
   const [subcentro, setSubcentro] = useState('');
   const [favorecidoId, setFavorecidoId] = useState('');
   const [descricao, setDescricao] = useState('');
+  const ultimoDefaultRef = useRef('');   // último default de descrição aplicado automaticamente (ajuste vinculante 3)
 
-  // Defaults por natureza: principal pré-carrega valor acordado, subcentro sugerido e descrição rica.
+  // Defaults por natureza: principal pré-carrega valor acordado e subcentro sugerido; obrigacao zera.
   useEffect(() => {
     setComponente('');
-    if (natureza === 'principal') {
-      setValor(valorAcordado);
-      setSubcentro(sugestaoSubcentro);
-      setDescricao(descricaoDefault);
-    } else {
-      setValor(null); setSubcentro(''); setDescricao('');
-    }
-  }, [natureza, valorAcordado, sugestaoSubcentro, descricaoDefault]);
+    if (natureza === 'principal') { setValor(valorAcordado); setSubcentro(sugestaoSubcentro); }
+    else { setValor(null); setSubcentro(''); }
+  }, [natureza, valorAcordado, sugestaoSubcentro]);
+
+  // Descrição = DEFAULT EDITÁVEL: principal → descricaoDefault; obrigacao → ''. Só atualiza se o campo está
+  // vazio OU ainda contém o último default gerado. Após edição manual do usuário, NUNCA sobrescreve.
+  useEffect(() => {
+    const alvo = natureza === 'principal' ? descricaoDefault : '';
+    setDescricao(prev => (prev === '' || prev === ultimoDefaultRef.current ? alvo : prev));
+    ultimoDefaultRef.current = alvo;
+  }, [natureza, descricaoDefault]);
 
   const planoTipo = tipoOperacao === 'compra' ? '2-Saídas' : '1-Entradas';
   const componenteOptions = useMemo(() => comps.porNatureza(natureza), [comps, natureza]);
@@ -439,64 +449,112 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
   );
 }
 
-// ===== Dialog: Programar (parcelas; sem conta nesta V1) =====
-function ProgramarDialog({ onClose, onSubmit, saving, valorCompromisso, valorAcordado, totalComprometido }: {
+// ===== Dialog: Programar (parcelas; conta OPCIONAL por parcela; identidade estável por idLocal) =====
+type LinhaParcela = { idLocal: string; valor: number | null; vencimento: string; contaId: string };
+
+function ProgramarDialog({ onClose, onSubmit, saving, clienteId, valorCompromisso, valorAcordado, totalComprometido }: {
   onClose: () => void; onSubmit: (p: ProgramarParcelaInput[]) => void; saving: boolean;
-  valorCompromisso: number; valorAcordado: number | null; totalComprometido: number;
+  clienteId: string | null; valorCompromisso: number; valorAcordado: number | null; totalComprometido: number;
 }) {
-  const [linhas, setLinhas] = useState<{ valor: number | null; vencimento: string }[]>([{ valor: null, vencimento: '' }]);
+  const { contas } = useContasBancariasLeves(clienteId);
+  const idRef = useRef(0);
+  // idLocal ESTÁVEL por linha (ajuste vinculante 2): React key E identidade do estado. Add/remove só recalcula
+  // a sequência 1..N na submissão — nunca desloca valor/vencimento/conta entre linhas.
+  const novaLinha = (): LinhaParcela => ({ idLocal: `p${idRef.current++}`, valor: null, vencimento: '', contaId: '' });
+  const [linhas, setLinhas] = useState<LinhaParcela[]>(() => [novaLinha()]);
+  const [confirmarParcial, setConfirmarParcial] = useState(false);
 
   const soma = useMemo(() => round2(linhas.reduce((s, l) => s + (l.valor ?? 0), 0)), [linhas]);
   const todasComValor = linhas.length > 0 && linhas.every(l => l.valor != null && l.valor > 0);
-  const podeSubmeter = todasComValor && soma <= round2(valorCompromisso) && !saving;
+  const tetoCompromisso = round2(valorCompromisso);
+  const podeSubmeter = todasComValor && soma <= tetoCompromisso && !saving;
   const restanteOC = (valorAcordado ?? 0) - totalComprometido;
+  const restanteCompromisso = round2(tetoCompromisso - soma);
 
-  const setValorLinha = (i: number, n: number | null) => setLinhas(prev => prev.map((l, idx) => (idx === i ? { ...l, valor: n } : l)));
-  const setVencLinha = (i: number, v: string) => setLinhas(prev => prev.map((l, idx) => (idx === i ? { ...l, vencimento: v } : l)));
+  const setLinha = (idLocal: string, patch: Partial<Omit<LinhaParcela, 'idLocal'>>) =>
+    setLinhas(prev => prev.map(l => (l.idLocal === idLocal ? { ...l, ...patch } : l)));
+  const removerLinha = (idLocal: string) => setLinhas(prev => prev.filter(l => l.idLocal !== idLocal));
+
+  const contaOptions = useMemo(() => contas.map(c => ({ value: c.id, label: rotuloContaLeve(c) })), [contas]);
+
+  // Sequência é derivada 1..N na ordem visual, na hora de emitir (nunca guardada por linha).
+  const emitir = () => {
+    if (!podeSubmeter) return;
+    onSubmit(linhas.map((l, i) => ({ sequencia: i + 1, valor: l.valor ?? 0, vencimento: l.vencimento || null, conta_bancaria_id: l.contaId || null })));
+  };
+  // item 3: Σ = teto segue direto; Σ > teto fica bloqueado (writer); Σ < teto exige confirmação de parcial.
+  const aoProgramar = () => {
+    if (!podeSubmeter) return;
+    if (soma < tetoCompromisso) { setConfirmarParcial(true); return; }
+    emitir();
+  };
 
   return (
-    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle>Programar parcelas</DialogTitle></DialogHeader>
-        <div className="space-y-2">
-          <div className="grid grid-cols-2 gap-1.5 text-[11px]">
-            <div className="rounded border bg-muted/30 px-1.5 py-0.5"><span className="text-muted-foreground">OC (acordado): </span><b>{valorAcordado != null ? brl(valorAcordado) : '—'}</b></div>
-            <div className="rounded border bg-muted/30 px-1.5 py-0.5"><span className="text-muted-foreground">Comprometido: </span><b>{brl(totalComprometido)}</b></div>
-            <div className="rounded border bg-muted/30 px-1.5 py-0.5"><span className="text-muted-foreground">Restante OC: </span><b>{brl(restanteOC)}</b></div>
-            <div className="rounded border bg-muted/30 px-1.5 py-0.5"><span className="text-muted-foreground">Compromisso: </span><b>{brl(valorCompromisso)}</b> · Σ {brl(soma)}</div>
-          </div>
-          {linhas.map((l, i) => (
-            <div key={i} className="grid grid-cols-[24px_1fr_1fr_28px] items-end gap-2">
-              <div className="text-[11px] text-muted-foreground pb-2">{i + 1}</div>
-              <div>
-                <Label className="text-[10px]">Valor</Label>
-                <CampoMoeda valor={l.valor} onChange={(n) => setValorLinha(i, n)} placeholder="R$ 0,00" className="mt-0.5 h-8 text-[12px]" />
-              </div>
-              <div>
-                <Label className="text-[10px]">Vencimento</Label>
-                <DatePicker value={l.vencimento} onChange={(v) => setVencLinha(i, v)} size="compact" />
-              </div>
-              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" disabled={linhas.length === 1}
-                onClick={() => setLinhas(prev => prev.filter((_, idx) => idx !== i))} aria-label="remover parcela">
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
+    <>
+      <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>Programar parcelas</DialogTitle></DialogHeader>
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-1.5 text-[11px]">
+              <div className="rounded border bg-muted/30 px-1.5 py-0.5"><span className="text-muted-foreground">OC (acordado): </span><b>{valorAcordado != null ? brl(valorAcordado) : '—'}</b></div>
+              <div className="rounded border bg-muted/30 px-1.5 py-0.5"><span className="text-muted-foreground">Comprometido: </span><b>{brl(totalComprometido)}</b></div>
+              <div className="rounded border bg-muted/30 px-1.5 py-0.5"><span className="text-muted-foreground">Restante OC: </span><b>{brl(restanteOC)}</b></div>
+              <div className="rounded border bg-muted/30 px-1.5 py-0.5"><span className="text-muted-foreground">Compromisso: </span><b>{brl(valorCompromisso)}</b> · Σ {brl(soma)}</div>
             </div>
-          ))}
-          <Button variant="outline" size="sm" className="h-7 text-[12px]" onClick={() => setLinhas(prev => [...prev, { valor: null, vencimento: '' }])}>
-            <Plus className="h-3.5 w-3.5 mr-1" /> Adicionar parcela
-          </Button>
-          {soma > round2(valorCompromisso) && (
-            <div className="text-[11px] text-destructive">A soma das parcelas excede o valor do compromisso.</div>
-          )}
-        </div>
-        <DialogFooter>
-          <Button variant="outline" size="sm" onClick={onClose}>Cancelar</Button>
-          <Button size="sm" disabled={!podeSubmeter}
-            onClick={() => { if (podeSubmeter) onSubmit(linhas.map((l, i) => ({ sequencia: i + 1, valor: l.valor ?? 0, vencimento: l.vencimento || null }))); }}>
-            Programar
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+            {linhas.map((l, i) => (
+              <div key={l.idLocal} className="grid grid-cols-[16px_1fr_1fr_1fr_24px] items-end gap-1.5">
+                <div className="text-[11px] text-muted-foreground pb-2">{i + 1}</div>
+                <div>
+                  <Label className="text-[10px]">Valor</Label>
+                  <CampoMoeda valor={l.valor} onChange={(n) => setLinha(l.idLocal, { valor: n })} placeholder="R$ 0,00" className="mt-0.5 h-8 text-[12px]" />
+                </div>
+                <div>
+                  <Label className="text-[10px]">Vencimento</Label>
+                  <DatePicker value={l.vencimento} onChange={(v) => setLinha(l.idLocal, { vencimento: v })} size="compact" />
+                </div>
+                <div>
+                  <Label className="text-[10px]">Conta</Label>
+                  <SearchableSelect
+                    value={l.contaId || '__none__'} onValueChange={(v) => setLinha(l.idLocal, { contaId: v === '__none__' ? '' : v })}
+                    options={contaOptions} placeholder="Definir depois"
+                    allLabel="— definir depois —" allValue="__none__" dense className="[&>button]:h-8 [&>button]:text-[11px]"
+                  />
+                </div>
+                <Button variant="ghost" size="sm" className="h-8 w-8 p-0" disabled={linhas.length === 1}
+                  onClick={() => removerLinha(l.idLocal)} aria-label="remover parcela">
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ))}
+            <Button variant="outline" size="sm" className="h-7 text-[12px]" onClick={() => setLinhas(prev => [...prev, novaLinha()])}>
+              <Plus className="h-3.5 w-3.5 mr-1" /> Adicionar parcela
+            </Button>
+            {soma > tetoCompromisso && (
+              <div className="text-[11px] text-destructive">A soma das parcelas excede o valor do compromisso.</div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={onClose}>Cancelar</Button>
+            <Button size="sm" disabled={!podeSubmeter} onClick={aoProgramar}>Programar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* item 3 — confirmação de programação PARCIAL (Σ < valor do compromisso). Contrato do writer intacto. */}
+      {confirmarParcial && (
+        <Dialog open onOpenChange={(o) => { if (!o) setConfirmarParcial(false); }}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader><DialogTitle>Programação parcial</DialogTitle></DialogHeader>
+            <div className="text-[13px]">
+              As parcelas somam <b>{brl(soma)}</b> de <b>{brl(tetoCompromisso)}</b>. Restarão <b>{brl(restanteCompromisso)}</b> a programar. Confirmar programação parcial?
+            </div>
+            <DialogFooter>
+              <Button variant="outline" size="sm" onClick={() => setConfirmarParcial(false)}>Voltar</Button>
+              <Button size="sm" disabled={saving} onClick={() => { setConfirmarParcial(false); emitir(); }}>Confirmar parcial</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+    </>
   );
 }

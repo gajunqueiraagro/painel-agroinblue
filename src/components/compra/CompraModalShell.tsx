@@ -461,7 +461,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
           {api.aberturaExistente && api.ocTemTitulo && (
             <span className="text-white/80 text-[11px] flex items-center gap-1.5 max-w-xl leading-tight">
               <Lock className="h-3.5 w-3.5 shrink-0" />
-              Esta operação possui título financeiro materializado. Para preservar a consistência financeira, a negociação não pode ser alterada.
+              Esta operação possui título financeiro materializado. Para preservar a consistência financeira, a negociação não pode ser alterada — qualquer ajuste no valor materializado virá pela frente de estorno/renegociação (Recebimento e Documentos seguem editáveis).
             </span>
           )}
         </div>

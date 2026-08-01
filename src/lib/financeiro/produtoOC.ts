@@ -48,3 +48,14 @@ export function produtoOCPrincipal(
 ): string {
   return `${verboOC(tipoOperacao)} ${qtd3(qtd)} ${siglaCategoria(categoriaSlug)} — Parc. ${seq}/${totalParcelas}`;
 }
+
+// Produto do COMPROMISSO principal (grão AGREGADO, sem parcela): "{Verbo} {qtd:3} {Categoria}[ — {Contraparte}]".
+//   Irmão de produtoOCPrincipal, mesma fonte única de qtd3/verbo, mas SEM sufixo "— Parc. x/y" (grão-parcela)
+//   e com o LABEL completo da categoria (ex.: "Garrotes"), não a sigla. Ex.: "Compra 007 Garrotes — Carlinhos (Silvana)".
+//   categoriaLabel e contraparte já resolvidos pelo chamador (strings de exibição); ambos opcionais.
+export function produtoOCCompromisso(
+  tipoOperacao: string, qtd: number, categoriaLabel: string, contraparte?: string | null,
+): string {
+  const base = `${verboOC(tipoOperacao)} ${qtd3(qtd)}${categoriaLabel ? ` ${categoriaLabel}` : ''}`.trim();
+  return contraparte ? `${base} — ${contraparte}` : base;
+}
