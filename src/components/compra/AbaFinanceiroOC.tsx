@@ -8,25 +8,24 @@ import type { LiquidacaoApi } from '@/hooks/useOperacaoLiquidacao';
 //   'legado' → fluxo atual intacto (AbaLiquidacaoOC via useOperacaoLiquidacao), sem retrofit.
 //   'nova_vazia' | 'novo_modelo' → Blocos A/B/C (AbaCompromissosOC via useOcCompromissos).
 //   'misto_inconsistente' → banner + visão somente-leitura dos blocos novos.
-//   carregando → placeholder. O gate de escrita do modelo novo NÃO reusa o somenteLeitura legado
-//   (que é RO em qualquer operação existente); segue os writers: rascunho/cancelada bloqueiam.
+//   carregando → placeholder. PR-OC-CONSOLIDACAO-A1: os gates de escrita (legado e novo) chegam PRONTOS
+//   por prop do CompraModalShell (fonte única por eixo); esta aba NÃO reconstrói permissão.
 interface Props {
   api: LiquidacaoApi;
   operacaoPronta: boolean;
   darkSelectClass: string;
-  somenteLeitura?: boolean;
+  financeiroLegadoReadOnly: boolean;   // gate do fluxo legado (AbaLiquidacaoOC)
+  financeiroNovoReadOnly: boolean;     // gate do modelo novo (AbaCompromissosOC) — já calculado no shell
   onIrParaDocumentos?: () => void;
   // wiring mínimo do modelo novo (vindo do CompraModalShell)
   operacaoId?: string | null;
   clienteId?: string | null;
-  rascunho?: boolean;
-  statusComercial?: string | null;
   dataOperacao?: string | null;   // FIX item 6 — data da compra
   dataChegada?: string | null;    // FIX item 6 — data de chegada (recebimento)
 }
 
 export function AbaFinanceiroOC(props: Props) {
-  const { api, operacaoId, clienteId, rascunho, statusComercial } = props;
+  const { api, operacaoId, clienteId } = props;
   const ocApi = useOcCompromissos({
     operacaoId: operacaoId ?? null,
     clienteId: clienteId ?? null,
@@ -39,7 +38,7 @@ export function AbaFinanceiroOC(props: Props) {
       api={api}
       operacaoPronta={props.operacaoPronta}
       darkSelectClass={props.darkSelectClass}
-      somenteLeitura={props.somenteLeitura}
+      somenteLeitura={props.financeiroLegadoReadOnly}
       onIrParaDocumentos={props.onIrParaDocumentos}
     />
   );
@@ -61,10 +60,9 @@ export function AbaFinanceiroOC(props: Props) {
       </div>
     );
   }
-  // nova_vazia | novo_modelo — gate do modelo novo: rascunho/cancelada bloqueiam; 'fechada' permite.
-  const bloqueado = rascunho === true || statusComercial === 'cancelada';
+  // nova_vazia | novo_modelo — gate do modelo novo vem PRONTO do shell (financeiroNovoReadOnly).
   return (
-    <AbaCompromissosOC ocApi={ocApi} bloqueado={bloqueado} clienteId={clienteId} tipoOperacao={api.tipoOperacao} fornecedores={api.fornecedores}
+    <AbaCompromissosOC ocApi={ocApi} bloqueado={props.financeiroNovoReadOnly} clienteId={clienteId} tipoOperacao={api.tipoOperacao} fornecedores={api.fornecedores}
       valorAcordado={api.valorAcordado} lotes={api.lotes} contraparteId={api.contraparteId} dataOperacao={props.dataOperacao ?? null} dataChegada={props.dataChegada ?? null}
       darkSelectClass={props.darkSelectClass} />
   );
