@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Check, Undo2, Lock, FileText } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Check, Undo2, Lock, FileText, AlertTriangle } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 import { DatePicker } from '@/components/ui/date-picker';
 import { parseNumericValue } from '@/lib/calculos/abate';
 import type { RecebimentoApi, EstadoRecebimento, LoteRecebimento } from '@/hooks/useOperacaoRecebimento';
@@ -41,6 +42,10 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
   const [peso, setPeso] = useState<Record<string, string>>({});
   const [dataReb, setDataReb] = useState<Record<string, string>>({});
   const [docLoteId, setDocLoteId] = useState<string | null>(null);   // lote-contexto do registro rápido de documento
+  const [encerrarOpen, setEncerrarOpen] = useState(false);
+  const [motivoEncerrar, setMotivoEncerrar] = useState('');
+  const [reabrirOpen, setReabrirOpen] = useState(false);
+  const [motivoReabrir, setMotivoReabrir] = useState('');
   const hoje = new Date().toISOString().slice(0, 10);
   // OPEN-01: abertura existente = read-only (equivale ao "encerrada" para fins de escrita/exibição).
   const readOnly = encerrada || somenteLeitura;
@@ -56,10 +61,13 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
       </div>
     );
   }
-  if (!concluida) {
+  // Entrega encerrada tem precedência de exibição sobre a negociação não concluída: uma operação
+  //   programada+encerrada mostra os lotes em consulta + "Reabrir recebimento". Só quando NÃO encerrada
+  //   e negociação não concluída é que exibimos o aviso de indisponibilidade (estado pós-reabertura).
+  if (!concluida && !encerrada) {
     return (
       <div className="rounded-md border border-dashed bg-muted/10 px-3 py-5 text-center space-y-1">
-        <div className="text-[12px] font-semibold text-foreground">Recebimento indisponível</div>
+        <div className="text-[12px] font-semibold text-foreground">Recebimento indisponível — negociação ainda não concluída</div>
         <div className="text-[11px] text-muted-foreground">Conclua a negociação (botão “Concluir negociação”) para registrar o recebimento físico.</div>
       </div>
     );
@@ -85,6 +93,30 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
   };
 
   const movsAtivas = api.movimentacoes.filter(m => !m.cancelado);
+
+  // Totais soberanos (soma dos lotes) para o dialog de encerramento. Motivo obrigatório quando há
+  //   diferença ou zero recebido — a UI torna a consequência explícita; o writer já exige o motivo.
+  const totalNegociado = api.lotes.reduce((s, l) => s + (l.qtdNegociada ?? 0), 0);
+  const totalRecebido = api.lotes.reduce((s, l) => s + l.qtdRecebida, 0);
+  const diferencaTotal = totalNegociado - totalRecebido;
+  const zeroRecebido = totalRecebido === 0;
+  const motivoEncerrarObrigatorio = diferencaTotal !== 0 || zeroRecebido;
+  const podeEncerrar = !api.saving && (!motivoEncerrarObrigatorio || motivoEncerrar.trim() !== '');
+  const podeReabrir = !api.saving && motivoReabrir.trim() !== '';
+
+  // Fecha o dialog ANTES de disparar (nunca congela); o hook cuida de toast/refetch/versão.
+  const submitEncerrar = () => {
+    if (!podeEncerrar) return;
+    const m = motivoEncerrar.trim();
+    setEncerrarOpen(false); setMotivoEncerrar('');
+    void api.encerrar(m || 'encerramento pela aba Recebimento');
+  };
+  const submitReabrir = () => {
+    if (!podeReabrir) return;
+    const m = motivoReabrir.trim();
+    setReabrirOpen(false); setMotivoReabrir('');
+    void api.reabrir(m);
+  };
 
   return (
     <div className="rounded-md border bg-card p-2 shadow-sm space-y-2 min-w-0">
@@ -185,11 +217,78 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
       {!readOnly && (
         <div className="flex justify-end pt-1">
           <Button type="button" variant="outline" size="sm" className="h-7 text-[11px] gap-1" disabled={api.saving}
-            onClick={() => void api.encerrar('encerramento pela aba Recebimento')}>
+            onClick={() => { setMotivoEncerrar(''); setEncerrarOpen(true); }}>
             <Lock className="h-3 w-3" /> Encerrar recebimento
           </Button>
         </div>
       )}
+      {/* Reabertura: só quando a entrega está encerrada e a operação não é somente-leitura (ex.: cancelada).
+          Não altera a negociação — se programada, após reabrir volta a "indisponível" pelos gates. */}
+      {encerrada && !somenteLeitura && (
+        <div className="flex justify-end pt-1">
+          <Button type="button" variant="outline" size="sm" className="h-7 text-[11px] gap-1" disabled={api.saving}
+            onClick={() => { setMotivoReabrir(''); setReabrirOpen(true); }}>
+            <Undo2 className="h-3 w-3" /> Reabrir recebimento
+          </Button>
+        </div>
+      )}
+
+      {/* Encerramento com consequência EXPLÍCITA (substitui a confirmação fraca). Motivo obrigatório quando
+          há diferença ou zero recebido; alerta forte + botão destrutivo quando nada foi recebido. */}
+      <Dialog open={encerrarOpen} onOpenChange={o => { if (!o) setEncerrarOpen(false); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle className="text-[13px]">Encerrar recebimento</DialogTitle></DialogHeader>
+          <div className="space-y-2 text-[12px]">
+            <div className="grid grid-cols-3 gap-1.5">
+              <div className="rounded border bg-muted/30 px-1.5 py-1"><div className="text-[10px] text-muted-foreground">Negociado</div><div className="font-semibold tabular-nums">{totalNegociado}</div></div>
+              <div className="rounded border bg-muted/30 px-1.5 py-1"><div className="text-[10px] text-muted-foreground">Recebido</div><div className="font-semibold tabular-nums">{totalRecebido}</div></div>
+              <div className={`rounded border px-1.5 py-1 ${diferencaTotal !== 0 ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/30' : 'bg-muted/30'}`}><div className="text-[10px] text-muted-foreground">Diferença</div><div className={`font-semibold tabular-nums ${diferencaTotal !== 0 ? 'text-amber-700 dark:text-amber-300' : ''}`}>{diferencaTotal}</div></div>
+            </div>
+            {zeroRecebido ? (
+              <div className="flex items-start gap-1.5 rounded border border-destructive bg-destructive/10 px-2 py-1.5 text-[11px] text-destructive">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                <span>Nenhum animal foi recebido. Deseja encerrar esta entrega mesmo assim?</span>
+              </div>
+            ) : (
+              <div className="text-[11px] text-muted-foreground">
+                Após encerrar, novos recebimentos ficarão bloqueados e a reabertura exigirá justificativa.
+              </div>
+            )}
+            <div>
+              <div className="text-[11px] font-medium">Motivo{motivoEncerrarObrigatorio ? ' *' : ' (opcional)'}</div>
+              <Textarea value={motivoEncerrar} onChange={e => setMotivoEncerrar(e.target.value)} rows={2}
+                className="mt-0.5 text-[12px]" placeholder={motivoEncerrarObrigatorio ? 'Justifique a diferença / ausência de recebimento' : 'Opcional'} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" size="sm" onClick={() => setEncerrarOpen(false)}>Cancelar</Button>
+            <Button type="button" size="sm" variant={zeroRecebido ? 'destructive' : 'default'} disabled={!podeEncerrar} onClick={submitEncerrar}>
+              Encerrar entrega
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reabertura AUDITADA da entrega (não altera a negociação). Motivo obrigatório. */}
+      <Dialog open={reabrirOpen} onOpenChange={o => { if (!o) setReabrirOpen(false); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle className="text-[13px]">Reabrir recebimento</DialogTitle></DialogHeader>
+          <div className="space-y-2 text-[12px]">
+            <div className="text-[11px] text-muted-foreground">
+              Esta ação é <b>auditada</b>: reabre a entrega para novos recebimentos e fica registrada com o motivo informado. <b>Não</b> altera a negociação — se a operação estiver programada, o recebimento seguirá indisponível até a negociação ser concluída.
+            </div>
+            <div>
+              <div className="text-[11px] font-medium">Motivo *</div>
+              <Textarea value={motivoReabrir} onChange={e => setMotivoReabrir(e.target.value)} rows={2}
+                className="mt-0.5 text-[12px]" placeholder="Justifique a reabertura" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" size="sm" onClick={() => setReabrirOpen(false)}>Cancelar</Button>
+            <Button type="button" size="sm" disabled={!podeReabrir} onClick={submitReabrir}>Reabrir</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Registro rápido de documento no contexto do lote — reutiliza o cadastro OFICIAL (DocumentoFormOC)
           com a instância única documentosApi. Ao salvar: fecha, dados atualizam (mesmo hook) e permanece aqui.

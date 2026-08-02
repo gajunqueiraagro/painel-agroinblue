@@ -48,6 +48,7 @@ export interface RecebimentoApi {
   registrar: (loteId: string, dados: RegistroRecebimento) => Promise<void>;
   estornar: (movimentacaoId: string, motivo: string) => Promise<void>;
   encerrar: (motivo: string) => Promise<void>;
+  reabrir: (motivo: string) => Promise<void>;
 }
 
 interface Params {
@@ -208,8 +209,35 @@ export function useOperacaoRecebimento({ operacaoId, clienteId, versao, onVersao
     } finally { setSaving(false); }
   }, [operacaoId, clienteId, versao, onVersaoChange, onEntregaChange, carregar]);
 
+  // PR-OC-REABRIR-ENTREGA-UI-01 — reabertura AUDITADA da entrega (oc_reabrir_entrega). Motivo obrigatório;
+  //   versão EXPLÍCITA (sem fallback inventado). Sucesso: propaga operacao_versao + entrega aberta e recarrega.
+  //   40001 (conflito de versão): recarrega os dados antes de encerrar o fluxo. NÃO altera status_comercial.
+  const reabrir = useCallback(async (motivo: string) => {
+    if (!operacaoId || !clienteId) { toast.error('Operação não iniciada.'); return; }
+    if (versao == null) { toast.error('Versão da operação indisponível.'); return; }
+    const m = motivo.trim();
+    if (m === '') { toast.error('Informe o motivo da reabertura.'); return; }
+    setSaving(true);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase as any).rpc('oc_reabrir_entrega', {
+        p_operacao_id: operacaoId, p_cliente_id: clienteId, p_versao_esperada: versao, p_motivo: m,
+      });
+      if (error) {
+        if (error.code === '40001') await carregar();   // conflito de versão: sincroniza antes de sair
+        throw new Error(error.message);
+      }
+      if (data?.operacao_versao != null) onVersaoChange(data.operacao_versao);
+      if (onEntregaChange) onEntregaChange(false);
+      toast.success('Recebimento reaberto.');
+      await carregar();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Falha ao reabrir recebimento.');
+    } finally { setSaving(false); }
+  }, [operacaoId, clienteId, versao, onVersaoChange, onEntregaChange, carregar]);
+
   return useMemo(() => ({
     lotes, movimentacoes, loading, saving,
-    concluirNegociacao, receberTodos, registrar, estornar, encerrar,
-  }), [lotes, movimentacoes, loading, saving, concluirNegociacao, receberTodos, registrar, estornar, encerrar]);
+    concluirNegociacao, receberTodos, registrar, estornar, encerrar, reabrir,
+  }), [lotes, movimentacoes, loading, saving, concluirNegociacao, receberTodos, registrar, estornar, encerrar, reabrir]);
 }
