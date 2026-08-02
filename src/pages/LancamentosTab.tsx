@@ -1844,6 +1844,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setOcTemTitulo((estado.partes ?? []).some(
       (p) => Boolean(p.financeiro_lancamento_id) && p.cancelada !== true,
     ));
+    // PR-OC-FIN-REFRESH-01 — propaga os dados persistidos da OC (lotes/valor_acordado/contraparte) ao
+    //   Financeiro no FLUXO CONTÍNUO. useOperacaoLiquidacao só busca por operacaoId (não por versão): sem
+    //   este refetch soberano, após Confirmar os defaults do "Novo compromisso" (subcentro/valor/descrição)
+    //   ficariam vazios. Reaberto pela Central já funciona (operacaoId nasce com a OC completa).
+    liquidacaoApi.recarregar();
   };
 
   // PR-OC-EDIT-01B — ações de ciclo (RPCs oficiais; backend soberano). Erro real do backend é exibido
