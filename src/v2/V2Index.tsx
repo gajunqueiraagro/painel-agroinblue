@@ -143,8 +143,10 @@ interface V2LancamentosWrapperProps {
   cenariosPermitidos?: Array<'realizado' | 'programado' | 'meta'>;
   /** PR-OC-NAV-01 — fecho do modal de Operação Comercial: retorna à Central e limpa a URL. */
   onFecharOperacaoOC?: () => void;
+  /** PR-OC-ENTRYPOINT-COMPRA-01 — card "Compra" abre o CompraModalShell em modo OC (nova Compra). */
+  onNovaCompraOC?: () => void;
 }
-function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEdit, onNavegarChuvas, onNavegarMapaRebanho, cenarioInicial, cenariosPermitidos, onFecharOperacaoOC }: V2LancamentosWrapperProps = {}) {
+function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEdit, onNavegarChuvas, onNavegarMapaRebanho, cenarioInicial, cenariosPermitidos, onFecharOperacaoOC, onNovaCompraOC }: V2LancamentosWrapperProps = {}) {
   const navigate = useNavigate();
   const { isGlobal } = useFazenda();
   const { canEdit, canEditMeta } = usePermissions();
@@ -268,6 +270,7 @@ function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEd
         cenariosPermitidos={cenariosPermitidos}
         abaInicial={(abateParaEditar || vendaParaEditar) ? 'saida' : undefined}
         onFecharOperacaoOC={onFecharOperacaoOC}
+        onNovaCompraOC={onNovaCompraOC}
       />
     </div>
   );
@@ -411,6 +414,15 @@ export default function V2Index() {
     p.delete('oc_id');
     setSearchParams(p, { replace: true });
     setSection('operacoes-comerciais');
+  }, [setSearchParams]);
+  // PR-OC-ENTRYPOINT-COMPRA-01 — nova Compra: abre o CompraModalShell em MODO OC (?oc_compra=1, sem oc_id)
+  //   direto na seção Lançamentos — mesma árvore da Central/deep-link; ausência de oc_id = criação nova.
+  const abrirNovaCompraOC = useCallback(() => {
+    const p = new URLSearchParams(window.location.search);
+    p.set('oc_compra', '1');
+    p.delete('oc_id');
+    setSearchParams(p, { replace: true });
+    setSection('lancamentos-zoot');
   }, [setSearchParams]);
   // ID alvo lido da URL (?edit=...&tipo=...). Quando o lançamento carrega
   // pelo useLancamento, useEffect roteia. Limpa-se ao consumir.
@@ -745,6 +757,7 @@ export default function V2Index() {
         vendaParaEditar={vendaParaEditar}
         cenariosPermitidos={['realizado']}
         onFecharOperacaoOC={fecharOperacaoOC}
+        onNovaCompraOC={abrirNovaCompraOC}
         onReturnFromEdit={() => {
           limparEdicaoAvancada();
           setSection('conferencia-lancamentos');

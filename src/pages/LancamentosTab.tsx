@@ -53,7 +53,6 @@ import { AbateExportDialog } from '@/components/AbateExportMenu';
 import { AbateFinanceiroPanel, AbateFinanceiroPanelRef } from '@/components/AbateFinanceiroPanel';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { NovoFornecedorDialog } from '@/components/financeiro-v2/NovoFornecedorDialog';
-import { NovaOperacaoComercialButton } from '@/components/operacao-comercial/modal/ModalOperacaoComercial';
 import { supabase } from '@/integrations/supabase/client';
 import { VendaFinanceiroPanel, VendaFinanceiroPanelRef } from '@/components/VendaFinanceiroPanel';
 import { useAnosDisponiveis } from '@/hooks/useAnosDisponiveis';
@@ -108,6 +107,11 @@ interface Props {
    * e limpa os parâmetros ?oc_compra/?oc_id da URL. Acionado só quando o modal está em modo OC.
    */
   onFecharOperacaoOC?: () => void;
+  /**
+   * PR-OC-ENTRYPOINT-COMPRA-01 — abre uma nova Compra no fluxo OC canônico (CompraModalShell modo OC,
+   * ?oc_compra=1 sem oc_id). O parent (V2Index) faz a navegação SPA. Ausente = comportamento anterior.
+   */
+  onNovaCompraOC?: () => void;
   /**
    * Cenário inicial padrão da tela: 'realizado' (default) ou 'meta'.
    * Usado APENAS como valor inicial do `statusOp`. O usuário pode trocar
@@ -273,7 +277,7 @@ function matchFornecedor(options: FornecedorOption[], params: { id?: string | nu
   });
 }
 
-export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar, vendaParaEditar, compraParaEditar, transferenciaParaEditar, reclassParaEditar, morteParaEditar, consumoParaEditar, onReturnFromEdit, initialAnoFiltro, initialMesFiltro, initialReclassCenario, onNavegarChuvas, onFecharOperacaoOC, cenarioInicial, cenariosPermitidos }: Props) {
+export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar, vendaParaEditar, compraParaEditar, transferenciaParaEditar, reclassParaEditar, morteParaEditar, consumoParaEditar, onReturnFromEdit, initialAnoFiltro, initialMesFiltro, initialReclassCenario, onNavegarChuvas, onFecharOperacaoOC, onNovaCompraOC, cenarioInicial, cenariosPermitidos }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const { clienteAtual } = useCliente();
   const nomeFazenda = fazendaAtual?.nome || '';
@@ -2716,6 +2720,17 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         return;
       }
       if (isEditing) return; // Bloqueia troca de tipo durante edição
+      // PR-OC-ENTRYPOINT-COMPRA-01 — SOMENTE Compra migra para o fluxo OC canônico. onNovaCompraOC seta
+      //   ?oc_compra=1 (modoOCCompra=true, batched); resetContextoOC dá uma OC nova limpa COM a fazenda do
+      //   contexto atual (ocFazendaDestinoId = fazendaAtual); e abrimos o modal aqui (o efeito de hidratação
+      //   só abre quando há oc_id — nova Compra não tem). Demais movimentos seguem o fluxo atual.
+      if (it.value === 'compra' && onNovaCompraOC) {
+        onNovaCompraOC();
+        resetContextoOC();
+        setTipo('compra');
+        setLancModalOpen(true);
+        return;
+      }
       setAba(it.aba);
       setTipo(it.value as TipoMovimentacao);
       resetAllFields();
@@ -2726,10 +2741,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
     return (
       <div className="space-y-2 mb-2">
-        {/* PR-OC-04: entrada do fluxo definitivo (modal da Operação Comercial) */}
-        <div className="flex justify-end">
-          <NovaOperacaoComercialButton />
-        </div>
+        {/* PR-OC-ENTRYPOINT-COMPRA-01 — acesso ao wizard legado (NovaOperacaoComercialButton /
+            ModalOperacaoComercial) desconectado. O fluxo oficial de Compra é o CompraModalShell (card Compra
+            → modo OC). Componente preservado no repo, sem caller ativo. */}
         {TIPO_CARDS_GROUPS.map(g => (
           <div key={g.grupo}>
             <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">
@@ -2739,6 +2753,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               {g.items
                 // Esconde Chuvas se o parent não passou callback de navegação.
                 .filter(it => !it.navOnly || (it.value === 'chuvas' && !!onNavegarChuvas))
+                // PR-OC-ENTRYPOINT-COMPRA-01 — Compra só aparece onde existe o fluxo OC (onNovaCompraOC).
+                //   Sem ele (ex.: contexto meta/Planejamento) o card é OCULTADO — nunca abre CompraModalShell
+                //   em modo legado. Zero ponto de entrada visível de Compra legada.
+                .filter(it => !(it.value === 'compra' && !onNovaCompraOC))
                 .map(it => {
                 const active = isItemActive(it);
                 // navOnly nunca é "disabled" durante edição — atalho continua acessível
