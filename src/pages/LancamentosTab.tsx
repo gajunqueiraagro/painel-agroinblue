@@ -528,6 +528,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         setOcOperacaoId(op.id);
         setOcVersao(op.versao);
         setOcStatusComercial(op.status_comercial);
+        setOcEntregaEncerrada(!!op.entrega_encerrada);   // PR-HOTFIX-P0 — hidrata entrega soberana (habilita Reabrir)
         // PR-OC-EDIT-01A — título financeiro materializado = parte ativa com financeiro_lancamento_id.
         const temTitulo = (estado.partes ?? []).some(
           (p) => Boolean(p.financeiro_lancamento_id) && p.cancelada !== true,
@@ -1838,6 +1839,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setNotaFiscal(op.numero_documento ?? '');
     setOcVersao(op.versao);
     setOcStatusComercial(op.status_comercial);
+    setOcEntregaEncerrada(!!op.entrega_encerrada);   // PR-HOTFIX-P0 — reidrata entrega soberana no refetch
     setOcRascunho(op.rascunho);
     setOcTemTitulo((estado.partes ?? []).some(
       (p) => Boolean(p.financeiro_lancamento_id) && p.cancelada !== true,
@@ -3741,6 +3743,16 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   // formApi — referências dos estados/setters/handlers existentes para a casca de Compra
   // (PR-COMPRA-SHELL-01). Sem estado novo; apenas display-derivations (statusDescription,
   // quantidadeNum, pesoKgNum) e o wrapper de setCategoria (mesmo idioma do Select legado).
+  // PR-HOTFIX-P0 — nome SOBERANO da fazenda para o cabeçalho/resumo da OP aberta. Operação existente com
+  //   fazenda própria exibe a fazenda da OC (não o contexto global); OC sem fazenda → contexto atual/"Global";
+  //   fazenda_id presente mas nome ainda não resolvido → texto neutro (nunca "Global", que seria falso).
+  //   NÃO altera fazendaAtualId, a fazenda gravada, o SELECT da aba Compra, filtros ou regras de negócio.
+  const ocTemFazendaPropria = !!ocOperacaoId && !!ocFazendaDestinoId
+    && ocFazendaDestinoId !== '__atual__' && ocFazendaDestinoId !== '__global__';
+  const ocHeaderFazendaNome = ocTemFazendaPropria
+    ? (fazendas.find(f => f.id === ocFazendaDestinoId)?.nome ?? 'Fazenda da operação')
+    : nomeFazenda;
+
   const compraFormApi = {
     statusOp, setStatusOp,
     statusDescription: getStatusDescription(tipo, statusOp),
@@ -3752,7 +3764,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     categoriasDisponiveis,
     observacao, setObservacao,
     fazendaOrigem, setFazendaOrigem,
-    fazendaAtualNome: nomeFazenda,
+    fazendaAtualNome: ocHeaderFazendaNome,
     fazendaAtualId: fazendaAtual?.id ?? null,
     fazendas: fazendasOC,
     fazendaDestinoId: ocFazendaDestinoId,

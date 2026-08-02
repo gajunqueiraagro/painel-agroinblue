@@ -99,6 +99,9 @@ export interface OcOperacaoRow {
   // PR-OC-EDIT-01B — rascunho TÉCNICO (cadastro incompleto). `select('*')` já o traz; usado no
   //   gate do "Confirmar" (o backend permanece soberano com sua própria validação).
   rascunho: boolean;
+  // PR-HOTFIX-P0 — entrega_encerrada soberana (coluna NOT NULL; `select('*')` já a traz). Hidrata o
+  //   estado do Recebimento ao abrir operação existente (habilita o botão "Reabrir recebimento").
+  entrega_encerrada: boolean;
   versao: number;
 }
 
