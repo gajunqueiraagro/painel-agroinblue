@@ -429,14 +429,25 @@ export default function V2Index() {
     p.delete('oc_aba');
     p.delete('oc_return');
     setSearchParams(p, { replace: true });
-    setSection(retorno === 'financeiro-lanc' ? 'financeiro-lanc' : 'operacoes-comerciais');
+    // PR-OC-NAVEGACAO-RETORNO-02 — destino = seção de origem quando conhecida (Financeiro V2 ou Lançamentos);
+    //   fallback Central quando não há origem registrada.
+    setSection(
+      retorno === 'financeiro-lanc' || retorno === 'lancamentos-zoot'
+        ? retorno
+        : 'operacoes-comerciais',
+    );
   }, [setSearchParams]);
   // PR-OC-ENTRYPOINT-COMPRA-01 — nova Compra: abre o CompraModalShell em MODO OC (?oc_compra=1, sem oc_id)
   //   direto na seção Lançamentos — mesma árvore da Central/deep-link; ausência de oc_id = criação nova.
   const abrirNovaCompraOC = useCallback(() => {
+    // PR-OC-NAVEGACAO-RETORNO-02 — captura a seção de ORIGEM antes de abrir a OC, para o fecho reconduzir
+    //   ao lugar onde o usuário estava (Lançamentos/Financeiro V2), em vez do destino fixo Central.
+    const origem = sectionRef.current;
     const p = new URLSearchParams(window.location.search);
     p.set('oc_compra', '1');
     p.delete('oc_id');
+    if (origem === 'financeiro-lanc' || origem === 'lancamentos-zoot') p.set('oc_return', origem);
+    else p.delete('oc_return');
     setSearchParams(p, { replace: true });
     setSection('lancamentos-zoot');
   }, [setSearchParams]);
