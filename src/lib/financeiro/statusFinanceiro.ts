@@ -58,15 +58,18 @@ export const STATUS_FINANCEIRO_OPCOES_MODAL: { value: StatusFinanceiro; label: s
  *   representa reclassificação. Não autoriza migration. Não deve ser agrupada
  *   dentro de "Previsto". Será removida após o saneamento do legado.
  */
-export type StatusFiltroFinanceiro = StatusFinanceiro | 'meta';
+// PR-FIN-V2-STATUS-01 — filtro perde 'Meta (legado)' e ganha 'Conciliado' (DERIVADO de conciliado_em != null;
+//   NÃO é status_transacao — a query aplica o filtro por conciliado_em). 'meta' segue no tipo/label só para
+//   EXIBIR registros legados na grade, mas não é mais opção de filtro.
+export type StatusFiltroFinanceiro = StatusFinanceiro | 'meta' | 'conciliado';
 
-/** Opções do FILTRO (multisseleção): ordem oficial + Meta (legado) ao fim. */
+/** Opções do FILTRO (multisseleção): ordem oficial + Conciliado (derivado) ao fim. */
 export const STATUS_FINANCEIRO_OPCOES_FILTRO: { value: StatusFiltroFinanceiro; label: string }[] = [
   ...STATUS_FINANCEIRO_ORDEM.map((v): { value: StatusFiltroFinanceiro; label: string } => ({ value: v, label: STATUS_FINANCEIRO_LABEL[v] })),
-  { value: 'meta', label: 'Meta (legado)' },
+  { value: 'conciliado', label: 'Conciliado' },
 ];
 
-const STATUS_FILTRO_SET = new Set<string>([...STATUS_FINANCEIRO_ORDEM, 'meta']);
+const STATUS_FILTRO_SET = new Set<string>([...STATUS_FINANCEIRO_ORDEM, 'meta', 'conciliado']);
 
 /** Guard: a string é uma chave válida do filtro de status? (sem cast, para drill-down externo) */
 export function isStatusFiltroFinanceiro(v: unknown): v is StatusFiltroFinanceiro {
@@ -78,12 +81,14 @@ export function isStatusFiltroFinanceiro(v: unknown): v is StatusFiltroFinanceir
 export const STATUS_FILTRO_LABEL: Record<string, string> = {
   ...STATUS_FINANCEIRO_LABEL,
   meta: 'Meta (legado)',
+  conciliado: 'Conciliado',
 };
 
-/** Cores da grade/filtro — Meta (legado) com aparência discreta/muted. */
+/** Cores da grade/filtro — Meta (legado) muted; Conciliado em azul. */
 export const STATUS_FILTRO_COR: Record<string, string> = {
   ...STATUS_FINANCEIRO_COR,
   meta: 'text-muted-foreground',
+  conciliado: 'text-blue-600 dark:text-blue-400',
 };
 
 // ── Writers ──

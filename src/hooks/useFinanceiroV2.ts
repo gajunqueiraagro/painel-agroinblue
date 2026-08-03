@@ -423,7 +423,17 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     //   (previsto/agendado/programado/realizado e o legado 'meta'). Vazio/ausente = Todos (sem restrição
     //   de status). A exclusão estrutural `.neq('conciliado')` (acima) permanece intocada.
     if (filtros.status_transacoes && filtros.status_transacoes.length > 0) {
-      query = query.in('status_transacao', filtros.status_transacoes);
+      // PR-FIN-V2-STATUS-01 — 'conciliado' é DERIVADO (conciliado_em != null), não um status_transacao.
+      //   Separa os status reais do filtro derivado; combina com OR quando ambos presentes.
+      const temConciliado = filtros.status_transacoes.includes('conciliado');
+      const statusReais = filtros.status_transacoes.filter(s => s !== 'conciliado');
+      if (temConciliado && statusReais.length > 0) {
+        query = query.or(`status_transacao.in.(${statusReais.join(',')}),conciliado_em.not.is.null`);
+      } else if (temConciliado) {
+        query = query.not('conciliado_em', 'is', null);
+      } else {
+        query = query.in('status_transacao', statusReais);
+      }
     }
     if (filtros.macro_custo) query = query.eq('macro_custo', filtros.macro_custo);
     if (filtros.grupo_custo) query = query.eq('grupo_custo', filtros.grupo_custo);

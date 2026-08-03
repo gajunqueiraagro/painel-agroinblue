@@ -450,7 +450,7 @@ export function LancamentoV2Dialog({
       setSafraId('');
       setDataCompetencia(prefill.data_competencia ?? prefill.data_pagamento ?? today);
       setDataVencimento('');   // PR-FIN-MODAL-VENCIMENTO-02B — prefill não traz vencimento; abre vazio (sem auto-preencher)
-      setDataPagamento(prefill.data_pagamento ?? today);
+      setDataPagamento(prefill.data_pagamento ?? '');   // PR-FIN-V2-STATUS-01 — sem fallback para hoje
       setStatusTransacao(prefill.status_transacao ?? 'realizado');
       setTipoOperacao(prefill.tipo_operacao ?? '2-Saídas');
       setValorDisplay(prefill.valor !== undefined ? toBRL(Math.abs(prefill.valor)) : '0,00');
@@ -489,7 +489,7 @@ export function LancamentoV2Dialog({
       setSafraId('');
       setDataCompetencia(today);
       setDataVencimento('');   // PR-FIN-MODAL-VENCIMENTO-02B — novo lançamento abre com vencimento vazio
-      setDataPagamento(today);
+      setDataPagamento('');   // PR-FIN-V2-STATUS-01 — novo lançamento NÃO recebe pagamento=hoje automático (só realizado exige)
       setStatusTransacao(deriveStatus(today));
       setDescricao('');
       setFavorecidoId('');
@@ -729,6 +729,11 @@ export function LancamentoV2Dialog({
 
   const handleSubmit = async () => {
     if (!canSave) return;
+    // PR-FIN-V2-STATUS-01 — 'Realizado' exige data de pagamento; previsto/agendado/programado podem salvar null.
+    if (statusTransacao === 'realizado' && !dataPagamento) {
+      toast.error('Status "Realizado" exige data de pagamento.');
+      return;
+    }
     // Dividendos sempre na fazenda Administrativo (defesa caso useEffect não tenha disparado).
     const fazendaIdEfetivo = (macroCusto === 'Dividendos' && fazendaAdm) ? fazendaAdm.id : fazendaId;
     // Extra validation for transfers
