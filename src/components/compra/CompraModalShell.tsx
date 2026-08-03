@@ -80,6 +80,7 @@ export interface CompraModalShellProps {
   mesFechadoMsg: string | null;
   // ponte Compra→OC (modo OC isolado; opt-in). Off por padrão → comportamento legado.
   modoOC?: boolean;
+  abaInicial?: string;                   // PR-OC-FIN-EDIT-FIX-02 — aba inicial (ex.: 'financeiro' via ?oc_aba); default 'compra'
   ocOperacaoId?: string | null;
   lotesApi?: CompraLotesApi;   // COM-3: estado/handlers dos lotes (só em modo OC)
   recebimentoApi?: RecebimentoApi;      // RECEB-01: recebimento por lote (só em modo OC)
@@ -138,7 +139,13 @@ export interface CompraPermissoesPorEixo {
 }
 
 export function CompraModalShell(api: CompraModalShellProps) {
-  const [abaAtiva, setAbaAtiva] = useState<string>('compra');
+  // Aba inicial: 'compra' por padrão; quando aberto pelo Financeiro V2 (?oc_aba=financeiro em modo OC),
+  //   abre já na aba Financeiro. Só aceita abas que existem no modo OC.
+  const [abaAtiva, setAbaAtiva] = useState<string>(
+    api.modoOC && api.abaInicial && ['negociacao', 'recebimento', 'documentos', 'financeiro'].includes(api.abaInicial)
+      ? api.abaInicial
+      : 'compra',
+  );
   // PR-OC-EDIT-01B — diálogo de confirmação das ações de ciclo (motivo obrigatório no cancelamento).
   const [acaoConfirm, setAcaoConfirm] = useState<null | 'confirmar' | 'cancelar' | 'reabrir'>(null);
   const [motivoAcao, setMotivoAcao] = useState('');

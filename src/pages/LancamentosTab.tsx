@@ -3777,6 +3777,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     : nomeFazenda;
 
   const compraFormApi = {
+    abaInicial: ocSearchParams.get('oc_aba') ?? undefined,   // PR-OC-FIN-EDIT-FIX-02 — aba inicial do modal OC
     statusOp, setStatusOp,
     statusDescription: getStatusDescription(tipo, statusOp),
     cenariosPermitidos: cenariosPermitidos ?? null,

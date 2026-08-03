@@ -132,6 +132,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
   const editarTitulo = (tituloId: string) => {
     const next = new URLSearchParams(searchParams);
     next.set('flancId', tituloId);
+    next.set('ocfin', '1');   // PR-OC-FIN-EDIT-FIX-02 — contexto OC: libera edição de favorecido no título
     next.delete('oc_compra');
     next.delete('oc_id');
     setSearchParams(next, { replace: true });

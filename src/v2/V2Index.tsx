@@ -400,10 +400,12 @@ export default function V2Index() {
   // PR-OC-NAV-01 — navegação SPA soberana da Central de Operações Comerciais (sem window.location.assign,
   //   sem sessionStorage). Abertura intencional (botão "Abrir" da Central ou link direto ?oc_id) sinaliza o
   //   modal de Compra (?oc_compra=1&oc_id) e troca a seção para Lançamentos, onde o CompraModalShell vive.
-  const abrirOperacaoOC = useCallback((ocId: string) => {
+  const abrirOperacaoOC = useCallback((ocId: string, aba?: string) => {
     const p = new URLSearchParams(window.location.search);
     p.set('oc_compra', '1');
     p.set('oc_id', ocId);
+    // PR-OC-FIN-EDIT-FIX-02 — aba inicial opcional (ex.: 'financeiro' quando aberto pelo Financeiro V2).
+    if (aba) p.set('oc_aba', aba); else p.delete('oc_aba');
     setSearchParams(p, { replace: true });
     setSection('lancamentos-zoot');
   }, [setSearchParams]);
@@ -464,6 +466,9 @@ export default function V2Index() {
   // no LancamentoV2Dialog ao chegar via ?flancId=. Consumido pelo callback
   // onLancamentoAlvoConsumido (zera após openEdit; sem timeout).
   const [flancIdAlvo, setFlancIdAlvo] = useState<string | null>(null);
+  // PR-OC-FIN-EDIT-FIX-02 — marca que o alvo (flancId) veio da ação "Editar" da Programação da OC (?ocfin=1),
+  //   habilitando a edição de favorecido no título OC. Consumido junto do flancId.
+  const [flancOcEdit, setFlancOcEdit] = useState(false);
   // PR-B1-R2 — alvo de retorno fin→zoo (Opção A: memória, NÃO URL). Capturado
   // junto do flancId (mesmo gesto de drill). Consumido por FinanceiroV2Tab
   // onCloseDialog: V2Index decide reabrir o Zoo no `zooId` informado e na
@@ -482,6 +487,7 @@ export default function V2Index() {
       const origemSection = sectionRef.current;
       setSection('financeiro-lanc');
       setFlancIdAlvo(fl);
+      setFlancOcEdit(searchParams.get('ocfin') === '1');   // PR-OC-FIN-EDIT-FIX-02 — contexto OC libera favorecido
       // PR-B1-R2 — captura do retorno (mesmo gesto de drill). Guard explícito
       // estreita rawTab para a union sem `as`. Default 'custos' se ausente
       // ou inválido (caminho principal vem de "Custos da Operação").
@@ -496,6 +502,7 @@ export default function V2Index() {
       }
       const next = new URLSearchParams(searchParams);
       next.delete('flancId');
+      next.delete('ocfin');
       next.delete('returnZooId');
       next.delete('returnZooTab');
       setSearchParams(next, { replace: true });
@@ -808,7 +815,9 @@ export default function V2Index() {
           setSection('conciliacao');
         } : undefined}
         lancamentoIdAlvo={flancIdAlvo}
-        onLancamentoAlvoConsumido={() => setFlancIdAlvo(null)}
+        ocEditFavorecido={flancOcEdit}
+        onAbrirOperacaoOCFinanceiro={(ocId: string) => abrirOperacaoOC(ocId, 'financeiro')}
+        onLancamentoAlvoConsumido={() => { setFlancIdAlvo(null); setFlancOcEdit(false); }}
         onCloseDialog={() => {
           if (drillReturn) {
             retornarAoZoo(drillReturn);

@@ -49,6 +49,11 @@ interface Props {
   safras?: Safra[];
   defaultFazendaId?: string;
   onCriarFornecedor: (nome: string, fazendaId: string, cpfCnpj?: string) => Promise<FornecedorV2 | null>;
+  // PR-OC-FIN-EDIT-FIX-02 — favorecido de título OC só é editável quando a edição vem da aba Financeiro
+  //   da OC (ação Editar da Programação). Default false = bloqueado no Financeiro V2 direto.
+  permiteEditarFavorecidoOC?: boolean;
+  // navegação SPA para abrir a OC vinculada na aba Financeiro (preserva contexto; substitui o reload).
+  onAbrirOperacaoOC?: (operacaoId: string) => void;
   prefill?: {
     fazenda_id?: string;
     conta_bancaria_id?: string;
@@ -287,7 +292,7 @@ function generateRecorrencias(dataComp: string, dataPgto: string, valor: number)
 export function LancamentoV2Dialog({
   open, onClose, onSave, onDelete, lancamento, fazendas, contas, classificacoes,
   fornecedores, safras, defaultFazendaId, onCriarFornecedor, prefill, lockedFields,
-  referenciaOperacionalInfo, excelContext,
+  referenciaOperacionalInfo, excelContext, permiteEditarFavorecidoOC, onAbrirOperacaoOC,
 }: Props) {
   const { clienteAtual } = useCliente();
   const navigate = useNavigate();
@@ -297,6 +302,9 @@ export function LancamentoV2Dialog({
   //   de proveniência persistido (origem_lancamento), nunca por texto de UI. O writer
   //   (useFinanceiroV2.editarLancamento) aplica a mesma proteção de forma independente.
   const isOCTitulo = isEdit && lancamento?.origem_lancamento === 'operacao_comercial';
+  // PR-OC-FIN-EDIT-FIX-02 — favorecido de título OC bloqueado no Financeiro V2 direto; liberado só quando
+  //   a edição vem da aba Financeiro da OC (permiteEditarFavorecidoOC=true).
+  const favorecidoOCBloqueado = isOCTitulo && !permiteEditarFavorecidoOC;
   // Store the editing ID in a ref so it can't become stale during async save
   const editingIdRef = useRef<string | null>(null);
   useEffect(() => {
@@ -1196,7 +1204,13 @@ export function LancamentoV2Dialog({
                     variant="link"
                     size="sm"
                     className="h-auto p-0 text-[10px] font-medium text-sky-800 dark:text-sky-300 shrink-0"
-                    onClick={() => window.location.assign(`/v2?oc_id=${encodeURIComponent(operacaoId!)}`)}
+                    onClick={() => {
+                      if (!operacaoId) return;
+                      // PR-OC-FIN-EDIT-FIX-02 — navegação SPA na aba Financeiro (preserva contexto/filtros);
+                      //   fallback para o reload legado quando o caller não fornece o handler.
+                      if (onAbrirOperacaoOC) onAbrirOperacaoOC(operacaoId);
+                      else window.location.assign(`/v2?oc_id=${encodeURIComponent(operacaoId)}`);
+                    }}
                   >
                     Abrir →
                   </Button>
@@ -1282,8 +1296,14 @@ export function LancamentoV2Dialog({
                   label="Fornecedor *"
                   triggerClassName={fieldBg}
                   tabIndex={6}
+                  disabled={favorecidoOCBloqueado}
                   showCpfCnpj
                 />
+                {favorecidoOCBloqueado && (
+                  <p className="text-[9px] text-sky-700 dark:text-sky-400 mt-0.5 leading-tight">
+                    Este título pertence a uma Operação Comercial. Ajuste o favorecido pela aba Financeiro da OC.
+                  </p>
+                )}
               </div>
             </div>
 

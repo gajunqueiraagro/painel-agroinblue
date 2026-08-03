@@ -163,6 +163,12 @@ interface Props {
    *  (salvar OU cancelar OU ESC/X — todos convergem em onClose). O pai decide
    *  se há drill a retornar. FinanceiroV2Tab é agnóstico ao drill. */
   onCloseDialog?: () => void;
+  /** PR-OC-FIN-EDIT-FIX-02 — quando o alvo (flancId) veio da ação "Editar" da Programação da OC,
+   *  libera a edição de favorecido no título OC. Só true nesse fluxo; row-click direto = false. */
+  ocEditFavorecido?: boolean;
+  /** PR-OC-FIN-EDIT-FIX-02 — abre a OC vinculada na aba Financeiro (navegação SPA), preservando os
+   *  filtros atuais do Financeiro V2 (salvos em sessionStorage para restauração no retorno). */
+  onAbrirOperacaoOCFinanceiro?: (operacaoId: string) => void;
 }
 
 function getInitialPageSize() {
@@ -173,7 +179,7 @@ function getInitialPageSize() {
   return 30;
 }
 
-export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, onIntensiveToggle, drillFilters, onAbrirFinanciamento, lancamentoIdAlvo, onLancamentoAlvoConsumido, onCloseDialog }: Props) {
+export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, onIntensiveToggle, drillFilters, onAbrirFinanciamento, lancamentoIdAlvo, onLancamentoAlvoConsumido, onCloseDialog, ocEditFavorecido, onAbrirOperacaoOCFinanceiro }: Props) {
   const { fazendas, fazendaAtual } = useFazenda();
   const [pageSize] = useState(getInitialPageSize);
   const [currentPage, setCurrentPage] = useState(0);
@@ -339,6 +345,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const [mode, setMode] = useState<'list' | 'rapido'>('list');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingLanc, setEditingLanc] = useState<LancamentoV2 | null>(null);
+  // PR-OC-FIN-EDIT-FIX-02 — libera favorecido do título OC só nesta abertura (fluxo "Editar" da OC).
+  const [favOCEdit, setFavOCEdit] = useState(false);
 
   // Bulk selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -471,7 +479,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     (async () => {
       const obj = await hook.buscarLancamentoPorId(lancamentoIdAlvo);
       if (cancelado) return;
-      if (obj) openEdit(obj);
+      if (obj) openEdit(obj, ocEditFavorecido === true);   // PR-OC-FIN-EDIT-FIX-02 — libera favorecido só via "Editar" da OC
       onLancamentoAlvoConsumido?.();
     })();
     return () => { cancelado = true; };
@@ -596,7 +604,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   };
 
   const openNew = () => { setEditingLanc(null); setDialogOpen(true); };
-  const openEdit = (l: LancamentoV2) => {
+  const openEdit = (l: LancamentoV2, permiteFavOC = false) => {
     console.log('[FinV2] reopen edit object', {
       id: l.id,
       tipo_operacao: l.tipo_operacao,
@@ -606,8 +614,24 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
       origem_lida_de: 'conta_bancaria_id',
       destino_lido_de: 'conta_destino_id',
     });
+    setFavOCEdit(permiteFavOC);   // PR-OC-FIN-EDIT-FIX-02 — só o fluxo "Editar" da OC passa true
     setEditingLanc(l);
     setDialogOpen(true);
+  };
+
+  // PR-OC-FIN-EDIT-FIX-02 — abre a OC vinculada na aba Financeiro preservando os filtros atuais
+  //   (salvos no mesmo mecanismo já consumido pela restauração de retorno). Sem novo mecanismo.
+  const abrirOCFinanceiro = (operacaoId: string) => {
+    try {
+      sessionStorage.setItem('financeirov2_return_filters', JSON.stringify({
+        fazendaId, ano, mesesSelecionados, statusSelecionados, tipoOperacao,
+        contaOrigem, contaDestino, macroFiltro, grupoFiltro, centroFiltro,
+        subcentroFiltro, produtoFiltro, fornecedorFiltro, atividadeFiltro,
+      }));
+    } catch (e) {
+      console.error('[FinanceiroV2Tab] erro ao salvar filtros de retorno:', e);
+    }
+    onAbrirOperacaoOCFinanceiro?.(operacaoId);
   };
 
   const fornecedoresMap = useMemo(
@@ -1615,6 +1639,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         safras={hook.safras}
         defaultFazendaId={fazendaId !== '__all__' ? fazendaId : fazOperacionais[0]?.id || ''}
         onCriarFornecedor={hook.criarFornecedor}
+        permiteEditarFavorecidoOC={favOCEdit}
+        onAbrirOperacaoOC={abrirOCFinanceiro}
       />
 
 
