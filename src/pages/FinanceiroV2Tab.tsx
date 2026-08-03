@@ -9,6 +9,7 @@ import {
   type StatusFiltroFinanceiro,
 } from '@/lib/financeiro/statusFinanceiro';
 import { isTransferenciaTipo } from '@/lib/financeiro/v2Transferencia';
+import { contaSimpleValid } from '@/components/financeiro-v2/lancamentoDialogTabs';
 import { validarLancamento } from '@/lib/financeiro/validacaoLancamento';
 import { formatDocumento } from '@/lib/financeiro/documentoHelper';
 import { toast } from 'sonner';
@@ -24,7 +25,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Plus, Pencil, Copy, ChevronLeft, ChevronRight, Zap, List, ChevronsUpDown, FilterX, Download, ArrowUp, ArrowDown, ArrowUpDown, Trash2, X, SlidersHorizontal, Maximize2, Minimize2, ExternalLink, Beef } from 'lucide-react';
+import { Plus, Pencil, Copy, ChevronLeft, ChevronRight, Zap, List, ChevronsUpDown, FilterX, Download, ArrowUp, ArrowDown, ArrowUpDown, Trash2, X, SlidersHorizontal, Maximize2, Minimize2, ExternalLink, Beef, CheckCircle2 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -352,6 +353,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  // PR-FIN-V2-AÇÕES-LOTE-01 — "Marcar realizado" em lote.
+  const [confirmRealizarOpen, setConfirmRealizarOpen] = useState(false);
+  const [bulkRealizando, setBulkRealizando] = useState(false);
+  const [dataPagamentoModo, setDataPagamentoModo] = useState<'vencimento' | 'unica'>('vencimento');
+  const [dataPagamentoUnica, setDataPagamentoUnica] = useState('');
 
   // Sorting state
    // PR-FIN-GRADE-DATAS-03 — 'data' = competência; 'venc' e 'pgto' são colunas independentes (nunca fundidas).
@@ -786,6 +792,39 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     return { deletaveis, origens: Array.from(origens) };
   }, [selectedLancamentos]);
 
+  // PR-FIN-V2-AÇÕES-LOTE-01 — elegibilidade para "Marcar realizado".
+  //   Elegíveis: previsto/agendado/programado, não conciliado, não cancelado e com conta
+  //   válida (mesma regra do modal: saída exige conta origem; transferência exige origem+destino;
+  //   entrada exige destino). Demais são inelegíveis e não são alterados.
+  const realizarInfo = useMemo(() => {
+    const elegiveis: LancamentoV2[] = [];
+    let jaRealizado = 0;
+    let jaConciliado = 0;
+    let semConta = 0;
+    let outroStatus = 0;
+    let semVencimento = 0;
+    for (const l of selectedLancamentos) {
+      if (l.cancelado) { outroStatus++; continue; }
+      if (l.conciliado_em) { jaConciliado++; continue; }
+      const st = (l.status_transacao || '').toLowerCase();
+      if (st === 'realizado') { jaRealizado++; continue; }
+      if (st !== 'previsto' && st !== 'agendado' && st !== 'programado') { outroStatus++; continue; }
+      if (!contaSimpleValid(l.tipo_operacao, l.conta_bancaria_id ?? '', l.conta_destino_id ?? '')) { semConta++; continue; }
+      if (!l.data_vencimento) semVencimento++;
+      elegiveis.push(l);
+    }
+    const inelegiveis = jaRealizado + jaConciliado + semConta + outroStatus;
+    const partes: string[] = [];
+    if (jaRealizado > 0) partes.push(`${jaRealizado} já realizado${jaRealizado !== 1 ? 's' : ''}`);
+    if (jaConciliado > 0) partes.push(`${jaConciliado} já conciliado${jaConciliado !== 1 ? 's' : ''}`);
+    if (semConta > 0) partes.push(`${semConta} sem conta`);
+    if (outroStatus > 0) partes.push(`${outroStatus} em outro status`);
+    const mensagem = partes.length > 0
+      ? `${selectedLancamentos.length} selecionado${selectedLancamentos.length !== 1 ? 's' : ''}. ${partes.join(', ')} — ${inelegiveis !== 1 ? 'não serão alterados' : 'não será alterado'}.`
+      : '';
+    return { elegiveis, jaRealizado, jaConciliado, semConta, outroStatus, semVencimento, inelegiveis, mensagem };
+  }, [selectedLancamentos]);
+
   const handleBulkDelete = async () => {
     setBulkDeleting(true);
     try {
@@ -802,6 +841,34 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     } finally {
       setBulkDeleting(false);
       setConfirmDeleteOpen(false);
+    }
+  };
+
+  const handleBulkRealizar = async () => {
+    setBulkRealizando(true);
+    try {
+      const hoje = format(new Date(), 'yyyy-MM-dd');
+      const itens = realizarInfo.elegiveis
+        .map(l => ({
+          id: l.id,
+          data_pagamento: dataPagamentoModo === 'unica'
+            ? dataPagamentoUnica
+            : (l.data_vencimento || hoje),
+        }))
+        .filter(it => !!it.data_pagamento);
+      if (itens.length === 0) {
+        toast.error('Nenhuma data de pagamento válida para os itens selecionados.');
+        return;
+      }
+      const result = await hook.marcarRealizadoEmLote(itens);
+      if (result.atualizados > 0) {
+        toast.success(`${result.atualizados} lançamento${result.atualizados !== 1 ? 's' : ''} marcado${result.atualizados !== 1 ? 's' : ''} como realizado`);
+      }
+      setSelectedIds(new Set());
+      await hook.loadLancamentos(filtros, hook.page);
+    } finally {
+      setBulkRealizando(false);
+      setConfirmRealizarOpen(false);
     }
   };
 
@@ -1611,14 +1678,26 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
 
           {/* Bulk action bar */}
           {someSelected && (
-            <div className="flex items-center gap-2 px-2 py-1.5 bg-destructive/10 border border-destructive/30 rounded-lg">
+            <div className="flex flex-wrap items-center gap-2 px-2 py-1.5 bg-muted border border-border rounded-lg">
               <span className="text-[11px] font-semibold">{selectedIds.size} selecionado{selectedIds.size !== 1 ? 's' : ''}</span>
+              <Button
+                size="sm"
+                variant="default"
+                className="h-6 text-[10px] gap-1 px-2"
+                disabled={realizarInfo.elegiveis.length === 0}
+                onClick={() => { setDataPagamentoModo('vencimento'); setDataPagamentoUnica(''); setConfirmRealizarOpen(true); }}
+              >
+                <CheckCircle2 className="h-3 w-3" /> Marcar realizado{realizarInfo.elegiveis.length > 0 ? ` (${realizarInfo.elegiveis.length})` : ''}
+              </Button>
               <Button size="sm" variant="destructive" className="h-6 text-[10px] gap-1 px-2" onClick={() => setConfirmDeleteOpen(true)}>
                 <Trash2 className="h-3 w-3" /> Excluir selecionados
               </Button>
               <Button size="sm" variant="ghost" className="h-6 text-[10px] gap-1 px-2" onClick={() => setSelectedIds(new Set())}>
                 <X className="h-3 w-3" /> Cancelar seleção
               </Button>
+              {realizarInfo.mensagem && (
+                <span className="text-[10px] text-muted-foreground">{realizarInfo.mensagem}</span>
+              )}
             </div>
           )}
 
@@ -1670,6 +1749,68 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {bulkDeleting ? 'Excluindo...' : `Excluir ${bloqueadosInfo.deletaveis.length} lançamento${bloqueadosInfo.deletaveis.length !== 1 ? 's' : ''}`}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk "marcar realizado" confirmation */}
+      <AlertDialog open={confirmRealizarOpen} onOpenChange={setConfirmRealizarOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Marcar como realizado em lote</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-sm">
+                <p>
+                  <strong>{realizarInfo.elegiveis.length}</strong> lançamento{realizarInfo.elegiveis.length !== 1 ? 's' : ''} elegí{realizarInfo.elegiveis.length !== 1 ? 'veis serão' : 'vel será'} marcado{realizarInfo.elegiveis.length !== 1 ? 's' : ''} como <strong>realizado</strong>.
+                </p>
+                {realizarInfo.inelegiveis > 0 && (
+                  <p className="text-[11px] text-muted-foreground">{realizarInfo.mensagem}</p>
+                )}
+                <div className="space-y-2">
+                  <p className="font-medium text-foreground">Data de pagamento</p>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="dtpgto-modo"
+                      checked={dataPagamentoModo === 'vencimento'}
+                      onChange={() => setDataPagamentoModo('vencimento')}
+                    />
+                    <span>Usar o vencimento de cada lançamento <span className="text-muted-foreground">(recomendado)</span></span>
+                  </label>
+                  {dataPagamentoModo === 'vencimento' && realizarInfo.semVencimento > 0 && (
+                    <p className="pl-6 text-[11px] text-amber-600 dark:text-amber-500">
+                      {realizarInfo.semVencimento} sem vencimento — {realizarInfo.semVencimento !== 1 ? 'usarão' : 'usará'} a data de hoje.
+                    </p>
+                  )}
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="dtpgto-modo"
+                      checked={dataPagamentoModo === 'unica'}
+                      onChange={() => setDataPagamentoModo('unica')}
+                    />
+                    <span>Informar uma data única para todos</span>
+                  </label>
+                  {dataPagamentoModo === 'unica' && (
+                    <Input
+                      type="date"
+                      value={dataPagamentoUnica}
+                      onChange={e => setDataPagamentoUnica(e.target.value)}
+                      className="ml-6 h-8 w-44 text-xs"
+                    />
+                  )}
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkRealizando}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleBulkRealizar}
+              disabled={bulkRealizando || realizarInfo.elegiveis.length === 0 || (dataPagamentoModo === 'unica' && !dataPagamentoUnica)}
+            >
+              {bulkRealizando ? 'Aplicando...' : `Marcar ${realizarInfo.elegiveis.length} como realizado`}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -44,6 +44,9 @@ export interface LancamentoV2 {
   forma_pagamento: string | null;
   dados_pagamento: string | null;
   cancelado: boolean;
+  // Vínculo de conciliação bancária (match com item de extrato). Read-only aqui —
+  // usado para derivar o estado 'Conciliado' na grade e vetar reclassificação em lote.
+  conciliado_em: string | null;
   editado_manual: boolean;
   created_at: string;
   updated_at: string;
@@ -925,6 +928,57 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     return { cancelados: totalCancelados };
   }, [clienteId, fetchAllLancamentos]);
 
+  /**
+   * PR-FIN-V2-AÇÕES-LOTE-01 — marca múltiplos lançamentos como 'realizado' em lote,
+   * gravando a `data_pagamento` de cada item. Espelha o caminho de escrita do editar
+   * single (status_transacao + data_pagamento + editado_manual/updated_by); NÃO toca
+   * classificação, valor nem campos estruturais. Sem RPC/migration.
+   *
+   * A elegibilidade (previsto/agendado/programado, não conciliado/cancelado, conta OK)
+   * é decidida no chamador (FinanceiroV2Tab); aqui só se aplica a lista já filtrada.
+   * Itens podem trazer datas distintas (modo "usar vencimento"), então agrupa por
+   * `data_pagamento` e emite um UPDATE por grupo. Item sem data é ignorado (realizado
+   * exige data de pagamento).
+   */
+  const marcarRealizadoEmLote = useCallback(async (
+    itens: { id: string; data_pagamento: string }[],
+  ): Promise<{ atualizados: number }> => {
+    if (!clienteId || !user || itens.length === 0) return { atualizados: 0 };
+
+    const grupos = new Map<string, string[]>();
+    for (const it of itens) {
+      if (!it.data_pagamento) continue;
+      const arr = grupos.get(it.data_pagamento);
+      if (arr) arr.push(it.id);
+      else grupos.set(it.data_pagamento, [it.id]);
+    }
+
+    let atualizados = 0;
+    for (const [dataPgto, ids] of grupos) {
+      for (let i = 0; i < ids.length; i += 100) {
+        const batch = ids.slice(i, i + 100);
+        const payload: Record<string, unknown> = {
+          status_transacao: 'realizado',
+          data_pagamento: dataPgto,
+          editado_manual: true,
+          updated_by: user.id,
+        };
+        const { error } = await (supabase as any)
+          .from('financeiro_lancamentos_v2')
+          .update(payload)
+          .in('id', batch);
+        if (error) {
+          console.error('[FinV2] marcarRealizadoEmLote batch error', error);
+          toast.error(`Erro ao marcar realizado: ${error.message}`);
+          return { atualizados };
+        }
+        atualizados += batch.length;
+      }
+    }
+
+    return { atualizados };
+  }, [clienteId, user]);
+
   /** Cancel migration records for a specific year */
   const cancelarMigracao = useCallback(async (ano: string): Promise<{ cancelados: number; restantes: { origem: string; qtd: number }[] }> => {
     if (!clienteId) return { cancelados: 0, restantes: [] };
@@ -1144,6 +1198,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     editarLancamento,
     excluirLancamento,
     excluirLancamentosEmLote,
+    marcarRealizadoEmLote,
     duplicarLancamento,
     cancelarRealizadosImportados,
     cancelarMigracao,
