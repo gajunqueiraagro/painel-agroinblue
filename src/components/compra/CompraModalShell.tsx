@@ -249,7 +249,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
       </div>
 
       {/* BARRA DE ABAS — template (bg-card, border-b, px-6 py-3) */}
-      <div className="bg-card border-b px-6 py-3 flex items-center gap-1 overflow-x-auto">
+      <div className="bg-card border-b px-6 py-1.5 flex items-center gap-1 overflow-x-auto">
         {ABAS.map(a => {
           // Recebimento, Documentos e Financeiro habilitam no modo OC; demais "em breve" seguem como estão.
           const enabled = a.enabled || ((a.key === 'recebimento' || a.key === 'documentos' || a.key === 'financeiro') && !!api.modoOC);
@@ -275,8 +275,9 @@ export function CompraModalShell(api: CompraModalShellProps) {
 
       {/* CORPO — altura FIXA (h-[62vh]) para a casca não mudar de tamanho entre abas; só o
           corpo rola (header/barra de abas/rodapé permanecem fixos fora do scroll). */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 p-6 h-[62vh] overflow-y-auto bg-muted/30">
-        <div className="space-y-3 min-w-0">
+      {/* PR-OC-UX-DENSIDADE-01 — lateral 320px→240px (−25%), menos padding/gap, mais área útil vertical. */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_240px] gap-3 p-4 h-[66vh] overflow-y-auto bg-muted/30">
+        <div className="space-y-2 min-w-0">
           {abaAtiva === 'negociacao' ? (
             <AbaNegociacaoLotes
               categoria={api.categoria}

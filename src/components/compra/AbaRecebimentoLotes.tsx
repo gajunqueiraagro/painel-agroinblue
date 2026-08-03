@@ -26,7 +26,7 @@ interface Props {
 }
 
 // Colunas independentes: #, Categoria, Negociado, Recebido, Diferença, Data, Qtd. a receber, Peso méd., Estado, Ações.
-const GRID = 'grid grid-cols-[0.35fr_1.3fr_0.6fr_0.6fr_0.7fr_1.4fr_0.65fr_0.75fr_0.8fr_0.9fr] gap-2';
+const GRID = 'grid grid-cols-[0.35fr_1.3fr_0.6fr_0.6fr_0.7fr_1.4fr_0.65fr_0.75fr_0.8fr_0.9fr] gap-1.5';
 const TONE: Record<EstadoRecebimento, string> = {
   nao_iniciado: 'bg-slate-100 text-slate-600',
   parcial: 'bg-amber-100 text-amber-700',
@@ -119,7 +119,7 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
   };
 
   return (
-    <div className="rounded-md border bg-card p-2 shadow-sm space-y-2 min-w-0">
+    <div className="rounded-md border bg-card p-1.5 shadow-sm space-y-1.5 min-w-0">{/* PR-OC-UX-DENSIDADE-01 item 5 — padding/gap reduzidos */}
       <div className="flex items-center justify-between gap-2">
         <div>
           <div className="text-[12px] font-semibold text-foreground">Recebimento por lote</div>

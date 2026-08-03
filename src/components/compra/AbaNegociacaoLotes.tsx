@@ -53,11 +53,13 @@ function resumoLote(criterio: CriterioValor, quantidade: string, pesoMedioKg: st
   const pm = parseNumericValue(pesoMedioKg) || 0;
   const pt = q * pm;
   const total = loteTotal(criterio, quantidade, pesoMedioKg, valorInformado);
+  // PR-OC-UX-DENSIDADE-01 item 3 — linha rotulada compacta (Qtd · Peso méd. · R$/cab · R$/kg).
   const parts: string[] = [];
-  if (q > 0 && total > 0) parts.push(`${brl(total / q)}/cab`);
-  if (pt > 0 && total > 0) parts.push(`${brl(total / pt)}/kg`);
-  if (pm > 0) parts.push(`${pm.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} kg/cab`);
-  return parts.join(' • ');
+  if (q > 0) parts.push(`Qtd: ${q.toLocaleString('pt-BR')} cab`);
+  if (pm > 0) parts.push(`Peso méd.: ${pm.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} kg`);
+  if (q > 0 && total > 0) parts.push(`R$/cab: ${brl(total / q)}`);
+  if (pt > 0 && total > 0) parts.push(`R$/kg: ${brl(total / pt)}`);
+  return parts.join(' · ');
 }
 
 // Campo Valor — apresentação monetária pt-BR SEM prejudicar a edição (format-on-blur):
@@ -156,11 +158,15 @@ export function AbaNegociacaoLotes({
           </div>
         )}
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 pt-1">
-          <div className="rounded-md border bg-muted/20 px-2 py-1"><div className="text-[10px] text-muted-foreground">Lotes</div><div className="font-bold text-[12px]">{totais.lotes || '—'}</div></div>
-          <div className="rounded-md border bg-muted/20 px-2 py-1"><div className="text-[10px] text-muted-foreground">Animais</div><div className="font-bold text-[12px]">{totais.animais || '—'}</div></div>
-          <div className="rounded-md border bg-muted/20 px-2 py-1"><div className="text-[10px] text-muted-foreground">Peso total</div><div className="font-bold text-[12px]">{fmtKg(totais.pesoTotal)}</div></div>
-          <div className="rounded-md border bg-muted/20 px-2 py-1"><div className="text-[10px] text-muted-foreground">Valor total negociado</div><div className="font-bold text-[12px] text-primary">{brl(totais.valorNegociado)}</div></div>
+        {/* PR-OC-UX-DENSIDADE-01 item 4 — cards compactos em UMA linha; destaque só p/ Valor Principal.
+            Médias derivadas dos totais (sem alterar cálculo/estado): peso méd, R$/cab méd, R$/kg méd. */}
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 pt-1">
+          <div className="rounded-md border bg-muted/20 px-1.5 py-0.5"><div className="text-[9px] text-muted-foreground leading-none">Lotes</div><div className="font-bold text-[12px] tabular-nums">{totais.lotes || '—'}</div></div>
+          <div className="rounded-md border bg-muted/20 px-1.5 py-0.5"><div className="text-[9px] text-muted-foreground leading-none">Animais</div><div className="font-bold text-[12px] tabular-nums">{totais.animais || '—'}</div></div>
+          <div className="rounded-md border bg-muted/20 px-1.5 py-0.5"><div className="text-[9px] text-muted-foreground leading-none">Peso Méd.</div><div className="font-bold text-[12px] tabular-nums">{totais.animais > 0 ? fmtKg(totais.pesoTotal / totais.animais) : '—'}</div></div>
+          <div className="rounded-md border bg-muted/20 px-1.5 py-0.5"><div className="text-[9px] text-muted-foreground leading-none">R$/cab Méd.</div><div className="font-bold text-[12px] tabular-nums">{totais.animais > 0 ? brl(totais.valorNegociado / totais.animais) : '—'}</div></div>
+          <div className="rounded-md border bg-muted/20 px-1.5 py-0.5"><div className="text-[9px] text-muted-foreground leading-none">R$/kg Méd.</div><div className="font-bold text-[12px] tabular-nums">{totais.pesoTotal > 0 ? brl(totais.valorNegociado / totais.pesoTotal) : '—'}</div></div>
+          <div className="rounded-md border-2 border-primary/40 bg-primary/5 px-1.5 py-0.5"><div className="text-[9px] text-muted-foreground leading-none">Valor Principal</div><div className="font-bold text-[13px] text-primary tabular-nums">{brl(totais.valorNegociado)}</div></div>
         </div>
       </div>
     );

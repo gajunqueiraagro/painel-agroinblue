@@ -75,7 +75,7 @@ const DOT_CLASS: Record<Sinal, string> = {
 // Blocos de conteúdo (hierarquia visual — apresentação pura, sem novo dado):
 //   Principal = dado-chave da etapa (13px semibold) · Ctx = contexto secundário (11px muted).
 function Principal({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <div className={`text-[13px] font-semibold text-foreground leading-tight break-words ${className}`}>{children}</div>;
+  return <div className={`text-[12px] font-semibold text-foreground leading-tight break-words ${className}`}>{children}</div>;
 }
 function Ctx({ children, className = '' }: { children: ReactNode; className?: string }) {
   return <div className={`text-[11px] text-muted-foreground leading-tight break-words ${className}`}>{children}</div>;
@@ -87,7 +87,7 @@ function Ctx({ children, className = '' }: { children: ReactNode; className?: st
 function Secao({ sinal, estadoLabel, titulo, divisor, children }: { sinal: Sinal; estadoLabel: string; titulo: string; divisor?: boolean; children: ReactNode }) {
   return (
     <div>
-      {divisor && <div className="w-8 border-t border-border/40 mb-2" />}
+      {divisor && <div className="w-8 border-t border-border/40 mb-1" />}
       <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-foreground/70 leading-none">
         <span role="img" aria-label={estadoLabel} className={`inline-block h-2 w-2 shrink-0 rounded-full ${DOT_CLASS[sinal]}`} />
         {titulo}
@@ -158,7 +158,7 @@ export function ResumoLateralOC({
     : 'Saldo em aberto';
 
   return (
-    <div className="bg-card rounded-md border shadow-sm p-2 space-y-2 self-start">
+    <div className="bg-card rounded-md border shadow-sm p-1.5 space-y-1.5 self-start">{/* PR-OC-UX-DENSIDADE-01 — padding/gap reduzidos */}
       <h3 className="text-[11px] font-semibold text-foreground leading-none">Resumo</h3>
 
       <Secao sinal={compraSinal} estadoLabel={compraEstadoLabel} titulo="Compra">
