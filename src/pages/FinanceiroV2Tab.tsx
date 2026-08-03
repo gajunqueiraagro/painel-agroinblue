@@ -229,6 +229,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     centroFiltro: '__all__',
     subcentroFiltro: '__all__',
     produtoFiltro: '',
+    documentoFiltro: '',
     fornecedorFiltro: '__all__',
     atividadeFiltro: '__all__',
   });
@@ -247,6 +248,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const [centroFiltro, setCentroFiltro] = useState(defaults.centroFiltro);
   const [subcentroFiltro, setSubcentroFiltro] = useState(defaults.subcentroFiltro);
   const [produtoFiltro, setProdutoFiltro] = useState(defaults.produtoFiltro);
+  const [documentoFiltro, setDocumentoFiltro] = useState(defaults.documentoFiltro);
   const [fornecedorFiltro, setFornecedorFiltro] = useState(defaults.fornecedorFiltro);
   const [atividadeFiltro, setAtividadeFiltro] = useState(defaults.atividadeFiltro);
   // PR-FIN-GRADE-DATAS-03 — dimensão temporal soberana da grade. Estado dura só enquanto a tela está
@@ -277,6 +279,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
       if (f.centroFiltro !== undefined) setCentroFiltro(f.centroFiltro);
       if (f.subcentroFiltro !== undefined) setSubcentroFiltro(f.subcentroFiltro);
       if (f.produtoFiltro !== undefined) setProdutoFiltro(f.produtoFiltro);
+      if (f.documentoFiltro !== undefined) setDocumentoFiltro(f.documentoFiltro);
       if (f.fornecedorFiltro !== undefined) setFornecedorFiltro(f.fornecedorFiltro);
       if (f.atividadeFiltro !== undefined) setAtividadeFiltro(f.atividadeFiltro);
     } catch (e) {
@@ -528,7 +531,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   useEffect(() => {
     setCurrentPage(0);
     setSelectedIds(new Set());
-  }, [filtros, produtoFiltro, fornecedorFiltro, atividadeFiltro]);
+  }, [filtros, produtoFiltro, documentoFiltro, fornecedorFiltro, atividadeFiltro]);
 
   const handlePageChange = (p: number) => setCurrentPage(p);
 
@@ -632,7 +635,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
       sessionStorage.setItem('financeirov2_return_filters', JSON.stringify({
         fazendaId, ano, mesesSelecionados, statusSelecionados, tipoOperacao,
         contaOrigem, contaDestino, macroFiltro, grupoFiltro, centroFiltro,
-        subcentroFiltro, produtoFiltro, fornecedorFiltro, atividadeFiltro,
+        subcentroFiltro, produtoFiltro, documentoFiltro, fornecedorFiltro, atividadeFiltro,
       }));
     } catch (e) {
       console.error('[FinanceiroV2Tab] erro ao salvar filtros de retorno:', e);
@@ -689,6 +692,14 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
       const q = produtoFiltro.toLowerCase();
       items = items.filter(l => l.descricao?.toLowerCase().includes(q));
     }
+    if (documentoFiltro.trim()) {
+      // Busca no número do documento (coluna DOC) e no documento formatado (tipo + número,
+      // mesmo valor do tooltip via formatDocCompleto). Case-insensitive, substring.
+      const q = documentoFiltro.toLowerCase();
+      items = items.filter(l =>
+        (l.numero_documento || '').toLowerCase().includes(q) ||
+        formatDocCompleto(l).toLowerCase().includes(q));
+    }
     if (fornecedorFiltro !== '__all__') {
       items = items.filter(l => l.favorecido_id === fornecedorFiltro);
     }
@@ -700,7 +711,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
       items = items.filter(l => (l as any).grupo_custo === grupoFiltro);
     }
     return items;
-  }, [hook.lancamentos, contaOrigem, contaDestino, produtoFiltro, fornecedorFiltro, atividadeFiltro, grupoFiltro, centroToGrupo]);
+  }, [hook.lancamentos, contaOrigem, contaDestino, produtoFiltro, documentoFiltro, fornecedorFiltro, atividadeFiltro, grupoFiltro, centroToGrupo]);
 
   const compareDefaultOrder = useCallback((a: LancamentoV2, b: LancamentoV2) => {
     // PR-FIN-GRADE-DATAS-03 — a ordenação padrão acompanha a dimensão selecionada (Data por). Chave
@@ -956,6 +967,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     setCentroFiltro('__all__');
     setSubcentroFiltro('__all__');
     setProdutoFiltro('');
+    setDocumentoFiltro('');
     setFornecedorFiltro('__all__');
     setAtividadeFiltro('__all__');
     setMacroLocked(false);
@@ -984,6 +996,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     centroFiltro !== '__all__',
     subcentroFiltro !== '__all__',
     produtoFiltro !== '',
+    documentoFiltro !== '',
     fornecedorFiltro !== '__all__',
     atividadeFiltro !== '__all__',
   ].filter(Boolean).length;
@@ -1168,8 +1181,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 </div>
               </div>
 
-              {/* MOBILE: Row 3 — Produto | Fornecedor */}
-              <div className="grid grid-cols-2 gap-1 items-end">
+              {/* MOBILE: Row 3 — Produto | Fornecedor | Documento */}
+              <div className="grid grid-cols-3 gap-1 items-end">
                 <div>
                   <label className={lblCls}>Produto</label>
                   <Input
@@ -1187,6 +1200,16 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     onValueChange={setFornecedorFiltro}
                     options={hook.fornecedores.map(f => ({ value: f.id, label: f.nome }))}
                     placeholder="Todos"
+                  />
+                </div>
+                <div>
+                  <label className={lblCls}>Documento</label>
+                  <Input
+                    value={documentoFiltro}
+                    onChange={e => setDocumentoFiltro(e.target.value)}
+                    placeholder="NF, recibo..."
+                    className="h-6 !text-[9px] placeholder:!text-[9px] leading-tight px-1.5 bg-white border-[#C9D4E2]"
+                    autoCorrect="off" autoCapitalize="none" spellCheck={false}
                   />
                 </div>
               </div>
@@ -1470,9 +1493,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 </div>
               </div>
 
-              {/* DESKTOP: LINE 3 — Produto | Fornecedor + Limpar + Summary */}
+              {/* DESKTOP: LINE 3 — Produto | Fornecedor | Documento + Limpar + Summary */}
               <div className="flex items-end gap-1.5">
-                <div className="grid grid-cols-[180px_260px] gap-1.5 items-end">
+                <div className="grid grid-cols-[180px_260px_180px] gap-1.5 items-end">
                   <div>
                     <label className={lblCls}>Produto</label>
                     <Input
@@ -1490,6 +1513,16 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       onValueChange={setFornecedorFiltro}
                       options={hook.fornecedores.map(f => ({ value: f.id, label: f.nome }))}
                       placeholder="Buscar fornecedor..."
+                    />
+                  </div>
+                  <div>
+                    <label className={lblCls}>Documento</label>
+                    <Input
+                      value={documentoFiltro}
+                      onChange={e => setDocumentoFiltro(e.target.value)}
+                      placeholder="NF, recibo, rateio..."
+                      className="h-6 !text-[8px] placeholder:!text-[8px] leading-tight px-1.5 bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus-visible:ring-[#1E3A5F]"
+                      autoCorrect="off" autoCapitalize="none" spellCheck={false}
                     />
                   </div>
                 </div>
