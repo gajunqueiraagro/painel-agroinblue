@@ -130,12 +130,12 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
     const qtd = lotes.reduce((s, l) => s + (l.qtd ?? 0), 0);
     const cats = Array.from(new Set(lotes.map(l => l.categoria).filter(Boolean)));
     const catLabel = cats.map(slug => CATEGORIAS.find(c => c.value === slug)?.label ?? slug).join('/');
-    const contraparte = fornecedores.find(f => f.id === contraparteId)?.nome ?? '';
-    // Formato soberano do compromisso principal (fonte única produtoOC.ts): "Compra 007 Garrotes — Contraparte".
+    // Formato soberano do compromisso principal (fonte única produtoOC.ts): "Compra 007 Garrotes".
+    // O fornecedor NÃO entra na descrição — permanece no campo Favorecido/dados da OC.
     // Sem lotes classificados (qtd 0), mantém o fallback simples p/ não exibir "Compra 000".
-    if (qtd <= 0) return contraparte ? `Compra principal — ${contraparte}` : 'Compra principal';
-    return produtoOCCompromisso(tipoOperacao ?? 'compra', qtd, catLabel, contraparte || null);
-  }, [lotes, fornecedores, contraparteId, tipoOperacao]);
+    if (qtd <= 0) return 'Compra principal';
+    return produtoOCCompromisso(tipoOperacao ?? 'compra', qtd, catLabel);
+  }, [lotes, tipoOperacao]);
 
   async function criar(payload: CriarCompromissoPayload) {
     if (versao == null) return;

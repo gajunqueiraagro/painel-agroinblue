@@ -1519,6 +1519,14 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                               <TooltipContent>Gerado a partir de lançamento zootécnico</TooltipContent>
                             </Tooltip>
                           )}
+                          {l.origem_lancamento === 'operacao_comercial' && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Beef className="inline h-3 w-3 text-amber-600 dark:text-amber-400 ml-1 shrink-0 align-middle" />
+                              </TooltipTrigger>
+                              <TooltipContent>Origem: Operação Comercial de Compra de Animais</TooltipContent>
+                            </Tooltip>
+                          )}
                         </td>
                         <td className="truncate px-2 py-1 align-middle text-[12px] font-medium leading-tight" title={fornNome || ''}>
                           {fornNome || (!l.favorecido_id ? '-' : <span className="text-warning">n/c</span>)}
