@@ -345,6 +345,13 @@ export function CompraModalShell(api: CompraModalShellProps) {
                 <div className={permissoes.negociacaoReadOnly ? 'pointer-events-none opacity-60' : ''}>
                   <DatePicker value={api.data} onChange={api.setData} className="mt-0.5" />
                 </div>
+                {/* PR-OC-HOMOLOG-01 item 3 — edição da data liberada quando não há registros financeiros;
+                    bloqueada (via negociacaoReadOnly = título materializado / fechada / cancelada) com aviso. */}
+                {permissoes.negociacaoReadOnly && (
+                  <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">
+                    Esta operação já possui registros financeiros. Para alterar a data, utilize ajuste histórico.
+                  </p>
+                )}
               </div>
               <div>
                 <Label className="font-bold text-[11px]">Fazenda <span className="text-destructive">*</span></Label>
@@ -488,9 +495,12 @@ export function CompraModalShell(api: CompraModalShellProps) {
           )}
           {/* PR-OC-EDIT-01B — título materializado: negociação bloqueada (ADR Soberania Financeira). */}
           {api.aberturaExistente && api.ocTemTitulo && (
-            <span className="text-white/80 text-[11px] flex items-center gap-1.5 max-w-xl leading-tight">
+            <span
+              className="text-white/80 text-[11px] flex items-center gap-1.5 leading-tight whitespace-nowrap"
+              title="Esta operação possui títulos financeiros materializados. A negociação está protegida para preservar a consistência financeira. O Recebimento permanece disponível conforme o estado da entrega. Ajustes nos valores materializados dependerão dos fluxos de estorno ou renegociação."
+            >
               <Lock className="h-3.5 w-3.5 shrink-0" />
-              Esta operação possui títulos financeiros materializados. A negociação está protegida para preservar a consistência financeira. O Recebimento permanece disponível conforme o estado da entrega. Ajustes nos valores materializados dependerão dos fluxos de estorno ou renegociação.
+              Valores financeiros materializados. Ajustes dependem de estorno ou renegociação.
             </span>
           )}
         </div>

@@ -97,6 +97,19 @@ interface Props {
 const badgeStatusCompromisso = (s: string) => (s === 'programado' ? 'default' : s === 'cancelado' ? 'destructive' : 'secondary');
 const badgeStatusParcela = (s: string) => (s === 'materializada' ? 'default' : s === 'paga' ? 'default' : s === 'cancelada' ? 'destructive' : 'secondary');
 
+// PR-OC-HOMOLOG-01 item 2 — status financeiro em LINGUAGEM DE USUÁRIO (estados internos preservados).
+//   materializado + liquidado total → 🟢 Pago; materializado sem liquidação → 🟡 Programado;
+//   liquidação parcial → 🟠 Parcial; prevista → Previsto; cancelada → Cancelado.
+function statusFinanceiroParcela(p: ParcelaMaterializacao): { icon: string; label: string } {
+  if (p.status === 'cancelada') return { icon: '', label: 'Cancelado' };
+  if (!p.materializada && p.status === 'prevista') return { icon: '', label: 'Previsto' };
+  const liq = p.totalLiquidadoTitulo ?? 0;
+  const tot = p.tituloValor ?? p.valor ?? 0;
+  if (tot > 0 && liq >= tot - 0.005) return { icon: '🟢', label: 'Pago' };
+  if (liq > 0) return { icon: '🟠', label: 'Parcial' };
+  return { icon: '🟡', label: 'Programado' };
+}
+
 export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, fornecedores, valorAcordado, lotes, contraparteId, dataOperacao, dataChegada, darkSelectClass, recarregarDados }: Props) {
   const { resumoOperacao, compromissos, parcelas, versao, saving } = ocApi;
   const [searchParams, setSearchParams] = useSearchParams();
@@ -287,6 +300,14 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
             )}
           </div>
 
+          {/* PR-OC-HOMOLOG-01 item 4 — gate de edição do compromisso: após materialização, alteração
+              direta é bloqueada; ajustes seguem por renegociação/estorno. */}
+          {selecionado.totalMaterializado > 0 && (
+            <div className="mb-1 rounded-md border border-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2 py-1 text-[10px] text-amber-800 dark:text-amber-200 leading-tight">
+              Compromisso materializado. Para alterações utilize renegociação ou estorno.
+            </div>
+          )}
+
           {parcelasDoComp.length === 0 ? (
             <div className="py-3 text-center text-[11px] text-muted-foreground">
               {selecionado.status === 'aberto' ? 'Compromisso aberto — clique em "Programar".' : 'Sem programação ativa.'}
@@ -311,7 +332,9 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
                       <td className="py-0.5 pr-2">{p.sequencia}</td>
                       <td className="py-0.5 pr-2">{fmtData(p.vencimento)}</td>
                       <td className="py-0.5 pr-2 text-right whitespace-nowrap">{brl(p.valor)}</td>
-                      <td className="py-0.5 pr-2"><Badge variant={badgeStatusParcela(p.status)} className="text-[9px] px-1">{p.status}</Badge></td>
+                      <td className="py-0.5 pr-2">{(() => { const s = statusFinanceiroParcela(p); return (
+                        <Badge variant={badgeStatusParcela(p.status)} className="text-[9px] px-1" title={p.status}>{s.icon ? `${s.icon} ` : ''}{s.label}</Badge>
+                      ); })()}</td>
                       <td className="py-0.5 pr-2">
                         {p.tituloId
                           ? <span className="text-[10px] text-muted-foreground" title={p.tituloId}>#{p.tituloId.slice(0, 8)} · {p.tituloStatusTransacao ?? '—'} · {p.tituloValor != null ? brl(p.tituloValor) : '—'}</span>
