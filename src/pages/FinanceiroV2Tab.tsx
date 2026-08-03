@@ -1489,6 +1489,13 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 ) : (
                   sortedLancamentos.map(l => {
                     const fornNome = fornecedoresMap.get(l.favorecido_id || '');
+                    // PR-OC-FIN-EDIT-FIX-01 — apresentação: título de OC não exibe o fornecedor no Produto.
+                    //   Só display (histórico intacto). Remove o sufixo " — <contraparte>" do formato de
+                    //   compromisso legado; NÃO mexe no formato por-parcela ("… — Parc. x/y") nem nos novos.
+                    const descExibida = (l.origem_lancamento === 'operacao_comercial' && l.descricao
+                        && !l.descricao.includes('Parc.') && l.descricao.includes(' — '))
+                      ? l.descricao.slice(0, l.descricao.indexOf(' — '))
+                      : l.descricao;
                     const stKey = (l.status_transacao || '').toLowerCase();
                     const stLabel = STATUS_FILTRO_LABEL[stKey] || l.status_transacao || '-';
                     const stColor = STATUS_FILTRO_COR[stKey] || 'text-muted-foreground';
@@ -1508,9 +1515,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                             VENC. permanece visível mesmo quando há PGTO. */}
                         <td className="font-mono px-0.5 py-1 align-middle text-[12px] font-medium leading-tight sticky left-[73px] z-10 bg-background text-center">{fmtDate(l.data_vencimento)}</td>
                         <td className="font-mono px-0.5 py-1 align-middle text-[12px] font-medium leading-tight sticky left-[118px] z-10 bg-background text-center">{fmtDate(l.data_pagamento)}</td>
-                        <td className="truncate px-2 py-1 align-middle text-[12px] font-medium leading-tight" title={isParcelaFinanciamento ? `Parcela de financiamento (origem automática) — ${l.descricao || ''}` : (l.descricao || '')}>
+                        <td className="truncate px-2 py-1 align-middle text-[12px] font-medium leading-tight" title={isParcelaFinanciamento ? `Parcela de financiamento (origem automática) — ${descExibida || ''}` : (descExibida || '')}>
                           {isParcelaFinanciamento && <span className="mr-1" title="Parcela de financiamento">🏦</span>}
-                          {l.descricao || '-'}
+                          {descExibida || '-'}
                           {l.movimentacao_rebanho_id && (
                             <Tooltip>
                               <TooltipTrigger asChild>

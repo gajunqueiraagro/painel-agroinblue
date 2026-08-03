@@ -46,8 +46,8 @@ describe('detectarViolacoesEstruturaisOC — recusa de alteração estrutural', 
   it('diferença de centavo dentro da tolerância NÃO viola', () => {
     expect(detectarViolacoesEstruturaisOC({ ...base, valor: 27062.503 }, base)).toEqual([]);
   });
-  it('alterar favorecido → viola', () => {
-    expect(detectarViolacoesEstruturaisOC({ ...base, favorecido_id: 'fav-2' }, base)).toContain('favorecido');
+  it('alterar favorecido → NÃO viola (favorecido financeiro editável — PR-OC-FIN-EDIT-FIX-01)', () => {
+    expect(detectarViolacoesEstruturaisOC({ ...base, favorecido_id: 'fav-2' }, base)).toEqual([]);
   });
   it('alterar tipo_operacao → viola', () => {
     expect(detectarViolacoesEstruturaisOC({ ...base, tipo_operacao: '1-Entradas' }, base)).toContain('tipo de operação');
@@ -60,10 +60,10 @@ describe('detectarViolacoesEstruturaisOC — recusa de alteração estrutural', 
     expect(detectarViolacoesEstruturaisOC({ ...base, grupo_custo: 'Outro' }, base)).toContain('classificação');
     expect(detectarViolacoesEstruturaisOC({ ...base, centro_custo: 'Outro' }, base)).toContain('classificação');
   });
-  it('múltiplas alterações → lista deduplicada de campos', () => {
+  it('múltiplas alterações → lista deduplicada de campos (favorecido não entra)', () => {
     const viol = detectarViolacoesEstruturaisOC({ ...base, valor: 1, favorecido_id: 'x', subcentro: 'y', macro_custo: 'z' }, base);
     expect(viol).toContain('valor');
-    expect(viol).toContain('favorecido');
+    expect(viol).not.toContain('favorecido');   // favorecido financeiro editável (PR-OC-FIN-EDIT-FIX-01)
     expect(viol).toContain('classificação');
     // classificação aparece uma única vez mesmo com subcentro+macro alterados
     expect(viol.filter(v => v === 'classificação')).toHaveLength(1);

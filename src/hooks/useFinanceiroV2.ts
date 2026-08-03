@@ -669,12 +669,14 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
         }
 
         // Payload RESTRITO — só campos permitidos; estruturais preservados por OMISSÃO
-        //   (valor, favorecido, classificação, tipo/sinal, origem, data_competencia e ano_mes da OC
-        //   NÃO são tocados). data_pagamento (data prevista) e status_transacao permanecem editáveis
-        //   (a frente de pagamento é PR próprio).
+        //   (valor, classificação, tipo/sinal, origem, data_competencia e ano_mes da OC NÃO são
+        //   tocados). data_pagamento e status_transacao permanecem editáveis.
+        //   PR-OC-FIN-EDIT-FIX-01 — favorecido_id passa a ser editável (favorecido financeiro do
+        //   título, distinto da contraparte comercial; o vínculo OC é por parte, não por favorecido).
         const restrito: Record<string, unknown> = {
           conta_bancaria_id: form.conta_bancaria_id || null,
           conta_destino_id: form.conta_destino_id || null,
+          favorecido_id: form.favorecido_id || null,
           data_pagamento: form.data_pagamento || null,
           descricao: form.descricao || null,
           observacao: form.observacao || null,

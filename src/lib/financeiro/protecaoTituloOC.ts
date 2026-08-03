@@ -19,7 +19,10 @@ export function isTituloOC(m: MarcadoresTituloOC, temVinculoParteOC = false): bo
 
 /** Campos ESTRUTURAIS que compõem a obrigação da OC e não podem ser editados pelo
  *  fluxo financeiro comum. Inclui a competência (nasce do fato operacional da OC e
- *  governa ano_mes). Não inclui data_pagamento/status/conta/descrição (permitidos). */
+ *  governa ano_mes). Não inclui data_pagamento/status/conta/descrição (permitidos).
+ *  PR-OC-FIN-EDIT-FIX-01 — favorecido DEIXA de ser estrutural: o favorecido financeiro
+ *  do título pode divergir da contraparte comercial (pagamento a terceiro). O vínculo OC
+ *  é por zoo_operacao_partes.financeiro_lancamento_id, independente do favorecido_id. */
 export interface EstruturaTituloOC {
   valor?: number | null;
   favorecido_id?: string | null;
@@ -42,7 +45,7 @@ export function detectarViolacoesEstruturaisOC(
 ): string[] {
   const viol = new Set<string>();
   if (Math.abs((Number(form.valor) || 0) - (Number(atual.valor) || 0)) > 0.005) viol.add('valor');
-  if (norm(form.favorecido_id) !== norm(atual.favorecido_id)) viol.add('favorecido');
+  // favorecido NÃO é mais estrutural (PR-OC-FIN-EDIT-FIX-01): favorecido financeiro editável.
   if (norm(form.tipo_operacao) !== norm(atual.tipo_operacao)) viol.add('tipo de operação');
   if (norm(form.subcentro) !== norm(atual.subcentro)
     || norm(form.macro_custo) !== norm(atual.macro_custo)

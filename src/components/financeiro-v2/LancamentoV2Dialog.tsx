@@ -927,6 +927,7 @@ export function LancamentoV2Dialog({
       status_transacao: statusPersistido,
       descricao,
       macro_custo: macroCusto,
+      grupo_custo: grupoCusto,   // PR-OC-FIN-EDIT-FIX-01 — enviar grupo_custo evita falso-positivo de "classificação" na proteção OC
       centro_custo: centroCusto,
       subcentro,
       escopo_negocio: escopoNegocio || undefined,
@@ -1281,7 +1282,6 @@ export function LancamentoV2Dialog({
                   label="Fornecedor *"
                   triggerClassName={fieldBg}
                   tabIndex={6}
-                  disabled={isOCTitulo}
                   showCpfCnpj
                 />
               </div>
