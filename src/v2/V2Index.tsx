@@ -405,17 +405,31 @@ export default function V2Index() {
     p.set('oc_compra', '1');
     p.set('oc_id', ocId);
     // PR-OC-FIN-EDIT-FIX-02 — aba inicial opcional (ex.: 'financeiro' quando aberto pelo Financeiro V2).
-    if (aba) p.set('oc_aba', aba); else p.delete('oc_aba');
+    // PR-OC-FIN-RETORNO-01 — origem Financeiro V2 (abre na aba financeira): marca oc_return p/ o fecho
+    //   reconduzir à seção 'financeiro-lanc' (e restaurar os filtros). Central segue sem oc_return.
+    if (aba) {
+      p.set('oc_aba', aba);
+      if (aba === 'financeiro') p.set('oc_return', 'financeiro-lanc'); else p.delete('oc_return');
+    } else {
+      p.delete('oc_aba');
+      p.delete('oc_return');
+    }
     setSearchParams(p, { replace: true });
     setSection('lancamentos-zoot');
   }, [setSearchParams]);
-  // Fecho do modal OC: limpa os parâmetros transitórios (sem resíduo) e retorna à Central.
+  // Fecho do modal OC: limpa os parâmetros transitórios (sem resíduo) e retorna à seção de origem.
+  //   PR-OC-FIN-RETORNO-01 — aberto pelo Financeiro V2 (oc_return='financeiro-lanc') → volta ao
+  //   Financeiro V2 (o restore-effect de filtros do FinanceiroV2Tab dispara no mount). Caso contrário,
+  //   comportamento atual: retorna à Central.
   const fecharOperacaoOC = useCallback(() => {
     const p = new URLSearchParams(window.location.search);
+    const retorno = p.get('oc_return');
     p.delete('oc_compra');
     p.delete('oc_id');
+    p.delete('oc_aba');
+    p.delete('oc_return');
     setSearchParams(p, { replace: true });
-    setSection('operacoes-comerciais');
+    setSection(retorno === 'financeiro-lanc' ? 'financeiro-lanc' : 'operacoes-comerciais');
   }, [setSearchParams]);
   // PR-OC-ENTRYPOINT-COMPRA-01 — nova Compra: abre o CompraModalShell em MODO OC (?oc_compra=1, sem oc_id)
   //   direto na seção Lançamentos — mesma árvore da Central/deep-link; ausência de oc_id = criação nova.
