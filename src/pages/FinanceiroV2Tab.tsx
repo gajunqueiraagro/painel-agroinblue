@@ -1300,6 +1300,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
             </>
           ) : (
             <>
+              {/* PR-FIN-V2-HEADER-DENSIDADE-01 — cabeçalho desktop em duas colunas: FILTROS (flex-1 min-w-0)
+                  | AÇÕES (shrink-0, não encolhe). Impede os filtros de comprimirem/quebrarem os botões. */}
+              <div className="flex items-start gap-1.5">
+                <div className="flex-1 min-w-0 space-y-1">
               {/* DESKTOP: LINE 1 — Ano | Mês | Data por | Tipo | Status | Fazenda | Atividade
                   PR-FIN-V2-FILTROS-DENSIDADE-01 (revisão) — Fazenda volta a largura compacta fixa (120px),
                   em família com Tipo/Status (106px) e Atividade (110px); truncate/ellipsis segue como fallback.
@@ -1488,9 +1492,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     />
                   </div>
                 </div>
-                <div className="flex items-center gap-1 shrink-0 pb-[1px]">
-                  {actionButtons}
-                </div>
               </div>
 
               {/* DESKTOP: LINE 3 — Produto | Fornecedor | Documento + Limpar + Summary */}
@@ -1533,6 +1534,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                   <span className="text-[10px] text-success font-bold">Entradas: {formatMoeda(totalEntradas)}</span>
                   <span className="text-[10px] text-destructive font-bold">Saídas: {formatMoeda(totalSaidas)}</span>
                   <span className="text-[10px] text-muted-foreground">{totalLancamentosFiltrados} lanç.</span>
+                </div>
+              </div>
+                </div>
+                {/* AÇÕES — coluna fixa à direita; shrink-0 para nunca encolher/quebrar. */}
+                <div className="shrink-0 pb-[1px]">
+                  {actionButtons}
                 </div>
               </div>
             </>
