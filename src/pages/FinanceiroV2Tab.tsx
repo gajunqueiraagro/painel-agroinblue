@@ -1206,8 +1206,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
             </>
           ) : (
             <>
-              {/* DESKTOP: LINE 1 — Ano | Mês | Data por | Tipo | Status | Fazenda | Atividade */}
-              <div className="grid grid-cols-[62px_77px_92px_106px_106px_0.35fr_110px] gap-1.5 items-end">
+              {/* DESKTOP: LINE 1 — Ano | Mês | Data por | Tipo | Status | Fazenda | Atividade
+                  PR-FIN-V2-FILTROS-DENSIDADE-01 — Fazenda ganha min-width confortável (minmax) para exibir
+                  o nome usual completo, crescendo com o espaço disponível; truncate segue como fallback. */}
+              <div className="grid grid-cols-[62px_77px_92px_106px_106px_minmax(150px,1.4fr)_110px] gap-1.5 items-end">
                 <div>
                   <label className={lblCls}>Ano</label>
                   <Select value={ano} onValueChange={setAno}>
@@ -1320,7 +1322,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
 
               {/* DESKTOP: LINE 2 — Conta Origem | Conta Destino | Macro | Grupo | Centro | Subcentro + Action Buttons */}
               <div className="flex items-end gap-1.5">
-                <div className="grid grid-cols-[120px_120px_110px_110px_110px_110px] gap-1 items-end flex-1 min-w-0">
+                {/* PR-FIN-V2-FILTROS-DENSIDADE-01 — Conta Origem/Destino (nomes longos) priorizadas com min 150px
+                    e maior fração; Macro/Grupo/Centro/Subcentro com min 115px. Todas crescem via fr para preencher
+                    o espaço; truncate/ellipsis permanece como proteção para nomes extremos. */}
+                <div className="grid grid-cols-[minmax(150px,1.4fr)_minmax(150px,1.4fr)_minmax(115px,1fr)_minmax(115px,1fr)_minmax(115px,1fr)_minmax(115px,1fr)] gap-1 items-end flex-1 min-w-0">
                   <div>
                     <label className={lblCls}>Conta Origem</label>
                     {/* PR-H2 — ContaBancariaSelect compartilhado. */}
