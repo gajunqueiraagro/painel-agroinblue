@@ -91,7 +91,7 @@ interface Props {
   dataOperacao: string | null;        // contexto: data da compra
   dataChegada: string | null;         // contexto: data de chegada (recebimento)
   darkSelectClass: string;
-  recarregarDados?: () => void;        // refresh da API de negociação antes de abrir "Novo compromisso"
+  recarregarDados?: () => void | Promise<void>;   // refresh da API de negociação antes de abrir "Novo compromisso"
 }
 
 const badgeStatusCompromisso = (s: string) => (s === 'programado' ? 'default' : s === 'cancelado' ? 'destructive' : 'secondary');
@@ -122,9 +122,13 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
   );
   const podeEscrever = !bloqueado && versao != null && !saving;
 
-  // Abre "Novo compromisso" após refrescar os dados da OC (valor_acordado/lotes/contraparte),
-  // garantindo que o dialog herde o snapshot atual e não uma leitura obsoleta da negociação.
-  const abrirNovo = () => { recarregarDados?.(); setNovoAberto(true); };
+  // Abre "Novo compromisso" AGUARDANDO o refresh da OC (valor_acordado/lotes/contraparte) concluir,
+  // para o dialog herdar o snapshot atual — evita compor o Produto com lotes obsoletos/vazios
+  // ("Compra principal"). Se o refresh falhar, ainda abre (o guard de submit protege a persistência).
+  const abrirNovo = async () => {
+    try { await recarregarDados?.(); } catch { /* abre mesmo assim; guard de submit protege */ }
+    setNovoAberto(true);
+  };
 
   // Editar o título vinculado à parcela materializada: reutiliza o modal oficial do Financeiro V2
   // via o fluxo existente ?flancId={tituloId} (V2Index consome, troca de seção e abre o modal com a
@@ -144,6 +148,10 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
     const subs = new Set(c.itens.map(i => i.subcentro));
     return subs.size === 1 ? Array.from(subs)[0] : '';
   }, [lotes]);
+
+  // Lotes prontos = há quantidade negociada carregada. Guarda contra criar compromisso PRINCIPAL
+  // com o fallback "Compra principal" (lotes stale/vazios). Ver descricaoDefault + NovoCompromissoDialog.
+  const lotesProntos = useMemo(() => lotes.reduce((s, l) => s + (l.qtd ?? 0), 0) > 0, [lotes]);
 
   const descricaoDefault = useMemo(() => {
     const qtd = lotes.reduce((s, l) => s + (l.qtd ?? 0), 0);
@@ -332,7 +340,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
           onClose={() => setNovoAberto(false)} onSubmit={criar} saving={saving}
           clienteId={clienteId} tipoOperacao={tipoOperacao} fornecedores={fornecedores} darkSelectClass={darkSelectClass}
           valorAcordado={valorAcordado} sugestaoSubcentro={sugestaoSubcentro} descricaoDefault={descricaoDefault}
-          contraparteId={contraparteId}
+          contraparteId={contraparteId} lotesProntos={lotesProntos}
         />
       )}
       {programarAberto && selecionado && (
@@ -368,10 +376,10 @@ function ResumoCard({ rotulo, valor }: { rotulo: string; valor: number }) {
 }
 
 // ===== Dialog: Novo compromisso =====
-function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOperacao, fornecedores, darkSelectClass, valorAcordado, sugestaoSubcentro, descricaoDefault, contraparteId }: {
+function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOperacao, fornecedores, darkSelectClass, valorAcordado, sugestaoSubcentro, descricaoDefault, contraparteId, lotesProntos }: {
   onClose: () => void; onSubmit: (p: CriarCompromissoPayload) => void; saving: boolean;
   clienteId: string | null; tipoOperacao: string | null; fornecedores: { id: string; nome: string }[]; darkSelectClass: string;
-  valorAcordado: number | null; sugestaoSubcentro: string; descricaoDefault: string; contraparteId: string | null;
+  valorAcordado: number | null; sugestaoSubcentro: string; descricaoDefault: string; contraparteId: string | null; lotesProntos: boolean;
 }) {
   const plano = usePlanoContasOC(clienteId ?? undefined);
   const comps = useComponentesFinanceiros();
@@ -407,7 +415,10 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
     return Array.from(set).sort().map(s => ({ value: s, label: s }));
   }, [plano.rows, planoTipo]);
 
-  const podeSubmeter = !!componente && valor != null && valor > 0 && !!subcentro && !saving;
+  // GUARD "Compra principal": um compromisso PRINCIPAL não pode ser criado sem os lotes carregados,
+  //   pois o Produto seria o fallback "Compra principal" (dados de negociação obsoletos/ausentes).
+  const principalSemLotes = natureza === 'principal' && !lotesProntos;
+  const podeSubmeter = !!componente && valor != null && valor > 0 && !!subcentro && !saving && !principalSemLotes;
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
@@ -462,10 +473,15 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
             <Textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={2} className="mt-0.5 text-[12px]" placeholder="Opcional" />
           </div>
         </div>
+        {principalSemLotes && (
+          <div className="rounded-md border border-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2 py-1 text-[11px] text-amber-800 dark:text-amber-200">
+            Aguardando os dados da negociação (lotes) para compor o Produto. Feche e reabra o compromisso em instantes — o compromisso principal não pode ser criado sem os lotes carregados.
+          </div>
+        )}
         <DialogFooter>
           <Button variant="outline" size="sm" onClick={onClose}>Cancelar</Button>
           <Button size="sm" disabled={!podeSubmeter}
-            onClick={() => { if (componente && valor != null && valor > 0 && subcentro) onSubmit({ natureza, componente, valor_total: valor, subcentro, favorecido_id: favorecidoId || null, descricao: descricao || null }); }}>
+            onClick={() => { if (componente && valor != null && valor > 0 && subcentro && !principalSemLotes) onSubmit({ natureza, componente, valor_total: valor, subcentro, favorecido_id: favorecidoId || null, descricao: descricao || null }); }}>
             Criar
           </Button>
         </DialogFooter>
