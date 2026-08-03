@@ -98,10 +98,13 @@ export function computeValidacaoModal(v: ValidacaoModalInput): ValidacaoModalRes
     (v.numParcelas >= 2 && v.numParcelas <= 24 && v.parcelaRowsLength === v.numParcelas);
   const recorrenteValid = v.frequencia === 'pontual' || v.recorrenciaRowsLength > 0;
 
+  // PR-FIN-V2-STATUS-01-AJUSTE — data_pagamento é obrigatória APENAS quando status = 'realizado'.
+  //   Previsto/agendado/programado salvam com data_pagamento vazia (null).
+  const dataPagamentoOk = v.statusTransacao === 'realizado' ? !!v.dataPagamento : true;
   const geralValida =
     !!v.fazendaId &&
     !!v.dataCompetencia &&
-    !!v.dataPagamento &&
+    dataPagamentoOk &&
     !!v.descricao &&
     !!v.tipoOperacao &&
     !!v.statusTransacao &&

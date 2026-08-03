@@ -717,6 +717,10 @@ export function LancamentoV2Dialog({
     frequencia, recorrenciaRowsLength: recorrenciaRows.length,
   });
   const canSave = validacao.canSave;
+  // PR-FIN-V2-STATUS-01-AJUSTE item 2 — mensagem clara da pendência principal (regra/campo).
+  const pendenciaMsg = statusTransacao === 'realizado' && !dataPagamento
+    ? 'Data de pagamento obrigatória quando status = Realizado.'
+    : null;
   // PR-FIN-MODAL-02E — a aba Classificação foi INCORPORADA à aba Geral. A validação
   // (helper puro/computeValidacaoModal) permanece IDÊNTICA — mesmas regras, mensagens e
   // critérios; muda apenas o DESTINO VISUAL: pendência de 'classificacao' aponta para
@@ -1716,10 +1720,11 @@ export function LancamentoV2Dialog({
               <button
                 type="button"
                 onClick={handleVerPendencia}
+                title={pendenciaMsg ?? undefined}
                 className="flex items-center gap-1 text-[11px] font-medium text-destructive hover:underline"
               >
                 <AlertCircle className="h-3.5 w-3.5" />
-                Ver pendência
+                {pendenciaMsg ?? 'Ver pendência'}
               </button>
             )}
             <div className="flex-1" />
