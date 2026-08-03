@@ -7,6 +7,7 @@ import { Lancamento, SaldoInicial, Categoria } from '@/types/cattle';
 import { assertStatusZootGravavel } from '@/lib/statusOperacional';
 import type { StatusOperacional } from '@/lib/statusOperacional';
 import { addToQueue, isOnline } from '@/lib/offlineQueue';
+import { enriquecerMovimentosOC } from '@/lib/oc/enriquecerMovimentosOC';
 import { toast } from 'sonner';
 
 const STORAGE_KEY = 'gado-lancamentos';
@@ -262,10 +263,15 @@ export function useLancamentos(arg: UseLancamentosArg = 'realizado') {
           }
         }
 
-        const lancamentos = lancData.map((l: any) => ({
+        const lancamentosBase = lancData.map((l: any) => ({
           ...mapRowToLancamento(l, profileMap),
           operacaoId: ocByMov[l.id] ?? null,
         }));
+        // PR-OC-CONFERENCIA-REBANHO-01 — enriquecimento de LEITURA: preenche dados comerciais
+        //   (fornecedor/valor/R$@) dos movimentos originados de OC, a partir da OC/lote, sem gravar
+        //   no banco. Legado e não-OC passam intactos. Serve também o useMovimentacoesAgregadas
+        //   (que consome este hook) — ponto único, sem lógica duplicada.
+        const lancamentos = await enriquecerMovimentosOC(lancamentosBase);
 
         const saldosIniciais: SaldoInicial[] = saldoRes.data
           ? saldoRes.data.map(s => ({
