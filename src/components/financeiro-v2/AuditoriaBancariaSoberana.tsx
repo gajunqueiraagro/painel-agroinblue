@@ -721,12 +721,16 @@ function montarAchados(diag: DiagnosticoSoberano): Achado[] {
   return out;
 }
 
-function LadoCelula({ data, valor, descricao }: { data: string | null; valor: number; descricao: string }) {
+function LadoCelula({ data, valor, descricao, documento, classificacao }: { data: string | null; valor: number; descricao: string; documento?: string | null; classificacao?: string | null }) {
+  // PR-1 — extra (documento no lado banco, centro/subcentro no lado sistema) é OPCIONAL: quando ausente
+  //   (ex.: LinhaGrupo/LinhaPar dos cards de auditoria) o render é idêntico ao anterior.
+  const extra = documento ?? classificacao ?? null;
   return (
     <div className="flex items-center gap-1 min-w-0">
       <span className="w-9 shrink-0 text-muted-foreground">{fmtData(data)}</span>
       <span className={`shrink-0 ${valor >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{valor >= 0 ? '▲' : '▼'}</span>
       <span className="flex-1 min-w-0 truncate" title={descricao}>{descricao}</span>
+      {extra && <span className="shrink-0 max-w-[92px] truncate text-[8px] text-muted-foreground" title={extra}>{extra}</span>}
       <span className="shrink-0 tabular-nums">{fmtBRL(Math.abs(valor))}</span>
     </div>
   );
@@ -969,7 +973,7 @@ function AbaSistemaReal({ sistema, inicial, onAbrir }: { sistema: EspSis[]; inic
 
 // Aba 3 (Opção B): conciliados (status) + sugestões/sem-vínculo (motor via diag).
 type ClasseEsp = 'conciliado' | 'forte' | 'possiveis' | 'sem_vinculo';
-interface LadoCell { data: string | null; valor: number; descricao: string; }
+interface LadoCell { data: string | null; valor: number; descricao: string; documento?: string | null; classificacao?: string | null; }
 interface ParReal {
   key: string; classe: ClasseEsp;
   ofx?: LadoCell; sis?: LadoCell; nPossiveis?: number;
@@ -979,6 +983,10 @@ interface ParReal {
 }
 function montarEspelhoReal(data: EspelhadosReais, diag: DiagnosticoSoberano): ParReal[] {
   const out: ParReal[] = [];
+  // PR-1 — enriquecimento de exibição a partir do MESMO payload (fn_extratos_espelhados): documento por
+  //   extrato (lado banco) e centro/subcentro por lançamento (lado sistema). Não altera pareamento/ordem.
+  const docByExtrato = new Map(data.ofx_completo.map((o) => [o.extrato_id, o.documento]));
+  const classByLanc = new Map(data.sistema_completo.map((s) => [s.lancamento_id, [s.centro, s.subcentro].filter(Boolean).join(' / ') || null]));
   // Conciliados: pareamento de exibição (mesmo valor assinado + data; fallback só valor). Não é o motor.
   const cOfx = data.ofx_completo.filter((o) => o.status === 'conciliado');
   const cSis = data.sistema_completo.filter((s) => s.status === 'conciliado');
@@ -1013,7 +1021,13 @@ function montarEspelhoReal(data: EspelhadosReais, diag: DiagnosticoSoberano): Pa
     });
   }
   // dataChave por item (OFX soberano: data do OFX ancora; senão a do Sistema). Não muda pareamento.
-  return out.map((p) => ({ ...p, dataChave: p.ofx?.data ?? p.sis?.data ?? null }));
+  //   PR-1 — anexa documento (banco) e classificação (sistema) por id, sem reordenar/reparear.
+  return out.map((p) => ({
+    ...p,
+    ofx: p.ofx ? { ...p.ofx, documento: p.extrato_id ? docByExtrato.get(p.extrato_id) ?? null : null } : undefined,
+    sis: p.sis ? { ...p.sis, classificacao: p.lancamento_id ? classByLanc.get(p.lancamento_id) ?? null : null } : undefined,
+    dataChave: p.ofx?.data ?? p.sis?.data ?? null,
+  }));
 }
 // Agrupa ParReal por dataChave, grupos em data ASC (cronológico), grupo sem-data por último.
 // ESTÁVEL: preserva a ordem dos itens dentro do mesmo dia (não re-pareia nem reordena).
@@ -1040,11 +1054,13 @@ type ResolverCtx = { tipo: 'extrato_sem_vinculo' | 'sistema_sem_vinculo'; id: st
 function LinhaEspReal({ par, onResolver, onDesconsiderar }: { par: ParReal; onResolver: (ctx: ResolverCtx) => void; onDesconsiderar?: (extratoId: string) => void }) {
   // Conector por classe — 4 estados (verde/amarelo/amarelo/cinza). Vermelho = divergência REAL,
   // tratado nos GRUPOS (LinhaGrupo), não aqui (sem classe 'divergente' por linha no contrato).
+  // PR-1 — Situação em 3 estados claros. Agrupamento (🟣) e divergência-por-linha (🔴) ficam para PRs futuros.
   const conector =
-    par.classe === 'conciliado' ? <span className="text-emerald-600 text-[10px]" title="Conciliado">◀══▶</span>
-    : par.classe === 'forte' ? <span className="px-1 rounded bg-amber-100 text-amber-700 text-[8px] font-medium" title="Sugestão forte">sugestão</span>
-    : par.classe === 'possiveis' ? <span className="px-1 rounded bg-amber-100 text-amber-700 text-[8px] font-medium" title="Candidatos possíveis">{par.nPossiveis} poss.</span>
-    : <span className="text-muted-foreground text-[10px]" title="Sem vínculo">────</span>;
+    par.classe === 'conciliado'
+      ? <span className="inline-flex items-center gap-0.5 text-emerald-700 text-[8px] font-medium" title="Conciliado"><span className="text-emerald-500">●</span>Conciliado</span>
+      : (par.classe === 'forte' || par.classe === 'possiveis')
+      ? <span className="inline-flex items-center gap-0.5 text-amber-700 text-[8px] font-medium" title={par.classe === 'possiveis' ? `${par.nPossiveis} candidato(s) possível(is)` : 'Sugestão encontrada'}><span className="text-amber-500">●</span>Sugestão{par.classe === 'possiveis' && par.nPossiveis ? ` (${par.nPossiveis})` : ''}</span>
+      : <span className="inline-flex items-center gap-0.5 text-muted-foreground text-[8px]" title="Sem correspondência"><span>○</span>Sem corresp.</span>;
   // Ação Resolver → abre a MESMA Estação dos buckets (reusa onResolver=setEstacaoCtx).
   let acao: React.ReactNode = null;
   if (par.classe !== 'conciliado') {
@@ -1059,7 +1075,7 @@ function LinhaEspReal({ par, onResolver, onDesconsiderar }: { par: ParReal; onRe
   return (
     <div className="flex items-center gap-1 py-0.5 text-[10px] border-b last:border-b-0">
       <div className="flex-1 min-w-0">{par.ofx ? <LadoCelula data={par.ofx.data} valor={par.ofx.valor} descricao={par.ofx.descricao} /> : <span className="text-[9px] italic text-muted-foreground">— sem OFX</span>}</div>
-      <div className="w-16 shrink-0 flex justify-center">{conector}</div>
+      <div className="w-24 shrink-0 flex justify-center">{conector}</div>
       <div className="flex-1 min-w-0">{par.sis ? <LadoCelula data={par.sis.data} valor={par.sis.valor} descricao={par.sis.descricao} /> : <span className="text-[9px] italic text-muted-foreground">— sem lançamento</span>}</div>
       <div className="w-24 shrink-0 flex flex-col items-end gap-0.5">
         {acao}
@@ -1078,14 +1094,15 @@ function AbaEspelhoReal({ data, diag, onResolver, onDesconsiderar }: { data: Esp
   return (
     <div className="max-h-[55vh] overflow-y-auto">
       {/* Legenda de cores (4 estados) */}
+      {/* PR-1 — legenda alinhada aos 3 estados reais desta visão. Removido o ponto "divergência"
+          (rosa) que a linha NUNCA emitia (a divergência por linha entra em PR futuro). */}
       <div className="flex flex-wrap items-center gap-2 text-[9px] text-muted-foreground pb-1">
-        <span className="inline-flex items-center gap-1"><span className="text-emerald-600">●</span> conciliado</span>
-        <span className="inline-flex items-center gap-1"><span className="text-amber-600">●</span> sugestão</span>
-        <span className="inline-flex items-center gap-1"><span className="text-rose-600">●</span> divergência</span>
-        <span className="inline-flex items-center gap-1"><span className="text-muted-foreground">●</span> sem vínculo</span>
+        <span className="inline-flex items-center gap-1"><span className="text-emerald-500">●</span> Conciliado</span>
+        <span className="inline-flex items-center gap-1"><span className="text-amber-500">●</span> Sugestão</span>
+        <span className="inline-flex items-center gap-1"><span className="text-muted-foreground">○</span> Sem correspondência</span>
       </div>
       <div className="flex items-center gap-1 text-[9px] font-semibold uppercase text-muted-foreground border-b pb-0.5 sticky top-0 bg-card z-10">
-        <span className="flex-1">Extrato (banco)</span><span className="w-16 text-center">vínculo</span><span className="flex-1">Sistema</span><span className="w-24 text-right">ação</span>
+        <span className="flex-1">Banco (OFX)</span><span className="w-24 text-center">Situação</span><span className="flex-1">Sistema</span><span className="w-24 text-right">Ação</span>
       </div>
       {grupos.map((g) => (
         <div key={g.data ?? 'sem-data'}>
@@ -1149,7 +1166,9 @@ function AbaEvolucaoReal({ data }: { data: EspelhadosReais }) {
 }
 
 function ExtratosEspelhadosReais({ data, diag, onResolver, onAbrirLanc, onDesconsiderar }: { data: EspelhadosReais; diag: DiagnosticoSoberano; onResolver: (ctx: ResolverCtx) => void; onAbrirLanc?: (id: string) => void; onDesconsiderar?: (extratoId: string) => void }) {
-  const [aberto, setAberto] = useState(false);
+  // PR-FIN-V2-CONCILIACAO-REMODELAGEM-FASE-1 (PR-1) — Conferência é a visão operacional principal:
+  //   o card nasce EXPANDIDO (antes iniciava colapsado) e a aba default segue 'espelho' (Conferência).
+  const [aberto, setAberto] = useState(true);
   const [aba, setAba] = useState<'ofx' | 'sistema' | 'espelho' | 'evolucao'>('espelho');
   const inicial = data.saldos.inicial ?? 0;
   // Conferência (foto) primeiro: é a tela principal de conferência operacional. Demais = apoio.
