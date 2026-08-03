@@ -459,6 +459,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
             documentos={api.documentosApi?.documentos ?? null}
             financeiroResumo={api.liquidacaoApi?.resumo ?? null}
             obrigacoesCount={api.liquidacaoApi?.obrigacoes.length ?? null}
+            obrigacoes={api.liquidacaoApi?.obrigacoes ?? null}
           />
         ) : (
           <div className="space-y-2 self-start">

@@ -3,7 +3,7 @@ import { formatMoeda } from '@/lib/calculos/formatters';
 import type { CompraLotesApi } from '@/hooks/useCompraLotes';
 import type { LoteRecebimento, EstadoRecebimento } from '@/hooks/useOperacaoRecebimento';
 import type { DocumentoLista } from '@/hooks/useOperacaoDocumentos';
-import type { ResumoLiquidacao } from '@/hooks/useOperacaoLiquidacao';
+import type { ResumoLiquidacao, ObrigacaoLinha } from '@/hooks/useOperacaoLiquidacao';
 
 // Resumo lateral OC (PR-RESUMO-LATERAL-01a). Painel PERMANENTE das 6 etapas, independente
 //   da aba ativa. Espelho sintético das fontes OFICIAIS já montadas (uma única vez) em
@@ -97,6 +97,19 @@ function Secao({ sinal, estadoLabel, titulo, divisor, children }: { sinal: Sinal
   );
 }
 
+// PR-OC-FIN-VISAO-02 — status financeiro por natureza (mesma regra do PR-OC-HOMOLOG-01):
+//   liquidado ≥ base → Pago; liquidado 0 → Programado; parcial → Parcial.
+function statusFinanceiro(base: number, liquidado: number): { icon: string; label: string; sinal: Sinal } {
+  if (base <= 0) return { icon: '', label: '—', sinal: 'neutro' };
+  if (liquidado >= base - 0.005) return { icon: '🟢', label: 'Pago', sinal: 'ok' };
+  if (liquidado > 0) return { icon: '🟠', label: 'Parcial', sinal: 'atencao' };
+  return { icon: '🟡', label: 'Programado', sinal: 'atencao' };
+}
+const COMPONENTE_LABEL: Record<string, string> = {
+  frete: 'Frete', comissao: 'Comissão', taxa_aquisicao: 'Taxa aquisição', taxa: 'Taxas', imposto: 'Impostos',
+};
+const rotuloComponente = (c: string) => COMPONENTE_LABEL[c] ?? (c ? c.charAt(0).toUpperCase() + c.slice(1).replace(/_/g, ' ') : 'Outros');
+
 interface Props {
   dataLabel: string;                                    // Compra — data já disponível no shell (sem consulta)
   statusComercial: string | null;                       // Compra — fonte oficial status_comercial: 'programada'|'fechada'|'cancelada'
@@ -107,13 +120,14 @@ interface Props {
   recebimentoLotes: LoteRecebimento[] | null;           // consolidação por helper puro
   entregaEncerrada: boolean;
   documentos: DocumentoLista[] | null;                  // consolidação por helper puro
-  financeiroResumo: ResumoLiquidacao | null;            // fonte oficial derivada nas views
+  financeiroResumo: ResumoLiquidacao | null;            // fonte oficial derivada nas views (legado; não mais exibido)
   obrigacoesCount: number | null;
+  obrigacoes: ObrigacaoLinha[] | null;                  // PR-OC-FIN-VISAO-02 — split Principal × Obrigações por natureza
 }
 
 export function ResumoLateralOC({
   dataLabel, statusComercial, fornecedorNome, fazendaNome, ocId,
-  negociacaoTotais, recebimentoLotes, entregaEncerrada, documentos, financeiroResumo, obrigacoesCount,
+  negociacaoTotais, recebimentoLotes, entregaEncerrada, documentos, obrigacoes,
 }: Props) {
   const rec = consolidarRecebimento(recebimentoLotes);
   const doc = consolidarDocumentos(documentos);
@@ -145,17 +159,23 @@ export function ResumoLateralOC({
   //   textual, não pendência (vw_oc_documentos só distingue ativo/cancelado; sem estado de pendência ativa).
   const docSinal: Sinal = !doc || doc.total === 0 ? 'neutro' : 'ok';
   const docEstadoLabel = !doc || doc.total === 0 ? 'Sem documentos' : doc.situacao;
-  // Financeiro — quitada(=liquidado)→success · excedente→destructive · demais(saldo aberto)→warning · sem resumo→muted.
-  const finSinal: Sinal =
-    !financeiroResumo ? 'neutro'
-    : financeiroResumo.estadoLiquidacao === 'quitada' ? 'ok'
-    : financeiroResumo.estadoLiquidacao === 'excedente' ? 'divergencia'
-    : 'atencao';
-  const finEstadoLabel =
-    !financeiroResumo ? 'Indisponível'
-    : financeiroResumo.estadoLiquidacao === 'quitada' ? 'Liquidado'
-    : financeiroResumo.estadoLiquidacao === 'excedente' ? 'Excedente'
-    : 'Saldo em aberto';
+  // PR-OC-FIN-VISAO-02 — visão financeira SEPARADA por natureza (substitui saldo/excedente misto).
+  //   Fonte: obrigacoes (vw_oc_obrigacoes) — cada linha tem natureza/componente/valorNominal/totalLiquidado.
+  //   O "excedente" da view legada não é mais exibido (base era só principal × liquidado principal+obrigações).
+  const obrAtivas = (obrigacoes ?? []).filter(o => !o.cancelada);
+  const aggNat = (nat: string) => obrAtivas.filter(o => o.natureza === nat)
+    .reduce((a, o) => ({ base: a.base + (o.valorNominal || 0), liq: a.liq + (o.totalLiquidado || 0) }), { base: 0, liq: 0 });
+  const finPrincipal = aggNat('principal');
+  const finObrig = aggNat('obrigacao');
+  const finTotalBase = finPrincipal.base + finObrig.base;
+  const finTotalLiq = finPrincipal.liq + finObrig.liq;
+  const temFinanceiro = obrAtivas.length > 0;
+  const stPrincipal = statusFinanceiro(finPrincipal.base, finPrincipal.liq);
+  const stObrig = statusFinanceiro(finObrig.base, finObrig.liq);
+  const componentesObrig = Array.from(new Set(obrAtivas.filter(o => o.natureza === 'obrigacao').map(o => o.componente))).map(rotuloComponente);
+  const stTotal = statusFinanceiro(finTotalBase, finTotalLiq);
+  const finSinal: Sinal = !temFinanceiro ? 'neutro' : stTotal.sinal;
+  const finEstadoLabel = !temFinanceiro ? 'Indisponível' : stTotal.label;
 
   return (
     <div className="bg-card rounded-md border shadow-sm p-1.5 space-y-1.5 self-start">{/* PR-OC-UX-DENSIDADE-01 — padding/gap reduzidos */}
@@ -211,23 +231,28 @@ export function ResumoLateralOC({
         )}
       </Secao>
 
+      {/* PR-OC-FIN-VISAO-02 — Financeiro separado por natureza: Principal (animais) × Obrigações × Total.
+          Sem "Excedente" falso (base agora é comparada por natureza, não principal × liquidado total). */}
       <Secao sinal={finSinal} estadoLabel={finEstadoLabel} titulo="Financeiro" divisor>
-        {!financeiroResumo ? (
+        {!temFinanceiro ? (
           <Ctx>—</Ctx>
-        ) : financeiroResumo.estadoLiquidacao === 'quitada' ? (
-          <>
-            <Principal>Liquidado • {moneyOr(financeiroResumo.totalLiquidadoValido)}</Principal>
-            {obrigacoesCount != null && (
-              <Ctx>{obrigacoesCount} título{obrigacoesCount === 1 ? '' : 's'}</Ctx>
-            )}
-          </>
         ) : (
-          <>
-            <Principal className={financeiroResumo.estadoLiquidacao === 'excedente' ? 'text-destructive' : ''}>Saldo {moneyOr(financeiroResumo.saldoOperacao)}</Principal>
-            {obrigacoesCount != null && (
-              <Ctx>{obrigacoesCount} título{obrigacoesCount === 1 ? '' : 's'}</Ctx>
+          <div className="space-y-1">
+            <div>
+              <div className="text-[10px] font-semibold text-foreground/80 leading-none">Principal (animais)</div>
+              <Ctx>{stPrincipal.icon ? `${stPrincipal.icon} ` : ''}{stPrincipal.label} · {moneyOr(finPrincipal.liq)} / {moneyOr(finPrincipal.base)}</Ctx>
+            </div>
+            {finObrig.base > 0 && (
+              <div>
+                <div className="text-[10px] font-semibold text-foreground/80 leading-none">Obrigações</div>
+                <Ctx>{stObrig.icon ? `${stObrig.icon} ` : ''}{stObrig.label} · {moneyOr(finObrig.liq)} / {moneyOr(finObrig.base)}</Ctx>
+                {componentesObrig.length > 0 && <Ctx>{componentesObrig.join(' · ')}</Ctx>}
+              </div>
             )}
-          </>
+            <div className="pt-0.5">
+              <Principal className="text-primary">Total {moneyOr(finTotalBase)}</Principal>
+            </div>
+          </div>
         )}
       </Secao>
     </div>
