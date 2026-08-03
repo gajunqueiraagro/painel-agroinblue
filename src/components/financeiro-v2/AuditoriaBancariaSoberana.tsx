@@ -755,9 +755,11 @@ function LinhaPar({ par }: { par: ParEspelho }) {
 
 // Bloco de grupo conciliado REAL (cbi): 1 âncora + N membros. NUNCA "sem vínculo".
 // 1xN: âncora=OFX (esq), membros=lançamentos (dir). Nx1: espelhado.
-function LinhaGrupo({ grupo, compartilhados }: { grupo: GrupoConciliado; compartilhados: Set<string> }) {
+function LinhaGrupo({ grupo, compartilhados, sugerido = false, acao }: { grupo: GrupoConciliado; compartilhados: Set<string>; sugerido?: boolean; acao?: React.ReactNode }) {
   const batido = grupo.status_grupo === 'batido';
-  const corBloco = batido ? 'border-emerald-300 bg-emerald-50/50' : 'border-rose-400 bg-rose-50/60';
+  // PR-2 — grupo SUGERIDO (agrupamento não vinculado, ex.: JBS) tem estado próprio (🟣 Agrupado), sem herdar
+  //   'batido/divergente' de conciliação. Card de auditoria (sugerido=false) segue idêntico.
+  const corBloco = sugerido ? 'border-violet-300 bg-violet-50/50' : batido ? 'border-emerald-300 bg-emerald-50/50' : 'border-rose-400 bg-rose-50/60';
   const ancoraEsq = grupo.tipo === '1xN';
   const selo = (id: string) =>
     compartilhados.has(id) ? (
@@ -785,10 +787,10 @@ function LinhaGrupo({ grupo, compartilhados }: { grupo: GrupoConciliado; compart
       <div className="flex items-stretch gap-1 text-[10px]">
         <div className="flex-1 min-w-0">{ancoraEsq ? ancoraCell : membrosCells}</div>
         <div className="w-16 shrink-0 flex flex-col items-center justify-center gap-0.5">
-          <span className={`px-1 rounded text-[8px] font-bold ${batido ? 'bg-emerald-200 text-emerald-800' : 'bg-rose-200 text-rose-900'}`}>
+          <span className={`px-1 rounded text-[8px] font-bold ${sugerido ? 'bg-violet-200 text-violet-900' : batido ? 'bg-emerald-200 text-emerald-800' : 'bg-rose-200 text-rose-900'}`}>
             {ancoraEsq ? '1×N' : 'N×1'}
           </span>
-          <span className={`text-[8px] ${batido ? 'text-emerald-700' : 'text-rose-700'}`}>{batido ? 'batido' : 'divergente'}</span>
+          <span className={`text-[8px] ${sugerido ? 'text-violet-700' : batido ? 'text-emerald-700' : 'text-rose-700'}`}>{sugerido ? 'Agrupado' : batido ? 'batido' : 'divergente'}</span>
         </div>
         <div className="flex-1 min-w-0">{ancoraEsq ? membrosCells : ancoraCell}</div>
       </div>
@@ -796,6 +798,9 @@ function LinhaGrupo({ grupo, compartilhados }: { grupo: GrupoConciliado; compart
         <div className="mt-1 pt-0.5 border-t border-rose-300 text-[8px] text-rose-800 text-right tabular-nums">
           OFX R$ {fmtBRL(grupo.total_ofx)} · Sistema R$ {fmtBRL(grupo.total_sistema)} · dif R$ {fmtBRL(grupo.diferenca)}
         </div>
+      )}
+      {acao && (
+        <div className="mt-1 pt-0.5 border-t border-violet-200 flex justify-end">{acao}</div>
       )}
     </div>
   );
@@ -974,12 +979,16 @@ function AbaSistemaReal({ sistema, inicial, onAbrir }: { sistema: EspSis[]; inic
 // Aba 3 (Opção B): conciliados (status) + sugestões/sem-vínculo (motor via diag).
 type ClasseEsp = 'conciliado' | 'forte' | 'possiveis' | 'sem_vinculo';
 interface LadoCell { data: string | null; valor: number; descricao: string; documento?: string | null; classificacao?: string | null; }
+// PR-2 — bloco-grupo na timeline (reusa LinhaGrupo). `sugerido` = agrupamento não vinculado (AgrItem);
+//   `false` = grupo já conciliado (cbi). `acaoExtratoId` só existe no sugerido (encaminha à Estação).
+interface GrupoView { grupo: GrupoConciliado; sugerido: boolean; acaoExtratoId?: string; }
 interface ParReal {
-  key: string; classe: ClasseEsp;
+  key: string; classe: ClasseEsp | 'agrupado' | 'grupo_conciliado';
   ofx?: LadoCell; sis?: LadoCell; nPossiveis?: number;
   extrato_id?: string;     // quando há lado OFX (para a ação Resolver)
   lancamento_id?: string;  // quando há lado Sistema
   dataChave?: string | null; // data que posiciona o item na timeline (OFX soberano)
+  grupo?: GrupoView;       // PR-2 — quando presente, a linha é um bloco-grupo (LinhaGrupo), não LinhaEspReal
 }
 function montarEspelhoReal(data: EspelhadosReais, diag: DiagnosticoSoberano): ParReal[] {
   const out: ParReal[] = [];
@@ -987,13 +996,48 @@ function montarEspelhoReal(data: EspelhadosReais, diag: DiagnosticoSoberano): Pa
   //   extrato (lado banco) e centro/subcentro por lançamento (lado sistema). Não altera pareamento/ordem.
   const docByExtrato = new Map(data.ofx_completo.map((o) => [o.extrato_id, o.documento]));
   const classByLanc = new Map(data.sistema_completo.map((s) => [s.lancamento_id, [s.centro, s.subcentro].filter(Boolean).join(' / ') || null]));
+
+  // PR-2 — blocos-grupo (1×N/N×1) direto dos buckets do soberano (sem recomputar). Os membros cobertos
+  //   por um grupo NÃO podem reaparecer como linha individual (dedupe via `coberto`).
+  const ofxById = new Map(data.ofx_completo.map((o) => [o.extrato_id, o]));
+  const sisById = new Map(data.sistema_completo.map((s) => [s.lancamento_id, s]));
+  const coberto = new Set<string>();
+  const gruposView: ParReal[] = [];
+  // (a) grupos JÁ conciliados (cbi 1×N/N×1): dados completos, sem ação.
+  for (const g of (diag.buckets.grupos_conciliados ?? [])) {
+    coberto.add(g.ancora.id);
+    g.membros.forEach((m) => coberto.add(m.id));
+    gruposView.push({ key: `grp-c-${g.ancora.id}`, classe: 'grupo_conciliado', grupo: { grupo: g, sugerido: false }, dataChave: g.ancora.data });
+  }
+  // (b) agrupamentos SUGERIDOS (AgrItem = 1 OFX ↔ N lançamentos, ainda não vinculados; ex.: JBS). AgrItem
+  //   não traz data/descrição → enriquece por id no MESMO payload; ação encaminha à Estação existente.
+  for (const a of (diag.buckets.agrupamentos ?? [])) {
+    coberto.add(a.extrato_id);
+    a.lancamentos.forEach((m) => coberto.add(m.lancamento_id));
+    const o = ofxById.get(a.extrato_id);
+    const membros = a.lancamentos.map((m) => {
+      const s = sisById.get(m.lancamento_id);
+      return { id: m.lancamento_id, data: s?.data ?? null, valor_assinado: m.valor_assinado, descricao: s?.descricao ?? '—' };
+    });
+    const total_sistema = a.lancamentos.reduce((sum, m) => sum + m.valor_assinado, 0);
+    const grupo: GrupoConciliado = {
+      tipo: '1xN',
+      ancora: { id: a.extrato_id, data: o?.data ?? null, valor: a.valor, descricao: o?.historico ?? '—' },
+      membros,
+      total_ofx: a.valor, total_sistema, diferenca: a.valor - total_sistema,
+      status_grupo: Math.abs(a.valor - total_sistema) < 0.005 ? 'batido' : 'divergente',
+    };
+    gruposView.push({ key: `grp-a-${a.extrato_id}`, classe: 'agrupado', grupo: { grupo, sugerido: true, acaoExtratoId: a.extrato_id }, dataChave: o?.data ?? null });
+  }
+
   // Conciliados: pareamento de exibição (mesmo valor assinado + data; fallback só valor). Não é o motor.
   const cOfx = data.ofx_completo.filter((o) => o.status === 'conciliado');
   const cSis = data.sistema_completo.filter((s) => s.status === 'conciliado');
   const usado = new Set<number>();
   for (const o of cOfx) {
-    let idx = cSis.findIndex((s, i) => !usado.has(i) && Math.abs(s.valor_assinado - o.valor) < 0.005 && s.data === o.data);
-    if (idx < 0) idx = cSis.findIndex((s, i) => !usado.has(i) && Math.abs(s.valor_assinado - o.valor) < 0.005);
+    if (coberto.has(o.extrato_id)) continue; // PR-2 — membro de grupo conciliado sai da linha individual
+    let idx = cSis.findIndex((s, i) => !usado.has(i) && !coberto.has(s.lancamento_id) && Math.abs(s.valor_assinado - o.valor) < 0.005 && s.data === o.data);
+    if (idx < 0) idx = cSis.findIndex((s, i) => !usado.has(i) && !coberto.has(s.lancamento_id) && Math.abs(s.valor_assinado - o.valor) < 0.005);
     let s: EspSis | null = null;
     if (idx >= 0) { usado.add(idx); s = cSis[idx]; }
     out.push({
@@ -1004,13 +1048,16 @@ function montarEspelhoReal(data: EspelhadosReais, diag: DiagnosticoSoberano): Pa
     });
   }
   cSis.forEach((s, i) => {
-    if (!usado.has(i)) out.push({
+    if (usado.has(i) || coberto.has(s.lancamento_id)) return; // PR-2 — membro de grupo sai da linha individual
+    out.push({
       key: `cs-${s.lancamento_id}`, classe: 'conciliado',
       sis: { data: s.data, valor: s.valor_assinado, descricao: s.descricao ?? '—' }, lancamento_id: s.lancamento_id,
     });
   });
   // Sugestões (forte/possíveis) + sem-vínculo: reusa montarPares(diag) — sem reescrever o motor.
   for (const p of montarPares(diag)) {
+    // PR-2 — membro coberto por um grupo (ex.: OFX do JBS e seus 2 lançamentos) sai da timeline individual.
+    if ((p.ofx?.extrato_id && coberto.has(p.ofx.extrato_id)) || (p.sistema?.lancamento_id && coberto.has(p.sistema.lancamento_id))) continue;
     const classe: ClasseEsp = p.classe === 'forte' ? 'forte' : p.classe === 'possiveis' ? 'possiveis' : 'sem_vinculo';
     out.push({
       key: `m-${p.key}`, classe, nPossiveis: p.nPossiveis,
@@ -1020,13 +1067,16 @@ function montarEspelhoReal(data: EspelhadosReais, diag: DiagnosticoSoberano): Pa
       lancamento_id: p.sistema?.lancamento_id,
     });
   }
+  // PR-2 — anexa os blocos-grupo à timeline (posicionados por dataChave da âncora).
+  out.push(...gruposView);
   // dataChave por item (OFX soberano: data do OFX ancora; senão a do Sistema). Não muda pareamento.
   //   PR-1 — anexa documento (banco) e classificação (sistema) por id, sem reordenar/reparear.
+  //   PR-2 — blocos-grupo (sem ofx/sis) preservam a dataChave já definida na sua construção.
   return out.map((p) => ({
     ...p,
     ofx: p.ofx ? { ...p.ofx, documento: p.extrato_id ? docByExtrato.get(p.extrato_id) ?? null : null } : undefined,
     sis: p.sis ? { ...p.sis, classificacao: p.lancamento_id ? classByLanc.get(p.lancamento_id) ?? null : null } : undefined,
-    dataChave: p.ofx?.data ?? p.sis?.data ?? null,
+    dataChave: p.ofx?.data ?? p.sis?.data ?? p.dataChave ?? null,
   }));
 }
 // Agrupa ParReal por dataChave, grupos em data ASC (cronológico), grupo sem-data por último.
@@ -1091,6 +1141,17 @@ function LinhaEspReal({ par, onResolver, onDesconsiderar }: { par: ParReal; onRe
 function AbaEspelhoReal({ data, diag, onResolver, onDesconsiderar }: { data: EspelhadosReais; diag: DiagnosticoSoberano; onResolver: (ctx: ResolverCtx) => void; onDesconsiderar?: (extratoId: string) => void }) {
   // Timeline única: agrupa por data a saída de montarEspelhoReal (sem re-parear nem recalcular).
   const grupos = useMemo(() => agruparPorData(montarEspelhoReal(data, diag)), [data, diag]);
+  // PR-2 — ids que aparecem em mais de um bloco-grupo (N:N) para o selo "↔ também em outro grupo".
+  const compartilhados = useMemo(() => {
+    const cont = new Map<string, number>();
+    for (const g of grupos) for (const p of g.itens) {
+      if (!p.grupo) continue;
+      for (const id of [p.grupo.grupo.ancora.id, ...p.grupo.grupo.membros.map((m) => m.id)]) cont.set(id, (cont.get(id) ?? 0) + 1);
+    }
+    const s = new Set<string>();
+    cont.forEach((n, id) => { if (n > 1) s.add(id); });
+    return s;
+  }, [grupos]);
   return (
     <div className="max-h-[55vh] overflow-y-auto">
       {/* Legenda de cores (4 estados) */}
@@ -1109,7 +1170,18 @@ function AbaEspelhoReal({ data, diag, onResolver, onDesconsiderar }: { data: Esp
           <div className="text-[10px] uppercase tracking-wide text-muted-foreground bg-muted/40 px-1 py-0.5 border-b mt-1">
             {g.data ? fmtData(g.data) : 'Sem data'}
           </div>
-          {g.itens.map((p) => <LinhaEspReal key={p.key} par={p} onResolver={onResolver} onDesconsiderar={onDesconsiderar} />)}
+          {g.itens.map((p) => p.grupo
+            ? <LinhaGrupo
+                key={p.key}
+                grupo={p.grupo.grupo}
+                compartilhados={compartilhados}
+                sugerido={p.grupo.sugerido}
+                acao={p.grupo.sugerido && p.grupo.acaoExtratoId
+                  ? <Button size="sm" variant="outline" className="h-5 text-[9px] px-1.5 shrink-0"
+                      onClick={() => onResolver({ tipo: 'extrato_sem_vinculo', id: p.grupo!.acaoExtratoId! })}>Confirmar agrupamento →</Button>
+                  : undefined}
+              />
+            : <LinhaEspReal key={p.key} par={p} onResolver={onResolver} onDesconsiderar={onDesconsiderar} />)}
         </div>
       ))}
     </div>
