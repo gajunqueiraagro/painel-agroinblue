@@ -91,12 +91,13 @@ interface Props {
   dataOperacao: string | null;        // contexto: data da compra
   dataChegada: string | null;         // contexto: data de chegada (recebimento)
   darkSelectClass: string;
+  recarregarDados?: () => void;        // refresh da API de negociação antes de abrir "Novo compromisso"
 }
 
 const badgeStatusCompromisso = (s: string) => (s === 'programado' ? 'default' : s === 'cancelado' ? 'destructive' : 'secondary');
 const badgeStatusParcela = (s: string) => (s === 'materializada' ? 'default' : s === 'paga' ? 'default' : s === 'cancelada' ? 'destructive' : 'secondary');
 
-export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, fornecedores, valorAcordado, lotes, contraparteId, dataOperacao, dataChegada, darkSelectClass }: Props) {
+export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, fornecedores, valorAcordado, lotes, contraparteId, dataOperacao, dataChegada, darkSelectClass, recarregarDados }: Props) {
   const { resumoOperacao, compromissos, parcelas, versao, saving } = ocApi;
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -120,6 +121,10 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
     [parcelas, selectedId],
   );
   const podeEscrever = !bloqueado && versao != null && !saving;
+
+  // Abre "Novo compromisso" após refrescar os dados da OC (valor_acordado/lotes/contraparte),
+  // garantindo que o dialog herde o snapshot atual e não uma leitura obsoleta da negociação.
+  const abrirNovo = () => { recarregarDados?.(); setNovoAberto(true); };
 
   // Editar o título vinculado à parcela materializada: reutiliza o modal oficial do Financeiro V2
   // via o fluxo existente ?flancId={tituloId} (V2Index consome, troca de seção e abre o modal com a
@@ -207,7 +212,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
       <div className="rounded-md border bg-card p-1.5 shadow-sm">
         <div className="flex items-center justify-between mb-1">
           <div className="text-[11px] font-semibold text-muted-foreground">Compromissos</div>
-          <Button size="sm" className="h-6 text-[11px] px-2" disabled={!podeEscrever} onClick={() => setNovoAberto(true)}>
+          <Button size="sm" className="h-6 text-[11px] px-2" disabled={!podeEscrever} onClick={abrirNovo}>
             <Plus className="h-3 w-3 mr-1" /> Novo compromisso
           </Button>
         </div>
@@ -215,7 +220,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
         {compromissos.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 py-6 text-center">
             <div className="text-[11px] text-muted-foreground">Nenhum compromisso nesta operação.</div>
-            <Button size="sm" className="h-7 text-[11px]" disabled={!podeEscrever} onClick={() => setNovoAberto(true)}>
+            <Button size="sm" className="h-7 text-[11px]" disabled={!podeEscrever} onClick={abrirNovo}>
               <Plus className="h-3 w-3 mr-1" /> Novo compromisso
             </Button>
           </div>
@@ -326,6 +331,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
           onClose={() => setNovoAberto(false)} onSubmit={criar} saving={saving}
           clienteId={clienteId} tipoOperacao={tipoOperacao} fornecedores={fornecedores} darkSelectClass={darkSelectClass}
           valorAcordado={valorAcordado} sugestaoSubcentro={sugestaoSubcentro} descricaoDefault={descricaoDefault}
+          contraparteId={contraparteId}
         />
       )}
       {programarAberto && selecionado && (
@@ -361,10 +367,10 @@ function ResumoCard({ rotulo, valor }: { rotulo: string; valor: number }) {
 }
 
 // ===== Dialog: Novo compromisso =====
-function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOperacao, fornecedores, darkSelectClass, valorAcordado, sugestaoSubcentro, descricaoDefault }: {
+function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOperacao, fornecedores, darkSelectClass, valorAcordado, sugestaoSubcentro, descricaoDefault, contraparteId }: {
   onClose: () => void; onSubmit: (p: CriarCompromissoPayload) => void; saving: boolean;
   clienteId: string | null; tipoOperacao: string | null; fornecedores: { id: string; nome: string }[]; darkSelectClass: string;
-  valorAcordado: number | null; sugestaoSubcentro: string; descricaoDefault: string;
+  valorAcordado: number | null; sugestaoSubcentro: string; descricaoDefault: string; contraparteId: string | null;
 }) {
   const plano = usePlanoContasOC(clienteId ?? undefined);
   const comps = useComponentesFinanceiros();
@@ -376,12 +382,13 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
   const [descricao, setDescricao] = useState('');
   const ultimoDefaultRef = useRef('');   // último default de descrição aplicado automaticamente (ajuste vinculante 3)
 
-  // Defaults por natureza: principal pré-carrega valor acordado e subcentro sugerido; obrigacao zera.
+  // Defaults por natureza: principal pré-carrega valor acordado, subcentro sugerido e favorecido = contraparte
+  // da OC; obrigacao zera. Campos seguem editáveis (mesma semântica de valor/subcentro).
   useEffect(() => {
     setComponente('');
-    if (natureza === 'principal') { setValor(valorAcordado); setSubcentro(sugestaoSubcentro); }
-    else { setValor(null); setSubcentro(''); }
-  }, [natureza, valorAcordado, sugestaoSubcentro]);
+    if (natureza === 'principal') { setValor(valorAcordado); setSubcentro(sugestaoSubcentro); setFavorecidoId(contraparteId ?? ''); }
+    else { setValor(null); setSubcentro(''); setFavorecidoId(''); }
+  }, [natureza, valorAcordado, sugestaoSubcentro, contraparteId]);
 
   // Descrição = DEFAULT EDITÁVEL: principal → descricaoDefault; obrigacao → ''. Só atualiza se o campo está
   // vazio OU ainda contém o último default gerado. Após edição manual do usuário, NUNCA sobrescreve.

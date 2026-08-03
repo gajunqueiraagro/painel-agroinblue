@@ -56,7 +56,7 @@ export function AbaFinanceiroOC(props: Props) {
         </div>
         <AbaCompromissosOC ocApi={ocApi} bloqueado clienteId={clienteId} tipoOperacao={api.tipoOperacao} fornecedores={api.fornecedores}
           valorAcordado={api.valorAcordado} lotes={api.lotes} contraparteId={api.contraparteId} dataOperacao={props.dataOperacao ?? null} dataChegada={props.dataChegada ?? null}
-          darkSelectClass={props.darkSelectClass} />
+          darkSelectClass={props.darkSelectClass} recarregarDados={api.recarregar} />
       </div>
     );
   }
@@ -64,6 +64,6 @@ export function AbaFinanceiroOC(props: Props) {
   return (
     <AbaCompromissosOC ocApi={ocApi} bloqueado={props.financeiroNovoReadOnly} clienteId={clienteId} tipoOperacao={api.tipoOperacao} fornecedores={api.fornecedores}
       valorAcordado={api.valorAcordado} lotes={api.lotes} contraparteId={api.contraparteId} dataOperacao={props.dataOperacao ?? null} dataChegada={props.dataChegada ?? null}
-      darkSelectClass={props.darkSelectClass} />
+      darkSelectClass={props.darkSelectClass} recarregarDados={api.recarregar} />
   );
 }
