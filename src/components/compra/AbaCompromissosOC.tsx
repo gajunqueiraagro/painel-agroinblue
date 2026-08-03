@@ -15,7 +15,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { DatePicker } from '@/components/ui/date-picker';
-import { Plus, AlertTriangle, Trash2 } from 'lucide-react';
+import { Plus, AlertTriangle, Trash2, Pencil } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 
 // PR-OC-UI-FIN-VIEW / FIX-01 / FIX-01b — aba Financeiro do modelo de compromissos (Blocos A/B/C).
 //   Consome APENAS useOcCompromissos (totais/flags/modo soberanos da view; React nunca soma). Escrita
@@ -97,6 +98,7 @@ const badgeStatusParcela = (s: string) => (s === 'materializada' ? 'default' : s
 
 export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, fornecedores, valorAcordado, lotes, contraparteId, dataOperacao, dataChegada, darkSelectClass }: Props) {
   const { resumoOperacao, compromissos, parcelas, versao, saving } = ocApi;
+  const [searchParams, setSearchParams] = useSearchParams();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [recemMaterializada, setRecemMaterializada] = useState<string | null>(null);
   const [novoAberto, setNovoAberto] = useState(false);
@@ -118,6 +120,17 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
     [parcelas, selectedId],
   );
   const podeEscrever = !bloqueado && versao != null && !saving;
+
+  // Editar o título vinculado à parcela materializada: reutiliza o modal oficial do Financeiro V2
+  // via o fluxo existente ?flancId={tituloId} (V2Index consome, troca de seção e abre o modal com a
+  // proteção OC — valor/classificação/favorecido/vencimento seguem travados). Sem modal/RPC/writer novo.
+  const editarTitulo = (tituloId: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('flancId', tituloId);
+    next.delete('oc_compra');
+    next.delete('oc_id');
+    setSearchParams(next, { replace: true });
+  };
 
   const sugestaoSubcentro = useMemo(() => {
     const c = classificarLotesCompra(lotes);
@@ -292,7 +305,11 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
                       </td>
                       <td className="py-0.5 pr-1 text-right">
                         {p.materializada
-                          ? <span className="text-[10px] text-green-600">ok</span>
+                          ? (p.tituloId
+                              ? <Button size="sm" variant="outline" className="h-5 text-[10px] px-1.5" onClick={() => { if (p.tituloId) editarTitulo(p.tituloId); }}>
+                                  <Pencil className="h-2.5 w-2.5 mr-0.5" /> Editar
+                                </Button>
+                              : <span className="text-[10px] text-green-600">ok</span>)
                           : <Button size="sm" variant="outline" className="h-5 text-[10px] px-1.5" disabled={!podeMaterializar} onClick={() => setConfirmarParcela(p)}>Materializar</Button>}
                       </td>
                     </tr>
