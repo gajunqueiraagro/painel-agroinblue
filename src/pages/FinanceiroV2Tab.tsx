@@ -1274,9 +1274,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
           ) : (
             <>
               {/* DESKTOP: LINE 1 — Ano | Mês | Data por | Tipo | Status | Fazenda | Atividade
-                  PR-FIN-V2-FILTROS-DENSIDADE-01 — Fazenda ganha min-width confortável (minmax) para exibir
-                  o nome usual completo, crescendo com o espaço disponível; truncate segue como fallback. */}
-              <div className="grid grid-cols-[62px_77px_92px_106px_106px_minmax(150px,1.4fr)_110px] gap-1.5 items-end">
+                  PR-FIN-V2-FILTROS-DENSIDADE-01 (revisão) — Fazenda volta a largura compacta fixa (120px),
+                  em família com Tipo/Status (106px) e Atividade (110px); truncate/ellipsis segue como fallback.
+                  Removido o minmax(150px,1.4fr) que esticava a coluna e quebrava a densidade da linha. */}
+              <div className="grid grid-cols-[62px_77px_92px_106px_106px_120px_110px] gap-1.5 items-end">
                 <div>
                   <label className={lblCls}>Ano</label>
                   <Select value={ano} onValueChange={setAno}>
