@@ -361,7 +361,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
 
   // Sorting state
    // PR-FIN-GRADE-DATAS-03 — 'data' = competência; 'venc' e 'pgto' são colunas independentes (nunca fundidas).
-   type SortField = 'default' | 'data' | 'venc' | 'pgto' | 'valor' | 'produto' | 'fornecedor' | 'centro' | 'status';
+   type SortField = 'default' | 'data' | 'venc' | 'pgto' | 'valor' | 'produto' | 'fornecedor' | 'centro' | 'status' | 'doc';
   type SortDir = 'asc' | 'desc';
    const [sortField, setSortField] = useState<SortField>('default');
    const [sortDir, setSortDir] = useState<SortDir>('asc');
@@ -758,6 +758,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
           break;
         case 'status':
           primary = dir * (a.status_transacao || '').localeCompare(b.status_transacao || '', 'pt-BR');
+          break;
+        case 'doc':
+          // Ordena pelo número do documento exibido na coluna DOC (mesmo valor de formatNF).
+          primary = dir * (a.numero_documento || '').localeCompare(b.numero_documento || '', 'pt-BR');
           break;
         default:
           primary = 0;
@@ -1571,7 +1575,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('centro')}>Centro<SortIndicator field="centro" /></th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground">Fazenda</th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('valor')}>Valor<SortIndicator field="valor" /></th>
-                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground">Doc.</th>
+                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('doc')}>Doc.<SortIndicator field="doc" /></th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('status')}>Status<SortIndicator field="status" /></th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground"></th>
                 </tr>
