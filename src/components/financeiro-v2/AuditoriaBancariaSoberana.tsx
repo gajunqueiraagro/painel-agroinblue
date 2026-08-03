@@ -19,7 +19,7 @@ import { Button } from '@/components/ui/button';
 import { DecisaoDerivadosDialog } from '@/components/financeiro-v2/DecisaoDerivadosDialog';
 import { ContaBancariaSelect, type ContaSelecionavel } from '@/components/shared/ContaBancariaSelect';
 import { ExtratoImportPreview } from '@/components/financeiro-v2/ExtratoImportPreview';
-import { EstacaoConciliacao } from '@/components/financeiro-v2/EstacaoConciliacao';
+import { EstacaoConciliacao, type GrupoSugerido } from '@/components/financeiro-v2/EstacaoConciliacao';
 import { LancamentoLeituraDialog } from '@/components/financeiro-v2/LancamentoLeituraDialog';
 import { toast } from 'sonner';
 
@@ -1100,7 +1100,8 @@ function agruparPorData(pares: ParReal[]): { data: string | null; itens: ParReal
       return a.data < b.data ? -1 : 1; // 'YYYY-MM-DD' ordena lexicograficamente = cronológico
     });
 }
-type ResolverCtx = { tipo: 'extrato_sem_vinculo' | 'sistema_sem_vinculo'; id: string };
+// PR-3A — Resolver pode carregar o contexto do agrupamento (opcional). Linhas individuais não o setam.
+type ResolverCtx = { tipo: 'extrato_sem_vinculo' | 'sistema_sem_vinculo'; id: string; grupoSugerido?: GrupoSugerido };
 function LinhaEspReal({ par, onResolver, onDesconsiderar }: { par: ParReal; onResolver: (ctx: ResolverCtx) => void; onDesconsiderar?: (extratoId: string) => void }) {
   // Conector por classe — 4 estados (verde/amarelo/amarelo/cinza). Vermelho = divergência REAL,
   // tratado nos GRUPOS (LinhaGrupo), não aqui (sem classe 'divergente' por linha no contrato).
@@ -1178,7 +1179,17 @@ function AbaEspelhoReal({ data, diag, onResolver, onDesconsiderar }: { data: Esp
                 sugerido={p.grupo.sugerido}
                 acao={p.grupo.sugerido && p.grupo.acaoExtratoId
                   ? <Button size="sm" variant="outline" className="h-5 text-[9px] px-1.5 shrink-0"
-                      onClick={() => onResolver({ tipo: 'extrato_sem_vinculo', id: p.grupo!.acaoExtratoId! })}>Confirmar agrupamento →</Button>
+                      onClick={() => onResolver({
+                        tipo: 'extrato_sem_vinculo', id: p.grupo!.acaoExtratoId!,
+                        // PR-3A — transporta a composição do grupo para a Estação (só exibição).
+                        grupoSugerido: {
+                          extratoId: p.grupo!.acaoExtratoId!,
+                          banco: { data: p.grupo!.grupo.ancora.data, valor: p.grupo!.grupo.ancora.valor, descricao: p.grupo!.grupo.ancora.descricao ?? '—' },
+                          membros: p.grupo!.grupo.membros.map((m) => ({ lancamento_id: m.id, data: m.data, valor: m.valor_assinado, descricao: m.descricao ?? '—' })),
+                          total: p.grupo!.grupo.total_sistema,
+                          diferenca: p.grupo!.grupo.diferenca,
+                        },
+                      })}>Confirmar agrupamento →</Button>
                   : undefined}
               />
             : <LinhaEspReal key={p.key} par={p} onResolver={onResolver} onDesconsiderar={onDesconsiderar} />)}
@@ -1291,7 +1302,7 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
   const [cardsTopoAbertos, setCardsTopoAbertos] = useState(false);
   const [ordenacao, setOrdenacao] = useState<'valor_desc' | 'valor_asc' | 'data_asc' | 'data_desc' | 'descricao' | 'tipo'>('data_desc');
   // WS1 — contexto da Estação de Conciliação (read-only). null = fechada.
-  const [estacaoCtx, setEstacaoCtx] = useState<{ tipo: 'sistema_sem_vinculo' | 'extrato_sem_vinculo'; id: string } | null>(null);
+  const [estacaoCtx, setEstacaoCtx] = useState<ResolverCtx | null>(null);
   // P3.3 — leitura do lançamento oficial (aba Sistema → linha clicável).
   const [lancLeituraId, setLancLeituraId] = useState<string | null>(null);
   // PR-PROTOCOLO-01 — invalidação de origem (extrato): abre o protocolo de derivados.
@@ -1720,6 +1731,7 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
         <EstacaoConciliacao
           tipo={estacaoCtx.tipo}
           id={estacaoCtx.id}
+          grupoSugerido={estacaoCtx.grupoSugerido}
           contaNome={nomeConta}
           contaExtratoId={contaId ?? undefined}
           contas={contas}

@@ -91,9 +91,21 @@ interface WsPayload {
   candidatos_financeiros?: CandidatoFinanceiro[] | null;
 }
 
+// PR-3A — contexto de agrupamento transportado da Conferência (só exibição; NENHUM vínculo é criado aqui).
+//   Os dados vêm prontos do diagnóstico (fn_conciliacao_soberana.buckets.agrupamentos, enriquecido no PR-2).
+export interface GrupoSugerido {
+  extratoId: string;
+  banco: { data: string | null; valor: number; descricao: string };
+  membros: { lancamento_id: string; data: string | null; valor: number; descricao: string }[];
+  total: number;      // soma dos membros
+  diferenca: number;  // banco − total
+}
+
 export interface EstacaoConciliacaoProps {
   tipo: 'sistema_sem_vinculo' | 'extrato_sem_vinculo';
   id: string;
+  // PR-3A — quando presente, a Estação exibe a "Composição sugerida" do agrupamento (read-only).
+  grupoSugerido?: GrupoSugerido;
   // Nome da conta já resolvido pelo pai (uuid->nome via contas carregadas).
   // A Estação apenas renderiza; não faz outra query.
   contaNome?: string;
@@ -197,7 +209,7 @@ function rotuloLacuna(campo: string | null): string {
   return LACUNA_LABEL[campo] ?? `${campo} inexistente na origem`;
 }
 
-export function EstacaoConciliacao({ tipo, id, contaNome, contas, contaExtratoId, onClose }: EstacaoConciliacaoProps) {
+export function EstacaoConciliacao({ tipo, id, grupoSugerido, contaNome, contas, contaExtratoId, onClose }: EstacaoConciliacaoProps) {
   const [estado, setEstado] = useState<'loading' | 'erro' | 'ok'>('loading');
   const [payload, setPayload] = useState<WsPayload | null>(null);
   const [msgErro, setMsgErro] = useState<string>('');
@@ -523,6 +535,34 @@ export function EstacaoConciliacao({ tipo, id, contaNome, contas, contaExtratoId
             <div className="h-full flex">
               {/* 2. Painel âncora (esq, flex 1.7) */}
               <section className="flex-[0.45] min-w-0 overflow-y-auto p-2 space-y-1.5">
+                {/* PR-3A — Composição sugerida do agrupamento (read-only). Transportada da Conferência;
+                    NENHUM vínculo é criado aqui — a camada de confirmação/gravação virá em etapa futura. */}
+                {grupoSugerido && (
+                  <Card className="p-2 space-y-1 border-violet-300 bg-violet-50/40">
+                    <div className="text-[11px] font-semibold text-violet-800">Composição sugerida do agrupamento</div>
+                    <div className="text-[9px] uppercase tracking-wide text-muted-foreground">Banco</div>
+                    <div className="flex items-center justify-between gap-2 text-[11px]">
+                      <span className="truncate" title={grupoSugerido.banco.descricao}>{fmtData(grupoSugerido.banco.data)} · {grupoSugerido.banco.descricao}</span>
+                      <span className="tabular-nums font-semibold shrink-0">{fmtBRL(grupoSugerido.banco.valor)}</span>
+                    </div>
+                    <div className="text-[9px] uppercase tracking-wide text-muted-foreground pt-1">Composição sugerida ({grupoSugerido.membros.length} lançamentos)</div>
+                    {grupoSugerido.membros.map((m) => (
+                      <div key={m.lancamento_id} className="flex items-center justify-between gap-2 text-[11px]">
+                        <span className="truncate" title={m.descricao}>{fmtData(m.data)} · {m.descricao}</span>
+                        <span className="tabular-nums shrink-0">{fmtBRL(m.valor)}</span>
+                      </div>
+                    ))}
+                    <div className="flex items-center justify-between gap-2 text-[11px] font-semibold border-t pt-1 mt-1">
+                      <span>Total sugerido</span>
+                      <span className="tabular-nums">{fmtBRL(grupoSugerido.total)}</span>
+                    </div>
+                    <div className={`flex items-center justify-between gap-2 text-[10px] ${Math.abs(grupoSugerido.diferenca) < 0.005 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                      <span>Diferença vs banco</span>
+                      <span className="tabular-nums">{fmtBRL(grupoSugerido.diferenca)}{Math.abs(grupoSugerido.diferenca) < 0.005 ? ' ✓' : ''}</span>
+                    </div>
+                    <div className="text-[9px] text-muted-foreground pt-1 border-t italic">Revisão/gravação do grupo virá em etapa futura. Nenhum vínculo é criado aqui.</div>
+                  </Card>
+                )}
                 {tipo === 'sistema_sem_vinculo' ? (
                   <>
                     <CardSecao titulo="Identificação">
