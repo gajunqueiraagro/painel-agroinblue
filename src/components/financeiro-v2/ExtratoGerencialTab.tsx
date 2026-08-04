@@ -23,8 +23,7 @@ import { ExtratoAnaliseFluxo } from '@/components/financeiro-v2/ExtratoAnaliseFl
 import { ExtratoOrganizacaoPagamentos } from '@/components/financeiro-v2/ExtratoOrganizacaoPagamentos';
 import { ExtratoDistribuicaoEconomica } from '@/components/financeiro-v2/ExtratoDistribuicaoEconomica';
 import { ExtratoMaioresCompromissos } from '@/components/financeiro-v2/ExtratoMaioresCompromissos';
-import { gerarPdfAnaliseExecutiva } from '@/lib/pdf/buildPdfAnaliseExecutiva';
-import { capturarAnalise } from '@/lib/pdf/capturarAnalise';
+import { gerarPdfAnaliseExecutivaV3 } from '@/lib/pdf/analise/gerarPdfAnaliseExecutivaV3';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { STATUS_FILTRO_LABEL, STATUS_FILTRO_COR } from '@/lib/financeiro/statusFinanceiro';
 import { formatMoeda } from '@/lib/calculos/formatters';
@@ -223,50 +222,14 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
   const anos = useMemo(() => { const y = hoje.getFullYear(); return [y - 3, y - 2, y - 1, y, y + 1]; }, []);
   const contaNome = conta ? (conta.nome_exibicao || conta.nome_conta) : '—';
 
-  // PDF Executivo — consome os mesmos linhas/dadosOrg/saldos das telas (fonte única de agregações).
+  // PDF Executivo (react-pdf V3) — deriva das mesmas linhas/dadosOrg/saldos (fonte única analiseAgregacoes).
   const exportarPdfExecutivo = async () => {
-    const contaNomeMap = new Map(contas.map((c) => [c.id, c.nome_exibicao || c.nome_conta]));
-    const serieLinhas = linhas.map((x) => ({ data: x.data, mov: x.mov, saldo: x.saldo, realizado: (x.l.status_transacao || '').toLowerCase() === 'realizado' }));
-    const extrato = linhas.map((x) => {
-      const sk = (x.l.status_transacao || '').toLowerCase();
-      return {
-        id: x.l.id, data: x.data,
-        produto: x.l.descricao, fornecedor: (x.l.favorecido_id && fornMap?.get(x.l.favorecido_id)) || '', centro: x.l.centro_custo,
-        valor: x.mov, saldo: x.saldo,
-        statusKey: sk, statusLabel: STATUS_FILTRO_LABEL[sk] ?? (x.l.status_transacao || '—'),
-        concil: concStatus(x.l).txt, doc: x.l.numero_documento || x.l.documento || x.l.tipo_documento || '',
-      };
-    });
-    // Transferências entre contas próprias (tesouraria) — origem/destino via mapa de contas.
-    type TransfLinha = { data: string; sentido: 'entrada' | 'saida'; descricao: string; contaOrigem: string; contaDestino: string; valor: number; status: string };
-    const transferencias = linhas
-      .filter((x) => x.l.tipo_operacao.startsWith('3'))
-      .map((x): TransfLinha | null => {
-        const sentido: 'entrada' | 'saida' | null = x.l.conta_destino_id === contaId ? 'entrada' : x.l.conta_bancaria_id === contaId ? 'saida' : null;
-        if (!sentido) return null;
-        const sk = (x.l.status_transacao || '').toLowerCase();
-        return {
-          data: x.data, sentido, descricao: x.l.descricao || '',
-          contaOrigem: contaNomeMap.get(x.l.conta_bancaria_id ?? '') || 'Outra conta',
-          contaDestino: contaNomeMap.get(x.l.conta_destino_id ?? '') || 'Outra conta',
-          valor: Math.abs(x.mov), status: STATUS_FILTRO_LABEL[sk] ?? (x.l.status_transacao || '—'),
-        };
-      })
-      .filter((t): t is TransfLinha => t !== null);
-    // Captura os 4 componentes REAIS da tela (mesmos props) como imagem de alta resolução.
-    const imagens = await capturarAnalise({
-      linhas, itens: dadosOrg, saldoIni, contaNome, periodoLabel: `${MESES[mes - 1]}/${ano}`, ano, mes,
-    });
-    await gerarPdfAnaliseExecutiva({
+    const serieLinhas = linhas.map((x) => ({ data: x.data, mov: x.mov, realizado: (x.l.status_transacao || '').toLowerCase() === 'realizado' }));
+    await gerarPdfAnaliseExecutivaV3({
       clienteNome: clienteAtual?.nome ?? '—',
-      periodoLabel: `${MESES[mes - 1]}/${ano}`,
-      ano, mes,
-      contas: [{
-        nome: contaNome,
-        fazenda: fazScope && fazendaAtual?.nome ? fazendaAtual.nome : undefined,
-        saldoIni, saldoFin, totais, serieLinhas, extrato, dadosOrg, transferencias,
-      }],
-      imagens,
+      fazenda: fazScope && fazendaAtual?.nome ? fazendaAtual.nome : undefined,
+      contaNome, periodoLabel: `${MESES[mes - 1]}/${ano}`, ano, mes,
+      saldoIni, saldoFin, totais, serieLinhas, dadosOrg,
     });
   };
 
