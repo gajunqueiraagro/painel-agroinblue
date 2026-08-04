@@ -12,6 +12,7 @@
  * (detalhe) → lançamentos. Total sempre fecha com as saídas.
  */
 import { useEffect, useMemo, useState } from 'react';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { AnaliseDrawer } from '@/components/financeiro-v2/AnaliseDrawer';
 
@@ -25,6 +26,9 @@ const SEM_CENTRO = 'Sem centro';
 const TOP_N = 10;
 const COR = '#1e3a5f';
 const COR_DEMAIS = '#94a3b8';
+// Paleta ordinal só para distinguir fatias do donut / pontos da tabela (apoio visual; não é classificação).
+const PALETA = ['#1e3a5f', '#2f6f4f', '#b7791f', '#7c3aad', '#0e7490', '#9d174d', '#3f6212', '#a16207', '#155e75', '#5b21b6'];
+const corLinha = (i: number, ehDemais?: boolean) => (ehDemais ? COR_DEMAIS : PALETA[i % PALETA.length]);
 const diaBR = (iso: string) => (iso.length >= 10 ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '—');
 
 export function ExtratoMaioresCompromissos({ itens, contaNome, periodoLabel }: {
@@ -66,7 +70,6 @@ export function ExtratoMaioresCompromissos({ itens, contaNome, periodoLabel }: {
   const topTotal = useMemo(() => top.reduce((s, r) => s + r.total, 0), [top]);
   const topPag = useMemo(() => top.reduce((s, r) => s + r.count, 0), [top]);
   const totalPag = useMemo(() => linhas.reduce((s, r) => s + r.count, 0), [linhas]);
-  const maxTotal = linhas.length ? linhas[0].total : 0;
   const pct = (v: number) => (totalGeral > 0 ? Math.round((v / totalGeral) * 100) : 0);
 
   useEffect(() => {
@@ -96,7 +99,7 @@ export function ExtratoMaioresCompromissos({ itens, contaNome, periodoLabel }: {
   }, [aberto]);
 
   return (
-    <div className="w-full max-w-[900px] mx-auto rounded-lg border p-2 space-y-2">
+    <div className="w-full max-w-[720px] mx-auto rounded-lg border px-3 py-2 space-y-2">
       <div className="flex items-baseline justify-between gap-2">
         <div className="text-[12px] font-semibold">Principais Custos e Compromissos</div>
         <div className="text-[9px] text-muted-foreground">Por centro de custo · {contaNome} · {periodoLabel}</div>
@@ -120,50 +123,64 @@ export function ExtratoMaioresCompromissos({ itens, contaNome, periodoLabel }: {
             </div>
           </div>
 
-          {/* Ranking dos compromissos (centros). */}
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-[11px]">
-              <thead>
-                <tr className="text-[9px] uppercase text-muted-foreground">
-                  <th className="text-left py-0.5 font-semibold w-5">#</th>
-                  <th className="text-left py-0.5 font-semibold">Compromisso</th>
-                  <th className="text-right py-0.5 font-semibold">Valor</th>
-                  <th className="text-right py-0.5 font-semibold w-12">%</th>
-                  <th className="text-right py-0.5 font-semibold w-14">nº pag.</th>
-                  <th className="w-4" />
-                </tr>
-              </thead>
-              <tbody>
-                {linhas.map((r, i) => {
-                  const cor = r.ehDemais ? COR_DEMAIS : COR;
-                  return (
-                    <tr key={r.chave} onClick={() => setDrawer(r.chave)} className="border-t cursor-pointer hover:bg-muted/40">
-                      <td className="py-0.5 text-muted-foreground tabular-nums">{r.ehDemais ? '—' : i + 1}</td>
-                      <td className="py-0.5">
-                        <span className="font-medium" style={{ color: cor }}>{r.chave}</span>
-                        <div className="mt-0.5 h-1 rounded bg-muted overflow-hidden max-w-[160px]">
-                          <div className="h-full rounded" style={{ width: `${maxTotal > 0 ? Math.round((r.total / maxTotal) * 100) : 0}%`, background: cor }} />
-                        </div>
-                      </td>
-                      <td className="text-right tabular-nums py-0.5 whitespace-nowrap">{formatMoeda(r.total)}</td>
-                      <td className="text-right tabular-nums py-0.5 font-semibold" style={{ color: cor }}>{pct(r.total)}%</td>
-                      <td className="text-right tabular-nums py-0.5 text-muted-foreground">{r.count}</td>
-                      <td className="text-right text-[9px] font-medium" style={{ color: cor }}>↗</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-              <tfoot>
-                <tr className="border-t font-semibold">
-                  <td />
-                  <td className="py-0.5">Total</td>
-                  <td className="text-right tabular-nums py-0.5 whitespace-nowrap">{formatMoeda(totalGeral)}</td>
-                  <td className="text-right tabular-nums py-0.5">100%</td>
-                  <td className="text-right tabular-nums py-0.5 text-muted-foreground">{totalPag}</td>
-                  <td />
-                </tr>
-              </tfoot>
-            </table>
+          {/* Donut (apoio visual) à esquerda · ranking compacto à direita. */}
+          <div className="flex flex-wrap gap-2 items-center">
+            <div className="w-[200px] h-[200px] shrink-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={linhas} dataKey="total" nameKey="chave" cx="50%" cy="50%" innerRadius={52} outerRadius={86} paddingAngle={1} isAnimationActive={false}
+                       onClick={(_, idx) => setDrawer(linhas[idx].chave)}>
+                    {linhas.map((r, i) => <Cell key={r.chave} fill={corLinha(i, r.ehDemais)} stroke="#fff" strokeWidth={1} cursor="pointer" />)}
+                  </Pie>
+                  <Tooltip formatter={(v, name) => [typeof v === 'number' ? `${formatMoeda(v)} · ${pct(v)}%` : String(v), String(name)]} contentStyle={{ fontSize: 11 }} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="flex-1 min-w-[280px] max-w-[440px]">
+              <table className="w-full border-collapse text-[11px]">
+                <thead>
+                  <tr className="text-[9px] uppercase text-muted-foreground">
+                    <th className="text-left py-0.5 font-semibold w-5">#</th>
+                    <th className="text-left py-0.5 font-semibold">Compromisso</th>
+                    <th className="text-right py-0.5 font-semibold w-[110px]">Valor</th>
+                    <th className="text-right py-0.5 font-semibold w-[45px]">%</th>
+                    <th className="text-right py-0.5 font-semibold w-[42px]">nº</th>
+                    <th className="w-4" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {linhas.map((r, i) => {
+                    const cor = corLinha(i, r.ehDemais);
+                    return (
+                      <tr key={r.chave} onClick={() => setDrawer(r.chave)} className="border-t cursor-pointer hover:bg-muted/40">
+                        <td className="py-1 text-muted-foreground tabular-nums">{r.ehDemais ? '—' : i + 1}</td>
+                        <td className="py-1">
+                          <span className="inline-flex items-center gap-1.5 min-w-0">
+                            <span className="w-2 h-2 rounded-sm shrink-0" style={{ background: cor }} />
+                            <span className="font-medium truncate" style={{ color: cor }}>{r.chave}</span>
+                          </span>
+                        </td>
+                        <td className="text-right tabular-nums py-1 whitespace-nowrap">{formatMoeda(r.total)}</td>
+                        <td className="text-right tabular-nums py-1 font-semibold" style={{ color: cor }}>{pct(r.total)}%</td>
+                        <td className="text-right tabular-nums py-1 text-muted-foreground">{r.count}</td>
+                        <td className="text-right text-[9px] font-medium" style={{ color: cor }}>↗</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t font-semibold">
+                    <td />
+                    <td className="py-1">Total</td>
+                    <td className="text-right tabular-nums py-1 whitespace-nowrap">{formatMoeda(totalGeral)}</td>
+                    <td className="text-right tabular-nums py-1">100%</td>
+                    <td className="text-right tabular-nums py-1 text-muted-foreground">{totalPag}</td>
+                    <td />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
           </div>
 
           <div className="text-[9px] text-muted-foreground">
