@@ -24,6 +24,7 @@ import { ExtratoOrganizacaoPagamentos } from '@/components/financeiro-v2/Extrato
 import { ExtratoDistribuicaoEconomica } from '@/components/financeiro-v2/ExtratoDistribuicaoEconomica';
 import { ExtratoMaioresCompromissos } from '@/components/financeiro-v2/ExtratoMaioresCompromissos';
 import { gerarPdfAnaliseExecutiva } from '@/lib/pdf/buildPdfAnaliseExecutiva';
+import { capturarAnalise } from '@/lib/pdf/capturarAnalise';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { STATUS_FILTRO_LABEL, STATUS_FILTRO_COR } from '@/lib/financeiro/statusFinanceiro';
 import { formatMoeda } from '@/lib/calculos/formatters';
@@ -223,7 +224,7 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
   const contaNome = conta ? (conta.nome_exibicao || conta.nome_conta) : '—';
 
   // PDF Executivo — consome os mesmos linhas/dadosOrg/saldos das telas (fonte única de agregações).
-  const exportarPdfExecutivo = () => {
+  const exportarPdfExecutivo = async () => {
     const contaNomeMap = new Map(contas.map((c) => [c.id, c.nome_exibicao || c.nome_conta]));
     const serieLinhas = linhas.map((x) => ({ data: x.data, mov: x.mov, saldo: x.saldo, realizado: (x.l.status_transacao || '').toLowerCase() === 'realizado' }));
     const extrato = linhas.map((x) => {
@@ -252,7 +253,11 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
         };
       })
       .filter((t): t is TransfLinha => t !== null);
-    void gerarPdfAnaliseExecutiva({
+    // Captura os 4 componentes REAIS da tela (mesmos props) como imagem de alta resolução.
+    const imagens = await capturarAnalise({
+      linhas, itens: dadosOrg, saldoIni, contaNome, periodoLabel: `${MESES[mes - 1]}/${ano}`, ano, mes,
+    });
+    await gerarPdfAnaliseExecutiva({
       clienteNome: clienteAtual?.nome ?? '—',
       periodoLabel: `${MESES[mes - 1]}/${ano}`,
       ano, mes,
@@ -261,6 +266,7 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
         fazenda: fazScope && fazendaAtual?.nome ? fazendaAtual.nome : undefined,
         saldoIni, saldoFin, totais, serieLinhas, extrato, dadosOrg, transferencias,
       }],
+      imagens,
     });
   };
 
