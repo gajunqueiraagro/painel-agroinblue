@@ -19,6 +19,7 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { ContaBancariaSelect, type ContaSelecionavel } from '@/components/shared/ContaBancariaSelect';
 import { LancamentoLeituraDialog } from '@/components/financeiro-v2/LancamentoLeituraDialog';
+import { ExtratoAnaliseFluxo } from '@/components/financeiro-v2/ExtratoAnaliseFluxo';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { STATUS_FILTRO_LABEL, STATUS_FILTRO_COR } from '@/lib/financeiro/statusFinanceiro';
 import { formatMoeda } from '@/lib/calculos/formatters';
@@ -51,6 +52,7 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
   const [contaSel, setContaSel] = useState<string | null>(null);
   const [statusSel, setStatusSel] = useState<Set<string>>(new Set(STATUS_OFICIAIS));
   const [incluirLegados, setIncluirLegados] = useState(false);
+  const [modo, setModo] = useState<'extrato' | 'analise'>('extrato');
   const [lancLeituraId, setLancLeituraId] = useState<string | null>(null);
 
   const ini = `${ano}-${pad(mes)}-01`;
@@ -233,11 +235,17 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
             {conta ? <span className="text-[10px] font-normal text-muted-foreground"> · Banco {conta.banco || '—'} {conta.agencia ? `· Ag ${conta.agencia}` : ''} {conta.numero_conta || ''}</span> : null}
             {fazScope && fazendaAtual?.nome ? <span className="text-[10px] font-normal text-muted-foreground"> · {fazendaAtual.nome}</span> : null}
           </div>
-          <div className="text-right shrink-0">
-            <div className="text-[10px] text-muted-foreground">{MESES[mes - 1]}/{ano}</div>
-            <div className="text-[9px] text-muted-foreground">
-              {saldoFin !== null ? 'Mês fechado · saldo final oficial' : 'Mês aberto · projeção conforme compromissos selecionados'}
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="text-right">
+              <div className="text-[10px] text-muted-foreground">{MESES[mes - 1]}/{ano}</div>
+              <div className="text-[9px] text-muted-foreground">
+                {saldoFin !== null ? 'Mês fechado · saldo final oficial' : 'Mês aberto · projeção conforme compromissos selecionados'}
+              </div>
             </div>
+            <button type="button" onClick={() => setModo((m) => (m === 'extrato' ? 'analise' : 'extrato'))}
+              className="h-7 px-2 rounded border text-[10px] font-medium bg-white hover:bg-muted whitespace-nowrap">
+              {modo === 'extrato' ? '📊 Analisar Fluxo' : '📋 Voltar ao extrato'}
+            </button>
           </div>
         </div>
         <div className="flex flex-wrap gap-1.5">
@@ -253,7 +261,13 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
         </div>
       </div>
 
-      {/* Timeline — ocupa o espaço vertical restante; cabeçalho fixo; scroll interno */}
+      {/* Análise (Bloco 1) — mesma conta/mês/status; consome as mesmas `linhas` do extrato */}
+      {modo === 'analise' ? (
+        <div className="flex-1 min-h-0">
+          <ExtratoAnaliseFluxo linhas={linhas} saldoIni={saldoIni} contaNome={contaNome} periodoLabel={`${MESES[mes - 1]}/${ano}`} />
+        </div>
+      ) : (
+      /* Timeline — ocupa o espaço vertical restante; cabeçalho fixo; scroll interno */
       <div className="rounded-lg border overflow-auto flex-1 min-h-0">
         <table className="w-full border-collapse">
           <thead className="sticky top-0 z-10">
@@ -298,6 +312,7 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
           </tbody>
         </table>
       </div>
+      )}
 
       <LancamentoLeituraDialog open={!!lancLeituraId} lancamentoId={lancLeituraId} onClose={() => setLancLeituraId(null)} />
     </div>
