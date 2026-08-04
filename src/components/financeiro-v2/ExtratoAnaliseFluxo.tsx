@@ -13,7 +13,7 @@
  *   - sem saldo inicial → não projeta. Sem interpretação ("risco"/"alerta").
  */
 import { useMemo } from 'react';
-import { ResponsiveContainer, ComposedChart, Bar, Line, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ReferenceDot, LabelList } from 'recharts';
+import { ResponsiveContainer, ComposedChart, Area, Bar, Line, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ReferenceDot, LabelList } from 'recharts';
 import { formatMoeda } from '@/lib/calculos/formatters';
 
 interface LinhaFluxo { data: string; mov: number; saldo: number | null; }
@@ -22,6 +22,11 @@ function fmtEixoY(v: number): string {
   const abs = Math.abs(v);
   if (abs >= 1000) return `${v < 0 ? '-' : ''}${Math.round(abs / 1000)}k`;
   return String(Math.round(v));
+}
+// Valor compacto para labels de pontos (mesmo padrão das colunas): R$ 27,9k · R$ 405k.
+function fmtCompacto(v: number): string {
+  if (Math.abs(v) >= 1000) return `R$ ${(v / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}k`;
+  return formatMoeda(v);
 }
 
 export function ExtratoAnaliseFluxo({ linhas, saldoIni, contaNome, periodoLabel, ano, mes }: {
@@ -60,24 +65,42 @@ export function ExtratoAnaliseFluxo({ linhas, saldoIni, contaNome, periodoLabel,
     return [0, maxV * 1.1 || 1];
   }, [serie]);
 
+  // Ponto de virada da zona (azul acima do zero / vermelho abaixo) — fração do topo onde o saldo cruza 0.
+  const gradOffset = useMemo(() => {
+    if (serie.length === 0) return 1;
+    const vals = serie.map((p) => p.saldo);
+    const mx = Math.max(...vals), mn = Math.min(...vals);
+    if (mx <= 0) return 0;
+    if (mn >= 0) return 1;
+    return mx / (mx - mn);
+  }, [serie]);
+
   return (
-    <div className="w-full max-w-[900px] mx-auto rounded-lg border p-2">
+    <div className="w-full max-w-[780px] mx-auto rounded-lg border px-4 py-2">
       <div className="flex items-baseline justify-between gap-2 mb-1">
         <div className="text-[12px] font-semibold">Evolução do caixa projetado</div>
         <div className="text-[9px] text-muted-foreground">Baseado nos compromissos selecionados · {contaNome} · {periodoLabel}</div>
       </div>
 
       {saldoIni === null ? (
-        <div className="h-[280px] flex items-center justify-center text-[11px] text-muted-foreground">
+        <div className="h-[240px] flex items-center justify-center text-[11px] text-muted-foreground">
           Saldo inicial não informado — não é possível projetar.
         </div>
       ) : (
         <>
-          {/* altura executiva fixa — não ocupa a tela inteira */}
-          <div className="h-[320px]">
+          {/* altura executiva reduzida — não ocupa a tela inteira */}
+          <div className="h-[240px]">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={serie} margin={{ top: 16, right: 12, left: 4, bottom: 4 }}>
+                <defs>
+                  <linearGradient id="zonaSaldoFluxo" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset={gradOffset} stopColor="#3b82f6" stopOpacity={0.12} />
+                    <stop offset={gradOffset} stopColor="#ef4444" stopOpacity={0.12} />
+                  </linearGradient>
+                </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e9f0" />
+                {/* Zona de fundo: azul p/ saldo>0, vermelho p/ saldo<0 — leitura de aperto de caixa. */}
+                <Area type="monotone" dataKey="saldo" stroke="none" fill="url(#zonaSaldoFluxo)" baseValue={0} isAnimationActive={false} />
                 <XAxis dataKey="dia" tick={{ fontSize: 9 }} interval="preserveStartEnd" minTickGap={12} />
                 <YAxis tick={{ fontSize: 9 }} width={44} domain={dominio} tickFormatter={fmtEixoY} />
                 <ReferenceLine y={0} stroke="#64748b" strokeWidth={1.2} />
@@ -90,10 +113,10 @@ export function ExtratoAnaliseFluxo({ linhas, saldoIni, contaNome, periodoLabel,
                   {serie.map((p, i) => <Cell key={i} fill={p.mov >= 0 ? '#22784a' : '#b91c1c'} />)}
                   <LabelList dataKey="mov" position="top" formatter={(v) => (typeof v === 'number' && v !== 0 ? fmtEixoY(v) : '')} style={{ fontSize: 8, fill: '#64748b' }} />
                 </Bar>
-                <Line type="monotone" dataKey="saldo" stroke="#1e3a5f" strokeWidth={2} dot={false} />
-                {inicial && <ReferenceDot x={inicial.dia} y={inicial.saldo} r={3} fill="#1e3a5f" stroke="#fff" label={{ value: formatMoeda(inicial.saldo), position: 'top', fontSize: 9, fill: '#1e3a5f' }} />}
-                {final && <ReferenceDot x={final.dia} y={final.saldo} r={3.5} fill="#1e3a5f" stroke="#fff" label={{ value: formatMoeda(final.saldo), position: 'top', fontSize: 9, fill: '#1e3a5f' }} />}
-                {menor && <ReferenceDot x={menor.dia} y={menor.saldo} r={3} fill={menor.saldo < 0 ? '#b91c1c' : '#22784a'} stroke="#fff" label={{ value: formatMoeda(menor.saldo), position: 'bottom', fontSize: 9, fill: menor.saldo < 0 ? '#b91c1c' : '#22784a' }} />}
+                <Line type="monotone" dataKey="saldo" stroke="#1e3a5f" strokeWidth={1.2} dot={false} />
+                {inicial && <ReferenceDot x={inicial.dia} y={inicial.saldo} r={3} fill="#1e3a5f" stroke="#fff" label={{ value: fmtCompacto(inicial.saldo), position: 'top', fontSize: 9, fill: '#1e3a5f' }} />}
+                {final && <ReferenceDot x={final.dia} y={final.saldo} r={3.5} fill="#1e3a5f" stroke="#fff" label={{ value: fmtCompacto(final.saldo), position: 'top', fontSize: 9, fill: '#1e3a5f' }} />}
+                {menor && <ReferenceDot x={menor.dia} y={menor.saldo} r={3} fill={menor.saldo < 0 ? '#b91c1c' : '#22784a'} stroke="#fff" label={{ value: fmtCompacto(menor.saldo), position: 'bottom', fontSize: 9, fill: menor.saldo < 0 ? '#b91c1c' : '#22784a' }} />}
               </ComposedChart>
             </ResponsiveContainer>
           </div>
