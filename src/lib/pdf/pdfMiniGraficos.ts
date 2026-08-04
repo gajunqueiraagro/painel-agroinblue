@@ -55,6 +55,34 @@ export function desenharMiniLinhaSaldo(
   doc.setTextColor(0, 0, 0);
 }
 
+/** Donut nativo (setores por triângulos a partir do centro + furo central branco). */
+export function desenharDonut(
+  doc: jsPDF,
+  segmentos: { valor: number; cor: RGB }[],
+  cx: number,
+  cy: number,
+  rOuter: number,
+  rInner: number,
+): void {
+  const total = segmentos.reduce((s, x) => s + x.valor, 0);
+  if (total <= 0) return;
+  const step = Math.PI / 90; // ~2° por triângulo (borda suave)
+  let ang = -Math.PI / 2;    // começa no topo
+  for (const seg of segmentos) {
+    if (seg.valor <= 0) continue;
+    const a1 = ang + (seg.valor / total) * Math.PI * 2;
+    doc.setFillColor(seg.cor[0], seg.cor[1], seg.cor[2]);
+    for (let a = ang; a < a1 - 1e-9; a += step) {
+      const aa = Math.min(a + step, a1);
+      doc.triangle(cx, cy, cx + rOuter * Math.cos(a), cy + rOuter * Math.sin(a), cx + rOuter * Math.cos(aa), cy + rOuter * Math.sin(aa), 'F');
+    }
+    ang = a1;
+  }
+  // Furo central → donut. Anel branco fino nas bordas dos setores fica implícito pelo furo.
+  doc.setFillColor(255, 255, 255);
+  doc.circle(cx, cy, rInner, 'F');
+}
+
 /** Barra horizontal 100% proporcional: segmentos coloridos lado a lado (com separador branco). */
 export function desenharBarraProporcional(
   doc: jsPDF,

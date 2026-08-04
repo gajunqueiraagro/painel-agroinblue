@@ -12,7 +12,7 @@
 
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import type { RowInput, UserOptions } from 'jspdf-autotable';
+import type { RowInput, UserOptions, CellHookData } from 'jspdf-autotable';
 import logoUrl from '@/assets/logo.png';
 
 // ── Geometria A4 retrato ──
@@ -207,10 +207,15 @@ export function addTabelaExecutiva(
       totalVerde?: boolean;
       headFill?: RGB;
       columnStyles?: UserOptions['columnStyles'];
+      // Capacidades OPCIONAIS genéricas (infra; sem regra de domínio aqui):
+      fontSize?: number;                              // tabelas densas (ex.: extrato)
+      cellPadding?: number;                           // compactação vertical
+      didParseCell?: (data: CellHookData) => void;    // formatação condicional de célula
     };
   },
 ): number {
   const { head, body, startY, opts } = params;
+  const pad = opts?.cellPadding;
 
   autoTable(doc, {
     startY,
@@ -219,12 +224,13 @@ export function addTabelaExecutiva(
     foot: opts?.foot,
     theme: 'grid',
     styles: {
-      fontSize: 9,
-      cellPadding: { top: 2.2, bottom: 2.2, left: 2.5, right: 2.5 },
+      fontSize: opts?.fontSize ?? 9,
+      cellPadding: pad != null ? pad : { top: 2.2, bottom: 2.2, left: 2.5, right: 2.5 },
       lineColor: PALETA.LINHA_SEPARADORA,
       lineWidth: 0.1,
       textColor: [50, 50, 50],
     },
+    didParseCell: opts?.didParseCell,
     headStyles: {
       fillColor: opts?.headFill ?? PALETA.AZUL_PRIMARIO,
       textColor: PALETA.BRANCO,
