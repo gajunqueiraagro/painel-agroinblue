@@ -84,7 +84,7 @@ function blocoDonut(doc: jsPDF, x: number, w: number, y: number, titulo: string,
   const yy = titulo ? subtitulo(doc, titulo, x, y) : y;
   const cx = x + 18, cy = yy + 16;
   desenharDonut(doc, ranking.map((r) => ({ valor: r.total, cor: corDe(r.chave) })), cx, cy, 15, 8);
-  const yLista = rankingLista(doc, x + 38, yy + 4, w - 38, ranking.slice(0, 6).map((r) => ({ label: r.chave, valor: r.total, pct: pctDe(r.total, totalGeral), cor: corDe(r.chave) })), 20);
+  const yLista = rankingLista(doc, x + 40, yy + 4, w - 40, ranking.slice(0, 6).map((r) => ({ label: r.chave, valor: r.total, pct: pctDe(r.total, totalGeral), cor: corDe(r.chave) })), 42);
   return Math.max(cy + 18, yLista) + 2;
 }
 
@@ -157,25 +157,35 @@ export async function gerarPdfAnaliseExecutiva(params: {
   if (creditos.ranking.length > 0) y = blocoDonut(doc, MARGEM, INNER, y + 1, '', creditos.ranking, creditos.totalGeral, corCredito) + 1;
   else { doc.setFontSize(9); doc.setTextColor(...PALETA.CINZA_TEXTO); doc.text('Sem créditos no período.', MARGEM, y + 5); doc.setTextColor(0, 0, 0); y += 8; }
 
-  y = addImagem(doc, img.distribuicao, MARGEM, y + 2, INNER, 78, 'Distribuição Econômica') + 1;
+  y = addTituloSecao(doc, 'Para onde foi o dinheiro', y + 2);
+  y = addImagem(doc, img.distribuicao, MARGEM, y + 2, INNER, 90, 'Distribuição Econômica') + 3;
   y = addImagem(doc, img.compromissos, MARGEM, y + 2, INNER, PAGE_H - y - 16, 'Principais Custos e Compromissos');
 
   /* ───────── PÁGINA 3 — Transferências entre Contas ───────── */
   doc.addPage();
   y = addTituloSecao(doc, 'Transferências entre Contas', 22);
+  const tRec = conta.transferencias.filter((t) => t.sentido === 'entrada');
+  const tEnv = conta.transferencias.filter((t) => t.sentido === 'saida');
+  const linhaT = (t: TransferenciaPdf): string[] => [diaBR(t.data), trunc(t.descricao || '—', 30), trunc(t.contaOrigem, 20), trunc(t.contaDestino, 20), formatMoeda(t.valor), t.status];
+  const headT: string[][] = [['Data', 'Descrição', 'Conta origem', 'Conta destino', 'Valor', 'Status']];
   if (conta.transferencias.length === 0) {
     doc.setFontSize(9); doc.setTextColor(...PALETA.CINZA_TEXTO);
     doc.text('Nenhuma transferência entre contas próprias no período.', MARGEM, y + 6); doc.setTextColor(0, 0, 0);
   } else {
-    const totEnt = conta.transferencias.filter((t) => t.sentido === 'entrada').reduce((s, t) => s + t.valor, 0);
-    const totSai = conta.transferencias.filter((t) => t.sentido === 'saida').reduce((s, t) => s + t.valor, 0);
-    y = subtitulo(doc, `Recebidas: ${formatMoeda(totEnt)}   ·   Enviadas: ${formatMoeda(totSai)}`, MARGEM, y + 3) + 1;
-    addTabelaExecutiva(doc, {
-      head: [['Data', 'Descrição', 'Conta origem', 'Conta destino', 'Valor', 'Status']],
-      body: conta.transferencias.map((t) => [diaBR(t.data), trunc(t.descricao || '—', 30), trunc(t.contaOrigem, 20), trunc(t.contaDestino, 20), formatMoeda(t.valor), t.status]),
-      startY: y,
-      opts: { fontSize: 8, overflow: 'ellipsize', rowPageBreak: 'avoid', columnStyles: { 0: { cellWidth: 14 }, 4: { halign: 'right', cellWidth: 30 }, 5: { cellWidth: 26 } } },
-    });
+    // Recebidas (valor verde)
+    y = subtitulo(doc, `Transferências Recebidas — ${formatMoeda(tRec.reduce((s, t) => s + t.valor, 0))}`, MARGEM, y + 3) + 1;
+    if (tRec.length === 0) { doc.setFontSize(8); doc.setTextColor(...PALETA.CINZA_TEXTO); doc.text('Nenhuma.', MARGEM, y + 3); doc.setTextColor(0, 0, 0); y += 6; }
+    else y = addTabelaExecutiva(doc, {
+      head: headT, body: tRec.map(linhaT), startY: y,
+      opts: { fontSize: 8, overflow: 'ellipsize', rowPageBreak: 'avoid', marginTop: 22, columnStyles: { 0: { cellWidth: 14 }, 4: { halign: 'right', cellWidth: 30 }, 5: { cellWidth: 26 } }, didParseCell: (d) => { if (d.section === 'body' && d.column.index === 4) d.cell.styles.textColor = VERDE; } },
+    }) + 4;
+    // Enviadas (valor vermelho)
+    y = subtitulo(doc, `Transferências Enviadas — ${formatMoeda(tEnv.reduce((s, t) => s + t.valor, 0))}`, MARGEM, y + 2) + 1;
+    if (tEnv.length === 0) { doc.setFontSize(8); doc.setTextColor(...PALETA.CINZA_TEXTO); doc.text('Nenhuma.', MARGEM, y + 3); doc.setTextColor(0, 0, 0); y += 6; }
+    else y = addTabelaExecutiva(doc, {
+      head: headT, body: tEnv.map(linhaT), startY: y,
+      opts: { fontSize: 8, overflow: 'ellipsize', rowPageBreak: 'avoid', marginTop: 22, columnStyles: { 0: { cellWidth: 14 }, 4: { halign: 'right', cellWidth: 30 }, 5: { cellWidth: 26 } }, didParseCell: (d) => { if (d.section === 'body' && d.column.index === 4) d.cell.styles.textColor = VERMELHO; } },
+    }) + 4;
     doc.setFontSize(8); doc.setTextColor(...PALETA.CINZA_TEXTO);
     doc.text('Transferências entre contas próprias não entram na análise econômica; impactam saldo, fluxo de caixa e planejamento financeiro.', MARGEM, PAGE_H - 22, { maxWidth: INNER });
     doc.setTextColor(0, 0, 0);
@@ -219,6 +229,7 @@ export async function gerarPdfAnaliseExecutiva(params: {
         cellPadding: 1.1,
         overflow: 'ellipsize',
         rowPageBreak: 'avoid',
+        marginTop: 22, // páginas de continuação começam abaixo do cabeçalho global (head repete)
         columnStyles: {
           0: { halign: 'left', cellWidth: 13 }, 1: { halign: 'left', cellWidth: 32 }, 2: { halign: 'left', cellWidth: 27 }, 3: { halign: 'left', cellWidth: 19 },
           4: { halign: 'right', cellWidth: 27 }, 5: { halign: 'right', cellWidth: 27 }, 6: { halign: 'left', cellWidth: 24 }, 7: { halign: 'left' },

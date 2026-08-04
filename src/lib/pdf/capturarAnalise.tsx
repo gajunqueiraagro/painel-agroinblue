@@ -39,8 +39,11 @@ export interface DadosCaptura {
   mes: number;
 }
 
-const LARGURA = 860; // largura fixa off-screen (mesmo breakpoint executivo da tela)
+// Largura off-screen POR componente = a max-w de cada um na tela (preserva o layout desenhado).
+const LARG = { evo: 780, org: 900, dist: 620, comp: 720 };
+const LARG_MAX = 900;
 const ESCALA = 2.5;  // 2x mínimo · 3x se necessário (fidelidade sem arquivo pesado)
+const ESPERA_MS = 1700; // > duração da animação recharts (~1500ms) → linha/barras completas na captura
 
 const esperar = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -52,16 +55,16 @@ async function capturarNo(el: HTMLElement | null): Promise<ImagemCapturada | und
 
 export async function capturarAnalise(d: DadosCaptura): Promise<ImagensAnalise> {
   const container = document.createElement('div');
-  container.style.cssText = `position:fixed;left:-99999px;top:0;width:${LARGURA}px;background:#ffffff;z-index:-1;`;
+  container.style.cssText = `position:fixed;left:-99999px;top:0;width:${LARG_MAX}px;background:#ffffff;z-index:-1;`;
   document.body.appendChild(container);
 
-  const mk = (id: string): HTMLDivElement => {
+  const mk = (id: string, largura: number): HTMLDivElement => {
     const w = document.createElement('div');
-    w.id = id; w.style.cssText = `width:${LARGURA}px;background:#ffffff;padding:8px;`;
+    w.id = id; w.style.cssText = `width:${largura}px;background:#ffffff;padding:8px;`;
     container.appendChild(w);
     return w;
   };
-  const boxEvo = mk('cap-evo'), boxOrg = mk('cap-org'), boxDist = mk('cap-dist'), boxComp = mk('cap-comp');
+  const boxEvo = mk('cap-evo', LARG.evo), boxOrg = mk('cap-org', LARG.org), boxDist = mk('cap-dist', LARG.dist), boxComp = mk('cap-comp', LARG.comp);
 
   const roots: Root[] = [];
   const render = (box: HTMLElement, node: ReactElement) => { const r = createRoot(box); r.render(node); roots.push(r); };
@@ -70,8 +73,8 @@ export async function capturarAnalise(d: DadosCaptura): Promise<ImagensAnalise> 
   render(boxDist, <ExtratoDistribuicaoEconomica itens={d.itens} contaNome={d.contaNome} periodoLabel={d.periodoLabel} />);
   render(boxComp, <ExtratoMaioresCompromissos itens={d.itens} contaNome={d.contaNome} periodoLabel={d.periodoLabel} />);
 
-  // Aguarda layout + render assíncrono do recharts (ResponsiveContainer mede o pai).
-  await esperar(450);
+  // Aguarda layout + FIM da animação do recharts (senão a linha/barras saem incompletas).
+  await esperar(ESPERA_MS);
 
   try {
     const [evolucao, organizacao, distribuicao, compromissos] = await Promise.all([

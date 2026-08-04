@@ -243,6 +243,7 @@ export function addTabelaExecutiva(
       cellPadding?: number;                           // compactação vertical
       overflow?: 'linebreak' | 'ellipsize' | 'visible' | 'hidden';  // truncamento controlado
       rowPageBreak?: 'auto' | 'avoid';                // nunca quebrar uma linha entre páginas
+      marginTop?: number;                             // topo das páginas de continuação (reserva de cabeçalho)
       didParseCell?: (data: CellHookData) => void;    // formatação condicional de célula
     };
   },
@@ -281,7 +282,7 @@ export function addTabelaExecutiva(
       fontStyle: 'bold',
     },
     columnStyles: opts?.columnStyles,
-    margin: { left: MARGEM, right: MARGEM },
+    margin: { left: MARGEM, right: MARGEM, top: opts?.marginTop ?? 0 },
   });
 
   const finalY = (doc as unknown as { lastAutoTable?: { finalY: number } })
