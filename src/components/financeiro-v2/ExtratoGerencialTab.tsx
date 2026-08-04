@@ -224,11 +224,26 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
 
   // PDF Executivo — consome os mesmos linhas/dadosOrg/saldos das telas (fonte única de agregações).
   const exportarPdfExecutivo = () => {
+    const serieLinhas = linhas.map((x) => ({ data: x.data, mov: x.mov, saldo: x.saldo }));
+    const extrato = linhas.map((x) => {
+      const sk = (x.l.status_transacao || '').toLowerCase();
+      return {
+        id: x.l.id, data: x.data,
+        produto: x.l.descricao, fornecedor: (x.l.favorecido_id && fornMap?.get(x.l.favorecido_id)) || '', centro: x.l.centro_custo,
+        valor: x.mov, saldo: x.saldo,
+        statusKey: sk, statusLabel: STATUS_FILTRO_LABEL[sk] ?? (x.l.status_transacao || '—'),
+        concil: concStatus(x.l).txt, doc: x.l.numero_documento || x.l.documento || '',
+      };
+    });
     void gerarPdfAnaliseExecutiva({
       clienteNome: clienteAtual?.nome ?? '—',
       periodoLabel: `${MESES[mes - 1]}/${ano}`,
       ano, mes,
-      contas: [{ nome: contaNome, saldoIni, saldoFin, totais, linhas, dadosOrg }],
+      contas: [{
+        nome: contaNome,
+        fazenda: fazScope && fazendaAtual?.nome ? fazendaAtual.nome : undefined,
+        saldoIni, saldoFin, totais, serieLinhas, extrato, dadosOrg,
+      }],
     });
   };
 
