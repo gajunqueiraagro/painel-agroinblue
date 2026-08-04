@@ -20,6 +20,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { AnaliseDrawer } from '@/components/financeiro-v2/AnaliseDrawer';
 import { TabelaLancamentosCompacta } from '@/components/financeiro-v2/TabelaLancamentosCompacta';
+import { distribuicaoEconomica, semLabelEcon, type DimensaoEcon } from '@/lib/analise/analiseAgregacoes';
 
 interface ItemEcon {
   id: string; data: string; mov: number; tipo: string;
@@ -27,12 +28,8 @@ interface ItemEcon {
   macro: string | null; grupo: string | null; centroPlano: string | null;
   escopo: string | null;
 }
-type Dimensao = 'macro' | 'negocio';
-const isTransferencia = (tipo: string) => tipo.startsWith('3-');
+type Dimensao = DimensaoEcon;
 const NAO_OPERACIONAL = new Set(['Investimento na Fazenda', 'Investimento em Bovinos', 'Dividendos']);
-const NEGOCIO_LABEL: Record<string, string> = {
-  pecuaria: 'Pecuária', agricultura: 'Agricultura', administrativo: 'Administrativo', financeiro: 'Financeiro/Outros',
-};
 const COR_OPER = '#1e3a5f';
 const COR_NAO_OPER = '#d97706';
 const COR_SEM = '#94a3b8';
@@ -46,36 +43,11 @@ export function ExtratoDistribuicaoEconomica({ itens, contaNome, periodoLabel }:
   const [dimensao, setDimensao] = useState<Dimensao>('macro');
   const [drawer, setDrawer] = useState<string | null>(null);
 
-  const SEM = dimensao === 'macro' ? 'Sem classificação no plano' : 'Sem classificação';
-  const rotulo = (it: ItemEcon): string | null => {
-    if (dimensao === 'macro') return it.macro;
-    if (!it.escopo) return null;
-    return NEGOCIO_LABEL[it.escopo] ?? (it.escopo.charAt(0).toUpperCase() + it.escopo.slice(1));
-  };
+  const SEM = semLabelEcon(dimensao);
   const ehNaoOper = (chave: string) => dimensao === 'macro' && NAO_OPERACIONAL.has(chave);
   const corDoBucket = (chave: string) => (chave === SEM ? COR_SEM : ehNaoOper(chave) ? COR_NAO_OPER : COR_OPER);
 
-  const { ranking, totalGeral, totalClass, folhaCusteio } = useMemo(() => {
-    const map = new Map<string, { chave: string; total: number; count: number; itens: ItemEcon[] }>();
-    let totalGeral = 0, totalClass = 0, folhaCusteio = 0;
-    for (const it of itens) {
-      if (it.mov >= 0) continue; // só saídas de caixa
-      if (isTransferencia(it.tipo)) continue; // exclui tesouraria (tipo '3-%')
-      const valor = Math.abs(it.mov);
-      totalGeral += valor;
-      const classif = rotulo(it);
-      if (classif) totalClass += valor;
-      if (dimensao === 'macro' && it.macro === 'Custeio Produção' && it.centroPlano === 'Mão de Obra') folhaCusteio += valor;
-      const chave = classif ?? SEM;
-      const e = map.get(chave) ?? { chave, total: 0, count: 0, itens: [] };
-      e.total += valor; e.count += 1; e.itens.push(it);
-      map.set(chave, e);
-    }
-    // "Sem classificação" sempre por último; demais por valor desc.
-    const ranking = [...map.values()].sort((a, b) =>
-      a.chave === SEM ? 1 : b.chave === SEM ? -1 : b.total - a.total);
-    return { ranking, totalGeral, totalClass, folhaCusteio };
-  }, [itens, dimensao]);
+  const { ranking, totalGeral, totalClass, folhaCusteio } = useMemo(() => distribuicaoEconomica(itens, dimensao), [itens, dimensao]);
 
   const cobertura = totalGeral > 0 ? totalClass / totalGeral : 0;
   const pct = (v: number) => (totalGeral > 0 ? Math.round((v / totalGeral) * 100) : 0);

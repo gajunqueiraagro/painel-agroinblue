@@ -15,9 +15,9 @@
 import { useMemo } from 'react';
 import { ResponsiveContainer, ComposedChart, Area, Bar, Line, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ReferenceDot, LabelList } from 'recharts';
 import { formatMoeda } from '@/lib/calculos/formatters';
+import { serieEvolucao } from '@/lib/analise/analiseAgregacoes';
 
 interface LinhaFluxo { data: string; mov: number; saldo: number | null; }
-const pad2 = (n: number) => String(n).padStart(2, '0');
 function fmtEixoY(v: number): string {
   const abs = Math.abs(v);
   if (abs >= 1000) return `${v < 0 ? '-' : ''}${Math.round(abs / 1000)}k`;
@@ -37,19 +37,7 @@ export function ExtratoAnaliseFluxo({ linhas, saldoIni, contaNome, periodoLabel,
   ano: number;
   mes: number;
 }) {
-  const serie = useMemo(() => {
-    if (saldoIni === null) return [];
-    const movPorDia = new Map<number, number>();
-    for (const p of linhas) {
-      const dd = Number(p.data.slice(8, 10));
-      if (dd) movPorDia.set(dd, (movPorDia.get(dd) ?? 0) + p.mov);
-    }
-    const diasNoMes = new Date(ano, mes, 0).getDate();
-    const pontos: { dia: string; mov: number; saldo: number }[] = [{ dia: 'Início', mov: 0, saldo: saldoIni }];
-    let acc = saldoIni;
-    for (let d = 1; d <= diasNoMes; d++) { const mv = movPorDia.get(d) ?? 0; acc += mv; pontos.push({ dia: pad2(d), mov: mv, saldo: acc }); }
-    return pontos;
-  }, [linhas, saldoIni, ano, mes]);
+  const serie = useMemo(() => serieEvolucao(linhas, saldoIni, ano, mes), [linhas, saldoIni, ano, mes]);
 
   const menor = useMemo(() => (serie.length ? serie.reduce((m, p) => (p.saldo < m.saldo ? p : m), serie[0]) : null), [serie]);
   const inicial = serie.length ? serie[0] : null;

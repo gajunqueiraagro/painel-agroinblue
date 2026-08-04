@@ -15,15 +15,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { AnaliseDrawer } from '@/components/financeiro-v2/AnaliseDrawer';
+import { maioresCompromissos, TOP_N } from '@/lib/analise/analiseAgregacoes';
 
 interface ItemCompromisso {
   id: string; data: string; mov: number; tipo: string;
   centroPlano: string | null; fornecedor: string; produto: string | null; doc: string;
 }
-interface Bucket { chave: string; total: number; count: number; itens: ItemCompromisso[]; ehDemais?: boolean; }
-const isTransferencia = (tipo: string) => tipo.startsWith('3-');
-const SEM_CENTRO = 'Sem centro';
-const TOP_N = 10;
 const COR = '#1e3a5f';
 const COR_DEMAIS = '#94a3b8';
 // Paleta ordinal só para distinguir fatias do donut / pontos da tabela (apoio visual; não é classificação).
@@ -38,34 +35,7 @@ export function ExtratoMaioresCompromissos({ itens, contaNome, periodoLabel }: {
 }) {
   const [drawer, setDrawer] = useState<string | null>(null);
 
-  const { linhas, totalGeral, top, demais } = useMemo(() => {
-    const map = new Map<string, Bucket>();
-    let totalGeral = 0;
-    for (const it of itens) {
-      if (it.mov >= 0) continue; // só saídas de caixa
-      if (isTransferencia(it.tipo)) continue; // exclui tesouraria (tipo '3-%')
-      const v = Math.abs(it.mov);
-      totalGeral += v;
-      const chave = it.centroPlano || SEM_CENTRO;
-      const e = map.get(chave) ?? { chave, total: 0, count: 0, itens: [] };
-      e.total += v; e.count += 1; e.itens.push(it);
-      map.set(chave, e);
-    }
-    const ordenado = [...map.values()].sort((a, b) => b.total - a.total);
-    const top = ordenado.slice(0, TOP_N);
-    const cauda = ordenado.slice(TOP_N);
-    const demais: Bucket | null = cauda.length
-      ? {
-          chave: `Demais (${cauda.length} centro${cauda.length !== 1 ? 's' : ''})`,
-          total: cauda.reduce((s, x) => s + x.total, 0),
-          count: cauda.reduce((s, x) => s + x.count, 0),
-          itens: cauda.flatMap((x) => x.itens),
-          ehDemais: true,
-        }
-      : null;
-    const linhas = demais ? [...top, demais] : top;
-    return { linhas, totalGeral, top, demais };
-  }, [itens]);
+  const { linhas, totalGeral, top, demais } = useMemo(() => maioresCompromissos(itens), [itens]);
 
   const topTotal = useMemo(() => top.reduce((s, r) => s + r.total, 0), [top]);
   const topPag = useMemo(() => top.reduce((s, r) => s + r.count, 0), [top]);

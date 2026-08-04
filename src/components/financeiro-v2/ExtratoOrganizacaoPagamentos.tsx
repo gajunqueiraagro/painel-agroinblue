@@ -25,17 +25,17 @@ import { useEffect, useMemo, useState } from 'react';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { AnaliseDrawer } from '@/components/financeiro-v2/AnaliseDrawer';
 import { TabelaLancamentosCompacta } from '@/components/financeiro-v2/TabelaLancamentosCompacta';
+import { etapasPagamento, etapaDoDia, type EtapaId, type EtapaBucketId } from '@/lib/analise/analiseAgregacoes';
 
 interface ItemPag { id: string; data: string; mov: number; tipo: string; centro: string | null; produto: string | null; fornecedor: string; doc: string; }
-const isTransferencia = (tipo: string) => tipo.startsWith('3-');
 
-type JanelaId = 'j1' | 'j2' | 'j3';
-type BucketId = JanelaId | 'fora';
-// Janelas móveis de 4 dias (não se sobrepõem → sem regra de "dia limítrofe").
-const JANELAS: { id: JanelaId; nome: string; faixa: string; ini: number; fim: number; cor: string }[] = [
-  { id: 'j1', nome: '1ª etapa de pagamentos', faixa: '03–06', ini: 3, fim: 6, cor: '#3b82f6' },
-  { id: 'j2', nome: '2ª etapa de pagamentos', faixa: '08–11', ini: 8, fim: 11, cor: '#22784a' },
-  { id: 'j3', nome: '3ª etapa de pagamentos', faixa: '20–23', ini: 20, fim: 23, cor: '#d97706' },
+type JanelaId = EtapaId;
+type BucketId = EtapaBucketId;
+// Apresentação das etapas (faixas/ranges = fonte única em analiseAgregacoes.ETAPAS).
+const JANELAS: { id: JanelaId; nome: string; faixa: string; cor: string }[] = [
+  { id: 'j1', nome: '1ª etapa de pagamentos', faixa: '03–06', cor: '#3b82f6' },
+  { id: 'j2', nome: '2ª etapa de pagamentos', faixa: '08–11', cor: '#22784a' },
+  { id: 'j3', nome: '3ª etapa de pagamentos', faixa: '20–23', cor: '#d97706' },
 ];
 const COR_FORA = '#94a3b8';
 const pad2 = (n: number) => String(n).padStart(2, '0');
@@ -49,29 +49,8 @@ export function ExtratoOrganizacaoPagamentos({ itens, ano, mes, contaNome, perio
 }) {
   const [drawer, setDrawer] = useState<BucketId | null>(null);
   const diasNoMes = useMemo(() => new Date(ano, mes, 0).getDate(), [ano, mes]);
-  const janelaDoDia = (d: number): JanelaId | null => JANELAS.find((j) => d >= j.ini && d <= j.fim)?.id ?? null;
 
-  const { buckets, totalGeral } = useMemo(() => {
-    const b: Record<BucketId, { total: number; count: number; itens: ItemPag[] }> = {
-      j1: { total: 0, count: 0, itens: [] },
-      j2: { total: 0, count: 0, itens: [] },
-      j3: { total: 0, count: 0, itens: [] },
-      fora: { total: 0, count: 0, itens: [] },
-    };
-    let totalGeral = 0;
-    for (const it of itens) {
-      if (it.mov >= 0) continue; // só saídas de caixa (pagamentos)
-      if (isTransferencia(it.tipo)) continue; // exclui tesouraria (transferência interna, tipo '3-%')
-      const valor = Math.abs(it.mov);
-      totalGeral += valor;
-      const dd = Number(it.data.slice(8, 10));
-      const key: BucketId = janelaDoDia(dd) ?? 'fora';
-      b[key].total += valor;
-      b[key].count += 1;
-      b[key].itens.push(it);
-    }
-    return { buckets: b, totalGeral };
-  }, [itens]);
+  const { buckets, totalGeral } = useMemo(() => etapasPagamento(itens), [itens]);
 
   const pct = (v: number) => (totalGeral > 0 ? Math.round((v / totalGeral) * 100) : 0);
 
@@ -111,7 +90,7 @@ export function ExtratoOrganizacaoPagamentos({ itens, ano, mes, contaNome, perio
           {/* Calendário horizontal do mês — etapas destacadas por cor. */}
           <div className="flex flex-wrap gap-0.5">
             {Array.from({ length: diasNoMes }, (_, i) => i + 1).map((d) => {
-              const j = JANELAS.find((x) => x.id === janelaDoDia(d));
+              const j = JANELAS.find((x) => x.id === etapaDoDia(d));
               return (
                 <div key={d} className="w-6 text-center text-[8px] py-0.5 rounded border"
                      style={j ? { background: `${j.cor}1f`, color: j.cor, borderColor: `${j.cor}55` } : { color: '#94a3b8', borderColor: '#e5e9f0' }}
