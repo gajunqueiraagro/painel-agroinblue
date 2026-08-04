@@ -45,22 +45,10 @@ BEGIN
      AND t.grupo_id IS NULL;                               -- idempotência
   GET DIAGNOSTICS v_rows = ROW_COUNT;
   RAISE NOTICE 'PR-CONC-GRUPO backfill 1xN: % itens rotulados', v_rows;
-
-  -- Trilha: uma entrada por grupo legado 1×N identificado (grupo_id = o que foi de fato gravado).
-  INSERT INTO conciliacao_audit_log (acao, actor_user_id, cliente_id, extrato_id, motivo, payload_depois)
-  SELECT 'grupo_legado_identificado', NULL, e.cliente_id, e.id, 'backfill_pr_conc_grupo_fase1_1xN',
-         jsonb_build_object('grupo_id', c.grupo_id, 'itens', c.qtd, 'soma', c.soma, 'valor_ofx', abs(e.valor))
-  FROM extrato_bancario_v2 e
-  JOIN (
-    select extrato_id, grupo_id, count(*) qtd, round(sum(valor_aplicado),2) soma
-    from conciliacao_bancaria_itens
-    where tipo_aprovacao = 'agrupamento_legado' and desfeito_em is null
-    group by extrato_id, grupo_id
-  ) c ON c.extrato_id = e.id
-  WHERE NOT EXISTS (
-    SELECT 1 FROM conciliacao_audit_log a
-    WHERE a.acao = 'grupo_legado_identificado' AND a.extrato_id = e.id
-  );
+  -- OPÇÃO A (aprovada): SEM evento de auditoria explícito. A auditoria oficial é trigger-driven
+  --   (trg_audit_conciliacao) e cobre INSERT/desfazer de vínculo. O backfill é rotulagem de metadado
+  --   (UPDATE de grupo_id/tipo, sem tocar desfeito_em) → o próprio grupo_id + tipo='agrupamento_legado'
+  --   nas linhas é o registro; não se criam novos tipos de acao para não duplicar o mecanismo existente.
 END $$;
 
 -- ───────────────────────── ROLLBACK (metadado apenas; NUNCA desfaz vínculo) ─────────────────────────
