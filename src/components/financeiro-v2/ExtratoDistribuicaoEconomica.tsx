@@ -106,33 +106,32 @@ export function ExtratoDistribuicaoEconomica({ itens, contaNome, periodoLabel }:
             </div>
           )}
 
-          {/* Ranking por macro. */}
-          <div className="space-y-1">
+          {/* Ranking por macro — cards compactos (alta densidade, 2–3 por linha). */}
+          <div className="flex flex-wrap gap-1.5">
             {ranking.map((r) => {
               const cor = corDoMacro(r.macro);
               const naoOper = NAO_OPERACIONAL.has(r.macro);
               return (
                 <button key={r.macro} type="button" onClick={() => setDrawer(r.macro)}
-                  className="w-full text-left rounded-md border p-1.5 hover:bg-muted/40 focus:outline-none focus:ring-1"
+                  className="rounded-md border p-2 flex-1 min-w-[220px] text-left transition-colors hover:bg-muted/40 focus:outline-none focus:ring-1"
                   style={{ borderColor: `${cor}44` }}>
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="text-[11px] font-semibold truncate" style={{ color: cor }}>{r.macro}</span>
-                      {naoOper && <span className="text-[8px] px-1 rounded shrink-0" style={{ background: `${COR_NAO_OPER}1f`, color: COR_NAO_OPER }}>não operacional</span>}
-                      {r.macro === SEM_CLASS && <span className="text-[8px] px-1 rounded shrink-0" style={{ background: `${COR_SEM}22`, color: '#475569' }}>sem plano</span>}
-                    </div>
-                    <div className="flex items-baseline gap-2 shrink-0">
-                      <span className="text-[12px] font-bold tabular-nums" style={{ color: cor }}>{formatMoeda(r.total)}</span>
-                      <span className="text-[10px] text-muted-foreground tabular-nums w-8 text-right">{pct(r.total)}%</span>
-                      <span className="text-[9px] text-muted-foreground w-16 text-right">{r.count} lanç.</span>
-                      <span className="text-[9px] font-medium" style={{ color: cor }}>↗</span>
-                    </div>
+                  <div className="flex items-start justify-between gap-1">
+                    <span className="text-[11px] font-semibold leading-tight truncate" style={{ color: cor }}>{r.macro}</span>
+                    <span className="text-[9px] font-medium shrink-0" style={{ color: cor }}>↗</span>
                   </div>
+                  {(naoOper || r.macro === SEM_CLASS) && (
+                    <div className="mt-0.5">
+                      {naoOper && <span className="text-[8px] px-1 rounded" style={{ background: `${COR_NAO_OPER}1f`, color: COR_NAO_OPER }}>não operacional</span>}
+                      {r.macro === SEM_CLASS && <span className="text-[8px] px-1 rounded" style={{ background: `${COR_SEM}22`, color: '#475569' }}>sem plano</span>}
+                    </div>
+                  )}
+                  <div className="text-[14px] font-bold tabular-nums leading-tight mt-0.5" style={{ color: cor }}>{formatMoeda(r.total)}</div>
+                  <div className="text-[10px] text-muted-foreground">{pct(r.total)}% das saídas · {r.count} lanç.</div>
                   <div className="mt-1 h-1.5 rounded bg-muted overflow-hidden">
                     <div className="h-full rounded" style={{ width: `${maxTotal > 0 ? Math.round((r.total / maxTotal) * 100) : 0}%`, background: cor }} />
                   </div>
                   {r.macro === 'Custeio Produção' && folhaCusteio > 0 && (
-                    <div className="text-[9px] text-muted-foreground mt-0.5">dos quais Mão de Obra (Folha): <span className="font-semibold text-foreground">{formatMoeda(folhaCusteio)}</span></div>
+                    <div className="text-[9px] text-muted-foreground mt-0.5 truncate">dos quais Mão de Obra (Folha): <span className="font-semibold text-foreground">{formatMoeda(folhaCusteio)}</span></div>
                   )}
                 </button>
               );
