@@ -7,11 +7,15 @@
  * Fonte: os mesmos `itens` derivados de `linhas` (mesma conta/mês/status/sinal do Extrato Gerencial).
  * Pagamento = mov < 0 (valor = abs). Janelas por DATA DO MOVIMENTO (first-match, sem sobreposição;
  * dia 5 conta na 1ª janela). Pagamentos fora das janelas = "Fora das janelas". Sem julgamento.
+ *
+ * PR-02 — despesa OPERACIONAL apenas: exclui transferências internas entre contas próprias
+ * (tipo_operacao começando em '3-'). Tesouraria segue normal no Extrato/Fluxo/saldo (intocados).
  */
 import { useMemo } from 'react';
 import { formatMoeda } from '@/lib/calculos/formatters';
 
-interface ItemPag { data: string; mov: number; centro: string | null; produto: string | null; fornecedor: string; }
+interface ItemPag { data: string; mov: number; tipo: string; centro: string | null; produto: string | null; fornecedor: string; }
+const isTransferencia = (tipo: string) => tipo.startsWith('3-');
 
 type JanelaId = 'j1' | 'j2' | 'j3';
 const JANELAS: { id: JanelaId; label: string; nome: string; ini: number; fim: number; cor: string }[] = [
@@ -39,6 +43,7 @@ export function ExtratoOrganizacaoPagamentos({ itens, ano, mes, contaNome, perio
     let totalGeral = 0;
     for (const it of itens) {
       if (it.mov >= 0) continue; // só pagamentos (saídas)
+      if (isTransferencia(it.tipo)) continue; // exclui tesouraria (transferência interna, tipo '3-%')
       const valor = Math.abs(it.mov);
       totalGeral += valor;
       const dd = Number(it.data.slice(8, 10));
@@ -68,7 +73,7 @@ export function ExtratoOrganizacaoPagamentos({ itens, ano, mes, contaNome, perio
 
       {totalGeral === 0 ? (
         <div className="h-[120px] flex items-center justify-center text-[11px] text-muted-foreground">
-          Nenhum pagamento no período (conforme filtros selecionados).
+          Nenhuma despesa operacional no período (conforme filtros; transferências internas não contam).
         </div>
       ) : (
         <>
@@ -102,8 +107,9 @@ export function ExtratoOrganizacaoPagamentos({ itens, ano, mes, contaNome, perio
             })}
           </div>
 
-          <div className="text-[9px] text-muted-foreground">
-            Distribuição de <span className="font-semibold text-foreground">{formatMoeda(totalGeral)}</span> em pagamentos por janela de data (orientação visual; o dia 5 conta na 1ª janela).
+          <div className="text-[9px] text-muted-foreground space-y-0.5">
+            <div>Distribuição de <span className="font-semibold text-foreground">{formatMoeda(totalGeral)}</span> por janela de data (orientação visual; o dia 5 conta na 1ª janela).</div>
+            <div>Total organizado: despesas operacionais. Transferências internas entre contas próprias não são consideradas.</div>
           </div>
         </>
       )}

@@ -176,6 +176,7 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
   const dadosOrg = useMemo(() => linhas.map((x) => ({
     data: x.data,
     mov: x.mov,
+    tipo: x.l.tipo_operacao,
     centro: x.l.centro_custo,
     produto: x.l.descricao,
     fornecedor: (x.l.favorecido_id && fornMap?.get(x.l.favorecido_id)) || '',
