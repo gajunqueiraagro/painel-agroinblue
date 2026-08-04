@@ -21,6 +21,7 @@ import { ContaBancariaSelect, type ContaSelecionavel } from '@/components/shared
 import { LancamentoLeituraDialog } from '@/components/financeiro-v2/LancamentoLeituraDialog';
 import { ExtratoAnaliseFluxo } from '@/components/financeiro-v2/ExtratoAnaliseFluxo';
 import { ExtratoOrganizacaoPagamentos } from '@/components/financeiro-v2/ExtratoOrganizacaoPagamentos';
+import { ExtratoDistribuicaoEconomica } from '@/components/financeiro-v2/ExtratoDistribuicaoEconomica';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { STATUS_FILTRO_LABEL, STATUS_FILTRO_COR } from '@/lib/financeiro/statusFinanceiro';
 import { formatMoeda } from '@/lib/calculos/formatters';
@@ -30,14 +31,16 @@ interface ContaRow extends ContaSelecionavel { fazenda_id: string | null; }
 interface LancExtrato {
   id: string; data_pagamento: string | null; data_vencimento: string | null; valor: number;
   tipo_operacao: string; descricao: string | null; numero_documento: string | null; documento: string | null;
-  favorecido_id: string | null; centro_custo: string | null; status_transacao: string | null;
+  favorecido_id: string | null; centro_custo: string | null; plano_conta_id: string | null; status_transacao: string | null;
   conta_bancaria_id: string | null; conta_destino_id: string | null;
 }
 interface SaldoRow { saldo_inicial: number | null; saldo_final: number | null; status_mes: string | null; }
 
-const ANALISE_VIEWS: { k: 'evolucao' | 'organizacao'; l: string }[] = [
+type AnaliseView = 'evolucao' | 'organizacao' | 'economica';
+const ANALISE_VIEWS: { k: AnaliseView; l: string }[] = [
   { k: 'evolucao', l: '📈 Evolução do caixa' },
   { k: 'organizacao', l: '📅 Organização dos pagamentos' },
+  { k: 'economica', l: '📊 Distribuição econômica' },
 ];
 
 const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -59,7 +62,7 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
   const [statusSel, setStatusSel] = useState<Set<string>>(new Set(STATUS_OFICIAIS));
   const [incluirLegados, setIncluirLegados] = useState(false);
   const [modo, setModo] = useState<'extrato' | 'analise'>('extrato');
-  const [analiseView, setAnaliseView] = useState<'evolucao' | 'organizacao'>('evolucao');
+  const [analiseView, setAnaliseView] = useState<AnaliseView>('evolucao');
   const [lancLeituraId, setLancLeituraId] = useState<string | null>(null);
 
   const ini = `${ano}-${pad(mes)}-01`;
@@ -88,6 +91,18 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
       const { data } = await (supabase as any).from('financeiro_fornecedores').select('id, nome').eq('cliente_id', clienteId);
       const rows: { id: string; nome: string }[] = data ?? [];
       return new Map(rows.map((f) => [f.id, f.nome]));
+    },
+  });
+
+  // Plano de contas oficial (lookup read-only) — única fonte de classificação econômica.
+  const { data: planoMap } = useQuery({
+    queryKey: ['extrato-ger-plano', clienteId],
+    enabled: !!clienteId,
+    queryFn: async (): Promise<Map<string, { macro: string | null; grupo: string | null; centro: string | null }>> => {
+      const { data } = await (supabase as any).from('financeiro_plano_contas')
+        .select('id, macro_custo, grupo_custo, centro_custo').eq('cliente_id', clienteId);
+      const rows: { id: string; macro_custo: string | null; grupo_custo: string | null; centro_custo: string | null }[] = data ?? [];
+      return new Map(rows.map((p) => [p.id, { macro: p.macro_custo, grupo: p.grupo_custo, centro: p.centro_custo }]));
     },
   });
 
@@ -122,7 +137,7 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
     enabled: !!clienteId && !!contaId,
     queryFn: async (): Promise<LancExtrato[]> => {
       let q = (supabase as any).from('financeiro_lancamentos_v2')
-        .select('id, data_pagamento, data_vencimento, valor, tipo_operacao, descricao, numero_documento, documento, favorecido_id, centro_custo, status_transacao, conta_bancaria_id, conta_destino_id')
+        .select('id, data_pagamento, data_vencimento, valor, tipo_operacao, descricao, numero_documento, documento, favorecido_id, centro_custo, plano_conta_id, status_transacao, conta_bancaria_id, conta_destino_id')
         .eq('cliente_id', clienteId).eq('cancelado', false)
         .or(`conta_bancaria_id.eq.${contaId},conta_destino_id.eq.${contaId}`)
         .or(`and(data_pagamento.gte.${ini},data_pagamento.lt.${fim}),and(data_pagamento.is.null,data_vencimento.gte.${ini},data_vencimento.lt.${fim})`);
@@ -173,16 +188,23 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
   }, [lancs, statusSel, incluirLegados, saldoIni, contaId]);
 
   // Mesma fonte do gráfico: itens da Organização derivados de `linhas` (só reorganiza, sem cálculo novo).
-  const dadosOrg = useMemo(() => linhas.map((x) => ({
-    id: x.l.id,
-    data: x.data,
-    mov: x.mov,
-    tipo: x.l.tipo_operacao,
-    centro: x.l.centro_custo,
-    produto: x.l.descricao,
-    fornecedor: (x.l.favorecido_id && fornMap?.get(x.l.favorecido_id)) || '',
-    doc: x.l.numero_documento || x.l.documento || '',
-  })), [linhas, fornMap]);
+  const dadosOrg = useMemo(() => linhas.map((x) => {
+    const pl = x.l.plano_conta_id ? planoMap?.get(x.l.plano_conta_id) : null;
+    return {
+      id: x.l.id,
+      data: x.data,
+      mov: x.mov,
+      tipo: x.l.tipo_operacao,
+      centro: x.l.centro_custo,
+      produto: x.l.descricao,
+      fornecedor: (x.l.favorecido_id && fornMap?.get(x.l.favorecido_id)) || '',
+      doc: x.l.numero_documento || x.l.documento || '',
+      // Classificação econômica — SOMENTE plano de contas oficial (nunca descrição/produto/favorecido).
+      macro: pl?.macro ?? null,
+      grupo: pl?.grupo ?? null,
+      centroPlano: pl?.centro ?? null,
+    };
+  }), [linhas, fornMap, planoMap]);
 
   const totais = useMemo(() => {
     let ent = 0, sai = 0;
@@ -291,14 +313,15 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
                 {v.l}
               </button>
             ))}
-            <span className="px-2 py-0.5 rounded-md border text-[11px] bg-white text-muted-foreground opacity-50 cursor-not-allowed">📊 Distribuição por centro</span>
             <span className="px-2 py-0.5 rounded-md border text-[11px] bg-white text-muted-foreground opacity-50 cursor-not-allowed">📋 Maiores compromissos</span>
             <span className="text-[9px] text-muted-foreground">(em breve)</span>
           </div>
           {analiseView === 'evolucao' ? (
             <ExtratoAnaliseFluxo linhas={linhas} saldoIni={saldoIni} contaNome={contaNome} periodoLabel={`${MESES[mes - 1]}/${ano}`} ano={ano} mes={mes} />
-          ) : (
+          ) : analiseView === 'organizacao' ? (
             <ExtratoOrganizacaoPagamentos itens={dadosOrg} ano={ano} mes={mes} contaNome={contaNome} periodoLabel={`${MESES[mes - 1]}/${ano}`} />
+          ) : (
+            <ExtratoDistribuicaoEconomica itens={dadosOrg} contaNome={contaNome} periodoLabel={`${MESES[mes - 1]}/${ano}`} />
           )}
         </div>
       ) : (
