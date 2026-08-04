@@ -233,13 +233,23 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
             {conta ? <span className="text-[10px] font-normal text-muted-foreground"> · Banco {conta.banco || '—'} {conta.agencia ? `· Ag ${conta.agencia}` : ''} {conta.numero_conta || ''}</span> : null}
             {fazScope && fazendaAtual?.nome ? <span className="text-[10px] font-normal text-muted-foreground"> · {fazendaAtual.nome}</span> : null}
           </div>
-          <div className="text-[10px] text-muted-foreground shrink-0">{MESES[mes - 1]}/{ano}</div>
+          <div className="text-right shrink-0">
+            <div className="text-[10px] text-muted-foreground">{MESES[mes - 1]}/{ano}</div>
+            <div className="text-[9px] text-muted-foreground">
+              {saldoFin !== null ? 'Mês fechado · saldo final oficial' : 'Mês aberto · projeção conforme compromissos selecionados'}
+            </div>
+          </div>
         </div>
         <div className="flex flex-wrap gap-1.5">
           {card('Saldo inicial', saldoIni !== null ? formatMoeda(saldoIni) : 'Saldo não informado', saldoIni !== null ? '' : 'text-muted-foreground text-[11px]')}
           {card('Entradas', formatMoeda(totais.ent), 'text-emerald-700')}
           {card('Saídas', formatMoeda(totais.sai), 'text-rose-700')}
-          {card('Saldo final', saldoFin !== null ? formatMoeda(saldoFin) : 'Saldo não informado', saldoFin !== null ? '' : 'text-muted-foreground text-[11px]')}
+          {/* Mês com saldo_final oficial → SALDO FINAL REAL; senão → SALDO PROJETADO (inicial + entradas − saídas). */}
+          {saldoFin !== null
+            ? card('Saldo Final Real', formatMoeda(saldoFin))
+            : card('Saldo Projetado',
+                saldoIni !== null ? formatMoeda(saldoIni + totais.ent - totais.sai) : 'Saldo não informado',
+                saldoIni !== null ? 'text-blue-700' : 'text-muted-foreground text-[11px]')}
         </div>
       </div>
 
