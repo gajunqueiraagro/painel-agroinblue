@@ -19,7 +19,7 @@ export type V2Section =
   // financeiro — lançamentos
   | 'financeiro-lanc' | 'contratos'
   // financeiro — conciliação
-  | 'conciliacao' | 'auditoria-bancaria' | 'saldos-mensais' | 'mesa-operacional' | 'mesa-classificacao'
+  | 'conciliacao' | 'auditoria-bancaria' | 'extrato-gerencial' | 'saldos-mensais' | 'mesa-operacional' | 'mesa-classificacao'
   // financeiro — financiamentos
   | 'financiamentos' | 'painel-financiamentos'
   // financeiro — cadastros
@@ -110,6 +110,7 @@ export const NAV_GRUPOS: NavGrupo[] = [
           { id: 'financeiro-lanc',     label: 'Lançamentos Financeiros', status: 'ready' },
           { id: 'conciliacao',         label: 'Conciliação Bancária',    status: 'ready' },
           { id: 'auditoria-bancaria',  label: 'Auditoria Bancária',      status: 'ready' },
+          { id: 'extrato-gerencial',   label: 'Extrato Gerencial',       status: 'ready' },
           { id: 'mesa-classificacao',  label: 'Mesa de Classificação',   status: 'ready' },
           ...(FEATURE_FLAGS.MESA_OPERACIONAL_V2
             ? [{ id: 'mesa-operacional' as const, label: 'Referências Operacionais', status: 'ready' as const }]

@@ -57,6 +57,7 @@ import FinanciamentoCadastro from '@/pages/FinanciamentoCadastro';
 import FinanciamentosPainelTab from '@/pages/FinanciamentosPainelTab';
 import { ConciliacaoBancariaTab } from '@/pages/ConciliacaoBancariaTab';
 import { AuditoriaBancariaSoberana } from '@/components/financeiro-v2/AuditoriaBancariaSoberana';
+import { ExtratoGerencialTab } from '@/components/financeiro-v2/ExtratoGerencialTab';
 import CusteioTxtImportTab from './pages/CusteioTxtImportTab';
 import { V2MesaOperacional } from './pages/V2MesaOperacional';
 import { V2MesaClassificacao } from './pages/V2MesaClassificacao';
@@ -620,6 +621,9 @@ export default function V2Index() {
           setSection('financeiro-lanc');
         }}
       />
+    );
+    if (section === 'extrato-gerencial') return (
+      <ExtratoGerencialTab initialAno={Number(ano)} initialMes={mes !== '0' ? Number(mes) : undefined} />
     );
     if (section === 'mesa-classificacao') return (
       <V2MesaClassificacao />
