@@ -22,6 +22,7 @@ import { LancamentoLeituraDialog } from '@/components/financeiro-v2/LancamentoLe
 import { ExtratoAnaliseFluxo } from '@/components/financeiro-v2/ExtratoAnaliseFluxo';
 import { ExtratoOrganizacaoPagamentos } from '@/components/financeiro-v2/ExtratoOrganizacaoPagamentos';
 import { ExtratoDistribuicaoEconomica } from '@/components/financeiro-v2/ExtratoDistribuicaoEconomica';
+import { ExtratoMaioresCompromissos } from '@/components/financeiro-v2/ExtratoMaioresCompromissos';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { STATUS_FILTRO_LABEL, STATUS_FILTRO_COR } from '@/lib/financeiro/statusFinanceiro';
 import { formatMoeda } from '@/lib/calculos/formatters';
@@ -37,11 +38,12 @@ interface LancExtrato {
 }
 interface SaldoRow { saldo_inicial: number | null; saldo_final: number | null; status_mes: string | null; }
 
-type AnaliseView = 'evolucao' | 'organizacao' | 'economica';
+type AnaliseView = 'evolucao' | 'organizacao' | 'economica' | 'compromissos';
 const ANALISE_VIEWS: { k: AnaliseView; l: string }[] = [
   { k: 'evolucao', l: '📈 Evolução do caixa' },
   { k: 'organizacao', l: '📅 Organização dos pagamentos' },
   { k: 'economica', l: '📊 Distribuição econômica' },
+  { k: 'compromissos', l: '📋 Maiores compromissos' },
 ];
 
 const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -317,15 +319,15 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
                 {v.l}
               </button>
             ))}
-            <span className="px-2 py-0.5 rounded-md border text-[11px] bg-white text-muted-foreground opacity-50 cursor-not-allowed">📋 Maiores compromissos</span>
-            <span className="text-[9px] text-muted-foreground">(em breve)</span>
           </div>
           {analiseView === 'evolucao' ? (
             <ExtratoAnaliseFluxo linhas={linhas} saldoIni={saldoIni} contaNome={contaNome} periodoLabel={`${MESES[mes - 1]}/${ano}`} ano={ano} mes={mes} />
           ) : analiseView === 'organizacao' ? (
             <ExtratoOrganizacaoPagamentos itens={dadosOrg} ano={ano} mes={mes} contaNome={contaNome} periodoLabel={`${MESES[mes - 1]}/${ano}`} />
-          ) : (
+          ) : analiseView === 'economica' ? (
             <ExtratoDistribuicaoEconomica itens={dadosOrg} contaNome={contaNome} periodoLabel={`${MESES[mes - 1]}/${ano}`} />
+          ) : (
+            <ExtratoMaioresCompromissos itens={dadosOrg} contaNome={contaNome} periodoLabel={`${MESES[mes - 1]}/${ano}`} />
           )}
         </div>
       ) : (
