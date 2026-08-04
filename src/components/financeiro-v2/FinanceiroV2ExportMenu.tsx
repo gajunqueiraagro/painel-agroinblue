@@ -3,8 +3,10 @@ import { Download, FileSpreadsheet, FileText, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from 'sonner';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import {
+  carregarLogoBase64, criarDocRetratoA4, addHeader, addTituloSecao, addCardsKPI, addTabelaExecutiva, addFooterComPaginacao,
+} from '@/lib/pdf/pdfChassi';
+import { STATUS_FILTRO_LABEL } from '@/lib/financeiro/statusFinanceiro';
 import { format, parseISO } from 'date-fns';
 import type { LancamentoV2, DimensaoDataFinanceiro } from '@/hooks/useFinanceiroV2';
 import { triggerXlsxDownload } from '@/lib/xlsxDownload';
@@ -110,51 +112,66 @@ function exportExcel(lancamentos: LancamentoV2[], fornecedores: FornecedorMap[],
   });
 }
 
-function exportPDF(lancamentos: LancamentoV2[], fornecedores: FornecedorMap[], ano: string, dimensao: DimensaoDataFinanceiro, fazendaNome?: string) {
-  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-  const pageW = doc.internal.pageSize.getWidth();
-
-  let y = 10;
-  doc.setFontSize(14);
-  doc.text(`Financeiro - ${ano}`, pageW / 2, y, { align: 'center' });
-  y += 6;
-  if (fazendaNome) {
-    doc.setFontSize(10);
-    doc.text(fazendaNome, pageW / 2, y, { align: 'center' });
-    y += 5;
+// Resumo de status (client-side, só sobre os lancamentos recebidos). Ordena os oficiais e agrega os demais.
+function contarStatus(lancamentos: LancamentoV2[]): { label: string; valor: string }[] {
+  const cont = new Map<string, number>();
+  for (const l of lancamentos) {
+    const s = (l.status_transacao || '—').toLowerCase();
+    cont.set(s, (cont.get(s) ?? 0) + 1);
   }
-  // PR-FIN-GRADE-DATAS-03 — identifica a dimensão temporal do recorte (subtítulo simples).
-  doc.setFontSize(9);
-  doc.text(`Data por: ${DIMENSAO_LABEL[dimensao]}`, pageW / 2, y, { align: 'center' });
-  y += 4;
-  doc.setFontSize(8);
-  doc.text(`${lancamentos.length} lançamentos`, pageW / 2, y, { align: 'center' });
-  y += 4;
+  const ordem = ['realizado', 'programado', 'agendado', 'previsto'];
+  const cards: { label: string; valor: string }[] = [];
+  for (const s of ordem) {
+    if (cont.has(s)) { cards.push({ label: STATUS_FILTRO_LABEL[s] ?? s, valor: String(cont.get(s)) }); cont.delete(s); }
+  }
+  for (const [s, n] of cont) cards.push({ label: STATUS_FILTRO_LABEL[s] ?? s, valor: String(n) });
+  return cards;
+}
 
+// PR-FIN-V2-EXPORT-LAYOUT-01 — PDF migrado para o chassi AGROinBLUE "Versão PDF v2" (pdfChassi).
+//   Async por causa do logo (carregarLogoBase64). Sem novo dado de banco; só o que o export já recebe.
+async function exportPDF(lancamentos: LancamentoV2[], fornecedores: FornecedorMap[], ano: string, dimensao: DimensaoDataFinanceiro, fazendaNome?: string) {
   const rows = buildRows(lancamentos, fornecedores);
-  // PR-FIN-GRADE-DATAS-03 — Comp. | Venc. | Pgto. como colunas independentes.
+  const totalEnt = rows.filter(r => r.sinal > 0).reduce((s, r) => s + Math.abs(r.valor), 0);
+  const totalSai = rows.filter(r => r.sinal < 0).reduce((s, r) => s + Math.abs(r.valor), 0);
+  const resultado = totalEnt - totalSai;
+
+  let logoData: string | undefined;
+  try { logoData = await carregarLogoBase64(); } catch { logoData = undefined; }
+
+  const doc = criarDocRetratoA4();
+  let y = addHeader(doc, {
+    titulo: 'Financeiro',
+    subtitulo: `${fazendaNome ? fazendaNome + ' · ' : ''}Ano ${ano} · Data por: ${DIMENSAO_LABEL[dimensao]}`,
+    infoLinha: `Gerado em ${format(new Date(), 'dd/MM/yyyy HH:mm')} · ${lancamentos.length} lançamento${lancamentos.length !== 1 ? 's' : ''}`,
+    logoData,
+  });
+
+  // Resumo Executivo — cards financeiros + resumo por status (tudo client-side).
+  y = addTituloSecao(doc, 'Resumo Executivo', y);
+  y = addCardsKPI(doc, [
+    { label: 'Entradas', valor: formatMoeda(totalEnt) },
+    { label: 'Saídas', valor: formatMoeda(totalSai) },
+    { label: 'Resultado do período', valor: formatMoeda(resultado) },
+    { label: 'Lançamentos', valor: String(lancamentos.length) },
+  ], y, { colunas: 4 });
+  const statusCards = contarStatus(lancamentos);
+  if (statusCards.length > 0) y = addCardsKPI(doc, statusCards, y, { colunas: 4 });
+
+  // Tabela padrão v2 (header azul, zebra, linha TOTAL).
   const head = [['Comp.', 'Venc.', 'Pgto.', 'Produto', 'Fornecedor', 'Valor', 'Documento', 'Status']];
   const body = rows.map(r => [
     r.comp, r.venc, r.pgto, r.produto, r.fornecedor,
     formatMoeda(r.sinal >= 0 ? Math.abs(r.valor) : -Math.abs(r.valor)),
     r.documento, r.status,
   ]);
-
-  const totalEnt = rows.filter(r => r.sinal > 0).reduce((s, r) => s + Math.abs(r.valor), 0);
-  const totalSai = rows.filter(r => r.sinal < 0).reduce((s, r) => s + Math.abs(r.valor), 0);
-  body.push(['', '', '', '', 'ENTRADAS', formatMoeda(totalEnt), '', '']);
-  body.push(['', '', '', '', 'SAÍDAS', formatMoeda(-totalSai), '', '']);
-
-  autoTable(doc, {
-    startY: y,
-    head,
-    body,
-    theme: 'grid',
-    headStyles: { fillColor: [34, 120, 74], fontSize: 7 },
-    bodyStyles: { fontSize: 7 },
-    margin: { left: 8, right: 8 },
+  const foot = [['', '', '', '', 'TOTAL', formatMoeda(resultado), '', '']];
+  addTabelaExecutiva(doc, {
+    head, body, startY: y,
+    opts: { foot, totalVerde: resultado >= 0, columnStyles: { 5: { halign: 'right' } } },
   });
 
+  addFooterComPaginacao(doc);
   const faz = fazendaNome ? `_${fazendaNome.replace(/\s+/g, '_')}` : '';
   doc.save(`financeiro_v2_${ano}${faz}.pdf`);
 }
@@ -171,7 +188,7 @@ export function FinanceiroV2ExportMenu({ lancamentos, fornecedores, ano, fazenda
       if (type === 'excel') {
         exportExcel(lancamentos, fornecedores, ano, dimensao, fazendaNome);
       } else {
-        exportPDF(lancamentos, fornecedores, ano, dimensao, fazendaNome);
+        await exportPDF(lancamentos, fornecedores, ano, dimensao, fazendaNome);
         toast.success(`PDF exportado! (${lancamentos.length} lançamentos)`);
       }
     } catch {
