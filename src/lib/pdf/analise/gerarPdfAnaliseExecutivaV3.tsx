@@ -4,13 +4,25 @@
  * Deriva os dados de apresentação a partir dos helpers (fonte única analiseAgregacoes) e monta
  * o <Document>. Motor react-pdf carregado por import() dinâmico (bundle leve). FASE 1 = Página 1.
  */
-import { serieEvolucaoRP, etapasPagamento, etapaDoDia, type EtapaId } from '@/lib/analise/analiseAgregacoes';
+import { serieEvolucaoRP, etapasPagamento, etapaDoDia, distribuicaoEconomica, maioresCompromissos, creditosPorOrigem, type EtapaId } from '@/lib/analise/analiseAgregacoes';
 import { carregarLogoBase64 } from '@/lib/pdf/pdfChassi';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { COR } from '@/lib/pdf/analise/estilos';
 import type { DiaCalendario, CardEtapa } from '@/lib/pdf/analise/PdfOrganizacaoPagamentos';
+import type { LinhaRanking } from '@/lib/pdf/analise/PdfBlocoDonut';
 
-interface ItemOrg { mov: number; tipo: string; data: string; }
+interface ItemOrg { mov: number; tipo: string; data: string; macro: string | null; escopo: string | null; centroPlano: string | null; }
+const pct = (v: number, t: number): number => (t > 0 ? Math.round((v / t) * 100) : 0);
+// Paletas (apresentação — espelham as telas).
+const NAO_OPER = new Set(['Investimento na Fazenda', 'Investimento em Bovinos', 'Dividendos']);
+const NEG_COR: Record<string, string> = { 'Pecuária': '#1e3a5f', 'Agricultura': '#2f6f4f', 'Administrativo': '#b7791f', 'Financeiro/Outros': '#7c3aad' };
+const PALETA_COMP = ['#1e3a5f', '#2f6f4f', '#b7791f', '#7c3aad', '#0e7490', '#9d174d', '#3f6212', '#a16207', '#155e75', '#5b21b6'];
+const corMacro = (c: string): string => (c.startsWith('Sem classificação') ? '#94a3b8' : NAO_OPER.has(c) ? '#d77706' : '#1e3a5f');
+const corNegocio = (c: string): string => (c.startsWith('Sem classificação') ? '#94a3b8' : NEG_COR[c] ?? '#5b21b6');
+const corCredito = (c: string): string => (c === 'Receitas Operacionais' ? '#22784a' : c === 'Rendimentos Financeiros' ? '#0d9488' : c === 'Transferências Recebidas' ? '#2563eb' : '#d77706');
+const mapRanking = (rk: { chave: string; total: number }[], total: number, corDe: (c: string) => string): LinhaRanking[] =>
+  rk.slice(0, 6).map((r) => ({ label: r.chave, valorFmt: formatMoeda(r.total), pct: pct(r.total, total), cor: corDe(r.chave) }));
+const mapSegmentos = (rk: { chave: string; total: number }[], corDe: (c: string) => string) => rk.map((r) => ({ valor: r.total, cor: corDe(r.chave) }));
 const fmtCompacto = (v: number): string => (Math.abs(v) >= 1000 ? `R$ ${(v / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}k` : formatMoeda(v));
 const fm = (v: number | null): string => (v == null ? '—' : formatMoeda(v));
 const claro = (hex: string, a: number): string => {
@@ -43,6 +55,20 @@ export async function gerarPdfAnaliseExecutivaV3(params: {
   const menor = serie.length ? serie.reduce((m, p) => (p.saldo < m.saldo ? p : m), serie[0]) : null;
   const { buckets: etapas, totalGeral: totEtapas } = etapasPagamento(params.dadosOrg);
   const saldoFinal = params.saldoFin ?? (params.saldoIni != null ? params.saldoIni + params.totais.ent - params.totais.sai : null);
+
+  // Página 2 (fonte única) — créditos + distribuição (macro/negócio) + compromissos.
+  const creditos = creditosPorOrigem(params.dadosOrg);
+  const distMacro = distribuicaoEconomica(params.dadosOrg, 'macro');
+  const distNeg = distribuicaoEconomica(params.dadosOrg, 'negocio');
+  const comp = maioresCompromissos(params.dadosOrg);
+  const credito = { segmentos: mapSegmentos(creditos.ranking, corCredito), ranking: mapRanking(creditos.ranking, creditos.totalGeral, corCredito) };
+  const natureza = { segmentos: mapSegmentos(distMacro.ranking, corMacro), ranking: mapRanking(distMacro.ranking, distMacro.totalGeral, corMacro) };
+  const negocio = { segmentos: mapSegmentos(distNeg.ranking, corNegocio), ranking: mapRanking(distNeg.ranking, distNeg.totalGeral, corNegocio) };
+  const compromissos = {
+    linhas: comp.linhas.map((r, i) => ({ rank: String(i + 1), label: r.chave, valorFmt: formatMoeda(r.total), pct: pct(r.total, comp.totalGeral), count: r.count, cor: r.ehDemais ? '#94a3b8' : PALETA_COMP[i % PALETA_COMP.length], ehDemais: r.ehDemais })),
+    totalFmt: formatMoeda(comp.totalGeral),
+    totalCount: comp.linhas.reduce((s, r) => s + r.count, 0),
+  };
 
   const kpis = [
     { label: 'Saldo inicial', valor: fm(params.saldoIni) },
@@ -82,6 +108,7 @@ export async function gerarPdfAnaliseExecutivaV3(params: {
     DocumentoAnaliseExecutiva({
       clienteNome: params.clienteNome, fazenda: params.fazenda, contaNome: params.contaNome, periodoLabel: params.periodoLabel, logoData,
       kpis, serie, fmt: fmtCompacto, calendario, cards, notaProjetado,
+      credito, natureza, negocio, compromissos,
     }),
   ).toBlob();
 

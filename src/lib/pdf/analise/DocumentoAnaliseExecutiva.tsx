@@ -4,11 +4,15 @@
  */
 import { Document, Page, View, Text } from '@react-pdf/renderer';
 import { estilos } from '@/lib/pdf/analise/estilos';
-import { PdfHeader, PdfRodape } from '@/lib/pdf/analise/PdfHeader';
+import { PdfHeader, PdfRodape, PdfDivisoria } from '@/lib/pdf/analise/PdfHeader';
 import { PdfKpis } from '@/lib/pdf/analise/PdfKpis';
 import { PdfFluxoCaixa } from '@/lib/pdf/analise/PdfFluxoCaixa';
 import { PdfOrganizacaoPagamentos, type DiaCalendario, type CardEtapa } from '@/lib/pdf/analise/PdfOrganizacaoPagamentos';
+import { PdfBlocoDonut, type LinhaRanking } from '@/lib/pdf/analise/PdfBlocoDonut';
+import { PdfCompromissos, type LinhaCompromisso } from '@/lib/pdf/analise/PdfCompromissos';
+import type { SegmentoDonut } from '@/lib/pdf/analise/PdfDonut';
 
+interface BlocoDist { segmentos: SegmentoDonut[]; ranking: LinhaRanking[]; }
 export interface DocProps {
   clienteNome: string;
   fazenda?: string;
@@ -21,6 +25,11 @@ export interface DocProps {
   calendario: DiaCalendario[];
   cards: CardEtapa[];
   notaProjetado?: string;
+  // Página 2
+  credito: BlocoDist;
+  natureza: BlocoDist;
+  negocio: BlocoDist;
+  compromissos: { linhas: LinhaCompromisso[]; totalFmt: string; totalCount: number };
 }
 
 export function DocumentoAnaliseExecutiva(p: DocProps) {
@@ -38,6 +47,25 @@ export function DocumentoAnaliseExecutiva(p: DocProps) {
 
         <Text style={estilos.secao}>Organização dos Pagamentos</Text>
         <PdfOrganizacaoPagamentos calendario={p.calendario} cards={p.cards} />
+      </Page>
+
+      <Page size="A4" style={estilos.pagina} wrap>
+        <PdfHeader clienteNome={p.clienteNome} fazenda={p.fazenda} contaNome={p.contaNome} periodoLabel={p.periodoLabel} logoData={p.logoData} />
+        <PdfRodape />
+
+        <Text style={estilos.secao}>De onde veio o dinheiro</Text>
+        <PdfBlocoDonut segmentos={p.credito.segmentos} ranking={p.credito.ranking} />
+
+        <PdfDivisoria />
+        <Text style={estilos.secao}>Para onde foi o dinheiro</Text>
+        <View style={{ flexDirection: 'row', gap: 16 }}>
+          <View style={{ flex: 1 }}><PdfBlocoDonut subtitulo="Por natureza" segmentos={p.natureza.segmentos} ranking={p.natureza.ranking} donutSize={70} /></View>
+          <View style={{ flex: 1 }}><PdfBlocoDonut subtitulo="Por negócio" segmentos={p.negocio.segmentos} ranking={p.negocio.ranking} donutSize={70} /></View>
+        </View>
+
+        <PdfDivisoria />
+        <Text style={estilos.secao}>Principais Custos e Compromissos</Text>
+        <PdfCompromissos linhas={p.compromissos.linhas} totalFmt={p.compromissos.totalFmt} totalCount={p.compromissos.totalCount} />
       </Page>
     </Document>
   );
