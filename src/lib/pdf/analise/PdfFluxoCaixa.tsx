@@ -17,7 +17,7 @@ export function PdfFluxoCaixa({ serie, fmt }: { serie: Ponto[]; fmt: (v: number)
   if (serie.length < 2) {
     return <Text style={{ fontSize: 9, color: COR.cinzaMedio, marginTop: 6 }}>Saldo inicial não informado — evolução indisponível.</Text>;
   }
-  const W = 540, H = 200, padL = 46, padR = 10, padT = 10, padB = 18;
+  const W = 540, H = 300, padL = 50, padR = 12, padT = 12, padB = 24;
   const x0 = padL, x1 = W - padR, y0 = padT, y1 = H - padB;
   const vals = serie.flatMap((p) => [p.saldo, p.mov]);
   let min = Math.min(...vals, 0), max = Math.max(...vals, 0);
@@ -40,7 +40,7 @@ export function PdfFluxoCaixa({ serie, fmt }: { serie: Ponto[]; fmt: (v: number)
         {yTicks.map((v, i) => (
           <G key={`y${i}`}>
             <Line x1={x0} y1={yAt(v)} x2={x1} y2={yAt(v)} stroke={COR.separador} strokeWidth={0.3} />
-            <Text x={x0 - 3} y={yAt(v) + 2} style={{ fontSize: 6 }} fill={COR.cinzaMedio} textAnchor="end">{fmtEixo(v)}</Text>
+            <Text x={x0 - 3} y={yAt(v) + 2} style={{ fontSize: 7.5 }} fill={COR.cinzaMedio} textAnchor="end">{fmtEixo(v)}</Text>
           </G>
         ))}
         <Line x1={x0} y1={yz} x2={x1} y2={yz} stroke="#8a8a8a" strokeWidth={0.6} />
@@ -51,18 +51,18 @@ export function PdfFluxoCaixa({ serie, fmt }: { serie: Ponto[]; fmt: (v: number)
         {marcos.map((m, i) => (
           <G key={`m${i}`}>
             <Circle cx={xAt(m.i)} cy={yAt(serie[m.i].saldo)} r={1.8} fill={COR.azul} />
-            <Text x={Math.min(Math.max(xAt(m.i), x0 + 14), x1 - 14)} y={m.ab ? yAt(serie[m.i].saldo) + 8 : yAt(serie[m.i].saldo) - 3} style={{ fontSize: 6.5, fontWeight: 700 }} fill={COR.azul} textAnchor="middle">{fmt(serie[m.i].saldo)}</Text>
+            <Text x={Math.min(Math.max(xAt(m.i), x0 + 16), x1 - 16)} y={m.ab ? yAt(serie[m.i].saldo) + 9 : yAt(serie[m.i].saldo) - 3.5} style={{ fontSize: 8, fontWeight: 700 }} fill={COR.azul} textAnchor="middle">{fmt(serie[m.i].saldo)}</Text>
           </G>
         ))}
         {xIdx.map((i, k) => (
-          <Text key={`x${k}`} x={xAt(i)} y={y1 + 9} style={{ fontSize: 6 }} fill={COR.cinzaMedio} textAnchor="middle">{serie[i].dia}</Text>
+          <Text key={`x${k}`} x={xAt(i)} y={y1 + 11} style={{ fontSize: 7.5 }} fill={COR.cinzaMedio} textAnchor="middle">{serie[i].dia}</Text>
         ))}
       </Svg>
       <View style={{ flexDirection: 'row', gap: 14, marginTop: 2 }}>
         {[{ c: COR.verde, t: 'Entradas' }, { c: COR.vermelho, t: 'Saídas' }, { c: COR.azul, t: 'Saldo acumulado' }].map((l) => (
           <View key={l.t} style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-            <View style={{ width: 6, height: 6, backgroundColor: l.c, borderRadius: 1 }} />
-            <Text style={{ fontSize: 7, color: COR.cinzaMedio }}>{l.t}</Text>
+            <View style={{ width: 7, height: 7, backgroundColor: l.c, borderRadius: 1 }} />
+            <Text style={{ fontSize: 8, color: COR.cinzaMedio }}>{l.t}</Text>
           </View>
         ))}
       </View>

@@ -39,7 +39,7 @@ export function registrarFontes(fontes?: { regular: string; semibold?: string; b
 }
 
 export const estilos = StyleSheet.create({
-  pagina: { paddingTop: 64, paddingBottom: 34, paddingHorizontal: 24, fontFamily: FONTE, fontSize: 9, color: COR.cinza },
+  pagina: { paddingTop: 66, paddingBottom: 32, paddingHorizontal: 22, fontFamily: FONTE, fontSize: 9, color: COR.cinza },
   // Header fixo
   header: { position: 'absolute', top: 0, left: 0, right: 0, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 8, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 0.6, borderBottomColor: COR.separador },
   headerLogo: { width: 42, height: 21, objectFit: 'contain', marginRight: 10 },
@@ -48,5 +48,5 @@ export const estilos = StyleSheet.create({
   // Rodapé fixo
   rodape: { position: 'absolute', bottom: 14, left: 24, right: 24, flexDirection: 'row', justifyContent: 'space-between', fontSize: 8, color: '#828282', borderTopWidth: 0.4, borderTopColor: COR.separador, paddingTop: 4 },
   // Título de seção (faixa azul)
-  secao: { backgroundColor: COR.azul, color: COR.branco, fontSize: 11, fontWeight: 700, paddingVertical: 4, paddingHorizontal: 6, marginTop: 8, marginBottom: 4, borderRadius: 2 },
+  secao: { backgroundColor: COR.azul, color: COR.branco, fontSize: 12, fontWeight: 700, paddingVertical: 5, paddingHorizontal: 7, marginTop: 14, marginBottom: 6, borderRadius: 2 },
 });

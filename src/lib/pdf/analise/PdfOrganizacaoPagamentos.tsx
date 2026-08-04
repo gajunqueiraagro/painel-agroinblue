@@ -12,23 +12,23 @@ export function PdfOrganizacaoPagamentos({ calendario, cards }: { calendario: Di
   return (
     <View>
       {/* Calendário horizontal */}
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 1.5, marginBottom: 6 }}>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 2, marginBottom: 10 }}>
         {calendario.map((d) => (
-          <View key={d.dia} style={{ width: 15, height: 13, backgroundColor: d.claro, borderWidth: 0.4, borderColor: COR.separador, borderRadius: 1.5, alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ fontSize: 6, color: d.cor }}>{String(d.dia).padStart(2, '0')}</Text>
+          <View key={d.dia} style={{ width: 15.5, height: 18, backgroundColor: d.claro, borderWidth: 0.5, borderColor: COR.separador, borderRadius: 2, alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontSize: 7.5, color: d.cor }}>{String(d.dia).padStart(2, '0')}</Text>
           </View>
         ))}
       </View>
       {/* 4 cards das etapas */}
-      <View style={{ flexDirection: 'row', gap: 6 }}>
+      <View style={{ flexDirection: 'row', gap: 7 }}>
         {cards.map((c) => (
-          <View key={c.nome} style={{ flex: 1, borderWidth: 0.8, borderColor: c.cor, borderRadius: 3, paddingVertical: 7, paddingHorizontal: 8 }}>
-            <Text style={{ fontSize: 8.5, fontWeight: 700, color: c.cor }}>{c.nome}</Text>
-            <Text style={{ fontSize: 7, color: COR.cinzaMedio, marginBottom: 3 }}>{c.faixa}</Text>
-            <Text style={{ fontSize: 22, fontWeight: 700, color: c.cor }}>{c.pct}%</Text>
-            <Text style={{ fontSize: 7, color: COR.cinzaMedio }}>das saídas do mês</Text>
-            <Text style={{ fontSize: 9.5, fontWeight: 700, color: COR.cinza, marginTop: 4 }}>{c.valor}</Text>
-            <Text style={{ fontSize: 7, color: COR.cinzaMedio }}>{c.count} pagamento{c.count !== 1 ? 's' : ''}</Text>
+          <View key={c.nome} style={{ flex: 1, borderWidth: 1, borderColor: c.cor, borderRadius: 4, paddingVertical: 12, paddingHorizontal: 11 }}>
+            <Text style={{ fontSize: 10, fontWeight: 700, color: c.cor }}>{c.nome}</Text>
+            <Text style={{ fontSize: 8, color: COR.cinzaMedio, marginBottom: 6 }}>{c.faixa}</Text>
+            <Text style={{ fontSize: 30, fontWeight: 700, color: c.cor }}>{c.pct}%</Text>
+            <Text style={{ fontSize: 8, color: COR.cinzaMedio }}>das saídas do mês</Text>
+            <Text style={{ fontSize: 12, fontWeight: 700, color: COR.cinza, marginTop: 8 }}>{c.valor}</Text>
+            <Text style={{ fontSize: 8, color: COR.cinzaMedio, marginTop: 1 }}>{c.count} pagamento{c.count !== 1 ? 's' : ''}</Text>
           </View>
         ))}
       </View>
