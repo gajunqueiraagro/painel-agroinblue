@@ -33,7 +33,9 @@ const claro = (hex: string, a: number): string => {
 const slug = (s: string): string => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '').toLowerCase() || 'pdf';
 const diaBR = (iso: string): string => (iso.length >= 10 ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '—');
 
+const assinado = (v: number): string => `${v >= 0 ? '+' : '-'}${formatMoeda(Math.abs(v))}`;
 export interface TransfPdf { data: string; sentido: 'entrada' | 'saida'; descricao: string; contaOrigem: string; contaDestino: string; valor: number; status: string; }
+export interface ExtratoPdf { data: string; produto: string | null; fornecedor: string; centro: string | null; valor: number; saldo: number | null; statusKey: string; statusLabel: string; doc: string; }
 
 const COR_ETAPA: Record<EtapaId, string> = { j1: '#3b82f6', j2: '#22784a', j3: '#d77706' };
 const ETAPA_LABEL: Record<string, { nome: string; faixa: string }> = {
@@ -53,6 +55,7 @@ export async function gerarPdfAnaliseExecutivaV3(params: {
   serieLinhas: { data: string; mov: number; realizado: boolean }[];
   dadosOrg: ItemOrg[];
   transferencias: TransfPdf[];
+  extrato: ExtratoPdf[];
 }): Promise<void> {
   // ── Derivações via fonte única ──
   const { pontos: serie, corteIdx, temProjetado } = serieEvolucaoRP(params.serieLinhas, params.saldoIni, params.ano, params.mes);
@@ -82,6 +85,32 @@ export async function gerarPdfAnaliseExecutivaV3(params: {
     recebidas: rec.map(mapTransf), enviadas: env.map(mapTransf),
     totalRecFmt: formatMoeda(rec.reduce((s, t) => s + t.valor, 0)),
     totalEnvFmt: formatMoeda(env.reduce((s, t) => s + t.valor, 0)),
+  };
+
+  // Página 4+ — Extrato (linhas prontas do payload; resumo + contadores + formatação/flags).
+  const ext = params.extrato;
+  const resultado = params.totais.ent - params.totais.sai;
+  const cont = (k: string) => String(ext.filter((r) => r.statusKey === k).length);
+  const extrato = {
+    resumo: [
+      { label: 'Entradas', valor: formatMoeda(params.totais.ent), cor: '#22784a' },
+      { label: 'Saídas', valor: formatMoeda(params.totais.sai), cor: '#b91c1c' },
+      { label: 'Resultado do período', valor: assinado(resultado), cor: resultado >= 0 ? '#22784a' : '#b91c1c' },
+      { label: 'Lançamentos', valor: String(ext.length) },
+    ],
+    contadores: [
+      { label: 'Realizado', valor: cont('realizado') },
+      { label: 'Programado', valor: cont('programado') },
+      { label: 'Previsto', valor: cont('previsto') },
+      { label: 'Agendado', valor: cont('agendado') },
+    ],
+    linhas: ext.map((r, i) => ({
+      data: diaBR(r.data), descricao: r.produto || '—', fornecedor: r.fornecedor || '—', centro: r.centro || '—',
+      valorFmt: assinado(r.valor), valorPos: r.valor >= 0,
+      saldoFmt: r.saldo == null ? '—' : formatMoeda(r.saldo), saldoNeg: r.saldo == null ? null : r.saldo < 0,
+      status: r.statusLabel, doc: r.doc || '',
+      ehFechamento: i === ext.length - 1 || ext[i + 1].data !== r.data,
+    })),
   };
 
   const kpis = [
@@ -122,7 +151,7 @@ export async function gerarPdfAnaliseExecutivaV3(params: {
     DocumentoAnaliseExecutiva({
       clienteNome: params.clienteNome, fazenda: params.fazenda, contaNome: params.contaNome, periodoLabel: params.periodoLabel, logoData,
       kpis, serie, fmt: fmtCompacto, calendario, cards, notaProjetado,
-      credito, natureza, negocio, compromissos, tesouraria,
+      credito, natureza, negocio, compromissos, tesouraria, extrato,
     }),
   ).toBlob();
 

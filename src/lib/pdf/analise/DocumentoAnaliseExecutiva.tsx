@@ -11,6 +11,7 @@ import { PdfOrganizacaoPagamentos, type DiaCalendario, type CardEtapa } from '@/
 import { PdfBlocoDonut, type LinhaRanking } from '@/lib/pdf/analise/PdfBlocoDonut';
 import { PdfCompromissos, type LinhaCompromisso } from '@/lib/pdf/analise/PdfCompromissos';
 import { PdfTesouraria, type LinhaTransf } from '@/lib/pdf/analise/PdfTesouraria';
+import { PdfExtrato, type LinhaExtrato } from '@/lib/pdf/analise/PdfExtrato';
 import type { SegmentoDonut } from '@/lib/pdf/analise/PdfDonut';
 
 interface BlocoDist { segmentos: SegmentoDonut[]; ranking: LinhaRanking[]; }
@@ -33,6 +34,8 @@ export interface DocProps {
   compromissos: { linhas: LinhaCompromisso[]; totalFmt: string; totalCount: number };
   // Página 3
   tesouraria: { recebidas: LinhaTransf[]; enviadas: LinhaTransf[]; totalRecFmt: string; totalEnvFmt: string };
+  // Página 4+
+  extrato: { resumo: { label: string; valor: string; cor?: string }[]; contadores: { label: string; valor: string }[]; linhas: LinhaExtrato[] };
 }
 
 export function DocumentoAnaliseExecutiva(p: DocProps) {
@@ -77,6 +80,14 @@ export function DocumentoAnaliseExecutiva(p: DocProps) {
 
         <Text style={estilos.secao}>Transferências entre Contas (Tesouraria)</Text>
         <PdfTesouraria recebidas={p.tesouraria.recebidas} enviadas={p.tesouraria.enviadas} totalRecFmt={p.tesouraria.totalRecFmt} totalEnvFmt={p.tesouraria.totalEnvFmt} />
+      </Page>
+
+      <Page size="A4" style={estilos.pagina} wrap>
+        <PdfHeader clienteNome={p.clienteNome} fazenda={p.fazenda} contaNome={p.contaNome} periodoLabel={p.periodoLabel} logoData={p.logoData} />
+        <PdfRodape />
+
+        <Text style={estilos.secao}>Extrato Financeiro do Período</Text>
+        <PdfExtrato resumo={p.extrato.resumo} contadores={p.extrato.contadores} linhas={p.extrato.linhas} />
       </Page>
     </Document>
   );
