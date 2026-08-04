@@ -69,7 +69,7 @@ export function ExtratoMaioresCompromissos({ itens, contaNome, periodoLabel }: {
   }, [aberto]);
 
   return (
-    <div className="w-full max-w-[720px] mx-auto rounded-lg border px-3 py-2 space-y-2">
+    <div className="w-full max-w-[720px] mx-auto rounded-lg border px-3 py-1.5 space-y-1.5">
       <div className="flex items-baseline justify-between gap-2">
         <div className="text-[12px] font-semibold">Principais Custos e Compromissos</div>
         <div className="text-[9px] text-muted-foreground">Por centro de custo · {contaNome} · {periodoLabel}</div>
@@ -82,7 +82,7 @@ export function ExtratoMaioresCompromissos({ itens, contaNome, periodoLabel }: {
       ) : (
         <>
           {/* Concentração: Top 10 x Demais. */}
-          <div className="rounded-md border p-2 space-y-1">
+          <div className="rounded-md border p-1.5 space-y-0.5">
             <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[10px]">
               <span>Top {Math.min(TOP_N, top.length)}: <span className="font-semibold text-foreground">{formatMoeda(topTotal)}</span> · <span className="font-semibold" style={{ color: COR }}>{pct(topTotal)}%</span> das saídas · {topPag} pagamento{topPag !== 1 ? 's' : ''}</span>
               {demais && <span>Demais: <span className="font-semibold text-foreground">{formatMoeda(demais.total)}</span> · {pct(demais.total)}% · {demais.count} pagamento{demais.count !== 1 ? 's' : ''}</span>}
@@ -94,7 +94,7 @@ export function ExtratoMaioresCompromissos({ itens, contaNome, periodoLabel }: {
           </div>
 
           {/* Donut (apoio visual) à esquerda · ranking compacto à direita. */}
-          <div className="flex flex-wrap gap-2 items-center">
+          <div className="flex flex-wrap gap-1.5 items-center">
             <div className="w-[200px] h-[200px] shrink-0">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -108,7 +108,7 @@ export function ExtratoMaioresCompromissos({ itens, contaNome, periodoLabel }: {
             </div>
 
             <div className="flex-1 min-w-[280px] max-w-[440px]">
-              <table className="w-full border-collapse text-[11px]">
+              <table className="w-full border-collapse text-[10px]">
                 <thead>
                   <tr className="text-[9px] uppercase text-muted-foreground">
                     <th className="text-left py-0.5 font-semibold w-5">#</th>
@@ -124,16 +124,16 @@ export function ExtratoMaioresCompromissos({ itens, contaNome, periodoLabel }: {
                     const cor = corLinha(i, r.ehDemais);
                     return (
                       <tr key={r.chave} onClick={() => setDrawer(r.chave)} className="border-t cursor-pointer hover:bg-muted/40">
-                        <td className="py-1 text-muted-foreground tabular-nums">{r.ehDemais ? '—' : i + 1}</td>
-                        <td className="py-1">
+                        <td className="py-0.5 text-muted-foreground tabular-nums">{r.ehDemais ? '—' : i + 1}</td>
+                        <td className="py-0.5">
                           <span className="inline-flex items-center gap-1.5 min-w-0">
                             <span className="w-2 h-2 rounded-sm shrink-0" style={{ background: cor }} />
-                            <span className="font-medium truncate" style={{ color: cor }}>{r.chave}</span>
+                            <span className="font-medium truncate text-[11px]" style={{ color: cor }}>{r.chave}</span>
                           </span>
                         </td>
-                        <td className="text-right tabular-nums py-1 whitespace-nowrap">{formatMoeda(r.total)}</td>
-                        <td className="text-right tabular-nums py-1 font-semibold" style={{ color: cor }}>{pct(r.total)}%</td>
-                        <td className="text-right tabular-nums py-1 text-muted-foreground">{r.count}</td>
+                        <td className="text-right tabular-nums py-0.5 whitespace-nowrap">{formatMoeda(r.total)}</td>
+                        <td className="text-right tabular-nums py-0.5 font-semibold" style={{ color: cor }}>{pct(r.total)}%</td>
+                        <td className="text-right tabular-nums py-0.5 text-muted-foreground">{r.count}</td>
                         <td className="text-right text-[9px] font-medium" style={{ color: cor }}>↗</td>
                       </tr>
                     );
@@ -142,10 +142,10 @@ export function ExtratoMaioresCompromissos({ itens, contaNome, periodoLabel }: {
                 <tfoot>
                   <tr className="border-t font-semibold">
                     <td />
-                    <td className="py-1">Total</td>
-                    <td className="text-right tabular-nums py-1 whitespace-nowrap">{formatMoeda(totalGeral)}</td>
-                    <td className="text-right tabular-nums py-1">100%</td>
-                    <td className="text-right tabular-nums py-1 text-muted-foreground">{totalPag}</td>
+                    <td className="py-0.5">Total</td>
+                    <td className="text-right tabular-nums py-0.5 whitespace-nowrap">{formatMoeda(totalGeral)}</td>
+                    <td className="text-right tabular-nums py-0.5">100%</td>
+                    <td className="text-right tabular-nums py-0.5 text-muted-foreground">{totalPag}</td>
                     <td />
                   </tr>
                 </tfoot>

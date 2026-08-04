@@ -70,7 +70,7 @@ export function ExtratoDistribuicaoEconomica({ itens, contaNome, periodoLabel }:
   const TABS: { k: Dimensao; l: string }[] = [{ k: 'macro', l: 'Por natureza' }, { k: 'negocio', l: 'Por negócio' }];
 
   return (
-    <div className="w-full max-w-[720px] mx-auto rounded-lg border px-3 py-2 space-y-2">
+    <div className="w-full max-w-[620px] mx-auto rounded-lg border px-3 py-2 space-y-2">
       <div className="flex items-baseline justify-between gap-2">
         <div className="text-[12px] font-semibold">Distribuição econômica</div>
         <div className="text-[9px] text-muted-foreground">
@@ -110,7 +110,7 @@ export function ExtratoDistribuicaoEconomica({ itens, contaNome, periodoLabel }:
           )}
 
           {/* Pizza (apoio visual, centralizada) à esquerda · tabela compacta à direita. */}
-          <div className="flex flex-wrap gap-2 items-center">
+          <div className="flex flex-wrap gap-1 items-center justify-center">
             <div className="w-[200px] h-[200px] shrink-0">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -123,7 +123,7 @@ export function ExtratoDistribuicaoEconomica({ itens, contaNome, periodoLabel }:
               </ResponsiveContainer>
             </div>
 
-            <div className="flex-1 min-w-[260px] max-w-[400px]">
+            <div className="w-[360px] max-w-full">
               <table className="w-full border-collapse text-[11px]">
                 <thead>
                   <tr className="text-[9px] uppercase text-muted-foreground">
