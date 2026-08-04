@@ -109,6 +109,53 @@ export function distribuicaoEconomica<T extends ItemEconAgg>(itens: T[], dimensa
   return { ranking, totalGeral, totalClass, folhaCusteio };
 }
 
+/* ───────── Evolução com corte Realizado × Projetado (visão financeira) ───────── */
+export function serieEvolucaoRP(
+  linhas: { data: string; mov: number; realizado: boolean }[],
+  saldoIni: number | null, ano: number, mes: number,
+): { pontos: PontoEvolucao[]; corteIdx: number; temProjetado: boolean } {
+  if (saldoIni === null) return { pontos: [], corteIdx: 0, temProjetado: false };
+  const movPorDia = new Map<number, number>();
+  let lastRealDia = 0, temProjetado = false;
+  for (const p of linhas) {
+    const dd = Number(p.data.slice(8, 10));
+    if (dd) movPorDia.set(dd, (movPorDia.get(dd) ?? 0) + p.mov);
+    if (p.realizado) { if (dd > lastRealDia) lastRealDia = dd; } else temProjetado = true;
+  }
+  const diasNoMes = new Date(ano, mes, 0).getDate();
+  const pontos: PontoEvolucao[] = [{ dia: 'Início', mov: 0, saldo: saldoIni }];
+  let acc = saldoIni;
+  for (let d = 1; d <= diasNoMes; d++) { const mv = movPorDia.get(d) ?? 0; acc += mv; pontos.push({ dia: pad2(d), mov: mv, saldo: acc }); }
+  // pontos[d] corresponde ao dia d (pontos[0] = Início). Corte no último dia realizado.
+  const corteIdx = temProjetado ? lastRealDia : pontos.length - 1;
+  return { pontos, corteIdx, temProjetado };
+}
+
+/* ─────────────── Créditos / Entradas por origem (visão financeira) ─────────────── */
+// Só via tipo_operacao (sem macro/escopo): Receitas (1-Entradas) · Transferências recebidas
+// (3-%) · Outros créditos (fallback). Transferências ENTRAM aqui (financeiro), não na econômica.
+interface ItemCredito { mov: number; tipo: string; }
+const ORIGEM_CREDITO = ['Receitas', 'Transferências recebidas', 'Outros créditos'];
+export function creditosPorOrigem<T extends ItemCredito>(itens: T[]): {
+  ranking: { chave: string; total: number; count: number; itens: T[] }[];
+  totalGeral: number;
+} {
+  const map = new Map<string, { chave: string; total: number; count: number; itens: T[] }>();
+  let totalGeral = 0;
+  for (const it of itens) {
+    if (it.mov <= 0) continue; // só créditos (entradas)
+    const v = it.mov;
+    totalGeral += v;
+    const chave = it.tipo.startsWith('1') ? 'Receitas' : it.tipo.startsWith('3') ? 'Transferências recebidas' : 'Outros créditos';
+    const e = map.get(chave) ?? { chave, total: 0, count: 0, itens: [] };
+    e.total += v; e.count += 1; e.itens.push(it);
+    map.set(chave, e);
+  }
+  const ranking: { chave: string; total: number; count: number; itens: T[] }[] = [];
+  for (const k of ORIGEM_CREDITO) { const e = map.get(k); if (e) ranking.push(e); }
+  return { ranking, totalGeral };
+}
+
 /* ─────────────────── 4) Maiores compromissos (centro) ─────────────────── */
 export const TOP_N = 10;
 export const SEM_CENTRO = 'Sem centro';

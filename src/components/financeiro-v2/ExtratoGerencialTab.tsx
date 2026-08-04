@@ -224,7 +224,8 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
 
   // PDF Executivo — consome os mesmos linhas/dadosOrg/saldos das telas (fonte única de agregações).
   const exportarPdfExecutivo = () => {
-    const serieLinhas = linhas.map((x) => ({ data: x.data, mov: x.mov, saldo: x.saldo }));
+    const contaNomeMap = new Map(contas.map((c) => [c.id, c.nome_exibicao || c.nome_conta]));
+    const serieLinhas = linhas.map((x) => ({ data: x.data, mov: x.mov, saldo: x.saldo, realizado: (x.l.status_transacao || '').toLowerCase() === 'realizado' }));
     const extrato = linhas.map((x) => {
       const sk = (x.l.status_transacao || '').toLowerCase();
       return {
@@ -235,6 +236,15 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
         concil: concStatus(x.l).txt, doc: x.l.numero_documento || x.l.documento || '',
       };
     });
+    // Transferências entre contas próprias (tesouraria) — nomes via mapa de contas.
+    const transferencias = linhas
+      .filter((x) => x.l.tipo_operacao.startsWith('3'))
+      .map((x): { data: string; sentido: 'entrada' | 'saida'; conta: string; valor: number } | null => {
+        if (x.l.conta_destino_id === contaId) return { data: x.data, sentido: 'entrada', conta: contaNomeMap.get(x.l.conta_bancaria_id ?? '') || 'Outra conta', valor: Math.abs(x.mov) };
+        if (x.l.conta_bancaria_id === contaId) return { data: x.data, sentido: 'saida', conta: contaNomeMap.get(x.l.conta_destino_id ?? '') || 'Outra conta', valor: Math.abs(x.mov) };
+        return null;
+      })
+      .filter((t): t is { data: string; sentido: 'entrada' | 'saida'; conta: string; valor: number } => t !== null);
     void gerarPdfAnaliseExecutiva({
       clienteNome: clienteAtual?.nome ?? '—',
       periodoLabel: `${MESES[mes - 1]}/${ano}`,
@@ -242,7 +252,7 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
       contas: [{
         nome: contaNome,
         fazenda: fazScope && fazendaAtual?.nome ? fazendaAtual.nome : undefined,
-        saldoIni, saldoFin, totais, serieLinhas, extrato, dadosOrg,
+        saldoIni, saldoFin, totais, serieLinhas, extrato, dadosOrg, transferencias,
       }],
     });
   };

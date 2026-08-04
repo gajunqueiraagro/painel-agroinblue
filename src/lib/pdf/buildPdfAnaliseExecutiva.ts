@@ -13,7 +13,7 @@ import {
 } from '@/lib/pdf/pdfChassi';
 import { desenharEvolucao, desenharDonut, type RGB } from '@/lib/pdf/pdfMiniGraficos';
 import {
-  serieEvolucao, etapasPagamento, etapaDoDia, distribuicaoEconomica, maioresCompromissos, type LinhaFluxoIn,
+  serieEvolucaoRP, etapasPagamento, etapaDoDia, distribuicaoEconomica, maioresCompromissos, creditosPorOrigem,
 } from '@/lib/analise/analiseAgregacoes';
 import { formatMoeda } from '@/lib/calculos/formatters';
 
@@ -32,15 +32,17 @@ export interface ExtratoLinhaPdf {
   valor: number; saldo: number | null;
   statusKey: string; statusLabel: string; concil: string; doc: string;
 }
+export interface TransferenciaPdf { data: string; sentido: 'entrada' | 'saida'; conta: string; valor: number; }
 export interface ContaPdf {
   nome: string;
   fazenda?: string;
   saldoIni: number | null;
   saldoFin: number | null;
   totais: { ent: number; sai: number };
-  serieLinhas: LinhaFluxoIn[];   // {data,mov,saldo} → gráfico de evolução
+  serieLinhas: { data: string; mov: number; saldo: number | null; realizado: boolean }[]; // gráfico (com realizado)
   extrato: ExtratoLinhaPdf[];    // linhas completas do extrato
-  dadosOrg: ItemPdf[];           // análises (etapas/distribuição/compromissos)
+  dadosOrg: ItemPdf[];           // análises (etapas/distribuição/compromissos/créditos)
+  transferencias: TransferenciaPdf[]; // tesouraria (entre contas próprias)
 }
 
 // ── Cores (espelham as telas) ──
@@ -58,6 +60,7 @@ const NAO_OPER = new Set(['Investimento na Fazenda', 'Investimento em Bovinos', 
 const corMacro = (chave: string): RGB => (chave.startsWith('Sem classificação') ? CINZA : NAO_OPER.has(chave) ? AMBAR : AZUL);
 const corNegocio = (chave: string): RGB => (chave.startsWith('Sem classificação') ? CINZA : NEG_COR[chave] ?? [91, 33, 182]);
 const corStatus = (k: string): RGB => STATUS_COR[k] ?? [120, 120, 120];
+const corCredito = (c: string): RGB => (c === 'Receitas' ? VERDE : c === 'Transferências recebidas' ? [37, 99, 235] : AMBAR);
 
 const ETAPA_LABEL: Record<string, { nome: string; faixa: string }> = {
   j1: { nome: '1ª etapa', faixa: '03–06' }, j2: { nome: '2ª etapa', faixa: '08–11' }, j3: { nome: '3ª etapa', faixa: '20–23' }, fora: { nome: 'Demais períodos', faixa: '—' },
@@ -123,12 +126,15 @@ export async function gerarPdfAnaliseExecutiva(params: {
   const doc = criarDocRetratoA4();
 
   // ── Agregações (fonte única) ──
-  const serie = serieEvolucao(conta.serieLinhas, conta.saldoIni, ano, mes);
+  const { pontos: serie, corteIdx, temProjetado } = serieEvolucaoRP(conta.serieLinhas, conta.saldoIni, ano, mes);
   const menor = serie.length ? serie.reduce((m, p) => (p.saldo < m.saldo ? p : m), serie[0]) : null;
+  const saldoRealizado = serie.length ? serie[Math.max(0, Math.min(corteIdx, serie.length - 1))].saldo : null;
+  const menorProjetado = temProjetado && serie.length ? serie.slice(corteIdx).reduce((m, p) => (p.saldo < m ? p.saldo : m), serie[corteIdx].saldo) : null;
   const { buckets: etapas, totalGeral: totEtapas } = etapasPagamento(conta.dadosOrg);
   const distMacro = distribuicaoEconomica(conta.dadosOrg, 'macro');
   const distNeg = distribuicaoEconomica(conta.dadosOrg, 'negocio');
   const comp = maioresCompromissos(conta.dadosOrg);
+  const creditos = creditosPorOrigem(conta.dadosOrg);
 
   const saldoFinal = conta.saldoFin ?? (conta.saldoIni != null ? conta.saldoIni + conta.totais.ent - conta.totais.sai : null);
   const topTotal = comp.top.reduce((s, r) => s + r.total, 0);
@@ -150,11 +156,16 @@ export async function gerarPdfAnaliseExecutiva(params: {
     { label: 'Menor saldo', valor: menor ? formatMoeda(menor.saldo) : '—' },
   ], y, { colunas: 5 });
 
-  // Bloco 1 — Evolução do caixa (gráfico composto: barras + linha + zero + marcadores + legenda)
+  // Bloco 1 — Evolução do caixa (composto + corte Realizado × Projetado p/ meses abertos)
   y = addTituloSecao(doc, 'Evolução do Caixa', y + 1);
   if (serie.length >= 2) {
-    desenharEvolucao(doc, serie, { x: MARGEM, y: y + 1, w: INNER, h: 42 }, fmtCompacto);
+    desenharEvolucao(doc, serie, { x: MARGEM, y: y + 1, w: INNER, h: 42 }, fmtCompacto, { corteIdx, temProjetado });
     y += 50;
+    if (temProjetado) {
+      doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(90, 90, 90);
+      doc.text(`Saldo atual realizado: ${fm(saldoRealizado)}   ·   Saldo final projetado: ${fm(serie[serie.length - 1].saldo)}   ·   Menor saldo projetado: ${fm(menorProjetado)}`, MARGEM, y);
+      doc.setTextColor(0, 0, 0); y += 4;
+    }
   } else {
     doc.setFontSize(9); doc.setTextColor(...PALETA.CINZA_TEXTO);
     doc.text('Saldo inicial não informado — evolução indisponível.', MARGEM, y + 6); doc.setTextColor(0, 0, 0);
@@ -189,9 +200,16 @@ export async function gerarPdfAnaliseExecutiva(params: {
   });
   doc.setTextColor(0, 0, 0); doc.setFont('helvetica', 'normal');
 
-  /* ───────── PÁGINA 2 — Estrutura das Saídas ───────── */
+  /* ───────── PÁGINA 2 — Análise Econômica (de onde veio · para onde foi) ───────── */
   doc.addPage();
-  y = addTituloSecao(doc, 'Distribuição Econômica', 22); // 22 = reserva do cabeçalho global
+  y = addTituloSecao(doc, 'De onde veio o dinheiro (Créditos)', 22); // 22 = reserva do cabeçalho global
+  if (creditos.ranking.length > 0) {
+    y = blocoDonut(doc, MARGEM, INNER, y + 1, '', creditos.ranking, creditos.totalGeral, corCredito) + 1;
+  } else {
+    doc.setFontSize(9); doc.setTextColor(...PALETA.CINZA_TEXTO); doc.text('Sem créditos no período.', MARGEM, y + 5); doc.setTextColor(0, 0, 0); y += 8;
+  }
+
+  y = addTituloSecao(doc, 'Para onde foi — Distribuição Econômica', y + 1);
   const colW = (INNER - 8) / 2;
   const yEsq = blocoDonut(doc, MARGEM, colW, y + 1, 'Por natureza', distMacro.ranking, distMacro.totalGeral, corMacro);
   const yDir = blocoDonut(doc, MARGEM + colW + 8, colW, y + 1, 'Por negócio', distNeg.ranking, distNeg.totalGeral, corNegocio);
@@ -205,7 +223,37 @@ export async function gerarPdfAnaliseExecutiva(params: {
   doc.setFontSize(8); doc.setTextColor(...PALETA.CINZA_TEXTO);
   doc.text(`Top 10 compromissos representam ${topPct}% das saídas · Total ${formatMoeda(comp.totalGeral)}.`, MARGEM, cyc + 22); doc.setTextColor(0, 0, 0);
 
-  /* ───────── PÁGINA 3+ — Extrato Financeiro Completo ───────── */
+  /* ───────── PÁGINA 3 — Transferências entre Contas (tesouraria) ───────── */
+  doc.addPage();
+  y = addTituloSecao(doc, 'Transferências entre Contas', 22); // 22 = reserva do cabeçalho global
+  const tEnt = conta.transferencias.filter((t) => t.sentido === 'entrada');
+  const tSai = conta.transferencias.filter((t) => t.sentido === 'saida');
+  if (conta.transferencias.length === 0) {
+    doc.setFontSize(9); doc.setTextColor(...PALETA.CINZA_TEXTO);
+    doc.text('Nenhuma transferência entre contas próprias no período.', MARGEM, y + 6); doc.setTextColor(0, 0, 0);
+  } else {
+    const totEnt = tEnt.reduce((s, t) => s + t.valor, 0);
+    const totSai = tSai.reduce((s, t) => s + t.valor, 0);
+    y = subtitulo(doc, `Entradas recebidas — ${tEnt.length} · ${formatMoeda(totEnt)}`, MARGEM, y + 3) + 1;
+    y = addTabelaExecutiva(doc, {
+      head: [['Data', 'Conta de origem', 'Valor']],
+      body: tEnt.map((t) => [diaBR(t.data), trunc(t.conta, 46), formatMoeda(t.valor)]),
+      startY: y,
+      opts: { fontSize: 8, foot: [['Total', '', formatMoeda(totEnt)]], columnStyles: { 2: { halign: 'right', cellWidth: 34 } } },
+    }) + 3;
+    y = subtitulo(doc, `Saídas enviadas — ${tSai.length} · ${formatMoeda(totSai)}`, MARGEM, y + 2) + 1;
+    y = addTabelaExecutiva(doc, {
+      head: [['Data', 'Conta de destino', 'Valor']],
+      body: tSai.map((t) => [diaBR(t.data), trunc(t.conta, 46), formatMoeda(t.valor)]),
+      startY: y,
+      opts: { fontSize: 8, foot: [['Total', '', formatMoeda(totSai)]], columnStyles: { 2: { halign: 'right', cellWidth: 34 } } },
+    }) + 3;
+    doc.setFontSize(8); doc.setTextColor(...PALETA.CINZA_TEXTO);
+    doc.text('Transferências entre contas próprias não entram na análise econômica (custos/compromissos); impactam saldo, fluxo de caixa e disponibilidade da conta.', MARGEM, y + 1, { maxWidth: INNER });
+    doc.setTextColor(0, 0, 0);
+  }
+
+  /* ───────── PÁGINA 4+ — Extrato Financeiro Completo ───────── */
   doc.addPage();
   y = addTituloSecao(doc, 'Extrato Financeiro do Período', 22); // 22 = reserva do cabeçalho global
   const ext = conta.extrato;

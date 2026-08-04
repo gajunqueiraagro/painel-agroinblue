@@ -62,6 +62,7 @@ export function desenharEvolucao(
   serie: { dia: string; mov: number; saldo: number }[],
   box: Box,
   fmt: (v: number) => string,
+  opts?: { corteIdx?: number; temProjetado?: boolean },
 ): void {
   if (serie.length < 2) return;
   const vals = serie.flatMap((p) => [p.saldo, p.mov]);
@@ -72,6 +73,7 @@ export function desenharEvolucao(
   const xAt = (i: number) => box.x + (i / (n - 1)) * box.w;
   const yAt = (v: number) => box.y + box.h - ((v - min) / (max - min)) * box.h;
   const barW = Math.max(0.6, (box.w / n) * 0.45);
+  const corte = opts?.temProjetado && opts.corteIdx != null ? Math.max(0, Math.min(opts.corteIdx, n - 1)) : n - 1;
 
   doc.setDrawColor(217, 226, 236); doc.setLineWidth(0.1); doc.rect(box.x, box.y, box.w, box.h, 'S');
   const yz = yAt(0);
@@ -87,9 +89,18 @@ export function desenharEvolucao(
     doc.rect(x, Math.min(yz, yv), barW, Math.abs(yv - yz), 'F');
   }
 
-  // linha do saldo acumulado (azul)
-  doc.setDrawColor(30, 58, 95); doc.setLineWidth(0.5);
-  for (let i = 1; i < n; i++) doc.line(xAt(i - 1), yAt(serie[i - 1].saldo), xAt(i), yAt(serie[i].saldo));
+  // linha do saldo: realizado (azul contínuo) até o corte; projetado (laranja pontilhado) depois
+  doc.setLineWidth(0.5);
+  doc.setDrawColor(30, 58, 95);
+  for (let i = 1; i <= corte; i++) doc.line(xAt(i - 1), yAt(serie[i - 1].saldo), xAt(i), yAt(serie[i].saldo));
+  if (corte < n - 1) {
+    doc.setDrawColor(217, 119, 6); doc.setLineDashPattern([1, 1], 0);
+    for (let i = corte + 1; i < n; i++) doc.line(xAt(i - 1), yAt(serie[i - 1].saldo), xAt(i), yAt(serie[i].saldo));
+    doc.setLineDashPattern([], 0);
+    // marcador do ponto de corte (fim do realizado / início do projetado)
+    doc.setDrawColor(120, 120, 120); doc.setLineWidth(0.2);
+    doc.line(xAt(corte), box.y, xAt(corte), box.y + box.h);
+  }
 
   // marcadores inicial / menor / final
   const saldos = serie.map((p) => p.saldo);
@@ -104,7 +115,8 @@ export function desenharEvolucao(
 
   // legenda inferior
   const ly = box.y + box.h + 4;
-  const leg: { c: RGB; t: string }[] = [{ c: [34, 120, 74], t: 'Entradas' }, { c: [185, 28, 28], t: 'Saídas' }, { c: [30, 58, 95], t: 'Saldo acumulado' }];
+  const leg: { c: RGB; t: string }[] = [{ c: [34, 120, 74], t: 'Entradas' }, { c: [185, 28, 28], t: 'Saídas' }, { c: [30, 58, 95], t: 'Saldo realizado' }];
+  if (corte < n - 1) leg.push({ c: [217, 119, 6], t: 'Saldo projetado' });
   let lx = box.x;
   doc.setFontSize(7); doc.setFont('helvetica', 'normal');
   for (const it of leg) {
