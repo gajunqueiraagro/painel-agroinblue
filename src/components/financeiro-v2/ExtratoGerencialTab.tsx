@@ -20,14 +20,14 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { ContaBancariaSelect, type ContaSelecionavel } from '@/components/shared/ContaBancariaSelect';
 import { LancamentoLeituraDialog } from '@/components/financeiro-v2/LancamentoLeituraDialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { STATUS_FILTRO_LABEL } from '@/lib/financeiro/statusFinanceiro';
+import { STATUS_FILTRO_LABEL, STATUS_FILTRO_COR } from '@/lib/financeiro/statusFinanceiro';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { format, parseISO } from 'date-fns';
 
 interface ContaRow extends ContaSelecionavel { fazenda_id: string | null; }
 interface LancExtrato {
   id: string; data_pagamento: string | null; data_vencimento: string | null; valor: number;
-  tipo_operacao: string; descricao: string | null; numero_documento: string | null;
+  tipo_operacao: string; descricao: string | null; numero_documento: string | null; documento: string | null;
   favorecido_id: string | null; centro_custo: string | null; status_transacao: string | null;
   conta_bancaria_id: string | null; conta_destino_id: string | null;
 }
@@ -93,13 +93,27 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
     },
   });
 
+  // Item #1 — fallback do saldo inicial: saldo_final oficial do MÊS ANTERIOR (a cadeia saldos_v2 garante
+  //   saldo_final(N) = saldo_inicial(N+1)). Só usado quando o mês selecionado não tem saldo_inicial.
+  const prevAno = mes === 1 ? ano - 1 : ano;
+  const prevAnoMes = `${prevAno}-${pad(mes === 1 ? 12 : mes - 1)}`;
+  const { data: saldoPrev } = useQuery({
+    queryKey: ['extrato-ger-saldo-prev', clienteId, contaId, prevAnoMes],
+    enabled: !!clienteId && !!contaId,
+    queryFn: async (): Promise<number | null> => {
+      const { data } = await (supabase as any).from('financeiro_saldos_bancarios_v2')
+        .select('saldo_final').eq('cliente_id', clienteId).eq('conta_bancaria_id', contaId).eq('ano_mes', prevAnoMes).maybeSingle();
+      return typeof data?.saldo_final === 'number' ? data.saldo_final : null;
+    },
+  });
+
   // Timeline: recorte pela DATA DO MOVIMENTO (COALESCE(pgto,venc) no mês) — mesma dimensão do grid.
   const { data: lancs = [] } = useQuery({
     queryKey: ['extrato-ger-lancs', clienteId, contaId, ini, fim, incluirLegados],
     enabled: !!clienteId && !!contaId,
     queryFn: async (): Promise<LancExtrato[]> => {
       let q = (supabase as any).from('financeiro_lancamentos_v2')
-        .select('id, data_pagamento, data_vencimento, valor, tipo_operacao, descricao, numero_documento, favorecido_id, centro_custo, status_transacao, conta_bancaria_id, conta_destino_id')
+        .select('id, data_pagamento, data_vencimento, valor, tipo_operacao, descricao, numero_documento, documento, favorecido_id, centro_custo, status_transacao, conta_bancaria_id, conta_destino_id')
         .eq('cliente_id', clienteId).eq('cancelado', false)
         .or(`conta_bancaria_id.eq.${contaId},conta_destino_id.eq.${contaId}`)
         .or(`and(data_pagamento.gte.${ini},data_pagamento.lt.${fim}),and(data_pagamento.is.null,data_vencimento.gte.${ini},data_vencimento.lt.${fim})`);
@@ -125,7 +139,9 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
 
   const siRaw = saldo?.saldo_inicial;
   const sfRaw = saldo?.saldo_final;
-  const saldoIni = typeof siRaw === 'number' ? siRaw : null;
+  const saldoIniCurr = typeof siRaw === 'number' ? siRaw : null;
+  // Fallback: saldo inicial do mês = saldo_inicial do mês OU saldo_final do mês anterior.
+  const saldoIni = saldoIniCurr ?? (saldoPrev ?? null);
   const saldoFin = typeof sfRaw === 'number' ? sfRaw : null;
 
   // Filtro por status (client-side) + saldo corrido recalculado SOBRE O CONJUNTO EXIBIDO (item #6).
@@ -138,8 +154,10 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
 
     let acc: number | null = saldoIni;
     return visiveis.map((l) => {
-      // Regra da conta: origem (conta_bancaria_id) = saída (−); destino (conta_destino_id) = entrada (+).
-      const mov = l.conta_bancaria_id === contaId ? -Math.abs(l.valor) : Math.abs(l.valor);
+      // Sinal correto: 1-Entradas é SEMPRE entrada (+), mesmo com conta_bancaria_id preenchida; o lado
+      //   destino de uma transferência também entra (+). Demais (saída / transferência-origem) = saída (−).
+      const isEntrada = l.tipo_operacao.startsWith('1') || (l.conta_destino_id === contaId && l.conta_bancaria_id !== contaId);
+      const mov = isEntrada ? Math.abs(l.valor) : -Math.abs(l.valor);
       if (acc !== null) acc += mov;
       return { l, mov, saldo: acc, data: dataMov(l) };
     });
@@ -171,9 +189,9 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
   );
 
   return (
-    <div className="space-y-1.5 pb-10">
+    <div className="flex flex-col h-[calc(100vh-64px)] gap-1.5">
       {/* Filtros */}
-      <div className="flex flex-wrap items-end gap-1.5">
+      <div className="flex flex-wrap items-end gap-1.5 shrink-0">
         <div className="min-w-[220px]">
           <label className="text-[9px] font-semibold text-muted-foreground block mb-0.5">Conta</label>
           <ContaBancariaSelect value={contaId} onValueChange={setContaSel} contas={contas} showBankDetails="agencia" placeholder="Selecionar conta" />
@@ -208,7 +226,7 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
       </div>
 
       {/* Cabeçalho: conta/período + cards */}
-      <div className="rounded-lg border bg-muted/20 p-2 space-y-1.5">
+      <div className="rounded-lg border bg-muted/20 p-2 space-y-1.5 shrink-0">
         <div className="flex items-baseline justify-between gap-2">
           <div className="text-[12px] font-semibold truncate">
             {contaNome}
@@ -225,27 +243,28 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
         </div>
       </div>
 
-      {/* Timeline */}
-      <div className="rounded-lg border overflow-auto" style={{ maxHeight: 'calc(100vh - 280px)' }}>
+      {/* Timeline — ocupa o espaço vertical restante; cabeçalho fixo; scroll interno */}
+      <div className="rounded-lg border overflow-auto flex-1 min-h-0">
         <table className="w-full border-collapse">
           <thead className="sticky top-0 z-10">
             <tr className="bg-primary text-primary-foreground">
               {['Data Movimento', 'Produto', 'Fornecedor', 'Centro', 'Valor', 'Saldo', 'Status', 'Doc'].map((h, i) => (
-                <th key={h} className={`px-1.5 py-1 text-[9px] uppercase font-semibold ${i === 4 || i === 5 ? 'text-right' : 'text-left'}`}>{h}</th>
+                <th key={h} className={`px-1.5 py-1 text-[9px] uppercase font-semibold ${i === 4 || i === 5 ? 'text-right whitespace-nowrap' : 'text-left'}`}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {/* Linha fixa de Saldo Inicial (item #4) */}
-            <tr className="border-b bg-muted/40 text-[10px] font-semibold">
-              <td className="px-1.5 py-0.5">Saldo Inicial</td>
+            {/* Linha de Saldo Inicial (item #4/#5) — linha normal; valor na coluna Saldo. */}
+            <tr className="border-b text-[10px] font-medium bg-muted/20">
+              <td className="px-1.5 py-0.5 whitespace-nowrap">Saldo Inicial</td>
               <td /><td /><td /><td />
-              <td className="px-1.5 py-0.5 text-right tabular-nums">{saldoIni !== null ? formatMoeda(saldoIni) : 'Saldo não informado'}</td>
+              <td className="px-1.5 py-0.5 text-right tabular-nums whitespace-nowrap min-w-[96px]">{saldoIni !== null ? formatMoeda(saldoIni) : 'Saldo não informado'}</td>
               <td /><td />
             </tr>
             {linhas.length === 0 ? (
               <tr><td colSpan={8} className="text-center text-[10px] text-muted-foreground py-6">Nenhuma movimentação para esta conta no período.</td></tr>
             ) : linhas.map(({ l, mov, saldo: sAcc, data }) => {
+              const stKey = (l.status_transacao || '').toLowerCase();
               const cs = concStatus(l);
               return (
                 <tr key={l.id} onClick={() => setLancLeituraId(l.id)}
@@ -254,15 +273,15 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
                   <td className="px-1.5 py-0.5 max-w-[200px] truncate" title={l.descricao ?? ''}>{l.descricao || '—'}</td>
                   <td className="px-1.5 py-0.5 max-w-[150px] truncate">{(l.favorecido_id && fornMap?.get(l.favorecido_id)) || '—'}</td>
                   <td className="px-1.5 py-0.5 max-w-[120px] truncate text-muted-foreground">{l.centro_custo || '—'}</td>
-                  <td className={`px-1.5 py-0.5 text-right tabular-nums ${mov >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                  <td className={`px-1.5 py-0.5 text-right tabular-nums whitespace-nowrap min-w-[96px] ${mov >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
                     {mov >= 0 ? '+' : '−'} {formatMoeda(Math.abs(mov))}
                   </td>
-                  <td className="px-1.5 py-0.5 text-right tabular-nums">{sAcc === null ? '—' : formatMoeda(sAcc)}</td>
+                  <td className={`px-1.5 py-0.5 text-right tabular-nums whitespace-nowrap min-w-[96px] ${sAcc === null ? '' : sAcc < 0 ? 'text-rose-700' : 'text-emerald-700'}`}>{sAcc === null ? '—' : formatMoeda(sAcc)}</td>
                   <td className="px-1.5 py-0.5 whitespace-nowrap">
-                    <span>{STATUS_FILTRO_LABEL[(l.status_transacao || '').toLowerCase()] ?? (l.status_transacao || '—')}</span>
-                    <span className={`ml-1 ${cs.cls}`}>· {cs.txt}</span>
+                    <span className={STATUS_FILTRO_COR[stKey] || ''}>{STATUS_FILTRO_LABEL[stKey] ?? (l.status_transacao || '—')}</span>
+                    {stKey === 'realizado' && <span className={`ml-1 ${cs.cls}`}>· {cs.txt}</span>}
                   </td>
-                  <td className="px-1.5 py-0.5 max-w-[90px] truncate text-muted-foreground" title={l.numero_documento ?? ''}>{l.numero_documento || '—'}</td>
+                  <td className="px-1.5 py-0.5 max-w-[90px] truncate text-muted-foreground" title={l.numero_documento ?? l.documento ?? ''}>{l.numero_documento || l.documento || '—'}</td>
                 </tr>
               );
             })}
