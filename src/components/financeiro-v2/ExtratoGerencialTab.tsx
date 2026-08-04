@@ -32,7 +32,7 @@ interface LancExtrato {
   id: string; data_pagamento: string | null; data_vencimento: string | null; valor: number;
   tipo_operacao: string; descricao: string | null; numero_documento: string | null; documento: string | null;
   favorecido_id: string | null; centro_custo: string | null; plano_conta_id: string | null; status_transacao: string | null;
-  macro_custo: string | null; grupo_custo: string | null; subcentro: string | null;
+  macro_custo: string | null; grupo_custo: string | null; subcentro: string | null; escopo_negocio: string | null;
   conta_bancaria_id: string | null; conta_destino_id: string | null;
 }
 interface SaldoRow { saldo_inicial: number | null; saldo_final: number | null; status_mes: string | null; }
@@ -140,7 +140,7 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
     enabled: !!clienteId && !!contaId,
     queryFn: async (): Promise<LancExtrato[]> => {
       let q = (supabase as any).from('financeiro_lancamentos_v2')
-        .select('id, data_pagamento, data_vencimento, valor, tipo_operacao, descricao, numero_documento, documento, favorecido_id, macro_custo, grupo_custo, centro_custo, subcentro, plano_conta_id, status_transacao, conta_bancaria_id, conta_destino_id')
+        .select('id, data_pagamento, data_vencimento, valor, tipo_operacao, descricao, numero_documento, documento, favorecido_id, macro_custo, grupo_custo, centro_custo, subcentro, escopo_negocio, plano_conta_id, status_transacao, conta_bancaria_id, conta_destino_id')
         .eq('cliente_id', clienteId).eq('cancelado', false)
         .or(`conta_bancaria_id.eq.${contaId},conta_destino_id.eq.${contaId}`)
         .or(`and(data_pagamento.gte.${ini},data_pagamento.lt.${fim}),and(data_pagamento.is.null,data_vencimento.gte.${ini},data_vencimento.lt.${fim})`);
@@ -206,6 +206,8 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
     macro: x.l.macro_custo ?? null,
     grupo: x.l.grupo_custo ?? null,
     centroPlano: x.l.centro_custo ?? null,
+    // Dimensão de negócio = escopo_negocio persistido no lançamento (soberano; nunca conta/texto).
+    escopo: x.l.escopo_negocio ?? null,
   })), [linhas, fornMap]);
 
   const totais = useMemo(() => {
