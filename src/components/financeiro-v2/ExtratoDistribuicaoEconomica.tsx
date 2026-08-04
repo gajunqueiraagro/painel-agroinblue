@@ -98,7 +98,7 @@ export function ExtratoDistribuicaoEconomica({ itens, contaNome, periodoLabel }:
   const TABS: { k: Dimensao; l: string }[] = [{ k: 'macro', l: 'Por natureza' }, { k: 'negocio', l: 'Por negócio' }];
 
   return (
-    <div className="w-full max-w-[900px] mx-auto rounded-lg border p-2 space-y-2">
+    <div className="w-full max-w-[720px] mx-auto rounded-lg border px-3 py-2 space-y-2">
       <div className="flex items-baseline justify-between gap-2">
         <div className="text-[12px] font-semibold">Distribuição econômica</div>
         <div className="text-[9px] text-muted-foreground">
@@ -137,12 +137,12 @@ export function ExtratoDistribuicaoEconomica({ itens, contaNome, periodoLabel }:
             </div>
           )}
 
-          {/* Pizza (apoio visual) à esquerda · tabela (leitura principal) à direita. */}
-          <div className="flex flex-wrap gap-3 items-start">
-            <div className="w-[150px] h-[150px] shrink-0">
+          {/* Pizza (apoio visual, centralizada) à esquerda · tabela compacta à direita. */}
+          <div className="flex flex-wrap gap-2 items-center">
+            <div className="w-[200px] h-[200px] shrink-0">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={ranking} dataKey="total" nameKey="chave" cx="50%" cy="50%" innerRadius={38} outerRadius={62} paddingAngle={1} isAnimationActive={false}
+                  <Pie data={ranking} dataKey="total" nameKey="chave" cx="50%" cy="50%" innerRadius={52} outerRadius={86} paddingAngle={1} isAnimationActive={false}
                        onClick={(_, idx) => setDrawer(ranking[idx].chave)}>
                     {ranking.map((r) => <Cell key={r.chave} fill={corDoBucket(r.chave)} stroke="#fff" strokeWidth={1} cursor="pointer" />)}
                   </Pie>
@@ -151,13 +151,13 @@ export function ExtratoDistribuicaoEconomica({ itens, contaNome, periodoLabel }:
               </ResponsiveContainer>
             </div>
 
-            <div className="flex-1 min-w-[240px] overflow-x-auto">
+            <div className="flex-1 min-w-[260px] max-w-[400px]">
               <table className="w-full border-collapse text-[11px]">
                 <thead>
                   <tr className="text-[9px] uppercase text-muted-foreground">
                     <th className="text-left py-0.5 font-semibold">Categoria</th>
-                    <th className="text-right py-0.5 font-semibold">Valor</th>
-                    <th className="text-right py-0.5 font-semibold w-12">%</th>
+                    <th className="text-right py-0.5 font-semibold w-[110px]">Valor</th>
+                    <th className="text-right py-0.5 font-semibold w-[45px]">%</th>
                     <th className="w-4" />
                   </tr>
                 </thead>
