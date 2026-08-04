@@ -13,10 +13,11 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { formatMoeda } from '@/lib/calculos/formatters';
+import { AnaliseDrawer } from '@/components/financeiro-v2/AnaliseDrawer';
 
 interface ItemCompromisso {
   id: string; data: string; mov: number; tipo: string;
-  centroPlano: string | null; fornecedor: string; produto: string | null;
+  centroPlano: string | null; fornecedor: string; produto: string | null; doc: string;
 }
 interface Bucket { chave: string; total: number; count: number; itens: ItemCompromisso[]; ehDemais?: boolean; }
 const isTransferencia = (tipo: string) => tipo.startsWith('3-');
@@ -173,59 +174,49 @@ export function ExtratoMaioresCompromissos({ itens, contaNome, periodoLabel }: {
 
       {/* Drawer: centro → favorecidos (detalhe) → lançamentos. */}
       {aberto && (
-        <div className="fixed inset-0 z-50 flex justify-end" onClick={() => setDrawer(null)}>
-          <div className="absolute inset-0 bg-black/20" />
-          <div className="relative h-full w-[480px] max-w-[92vw] bg-white border-l shadow-xl flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-start justify-between gap-2 px-3 py-2 border-b" style={{ borderColor: `${aberto.ehDemais ? COR_DEMAIS : COR}55` }}>
-              <div>
-                <div className="text-[12px] font-semibold" style={{ color: aberto.ehDemais ? COR_DEMAIS : COR }}>{aberto.chave}</div>
-                <div className="text-[9px] text-muted-foreground">{contaNome} · {periodoLabel} · {formatMoeda(aberto.total)} · {aberto.count} pagamento{aberto.count !== 1 ? 's' : ''}</div>
-              </div>
-              <button type="button" onClick={() => setDrawer(null)} className="text-[13px] leading-none px-1.5 py-0.5 rounded hover:bg-muted" aria-label="Fechar">✕</button>
-            </div>
-
-            <div className="flex-1 overflow-auto">
-              {/* Mini-ranking (detalhe): favorecidos, ou centros da cauda quando "Demais". */}
-              <div className="px-3 py-2 border-b">
-                <div className="text-[9px] uppercase tracking-wide text-muted-foreground mb-1">{aberto.ehDemais ? 'Centros agregados' : 'Favorecidos (detalhe)'}</div>
-                <div className="space-y-0.5 max-h-[160px] overflow-auto">
-                  {miniRank.map((m) => (
-                    <div key={m.k} className="flex items-baseline justify-between gap-2 text-[10px]">
-                      <span className="truncate" title={m.k}>{m.k}</span>
-                      <span className="tabular-nums whitespace-nowrap text-muted-foreground">{formatMoeda(m.total)} · {m.count}</span>
-                    </div>
-                  ))}
+        <AnaliseDrawer
+          titulo={aberto.chave}
+          subtitulo={`${contaNome} · ${periodoLabel} · ${formatMoeda(aberto.total)} · ${aberto.count} pagamento${aberto.count !== 1 ? 's' : ''}`}
+          corAccent={aberto.ehDemais ? COR_DEMAIS : COR}
+          total={aberto.total}
+          totalLabel="TOTAL DO COMPROMISSO"
+          onClose={() => setDrawer(null)}
+        >
+          {/* Mini-ranking (detalhe): favorecidos, ou centros da cauda quando "Demais". */}
+          <div className="px-3 py-2 border-b">
+            <div className="text-[9px] uppercase tracking-wide text-muted-foreground mb-1">{aberto.ehDemais ? 'Centros agregados' : 'Favorecidos (detalhe)'}</div>
+            <div className="space-y-0.5 max-h-[160px] overflow-auto">
+              {miniRank.map((m) => (
+                <div key={m.k} className="flex items-baseline justify-between gap-2 text-[10px]">
+                  <span className="truncate" title={m.k}>{m.k}</span>
+                  <span className="tabular-nums whitespace-nowrap text-muted-foreground">{formatMoeda(m.total)}</span>
                 </div>
-              </div>
-
-              {/* Lançamentos. */}
-              <table className="w-full border-collapse text-[10px]">
-                <thead className="sticky top-0 bg-muted/60">
-                  <tr>
-                    {['Data', 'Favorecido', 'Descrição', 'Valor'].map((h, i) => (
-                      <th key={h} className={`px-1.5 py-1 font-semibold uppercase text-[8px] ${i === 3 ? 'text-right' : 'text-left'}`}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {itensAberto.map((it) => (
-                    <tr key={it.id} className="border-t">
-                      <td className="px-1.5 py-0.5 whitespace-nowrap tabular-nums">{diaBR(it.data)}</td>
-                      <td className="px-1.5 py-0.5 max-w-[110px] truncate" title={it.fornecedor || '—'}>{it.fornecedor || '—'}</td>
-                      <td className="px-1.5 py-0.5 max-w-[110px] truncate" title={it.produto || '—'}>{it.produto || '—'}</td>
-                      <td className="px-1.5 py-0.5 text-right tabular-nums whitespace-nowrap">{formatMoeda(Math.abs(it.mov))}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="flex items-center justify-between gap-2 px-3 py-2 border-t bg-muted/30">
-              <span className="text-[10px] text-muted-foreground">TOTAL DO COMPROMISSO</span>
-              <span className="text-[13px] font-bold tabular-nums" style={{ color: aberto.ehDemais ? COR_DEMAIS : COR }}>{formatMoeda(aberto.total)}</span>
+              ))}
             </div>
           </div>
-        </div>
+
+          {/* Lançamentos — dentro do centro, "Centro" é redundante; mantém Favorecido + Doc. */}
+          <table className="w-full border-collapse text-[10px]">
+            <thead className="sticky top-0 bg-muted/60">
+              <tr>
+                {['Data', 'Favorecido', 'Descrição', 'Doc', 'Valor'].map((h, i) => (
+                  <th key={h} className={`px-1.5 py-1 font-semibold uppercase text-[8px] ${i === 4 ? 'text-right' : 'text-left'}`}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {itensAberto.map((it) => (
+                <tr key={it.id} className="border-t">
+                  <td className="px-1.5 py-1 whitespace-nowrap tabular-nums">{diaBR(it.data)}</td>
+                  <td className="px-1.5 py-1 max-w-[120px] truncate" title={it.fornecedor || '—'}>{it.fornecedor || '—'}</td>
+                  <td className="px-1.5 py-1 max-w-[130px] truncate" title={it.produto || '—'}>{it.produto || '—'}</td>
+                  <td className="px-1.5 py-1 max-w-[80px] truncate text-muted-foreground" title={it.doc || '—'}>{it.doc || '—'}</td>
+                  <td className="px-1.5 py-1 text-right tabular-nums whitespace-nowrap">{formatMoeda(Math.abs(it.mov))}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </AnaliseDrawer>
       )}
     </div>
   );

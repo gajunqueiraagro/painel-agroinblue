@@ -18,6 +18,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { formatMoeda } from '@/lib/calculos/formatters';
+import { AnaliseDrawer } from '@/components/financeiro-v2/AnaliseDrawer';
+import { TabelaLancamentosCompacta } from '@/components/financeiro-v2/TabelaLancamentosCompacta';
 
 interface ItemEcon {
   id: string; data: string; mov: number; tipo: string;
@@ -35,7 +37,6 @@ const COR_OPER = '#1e3a5f';
 const COR_NAO_OPER = '#d97706';
 const COR_SEM = '#94a3b8';
 const COBERTURA_MIN = 0.6; // abaixo disto → banner de ranking parcial
-const diaBR = (iso: string) => (iso.length >= 10 ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '—');
 
 export function ExtratoDistribuicaoEconomica({ itens, contaNome, periodoLabel }: {
   itens: ItemEcon[];
@@ -207,48 +208,20 @@ export function ExtratoDistribuicaoEconomica({ itens, contaNome, periodoLabel }:
         </>
       )}
 
-      {/* Drawer — detalhe do bucket (grupo/centro/lançamentos). Mesmas colunas nas duas dimensões. */}
+      {/* Drawer — detalhe do bucket. Chassi + tabela padrão (Data·Descrição·Favorecido·Centro·Doc·Valor). */}
       {aberto && (
-        <div className="fixed inset-0 z-50 flex justify-end" onClick={() => setDrawer(null)}>
-          <div className="absolute inset-0 bg-black/20" />
-          <div className="relative h-full w-[460px] max-w-[92vw] bg-white border-l shadow-xl flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-start justify-between gap-2 px-3 py-2 border-b" style={{ borderColor: `${corDoBucket(aberto.chave)}55` }}>
-              <div>
-                <div className="text-[12px] font-semibold" style={{ color: corDoBucket(aberto.chave) }}>{aberto.chave}</div>
-                <div className="text-[9px] text-muted-foreground">{contaNome} · {periodoLabel} · {itensAberto.length} lançamento{itensAberto.length !== 1 ? 's' : ''}</div>
-              </div>
-              <button type="button" onClick={() => setDrawer(null)} className="text-[13px] leading-none px-1.5 py-0.5 rounded hover:bg-muted" aria-label="Fechar">✕</button>
-            </div>
-
-            <div className="flex-1 overflow-auto">
-              <table className="w-full border-collapse text-[10px]">
-                <thead className="sticky top-0 bg-muted/60">
-                  <tr>
-                    {['Data', 'Grupo', 'Centro', 'Descrição', 'Valor'].map((h, i) => (
-                      <th key={h} className={`px-1.5 py-1 font-semibold uppercase text-[8px] ${i === 4 ? 'text-right' : 'text-left'}`}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {itensAberto.map((it) => (
-                    <tr key={it.id} className="border-t">
-                      <td className="px-1.5 py-0.5 whitespace-nowrap tabular-nums">{diaBR(it.data)}</td>
-                      <td className="px-1.5 py-0.5 max-w-[90px] truncate text-muted-foreground" title={it.grupo || '—'}>{it.grupo || '—'}</td>
-                      <td className="px-1.5 py-0.5 max-w-[80px] truncate text-muted-foreground" title={it.centroPlano || '—'}>{it.centroPlano || '—'}</td>
-                      <td className="px-1.5 py-0.5 max-w-[110px] truncate" title={it.produto || '—'}>{it.produto || '—'}</td>
-                      <td className="px-1.5 py-0.5 text-right tabular-nums whitespace-nowrap">{formatMoeda(Math.abs(it.mov))}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="flex items-center justify-between gap-2 px-3 py-2 border-t bg-muted/30">
-              <span className="text-[10px] text-muted-foreground">TOTAL {aberto.chave === SEM ? '(sem classificação)' : ''}</span>
-              <span className="text-[13px] font-bold tabular-nums" style={{ color: corDoBucket(aberto.chave) }}>{formatMoeda(aberto.total)}</span>
-            </div>
-          </div>
-        </div>
+        <AnaliseDrawer
+          titulo={aberto.chave}
+          subtitulo={`${contaNome} · ${periodoLabel} · ${itensAberto.length} lançamento${itensAberto.length !== 1 ? 's' : ''}`}
+          corAccent={corDoBucket(aberto.chave)}
+          total={aberto.total}
+          totalLabel={`TOTAL${aberto.chave === SEM ? ' (sem classificação)' : ''}`}
+          onClose={() => setDrawer(null)}
+        >
+          <TabelaLancamentosCompacta itens={itensAberto.map((it) => ({
+            id: it.id, data: it.data, produto: it.produto, fornecedor: it.fornecedor, centro: it.centroPlano, doc: it.doc, mov: it.mov,
+          }))} />
+        </AnaliseDrawer>
       )}
     </div>
   );

@@ -23,6 +23,8 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { formatMoeda } from '@/lib/calculos/formatters';
+import { AnaliseDrawer } from '@/components/financeiro-v2/AnaliseDrawer';
+import { TabelaLancamentosCompacta } from '@/components/financeiro-v2/TabelaLancamentosCompacta';
 
 interface ItemPag { id: string; data: string; mov: number; tipo: string; centro: string | null; produto: string | null; fornecedor: string; doc: string; }
 const isTransferencia = (tipo: string) => tipo.startsWith('3-');
@@ -37,7 +39,6 @@ const JANELAS: { id: JanelaId; nome: string; faixa: string; ini: number; fim: nu
 ];
 const COR_FORA = '#94a3b8';
 const pad2 = (n: number) => String(n).padStart(2, '0');
-const diaBR = (iso: string) => (iso.length >= 10 ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '—');
 
 export function ExtratoOrganizacaoPagamentos({ itens, ano, mes, contaNome, periodoLabel }: {
   itens: ItemPag[];
@@ -151,49 +152,18 @@ export function ExtratoOrganizacaoPagamentos({ itens, ano, mes, contaNome, perio
         </>
       )}
 
-      {/* Drawer de detalhamento — compacto, conferência operacional. */}
+      {/* Drawer de detalhamento — chassi compartilhado + tabela padrão. */}
       {cardAberto && (
-        <div className="fixed inset-0 z-50 flex justify-end" onClick={() => setDrawer(null)}>
-          <div className="absolute inset-0 bg-black/20" />
-          <div className="relative h-full w-[420px] max-w-[90vw] bg-white border-l shadow-xl flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-start justify-between gap-2 px-3 py-2 border-b" style={{ borderColor: `${cardAberto.cor}55` }}>
-              <div>
-                <div className="text-[12px] font-semibold" style={{ color: cardAberto.cor }}>{cardAberto.nome} · {cardAberto.faixa}</div>
-                <div className="text-[9px] text-muted-foreground">{contaNome} · {periodoLabel} · {itensAberto.length} pagamento{itensAberto.length !== 1 ? 's' : ''}</div>
-              </div>
-              <button type="button" onClick={() => setDrawer(null)} className="text-[13px] leading-none px-1.5 py-0.5 rounded hover:bg-muted" aria-label="Fechar">✕</button>
-            </div>
-
-            <div className="flex-1 overflow-auto">
-              <table className="w-full border-collapse text-[10px]">
-                <thead className="sticky top-0 bg-muted/60">
-                  <tr>
-                    {['Data', 'Descrição', 'Favorecido', 'Centro', 'Doc', 'Valor'].map((h, i) => (
-                      <th key={h} className={`px-1.5 py-1 font-semibold uppercase text-[8px] ${i === 5 ? 'text-right' : 'text-left'}`}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {itensAberto.map((it) => (
-                    <tr key={it.id} className="border-t">
-                      <td className="px-1.5 py-0.5 whitespace-nowrap tabular-nums">{diaBR(it.data)}</td>
-                      <td className="px-1.5 py-0.5 max-w-[110px] truncate" title={it.produto || '—'}>{it.produto || '—'}</td>
-                      <td className="px-1.5 py-0.5 max-w-[90px] truncate" title={it.fornecedor || '—'}>{it.fornecedor || '—'}</td>
-                      <td className="px-1.5 py-0.5 max-w-[80px] truncate text-muted-foreground" title={it.centro || '—'}>{it.centro || '—'}</td>
-                      <td className="px-1.5 py-0.5 max-w-[70px] truncate text-muted-foreground" title={it.doc || '—'}>{it.doc || '—'}</td>
-                      <td className="px-1.5 py-0.5 text-right tabular-nums whitespace-nowrap">{formatMoeda(Math.abs(it.mov))}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="flex items-center justify-between gap-2 px-3 py-2 border-t bg-muted/30">
-              <span className="text-[10px] text-muted-foreground">TOTAL DA ETAPA</span>
-              <span className="text-[13px] font-bold tabular-nums" style={{ color: cardAberto.cor }}>{formatMoeda(buckets[cardAberto.bucket].total)}</span>
-            </div>
-          </div>
-        </div>
+        <AnaliseDrawer
+          titulo={`${cardAberto.nome} · ${cardAberto.faixa}`}
+          subtitulo={`${contaNome} · ${periodoLabel} · ${itensAberto.length} pagamento${itensAberto.length !== 1 ? 's' : ''}`}
+          corAccent={cardAberto.cor}
+          total={buckets[cardAberto.bucket].total}
+          totalLabel="TOTAL DA ETAPA"
+          onClose={() => setDrawer(null)}
+        >
+          <TabelaLancamentosCompacta itens={itensAberto} />
+        </AnaliseDrawer>
       )}
     </div>
   );
