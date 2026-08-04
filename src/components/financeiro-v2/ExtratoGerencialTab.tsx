@@ -99,8 +99,10 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
     queryKey: ['extrato-ger-plano', clienteId],
     enabled: !!clienteId,
     queryFn: async (): Promise<Map<string, { macro: string | null; grupo: string | null; centro: string | null }>> => {
+      // Inclui planos GLOBAIS (cliente_id IS NULL) + do cliente atual. 148/156 planos são globais;
+      // filtrar só .eq('cliente_id') derrubava os globais (eq não casa NULL) → macro não resolvia.
       const { data } = await (supabase as any).from('financeiro_plano_contas')
-        .select('id, macro_custo, grupo_custo, centro_custo').eq('cliente_id', clienteId);
+        .select('id, macro_custo, grupo_custo, centro_custo').or(`cliente_id.is.null,cliente_id.eq.${clienteId}`);
       const rows: { id: string; macro_custo: string | null; grupo_custo: string | null; centro_custo: string | null }[] = data ?? [];
       return new Map(rows.map((p) => [p.id, { macro: p.macro_custo, grupo: p.grupo_custo, centro: p.centro_custo }]));
     },
