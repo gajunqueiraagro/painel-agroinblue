@@ -263,8 +263,8 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
 
       {/* Análise (Bloco 1) — mesma conta/mês/status; consome as mesmas `linhas` do extrato */}
       {modo === 'analise' ? (
-        <div className="flex-1 min-h-0">
-          <ExtratoAnaliseFluxo linhas={linhas} saldoIni={saldoIni} contaNome={contaNome} periodoLabel={`${MESES[mes - 1]}/${ano}`} />
+        <div className="flex-1 min-h-0 overflow-auto">
+          <ExtratoAnaliseFluxo linhas={linhas} saldoIni={saldoIni} contaNome={contaNome} periodoLabel={`${MESES[mes - 1]}/${ano}`} ano={ano} mes={mes} />
         </div>
       ) : (
       /* Timeline — ocupa o espaço vertical restante; cabeçalho fixo; scroll interno */
