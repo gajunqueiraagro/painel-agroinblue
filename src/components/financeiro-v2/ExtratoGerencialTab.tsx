@@ -23,6 +23,7 @@ import { ExtratoAnaliseFluxo } from '@/components/financeiro-v2/ExtratoAnaliseFl
 import { ExtratoOrganizacaoPagamentos } from '@/components/financeiro-v2/ExtratoOrganizacaoPagamentos';
 import { ExtratoDistribuicaoEconomica } from '@/components/financeiro-v2/ExtratoDistribuicaoEconomica';
 import { ExtratoMaioresCompromissos } from '@/components/financeiro-v2/ExtratoMaioresCompromissos';
+import { gerarPdfAnaliseExecutiva } from '@/lib/pdf/buildPdfAnaliseExecutiva';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { STATUS_FILTRO_LABEL, STATUS_FILTRO_COR } from '@/lib/financeiro/statusFinanceiro';
 import { formatMoeda } from '@/lib/calculos/formatters';
@@ -221,6 +222,16 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
   const anos = useMemo(() => { const y = hoje.getFullYear(); return [y - 3, y - 2, y - 1, y, y + 1]; }, []);
   const contaNome = conta ? (conta.nome_exibicao || conta.nome_conta) : '—';
 
+  // PDF Executivo — consome os mesmos linhas/dadosOrg/saldos das telas (fonte única de agregações).
+  const exportarPdfExecutivo = () => {
+    void gerarPdfAnaliseExecutiva({
+      clienteNome: clienteAtual?.nome ?? '—',
+      periodoLabel: `${MESES[mes - 1]}/${ano}`,
+      ano, mes,
+      contas: [{ nome: contaNome, saldoIni, saldoFin, totais, linhas, dadosOrg }],
+    });
+  };
+
   function concStatus(l: LancExtrato): { txt: string; cls: string } {
     const aplic = concilMap?.get(l.id) ?? 0;
     if (aplic <= 0) return { txt: 'Sem vínculo', cls: 'text-muted-foreground' };
@@ -311,7 +322,7 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
       {/* Análise (Bloco 1) — mesma conta/mês/status; consome as mesmas `linhas` do extrato */}
       {modo === 'analise' ? (
         <div className="flex-1 min-h-0 overflow-auto space-y-1.5">
-          {/* Sub-seletor de views da Análise */}
+          {/* Sub-seletor de views da Análise + exportação executiva */}
           <div className="flex flex-wrap items-center gap-1">
             {ANALISE_VIEWS.map((v) => (
               <button key={v.k} onClick={() => setAnaliseView(v.k)}
@@ -319,6 +330,10 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
                 {v.l}
               </button>
             ))}
+            <button type="button" onClick={exportarPdfExecutivo}
+              className="ml-auto px-2 py-0.5 rounded-md border text-[11px] font-medium bg-white hover:bg-muted whitespace-nowrap">
+              📄 PDF Executivo
+            </button>
           </div>
           {analiseView === 'evolucao' ? (
             <ExtratoAnaliseFluxo linhas={linhas} saldoIni={saldoIni} contaNome={contaNome} periodoLabel={`${MESES[mes - 1]}/${ano}`} ano={ano} mes={mes} />
