@@ -29,6 +29,28 @@ function fmtCompacto(v: number): string {
   return formatMoeda(v);
 }
 
+// Tooltip custom: mostra o saldo acumulado UMA vez (o dataKey "saldo" existe em Line+Area,
+// e "mov" é a coluna) — evita duplicação. Fundo glass discreto, leve sobre o gráfico.
+interface TooltipSaldoProps { active?: boolean; label?: string | number; payload?: { dataKey?: string | number; value?: number | string }[]; }
+function TooltipSaldo({ active, label, payload }: TooltipSaldoProps) {
+  if (!active || !payload || payload.length === 0) return null;
+  const p = payload.find((x) => x.dataKey === 'saldo');
+  const saldo = typeof p?.value === 'number' ? p.value : null;
+  if (saldo === null) return null;
+  const titulo = label === 'Início' ? 'Início' : `Dia ${label}`;
+  return (
+    <div style={{
+      background: 'rgba(255,255,255,0.55)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)',
+      border: '1px solid rgba(148,163,184,0.35)', borderRadius: 6, padding: '4px 8px',
+      boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+    }}>
+      <div style={{ color: '#64748b', fontSize: 9 }}>{titulo}</div>
+      <div style={{ color: '#1e3a5f', fontSize: 9, marginTop: 2 }}>Saldo acumulado</div>
+      <div style={{ color: '#1e3a5f', fontSize: 12, fontWeight: 700 }}>{formatMoeda(saldo)}</div>
+    </div>
+  );
+}
+
 export function ExtratoAnaliseFluxo({ linhas, saldoIni, contaNome, periodoLabel, ano, mes }: {
   linhas: LinhaFluxo[];
   saldoIni: number | null;
@@ -92,11 +114,7 @@ export function ExtratoAnaliseFluxo({ linhas, saldoIni, contaNome, periodoLabel,
                 <XAxis dataKey="dia" tick={{ fontSize: 9 }} interval="preserveStartEnd" minTickGap={12} />
                 <YAxis tick={{ fontSize: 9 }} width={44} domain={dominio} tickFormatter={fmtEixoY} />
                 <ReferenceLine y={0} stroke="#64748b" strokeWidth={1.2} />
-                <Tooltip
-                  formatter={(v, name) => [typeof v === 'number' ? formatMoeda(v) : String(v), name === 'mov' ? 'Líquido do dia' : 'Saldo acumulado']}
-                  labelFormatter={(l) => `Dia ${l}`}
-                  contentStyle={{ fontSize: 11 }}
-                />
+                <Tooltip content={<TooltipSaldo />} cursor={{ stroke: '#cbd5e1', strokeWidth: 1 }} />
                 <Bar dataKey="mov" barSize={10}>
                   {serie.map((p, i) => <Cell key={i} fill={p.mov >= 0 ? '#22784a' : '#b91c1c'} />)}
                   <LabelList dataKey="mov" position="top" formatter={(v) => (typeof v === 'number' && v !== 0 ? fmtEixoY(v) : '')} style={{ fontSize: 8, fill: '#64748b' }} />
