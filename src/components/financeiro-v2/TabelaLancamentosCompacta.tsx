@@ -18,26 +18,35 @@ export interface LancamentoLinha {
   mov: number;
 }
 const diaBR = (iso: string) => (iso.length >= 10 ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '—');
-const COLS = ['Data', 'Descrição', 'Favorecido', 'Centro', 'Doc', 'Valor'];
+// Alinhamento por coluna (Data/Descrição/Favorecido/Centro à esquerda; Doc centralizado; Valor à direita).
+const COLS: { h: string; align: string }[] = [
+  { h: 'Data', align: 'text-left' },
+  { h: 'Descrição', align: 'text-left' },
+  { h: 'Favorecido', align: 'text-left' },
+  { h: 'Centro', align: 'text-left' },
+  { h: 'Doc', align: 'text-center' },
+  { h: 'Valor', align: 'text-right' },
+];
+const SEP = 'border-r border-slate-100';
 
 export function TabelaLancamentosCompacta({ itens }: { itens: LancamentoLinha[] }) {
   return (
     <table className="w-full border-collapse text-[10px]">
-      <thead className="sticky top-0 bg-muted/60">
+      <thead className="sticky top-0 bg-[#1e3a5f]/[0.06]">
         <tr>
-          {COLS.map((h, i) => (
-            <th key={h} className={`px-1.5 py-1 font-semibold uppercase text-[8px] ${i === 5 ? 'text-right' : 'text-left'}`}>{h}</th>
+          {COLS.map((c, i) => (
+            <th key={c.h} className={`px-1.5 py-1 font-semibold uppercase text-[8px] text-[#1e3a5f] ${c.align} ${i < COLS.length - 1 ? SEP : ''}`}>{c.h}</th>
           ))}
         </tr>
       </thead>
       <tbody>
         {itens.map((it) => (
-          <tr key={it.id} className="border-t">
-            <td className="px-1.5 py-1 whitespace-nowrap tabular-nums">{diaBR(it.data)}</td>
-            <td className="px-1.5 py-1 max-w-[140px] truncate" title={it.produto || '—'}>{it.produto || '—'}</td>
-            <td className="px-1.5 py-1 max-w-[120px] truncate" title={it.fornecedor || '—'}>{it.fornecedor || '—'}</td>
-            <td className="px-1.5 py-1 max-w-[100px] truncate text-muted-foreground" title={it.centro || '—'}>{it.centro || '—'}</td>
-            <td className="px-1.5 py-1 max-w-[80px] truncate text-muted-foreground" title={it.doc || '—'}>{it.doc || '—'}</td>
+          <tr key={it.id} className="border-t border-slate-100 odd:bg-[#1e3a5f]/[0.03] hover:bg-[#1e3a5f]/[0.06]">
+            <td className={`px-1.5 py-1 whitespace-nowrap tabular-nums ${SEP}`}>{diaBR(it.data)}</td>
+            <td className={`px-1.5 py-1 max-w-[140px] truncate ${SEP}`} title={it.produto || '—'}>{it.produto || '—'}</td>
+            <td className={`px-1.5 py-1 max-w-[120px] truncate ${SEP}`} title={it.fornecedor || '—'}>{it.fornecedor || '—'}</td>
+            <td className={`px-1.5 py-1 max-w-[100px] truncate text-muted-foreground ${SEP}`} title={it.centro || '—'}>{it.centro || '—'}</td>
+            <td className={`px-1.5 py-1 max-w-[80px] truncate text-center text-muted-foreground ${SEP}`} title={it.doc || '—'}>{it.doc || '—'}</td>
             <td className="px-1.5 py-1 text-right tabular-nums whitespace-nowrap">{formatMoeda(Math.abs(it.mov))}</td>
           </tr>
         ))}

@@ -182,22 +182,23 @@ export function ExtratoMaioresCompromissos({ itens, contaNome, periodoLabel }: {
             </div>
           </div>
 
-          {/* Lançamentos — dentro do centro, "Centro" é redundante; mantém Favorecido + Doc. */}
+          {/* Lançamentos — dentro do centro, "Centro" é redundante; mantém Favorecido + Doc.
+              Mesmo acabamento visual da TabelaLancamentosCompacta (zebra/hover/separadores/header institucional). */}
           <table className="w-full border-collapse text-[10px]">
-            <thead className="sticky top-0 bg-muted/60">
+            <thead className="sticky top-0 bg-[#1e3a5f]/[0.06]">
               <tr>
-                {['Data', 'Favorecido', 'Descrição', 'Doc', 'Valor'].map((h, i) => (
-                  <th key={h} className={`px-1.5 py-1 font-semibold uppercase text-[8px] ${i === 4 ? 'text-right' : 'text-left'}`}>{h}</th>
+                {[{ h: 'Data', a: 'text-left' }, { h: 'Favorecido', a: 'text-left' }, { h: 'Descrição', a: 'text-left' }, { h: 'Doc', a: 'text-center' }, { h: 'Valor', a: 'text-right' }].map((c, i) => (
+                  <th key={c.h} className={`px-1.5 py-1 font-semibold uppercase text-[8px] text-[#1e3a5f] ${c.a} ${i < 4 ? 'border-r border-slate-100' : ''}`}>{c.h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {itensAberto.map((it) => (
-                <tr key={it.id} className="border-t">
-                  <td className="px-1.5 py-1 whitespace-nowrap tabular-nums">{diaBR(it.data)}</td>
-                  <td className="px-1.5 py-1 max-w-[120px] truncate" title={it.fornecedor || '—'}>{it.fornecedor || '—'}</td>
-                  <td className="px-1.5 py-1 max-w-[130px] truncate" title={it.produto || '—'}>{it.produto || '—'}</td>
-                  <td className="px-1.5 py-1 max-w-[80px] truncate text-muted-foreground" title={it.doc || '—'}>{it.doc || '—'}</td>
+                <tr key={it.id} className="border-t border-slate-100 odd:bg-[#1e3a5f]/[0.03] hover:bg-[#1e3a5f]/[0.06]">
+                  <td className="px-1.5 py-1 whitespace-nowrap tabular-nums border-r border-slate-100">{diaBR(it.data)}</td>
+                  <td className="px-1.5 py-1 max-w-[120px] truncate border-r border-slate-100" title={it.fornecedor || '—'}>{it.fornecedor || '—'}</td>
+                  <td className="px-1.5 py-1 max-w-[130px] truncate border-r border-slate-100" title={it.produto || '—'}>{it.produto || '—'}</td>
+                  <td className="px-1.5 py-1 max-w-[80px] truncate text-center text-muted-foreground border-r border-slate-100" title={it.doc || '—'}>{it.doc || '—'}</td>
                   <td className="px-1.5 py-1 text-right tabular-nums whitespace-nowrap">{formatMoeda(Math.abs(it.mov))}</td>
                 </tr>
               ))}

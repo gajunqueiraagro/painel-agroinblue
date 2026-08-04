@@ -28,19 +28,21 @@ export function AnaliseDrawer({ titulo, subtitulo, corAccent = '#1e3a5f', total,
     <div className="fixed inset-0 z-50 flex justify-end" onClick={onClose}>
       <div className="absolute inset-0 bg-black/20" />
       <div className="relative h-full w-[560px] max-w-[92vw] bg-white border-l shadow-xl flex flex-col" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-start justify-between gap-2 px-3 py-2 border-b" style={{ borderColor: `${corAccent}55` }}>
+        {/* Faixa superior de identidade (accent contextual, detalhe). */}
+        <div className="h-[3px] shrink-0" style={{ background: corAccent }} />
+        <div className="flex items-start justify-between gap-2 px-3 py-2 border-b bg-[#1e3a5f]/[0.04]">
           <div className="min-w-0">
-            <div className="text-[12px] font-semibold truncate" style={{ color: corAccent }}>{titulo}</div>
+            <div className="text-[13px] font-bold truncate text-[#1e3a5f]">{titulo}</div>
             <div className="text-[9px] text-muted-foreground truncate">{subtitulo}</div>
           </div>
-          <button type="button" onClick={onClose} className="text-[13px] leading-none px-1.5 py-0.5 rounded hover:bg-muted shrink-0" aria-label="Fechar">✕</button>
+          <button type="button" onClick={onClose} className="text-[13px] leading-none px-1.5 py-0.5 rounded text-muted-foreground hover:bg-muted shrink-0" aria-label="Fechar">✕</button>
         </div>
 
         <div className="flex-1 overflow-auto">{children}</div>
 
-        <div className="flex items-center justify-between gap-2 px-3 py-2 border-t bg-muted/30">
-          <span className="text-[10px] text-muted-foreground">{totalLabel}</span>
-          <span className="text-[13px] font-bold tabular-nums" style={{ color: corAccent }}>{formatMoeda(total)}</span>
+        <div className="flex items-center justify-between gap-2 px-3 py-2 border-t-2 bg-[#1e3a5f]/[0.05]" style={{ borderTopColor: corAccent }}>
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{totalLabel}</span>
+          <span className="text-[14px] font-bold tabular-nums" style={{ color: corAccent }}>{formatMoeda(total)}</span>
         </div>
       </div>
     </div>
