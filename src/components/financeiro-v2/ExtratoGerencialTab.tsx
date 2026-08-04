@@ -366,20 +366,22 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
             </tr>
             {linhas.length === 0 ? (
               <tr><td colSpan={8} className="text-center text-[10px] text-muted-foreground py-6">Nenhuma movimentação para esta conta no período.</td></tr>
-            ) : linhas.map(({ l, mov, saldo: sAcc, data }) => {
+            ) : linhas.map(({ l, mov, saldo: sAcc, data }, i) => {
               const stKey = (l.status_transacao || '').toLowerCase();
               const cs = concStatus(l);
+              // Último lançamento do dia (leitura da lista já ordenada) → destaque de fechamento diário.
+              const ehFechamentoDia = i === linhas.length - 1 || linhas[i + 1].data !== data;
               return (
                 <tr key={l.id} onClick={() => setLancLeituraId(l.id)}
                     className="border-b cursor-pointer hover:bg-muted/50 text-[10px]">
-                  <td className="px-1.5 py-0.5 whitespace-nowrap text-muted-foreground">{fmtData(data)}</td>
+                  <td className={`px-1.5 py-0.5 whitespace-nowrap ${ehFechamentoDia ? 'font-bold text-foreground' : 'text-muted-foreground'}`}>{fmtData(data)}</td>
                   <td className="px-1.5 py-0.5 max-w-[200px] truncate" title={l.descricao ?? ''}>{l.descricao || '—'}</td>
                   <td className="px-1.5 py-0.5 max-w-[150px] truncate">{(l.favorecido_id && fornMap?.get(l.favorecido_id)) || '—'}</td>
                   <td className="px-1.5 py-0.5 max-w-[120px] truncate text-muted-foreground">{l.centro_custo || '—'}</td>
                   <td className={`px-1.5 py-0.5 text-right tabular-nums whitespace-nowrap min-w-[96px] ${mov >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
                     {mov >= 0 ? '+' : '−'} {formatMoeda(Math.abs(mov))}
                   </td>
-                  <td className={`px-1.5 py-0.5 text-right tabular-nums whitespace-nowrap min-w-[96px] ${sAcc === null ? '' : sAcc < 0 ? 'text-rose-700' : 'text-emerald-700'}`}>{sAcc === null ? '—' : formatMoeda(sAcc)}</td>
+                  <td className={`px-1.5 py-0.5 text-right tabular-nums whitespace-nowrap min-w-[96px] ${ehFechamentoDia ? 'font-bold ' : ''}${sAcc === null ? '' : sAcc < 0 ? 'text-rose-700' : 'text-emerald-700'}`}>{sAcc === null ? '—' : formatMoeda(sAcc)}</td>
                   <td className="px-1.5 py-0.5 whitespace-nowrap">
                     <span className={STATUS_FILTRO_COR[stKey] || ''}>{STATUS_FILTRO_LABEL[stKey] ?? (l.status_transacao || '—')}</span>
                     {stKey === 'realizado' && <span className={`ml-1 ${cs.cls}`}>· {cs.txt}</span>}
