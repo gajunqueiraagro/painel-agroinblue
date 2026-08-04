@@ -1,15 +1,16 @@
 /**
- * ExtratoGerencialTab — PR-FIN-V2-EXTRATO-GERENCIAL-01.
+ * ExtratoGerencialTab — PR-FIN-V2-EXTRATO-GERENCIAL (01 + 02).
  *
- * Extrato bancário GERENCIAL (visão do sistema) de UMA conta + período: saldo inicial +
- * movimentações (financeiro_lancamentos_v2) + saldo corrido + saldo final oficial.
+ * Extrato bancário GERENCIAL de UMA conta + período: linha de Saldo Inicial + movimentações
+ * (financeiro_lancamentos_v2) + saldo corrido + saldo final oficial.
  *
- * Frontend puro. Reutiliza FONTES existentes (sem hook/RPC/tabela nova):
- *   - conta: financeiro_contas_bancarias
- *   - saldo inicial/final: financeiro_saldos_bancarios_v2 por (cliente_id, conta_bancaria_id, ano_mes)
- *   - timeline: financeiro_lancamentos_v2 (conta_bancaria_id=saída / conta_destino_id=entrada)
- *   - conciliação: conciliacao_bancaria_itens (indicador Conciliado/Parcial/Sem vínculo)
- *   - clique na linha: LancamentoLeituraDialog (fluxo existente; sem novo modal)
+ * PR-02 — reconcilia com o Financeiro V2:
+ *   - recorte temporal pela DATA DO MOVIMENTO = COALESCE(data_pagamento, data_vencimento) no mês
+ *     (mesma dimensão 'financeira' do grid), NÃO por ano_mes (causava perda de lançamentos);
+ *   - exclui cancelado / conciliado / cenario='meta' por padrão (como o grid); "Incluir legados" opcional;
+ *   - sem coluna Histórico; coluna de Data = exclusivamente data do movimento (nunca competência).
+ *
+ * Frontend puro. Fontes existentes (sem hook/RPC/tabela nova). Zero-cast (só idioma supabase).
  */
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -25,16 +26,18 @@ import { format, parseISO } from 'date-fns';
 
 interface ContaRow extends ContaSelecionavel { fazenda_id: string | null; }
 interface LancExtrato {
-  id: string; data_pagamento: string | null; data_competencia: string; valor: number;
-  tipo_operacao: string; descricao: string | null; historico: string | null;
-  numero_documento: string | null; favorecido_id: string | null; centro_custo: string | null;
-  status_transacao: string | null; cancelado: boolean;
+  id: string; data_pagamento: string | null; data_vencimento: string | null; valor: number;
+  tipo_operacao: string; descricao: string | null; numero_documento: string | null;
+  favorecido_id: string | null; centro_custo: string | null; status_transacao: string | null;
   conta_bancaria_id: string | null; conta_destino_id: string | null;
 }
 interface SaldoRow { saldo_inicial: number | null; saldo_final: number | null; status_mes: string | null; }
 
 const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+const STATUS_OFICIAIS: string[] = ['realizado', 'programado', 'agendado', 'previsto'];
+const pad = (n: number) => String(n).padStart(2, '0');
 function fmtData(d: string | null): string { if (!d) return '—'; try { return format(parseISO(d), 'dd/MM/yy'); } catch { return d; } }
+function isOficial(s: string | null): boolean { return !!s && STATUS_OFICIAIS.includes(s.toLowerCase()); }
 
 export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: number; initialMes?: number }) {
   const { clienteAtual } = useCliente();
@@ -46,10 +49,14 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
   const [ano, setAno] = useState<number>(initialAno ?? hoje.getFullYear());
   const [mes, setMes] = useState<number>(initialMes ?? hoje.getMonth() + 1);
   const [contaSel, setContaSel] = useState<string | null>(null);
+  const [statusSel, setStatusSel] = useState<Set<string>>(new Set(STATUS_OFICIAIS));
+  const [incluirLegados, setIncluirLegados] = useState(false);
   const [lancLeituraId, setLancLeituraId] = useState<string | null>(null);
-  const anoMes = `${ano}-${String(mes).padStart(2, '0')}`;
 
-  // Contas do cliente (escopo da fazenda global, quando não é __global__).
+  const ini = `${ano}-${pad(mes)}-01`;
+  const fim = mes === 12 ? `${ano + 1}-01-01` : `${ano}-${pad(mes + 1)}-01`;
+  const anoMes = `${ano}-${pad(mes)}`;
+
   const { data: contas = [] } = useQuery({
     queryKey: ['extrato-ger-contas', clienteId, fazScope],
     enabled: !!clienteId,
@@ -62,7 +69,6 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
       return data ?? [];
     },
   });
-
   const contaId = contaSel ?? contas[0]?.id ?? null;
   const conta = useMemo(() => contas.find((c) => c.id === contaId) ?? null, [contas, contaId]);
 
@@ -87,21 +93,25 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
     },
   });
 
+  // Timeline: recorte pela DATA DO MOVIMENTO (COALESCE(pgto,venc) no mês) — mesma dimensão do grid.
   const { data: lancs = [] } = useQuery({
-    queryKey: ['extrato-ger-lancs', clienteId, contaId, anoMes],
+    queryKey: ['extrato-ger-lancs', clienteId, contaId, ini, fim, incluirLegados],
     enabled: !!clienteId && !!contaId,
     queryFn: async (): Promise<LancExtrato[]> => {
-      const { data } = await (supabase as any).from('financeiro_lancamentos_v2')
-        .select('id, data_pagamento, data_competencia, valor, tipo_operacao, descricao, historico, numero_documento, favorecido_id, centro_custo, status_transacao, cancelado, conta_bancaria_id, conta_destino_id')
-        .eq('cliente_id', clienteId).eq('ano_mes', anoMes)
-        .or(`conta_bancaria_id.eq.${contaId},conta_destino_id.eq.${contaId}`);
+      let q = (supabase as any).from('financeiro_lancamentos_v2')
+        .select('id, data_pagamento, data_vencimento, valor, tipo_operacao, descricao, numero_documento, favorecido_id, centro_custo, status_transacao, conta_bancaria_id, conta_destino_id')
+        .eq('cliente_id', clienteId).eq('cancelado', false)
+        .or(`conta_bancaria_id.eq.${contaId},conta_destino_id.eq.${contaId}`)
+        .or(`and(data_pagamento.gte.${ini},data_pagamento.lt.${fim}),and(data_pagamento.is.null,data_vencimento.gte.${ini},data_vencimento.lt.${fim})`);
+      if (!incluirLegados) q = q.neq('cenario', 'meta').neq('status_transacao', 'conciliado');
+      const { data } = await q;
       return data ?? [];
     },
   });
 
   const lancIds = useMemo(() => lancs.map((l) => l.id), [lancs]);
   const { data: concilMap } = useQuery({
-    queryKey: ['extrato-ger-concil', contaId, anoMes, lancIds.length],
+    queryKey: ['extrato-ger-concil', contaId, ini, lancIds.length],
     enabled: lancIds.length > 0,
     queryFn: async (): Promise<Map<string, number>> => {
       const { data } = await (supabase as any).from('conciliacao_bancaria_itens')
@@ -113,30 +123,31 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
     },
   });
 
-  // Saldo inicial/final oficiais (narrow por typeof — sem cast). null = "não informado".
   const siRaw = saldo?.saldo_inicial;
   const sfRaw = saldo?.saldo_final;
   const saldoIni = typeof siRaw === 'number' ? siRaw : null;
   const saldoFin = typeof sfRaw === 'number' ? sfRaw : null;
 
-  // Timeline: ordena por data do movimento e calcula saldo corrido (só se saldo inicial existir).
+  // Filtro por status (client-side) + saldo corrido recalculado SOBRE O CONJUNTO EXIBIDO (item #6).
   const linhas = useMemo(() => {
-    const ord = [...lancs].sort((a, b) => {
-      const da = a.data_pagamento ?? a.data_competencia; const db = b.data_pagamento ?? b.data_competencia;
-      return da < db ? -1 : da > db ? 1 : 0;
-    });
+    const dataMov = (l: LancExtrato) => l.data_pagamento ?? l.data_vencimento ?? '';
+    const visiveis = lancs.filter((l) => {
+      if (isOficial(l.status_transacao)) return statusSel.has((l.status_transacao || '').toLowerCase());
+      return incluirLegados; // legado (meta/conciliado/etc.) só quando o toggle estiver ligado
+    }).sort((a, b) => { const da = dataMov(a), db = dataMov(b); return da < db ? -1 : da > db ? 1 : 0; });
+
     let acc: number | null = saldoIni;
-    return ord.map((l) => {
+    return visiveis.map((l) => {
       // Regra da conta: origem (conta_bancaria_id) = saída (−); destino (conta_destino_id) = entrada (+).
-      const mov = l.cancelado ? 0 : (l.conta_bancaria_id === contaId ? -Math.abs(l.valor) : Math.abs(l.valor));
-      if (acc !== null && !l.cancelado) acc += mov;
-      return { l, mov, saldo: acc, data: l.data_pagamento ?? l.data_competencia };
+      const mov = l.conta_bancaria_id === contaId ? -Math.abs(l.valor) : Math.abs(l.valor);
+      if (acc !== null) acc += mov;
+      return { l, mov, saldo: acc, data: dataMov(l) };
     });
-  }, [lancs, saldoIni, contaId]);
+  }, [lancs, statusSel, incluirLegados, saldoIni, contaId]);
 
   const totais = useMemo(() => {
     let ent = 0, sai = 0;
-    for (const x of linhas) { if (x.l.cancelado) continue; if (x.mov > 0) ent += x.mov; else sai += Math.abs(x.mov); }
+    for (const x of linhas) { if (x.mov > 0) ent += x.mov; else sai += Math.abs(x.mov); }
     return { ent, sai };
   }, [linhas]);
 
@@ -149,6 +160,9 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
     if (aplic + 0.005 >= Math.abs(l.valor)) return { txt: 'Conciliado', cls: 'text-emerald-600' };
     return { txt: 'Parcial', cls: 'text-amber-600' };
   }
+  const toggleStatus = (s: string) => setStatusSel((prev) => {
+    const n = new Set(prev); if (n.has(s)) n.delete(s); else n.add(s); return n;
+  });
   const card = (label: string, valor: string, cls = '') => (
     <div className="rounded-md border bg-white px-2 py-1 flex-1 min-w-0">
       <div className="text-[9px] uppercase tracking-wide text-muted-foreground">{label}</div>
@@ -178,17 +192,30 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
             <SelectContent>{anos.map((a) => <SelectItem key={a} value={String(a)} className="text-[10px]">{a}</SelectItem>)}</SelectContent>
           </Select>
         </div>
-        <div className="text-[10px] text-muted-foreground pb-1">
-          {conta ? <>Banco {conta.banco || '—'} · {conta.agencia ? `Ag ${conta.agencia}` : ''} {conta.numero_conta || ''}</> : null}
-          {fazScope && fazendaAtual?.nome ? ` · ${fazendaAtual.nome}` : ''}
+        {/* Status chips (4 oficiais) + Incluir legados */}
+        <div className="flex items-center gap-1 pb-0.5">
+          {STATUS_OFICIAIS.map((s) => (
+            <button key={s} type="button" onClick={() => toggleStatus(s)}
+              className={`px-1.5 h-6 rounded border text-[9px] ${statusSel.has(s) ? 'bg-primary/10 border-primary text-foreground' : 'bg-card text-muted-foreground'}`}>
+              {STATUS_FILTRO_LABEL[s] ?? s}
+            </button>
+          ))}
+          <label className="flex items-center gap-1 text-[9px] text-muted-foreground ml-1 cursor-pointer">
+            <input type="checkbox" checked={incluirLegados} onChange={(e) => setIncluirLegados(e.target.checked)} className="h-3 w-3" />
+            Incluir legados
+          </label>
         </div>
       </div>
 
       {/* Cabeçalho: conta/período + cards */}
       <div className="rounded-lg border bg-muted/20 p-2 space-y-1.5">
         <div className="flex items-baseline justify-between gap-2">
-          <div className="text-[12px] font-semibold truncate">{contaNome}</div>
-          <div className="text-[10px] text-muted-foreground">{MESES[mes - 1]}/{ano}</div>
+          <div className="text-[12px] font-semibold truncate">
+            {contaNome}
+            {conta ? <span className="text-[10px] font-normal text-muted-foreground"> · Banco {conta.banco || '—'} {conta.agencia ? `· Ag ${conta.agencia}` : ''} {conta.numero_conta || ''}</span> : null}
+            {fazScope && fazendaAtual?.nome ? <span className="text-[10px] font-normal text-muted-foreground"> · {fazendaAtual.nome}</span> : null}
+          </div>
+          <div className="text-[10px] text-muted-foreground shrink-0">{MESES[mes - 1]}/{ano}</div>
         </div>
         <div className="flex flex-wrap gap-1.5">
           {card('Saldo inicial', saldoIni !== null ? formatMoeda(saldoIni) : 'Saldo não informado', saldoIni !== null ? '' : 'text-muted-foreground text-[11px]')}
@@ -199,34 +226,43 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
       </div>
 
       {/* Timeline */}
-      <div className="rounded-lg border overflow-auto" style={{ maxHeight: 'calc(100vh - 260px)' }}>
+      <div className="rounded-lg border overflow-auto" style={{ maxHeight: 'calc(100vh - 280px)' }}>
         <table className="w-full border-collapse">
           <thead className="sticky top-0 z-10">
             <tr className="bg-primary text-primary-foreground">
-              {['Data', 'Histórico', 'Produto', 'Fornecedor', 'Centro', 'Valor', 'Saldo', 'Status'].map((h, i) => (
-                <th key={h} className={`px-1.5 py-1 text-[9px] uppercase font-semibold ${i >= 5 && i <= 6 ? 'text-right' : 'text-left'}`}>{h}</th>
+              {['Data Movimento', 'Produto', 'Fornecedor', 'Centro', 'Valor', 'Saldo', 'Status', 'Doc'].map((h, i) => (
+                <th key={h} className={`px-1.5 py-1 text-[9px] uppercase font-semibold ${i === 4 || i === 5 ? 'text-right' : 'text-left'}`}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
+            {/* Linha fixa de Saldo Inicial (item #4) */}
+            <tr className="border-b bg-muted/40 text-[10px] font-semibold">
+              <td className="px-1.5 py-0.5">Saldo Inicial</td>
+              <td /><td /><td /><td />
+              <td className="px-1.5 py-0.5 text-right tabular-nums">{saldoIni !== null ? formatMoeda(saldoIni) : 'Saldo não informado'}</td>
+              <td /><td />
+            </tr>
             {linhas.length === 0 ? (
               <tr><td colSpan={8} className="text-center text-[10px] text-muted-foreground py-6">Nenhuma movimentação para esta conta no período.</td></tr>
             ) : linhas.map(({ l, mov, saldo: sAcc, data }) => {
               const cs = concStatus(l);
               return (
                 <tr key={l.id} onClick={() => setLancLeituraId(l.id)}
-                    className={`border-b cursor-pointer hover:bg-muted/50 text-[10px] ${l.cancelado ? 'opacity-50 line-through' : ''}`}>
+                    className="border-b cursor-pointer hover:bg-muted/50 text-[10px]">
                   <td className="px-1.5 py-0.5 whitespace-nowrap text-muted-foreground">{fmtData(data)}</td>
-                  <td className="px-1.5 py-0.5 max-w-[180px] truncate" title={l.historico ?? ''}>{l.historico || '—'}</td>
-                  <td className="px-1.5 py-0.5 max-w-[180px] truncate" title={l.descricao ?? ''}>{l.descricao || '—'}</td>
-                  <td className="px-1.5 py-0.5 max-w-[140px] truncate">{(l.favorecido_id && fornMap?.get(l.favorecido_id)) || '—'}</td>
+                  <td className="px-1.5 py-0.5 max-w-[200px] truncate" title={l.descricao ?? ''}>{l.descricao || '—'}</td>
+                  <td className="px-1.5 py-0.5 max-w-[150px] truncate">{(l.favorecido_id && fornMap?.get(l.favorecido_id)) || '—'}</td>
                   <td className="px-1.5 py-0.5 max-w-[120px] truncate text-muted-foreground">{l.centro_custo || '—'}</td>
-                  <td className={`px-1.5 py-0.5 text-right tabular-nums ${mov > 0 ? 'text-emerald-700' : mov < 0 ? 'text-rose-700' : 'text-muted-foreground'}`}>{l.cancelado ? '—' : formatMoeda(mov)}</td>
+                  <td className={`px-1.5 py-0.5 text-right tabular-nums ${mov >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                    {mov >= 0 ? '+' : '−'} {formatMoeda(Math.abs(mov))}
+                  </td>
                   <td className="px-1.5 py-0.5 text-right tabular-nums">{sAcc === null ? '—' : formatMoeda(sAcc)}</td>
                   <td className="px-1.5 py-0.5 whitespace-nowrap">
                     <span>{STATUS_FILTRO_LABEL[(l.status_transacao || '').toLowerCase()] ?? (l.status_transacao || '—')}</span>
                     <span className={`ml-1 ${cs.cls}`}>· {cs.txt}</span>
                   </td>
+                  <td className="px-1.5 py-0.5 max-w-[90px] truncate text-muted-foreground" title={l.numero_documento ?? ''}>{l.numero_documento || '—'}</td>
                 </tr>
               );
             })}
