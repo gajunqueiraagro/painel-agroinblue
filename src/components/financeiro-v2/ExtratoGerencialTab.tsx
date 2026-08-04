@@ -174,12 +174,14 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
 
   // Mesma fonte do gráfico: itens da Organização derivados de `linhas` (só reorganiza, sem cálculo novo).
   const dadosOrg = useMemo(() => linhas.map((x) => ({
+    id: x.l.id,
     data: x.data,
     mov: x.mov,
     tipo: x.l.tipo_operacao,
     centro: x.l.centro_custo,
     produto: x.l.descricao,
     fornecedor: (x.l.favorecido_id && fornMap?.get(x.l.favorecido_id)) || '',
+    doc: x.l.numero_documento || x.l.documento || '',
   })), [linhas, fornMap]);
 
   const totais = useMemo(() => {
