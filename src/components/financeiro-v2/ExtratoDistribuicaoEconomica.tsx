@@ -11,8 +11,12 @@
  * explícito "Sem classificação" + indicador de cobertura por valor. Nunca esconder ausência.
  *
  * Badges "não operacional" e linha "dos quais Mão de Obra" são conceitos de macro → só no modo natureza.
+ *
+ * UX-01C — layout executivo: pizza (apoio visual) à esquerda + tabela (leitura principal) à direita.
+ * Drill-down por clique na fatia OU na linha da tabela. Mesma agregação/fonte/cobertura/100%.
  */
 import { useEffect, useMemo, useState } from 'react';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { formatMoeda } from '@/lib/calculos/formatters';
 
 interface ItemEcon {
@@ -73,7 +77,6 @@ export function ExtratoDistribuicaoEconomica({ itens, contaNome, periodoLabel }:
   }, [itens, dimensao]);
 
   const cobertura = totalGeral > 0 ? totalClass / totalGeral : 0;
-  const maxTotal = useMemo(() => ranking.reduce((m, r) => Math.max(m, r.total), 0), [ranking]);
   const pct = (v: number) => (totalGeral > 0 ? Math.round((v / totalGeral) * 100) : 0);
 
   useEffect(() => {
@@ -133,36 +136,64 @@ export function ExtratoDistribuicaoEconomica({ itens, contaNome, periodoLabel }:
             </div>
           )}
 
-          {/* Ranking — cards compactos (alta densidade, 2–3 por linha). */}
-          <div className="flex flex-wrap gap-1.5">
-            {ranking.map((r) => {
-              const cor = corDoBucket(r.chave);
-              const naoOper = ehNaoOper(r.chave);
-              return (
-                <button key={r.chave} type="button" onClick={() => setDrawer(r.chave)}
-                  className="rounded-md border p-2 flex-1 min-w-[220px] text-left transition-colors hover:bg-muted/40 focus:outline-none focus:ring-1"
-                  style={{ borderColor: `${cor}44` }}>
-                  <div className="flex items-start justify-between gap-1">
-                    <span className="text-[11px] font-semibold leading-tight truncate" style={{ color: cor }}>{r.chave}</span>
-                    <span className="text-[9px] font-medium shrink-0" style={{ color: cor }}>↗</span>
-                  </div>
-                  {(naoOper || r.chave === SEM) && (
-                    <div className="mt-0.5">
-                      {naoOper && <span className="text-[8px] px-1 rounded" style={{ background: `${COR_NAO_OPER}1f`, color: COR_NAO_OPER }}>não operacional</span>}
-                      {r.chave === SEM && <span className="text-[8px] px-1 rounded" style={{ background: `${COR_SEM}22`, color: '#475569' }}>{dimensao === 'macro' ? 'sem plano' : 'sem escopo'}</span>}
-                    </div>
-                  )}
-                  <div className="text-[14px] font-bold tabular-nums leading-tight mt-0.5" style={{ color: cor }}>{formatMoeda(r.total)}</div>
-                  <div className="text-[10px] text-muted-foreground">{pct(r.total)}% das saídas · {r.count} lanç.</div>
-                  <div className="mt-1 h-1.5 rounded bg-muted overflow-hidden">
-                    <div className="h-full rounded" style={{ width: `${maxTotal > 0 ? Math.round((r.total / maxTotal) * 100) : 0}%`, background: cor }} />
-                  </div>
-                  {dimensao === 'macro' && r.chave === 'Custeio Produção' && folhaCusteio > 0 && (
-                    <div className="text-[9px] text-muted-foreground mt-0.5 truncate">dos quais Mão de Obra (Folha): <span className="font-semibold text-foreground">{formatMoeda(folhaCusteio)}</span></div>
-                  )}
-                </button>
-              );
-            })}
+          {/* Pizza (apoio visual) à esquerda · tabela (leitura principal) à direita. */}
+          <div className="flex flex-wrap gap-3 items-start">
+            <div className="w-[150px] h-[150px] shrink-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={ranking} dataKey="total" nameKey="chave" cx="50%" cy="50%" innerRadius={38} outerRadius={62} paddingAngle={1} isAnimationActive={false}
+                       onClick={(_, idx) => setDrawer(ranking[idx].chave)}>
+                    {ranking.map((r) => <Cell key={r.chave} fill={corDoBucket(r.chave)} stroke="#fff" strokeWidth={1} cursor="pointer" />)}
+                  </Pie>
+                  <Tooltip formatter={(v, name) => [typeof v === 'number' ? `${formatMoeda(v)} · ${pct(v)}%` : String(v), String(name)]} contentStyle={{ fontSize: 11 }} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="flex-1 min-w-[240px] overflow-x-auto">
+              <table className="w-full border-collapse text-[11px]">
+                <thead>
+                  <tr className="text-[9px] uppercase text-muted-foreground">
+                    <th className="text-left py-0.5 font-semibold">Categoria</th>
+                    <th className="text-right py-0.5 font-semibold">Valor</th>
+                    <th className="text-right py-0.5 font-semibold w-12">%</th>
+                    <th className="w-4" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {ranking.map((r) => {
+                    const cor = corDoBucket(r.chave);
+                    const naoOper = ehNaoOper(r.chave);
+                    return (
+                      <tr key={r.chave} onClick={() => setDrawer(r.chave)} className="border-t cursor-pointer hover:bg-muted/40">
+                        <td className="py-0.5">
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-sm shrink-0" style={{ background: cor }} />
+                            <span className="font-medium" style={{ color: cor }}>{r.chave}</span>
+                            {naoOper && <span className="text-[8px] px-1 rounded" style={{ background: `${COR_NAO_OPER}1f`, color: COR_NAO_OPER }}>não operacional</span>}
+                            {r.chave === SEM && <span className="text-[8px] px-1 rounded" style={{ background: `${COR_SEM}22`, color: '#475569' }}>{dimensao === 'macro' ? 'sem plano' : 'sem escopo'}</span>}
+                          </span>
+                          {dimensao === 'macro' && r.chave === 'Custeio Produção' && folhaCusteio > 0 && (
+                            <div className="text-[9px] text-muted-foreground pl-3.5">dos quais Mão de Obra: <span className="font-semibold text-foreground">{formatMoeda(folhaCusteio)}</span></div>
+                          )}
+                        </td>
+                        <td className="text-right tabular-nums py-0.5 whitespace-nowrap">{formatMoeda(r.total)}</td>
+                        <td className="text-right tabular-nums py-0.5 font-semibold" style={{ color: cor }}>{pct(r.total)}%</td>
+                        <td className="text-right text-[9px] font-medium" style={{ color: cor }}>↗</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t font-semibold">
+                    <td className="py-0.5">Total</td>
+                    <td className="text-right tabular-nums py-0.5 whitespace-nowrap">{formatMoeda(totalGeral)}</td>
+                    <td className="text-right tabular-nums py-0.5">100%</td>
+                    <td />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
           </div>
 
           <div className="text-[9px] text-muted-foreground space-y-0.5">
