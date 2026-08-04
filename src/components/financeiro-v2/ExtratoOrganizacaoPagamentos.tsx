@@ -1,13 +1,15 @@
 /**
- * ExtratoOrganizacaoPagamentos — PR-FIN-V2-ORGANIZACAO-PAGAMENTOS-01/02/04/05.
+ * ExtratoOrganizacaoPagamentos — PR-FIN-V2-ORGANIZACAO-PAGAMENTOS-01/02/04/05 + UX-01B.
  *
  * 3ª view do modo "Analisar Fluxo": distribuição TEMPORAL das SAÍDAS DE CAIXA ao longo do mês,
- * em etapas de pagamento (janelas-orientação AGROinBLUE). NÃO cria verdade nova nem categoria:
+ * em etapas de pagamento (janelas móveis de 4 dias). NÃO cria verdade nova nem categoria:
  * só reorganiza `linhas` por data. Cada card é uma ETAPA (janela de datas), não uma natureza.
  *
  * Fonte: os mesmos `itens` derivados de `linhas` (mesma conta/mês/status/sinal do Extrato Gerencial).
- * Pagamento = mov < 0 (valor = abs). Etapas por DATA DO MOVIMENTO (first-match, sem sobreposição;
- * dia 5 conta na 1ª etapa). Pagamentos fora das etapas = "Demais períodos". Sem julgamento.
+ * Pagamento = mov < 0 (valor = abs). Etapas por DATA DO MOVIMENTO (janelas 03–06/08–11/20–23,
+ * sem sobreposição). Pagamentos fora das etapas = "Demais períodos". Sem julgamento.
+ *
+ * UX-01B — card com o PERCENTUAL como elemento principal; valor de saída secundário.
  *
  * PR-02 — despesa OPERACIONAL apenas: exclui transferências internas entre contas próprias
  * (tipo_operacao começando em '3-'). Tesouraria segue normal no Extrato/Fluxo/saldo (intocados).
@@ -27,10 +29,11 @@ const isTransferencia = (tipo: string) => tipo.startsWith('3-');
 
 type JanelaId = 'j1' | 'j2' | 'j3';
 type BucketId = JanelaId | 'fora';
+// Janelas móveis de 4 dias (não se sobrepõem → sem regra de "dia limítrofe").
 const JANELAS: { id: JanelaId; nome: string; faixa: string; ini: number; fim: number; cor: string }[] = [
-  { id: 'j1', nome: '1ª etapa de pagamentos', faixa: '02–05', ini: 2, fim: 5, cor: '#3b82f6' },
-  { id: 'j2', nome: '2ª etapa de pagamentos', faixa: '05–10', ini: 5, fim: 10, cor: '#22784a' },
-  { id: 'j3', nome: '3ª etapa de pagamentos', faixa: '20–25', ini: 20, fim: 25, cor: '#d97706' },
+  { id: 'j1', nome: '1ª etapa de pagamentos', faixa: '03–06', ini: 3, fim: 6, cor: '#3b82f6' },
+  { id: 'j2', nome: '2ª etapa de pagamentos', faixa: '08–11', ini: 8, fim: 11, cor: '#22784a' },
+  { id: 'j3', nome: '3ª etapa de pagamentos', faixa: '20–23', ini: 20, fim: 23, cor: '#d97706' },
 ];
 const COR_FORA = '#94a3b8';
 const pad2 = (n: number) => String(n).padStart(2, '0');
@@ -126,22 +129,23 @@ export function ExtratoOrganizacaoPagamentos({ itens, ano, mes, contaNome, perio
                 <button key={c.bucket} type="button" onClick={() => setDrawer(c.bucket)}
                   className="rounded-md border p-2 flex-1 min-w-[160px] text-left transition-colors hover:bg-muted/40 focus:outline-none focus:ring-1"
                   style={{ borderColor: `${c.cor}55` }}>
-                  <div className="text-[11px] font-semibold leading-tight uppercase tracking-wide" style={{ color: c.cor }}>{c.nome}</div>
-                  <div className="text-[9px] text-muted-foreground">{c.faixa}</div>
-                  <div className="text-[8px] uppercase tracking-wide text-muted-foreground mt-1">Saídas de caixa</div>
-                  <div className="text-[14px] font-bold tabular-nums leading-tight">{formatMoeda(bk.total)}</div>
-                  <div className="text-[10px] text-muted-foreground">{bk.count} pagamento{bk.count !== 1 ? 's' : ''}</div>
                   <div className="flex items-center justify-between gap-1">
-                    <span className="text-[10px] text-muted-foreground">{pct(bk.total)}% das saídas do mês</span>
+                    <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: c.cor }}>{c.faixa}</span>
                     <span className="text-[9px] font-medium shrink-0" style={{ color: c.cor }}>↗ detalhes</span>
                   </div>
+                  {/* Percentual = elemento principal (concentração das saídas). */}
+                  <div className="text-[26px] font-bold tabular-nums leading-none mt-0.5" style={{ color: c.cor }}>{pct(bk.total)}%</div>
+                  <div className="text-[9px] text-muted-foreground leading-tight">das saídas do mês</div>
+                  <div className="text-[8px] uppercase tracking-wide text-muted-foreground mt-1.5">Saídas de caixa</div>
+                  <div className="text-[13px] font-semibold tabular-nums leading-tight text-foreground">{formatMoeda(bk.total)}</div>
+                  <div className="text-[10px] text-muted-foreground">{bk.count} pagamento{bk.count !== 1 ? 's' : ''}</div>
                 </button>
               );
             })}
           </div>
 
           <div className="text-[9px] text-muted-foreground space-y-0.5">
-            <div>Etapas por data de pagamento — <span className="font-semibold text-foreground">{formatMoeda(totalGeral)}</span> em saídas de caixa (orientação visual; o dia 5 conta na 1ª etapa).</div>
+            <div>Etapas por data de pagamento (janelas móveis de 4 dias) — <span className="font-semibold text-foreground">{formatMoeda(totalGeral)}</span> em saídas de caixa.</div>
             <div>Total organizado: despesas operacionais. Transferências internas entre contas próprias não são consideradas.</div>
           </div>
         </>
