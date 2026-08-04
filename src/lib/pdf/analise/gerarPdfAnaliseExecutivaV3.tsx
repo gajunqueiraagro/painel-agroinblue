@@ -31,6 +31,9 @@ const claro = (hex: string, a: number): string => {
   return `#${mix(r)}${mix(g)}${mix(b)}`;
 };
 const slug = (s: string): string => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '').toLowerCase() || 'pdf';
+const diaBR = (iso: string): string => (iso.length >= 10 ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '—');
+
+export interface TransfPdf { data: string; sentido: 'entrada' | 'saida'; descricao: string; contaOrigem: string; contaDestino: string; valor: number; status: string; }
 
 const COR_ETAPA: Record<EtapaId, string> = { j1: '#3b82f6', j2: '#22784a', j3: '#d77706' };
 const ETAPA_LABEL: Record<string, { nome: string; faixa: string }> = {
@@ -49,6 +52,7 @@ export async function gerarPdfAnaliseExecutivaV3(params: {
   totais: { ent: number; sai: number };
   serieLinhas: { data: string; mov: number; realizado: boolean }[];
   dadosOrg: ItemOrg[];
+  transferencias: TransfPdf[];
 }): Promise<void> {
   // ── Derivações via fonte única ──
   const { pontos: serie, corteIdx, temProjetado } = serieEvolucaoRP(params.serieLinhas, params.saldoIni, params.ano, params.mes);
@@ -68,6 +72,16 @@ export async function gerarPdfAnaliseExecutivaV3(params: {
     linhas: comp.linhas.map((r, i) => ({ rank: String(i + 1), label: r.chave, valorFmt: formatMoeda(r.total), pct: pct(r.total, comp.totalGeral), count: r.count, cor: r.ehDemais ? '#94a3b8' : PALETA_COMP[i % PALETA_COMP.length], ehDemais: r.ehDemais })),
     totalFmt: formatMoeda(comp.totalGeral),
     totalCount: comp.linhas.reduce((s, r) => s + r.count, 0),
+  };
+
+  // Página 3 — Tesouraria (transferências prontas do payload; só formata p/ o componente).
+  const mapTransf = (t: TransfPdf) => ({ data: diaBR(t.data), descricao: t.descricao || '—', contaOrigem: t.contaOrigem, contaDestino: t.contaDestino, valorFmt: formatMoeda(t.valor), status: t.status });
+  const rec = params.transferencias.filter((t) => t.sentido === 'entrada');
+  const env = params.transferencias.filter((t) => t.sentido === 'saida');
+  const tesouraria = {
+    recebidas: rec.map(mapTransf), enviadas: env.map(mapTransf),
+    totalRecFmt: formatMoeda(rec.reduce((s, t) => s + t.valor, 0)),
+    totalEnvFmt: formatMoeda(env.reduce((s, t) => s + t.valor, 0)),
   };
 
   const kpis = [
@@ -108,7 +122,7 @@ export async function gerarPdfAnaliseExecutivaV3(params: {
     DocumentoAnaliseExecutiva({
       clienteNome: params.clienteNome, fazenda: params.fazenda, contaNome: params.contaNome, periodoLabel: params.periodoLabel, logoData,
       kpis, serie, fmt: fmtCompacto, calendario, cards, notaProjetado,
-      credito, natureza, negocio, compromissos,
+      credito, natureza, negocio, compromissos, tesouraria,
     }),
   ).toBlob();
 

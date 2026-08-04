@@ -225,11 +225,27 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
   // PDF Executivo (react-pdf V3) — deriva das mesmas linhas/dadosOrg/saldos (fonte única analiseAgregacoes).
   const exportarPdfExecutivo = async () => {
     const serieLinhas = linhas.map((x) => ({ data: x.data, mov: x.mov, realizado: (x.l.status_transacao || '').toLowerCase() === 'realizado' }));
+    const contaNomeMap = new Map(contas.map((c) => [c.id, c.nome_exibicao || c.nome_conta]));
+    type TransfLinha = { data: string; sentido: 'entrada' | 'saida'; descricao: string; contaOrigem: string; contaDestino: string; valor: number; status: string };
+    const transferencias = linhas
+      .filter((x) => x.l.tipo_operacao.startsWith('3'))
+      .map((x): TransfLinha | null => {
+        const sentido: 'entrada' | 'saida' | null = x.l.conta_destino_id === contaId ? 'entrada' : x.l.conta_bancaria_id === contaId ? 'saida' : null;
+        if (!sentido) return null;
+        const sk = (x.l.status_transacao || '').toLowerCase();
+        return {
+          data: x.data, sentido, descricao: x.l.descricao || '',
+          contaOrigem: contaNomeMap.get(x.l.conta_bancaria_id ?? '') || 'Outra conta',
+          contaDestino: contaNomeMap.get(x.l.conta_destino_id ?? '') || 'Outra conta',
+          valor: Math.abs(x.mov), status: STATUS_FILTRO_LABEL[sk] ?? (x.l.status_transacao || '—'),
+        };
+      })
+      .filter((t): t is TransfLinha => t !== null);
     await gerarPdfAnaliseExecutivaV3({
       clienteNome: clienteAtual?.nome ?? '—',
       fazenda: fazScope && fazendaAtual?.nome ? fazendaAtual.nome : undefined,
       contaNome, periodoLabel: `${MESES[mes - 1]}/${ano}`, ano, mes,
-      saldoIni, saldoFin, totais, serieLinhas, dadosOrg,
+      saldoIni, saldoFin, totais, serieLinhas, dadosOrg, transferencias,
     });
   };
 

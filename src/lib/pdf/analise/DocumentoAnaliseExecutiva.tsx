@@ -10,6 +10,7 @@ import { PdfFluxoCaixa } from '@/lib/pdf/analise/PdfFluxoCaixa';
 import { PdfOrganizacaoPagamentos, type DiaCalendario, type CardEtapa } from '@/lib/pdf/analise/PdfOrganizacaoPagamentos';
 import { PdfBlocoDonut, type LinhaRanking } from '@/lib/pdf/analise/PdfBlocoDonut';
 import { PdfCompromissos, type LinhaCompromisso } from '@/lib/pdf/analise/PdfCompromissos';
+import { PdfTesouraria, type LinhaTransf } from '@/lib/pdf/analise/PdfTesouraria';
 import type { SegmentoDonut } from '@/lib/pdf/analise/PdfDonut';
 
 interface BlocoDist { segmentos: SegmentoDonut[]; ranking: LinhaRanking[]; }
@@ -30,6 +31,8 @@ export interface DocProps {
   natureza: BlocoDist;
   negocio: BlocoDist;
   compromissos: { linhas: LinhaCompromisso[]; totalFmt: string; totalCount: number };
+  // Página 3
+  tesouraria: { recebidas: LinhaTransf[]; enviadas: LinhaTransf[]; totalRecFmt: string; totalEnvFmt: string };
 }
 
 export function DocumentoAnaliseExecutiva(p: DocProps) {
@@ -66,6 +69,14 @@ export function DocumentoAnaliseExecutiva(p: DocProps) {
         <PdfDivisoria />
         <Text style={estilos.secao}>Principais Custos e Compromissos</Text>
         <PdfCompromissos linhas={p.compromissos.linhas} totalFmt={p.compromissos.totalFmt} totalCount={p.compromissos.totalCount} />
+      </Page>
+
+      <Page size="A4" style={estilos.pagina} wrap>
+        <PdfHeader clienteNome={p.clienteNome} fazenda={p.fazenda} contaNome={p.contaNome} periodoLabel={p.periodoLabel} logoData={p.logoData} />
+        <PdfRodape />
+
+        <Text style={estilos.secao}>Transferências entre Contas (Tesouraria)</Text>
+        <PdfTesouraria recebidas={p.tesouraria.recebidas} enviadas={p.tesouraria.enviadas} totalRecFmt={p.tesouraria.totalRecFmt} totalEnvFmt={p.tesouraria.totalEnvFmt} />
       </Page>
     </Document>
   );
