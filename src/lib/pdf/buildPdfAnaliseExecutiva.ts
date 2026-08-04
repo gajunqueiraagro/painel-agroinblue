@@ -32,7 +32,7 @@ export interface ExtratoLinhaPdf {
   valor: number; saldo: number | null;
   statusKey: string; statusLabel: string; concil: string; doc: string;
 }
-export interface TransferenciaPdf { data: string; sentido: 'entrada' | 'saida'; conta: string; valor: number; }
+export interface TransferenciaPdf { data: string; sentido: 'entrada' | 'saida'; descricao: string; contaOrigem: string; contaDestino: string; valor: number; status: string; }
 export interface ContaPdf {
   nome: string;
   fazenda?: string;
@@ -60,7 +60,7 @@ const NAO_OPER = new Set(['Investimento na Fazenda', 'Investimento em Bovinos', 
 const corMacro = (chave: string): RGB => (chave.startsWith('Sem classificação') ? CINZA : NAO_OPER.has(chave) ? AMBAR : AZUL);
 const corNegocio = (chave: string): RGB => (chave.startsWith('Sem classificação') ? CINZA : NEG_COR[chave] ?? [91, 33, 182]);
 const corStatus = (k: string): RGB => STATUS_COR[k] ?? [120, 120, 120];
-const corCredito = (c: string): RGB => (c === 'Receitas' ? VERDE : c === 'Transferências recebidas' ? [37, 99, 235] : AMBAR);
+const corCredito = (c: string): RGB => (c === 'Receitas Operacionais' ? VERDE : c === 'Rendimentos Financeiros' ? [13, 148, 136] : c === 'Transferências Recebidas' ? [37, 99, 235] : AMBAR);
 
 const ETAPA_LABEL: Record<string, { nome: string; faixa: string }> = {
   j1: { nome: '1ª etapa', faixa: '03–06' }, j2: { nome: '2ª etapa', faixa: '08–11' }, j3: { nome: '3ª etapa', faixa: '20–23' }, fora: { nome: 'Demais períodos', faixa: '—' },
@@ -69,7 +69,7 @@ const ETAPA_LABEL: Record<string, { nome: string; faixa: string }> = {
 const fm = (v: number | null): string => (v == null ? '—' : formatMoeda(v));
 const fmtCompacto = (v: number): string => (Math.abs(v) >= 1000 ? `R$ ${(v / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}k` : formatMoeda(v));
 const diaBR = (iso: string): string => (iso.length >= 10 ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '—');
-const assinado = (v: number): string => `${v >= 0 ? '+' : '−'} ${formatMoeda(Math.abs(v))}`;
+const assinado = (v: number): string => `${v >= 0 ? '+' : '-'}${formatMoeda(Math.abs(v))}`; // +R$ 500,00 / -R$ 11.500,00
 const pctDe = (v: number, total: number): number => (total > 0 ? Math.round((v / total) * 100) : 0);
 const slug = (s: string): string => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '').toLowerCase() || 'pdf';
 const trunc = (s: string, n: number): string => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
@@ -226,30 +226,24 @@ export async function gerarPdfAnaliseExecutiva(params: {
   /* ───────── PÁGINA 3 — Transferências entre Contas (tesouraria) ───────── */
   doc.addPage();
   y = addTituloSecao(doc, 'Transferências entre Contas', 22); // 22 = reserva do cabeçalho global
-  const tEnt = conta.transferencias.filter((t) => t.sentido === 'entrada');
-  const tSai = conta.transferencias.filter((t) => t.sentido === 'saida');
   if (conta.transferencias.length === 0) {
     doc.setFontSize(9); doc.setTextColor(...PALETA.CINZA_TEXTO);
     doc.text('Nenhuma transferência entre contas próprias no período.', MARGEM, y + 6); doc.setTextColor(0, 0, 0);
   } else {
-    const totEnt = tEnt.reduce((s, t) => s + t.valor, 0);
-    const totSai = tSai.reduce((s, t) => s + t.valor, 0);
-    y = subtitulo(doc, `Entradas recebidas — ${tEnt.length} · ${formatMoeda(totEnt)}`, MARGEM, y + 3) + 1;
+    const totEnt = conta.transferencias.filter((t) => t.sentido === 'entrada').reduce((s, t) => s + t.valor, 0);
+    const totSai = conta.transferencias.filter((t) => t.sentido === 'saida').reduce((s, t) => s + t.valor, 0);
+    y = subtitulo(doc, `Recebidas: ${formatMoeda(totEnt)}   ·   Enviadas: ${formatMoeda(totSai)}`, MARGEM, y + 3) + 1;
     y = addTabelaExecutiva(doc, {
-      head: [['Data', 'Conta de origem', 'Valor']],
-      body: tEnt.map((t) => [diaBR(t.data), trunc(t.conta, 46), formatMoeda(t.valor)]),
+      head: [['Data', 'Descrição', 'Conta origem', 'Conta destino', 'Valor', 'Status']],
+      body: conta.transferencias.map((t) => [diaBR(t.data), trunc(t.descricao || '—', 30), trunc(t.contaOrigem, 20), trunc(t.contaDestino, 20), formatMoeda(t.valor), t.status]),
       startY: y,
-      opts: { fontSize: 8, foot: [['Total', '', formatMoeda(totEnt)]], columnStyles: { 2: { halign: 'right', cellWidth: 34 } } },
-    }) + 3;
-    y = subtitulo(doc, `Saídas enviadas — ${tSai.length} · ${formatMoeda(totSai)}`, MARGEM, y + 2) + 1;
-    y = addTabelaExecutiva(doc, {
-      head: [['Data', 'Conta de destino', 'Valor']],
-      body: tSai.map((t) => [diaBR(t.data), trunc(t.conta, 46), formatMoeda(t.valor)]),
-      startY: y,
-      opts: { fontSize: 8, foot: [['Total', '', formatMoeda(totSai)]], columnStyles: { 2: { halign: 'right', cellWidth: 34 } } },
+      opts: {
+        fontSize: 8, overflow: 'ellipsize', rowPageBreak: 'avoid',
+        columnStyles: { 0: { cellWidth: 14 }, 4: { halign: 'right', cellWidth: 30 }, 5: { cellWidth: 26 } },
+      },
     }) + 3;
     doc.setFontSize(8); doc.setTextColor(...PALETA.CINZA_TEXTO);
-    doc.text('Transferências entre contas próprias não entram na análise econômica (custos/compromissos); impactam saldo, fluxo de caixa e disponibilidade da conta.', MARGEM, y + 1, { maxWidth: INNER });
+    doc.text('Transferências entre contas próprias não entram na análise econômica (custos/compromissos); impactam saldo, fluxo de caixa e planejamento financeiro.', MARGEM, y + 1, { maxWidth: INNER });
     doc.setTextColor(0, 0, 0);
   }
 
@@ -261,12 +255,27 @@ export async function gerarPdfAnaliseExecutiva(params: {
     doc.setFontSize(10); doc.setTextColor(...PALETA.CINZA_TEXTO);
     doc.text('Nenhuma movimentação para esta conta no período.', MARGEM, y + 6); doc.setTextColor(0, 0, 0);
   } else {
+    // Resumo executivo do extrato: entradas/saídas/resultado/qtd + contadores por status.
+    const resultado = conta.totais.ent - conta.totais.sai;
+    y = addCardsKPI(doc, [
+      { label: 'Entradas', valor: formatMoeda(conta.totais.ent) },
+      { label: 'Saídas', valor: formatMoeda(conta.totais.sai) },
+      { label: 'Resultado do período', valor: `${resultado >= 0 ? '+' : '-'}${formatMoeda(Math.abs(resultado))}` },
+      { label: 'Lançamentos', valor: String(ext.length) },
+    ], y, { colunas: 4 });
+    const cont = (k: string) => ext.filter((r) => r.statusKey === k).length;
+    y = addCardsKPI(doc, [
+      { label: 'Realizado', valor: String(cont('realizado')) },
+      { label: 'Programado', valor: String(cont('programado')) },
+      { label: 'Previsto', valor: String(cont('previsto')) },
+      { label: 'Agendado', valor: String(cont('agendado')) },
+    ], y, { colunas: 4 }) + 2;
+
     const ehFech = ext.map((r, i) => i === ext.length - 1 || ext[i + 1].data !== r.data);
     const body = ext.map((r) => [
       diaBR(r.data), trunc(r.produto || '—', 26), trunc(r.fornecedor || '—', 22), trunc(r.centro || '—', 16),
       assinado(r.valor), r.saldo == null ? '—' : formatMoeda(r.saldo),
-      r.concil && r.concil !== 'Sem vínculo' ? `${r.statusLabel} · ${trunc(r.concil, 10)}` : r.statusLabel,
-      trunc(r.doc || '—', 12),
+      r.statusLabel, trunc(r.doc || '', 14),
     ]);
     addTabelaExecutiva(doc, {
       head: [['Data', 'Produto', 'Fornecedor', 'Centro', 'Valor', 'Saldo', 'Status', 'Doc']],

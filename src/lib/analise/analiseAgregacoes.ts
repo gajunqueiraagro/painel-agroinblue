@@ -134,8 +134,8 @@ export function serieEvolucaoRP(
 /* ─────────────── Créditos / Entradas por origem (visão financeira) ─────────────── */
 // Só via tipo_operacao (sem macro/escopo): Receitas (1-Entradas) · Transferências recebidas
 // (3-%) · Outros créditos (fallback). Transferências ENTRAM aqui (financeiro), não na econômica.
-interface ItemCredito { mov: number; tipo: string; }
-const ORIGEM_CREDITO = ['Receitas', 'Transferências recebidas', 'Outros créditos'];
+interface ItemCredito { mov: number; tipo: string; macro: string | null; }
+const ORIGEM_CREDITO = ['Receitas Operacionais', 'Rendimentos Financeiros', 'Transferências Recebidas', 'Outros Créditos'];
 export function creditosPorOrigem<T extends ItemCredito>(itens: T[]): {
   ranking: { chave: string; total: number; count: number; itens: T[] }[];
   totalGeral: number;
@@ -146,7 +146,11 @@ export function creditosPorOrigem<T extends ItemCredito>(itens: T[]): {
     if (it.mov <= 0) continue; // só créditos (entradas)
     const v = it.mov;
     totalGeral += v;
-    const chave = it.tipo.startsWith('1') ? 'Receitas' : it.tipo.startsWith('3') ? 'Transferências recebidas' : 'Outros créditos';
+    // Rendimento financeiro (plano oficial macro='Entrada Financeira') separado de receita operacional.
+    const chave = it.macro === 'Entrada Financeira' ? 'Rendimentos Financeiros'
+      : it.tipo.startsWith('1') ? 'Receitas Operacionais'
+      : it.tipo.startsWith('3') ? 'Transferências Recebidas'
+      : 'Outros Créditos';
     const e = map.get(chave) ?? { chave, total: 0, count: 0, itens: [] };
     e.total += v; e.count += 1; e.itens.push(it);
     map.set(chave, e);
