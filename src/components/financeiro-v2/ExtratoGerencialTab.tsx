@@ -20,6 +20,7 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { ContaBancariaSelect, type ContaSelecionavel } from '@/components/shared/ContaBancariaSelect';
 import { LancamentoLeituraDialog } from '@/components/financeiro-v2/LancamentoLeituraDialog';
 import { ExtratoAnaliseFluxo } from '@/components/financeiro-v2/ExtratoAnaliseFluxo';
+import { ExtratoOrganizacaoPagamentos } from '@/components/financeiro-v2/ExtratoOrganizacaoPagamentos';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { STATUS_FILTRO_LABEL, STATUS_FILTRO_COR } from '@/lib/financeiro/statusFinanceiro';
 import { formatMoeda } from '@/lib/calculos/formatters';
@@ -33,6 +34,11 @@ interface LancExtrato {
   conta_bancaria_id: string | null; conta_destino_id: string | null;
 }
 interface SaldoRow { saldo_inicial: number | null; saldo_final: number | null; status_mes: string | null; }
+
+const ANALISE_VIEWS: { k: 'evolucao' | 'organizacao'; l: string }[] = [
+  { k: 'evolucao', l: '📈 Evolução do caixa' },
+  { k: 'organizacao', l: '📅 Organização dos pagamentos' },
+];
 
 const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 const STATUS_OFICIAIS: string[] = ['realizado', 'programado', 'agendado', 'previsto'];
@@ -53,6 +59,7 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
   const [statusSel, setStatusSel] = useState<Set<string>>(new Set(STATUS_OFICIAIS));
   const [incluirLegados, setIncluirLegados] = useState(false);
   const [modo, setModo] = useState<'extrato' | 'analise'>('extrato');
+  const [analiseView, setAnaliseView] = useState<'evolucao' | 'organizacao'>('evolucao');
   const [lancLeituraId, setLancLeituraId] = useState<string | null>(null);
 
   const ini = `${ano}-${pad(mes)}-01`;
@@ -165,6 +172,15 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
     });
   }, [lancs, statusSel, incluirLegados, saldoIni, contaId]);
 
+  // Mesma fonte do gráfico: itens da Organização derivados de `linhas` (só reorganiza, sem cálculo novo).
+  const dadosOrg = useMemo(() => linhas.map((x) => ({
+    data: x.data,
+    mov: x.mov,
+    centro: x.l.centro_custo,
+    produto: x.l.descricao,
+    fornecedor: (x.l.favorecido_id && fornMap?.get(x.l.favorecido_id)) || '',
+  })), [linhas, fornMap]);
+
   const totais = useMemo(() => {
     let ent = 0, sai = 0;
     for (const x of linhas) { if (x.mov > 0) ent += x.mov; else sai += Math.abs(x.mov); }
@@ -263,8 +279,24 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
 
       {/* Análise (Bloco 1) — mesma conta/mês/status; consome as mesmas `linhas` do extrato */}
       {modo === 'analise' ? (
-        <div className="flex-1 min-h-0 overflow-auto">
-          <ExtratoAnaliseFluxo linhas={linhas} saldoIni={saldoIni} contaNome={contaNome} periodoLabel={`${MESES[mes - 1]}/${ano}`} ano={ano} mes={mes} />
+        <div className="flex-1 min-h-0 overflow-auto space-y-1.5">
+          {/* Sub-seletor de views da Análise */}
+          <div className="flex flex-wrap items-center gap-1">
+            {ANALISE_VIEWS.map((v) => (
+              <button key={v.k} onClick={() => setAnaliseView(v.k)}
+                className={`px-2 py-0.5 rounded-md border text-[11px] ${analiseView === v.k ? 'bg-primary text-primary-foreground border-primary' : 'bg-white text-muted-foreground'}`}>
+                {v.l}
+              </button>
+            ))}
+            <span className="px-2 py-0.5 rounded-md border text-[11px] bg-white text-muted-foreground opacity-50 cursor-not-allowed">📊 Distribuição por centro</span>
+            <span className="px-2 py-0.5 rounded-md border text-[11px] bg-white text-muted-foreground opacity-50 cursor-not-allowed">📋 Maiores compromissos</span>
+            <span className="text-[9px] text-muted-foreground">(em breve)</span>
+          </div>
+          {analiseView === 'evolucao' ? (
+            <ExtratoAnaliseFluxo linhas={linhas} saldoIni={saldoIni} contaNome={contaNome} periodoLabel={`${MESES[mes - 1]}/${ano}`} ano={ano} mes={mes} />
+          ) : (
+            <ExtratoOrganizacaoPagamentos itens={dadosOrg} ano={ano} mes={mes} contaNome={contaNome} periodoLabel={`${MESES[mes - 1]}/${ano}`} />
+          )}
         </div>
       ) : (
       /* Timeline — ocupa o espaço vertical restante; cabeçalho fixo; scroll interno */
