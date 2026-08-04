@@ -9,11 +9,11 @@
  */
 import type jsPDF from 'jspdf';
 import {
-  carregarLogoBase64, criarDocRetratoA4, addHeader, addTituloSecao, addCardsKPI, addTabelaExecutiva, addFooterComPaginacao, PALETA,
+  carregarLogoBase64, criarDocRetratoA4, addHeader, addHeaderGlobalTodasPaginas, addTituloSecao, addCardsKPI, addTabelaExecutiva, addFooterComPaginacao, PALETA,
 } from '@/lib/pdf/pdfChassi';
-import { desenharMiniLinhaSaldo, desenharBarraProporcional, desenharDonut, type RGB } from '@/lib/pdf/pdfMiniGraficos';
+import { desenharEvolucao, desenharDonut, type RGB } from '@/lib/pdf/pdfMiniGraficos';
 import {
-  serieEvolucao, etapasPagamento, distribuicaoEconomica, maioresCompromissos, type LinhaFluxoIn,
+  serieEvolucao, etapasPagamento, etapaDoDia, distribuicaoEconomica, maioresCompromissos, type LinhaFluxoIn,
 } from '@/lib/analise/analiseAgregacoes';
 import { formatMoeda } from '@/lib/calculos/formatters';
 
@@ -65,25 +65,13 @@ const ETAPA_LABEL: Record<string, { nome: string; faixa: string }> = {
 
 const fm = (v: number | null): string => (v == null ? '—' : formatMoeda(v));
 const fmtCompacto = (v: number): string => (Math.abs(v) >= 1000 ? `R$ ${(v / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}k` : formatMoeda(v));
-const dataBR = (iso: string): string => (iso.length >= 10 ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '—');
 const diaBR = (iso: string): string => (iso.length >= 10 ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '—');
 const assinado = (v: number): string => `${v >= 0 ? '+' : '−'} ${formatMoeda(Math.abs(v))}`;
 const pctDe = (v: number, total: number): number => (total > 0 ? Math.round((v / total) * 100) : 0);
 const slug = (s: string): string => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '').toLowerCase() || 'pdf';
 const trunc = (s: string, n: number): string => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
-
-/** Caixa com bullets factuais (fundo azul institucional leve). */
-function caixaBullets(doc: jsPDF, titulo: string, bullets: string[], y: number): number {
-  const boxH = 6 + bullets.length * 5.2;
-  doc.setFillColor(...PALETA.CARD_KPI_BG); doc.setDrawColor(...PALETA.LINHA_SEPARADORA); doc.setLineWidth(0.1);
-  doc.rect(MARGEM, y, INNER, boxH, 'FD');
-  doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(...PALETA.CINZA_MEDIO);
-  doc.text(titulo.toUpperCase(), MARGEM + 3, y + 4.5);
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(50, 50, 50);
-  bullets.forEach((b, i) => doc.text(`•  ${b}`, MARGEM + 4, y + 9.5 + i * 5.2));
-  doc.setTextColor(0, 0, 0);
-  return y + boxH + 3;
-}
+const pad2 = (n: number): string => String(n).padStart(2, '0');
+const claro = (c: RGB, a: number): RGB => [Math.round(c[0] * a + 255 * (1 - a)), Math.round(c[1] * a + 255 * (1 - a)), Math.round(c[2] * a + 255 * (1 - a))];
 
 /** Título miúdo de sub-bloco (sem barra cheia). */
 function subtitulo(doc: jsPDF, texto: string, x: number, y: number): number {
@@ -145,8 +133,6 @@ export async function gerarPdfAnaliseExecutiva(params: {
   const saldoFinal = conta.saldoFin ?? (conta.saldoIni != null ? conta.saldoIni + conta.totais.ent - conta.totais.sai : null);
   const topTotal = comp.top.reduce((s, r) => s + r.total, 0);
   const topPct = pctDe(topTotal, comp.totalGeral);
-  const maiorNeg = distNeg.ranking.find((r) => !r.chave.startsWith('Sem classificação')) ?? distNeg.ranking[0] ?? null;
-  const maiorComp = comp.top[0] ?? null;
 
   /* ───────── PÁGINA 1 — Dashboard Executivo ───────── */
   const infoFaz = conta.fazenda ? ` · ${conta.fazenda}` : '';
@@ -164,35 +150,48 @@ export async function gerarPdfAnaliseExecutiva(params: {
     { label: 'Menor saldo', valor: menor ? formatMoeda(menor.saldo) : '—' },
   ], y, { colunas: 5 });
 
-  // Bloco 1 — Evolução do caixa
+  // Bloco 1 — Evolução do caixa (gráfico composto: barras + linha + zero + marcadores + legenda)
   y = addTituloSecao(doc, 'Evolução do Caixa', y + 1);
   if (serie.length >= 2) {
-    desenharMiniLinhaSaldo(doc, serie, { x: MARGEM, y: y + 1, w: INNER, h: 48 }, fmtCompacto);
-    y += 52;
+    desenharEvolucao(doc, serie, { x: MARGEM, y: y + 1, w: INNER, h: 42 }, fmtCompacto);
+    y += 50;
   } else {
     doc.setFontSize(9); doc.setTextColor(...PALETA.CINZA_TEXTO);
     doc.text('Saldo inicial não informado — evolução indisponível.', MARGEM, y + 6); doc.setTextColor(0, 0, 0);
     y += 12;
   }
 
-  // Bloco — Organização dos pagamentos (barra + 4 linhas)
+  // Bloco 2 — Organização dos pagamentos (calendário 01–fim + cards das etapas)
   y = addTituloSecao(doc, 'Organização dos Pagamentos', y + 1);
   const ordemEtapas: ('j1' | 'j2' | 'j3' | 'fora')[] = ['j1', 'j2', 'j3', 'fora'];
-  desenharBarraProporcional(doc, ordemEtapas.map((k) => ({ valor: etapas[k].total, cor: COR_ETAPA[k] })), { x: MARGEM, y: y + 1, w: INNER, h: 5 });
-  y += 9;
-  y = rankingLista(doc, MARGEM, y, INNER,
-    ordemEtapas.map((k) => ({ label: `${ETAPA_LABEL[k].nome} (${ETAPA_LABEL[k].faixa}) · ${etapas[k].count} pag.`, valor: etapas[k].total, pct: pctDe(etapas[k].total, totEtapas), cor: COR_ETAPA[k] })), 60) + 1;
-
-  // Resumo factual
-  const resumo: string[] = [];
-  resumo.push(`Entradas ${formatMoeda(conta.totais.ent)}  ·  Saídas ${formatMoeda(conta.totais.sai)}.`);
-  if (menor) resumo.push(`Menor saldo do período: ${formatMoeda(menor.saldo)}${menor.dia !== 'Início' ? ` (dia ${menor.dia})` : ''}.`);
-  resumo.push(`Top 10 compromissos: ${topPct}% das saídas.`);
-  caixaBullets(doc, 'Resumo do período', resumo, y + 1);
+  const diasNoMes = new Date(ano, mes, 0).getDate();
+  const cw = INNER / diasNoMes;
+  for (let d = 1; d <= diasNoMes; d++) {
+    const et = etapaDoDia(d);
+    const cor = et ? COR_ETAPA[et] : CINZA;
+    const [lr, lg, lb] = claro(cor, 0.18);
+    const x = MARGEM + (d - 1) * cw;
+    doc.setFillColor(lr, lg, lb); doc.rect(x, y + 1, cw - 0.4, 6, 'F');
+    doc.setFontSize(4.6); doc.setTextColor(cor[0], cor[1], cor[2]); doc.text(pad2(d), x + (cw - 0.4) / 2, y + 5, { align: 'center' });
+  }
+  doc.setTextColor(0, 0, 0);
+  y += 10;
+  const cardW = (INNER - 6) / 4;
+  ordemEtapas.forEach((k, i) => {
+    const cor = COR_ETAPA[k];
+    const x = MARGEM + i * (cardW + 2);
+    doc.setDrawColor(cor[0], cor[1], cor[2]); doc.setLineWidth(0.3); doc.rect(x, y, cardW, 24, 'S');
+    doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(cor[0], cor[1], cor[2]); doc.text(ETAPA_LABEL[k].nome, x + 2.5, y + 4.6);
+    doc.setFontSize(6.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(120, 120, 120); doc.text(ETAPA_LABEL[k].faixa, x + 2.5, y + 8);
+    doc.setFontSize(19); doc.setFont('helvetica', 'bold'); doc.setTextColor(cor[0], cor[1], cor[2]); doc.text(`${pctDe(etapas[k].total, totEtapas)}%`, x + 2.5, y + 16);
+    doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(50, 50, 50); doc.text(formatMoeda(etapas[k].total), x + 2.5, y + 20.5);
+    doc.setFontSize(6.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(120, 120, 120); doc.text(`${etapas[k].count} pagamento${etapas[k].count !== 1 ? 's' : ''}`, x + 2.5, y + 23.4);
+  });
+  doc.setTextColor(0, 0, 0); doc.setFont('helvetica', 'normal');
 
   /* ───────── PÁGINA 2 — Estrutura das Saídas ───────── */
   doc.addPage();
-  y = addTituloSecao(doc, 'Distribuição Econômica', 14);
+  y = addTituloSecao(doc, 'Distribuição Econômica', 22); // 22 = reserva do cabeçalho global
   const colW = (INNER - 8) / 2;
   const yEsq = blocoDonut(doc, MARGEM, colW, y + 1, 'Por natureza', distMacro.ranking, distMacro.totalGeral, corMacro);
   const yDir = blocoDonut(doc, MARGEM + colW + 8, colW, y + 1, 'Por negócio', distNeg.ranking, distNeg.totalGeral, corNegocio);
@@ -208,7 +207,7 @@ export async function gerarPdfAnaliseExecutiva(params: {
 
   /* ───────── PÁGINA 3+ — Extrato Financeiro Completo ───────── */
   doc.addPage();
-  y = addTituloSecao(doc, 'Extrato Financeiro do Período', 14);
+  y = addTituloSecao(doc, 'Extrato Financeiro do Período', 22); // 22 = reserva do cabeçalho global
   const ext = conta.extrato;
   if (ext.length === 0) {
     doc.setFontSize(10); doc.setTextColor(...PALETA.CINZA_TEXTO);
@@ -228,18 +227,33 @@ export async function gerarPdfAnaliseExecutiva(params: {
       opts: {
         fontSize: 7,
         cellPadding: 1.1,
-        columnStyles: { 0: { halign: 'left' }, 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'left' } },
+        overflow: 'ellipsize',        // truncamento controlado (nunca sobreposição)
+        rowPageBreak: 'avoid',        // nunca quebrar um lançamento entre páginas
+        // Larguras fixas: moeda (Valor/Saldo) com espaço garantido → nunca quebra "R$ ...".
+        columnStyles: {
+          0: { halign: 'left', cellWidth: 13 },   // Data
+          1: { halign: 'left', cellWidth: 32 },   // Produto
+          2: { halign: 'left', cellWidth: 27 },   // Fornecedor
+          3: { halign: 'left', cellWidth: 19 },   // Centro
+          4: { halign: 'right', cellWidth: 27 },  // Valor
+          5: { halign: 'right', cellWidth: 27 },  // Saldo
+          6: { halign: 'left', cellWidth: 24 },   // Status
+          7: { halign: 'left' },                  // Doc (restante)
+        },
         didParseCell: (d) => {
           if (d.section !== 'body') return;
           const i = d.row.index;
           if ((d.column.index === 0 || d.column.index === 5) && ehFech[i]) d.cell.styles.fontStyle = 'bold';
           if (d.column.index === 4) d.cell.styles.textColor = ext[i].valor >= 0 ? VERDE : VERMELHO;
+          if (d.column.index === 5) d.cell.styles.textColor = ext[i].saldo == null ? [50, 50, 50] : ext[i].saldo < 0 ? VERMELHO : VERDE;
           if (d.column.index === 6) d.cell.styles.textColor = corStatus(ext[i].statusKey);
         },
       },
     });
   }
 
+  // Cabeçalho global compacto nas páginas ≥ 2 (contexto em todas) + rodapé paginado.
+  addHeaderGlobalTodasPaginas(doc, { clienteNome, fazenda: conta.fazenda, contaNome: conta.nome, periodoLabel, logoData, from: 2 });
   addFooterComPaginacao(doc);
   doc.save(`analise_financeira_executiva_${slug(clienteNome)}_${slug(periodoLabel)}.pdf`);
 }

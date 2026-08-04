@@ -55,6 +55,66 @@ export function desenharMiniLinhaSaldo(
   doc.setTextColor(0, 0, 0);
 }
 
+/** Evolução composta (linguagem da tela): barras de movimentação (verde/vermelho) +
+ *  linha do saldo acumulado (azul) + linha-zero + marcadores (inicial/menor/final) + legenda. */
+export function desenharEvolucao(
+  doc: jsPDF,
+  serie: { dia: string; mov: number; saldo: number }[],
+  box: Box,
+  fmt: (v: number) => string,
+): void {
+  if (serie.length < 2) return;
+  const vals = serie.flatMap((p) => [p.saldo, p.mov]);
+  let min = Math.min(...vals, 0), max = Math.max(...vals, 0);
+  if (min === max) { min -= 1; max += 1; }
+  const pad = (max - min) * 0.12; min -= pad; max += pad;
+  const n = serie.length;
+  const xAt = (i: number) => box.x + (i / (n - 1)) * box.w;
+  const yAt = (v: number) => box.y + box.h - ((v - min) / (max - min)) * box.h;
+  const barW = Math.max(0.6, (box.w / n) * 0.45);
+
+  doc.setDrawColor(217, 226, 236); doc.setLineWidth(0.1); doc.rect(box.x, box.y, box.w, box.h, 'S');
+  const yz = yAt(0);
+  doc.setDrawColor(120, 120, 120); doc.setLineWidth(0.2); doc.line(box.x, yz, box.x + box.w, yz);
+
+  // barras de movimentação (verde entrada / vermelho saída)
+  for (let i = 0; i < n; i++) {
+    const mv = serie[i].mov;
+    if (!mv) continue;
+    const x = xAt(i) - barW / 2;
+    const yv = yAt(mv);
+    if (mv >= 0) doc.setFillColor(34, 120, 74); else doc.setFillColor(185, 28, 28);
+    doc.rect(x, Math.min(yz, yv), barW, Math.abs(yv - yz), 'F');
+  }
+
+  // linha do saldo acumulado (azul)
+  doc.setDrawColor(30, 58, 95); doc.setLineWidth(0.5);
+  for (let i = 1; i < n; i++) doc.line(xAt(i - 1), yAt(serie[i - 1].saldo), xAt(i), yAt(serie[i].saldo));
+
+  // marcadores inicial / menor / final
+  const saldos = serie.map((p) => p.saldo);
+  const idxMenor = saldos.reduce((mi, v, i, a) => (v < a[mi] ? i : mi), 0);
+  const marcos: { i: number; abaixo?: boolean }[] = [{ i: 0 }, { i: idxMenor, abaixo: true }, { i: n - 1 }];
+  doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 58, 95); doc.setFillColor(30, 58, 95);
+  for (const m of marcos) {
+    const x = xAt(m.i), yv = yAt(serie[m.i].saldo);
+    doc.circle(x, yv, 0.8, 'F');
+    doc.text(fmt(serie[m.i].saldo), Math.min(Math.max(x, box.x + 12), box.x + box.w - 12), m.abaixo ? yv + 3.4 : yv - 1.8, { align: 'center' });
+  }
+
+  // legenda inferior
+  const ly = box.y + box.h + 4;
+  const leg: { c: RGB; t: string }[] = [{ c: [34, 120, 74], t: 'Entradas' }, { c: [185, 28, 28], t: 'Saídas' }, { c: [30, 58, 95], t: 'Saldo acumulado' }];
+  let lx = box.x;
+  doc.setFontSize(7); doc.setFont('helvetica', 'normal');
+  for (const it of leg) {
+    doc.setFillColor(it.c[0], it.c[1], it.c[2]); doc.rect(lx, ly - 2, 2.4, 2.4, 'F');
+    doc.setTextColor(90, 90, 90); doc.text(it.t, lx + 3.4, ly);
+    lx += 6 + doc.getTextWidth(it.t) + 4;
+  }
+  doc.setTextColor(0, 0, 0); doc.setFont('helvetica', 'normal');
+}
+
 /** Donut nativo (setores por triângulos a partir do centro + furo central branco). */
 export function desenharDonut(
   doc: jsPDF,

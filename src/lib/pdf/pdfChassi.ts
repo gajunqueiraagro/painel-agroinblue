@@ -134,6 +134,37 @@ export function addFooterComPaginacao(doc: jsPDF): void {
 }
 
 /**
+ * 3b) Cabeçalho GLOBAL compacto repetido nas páginas (logo + identidade + contexto).
+ *     Passo em loop (como o rodapé). Por padrão a partir da página `from` (2), deixando a
+ *     página 1 com o cabeçalho completo (addHeader). Reserve ~22mm no topo das páginas ≥ from.
+ */
+export function addHeaderGlobalTodasPaginas(
+  doc: jsPDF,
+  ctx: { clienteNome: string; fazenda?: string; contaNome: string; periodoLabel: string; logoData?: string; from?: number },
+): void {
+  const total = doc.getNumberOfPages();
+  const from = ctx.from ?? 2;
+  for (let p = from; p <= total; p++) {
+    doc.setPage(p);
+    if (ctx.logoData) doc.addImage(ctx.logoData, 'PNG', MARGEM, 6, 20, 10);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...PALETA.AZUL_PRIMARIO);
+    doc.text('Análise Financeira Executiva', MARGEM + 24, 10.5);
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...PALETA.CINZA_TEXTO);
+    const linha = [ctx.clienteNome, ctx.fazenda, `Conta: ${ctx.contaNome}`, ctx.periodoLabel].filter(Boolean).join('   ·   ');
+    doc.text(linha, MARGEM + 24, 15);
+    doc.setDrawColor(...PALETA.LINHA_SEPARADORA);
+    doc.setLineWidth(0.2);
+    doc.line(MARGEM, 18.5, PAGE_W - MARGEM, 18.5);
+    doc.setTextColor(...PALETA.PRETO);
+    doc.setFont('helvetica', 'normal');
+  }
+}
+
+/**
  * 4) Faixa de título de seção (barra azul, texto branco bold). RETORNA novo Y.
  */
 export function addTituloSecao(doc: jsPDF, texto: string, y: number): number {
@@ -210,6 +241,8 @@ export function addTabelaExecutiva(
       // Capacidades OPCIONAIS genéricas (infra; sem regra de domínio aqui):
       fontSize?: number;                              // tabelas densas (ex.: extrato)
       cellPadding?: number;                           // compactação vertical
+      overflow?: 'linebreak' | 'ellipsize' | 'visible' | 'hidden';  // truncamento controlado
+      rowPageBreak?: 'auto' | 'avoid';                // nunca quebrar uma linha entre páginas
       didParseCell?: (data: CellHookData) => void;    // formatação condicional de célula
     };
   },
@@ -223,9 +256,11 @@ export function addTabelaExecutiva(
     body,
     foot: opts?.foot,
     theme: 'grid',
+    rowPageBreak: opts?.rowPageBreak ?? 'auto',
     styles: {
       fontSize: opts?.fontSize ?? 9,
       cellPadding: pad != null ? pad : { top: 2.2, bottom: 2.2, left: 2.5, right: 2.5 },
+      overflow: opts?.overflow ?? 'linebreak',
       lineColor: PALETA.LINHA_SEPARADORA,
       lineWidth: 0.1,
       textColor: [50, 50, 50],
