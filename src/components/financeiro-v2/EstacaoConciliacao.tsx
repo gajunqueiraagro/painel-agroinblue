@@ -215,6 +215,7 @@ export function EstacaoConciliacao({ tipo, id, grupoSugerido, contaNome, contas,
   const [msgErro, setMsgErro] = useState<string>('');
   // TASK-003/D1 — índice do candidato em vinculação (null = ocioso).
   const [vinculandoIdx, setVinculandoIdx] = useState<number | null>(null);
+  const [confirmandoGrupo, setConfirmandoGrupo] = useState(false);
   const queryClient = useQueryClient();
   // TASK-005/D2 — mini-form de criação a partir do OFX (modo extrato).
   const [criando, setCriando] = useState(false);
@@ -308,6 +309,35 @@ export function EstacaoConciliacao({ tipo, id, grupoSugerido, contaNome, contas,
       const msg = (e as { message?: string } | null)?.message || 'Falha ao vincular.';
       toast.error(msg);
       setVinculandoIdx(null);
+    }
+  }
+
+  // PR-CONC-GRUPO-FLOW-01 — confirma a conciliação em grupo (1 OFX ↔ N lançamentos) via a RPC atômica.
+  //   Nunca é chamado automaticamente (só no clique). Guardas espelham a RPC; erro da RPC é mostrado.
+  async function confirmarGrupo() {
+    if (!grupoSugerido || confirmandoGrupo) return;
+    const g = grupoSugerido;
+    if (g.membros.length < 2) { toast.error('O agrupamento precisa de ao menos 2 lançamentos.'); return; }
+    if (g.membros.some((m) => !m.lancamento_id)) { toast.error('Há lançamento sem identificação — não é possível confirmar.'); return; }
+    if (Math.abs(g.diferenca) >= 0.005) { toast.error('A soma dos lançamentos não confere com o movimento do banco.'); return; }
+    setConfirmandoGrupo(true);
+    try {
+      const { error } = await (supabase as any).rpc('fn_vincular_grupo_conciliacao', {
+        p_extrato_id: g.extratoId,
+        p_lancamentos: g.membros.map((m) => m.lancamento_id),
+        p_valores: g.membros.map((m) => Math.abs(m.valor)),
+        p_motivo: 'agrupamento_confirmado_conferencia',
+      });
+      if (error) throw error;
+      toast.success(`Agrupamento confirmado — ${g.membros.length} lançamentos conciliados com 1 movimento bancário.`);
+      queryClient.invalidateQueries({ queryKey: ['extratos-espelhados'] });
+      queryClient.invalidateQueries({ queryKey: ['auditoria-soberana'] });
+      queryClient.invalidateQueries({ queryKey: ['auditoria-extrato-existe'] });
+      onClose();
+    } catch (e) {
+      const msg = (e as { message?: string } | null)?.message || 'Falha ao confirmar o agrupamento.';
+      toast.error(msg);
+      setConfirmandoGrupo(false);
     }
   }
 
@@ -539,16 +569,16 @@ export function EstacaoConciliacao({ tipo, id, grupoSugerido, contaNome, contas,
                     NENHUM vínculo é criado aqui — a camada de confirmação/gravação virá em etapa futura. */}
                 {grupoSugerido && (
                   <Card className="p-2 space-y-1 border-violet-300 bg-violet-50/40">
-                    <div className="text-[11px] font-semibold text-violet-800">Composição sugerida do agrupamento</div>
+                    <div className="text-[11px] font-semibold text-violet-800">Confirmar conciliação em grupo?</div>
                     <div className="text-[9px] uppercase tracking-wide text-muted-foreground">Banco</div>
                     <div className="flex items-center justify-between gap-2 text-[11px]">
                       <span className="truncate" title={grupoSugerido.banco.descricao}>{fmtData(grupoSugerido.banco.data)} · {grupoSugerido.banco.descricao}</span>
                       <span className="tabular-nums font-semibold shrink-0">{fmtBRL(grupoSugerido.banco.valor)}</span>
                     </div>
-                    <div className="text-[9px] uppercase tracking-wide text-muted-foreground pt-1">Composição sugerida ({grupoSugerido.membros.length} lançamentos)</div>
+                    <div className="text-[9px] uppercase tracking-wide text-muted-foreground pt-1">Lançamentos selecionados ({grupoSugerido.membros.length})</div>
                     {grupoSugerido.membros.map((m) => (
                       <div key={m.lancamento_id} className="flex items-center justify-between gap-2 text-[11px]">
-                        <span className="truncate" title={m.descricao}>{fmtData(m.data)} · {m.descricao}</span>
+                        <span className="truncate" title={m.descricao}><span className="text-emerald-600">✓</span> {fmtData(m.data)} · {m.descricao}</span>
                         <span className="tabular-nums shrink-0">{fmtBRL(m.valor)}</span>
                       </div>
                     ))}
@@ -560,7 +590,23 @@ export function EstacaoConciliacao({ tipo, id, grupoSugerido, contaNome, contas,
                       <span>Diferença vs banco</span>
                       <span className="tabular-nums">{fmtBRL(grupoSugerido.diferenca)}{Math.abs(grupoSugerido.diferenca) < 0.005 ? ' ✓' : ''}</span>
                     </div>
-                    <div className="text-[9px] text-muted-foreground pt-1 border-t italic">Revisão/gravação do grupo virá em etapa futura. Nenhum vínculo é criado aqui.</div>
+                    {Math.abs(grupoSugerido.diferenca) >= 0.005 && (
+                      <div className="text-[9px] text-rose-700 pt-1">A soma dos lançamentos não confere com o banco — não é possível confirmar.</div>
+                    )}
+                    <div className="flex items-center justify-end gap-2 pt-1 border-t">
+                      <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" disabled={confirmandoGrupo} onClick={onClose}>Cancelar</Button>
+                      <Button
+                        size="sm"
+                        className="h-6 text-[10px] px-2 bg-violet-600 hover:bg-violet-700 text-white"
+                        disabled={confirmandoGrupo
+                          || grupoSugerido.membros.length < 2
+                          || grupoSugerido.membros.some((m) => !m.lancamento_id)
+                          || Math.abs(grupoSugerido.diferenca) >= 0.005}
+                        onClick={confirmarGrupo}
+                      >
+                        {confirmandoGrupo ? 'Confirmando…' : 'Confirmar agrupamento'}
+                      </Button>
+                    </div>
                   </Card>
                 )}
                 {tipo === 'sistema_sem_vinculo' ? (
