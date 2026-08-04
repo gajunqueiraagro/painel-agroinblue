@@ -32,6 +32,7 @@ interface LancExtrato {
   id: string; data_pagamento: string | null; data_vencimento: string | null; valor: number;
   tipo_operacao: string; descricao: string | null; numero_documento: string | null; documento: string | null;
   favorecido_id: string | null; centro_custo: string | null; plano_conta_id: string | null; status_transacao: string | null;
+  macro_custo: string | null; grupo_custo: string | null; subcentro: string | null;
   conta_bancaria_id: string | null; conta_destino_id: string | null;
 }
 interface SaldoRow { saldo_inicial: number | null; saldo_final: number | null; status_mes: string | null; }
@@ -139,7 +140,7 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
     enabled: !!clienteId && !!contaId,
     queryFn: async (): Promise<LancExtrato[]> => {
       let q = (supabase as any).from('financeiro_lancamentos_v2')
-        .select('id, data_pagamento, data_vencimento, valor, tipo_operacao, descricao, numero_documento, documento, favorecido_id, centro_custo, plano_conta_id, status_transacao, conta_bancaria_id, conta_destino_id')
+        .select('id, data_pagamento, data_vencimento, valor, tipo_operacao, descricao, numero_documento, documento, favorecido_id, macro_custo, grupo_custo, centro_custo, subcentro, plano_conta_id, status_transacao, conta_bancaria_id, conta_destino_id')
         .eq('cliente_id', clienteId).eq('cancelado', false)
         .or(`conta_bancaria_id.eq.${contaId},conta_destino_id.eq.${contaId}`)
         .or(`and(data_pagamento.gte.${ini},data_pagamento.lt.${fim}),and(data_pagamento.is.null,data_vencimento.gte.${ini},data_vencimento.lt.${fim})`);
@@ -190,23 +191,22 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
   }, [lancs, statusSel, incluirLegados, saldoIni, contaId]);
 
   // Mesma fonte do gráfico: itens da Organização derivados de `linhas` (só reorganiza, sem cálculo novo).
-  const dadosOrg = useMemo(() => linhas.map((x) => {
-    const pl = x.l.plano_conta_id ? planoMap?.get(x.l.plano_conta_id) : null;
-    return {
-      id: x.l.id,
-      data: x.data,
-      mov: x.mov,
-      tipo: x.l.tipo_operacao,
-      centro: x.l.centro_custo,
-      produto: x.l.descricao,
-      fornecedor: (x.l.favorecido_id && fornMap?.get(x.l.favorecido_id)) || '',
-      doc: x.l.numero_documento || x.l.documento || '',
-      // Classificação econômica — SOMENTE plano de contas oficial (nunca descrição/produto/favorecido).
-      macro: pl?.macro ?? null,
-      grupo: pl?.grupo ?? null,
-      centroPlano: pl?.centro ?? null,
-    };
-  }), [linhas, fornMap, planoMap]);
+  const dadosOrg = useMemo(() => linhas.map((x) => ({
+    id: x.l.id,
+    data: x.data,
+    mov: x.mov,
+    tipo: x.l.tipo_operacao,
+    centro: x.l.centro_custo,
+    produto: x.l.descricao,
+    fornecedor: (x.l.favorecido_id && fornMap?.get(x.l.favorecido_id)) || '',
+    doc: x.l.numero_documento || x.l.documento || '',
+    // Classificação econômica = coluna denormalizada do lançamento (MESMA fonte do Financeiro,
+    // gravada por subcentro→plano na entrada). É a classificação do plano oficial, 100% preenchida;
+    // nunca descrição/produto/favorecido/inferência. plano_conta_id/planoMap ficam para limpeza futura.
+    macro: x.l.macro_custo ?? null,
+    grupo: x.l.grupo_custo ?? null,
+    centroPlano: x.l.centro_custo ?? null,
+  })), [linhas, fornMap]);
 
   const totais = useMemo(() => {
     let ent = 0, sai = 0;
