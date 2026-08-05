@@ -430,19 +430,15 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                       <>
                         <div className="space-y-0.5 text-[10px]">
                           <div className="flex justify-between"><span className="text-muted-foreground">Valor Base</span><strong className="tabular-nums">{formatMoeda(valorBase)}</strong></div>
+                          <div className="flex justify-between"><span className="text-muted-foreground">+ Bônus</span><strong className="text-green-600 dark:text-green-400 tabular-nums">+{formatMoeda(bonusTotal)}</strong></div>
+                          <div className="flex justify-between"><span className="text-muted-foreground">– Descontos</span><strong className="text-destructive tabular-nums">-{formatMoeda(descontosTotal)}</strong></div>
+                          <div className="flex justify-between font-bold text-[10px]"><span>= Valor Bruto</span><span className="tabular-nums">{formatMoeda(valorBruto)}</span></div>
                           {funruralTotal > 0 && (
                             <div className="flex justify-between"><span className="text-muted-foreground">– Funrural</span><strong className="text-destructive tabular-nums">-{formatMoeda(funruralTotal)}</strong></div>
                           )}
-                          <div className="flex justify-between font-bold text-[10px]"><span>= Valor Bruto</span><span className="tabular-nums">{formatMoeda(valorBruto)}</span></div>
-                          {bonusTotal > 0 && (
-                            <div className="flex justify-between"><span className="text-muted-foreground">+ Bônus</span><strong className="text-green-600 dark:text-green-400 tabular-nums">+{formatMoeda(bonusTotal)}</strong></div>
-                          )}
-                          {descontosTotal > 0 && (
-                            <div className="flex justify-between"><span className="text-muted-foreground">– Descontos</span><strong className="text-destructive tabular-nums">-{formatMoeda(descontosTotal)}</strong></div>
-                          )}
                         </div>
                         <div className="bg-primary/10 rounded px-2.5 py-1.5 flex items-center justify-between">
-                          <span className="text-[10px] text-muted-foreground font-medium">Valor Líquido</span>
+                          <span className="text-[10px] text-muted-foreground font-medium">Valor Líquido (NF)</span>
                           <span className="font-extrabold text-primary text-base tabular-nums">{formatMoeda(valorLiquido)}</span>
                         </div>
                         <div className="grid grid-cols-4 gap-x-2 gap-y-0.5 text-[10px]">

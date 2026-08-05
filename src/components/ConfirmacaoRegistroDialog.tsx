@@ -229,19 +229,16 @@ export function ConfirmacaoRegistroDialog({ open, onClose, onConfirm, operaciona
                 {financeiros.valorBase != null && financeiros.valorBase > 0 ? (
                   <div className="space-y-0 pt-0.5">
                     <Separator className="my-0.5" />
+                    <div className="flex justify-between text-xs"><span className="text-muted-foreground">Valor Base</span><strong className="tabular-nums">{formatMoeda(financeiros.valorBase)}</strong></div>
+                    <div className="flex justify-between text-xs"><span className="text-muted-foreground">(+) Bônus</span><strong className="text-green-600 tabular-nums">+{formatMoeda(financeiros.totalBonus || 0)}</strong></div>
+                    <div className="flex justify-between text-xs"><span className="text-muted-foreground">(–) Descontos</span><strong className="text-destructive tabular-nums">-{formatMoeda(financeiros.totalDescontos || 0)}</strong></div>
+                    <div className="flex justify-between font-bold"><span>= Valor Bruto</span><span className="tabular-nums">{formatMoeda(financeiros.totalBruto || 0)}</span></div>
                     {financeiros.funruralTotal != null && financeiros.funruralTotal > 0 && (
                       <div className="flex justify-between text-xs"><span className="text-muted-foreground">(–) Funrural</span><strong className="text-destructive tabular-nums">-{formatMoeda(financeiros.funruralTotal)}</strong></div>
                     )}
-                    <div className="flex justify-between font-bold"><span>= Valor Bruto</span><span className="tabular-nums">{formatMoeda(financeiros.totalBruto || 0)}</span></div>
-                    {financeiros.totalBonus != null && financeiros.totalBonus > 0 && (
-                      <div className="flex justify-between text-xs"><span className="text-muted-foreground">(+) Bônus</span><strong className="text-green-600 tabular-nums">+{formatMoeda(financeiros.totalBonus)}</strong></div>
-                    )}
-                    {financeiros.totalDescontos != null && financeiros.totalDescontos > 0 && (
-                      <div className="flex justify-between text-xs"><span className="text-muted-foreground">(–) Descontos</span><strong className="text-destructive tabular-nums">-{formatMoeda(financeiros.totalDescontos)}</strong></div>
-                    )}
                     <Separator className="my-0.5" />
                     <div className="flex justify-between text-[12px] font-bold">
-                      <span>= Valor Líquido</span>
+                      <span>= Valor Líquido (NF)</span>
                       <span className="text-primary tabular-nums">{formatMoeda(financeiros.valorLiquido || 0)}</span>
                     </div>
                     {financeiros.liqArroba != null && financeiros.liqArroba > 0 && (
