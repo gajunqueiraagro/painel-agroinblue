@@ -17,7 +17,7 @@ export function PdfFluxoCaixa({ serie, fmt }: { serie: Ponto[]; fmt: (v: number)
   if (serie.length < 2) {
     return <Text style={{ fontSize: 9, color: COR.cinzaMedio, marginTop: 6 }}>Saldo inicial não informado — evolução indisponível.</Text>;
   }
-  const W = 540, H = 300, padL = 50, padR = 12, padT = 12, padB = 24;
+  const W = 540, H = 335, padL = 52, padR = 12, padT = 12, padB = 26;
   const x0 = padL, x1 = W - padR, y0 = padT, y1 = H - padB;
   const vals = serie.flatMap((p) => [p.saldo, p.mov]);
   let min = Math.min(...vals, 0), max = Math.max(...vals, 0);

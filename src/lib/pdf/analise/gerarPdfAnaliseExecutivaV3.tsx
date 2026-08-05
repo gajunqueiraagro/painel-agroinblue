@@ -38,9 +38,13 @@ export interface TransfPdf { data: string; sentido: 'entrada' | 'saida'; descric
 export interface ExtratoPdf { data: string; produto: string | null; fornecedor: string; centro: string | null; valor: number; saldo: number | null; statusKey: string; statusLabel: string; doc: string; }
 
 const COR_ETAPA: Record<EtapaId, string> = { j1: '#3b82f6', j2: '#22784a', j3: '#d77706' };
+// Janelas de datas (não "etapas" — concentração de saídas por período do mês).
 const ETAPA_LABEL: Record<string, { nome: string; faixa: string }> = {
-  j1: { nome: '1ª etapa', faixa: '03–06' }, j2: { nome: '2ª etapa', faixa: '08–11' }, j3: { nome: '3ª etapa', faixa: '20–23' }, fora: { nome: 'Demais', faixa: '—' },
+  j1: { nome: 'Janela 1', faixa: '03–06' }, j2: { nome: 'Janela 2', faixa: '08–11' }, j3: { nome: 'Janela 3', faixa: '20–23' }, fora: { nome: 'Fora das janelas', faixa: 'Demais' },
 };
+// Cor de status (padrão do sistema): Realizado verde · Programado azul · Previsto laranja · Agendado roxo.
+const COR_STATUS: Record<string, string> = { realizado: '#22784a', programado: '#2563eb', previsto: '#d77706', agendado: '#7c3aad' };
+const corStatus = (s: string): string => COR_STATUS[s.toLowerCase()] ?? '#787878';
 
 export async function gerarPdfAnaliseExecutivaV3(params: {
   clienteNome: string;
@@ -78,7 +82,7 @@ export async function gerarPdfAnaliseExecutivaV3(params: {
   };
 
   // Página 3 — Tesouraria (transferências prontas do payload; só formata p/ o componente).
-  const mapTransf = (t: TransfPdf) => ({ data: diaBR(t.data), descricao: t.descricao || '—', contaOrigem: t.contaOrigem, contaDestino: t.contaDestino, valorFmt: formatMoeda(t.valor), status: t.status });
+  const mapTransf = (t: TransfPdf) => ({ data: diaBR(t.data), descricao: t.descricao || '—', contaOrigem: t.contaOrigem, contaDestino: t.contaDestino, valorFmt: formatMoeda(t.valor), status: t.status, statusCor: corStatus(t.status) });
   const rec = params.transferencias.filter((t) => t.sentido === 'entrada');
   const env = params.transferencias.filter((t) => t.sentido === 'saida');
   const tesouraria = {
@@ -108,7 +112,7 @@ export async function gerarPdfAnaliseExecutivaV3(params: {
       data: diaBR(r.data), descricao: r.produto || '—', fornecedor: r.fornecedor || '—', centro: r.centro || '—',
       valorFmt: assinado(r.valor), valorPos: r.valor >= 0,
       saldoFmt: r.saldo == null ? '—' : formatMoeda(r.saldo), saldoNeg: r.saldo == null ? null : r.saldo < 0,
-      status: r.statusLabel, doc: r.doc || '',
+      status: r.statusLabel, statusCor: corStatus(r.statusKey), doc: r.doc || '',
       ehFechamento: i === ext.length - 1 || ext[i + 1].data !== r.data,
     })),
   };

@@ -5,11 +5,11 @@
 import { View, Text } from '@react-pdf/renderer';
 import { COR } from '@/lib/pdf/analise/estilos';
 
-export interface LinhaTransf { data: string; descricao: string; contaOrigem: string; contaDestino: string; valorFmt: string; status: string; }
+export interface LinhaTransf { data: string; descricao: string; contaOrigem: string; contaDestino: string; valorFmt: string; status: string; statusCor: string; }
 
 const cData: { width: number } = { width: 34 };
-const cConta: { width: number } = { width: 96 };
-const cValor: { width: number; textAlign: 'right' } = { width: 62, textAlign: 'right' };
+const cConta: { width: number } = { width: 94 };
+const cValor: { width: number; textAlign: 'right'; paddingRight: number } = { width: 66, textAlign: 'right', paddingRight: 8 };
 const cStatus: { width: number } = { width: 58 };
 
 function Tabela({ titulo, cor, linhas, totalFmt }: { titulo: string; cor: string; linhas: LinhaTransf[]; totalFmt: string }) {
@@ -35,7 +35,7 @@ function Tabela({ titulo, cor, linhas, totalFmt }: { titulo: string; cor: string
               <Text style={{ ...cConta, fontSize: 8, color: COR.cinza }}>{r.contaOrigem}</Text>
               <Text style={{ ...cConta, fontSize: 8, color: COR.cinza }}>{r.contaDestino}</Text>
               <Text style={{ ...cValor, fontSize: 8, fontWeight: 700, color: cor }}>{r.valorFmt}</Text>
-              <Text style={{ ...cStatus, fontSize: 8, color: COR.cinzaMedio }}>{r.status}</Text>
+              <Text style={{ ...cStatus, fontSize: 8, fontWeight: 700, color: r.statusCor }}>{r.status}</Text>
             </View>
           ))}
         </View>

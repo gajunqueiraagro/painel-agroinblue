@@ -52,7 +52,7 @@ export function DocumentoAnaliseExecutiva(p: DocProps) {
         {p.notaProjetado ? <Text style={{ fontSize: 7.5, color: '#5a5a5a', marginTop: 3 }}>{p.notaProjetado}</Text> : null}
 
         <Text style={estilos.secao}>Organização dos Pagamentos</Text>
-        <PdfOrganizacaoPagamentos calendario={p.calendario} cards={p.cards} />
+        <PdfOrganizacaoPagamentos subtitulo="Concentração das saídas de caixa por período do mês (janelas móveis de 4 dias)." calendario={p.calendario} cards={p.cards} />
       </Page>
 
       <Page size="A4" style={estilos.pagina} wrap>

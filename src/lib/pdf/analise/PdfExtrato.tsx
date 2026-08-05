@@ -10,15 +10,15 @@ import { PdfKpis } from '@/lib/pdf/analise/PdfKpis';
 export interface LinhaExtrato {
   data: string; descricao: string; fornecedor: string; centro: string;
   valorFmt: string; valorPos: boolean; saldoFmt: string; saldoNeg: boolean | null;
-  status: string; doc: string; ehFechamento: boolean;
+  status: string; statusCor: string; doc: string; ehFechamento: boolean;
 }
 
-const wData: { width: number } = { width: 34 };
-const wForn: { width: number } = { width: 74 };
-const wCentro: { width: number } = { width: 52 };
-const wValor: { width: number; textAlign: 'right' } = { width: 56, textAlign: 'right' };
-const wSaldo: { width: number; textAlign: 'right' } = { width: 56, textAlign: 'right' };
-const wStatus: { width: number } = { width: 50 };
+const wData: { width: number } = { width: 32 };
+const wForn: { width: number } = { width: 70 };
+const wCentro: { width: number } = { width: 50 };
+const wValor: { width: number; textAlign: 'right'; paddingRight: number } = { width: 54, textAlign: 'right', paddingRight: 6 };
+const wSaldo: { width: number; textAlign: 'right'; paddingRight: number } = { width: 54, textAlign: 'right', paddingRight: 8 };
+const wStatus: { width: number } = { width: 52 };
 const wDoc: { width: number } = { width: 46 };
 const F = 7;
 
@@ -57,7 +57,7 @@ export function PdfExtrato({ resumo, contadores, linhas }: {
               <Text style={{ ...wCentro, fontSize: F, color: COR.cinzaMedio }}>{r.centro}</Text>
               <Text style={{ ...wValor, fontSize: F, color: r.valorPos ? COR.verde : COR.vermelho }}>{r.valorFmt}</Text>
               <Text style={{ ...wSaldo, fontSize: F, fontWeight: r.ehFechamento ? 700 : 400, color: r.saldoNeg == null ? COR.cinza : r.saldoNeg ? COR.vermelho : COR.verde }}>{r.saldoFmt}</Text>
-              <Text style={{ ...wStatus, fontSize: F, color: COR.cinzaMedio }}>{r.status}</Text>
+              <Text style={{ ...wStatus, fontSize: F, fontWeight: 700, color: r.statusCor }}>{r.status}</Text>
               <Text style={{ ...wDoc, fontSize: F, color: COR.cinzaMedio }}>{r.doc}</Text>
             </View>
           ))}

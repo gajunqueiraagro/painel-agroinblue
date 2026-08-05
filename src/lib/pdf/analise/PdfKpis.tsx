@@ -9,9 +9,9 @@ export function PdfKpis({ itens }: { itens: { label: string; valor: string; cor?
   return (
     <View style={{ flexDirection: 'row', gap: 7 }}>
       {itens.map((k) => (
-        <View key={k.label} style={{ flex: 1, backgroundColor: COR.azulClaro, borderWidth: 0.6, borderColor: COR.separador, borderRadius: 4, paddingVertical: 12, paddingHorizontal: 9 }}>
-          <Text style={{ fontSize: 8, color: COR.cinzaMedio, textTransform: 'uppercase', letterSpacing: 0.3 }}>{k.label}</Text>
-          <Text style={{ fontSize: 15, fontWeight: 700, color: k.cor ?? COR.azul, marginTop: 6 }}>{k.valor}</Text>
+        <View key={k.label} style={{ flex: 1, backgroundColor: COR.azulClaro, borderWidth: 0.6, borderColor: COR.separador, borderRadius: 4, paddingVertical: 14, paddingHorizontal: 10 }}>
+          <Text style={{ fontSize: 8.5, color: COR.cinzaMedio, textTransform: 'uppercase', letterSpacing: 0.3 }}>{k.label}</Text>
+          <Text style={{ fontSize: 17, fontWeight: 700, color: k.cor ?? COR.azul, marginTop: 7 }}>{k.valor}</Text>
         </View>
       ))}
     </View>

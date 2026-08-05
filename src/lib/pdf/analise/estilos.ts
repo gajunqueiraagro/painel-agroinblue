@@ -48,5 +48,5 @@ export const estilos = StyleSheet.create({
   // Rodapé fixo
   rodape: { position: 'absolute', bottom: 14, left: 24, right: 24, flexDirection: 'row', justifyContent: 'space-between', fontSize: 8, color: '#828282', borderTopWidth: 0.4, borderTopColor: COR.separador, paddingTop: 4 },
   // Título de seção (faixa azul)
-  secao: { backgroundColor: COR.azul, color: COR.branco, fontSize: 12, fontWeight: 700, paddingVertical: 5, paddingHorizontal: 7, marginTop: 14, marginBottom: 6, borderRadius: 2 },
+  secao: { backgroundColor: COR.azul, color: COR.branco, fontSize: 13, fontWeight: 700, paddingVertical: 6, paddingHorizontal: 8, marginTop: 14, marginBottom: 6, borderRadius: 2 },
 });
