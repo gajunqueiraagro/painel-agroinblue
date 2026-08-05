@@ -4,6 +4,7 @@
  * Deriva os dados de apresentação a partir dos helpers (fonte única analiseAgregacoes) e monta
  * o <Document>. Motor react-pdf carregado por import() dinâmico (bundle leve). FASE 1 = Página 1.
  */
+import { toast } from 'sonner';
 import { serieEvolucaoRP, etapasPagamento, etapaDoDia, distribuicaoEconomica, maioresCompromissos, creditosPorOrigem, type EtapaId } from '@/lib/analise/analiseAgregacoes';
 import { carregarLogoBase64 } from '@/lib/pdf/pdfChassi';
 import { formatMoeda } from '@/lib/calculos/formatters';
@@ -147,21 +148,27 @@ export async function gerarPdfAnaliseExecutivaV3(params: {
   try { logoData = await carregarLogoBase64(); } catch { logoData = undefined; }
 
   // Motor react-pdf sob demanda.
-  const [{ pdf }, { DocumentoAnaliseExecutiva }] = await Promise.all([
-    import('@react-pdf/renderer'),
-    import('@/lib/pdf/analise/DocumentoAnaliseExecutiva'),
-  ]);
-  const blob = await pdf(
-    DocumentoAnaliseExecutiva({
-      clienteNome: params.clienteNome, fazenda: params.fazenda, contaNome: params.contaNome, periodoLabel: params.periodoLabel, logoData,
-      kpis, serie, fmt: fmtCompacto, calendario, cards, notaProjetado,
-      credito, natureza, negocio, compromissos, tesouraria, extrato,
-    }),
-  ).toBlob();
+  try {
+    const [{ pdf }, { DocumentoAnaliseExecutiva }] = await Promise.all([
+      import('@react-pdf/renderer'),
+      import('@/lib/pdf/analise/DocumentoAnaliseExecutiva'),
+    ]);
+    // Elemento React (padrão do react-pdf) — NÃO invocar como função.
+    const blob = await pdf(
+      <DocumentoAnaliseExecutiva
+        clienteNome={params.clienteNome} fazenda={params.fazenda} contaNome={params.contaNome} periodoLabel={params.periodoLabel} logoData={logoData}
+        kpis={kpis} serie={serie} fmt={fmtCompacto} calendario={calendario} cards={cards} notaProjetado={notaProjetado}
+        credito={credito} natureza={natureza} negocio={negocio} compromissos={compromissos} tesouraria={tesouraria} extrato={extrato}
+      />,
+    ).toBlob();
 
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = `analise_financeira_executiva_${slug(params.clienteNome)}_${slug(params.periodoLabel)}.pdf`;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 4000);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `analise_financeira_executiva_${slug(params.clienteNome)}_${slug(params.periodoLabel)}.pdf`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  } catch (e) {
+    console.error('[PDF Executivo] falha ao gerar:', e);
+    toast.error('Falha ao gerar PDF');
+  }
 }
