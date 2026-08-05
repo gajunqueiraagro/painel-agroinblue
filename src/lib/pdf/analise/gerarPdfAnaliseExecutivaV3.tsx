@@ -34,7 +34,8 @@ const claro = (hex: string, a: number): string => {
 const slug = (s: string): string => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '').toLowerCase() || 'pdf';
 const diaBR = (iso: string): string => (iso.length >= 10 ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '—');
 
-const assinado = (v: number): string => `${v >= 0 ? '+' : '-'}${formatMoeda(Math.abs(v))}`;
+// Só prefixa "-" para negativos; positivos sem "+" (entrada = "R$ 873,10", saída = "-R$ 10.000,00").
+const assinado = (v: number): string => `${v < 0 ? '-' : ''}${formatMoeda(Math.abs(v))}`;
 export interface TransfPdf { data: string; sentido: 'entrada' | 'saida'; descricao: string; contaOrigem: string; contaDestino: string; valor: number; status: string; }
 export interface ExtratoPdf { data: string; produto: string | null; fornecedor: string; centro: string | null; valor: number; saldo: number | null; statusKey: string; statusLabel: string; doc: string; }
 
