@@ -88,15 +88,7 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
   const contaId = contaSel ?? contas[0]?.id ?? null;
   const conta = useMemo(() => contas.find((c) => c.id === contaId) ?? null, [contas, contaId]);
 
-  const { data: fornMap } = useQuery({
-    queryKey: ['extrato-ger-forn', clienteId],
-    enabled: !!clienteId,
-    queryFn: async (): Promise<Map<string, string>> => {
-      const { data } = await (supabase as any).from('financeiro_fornecedores').select('id, nome').eq('cliente_id', clienteId);
-      const rows: { id: string; nome: string }[] = data ?? [];
-      return new Map(rows.map((f) => [f.id, f.nome]));
-    },
-  });
+  // fornMap é definido após `lancs` (resolve só os favorecidos presentes) — ver abaixo.
 
   // Plano de contas oficial (lookup read-only) — única fonte de classificação econômica.
   const { data: planoMap } = useQuery({
@@ -150,6 +142,23 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
       if (!incluirLegados) q = q.neq('cenario', 'meta').neq('status_transacao', 'conciliado');
       const { data } = await q;
       return data ?? [];
+    },
+  });
+
+  // Fornecedores: resolver SOMENTE os favorecidos presentes nos lançamentos carregados.
+  // Carregar todos por cliente batia no teto de 1000 do PostgREST (NJ tem 3.268) → nomes
+  // além da 1000ª linha caíam para "—" na lista, embora o modal (lookup por id) resolvesse.
+  const favIds = useMemo(
+    () => Array.from(new Set(lancs.map((l) => l.favorecido_id).filter((v): v is string => !!v))).sort(),
+    [lancs],
+  );
+  const { data: fornMap } = useQuery({
+    queryKey: ['extrato-ger-forn', favIds],
+    enabled: favIds.length > 0,
+    queryFn: async (): Promise<Map<string, string>> => {
+      const { data } = await (supabase as any).from('financeiro_fornecedores').select('id, nome').in('id', favIds);
+      const rows: { id: string; nome: string }[] = data ?? [];
+      return new Map(rows.map((f) => [f.id, f.nome]));
     },
   });
 
