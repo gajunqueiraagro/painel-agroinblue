@@ -200,8 +200,16 @@ const STATUS_DESCRIPTIONS_ABATE: Partial<Record<StatusOperacional | 'meta', stri
   realizado: 'Abate concluído com dados reais de carcaça, bônus e descontos. Os valores refletem o resultado efetivo da operação.',
 };
 
+const STATUS_DESCRIPTIONS_MORTE_CONSUMO: Partial<Record<StatusOperacional | 'meta', string>> = {
+  meta: META_VISUAL.description,
+  programado: 'Operação definida, ainda não executada. Não gera lançamento financeiro.',
+  realizado: 'Operação concluída. Impacta apenas o estoque de rebanho.',
+};
+
 function getStatusDescription(tipo: TipoMovimentacao, status: StatusOperacional | 'meta'): string {
-  return tipo === 'abate' ? STATUS_DESCRIPTIONS_ABATE[status] : STATUS_DESCRIPTIONS_DEFAULT[status];
+  if (tipo === 'abate') return STATUS_DESCRIPTIONS_ABATE[status];
+  if (tipo === 'morte' || tipo === 'consumo') return STATUS_DESCRIPTIONS_MORTE_CONSUMO[status];
+  return STATUS_DESCRIPTIONS_DEFAULT[status];
 }
 
 function getCamposFazenda(tipo: TipoMovimentacao, nomeFazenda: string) {
@@ -3038,8 +3046,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
       {!isVenda && (
         <div>
-          <Label className="text-[11px]">Nota Fiscal</Label>
-          <Input value={notaFiscal} onChange={e => setNotaFiscal(e.target.value)} placeholder="Nº da nota" className="h-8 text-[12px]" />
+          <Label className="text-[11px]">{isMorte || isConsumo ? 'Identificação (brinco)' : 'Nota Fiscal'}</Label>
+          <Input value={notaFiscal} onChange={e => setNotaFiscal(e.target.value)} placeholder={isMorte || isConsumo ? 'Ex: brinco 1234' : 'Nº da nota'} className="h-8 text-[12px]" />
         </div>
       )}
 

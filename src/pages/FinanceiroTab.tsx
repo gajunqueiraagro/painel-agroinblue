@@ -261,6 +261,7 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
           {isCompra && <th className={`${TABLE_HEAD_CELL} text-left`}>Fornecedor</th>}
           {showFornecedorCol && <th className={`${TABLE_HEAD_CELL} text-left`} style={{ minWidth: '90px' }}>{subTipo === 'abate' ? 'Frigorífico' : 'Destino'}</th>}
           {showMotivoCol && <th className={`${TABLE_HEAD_CELL} text-left`} style={{ minWidth: '90px' }}>Motivo</th>}
+          {showMotivoCol && <th className={`${TABLE_HEAD_CELL} text-left`} style={{ minWidth: '80px' }}>Ident.</th>}
           {showOrigemDestinoCol && <th className={`${TABLE_HEAD_CELL} text-left`} style={{ minWidth: '120px' }}>Origem → Destino</th>}
           {isGlobal && <th className={`${TABLE_HEAD_CELL} text-left`}>{showTipo ? 'Fazenda' : globalColHeader}</th>}
           <SortableHeader label="P.Vivo" align="text-right" sortKey="pesoVivo" {...hp} />
@@ -287,7 +288,8 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
               <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{cat}</td>
               {isCompra && <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{getContraparteZoo(l, 'compra')}</td>}
               {showFornecedorCol && <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{getContraparteZoo(l, subTipo || '')}</td>}
-              {showMotivoCol && <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{(l as any).motivo || l.observacao || '—'}</td>}
+              {showMotivoCol && <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{l.fazendaDestino || l.motivo || '—'}</td>}
+              {showMotivoCol && <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{l.notaFiscal || '—'}</td>}
               {showOrigemDestinoCol && <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{getFazendaCellValue(l, fMap)}</td>}
               {isGlobal && <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{showTipo ? (fMap.get(l.fazendaId || '') || '-') : getFazendaCellValue(l, fMap)}</td>}
               <td className={`${TABLE_BODY_CELL} text-right text-[9px]`}>{l.pesoMedioKg != null ? l.pesoMedioKg.toFixed(2) : '-'}</td>
@@ -335,6 +337,7 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
               <td className={TABLE_FOOT_CELL}></td>
               {isCompra && <td className={TABLE_FOOT_CELL}></td>}
               {showFornecedorCol && <td className={TABLE_FOOT_CELL}></td>}
+              {showMotivoCol && <td className={TABLE_FOOT_CELL}></td>}
               {showMotivoCol && <td className={TABLE_FOOT_CELL}></td>}
               {showOrigemDestinoCol && <td className={TABLE_FOOT_CELL}></td>}
               {isGlobal && <td className={TABLE_FOOT_CELL}></td>}
