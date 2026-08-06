@@ -13,13 +13,13 @@ export interface LinhaExtrato {
   status: string; statusCor: string; doc: string; ehFechamento: boolean;
 }
 
-const wData: { width: number } = { width: 32 };
+const wData: { width: number; textAlign: 'center' } = { width: 32, textAlign: 'center' };
 const wForn: { width: number } = { width: 70 };
 const wCentro: { width: number } = { width: 50 };
 const wValor: { width: number; textAlign: 'right'; paddingRight: number } = { width: 54, textAlign: 'right', paddingRight: 6 };
-const wSaldo: { width: number; textAlign: 'right'; paddingRight: number } = { width: 54, textAlign: 'right', paddingRight: 8 };
-const wStatus: { width: number } = { width: 52 };
-const wDoc: { width: number } = { width: 46 };
+const wSaldo: { width: number; textAlign: 'right'; paddingRight: number } = { width: 70, textAlign: 'right', paddingRight: 6 };
+const wStatus: { width: number; textAlign: 'center' } = { width: 52, textAlign: 'center' };
+const wDoc: { width: number; textAlign: 'center' } = { width: 46, textAlign: 'center' };
 const F = 7;
 
 export function PdfExtrato({ resumo, contadores, linhas }: {
@@ -40,14 +40,14 @@ export function PdfExtrato({ resumo, contadores, linhas }: {
         <View>
           {/* Cabeçalho da tabela — repete em todas as páginas */}
           <View fixed style={{ flexDirection: 'row', backgroundColor: COR.azul, paddingVertical: 3, paddingHorizontal: 4 }}>
-            <Text style={{ ...wData, fontSize: F, color: COR.branco, fontWeight: 700 }}>Data</Text>
-            <Text style={{ flex: 1, fontSize: F, color: COR.branco, fontWeight: 700 }}>Descrição</Text>
-            <Text style={{ ...wForn, fontSize: F, color: COR.branco, fontWeight: 700 }}>Fornecedor</Text>
-            <Text style={{ ...wCentro, fontSize: F, color: COR.branco, fontWeight: 700 }}>Centro</Text>
-            <Text style={{ ...wValor, fontSize: F, color: COR.branco, fontWeight: 700 }}>Valor</Text>
-            <Text style={{ ...wSaldo, fontSize: F, color: COR.branco, fontWeight: 700 }}>Saldo</Text>
-            <Text style={{ ...wStatus, fontSize: F, color: COR.branco, fontWeight: 700 }}>Status</Text>
-            <Text style={{ ...wDoc, fontSize: F, color: COR.branco, fontWeight: 700 }}>Doc</Text>
+            <Text style={{ ...wData, fontSize: F, color: COR.branco, fontWeight: 700, textAlign: 'center' }}>Data</Text>
+            <Text style={{ flex: 1, fontSize: F, color: COR.branco, fontWeight: 700, textAlign: 'center' }}>Descrição</Text>
+            <Text style={{ ...wForn, fontSize: F, color: COR.branco, fontWeight: 700, textAlign: 'center' }}>Fornecedor</Text>
+            <Text style={{ ...wCentro, fontSize: F, color: COR.branco, fontWeight: 700, textAlign: 'center' }}>Centro</Text>
+            <Text style={{ ...wValor, fontSize: F, color: COR.branco, fontWeight: 700, textAlign: 'center', paddingRight: 0 }}>Valor</Text>
+            <Text style={{ ...wSaldo, fontSize: F, color: COR.branco, fontWeight: 700, textAlign: 'center', paddingRight: 0 }}>Saldo</Text>
+            <Text style={{ ...wStatus, fontSize: F, color: COR.branco, fontWeight: 700, textAlign: 'center' }}>Status</Text>
+            <Text style={{ ...wDoc, fontSize: F, color: COR.branco, fontWeight: 700, textAlign: 'center' }}>Doc</Text>
           </View>
           {linhas.map((r, i) => (
             <View key={i} wrap={false} style={{ flexDirection: 'row', paddingVertical: 1.6, paddingHorizontal: 4, backgroundColor: i % 2 ? COR.zebra : COR.branco, borderBottomWidth: 0.3, borderBottomColor: COR.separador }}>

@@ -113,7 +113,7 @@ export async function gerarPdfAnaliseExecutivaV3(params: {
     linhas: ext.map((r, i) => ({
       data: diaBR(r.data), descricao: r.produto || '—', fornecedor: r.fornecedor || '—', centro: r.centro || '—',
       valorFmt: assinado(r.valor), valorPos: r.valor >= 0,
-      saldoFmt: r.saldo == null ? '—' : formatMoeda(r.saldo), saldoNeg: r.saldo == null ? null : r.saldo < 0,
+      saldoFmt: r.saldo == null ? '—' : assinado(r.saldo), saldoNeg: r.saldo == null ? null : r.saldo < 0,
       status: r.statusLabel, statusCor: corStatus(r.statusKey), doc: r.doc || '',
       ehFechamento: i === ext.length - 1 || ext[i + 1].data !== r.data,
     })),
@@ -158,7 +158,7 @@ export async function gerarPdfAnaliseExecutivaV3(params: {
     const blob = await pdf(
       <DocumentoAnaliseExecutiva
         clienteNome={params.clienteNome} fazenda={params.fazenda} contaNome={params.contaNome} periodoLabel={params.periodoLabel} logoData={logoData}
-        kpis={kpis} serie={serie} fmt={fmtCompacto} calendario={calendario} cards={cards} notaProjetado={notaProjetado}
+        kpis={kpis} serie={serie} fmt={fmtCompacto} projetado={temProjetado} calendario={calendario} cards={cards} notaProjetado={notaProjetado}
         credito={credito} natureza={natureza} negocio={negocio} compromissos={compromissos} tesouraria={tesouraria} extrato={extrato}
       />,
     ).toBlob();

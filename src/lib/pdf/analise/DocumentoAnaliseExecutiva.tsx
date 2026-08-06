@@ -24,6 +24,7 @@ export interface DocProps {
   kpis: { label: string; valor: string }[];
   serie: { dia: string; mov: number; saldo: number }[];
   fmt: (v: number) => string;
+  projetado?: boolean;
   calendario: DiaCalendario[];
   cards: CardEtapa[];
   notaProjetado?: string;
@@ -48,7 +49,7 @@ export function DocumentoAnaliseExecutiva(p: DocProps) {
         <PdfKpis itens={p.kpis} />
 
         <Text style={estilos.secao}>Evolução do Caixa</Text>
-        <PdfFluxoCaixa serie={p.serie} fmt={p.fmt} />
+        <PdfFluxoCaixa serie={p.serie} fmt={p.fmt} projetado={p.projetado} />
         {p.notaProjetado ? <Text style={{ fontSize: 7.5, color: '#5a5a5a', marginTop: 3 }}>{p.notaProjetado}</Text> : null}
 
         <Text style={estilos.secao}>Organização dos Pagamentos</Text>

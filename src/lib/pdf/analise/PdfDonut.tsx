@@ -14,13 +14,23 @@ function arco(cx: number, cy: number, r: number, a0: number, a1: number): string
 }
 
 export function PdfDonut({ segmentos, size = 86, inner = 0.56 }: { segmentos: SegmentoDonut[]; size?: number; inner?: number }) {
-  const total = segmentos.reduce((s, x) => s + x.valor, 0);
+  const positivos = segmentos.filter((s) => s.valor > 0);
+  const total = positivos.reduce((s, x) => s + x.valor, 0);
   if (total <= 0) return <Svg width={size} height={size} />;
   const cx = size / 2, cy = size / 2, r = size / 2 - 1, ri = r * inner;
+  // Uma única categoria (100%): um arco de 360° tem início == fim e a lib não o desenha.
+  // Desenhar o anel completo com círculo cheio + furo branco (sem fatia/valor fictício).
+  if (positivos.length === 1) {
+    return (
+      <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        <Circle cx={cx} cy={cy} r={r} fill={positivos[0].cor} />
+        <Circle cx={cx} cy={cy} r={ri} fill="#ffffff" />
+      </Svg>
+    );
+  }
   let a = -Math.PI / 2;
   const paths: { d: string; cor: string }[] = [];
-  for (const seg of segmentos) {
-    if (seg.valor <= 0) continue;
+  for (const seg of positivos) {
     const a1 = a + (seg.valor / total) * Math.PI * 2;
     paths.push({ d: arco(cx, cy, r, a, a1), cor: seg.cor });
     a = a1;
