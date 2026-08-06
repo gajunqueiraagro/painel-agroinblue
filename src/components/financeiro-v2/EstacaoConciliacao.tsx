@@ -19,6 +19,41 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+  buscarCompromissosAbertos,
+  type CompromissoAberto,
+} from '@/lib/financeiro/antiDupCriarLancamento';
+
+// PR-CONCIL-AGENDADO-01 (D5) — consulta de vínculos ativos injetada no módulo
+// anti-dup (conciliacao_bancaria_itens está fora dos types gerados;
+// `(supabase as any)` é o padrão já vigente neste arquivo).
+async function listarVinculosAtivosCbi(lancIds: string[]): Promise<string[]> {
+  if (lancIds.length === 0) return [];
+  const { data, error } = await (supabase as any)
+    .from('conciliacao_bancaria_itens')
+    .select('lancamento_id')
+    .in('lancamento_id', lancIds)
+    .is('desfeito_em', null);
+  if (error) throw error;
+  // Normalização segura, sem cast: `data` já é any pelo adapter acima;
+  // validamos a forma em runtime antes de usar.
+  const ids: string[] = [];
+  for (const row of Array.isArray(data) ? data : []) {
+    const id = row?.lancamento_id;
+    if (typeof id === 'string') ids.push(id);
+  }
+  return ids;
+}
 
 // ── Contrato do payload (fn_ws_conciliacao, versao ws-01-readonly) ───────────
 interface Contexto { cliente_id: string | null; conta_bancaria_id: string | null; ano_mes: string | null; }
@@ -216,6 +251,8 @@ export function EstacaoConciliacao({ tipo, id, grupoSugerido, contaNome, contas,
   // TASK-003/D1 — índice do candidato em vinculação (null = ocioso).
   const [vinculandoIdx, setVinculandoIdx] = useState<number | null>(null);
   const [confirmandoGrupo, setConfirmandoGrupo] = useState(false);
+  // PR-CONCIL-AGENDADO-01 (D5) — guarda anti-duplicidade do "Criar lançamento".
+  const [compromissosAviso, setCompromissosAviso] = useState<CompromissoAberto[] | null>(null);
   const queryClient = useQueryClient();
   // TASK-005/D2 — mini-form de criação a partir do OFX (modo extrato).
   const [criando, setCriando] = useState(false);
@@ -384,7 +421,37 @@ export function EstacaoConciliacao({ tipo, id, grupoSugerido, contaNome, contas,
     },
   });
 
+  // PR-CONCIL-AGENDADO-01 (D5) — checagem anti-duplicidade ANTES de criar.
+  // Bloqueio consciente: havendo compromisso aberto equivalente, abre alerta
+  // com "Criar mesmo assim". Erro na checagem NUNCA impede a criação.
   async function criarLancamento() {
+    if (!ofx?.extrato_id || !fazendaId) { toast.error('Selecione a fazenda.'); return; }
+    setSalvando(true);
+    let compromissos: CompromissoAberto[] = [];
+    try {
+      // Guarda só roda quando o contexto necessário está disponível
+      // (contaExtratoId é prop opcional; ofx.data pode ser null no payload).
+      if (clienteId && contaExtratoId && ofx.data && typeof ofx.valor === 'number') {
+        compromissos = await buscarCompromissosAbertos(supabase, {
+          clienteId,
+          contaBancariaId: contaExtratoId,
+          valorAbs: Math.abs(ofx.valor),
+          sinal: ofx.valor >= 0 ? 1 : -1,
+          dataMov: ofx.data,
+        }, listarVinculosAtivosCbi);
+      }
+    } catch (e) {
+      console.warn('[EstacaoConciliacao] guarda anti-dup falhou — seguindo criação normal:', e);
+    }
+    if (compromissos.length > 0) {
+      setSalvando(false);
+      setCompromissosAviso(compromissos);
+      return;
+    }
+    await executarCriacaoLancamento();
+  }
+
+  async function executarCriacaoLancamento() {
     if (!ofx?.extrato_id || !fazendaId) { toast.error('Selecione a fazenda.'); return; }
     setSalvando(true);
     try {
@@ -1027,6 +1094,56 @@ export function EstacaoConciliacao({ tipo, id, grupoSugerido, contaNome, contas,
           <span className="text-[10px] text-muted-foreground/70">(somente leitura)</span>
         </footer>
       </DialogContent>
+
+      {/* PR-CONCIL-AGENDADO-01 (D5) — alerta anti-duplicidade do "Criar
+          lançamento". Bloqueio consciente; vincular o compromisso existente
+          continua disponível no trilho de candidatos. */}
+      <AlertDialog
+        open={!!compromissosAviso}
+        onOpenChange={(o) => { if (!o) setCompromissosAviso(null); }}
+      >
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-base">
+              Já existe compromisso aberto com este valor
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-[12px]">
+              Encontrei lançamento(s) agendado(s)/programado(s) de mesmo valor e
+              direção na janela de ±10 dias. Criar um novo lançamento pode
+              duplicar o compromisso — o caminho recomendado é vincular o
+              existente (ele será promovido a Realizado automaticamente).
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="max-h-44 overflow-y-auto rounded-md border text-[11px]">
+            {(compromissosAviso ?? []).map((c) => (
+              <div key={c.id} className="flex items-center gap-2 border-b px-2.5 py-1.5 last:border-b-0">
+                <span className="font-mono shrink-0">{c.data ? c.data.split('-').reverse().join('/') : '—'}</span>
+                <span className={`font-mono tabular-nums shrink-0 ${c.valor < 0 ? 'text-red-700' : 'text-emerald-700'}`}>
+                  {fmtBRL(c.valor)}
+                </span>
+                <Badge variant="outline" className="h-4 px-1.5 text-[9px] uppercase shrink-0">
+                  {c.status_transacao ?? '—'}
+                </Badge>
+                <span className="truncate text-muted-foreground" title={c.descricao ?? ''}>
+                  {c.descricao ?? '—'}
+                </span>
+              </div>
+            ))}
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="h-8 text-[12px]">Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="h-8 text-[12px]"
+              onClick={() => {
+                setCompromissosAviso(null);
+                void executarCriacaoLancamento();
+              }}
+            >
+              Criar mesmo assim
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }

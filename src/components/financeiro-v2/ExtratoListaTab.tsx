@@ -45,6 +45,42 @@ import {
   type MovimentoEnriquecido,
 } from '@/lib/financeiro/extratoEnriquecer';
 import { montarPayloadConta } from '@/lib/financeiro/contaPayload';
+import {
+  buscarCompromissosAbertos,
+  contarMovimentosComCompromissoAberto,
+  type CompromissoAberto,
+} from '@/lib/financeiro/antiDupCriarLancamento';
+
+// PR-CONCIL-AGENDADO-01 (D5) — consulta de vínculos ativos injetada no módulo
+// anti-dup (a tabela conciliacao_bancaria_itens está fora dos types gerados;
+// `(supabase as any)` é o padrão já vigente neste arquivo para esses casos).
+async function listarVinculosAtivosCbi(lancIds: string[]): Promise<string[]> {
+  if (lancIds.length === 0) return [];
+  const { data, error } = await (supabase as any)
+    .from('conciliacao_bancaria_itens')
+    .select('lancamento_id')
+    .in('lancamento_id', lancIds)
+    .is('desfeito_em', null);
+  if (error) throw error;
+  // Normalização segura, sem cast: `data` já é any pelo adapter acima;
+  // validamos a forma em runtime antes de usar.
+  const ids: string[] = [];
+  for (const row of Array.isArray(data) ? data : []) {
+    const id = row?.lancamento_id;
+    if (typeof id === 'string') ids.push(id);
+  }
+  return ids;
+}
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { ConciliacaoPendenciasPanel } from './ConciliacaoPendenciasPanel';
 import { RematchOnDemandPanel } from './RematchOnDemandPanel';
 import { useExtratoParesOfx, type ParOfx } from '@/hooks/useExtratoParesOfx';
@@ -387,6 +423,11 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
   // Elegibilidade: status='nao_conciliado' && sem vínculo em cbi && não ignorado.
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
   const [mostrarConfirmacaoLote, setMostrarConfirmacaoLote] = useState(false);
+  // PR-CONCIL-AGENDADO-01 (D5) — guarda anti-duplicidade do "Criar lançamento".
+  const [avisoDup, setAvisoDup] = useState<{ mov: ExtratoMovimento; compromissos: CompromissoAberto[] } | null>(null);
+  const [verificandoDupId, setVerificandoDupId] = useState<string | null>(null);
+  // Aviso agregado (não bloqueante) do lote: qtde de movimentos com compromisso aberto.
+  const [avisoLoteQtd, setAvisoLoteQtd] = useState<number | null>(null);
   const [processandoLote, setProcessandoLote] = useState(false);
 
   // ── PR-Det-4b — modal de transferência ────────────────────────────
@@ -500,6 +541,33 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
     () => contasBancarias.find((c) => c.id === contaBancariaId) ?? null,
     [contasBancarias, contaBancariaId],
   );
+
+  // PR-CONCIL-AGENDADO-01 (D5) — aviso AGREGADO (não bloqueante) na abertura da
+  // confirmação do lote: quantos movimentos selecionados têm compromissos
+  // agendados/programados de mesmo valor na janela ±10d da âncora.
+  useEffect(() => {
+    if (!mostrarConfirmacaoLote) { setAvisoLoteQtd(null); return; }
+    if (!clienteAtual?.id || !contaBancariaId || selecionados.size === 0) {
+      setAvisoLoteQtd(null);
+      return;
+    }
+    let cancelado = false;
+    const movs = enriquecidos
+      .filter((m) => selecionados.has(m.id))
+      .map((m) => ({ id: m.id, data_movimento: m.data_movimento, valor: m.valor }));
+    contarMovimentosComCompromissoAberto(supabase, {
+      clienteId: clienteAtual.id,
+      contaBancariaId,
+      movimentos: movs,
+    }, listarVinculosAtivosCbi)
+      .then((n) => { if (!cancelado) setAvisoLoteQtd(n); })
+      .catch((e) => {
+        console.warn('[ExtratoListaTab] aviso agregado anti-dup falhou:', e);
+        if (!cancelado) setAvisoLoteQtd(null);
+      });
+    return () => { cancelado = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mostrarConfirmacaoLote]);
 
   const handleCriarLote = async () => {
     if (!clienteAtual?.id || !contaBancariaId) return;
@@ -665,6 +733,33 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
       toast.error(msg);
     } finally {
       setVinculoBusyId(null);
+    }
+  };
+
+  // PR-CONCIL-AGENDADO-01 (D5) — antes de abrir o modal de criação, procurar
+  // compromissos abertos (agendado/programado sem vínculo ativo) equivalentes.
+  // A guarda NUNCA impede: erro na consulta → segue o fluxo normal de criação.
+  const handleAbrirCriarLancamento = async (m: ExtratoMovimento) => {
+    if (verificandoDupId) return;
+    setVerificandoDupId(m.id);
+    try {
+      const compromissos = await buscarCompromissosAbertos(supabase, {
+        clienteId: m.cliente_id,
+        contaBancariaId: m.conta_bancaria_id,
+        valorAbs: Math.abs(Number(m.valor) || 0),
+        sinal: (Number(m.valor) || 0) >= 0 ? 1 : -1,
+        dataMov: m.data_movimento,
+      }, listarVinculosAtivosCbi);
+      if (compromissos.length > 0) {
+        setAvisoDup({ mov: m, compromissos });
+      } else {
+        setMovCriando(m);
+      }
+    } catch (e) {
+      console.warn('[ExtratoListaTab] guarda anti-dup falhou — seguindo criação normal:', e);
+      setMovCriando(m);
+    } finally {
+      setVerificandoDupId(null);
     }
   };
 
@@ -1190,8 +1285,8 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
                         size="sm"
                         variant="outline"
                         className="h-6 text-[10px] px-2"
-                        disabled={m.status === 'ignorado' || m.vinculos.length > 0}
-                        onClick={() => setMovCriando(m)}
+                        disabled={m.status === 'ignorado' || m.vinculos.length > 0 || verificandoDupId === m.id}
+                        onClick={() => handleAbrirCriarLancamento(m)}
                       >
                         Criar lançamento
                       </Button>
@@ -1355,6 +1450,59 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
         onConciliado={() => { setConciliando(null); refetch(); }}
       />
 
+      {/* PR-CONCIL-AGENDADO-01 (D5) — alerta anti-duplicidade do "Criar
+          lançamento". Bloqueio CONSCIENTE: o operador pode criar mesmo assim,
+          e conciliar o compromisso existente segue disponível pelos fluxos
+          normais (Conciliar). */}
+      <AlertDialog
+        open={!!avisoDup}
+        onOpenChange={(o) => { if (!o) setAvisoDup(null); }}
+      >
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-base">
+              Já existe compromisso aberto com este valor
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-[12px]">
+              Encontrei lançamento(s) agendado(s)/programado(s) de mesmo valor e
+              direção na janela de ±10 dias. Criar um novo lançamento pode
+              duplicar o compromisso — o caminho recomendado é usar
+              &quot;Conciliar&quot; e vincular o existente (ele será promovido a
+              Realizado automaticamente).
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="max-h-44 overflow-y-auto rounded-md border text-[11px]">
+            {(avisoDup?.compromissos ?? []).map((c) => (
+              <div key={c.id} className="flex items-center gap-2 border-b px-2.5 py-1.5 last:border-b-0">
+                <span className="font-mono shrink-0">{c.data ? format(parseISO(c.data), 'dd/MM/yy') : '—'}</span>
+                <span className={`font-mono tabular-nums shrink-0 ${c.valor < 0 ? 'text-red-700' : 'text-emerald-700'}`}>
+                  {formatMoeda(c.valor)}
+                </span>
+                <Badge variant="outline" className="h-4 px-1.5 text-[9px] uppercase shrink-0">
+                  {c.status_transacao ?? '—'}
+                </Badge>
+                <span className="truncate text-muted-foreground" title={c.descricao ?? ''}>
+                  {c.descricao ?? '—'}
+                </span>
+              </div>
+            ))}
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="h-8 text-[12px]">Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="h-8 text-[12px]"
+              onClick={() => {
+                const m = avisoDup?.mov ?? null;
+                setAvisoDup(null);
+                if (m) setMovCriando(m);
+              }}
+            >
+              Criar mesmo assim
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* PR-D — Dialog de confirmação para criação em lote a partir do OFX. */}
       <Dialog
         open={mostrarConfirmacaoLote}
@@ -1394,6 +1542,14 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
               <span className="text-muted-foreground">Mês/ano</span>
               <span className="text-right font-mono">{anoMes ?? '—'}</span>
             </div>
+            {avisoLoteQtd !== null && avisoLoteQtd > 0 && (
+              <div className="rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-800">
+                {avisoLoteQtd} movimento{avisoLoteQtd > 1 ? 's têm' : ' tem'}{' '}
+                compromissos agendados/programados de mesmo valor na janela de
+                ±10 dias — revise antes: criar em lote pode duplicar o
+                compromisso já lançado.
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button

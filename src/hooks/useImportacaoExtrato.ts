@@ -26,6 +26,7 @@ import { parseOFX, type MovimentoBruto } from '@/lib/financeiro/parser/parseOFX'
 import { parseCSVComRelatorio } from '@/lib/financeiro/parser/parseCSV';
 import { extractPdfText } from '@/lib/financeiro/parser/extractPdfText';
 import { hashMovimento } from '@/lib/financeiro/extratoHash';
+import { dataAncoraLancamento, orFiltroDataAncora, OR_CENARIO_NAO_META } from '@/lib/financeiro/dataAncora';
 import {
   classificarDuplicidadeOFX,
   type ClassificacaoOFXDup,
@@ -292,6 +293,8 @@ function normalizarTexto(s: string | null | undefined): string {
 interface LancamentoCandidato {
   id: string;
   data_pagamento: string | null;
+  data_vencimento: string | null;
+  data_competencia: string | null;
   valor: number;
   sinal: number;
   descricao: string | null;
@@ -349,7 +352,7 @@ function detectarAmbiguidade(
     // Caso especial: scores diferentes mas valor+data+fornecedor idênticos
     const valorIgual =
       Math.abs(Math.abs(c.lanc.valor) - Math.abs(top.lanc.valor)) <= 0.01;
-    const dataIgual = c.lanc.data_pagamento === top.lanc.data_pagamento;
+    const dataIgual = dataAncoraLancamento(c.lanc) === dataAncoraLancamento(top.lanc);
     const fornParecido = similarFornecedorEstrito(c.fornNome, top.fornNome);
     return valorIgual && dataIgual && fornParecido;
   });
@@ -375,8 +378,9 @@ function calcularScore(
   fornNome: string | null,
 ): number {
   let score = 70;
-  if (lanc.data_pagamento) {
-    const diff = Math.abs(diasEntre(movDataISO, lanc.data_pagamento));
+  const ancScore = dataAncoraLancamento(lanc);
+  if (ancScore) {
+    const diff = Math.abs(diasEntre(movDataISO, ancScore));
     if (diff <= 3) score += 20;
   }
   const movN = normalizarTexto(movDescricao);
@@ -418,8 +422,10 @@ function tryGroupingMatch(
 
   // Ordena por proximidade da data — primeiros são candidatos mais prováveis.
   const ordenado = [...pool].sort((a, b) => {
-    const da = a.data_pagamento ? Math.abs(diasEntre(movDataISO, a.data_pagamento)) : 999;
-    const db = b.data_pagamento ? Math.abs(diasEntre(movDataISO, b.data_pagamento)) : 999;
+    const ancA = dataAncoraLancamento(a);
+    const ancB = dataAncoraLancamento(b);
+    const da = ancA ? Math.abs(diasEntre(movDataISO, ancA)) : 999;
+    const db = ancB ? Math.abs(diasEntre(movDataISO, ancB)) : 999;
     return da - db;
   });
 
@@ -481,7 +487,7 @@ function calcularScoreAgrupado(
   let score = 50;
 
   // ── Δ data média ──
-  const datas = itens.map((l) => l.data_pagamento).filter((d): d is string => !!d);
+  const datas = itens.map((l) => dataAncoraLancamento(l)).filter((d): d is string => !!d);
   let span = 0;
   if (datas.length > 0) {
     const ts = datas.map((d) => new Date(d + 'T00:00:00').getTime());
@@ -655,14 +661,16 @@ export function useImportacaoExtrato() {
       // Exclui cenário META — não é alvo de conciliação.
       const { data: lancsRaw } = await supabase
         .from('financeiro_lancamentos_v2')
-        .select('id, data_pagamento, valor, sinal, descricao, favorecido_id, conta_bancaria_id, conta_destino_id, macro_custo, grupo_custo, centro_custo, subcentro, status_transacao, numero_documento, cenario, fazenda_id')
+        .select('id, data_pagamento, data_vencimento, data_competencia, valor, sinal, descricao, favorecido_id, conta_bancaria_id, conta_destino_id, macro_custo, grupo_custo, centro_custo, subcentro, status_transacao, numero_documento, cenario, fazenda_id')
         .eq('cliente_id', clienteAtual.id)
-        .eq('cancelado', false)
-        .neq('cenario', 'meta')
+        // PR-CONCIL-AGENDADO-01 (D9): vivo = cancelado IS NOT TRUE (coluna anulável).
+        .not('cancelado', 'is', true)
+        // D9: cenario é anulável — 'diferente de meta OU nulo'.
+        .or(OR_CENARIO_NAO_META)
         .in('status_transacao', ['realizado', 'agendado', 'programado'])
         .or(`conta_bancaria_id.eq.${params.contaBancariaId},conta_destino_id.eq.${params.contaBancariaId}`)
-        .gte('data_pagamento', fetchIni)
-        .lte('data_pagamento', fetchFim);
+        // D1: janela ±10d sobre a âncora COALESCE(pagamento, vencimento, competência).
+        .or(orFiltroDataAncora(fetchIni, fetchFim));
 
       const lancs = (lancsRaw ?? []) as unknown as LancamentoCandidato[];
 
@@ -759,15 +767,16 @@ export function useImportacaoExtrato() {
         const valorOriginal = Math.abs(Number(l.valor) || 0);
         const valorJaConciliado = totalAplicadoPorLanc.get(l.id) ?? 0;
         const saldoConciliar = Math.max(0, valorOriginal - valorJaConciliado);
+        const ancCand = dataAncoraLancamento(l);
         return {
           id: l.id,
-          data: l.data_pagamento,
+          data: ancCand,
           fornecedor: l.favorecido_id ? fornMap.get(l.favorecido_id) ?? null : null,
           descricao: l.descricao,
           valor: (Number(l.valor) || 0) * ((Number(l.sinal) || 0) >= 0 ? 1 : -1),
           statusTransacao: l.status_transacao,
           diffValor: Math.abs(valorOriginal - valorMovAbs),
-          diffDias: l.data_pagamento ? Math.abs(diasEntre(movDataISO, l.data_pagamento)) : 999,
+          diffDias: ancCand ? Math.abs(diasEntre(movDataISO, ancCand)) : 999,
           numeroDocumento: l.numero_documento,
           fazenda: l.fazenda_id ? fazendaMap.get(l.fazenda_id) ?? null : null,
           contaBancaria: l.conta_bancaria_id ? contaMap.get(l.conta_bancaria_id) ?? null : null,
@@ -796,8 +805,9 @@ export function useImportacaoExtrato() {
         const candidatosScore: CandidatoComScore[] = [];
         for (const l of lancsLivres) {
           if (Math.abs(Math.abs(Number(l.valor) || 0) - valorMov) > 0.01) continue;
-          if (!l.data_pagamento) continue;
-          if (Math.abs(diasEntre(m.data, l.data_pagamento)) > 7) continue;
+          const ancL = dataAncoraLancamento(l);
+          if (!ancL) continue;
+          if (Math.abs(diasEntre(m.data, ancL)) > 7) continue;
           const fornNome = l.favorecido_id ? fornMap.get(l.favorecido_id) ?? null : null;
           const s = calcularScore(m.data, m.descricao, l, fornNome);
           candidatosScore.push({ lanc: l, score: s, fornNome });
@@ -825,8 +835,9 @@ export function useImportacaoExtrato() {
         const movN = normalizarTexto(m.descricao);
         const candidatosPossiveis: CandidatoPossivel[] = lancs
           .filter((l) => {
-            if (!l.data_pagamento) return false;
-            const dDiff = Math.abs(diasEntre(m.data, l.data_pagamento));
+            const ancL = dataAncoraLancamento(l);
+            if (!ancL) return false;
+            const dDiff = Math.abs(diasEntre(m.data, ancL));
             if (dDiff > 10) return false;
             const sinalLanc = (Number(l.sinal) || 0) >= 0 ? 1 : -1;
             return sinalLanc === sinalEsperado;
@@ -834,7 +845,8 @@ export function useImportacaoExtrato() {
           .map((l) => {
             const valorL = Math.abs(Number(l.valor) || 0);
             const diffValor = Math.abs(valorL - valorMov);
-            const diffDias = Math.abs(diasEntre(m.data, l.data_pagamento!));
+            const ancL = dataAncoraLancamento(l);
+            const diffDias = ancL ? Math.abs(diasEntre(m.data, ancL)) : 999;
             const fornN = normalizarTexto(l.favorecido_id ? fornMap.get(l.favorecido_id) ?? null : null);
             const lancN = normalizarTexto(l.descricao);
             const similaridade = (movN && (
@@ -884,8 +896,9 @@ export function useImportacaoExtrato() {
         if (melhorScore < 50) {
           const sinalEsperado = m.tipo === 'credito' ? 1 : -1;
           const pool = lancs.filter((l) => {
-            if (!l.data_pagamento) return false;
-            if (Math.abs(diasEntre(m.data, l.data_pagamento)) > 10) return false;
+            const ancL = dataAncoraLancamento(l);
+            if (!ancL) return false;
+            if (Math.abs(diasEntre(m.data, ancL)) > 10) return false;
             // Compatibilidade de sinal: positivo = entrada, negativo = saída
             const sinalLanc = (Number(l.sinal) || 0) >= 0 ? 1 : -1;
             return sinalLanc === sinalEsperado;
@@ -893,7 +906,10 @@ export function useImportacaoExtrato() {
 
           // Limita pool a 30 mais próximos da data para reduzir explosão DFS.
           const poolReduzido = pool
-            .map((l) => ({ l, dist: Math.abs(diasEntre(m.data, l.data_pagamento!)) }))
+            .map((l) => {
+              const ancL = dataAncoraLancamento(l);
+              return { l, dist: ancL ? Math.abs(diasEntre(m.data, ancL)) : 999 };
+            })
             .sort((a, b) => a.dist - b.dist)
             .slice(0, 30)
             .map((x) => x.l);
@@ -905,7 +921,7 @@ export function useImportacaoExtrato() {
               const detalhes: LancamentoAgrupadoInfo[] = grupo.itens
                 .map((l) => ({
                   id: l.id,
-                  data: l.data_pagamento,
+                  data: dataAncoraLancamento(l),
                   fornecedor: l.favorecido_id ? fornMap.get(l.favorecido_id) ?? null : null,
                   descricao: l.descricao,
                   valor: (Number(l.valor) || 0) * ((Number(l.sinal) || 0) >= 0 ? 1 : -1),

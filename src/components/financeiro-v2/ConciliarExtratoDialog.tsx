@@ -1,12 +1,16 @@
 /**
  * ConciliarExtratoDialog — vínculo manual extrato↔lançamentos.
  *
- * Recebe um movimento de extrato e busca candidatos em financeiro_lancamentos_v2:
+ * Recebe um movimento de extrato e busca candidatos em financeiro_lancamentos_v2
+ * (PR-CONCIL-AGENDADO-01):
  *   - mesmo cliente
  *   - mesma conta_bancaria_id (origem ou destino)
- *   - status_transacao = 'realizado'
- *   - cancelado = false
- *   - data_pagamento ±7 dias do data_movimento
+ *   - status_transacao in (realizado, agendado, programado) — conciliar um
+ *     agendado/programado promove a realizado via trigger no banco
+ *     (trg_promover_lancamento_realizado_ao_conciliar)
+ *   - cancelado IS NOT TRUE · COALESCE(cenario,'realizado') != 'meta'
+ *   - âncora COALESCE(data_pagamento, data_vencimento, data_competencia)
+ *     ±7 dias do data_movimento
  *
  * Usuário marca lançamentos e ajusta `valor_aplicado` por linha.
  * Insere em conciliacao_bancaria_itens via useConciliacaoBancariaItens.
@@ -28,6 +32,7 @@ import { useFinanceiroV2, type LancamentoV2Form } from '@/hooks/useFinanceiroV2'
 import { useExcelLinhasAux, type ExcelLinhaAux } from '@/hooks/useExcelLinhasAux';
 import { LancamentoV2Dialog } from './LancamentoV2Dialog';
 import { formatMoeda } from '@/lib/calculos/formatters';
+import { dataAncoraLancamento, orFiltroDataAncora, OR_CENARIO_NAO_META } from '@/lib/financeiro/dataAncora';
 import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
 
@@ -44,8 +49,10 @@ export interface ExtratoMovimentoRef {
 
 interface CandidatoLancamento {
   id: string;
-  data_competencia: string;
+  data_competencia: string | null;
   data_pagamento: string | null;
+  data_vencimento: string | null;
+  status_transacao: string | null;
   valor: number;
   sinal: number;
   descricao: string | null;
@@ -179,20 +186,29 @@ export function ConciliarExtratoDialog({ open, onClose, movimento, onConciliado,
 
     supabase
       .from('financeiro_lancamentos_v2')
-      .select('id, data_competencia, data_pagamento, valor, sinal, descricao, numero_documento, conta_bancaria_id, conta_destino_id')
+      .select('id, data_competencia, data_pagamento, data_vencimento, status_transacao, valor, sinal, descricao, numero_documento, conta_bancaria_id, conta_destino_id')
       .eq('cliente_id', clienteAtual.id)
-      .eq('cancelado', false)
-      .eq('status_transacao', 'realizado')
+      // PR-CONCIL-AGENDADO-01 (D9): vivo = cancelado IS NOT TRUE (coluna anulável).
+      .not('cancelado', 'is', true)
+      // D2: paridade de status — agendado/programado entram e são promovidos
+      // a realizado pelo trigger do banco ao vincular.
+      .in('status_transacao', ['realizado', 'agendado', 'programado'])
+      // D9: cenario é anulável — 'diferente de meta OU nulo'.
+      .or(OR_CENARIO_NAO_META)
       .or(`conta_bancaria_id.eq.${movimento.conta_bancaria_id},conta_destino_id.eq.${movimento.conta_bancaria_id}`)
-      .gte('data_pagamento', dataIni)
-      .lte('data_pagamento', dataFim)
+      // D1: janela ±7d sobre a âncora COALESCE(pagamento, vencimento, competência).
+      .or(orFiltroDataAncora(dataIni, dataFim))
       .eq('sinal', sinalEsperado)
       .gte('valor', valorAbs - 0.01)
       .lte('valor', valorAbs + 0.01)
-      .order('data_pagamento', { ascending: true })
       .then(({ data, error }) => {
         if (error) { toast.error('Erro ao buscar candidatos: ' + error.message); setCandidatos([]); }
-        else setCandidatos((data ?? []) as CandidatoLancamento[]);
+        else {
+          // Ordenação pela âncora (PostgREST não ordena por COALESCE).
+          const rows = ((data ?? []) as CandidatoLancamento[]).slice().sort((a, b) =>
+            (dataAncoraLancamento(a) ?? '').localeCompare(dataAncoraLancamento(b) ?? ''));
+          setCandidatos(rows);
+        }
         setLoading(false);
       });
   }, [open, movimento, clienteAtual?.id]);
@@ -479,9 +495,18 @@ export function ConciliarExtratoDialog({ open, onClose, movimento, onConciliado,
                         onCheckedChange={() => toggleMarcado(l)}
                       />
                     </TableCell>
-                    <TableCell className="text-[11px] font-mono">{fmtData(l.data_pagamento)}</TableCell>
+                    <TableCell className="text-[11px] font-mono">{fmtData(dataAncoraLancamento(l))}</TableCell>
                     <TableCell className="text-[11px] max-w-[260px] truncate" title={l.descricao || ''}>
                       <div className="flex items-center gap-1.5">
+                        {l.status_transacao && l.status_transacao !== 'realizado' && (
+                          <Badge
+                            variant="outline"
+                            className="h-4 px-1.5 text-[9px] uppercase shrink-0 bg-amber-50 text-amber-800 border-amber-300"
+                            title="Ao vincular, este lançamento é promovido a Realizado (data de pagamento = data do movimento OFX)."
+                          >
+                            {l.status_transacao}
+                          </Badge>
+                        )}
                         {jaVinculado && (
                           <Badge
                             variant="secondary"

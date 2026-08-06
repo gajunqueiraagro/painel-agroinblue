@@ -9,13 +9,14 @@
  * futuro unificará as duas implementações num único módulo puro. Até lá,
  * QUALQUER mudança de regra de score deve refletir em AMBOS os locais.
  *
- * Filtros aplicados na busca de candidatos:
- *   - cancelado = false
- *   - sem_movimentacao_caixa = false   (novo neste PR — OFX é caixa real)
- *   - cenario != 'meta'                 (igual ao import)
+ * Filtros aplicados na busca de candidatos (PR-CONCIL-AGENDADO-01):
+ *   - cancelado IS NOT TRUE            (coluna anulável — vivo = false OU null)
+ *   - sem_movimentacao_caixa IS NOT TRUE (OFX é caixa real; NULL não exclui)
+ *   - COALESCE(cenario,'realizado') != 'meta'  (cenario é anulável)
  *   - status_transacao in (realizado, agendado, programado)
  *   - conta_bancaria_id = X  OR  conta_destino_id = X
- *   - data_pagamento ±10 dias do range OFX
+ *   - âncora COALESCE(data_pagamento, data_vencimento, data_competencia)
+ *     ±10 dias do range OFX (agendado costuma viver em data_vencimento)
  *   - lançamentos JÁ VINCULADOS (conciliacao_bancaria_itens.desfeito_em IS NULL)
  *     são excluídos do pool de candidatos
  *
@@ -23,6 +24,7 @@
  * Resultado é consumido em memória pelo RematchOnDemandPanel.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { dataAncoraLancamento, orFiltroDataAncora, OR_CENARIO_NAO_META } from './dataAncora';
 
 export interface MovimentoOfxParaRematch {
   id: string;
@@ -101,7 +103,9 @@ function calcularScore1to1(
 
 interface LancRaw {
   id: string;
-  data_pagamento: string;
+  data_pagamento: string | null;
+  data_vencimento: string | null;
+  data_competencia: string | null;
   valor: number;
   sinal: number | null;
   descricao: string | null;
@@ -128,8 +132,10 @@ function tryGroupingMatch(
   const target = Math.abs(mov.valor);
   const movTime = new Date(mov.data_movimento).getTime();
   const ordenado = [...pool].sort((a, b) => {
-    const ta = Math.abs(new Date(a.data_pagamento).getTime() - movTime);
-    const tb = Math.abs(new Date(b.data_pagamento).getTime() - movTime);
+    const ancA = dataAncoraLancamento(a);
+    const ancB = dataAncoraLancamento(b);
+    const ta = ancA ? Math.abs(new Date(ancA).getTime() - movTime) : Number.MAX_SAFE_INTEGER;
+    const tb = ancB ? Math.abs(new Date(ancB).getTime() - movTime) : Number.MAX_SAFE_INTEGER;
     return ta - tb;
   });
 
@@ -163,9 +169,14 @@ function tryGroupingMatch(
 
   // Score agrupado (simplificado — MVP. Bônus completos ficam para PR futuro)
   let score = 50;
-  const datasItens = melhorSafe.map((i) => new Date(i.data_pagamento).getTime());
-  const diffMedio = datasItens.reduce((s, t) => s + Math.abs(t - movTime), 0)
-    / melhorSafe.length / 86400000;
+  const datasItens = melhorSafe
+    .map((i) => dataAncoraLancamento(i))
+    .filter((d): d is string => !!d)
+    .map((d) => new Date(d).getTime());
+  const diffMedio = datasItens.length > 0
+    ? datasItens.reduce((s, t) => s + Math.abs(t - movTime), 0)
+      / datasItens.length / 86400000
+    : 999;
   if (diffMedio <= 3) score += 20;
   if (melhorSafe.length > 5) score -= 10;
   score = Math.min(score, 89);
@@ -173,12 +184,13 @@ function tryGroupingMatch(
   const itens: CandidatoRematch[] = melhorSafe.map((l) => {
     const lancValor = Number(l.valor);
     const contaId = l.conta_bancaria_id ?? l.conta_destino_id;
-    const diffDias = Math.abs(
-      (new Date(l.data_pagamento).getTime() - movTime) / 86400000,
-    );
+    const anc = dataAncoraLancamento(l);
+    const diffDias = anc
+      ? Math.abs((new Date(anc).getTime() - movTime) / 86400000)
+      : 999;
     return {
       lancamentoId: l.id,
-      data: l.data_pagamento,
+      data: anc ?? '',
       valor: lancValor,
       descricao: l.descricao,
       fornecedor: null,
@@ -237,15 +249,18 @@ export async function rematchOfxOnDemand(
   // 3) Lançamentos candidatos
   const { data: lancsRaw, error: errLanc } = await supabase
     .from('financeiro_lancamentos_v2')
-    .select('id, data_pagamento, valor, sinal, descricao, favorecido_id, conta_bancaria_id, conta_destino_id, macro_custo, grupo_custo, centro_custo, subcentro, status_transacao, numero_documento, cenario, fazenda_id, sem_movimentacao_caixa')
+    .select('id, data_pagamento, data_vencimento, data_competencia, valor, sinal, descricao, favorecido_id, conta_bancaria_id, conta_destino_id, macro_custo, grupo_custo, centro_custo, subcentro, status_transacao, numero_documento, cenario, fazenda_id, sem_movimentacao_caixa')
     .eq('cliente_id', params.clienteId)
-    .eq('cancelado', false)
-    .eq('sem_movimentacao_caixa', false)
-    .neq('cenario', 'meta')
+    // PR-CONCIL-AGENDADO-01 (D9): vivo = cancelado IS NOT TRUE (coluna anulável).
+    .not('cancelado', 'is', true)
+    // D9: apenas TRUE exclui — coluna anulável sem default (136 vivos com NULL).
+    .not('sem_movimentacao_caixa', 'is', true)
+    // D9: cenario é anulável — 'diferente de meta OU nulo'.
+    .or(OR_CENARIO_NAO_META)
     .in('status_transacao', ['realizado', 'agendado', 'programado'])
     .or(`conta_bancaria_id.eq.${params.contaBancariaId},conta_destino_id.eq.${params.contaBancariaId}`)
-    .gte('data_pagamento', dataIniLanc)
-    .lte('data_pagamento', dataFimLanc);
+    // D1: janela ±10d sobre a âncora COALESCE(pagamento, vencimento, competência).
+    .or(orFiltroDataAncora(dataIniLanc, dataFimLanc));
   if (errLanc) throw errLanc;
 
   // 4) Excluir lançamentos já vinculados ativos
@@ -295,10 +310,12 @@ export async function rematchOfxOnDemand(
   for (const mov of movs) {
     const movValorAbs = Math.abs(mov.valor);
 
-    // Filtrar pool: ±10 dias. Sem filtro de sinal — engine atual também não filtra.
+    // Filtrar pool: ±10 dias sobre a âncora. Sem filtro de sinal — engine atual também não filtra.
     const pool = lancsLivres.filter((l) => {
+      const anc = dataAncoraLancamento(l);
+      if (!anc) return false;
       const diff = Math.abs(
-        (new Date(l.data_pagamento).getTime() - new Date(mov.data_movimento).getTime()) / 86400000,
+        (new Date(anc).getTime() - new Date(mov.data_movimento).getTime()) / 86400000,
       );
       return diff <= 10;
     });
@@ -306,18 +323,20 @@ export async function rematchOfxOnDemand(
     const candidatos1to1: CandidatoRematch[] = pool.map((l) => {
       const lancValor = Number(l.valor);
       const lancValorAbs = Math.abs(lancValor);
+      // Âncora não-nula garantida pelo filtro do pool acima.
+      const anc = dataAncoraLancamento(l) ?? mov.data_movimento;
       const score = calcularScore1to1(
         mov.data_movimento, mov.descricao,
-        l.data_pagamento, l.descricao,
+        anc, l.descricao,
         lancValorAbs, movValorAbs,
       );
       const diffDias = Math.abs(
-        (new Date(l.data_pagamento).getTime() - new Date(mov.data_movimento).getTime()) / 86400000,
+        (new Date(anc).getTime() - new Date(mov.data_movimento).getTime()) / 86400000,
       );
       const contaId = l.conta_bancaria_id ?? l.conta_destino_id;
       return {
         lancamentoId: l.id,
-        data: l.data_pagamento,
+        data: anc,
         valor: lancValor,
         descricao: l.descricao,
         fornecedor: null,
