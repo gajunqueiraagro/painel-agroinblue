@@ -19,7 +19,7 @@ export type V2Section =
   // financeiro — lançamentos
   | 'financeiro-lanc' | 'contratos'
   // financeiro — conciliação
-  | 'conciliacao' | 'auditoria-bancaria' | 'extrato-gerencial' | 'visao-consolidada' | 'saldos-mensais' | 'mesa-operacional' | 'mesa-classificacao'
+  | 'conciliacao' | 'auditoria-bancaria' | 'extrato-gerencial' | 'visao-consolidada' | 'saldos-mensais' | 'mesa-operacional'
   // financeiro — financiamentos
   | 'financiamentos' | 'painel-financiamentos'
   // financeiro — cadastros
@@ -112,7 +112,8 @@ export const NAV_GRUPOS: NavGrupo[] = [
           { id: 'auditoria-bancaria',  label: 'Auditoria Bancária',      status: 'ready' },
           { id: 'extrato-gerencial',   label: 'Extrato Gerencial',       status: 'ready' },
           { id: 'visao-consolidada',   label: 'Visão Consolidada',       status: 'ready' },
-          { id: 'mesa-classificacao',  label: 'Mesa de Classificação',   status: 'ready' },
+          // PR-CLEANUP-MESA-CLASSIFICACAO-01 — 'mesa-classificacao' saiu do menu. O fluxo
+          // vigente e' Conciliação Bancária → Importar Banco / Enriquecer / Conciliação.
           ...(FEATURE_FLAGS.MESA_OPERACIONAL_V2
             ? [{ id: 'mesa-operacional' as const, label: 'Referências Operacionais', status: 'ready' as const }]
             : []),
@@ -231,7 +232,6 @@ export const SECTION_TO_GROUP: Partial<Record<V2Section, string>> = {
   'importacao-extratos': 'financeiro', 'importacao-custeio-txt': 'financeiro', 'financeiro-lanc': 'financeiro',
   'contratos': 'financeiro', 'conciliacao': 'financeiro', 'auditoria-bancaria': 'financeiro',
   'mesa-operacional': 'financeiro',
-  'mesa-classificacao': 'financeiro',
   'saldos-mensais': 'financeiro', 'financiamentos': 'financeiro',
   'painel-financiamentos': 'financeiro',
   'analise-trimestral': 'financeiro',

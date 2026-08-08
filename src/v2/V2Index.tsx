@@ -61,7 +61,8 @@ import { ExtratoGerencialTab } from '@/components/financeiro-v2/ExtratoGerencial
 import { VisaoConsolidadaTab } from '@/components/financeiro-v2/VisaoConsolidadaTab';
 import CusteioTxtImportTab from './pages/CusteioTxtImportTab';
 import { V2MesaOperacional } from './pages/V2MesaOperacional';
-import { V2MesaClassificacao } from './pages/V2MesaClassificacao';
+// PR-CLEANUP-MESA-CLASSIFICACAO-01 — import de V2MesaClassificacao removido: a tela legada
+// saiu do menu e da rota. O arquivo continua no repo (quarentena), fora do bundle.
 import { V2Configuracoes } from './pages/V2Configuracoes';
 import { V2Fazendas } from './pages/V2Fazendas';
 import { ClientesTab } from '@/pages/ClientesTab';
@@ -629,9 +630,9 @@ export default function V2Index() {
     if (section === 'visao-consolidada') return (
       <VisaoConsolidadaTab clienteId={clienteAtual?.id ?? null} />
     );
-    if (section === 'mesa-classificacao') return (
-      <V2MesaClassificacao />
-    );
+    // PR-CLEANUP-MESA-CLASSIFICACAO-01 — rota 'mesa-classificacao' retirada de circulação.
+    // Os arquivos da tela legada permanecem no repo (quarentena, nao remocao); o motor de
+    // classificacao segue vivo servindo a aba Enriquecer da Conciliação Bancária.
     if (section === 'mesa-operacional') return (
       <V2MesaOperacional
         initialAno={ano}

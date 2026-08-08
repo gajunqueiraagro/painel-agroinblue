@@ -853,19 +853,10 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
         {!loading && selectedCard && vistaExtrato === 'enriquecer' && (
           <div className="space-y-2 md:space-y-0 md:flex-1 md:min-h-0 md:flex md:flex-col md:gap-1 md:overflow-hidden">
             <MesaEnriquecimentoTab />
-            {/* Transição — Mesa de Classificação antiga segue acessível como referência, discreta. */}
-            <div className="flex justify-end pt-1 md:shrink-0">
-              <button
-                type="button"
-                className="text-[10px] text-muted-foreground/70 hover:text-muted-foreground hover:underline"
-                onClick={() => {
-                  try { sessionStorage.setItem('v2:autoSection', 'mesa-classificacao'); } catch { /* sessionStorage indisponível */ }
-                  window.location.reload();
-                }}
-              >
-                Abrir tela antiga
-              </button>
-            </div>
+            {/* PR-CLEANUP-MESA-CLASSIFICACAO-01 — o link para a Mesa de Classificação antiga
+                foi removido junto com o item de menu e a rota. A tela legada saiu de circulação;
+                o motor (staging + vw_classificacao_staging_preview + fn_classificacao_*) segue
+                intacto e continua sendo a fonte deste Enriquecimento. */}
           </div>
         )}
 
