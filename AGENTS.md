@@ -41,8 +41,17 @@ no mesmo arquivo.
   NAO usar `npx tsc --noEmit`: o tsconfig.json da raiz e solution-style
   (`"files": []` + `references`), entao esse comando compila ZERO arquivos,
   sai com codigo 0 e passa sempre. Era um gate vazio. O comando oficial
-  varre os 724 arquivos de src/ e sai com codigo 2 enquanto houver erro.
-- TSC baseline: 98 erros (medida em 2026-08-08, PR-DEV-TSC-GATE-01).
+  varre os 671 arquivos .ts/.tsx em src/ e sai com codigo 2 enquanto
+  houver erro.
+- TSC baseline: 95 erros, medidos em ARVORE LIMPA — worktree em detached
+  HEAD sobre o commit, NUNCA no checkout principal. Mesmo numero e mesmo
+  conjunto de diagnosticos em c0fdb21b, 487fe1cf e c28de22a.
+  O 98 que constava aqui nao decorreu de reducao posterior: foi medido com
+  trabalho parked na arvore. As duas linhas parked do PR-CONCIL-DERIVADO-02A
+  (comentario + campo `conciliado_origem`) acrescentam exatamente 3 erros
+  TS2352, porque o campo ainda nao existe em
+  src/integrations/supabase/types.ts. 95 + 3 = 98.
+  (Corrigido em PR-DEV-TSC-BASELINE-95, 2026-08-08, sobre c28de22a.)
   Como comparar antes (A) x depois (B), nesta ordem:
     1. CONTAGEM. B <= A, sempre. B > A reprova o PR.
     2. DIAGNOSTICOS. Comparar os conjuntos por
@@ -63,7 +72,7 @@ no mesmo arquivo.
 - Build verde obrigatorio antes de qualquer commit.
 
 ## RELATORIO DE EXECUCAO (formato obrigatorio, todo ciclo)
-1. TSC: N erros (baseline 98) — numero explicito, obtido com
+1. TSC: N erros (baseline 95) — numero explicito, obtido com
    `npx tsc -p tsconfig.app.json --noEmit`
 2. Build: OK/FALHOU + tempo
 3. git diff --stat completo
