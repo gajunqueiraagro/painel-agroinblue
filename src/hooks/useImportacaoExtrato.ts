@@ -17,6 +17,16 @@
  *      - NÃO faz matching automático.
  *
  * Erros são propagados via `error` state e exception.
+ *
+ * FRONTEIRA DE MENSAGEM SEGURA (PR-FIN-IMPORT-ERRO-VISIVEL-01).
+ * Este hook é o único lugar que sabe distinguir "validação que nós mesmos
+ * escrevemos" de "erro que veio do banco, da rede ou do arquivo do usuário".
+ * As validações autorais são lançadas como `ErroUsuarioSeguro` e chegam à tela
+ * com o texto íntegro; todo o resto vira mensagem genérica na camada de UI.
+ *
+ * O que NUNCA é promovido a seguro, mesmo vindo de um Error tipado: qualquer
+ * string que interpole conteúdo do arquivo (linha de extrato, cabeçalho lido),
+ * mensagem do PostgREST, stack, path, SQL ou UUID.
  */
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -32,6 +42,30 @@ import {
   type ClassificacaoOFXDup,
   type RegistroExtratoExistente,
 } from '@/lib/financeiro/duplicidadeImportacao';
+import { ErroUsuarioSeguro, normalizarErro } from '@/lib/erroOperacional';
+
+/**
+ * `CsvLayoutError` (parseCSV) é um erro de validação de layout, mas suas
+ * mensagens interpolam conteúdo do arquivo — cabeçalhos lidos e, num dos
+ * casos, amostras de linhas do extrato (`linha N: <conteúdo>`). Por isso o
+ * texto do parser NÃO é repassado: reconhecemos a classe pelo nome e
+ * respondemos com uma orientação autoral, equivalente em utilidade e livre
+ * de dado do arquivo.
+ *
+ * Detecção por `name` e não por `instanceof`: importar a classe criaria
+ * acoplamento de tipo com o parser sem ganho — o nome é estável e o único
+ * produtor é o próprio parseCSV.
+ */
+function ehErroDeLayoutCsv(e: unknown): boolean {
+  return typeof e === 'object' && e !== null
+    && (e as { name?: unknown }).name === 'CsvLayoutError';
+}
+
+const MSG_CSV_LAYOUT =
+  'O CSV não está num layout reconhecido, ou tem linhas com valor monetário '
+  + 'inválido. Confira se existem colunas de Data e de Valor (ou Débito e '
+  + 'Crédito) e se os valores estão preenchidos corretamente. '
+  + 'Nenhum movimento foi importado.';
 
 /** Status operacional persistido em extrato_bancario_v2.status. */
 export type StatusPersistido = 'nao_conciliado' | 'parcial' | 'conciliado' | 'ignorado';
@@ -544,7 +578,7 @@ export function useImportacaoExtrato() {
     setLoading(true);
     setError(null);
     try {
-      if (!clienteAtual?.id) throw new Error('Cliente não selecionado');
+      if (!clienteAtual?.id) throw new ErroUsuarioSeguro('Cliente não selecionado');
 
       // Guard PDF: detectar pelo nome antes de ler como texto (arquivo PDF
       // eh binario; arquivo.text() retornaria lixo UTF-8). Parser PDF
@@ -553,18 +587,18 @@ export function useImportacaoExtrato() {
       if (lowerName.endsWith('.pdf')) {
         const { hasTextLayer } = await extractPdfText(params.arquivo);
         if (!hasTextLayer) {
-          throw new Error(
+          throw new ErroUsuarioSeguro(
             'Este PDF parece ser escaneado/imagem. Envie OFX, CSV ou PDF digital baixado do banco. OCR sera tratado futuramente.'
           );
         }
-        throw new Error(
+        throw new ErroUsuarioSeguro(
           'PDF digital detectado, mas o parser PDF ainda esta em desenvolvimento. Use OFX/CSV por enquanto, ou aguarde a proxima versao.'
         );
       }
 
       const conteudo = await params.arquivo.text();
       const formato = detectarFormato(params.arquivo.name, conteudo);
-      if (!formato) throw new Error('Formato não reconhecido (espera-se .ofx, .csv ou .pdf)');
+      if (!formato) throw new ErroUsuarioSeguro('Formato não reconhecido (espera-se .ofx, .csv ou .pdf)');
       // Defensivo: o branch PDF acima sempre throwa antes de chegar aqui.
       // Esse narrowing existe pra TS estreitar formato pra 'OFX' | 'CSV'
       // (o tipo de retorno de detectarFormato inclui 'PDF').
@@ -582,7 +616,14 @@ export function useImportacaoExtrato() {
         linhasInformativas = rel.linhasInformativas.length;
       }
       if (movimentosBrutos.length === 0) {
-        throw new Error('Nenhum movimento encontrado no arquivo');
+        // Caminho real do "OFX inválido": parseOFX não lança — um arquivo
+        // corrompido, truncado ou que não é OFX simplesmente não produz
+        // movimento. `formato` é o literal 'OFX' | 'CSV' da nossa própria
+        // união, não conteúdo do arquivo.
+        throw new ErroUsuarioSeguro(
+          `Nenhum movimento encontrado no arquivo. Verifique se o ${formato} `
+          + 'é um extrato válido do banco e não está vazio ou truncado.',
+        );
       }
 
       // Calcular hashes em paralelo.
@@ -1000,9 +1041,14 @@ export function useImportacaoExtrato() {
       setPreview(result);
       return result;
     } catch (e: any) {
-      const msg = e?.message ?? String(e);
-      setError(msg);
-      throw e;
+      // O layout de CSV é validação legítima, mas o texto do parser carrega
+      // conteúdo do arquivo — troca-se por orientação autoral equivalente.
+      const seguro = ehErroDeLayoutCsv(e) ? new ErroUsuarioSeguro(MSG_CSV_LAYOUT) : e;
+      // `error` é RENDERIZADO na tela (ExtratoImportPreview) — nunca a mensagem
+      // crua. Antes: `setError(e?.message ?? String(e))`, que exibia texto do
+      // PostgREST e do parser direto no painel.
+      setError(normalizarErro(seguro, 'gerarPreview').mensagem);
+      throw seguro;
     } finally {
       setLoading(false);
     }
@@ -1012,8 +1058,10 @@ export function useImportacaoExtrato() {
     inseridos: number;
     importacaoId: string | null;
   }> {
+    // Invariante de programação, não erro de operador: segue Error comum e
+    // chega à tela como mensagem genérica — é bug nosso, não ação do usuário.
     if (!preview) throw new Error('Sem preview gerado — chame gerarPreview primeiro');
-    if (!clienteAtual?.id) throw new Error('Cliente não selecionado');
+    if (!clienteAtual?.id) throw new ErroUsuarioSeguro('Cliente não selecionado');
 
     // Extrato bancário pertence ao cliente+conta (sem fazenda — a tabela
     // extrato_bancario_v2 não tem fazenda_id). O cabeçalho opcional em
@@ -1035,7 +1083,7 @@ export function useImportacaoExtrato() {
       (m) => !m.existeNoDB && !m.jaExistenteChave && (params.forcarImportarSuspeitas || m.dupImportar !== false),
     );
     // BUG-CSV-DEDUP-01 (UX): tudo já existe → mensagem clara, nunca erro SQL.
-    if (novos.length === 0) throw new Error('Extrato já importado anteriormente. Nenhuma movimentação nova foi encontrada.');
+    if (novos.length === 0) throw new ErroUsuarioSeguro('Extrato já importado anteriormente. Nenhuma movimentação nova foi encontrada.');
 
     setLoading(true);
     setError(null);
@@ -1048,9 +1096,9 @@ export function useImportacaoExtrato() {
         .eq('id', params.contaBancariaId)
         .maybeSingle();
       if (errConta) throw errConta;
-      if (!conta) throw new Error('Conta bancária não encontrada.');
+      if (!conta) throw new ErroUsuarioSeguro('Conta bancária não encontrada.');
       if ((conta as { cliente_id: string }).cliente_id !== clienteAtual.id) {
-        throw new Error('A conta bancária selecionada não pertence ao cliente atual.');
+        throw new ErroUsuarioSeguro('A conta bancária selecionada não pertence ao cliente atual.');
       }
 
       // 1) Cabeçalho de importação — opcional (depende de fazenda específica).
@@ -1143,17 +1191,30 @@ export function useImportacaoExtrato() {
       const isHashDup = /idx_extrato_v2_hash_unico/i.test(raw);
       const isOutraConstraint = !isHashDup
         && (e?.code === '23505' || /duplicate key|violates .*constraint/i.test(raw));
-      let msg: string;
+
+      // As duas frases abaixo são autorais e não interpolam nada do erro —
+      // por isso viram `ErroUsuarioSeguro` e chegam íntegras ao operador.
+      // O ramo final MUDOU: antes fazia `msg = raw`, ou seja, devolvia a
+      // mensagem crua do PostgREST tanto para o `error` renderizado na tela
+      // quanto para o toast. Agora o erro original sobe intacto e a camada de
+      // UI o generaliza; o diagnóstico sanitizado fica no console.
+      let seguro: unknown;
       if (isHashDup) {
-        msg = 'Extrato já importado anteriormente. Nenhuma movimentação nova foi encontrada.';
+        seguro = new ErroUsuarioSeguro(
+          'Extrato já importado anteriormente. Nenhuma movimentação nova foi encontrada.',
+        );
       } else if (isOutraConstraint) {
-        console.error('[BUG-CSV-DEDUP-01] conflito de constraint ao salvar extrato:', raw);
-        msg = 'Não foi possível salvar o extrato por conflito de dados. Nenhuma movimentação foi alterada.';
+        seguro = new ErroUsuarioSeguro(
+          'Não foi possível salvar o extrato por conflito de dados. Nenhuma movimentação foi alterada.',
+        );
       } else {
-        msg = raw;
+        seguro = e;
       }
-      setError(msg);
-      throw (isHashDup || isOutraConstraint) ? new Error(msg) : e;
+
+      const n = normalizarErro(seguro, 'confirmarImportacao');
+      if (isOutraConstraint) console.error('[BUG-CSV-DEDUP-01] ' + n.diagnostico);
+      setError(n.mensagem);
+      throw seguro;
     } finally {
       setLoading(false);
     }
@@ -1189,7 +1250,7 @@ export function useImportacaoExtrato() {
         .order('id', { ascending: true })
         .range(from, from + PAGE_DEDUP - 1);
       if (error) {
-        console.error('[refreshStatusPersistidos]', error);
+        console.error(normalizarErro(error, 'refreshStatusPersistidos').diagnostico);
         return;
       }
       const lote = (data as unknown as

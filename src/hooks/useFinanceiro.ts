@@ -23,6 +23,7 @@ import { useFazenda, type Fazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { reportarErro, normalizarErro } from '@/lib/erroOperacional';
 import type { LinhaImportada, SaldoBancarioImportado, ResumoCaixaImportado, CentroCustoOficial } from '@/lib/financeiro/importParser';
 import { gerarHashImportacao } from '@/lib/financeiro/duplicidadeImportacao';
 
@@ -961,7 +962,8 @@ export function useFinanceiro(options: UseFinanceiroOptions = {}) {
         .single();
 
       if (impErr) throw impErr;
-      console.log('[Importação] importacao_id gerado:', imp.id);
+      // Antes imprimia o UUID da importação. O marco de fluxo basta.
+      console.log('[Importação] cabeçalho de importação criado');
 
       // ── Inserir lançamentos novos no V2 ──
       const insertBatchSize = 50;
@@ -1108,9 +1110,14 @@ export function useFinanceiro(options: UseFinanceiroOptions = {}) {
               fornecedorMap.set(nomeNormalizado, existing.id);
               return existing.id;
             }
-            console.warn(`[Importação] Fornecedor duplicado não localizado após conflito: ${nomeOriginal}`);
+            // Antes imprimia o nome do fornecedor — dado do cliente. O evento
+            // (conflito sem linha correspondente) é o que importa no console.
+            console.warn('[Importação] fornecedor duplicado não localizado após conflito');
             return null;
           }
+          // A mensagem crua do banco continua embutida aqui, mas não vaza: o
+          // catch de `importarLancamentos` normaliza antes de exibir. Ver a
+          // dívida registrada no relatório.
           throw new Error(`Erro ao criar fornecedor automaticamente: ${nomeOriginal} — ${error.message}`);
         }
 
@@ -1240,12 +1247,15 @@ export function useFinanceiro(options: UseFinanceiroOptions = {}) {
           ano_mes: s.anoMes,
           saldo_final: s.saldoFinal,
         }));
-        console.log('[Importação] saldoBatch payload:', JSON.stringify(saldoBatch, null, 2));
+        // Antes: JSON.stringify do lote inteiro — fazenda_id, conta_banco,
+        // ano_mes e SALDO FINAL de cada conta do cliente no console. Só a
+        // contagem sobrevive.
+        console.log(`[Importação] saldos bancários: ${saldoBatch.length} registro(s)`);
         const { error } = await supabase.from('financeiro_saldos_bancarios').upsert(saldoBatch, {
           onConflict: 'fazenda_id,conta_banco,ano_mes',
         });
         if (error) {
-          console.error('[Importação] Erro ao salvar saldos bancários:', error);
+          console.error(normalizarErro(error, 'importarLancamentos.saldosBancarios').diagnostico);
           throw error;
         }
       }
@@ -1260,12 +1270,14 @@ export function useFinanceiro(options: UseFinanceiroOptions = {}) {
           saidas: r.saidas,
           saldo_final_total: r.saldoFinalTotal,
         }));
-        console.log('[Importação] resumoCaixa payload:', JSON.stringify(resumoBatch, null, 2));
+        // Antes: JSON.stringify do lote — entradas, saídas e saldo final total
+        // por fazenda/mês. Só a contagem sobrevive.
+        console.log(`[Importação] resumo de caixa: ${resumoBatch.length} registro(s)`);
         const { error } = await supabase.from('financeiro_resumo_caixa').upsert(resumoBatch, {
           onConflict: 'fazenda_id,ano_mes',
         });
         if (error) {
-          console.error('[Importação] Erro ao salvar resumo caixa:', error);
+          console.error(normalizarErro(error, 'importarLancamentos.resumoCaixa').diagnostico);
           throw error;
         }
       }
@@ -1292,14 +1304,18 @@ export function useFinanceiro(options: UseFinanceiroOptions = {}) {
         erros: errosDetalhe,
       };
     } catch (err: any) {
-      toast.error('Erro na importação: ' + (err.message || err));
+      // Contrato de retorno preservado byte a byte na FORMA (ok/totalProcessado/
+      // totalSalvo/totalDuplicado/totalErro/erros[]); muda só o CONTEÚDO de
+      // `motivo`, que antes carregava a mensagem crua do banco e é exibido na
+      // tela de resultado da importação.
+      const n = reportarErro(err, 'importarLancamentos', toast.error);
       return {
         ok: false,
         totalProcessado: linhas.length,
         totalSalvo: 0,
         totalDuplicado: 0,
         totalErro: 1,
-        erros: [{ motivo: err.message || String(err) }],
+        erros: [{ motivo: n.mensagem }],
       };
     }
   }, [user, queryClient, fazendas, fazendaAtual]);
@@ -1347,7 +1363,7 @@ export function useFinanceiro(options: UseFinanceiroOptions = {}) {
       await queryClient.invalidateQueries({ queryKey: ['financeiro-data'] });
       return true;
     } catch (err: any) {
-      toast.error('Erro ao excluir importação: ' + (err.message || err));
+      reportarErro(err, 'excluirImportacao', toast.error);
       return false;
     }
   }, [queryClient]);

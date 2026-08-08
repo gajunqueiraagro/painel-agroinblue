@@ -31,6 +31,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { toast } from 'sonner';
+import { reportarErro, normalizarErro } from '@/lib/erroOperacional';
 import { format, parseISO } from 'date-fns';
 import { Info, CheckCircle2 } from 'lucide-react';
 
@@ -359,7 +360,7 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
       setFiltro('todos');
       await gerarPreview({ arquivo, contaBancariaId: contaId });
     } catch (e: any) {
-      toast.error('Erro ao gerar preview: ' + (e?.message ?? e));
+      reportarErro(e, 'gerarPreviewExtrato', toast.error);
     }
   };
 
@@ -383,15 +384,25 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
         formato: preview.formato,
         forcarImportarSuspeitas,
       });
+      // CONTRATO (useImportacaoExtrato): o insert é um upsert idempotente com
+      // `onConflict: 'cliente_id,hash_movimento'` + `ignoreDuplicates: true`, e
+      // `inseridos` conta apenas as linhas REALMENTE inseridas. Portanto
+      // `inseridos === 0` é SUCESSO — o extrato já estava importado —, não
+      // falha. `setImportacaoConfirmada(true)` vale nos dois casos: os
+      // movimentos estão persistidos e os botões de ação devem liberar.
+      // Muda só a redação, para o operador não ler "0 movimentos" como erro.
       toast.success(
-        `Extrato salvo (${r.inseridos} movimento(s)). ` +
-        `Agora revise os matches para vincular ou marcar realizados.`,
+        r.inseridos === 0
+          ? 'Extrato já importado — nenhum movimento novo. ' +
+            'Revise os matches para vincular ou marcar realizados.'
+          : `Extrato salvo (${r.inseridos} movimento(s)). ` +
+            `Agora revise os matches para vincular ou marcar realizados.`,
       );
       setImportacaoConfirmada(true);
       onImported?.(r);
       // NÃO fechar automaticamente — usuário precisa interagir com botões individuais.
     } catch (e: any) {
-      toast.error('Erro ao confirmar: ' + (e?.message ?? e));
+      reportarErro(e, 'confirmarImportacaoExtrato', toast.error);
     }
   };
 
@@ -440,7 +451,7 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
       // Reflete o novo status persistido (conciliado/parcial) no preview.
       await refreshStatusPersistidos();
     } catch (e: any) {
-      toast.error('Erro: ' + (e?.message ?? e));
+      reportarErro(e, 'executarConversao1a1', toast.error);
     } finally {
       setConvertindo(false);
     }
@@ -455,7 +466,7 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
       const extratoId = await obterExtratoId(clienteId, m);
       setConfirmAgrupado({ extratoId, movimento: m });
     } catch (e: any) {
-      toast.error('Erro: ' + (e?.message ?? e));
+      reportarErro(e, 'abrirAgrupado', toast.error);
     } finally {
       setConvertindo(false);
     }
@@ -516,7 +527,7 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
         titulo: `Escolher lançamento — ${m.candidatosAmbiguos.length} candidatos equivalentes`,
       });
     } catch (e: any) {
-      toast.error('Erro: ' + (e?.message ?? e));
+      reportarErro(e, 'abrirEscolherAmbiguo', toast.error);
     } finally {
       setConvertindo(false);
     }
@@ -560,7 +571,7 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
         titulo: `Revisar e aprovar match provável (${m.scoreMatch})`,
       });
     } catch (e: any) {
-      toast.error('Erro: ' + (e?.message ?? e));
+      reportarErro(e, 'abrirRevisarAprovar', toast.error);
     } finally {
       setConvertindo(false);
     }
@@ -585,7 +596,7 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
         titulo: 'Possíveis lançamentos para este movimento',
       });
     } catch (e: any) {
-      toast.error('Erro: ' + (e?.message ?? e));
+      reportarErro(e, 'abrirVerPossiveis', toast.error);
     } finally {
       setConvertindo(false);
     }
@@ -679,7 +690,9 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
         }
       } catch (e: any) {
         erros++;
-        console.error('[mass-vinc] hash=', hash, e);
+        // Sem toast por item: o total de falhas é reportado uma vez ao final.
+        // O console recebe só o diagnóstico sanitizado, nunca o erro bruto.
+        console.error(normalizarErro(e, 'vincularEmMassa').diagnostico);
       }
     }
     if (vinculados > 0 || erros > 0) {

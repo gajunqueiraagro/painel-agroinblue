@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
+import { reportarErro } from '@/lib/erroOperacional';
 import { useFinanceiroV2 } from '@/hooks/useFinanceiroV2';
 import { useImportarClassificacao } from '@/v2/hooks/useImportarClassificacao';
 import { fmtBRL, fmtData } from './fmt';
@@ -56,7 +57,9 @@ export function EnriquecimentoImportarDialog({ open, onClose, clienteId, onImpor
       else if (parsed.linhasComErro > 0) toast.warning(`${parsed.linhasValidas} válida(s) · ${parsed.linhasComErro} rejeitada(s).`);
       else toast.success(`Excel lido: ${parsed.linhasValidas} linha(s) válida(s).`);
     } catch (e: unknown) {
-      toast.error(`Erro ao ler Excel: ${e instanceof Error ? e.message : String(e)}`);
+      // As rejeições de linha do parser continuam visíveis na lista `errosParser`
+      // do preview; aqui só a falha global da leitura, já sanitizada.
+      reportarErro(e, 'lerExcelClassificacao', toast.error);
     }
   }
 
@@ -69,7 +72,7 @@ export function EnriquecimentoImportarDialog({ open, onClose, clienteId, onImpor
       onImportado(res.sessaoId);
       imp.reset();
     } catch (e: unknown) {
-      toast.error(`Erro no populate: ${e instanceof Error ? e.message : String(e)}`);
+      reportarErro(e, 'popularStagingClassificacao', toast.error);
     }
   }
 

@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { sincronizarVinculosDoLancamento, recomputarStatusExtrato } from '@/lib/financeiro/conciliacaoSync';
 import { isTituloOC, detectarViolacoesEstruturaisOC } from '@/lib/financeiro/protecaoTituloOC';
 import { STATUS_FINANCEIRO_INICIAL, type StatusFiltroFinanceiro } from '@/lib/financeiro/statusFinanceiro';
+import { reportarErro, normalizarErro, ErroUsuarioSeguro } from '@/lib/erroOperacional';
 
 
 export interface LancamentoV2 {
@@ -303,8 +304,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       .select('id, nome, cpf_cnpj, fazenda_id')
       .single();
     if (error) {
-      toast.error('Erro ao criar fornecedor');
-      console.error(error);
+      reportarErro(error, 'criarFornecedor', toast.error);
       return null;
     }
     setFornecedores(prev => [...prev, data as FornecedorV2]);
@@ -464,29 +464,21 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       if (error) throw error;
       if (!data || data.length === 0) break;
 
-      for (const row of data) {
-        if ((row as any).tipo_operacao === '3-Transferências') {
-          console.log('[FinV2] load RAW row', {
-            id: (row as any).id,
-            conta_bancaria_id: (row as any).conta_bancaria_id,
-            conta_destino_id: (row as any).conta_destino_id,
-            tipo_operacao: (row as any).tipo_operacao,
-            status_transacao: (row as any).status_transacao,
-          });
-        }
-      }
-
       const mapped = data as LancamentoV2[];
-      for (const row of mapped) {
-        if (row.tipo_operacao === '3-Transferências') {
-          console.log('[FinV2] load MAPPED row', {
-            id: row.id,
-            conta_bancaria_id: row.conta_bancaria_id,
-            conta_destino_id: row.conta_destino_id,
-            tipo_operacao: row.tipo_operacao,
-            status_transacao: row.status_transacao,
-          });
-        }
+
+      // Instrumentação de '3-Transferências'. Antes despejava, POR LINHA e em
+      // duas passadas, `id`, `conta_bancaria_id` e `conta_destino_id` — UUID de
+      // lançamento e de conta bancária no console do navegador, em produção.
+      // As duas passadas imprimiam os MESMOS objetos (`mapped` é `data` com
+      // outro tipo), então uma delas era pura duplicação.
+      // Sobra o agregado, que preserva o sinal investigado — transferência sem
+      // conta de destino — sem identificar registro nenhum.
+      const transferencias = mapped.filter((r) => r.tipo_operacao === '3-Transferências');
+      if (transferencias.length > 0) {
+        const semDestino = transferencias.filter((r) => !r.conta_destino_id).length;
+        console.log(
+          `[FinV2] load: ${transferencias.length} transferência(s), ${semDestino} sem conta_destino_id`,
+        );
       }
 
       all.push(...(residual ? mapped.filter(residual) : mapped));
@@ -508,8 +500,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       setTotal(data.length);
       setPage(pageNum);
     } catch (err: any) {
-      toast.error('Erro ao carregar lançamentos v2');
-      console.error(err);
+      reportarErro(err, 'carregarLancamentos', toast.error);
     } finally {
       setLoading(false);
     }
@@ -520,7 +511,9 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     try {
       return await fetchAllLancamentos(filtros);
     } catch (error) {
-      console.error(error);
+      // Comportamento preservado: falha de export não emite toast aqui.
+      // Só o log deixa de despejar o objeto bruto.
+      console.error(normalizarErro(error, 'loadAllForExport').diagnostico);
       return [];
     }
   }, [fetchAllLancamentos]);
@@ -580,8 +573,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     const { error } = await supabase.from('financeiro_lancamentos_v2').insert(row as any);
 
     if (error) {
-      toast.error('Erro ao criar lançamento');
-      console.error(error);
+      reportarErro(error, 'criarLancamento', toast.error);
       return false;
     }
     toast.success('Lançamento criado');
@@ -636,8 +628,8 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       .single();
 
     if (error) {
-      if (!opts?.silent) toast.error('Erro ao criar lançamento');
-      console.error(error);
+      // `silent` suprime o toast, nunca o diagnóstico: o console continua registrando.
+      reportarErro(error, 'criarLancamentoComId', opts?.silent ? () => {} : toast.error);
       return null;
     }
     if (!opts?.silent) toast.success('Lançamento criado');
@@ -658,8 +650,13 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
         .eq('id', id)
         .maybeSingle();
       if (loadErr || !atual) {
-        toast.error('Erro ao carregar o lançamento para edição');
-        console.error('[FinV2] editarLancamento LOAD ERROR', loadErr);
+        // Sem erro do banco e sem linha: registro inexistente ou fora do escopo.
+        // Nesse caso a mensagem original é preservada — já era segura.
+        reportarErro(
+          loadErr ?? new ErroUsuarioSeguro('Erro ao carregar o lançamento para edição'),
+          'editarLancamento.load',
+          toast.error,
+        );
         return false;
       }
       let vinculoOC = false;
@@ -704,8 +701,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
 
         const { error } = await (supabase as any).from('financeiro_lancamentos_v2').update(restrito).eq('id', id);
         if (error) {
-          toast.error('Erro ao editar lançamento');
-          console.error('[FinV2] editarLancamento (OC) ERROR', error);
+          reportarErro(error, 'editarLancamento.OC', toast.error);
           return false;
         }
         toast.success('Lançamento atualizado');
@@ -766,18 +762,19 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       safra_id: form.safra_id || null,
     };
 
-    console.log('[FinV2] editarLancamento PAYLOAD', {
-      id,
-      'form.conta_destino_id': form.conta_destino_id,
-      'payload.conta_destino_id': updatePayload.conta_destino_id,
-      'form.tipo_operacao': form.tipo_operacao,
-    });
+    // Antes imprimia `id` e os dois `conta_destino_id` — UUIDs. O que a
+    // instrumentação investigava era se o destino sobrevive do form ao payload;
+    // isso é presença, não identidade. `tipo_operacao` é literal de enum nosso.
+    console.log(
+      `[FinV2] editarLancamento: tipo=${form.tipo_operacao}`
+      + ` destino_no_form=${!!form.conta_destino_id}`
+      + ` destino_no_payload=${!!updatePayload.conta_destino_id}`,
+    );
 
     const { error } = await supabase.from('financeiro_lancamentos_v2').update(updatePayload as any).eq('id', id);
 
     if (error) {
-      toast.error('Erro ao editar lançamento');
-      console.error('[FinV2] editarLancamento ERROR', error);
+      reportarErro(error, 'editarLancamento', toast.error);
       return false;
     }
 
@@ -786,7 +783,11 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       .select('id, conta_destino_id, conta_bancaria_id, tipo_operacao')
       .eq('id', id)
       .single();
-    console.log('[FinV2] POST-SAVE VERIFY', verify);
+    // Antes imprimia a linha inteira relida do banco (id + duas contas, todos
+    // UUID). O objetivo era confirmar que o destino persistiu — booleano basta.
+    console.log(
+      `[FinV2] POST-SAVE VERIFY: linha=${!!verify} destino_persistido=${!!verify?.conta_destino_id}`,
+    );
 
     // PR4 — sync best-effort dos vínculos de conciliação bancária.
     // Se o novo valor do lançamento bate EXATO (±0.01) com o OFX vinculado,
@@ -797,7 +798,8 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       const valorAbs = Math.abs(Number(form.valor) || 0);
       await sincronizarVinculosDoLancamento(id, valorAbs);
     } catch (syncErr) {
-      console.warn('[FinV2] sincronizacao vinculo cbi falhou', syncErr);
+      // Falha best-effort: não bloqueia o save. Só o diagnóstico sanitizado.
+      console.warn(normalizarErro(syncErr, 'sincronizarVinculosDoLancamento').diagnostico);
     }
 
     toast.success('Lançamento atualizado');
@@ -830,7 +832,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       .eq('id', id);
 
     if (error) {
-      toast.error('Erro ao excluir lançamento');
+      reportarErro(error, 'excluirLancamento', toast.error);
       return false;
     }
 
@@ -879,8 +881,9 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
         .in('id', batch);
 
       if (error) {
-        console.error('[FinV2] batch soft-delete error', error);
-        toast.error(`Erro ao excluir lote (${i}): ${error.message}`);
+        // `break` preservado: as fatias anteriores JÁ foram excluídas e
+        // `totalExcluidos` continua refletindo o parcial real.
+        reportarErro(error, `excluirEmLote[offset=${i}]`, toast.error);
         break;
       }
       totalExcluidos += batch.length;
@@ -918,8 +921,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
         .update({ cancelado: true, cancelado_em: new Date().toISOString() } as any)
         .in('id', batch);
       if (error) {
-        console.error('[FinV2] cancel batch error', error);
-        toast.error(`Erro ao cancelar lote: ${error.message}`);
+        reportarErro(error, `cancelarEmLote[offset=${i}]`, toast.error);
         break;
       }
       totalCancelados += batch.length;
@@ -968,8 +970,8 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
           .update(payload)
           .in('id', batch);
         if (error) {
-          console.error('[FinV2] marcarRealizadoEmLote batch error', error);
-          toast.error(`Erro ao marcar realizado: ${error.message}`);
+          // `atualizados` devolve o parcial já persistido — não zerar.
+          reportarErro(error, 'marcarRealizadoEmLote', toast.error);
           return { atualizados };
         }
         atualizados += batch.length;
@@ -997,7 +999,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
         .eq('origem_lancamento', 'migracao')
         .eq('status_transacao', 'realizado')
         .range(from, from + PAGE - 1);
-      if (error) { console.error(error); break; }
+      if (error) { console.error(normalizarErro(error, 'listarMigracaoParaCancelar').diagnostico); break; }
       if (!data || data.length === 0) break;
       allIds = allIds.concat(data.map(d => d.id));
       if (data.length < PAGE) break;
@@ -1014,8 +1016,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
         .update({ cancelado: true, cancelado_em: new Date().toISOString() } as any)
         .in('id', batch);
       if (error) {
-        console.error('[FinV2] cancel migracao batch error', error);
-        toast.error(`Erro ao cancelar lote: ${error.message}`);
+        reportarErro(error, `cancelarMigracaoEmLote[offset=${i}]`, toast.error);
         break;
       }
       totalCancelados += batch.length;
@@ -1070,7 +1071,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     });
 
     if (error) {
-      toast.error('Erro ao duplicar lançamento');
+      reportarErro(error, 'duplicarLancamento', toast.error);
       return false;
     }
     toast.success('Lançamento duplicado');
@@ -1082,11 +1083,16 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
 
     const rows = forms.map(form => buildInsertRow(form, user.id));
 
+    // CONTRATO (não alterar sem revisar o toast de sucesso abaixo): um único
+    // statement INSERT com N linhas é ATÔMICO — ou todas entram, ou nenhuma
+    // entra e `error` vem preenchido. Não existe sucesso parcial aqui, e por
+    // isso `${forms.length} lançamentos salvos` é um número confiável.
     const { error } = await supabase.from('financeiro_lancamentos_v2').insert(rows as any);
 
     if (error) {
-      toast.error(`Erro ao salvar lote: ${error.message}`);
-      console.error(error);
+      // Antes: `Erro ao salvar lote: ${error.message}` — despejava a mensagem
+      // crua do PostgREST na tela (nome de constraint, SQL, valor da coluna).
+      reportarErro(error, 'criarLancamentosEmLote', toast.error);
       return false;
     }
     toast.success(`${forms.length} lançamentos salvos`);
@@ -1153,7 +1159,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       }
       return Array.from(anos).sort((a, b) => Number(b) - Number(a));
     } catch (e) {
-      console.warn('[loadAnosDisponiveis] erro, usando fallback estático', e);
+      console.warn(normalizarErro(e, 'loadAnosDisponiveis').diagnostico + ' — usando fallback estático');
       return fallback();
     }
   }, [clienteId]);
