@@ -60,7 +60,8 @@ import { AuditoriaBancariaSoberana } from '@/components/financeiro-v2/AuditoriaB
 import { ExtratoGerencialTab } from '@/components/financeiro-v2/ExtratoGerencialTab';
 import { VisaoConsolidadaTab } from '@/components/financeiro-v2/VisaoConsolidadaTab';
 import CusteioTxtImportTab from './pages/CusteioTxtImportTab';
-import { V2MesaOperacional } from './pages/V2MesaOperacional';
+// PR-CLEANUP-REFERENCIAS-OPERACIONAIS-01 — import de V2MesaOperacional removido: a tela saiu
+// do menu e da rota. O arquivo continua no repo (quarentena), fora do bundle.
 // PR-CLEANUP-MESA-CLASSIFICACAO-01 — import de V2MesaClassificacao removido: a tela legada
 // saiu do menu e da rota. O arquivo continua no repo (quarentena), fora do bundle.
 import { V2Configuracoes } from './pages/V2Configuracoes';
@@ -633,12 +634,9 @@ export default function V2Index() {
     // PR-CLEANUP-MESA-CLASSIFICACAO-01 — rota 'mesa-classificacao' retirada de circulação.
     // Os arquivos da tela legada permanecem no repo (quarentena, nao remocao); o motor de
     // classificacao segue vivo servindo a aba Enriquecer da Conciliação Bancária.
-    if (section === 'mesa-operacional') return (
-      <V2MesaOperacional
-        initialAno={ano}
-        initialMes={mes !== '0' ? Number(mes) : undefined}
-      />
-    );
+    // PR-CLEANUP-REFERENCIAS-OPERACIONAIS-01 — rota 'mesa-operacional' retirada de circulação.
+    // Sem este ramo, um valor residual em sessionStorage 'v2:autoSection', um estado salvo ou
+    // uma URL antiga caem no fallback generico da Fase 2 — nao renderizam a tela.
     if (section === 'painel-financiamentos') return (
       <FinanciamentosPainelTab filtroAnoInicial={Number(ano)} />
     );

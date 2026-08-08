@@ -2,7 +2,8 @@
  * navGrupos.ts — Fonte única de verdade para a navegação do /v2
  * Atualizado com estrutura completa do módulo Financeiro.
  */
-import { FEATURE_FLAGS } from '@/lib/featureFlags';
+// PR-CLEANUP-REFERENCIAS-OPERACIONAIS-01 — import de FEATURE_FLAGS removido: o unico
+// consumidor era o item condicional 'mesa-operacional', agora fora do menu.
 
 export type V2Section =
   | 'home'
@@ -19,7 +20,7 @@ export type V2Section =
   // financeiro — lançamentos
   | 'financeiro-lanc' | 'contratos'
   // financeiro — conciliação
-  | 'conciliacao' | 'auditoria-bancaria' | 'extrato-gerencial' | 'visao-consolidada' | 'saldos-mensais' | 'mesa-operacional'
+  | 'conciliacao' | 'auditoria-bancaria' | 'extrato-gerencial' | 'visao-consolidada' | 'saldos-mensais'
   // financeiro — financiamentos
   | 'financiamentos' | 'painel-financiamentos'
   // financeiro — cadastros
@@ -114,9 +115,11 @@ export const NAV_GRUPOS: NavGrupo[] = [
           { id: 'visao-consolidada',   label: 'Visão Consolidada',       status: 'ready' },
           // PR-CLEANUP-MESA-CLASSIFICACAO-01 — 'mesa-classificacao' saiu do menu. O fluxo
           // vigente e' Conciliação Bancária → Importar Banco / Enriquecer / Conciliação.
-          ...(FEATURE_FLAGS.MESA_OPERACIONAL_V2
-            ? [{ id: 'mesa-operacional' as const, label: 'Referências Operacionais', status: 'ready' as const }]
-            : []),
+          // PR-CLEANUP-REFERENCIAS-OPERACIONAIS-01 — 'mesa-operacional' saiu do menu junto com
+          // o tipo, o mapa de grupo e a rota. O item era condicionado a
+          // FEATURE_FLAGS.MESA_OPERACIONAL_V2, que estava ATIVA no ambiente da Vercel apesar de
+          // ausente nos .env do repo; sem este item a flag deixa de ter qualquer consumidor e
+          // VITE_MESA_OPERACIONAL_V2=true nao reativa mais nada.
           { id: 'financiamentos',      label: 'Financiamentos',          status: 'needs-wrapper' },
           { id: 'contratos',           label: 'Contratos',               status: 'needs-wrapper' },
           { id: 'importacao-extratos', label: 'Importação Extratos',     status: 'needs-wrapper' },
@@ -231,7 +234,6 @@ export const SECTION_TO_GROUP: Partial<Record<V2Section, string>> = {
   'fluxo-caixa': 'financeiro', 'rateio-adm': 'financeiro',
   'importacao-extratos': 'financeiro', 'importacao-custeio-txt': 'financeiro', 'financeiro-lanc': 'financeiro',
   'contratos': 'financeiro', 'conciliacao': 'financeiro', 'auditoria-bancaria': 'financeiro',
-  'mesa-operacional': 'financeiro',
   'saldos-mensais': 'financeiro', 'financiamentos': 'financeiro',
   'painel-financiamentos': 'financeiro',
   'analise-trimestral': 'financeiro',

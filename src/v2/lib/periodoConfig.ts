@@ -31,7 +31,7 @@ export const SECTION_PERIODO: Partial<Record<V2Section, PeriodoTipo>> = {
   'importacao-extratos':   'nenhum',
   'financeiro-lanc':       'nenhum',
   'conciliacao':           'nenhum',
-  'mesa-operacional':      'nenhum',
+  // PR-CLEANUP-REFERENCIAS-OPERACIONAIS-01 — 'mesa-operacional' removida do mapa junto com o tipo.
   'saldos-mensais':        'nenhum',
   'financiamentos':        'nenhum',
   'painel-financiamentos': 'ano',
