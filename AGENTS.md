@@ -1,4 +1,4 @@
-# CLAUDE.md — AGROinBLUE proto
+# AGENTS.md — AGROinBLUE proto
 
 ## Identidade e limites
 - Repo: gajunqueiraagro/painel-agroinblue. Branch de trabalho: proto.
@@ -7,7 +7,7 @@
   NUNCA tocar. Nao existe SUPABASE_DB_URL_PROTO no terminal — este
   ambiente NAO tem acesso de escrita ao banco proto.
 - Papel: FASE 2 (executor). Investigacao (FASE 0) e briefing (FASE 1)
-  acontecem no Claude Chat. Implementar SOMENTE o que o briefing pede.
+  acontecem no Codex Chat. Implementar SOMENTE o que o briefing pede.
 
 ## REGRA DE ANCORA (absoluta)
 Se qualquer ancora do briefing (linha, string, estrutura, nome de
@@ -78,7 +78,7 @@ Commit NUNCA e feito neste passo.
 - Commits pequenos e focados — nunca misturar PRs distintos.
 - TSC verde + build verde + diff conferido NAO fecham um PR. Todo PR
   fica em estado "aguardando homologacao runtime" ate validacao no
-  Claude Chat. Proibido declarar "validado" por conta propria.
+  Codex Chat. Proibido declarar "validado" por conta propria.
 
 ## SECAO CHECKS
 Quando o briefing incluir uma secao CHECKS (greps verificaveis), rodar
@@ -97,7 +97,7 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   ARQUITETURAL (seis perguntas do Titulo IV). Briefing sem ela:
   PARAR e solicitar.
 - Hierarquia documental: Constituicao > ADRs > specs/modules/
-  runbooks > codigo. CLAUDE.md rege a execucao; a Constituicao rege
+  runbooks > codigo. AGENTS.md rege a execucao; a Constituicao rege
   a arquitetura.
 - Convivencia dos checklists constitucionais:
   (a) ENCAIXE ARQUITETURAL (Constituicao n. 1, Titulo IV) aplica-se
