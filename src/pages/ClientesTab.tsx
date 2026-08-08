@@ -79,60 +79,33 @@ export function ClientesTab() {
     }
     setSaving(true);
 
-    // 1. Criar cliente
-    const { data: novoCliente, error } = await supabase
-      .from('clientes')
-      .insert({ nome: nome.trim(), slug: slug.trim() })
-      .select('id')
-      .single();
+    // PR-SEC-RLS-TENANT-PROVISION-01: os 3 INSERT diretos (clientes, fazendas,
+    // cliente_membros) davam 42501 sob RLS e não eram transacionais. Agora um único
+    // RPC atômico, admin-only, cria cliente + fazenda Administrativo/ADM + membership.
+    const { data: prov, error } = await supabase.rpc('provisionar_cliente', {
+      p_nome: nome.trim(),
+      p_slug: slug.trim(),
+    });
 
-    if (error || !novoCliente) {
-      if (error?.message.includes('duplicate') || error?.message.includes('unique')) {
+    const criado = prov?.[0];
+
+    if (error || !criado) {
+      if (error?.code === '23505') {
         toast.error('Já existe um cliente com este identificador.');
       } else {
-        toast.error('Erro ao criar cliente: ' + (error?.message || 'desconhecido'));
+        toast.error('Falha no provisionamento do cliente: ' + (error?.message || 'desconhecido'));
       }
       setSaving(false);
       return;
     }
 
-    const clienteId = novoCliente.id;
-    const userId = (await supabase.auth.getUser()).data.user?.id;
+    const clienteId: string = criado.cliente_id;
 
-    // 2. Criar fazenda Administrativo + vincular usuário como admin
-    const promises: Promise<any>[] = [];
-
-    const [fazRes, memRes] = await Promise.all([
-      supabase.from('fazendas').insert({
-        nome: 'Administrativo',
-        cliente_id: clienteId,
-        tem_pecuaria: false,
-        owner_id: userId!,
-        codigo: 'ADM',
-        codigo_importacao: 'ADM',
-      }).select(),
-      supabase.from('cliente_membros').insert({
-        cliente_id: clienteId,
-        user_id: userId!,
-        perfil: 'admin_agroinblue',
-      }).select(),
-    ]);
-
-    const results = [fazRes, memRes];
-    const erros = results.filter(r => r.error);
-
-    if (erros.length > 0) {
-      console.error('Erros no bootstrap:', erros.map(r => r.error));
-      toast.warning('Cliente criado, mas houve erros na configuração automática.');
-    } else {
-      toast.success('Cliente criado e configurado com sucesso!');
-    }
+    toast.success('Cliente criado e configurado com sucesso!');
 
     // Cadastro de fazenda → invalida a lista pecuária e a área snapshot do cliente.
-    if (!fazRes.error) {
-      await qc.invalidateQueries({ queryKey: ['fazendas-pecuaria-ativas', clienteId] });
-      await qc.invalidateQueries({ queryKey: ['snapshot-area-anual', clienteId] });
-    }
+    await qc.invalidateQueries({ queryKey: ['fazendas-pecuaria-ativas', clienteId] });
+    await qc.invalidateQueries({ queryKey: ['snapshot-area-anual', clienteId] });
 
     setNome('');
     setSlug('');

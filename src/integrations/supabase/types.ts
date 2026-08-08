@@ -5478,6 +5478,14 @@ export type Database = {
         Args: { _fazenda_id: string; _user_id: string }
         Returns: boolean
       }
+      provisionar_cliente: {
+        Args: { p_nome: string; p_slug: string }
+        Returns: {
+          cliente_id: string
+          fazenda_id: string
+          membro_id: string
+        }[]
+      }
       reabrir_pilar_fechamento: {
         Args: {
           _ano_mes: string
