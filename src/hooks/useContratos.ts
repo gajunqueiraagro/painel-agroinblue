@@ -18,6 +18,12 @@ import { ErroUsuarioSeguro, reportarErro } from '@/lib/erroOperacional';
  * ANTES de qualquer chamada ao banco. Texto autoral, sem interpolar nada de
  * fora, conforme o contrato de ErroUsuarioSeguro.
  */
+export const MENSAGEM_REGENERACAO_INDEFINIDA =
+  'Nao foi possivel confirmar a atualizacao das obrigacoes futuras. Recarregue a tela e tente novamente.';
+
+export const MENSAGEM_CONTRATO_NAO_LOCALIZADO =
+  'Nao foi possivel localizar este contrato. Recarregue a tela e tente novamente.';
+
 export const MENSAGEM_EXCLUSAO_BLOQUEADA =
   'Contratos com historico nao podem ser excluidos. Altere o status para Encerrado. ' +
   'A exclusao segura de contratos sem movimentacoes sera disponibilizada em uma proxima etapa.';
@@ -152,66 +158,60 @@ export function useContratos() {
   }, [clienteAtual?.id, fetchContratos]);
 
   const editarContrato = useCallback(async (id: string, form: Partial<ContratoForm>, atualizarFuturos: boolean): Promise<boolean> => {
-    const { data: contratoAtualRaw, error: contratoAtualError } = await supabase
-      .from('financeiro_contratos' as any)
-      .select('*')
-      .eq('id', id)
-      .single();
-
-    const contratoAtual = contratoAtualRaw as unknown as Contrato | null;
-
-    if (contratoAtualError || !contratoAtual) {
-      toast.error('Erro ao localizar contrato atual');
-      console.error(contratoAtualError);
+    const { data: atualRaw, error: erroLeitura } = await supabase
+      .from('financeiro_contratos' as any).select('*').eq('id', id).single();
+    if (erroLeitura || !atualRaw) {
+      reportarErro(erroLeitura ?? new ErroUsuarioSeguro(MENSAGEM_CONTRATO_NAO_LOCALIZADO), 'editarContrato', toast.error);
       return false;
     }
-
-    const { error } = await supabase
-      .from('financeiro_contratos' as any)
-      .update(form as any)
-      .eq('id', id);
-
-    if (error) {
-      toast.error('Erro ao atualizar contrato');
-      console.error(error);
-      return false;
-    }
+    const atual = atualRaw as unknown as Contrato;
+    const novo = { ...atual, ...form };
 
     if (atualizarFuturos) {
-      const today = new Date().toISOString().slice(0, 10);
-
-      // Delete future lancamentos linked by contrato_id (single source of truth)
-      const { error: deleteError, count: deleted } = await (supabase
-        .from('financeiro_lancamentos_v2') as any)
-        .delete()
-        .select('id', { count: 'exact', head: true })
-        .eq('contrato_id', id)
-        .gte('data_competencia', today);
-
-      if (deleteError) {
-        toast.error('Erro ao limpar lançamentos futuros do contrato');
-        console.error(deleteError);
+      // PR-SEC-RLS-CONTRATOS-01B — edicao e regeneracao em UMA transacao
+      // server-side. NAO ha UPDATE aqui: se houvesse e a regeneracao falhasse,
+      // o contrato ficaria alterado e o cronograma nao. A versao enviada e a
+      // PRE-update, para que uma segunda chamada concorrente falhe.
+      const { data: r, error: erroRpc } = await (supabase as any).rpc('fn_contrato_editar_e_regenerar', {
+        p_contrato_id: id,
+        p_versao: atual.updated_at,
+        p_a_partir_de: new Date().toISOString().slice(0, 10),
+        p_fazenda_id: novo.fazenda_id ?? null,
+        p_fornecedor_id: novo.fornecedor_id ?? null,
+        p_produto: novo.produto ?? null,
+        p_valor: novo.valor,
+        p_frequencia: novo.frequencia ?? null,
+        p_data_inicio: novo.data_inicio,
+        p_data_fim: novo.data_fim ?? null,
+        p_dia_pagamento: novo.dia_pagamento,
+        p_forma_pagamento: novo.forma_pagamento ?? null,
+        p_dados_pagamento: novo.dados_pagamento ?? null,
+        p_conta_bancaria_id: novo.conta_bancaria_id ?? null,
+        p_subcentro: novo.subcentro ?? null,
+        p_centro_custo: novo.centro_custo ?? null,
+        p_macro_custo: novo.macro_custo ?? null,
+        p_observacao: novo.observacao ?? null,
+        p_status: novo.status ?? 'ativo',
+      });
+      if (erroRpc) { reportarErro(erroRpc, 'editarContratoRegenerar', toast.error); return false; }
+      const ok = r && typeof r === 'object' && r.ok === true
+        && typeof r.removidas === 'number' && typeof r.criadas === 'number';
+      if (!ok) {
+        reportarErro(new ErroUsuarioSeguro(MENSAGEM_REGENERACAO_INDEFINIDA), 'editarContratoRegenerar', toast.error);
         return false;
       }
-
-      const { data: updatedRaw } = await supabase
-        .from('financeiro_contratos' as any)
-        .select('*')
-        .eq('id', id)
-        .single();
-
-      const updated = updatedRaw as unknown as Contrato | null;
-
-      if (updated) {
-        const regenerated = await gerarLancamentos(updated as any as Contrato, today);
-        console.info('[Contratos] atualizar futuros', {
-          contratoId: id,
-          deleted: deleted || 0,
-          regenerated,
-        });
-      }
+      await fetchContratos();
+      toast.success(`Contrato atualizado. ${r.removidas} obrigacao(oes) substituida(s), ${r.criadas} criada(s).`);
+      return true;
     }
 
+    // Sem regeneracao: UPDATE simples, com retorno conferido.
+    const { data: gravado, error } = await supabase
+      .from('financeiro_contratos' as any).update(form as any).eq('id', id).select('id').single();
+    if (error || !gravado) {
+      reportarErro(error ?? new ErroUsuarioSeguro(MENSAGEM_CONTRATO_NAO_LOCALIZADO), 'editarContrato', toast.error);
+      return false;
+    }
     toast.success('Contrato atualizado');
     await fetchContratos();
     return true;
