@@ -3,7 +3,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Pencil, Pause, Play, XCircle, Trash2, ShieldAlert } from 'lucide-react';
-import { useContratos, Contrato, ContratoForm } from '@/hooks/useContratos';
+import { useContratos, Contrato, ContratoForm, MENSAGEM_EXCLUSAO_BLOQUEADA } from '@/hooks/useContratos';
 import { useFinanceiroV2 } from '@/hooks/useFinanceiroV2';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { ContratoDialog } from '@/components/financeiro-v2/ContratoDialog';
@@ -34,7 +34,7 @@ const STATUS_MAP: Record<string, { label: string; variant: 'default' | 'secondar
 };
 
 export function ContratosTab() {
-  const { contratos, loading, criarContrato, editarContrato, alterarStatus, excluirContrato } = useContratos();
+  const { contratos, loading, criarContrato, editarContrato, alterarStatus } = useContratos();
   const { contasBancarias: contas, classificacoes, fornecedores, loadContas, loadFornecedores, loadClassificacoes } = useFinanceiroV2();
   const { fazendas, fazendaAtual, isGlobal } = useFazenda();
 
@@ -157,12 +157,24 @@ export function ContratosTab() {
                         <XCircle className="h-3 w-3" /> Encerrar
                       </Button>
                     )}
-                    <Button variant="ghost" size="sm" className="h-7 px-2 text-xs gap-1 text-destructive" onClick={() => {
-                      if (confirm('Deseja excluir este contrato e todos os lançamentos gerados por ele? Esta ação não pode ser desfeita.')) excluirContrato(c.id);
-                    }}>
+                    {/* PR-SEC-RLS-CONTRATOS-01A — exclusão desabilitada até o 01B.
+                        O caminho antigo apagaria obrigações realizadas e conciliadas
+                        sem qualquer guarda. Botão inerte, com o motivo visível. */}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-xs gap-1 text-muted-foreground"
+                      disabled
+                      title={MENSAGEM_EXCLUSAO_BLOQUEADA}
+                    >
                       <Trash2 className="h-3 w-3" /> Excluir
                     </Button>
                   </div>
+                  <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
+                    Contratos com histórico não podem ser excluídos. Altere o status para
+                    <span className="font-medium"> Encerrado</span>. A exclusão segura de contratos
+                    sem movimentações será disponibilizada em uma próxima etapa.
+                  </p>
                 </CardContent>
               </Card>
             );

@@ -3,6 +3,24 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { toast } from 'sonner';
+import { ErroUsuarioSeguro, reportarErro } from '@/lib/erroOperacional';
+
+/**
+ * PR-SEC-RLS-CONTRATOS-01A — a exclusao de contrato esta BLOQUEADA.
+ *
+ * O caminho antigo emitia DELETE direto em `financeiro_lancamentos_v2` e em
+ * `financeiro_contratos`, sem guarda de status: apagaria obrigacoes realizadas
+ * e conciliadas. O 01A revoga o privilegio de DELETE de `authenticated`, entao
+ * esse caminho passaria a falhar no banco — e o codigo antigo exibiria
+ * `toast.success` mesmo assim.
+ *
+ * Ate o 01B entregar a exclusao transacional server-side, a operacao e recusada
+ * ANTES de qualquer chamada ao banco. Texto autoral, sem interpolar nada de
+ * fora, conforme o contrato de ErroUsuarioSeguro.
+ */
+export const MENSAGEM_EXCLUSAO_BLOQUEADA =
+  'Contratos com historico nao podem ser excluidos. Altere o status para Encerrado. ' +
+  'A exclusao segura de contratos sem movimentacoes sera disponibilizada em uma proxima etapa.';
 
 export interface Contrato {
   id: string;
@@ -288,34 +306,15 @@ export function useContratos() {
     return lancamentos.length;
   }, []);
 
-  const excluirContrato = useCallback(async (id: string): Promise<boolean> => {
-    // Delete linked lancamentos first
-    const { error: delLanc } = await (supabase
-      .from('financeiro_lancamentos_v2') as any)
-      .delete()
-      .eq('contrato_id', id);
-
-    if (delLanc) {
-      toast.error('Erro ao excluir lançamentos do contrato');
-      console.error(delLanc);
+  const excluirContrato = useCallback(async (): Promise<boolean> => {
+    // Nenhuma chamada ao banco: a recusa acontece antes de qualquer DELETE.
+    try {
+      throw new ErroUsuarioSeguro(MENSAGEM_EXCLUSAO_BLOQUEADA);
+    } catch (e) {
+      reportarErro(e, 'excluirContrato', toast.error);
       return false;
     }
-
-    const { error } = await supabase
-      .from('financeiro_contratos' as any)
-      .delete()
-      .eq('id', id);
-
-    if (error) {
-      toast.error('Erro ao excluir contrato');
-      console.error(error);
-      return false;
-    }
-
-    toast.success('Contrato excluído');
-    await fetchContratos();
-    return true;
-  }, [fetchContratos]);
+  }, []);
 
   return {
     contratos,
