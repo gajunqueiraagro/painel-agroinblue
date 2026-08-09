@@ -195,7 +195,6 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
     }
     setSaving(true);
     try {
-      const { criarMirrorParcela, atualizarStatusMirror } = await import('@/lib/financiamentos/parcelaMirror');
 
       // 1. Remover lançamento legado inválido (origem_lancamento='financiamento') se existir
       // Rastrear IDs efetivos: se legado removido, zerar; senão usar state atual
@@ -237,18 +236,10 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
       //   credor_id: financiamento.credor_id ?? null,
       //   data_contrato: financiamento.data_contrato ?? null,
       // });
-      const lancamentoIdPrincipal: string | null = null;
-      const lancamentoIdJuros: string | null = null;
-
-      // 3. Setar status realizado + conta bancária + data real de pagamento via IDs oficiais
-      const anoMes = dataPagamento.slice(0, 7);
-      // DESATIVADO (Opção A — eliminar espelhos auto em planejamento_financeiro):
-      // await atualizarStatusMirror(supabase as any, lancamentoIdPrincipal, lancamentoIdJuros, dataPagamento, contaBancariaId);
-      // Atualizar ano_mes para refletir o mês efetivo de pagamento
-      const idsParaAtualizar = [lancamentoIdPrincipal, lancamentoIdJuros].filter(Boolean) as string[];
-      if (idsParaAtualizar.length > 0) {
-        await supabase.from('financeiro_lancamentos_v2').update({ ano_mes: anoMes }).in('id', idsParaAtualizar);
-      }
+      // PR-FIN-DATAS-VENCIMENTO-02B: o bloco que atualizava ano_mes foi removido.
+      // Ele era inalcancavel — os dois ids locais eram sempre null, entao o
+      // update nunca chegava a ser emitido — e, se fosse, o trigger 02E o
+      // descartaria: ano_mes deriva de data_competencia, nao do pagamento.
 
       // 4. Atualizar parcela
       const { error: errParc } = await supabase
@@ -332,8 +323,6 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
       const tipo = financiamento.tipo_financiamento;
       const tipoValido = tipo === 'pecuaria' || tipo === 'agricultura';
 
-      const { deletarMirrorParcela, criarMirrorParcela, atualizarStatusMirror } =
-        await import('@/lib/financiamentos/parcelaMirror');
 
       if (status === 'cancelado' || saindoDePago) {
         // CORREÇÃO: cancelar parcela deve cancelar (marcar cancelado=true) o lançamento espelho
