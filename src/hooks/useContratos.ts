@@ -18,6 +18,9 @@ import { ErroUsuarioSeguro, reportarErro } from '@/lib/erroOperacional';
  * ANTES de qualquer chamada ao banco. Texto autoral, sem interpolar nada de
  * fora, conforme o contrato de ErroUsuarioSeguro.
  */
+export const MENSAGEM_CRIACAO_INDEFINIDA =
+  'Nao foi possivel confirmar a criacao do contrato. Recarregue a tela e tente novamente.';
+
 export const MENSAGEM_REGENERACAO_INDEFINIDA =
   'Nao foi possivel confirmar a atualizacao das obrigacoes futuras. Recarregue a tela e tente novamente.';
 
@@ -71,15 +74,6 @@ export interface ContratoForm {
 }
 
 
-function addMonthsClamped(dateStr: string, months: number, dayTarget: number): string {
-  const d = new Date(dateStr + 'T00:00:00');
-  const targetMonth = d.getMonth() + months;
-  d.setMonth(targetMonth, 1);
-  const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-  d.setDate(Math.min(dayTarget, lastDay));
-  return d.toISOString().slice(0, 10);
-}
-
 export function useContratos() {
   const { clienteAtual } = useCliente();
   const { fazendaAtual } = useFazenda();
@@ -101,8 +95,7 @@ export function useContratos() {
 
     const { data, error } = await query;
     if (error) {
-      toast.error('Erro ao carregar contratos');
-      console.error(error);
+      reportarErro(error, 'fetchContratos', toast.error);
     } else {
       setContratos((data as any[] || []) as Contrato[]);
     }
@@ -114,48 +107,47 @@ export function useContratos() {
   }, [fetchContratos]);
 
   const criarContrato = useCallback(async (form: ContratoForm): Promise<boolean> => {
-    if (!clienteAtual?.id) return false;
+    // PR-FIN-DATAS-VENCIMENTO-02A — criacao ATOMICA server-side.
+    //
+    // O caminho antigo fazia INSERT do contrato, commitava, e so entao gerava
+    // as parcelas numa segunda chamada: falha na segunda deixava contrato
+    // ORFAO. E o gerador client-side gravava o vencimento em `data_pagamento`,
+    // produzindo as 126 obrigacoes defeituosas.
+    //
+    // Agora e uma unica RPC. O tenant e resolvido no servidor a partir da
+    // fazenda: `cliente_id` nao e enviado.
+    const { data: r, error } = await (supabase as any).rpc('fn_contrato_criar_e_gerar', {
+      p_fazenda_id: form.fazenda_id,
+      p_fornecedor_id: form.fornecedor_id ?? null,
+      p_produto: form.produto ?? null,
+      p_valor: form.valor,
+      p_frequencia: form.frequencia ?? 'mensal',
+      p_data_inicio: form.data_inicio,
+      p_data_fim: form.data_fim ?? null,
+      p_dia_pagamento: form.dia_pagamento,
+      p_forma_pagamento: form.forma_pagamento ?? null,
+      p_dados_pagamento: form.dados_pagamento ?? null,
+      p_conta_bancaria_id: form.conta_bancaria_id ?? null,
+      p_subcentro: form.subcentro ?? null,
+      p_centro_custo: form.centro_custo ?? null,
+      p_macro_custo: form.macro_custo ?? null,
+      p_observacao: form.observacao ?? null,
+      p_status: form.status ?? 'ativo',
+    });
 
-    const row = {
-      cliente_id: clienteAtual.id,
-      fazenda_id: form.fazenda_id,
-      fornecedor_id: form.fornecedor_id || null,
-      produto: form.produto || null,
-      valor: form.valor,
-      frequencia: form.frequencia || 'mensal',
-      data_inicio: form.data_inicio,
-      data_fim: form.data_fim || null,
-      dia_pagamento: form.dia_pagamento,
-      forma_pagamento: form.forma_pagamento || null,
-      dados_pagamento: form.dados_pagamento || null,
-      conta_bancaria_id: form.conta_bancaria_id || null,
-      subcentro: form.subcentro || null,
-      centro_custo: form.centro_custo || null,
-      macro_custo: form.macro_custo || null,
-      observacao: form.observacao || null,
-      status: form.status || 'ativo',
-    };
+    if (error) { reportarErro(error, 'criarContrato', toast.error); return false; }
 
-    const { data, error } = await supabase
-      .from('financeiro_contratos' as any)
-      .insert(row as any)
-      .select()
-      .single();
-
-    if (error) {
-      toast.error('Erro ao criar contrato');
-      console.error(error);
+    const ok = r && typeof r === 'object' && r.ok === true
+      && typeof r.contrato_id === 'string' && typeof r.criadas === 'number';
+    if (!ok) {
+      reportarErro(new ErroUsuarioSeguro(MENSAGEM_CRIACAO_INDEFINIDA), 'criarContrato', toast.error);
       return false;
     }
 
-    const contrato = data as any as Contrato;
-
-    // Generate lancamentos
-    const generated = await gerarLancamentos(contrato);
-    toast.success(`Contrato criado com ${generated} lançamentos gerados`);
     await fetchContratos();
+    toast.success(`Contrato criado com ${r.criadas} obrigacao(oes) programada(s).`);
     return true;
-  }, [clienteAtual?.id, fetchContratos]);
+  }, [fetchContratos]);
 
   const editarContrato = useCallback(async (id: string, form: Partial<ContratoForm>, atualizarFuturos: boolean): Promise<boolean> => {
     const { data: atualRaw, error: erroLeitura } = await supabase
@@ -224,8 +216,7 @@ export function useContratos() {
       .eq('id', id);
 
     if (error) {
-      toast.error('Erro ao alterar status');
-      console.error(error);
+      reportarErro(error, 'alterarStatus', toast.error);
       return false;
     }
 
@@ -233,78 +224,6 @@ export function useContratos() {
     await fetchContratos();
     return true;
   }, [fetchContratos]);
-
-  const gerarLancamentos = useCallback(async (contrato: Contrato, aPartirDe?: string): Promise<number> => {
-    if (contrato.status !== 'ativo') return 0;
-
-    const inicio = new Date(contrato.data_inicio + 'T00:00:00');
-    const anoVigente = new Date().getFullYear();
-    const fimDefault = `${anoVigente}-12-31`;
-    const dataFim = contrato.data_fim || fimDefault;
-    const startDate = aPartirDe && aPartirDe > contrato.data_inicio ? aPartirDe : contrato.data_inicio;
-
-    const lancamentos: any[] = [];
-    let currentDate = contrato.data_inicio;
-    let monthOffset = 0;
-
-    while (true) {
-      const comp = monthOffset === 0 ? contrato.data_inicio : addMonthsClamped(contrato.data_inicio, monthOffset, inicio.getDate());
-      
-      if (comp > dataFim) break;
-      if (comp < startDate) {
-        monthOffset++;
-        continue;
-      }
-
-      // Payment date uses dia_pagamento
-      const compDate = new Date(comp + 'T00:00:00');
-      const lastDayOfMonth = new Date(compDate.getFullYear(), compDate.getMonth() + 1, 0).getDate();
-      const payDay = Math.min(contrato.dia_pagamento, lastDayOfMonth);
-      const dataPgto = `${compDate.getFullYear()}-${String(compDate.getMonth() + 1).padStart(2, '0')}-${String(payDay).padStart(2, '0')}`;
-
-      const anoMes = `${compDate.getFullYear()}-${String(compDate.getMonth() + 1).padStart(2, '0')}`;
-
-      lancamentos.push({
-        cliente_id: contrato.cliente_id,
-        fazenda_id: contrato.fazenda_id,
-        data_competencia: comp,
-        data_pagamento: dataPgto,
-        ano_mes: anoMes,
-        valor: contrato.valor,
-        tipo_operacao: '2-Saídas',
-        status_transacao: 'programado',
-        descricao: contrato.produto || null,
-        macro_custo: contrato.macro_custo || null,
-        centro_custo: contrato.centro_custo || null,
-        subcentro: contrato.subcentro || null,
-        observacao: contrato.observacao || null,
-        numero_documento: null,
-        favorecido_id: contrato.fornecedor_id || null,
-        forma_pagamento: contrato.forma_pagamento || null,
-        dados_pagamento: contrato.dados_pagamento || null,
-        conta_bancaria_id: contrato.conta_bancaria_id || null,
-        contrato_id: contrato.id,
-        origem_lancamento: 'contrato',
-      });
-
-      monthOffset++;
-      if (lancamentos.length > 36) break; // safety cap
-    }
-
-    if (lancamentos.length === 0) return 0;
-
-    const { error } = await (supabase
-      .from('financeiro_lancamentos_v2') as any)
-      .insert(lancamentos);
-
-    if (error) {
-      console.error('Erro ao gerar lançamentos do contrato:', error);
-      toast.error('Erro ao gerar lançamentos');
-      return 0;
-    }
-
-    return lancamentos.length;
-  }, []);
 
   const excluirContrato = useCallback(async (): Promise<boolean> => {
     // Nenhuma chamada ao banco: a recusa acontece antes de qualquer DELETE.
