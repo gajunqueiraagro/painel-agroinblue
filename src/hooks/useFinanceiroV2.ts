@@ -10,6 +10,37 @@ import { sincronizarVinculosDoLancamento, recomputarStatusExtrato } from '@/lib/
 import { isTituloOC, detectarViolacoesEstruturaisOC } from '@/lib/financeiro/protecaoTituloOC';
 import { STATUS_FINANCEIRO_INICIAL, type StatusFiltroFinanceiro } from '@/lib/financeiro/statusFinanceiro';
 import { reportarErro, normalizarErro, ErroUsuarioSeguro } from '@/lib/erroOperacional';
+import { montarPlanoBaseV2, mesesDoRecorte } from '@/lib/financeiro/filtrosBaseV2';
+import { FEATURE_FLAGS } from '@/lib/featureFlags';
+import {
+  consultarPagina,
+  consultarTotais,
+  buscarConjuntoCompleto,
+  prepararCancelamentoEmLote,
+  lotesDeCancelamento,
+  faixaDaPagina,
+  totaisNoCliente,
+  filtrarSeisNoCliente,
+  ordenarPorVencimentoNoCliente,
+  paramsDosTotais,
+  TAMANHO_PAGINA_LISTA,
+  VIEW_LISTA_DOC,
+  RPC_TOTAIS,
+  type BuilderView,
+  type OpcoesAbertura,
+  type AbrirView,
+  type ChamarRpcTotais,
+  type OpcoesPagina,
+  type OpcoesConjunto,
+  type RegistroListaV2,
+  type TotaisLista,
+} from '@/lib/financeiro/listaPaginadaV2';
+
+// PR-FIN-LISTA-VENCIMENTO-03 · 2C-2B — `FiltrosV2` e a dimensão temporal passaram
+//   a morar em `filtrosBaseV2`, junto dos filtros que o caminho paginado também
+//   usa. Reexportados aqui para que nenhum consumidor precise mudar de import.
+export type { FiltrosV2, DimensaoDataFinanceiro } from '@/lib/financeiro/filtrosBaseV2';
+import type { FiltrosV2, DimensaoDataFinanceiro } from '@/lib/financeiro/filtrosBaseV2';
 
 
 export interface LancamentoV2 {
@@ -135,27 +166,6 @@ export interface FornecedorV2 {
   observacao_pagamento: string | null;
 }
 
-// PR-FIN-GRADE-DATAS-03 — dimensão temporal soberana da grade. 'financeira' = COALESCE(data_pagamento,
-//   data_vencimento) (contrato de PR-FIN-OC-CONTRATO-01); as demais recortam pela coluna homônima.
-//   Ausência do campo em FiltrosV2 é tratada como 'financeira' (default preserva o comportamento atual).
-export type DimensaoDataFinanceiro = 'financeira' | 'competencia' | 'vencimento' | 'pagamento';
-
-export interface FiltrosV2 {
-  fazenda_id?: string;
-  ano?: string;
-  mes?: string;           // single month or 'todos'
-  meses?: string[];       // multi-month select
-  conta_bancaria_id?: string;
-  conta_destino_id?: string;
-  tipo_operacao?: string;
-  status_transacoes?: StatusFiltroFinanceiro[];   // PR-FIN-STATUS-UX-03A-1 — multisseleção; vazio/ausente = Todos
-  macro_custo?: string;
-  grupo_custo?: string;
-  centro_custo?: string;
-  subcentro?: string;
-  dimensao?: DimensaoDataFinanceiro;   // PR-FIN-GRADE-DATAS-03 — default 'financeira'
-}
-
 export interface ClassificacaoItem {
   subcentro: string;
   centro_custo: string;
@@ -166,63 +176,6 @@ export interface ClassificacaoItem {
 }
 
 const DEFAULT_PAGE_SIZE = 30;
-
-// PR-FIN-FILTRO-PGTO-01 — recorte temporal SOBERANO por data_pagamento (a dimensão exibida em PGTO),
-//   nunca por ano_mes (que o motor da OC deriva da competência). Faixa [1º dia do mês, 1º dia do mês
-//   seguinte) sobre a coluna date — vira o ano corretamente e sem comparação textual de datas.
-function faixaMes(ano: number, mes: number): [string, string] {
-  const mm = String(mes).padStart(2, '0');
-  const ini = `${ano}-${mm}-01`;
-  const proxAno = mes === 12 ? ano + 1 : ano;
-  const proxMes = mes === 12 ? 1 : mes + 1;
-  const fim = `${proxAno}-${String(proxMes).padStart(2, '0')}-01`;
-  return [ini, fim];
-}
-
-// Meses normalizados do recorte (multi ou único); [] quando "Todos os meses".
-function mesesDoRecorte(filtros: FiltrosV2): string[] {
-  if (filtros.meses && filtros.meses.length > 0 && !filtros.meses.includes('todos')) return filtros.meses;
-  if (filtros.mes && filtros.mes !== 'todos') return [filtros.mes];
-  return [];
-}
-
-// PR-FIN-OC-CONTRATO-01 — data financeira DERIVADA = COALESCE(data_pagamento, data_vencimento):
-//   pagamento efetivo quando há; senão o vencimento (título OC aberto). Ramo OR server-side (PostgREST):
-//   (pago na faixa) OU (não pago E vencimento na faixa). Legado (data_pagamento preenchida) cai sempre no
-//   1º ramo → comportamento idêntico ao de hoje. Sem carregar a base para filtrar client-side.
-//   IMPORTANTE: o pagamento é soberano — se há pagamento fora da faixa, a linha NÃO entra pelo vencimento
-//   (o 2º ramo exige data_pagamento IS NULL). Ex.: pag=10/09, venc=10/08, recorte=agosto → fora.
-function ramoDerivado(ini: string, fim: string): string {
-  return `and(data_pagamento.gte.${ini},data_pagamento.lt.${fim}),`
-       + `and(data_pagamento.is.null,data_vencimento.gte.${ini},data_vencimento.lt.${fim})`;
-}
-
-// PR-FIN-GRADE-DATAS-03 — segmento OR de UMA faixa [ini,fim) para a dimensão selecionada.
-//   'financeira' delega ao ramoDerivado (contrato acima); as demais recortam pela coluna homônima.
-//   gte/lt sobre coluna NULL não corresponde → linhas sem a data da dimensão ficam fora (contrato do PR).
-function ramoDimensao(dimensao: DimensaoDataFinanceiro, ini: string, fim: string): string {
-  switch (dimensao) {
-    case 'competencia': return `and(data_competencia.gte.${ini},data_competencia.lt.${fim})`;
-    case 'vencimento':  return `and(data_vencimento.gte.${ini},data_vencimento.lt.${fim})`;
-    case 'pagamento':   return `and(data_pagamento.gte.${ini},data_pagamento.lt.${fim})`;
-    case 'financeira':
-    default:            return ramoDerivado(ini, fim);
-  }
-}
-
-// PR-FIN-GRADE-DATAS-03 — "Todos os anos + Todos os meses": sem faixa, mas a dimensão continua soberana.
-//   A linha só permanece se a data da dimensão for não-NULL (financeira = pagamento OU vencimento não-NULL).
-function aplicarNaoNuloDimensao<Q extends { or: (f: string) => Q; not: (c: string, op: string, v: unknown) => Q }>(
-  query: Q, dimensao: DimensaoDataFinanceiro,
-): Q {
-  switch (dimensao) {
-    case 'competencia': return query.not('data_competencia', 'is', null);
-    case 'vencimento':  return query.not('data_vencimento', 'is', null);
-    case 'pagamento':   return query.not('data_pagamento', 'is', null);
-    case 'financeira':
-    default:            return query.or('data_pagamento.not.is.null,data_vencimento.not.is.null');
-  }
-}
 
 // PR-FIN-GRADE-DATAS-03 — data da dimensão para um lançamento (client-side). 'financeira' = COALESCE.
 export function dataDaDimensao(l: LancamentoV2, dimensao: DimensaoDataFinanceiro): string | null {
@@ -366,85 +319,61 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     setSafras((data as Safra[]) || []);
   }, [clienteId]);
 
+  // PR-FIN-LISTA-VENCIMENTO-03 — as DECISOES de filtro vivem em montarPlanoBaseV2,
+  //   compartilhadas com o caminho paginado. A APLICACAO fica aqui, sobre o builder
+  //   tipado de verdade do PostgREST: assim os nomes de coluna continuam conferidos
+  //   pelo compilador contra o schema gerado, que e o que um cast amplo apagaria.
+  //   Sequencia fixa de `if`s, nunca laco — reatribuir o builder dentro de laco
+  //   estoura a inferencia do TypeScript (TS2589).
   const buildLancamentosQuery = useCallback((filtros: FiltrosV2) => {
+    const plano = montarPlanoBaseV2(clienteId!, filtros, { relacao: 'tabela' });
+
     let query = supabase
       .from('financeiro_lancamentos_v2')
       .select('*')
-      .eq('cliente_id', clienteId!)
+      .eq('cliente_id', plano.clienteId)
       .eq('cancelado', false)
       .neq('status_transacao', 'conciliado')
       .neq('cenario', 'meta');
 
-    if (filtros.fazenda_id) {
-      query = query.eq('fazenda_id', filtros.fazenda_id);
+    if (plano.fazendaId) query = query.eq('fazenda_id', plano.fazendaId);
+    if (plano.naoNuloDimensao) query = query.not(plano.naoNuloDimensao, 'is', null);
+    if (plano.orTemporal) query = query.or(plano.orTemporal);
+    if (plano.transferenciaEntreContas) {
+      query = query.eq('tipo_operacao', '3-Transferências');
+      query = query.eq('conta_bancaria_id', plano.transferenciaEntreContas.origem);
+      query = query.eq('conta_destino_id', plano.transferenciaEntreContas.destino);
     }
-
-    // PR-FIN-GRADE-DATAS-03 — recorte temporal pela DIMENSÃO selecionada (default 'financeira' =
-    //   COALESCE(data_pagamento, data_vencimento), contrato de PR-FIN-OC-CONTRATO-01), NUNCA por ano_mes.
-    //   Faixas [1º dia, 1º dia do mês/ano seguinte) via ramoDimensao (OR server-side). Linha sem a data da
-    //   dimensão → fora de qualquer faixa. "Todos os anos + meses" é resíduo client-side em
-    //   fetchAllLancamentos (mês em qualquer ano não é faixa contínua); "Todos os anos + todos os meses"
-    //   mantém a dimensão soberana exigindo a data não-NULL (aplicarNaoNuloDimensao).
-    const dimensao: DimensaoDataFinanceiro = filtros.dimensao ?? 'financeira';
-    const isTodosAnos = !filtros.ano || filtros.ano === '__todos__';
-    const mesesRecorte = mesesDoRecorte(filtros);
-
-    if (isTodosAnos) {
-      if (mesesRecorte.length === 0) {
-        // Todos os anos + todos os meses: sem faixa, mas a dimensão continua soberana (exige data não-NULL).
-        query = aplicarNaoNuloDimensao(query, dimensao);
-      }
-      // Todos os anos + meses específicos: resíduo client-side (mês em qualquer ano) em fetchAllLancamentos.
-    } else if (mesesRecorte.length > 0) {
-      const anoNum = Number(filtros.ano);
-      const faixas = mesesRecorte.map(m => faixaMes(anoNum, Number(m)));
-      query = query.or(faixas.map(([ini, fim]) => ramoDimensao(dimensao, ini, fim)).join(','));
-    } else {
-      const anoNum = Number(filtros.ano);
-      query = query.or(ramoDimensao(dimensao, `${anoNum}-01-01`, `${anoNum + 1}-01-01`));
-    }
-
-    const contaOrigemId = filtros.conta_bancaria_id?.trim();
-    const contaDestinoId = filtros.conta_destino_id?.trim();
-
-    if (contaOrigemId && contaDestinoId) {
-      query = query
-        .eq('tipo_operacao', '3-Transferências')
-        .eq('conta_bancaria_id', contaOrigemId)
-        .eq('conta_destino_id', contaDestinoId);
-    } else {
-      if (contaOrigemId) {
-        query = query.eq('conta_bancaria_id', contaOrigemId);
-      }
-      if (contaDestinoId) {
-        query = query.eq('conta_destino_id', contaDestinoId);
-      }
-      if (filtros.tipo_operacao) query = query.eq('tipo_operacao', filtros.tipo_operacao);
-    }
-
-    // PR-FIN-STATUS-UX-03A-1 — filtro Status multisseleção: cada opção mapeia 1:1 ao valor persistido
-    //   (previsto/agendado/programado/realizado e o legado 'meta'). Vazio/ausente = Todos (sem restrição
-    //   de status). A exclusão estrutural `.neq('conciliado')` (acima) permanece intocada.
-    if (filtros.status_transacoes && filtros.status_transacoes.length > 0) {
-      // PR-FIN-V2-STATUS-01 — 'conciliado' é DERIVADO (conciliado_em != null), não um status_transacao.
-      //   Separa os status reais do filtro derivado; combina com OR quando ambos presentes.
-      const temConciliado = filtros.status_transacoes.includes('conciliado');
-      const statusReais = filtros.status_transacoes.filter(s => s !== 'conciliado');
-      if (temConciliado && statusReais.length > 0) {
-        query = query.or(`status_transacao.in.(${statusReais.join(',')}),conciliado_em.not.is.null`);
-      } else if (temConciliado) {
-        query = query.not('conciliado_em', 'is', null);
-      } else {
-        query = query.in('status_transacao', statusReais);
-      }
-    }
-    if (filtros.macro_custo) query = query.eq('macro_custo', filtros.macro_custo);
-    if (filtros.grupo_custo) query = query.eq('grupo_custo', filtros.grupo_custo);
-    if (filtros.centro_custo) query = query.eq('centro_custo', filtros.centro_custo);
-    if (filtros.subcentro) query = query.eq('subcentro', filtros.subcentro);
+    if (plano.contaBancariaId) query = query.eq('conta_bancaria_id', plano.contaBancariaId);
+    if (plano.contaDestinoId) query = query.eq('conta_destino_id', plano.contaDestinoId);
+    if (plano.tipoOperacao) query = query.eq('tipo_operacao', plano.tipoOperacao);
+    if (plano.orStatus) query = query.or(plano.orStatus);
+    if (plano.statusIn) query = query.in('status_transacao', plano.statusIn as string[]);
+    if (plano.conciliadoNaoNulo) query = query.not('conciliado_em', 'is', null);
+    if (plano.macroCusto) query = query.eq('macro_custo', plano.macroCusto);
+    if (plano.grupoCusto) query = query.eq('grupo_custo', plano.grupoCusto);
+    if (plano.centroCusto) query = query.eq('centro_custo', plano.centroCusto);
+    if (plano.subcentro) query = query.eq('subcentro', plano.subcentro);
+    if (plano.orDirecao) query = query.or(plano.orDirecao);
+    if (plano.orDescricao) query = query.or(plano.orDescricao);
+    if (plano.favorecidoId) query = query.eq('favorecido_id', plano.favorecidoId);
+    if (plano.listaGrupoCusto) query = query.eq('grupo_custo', plano.listaGrupoCusto);
+    if (plano.escopoNegocio) query = query.eq('escopo_negocio', plano.escopoNegocio);
+    if (plano.orAtividadeOutros) query = query.or(plano.orAtividadeOutros);
+    // `mesesDimensao` e `orDocumento` nao existem no plano da TABELA: dependem de
+    //   colunas que so a view tem. O caminho antigo resolve os dois em memoria.
 
     return query;
   }, [clienteId]);
+
+  // A view e a RPC nao estao em types.ts (regen e frente propria). O cast e
+  // ESTREITO e feito uma vez, para tipos NOSSOS que conferem coluna e argumento:
+  // `BuilderView` checa cada nome de coluna contra LinhaViewDoc, e `ParamsTotais`
+  // checa cada argumento da RPC. Nao e o `any` que engoliria um nome errado.
+  const abrirView: AbrirView = useCallback((colunas, opcoes) =>
+    (supabase as unknown as {
+      from: (r: string) => { select: (c: string, o?: OpcoesAbertura) => BuilderView };
+    }).from(VIEW_LISTA_DOC).select(colunas, opcoes), []);
 
   const fetchAllLancamentos = useCallback(async (filtros: FiltrosV2): Promise<LancamentoV2[]> => {
     if (!clienteId) return [];
@@ -897,38 +826,55 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     return { excluidos: totalExcluidos, bloqueados: [] };
   }, [user]);
 
-  /** Cancel (soft-delete) imported "realizado" lancamentos matching filters */
-  const cancelarRealizadosImportados = useCallback(async (filtros: FiltrosV2): Promise<{ cancelados: number }> => {
-    if (!clienteId) return { cancelados: 0 };
+  /**
+   * PR-FIN-LISTA-VENCIMENTO-03 · 2C-3 — cancela em lote os "realizado" importados
+   * do filtro. Cancelamento e IRREVERSIVEL pela tela, entao a regra aqui e dura:
+   *
+   *   1. o conjunto e lido INTEIRO antes de qualquer escrita. Nenhuma mutacao
+   *      comeca enquanto a leitura nao terminou — se a leitura falhar, nada e
+   *      cancelado, e o erro sobe;
+   *   2. o conjunto vem da MESMA semantica server-side da lista, com os seis
+   *      filtros. Sem isso, o cancelamento atingiria linhas que o operador
+   *      filtrou e nao esta vendo;
+   *   3. ids sao deduplicados. Um id repetido nao vira operacao repetida;
+   *   4. conjunto elegivel vazio nao dispara escrita alguma;
+   *   5. `sinal` aborta a preparacao se o filtro mudar no meio dela, em vez de
+   *      cancelar um conjunto que ja nao corresponde ao que esta na tela.
+   *
+   * Elegibilidade preservada: status 'realizado', com lote de importacao, nao
+   * cancelado. Lotes de 100 e a parada no primeiro erro tambem sao preservados —
+   * `cancelados` devolve o parcial ja persistido, nunca zera.
+   */
+  const cancelarRealizadosImportados = useCallback(async (
+    filtros: FiltrosV2,
+    opcoes: OpcoesConjunto = {},
+  ): Promise<{ cancelados: number; elegiveis: number }> => {
+    if (!clienteId) return { cancelados: 0, elegiveis: 0 };
 
-    // Fetch all matching the filters
-    const all = await fetchAllLancamentos(filtros);
+    // LEITURA COMPLETA PRIMEIRO, com elegibilidade e deduplicacao. Qualquer falha
+    // aqui levanta e a mutacao nem comeca. E a MESMA funcao que os testes exercitam.
+    const ids = await prepararCancelamentoEmLote(abrirView, clienteId, filtros, opcoes);
 
-    // Filter: only realizado + imported (has lote_importacao_id)
-    const alvo = all.filter(l =>
-      l.status_transacao === 'realizado' &&
-      !!l.lote_importacao_id &&
-      !l.cancelado
-    );
-
-    if (alvo.length === 0) return { cancelados: 0 };
+    if (ids.length === 0) return { cancelados: 0, elegiveis: 0 };
+    if (opcoes.sinal?.aborted) return { cancelados: 0, elegiveis: ids.length };
 
     let totalCancelados = 0;
-    for (let i = 0; i < alvo.length; i += 100) {
-      const batch = alvo.slice(i, i + 100).map(l => l.id);
+    let offset = 0;
+    for (const batch of lotesDeCancelamento(ids)) {
       const { error } = await supabase
         .from('financeiro_lancamentos_v2')
         .update({ cancelado: true, cancelado_em: new Date().toISOString() } as any)
         .in('id', batch);
       if (error) {
-        reportarErro(error, `cancelarEmLote[offset=${i}]`, toast.error);
+        reportarErro(error, `cancelarEmLote[offset=${offset}]`, toast.error);
         break;
       }
       totalCancelados += batch.length;
+      offset += batch.length;
     }
 
-    return { cancelados: totalCancelados };
-  }, [clienteId, fetchAllLancamentos]);
+    return { cancelados: totalCancelados, elegiveis: ids.length };
+  }, [clienteId, abrirView]);
 
   /**
    * PR-FIN-V2-AÇÕES-LOTE-01 — marca múltiplos lançamentos como 'realizado' em lote,
@@ -1099,6 +1045,132 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     return true;
   }, [clienteId, user]);
 
+  // ───────────────────────────────────────────────────────────────────────────
+  // PR-FIN-LISTA-VENCIMENTO-03 · 2C-2B — lista paginada, atrás de feature flag.
+  //
+  // Superfície NOVA e isolada: `loadLancamentos` e `lancamentos` continuam
+  // exatamente como estavam, e a tela não consome nada disto ainda. Ligar a flag
+  // hoje não muda uma linha do que está em produção — a fase de interface é que
+  // fará a troca.
+  //
+  // OFF: uma leitura (fetchAll) e tudo derivado dela em memória — o que a tela
+  //      faz hoje, com a ordenação do contrato aplicada por cima.
+  // ON:  três consultas independentes ao servidor. A lista NUNCA baixa o conjunto.
+  //
+  // Lista, contagem e totais têm loading e erro próprios porque falham por
+  // motivos diferentes: a lista pode voltar enquanto a contagem ainda roda, e
+  // uma contagem que estoura timeout não pode apagar a lista já exibida.
+  // ───────────────────────────────────────────────────────────────────────────
+  const [listaPagina, setListaPagina] = useState<LancamentoV2[]>([]);
+  const [listaTotal, setListaTotal] = useState(0);
+  const [listaTotais, setListaTotais] = useState<TotaisLista>({ total: 0, entradas: 0, saidas: 0, excluidosSemVencimento: 0 });
+  const [listaExcluidosSemVencimento, setListaExcluidosSemVencimento] = useState(0);
+  const [carregandoLista, setCarregandoLista] = useState(false);
+  const [carregandoContagem, setCarregandoContagem] = useState(false);
+  const [carregandoTotais, setCarregandoTotais] = useState(false);
+  const [erroLista, setErroLista] = useState<string | null>(null);
+  const [erroContagem, setErroContagem] = useState<string | null>(null);
+  const [erroTotais, setErroTotais] = useState<string | null>(null);
+
+  // Guarda de corrida: token monotônico. Toda escrita de estado passa por `vivo()`,
+  // então uma resposta lenta de um filtro antigo é DESCARTADA em vez de sobrescrever
+  // a resposta do filtro atual. AbortController não serviria sozinho aqui: ele
+  // cancelaria o fetch, mas não a janela entre `await` e `setState`.
+  const tokenListaRef = useRef(0);
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // PR-FIN-LISTA-VENCIMENTO-03 · 2C-3 — conjunto completo sob demanda.
+  //
+  // A tela nunca chama isto durante a renderizacao. So exportacao e cancelamento
+  // em massa chamam, por acao explicita do operador. E a MESMA semantica
+  // server-side da lista, com os seis filtros e a ordenacao do contrato — o que
+  // garante que o arquivo exportado e o que esta na tela, e que o cancelamento
+  // atinge exatamente o que o filtro mostra.
+  // ───────────────────────────────────────────────────────────────────────────
+  const buscarConjuntoFiltrado = useCallback(async (
+    filtros: FiltrosV2,
+    opcoes: OpcoesConjunto = {},
+  ): Promise<LancamentoV2[]> => {
+    if (!clienteId) return [];
+    const linhas = await buscarConjuntoCompleto(abrirView, clienteId, filtros, opcoes);
+    return linhas as unknown as LancamentoV2[];
+  }, [clienteId, abrirView]);
+
+  const carregarPagina = useCallback(async (filtros: FiltrosV2, opcoes: OpcoesPagina = {}) => {
+    if (!clienteId) return;
+    const token = ++tokenListaRef.current;
+    const vivo = () => token === tokenListaRef.current;
+    const tamanho = opcoes.tamanhoPagina ?? TAMANHO_PAGINA_LISTA;
+    const opts: OpcoesPagina = { ...opcoes, tamanhoPagina: tamanho };
+
+    setCarregandoLista(true); setCarregandoContagem(true); setCarregandoTotais(true);
+    setErroLista(null); setErroContagem(null); setErroTotais(null);
+
+    if (!FEATURE_FLAGS.LISTA_PAGINADA_V2) {
+      try {
+        const todos = await fetchAllLancamentos(filtros);
+        if (!vivo()) return;
+        const ordenadas = ordenarPorVencimentoNoCliente(
+          filtrarSeisNoCliente(todos as unknown as RegistroListaV2[], filtros),
+        );
+        const [de] = faixaDaPagina(opts.pagina ?? 0, tamanho);
+        const somas = totaisNoCliente(ordenadas);
+        setListaPagina(ordenadas.slice(de, de + tamanho) as unknown as LancamentoV2[]);
+        setListaTotal(ordenadas.length);
+        setListaTotais({ total: ordenadas.length, ...somas, excluidosSemVencimento: 0 });
+        // O caminho antigo nao conhece o universo SEM recorte temporal, entao nao
+        // tem como medir o que o periodo cortou. Reporta 0 em vez de estimar.
+        setListaExcluidosSemVencimento(0);
+      } catch (err) {
+        if (!vivo()) return;
+        const msg = normalizarErro(err, 'carregarPagina').mensagem;
+        setErroLista(msg); setErroContagem(msg); setErroTotais(msg);
+      } finally {
+        if (vivo()) {
+          setCarregandoLista(false); setCarregandoContagem(false); setCarregandoTotais(false);
+        }
+      }
+      return;
+    }
+
+    const abrir = abrirView;
+
+    const chamarTotais: ChamarRpcTotais = (params) =>
+      (supabase as unknown as {
+        rpc: (n: string, p: Record<string, unknown>) => Promise<{
+          data: unknown; error: { message?: string } | null;
+        }>;
+      }).rpc(RPC_TOTAIS, params as unknown as Record<string, unknown>)
+        .then((r) => ({ data: r.data as never, error: r.error }));
+
+    await Promise.allSettled([
+      consultarPagina(abrir, clienteId, filtros, opts)
+        .then((linhas) => { if (vivo()) setListaPagina(linhas as unknown as LancamentoV2[]); })
+        .catch((err) => { if (vivo()) setErroLista(normalizarErro(err, 'listaPaginada').mensagem); })
+        .finally(() => { if (vivo()) setCarregandoLista(false); }),
+
+      // Contagem e totais saem da MESMA RPC: e uma passagem so no servidor, e
+      // separa-las em duas chamadas seria varrer a tabela duas vezes para exibir
+      // numeros do mesmo rodape. Os dois estados de loading/erro continuam
+      // existindo e se movem juntos — que e a verdade do que acontece.
+      consultarTotais(chamarTotais, clienteId, filtros, opts)
+        .then((t) => {
+          if (!vivo()) return;
+          setListaTotal(t.total);
+          setListaTotais(t);
+          setListaExcluidosSemVencimento(t.excluidosSemVencimento);
+        })
+        .catch((err) => {
+          if (!vivo()) return;
+          const msg = normalizarErro(err, 'totaisLista').mensagem;
+          setErroContagem(msg); setErroTotais(msg);
+        })
+        .finally(() => {
+          if (vivo()) { setCarregandoContagem(false); setCarregandoTotais(false); }
+        }),
+    ]);
+  }, [clienteId, fetchAllLancamentos]);
+
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   /** Fetch distinct years from financeiro_lancamentos_v2 for the current client.
@@ -1210,5 +1282,19 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     cancelarMigracao,
     loadAnosDisponiveis,
     setPage,
+    // PR-FIN-LISTA-VENCIMENTO-03 · 2C-3 — conjunto completo sob demanda (exportação).
+    buscarConjuntoFiltrado,
+    // PR-FIN-LISTA-VENCIMENTO-03 · 2C-2B — superfície paginada. Nenhum consumidor ainda.
+    carregarPagina,
+    listaPagina,
+    listaTotal,
+    listaTotais,
+    listaExcluidosSemVencimento,
+    carregandoLista,
+    carregandoContagem,
+    carregandoTotais,
+    erroLista,
+    erroContagem,
+    erroTotais,
   };
 }

@@ -12,6 +12,8 @@ import type { LancamentoV2, DimensaoDataFinanceiro } from '@/hooks/useFinanceiro
 import { triggerXlsxDownload } from '@/lib/xlsxDownload';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { formatDocumento } from '@/lib/financeiro/documentoHelper';
+import { ErroConjuntoIncompleto } from '@/lib/financeiro/listaPaginadaV2';
+import { normalizarErro } from '@/lib/erroOperacional';
 
 interface FornecedorMap {
   id: string;
@@ -27,7 +29,19 @@ const DIMENSAO_LABEL: Record<DimensaoDataFinanceiro, string> = {
 };
 
 interface Props {
-  lancamentos: LancamentoV2[];
+  /**
+   * PR-FIN-LISTA-VENCIMENTO-03 · 2C-3 — a exportacao deixou de receber o array
+   * da tela e passou a BUSCAR o conjunto do filtro no servidor, no clique.
+   *
+   * Antes recebia `lancamentos`, o mesmo array que alimenta a grade. Enquanto a
+   * grade carregava tudo em memoria isso funcionava por acidente; no momento em
+   * que a lista virar paginada de 30, o arquivo sairia com 30 linhas e ninguem
+   * notaria. Receber a FUNCAO em vez do array remove a possibilidade.
+   *
+   * Deve devolver o conjunto completo dos filtros APLICADOS, ja ordenado.
+   * Deve levantar erro em vez de devolver conjunto parcial.
+   */
+  carregarConjunto: () => Promise<LancamentoV2[]>;
   fornecedores: FornecedorMap[];
   ano: string;
   fazendaNome?: string;
@@ -176,7 +190,7 @@ async function exportPDF(lancamentos: LancamentoV2[], fornecedores: FornecedorMa
   doc.save(`financeiro_v2_${ano}${faz}.pdf`);
 }
 
-export function FinanceiroV2ExportMenu({ lancamentos, fornecedores, ano, fazendaNome, totalCount, dimensao }: Props) {
+export function FinanceiroV2ExportMenu({ carregarConjunto, fornecedores, ano, fazendaNome, totalCount, dimensao }: Props) {
   const [open, setOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
 
@@ -185,14 +199,28 @@ export function FinanceiroV2ExportMenu({ lancamentos, fornecedores, ano, fazenda
   const handleExport = async (type: 'excel' | 'pdf') => {
     setExporting(true);
     try {
+      // Busca o conjunto INTEIRO do filtro. Se falhar — inclusive por exceder o
+      // teto de leitura —, nenhum arquivo e gerado: melhor exportacao que falha
+      // do que arquivo parcial entregue como completo.
+      const lancamentos = await carregarConjunto();
+      if (lancamentos.length === 0) {
+        toast.info('Nenhum lançamento no filtro atual.');
+        return;
+      }
       if (type === 'excel') {
         exportExcel(lancamentos, fornecedores, ano, dimensao, fazendaNome);
+        toast.success(`Excel exportado! (${lancamentos.length} lançamentos)`);
       } else {
         await exportPDF(lancamentos, fornecedores, ano, dimensao, fazendaNome);
         toast.success(`PDF exportado! (${lancamentos.length} lançamentos)`);
       }
-    } catch {
-      toast.error('Erro ao exportar');
+    } catch (e) {
+      // `ErroConjuntoIncompleto` traz mensagem acionavel (estreite o filtro);
+      // o resto cai na mensagem generica, sem vazar detalhe interno.
+      const msg = e instanceof ErroConjuntoIncompleto
+        ? e.message
+        : normalizarErro(e, 'exportarLista').mensagem;
+      toast.error(msg);
     } finally {
       setExporting(false);
       setOpen(false);

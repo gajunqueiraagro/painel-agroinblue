@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, useReducer } from 'react';
 import { formatMoeda } from '@/lib/calculos/formatters';
 // PR-FIN-STATUS-UX-03A-1 — domínio financeiro (dono único); statusOperacional (compartilhado) não é mais usado aqui.
 import {
@@ -37,6 +37,14 @@ import { FinanceiroV2ExportMenu } from '@/components/financeiro-v2/FinanceiroV2E
 import { CorrecaoTransferenciasBanner } from '@/components/financeiro-v2/CorrecaoTransferenciasBanner';
 import { format, parseISO } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
+import { normalizarAtividade } from '@/lib/financeiro/filtrosListaV2';
+import { filtrosAplicadosDaLista, TAMANHO_PAGINA_LISTA } from '@/lib/financeiro/listaPaginadaV2';
+import { FEATURE_FLAGS } from '@/lib/featureFlags';
+import { FinanceiroV2ControlesLista, BotaoAplicarFiltros } from '@/components/financeiro-v2/FinanceiroV2ControlesLista';
+import {
+  reduzirLista, ESTADO_INICIAL, temPendencias, calcularPaginacao,
+  type EstadoLista, type FiltrosEditaveis,
+} from '@/lib/financeiro/estadoFiltrosLista';
 
 // ── Sorting helpers ──
 
@@ -658,13 +666,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   );
 
   // Derive atividade from escopo_negocio (official field from plano de contas)
-  const getAtividade = (l: LancamentoV2): string => {
-    const escopo = (l.escopo_negocio || '').toLowerCase().trim();
-    if (escopo === 'pecuaria' || escopo === 'pecuária') return 'pecuaria';
-    if (escopo === 'agricultura' || escopo === 'agri') return 'agricultura';
-    if (escopo === 'administrativo') return 'administrativo';
-    return 'outros';
-  };
+  // PR-FIN-LISTA-VENCIMENTO-03 · 2C-1 — regra unica, compartilhada com o modulo
+  //   de filtros server-side, para que tela e servidor nao possam divergir.
+  const getAtividade = (l: LancamentoV2): string => normalizarAtividade(l.escopo_negocio);
 
   // Build grupo_custo lookup from classificacoes (centro_custo → grupo_custo)
   const centroToGrupo = useMemo(() => {
@@ -785,6 +789,104 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   }, [filteredLancamentos, sortField, sortDir, compareDefaultOrder, fornecedoresMap]);
 
   const totalLancamentosFiltrados = sortedLancamentos.length;
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // PR-FIN-LISTA-VENCIMENTO-03 · 2C-4 — rascunho x aplicado, atras da flag.
+  //
+  //   flag OFF  nada disto entra em cena: os campos continuam consultando a cada
+  //             tecla e a grade continua pintando `sortedLancamentos`.
+  //   flag ON   os campos alimentam o RASCUNHO; a lista, o count, os totais, a
+  //             exportacao e o cancelamento leem o APLICADO, que so muda em
+  //             "Aplicar filtros" ou "Limpar".
+  // ───────────────────────────────────────────────────────────────────────────
+  const LISTA_V2 = FEATURE_FLAGS.LISTA_PAGINADA_V2;
+  const [estadoLista, despacharLista] = useReducer(reduzirLista, ESTADO_INICIAL);
+
+  // O rascunho e alimentado pelos MESMOS campos da tela. Com a flag OFF este
+  // efeito e inerte: ninguem le `estadoLista`.
+  useEffect(() => {
+    if (!LISTA_V2) return;
+    const atual: FiltrosEditaveis = {
+      contaOrigem, contaDestino,
+      produto: produtoFiltro, documento: documentoFiltro,
+      fornecedor: fornecedorFiltro, atividade: atividadeFiltro, grupo: grupoFiltro,
+      incluirSemVencimento: estadoLista.rascunho.incluirSemVencimento,
+    };
+    (Object.keys(atual) as (keyof FiltrosEditaveis)[]).forEach((campo) => {
+      if (estadoLista.rascunho[campo] !== atual[campo]) {
+        despacharLista({ tipo: 'editar', campo, valor: atual[campo] });
+      }
+    });
+  }, [LISTA_V2, contaOrigem, contaDestino, produtoFiltro, documentoFiltro,
+      fornecedorFiltro, atividadeFiltro, grupoFiltro, estadoLista.rascunho]);
+
+  // Filtros que a lista, os totais e a exportacao enxergam.
+  //   flag ON  -> o APLICADO
+  //   flag OFF -> o estado corrente, como sempre foi
+  const filtrosAplicados = useMemo(() => filtrosAplicadosDaLista(
+    filtros,
+    LISTA_V2 ? estadoLista.aplicado : {
+      contaOrigem, contaDestino,
+      produto: produtoFiltro, documento: documentoFiltro,
+      fornecedor: fornecedorFiltro, atividade: atividadeFiltro, grupo: grupoFiltro,
+    },
+  ), [filtros, LISTA_V2, estadoLista.aplicado, contaOrigem, contaDestino,
+      produtoFiltro, documentoFiltro, fornecedorFiltro, atividadeFiltro, grupoFiltro]);
+
+  const incluirSemVencimentoAplicado = LISTA_V2
+    ? estadoLista.aplicado.incluirSemVencimento === true
+    : false;
+
+  // Consulta paginada: dispara SO quando o aplicado ou a pagina mudam.
+  useEffect(() => {
+    if (!LISTA_V2) return;
+    hook.carregarPagina(filtrosAplicados, {
+      pagina: estadoLista.pagina,
+      incluirSemVencimento: incluirSemVencimentoAplicado,
+    });
+  }, [LISTA_V2, filtrosAplicados, estadoLista.pagina, incluirSemVencimentoAplicado]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const pendenteAplicar = LISTA_V2 && temPendencias(estadoLista);
+  const paginacao = useMemo(
+    () => calcularPaginacao(hook.listaTotal, estadoLista.pagina, TAMANHO_PAGINA_LISTA),
+    [hook.listaTotal, estadoLista.pagina],
+  );
+
+  // Count encolheu e a pagina atual passou do fim: reposiciona na ultima real.
+  useEffect(() => {
+    if (!LISTA_V2) return;
+    if (paginacao.pagina !== estadoLista.pagina) {
+      despacharLista({ tipo: 'pagina', pagina: paginacao.pagina });
+    }
+  }, [LISTA_V2, paginacao.pagina, estadoLista.pagina]);
+
+  const handleAplicarFiltros = useCallback(() => despacharLista({ tipo: 'aplicar' }), []);
+  // `handleLimparFiltros` e declarado mais abaixo no componente; a ref evita a
+  // dependencia circular sem duplicar a logica de limpeza dos campos.
+  const limparCamposRef = useRef<() => void>(() => {});
+  const handleLimparLista = useCallback(() => {
+    limparCamposRef.current();
+    despacharLista({ tipo: 'limpar' });
+  }, []);
+  const handleToggleSemVencimento = useCallback(() => {
+    despacharLista({
+      tipo: 'editar', campo: 'incluirSemVencimento',
+      valor: !estadoLista.rascunho.incluirSemVencimento,
+    });
+  }, [estadoLista.rascunho.incluirSemVencimento]);
+
+  // Linhas que a GRADE pinta. Com a flag ON sao no maximo 30, vindas do
+  // servidor; com a flag OFF, o array completo de sempre.
+  const linhasDaGrade = LISTA_V2 ? hook.listaPagina : sortedLancamentos;
+
+  // Busca o conjunto inteiro SO no clique de exportar. Nunca na renderizacao.
+  const carregarConjuntoExportacao = useCallback(
+    () => hook.buscarConjuntoFiltrado(filtrosAplicados, {
+      incluirSemVencimento: incluirSemVencimentoAplicado,
+    }),
+    [hook.buscarConjuntoFiltrado, filtrosAplicados, incluirSemVencimentoAplicado],
+  );
+
 
   // ── Bulk selection (depends on sortedLancamentos) ──
   const allSelected = useMemo(() => selectedIds.size > 0 && sortedLancamentos.length > 0 && sortedLancamentos.every(l => selectedIds.has(l.id)), [selectedIds, sortedLancamentos]);
@@ -978,6 +1080,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   };
 
   // Determine which fazenda_id to pass to loadLancamentos
+
+  // Liga a limpeza dos campos ao botao Limpar do 2C-4 (declarado acima).
+  limparCamposRef.current = handleLimparFiltros;
+
   const queryFazendaId = fazendaId !== '__all__' ? fazendaId : undefined;
 
   const selCls = "h-6 text-[10px]";
@@ -1008,14 +1114,40 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     onIntensiveToggle?.(next);
   }, [modoIntensivo, onIntensiveToggle]);
 
-  const actionButtons = (
+  const actionButtons = LISTA_V2 ? (
+    <FinanceiroV2ControlesLista
+      pendente={pendenteAplicar}
+      onLimpar={handleLimparLista}
+      onNovo={() => { setEditingLanc(null); setDialogOpen(true); }}
+      exportar={(
+        <FinanceiroV2ExportMenu
+          carregarConjunto={carregarConjuntoExportacao}
+          fornecedores={hook.fornecedores}
+          ano={ano}
+          fazendaNome={fazOperacionais.find(f => f.id === fazendaId)?.nome}
+          totalCount={hook.listaTotal}
+          dimensao={dataPor}
+        />
+      )}
+      modoIntensivo={modoIntensivo}
+      onToggleIntensivo={() => toggleIntensivo()}
+      onVoltar={onBack}
+      excluidosSemVencimento={hook.listaExcluidosSemVencimento}
+      incluirSemVencimento={estadoLista.rascunho.incluirSemVencimento === true}
+      onToggleSemVencimento={handleToggleSemVencimento}
+      paginacao={paginacao}
+      total={hook.listaTotal}
+      onPagina={(pg) => despacharLista({ tipo: 'pagina', pagina: pg })}
+      carregandoLista={hook.carregandoLista}
+    />
+  ) : (
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-1">
         <Button size="sm" onClick={() => { setEditingLanc(null); setDialogOpen(true); }} className="h-6 text-[10px] gap-0.5 px-1.5 bg-[#E7C873] text-foreground hover:bg-[#D9B95F]" title="Novo Lançamento">
           <Plus className="h-3 w-3" /> Novo
         </Button>
         <FinanceiroV2ExportMenu
-          lancamentos={sortedLancamentos}
+          carregarConjunto={carregarConjuntoExportacao}
           fornecedores={hook.fornecedores}
           ano={ano}
           fazendaNome={fazOperacionais.find(f => f.id === fazendaId)?.nome}
@@ -1279,6 +1411,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                         </SelectContent>
                       </Select>
                     </div>
+                    {/* 2C-4 — Aplicar filtros junto de Atividade, dentro do painel. */}
+                    {LISTA_V2 && (
+                      <div className="flex items-end">
+                        <BotaoAplicarFiltros pendente={pendenteAplicar} onAplicar={handleAplicarFiltros} className="w-full" />
+                      </div>
+                    )}
                   </div>
                 </CollapsibleContent>
               </Collapsible>
@@ -1417,6 +1555,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     </SelectContent>
                   </Select>
                 </div>
+                {/* 2C-4 — Aplicar filtros no FIM da mesma fileira de Atividade. */}
+                {LISTA_V2 && (
+                  <div className="flex items-end shrink-0">
+                    <BotaoAplicarFiltros pendente={pendenteAplicar} onAplicar={handleAplicarFiltros} />
+                  </div>
+                )}
               </div>
 
               {/* DESKTOP: LINE 2 — Conta Origem | Conta Destino | Macro | Grupo | Centro | Subcentro + Action Buttons */}
@@ -1621,14 +1765,14 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 </tr>
               </thead>
               <tbody className="[&_tr:last-child]:border-0">
-                {totalLancamentosFiltrados === 0 ? (
+                {linhasDaGrade.length === 0 ? (
                   <tr className="border-b">
                     <td colSpan={13} className="text-center text-muted-foreground py-4 text-[10px]">
                       Nenhum lançamento encontrado.
                     </td>
                   </tr>
                 ) : (
-                  sortedLancamentos.map(l => {
+                  linhasDaGrade.map(l => {
                     const fornNome = fornecedoresMap.get(l.favorecido_id || '');
                     // PR-OC-FIN-EDIT-FIX-01 — apresentação: título de OC não exibe o fornecedor no Produto.
                     //   Só display (histórico intacto). Remove o sufixo " — <contraparte>" do formato de
