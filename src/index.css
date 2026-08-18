@@ -95,24 +95,30 @@
 .table-financeiro td * {
   font-size: 9px !important;
 }
-/* Datas (Comp. e Pgto) – ultra compactas */
-.table-financeiro td:nth-child(1),
-.table-financeiro td:nth-child(2),
-.table-financeiro td:nth-child(1) *,
-.table-financeiro td:nth-child(2) * {
+/* PR-FIN-GRADE-DATAS-CSS-01 — seletores por CLASSE NOMEADA, não por posição.
+   Os antigos nth-child(1)/(2)/(5)/(6) foram escritos para uma grade com menos
+   colunas; a entrada de VENC. (PR-FIN-GRADE-DATAS-03) deslocou tudo e as regras
+   passaram a pegar checkbox, Produto e Fornecedor. Classe nomeada é imune a
+   mudança de posição.
+   Exceção deliberada: o `font-weight: 500` que o antigo nth-child(5) carregava NÃO
+   foi transposto. Ele nunca chegou a Valor (pegava Produto), e transpô-lo rebaixaria
+   o `font-semibold` do JSX de 600 para 500 — mudança de peso fora do escopo deste PR,
+   que é só igualar as três colunas de data. Valor segue mandado pelo JSX (font-semibold, 600). */
+/* Datas (Comp., Venc., Pgto.) – ultra compactas */
+.table-financeiro td.celula-data,
+.table-financeiro td.celula-data * {
   font-size: 8px !important;
   line-height: 1 !important;
   letter-spacing: -0.4px !important;
 }
-/* NF (coluna 6) */
-.table-financeiro td:nth-child(6),
-.table-financeiro td:nth-child(6) * {
+/* Valor */
+.table-financeiro td.celula-valor {
   font-size: 9px !important;
 }
-/* Valor – destaque leve */
-.table-financeiro td:nth-child(5) {
+/* Doc./NF */
+.table-financeiro td.celula-doc,
+.table-financeiro td.celula-doc * {
   font-size: 9px !important;
-  font-weight: 500;
 }
 /* Forçar herança em elementos internos */
 .table-financeiro td span,
