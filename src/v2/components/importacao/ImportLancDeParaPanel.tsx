@@ -53,26 +53,26 @@ export function ImportLancDeParaPanel({
 
   return (
     <div className="rounded-lg border bg-card overflow-hidden">
-      <div className="px-2 py-1 border-b bg-muted/40 flex items-baseline justify-between">
-        <span className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground">{titulo}</span>
-        <span className={`text-[10px] tabular-nums font-semibold ${pendentes > 0 ? 'text-red-700' : 'text-emerald-700'}`}>
+      <div className="px-2 py-0.5 border-b bg-muted/40 flex items-baseline justify-between">
+        <span className="text-[9px] uppercase tracking-wider font-bold text-muted-foreground">{titulo}</span>
+        <span className={`text-[9px] tabular-nums font-semibold ${pendentes > 0 ? 'text-red-700' : 'text-emerald-700'}`}>
           {pendentes > 0 ? `${pendentes} a resolver` : 'tudo resolvido'}
         </span>
       </div>
 
       {itens.length === 0 ? (
-        <div className="px-2 py-3 text-[11px] text-muted-foreground text-center">
+        <div className="px-2 py-2 text-[10px] text-muted-foreground text-center">
           Nenhum valor desta coluna na planilha.
         </div>
       ) : (
-        <div className="divide-y divide-border/60 max-h-[42vh] overflow-y-auto">
+        <div className="divide-y divide-border/40 max-h-[38vh] overflow-y-auto">
           {itens.map((it) => {
             const selo = SELO[it.origem];
             return (
-              <div key={it.texto} className="px-2 py-1 grid gap-2 items-center"
+              <div key={it.texto} className="px-1.5 py-px grid gap-1.5 items-center"
                    style={{ gridTemplateColumns: 'minmax(0,1fr) 44px minmax(0,1.3fr) 96px' }}>
-                <span className="text-[11px] truncate" title={it.texto}>{it.texto}</span>
-                <span className="text-[10px] text-muted-foreground tabular-nums text-right">{it.qtd}×</span>
+                <span className="text-[10px] truncate leading-tight" title={it.texto}>{it.texto}</span>
+                <span className="text-[9px] text-muted-foreground tabular-nums text-right">{it.qtd}×</span>
 
                 <div className="min-w-0">
                   {campo === 'subcentro' && classificacoes && (
@@ -83,9 +83,9 @@ export function ImportLancDeParaPanel({
                       tipoOperacao={tipoPorTexto?.[it.texto] ?? ''}
                       search={busca[it.texto] ?? ''}
                       onSearchChange={(s) => setBuscaDe(it.texto, s)}
-                      triggerClassName="h-6 text-[10px] px-2"
+                      triggerClassName="h-5 text-[9px] px-1.5"
                       contentClassName="w-[22rem]"
-                      itemClassName="text-[11px] py-1"
+                      itemClassName="text-[10px] py-0.5"
                     />
                   )}
 
@@ -97,12 +97,12 @@ export function ImportLancDeParaPanel({
                         onResolver(campo, it.texto, id || null, f?.nome ?? null);
                       }}
                     >
-                      <SelectTrigger className="h-6 text-[10px] px-2"><SelectValue placeholder="Escolher fazenda" /></SelectTrigger>
+                      <SelectTrigger className="h-5 text-[9px] px-1.5"><SelectValue placeholder="Escolher fazenda" /></SelectTrigger>
                       <SelectContent>
                         {fazendas
                           .filter((f) => f.id !== '__global__')
                           .map((f) => (
-                            <SelectItem key={f.id} value={f.id} className="text-[11px]">{f.nome}</SelectItem>
+                            <SelectItem key={f.id} value={f.id} className="text-[10px]">{f.nome}</SelectItem>
                           ))}
                       </SelectContent>
                     </Select>
@@ -119,7 +119,8 @@ export function ImportLancDeParaPanel({
                       search={busca[it.texto] ?? ''}
                       onSearchChange={(s) => setBuscaDe(it.texto, s)}
                       onCriarNovo={() => setNovoFornecedorPara(it.texto)}
-                      triggerClassName="h-6 text-[10px] px-2"
+                      triggerClassName="h-5 text-[9px] px-1.5"
+                      novoButtonClassName="h-5 w-5"
                     />
                   )}
 
@@ -132,13 +133,13 @@ export function ImportLancDeParaPanel({
                       }}
                       contas={contas}
                       placeholder="Escolher conta"
-                      className="h-6 text-[10px]"
+                      className="h-5 text-[9px]"
                     />
                   )}
                 </div>
 
                 <div className="flex flex-col items-end gap-px">
-                  <span className={`text-[9px] px-1 py-px rounded font-semibold ${selo.cls}`}>
+                  <span className={`text-[8px] px-1 rounded font-semibold ${selo.cls}`}>
                     {selo.label}
                   </span>
                   {/* Conflito de apelido: mostrar de onde o texto saiu ANTES de confirmar.

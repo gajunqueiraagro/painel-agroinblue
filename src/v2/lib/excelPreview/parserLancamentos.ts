@@ -56,26 +56,41 @@ export interface LancamentosParseResult {
   linhasComErro: number;
   erros: Array<{ linha: number; motivo: string }>;
   nomeSheet: string | null;
+  /**
+   * Cabeçalho de plano de contas efetivamente encontrado na planilha, ou null.
+   * null significa que NENHUMA linha terá subcentro resolvível — a tela avisa em
+   * vez de deixar o operador descobrir isso pela prévia inteira em vermelho.
+   */
+  colunaPlanoDetectada: string | null;
 }
 
 // ─── Cabeçalhos aceitos (tolerante a variações do cliente) ──────────
+//
+// EXPORTADOS de propósito: o gerador do modelo (modeloPlanilha.ts) usa o PRIMEIRO
+// alias de cada lista como cabeçalho canônico. Assim o modelo que o operador baixa
+// nunca diverge do que a tela sabe ler — a string existe em um lugar só.
 
-const COL_COMPETENCIA = ['Data de competência', 'Data de competencia', 'Competência', 'Competencia', 'Data_Competencia', 'Data'];
-const COL_VENCIMENTO = ['Data de vencimento', 'Vencimento', 'Data_Vencimento'];
-const COL_PAGAMENTO = ['Data de pagamento', 'Pagamento', 'Data_Pagamento'];
-const COL_VALOR = ['Valor', 'VALOR', 'Vl', 'Valor R$'];
-const COL_TIPO = ['Tipo de operação', 'Tipo de operacao', 'Tipo', 'Tipo_Operacao'];
-const COL_CONTA_PLANO = ['Conta', 'Conta (plano do cliente)', 'Plano de contas', 'Categoria', 'Classificação', 'Classificacao'];
-const COL_FAZENDA = ['Fazenda', 'FAZENDA', 'Unidade'];
-const COL_FORNECEDOR = ['Fornecedor', 'Favorecido', 'Beneficiário', 'Beneficiario'];
-const COL_CONTA_BANCARIA = ['Conta bancária', 'Conta bancaria', 'Banco', 'Cartão', 'Cartao', 'Conta_Bancaria'];
-const COL_DESCRICAO = ['Descrição', 'Descricao', 'Histórico', 'Historico', 'Produto'];
-const COL_DOCUMENTO = ['Documento', 'Nº Documento', 'Numero Documento', 'Número Documento', 'NF'];
-const COL_TIPO_DOCUMENTO = ['Tipo de documento', 'Tipo_Documento', 'Tipo Doc'];
-const COL_FORMA_PAGAMENTO = ['Forma de pagamento', 'Forma_Pagamento', 'Forma'];
-const COL_OBSERVACAO = ['Observação', 'Observacao', 'Obs', 'OBS', 'Observações', 'Observacoes'];
-const COL_STATUS = ['Status', 'STATUS', 'Situação', 'Situacao'];
-const COL_SAFRA = ['Safra', 'SAFRA'];
+export const COL_COMPETENCIA = ['Data de competência', 'Data de competencia', 'Competência', 'Competencia', 'Data_Competencia', 'Data'];
+export const COL_VENCIMENTO = ['Data de vencimento', 'Vencimento', 'Data_Vencimento'];
+export const COL_PAGAMENTO = ['Data de pagamento', 'Pagamento', 'Data_Pagamento'];
+export const COL_VALOR = ['Valor', 'VALOR', 'Vl', 'Valor R$'];
+export const COL_TIPO = ['Tipo de operação', 'Tipo de operacao', 'Tipo', 'Tipo_Operacao'];
+// PR-IMPORT-EXCEL-LANC-02 — 'Conta' SAIU desta lista. Planilha em formato antigo traz
+// coluna "Conta" com a conta BANCÁRIA ("cc-001 | bradesco"); ela era capturada aqui como
+// se fosse plano de contas, o de-para bancário ficava vazio e 100% das linhas caíam com
+// "conta do plano ainda não mapeada". Foi o que ocorreu na homologação. Nunca reintroduzir
+// 'Conta' aqui: o termo é ambíguo entre os dois domínios.
+export const COL_CONTA_PLANO = ['Conta (plano do cliente)', 'Plano de contas', 'Categoria', 'Classificação', 'Classificacao'];
+export const COL_FAZENDA = ['Fazenda', 'FAZENDA', 'Unidade'];
+export const COL_FORNECEDOR = ['Fornecedor', 'Favorecido', 'Beneficiário', 'Beneficiario'];
+export const COL_CONTA_BANCARIA = ['Conta bancária', 'Conta bancaria', 'Banco', 'Cartão', 'Cartao', 'Conta_Bancaria'];
+export const COL_DESCRICAO = ['Descrição', 'Descricao', 'Histórico', 'Historico', 'Produto'];
+export const COL_DOCUMENTO = ['Documento', 'Nº Documento', 'Numero Documento', 'Número Documento', 'NF'];
+export const COL_TIPO_DOCUMENTO = ['Tipo de documento', 'Tipo_Documento', 'Tipo Doc'];
+export const COL_FORMA_PAGAMENTO = ['Forma de pagamento', 'Forma_Pagamento', 'Forma'];
+export const COL_OBSERVACAO = ['Observação', 'Observacao', 'Obs', 'OBS', 'Observações', 'Observacoes'];
+export const COL_STATUS = ['Status', 'STATUS', 'Situação', 'Situacao'];
+export const COL_SAFRA = ['Safra', 'SAFRA'];
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
@@ -193,6 +208,7 @@ export async function parseExcelLancamentos(file: File): Promise<LancamentosPars
   const vazio = (erro: string): LancamentosParseResult => ({
     rows: [], totalLinhas: 0, linhasValidas: 0, linhasComErro: 0,
     erros: [{ linha: 0, motivo: erro }], nomeSheet: null,
+    colunaPlanoDetectada: null,
   });
 
   const bytes = new Uint8Array(await file.arrayBuffer());
@@ -211,6 +227,12 @@ export async function parseExcelLancamentos(file: File): Promise<LancamentosPars
     defval: null,
   });
 
+  // Detecção pelo CABEÇALHO, não pelo conteúdo: uma planilha pode ter a coluna
+  // presente e vazia nas primeiras linhas, e isso não é o mesmo que não ter a coluna.
+  const cabecalhos = Object.keys(rawRows[0] ?? {});
+  const colunaPlanoDetectada =
+    COL_CONTA_PLANO.find((c) => cabecalhos.includes(c)) ?? null;
+
   const rows: LancamentoExcelRow[] = [];
   const erros: Array<{ linha: number; motivo: string }> = [];
 
@@ -228,5 +250,6 @@ export async function parseExcelLancamentos(file: File): Promise<LancamentosPars
     linhasComErro: erros.length,
     erros,
     nomeSheet: sheetName,
+    colunaPlanoDetectada,
   };
 }

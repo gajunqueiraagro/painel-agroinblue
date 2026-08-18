@@ -20,6 +20,9 @@ export interface FavorecidoSelectProps {
   search: string;                         // busca CONTROLADA (o caller é dono)
   onSearchChange: (s: string) => void;
   onCriarNovo: () => void;                // botão "+" → abrir cadastro de fornecedor
+  /** Classe do botão "+". Default 'h-8 w-8' — telas existentes inalteradas.
+   *  PR-IMPORT-EXCEL-LANC-02: a importação usa denso ('h-5 w-5'). */
+  novoButtonClassName?: string;
   label?: string;
   triggerClassName?: string;              // ex.: fieldBg
   tabIndex?: number;
@@ -40,7 +43,7 @@ function normalizeSearch(s: string): string {
 
 export function FavorecidoSelect({
   value, onChange, onSelected, fornecedores,
-  search, onSearchChange, onCriarNovo,
+  search, onSearchChange, onCriarNovo, novoButtonClassName,
   label, triggerClassName, tabIndex, disabled, showCpfCnpj = false,
 }: FavorecidoSelectProps) {
   const [open, setOpen] = useState(false);
@@ -144,7 +147,7 @@ export function FavorecidoSelect({
             </div>
           </PopoverContent>
         </Popover>
-        <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={onCriarNovo} title="Novo Fornecedor">
+        <Button variant="outline" size="icon" className={cn('shrink-0', novoButtonClassName ?? 'h-8 w-8')} onClick={onCriarNovo} title="Novo Fornecedor">
           <Plus className="h-3.5 w-3.5" />
         </Button>
       </div>

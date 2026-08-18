@@ -23,6 +23,8 @@ import { useImportLancamentosExcel } from '@/v2/hooks/useImportLancamentosExcel'
 import { ImportLancDeParaPanel } from '@/v2/components/importacao/ImportLancDeParaPanel';
 import { ImportLancPrevia } from '@/v2/components/importacao/ImportLancPrevia';
 import { tipoPorContaPlano } from '@/v2/lib/importLanc/importLancamentosView';
+import { baixarModeloPlanilha } from '@/v2/lib/importLanc/modeloPlanilha';
+import { Download } from 'lucide-react';
 
 export function V2ImportLancamentosExcel() {
   const {
@@ -49,25 +51,24 @@ export function V2ImportLancamentosExcel() {
   if (previa && previa.totais.entram.qtd === 0) bloqueios.push('nenhuma linha elegível para importar');
 
   return (
-    <div className="space-y-2 p-3">
-      {/* ── Passo 1 — arquivo ── */}
-      <div className="rounded-lg border bg-card p-3 space-y-2">
-        <div>
-          <div className="text-sm font-semibold">Importar lançamentos por planilha</div>
-          <p className="text-[11px] text-muted-foreground leading-snug">
-            A planilha vem no plano de contas do cliente. Você mapeia cada conta para um
-            subcentro AGROinBLUE, e o mapeamento fica memorizado para as próximas importações.
-            Não envolve conciliação bancária.
-          </p>
+    <div className="space-y-1.5 p-2">
+      {/* ── Passo 1 — arquivo. Cabeçalho congelado: com a lista longa de de-para,
+             o operador perde o contexto do arquivo ao rolar. ── */}
+      <div className="rounded-lg border bg-card p-2 space-y-1.5 sticky top-0 z-30">
+        <div className="flex items-baseline gap-2 flex-wrap">
+          <span className="text-[13px] font-semibold">Importar lançamentos por planilha</span>
+          <span className="text-[10px] text-muted-foreground">
+            Planilha no plano de contas do cliente · você mapeia cada conta uma vez · sem conciliação bancária
+          </span>
         </div>
 
-        <div className="flex items-end gap-3 flex-wrap">
-          <div className="min-w-[240px]">
-            <Label className="text-xs">Arquivo (.xlsx, .xls)</Label>
+        <div className="flex items-end gap-2 flex-wrap">
+          <div className="min-w-[220px]">
+            <Label className="text-[10px]">Arquivo (.xlsx, .xls)</Label>
             <Input
               type="file"
               accept=".xlsx,.xls"
-              className="h-9"
+              className="h-8 text-xs"
               onChange={(e) => {
                 const f = e.target.files?.[0];
                 if (f) void lerArquivo(f);
@@ -75,14 +76,23 @@ export function V2ImportLancamentosExcel() {
             />
           </div>
 
+          <Button
+            variant="outline"
+            className="h-8 text-[11px] gap-1"
+            onClick={baixarModeloPlanilha}
+            title="Baixa a planilha modelo, com os cabeçalhos que esta tela lê e uma aba de instruções."
+          >
+            <Download className="h-3.5 w-3.5" /> Baixar modelo
+          </Button>
+
           {exigeFazendaCabecalho && (
-            <div className="min-w-[200px]">
-              <Label className="text-xs text-amber-800">Fazenda (planilha não traz) *</Label>
+            <div className="min-w-[180px]">
+              <Label className="text-[10px] text-amber-800">Fazenda (planilha não traz) *</Label>
               <Select value={fazendaCabecalhoId ?? ''} onValueChange={setFazendaCabecalhoId}>
-                <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Escolher fazenda" /></SelectTrigger>
+                <SelectTrigger className="h-8 text-[11px]"><SelectValue placeholder="Escolher fazenda" /></SelectTrigger>
                 <SelectContent>
                   {fazendas.filter((f) => f.id !== '__global__').map((f) => (
-                    <SelectItem key={f.id} value={f.id} className="text-xs">{f.nome}</SelectItem>
+                    <SelectItem key={f.id} value={f.id} className="text-[11px]">{f.nome}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -90,19 +100,37 @@ export function V2ImportLancamentosExcel() {
           )}
 
           {arquivo && (
-            <Button variant="ghost" className="h-9" onClick={limpar} disabled={lendo}>
+            <Button variant="ghost" className="h-8 text-[11px]" onClick={limpar} disabled={lendo}>
               Limpar
             </Button>
           )}
         </div>
 
-        {lendo && <div className="text-[11px] text-muted-foreground">Lendo a planilha…</div>}
-        {erro && <div className="text-[11px] text-destructive">{erro}</div>}
+        {lendo && <div className="text-[10px] text-muted-foreground">Lendo a planilha…</div>}
+        {erro && <div className="text-[10px] text-destructive">{erro}</div>}
+
+        {/* Coluna de plano ausente: avisar em vez de deixar o operador descobrir pela
+            prévia inteira em vermelho. Foi o sintoma da homologação. */}
+        {parse && parse.linhasValidas > 0 && !parse.colunaPlanoDetectada && (
+          <div className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-[10px] text-amber-900">
+            <strong>Nenhuma coluna de plano de contas foi encontrada.</strong> Sem ela nenhuma linha
+            pode ser importada. Renomeie a coluna para <span className="font-mono">Conta (plano do cliente)</span>
+            {' '}— ou use o botão <b>Baixar modelo</b>. Atenção: uma coluna chamada apenas
+            {' '}<span className="font-mono">Conta</span> com valores como
+            {' '}<span className="font-mono">cc-001 | bradesco</span> é conta <b>bancária</b>, não plano de contas.
+          </div>
+        )}
 
         {parse && (
-          <div className="text-[11px] text-muted-foreground flex gap-3 flex-wrap">
+          <div className="text-[10px] text-muted-foreground flex gap-3 flex-wrap">
             <span>Aba: <span className="font-mono">{parse.nomeSheet ?? '—'}</span></span>
             <span>{parse.linhasValidas} linha(s) lida(s)</span>
+            <span>
+              Plano de contas:{' '}
+              {parse.colunaPlanoDetectada
+                ? <span className="font-mono">{parse.colunaPlanoDetectada}</span>
+                : <span className="text-amber-700 font-semibold">coluna não encontrada</span>}
+            </span>
             {parse.linhasComErro > 0 && (
               <span className="text-red-700">{parse.linhasComErro} linha(s) ilegível(is)</span>
             )}
@@ -127,49 +155,59 @@ export function V2ImportLancamentosExcel() {
       {dePara && pendentes && (
         <div className="space-y-1.5">
           <div className="flex items-baseline justify-between">
-            <span className="text-xs font-semibold">De-para</span>
-            <span className={`text-[11px] font-semibold ${pendentes.total > 0 ? 'text-red-700' : 'text-emerald-700'}`}>
+            <span className="text-[11px] font-semibold">De-para</span>
+            <span className={`text-[10px] font-semibold ${pendentes.total > 0 ? 'text-red-700' : 'text-emerald-700'}`}>
               {pendentes.total > 0
                 ? `${pendentes.total} valor(es) a resolver`
                 : 'todos os valores resolvidos'}
             </span>
           </div>
 
-          <div className="grid gap-1.5 grid-cols-1 lg:grid-cols-2">
-            <ImportLancDeParaPanel
-              titulo="Conta do plano do cliente → Subcentro"
-              campo="subcentro"
-              mapa={dePara.subcentro}
-              pendentes={pendentes.subcentro}
-              tipoPorTexto={tipoPorTexto}
-              classificacoes={classificacoes}
-              onResolver={resolverManualmente}
-            />
-            <ImportLancDeParaPanel
-              titulo="Fazenda"
-              campo="fazenda"
-              mapa={dePara.fazenda}
-              pendentes={pendentes.fazenda}
-              fazendas={fazendas}
-              onResolver={resolverManualmente}
-            />
-            <ImportLancDeParaPanel
-              titulo="Fornecedor"
-              campo="fornecedor"
-              mapa={dePara.fornecedor}
-              pendentes={pendentes.fornecedor}
-              fornecedores={fornecedores}
-              onResolver={resolverManualmente}
-              onCriarFornecedor={criarFornecedor}
-            />
-            <ImportLancDeParaPanel
-              titulo="Conta bancária / cartão"
-              campo="conta"
-              mapa={dePara.conta}
-              pendentes={pendentes.conta}
-              contas={contasBancarias}
-              onResolver={resolverManualmente}
-            />
+          {/* Grade 12: Fornecedor ganha mais largura (nomes longos + botão de criação
+              inline); Conta bancária cede, porque o rótulo é curto. */}
+          <div className="grid gap-1.5 grid-cols-1 lg:grid-cols-12">
+            <div className="lg:col-span-7">
+              <ImportLancDeParaPanel
+                titulo="Conta do plano do cliente → Subcentro"
+                campo="subcentro"
+                mapa={dePara.subcentro}
+                pendentes={pendentes.subcentro}
+                tipoPorTexto={tipoPorTexto}
+                classificacoes={classificacoes}
+                onResolver={resolverManualmente}
+              />
+            </div>
+            <div className="lg:col-span-5">
+              <ImportLancDeParaPanel
+                titulo="Fazenda"
+                campo="fazenda"
+                mapa={dePara.fazenda}
+                pendentes={pendentes.fazenda}
+                fazendas={fazendas}
+                onResolver={resolverManualmente}
+              />
+            </div>
+            <div className="lg:col-span-8">
+              <ImportLancDeParaPanel
+                titulo="Fornecedor"
+                campo="fornecedor"
+                mapa={dePara.fornecedor}
+                pendentes={pendentes.fornecedor}
+                fornecedores={fornecedores}
+                onResolver={resolverManualmente}
+                onCriarFornecedor={criarFornecedor}
+              />
+            </div>
+            <div className="lg:col-span-4">
+              <ImportLancDeParaPanel
+                titulo="Conta bancária / cartão"
+                campo="conta"
+                mapa={dePara.conta}
+                pendentes={pendentes.conta}
+                contas={contasBancarias}
+                onResolver={resolverManualmente}
+              />
+            </div>
           </div>
         </div>
       )}
@@ -177,7 +215,7 @@ export function V2ImportLancamentosExcel() {
       {/* ── Passo 3 — prévia ── */}
       {previa && (
         <div className="space-y-1.5">
-          <span className="text-xs font-semibold">Prévia</span>
+          <span className="text-[11px] font-semibold">Prévia</span>
           <ImportLancPrevia linhas={previa.linhas} totais={previa.totais} />
 
           <div className="flex items-center justify-end gap-2 flex-wrap">
