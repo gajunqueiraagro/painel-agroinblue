@@ -178,10 +178,13 @@ export function V2ImportLancamentosExcel() {
             </span>
           </div>
 
-          {/* Grade 12: Fornecedor ganha mais largura (nomes longos + botão de criação
-              inline); Conta bancária cede, porque o rótulo é curto. */}
-          <div className="grid gap-1.5 grid-cols-1 lg:grid-cols-12">
-            <div className="lg:col-span-7">
+          {/* PR-IMPORT-EXCEL-LANC-05 — blocos EMPILHADOS, cada um em largura total.
+              Na grade 2x2 anterior cada bloco recebia metade da tela e todo texto
+              truncava ("Pec/Mão de Obra/Sala…", "cc-001 | brades…"): o operador tinha
+              de passar o mouse para ler o que estava mapeando. Mapear é comparar dois
+              textos — se um deles está cortado, a tela não cumpre a função. */}
+          <div className="space-y-1.5">
+            <div>
               <ImportLancDeParaPanel
                 titulo="Conta do plano do cliente → Subcentro"
                 campo="subcentro"
@@ -193,7 +196,7 @@ export function V2ImportLancamentosExcel() {
                 onDescartar={alternarDescarte}
               />
             </div>
-            <div className="lg:col-span-5">
+            <div>
               <ImportLancDeParaPanel
                 titulo="Fazenda"
                 campo="fazenda"
@@ -204,7 +207,7 @@ export function V2ImportLancamentosExcel() {
                 onDescartar={alternarDescarte}
               />
             </div>
-            <div className="lg:col-span-6">
+            <div>
               <ImportLancDeParaPanel
                 titulo="Fornecedor"
                 campo="fornecedor"
@@ -216,7 +219,7 @@ export function V2ImportLancamentosExcel() {
                 onCriarFornecedor={criarFornecedor}
               />
             </div>
-            <div className="lg:col-span-6">
+            <div>
               <ImportLancDeParaPanel
                 titulo="Conta bancária / cartão"
                 campo="conta"

@@ -55,28 +55,55 @@ export function ImportLancDeParaPanel({
   const itens = Object.values(mapa);
   const setBuscaDe = (texto: string, s: string) => setBusca((p) => ({ ...p, [texto]: s }));
 
+  // PR-IMPORT-EXCEL-LANC-05 — empilhados, os quatro blocos não cabem abertos. Bloco
+  // sem pendência nasce recolhido: o que exige ação fica à vista, o que já está
+  // resolvido não ocupa tela. O cabeçalho permanece visível e expande em um clique,
+  // então nada some — só deixa de competir por espaço.
+  const [recolhidoManual, setRecolhidoManual] = useState<boolean | null>(null);
+  const recolhido = recolhidoManual ?? (itens.length > 0 && pendentes === 0);
+
   return (
     <div className="rounded-lg border bg-card overflow-hidden">
-      <div className="px-2 py-0.5 border-b bg-muted/40 flex items-baseline justify-between">
-        <span className="text-[9px] uppercase tracking-wider font-bold text-muted-foreground">{titulo}</span>
-        <span className={`text-[9px] tabular-nums font-semibold ${pendentes > 0 ? 'text-red-700' : 'text-emerald-700'}`}>
-          {pendentes > 0 ? `${pendentes} a resolver` : 'tudo resolvido'}
+      <button
+        type="button"
+        onClick={() => setRecolhidoManual(!recolhido)}
+        disabled={itens.length === 0}
+        className="w-full px-2 py-0.5 border-b bg-muted/40 flex items-baseline justify-between gap-2
+                   hover:bg-muted/60 disabled:hover:bg-muted/40 disabled:cursor-default"
+      >
+        <span className="text-[9px] uppercase tracking-wider font-bold text-muted-foreground flex items-baseline gap-1">
+          {itens.length > 0 && (
+            <span className="text-[8px] text-muted-foreground/70">{recolhido ? '▸' : '▾'}</span>
+          )}
+          {titulo}
         </span>
-      </div>
+        <span className="flex items-baseline gap-2 shrink-0">
+          <span className="text-[9px] text-muted-foreground/70 tabular-nums">
+            {itens.length} valor{itens.length !== 1 ? 'es' : ''}
+          </span>
+          <span className={`text-[9px] tabular-nums font-semibold ${pendentes > 0 ? 'text-red-700' : 'text-emerald-700'}`}>
+            {pendentes > 0 ? `${pendentes} a resolver` : 'tudo resolvido'}
+          </span>
+        </span>
+      </button>
 
       {itens.length === 0 ? (
         <div className="px-2 py-2 text-[10px] text-muted-foreground text-center">
           Nenhum valor desta coluna na planilha.
         </div>
-      ) : (
-        <div className="divide-y divide-border/40 max-h-[38vh] overflow-y-auto">
+      ) : recolhido ? null : (
+        <div className="divide-y divide-border/40 max-h-[28vh] overflow-y-auto">
           {itens.map((it) => {
             const selo = it.descartado ? SELO_DESCARTADO : SELO[it.origem];
             return (
-              <div key={it.texto} className={`px-1.5 py-px grid gap-1.5 items-center ${it.descartado ? 'opacity-55' : ''}`}
-                   style={{ gridTemplateColumns: 'minmax(0,0.9fr) 34px minmax(0,1.8fr) 18px 92px' }}>
-                <span className="text-[10px] truncate leading-tight" title={it.texto}>{it.texto}</span>
-                <span className="text-[9px] text-muted-foreground tabular-nums text-right">{it.qtd}×</span>
+              <div key={it.texto} className={`px-2 py-0.5 grid gap-2 items-center ${it.descartado ? 'opacity-55' : ''}`}
+                   style={{ gridTemplateColumns: 'minmax(0,2.2fr) minmax(0,1.4fr) 44px 20px 96px' }}>
+                {/* Valor de origem: QUEBRA em vez de truncar. Com a largura toda, o
+                    texto do cliente cabe — e é ele que o operador precisa ler para
+                    decidir o mapeamento. */}
+                <span className="text-[10px] leading-tight whitespace-normal break-words" title={it.texto}>
+                  {it.texto}
+                </span>
 
                 <div className="min-w-0">
                   {campo === 'subcentro' && classificacoes && (
@@ -145,6 +172,8 @@ export function ImportLancDeParaPanel({
                     />
                   )}
                 </div>
+
+                <span className="text-[9px] text-muted-foreground tabular-nums text-right">{it.qtd}×</span>
 
                 <button
                   type="button"
