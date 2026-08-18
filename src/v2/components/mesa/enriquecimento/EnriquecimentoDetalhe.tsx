@@ -22,13 +22,18 @@ export interface EnriquecimentoDetalheProps {
   hideBanco?: boolean;   // U2 — sob filtro por conta, a linha Banco some (redundante)
   onEditar?: (patch: Record<string, unknown>) => Promise<void>;
   onCriarFornecedor?: (nome: string, fazendaId: string | null, cpfCnpj?: string) => Promise<FornecedorV2 | null>;   // PR-FORNECEDOR-FAZENDA-01
+  // PR-UX-ENR-MODAL-01 — modo ampliado (modal). SÓ apresentação: colunas mais largas e
+  // tipografia maior. Default false = aba intacta (densidade otimizada de propósito).
+  amplo?: boolean;
 }
 
 // Larguras FIXAS — "Resultado" é a mais larga (coração da tela).
 // PR-ENR-01 — ordem visual Excel | Sistema atual | Resultado (cada coluna mantém sua largura).
 const COLS = '68px minmax(0,1.05fr) minmax(0,1fr) minmax(0,1.75fr)';
+// PR-UX-ENR-MODAL-01 — modal: rótulo 68px→110px (deixa de truncar) e Resultado 1,75fr→2,2fr.
+const COLS_AMPLO = '110px minmax(0,1fr) minmax(0,1fr) minmax(0,2.2fr)';
 
-export function EnriquecimentoDetalhe({ row, classificacoes, fornecedores, fazendas, clienteId, hideBanco, onEditar, onCriarFornecedor }: EnriquecimentoDetalheProps) {
+export function EnriquecimentoDetalhe({ row, classificacoes, fornecedores, fazendas, clienteId, hideBanco, onEditar, onCriarFornecedor, amplo = false }: EnriquecimentoDetalheProps) {
   if (!row) {
     return (
       <div className="rounded-lg border bg-card p-4 text-[11px] text-muted-foreground text-center">
@@ -37,6 +42,11 @@ export function EnriquecimentoDetalhe({ row, classificacoes, fornecedores, fazen
     );
   }
   const bloqueado = row.comparativo.some((c) => c.tom === 'bloqueio');
+  // PR-UX-ENR-MODAL-01 — apresentação por modo. `amplo=false` reproduz exatamente
+  // o que a aba já renderiza (COLS / text-[9px] / text-[10px]).
+  const cols = amplo ? COLS_AMPLO : COLS;
+  const t9 = amplo ? 'text-[11px]' : 'text-[9px]';
+  const t10 = amplo ? 'text-[12px]' : 'text-[10px]';
 
   return (
     // Limitado à própria área (h-full + overflow-y-auto): NUNCA invade a barra inferior;
@@ -44,11 +54,11 @@ export function EnriquecimentoDetalhe({ row, classificacoes, fornecedores, fazen
     <div className="rounded-lg border bg-card md:h-full md:min-h-0 md:overflow-y-auto">
       <div className="px-2 py-0.5">
         {/* Cabeçalhos fortes + identidade de coluna (P0-4 / P0-6) — compactados (BUG1). */}
-        <div className="grid gap-x-2" style={{ gridTemplateColumns: COLS }}>
+        <div className="grid gap-x-2" style={{ gridTemplateColumns: cols }}>
           <span />
-          <span className="text-[9px] font-bold uppercase tracking-wide text-blue-600 border-t border-blue-300">Excel</span>
-          <span className="text-[9px] font-bold uppercase tracking-wide text-slate-500 border-t border-slate-300">Sistema atual</span>
-          <span className="text-[9px] font-bold uppercase tracking-wide text-emerald-600 border-t border-emerald-400">Resultado</span>
+          <span className={`${t9} font-bold uppercase tracking-wide text-blue-600 border-t border-blue-300`}>Excel</span>
+          <span className={`${t9} font-bold uppercase tracking-wide text-slate-500 border-t border-slate-300`}>Sistema atual</span>
+          <span className={`${t9} font-bold uppercase tracking-wide text-emerald-600 border-t border-emerald-400`}>Resultado</span>
         </div>
 
         {/* Linhas densas, estilo planilha (P0-7) */}
@@ -58,10 +68,10 @@ export function EnriquecimentoDetalhe({ row, classificacoes, fornecedores, fazen
             // U6 — Produto/Descrição e Fornecedor NUNCA truncam no detalhe (wrap multi-linha); demais truncam.
             const wrap = c.campo === 'Produto / Descrição' || c.campo === 'Fornecedor';
             return (
-            <div key={c.campo} className="grid gap-x-2 items-start" style={{ gridTemplateColumns: COLS }}>
-              <span className="text-[9px] text-muted-foreground truncate pt-0.5" title={c.campo}>{c.campo}</span>
-              <span className={`text-[10px] text-blue-700/90 pt-0.5 ${wrap ? 'break-words' : 'truncate'}`} title={c.excel}>{c.excel}</span>
-              <span className={`text-[10px] pt-0.5 ${wrap ? 'break-words' : 'truncate'}`} title={c.sistema}>{c.sistema}</span>
+            <div key={c.campo} className="grid gap-x-2 items-start" style={{ gridTemplateColumns: cols }}>
+              <span className={`${t9} text-muted-foreground truncate pt-0.5`} title={c.campo}>{c.campo}</span>
+              <span className={`${t10} text-blue-700/90 pt-0.5 ${wrap ? 'break-words' : 'truncate'}`} title={c.excel}>{c.excel}</span>
+              <span className={`${t10} pt-0.5 ${wrap ? 'break-words' : 'truncate'}`} title={c.sistema}>{c.sistema}</span>
               <div className="min-w-0">
                 {/* PR-U2d-1 — editor só enquanto !aplicado; aplicada recua para o badge (valor final na coluna Sistema). */}
                 {!row.aplicado && c.campo === 'Subcentro' && onEditar && classificacoes ? (
@@ -108,7 +118,7 @@ export function EnriquecimentoDetalhe({ row, classificacoes, fornecedores, fazen
                   />
                 ) : (
                   <span
-                    className={`inline-flex items-center rounded px-1 py-px text-[9px] max-w-full ${wrap ? 'whitespace-normal break-words' : 'truncate'} ${TOM_BADGE[c.tom]}`}
+                    className={`inline-flex items-center rounded px-1 py-px ${t9} max-w-full ${wrap ? 'whitespace-normal break-words' : 'truncate'} ${TOM_BADGE[c.tom]}`}
                     title={c.resultado}
                   >
                     {c.resultado}
@@ -121,7 +131,7 @@ export function EnriquecimentoDetalhe({ row, classificacoes, fornecedores, fazen
         </div>
 
         {/* Resumo do que o Aplicar faria — compactado (BUG1). */}
-        <div className="text-[9px] leading-tight border-t border-dashed pt-0.5 mt-0.5">
+        <div className={`${t9} leading-tight border-t border-dashed pt-0.5 mt-0.5`}>
           {bloqueado
             ? <span className="text-red-700">Bloqueado no Aplicar: subcentro proposto fora do plano oficial.</span>
             : row.mudaAlgo
@@ -130,7 +140,7 @@ export function EnriquecimentoDetalhe({ row, classificacoes, fornecedores, fazen
         </div>
 
         {/* PR-U2b — proveniência da resolução (read-only, rastreabilidade). '—' em linhas sem _meta. */}
-        <div className="text-[9px] leading-tight text-muted-foreground" title="Como esta proposta foi resolvida (metadado)">
+        <div className={`${t9} leading-tight text-muted-foreground`} title="Como esta proposta foi resolvida (metadado)">
           Resolução: {row.proveniencia.origem ?? '—'}
           {row.proveniencia.tier && row.proveniencia.tier !== row.proveniencia.origem ? ` (${row.proveniencia.tier})` : ''}
           {row.proveniencia.motorVersion != null ? ` · motor v${row.proveniencia.motorVersion}` : ''}
