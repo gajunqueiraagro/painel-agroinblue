@@ -31,8 +31,11 @@ export function ResultadoProdutoEditor({ value, descricaoAtual, clienteId, onEdi
     if (v !== baseRef.current.trim()) { baseRef.current = v; void onEditar({ produto: v }); }
   };
 
+  // PR-UX-ENR-MODAL-01 — title no wrapper: o input do ProdutoAutocomplete corta o valor longo
+  // e não aceita `title` (componente compartilhado; a prop fica para PR próprio). Paliativo
+  // declarado. Usa `text` — o que está na tela — e não `value` (proposta, frequentemente null).
   return (
-    <div onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) commitValue(textRef.current); }}>
+    <div title={text} onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) commitValue(textRef.current); }}>
       <ProdutoAutocomplete value={text} onChange={setBoth} onCommit={commitValue} clienteId={clienteId} inputClassName="h-6 text-[10px] px-2" />
     </div>
   );

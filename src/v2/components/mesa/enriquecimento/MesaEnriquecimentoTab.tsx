@@ -17,9 +17,10 @@ import {
   listarContas, filtrarPorConta,
 } from '@/v2/lib/mesa/enriquecimentoView';
 import { EnriquecimentoToolbar } from './EnriquecimentoToolbar';
-import { EnriquecimentoLista } from './EnriquecimentoLista';
-import { EnriquecimentoDetalhe } from './EnriquecimentoDetalhe';
-import { EnriquecimentoActions } from './EnriquecimentoActions';
+import { EnriquecimentoLista, type EnriquecimentoListaProps } from './EnriquecimentoLista';
+import { EnriquecimentoDetalhe, type EnriquecimentoDetalheProps } from './EnriquecimentoDetalhe';
+import { EnriquecimentoActions, type EnriquecimentoActionsProps } from './EnriquecimentoActions';
+import { EnriquecimentoMesaModal } from './EnriquecimentoMesaModal';
 import { EnriquecimentoImportarDialog } from './EnriquecimentoImportarDialog';
 import { EnriquecimentoCandidatosDrawer } from './EnriquecimentoCandidatosDrawer';
 import { EnriquecimentoNaoExplicadoDrawer } from './EnriquecimentoNaoExplicadoDrawer';
@@ -54,6 +55,9 @@ export function MesaEnriquecimentoTab() {
   const [selecionadoId, setSelecionadoId] = useState<string | null>(null);
   const [revisei, setRevisei] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  // PR-UX-ENR-MODAL-01 — superfície ampla da mesma mesa. Estado de UI puro:
+  // não persiste, não sincroniza com URL, não altera nada do fluxo.
+  const [mesaAmpliadaOpen, setMesaAmpliadaOpen] = useState(false);
 
   // Auto-seleção da sessão mais útil na abertura (regra extraída para o módulo puro).
   useEffect(() => {
@@ -306,6 +310,46 @@ export function MesaEnriquecimentoTab() {
     }
   }
 
+  // PR-UX-ENR-MODAL-01 — prop-bags únicos. A aba e o modal ampliado consomem
+  // EXATAMENTE as mesmas props; a lista de props existe em UM lugar só.
+  const listaProps: EnriquecimentoListaProps = {
+    rows: rowsFiltradas,
+    selecionadoId,
+    onSelecionar: setSelecionadoId,
+    hideBanco: filtroConta !== 'todas',
+  };
+  const detalheProps: EnriquecimentoDetalheProps = {
+    row: selecionado,
+    classificacoes,
+    fornecedores,
+    fazendas,
+    clienteId: clienteAtual?.id,
+    hideBanco: filtroConta !== 'todas',
+    onEditar,
+    onCriarFornecedor: criarFornecedor,
+  };
+  const actionsProps: EnriquecimentoActionsProps = {
+    posicao,
+    onAnterior: irAnterior,
+    onProximo: irProximo,
+    canAnterior,
+    canProximo,
+    revisado: revisei,
+    onRevisado: setRevisei,
+    onSalvar: () => { void salvar(); },
+    onSalvarProximo: () => { void handleSalvarProximo(); },
+    onReverter: () => { void handleReverter(); },
+    onAplicarTodos: () => { void handleAplicarTodos(); },
+    nAplicaveis,
+    salvarDisabled: !podeSalvar,
+    reverterDisabled: !podeReverter,
+    aplicarTodosDisabled: !sessaoId || nAplicaveis === 0,
+    isBusy,
+  };
+  // Contagem da mesa ampliada: reusa rowsFiltradas (sessão + filtros vigentes). Nada recalculado.
+  const mesaAmpliadaVazia = rowsFiltradas.length === 0;
+  const sessaoLabel = sessoesVM.find((s) => s.id === sessaoId)?.label ?? null;
+
   return (
     <div className="space-y-1 md:space-y-0 md:flex-1 md:min-h-0 md:flex md:flex-col md:gap-1">
       <EnriquecimentoToolbar
@@ -327,21 +371,50 @@ export function MesaEnriquecimentoTab() {
 
       {isFetching && <div className="text-[10px] text-muted-foreground px-1 md:shrink-0">Carregando…</div>}
 
+      {/* PR-UX-ENR-MODAL-01 — entrada da mesa ampliada. Só apresentação: abre os MESMOS
+          componentes numa superfície larga. Nenhuma regra, nenhum recálculo. */}
+      <div
+        role={mesaAmpliadaVazia ? undefined : 'button'}
+        tabIndex={mesaAmpliadaVazia ? undefined : 0}
+        aria-disabled={mesaAmpliadaVazia || undefined}
+        onClick={mesaAmpliadaVazia ? undefined : () => setMesaAmpliadaOpen(true)}
+        onKeyDown={mesaAmpliadaVazia ? undefined : (e) => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setMesaAmpliadaOpen(true); }
+        }}
+        className={`flex items-center gap-2 rounded-lg border px-2 py-1 md:shrink-0 ${
+          mesaAmpliadaVazia
+            ? 'bg-muted/20 opacity-60'
+            : 'bg-card cursor-pointer transition-colors hover:bg-muted/40'
+        }`}
+      >
+        <div className="min-w-0 flex-1">
+          <div className="text-[11px] font-semibold leading-tight">Mesa de revisão ampliada</div>
+          <div className="text-[10px] text-muted-foreground leading-tight">
+            {mesaAmpliadaVazia
+              ? 'Nenhuma linha nesta sessão/filtro — não há o que revisar em tela cheia.'
+              : 'Abrir em tela cheia para revisar linha por linha com todos os campos visíveis.'}
+          </div>
+        </div>
+        <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
+          {rowsFiltradas.length} linha{rowsFiltradas.length !== 1 ? 's' : ''}
+        </span>
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-6 text-[11px] px-2 shrink-0"
+          disabled={mesaAmpliadaVazia}
+          onClick={(e) => { e.stopPropagation(); setMesaAmpliadaOpen(true); }}
+        >
+          Abrir mesa ampliada
+        </Button>
+      </div>
+
       {/* Hierarquia: ESQUERDA (~29%) só LOCALIZA o lançamento · DIREITA (~71%) é a área de
           trabalho (foco). Desktop: grid ocupa o restante (flex-1) e só a lista rola. Mobile: empilha.
           hideBanco: sob filtro por conta, Banco é redundante (some na lista e no detalhe). */}
       <div className="grid gap-1.5 grid-cols-1 items-start md:[grid-template-columns:0.40fr_1fr] md:[grid-template-rows:minmax(0,1fr)] md:flex-1 md:min-h-0">
-        <EnriquecimentoLista rows={rowsFiltradas} selecionadoId={selecionadoId} onSelecionar={setSelecionadoId} hideBanco={filtroConta !== 'todas'} />
-        <EnriquecimentoDetalhe
-          row={selecionado}
-          classificacoes={classificacoes}
-          fornecedores={fornecedores}
-          fazendas={fazendas}
-          clienteId={clienteAtual?.id}
-          hideBanco={filtroConta !== 'todas'}
-          onEditar={onEditar}
-          onCriarFornecedor={criarFornecedor}
-        />
+        <EnriquecimentoLista {...listaProps} />
+        <EnriquecimentoDetalhe {...detalheProps} />
       </div>
 
       {/* PR-MESA-RESOLUCAO-01 / -GRUPO-01 — faixa de decisão humana da linha selecionada. */}
@@ -390,23 +463,16 @@ export function MesaEnriquecimentoTab() {
       )}
       </div>
 
-      <EnriquecimentoActions
-        posicao={posicao}
-        onAnterior={irAnterior}
-        onProximo={irProximo}
-        canAnterior={canAnterior}
-        canProximo={canProximo}
-        revisado={revisei}
-        onRevisado={setRevisei}
-        onSalvar={() => { void salvar(); }}
-        onSalvarProximo={() => { void handleSalvarProximo(); }}
-        onReverter={() => { void handleReverter(); }}
-        onAplicarTodos={() => { void handleAplicarTodos(); }}
-        nAplicaveis={nAplicaveis}
-        salvarDisabled={!podeSalvar}
-        reverterDisabled={!podeReverter}
-        aplicarTodosDisabled={!sessaoId || nAplicaveis === 0}
-        isBusy={isBusy}
+      <EnriquecimentoActions {...actionsProps} />
+
+      {/* PR-UX-ENR-MODAL-01 — mesma mesa, superfície ampla. Mesmos prop-bags. */}
+      <EnriquecimentoMesaModal
+        open={mesaAmpliadaOpen}
+        onOpenChange={setMesaAmpliadaOpen}
+        sessaoLabel={sessaoLabel}
+        lista={listaProps}
+        detalhe={detalheProps}
+        actions={actionsProps}
       />
 
       <EnriquecimentoImportarDialog
