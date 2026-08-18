@@ -17,6 +17,7 @@ export type V2Section =
   // financeiro — visão geral
   | 'financeiro-home' | 'financeiro-dashboard' | 'fluxo-caixa'
   | 'rateio-adm' | 'importacao-extratos' | 'importacao-custeio-txt'
+  | 'importacao-lanc-excel'
   // financeiro — lançamentos
   | 'financeiro-lanc' | 'contratos'
   // financeiro — conciliação
@@ -124,6 +125,9 @@ export const NAV_GRUPOS: NavGrupo[] = [
           { id: 'contratos',           label: 'Contratos',               status: 'needs-wrapper' },
           { id: 'importacao-extratos', label: 'Importação Extratos',     status: 'needs-wrapper' },
           { id: 'importacao-custeio-txt', label: 'Importação Custeio (TXT)', status: 'ready' },
+          // PR-IMPORT-EXCEL-LANC-01 — planilha no vocabulário DO CLIENTE (de-para de plano
+          // de contas). Distinta de 'Importação Extratos', que exige o formato AGROinBLUE.
+          { id: 'importacao-lanc-excel', label: 'Importação Lançamentos (Excel)', status: 'ready' },
         ],
       },
       {
@@ -233,6 +237,7 @@ export const SECTION_TO_GROUP: Partial<Record<V2Section, string>> = {
   'financeiro-home': 'financeiro', 'financeiro-dashboard': 'financeiro',
   'fluxo-caixa': 'financeiro', 'rateio-adm': 'financeiro',
   'importacao-extratos': 'financeiro', 'importacao-custeio-txt': 'financeiro', 'financeiro-lanc': 'financeiro',
+  'importacao-lanc-excel': 'financeiro',
   'contratos': 'financeiro', 'conciliacao': 'financeiro', 'auditoria-bancaria': 'financeiro',
   'saldos-mensais': 'financeiro', 'financiamentos': 'financeiro',
   'painel-financiamentos': 'financeiro',

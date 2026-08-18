@@ -60,6 +60,7 @@ import { AuditoriaBancariaSoberana } from '@/components/financeiro-v2/AuditoriaB
 import { ExtratoGerencialTab } from '@/components/financeiro-v2/ExtratoGerencialTab';
 import { VisaoConsolidadaTab } from '@/components/financeiro-v2/VisaoConsolidadaTab';
 import CusteioTxtImportTab from './pages/CusteioTxtImportTab';
+import { V2ImportLancamentosExcel } from './pages/V2ImportLancamentosExcel';
 // PR-CLEANUP-REFERENCIAS-OPERACIONAIS-01 — import de V2MesaOperacional removido: a tela saiu
 // do menu e da rota. O arquivo continua no repo (quarentena), fora do bundle.
 // PR-CLEANUP-MESA-CLASSIFICACAO-01 — import de V2MesaClassificacao removido: a tela legada
@@ -677,6 +678,9 @@ export default function V2Index() {
       <FinanceiroCaixaTab initialTab="importacao" hideInternalTabs filtroAnoInicial={ano} filtroMesInicial={mes === '0' ? undefined : Number(mes)} />
     );
     if (section === 'importacao-custeio-txt') return <CusteioTxtImportTab />;
+    // PR-IMPORT-EXCEL-LANC-01 — passos 1-3 (ler, mapear, conferir). A gravação
+    // (passo 4) entra depois, no mesmo PR; o botão fica desabilitado até lá.
+    if (section === 'importacao-lanc-excel') return <V2ImportLancamentosExcel />;
     if (section === 'rateio-adm') return (
       <FinanceiroCaixaTab initialTab="rateio" hideInternalTabs filtroAnoInicial={ano} filtroMesInicial={mes === '0' ? undefined : Number(mes)} />
     );
