@@ -62,6 +62,10 @@ export interface LancamentosParseResult {
    * vez de deixar o operador descobrir isso pela prévia inteira em vermelho.
    */
   colunaPlanoDetectada: string | null;
+  /** Linha do Excel (1-based) reconhecida como cabeçalho. null = nenhuma reconhecida. */
+  linhaCabecalho: number | null;
+  /** Quantas linhas do topo foram testadas em busca do cabeçalho. */
+  linhasTestadas: number;
 }
 
 // ─── Cabeçalhos aceitos (tolerante a variações do cliente) ──────────
@@ -152,6 +156,85 @@ export function normalizarStatus(v: string | null): StatusPlanilha | null {
   return null;
 }
 
+// ─── Localização da linha de cabeçalho ──────────────────────────────
+//
+// PR-IMPORT-EXCEL-LANC-03 — o parser NÃO pode assumir que o cabeçalho está na
+// linha 1. O modelo gerado por modeloPlanilha.ts usa duas linhas: marcadores
+// (OBRIGATÓRIA / opcional) na 1 e os cabeçalhos reais na 2. Lendo a primeira,
+// nada casava e o arquivo voltava com 0 linhas — planilha certa, leitura errada.
+//
+// Solução: varrer o topo e adotar como cabeçalho a linha que casa com mais
+// aliases conhecidos. Funciona com o modelo de duas linhas e com planilha que já
+// traga cabeçalho na linha 1, sem precisar saber de antemão qual é o caso.
+
+/** Quantas linhas do topo são testadas. */
+const LINHAS_TESTADAS_CABECALHO = 5;
+/** Abaixo disto a linha não é cabeçalho — é dado que por acaso bateu uma palavra. */
+const MINIMO_ALIASES_CABECALHO = 3;
+
+const TODOS_ALIASES: readonly string[] = [
+  ...COL_COMPETENCIA, ...COL_VENCIMENTO, ...COL_PAGAMENTO, ...COL_VALOR, ...COL_TIPO,
+  ...COL_CONTA_PLANO, ...COL_FAZENDA, ...COL_FORNECEDOR, ...COL_CONTA_BANCARIA,
+  ...COL_DESCRICAO, ...COL_DOCUMENTO, ...COL_TIPO_DOCUMENTO, ...COL_FORMA_PAGAMENTO,
+  ...COL_OBSERVACAO, ...COL_STATUS, ...COL_SAFRA,
+];
+
+const ALIASES_SET = new Set<string>(TODOS_ALIASES);
+
+/** Texto da célula de cabeçalho, sem coerção além de trim. */
+function textoCelula(v: unknown): string {
+  if (v === null || v === undefined) return '';
+  return String(v).trim();
+}
+
+/** Quantos aliases conhecidos esta linha reconhece. */
+function pontuarLinha(linha: readonly unknown[]): number {
+  let n = 0;
+  const vistos = new Set<string>();
+  for (const c of linha) {
+    const t = textoCelula(c);
+    if (!t || vistos.has(t)) continue;
+    vistos.add(t);
+    if (ALIASES_SET.has(t)) n++;
+  }
+  return n;
+}
+
+/**
+ * Escolhe a linha de cabeçalho entre as primeiras `LINHAS_TESTADAS_CABECALHO`.
+ * Empate resolve pela PRIMEIRA — se duas linhas reconhecem o mesmo tanto, a de
+ * cima é o cabeçalho e a de baixo já é dado.
+ */
+function localizarCabecalho(
+  matriz: readonly (readonly unknown[])[],
+): { indice: number; acertos: number } | null {
+  let melhor: { indice: number; acertos: number } | null = null;
+  const limite = Math.min(LINHAS_TESTADAS_CABECALHO, matriz.length);
+  for (let i = 0; i < limite; i++) {
+    const acertos = pontuarLinha(matriz[i] ?? []);
+    if (acertos > (melhor?.acertos ?? 0)) melhor = { indice: i, acertos };
+  }
+  if (!melhor || melhor.acertos < MINIMO_ALIASES_CABECALHO) return null;
+  return melhor;
+}
+
+/**
+ * Monta o objeto da linha de dados usando os cabeçalhos localizados.
+ * Cabeçalho repetido: a PRIMEIRA coluna vence — mesma precedência do pickCol,
+ * que já lê o primeiro alias não-vazio.
+ */
+function linhaParaObjeto(
+  cabecalhos: readonly string[],
+  linha: readonly unknown[],
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  cabecalhos.forEach((cab, i) => {
+    if (!cab || cab in out) return;
+    out[cab] = linha[i] ?? null;
+  });
+  return out;
+}
+
 // ─── Parse de uma linha ─────────────────────────────────────────────
 
 function parseRow(
@@ -208,7 +291,7 @@ export async function parseExcelLancamentos(file: File): Promise<LancamentosPars
   const vazio = (erro: string): LancamentosParseResult => ({
     rows: [], totalLinhas: 0, linhasValidas: 0, linhasComErro: 0,
     erros: [{ linha: 0, motivo: erro }], nomeSheet: null,
-    colunaPlanoDetectada: null,
+    colunaPlanoDetectada: null, linhaCabecalho: null, linhasTestadas: 0,
   });
 
   const bytes = new Uint8Array(await file.arrayBuffer());
@@ -220,28 +303,49 @@ export async function parseExcelLancamentos(file: File): Promise<LancamentosPars
   const ws = wb.Sheets[sheetName];
   if (!ws) return vazio(`Sheet "${sheetName}" não encontrada`);
 
-  // raw: true preserva números (incl. serial date) e strings sem coerção.
-  // defval: null deixa célula vazia como null em vez de omitir a chave.
-  const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, {
+  // Matriz crua: header:1 devolve array-de-arrays, sem assumir onde está o cabeçalho.
+  // raw: true preserva números (incl. serial date); defval: null mantém a posição das
+  // células vazias, o que é essencial para o índice de coluna bater com o cabeçalho.
+  const matriz = XLSX.utils.sheet_to_json<unknown[]>(ws, {
+    header: 1,
     raw: true,
     defval: null,
   });
 
+  const achado = localizarCabecalho(matriz);
+  const linhasTestadas = Math.min(LINHAS_TESTADAS_CABECALHO, matriz.length);
+
+  if (!achado) {
+    return {
+      rows: [], totalLinhas: 0, linhasValidas: 0, linhasComErro: 0,
+      erros: [{
+        linha: 0,
+        motivo: `Nenhuma linha de cabeçalho reconhecida nas ${linhasTestadas} primeiras linhas `
+          + `da aba "${sheetName}". É esperado ao menos ${MINIMO_ALIASES_CABECALHO} colunas conhecidas.`,
+      }],
+      nomeSheet: sheetName,
+      colunaPlanoDetectada: null,
+      linhaCabecalho: null,
+      linhasTestadas,
+    };
+  }
+
+  const cabecalhos = (matriz[achado.indice] ?? []).map(textoCelula);
+
   // Detecção pelo CABEÇALHO, não pelo conteúdo: uma planilha pode ter a coluna
   // presente e vazia nas primeiras linhas, e isso não é o mesmo que não ter a coluna.
-  const cabecalhos = Object.keys(rawRows[0] ?? {});
   const colunaPlanoDetectada =
     COL_CONTA_PLANO.find((c) => cabecalhos.includes(c)) ?? null;
 
   const rows: LancamentoExcelRow[] = [];
   const erros: Array<{ linha: number; motivo: string }> = [];
 
-  rawRows.forEach((raw, idx) => {
-    const linha = idx + 2;
-    const { row, erro } = parseRow(raw, linha);
+  for (let k = achado.indice + 1; k < matriz.length; k++) {
+    const linha = k + 1;   // Excel é 1-based; a matriz é 0-based.
+    const { row, erro } = parseRow(linhaParaObjeto(cabecalhos, matriz[k] ?? []), linha);
     if (row) rows.push(row);
     else if (erro) erros.push({ linha, motivo: erro });
-  });
+  }
 
   return {
     rows,
@@ -251,5 +355,7 @@ export async function parseExcelLancamentos(file: File): Promise<LancamentosPars
     erros,
     nomeSheet: sheetName,
     colunaPlanoDetectada,
+    linhaCabecalho: achado.indice + 1,
+    linhasTestadas,
   };
 }
