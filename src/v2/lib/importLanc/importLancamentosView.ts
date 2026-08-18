@@ -20,7 +20,7 @@ import {
   type ContaResolvivel,
 } from '@/v2/lib/mesa/resolverConta';
 import {
-  TIPO_TRANSFERENCIAS,
+  TIPO_ENTRADAS, TIPO_SAIDAS, TIPO_TRANSFERENCIAS,
   type LancamentoExcelRow,
 } from '@/v2/lib/excelPreview/parserLancamentos';
 
@@ -59,6 +59,17 @@ export interface DeParaItem<TValor = string> {
    * texto saiu, antes da confirmação. Não influencia gravação nenhuma.
    */
   anterior?: string | null;
+  /**
+   * PR-IMPORT-EXCEL-LANC-04 — terceira saída do de-para: o texto existe na planilha
+   * mas NÃO corresponde a nada no sistema e nem deveria (caso real: "terceiros" na
+   * coluna de conta bancária, que não é conta).
+   *
+   * Descartado deixa de contar como pendência e é reversível. NÃO vira apelido:
+   * descarte é decisão DESTA sessão. Gravar "não é nada" numa tabela cujo contrato
+   * é "este texto significa X" distorceria o significado dela — e, no caso do
+   * subcentro, é impossível: plano_conta_id é NOT NULL.
+   */
+  descartado?: boolean;
 }
 
 export type DeParaMap = Record<string, DeParaItem>;
@@ -225,7 +236,9 @@ export function montarDePara(
 
 /** Quantos ainda faltam resolver, por painel e no total. */
 export function contarPendentes(dp: DeParaCompleto) {
-  const p = (m: DeParaMap) => Object.values(m).filter((i) => i.valor === null).length;
+  // Descartado NÃO é pendência: é decisão tomada.
+  const p = (m: DeParaMap) =>
+    Object.values(m).filter((i) => i.valor === null && !i.descartado).length;
   const subcentro = p(dp.subcentro);
   const fazenda = p(dp.fazenda);
   const fornecedor = p(dp.fornecedor);
@@ -240,13 +253,15 @@ export type MotivoExclusao =
   | 'transferencia'
   | 'fazenda_nao_resolvida'
   | 'mes_fechado'
-  | 'subcentro_nao_resolvido';
+  | 'subcentro_nao_resolvido'
+  | 'campo_obrigatorio_descartado';
 
 export const MOTIVO_LABEL: Record<MotivoExclusao, string> = {
   transferencia: 'Transferência — não é criada por esta importação',
   fazenda_nao_resolvida: 'Fazenda não resolvida',
   mes_fechado: 'Mês fechado para esta fazenda',
   subcentro_nao_resolvido: 'Conta do plano ainda não mapeada',
+  campo_obrigatorio_descartado: 'Fazenda ou conta do plano descartada — sem esses dois a linha não existe',
 };
 
 export interface LinhaPrevia {
@@ -296,6 +311,9 @@ export function avaliarLinha(
   const base = {
     row, anoMes, fazendaId, fazendaNome,
     subcentro: itSub?.valor ?? null,
+    // Descartado em campo OPCIONAL vira simplesmente ausência: a linha entra sem
+    // o dado. É o caso de uso que originou o descarte ("terceiros" na coluna de
+    // conta bancária) — não é conta, e a despesa existe do mesmo jeito.
     favorecidoId: itForn?.valor ?? null,
     contaBancariaId: itConta?.valor ?? null,
   };
@@ -304,6 +322,12 @@ export function avaliarLinha(
   // raiz e não um sintoma. Transferência não é resolvível por de-para nenhum.
   if (row.tipo_operacao === TIPO_TRANSFERENCIAS) {
     return { ...base, entra: false, motivo: 'transferencia' };
+  }
+  // Descarte em campo OBRIGATÓRIO é diferente de descarte em campo opcional: sem
+  // fazenda ou sem conta do plano a linha não pode existir. Motivo próprio, para
+  // não mentir dizendo "não resolvida" quando foi decisão explícita do operador.
+  if (itFaz?.descartado || itSub?.descartado) {
+    return { ...base, entra: false, motivo: 'campo_obrigatorio_descartado' };
   }
   if (!fazendaId) {
     return { ...base, entra: false, motivo: 'fazenda_nao_resolvida' };
@@ -324,6 +348,38 @@ export interface TotaisPrevia {
 }
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
+
+/** PR-IMPORT-EXCEL-LANC-04 — recortes da prévia. */
+export type FiltroPrevia = 'entra' | 'sai' | 'fora';
+
+export const FILTRO_LABEL: Record<FiltroPrevia, string> = {
+  entra: 'Entra',
+  sai: 'Sai',
+  fora: 'Fora',
+};
+
+/** Entra = elegível e 1-Entradas · Sai = elegível e 2-Saídas · Fora = excluída por qualquer motivo. */
+export function aplicarFiltroPrevia(l: LinhaPrevia, f: FiltroPrevia): boolean {
+  if (f === 'fora') return !l.entra;
+  if (f === 'entra') return l.entra && l.row.tipo_operacao === TIPO_ENTRADAS;
+  return l.entra && l.row.tipo_operacao === TIPO_SAIDAS;
+}
+
+export interface ResumoFiltro { qtd: number; valor: number; }
+
+export function resumirPorFiltro(linhas: LinhaPrevia[]): Record<FiltroPrevia, ResumoFiltro> {
+  const acc: Record<FiltroPrevia, ResumoFiltro> = {
+    entra: { qtd: 0, valor: 0 }, sai: { qtd: 0, valor: 0 }, fora: { qtd: 0, valor: 0 },
+  };
+  for (const l of linhas) {
+    const v = Math.abs(Number(l.row.valor) || 0);
+    (['entra', 'sai', 'fora'] as FiltroPrevia[]).forEach((f) => {
+      if (aplicarFiltroPrevia(l, f)) { acc[f].qtd++; acc[f].valor += v; }
+    });
+  }
+  (['entra', 'sai', 'fora'] as FiltroPrevia[]).forEach((f) => { acc[f].valor = r2(acc[f].valor); });
+  return acc;
+}
 
 export function montarPrevia(
   rows: LancamentoExcelRow[],

@@ -9,9 +9,11 @@
 // ano_mes (trigger trg_00_ano_mes_from_competencia) e, portanto, qual mês é
 // testado contra financeiro_fechamentos.
 // ============================================================================
+import { useMemo, useState } from 'react';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import {
-  MOTIVO_LABEL,
+  MOTIVO_LABEL, FILTRO_LABEL, aplicarFiltroPrevia, resumirPorFiltro,
+  type FiltroPrevia,
   type LinhaPrevia,
   type TotaisPrevia,
 } from '@/v2/lib/importLanc/importLancamentosView';
@@ -23,8 +25,24 @@ export interface ImportLancPreviaProps {
 
 const LIMITE_LINHAS = 300;
 
+const FILTRO_CLS: Record<FiltroPrevia, { ativo: string; inativo: string }> = {
+  entra: { ativo: 'bg-emerald-600 text-white', inativo: 'bg-emerald-50 text-emerald-800' },
+  sai:   { ativo: 'bg-red-600 text-white',     inativo: 'bg-red-50 text-red-800' },
+  fora:  { ativo: 'bg-slate-600 text-white',   inativo: 'bg-slate-100 text-slate-700' },
+};
+
+const FILTROS: FiltroPrevia[] = ['entra', 'sai', 'fora'];
+
 export function ImportLancPrevia({ linhas, totais }: ImportLancPreviaProps) {
-  const visiveis = linhas.slice(0, LIMITE_LINHAS);
+  // null = sem recorte (mostra tudo). Só apresentação: não altera elegibilidade.
+  const [filtro, setFiltro] = useState<FiltroPrevia | null>(null);
+
+  const resumo = useMemo(() => resumirPorFiltro(linhas), [linhas]);
+  const filtradas = useMemo(
+    () => (filtro === null ? linhas : linhas.filter((l) => aplicarFiltroPrevia(l, filtro))),
+    [linhas, filtro],
+  );
+  const visiveis = filtradas.slice(0, LIMITE_LINHAS);
 
   return (
     <div className="space-y-1.5">
@@ -66,6 +84,41 @@ export function ImportLancPrevia({ linhas, totais }: ImportLancPreviaProps) {
         </div>
       </div>
 
+      {/* ── Filtros: recorte da lista. Os totais acima continuam sobre TUDO. ── */}
+      <div className="flex items-center gap-1 flex-wrap">
+        {FILTROS.map((f) => {
+          const ativo = filtro === f;
+          const r = resumo[f];
+          return (
+            <button
+              key={f}
+              type="button"
+              onClick={() => setFiltro(ativo ? null : f)}
+              disabled={r.qtd === 0}
+              className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-colors
+                ${r.qtd === 0 ? 'opacity-40 cursor-not-allowed bg-muted text-muted-foreground'
+                              : ativo ? FILTRO_CLS[f].ativo : FILTRO_CLS[f].inativo}`}
+            >
+              {FILTRO_LABEL[f]} ({r.qtd}) · {formatMoeda(r.valor)}
+            </button>
+          );
+        })}
+        {filtro !== null && (
+          <button
+            type="button"
+            onClick={() => setFiltro(null)}
+            className="px-1.5 py-0.5 rounded text-[10px] text-muted-foreground hover:text-foreground"
+          >
+            limpar recorte
+          </button>
+        )}
+        <span className="text-[10px] text-muted-foreground ml-auto">
+          {filtro === null
+            ? `${linhas.length} linha(s)`
+            : `${filtradas.length} de ${linhas.length} linha(s)`}
+        </span>
+      </div>
+
       {/* ── Linhas ── */}
       <div className="border rounded-md overflow-auto max-h-[46vh]">
         <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>
@@ -91,7 +144,9 @@ export function ImportLancPrevia({ linhas, totais }: ImportLancPreviaProps) {
             {visiveis.length === 0 && (
               <tr>
                 <td colSpan={7} className="text-center text-[11px] text-muted-foreground py-6">
-                  Nenhuma linha lida da planilha.
+                  {filtro === null
+                    ? 'Nenhuma linha lida da planilha.'
+                    : `Nenhuma linha em "${FILTRO_LABEL[filtro]}".`}
                 </td>
               </tr>
             )}
@@ -129,9 +184,10 @@ export function ImportLancPrevia({ linhas, totais }: ImportLancPreviaProps) {
         </table>
       </div>
 
-      {linhas.length > LIMITE_LINHAS && (
+      {filtradas.length > LIMITE_LINHAS && (
         <p className="text-[10px] text-center text-muted-foreground">
-          Exibindo {LIMITE_LINHAS} de {linhas.length} linhas. Os totais acima consideram todas.
+          Exibindo {LIMITE_LINHAS} de {filtradas.length} linhas do recorte. Os totais acima
+          consideram todas.
         </p>
       )}
     </div>

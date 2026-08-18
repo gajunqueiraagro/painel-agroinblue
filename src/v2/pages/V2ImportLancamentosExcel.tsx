@@ -31,7 +31,7 @@ export function V2ImportLancamentosExcel() {
     classificacoes, fornecedores, fazendas, contasBancarias, criarFornecedor,
     arquivo, parse, dePara, previa, pendentes, lendo, erro,
     exigeFazendaCabecalho, fazendaCabecalhoId, setFazendaCabecalhoId,
-    lerArquivo, resolverManualmente, limpar,
+    lerArquivo, resolverManualmente, alternarDescarte, limpar,
     confirmarImportacao, gravando, resultado,
   } = useImportLancamentosExcel();
   const [confirmando, setConfirmando] = useState(false);
@@ -190,6 +190,7 @@ export function V2ImportLancamentosExcel() {
                 tipoPorTexto={tipoPorTexto}
                 classificacoes={classificacoes}
                 onResolver={resolverManualmente}
+                onDescartar={alternarDescarte}
               />
             </div>
             <div className="lg:col-span-5">
@@ -200,9 +201,10 @@ export function V2ImportLancamentosExcel() {
                 pendentes={pendentes.fazenda}
                 fazendas={fazendas}
                 onResolver={resolverManualmente}
+                onDescartar={alternarDescarte}
               />
             </div>
-            <div className="lg:col-span-8">
+            <div className="lg:col-span-6">
               <ImportLancDeParaPanel
                 titulo="Fornecedor"
                 campo="fornecedor"
@@ -210,10 +212,11 @@ export function V2ImportLancamentosExcel() {
                 pendentes={pendentes.fornecedor}
                 fornecedores={fornecedores}
                 onResolver={resolverManualmente}
+                onDescartar={alternarDescarte}
                 onCriarFornecedor={criarFornecedor}
               />
             </div>
-            <div className="lg:col-span-4">
+            <div className="lg:col-span-6">
               <ImportLancDeParaPanel
                 titulo="Conta bancária / cartão"
                 campo="conta"
@@ -221,6 +224,7 @@ export function V2ImportLancamentosExcel() {
                 pendentes={pendentes.conta}
                 contas={contasBancarias}
                 onResolver={resolverManualmente}
+                onDescartar={alternarDescarte}
               />
             </div>
           </div>

@@ -25,6 +25,9 @@ const SELO: Record<DeParaItem['origem'], { label: string; cls: string }> = {
   pendente: { label: 'pendente', cls: 'bg-red-100 text-red-700' },
 };
 
+/** Terceira saída: o texto existe na planilha e não corresponde a nada no sistema. */
+const SELO_DESCARTADO = { label: 'descartado', cls: 'bg-slate-200 text-slate-600' };
+
 export interface ImportLancDeParaPanelProps {
   titulo: string;
   campo: CampoDePara;
@@ -37,13 +40,14 @@ export interface ImportLancDeParaPanelProps {
   fornecedores?: FornecedorV2[];
   contas?: ContaBancariaV2[];
   onResolver: (campo: CampoDePara, texto: string, valor: string | null, rotulo: string | null) => void;
+  onDescartar: (campo: CampoDePara, texto: string) => void;
   onCriarFornecedor?: (nome: string, fazendaId: string | null, cpfCnpj?: string) => Promise<FornecedorV2 | null>;
 }
 
 export function ImportLancDeParaPanel({
   titulo, campo, mapa, pendentes, tipoPorTexto,
   classificacoes, fazendas, fornecedores, contas,
-  onResolver, onCriarFornecedor,
+  onResolver, onDescartar, onCriarFornecedor,
 }: ImportLancDeParaPanelProps) {
   const [busca, setBusca] = useState<Record<string, string>>({});
   const [novoFornecedorPara, setNovoFornecedorPara] = useState<string | null>(null);
@@ -67,10 +71,10 @@ export function ImportLancDeParaPanel({
       ) : (
         <div className="divide-y divide-border/40 max-h-[38vh] overflow-y-auto">
           {itens.map((it) => {
-            const selo = SELO[it.origem];
+            const selo = it.descartado ? SELO_DESCARTADO : SELO[it.origem];
             return (
-              <div key={it.texto} className="px-1.5 py-px grid gap-1.5 items-center"
-                   style={{ gridTemplateColumns: 'minmax(0,1fr) 44px minmax(0,1.3fr) 96px' }}>
+              <div key={it.texto} className={`px-1.5 py-px grid gap-1.5 items-center ${it.descartado ? 'opacity-55' : ''}`}
+                   style={{ gridTemplateColumns: 'minmax(0,0.9fr) 34px minmax(0,1.8fr) 18px 92px' }}>
                 <span className="text-[10px] truncate leading-tight" title={it.texto}>{it.texto}</span>
                 <span className="text-[9px] text-muted-foreground tabular-nums text-right">{it.qtd}×</span>
 
@@ -86,12 +90,14 @@ export function ImportLancDeParaPanel({
                       triggerClassName="h-5 text-[9px] px-1.5"
                       contentClassName="w-[22rem]"
                       itemClassName="text-[10px] py-0.5"
+                      disabled={it.descartado}
                     />
                   )}
 
                   {campo === 'fazenda' && fazendas && (
                     <Select
                       value={it.valor ?? ''}
+                      disabled={it.descartado}
                       onValueChange={(id) => {
                         const f = fazendas.find((x) => x.id === id);
                         onResolver(campo, it.texto, id || null, f?.nome ?? null);
@@ -121,6 +127,7 @@ export function ImportLancDeParaPanel({
                       onCriarNovo={() => setNovoFornecedorPara(it.texto)}
                       triggerClassName="h-5 text-[9px] px-1.5"
                       novoButtonClassName="h-5 w-5"
+                      disabled={it.descartado}
                     />
                   )}
 
@@ -134,9 +141,21 @@ export function ImportLancDeParaPanel({
                       contas={contas}
                       placeholder="Escolher conta"
                       className="h-5 text-[9px]"
+                      disabled={it.descartado}
                     />
                   )}
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => onDescartar(campo, it.texto)}
+                  className="text-[11px] leading-none text-muted-foreground hover:text-foreground"
+                  title={it.descartado
+                    ? 'Restaurar: volta a exigir mapeamento.'
+                    : 'Descartar: este texto não corresponde a nada no sistema. Sai das pendências e não vira apelido.'}
+                >
+                  {it.descartado ? '↺' : '⊘'}
+                </button>
 
                 <div className="flex flex-col items-end gap-px">
                   <span className={`text-[8px] px-1 rounded font-semibold ${selo.cls}`}>

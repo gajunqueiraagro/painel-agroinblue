@@ -256,7 +256,10 @@ export function useImportLancamentosExcel() {
         const out: DeParaMap = {};
         for (const [k, item] of Object.entries(b)) {
           const anterior = a[k];
-          out[k] = anterior && anterior.valor !== null ? anterior : item;
+          // Preserva tanto a resolução manual quanto o descarte: os dois são
+          // decisão do operador e não podem ser desfeitos por chegada de catálogo.
+          const decidido = anterior && (anterior.valor !== null || anterior.descartado);
+          out[k] = decidido ? anterior : item;
         }
         return out;
       };
@@ -285,7 +288,32 @@ export function useImportLancamentosExcel() {
         ...atual,
         [campo]: {
           ...mapa,
-          [texto]: { ...item, valor, rotulo, origem: valor === null ? 'pendente' : 'manual' },
+          // Resolver reverte o descarte: escolher um destino é o oposto de descartar.
+          [texto]: { ...item, valor, rotulo, origem: valor === null ? 'pendente' : 'manual', descartado: false },
+        },
+      };
+    });
+  }, []);
+
+  /**
+   * PR-IMPORT-EXCEL-LANC-04 — descarte/reversão. Estado da SESSÃO: não vira apelido,
+   * não é persistido, some ao trocar de arquivo. Ver relatório sobre memória.
+   */
+  const alternarDescarte = useCallback((campo: CampoDePara, texto: string) => {
+    setDePara((atual) => {
+      if (!atual) return atual;
+      const mapa = atual[campo];
+      const item = mapa[texto];
+      if (!item) return atual;
+      const descartado = !item.descartado;
+      return {
+        ...atual,
+        [campo]: {
+          ...mapa,
+          // Descartar limpa a resolução: as duas coisas são mutuamente exclusivas.
+          [texto]: descartado
+            ? { ...item, descartado: true, valor: null, rotulo: null, origem: 'pendente' as const }
+            : { ...item, descartado: false },
         },
       };
     });
@@ -407,7 +435,7 @@ export function useImportLancamentosExcel() {
     arquivo, parse, dePara, previa, pendentes, lendo, erro,
     exigeFazendaCabecalho, fazendaCabecalhoId, setFazendaCabecalhoId,
     // ações
-    lerArquivo, resolverManualmente, limpar,
+    lerArquivo, resolverManualmente, alternarDescarte, limpar,
     // passo 4 — a ÚNICA que grava, e só por confirmação explícita
     confirmarImportacao, gravando, resultado,
   };
