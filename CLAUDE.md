@@ -43,7 +43,7 @@ no mesmo arquivo.
   sai com codigo 0 e passa sempre. Era um gate vazio. O comando oficial
   varre os 671 arquivos .ts/.tsx em src/ e sai com codigo 2 enquanto
   houver erro.
-- TSC baseline: 95 erros, medidos em ARVORE LIMPA — worktree em detached
+- TSC baseline: 89 erros, medidos em ARVORE LIMPA — worktree em detached
   HEAD sobre o commit, NUNCA no checkout principal. Mesmo numero e mesmo
   conjunto de diagnosticos em c0fdb21b, 487fe1cf e c28de22a.
   O 98 que constava aqui nao decorreu de reducao posterior: foi medido com
@@ -52,6 +52,15 @@ no mesmo arquivo.
   TS2352, porque o campo ainda nao existe em
   src/integrations/supabase/types.ts. 95 + 3 = 98.
   (Corrigido em PR-DEV-TSC-BASELINE-95, 2026-08-08, sobre c28de22a.)
+  De 95 para 89 em PR-AREA-CADASTROSTAB-01, 2026-08-19, sobre c688d8ae.
+  Sairam 6, todos de src/pages/CadastrosTab.tsx, porque as colunas de area
+  sairam do state e do payload daquela tela:
+    4x TS2339 — 'area_pecuaria_ha' / 'area_agricultura_ha' nao existem no tipo
+       gerado (row.area_* no setData);
+    2x TS2345 — propriedade excedente no update e no insert do payload.
+  Registrado porque a origem importa: a regeneracao futura de
+  src/integrations/supabase/types.ts pode reintroduzir numeros diferentes, e
+  quem ler esta baseline precisa saber de onde ela veio.
   Como comparar antes (A) x depois (B), nesta ordem:
     1. CONTAGEM. B <= A, sempre. B > A reprova o PR.
     2. DIAGNOSTICOS. Comparar os conjuntos por
@@ -72,7 +81,7 @@ no mesmo arquivo.
 - Build verde obrigatorio antes de qualquer commit.
 
 ## RELATORIO DE EXECUCAO (formato obrigatorio, todo ciclo)
-1. TSC: N erros (baseline 95) — numero explicito, obtido com
+1. TSC: N erros (baseline 89) — numero explicito, obtido com
    `npx tsc -p tsconfig.app.json --noEmit`
 2. Build: OK/FALHOU + tempo
 3. git diff --stat completo
