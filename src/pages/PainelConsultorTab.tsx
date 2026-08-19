@@ -50,6 +50,7 @@ import { supabase } from '@/integrations/supabase/client';
 import type { MetaCategoriaMes } from '@/hooks/useMetaConsolidacao';
 import { triggerXlsxDownload } from '@/lib/xlsxDownload';
 import { CATALOGO_INDICADORES, getFonteStatusLabel, type FonteIndicador, type IndicadorMeta } from '@/lib/painelConsultor/indicadorCatalogo';
+import type { DestinoArea } from '@/hooks/useFechamentoArea';
 import { warnIndicadoresSemCatalogo } from '@/lib/painelConsultor/validarIndicadores';
 import { agregaSnapshotsGlobal } from '@/lib/painelConsultor/consolidacaoGlobal';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -77,6 +78,7 @@ interface Row {
   format: PainelFormatType;
   valores: number[];     // 12 values
   noTotal?: boolean;     // true = total column stays blank (stock indicators)
+  nivel?: 'familia' | 'destino';  // ausente = linha normal
 }
 
 interface Bloco {
@@ -1752,17 +1754,62 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
     areaAgriAtiva.every(v => v == null) &&
     areaTotalAtiva.every(v => v == null);
 
+  // PR-PC100-AREAS-01 — repartição por destino, nas quatro famílias da taxonomia.
+  // Só o Realizado tem destinos: a Meta é planejada por família (planejamento_area_meta),
+  // não por destino, então na aba Meta as linhas de destino existem e exibem "—".
+  // É a regra de 19/08: toda linha existe em todas as abas; onde não se aplica, travessão.
+  const areaDestReal = pcdSoberano.areaDestinoRealPorMes;
+
   const blocoAreas: Bloco = useMemo(() => {
     const toNan = (arr: (number | null)[]): number[] => arr.map(v => v == null ? NaN : v);
+    const vazio: (number | null)[] = Array(12).fill(null);
+    // Destino só existe no Realizado; na Meta a série inteira é nula → "—".
+    const dest = (d: DestinoArea): (number | null)[] =>
+      isPrevisto ? vazio : (areaDestReal?.[d] ?? vazio);
+
+    // ÁREA TOTAL = soma das quatro famílias, montada AQUI.
+    // Não usa area_produtiva_ha do snapshot de propósito: aquela série alimenta o
+    // denominador do PC-100 Realizado e o usePlanejamentoAprovacaoData, e vem crua
+    // do snapshot enquanto a Pecuária é recalculada — a mistura fazia a Sta. Rita
+    // exibir Pecuária maior que a Total, parte maior que o todo. Somando as famílias
+    // a conta fecha por construção.
+    // Mês sem NENHUMA família (todas null) permanece null → "—", nunca 0,00.
+    const somaFamilias = (partes: (number | null)[][]): (number | null)[] =>
+      Array.from({ length: 12 }, (_, i) => {
+        const vals = partes.map(p => p[i]).filter((v): v is number => v != null);
+        return vals.length > 0 ? vals.reduce((a, b) => a + b, 0) : null;
+      });
+
+    const ambiental = somaFamilias([dest('reserva'), dest('app')]);
+    const infra = somaFamilias([dest('benfeitorias')]);
+    const total = somaFamilias([areaPecAtiva, areaAgriAtiva, ambiental, infra]);
+
+    const familia = (indicador: string, valores: (number | null)[], indicadorId?: string): Row =>
+      ({ indicador, format: 'padrao', valores: toNan(valores), indicadorId, noTotal: true, nivel: 'familia' });
+    const destino = (indicador: string, d: DestinoArea): Row =>
+      ({ indicador, format: 'padrao', valores: toNan(dest(d)), noTotal: true, nivel: 'destino' });
+
     return {
       nome: 'ÁREAS — USO DO SOLO',
       rows: [
-        { indicador: 'Área Pecuária (ha)',    format: 'padrao', valores: toNan(areaPecAtiva),   indicadorId: 'area_pec',   noTotal: true },
-        { indicador: 'Área Agricultura (ha)', format: 'padrao', valores: toNan(areaAgriAtiva),  indicadorId: 'area_agri',  noTotal: true },
-        { indicador: 'Área Total (ha)',       format: 'padrao', valores: toNan(areaTotalAtiva), indicadorId: 'area_total', noTotal: true },
+        familia('PECUÁRIA (ha)', areaPecAtiva, 'area_pec'),
+        destino('Cria', 'cria'),
+        destino('Recria', 'recria'),
+        destino('Engorda', 'engorda'),
+        destino('Vedado', 'vedado'),
+        destino('Reforma Pecuária', 'reforma_pecuaria'),
+        // AGRICULTURA sem destinos: granularidade por cultura mexe em lista oficial
+        // fechada (tiposUso.ts) e é FASE 0 própria — a frente de culturas.
+        familia('AGRICULTURA (ha)', areaAgriAtiva, 'area_agri'),
+        familia('AMBIENTAL (ha)', ambiental),
+        destino('Reserva Legal', 'reserva'),
+        destino('APP', 'app'),
+        familia('INFRAESTRUTURA (ha)', infra),
+        destino('Benfeitorias', 'benfeitorias'),
+        familia('ÁREA TOTAL (ha)', total, 'area_total'),
       ],
     };
-  }, [areaPecAtiva, areaAgriAtiva, areaTotalAtiva]);
+  }, [areaPecAtiva, areaAgriAtiva, areaDestReal, isPrevisto]);
 
   // @ produzidas METa — Σ por mês via calcArrobasSafe (abate/15 c/ carcaça,
   // venda/consumo/30) sobre lançamentos cenario='meta'. Filtro TIPOS_DESFRUTE_GLOBAL
@@ -1941,7 +1988,11 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
 
             return (
               <tr key={idx} className={`border-b border-border/20 hover:bg-muted/20 ${idx % 2 !== 0 ? 'bg-muted/10' : ''}`}>
-                <td className="sticky left-0 z-20 bg-card text-[10px] font-medium py-0.5 px-1.5 leading-tight border-r border-border/30" title={row.indicador} style={{ boxShadow: '2px 0 4px -1px rgba(0,0,0,0.06)' }}>
+                <td className={`sticky left-0 z-20 bg-card py-0.5 px-1.5 leading-tight border-r border-border/30 ${
+                  row.nivel === 'familia' ? 'text-[10px] font-bold'
+                    : row.nivel === 'destino' ? 'text-[9px] font-normal text-muted-foreground pl-3'
+                    : 'text-[10px] font-medium'
+                }`} title={row.indicador} style={{ boxShadow: '2px 0 4px -1px rgba(0,0,0,0.06)' }}>
                   <span className="truncate inline-block max-w-[170px] align-middle">{row.indicador}</span>
                   <SourceInfoTooltip indicadorId={row.indicadorId} cenario={cenario} />
                 </td>

@@ -3,12 +3,35 @@ import { supabase } from '@/integrations/supabase/client';
 import { isOperacionalPecuaria } from '@/lib/pastos/tiposUso';
 import { useFazendasPecuariaAtivas } from '@/hooks/useFazendasPecuariaAtivas';
 
+/**
+ * PR-PC100-AREAS-01 — repartição por DESTINO, na ordem das quatro famílias da
+ * taxonomia (tiposUso.ts): pecuária, agricultura, ambiental, infraestrutura.
+ */
+export const DESTINOS_AREA = [
+  'cria', 'recria', 'engorda', 'vedado', 'reforma_pecuaria',
+  'agricultura',
+  'reserva', 'app',
+  'benfeitorias',
+] as const;
+
+export type DestinoArea = typeof DESTINOS_AREA[number];
+
 export interface SnapshotAreaMes {
   mes: number;              // 1–12
   area_pecuaria_ha: number;
   area_agricultura_ha: number;
   area_produtiva_ha: number;
+  /**
+   * PR-PC100-AREAS-01 — área por destino, RECALCULADA de fechamento_pastos com
+   * tipoEfetivo = COALESCE(tipo_uso_mes, tipo_uso). NÃO vem do snapshot, ao
+   * contrário de area_agricultura_ha e area_produtiva_ha, que seguem crus.
+   * Ausente do mapa = destino sem pasto no mês (zero legítimo, não ausência).
+   */
+  destinos: Record<DestinoArea, number>;
 }
+
+const zeroDestinos = (): Record<DestinoArea, number> =>
+  Object.fromEntries(DESTINOS_AREA.map(d => [d, 0])) as Record<DestinoArea, number>;
 
 export interface UseSnapshotAreaAnualResult {
   areaMensal: number[];
@@ -167,7 +190,12 @@ export function useSnapshotAreaAnual(
 
       // Construir mapa de area pecuaria recalculada por (fazenda_id, ano_mes 'YYYY-MM').
       // Aplicar isOperacionalPecuaria ao tipo efetivo = COALESCE(tipo_uso_mes, tipo_uso).
+      // PR-PC100-AREAS-01 — a MESMA varredura alimenta agora dois mapas: o da
+      // pecuária (inalterado) e o da repartição por destino, que não filtra nada
+      // e é a base das quatro famílias no bloco "ÁREAS — USO DO SOLO" do PC-100.
       const pecRecalcPorFazendaMes = new Map<string, number>();
+      const destinoPorFazendaMes = new Map<string, Record<DestinoArea, number>>();
+      const SET_DESTINOS = new Set<string>(DESTINOS_AREA);
       if (pastosQueryOk) {
         type PastoRow = {
           fazenda_id: string;
@@ -179,10 +207,20 @@ export function useSnapshotAreaAnual(
         for (const row of pastosRows) {
           const tipoEfetivo: string | null =
             row.tipo_uso_mes || row.pasto?.tipo_uso || null;
-          if (!isOperacionalPecuaria(tipoEfetivo)) continue;
           const area = Number(row.pasto?.area_produtiva_ha) || 0;
           if (area <= 0) continue;
           const key = `${row.fazenda_id}|${row.ano_mes}`;
+
+          // Repartição por destino — sem filtro de família. Tipo fora da lista
+          // oficial (legado, 'divergencia') NÃO entra em destino algum: entraria
+          // como família inventada e a soma deixaria de fechar com os pastos.
+          if (tipoEfetivo && SET_DESTINOS.has(tipoEfetivo)) {
+            let acc = destinoPorFazendaMes.get(key);
+            if (!acc) { acc = zeroDestinos(); destinoPorFazendaMes.set(key, acc); }
+            acc[tipoEfetivo as DestinoArea] += area;
+          }
+
+          if (!isOperacionalPecuaria(tipoEfetivo)) continue;
           pecRecalcPorFazendaMes.set(key, (pecRecalcPorFazendaMes.get(key) || 0) + area);
         }
       }
@@ -197,6 +235,14 @@ export function useSnapshotAreaAnual(
       // pec eh recalculada. Mistura conhecida — sera revisada em commit
       // posterior. Objetivo deste commit: impedir perda silenciosa de pec
       // e paginacao truncando query de fechamento_pastos.
+      //
+      // PR-PC100-AREAS-01 — a mistura acima permanece nos campos ANTIGOS, de
+      // propósito: area_produtiva_ha alimenta o denominador do PC-100 Realizado
+      // e o usePlanejamentoAprovacaoData, e redefini-la seria mudança de
+      // contrato. O campo `destinos` é a saída nova e é 100% recalculada — nada
+      // dele vem do snapshot. Quem quiser a repartição coerente usa `destinos`;
+      // a divergência entre somar `destinos` e ler area_produtiva_ha é REAL e
+      // mede snapshots gravados sob a regra antiga.
       for (const row of data) {
         const mesIdx = parseInt((row.ano_mes as string).split('-')[1], 10) - 1;
         // Chave do recalculado: ano_mes do snapshot eh DATE ('YYYY-MM-DD'); converter pra 'YYYY-MM'
@@ -238,13 +284,24 @@ export function useSnapshotAreaAnual(
 
         arr[mesIdx] = isGlobal ? (arr[mesIdx] || 0) + pec : pec;
 
+        // Destinos do mesmo (fazenda, mês). Sem entrada no mapa = nenhum pasto
+        // fechado com destino conhecido: zeros, e a soma continua fechando.
+        const dest = destinoPorFazendaMes.get(fazMesKey) ?? zeroDestinos();
+
         const existing = snaps.find(s => s.mes === mesIdx + 1);
         if (existing) {
           existing.area_pecuaria_ha += pec;
           existing.area_agricultura_ha += agric;
           existing.area_produtiva_ha += prod;
+          for (const d of DESTINOS_AREA) existing.destinos[d] += dest[d];
         } else {
-          snaps.push({ mes: mesIdx + 1, area_pecuaria_ha: pec, area_agricultura_ha: agric, area_produtiva_ha: prod });
+          snaps.push({
+            mes: mesIdx + 1,
+            area_pecuaria_ha: pec,
+            area_agricultura_ha: agric,
+            area_produtiva_ha: prod,
+            destinos: { ...dest },
+          });
         }
       }
 

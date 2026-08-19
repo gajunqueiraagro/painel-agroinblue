@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
-import { useSnapshotAreaAnual } from '@/hooks/useFechamentoArea';
+import { useSnapshotAreaAnual, DESTINOS_AREA, type DestinoArea } from '@/hooks/useFechamentoArea';
 import { useAreaPlanejamento } from '@/hooks/useAreaPlanejamento';
 import { useLancamentos } from '@/hooks/useLancamentos';
 import { useFinanceiro } from '@/hooks/useFinanceiro';
@@ -146,6 +146,12 @@ export interface PainelConsultorDataResult {
   areaPecuariaRealPorMes: (number | null)[];
   areaAgriculturaRealPorMes: (number | null)[];
   areaProdutivaRealPorMes: (number | null)[];
+  /**
+   * PR-PC100-AREAS-01 — repartição REALIZADA por destino, uma série de 12 por
+   * destino. null = mês sem snapshot (exibe "—"); 0 = destino sem pasto no mês.
+   * Recalculada de fechamento_pastos; não sai do snapshot.
+   */
+  areaDestinoRealPorMes: Record<DestinoArea, (number | null)[]>;
   lotUaHa: number | null;
   kgHa: number | null;
   arrHa: number | null;
@@ -532,6 +538,20 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       const s = snapshots.find(x => x.mes === i + 1);
       return s ? s.area_produtiva_ha : null;
     }),
+    [snapshots],
+  );
+  // PR-PC100-AREAS-01 — mesmo idioma das três acima: `find` por mês e null quando
+  // o mês não tem snapshot, para o painel exibir "—" em vez de zero inventado.
+  const areaDestinoRealPorMes = useMemo<Record<DestinoArea, (number | null)[]>>(
+    () => Object.fromEntries(
+      DESTINOS_AREA.map(d => [
+        d,
+        Array.from({ length: 12 }, (_, i) => {
+          const s = snapshots.find(x => x.mes === i + 1);
+          return s ? s.destinos[d] : null;
+        }),
+      ]),
+    ) as Record<DestinoArea, (number | null)[]>,
     [snapshots],
   );
 
@@ -2916,6 +2936,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     areaAgriculturaRealMes: areaAgriculturaRealPorMes[areaRealIdx] ?? null,
     areaProdutivaRealMes:   areaProdutivaRealPorMes[areaRealIdx]   ?? null,
     areaPecuariaRealPorMes,
+    areaDestinoRealPorMes,
     areaAgriculturaRealPorMes,
     areaProdutivaRealPorMes,
 
