@@ -376,6 +376,23 @@ function lerMatriculaCadastro(bruto: unknown): number | null {
   return Number.isFinite(v) ? v : null;
 }
 
+/**
+ * PR-FIX-PASTOS-RODAPE-02 — a matrícula foi CONFERIDA contra o documento?
+ *
+ * As 12 fazendas herdaram em area_total_ha o resíduo do cálculo antigo, e
+ * matricula_conferida_em está NULL em todas. Sem esta leitura o rodapé pintava
+ * "confere" de verde comparando contra número que ninguém conferiu — exatamente o
+ * defeito que a coluna foi criada para impedir na aba Cadastro (20260904120000).
+ *
+ * Mesma disciplina de validação em runtime: a linha vem sem tipo.
+ */
+function lerMatriculaConferida(bruto: unknown): boolean {
+  if (typeof bruto !== 'object' || bruto === null) return false;
+  const linha: Record<string, unknown> = Object.fromEntries(Object.entries(bruto));
+  const v = linha['matricula_conferida_em'];
+  return typeof v === 'string' && v.trim() !== '';
+}
+
 const GRID_LINHA =
   'minmax(0,1.4fr) 96px repeat(5, minmax(0,0.8fr)) 108px';
 
@@ -555,6 +572,7 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
   const [modo, setModo] = useState<'destino' | 'manual'>('destino');
   /** Área total do cadastro da fazenda, para o comparativo do rodapé. */
   const [areaTotalFazenda, setAreaTotalFazenda] = useState<number | null>(null);
+  const [matriculaConferida, setMatriculaConferida] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -570,7 +588,7 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
   // Área tornaria duas abas hoje independentes dependentes uma da outra; a leitura
   // duplicada é o custo menor e mais reversível.
   useEffect(() => {
-    if (!fazendaAtual?.id || fazendaAtual.id === '__global__') { setAreaTotalFazenda(null); return; }
+    if (!fazendaAtual?.id || fazendaAtual.id === '__global__') { setAreaTotalFazenda(null); setMatriculaConferida(false); return; }
     let cancelado = false;
     // area_total_ha existe no banco mas NÃO em types.ts (o arquivo está defasado —
     // o V2Fazendas carrega 2 erros de baseline exatamente por isso). Idioma do
@@ -578,12 +596,13 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
     // não propagar `any`. Sai no lote da regeneração de types.
     void (supabase as any)
       .from('fazenda_cadastros')
-      .select('area_total_ha')
+      .select('area_total_ha, matricula_conferida_em')
       .eq('fazenda_id', fazendaAtual.id)
       .maybeSingle()
       .then(({ data }: { data: unknown }) => {
         if (cancelado) return;
         setAreaTotalFazenda(lerMatriculaCadastro(data));
+        setMatriculaConferida(lerMatriculaConferida(data));
       });
     return () => { cancelado = true; };
   }, [fazendaAtual?.id]);
@@ -943,13 +962,29 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
             ) : (() => {
               const dif = somaPastos - areaTotalFazenda;
               const fecha = Math.abs(dif) < 0.005;
+              // PR-FIX-PASTOS-RODAPE-02 — TRÊS estados, não dois. Achatar divergência
+              // e "não conferida" na mesma cor perderia informação: são coisas
+              // diferentes e podem coexistir.
+              //   |Δ| >= 0,01              → VERMELHO. Divergência é divergência,
+              //                              conferida ou não.
+              //   |Δ| < 0,01 e conferida   → VERDE.
+              //   |Δ| < 0,01 e NÃO conf.   → ÂMBAR. Diferença zero contra número que
+              //                              ninguém conferiu é conferência APARENTE.
+              // Sem botão nem data aqui: o lugar de conferir é a aba Cadastro, e
+              // repetir a ação criaria um segundo caminho para o mesmo estado.
+              const cor = !fecha
+                ? 'text-red-700'
+                : matriculaConferida ? 'text-emerald-700' : 'text-amber-700';
               return (
                 <span className="text-[10px] tabular-nums">
                   <span className="text-muted-foreground">Matrícula: {formatarAreaBR(areaTotalFazenda)} ha · </span>
-                  <span className={fecha ? 'text-emerald-700 font-semibold' : 'text-red-700 font-semibold'}>
+                  <span className={`${cor} font-semibold`}>
                     {fecha ? 'confere' : `divergência de ${formatarAreaBR(Math.abs(dif))} ha`}
                     {!fecha && (dif > 0 ? ' a mais nos pastos' : ' a menos nos pastos')}
                   </span>
+                  {!matriculaConferida && (
+                    <span className="text-muted-foreground"> · não conferida</span>
+                  )}
                 </span>
               );
             })()}
