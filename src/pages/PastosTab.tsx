@@ -136,127 +136,124 @@ function PastoForm({ pasto, onSave, onCancel }: { pasto?: Pasto; onSave: (data: 
           child não encolhe e a rolagem vaza para o modal inteiro. */}
       <div className="flex-1 overflow-y-auto min-h-0 px-5 py-3">
       <TabsContent value="area-uso" className="space-y-3 mt-0">
-      {/* Área é número de 5 caracteres: não precisa de meia largura (A2). */}
-      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_140px]">
-        <div>
-          <Label className="text-xs">Nome *</Label>
-          <Input value={nome} onChange={e => setNome(e.target.value)} placeholder="Nome do pasto" className="h-9" />
+
+        {/* ── Linha 1: identificação + destino ──────────────────────────────
+            A2 levado ao limite: nome de pasto tem 3-6 caracteres, área tem 5,
+            destino é seletor. Os três cabem numa linha só. ── */}
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_130px_300px] items-start">
+          <div>
+            <Label className="text-xs">Nome *</Label>
+            <Input value={nome} onChange={e => setNome(e.target.value)} placeholder="Nome do pasto" className="h-9" />
+          </div>
+          <div>
+            <Label className="text-xs">Área Produtiva (ha)</Label>
+            <Input
+              inputMode="decimal"
+              value={area}
+              onChange={e => setArea(e.target.value)}
+              onBlur={() => setArea(formatarAreaBR(parseAreaBR(area)))}
+              placeholder="0,00"
+              className="h-9 text-right tabular-nums"
+            />
+          </div>
+          <div>
+            <Label className="text-xs">Destino padrão *</Label>
+            <Select value={tipoUso} onValueChange={setTipoUso}>
+              <SelectTrigger className="h-9"><SelectValue placeholder="Escolher destino" /></SelectTrigger>
+                <SelectContent>
+                  {tipoUsoLegado && (
+                    <SelectGroup>
+                      <SelectLabel className="text-amber-700">Valor atual (legado)</SelectLabel>
+                      <SelectItem value={tipoUsoLegado}>{labelDoTipoUso(tipoUsoLegado)} — legado</SelectItem>
+                    </SelectGroup>
+                  )}
+                  {TIPOS_USO_OPTIONS_AGRUPADAS.map(g => (
+                    <SelectGroup key={g.grupo}>
+                      <SelectLabel>{g.label}</SelectLabel>
+                      {g.options.map(o => (
+                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      ))}
+                    </SelectGroup>
+                  ))}
+                </SelectContent>
+            </Select>
+
+            {/*
+              ╔════════════════════════════════════════════════════════════════════╗
+              ║ REGRA INVIOLÁVEL — O DESTINO PADRÃO NUNCA ALTERA MÊS JÁ FECHADO.   ║
+              ║                                                                    ║
+              ║ pastos.tipo_uso é o destino CADASTRAL; fechamento_pastos.          ║
+              ║ tipo_uso_mes é a fotografia do mês. A propagação de um para o      ║
+              ║ outro acontece UMA vez, na criação do card do mês, em              ║
+              ║ fn_obter_ou_criar_fechamentos_lote:                                ║
+              ║   SELECT ... p.tipo_uso ... ON CONFLICT (fazenda_id, pasto_id,     ║
+              ║   ano_mes) DO NOTHING                                              ║
+              ║                                                                    ║
+              ║ O DO NOTHING é o mecanismo: card que já existe nunca é tocado.     ║
+              ║ Não há UPDATE de fechamento_pastos a partir de pastos em lugar     ║
+              ║ nenhum do sistema. A garantia é ESTRUTURAL, não disciplinar —      ║
+              ║ mudar este campo é incapaz de alcançar mês fechado.                ║
+              ║                                                                    ║
+              ║ Se você veio "corrigir" isto achando que faltou propagar para os   ║
+              ║ meses existentes: não faltou. Propagar reescreveria fechamento     ║
+              ║ contábil já conferido.                                             ║
+              ╚════════════════════════════════════════════════════════════════════╝
+            */}
+
+            {/* Família deixa de ser caixa: é valor derivado, nunca editável — caixa
+                com borda sugere campo. Vira linha de leitura sob o destino. */}
+            <p className="text-[10px] leading-snug text-muted-foreground mt-1">
+              Família:{' '}
+              {familiaLabel
+                ? <strong className="text-foreground font-medium">{familiaLabel}</strong>
+                : <em>— legado</em>}
+            </p>
+            <p className="text-[10px] leading-snug text-muted-foreground mt-0.5">
+              Vale como padrão dos <strong>próximos</strong> fechamentos. Meses já fechados
+              não mudam — cada mês guarda o destino que tinha quando foi fechado.
+            </p>
+          </div>
         </div>
-        <div>
-          <Label className="text-xs">Área Produtiva (ha)</Label>
-          <Input
-            inputMode="decimal"
-            value={area}
-            onChange={e => setArea(e.target.value)}
-            onBlur={() => setArea(formatarAreaBR(parseAreaBR(area)))}
-            placeholder="0,00"
-            className="h-10 text-right tabular-nums"
-          />
+
+        {/* ── Linha 2: vigência empilhada + observações ao lado ────────────
+            Os dois campos de mês são estreitos por natureza; empilhados à
+            esquerda liberam a direita inteira para o texto livre, que é o
+            único campo do formulário que ganha com altura. ── */}
+        <div className="grid gap-3 sm:grid-cols-[260px_minmax(0,1fr)] items-start">
+          <div className="space-y-3">
+            <div>
+              <Label className="text-xs">Data de início (opcional)</Label>
+              <Input type="month" value={dataInicioMes} onChange={e => setDataInicioMes(e.target.value)} className="h-9" />
+              <p className="text-[10px] leading-snug text-muted-foreground mt-1">
+                Vazio = todos os meses. Preenchido, o pasto passa a existir a partir desse mês.
+              </p>
+            </div>
+            <div>
+              <Label className="text-xs">Data de fim (opcional)</Label>
+              <Input type="month" value={dataFimMes} onChange={e => setDataFimMes(e.target.value)} className="h-9" />
+              {/* Texto diz o EFEITO REAL: data_fim é o filtro temporal soberano
+                  de fn_pastos_aplicaveis_mes. */}
+              <p className="text-[10px] leading-snug text-muted-foreground mt-1">
+                Último mês de uso. Depois dele o pasto não gera card no fechamento nem entra
+                na conta de área. Meses anteriores ficam intactos. Vazio = sem fim previsto.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-col">
+            <Label className="text-xs">Observações</Label>
+            <Textarea
+              className="text-xs min-h-[150px] resize-none"
+              value={observacoes}
+              onChange={e => setObservacoes(e.target.value)}
+              placeholder="Observações gerais..."
+            />
+          </div>
         </div>
-      </div>
 
-      {/* ── Destino padrão ── A2: em grade com a família derivada ao lado, para
-             não esticar um seletor de 11 opções pela largura toda do modal. ── */}
-      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_160px] items-start">
-      <div>
-        <Label className="text-xs">Destino padrão *</Label>
-        <Select value={tipoUso} onValueChange={setTipoUso}>
-          <SelectTrigger className="h-9"><SelectValue placeholder="Escolher destino" /></SelectTrigger>
-          <SelectContent>
-            {tipoUsoLegado && (
-              <SelectGroup>
-                <SelectLabel className="text-amber-700">Valor atual (legado)</SelectLabel>
-                <SelectItem value={tipoUsoLegado}>{labelDoTipoUso(tipoUsoLegado)} — legado</SelectItem>
-              </SelectGroup>
-            )}
-            {TIPOS_USO_OPTIONS_AGRUPADAS.map(g => (
-              <SelectGroup key={g.grupo}>
-                <SelectLabel>{g.label}</SelectLabel>
-                {g.options.map(o => (
-                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                ))}
-              </SelectGroup>
-            ))}
-          </SelectContent>
-        </Select>
-
-        {/*
-          ╔════════════════════════════════════════════════════════════════════╗
-          ║ REGRA INVIOLÁVEL — O DESTINO PADRÃO NUNCA ALTERA MÊS JÁ FECHADO.   ║
-          ║                                                                    ║
-          ║ pastos.tipo_uso é o destino CADASTRAL; fechamento_pastos.          ║
-          ║ tipo_uso_mes é a fotografia do mês. A propagação de um para o      ║
-          ║ outro acontece UMA vez, na criação do card do mês, em              ║
-          ║ fn_obter_ou_criar_fechamentos_lote:                                ║
-          ║   SELECT ... p.tipo_uso ... ON CONFLICT (fazenda_id, pasto_id,     ║
-          ║   ano_mes) DO NOTHING                                              ║
-          ║                                                                    ║
-          ║ O DO NOTHING é o mecanismo: card que já existe nunca é tocado.     ║
-          ║ Não há UPDATE de fechamento_pastos a partir de pastos em lugar     ║
-          ║ nenhum do sistema. A garantia é ESTRUTURAL, não disciplinar —      ║
-          ║ mudar este campo é incapaz de alcançar mês fechado.                ║
-          ║                                                                    ║
-          ║ Se você veio "corrigir" isto achando que faltou propagar para os   ║
-          ║ meses existentes: não faltou. Propagar reescreveria fechamento     ║
-          ║ contábil já conferido.                                             ║
-          ╚════════════════════════════════════════════════════════════════════╝
-        */}
-        <p className="text-[10px] leading-snug text-muted-foreground mt-1">
-          Vale como padrão dos <strong>próximos</strong> fechamentos. Meses já fechados
-          não mudam — cada mês guarda o destino que tinha quando foi fechado.
-        </p>
-      </div>
-
-      {/* Família: leitura, derivada de grupoDoTipoUso(). Nunca editável. */}
-      <div>
-        <Label className="text-xs text-muted-foreground">Família</Label>
-        <div className="h-9 flex items-center px-3 rounded-md border bg-muted/40 text-xs">
-          {familiaLabel ?? <span className="text-muted-foreground italic">— legado</span>}
+        <div className="flex items-center gap-3">
+          <Switch checked={entraConciliacao} onCheckedChange={setEntraConciliacao} />
+          <Label className="text-xs">Entra na conciliação</Label>
         </div>
-        <p className="text-[10px] leading-snug text-muted-foreground mt-1">Derivada do destino.</p>
-      </div>
-      </div>
-
-      {/* ── Vigência ── */}
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div>
-          <Label className="text-xs">Data de início (opcional)</Label>
-          <Input
-            type="month"
-            value={dataInicioMes}
-            onChange={e => setDataInicioMes(e.target.value)}
-            className="h-9"
-          />
-          <p className="text-[10px] leading-snug text-muted-foreground mt-1">
-            Deixe vazio para incluir em todos os meses. Se preenchido, o pasto aparecerá apenas a partir do mês escolhido.
-          </p>
-        </div>
-        <div>
-          <Label className="text-xs">Data de fim (opcional)</Label>
-          <Input
-            type="month"
-            value={dataFimMes}
-            onChange={e => setDataFimMes(e.target.value)}
-            className="h-9"
-          />
-          {/* Texto diz o EFEITO REAL, não "sem data de término": data_fim é o filtro
-              temporal soberano de fn_pastos_aplicaveis_mes. */}
-          <p className="text-[10px] leading-snug text-muted-foreground mt-1">
-            Último mês de uso. Depois dele o pasto não gera card no fechamento nem entra
-            na conta de área. Meses anteriores ficam intactos. Vazio = sem fim previsto.
-          </p>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-3">
-        <Switch checked={entraConciliacao} onCheckedChange={setEntraConciliacao} />
-        <Label className="text-xs">Entra na conciliação</Label>
-      </div>
-
-      <div>
-        <Label className="text-xs">Observações</Label>
-        <Textarea rows={2} className="text-xs" value={observacoes} onChange={e => setObservacoes(e.target.value)} placeholder="Observações gerais..." />
-      </div>
 
       </TabsContent>
 
@@ -637,7 +634,7 @@ export function PastosTab() {
                 trocar de aba · A8 header e rodapé congelados, só o miolo rola.
                 max-h-[92vh] é teto em tela baixa. Receita de MesaPareamentoModal:1365
                 e LancamentoV2Dialog:1017. */}
-            <DialogContent className="max-w-3xl h-[540px] max-h-[92vh] p-0 flex flex-col gap-0">
+            <DialogContent className="max-w-3xl h-[470px] max-h-[92vh] p-0 flex flex-col gap-0">
               <DialogHeader className="px-5 py-3 border-b shrink-0">
                 <DialogTitle className="text-sm font-semibold">{editingPasto ? 'Editar Pasto' : 'Novo Pasto'}</DialogTitle>
               </DialogHeader>
