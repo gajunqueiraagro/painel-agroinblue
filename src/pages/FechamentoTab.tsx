@@ -5,7 +5,6 @@ import { usePastos, isPastoAtivoNoMes, type Pasto } from '@/hooks/usePastos';
 import { useFechamento, type FechamentoPasto, type FechamentoItem } from '@/hooks/useFechamento';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { useRedirecionarPecuaria } from '@/hooks/useRedirecionarPecuaria';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useLancamentos } from '@/hooks/useLancamentos';
 import { Badge } from '@/components/ui/badge';
@@ -116,7 +115,6 @@ function gmdColor(gmd: number | null): string {
 
 export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConciliacao, onNavigateToReclass, onNavigateToValorRebanho, onNavigateToConferenciaGmd, onNavigateToMapaPastos }: Props = {}) {
   const { isGlobal, fazendaAtual } = useFazenda();
-  const { bloqueado } = useRedirecionarPecuaria();
   const { canEdit } = usePermissions();
 
   const { pastos, categorias } = usePastos();
@@ -785,16 +783,13 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   const showCloseButton = !allClosed && canBulkClose;
   const showAdjustButton = hasDivergencia;
 
-  if (bloqueado) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 gap-3 text-muted-foreground">
-        <span className="text-4xl">🐄</span>
-        <p className="font-medium text-base">Esta fazenda não possui operação pecuária</p>
-        <p className="text-sm">Selecione uma fazenda com pecuária para visualizar os dados zootécnicos.</p>
-      </div>
-    );
-  }
-
+  // PR-FECH-GATE-01 — o gate de tem_pecuaria saiu daqui. Ele nasceu quando pasto era
+  // sinônimo de pecuária; hoje o fechamento mensal é de USO DA TERRA, e a taxonomia
+  // tem cinco famílias. O corpo desta tela já é agnóstico a tipo_uso (ver L~362: a
+  // reconciliação inclui todo pasto com entra_conciliacao, independente do destino) —
+  // só o gate impedia de chegar aqui. Fazenda sem boi abre com as colunas zootécnicas
+  // zeradas, que é o estado honesto: o talhão existe, o mês existe, e não há rebanho.
+  // useRedirecionarPecuaria segue em uso nas outras 7 telas, onde o gate é correto.
   return (
     <div className="pb-24">
       {/* ═══ HEADER FIXO — 3 COLUNAS ═══ */}
