@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { usePastos, type Pasto } from '@/hooks/usePastos';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { Button } from '@/components/ui/button';
@@ -472,7 +473,7 @@ function GrupoTipo({
   );
 }
 
-export function PastosTab() {
+export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}) {
   const { pastos, loading, criarPasto, editarPasto, toggleAtivo, reorderPastos } = usePastos();
   const { isGlobal, fazendaAtual } = useFazenda();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -601,66 +602,76 @@ export function PastosTab() {
     reorderPastos(reordered.map(p => p.id));
   };
 
+  // PR-UI-PASTOS-BARRA-01 — a barra é publicada como valor, não movida para o pai.
+  // PastosTab tem DOIS pais (V2Fazendas e CadastrosTab); mover o JSX duplicaria a
+  // barra em dois arquivos, e duas cópias divergem. Um componente, dois destinos.
+  const barra = (
+    <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center gap-2">
+        <h2 className="text-xs font-bold">Pastos</h2>
+        <Badge variant="secondary" className="text-[10px]">{pastos.filter(p => p.ativo).length} ativos</Badge>
+        {showInativos && <Badge variant="outline" className="text-[10px]">{pastos.length} total</Badge>}
+      </div>
+      <div className="flex items-center gap-2">
+        <div className="flex rounded border overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setModo('destino')}
+            className={`px-2 py-0.5 text-[10px] font-semibold ${modo === 'destino' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/70'}`}
+          >
+            Por destino
+          </button>
+          <button
+            type="button"
+            onClick={() => setModo('manual')}
+            className={`px-2 py-0.5 text-[10px] font-semibold ${modo === 'manual' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/70'}`}
+            title="Lista plana, arrastável — define ordem_exibicao"
+          >
+            Ordem manual
+          </button>
+        </div>
+        <label className="text-[10px] text-muted-foreground flex items-center gap-1">
+          <Switch checked={showInativos} onCheckedChange={setShowInativos} className="scale-75" />
+          Inativos
+        </label>
+        {!jaTemDivergencia && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs border-amber-500 text-amber-700 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-950/30"
+            onClick={handleCriarDivergencia}
+            disabled={criandoDivergencia}
+          >
+            <AlertTriangle className="h-3 w-3 mr-1" />
+            {criandoDivergencia ? 'Criando...' : 'Criar pasto de divergência'}
+          </Button>
+        )}
+        <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) setEditingPasto(undefined); }}>
+          <DialogTrigger asChild>
+            <Button size="sm" className="h-7 text-xs"><Plus className="h-3 w-3 mr-1" />Novo</Button>
+          </DialogTrigger>
+          {/* A1 largura · A7 altura fixa (h-[540px]) para não mudar de tamanho ao
+              trocar de aba · A8 header e rodapé congelados, só o miolo rola.
+              max-h-[92vh] é teto em tela baixa. Receita de MesaPareamentoModal:1365
+              e LancamentoV2Dialog:1017. */}
+          <DialogContent className="max-w-3xl h-[470px] max-h-[92vh] p-0 flex flex-col gap-0">
+            <DialogHeader className="px-5 py-3 border-b shrink-0">
+              <DialogTitle className="text-sm font-semibold">{editingPasto ? 'Editar Pasto' : 'Novo Pasto'}</DialogTitle>
+            </DialogHeader>
+            <PastoForm pasto={editingPasto} onSave={handleSave} onCancel={() => { setDialogOpen(false); setEditingPasto(undefined); }} />
+          </DialogContent>
+        </Dialog>
+      </div>
+    </div>
+  );
+
   return (
     <div className="p-3 pb-20 space-y-2">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <h2 className="text-sm font-bold">Pastos</h2>
-          <Badge variant="secondary" className="text-xs">{pastos.filter(p => p.ativo).length} ativos</Badge>
-          {showInativos && <Badge variant="outline" className="text-xs">{pastos.length} total</Badge>}
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="flex rounded border overflow-hidden">
-            <button
-              type="button"
-              onClick={() => setModo('destino')}
-              className={`px-2 py-0.5 text-[10px] font-semibold ${modo === 'destino' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/70'}`}
-            >
-              Por destino
-            </button>
-            <button
-              type="button"
-              onClick={() => setModo('manual')}
-              className={`px-2 py-0.5 text-[10px] font-semibold ${modo === 'manual' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/70'}`}
-              title="Lista plana, arrastável — define ordem_exibicao"
-            >
-              Ordem manual
-            </button>
-          </div>
-          <label className="text-[10px] text-muted-foreground flex items-center gap-1">
-            <Switch checked={showInativos} onCheckedChange={setShowInativos} className="scale-75" />
-            Inativos
-          </label>
-          {!jaTemDivergencia && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 text-xs border-amber-500 text-amber-700 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-950/30"
-              onClick={handleCriarDivergencia}
-              disabled={criandoDivergencia}
-            >
-              <AlertTriangle className="h-3 w-3 mr-1" />
-              {criandoDivergencia ? 'Criando...' : 'Criar pasto de divergência'}
-            </Button>
-          )}
-          <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) setEditingPasto(undefined); }}>
-            <DialogTrigger asChild>
-              <Button size="sm" className="h-7 text-xs"><Plus className="h-3 w-3 mr-1" />Novo</Button>
-            </DialogTrigger>
-            {/* A1 largura · A7 altura fixa (h-[540px]) para não mudar de tamanho ao
-                trocar de aba · A8 header e rodapé congelados, só o miolo rola.
-                max-h-[92vh] é teto em tela baixa. Receita de MesaPareamentoModal:1365
-                e LancamentoV2Dialog:1017. */}
-            <DialogContent className="max-w-3xl h-[470px] max-h-[92vh] p-0 flex flex-col gap-0">
-              <DialogHeader className="px-5 py-3 border-b shrink-0">
-                <DialogTitle className="text-sm font-semibold">{editingPasto ? 'Editar Pasto' : 'Novo Pasto'}</DialogTitle>
-              </DialogHeader>
-              <PastoForm pasto={editingPasto} onSave={handleSave} onCancel={() => { setDialogOpen(false); setEditingPasto(undefined); }} />
-            </DialogContent>
-          </Dialog>
-        </div>
-      </div>
+      {/* A barra é a MESMA em qualquer lugar; só o destino do render muda. Pai que
+          passa hostBarra a recebe ao lado das abas; pai que não passa (CadastrosTab)
+          continua com ela no topo do próprio conteúdo, como sempre. O portal preserva
+          a árvore React — estado, contexto e eventos seguem dentro do PastosTab. */}
+      {hostBarra ? createPortal(barra, hostBarra) : barra}
 
       {/* Grid */}
       {loading ? (

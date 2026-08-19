@@ -48,6 +48,9 @@ export function V2Fazendas() {
   const { clienteAtual } = useCliente();
   const { pastos } = usePastos();
 
+  // Callback ref, NÃO useRef: useRef não dispara re-render quando o nó monta, e o
+  // portal do PastosTab renderizaria contra null na primeira passada.
+  const [hostBarra, setHostBarra] = useState<HTMLDivElement | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>('area');
   const [data, setData] = useState<CadastroRow>(EMPTY);
   const [editing, setEditing] = useState(false);
@@ -271,20 +274,24 @@ export function V2Fazendas() {
         </div>
       </div>
 
-      <div className="flex gap-0.5 mb-4 border-b border-border">
-        {TABS.map(t => (
-          <button
-            key={t.key}
-            onClick={() => setActiveTab(t.key)}
-            className={`px-3 py-1.5 text-xs font-medium transition-colors border-b-2 -mb-px ${
-              activeTab === t.key
-                ? 'border-primary text-foreground'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
+      <div className="flex items-end justify-between gap-4 mb-4 border-b border-border">
+        <div className="flex gap-0.5">
+          {TABS.map(t => (
+            <button
+              key={t.key}
+              onClick={() => setActiveTab(t.key)}
+              className={`px-3 py-1.5 text-xs font-medium transition-colors border-b-2 -mb-px ${
+                activeTab === t.key
+                  ? 'border-primary text-foreground'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+        {/* Slot da barra da aba ativa. Vazio nas demais abas — não ocupa espaço. */}
+        <div ref={setHostBarra} className="pb-1" />
       </div>
       </div>
 
@@ -386,7 +393,7 @@ export function V2Fazendas() {
         </div>
       )}
 
-      {activeTab === 'pastos' && <PastosTab />}
+      {activeTab === 'pastos' && <PastosTab hostBarra={hostBarra} />}
 
       {activeTab === 'roteiro' && (
         <div className="py-4">
