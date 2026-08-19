@@ -397,17 +397,23 @@ export function V2Fazendas() {
                     ? `${formatNum(matriculaHa, 2)} ha`
                     : <span className="text-muted-foreground italic">—</span>}
                 </span>
-                {/* PR-AREA-CARD-CONFERIDA-02 — sem o rótulo "Não conferida": o botão
-                    já comunica o estado, porque só existe enquanto não foi conferida.
-                    Rótulo e botão juntos comprimiam as trilhas de rótulo e valor e
-                    empurravam os números para a esquerda. Texto em duas linhas para
-                    o botão ocupar a largura da maior palavra, não da frase inteira. */}
+                {/* PR-AREA-CONFERIDA-BOTAO-01 — o botão só existe no modo de EDIÇÃO.
+                    Ele escreve apenas no state; a persistência é do handleSave. Fora
+                    da edição não há Salvar na tela, então clicar e sair perdia a
+                    marcação em silêncio — o botão parecia ação imediata e não é.
+                    Oferecido só onde há Salvar visível, a expectativa não se cria.
+                    O ESTADO continua legível nas duas situações: o que muda é se há
+                    ou não o que fazer a respeito dele aqui.
+
+                    PR-AREA-CARD-CONFERIDA-02 — quando o botão aparece, ele dispensa o
+                    rótulo: só existe enquanto não foi conferida. Texto em duas linhas
+                    para ocupar a largura da maior palavra, não da frase inteira. */}
                 <span className="flex items-center justify-end">
                   {matriculaConferida ? (
                     <span className="text-[9px] text-muted-foreground whitespace-nowrap">
                       Conferida em {new Date(data.matricula_conferida_em).toLocaleDateString('pt-BR')}
                     </span>
-                  ) : (
+                  ) : editing ? (
                     <Button
                       size="sm"
                       variant="outline"
@@ -416,6 +422,10 @@ export function V2Fazendas() {
                     >
                       Marcar como<br />conferida
                     </Button>
+                  ) : (
+                    <span className="text-[9px] font-semibold text-amber-700 whitespace-nowrap">
+                      Não conferida
+                    </span>
                   )}
                 </span>
               </div>
