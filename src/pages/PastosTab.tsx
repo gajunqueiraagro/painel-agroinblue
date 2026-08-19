@@ -17,6 +17,7 @@ import {
 import {
   TIPOS_USO_OPTIONS_AGRUPADAS, isTipoUsoValido, labelDoTipoUso, grupoDoTipoUso, corDoTipoUso,
 } from '@/lib/pastos/tiposUso';
+import { agruparPastosPorFamilia } from '@/lib/pastos/agruparPorFamilia';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -551,34 +552,12 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
   // Agrupamento: família → tipo de uso. Fora da taxonomia, DOIS destinos distintos:
   // 'divergencia' ganha bloco próprio, o resto fica no balde genérico. Todo pasto de
   // `filtered` cai em exatamente um dos três — taxonomia, divergência ou legado.
-  const agrupado = useMemo(() => {
-    const porTipo = new Map<string, Pasto[]>();
-    const divergencia: Pasto[] = [];
-    const legado: Pasto[] = [];
-    for (const p of filtered) {
-      if (isTipoUsoValido(p.tipo_uso)) {
-        const arr = porTipo.get(p.tipo_uso) ?? [];
-        arr.push(p);
-        porTipo.set(p.tipo_uso, arr);
-      } else if (p.tipo_uso === 'divergencia') {
-        divergencia.push(p);
-      } else {
-        legado.push(p);
-      }
-    }
-    const familias = TIPOS_USO_OPTIONS_AGRUPADAS.map(g => {
-      const tipos = g.options.map(o => ({ tipo: o.value, label: o.label, pastos: porTipo.get(o.value) ?? [] }));
-      const todos = tipos.flatMap(t => t.pastos);
-      return {
-        grupo: g.grupo,
-        label: g.label,
-        tipos,
-        qtd: todos.length,
-        somaHa: todos.reduce((s, p) => s + (p.area_produtiva_ha ?? 0), 0),
-      };
-    });
-    return { familias, divergencia, legado };
-  }, [filtered]);
+  //
+  // PR-AREA-EXTRAIR-01 — o corpo saiu daqui para lib/pastos/agruparPorFamilia.ts,
+  // verbatim: a aba Área do V2Fazendas vai consumir a MESMA repartição, e duas
+  // cópias divergiriam. O filtro de `ativo` fica aqui, em `filtered`, porque só
+  // esta tela tem o modo "Inativos".
+  const agrupado = useMemo(() => agruparPastosPorFamilia(filtered), [filtered]);
 
   const somaPastos = useMemo(
     () => filtered.reduce((s, p) => s + (p.area_produtiva_ha ?? 0), 0),
