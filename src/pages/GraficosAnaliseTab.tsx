@@ -169,20 +169,23 @@ function ZootecnicoCharts({ zoo, lancamentos, saldosIniciais, anoNum, mesFiltro,
   const rebanhoMeta = useRebanhoOficial({ ano: anoNum, cenario: 'meta' });
 
   const chartData = useMemo(() => {
-    const buildYear = (rebanho: typeof rebanhoAtual) => {
+    // PR-VIGENCIA-03C — `ano` na assinatura: este builder serve três séries e a
+    // do ano anterior é de outro ano. A META usa o ano corrente, que é o ano que
+    // ela planeja.
+    const buildYear = (rebanho: typeof rebanhoAtual, ano: number) => {
       const data: any[] = [];
       for (let m = 1; m <= 12; m++) {
         const cab = rebanho.getSaldoFinalTotal(m);
         const pm = rebanho.getPesoMedioRebanho(m);
-        const areaPec = calcAreaProdutivaPecuaria(pastos);
+        const areaPec = calcAreaProdutivaPecuaria(pastos, `${ano}-${String(m).padStart(2, '0')}`);
         const kgha = pm && areaPec > 0 ? (cab * pm) / areaPec : null;
         data.push({ cabecas: cab, kgHa: kgha ? Math.round(kgha) : null });
       }
       return data;
     };
-    const atual = buildYear(rebanhoAtual);
-    const anterior = buildYear(rebanhoAnt);
-    const meta = buildYear(rebanhoMeta);
+    const atual = buildYear(rebanhoAtual, anoNum);
+    const anterior = buildYear(rebanhoAnt, anoNum - 1);
+    const meta = buildYear(rebanhoMeta, anoNum);
     return MESES_NOMES.map((mes, i) => {
       const isFuturo = i + 1 > mesFiltro;
       return {

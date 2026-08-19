@@ -134,14 +134,18 @@ export function IndicadoresZooTab({ lancamentos, saldosIniciais, onBack, onTabCh
   const acumulado = useMemo(() => {
     type Snap = { cab: number; pesoMedio: number | null; kgTotal: number; area: number; ua: number };
 
-    const buildSnapshots = (byMes: Record<number, ZootCategoriaMensal[]>, ateMes: number): Snap[] => {
+    // PR-VIGENCIA-03C — `ano` entra na assinatura porque este builder serve TRÊS
+    // séries, duas delas de anos diferentes (atual, MoM e YoY). Sem ele, a área
+    // do YoY viria do ano corrente e compararia rebanho de um ano contra área de
+    // outro — defeito mais sutil que o que este PR corrige.
+    const buildSnapshots = (byMes: Record<number, ZootCategoriaMensal[]>, ateMes: number, ano: number): Snap[] => {
       const snaps: Snap[] = [];
       for (let m = 1; m <= ateMes; m++) {
         const cats = byMes[m] || [];
         const cab = cats.reduce((s, c) => s + c.saldo_final, 0);
         const totalPeso = cats.reduce((s, c) => s + c.peso_total_final, 0);
         const pm = cab > 0 ? totalPeso / cab : null;
-        const area = calcAreaProdutivaPecuaria(pastos);
+        const area = calcAreaProdutivaPecuaria(pastos, `${ano}-${String(m).padStart(2, '0')}`);
         const ua = totalPeso / 450;
         snaps.push({ cab, pesoMedio: pm, kgTotal: totalPeso, area, ua });
       }
@@ -173,9 +177,9 @@ export function IndicadoresZooTab({ lancamentos, saldosIniciais, onBack, onTabCh
     const byMesAno = groupByMes(viewDataAno || []);
     const byMesAnoAnt = groupByMes(viewDataAnoAnt || []);
 
-    const atual = calcAvgs(buildSnapshots(byMesAno, mesFiltro));
-    const mom = mesFiltro > 1 ? calcAvgs(buildSnapshots(byMesAno, mesFiltro - 1)) : null;
-    const yoy = calcAvgs(buildSnapshots(byMesAnoAnt, mesFiltro));
+    const atual = calcAvgs(buildSnapshots(byMesAno, mesFiltro, anoNum));
+    const mom = mesFiltro > 1 ? calcAvgs(buildSnapshots(byMesAno, mesFiltro - 1, anoNum)) : null;
+    const yoy = calcAvgs(buildSnapshots(byMesAnoAnt, mesFiltro, anoNum - 1));
 
     return {
       ...atual,
@@ -464,7 +468,7 @@ function GraficosView({ subView, onBack, zoo, lancamentos, anoNum, mesFiltro, pa
         const cats = byMes[m] || [];
         const cab = cats.reduce((s, c) => s + c.saldo_final, 0);
         const totalPeso = cats.reduce((s, c) => s + c.peso_total_final, 0);
-        const areaPec = calcAreaProdutivaPecuaria(pastos);
+        const areaPec = calcAreaProdutivaPecuaria(pastos, `${ano}-${String(m).padStart(2, '0')}`);
         const kgha = totalPeso > 0 && areaPec > 0 ? totalPeso / areaPec : null;
 
         // Saídas do mês (movimentações — uso legítimo para explicar variações)

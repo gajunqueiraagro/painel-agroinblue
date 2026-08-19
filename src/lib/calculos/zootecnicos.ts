@@ -6,6 +6,8 @@
 import type { Lancamento, SaldoInicial, Categoria, TipoMovimentacao } from '@/types/cattle';
 import type { CategoriaRebanho } from '@/hooks/usePastos';
 import { isRealizado as isLancRealizado } from '@/lib/statusOperacional';
+import { isOperacionalPecuaria } from '@/lib/pastos/tiposUso';
+import { isPastoAtivoNoMes } from '@/hooks/usePastos';
 
 // ---------------------------------------------------------------------------
 // Tipos auxiliares
@@ -445,29 +447,44 @@ export function calcUAHa(uaTotal: number, areaHa: number | null): number | null 
 
 interface PastoParaArea {
   ativo: boolean;
-  entra_conciliacao: boolean;
   area_produtiva_ha: number | null;
+  tipo_uso?: string | null;
+  data_inicio?: string | null;
+  data_fim?: string | null;
 }
 
 /**
- * Calcula a área produtiva pecuária oficial para indicadores zootécnicos.
+ * Área produtiva PECUÁRIA de um mês.
  *
- * Fonte primária: soma das áreas dos pastos ativos com `entra_conciliacao = true`.
- * Fallback: área geral da fazenda (se informada e se nenhum pasto válido).
+ * Filtra por isOperacionalPecuaria (cria, recria, engorda, vedado,
+ * reforma_pecuaria) e pela vigência do mês via isPastoAtivoNoMes.
+ * Reserva, APP, benfeitorias e silvicultura NÃO são área pecuária.
  *
- * A função considera o contexto mensal da operação — só pastos ativos e
- * válidos para conciliação são contabilizados.
+ * anoMes é OPCIONAL apenas por causa de PainelConsultorTab:1616 — o resíduo da
+ * aba Meta, que usa escalar anual e cujo denominador é decisão de produto
+ * reservada ao PR-VIGENCIA-03B. Todo chamador novo DEVE passar o mês.
+ *
+ * Sem anoMes a vigência não é aplicada, mas o filtro de tipo_uso É — reserva,
+ * APP, benfeitorias e silvicultura ficam de fora em qualquer caso. O que fica
+ * pendente sem mês é só o pasto encerrado, não a família errada.
+ *
+ * Retorno ZERO é legítimo: significa "nenhum pasto pecuário neste mês". Quem
+ * exibe deve mostrar "—", não 0,00 (sentinela do projeto). O antigo parâmetro
+ * `areaFazendaFallback` saiu: nenhum chamador o passava e o ramo era
+ * inalcançável, porque a soma era > 0 sempre que havia pasto. Não reintroduzir
+ * fallback para mascarar o zero.
  */
 export function calcAreaProdutivaPecuaria(
   pastos: PastoParaArea[],
-  areaFazendaFallback?: number | null,
+  anoMes?: string,
 ): number {
-  const pastosValidos = pastos.filter(p => p.ativo && p.entra_conciliacao);
-  const soma = pastosValidos.reduce((s, p) => s + (p.area_produtiva_ha || 0), 0);
-
-  if (soma > 0) return soma;
-  if (areaFazendaFallback && areaFazendaFallback > 0) return areaFazendaFallback;
-  return 0;
+  return pastos
+    .filter(p =>
+      p.ativo &&
+      isOperacionalPecuaria(p.tipo_uso) &&
+      (anoMes ? isPastoAtivoNoMes(p, anoMes) : true),
+    )
+    .reduce((s, p) => s + (p.area_produtiva_ha || 0), 0);
 }
 
 // ---------------------------------------------------------------------------

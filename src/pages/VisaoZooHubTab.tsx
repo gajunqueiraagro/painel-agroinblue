@@ -216,13 +216,15 @@ export function VisaoZooHubTab({ lancamentos, saldosIniciais, onTabChange, filtr
   // Acumulado — FONTE OFICIAL
   const acumulado = useMemo(() => {
     type Snap = { cab: number; pesoMedio: number | null; kgTotal: number; area: number; ua: number };
-    const buildSnapshots = (rebanho: typeof rebanhoAtual, ateMes: number): Snap[] => {
+    // PR-VIGENCIA-03C — `ano` na assinatura: o mesmo builder serve atual, MoM e
+    // YoY, e o YoY é de outro ano. Sem ele a área do YoY viria do ano corrente.
+    const buildSnapshots = (rebanho: typeof rebanhoAtual, ateMes: number, ano: number): Snap[] => {
       const snaps: Snap[] = [];
       for (let m = 1; m <= ateMes; m++) {
         const cab = rebanho.getSaldoFinalTotal(m);
         const pm = rebanho.getPesoMedioRebanho(m);
         const kgTot = rebanho.getPesoTotalRebanho(m);
-        const area = calcAreaProdutivaPecuaria(pastos);
+        const area = calcAreaProdutivaPecuaria(pastos, `${ano}-${String(m).padStart(2, '0')}`);
         const ua = calcUA(cab, pm);
         snaps.push({ cab, pesoMedio: pm, kgTotal: kgTot, area, ua });
       }
@@ -248,9 +250,9 @@ export function VisaoZooHubTab({ lancamentos, saldosIniciais, onTabChange, filtr
       const pct = ref !== 0 ? (diff / Math.abs(ref)) * 100 : null;
       return { diferencaPercentual: pct, disponivel: true } as any;
     };
-    const atual = calcAvgs(buildSnapshots(rebanhoAtual, mesFiltro));
-    const mom = mesFiltro > 1 ? calcAvgs(buildSnapshots(rebanhoAtual, mesFiltro - 1)) : null;
-    const yoy = calcAvgs(buildSnapshots(rebanhoAnt, mesFiltro));
+    const atual = calcAvgs(buildSnapshots(rebanhoAtual, mesFiltro, anoNum));
+    const mom = mesFiltro > 1 ? calcAvgs(buildSnapshots(rebanhoAtual, mesFiltro - 1, anoNum)) : null;
+    const yoy = calcAvgs(buildSnapshots(rebanhoAnt, mesFiltro, anoNum - 1));
     return {
       ...atual,
       compCab: { mensal: comp(atual.cabMedia, mom?.cabMedia ?? null), anual: comp(atual.cabMedia, yoy.cabMedia) },
@@ -852,7 +854,7 @@ function GraficosContent({ zoo, lancamentos, saldosIniciais, anoNum, mesFiltro, 
       for (let m = 1; m <= 12; m++) {
         const cab = rebanho.getSaldoFinalTotal(m);
         const pm = rebanho.getPesoMedioRebanho(m);
-        const areaPec = calcAreaProdutivaPecuaria(pastos);
+        const areaPec = calcAreaProdutivaPecuaria(pastos, `${ano}-${String(m).padStart(2, '0')}`);
         const kgha = pm && areaPec > 0 ? (cab * pm) / areaPec : null;
         const mesStr = `${ano}-${String(m).padStart(2, '0')}`;
         const saidasMes = lancamentos.filter(l => l.data.startsWith(mesStr) && TIPOS_SAIDA_DESFRUTE.includes(l.tipo));

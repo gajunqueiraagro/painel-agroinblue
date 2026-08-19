@@ -15,7 +15,8 @@
 
 import { useMemo, useState, useEffect, useCallback } from 'react';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
-import type { Pasto } from '@/hooks/usePastos';
+import { isPastoAtivoNoMes, type Pasto } from '@/hooks/usePastos';
+import { isOperacionalPecuaria } from '@/lib/pastos/tiposUso';
 import {
   calcUA,
   calcUAHa,
@@ -404,8 +405,13 @@ export function useIndicadoresZootecnicos(
     const saldoAnterior = mes > 1 ? viewSaldoFinal(viewByMesAno, mes - 1) : saldoInicialAno;
 
     // Área / UA
-    const areaProdutiva = calcAreaProdutivaPecuaria(pastos);
-    const areaProdutivaEstimativa = pastos.filter(p => p.ativo && p.entra_conciliacao && (!p.data_inicio || p.data_inicio <= `${anoMes}-01`)).length === 0;
+    const areaProdutiva = calcAreaProdutivaPecuaria(pastos, anoMes);
+    // PR-VIGENCIA-03C — mesma regra da função acima, para a flag concordar com o
+    // número: sem pasto pecuário vigente no mês, a área é estimativa. Saiu o
+    // entra_conciliacao (aposentado no 02) e o teste manual de data_inicio.
+    const areaProdutivaEstimativa = pastos.filter(p =>
+      p.ativo && isOperacionalPecuaria(p.tipo_uso) && isPastoAtivoNoMes(p, anoMes),
+    ).length === 0;
     const uaTotal = calcUA(saldoFinalMes, pesoMedioRebanhoKg);
     const uaHa = calcUAHa(uaTotal, areaProdutiva);
 
