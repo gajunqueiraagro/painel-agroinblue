@@ -329,6 +329,8 @@ export default function V2Index() {
   });
   const [intensivo, setIntensivo] = useState(false);
   const [drawerAtivo, setDrawerAtivo] = useState<string | null>(null);
+  /** Origem da navegação para 'mapa-pastos': só há "voltar" quando veio do Fechamento. */
+  const mapaPastosOriginRef = useRef(false);
   // Estado para edição completa de Abate/Venda vinda da Conferência.
   // Quando setado, navega para `lancamentos-zoot` e abre LancamentosTab em edit mode.
   const [abateParaEditar, setAbateParaEditar] = useState<Lancamento | null>(null);
@@ -770,6 +772,12 @@ export default function V2Index() {
     if (section === 'meta-gmd') return (
       <MetaGmdTab initialAno={ano} ocultarFiltroAno />
     );
+    // ÓRFÃO NO /v2 desde PR-UI-FECHAMENTO-CARD-MAPA-01 (19/08/2026): a única porta
+    // de entrada era o card "Mapa de Pastos" do Fechamento, que apontava para cá
+    // por engano e passou a apontar para 'mapa-pastos'. Não recebeu item de menu
+    // porque a tela foi avaliada em runtime e considerada sem função — candidata à
+    // faxina de telas do /v2. Segue acessível na tela antiga (Index.tsx:657).
+    // Antes de reconectar: decidir se ela deve existir, não só como chegar nela.
     if (section === 'resumo-pastos') return (
       <ResumoPastosTab />
     );
@@ -784,6 +792,7 @@ export default function V2Index() {
     );
     if (section === 'mapa-pastos') return (
       <MapaPastosTab
+        onBack={mapaPastosOriginRef.current ? () => { mapaPastosOriginRef.current = false; setSection('fechamento'); } : undefined}
         filtroAnoInicial={ano}
         filtroMesInicial={mes === '0' ? undefined : Number(mes)}
       />
@@ -895,7 +904,8 @@ export default function V2Index() {
         onNavigateToMapaPastos={(filtro) => {
           setAno(filtro.ano);
           setMes(String(filtro.mes));
-          setSection('resumo-pastos');
+          mapaPastosOriginRef.current = true;
+          setSection('mapa-pastos');
         }}
       />
     );
@@ -1036,6 +1046,9 @@ export default function V2Index() {
     setSection(s);
     setDrawerAtivo(null);
     setIntensivo(false);
+    // Chegar pelo menu apaga a origem: sem isto, Fechamento → Mapa → menu → Mapa
+    // traria a seta de volta apontando para um Fechamento de onde o operador não veio.
+    mapaPastosOriginRef.current = false;
   }
 
   // Seções em app-shell: a <section> não rola, o scroll vive dentro da aba.
