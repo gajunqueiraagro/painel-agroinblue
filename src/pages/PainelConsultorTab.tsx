@@ -1599,13 +1599,39 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
     })();
   }, [fazendaId, anoNum, fazendas, isGlobal, clienteId]);
 
+  // RESÍDUO CONSCIENTE — PR-VIGENCIA-03A (19/08/2026).
+  // calcAreaProdutivaPecuaria ignora tipo_uso e vigência: soma reserva/APP/
+  // benfeitorias e pastos encerrados. Na Sta. Rita infla a área em 887 ha (32%);
+  // Sta. Luzia e Retiro Agricultura têm denominador 100% não-pecuário.
+  //
+  // O caminho REALIZADO já não usa isto — passou para a série soberana
+  // areaPecuariaRealPorMes. Sobrou aqui só para buildBlocosFromMetaConsolidacao
+  // (L1805), que é ESCALAR ANUAL, contrato diferente do mensal do Realizado.
+  //
+  // Trocar o divisor da META é decisão de produto (areaPecuariaMetaPorMes tem
+  // meses sem plano — reabre a pergunta do "—" em outro contexto). Fica para o
+  // PR-VIGENCIA-03B. Não "consertar" isto de passagem.
   const areaProdutiva = useMemo(() => calcAreaProdutivaPecuaria(pastos), [pastos]);
+
+  // A área do painel vem da MESMA fonte soberana do bloco de áreas (:1717):
+  // areaPecuariaRealPorMes, que filtra por isOperacionalPecuaria e por mês.
+  // Antes daqui saía calcAreaProdutivaPecuaria(pastos), que ignora tipo_uso e
+  // vigência — dois denominadores para a mesma fazenda no mesmo mês, na mesma tela.
+  //
+  // Escalar 0 é deliberado: em buildMonthlyDataFromView, NaN/null no array caem
+  // para o escalar. Com 0, mês sem fechamento produz NaN nos indicadores, que
+  // safe() converte em null e a tela exibe "—". Qualquer outro escalar
+  // reintroduziria número em mês sem dado.
+  const areaProdutivaMensalSoberana = useMemo<number[]>(
+    () => (pcdSoberano.areaPecuariaRealPorMes ?? Array(12).fill(null)).map(v => v ?? NaN),
+    [pcdSoberano.areaPecuariaRealPorMes],
+  );
 
   const viewTotals = useMemo(() => totalizarViewPorMes(viewDataRealizado || []), [viewDataRealizado]);
 
   const monthlyData = useMemo(() =>
-    buildMonthlyDataFromView(viewTotals, viewDataRealizado || [], lancFin, lancPec, anoNum, areaProdutiva, valorRebanhoMes, isGlobal),
-    [viewTotals, viewDataRealizado, lancFin, lancPec, anoNum, areaProdutiva, valorRebanhoMes, isGlobal],
+    buildMonthlyDataFromView(viewTotals, viewDataRealizado || [], lancFin, lancPec, anoNum, 0, valorRebanhoMes, isGlobal, areaProdutivaMensalSoberana),
+    [viewTotals, viewDataRealizado, lancFin, lancPec, anoNum, valorRebanhoMes, isGlobal, areaProdutivaMensalSoberana],
   );
 
   const isPrevisto = cenario === 'meta';
