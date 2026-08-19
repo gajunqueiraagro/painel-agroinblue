@@ -92,12 +92,22 @@ export function ImportLancDeParaPanel({
           Nenhum valor desta coluna na planilha.
         </div>
       ) : recolhido ? null : (
-        <div className="divide-y divide-border/40 max-h-[28vh] overflow-y-auto">
+        /* PR-IMPORT-EXCEL-LANC-06 — rolagem interna REMOVIDA. Com quatro blocos de
+           altura limitada, o cursor ficava sempre dentro de uma área rolável e a
+           página quase não rolava. O que justificava o limite — caber tudo na tela —
+           já é resolvido pelo recolhimento automático dos blocos sem pendência.
+           Agora a página rola como um documento só, e o cabeçalho sticky preserva o
+           contexto do arquivo. */
+        <div className="divide-y divide-border/40">
           {itens.map((it) => {
             const selo = it.descartado ? SELO_DESCARTADO : SELO[it.origem];
             return (
+              // Colunas com TETO em vez de fração pura: valor e seletor ficam lado a
+              // lado e param de esticar. A 6ª trilha não tem filho — existe só para
+              // absorver a folga, que assim sobra à DIREITA e nunca no meio da linha,
+              // separando o valor do seu próprio estado.
               <div key={it.texto} className={`px-2 py-0.5 grid gap-2 items-center ${it.descartado ? 'opacity-55' : ''}`}
-                   style={{ gridTemplateColumns: 'minmax(0,2.2fr) minmax(0,1.4fr) 44px 20px 96px' }}>
+                   style={{ gridTemplateColumns: 'minmax(0,26rem) minmax(0,17rem) 40px 20px 92px 1fr' }}>
                 {/* Valor de origem: QUEBRA em vez de truncar. Com a largura toda, o
                     texto do cliente cabe — e é ele que o operador precisa ler para
                     decidir o mapeamento. */}

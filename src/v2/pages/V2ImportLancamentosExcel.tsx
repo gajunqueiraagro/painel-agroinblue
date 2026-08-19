@@ -51,7 +51,12 @@ export function V2ImportLancamentosExcel() {
   if (previa && previa.totais.entram.qtd === 0) bloqueios.push('nenhuma linha elegível para importar');
 
   return (
-    <div className="space-y-1.5 p-2">
+    // PR-IMPORT-EXCEL-LANC-06 — conteúdo limitado (~70% num monitor grande) e ALINHADO
+    // À ESQUERDA, sem mx-auto. Ocupando 100% da largura, os extremos de cada linha do
+    // de-para ficavam distantes demais e a relação entre o valor de origem e o seu
+    // estado se perdia. max-w em pixel, e não em %, para que telas menores usem tudo
+    // o que têm em vez de encolher proporcionalmente.
+    <div className="space-y-1.5 p-2 w-full max-w-[1100px]">
       {/* ── Passo 1 — arquivo. Cabeçalho congelado: com a lista longa de de-para,
              o operador perde o contexto do arquivo ao rolar. ── */}
       <div className="rounded-lg border bg-card p-2 space-y-1.5 sticky top-0 z-30">
