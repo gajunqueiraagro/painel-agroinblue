@@ -743,6 +743,13 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
         </DndContext>
       ) : (
         <div className="space-y-1">
+          {/* PR-AREA-LISTA-03 — moldura contínua: com tudo recolhido, as cinco famílias
+              eram cinco linhas soltas no branco. Antes o bloco de destinos abaixo de cada
+              uma dava a estrutura; recolhido, sumiu. divide-y no mesmo idioma do container
+              de destinos, para a lista recolhida ler como UMA tabela.
+              O alinhamento sobrevive porque o border do container desloca cabeçalho e
+              linhas de pasto JUNTOS — os dois ganham o mesmo 1px. */}
+          <div className="divide-y divide-border/40 border rounded-md overflow-hidden">
           {agrupado.familias.map(f => (
             /* PR-UI-PASTOS-BLOCO-01 item 5 — o cabeçalho usa a MESMA grade das linhas
                de pasto (GRID_LINHA), para o total da família cair exatamente sob a
@@ -756,13 +763,22 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
                filho do grid — como filho ele ocuparia a coluna de área. */
             <BlocoColapsavel
               key={f.grupo}
-              botaoClassName="w-full text-left grid gap-2 px-2 ml-2 border border-transparent items-baseline hover:bg-muted/40 rounded"
+              botaoClassName="w-full text-left grid gap-2 px-2 py-1 ml-2 border border-transparent items-baseline hover:bg-muted/40"
               style={{ gridTemplateColumns: GRID_LINHA }}
               cabecalho={(chevron) => (<>
-                <span className="text-xs uppercase tracking-widest font-bold text-foreground truncate flex items-center gap-1">
+                {/* PR-AREA-LISTA-03 — a contagem truncava ("0 pastoc") porque o `truncate`
+                    estava no CONTAINER FLEX: text-overflow não se aplica a filhos de flex,
+                    então eles eram cortados no meio da letra, sem reticências. O truncate
+                    vai para o texto do rótulo (curto, raramente corta) e a contagem ganha
+                    shrink-0: ela nunca mais cede largura. Sem mexer no track — alargá-lo
+                    deslocaria a coluna de área e quebraria o alinhamento com as linhas
+                    de pasto, que é o que o BLOCO-01 construiu. */}
+                <span className="flex items-baseline gap-1 min-w-0">
                   {chevron}
-                  {f.label}
-                  <span className="ml-0.5 text-[10px] normal-case tracking-normal font-normal text-muted-foreground">
+                  <span className="text-xs uppercase tracking-wide font-bold text-foreground truncate">
+                    {f.label}
+                  </span>
+                  <span className="text-[10px] font-normal text-muted-foreground shrink-0 whitespace-nowrap">
                     {f.qtd} pasto{f.qtd !== 1 ? 's' : ''}
                   </span>
                 </span>
@@ -800,16 +816,27 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
               É valor OPERANTE (a linha que fecha a conta da fazenda), não resíduo —
               merece nome e lugar seus, não ser diluído em "fora da taxonomia". */}
           {agrupado.divergencia.length > 0 && (
+            /* PR-AREA-LISTA-03 — mesma grade e mesmas trilhas das famílias. O âmbar
+               fica SÓ no texto do rótulo: é o sinal de "fora da taxonomia" e permanece,
+               sem fundo colorido e sem alinhamento próprio. */
             <BlocoColapsavel
-              botaoClassName="w-full text-left flex items-baseline justify-between px-1 hover:bg-muted/40 rounded"
+              botaoClassName="w-full text-left grid gap-2 px-2 py-1 ml-2 border border-transparent items-baseline hover:bg-muted/40"
+              style={{ gridTemplateColumns: GRID_LINHA }}
               cabecalho={(chevron) => (<>
-                <span className="text-[11px] uppercase tracking-widest font-bold text-amber-700 flex items-center gap-1">
+                <span className="flex items-baseline gap-1 min-w-0">
                   {chevron}
-                  Divergência Campo
+                  <span className="text-xs uppercase tracking-wide font-bold text-amber-700 truncate">
+                    Divergência Campo
+                  </span>
+                  <span className="text-[10px] font-normal text-muted-foreground shrink-0 whitespace-nowrap">
+                    {agrupado.divergencia.length} pasto{agrupado.divergencia.length !== 1 ? 's' : ''}
+                  </span>
                 </span>
-                <span className="text-[11px] tabular-nums text-muted-foreground">
-                  {agrupado.divergencia.length} pasto{agrupado.divergencia.length !== 1 ? 's' : ''} ·{' '}
-                  {formatarAreaBR(agrupado.divergencia.reduce((s, p) => s + (p.area_produtiva_ha ?? 0), 0))} ha
+                <span className="text-xs tabular-nums font-semibold text-foreground text-right">
+                  {formatarAreaBR(agrupado.divergencia.reduce((s, p) => s + (p.area_produtiva_ha ?? 0), 0))}
+                </span>
+                <span className="text-[10px] tabular-nums text-muted-foreground pl-2">
+                  {percentualBR(agrupado.divergencia.reduce((s, p) => s + (p.area_produtiva_ha ?? 0), 0), somaPastos)}
                 </span>
               </>)}
             >
@@ -837,15 +864,23 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
               aparece com o nome real que tem no banco. */}
           {agrupado.legado.length > 0 && (
             <BlocoColapsavel
-              botaoClassName="w-full text-left flex items-baseline justify-between px-1 hover:bg-muted/40 rounded"
+              botaoClassName="w-full text-left grid gap-2 px-2 py-1 ml-2 border border-transparent items-baseline hover:bg-muted/40"
+              style={{ gridTemplateColumns: GRID_LINHA }}
               cabecalho={(chevron) => (<>
-                <span className="text-[11px] uppercase tracking-widest font-bold text-amber-700 flex items-center gap-1">
+                <span className="flex items-baseline gap-1 min-w-0">
                   {chevron}
-                  Legado — fora da taxonomia
+                  <span className="text-xs uppercase tracking-wide font-bold text-amber-700 truncate">
+                    Legado — fora da taxonomia
+                  </span>
+                  <span className="text-[10px] font-normal text-muted-foreground shrink-0 whitespace-nowrap">
+                    {agrupado.legado.length} pasto{agrupado.legado.length !== 1 ? 's' : ''}
+                  </span>
                 </span>
-                <span className="text-[11px] tabular-nums text-muted-foreground">
-                  {agrupado.legado.length} pasto{agrupado.legado.length !== 1 ? 's' : ''} ·{' '}
-                  {formatarAreaBR(agrupado.legado.reduce((s, p) => s + (p.area_produtiva_ha ?? 0), 0))} ha
+                <span className="text-xs tabular-nums font-semibold text-foreground text-right">
+                  {formatarAreaBR(agrupado.legado.reduce((s, p) => s + (p.area_produtiva_ha ?? 0), 0))}
+                </span>
+                <span className="text-[10px] tabular-nums text-muted-foreground pl-2">
+                  {percentualBR(agrupado.legado.reduce((s, p) => s + (p.area_produtiva_ha ?? 0), 0), somaPastos)}
                 </span>
               </>)}
             >
@@ -870,6 +905,8 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
             </BlocoColapsavel>
           )}
 
+          </div>
+
           {/* PR-AREA-LISTA-02 item 4 — o total é a ÚLTIMA LINHA DA TABELA, não uma barra
               à parte: usa o MESMO GRID_LINHA das famílias, com o mesmo `border
               border-transparent` que iguala a caixa, para o número cair sob a coluna
@@ -881,10 +918,13 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
               (as colunas não são editáveis por tela nenhuma desde o 77cec994) é assunto
               do PR-FIX-PASTOS-RODAPE-01. Aqui é só posição e tipografia. */}
           <div
-            className="grid gap-2 px-2 ml-2 border border-transparent items-baseline pt-1 mt-1 border-t-border"
+            className="grid gap-2 px-2 ml-2 border border-transparent border-t-border items-baseline pt-1.5 mt-1"
             style={{ gridTemplateColumns: GRID_LINHA }}
           >
-            <span className="text-sm uppercase tracking-widest font-bold text-foreground truncate">
+            {/* Sem truncate: "TOTAL DOS PASTOS" cortava. tracking-wide no lugar de
+                widest devolve a largura sem tocar no tamanho da fonte — é fechamento,
+                não mais uma família, e a régua acima (border-t-border) diz isso. */}
+            <span className="text-sm uppercase tracking-wide font-bold text-foreground whitespace-nowrap">
               Total dos pastos
             </span>
             <span className="text-sm tabular-nums font-bold text-foreground text-right">
