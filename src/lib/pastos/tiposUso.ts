@@ -202,9 +202,14 @@ export function corDoTipoUso(t: string | null | undefined): string {
   }
 }
 
-// Fundo de linha — ESPELHA corDoTipoUso, tom a tom, diluído (alpha 0.3–0.4) para o
-// fundo não competir com os dados da linha. Os `case` estão na MESMA ordem da outra
-// função, de propósito: lidas lado a lado, uma divergência salta aos olhos.
+// Fundo de linha — ESPELHA corDoTipoUso na COR, diluído para o fundo não competir
+// com os dados da linha. Os `case` estão na MESMA ordem da outra função, de
+// propósito: lidas lado a lado, uma divergência salta aos olhos.
+//
+// O que não pode divergir é a COR; o degrau e o alpha são ajuste de legibilidade,
+// porque badge e fundo de linha não se comportam igual. 'engorda' é o caso vivo:
+// purple-50 no badge, purple-100 no tint — o 50 desaparece como fundo, ao lado das
+// linhas de recria. Mesma cor, degrau escolhido para ela ser visível.
 //
 // As duas derivam da mesma decisão de cor e mudam JUNTAS. Alterar uma sem a outra
 // reintroduz exatamente o defeito que o PR-UI-PASTO-CORES-02B corrigiu — recria com
@@ -218,7 +223,7 @@ export function tintDoTipoUso(t: string | null | undefined): string {
     case 'recria':
       return 'rgba(255, 247, 237, 0.5)'; // orange-50/50
     case 'engorda':
-      return 'rgba(250, 245, 255, 0.5)'; // purple-50/50
+      return 'rgba(243, 232, 255, 0.6)'; // purple-100/60
     case 'vedado':
       return 'rgba(241, 245, 249, 0.4)'; // slate-100/40
     case 'reforma_pecuaria':
