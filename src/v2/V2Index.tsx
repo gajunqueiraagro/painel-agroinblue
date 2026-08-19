@@ -1038,6 +1038,10 @@ export default function V2Index() {
     setIntensivo(false);
   }
 
+  // Seções em app-shell: a <section> não rola, o scroll vive dentro da aba.
+  // Ver o comentário no JSX da <section> para o porquê e para a regra da terceira.
+  const appShell = section === 'conciliacao' || section === 'mapa-pastos';
+
   return (
     <div className="h-screen bg-background overflow-hidden flex">
 
@@ -1119,18 +1123,27 @@ export default function V2Index() {
         )}
 
         {/* SCROLL — chamada ÚNICA de renderContent().
-            App-shell (só na Conciliação, desktop): a section deixa de rolar (overflow-hidden)
-            para o scroll viver dentro da aba (Enriquecer = lista; Importar/Conciliação = wrapper).
-            No mobile mantém overflow-auto (fallback empilhado). */}
+            App-shell (desktop): a section deixa de rolar (overflow-hidden) para o scroll
+            viver dentro da aba (Enriquecer = lista; Importar/Conciliação = wrapper;
+            Mapa de Pastos = corpo da tabela). No mobile mantém overflow-auto (fallback
+            empilhado).
+
+            Sem isto, a tela que pede height:100% mede contra um pai sem altura, o
+            `flex-1 min-h-0` interno não tem contra o que se medir e o `overflow-y-auto`
+            da tabela nunca vira scroller: quem rola é a section inteira, e o `sticky`
+            do cabeçalho gruda no topo de uma tabela que está saindo de cena junto.
+
+            SEGUNDA seção neste padrão. A TERCEIRA não deve virar um terceiro `||` —
+            vira lista de seções (Set/array) consultada aqui. */}
         <section className={
-          section === 'conciliacao'
+          appShell
             ? "flex-1 min-h-0 min-w-0 overflow-auto md:overflow-hidden md:flex md:flex-col bg-background"
             : intensivo
               ? "flex-1 min-h-0 w-full overflow-auto bg-background"
               : "flex-1 min-h-0 min-w-0 overflow-auto"
         }>
           <div className={
-            section === 'conciliacao'
+            appShell
               ? "w-full min-w-0 pb-16 md:pb-0 md:flex-1 md:min-h-0 md:flex md:flex-col"
               : "w-full min-w-0 pb-16 md:pb-0"
           }>
