@@ -202,20 +202,33 @@ export function corDoTipoUso(t: string | null | undefined): string {
   }
 }
 
+// Fundo de linha — ESPELHA corDoTipoUso, tom a tom, diluído (alpha 0.3–0.4) para o
+// fundo não competir com os dados da linha. Os `case` estão na MESMA ordem da outra
+// função, de propósito: lidas lado a lado, uma divergência salta aos olhos.
+//
+// As duas derivam da mesma decisão de cor e mudam JUNTAS. Alterar uma sem a outra
+// reintroduz exatamente o defeito que o PR-UI-PASTO-CORES-02B corrigiu — recria com
+// badge laranja sobre fundo verde, engorda com badge roxo sobre fundo azul, dentro
+// do próprio módulo que existe para ser a fonte única.
 export function tintDoTipoUso(t: string | null | undefined): string {
   if (!t) return 'transparent';
   switch (t) {
     case 'cria':
-    case 'reforma_pecuaria':
       return 'rgba(236, 253, 245, 0.4)'; // emerald-50/40
     case 'recria':
-      return 'rgba(220, 252, 231, 0.3)'; // green-100/30
+      return 'rgba(255, 247, 237, 0.5)'; // orange-50/50
     case 'engorda':
-      return 'rgba(240, 249, 255, 0.4)'; // sky-50/40
-    case 'agricultura':
-      return 'rgba(219, 234, 254, 0.3)'; // blue-100/30
+      return 'rgba(250, 245, 255, 0.5)'; // purple-50/50
     case 'vedado':
       return 'rgba(241, 245, 249, 0.4)'; // slate-100/40
+    case 'reforma_pecuaria':
+      return 'rgba(254, 242, 242, 0.5)'; // red-50/50
+    case 'agricultura':
+      return 'rgba(219, 234, 254, 0.3)'; // blue-100/30
+    case 'reserva':
+    case 'app':
+    case 'benfeitorias':
+      return 'rgba(229, 231, 235, 0.5)'; // gray-200/50
     case 'divergencia':
       return 'rgba(254, 243, 199, 0.3)'; // amber-100/30
     default:
