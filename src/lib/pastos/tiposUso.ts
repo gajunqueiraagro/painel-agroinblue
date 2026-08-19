@@ -161,23 +161,40 @@ export function labelDoTipoUso(t: string | null | undefined): string {
 // cor nova entraria numa cópia só. Aceita string genérica pela mesma razão que
 // as funções de domínio: 'divergencia' e outros legados existem no banco.
 //
-// Seis cores: cria/reforma_pecuaria emerald · recria green · engorda sky
-// agricultura blue · vedado slate · divergencia amber · resto neutro.
+// A paleta separa as FASES DO CICLO, que é o motivo de a cor existir:
+// cria emerald · recria orange · engorda purple — três famílias cromáticas
+// distintas, legíveis lado a lado. A paleta anterior punha cria em emerald e
+// recria em green, quase o mesmo tom, e ainda fazia reforma_pecuaria dividir o
+// case de cria; agora reforma_pecuaria é red, caso próprio, porque é pasto FORA
+// de produção e deve saltar. vedado slate · agricultura blue · divergencia amber.
+// reserva/app/benfeitorias compartilham gray: não são fase de ciclo, e antes caíam
+// no neutro por omissão — agora é escolha declarada.
+//
+// ATENÇÃO — esta paleta AINDA NÃO é a da aplicação inteira.
+// ResumoPastosTab.tsx:38 e ResumoAtividadesView.tsx:11 mantêm tabelas próprias,
+// e nelas LARANJA significa CRIA — aqui significa RECRIA. A mesma cor diz coisas
+// opostas em telas diferentes até o PR-UI-PASTO-CORES-03 migrar as duas.
+// Não "corrigir" uma ponta só: isso troca a divergência de lugar.
 
 export function corDoTipoUso(t: string | null | undefined): string {
   if (!t) return 'bg-muted/40 text-muted-foreground border-border/50';
   switch (t) {
     case 'cria':
-    case 'reforma_pecuaria':
       return 'bg-emerald-50 text-emerald-700 border-emerald-200';
     case 'recria':
-      return 'bg-green-100 text-green-800 border-green-300';
+      return 'bg-orange-50 text-orange-700 border-orange-200';
     case 'engorda':
-      return 'bg-sky-50 text-sky-700 border-sky-200';
-    case 'agricultura':
-      return 'bg-blue-100 text-blue-800 border-blue-300';
+      return 'bg-purple-50 text-purple-700 border-purple-200';
     case 'vedado':
       return 'bg-slate-100 text-slate-600 border-slate-300';
+    case 'reforma_pecuaria':
+      return 'bg-red-50 text-red-700 border-red-200';
+    case 'agricultura':
+      return 'bg-blue-100 text-blue-800 border-blue-300';
+    case 'reserva':
+    case 'app':
+    case 'benfeitorias':
+      return 'bg-gray-200 text-gray-800 border-gray-400';
     case 'divergencia':
       return 'bg-amber-100 text-amber-800 border-amber-300';
     default:

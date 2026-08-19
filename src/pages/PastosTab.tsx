@@ -521,15 +521,20 @@ export function PastosTab() {
     return () => { cancelado = true; };
   }, [fazendaAtual?.id]);
 
-  // Agrupamento: família → tipo de uso. Legado (fora da taxonomia) num grupo ao final.
+  // Agrupamento: família → tipo de uso. Fora da taxonomia, DOIS destinos distintos:
+  // 'divergencia' ganha bloco próprio, o resto fica no balde genérico. Todo pasto de
+  // `filtered` cai em exatamente um dos três — taxonomia, divergência ou legado.
   const agrupado = useMemo(() => {
     const porTipo = new Map<string, Pasto[]>();
+    const divergencia: Pasto[] = [];
     const legado: Pasto[] = [];
     for (const p of filtered) {
       if (isTipoUsoValido(p.tipo_uso)) {
         const arr = porTipo.get(p.tipo_uso) ?? [];
         arr.push(p);
         porTipo.set(p.tipo_uso, arr);
+      } else if (p.tipo_uso === 'divergencia') {
+        divergencia.push(p);
       } else {
         legado.push(p);
       }
@@ -545,7 +550,7 @@ export function PastosTab() {
         somaHa: todos.reduce((s, p) => s + (p.area_produtiva_ha ?? 0), 0),
       };
     });
-    return { familias, legado };
+    return { familias, divergencia, legado };
   }, [filtered]);
 
   const somaPastos = useMemo(
@@ -709,8 +714,37 @@ export function PastosTab() {
             </div>
           ))}
 
-          {/* Legado ao final: valor fora da taxonomia oficial (divergencia, pecuaria).
-              Fica visível e editável — reclassificar é ato explícito do operador. */}
+          {/* Divergência do Campeiro: bloco próprio, antes do legado genérico.
+              É valor OPERANTE (a linha que fecha a conta da fazenda), não resíduo —
+              merece nome e lugar seus, não ser diluído em "fora da taxonomia". */}
+          {agrupado.divergencia.length > 0 && (
+            <div className="space-y-1">
+              <div className="flex items-baseline justify-between px-1">
+                <span className="text-[11px] uppercase tracking-widest font-bold text-amber-700">
+                  Divergência Campo
+                </span>
+                <span className="text-[11px] tabular-nums text-muted-foreground">
+                  {agrupado.divergencia.length} pasto{agrupado.divergencia.length !== 1 ? 's' : ''} ·{' '}
+                  {formatarAreaBR(agrupado.divergencia.reduce((s, p) => s + (p.area_produtiva_ha ?? 0), 0))} ha
+                </span>
+              </div>
+              <GrupoTipo
+                tipo="divergencia"
+                label="Pendente"
+                pastos={agrupado.divergencia}
+                onEdit={(p) => { setEditingPasto(p); setDialogOpen(true); }}
+                onToggle={(p, v) => toggleAtivo(p.id, v)}
+              />
+            </div>
+          )}
+
+          {/* Legado ao final: qualquer OUTRO valor fora da taxonomia oficial (ex.: 'pecuaria').
+              Fica visível e editável — reclassificar é ato explícito do operador.
+
+              O nome genérico é deliberado: este balde recebe qualquer tipo_uso desconhecido,
+              e chamá-lo de "Divergência Campo" rotularia um pasto 'pecuaria' como divergência
+              de campo, que é falso. Divergência tem bloco próprio acima; aqui cada valor
+              aparece com o nome real que tem no banco. */}
           {agrupado.legado.length > 0 && (
             <div className="space-y-1">
               <div className="flex items-baseline justify-between px-1">
