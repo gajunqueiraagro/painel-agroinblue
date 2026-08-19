@@ -247,6 +247,11 @@ export function V2Fazendas() {
     // max-w em PIXEL (nao %) e sem mx-auto. O max-w-2xl anterior (672px) vinha de uma
     // versao anterior e sufocava a aba Pastos, que lista dezenas de linhas.
     <div className="px-4 py-4 w-full max-w-[1100px]">
+      {/* PR-UI-PADROES-01 / A3 — cabeçalho FIXO: título, subtítulo, ações e abas
+          permanecem visíveis ao rolar. A aba Pastos lista dezenas de linhas; sem isso
+          o operador perde de vista em que fazenda está. Um bloco só (título + abas)
+          para que nada deslize por baixo do outro. */}
+      <div className="sticky top-0 z-30 bg-background pt-1 -mx-4 px-4">
       <div className="flex items-center justify-between mb-3">
         <div>
           <h2 className="text-sm font-bold text-foreground">{fazendaAtual.nome}</h2>
@@ -280,6 +285,7 @@ export function V2Fazendas() {
             {t.label}
           </button>
         ))}
+      </div>
       </div>
 
       {activeTab === 'dados' && (

@@ -14,8 +14,9 @@ import {
   Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import {
-  TIPOS_USO_OPTIONS_AGRUPADAS, isTipoUsoValido, labelDoTipoUso,
+  TIPOS_USO_OPTIONS_AGRUPADAS, isTipoUsoValido, labelDoTipoUso, grupoDoTipoUso,
 } from '@/lib/pastos/tiposUso';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { ChevronRight, ChevronDown } from 'lucide-react';
@@ -97,6 +98,13 @@ function PastoForm({ pasto, onSave, onCancel }: { pasto?: Pasto; onSave: (data: 
   // Por isso o valor atual é sempre selecionável, e a reclassificação é ato explícito.
   const tipoUsoLegado = !isTipoUsoValido(tipoUso) ? tipoUso : null;
 
+  // PR-UI-PADROES-01 / B4 — família é TEXTO DERIVADO, nunca campo.
+  // tiposUso.ts declara grupo como "conceito derivado (NÃO armazenar no banco)".
+  // Dois campos permitiriam contradição — um pasto 'cria' marcado como 'Ambiental'.
+  // Aqui a família é sempre recalculada a partir do destino escolhido.
+  const familiaLabel =
+    TIPOS_USO_OPTIONS_AGRUPADAS.find(g => g.grupo === grupoDoTipoUso(tipoUso))?.label ?? null;
+
   const handleSubmit = () => {
     if (!nome.trim()) return;
     onSave({
@@ -113,7 +121,16 @@ function PastoForm({ pasto, onSave, onCancel }: { pasto?: Pasto; onSave: (data: 
   };
 
   return (
-    <div className="space-y-4">
+    // PR-UI-PADROES-01 / B3 — duas abas: "Área e uso" concentra o que é editável hoje;
+    // "Avançado" isola os campos ainda não implementados, para que eles não competam
+    // com o fluxo principal nem sugiram que já são salvos.
+    <Tabs defaultValue="area-uso" className="space-y-4">
+      <TabsList className="h-8">
+        <TabsTrigger value="area-uso" className="text-xs">Área e uso</TabsTrigger>
+        <TabsTrigger value="avancado" className="text-xs">Avançado</TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="area-uso" className="space-y-4 mt-0">
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <Label>Nome *</Label>
@@ -132,7 +149,9 @@ function PastoForm({ pasto, onSave, onCancel }: { pasto?: Pasto; onSave: (data: 
         </div>
       </div>
 
-      {/* ── Destino padrão ── */}
+      {/* ── Destino padrão ── A2: em grade com a família derivada ao lado, para
+             não esticar um seletor de 11 opções pela largura toda do modal. ── */}
+      <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_180px] items-start">
       <div>
         <Label>Destino padrão *</Label>
         <Select value={tipoUso} onValueChange={setTipoUso}>
@@ -182,6 +201,16 @@ function PastoForm({ pasto, onSave, onCancel }: { pasto?: Pasto; onSave: (data: 
         </p>
       </div>
 
+      {/* Família: leitura, derivada de grupoDoTipoUso(). Nunca editável. */}
+      <div>
+        <Label className="text-muted-foreground">Família</Label>
+        <div className="h-10 flex items-center px-3 rounded-md border bg-muted/40 text-sm">
+          {familiaLabel ?? <span className="text-muted-foreground italic">— legado</span>}
+        </div>
+        <p className="text-[11px] text-muted-foreground mt-1">Derivada do destino.</p>
+      </div>
+      </div>
+
       {/* ── Vigência ── */}
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
@@ -224,9 +253,11 @@ function PastoForm({ pasto, onSave, onCancel }: { pasto?: Pasto; onSave: (data: 
         <Textarea value={observacoes} onChange={e => setObservacoes(e.target.value)} placeholder="Observações gerais..." />
       </div>
 
+      </TabsContent>
+
       {/* ── Campos futuros: desabilitados, sem persistência e sem coluna nova.
              Existem para dimensionar o layout definitivo do cadastro. ── */}
-      <div className="rounded-lg border border-dashed p-3 space-y-3">
+      <TabsContent value="avancado" className="space-y-3 mt-0">
         <p className="text-[11px] text-muted-foreground">
           Campos em preparação — ainda não são salvos.
         </p>
@@ -237,13 +268,14 @@ function PastoForm({ pasto, onSave, onCancel }: { pasto?: Pasto; onSave: (data: 
           <CampoEmBreve label="Qualidade das cercas" />
           <CampoEmBreve label="Última reforma" />
         </div>
-      </div>
+      </TabsContent>
 
-      <div className="flex gap-2 pt-2">
+      {/* Ações fora das abas: salvar vale para o formulário inteiro, não para a aba. */}
+      <div className="flex gap-2 pt-2 border-t">
         <Button onClick={handleSubmit} className="flex-1 h-10">{pasto ? 'Atualizar' : 'Criar Pasto'}</Button>
         <Button variant="outline" onClick={onCancel} className="h-10">Cancelar</Button>
       </div>
-    </div>
+    </Tabs>
   );
 }
 
@@ -338,15 +370,15 @@ function LinhaPasto({
 }: { pasto: Pasto; onEdit: () => void; onToggle: (v: boolean) => void }) {
   return (
     <div
-      className={`grid gap-2 items-center px-2 py-1 border-b last:border-b-0 hover:bg-muted/40 ${!pasto.ativo ? 'opacity-45' : ''}`}
+      className={`grid gap-2 items-center px-2 py-1 border-b last:border-b-0 hover:bg-muted/40 leading-tight ${!pasto.ativo ? 'opacity-45' : ''}`}
       style={{ gridTemplateColumns: GRID_LINHA }}
     >
-      <span className="text-[12px] font-medium truncate" title={pasto.nome}>{pasto.nome}</span>
-      <span className="text-[12px] tabular-nums text-right">
+      <span className="text-[11px] font-medium truncate" title={pasto.nome}>{pasto.nome}</span>
+      <span className="text-[11px] font-medium tabular-nums text-right">
         {formatarAreaBR(pasto.area_produtiva_ha ?? null) || '—'}
       </span>
       {COLUNAS_EM_BREVE.map(c => (
-        <span key={c} className="text-[11px] text-muted-foreground/40 truncate" title={`${c} — em breve`}>—</span>
+        <span key={c} className="text-[10px] text-muted-foreground/40 truncate" title={`${c} — em breve`}>—</span>
       ))}
       <div className="flex items-center justify-end gap-1">
         {pasto.entra_conciliacao && (
@@ -364,10 +396,11 @@ function LinhaPasto({
   );
 }
 
+/** Cabeçalho de colunas — densidade A4 (padrão Plano de Contas), sticky. */
 function CabecalhoColunas() {
   return (
     <div
-      className="grid gap-2 px-2 py-1 border-b bg-muted/40 text-[9px] uppercase tracking-wider font-bold text-muted-foreground"
+      className="grid gap-2 px-2 py-1 border-b bg-muted/40 text-[11px] font-semibold text-muted-foreground sticky top-0 z-10"
       style={{ gridTemplateColumns: GRID_LINHA }}
     >
       <span>Pasto</span>
@@ -400,7 +433,7 @@ function GrupoTipo({
         className="w-full flex items-center gap-2 px-2 py-1 bg-card hover:bg-muted/50 text-left"
       >
         {aberto ? <ChevronDown className="h-3 w-3 shrink-0" /> : <ChevronRight className="h-3 w-3 shrink-0" />}
-        <span className="text-[12px] font-semibold">{label}</span>
+        <span className="text-[11px] font-semibold">{label}</span>
         <span className={`text-[11px] tabular-nums ml-auto ${vazio ? 'text-muted-foreground/60' : 'text-muted-foreground'}`}>
           {doTipo.length} pasto{doTipo.length !== 1 ? 's' : ''} · {formatarAreaBR(somaHa)} ha
         </span>
@@ -596,7 +629,8 @@ export function PastosTab() {
             {/* PR-PASTO-DESTINO-01 — modal alargado: com destino, vigência em dois
                 campos e o bloco de campos futuros, a largura padrão exigia rolagem
                 interna. max-h preservado como teto de segurança em tela baixa. */}
-            <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto">
+            {/* A1 — modais largos por padrão: mínimo max-w-3xl. */}
+            <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto">
               <DialogHeader><DialogTitle>{editingPasto ? 'Editar Pasto' : 'Novo Pasto'}</DialogTitle></DialogHeader>
               <PastoForm pasto={editingPasto} onSave={handleSave} onCancel={() => { setDialogOpen(false); setEditingPasto(undefined); }} />
             </DialogContent>
@@ -688,7 +722,7 @@ export function PastosTab() {
           {/* Rodapé: total dos pastos × área do cadastro da fazenda. Era informação
               que só existia na aba Área — aqui ela fica ao lado da soma que a produz. */}
           <div className="rounded-md border bg-card px-3 py-2 flex items-baseline justify-between flex-wrap gap-2">
-            <span className="text-[12px] font-semibold">
+            <span className="text-[11px] font-semibold">
               Total dos pastos: <span className="tabular-nums">{formatarAreaBR(somaPastos)} ha</span>
             </span>
             {areaTotalFazenda === null ? (
