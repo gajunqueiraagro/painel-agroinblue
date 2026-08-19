@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -152,6 +152,28 @@ function invalidatePastosForCliente(clienteId: string) {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PR-FIX-PASTOS-SYNC-01 — assinantes montados por cliente.
+//
+// Cada instância de usePastos tem seu PRÓPRIO array em useState. PastosTab e
+// V2Fazendas chamam o hook separadamente, então editar um pasto pelo modal
+// atualizava só a instância que originou a mutação: o dado ia certo para o banco,
+// e a outra tela seguia exibindo o valor antigo até remontar.
+//
+// A notificação é DEPOIS da escrita, nunca dentro de invalidatePastosForCliente.
+// A invalidação acontece ANTES do update (é o que impede uma leitura concorrente
+// de servir cache velho); notificar ali faria os assinantes buscarem o estado
+// PRÉ-escrita e repovoarem o cache com ele — o defeito ficaria pior, não melhor.
+// ─────────────────────────────────────────────────────────────────────────────
+const pastosSubscribers = new Map<string, Set<() => void>>();
+
+function notifyPastosChanged(clienteId: string) {
+  const subs = pastosSubscribers.get(clienteId);
+  if (!subs) return;
+  // Cópia: um callback pode desmontar durante a iteração.
+  for (const cb of [...subs]) cb();
+}
+
 export function usePastos() {
   const { fazendaAtual, fazendas: todasFazendas } = useFazenda();
   const { clienteAtual } = useCliente();
@@ -217,6 +239,28 @@ export function usePastos() {
   useEffect(() => { loadCategorias(); }, [loadCategorias]);
   useEffect(() => { loadPastos(); }, [loadPastos]);
 
+  // Referência estável para o loader corrente. Sem o ref, a inscrição teria de
+  // depender de `loadPastos`, que muda a cada troca de fazenda — e reinscrever a
+  // cada mudança de identidade é ruído. O ref também respeita a regra do projeto:
+  // nunca colocar array (pastos/categorias) em lista de dependências.
+  const loadPastosRef = useRef(loadPastos);
+  useEffect(() => { loadPastosRef.current = loadPastos; }, [loadPastos]);
+
+  // Inscrição por cliente. A dependência é só o clienteId (string): trocar de
+  // cliente sai do Set antigo pelo cleanup e entra no novo. Trocar de FAZENDA não
+  // reinscreve — o mesmo callback passa a chamar o loader novo via ref.
+  useEffect(() => {
+    if (!clienteId) return;
+    const cb = () => { void loadPastosRef.current(); };
+    let set = pastosSubscribers.get(clienteId);
+    if (!set) { set = new Set(); pastosSubscribers.set(clienteId, set); }
+    set.add(cb);
+    return () => {
+      set!.delete(cb);
+      if (set!.size === 0) pastosSubscribers.delete(clienteId);
+    };
+  }, [clienteId]);
+
   const criarPasto = useCallback(async (pasto: Omit<Pasto, 'id' | 'created_at' | 'updated_at'>) => {
     if (clienteId) invalidatePastosForCliente(clienteId);
     const maxOrdem = pastos.length > 0 ? Math.max(...pastos.map(p => p.ordem_exibicao || 0)) : 0;
@@ -227,9 +271,12 @@ export function usePastos() {
     } as any);
     if (error) { toast.error('Erro ao criar pasto'); console.error(error); return false; }
     toast.success('Pasto criado');
-    await loadPastos();
+    // A notificação é o ÚNICO caminho de recarga: ela alcança esta instância
+    // também, então `await loadPastos()` aqui seria a segunda leitura da mesma
+    // mutação. Ver o bloco de assinantes no topo do arquivo.
+    if (clienteId) notifyPastosChanged(clienteId);
     return true;
-  }, [loadPastos, pastos, fazendaAtual, clienteId]);
+  }, [pastos, fazendaAtual, clienteId]);
 
   // PR-PASTO-DESTINO-01 — o Omit<Pasto,'data_fim'> saiu: o cadastro passa a ESCREVER
   // a vigência, que é a peça que faltava para o modelo de divisão de pasto
@@ -244,9 +291,9 @@ export function usePastos() {
     const { error } = await (supabase as any).from('pastos').update(updates).eq('id', id);
     if (error) { toast.error('Erro ao atualizar pasto'); console.error(error); return false; }
     toast.success('Pasto atualizado');
-    await loadPastos();
+    if (clienteId) notifyPastosChanged(clienteId);
     return true;
-  }, [loadPastos, clienteId]);
+  }, [clienteId]);
 
   const toggleAtivo = useCallback(async (id: string, ativo: boolean) => {
     if (clienteId) invalidatePastosForCliente(clienteId);
@@ -267,11 +314,11 @@ export function usePastos() {
     const results = await Promise.all(updates);
     const hasError = results.some(r => r.error);
     if (clienteId) invalidatePastosForCliente(clienteId);
-    if (hasError) {
-      toast.error('Erro ao salvar ordem');
-      await loadPastos();
-    }
-  }, [loadPastos, clienteId]);
+    if (hasError) toast.error('Erro ao salvar ordem');
+    // Notifica nos DOIS casos: com erro, para desfazer o optimistic update contra
+    // o banco; sem erro, porque ordem_exibicao alimenta outras telas montadas.
+    if (clienteId) notifyPastosChanged(clienteId);
+  }, [clienteId]);
 
   return { pastos, categorias, loading, criarPasto, editarPasto, toggleAtivo, loadPastos, reorderPastos };
 }
