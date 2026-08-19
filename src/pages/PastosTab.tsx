@@ -673,7 +673,7 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
   );
 
   return (
-    <div className="p-3 pb-20 space-y-2">
+    <div className="p-3 pt-1 pb-20 space-y-2">
       {/* A barra é a MESMA em qualquer lugar; só o destino do render muda. Pai que
           passa hostBarra a recebe ao lado das abas; pai que não passa (CadastrosTab)
           continua com ela no topo do próprio conteúdo, como sempre. O portal preserva
@@ -706,9 +706,9 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
           </SortableContext>
         </DndContext>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-1">
           {agrupado.familias.map(f => (
-            <div key={f.grupo} className="space-y-1">
+            <div key={f.grupo} className="space-y-0.5">
               {/* PR-UI-PASTOS-HIERARQUIA-01 — família manda no bloco: px-0 a alinha à
                   esquerda dos destinos, que ganham ml-2. O recuo faz o trabalho que o
                   peso da fonte sozinho não fazia com 5 famílias e 10 destinos na tela. */}
@@ -720,7 +720,7 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
                   {f.qtd} pasto{f.qtd !== 1 ? 's' : ''} · {formatarAreaBR(f.somaHa)} ha
                 </span>
               </div>
-              <div className="space-y-1 ml-2">
+              <div className="space-y-0.5 ml-2">
                 {f.tipos.map(t => (
                   <GrupoTipo
                     key={t.tipo}
@@ -739,7 +739,7 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
               É valor OPERANTE (a linha que fecha a conta da fazenda), não resíduo —
               merece nome e lugar seus, não ser diluído em "fora da taxonomia". */}
           {agrupado.divergencia.length > 0 && (
-            <div className="space-y-1">
+            <div className="space-y-0.5">
               <div className="flex items-baseline justify-between px-1">
                 <span className="text-[11px] uppercase tracking-widest font-bold text-amber-700">
                   Divergência Campo
@@ -767,7 +767,7 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
               de campo, que é falso. Divergência tem bloco próprio acima; aqui cada valor
               aparece com o nome real que tem no banco. */}
           {agrupado.legado.length > 0 && (
-            <div className="space-y-1">
+            <div className="space-y-0.5">
               <div className="flex items-baseline justify-between px-1">
                 <span className="text-[11px] uppercase tracking-widest font-bold text-amber-700">
                   Legado — fora da taxonomia
