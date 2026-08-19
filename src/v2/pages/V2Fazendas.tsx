@@ -44,6 +44,25 @@ const EMPTY: CadastroRow = {
 
 const n = (v: string) => (v.trim() === '' ? 0 : Number(v));
 
+// PR-AREA-MATRICULA-01 — área da matrícula no padrão BR (0.000,00).
+// Input é TEXTO, não `type="number"`: number não exibe separador de milhar nem
+// vírgula decimal. Digitação livre; a formatação acontece no blur.
+//
+// Mesmo idioma de PastosTab.tsx:46-56, declarado LOCAL de propósito: lá as duas
+// funções não são exportadas, e extrair para lib/ com só dois consumidores seria
+// criar módulo antes de haver o terceiro. Extrair quando ele aparecer.
+function formatarAreaBR(v: number | null): string {
+  if (v === null || !Number.isFinite(v)) return '';
+  return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function parseAreaBR(texto: string): number | null {
+  const limpo = texto.replace(/\./g, '').replace(',', '.').trim();
+  if (!limpo) return null;
+  const num = Number(limpo);
+  return Number.isFinite(num) ? num : null;
+}
+
 export function V2Fazendas() {
   const { fazendaAtual, isGlobal } = useFazenda();
   const { clienteAtual } = useCliente();
@@ -126,14 +145,6 @@ export function V2Fazendas() {
       return;
     }
 
-    const areaTotalCalculada =
-      n(data.area_pecuaria_ha) +
-      n(data.area_agricultura_ha) +
-      n(data.area_app_ha) +
-      n(data.area_reserva_ha) +
-      n(data.area_benfeitorias_ha) +
-      n(data.area_outras_ha);
-
     // area_produtiva_ha alimenta fn_gerar_area_de_snapshot, que lança
     // 'fazenda_cadastros_sem_area' quando o valor é NULL — sem ele a fazenda não
     // fecha P1. Até aqui a coluna só era escrita pela CadastrosTab legada, então
@@ -150,7 +161,11 @@ export function V2Fazendas() {
       estado: data.estado || null,
       car: data.car || null,
       nirf: data.nirf || null,
-      area_total_ha: areaTotalCalculada || null,
+      // PR-AREA-MATRICULA-01 — area_total_ha e a area da MATRICULA, documento
+      // digitado, sem correspondente nos pastos. Antes era a soma das seis colunas
+      // de area do cadastro, que deixaram de ser editaveis no 77cec994 — o valor
+      // gravado era a soma de numeros congelados.
+      area_total_ha: parseAreaBR(data.area_total_ha),
       ie: data.ie || null,
       area_pecuaria_ha: n(data.area_pecuaria_ha) || null,
       area_agricultura_ha: n(data.area_agricultura_ha) || null,
@@ -202,14 +217,6 @@ export function V2Fazendas() {
     return <div className="px-4 py-6 text-xs text-muted-foreground">Carregando...</div>;
   }
 
-  const areaTotalCalculada =
-    n(data.area_pecuaria_ha) +
-    n(data.area_agricultura_ha) +
-    n(data.area_app_ha) +
-    n(data.area_reserva_ha) +
-    n(data.area_benfeitorias_ha) +
-    n(data.area_outras_ha);
-
   const TABS: { key: TabKey; label: string }[] = [
     { key: 'area', label: 'Cadastro' },
     { key: 'pastos', label: 'Pastos' },
@@ -229,6 +236,8 @@ export function V2Fazendas() {
     return 0;
   };
   const somaPastosTotal = agrupado.familias.reduce((acc, f) => acc + f.somaHa, 0);
+  const matriculaHa = parseAreaBR(data.area_total_ha);
+  const diferencaMatricula = matriculaHa !== null ? matriculaHa - somaPastosTotal : null;
 
   // PR-AREA-LAYOUT-01 — a coluna CADASTRO saiu: os valores digitados em
   // fazenda_cadastros foram conferidos contra os pastos e descartados como lixo.
@@ -377,20 +386,63 @@ export function V2Fazendas() {
                 </p>
               )}
             </div>
+
+            {/* PR-AREA-MATRICULA-01 — a MATRÍCULA é documento, não derivado: é a
+                terceira referência do sistema, ao lado dos pastos e do fechamento.
+                Se não bater com a soma dos pastos, isso é informação permanente —
+                não erro a corrigir automaticamente. Por isso é digitada, e fica
+                aqui, entre os dados de identificação, e não na coluna de área. */}
+            <div className="space-y-0.5 col-span-2">
+              <Label className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide">
+                Área da Matrícula (ha)
+              </Label>
+              {editing ? (
+                <Input
+                  value={data.area_total_ha}
+                  onChange={e => setData(prev => ({ ...prev, area_total_ha: e.target.value }))}
+                  onBlur={e => setData(prev => ({ ...prev, area_total_ha: formatarAreaBR(parseAreaBR(e.target.value)) }))}
+                  className="h-6 text-[11px] text-right tabular-nums"
+                  placeholder="0,00"
+                />
+              ) : (
+                <p className="text-[11px] font-medium px-2 py-0.5 rounded bg-muted/50 min-h-[24px] text-right tabular-nums">
+                  {data.area_total_ha
+                    ? formatarAreaBR(parseAreaBR(data.area_total_ha))
+                    : <span className="text-muted-foreground italic">—</span>}
+                </p>
+              )}
+            </div>
           </div>
 
           {/* DIREITA — resumo derivado dos pastos. */}
           <div className="space-y-2">
-            <div className="rounded-lg border border-border bg-muted/40 p-2">
-              <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Área Total Calculada
-              </p>
-              <p className="text-lg font-bold text-foreground leading-tight">
-                {formatNum(somaPastosTotal, 2)} ha
-              </p>
-              <p className="text-[9px] text-muted-foreground">
-                Soma dos pastos ativos por família.
-              </p>
+            {/* Matrícula × pastos: a diferença é exibida SEMPRE, inclusive zero —
+                é informação permanente, não alerta. Matrícula ausente mostra traço
+                nela e na diferença; nunca zero, que afirmaria uma igualdade
+                inexistente (sentinela do projeto). */}
+            <div className="rounded-lg border border-border bg-muted/40 p-2 space-y-1">
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Matrícula</span>
+                <span className="text-[11px] font-medium tabular-nums">
+                  {matriculaHa !== null
+                    ? `${formatNum(matriculaHa, 2)} ha`
+                    : <span className="text-muted-foreground italic">—</span>}
+                </span>
+              </div>
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Soma dos pastos</span>
+                <span className="text-base font-bold tabular-nums leading-tight">{formatNum(somaPastosTotal, 2)} ha</span>
+              </div>
+              <div className="flex items-baseline justify-between gap-2 pt-1 border-t border-border/60">
+                <span className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Diferença</span>
+                <span className={`text-[11px] font-semibold tabular-nums ${
+                  diferencaMatricula === null ? '' : Math.abs(diferencaMatricula) < 0.01 ? 'text-emerald-700' : 'text-amber-700'
+                }`}>
+                  {diferencaMatricula === null
+                    ? <span className="text-muted-foreground italic font-normal">—</span>
+                    : `${diferencaMatricula > 0 ? '+' : ''}${formatNum(diferencaMatricula, 2)} ha`}
+                </span>
+              </div>
             </div>
 
             <div>
