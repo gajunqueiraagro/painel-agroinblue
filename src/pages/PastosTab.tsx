@@ -382,11 +382,11 @@ function LinhaPasto({
 }: { pasto: Pasto; onEdit: () => void; onToggle: (v: boolean) => void }) {
   return (
     <div
-      className={`grid gap-2 items-center px-2 py-1 border-b last:border-b-0 hover:bg-muted/40 leading-tight ${!pasto.ativo ? 'opacity-45' : ''}`}
+      className={`grid gap-2 items-center px-2 py-0.5 border-b last:border-b-0 hover:bg-muted/40 leading-tight ${!pasto.ativo ? 'opacity-45' : ''}`}
       style={{ gridTemplateColumns: GRID_LINHA }}
     >
-      <span className="text-[11px] font-medium truncate" title={pasto.nome}>{pasto.nome}</span>
-      <span className="text-[11px] font-medium tabular-nums text-right">
+      <span className="text-[10px] font-medium truncate" title={pasto.nome}>{pasto.nome}</span>
+      <span className="text-[10px] font-medium tabular-nums text-right">
         {formatarAreaBR(pasto.area_produtiva_ha ?? null) || '—'}
       </span>
       {COLUNAS_EM_BREVE.map(c => (
@@ -431,23 +431,35 @@ function GrupoTipo({
   // exatamente a lacuna que esta frente quer tornar visível — a repartição só fecha
   // quando reserva, APP e benfeitorias existem como pasto.
   const vazio = doTipo.length === 0;
-  const [aberto, setAberto] = useState(!vazio);
+  // PR-UI-PASTOS-HIERARQUIA-01 — a lista abre TODA recolhida. Com a taxonomia
+  // completa (5 famílias, até 10 destinos), abrir tudo por padrão produz uma
+  // parede de linhas antes de o operador decidir o que quer ver. A regra do
+  // grupo VAZIO permanece: ele APARECE, recolhido — omiti-lo esconderia a
+  // lacuna que a lista quer tornar visível.
+  const [aberto, setAberto] = useState(false);
   const somaHa = doTipo.reduce((s, p) => s + (p.area_produtiva_ha ?? 0), 0);
 
   return (
     <div className="border rounded-md overflow-hidden">
+      {/* PR-UI-PASTOS-HIERARQUIA-01 — a cor saiu do badge e foi para a BARRA inteira.
+          Badge colorido ao lado de família em uppercase dava aos dois níveis o mesmo
+          peso; pintando a linha, o destino vira faixa e a família vira título.
+          corDoTipoUso devolve fundo + texto + borda: o texto é herdado pelo label e
+          pela contagem, e a borda pega no container, que já é `border rounded-md`. */}
       <button
         type="button"
         onClick={() => setAberto(!aberto)}
-        className="w-full flex items-center gap-2 px-2 py-1 bg-card hover:bg-muted/50 text-left"
+        className={`w-full flex items-center gap-2 px-2 py-1 text-left font-medium border-b border-border/40 hover:brightness-95 ${corDoTipoUso(tipo)}`}
       >
         {aberto ? <ChevronDown className="h-3 w-3 shrink-0" /> : <ChevronRight className="h-3 w-3 shrink-0" />}
         {/* Cor mantida também no grupo VAZIO: "Reserva Legal · 0 pastos" é informação,
             e apagar a cor dele o esconderia de novo — o oposto do que a lista quer. */}
-        <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded border leading-none ${corDoTipoUso(tipo)}`}>
+        <span className="text-[11px] font-semibold">
           {label}
         </span>
-        <span className={`text-[11px] tabular-nums ml-auto ${vazio ? 'text-muted-foreground/60' : 'text-muted-foreground'}`}>
+        {/* Sem classe de cor quando há pastos: herda a do botão, que é a cor do destino.
+            Vazio mantém o esmaecido — ali a informação é a AUSÊNCIA, não o destino. */}
+        <span className={`text-[10px] tabular-nums ml-auto ${vazio ? 'text-muted-foreground/60' : ''}`}>
           {doTipo.length} pasto{doTipo.length !== 1 ? 's' : ''} · {formatarAreaBR(somaHa)} ha
         </span>
       </button>
@@ -697,15 +709,18 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
         <div className="space-y-2">
           {agrupado.familias.map(f => (
             <div key={f.grupo} className="space-y-1">
-              <div className="flex items-baseline justify-between px-1">
-                <span className="text-[11px] uppercase tracking-widest font-bold text-muted-foreground">
+              {/* PR-UI-PASTOS-HIERARQUIA-01 — família manda no bloco: px-0 a alinha à
+                  esquerda dos destinos, que ganham ml-2. O recuo faz o trabalho que o
+                  peso da fonte sozinho não fazia com 5 famílias e 10 destinos na tela. */}
+              <div className="flex items-baseline justify-between px-0">
+                <span className="text-xs uppercase tracking-widest font-bold text-foreground">
                   {f.label}
                 </span>
-                <span className="text-[11px] tabular-nums text-muted-foreground">
+                <span className="text-xs tabular-nums font-semibold text-foreground">
                   {f.qtd} pasto{f.qtd !== 1 ? 's' : ''} · {formatarAreaBR(f.somaHa)} ha
                 </span>
               </div>
-              <div className="space-y-1">
+              <div className="space-y-1 ml-2">
                 {f.tipos.map(t => (
                   <GrupoTipo
                     key={t.tipo}
