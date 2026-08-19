@@ -390,41 +390,43 @@ export function V2Fazendas() {
                 A diferença é exibida SEMPRE, inclusive zero: informação permanente,
                 não alerta. */}
             <div className="rounded-lg border border-border bg-muted/40 p-2 space-y-1">
-              <div className="grid grid-cols-[auto_104px_1fr] gap-2 items-baseline">
+              <div className="grid grid-cols-[1fr_112px_auto] gap-2 items-baseline">
                 <span className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Matrícula</span>
                 <span className="text-[11px] font-medium tabular-nums text-right whitespace-nowrap">
                   {matriculaHa !== null
                     ? `${formatNum(matriculaHa, 2)} ha`
                     : <span className="text-muted-foreground italic">—</span>}
                 </span>
-                <span className="flex items-center justify-end gap-1.5">
+                {/* PR-AREA-CARD-CONFERIDA-02 — sem o rótulo "Não conferida": o botão
+                    já comunica o estado, porque só existe enquanto não foi conferida.
+                    Rótulo e botão juntos comprimiam as trilhas de rótulo e valor e
+                    empurravam os números para a esquerda. Texto em duas linhas para
+                    o botão ocupar a largura da maior palavra, não da frase inteira. */}
+                <span className="flex items-center justify-end">
                   {matriculaConferida ? (
-                    <span className="text-[9px] text-muted-foreground">
+                    <span className="text-[9px] text-muted-foreground whitespace-nowrap">
                       Conferida em {new Date(data.matricula_conferida_em).toLocaleDateString('pt-BR')}
                     </span>
                   ) : (
-                    <>
-                      <span className="text-[9px] font-semibold text-amber-700">Não conferida</span>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-6 text-[10px] px-1.5"
-                        onClick={() => setData(prev => ({ ...prev, matricula_conferida_em: new Date().toISOString() }))}
-                      >
-                        Marcar como conferida
-                      </Button>
-                    </>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-auto py-0.5 px-1.5 text-[10px] leading-tight text-amber-700 border-amber-300 hover:bg-amber-50 whitespace-normal"
+                      onClick={() => setData(prev => ({ ...prev, matricula_conferida_em: new Date().toISOString() }))}
+                    >
+                      Marcar como<br />conferida
+                    </Button>
                   )}
                 </span>
               </div>
-              <div className="grid grid-cols-[auto_104px_1fr] gap-2 items-baseline">
+              <div className="grid grid-cols-[1fr_112px_auto] gap-2 items-baseline">
                 <span className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Soma dos pastos</span>
                 <span className="text-base font-bold tabular-nums leading-tight text-right whitespace-nowrap">{formatNum(somaPastosTotal, 2)} ha</span>
                 <span />
               </div>
               {/* Diferença é a menos consultada das três — peso menor que Matrícula
                   e Soma dos pastos. A cor (âmbar/verde) continua carregando o sinal. */}
-              <div className="grid grid-cols-[auto_104px_1fr] gap-2 items-baseline py-0.5 border-t border-border/60">
+              <div className="grid grid-cols-[1fr_112px_auto] gap-2 items-baseline py-0.5 border-t border-border/60">
                 <span className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Diferença</span>
                 {/* VERDE só depois de conferida. Enquanto matricula_conferida_em for
                     NULL, Δ zero NÃO vira verde: as 12 fazendas herdaram em
