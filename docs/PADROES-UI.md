@@ -18,6 +18,10 @@ Modal estreito com campos espremidos é **defeito, não escolha**. Se o conteúd
 cabe, a resposta é alargar o modal — não reduzir fonte, não empilhar tudo em uma
 coluna, não introduzir rolagem interna.
 
+Esta proibição vale contra **espremer conteúdo em modal estreito**. Densidade de
+formulário tem escala própria — `h-9` em campo e `text-[10px]` em texto de ajuda são
+densidade correta, não conteúdo espremido, do mesmo modo que o A4 vale para tabela.
+
 Referência viva: `MesaPareamentoModal.tsx` (`w-[96vw] max-w-[1800px] h-[92vh]`) para
 mesas de trabalho; `max-w-3xl`/`max-w-4xl` para formulários.
 
@@ -93,6 +97,35 @@ Sentinela: **ausência de dado nunca é `0,00`** — exibir `—` e dizer que n�
 informado. Zero é valor real; confundi-los produz "divergência" onde só há dado
 faltando. Ver CLAUDE.md, seção de sentinelas.
 
+## A7 — Modal com abas tem altura constante
+
+O modal **nunca muda de tamanho ao trocar de aba**. Altura fixa no `DialogContent`
+(`h-[...]` além do `max-h`), dimensionada pela aba mais alta.
+
+Aba mais curta sobrando espaço vazio é o comportamento **correto — sempre**. Não é
+defeito a corrigir, não é caso para encolher o modal, não é caso para preencher o
+vazio. Modal que encolhe e reposiciona a cada clique de aba é o defeito; espaço em
+branco é o preço aceito da estabilidade, e é sempre o preço certo.
+
+Referência viva: `LancamentoV2Dialog.tsx:1017` (PR-FIN-MODAL-02C).
+
+## A8 — Cabeçalho e rodapé de modal não rolam
+
+Todo modal com rodapé de ação (Salvar, Atualizar, Confirmar) é `p-0 flex flex-col`:
+header `shrink-0 border-b`, corpo `flex-1 overflow-y-auto min-h-0`, rodapé
+`shrink-0 border-t`.
+
+**Proibido `overflow-y-auto` no `DialogContent` inteiro** — leva o botão de salvar
+embora no scroll e some com o título que diz o que está sendo editado.
+
+O ideal é não rolar. Se rolar, rola só o miolo.
+
+⚠️ `min-h-0` é obrigatório em **todos** os níveis flex entre o `DialogContent` e o
+corpo rolável. Sem ele o filho não encolhe e a rolagem vaza para o modal inteiro,
+desfazendo o padrão sem erro visível no código.
+
+Referência viva: `MesaPareamentoModal.tsx:1365`.
+
 ---
 
 ## Pendências deste documento
@@ -101,3 +134,10 @@ faltando. Ver CLAUDE.md, seção de sentinelas.
   segue válido para campos de granularidade mensal (ver A5).
 - **Navegação por ano no `Calendar`** — hoje só por mês. Candidato: `captionLayout="dropdown"`
   com `fromYear`/`toYear` do `react-day-picker` já instalado (`^8.10.1`), sem dependência nova.
+- **Retrofit A8** — **15** modais legados ainda com `overflow-y-auto` no `DialogContent`
+  inteiro: `MapaRebanhoImportDialog`, `AbateDetalhesDialog`, `CompraDetalhesDialog`,
+  `AbaRecebimentoLotes`, `AbaLiquidacaoOC`, `SaldoInicialForm`, `LancamentoDetalhe`,
+  `FinanceiroEditDialog`, `DialogVerLancamentosOficiais`, `VendaDetalhesDialog`,
+  `TransferenciaDetalhesDialog`, `ProjetosInvestimento`, `MesaClassificacaoTab`,
+  `LinhaExecutivaExecutivoModal`, `FinanciamentoDetalhe`. Frente própria:
+  **PR-UI-MODAL-RETROFIT-01**.

@@ -64,10 +64,10 @@ function ultimoDiaDoMes(anoMes: string): string {
 function CampoEmBreve({ label }: { label: string }) {
   return (
     <div>
-      <Label className="text-muted-foreground">
+      <Label className="text-xs text-muted-foreground">
         {label} <span className="text-[10px] font-normal">· em breve</span>
       </Label>
-      <Input disabled placeholder="—" className="h-10" />
+      <Input disabled placeholder="—" className="h-9" />
     </div>
   );
 }
@@ -124,20 +124,26 @@ function PastoForm({ pasto, onSave, onCancel }: { pasto?: Pasto; onSave: (data: 
     // PR-UI-PADROES-01 / B3 — duas abas: "Área e uso" concentra o que é editável hoje;
     // "Avançado" isola os campos ainda não implementados, para que eles não competam
     // com o fluxo principal nem sugiram que já são salvos.
-    <Tabs defaultValue="area-uso" className="space-y-4">
-      <TabsList className="h-8">
-        <TabsTrigger value="area-uso" className="text-xs">Área e uso</TabsTrigger>
-        <TabsTrigger value="avancado" className="text-xs">Avançado</TabsTrigger>
-      </TabsList>
+    <Tabs defaultValue="area-uso" className="flex flex-col flex-1 min-h-0">
+      <div className="px-5 pt-3 shrink-0">
+        <TabsList className="h-7">
+          <TabsTrigger value="area-uso" className="text-xs">Área e uso</TabsTrigger>
+          <TabsTrigger value="avancado" className="text-xs">Avançado</TabsTrigger>
+        </TabsList>
+      </div>
 
-      <TabsContent value="area-uso" className="space-y-4 mt-0">
-      <div className="grid gap-4 sm:grid-cols-2">
+      {/* min-h-0 nos DOIS níveis (Tabs e este miolo) é obrigatório: sem ele o flex
+          child não encolhe e a rolagem vaza para o modal inteiro. */}
+      <div className="flex-1 overflow-y-auto min-h-0 px-5 py-3">
+      <TabsContent value="area-uso" className="space-y-3 mt-0">
+      {/* Área é número de 5 caracteres: não precisa de meia largura (A2). */}
+      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_140px]">
         <div>
-          <Label>Nome *</Label>
-          <Input value={nome} onChange={e => setNome(e.target.value)} placeholder="Nome do pasto" className="h-10" />
+          <Label className="text-xs">Nome *</Label>
+          <Input value={nome} onChange={e => setNome(e.target.value)} placeholder="Nome do pasto" className="h-9" />
         </div>
         <div>
-          <Label>Área Produtiva (ha)</Label>
+          <Label className="text-xs">Área Produtiva (ha)</Label>
           <Input
             inputMode="decimal"
             value={area}
@@ -151,11 +157,11 @@ function PastoForm({ pasto, onSave, onCancel }: { pasto?: Pasto; onSave: (data: 
 
       {/* ── Destino padrão ── A2: em grade com a família derivada ao lado, para
              não esticar um seletor de 11 opções pela largura toda do modal. ── */}
-      <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_180px] items-start">
+      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_160px] items-start">
       <div>
-        <Label>Destino padrão *</Label>
+        <Label className="text-xs">Destino padrão *</Label>
         <Select value={tipoUso} onValueChange={setTipoUso}>
-          <SelectTrigger className="h-10"><SelectValue placeholder="Escolher destino" /></SelectTrigger>
+          <SelectTrigger className="h-9"><SelectValue placeholder="Escolher destino" /></SelectTrigger>
           <SelectContent>
             {tipoUsoLegado && (
               <SelectGroup>
@@ -195,7 +201,7 @@ function PastoForm({ pasto, onSave, onCancel }: { pasto?: Pasto; onSave: (data: 
           ║ contábil já conferido.                                             ║
           ╚════════════════════════════════════════════════════════════════════╝
         */}
-        <p className="text-[11px] text-muted-foreground mt-1">
+        <p className="text-[10px] leading-snug text-muted-foreground mt-1">
           Vale como padrão dos <strong>próximos</strong> fechamentos. Meses já fechados
           não mudam — cada mês guarda o destino que tinha quando foi fechado.
         </p>
@@ -203,54 +209,53 @@ function PastoForm({ pasto, onSave, onCancel }: { pasto?: Pasto; onSave: (data: 
 
       {/* Família: leitura, derivada de grupoDoTipoUso(). Nunca editável. */}
       <div>
-        <Label className="text-muted-foreground">Família</Label>
-        <div className="h-10 flex items-center px-3 rounded-md border bg-muted/40 text-sm">
+        <Label className="text-xs text-muted-foreground">Família</Label>
+        <div className="h-9 flex items-center px-3 rounded-md border bg-muted/40 text-xs">
           {familiaLabel ?? <span className="text-muted-foreground italic">— legado</span>}
         </div>
-        <p className="text-[11px] text-muted-foreground mt-1">Derivada do destino.</p>
+        <p className="text-[10px] leading-snug text-muted-foreground mt-1">Derivada do destino.</p>
       </div>
       </div>
 
       {/* ── Vigência ── */}
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <Label>Data de início (opcional)</Label>
+          <Label className="text-xs">Data de início (opcional)</Label>
           <Input
             type="month"
             value={dataInicioMes}
             onChange={e => setDataInicioMes(e.target.value)}
-            className="h-10"
+            className="h-9"
           />
-          <p className="text-[11px] text-muted-foreground mt-1">
+          <p className="text-[10px] leading-snug text-muted-foreground mt-1">
             Deixe vazio para incluir em todos os meses. Se preenchido, o pasto aparecerá apenas a partir do mês escolhido.
           </p>
         </div>
         <div>
-          <Label>Data de fim (opcional)</Label>
+          <Label className="text-xs">Data de fim (opcional)</Label>
           <Input
             type="month"
             value={dataFimMes}
             onChange={e => setDataFimMes(e.target.value)}
-            className="h-10"
+            className="h-9"
           />
           {/* Texto diz o EFEITO REAL, não "sem data de término": data_fim é o filtro
               temporal soberano de fn_pastos_aplicaveis_mes. */}
-          <p className="text-[11px] text-muted-foreground mt-1">
-            Último mês de uso. A partir do mês seguinte o pasto deixa de gerar card no
-            fechamento e sai da conta de área. Os meses anteriores permanecem intactos.
-            Vazio = sem fim previsto.
+          <p className="text-[10px] leading-snug text-muted-foreground mt-1">
+            Último mês de uso. Depois dele o pasto não gera card no fechamento nem entra
+            na conta de área. Meses anteriores ficam intactos. Vazio = sem fim previsto.
           </p>
         </div>
       </div>
 
       <div className="flex items-center gap-3">
         <Switch checked={entraConciliacao} onCheckedChange={setEntraConciliacao} />
-        <Label>Entra na conciliação</Label>
+        <Label className="text-xs">Entra na conciliação</Label>
       </div>
 
       <div>
-        <Label>Observações</Label>
-        <Textarea value={observacoes} onChange={e => setObservacoes(e.target.value)} placeholder="Observações gerais..." />
+        <Label className="text-xs">Observações</Label>
+        <Textarea rows={2} className="text-xs" value={observacoes} onChange={e => setObservacoes(e.target.value)} placeholder="Observações gerais..." />
       </div>
 
       </TabsContent>
@@ -258,7 +263,7 @@ function PastoForm({ pasto, onSave, onCancel }: { pasto?: Pasto; onSave: (data: 
       {/* ── Campos futuros: desabilitados, sem persistência e sem coluna nova.
              Existem para dimensionar o layout definitivo do cadastro. ── */}
       <TabsContent value="avancado" className="space-y-3 mt-0">
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-[10px] leading-snug text-muted-foreground">
           Campos em preparação — ainda não são salvos.
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
@@ -269,11 +274,13 @@ function PastoForm({ pasto, onSave, onCancel }: { pasto?: Pasto; onSave: (data: 
           <CampoEmBreve label="Última reforma" />
         </div>
       </TabsContent>
+      </div>
 
-      {/* Ações fora das abas: salvar vale para o formulário inteiro, não para a aba. */}
-      <div className="flex gap-2 pt-2 border-t">
-        <Button onClick={handleSubmit} className="flex-1 h-10">{pasto ? 'Atualizar' : 'Criar Pasto'}</Button>
-        <Button variant="outline" onClick={onCancel} className="h-10">Cancelar</Button>
+      {/* Ações fora das abas e fora do miolo rolável: salvar vale para o formulário
+          inteiro, e o botão nunca sai da tela no scroll (A8). */}
+      <div className="shrink-0 flex gap-2 px-5 py-3 border-t bg-background">
+        <Button onClick={handleSubmit} className="flex-1 h-9">{pasto ? 'Atualizar' : 'Criar Pasto'}</Button>
+        <Button variant="outline" onClick={onCancel} className="h-9">Cancelar</Button>
       </div>
     </Tabs>
   );
@@ -626,12 +633,14 @@ export function PastosTab() {
             <DialogTrigger asChild>
               <Button size="sm" className="h-7 text-xs"><Plus className="h-3 w-3 mr-1" />Novo</Button>
             </DialogTrigger>
-            {/* PR-PASTO-DESTINO-01 — modal alargado: com destino, vigência em dois
-                campos e o bloco de campos futuros, a largura padrão exigia rolagem
-                interna. max-h preservado como teto de segurança em tela baixa. */}
-            {/* A1 — modais largos por padrão: mínimo max-w-3xl. */}
-            <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto">
-              <DialogHeader><DialogTitle>{editingPasto ? 'Editar Pasto' : 'Novo Pasto'}</DialogTitle></DialogHeader>
+            {/* A1 largura · A7 altura fixa (h-[540px]) para não mudar de tamanho ao
+                trocar de aba · A8 header e rodapé congelados, só o miolo rola.
+                max-h-[92vh] é teto em tela baixa. Receita de MesaPareamentoModal:1365
+                e LancamentoV2Dialog:1017. */}
+            <DialogContent className="max-w-3xl h-[540px] max-h-[92vh] p-0 flex flex-col gap-0">
+              <DialogHeader className="px-5 py-3 border-b shrink-0">
+                <DialogTitle className="text-sm font-semibold">{editingPasto ? 'Editar Pasto' : 'Novo Pasto'}</DialogTitle>
+              </DialogHeader>
               <PastoForm pasto={editingPasto} onSave={handleSave} onCancel={() => { setDialogOpen(false); setEditingPasto(undefined); }} />
             </DialogContent>
           </Dialog>
