@@ -6,9 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Download, FileText, Upload, FileDown, ArrowLeft } from 'lucide-react';
-import { gerarModeloMapaPastos } from '@/lib/importMapaPastos';
-import { ImportMapaPastos } from '@/components/ImportMapaPastos';
+import { Download, FileText, ArrowLeft } from 'lucide-react';
 import { MESES_COLS } from '@/lib/calculos/labels';
 import { exportMapaPastosXlsx } from '@/lib/exportMapaPastos';
 import { exportMapaPastosPdf } from '@/lib/exportMapaPastosPdf';
@@ -129,7 +127,6 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial }: Ma
 
   const [rows, setRows] = useState<PastoMapaRow[]>([]);
   const [loading, setLoading] = useState(false);
-  const [importOpen, setImportOpen] = useState(false);
   const tableModuleRef = useRef<HTMLDivElement | null>(null);
 
   const updateLayoutBounds = useCallback(() => {
@@ -353,14 +350,11 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial }: Ma
               )}
             </div>
             <div className="flex gap-1 flex-wrap">
-              <Button variant="outline" size="sm" className="h-7 text-xs px-2"
-                onClick={() => gerarModeloMapaPastos(pastos, categorias, fazendaAtual?.nome || 'Fazenda')}>
-                <FileDown className="h-3.5 w-3.5 mr-1" />Modelo
-              </Button>
-              <Button variant="outline" size="sm" className="h-7 text-xs px-2"
-                onClick={() => setImportOpen(true)}>
-                <Upload className="h-3.5 w-3.5 mr-1" />Importar
-              </Button>
+              {/* Import removido em 19/08/2026: a entrada de fechamento é Rebanho → Fechamento
+                  Pastos, card por card. Esta tela é espelho. lib/importMapaPastos.ts e
+                  components/ImportMapaPastos.tsx ficaram ÓRFÃOS de propósito — se a decisão se
+                  confirmar, saem num PR de faxina; não reconectar sem decisão explícita.
+                  Excel e PDF ficam: são saída, não entrada. */}
               <Button variant="outline" size="sm" className="h-7 text-xs px-2"
                 onClick={() => exportMapaPastosXlsx(rows, categorias, totais, resumoAtividades, anoMes, fazendaAtual?.nome || 'Fazenda')}
                 disabled={rows.length === 0}>
@@ -391,16 +385,6 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial }: Ma
         )}
       </div>
 
-      <ImportMapaPastos
-        open={importOpen}
-        onOpenChange={setImportOpen}
-        pastos={pastos}
-        categorias={categorias}
-        fazendaId={fazendaAtual?.id || ''}
-        clienteId={fazendaAtual?.cliente_id || ''}
-        anoMes={anoMes}
-        onImported={() => loadFechamentos(anoMes)}
-      />
     </TooltipProvider>
   );
 }
