@@ -154,3 +154,54 @@ export function labelDoTipoUso(t: string | null | undefined): string {
   const found = TIPOS_USO_OPTIONS_FLAT.find(o => o.value === t);
   return found?.label || t;
 }
+
+// ─── UI: cor por tipo de uso ────────────────────────────────────────────────
+// Fonte única da cor de atividade. Antes vivia como função local não exportada
+// em MapaPastosTab.tsx; qualquer segunda tela precisaria copiar o switch, e uma
+// cor nova entraria numa cópia só. Aceita string genérica pela mesma razão que
+// as funções de domínio: 'divergencia' e outros legados existem no banco.
+//
+// Seis cores: cria/reforma_pecuaria emerald · recria green · engorda sky
+// agricultura blue · vedado slate · divergencia amber · resto neutro.
+
+export function corDoTipoUso(t: string | null | undefined): string {
+  if (!t) return 'bg-muted/40 text-muted-foreground border-border/50';
+  switch (t) {
+    case 'cria':
+    case 'reforma_pecuaria':
+      return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+    case 'recria':
+      return 'bg-green-100 text-green-800 border-green-300';
+    case 'engorda':
+      return 'bg-sky-50 text-sky-700 border-sky-200';
+    case 'agricultura':
+      return 'bg-blue-100 text-blue-800 border-blue-300';
+    case 'vedado':
+      return 'bg-slate-100 text-slate-600 border-slate-300';
+    case 'divergencia':
+      return 'bg-amber-100 text-amber-800 border-amber-300';
+    default:
+      return 'bg-muted/40 text-muted-foreground border-border/50';
+  }
+}
+
+export function tintDoTipoUso(t: string | null | undefined): string {
+  if (!t) return 'transparent';
+  switch (t) {
+    case 'cria':
+    case 'reforma_pecuaria':
+      return 'rgba(236, 253, 245, 0.4)'; // emerald-50/40
+    case 'recria':
+      return 'rgba(220, 252, 231, 0.3)'; // green-100/30
+    case 'engorda':
+      return 'rgba(240, 249, 255, 0.4)'; // sky-50/40
+    case 'agricultura':
+      return 'rgba(219, 234, 254, 0.3)'; // blue-100/30
+    case 'vedado':
+      return 'rgba(241, 245, 249, 0.4)'; // slate-100/40
+    case 'divergencia':
+      return 'rgba(254, 243, 199, 0.3)'; // amber-100/30
+    default:
+      return 'transparent';
+  }
+}

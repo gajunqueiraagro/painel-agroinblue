@@ -14,7 +14,7 @@ import {
   Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import {
-  TIPOS_USO_OPTIONS_AGRUPADAS, isTipoUsoValido, labelDoTipoUso, grupoDoTipoUso,
+  TIPOS_USO_OPTIONS_AGRUPADAS, isTipoUsoValido, labelDoTipoUso, grupoDoTipoUso, corDoTipoUso,
 } from '@/lib/pastos/tiposUso';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useEffect } from 'react';
@@ -328,10 +328,15 @@ function SortablePastoCard({
       </span>
 
       {/* Rodapé: editar + badge conciliação */}
-      <div className="flex items-center gap-1.5 mt-0.5">
+      <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
         <button onClick={onEdit} className="text-muted-foreground hover:text-foreground p-0.5">
           <Edit2 className="h-3.5 w-3.5" />
         </button>
+        {/* No modo manual o destino não aparecia em lugar nenhum: arrastava-se um pasto
+            sem saber se era Cria ou Vedado. */}
+        <Badge variant="outline" className={`text-[9px] px-1 py-0 leading-tight ${corDoTipoUso(pasto.tipo_uso)}`}>
+          {labelDoTipoUso(pasto.tipo_uso)}
+        </Badge>
         {pasto.entra_conciliacao && (
           <Badge variant="outline" className="text-[10px] px-1.5 py-0 leading-tight">Conc</Badge>
         )}
@@ -423,8 +428,8 @@ function CabecalhoColunas() {
 
 /** Um tipo de uso dentro de uma família. Vazio aparece, recolhido. */
 function GrupoTipo({
-  label, pastos: doTipo, onEdit, onToggle,
-}: { label: string; pastos: Pasto[]; onEdit: (p: Pasto) => void; onToggle: (p: Pasto, v: boolean) => void }) {
+  tipo, label, pastos: doTipo, onEdit, onToggle,
+}: { tipo: string; label: string; pastos: Pasto[]; onEdit: (p: Pasto) => void; onToggle: (p: Pasto, v: boolean) => void }) {
   // PR-PASTOS-LISTA-01 — grupo VAZIO aparece recolhido, nunca omitido: um
   // "Reserva Legal · 0 pastos" é INFORMAÇÃO, não ausência dela. Omitir esconderia
   // exatamente a lacuna que esta frente quer tornar visível — a repartição só fecha
@@ -441,7 +446,11 @@ function GrupoTipo({
         className="w-full flex items-center gap-2 px-2 py-1 bg-card hover:bg-muted/50 text-left"
       >
         {aberto ? <ChevronDown className="h-3 w-3 shrink-0" /> : <ChevronRight className="h-3 w-3 shrink-0" />}
-        <span className="text-[11px] font-semibold">{label}</span>
+        {/* Cor mantida também no grupo VAZIO: "Reserva Legal · 0 pastos" é informação,
+            e apagar a cor dele o esconderia de novo — o oposto do que a lista quer. */}
+        <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded border leading-none ${corDoTipoUso(tipo)}`}>
+          {label}
+        </span>
         <span className={`text-[11px] tabular-nums ml-auto ${vazio ? 'text-muted-foreground/60' : 'text-muted-foreground'}`}>
           {doTipo.length} pasto{doTipo.length !== 1 ? 's' : ''} · {formatarAreaBR(somaHa)} ha
         </span>
@@ -689,6 +698,7 @@ export function PastosTab() {
                 {f.tipos.map(t => (
                   <GrupoTipo
                     key={t.tipo}
+                    tipo={t.tipo}
                     label={t.label}
                     pastos={t.pastos}
                     onEdit={(p) => { setEditingPasto(p); setDialogOpen(true); }}
@@ -720,6 +730,7 @@ export function PastosTab() {
               ).map(([tipo, lista]) => (
                 <GrupoTipo
                   key={tipo}
+                  tipo={tipo}
                   label={`${labelDoTipoUso(tipo)} — legado`}
                   pastos={lista}
                   onEdit={(p) => { setEditingPasto(p); setDialogOpen(true); }}

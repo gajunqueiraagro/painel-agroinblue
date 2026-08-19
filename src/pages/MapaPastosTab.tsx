@@ -18,7 +18,7 @@ import { tipoUsoLabel } from '@/lib/calculos/labels';
 import { supabase } from '@/integrations/supabase/client';
 import { fetchAllPaginated, MAX_ROWS } from '@/lib/supabase/fetchAllPaginated';
 import { toast } from 'sonner';
-import { isOperacionalPecuaria, grupoDoTipoUso } from '@/lib/pastos/tiposUso';
+import { isOperacionalPecuaria, grupoDoTipoUso, corDoTipoUso, tintDoTipoUso } from '@/lib/pastos/tiposUso';
 
 export interface PastoMapaRow {
   pasto: Pasto;
@@ -58,61 +58,10 @@ const CAT_SIGLAS: Record<string, string> = {
   mamotes_f: 'MF', desmama_f: 'DF', novilhas: 'N', vacas: 'V',
 };
 
-/**
- * Estilo de badge da coluna Atividade — 6 cores distintas por tipo_uso:
- *   cria, reforma_pecuaria → emerald (verde claro)
- *   recria                 → green   (verde escuro)
- *   engorda                → sky     (azul claro)
- *   agricultura            → blue    (azul escuro)
- *   vedado                 → slate   (cinza)
- *   divergencia (legado)   → amber   (âmbar/laranja)
- *   default                → neutro  (sem tipo definido, reserva, app, benfeitorias)
- */
-function getAtividadeBadgeClasses(tipo: string | null): string {
-  if (!tipo) return 'bg-muted/40 text-muted-foreground border-border/50';
-  switch (tipo) {
-    case 'cria':
-    case 'reforma_pecuaria':
-      return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-    case 'recria':
-      return 'bg-green-100 text-green-800 border-green-300';
-    case 'engorda':
-      return 'bg-sky-50 text-sky-700 border-sky-200';
-    case 'agricultura':
-      return 'bg-blue-100 text-blue-800 border-blue-300';
-    case 'vedado':
-      return 'bg-slate-100 text-slate-600 border-slate-300';
-    case 'divergencia':
-      return 'bg-amber-100 text-amber-800 border-amber-300';
-    default:
-      return 'bg-muted/40 text-muted-foreground border-border/50';
-  }
-}
-
-/**
- * Tint suave de linha por atividade — substitui a zebra.
- * Mesma família de cor do badge, bem diluído. Ordem das linhas preservada.
- */
-function getRowTintBg(tipo: string | null): string {
-  if (!tipo) return 'transparent';
-  switch (tipo) {
-    case 'cria':
-    case 'reforma_pecuaria':
-      return 'rgba(236, 253, 245, 0.4)'; // emerald-50/40
-    case 'recria':
-      return 'rgba(220, 252, 231, 0.3)'; // green-100/30
-    case 'engorda':
-      return 'rgba(240, 249, 255, 0.4)'; // sky-50/40
-    case 'agricultura':
-      return 'rgba(219, 234, 254, 0.3)'; // blue-100/30
-    case 'vedado':
-      return 'rgba(241, 245, 249, 0.4)'; // slate-100/40
-    case 'divergencia':
-      return 'rgba(254, 243, 199, 0.3)'; // amber-100/30
-    default:
-      return 'transparent';
-  }
-}
+// PR-UI-PASTO-CORES-01 — getAtividadeBadgeClasses/getRowTintBg saíram daqui para
+// tiposUso.ts (corDoTipoUso/tintDoTipoUso), que já é o dono do vocabulário visual.
+// Eram locais e não exportadas: uma segunda tela teria de copiar o switch, e cor nova
+// entraria numa cópia só. Aparência inalterada — só mudou de onde vem.
 
 interface MapaPastosTabProps {
   onBack?: () => void;
@@ -642,7 +591,7 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor, 
               <tbody>
                 {rows.map((row) => {
                   // Tint suave por atividade (substitui zebra). Mesmo bgStyle vai para o td sticky de Pasto.
-                  const bgStyle = { backgroundColor: getRowTintBg(row.tipoUso) };
+                  const bgStyle = { backgroundColor: tintDoTipoUso(row.tipoUso) };
                   const isAgri = grupoDoTipoUso(row.tipoUso) === 'agricultura';
                   return (
                     <tr key={row.pasto.id} className="h-6" style={bgStyle}>
@@ -650,7 +599,7 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor, 
                         {row.pasto.nome}
                       </td>
                       <td className="px-1 py-0.5 text-[11px] border-r border-border/30 whitespace-nowrap overflow-hidden text-ellipsis">
-                        <span className={`inline-flex items-center px-1.5 py-px rounded border text-[10px] font-medium ${getAtividadeBadgeClasses(row.tipoUso)}`}>
+                        <span className={`inline-flex items-center px-1.5 py-px rounded border text-[10px] font-medium ${corDoTipoUso(row.tipoUso)}`}>
                           {tipoUsoLabel(row.tipoUso)}
                         </span>
                       </td>
