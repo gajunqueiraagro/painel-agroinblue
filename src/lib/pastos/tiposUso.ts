@@ -234,10 +234,39 @@ export function corDoTipoUso(t: string | null | undefined): string {
 // purple-50 no badge, purple-100 no tint — o 50 desaparece como fundo, ao lado das
 // linhas de recria. Mesma cor, degrau escolhido para ela ser visível.
 //
-// As duas derivam da mesma decisão de cor e mudam JUNTAS. Alterar uma sem a outra
-// reintroduz exatamente o defeito que o PR-UI-PASTO-CORES-02B corrigiu — recria com
-// badge laranja sobre fundo verde, engorda com badge roxo sobre fundo azul, dentro
-// do próprio módulo que existe para ser a fonte única.
+// PR-CORES-TEXTO-01 — são TRÊS variantes da mesma decisão de cor: corDoTipoUso
+// (pacote de badge), corTextoDoTipoUso (só o texto) e esta (tint de fundo de linha).
+// A de TEXTO é DERIVADA do badge — acompanha sozinha. Esta NÃO é: tem paleta própria,
+// por causa do degrau e do alpha. Logo, cor nova exige tocar DUAS funções, não três:
+// corDoTipoUso e tintDoTipoUso.
+//
+// Estas duas mudam JUNTAS. Alterar uma sem a outra reintroduz exatamente o defeito
+// que o PR-UI-PASTO-CORES-02B corrigiu — recria com badge laranja sobre fundo verde,
+// engorda com badge roxo sobre fundo azul, dentro do próprio módulo que existe para
+// ser a fonte única.
+/**
+ * Só a COR DE TEXTO do destino, para quem pinta título/subtítulo em vez da linha
+ * inteira. É a regra do projeto: cor em título e subtítulo, nunca tint na linha.
+ *
+ * DERIVADA de corDoTipoUso, de propósito. Aquele pacote já contém a classe de texto;
+ * uma terceira lista de `case` criaria um terceiro lugar onde uma cor nova precisaria
+ * entrar, e o histórico mostra que isso não se sustenta por disciplina — o
+ * PR-UI-PASTO-CORES-02B existiu para corrigir badge laranja sobre fundo verde, com
+ * apenas duas listas. Derivando, o espelhamento vira estrutural: acrescentar um caso
+ * em corDoTipoUso já chega aqui.
+ *
+ * A extração ignora tokens com variante (`hover:`, `dark:`, `focus:`) — hoje não há
+ * nenhum, mas o dia em que houver, pegar `hover:text-x` como cor base seria um erro
+ * silencioso. Sem correspondência, devolve o mesmo default de texto que corDoTipoUso
+ * usa; nunca string vazia, que apagaria a cor sem avisar.
+ */
+export function corTextoDoTipoUso(t: string | null | undefined): string {
+  const token = corDoTipoUso(t)
+    .split(/\s+/)
+    .find(c => c.startsWith('text-') && !c.includes(':'));
+  return token ?? 'text-muted-foreground';
+}
+
 export function tintDoTipoUso(t: string | null | undefined): string {
   if (!t) return 'transparent';
   switch (t) {

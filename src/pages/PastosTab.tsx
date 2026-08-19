@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/select';
 import {
   TIPOS_USO_OPTIONS_AGRUPADAS, isTipoUsoValido, labelDoTipoUso, grupoDoTipoUso, corDoTipoUso,
+  corTextoDoTipoUso,
 } from '@/lib/pastos/tiposUso';
 import { agruparPastosPorFamilia } from '@/lib/pastos/agruparPorFamilia';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -516,26 +517,26 @@ function GrupoTipo({
   // ilhas, e a família não se lia como unidade. Aqui fica só o overflow.
   return (
     <div className="overflow-hidden">
-      {/* PR-UI-PASTOS-HIERARQUIA-01 — a cor saiu do badge e foi para a BARRA inteira.
-          Badge colorido ao lado de família em uppercase dava aos dois níveis o mesmo
-          peso; pintando a linha, o destino vira faixa e a família vira título.
-          corDoTipoUso devolve fundo + texto + borda: o texto é herdado pelo label e
-          pela contagem. A borda de corDoTipoUso não pega: desde o BLOCO-01 a moldura
-          é do container da família, e o que separa as barras é o divide-y dele. */}
+      {/* PR-CORES-TEXTO-01 — a cor sai da BARRA e fica só no TEXTO do label.
+          O HIERARQUIA-01 tinha levado o pacote de badge para a linha inteira; a regra
+          do produto é cor em título e subtítulo, nunca tint na linha. A barra perde
+          fundo, texto e borda; o que separa as faixas é o divide-y do container da
+          família, que já existe desde o BLOCO-01. */}
       <button
         type="button"
         onClick={() => setAberto(!aberto)}
-        className={`w-full flex items-center gap-2 px-2 py-0.5 text-left font-medium hover:brightness-95 ${corDoTipoUso(tipo)}`}
+        className="w-full flex items-center gap-2 px-2 py-0.5 text-left font-medium hover:bg-muted/40"
       >
         {aberto ? <ChevronDown className="h-3 w-3 shrink-0" /> : <ChevronRight className="h-3 w-3 shrink-0" />}
         {/* Cor mantida também no grupo VAZIO: "Reserva Legal · 0 pastos" é informação,
             e apagar a cor dele o esconderia de novo — o oposto do que a lista quer. */}
-        <span className="text-[11px] font-semibold">
+        <span className={`text-[11px] font-semibold ${corTextoDoTipoUso(tipo)}`}>
           {label}
         </span>
-        {/* Sem classe de cor quando há pastos: herda a do botão, que é a cor do destino.
-            Vazio mantém o esmaecido — ali a informação é a AUSÊNCIA, não o destino. */}
-        <span className={`text-[10px] tabular-nums ml-auto ${vazio ? 'text-muted-foreground/60' : ''}`}>
+        {/* A contagem herdava a cor do BOTÃO, que agora não tem nenhuma — sem isto ela
+            cairia na cor de texto padrão, mais forte que o label colorido ao lado.
+            Vazio segue mais esmaecido: ali a informação é a AUSÊNCIA, não o destino. */}
+        <span className={`text-[10px] tabular-nums ml-auto ${vazio ? 'text-muted-foreground/60' : 'text-muted-foreground'}`}>
           {doTipo.length} pasto{doTipo.length !== 1 ? 's' : ''} · {formatarAreaBR(somaHa)} ha · {percentualBR(somaHa, basePercentual)}
         </span>
       </button>
