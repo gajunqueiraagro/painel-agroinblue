@@ -11,6 +11,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Plus, Edit2, MapPin, GripVertical, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import {
+  Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import {
+  TIPOS_USO_OPTIONS_AGRUPADAS, isTipoUsoValido, labelDoTipoUso,
+} from '@/lib/pastos/tiposUso';
+import {
   DndContext,
   closestCenter,
   KeyboardSensor,
@@ -28,60 +34,208 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
+// ── PR-PASTO-DESTINO-01 — formatação de área no padrão BR (0.000,00) ──
+// Input é texto, não number: `type="number"` não exibe separador de milhar nem
+// vírgula decimal. Digitação livre; a formatação acontece no blur.
+function formatarAreaBR(v: number | null): string {
+  if (v === null || !Number.isFinite(v)) return '';
+  return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function parseAreaBR(texto: string): number | null {
+  const limpo = texto.replace(/\./g, '').replace(',', '.').trim();
+  if (!limpo) return null;
+  const n = Number(limpo);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Último dia do mês 'YYYY-MM' → 'YYYY-MM-DD'. data_fim é fim INCLUSIVO. */
+function ultimoDiaDoMes(anoMes: string): string {
+  const [ano, mes] = anoMes.split('-').map(Number);
+  const dia = new Date(ano, mes, 0).getDate();
+  return `${anoMes}-${String(dia).padStart(2, '0')}`;
+}
+
+/** Campo ainda não implementado — existe só para dimensionar o layout. */
+function CampoEmBreve({ label }: { label: string }) {
+  return (
+    <div>
+      <Label className="text-muted-foreground">
+        {label} <span className="text-[10px] font-normal">· em breve</span>
+      </Label>
+      <Input disabled placeholder="—" className="h-10" />
+    </div>
+  );
+}
+
 function PastoForm({ pasto, onSave, onCancel }: { pasto?: Pasto; onSave: (data: any) => void; onCancel: () => void }) {
   const { fazendaAtual } = useFazenda();
   const [nome, setNome] = useState(pasto?.nome || '');
-  const [area, setArea] = useState(pasto?.area_produtiva_ha?.toString() || '');
+  const [area, setArea] = useState(formatarAreaBR(pasto?.area_produtiva_ha ?? null));
   const [entraConciliacao, setEntraConciliacao] = useState(pasto?.entra_conciliacao ?? true);
   const [observacoes, setObservacoes] = useState(pasto?.observacoes || '');
   // data_inicio armazenada como 'YYYY-MM-DD'; input month usa 'YYYY-MM'
   const [dataInicioMes, setDataInicioMes] = useState(
     pasto?.data_inicio ? pasto.data_inicio.slice(0, 7) : ''
   );
+  const [dataFimMes, setDataFimMes] = useState(
+    pasto?.data_fim ? pasto.data_fim.slice(0, 7) : ''
+  );
+  const [tipoUso, setTipoUso] = useState(pasto?.tipo_uso || 'recria');
+
+  // PR-PASTO-DESTINO-01 — valor LEGADO fora da taxonomia oficial (ex.: 'divergencia',
+  // 'pecuaria'). Entra como opção extra rotulada, NUNCA some do seletor.
+  //
+  // 'divergencia' é valor OPERANTE, não resíduo: PastosTab cria deliberadamente um
+  // pasto com esse tipo para registrar divergência de contagem do campeiro, e
+  // fn_pastos_aplicaveis_mes o exclui do conjunto do mês por
+  // `tipo_uso IS DISTINCT FROM 'divergencia'`. Reclassificá-lo por efeito colateral
+  // — abrir o modal para mudar outro campo e salvar — quebraria esse registro.
+  // Por isso o valor atual é sempre selecionável, e a reclassificação é ato explícito.
+  const tipoUsoLegado = !isTipoUsoValido(tipoUso) ? tipoUso : null;
 
   const handleSubmit = () => {
     if (!nome.trim()) return;
     onSave({
       fazenda_id: fazendaAtual?.id,
       nome: nome.trim(),
-      area_produtiva_ha: area ? Number(area) : null,
+      area_produtiva_ha: parseAreaBR(area),
+      tipo_uso: tipoUso,
       entra_conciliacao: entraConciliacao,
       observacoes: observacoes || null,
       ativo: pasto?.ativo ?? true,
       data_inicio: dataInicioMes ? `${dataInicioMes}-01` : null,
+      data_fim: dataFimMes ? ultimoDiaDoMes(dataFimMes) : null,
     });
   };
 
   return (
     <div className="space-y-4">
-      <div>
-        <Label>Nome *</Label>
-        <Input value={nome} onChange={e => setNome(e.target.value)} placeholder="Nome do pasto" className="h-10" />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <Label>Nome *</Label>
+          <Input value={nome} onChange={e => setNome(e.target.value)} placeholder="Nome do pasto" className="h-10" />
+        </div>
+        <div>
+          <Label>Área Produtiva (ha)</Label>
+          <Input
+            inputMode="decimal"
+            value={area}
+            onChange={e => setArea(e.target.value)}
+            onBlur={() => setArea(formatarAreaBR(parseAreaBR(area)))}
+            placeholder="0,00"
+            className="h-10 text-right tabular-nums"
+          />
+        </div>
       </div>
+
+      {/* ── Destino padrão ── */}
       <div>
-        <Label>Área Produtiva (ha)</Label>
-        <Input type="number" value={area} onChange={e => setArea(e.target.value)} placeholder="0" className="h-10" />
-      </div>
-      <div>
-        <Label>Data de início (opcional)</Label>
-        <Input
-          type="month"
-          value={dataInicioMes}
-          onChange={e => setDataInicioMes(e.target.value)}
-          className="h-10"
-        />
+        <Label>Destino padrão *</Label>
+        <Select value={tipoUso} onValueChange={setTipoUso}>
+          <SelectTrigger className="h-10"><SelectValue placeholder="Escolher destino" /></SelectTrigger>
+          <SelectContent>
+            {tipoUsoLegado && (
+              <SelectGroup>
+                <SelectLabel className="text-amber-700">Valor atual (legado)</SelectLabel>
+                <SelectItem value={tipoUsoLegado}>{labelDoTipoUso(tipoUsoLegado)} — legado</SelectItem>
+              </SelectGroup>
+            )}
+            {TIPOS_USO_OPTIONS_AGRUPADAS.map(g => (
+              <SelectGroup key={g.grupo}>
+                <SelectLabel>{g.label}</SelectLabel>
+                {g.options.map(o => (
+                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                ))}
+              </SelectGroup>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {/*
+          ╔════════════════════════════════════════════════════════════════════╗
+          ║ REGRA INVIOLÁVEL — O DESTINO PADRÃO NUNCA ALTERA MÊS JÁ FECHADO.   ║
+          ║                                                                    ║
+          ║ pastos.tipo_uso é o destino CADASTRAL; fechamento_pastos.          ║
+          ║ tipo_uso_mes é a fotografia do mês. A propagação de um para o      ║
+          ║ outro acontece UMA vez, na criação do card do mês, em              ║
+          ║ fn_obter_ou_criar_fechamentos_lote:                                ║
+          ║   SELECT ... p.tipo_uso ... ON CONFLICT (fazenda_id, pasto_id,     ║
+          ║   ano_mes) DO NOTHING                                              ║
+          ║                                                                    ║
+          ║ O DO NOTHING é o mecanismo: card que já existe nunca é tocado.     ║
+          ║ Não há UPDATE de fechamento_pastos a partir de pastos em lugar     ║
+          ║ nenhum do sistema. A garantia é ESTRUTURAL, não disciplinar —      ║
+          ║ mudar este campo é incapaz de alcançar mês fechado.                ║
+          ║                                                                    ║
+          ║ Se você veio "corrigir" isto achando que faltou propagar para os   ║
+          ║ meses existentes: não faltou. Propagar reescreveria fechamento     ║
+          ║ contábil já conferido.                                             ║
+          ╚════════════════════════════════════════════════════════════════════╝
+        */}
         <p className="text-[11px] text-muted-foreground mt-1">
-          Deixe vazio para incluir em todos os meses. Se preenchido, o pasto aparecerá apenas a partir do mês escolhido.
+          Vale como padrão dos <strong>próximos</strong> fechamentos. Meses já fechados
+          não mudam — cada mês guarda o destino que tinha quando foi fechado.
         </p>
       </div>
+
+      {/* ── Vigência ── */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <Label>Data de início (opcional)</Label>
+          <Input
+            type="month"
+            value={dataInicioMes}
+            onChange={e => setDataInicioMes(e.target.value)}
+            className="h-10"
+          />
+          <p className="text-[11px] text-muted-foreground mt-1">
+            Deixe vazio para incluir em todos os meses. Se preenchido, o pasto aparecerá apenas a partir do mês escolhido.
+          </p>
+        </div>
+        <div>
+          <Label>Data de fim (opcional)</Label>
+          <Input
+            type="month"
+            value={dataFimMes}
+            onChange={e => setDataFimMes(e.target.value)}
+            className="h-10"
+          />
+          {/* Texto diz o EFEITO REAL, não "sem data de término": data_fim é o filtro
+              temporal soberano de fn_pastos_aplicaveis_mes. */}
+          <p className="text-[11px] text-muted-foreground mt-1">
+            Último mês de uso. A partir do mês seguinte o pasto deixa de gerar card no
+            fechamento e sai da conta de área. Os meses anteriores permanecem intactos.
+            Vazio = sem fim previsto.
+          </p>
+        </div>
+      </div>
+
       <div className="flex items-center gap-3">
         <Switch checked={entraConciliacao} onCheckedChange={setEntraConciliacao} />
         <Label>Entra na conciliação</Label>
       </div>
+
       <div>
         <Label>Observações</Label>
         <Textarea value={observacoes} onChange={e => setObservacoes(e.target.value)} placeholder="Observações gerais..." />
       </div>
+
+      {/* ── Campos futuros: desabilitados, sem persistência e sem coluna nova.
+             Existem para dimensionar o layout definitivo do cadastro. ── */}
+      <div className="rounded-lg border border-dashed p-3 space-y-3">
+        <p className="text-[11px] text-muted-foreground">
+          Campos em preparação — ainda não são salvos.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <CampoEmBreve label="Tipo de pastagem" />
+          <CampoEmBreve label="Invasoras" />
+          <CampoEmBreve label="Fonte de água (natural ou bebedouro)" />
+          <CampoEmBreve label="Qualidade das cercas" />
+          <CampoEmBreve label="Última reforma" />
+        </div>
+      </div>
+
       <div className="flex gap-2 pt-2">
         <Button onClick={handleSubmit} className="flex-1 h-10">{pasto ? 'Atualizar' : 'Criar Pasto'}</Button>
         <Button variant="outline" onClick={onCancel} className="h-10">Cancelar</Button>
@@ -237,7 +391,10 @@ export function PastosTab() {
             <DialogTrigger asChild>
               <Button size="sm" className="h-7 text-xs"><Plus className="h-3 w-3 mr-1" />Novo</Button>
             </DialogTrigger>
-            <DialogContent className="max-h-[90vh] overflow-y-auto">
+            {/* PR-PASTO-DESTINO-01 — modal alargado: com destino, vigência em dois
+                campos e o bloco de campos futuros, a largura padrão exigia rolagem
+                interna. max-h preservado como teto de segurança em tela baixa. */}
+            <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto">
               <DialogHeader><DialogTitle>{editingPasto ? 'Editar Pasto' : 'Novo Pasto'}</DialogTitle></DialogHeader>
               <PastoForm pasto={editingPasto} onSave={handleSave} onCancel={() => { setDialogOpen(false); setEditingPasto(undefined); }} />
             </DialogContent>

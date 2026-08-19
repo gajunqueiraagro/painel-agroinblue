@@ -223,12 +223,17 @@ export function usePastos() {
     return true;
   }, [loadPastos, pastos, fazendaAtual, clienteId]);
 
-  // Omit data_fim: a coluna nasce na migration desta frente e so entra em
-  // types.ts na regeneracao, fora deste PR. Nenhum caller a envia hoje; o campo
-  // e leitura na grade. Ao regenerar types.ts, remover o Omit.
-  const editarPasto = useCallback(async (id: string, updates: Partial<Omit<Pasto, 'data_fim'>>) => {
+  // PR-PASTO-DESTINO-01 — o Omit<Pasto,'data_fim'> saiu: o cadastro passa a ESCREVER
+  // a vigência, que é a peça que faltava para o modelo de divisão de pasto
+  // (P_05 → P_05A + P_05B: o antigo recebe data_fim, os novos nascem com data_inicio,
+  // e cada mês compõe o conjunto que valia naquele momento).
+  //
+  // `data_fim` existe no banco desde 20260717140000 mas AINDA NÃO está em types.ts,
+  // daí o idioma do repositório para relação/coluna sem tipo gerado. Ao regenerar
+  // types.ts, remover o `as any` — é o mesmo lote das outras 81 ocorrências.
+  const editarPasto = useCallback(async (id: string, updates: Partial<Pasto>) => {
     if (clienteId) invalidatePastosForCliente(clienteId);
-    const { error } = await supabase.from('pastos').update(updates).eq('id', id);
+    const { error } = await (supabase as any).from('pastos').update(updates).eq('id', id);
     if (error) { toast.error('Erro ao atualizar pasto'); console.error(error); return false; }
     toast.success('Pasto atualizado');
     await loadPastos();
