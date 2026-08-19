@@ -353,26 +353,27 @@ function SortablePastoCard({
 // definitivo antes de haver coluna no banco.
 const COLUNAS_EM_BREVE = ['Pastagem', 'Invasoras', 'Água', 'Cercas', 'Últ. reforma'] as const;
 
-/** Colunas de área do cadastro da fazenda, somadas. Mesmo conjunto do V2Fazendas. */
-const COLUNAS_AREA_CADASTRO = [
-  'area_pecuaria_ha', 'area_agricultura_ha', 'area_app_ha',
-  'area_reserva_ha', 'area_benfeitorias_ha', 'area_outras_ha',
-] as const;
-
 /**
- * Soma as áreas do cadastro validando a forma em runtime — a linha vem sem tipo
- * (types.ts defasado). null quando não há cadastro: ausência de dado NÃO é zero,
- * e o rodapé precisa distinguir "não informada" de "zero hectares".
+ * PR-FIX-PASTOS-RODAPE-01 — lê a área da MATRÍCULA do cadastro da fazenda.
+ *
+ * Antes daqui saía a soma das SEIS colunas de família de fazenda_cadastros. Elas não
+ * são editáveis por tela nenhuma desde o 77cec994 — o dono do produto as classificou
+ * como lixo, e a CadastrosTab legada perdeu os campos no 26217942. Eram números
+ * congelados que ninguém mantém, e o rodapé acusava divergência contra dado morto:
+ * na Retiro Agricultura dizia "68,67 ha a menos nos pastos" enquanto a aba Cadastro,
+ * ao lado, mostrava diferença zero.
+ *
+ * A referência viva é `area_total_ha`, digitada na aba Cadastro desde o 3576814f.
+ *
+ * Validação de forma em runtime porque a linha vem sem tipo (types.ts defasado).
+ * null quando não há cadastro ou o valor não é numérico: ausência de dado NÃO é
+ * zero, e o rodapé precisa distinguir "matrícula não informada" de "zero hectares".
  */
-function somarAreasCadastro(bruto: unknown): number | null {
+function lerMatriculaCadastro(bruto: unknown): number | null {
   if (typeof bruto !== 'object' || bruto === null) return null;
   const linha: Record<string, unknown> = Object.fromEntries(Object.entries(bruto));
-  let total = 0;
-  for (const col of COLUNAS_AREA_CADASTRO) {
-    const v = Number(linha[col]);
-    if (Number.isFinite(v)) total += v;
-  }
-  return total;
+  const v = Number(linha['area_total_ha']);
+  return Number.isFinite(v) ? v : null;
 }
 
 const GRID_LINHA =
@@ -571,18 +572,18 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
   useEffect(() => {
     if (!fazendaAtual?.id || fazendaAtual.id === '__global__') { setAreaTotalFazenda(null); return; }
     let cancelado = false;
-    // As colunas area_*_ha existem no banco mas NÃO em types.ts (o arquivo está
-    // defasado — o V2Fazendas já carrega 2 erros de baseline pelo mesmo motivo).
-    // Idioma do repositório para coluna sem tipo gerado, com leitura validada em
-    // runtime para não propagar `any`. Sai no lote da regeneração de types.
+    // area_total_ha existe no banco mas NÃO em types.ts (o arquivo está defasado —
+    // o V2Fazendas carrega 2 erros de baseline exatamente por isso). Idioma do
+    // repositório para coluna sem tipo gerado, com leitura validada em runtime para
+    // não propagar `any`. Sai no lote da regeneração de types.
     void (supabase as any)
       .from('fazenda_cadastros')
-      .select('area_pecuaria_ha, area_agricultura_ha, area_app_ha, area_reserva_ha, area_benfeitorias_ha, area_outras_ha')
+      .select('area_total_ha')
       .eq('fazenda_id', fazendaAtual.id)
       .maybeSingle()
       .then(({ data }: { data: unknown }) => {
         if (cancelado) return;
-        setAreaTotalFazenda(somarAreasCadastro(data));
+        setAreaTotalFazenda(lerMatriculaCadastro(data));
       });
     return () => { cancelado = true; };
   }, [fazendaAtual?.id]);
@@ -913,10 +914,10 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
               de área onde estão 2.778,25 / 740,12 / 147,17.
               A comparação contra o cadastro fica ao LADO, em peso menor: é comentário
               sobre o total, não parte dele.
-              A fonte do número comparado NÃO muda aqui — segue de somarAreasCadastro(),
-              que soma as seis colunas de fazenda_cadastros. Que essa fonte esteja errada
-              (as colunas não são editáveis por tela nenhuma desde o 77cec994) é assunto
-              do PR-FIX-PASTOS-RODAPE-01. Aqui é só posição e tipografia. */}
+              PR-FIX-PASTOS-RODAPE-01 — o número comparado passou a ser a MATRÍCULA
+              (fazenda_cadastros.area_total_ha), a mesma que a aba Cadastro exibe. Antes
+              vinha da soma das seis colunas de família, que nenhuma tela edita desde o
+              77cec994 — as duas abas mostravam números diferentes para a mesma fazenda. */}
           <div
             className="grid gap-2 px-2 ml-2 border border-transparent border-t-border items-baseline pt-1.5 mt-1"
             style={{ gridTemplateColumns: GRID_LINHA }}
@@ -937,14 +938,14 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
           <div className="px-2 ml-2">
             {areaTotalFazenda === null ? (
               <span className="text-[10px] text-muted-foreground">
-                Área do cadastro da fazenda: — (não informada)
+                Matrícula: — (não informada)
               </span>
             ) : (() => {
               const dif = somaPastos - areaTotalFazenda;
               const fecha = Math.abs(dif) < 0.005;
               return (
                 <span className="text-[10px] tabular-nums">
-                  <span className="text-muted-foreground">Cadastro da fazenda: {formatarAreaBR(areaTotalFazenda)} ha · </span>
+                  <span className="text-muted-foreground">Matrícula: {formatarAreaBR(areaTotalFazenda)} ha · </span>
                   <span className={fecha ? 'text-emerald-700 font-semibold' : 'text-red-700 font-semibold'}>
                     {fecha ? 'confere' : `divergência de ${formatarAreaBR(Math.abs(dif))} ha`}
                     {!fecha && (dif > 0 ? ' a mais nos pastos' : ' a menos nos pastos')}
