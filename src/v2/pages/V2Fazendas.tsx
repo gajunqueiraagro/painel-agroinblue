@@ -118,6 +118,14 @@ export function V2Fazendas() {
       n(data.area_benfeitorias_ha) +
       n(data.area_outras_ha);
 
+    // area_produtiva_ha alimenta fn_gerar_area_de_snapshot, que lança
+    // 'fazenda_cadastros_sem_area' quando o valor é NULL — sem ele a fazenda não
+    // fecha P1. Até aqui a coluna só era escrita pela CadastrosTab legada, então
+    // fazenda cadastrada por esta tela nascia travada. Produtiva = pecuária +
+    // agricultura; APP, reserva, benfeitorias e outras entram só no total.
+    const areaProdutivaCalculada =
+      n(data.area_pecuaria_ha) + n(data.area_agricultura_ha);
+
     setSaving(true);
     const payload = {
       fazenda_id: fazendaAtual.id,
@@ -130,6 +138,7 @@ export function V2Fazendas() {
       ie: data.ie || null,
       area_pecuaria_ha: n(data.area_pecuaria_ha) || null,
       area_agricultura_ha: n(data.area_agricultura_ha) || null,
+      area_produtiva_ha: areaProdutivaCalculada || null,
       area_app_ha: n(data.area_app_ha) || null,
       area_reserva_ha: n(data.area_reserva_ha) || null,
       area_benfeitorias_ha: n(data.area_benfeitorias_ha) || null,
