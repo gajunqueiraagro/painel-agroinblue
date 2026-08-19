@@ -392,13 +392,18 @@ function LinhaPasto({
       {COLUNAS_EM_BREVE.map(c => (
         <span key={c} className="text-[10px] text-muted-foreground/40 truncate" title={`${c} — em breve`}>—</span>
       ))}
-      <div className="flex items-center justify-end gap-1">
+      <div className="flex items-center justify-end gap-0.5">
         {pasto.observacoes && (
           <Badge variant="secondary" className="text-[9px] px-1 py-0 leading-tight" title={pasto.observacoes}>Obs</Badge>
         )}
-        <Switch checked={pasto.ativo} onCheckedChange={onToggle} className="scale-[0.6]" />
-        <button onClick={onEdit} className="text-muted-foreground hover:text-foreground p-0.5" title="Editar">
-          <Edit2 className="h-3.5 w-3.5" />
+        {/* h-4 no wrapper: o scale-[0.6] do Switch é transformação visual e não
+            reduz a altura que ele ocupa no layout — sem isto, ele é quem define a
+            altura da linha inteira. */}
+        <div className="h-4 flex items-center">
+          <Switch checked={pasto.ativo} onCheckedChange={onToggle} className="scale-[0.6] origin-center" />
+        </div>
+        <button onClick={onEdit} className="text-muted-foreground hover:text-foreground p-0 h-4 w-4 flex items-center justify-center" title="Editar">
+          <Edit2 className="h-3 w-3" />
         </button>
       </div>
     </div>
