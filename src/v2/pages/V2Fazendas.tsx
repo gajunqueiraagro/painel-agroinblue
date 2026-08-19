@@ -124,7 +124,14 @@ export function V2Fazendas() {
         car: (row as any).car ?? '',
         nirf: (row as any).nirf ?? '',
         ie: (row as any).ie ?? '',
-        area_total_ha: row.area_total_ha != null ? String(row.area_total_ha) : '',
+        // PR-FIX-MATRICULA-PARSE-01 — entra JÁ FORMATADO em BR. Com String() o
+        // state ficava em formato americano ("3665.54"), e o blur passava esse texto
+        // por parseAreaBR, que trata o ponto como separador de MILHAR: 3665.54 virava
+        // 366554. O valor era multiplicado por 100 a cada ciclo abrir-salvar.
+        // O texto do state e o texto que parseAreaBR espera precisam ser o mesmo formato.
+        area_total_ha: row.area_total_ha != null
+          ? formatarAreaBR(Number(row.area_total_ha))
+          : '',
         area_pecuaria_ha: (row as any).area_pecuaria_ha != null ? String((row as any).area_pecuaria_ha) : '',
         area_agricultura_ha: (row as any).area_agricultura_ha != null ? String((row as any).area_agricultura_ha) : '',
         area_app_ha: (row as any).area_app_ha != null ? String((row as any).area_app_ha) : '',
