@@ -68,7 +68,17 @@ const SelectContent = React.forwardRef<
       className={cn(
         // PR-UI-CAMPOS-STD-01 — PADRÃO OFICIAL de dropdown (dark-glass), igual ao de Conta:
         // painel cinza-escuro translúcido + texto branco legível em light/dark. Antes: bg-popover.
-        "relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-md border border-zinc-700/40 bg-zinc-950/55 backdrop-blur-xl text-zinc-100 shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
+        //
+        // PR-UI-DROPDOWN-VIEWPORT-01 (A9) — o teto do painel é o espaço DISPONÍVEL medido
+        // pelo Radix, não um valor fixo. Com max-h-96 (384px), um Select de 11 opções em 4
+        // grupos não cabia acima nem abaixo do gatilho num modal de ~545px e vazava da tela —
+        // e item que vaza é invisível, não dá erro. avoidCollisions sozinho não resolve: ele
+        // inverte o lado, não encolhe o painel.
+        //
+        // O fallback dentro do var() é OBRIGATÓRIO: quando position !== 'popper' a variável
+        // não existe, min() fica inválido e a declaração INTEIRA cai — o painel voltaria a
+        // não ter teto nenhum, silenciosamente.
+        "relative z-50 max-h-[min(24rem,var(--radix-select-content-available-height,24rem))] min-w-[8rem] overflow-hidden rounded-md border border-zinc-700/40 bg-zinc-950/55 backdrop-blur-xl text-zinc-100 shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
         position === "popper" &&
           "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
         className,

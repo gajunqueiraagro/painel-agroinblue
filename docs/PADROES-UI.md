@@ -126,6 +126,23 @@ desfazendo o padrão sem erro visível no código.
 
 Referência viva: `MesaPareamentoModal.tsx:1365`.
 
+## A9 — Painel flutuante nunca ultrapassa a tela
+
+Dropdown, popover e combobox se limitam ao **espaço disponível medido pelo Radix**,
+nunca a um teto fixo em `rem`. Teto fixo funciona na tela do desenvolvedor e vaza na
+janela pequena do operador — e o item que vazou é **invisível, não dá erro**.
+
+```
+max-h-[min(24rem,var(--radix-select-content-available-height,24rem))]
+```
+
+O **fallback dentro do `var()` é obrigatório**: sem ele a declaração inteira cai
+quando a variável não existe, e o teto some sem aviso.
+
+`avoidCollisions` sozinho **não resolve** — ele inverte o lado, não encolhe o painel.
+
+Referência viva: `select.tsx` (PR-UI-DROPDOWN-VIEWPORT-01).
+
 ---
 
 ## Pendências deste documento
@@ -141,3 +158,5 @@ Referência viva: `MesaPareamentoModal.tsx:1365`.
   `TransferenciaDetalhesDialog`, `ProjetosInvestimento`, `MesaClassificacaoTab`,
   `LinhaExecutivaExecutivoModal`, `FinanciamentoDetalhe`. Frente própria:
   **PR-UI-MODAL-RETROFIT-01**.
+- **A9 em `popover.tsx` e `dropdown-menu.tsx`** — hoje sem `max-h` nenhum: crescem com o
+  conteúdo e vazam do mesmo jeito, por caminho diferente. Auditar quando houver caso real.
