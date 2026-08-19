@@ -1780,9 +1780,10 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
         return vals.length > 0 ? vals.reduce((a, b) => a + b, 0) : null;
       });
 
+    const silvicultura = somaFamilias([dest('eucalipto')]);
     const ambiental = somaFamilias([dest('reserva'), dest('app')]);
     const infra = somaFamilias([dest('benfeitorias')]);
-    const total = somaFamilias([areaPecAtiva, areaAgriAtiva, ambiental, infra]);
+    const total = somaFamilias([areaPecAtiva, areaAgriAtiva, silvicultura, ambiental, infra]);
 
     const familia = (indicador: string, valores: (number | null)[], indicadorId?: string): Row =>
       ({ indicador, format: 'padrao', valores: toNan(valores), indicadorId, noTotal: true, nivel: 'familia' });
@@ -1801,6 +1802,10 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
         // AGRICULTURA sem destinos: granularidade por cultura mexe em lista oficial
         // fechada (tiposUso.ts) e é FASE 0 própria — a frente de culturas.
         familia('AGRICULTURA (ha)', areaAgriAtiva, 'area_agri'),
+        // PR-SILVICULTURA-01 — família própria, não destino dentro de Agricultura:
+        // ciclo, custo e receita distintos da lavoura.
+        familia('SILVICULTURA (ha)', silvicultura),
+        destino('Eucalipto', 'eucalipto'),
         familia('AMBIENTAL (ha)', ambiental),
         destino('Reserva Legal', 'reserva'),
         destino('APP', 'app'),

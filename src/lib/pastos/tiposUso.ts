@@ -41,20 +41,32 @@ export const TIPOS_USO_INFRAESTRUTURA = [
   'benfeitorias',
 ] as const;
 
+// Silvicultura — FAMÍLIA PRÓPRIA, não destino dentro de Agricultura.
+// Criada em 19/08/2026 por decisão arquitetural: silvicultura tem ciclo, custo e
+// receita distintos da lavoura, e misturá-los distorceria qualquer indicador de
+// agricultura. 'eucalipto' JÁ EXISTIA no banco desde 2023-08 (399 linhas em
+// fechamento_pastos, Faz. Sta. Luzia, ~27 mil ha-mês) sem constar desta lista —
+// a lista se dizia fechada e o dado real a contradizia. A Sta. Luzia depende dela.
+export const TIPOS_USO_SILVICULTURA = [
+  'eucalipto',
+] as const;
+
 // ─── Tipos ──────────────────────────────────────────────────────────────────
 
 export type TipoUsoPecuaria = typeof TIPOS_USO_PECUARIA[number];
 export type TipoUsoAgricultura = typeof TIPOS_USO_AGRICULTURA[number];
 export type TipoUsoAmbiental = typeof TIPOS_USO_AMBIENTAL[number];
 export type TipoUsoInfraestrutura = typeof TIPOS_USO_INFRAESTRUTURA[number];
+export type TipoUsoSilvicultura = typeof TIPOS_USO_SILVICULTURA[number];
 
 export type TipoUso =
   | TipoUsoPecuaria
   | TipoUsoAgricultura
   | TipoUsoAmbiental
-  | TipoUsoInfraestrutura;
+  | TipoUsoInfraestrutura
+  | TipoUsoSilvicultura;
 
-export type GrupoUso = 'pecuaria' | 'agricultura' | 'ambiental' | 'infraestrutura';
+export type GrupoUso = 'pecuaria' | 'agricultura' | 'ambiental' | 'infraestrutura' | 'silvicultura';
 
 // ─── Sets para lookup O(1) ──────────────────────────────────────────────────
 
@@ -62,6 +74,7 @@ const SET_PEC = new Set<string>(TIPOS_USO_PECUARIA);
 const SET_AGRI = new Set<string>(TIPOS_USO_AGRICULTURA);
 const SET_AMB = new Set<string>(TIPOS_USO_AMBIENTAL);
 const SET_INFRA = new Set<string>(TIPOS_USO_INFRAESTRUTURA);
+const SET_SILVI = new Set<string>(TIPOS_USO_SILVICULTURA);
 const SET_EXIGE_REBANHO = new Set<string>(['cria', 'recria', 'engorda']);
 
 // ─── Funções soberanas ──────────────────────────────────────────────────────
@@ -70,7 +83,7 @@ const SET_EXIGE_REBANHO = new Set<string>(['cria', 'recria', 'engorda']);
 
 export function isTipoUsoValido(t: string | null | undefined): t is TipoUso {
   if (!t) return false;
-  return SET_PEC.has(t) || SET_AGRI.has(t) || SET_AMB.has(t) || SET_INFRA.has(t);
+  return SET_PEC.has(t) || SET_AGRI.has(t) || SET_AMB.has(t) || SET_INFRA.has(t) || SET_SILVI.has(t);
 }
 
 export function grupoDoTipoUso(t: string | null | undefined): GrupoUso | null {
@@ -79,6 +92,7 @@ export function grupoDoTipoUso(t: string | null | undefined): GrupoUso | null {
   if (SET_AGRI.has(t)) return 'agricultura';
   if (SET_AMB.has(t)) return 'ambiental';
   if (SET_INFRA.has(t)) return 'infraestrutura';
+  if (SET_SILVI.has(t)) return 'silvicultura';
   return null;
 }
 
@@ -127,6 +141,13 @@ export const TIPOS_USO_OPTIONS_AGRUPADAS: ReadonlyArray<TipoUsoGrupoOption> = [
     label: 'Agricultura',
     options: [
       { value: 'agricultura', label: 'Agricultura' },
+    ],
+  },
+  {
+    grupo: 'silvicultura',
+    label: 'Silvicultura',
+    options: [
+      { value: 'eucalipto', label: 'Eucalipto' },
     ],
   },
   {
@@ -191,6 +212,8 @@ export function corDoTipoUso(t: string | null | undefined): string {
       return 'bg-red-50 text-red-700 border-red-200';
     case 'agricultura':
       return 'bg-blue-100 text-blue-800 border-blue-300';
+    case 'eucalipto':
+      return 'bg-teal-50 text-teal-700 border-teal-200';
     case 'reserva':
     case 'app':
     case 'benfeitorias':
@@ -230,6 +253,8 @@ export function tintDoTipoUso(t: string | null | undefined): string {
       return 'rgba(254, 242, 242, 0.5)'; // red-50/50
     case 'agricultura':
       return 'rgba(219, 234, 254, 0.3)'; // blue-100/30
+    case 'eucalipto':
+      return 'rgba(240, 253, 250, 0.5)'; // teal-50/50
     case 'reserva':
     case 'app':
     case 'benfeitorias':

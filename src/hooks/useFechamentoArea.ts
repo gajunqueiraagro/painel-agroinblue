@@ -10,6 +10,7 @@ import { useFazendasPecuariaAtivas } from '@/hooks/useFazendasPecuariaAtivas';
 export const DESTINOS_AREA = [
   'cria', 'recria', 'engorda', 'vedado', 'reforma_pecuaria',
   'agricultura',
+  'eucalipto',
   'reserva', 'app',
   'benfeitorias',
 ] as const;
