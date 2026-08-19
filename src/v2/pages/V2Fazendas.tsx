@@ -177,12 +177,20 @@ export function V2Fazendas() {
     return <div className="px-4 py-6 text-xs text-muted-foreground">Carregando...</div>;
   }
 
+  // PR-AREA-VALIDACAO-01 — dataInicio/dataFim vão no payload, mas o terceiro
+  // argumento (anoMes) fica de fora: esta tela NÃO tem seletor de mês nem de ano,
+  // e inventar um mês daria à conferência uma precisão que ela não tem. Sem mês a
+  // vigência não é aplicada — pasto encerrado ainda entra na soma —, mas o filtro
+  // de tipo_uso vale sempre, e é ele que corrige o caso da Sta. Luzia.
+  // Passar o mês assim que a tela ganhar seletor.
   const pastosVal = validarAreaPastosPecuarios(
     pastos.map(p => ({
       areaHa: Number((p as any).area_produtiva_ha || (p as any).area || 0),
       tipoUso: (p as any).tipo_uso,
       situacao: (p as any).situacao,
       ativo: p.ativo,
+      dataInicio: (p as any).data_inicio,
+      dataFim: (p as any).data_fim,
     })),
     n(data.area_pecuaria_ha),
   );
