@@ -11,6 +11,7 @@ import { Save, Pencil } from 'lucide-react';
 import { PastosTab } from '@/pages/PastosTab';
 import { agruparPastosPorFamilia } from '@/lib/pastos/agruparPorFamilia';
 import { FazendasList } from '@/components/FazendasList';
+import { formatNum } from '@/lib/calculos/formatters';
 
 // 'area' virou a aba "Cadastro" (Dados + Área fundidos). A CHAVE continua 'area'
 // para não mexer no default de activeTab nem nos blocos condicionais.
@@ -215,29 +216,7 @@ export function V2Fazendas() {
     { key: 'roteiro', label: 'Roteiro' },
   ];
 
-  // PR-AREA-DERIVADA-01 — o rótulo saiu: agora ele é a primeira coluna da tabela de
-  // comparação, e este helper renderiza só a célula CADASTRO. Segue EDITÁVEL: é com
-  // ele que o operador corrige a divergência que a coluna PASTOS revela.
-  const areaField = (key: keyof CadastroRow) => (
-    editing ? (
-      <Input
-        type="number"
-        step="0.01"
-        value={data[key] as string}
-        onChange={e => setData(prev => ({ ...prev, [key]: e.target.value }))}
-        className="h-6 text-xs text-right tabular-nums px-1"
-        placeholder="0.00"
-      />
-    ) : (
-      <p className="text-xs font-medium px-2 py-1 rounded bg-muted/50 text-right tabular-nums">
-        {data[key]
-          ? Number(data[key]).toFixed(2)
-          : <span className="text-muted-foreground italic">—</span>}
-      </p>
-    )
-  );
-
-  // ── Derivação por família/destino, para a tabela de comparação ──────────────
+  // ── Derivação por família/destino ───────────────────────────────────────────
   // familias[].tipos[] traz `.pastos`, não `.somaHa` — o módulo devolve a forma
   // canônica e a tela soma do lado dela, como o próprio comentário dele autoriza.
   const somaFamilia = (grupo: string) =>
@@ -251,62 +230,37 @@ export function V2Fazendas() {
   };
   const somaPastosTotal = agrupado.familias.reduce((acc, f) => acc + f.somaHa, 0);
 
-  /**
-   * Uma linha da tabela CADASTRO × PASTOS × Δ.
-   *
-   * `col` ausente = família SEM coluna no banco (Silvicultura). `derivado` null =
-   * coluna SEM família correspondente (Outras). Os dois casos são divergência REAL
-   * e aparecem como tal — não escondê-los.
-   */
-  const linhaArea = (
-    rotulo: string,
-    col: keyof CadastroRow | null,
-    derivado: number | null,
-    opts?: { destino?: boolean },
-  ) => {
-    const cadastro = col ? n(data[col] as string) : null;
-    const delta = cadastro !== null && derivado !== null ? derivado - cadastro : null;
-    return (
-      <div key={rotulo} className="grid grid-cols-[1fr_110px_90px_90px] gap-2 items-center py-0.5 border-b border-border/30 last:border-b-0">
-        <span className={opts?.destino
-          ? 'text-[10px] text-muted-foreground pl-3'
-          : 'text-[11px] font-semibold'}>
-          {rotulo}
-        </span>
-        <div>
-          {col ? areaField(col) : (
-            <p className="text-xs px-2 py-1 text-right text-muted-foreground italic">sem coluna</p>
-          )}
-        </div>
-        <span className="text-xs tabular-nums text-right px-2">
-          {derivado !== null
-            ? derivado.toFixed(2)
-            : <span className="text-muted-foreground italic">—</span>}
-        </span>
-        <span className={`text-xs tabular-nums text-right px-2 ${
-          delta === null ? '' : Math.abs(delta) < 0.01 ? 'text-emerald-700' : 'text-amber-700 font-semibold'
-        }`}>
-          {delta === null
-            ? <span className="text-muted-foreground italic">—</span>
-            : Math.abs(delta) < 0.01 ? '✓' : `${delta > 0 ? '+' : ''}${delta.toFixed(2)}`}
-        </span>
-      </div>
-    );
-  };
+  // PR-AREA-LAYOUT-01 — a coluna CADASTRO saiu: os valores digitados em
+  // fazenda_cadastros foram conferidos contra os pastos e descartados como lixo.
+  // A tela passa a exibir SÓ o derivado. As colunas do banco continuam sendo
+  // gravadas pelo handleSave com o que veio do load — deixaram de ser exibidas,
+  // não de existir. `areaField` saiu junto, órfão; `textField` segue em uso.
+  const linhaArea = (rotulo: string, valor: number, opts?: { destino?: boolean }) => (
+    <div key={rotulo} className="grid grid-cols-[1fr_90px] gap-2 items-baseline py-0.5 border-b border-border/30 last:border-b-0">
+      <span className={opts?.destino
+        ? 'text-[10px] text-muted-foreground pl-3'
+        : 'text-[11px] font-semibold'}>
+        {rotulo}
+      </span>
+      <span className={`tabular-nums text-right px-1 ${opts?.destino ? 'text-[10px] text-muted-foreground' : 'text-[11px] font-medium'}`}>
+        {formatNum(valor, 2)}
+      </span>
+    </div>
+  );
 
   const textField = (label: string, key: keyof CadastroRow) => (
     <div className="space-y-0.5">
-      <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+      <Label className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide">
         {label}
       </Label>
       {editing ? (
         <Input
           value={data[key]}
           onChange={e => setData(prev => ({ ...prev, [key]: e.target.value }))}
-          className="h-7 text-xs"
+          className="h-6 text-[11px]"
         />
       ) : (
-        <p className="text-xs font-medium px-2 py-1 rounded bg-muted/50 min-h-[28px]">
+        <p className="text-[11px] font-medium px-2 py-0.5 rounded bg-muted/50 min-h-[24px]">
           {data[key] || <span className="text-muted-foreground italic">—</span>}
         </p>
       )}
@@ -364,117 +318,104 @@ export function V2Fazendas() {
       </div>
 
       {activeTab === 'area' && (
-        <div className="space-y-4">
-          {/* PR-AREA-DERIVADA-01 — os campos vinham da aba 'Dados', removida. Dados e
-              Área compartilhavam state, handleSave e botão Editar: a separação obrigava
-              o operador a alternar entre duas abas do mesmo formulário. Movidos VERBATIM. */}
-          <div className="grid grid-cols-2 gap-2">
-          <div className="space-y-0.5">
-            <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
-              Código da Fazenda
-            </Label>
-            {editing ? (
-              <Input
-                value={codigoFazenda}
-                onChange={e => setCodigoFazenda(e.target.value)}
-                className="h-7 text-xs"
-                placeholder="Ex: BG, 3M"
-              />
-            ) : (
-              <p className="text-xs font-medium px-2 py-1 rounded bg-muted/50 min-h-[28px]">
-                {codigoFazenda || <span className="text-muted-foreground italic">—</span>}
-              </p>
-            )}
-          </div>
-          {textField('Município', 'municipio')}
-          {textField('Estado', 'estado')}
-          {textField('CAR', 'car')}
-          {textField('NIRF', 'nirf')}
-          {textField('IE / Inscrição Estadual', 'ie')}
-          {/* Status Operacional — fonte: tabela fazendas */}
-          <div className="space-y-0.5 col-span-2">
-            <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
-              Status Operacional
-            </label>
-            {editing ? (
-              <select
-                value={data.status_operacional}
-                onChange={e => setData(prev => ({ ...prev, status_operacional: e.target.value }))}
-                className="h-7 text-xs w-full rounded-md border border-input bg-background px-3"
-              >
-                <option value="ativa">Ativa</option>
-                <option value="inativa">Inativa</option>
-                <option value="arrendada">Arrendada</option>
-                <option value="suspensa">Suspensa</option>
-              </select>
-            ) : (
-              <p className={`text-xs font-medium px-2 py-1 rounded min-h-[28px] ${
-                data.status_operacional === 'ativa'
-                  ? 'bg-emerald-50 text-emerald-700'
-                  : 'bg-amber-50 text-amber-700'
-              }`}>
-                {data.status_operacional === 'ativa' ? '✅ Ativa'
-                  : data.status_operacional === 'arrendada' ? '⚠️ Arrendada'
-                  : data.status_operacional === 'inativa' ? '⚠️ Inativa'
-                  : '⚠️ Suspensa'}
-              </p>
-            )}
-          </div>
+        // PR-AREA-LAYOUT-01 — duas colunas lado a lado para a aba caber SEM ROLAGEM.
+        // Antes o bloco de dados ocupava a largura toda e empurrava a composição
+        // para fora da viewport.
+        <div className="grid grid-cols-2 gap-4 items-start">
+
+          {/* ESQUERDA — identificação da fazenda. Continua EDITÁVEL: só os campos de
+              ÁREA saíram, porque o digitado foi descartado em favor dos pastos. */}
+          <div className="grid grid-cols-2 gap-1.5">
+            <div className="space-y-0.5">
+              <Label className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide">
+                Código da Fazenda
+              </Label>
+              {editing ? (
+                <Input
+                  value={codigoFazenda}
+                  onChange={e => setCodigoFazenda(e.target.value)}
+                  className="h-6 text-[11px]"
+                  placeholder="Ex: BG, 3M"
+                />
+              ) : (
+                <p className="text-[11px] font-medium px-2 py-0.5 rounded bg-muted/50 min-h-[24px]">
+                  {codigoFazenda || <span className="text-muted-foreground italic">—</span>}
+                </p>
+              )}
+            </div>
+            {textField('Município', 'municipio')}
+            {textField('Estado', 'estado')}
+            {textField('CAR', 'car')}
+            {textField('NIRF', 'nirf')}
+            {textField('IE / Inscrição Estadual', 'ie')}
+            {/* Status Operacional — fonte: tabela fazendas */}
+            <div className="space-y-0.5 col-span-2">
+              <label className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide">
+                Status Operacional
+              </label>
+              {editing ? (
+                <select
+                  value={data.status_operacional}
+                  onChange={e => setData(prev => ({ ...prev, status_operacional: e.target.value }))}
+                  className="h-6 text-[11px] w-full rounded-md border border-input bg-background px-3"
+                >
+                  <option value="ativa">Ativa</option>
+                  <option value="inativa">Inativa</option>
+                  <option value="arrendada">Arrendada</option>
+                  <option value="suspensa">Suspensa</option>
+                </select>
+              ) : (
+                <p className={`text-[11px] font-medium px-2 py-0.5 rounded min-h-[24px] ${
+                  data.status_operacional === 'ativa'
+                    ? 'bg-emerald-50 text-emerald-700'
+                    : 'bg-amber-50 text-amber-700'
+                }`}>
+                  {data.status_operacional === 'ativa' ? '✅ Ativa'
+                    : data.status_operacional === 'arrendada' ? '⚠️ Arrendada'
+                    : data.status_operacional === 'inativa' ? '⚠️ Inativa'
+                    : '⚠️ Suspensa'}
+                </p>
+              )}
+            </div>
           </div>
 
-          <div className="rounded-lg border border-border bg-muted/40 p-3">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Área Total Calculada
-            </p>
-            <p className="text-lg font-bold text-foreground">
-              {areaTotalCalculada.toFixed(2)} ha
-            </p>
-            <p className="text-[10px] text-muted-foreground">
-              Soma de pecuária, agricultura, APP, reserva, benfeitorias e outras.
-            </p>
-          </div>
-
-          {/* Composição: CADASTRO (digitado) × PASTOS (derivado) × Δ. É o instrumento de
-              descoberta — a soma dos pastos é a base do sistema e o cadastro puxa dela,
-              então a coluna Δ é o que o operador tem para achar pasto faltando, número
-              errado ou área que mudou de fazenda por desmembramento.
-              O quadro "Pastos vs Pecuária" saiu: virou a primeira linha desta tabela.
-              validarAreaPastosPecuarios continua em lib/validacoes/areaFazenda.ts. */}
-          <div>
-            <div className="grid grid-cols-[1fr_110px_90px_90px] gap-2 pb-1 border-b border-border">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Composição da Área
+          {/* DIREITA — resumo derivado dos pastos. */}
+          <div className="space-y-2">
+            <div className="rounded-lg border border-border bg-muted/40 p-2">
+              <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Área Total Calculada
               </p>
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground text-right px-2">Cadastro</p>
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground text-right px-2">Pastos</p>
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground text-right px-2">Δ</p>
+              <p className="text-lg font-bold text-foreground leading-tight">
+                {formatNum(somaPastosTotal, 2)} ha
+              </p>
+              <p className="text-[9px] text-muted-foreground">
+                Soma dos pastos ativos por família.
+              </p>
             </div>
 
-            {linhaArea('Pecuária', 'area_pecuaria_ha', somaFamilia('pecuaria'))}
-            {linhaArea('Agricultura', 'area_agricultura_ha', somaFamilia('agricultura'))}
-            {/* Silvicultura NÃO tem coluna em fazenda_cadastros. A linha existe e mostra
-                o cadastro vazio: é divergência real, não lacuna a esconder. */}
-            {linhaArea('Silvicultura', null, somaFamilia('silvicultura'))}
-            {linhaArea('Ambiental', null, somaFamilia('ambiental'))}
-            {linhaArea('Reserva Legal', 'area_reserva_ha', somaDestino('reserva'), { destino: true })}
-            {linhaArea('APP', 'area_app_ha', somaDestino('app'), { destino: true })}
-            {linhaArea('Infraestrutura', null, somaFamilia('infraestrutura'))}
-            {linhaArea('Benfeitorias', 'area_benfeitorias_ha', somaDestino('benfeitorias'), { destino: true })}
-            {/* Outras: coluna SEM família correspondente na taxonomia. Mesma razão
-                inversa da Silvicultura — aparece com PASTOS vazio. */}
-            {linhaArea('Outras', 'area_outras_ha', null)}
+            <div>
+              <div className="grid grid-cols-[1fr_90px] gap-2 pb-0.5 border-b border-border">
+                <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Composição da Área
+                </p>
+                <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground text-right px-1">ha</p>
+              </div>
 
-            <div className="grid grid-cols-[1fr_110px_90px_90px] gap-2 items-center pt-1 mt-1 border-t border-border">
-              <span className="text-xs font-bold uppercase tracking-wide">Total</span>
-              <span className="text-xs font-bold tabular-nums text-right px-2">{areaTotalCalculada.toFixed(2)}</span>
-              <span className="text-xs font-bold tabular-nums text-right px-2">{somaPastosTotal.toFixed(2)}</span>
-              <span className={`text-xs font-bold tabular-nums text-right px-2 ${
-                Math.abs(somaPastosTotal - areaTotalCalculada) < 0.01 ? 'text-emerald-700' : 'text-amber-700'
-              }`}>
-                {Math.abs(somaPastosTotal - areaTotalCalculada) < 0.01
-                  ? '✓'
-                  : `${somaPastosTotal - areaTotalCalculada > 0 ? '+' : ''}${(somaPastosTotal - areaTotalCalculada).toFixed(2)}`}
-              </span>
+              {/* Família com 0,00 continua aparecendo: ausência é informação, e é ela
+                  que mostra ao operador que falta pasto naquela família. */}
+              {linhaArea('Pecuária', somaFamilia('pecuaria'))}
+              {linhaArea('Agricultura', somaFamilia('agricultura'))}
+              {linhaArea('Silvicultura', somaFamilia('silvicultura'))}
+              {linhaArea('Ambiental', somaFamilia('ambiental'))}
+              {linhaArea('Reserva Legal', somaDestino('reserva'), { destino: true })}
+              {linhaArea('APP', somaDestino('app'), { destino: true })}
+              {linhaArea('Infraestrutura', somaFamilia('infraestrutura'))}
+              {linhaArea('Benfeitorias', somaDestino('benfeitorias'), { destino: true })}
+
+              <div className="grid grid-cols-[1fr_90px] gap-2 items-baseline pt-1 mt-1 border-t border-border">
+                <span className="text-xs font-semibold uppercase tracking-wide">Total</span>
+                <span className="text-xs font-semibold tabular-nums text-right px-1">{formatNum(somaPastosTotal, 2)}</span>
+              </div>
             </div>
           </div>
         </div>
