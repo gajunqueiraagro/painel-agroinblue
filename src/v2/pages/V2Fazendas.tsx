@@ -243,7 +243,10 @@ export function V2Fazendas() {
   );
 
   return (
-    <div className="px-4 py-4 max-w-2xl">
+    // PR-PASTOS-LISTA-01 — largura alinhada ao padrao do V2ImportLancamentosExcel:
+    // max-w em PIXEL (nao %) e sem mx-auto. O max-w-2xl anterior (672px) vinha de uma
+    // versao anterior e sufocava a aba Pastos, que lista dezenas de linhas.
+    <div className="px-4 py-4 w-full max-w-[1100px]">
       <div className="flex items-center justify-between mb-3">
         <div>
           <h2 className="text-sm font-bold text-foreground">{fazendaAtual.nome}</h2>

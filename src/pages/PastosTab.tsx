@@ -16,6 +16,9 @@ import {
 import {
   TIPOS_USO_OPTIONS_AGRUPADAS, isTipoUsoValido, labelDoTipoUso,
 } from '@/lib/pastos/tiposUso';
+import { useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { ChevronRight, ChevronDown } from 'lucide-react';
 import {
   DndContext,
   closestCenter,
@@ -300,6 +303,125 @@ function SortablePastoCard({
   );
 }
 
+// ── PR-PASTOS-LISTA-01 — colunas "em breve" da LISTA, espelhando os campos que o
+// modal já reserva. Desabilitadas e sem dado: existem para dimensionar o layout
+// definitivo antes de haver coluna no banco.
+const COLUNAS_EM_BREVE = ['Pastagem', 'Invasoras', 'Água', 'Cercas', 'Últ. reforma'] as const;
+
+/** Colunas de área do cadastro da fazenda, somadas. Mesmo conjunto do V2Fazendas. */
+const COLUNAS_AREA_CADASTRO = [
+  'area_pecuaria_ha', 'area_agricultura_ha', 'area_app_ha',
+  'area_reserva_ha', 'area_benfeitorias_ha', 'area_outras_ha',
+] as const;
+
+/**
+ * Soma as áreas do cadastro validando a forma em runtime — a linha vem sem tipo
+ * (types.ts defasado). null quando não há cadastro: ausência de dado NÃO é zero,
+ * e o rodapé precisa distinguir "não informada" de "zero hectares".
+ */
+function somarAreasCadastro(bruto: unknown): number | null {
+  if (typeof bruto !== 'object' || bruto === null) return null;
+  const linha: Record<string, unknown> = Object.fromEntries(Object.entries(bruto));
+  let total = 0;
+  for (const col of COLUNAS_AREA_CADASTRO) {
+    const v = Number(linha[col]);
+    if (Number.isFinite(v)) total += v;
+  }
+  return total;
+}
+
+const GRID_LINHA =
+  'minmax(0,1.4fr) 96px repeat(5, minmax(0,0.8fr)) 108px';
+
+function LinhaPasto({
+  pasto, onEdit, onToggle,
+}: { pasto: Pasto; onEdit: () => void; onToggle: (v: boolean) => void }) {
+  return (
+    <div
+      className={`grid gap-2 items-center px-2 py-1 border-b last:border-b-0 hover:bg-muted/40 ${!pasto.ativo ? 'opacity-45' : ''}`}
+      style={{ gridTemplateColumns: GRID_LINHA }}
+    >
+      <span className="text-[12px] font-medium truncate" title={pasto.nome}>{pasto.nome}</span>
+      <span className="text-[12px] tabular-nums text-right">
+        {formatarAreaBR(pasto.area_produtiva_ha ?? null) || '—'}
+      </span>
+      {COLUNAS_EM_BREVE.map(c => (
+        <span key={c} className="text-[11px] text-muted-foreground/40 truncate" title={`${c} — em breve`}>—</span>
+      ))}
+      <div className="flex items-center justify-end gap-1">
+        {pasto.entra_conciliacao && (
+          <Badge variant="outline" className="text-[9px] px-1 py-0 leading-tight">Conc</Badge>
+        )}
+        {pasto.observacoes && (
+          <Badge variant="secondary" className="text-[9px] px-1 py-0 leading-tight" title={pasto.observacoes}>Obs</Badge>
+        )}
+        <Switch checked={pasto.ativo} onCheckedChange={onToggle} className="scale-[0.6]" />
+        <button onClick={onEdit} className="text-muted-foreground hover:text-foreground p-0.5" title="Editar">
+          <Edit2 className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CabecalhoColunas() {
+  return (
+    <div
+      className="grid gap-2 px-2 py-1 border-b bg-muted/40 text-[9px] uppercase tracking-wider font-bold text-muted-foreground"
+      style={{ gridTemplateColumns: GRID_LINHA }}
+    >
+      <span>Pasto</span>
+      <span className="text-right">Área (ha)</span>
+      {COLUNAS_EM_BREVE.map(c => (
+        <span key={c} className="text-muted-foreground/50" title="em breve">{c}</span>
+      ))}
+      <span className="text-right">Ações</span>
+    </div>
+  );
+}
+
+/** Um tipo de uso dentro de uma família. Vazio aparece, recolhido. */
+function GrupoTipo({
+  label, pastos: doTipo, onEdit, onToggle,
+}: { label: string; pastos: Pasto[]; onEdit: (p: Pasto) => void; onToggle: (p: Pasto, v: boolean) => void }) {
+  // PR-PASTOS-LISTA-01 — grupo VAZIO aparece recolhido, nunca omitido: um
+  // "Reserva Legal · 0 pastos" é INFORMAÇÃO, não ausência dela. Omitir esconderia
+  // exatamente a lacuna que esta frente quer tornar visível — a repartição só fecha
+  // quando reserva, APP e benfeitorias existem como pasto.
+  const vazio = doTipo.length === 0;
+  const [aberto, setAberto] = useState(!vazio);
+  const somaHa = doTipo.reduce((s, p) => s + (p.area_produtiva_ha ?? 0), 0);
+
+  return (
+    <div className="border rounded-md overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setAberto(!aberto)}
+        className="w-full flex items-center gap-2 px-2 py-1 bg-card hover:bg-muted/50 text-left"
+      >
+        {aberto ? <ChevronDown className="h-3 w-3 shrink-0" /> : <ChevronRight className="h-3 w-3 shrink-0" />}
+        <span className="text-[12px] font-semibold">{label}</span>
+        <span className={`text-[11px] tabular-nums ml-auto ${vazio ? 'text-muted-foreground/60' : 'text-muted-foreground'}`}>
+          {doTipo.length} pasto{doTipo.length !== 1 ? 's' : ''} · {formatarAreaBR(somaHa)} ha
+        </span>
+      </button>
+      {aberto && !vazio && (
+        <div>
+          <CabecalhoColunas />
+          {doTipo.map(p => (
+            <LinhaPasto key={p.id} pasto={p} onEdit={() => onEdit(p)} onToggle={(v) => onToggle(p, v)} />
+          ))}
+        </div>
+      )}
+      {aberto && vazio && (
+        <div className="px-2 py-1.5 text-[11px] text-muted-foreground">
+          Nenhum pasto com este destino.
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function PastosTab() {
   const { pastos, loading, criarPasto, editarPasto, toggleAtivo, reorderPastos } = usePastos();
   const { isGlobal, fazendaAtual } = useFazenda();
@@ -307,6 +429,15 @@ export function PastosTab() {
   const [editingPasto, setEditingPasto] = useState<Pasto | undefined>();
   const [showInativos, setShowInativos] = useState(false);
   const [criandoDivergencia, setCriandoDivergencia] = useState(false);
+  // PR-PASTOS-LISTA-01 — dois modos, porque são dois usos distintos: "destino"
+  // serve para CONFERIR a repartição; "manual" serve para a ordem operacional de
+  // campo. Fundir os dois num único gesto de arrastar produziria um arrasto que
+  // às vezes não tem efeito (o grupo manda sobre ordem_exibicao). O modo manual
+  // preserva o comportamento atual intacto — e, com ele, o significado de
+  // ordem_exibicao, que é a ordenação de usePastos e alimenta outras 12 telas.
+  const [modo, setModo] = useState<'destino' | 'manual'>('destino');
+  /** Área total do cadastro da fazenda, para o comparativo do rodapé. */
+  const [areaTotalFazenda, setAreaTotalFazenda] = useState<number | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -316,6 +447,60 @@ export function PastosTab() {
   const filtered = useMemo(
     () => (showInativos ? pastos : pastos.filter(p => p.ativo)),
     [pastos, showInativos],
+  );
+
+  // Área total do cadastro. Query própria em vez de prop: acoplar PastosTab à aba
+  // Área tornaria duas abas hoje independentes dependentes uma da outra; a leitura
+  // duplicada é o custo menor e mais reversível.
+  useEffect(() => {
+    if (!fazendaAtual?.id || fazendaAtual.id === '__global__') { setAreaTotalFazenda(null); return; }
+    let cancelado = false;
+    // As colunas area_*_ha existem no banco mas NÃO em types.ts (o arquivo está
+    // defasado — o V2Fazendas já carrega 2 erros de baseline pelo mesmo motivo).
+    // Idioma do repositório para coluna sem tipo gerado, com leitura validada em
+    // runtime para não propagar `any`. Sai no lote da regeneração de types.
+    void (supabase as any)
+      .from('fazenda_cadastros')
+      .select('area_pecuaria_ha, area_agricultura_ha, area_app_ha, area_reserva_ha, area_benfeitorias_ha, area_outras_ha')
+      .eq('fazenda_id', fazendaAtual.id)
+      .maybeSingle()
+      .then(({ data }: { data: unknown }) => {
+        if (cancelado) return;
+        setAreaTotalFazenda(somarAreasCadastro(data));
+      });
+    return () => { cancelado = true; };
+  }, [fazendaAtual?.id]);
+
+  // Agrupamento: família → tipo de uso. Legado (fora da taxonomia) num grupo ao final.
+  const agrupado = useMemo(() => {
+    const porTipo = new Map<string, Pasto[]>();
+    const legado: Pasto[] = [];
+    for (const p of filtered) {
+      if (isTipoUsoValido(p.tipo_uso)) {
+        const arr = porTipo.get(p.tipo_uso) ?? [];
+        arr.push(p);
+        porTipo.set(p.tipo_uso, arr);
+      } else {
+        legado.push(p);
+      }
+    }
+    const familias = TIPOS_USO_OPTIONS_AGRUPADAS.map(g => {
+      const tipos = g.options.map(o => ({ tipo: o.value, label: o.label, pastos: porTipo.get(o.value) ?? [] }));
+      const todos = tipos.flatMap(t => t.pastos);
+      return {
+        grupo: g.grupo,
+        label: g.label,
+        tipos,
+        qtd: todos.length,
+        somaHa: todos.reduce((s, p) => s + (p.area_produtiva_ha ?? 0), 0),
+      };
+    });
+    return { familias, legado };
+  }, [filtered]);
+
+  const somaPastos = useMemo(
+    () => filtered.reduce((s, p) => s + (p.area_produtiva_ha ?? 0), 0),
+    [filtered],
   );
 
   const jaTemDivergencia = useMemo(
@@ -371,6 +556,23 @@ export function PastosTab() {
           {showInativos && <Badge variant="outline" className="text-xs">{pastos.length} total</Badge>}
         </div>
         <div className="flex items-center gap-2">
+          <div className="flex rounded border overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setModo('destino')}
+              className={`px-2 py-0.5 text-[10px] font-semibold ${modo === 'destino' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/70'}`}
+            >
+              Por destino
+            </button>
+            <button
+              type="button"
+              onClick={() => setModo('manual')}
+              className={`px-2 py-0.5 text-[10px] font-semibold ${modo === 'manual' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/70'}`}
+              title="Lista plana, arrastável — define ordem_exibicao"
+            >
+              Ordem manual
+            </button>
+          </div>
           <label className="text-[10px] text-muted-foreground flex items-center gap-1">
             <Switch checked={showInativos} onCheckedChange={setShowInativos} className="scale-75" />
             Inativos
@@ -410,7 +612,9 @@ export function PastosTab() {
           <MapPin className="h-10 w-10 mx-auto mb-2 opacity-30" />
           <p className="text-xs">Nenhum pasto cadastrado</p>
         </div>
-      ) : (
+      ) : modo === 'manual' ? (
+        /* Modo manual: comportamento ANTERIOR, intocado. É onde ordem_exibicao é
+           definido, e ele continua significando exatamente o que significava. */
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={filtered.map(p => p.id)} strategy={rectSortingStrategy}>
             <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))' }}>
@@ -425,6 +629,87 @@ export function PastosTab() {
             </div>
           </SortableContext>
         </DndContext>
+      ) : (
+        <div className="space-y-2">
+          {agrupado.familias.map(f => (
+            <div key={f.grupo} className="space-y-1">
+              <div className="flex items-baseline justify-between px-1">
+                <span className="text-[11px] uppercase tracking-widest font-bold text-muted-foreground">
+                  {f.label}
+                </span>
+                <span className="text-[11px] tabular-nums text-muted-foreground">
+                  {f.qtd} pasto{f.qtd !== 1 ? 's' : ''} · {formatarAreaBR(f.somaHa)} ha
+                </span>
+              </div>
+              <div className="space-y-1">
+                {f.tipos.map(t => (
+                  <GrupoTipo
+                    key={t.tipo}
+                    label={t.label}
+                    pastos={t.pastos}
+                    onEdit={(p) => { setEditingPasto(p); setDialogOpen(true); }}
+                    onToggle={(p, v) => toggleAtivo(p.id, v)}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+
+          {/* Legado ao final: valor fora da taxonomia oficial (divergencia, pecuaria).
+              Fica visível e editável — reclassificar é ato explícito do operador. */}
+          {agrupado.legado.length > 0 && (
+            <div className="space-y-1">
+              <div className="flex items-baseline justify-between px-1">
+                <span className="text-[11px] uppercase tracking-widest font-bold text-amber-700">
+                  Legado — fora da taxonomia
+                </span>
+                <span className="text-[11px] tabular-nums text-muted-foreground">
+                  {agrupado.legado.length} pasto{agrupado.legado.length !== 1 ? 's' : ''} ·{' '}
+                  {formatarAreaBR(agrupado.legado.reduce((s, p) => s + (p.area_produtiva_ha ?? 0), 0))} ha
+                </span>
+              </div>
+              {Object.entries(
+                agrupado.legado.reduce<Record<string, Pasto[]>>((acc, p) => {
+                  (acc[p.tipo_uso] ??= []).push(p);
+                  return acc;
+                }, {}),
+              ).map(([tipo, lista]) => (
+                <GrupoTipo
+                  key={tipo}
+                  label={`${labelDoTipoUso(tipo)} — legado`}
+                  pastos={lista}
+                  onEdit={(p) => { setEditingPasto(p); setDialogOpen(true); }}
+                  onToggle={(p, v) => toggleAtivo(p.id, v)}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Rodapé: total dos pastos × área do cadastro da fazenda. Era informação
+              que só existia na aba Área — aqui ela fica ao lado da soma que a produz. */}
+          <div className="rounded-md border bg-card px-3 py-2 flex items-baseline justify-between flex-wrap gap-2">
+            <span className="text-[12px] font-semibold">
+              Total dos pastos: <span className="tabular-nums">{formatarAreaBR(somaPastos)} ha</span>
+            </span>
+            {areaTotalFazenda === null ? (
+              <span className="text-[11px] text-muted-foreground">
+                Área do cadastro da fazenda: — (não informada)
+              </span>
+            ) : (() => {
+              const dif = somaPastos - areaTotalFazenda;
+              const fecha = Math.abs(dif) < 0.005;
+              return (
+                <span className="text-[11px] tabular-nums">
+                  <span className="text-muted-foreground">Cadastro da fazenda: {formatarAreaBR(areaTotalFazenda)} ha · </span>
+                  <span className={fecha ? 'text-emerald-700 font-semibold' : 'text-red-700 font-semibold'}>
+                    {fecha ? 'confere' : `divergência de ${formatarAreaBR(Math.abs(dif))} ha`}
+                    {!fecha && (dif > 0 ? ' a mais nos pastos' : ' a menos nos pastos')}
+                  </span>
+                </span>
+              );
+            })()}
+          </div>
+        </div>
       )}
     </div>
   );
