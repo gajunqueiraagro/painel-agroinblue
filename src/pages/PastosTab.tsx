@@ -202,13 +202,13 @@ function PastoForm({ pasto, onSave, onCancel }: { pasto?: Pasto; onSave: (data: 
 
             {/* Família deixa de ser caixa: é valor derivado, nunca editável — caixa
                 com borda sugere campo. Vira linha de leitura sob o destino. */}
-            <p className="text-[10px] leading-snug text-muted-foreground mt-1">
+            <p className="text-[9px] leading-tight text-muted-foreground mt-1">
               Família:{' '}
               {familiaLabel
                 ? <strong className="text-foreground font-medium">{familiaLabel}</strong>
                 : <em>— legado</em>}
             </p>
-            <p className="text-[10px] leading-snug text-muted-foreground mt-0.5">
+            <p className="text-[9px] leading-tight text-muted-foreground mt-0.5">
               Vale como padrão dos <strong>próximos</strong> fechamentos. Meses já fechados
               não mudam — cada mês guarda o destino que tinha quando foi fechado.
             </p>
@@ -224,7 +224,7 @@ function PastoForm({ pasto, onSave, onCancel }: { pasto?: Pasto; onSave: (data: 
             <div>
               <Label className="text-xs">Data de início (opcional)</Label>
               <Input type="month" value={dataInicioMes} onChange={e => setDataInicioMes(e.target.value)} className="h-9" />
-              <p className="text-[10px] leading-snug text-muted-foreground mt-1">
+              <p className="text-[9px] leading-tight text-muted-foreground mt-1">
                 Vazio = todos os meses. Preenchido, o pasto passa a existir a partir desse mês.
               </p>
             </div>
@@ -233,26 +233,30 @@ function PastoForm({ pasto, onSave, onCancel }: { pasto?: Pasto; onSave: (data: 
               <Input type="month" value={dataFimMes} onChange={e => setDataFimMes(e.target.value)} className="h-9" />
               {/* Texto diz o EFEITO REAL: data_fim é o filtro temporal soberano
                   de fn_pastos_aplicaveis_mes. */}
-              <p className="text-[10px] leading-snug text-muted-foreground mt-1">
+              <p className="text-[9px] leading-tight text-muted-foreground mt-1">
                 Último mês de uso. Depois dele o pasto não gera card no fechamento nem entra
                 na conta de área. Meses anteriores ficam intactos. Vazio = sem fim previsto.
               </p>
             </div>
           </div>
-          <div className="flex flex-col">
-            <Label className="text-xs">Observações</Label>
-            <Textarea
-              className="text-xs min-h-[150px] resize-none"
-              value={observacoes}
-              onChange={e => setObservacoes(e.target.value)}
-              placeholder="Observações gerais..."
-            />
+          {/* O switch MIGROU para cá, sob o Observações: como faixa horizontal própria
+              custava ~32px de altura para usar 3% da largura, e a coluna direita era mais
+              curta que a esquerda (duas datas empilhadas). Ocupa folga que já existia. */}
+          <div className="flex flex-col gap-3">
+            <div>
+              <Label className="text-xs">Observações</Label>
+              <Textarea
+                className="text-xs min-h-[120px] resize-none"
+                value={observacoes}
+                onChange={e => setObservacoes(e.target.value)}
+                placeholder="Observações gerais..."
+              />
+            </div>
+            <div className="flex items-center gap-3">
+              <Switch checked={entraConciliacao} onCheckedChange={setEntraConciliacao} />
+              <Label className="text-xs">Entra na conciliação</Label>
+            </div>
           </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <Switch checked={entraConciliacao} onCheckedChange={setEntraConciliacao} />
-          <Label className="text-xs">Entra na conciliação</Label>
         </div>
 
       </TabsContent>
