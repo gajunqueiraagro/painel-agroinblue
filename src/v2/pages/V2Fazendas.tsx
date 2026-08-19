@@ -276,17 +276,21 @@ export function V2Fazendas() {
   // não de existir. `areaField` saiu junto, órfão; `textField` segue em uso.
   // Rótulo | ha | %. Cor fica em título e subtítulo — nunca tint na linha inteira.
   // A hierarquia é peso e recuo: família semibold, destino menor, muted e recuado.
+  // PR-AREA-LAYOUT-03 — o PERCENTUAL da família ganha o peso principal: é ele que
+  // responde "como esta fazenda se reparte", que é a leitura para a qual a tabela
+  // existe. O valor em ha vira apoio. Destinos encolhem (text-[9px], py-0) porque
+  // são 10 linhas no pior caso e é neles que há altura a recuperar.
   const linhaArea = (rotulo: string, valor: number, base: number, opts?: { destino?: boolean }) => (
-    <div key={rotulo} className={`grid grid-cols-[1fr_84px_58px] gap-1 items-baseline border-b border-border/30 last:border-b-0 ${opts?.destino ? 'py-0.5' : 'py-1'}`}>
+    <div key={rotulo} className={`grid grid-cols-[1fr_84px_58px] gap-1 items-baseline border-b border-border/30 last:border-b-0 ${opts?.destino ? 'py-0' : 'py-1'}`}>
       <span className={opts?.destino
-        ? 'text-[10px] text-muted-foreground pl-4'
+        ? 'text-[9px] text-muted-foreground pl-4'
         : 'text-[11px] font-semibold text-foreground'}>
         {rotulo}
       </span>
-      <span className={`tabular-nums text-right px-1 ${opts?.destino ? 'text-[10px] text-muted-foreground' : 'text-[11px] font-semibold text-foreground'}`}>
+      <span className={`tabular-nums text-right px-1 ${opts?.destino ? 'text-[9px] text-muted-foreground' : 'text-[11px] font-medium text-foreground'}`}>
         {formatNum(valor, 2)}
       </span>
-      <span className={`tabular-nums text-right px-1 text-[10px] ${opts?.destino ? 'text-muted-foreground/70' : 'text-muted-foreground'}`}>
+      <span className={`tabular-nums text-right px-1 ${opts?.destino ? 'text-[9px] text-muted-foreground/70' : 'text-[11px] font-semibold text-foreground'}`}>
         {valor > 0 ? pct(valor, base) : '—'}
       </span>
     </div>
@@ -394,13 +398,15 @@ export function V2Fazendas() {
                 <span className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Soma dos pastos</span>
                 <span className="text-base font-bold tabular-nums leading-tight">{formatNum(somaPastosTotal, 2)} ha</span>
               </div>
-              <div className="flex items-baseline justify-between gap-2 pt-1 border-t border-border/60">
+              {/* Diferença é a menos consultada das três — peso menor que Matrícula
+                  e Soma dos pastos. A cor (âmbar/verde) continua carregando o sinal. */}
+              <div className="flex items-baseline justify-between gap-2 py-0.5 border-t border-border/60">
                 <span className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Diferença</span>
                 {/* VERDE só depois de conferida. Enquanto matricula_conferida_em for
                     NULL, Δ zero NÃO vira verde: as 12 fazendas herdaram em
                     area_total_ha o resíduo do cálculo antigo, que coincide com a soma
                     dos pastos em 9 delas. Verde ali seria conferência APARENTE. */}
-                <span className={`text-[11px] font-semibold tabular-nums ${
+                <span className={`text-[10px] font-semibold tabular-nums ${
                   diferencaMatricula === null ? ''
                     : matriculaConferida && Math.abs(diferencaMatricula) < 0.01 ? 'text-emerald-700'
                     : 'text-amber-700'
@@ -457,12 +463,16 @@ export function V2Fazendas() {
           </div>
 
           {/* ── DIREITA — dados da fazenda ───────────────────────────────────── */}
-          <div className="space-y-2">
-            <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground pb-0.5 border-b border-border">
+          {/* PR-AREA-LAYOUT-03 — cabeçalho com borda inferior (mesmo tratamento de
+              "Composição da Área") e separador sutil entre os grupos de campos: o
+              bloco era opaco, sem hierarquia entre rótulo e conteúdo. */}
+          <div>
+            <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground pb-1 border-b border-border">
               Dados da Fazenda
             </p>
 
-            <div className="grid grid-cols-2 gap-1.5">
+            <div className="divide-y divide-border/40">
+            <div className="grid grid-cols-2 gap-1.5 py-1">
               {/* NOME é SOMENTE LEITURA: quem grava é FazendasList.tsx. Um segundo
                   escritor recriaria o problema que esta frente desmontou. */}
               <div className="space-y-0.5">
@@ -492,19 +502,19 @@ export function V2Fazendas() {
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-1.5">
+            <div className="grid grid-cols-3 gap-1.5 py-1">
               {textField('Município', 'municipio')}
               {textField('Estado', 'estado')}
               {textField('CAR', 'car')}
             </div>
 
-            <div className="grid grid-cols-2 gap-1.5">
+            <div className="grid grid-cols-2 gap-1.5 py-1">
               {textField('NIRF', 'nirf')}
               {textField('IE / Inscrição Estadual', 'ie')}
             </div>
 
               {/* Status Operacional — fonte: tabela fazendas */}
-              <div className="space-y-0.5 col-span-2">
+              <div className="space-y-0.5 py-1">
                 <label className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide">
                   Status Operacional
                 </label>
@@ -533,7 +543,7 @@ export function V2Fazendas() {
                 )}
               </div>
 
-            <div className="space-y-0.5">
+            <div className="space-y-0.5 py-1">
               <Label className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide">
                 Roteiro
               </Label>
@@ -554,7 +564,7 @@ export function V2Fazendas() {
             {/* A MATRÍCULA é documento, não derivado — terceira referência do sistema,
                 ao lado dos pastos e do fechamento. Alterar o valor limpa a conferência:
                 número novo é número não conferido. */}
-            <div className="space-y-0.5">
+            <div className="space-y-0.5 py-1">
               <Label className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide">
                 Área da Matrícula (ha)
               </Label>
@@ -573,6 +583,7 @@ export function V2Fazendas() {
                     : <span className="text-muted-foreground italic">—</span>}
                 </p>
               )}
+            </div>
             </div>
           </div>
         </div>
