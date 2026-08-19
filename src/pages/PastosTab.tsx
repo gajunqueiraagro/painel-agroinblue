@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, type ReactNode, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { usePastos, type Pasto } from '@/hooks/usePastos';
 import { useFazenda } from '@/contexts/FazendaContext';
@@ -438,6 +438,44 @@ function CabecalhoColunas() {
   );
 }
 
+/**
+ * PR-AREA-LISTA-02 — nível MACRO colapsável (família, Divergência, Legado).
+ *
+ * Precisa ser componente, não JSX inline no `.map()`: cada bloco tem estado próprio
+ * de aberto/fechado, e hook dentro de callback de map não é permitido.
+ *
+ * O cabeçalho vem do chamador como função de `chevron`, para que cada bloco decida
+ * ONDE encaixá-lo. Nas famílias isso importa: o cabeçalho é um grid com GRID_LINHA,
+ * e um chevron como filho direto ocuparia a coluna de área. Ele entra dentro da
+ * primeira célula, ao lado do rótulo — visualmente à esquerda, sem quebrar o
+ * alinhamento das colunas.
+ *
+ * Nasce FECHADO, como o GrupoTipo desde o PR-UI-PASTOS-HIERARQUIA-01: com 68 pastos
+ * a lista era uma parede antes de o operador escolher o que ver. Bloco VAZIO
+ * continua aparecendo, recolhido — a regra do grupo vazio vale nos dois níveis.
+ */
+function BlocoColapsavel({
+  botaoClassName, cabecalho, style, children,
+}: {
+  botaoClassName: string;
+  cabecalho: (chevron: ReactNode) => ReactNode;
+  style?: CSSProperties;
+  children: ReactNode;
+}) {
+  const [aberto, setAberto] = useState(false);
+  const chevron = aberto
+    ? <ChevronDown className="h-3 w-3 shrink-0" />
+    : <ChevronRight className="h-3 w-3 shrink-0" />;
+  return (
+    <div className="space-y-0.5">
+      <button type="button" onClick={() => setAberto(!aberto)} className={botaoClassName} style={style}>
+        {cabecalho(chevron)}
+      </button>
+      {aberto && children}
+    </div>
+  );
+}
+
 /** Um tipo de uso dentro de uma família. Vazio aparece, recolhido. */
 function GrupoTipo({
   tipo, label, pastos: doTipo, basePercentual, onEdit, onToggle,
@@ -706,24 +744,25 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
       ) : (
         <div className="space-y-1">
           {agrupado.familias.map(f => (
-            <div key={f.grupo} className="space-y-0.5">
-              {/* PR-UI-PASTOS-BLOCO-01 item 5 — o cabeçalho usa a MESMA grade das linhas
-                  de pasto (GRID_LINHA), para o total da família cair exatamente sob a
-                  coluna "Área (ha)".
-                  Alinhar exige que a LARGURA DISPONÍVEL seja idêntica à das linhas, senão
-                  os tracks `fr` são calculados sobre bases diferentes. As linhas ficam
-                  dentro do bloco: ml-2 (8px) + borda (1px) + px-2 (8px). O cabeçalho
-                  reproduz os três — daí o `border border-transparent`, que não desenha
-                  nada e existe só para igualar a caixa. Alinhamento exato, sem calc.
-                  O recuo do nível continua: o rótulo da família começa na coluna "Pasto",
-                  e os destinos ficam ~20px à direita por causa do chevron. */}
-              <div
-                className="grid gap-2 px-2 ml-2 border border-transparent items-baseline"
-                style={{ gridTemplateColumns: GRID_LINHA }}
-              >
-                <span className="text-xs uppercase tracking-widest font-bold text-foreground truncate">
+            /* PR-UI-PASTOS-BLOCO-01 item 5 — o cabeçalho usa a MESMA grade das linhas
+               de pasto (GRID_LINHA), para o total da família cair exatamente sob a
+               coluna "Área (ha)".
+               Alinhar exige que a LARGURA DISPONÍVEL seja idêntica à das linhas, senão
+               os tracks `fr` são calculados sobre bases diferentes. As linhas ficam
+               dentro do bloco: ml-2 (8px) + borda (1px) + px-2 (8px). O cabeçalho
+               reproduz os três — daí o `border border-transparent`, que não desenha
+               nada e existe só para igualar a caixa. Alinhamento exato, sem calc.
+               PR-AREA-LISTA-02: o chevron entra DENTRO da primeira célula, não como
+               filho do grid — como filho ele ocuparia a coluna de área. */
+            <BlocoColapsavel
+              key={f.grupo}
+              botaoClassName="w-full text-left grid gap-2 px-2 ml-2 border border-transparent items-baseline hover:bg-muted/40 rounded"
+              style={{ gridTemplateColumns: GRID_LINHA }}
+              cabecalho={(chevron) => (<>
+                <span className="text-xs uppercase tracking-widest font-bold text-foreground truncate flex items-center gap-1">
+                  {chevron}
                   {f.label}
-                  <span className="ml-1.5 text-[10px] normal-case tracking-normal font-normal text-muted-foreground">
+                  <span className="ml-0.5 text-[10px] normal-case tracking-normal font-normal text-muted-foreground">
                     {f.qtd} pasto{f.qtd !== 1 ? 's' : ''}
                   </span>
                 </span>
@@ -736,7 +775,8 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
                 <span className="text-[10px] tabular-nums text-muted-foreground pl-2">
                   {percentualBR(f.somaHa, somaPastos)}
                 </span>
-              </div>
+              </>)}
+            >
               {/* PR-UI-PASTOS-BLOCO-01 — bloco contínuo: a moldura é da FAMÍLIA e os
                   destinos são faixas dentro dela, separadas por 1px. Sem space-y, para
                   as barras coloridas ficarem coladas. */}
@@ -753,23 +793,26 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
                   />
                 ))}
               </div>
-            </div>
+            </BlocoColapsavel>
           ))}
 
           {/* Divergência do Campeiro: bloco próprio, antes do legado genérico.
               É valor OPERANTE (a linha que fecha a conta da fazenda), não resíduo —
               merece nome e lugar seus, não ser diluído em "fora da taxonomia". */}
           {agrupado.divergencia.length > 0 && (
-            <div className="space-y-0.5">
-              <div className="flex items-baseline justify-between px-1">
-                <span className="text-[11px] uppercase tracking-widest font-bold text-amber-700">
+            <BlocoColapsavel
+              botaoClassName="w-full text-left flex items-baseline justify-between px-1 hover:bg-muted/40 rounded"
+              cabecalho={(chevron) => (<>
+                <span className="text-[11px] uppercase tracking-widest font-bold text-amber-700 flex items-center gap-1">
+                  {chevron}
                   Divergência Campo
                 </span>
                 <span className="text-[11px] tabular-nums text-muted-foreground">
                   {agrupado.divergencia.length} pasto{agrupado.divergencia.length !== 1 ? 's' : ''} ·{' '}
                   {formatarAreaBR(agrupado.divergencia.reduce((s, p) => s + (p.area_produtiva_ha ?? 0), 0))} ha
                 </span>
-              </div>
+              </>)}
+            >
               {/* Mesma moldura de bloco das famílias (PR-UI-PASTOS-BLOCO-01): sem ela
                   a barra ficaria solta, já que a caixa saiu do GrupoTipo. */}
               <div className="divide-y divide-border/30 border rounded-md overflow-hidden ml-2">
@@ -782,7 +825,7 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
                   onToggle={(p, v) => toggleAtivo(p.id, v)}
                 />
               </div>
-            </div>
+            </BlocoColapsavel>
           )}
 
           {/* Legado ao final: qualquer OUTRO valor fora da taxonomia oficial (ex.: 'pecuaria').
@@ -793,16 +836,19 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
               de campo, que é falso. Divergência tem bloco próprio acima; aqui cada valor
               aparece com o nome real que tem no banco. */}
           {agrupado.legado.length > 0 && (
-            <div className="space-y-0.5">
-              <div className="flex items-baseline justify-between px-1">
-                <span className="text-[11px] uppercase tracking-widest font-bold text-amber-700">
+            <BlocoColapsavel
+              botaoClassName="w-full text-left flex items-baseline justify-between px-1 hover:bg-muted/40 rounded"
+              cabecalho={(chevron) => (<>
+                <span className="text-[11px] uppercase tracking-widest font-bold text-amber-700 flex items-center gap-1">
+                  {chevron}
                   Legado — fora da taxonomia
                 </span>
                 <span className="text-[11px] tabular-nums text-muted-foreground">
                   {agrupado.legado.length} pasto{agrupado.legado.length !== 1 ? 's' : ''} ·{' '}
                   {formatarAreaBR(agrupado.legado.reduce((s, p) => s + (p.area_produtiva_ha ?? 0), 0))} ha
                 </span>
-              </div>
+              </>)}
+            >
               <div className="divide-y divide-border/30 border rounded-md overflow-hidden ml-2">
               {Object.entries(
                 agrupado.legado.reduce<Record<string, Pasto[]>>((acc, p) => {
@@ -821,24 +867,43 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
                 />
               ))}
               </div>
-            </div>
+            </BlocoColapsavel>
           )}
 
-          {/* Rodapé: total dos pastos × área do cadastro da fazenda. Era informação
-              que só existia na aba Área — aqui ela fica ao lado da soma que a produz. */}
-          <div className="rounded-md border bg-card px-3 py-2 flex items-baseline justify-between flex-wrap gap-2">
-            <span className="text-[11px] font-semibold">
-              Total dos pastos: <span className="tabular-nums">{formatarAreaBR(somaPastos)} ha</span>
+          {/* PR-AREA-LISTA-02 item 4 — o total é a ÚLTIMA LINHA DA TABELA, não uma barra
+              à parte: usa o MESMO GRID_LINHA das famílias, com o mesmo `border
+              border-transparent` que iguala a caixa, para o número cair sob a coluna
+              de área onde estão 2.778,25 / 740,12 / 147,17.
+              A comparação contra o cadastro fica ao LADO, em peso menor: é comentário
+              sobre o total, não parte dele.
+              A fonte do número comparado NÃO muda aqui — segue de somarAreasCadastro(),
+              que soma as seis colunas de fazenda_cadastros. Que essa fonte esteja errada
+              (as colunas não são editáveis por tela nenhuma desde o 77cec994) é assunto
+              do PR-FIX-PASTOS-RODAPE-01. Aqui é só posição e tipografia. */}
+          <div
+            className="grid gap-2 px-2 ml-2 border border-transparent items-baseline pt-1 mt-1 border-t-border"
+            style={{ gridTemplateColumns: GRID_LINHA }}
+          >
+            <span className="text-sm uppercase tracking-widest font-bold text-foreground truncate">
+              Total dos pastos
             </span>
+            <span className="text-sm tabular-nums font-bold text-foreground text-right">
+              {formatarAreaBR(somaPastos)}
+            </span>
+            <span className="text-[10px] tabular-nums text-muted-foreground pl-2">
+              {somaPastos > 0 ? '100,0%' : '—'}
+            </span>
+          </div>
+          <div className="px-2 ml-2">
             {areaTotalFazenda === null ? (
-              <span className="text-[11px] text-muted-foreground">
+              <span className="text-[10px] text-muted-foreground">
                 Área do cadastro da fazenda: — (não informada)
               </span>
             ) : (() => {
               const dif = somaPastos - areaTotalFazenda;
               const fecha = Math.abs(dif) < 0.005;
               return (
-                <span className="text-[11px] tabular-nums">
+                <span className="text-[10px] tabular-nums">
                   <span className="text-muted-foreground">Cadastro da fazenda: {formatarAreaBR(areaTotalFazenda)} ha · </span>
                   <span className={fecha ? 'text-emerald-700 font-semibold' : 'text-red-700 font-semibold'}>
                     {fecha ? 'confere' : `divergência de ${formatarAreaBR(Math.abs(dif))} ha`}
