@@ -377,6 +377,16 @@ function somarAreasCadastro(bruto: unknown): number | null {
 const GRID_LINHA =
   'minmax(0,1.4fr) 96px repeat(5, minmax(0,0.8fr)) 108px';
 
+/**
+ * Percentual de `valor` sobre `base`, com uma casa. Base zero ou ausente devolve
+ * `—`, nunca "0,0%": sem denominador não há proporção, e zero por cento seria
+ * afirmar uma que não existe (sentinela do projeto).
+ */
+function percentualBR(valor: number, base: number | null | undefined): string {
+  if (!base || base <= 0) return '—';
+  return `${(valor / base * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+}
+
 function LinhaPasto({
   pasto, onEdit, onToggle,
 }: { pasto: Pasto; onEdit: () => void; onToggle: (v: boolean) => void }) {
@@ -429,8 +439,8 @@ function CabecalhoColunas() {
 
 /** Um tipo de uso dentro de uma família. Vazio aparece, recolhido. */
 function GrupoTipo({
-  tipo, label, pastos: doTipo, onEdit, onToggle,
-}: { tipo: string; label: string; pastos: Pasto[]; onEdit: (p: Pasto) => void; onToggle: (p: Pasto, v: boolean) => void }) {
+  tipo, label, pastos: doTipo, basePercentual, onEdit, onToggle,
+}: { tipo: string; label: string; pastos: Pasto[]; basePercentual?: number; onEdit: (p: Pasto) => void; onToggle: (p: Pasto, v: boolean) => void }) {
   // PR-PASTOS-LISTA-01 — grupo VAZIO aparece recolhido, nunca omitido: um
   // "Reserva Legal · 0 pastos" é INFORMAÇÃO, não ausência dela. Omitir esconderia
   // exatamente a lacuna que esta frente quer tornar visível — a repartição só fecha
@@ -444,17 +454,21 @@ function GrupoTipo({
   const [aberto, setAberto] = useState(false);
   const somaHa = doTipo.reduce((s, p) => s + (p.area_produtiva_ha ?? 0), 0);
 
+  // PR-UI-PASTOS-BLOCO-01 — a caixa (border rounded-md) saiu daqui e foi para o
+  // container da família: cinco destinos com moldura própria liam-se como cinco
+  // ilhas, e a família não se lia como unidade. Aqui fica só o overflow.
   return (
-    <div className="border rounded-md overflow-hidden">
+    <div className="overflow-hidden">
       {/* PR-UI-PASTOS-HIERARQUIA-01 — a cor saiu do badge e foi para a BARRA inteira.
           Badge colorido ao lado de família em uppercase dava aos dois níveis o mesmo
           peso; pintando a linha, o destino vira faixa e a família vira título.
           corDoTipoUso devolve fundo + texto + borda: o texto é herdado pelo label e
-          pela contagem, e a borda pega no container, que já é `border rounded-md`. */}
+          pela contagem. A borda de corDoTipoUso não pega: desde o BLOCO-01 a moldura
+          é do container da família, e o que separa as barras é o divide-y dele. */}
       <button
         type="button"
         onClick={() => setAberto(!aberto)}
-        className={`w-full flex items-center gap-2 px-2 py-1 text-left font-medium border-b border-border/40 hover:brightness-95 ${corDoTipoUso(tipo)}`}
+        className={`w-full flex items-center gap-2 px-2 py-0.5 text-left font-medium hover:brightness-95 ${corDoTipoUso(tipo)}`}
       >
         {aberto ? <ChevronDown className="h-3 w-3 shrink-0" /> : <ChevronRight className="h-3 w-3 shrink-0" />}
         {/* Cor mantida também no grupo VAZIO: "Reserva Legal · 0 pastos" é informação,
@@ -465,7 +479,7 @@ function GrupoTipo({
         {/* Sem classe de cor quando há pastos: herda a do botão, que é a cor do destino.
             Vazio mantém o esmaecido — ali a informação é a AUSÊNCIA, não o destino. */}
         <span className={`text-[10px] tabular-nums ml-auto ${vazio ? 'text-muted-foreground/60' : ''}`}>
-          {doTipo.length} pasto{doTipo.length !== 1 ? 's' : ''} · {formatarAreaBR(somaHa)} ha
+          {doTipo.length} pasto{doTipo.length !== 1 ? 's' : ''} · {formatarAreaBR(somaHa)} ha · {percentualBR(somaHa, basePercentual)}
         </span>
       </button>
       {aberto && !vazio && (
@@ -714,24 +728,47 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
         <div className="space-y-1">
           {agrupado.familias.map(f => (
             <div key={f.grupo} className="space-y-0.5">
-              {/* PR-UI-PASTOS-HIERARQUIA-01 — família manda no bloco: px-0 a alinha à
-                  esquerda dos destinos, que ganham ml-2. O recuo faz o trabalho que o
-                  peso da fonte sozinho não fazia com 5 famílias e 10 destinos na tela. */}
-              <div className="flex items-baseline justify-between px-0">
-                <span className="text-xs uppercase tracking-widest font-bold text-foreground">
+              {/* PR-UI-PASTOS-BLOCO-01 item 5 — o cabeçalho usa a MESMA grade das linhas
+                  de pasto (GRID_LINHA), para o total da família cair exatamente sob a
+                  coluna "Área (ha)".
+                  Alinhar exige que a LARGURA DISPONÍVEL seja idêntica à das linhas, senão
+                  os tracks `fr` são calculados sobre bases diferentes. As linhas ficam
+                  dentro do bloco: ml-2 (8px) + borda (1px) + px-2 (8px). O cabeçalho
+                  reproduz os três — daí o `border border-transparent`, que não desenha
+                  nada e existe só para igualar a caixa. Alinhamento exato, sem calc.
+                  O recuo do nível continua: o rótulo da família começa na coluna "Pasto",
+                  e os destinos ficam ~20px à direita por causa do chevron. */}
+              <div
+                className="grid gap-2 px-2 ml-2 border border-transparent items-baseline"
+                style={{ gridTemplateColumns: GRID_LINHA }}
+              >
+                <span className="text-xs uppercase tracking-widest font-bold text-foreground truncate">
                   {f.label}
+                  <span className="ml-1.5 text-[10px] normal-case tracking-normal font-normal text-muted-foreground">
+                    {f.qtd} pasto{f.qtd !== 1 ? 's' : ''}
+                  </span>
                 </span>
-                <span className="text-xs tabular-nums font-semibold text-foreground">
-                  {f.qtd} pasto{f.qtd !== 1 ? 's' : ''} · {formatarAreaBR(f.somaHa)} ha
+                <span className="text-xs tabular-nums font-semibold text-foreground text-right">
+                  {formatarAreaBR(f.somaHa)}
+                </span>
+                {/* Percentual da família sobre a SOMA DOS PASTOS da fazenda — não sobre
+                    o cadastro. A soma dos pastos é a base do sistema; o cadastro é que
+                    deve puxar dela, e não o contrário. */}
+                <span className="text-[10px] tabular-nums text-muted-foreground pl-2">
+                  {percentualBR(f.somaHa, somaPastos)}
                 </span>
               </div>
-              <div className="space-y-0.5 ml-2">
+              {/* PR-UI-PASTOS-BLOCO-01 — bloco contínuo: a moldura é da FAMÍLIA e os
+                  destinos são faixas dentro dela, separadas por 1px. Sem space-y, para
+                  as barras coloridas ficarem coladas. */}
+              <div className="divide-y divide-border/30 border rounded-md overflow-hidden ml-2">
                 {f.tipos.map(t => (
                   <GrupoTipo
                     key={t.tipo}
                     tipo={t.tipo}
                     label={t.label}
                     pastos={t.pastos}
+                    basePercentual={f.somaHa}
                     onEdit={(p) => { setEditingPasto(p); setDialogOpen(true); }}
                     onToggle={(p, v) => toggleAtivo(p.id, v)}
                   />
@@ -754,13 +791,18 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
                   {formatarAreaBR(agrupado.divergencia.reduce((s, p) => s + (p.area_produtiva_ha ?? 0), 0))} ha
                 </span>
               </div>
-              <GrupoTipo
-                tipo="divergencia"
-                label="Pendente"
-                pastos={agrupado.divergencia}
-                onEdit={(p) => { setEditingPasto(p); setDialogOpen(true); }}
-                onToggle={(p, v) => toggleAtivo(p.id, v)}
-              />
+              {/* Mesma moldura de bloco das famílias (PR-UI-PASTOS-BLOCO-01): sem ela
+                  a barra ficaria solta, já que a caixa saiu do GrupoTipo. */}
+              <div className="divide-y divide-border/30 border rounded-md overflow-hidden ml-2">
+                <GrupoTipo
+                  tipo="divergencia"
+                  label="Pendente"
+                  pastos={agrupado.divergencia}
+                  basePercentual={agrupado.divergencia.reduce((s, p) => s + (p.area_produtiva_ha ?? 0), 0)}
+                  onEdit={(p) => { setEditingPasto(p); setDialogOpen(true); }}
+                  onToggle={(p, v) => toggleAtivo(p.id, v)}
+                />
+              </div>
             </div>
           )}
 
@@ -782,6 +824,7 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
                   {formatarAreaBR(agrupado.legado.reduce((s, p) => s + (p.area_produtiva_ha ?? 0), 0))} ha
                 </span>
               </div>
+              <div className="divide-y divide-border/30 border rounded-md overflow-hidden ml-2">
               {Object.entries(
                 agrupado.legado.reduce<Record<string, Pasto[]>>((acc, p) => {
                   (acc[p.tipo_uso] ??= []).push(p);
@@ -793,10 +836,12 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
                   tipo={tipo}
                   label={`${labelDoTipoUso(tipo)} — legado`}
                   pastos={lista}
+                  basePercentual={agrupado.legado.reduce((s, p) => s + (p.area_produtiva_ha ?? 0), 0)}
                   onEdit={(p) => { setEditingPasto(p); setDialogOpen(true); }}
                   onToggle={(p, v) => toggleAtivo(p.id, v)}
                 />
               ))}
+              </div>
             </div>
           )}
 

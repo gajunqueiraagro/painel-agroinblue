@@ -183,7 +183,7 @@ export function labelDoTipoUso(t: string | null | undefined): string {
 // as funções de domínio: 'divergencia' e outros legados existem no banco.
 //
 // A paleta separa as FASES DO CICLO, que é o motivo de a cor existir:
-// cria emerald · recria orange · engorda purple — três famílias cromáticas
+// cria emerald · recria orange · engorda indigo — três famílias cromáticas
 // distintas, legíveis lado a lado. A paleta anterior punha cria em emerald e
 // recria em green, quase o mesmo tom, e ainda fazia reforma_pecuaria dividir o
 // case de cria; agora reforma_pecuaria é red, caso próprio, porque é pasto FORA
@@ -205,7 +205,7 @@ export function corDoTipoUso(t: string | null | undefined): string {
     case 'recria':
       return 'bg-orange-50 text-orange-700 border-orange-200';
     case 'engorda':
-      return 'bg-purple-50 text-purple-700 border-purple-200';
+      return 'bg-indigo-50 text-indigo-700 border-indigo-200';
     case 'vedado':
       return 'bg-slate-100 text-slate-600 border-slate-300';
     case 'reforma_pecuaria':
@@ -246,7 +246,7 @@ export function tintDoTipoUso(t: string | null | undefined): string {
     case 'recria':
       return 'rgba(255, 247, 237, 0.5)'; // orange-50/50
     case 'engorda':
-      return 'rgba(243, 232, 255, 0.6)'; // purple-100/60
+      return 'rgba(224, 231, 255, 0.6)'; // indigo-100/60
     case 'vedado':
       return 'rgba(241, 245, 249, 0.4)'; // slate-100/40
     case 'reforma_pecuaria':
