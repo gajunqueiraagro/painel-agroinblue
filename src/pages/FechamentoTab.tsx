@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { ArrowLeft, CheckCircle, AlertTriangle, Lock, Unlock, Pencil, BarChart3, Lightbulb, Activity, Map as MapIcon } from 'lucide-react';
 import { ResumoAtividadesView } from '@/components/ResumoAtividadesView';
-import { usePastos, type Pasto } from '@/hooks/usePastos';
+import { usePastos, isPastoAtivoNoMes, type Pasto } from '@/hooks/usePastos';
 import { useFechamento, type FechamentoPasto, type FechamentoItem } from '@/hooks/useFechamento';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -230,14 +230,12 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
 
   const pastosAtivos = useMemo(
     () => {
-      // Primeiro dia do mês selecionado (ex.: '2026-02' -> '2026-02-01')
-      const primeiroDiaMes = `${anoMes}-01`;
-      const filtrados = pastos.filter(p => {
-        if (!p.ativo || !p.entra_conciliacao) return false;
-        // Filtro por data_inicio: pasto só aparece se sem restrição OU iniciado até o mês atual
-        if (p.data_inicio && p.data_inicio > primeiroDiaMes) return false;
-        return true;
-      });
+      // PR-PASTO-VIGENCIA-02 — esta era a ÚNICA reimplementação inline da regra de
+      // vigência, e discordava do helper e do banco: testava data_inicio contra o
+      // PRIMEIRO dia do mês e ignorava data_fim, então pasto encerrado em 2024 ainda
+      // gerava card em 2026. O dono da regra agora é isPastoAtivoNoMes, espelho de
+      // fn_pastos_aplicaveis_mes. entra_conciliacao saiu: foi aposentado.
+      const filtrados = pastos.filter(p => p.ativo && isPastoAtivoNoMes(p, anoMes));
       // Pastos de divergência sempre no FINAL da lista
       const normais = filtrados.filter(p => !isPastoDivergencia(p.tipo_uso));
       const divergencia = filtrados.filter(p => isPastoDivergencia(p.tipo_uso));

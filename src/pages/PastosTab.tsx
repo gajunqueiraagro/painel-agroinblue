@@ -77,7 +77,6 @@ function PastoForm({ pasto, onSave, onCancel }: { pasto?: Pasto; onSave: (data: 
   const { fazendaAtual } = useFazenda();
   const [nome, setNome] = useState(pasto?.nome || '');
   const [area, setArea] = useState(formatarAreaBR(pasto?.area_produtiva_ha ?? null));
-  const [entraConciliacao, setEntraConciliacao] = useState(pasto?.entra_conciliacao ?? true);
   const [observacoes, setObservacoes] = useState(pasto?.observacoes || '');
   // data_inicio armazenada como 'YYYY-MM-DD'; input month usa 'YYYY-MM'
   const [dataInicioMes, setDataInicioMes] = useState(
@@ -113,7 +112,6 @@ function PastoForm({ pasto, onSave, onCancel }: { pasto?: Pasto; onSave: (data: 
       nome: nome.trim(),
       area_produtiva_ha: parseAreaBR(area),
       tipo_uso: tipoUso,
-      entra_conciliacao: entraConciliacao,
       observacoes: observacoes || null,
       ativo: pasto?.ativo ?? true,
       data_inicio: dataInicioMes ? `${dataInicioMes}-01` : null,
@@ -253,10 +251,13 @@ function PastoForm({ pasto, onSave, onCancel }: { pasto?: Pasto; onSave: (data: 
                 placeholder="Observações gerais..."
               />
             </div>
-            <div className="flex items-center gap-3">
-              <Switch checked={entraConciliacao} onCheckedChange={setEntraConciliacao} />
-              <Label className="text-xs">Entra na conciliação</Label>
-            </div>
+            {/* entra_conciliacao aposentado em 19/08/2026 (PR-PASTO-VIGENCIA-02): a vigência
+                (data_inicio/data_fim) + ativo já respondem "este pasto vale neste mês?".
+                Como interruptor manual ele escondia o pasto INCLUSIVE nos meses em que existiu.
+                Esse é o motivo, e é o único: a taxonomia exclui reserva/APP/benfeitorias do
+                CÁLCULO DE ÁREA pelo tipo_uso, não da lista do Fechamento — todo pasto vira
+                card, com destino fixo (decisão de produto, 19/08/2026).
+                Coluna mantida no banco forçada a true; não reintroduzir na UI. */}
           </div>
         </div>
 
@@ -338,9 +339,6 @@ function SortablePastoCard({
         <Badge variant="outline" className={`text-[9px] px-1 py-0 leading-tight ${corDoTipoUso(pasto.tipo_uso)}`}>
           {labelDoTipoUso(pasto.tipo_uso)}
         </Badge>
-        {pasto.entra_conciliacao && (
-          <Badge variant="outline" className="text-[10px] px-1.5 py-0 leading-tight">Conc</Badge>
-        )}
         {pasto.observacoes && (
           <Badge variant="secondary" className="text-[10px] px-1.5 py-0 leading-tight">Obs</Badge>
         )}
@@ -395,9 +393,6 @@ function LinhaPasto({
         <span key={c} className="text-[10px] text-muted-foreground/40 truncate" title={`${c} — em breve`}>—</span>
       ))}
       <div className="flex items-center justify-end gap-1">
-        {pasto.entra_conciliacao && (
-          <Badge variant="outline" className="text-[9px] px-1 py-0 leading-tight">Conc</Badge>
-        )}
         {pasto.observacoes && (
           <Badge variant="secondary" className="text-[9px] px-1 py-0 leading-tight" title={pasto.observacoes}>Obs</Badge>
         )}

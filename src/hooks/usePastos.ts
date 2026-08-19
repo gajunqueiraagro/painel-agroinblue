@@ -35,20 +35,28 @@ export interface CategoriaRebanho {
 }
 
 /**
- * Verifica se um pasto está visível/ativo em um determinado mês,
- * considerando o campo `data_inicio` (data a partir da qual o pasto entra no sistema).
+ * Vigência mensal de um pasto: interseção do mês com [data_inicio, data_fim].
  *
- * Regra: incluir pasto APENAS se:
- *   - data_inicio IS NULL (sem restrição), OU
- *   - data_inicio <= primeiro dia do anoMes selecionado
+ * ESPELHO DE fn_pastos_aplicaveis_mes (migration 20260717140100). As duas
+ * implementam a MESMA regra e precisam mudar juntas — divergência aqui produz
+ * tela que discorda do banco, sem erro visível.
  *
- * @param pasto Objeto de pasto (precisa ter `data_inicio`)
- * @param anoMes String no formato 'YYYY-MM'
+ * Fronteiras (alinhadas ao SQL):
+ *   data_inicio <= ÚLTIMO dia do mês   (pasto que começa em 15/07 vale em julho)
+ *   data_fim    >= PRIMEIRO dia do mês (pasto que fecha em 31/07 vale em julho)
+ *
+ * NÃO consulta entra_conciliacao: o campo foi aposentado no PR-PASTO-VIGENCIA-02.
  */
-export function isPastoAtivoNoMes(pasto: { data_inicio?: string | null }, anoMes: string): boolean {
-  if (!pasto.data_inicio) return true;
-  const primeiroDiaMes = `${anoMes}-01`;
-  return pasto.data_inicio <= primeiroDiaMes;
+export function isPastoAtivoNoMes(
+  pasto: { data_inicio?: string | null; data_fim?: string | null },
+  anoMes: string,
+): boolean {
+  const primeiroDia = `${anoMes}-01`;
+  const [a, m] = anoMes.split('-').map(Number);
+  const ultimoDia = `${anoMes}-${String(new Date(a, m, 0).getDate()).padStart(2, '0')}`;
+  if (pasto.data_inicio && pasto.data_inicio > ultimoDia) return false;
+  if (pasto.data_fim && pasto.data_fim < primeiroDia) return false;
+  return true;
 }
 
 // Re-export da fonte única — NÃO definir lista local.
