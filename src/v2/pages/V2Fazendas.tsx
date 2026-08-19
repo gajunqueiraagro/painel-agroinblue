@@ -383,30 +383,54 @@ export function V2Fazendas() {
 
           {/* ── ESQUERDA — composição derivada dos pastos ───────────────────── */}
           <div className="space-y-2">
-            {/* Matrícula × pastos. A diferença é exibida SEMPRE, inclusive zero:
-                é informação permanente, não alerta. */}
+            {/* PR-AREA-CARD-CONFERIDA-01 — três colunas: rótulo | valor | estado.
+                O estado da conferência é atributo DA MATRÍCULA, não informação de
+                mesmo nível das outras duas linhas — por isso vai na terceira coluna
+                da própria linha, e não numa quarta linha do card.
+                A diferença é exibida SEMPRE, inclusive zero: informação permanente,
+                não alerta. */}
             <div className="rounded-lg border border-border bg-muted/40 p-2 space-y-1">
-              <div className="flex items-baseline justify-between gap-2">
+              <div className="grid grid-cols-[auto_104px_1fr] gap-2 items-baseline">
                 <span className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Matrícula</span>
-                <span className="text-[11px] font-medium tabular-nums">
+                <span className="text-[11px] font-medium tabular-nums text-right whitespace-nowrap">
                   {matriculaHa !== null
                     ? `${formatNum(matriculaHa, 2)} ha`
                     : <span className="text-muted-foreground italic">—</span>}
                 </span>
+                <span className="flex items-center justify-end gap-1.5">
+                  {matriculaConferida ? (
+                    <span className="text-[9px] text-muted-foreground">
+                      Conferida em {new Date(data.matricula_conferida_em).toLocaleDateString('pt-BR')}
+                    </span>
+                  ) : (
+                    <>
+                      <span className="text-[9px] font-semibold text-amber-700">Não conferida</span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-6 text-[10px] px-1.5"
+                        onClick={() => setData(prev => ({ ...prev, matricula_conferida_em: new Date().toISOString() }))}
+                      >
+                        Marcar como conferida
+                      </Button>
+                    </>
+                  )}
+                </span>
               </div>
-              <div className="flex items-baseline justify-between gap-2">
+              <div className="grid grid-cols-[auto_104px_1fr] gap-2 items-baseline">
                 <span className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Soma dos pastos</span>
-                <span className="text-base font-bold tabular-nums leading-tight">{formatNum(somaPastosTotal, 2)} ha</span>
+                <span className="text-base font-bold tabular-nums leading-tight text-right whitespace-nowrap">{formatNum(somaPastosTotal, 2)} ha</span>
+                <span />
               </div>
               {/* Diferença é a menos consultada das três — peso menor que Matrícula
                   e Soma dos pastos. A cor (âmbar/verde) continua carregando o sinal. */}
-              <div className="flex items-baseline justify-between gap-2 py-0.5 border-t border-border/60">
+              <div className="grid grid-cols-[auto_104px_1fr] gap-2 items-baseline py-0.5 border-t border-border/60">
                 <span className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Diferença</span>
                 {/* VERDE só depois de conferida. Enquanto matricula_conferida_em for
                     NULL, Δ zero NÃO vira verde: as 12 fazendas herdaram em
                     area_total_ha o resíduo do cálculo antigo, que coincide com a soma
                     dos pastos em 9 delas. Verde ali seria conferência APARENTE. */}
-                <span className={`text-[10px] font-semibold tabular-nums ${
+                <span className={`text-[10px] font-semibold tabular-nums text-right whitespace-nowrap ${
                   diferencaMatricula === null ? ''
                     : matriculaConferida && Math.abs(diferencaMatricula) < 0.01 ? 'text-emerald-700'
                     : 'text-amber-700'
@@ -415,25 +439,7 @@ export function V2Fazendas() {
                     ? <span className="text-muted-foreground italic font-normal">—</span>
                     : `${diferencaMatricula > 0 ? '+' : ''}${formatNum(diferencaMatricula, 2)} ha`}
                 </span>
-              </div>
-              <div className="flex items-center justify-between gap-2 pt-1 border-t border-border/60">
-                {matriculaConferida ? (
-                  <span className="text-[9px] text-muted-foreground">
-                    Conferida em {new Date(data.matricula_conferida_em).toLocaleDateString('pt-BR')}
-                  </span>
-                ) : (
-                  <>
-                    <span className="text-[9px] font-semibold text-amber-700">Não conferida</span>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-5 text-[9px] px-1.5"
-                      onClick={() => setData(prev => ({ ...prev, matricula_conferida_em: new Date().toISOString() }))}
-                    >
-                      Marcar como conferida
-                    </Button>
-                  </>
-                )}
+                <span />
               </div>
             </div>
 
