@@ -1369,8 +1369,11 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
               A área gravada de{fazendaAtual ? ` "${fazendaAtual.nome}"` : ''} em <strong>{formatAnoMes(anoMes)}</strong> será
               {' '}<strong>apagada e recalculada</strong> a partir dos pastos do conjunto fechado.
               <br /><br />
-              Os cards dos pastos e o rebanho <strong>não são afetados</strong> — só a repartição de área do mês.
-              Mês oficializado não regenera: reabra formalmente antes.
+              Para refazer a área, o mês é conciliado antes: pasto aplicável sem card ganha um card já
+              fechado, e card vazio que esteja aberto é fechado. Card aberto com dados interrompe a
+              operação — nada é apagado.
+              <br /><br />
+              O rebanho não é afetado. Mês oficializado não regenera: reabra formalmente antes.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

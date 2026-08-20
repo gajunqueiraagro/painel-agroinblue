@@ -1122,8 +1122,13 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
               {loteMeses.length > 0 ? <>, de <strong>{formatAnoMes(loteMeses[0])}</strong> a <strong>{formatAnoMes(loteMeses[loteMeses.length - 1])}</strong></> : null}.
               <br /><br />
               A área gravada de cada mês será <strong>apagada e recalculada</strong> a partir dos pastos do
-              conjunto fechado. Os cards dos pastos e o rebanho <strong>não são afetados</strong>.
-              Mês oficializado não regenera.
+              conjunto fechado.
+              <br /><br />
+              Para refazer a área, cada mês é conciliado antes: pasto aplicável sem card ganha um card já
+              fechado, e card vazio que esteja aberto é fechado. Card aberto com dados interrompe a
+              operação — nada é apagado.
+              <br /><br />
+              O rebanho não é afetado. Mês oficializado não regenera: reabra formalmente antes.
               <br /><br />
               <span className="text-muted-foreground text-xs">
                 Cada mês é processado <strong>separadamente</strong>, um por vez. Uma falha no meio do lote
