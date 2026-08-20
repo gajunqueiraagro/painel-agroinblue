@@ -1043,6 +1043,48 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                 Preço do rebanho →
               </Button>
             )}
+
+            {/* PR-AREA-REGENERAR-01I — a condicao e fechadosCount > 0, NAO allClosed.
+                pastosAtivos sai da vigencia de HOJE e os cards vem do passado: quando um
+                pasto passa a ser aplicavel a um mes ja fechado, allClosed vira falso e o
+                botao sumia — exatamente no estado hibrido que a regeneracao existe para
+                resolver (Sta. Rita jan/2020: 67 aplicaveis, 65 com card). Mes nunca
+                fechado continua sem os botoes: nao ha area para regenerar.
+                PR-AREA-REGENERAR-01B — ambar do idioma do "Ver sugestoes": este botao
+                APAGA uma linha de fechamento_area_snapshot, e dar a ele o mesmo peso
+                neutro de "Resumo por Atividade", que so abre uma tela, convidaria ao
+                clique errado.
+                PR-UI-REGENERAR-COLUNA-01 — h-8 da coluna, mas text-[10px] e nao text-xs:
+                sao acoes SECUNDARIAS ao lado do "Fechar Mes", que e a acao principal
+                daqui, e a fonte menor marca a hierarquia. Resolve tambem o cabimento —
+                "Regenerar historico" em 12px mede ~163px e a trilha da COL 1 e fixa em
+                150px, com whitespace-nowrap na base do Button: transbordaria em vez de
+                quebrar. Em 10px mede ~142px. Sem alargar a trilha, sem encurtar rotulo. */}
+            {fechadosCount > 0 && (canEdit('pastos') || canEdit('zootecnico')) && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-[10px] font-bold gap-1 border-amber-400 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 w-full"
+                onClick={() => setConfirmRegenerarOpen(true)}
+              >
+                <RefreshCw className="h-3.5 w-3.5" /> Regenerar área
+              </Button>
+            )}
+
+            {/* PR-AREA-REGENERAR-01E — o lote NAO substitui o botao de mes unico: aquele
+                serve para provar um caso antes de mandar a serie inteira.
+                Mesma condicao do vizinho, pelo mesmo motivo (01I). */}
+            {fechadosCount > 0 && (canEdit('pastos') || canEdit('zootecnico')) && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-[10px] font-bold gap-1 border-amber-400 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 w-full"
+                onClick={handleAbrirLote}
+                disabled={lotePreparando}
+              >
+                <History className="h-3.5 w-3.5" /> {lotePreparando ? 'Lendo meses…' : 'Regenerar histórico'}
+              </Button>
+            )}
           </div>
 
           {/* ── COL 2: Cards de mês + Tabela Conciliação ── */}
@@ -1226,41 +1268,6 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
               </div>
             )}
 
-            {/* PR-AREA-REGENERAR-01I — a condicao e fechadosCount > 0, NAO allClosed.
-                pastosAtivos sai da vigencia de HOJE e os cards vem do passado: quando um
-                pasto passa a ser aplicavel a um mes ja fechado, allClosed vira falso e o
-                botao sumia — exatamente no estado hibrido que a regeneracao existe para
-                resolver (Sta. Rita jan/2020: 67 aplicaveis, 65 com card). Mes nunca
-                fechado continua sem os botoes: nao ha area para regenerar.
-                PR-AREA-REGENERAR-01B — ambar do idioma do "Ver sugestoes": este botao
-                APAGA uma linha de fechamento_area_snapshot, e dar a ele o mesmo peso
-                neutro de "Resumo por Atividade", que so abre uma tela, convidaria ao
-                clique errado. */}
-            {fechadosCount > 0 && (canEdit('pastos') || canEdit('zootecnico')) && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 text-[10px] font-bold gap-1 border-amber-400 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 w-full justify-start"
-                onClick={() => setConfirmRegenerarOpen(true)}
-              >
-                <RefreshCw className="h-3.5 w-3.5" /> Regenerar área
-              </Button>
-            )}
-
-            {/* PR-AREA-REGENERAR-01E — o lote NAO substitui o botao de mes unico: aquele
-                serve para provar um caso antes de mandar a serie inteira.
-                Mesma condicao do vizinho, pelo mesmo motivo (01I). */}
-            {fechadosCount > 0 && (canEdit('pastos') || canEdit('zootecnico')) && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 text-[10px] font-bold gap-1 border-amber-400 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 w-full justify-start"
-                onClick={handleAbrirLote}
-                disabled={lotePreparando}
-              >
-                <History className="h-3.5 w-3.5" /> {lotePreparando ? 'Lendo meses…' : 'Regenerar histórico'}
-              </Button>
-            )}
           </div>
 
         </div>
