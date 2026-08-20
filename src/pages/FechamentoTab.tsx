@@ -1226,11 +1226,17 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
               </div>
             )}
 
-            {/* PR-AREA-REGENERAR-01B — mes aberto nao tem area para regenerar, por isso
-                allClosed. Ambar do idioma do "Ver sugestoes": este botao APAGA uma linha
-                de fechamento_area_snapshot, e dar a ele o mesmo peso neutro de "Resumo
-                por Atividade", que so abre uma tela, convidaria ao clique errado. */}
-            {allClosed && (canEdit('pastos') || canEdit('zootecnico')) && (
+            {/* PR-AREA-REGENERAR-01I — a condicao e fechadosCount > 0, NAO allClosed.
+                pastosAtivos sai da vigencia de HOJE e os cards vem do passado: quando um
+                pasto passa a ser aplicavel a um mes ja fechado, allClosed vira falso e o
+                botao sumia — exatamente no estado hibrido que a regeneracao existe para
+                resolver (Sta. Rita jan/2020: 67 aplicaveis, 65 com card). Mes nunca
+                fechado continua sem os botoes: nao ha area para regenerar.
+                PR-AREA-REGENERAR-01B — ambar do idioma do "Ver sugestoes": este botao
+                APAGA uma linha de fechamento_area_snapshot, e dar a ele o mesmo peso
+                neutro de "Resumo por Atividade", que so abre uma tela, convidaria ao
+                clique errado. */}
+            {fechadosCount > 0 && (canEdit('pastos') || canEdit('zootecnico')) && (
               <Button
                 size="sm"
                 variant="outline"
@@ -1242,8 +1248,9 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             )}
 
             {/* PR-AREA-REGENERAR-01E — o lote NAO substitui o botao de mes unico: aquele
-                serve para provar um caso antes de mandar a serie inteira. */}
-            {allClosed && (canEdit('pastos') || canEdit('zootecnico')) && (
+                serve para provar um caso antes de mandar a serie inteira.
+                Mesma condicao do vizinho, pelo mesmo motivo (01I). */}
+            {fechadosCount > 0 && (canEdit('pastos') || canEdit('zootecnico')) && (
               <Button
                 size="sm"
                 variant="outline"
