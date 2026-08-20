@@ -2,6 +2,14 @@ import { useState, useMemo, type ReactNode, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { usePastos, type Pasto } from '@/hooks/usePastos';
 import { useFazenda } from '@/contexts/FazendaContext';
+import { usePermissions } from '@/hooks/usePermissions';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { formatNum } from '@/lib/calculos/formatters';
+import { formatAnoMes } from '@/lib/dateUtils';
+import { ERROS_REGENERAR, somarFamilias, type FalhaLote, type LoteRelatorio } from '@/lib/pastos/regenerarArea';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -9,7 +17,7 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Edit2, MapPin, GripVertical, AlertTriangle } from 'lucide-react';
+import { Plus, Edit2, MapPin, GripVertical, AlertTriangle, History, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue,
@@ -560,6 +568,16 @@ function GrupoTipo({
 export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}) {
   const { pastos, loading, criarPasto, editarPasto, toggleAtivo, reorderPastos } = usePastos();
   const { isGlobal, fazendaAtual } = useFazenda();
+  const { canEdit } = usePermissions();
+
+  /* PR-AREA-REGENERAR-01J — o lote de regeneracao de area mora AQUI, no cadastro de
+     pastos, e nao no fechamento de um mes: ele varre TODOS os meses da fazenda. */
+  const [confirmLoteOpen, setConfirmLoteOpen] = useState(false);
+  const [lotePreparando, setLotePreparando] = useState(false);
+  const [loteMeses, setLoteMeses] = useState<string[]>([]);
+  const [loteProgresso, setLoteProgresso] = useState(0);
+  const [loteRodando, setLoteRodando] = useState(false);
+  const [loteRelatorio, setLoteRelatorio] = useState<LoteRelatorio | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingPasto, setEditingPasto] = useState<Pasto | undefined>();
   const [showInativos, setShowInativos] = useState(false);
@@ -656,6 +674,88 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
     if (ok) toast.success('Pasto de divergência criado');
   };
 
+  /* Descobre a serie ANTES de abrir o dialogo — sem numero concreto o operador nao tem
+     como consentir com o tamanho do que pediu.
+     A lista sai de fechamento_area_snapshot, UMA linha por fazenda+mes. O caminho
+     sem cast seria fechamento_pastos (typed, ja usado no statusPorMes), mas ele tem uma
+     linha por PASTO por mes: 6.617 linhas na Pureza contra 79 aqui, e cinco fazendas
+     passam de mil. Este projeto ja bateu no teto de 1000 linhas do PostgREST antes
+     (ProdutoAutocomplete, P0-3), e ali a truncagem e SILENCIOSA — o lote regeneraria
+     meia serie achando que fez tudo. Entre um cast e uma lista incompleta sem aviso,
+     o cast. Mais um item para a regeneracao de types.ts. */
+  const handleAbrirLote = async () => {
+    if (!fazendaAtual || fazendaAtual.id === '__global__') return;
+    setLotePreparando(true);
+    try {
+      const { data, error } = await (supabase as any)
+        .from('fechamento_area_snapshot')
+        .select('ano_mes')
+        .eq('fazenda_id', fazendaAtual.id)
+        .order('ano_mes', { ascending: true });
+      if (error) {
+        console.error('fechamento_area_snapshot', error);
+        toast.error(`Não foi possível listar os meses: ${error.message || 'tente novamente'}`);
+        return;
+      }
+      // ano_mes ali e DATE (dia 1); a RPC quer 'YYYY-MM'. O regex e o mesmo do SQL.
+      const meses: string[] = [];
+      for (const linha of Array.isArray(data) ? data : []) {
+        const mes = String(linha?.ano_mes ?? '').slice(0, 7);
+        if (/^[0-9]{4}-(0[1-9]|1[0-2])$/.test(mes) && !meses.includes(mes)) meses.push(mes);
+      }
+      if (meses.length === 0) {
+        toast.error('Esta fazenda não tem nenhum mês com área gravada.');
+        return;
+      }
+      setLoteMeses(meses);
+      setLoteProgresso(0);
+      setConfirmLoteOpen(true);
+    } finally {
+      setLotePreparando(false);
+    }
+  };
+
+  /* SEQUENCIAL, do mais antigo para o mais recente. Promise.all poria 79 chamadas
+     disputando o mesmo fn_lock_p1 da fazenda, e o resultado seria imprevisivel. */
+  const handleRegenerarLote = async () => {
+    if (!fazendaAtual || fazendaAtual.id === '__global__') return;
+    setLoteRodando(true);
+    setLoteProgresso(0);
+    const falhas: FalhaLote[] = [];
+    let regenerados = 0;
+    let inalterados = 0;
+    for (let i = 0; i < loteMeses.length; i++) {
+      const mes = loteMeses[i];
+      try {
+        const { data, error } = await (supabase as any).rpc('fn_regenerar_area_do_mes', {
+          p_fazenda_id: fazendaAtual.id,
+          p_ano_mes: mes,
+        });
+        if (error) {
+          const msg = String(error.message ?? '');
+          const conhecido = ERROS_REGENERAR.find(([codigo]) => msg.startsWith(codigo));
+          if (!conhecido) console.error('fn_regenerar_area_do_mes', mes, error);
+          falhas.push({ anoMes: mes, motivo: conhecido ? conhecido[1] : (msg || 'Erro desconhecido') });
+        } else {
+          const antes = somarFamilias(data?.area_anterior);
+          const depois = somarFamilias(data?.area_nova);
+          // Valor igual e RESULTADO, nao falha: a fotografia ja refletia os pastos.
+          if (antes !== null && depois !== null && Math.abs(depois - antes) < 0.01) inalterados++;
+          else regenerados++;
+        }
+      } catch (e: any) {
+        console.error('fn_regenerar_area_do_mes', mes, e);
+        falhas.push({ anoMes: mes, motivo: e?.message || 'Erro inesperado' });
+      }
+      setLoteProgresso(i + 1);
+    }
+    // Sem recarga de tela de mes: aqui nao ha uma. E o lote nao altera cadastro de
+    // pasto — mexe em area e conjunto —, entao a lista desta tela segue valida.
+    setLoteRodando(false);
+    setConfirmLoteOpen(false);
+    setLoteRelatorio({ total: loteMeses.length, regenerados, inalterados, falhas });
+  };
+
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
@@ -708,6 +808,21 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
           >
             <AlertTriangle className="h-3 w-3 mr-1" />
             {criandoDivergencia ? 'Criando...' : 'Criar pasto de divergência'}
+          </Button>
+        )}
+        {/* PR-AREA-REGENERAR-01J — vindo do cabecalho do FechamentoTab. A condicao la era
+            `fechadosCount > 0`, que aqui nao tem sujeito: esta tela nao tem mes. Quem
+            responde "nao ha o que regenerar" e o proprio clique, pelo toast de
+            handleAbrirLote. Metrica e cores preservadas do lugar de origem. */}
+        {(canEdit('pastos') || canEdit('zootecnico')) && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-6 px-2 text-[10px] font-bold gap-1 border-amber-400 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 w-fit"
+            onClick={handleAbrirLote}
+            disabled={lotePreparando}
+          >
+            <History className="h-3 w-3" /> {lotePreparando ? 'Lendo meses…' : 'Regenerar histórico'}
           </Button>
         )}
         <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) setEditingPasto(undefined); }}>
@@ -992,6 +1107,89 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
           </div>
         </div>
       )}
+
+      {/* Regenerar histórico — confirmação com o TAMANHO */}
+      <AlertDialog open={confirmLoteOpen} onOpenChange={(o) => { if (!loteRodando) setConfirmLoteOpen(o); }}>
+        <AlertDialogContent className="max-w-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <History className="h-5 w-5 text-amber-600" />
+              Regenerar histórico
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm leading-relaxed">
+              Isso vai regenerar <strong>{loteMeses.length} {loteMeses.length === 1 ? 'mês' : 'meses'}</strong>
+              {fazendaAtual ? ` da "${fazendaAtual.nome}"` : ''}
+              {loteMeses.length > 0 ? <>, de <strong>{formatAnoMes(loteMeses[0])}</strong> a <strong>{formatAnoMes(loteMeses[loteMeses.length - 1])}</strong></> : null}.
+              <br /><br />
+              A área gravada de cada mês será <strong>apagada e recalculada</strong> a partir dos pastos do
+              conjunto fechado. Os cards dos pastos e o rebanho <strong>não são afetados</strong>.
+              Mês oficializado não regenera.
+              <br /><br />
+              <span className="text-muted-foreground text-xs">
+                Cada mês é processado <strong>separadamente</strong>, um por vez. Uma falha no meio do lote
+                <strong> não desfaz</strong> os meses já regenerados — no fim você recebe o relatório do que
+                deu certo e do que não deu.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={loteRodando}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={(e) => { e.preventDefault(); handleRegenerarLote(); }} disabled={loteRodando}>
+              {loteRodando ? `Regenerando… ${loteProgresso} de ${loteMeses.length}` : `Regenerar ${loteMeses.length} ${loteMeses.length === 1 ? 'mês' : 'meses'}`}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Relatório do lote — dialogo, nao toast: com falhas, a lista E o conteudo */}
+      <AlertDialog open={loteRelatorio !== null} onOpenChange={(o) => { if (!o) setLoteRelatorio(null); }}>
+        <AlertDialogContent className="max-w-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              {loteRelatorio && loteRelatorio.falhas.length > 0
+                ? <AlertTriangle className="h-5 w-5 text-amber-600" />
+                : <CheckCircle className="h-5 w-5 text-emerald-600" />}
+              Histórico regenerado
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm leading-relaxed">
+              {loteRelatorio ? (
+                <>
+                  <strong>{loteRelatorio.total}</strong> {loteRelatorio.total === 1 ? 'mês processado' : 'meses processados'}:
+                  {' '}<strong>{loteRelatorio.regenerados}</strong> com valor novo,
+                  {' '}<strong>{loteRelatorio.inalterados}</strong> sem mudança de valor,
+                  {' '}<strong>{loteRelatorio.falhas.length}</strong> com falha.
+                  {loteRelatorio.falhas.length === 0 && loteRelatorio.inalterados > 0 && (
+                    <><br /><br />
+                    <span className="text-muted-foreground text-xs">
+                      Mês sem mudança de valor não é falha: a área gravada já refletia os pastos.
+                    </span></>
+                  )}
+                </>
+              ) : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          {loteRelatorio && loteRelatorio.falhas.length > 0 && (
+            <div className="rounded-md border border-amber-300 bg-amber-50/60 dark:bg-amber-950/20 p-2 max-h-[40vh] overflow-y-auto">
+              <div className="text-[11px] font-bold text-amber-800 dark:text-amber-300 mb-1">
+                Meses que não regeneraram
+              </div>
+              <div className="flex flex-col gap-0.5">
+                {loteRelatorio.falhas.map(f => (
+                  <div key={f.anoMes} className="flex items-start gap-2 text-[11px] leading-tight">
+                    <span className="font-bold shrink-0 w-[64px]">{formatAnoMes(f.anoMes)}</span>
+                    <span className="text-muted-foreground">{f.motivo}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setLoteRelatorio(null)}>Fechar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

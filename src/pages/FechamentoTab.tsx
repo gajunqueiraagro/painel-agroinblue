@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { ArrowLeft, CheckCircle, AlertTriangle, Lock, Unlock, Pencil, BarChart3, Lightbulb, Activity, Map as MapIcon, RefreshCw, History } from 'lucide-react';
+import { ArrowLeft, CheckCircle, AlertTriangle, Lock, Unlock, Pencil, BarChart3, Lightbulb, Activity, Map as MapIcon, RefreshCw } from 'lucide-react';
 import { ResumoAtividadesView } from '@/components/ResumoAtividadesView';
 import { usePastos, isPastoAtivoNoMes, type Pasto } from '@/hooks/usePastos';
 import { useFechamento, type FechamentoPasto, type FechamentoItem } from '@/hooks/useFechamento';
@@ -25,6 +25,7 @@ import { ReclassificacaoResumoPanel } from '@/components/ReclassificacaoResumoPa
 import { MapaRebanhoImportDialog, type MapaItem } from '@/components/MapaRebanhoImportDialog';
 import { calcUA } from '@/lib/calculos/zootecnicos';
 import { formatNum } from '@/lib/calculos/formatters';
+import { ERROS_REGENERAR, somarFamilias } from '@/lib/pastos/regenerarArea';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { gerarSugestoes, type Sugestao } from '@/lib/calculos/sugestoesConciliacao';
@@ -113,66 +114,6 @@ function gmdColor(gmd: number | null): string {
   return 'text-emerald-600 dark:text-emerald-400';
 }
 
-/* ── PR-AREA-REGENERAR-01B — erros proprios de fn_regenerar_area_do_mes ──
-   A funcao levanta seis erros com MESSAGE proprio. Exibir error.message cru
-   entregaria "conjunto_nao_vigente" ao operador, que nao tem como saber o que e um
-   conjunto vigente. O casamento e por PREFIXO porque duas mensagens carregam
-   explicacao depois do codigo ("ano_mes_invalido: esperado YYYY-MM (01-12)"). */
-const ERROS_REGENERAR: ReadonlyArray<readonly [string, string]> = [
-  ['nao_autenticado',      'Sessão expirada. Entre novamente.'],
-  ['ano_mes_invalido',     'Mês inválido.'],
-  ['fazenda_inexistente',  'Fazenda não encontrada.'],
-  ['sem_permissao',        'Você não tem permissão para regenerar esta fazenda.'],
-  ['mes_oficializado',     'Mês oficializado. Reabra formalmente antes de regenerar.'],
-  ['conjunto_nao_vigente', 'Feche o mês antes de regenerar a área.'],
-];
-
-/* PR-AREA-REGENERAR-01F — as SETE familias de fechamento_area_snapshot.
-   Nao entra area_produtiva_ha, que e a PARCELA pecuaria + agricultura + silvicultura e
-   somaria em dobro. Nao entra area_total_ha, que e a MATRICULA copiada do cadastro: ela
-   nao muda quando o cadastro de pastos muda, e mostra-la faria o toast dizer "nao mudou"
-   sempre. */
-const CAMPOS_FAMILIA: readonly string[] = [
-  'area_pecuaria_ha', 'area_agricultura_ha', 'area_silvicultura_ha',
-  'area_reserva_ha', 'area_app_ha', 'area_benfeitorias_ha', 'area_outras_ha',
-];
-
-function paraNumero(v: unknown): number {
-  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
-  if (typeof v === 'string') {
-    const n = Number(v);
-    return Number.isFinite(n) ? n : 0;
-  }
-  return 0;
-}
-
-/* area_anterior e area_nova chegam como to_jsonb da LINHA INTEIRA de
-   fechamento_area_snapshot. O que interessa e a soma das familias — foi ela que a
-   regeneracao produziu, e e ela que muda quando o cadastro de pastos muda.
-   Ler so a produtiva escondia o essencial: na Sta. Tereza o toast disse
-   632,30 -> 644,20 quando a correcao real foi 632,30 -> 837,92. Os 193,72 de reserva,
-   APP e benfeitorias eram justamente o que faltava no cadastro.
-   Campo ausente vale zero NA SOMA; bloco nulo ou nao-objeto devolve null, e o
-   formatNum imprime travessao — ausencia de dado nao e 0,00.
-   Object.entries em vez de bloco[campo]: indexar exigiria cast, e `in` so estreita
-   com chave literal. */
-function somarFamilias(bloco: unknown): number | null {
-  if (bloco === null || typeof bloco !== 'object') return null;
-  let soma = 0;
-  for (const [chave, valor] of Object.entries(bloco)) {
-    if (CAMPOS_FAMILIA.includes(chave)) soma += paraNumero(valor);
-  }
-  return soma;
-}
-
-/* ── PR-AREA-REGENERAR-01E — lote ──
-   Cada mes e uma chamada e uma TRANSACAO propria. Nao ha atomicidade possivel entre
-   eles: 79 meses numa transacao so seria um lock enorme sobre a fazenda inteira. Logo,
-   falha no mes 40 nao desfaz os 39 anteriores — o lote precisa RELATAR, nao so
-   executar, e o relatorio nao pode ser um toast que some. */
-type FalhaLote = { anoMes: string; motivo: string };
-type LoteRelatorio = { total: number; regenerados: number; inalterados: number; falhas: FalhaLote[] };
-
 export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConciliacao, onNavigateToReclass, onNavigateToValorRebanho, onNavigateToConferenciaGmd, onNavigateToMapaPastos }: Props = {}) {
   const { isGlobal, fazendaAtual } = useFazenda();
   const { canEdit } = usePermissions();
@@ -226,12 +167,6 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   const [showMapaImport, setShowMapaImport] = useState(false);
   const [confirmRegenerarOpen, setConfirmRegenerarOpen] = useState(false);
   const [regenerandoArea, setRegenerandoArea] = useState(false);
-  const [confirmLoteOpen, setConfirmLoteOpen] = useState(false);
-  const [lotePreparando, setLotePreparando] = useState(false);
-  const [loteMeses, setLoteMeses] = useState<string[]>([]);
-  const [loteProgresso, setLoteProgresso] = useState(0);
-  const [loteRodando, setLoteRodando] = useState(false);
-  const [loteRelatorio, setLoteRelatorio] = useState<LoteRelatorio | null>(null);
 
   // Auto-abre o modal "Importar Mapa IA" quando navegado via card "por Foto" no LancarZooHub.
   useEffect(() => {
@@ -841,88 +776,6 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     }
   };
 
-  /* Descobre a serie ANTES de abrir o dialogo — sem numero concreto o operador nao tem
-     como consentir com o tamanho do que pediu.
-     A lista sai de fechamento_area_snapshot, UMA linha por fazenda+mes. O caminho
-     sem cast seria fechamento_pastos (typed, ja usado no statusPorMes), mas ele tem uma
-     linha por PASTO por mes: 6.617 linhas na Pureza contra 79 aqui, e cinco fazendas
-     passam de mil. Este projeto ja bateu no teto de 1000 linhas do PostgREST antes
-     (ProdutoAutocomplete, P0-3), e ali a truncagem e SILENCIOSA — o lote regeneraria
-     meia serie achando que fez tudo. Entre um cast e uma lista incompleta sem aviso,
-     o cast. Mais um item para a regeneracao de types.ts. */
-  const handleAbrirLote = async () => {
-    if (!fazendaAtual || fazendaAtual.id === '__global__') return;
-    setLotePreparando(true);
-    try {
-      const { data, error } = await (supabase as any)
-        .from('fechamento_area_snapshot')
-        .select('ano_mes')
-        .eq('fazenda_id', fazendaAtual.id)
-        .order('ano_mes', { ascending: true });
-      if (error) {
-        console.error('fechamento_area_snapshot', error);
-        toast.error(`Não foi possível listar os meses: ${error.message || 'tente novamente'}`);
-        return;
-      }
-      // ano_mes ali e DATE (dia 1); a RPC quer 'YYYY-MM'. O regex e o mesmo do SQL.
-      const meses: string[] = [];
-      for (const linha of Array.isArray(data) ? data : []) {
-        const mes = String(linha?.ano_mes ?? '').slice(0, 7);
-        if (/^[0-9]{4}-(0[1-9]|1[0-2])$/.test(mes) && !meses.includes(mes)) meses.push(mes);
-      }
-      if (meses.length === 0) {
-        toast.error('Esta fazenda não tem nenhum mês com área gravada.');
-        return;
-      }
-      setLoteMeses(meses);
-      setLoteProgresso(0);
-      setConfirmLoteOpen(true);
-    } finally {
-      setLotePreparando(false);
-    }
-  };
-
-  /* SEQUENCIAL, do mais antigo para o mais recente. Promise.all poria 79 chamadas
-     disputando o mesmo fn_lock_p1 da fazenda, e o resultado seria imprevisivel. */
-  const handleRegenerarLote = async () => {
-    if (!fazendaAtual || fazendaAtual.id === '__global__') return;
-    setLoteRodando(true);
-    setLoteProgresso(0);
-    const falhas: FalhaLote[] = [];
-    let regenerados = 0;
-    let inalterados = 0;
-    for (let i = 0; i < loteMeses.length; i++) {
-      const mes = loteMeses[i];
-      try {
-        const { data, error } = await (supabase as any).rpc('fn_regenerar_area_do_mes', {
-          p_fazenda_id: fazendaAtual.id,
-          p_ano_mes: mes,
-        });
-        if (error) {
-          const msg = String(error.message ?? '');
-          const conhecido = ERROS_REGENERAR.find(([codigo]) => msg.startsWith(codigo));
-          if (!conhecido) console.error('fn_regenerar_area_do_mes', mes, error);
-          falhas.push({ anoMes: mes, motivo: conhecido ? conhecido[1] : (msg || 'Erro desconhecido') });
-        } else {
-          const antes = somarFamilias(data?.area_anterior);
-          const depois = somarFamilias(data?.area_nova);
-          // Valor igual e RESULTADO, nao falha: a fotografia ja refletia os pastos.
-          if (antes !== null && depois !== null && Math.abs(depois - antes) < 0.01) inalterados++;
-          else regenerados++;
-        }
-      } catch (e: any) {
-        console.error('fn_regenerar_area_do_mes', mes, e);
-        falhas.push({ anoMes: mes, motivo: e?.message || 'Erro inesperado' });
-      }
-      setLoteProgresso(i + 1);
-    }
-    // Uma recarga so, no fim. A cada mes seriam 79.
-    await loadFechamentos(anoMes);
-    setLoteRodando(false);
-    setConfirmLoteOpen(false);
-    setLoteRelatorio({ total: loteMeses.length, regenerados, inalterados, falhas });
-  };
-
   const dataInicialReclass = `${anoFiltro}-${String(mesFiltro).padStart(2, '0')}-01`;
   const reclassState = useReclassificacaoState({
     onAdicionar: async (lancamento) => {
@@ -1070,21 +923,6 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                 onClick={() => setConfirmRegenerarOpen(true)}
               >
                 <RefreshCw className="h-3 w-3" /> Regenerar área
-              </Button>
-            )}
-
-            {/* PR-AREA-REGENERAR-01E — o lote NAO substitui o botao de mes unico: aquele
-                serve para provar um caso antes de mandar a serie inteira.
-                Mesma condicao do vizinho, pelo mesmo motivo (01I). */}
-            {fechadosCount > 0 && (canEdit('pastos') || canEdit('zootecnico')) && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-6 px-2 text-[10px] font-bold gap-1 border-amber-400 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 w-fit"
-                onClick={handleAbrirLote}
-                disabled={lotePreparando}
-              >
-                <History className="h-3 w-3" /> {lotePreparando ? 'Lendo meses…' : 'Regenerar histórico'}
               </Button>
             )}
           </div>
@@ -1540,89 +1378,6 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             <AlertDialogAction onClick={handleRegenerarArea} disabled={regenerandoArea}>
               {regenerandoArea ? 'Regenerando...' : 'Regenerar área'}
             </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Regenerar histórico — confirmação com o TAMANHO */}
-      <AlertDialog open={confirmLoteOpen} onOpenChange={(o) => { if (!loteRodando) setConfirmLoteOpen(o); }}>
-        <AlertDialogContent className="max-w-lg">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <History className="h-5 w-5 text-amber-600" />
-              Regenerar histórico
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-sm leading-relaxed">
-              Isso vai regenerar <strong>{loteMeses.length} {loteMeses.length === 1 ? 'mês' : 'meses'}</strong>
-              {fazendaAtual ? ` da "${fazendaAtual.nome}"` : ''}
-              {loteMeses.length > 0 ? <>, de <strong>{formatAnoMes(loteMeses[0])}</strong> a <strong>{formatAnoMes(loteMeses[loteMeses.length - 1])}</strong></> : null}.
-              <br /><br />
-              A área gravada de cada mês será <strong>apagada e recalculada</strong> a partir dos pastos do
-              conjunto fechado. Os cards dos pastos e o rebanho <strong>não são afetados</strong>.
-              Mês oficializado não regenera.
-              <br /><br />
-              <span className="text-muted-foreground text-xs">
-                Cada mês é processado <strong>separadamente</strong>, um por vez. Uma falha no meio do lote
-                <strong> não desfaz</strong> os meses já regenerados — no fim você recebe o relatório do que
-                deu certo e do que não deu.
-              </span>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={loteRodando}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={(e) => { e.preventDefault(); handleRegenerarLote(); }} disabled={loteRodando}>
-              {loteRodando ? `Regenerando… ${loteProgresso} de ${loteMeses.length}` : `Regenerar ${loteMeses.length} ${loteMeses.length === 1 ? 'mês' : 'meses'}`}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Relatório do lote — dialogo, nao toast: com falhas, a lista E o conteudo */}
-      <AlertDialog open={loteRelatorio !== null} onOpenChange={(o) => { if (!o) setLoteRelatorio(null); }}>
-        <AlertDialogContent className="max-w-lg">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              {loteRelatorio && loteRelatorio.falhas.length > 0
-                ? <AlertTriangle className="h-5 w-5 text-amber-600" />
-                : <CheckCircle className="h-5 w-5 text-emerald-600" />}
-              Histórico regenerado
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-sm leading-relaxed">
-              {loteRelatorio ? (
-                <>
-                  <strong>{loteRelatorio.total}</strong> {loteRelatorio.total === 1 ? 'mês processado' : 'meses processados'}:
-                  {' '}<strong>{loteRelatorio.regenerados}</strong> com valor novo,
-                  {' '}<strong>{loteRelatorio.inalterados}</strong> sem mudança de valor,
-                  {' '}<strong>{loteRelatorio.falhas.length}</strong> com falha.
-                  {loteRelatorio.falhas.length === 0 && loteRelatorio.inalterados > 0 && (
-                    <><br /><br />
-                    <span className="text-muted-foreground text-xs">
-                      Mês sem mudança de valor não é falha: a área gravada já refletia os pastos.
-                    </span></>
-                  )}
-                </>
-              ) : null}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-
-          {loteRelatorio && loteRelatorio.falhas.length > 0 && (
-            <div className="rounded-md border border-amber-300 bg-amber-50/60 dark:bg-amber-950/20 p-2 max-h-[40vh] overflow-y-auto">
-              <div className="text-[11px] font-bold text-amber-800 dark:text-amber-300 mb-1">
-                Meses que não regeneraram
-              </div>
-              <div className="flex flex-col gap-0.5">
-                {loteRelatorio.falhas.map(f => (
-                  <div key={f.anoMes} className="flex items-start gap-2 text-[11px] leading-tight">
-                    <span className="font-bold shrink-0 w-[64px]">{formatAnoMes(f.anoMes)}</span>
-                    <span className="text-muted-foreground">{f.motivo}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <AlertDialogFooter>
-            <AlertDialogAction onClick={() => setLoteRelatorio(null)}>Fechar</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
