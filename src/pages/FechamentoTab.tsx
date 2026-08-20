@@ -794,14 +794,17 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     <div className="pb-24">
       {/* ═══ HEADER FIXO — 3 COLUNAS ═══ */}
       <div className="sticky top-0 z-20 bg-background border-b border-border shadow-sm px-3 py-2">
-        {/* PR-FECH-HEADER-LARGURA-01 — a COL 1 tem trilha FIXA. Com `auto` ela crescia
-            até o conteúdo do estado corrente e empurrava a COL 2, onde ficam os cards de
-            mês e a tabela de conciliação: a tabela ANDAVA na horizontal a cada troca de
-            mês, e na tela com divergência a coluna "Cabeças" chegava a ser cortada.
-            236px = os 220 que o aviso de divergência já declara em max-w, mais folga.
-            É o conteúdo mais largo da coluna; o segundo é "Inserir preço do rebanho →",
-            com ~174px. O `min-w-[120px]` saiu — a trilha é que define agora. */}
-        <div className="grid grid-cols-[236px_1fr_auto] gap-4 items-start">
+        {/* PR-FECH-HEADER-LARGURA-02 — a COL 1 tem trilha FIXA e ESTREITA. Fixar resolveu
+            a instabilidade (com `auto` ela crescia até o conteúdo do estado corrente e
+            empurrava a COL 2, onde ficam os cards de mês e a tabela de conciliação, que
+            ANDAVA na horizontal a cada troca de mês). Mas o 236px do -01 fixou no TETO, e
+            a COL 2 passou a ficar apertada em TODO estado, não só no de divergência.
+            150px é o menor valor que comporta o conteúdo real: o maior elemento que não
+            acompanha a trilha é o badge "N divergências", com ~123px. O aviso e o botão
+            "Fechar Mês" são `w-full` e seguem a trilha — o aviso perdeu o max-w-[220px],
+            que era quem ditava os 236, e agora quebra em duas linhas dentro dos 150.
+            Altura da COL 1 não afeta a COL 2, então quebrar não custa nada. */}
+        <div className="grid grid-cols-[150px_1fr_auto] gap-4 items-start">
 
           {/* ── COL 1: Contexto / Filtros ── */}
           <div className="flex flex-col gap-1.5">
@@ -830,7 +833,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             {showCloseButton && (
               <>
                 {hasDivergencia && (
-                  <div className="w-full max-w-[220px] rounded-md border border-red-200 bg-red-50 px-2 py-1 text-[10px] leading-tight text-red-700">
+                  <div className="w-full rounded-md border border-red-200 bg-red-50 px-2 py-1 text-[10px] leading-tight text-red-700">
                     ⚠ Corrija as divergências antes de fechar.
                   </div>
                 )}
@@ -846,7 +849,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             )}
             {allClosed && onNavigateToValorRebanho && (
               <Button size="sm" variant="outline" className="text-[10px] h-6 px-2 font-bold w-fit mt-1" onClick={() => onNavigateToValorRebanho({ ano: anoFiltro, mes: mesFiltro })}>
-                Inserir preço do rebanho →
+                Preço do rebanho →
               </Button>
             )}
           </div>
