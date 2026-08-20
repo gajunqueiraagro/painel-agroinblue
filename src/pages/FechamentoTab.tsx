@@ -1054,20 +1054,22 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                 APAGA uma linha de fechamento_area_snapshot, e dar a ele o mesmo peso
                 neutro de "Resumo por Atividade", que so abre uma tela, convidaria ao
                 clique errado.
-                PR-UI-REGENERAR-COLUNA-01 — h-8 da coluna, mas text-[10px] e nao text-xs:
-                sao acoes SECUNDARIAS ao lado do "Fechar Mes", que e a acao principal
-                daqui, e a fonte menor marca a hierarquia. Resolve tambem o cabimento —
-                "Regenerar historico" em 12px mede ~163px e a trilha da COL 1 e fixa em
-                150px, com whitespace-nowrap na base do Button: transbordaria em vez de
-                quebrar. Em 10px mede ~142px. Sem alargar a trilha, sem encurtar rotulo. */}
+                PR-UI-REGENERAR-COLUNA-01 / -COMPACTO-01 — metrica do "Preco do rebanho",
+                o vizinho imediato: h-6 px-2 w-fit, icone h-3. Sao acoes SECUNDARIAS ao
+                lado do "Fechar Mes", que e a acao principal daqui — a fonte de 10px e a
+                altura menor marcam a hierarquia, e com h-8 w-full a coluna crescia e
+                empurrava a grade de cards para baixo.
+                w-fit tira o rotulo da disputa pela trilha: fit-content com
+                whitespace-nowrap vale a largura do texto (~136px aqui) e nao estica ate
+                os 150px da COL 1. Sem alargar a trilha, sem encurtar rotulo. */}
             {fechadosCount > 0 && (canEdit('pastos') || canEdit('zootecnico')) && (
               <Button
                 size="sm"
                 variant="outline"
-                className="h-8 text-[10px] font-bold gap-1 border-amber-400 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 w-full"
+                className="h-6 px-2 text-[10px] font-bold gap-1 border-amber-400 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 w-fit"
                 onClick={() => setConfirmRegenerarOpen(true)}
               >
-                <RefreshCw className="h-3.5 w-3.5" /> Regenerar área
+                <RefreshCw className="h-3 w-3" /> Regenerar área
               </Button>
             )}
 
@@ -1078,11 +1080,11 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
               <Button
                 size="sm"
                 variant="outline"
-                className="h-8 text-[10px] font-bold gap-1 border-amber-400 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 w-full"
+                className="h-6 px-2 text-[10px] font-bold gap-1 border-amber-400 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 w-fit"
                 onClick={handleAbrirLote}
                 disabled={lotePreparando}
               >
-                <History className="h-3.5 w-3.5" /> {lotePreparando ? 'Lendo meses…' : 'Regenerar histórico'}
+                <History className="h-3 w-3" /> {lotePreparando ? 'Lendo meses…' : 'Regenerar histórico'}
               </Button>
             )}
           </div>
