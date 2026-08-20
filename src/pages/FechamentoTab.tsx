@@ -794,10 +794,17 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     <div className="pb-24">
       {/* ═══ HEADER FIXO — 3 COLUNAS ═══ */}
       <div className="sticky top-0 z-20 bg-background border-b border-border shadow-sm px-3 py-2">
-        <div className="grid grid-cols-[auto_1fr_auto] gap-4 items-start">
+        {/* PR-FECH-HEADER-LARGURA-01 — a COL 1 tem trilha FIXA. Com `auto` ela crescia
+            até o conteúdo do estado corrente e empurrava a COL 2, onde ficam os cards de
+            mês e a tabela de conciliação: a tabela ANDAVA na horizontal a cada troca de
+            mês, e na tela com divergência a coluna "Cabeças" chegava a ser cortada.
+            236px = os 220 que o aviso de divergência já declara em max-w, mais folga.
+            É o conteúdo mais largo da coluna; o segundo é "Inserir preço do rebanho →",
+            com ~174px. O `min-w-[120px]` saiu — a trilha é que define agora. */}
+        <div className="grid grid-cols-[236px_1fr_auto] gap-4 items-start">
 
           {/* ── COL 1: Contexto / Filtros ── */}
-          <div className="flex flex-col gap-1.5 min-w-[120px]">
+          <div className="flex flex-col gap-1.5">
             <div className="flex flex-col gap-1">
               <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 text-[10px] font-bold gap-1 w-fit">
                 <CheckCircle className="h-3 w-3" />
