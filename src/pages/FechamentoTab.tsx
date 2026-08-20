@@ -1335,13 +1335,25 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                         </div>
                       </button>
                     </TooltipTrigger>
-                    <TooltipContent side="top" className="max-w-[220px] p-2 text-[10px] space-y-1">
+                    <TooltipContent side="top" className="max-w-[260px] p-2 text-[10px] space-y-1">
                       <div className="font-bold text-xs">{p.nome}</div>
+                      {/* PR-UI-TOOLTIP-PASTO-01 — Lote SEMPRE visivel, inclusive em pasto sem
+                          gado: e o dado que identifica o lote do mes, e ausencia dele e
+                          informacao. Travessao, nunca vazio — sentinela do CLAUDE.md. */}
+                      <div className="text-muted-foreground">
+                        Lote: <span className="font-semibold text-foreground">{(fech?.lote_mes ?? '').trim() || '—'}</span>
+                      </div>
                       {resumo.totalCabecas > 0 && (
                         <>
-                          <div className="text-muted-foreground">
-                            <span className="font-semibold text-foreground">{resumo.totalCabecas}</span> cab
-                            {resumo.pesoMedio && <> · <span className="font-semibold text-foreground">{formatNum(resumo.pesoMedio, 1)}</span> kg</>}
+                          {/* Total na MESMA coluna de valor das categorias: celula da esquerda
+                              vazia, valor a direita. Antes era texto corrido e nao alinhava
+                              com o breakdown logo abaixo. */}
+                          <div className="flex justify-between text-muted-foreground">
+                            <span />
+                            <span className="tabular-nums">
+                              <span className="font-semibold text-foreground">{resumo.totalCabecas}</span> cab
+                              {resumo.pesoMedio && <> · <span className="font-semibold text-foreground">{formatNum(resumo.pesoMedio, 1)}</span> kg</>}
+                            </span>
                           </div>
                           {resumo.catBreakdown.length > 0 && (
                             <div className="space-y-0.5 pt-1 border-t border-border/30">
@@ -1353,10 +1365,15 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                               ))}
                             </div>
                           )}
-                          {resumo.lotacaoKgHa != null && (
+                          {/* Porteiro trocado de lotacaoKgHa para uaHa: com o kg/ha fora da
+                              exibicao, quem porteia o bloco tem que ser o dado que ele mostra.
+                              uaHa != null e SUPERCONJUNTO de lotacaoKgHa != null (calcUA
+                              devolve a quantidade quando nao ha peso), entao a troca nunca
+                              esconde rodape que aparecia antes. O calculo de lotacaoKgHa
+                              continua intacto — o grafico de kg/ha do painel consome ele. */}
+                          {resumo.uaHa != null && (
                             <div className="pt-1 border-t border-border/30 text-muted-foreground">
-                              Lotação: <span className="font-semibold text-foreground">{formatNum(resumo.lotacaoKgHa, 0)}</span> kg/ha
-                              {resumo.uaHa != null && <> · <span className="font-semibold text-foreground">{formatNum(resumo.uaHa, 2)}</span> UA/ha</>}
+                              Lotação: <span className="text-sm font-bold text-foreground">{formatNum(resumo.uaHa, 2)} UA/ha</span>
                             </div>
                           )}
                         </>
