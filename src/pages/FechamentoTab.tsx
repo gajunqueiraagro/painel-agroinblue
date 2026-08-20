@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { ArrowLeft, CheckCircle, AlertTriangle, Lock, Unlock, Pencil, BarChart3, Lightbulb, Activity, Map as MapIcon } from 'lucide-react';
+import { ArrowLeft, CheckCircle, AlertTriangle, Lock, Unlock, Pencil, BarChart3, Lightbulb, Activity, Map as MapIcon, RefreshCw } from 'lucide-react';
 import { ResumoAtividadesView } from '@/components/ResumoAtividadesView';
 import { usePastos, isPastoAtivoNoMes, type Pasto } from '@/hooks/usePastos';
 import { useFechamento, type FechamentoPasto, type FechamentoItem } from '@/hooks/useFechamento';
@@ -113,6 +113,35 @@ function gmdColor(gmd: number | null): string {
   return 'text-emerald-600 dark:text-emerald-400';
 }
 
+/* ── PR-AREA-REGENERAR-01B — erros proprios de fn_regenerar_area_do_mes ──
+   A funcao levanta seis erros com MESSAGE proprio. Exibir error.message cru
+   entregaria "conjunto_nao_vigente" ao operador, que nao tem como saber o que e um
+   conjunto vigente. O casamento e por PREFIXO porque duas mensagens carregam
+   explicacao depois do codigo ("ano_mes_invalido: esperado YYYY-MM (01-12)"). */
+const ERROS_REGENERAR: ReadonlyArray<readonly [string, string]> = [
+  ['nao_autenticado',      'Sessão expirada. Entre novamente.'],
+  ['ano_mes_invalido',     'Mês inválido.'],
+  ['fazenda_inexistente',  'Fazenda não encontrada.'],
+  ['sem_permissao',        'Você não tem permissão para regenerar esta fazenda.'],
+  ['mes_oficializado',     'Mês oficializado. Reabra formalmente antes de regenerar.'],
+  ['conjunto_nao_vigente', 'Feche o mês antes de regenerar a área.'],
+];
+
+/* area_anterior e area_nova chegam como to_jsonb da LINHA INTEIRA de
+   fechamento_area_snapshot; daqui so interessa a produtiva. Sem cast: `in` estreita
+   o unknown, e o valor sai como unknown para ser conferido tipo a tipo. */
+function lerAreaProdutiva(bloco: unknown): number | null {
+  if (bloco === null || typeof bloco !== 'object') return null;
+  if (!('area_produtiva_ha' in bloco)) return null;
+  const v = bloco.area_produtiva_ha;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  if (typeof v === 'string') {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
 export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConciliacao, onNavigateToReclass, onNavigateToValorRebanho, onNavigateToConferenciaGmd, onNavigateToMapaPastos }: Props = {}) {
   const { isGlobal, fazendaAtual } = useFazenda();
   const { canEdit } = usePermissions();
@@ -164,6 +193,8 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   const [showSugestoes, setShowSugestoes] = useState(false);
   const [showReclassModal, setShowReclassModal] = useState(false);
   const [showMapaImport, setShowMapaImport] = useState(false);
+  const [confirmRegenerarOpen, setConfirmRegenerarOpen] = useState(false);
+  const [regenerandoArea, setRegenerandoArea] = useState(false);
 
   // Auto-abre o modal "Importar Mapa IA" quando navegado via card "por Foto" no LancarZooHub.
   useEffect(() => {
@@ -732,6 +763,47 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     }
   };
 
+  /* PR-AREA-REGENERAR-01B — regenera a AREA do mes, so a area.
+     A protecao PR1 de fn_gerar_area_de_snapshot preserva mes ja fotografado, entao
+     refechar nao recalcula: quem apaga a linha e chama a geracao num ato so e a
+     fn_regenerar_area_do_mes. Nao passa perto de card de pasto nem de rebanho. */
+  const handleRegenerarArea = async () => {
+    if (!fazendaAtual || fazendaAtual.id === '__global__') return;
+    setRegenerandoArea(true);
+    try {
+      const { data, error } = await (supabase as any).rpc('fn_regenerar_area_do_mes', {
+        p_fazenda_id: fazendaAtual.id,
+        p_ano_mes: anoMes,
+      });
+      if (error) {
+        const msg = String(error.message ?? '');
+        const conhecido = ERROS_REGENERAR.find(([codigo]) => msg.startsWith(codigo));
+        if (conhecido) {
+          toast.error(conhecido[1]);
+        } else {
+          console.error('fn_regenerar_area_do_mes', error);
+          toast.error(`Erro ao regenerar a área: ${msg || 'Tente novamente'}`);
+        }
+        return;
+      }
+      const antes = lerAreaProdutiva(data?.area_anterior);
+      const depois = lerAreaProdutiva(data?.area_nova);
+      // Valor igual e RESULTADO, nao falha: diz que a fotografia ja refletia os pastos.
+      if (antes !== null && depois !== null && Math.abs(depois - antes) < 0.01) {
+        toast.success(`Área regenerada. O valor não mudou: ${formatNum(depois, 2)} ha de área produtiva.`);
+      } else {
+        toast.success(`Área regenerada. Produtiva: ${formatNum(antes, 2)} → ${formatNum(depois, 2)} ha.`);
+      }
+      await loadFechamentos(anoMes);
+    } catch (e: any) {
+      console.error('fn_regenerar_area_do_mes', e);
+      toast.error(`Erro inesperado: ${e?.message || 'Tente novamente'}`);
+    } finally {
+      setRegenerandoArea(false);
+      setConfirmRegenerarOpen(false);
+    }
+  };
+
   const dataInicialReclass = `${anoFiltro}-${String(mesFiltro).padStart(2, '0')}-01`;
   const reclassState = useReclassificacaoState({
     onAdicionar: async (lancamento) => {
@@ -1034,6 +1106,21 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                 </Button>
               </div>
             )}
+
+            {/* PR-AREA-REGENERAR-01B — mes aberto nao tem area para regenerar, por isso
+                allClosed. Ambar do idioma do "Ver sugestoes": este botao APAGA uma linha
+                de fechamento_area_snapshot, e dar a ele o mesmo peso neutro de "Resumo
+                por Atividade", que so abre uma tela, convidaria ao clique errado. */}
+            {allClosed && (canEdit('pastos') || canEdit('zootecnico')) && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-[10px] font-bold gap-1 border-amber-400 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 w-full justify-start"
+                onClick={() => setConfirmRegenerarOpen(true)}
+              >
+                <RefreshCw className="h-3.5 w-3.5" /> Regenerar área
+              </Button>
+            )}
           </div>
 
         </div>
@@ -1261,6 +1348,31 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             <AlertDialogCancel disabled={bulkReopening}>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={handleBulkReopen} disabled={bulkReopening} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               {bulkReopening ? 'Reabrindo...' : `Reabrir Mês`}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Regenerar área */}
+      <AlertDialog open={confirmRegenerarOpen} onOpenChange={(o) => { if (!regenerandoArea) setConfirmRegenerarOpen(o); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <RefreshCw className="h-5 w-5 text-amber-600" />
+              Regenerar área
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm leading-relaxed">
+              A área gravada de{fazendaAtual ? ` "${fazendaAtual.nome}"` : ''} em <strong>{formatAnoMes(anoMes)}</strong> será
+              {' '}<strong>apagada e recalculada</strong> a partir dos pastos do conjunto fechado.
+              <br /><br />
+              Os cards dos pastos e o rebanho <strong>não são afetados</strong> — só a repartição de área do mês.
+              Mês oficializado não regenera: reabra formalmente antes.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={regenerandoArea}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleRegenerarArea} disabled={regenerandoArea}>
+              {regenerandoArea ? 'Regenerando...' : 'Regenerar área'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
