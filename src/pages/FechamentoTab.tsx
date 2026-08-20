@@ -127,19 +127,42 @@ const ERROS_REGENERAR: ReadonlyArray<readonly [string, string]> = [
   ['conjunto_nao_vigente', 'Feche o mês antes de regenerar a área.'],
 ];
 
-/* area_anterior e area_nova chegam como to_jsonb da LINHA INTEIRA de
-   fechamento_area_snapshot; daqui so interessa a produtiva. Sem cast: `in` estreita
-   o unknown, e o valor sai como unknown para ser conferido tipo a tipo. */
-function lerAreaProdutiva(bloco: unknown): number | null {
-  if (bloco === null || typeof bloco !== 'object') return null;
-  if (!('area_produtiva_ha' in bloco)) return null;
-  const v = bloco.area_produtiva_ha;
-  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+/* PR-AREA-REGENERAR-01F — as SETE familias de fechamento_area_snapshot.
+   Nao entra area_produtiva_ha, que e a PARCELA pecuaria + agricultura + silvicultura e
+   somaria em dobro. Nao entra area_total_ha, que e a MATRICULA copiada do cadastro: ela
+   nao muda quando o cadastro de pastos muda, e mostra-la faria o toast dizer "nao mudou"
+   sempre. */
+const CAMPOS_FAMILIA: readonly string[] = [
+  'area_pecuaria_ha', 'area_agricultura_ha', 'area_silvicultura_ha',
+  'area_reserva_ha', 'area_app_ha', 'area_benfeitorias_ha', 'area_outras_ha',
+];
+
+function paraNumero(v: unknown): number {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
   if (typeof v === 'string') {
     const n = Number(v);
-    return Number.isFinite(n) ? n : null;
+    return Number.isFinite(n) ? n : 0;
   }
-  return null;
+  return 0;
+}
+
+/* area_anterior e area_nova chegam como to_jsonb da LINHA INTEIRA de
+   fechamento_area_snapshot. O que interessa e a soma das familias — foi ela que a
+   regeneracao produziu, e e ela que muda quando o cadastro de pastos muda.
+   Ler so a produtiva escondia o essencial: na Sta. Tereza o toast disse
+   632,30 -> 644,20 quando a correcao real foi 632,30 -> 837,92. Os 193,72 de reserva,
+   APP e benfeitorias eram justamente o que faltava no cadastro.
+   Campo ausente vale zero NA SOMA; bloco nulo ou nao-objeto devolve null, e o
+   formatNum imprime travessao — ausencia de dado nao e 0,00.
+   Object.entries em vez de bloco[campo]: indexar exigiria cast, e `in` so estreita
+   com chave literal. */
+function somarFamilias(bloco: unknown): number | null {
+  if (bloco === null || typeof bloco !== 'object') return null;
+  let soma = 0;
+  for (const [chave, valor] of Object.entries(bloco)) {
+    if (CAMPOS_FAMILIA.includes(chave)) soma += paraNumero(valor);
+  }
+  return soma;
 }
 
 /* ── PR-AREA-REGENERAR-01E — lote ──
@@ -800,13 +823,13 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
         }
         return;
       }
-      const antes = lerAreaProdutiva(data?.area_anterior);
-      const depois = lerAreaProdutiva(data?.area_nova);
+      const antes = somarFamilias(data?.area_anterior);
+      const depois = somarFamilias(data?.area_nova);
       // Valor igual e RESULTADO, nao falha: diz que a fotografia ja refletia os pastos.
       if (antes !== null && depois !== null && Math.abs(depois - antes) < 0.01) {
-        toast.success(`Área regenerada. O valor não mudou: ${formatNum(depois, 2)} ha de área produtiva.`);
+        toast.success(`Área regenerada. O valor não mudou: ${formatNum(depois, 2)} ha.`);
       } else {
-        toast.success(`Área regenerada. Produtiva: ${formatNum(antes, 2)} → ${formatNum(depois, 2)} ha.`);
+        toast.success(`Área regenerada. Total: ${formatNum(antes, 2)} → ${formatNum(depois, 2)} ha.`);
       }
       await loadFechamentos(anoMes);
     } catch (e: any) {
@@ -881,8 +904,8 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
           if (!conhecido) console.error('fn_regenerar_area_do_mes', mes, error);
           falhas.push({ anoMes: mes, motivo: conhecido ? conhecido[1] : (msg || 'Erro desconhecido') });
         } else {
-          const antes = lerAreaProdutiva(data?.area_anterior);
-          const depois = lerAreaProdutiva(data?.area_nova);
+          const antes = somarFamilias(data?.area_anterior);
+          const depois = somarFamilias(data?.area_nova);
           // Valor igual e RESULTADO, nao falha: a fotografia ja refletia os pastos.
           if (antes !== null && depois !== null && Math.abs(depois - antes) < 0.01) inalterados++;
           else regenerados++;
