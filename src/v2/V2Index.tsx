@@ -565,7 +565,7 @@ export default function V2Index() {
   }, [section]); // eslint-disable-line react-hooks/exhaustive-deps
   const periodoTipo = getPeriodoTipo(section);
   const { clientes, clienteAtual } = useCliente();
-  const { fazendas, isGlobal } = useFazenda();
+  const { fazendas, isGlobal, setFazendaAtual } = useFazenda();
   const { canEditMeta } = usePermissions();
 
   useEffect(() => {
@@ -596,8 +596,21 @@ export default function V2Index() {
     })();
   }, [clienteAtual?.id]);
 
+  /* PR-HOME-STATUS-CHIP-NAV-01 — a faixa de status da Home e ACIONAVEL: o chip leva a
+     onde a pendencia esta. A troca de fazenda vai JUNTO porque sem ela clicar no chip
+     de outra fazenda estando em Global cairia na tela certa em contexto errado, e o
+     operador teria de trocar a fazenda na mao — metade da navegacao.
+     Fazenda nao encontrada NAO impede a navegacao: leva para a tela assim mesmo, em vez
+     de o clique nao fazer nada. Idioma da busca copiado de V2FilterBar.tsx:37.
+     So navega: nao corrige, nao fecha, nao reabre, nao grava. */
+  const irParaPendencia = (destino: V2Section, fazendaId: string) => {
+    const f = fazendas.find(x => x.id === fazendaId);
+    if (f) setFazendaAtual(f);
+    setSection(destino);
+  };
+
   function renderContent() {
-    if (section === 'home') return <V2Home ano={ano} mes={mes} viewMode={viewMode} onViewModeChange={setViewMode} />;
+    if (section === 'home') return <V2Home ano={ano} mes={mes} viewMode={viewMode} onViewModeChange={setViewMode} onIrPara={irParaPendencia} />;
     if (section === 'painel-consultor') return (
       <PainelConsultorTab
         onBack={() => setSection('home')}

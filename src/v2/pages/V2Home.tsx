@@ -11,6 +11,7 @@ import { IndicadorHistoricoModal } from '@/v2/components/IndicadorHistoricoModal
 import { useHistoricoIndicador, type HistoricoIndicadorKey } from '@/hooks/useHistoricoIndicador';
 import { supabase } from '@/integrations/supabase/client';
 import { useStatusPilaresLote, type StatusFazenda } from '@/hooks/useStatusPilaresLote';
+import type { V2Section } from '@/v2/lib/navGrupos';
 
 const fmtN = (v: number | null | undefined, dec = 0) =>
   v == null || isNaN(v) ? null
@@ -126,10 +127,11 @@ function SectionBlock({ title, subtitle, children }: {
    P3/P4/P5 nao aparecem: estao 'nao_implementado', e mostra-los como cinza no topo da
    tela principal seria ruido permanente.
    Nao corrige, nao fecha, nao abre dialogo de acao — so informa onde a pendencia esta. */
-function StatusFechamentoBanda({ status, isGlobal, loading }: {
+function StatusFechamentoBanda({ status, isGlobal, loading, onIrPara }: {
   status: StatusFazenda[];
   isGlobal: boolean;
   loading: boolean;
+  onIrPara?: (section: V2Section, fazendaId: string) => void;
 }) {
   // Skeleton de UMA linha, mesma altura do estado final: a barra sticky nao pode
   // pular de altura quando o fetch termina.
@@ -145,15 +147,33 @@ function StatusFechamentoBanda({ status, isGlobal, loading }: {
     return faltas.length > 0 ? faltas.join(' e ') : null;
   };
 
+  /* P1 ANTES de P2, e nao por ordem alfabetica: o mapa de pastos e pre-requisito do
+     valor do rebanho. Mandar o operador ao valor primeiro seria manda-lo a uma tela
+     que ele ainda nao pode fechar. */
+  const destinoDe = (f: StatusFazenda): V2Section =>
+    (f.p1 !== 'oficial' ? 'fechamento' : 'valor-rebanho');
+
   const pendentes = status.filter(f => faltaDe(f) !== null);
 
   if (!isGlobal) {
     const f = status[0];
     const falta = faltaDe(f);
-    return falta === null ? (
-      <p className="mt-1 text-[11px] text-muted-foreground">
-        Mês fechado — mapa de pastos e valor do rebanho
-      </p>
+    if (falta === null) {
+      return (
+        <p className="mt-1 text-[11px] text-muted-foreground">
+          Mês fechado — mapa de pastos e valor do rebanho
+        </p>
+      );
+    }
+    // Sem onIrPara, texto — nunca botao morto.
+    return onIrPara ? (
+      <button
+        type="button"
+        onClick={() => onIrPara(destinoDe(f), f.fazendaId)}
+        className="mt-1 block text-left text-[11px] text-amber-700 cursor-pointer hover:underline"
+      >
+        Pendente: {falta}
+      </button>
     ) : (
       <p className="mt-1 text-[11px] text-amber-700">
         Pendente: {falta}
@@ -172,12 +192,23 @@ function StatusFechamentoBanda({ status, isGlobal, loading }: {
       {!tudoFechado && (
         <div className="mt-1 flex flex-wrap gap-1">
           {pendentes.map(f => (
-            <span
-              key={f.fazendaId}
-              className="rounded-full border border-border/40 bg-amber-500/15 px-2 py-0.5 text-[10px] text-amber-700"
-            >
-              {f.nome} · {faltaDe(f)}
-            </span>
+            onIrPara ? (
+              <button
+                key={f.fazendaId}
+                type="button"
+                onClick={() => onIrPara(destinoDe(f), f.fazendaId)}
+                className="rounded-full border border-border/40 bg-amber-500/15 px-2 py-0.5 text-[10px] text-amber-700 cursor-pointer hover:bg-amber-500/25"
+              >
+                {f.nome} · {faltaDe(f)}
+              </button>
+            ) : (
+              <span
+                key={f.fazendaId}
+                className="rounded-full border border-border/40 bg-amber-500/15 px-2 py-0.5 text-[10px] text-amber-700"
+              >
+                {f.nome} · {faltaDe(f)}
+              </span>
+            )
           ))}
         </div>
       )}
@@ -185,11 +216,13 @@ function StatusFechamentoBanda({ status, isGlobal, loading }: {
   );
 }
 
-export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
+export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara }: {
   ano: string;
   mes: string;
   viewMode?: 'mes' | 'periodo';
   onViewModeChange?: (v: 'mes' | 'periodo') => void;
+  /* OPCIONAL: sem ela a faixa continua informando, so nao clica. */
+  onIrPara?: (section: V2Section, fazendaId: string) => void;
 }) {
   const { clienteAtual } = useCliente();
   const { fazendaAtual, isGlobal, fazendasComPecuaria } = useFazenda();
@@ -903,6 +936,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           status={statusFechamento}
           isGlobal={isGlobal}
           loading={loadingStatusFechamento}
+          onIrPara={onIrPara}
         />
         {onViewModeChange && (
           <div className="flex gap-1 mt-2">
