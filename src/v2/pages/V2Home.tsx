@@ -10,6 +10,7 @@ import { useEndividamentoAtual } from '@/hooks/useEndividamentoAtual';
 import { IndicadorHistoricoModal } from '@/v2/components/IndicadorHistoricoModal';
 import { useHistoricoIndicador, type HistoricoIndicadorKey } from '@/hooks/useHistoricoIndicador';
 import { supabase } from '@/integrations/supabase/client';
+import { useStatusPilaresLote, type StatusFazenda } from '@/hooks/useStatusPilaresLote';
 
 const fmtN = (v: number | null | undefined, dec = 0) =>
   v == null || isNaN(v) ? null
@@ -118,6 +119,72 @@ function SectionBlock({ title, subtitle, children }: {
   );
 }
 
+/* PR-HOME-STATUS-BLOCO-01 — faixa de status de fechamento.
+   DISCRETA QUANDO ESTA TUDO FECHADO, e isso e regra, nao economia de pixel: faixa que
+   grita todos os dias vira faixa que ninguem le. O destaque existe para a EXCECAO.
+   Em modo global lista SO as fazendas com pendencia — as fechadas nao ocupam espaco.
+   P3/P4/P5 nao aparecem: estao 'nao_implementado', e mostra-los como cinza no topo da
+   tela principal seria ruido permanente.
+   Nao corrige, nao fecha, nao abre dialogo de acao — so informa onde a pendencia esta. */
+function StatusFechamentoBanda({ status, isGlobal, loading }: {
+  status: StatusFazenda[];
+  isGlobal: boolean;
+  loading: boolean;
+}) {
+  // Skeleton de UMA linha, mesma altura do estado final: a barra sticky nao pode
+  // pular de altura quando o fetch termina.
+  if (loading) {
+    return <div className="mt-1 h-4 w-48 rounded bg-muted/60 animate-pulse" />;
+  }
+  if (status.length === 0) return null;
+
+  const faltaDe = (f: StatusFazenda): string | null => {
+    const faltas: string[] = [];
+    if (f.p1 !== 'oficial') faltas.push('mapa de pastos');
+    if (f.p2 !== 'oficial') faltas.push('valor do rebanho');
+    return faltas.length > 0 ? faltas.join(' e ') : null;
+  };
+
+  const pendentes = status.filter(f => faltaDe(f) !== null);
+
+  if (!isGlobal) {
+    const f = status[0];
+    const falta = faltaDe(f);
+    return falta === null ? (
+      <p className="mt-1 text-[11px] text-muted-foreground">
+        Mês fechado — mapa de pastos e valor do rebanho
+      </p>
+    ) : (
+      <p className="mt-1 text-[11px] text-amber-700">
+        Pendente: {falta}
+      </p>
+    );
+  }
+
+  const fechadas = status.length - pendentes.length;
+  const tudoFechado = pendentes.length === 0;
+
+  return (
+    <div className="mt-1">
+      <p className={`text-[11px] ${tudoFechado ? 'text-muted-foreground' : 'text-amber-700'}`}>
+        {fechadas} de {status.length} fazendas com o mês fechado
+      </p>
+      {!tudoFechado && (
+        <div className="mt-1 flex flex-wrap gap-1">
+          {pendentes.map(f => (
+            <span
+              key={f.fazendaId}
+              className="rounded-full border border-border/40 bg-amber-500/15 px-2 py-0.5 text-[10px] text-amber-700"
+            >
+              {f.nome} · {faltaDe(f)}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
   ano: string;
   mes: string;
@@ -135,6 +202,20 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
 
   const mesNum = parseInt(mes);
   const anoNum = parseInt(ano);
+
+  /* Status de fechamento da faixa. Em modo global pergunta fazenda a fazenda; com
+     fazenda especifica, so a dela. anoMes e sempre 'YYYY-MM', o formato que a RPC
+     recebe — `mes` chega como string sem garantia de zero a esquerda. */
+  const anoMesStatus = useMemo(
+    () => (anoNum && mesNum ? `${anoNum}-${String(mesNum).padStart(2, '0')}` : undefined),
+    [anoNum, mesNum],
+  );
+  const fazendasStatus = useMemo(
+    () => (isGlobal ? fazendasComPecuaria : fazendaAtual ? [fazendaAtual] : []),
+    [isGlobal, fazendasComPecuaria, fazendaAtual],
+  );
+  const { data: statusFechamento, loading: loadingStatusFechamento } =
+    useStatusPilaresLote(fazendasStatus, anoMesStatus);
   const isPeriodo = viewMode === 'periodo';
 
   const MES_ABREV = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
@@ -818,6 +899,11 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
         <p className="text-xs text-muted-foreground mt-0.5">
           {isGlobal ? 'Todas as fazendas' : fazendaAtual?.nome} · {ml}
         </p>
+        <StatusFechamentoBanda
+          status={statusFechamento}
+          isGlobal={isGlobal}
+          loading={loadingStatusFechamento}
+        />
         {onViewModeChange && (
           <div className="flex gap-1 mt-2">
             <button
