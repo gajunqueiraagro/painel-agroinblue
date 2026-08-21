@@ -1,6 +1,8 @@
 # Runbook — Backfill de subcentro em transferências entre contas
 
 **Executado:** 21/08/2026 17:21 UTC — proto (`binbcdfbisgscrifztia`)
+**Executado por:** sessão Claude Chat (Arquiteto), via Supabase Management API.
+Nenhum PR de código acompanha esta operação.
 **Natureza:** operação de dado pontual. Higiene de classificação.
 **Impacto em tela: ZERO** — transferências não entram no bloco Caixa nem
 em nenhum agregado de entrada ou saída.
@@ -95,11 +97,31 @@ Não resta nenhum órfão sem causa documentada.
 
 ## Rollback
 
-Janela: `updated_at > timestamptz '2026-08-21 17:21:01.971939+00'`.
+**A janela de `updated_at` sozinha NÃO é segura.** No dia da execução ela
+isolava exatamente os 3.050 registros; a cada dia que passa, mais lançamentos
+não relacionados caem dentro dela — e o UPDATE zeraria a classificação deles
+também. Os filtros abaixo caracterizam o conjunto por atributos que não mudam.
 
 ```sql
+-- CONFIRA A CONTAGEM ANTES DE EXECUTAR: deve retornar exatamente 3.050.
+SELECT count(*) FROM financeiro_lancamentos_v2
+WHERE updated_at > timestamptz '2026-08-21 17:21:01.971939+00'
+  AND tipo_operacao = '3-Transferências'
+  AND transferencia_grupo_id IS NOT NULL
+  AND subcentro = 'Transferência entre Contas Bancárias';
+
 UPDATE financeiro_lancamentos_v2
   SET subcentro = NULL, grupo_custo = NULL, macro_custo = NULL,
       centro_custo = NULL, escopo_negocio = NULL
-  WHERE updated_at > timestamptz '2026-08-21 17:21:01.971939+00';
+  WHERE updated_at > timestamptz '2026-08-21 17:21:01.971939+00'
+    AND tipo_operacao = '3-Transferências'
+    AND transferencia_grupo_id IS NOT NULL
+    AND subcentro = 'Transferência entre Contas Bancárias';
 ```
+
+Se a contagem não der 3.050, PARE: outra operação tocou o conjunto e o
+rollback não é mais reconstruível por regra.
+
+ATENÇÃO: este rollback reverte APENAS a classificação. Ele não restaura
+`editado_manual`, que foi deliberadamente mantido em `false` — ver a seção
+"ARMADILHA" acima.

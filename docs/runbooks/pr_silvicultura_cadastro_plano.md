@@ -1,6 +1,8 @@
 # Runbook — Cadastro de Silvicultura no Plano de Contas
 
 **Executado:** 21/08/2026 17:12 UTC — proto (`binbcdfbisgscrifztia`)
+**Executado por:** sessão Claude Chat (Arquiteto), via Supabase Management API.
+O Claude Code commitou apenas o PR de código `2e24e5d0` e este runbook.
 **Natureza:** operação de dado. Complementa o PR de código `2e24e5d0`
 (`PR-PC100-SILVICULTURA-01`), que criou predicates, agregadores,
 indicadores e linhas do bloco Caixa.
@@ -114,3 +116,9 @@ DELETE FROM financeiro_plano_contas
   WHERE escopo_negocio='silvicultura' AND subcentro <> 'Venda de Eucalipto';
 ```
 A limpeza dos 6 `escopo_negocio` não deve ser revertida — era correção.
+
+Este rollback é seguro sem depender da janela de `updated_at`: as três
+cláusulas filtram por `subcentro` e `escopo_negocio`, que identificam o
+conjunto por conteúdo e não por horário. Confira antes de executar que
+`SELECT count(*) FROM financeiro_plano_contas WHERE escopo_negocio='silvicultura'`
+retorna 35 e que os lançamentos de eucalipto são 15.

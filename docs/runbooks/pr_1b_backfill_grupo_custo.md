@@ -1,6 +1,8 @@
 # Runbook PR-1b — Backfill de `grupo_custo` em `financeiro_lancamentos_v2`
 
 **Executado:** 21/08/2026 16:10 UTC — proto (`binbcdfbisgscrifztia`)
+**Executado por:** sessão Claude Chat (Arquiteto), via Supabase Management API.
+NÃO foi executado pelo Claude Code — o Code commitou apenas este runbook.
 **Natureza:** operação de dado pontual. NÃO virou migration: replay em banco
 limpo não teria o defeito, e a migration ficaria como um UPDATE que nunca casa.
 
@@ -91,10 +93,34 @@ idêntico ao dry-run, ao centavo.
 
 ## Rollback
 
+Valor anterior era `NULL` em todos os 465.
+
+**A janela de `updated_at` sozinha NÃO é segura.** No dia da execução ela
+isolava exatamente os 465 registros; a cada dia que passa, mais lançamentos
+não relacionados caem dentro dela e teriam a classificação zerada. Por isso o
+rollback filtra também por `created_at`, que é imutável: todos os 465
+nasceram na janela de importação de 20–28/04/2026.
+
 ```sql
+-- CONFIRA A CONTAGEM ANTES DE EXECUTAR: deve retornar exatamente 465.
+SELECT count(*) FROM financeiro_lancamentos_v2
+WHERE updated_at > timestamptz '2026-08-21 16:10:16.646515+00'
+  AND created_at >= timestamptz '2026-04-20'
+  AND created_at <  timestamptz '2026-04-29'
+  AND grupo_custo IS NOT NULL
+  AND subcentro IS NOT NULL
+  AND coalesce(macro_custo,'') <> 'Dividendos';
+
 UPDATE financeiro_lancamentos_v2
 SET grupo_custo = NULL
-WHERE updated_at > timestamptz '2026-08-21 16:10:16.646515+00';
+WHERE updated_at > timestamptz '2026-08-21 16:10:16.646515+00'
+  AND created_at >= timestamptz '2026-04-20'
+  AND created_at <  timestamptz '2026-04-29'
+  AND grupo_custo IS NOT NULL
+  AND subcentro IS NOT NULL
+  AND coalesce(macro_custo,'') <> 'Dividendos';
 ```
 
-Valor anterior era `NULL` em todos os 465.
+Se a contagem não der 465, PARE: outra operação tocou o conjunto e o rollback
+não é mais reconstruível por regra — será preciso identificar os registros
+individualmente antes de reverter.
