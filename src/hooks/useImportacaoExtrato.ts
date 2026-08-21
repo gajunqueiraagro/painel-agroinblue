@@ -31,7 +31,6 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
-import { useFazenda } from '@/contexts/FazendaContext';
 import { parseOFX, type MovimentoBruto } from '@/lib/financeiro/parser/parseOFX';
 import { parseCSVComRelatorio } from '@/lib/financeiro/parser/parseCSV';
 import { extractPdfText } from '@/lib/financeiro/parser/extractPdfText';
@@ -566,7 +565,6 @@ function calcularScoreAgrupado(
 
 export function useImportacaoExtrato() {
   const { clienteAtual } = useCliente();
-  const { fazendaAtual } = useFazenda();
   const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1063,14 +1061,19 @@ export function useImportacaoExtrato() {
     if (!preview) throw new Error('Sem preview gerado — chame gerarPreview primeiro');
     if (!clienteAtual?.id) throw new ErroUsuarioSeguro('Cliente não selecionado');
 
-    // Extrato bancário pertence ao cliente+conta (sem fazenda — a tabela
-    // extrato_bancario_v2 não tem fazenda_id). O cabeçalho opcional em
-    // financeiro_importacoes_v2 ainda exige fazenda_id NOT NULL, então só
-    // criamos esse header quando o usuário está em uma fazenda específica.
-    // Em modo global, a importação é salva direto em extrato_bancario_v2
-    // com importacao_id = NULL (campo já é nullable). Sem fazenda padrão.
-    const fazendaId = fazendaAtual?.id;
-    const fazendaEspecifica = !!fazendaId && fazendaId !== '__global__';
+    // PR-FIX-OFX-IMPORT-ID — extrato bancário NÃO TEM FAZENDA, e o cabeçalho de
+    // importação registra isso gravando fazenda_id NULL SEMPRE, inclusive quando há
+    // fazenda selecionada na tela. A conta bancária pertence ao cliente, e
+    // extrato_bancario_v2 não tem coluna fazenda_id: preencher a fazenda aqui seria
+    // informação decorativa, e abriria a porta para o MESMO extrato ser importado
+    // duas vezes em fazendas diferentes e tratado como coisas distintas.
+    // O fluxo Excel de lançamentos (useFinanceiro.ts) não muda — lá a fazenda é real.
+    //
+    // Até aqui o header só nascia com fazenda específica, e o comentário anterior dava
+    // a razão: "financeiro_importacoes_v2 ainda exige fazenda_id NOT NULL". A premissa
+    // era falsa no banco — a coluna é nullable no proto — e verdadeira só no repo, que
+    // nunca versionou o DROP NOT NULL. O resultado foi importacao_id NULL em 3.638 de
+    // 3.638 linhas de extrato: nenhum lote rastreável, nunca.
 
     // P0-OFX-DUP-GUARD / FASE 1B — SKIP controlado: pula APENAS o que o operador
     // (ou o default da régua) marcou explicitamente p/ pular (dupImportar===false).
@@ -1101,21 +1104,28 @@ export function useImportacaoExtrato() {
         throw new ErroUsuarioSeguro('A conta bancária selecionada não pertence ao cliente atual.');
       }
 
-      // 1) Cabeçalho de importação — opcional (depende de fazenda específica).
+      // 1) Cabeçalho de importação — SEMPRE. É ele que dá lote rastreável ao extrato.
+      //    status 'processada' e não 'confirmada': as 53 linhas existentes usam só
+      //    'processada' e 'cancelada', não há CHECK em status, e como este insert passa
+      //    a rodar sempre, 'confirmada' criaria um terceiro vocabulário no banco a
+      //    partir de um caminho que nunca gravou nada. 'processada' é o que o fluxo
+      //    Excel grava.
+      //    O `as any` fica: types.ts declara fazenda_id como string obrigatório e está
+      //    desatualizado em relação ao banco. Regenerar types.ts é PR próprio.
       let importacaoId: string | null = null;
-      if (fazendaEspecifica) {
+      {
         const { data: imp, error: e1 } = await supabase
           .from('financeiro_importacoes_v2')
           .insert({
             cliente_id: clienteAtual.id,
-            fazenda_id: fazendaId,
+            fazenda_id: null,
             conta_bancaria_id: params.contaBancariaId,
             nome_arquivo: params.nomeArquivo,
             tipo_arquivo: params.formato,
             total_linhas: preview.totalLinhas,
             total_validas: novos.length,
             total_com_erro: preview.existentesNoBanco,
-            status: 'confirmada',
+            status: 'processada',
           } as any)
           .select('id')
           .single();
