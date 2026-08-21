@@ -153,11 +153,14 @@ function LinhaCaixa({ label, valor, tipo = 'detalhe', corValor }: {
   tipo?: 'detalhe' | 'total';
   corValor?: string;
 }) {
+  /* Hierarquia: TOTAL em text-xs, DETALHE em text-[9px] + leading-tight. O bloco
+     "Disponivel em conta" reusa este componente e herda a mesma hierarquia —
+     subtotal de tipo maior que as contas, que e o efeito desejado la tambem. */
   const base = tipo === 'total'
-    ? 'font-medium text-foreground'
-    : 'text-muted-foreground pl-2';
+    ? 'text-xs font-medium text-foreground'
+    : 'text-[9px] leading-tight text-muted-foreground pl-2';
   return (
-    <div className={`flex items-baseline justify-between gap-3 text-[10px] ${base}`}>
+    <div className={`flex items-baseline justify-between gap-3 ${base}`}>
       <span className="truncate">{label}</span>
       <span className={`tabular-nums shrink-0 ${corValor ?? ''}`}>
         {valor == null ? '—' : fmtR(valor)}
@@ -701,9 +704,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
        dois permanecem intocados. Aqui o regime e caixa: o bloco fecha contra
        saldo bancario real, e misturar regimes num total que precisa fechar
        era o defeito. As duas leituras divergem por natureza. */
-    { label: 'Produção pecuária',      valor: receitaPecCaixaIndicador?.valor ?? null },
-    { label: 'Produção agricultura',   valor: receitaAgriIndicador?.valor   ?? null },
-    { label: 'Produção silvicultura',  valor: receitaSilvicolaIndicador?.valor ?? null },
+    { label: 'Receitas pecuária',      valor: receitaPecCaixaIndicador?.valor ?? null },
+    { label: 'Receitas agricultura',   valor: receitaAgriIndicador?.valor   ?? null },
+    { label: 'Receitas silvicultura',  valor: receitaSilvicolaIndicador?.valor ?? null },
     { label: 'Outras receitas',        valor: receitaOutrasIndicador?.valor ?? null },
     { label: 'Captação financiamento', valor: captacaoIndicador?.valor      ?? null },
     /* Residuo CONDICIONAL: totalEntradas e a soma das linhas EXIBIDAS, entao somar uma
@@ -1402,7 +1405,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
 
   return (
     <div className="px-4 pb-5 max-w-7xl">
-      <div className="sticky top-0 z-30 -mx-4 px-4 py-3 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border/40 shadow-sm mb-4">
+      <div className="sticky top-0 z-30 -mx-4 px-4 py-3 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border/40 shadow-sm mb-2">
         <h2 className="text-sm font-semibold text-foreground">
           {g}{clienteAtual ? ', ' + clienteAtual.nome : ''}
         </h2>
@@ -1755,7 +1758,10 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
             O conteudo vai num col-span-2 porque o miolo do SectionBlock e uma grade de
             DUAS colunas, feita para MetricTile — e aqui e uma LISTA de 19 linhas. */}
         <SectionBlock title="Caixa" subtitle="entradas e saídas do período">
-          <div className="col-span-2 space-y-0.5">
+          {/* -mt-1 puxa a primeira linha para cima, encostando no titulo. Aplicado
+             SO aqui: o respiro vem do SectionBlock, que e usado por todos os blocos
+             e nao pode ser alterado por causa de um. */}
+          <div className="col-span-2 -mt-1 space-y-0.5">
             <LinhaCaixa label={rotuloSaldoInicial} valor={saldoInicial} tipo="total" />
 
             <div className="pt-1 space-y-0.5">
