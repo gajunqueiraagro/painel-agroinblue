@@ -22,7 +22,6 @@ import {
   datePagtoAnoMes as datePagtoAnoMesCentral,
   isDesembolsoProdutivo as isDesembolsoProdutivoCentral,
 } from '@/lib/financeiro/classificacao';
-import { isLancamentoDRERealizada } from '@/lib/financeiro/dreRealizada';
 
 // ---------------------------------------------------------------------------
 // Agrupamento por macro_custo oficial (plano de contas)
@@ -66,9 +65,34 @@ export interface DrillDownPayload {
   periodo: 'mes' | 'acum';
 }
 
-/** Pertencimento à DRE = flag oficial compoe_dre (FIN-FLAGS-01B). Sem heurística de macro.
- *  A separação entrada/saída e a linha continuam nos predicados isEntrada/isSaida. */
-const isDRE = (l: FinanceiroLancamento) => isLancamentoDRERealizada(l);
+/* PR-DASH-FIN-CAIXA-01 — ESTA TELA E DE CAIXA, NAO DE DRE.
+ *
+ * Ate aqui os seis pontos de filtro exigiam compoe_dre=true, e o efeito era esconder
+ * exatamente o que so existe em caixa. Medido na Vera Ligia, jan-jul/2026, realizado:
+ *
+ *   SAIDAS            compoe_dre     valor
+ *     Custeio Producao   true      773.861
+ *     Dividendos        FALSE      619.564   <- sumia
+ *     Deducoes           true      189.077
+ *     Inv. na Fazenda    true      176.635
+ *     Tributos           true       85.226
+ *     Saida Financeira  FALSE       54.346   <- sumia
+ *     TOTAL DE CAIXA ............ 1.898.710
+ *     TOTAL EXIBIDO ............. 1.224.799   (-35%)
+ *
+ *   ENTRADAS: 1.685.135 de caixa contra 1.678.972 exibidos — Entrada Financeira
+ *   (6.163) tambem sumia.
+ *
+ * A FLAG NAO ESTA ERRADA e nao foi tocada: dividendo e distribuicao de lucro,
+ * amortizacao e devolucao de principal, captacao e emprestimo recebido — nenhum e
+ * receita ou despesa da operacao, e nenhum entra no DRE. O defeito era usar a flag do
+ * DRE numa tela de caixa.
+ *
+ * Com o filtro fora, esta tela passa a bater com o bloco de Caixa da Visao Geral
+ * (a599a7e8), que ja mostrava os 1.898.710. Duas telas, um numero.
+ *
+ * A separacao entrada/saida continua nos predicados isEntrada/isSaida.
+ */
 
 interface Props {
   lancamentos: FinanceiroLancamento[];
@@ -148,8 +172,8 @@ export function DashboardFinanceiro({
       return datePagtoAnoMes(l) === periodoMes;
     }), [lancamentos, periodoMes]);
 
-  const entradasListMes = useMemo(() => filtradosMes.filter(l => isEntrada(l) && isDRE(l)), [filtradosMes]);
-  const saidasListMes = useMemo(() => filtradosMes.filter(l => isSaida(l) && isDRE(l)), [filtradosMes]);
+  const entradasListMes = useMemo(() => filtradosMes.filter(l => isEntrada(l)), [filtradosMes]);
+  const saidasListMes = useMemo(() => filtradosMes.filter(l => isSaida(l)), [filtradosMes]);
 
   // Rateio
   const rateioFiltradoMes = useMemo(() => rateioADM.filter(r => r.anoMes === periodoMes), [rateioADM, periodoMes]);
@@ -176,8 +200,8 @@ export function DashboardFinanceiro({
       return Number(am.substring(5, 7)) <= mesLimite;
     };
 
-    const entradasAcum = lancamentos.filter(l => filtroAcum(l) && isEntrada(l) && isDRE(l)).reduce((s, l) => s + Math.abs(l.valor), 0);
-    const saidasAcum = lancamentos.filter(l => filtroAcum(l) && isSaida(l) && isDRE(l)).reduce((s, l) => s + Math.abs(l.valor), 0);
+    const entradasAcum = lancamentos.filter(l => filtroAcum(l) && isEntrada(l)).reduce((s, l) => s + Math.abs(l.valor), 0);
+    const saidasAcum = lancamentos.filter(l => filtroAcum(l) && isSaida(l)).reduce((s, l) => s + Math.abs(l.valor), 0);
 
     // Decomposição entradas — agrupamento por macro_custo oficial
     const entradaDecomp = { mes: new Map<string, number>(), acum: new Map<string, number>() };
@@ -186,7 +210,7 @@ export function DashboardFinanceiro({
       const cat = normMacroDisplay(l.macro_custo);
       entradaDecomp.mes.set(cat, (entradaDecomp.mes.get(cat) || 0) + Math.abs(l.valor));
     }
-    lancamentos.filter(l => filtroAcum(l) && isEntrada(l) && isDRE(l)).forEach(l => {
+    lancamentos.filter(l => filtroAcum(l) && isEntrada(l)).forEach(l => {
       const cat = normMacroDisplay(l.macro_custo);
       entradaDecomp.acum.set(cat, (entradaDecomp.acum.get(cat) || 0) + Math.abs(l.valor));
     });
@@ -198,7 +222,7 @@ export function DashboardFinanceiro({
       const cat = normMacroDisplay(l.macro_custo);
       saidaDecomp.mes.set(cat, (saidaDecomp.mes.get(cat) || 0) + Math.abs(l.valor));
     }
-    lancamentos.filter(l => filtroAcum(l) && isSaida(l) && isDRE(l)).forEach(l => {
+    lancamentos.filter(l => filtroAcum(l) && isSaida(l)).forEach(l => {
       const cat = normMacroDisplay(l.macro_custo);
       saidaDecomp.acum.set(cat, (saidaDecomp.acum.get(cat) || 0) + Math.abs(l.valor));
     });
