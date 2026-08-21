@@ -143,6 +143,33 @@ function SectionBlock({ title, subtitle, children, naoFechado, avisoNaoFechado }
   );
 }
 
+/* ── PR-HOME-CAIXA-CONSOLIDADO-01 — linha do bloco de Caixa ──
+   Travessao quando nao ha valor, NUNCA zero: zero afirma "nao houve", travessao diz
+   "nao ha dado". Regra de sentinela do CLAUDE.md. */
+function LinhaCaixa({ label, valor, tipo = 'detalhe', corValor }: {
+  label: string;
+  valor: number | null;
+  tipo?: 'detalhe' | 'total';
+  corValor?: string;
+}) {
+  const base = tipo === 'total'
+    ? 'font-medium text-foreground'
+    : 'text-muted-foreground pl-2.5';
+  return (
+    <div className={`flex items-baseline justify-between gap-3 text-[11px] ${base}`}>
+      <span className="truncate">{label}</span>
+      <span className={`tabular-nums shrink-0 ${corValor ?? ''}`}>
+        {valor == null ? '—' : fmtR(valor)}
+      </span>
+    </div>
+  );
+}
+
+/* Soma so o que EXISTE: null nao entra na conta. */
+function somaLinhas(valores: (number | null)[]): number {
+  return valores.reduce<number>((acc, v) => acc + (v ?? 0), 0);
+}
+
 /* ── PR-HOME-REGUA-MESES-01 — regua de 12 meses ──
    Substitui o dropdown de mes (que saiu de periodoConfig, entrada 'home'). Um seletor
    so, e ele mostra o ANO INTEIRO de uma vez: o dropdown escondia o historico.
@@ -503,8 +530,72 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     lotUaHa, kgHa, statusArea, faltandoCount,
     seriesMensais, seriesMeta, cabecasIndicador, pesoMedioIndicador, gmdIndicador, uaHaIndicador, kgHaIndicador, arrobasIndicador, desfruteIndicador, valorRebanhoIndicador,
     receitaPecIndicador, custeioPecIndicador, custoArrIndicador, precoArrIndicador, custoCabIndicador, margemArrIndicador,
+    // PR-HOME-CAIXA-CONSOLIDADO-01 — as 15 linhas de fluxo e o saldo.
+    receitaAgriIndicador, receitaOutrasIndicador, captacaoIndicador,
+    investPecIndicador, investBovinosIndicador, amortizacaoPecIndicador,
+    custeioAgriIndicador, investAgriIndicador, amortizacaoAgriIndicador,
+    dividendosIndicador, deducoesTributosIndicador, tributosIndicador,
+    caixaIndicador,
     loading: loadingPainel,
   } = usePainelConsultorData({ ano: anoNum, mes: mesNum, viewMode, incluirComparativos: true, ...sharedLanc });
+
+  /* ── PR-HOME-CAIXA-CONSOLIDADO-01 ──
+     O bloco SEGUE o viewMode da tela. Nao ha seletor proprio: a Visao Geral ja tem
+     "No mes / No periodo", e um segundo controle para a mesma pergunta faria a tela
+     falar com duas vozes.
+
+     SALDO — caixaIndicador.serieAno tem length 13, com a posicao 0 = DEZEMBRO do ano
+     anterior (caixaIndicador.ts:22). O encadeamento sai de graca:
+       mes     -> inicial = serieAno[mes-1] (mes anterior; em janeiro, dez do ano ant.)
+       periodo -> inicial = serieAno[0]     (dez do ano anterior)
+     Final e sempre serieAno[mes]. Nenhum agregado novo, nenhuma query. */
+  const rotuloSaldoInicial = isPeriodo
+    ? 'Saldo inicial do ano'
+    : `Saldo inicial · ${mesNum > 1 ? MES_ABREV[mesNum - 2] : 'Dez'}`;
+  const rotuloSaldoFinal = `Saldo final · ${MES_ABREV[mesNum - 1]}`;
+
+  const serieCaixa = caixaIndicador?.serieAno;
+  const saldoInicial = serieCaixa
+    ? (isPeriodo ? (serieCaixa[0] ?? null) : (serieCaixa[mesNum - 1] ?? null))
+    : null;
+  const saldoFinal = serieCaixa ? (serieCaixa[mesNum] ?? null) : null;
+
+  const entradasCaixa = [
+    { label: 'Produção pecuária',      valor: receitaPecIndicador?.valor    ?? null },
+    { label: 'Produção agricultura',   valor: receitaAgriIndicador?.valor   ?? null },
+    /* Silvicultura e travessao PERMANENTE e deliberado: nao existe isReceitaSilvicola
+       em classificacao.ts, e os R$ 5,31 mi de 'Venda de Eucalipto' estao classificados
+       FORA do escopo silvicultura. O travessao expoe a lacuna em vez de esconde-la. */
+    { label: 'Produção silvicultura',  valor: null as number | null },
+    { label: 'Outras receitas',        valor: receitaOutrasIndicador?.valor ?? null },
+    { label: 'Captação financiamento', valor: captacaoIndicador?.valor      ?? null },
+  ];
+
+  const saidasCaixa = [
+    { label: 'Custeio pecuária',          valor: custeioPecIndicador?.valor       ?? null },
+    { label: 'Investimento pecuária',     valor: investPecIndicador?.valor        ?? null },
+    { label: 'Reposição de bovinos',      valor: investBovinosIndicador?.valor    ?? null },
+    { label: 'Amortização financ. pec.',  valor: amortizacaoPecIndicador?.valor   ?? null },
+    { label: 'Custeio agricultura',       valor: custeioAgriIndicador?.valor      ?? null },
+    { label: 'Investimento agricultura',  valor: investAgriIndicador?.valor       ?? null },
+    { label: 'Amortização financ. agri.', valor: amortizacaoAgriIndicador?.valor  ?? null },
+    { label: 'Dividendos',                valor: dividendosIndicador?.valor       ?? null },
+    { label: 'Deduções de receitas',      valor: deducoesTributosIndicador?.valor ?? null },
+    { label: 'Tributos',                  valor: tributosIndicador?.valor         ?? null },
+  ];
+
+  /* Totais = SOMA DAS LINHAS EXIBIDAS. NAO usar saidasTotaisIndicador: ele tem regra
+     propria (deducao e ajuste de entrada e nao entra nele), e o total divergiria das
+     partes logo abaixo — o pior defeito possivel num bloco que existe para fechar conta. */
+  const totalEntradas = somaLinhas(entradasCaixa.map(l => l.valor));
+  const totalSaidas   = somaLinhas(saidasCaixa.map(l => l.valor));
+
+  /* MOSTRAR, NAO FORCAR. Se a conta nao fecha, a diferenca aparece — maquiar seria
+     inventar. Tolerancia de R$ 1,00 para nao exibir centavo de arredondamento. */
+  const difCaixa = (saldoInicial != null && saldoFinal != null)
+    ? saldoFinal - (saldoInicial + totalEntradas - totalSaidas)
+    : null;
+  const mostrarDifCaixa = difCaixa != null && Math.abs(difCaixa) > 1;
 
   // ── Histórico OFICIAL PC-100 (Opção B) ──
   // Lista de indicadores cujo histórico inferior consome fonte oficial PC-100
@@ -1370,6 +1461,47 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
               />
             );
           })()}
+        </SectionBlock>
+
+        {/* PR-HOME-CAIXA-CONSOLIDADO-01 — quinto bloco da grade de dois por linha; fica
+            sozinho na terceira fileira, em meia largura. NAO recebe naoFechado: caixa
+            nao depende de fechamento de rebanho.
+            O conteudo vai num col-span-2 porque o miolo do SectionBlock e uma grade de
+            DUAS colunas, feita para MetricTile — e aqui e uma LISTA de 19 linhas. */}
+        <SectionBlock title="Caixa" subtitle="entradas e saídas do período">
+          <div className="col-span-2 space-y-1">
+            <LinhaCaixa label={rotuloSaldoInicial} valor={saldoInicial} tipo="total" />
+
+            <div className="pt-1">
+              <LinhaCaixa label="Entradas" valor={totalEntradas} tipo="total"
+                corValor="text-emerald-600" />
+              {entradasCaixa.map(l => (
+                <LinhaCaixa key={l.label} label={l.label} valor={l.valor} />
+              ))}
+            </div>
+
+            <div className="pt-1">
+              <LinhaCaixa label="Saídas" valor={totalSaidas} tipo="total"
+                corValor="text-red-500" />
+              {saidasCaixa.map(l => (
+                <LinhaCaixa key={l.label} label={l.label} valor={l.valor} />
+              ))}
+            </div>
+
+            <div className="pt-1 border-t border-border/40">
+              <LinhaCaixa label={rotuloSaldoFinal} valor={saldoFinal} tipo="total" />
+            </div>
+
+            {mostrarDifCaixa && (
+              <p className="text-[10px] text-amber-700">
+                Diferença de {fmtR(difCaixa)} — não conciliado
+              </p>
+            )}
+
+            <p className="text-[10px] text-muted-foreground pt-1">
+              Regime de caixa, ano civil. Transferências entre contas não entram.
+            </p>
+          </div>
         </SectionBlock>
 
       </div>
