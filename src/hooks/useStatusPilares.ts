@@ -13,7 +13,7 @@ import { supabase } from '@/integrations/supabase/client';
    provisorio SAIU — nenhuma versao da funcao o emitiu. 'bloqueado' FICA: e o estado
    previsto para quando o P5 virar derivado real. 'nao_implementado' entra porque o
    banco passou a declara-lo. */
-export type StatusPilar = 'oficial' | 'pendente' | 'nao_aplicavel' | 'nao_implementado' | 'bloqueado';
+export type StatusPilar = 'oficial' | 'pendente' | 'nao_aplicavel' | 'nao_iniciado' | 'nao_implementado' | 'bloqueado';
 
 export interface PilarInfo {
   status: StatusPilar;
@@ -44,7 +44,7 @@ function parsePilar(raw: unknown): PilarInfo {
   const obj = raw as Record<string, unknown>;
   const status = (obj.status as string) || 'pendente';
   return {
-    status: (['oficial', 'pendente', 'nao_aplicavel', 'nao_implementado', 'bloqueado'].includes(status) ? status : 'pendente') as StatusPilar,
+    status: (['oficial', 'pendente', 'nao_aplicavel', 'nao_iniciado', 'nao_implementado', 'bloqueado'].includes(status) ? status : 'pendente') as StatusPilar,
     detalhe: obj.detalhe as Record<string, unknown> | undefined,
   };
 }
@@ -141,6 +141,12 @@ export function getPilarBadgeConfig(status: StatusPilar): {
        porque outras telas usam este badge e o switch e EXAUSTIVO, sem default. */
     case 'nao_aplicavel':
       return { label: 'Não se aplica', className: 'bg-muted text-muted-foreground border-border' };
+    /* Terceiro cinza, e cada um diz uma coisa: 'nao_aplicavel' e "nao havia rebanho
+       neste mes"; 'nao_iniciado' e "ninguem abriu este mes"; 'nao_implementado' e "esta
+       tela nao existe". Para o olho sao iguais — nao ha o que fazer em nenhum —, e e por
+       isso que compartilham a caixa. */
+    case 'nao_iniciado':
+      return { label: 'Não iniciado', className: 'bg-muted text-muted-foreground border-border' };
     case 'nao_implementado':
       return { label: 'Não implementado', className: 'bg-muted text-muted-foreground border-border' };
     case 'bloqueado':
@@ -188,6 +194,9 @@ export function getPilarTooltipText(pilarKey: keyof StatusPilares, info: PilarIn
   if (info.status === 'pendente') return 'Pendente — fechamento não concluído';
   if (info.status === 'nao_aplicavel') {
     return 'Não se aplica — nenhum pasto de pecuária neste mês';
+  }
+  if (info.status === 'nao_iniciado') {
+    return 'Não iniciado — nenhum card de pasto neste mês';
   }
   if (info.status === 'nao_implementado') {
     return 'Não implementado — este pilar ainda não tem fechamento no sistema';
