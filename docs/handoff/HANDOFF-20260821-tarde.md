@@ -273,3 +273,91 @@ recarregar a original.
 **API do GitHub tem rate limit** sem autenticação. Para ler arquivos,
 `raw.githubusercontent.com` com SHA fixo; para varrer o repo, tarball via
 `codeload.github.com`.
+
+---
+
+## ADENDO — ÚLTIMA HORA (18h–19h)
+
+Proto `11fc5e84` → `64c8c412`.
+
+### PRs
+- `04d8d457` hierarquia tipográfica no Caixa + rótulos "Receitas …"
+- captação por escopo em 4 linhas + linhas zeradas ocultas + título por modo
+- `86580a49` "(ha)" no cabeçalho da tabela por fazenda
+- `11fc5e84` tabela produtiva por fazenda
+- `64c8c412` tabela "Pecuária" no card de Área, com desfrute, GMD no Total,
+  média/período, e Área+Caixa alinhados
+
+### Captação: 4 subcentros, não 3
+`Aporte Pessoal` (R$ 26,9 mi) e `Retorno de Empréstimos` (R$ 2,4 mi) NÃO têm
+escopo — somam R$ 29,3 mi e precisam de linha própria ("Aportes e outras").
+Os quatro predicates PARTICIONAM `isEntradaFinanceira`; há verificação de
+fechamento na tela que acusa se um subcentro novo escapar do mapa.
+
+### Linha zerada não renderiza
+Decisão: esconder zero em vez de agrupar linha com conteúdo. Agrupar
+"Receitas (Pec. Agri. Silv.)" apagaria da tela a atividade que ganhou 34
+subcentros no plano. Custo aceito: o operador não vê a categoria quando ela
+está zerada.
+
+### GMD: consumir, nunca calcular
+MEDIDO: `56.887,99 ÷ (5.165 × 31)` = 0,355, mas a view diz 0,378 — o
+denominador do GMD NÃO é cabeças finais. O Total da tabela consome
+`gmdIndicador` do PC-100, o MESMO objeto do tile. Bate por construção.
+
+**Regra geral que isso estabeleceu:** o Total de tabela por fazenda consome
+os indicadores do PC-100; as LINHAS vêm do hook. Nunca recalcular o
+agregado.
+
+### Desfrute (@) — definição nova
+`@ vendidas ÷ @ iniciais`, onde @ iniciais = `peso_inicio_kg / 30` e
+@ vendidas = desfrutes pela regra oficial da arroba (carcaça/15 no abate,
+peso vivo/30 nos demais). Medido: Pureza 4,3%, Sto. Expedito 0,0%.
+NÃO confundir com `desfruteIndicador` do PC-100, que é em CABEÇAS.
+
+### Item 8 — cards alinhados, decisão consciente
+Área e Caixa voltaram a ser filhos diretos do grid (`col-span-3`/`col-span-2`),
+revertendo parcialmente `e948a653`. Custo aceito: o card mais baixo ganha
+branco embaixo. Em escopo de fazenda específica as duas tabelas não
+renderizam e o branco troca de lado.
+
+---
+
+## DOIS ACHADOS DE DADO (não corrigidos)
+
+### 1. Bom Retiro — correção de um erro meu neste handoff
+A PARTE 7 afirma que a Bom Retiro parou de fechar em jan/2024. **ERRADO.**
+Ela tem cards em TODOS os meses de 2026 e 31 snapshots desde 2024.
+
+O que acabou em jan/2024 foram os cards do pasto `Geral` (recria). De
+fev/2024 em diante os cards são do pasto `Eucalipto`. A fazenda migrou de
+recria para silvicultura e continua fechando normalmente.
+
+Minha query anterior agrupava por pasto e eu li o fim de um pasto como o fim
+da fazenda. **Sexto erro do mesmo tipo na sessão.**
+
+O que permanece verdadeiro da PARTE 7: o pasto `Geral` está inativo e seu
+histórico some das telas de pasto ao consultar 2022–2023.
+
+### 2. Santa Rita — 212 ha de reserva viraram cria em maio
+Pasto **`P_24 Reserva`**, 212,00 ha, cadastrado como `reserva`.
+Fechou como `reserva` em abril; **como `cria` de maio a julho**.
+
+| | abril | maio → julho |
+|---|---:|---:|
+| Pecuária (snapshot) | 2.778,25 | 2.990,25 |
+| Reserva (snapshot) | 740,12 | 528,12 |
+
+`2.778,25 + 212 = 2.990,25` e `740,12 − 212 = 528,12`. Fecha exato.
+
+**Nada quebrado no software.** `tipo_uso_mes` existe para isso, e o tipo
+efetivo é `COALESCE(tipo_uso_mes, p.tipo_uso)` — fechamento vence cadastro,
+que é a regra correta.
+
+**Decisão de negócio pendente:** ou o cadastro está desatualizado (a área
+deixou de ser reserva), ou o fechamento está errado nos últimos três meses
+(reserva legal virou pecuária no papel). O nome do pasto sugere a segunda,
+mas nome não é evidência.
+
+O sistema está mostrando a divergência — cadastro diz uma coisa, fechamento
+diz outra, as duas visíveis. É o comportamento desejado.
