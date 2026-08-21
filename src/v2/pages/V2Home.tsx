@@ -165,6 +165,26 @@ function LinhaCaixa({ label, valor, tipo = 'detalhe', corValor }: {
   );
 }
 
+/* Irmao de LinhaCaixa: mesma anatomia, unidade diferente. Area em ha nao
+   pode usar fmtR — o bloco inteiro perderia o sentido com cifrao. */
+function LinhaArea({ label, valor, tipo = 'detalhe' }: {
+  label: string;
+  valor: number | null;
+  tipo?: 'detalhe' | 'total';
+}) {
+  const base = tipo === 'total'
+    ? 'font-medium text-foreground'
+    : 'text-muted-foreground pl-2.5';
+  return (
+    <div className={`flex items-baseline justify-between gap-3 text-[11px] ${base}`}>
+      <span className="truncate">{label}</span>
+      <span className="tabular-nums shrink-0">
+        {valor == null ? '—' : `${valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ha`}
+      </span>
+    </div>
+  );
+}
+
 /* Soma so o que EXISTE: null nao entra na conta. */
 function somaLinhas(valores: (number | null)[]): number {
   return valores.reduce<number>((acc, v) => acc + (v ?? 0), 0);
@@ -527,6 +547,10 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     cabecas, pesoMedio, gmd, arrobas, desfrute,
     receita, desembolso, resultado, valorRebanhoMes: valorReb,
     areaProdutivaMes, areaPecuariaRealMes, areaPecuariaRealPorMes, areaPecuariaMetaPorMes,
+    // PR-HOME-AREA-COMPOSICAO-01 — composicao da area no mes, do snapshot oficial.
+    areaProdutivaRealPorMes, areaAgriculturaRealPorMes,
+    areaTotalRealPorMes, areaSilviculturaRealPorMes, areaReservaRealPorMes,
+    areaAppRealPorMes, areaBenfeitoriasRealPorMes, areaOutrasRealPorMes,
     lotUaHa, kgHa, statusArea, faltandoCount,
     seriesMensais, seriesMeta, cabecasIndicador, pesoMedioIndicador, gmdIndicador, uaHaIndicador, kgHaIndicador, arrobasIndicador, desfruteIndicador, valorRebanhoIndicador,
     receitaPecIndicador, custeioPecIndicador, custoArrIndicador, precoArrIndicador, custoCabIndicador, margemArrIndicador,
@@ -560,6 +584,29 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     ? (isPeriodo ? (serieCaixa[0] ?? null) : (serieCaixa[mesNum - 1] ?? null))
     : null;
   const saldoFinal = serieCaixa ? (serieCaixa[mesNum] ?? null) : null;
+
+  /* ── PR-HOME-AREA-COMPOSICAO-01 — composicao da area do mes ──
+     Area e ESTOQUE: sempre a posicao do mes, NUNCA acumulada em viewMode='periodo'
+     (mesmo principio de montarCaixaIndicador). null = mes sem snapshot -> "—". */
+  const areaIdx = mesNum - 1;
+  const areaTotal     = areaTotalRealPorMes?.[areaIdx]        ?? null;
+  const areaProdutiva = areaProdutivaRealPorMes?.[areaIdx]    ?? null;
+  const areaPec       = areaPecuariaRealPorMes?.[areaIdx]     ?? null;
+  const areaAgri      = areaAgriculturaRealPorMes?.[areaIdx]  ?? null;
+  const areaSilvi     = areaSilviculturaRealPorMes?.[areaIdx] ?? null;
+  const areaReserva   = areaReservaRealPorMes?.[areaIdx]      ?? null;
+  const areaApp       = areaAppRealPorMes?.[areaIdx]          ?? null;
+  const areaBenf      = areaBenfeitoriasRealPorMes?.[areaIdx] ?? null;
+  const areaOutras    = areaOutrasRealPorMes?.[areaIdx]       ?? null;
+
+  /* MOSTRAR, NAO MAQUIAR. Produtiva > total acontece quando ha pasto
+     arrendado DE TERCEIRO: a terra nao esta na matricula, mas o gado e do
+     cliente e a area entra em uso. Medido em 2026-07: 3 Muchachas, 50,00 ha
+     (`Arrendamento - Baldasso`). O sistema ainda nao tem campo de posse,
+     entao a linha NAO afirma que e arrendamento — mostra o fato. */
+  const areaExcedente = (areaProdutiva != null && areaTotal != null && areaProdutiva > areaTotal)
+    ? areaProdutiva - areaTotal
+    : null;
 
   const entradasCaixa = [
     /* CAIXA, nao competencia. receitaPecIndicador e competencia zootecnica
@@ -1310,6 +1357,32 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+        <SectionBlock title="Área" subtitle="como a terra está dividida">
+          <div className="space-y-1">
+            <LinhaArea label="Área total (matrícula)" valor={areaTotal} tipo="total" />
+            <LinhaArea label="Pecuária"      valor={areaPec} />
+            <LinhaArea label="Agricultura"   valor={areaAgri} />
+            <LinhaArea label="Silvicultura"  valor={areaSilvi} />
+            <LinhaArea label="Reserva legal" valor={areaReserva} />
+            <LinhaArea label="APP"           valor={areaApp} />
+            <LinhaArea label="Benfeitorias"  valor={areaBenf} />
+            {(areaOutras ?? 0) > 0 && (
+              <LinhaArea label="Outras" valor={areaOutras} />
+            )}
+            <div className="pt-1 mt-1 border-t border-border">
+              <LinhaArea label="Área produtiva" valor={areaProdutiva} tipo="total" />
+            </div>
+            {areaExcedente != null && (
+              <div className="text-[11px] text-warning pt-1">
+                Área além da matrícula: {areaExcedente.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ha
+              </div>
+            )}
+          </div>
+          <p className="text-[10px] text-muted-foreground pt-2">
+            Fonte: fechamento de áreas do mês. Estoque — não acumula no período.
+          </p>
+        </SectionBlock>
 
         <SectionBlock title="Produção" subtitle="o que a fazenda entregou" naoFechado={mesSemFechamento} avisoNaoFechado={avisoMes}>
           <MetricTile label={cabecasIndicador?.label ?? 'CABEÇAS'} value={fmtN(cabecasIndicador?.valor ?? null)} unit="cab" loading={loadingPainel}

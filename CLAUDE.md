@@ -43,7 +43,7 @@ no mesmo arquivo.
   sai com codigo 0 e passa sempre. Era um gate vazio. O comando oficial
   varre os 671 arquivos .ts/.tsx em src/ e sai com codigo 2 enquanto
   houver erro.
-- TSC baseline: 89 erros, medidos em ARVORE LIMPA — worktree em detached
+- TSC baseline: 79 erros, medidos em ARVORE LIMPA — worktree em detached
   HEAD sobre o commit, NUNCA no checkout principal. Mesmo numero e mesmo
   conjunto de diagnosticos em c0fdb21b, 487fe1cf e c28de22a.
   O 98 que constava aqui nao decorreu de reducao posterior: foi medido com
@@ -58,6 +58,23 @@ no mesmo arquivo.
     4x TS2339 — 'area_pecuaria_ha' / 'area_agricultura_ha' nao existem no tipo
        gerado (row.area_* no setData);
     2x TS2345 — propriedade excedente no update e no insert do payload.
+  De 89 para 79 em PR-HOME-AREA-COMPOSICAO-01, 2026-08-21, sobre 9086ea6e.
+  Sairam 10, TODOS de src/hooks/useFechamentoArea.ts e todos da MESMA raiz:
+  a tabela `fechamento_area_snapshot` nao existe em
+  src/integrations/supabase/types.ts, entao `.from()` resolvia para
+  SelectQueryError e tudo que se lia do row errava.
+    7x TS2339 — ano_mes (x2), fazenda_id, area_pecuaria_ha (x2),
+       area_agricultura_ha, area_produtiva_ha;
+    2x TS2345 — 'cliente_id' e 'fazenda_id' nao atribuiveis a 'id'
+       (o .eq() encadeado sobre um builder ja quebrado);
+    1x TS2769 — no overload matches this call (mesma causa).
+  A queda foi por ELIMINACAO da divida de tipos, nao por supressao: adotou-se
+  o idioma completo de dois casts, ja estabelecido no repo (105 ocorrencias) —
+  `as any` no nome da tabela E no resultado do .select(). So o segundo elimina
+  o branch SelectQueryError; o primeiro sozinho apenas troca a mensagem do
+  erro (medido: 89 -> 92). Referencia viva com a MESMA tabela e zero erros:
+  src/v2/hooks/useFechamentoPeriodoData.ts:227-228. O arquivo passou a ter
+  zero erros. Correcao de raiz continua sendo regenerar types.ts.
   Registrado porque a origem importa: a regeneracao futura de
   src/integrations/supabase/types.ts pode reintroduzir numeros diferentes, e
   quem ler esta baseline precisa saber de onde ela veio.
@@ -81,7 +98,7 @@ no mesmo arquivo.
 - Build verde obrigatorio antes de qualquer commit.
 
 ## RELATORIO DE EXECUCAO (formato obrigatorio, todo ciclo)
-1. TSC: N erros (baseline 89) — numero explicito, obtido com
+1. TSC: N erros (baseline 79) — numero explicito, obtido com
    `npx tsc -p tsconfig.app.json --noEmit`
 2. Build: OK/FALHOU + tempo
 3. git diff --stat completo

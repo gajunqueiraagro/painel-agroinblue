@@ -180,6 +180,17 @@ export interface PainelConsultorDataResult {
   areaAgriculturaRealPorMes: (number | null)[];
   areaProdutivaRealPorMes: (number | null)[];
   /**
+   * PR-HOME-AREA-COMPOSICAO-01 — as seis series restantes do snapshot de area,
+   * mesmo idioma das tres acima: null = mes sem snapshot (a tela exibe "—"),
+   * 0 = valor real. Estoque mensal; NAO acumula em viewMode='periodo'.
+   */
+  areaTotalRealPorMes: (number | null)[];
+  areaSilviculturaRealPorMes: (number | null)[];
+  areaReservaRealPorMes: (number | null)[];
+  areaAppRealPorMes: (number | null)[];
+  areaBenfeitoriasRealPorMes: (number | null)[];
+  areaOutrasRealPorMes: (number | null)[];
+  /**
    * PR-PC100-AREAS-01 — repartição REALIZADA por destino, uma série de 12 por
    * destino. null = mês sem snapshot (exibe "—"); 0 = destino sem pasto no mês.
    * Recalculada de fechamento_pastos; não sai do snapshot.
@@ -613,6 +624,50 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     () => Array.from({ length: 12 }, (_, i) => {
       const s = snapshots.find(x => x.mes === i + 1);
       return s ? s.area_produtiva_ha : null;
+    }),
+    [snapshots],
+  );
+  // PR-HOME-AREA-COMPOSICAO-01 — mesmo idioma das tres acima. As seis colunas
+  // restantes do snapshot, cruas, para o bloco de composicao da area.
+  const areaTotalRealPorMes = useMemo<(number | null)[]>(
+    () => Array.from({ length: 12 }, (_, i) => {
+      const s = snapshots.find(x => x.mes === i + 1);
+      return s ? s.area_total_ha : null;
+    }),
+    [snapshots],
+  );
+  const areaSilviculturaRealPorMes = useMemo<(number | null)[]>(
+    () => Array.from({ length: 12 }, (_, i) => {
+      const s = snapshots.find(x => x.mes === i + 1);
+      return s ? s.area_silvicultura_ha : null;
+    }),
+    [snapshots],
+  );
+  const areaReservaRealPorMes = useMemo<(number | null)[]>(
+    () => Array.from({ length: 12 }, (_, i) => {
+      const s = snapshots.find(x => x.mes === i + 1);
+      return s ? s.area_reserva_ha : null;
+    }),
+    [snapshots],
+  );
+  const areaAppRealPorMes = useMemo<(number | null)[]>(
+    () => Array.from({ length: 12 }, (_, i) => {
+      const s = snapshots.find(x => x.mes === i + 1);
+      return s ? s.area_app_ha : null;
+    }),
+    [snapshots],
+  );
+  const areaBenfeitoriasRealPorMes = useMemo<(number | null)[]>(
+    () => Array.from({ length: 12 }, (_, i) => {
+      const s = snapshots.find(x => x.mes === i + 1);
+      return s ? s.area_benfeitorias_ha : null;
+    }),
+    [snapshots],
+  );
+  const areaOutrasRealPorMes = useMemo<(number | null)[]>(
+    () => Array.from({ length: 12 }, (_, i) => {
+      const s = snapshots.find(x => x.mes === i + 1);
+      return s ? s.area_outras_ha : null;
     }),
     [snapshots],
   );
@@ -3112,6 +3167,12 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     areaDestinoRealPorMes,
     areaAgriculturaRealPorMes,
     areaProdutivaRealPorMes,
+    areaTotalRealPorMes,
+    areaSilviculturaRealPorMes,
+    areaReservaRealPorMes,
+    areaAppRealPorMes,
+    areaBenfeitoriasRealPorMes,
+    areaOutrasRealPorMes,
 
     // UA/ha: série oficial (mês = monthlyData.lotUaHa; período = rollingAvg PC-100)
     lotUaHa: uaHaValor,

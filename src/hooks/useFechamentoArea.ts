@@ -23,6 +23,18 @@ export interface SnapshotAreaMes {
   area_agricultura_ha: number;
   area_produtiva_ha: number;
   /**
+   * PR-HOME-AREA-COMPOSICAO-01 — as seis colunas restantes do snapshot, cruas.
+   * Chegam ao PC-100 para o bloco de composicao da area. NULL no banco (snapshot
+   * legado) entra como 0 na soma; ausencia do MES inteiro continua sendo ausencia
+   * de snapshot, e a tela exibe "—".
+   */
+  area_total_ha: number;
+  area_silvicultura_ha: number;
+  area_reserva_ha: number;
+  area_app_ha: number;
+  area_benfeitorias_ha: number;
+  area_outras_ha: number;
+  /**
    * PR-PC100-AREAS-01 — área por destino, RECALCULADA de fechamento_pastos com
    * tipoEfetivo = COALESCE(tipo_uso_mes, tipo_uso). NÃO vem do snapshot, ao
    * contrário de area_agricultura_ha e area_produtiva_ha, que seguem crus.
@@ -94,9 +106,20 @@ export function useSnapshotAreaAnual(
     refetchOnWindowFocus: false,
     queryFn: async (): Promise<SnapshotAreaData> => {
       // Montar as queries em paralelo
-      let snapshotsQuery = supabase
-        .from('fechamento_area_snapshot')
-        .select('fazenda_id, ano_mes, area_pecuaria_ha, area_agricultura_ha, area_produtiva_ha')
+      /* Dois casts, idioma estabelecido do repo (105 ocorrencias):
+         `as any` no nome da tabela porque fechamento_area_snapshot NAO existe
+         em src/integrations/supabase/types.ts, e `as any` no resultado do
+         .select() porque so ele elimina o branch SelectQueryError — sem o
+         segundo, cada coluna lida continua TS2339 e o .eq() encadeado sobre
+         um builder quebrado gera TS2345/TS2769.
+         Mesma tabela, mesmo padrao, zero erros:
+         src/v2/hooks/useFechamentoPeriodoData.ts:227-228.
+         Correcao de raiz: regeneracao de types.ts, frente propria registrada. */
+      let snapshotsQuery = (supabase
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .from('fechamento_area_snapshot' as any)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .select('fazenda_id, ano_mes, area_pecuaria_ha, area_agricultura_ha, area_produtiva_ha, area_total_ha, area_silvicultura_ha, area_reserva_ha, area_app_ha, area_benfeitorias_ha, area_outras_ha') as any)
         .eq('cliente_id', clienteId!)
         .gte('ano_mes', `${ano}-01-01`)
         .lte('ano_mes', `${ano}-12-31`);
@@ -282,6 +305,12 @@ export function useSnapshotAreaAnual(
         }
         const agric = Number(row.area_agricultura_ha) || 0;
         const prod = Number(row.area_produtiva_ha) || 0;
+        const total = Number(row.area_total_ha) || 0;
+        const silvi = Number(row.area_silvicultura_ha) || 0;
+        const reserva = Number(row.area_reserva_ha) || 0;
+        const app = Number(row.area_app_ha) || 0;
+        const benf = Number(row.area_benfeitorias_ha) || 0;
+        const outras = Number(row.area_outras_ha) || 0;
 
         arr[mesIdx] = isGlobal ? (arr[mesIdx] || 0) + pec : pec;
 
@@ -294,6 +323,12 @@ export function useSnapshotAreaAnual(
           existing.area_pecuaria_ha += pec;
           existing.area_agricultura_ha += agric;
           existing.area_produtiva_ha += prod;
+          existing.area_total_ha += total;
+          existing.area_silvicultura_ha += silvi;
+          existing.area_reserva_ha += reserva;
+          existing.area_app_ha += app;
+          existing.area_benfeitorias_ha += benf;
+          existing.area_outras_ha += outras;
           for (const d of DESTINOS_AREA) existing.destinos[d] += dest[d];
         } else {
           snaps.push({
@@ -301,6 +336,12 @@ export function useSnapshotAreaAnual(
             area_pecuaria_ha: pec,
             area_agricultura_ha: agric,
             area_produtiva_ha: prod,
+            area_total_ha: total,
+            area_silvicultura_ha: silvi,
+            area_reserva_ha: reserva,
+            area_app_ha: app,
+            area_benfeitorias_ha: benf,
+            area_outras_ha: outras,
             destinos: { ...dest },
           });
         }
