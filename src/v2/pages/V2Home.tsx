@@ -1600,20 +1600,33 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
             onClick={() => setModalIndicador('valorRebanho')} />
         </SectionBlock>
 
-        <SectionBlock title="Eficiência" subtitle="do uso da área" naoFechado={mesSemFechamento} avisoNaoFechado={avisoMes}>
-          <MetricTile
-            label={isPeriodoArea ? 'Área Produtiva Pec. média no período' : 'Área Produtiva Pecuária'}
-            value={fmtN(areaProdutivaPecValor, 0)} unit="ha"
-            loading={statusArea === 'carregando'} status={msgArea(statusArea)}
-            deltaMes={areaProdutivaPecDeltaMes}
-            deltaAno={areaProdutivaPecDeltaAno}
-            deltaMeta={areaProdutivaPecDeltaMeta}
-            onClick={() => setModalIndicador('areaProdutivaPec')} />
+        {/* Os quatro tiles sao os MESMOS indicadores ja consumidos no bloco Producao
+            (cabecas, GMD, @) e no proprio Eficiencia (UA/ha) — copiados verbatim, sem
+            reescrever formatacao. A repeticao entre os dois blocos e deliberada.
+            Os rotulos mudam sozinhos no viewMode 'periodo' porque vem do indicador;
+            a semantica difere por natureza: cabecas, UA/ha e GMD sao MEDIA no periodo,
+            @ produzidas e SOMA — arroba acumula, lotacao e ganho de peso nao. */}
+        <SectionBlock title="Eficiência" subtitle="rebanho e uso da área" naoFechado={mesSemFechamento} avisoNaoFechado={avisoMes}>
+          <MetricTile label={cabecasIndicador?.label ?? 'CABEÇAS'} value={fmtN(cabecasIndicador?.valor ?? null)} unit="cab" loading={loadingPainel}
+            deltaMes={cabecasIndicador?.deltaMes ?? null}
+            deltaAno={cabecasIndicador?.deltaAno ?? null}
+            deltaMeta={cabecasIndicador?.deltaMeta ?? null}
+            onClick={() => setModalIndicador('cabecas')} />
           <MetricTile label={uaHaIndicador?.label ?? 'UA/HA NO MÊS'} value={fmtN(uaHaIndicador?.valor ?? null, 2)} loading={statusArea === 'carregando'} status={statusArea !== 'ok' ? msgArea(statusArea) : null}
             deltaMes={uaHaIndicador?.deltaMes ?? null}
             deltaAno={uaHaIndicador?.deltaAno ?? null}
             deltaMeta={uaHaIndicador?.deltaMeta ?? null}
             onClick={() => setModalIndicador('uaHa')} />
+          <MetricTile label={gmdIndicador?.label ?? 'GMD'} value={fmtN(gmdIndicador?.valor ?? null, 3)} unit="kg/dia" loading={loadingPainel}
+            deltaMes={gmdIndicador?.deltaMes ?? null}
+            deltaAno={gmdIndicador?.deltaAno ?? null}
+            deltaMeta={gmdIndicador?.deltaMeta ?? null}
+            onClick={() => setModalIndicador('gmd')} />
+          <MetricTile label={arrobasIndicador?.label ?? '@ PRODUZIDAS NO MÊS'} value={fmtN(arrobasIndicador?.valor ?? null, 1)} unit="@" loading={loadingPainel}
+            deltaMes={arrobasIndicador?.deltaMes ?? null}
+            deltaAno={arrobasIndicador?.deltaAno ?? null}
+            deltaMeta={arrobasIndicador?.deltaMeta ?? null}
+            onClick={() => setModalIndicador('arrobas')} />
           <MetricTile label={kgHaIndicador?.label ?? 'KG VIVO/HA NO MÊS'} value={fmtN(kgHaIndicador?.valor ?? null, 1)} unit="kg/ha" loading={statusArea === 'carregando'} status={statusArea !== 'ok' ? msgArea(statusArea) : null}
             deltaMes={kgHaIndicador?.deltaMes ?? null}
             deltaAno={kgHaIndicador?.deltaAno ?? null}
