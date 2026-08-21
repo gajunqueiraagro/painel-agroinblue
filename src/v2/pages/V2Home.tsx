@@ -593,6 +593,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     receitaPecIndicador, custeioPecIndicador, custoArrIndicador, precoArrIndicador, custoCabIndicador, margemArrIndicador,
     // PR-HOME-CAIXA-CONSOLIDADO-01 — as 15 linhas de fluxo e o saldo.
     receitaPecCaixaIndicador, receitaAgriIndicador, receitaOutrasIndicador, captacaoIndicador, entradasNaoClassificadasIndicador,
+    captacaoPecIndicador, captacaoAgriIndicador, captacaoSilviIndicador, captacaoSemEscopoIndicador,
     receitaSilvicolaIndicador, custeioSilviIndicador, investSilviIndicador, amortizacaoSilviIndicador,
     investPecIndicador, investBovinosIndicador, amortizacaoPecIndicador,
     custeioAgriIndicador, investAgriIndicador, amortizacaoAgriIndicador,
@@ -708,15 +709,27 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     { label: 'Receitas agricultura',   valor: receitaAgriIndicador?.valor   ?? null },
     { label: 'Receitas silvicultura',  valor: receitaSilvicolaIndicador?.valor ?? null },
     { label: 'Outras receitas',        valor: receitaOutrasIndicador?.valor ?? null },
-    { label: 'Captação financiamento', valor: captacaoIndicador?.valor      ?? null },
-    /* Residuo CONDICIONAL: totalEntradas e a soma das linhas EXIBIDAS, entao somar uma
-       linha invisivel faria o total divergir das partes — o pior defeito possivel num
-       bloco que existe para fechar conta. Sem residuo, a linha nao existe e nada muda. */
-    ...(((entradasNaoClassificadasIndicador?.valor ?? 0) > 0)
-      ? [{ label: 'Não classificado',
-           valor: entradasNaoClassificadasIndicador?.valor ?? null }]
-      : []),
+    /* Captacao aberta por escopo: as quatro PARTICIONAM captacaoIndicador, que
+       permanece como total e alimenta a verificacao de fechamento abaixo do bloco.
+       Sem condicional propria — o filtro `temValor` cuida das zeradas. */
+    { label: 'Captação pecuária',     valor: captacaoPecIndicador?.valor       ?? null },
+    { label: 'Captação agricultura',  valor: captacaoAgriIndicador?.valor      ?? null },
+    { label: 'Captação silvicultura', valor: captacaoSilviIndicador?.valor     ?? null },
+    { label: 'Aportes e outras',      valor: captacaoSemEscopoIndicador?.valor ?? null },
+    /* Residuo de entrada: grupo fora dos oficiais. A condicional propria que existia
+       aqui saiu — `temValor` faz a mesma coisa para TODAS as linhas, e duas regras
+       para o mesmo efeito e onde uma delas apodrece. Comportamento identico: antes
+       `> 0`, agora `!= null && !== 0`. Valor negativo passaria a aparecer, o que e
+       melhor do que sumir. */
+    { label: 'Não classificado',      valor: entradasNaoClassificadasIndicador?.valor ?? null },
   ];
+
+  /* Linha zerada nao renderiza: cada cliente ve so o que movimenta. O operador nao ve
+     a categoria quando ela esta zerada — custo aceito e ja vigente na silvicultura das
+     saidas e no grupo Cartao do Disponivel em conta. Preferido a agrupar linhas COM
+     conteudo, que apagaria a leitura por atividade. */
+  const temValor = (v: number | null) => v != null && v !== 0;
+  const entradasVisiveis = entradasCaixa.filter(l => temValor(l.valor));
 
   /* PR-HOME-DENSIDADE-01 — as MESMAS linhas, na MESMA ordem, agora agrupadas por
      familia so para ganhar um separador visual. saidasCaixa e o flat destes grupos,
@@ -754,16 +767,16 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
 
   /* Grupo TODO ausente ou zerado nao rende linhas nem separador — senao sobra um
      traco solto. Silvicultura cai nesse caso em todos os clientes hoje. */
-  const saidasGruposVisiveis = saidasGrupos.filter(
-    g => g.linhas.some(l => (l.valor ?? 0) !== 0),
-  );
+  const saidasGruposVisiveis = saidasGrupos
+    .map(g => ({ ...g, linhas: g.linhas.filter(l => temValor(l.valor)) }))
+    .filter(g => g.linhas.length > 0);
 
   const saidasCaixa = saidasGruposVisiveis.flatMap(g => g.linhas);
 
   /* Totais = SOMA DAS LINHAS EXIBIDAS. NAO usar saidasTotaisIndicador: ele tem regra
      propria (deducao e ajuste de entrada e nao entra nele), e o total divergiria das
      partes logo abaixo — o pior defeito possivel num bloco que existe para fechar conta. */
-  const totalEntradas = somaLinhas(entradasCaixa.map(l => l.valor));
+  const totalEntradas = somaLinhas(entradasVisiveis.map(l => l.valor));
   const totalSaidas   = somaLinhas(saidasCaixa.map(l => l.valor));
 
   /* MOSTRAR, NAO FORCAR. Se a conta nao fecha, a diferenca aparece — maquiar seria
@@ -1757,7 +1770,10 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
             nao depende de fechamento de rebanho.
             O conteudo vai num col-span-2 porque o miolo do SectionBlock e uma grade de
             DUAS colunas, feita para MetricTile — e aqui e uma LISTA de 19 linhas. */}
-        <SectionBlock title="Caixa" subtitle="entradas e saídas do período">
+        <SectionBlock
+          title={isPeriodo ? 'Caixa no período' : 'Caixa no mês'}
+          subtitle="entradas e saídas"
+        >
           {/* -mt-1 puxa a primeira linha para cima, encostando no titulo. Aplicado
              SO aqui: o respiro vem do SectionBlock, que e usado por todos os blocos
              e nao pode ser alterado por causa de um. */}
@@ -1767,9 +1783,25 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
             <div className="pt-1 space-y-0.5">
               <LinhaCaixa label="Entradas" valor={totalEntradas} tipo="total"
                 corValor="text-emerald-600" />
-              {entradasCaixa.map(l => (
+              {entradasVisiveis.map(l => (
                 <LinhaCaixa key={l.label} label={l.label} valor={l.valor} />
               ))}
+              {(() => {
+                const somaCaptacao =
+                  (captacaoPecIndicador?.valor ?? 0) +
+                  (captacaoAgriIndicador?.valor ?? 0) +
+                  (captacaoSilviIndicador?.valor ?? 0) +
+                  (captacaoSemEscopoIndicador?.valor ?? 0);
+                const total = captacaoIndicador?.valor ?? 0;
+                /* Os quatro predicates PARTICIONAM isEntradaFinanceira: a soma tem que
+                   bater com o total. Se nao bater, subcentro novo escapou do mapa e o
+                   dinheiro esta sendo contado a menos ou a mais. MOSTRAR, nao forcar. */
+                return Math.abs(somaCaptacao - total) > 1 ? (
+                  <div className="text-[9px] text-warning pt-1">
+                    Captação: divergência de {fmtR(somaCaptacao - total)} entre as partes e o total
+                  </div>
+                ) : null;
+              })()}
             </div>
 
             <div className="pt-1 space-y-0.5">

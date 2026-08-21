@@ -48,6 +48,10 @@ import {
   isReceitaSilvicola,
   isOutrasReceitas,
   isEntradaFinanceira,
+  isCaptacaoPecuaria,
+  isCaptacaoAgricultura,
+  isCaptacaoSilvicultura,
+  isCaptacaoSemEscopo,
   isEntradaNaoClassificada,
   isAmortizacaoPecuaria,
   isAmortizacaoAgricultura,
@@ -283,6 +287,24 @@ export function agregaEntradasFinanceiras(lancFin: FinanceiroLancamento[], ano: 
   return agregaPorPredicadoGenerico(makeRealizadoSourceEntrada(lancFin, ano), isEntradaFinanceira);
 }
 
+/* Captacao por escopo — os quatro PARTICIONAM agregaEntradasFinanceiras acima,
+   que permanece como TOTAL e e o que permite verificar o fechamento na tela. */
+export function agregaCaptacaoPec(lancFin: FinanceiroLancamento[], ano: number): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSourceEntrada(lancFin, ano), isCaptacaoPecuaria);
+}
+
+export function agregaCaptacaoAgri(lancFin: FinanceiroLancamento[], ano: number): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSourceEntrada(lancFin, ano), isCaptacaoAgricultura);
+}
+
+export function agregaCaptacaoSilvi(lancFin: FinanceiroLancamento[], ano: number): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSourceEntrada(lancFin, ano), isCaptacaoSilvicultura);
+}
+
+export function agregaCaptacaoSemEscopo(lancFin: FinanceiroLancamento[], ano: number): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSourceEntrada(lancFin, ano), isCaptacaoSemEscopo);
+}
+
 /**
  * Entradas que nao casam com nenhum grupo oficial. Existe para que nada suma do total
  * sem aviso: com a classificacao por grupo literal, uma entrada de grupo desconhecido
@@ -470,6 +492,24 @@ export function agregaOutrasReceitasMeta(grid: SubcentroGrid[]): number[] {
 
 export function agregaEntradasFinanceirasMeta(grid: SubcentroGrid[]): number[] {
   return agregaPorPredicadoGenerico(makeMetaSource(grid), isEntradaFinanceira);
+}
+
+/* Par META obrigatorio dos quatro: agregador REALIZADO sem irmao META deixaria a
+   Meta cega, e a comparacao realizado x meta mentiria por omissao. */
+export function agregaCaptacaoPecMeta(grid: SubcentroGrid[]): number[] {
+  return agregaPorPredicadoGenerico(makeMetaSource(grid), isCaptacaoPecuaria);
+}
+
+export function agregaCaptacaoAgriMeta(grid: SubcentroGrid[]): number[] {
+  return agregaPorPredicadoGenerico(makeMetaSource(grid), isCaptacaoAgricultura);
+}
+
+export function agregaCaptacaoSilviMeta(grid: SubcentroGrid[]): number[] {
+  return agregaPorPredicadoGenerico(makeMetaSource(grid), isCaptacaoSilvicultura);
+}
+
+export function agregaCaptacaoSemEscopoMeta(grid: SubcentroGrid[]): number[] {
+  return agregaPorPredicadoGenerico(makeMetaSource(grid), isCaptacaoSemEscopo);
 }
 
 /* Par META obrigatorio: agregador REALIZADO sem irmao META deixaria a Meta cega para o

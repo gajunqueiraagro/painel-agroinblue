@@ -48,6 +48,10 @@ import {
   agregaReceitaAgri,
   agregaOutrasReceitas,
   agregaEntradasFinanceiras,
+  agregaCaptacaoPec,
+  agregaCaptacaoAgri,
+  agregaCaptacaoSilvi,
+  agregaCaptacaoSemEscopo,
   agregaEntradasNaoClassificadas,
   agregaDeducoesSaida,
   agregaAmortizacaoPec,
@@ -71,6 +75,10 @@ import {
   agregaReceitaAgriMeta,
   agregaOutrasReceitasMeta,
   agregaEntradasFinanceirasMeta,
+  agregaCaptacaoPecMeta,
+  agregaCaptacaoAgriMeta,
+  agregaCaptacaoSilviMeta,
+  agregaCaptacaoSemEscopoMeta,
   agregaEntradasNaoClassificadasMeta,
   agregaDeducoesSaidaMeta,
   agregaAmortizacaoPecMeta,
@@ -535,6 +543,15 @@ export interface PainelConsultorDataResult {
   investSilviIndicador:         IndicadorFinanceiroShape | null;
   amortizacaoSilviIndicador:    IndicadorFinanceiroShape | null;
   captacaoIndicador:            IndicadorFinanceiroShape | null;
+  /**
+   * Captacao aberta por escopo. Os quatro PARTICIONAM captacaoIndicador, que
+   * permanece como TOTAL: a soma dos quatro tem que bater com ele, e a tela
+   * exibe a divergencia se nao bater (subcentro novo fora do mapa).
+   */
+  captacaoPecIndicador:         IndicadorFinanceiroShape | null;
+  captacaoAgriIndicador:        IndicadorFinanceiroShape | null;
+  captacaoSilviIndicador:       IndicadorFinanceiroShape | null;
+  captacaoSemEscopoIndicador:   IndicadorFinanceiroShape | null;
   /* Residuo de entrada: grupo que nao casa com nenhum oficial. Existe para nada sumir
      do total sem aviso — a linha da tela so aparece quando ha valor. */
   entradasNaoClassificadasIndicador: IndicadorFinanceiroShape | null;
@@ -2753,6 +2770,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     const recAgri     = agregaReceitaAgri(lancFin, ano);
     const recOutras   = agregaOutrasReceitas(lancFin, ano);
     const captacao    = agregaEntradasFinanceiras(lancFin, ano);
+    const captPec     = agregaCaptacaoPec(lancFin, ano);
+    const captAgri    = agregaCaptacaoAgri(lancFin, ano);
+    const captSilvi   = agregaCaptacaoSilvi(lancFin, ano);
+    const captSemEsc  = agregaCaptacaoSemEscopo(lancFin, ano);
     const naoClassif  = agregaEntradasNaoClassificadas(lancFin, ano);
     const deducoes    = agregaDeducoesSaida(lancFin, ano);
     const amortPec    = agregaAmortizacaoPec(lancFin, ano);
@@ -2797,6 +2818,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     const recAgri_M     = hasGridMeta ? agregaReceitaAgriMeta(gridMetaConsolidado) : null;
     const recOutras_M   = hasGridMeta ? agregaOutrasReceitasMeta(gridMetaConsolidado) : null;
     const captacao_M    = hasGridMeta ? agregaEntradasFinanceirasMeta(gridMetaConsolidado) : null;
+    const captPec_M     = hasGridMeta ? agregaCaptacaoPecMeta(gridMetaConsolidado) : null;
+    const captAgri_M    = hasGridMeta ? agregaCaptacaoAgriMeta(gridMetaConsolidado) : null;
+    const captSilvi_M   = hasGridMeta ? agregaCaptacaoSilviMeta(gridMetaConsolidado) : null;
+    const captSemEsc_M  = hasGridMeta ? agregaCaptacaoSemEscopoMeta(gridMetaConsolidado) : null;
     const naoClassif_M  = hasGridMeta ? agregaEntradasNaoClassificadasMeta(gridMetaConsolidado) : null;
     const deducoes_M    = hasGridMeta ? agregaDeducoesSaidaMeta(gridMetaConsolidado) : null;
     const amortPec_M    = hasGridMeta ? agregaAmortizacaoPecMeta(gridMetaConsolidado) : null;
@@ -2952,6 +2977,26 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
         isPer ? 'Entradas financeiras (captação) acumuladas Jan→mês (caixa)'
               : 'Entradas financeiras (captação) no mês (caixa)',
         captacao_M),
+      captacaoPec: buildInd(captPec,
+        'CAPTAÇÃO PECUÁRIA', 'Captação Pecuária',
+        isPer ? 'Captação de financiamento pecuário acumulada Jan→mês (caixa)'
+              : 'Captação de financiamento pecuário no mês (caixa)',
+        captPec_M),
+      captacaoAgri: buildInd(captAgri,
+        'CAPTAÇÃO AGRICULTURA', 'Captação Agricultura',
+        isPer ? 'Captação de financiamento agrícola acumulada Jan→mês (caixa)'
+              : 'Captação de financiamento agrícola no mês (caixa)',
+        captAgri_M),
+      captacaoSilvi: buildInd(captSilvi,
+        'CAPTAÇÃO SILVICULTURA', 'Captação Silvicultura',
+        isPer ? 'Captação de financiamento silvícola acumulada Jan→mês (caixa)'
+              : 'Captação de financiamento silvícola no mês (caixa)',
+        captSilvi_M),
+      captacaoSemEscopo: buildInd(captSemEsc,
+        'APORTES E OUTRAS ENTRADAS', 'Aportes e Outras Entradas',
+        isPer ? 'Aportes e demais entradas financeiras sem escopo, acumulados Jan→mês (caixa)'
+              : 'Aportes e demais entradas financeiras sem escopo no mês (caixa)',
+        captSemEsc_M),
       entradasNaoClassificadas: buildInd(naoClassif,
         'ENTRADAS NÃO CLASSIFICADAS', 'Entradas não classificadas',
         isPer ? 'Entradas sem grupo oficial, acumulado Jan→mês (caixa)'
@@ -3489,6 +3534,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     investSilviIndicador:         _finSoberano.investSilvi,
     amortizacaoSilviIndicador:    _finSoberano.amortizacaoSilvi,
     captacaoIndicador:            _finSoberano.captacao,
+    captacaoPecIndicador:         _finSoberano.captacaoPec,
+    captacaoAgriIndicador:        _finSoberano.captacaoAgri,
+    captacaoSilviIndicador:       _finSoberano.captacaoSilvi,
+    captacaoSemEscopoIndicador:   _finSoberano.captacaoSemEscopo,
     entradasNaoClassificadasIndicador: _finSoberano.entradasNaoClassificadas,
     amortizacaoPecIndicador:      _finSoberano.amortizacaoPec,
     amortizacaoAgriIndicador:     _finSoberano.amortizacaoAgri,
@@ -3562,6 +3611,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       investSilviIndicador:         _finSoberano.investSilvi,
       amortizacaoSilviIndicador:    _finSoberano.amortizacaoSilvi,
       captacaoIndicador:            _finSoberano.captacao,
+      captacaoPecIndicador:         _finSoberano.captacaoPec,
+      captacaoAgriIndicador:        _finSoberano.captacaoAgri,
+      captacaoSilviIndicador:       _finSoberano.captacaoSilvi,
+      captacaoSemEscopoIndicador:   _finSoberano.captacaoSemEscopo,
       entradasNaoClassificadasIndicador: _finSoberano.entradasNaoClassificadas,
       amortizacaoPecIndicador:      _finSoberano.amortizacaoPec,
       amortizacaoAgriIndicador:     _finSoberano.amortizacaoAgri,

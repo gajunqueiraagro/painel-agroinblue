@@ -562,6 +562,39 @@ export const isEntradaFinanceira = (l: LancamentoClassificavel): boolean =>
   canonicalMacro(l) === 'outras entradas financeiras';
 
 /**
+ * Captacao por escopo — filtro por SUBCENTRO literal do plano de contas.
+ * O grupo 'Entradas de Capital' e generico e nao distingue a atividade;
+ * quem distingue e o subcentro (ordem 4030/4040/4050).
+ *
+ * As quatro funcoes abaixo PARTICIONAM isEntradaFinanceira: todo lancamento
+ * que a satisfaz satisfaz exatamente UMA delas. Ao criar subcentro novo no
+ * macro 'Entrada Financeira', ele PRECISA ser mapeado aqui — senao cai em
+ * isCaptacaoSemEscopo e aparece como "Aportes e outras", que e o
+ * comportamento seguro (nao some), mas impreciso.
+ *
+ * Medido em 21/08/2026: Pecuaria R$ 77,97 mi | Aporte Pessoal R$ 26,91 mi |
+ * Agricultura R$ 7,86 mi | Retorno de Emprestimos R$ 2,41 mi.
+ * Silvicultura existe no plano com ZERO lancamentos.
+ */
+export const isCaptacaoPecuaria = (l: LancamentoClassificavel): boolean =>
+  isEntradaFinanceira(l) && l.subcentro === 'Entrada de Financiamento Pecuária';
+
+export const isCaptacaoAgricultura = (l: LancamentoClassificavel): boolean =>
+  isEntradaFinanceira(l) && l.subcentro === 'Entrada de Financiamento Agricultura';
+
+export const isCaptacaoSilvicultura = (l: LancamentoClassificavel): boolean =>
+  isEntradaFinanceira(l) && l.subcentro === 'Entrada de Financiamento Silvicultura';
+
+/** Entrada financeira sem escopo: Aporte Pessoal, Retorno de Emprestimos e
+ *  qualquer subcentro novo ainda nao mapeado. Definido por NEGACAO das tres
+ *  acima, para que nada suma quando o plano crescer. */
+export const isCaptacaoSemEscopo = (l: LancamentoClassificavel): boolean =>
+  isEntradaFinanceira(l) &&
+  !isCaptacaoPecuaria(l) &&
+  !isCaptacaoAgricultura(l) &&
+  !isCaptacaoSilvicultura(l);
+
+/**
  * Entrada que não casa com nenhum grupo oficial de entrada.
  *
  * PRÉ-CONDIÇÃO: o caller já garantiu que é entrada (o adapter
