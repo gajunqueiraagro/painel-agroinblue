@@ -1465,8 +1465,11 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
               });
 
               return (
-                <div className="flex items-center gap-4">
-                  <svg viewBox="0 0 80 80" className="h-20 w-20 shrink-0 -rotate-90">
+                <div className="flex items-start gap-5">
+                  {/* Donut maior: coluna propria a esquerda. O viewBox e a
+                      espessura sao os mesmos — so a caixa renderizada cresce,
+                      entao a proporcao do anel nao muda. */}
+                  <svg viewBox="0 0 80 80" className="h-32 w-32 shrink-0 -rotate-90">
                     {fatias.map(f => (
                       <circle key={f.label} cx="40" cy="40" r={R} fill="none"
                         strokeWidth="12" className={f.stroke}
@@ -1474,20 +1477,34 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
                         strokeDashoffset={f.offset} />
                     ))}
                   </svg>
-                  <div className="min-w-0 flex-1 space-y-1">
-                    {fatias.map(f => (
-                      <div key={f.label} className="flex items-baseline justify-between gap-2 text-[10px]">
-                        <span className="flex items-center gap-1.5 truncate text-muted-foreground">
-                          <span className={`inline-block h-2 w-2 rounded-full shrink-0 ${f.cor}`} />
-                          {f.label}
-                        </span>
-                        <span className="tabular-nums shrink-0 text-foreground">
-                          {fmtHaInt(f.valor)} <span className="text-muted-foreground">
+                  <div className="min-w-0 flex-1">
+                    {/* Grid de 3 colunas com largura de conteudo: rotulo, valor e
+                        percentual alinham entre si, e o rotulo NAO e esticado —
+                        e o que aproxima "Pecuaria" do numero. Valor e % em
+                        <span> separados: juntos, a largura variavel do %
+                        deslocava o numero. */}
+                    <div className="grid grid-cols-[auto_auto_auto] justify-start gap-x-3 gap-y-1 text-[10px]">
+                      {fatias.map(f => (
+                        <div key={f.label} className="contents">
+                          <span className="flex items-center gap-1.5 text-muted-foreground">
+                            <span className={`inline-block h-2 w-2 rounded-full shrink-0 ${f.cor}`} />
+                            {f.label}
+                          </span>
+                          <span className="tabular-nums text-right text-foreground">
+                            {fmtHaInt(f.valor)}
+                          </span>
+                          <span className="tabular-nums text-right text-muted-foreground">
                             {((f.valor / soma) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}%
                           </span>
-                        </span>
-                      </div>
-                    ))}
+                        </div>
+                      ))}
+                    </div>
+                    {/* Nota abaixo da legenda, dentro da coluna da direita:
+                        acompanha a lista em vez de atravessar o bloco inteiro. */}
+                    <p className="text-[9px] text-muted-foreground pt-2 leading-snug">
+                      Fonte: fechamento de áreas do mês. Área total = matrícula.
+                      Estoque — não acumula no período.
+                    </p>
                   </div>
                 </div>
               );
@@ -1497,10 +1514,6 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
                 Área além da matrícula: {fmtHa(areaExcedente)}
               </div>
             )}
-            <p className="text-[10px] text-muted-foreground pt-2">
-              Fonte: fechamento de áreas do mês. Área total = matrícula.
-              Estoque — não acumula no período.
-            </p>
           </div>
         </SectionBlock>
 
