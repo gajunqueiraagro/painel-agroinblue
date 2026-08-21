@@ -172,6 +172,15 @@ function fmtHa(v: number | null): string {
     : `${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ha`;
 }
 
+/* Area em hectares INTEIROS para tabela e barra: o mockup usa densidade
+   alta e centavo de hectare nao muda decisao nenhuma. `fmtHa` (2 casas)
+   permanece para os poucos lugares que precisam de precisao. */
+function fmtHaInt(v: number | null): string {
+  return v == null || v === 0
+    ? '—'
+    : v.toLocaleString('pt-BR', { maximumFractionDigits: 0 });
+}
+
 /* Irmao de LinhaCaixa: mesma anatomia, unidade diferente. Area em ha nao
    pode usar fmtR — o bloco inteiro perderia o sentido com cifrao. */
 function LinhaArea({ label, valor, tipo = 'detalhe' }: {
@@ -1371,273 +1380,346 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
-        <SectionBlock title="Área" subtitle="como a terra está dividida">
-          <div className="space-y-1">
-            <LinhaArea label="Área total" valor={areaTotal} tipo="total" />
-            <LinhaArea label="Pecuária"      valor={areaPec} />
-            <LinhaArea label="Agricultura"   valor={areaAgri} />
-            <LinhaArea label="Silvicultura"  valor={areaSilvi} />
-            <LinhaArea label="Reserva legal" valor={areaReserva} />
-            <LinhaArea label="APP"           valor={areaApp} />
-            <LinhaArea label="Benfeitorias"  valor={areaBenf} />
-            {(areaOutras ?? 0) > 0 && (
-              <LinhaArea label="Outras" valor={areaOutras} />
-            )}
-            <div className="pt-1 mt-1 border-t border-border">
-              <LinhaArea label="Área produtiva" valor={areaProdutiva} tipo="total" />
-            </div>
-            {areaExcedente != null && (
-              <div className="text-[11px] text-warning pt-1">
-                Área além da matrícula: {fmtHa(areaExcedente)}
-              </div>
-            )}
-          </div>
-          <p className="text-[10px] text-muted-foreground pt-2">
-            Fonte: fechamento de áreas do mês. Área total = matrícula.
-            Estoque — não acumula no período.
-          </p>
-        </SectionBlock>
+      {/* Faixa de resumo: os tres numeros que respondem "de que tamanho e a operacao"
+          antes de qualquer bloco. "Fechamento N de N" NAO entra aqui — o mesmo dado ja
+          esta na StatusFechamentoBanda logo acima, e repetir em 3 cm de tela e ruido. */}
+      <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 mb-4 text-[11px] text-muted-foreground">
+        <span>Área total <strong className="text-foreground text-sm tabular-nums">{fmtHaInt(areaTotal)}</strong> ha</span>
+        <span>Produtiva <strong className="text-foreground text-sm tabular-nums">{fmtHaInt(areaProdutiva)}</strong> ha
+          {areaTotal != null && areaProdutiva != null && areaTotal > 0 && (
+            <> · {((areaProdutiva / areaTotal) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%</>
+          )}
+        </span>
+        <span>Disponível <strong className="text-foreground text-sm tabular-nums">{fmtR(caixaIndicador?.valor ?? null)}</strong></span>
+      </div>
 
-        {isGlobal && areaPorFazendaMes.length > 0 && (
-          <SectionBlock title="Área por fazenda" subtitle="onde a operação está">
-            <div className="space-y-1.5">
-              {areaPorFazendaMes.map(f => (
-                <div key={f.fazenda_id} className="space-y-0.5">
-                  <div className="flex items-baseline justify-between gap-3 text-[11px] font-medium text-foreground">
-                    <span className="truncate">{nomeFazendaPorId[f.fazenda_id] ?? 'Fazenda'}</span>
-                    <span className="tabular-nums shrink-0">{fmtHa(f.area_total_ha)}</span>
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+
+        <div className="lg:col-span-3">
+          {/* col-span-2 porque o miolo do SectionBlock e uma grade de DUAS colunas,
+              feita para MetricTile. Sem isso a barra ocupava meia largura e o rodape
+              subia para a coluna da direita, ao lado dos numeros em vez de abaixo. */}
+          <SectionBlock title="Composição da área" subtitle="como a terra está dividida">
+            <div className="col-span-2 space-y-2">
+              {(() => {
+                const partes = [
+                  { label: 'Pecuária',    valor: areaPec   ?? 0, cor: 'bg-success' },
+                  { label: 'Agricultura', valor: areaAgri  ?? 0, cor: 'bg-cta' },
+                  { label: 'Silvicultura',valor: areaSilvi ?? 0, cor: 'bg-primary' },
+                  { label: 'Reserva, APP, benf.',
+                    valor: (areaReserva ?? 0) + (areaApp ?? 0) + (areaBenf ?? 0) + (areaOutras ?? 0),
+                    cor: 'bg-muted-foreground/40' },
+                ].filter(p => p.valor > 0);
+                const soma = partes.reduce((s, p) => s + p.valor, 0);
+                if (soma <= 0) return <p className="text-[11px] text-muted-foreground">—</p>;
+                return (
+                  <div className="space-y-2">
+                    <div className="flex h-3 w-full overflow-hidden rounded-sm">
+                      {partes.map(p => (
+                        <div key={p.label} className={p.cor} style={{ width: `${(p.valor / soma) * 100}%` }} />
+                      ))}
+                    </div>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-muted-foreground">
+                      {partes.map(p => (
+                        <span key={p.label} className="flex items-center gap-1">
+                          <span className={`inline-block h-2 w-2 rounded-full ${p.cor}`} />
+                          {p.label} {fmtHaInt(p.valor)}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 pl-2.5 text-[10px] text-muted-foreground">
-                    {f.area_pecuaria_ha > 0     && <span>Pec. {fmtHa(f.area_pecuaria_ha)}</span>}
-                    {f.area_agricultura_ha > 0  && <span>Agri. {fmtHa(f.area_agricultura_ha)}</span>}
-                    {f.area_silvicultura_ha > 0 && <span>Silvi. {fmtHa(f.area_silvicultura_ha)}</span>}
-                    {f.area_reserva_ha > 0      && <span>Reserva {fmtHa(f.area_reserva_ha)}</span>}
-                    {f.area_produtiva_ha > f.area_total_ha && (
-                      <span className="text-warning">
-                        Além da matrícula {fmtHa(f.area_produtiva_ha - f.area_total_ha)}
-                      </span>
-                    )}
-                  </div>
+                );
+              })()}
+              {areaExcedente != null && (
+                <div className="text-[11px] text-warning pt-1">
+                  Área além da matrícula: {fmtHa(areaExcedente)}
                 </div>
-              ))}
+              )}
+              <p className="text-[10px] text-muted-foreground pt-2">
+                Fonte: fechamento de áreas do mês. Área total = matrícula.
+                Estoque — não acumula no período.
+              </p>
             </div>
           </SectionBlock>
-        )}
+        </div>
 
-        <SectionBlock title="Produção" subtitle="o que a fazenda entregou" naoFechado={mesSemFechamento} avisoNaoFechado={avisoMes}>
-          <MetricTile label={cabecasIndicador?.label ?? 'CABEÇAS'} value={fmtN(cabecasIndicador?.valor ?? null)} unit="cab" loading={loadingPainel}
-            deltaMes={cabecasIndicador?.deltaMes ?? null}
-            deltaAno={cabecasIndicador?.deltaAno ?? null}
-            deltaMeta={cabecasIndicador?.deltaMeta ?? null}
-            onClick={() => setModalIndicador('cabecas')} />
-          <MetricTile label={pesoMedioIndicador?.label ?? 'PESO MÉDIO FINAL'} value={fmtN(pesoMedioIndicador?.valor ?? null, 1)} unit="kg" loading={loadingPainel}
-            deltaMes={pesoMedioIndicador?.deltaMes ?? null}
-            deltaAno={pesoMedioIndicador?.deltaAno ?? null}
-            deltaMeta={pesoMedioIndicador?.deltaMeta ?? null}
-            onClick={() => setModalIndicador('pesoMedio')} />
-          <MetricTile label={arrobasIndicador?.label ?? '@ PRODUZIDAS NO MÊS'} value={fmtN(arrobasIndicador?.valor ?? null, 1)} unit="@" loading={loadingPainel}
-            deltaMes={arrobasIndicador?.deltaMes ?? null}
-            deltaAno={arrobasIndicador?.deltaAno ?? null}
-            deltaMeta={arrobasIndicador?.deltaMeta ?? null}
-            onClick={() => setModalIndicador('arrobas')} />
-          <MetricTile label={desfruteIndicador?.label ?? 'DESFRUTE (CAB.) NO MÊS'} value={fmtN(desfruteIndicador?.valor ?? null)} unit="cab" loading={loadingPainel}
-            deltaMes={desfruteIndicador?.deltaMes ?? null}
-            deltaAno={desfruteIndicador?.deltaAno ?? null}
-            deltaMeta={desfruteIndicador?.deltaMeta ?? null}
-            onClick={() => setModalIndicador('desfrute')} />
-          <MetricTile label={gmdIndicador?.label ?? 'GMD'} value={fmtN(gmdIndicador?.valor ?? null, 3)} unit="kg/dia" loading={loadingPainel}
-            deltaMes={gmdIndicador?.deltaMes ?? null}
-            deltaAno={gmdIndicador?.deltaAno ?? null}
-            deltaMeta={gmdIndicador?.deltaMeta ?? null}
-            onClick={() => setModalIndicador('gmd')} />
-          <MetricTile label={valorRebanhoIndicador?.label ?? 'VALOR DO REBANHO NO MÊS'} value={fmtRAbreviado(valorRebanhoIndicador?.valor ?? null)} loading={loadingPainel}
-            deltaMes={valorRebanhoIndicador?.deltaMes ?? null}
-            deltaAno={valorRebanhoIndicador?.deltaAno ?? null}
-            deltaMeta={valorRebanhoIndicador?.deltaMeta ?? null}
-            onClick={() => setModalIndicador('valorRebanho')} />
-        </SectionBlock>
+        <div className="lg:col-span-2">
+          {/* PR-HOME-CAIXA-CONSOLIDADO-01 — quinto bloco da grade de dois por linha; fica
+              sozinho na terceira fileira, em meia largura. NAO recebe naoFechado: caixa
+              nao depende de fechamento de rebanho.
+              O conteudo vai num col-span-2 porque o miolo do SectionBlock e uma grade de
+              DUAS colunas, feita para MetricTile — e aqui e uma LISTA de 19 linhas. */}
+          <SectionBlock title="Caixa" subtitle="entradas e saídas do período">
+            <div className="col-span-2 space-y-1">
+              <LinhaCaixa label={rotuloSaldoInicial} valor={saldoInicial} tipo="total" />
 
-        <SectionBlock title="Eficiência" subtitle="do uso da área" naoFechado={mesSemFechamento} avisoNaoFechado={avisoMes}>
-          <MetricTile
-            label={isPeriodoArea ? 'Área Produtiva Pec. média no período' : 'Área Produtiva Pecuária'}
-            value={fmtN(areaProdutivaPecValor, 0)} unit="ha"
-            loading={statusArea === 'carregando'} status={msgArea(statusArea)}
-            deltaMes={areaProdutivaPecDeltaMes}
-            deltaAno={areaProdutivaPecDeltaAno}
-            deltaMeta={areaProdutivaPecDeltaMeta}
-            onClick={() => setModalIndicador('areaProdutivaPec')} />
-          <MetricTile label={uaHaIndicador?.label ?? 'UA/HA NO MÊS'} value={fmtN(uaHaIndicador?.valor ?? null, 2)} loading={statusArea === 'carregando'} status={statusArea !== 'ok' ? msgArea(statusArea) : null}
-            deltaMes={uaHaIndicador?.deltaMes ?? null}
-            deltaAno={uaHaIndicador?.deltaAno ?? null}
-            deltaMeta={uaHaIndicador?.deltaMeta ?? null}
-            onClick={() => setModalIndicador('uaHa')} />
-          <MetricTile label={kgHaIndicador?.label ?? 'KG VIVO/HA NO MÊS'} value={fmtN(kgHaIndicador?.valor ?? null, 1)} unit="kg/ha" loading={statusArea === 'carregando'} status={statusArea !== 'ok' ? msgArea(statusArea) : null}
-            deltaMes={kgHaIndicador?.deltaMes ?? null}
-            deltaAno={kgHaIndicador?.deltaAno ?? null}
-            deltaMeta={kgHaIndicador?.deltaMeta ?? null}
-            onClick={() => setModalIndicador('kgHa')} />
-        </SectionBlock>
+              <div className="pt-1">
+                <LinhaCaixa label="Entradas" valor={totalEntradas} tipo="total"
+                  corValor="text-emerald-600" />
+                {entradasCaixa.map(l => (
+                  <LinhaCaixa key={l.label} label={l.label} valor={l.valor} />
+                ))}
+              </div>
 
-        <SectionBlock title="Financeiro Produtivo" subtitle="receita × custo por @">
-          <MetricTile
-            label={receitaPecIndicador?.label ?? 'RECEITAS PECUÁRIAS COMPETÊNCIA NO MÊS'}
-            value={fmtR(receitaPecIndicador?.valor ?? null)}
-            loading={loadingPainel}
-            tone="blue"
-            deltaMes={receitaPecIndicador?.deltaMes ?? null}
-            deltaAno={receitaPecIndicador?.deltaAno ?? null}
-            deltaMeta={receitaPecIndicador?.deltaMeta ?? null}
-            onClick={() => setModalIndicador('receitaPec')} />
-          <MetricTile
-            label={custeioPecIndicador?.label ?? 'CUSTEIO PRODUÇÃO PECUÁRIA NO MÊS'}
-            value={fmtR(custeioPecIndicador?.valor ?? null)}
-            loading={loadingPainel}
-            tone="negative"
-            deltaMes={custeioPecIndicador?.deltaMes ?? null}
-            deltaAno={custeioPecIndicador?.deltaAno ?? null}
-            deltaMeta={custeioPecIndicador?.deltaMeta ?? null}
-            onClick={() => setModalIndicador('custeioPec')} />
-          <MetricTile
-            label={custoArrIndicador?.label ?? 'CUSTO PRODUTIVO R$/@'}
-            value={fmtR(custoArrIndicador?.valor ?? null)}
-            unit="R$/@"
-            loading={loadingPainel}
-            tone="negative"
-            deltaMes={custoArrIndicador?.deltaMes ?? null}
-            deltaAno={custoArrIndicador?.deltaAno ?? null}
-            deltaMeta={custoArrIndicador?.deltaMeta ?? null}
-            onClick={() => setModalIndicador('custoArr')} />
-          <MetricTile
-            label={precoArrIndicador?.label ?? 'PREÇO DE VENDA R$/@'}
-            value={fmtR(precoArrIndicador?.valor ?? null)}
-            unit="R$/@"
-            loading={loadingPainel}
-            tone="blue"
-            deltaMes={precoArrIndicador?.deltaMes ?? null}
-            deltaAno={precoArrIndicador?.deltaAno ?? null}
-            deltaMeta={precoArrIndicador?.deltaMeta ?? null}
-            onClick={() => setModalIndicador('precoArr')} />
-          <MetricTile
-            label={custoCabIndicador?.label ?? 'CUSTO CAB. MÊS R$/CAB.'}
-            value={fmtR(custoCabIndicador?.valor ?? null)}
-            unit="R$/cab."
-            loading={loadingPainel}
-            tone="negative"
-            deltaMes={custoCabIndicador?.deltaMes ?? null}
-            deltaAno={custoCabIndicador?.deltaAno ?? null}
-            deltaMeta={custoCabIndicador?.deltaMeta ?? null}
-            onClick={() => setModalIndicador('custoCab')} />
-          <MetricTile
-            label={margemArrIndicador?.label ?? 'MARGEM POR @'}
-            value={fmtR(margemArrIndicador?.valor ?? null)}
-            unit="R$/@"
-            loading={loadingPainel}
-            tone={margemArrIndicador?.valor == null ? 'default' : margemArrIndicador.valor >= 0 ? 'blue' : 'negative'}
-            deltaMes={margemArrIndicador?.deltaMes ?? null}
-            deltaAno={margemArrIndicador?.deltaAno ?? null}
-            deltaMeta={margemArrIndicador?.deltaMeta ?? null}
-            onClick={() => setModalIndicador('margemArr')} />
-        </SectionBlock>
+              <div className="pt-1">
+                <LinhaCaixa label="Saídas" valor={totalSaidas} tipo="total"
+                  corValor="text-red-500" />
+                {saidasCaixa.map(l => (
+                  <LinhaCaixa key={l.label} label={l.label} valor={l.valor} />
+                ))}
+              </div>
 
-        <SectionBlock title="Estrutura Financeira" subtitle="posição patrimonial">
-          <MetricTile
-            label="Caixa disponível"
-            value={fmtR(caixaValor)}
-            loading={loadingFluxo}
-            tone="blue"
-            deltaMes={deltaMesCaixa}
-            deltaAno={deltaAnoCaixa}
-            deltaMeta={null}
-            onClick={() => setModalIndicador('caixaDisponivel')}
-          />
-          <MetricTile
-            label="Endividamento"
-            value={fmtR(endividamentoValor)}
-            loading={loadingDivida}
-            tone={endividamentoValor != null && endividamentoValor > 0 ? 'negative' : 'default'}
-            deltaMes={finEndDeltaMes}
-            deltaAno={finEndDeltaAno}
-            deltaMeta={null}
-            inverseDelta
-            onClick={() => setModalIndicador('endividamento')}
-          />
-          <MetricTile
-            label="Dívida / rebanho"
-            value={loadingDivida ? null : fmtN(finAlavancagem?.percentual ?? null, 1)}
-            unit="%"
-            loading={loadingDivida}
-            tone={
-              finAlavancagem?.status === 'critico' ? 'negative'
-              : finAlavancagem?.status === 'atencao' ? 'negative'
-              : 'default'
-            }
-            deltaMes={finAlavancagem?.deltaMes ?? null}
-            deltaAno={finAlavancagem?.deltaAno ?? null}
-            deltaMeta={null}
-            inverseDelta
-            onClick={() => setModalIndicador('alavancagem')}
-          />
-          {(() => {
-            const pizza = finPizza ?? [];
-            const curto = pizza.find(p => p.nome?.toLowerCase().includes('curto'));
-            const longo = pizza.find(p => p.nome?.toLowerCase().includes('longo'));
-            const total = (curto?.valor ?? 0) + (longo?.valor ?? 0);
-            const pctCurto = total > 0 ? (curto?.valor ?? 0) / total * 100 : null;
-            return (
-              <MetricTile
-                label="Curto vs longo prazo"
-                value={pctCurto != null
-                  ? `${fmtN(pctCurto, 0)}% Curto Prazo / ${fmtN(100 - pctCurto, 0)}% Longo Prazo`
-                  : null}
-                loading={loadingDivida}
-                hideDelta
-              />
-            );
-          })()}
-        </SectionBlock>
+              <div className="pt-1 border-t border-border/40">
+                <LinhaCaixa label={rotuloSaldoFinal} valor={saldoFinal} tipo="total" />
+              </div>
 
-        {/* PR-HOME-CAIXA-CONSOLIDADO-01 — quinto bloco da grade de dois por linha; fica
-            sozinho na terceira fileira, em meia largura. NAO recebe naoFechado: caixa
-            nao depende de fechamento de rebanho.
-            O conteudo vai num col-span-2 porque o miolo do SectionBlock e uma grade de
-            DUAS colunas, feita para MetricTile — e aqui e uma LISTA de 19 linhas. */}
-        <SectionBlock title="Caixa" subtitle="entradas e saídas do período">
-          <div className="col-span-2 space-y-1">
-            <LinhaCaixa label={rotuloSaldoInicial} valor={saldoInicial} tipo="total" />
+              {mostrarDifCaixa && (
+                <p className="text-[10px] text-amber-700">
+                  Diferença de {fmtR(difCaixa)} — não conciliado
+                </p>
+              )}
 
-            <div className="pt-1">
-              <LinhaCaixa label="Entradas" valor={totalEntradas} tipo="total"
-                corValor="text-emerald-600" />
-              {entradasCaixa.map(l => (
-                <LinhaCaixa key={l.label} label={l.label} valor={l.valor} />
-              ))}
-            </div>
-
-            <div className="pt-1">
-              <LinhaCaixa label="Saídas" valor={totalSaidas} tipo="total"
-                corValor="text-red-500" />
-              {saidasCaixa.map(l => (
-                <LinhaCaixa key={l.label} label={l.label} valor={l.valor} />
-              ))}
-            </div>
-
-            <div className="pt-1 border-t border-border/40">
-              <LinhaCaixa label={rotuloSaldoFinal} valor={saldoFinal} tipo="total" />
-            </div>
-
-            {mostrarDifCaixa && (
-              <p className="text-[10px] text-amber-700">
-                Diferença de {fmtR(difCaixa)} — não conciliado
+              <p className="text-[10px] text-muted-foreground pt-1">
+                Regime de caixa, ano civil. Transferências entre contas não entram.
               </p>
-            )}
+            </div>
+          </SectionBlock>
+        </div>
 
-            <p className="text-[10px] text-muted-foreground pt-1">
-              Regime de caixa, ano civil. Transferências entre contas não entram.
-            </p>
-          </div>
-        </SectionBlock>
+        <div className="lg:col-span-3">
+          {isGlobal && areaPorFazendaMes.length > 0 && (
+            <SectionBlock title="Área por fazenda" subtitle="onde a operação está">
+              {/* col-span-2 pelo mesmo motivo do bloco acima: a tabela precisa da
+                  largura inteira do miolo, que e uma grade de duas colunas. */}
+              <div className="col-span-2">
+                <table className="w-full text-[11px] tabular-nums">
+                  <thead>
+                    <tr className="text-muted-foreground border-b border-border">
+                      <th className="text-left font-normal py-1">Fazenda</th>
+                      <th className="text-right font-normal">Total</th>
+                      <th className="text-right font-normal">Produtiva</th>
+                      <th className="text-right font-normal">Pec.</th>
+                      <th className="text-right font-normal">Agri.</th>
+                      <th className="text-right font-normal">Silvi.</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {areaPorFazendaMes.map(f => {
+                      const excede = f.area_produtiva_ha > f.area_total_ha;
+                      return (
+                        <tr key={f.fazenda_id} className="border-b border-border/40">
+                          <td className="text-left py-1 truncate max-w-[140px]">{nomeFazendaPorId[f.fazenda_id] ?? 'Fazenda'}</td>
+                          <td className="text-right">{fmtHaInt(f.area_total_ha)}</td>
+                          <td
+                            className={`text-right${excede ? ' text-warning' : ''}`}
+                            title={excede ? `Área além da matrícula: ${fmtHa(f.area_produtiva_ha - f.area_total_ha)}` : undefined}
+                          >
+                            {fmtHaInt(f.area_produtiva_ha)}
+                          </td>
+                          <td className="text-right">{fmtHaInt(f.area_pecuaria_ha)}</td>
+                          <td className="text-right">{fmtHaInt(f.area_agricultura_ha)}</td>
+                          <td className="text-right">{fmtHaInt(f.area_silvicultura_ha)}</td>
+                        </tr>
+                      );
+                    })}
+                    {/* A linha Total sai dos agregados do bloco acima, NAO da soma das
+                        linhas: se as duas fontes divergirem, isso precisa APARECER — uma
+                        soma das proprias linhas fecharia sempre e esconderia a divergencia. */}
+                    <tr className="font-medium text-foreground">
+                      <td className="text-left py-1">Total</td>
+                      <td className="text-right">{fmtHaInt(areaTotal)}</td>
+                      <td className="text-right">{fmtHaInt(areaProdutiva)}</td>
+                      <td className="text-right">{fmtHaInt(areaPec)}</td>
+                      <td className="text-right">{fmtHaInt(areaAgri)}</td>
+                      <td className="text-right">{fmtHaInt(areaSilvi)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </SectionBlock>
+          )}
+        </div>
+
+        <div className="lg:col-span-2">
+          <SectionBlock title="Financeiro Produtivo" subtitle="receita × custo por @">
+            <MetricTile
+              label={receitaPecIndicador?.label ?? 'RECEITAS PECUÁRIAS COMPETÊNCIA NO MÊS'}
+              value={fmtR(receitaPecIndicador?.valor ?? null)}
+              loading={loadingPainel}
+              tone="blue"
+              deltaMes={receitaPecIndicador?.deltaMes ?? null}
+              deltaAno={receitaPecIndicador?.deltaAno ?? null}
+              deltaMeta={receitaPecIndicador?.deltaMeta ?? null}
+              onClick={() => setModalIndicador('receitaPec')} />
+            <MetricTile
+              label={custeioPecIndicador?.label ?? 'CUSTEIO PRODUÇÃO PECUÁRIA NO MÊS'}
+              value={fmtR(custeioPecIndicador?.valor ?? null)}
+              loading={loadingPainel}
+              tone="negative"
+              deltaMes={custeioPecIndicador?.deltaMes ?? null}
+              deltaAno={custeioPecIndicador?.deltaAno ?? null}
+              deltaMeta={custeioPecIndicador?.deltaMeta ?? null}
+              onClick={() => setModalIndicador('custeioPec')} />
+            <MetricTile
+              label={custoArrIndicador?.label ?? 'CUSTO PRODUTIVO R$/@'}
+              value={fmtR(custoArrIndicador?.valor ?? null)}
+              unit="R$/@"
+              loading={loadingPainel}
+              tone="negative"
+              deltaMes={custoArrIndicador?.deltaMes ?? null}
+              deltaAno={custoArrIndicador?.deltaAno ?? null}
+              deltaMeta={custoArrIndicador?.deltaMeta ?? null}
+              onClick={() => setModalIndicador('custoArr')} />
+            <MetricTile
+              label={precoArrIndicador?.label ?? 'PREÇO DE VENDA R$/@'}
+              value={fmtR(precoArrIndicador?.valor ?? null)}
+              unit="R$/@"
+              loading={loadingPainel}
+              tone="blue"
+              deltaMes={precoArrIndicador?.deltaMes ?? null}
+              deltaAno={precoArrIndicador?.deltaAno ?? null}
+              deltaMeta={precoArrIndicador?.deltaMeta ?? null}
+              onClick={() => setModalIndicador('precoArr')} />
+            <MetricTile
+              label={custoCabIndicador?.label ?? 'CUSTO CAB. MÊS R$/CAB.'}
+              value={fmtR(custoCabIndicador?.valor ?? null)}
+              unit="R$/cab."
+              loading={loadingPainel}
+              tone="negative"
+              deltaMes={custoCabIndicador?.deltaMes ?? null}
+              deltaAno={custoCabIndicador?.deltaAno ?? null}
+              deltaMeta={custoCabIndicador?.deltaMeta ?? null}
+              onClick={() => setModalIndicador('custoCab')} />
+            <MetricTile
+              label={margemArrIndicador?.label ?? 'MARGEM POR @'}
+              value={fmtR(margemArrIndicador?.valor ?? null)}
+              unit="R$/@"
+              loading={loadingPainel}
+              tone={margemArrIndicador?.valor == null ? 'default' : margemArrIndicador.valor >= 0 ? 'blue' : 'negative'}
+              deltaMes={margemArrIndicador?.deltaMes ?? null}
+              deltaAno={margemArrIndicador?.deltaAno ?? null}
+              deltaMeta={margemArrIndicador?.deltaMeta ?? null}
+              onClick={() => setModalIndicador('margemArr')} />
+          </SectionBlock>
+        </div>
+
+        <div className="lg:col-span-3">
+          <SectionBlock title="Produção" subtitle="o que a fazenda entregou" naoFechado={mesSemFechamento} avisoNaoFechado={avisoMes}>
+            <MetricTile label={cabecasIndicador?.label ?? 'CABEÇAS'} value={fmtN(cabecasIndicador?.valor ?? null)} unit="cab" loading={loadingPainel}
+              deltaMes={cabecasIndicador?.deltaMes ?? null}
+              deltaAno={cabecasIndicador?.deltaAno ?? null}
+              deltaMeta={cabecasIndicador?.deltaMeta ?? null}
+              onClick={() => setModalIndicador('cabecas')} />
+            <MetricTile label={pesoMedioIndicador?.label ?? 'PESO MÉDIO FINAL'} value={fmtN(pesoMedioIndicador?.valor ?? null, 1)} unit="kg" loading={loadingPainel}
+              deltaMes={pesoMedioIndicador?.deltaMes ?? null}
+              deltaAno={pesoMedioIndicador?.deltaAno ?? null}
+              deltaMeta={pesoMedioIndicador?.deltaMeta ?? null}
+              onClick={() => setModalIndicador('pesoMedio')} />
+            <MetricTile label={arrobasIndicador?.label ?? '@ PRODUZIDAS NO MÊS'} value={fmtN(arrobasIndicador?.valor ?? null, 1)} unit="@" loading={loadingPainel}
+              deltaMes={arrobasIndicador?.deltaMes ?? null}
+              deltaAno={arrobasIndicador?.deltaAno ?? null}
+              deltaMeta={arrobasIndicador?.deltaMeta ?? null}
+              onClick={() => setModalIndicador('arrobas')} />
+            <MetricTile label={desfruteIndicador?.label ?? 'DESFRUTE (CAB.) NO MÊS'} value={fmtN(desfruteIndicador?.valor ?? null)} unit="cab" loading={loadingPainel}
+              deltaMes={desfruteIndicador?.deltaMes ?? null}
+              deltaAno={desfruteIndicador?.deltaAno ?? null}
+              deltaMeta={desfruteIndicador?.deltaMeta ?? null}
+              onClick={() => setModalIndicador('desfrute')} />
+            <MetricTile label={gmdIndicador?.label ?? 'GMD'} value={fmtN(gmdIndicador?.valor ?? null, 3)} unit="kg/dia" loading={loadingPainel}
+              deltaMes={gmdIndicador?.deltaMes ?? null}
+              deltaAno={gmdIndicador?.deltaAno ?? null}
+              deltaMeta={gmdIndicador?.deltaMeta ?? null}
+              onClick={() => setModalIndicador('gmd')} />
+            <MetricTile label={valorRebanhoIndicador?.label ?? 'VALOR DO REBANHO NO MÊS'} value={fmtRAbreviado(valorRebanhoIndicador?.valor ?? null)} loading={loadingPainel}
+              deltaMes={valorRebanhoIndicador?.deltaMes ?? null}
+              deltaAno={valorRebanhoIndicador?.deltaAno ?? null}
+              deltaMeta={valorRebanhoIndicador?.deltaMeta ?? null}
+              onClick={() => setModalIndicador('valorRebanho')} />
+          </SectionBlock>
+        </div>
+
+        <div className="lg:col-span-2">
+          <SectionBlock title="Estrutura Financeira" subtitle="posição patrimonial">
+            <MetricTile
+              label="Caixa disponível"
+              value={fmtR(caixaValor)}
+              loading={loadingFluxo}
+              tone="blue"
+              deltaMes={deltaMesCaixa}
+              deltaAno={deltaAnoCaixa}
+              deltaMeta={null}
+              onClick={() => setModalIndicador('caixaDisponivel')}
+            />
+            <MetricTile
+              label="Endividamento"
+              value={fmtR(endividamentoValor)}
+              loading={loadingDivida}
+              tone={endividamentoValor != null && endividamentoValor > 0 ? 'negative' : 'default'}
+              deltaMes={finEndDeltaMes}
+              deltaAno={finEndDeltaAno}
+              deltaMeta={null}
+              inverseDelta
+              onClick={() => setModalIndicador('endividamento')}
+            />
+            <MetricTile
+              label="Dívida / rebanho"
+              value={loadingDivida ? null : fmtN(finAlavancagem?.percentual ?? null, 1)}
+              unit="%"
+              loading={loadingDivida}
+              tone={
+                finAlavancagem?.status === 'critico' ? 'negative'
+                : finAlavancagem?.status === 'atencao' ? 'negative'
+                : 'default'
+              }
+              deltaMes={finAlavancagem?.deltaMes ?? null}
+              deltaAno={finAlavancagem?.deltaAno ?? null}
+              deltaMeta={null}
+              inverseDelta
+              onClick={() => setModalIndicador('alavancagem')}
+            />
+            {(() => {
+              const pizza = finPizza ?? [];
+              const curto = pizza.find(p => p.nome?.toLowerCase().includes('curto'));
+              const longo = pizza.find(p => p.nome?.toLowerCase().includes('longo'));
+              const total = (curto?.valor ?? 0) + (longo?.valor ?? 0);
+              const pctCurto = total > 0 ? (curto?.valor ?? 0) / total * 100 : null;
+              return (
+                <MetricTile
+                  label="Curto vs longo prazo"
+                  value={pctCurto != null
+                    ? `${fmtN(pctCurto, 0)}% Curto Prazo / ${fmtN(100 - pctCurto, 0)}% Longo Prazo`
+                    : null}
+                  loading={loadingDivida}
+                  hideDelta
+                />
+              );
+            })()}
+          </SectionBlock>
+        </div>
+
+        <div className="lg:col-span-3">
+          <SectionBlock title="Eficiência" subtitle="do uso da área" naoFechado={mesSemFechamento} avisoNaoFechado={avisoMes}>
+            <MetricTile
+              label={isPeriodoArea ? 'Área Produtiva Pec. média no período' : 'Área Produtiva Pecuária'}
+              value={fmtN(areaProdutivaPecValor, 0)} unit="ha"
+              loading={statusArea === 'carregando'} status={msgArea(statusArea)}
+              deltaMes={areaProdutivaPecDeltaMes}
+              deltaAno={areaProdutivaPecDeltaAno}
+              deltaMeta={areaProdutivaPecDeltaMeta}
+              onClick={() => setModalIndicador('areaProdutivaPec')} />
+            <MetricTile label={uaHaIndicador?.label ?? 'UA/HA NO MÊS'} value={fmtN(uaHaIndicador?.valor ?? null, 2)} loading={statusArea === 'carregando'} status={statusArea !== 'ok' ? msgArea(statusArea) : null}
+              deltaMes={uaHaIndicador?.deltaMes ?? null}
+              deltaAno={uaHaIndicador?.deltaAno ?? null}
+              deltaMeta={uaHaIndicador?.deltaMeta ?? null}
+              onClick={() => setModalIndicador('uaHa')} />
+            <MetricTile label={kgHaIndicador?.label ?? 'KG VIVO/HA NO MÊS'} value={fmtN(kgHaIndicador?.valor ?? null, 1)} unit="kg/ha" loading={statusArea === 'carregando'} status={statusArea !== 'ok' ? msgArea(statusArea) : null}
+              deltaMes={kgHaIndicador?.deltaMes ?? null}
+              deltaAno={kgHaIndicador?.deltaAno ?? null}
+              deltaMeta={kgHaIndicador?.deltaMeta ?? null}
+              onClick={() => setModalIndicador('kgHa')} />
+          </SectionBlock>
+        </div>
 
       </div>
       </div>
