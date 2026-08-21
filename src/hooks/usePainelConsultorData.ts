@@ -678,12 +678,53 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     [snapshots],
   );
   // PR-HOME-AREA-TABELA-FAZENDA-01 — a mesma composicao, sem agregar fazendas.
-  const areaPorFazendaMes = useMemo(
-    () => snapshotsFazenda
-      .filter(s => s.mes === areaRealIdx + 1)
-      .sort((a, b) => b.area_total_ha - a.area_total_ha),
-    [snapshotsFazenda, areaRealIdx],
-  );
+  // PR-PC100-AREA-FAZENDA-PERIODO-01 — e agora sensivel ao viewMode.
+  const areaPorFazendaMes = useMemo(() => {
+    const ateMes = areaRealIdx + 1;
+
+    if (viewMode !== 'periodo') {
+      return snapshotsFazenda
+        .filter(s => s.mes === ateMes)
+        .sort((a, b) => b.area_total_ha - a.area_total_ha);
+    }
+
+    /* MEDIA POR FAZENDA, Jan -> mes selecionado. Media dos meses em que a
+       fazenda TEM snapshot: mes sem fechamento e ausencia, nao zero — contar
+       zero faria a area da fazenda encolher so porque um mes nao fechou.
+       Divisor por fazenda, nunca fixo: fazenda que fechou 3 dos 7 meses
+       divide por 3.
+
+       O campo `mes` das linhas devolvidas carrega o mes FINAL do intervalo,
+       NAO um mes real de snapshot — quem consumir precisa saber disso. O tipo
+       continua SnapshotAreaFazendaMes: a tela nao precisa saber se e foto ou
+       media, so as duas leituras precisam ter o mesmo formato. */
+    const porFazenda = new Map<string, SnapshotAreaFazendaMes[]>();
+    for (const s of snapshotsFazenda) {
+      if (s.mes > ateMes) continue;
+      const arr = porFazenda.get(s.fazenda_id) ?? [];
+      arr.push(s);
+      porFazenda.set(s.fazenda_id, arr);
+    }
+
+    const media = (arr: SnapshotAreaFazendaMes[], campo: keyof SnapshotAreaFazendaMes) =>
+      arr.reduce((acc, s) => acc + (Number(s[campo]) || 0), 0) / arr.length;
+
+    return Array.from(porFazenda.entries())
+      .map(([fazenda_id, arr]) => ({
+        fazenda_id,
+        mes: ateMes,
+        area_total_ha:        media(arr, 'area_total_ha'),
+        area_produtiva_ha:    media(arr, 'area_produtiva_ha'),
+        area_pecuaria_ha:     media(arr, 'area_pecuaria_ha'),
+        area_agricultura_ha:  media(arr, 'area_agricultura_ha'),
+        area_silvicultura_ha: media(arr, 'area_silvicultura_ha'),
+        area_reserva_ha:      media(arr, 'area_reserva_ha'),
+        area_app_ha:          media(arr, 'area_app_ha'),
+        area_benfeitorias_ha: media(arr, 'area_benfeitorias_ha'),
+        area_outras_ha:       media(arr, 'area_outras_ha'),
+      }))
+      .sort((a, b) => b.area_total_ha - a.area_total_ha);
+  }, [snapshotsFazenda, areaRealIdx, viewMode]);
   // PR-PC100-AREAS-01 — mesmo idioma das três acima: `find` por mês e null quando
   // o mês não tem snapshot, para o painel exibir "—" em vez de zero inventado.
   const areaDestinoRealPorMes = useMemo<Record<DestinoArea, (number | null)[]>>(
