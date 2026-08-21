@@ -1579,6 +1579,29 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
                           {areaTotal == null ? '—' : '100%'}
                         </span>
                       </div>
+                      {/* Produtiva NAO e familia: e o subconjunto pec+agri+silvi. Vem depois
+                          do Total de proposito — primeiro quanto a fazenda tem, depois quanto
+                          disso produz. Fora do donut e de partesLegenda.
+
+                          Base do percentual e areaTotal (matricula), NAO `soma`. Com `soma`,
+                          Produtiva seria subconjunto de si mesma e nunca passaria de 100% —
+                          escondendo o caso de terra arrendada de terceiro. Mesma base da
+                          linha "% da area" da tabela por fazenda. PODE ultrapassar 100%:
+                          nao truncar. */}
+                      <div className="contents">
+                        <span className="flex items-center gap-1.5 font-medium text-foreground">
+                          <span className="inline-block h-2 w-2 shrink-0" />
+                          Produtiva
+                        </span>
+                        <span className="tabular-nums text-right font-medium text-foreground">
+                          {areaProdutiva == null ? '—' : fmtHaInt(areaProdutiva)}
+                        </span>
+                        <span className="tabular-nums text-right font-medium text-muted-foreground">
+                          {(areaProdutiva == null || areaTotal == null || areaTotal <= 0)
+                            ? '—'
+                            : `${((areaProdutiva / areaTotal) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`}
+                        </span>
+                      </div>
                     </div>
                     {/* Excecao acompanha a legenda, no MESMO tamanho de fonte dela, e
                         em fmtHa (2 casas): valor de excecao — a precisao importa. */}
