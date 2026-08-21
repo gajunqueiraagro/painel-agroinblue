@@ -2185,7 +2185,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
                             onClick={isP1Bloqueado ? (e) => { e.stopPropagation(); setShowDivP1(true); } : isP1Oficial ? (e) => { e.stopPropagation(); setShowReabrirP1(true); } : undefined}
                           >
                             {badge.label}
-                            {(pilarInfo.modo_transitorio || pilarInfo.status === 'bloqueado') && (
+                            {pilarInfo.status === 'bloqueado' && (
                               <Info className="h-2.5 w-2.5 ml-0.5 opacity-60" />
                             )}
                           </span>

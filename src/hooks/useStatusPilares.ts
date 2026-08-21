@@ -7,12 +7,17 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
-export type StatusPilar = 'oficial' | 'provisorio' | 'bloqueado';
+/* PR-PILARES-CALCULO-01 — vocabulario alinhado ao que a funcao EMITE.
+   Antes o tipo era oficial|provisorio|bloqueado e a funcao emitia oficial|pendente:
+   a unica palavra em comum era 'oficial', e todo o resto virava provisorio no parse.
+   provisorio SAIU — nenhuma versao da funcao o emitiu. 'bloqueado' FICA: e o estado
+   previsto para quando o P5 virar derivado real. 'nao_implementado' entra porque o
+   banco passou a declara-lo. */
+export type StatusPilar = 'oficial' | 'pendente' | 'nao_implementado' | 'bloqueado';
 
 export interface PilarInfo {
   status: StatusPilar;
   detalhe?: Record<string, unknown>;
-  modo_transitorio?: boolean;
 }
 
 export interface StatusPilares {
@@ -23,7 +28,8 @@ export interface StatusPilares {
   p5_economico_consolidado: PilarInfo;
 }
 
-const DEFAULT_PILAR: PilarInfo = { status: 'provisorio' };
+/* Default e 'pendente': na ausencia de informacao nunca afirmar fechamento. */
+const DEFAULT_PILAR: PilarInfo = { status: 'pendente' };
 
 const DEFAULT_STATUS: StatusPilares = {
   p1_mapa_pastos: DEFAULT_PILAR,
@@ -36,11 +42,10 @@ const DEFAULT_STATUS: StatusPilares = {
 function parsePilar(raw: unknown): PilarInfo {
   if (!raw || typeof raw !== 'object') return DEFAULT_PILAR;
   const obj = raw as Record<string, unknown>;
-  const status = (obj.status as string) || 'provisorio';
+  const status = (obj.status as string) || 'pendente';
   return {
-    status: (['oficial', 'provisorio', 'bloqueado'].includes(status) ? status : 'provisorio') as StatusPilar,
+    status: (['oficial', 'pendente', 'nao_implementado', 'bloqueado'].includes(status) ? status : 'pendente') as StatusPilar,
     detalhe: obj.detalhe as Record<string, unknown> | undefined,
-    modo_transitorio: obj.modo_transitorio as boolean | undefined,
   };
 }
 
@@ -122,8 +127,15 @@ export function getPilarBadgeConfig(status: StatusPilar): {
   switch (status) {
     case 'oficial':
       return { label: 'Oficial', className: 'bg-emerald-600/15 text-emerald-700 border-emerald-600/30' };
-    case 'provisorio':
-      return { label: 'Provisório', className: 'bg-amber-500/15 text-amber-700 border-amber-500/30' };
+    case 'pendente':
+      return { label: 'Pendente', className: 'bg-amber-500/15 text-amber-700 border-amber-500/30' };
+    /* Cinza inerte, e nao ambar: nao_implementado NAO e pendencia do operador — e
+       funcionalidade que nao existe. Pintado de ambar junto com pendencia real, treina
+       o olho a ignorar o ambar inteiro, e ai a pendencia verdadeira some no meio.
+       O switch segue EXAUSTIVO sobre o union, sem default: estado novo no futuro vira
+       erro de compilacao em vez de undefined silencioso. */
+    case 'nao_implementado':
+      return { label: 'Não implementado', className: 'bg-muted text-muted-foreground border-border' };
     case 'bloqueado':
       return { label: 'Bloqueado', className: 'bg-red-500/15 text-red-700 border-red-500/30' };
   }
@@ -148,25 +160,28 @@ export function getPilarTooltipText(pilarKey: keyof StatusPilares, info: PilarIn
       if (motivo) return `Bloqueado — ${motivo}`;
       return 'Bloqueado';
     }
-    if (info.status === 'provisorio' && d) {
+    if (info.status === 'pendente' && d) {
       const fechados = d.pastos_fechados as number | undefined;
       const total = d.pastos_total as number | undefined;
       if (typeof fechados === 'number' && typeof total === 'number' && total > 0) {
-        return `Provisório — ${fechados} de ${total} pastos fechados`;
+        return `Pendente — ${fechados} de ${total} pastos fechados`;
       }
-      return 'Provisório — fechamento pendente';
+      return 'Pendente — fechamento não concluído';
     }
     if (info.status === 'oficial') {
       return 'Oficial — conciliado e fechado';
     }
   }
 
-  if (info.modo_transitorio) {
-    return 'Oficial transitório — fechamento formal ainda não implementado';
-  }
-
+  /* modo_transitorio saiu inteiro — tipo, leitura e ramo. A funcao o emitia fixo no P4,
+     entao descrevia transitoriedade de um valor que era constante; a migration deste PR
+     remove o unico emissor. Campo sem emissor mas com tipo e consumidor e' o pior dos
+     estados: o proximo leitor conclui que existe. */
   if (info.status === 'oficial') return 'Oficial';
-  if (info.status === 'provisorio') return 'Provisório — fechamento pendente';
+  if (info.status === 'pendente') return 'Pendente — fechamento não concluído';
+  if (info.status === 'nao_implementado') {
+    return 'Não implementado — este pilar ainda não tem fechamento no sistema';
+  }
   if (info.status === 'bloqueado') {
     const motivo = d?.motivo as string | undefined;
     return motivo ? `Bloqueado — ${motivo}` : 'Bloqueado — dependência pendente';

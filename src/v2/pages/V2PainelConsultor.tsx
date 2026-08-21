@@ -41,12 +41,20 @@ const PILARES: { key: PilarKey; label: string }[] = [
   { key: 'p4_competencia',           label: 'P4 Competência' },
   { key: 'p5_economico_consolidado', label: 'P5 Econômico'   },
 ];
+/* PR-PILARES-CALCULO-01 — chaves = vocabulario da RPC (oficial | pendente |
+   nao_implementado | bloqueado). A chave antiga saiu: nao e emitida por ninguem e nao
+   e usada por nenhum outro tipo neste arquivo.
+   nao_implementado em CINZA INERTE, nao em ambar: nao e pendencia do operador, e
+   funcionalidade que nao existe — misturar as duas ensina a ignorar o ambar. */
 const PILAR_CLS: Record<string, string> = {
-  oficial:    'bg-emerald-50 text-emerald-700 border-emerald-200',
-  provisorio: 'bg-amber-50   text-amber-700   border-amber-200',
-  bloqueado:  'bg-red-50     text-red-700     border-red-200',
+  oficial:          'bg-emerald-50 text-emerald-700 border-emerald-200',
+  pendente:         'bg-amber-50   text-amber-700   border-amber-200',
+  nao_implementado: 'bg-muted      text-muted-foreground border-border',
+  bloqueado:        'bg-red-50     text-red-700     border-red-200',
 };
-const PILAR_ICON: Record<string, string> = { oficial: '🟢', provisorio: '🟡', bloqueado: '🔴' };
+const PILAR_ICON: Record<string, string> = {
+  oficial: '🟢', pendente: '🟡', nao_implementado: '⚪', bloqueado: '🔴',
+};
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
@@ -128,11 +136,13 @@ export function V2PainelConsultor({ ano, mes }: { ano: string; mes: string }) {
         ) : pilares ? (
           <div className="flex flex-wrap gap-2">
             {PILARES.map(({ key, label }) => {
-              const status = pilares[key]?.status ?? 'provisorio';
+              /* Fallback 'pendente': com o anterior, P3/P4/P5 caiam em amarelo
+                 provisorio — a mentira que este PR existe para eliminar. */
+              const status = pilares[key]?.status ?? 'pendente';
               return (
                 <div key={key} className={cn(
                   'flex items-center gap-1.5 px-2.5 py-1.5 rounded border text-xs font-medium',
-                  PILAR_CLS[status] ?? PILAR_CLS.provisorio,
+                  PILAR_CLS[status] ?? PILAR_CLS.pendente,
                 )}>
                   <span>{PILAR_ICON[status]}</span>
                   <span>{label}</span>

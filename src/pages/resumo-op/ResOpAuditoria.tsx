@@ -8,7 +8,8 @@ interface Props { filtros: ResOpFilters; }
 
 const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
-type StatusVal = 'oficial' | 'provisorio' | 'bloqueado' | null;
+/* PR-PILARES-CALCULO-01 — vocabulario da RPC get_status_pilares_fechamento. */
+type StatusVal = 'oficial' | 'pendente' | 'nao_implementado' | 'bloqueado' | null;
 
 interface CelulaStatus {
   p1: StatusVal;
@@ -25,9 +26,10 @@ function StatusDot({ status }: { status: StatusVal }) {
   return (
     <span className={cn(
       'w-2 h-2 rounded-full inline-block',
-      status === 'oficial'    && 'bg-emerald-500',
-      status === 'provisorio' && 'bg-amber-400',
-      status === 'bloqueado'  && 'bg-rose-500',
+      status === 'oficial'          && 'bg-emerald-500',
+      status === 'pendente'         && 'bg-amber-400',
+      status === 'nao_implementado' && 'bg-muted-foreground/40',
+      status === 'bloqueado'        && 'bg-rose-500',
     )} />
   );
 }
@@ -114,9 +116,12 @@ export const ResOpAuditoria = ({ filtros }: Props) => {
       const anoMes = `${anoNum}-${String(m).padStart(2, '0')}`;
       const cel = heatmap.get(`${f.id}/${anoMes}`);
       if (!cel) continue;
-      if (cel.p1 && cel.p1 !== 'oficial') pendencias.push({ fazenda: f.nome, mes: MESES[m - 1], pilar: 'P1 Pastos', status: cel.p1 });
-      if (cel.p2 && cel.p2 !== 'oficial') pendencias.push({ fazenda: f.nome, mes: MESES[m - 1], pilar: 'P2 Rebanho', status: cel.p2 });
-      if (cel.p3 && cel.p3 !== 'oficial') pendencias.push({ fazenda: f.nome, mes: MESES[m - 1], pilar: 'P3 Caixa', status: cel.p3 });
+      /* PR-PILARES-CALCULO-01 — a lista era montada por "tudo que nao e oficial", e
+         com o P3 declarando nao_implementado ela inflaria com 12 meses x N fazendas de
+         item que ninguem pode resolver. Pendencia e' SO 'pendente'. */
+      if (cel.p1 === 'pendente') pendencias.push({ fazenda: f.nome, mes: MESES[m - 1], pilar: 'P1 Pastos', status: cel.p1 });
+      if (cel.p2 === 'pendente') pendencias.push({ fazenda: f.nome, mes: MESES[m - 1], pilar: 'P2 Rebanho', status: cel.p2 });
+      if (cel.p3 === 'pendente') pendencias.push({ fazenda: f.nome, mes: MESES[m - 1], pilar: 'P3 Caixa', status: cel.p3 });
     }
   }
 
@@ -134,7 +139,8 @@ export const ResOpAuditoria = ({ filtros }: Props) => {
 
       <div className="flex flex-wrap gap-3 text-[10px] text-muted-foreground items-center">
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />Oficial</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />Provisório</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />Pendente</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-muted-foreground/40 inline-block" />Não implementado</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rose-500 inline-block" />Bloqueado</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-border inline-block" />Sem dados</span>
         <span className="ml-2 text-[9px]">Linhas por célula: {PILAR_LABELS.join(' · ')}</span>
@@ -181,7 +187,7 @@ export const ResOpAuditoria = ({ filtros }: Props) => {
             {pendencias.slice(0, 20).map((p, i) => (
               <div key={i} className={cn(
                 'flex items-center gap-2 text-[11px] px-2 py-1.5 rounded',
-                p.status === 'provisorio'
+                p.status === 'pendente'
                   ? 'bg-amber-50 dark:bg-amber-950/20 text-amber-800 dark:text-amber-300'
                   : 'bg-rose-50 dark:bg-rose-950/20 text-rose-800 dark:text-rose-300',
               )}>
