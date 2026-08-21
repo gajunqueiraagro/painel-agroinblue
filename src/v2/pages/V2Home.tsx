@@ -296,7 +296,6 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara 
     receita, desembolso, resultado, valorRebanhoMes: valorReb,
     areaProdutivaMes, areaPecuariaRealMes, areaPecuariaRealPorMes, areaPecuariaMetaPorMes,
     lotUaHa, kgHa, statusArea, faltandoCount,
-    dadosCompletos,
     seriesMensais, seriesMeta, cabecasIndicador, pesoMedioIndicador, gmdIndicador, uaHaIndicador, kgHaIndicador, arrobasIndicador, desfruteIndicador, valorRebanhoIndicador,
     receitaPecIndicador, custeioPecIndicador, custoArrIndicador, precoArrIndicador, custoCabIndicador, margemArrIndicador,
     loading: loadingPainel,
@@ -964,12 +963,6 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara 
         )}
       </div>
       <div className="space-y-4">
-
-      {!dadosCompletos && (
-        <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-[12px] leading-snug text-amber-800">
-          ⚠️ Dados zootécnicos incompletos no Global. Reprocesse o cache/fechamento das fazendas antes de analisar.
-        </div>
-      )}
 
       {globalParcial && isGlobal && (
         <div className="mx-4 mb-3 flex items-start gap-2 rounded-md border border-yellow-400/60 bg-yellow-50/80 px-4 py-2.5 text-sm text-yellow-800 dark:border-yellow-500/40 dark:bg-yellow-900/20 dark:text-yellow-300">
