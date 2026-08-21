@@ -1478,10 +1478,10 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
             feita para MetricTile. Sem isso a barra ocupava meia largura e o rodape
             subia para a coluna da direita, ao lado dos numeros em vez de abaixo. */}
         <SectionBlock
-          title={isPeriodo ? 'Composição da área — Média no Período' : 'Composição da área'}
-          subtitle="como a terra está dividida"
+          title={isPeriodo ? 'Área — Média no Período' : 'Área'}
+          subtitle="como a terra está dividida e onde a operação está"
         >
-          <div className="col-span-2 space-y-2">
+          <div className="col-span-2 space-y-3">
             {(() => {
               /* Duas classes por parte: `cor` (bg-*) para o ponto da legenda e
                  `stroke` (stroke-*) para a fatia do donut. Tailwind v3 gera
@@ -1607,71 +1607,78 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
                 </div>
               );
             })()}
+
+            {/* Metade 2: a mesma fonte, o mesmo mes, o mesmo viewMode — aberta por
+                fazenda. Era card proprio; a divisao entre os dois nao correspondia a
+                nada. So no Global: em fazenda especifica seria uma linha repetindo a
+                legenda acima. */}
+            {isGlobal && areaPorFazendaMes.length > 0 && (
+              <div className="pt-1 border-t border-border">
+                <p className="text-[10px] font-medium text-muted-foreground pb-1">
+                  Por fazenda
+                </p>
+                {/* col-span-2 pelo mesmo motivo do bloco acima: a tabela precisa da
+                    largura inteira do miolo, que e uma grade de duas colunas. */}
+                <div className="col-span-2">
+                  <table className="w-full text-[10px] tabular-nums">
+                    <thead className="bg-muted/50">
+                      <tr className="text-muted-foreground">
+                        <th className="text-left font-normal px-1.5 py-1">Fazenda</th>
+                        <th className="text-right px-1.5 py-1 font-medium text-foreground">Total</th>
+                        <th className="text-right px-1.5 py-1 font-medium text-foreground">Produtiva</th>
+                        <th className="text-right font-normal px-1.5 py-1">Pec.</th>
+                        <th className="text-right font-normal px-1.5 py-1">Agri.</th>
+                        <th className="text-right font-normal px-1.5 py-1">Silvi.</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {areaPorFazendaMes.map(f => {
+                        const excede = f.area_produtiva_ha > f.area_total_ha;
+                        return (
+                          <tr key={f.fazenda_id} className="odd:bg-muted/20">
+                            <td className="text-left px-1.5 py-0.5 truncate max-w-[140px]">{nomeFazendaPorId[f.fazenda_id] ?? 'Fazenda'}</td>
+                            <td className="text-right px-1.5 py-0.5 font-medium text-foreground">{fmtHaInt(f.area_total_ha)}</td>
+                            <td
+                              className={`text-right px-1.5 py-0.5 font-medium${excede ? ' text-warning' : ' text-foreground'}`}
+                              title={excede ? `Área além da matrícula: ${fmtHa(f.area_produtiva_ha - f.area_total_ha)}` : undefined}
+                            >
+                              {fmtHaInt(f.area_produtiva_ha)}
+                            </td>
+                            <td className="text-right px-1.5 py-0.5 text-muted-foreground">{fmtHaInt(f.area_pecuaria_ha)}</td>
+                            <td className="text-right px-1.5 py-0.5 text-muted-foreground">{fmtHaInt(f.area_agricultura_ha)}</td>
+                            <td className="text-right px-1.5 py-0.5 text-muted-foreground">{fmtHaInt(f.area_silvicultura_ha)}</td>
+                          </tr>
+                        );
+                      })}
+                      {/* A linha Total sai dos agregados do bloco acima, NAO da soma das
+                          linhas: se as duas fontes divergirem, isso precisa APARECER — uma
+                          soma das proprias linhas fecharia sempre e esconderia a divergencia. */}
+                      <tr className="bg-muted/50 font-medium text-foreground border-t border-border">
+                        <td className="text-left px-1.5 py-0.5">Total</td>
+                        <td className="text-right px-1.5 py-0.5">{fmtHaInt(areaTotal)}</td>
+                        <td className="text-right px-1.5 py-0.5">{fmtHaInt(areaProdutiva)}</td>
+                        <td className="text-right px-1.5 py-0.5">{fmtHaInt(areaPec)}</td>
+                        <td className="text-right px-1.5 py-0.5">{fmtHaInt(areaAgri)}</td>
+                        <td className="text-right px-1.5 py-0.5">{fmtHaInt(areaSilvi)}</td>
+                      </tr>
+                      {/* Bases DIFERENTES por coluna: Produtiva sobre o total da matricula,
+                          as tres familias sobre a produtiva. Por isso Produtiva pode passar
+                          de 100% e as familias somam ~100% entre si. */}
+                      <tr className="text-[9px] text-muted-foreground">
+                        <td className="text-left px-1.5 pb-1">% da área</td>
+                        <td className="text-right px-1.5">100%</td>
+                        <td className="text-right px-1.5">{pctDe(areaProdutiva, areaTotal)}</td>
+                        <td className="text-right px-1.5">{pctDe(areaPec,   areaProdutiva)}</td>
+                        <td className="text-right px-1.5">{pctDe(areaAgri,  areaProdutiva)}</td>
+                        <td className="text-right px-1.5">{pctDe(areaSilvi, areaProdutiva)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         </SectionBlock>
-
-        {isGlobal && areaPorFazendaMes.length > 0 && (
-          <SectionBlock title="Área por fazenda" subtitle="onde a operação está">
-            {/* col-span-2 pelo mesmo motivo do bloco acima: a tabela precisa da
-                largura inteira do miolo, que e uma grade de duas colunas. */}
-            <div className="col-span-2">
-              <table className="w-full text-[10px] tabular-nums">
-                <thead className="bg-muted/50">
-                  <tr className="text-muted-foreground">
-                    <th className="text-left font-normal px-1.5 py-1">Fazenda</th>
-                    <th className="text-right px-1.5 py-1 font-medium text-foreground">Total</th>
-                    <th className="text-right px-1.5 py-1 font-medium text-foreground">Produtiva</th>
-                    <th className="text-right font-normal px-1.5 py-1">Pec.</th>
-                    <th className="text-right font-normal px-1.5 py-1">Agri.</th>
-                    <th className="text-right font-normal px-1.5 py-1">Silvi.</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {areaPorFazendaMes.map(f => {
-                    const excede = f.area_produtiva_ha > f.area_total_ha;
-                    return (
-                      <tr key={f.fazenda_id} className="odd:bg-muted/20">
-                        <td className="text-left px-1.5 py-0.5 truncate max-w-[140px]">{nomeFazendaPorId[f.fazenda_id] ?? 'Fazenda'}</td>
-                        <td className="text-right px-1.5 py-0.5 font-medium text-foreground">{fmtHaInt(f.area_total_ha)}</td>
-                        <td
-                          className={`text-right px-1.5 py-0.5 font-medium${excede ? ' text-warning' : ' text-foreground'}`}
-                          title={excede ? `Área além da matrícula: ${fmtHa(f.area_produtiva_ha - f.area_total_ha)}` : undefined}
-                        >
-                          {fmtHaInt(f.area_produtiva_ha)}
-                        </td>
-                        <td className="text-right px-1.5 py-0.5 text-muted-foreground">{fmtHaInt(f.area_pecuaria_ha)}</td>
-                        <td className="text-right px-1.5 py-0.5 text-muted-foreground">{fmtHaInt(f.area_agricultura_ha)}</td>
-                        <td className="text-right px-1.5 py-0.5 text-muted-foreground">{fmtHaInt(f.area_silvicultura_ha)}</td>
-                      </tr>
-                    );
-                  })}
-                  {/* A linha Total sai dos agregados do bloco acima, NAO da soma das
-                      linhas: se as duas fontes divergirem, isso precisa APARECER — uma
-                      soma das proprias linhas fecharia sempre e esconderia a divergencia. */}
-                  <tr className="bg-muted/50 font-medium text-foreground border-t border-border">
-                    <td className="text-left px-1.5 py-0.5">Total</td>
-                    <td className="text-right px-1.5 py-0.5">{fmtHaInt(areaTotal)}</td>
-                    <td className="text-right px-1.5 py-0.5">{fmtHaInt(areaProdutiva)}</td>
-                    <td className="text-right px-1.5 py-0.5">{fmtHaInt(areaPec)}</td>
-                    <td className="text-right px-1.5 py-0.5">{fmtHaInt(areaAgri)}</td>
-                    <td className="text-right px-1.5 py-0.5">{fmtHaInt(areaSilvi)}</td>
-                  </tr>
-                  {/* Bases DIFERENTES por coluna: Produtiva sobre o total da matricula,
-                      as tres familias sobre a produtiva. Por isso Produtiva pode passar
-                      de 100% e as familias somam ~100% entre si. */}
-                  <tr className="text-[9px] text-muted-foreground">
-                    <td className="text-left px-1.5 pb-1">% da área</td>
-                    <td className="text-right px-1.5">100%</td>
-                    <td className="text-right px-1.5">{pctDe(areaProdutiva, areaTotal)}</td>
-                    <td className="text-right px-1.5">{pctDe(areaPec,   areaProdutiva)}</td>
-                    <td className="text-right px-1.5">{pctDe(areaAgri,  areaProdutiva)}</td>
-                    <td className="text-right px-1.5">{pctDe(areaSilvi, areaProdutiva)}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </SectionBlock>
-        )}
 
         <SectionBlock title="Produção" subtitle="o que a fazenda entregou" naoFechado={mesSemFechamento} avisoNaoFechado={avisoMes}>
           <MetricTile label={cabecasIndicador?.label ?? 'CABEÇAS'} value={fmtN(cabecasIndicador?.valor ?? null)} unit="cab" loading={loadingPainel}
