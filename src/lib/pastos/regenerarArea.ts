@@ -6,18 +6,45 @@
    nos dois lugares, senao a mesma falha ganha dois textos e o mesmo mes ganha dois
    totais. Um modulo, dois importadores. */
 
-/* ── PR-AREA-REGENERAR-01B — erros proprios de fn_regenerar_area_do_mes ──
-   A funcao levanta seis erros com MESSAGE proprio. Exibir error.message cru
-   entregaria "conjunto_nao_vigente" ao operador, que nao tem como saber o que e um
-   conjunto vigente. O casamento e por PREFIXO porque duas mensagens carregam
-   explicacao depois do codigo ("ano_mes_invalido: esperado YYYY-MM (01-12)"). */
+/* ── PR-AREA-ERROS-MAPA-01 — os NOVE codigos alcancaveis pela regeneracao ──
+   O mapa existe para o vocabulario interno do banco nao vazar para o operador: sem
+   ele, a tela imprime "area_produtiva_derivada_zero: nenhum pasto de pecuaria..." na
+   cara de quem clicou em regenerar.
+
+   Escrito no 01B com SEIS codigos, quando a funcao era so-area. A cadeia cresceu nos
+   PRs 01D, 01G e 01H, e hoje a regeneracao atravessa QUATRO funcoes — os codigos vem
+   de todas elas, nao so da que a tela chama:
+     fn_regenerar_area_do_mes            nao_autenticado, ano_mes_invalido,
+                                         fazenda_inexistente, sem_permissao,
+                                         mes_oficializado, cards_abertos_com_dados
+     fn_gerar_area_de_snapshot           area_produtiva_derivada_zero,
+                                         snapshot_nao_vigente
+     fn_obter_ou_criar_fechamentos_lote  falha_concorrencia_irrecuperavel_lote
+
+   Casamento por PREFIXO porque quatro mensagens carregam explicacao depois do codigo
+   ("ano_mes_invalido: esperado YYYY-MM (01-12)").
+
+   conjunto_nao_vigente SAIU. Ele existe no banco, mas so em fn_oficializar_p1, que
+   NAO esta na cadeia da regeneracao — nenhuma das quatro funcoes acima a chama. Era
+   guarda da propria fn_regenerar_area_do_mes ate o 01D, que a removeu ao passar a
+   materializar o conjunto ausente. Ficou prometendo um texto que nunca sai.
+
+   FORA DO MAPA POR DECISAO: guard_fechamento_pastos_snapshot, o trigger que barra
+   alteracao de card em mes com P2 fechado ou validado. Ele e alcancavel pelo passo de
+   conciliacao, mas levanta mensagem interpolada em portugues ("Mes % possui Valor do
+   Rebanho validado ou P2 fechado. Reabra o pilar P2 antes de alterar pastos."), sem
+   codigo snake_case. O prefixo nao a alcanca por construcao, e o fallback ja entrega
+   texto legivel — mapear seria duplicar uma frase que ja esta pronta. */
 export const ERROS_REGENERAR: ReadonlyArray<readonly [string, string]> = [
   ['nao_autenticado',      'Sessão expirada. Entre novamente.'],
   ['ano_mes_invalido',     'Mês inválido.'],
   ['fazenda_inexistente',  'Fazenda não encontrada.'],
   ['sem_permissao',        'Você não tem permissão para regenerar esta fazenda.'],
   ['mes_oficializado',     'Mês oficializado. Reabra formalmente antes de regenerar.'],
-  ['conjunto_nao_vigente', 'Feche o mês antes de regenerar a área.'],
+  ['cards_abertos_com_dados',   'Há card de pasto aberto com dados neste mês. Feche o mês manualmente antes de regenerar.'],
+  ['area_produtiva_derivada_zero', 'Nenhum pasto de pecuária, agricultura ou silvicultura no mês. A área produtiva ficaria zero.'],
+  ['snapshot_nao_vigente',      'O conjunto do mês mudou durante a operação. Tente novamente.'],
+  ['falha_concorrencia_irrecuperavel_lote', 'Não foi possível criar os cards do mês. Tente novamente.'],
 ];
 
 /* PR-AREA-REGENERAR-01F — as SETE familias de fechamento_area_snapshot.
