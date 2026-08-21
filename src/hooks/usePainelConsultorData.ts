@@ -34,6 +34,15 @@ import {
   agregaInvBovinos,
   agregaAmortizacoes,
   agregaDividendos,
+  // PR-PC100-RECEITAS-01 — os agregadores JA EXISTIAM em agregadosFinanceiros.ts, com
+  // predicate proprio em classificacao.ts. O PC-100 e que nao os importava: o lado das
+  // SAIDAS foi construido e o das RECEITAS ficou como "gap futuro". Ligar, nao construir.
+  agregaReceitaAgri,
+  agregaOutrasReceitas,
+  agregaEntradasFinanceiras,
+  agregaDeducoesSaida,
+  agregaAmortizacaoPec,
+  agregaAmortizacaoAgri,
   agregaCusteioPecSemJurosMeta,
   agregaJurosPecMeta,
   agregaInvFazendaPecMeta,
@@ -43,6 +52,12 @@ import {
   agregaInvBovinosMeta,
   agregaAmortizacoesMeta,
   agregaDividendosMeta,
+  agregaReceitaAgriMeta,
+  agregaOutrasReceitasMeta,
+  agregaEntradasFinanceirasMeta,
+  agregaDeducoesSaidaMeta,
+  agregaAmortizacaoPecMeta,
+  agregaAmortizacaoAgriMeta,
   agregaSaidasTotais,
   agregaSaidasTotaisMeta,
 } from '@/lib/painelConsultor/agregadosFinanceiros';
@@ -452,6 +467,17 @@ export interface PainelConsultorDataResult {
   amortizacoesIndicador:        IndicadorFinanceiroShape | null;
   dividendosIndicador:          IndicadorFinanceiroShape | null;
   caixaIndicador:               IndicadorFinanceiroShape | null;
+
+  // ─── PR-PC100-RECEITAS-01 — lado das ENTRADAS e as duas amortizacoes ───
+  // amortizacoesIndicador acima CONTINUA sendo o TOTAL e tem consumidores; os dois
+  // abaixo sao o par detalhado. Silvicultura NAO entra: nao existe isReceitaSilvicola
+  // em classificacao.ts, e criar predicate mudaria o cerebro de classificacao.
+  receitaAgriIndicador:         IndicadorFinanceiroShape | null;
+  receitaOutrasIndicador:       IndicadorFinanceiroShape | null;
+  captacaoIndicador:            IndicadorFinanceiroShape | null;
+  amortizacaoPecIndicador:      IndicadorFinanceiroShape | null;
+  amortizacaoAgriIndicador:     IndicadorFinanceiroShape | null;
+  deducoesTributosIndicador:    IndicadorFinanceiroShape | null;
 
   /** Domínio rebanho · estruturas executivas (Fase 0 Step 2.2). */
   rebanho: PC100_Rebanho;
@@ -2559,6 +2585,12 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     const invBov      = agregaInvBovinos(lancFin, ano);
     const amort       = agregaAmortizacoes(lancFin, ano);
     const div         = agregaDividendos(lancFin, ano);
+    const recAgri     = agregaReceitaAgri(lancFin, ano);
+    const recOutras   = agregaOutrasReceitas(lancFin, ano);
+    const captacao    = agregaEntradasFinanceiras(lancFin, ano);
+    const deducoes    = agregaDeducoesSaida(lancFin, ano);
+    const amortPec    = agregaAmortizacaoPec(lancFin, ano);
+    const amortAgri   = agregaAmortizacaoAgri(lancFin, ano);
     const cusPecComJ  = addArr12(cusPecSemJ, jurPec);
     const cusAgriComJ = addArr12(cusAgriSemJ, jurAgri);
     const desembPec   = addArr12(cusPecComJ, invFazPec);
@@ -2588,6 +2620,12 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     const invBov_M      = hasGridMeta ? agregaInvBovinosMeta(gridMetaConsolidado) : null;
     const amort_M       = hasGridMeta ? agregaAmortizacoesMeta(gridMetaConsolidado) : null;
     const div_M         = hasGridMeta ? agregaDividendosMeta(gridMetaConsolidado) : null;
+    const recAgri_M     = hasGridMeta ? agregaReceitaAgriMeta(gridMetaConsolidado) : null;
+    const recOutras_M   = hasGridMeta ? agregaOutrasReceitasMeta(gridMetaConsolidado) : null;
+    const captacao_M    = hasGridMeta ? agregaEntradasFinanceirasMeta(gridMetaConsolidado) : null;
+    const deducoes_M    = hasGridMeta ? agregaDeducoesSaidaMeta(gridMetaConsolidado) : null;
+    const amortPec_M    = hasGridMeta ? agregaAmortizacaoPecMeta(gridMetaConsolidado) : null;
+    const amortAgri_M   = hasGridMeta ? agregaAmortizacaoAgriMeta(gridMetaConsolidado) : null;
     const cusPecComJ_M  = (cusPecSemJ_M && jurPec_M) ? addArr12(cusPecSemJ_M, jurPec_M) : null;
     const cusAgriComJ_M = (cusAgriSemJ_M && jurAgri_M) ? addArr12(cusAgriSemJ_M, jurAgri_M) : null;
     const desembPec_M   = (cusPecComJ_M && invFazPec_M) ? addArr12(cusPecComJ_M, invFazPec_M) : null;
@@ -2698,6 +2736,39 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
         isPer ? 'Dividendos e retiradas acumulado Jan→mês (caixa)'
               : 'Dividendos e retiradas no mês (caixa)',
         div_M),
+
+      // ─── PR-PC100-RECEITAS-01 ───
+      receitaAgri: buildInd(recAgri, 'RECEITA AGRICULTURA', 'Receita Agricultura',
+        isPer ? 'Receita operacional escopo Agricultura acumulada Jan→mês (caixa)'
+              : 'Receita operacional escopo Agricultura no mês (caixa)',
+        recAgri_M),
+      receitaOutras: buildInd(recOutras, 'OUTRAS RECEITAS', 'Outras Receitas',
+        isPer ? 'Receita operacional fora de Pecuária e Agricultura acumulada Jan→mês (caixa)'
+              : 'Receita operacional fora de Pecuária e Agricultura no mês (caixa)',
+        recOutras_M),
+      captacao: buildInd(captacao, 'CAPTAÇÃO FINANCIAMENTO', 'Captação de Financiamento',
+        isPer ? 'Entradas financeiras (captação) acumuladas Jan→mês (caixa)'
+              : 'Entradas financeiras (captação) no mês (caixa)',
+        captacao_M),
+      // O par detalhado. amortizacoes (acima) segue sendo o TOTAL, intocado.
+      amortizacaoPec: buildInd(amortPec, 'AMORTIZAÇÃO PECUÁRIA', 'Amortização Financiamento Pecuária',
+        isPer ? 'Amortização de financiamento pecuária acumulada Jan→mês (caixa)'
+              : 'Amortização de financiamento pecuária no mês (caixa)',
+        amortPec_M),
+      amortizacaoAgri: buildInd(amortAgri, 'AMORTIZAÇÃO AGRICULTURA', 'Amortização Financiamento Agricultura',
+        isPer ? 'Amortização de financiamento agricultura acumulada Jan→mês (caixa)'
+              : 'Amortização de financiamento agricultura no mês (caixa)',
+        amortAgri_M),
+      /* MEDIDO: agregaDeducoesSaida usa isDeducaoReceitas e entrega SO deducoes —
+         93.036 no NJ jan-jul/2026. "Tributos e Impostos" e grupo_custo separado
+         (25.586) e nao tem agregador em agregadosFinanceiros.ts. 93.036 + 25.586 =
+         118.622, que era o numero esperado para a linha. O rotulo diz o que o
+         indicador CONTEM, e nao o que a linha do bloco gostaria de conter — ver
+         relatorio do PR. */
+      deducoesTributos: buildInd(deducoes, 'DEDUÇÕES DE RECEITAS', 'Deduções de Receitas',
+        isPer ? 'Deduções de receitas acumuladas Jan→mês (caixa, lado saída)'
+              : 'Deduções de receitas no mês (caixa, lado saída)',
+        deducoes_M),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lancFin, ano, mes, viewMode, gridMetaConsolidado]);
@@ -3190,6 +3261,14 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     amortizacoesIndicador:        _finSoberano.amortizacoes,
     dividendosIndicador:          _finSoberano.dividendos,
     caixaIndicador:               caixaIndicadorResolved,
+    /* Soberanos: vem de financeiro_lancamentos_v2 e NAO dependem de P1. Por isso
+       aparecem tambem no retorno de incompletoOverride, ao lado dos de saida. */
+    receitaAgriIndicador:         _finSoberano.receitaAgri,
+    receitaOutrasIndicador:       _finSoberano.receitaOutras,
+    captacaoIndicador:            _finSoberano.captacao,
+    amortizacaoPecIndicador:      _finSoberano.amortizacaoPec,
+    amortizacaoAgriIndicador:     _finSoberano.amortizacaoAgri,
+    deducoesTributosIndicador:    _finSoberano.deducoesTributos,
 
     rebanho,
     financeiro,
@@ -3250,6 +3329,12 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       amortizacoesIndicador:        _finSoberano.amortizacoes,
       dividendosIndicador:          _finSoberano.dividendos,
       caixaIndicador:               caixaIndicadorResolved,
+      receitaAgriIndicador:         _finSoberano.receitaAgri,
+      receitaOutrasIndicador:       _finSoberano.receitaOutras,
+      captacaoIndicador:            _finSoberano.captacao,
+      amortizacaoPecIndicador:      _finSoberano.amortizacaoPec,
+      amortizacaoAgriIndicador:     _finSoberano.amortizacaoAgri,
+      deducoesTributosIndicador:    _finSoberano.deducoesTributos,
       // Step 2.2: dominio rebanho preservado (composicao depende de getCategoriasDetalhe,
       // que pode existir mesmo em estado incompleto — funcao filtra saldoFinal > 0 e
       // retorna null quando vazio).
