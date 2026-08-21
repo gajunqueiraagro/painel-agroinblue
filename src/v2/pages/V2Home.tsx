@@ -1463,19 +1463,6 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
       )}
 
 
-      {/* Faixa de resumo: os tres numeros que respondem "de que tamanho e a operacao"
-          antes de qualquer bloco. "Fechamento N de N" NAO entra aqui — o mesmo dado ja
-          esta na StatusFechamentoBanda logo acima, e repetir em 3 cm de tela e ruido. */}
-      <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 mb-4 text-[11px] text-muted-foreground">
-        <span>Área total <strong className="text-foreground text-sm tabular-nums">{fmtHaInt(areaTotal)}</strong> ha</span>
-        <span>Produtiva <strong className="text-foreground text-sm tabular-nums">{fmtHaInt(areaProdutiva)}</strong> ha
-          {areaTotal != null && areaProdutiva != null && areaTotal > 0 && (
-            <> · {((areaProdutiva / areaTotal) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%</>
-          )}
-        </span>
-        <span>Disponível <strong className="text-foreground text-sm tabular-nums">{fmtR(caixaIndicador?.valor ?? null)}</strong></span>
-      </div>
-
       {/* DUAS COLUNAS que empilham de forma INDEPENDENTE, nao sete irmaos numa grade.
           CSS Grid preenche linha a linha e cada linha assume a altura do maior item —
           com blocos irmaos, "Composicao da area" (baixo) dividia linha com o "Caixa"
@@ -1557,7 +1544,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
                               e aqui zero e familia sem area, nao ausencia de fechamento.
                               fmtHaInt fica intacto — outros blocos dependem dele. */}
                           <span className="tabular-nums text-right text-foreground">
-                            {f.valor.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
+                            {f.valor.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} <span className="text-muted-foreground font-normal">ha</span>
                           </span>
                           <span className="tabular-nums text-right text-muted-foreground">
                             {((f.valor / soma) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}%
@@ -1573,7 +1560,11 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
                           Total
                         </span>
                         <span className="tabular-nums text-right pt-1 font-medium text-foreground border-t border-border">
-                          {areaTotal == null ? '—' : fmtHaInt(areaTotal)}
+                          {/* Sem sufixo quando o valor nao existe: fmtHaInt devolve "—" para
+                              null E para zero, e "— ha" nao quer dizer nada. */}
+                          {areaTotal == null || areaTotal === 0
+                            ? '—'
+                            : <>{fmtHaInt(areaTotal)} <span className="text-muted-foreground font-normal">ha</span></>}
                         </span>
                         <span className="tabular-nums text-right pt-1 font-medium text-muted-foreground border-t border-border">
                           {areaTotal == null ? '—' : '100%'}
@@ -1594,7 +1585,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
                           Produtiva
                         </span>
                         <span className="tabular-nums text-right font-medium text-foreground">
-                          {areaProdutiva == null ? '—' : fmtHaInt(areaProdutiva)}
+                          {areaProdutiva == null || areaProdutiva === 0
+                            ? '—'
+                            : <>{fmtHaInt(areaProdutiva)} <span className="text-muted-foreground font-normal">ha</span></>}
                         </span>
                         <span className="tabular-nums text-right font-medium text-muted-foreground">
                           {(areaProdutiva == null || areaTotal == null || areaTotal <= 0)
