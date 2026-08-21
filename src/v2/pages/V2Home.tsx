@@ -532,6 +532,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     receitaPecIndicador, custeioPecIndicador, custoArrIndicador, precoArrIndicador, custoCabIndicador, margemArrIndicador,
     // PR-HOME-CAIXA-CONSOLIDADO-01 — as 15 linhas de fluxo e o saldo.
     receitaPecCaixaIndicador, receitaAgriIndicador, receitaOutrasIndicador, captacaoIndicador, entradasNaoClassificadasIndicador,
+    receitaSilvicolaIndicador, custeioSilviIndicador, investSilviIndicador, amortizacaoSilviIndicador,
     investPecIndicador, investBovinosIndicador, amortizacaoPecIndicador,
     custeioAgriIndicador, investAgriIndicador, amortizacaoAgriIndicador,
     dividendosIndicador, deducoesTributosIndicador, tributosIndicador,
@@ -568,10 +569,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
        era o defeito. As duas leituras divergem por natureza. */
     { label: 'Produção pecuária',      valor: receitaPecCaixaIndicador?.valor ?? null },
     { label: 'Produção agricultura',   valor: receitaAgriIndicador?.valor   ?? null },
-    /* Silvicultura e travessao PERMANENTE e deliberado: nao existe isReceitaSilvicola
-       em classificacao.ts, e os R$ 5,31 mi de 'Venda de Eucalipto' estao classificados
-       FORA do escopo silvicultura. O travessao expoe a lacuna em vez de esconde-la. */
-    { label: 'Produção silvicultura',  valor: null as number | null },
+    { label: 'Produção silvicultura',  valor: receitaSilvicolaIndicador?.valor ?? null },
     { label: 'Outras receitas',        valor: receitaOutrasIndicador?.valor ?? null },
     { label: 'Captação financiamento', valor: captacaoIndicador?.valor      ?? null },
     /* Residuo CONDICIONAL: totalEntradas e a soma das linhas EXIBIDAS, entao somar uma
@@ -591,6 +589,16 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     { label: 'Custeio agricultura',       valor: custeioAgriIndicador?.valor      ?? null },
     { label: 'Investimento agricultura',  valor: investAgriIndicador?.valor       ?? null },
     { label: 'Amortização financ. agri.', valor: amortizacaoAgriIndicador?.valor  ?? null },
+    /* Silvicultura nasce condicional: hoje o proto tem ZERO lancamento de custo
+       silvicola, e tres linhas de R$ 0 poluiriam a tela de todos os clientes.
+       Os predicates existem para que o custo NAO suma quando aparecer — mesmo
+       principio da linha residual de entradas. */
+    ...(((custeioSilviIndicador?.valor ?? 0) > 0)
+      ? [{ label: 'Custeio silvicultura', valor: custeioSilviIndicador?.valor ?? null }] : []),
+    ...(((investSilviIndicador?.valor ?? 0) > 0)
+      ? [{ label: 'Investimento silvicultura', valor: investSilviIndicador?.valor ?? null }] : []),
+    ...(((amortizacaoSilviIndicador?.valor ?? 0) > 0)
+      ? [{ label: 'Amortização financ. silvi.', valor: amortizacaoSilviIndicador?.valor ?? null }] : []),
     { label: 'Dividendos',                valor: dividendosIndicador?.valor       ?? null },
     { label: 'Deduções de receitas',      valor: deducoesTributosIndicador?.valor ?? null },
     { label: 'Tributos',                  valor: tributosIndicador?.valor         ?? null },

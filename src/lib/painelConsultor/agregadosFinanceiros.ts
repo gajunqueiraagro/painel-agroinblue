@@ -31,10 +31,13 @@ import {
   isCustoVariavelPecuaria,
   isCustoFixoPecuaria,
   isCusteioProducaoAgricultura,
+  isCusteioProducaoSilvicultura,
   isJurosPecuaria,
   isJurosAgricultura,
+  isJurosSilvicultura,
   isInvestimentoFazendaPecuaria,
   isInvestimentoFazendaAgricultura,
+  isInvestimentoFazendaSilvicultura,
   isReposicaoBovinos,
   isAmortizacao,
   isDividendoOuRetirada,
@@ -42,11 +45,13 @@ import {
   isTributos,
   isReceitaPecuaria,
   isReceitaAgricola,
+  isReceitaSilvicola,
   isOutrasReceitas,
   isEntradaFinanceira,
   isEntradaNaoClassificada,
   isAmortizacaoPecuaria,
   isAmortizacaoAgricultura,
+  isAmortizacaoSilvicultura,
   datePagtoMes,
   datePagtoAno,
   type LancamentoClassificavel,
@@ -230,6 +235,20 @@ export function agregaInvFazendaAgri(lancFin: FinanceiroLancamento[], ano: numbe
   return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isInvestimentoFazendaAgricultura);
 }
 
+/* Silvicultura — os quatro de SAIDA usam makeRealizadoSource; a receita acima usa
+   makeRealizadoSourceEntrada. Trocar o adapter inverte o filtro de sinal e zera a linha. */
+export function agregaCusteioSilviSemJuros(lancFin: FinanceiroLancamento[], ano: number): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isCusteioProducaoSilvicultura);
+}
+
+export function agregaJurosSilvi(lancFin: FinanceiroLancamento[], ano: number): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isJurosSilvicultura);
+}
+
+export function agregaInvFazendaSilvi(lancFin: FinanceiroLancamento[], ano: number): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isInvestimentoFazendaSilvicultura);
+}
+
 export function agregaInvBovinos(lancFin: FinanceiroLancamento[], ano: number): number[] {
   return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isReposicaoBovinos);
 }
@@ -250,6 +269,10 @@ export function agregaReceitaPec(lancFin: FinanceiroLancamento[], ano: number): 
 
 export function agregaReceitaAgri(lancFin: FinanceiroLancamento[], ano: number): number[] {
   return agregaPorPredicadoGenerico(makeRealizadoSourceEntrada(lancFin, ano), isReceitaAgricola);
+}
+
+export function agregaReceitaSilvicola(lancFin: FinanceiroLancamento[], ano: number): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSourceEntrada(lancFin, ano), isReceitaSilvicola);
 }
 
 export function agregaOutrasReceitas(lancFin: FinanceiroLancamento[], ano: number): number[] {
@@ -315,6 +338,10 @@ export function agregaAmortizacaoPec(lancFin: FinanceiroLancamento[], ano: numbe
 
 export function agregaAmortizacaoAgri(lancFin: FinanceiroLancamento[], ano: number): number[] {
   return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isAmortizacaoAgricultura);
+}
+
+export function agregaAmortizacaoSilvi(lancFin: FinanceiroLancamento[], ano: number): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isAmortizacaoSilvicultura);
 }
 
 // ─── Derivados REALIZADO (somas de atômicos) ─────────────────────────
@@ -397,6 +424,20 @@ export function agregaInvFazendaAgriMeta(grid: SubcentroGrid[]): number[] {
   return agregaPorPredicadoGenerico(makeMetaSource(grid), isInvestimentoFazendaAgricultura);
 }
 
+/* Par META obrigatorio dos cinco atomicos de silvicultura: agregador REALIZADO sem
+   irmao META deixaria a Meta cega, e a comparacao realizado x meta mentiria por omissao. */
+export function agregaCusteioSilviSemJurosMeta(grid: SubcentroGrid[]): number[] {
+  return agregaPorPredicadoGenerico(makeMetaSource(grid), isCusteioProducaoSilvicultura);
+}
+
+export function agregaJurosSilviMeta(grid: SubcentroGrid[]): number[] {
+  return agregaPorPredicadoGenerico(makeMetaSource(grid), isJurosSilvicultura);
+}
+
+export function agregaInvFazendaSilviMeta(grid: SubcentroGrid[]): number[] {
+  return agregaPorPredicadoGenerico(makeMetaSource(grid), isInvestimentoFazendaSilvicultura);
+}
+
 export function agregaInvBovinosMeta(grid: SubcentroGrid[]): number[] {
   return agregaPorPredicadoGenerico(makeMetaSource(grid), isReposicaoBovinos);
 }
@@ -417,6 +458,10 @@ export function agregaReceitaPecMeta(grid: SubcentroGrid[]): number[] {
 
 export function agregaReceitaAgriMeta(grid: SubcentroGrid[]): number[] {
   return agregaPorPredicadoGenerico(makeMetaSource(grid), isReceitaAgricola);
+}
+
+export function agregaReceitaSilvicolaMeta(grid: SubcentroGrid[]): number[] {
+  return agregaPorPredicadoGenerico(makeMetaSource(grid), isReceitaSilvicola);
 }
 
 export function agregaOutrasReceitasMeta(grid: SubcentroGrid[]): number[] {
@@ -457,6 +502,10 @@ export function agregaAmortizacaoPecMeta(grid: SubcentroGrid[]): number[] {
 
 export function agregaAmortizacaoAgriMeta(grid: SubcentroGrid[]): number[] {
   return agregaPorPredicadoGenerico(makeMetaSource(grid), isAmortizacaoAgricultura);
+}
+
+export function agregaAmortizacaoSilviMeta(grid: SubcentroGrid[]): number[] {
+  return agregaPorPredicadoGenerico(makeMetaSource(grid), isAmortizacaoSilvicultura);
 }
 
 // ─── Derivados META (somas de atômicos) ──────────────────────────────

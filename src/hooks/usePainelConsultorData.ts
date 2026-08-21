@@ -38,6 +38,13 @@ import {
   // predicate proprio em classificacao.ts. O PC-100 e que nao os importava: o lado das
   // SAIDAS foi construido e o das RECEITAS ficou como "gap futuro". Ligar, nao construir.
   agregaReceitaPec,
+  // PR-PC100-SILVICULTURA-01 — silvicultura ganha os mesmos cinco atomicos que
+  // pecuaria e agricultura ja tinham. Predicates literais por grupo_custo.
+  agregaReceitaSilvicola,
+  agregaCusteioSilviSemJuros,
+  agregaJurosSilvi,
+  agregaInvFazendaSilvi,
+  agregaAmortizacaoSilvi,
   agregaReceitaAgri,
   agregaOutrasReceitas,
   agregaEntradasFinanceiras,
@@ -56,6 +63,11 @@ import {
   agregaAmortizacoesMeta,
   agregaDividendosMeta,
   agregaReceitaPecMeta,
+  agregaReceitaSilvicolaMeta,
+  agregaCusteioSilviSemJurosMeta,
+  agregaJurosSilviMeta,
+  agregaInvFazendaSilviMeta,
+  agregaAmortizacaoSilviMeta,
   agregaReceitaAgriMeta,
   agregaOutrasReceitasMeta,
   agregaEntradasFinanceirasMeta,
@@ -476,8 +488,12 @@ export interface PainelConsultorDataResult {
 
   // ─── PR-PC100-RECEITAS-01 — lado das ENTRADAS e as duas amortizacoes ───
   // amortizacoesIndicador acima CONTINUA sendo o TOTAL e tem consumidores; os dois
-  // abaixo sao o par detalhado. Silvicultura NAO entra: nao existe isReceitaSilvicola
-  // em classificacao.ts, e criar predicate mudaria o cerebro de classificacao.
+  // abaixo sao o par detalhado.
+  //
+  // Silvicultura entra por grupo_custo literal ('Receita Silvícola'), via
+  // isReceitaSilvicola — mesmo critério de pecuária e agricultura. O tipo
+  // Escopo NÃO foi tocado: silvicultura não é um escopo no código, é um
+  // grupo no plano de contas.
   receitaAgriIndicador:         IndicadorFinanceiroShape | null;
   receitaOutrasIndicador:       IndicadorFinanceiroShape | null;
   /**
@@ -491,6 +507,16 @@ export interface PainelConsultorDataResult {
    * ocorrer meses depois. Nunca forçar a bater.
    */
   receitaPecCaixaIndicador:     IndicadorFinanceiroShape | null;
+  /**
+   * Silvicultura — quatro indicadores soberanos de CAIXA, mesmo padrão de
+   * pecuária e agricultura: grupo_custo literal, sem passar por getEscopo().
+   * Atividade própria (ciclo plurianual, formação capitalizada), não
+   * subconjunto de agricultura. Ver isReceitaSilvicola em classificacao.ts.
+   */
+  receitaSilvicolaIndicador:    IndicadorFinanceiroShape | null;
+  custeioSilviIndicador:        IndicadorFinanceiroShape | null;
+  investSilviIndicador:         IndicadorFinanceiroShape | null;
+  amortizacaoSilviIndicador:    IndicadorFinanceiroShape | null;
   captacaoIndicador:            IndicadorFinanceiroShape | null;
   /* Residuo de entrada: grupo que nao casa com nenhum oficial. Existe para nada sumir
      do total sem aviso — a linha da tela so aparece quando ha valor. */
@@ -2610,6 +2636,11 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     const amort       = agregaAmortizacoes(lancFin, ano);
     const div         = agregaDividendos(lancFin, ano);
     const recPecCx    = agregaReceitaPec(lancFin, ano);
+    const recSilvi      = agregaReceitaSilvicola(lancFin, ano);
+    const cusSilviSemJ  = agregaCusteioSilviSemJuros(lancFin, ano);
+    const jurSilvi      = agregaJurosSilvi(lancFin, ano);
+    const invFazSilvi   = agregaInvFazendaSilvi(lancFin, ano);
+    const amortSilvi    = agregaAmortizacaoSilvi(lancFin, ano);
     const recAgri     = agregaReceitaAgri(lancFin, ano);
     const recOutras   = agregaOutrasReceitas(lancFin, ano);
     const captacao    = agregaEntradasFinanceiras(lancFin, ano);
@@ -2620,6 +2651,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     const tributos    = agregaTributos(lancFin, ano);
     const cusPecComJ  = addArr12(cusPecSemJ, jurPec);
     const cusAgriComJ = addArr12(cusAgriSemJ, jurAgri);
+    const cusSilviComJ  = addArr12(cusSilviSemJ, jurSilvi);
     const desembPec   = addArr12(cusPecComJ, invFazPec);
     const desembAgri  = addArr12(cusAgriComJ, invFazAgri);
     // Modelo Caixa puro — inclui Deduções de Receitas (lado saída).
@@ -2648,6 +2680,11 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     const amort_M       = hasGridMeta ? agregaAmortizacoesMeta(gridMetaConsolidado) : null;
     const div_M         = hasGridMeta ? agregaDividendosMeta(gridMetaConsolidado) : null;
     const recPecCx_M    = hasGridMeta ? agregaReceitaPecMeta(gridMetaConsolidado) : null;
+    const recSilvi_M     = hasGridMeta ? agregaReceitaSilvicolaMeta(gridMetaConsolidado) : null;
+    const cusSilviSemJ_M = hasGridMeta ? agregaCusteioSilviSemJurosMeta(gridMetaConsolidado) : null;
+    const jurSilvi_M     = hasGridMeta ? agregaJurosSilviMeta(gridMetaConsolidado) : null;
+    const invFazSilvi_M  = hasGridMeta ? agregaInvFazendaSilviMeta(gridMetaConsolidado) : null;
+    const amortSilvi_M   = hasGridMeta ? agregaAmortizacaoSilviMeta(gridMetaConsolidado) : null;
     const recAgri_M     = hasGridMeta ? agregaReceitaAgriMeta(gridMetaConsolidado) : null;
     const recOutras_M   = hasGridMeta ? agregaOutrasReceitasMeta(gridMetaConsolidado) : null;
     const captacao_M    = hasGridMeta ? agregaEntradasFinanceirasMeta(gridMetaConsolidado) : null;
@@ -2658,6 +2695,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     const tributos_M    = hasGridMeta ? agregaTributosMeta(gridMetaConsolidado) : null;
     const cusPecComJ_M  = (cusPecSemJ_M && jurPec_M) ? addArr12(cusPecSemJ_M, jurPec_M) : null;
     const cusAgriComJ_M = (cusAgriSemJ_M && jurAgri_M) ? addArr12(cusAgriSemJ_M, jurAgri_M) : null;
+    const cusSilviComJ_M = (cusSilviSemJ_M && jurSilvi_M) ? addArr12(cusSilviSemJ_M, jurSilvi_M) : null;
     const desembPec_M   = (cusPecComJ_M && invFazPec_M) ? addArr12(cusPecComJ_M, invFazPec_M) : null;
     const desembAgri_M  = (cusAgriComJ_M && invFazAgri_M) ? addArr12(cusAgriComJ_M, invFazAgri_M) : null;
     // Modelo Caixa puro — inclui Deduções de Receitas META.
@@ -2781,6 +2819,26 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
         isPer ? 'Receita pecuária recebida, acumulada Jan→mês (caixa, por data de pagamento)'
               : 'Receita pecuária recebida no mês (caixa, por data de pagamento)',
         recPecCx_M),
+      receitaSilvicola: buildInd(recSilvi,
+        'RECEITA SILVÍCOLA', 'Receita Silvícola',
+        isPer ? 'Receita silvícola recebida, acumulada Jan→mês (caixa)'
+              : 'Receita silvícola recebida no mês (caixa)',
+        recSilvi_M),
+      custeioSilvi: buildInd(cusSilviComJ,
+        'CUSTEIO SILVICULTURA', 'Custeio Silvicultura',
+        isPer ? 'Custeio silvícola com juros, acumulado Jan→mês (caixa)'
+              : 'Custeio silvícola com juros no mês (caixa)',
+        cusSilviComJ_M),
+      investSilvi: buildInd(invFazSilvi,
+        'INVESTIMENTO SILVICULTURA', 'Investimento Silvicultura',
+        isPer ? 'Investimento silvícola acumulado Jan→mês (caixa)'
+              : 'Investimento silvícola no mês (caixa)',
+        invFazSilvi_M),
+      amortizacaoSilvi: buildInd(amortSilvi,
+        'AMORTIZAÇÃO FINANC. SILVI.', 'Amortização Financiamento Silvicultura',
+        isPer ? 'Amortização de financiamento silvícola acumulada Jan→mês (caixa)'
+              : 'Amortização de financiamento silvícola no mês (caixa)',
+        amortSilvi_M),
       captacao: buildInd(captacao, 'CAPTAÇÃO FINANCIAMENTO', 'Captação de Financiamento',
         isPer ? 'Entradas financeiras (captação) acumuladas Jan→mês (caixa)'
               : 'Entradas financeiras (captação) no mês (caixa)',
@@ -3310,6 +3368,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     receitaAgriIndicador:         _finSoberano.receitaAgri,
     receitaOutrasIndicador:       _finSoberano.receitaOutras,
     receitaPecCaixaIndicador:     _finSoberano.receitaPecCaixa,
+    receitaSilvicolaIndicador:    _finSoberano.receitaSilvicola,
+    custeioSilviIndicador:        _finSoberano.custeioSilvi,
+    investSilviIndicador:         _finSoberano.investSilvi,
+    amortizacaoSilviIndicador:    _finSoberano.amortizacaoSilvi,
     captacaoIndicador:            _finSoberano.captacao,
     entradasNaoClassificadasIndicador: _finSoberano.entradasNaoClassificadas,
     amortizacaoPecIndicador:      _finSoberano.amortizacaoPec,
@@ -3379,6 +3441,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       receitaAgriIndicador:         _finSoberano.receitaAgri,
       receitaOutrasIndicador:       _finSoberano.receitaOutras,
       receitaPecCaixaIndicador:     _finSoberano.receitaPecCaixa,
+      receitaSilvicolaIndicador:    _finSoberano.receitaSilvicola,
+      custeioSilviIndicador:        _finSoberano.custeioSilvi,
+      investSilviIndicador:         _finSoberano.investSilvi,
+      amortizacaoSilviIndicador:    _finSoberano.amortizacaoSilvi,
       captacaoIndicador:            _finSoberano.captacao,
       entradasNaoClassificadasIndicador: _finSoberano.entradasNaoClassificadas,
       amortizacaoPecIndicador:      _finSoberano.amortizacaoPec,

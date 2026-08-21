@@ -401,6 +401,15 @@ export function isCusteioProducaoAgricultura(l: LancamentoClassificavel): boolea
       || l.grupo_custo === 'Custo Variável Agricultura';
 }
 
+/**
+ * É Custeio Produção Silvicultura = Custo Fixo Silvi + Custo Variável Silvi.
+ * Espelha isCusteioProducaoAgricultura — sem incluir Juros.
+ */
+export function isCusteioProducaoSilvicultura(l: LancamentoClassificavel): boolean {
+  return l.grupo_custo === 'Custo Fixo Silvicultura'
+      || l.grupo_custo === 'Custo Variável Silvicultura';
+}
+
 /** Juros Pecuária — entra em "Custeio Pec com Juros" e em "Desembolso Pec". */
 export function isJurosPecuaria(l: LancamentoClassificavel): boolean {
   return l.grupo_custo === 'Juros Pecuária'
@@ -411,6 +420,11 @@ export function isJurosPecuaria(l: LancamentoClassificavel): boolean {
 export function isJurosAgricultura(l: LancamentoClassificavel): boolean {
   return l.grupo_custo === 'Juros Agricultura'
       || l.grupo_custo === 'Juros de Financiamento Agricultura';
+}
+
+/** Juros Silvicultura — entra em "Custeio Silvi com Juros" e em "Desembolso Silvi". */
+export function isJurosSilvicultura(l: LancamentoClassificavel): boolean {
+  return l.grupo_custo === 'Juros de Financiamento Silvicultura';
 }
 
 /** Macro Investimento na Fazenda (sem distinção de escopo). */
@@ -426,6 +440,11 @@ export function isInvestimentoFazendaPecuaria(l: LancamentoClassificavel): boole
 /** Investimento na Fazenda — Agricultura via grupo_custo literal oficial. */
 export function isInvestimentoFazendaAgricultura(l: LancamentoClassificavel): boolean {
   return isInvestimentoFazenda(l) && l.grupo_custo === 'Investimento Agricultura';
+}
+
+/** Investimento na Fazenda — Silvicultura via grupo_custo literal oficial. */
+export function isInvestimentoFazendaSilvicultura(l: LancamentoClassificavel): boolean {
+  return isInvestimentoFazenda(l) && l.grupo_custo === 'Investimento Silvicultura';
 }
 
 /** Investimento em Bovinos (linha "Reposição"/"Investimento em Bovinos" do PC-100). */
@@ -506,6 +525,7 @@ export function isTributos(l: LancamentoClassificavel): boolean {
  */
 export const GRUPO_RECEITA_PECUARIA  = 'Receita Pecuária';
 export const GRUPO_RECEITA_AGRICOLA  = 'Receita Agrícola';
+export const GRUPO_RECEITA_SILVICOLA = 'Receita Silvícola';
 export const GRUPO_OUTRAS_RECEITAS   = 'Outras Receitas';
 export const GRUPO_ENTRADAS_CAPITAL  = 'Entradas de Capital';
 
@@ -517,6 +537,21 @@ export const isReceitaAgricola = (l: LancamentoClassificavel): boolean =>
 
 export const isOutrasReceitas = (l: LancamentoClassificavel): boolean =>
   l.grupo_custo === GRUPO_OUTRAS_RECEITAS;
+
+/**
+ * Receita silvícola — grupo literal do plano de contas.
+ *
+ * Silvicultura é atividade própria, não subconjunto de agricultura:
+ * ciclo plurianual (6-7 anos entre plantio e corte), formação
+ * capitalizada, receita concentrada na colheita. Somar com agricultura
+ * produziria um R$/ha que não descreve nenhuma das duas.
+ *
+ * Medido em 21/08/2026: 15 lançamentos, R$ 5.313.416,24, 3 clientes —
+ * todos 'Venda de Eucalipto', que estavam classificados em
+ * 'Receita Agrícola' até a migração do plano.
+ */
+export const isReceitaSilvicola = (l: LancamentoClassificavel): boolean =>
+  l.grupo_custo === GRUPO_RECEITA_SILVICOLA;
 
 /**
  * Entrada financeira (Aportes + Captação Pec + Captação Agri).
@@ -533,23 +568,30 @@ export const isEntradaFinanceira = (l: LancamentoClassificavel): boolean =>
  * makeRealizadoSourceEntrada filtra isEntrada). Este predicate apenas
  * detecta o resíduo.
  *
- * Existe para que nenhuma entrada desapareça do total sem aviso.
+ * REGRA DE MANUTENÇÃO: este predicate lista TODOS os grupos oficiais de
+ * entrada por negação. Ao criar um grupo novo, ele PRECISA ser negado
+ * aqui — senão o valor conta duas vezes no bloco Caixa (na linha própria
+ * e na residual), porque totalEntradas é a soma das linhas exibidas.
+ * Grupos cobertos hoje: Receita Pecuária, Receita Agrícola,
+ * Receita Silvícola, Outras Receitas, Entradas de Capital.
  *
- * Medido no proto em 21/08/2026: 3 lançamentos, todos do NJ, por DUAS causas
- * distintas — por isso o predicate testa ausência dos quatro grupos oficiais
- * em vez de procurar um caso específico:
+ * Existe para que nenhuma entrada desapareça do total sem aviso. Medido
+ * no proto em 21/08/2026: 3 lançamentos, todos do NJ, por DUAS causas
+ * distintas — e é por isso que o predicate testa ausência dos grupos
+ * oficiais em vez de procurar um caso específico:
  *   - 04/07/2026 R$ 2.513,27 — grupo 'Custo Fixo Pecuária' em 1-Entradas
  *     (rescisão lançada como entrada): classificado, mas em grupo de saída.
- *   - 05/08/2026 R$ 4.007,42 e 07/08/2026 R$ 1.650,00 — Pix de OFX com
- *     macro_custo e grupo_custo nulos: nunca enriquecidos.
- * Nenhum dos três mudou de lugar com este PR: os predicates antigos exigiam
- * isReceita(l) (canonicalMacro === 'receitas'), que já dava false para macro
- * 'Custeio Produção' ou null. Eram invisíveis antes; agora aparecem.
- * O mecanismo não tem piso — a linha é permanente, não um patch.
+ *   - 05/08/2026 R$ 4.007,42 e 07/08/2026 R$ 1.650,00 — Pix vindos de OFX
+ *     com macro_custo e grupo_custo nulos: nunca enriquecidos.
+ * Nenhum dos três mudou de lugar com aquele PR: os predicates antigos
+ * exigiam isReceita(l) (canonicalMacro === 'receitas'), que já dava false
+ * para macro 'Custeio Produção' ou null. Eram invisíveis antes; agora
+ * aparecem. O mecanismo não tem piso — a linha é permanente, não um patch.
  */
 export const isEntradaNaoClassificada = (l: LancamentoClassificavel): boolean =>
   !isReceitaPecuaria(l) &&
   !isReceitaAgricola(l) &&
+  !isReceitaSilvicola(l) &&
   !isOutrasReceitas(l) &&
   !isEntradaFinanceira(l);
 
@@ -561,6 +603,9 @@ export const isAmortizacaoPecuaria = (l: LancamentoClassificavel): boolean =>
 
 export const isAmortizacaoAgricultura = (l: LancamentoClassificavel): boolean =>
   isAmortizacao(l) && l.subcentro === 'Amortização Financiamento Agricultura';
+
+export const isAmortizacaoSilvicultura = (l: LancamentoClassificavel): boolean =>
+  isAmortizacao(l) && l.subcentro === 'Amortização Financiamento Silvicultura';
 
 // ---------------------------------------------------------------------------
 // CLASSIFICADOR SOBERANO OFICIAL — categoria única por saída
@@ -653,6 +698,10 @@ export type CentroReceitaPecuaria = (typeof ORDEM_CENTROS_RECEITA_PECUARIA)[numb
 
 export const ORDEM_CENTROS_RECEITA_AGRICULTURA = [
   'Venda Produção', 'Venda Ativos',
+] as const;
+
+export const ORDEM_CENTROS_RECEITA_SILVICOLA = [
+  'Venda Produção', 'Arrendamento', 'Venda Ativos',
 ] as const;
 
 export const ORDEM_CENTROS_OUTRAS_RECEITAS = [
