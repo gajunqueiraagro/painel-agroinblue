@@ -30,11 +30,16 @@ export interface StatusFazenda {
 }
 
 /* Falta de resposta NUNCA vira 'oficial'. Fazenda que não respondeu entra como
-   pendente: afirmar fechamento por silêncio é o pior erro possível aqui. */
+   pendente: afirmar fechamento por silêncio é o pior erro possível aqui.
+   PR-HOME-STATUS-NAO-APLICAVEL-01 — 'nao_aplicavel' entra na lista branca: é valor
+   LEGÍTIMO do contrato (mês sem pasto de pecuária), não ausência de resposta. Fora da
+   lista, ele caía no fallback e a tela cobrava rebanho de fazenda que não tem gado. O
+   fallback continua valendo para todo o resto — ausente, malformado ou desconhecido. */
 function lerStatus(bruto: unknown): StatusPilar {
   if (!bruto || typeof bruto !== 'object') return 'pendente';
   const s = (bruto as Record<string, unknown>).status;
-  return s === 'oficial' || s === 'nao_implementado' || s === 'bloqueado' ? s : 'pendente';
+  return s === 'oficial' || s === 'nao_implementado'
+      || s === 'bloqueado' || s === 'nao_aplicavel' ? s : 'pendente';
 }
 
 export function useStatusPilaresLote(

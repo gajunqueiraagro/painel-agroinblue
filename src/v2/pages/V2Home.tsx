@@ -11,6 +11,7 @@ import { IndicadorHistoricoModal } from '@/v2/components/IndicadorHistoricoModal
 import { useHistoricoIndicador, type HistoricoIndicadorKey } from '@/hooks/useHistoricoIndicador';
 import { supabase } from '@/integrations/supabase/client';
 import { useStatusPilaresLote, type StatusFazenda } from '@/hooks/useStatusPilaresLote';
+import type { StatusPilar } from '@/hooks/useStatusPilares';
 import type { V2Section } from '@/v2/lib/navGrupos';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
@@ -153,10 +154,20 @@ function StatusFechamentoBanda({ status, isGlobal, loading, mesLabel, onIrPara }
   }
   if (status.length === 0) return null;
 
+  /* PR-HOME-STATUS-NAO-APLICAVEL-01 — a pergunta certa e "esta PENDENTE?", nao "nao e
+     oficial?". As duas coincidiam por acidente enquanto so havia dois estados uteis;
+     com 'nao_aplicavel' no contrato, nao-oficial deixou de significar pendente e a tela
+     passaria a cobrar rebanho de fazenda sem gado. Um helper, quatro usos. */
+  const pendente = (s: StatusPilar) => s === 'pendente';
+
+  /* '✓' so para oficial; travessao para o que nao e nem oficial nem pendente — sentinela
+     do CLAUDE.md, em vez de chamar de pendente o que nao e. */
+  const marca = (s: StatusPilar) => (s === 'oficial' ? '✓' : pendente(s) ? 'pendente' : '—');
+
   const faltaDe = (f: StatusFazenda): string | null => {
     const faltas: string[] = [];
-    if (f.p1 !== 'oficial') faltas.push('mapa de pastos');
-    if (f.p2 !== 'oficial') faltas.push('valor do rebanho');
+    if (pendente(f.p1)) faltas.push('mapa de pastos');
+    if (pendente(f.p2)) faltas.push('valor do rebanho');
     return faltas.length > 0 ? faltas.join(' e ') : null;
   };
 
@@ -164,10 +175,14 @@ function StatusFechamentoBanda({ status, isGlobal, loading, mesLabel, onIrPara }
      valor do rebanho. Mandar o operador ao valor primeiro seria manda-lo a uma tela
      que ele ainda nao pode fechar. */
   const destinoDe = (f: StatusFazenda): V2Section =>
-    (f.p1 !== 'oficial' ? 'fechamento' : 'valor-rebanho');
+    (pendente(f.p1) ? 'fechamento' : 'valor-rebanho');
 
   const total = status.length;
-  const fechadas = status.filter(f => f.p1 === 'oficial' && f.p2 === 'oficial').length;
+  /* Fechada = NENHUM pilar pendente, e nao "todos oficiais". A Sta. Luzia, com P1
+     oficial e P2 'nao_aplicavel', tem o mes DELA fechado — o que nao existe ali e a
+     cobranca de rebanho. O denominador segue sendo todas as fazendas do cliente: ela e
+     uma fazenda do cliente. */
+  const fechadas = status.filter(f => !pendente(f.p1) && !pendente(f.p2)).length;
   const tudoFechado = fechadas === total;
   const escopo = isGlobal ? 'todas as fazendas' : status[0].nome;
 
@@ -217,8 +232,11 @@ function StatusFechamentoBanda({ status, isGlobal, loading, mesLabel, onIrPara }
               const detalhe = (
                 <>
                   <span className="font-medium">{f.nome}</span>
-                  {' · '}mapa de pastos {f.p1 === 'oficial' ? '✓' : 'pendente'}
-                  {' · '}valor do rebanho {f.p2 === 'oficial' ? '✓' : 'pendente'}
+                  {/* O P1 aparece SEMPRE — e o que garante que a linha nunca fica vazia.
+                      O P2 some quando nao se aplica: dizer "valor do rebanho pendente"
+                      onde nao ha gado e a cobranca que este PR existe para acabar. */}
+                  {' · '}mapa de pastos {marca(f.p1)}
+                  {f.p2 !== 'nao_aplicavel' && <>{' · '}valor do rebanho {marca(f.p2)}</>}
                 </>
               );
               return falta && onIrPara ? (
