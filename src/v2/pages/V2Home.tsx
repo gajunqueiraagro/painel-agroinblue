@@ -12,6 +12,7 @@ import { useHistoricoIndicador, type HistoricoIndicadorKey } from '@/hooks/useHi
 import { supabase } from '@/integrations/supabase/client';
 import { useStatusPilaresLote, type StatusFazenda } from '@/hooks/useStatusPilaresLote';
 import { useSaldosPorConta } from '@/hooks/useSaldosPorConta';
+import { useProdutivoPorFazenda } from '@/hooks/useProdutivoPorFazenda';
 import type { StatusPilar } from '@/hooks/useStatusPilares';
 import { useStatusPilaresAno, type StatusCelulaAno } from '@/hooks/useStatusPilaresAno';
 import type { V2Section } from '@/v2/lib/navGrupos';
@@ -629,6 +630,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
      SELECIONADO — o mesmo do bloco Caixa, nao o mes corrente. */
   const { data: saldosPorConta } = useSaldosPorConta(clienteAtual?.id, anoMesStatus ?? '');
 
+  /* ── PR-HOME-PRODUTIVO-FAZENDA-01 — produtivo por fazenda no mes selecionado ── */
+  const { data: produtivoPorFazenda } = useProdutivoPorFazenda(clienteAtual?.id, anoMesStatus ?? '');
+
   const ROTULO_TIPO_CONTA: Record<string, string> = {
     cc: 'Conta corrente', inv: 'Investimento', cartao: 'Cartão',
   };
@@ -680,6 +684,41 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
   const areaApp       = areaNoModo(areaAppRealPorMes);
   const areaBenf      = areaNoModo(areaBenfeitoriasRealPorMes);
   const areaOutras    = areaNoModo(areaOutrasRealPorMes);
+
+  /* Area e lotacao SEMPRE do snapshot oficial. A view tem area propria e
+     lotacao derivada dela — divergentes (Pureza jul/2026: 4.726 ha e 0,73
+     contra 3.595 ha e 0,96). Cruzar por fazenda_id e recalcular. */
+  const linhasProdutivas = useMemo(
+    () => (produtivoPorFazenda ?? [])
+      .map(p => {
+        const area = areaPorFazendaMes.find(a => a.fazenda_id === p.fazenda_id);
+        const areaPec = area?.area_pecuaria_ha ?? 0;
+        return {
+          ...p,
+          areaPec,
+          /* Area zero exibe "—", nunca divisao por zero. */
+          lotacao: areaPec > 0 ? p.ua_media / areaPec : null,
+        };
+      })
+      .filter(l => l.cabecas > 0 || l.areaPec > 0)
+      .sort((a, b) => b.cabecas - a.cabecas),
+    [produtivoPorFazenda, areaPorFazendaMes],
+  );
+
+  /* Totais da tabela produtiva. Lotacao = SOMA das UA / SOMA das areas, NUNCA
+     media das lotacoes: promediar razoes de denominadores diferentes da numero
+     errado. GMD fica "—" — e media ponderada por cabeca, e somar ou promediar
+     as fazendas mentiria; ponderar e decisao pendente. */
+  const totProdutivo = useMemo(() => {
+    const areaPec = linhasProdutivas.reduce((s, l) => s + l.areaPec, 0);
+    const ua = linhasProdutivas.reduce((s, l) => s + l.ua_media, 0);
+    return {
+      areaPec,
+      cabecas: linhasProdutivas.reduce((s, l) => s + l.cabecas, 0),
+      arrobas: linhasProdutivas.reduce((s, l) => s + l.arrobas, 0),
+      lotacao: areaPec > 0 ? ua / areaPec : null,
+    };
+  }, [linhasProdutivas]);
 
   /* Nome da fazenda: `fazendas` do FazendaContext — a lista COMPLETA, a mesma que
      alimenta o seletor. Nao `fazendasComPecuaria`, que filtra tem_pecuaria !== false
@@ -1764,6 +1803,50 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
             deltaAno={kgHaIndicador?.deltaAno ?? null}
             deltaMeta={kgHaIndicador?.deltaMeta ?? null}
             onClick={() => setModalIndicador('kgHa')} />
+
+          {/* Mesma anatomia da tabela do card de Area: col-span-2 para a largura
+              inteira do miolo, separador acima e subtitulo "Por fazenda". */}
+          {isGlobal && linhasProdutivas.length > 0 && (
+            <div className="col-span-2 pt-1 border-t border-border">
+              <p className="text-[10px] font-medium text-muted-foreground pb-1">
+                Por fazenda
+              </p>
+              <table className="w-full text-[10px] tabular-nums">
+                <thead className="bg-muted/50">
+                  <tr className="text-muted-foreground">
+                    <th className="text-left font-normal px-1.5 py-1">Fazenda</th>
+                    <th className="text-right px-1.5 py-1 font-medium text-foreground">Área pec. (ha)</th>
+                    <th className="text-right px-1.5 py-1 font-medium text-foreground">Rebanho (cab)</th>
+                    <th className="text-right font-normal px-1.5 py-1">Lotação (UA/ha)</th>
+                    <th className="text-right font-normal px-1.5 py-1">GMD</th>
+                    <th className="text-right font-normal px-1.5 py-1">@</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {linhasProdutivas.map(l => (
+                    <tr key={l.fazenda_id} className="odd:bg-muted/20">
+                      <td className="text-left px-1.5 py-0.5 truncate max-w-[140px]">{nomeFazendaPorId[l.fazenda_id] ?? 'Fazenda'}</td>
+                      <td className="text-right px-1.5 py-0.5 font-medium text-foreground">{fmtHaInt(l.areaPec)}</td>
+                      <td className="text-right px-1.5 py-0.5 font-medium text-foreground">{fmtN(l.cabecas) ?? '—'}</td>
+                      <td className="text-right px-1.5 py-0.5 text-muted-foreground">{fmtN(l.lotacao, 2) ?? '—'}</td>
+                      <td className="text-right px-1.5 py-0.5 text-muted-foreground">{fmtN(l.gmd, 3) ?? '—'}</td>
+                      <td className="text-right px-1.5 py-0.5 text-muted-foreground">{fmtN(l.arrobas, 1) ?? '—'}</td>
+                    </tr>
+                  ))}
+                  <tr className="bg-muted/50 font-medium text-foreground border-t border-border">
+                    <td className="text-left px-1.5 py-0.5">Total</td>
+                    <td className="text-right px-1.5 py-0.5">{fmtHaInt(totProdutivo.areaPec)}</td>
+                    <td className="text-right px-1.5 py-0.5">{fmtN(totProdutivo.cabecas) ?? '—'}</td>
+                    <td className="text-right px-1.5 py-0.5">{fmtN(totProdutivo.lotacao, 2) ?? '—'}</td>
+                    {/* GMD do Total fica "—": e media ponderada por cabeca, e somar
+                        ou promediar as fazendas daria numero errado. */}
+                    <td className="text-right px-1.5 py-0.5">—</td>
+                    <td className="text-right px-1.5 py-0.5">{fmtN(totProdutivo.arrobas, 1) ?? '—'}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
         </SectionBlock>
         </div>
 
