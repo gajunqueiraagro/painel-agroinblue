@@ -628,7 +628,7 @@ export default function V2Index() {
   };
 
   function renderContent() {
-    if (section === 'home') return <V2Home ano={ano} mes={mes} viewMode={viewMode} onViewModeChange={setViewMode} onIrPara={irParaPendencia} />;
+    if (section === 'home') return <V2Home ano={ano} mes={mes} viewMode={viewMode} onViewModeChange={setViewMode} onIrPara={irParaPendencia} onMesChange={setMes} />;
     if (section === 'painel-consultor') return (
       <PainelConsultorTab
         onBack={() => setSection('home')}

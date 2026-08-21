@@ -50,7 +50,11 @@ export const SECTION_PERIODO: Partial<Record<V2Section, PeriodoTipo>> = {
   'meta-consolidacao':     'ano',
   'painel-anual':          'ano-mes',
   'auditoria-anual':       'ano',
-  'home':                  'ano-mes',
+  // PR-HOME-REGUA-MESES-01 — 'ano' e nao 'ano-mes': o mes passou a ser escolhido na
+  // REGUA de 12 cards dentro da propria Home. Dois seletores para a mesma coisa e
+  // duplicacao, e divergindo em algum estado o operador nao sabe qual manda.
+  // O seletor de ANO permanece — e isso que 'ano' preserva.
+  'home':                  'ano',
   'painel-consultor':      'ano-mes',
   'configuracoes':         'nenhum',
   'atalhos-campeiro':      'nenhum',

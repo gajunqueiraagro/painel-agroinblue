@@ -12,6 +12,7 @@ import { useHistoricoIndicador, type HistoricoIndicadorKey } from '@/hooks/useHi
 import { supabase } from '@/integrations/supabase/client';
 import { useStatusPilaresLote, type StatusFazenda } from '@/hooks/useStatusPilaresLote';
 import type { StatusPilar } from '@/hooks/useStatusPilares';
+import { useStatusPilaresAno, type StatusCelulaAno } from '@/hooks/useStatusPilaresAno';
 import type { V2Section } from '@/v2/lib/navGrupos';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
@@ -118,6 +119,104 @@ function SectionBlock({ title, subtitle, children }: {
       <div className="grid grid-cols-2 gap-x-6 gap-y-5">
         {children}
       </div>
+    </div>
+  );
+}
+
+/* ── PR-HOME-REGUA-MESES-01 — regua de 12 meses ──
+   Substitui o dropdown de mes (que saiu de periodoConfig, entrada 'home'). Um seletor
+   so, e ele mostra o ANO INTEIRO de uma vez: o dropdown escondia o historico.
+
+   REGRA DE COR, por mes, agregando as fazendas do escopo:
+     cinza claro  nenhuma fazenda iniciou o mes
+     verde        TODAS as fazendas fecharam
+     vermelho     nenhuma fechou
+     ambar        o resto — alguma fechou, alguma nao
+
+   'nao_implementado' e 'nao_aplicavel' NAO CONTAM como pendencia: fazenda com
+   p1 oficial e p2 nao_aplicavel esta FECHADA — o mapa fechou e nao havia rebanho a
+   fechar. Sao os 14 casos de Sta. Luzia e Retiro Agricultura em 2026.
+
+   'nao_iniciado' NAO E PENDENCIA. Mes que ninguem abriu e cinza, nao ambar — foram 149
+   celulas assim em 2026, e pinta-las de ambar afogaria as 3 pendencias reais.
+
+   Verde exige TODAS as fazendas, por decisao explicita: "se tem 1 ou 12 fazendas, tem
+   que fechar todas todo mes". Verde raro e informacao, nao defeito de UX. */
+const CELULA_MES = 'rounded border px-1 py-0.5 text-[10px] leading-tight font-semibold';
+
+type CorMes = 'verde' | 'ambar' | 'vermelho' | 'cinza';
+
+const COR_CELULA: Record<CorMes, string> = {
+  verde:    'bg-emerald-600/15 text-emerald-700 border-emerald-600/30',
+  ambar:    'bg-amber-500/15   text-amber-700   border-amber-500/30',
+  vermelho: 'bg-red-500/15     text-red-700     border-red-500/30',
+  cinza:    'bg-muted          text-muted-foreground border-border/40',
+};
+
+/* Pilar que nao existe ou nao se aplica sai da conta; o que sobra tem que ser oficial. */
+function pilarOk(s: StatusPilar): boolean {
+  return s === 'oficial' || s === 'nao_aplicavel' || s === 'nao_implementado';
+}
+
+function corDoMes(celulas: StatusCelulaAno[]): CorMes {
+  if (celulas.length === 0) return 'cinza';
+  const iniciadas = celulas.filter(c => c.p1 !== 'nao_iniciado');
+  if (iniciadas.length === 0) return 'cinza';
+  const fechadas = iniciadas.filter(c => pilarOk(c.p1) && pilarOk(c.p2)).length;
+  if (fechadas === celulas.length) return 'verde';   // TODAS as fazendas, nao so as iniciadas
+  if (fechadas === 0) return 'vermelho';
+  return 'ambar';
+}
+
+function ReguaMeses({ celulas, mesSelecionado, ano, loading, erro, onMesChange, meses }: {
+  celulas: StatusCelulaAno[];
+  mesSelecionado: number;
+  ano: number;
+  loading: boolean;
+  erro: string | null;
+  onMesChange?: (mes: string) => void;
+  meses: string[];
+}) {
+  /* Skeleton com os ROTULOS REAIS em text-transparent: a altura de carregamento e a
+     altura final por construcao, e nao uma estimativa mantida a mao. */
+  if (loading) {
+    return (
+      <div className="mt-1 grid grid-cols-12 gap-0.5">
+        {meses.map(m => (
+          <span key={m} className={`${CELULA_MES} ${COR_CELULA.cinza} text-transparent animate-pulse text-center`}>{m}</span>
+        ))}
+      </div>
+    );
+  }
+
+  /* Erro do status NAO pode tirar do operador a escolha do mes. Sem cor, mas clicavel. */
+  const semCor = erro !== null;
+  const hoje = new Date();
+  const mesCorrente = (hoje.getFullYear() === ano) ? hoje.getMonth() + 1 : 0;
+
+  return (
+    <div className="mt-1 grid grid-cols-12 gap-0.5">
+      {meses.map((rotulo, i) => {
+        const mm = i + 1;
+        const doMes = celulas.filter(c => c.mes === mm);
+        const cor: CorMes = semCor ? 'cinza' : corDoMes(doMes);
+        const selecionado = mm === mesSelecionado;
+        const corrente = mm === mesCorrente;
+        const realce = selecionado
+          ? ' ring-2 ring-primary'
+          : corrente ? ' ring-1 ring-border font-bold' : '';
+        // Mes futuro continua CLICAVEL: o operador pode querer olhar.
+        return (
+          <button
+            key={rotulo}
+            type="button"
+            onClick={() => onMesChange?.(String(mm))}
+            className={`${CELULA_MES} ${COR_CELULA[cor]}${realce} text-center cursor-pointer hover:opacity-80`}
+          >
+            {rotulo}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -264,13 +363,18 @@ function StatusFechamentoBanda({ status, isGlobal, loading, mesLabel, onIrPara }
   );
 }
 
-export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara }: {
+export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara, onMesChange }: {
   ano: string;
   mes: string;
   viewMode?: 'mes' | 'periodo';
   onViewModeChange?: (v: 'mes' | 'periodo') => void;
   /* OPCIONAL: sem ela a faixa continua informando, so nao clica. */
   onIrPara?: (section: V2Section, fazendaId: string) => void;
+  /* OPCIONAL pelo mesmo motivo. `mes` e estado do V2Index; a regua so o comunica.
+     FORMATO: '1'..'12', SEM zero a esquerda — e o que setMes recebe em todo o V2Index e
+     o que o V2FilterBar sempre mandou (MESES[].v). Zero a esquerda quebraria o filtro
+     em silencio. */
+  onMesChange?: (mes: string) => void;
 }) {
   const { clienteAtual } = useCliente();
   const { fazendaAtual, isGlobal, fazendasComPecuaria } = useFazenda();
@@ -297,6 +401,15 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara 
   );
   const { data: statusFechamento, loading: loadingStatusFechamento } =
     useStatusPilaresLote(fazendasStatus, anoMesStatus);
+
+  /* Grade do ANO para a regua: UMA chamada, 12 meses x N fazendas. Em fazenda especifica
+     as celulas das outras sao filtradas na tela — a RPC devolve o cliente inteiro. */
+  const { data: gradeAno, loading: loadingGradeAno, error: erroGradeAno } =
+    useStatusPilaresAno(clienteAtual?.id, anoNum);
+  const gradeEscopo = useMemo(
+    () => (isGlobal ? gradeAno : gradeAno.filter(c => c.fazendaId === fazendaAtual?.id)),
+    [gradeAno, isGlobal, fazendaAtual?.id],
+  );
   const isPeriodo = viewMode === 'periodo';
 
   const MES_ABREV = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
@@ -994,6 +1107,15 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara 
           loading={loadingStatusFechamento}
           mesLabel={ml}
           onIrPara={onIrPara}
+        />
+        <ReguaMeses
+          celulas={gradeEscopo}
+          mesSelecionado={mesNum}
+          ano={anoNum}
+          loading={loadingGradeAno}
+          erro={erroGradeAno}
+          onMesChange={onMesChange}
+          meses={MES_ABREV}
         />
         {onViewModeChange && (
           <div className="flex gap-1 mt-2">
