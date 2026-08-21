@@ -29,17 +29,32 @@ export interface StatusFazenda {
   p2: StatusPilar;
 }
 
-/* Falta de resposta NUNCA vira 'oficial'. Fazenda que não respondeu entra como
+/* Falta de resposta NUNCA vira 'oficial'. Valor que não pertence ao contrato entra como
    pendente: afirmar fechamento por silêncio é o pior erro possível aqui.
-   PR-HOME-STATUS-NAO-APLICAVEL-01 — 'nao_aplicavel' entra na lista branca: é valor
-   LEGÍTIMO do contrato (mês sem pasto de pecuária), não ausência de resposta. Fora da
-   lista, ele caía no fallback e a tela cobrava rebanho de fazenda que não tem gado. O
-   fallback continua valendo para todo o resto — ausente, malformado ou desconhecido. */
-function lerStatus(bruto: unknown): StatusPilar {
+   'nao_aplicavel' e 'nao_iniciado' SÃO do contrato — mês sem pasto de pecuária e mês sem
+   card — e não podem cair no fallback só por serem novos. Foi assim que a tela chegou a
+   cobrar rebanho de fazenda que não tem gado.
+
+   PR-STATUS-ANO-HOOK-01 — o MIOLO virou função exportada porque agora há dois leitores
+   da mesma RPC: este hook (mês corrente, objeto {status}) e useStatusPilaresAno (grade
+   anual, texto solto). Duas listas brancas divergiriam no próximo estado novo — foi
+   exatamente esse o defeito que 'nao_aplicavel' e 'nao_iniciado' expuseram. */
+export function normalizarStatusPilar(valor: unknown): StatusPilar {
+  return valor === 'oficial' || valor === 'pendente' || valor === 'nao_aplicavel'
+      || valor === 'nao_iniciado' || valor === 'nao_implementado' || valor === 'bloqueado'
+    ? valor : 'pendente';
+}
+
+export function lerStatus(bruto: unknown): StatusPilar {
   if (!bruto || typeof bruto !== 'object') return 'pendente';
-  const s = (bruto as Record<string, unknown>).status;
-  return s === 'oficial' || s === 'nao_implementado'
-      || s === 'bloqueado' || s === 'nao_aplicavel' ? s : 'pendente';
+  const s = normalizarStatusPilar((bruto as Record<string, unknown>).status);
+  /* A FAIXA da Visão Geral ainda dobra 'nao_iniciado' em 'pendente', e isso é
+     DELIBERADO até o PR da régua. A faixa conta "fechada" como "nenhum pilar pendente":
+     sem esta linha, um mês que ninguém abriu contaria como FECHADO e a tela afirmaria
+     "Rebanho 2/2" sobre trabalho que não começou. Coagir para pendente é conservador —
+     nunca afirma fechamento. A régua, que sabe distinguir os dois, lê pela função
+     exportada acima e não passa por aqui. */
+  return s === 'nao_iniciado' ? 'pendente' : s;
 }
 
 export function useStatusPilaresLote(
