@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
-import { useSnapshotAreaAnual, DESTINOS_AREA, type DestinoArea } from '@/hooks/useFechamentoArea';
+import { useSnapshotAreaAnual, DESTINOS_AREA, type DestinoArea, type SnapshotAreaFazendaMes } from '@/hooks/useFechamentoArea';
 import { useAreaPlanejamento } from '@/hooks/useAreaPlanejamento';
 import { useLancamentos } from '@/hooks/useLancamentos';
 import { useFinanceiro } from '@/hooks/useFinanceiro';
@@ -190,6 +190,12 @@ export interface PainelConsultorDataResult {
   areaAppRealPorMes: (number | null)[];
   areaBenfeitoriasRealPorMes: (number | null)[];
   areaOutrasRealPorMes: (number | null)[];
+  /**
+   * PR-HOME-AREA-TABELA-FAZENDA-01 — composicao por FAZENDA do mes selecionado,
+   * ordenada por area total desc. So tem conteudo no escopo Global; em escopo de
+   * fazenda a lista traz a unica fazenda e a tela nao exibe o bloco.
+   */
+  areaPorFazendaMes: SnapshotAreaFazendaMes[];
   /**
    * PR-PC100-AREAS-01 — repartição REALIZADA por destino, uma série de 12 por
    * destino. null = mês sem snapshot (exibe "—"); 0 = destino sem pasto no mês.
@@ -557,7 +563,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
   const fazendaId = fazendaAtual?.id;
   const { clienteAtual } = useCliente();
 
-  const { areaMensal, snapshots, totalFazendasAtivas, fazendasAtivasCarregadas, fazendasComSnapPorMes, fazendasComP1PorMes, temP1FechadoPorMes, loading: loadingArea } = useSnapshotAreaAnual(
+  const { areaMensal, snapshots, snapshotsFazenda, totalFazendasAtivas, fazendasAtivasCarregadas, fazendasComSnapPorMes, fazendasComP1PorMes, temP1FechadoPorMes, loading: loadingArea } = useSnapshotAreaAnual(
     ano,
     isGlobal ? undefined : fazendaId,
     isGlobal,
@@ -670,6 +676,13 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       return s ? s.area_outras_ha : null;
     }),
     [snapshots],
+  );
+  // PR-HOME-AREA-TABELA-FAZENDA-01 — a mesma composicao, sem agregar fazendas.
+  const areaPorFazendaMes = useMemo(
+    () => snapshotsFazenda
+      .filter(s => s.mes === areaRealIdx + 1)
+      .sort((a, b) => b.area_total_ha - a.area_total_ha),
+    [snapshotsFazenda, areaRealIdx],
   );
   // PR-PC100-AREAS-01 — mesmo idioma das três acima: `find` por mês e null quando
   // o mês não tem snapshot, para o painel exibir "—" em vez de zero inventado.
@@ -3173,6 +3186,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     areaAppRealPorMes,
     areaBenfeitoriasRealPorMes,
     areaOutrasRealPorMes,
+    areaPorFazendaMes,
 
     // UA/ha: série oficial (mês = monthlyData.lotUaHa; período = rollingAvg PC-100)
     lotUaHa: uaHaValor,

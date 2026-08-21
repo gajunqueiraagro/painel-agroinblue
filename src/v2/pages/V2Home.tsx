@@ -165,6 +165,13 @@ function LinhaCaixa({ label, valor, tipo = 'detalhe', corValor }: {
   );
 }
 
+/* Formatador unico de area. Duas casas, sempre com sufixo. */
+function fmtHa(v: number | null): string {
+  return v == null
+    ? '—'
+    : `${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ha`;
+}
+
 /* Irmao de LinhaCaixa: mesma anatomia, unidade diferente. Area em ha nao
    pode usar fmtR — o bloco inteiro perderia o sentido com cifrao. */
 function LinhaArea({ label, valor, tipo = 'detalhe' }: {
@@ -178,9 +185,7 @@ function LinhaArea({ label, valor, tipo = 'detalhe' }: {
   return (
     <div className={`flex items-baseline justify-between gap-3 text-[11px] ${base}`}>
       <span className="truncate">{label}</span>
-      <span className="tabular-nums shrink-0">
-        {valor == null ? '—' : `${valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ha`}
-      </span>
+      <span className="tabular-nums shrink-0">{fmtHa(valor)}</span>
     </div>
   );
 }
@@ -444,7 +449,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
   onMesChange?: (mes: string) => void;
 }) {
   const { clienteAtual } = useCliente();
-  const { fazendaAtual, isGlobal, fazendasComPecuaria } = useFazenda();
+  const { fazendaAtual, isGlobal, fazendasComPecuaria, fazendas } = useFazenda();
   const fazendaIdsPecuaria = useMemo(
     () => fazendasComPecuaria.map(f => f.id),
     [fazendasComPecuaria],
@@ -551,6 +556,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     areaProdutivaRealPorMes, areaAgriculturaRealPorMes,
     areaTotalRealPorMes, areaSilviculturaRealPorMes, areaReservaRealPorMes,
     areaAppRealPorMes, areaBenfeitoriasRealPorMes, areaOutrasRealPorMes,
+    areaPorFazendaMes,
     lotUaHa, kgHa, statusArea, faltandoCount,
     seriesMensais, seriesMeta, cabecasIndicador, pesoMedioIndicador, gmdIndicador, uaHaIndicador, kgHaIndicador, arrobasIndicador, desfruteIndicador, valorRebanhoIndicador,
     receitaPecIndicador, custeioPecIndicador, custoArrIndicador, precoArrIndicador, custoCabIndicador, margemArrIndicador,
@@ -598,6 +604,15 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
   const areaApp       = areaAppRealPorMes?.[areaIdx]          ?? null;
   const areaBenf      = areaBenfeitoriasRealPorMes?.[areaIdx] ?? null;
   const areaOutras    = areaOutrasRealPorMes?.[areaIdx]       ?? null;
+
+  /* Nome da fazenda: `fazendas` do FazendaContext — a lista COMPLETA, a mesma que
+     alimenta o seletor. Nao `fazendasComPecuaria`, que filtra tem_pecuaria !== false
+     e deixaria de fora justamente a Retiro Agricultura, que o PR-AREA-FONTE-OPERACAO-01
+     trouxe para a area. Sem query nova. */
+  const nomeFazendaPorId = useMemo<Record<string, string>>(
+    () => Object.fromEntries(fazendas.map(f => [f.id, f.nome])),
+    [fazendas],
+  );
 
   /* MOSTRAR, NAO MAQUIAR. Produtiva > total acontece quando ha pasto
      arrendado DE TERCEIRO: a terra nao esta na matricula, mas o gado e do
@@ -1360,7 +1375,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
 
         <SectionBlock title="Área" subtitle="como a terra está dividida">
           <div className="space-y-1">
-            <LinhaArea label="Área total (matrícula)" valor={areaTotal} tipo="total" />
+            <LinhaArea label="Área total" valor={areaTotal} tipo="total" />
             <LinhaArea label="Pecuária"      valor={areaPec} />
             <LinhaArea label="Agricultura"   valor={areaAgri} />
             <LinhaArea label="Silvicultura"  valor={areaSilvi} />
@@ -1375,14 +1390,41 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
             </div>
             {areaExcedente != null && (
               <div className="text-[11px] text-warning pt-1">
-                Área além da matrícula: {areaExcedente.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ha
+                Área além da matrícula: {fmtHa(areaExcedente)}
               </div>
             )}
           </div>
           <p className="text-[10px] text-muted-foreground pt-2">
-            Fonte: fechamento de áreas do mês. Estoque — não acumula no período.
+            Fonte: fechamento de áreas do mês. Área total = matrícula.
+            Estoque — não acumula no período.
           </p>
         </SectionBlock>
+
+        {isGlobal && areaPorFazendaMes.length > 0 && (
+          <SectionBlock title="Área por fazenda" subtitle="onde a operação está">
+            <div className="space-y-1.5">
+              {areaPorFazendaMes.map(f => (
+                <div key={f.fazenda_id} className="space-y-0.5">
+                  <div className="flex items-baseline justify-between gap-3 text-[11px] font-medium text-foreground">
+                    <span className="truncate">{nomeFazendaPorId[f.fazenda_id] ?? 'Fazenda'}</span>
+                    <span className="tabular-nums shrink-0">{fmtHa(f.area_total_ha)}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 pl-2.5 text-[10px] text-muted-foreground">
+                    {f.area_pecuaria_ha > 0     && <span>Pec. {fmtHa(f.area_pecuaria_ha)}</span>}
+                    {f.area_agricultura_ha > 0  && <span>Agri. {fmtHa(f.area_agricultura_ha)}</span>}
+                    {f.area_silvicultura_ha > 0 && <span>Silvi. {fmtHa(f.area_silvicultura_ha)}</span>}
+                    {f.area_reserva_ha > 0      && <span>Reserva {fmtHa(f.area_reserva_ha)}</span>}
+                    {f.area_produtiva_ha > f.area_total_ha && (
+                      <span className="text-warning">
+                        Além da matrícula {fmtHa(f.area_produtiva_ha - f.area_total_ha)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </SectionBlock>
+        )}
 
         <SectionBlock title="Produção" subtitle="o que a fazenda entregou" naoFechado={mesSemFechamento} avisoNaoFechado={avisoMes}>
           <MetricTile label={cabecasIndicador?.label ?? 'CABEÇAS'} value={fmtN(cabecasIndicador?.valor ?? null)} unit="cab" loading={loadingPainel}

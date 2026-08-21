@@ -43,12 +43,34 @@ export interface SnapshotAreaMes {
   destinos: Record<DestinoArea, number>;
 }
 
+/**
+ * Mesma composicao de SnapshotAreaMes, porem SEM agregar fazendas.
+ * Existe porque a tabela por fazenda precisa da granularidade que a
+ * agregacao do Global descarta. Nenhuma query nova: sao as mesmas linhas
+ * lidas em `data`, guardadas antes da soma.
+ */
+export interface SnapshotAreaFazendaMes {
+  fazenda_id: string;
+  mes: number;
+  area_total_ha: number;
+  area_produtiva_ha: number;
+  area_pecuaria_ha: number;
+  area_agricultura_ha: number;
+  area_silvicultura_ha: number;
+  area_reserva_ha: number;
+  area_app_ha: number;
+  area_benfeitorias_ha: number;
+  area_outras_ha: number;
+}
+
 const zeroDestinos = (): Record<DestinoArea, number> =>
   Object.fromEntries(DESTINOS_AREA.map(d => [d, 0])) as Record<DestinoArea, number>;
 
 export interface UseSnapshotAreaAnualResult {
   areaMensal: number[];
   snapshots: SnapshotAreaMes[];
+  /** PR-HOME-AREA-TABELA-FAZENDA-01 — as mesmas linhas, sem agregar fazendas. */
+  snapshotsFazenda: SnapshotAreaFazendaMes[];
   totalFazendasAtivas: number;
   fazendasAtivasCarregadas: boolean;
   fazendasComSnapPorMes: number[];
@@ -63,6 +85,7 @@ type SnapshotAreaData = Omit<UseSnapshotAreaAnualResult, 'loading'>;
 const EMPTY_SNAPSHOT: SnapshotAreaData = {
   areaMensal: Array(12).fill(0),
   snapshots: [],
+  snapshotsFazenda: [],
   totalFazendasAtivas: 0,
   fazendasAtivasCarregadas: false,
   fazendasComSnapPorMes: Array(12).fill(0),
@@ -254,6 +277,11 @@ export function useSnapshotAreaAnual(
       // Montar array de 12 posições a partir dos snapshots
       const arr = Array(12).fill(0);
       const snaps: SnapshotAreaMes[] = [];
+      /* PR-HOME-AREA-TABELA-FAZENDA-01 — acumulado EM PARALELO, sem tocar a
+         agregacao acima: uma entrada por (fazenda_id, mes), com os mesmos
+         numeros que ja alimentam `snaps`. A granularidade por fazenda existe
+         na linha lida do banco e era descartada na soma. */
+      const snapsFazenda: SnapshotAreaFazendaMes[] = [];
 
       // NOTA: agric e prod_total continuam vindo do snapshot mesmo quando
       // pec eh recalculada. Mistura conhecida — sera revisada em commit
@@ -317,6 +345,20 @@ export function useSnapshotAreaAnual(
         // Destinos do mesmo (fazenda, mês). Sem entrada no mapa = nenhum pasto
         // fechado com destino conhecido: zeros, e a soma continua fechando.
         const dest = destinoPorFazendaMes.get(fazMesKey) ?? zeroDestinos();
+
+        snapsFazenda.push({
+          fazenda_id: (row as unknown as { fazenda_id: string }).fazenda_id,
+          mes: mesIdx + 1,
+          area_total_ha: total,
+          area_produtiva_ha: prod,
+          area_pecuaria_ha: pec,
+          area_agricultura_ha: agric,
+          area_silvicultura_ha: silvi,
+          area_reserva_ha: reserva,
+          area_app_ha: app,
+          area_benfeitorias_ha: benf,
+          area_outras_ha: outras,
+        });
 
         const existing = snaps.find(s => s.mes === mesIdx + 1);
         if (existing) {
@@ -394,6 +436,7 @@ export function useSnapshotAreaAnual(
       return {
         areaMensal: arr,
         snapshots: snaps,
+        snapshotsFazenda: snapsFazenda,
         totalFazendasAtivas: totalAtivas,
         fazendasAtivasCarregadas,
         fazendasComSnapPorMes: comSnapPorMes,
