@@ -107,17 +107,37 @@ function MetricTile({ label, value, unit, loading, pending, tone = 'default', st
   );
 }
 
-function SectionBlock({ title, subtitle, children }: {
+function SectionBlock({ title, subtitle, children, naoFechado, avisoNaoFechado }: {
   title: string; subtitle?: string; children: React.ReactNode;
+  /* PR-HOME-BLOCOS-PARCIAIS-01 — bloco que DEPENDE de fechamento fica esmaecido com
+     aviso por cima quando o mes nao fechou. Sem isto, a regua dizia "vermelho, ninguem
+     fechou" e o bloco logo abaixo mostrava "0,0 @ · ↓ 100,0% vs mes" como se a producao
+     tivesse desabado — duas afirmacoes contraditorias na mesma tela, e a de baixo era a
+     errada. O zero do banco esta certo; o que faltava era CONTEXTO. */
+  naoFechado?: boolean;
+  avisoNaoFechado?: string;
 }) {
   return (
     <div className="bg-card rounded-xl border border-border/40 p-5">
+      {/* Titulo e subtitulo NAO esmaecem: o operador precisa saber que bloco e aquele. */}
       <div className="flex items-baseline gap-2 mb-4">
         <h3 className="text-[11px] font-black uppercase tracking-widest text-foreground">{title}</h3>
         {subtitle && <span className="text-[10px] text-muted-foreground">({subtitle})</span>}
       </div>
-      <div className="grid grid-cols-2 gap-x-6 gap-y-5">
-        {children}
+      <div className="relative">
+        {/* pointer-events-none impede clicar num card e abrir o historico de um numero
+            parcial. O overlay e ABSOLUTO: nao empurra layout nem muda a altura do bloco. */}
+        <div className={`grid grid-cols-2 gap-x-6 gap-y-5${naoFechado ? ' opacity-40 pointer-events-none select-none' : ''}`}>
+          {children}
+        </div>
+        {naoFechado && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 rounded-lg bg-card/80 px-2 text-center pointer-events-none">
+            <span className="text-xs font-semibold text-muted-foreground">{avisoNaoFechado}</span>
+            <span className="text-[10px] text-muted-foreground">
+              Os números aparecem quando o fechamento for concluído.
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -410,7 +430,31 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     () => (isGlobal ? gradeAno : gradeAno.filter(c => c.fazendaId === fazendaAtual?.id)),
     [gradeAno, isGlobal, fazendaAtual?.id],
   );
+
   const isPeriodo = viewMode === 'periodo';
+
+  /* PR-HOME-BLOCOS-PARCIAIS-01 — o mesmo corDoMes que pinta a regua decide se os blocos
+     dependentes de fechamento esmaecem. UMA regra, dois usos: reimplementar aqui criaria
+     a divergencia que esta frente passou o dia eliminando. Sem chamada extra ao hook —
+     gradeEscopo ja esta em mao.
+
+     So VERMELHO (ninguem fechou) e CINZA (ninguem abriu) recebem o aviso. AMBAR fica de
+     fora de proposito: ali os numeros sao PARCIAIS mas REAIS, e a faixa logo acima ja
+     diz quantas fazendas faltam.
+
+     Em modo PERIODO nao se aplica: o bloco acumula Jan..mes, e esmaecer sete meses de
+     dado real porque o ultimo esta aberto esconderia mais verdade do que protege.
+
+     Enquanto carrega ou se o hook falhou, tambem nao: gradeEscopo vazio daria 'cinza' e
+     a tela acusaria "mes nao iniciado" sem ter perguntado ao banco. */
+  const corMesSelecionado = useMemo(
+    () => corDoMes(gradeEscopo.filter(c => c.mes === mesNum)),
+    [gradeEscopo, mesNum],
+  );
+  const mesSemFechamento =
+    !isPeriodo && !loadingGradeAno && erroGradeAno === null
+    && (corMesSelecionado === 'vermelho' || corMesSelecionado === 'cinza');
+  const avisoMes = corMesSelecionado === 'cinza' ? 'Mês não iniciado' : 'Mês não fechado';
 
   const MES_ABREV = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   const ml = isPeriodo
@@ -1156,7 +1200,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
-        <SectionBlock title="Produção" subtitle="o que a fazenda entregou">
+        <SectionBlock title="Produção" subtitle="o que a fazenda entregou" naoFechado={mesSemFechamento} avisoNaoFechado={avisoMes}>
           <MetricTile label={cabecasIndicador?.label ?? 'CABEÇAS'} value={fmtN(cabecasIndicador?.valor ?? null)} unit="cab" loading={loadingPainel}
             deltaMes={cabecasIndicador?.deltaMes ?? null}
             deltaAno={cabecasIndicador?.deltaAno ?? null}
@@ -1189,7 +1233,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
             onClick={() => setModalIndicador('valorRebanho')} />
         </SectionBlock>
 
-        <SectionBlock title="Eficiência" subtitle="do uso da área">
+        <SectionBlock title="Eficiência" subtitle="do uso da área" naoFechado={mesSemFechamento} avisoNaoFechado={avisoMes}>
           <MetricTile
             label={isPeriodoArea ? 'Área Produtiva Pec. média no período' : 'Área Produtiva Pecuária'}
             value={fmtN(areaProdutivaPecValor, 0)} unit="ha"
