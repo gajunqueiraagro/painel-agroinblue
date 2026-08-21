@@ -869,12 +869,21 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara 
   const vsAno = (campo: number | null, baseCampo: number | null) =>
     dadosZootCompletos ? calcVar(campo, baseCampo) : null;
 
+  /* PR-HOME-AVISOS-LINGUAGEM-01 — o operador nao sabe o que e um "P1" nem um
+     "snapshot": e vocabulario interno de governanca vazando para a tela, o mesmo
+     defeito que PR-AREA-ERROS-MAPA-01 corrigiu do lado do banco.
+     Os SETE estados de StatusValidacaoArea continuam distintos no tipo e na logica —
+     so o TEXTO muda.
+     'p1_fechado_sem_snap' e 'sem_snapshot' passam a dizer a MESMA coisa de proposito:
+     a diferenca entre eles e de causa interna (o mes fechou mas a area nao foi
+     materializada x nunca houve materializacao). Para quem le a tela o fato e um so —
+     a area daquele mes nao existe — e a acao e a mesma. Os ramos ficam separados. */
   const msgArea = (s: StatusValidacaoArea): string | null => {
     if (s === 'ok' || s === 'carregando') return null;
-    if (s === 'incompleto')          return `⚠ ${faltandoCount} fazenda${faltandoCount !== 1 ? 's' : ''} sem snapshot`;
-    if (s === 'p1_aberto')           return '⚠ P1 não fechado';
-    if (s === 'p1_fechado_sem_snap') return '⚠ P1 fechado sem snapshot';
-    if (s === 'sem_snapshot')        return '⚠ Snapshot não gerado';
+    if (s === 'incompleto')          return `⚠ ${faltandoCount} fazenda${faltandoCount !== 1 ? 's' : ''} sem área do mês`;
+    if (s === 'p1_aberto')           return '⚠ Mapa de pastos não fechado';
+    if (s === 'p1_fechado_sem_snap') return '⚠ Área do mês não gerada';
+    if (s === 'sem_snapshot')        return '⚠ Área do mês não gerada';
     if (s === 'sem_area')            return '⚠ Área não cadastrada';
     return null;
   };
