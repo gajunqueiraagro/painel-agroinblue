@@ -11,6 +11,7 @@ import { IndicadorHistoricoModal } from '@/v2/components/IndicadorHistoricoModal
 import { useHistoricoIndicador, type HistoricoIndicadorKey } from '@/hooks/useHistoricoIndicador';
 import { supabase } from '@/integrations/supabase/client';
 import { useStatusPilaresLote, type StatusFazenda } from '@/hooks/useStatusPilaresLote';
+import { useSaldosPorConta } from '@/hooks/useSaldosPorConta';
 import type { StatusPilar } from '@/hooks/useStatusPilares';
 import { useStatusPilaresAno, type StatusCelulaAno } from '@/hooks/useStatusPilaresAno';
 import type { V2Section } from '@/v2/lib/navGrupos';
@@ -607,6 +608,45 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     ? (isPeriodo ? (serieCaixa[0] ?? null) : (serieCaixa[mesNum - 1] ?? null))
     : null;
   const saldoFinal = serieCaixa ? (serieCaixa[mesNum] ?? null) : null;
+
+  /* ── PR-HOME-DISPONIVEL-CONTA-01 — onde o saldo do mes esta ──
+     Escopo CLIENTE, nunca fazenda (regra de useSaldoCaixaMensal): identico em
+     Global e em fazenda especifica. anoMesStatus ja e o 'YYYY-MM' do mes
+     SELECIONADO — o mesmo do bloco Caixa, nao o mes corrente. */
+  const { data: saldosPorConta } = useSaldosPorConta(clienteAtual?.id, anoMesStatus ?? '');
+
+  const ROTULO_TIPO_CONTA: Record<string, string> = {
+    cc: 'Conta corrente', inv: 'Investimento', cartao: 'Cartão',
+  };
+
+  /* Conta zerada nao aparece; grupo inteiro zerado nao aparece nem como rotulo
+     ('cartao' cai nesse caso em todos os clientes hoje). O hook devolve tudo —
+     esconder e decisao da tela. */
+  const gruposConta = useMemo(() => {
+    const comSaldo = (saldosPorConta ?? []).filter(c => c.saldo !== 0);
+    const out: { tipo: string; rotulo: string; subtotal: number; contas: typeof comSaldo }[] = [];
+    for (const c of comSaldo) {
+      const tipo = c.tipo_conta ?? '—';
+      let g = out.find(x => x.tipo === tipo);
+      if (!g) {
+        /* Tipo fora da lista oficial entra com o valor CRU: inventar rotulo
+           esconderia um tipo novo do plano de contas. */
+        g = { tipo, rotulo: ROTULO_TIPO_CONTA[tipo] ?? tipo, subtotal: 0, contas: [] };
+        out.push(g);
+      }
+      g.contas.push(c);
+      g.subtotal += c.saldo;
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saldosPorConta]);
+
+  const totalEmConta = gruposConta.reduce((acc, g) => acc + g.subtotal, 0);
+
+  /* MOSTRAR, NAO FORCAR — mesmo principio da diferenca de fechamento do Caixa.
+     Tolerancia de R$ 1,00 para nao exibir centavo de arredondamento. */
+  const difEmConta = saldoFinal != null ? totalEmConta - saldoFinal : null;
+  const mostrarDifEmConta = difEmConta != null && Math.abs(difEmConta) > 1;
 
   /* ── PR-HOME-AREA-COMPOSICAO-01 — composicao da area do mes ──
      Area e ESTOQUE: sempre a posicao do mes, NUNCA acumulada em viewMode='periodo'
@@ -1691,7 +1731,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
               </p>
             )}
 
-            <p className="text-[10px] text-muted-foreground pt-1">
+            <p className="text-[9px] text-muted-foreground pt-1">
               Regime de caixa, ano civil. Transferências entre contas não entram.
             </p>
           </div>
@@ -1814,6 +1854,34 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
             );
           })()}
         </SectionBlock>
+
+        {/* Ultimo bloco da COLUNA DA DIREITA — dentro da coluna, nunca como irmao
+            do grid (regra do PR das duas colunas). Sem conta com saldo, o bloco
+            nao renderiza nem o titulo: mes sem saldo lancado nao vira card vazio. */}
+        {gruposConta.length > 0 && (
+          <SectionBlock title="Disponível em conta" subtitle="onde o saldo está">
+            <div className="col-span-2 space-y-0.5">
+              {gruposConta.map(g => (
+                <div key={g.tipo} className="space-y-0.5">
+                  <LinhaCaixa label={g.rotulo} valor={g.subtotal} tipo="total" />
+                  {g.contas.map(c => (
+                    <LinhaCaixa key={c.conta_id} label={c.nome} valor={c.saldo} />
+                  ))}
+                </div>
+              ))}
+
+              <div className="pt-1 mt-1 border-t border-border">
+                <LinhaCaixa label="Total em conta" valor={totalEmConta} tipo="total" />
+              </div>
+
+              {mostrarDifEmConta && (
+                <div className="text-[10px] text-warning pt-1">
+                  Diferença de {fmtR(difEmConta)} contra o saldo do Caixa
+                </div>
+              )}
+            </div>
+          </SectionBlock>
+        )}
         </div>
 
       </div>
