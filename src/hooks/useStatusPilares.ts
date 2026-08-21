@@ -13,7 +13,7 @@ import { supabase } from '@/integrations/supabase/client';
    provisorio SAIU — nenhuma versao da funcao o emitiu. 'bloqueado' FICA: e o estado
    previsto para quando o P5 virar derivado real. 'nao_implementado' entra porque o
    banco passou a declara-lo. */
-export type StatusPilar = 'oficial' | 'pendente' | 'nao_implementado' | 'bloqueado';
+export type StatusPilar = 'oficial' | 'pendente' | 'nao_aplicavel' | 'nao_implementado' | 'bloqueado';
 
 export interface PilarInfo {
   status: StatusPilar;
@@ -44,7 +44,7 @@ function parsePilar(raw: unknown): PilarInfo {
   const obj = raw as Record<string, unknown>;
   const status = (obj.status as string) || 'pendente';
   return {
-    status: (['oficial', 'pendente', 'nao_implementado', 'bloqueado'].includes(status) ? status : 'pendente') as StatusPilar,
+    status: (['oficial', 'pendente', 'nao_aplicavel', 'nao_implementado', 'bloqueado'].includes(status) ? status : 'pendente') as StatusPilar,
     detalhe: obj.detalhe as Record<string, unknown> | undefined,
   };
 }
@@ -134,6 +134,13 @@ export function getPilarBadgeConfig(status: StatusPilar): {
        o olho a ignorar o ambar inteiro, e ai a pendencia verdadeira some no meio.
        O switch segue EXAUSTIVO sobre o union, sem default: estado novo no futuro vira
        erro de compilacao em vez de undefined silencioso. */
+    /* 'nao_aplicavel' e 'nao_implementado' compartilham a caixa cinza por serem a mesma
+       classe de coisa para o olho — nao ha o que fazer ali —, mas dizem coisas
+       diferentes: um e "nao havia rebanho neste mes", o outro e "esta tela nao existe".
+       Na faixa da Home o P2 nao aplicavel nem chega a ser renderizado; o case existe
+       porque outras telas usam este badge e o switch e EXAUSTIVO, sem default. */
+    case 'nao_aplicavel':
+      return { label: 'Não se aplica', className: 'bg-muted text-muted-foreground border-border' };
     case 'nao_implementado':
       return { label: 'Não implementado', className: 'bg-muted text-muted-foreground border-border' };
     case 'bloqueado':
@@ -179,6 +186,9 @@ export function getPilarTooltipText(pilarKey: keyof StatusPilares, info: PilarIn
      estados: o proximo leitor conclui que existe. */
   if (info.status === 'oficial') return 'Oficial';
   if (info.status === 'pendente') return 'Pendente — fechamento não concluído';
+  if (info.status === 'nao_aplicavel') {
+    return 'Não se aplica — nenhum pasto de pecuária neste mês';
+  }
   if (info.status === 'nao_implementado') {
     return 'Não implementado — este pilar ainda não tem fechamento no sistema';
   }
