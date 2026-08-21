@@ -331,6 +331,12 @@ export default function V2Index() {
   const [drawerAtivo, setDrawerAtivo] = useState<string | null>(null);
   /** Origem da navegação para 'mapa-pastos': só há "voltar" quando veio do Fechamento. */
   const mapaPastosOriginRef = useRef(false);
+  /* PR-V2-VOLTAR-ORIGEM-01 — de onde o operador veio ao clicar numa pendencia da faixa
+     de status. null = nao veio de la, e a tela nao mostra seta (idioma de
+     mapaPastosOriginRef). CONSUMIDO E ZERADO no primeiro uso: limpar em cada um dos
+     dezenas de setSection do arquivo seria invasivo, e consumir basta para nao vazar
+     entre navegacoes. */
+  const origemPendenciaRef = useRef<V2Section | null>(null);
   // Estado para edição completa de Abate/Venda vinda da Conferência.
   // Quando setado, navega para `lancamentos-zoot` e abre LancamentosTab em edit mode.
   const [abateParaEditar, setAbateParaEditar] = useState<Lancamento | null>(null);
@@ -606,7 +612,19 @@ export default function V2Index() {
   const irParaPendencia = (destino: V2Section, fazendaId: string) => {
     const f = fazendas.find(x => x.id === fazendaId);
     if (f) setFazendaAtual(f);
+    // A section CORRENTE, e nao o literal 'home': hoje a faixa so existe la, mas se ela
+    // for reusada em outra tela a volta continua correta sem tocar neste handler.
+    origemPendenciaRef.current = section;
     setSection(destino);
+  };
+
+  /* Volta para a origem registrada, consumindo o ref. Usado pelos dois destinos da
+     faixa — sem os DOIS consumidores o ref vazaria: quem chegasse ao Valor do Rebanho
+     pelo menu voltaria para a Home. */
+  const voltarParaOrigem = (): V2Section | null => {
+    const o = origemPendenciaRef.current;
+    origemPendenciaRef.current = null;
+    return o;
   };
 
   function renderContent() {
@@ -723,7 +741,7 @@ export default function V2Index() {
           <ValorRebanhoTab
             lancamentos={lancamentos}
             saldosIniciais={saldosIniciais}
-            onBack={() => setSection('rebanho-home')}
+            onBack={() => { const o = voltarParaOrigem(); setSection(o ?? 'rebanho-home'); }}
             filtroAnoInicial={ano}
           />
         )}
@@ -900,6 +918,9 @@ export default function V2Index() {
       <FechamentoTab
         filtroAnoInicial={ano}
         filtroMesInicial={mes === '0' ? undefined : Number(mes)}
+        onBack={origemPendenciaRef.current
+          ? () => { const o = voltarParaOrigem(); if (o) setSection(o); }
+          : undefined}
         onNavigateToReclass={(filtro) => {
           if (filtro) { setAno(filtro.ano); setMes(String(filtro.mes)); }
           setSection('lancamentos-zoot');

@@ -95,6 +95,10 @@ interface Props {
   onNavigateToValorRebanho?: (filtro: { ano: string; mes: number }) => void;
   onNavigateToConferenciaGmd?: (filtro: { ano: string; mes: number }) => void;
   onNavigateToMapaPastos?: (filtro: { ano: string; mes: number }) => void;
+  /* PR-V2-VOLTAR-ORIGEM-01 — volta GENERICA a origem, distinta de
+     onBackToConciliacao: aquele e destino NOMEADO ("Voltar para Conciliação de
+     Categoria") e continua no rodape. Os dois parecem diferentes porque sao. */
+  onBack?: () => void;
 }
 
 const FECHAMENTO_GLOBAL_MARKER = 'fechamento_global_administrativo';
@@ -114,7 +118,7 @@ function gmdColor(gmd: number | null): string {
   return 'text-emerald-600 dark:text-emerald-400';
 }
 
-export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConciliacao, onNavigateToReclass, onNavigateToValorRebanho, onNavigateToConferenciaGmd, onNavigateToMapaPastos }: Props = {}) {
+export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConciliacao, onNavigateToReclass, onNavigateToValorRebanho, onNavigateToConferenciaGmd, onNavigateToMapaPastos, onBack }: Props = {}) {
   const { isGlobal, fazendaAtual } = useFazenda();
   const { canEdit } = usePermissions();
 
@@ -852,6 +856,23 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
 
           {/* ── COL 1: Contexto / Filtros ── */}
           <div className="flex flex-col gap-1.5">
+            {/* PR-V2-VOLTAR-ORIGEM-01 — este header nao tem TITULO: e a grade de tres
+                colunas direto. O canto superior esquerdo dele e o topo da COL 1, e e
+                onde a seta cabe sem redesenhar nada. Fora do grid ela roubaria largura
+                da COL 2, que tres PRs seguidos trabalharam para preservar.
+                Idioma copiado de ValorRebanhoTab.tsx:1113. */}
+            {onBack && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 shrink-0"
+                aria-label="Voltar"
+                onClick={onBack}
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+            )}
             <div className="flex flex-col gap-1">
               <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 text-[10px] font-bold gap-1 w-fit">
                 <CheckCircle className="h-3 w-3" />
