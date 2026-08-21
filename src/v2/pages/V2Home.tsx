@@ -1640,11 +1640,14 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
                     <thead className="bg-muted/50">
                       <tr className="text-muted-foreground">
                         <th className="text-left font-normal px-1.5 py-1">Fazenda</th>
-                        <th className="text-right px-1.5 py-1 font-medium text-foreground">Total</th>
-                        <th className="text-right px-1.5 py-1 font-medium text-foreground">Produtiva</th>
-                        <th className="text-right font-normal px-1.5 py-1">Pec.</th>
-                        <th className="text-right font-normal px-1.5 py-1">Agri.</th>
-                        <th className="text-right font-normal px-1.5 py-1">Silvi.</th>
+                        {/* Unidade no CABECALHO, nao em cada celula: repetir "ha" em ~24
+                            celulas poluiria a tabela e desalinharia as colunas numericas.
+                            A linha "% da area" nao ganha sufixo — e percentual, nao hectare. */}
+                        <th className="text-right px-1.5 py-1 font-medium text-foreground">Total (ha)</th>
+                        <th className="text-right px-1.5 py-1 font-medium text-foreground">Produtiva (ha)</th>
+                        <th className="text-right font-normal px-1.5 py-1">Pec. (ha)</th>
+                        <th className="text-right font-normal px-1.5 py-1">Agri. (ha)</th>
+                        <th className="text-right font-normal px-1.5 py-1">Silvi. (ha)</th>
                       </tr>
                     </thead>
                     <tbody>
