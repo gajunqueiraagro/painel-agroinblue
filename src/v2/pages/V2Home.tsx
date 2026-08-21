@@ -182,6 +182,16 @@ function fmtHaInt(v: number | null): string {
     : v.toLocaleString('pt-BR', { maximumFractionDigits: 0 });
 }
 
+/* Media dos meses COM snapshot, Jan -> mes selecionado. Mes sem snapshot e
+   AUSENCIA, nao zero: incluir null na conta diluiria a media e faria a area
+   "encolher" so porque um mes nao fechou. null quando nenhum mes tem dado. */
+function mediaSerie(serie: (number | null)[] | undefined, ateIdx: number): number | null {
+  if (!serie) return null;
+  const vals = serie.slice(0, ateIdx + 1).filter((v): v is number => v != null);
+  if (vals.length === 0) return null;
+  return vals.reduce((s, v) => s + v, 0) / vals.length;
+}
+
 /* Produtiva sobre total; Pec/Agri/Silvi sobre produtiva. NAO limitar a
    100%: quando ha pasto arrendado de terceiro a produtiva excede a
    matricula (Vera Ligia, 102,8%) e truncar esconderia o fato. */
@@ -648,19 +658,24 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
   const difEmConta = saldoFinal != null ? totalEmConta - saldoFinal : null;
   const mostrarDifEmConta = difEmConta != null && Math.abs(difEmConta) > 1;
 
-  /* ── PR-HOME-AREA-COMPOSICAO-01 — composicao da area do mes ──
-     Area e ESTOQUE: sempre a posicao do mes, NUNCA acumulada em viewMode='periodo'
-     (mesmo principio de montarCaixaIndicador). null = mes sem snapshot -> "—". */
+  /* ── Composicao da area do mes ──
+     Area e ESTOQUE: NUNCA soma ao longo do periodo.
+     Em viewMode='periodo' o bloco mostra a MEDIA dos meses com snapshot
+     (Jan -> mes selecionado), nao a soma: quando entra e sai pasto
+     arrendado durante o ano, a media descreve a area efetivamente operada.
+     null = nenhum mes do intervalo tem snapshot -> "—". */
   const areaIdx = mesNum - 1;
-  const areaTotal     = areaTotalRealPorMes?.[areaIdx]        ?? null;
-  const areaProdutiva = areaProdutivaRealPorMes?.[areaIdx]    ?? null;
-  const areaPec       = areaPecuariaRealPorMes?.[areaIdx]     ?? null;
-  const areaAgri      = areaAgriculturaRealPorMes?.[areaIdx]  ?? null;
-  const areaSilvi     = areaSilviculturaRealPorMes?.[areaIdx] ?? null;
-  const areaReserva   = areaReservaRealPorMes?.[areaIdx]      ?? null;
-  const areaApp       = areaAppRealPorMes?.[areaIdx]          ?? null;
-  const areaBenf      = areaBenfeitoriasRealPorMes?.[areaIdx] ?? null;
-  const areaOutras    = areaOutrasRealPorMes?.[areaIdx]       ?? null;
+  const areaNoModo = (serie: (number | null)[] | undefined): number | null =>
+    isPeriodo ? mediaSerie(serie, areaIdx) : (serie?.[areaIdx] ?? null);
+  const areaTotal     = areaNoModo(areaTotalRealPorMes);
+  const areaProdutiva = areaNoModo(areaProdutivaRealPorMes);
+  const areaPec       = areaNoModo(areaPecuariaRealPorMes);
+  const areaAgri      = areaNoModo(areaAgriculturaRealPorMes);
+  const areaSilvi     = areaNoModo(areaSilviculturaRealPorMes);
+  const areaReserva   = areaNoModo(areaReservaRealPorMes);
+  const areaApp       = areaNoModo(areaAppRealPorMes);
+  const areaBenf      = areaNoModo(areaBenfeitoriasRealPorMes);
+  const areaOutras    = areaNoModo(areaOutrasRealPorMes);
 
   /* Nome da fazenda: `fazendas` do FazendaContext — a lista COMPLETA, a mesma que
      alimenta o seletor. Nao `fazendasComPecuaria`, que filtra tem_pecuaria !== false
@@ -1475,29 +1490,37 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
         {/* col-span-2 porque o miolo do SectionBlock e uma grade de DUAS colunas,
             feita para MetricTile. Sem isso a barra ocupava meia largura e o rodape
             subia para a coluna da direita, ao lado dos numeros em vez de abaixo. */}
-        <SectionBlock title="Composição da área" subtitle="como a terra está dividida">
+        <SectionBlock
+          title={isPeriodo ? 'Composição da área — Média no Período' : 'Composição da área'}
+          subtitle="como a terra está dividida"
+        >
           <div className="col-span-2 space-y-2">
             {(() => {
               /* Duas classes por parte: `cor` (bg-*) para o ponto da legenda e
                  `stroke` (stroke-*) para a fatia do donut. Tailwind v3 gera
                  stroke-* a partir das mesmas cores do tema, entao os quatro
                  tokens do design system valem nas duas formas. */
-              const partes = [
+              /* Legenda mostra as QUATRO familias sempre, mesmo zeradas: o operador
+                 compara clientes e fazendas entre si, e linha que some muda a posicao
+                 das outras. Zero e informacao. */
+              const partesLegenda = [
                 { label: 'Pecuária',    valor: areaPec   ?? 0, cor: 'bg-success', stroke: 'stroke-success' },
                 { label: 'Agricultura', valor: areaAgri  ?? 0, cor: 'bg-cta', stroke: 'stroke-cta' },
                 { label: 'Silvicultura',valor: areaSilvi ?? 0, cor: 'bg-primary', stroke: 'stroke-primary' },
                 { label: 'Reserva, APP, benf.',
                   valor: (areaReserva ?? 0) + (areaApp ?? 0) + (areaBenf ?? 0) + (areaOutras ?? 0),
                   cor: 'bg-muted-foreground/40', stroke: 'stroke-muted-foreground/40' },
-              ].filter(p => p.valor > 0);
-              const soma = partes.reduce((s, p) => s + p.valor, 0);
+              ];
+              const soma = partesLegenda.reduce((s, p) => s + p.valor, 0);
               if (soma <= 0) return <p className="text-[11px] text-muted-foreground">—</p>;
 
               /* Donut em SVG puro: sem dependencia nova, sem recharts. Circunferencia
                  do raio 34 = 213.63; cada fatia usa stroke-dasharray + offset. */
               const R = 34, C = 2 * Math.PI * R;
               let acc = 0;
-              const fatias = partes.map(p => {
+              /* Donut so desenha fatia com valor: arco de comprimento zero nao
+                 renderiza e ainda consome offset. */
+              const fatias = partesLegenda.filter(p => p.valor > 0).map(p => {
                 const frac = p.valor / soma;
                 const el = { ...p, dash: frac * C, offset: -acc * C };
                 acc += frac;
@@ -1505,11 +1528,11 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
               });
 
               return (
-                <div className="flex items-start gap-5">
+                <div className="flex items-start gap-4">
                   {/* Donut maior: coluna propria a esquerda. O viewBox e a
                       espessura sao os mesmos — so a caixa renderizada cresce,
                       entao a proporcao do anel nao muda. */}
-                  <svg viewBox="0 0 80 80" className="h-32 w-32 shrink-0 -rotate-90">
+                  <svg viewBox="0 0 80 80" className="h-28 w-28 shrink-0 -rotate-90">
                     {fatias.map(f => (
                       <circle key={f.label} cx="40" cy="40" r={R} fill="none"
                         strokeWidth="12" className={f.stroke}
@@ -1523,21 +1546,39 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
                         e o que aproxima "Pecuaria" do numero. Valor e % em
                         <span> separados: juntos, a largura variavel do %
                         deslocava o numero. */}
-                    <div className="grid grid-cols-[auto_auto_auto] justify-start gap-x-3 gap-y-1 text-[10px]">
-                      {fatias.map(f => (
+                    <div className="grid grid-cols-[auto_auto_auto] justify-start gap-x-3 gap-y-0.5 text-[11px]">
+                      {partesLegenda.map(f => (
                         <div key={f.label} className="contents">
                           <span className="flex items-center gap-1.5 text-muted-foreground">
                             <span className={`inline-block h-2 w-2 rounded-full shrink-0 ${f.cor}`} />
                             {f.label}
                           </span>
+                          {/* Formatacao direta, NAO fmtHaInt: ele devolve "—" para zero,
+                              e aqui zero e familia sem area, nao ausencia de fechamento.
+                              fmtHaInt fica intacto — outros blocos dependem dele. */}
                           <span className="tabular-nums text-right text-foreground">
-                            {fmtHaInt(f.valor)}
+                            {f.valor.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
                           </span>
                           <span className="tabular-nums text-right text-muted-foreground">
                             {((f.valor / soma) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}%
                           </span>
                         </div>
                       ))}
+                      {/* Total e a MATRICULA (areaTotal), nao `soma`: quando ha area alem
+                          da matricula, `soma` e maior — e a linha de excedente abaixo
+                          explica a diferenca. Duas formas de dizer a mesma coisa. */}
+                      <div className="contents">
+                        <span className="flex items-center gap-1.5 pt-1 font-medium text-foreground border-t border-border">
+                          <span className="inline-block h-2 w-2 shrink-0" />
+                          Total
+                        </span>
+                        <span className="tabular-nums text-right pt-1 font-medium text-foreground border-t border-border">
+                          {areaTotal == null ? '—' : fmtHaInt(areaTotal)}
+                        </span>
+                        <span className="tabular-nums text-right pt-1 font-medium text-muted-foreground border-t border-border">
+                          {areaTotal == null ? '—' : '100%'}
+                        </span>
+                      </div>
                     </div>
                     {/* Excecao acompanha a legenda, no MESMO tamanho de fonte dela, e
                         em fmtHa (2 casas): valor de excecao — a precisao importa. */}
@@ -1550,12 +1591,6 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
                 </div>
               );
             })()}
-            {/* RODAPE DO CARD: nota de fonte fica SEMPRE na base, largura total.
-                Padrao para todos os blocos — nada vai depois dela. */}
-            <p className="text-[9px] text-muted-foreground pt-2 leading-snug">
-              Fonte: fechamento de áreas do mês. Área total = matrícula.
-              Estoque — não acumula no período.
-            </p>
           </div>
         </SectionBlock>
 
