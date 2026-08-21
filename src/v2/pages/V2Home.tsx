@@ -12,6 +12,7 @@ import { useHistoricoIndicador, type HistoricoIndicadorKey } from '@/hooks/useHi
 import { supabase } from '@/integrations/supabase/client';
 import { useStatusPilaresLote, type StatusFazenda } from '@/hooks/useStatusPilaresLote';
 import type { V2Section } from '@/v2/lib/navGrupos';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 const fmtN = (v: number | null | undefined, dec = 0) =>
   v == null || isNaN(v) ? null
@@ -127,16 +128,28 @@ function SectionBlock({ title, subtitle, children }: {
    P3/P4/P5 nao aparecem: estao 'nao_implementado', e mostra-los como cinza no topo da
    tela principal seria ruido permanente.
    Nao corrige, nao fecha, nao abre dialogo de acao — so informa onde a pendencia esta. */
-function StatusFechamentoBanda({ status, isGlobal, loading, onIrPara }: {
+/* Pilula unica dos dois badges. Mesma caixa nos dois, para a barra sticky nao mudar de
+   altura entre estados — e o skeleton usa a MESMA classe com texto transparente, entao
+   a altura de carregamento e exatamente a altura final. */
+const PILL_STATUS = 'rounded-full border px-2 py-0.5 text-[10px] leading-tight';
+
+function StatusFechamentoBanda({ status, isGlobal, loading, mesLabel, onIrPara }: {
   status: StatusFazenda[];
   isGlobal: boolean;
   loading: boolean;
+  mesLabel: string;
   onIrPara?: (section: V2Section, fazendaId: string) => void;
 }) {
-  // Skeleton de UMA linha, mesma altura do estado final: a barra sticky nao pode
-  // pular de altura quando o fetch termina.
+  // useState ANTES de qualquer return: hook nao pode ficar atras de saida antecipada.
+  const [modalAberto, setModalAberto] = useState(false);
+
   if (loading) {
-    return <div className="mt-1 h-4 w-48 rounded bg-muted/60 animate-pulse" />;
+    return (
+      <div className="mt-1 flex flex-wrap gap-1">
+        <span className={`${PILL_STATUS} border-border/40 bg-muted text-transparent animate-pulse`}>Rebanho 0/0</span>
+        <span className={`${PILL_STATUS} border-border/40 bg-muted text-transparent animate-pulse`}>Financeiro (em construção)</span>
+      </div>
+    );
   }
   if (status.length === 0) return null;
 
@@ -153,66 +166,83 @@ function StatusFechamentoBanda({ status, isGlobal, loading, onIrPara }: {
   const destinoDe = (f: StatusFazenda): V2Section =>
     (f.p1 !== 'oficial' ? 'fechamento' : 'valor-rebanho');
 
-  const pendentes = status.filter(f => faltaDe(f) !== null);
+  const total = status.length;
+  const fechadas = status.filter(f => f.p1 === 'oficial' && f.p2 === 'oficial').length;
+  const tudoFechado = fechadas === total;
+  const escopo = isGlobal ? 'todas as fazendas' : status[0].nome;
 
-  if (!isGlobal) {
-    const f = status[0];
-    const falta = faltaDe(f);
-    if (falta === null) {
-      return (
-        <p className="mt-1 text-[11px] text-muted-foreground">
-          Mês fechado — mapa de pastos e valor do rebanho
-        </p>
-      );
-    }
-    // Sem onIrPara, texto — nunca botao morto.
-    return onIrPara ? (
-      <button
-        type="button"
-        onClick={() => onIrPara(destinoDe(f), f.fazendaId)}
-        className="mt-1 block text-left text-[11px] text-amber-700 cursor-pointer hover:underline"
-      >
-        Pendente: {falta}
-      </button>
-    ) : (
-      <p className="mt-1 text-[11px] text-amber-700">
-        Pendente: {falta}
-      </p>
-    );
-  }
+  /* A FRACAO e deliberada: com 12 fazendas, "3/12" informa o TAMANHO do problema, e um
+     simbolo de erro sozinho nao informa nada. Em fazenda especifica nao ha fracao — ali
+     a informacao util e o NOME do que falta. */
+  const rotuloRebanho = tudoFechado
+    ? 'Rebanho ✓'
+    : isGlobal
+      ? `Rebanho ${fechadas}/${total}`
+      : `Rebanho · ${faltaDe(status[0])}`;
 
-  const fechadas = status.length - pendentes.length;
-  const tudoFechado = pendentes.length === 0;
+  const classeRebanho = tudoFechado
+    ? `${PILL_STATUS} border-border/40 bg-transparent text-muted-foreground`
+    : `${PILL_STATUS} border-border/40 bg-amber-500/15 text-amber-700`;
 
   return (
-    <div className="mt-1">
-      <p className={`text-[11px] ${tudoFechado ? 'text-muted-foreground' : 'text-amber-700'}`}>
-        {fechadas} de {status.length} fazendas com o mês fechado
-      </p>
-      {!tudoFechado && (
-        <div className="mt-1 flex flex-wrap gap-1">
-          {pendentes.map(f => (
-            onIrPara ? (
-              <button
-                key={f.fazendaId}
-                type="button"
-                onClick={() => onIrPara(destinoDe(f), f.fazendaId)}
-                className="rounded-full border border-border/40 bg-amber-500/15 px-2 py-0.5 text-[10px] text-amber-700 cursor-pointer hover:bg-amber-500/25"
-              >
-                {f.nome} · {faltaDe(f)}
-              </button>
-            ) : (
-              <span
-                key={f.fazendaId}
-                className="rounded-full border border-border/40 bg-amber-500/15 px-2 py-0.5 text-[10px] text-amber-700"
-              >
-                {f.nome} · {faltaDe(f)}
-              </span>
-            )
-          ))}
-        </div>
-      )}
-    </div>
+    <>
+      <div className="mt-1 flex flex-wrap gap-1">
+        <button
+          type="button"
+          onClick={() => setModalAberto(true)}
+          className={`${classeRebanho} cursor-pointer hover:bg-amber-500/25`}
+        >
+          {rotuloRebanho}
+        </button>
+        {/* Financeiro e o P3, declarado 'nao_implementado' em PR-PILARES-CALCULO-01: a
+            regra existe, os campos de conferencia bancaria nao. CINZA INERTE e SEM
+            clique — o badge mostra a forma final da faixa, nunca finge medicao. */}
+        <span className={`${PILL_STATUS} border-border/40 bg-muted text-muted-foreground`}>
+          Financeiro (em construção)
+        </span>
+      </div>
+
+      {/* O modal e o lugar do quadro COMPLETO: aqui a fazenda fechada tambem aparece,
+          ao contrario da faixa, onde ela so ocuparia espaco. */}
+      <Dialog open={modalAberto} onOpenChange={setModalAberto}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-sm">
+              Fechamento do rebanho — {escopo} · {mesLabel}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-1">
+            {status.map(f => {
+              const falta = faltaDe(f);
+              const detalhe = (
+                <>
+                  <span className="font-medium">{f.nome}</span>
+                  {' · '}mapa de pastos {f.p1 === 'oficial' ? '✓' : 'pendente'}
+                  {' · '}valor do rebanho {f.p2 === 'oficial' ? '✓' : 'pendente'}
+                </>
+              );
+              return falta && onIrPara ? (
+                <button
+                  key={f.fazendaId}
+                  type="button"
+                  onClick={() => { setModalAberto(false); onIrPara(destinoDe(f), f.fazendaId); }}
+                  className="block w-full rounded border border-border/40 px-2 py-1 text-left text-[11px] text-amber-700 cursor-pointer hover:bg-amber-500/15"
+                >
+                  {detalhe}
+                </button>
+              ) : (
+                <div
+                  key={f.fazendaId}
+                  className={`rounded border border-border/40 px-2 py-1 text-[11px] ${falta ? 'text-amber-700' : 'text-muted-foreground'}`}
+                >
+                  {detalhe}
+                </div>
+              );
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -935,6 +965,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara 
           status={statusFechamento}
           isGlobal={isGlobal}
           loading={loadingStatusFechamento}
+          mesLabel={ml}
           onIrPara={onIrPara}
         />
         {onViewModeChange && (
