@@ -43,6 +43,7 @@ import {
   agregaDeducoesSaida,
   agregaAmortizacaoPec,
   agregaAmortizacaoAgri,
+  agregaTributos,
   agregaCusteioPecSemJurosMeta,
   agregaJurosPecMeta,
   agregaInvFazendaPecMeta,
@@ -58,6 +59,7 @@ import {
   agregaDeducoesSaidaMeta,
   agregaAmortizacaoPecMeta,
   agregaAmortizacaoAgriMeta,
+  agregaTributosMeta,
   agregaSaidasTotais,
   agregaSaidasTotaisMeta,
 } from '@/lib/painelConsultor/agregadosFinanceiros';
@@ -478,6 +480,10 @@ export interface PainelConsultorDataResult {
   amortizacaoPecIndicador:      IndicadorFinanceiroShape | null;
   amortizacaoAgriIndicador:     IndicadorFinanceiroShape | null;
   deducoesTributosIndicador:    IndicadorFinanceiroShape | null;
+  /* PR-CLASSIF-TRIBUTOS-01 — tributos tem indicador PROPRIO. Nao procure dentro de
+     deducoesTributosIndicador acima: ele entrega SO deducoes de receitas. Deducao e
+     ajuste de receita; tributo e saida patrimonial e fiscal. */
+  tributosIndicador:            IndicadorFinanceiroShape | null;
 
   /** Domínio rebanho · estruturas executivas (Fase 0 Step 2.2). */
   rebanho: PC100_Rebanho;
@@ -2591,6 +2597,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     const deducoes    = agregaDeducoesSaida(lancFin, ano);
     const amortPec    = agregaAmortizacaoPec(lancFin, ano);
     const amortAgri   = agregaAmortizacaoAgri(lancFin, ano);
+    const tributos    = agregaTributos(lancFin, ano);
     const cusPecComJ  = addArr12(cusPecSemJ, jurPec);
     const cusAgriComJ = addArr12(cusAgriSemJ, jurAgri);
     const desembPec   = addArr12(cusPecComJ, invFazPec);
@@ -2626,6 +2633,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     const deducoes_M    = hasGridMeta ? agregaDeducoesSaidaMeta(gridMetaConsolidado) : null;
     const amortPec_M    = hasGridMeta ? agregaAmortizacaoPecMeta(gridMetaConsolidado) : null;
     const amortAgri_M   = hasGridMeta ? agregaAmortizacaoAgriMeta(gridMetaConsolidado) : null;
+    const tributos_M    = hasGridMeta ? agregaTributosMeta(gridMetaConsolidado) : null;
     const cusPecComJ_M  = (cusPecSemJ_M && jurPec_M) ? addArr12(cusPecSemJ_M, jurPec_M) : null;
     const cusAgriComJ_M = (cusAgriSemJ_M && jurAgri_M) ? addArr12(cusAgriSemJ_M, jurAgri_M) : null;
     const desembPec_M   = (cusPecComJ_M && invFazPec_M) ? addArr12(cusPecComJ_M, invFazPec_M) : null;
@@ -2769,6 +2777,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
         isPer ? 'Deduções de receitas acumuladas Jan→mês (caixa, lado saída)'
               : 'Deduções de receitas no mês (caixa, lado saída)',
         deducoes_M),
+      tributos: buildInd(tributos, 'TRIBUTOS', 'Tributos e Impostos',
+        isPer ? 'Tributos e impostos acumulados Jan→mês (caixa) — ITR, taxas, IRPF, IRPJ'
+              : 'Tributos e impostos no mês (caixa) — ITR, taxas, IRPF, IRPJ',
+        tributos_M),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lancFin, ano, mes, viewMode, gridMetaConsolidado]);
@@ -3269,6 +3281,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     amortizacaoPecIndicador:      _finSoberano.amortizacaoPec,
     amortizacaoAgriIndicador:     _finSoberano.amortizacaoAgri,
     deducoesTributosIndicador:    _finSoberano.deducoesTributos,
+    tributosIndicador:            _finSoberano.tributos,
 
     rebanho,
     financeiro,
@@ -3335,6 +3348,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       amortizacaoPecIndicador:      _finSoberano.amortizacaoPec,
       amortizacaoAgriIndicador:     _finSoberano.amortizacaoAgri,
       deducoesTributosIndicador:    _finSoberano.deducoesTributos,
+      tributosIndicador:            _finSoberano.tributos,
       // Step 2.2: dominio rebanho preservado (composicao depende de getCategoriasDetalhe,
       // que pode existir mesmo em estado incompleto — funcao filtra saldoFinal > 0 e
       // retorna null quando vazio).

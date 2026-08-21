@@ -459,6 +459,25 @@ export function isDeducaoReceitas(l: LancamentoClassificavel): boolean {
   return canonicalMacro(l) === 'dedução de receitas';
 }
 
+/**
+ * Tributos e Impostos — predicado literal oficial.
+ *
+ * SEPARADO de isDeducaoReceitas de proposito: deducao e AJUSTE DE RECEITA;
+ * tributo e saida patrimonial e fiscal (ITR, taxas, IRPF, IRPJ). Somar os dois
+ * numa linha so esconderia R$ 1,5 mi atras de um rotulo que diz outra coisa.
+ *
+ * canonicalMacro ja mapeia macro_custo='Tributos' -> 'tributos' (ver o mapa acima):
+ * o literal nao foi adivinhado. Igualdade exata, sem heuristica por contains.
+ *
+ * Medido no proto em 2026-08-21: 171 lancamentos realizados nao cancelados,
+ * R$ 1.511.524, TODOS com escopo_negocio='administrativo' e tipo_operacao='2-Saidas'.
+ * Como nenhum e pecuaria ou agricultura, criar a categoria NAO move custo por hectare
+ * nem custo por arroba.
+ */
+export function isTributos(l: LancamentoClassificavel): boolean {
+  return canonicalMacro(l) === 'tributos';
+}
+
 // ---------------------------------------------------------------------------
 // Bloco 1 Executivo — predicates atômicos por macro/escopo.
 //

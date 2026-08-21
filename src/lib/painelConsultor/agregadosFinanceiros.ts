@@ -39,6 +39,7 @@ import {
   isAmortizacao,
   isDividendoOuRetirada,
   isDeducaoReceitas,
+  isTributos,
   isReceitaPecuaria,
   isReceitaAgricola,
   isOutrasReceitas,
@@ -286,6 +287,15 @@ export function agregaDeducoesSaida(lancFin: FinanceiroLancamento[], ano: number
   return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isDeducaoReceitas);
 }
 
+/**
+ * Tributos e Impostos — linha PROPRIA, nao somada as deducoes.
+ * Sempre SAIDA: os 171 lancamentos medidos sao todos tipo_operacao='2-Saidas',
+ * entao o adapter e o de saida, o mesmo de agregaDeducoesSaida.
+ */
+export function agregaTributos(lancFin: FinanceiroLancamento[], ano: number): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isTributos);
+}
+
 export function agregaAmortizacaoPec(lancFin: FinanceiroLancamento[], ano: number): number[] {
   return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isAmortizacaoPecuaria);
 }
@@ -416,6 +426,10 @@ export function agregaDeducoesMeta(grid: SubcentroGrid[]): number[] {
  */
 export function agregaDeducoesSaidaMeta(grid: SubcentroGrid[]): number[] {
   return agregaDeducoesMeta(grid);
+}
+
+export function agregaTributosMeta(grid: SubcentroGrid[]): number[] {
+  return agregaPorPredicadoGenerico(makeMetaSource(grid), isTributos);
 }
 
 export function agregaAmortizacaoPecMeta(grid: SubcentroGrid[]): number[] {
