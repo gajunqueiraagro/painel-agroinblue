@@ -1,10 +1,12 @@
 /**
- * Indicadores produtivos por FAZENDA no mês — cabecas, GMD, UA media e
- * producao biologica.
+ * Indicadores produtivos por FAZENDA — cabecas, GMD, UA media, producao
+ * biologica e as duas pernas do desfrute em arrobas.
  *
  * FONTES:
- *   vw_zoot_fazenda_mensal  -> cabecas_final, gmd_kg_cab_dia, ua_media
+ *   vw_zoot_fazenda_mensal  -> cabecas_final, gmd_kg_cab_dia, ua_media,
+ *                              peso_inicio_kg
  *   zoot_mensal_cache       -> producao_biologica (somar por fazenda)
+ *   lancamentos             -> @ VENDIDAS (abate/venda/consumo)
  *
  * NAO LER area_produtiva_ha NEM lotacao_ua_ha da view: ela usa area propria,
  * divergente do snapshot oficial (Pureza jul/2026: view 4.726 ha contra
@@ -12,16 +14,28 @@
  * o UA/ha do Global (0,86). Area vem de areaPorFazendaMes e a lotacao e
  * recalculada na tela.
  *
- * Somas conferidas contra o agregado em 21/08/2026 — cabecas, @ e lotacao
- * batem com os indicadores do Global.
+ * DESFRUTE EM @ — definicao propria desta tabela, NAO o desfruteIndicador do
+ * PC-100, que e em CABECAS:
+ *   @ iniciais = peso_inicio_kg / 30
+ *   @ vendidas = regra oficial da arroba, copiada de usePainelConsultorData:
+ *                abate -> quantidade x peso_carcaca_kg / 15
+ *                venda/consumo -> quantidade x peso_medio_kg / 30
+ * O hook devolve as DUAS pernas; o percentual e calculado na tela, para que o
+ * Total possa dividir somas em vez de promediar percentuais.
  *
- * CASTS: `vw_zoot_fazenda_mensal` ESTA em src/integrations/supabase/types.ts,
- * mas o repo ja a le com `as any` no nome (useZootMensal, ResumoTab) porque o
- * client nao resolve view sem relationship; `zoot_mensal_cache` NAO esta nos
- * types. Os dois casts sao o idioma estabelecido para esse caso.
+ * MODO: isPeriodo=false le so `ateMes`; isPeriodo=true agrega Jan->ateMes —
+ * MEDIA dos meses COM dado para cabecas, gmd, ua_media e @ iniciais, e SOMA
+ * para @ produzidas e @ vendidas. Mesma assimetria dos tiles: arroba acumula,
+ * o resto e media. Mes sem dado e AUSENCIA, nao zero: divisor por fazenda.
+ *
+ * CASTS: `zoot_mensal_cache` NAO esta em src/integrations/supabase/types.ts.
+ * `vw_zoot_fazenda_mensal` esta, mas o client nao resolve view sem
+ * relationship e o repo ja a le com `as any` (useZootMensal, ResumoTab).
+ * `lancamentos` esta nos types e e lida SEM cast.
  */
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { TIPOS_DESFRUTE_OFICIAL } from '@/lib/calculos/painelConsultorIndicadores';
 
 export interface ProdutivoPorFazenda {
   fazenda_id: string;
@@ -29,31 +43,39 @@ export interface ProdutivoPorFazenda {
   gmd: number | null;
   ua_media: number;
   arrobas: number;
+  arrIniciais: number;
+  arrVendidas: number;
 }
 
 /* @ do mes = producao biologica / 30 — mesma regra do PC-100. */
 const KG_POR_ARROBA = 30;
+/* Carcaca: 15 kg por arroba. Regra oficial, copiada de usePainelConsultorData. */
+const KG_POR_ARROBA_CARCACA = 15;
+
+const mm = (m: number) => String(m).padStart(2, '0');
 
 export function useProdutivoPorFazenda(
   clienteId: string | undefined,
-  anoMes: string,
+  ano: number,
+  ateMes: number,
+  isPeriodo: boolean,
   enabled = true,
 ) {
   return useQuery({
-    queryKey: ['produtivo-por-fazenda', clienteId, anoMes],
+    queryKey: ['produtivo-por-fazenda', clienteId, ano, ateMes, isPeriodo],
     queryFn: async (): Promise<ProdutivoPorFazenda[]> => {
-      const [anoStr, mesStr] = anoMes.split('-');
-      const ano = Number(anoStr);
-      const mes = Number(mesStr);
+      const mesIni = isPeriodo ? 1 : ateMes;
+      const meses: number[] = [];
+      for (let m = mesIni; m <= ateMes; m++) meses.push(m);
 
-      const [vwRes, cacheRes] = await Promise.all([
+      const [vwRes, cacheRes, lancRes] = await Promise.all([
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (supabase.from('vw_zoot_fazenda_mensal' as any)
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          .select('fazenda_id, cabecas_final, gmd_kg_cab_dia, ua_media') as any)
+          .select('fazenda_id, mes, cabecas_final, gmd_kg_cab_dia, ua_media, peso_inicio_kg') as any)
           .eq('cliente_id', clienteId!)
           .eq('ano', ano)
-          .eq('mes', mes)
+          .in('mes', meses)
           .eq('cenario', 'realizado'),
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (supabase.from('zoot_mensal_cache' as any)
@@ -61,13 +83,29 @@ export function useProdutivoPorFazenda(
           .select('fazenda_id, producao_biologica') as any)
           .eq('cliente_id', clienteId!)
           .eq('ano', ano)
-          .eq('mes', mes)
+          .in('mes', meses)
           .eq('cenario', 'realizado'),
+        supabase
+          .from('lancamentos')
+          .select('fazenda_origem, tipo, quantidade, peso_medio_kg, peso_carcaca_kg')
+          .eq('cliente_id', clienteId!)
+          .eq('cancelado', false)
+          .eq('status_operacional', 'realizado')
+          /* cenario = 'realizado', igual a usePainelConsultorData. O briefing pedia
+             <> 'meta', que aceitaria um terceiro cenario (projecao, simulacao) que a
+             fonte canonica descarta — e o desfrute desta tabela divergiria do resto
+             da tela por essa porta. Alinhado de proposito. */
+          .eq('cenario', 'realizado')
+          .in('tipo', [...TIPOS_DESFRUTE_OFICIAL] as string[])
+          .gte('data', `${ano}-${mm(mesIni)}-01`)
+          .lte('data', `${ano}-${mm(ateMes)}-31`),
       ]);
       if (vwRes.error) throw vwRes.error;
       if (cacheRes.error) throw cacheRes.error;
+      if (lancRes.error) throw lancRes.error;
 
-      /* producao_biologica vem por CATEGORIA: somar por fazenda antes de dividir. */
+      /* producao_biologica vem por CATEGORIA: somar por fazenda antes de dividir.
+         SEMPRE acumulada no periodo — producao soma, nao promedia. */
       type LinhaCache = { fazenda_id: string | null; producao_biologica: number | null };
       const bioPorFazenda = new Map<string, number>();
       for (const row of (cacheRes.data ?? []) as LinhaCache[]) {
@@ -78,27 +116,74 @@ export function useProdutivoPorFazenda(
         );
       }
 
+      /* @ vendidas por fazenda de ORIGEM. Tambem acumulada no periodo. */
+      type LinhaLanc = {
+        fazenda_origem: string | null;
+        tipo: string | null;
+        quantidade: number | null;
+        peso_medio_kg: number | null;
+        peso_carcaca_kg: number | null;
+      };
+      const vendPorFazenda = new Map<string, number>();
+      for (const r of (lancRes.data ?? []) as LinhaLanc[]) {
+        if (!r.fazenda_origem) continue;
+        const qtd = Number(r.quantidade) || 0;
+        let arr = 0;
+        if (r.tipo === 'abate') {
+          const pc = Number(r.peso_carcaca_kg) || 0;
+          if (pc > 0) arr = (qtd * pc) / KG_POR_ARROBA_CARCACA;
+        } else {
+          const pmk = Number(r.peso_medio_kg) || 0;
+          if (pmk > 0) arr = (qtd * pmk) / KG_POR_ARROBA;
+        }
+        if (arr > 0) {
+          vendPorFazenda.set(r.fazenda_origem, (vendPorFazenda.get(r.fazenda_origem) ?? 0) + arr);
+        }
+      }
+
+      /* Da view, o que e MEDIA no periodo: divisor por fazenda, contando so os
+         meses em que aquela fazenda tem linha. GMD tem divisor PROPRIO — mes sem
+         GMD nao deve diluir a media dos meses que tem. */
       type LinhaVw = {
         fazenda_id: string | null;
         cabecas_final: number | null;
         gmd_kg_cab_dia: number | null;
         ua_media: number | null;
+        peso_inicio_kg: number | null;
       };
-      const out: ProdutivoPorFazenda[] = [];
+      type Acc = {
+        cab: number; ua: number; arrIni: number;
+        n: number; gmdSoma: number; gmdN: number;
+      };
+      const acc = new Map<string, Acc>();
       for (const row of (vwRes.data ?? []) as LinhaVw[]) {
         if (!row.fazenda_id) continue;
+        let a = acc.get(row.fazenda_id);
+        if (!a) { a = { cab: 0, ua: 0, arrIni: 0, n: 0, gmdSoma: 0, gmdN: 0 }; acc.set(row.fazenda_id, a); }
+        a.cab += Number(row.cabecas_final) || 0;
+        a.ua += Number(row.ua_media) || 0;
+        a.arrIni += (Number(row.peso_inicio_kg) || 0) / KG_POR_ARROBA;
+        a.n += 1;
+        if (row.gmd_kg_cab_dia != null) { a.gmdSoma += Number(row.gmd_kg_cab_dia); a.gmdN += 1; }
+      }
+
+      const out: ProdutivoPorFazenda[] = [];
+      for (const [fazenda_id, a] of acc) {
+        if (a.n === 0) continue;
         out.push({
-          fazenda_id: row.fazenda_id,
-          cabecas: Number(row.cabecas_final) || 0,
+          fazenda_id,
+          cabecas: a.cab / a.n,
           /* GMD null e AUSENCIA, nao zero: fazenda sem fechamento nao ganhou 0 kg/dia. */
-          gmd: row.gmd_kg_cab_dia == null ? null : Number(row.gmd_kg_cab_dia),
-          ua_media: Number(row.ua_media) || 0,
-          arrobas: (bioPorFazenda.get(row.fazenda_id) ?? 0) / KG_POR_ARROBA,
+          gmd: a.gmdN > 0 ? a.gmdSoma / a.gmdN : null,
+          ua_media: a.ua / a.n,
+          arrIniciais: a.arrIni / a.n,
+          arrobas: (bioPorFazenda.get(fazenda_id) ?? 0) / KG_POR_ARROBA,
+          arrVendidas: vendPorFazenda.get(fazenda_id) ?? 0,
         });
       }
       return out;
     },
-    enabled: enabled && !!clienteId && !!anoMes,
+    enabled: enabled && !!clienteId && Number.isFinite(ano) && Number.isFinite(ateMes),
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
   });

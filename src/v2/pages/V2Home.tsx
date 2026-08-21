@@ -631,7 +631,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
   const { data: saldosPorConta } = useSaldosPorConta(clienteAtual?.id, anoMesStatus ?? '');
 
   /* ── PR-HOME-PRODUTIVO-FAZENDA-01 — produtivo por fazenda no mes selecionado ── */
-  const { data: produtivoPorFazenda } = useProdutivoPorFazenda(clienteAtual?.id, anoMesStatus ?? '');
+  const { data: produtivoPorFazenda } = useProdutivoPorFazenda(clienteAtual?.id, anoNum, mesNum, isPeriodo);
 
   const ROTULO_TIPO_CONTA: Record<string, string> = {
     cc: 'Conta corrente', inv: 'Investimento', cartao: 'Cartão',
@@ -705,18 +705,18 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     [produtivoPorFazenda, areaPorFazendaMes],
   );
 
-  /* Totais da tabela produtiva. Lotacao = SOMA das UA / SOMA das areas, NUNCA
-     media das lotacoes: promediar razoes de denominadores diferentes da numero
-     errado. GMD fica "—" — e media ponderada por cabeca, e somar ou promediar
-     as fazendas mentiria; ponderar e decisao pendente. */
+  /* Total consome os indicadores do PC-100, os MESMOS objetos dos tiles do bloco
+     Eficiencia. Bate por construcao, nao por coincidencia. NAO recalcular: o GMD,
+     em especial, nao e reproduzivel a partir das colunas da view (medido: 0,355
+     contra 0,378 na Pureza — o denominador nao e cabecas finais).
+     Area e a excecao: e area, nao indicador, entao soma as linhas.
+     Desfrute divide SOMAS, nunca promedia percentuais. */
   const totProdutivo = useMemo(() => {
-    const areaPec = linhasProdutivas.reduce((s, l) => s + l.areaPec, 0);
-    const ua = linhasProdutivas.reduce((s, l) => s + l.ua_media, 0);
+    const arrIni = linhasProdutivas.reduce((s, l) => s + l.arrIniciais, 0);
+    const arrVend = linhasProdutivas.reduce((s, l) => s + l.arrVendidas, 0);
     return {
-      areaPec,
-      cabecas: linhasProdutivas.reduce((s, l) => s + l.cabecas, 0),
-      arrobas: linhasProdutivas.reduce((s, l) => s + l.arrobas, 0),
-      lotacao: areaPec > 0 ? ua / areaPec : null,
+      areaPec: linhasProdutivas.reduce((s, l) => s + l.areaPec, 0),
+      desfrute: arrIni > 0 ? (arrVend / arrIni) * 100 : null,
     };
   }, [linhasProdutivas]);
 
@@ -1518,17 +1518,15 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
       )}
 
 
-      {/* DUAS COLUNAS que empilham de forma INDEPENDENTE, nao sete irmaos numa grade.
-          CSS Grid preenche linha a linha e cada linha assume a altura do maior item —
-          com blocos irmaos, "Composicao da area" (baixo) dividia linha com o "Caixa"
-          (19 linhas, o mais alto da tela) e sobrava um vazio embaixo dela ate a linha
-          seguinte comecar. Trocar blocos de lugar nao resolveria: qualquer bloco baixo
-          ao lado do Caixa teria o mesmo buraco.
-          items-start impede que as colunas se estiquem a altura da mais alta.
-          Em lg:grid-cols-1 as colunas empilham esquerda -> direita, a ordem de leitura. */}
+      {/* PRIMEIRA LINHA: Area e Caixa sao filhos DIRETOS do grid, entao a linha
+          alinha a altura dos dois. Decisao explicita (Gabriel, 21/08), ciente de
+          que o card mais baixo ganha espaco vazio embaixo — e o oposto do que
+          motivou e948a653. Com as duas tabelas dentro do card de Area, ele tende
+          a ser o mais alto e o branco cai no Caixa.
+          Os DEMAIS blocos seguem em duas colunas empilhadas, logo abaixo. */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 items-start">
 
-        <div className="lg:col-span-3 space-y-4">
+        <div className="lg:col-span-3">
         {/* col-span-2 porque o miolo do SectionBlock e uma grade de DUAS colunas,
             feita para MetricTile. Sem isso a barra ocupava meia largura e o rodape
             subia para a coluna da direita, ao lado dos numeros em vez de abaixo. */}
@@ -1735,9 +1733,134 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
                 </div>
               </div>
             )}
+
+            {/* Segunda tabela do card: a MESMA quebra por fazenda, do lado
+                zootecnico. Estava no bloco Eficiencia; veio para ca porque
+                responde a mesma pergunta que a tabela acima — onde a operacao
+                esta — e as duas se conferem contra os tiles. */}
+            {isGlobal && linhasProdutivas.length > 0 && (
+              <div className="pt-1 border-t border-border">
+                <p className="text-[10px] font-medium text-muted-foreground pb-1">
+                  Pecuária
+                </p>
+                <table className="w-full text-[10px] tabular-nums">
+                  <thead className="bg-muted/50">
+                    <tr className="text-muted-foreground">
+                      <th className="text-left font-normal px-1.5 py-1">Fazenda</th>
+                      <th className="text-right px-1.5 py-1 font-medium text-foreground">Área pec. (ha)</th>
+                      <th className="text-right px-1.5 py-1 font-medium text-foreground">Rebanho (cab)</th>
+                      <th className="text-right font-normal px-1.5 py-1 w-[64px]">Lot. (UA/ha)</th>
+                      <th className="text-right font-normal px-1.5 py-1">GMD</th>
+                      <th className="text-right font-normal px-1.5 py-1">@ prod.</th>
+                      <th className="text-right font-normal px-1.5 py-1">Desfrute</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {linhasProdutivas.map(l => (
+                      <tr key={l.fazenda_id} className="odd:bg-muted/20">
+                        <td className="text-left px-1.5 py-0.5 truncate max-w-[140px]">{nomeFazendaPorId[l.fazenda_id] ?? 'Fazenda'}</td>
+                        <td className="text-right px-1.5 py-0.5 font-medium text-foreground">{fmtHaInt(l.areaPec)}</td>
+                        <td className="text-right px-1.5 py-0.5 font-medium text-foreground">{fmtN(l.cabecas) ?? '—'}</td>
+                        <td className="text-right px-1.5 py-0.5 text-muted-foreground w-[64px]">{fmtN(l.lotacao, 2) ?? '—'}</td>
+                        <td className="text-right px-1.5 py-0.5 text-muted-foreground">{fmtN(l.gmd, 3) ?? '—'}</td>
+                        <td className="text-right px-1.5 py-0.5 text-muted-foreground">{fmtN(l.arrobas, 1) ?? '—'}</td>
+                        {/* Denominador zero exibe "—", nunca divisao por zero. */}
+                        <td className="text-right px-1.5 py-0.5 text-muted-foreground">
+                          {l.arrIniciais > 0 ? `${fmtN((l.arrVendidas / l.arrIniciais) * 100, 1)}%` : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                    {/* Total: os MESMOS objetos que alimentam os tiles do bloco
+                        Eficiencia — bate por construcao. Area soma as linhas
+                        (e area, nao indicador); Desfrute divide SOMAS. */}
+                    <tr className="bg-muted/50 font-medium text-foreground border-t border-border">
+                      <td className="text-left px-1.5 py-0.5">Total</td>
+                      <td className="text-right px-1.5 py-0.5">{fmtHaInt(totProdutivo.areaPec)}</td>
+                      <td className="text-right px-1.5 py-0.5">{fmtN(cabecasIndicador?.valor ?? null) ?? '—'}</td>
+                      <td className="text-right px-1.5 py-0.5 w-[64px]">{fmtN(uaHaIndicador?.valor ?? null, 2) ?? '—'}</td>
+                      <td className="text-right px-1.5 py-0.5">{fmtN(gmdIndicador?.valor ?? null, 3) ?? '—'}</td>
+                      <td className="text-right px-1.5 py-0.5">{fmtN(arrobasIndicador?.valor ?? null, 1) ?? '—'}</td>
+                      <td className="text-right px-1.5 py-0.5">
+                        {totProdutivo.desfrute != null ? `${fmtN(totProdutivo.desfrute, 1)}%` : '—'}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </SectionBlock>
+        </div>
 
+        <div className="lg:col-span-2">
+        {/* NAO recebe naoFechado: caixa nao depende de fechamento de rebanho.
+            O conteudo vai num col-span-2 porque o miolo do SectionBlock e uma grade de
+            DUAS colunas, feita para MetricTile — e aqui e uma LISTA de linhas. */}
+        <SectionBlock
+          title={isPeriodo ? 'Caixa no período' : 'Caixa no mês'}
+          subtitle="entradas e saídas"
+        >
+          {/* -mt-1 puxa a primeira linha para cima, encostando no titulo. Aplicado
+             SO aqui: o respiro vem do SectionBlock, que e usado por todos os blocos
+             e nao pode ser alterado por causa de um. */}
+          <div className="col-span-2 -mt-1 space-y-0.5">
+            <LinhaCaixa label={rotuloSaldoInicial} valor={saldoInicial} tipo="total" />
+
+            <div className="pt-1 space-y-0.5">
+              <LinhaCaixa label="Entradas" valor={totalEntradas} tipo="total"
+                corValor="text-emerald-600" />
+              {entradasVisiveis.map(l => (
+                <LinhaCaixa key={l.label} label={l.label} valor={l.valor} />
+              ))}
+              {(() => {
+                const somaCaptacao =
+                  (captacaoPecIndicador?.valor ?? 0) +
+                  (captacaoAgriIndicador?.valor ?? 0) +
+                  (captacaoSilviIndicador?.valor ?? 0) +
+                  (captacaoSemEscopoIndicador?.valor ?? 0);
+                const total = captacaoIndicador?.valor ?? 0;
+                /* Os quatro predicates PARTICIONAM isEntradaFinanceira: a soma tem que
+                   bater com o total. Se nao bater, subcentro novo escapou do mapa e o
+                   dinheiro esta sendo contado a menos ou a mais. MOSTRAR, nao forcar. */
+                return Math.abs(somaCaptacao - total) > 1 ? (
+                  <div className="text-[9px] text-warning pt-1">
+                    Captação: divergência de {fmtR(somaCaptacao - total)} entre as partes e o total
+                  </div>
+                ) : null;
+              })()}
+            </div>
+
+            <div className="pt-1 space-y-0.5">
+              <LinhaCaixa label="Saídas" valor={totalSaidas} tipo="total"
+                corValor="text-red-500" />
+              {saidasGruposVisiveis.map((g, i) => (
+                <div key={g.familia} className="space-y-0.5">
+                  {i > 0 && <div className="h-px bg-border/50 my-1" />}
+                  {g.linhas.map(l => (
+                    <LinhaCaixa key={l.label} label={l.label} valor={l.valor} />
+                  ))}
+                </div>
+              ))}
+            </div>
+
+            <div className="pt-1 border-t border-border/40">
+              <LinhaCaixa label={rotuloSaldoFinal} valor={saldoFinal} tipo="total" />
+            </div>
+
+            {mostrarDifCaixa && (
+              <p className="text-[10px] text-amber-700">
+                Diferença de {fmtR(difCaixa)} — não conciliado
+              </p>
+            )}
+
+            <p className="text-[9px] text-muted-foreground pt-1">
+              Regime de caixa, ano civil. Transferências entre contas não entram.
+            </p>
+          </div>
+        </SectionBlock>
+        </div>
+
+        <div className="lg:col-span-3 space-y-4">
         <SectionBlock title="Produção" subtitle="o que a fazenda entregou" naoFechado={mesSemFechamento} avisoNaoFechado={avisoMes}>
           <MetricTile label={cabecasIndicador?.label ?? 'CABEÇAS'} value={fmtN(cabecasIndicador?.valor ?? null)} unit="cab" loading={loadingPainel}
             deltaMes={cabecasIndicador?.deltaMes ?? null}
@@ -1803,122 +1926,10 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
             deltaAno={kgHaIndicador?.deltaAno ?? null}
             deltaMeta={kgHaIndicador?.deltaMeta ?? null}
             onClick={() => setModalIndicador('kgHa')} />
-
-          {/* Mesma anatomia da tabela do card de Area: col-span-2 para a largura
-              inteira do miolo, separador acima e subtitulo "Por fazenda". */}
-          {isGlobal && linhasProdutivas.length > 0 && (
-            <div className="col-span-2 pt-1 border-t border-border">
-              <p className="text-[10px] font-medium text-muted-foreground pb-1">
-                Por fazenda
-              </p>
-              <table className="w-full text-[10px] tabular-nums">
-                <thead className="bg-muted/50">
-                  <tr className="text-muted-foreground">
-                    <th className="text-left font-normal px-1.5 py-1">Fazenda</th>
-                    <th className="text-right px-1.5 py-1 font-medium text-foreground">Área pec. (ha)</th>
-                    <th className="text-right px-1.5 py-1 font-medium text-foreground">Rebanho (cab)</th>
-                    <th className="text-right font-normal px-1.5 py-1">Lotação (UA/ha)</th>
-                    <th className="text-right font-normal px-1.5 py-1">GMD</th>
-                    <th className="text-right font-normal px-1.5 py-1">@</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {linhasProdutivas.map(l => (
-                    <tr key={l.fazenda_id} className="odd:bg-muted/20">
-                      <td className="text-left px-1.5 py-0.5 truncate max-w-[140px]">{nomeFazendaPorId[l.fazenda_id] ?? 'Fazenda'}</td>
-                      <td className="text-right px-1.5 py-0.5 font-medium text-foreground">{fmtHaInt(l.areaPec)}</td>
-                      <td className="text-right px-1.5 py-0.5 font-medium text-foreground">{fmtN(l.cabecas) ?? '—'}</td>
-                      <td className="text-right px-1.5 py-0.5 text-muted-foreground">{fmtN(l.lotacao, 2) ?? '—'}</td>
-                      <td className="text-right px-1.5 py-0.5 text-muted-foreground">{fmtN(l.gmd, 3) ?? '—'}</td>
-                      <td className="text-right px-1.5 py-0.5 text-muted-foreground">{fmtN(l.arrobas, 1) ?? '—'}</td>
-                    </tr>
-                  ))}
-                  <tr className="bg-muted/50 font-medium text-foreground border-t border-border">
-                    <td className="text-left px-1.5 py-0.5">Total</td>
-                    <td className="text-right px-1.5 py-0.5">{fmtHaInt(totProdutivo.areaPec)}</td>
-                    <td className="text-right px-1.5 py-0.5">{fmtN(totProdutivo.cabecas) ?? '—'}</td>
-                    <td className="text-right px-1.5 py-0.5">{fmtN(totProdutivo.lotacao, 2) ?? '—'}</td>
-                    {/* GMD do Total fica "—": e media ponderada por cabeca, e somar
-                        ou promediar as fazendas daria numero errado. */}
-                    <td className="text-right px-1.5 py-0.5">—</td>
-                    <td className="text-right px-1.5 py-0.5">{fmtN(totProdutivo.arrobas, 1) ?? '—'}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          )}
         </SectionBlock>
         </div>
 
         <div className="lg:col-span-2 space-y-4">
-        {/* PR-HOME-CAIXA-CONSOLIDADO-01 — quinto bloco da grade de dois por linha; fica
-            sozinho na terceira fileira, em meia largura. NAO recebe naoFechado: caixa
-            nao depende de fechamento de rebanho.
-            O conteudo vai num col-span-2 porque o miolo do SectionBlock e uma grade de
-            DUAS colunas, feita para MetricTile — e aqui e uma LISTA de 19 linhas. */}
-        <SectionBlock
-          title={isPeriodo ? 'Caixa no período' : 'Caixa no mês'}
-          subtitle="entradas e saídas"
-        >
-          {/* -mt-1 puxa a primeira linha para cima, encostando no titulo. Aplicado
-             SO aqui: o respiro vem do SectionBlock, que e usado por todos os blocos
-             e nao pode ser alterado por causa de um. */}
-          <div className="col-span-2 -mt-1 space-y-0.5">
-            <LinhaCaixa label={rotuloSaldoInicial} valor={saldoInicial} tipo="total" />
-
-            <div className="pt-1 space-y-0.5">
-              <LinhaCaixa label="Entradas" valor={totalEntradas} tipo="total"
-                corValor="text-emerald-600" />
-              {entradasVisiveis.map(l => (
-                <LinhaCaixa key={l.label} label={l.label} valor={l.valor} />
-              ))}
-              {(() => {
-                const somaCaptacao =
-                  (captacaoPecIndicador?.valor ?? 0) +
-                  (captacaoAgriIndicador?.valor ?? 0) +
-                  (captacaoSilviIndicador?.valor ?? 0) +
-                  (captacaoSemEscopoIndicador?.valor ?? 0);
-                const total = captacaoIndicador?.valor ?? 0;
-                /* Os quatro predicates PARTICIONAM isEntradaFinanceira: a soma tem que
-                   bater com o total. Se nao bater, subcentro novo escapou do mapa e o
-                   dinheiro esta sendo contado a menos ou a mais. MOSTRAR, nao forcar. */
-                return Math.abs(somaCaptacao - total) > 1 ? (
-                  <div className="text-[9px] text-warning pt-1">
-                    Captação: divergência de {fmtR(somaCaptacao - total)} entre as partes e o total
-                  </div>
-                ) : null;
-              })()}
-            </div>
-
-            <div className="pt-1 space-y-0.5">
-              <LinhaCaixa label="Saídas" valor={totalSaidas} tipo="total"
-                corValor="text-red-500" />
-              {saidasGruposVisiveis.map((g, i) => (
-                <div key={g.familia} className="space-y-0.5">
-                  {i > 0 && <div className="h-px bg-border/50 my-1" />}
-                  {g.linhas.map(l => (
-                    <LinhaCaixa key={l.label} label={l.label} valor={l.valor} />
-                  ))}
-                </div>
-              ))}
-            </div>
-
-            <div className="pt-1 border-t border-border/40">
-              <LinhaCaixa label={rotuloSaldoFinal} valor={saldoFinal} tipo="total" />
-            </div>
-
-            {mostrarDifCaixa && (
-              <p className="text-[10px] text-amber-700">
-                Diferença de {fmtR(difCaixa)} — não conciliado
-              </p>
-            )}
-
-            <p className="text-[9px] text-muted-foreground pt-1">
-              Regime de caixa, ano civil. Transferências entre contas não entram.
-            </p>
-          </div>
-        </SectionBlock>
-
         <SectionBlock title="Financeiro Produtivo" subtitle="receita × custo por @">
           <MetricTile
             label={receitaPecIndicador?.label ?? 'RECEITAS PECUÁRIAS COMPETÊNCIA NO MÊS'}
