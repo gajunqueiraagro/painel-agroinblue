@@ -531,7 +531,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     seriesMensais, seriesMeta, cabecasIndicador, pesoMedioIndicador, gmdIndicador, uaHaIndicador, kgHaIndicador, arrobasIndicador, desfruteIndicador, valorRebanhoIndicador,
     receitaPecIndicador, custeioPecIndicador, custoArrIndicador, precoArrIndicador, custoCabIndicador, margemArrIndicador,
     // PR-HOME-CAIXA-CONSOLIDADO-01 — as 15 linhas de fluxo e o saldo.
-    receitaAgriIndicador, receitaOutrasIndicador, captacaoIndicador, entradasNaoClassificadasIndicador,
+    receitaPecCaixaIndicador, receitaAgriIndicador, receitaOutrasIndicador, captacaoIndicador, entradasNaoClassificadasIndicador,
     investPecIndicador, investBovinosIndicador, amortizacaoPecIndicador,
     custeioAgriIndicador, investAgriIndicador, amortizacaoAgriIndicador,
     dividendosIndicador, deducoesTributosIndicador, tributosIndicador,
@@ -561,7 +561,12 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
   const saldoFinal = serieCaixa ? (serieCaixa[mesNum] ?? null) : null;
 
   const entradasCaixa = [
-    { label: 'Produção pecuária',      valor: receitaPecIndicador?.valor    ?? null },
+    /* CAIXA, nao competencia. receitaPecIndicador e competencia zootecnica
+       (fonte soberana da DRE) e alimenta o card grande e o Preco R$/@ — os
+       dois permanecem intocados. Aqui o regime e caixa: o bloco fecha contra
+       saldo bancario real, e misturar regimes num total que precisa fechar
+       era o defeito. As duas leituras divergem por natureza. */
+    { label: 'Produção pecuária',      valor: receitaPecCaixaIndicador?.valor ?? null },
     { label: 'Produção agricultura',   valor: receitaAgriIndicador?.valor   ?? null },
     /* Silvicultura e travessao PERMANENTE e deliberado: nao existe isReceitaSilvicola
        em classificacao.ts, e os R$ 5,31 mi de 'Venda de Eucalipto' estao classificados

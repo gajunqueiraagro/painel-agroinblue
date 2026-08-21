@@ -37,6 +37,7 @@ import {
   // PR-PC100-RECEITAS-01 — os agregadores JA EXISTIAM em agregadosFinanceiros.ts, com
   // predicate proprio em classificacao.ts. O PC-100 e que nao os importava: o lado das
   // SAIDAS foi construido e o das RECEITAS ficou como "gap futuro". Ligar, nao construir.
+  agregaReceitaPec,
   agregaReceitaAgri,
   agregaOutrasReceitas,
   agregaEntradasFinanceiras,
@@ -54,6 +55,7 @@ import {
   agregaInvBovinosMeta,
   agregaAmortizacoesMeta,
   agregaDividendosMeta,
+  agregaReceitaPecMeta,
   agregaReceitaAgriMeta,
   agregaOutrasReceitasMeta,
   agregaEntradasFinanceirasMeta,
@@ -478,6 +480,17 @@ export interface PainelConsultorDataResult {
   // em classificacao.ts, e criar predicate mudaria o cerebro de classificacao.
   receitaAgriIndicador:         IndicadorFinanceiroShape | null;
   receitaOutrasIndicador:       IndicadorFinanceiroShape | null;
+  /**
+   * Receita Pecuária CAIXA — fonte: financeiro_lancamentos_v2 por
+   * data_pagamento, grupo_custo='Receita Pecuária' (isReceitaPecuaria).
+   *
+   * NÃO CONFUNDIR com receitaPecIndicador, que é COMPETÊNCIA zootécnica
+   * (lancamentos, abate/venda/consumo por data de movimentação) e é a
+   * fonte soberana da DRE. As duas DEVEM divergir: venda/abate pode
+   * existir sem movimentação financeira no período, e recebimento pode
+   * ocorrer meses depois. Nunca forçar a bater.
+   */
+  receitaPecCaixaIndicador:     IndicadorFinanceiroShape | null;
   captacaoIndicador:            IndicadorFinanceiroShape | null;
   /* Residuo de entrada: grupo que nao casa com nenhum oficial. Existe para nada sumir
      do total sem aviso — a linha da tela so aparece quando ha valor. */
@@ -2596,6 +2609,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     const invBov      = agregaInvBovinos(lancFin, ano);
     const amort       = agregaAmortizacoes(lancFin, ano);
     const div         = agregaDividendos(lancFin, ano);
+    const recPecCx    = agregaReceitaPec(lancFin, ano);
     const recAgri     = agregaReceitaAgri(lancFin, ano);
     const recOutras   = agregaOutrasReceitas(lancFin, ano);
     const captacao    = agregaEntradasFinanceiras(lancFin, ano);
@@ -2633,6 +2647,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     const invBov_M      = hasGridMeta ? agregaInvBovinosMeta(gridMetaConsolidado) : null;
     const amort_M       = hasGridMeta ? agregaAmortizacoesMeta(gridMetaConsolidado) : null;
     const div_M         = hasGridMeta ? agregaDividendosMeta(gridMetaConsolidado) : null;
+    const recPecCx_M    = hasGridMeta ? agregaReceitaPecMeta(gridMetaConsolidado) : null;
     const recAgri_M     = hasGridMeta ? agregaReceitaAgriMeta(gridMetaConsolidado) : null;
     const recOutras_M   = hasGridMeta ? agregaOutrasReceitasMeta(gridMetaConsolidado) : null;
     const captacao_M    = hasGridMeta ? agregaEntradasFinanceirasMeta(gridMetaConsolidado) : null;
@@ -2761,6 +2776,11 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
         isPer ? 'Receita operacional fora de Pecuária e Agricultura acumulada Jan→mês (caixa)'
               : 'Receita operacional fora de Pecuária e Agricultura no mês (caixa)',
         recOutras_M),
+      receitaPecCaixa: buildInd(recPecCx,
+        'RECEITA PECUÁRIA CAIXA', 'Receita Pecuária (caixa)',
+        isPer ? 'Receita pecuária recebida, acumulada Jan→mês (caixa, por data de pagamento)'
+              : 'Receita pecuária recebida no mês (caixa, por data de pagamento)',
+        recPecCx_M),
       captacao: buildInd(captacao, 'CAPTAÇÃO FINANCIAMENTO', 'Captação de Financiamento',
         isPer ? 'Entradas financeiras (captação) acumuladas Jan→mês (caixa)'
               : 'Entradas financeiras (captação) no mês (caixa)',
@@ -3289,6 +3309,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
        aparecem tambem no retorno de incompletoOverride, ao lado dos de saida. */
     receitaAgriIndicador:         _finSoberano.receitaAgri,
     receitaOutrasIndicador:       _finSoberano.receitaOutras,
+    receitaPecCaixaIndicador:     _finSoberano.receitaPecCaixa,
     captacaoIndicador:            _finSoberano.captacao,
     entradasNaoClassificadasIndicador: _finSoberano.entradasNaoClassificadas,
     amortizacaoPecIndicador:      _finSoberano.amortizacaoPec,
@@ -3357,6 +3378,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       caixaIndicador:               caixaIndicadorResolved,
       receitaAgriIndicador:         _finSoberano.receitaAgri,
       receitaOutrasIndicador:       _finSoberano.receitaOutras,
+      receitaPecCaixaIndicador:     _finSoberano.receitaPecCaixa,
       captacaoIndicador:            _finSoberano.captacao,
       entradasNaoClassificadasIndicador: _finSoberano.entradasNaoClassificadas,
       amortizacaoPecIndicador:      _finSoberano.amortizacaoPec,
