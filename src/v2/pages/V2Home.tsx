@@ -1499,21 +1499,23 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
                         </div>
                       ))}
                     </div>
-                    {/* Nota abaixo da legenda, dentro da coluna da direita:
-                        acompanha a lista em vez de atravessar o bloco inteiro. */}
-                    <p className="text-[9px] text-muted-foreground pt-2 leading-snug">
-                      Fonte: fechamento de áreas do mês. Área total = matrícula.
-                      Estoque — não acumula no período.
-                    </p>
+                    {/* Excecao acompanha a legenda, no MESMO tamanho de fonte dela, e
+                        em fmtHa (2 casas): valor de excecao — a precisao importa. */}
+                    {areaExcedente != null && (
+                      <p className="text-[10px] text-warning pt-1">
+                        Área além da matrícula: {fmtHa(areaExcedente)}
+                      </p>
+                    )}
                   </div>
                 </div>
               );
             })()}
-            {areaExcedente != null && (
-              <div className="text-[11px] text-warning pt-1">
-                Área além da matrícula: {fmtHa(areaExcedente)}
-              </div>
-            )}
+            {/* RODAPE DO CARD: nota de fonte fica SEMPRE na base, largura total.
+                Padrao para todos os blocos — nada vai depois dela. */}
+            <p className="text-[9px] text-muted-foreground pt-2 leading-snug">
+              Fonte: fechamento de áreas do mês. Área total = matrícula.
+              Estoque — não acumula no período.
+            </p>
           </div>
         </SectionBlock>
 
