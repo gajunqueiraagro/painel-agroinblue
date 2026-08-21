@@ -154,9 +154,9 @@ function LinhaCaixa({ label, valor, tipo = 'detalhe', corValor }: {
 }) {
   const base = tipo === 'total'
     ? 'font-medium text-foreground'
-    : 'text-muted-foreground pl-2.5';
+    : 'text-muted-foreground pl-2';
   return (
-    <div className={`flex items-baseline justify-between gap-3 text-[11px] ${base}`}>
+    <div className={`flex items-baseline justify-between gap-3 text-[10px] ${base}`}>
       <span className="truncate">{label}</span>
       <span className={`tabular-nums shrink-0 ${corValor ?? ''}`}>
         {valor == null ? '—' : fmtR(valor)}
@@ -179,6 +179,14 @@ function fmtHaInt(v: number | null): string {
   return v == null || v === 0
     ? '—'
     : v.toLocaleString('pt-BR', { maximumFractionDigits: 0 });
+}
+
+/* Produtiva sobre total; Pec/Agri/Silvi sobre produtiva. NAO limitar a
+   100%: quando ha pasto arrendado de terceiro a produtiva excede a
+   matricula (Vera Ligia, 102,8%) e truncar esconderia o fato. */
+function pctDe(parte: number | null, base: number | null): string {
+  if (parte == null || base == null || base <= 0 || parte === 0) return '—';
+  return `${((parte / base) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
 }
 
 /* Irmao de LinhaCaixa: mesma anatomia, unidade diferente. Area em ha nao
@@ -652,28 +660,47 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
       : []),
   ];
 
-  const saidasCaixa = [
-    { label: 'Custeio pecuária',          valor: custeioPecIndicador?.valor       ?? null },
-    { label: 'Investimento pecuária',     valor: investPecIndicador?.valor        ?? null },
-    { label: 'Reposição de bovinos',      valor: investBovinosIndicador?.valor    ?? null },
-    { label: 'Amortização financ. pec.',  valor: amortizacaoPecIndicador?.valor   ?? null },
-    { label: 'Custeio agricultura',       valor: custeioAgriIndicador?.valor      ?? null },
-    { label: 'Investimento agricultura',  valor: investAgriIndicador?.valor       ?? null },
-    { label: 'Amortização financ. agri.', valor: amortizacaoAgriIndicador?.valor  ?? null },
+  /* PR-HOME-DENSIDADE-01 — as MESMAS linhas, na MESMA ordem, agora agrupadas por
+     familia so para ganhar um separador visual. saidasCaixa e o flat destes grupos,
+     entao totalSaidas continua sendo a soma exata das linhas exibidas. */
+  const saidasGrupos: { familia: string; linhas: { label: string; valor: number | null }[] }[] = [
+    { familia: 'Pecuária', linhas: [
+      { label: 'Custeio pecuária',          valor: custeioPecIndicador?.valor       ?? null },
+      { label: 'Investimento pecuária',     valor: investPecIndicador?.valor        ?? null },
+      { label: 'Reposição de bovinos',      valor: investBovinosIndicador?.valor    ?? null },
+      { label: 'Amortização financ. pec.',  valor: amortizacaoPecIndicador?.valor   ?? null },
+    ] },
+    { familia: 'Agricultura', linhas: [
+      { label: 'Custeio agricultura',       valor: custeioAgriIndicador?.valor      ?? null },
+      { label: 'Investimento agricultura',  valor: investAgriIndicador?.valor       ?? null },
+      { label: 'Amortização financ. agri.', valor: amortizacaoAgriIndicador?.valor  ?? null },
+    ] },
     /* Silvicultura nasce condicional: hoje o proto tem ZERO lancamento de custo
        silvicola, e tres linhas de R$ 0 poluiriam a tela de todos os clientes.
        Os predicates existem para que o custo NAO suma quando aparecer — mesmo
        principio da linha residual de entradas. */
-    ...(((custeioSilviIndicador?.valor ?? 0) > 0)
-      ? [{ label: 'Custeio silvicultura', valor: custeioSilviIndicador?.valor ?? null }] : []),
-    ...(((investSilviIndicador?.valor ?? 0) > 0)
-      ? [{ label: 'Investimento silvicultura', valor: investSilviIndicador?.valor ?? null }] : []),
-    ...(((amortizacaoSilviIndicador?.valor ?? 0) > 0)
-      ? [{ label: 'Amortização financ. silvi.', valor: amortizacaoSilviIndicador?.valor ?? null }] : []),
-    { label: 'Dividendos',                valor: dividendosIndicador?.valor       ?? null },
-    { label: 'Deduções de receitas',      valor: deducoesTributosIndicador?.valor ?? null },
-    { label: 'Tributos',                  valor: tributosIndicador?.valor         ?? null },
+    { familia: 'Silvicultura', linhas: [
+      ...(((custeioSilviIndicador?.valor ?? 0) > 0)
+        ? [{ label: 'Custeio silvicultura', valor: custeioSilviIndicador?.valor ?? null }] : []),
+      ...(((investSilviIndicador?.valor ?? 0) > 0)
+        ? [{ label: 'Investimento silvicultura', valor: investSilviIndicador?.valor ?? null }] : []),
+      ...(((amortizacaoSilviIndicador?.valor ?? 0) > 0)
+        ? [{ label: 'Amortização financ. silvi.', valor: amortizacaoSilviIndicador?.valor ?? null }] : []),
+    ] },
+    { familia: 'Transversal', linhas: [
+      { label: 'Dividendos',                valor: dividendosIndicador?.valor       ?? null },
+      { label: 'Deduções de receitas',      valor: deducoesTributosIndicador?.valor ?? null },
+      { label: 'Tributos',                  valor: tributosIndicador?.valor         ?? null },
+    ] },
   ];
+
+  /* Grupo TODO ausente ou zerado nao rende linhas nem separador — senao sobra um
+     traco solto. Silvicultura cai nesse caso em todos os clientes hoje. */
+  const saidasGruposVisiveis = saidasGrupos.filter(
+    g => g.linhas.some(l => (l.valor ?? 0) !== 0),
+  );
+
+  const saidasCaixa = saidasGruposVisiveis.flatMap(g => g.linhas);
 
   /* Totais = SOMA DAS LINHAS EXIBIDAS. NAO usar saidasTotaisIndicador: ele tem regra
      propria (deducao e ajuste de entrada e nao entra nele), e o total divergiria das
@@ -1411,29 +1438,55 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
         <SectionBlock title="Composição da área" subtitle="como a terra está dividida">
           <div className="col-span-2 space-y-2">
             {(() => {
+              /* Duas classes por parte: `cor` (bg-*) para o ponto da legenda e
+                 `stroke` (stroke-*) para a fatia do donut. Tailwind v3 gera
+                 stroke-* a partir das mesmas cores do tema, entao os quatro
+                 tokens do design system valem nas duas formas. */
               const partes = [
-                { label: 'Pecuária',    valor: areaPec   ?? 0, cor: 'bg-success' },
-                { label: 'Agricultura', valor: areaAgri  ?? 0, cor: 'bg-cta' },
-                { label: 'Silvicultura',valor: areaSilvi ?? 0, cor: 'bg-primary' },
+                { label: 'Pecuária',    valor: areaPec   ?? 0, cor: 'bg-success', stroke: 'stroke-success' },
+                { label: 'Agricultura', valor: areaAgri  ?? 0, cor: 'bg-cta', stroke: 'stroke-cta' },
+                { label: 'Silvicultura',valor: areaSilvi ?? 0, cor: 'bg-primary', stroke: 'stroke-primary' },
                 { label: 'Reserva, APP, benf.',
                   valor: (areaReserva ?? 0) + (areaApp ?? 0) + (areaBenf ?? 0) + (areaOutras ?? 0),
-                  cor: 'bg-muted-foreground/40' },
+                  cor: 'bg-muted-foreground/40', stroke: 'stroke-muted-foreground/40' },
               ].filter(p => p.valor > 0);
               const soma = partes.reduce((s, p) => s + p.valor, 0);
               if (soma <= 0) return <p className="text-[11px] text-muted-foreground">—</p>;
+
+              /* Donut em SVG puro: sem dependencia nova, sem recharts. Circunferencia
+                 do raio 34 = 213.63; cada fatia usa stroke-dasharray + offset. */
+              const R = 34, C = 2 * Math.PI * R;
+              let acc = 0;
+              const fatias = partes.map(p => {
+                const frac = p.valor / soma;
+                const el = { ...p, dash: frac * C, offset: -acc * C };
+                acc += frac;
+                return el;
+              });
+
               return (
-                <div className="space-y-2">
-                  <div className="flex h-3 w-full overflow-hidden rounded-sm">
-                    {partes.map(p => (
-                      <div key={p.label} className={p.cor} style={{ width: `${(p.valor / soma) * 100}%` }} />
+                <div className="flex items-center gap-4">
+                  <svg viewBox="0 0 80 80" className="h-20 w-20 shrink-0 -rotate-90">
+                    {fatias.map(f => (
+                      <circle key={f.label} cx="40" cy="40" r={R} fill="none"
+                        strokeWidth="12" className={f.stroke}
+                        strokeDasharray={`${f.dash} ${C - f.dash}`}
+                        strokeDashoffset={f.offset} />
                     ))}
-                  </div>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-muted-foreground">
-                    {partes.map(p => (
-                      <span key={p.label} className="flex items-center gap-1">
-                        <span className={`inline-block h-2 w-2 rounded-full ${p.cor}`} />
-                        {p.label} {fmtHaInt(p.valor)}
-                      </span>
+                  </svg>
+                  <div className="min-w-0 flex-1 space-y-1">
+                    {fatias.map(f => (
+                      <div key={f.label} className="flex items-baseline justify-between gap-2 text-[10px]">
+                        <span className="flex items-center gap-1.5 truncate text-muted-foreground">
+                          <span className={`inline-block h-2 w-2 rounded-full shrink-0 ${f.cor}`} />
+                          {f.label}
+                        </span>
+                        <span className="tabular-nums shrink-0 text-foreground">
+                          {fmtHaInt(f.valor)} <span className="text-muted-foreground">
+                            {((f.valor / soma) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}%
+                          </span>
+                        </span>
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -1456,46 +1509,57 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
             {/* col-span-2 pelo mesmo motivo do bloco acima: a tabela precisa da
                 largura inteira do miolo, que e uma grade de duas colunas. */}
             <div className="col-span-2">
-              <table className="w-full text-[11px] tabular-nums">
-                <thead>
-                  <tr className="text-muted-foreground border-b border-border">
-                    <th className="text-left font-normal py-1">Fazenda</th>
-                    <th className="text-right font-normal">Total</th>
-                    <th className="text-right font-normal">Produtiva</th>
-                    <th className="text-right font-normal">Pec.</th>
-                    <th className="text-right font-normal">Agri.</th>
-                    <th className="text-right font-normal">Silvi.</th>
+              <table className="w-full text-[10px] tabular-nums">
+                <thead className="bg-muted/50">
+                  <tr className="text-muted-foreground">
+                    <th className="text-left font-normal px-1.5 py-1">Fazenda</th>
+                    <th className="text-right px-1.5 py-1 font-medium text-foreground">Total</th>
+                    <th className="text-right px-1.5 py-1 font-medium text-foreground">Produtiva</th>
+                    <th className="text-right font-normal px-1.5 py-1">Pec.</th>
+                    <th className="text-right font-normal px-1.5 py-1">Agri.</th>
+                    <th className="text-right font-normal px-1.5 py-1">Silvi.</th>
                   </tr>
                 </thead>
                 <tbody>
                   {areaPorFazendaMes.map(f => {
                     const excede = f.area_produtiva_ha > f.area_total_ha;
                     return (
-                      <tr key={f.fazenda_id} className="border-b border-border/40">
-                        <td className="text-left py-1 truncate max-w-[140px]">{nomeFazendaPorId[f.fazenda_id] ?? 'Fazenda'}</td>
-                        <td className="text-right">{fmtHaInt(f.area_total_ha)}</td>
+                      <tr key={f.fazenda_id} className="odd:bg-muted/20">
+                        <td className="text-left px-1.5 py-0.5 truncate max-w-[140px]">{nomeFazendaPorId[f.fazenda_id] ?? 'Fazenda'}</td>
+                        <td className="text-right px-1.5 py-0.5 font-medium text-foreground">{fmtHaInt(f.area_total_ha)}</td>
                         <td
-                          className={`text-right${excede ? ' text-warning' : ''}`}
+                          className={`text-right px-1.5 py-0.5 font-medium${excede ? ' text-warning' : ' text-foreground'}`}
                           title={excede ? `Área além da matrícula: ${fmtHa(f.area_produtiva_ha - f.area_total_ha)}` : undefined}
                         >
                           {fmtHaInt(f.area_produtiva_ha)}
                         </td>
-                        <td className="text-right">{fmtHaInt(f.area_pecuaria_ha)}</td>
-                        <td className="text-right">{fmtHaInt(f.area_agricultura_ha)}</td>
-                        <td className="text-right">{fmtHaInt(f.area_silvicultura_ha)}</td>
+                        <td className="text-right px-1.5 py-0.5 text-muted-foreground">{fmtHaInt(f.area_pecuaria_ha)}</td>
+                        <td className="text-right px-1.5 py-0.5 text-muted-foreground">{fmtHaInt(f.area_agricultura_ha)}</td>
+                        <td className="text-right px-1.5 py-0.5 text-muted-foreground">{fmtHaInt(f.area_silvicultura_ha)}</td>
                       </tr>
                     );
                   })}
                   {/* A linha Total sai dos agregados do bloco acima, NAO da soma das
                       linhas: se as duas fontes divergirem, isso precisa APARECER — uma
                       soma das proprias linhas fecharia sempre e esconderia a divergencia. */}
-                  <tr className="font-medium text-foreground">
-                    <td className="text-left py-1">Total</td>
-                    <td className="text-right">{fmtHaInt(areaTotal)}</td>
-                    <td className="text-right">{fmtHaInt(areaProdutiva)}</td>
-                    <td className="text-right">{fmtHaInt(areaPec)}</td>
-                    <td className="text-right">{fmtHaInt(areaAgri)}</td>
-                    <td className="text-right">{fmtHaInt(areaSilvi)}</td>
+                  <tr className="bg-muted/50 font-medium text-foreground border-t border-border">
+                    <td className="text-left px-1.5 py-0.5">Total</td>
+                    <td className="text-right px-1.5 py-0.5">{fmtHaInt(areaTotal)}</td>
+                    <td className="text-right px-1.5 py-0.5">{fmtHaInt(areaProdutiva)}</td>
+                    <td className="text-right px-1.5 py-0.5">{fmtHaInt(areaPec)}</td>
+                    <td className="text-right px-1.5 py-0.5">{fmtHaInt(areaAgri)}</td>
+                    <td className="text-right px-1.5 py-0.5">{fmtHaInt(areaSilvi)}</td>
+                  </tr>
+                  {/* Bases DIFERENTES por coluna: Produtiva sobre o total da matricula,
+                      as tres familias sobre a produtiva. Por isso Produtiva pode passar
+                      de 100% e as familias somam ~100% entre si. */}
+                  <tr className="text-[9px] text-muted-foreground">
+                    <td className="text-left px-1.5 pb-1">% da área</td>
+                    <td className="text-right px-1.5">100%</td>
+                    <td className="text-right px-1.5">{pctDe(areaProdutiva, areaTotal)}</td>
+                    <td className="text-right px-1.5">{pctDe(areaPec,   areaProdutiva)}</td>
+                    <td className="text-right px-1.5">{pctDe(areaAgri,  areaProdutiva)}</td>
+                    <td className="text-right px-1.5">{pctDe(areaSilvi, areaProdutiva)}</td>
                   </tr>
                 </tbody>
               </table>
@@ -1565,10 +1629,10 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
             O conteudo vai num col-span-2 porque o miolo do SectionBlock e uma grade de
             DUAS colunas, feita para MetricTile — e aqui e uma LISTA de 19 linhas. */}
         <SectionBlock title="Caixa" subtitle="entradas e saídas do período">
-          <div className="col-span-2 space-y-1">
+          <div className="col-span-2 space-y-0.5">
             <LinhaCaixa label={rotuloSaldoInicial} valor={saldoInicial} tipo="total" />
 
-            <div className="pt-1">
+            <div className="pt-1 space-y-0.5">
               <LinhaCaixa label="Entradas" valor={totalEntradas} tipo="total"
                 corValor="text-emerald-600" />
               {entradasCaixa.map(l => (
@@ -1576,11 +1640,16 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
               ))}
             </div>
 
-            <div className="pt-1">
+            <div className="pt-1 space-y-0.5">
               <LinhaCaixa label="Saídas" valor={totalSaidas} tipo="total"
                 corValor="text-red-500" />
-              {saidasCaixa.map(l => (
-                <LinhaCaixa key={l.label} label={l.label} valor={l.valor} />
+              {saidasGruposVisiveis.map((g, i) => (
+                <div key={g.familia} className="space-y-0.5">
+                  {i > 0 && <div className="h-px bg-border/50 my-1" />}
+                  {g.linhas.map(l => (
+                    <LinhaCaixa key={l.label} label={l.label} valor={l.valor} />
+                  ))}
+                </div>
               ))}
             </div>
 
