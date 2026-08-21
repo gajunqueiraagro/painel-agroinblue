@@ -44,6 +44,7 @@ import {
   isReceitaAgricola,
   isOutrasReceitas,
   isEntradaFinanceira,
+  isEntradaNaoClassificada,
   isAmortizacaoPecuaria,
   isAmortizacaoAgricultura,
   datePagtoMes,
@@ -260,6 +261,18 @@ export function agregaEntradasFinanceiras(lancFin: FinanceiroLancamento[], ano: 
 }
 
 /**
+ * Entradas que nao casam com nenhum grupo oficial. Existe para que nada suma do total
+ * sem aviso: com a classificacao por grupo literal, uma entrada de grupo desconhecido
+ * simplesmente nao entraria em linha nenhuma.
+ */
+export function agregaEntradasNaoClassificadas(
+  lancFin: FinanceiroLancamento[], ano: number,
+): number[] {
+  return agregaPorPredicadoGenerico(
+    makeRealizadoSourceEntrada(lancFin, ano), isEntradaNaoClassificada);
+}
+
+/**
  * Dedução de Receitas — ajuste de entrada. No banco aparece tanto como
  * entrada (sinal de redução) quanto como saída (alguns clientes legados),
  * portanto agregamos os dois lados e somamos.
@@ -412,6 +425,12 @@ export function agregaOutrasReceitasMeta(grid: SubcentroGrid[]): number[] {
 
 export function agregaEntradasFinanceirasMeta(grid: SubcentroGrid[]): number[] {
   return agregaPorPredicadoGenerico(makeMetaSource(grid), isEntradaFinanceira);
+}
+
+/* Par META obrigatorio: agregador REALIZADO sem irmao META deixaria a Meta cega para o
+   residuo, e a comparacao realizado x meta passaria a mentir por omissao. */
+export function agregaEntradasNaoClassificadasMeta(grid: SubcentroGrid[]): number[] {
+  return agregaPorPredicadoGenerico(makeMetaSource(grid), isEntradaNaoClassificada);
 }
 
 export function agregaDeducoesMeta(grid: SubcentroGrid[]): number[] {

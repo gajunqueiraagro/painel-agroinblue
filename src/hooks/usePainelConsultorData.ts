@@ -40,6 +40,7 @@ import {
   agregaReceitaAgri,
   agregaOutrasReceitas,
   agregaEntradasFinanceiras,
+  agregaEntradasNaoClassificadas,
   agregaDeducoesSaida,
   agregaAmortizacaoPec,
   agregaAmortizacaoAgri,
@@ -56,6 +57,7 @@ import {
   agregaReceitaAgriMeta,
   agregaOutrasReceitasMeta,
   agregaEntradasFinanceirasMeta,
+  agregaEntradasNaoClassificadasMeta,
   agregaDeducoesSaidaMeta,
   agregaAmortizacaoPecMeta,
   agregaAmortizacaoAgriMeta,
@@ -477,6 +479,9 @@ export interface PainelConsultorDataResult {
   receitaAgriIndicador:         IndicadorFinanceiroShape | null;
   receitaOutrasIndicador:       IndicadorFinanceiroShape | null;
   captacaoIndicador:            IndicadorFinanceiroShape | null;
+  /* Residuo de entrada: grupo que nao casa com nenhum oficial. Existe para nada sumir
+     do total sem aviso — a linha da tela so aparece quando ha valor. */
+  entradasNaoClassificadasIndicador: IndicadorFinanceiroShape | null;
   amortizacaoPecIndicador:      IndicadorFinanceiroShape | null;
   amortizacaoAgriIndicador:     IndicadorFinanceiroShape | null;
   deducoesTributosIndicador:    IndicadorFinanceiroShape | null;
@@ -2594,6 +2599,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     const recAgri     = agregaReceitaAgri(lancFin, ano);
     const recOutras   = agregaOutrasReceitas(lancFin, ano);
     const captacao    = agregaEntradasFinanceiras(lancFin, ano);
+    const naoClassif  = agregaEntradasNaoClassificadas(lancFin, ano);
     const deducoes    = agregaDeducoesSaida(lancFin, ano);
     const amortPec    = agregaAmortizacaoPec(lancFin, ano);
     const amortAgri   = agregaAmortizacaoAgri(lancFin, ano);
@@ -2630,6 +2636,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     const recAgri_M     = hasGridMeta ? agregaReceitaAgriMeta(gridMetaConsolidado) : null;
     const recOutras_M   = hasGridMeta ? agregaOutrasReceitasMeta(gridMetaConsolidado) : null;
     const captacao_M    = hasGridMeta ? agregaEntradasFinanceirasMeta(gridMetaConsolidado) : null;
+    const naoClassif_M  = hasGridMeta ? agregaEntradasNaoClassificadasMeta(gridMetaConsolidado) : null;
     const deducoes_M    = hasGridMeta ? agregaDeducoesSaidaMeta(gridMetaConsolidado) : null;
     const amortPec_M    = hasGridMeta ? agregaAmortizacaoPecMeta(gridMetaConsolidado) : null;
     const amortAgri_M   = hasGridMeta ? agregaAmortizacaoAgriMeta(gridMetaConsolidado) : null;
@@ -2758,6 +2765,11 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
         isPer ? 'Entradas financeiras (captação) acumuladas Jan→mês (caixa)'
               : 'Entradas financeiras (captação) no mês (caixa)',
         captacao_M),
+      entradasNaoClassificadas: buildInd(naoClassif,
+        'ENTRADAS NÃO CLASSIFICADAS', 'Entradas não classificadas',
+        isPer ? 'Entradas sem grupo oficial, acumulado Jan→mês (caixa)'
+              : 'Entradas sem grupo oficial no mês (caixa)',
+        naoClassif_M),
       // O par detalhado. amortizacoes (acima) segue sendo o TOTAL, intocado.
       amortizacaoPec: buildInd(amortPec, 'AMORTIZAÇÃO PECUÁRIA', 'Amortização Financiamento Pecuária',
         isPer ? 'Amortização de financiamento pecuária acumulada Jan→mês (caixa)'
@@ -3278,6 +3290,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     receitaAgriIndicador:         _finSoberano.receitaAgri,
     receitaOutrasIndicador:       _finSoberano.receitaOutras,
     captacaoIndicador:            _finSoberano.captacao,
+    entradasNaoClassificadasIndicador: _finSoberano.entradasNaoClassificadas,
     amortizacaoPecIndicador:      _finSoberano.amortizacaoPec,
     amortizacaoAgriIndicador:     _finSoberano.amortizacaoAgri,
     deducoesTributosIndicador:    _finSoberano.deducoesTributos,
@@ -3345,6 +3358,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       receitaAgriIndicador:         _finSoberano.receitaAgri,
       receitaOutrasIndicador:       _finSoberano.receitaOutras,
       captacaoIndicador:            _finSoberano.captacao,
+      entradasNaoClassificadasIndicador: _finSoberano.entradasNaoClassificadas,
       amortizacaoPecIndicador:      _finSoberano.amortizacaoPec,
       amortizacaoAgriIndicador:     _finSoberano.amortizacaoAgri,
       deducoesTributosIndicador:    _finSoberano.deducoesTributos,

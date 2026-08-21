@@ -488,55 +488,35 @@ export function isTributos(l: LancamentoClassificavel): boolean {
 // ---------------------------------------------------------------------------
 
 /**
- * Determina escopo de uma RECEITA — exclusivo para predicates de receita.
+ * Grupos oficiais de ENTRADA do plano de contas (financeiro_plano_contas).
+ * Igualdade literal — mesmo padrão de isCusteioProducaoPecuaria.
+ * NUNCA usar contains/substring/keyword: o texto do subcentro não é
+ * fonte de classificação, o grupo_custo é.
  *
- * Por que separado de getEscopo(): o getEscopo global busca apenas
- * "agricultura" literal em centro_custo, falhando para "Receita Agrícola"
- * (com í). Resultado: Receita Agrícola e Outras Receitas vazavam para
- * Receita Pecuária via fallback ('pec').
+ * grupo_custo é escrito pelo trigger trg_resolve_classificacao_plano a
+ * partir do plano; o front não grava esse campo.
  *
- * Esta função usa palavras-chave amplas (com e sem acento) em
- * grupo + centro + subcentro, cobrindo nomes do plano de contas oficial:
- *   - agri:    "Receita Agrícola", "Venda de Soja/Amendoim/Milho", etc.
- *   - pec:     "Receita Pecuária", "Abates", "Venda de Desmama/Bovinos/Boitel"
- *   - outras:  "Rendimentos Financeiros", "Outras Receitas" e demais.
- *
- * Ordem importa: agri é testado ANTES de pec para evitar que termos
- * agrícolas isolados sejam capturados por defaults pecuários.
- *
- * IMPORTANTE: getEscopo() global PERMANECE inalterado — esta função é
- * estritamente local aos predicates de receita. Não usar fora deste
- * arquivo nem para classificação de saídas/escopo geral.
+ * PR-CLASSIF-ENTRADA-GRUPO-01 — substituiu a antiga getEscopoReceita, que
+ * varria grupo+centro+subcentro atrás de 'soja', 'milho', 'abates', 'fêmeas'.
+ * As SAÍDAS já classificavam por grupo literal; as entradas eram a última
+ * heurística por keyword. Medido no proto em 21/08/2026: existem só QUATRO
+ * grupos de entrada, sem grafias divergentes, e keyword × literal deram
+ * resultado IDÊNTICO em todas as combinações existentes — a troca não move
+ * valor, só tira o texto livre do caminho da classificação.
  */
-function getEscopoReceita(l: LancamentoClassificavel): Escopo {
-  const texto = norm(`${l.grupo_custo ?? ''} ${l.centro_custo ?? ''} ${l.subcentro ?? ''}`);
-  if (
-    texto.includes('agricola') || texto.includes('agrícola') ||
-    texto.includes('agricultura') ||
-    texto.includes('amendoim') ||
-    texto.includes('soja') ||
-    texto.includes('milho')
-  ) return 'agri';
-  if (
-    texto.includes('pecuaria') || texto.includes('pecuária') ||
-    texto.includes('abates') ||
-    texto.includes('bovinos') ||
-    texto.includes('boitel') ||
-    texto.includes('desmama') ||
-    texto.includes('machos') ||
-    texto.includes('femeas') || texto.includes('fêmeas')
-  ) return 'pec';
-  return 'outras';
-}
+export const GRUPO_RECEITA_PECUARIA  = 'Receita Pecuária';
+export const GRUPO_RECEITA_AGRICOLA  = 'Receita Agrícola';
+export const GRUPO_OUTRAS_RECEITAS   = 'Outras Receitas';
+export const GRUPO_ENTRADAS_CAPITAL  = 'Entradas de Capital';
 
 export const isReceitaPecuaria = (l: LancamentoClassificavel): boolean =>
-  isReceita(l) && getEscopoReceita(l) === 'pec';
+  l.grupo_custo === GRUPO_RECEITA_PECUARIA;
 
 export const isReceitaAgricola = (l: LancamentoClassificavel): boolean =>
-  isReceita(l) && getEscopoReceita(l) === 'agri';
+  l.grupo_custo === GRUPO_RECEITA_AGRICOLA;
 
 export const isOutrasReceitas = (l: LancamentoClassificavel): boolean =>
-  isReceita(l) && getEscopoReceita(l) === 'outras';
+  l.grupo_custo === GRUPO_OUTRAS_RECEITAS;
 
 /**
  * Entrada financeira (Aportes + Captação Pec + Captação Agri).
@@ -545,6 +525,33 @@ export const isOutrasReceitas = (l: LancamentoClassificavel): boolean =>
  */
 export const isEntradaFinanceira = (l: LancamentoClassificavel): boolean =>
   canonicalMacro(l) === 'outras entradas financeiras';
+
+/**
+ * Entrada que não casa com nenhum grupo oficial de entrada.
+ *
+ * PRÉ-CONDIÇÃO: o caller já garantiu que é entrada (o adapter
+ * makeRealizadoSourceEntrada filtra isEntrada). Este predicate apenas
+ * detecta o resíduo.
+ *
+ * Existe para que nenhuma entrada desapareça do total sem aviso.
+ *
+ * Medido no proto em 21/08/2026: 3 lançamentos, todos do NJ, por DUAS causas
+ * distintas — por isso o predicate testa ausência dos quatro grupos oficiais
+ * em vez de procurar um caso específico:
+ *   - 04/07/2026 R$ 2.513,27 — grupo 'Custo Fixo Pecuária' em 1-Entradas
+ *     (rescisão lançada como entrada): classificado, mas em grupo de saída.
+ *   - 05/08/2026 R$ 4.007,42 e 07/08/2026 R$ 1.650,00 — Pix de OFX com
+ *     macro_custo e grupo_custo nulos: nunca enriquecidos.
+ * Nenhum dos três mudou de lugar com este PR: os predicates antigos exigiam
+ * isReceita(l) (canonicalMacro === 'receitas'), que já dava false para macro
+ * 'Custeio Produção' ou null. Eram invisíveis antes; agora aparecem.
+ * O mecanismo não tem piso — a linha é permanente, não um patch.
+ */
+export const isEntradaNaoClassificada = (l: LancamentoClassificavel): boolean =>
+  !isReceitaPecuaria(l) &&
+  !isReceitaAgricola(l) &&
+  !isOutrasReceitas(l) &&
+  !isEntradaFinanceira(l);
 
 // Para Amortização, o plano de contas oficial coloca a distinção Pec/Agri
 // no subcentro (não no grupo_custo, que é genérico 'Amortizações').

@@ -531,7 +531,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     seriesMensais, seriesMeta, cabecasIndicador, pesoMedioIndicador, gmdIndicador, uaHaIndicador, kgHaIndicador, arrobasIndicador, desfruteIndicador, valorRebanhoIndicador,
     receitaPecIndicador, custeioPecIndicador, custoArrIndicador, precoArrIndicador, custoCabIndicador, margemArrIndicador,
     // PR-HOME-CAIXA-CONSOLIDADO-01 — as 15 linhas de fluxo e o saldo.
-    receitaAgriIndicador, receitaOutrasIndicador, captacaoIndicador,
+    receitaAgriIndicador, receitaOutrasIndicador, captacaoIndicador, entradasNaoClassificadasIndicador,
     investPecIndicador, investBovinosIndicador, amortizacaoPecIndicador,
     custeioAgriIndicador, investAgriIndicador, amortizacaoAgriIndicador,
     dividendosIndicador, deducoesTributosIndicador, tributosIndicador,
@@ -569,6 +569,13 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     { label: 'Produção silvicultura',  valor: null as number | null },
     { label: 'Outras receitas',        valor: receitaOutrasIndicador?.valor ?? null },
     { label: 'Captação financiamento', valor: captacaoIndicador?.valor      ?? null },
+    /* Residuo CONDICIONAL: totalEntradas e a soma das linhas EXIBIDAS, entao somar uma
+       linha invisivel faria o total divergir das partes — o pior defeito possivel num
+       bloco que existe para fechar conta. Sem residuo, a linha nao existe e nada muda. */
+    ...(((entradasNaoClassificadasIndicador?.valor ?? 0) > 0)
+      ? [{ label: 'Não classificado',
+           valor: entradasNaoClassificadasIndicador?.valor ?? null }]
+      : []),
   ];
 
   const saidasCaixa = [
