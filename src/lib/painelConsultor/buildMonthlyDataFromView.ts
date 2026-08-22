@@ -80,8 +80,7 @@ export interface MonthlyData {
      entradas_externas/saidas_externas, e no Global ainda passam pela
      neutralizacao de transferencia. As series abaixo sao o DETALHE, e no
      Global as duas de transferencia ficam FORA da soma de propósito.
-     Peso por tipo existe no cache (peso_*) e nao foi trazido: nenhuma linha
-     deste PR o consome, e serie sem consumidor e peso morto. */
+     Peso por tipo entrou no PR do bloco PESOS TOTAIS — kg, abaixo. */
   movNascimento: number[];
   movCompra: number[];
   movTransfEntrada: number[];
@@ -91,6 +90,22 @@ export interface MonthlyData {
   movTransfSaida: number[];
   movConsumo: number[];
   movMorte: number[];
+  /* PESOS TOTAIS — kg. Espelho em quilos das linhas de rebanho.
+     `pesoEntradas`/`pesoSaidas` saem de peso_entradas_externas /
+     peso_saidas_externas, e no GLOBAL passam pela MESMA neutralizacao de
+     transferencia que as cabecas — ver o bloco isGlobal abaixo.
+     `pesoTotalIni`/`pesoTotalFin` ja existiam e nao mudaram. */
+  pesoEntradas: number[];
+  pesoSaidas: number[];
+  pesoMovNascimento: number[];
+  pesoMovCompra: number[];
+  pesoMovTransfEntrada: number[];
+  pesoMovAbate: number[];
+  pesoMovVenda: number[];
+  pesoMovVendaPe: number[];
+  pesoMovTransfSaida: number[];
+  pesoMovConsumo: number[];
+  pesoMovMorte: number[];
 }
 
 export function buildMonthlyDataFromView(
@@ -123,6 +138,26 @@ export function buildMonthlyDataFromView(
   let entradas = mk(m => viewTotals[m]?.entradas_externas ?? 0);
   let saidas = mk(m => viewTotals[m]?.saidas_externas ?? 0);
 
+  /* peso_morte e peso_nascimento subestimam: 91 mortes e 45 nascimentos tem
+     peso_medio_kg E peso_carcaca_kg nulos e caem no terceiro termo do
+     COALESCE — zero. Nao e carcaca disfarcada; e peso ausente virando zero.
+     Afeta tambem peso_entradas_externas e peso_saidas_externas, e e anterior
+     a esta frente. Medido em 22/08. Nao se corrige aqui: e dado faltando na
+     origem, nao conta errada. */
+  const pesoPorTipo = {
+    pesoMovNascimento: mk(m => viewTotals[m]?.peso_nascimento ?? 0),
+    pesoMovCompra: mk(m => viewTotals[m]?.peso_compra ?? 0),
+    pesoMovTransfEntrada: mk(m => viewTotals[m]?.peso_transf_entrada ?? 0),
+    pesoMovAbate: mk(m => viewTotals[m]?.peso_abate ?? 0),
+    pesoMovVenda: mk(m => viewTotals[m]?.peso_venda ?? 0),
+    pesoMovVendaPe: mk(m => viewTotals[m]?.peso_venda_pe ?? 0),
+    pesoMovTransfSaida: mk(m => viewTotals[m]?.peso_transf_saida ?? 0),
+    pesoMovConsumo: mk(m => viewTotals[m]?.peso_consumo ?? 0),
+    pesoMovMorte: mk(m => viewTotals[m]?.peso_morte ?? 0),
+  };
+  let pesoEntradas = mk(m => viewTotals[m]?.peso_entradas_externas ?? 0);
+  let pesoSaidas = mk(m => viewTotals[m]?.peso_saidas_externas ?? 0);
+
   // ── GLOBAL: neutralizar transferências inter-fazendas ──
   // No nível Global, transferências entre fazendas do grupo são movimento interno
   // e não devem inflar entradas nem saídas do sistema.
@@ -149,6 +184,17 @@ export function buildMonthlyDataFromView(
        aqui depois deve saber que existem duas fontes para este valor. */
     entradas = entradas.map((v, i) => Math.max(0, v - transfEntMes[i]));
     saidas = saidas.map((v, i) => Math.max(0, v - transfSaiMes[i]));
+
+    /* MESMA regra para o PESO — e a razao de existir esta linha: sem ela, o
+       Global do peso contaria a transferencia e as linhas de kg diriam o
+       oposto das de cabeca no mesmo bloco.
+       Aqui a fonte e o CACHE (peso_transf_*), nao a varredura de `lancPec`
+       acima: as duas colunas ja existem desde a migration 20260913120000 e
+       dao o numero direto. Medido em 22/08 na Vera Ligia / Baia Grande 2026:
+       peso_entradas_externas 72.510,00 kg, dos quais 67.410,00 sao
+       transferencia — sem a subtracao o Global inflaria 93%. */
+    pesoEntradas = pesoEntradas.map((v, i) => Math.max(0, v - pesoPorTipo.pesoMovTransfEntrada[i]));
+    pesoSaidas = pesoSaidas.map((v, i) => Math.max(0, v - pesoPorTipo.pesoMovTransfSaida[i]));
   }
   const movPorTipo = {
     movNascimento: mk(m => viewTotals[m]?.cab_nascimento ?? 0),
@@ -266,6 +312,8 @@ export function buildMonthlyDataFromView(
     pesoTotalIni, pesoTotalFin, pesoMedioIni, pesoMedioFin,
     gmd, arrobasProd, prodKg, areaProd: areaProdutiva,
     ...movPorTipo,
+    pesoEntradas, pesoSaidas,
+    ...pesoPorTipo,
     areaProdMensal: Array.from({ length: 12 }, (_, i) => {
       const v = areaProdutivaMensal?.[i];
       return typeof v === 'number' && !Number.isNaN(v) ? v : areaProdutiva;

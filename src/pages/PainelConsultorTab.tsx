@@ -493,10 +493,41 @@ function buildBlocosForTab(
     ],
   };
 
+  /* PESOS TOTAIS — kg: espelho do bloco Rebanho, mesmas linhas em quilo.
+     Sem as linhas de media (Rebanho medio, Peso medio, UA, Lotacao): elas ja
+     vivem no bloco Rebanho e repeti-las seria dois donos para o mesmo numero.
+     ATENCAO — peso NAO fecha como cabeca: `final != inicial + entradas -
+     saidas`, porque o rebanho ENGORDA sem entrar animal. A diferenca e a
+     producao biologica, que tem linha propria no bloco Producao. Nao existe
+     identidade fechada aqui, e nao se deve inventar uma. */
+  const blocoPesoKg: Bloco = {
+    nome: 'PESOS TOTAIS — kg',
+    rows: [
+      linha(['mensal'], 'Peso inicial (kg)', 'padrao', pesoTotalIni, undefined, true),
+      linha(['mensal','acumulado'], 'Peso entradas (kg)', 'padrao', d.pesoEntradas, undefined, false, 'familia'),
+      linha(['mensal','acumulado'], '→ Nascimentos', 'padrao', d.pesoMovNascimento, undefined, false, 'destino'),
+      linha(['mensal','acumulado'], '→ Compras', 'padrao', d.pesoMovCompra, undefined, false, 'destino'),
+      linha(['mensal','acumulado'], '→ Transf. Interna', 'padrao', d.pesoMovTransfEntrada, undefined, false, 'destino'),
+      linha(['mensal','acumulado'], 'Peso saídas (kg)', 'padrao', d.pesoSaidas, undefined, false, 'familia'),
+      linha(['mensal','acumulado'], '→ Abates', 'padrao', d.pesoMovAbate, undefined, false, 'destino'),
+      linha(['mensal','acumulado'], '→ Vendas', 'padrao', d.pesoMovVenda, undefined, false, 'destino'),
+      linha(['mensal','acumulado'], '→ Venda em pé', 'padrao', d.pesoMovVendaPe, undefined, false, 'destino'),
+      linha(['mensal','acumulado'], '→ Mortes', 'padrao', d.pesoMovMorte, undefined, false, 'destino'),
+      linha(['mensal','acumulado'], '→ Consumo', 'padrao', d.pesoMovConsumo, undefined, false, 'destino'),
+      linha(['mensal','acumulado'], '→ Transf. Interna', 'padrao', d.pesoMovTransfSaida, undefined, false, 'destino'),
+      /* pesoTotalIni/pesoTotalFin LOCAIS, nao d.*: no builder do Global eles
+         ja aplicam a REGRA SOBERANA do snapshot validado (`hasSnap`), que
+         vence sobre a view. Ler d.* aqui contornaria o snapshot e faria a
+         linha de peso discordar da de cabecas no mesmo bloco. */
+      linha(['mensal'], 'Peso final (kg)', 'padrao', pesoTotalFin, undefined, true),
+    ],
+  };
+
   switch (tab) {
     case 'mensal':
       return [
         blocoRebanho,
+        blocoPesoKg,
         {
           nome: 'Produção',
           rows: [
@@ -534,6 +565,7 @@ function buildBlocosForTab(
     case 'medio':
       return [
         blocoRebanho,
+        blocoPesoKg,
         {
           nome: 'Produção',
           rows: [
@@ -569,6 +601,7 @@ function buildBlocosForTab(
     case 'acumulado':
       return [
         blocoRebanho,
+        blocoPesoKg,
         {
           nome: 'Produção',
           rows: [
@@ -607,6 +640,7 @@ function buildBlocosForTab(
       const rebMedioPeriodoVals = rollingAvg(cabMedia);
       return [
         blocoRebanho,
+        blocoPesoKg,
         {
           nome: 'Produção',
           rows: [
@@ -800,6 +834,10 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
   const rebMedioPeriodoVals = rollingAvg(cabMedia);
 
   // Bloco "Financeiro Soberano (Auditoria)" — helper compartilhado
+  /* Peso de entradas/saidas ja agregado na fonte deste builder; ela nao tem
+     quebra por tipo, entao as nove setas ficam em travessao. */
+  const pesoEntKg = get('peso_entradas_kg');
+  const pesoSaiKg = get('peso_saidas_kg');
   const blocoSoberano = buildBlocoSoberano(soberano, r);
 
   /* ── BLOCO REBANHO — 14 linhas, IGUAIS nas quatro abas e nos tres cenarios ──
@@ -845,10 +883,37 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
     ],
   };
 
+  /* PESOS TOTAIS — kg: espelho do bloco Rebanho, mesmas linhas em quilo.
+     Sem as linhas de media (Rebanho medio, Peso medio, UA, Lotacao): elas ja
+     vivem no bloco Rebanho e repeti-las seria dois donos para o mesmo numero.
+     ATENCAO — peso NAO fecha como cabeca: `final != inicial + entradas -
+     saidas`, porque o rebanho ENGORDA sem entrar animal. A diferenca e a
+     producao biologica, que tem linha propria no bloco Producao. Nao existe
+     identidade fechada aqui, e nao se deve inventar uma. */
+  const blocoPesoKg: Bloco = {
+    nome: 'PESOS TOTAIS — kg',
+    rows: [
+      linha(['mensal'], 'Peso inicial (kg)', 'padrao', pesoIni, undefined, true),
+      linha(['mensal','acumulado'], 'Peso entradas (kg)', 'padrao', pesoEntKg, undefined, false, 'familia'),
+      linha([], '→ Nascimentos', 'padrao', NAN12, undefined, false, 'destino'),
+      linha([], '→ Compras', 'padrao', NAN12, undefined, false, 'destino'),
+      linha([], '→ Transf. Interna', 'padrao', NAN12, undefined, false, 'destino'),
+      linha(['mensal','acumulado'], 'Peso saídas (kg)', 'padrao', pesoSaiKg, undefined, false, 'familia'),
+      linha([], '→ Abates', 'padrao', NAN12, undefined, false, 'destino'),
+      linha([], '→ Vendas', 'padrao', NAN12, undefined, false, 'destino'),
+      linha([], '→ Venda em pé', 'padrao', NAN12, undefined, false, 'destino'),
+      linha([], '→ Mortes', 'padrao', NAN12, undefined, false, 'destino'),
+      linha([], '→ Consumo', 'padrao', NAN12, undefined, false, 'destino'),
+      linha([], '→ Transf. Interna', 'padrao', NAN12, undefined, false, 'destino'),
+      linha(['mensal'], 'Peso final (kg)', 'padrao', pesoFin, undefined, true),
+    ],
+  };
+
   switch (tab) {
     case 'mensal':
       return [
         blocoRebanho,
+        blocoPesoKg,
         {
           nome: 'Produção',
           rows: [
@@ -884,6 +949,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
     case 'medio':
       return [
         blocoRebanho,
+        blocoPesoKg,
         {
           nome: 'Produção',
           rows: [
@@ -918,6 +984,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
     case 'acumulado':
       return [
         blocoRebanho,
+        blocoPesoKg,
         {
           nome: 'Produção',
           rows: [
@@ -951,6 +1018,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
     case 'media_periodo':
       return [
         blocoRebanho,
+        blocoPesoKg,
         {
           nome: 'Produção',
           rows: [
@@ -1123,6 +1191,10 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
   const rebMedioPeriodoVals = rollingAvg(cabMedia);
 
   // Bloco "Financeiro Soberano (Auditoria)" — helper compartilhado
+  /* Peso de entradas/saidas ja agregado na fonte deste builder; ela nao tem
+     quebra por tipo, entao as nove setas ficam em travessao. */
+  const pesoEntKg = agg('pesoEntradas');
+  const pesoSaiKg = agg('pesoSaidas');
   const blocoSoberano = buildBlocoSoberano(soberano, r);
 
   /* ── BLOCO REBANHO — 14 linhas, IGUAIS nas quatro abas e nos tres cenarios ──
@@ -1168,10 +1240,37 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
     ],
   };
 
+  /* PESOS TOTAIS — kg: espelho do bloco Rebanho, mesmas linhas em quilo.
+     Sem as linhas de media (Rebanho medio, Peso medio, UA, Lotacao): elas ja
+     vivem no bloco Rebanho e repeti-las seria dois donos para o mesmo numero.
+     ATENCAO — peso NAO fecha como cabeca: `final != inicial + entradas -
+     saidas`, porque o rebanho ENGORDA sem entrar animal. A diferenca e a
+     producao biologica, que tem linha propria no bloco Producao. Nao existe
+     identidade fechada aqui, e nao se deve inventar uma. */
+  const blocoPesoKg: Bloco = {
+    nome: 'PESOS TOTAIS — kg',
+    rows: [
+      linha(['mensal'], 'Peso inicial (kg)', 'padrao', pesoIni, undefined, true),
+      linha(['mensal','acumulado'], 'Peso entradas (kg)', 'padrao', pesoEntKg, undefined, false, 'familia'),
+      linha([], '→ Nascimentos', 'padrao', NAN12, undefined, false, 'destino'),
+      linha([], '→ Compras', 'padrao', NAN12, undefined, false, 'destino'),
+      linha([], '→ Transf. Interna', 'padrao', NAN12, undefined, false, 'destino'),
+      linha(['mensal','acumulado'], 'Peso saídas (kg)', 'padrao', pesoSaiKg, undefined, false, 'familia'),
+      linha([], '→ Abates', 'padrao', NAN12, undefined, false, 'destino'),
+      linha([], '→ Vendas', 'padrao', NAN12, undefined, false, 'destino'),
+      linha([], '→ Venda em pé', 'padrao', NAN12, undefined, false, 'destino'),
+      linha([], '→ Mortes', 'padrao', NAN12, undefined, false, 'destino'),
+      linha([], '→ Consumo', 'padrao', NAN12, undefined, false, 'destino'),
+      linha([], '→ Transf. Interna', 'padrao', NAN12, undefined, false, 'destino'),
+      linha(['mensal'], 'Peso final (kg)', 'padrao', pesoFin, undefined, true),
+    ],
+  };
+
   switch (tab) {
     case 'mensal':
       return [
         blocoRebanho,
+        blocoPesoKg,
         {
           nome: 'Produção',
           rows: [
@@ -1207,6 +1306,7 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
     case 'medio':
       return [
         blocoRebanho,
+        blocoPesoKg,
         {
           nome: 'Produção',
           rows: [
@@ -1241,6 +1341,7 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
     case 'acumulado':
       return [
         blocoRebanho,
+        blocoPesoKg,
         {
           nome: 'Produção',
           rows: [
@@ -1274,6 +1375,7 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
     case 'media_periodo':
       return [
         blocoRebanho,
+        blocoPesoKg,
         {
           nome: 'Produção',
           rows: [

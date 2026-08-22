@@ -284,6 +284,11 @@ export function totalizarPorMes(rows: ZootCategoriaMensal[]): Record<number, {
   evol_cat_saida: number;
   peso_total_inicial: number;
   peso_total_final: number;
+  /* peso_entradas_externas / peso_saidas_externas NUNCA foram agregados aqui,
+     apesar de existirem na linha desde sempre — nenhum consumidor pedia. O
+     bloco PESOS TOTAIS — kg e o primeiro. */
+  peso_entradas_externas: number;
+  peso_saidas_externas: number;
   producao_biologica: number;
   cab_nascimento: number;
   cab_compra: number;
@@ -326,6 +331,8 @@ export function totalizarPorMes(rows: ZootCategoriaMensal[]): Record<number, {
       evol_cat_saida: cats.reduce((s, c) => s + c.evol_cat_saida, 0),
       peso_total_inicial: cats.reduce((s, c) => s + c.peso_total_inicial, 0),
       peso_total_final: cats.reduce((s, c) => s + c.peso_total_final, 0),
+      peso_entradas_externas: cats.reduce((s, c) => s + c.peso_entradas_externas, 0),
+      peso_saidas_externas: cats.reduce((s, c) => s + c.peso_saidas_externas, 0),
       producao_biologica: cats.reduce((s, c) => s + c.producao_biologica, 0),
       /* As 18 somam por categoria igual as irmas. `?? 0` porque linha de cache
          anterior ao rebuild traz NULL — e ali zero e a leitura correta: a
