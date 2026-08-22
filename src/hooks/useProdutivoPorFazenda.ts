@@ -57,6 +57,11 @@ export interface ProdutivoPorFazenda {
   arrobas: number;
   arrIniciais: number;
   arrVendidas: number;
+  /* Serie mensal de UA, indice 0 = Jan, `null` em mes sem linha. O valor
+     colapsado `ua_media` CONTINUA existindo e nao mudou — quem precisa da
+     lotacao do periodo cruza esta serie com a serie de area, mes a mes,
+     porque media de razoes nao e razao de medias quando a area varia. */
+  uaPorMes: (number | null)[];
 }
 
 /* @ do mes = producao biologica / 30 — mesma regra do PC-100. */
@@ -181,6 +186,7 @@ export function useProdutivoPorFazenda(
            acumula — entao o resultado no indice `ateMes-1` cobre exatamente
            Jan..ateMes, sem meses futuros contaminarem. */
         prodBio12: number[]; cabMedia12: number[]; dias12: number[];
+        ua12: (number | null)[];
       };
       const acc = new Map<string, Acc>();
       for (const row of (vwRes.data ?? []) as LinhaVw[]) {
@@ -190,6 +196,7 @@ export function useProdutivoPorFazenda(
           a = {
             cab: 0, ua: 0, arrIni: 0, n: 0, gmdSoma: 0, gmdN: 0, medSoma: 0, medN: 0,
             prodBio12: Array(12).fill(0), cabMedia12: Array(12).fill(0), dias12: Array(12).fill(0),
+            ua12: Array(12).fill(null),
           };
           acc.set(row.fazenda_id, a);
         }
@@ -201,6 +208,9 @@ export function useProdutivoPorFazenda(
           a.prodBio12[idx] = Number(row.gmd_numerador_kg) || 0;
           a.cabMedia12[idx] = mediaMes;
           a.dias12[idx] = Number(row.dias_mes) || 0;
+          /* null, nao 0: mes sem UA e AUSENCIA. Zero entraria como lotacao
+             zero e derrubaria a media do periodo. */
+          a.ua12[idx] = row.ua_media == null ? null : Number(row.ua_media);
         }
         a.ua += Number(row.ua_media) || 0;
         a.arrIni += (Number(row.peso_inicio_kg) || 0) / KG_POR_ARROBA;
@@ -244,6 +254,7 @@ export function useProdutivoPorFazenda(
             return v == null || isNaN(v) ? null : v;
           })(),
           ua_media: a.ua / a.n,
+          uaPorMes: a.ua12,
           arrIniciais: a.arrIni / a.n,
           arrobas: (bioPorFazenda.get(fazenda_id) ?? 0) / KG_POR_ARROBA,
           arrVendidas: vendPorFazenda.get(fazenda_id) ?? 0,

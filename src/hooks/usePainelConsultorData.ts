@@ -204,6 +204,14 @@ export interface PainelConsultorDataResult {
    * fazenda a lista traz a unica fazenda e a tela nao exibe o bloco.
    */
   areaPorFazendaMes: SnapshotAreaFazendaMes[];
+  /* snapshotsFazenda exposto: a serie de area por fazenda-mes ja era
+     carregada e colapsada em areaPorFazendaMes. A lotacao do periodo
+     precisa dela ANTES do colapso — media dos UA/ha mensais, nao razao de
+     medias. Publicar o que ja se calcula; nao duplicar a leitura de
+     fechamento_area_snapshot num segundo hook.
+     NAO e anulado em incompletoOverride: e area, nao indicador dependente
+     de P1 — mesma regra de areaPorFazendaMes, que tambem passa intacto. */
+  snapshotsFazenda: SnapshotAreaFazendaMes[];
   /**
    * PR-PC100-AREAS-01 — repartição REALIZADA por destino, uma série de 12 por
    * destino. null = mês sem snapshot (exibe "—"); 0 = destino sem pasto no mês.
@@ -3273,6 +3281,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     areaBenfeitoriasRealPorMes,
     areaOutrasRealPorMes,
     areaPorFazendaMes,
+    snapshotsFazenda,
 
     // UA/ha: série oficial (mês = monthlyData.lotUaHa; período = rollingAvg PC-100)
     lotUaHa: uaHaValor,

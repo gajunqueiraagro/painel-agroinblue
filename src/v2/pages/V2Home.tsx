@@ -625,6 +625,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     areaTotalRealPorMes, areaSilviculturaRealPorMes, areaReservaRealPorMes,
     areaAppRealPorMes, areaBenfeitoriasRealPorMes, areaOutrasRealPorMes,
     areaPorFazendaMes,
+    snapshotsFazenda,
     lotUaHa, kgHa, statusArea, faltandoCount,
     seriesMensais, seriesMeta, cabecasIndicador, pesoMedioIndicador, gmdIndicador, uaHaIndicador, kgHaIndicador, arrobasIndicador, desfruteIndicador, valorRebanhoIndicador,
     receitaPecIndicador, custeioPecIndicador, custoArrIndicador, precoArrIndicador, custoCabIndicador, margemArrIndicador,
@@ -729,16 +730,49 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
       .map(p => {
         const area = areaPorFazendaMes.find(a => a.fazenda_id === p.fazenda_id);
         const areaPec = area?.area_pecuaria_ha ?? 0;
+
+        /* Media dos UA/ha MENSAIS, nao razao de medias: e a regra do
+           rollingAvg(monthlyData.lotUaHa) do PC-100
+           (usePainelConsultorData:1911). Os dois so coincidem se a area for
+           constante no periodo — e ela muda (vigencia de pastos, 98a1eebf: a
+           Pureza perdeu 69,76 ha em maio/2025). Medido em 22/08.
+
+           Divisor proprio, nao rollingAvg: a funcao soma e conta
+           INCONDICIONALMENTE (painelConsultorIndicadores.ts:86-91) e nao
+           descarta mes vazio — no PC-100 e seguro porque a serie agregada e
+           densa, mas por fazenda ela tem buracos, e uma fazenda com 3 de 7
+           meses fechados dividiria por 7. Mesmo tratamento que o rebanho e o
+           GMD receberam.
+
+           Area do MES, do snapshot oficial — nunca a `area_produtiva_ha` da
+           view, que e lixo conhecido (Pureza jul/2026: 4.726 contra 3.595). */
+        const lotacaoPeriodo = (() => {
+          let soma = 0, n = 0;
+          for (let m = 1; m <= mesNum; m++) {
+            const ua = p.uaPorMes[m - 1];
+            const snap = snapshotsFazenda.find(x => x.fazenda_id === p.fazenda_id && x.mes === m);
+            const aPec = snap?.area_pecuaria_ha ?? 0;
+            if (ua == null || aPec <= 0) continue;
+            soma += ua / aPec;
+            n += 1;
+          }
+          return n > 0 ? soma / n : null;
+        })();
+
         return {
           ...p,
           areaPec,
-          /* Area zero exibe "—", nunca divisao por zero. */
-          lotacao: areaPec > 0 ? p.ua_media / areaPec : null,
+          /* No MES nada muda: `ua_media[m] / area[m]` e exatamente o que o
+             PC-100 faz (eficienciaArea.ts:35-36). Area zero exibe "—", nunca
+             divisao por zero. */
+          lotacao: isPeriodo
+            ? lotacaoPeriodo
+            : (areaPec > 0 ? p.ua_media / areaPec : null),
         };
       })
       .filter(l => l.cabecas > 0 || l.areaPec > 0)
       .sort((a, b) => b.cabecas - a.cabecas),
-    [produtivoPorFazenda, areaPorFazendaMes],
+    [produtivoPorFazenda, areaPorFazendaMes, snapshotsFazenda, isPeriodo, mesNum],
   );
 
   /* Total consome os indicadores do PC-100, os MESMOS objetos dos tiles do bloco
