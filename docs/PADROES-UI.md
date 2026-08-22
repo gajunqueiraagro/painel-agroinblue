@@ -143,25 +143,7 @@ quando a variável não existe, e o teto some sem aviso.
 
 Referência viva: `select.tsx` (PR-UI-DROPDOWN-VIEWPORT-01).
 
----
-
-## Pendências deste documento
-
-- **Seletor de mês/ano com setas** — não existe. Enquanto não houver, `type="month"`
-  segue válido para campos de granularidade mensal (ver A5).
-- **Navegação por ano no `Calendar`** — hoje só por mês. Candidato: `captionLayout="dropdown"`
-  com `fromYear`/`toYear` do `react-day-picker` já instalado (`^8.10.1`), sem dependência nova.
-- **Retrofit A8** — **15** modais legados ainda com `overflow-y-auto` no `DialogContent`
-  inteiro: `MapaRebanhoImportDialog`, `AbateDetalhesDialog`, `CompraDetalhesDialog`,
-  `AbaRecebimentoLotes`, `AbaLiquidacaoOC`, `SaldoInicialForm`, `LancamentoDetalhe`,
-  `FinanceiroEditDialog`, `DialogVerLancamentosOficiais`, `VendaDetalhesDialog`,
-  `TransferenciaDetalhesDialog`, `ProjetosInvestimento`, `MesaClassificacaoTab`,
-  `LinhaExecutivaExecutivoModal`, `FinanciamentoDetalhe`. Frente própria:
-  **PR-UI-MODAL-RETROFIT-01**.
-- **A9 em `popover.tsx` e `dropdown-menu.tsx`** — hoje sem `max-h` nenhum: crescem com o
-  conteúdo e vazam do mesmo jeito, por caminho diferente. Auditar quando houver caso real.
-
-## Tabelas de dados (padrão AGROinBLUE)
+## A10 — Tabelas de dados
 
 Estabelecido em `5d691b8d` (22/08/2026), aplicado às tabelas da Visão Geral.
 Vale para toda tabela nova.
@@ -190,3 +172,21 @@ tema claro, subir a ímpar para `/40`; nunca pintar a par de branco.
 
 **Linha de nota** (ex.: "% da área") fica FORA do padrão: sem fundo,
 `text-muted-foreground`, um passo menor. Ela é rodapé da tabela, não dado.
+
+---
+
+## Pendências deste documento
+
+- **Seletor de mês/ano com setas** — não existe. Enquanto não houver, `type="month"`
+  segue válido para campos de granularidade mensal (ver A5).
+- **Navegação por ano no `Calendar`** — hoje só por mês. Candidato: `captionLayout="dropdown"`
+  com `fromYear`/`toYear` do `react-day-picker` já instalado (`^8.10.1`), sem dependência nova.
+- **Retrofit A8** — **15** modais legados ainda com `overflow-y-auto` no `DialogContent`
+  inteiro: `MapaRebanhoImportDialog`, `AbateDetalhesDialog`, `CompraDetalhesDialog`,
+  `AbaRecebimentoLotes`, `AbaLiquidacaoOC`, `SaldoInicialForm`, `LancamentoDetalhe`,
+  `FinanceiroEditDialog`, `DialogVerLancamentosOficiais`, `VendaDetalhesDialog`,
+  `TransferenciaDetalhesDialog`, `ProjetosInvestimento`, `MesaClassificacaoTab`,
+  `LinhaExecutivaExecutivoModal`, `FinanciamentoDetalhe`. Frente própria:
+  **PR-UI-MODAL-RETROFIT-01**.
+- **A9 em `popover.tsx` e `dropdown-menu.tsx`** — hoje sem `max-h` nenhum: crescem com o
+  conteúdo e vazam do mesmo jeito, por caminho diferente. Auditar quando houver caso real.
