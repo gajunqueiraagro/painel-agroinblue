@@ -48,6 +48,7 @@ export default {
           DEFAULT: "hsl(var(--meta))",
           foreground: "hsl(var(--meta-foreground))",
         },
+        patrimonial: "hsl(var(--patrimonial))",
         muted: {
           DEFAULT: "hsl(var(--muted))",
           foreground: "hsl(var(--muted-foreground))",

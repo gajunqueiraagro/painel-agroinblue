@@ -37,6 +37,11 @@
        laranja". */
     --meta: 25 85% 45%;
     --meta-foreground: 0 0% 100%;
+
+    /* Cinza azulado para AREAS PATRIMONIAIS (reserva, APP, benfeitorias,
+       outras) no grafico. As quatro se distinguem por opacidade, nao por
+       matiz: sao a mesma natureza — terra que nao produz. */
+    --patrimonial: 220 9% 46%;
     --border: 218 12% 89%;
     --input: 218 12% 89%;
     --ring: 213 52% 24%;

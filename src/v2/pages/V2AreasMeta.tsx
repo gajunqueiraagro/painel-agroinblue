@@ -8,6 +8,7 @@ import { AlertTriangle, Globe, Loader2, Save } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
+import { useFazendaCadastro } from '@/hooks/useFazendaCadastro';
 import {
   useAreaPlanejamento,
   type UpsertLinhaArea,
@@ -60,6 +61,20 @@ interface LinhaLocal {
 /* Separador de trimestre: derivado do MES, nunca de posicao na lista de
    colunas — inserir ou remover coluna nao pode deslocar a divisao. Dez nao
    recebe: a coluna Media logo em seguida ja tem fundo proprio. */
+/* Cores das sete faixas do grafico. As tres produtivas reusam os tokens do
+   donut da Visao Geral — mesma familia, mesma cor, em qualquer tela. As
+   quatro patrimoniais compartilham `--patrimonial` e se distinguem por
+   OPACIDADE: sao a mesma natureza, terra que nao produz. */
+const COR_AREA: Record<string, string> = {
+  pec:     'hsl(var(--success))',
+  agric:   'hsl(var(--cta))',
+  silvi:   'hsl(var(--primary))',
+  reserva: 'hsl(var(--patrimonial) / 0.85)',
+  app:     'hsl(var(--patrimonial) / 0.65)',
+  benf:    'hsl(var(--patrimonial) / 0.45)',
+  outras:  'hsl(var(--patrimonial) / 0.28)',
+};
+
 const bordaTrimestre = (mes: number) => (mes % 3 === 0 && mes !== 12 ? ' border-r border-border/60' : '');
 
 const linhaVazia = (mes: number): LinhaLocal =>
@@ -147,6 +162,49 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
       return l;
     }));
   }, [data, clienteId, fazendaId, anoInicialNum, isGlobal]);
+
+  /* ── PR-META-AREA-ASSISTIDA-01 — referencia da matricula ──
+     So no modo individual: matricula e por fazenda. */
+  const { data: cadastro } = useFazendaCadastro(
+    clienteId ?? undefined, fazendaId ?? undefined, !isGlobal,
+  );
+
+  /* Decomposicao de fazenda_cadastros e lixo conhecido (V2Fazendas:273:
+     "conferidos contra os pastos e descartados"). So o TOTAL confere — no
+     Retiro Agricultura, 69,76 bate com a soma dos pastos, enquanto a
+     Reserva declarada diz 108,49. Referencia por familia exigiria ler os
+     pastos: fonte diferente, PR proprio. */
+  const matricula = cadastro?.area_total_ha ?? null;
+
+  /* Barras do grafico: lem o MESMO state dos inputs, nao o banco — por isso
+     o grafico muda enquanto se digita, sem salvar. */
+  const barras = useMemo(
+    () => linhas.map(l => ({
+      mes: l.mes,
+      partes: AREAS.map(a => ({ campo: a.campo, valor: parseAreaBR(l[a.campo]) ?? 0 })),
+      total: AREAS.reduce((s2, a) => s2 + (parseAreaBR(l[a.campo]) ?? 0), 0),
+    })),
+    [linhas],
+  );
+
+  /* Escala considera o maior entre matricula e maior total: quando ha area
+     arrendada de terceiro o planejado excede a matricula, e a barra nao pode
+     sair do grafico. */
+  const escalaMax = useMemo(() => {
+    const maiorTotal = Math.max(0, ...barras.map(b => b.total));
+    return Math.max(maiorTotal, matricula ?? 0) || 1;
+  }, [barras, matricula]);
+
+  /* MOSTRAR, NAO IMPEDIR. Divergencia pode ser legitima — area arrendada de
+     terceiro faz o planejado exceder a matricula de proposito (caso
+     3 Muchachas, 50 ha). O sistema explica, o operador decide.
+     Tolerancia de 0,01 ha para arredondamento. */
+  const mesesDivergentes = useMemo(() => {
+    if (isGlobal || matricula == null) return [];
+    return barras
+      .filter(b => b.total > 0 && Math.abs(b.total - matricula) > 0.01)
+      .map(b => MESES[b.mes - 1]);
+  }, [barras, matricula, isGlobal]);
 
   // Detectar dirty (apenas modo individual)
   const dirty = useMemo(() => {
@@ -286,6 +344,70 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
         )}
       </Card>
 
+      {/* Grafico — SVG puro, idioma do donut da Visao Geral. Doze barras nao
+          justificam recharts, e a tela nao usa a lib em mais nada. */}
+      <Card>
+        <CardContent className="p-3">
+          {(() => {
+            const H = 120, TOPO = 6, BASE = H - 14;
+            const alt = BASE - TOPO;
+            const larg = 100 / 12;
+            const yDe = (v: number) => BASE - (v / escalaMax) * alt;
+            return (
+              <>
+                <svg viewBox="0 0 100 120" preserveAspectRatio="none" className="w-full h-[120px]">
+                  {barras.map((b, i) => {
+                    let acc = 0;
+                    return (
+                      <g key={b.mes}>
+                        {b.partes.map(pt => {
+                          if (pt.valor <= 0) return null;
+                          const y = yDe(acc + pt.valor);
+                          const h = (pt.valor / escalaMax) * alt;
+                          acc += pt.valor;
+                          return (
+                            <rect key={pt.campo}
+                              x={i * larg + larg * 0.18} width={larg * 0.64}
+                              y={y} height={h} fill={COR_AREA[pt.campo]} />
+                          );
+                        })}
+                      </g>
+                    );
+                  })}
+                  {/* Linha da matricula: so no individual — ela e por fazenda. */}
+                  {!isGlobal && matricula != null && (
+                    <line x1="0" x2="100" y1={yDe(matricula)} y2={yDe(matricula)}
+                      stroke="hsl(var(--foreground))" strokeWidth="0.4"
+                      strokeDasharray="1.5 1.5" vectorEffect="non-scaling-stroke" />
+                  )}
+                </svg>
+                <div className="flex items-baseline justify-between gap-2">
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[9px] text-muted-foreground">
+                    {AREAS.map(a => (
+                      <span key={a.campo} className="flex items-center gap-1">
+                        <span className="inline-block h-2 w-2 rounded-full shrink-0"
+                          style={{ background: COR_AREA[a.campo] }} />
+                        {a.label}
+                      </span>
+                    ))}
+                  </div>
+                  {!isGlobal && matricula != null && (
+                    <span className="text-[9px] text-muted-foreground shrink-0 tabular-nums">
+                      Matrícula {fmt(matricula)} ha
+                    </span>
+                  )}
+                </div>
+                <div className="flex text-[8px] text-muted-foreground">
+                  {MESES.map(m => (
+                    <span key={m} className="flex-1 text-center">{m}</span>
+                  ))}
+                </div>
+              </>
+            );
+          })()}
+        </CardContent>
+      </Card>
+
       {/* Tabela — compacta, paleta META (laranja muito leve), sem scroll horizontal em notebook padrão */}
       <Card>
         <CardContent className="p-0">
@@ -300,6 +422,10 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
               <thead className="bg-orange-50 dark:bg-orange-950/20 border-b border-orange-200/60 dark:border-orange-900/40">
                 <tr>
                   <th className="text-left px-2 py-1.5 font-semibold sticky left-0 bg-orange-50 dark:bg-orange-950/20 min-w-[100px] text-orange-900 dark:text-orange-200">Linha (ha)</th>
+                  {/* Referencia da matricula — so no individual: ela e por fazenda. */}
+                  {!isGlobal && (
+                    <th className="px-1 py-1.5 font-semibold text-center min-w-[58px] border-r border-border text-orange-900 dark:text-orange-200">Matrícula</th>
+                  )}
                   {MESES.map((m, i) => (
                     <th key={m} className={`px-1 py-1.5 font-semibold text-center min-w-[56px] text-orange-900 dark:text-orange-200${bordaTrimestre(i + 1)}`}>{m}</th>
                   ))}
@@ -323,6 +449,10 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
                     <td className={`px-2 py-1 font-medium sticky left-0 ${
                       patri ? 'bg-muted/50 text-muted-foreground' : 'bg-background'
                     }`}>{a.label}</td>
+                    {/* Sem valor por familia: so o total da matricula confere. */}
+                    {!isGlobal && (
+                      <td className="px-1 py-1 border-r border-border" />
+                    )}
                     {linhas.map((l, idx) => {
                       return (
                         <td key={l.mes} className={`px-0.5 py-0.5 text-center${bordaTrimestre(l.mes)}`}>
@@ -366,6 +496,11 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
                 {/* Total — sempre read-only, paleta META destaque */}
                 <tr className="bg-orange-100/50 dark:bg-orange-900/25 border-t-2 border-orange-200/70 dark:border-orange-900/50">
                   <td className="px-2 py-1.5 font-semibold sticky left-0 bg-orange-100/50 dark:bg-orange-900/25 text-orange-900 dark:text-orange-200">Total</td>
+                  {!isGlobal && (
+                    <td className="px-1 py-1.5 text-right text-[9px] tabular-nums font-semibold text-muted-foreground border-r border-border">
+                      {fmt(matricula)}
+                    </td>
+                  )}
                   {linhas.map((_, idx) => (
                     <td key={idx} className={`px-0.5 py-1.5 text-center font-semibold text-[9px] italic text-meta${bordaTrimestre(idx + 1)}`}>
                       {fmt(totalsLocal[idx])}
@@ -385,6 +520,15 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
           ? 'Global: Total = soma de todas as áreas cadastradas no banco. Em modo Global, mês é considerado cadastrado se ao menos uma fazenda tiver linha.'
           : 'Total = soma das sete áreas. Campo em branco significa não planejado, diferente de planejado como zero.'}
       </p>
+
+      {/* MOSTRAR, NAO IMPEDIR. Divergencia pode ser legitima — area arrendada
+          de terceiro faz o planejado exceder a matricula de proposito (caso
+          3 Muchachas, 50 ha). O sistema explica, o operador decide. */}
+      {mesesDivergentes.length > 0 && (
+        <p className="text-[11px] text-warning">
+          Planejado difere da matrícula em {mesesDivergentes.length} {mesesDivergentes.length === 1 ? 'mês' : 'meses'}: {mesesDivergentes.join(', ')}.
+        </p>
+      )}
     </div>
   );
 }
