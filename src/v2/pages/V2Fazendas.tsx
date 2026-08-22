@@ -80,12 +80,21 @@ export function V2Fazendas() {
   // Só ATIVOS: agruparPastosPorFamilia não filtra por decisão declarada no módulo —
   // quem chama decide. Esta é tela de cadastro e quer o conjunto vigente.
   //
-  // SEM mês: esta tela não tem seletor de mês nem de ano, e a vigência NÃO é
-  // aplicada aqui — pasto encerrado por data_fim ainda entra na soma. Limitação
-  // conhecida; não inventar um mês para dar à conferência uma precisão que ela não tem.
+  // MÊS CORRENTE, declarado: a tela não tem seletor de mês nem de ano, e antes
+  // não passava mês nenhum — pasto encerrado por data_fim entrava na soma para
+  // sempre. Isso REVERTE a decisão anterior ("não inventar um mês"), por dois
+  // motivos medidos em 22/08/2026: o modal de edição já PROMETE que depois da
+  // data_fim o pasto "não entra na conta de área", e sem o filtro a Pureza
+  // acusava divergência de 69,76 ha contra a própria matrícula — exatamente os
+  // 4 pastos desmembrados para o Retiro Agricultura em 2025-05.
+  // Esta é tela de cadastro ATUAL: o mês corrente é a referência honesta.
+  const mesCorrente = useMemo(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  }, []);
   const agrupado = useMemo(
-    () => agruparPastosPorFamilia(pastos.filter(p => p.ativo !== false)),
-    [pastos],
+    () => agruparPastosPorFamilia(pastos.filter(p => p.ativo !== false), mesCorrente),
+    [pastos, mesCorrente],
   );
 
   // Callback ref, NÃO useRef: useRef não dispara re-render quando o nó monta, e o

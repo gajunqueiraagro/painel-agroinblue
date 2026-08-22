@@ -1,5 +1,5 @@
 import { TIPOS_USO_OPTIONS_AGRUPADAS, isTipoUsoValido } from '@/lib/pastos/tiposUso';
-import type { Pasto } from '@/hooks/usePastos';
+import { isPastoAtivoNoMes, type Pasto } from '@/hooks/usePastos';
 
 /**
  * Repartição SOBERANA dos pastos por família e destino.
@@ -16,11 +16,27 @@ import type { Pasto } from '@/hooks/usePastos';
  * NÃO filtra `ativo`: quem chama decide. A lista de pastos tem o modo "Inativos"
  * e precisa dos dois conjuntos; a aba Área quer só os ativos. Passar já filtrado.
  */
-export function agruparPastosPorFamilia(pastos: Pasto[]) {
+export function agruparPastosPorFamilia(pastos: Pasto[], mesRef?: string) {
+  /* Vigencia por data_inicio/data_fim, delegada a `isPastoAtivoNoMes` — que ja
+     existia em usePastos.ts, espelha `fn_pastos_aplicaveis_mes` e nao tinha
+     consumidor nenhum. A regra nao precisava ser escrita; precisava ser usada.
+
+     O parametro e OPCIONAL para nao quebrar consumidor existente, mas TODA tela
+     que mostra um mes especifico deve passa-lo: sem ele, pasto desmembrado conta
+     para sempre.
+
+     Medido em 22/08/2026: 6 pastos com data_fim em 3 clientes, incluindo um com
+     fim FUTURO (Baldasso, 2026-08-31). Por isso a comparacao e contra o MES
+     CONSULTADO, nunca contra now() — uma regra com data de hoje acertaria por
+     acidente agora e erraria em duas semanas.
+
+     `ativo` continua NAO filtrado aqui, por decisao declarada no cabecalho deste
+     modulo: quem chama decide. Vigencia e `ativo` sao coisas diferentes. */
+  const vigentes = mesRef ? pastos.filter(p => isPastoAtivoNoMes(p, mesRef)) : pastos;
   const porTipo = new Map<string, Pasto[]>();
   const divergencia: Pasto[] = [];
   const legado: Pasto[] = [];
-  for (const p of pastos) {
+  for (const p of vigentes) {
     if (isTipoUsoValido(p.tipo_uso)) {
       const arr = porTipo.get(p.tipo_uso) ?? [];
       arr.push(p);

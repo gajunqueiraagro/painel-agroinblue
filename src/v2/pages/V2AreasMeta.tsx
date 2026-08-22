@@ -206,9 +206,19 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
      aba Cadastro do V2Fazendas, sem query nova (usePastos ja carrega). So
      ATIVOS: o helper nao filtra por decisao declarada no proprio modulo. */
   const { pastos } = usePastos();
+  const mesCorrente = useMemo(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  }, []);
   const refPorArea = useMemo<(number | null)[]>(() => {
     if (isGlobal) return AREAS.map(() => null);
-    const { familias } = agruparPastosPorFamilia(pastos.filter(p => p.ativo !== false));
+    /* MES CORRENTE como referencia unica do ano. A vigencia e MENSAL e a coluna
+       Referencia e UMA so para os doze meses — as duas nao se encaixam sem
+       redesenhar a coluna em 12 valores. Decisao registrada: usar o mes corrente
+       neste PR. Consequencia conhecida: o Baldasso (fim 2026-08-31) vai continuar
+       na referencia depois de agosto, porque a coluna nao sabe de que mes fala.
+       Referencia por mes e PR proprio. */
+    const { familias } = agruparPastosPorFamilia(pastos.filter(p => p.ativo !== false), mesCorrente);
     return AREAS.map(a => {
       if (!a.familia) return null;
       const f = familias.find(x => x.grupo === a.familia);
@@ -217,7 +227,7 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
       const t = f.tipos.find(x => x.tipo === a.tipo);
       return t ? t.pastos.reduce((s2, p) => s2 + (p.area_produtiva_ha ?? 0), 0) : null;
     });
-  }, [pastos, isGlobal]);
+  }, [pastos, isGlobal, mesCorrente]);
 
   /* Soma das sete familias derivadas — confrontada com area_total_ha na linha
      de Diferenca. Diz se o proprio cadastro fecha contra os pastos. */
