@@ -717,6 +717,31 @@ function buildBlocosForTab(
     ],
   } : null;
 
+  /* BLOCO PATRIMONIO — 6 linhas, iguais nas quatro abas.
+     As TRES primeiras sao ESTOQUE e usam `bruto`: valor do rebanho num mes
+     nao se soma nem se promedia. Hoje elas passavam por r(), entao em
+     Acumulados sairiam somadas e em Media do Periodo promediadas — numero
+     sem significado. Mesma regra do Saldo Inicial/Final do bloco Caixa.
+     `Variacao do Valor` e FLUXO: existe em Mensais e Acumulados, travessao
+     nas outras duas — hoje a linha SOME nelas.
+
+     Valor do ha e Valor do imovel: nao existe fonte no sistema. As linhas
+     entram para o bloco declarar o que vai medir — travessao nas quatro
+     abas ate haver cadastro de valor de terra. Confirmado por Gabriel em
+     22/08. */
+
+  const blocoPatrimonio: Bloco = {
+    nome: 'Patrimônio',
+    rows: [
+      linha(['mensal','medio','acumulado','media_periodo'], 'Valor do Rebanho', 'moneyInt', d.valorRebFin, 'valor_reb_fin', true, undefined, true),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Valor por Cabeça', 'money', valorPorCab, 'valor_cab_fin', true, undefined, true),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Valor por Arroba', 'money', valorPorArr, 'valor_arr_fin', true, undefined, true),
+      linha(['mensal','acumulado'], 'Variação do Valor', 'money', d.varValorReb, 'var_valor_reb'),
+      linha([], '→ Valor do ha (R$/ha)', 'money', NAN12, 'pat_valor_ha', true, 'destino'),
+      linha([], '→ Valor do imóvel', 'moneyInt', NAN12, 'pat_valor_imovel', true, 'destino'),
+    ],
+  };
+
   switch (tab) {
     case 'mensal':
       return [
@@ -727,15 +752,7 @@ function buildBlocosForTab(
         ...(blocoCaixa ? [blocoCaixa] : []),
         ...(blocoSoberano ? [blocoSoberano] : []),
         ...(blocoEndividamentoMensal ? [blocoEndividamentoMensal] : []),
-        {
-          nome: 'Patrimônio',
-          rows: [
-            r('Valor do Rebanho', 'moneyInt', d.valorRebFin, 'valor_reb_fin', true),
-            r('Valor por Cabeça', 'money', valorPorCab, 'valor_cab_fin', true),
-            r('Valor por Arroba', 'money', valorPorArr, 'valor_arr_fin', true),
-            r('Variação do Valor', 'money', d.varValorReb, 'var_valor_reb'),
-          ],
-        },
+        blocoPatrimonio,
       ];
 
     case 'medio':
@@ -746,14 +763,7 @@ function buildBlocosForTab(
         blocoProducao,
         ...(blocoCaixa ? [blocoCaixa] : []),
         ...(blocoSoberano ? [blocoSoberano] : []),
-        {
-          nome: 'Patrimônio',
-          rows: [
-            r('Valor do Rebanho', 'moneyInt', d.valorRebFin, 'valor_reb_fin', true),
-            r('Valor por Cabeça', 'money', valorPorCab, 'valor_cab_fin', true),
-            r('Valor por Arroba', 'money', valorPorArr, 'valor_arr_fin', true),
-          ],
-        },
+        blocoPatrimonio,
       ];
 
     case 'acumulado':
@@ -765,15 +775,7 @@ function buildBlocosForTab(
         ...(blocoCaixa ? [blocoCaixa] : []),
         ...(blocoSoberano ? [blocoSoberano] : []),
         ...(blocoEndividamentoAcum ? [blocoEndividamentoAcum] : []),
-        {
-          nome: 'Patrimônio',
-          rows: [
-            r('Valor do Rebanho', 'moneyInt', d.valorRebFin, 'valor_reb_fin', true),
-            r('Valor por Cabeça', 'money', valorPorCab, 'valor_cab_fin', true),
-            r('Valor por Arroba', 'money', valorPorArr, 'valor_arr_fin', true),
-            r('Variação do Valor', 'money', d.varValorReb, 'var_valor_reb'),
-          ],
-        },
+        blocoPatrimonio,
       ];
 
     case 'media_periodo': {
@@ -787,14 +789,7 @@ function buildBlocosForTab(
         blocoProducao,
         ...(blocoCaixa ? [blocoCaixa] : []),
         ...(blocoSoberano ? [blocoSoberano] : []),
-        {
-          nome: 'Patrimônio',
-          rows: [
-            r('Valor do Rebanho', 'moneyInt', d.valorRebFin, 'valor_reb_fin', true),
-            r('Valor por Cabeça', 'money', valorPorCab, 'valor_cab_fin', true),
-            r('Valor por Arroba', 'money', valorPorArr, 'valor_arr_fin', true),
-          ],
-        },
+        blocoPatrimonio,
       ];
     }
 
@@ -1176,6 +1171,31 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
     ],
   } : null;
 
+  /* BLOCO PATRIMONIO — 6 linhas, iguais nas quatro abas.
+     As TRES primeiras sao ESTOQUE e usam `bruto`: valor do rebanho num mes
+     nao se soma nem se promedia. Hoje elas passavam por r(), entao em
+     Acumulados sairiam somadas e em Media do Periodo promediadas — numero
+     sem significado. Mesma regra do Saldo Inicial/Final do bloco Caixa.
+     `Variacao do Valor` e FLUXO: existe em Mensais e Acumulados, travessao
+     nas outras duas — hoje a linha SOME nelas.
+
+     Valor do ha e Valor do imovel: nao existe fonte no sistema. As linhas
+     entram para o bloco declarar o que vai medir — travessao nas quatro
+     abas ate haver cadastro de valor de terra. Confirmado por Gabriel em
+     22/08. */
+
+  const blocoPatrimonio: Bloco = {
+    nome: 'Patrimônio',
+    rows: [
+      linha(['mensal','medio','acumulado','media_periodo'], 'Valor do Rebanho', 'moneyInt', vrm, 'valor_reb_fin', true, undefined, true),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Valor por Cabeça', 'money', valorPorCabMeta, 'valor_cab_fin', true, undefined, true),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Valor por Arroba', 'money', valorPorArrMeta, 'valor_arr_fin', true, undefined, true),
+      linha(['mensal','acumulado'], 'Variação do Valor', 'money', emptyMoney, 'var_valor_reb'),
+      linha([], '→ Valor do ha (R$/ha)', 'money', NAN12, 'pat_valor_ha', true, 'destino'),
+      linha([], '→ Valor do imóvel', 'moneyInt', NAN12, 'pat_valor_imovel', true, 'destino'),
+    ],
+  };
+
   switch (tab) {
     case 'mensal':
       return [
@@ -1185,15 +1205,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
         blocoProducao,
         ...(blocoCaixa ? [blocoCaixa] : []),
         ...(blocoSoberano ? [blocoSoberano] : []),
-        {
-          nome: 'Patrimônio',
-          rows: [
-            r('Valor do Rebanho', 'moneyInt', vrm, 'valor_reb_fin', true),
-            r('Valor por Cabeça', 'money', valorPorCabMeta, 'valor_cab_fin', true),
-            r('Valor por Arroba', 'money', valorPorArrMeta, 'valor_arr_fin', true),
-            r('Variação do Valor', 'money', emptyMoney, 'var_valor_reb'),
-          ],
-        },
+        blocoPatrimonio,
       ];
     case 'medio':
       return [
@@ -1203,14 +1215,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
         blocoProducao,
         ...(blocoCaixa ? [blocoCaixa] : []),
         ...(blocoSoberano ? [blocoSoberano] : []),
-        {
-          nome: 'Patrimônio',
-          rows: [
-            r('Valor do Rebanho', 'moneyInt', vrm, 'valor_reb_fin', true),
-            r('Valor por Cabeça', 'money', valorPorCabMeta, 'valor_cab_fin', true),
-            r('Valor por Arroba', 'money', valorPorArrMeta, 'valor_arr_fin', true),
-          ],
-        },
+        blocoPatrimonio,
       ];
     case 'acumulado':
       return [
@@ -1220,15 +1225,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
         blocoProducao,
         ...(blocoCaixa ? [blocoCaixa] : []),
         ...(blocoSoberano ? [blocoSoberano] : []),
-        {
-          nome: 'Patrimônio',
-          rows: [
-            r('Valor do Rebanho', 'moneyInt', vrm, 'valor_reb_fin', true),
-            r('Valor por Cabeça', 'money', valorPorCabMeta, 'valor_cab_fin', true),
-            r('Valor por Arroba', 'money', valorPorArrMeta, 'valor_arr_fin', true),
-            r('Variação do Valor', 'money', emptyMoney, 'var_valor_reb'),
-          ],
-        },
+        blocoPatrimonio,
       ];
     case 'media_periodo':
       return [
@@ -1238,14 +1235,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
         blocoProducao,
         ...(blocoCaixa ? [blocoCaixa] : []),
         ...(blocoSoberano ? [blocoSoberano] : []),
-        {
-          nome: 'Patrimônio',
-          rows: [
-            r('Valor do Rebanho', 'moneyInt', vrm, 'valor_reb_fin', true),
-            r('Valor por Cabeça', 'money', valorPorCabMeta, 'valor_cab_fin', true),
-            r('Valor por Arroba', 'money', valorPorArrMeta, 'valor_arr_fin', true),
-          ],
-        },
+        blocoPatrimonio,
       ];
     default:
       return [];
@@ -1606,6 +1596,31 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
     ],
   } : null;
 
+  /* BLOCO PATRIMONIO — 6 linhas, iguais nas quatro abas.
+     As TRES primeiras sao ESTOQUE e usam `bruto`: valor do rebanho num mes
+     nao se soma nem se promedia. Hoje elas passavam por r(), entao em
+     Acumulados sairiam somadas e em Media do Periodo promediadas — numero
+     sem significado. Mesma regra do Saldo Inicial/Final do bloco Caixa.
+     `Variacao do Valor` e FLUXO: existe em Mensais e Acumulados, travessao
+     nas outras duas — hoje a linha SOME nelas.
+
+     Valor do ha e Valor do imovel: nao existe fonte no sistema. As linhas
+     entram para o bloco declarar o que vai medir — travessao nas quatro
+     abas ate haver cadastro de valor de terra. Confirmado por Gabriel em
+     22/08. */
+
+  const blocoPatrimonio: Bloco = {
+    nome: 'Patrimônio',
+    rows: [
+      linha(['mensal','medio','acumulado','media_periodo'], 'Valor do Rebanho', 'moneyInt', valorRebFin, 'valor_reb_fin', true, undefined, true),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Valor por Cabeça', 'money', valorPorCabMeta, 'valor_cab_fin', true, undefined, true),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Valor por Arroba', 'money', valorPorArrMeta, 'valor_arr_fin', true, undefined, true),
+      linha(['mensal','acumulado'], 'Variação do Valor', 'money', varValorRebMeta, 'var_valor_reb'),
+      linha([], '→ Valor do ha (R$/ha)', 'money', NAN12, 'pat_valor_ha', true, 'destino'),
+      linha([], '→ Valor do imóvel', 'moneyInt', NAN12, 'pat_valor_imovel', true, 'destino'),
+    ],
+  };
+
   switch (tab) {
     case 'mensal':
       return [
@@ -1615,15 +1630,7 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
         blocoProducao,
         ...(blocoCaixa ? [blocoCaixa] : []),
         ...(blocoSoberano ? [blocoSoberano] : []),
-        {
-          nome: 'Patrimônio',
-          rows: [
-            r('Valor do Rebanho', 'moneyInt', valorRebFin, 'valor_reb_fin', true),
-            r('Valor por Cabeça', 'money', valorPorCabMeta, 'valor_cab_fin', true),
-            r('Valor por Arroba', 'money', valorPorArrMeta, 'valor_arr_fin', true),
-            r('Variação do Valor', 'money', varValorRebMeta, 'var_valor_reb'),
-          ],
-        },
+        blocoPatrimonio,
       ];
     case 'medio':
       return [
@@ -1633,14 +1640,7 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
         blocoProducao,
         ...(blocoCaixa ? [blocoCaixa] : []),
         ...(blocoSoberano ? [blocoSoberano] : []),
-        {
-          nome: 'Patrimônio',
-          rows: [
-            r('Valor do Rebanho', 'moneyInt', valorRebFin, 'valor_reb_fin', true),
-            r('Valor por Cabeça', 'money', valorPorCabMeta, 'valor_cab_fin', true),
-            r('Valor por Arroba', 'money', valorPorArrMeta, 'valor_arr_fin', true),
-          ],
-        },
+        blocoPatrimonio,
       ];
     case 'acumulado':
       return [
@@ -1650,15 +1650,7 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
         blocoProducao,
         ...(blocoCaixa ? [blocoCaixa] : []),
         ...(blocoSoberano ? [blocoSoberano] : []),
-        {
-          nome: 'Patrimônio',
-          rows: [
-            r('Valor do Rebanho', 'moneyInt', valorRebFin, 'valor_reb_fin', true),
-            r('Valor por Cabeça', 'money', valorPorCabMeta, 'valor_cab_fin', true),
-            r('Valor por Arroba', 'money', valorPorArrMeta, 'valor_arr_fin', true),
-            r('Variação do Valor', 'money', varValorRebMeta, 'var_valor_reb'),
-          ],
-        },
+        blocoPatrimonio,
       ];
     case 'media_periodo':
       return [
@@ -1668,14 +1660,7 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
         blocoProducao,
         ...(blocoCaixa ? [blocoCaixa] : []),
         ...(blocoSoberano ? [blocoSoberano] : []),
-        {
-          nome: 'Patrimônio',
-          rows: [
-            r('Valor do Rebanho', 'moneyInt', valorRebFin, 'valor_reb_fin', true),
-            r('Valor por Cabeça', 'money', valorPorCabMeta, 'valor_cab_fin', true),
-            r('Valor por Arroba', 'money', valorPorArrMeta, 'valor_arr_fin', true),
-          ],
-        },
+        blocoPatrimonio,
       ];
     default:
       return [];

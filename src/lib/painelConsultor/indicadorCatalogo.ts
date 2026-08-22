@@ -151,6 +151,25 @@ const FONTE_CAIXA_ESCOPO_META: FonteIndicador = {
   observacao: 'Sem grid, slice12 devolve NaN — nao zero: zero afirmaria "nao houve movimento".',
 };
 
+/* Sem fonte em NENHUM cenario — distinto de SEM_PREVISTO, que diz "nao ha
+   META para este indicador". Aqui o dado nao existe no sistema: nao ha
+   cadastro de valor de terra, nem realizado nem previsto. A linha existe
+   para o bloco declarar o que vai medir; o travessao diz que ainda nao mede.
+   Distinto tambem do `realizado: { fonte_tipo: 'sem_fonte' }` inline usado
+   pelo bloco DRE (Planejamento), cuja regra e "Nao exibido no realizado" —
+   la o dado existe, so nao e mostrado. */
+const SEM_FONTE_AMBOS: FonteIndicador = {
+  fonte_tipo: 'sem_fonte',
+  fonte_tabela: '',
+  fonte_campo: '',
+  regra_calculo: 'Em construção — não há fonte cadastrada no sistema',
+  regra_prioridade: 'Sem fonte; exibir travessão até haver cadastro',
+  tela_origem: '',
+  tela_label: '',
+  permite_fallback: false,
+  observacao: 'Valor de terra ainda não existe como cadastro. Confirmado por Gabriel em 22/08/2026.',
+};
+
 // ─── Rebanho ───
 const FONTE_REBANHO_REAL: FonteIndicador = {
   fonte_tipo: 'fechamento',
@@ -756,6 +775,12 @@ export const CATALOGO_INDICADORES: Record<string, IndicadorMeta> = {
     realizado: FONTE_CAIXA_ESCOPO_REAL, previsto: FONTE_CAIXA_ESCOPO_META },
   'cx_saldo_final': { id: 'cx_saldo_final', nome: 'Saldo Final', aba: 'todas', bloco: 'Financeiro (Caixa)',
     realizado: FONTE_CAIXA_ESCOPO_REAL, previsto: FONTE_CAIXA_ESCOPO_META },
+
+  // ─── PR-PC100-BLOCO-PATRIMONIO-01 — duas linhas EM CONSTRUCAO ───
+  'pat_valor_ha': { id: 'pat_valor_ha', nome: '→ Valor do ha (R$/ha)', aba: 'todas', bloco: 'Patrimônio',
+    realizado: SEM_FONTE_AMBOS, previsto: SEM_FONTE_AMBOS },
+  'pat_valor_imovel': { id: 'pat_valor_imovel', nome: '→ Valor do imóvel', aba: 'todas', bloco: 'Patrimônio',
+    realizado: SEM_FONTE_AMBOS, previsto: SEM_FONTE_AMBOS },
 };
 
 /** Lookup by indicator name (display name) */
