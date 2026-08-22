@@ -180,6 +180,19 @@ export interface IndicadorFinanceiroShape {
   serieMeta?:   number[];
 }
 
+/* PR-HOME-MODAL-DOIS-GRAFICOS-01 — as DUAS leituras, sempre ambas.
+   `series` aninhado, nao seis campos flat: a ausencia de uma serie fica
+   local e legivel (`series.periodo.meta === undefined`) em vez de espalhada
+   em opcionais soltos. E `serieAno` continua escolhendo por viewMode —
+   nenhum consumidor atual muda.
+   Existe porque o modal mostra os dois graficos AO MESMO TEMPO e nao pode
+   calcular: a regra do IndicadorHistoricoModal:16-20 existe para o modal
+   nunca discordar do tile que o abriu. */
+export interface SeriesPorModo {
+  mes:     { ano: number[]; anoAnt?: number[]; meta?: number[] };
+  periodo: { ano: number[]; anoAnt?: number[]; meta?: number[] };
+}
+
 export interface PainelConsultorDataResult {
   cabecas: number | null;
   pesoMedio: number | null;
@@ -290,6 +303,8 @@ export interface PainelConsultorDataResult {
     serieAno:  number[];   // tamanho 13, índice 1=Jan…12=Dez (índice 0 = NaN)
     serieAnoAnt?: number[];
     serieMetaIndicador?: number[];
+    /** As duas leituras. Ver SeriesPorModo. */
+    series?: SeriesPorModo;
   } | null;
   /** Indicador de Peso Médio com tudo pronto para o card e o modal. */
   pesoMedioIndicador: {
@@ -303,6 +318,8 @@ export interface PainelConsultorDataResult {
     serieAno:   number[];
     serieAnoAnt?: number[];
     serieMeta?:  number[];
+    /** As duas leituras. Ver SeriesPorModo. */
+    series?: SeriesPorModo;
   } | null;
   /** Indicador de GMD com tudo pronto para o card e o modal. */
   gmdIndicador: {
@@ -316,6 +333,8 @@ export interface PainelConsultorDataResult {
     serieAno:   number[];
     serieAnoAnt?: number[];
     serieMeta?:  number[];
+    /** As duas leituras. Ver SeriesPorModo. */
+    series?: SeriesPorModo;
   } | null;
   /** Indicador de UA/ha (lotação) — sem ano anterior nesta fase. */
   uaHaIndicador: {
@@ -329,6 +348,8 @@ export interface PainelConsultorDataResult {
     serieAno:   number[];
     serieAnoAnt?: number[];      // ausente nesta fase
     serieMeta?:  number[];
+    /** As duas leituras. Ver SeriesPorModo. */
+    series?: SeriesPorModo;
   } | null;
   /** Indicador kg vivo/ha (peso total do rebanho / área) — sem ano anterior nesta fase. */
   kgHaIndicador: {
@@ -342,6 +363,8 @@ export interface PainelConsultorDataResult {
     serieAno:   number[];
     serieAnoAnt?: number[];      // ausente nesta fase
     serieMeta?:  number[];
+    /** As duas leituras. Ver SeriesPorModo. */
+    series?: SeriesPorModo;
   } | null;
   /** Indicador @ produzidas — fluxo (mês = valor do mês; período = acumulado Jan→mês). */
   arrobasIndicador: {
@@ -355,6 +378,8 @@ export interface PainelConsultorDataResult {
     serieAno:   number[];
     serieAnoAnt?: number[];
     serieMeta?:  number[];
+    /** As duas leituras. Ver SeriesPorModo. */
+    series?: SeriesPorModo;
   } | null;
   /**
    * Indicador Desfrute (cab.) — fluxo (mês = abate+venda+consumo do mês;
@@ -371,6 +396,8 @@ export interface PainelConsultorDataResult {
     serieAno:   number[];
     serieAnoAnt?: number[];      // ausente nesta fase
     serieMeta?:  number[];       // ausente nesta fase
+    /** As duas leituras. Ver SeriesPorModo. */
+    series?: SeriesPorModo;
   } | null;
   /**
    * Indicador Desfrute (@) — arrobas desfrutadas no fluxo
@@ -428,6 +455,8 @@ export interface PainelConsultorDataResult {
     serieAno:   number[];
     serieAnoAnt?: number[];
     serieMeta?:  number[];
+    /** As duas leituras. Ver SeriesPorModo. */
+    series?: SeriesPorModo;
   } | null;
   /**
    * Receita Pecuária Competência — fonte: monthlyData.recPecComp (lancPec desfrute, valorTotal/competência).
@@ -445,6 +474,8 @@ export interface PainelConsultorDataResult {
     serieAno:   number[];
     serieAnoAnt?: number[];
     serieMeta?:  number[];
+    /** As duas leituras. Ver SeriesPorModo. */
+    series?: SeriesPorModo;
   } | null;
   /**
    * Custeio Produção Pecuária — fonte: monthlyData.custeioPec
@@ -481,6 +512,8 @@ export interface PainelConsultorDataResult {
     serieAno:   number[];
     serieAnoAnt?: number[];
     serieMeta?:  number[];
+    /** As duas leituras. Ver SeriesPorModo. */
+    series?: SeriesPorModo;
     /** Valor do mês (1=Jan…12=Dez, 0=NaN): custeioPec[m]/arrobasProd[m]. Sempre mensal, independe de viewMode. */
     serieMensal: number[];
   } | null;
@@ -500,6 +533,8 @@ export interface PainelConsultorDataResult {
     serieAno:   number[];
     serieAnoAnt?: number[];
     serieMeta?:  number[];
+    /** As duas leituras. Ver SeriesPorModo. */
+    series?: SeriesPorModo;
   } | null;
   /**
    * Custo por Cabeça R$/cab — derivado: custeioPec / cabMedia.
@@ -517,6 +552,8 @@ export interface PainelConsultorDataResult {
     serieAno:   number[];
     serieAnoAnt?: number[];
     serieMeta?:  number[];
+    /** As duas leituras. Ver SeriesPorModo. */
+    series?: SeriesPorModo;
     /** Valor do mês (1=Jan…12=Dez, 0=NaN): custeioPec[m]/cabMediaMes[m]. Sempre mensal, independe de viewMode. */
     serieMensal: number[];
   } | null;
@@ -536,6 +573,8 @@ export interface PainelConsultorDataResult {
     serieAno:   number[];
     serieAnoAnt?: number[];
     serieMeta?:  number[];
+    /** As duas leituras. Ver SeriesPorModo. */
+    series?: SeriesPorModo;
   } | null;
 
   // ─── Indicadores financeiros oficiais — Etapa 2B (shape only) ───
@@ -3558,6 +3597,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       serieAno:    pesoSerie,
       serieAnoAnt: pesoSerieAnoAnt ?? undefined,
       serieMeta:   pesoMetaSerie ?? undefined,
+      series: {
+        mes:     { ano: pesoMedioFinSerie13, anoAnt: pesoMedioFinAnoAnt13, meta: pesoMedioMetaSerie13 },
+        periodo: { ano: pesoMedioPeriodoSerie13, anoAnt: pesoMedioPeriodoAnoAnt13, meta: pesoMedioPeriodoMetaSerie13 },
+      },
     } : null,
     gmdIndicador: monthlyData ? {
       label:     isPeriodo ? 'GMD MÉDIO NO PERÍODO' : 'GMD NO MÊS',
@@ -3572,6 +3615,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       serieAno:    gmdSerie,
       serieAnoAnt: gmdSerieAnoAnt ?? undefined,
       serieMeta:   gmdSerieMeta ?? undefined,
+      series: {
+        mes:     { ano: gmdMesSerie13, anoAnt: gmdMesAnoAntSerie13, meta: gmdMesMetaSerie13 },
+        periodo: { ano: gmdPeriodoSerie13, anoAnt: gmdPeriodoAnoAntSerie13, meta: gmdPeriodoMetaSerie13 },
+      },
     } : null,
     uaHaIndicador: monthlyData ? {
       label:     isPeriodo ? 'UA/HA MÉDIA NO PERÍODO' : 'UA/HA NO MÊS',
@@ -3586,6 +3633,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       serieAno:    uaHaSerie,
       serieAnoAnt: uaHaSerieAnoAnt ?? undefined,
       serieMeta:   uaHaSerieMeta ?? undefined,
+      series: {
+        mes:     { ano: uaHaMesSerie13, anoAnt: uaHaMesAnoAntSerie13, meta: uaHaMesMetaSerie13 },
+        periodo: { ano: uaHaPeriodoSerie13, anoAnt: uaHaPeriodoAnoAntSerie13, meta: uaHaPeriodoMetaSerie13 },
+      },
     } : null,
     kgHaIndicador: monthlyData ? {
       label:     isPeriodo ? 'KG VIVO/HA MÉDIO NO PERÍODO' : 'KG VIVO/HA NO MÊS',
@@ -3600,6 +3651,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       serieAno:    kgHaSerie,
       serieAnoAnt: kgHaSerieAnoAnt ?? undefined,
       serieMeta:   kgHaSerieMeta ?? undefined,
+      series: {
+        mes:     { ano: kgHaMesSerie13, anoAnt: kgHaMesAnoAntSerie13, meta: kgHaMesMetaSerie13 },
+        periodo: { ano: kgHaPeriodoSerie13, anoAnt: kgHaPeriodoAnoAntSerie13, meta: kgHaPeriodoMetaSerie13 },
+      },
     } : null,
     arrobasIndicador: monthlyData ? {
       label:     isPeriodo ? '@ PRODUZIDAS NO PERÍODO' : '@ PRODUZIDAS NO MÊS',
@@ -3614,6 +3669,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       serieAno:    arrobasSerie,
       serieAnoAnt: arrobasSerieAnoAnt ?? undefined,
       serieMeta:   arrobasSerieMeta ?? undefined,
+      series: {
+        mes:     { ano: arrobasMesSerie13, anoAnt: arrobasMesAnoAntSerie13, meta: arrobasMesMetaSerie13 },
+        periodo: { ano: arrobasPeriodoSerie13, anoAnt: arrobasPeriodoAnoAntSerie13, meta: arrobasPeriodoMetaSerie13 },
+      },
     } : null,
     desfruteIndicador: monthlyData ? {
       label:     isPeriodo ? 'DESFRUTE (CAB.) NO PERÍODO' : 'DESFRUTE (CAB.) NO MÊS',
@@ -3628,6 +3687,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       serieAno:    desfruteSerie,
       serieAnoAnt: desfruteSerieAnoAnt ?? undefined,
       serieMeta:   desfruteSerieMeta ?? undefined,
+      series: {
+        mes:     { ano: desfruteMesSerie13, anoAnt: desfruteMesAnoAntSerie13, meta: desfruteMesMetaSerie13 },
+        periodo: { ano: desfrutePeriodoSerie13, anoAnt: desfrutePeriodoAnoAntSerie13, meta: desfrutePeriodoMetaSerie13 },
+      },
     } : null,
     desfrutePctArrIndicador: monthlyData ? {
       label:     isPeriodo ? 'DESFRUTE (@) NO PERÍODO' : 'DESFRUTE (@) NO MÊS',
@@ -3668,6 +3731,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       serieAno:    valorRebanhoSerie,
       serieAnoAnt: valorRebanhoSerieAnoAnt ?? undefined,
       serieMeta:   valorRebanhoSerieMeta ?? undefined,
+      series: {
+        mes:     { ano: valorRebanhoMes, anoAnt: valorRebanhoSerieAnoAnt, meta: valorRebanhoSerieMeta },
+        periodo: { ano: valorRebanhoMes, anoAnt: valorRebanhoSerieAnoAnt, meta: valorRebanhoSerieMeta },
+      },
     } : null,
     receitaPecIndicador: monthlyData ? {
       label:     isPeriodo ? 'RECEITAS PECUÁRIAS COMPETÊNCIA ACUM.' : 'RECEITAS PECUÁRIAS COMPETÊNCIA NO MÊS',
@@ -3682,6 +3749,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       serieAno:    receitaPecSerie,
       serieAnoAnt: receitaPecSerieAnoAnt ?? undefined,
       serieMeta:   receitaPecSerieMeta ?? undefined,
+      series: {
+        mes:     { ano: receitaPecMesSerie13, anoAnt: receitaPecMesAnoAntSerie13, meta: receitaPecMesMetaSerie13 },
+        periodo: { ano: receitaPecPeriodoSerie13, anoAnt: receitaPecPeriodoAnoAntSerie13, meta: receitaPecPeriodoMetaSerie13 },
+      },
     } : null,
     custeioPecIndicador: _custeioPecIndicadorMerged,
     custoArrIndicador: monthlyData ? {
@@ -3697,6 +3768,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       serieAno:    custoArrSerie,
       serieAnoAnt: custoArrSerieAnoAnt ?? undefined,
       serieMeta:   custoArrSerieMeta ?? undefined,
+      series: {
+        mes:     { ano: custoArrMesSerie13, anoAnt: custoArrMesAnoAntSerie13, meta: custoArrMesMetaSerie13 },
+        periodo: { ano: custoArrPeriodoSerie13, anoAnt: custoArrPeriodoAnoAntSerie13, meta: custoArrPeriodoMetaSerie13 },
+      },
       serieMensal: custoArrMesSerie13,
     } : null,
     precoArrIndicador: monthlyData ? {
@@ -3712,6 +3787,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       serieAno:    precoArrSerie,
       serieAnoAnt: precoArrSerieAnoAnt ?? undefined,
       serieMeta:   precoArrSerieMeta ?? undefined,
+      series: {
+        mes:     { ano: precoArrMesSerie13, anoAnt: precoArrMesAnoAntSerie13, meta: precoArrMesMetaSerie13 },
+        periodo: { ano: precoArrPeriodoSerie13, anoAnt: precoArrPeriodoAnoAntSerie13, meta: precoArrPeriodoMetaSerie13 },
+      },
     } : null,
     custoCabIndicador: monthlyData ? {
       label:     isPeriodo ? 'CUSTO CAB. PERÍODO R$/CAB.' : 'CUSTO CAB. MÊS R$/CAB.',
@@ -3726,6 +3805,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       serieAno:    custoCabSerie,
       serieAnoAnt: custoCabSerieAnoAnt ?? undefined,
       serieMeta:   custoCabSerieMeta ?? undefined,
+      series: {
+        mes:     { ano: custoCabMesSerie13, anoAnt: custoCabMesAnoAntSerie13, meta: custoCabMesMetaSerie13 },
+        periodo: { ano: custoCabPeriodoSerie13, anoAnt: custoCabPeriodoAnoAntSerie13, meta: custoCabPeriodoMetaSerie13 },
+      },
       serieMensal: custoCabMesSerie13,
     } : null,
     margemArrIndicador: monthlyData ? {
@@ -3741,6 +3824,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       serieAno:    margemArrSerie,
       serieAnoAnt: margemArrSerieAnoAnt ?? undefined,
       serieMeta:   margemArrSerieMeta ?? undefined,
+      series: {
+        mes:     { ano: margemArrMesSerie13, anoAnt: undefined, meta: undefined },
+        periodo: { ano: margemArrPeriodoSerie13, anoAnt: undefined, meta: undefined },
+      },
     } : null,
 
     // ─── Etapa 2C: indicadores financeiros oficiais (caixa fica em 2D) ───

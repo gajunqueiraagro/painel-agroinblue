@@ -2434,6 +2434,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           serieAno={cabecasIndicador?.serieAno ?? []}
           serieAnoAnt={cabecasIndicador?.serieAnoAnt}
           serieMeta={cabecasIndicador?.serieMetaIndicador}
+          series={cabecasIndicador?.series}
           tipoAcumulado="posicao"
           indicadorKey="cabecas"
           clienteId={clienteAtual?.id}
@@ -2459,6 +2460,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           serieAno={pesoMedioIndicador?.serieAno ?? []}
           serieAnoAnt={pesoMedioIndicador?.serieAnoAnt}
           serieMeta={pesoMedioIndicador?.serieMeta}
+          series={pesoMedioIndicador?.series}
           tipoAcumulado="posicao"
           indicadorKey="pesoMedio"
           clienteId={clienteAtual?.id}
@@ -2484,6 +2486,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           serieAno={arrobasIndicador?.serieAno ?? []}
           serieAnoAnt={arrobasIndicador?.serieAnoAnt}
           serieMeta={arrobasIndicador?.serieMeta}
+          series={arrobasIndicador?.series}
           tipoAcumulado="soma"
           indicadorKey="arrobas"
           clienteId={clienteAtual?.id}
@@ -2509,6 +2512,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           serieAno={gmdIndicador?.serieAno ?? []}
           serieAnoAnt={gmdIndicador?.serieAnoAnt}
           serieMeta={gmdIndicador?.serieMeta}
+          series={gmdIndicador?.series}
           tipoAcumulado="media"
           indicadorKey="gmd"
           clienteId={clienteAtual?.id}
@@ -2534,6 +2538,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           serieAno={uaHaIndicador?.serieAno ?? []}
           serieAnoAnt={uaHaIndicador?.serieAnoAnt}
           serieMeta={uaHaIndicador?.serieMeta}
+          series={uaHaIndicador?.series}
           tipoAcumulado="media"
           indicadorKey="uaHa"
           clienteId={clienteAtual?.id}
@@ -2559,6 +2564,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           serieAno={kgHaIndicador?.serieAno ?? []}
           serieAnoAnt={kgHaIndicador?.serieAnoAnt}
           serieMeta={kgHaIndicador?.serieMeta}
+          series={kgHaIndicador?.series}
           tipoAcumulado="media"
           indicadorKey="kgHa"
           clienteId={clienteAtual?.id}
@@ -2609,6 +2615,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           serieAno={desfruteIndicador?.serieAno ?? []}
           serieAnoAnt={desfruteIndicador?.serieAnoAnt}
           serieMeta={desfruteIndicador?.serieMeta}
+          series={desfruteIndicador?.series}
           tipoAcumulado="soma"
           indicadorKey="desfrute"
           clienteId={clienteAtual?.id}
@@ -2634,6 +2641,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           serieAno={valorRebanhoIndicador?.serieAno ?? []}
           serieAnoAnt={valorRebanhoIndicador?.serieAnoAnt}
           serieMeta={valorRebanhoIndicador?.serieMeta}
+          series={valorRebanhoIndicador?.series}
           tipoAcumulado="posicao"
           indicadorKey="valorRebanho"
           clienteId={clienteAtual?.id}
@@ -2659,6 +2667,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           serieAno={receitaPecIndicador?.serieAno ?? []}
           serieAnoAnt={receitaPecIndicador?.serieAnoAnt}
           serieMeta={receitaPecIndicador?.serieMeta}
+          series={receitaPecIndicador?.series}
           tipoAcumulado={isPeriodo ? 'soma' : 'posicao'}
           indicadorKey="receitaPec"
           clienteId={clienteAtual?.id}
@@ -2711,6 +2720,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           serieAno={custoArrIndicador?.serieAno ?? []}
           serieAnoAnt={custoArrIndicador?.serieAnoAnt}
           serieMeta={custoArrIndicador?.serieMeta}
+          series={custoArrIndicador?.series}
           tipoAcumulado="media"
           indicadorKey="custoArr"
           clienteId={clienteAtual?.id}
@@ -2737,6 +2747,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           serieAno={precoArrIndicador?.serieAno ?? []}
           serieAnoAnt={precoArrIndicador?.serieAnoAnt}
           serieMeta={precoArrIndicador?.serieMeta}
+          series={precoArrIndicador?.series}
           tipoAcumulado="media"
           indicadorKey="precoArr"
           clienteId={clienteAtual?.id}
@@ -2763,6 +2774,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           serieAno={custoCabIndicador?.serieAno ?? []}
           serieAnoAnt={custoCabIndicador?.serieAnoAnt}
           serieMeta={custoCabIndicador?.serieMeta}
+          series={custoCabIndicador?.series}
           tipoAcumulado="media"
           indicadorKey="custoCab"
           clienteId={clienteAtual?.id}
@@ -2848,6 +2860,12 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           corPrincipal="vermelho"
         />
       )}
+      {/* SEM `series`: alavancagem, endividamento, caixaDisponivel e
+          areaProdutivaPec NAO existem em usePainelConsultorData — sao os
+          mesmos quatro que aparecem na baseline TSC por nao estarem no tipo
+          de `modalIndicador`. Sem as duas leituras, o modal cai em
+          `serieAno` e os dois graficos ficam iguais. Dar `series` a eles
+          exige antes cria-los no hook: frente propria. */}
       {modalIndicador === 'alavancagem' && (
         <IndicadorHistoricoModal
           open onClose={() => setModalIndicador(null)}

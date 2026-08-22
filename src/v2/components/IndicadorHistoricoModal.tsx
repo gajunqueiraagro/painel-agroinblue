@@ -72,6 +72,18 @@ interface Props {
   /** Variação % vs ano anterior — calculado fora; null oculta a linha. */
   deltaAno?: number | null;
   /** Modo de visualização — afeta o cálculo do histórico inferior multi-ano. */
+  /* As DUAS leituras, sempre ambas — vem do hook, prontas.
+     O modal NAO calcula: a regra de :16-20 existe para ele nunca discordar
+     do tile que o abriu, e `serieAno` sozinha nao serve porque ja chega
+     escolhida pelo viewMode do pai.
+     AUSENTE nos quatro indicadores que NAO existem em usePainelConsultorData
+     — alavancagem, endividamento, caixaDisponivel e areaProdutivaPec. Para
+     eles os dois graficos caem em `serieAno` e ficam iguais; dar `series` a
+     eles exige antes cria-los no hook, e isso e frente propria. */
+  series?: {
+    mes:     { ano: number[]; anoAnt?: number[]; meta?: number[] };
+    periodo: { ano: number[]; anoAnt?: number[]; meta?: number[] };
+  };
   viewMode?: 'mes' | 'periodo';
   /** Callback para alternar viewMode dentro do modal (toggle interno).
    *  Quando ausente, o toggle não é renderizado. Estado real vive no pai. */
@@ -134,6 +146,7 @@ export function IndicadorHistoricoModal({
   subtitulo,
   deltaMes,
   deltaAno,
+  series,
   viewMode = 'mes',
   onViewModeChange,
   historicoAno,
@@ -204,23 +217,27 @@ export function IndicadorHistoricoModal({
 
   const deltaMetaInterno = calcDelta(valorAtual, getMesValue(serieMeta, mesAtual));
 
-  const dados = MESES_LABELS.map((mes, idx) => {
-    // Realizado: corta no mês atual (Jan→mesAtual)
-    const atual       = idx + 1 <= mesAtual ? getMesValue(serieAno, idx + 1) : null;
-    // Ano anterior: série completa Jan–Dez
-    const anoAnterior = getMesValue(serieAnoAnt, idx + 1);
-    // Meta: série completa Jan–Dez (nunca cortar)
-    const meta        = getMesValue(serieMeta, idx + 1);
-    return {
-      mes,
-      atual,
-      anoAnterior,
-      meta,
-      // Auxiliares para Areas — mesmos valores, dataKey separado p/ não duplicar no tooltip
-      atualArea:       atual,
-      anoAnteriorArea: anoAnterior,
-    };
+  /* Um `dados` por MODO, com a MESMA forma do original — so muda de qual
+     trio de series ele parte. Nada aqui calcula: as duas leituras chegam
+     prontas em `series`. Sem `series`, ambos caem em `serieAno`. */
+  const montaDados = (
+    sAno: number[] | undefined,
+    sAnt: number[] | undefined,
+    sMeta: number[] | undefined,
+  ) => MESES_LABELS.map((mes, idx) => {
+    const atual       = idx + 1 <= mesAtual ? getMesValue(sAno, idx + 1) : null;
+    const anoAnterior = getMesValue(sAnt, idx + 1);
+    const meta        = getMesValue(sMeta, idx + 1);
+    return { mes, atual, anoAnterior, meta, atualArea: atual, anoAnteriorArea: anoAnterior };
   });
+  const dadosMes = montaDados(
+    series?.mes.ano ?? serieAno, series?.mes.anoAnt ?? serieAnoAnt, series?.mes.meta ?? serieMeta);
+  const dadosPeriodo = montaDados(
+    series?.periodo.ano ?? serieAno, series?.periodo.anoAnt ?? serieAnoAnt, series?.periodo.meta ?? serieMeta);
+
+  /* O `dados` unico saiu: ele lia `serieAno`, que muda com o viewMode do
+     pai, e era exatamente o que impedia os dois graficos de coexistir.
+     Deixa-lo aqui sem consumidor convidaria alguem a religa-lo. */
 
   const hasAnoAnt = serieAnoAnt != null && serieAnoAnt.some(v => v != null && !isNaN(v));
   const hasMeta = serieMeta != null && serieMeta.some(v => v != null && !isNaN(v as number));
@@ -348,126 +365,166 @@ export function IndicadorHistoricoModal({
         {/* Corpo rolável — gráfico + histórico + rodapé */}
         <div className="flex-1 overflow-y-auto">
 
-        {/* Gráfico */}
+        {/* Gráfico — DOIS de linha, lado a lado.
+            Esquerda le SEMPRE a serie mensal; direita, SEMPRE a do periodo.
+            Nenhum dos dois olha `serieAno`, que muda com o viewMode do pai —
+            e por isso alternar o toggle NAO troca os graficos entre si.
+            O idioma (Line + Area, #B4B2A9 tracejado, strokeWidth 1.5, dot r=2,
+            CartesianGrid "3 3") e o que ja existia no ramo periodo deste arquivo.
+            A legenda abaixo e UMA SO e serve os dois. */}
         <div className="px-3 pb-2">
-          <ResponsiveContainer width="100%" height={190}>
-            {viewMode === 'mes' ? (
-              // Comparativo executivo por barras com efeito de profundidade.
-              // Ordem Meta → AnoAnt → Atual: a última renderizada fica na frente.
-              // Offsets pequenos (8/4/0) para sugerir camadas sem virar agrupamento.
-              <BarChart data={dados} margin={{ top: 8, right: 16, left: 8, bottom: 4 }} barGap={-22} barCategoryGap="22%">
-                <CartesianGrid strokeDasharray="3 3" stroke="#E8E6DF" vertical={false} />
-                <XAxis dataKey="mes" tick={{ fontSize: 10, fill: '#888780' }} stroke="#E8E6DF" />
-                <YAxis tick={{ fontSize: 10, fill: '#888780' }} tickFormatter={fmtAxis} stroke="#E8E6DF" width={48} />
-                <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.04)' }} />
-                {hasMeta && (
-                  <Bar
-                    dataKey="meta"
-                    barSize={22}
-                    isAnimationActive={false}
-                    shape={(props: any) => {
-                      const { x, y, width, height } = props;
-                      if (height == null || height <= 0 || isNaN(height)) return null;
-                      return <rect x={x + 8} y={y} width={width} height={height} fill="#F97316" rx={2} ry={2} />;
-                    }}
-                  />
-                )}
-                {hasAnoAnt && (
-                  <Bar
-                    dataKey="anoAnterior"
-                    barSize={22}
-                    isAnimationActive={false}
-                    shape={(props: any) => {
-                      const { x, y, width, height } = props;
-                      if (height == null || height <= 0 || isNaN(height)) return null;
-                      return <rect x={x + 4} y={y} width={width} height={height} fill="#B4B2A9" rx={2} ry={2} />;
-                    }}
-                  />
-                )}
-                <Bar
-                  dataKey="atual"
-                  barSize={22}
-                  isAnimationActive={false}
-                  shape={(props: any) => {
-                    const { x, y, width, height } = props;
-                    if (height == null || height <= 0 || isNaN(height)) return null;
-                    return <rect x={x} y={y} width={width} height={height} fill={COR_ATUAL.stroke} rx={2} ry={2} />;
-                  }}
-                />
-              </BarChart>
-            ) : (
-              <ComposedChart data={dados} margin={{ top: 8, right: 16, left: 8, bottom: 4 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E8E6DF" vertical={false} />
-                <XAxis dataKey="mes" tick={{ fontSize: 10, fill: '#888780' }} stroke="#E8E6DF" />
-                <YAxis tick={{ fontSize: 10, fill: '#888780' }} tickFormatter={fmtAxis} stroke="#E8E6DF" width={48} />
-                <Tooltip content={<CustomTooltip />} />
-                {/* Areas (sob as linhas) — dataKey separado p/ não duplicar no tooltip */}
-                {hasAnoAnt && (
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <p className="text-[10px] font-semibold text-muted-foreground text-center mb-0.5">No mês</p>
+              <ResponsiveContainer width="100%" height={190}>
+                <ComposedChart data={dadosMes} margin={{ top: 8, right: 16, left: 8, bottom: 4 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#E8E6DF" vertical={false} />
+                  <XAxis dataKey="mes" tick={{ fontSize: 10, fill: '#888780' }} stroke="#E8E6DF" />
+                  <YAxis tick={{ fontSize: 10, fill: '#888780' }} tickFormatter={fmtAxis} stroke="#E8E6DF" width={48} />
+                  <Tooltip content={<CustomTooltip />} />
+                  {/* Areas (sob as linhas) — dataKey separado p/ não duplicar no tooltip */}
+                  {hasAnoAnt && (
+                    <Area
+                      type="monotone"
+                      dataKey="anoAnteriorArea"
+                      stroke="none"
+                      fill="#000000"
+                      fillOpacity={0.04}
+                      isAnimationActive={false}
+                      connectNulls={false}
+                      legendType="none"
+                      activeDot={false}
+                    />
+                  )}
                   <Area
                     type="monotone"
-                    dataKey="anoAnteriorArea"
+                    dataKey="atualArea"
                     stroke="none"
                     fill="#000000"
-                    fillOpacity={0.04}
+                    fillOpacity={0.09}
                     isAnimationActive={false}
                     connectNulls={false}
                     legendType="none"
                     activeDot={false}
                   />
-                )}
-                <Area
-                  type="monotone"
-                  dataKey="atualArea"
-                  stroke="none"
-                  fill="#000000"
-                  fillOpacity={0.09}
-                  isAnimationActive={false}
-                  connectNulls={false}
-                  legendType="none"
-                  activeDot={false}
-                />
-                {/* Lines (por cima das áreas) */}
-                {hasAnoAnt && (
+                  {/* Lines (por cima das áreas) */}
+                  {hasAnoAnt && (
+                    <Line
+                      type="monotone"
+                      dataKey="anoAnterior"
+                      stroke="#B4B2A9"
+                      strokeWidth={1.5}
+                      strokeDasharray="4 4"
+                      dot={{ r: 2, fill: '#B4B2A9' }}
+                      connectNulls={false}
+                      isAnimationActive={false}
+                    />
+                  )}
+                  {hasMeta && (
+                    <Line
+                      type="monotone"
+                      dataKey="meta"
+                      stroke="#F97316"
+                      strokeWidth={1.5}
+                      strokeDasharray="6 3"
+                      dot={{ r: 2, fill: '#F97316' }}
+                      connectNulls={false}
+                      isAnimationActive={false}
+                    />
+                  )}
                   <Line
                     type="monotone"
-                    dataKey="anoAnterior"
-                    stroke="#B4B2A9"
-                    strokeWidth={1.5}
-                    strokeDasharray="4 4"
-                    dot={{ r: 2, fill: '#B4B2A9' }}
+                    dataKey="atual"
+                    stroke={COR_ATUAL.stroke}
+                    strokeWidth={2}
                     connectNulls={false}
                     isAnimationActive={false}
+                    dot={(props: any) => {
+                      const isSel = props.index === mesAtual - 1;
+                      return isSel
+                        ? <circle key={props.index} cx={props.cx} cy={props.cy} r={6} fill={COR_ATUAL.stroke} />
+                        : <circle key={props.index} cx={props.cx} cy={props.cy} r={2} fill={COR_ATUAL.dotLight} />;
+                    }}
                   />
-                )}
-                {hasMeta && (
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+            <div>
+              <p className="text-[10px] font-semibold text-muted-foreground text-center mb-0.5">Média no período</p>
+              <ResponsiveContainer width="100%" height={190}>
+                <ComposedChart data={dadosPeriodo} margin={{ top: 8, right: 16, left: 8, bottom: 4 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#E8E6DF" vertical={false} />
+                  <XAxis dataKey="mes" tick={{ fontSize: 10, fill: '#888780' }} stroke="#E8E6DF" />
+                  <YAxis tick={{ fontSize: 10, fill: '#888780' }} tickFormatter={fmtAxis} stroke="#E8E6DF" width={48} />
+                  <Tooltip content={<CustomTooltip />} />
+                  {/* Areas (sob as linhas) — dataKey separado p/ não duplicar no tooltip */}
+                  {hasAnoAnt && (
+                    <Area
+                      type="monotone"
+                      dataKey="anoAnteriorArea"
+                      stroke="none"
+                      fill="#000000"
+                      fillOpacity={0.04}
+                      isAnimationActive={false}
+                      connectNulls={false}
+                      legendType="none"
+                      activeDot={false}
+                    />
+                  )}
+                  <Area
+                    type="monotone"
+                    dataKey="atualArea"
+                    stroke="none"
+                    fill="#000000"
+                    fillOpacity={0.09}
+                    isAnimationActive={false}
+                    connectNulls={false}
+                    legendType="none"
+                    activeDot={false}
+                  />
+                  {/* Lines (por cima das áreas) */}
+                  {hasAnoAnt && (
+                    <Line
+                      type="monotone"
+                      dataKey="anoAnterior"
+                      stroke="#B4B2A9"
+                      strokeWidth={1.5}
+                      strokeDasharray="4 4"
+                      dot={{ r: 2, fill: '#B4B2A9' }}
+                      connectNulls={false}
+                      isAnimationActive={false}
+                    />
+                  )}
+                  {hasMeta && (
+                    <Line
+                      type="monotone"
+                      dataKey="meta"
+                      stroke="#F97316"
+                      strokeWidth={1.5}
+                      strokeDasharray="6 3"
+                      dot={{ r: 2, fill: '#F97316' }}
+                      connectNulls={false}
+                      isAnimationActive={false}
+                    />
+                  )}
                   <Line
                     type="monotone"
-                    dataKey="meta"
-                    stroke="#F97316"
-                    strokeWidth={1.5}
-                    strokeDasharray="6 3"
-                    dot={{ r: 2, fill: '#F97316' }}
+                    dataKey="atual"
+                    stroke={COR_ATUAL.stroke}
+                    strokeWidth={2}
                     connectNulls={false}
                     isAnimationActive={false}
+                    dot={(props: any) => {
+                      const isSel = props.index === mesAtual - 1;
+                      return isSel
+                        ? <circle key={props.index} cx={props.cx} cy={props.cy} r={6} fill={COR_ATUAL.stroke} />
+                        : <circle key={props.index} cx={props.cx} cy={props.cy} r={2} fill={COR_ATUAL.dotLight} />;
+                    }}
                   />
-                )}
-                <Line
-                  type="monotone"
-                  dataKey="atual"
-                  stroke={COR_ATUAL.stroke}
-                  strokeWidth={2}
-                  connectNulls={false}
-                  isAnimationActive={false}
-                  dot={(props: any) => {
-                    const isSel = props.index === mesAtual - 1;
-                    return isSel
-                      ? <circle key={props.index} cx={props.cx} cy={props.cy} r={6} fill={COR_ATUAL.stroke} />
-                      : <circle key={props.index} cx={props.cx} cy={props.cy} r={2} fill={COR_ATUAL.dotLight} />;
-                  }}
-                />
-              </ComposedChart>
-            )}
-          </ResponsiveContainer>
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
 
           {/* Legenda — abaixo do gráfico */}
           <div className="flex gap-5 px-1 mt-3 flex-wrap">
