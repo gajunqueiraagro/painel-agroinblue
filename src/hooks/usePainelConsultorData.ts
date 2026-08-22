@@ -86,6 +86,24 @@ import {
   agregaTributosMeta,
   agregaSaidasTotais,
   agregaSaidasTotaisMeta,
+  agregaCustoFixoPec,
+  agregaCustoVariavelPec,
+  agregaCustoFixoAgri,
+  agregaCustoFixoSilvi,
+  agregaDeducoesPec,
+  agregaDeducoesAgri,
+  agregaDeducoesSilvi,
+  agregaAportePessoal,
+  agregaRetornoEmprestimos,
+  agregaCustoFixoPecMeta,
+  agregaCustoVariavelPecMeta,
+  agregaCustoFixoAgriMeta,
+  agregaCustoFixoSilviMeta,
+  agregaDeducoesPecMeta,
+  agregaDeducoesAgriMeta,
+  agregaDeducoesSilviMeta,
+  agregaAportePessoalMeta,
+  agregaRetornoEmprestimosMeta,
 } from '@/lib/painelConsultor/agregadosFinanceiros';
 import type { SubcentroGrid } from '@/hooks/usePlanejamentoFinanceiro';
 import { usePlanejamentoFinanceiro } from '@/hooks/usePlanejamentoFinanceiro';
@@ -574,6 +592,21 @@ export interface PainelConsultorDataResult {
    * permanece como TOTAL: a soma dos quatro tem que bater com ele, e a tela
    * exibe a divergencia se nao bater (subcentro novo fora do mapa).
    */
+  /* PR-PC100-BLOCO-CAIXA-01 — nove indicadores por ESCOPO. Custo Fixo e
+     Custo Variavel Pecuaria vem dos predicates ESTRITOS; somados dao
+     custeioPecSemJuros, e essa e a conferencia de fechamento do bloco. */
+  /* jurosSilvi ja existia no _finSoberano desde a frente de silvicultura,
+     mas nunca foi exposto no retorno — nenhum consumidor o pedia. */
+  jurosSilviIndicador:           IndicadorFinanceiroShape | null;
+  custoFixoPecIndicador:         IndicadorFinanceiroShape | null;
+  custoVariavelPecIndicador:     IndicadorFinanceiroShape | null;
+  custoFixoAgriIndicador:        IndicadorFinanceiroShape | null;
+  custoFixoSilviIndicador:       IndicadorFinanceiroShape | null;
+  deducoesPecIndicador:          IndicadorFinanceiroShape | null;
+  deducoesAgriIndicador:         IndicadorFinanceiroShape | null;
+  deducoesSilviIndicador:        IndicadorFinanceiroShape | null;
+  aportePessoalIndicador:        IndicadorFinanceiroShape | null;
+  retornoEmprestimosIndicador:   IndicadorFinanceiroShape | null;
   captacaoPecIndicador:         IndicadorFinanceiroShape | null;
   captacaoAgriIndicador:        IndicadorFinanceiroShape | null;
   captacaoSilviIndicador:       IndicadorFinanceiroShape | null;
@@ -2879,12 +2912,25 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     const recPecCx    = agregaReceitaPec(lancFin, ano);
     const recSilvi      = agregaReceitaSilvicola(lancFin, ano);
     const cusSilviSemJ  = agregaCusteioSilviSemJuros(lancFin, ano);
-    const jurSilvi      = agregaJurosSilvi(lancFin, ano);
     const invFazSilvi   = agregaInvFazendaSilvi(lancFin, ano);
     const amortSilvi    = agregaAmortizacaoSilvi(lancFin, ano);
     const recAgri     = agregaReceitaAgri(lancFin, ano);
     const recOutras   = agregaOutrasReceitas(lancFin, ano);
     const captacao    = agregaEntradasFinanceiras(lancFin, ano);
+/* PR-PC100-BLOCO-CAIXA-01 — dez series novas. Custo Fixo e Custo Variavel
+   PECUARIA saem dos predicates ESTRITOS: `custeioPecSemJuros` soma os dois,
+   e usa-lo numa das linhas faria ela conter a irma (Custo Fixo Pecuaria,
+   R$ 49,85 mi, o maior grupo de saida da base). */
+    const cfPec       = agregaCustoFixoPec(lancFin, ano);
+    const cvPec       = agregaCustoVariavelPec(lancFin, ano);
+    const cfAgri       = agregaCustoFixoAgri(lancFin, ano);
+    const cfSilvi       = agregaCustoFixoSilvi(lancFin, ano);
+    const dedPec       = agregaDeducoesPec(lancFin, ano);
+    const dedAgri       = agregaDeducoesAgri(lancFin, ano);
+    const dedSilvi       = agregaDeducoesSilvi(lancFin, ano);
+    const jurSilvi       = agregaJurosSilvi(lancFin, ano);
+    const aporte       = agregaAportePessoal(lancFin, ano);
+    const retEmp       = agregaRetornoEmprestimos(lancFin, ano);
     const captPec     = agregaCaptacaoPec(lancFin, ano);
     const captAgri    = agregaCaptacaoAgri(lancFin, ano);
     const captSilvi   = agregaCaptacaoSilvi(lancFin, ano);
@@ -2933,6 +2979,15 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     const recAgri_M     = hasGridMeta ? agregaReceitaAgriMeta(gridMetaConsolidado) : null;
     const recOutras_M   = hasGridMeta ? agregaOutrasReceitasMeta(gridMetaConsolidado) : null;
     const captacao_M    = hasGridMeta ? agregaEntradasFinanceirasMeta(gridMetaConsolidado) : null;
+    const cfPec_M      = hasGridMeta ? agregaCustoFixoPecMeta(gridMetaConsolidado) : null;
+    const cvPec_M      = hasGridMeta ? agregaCustoVariavelPecMeta(gridMetaConsolidado) : null;
+    const cfAgri_M      = hasGridMeta ? agregaCustoFixoAgriMeta(gridMetaConsolidado) : null;
+    const cfSilvi_M      = hasGridMeta ? agregaCustoFixoSilviMeta(gridMetaConsolidado) : null;
+    const dedPec_M      = hasGridMeta ? agregaDeducoesPecMeta(gridMetaConsolidado) : null;
+    const dedAgri_M      = hasGridMeta ? agregaDeducoesAgriMeta(gridMetaConsolidado) : null;
+    const dedSilvi_M      = hasGridMeta ? agregaDeducoesSilviMeta(gridMetaConsolidado) : null;
+    const aporte_M      = hasGridMeta ? agregaAportePessoalMeta(gridMetaConsolidado) : null;
+    const retEmp_M      = hasGridMeta ? agregaRetornoEmprestimosMeta(gridMetaConsolidado) : null;
     const captPec_M     = hasGridMeta ? agregaCaptacaoPecMeta(gridMetaConsolidado) : null;
     const captAgri_M    = hasGridMeta ? agregaCaptacaoAgriMeta(gridMetaConsolidado) : null;
     const captSilvi_M   = hasGridMeta ? agregaCaptacaoSilviMeta(gridMetaConsolidado) : null;
@@ -3092,6 +3147,56 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
         isPer ? 'Entradas financeiras (captação) acumuladas Jan→mês (caixa)'
               : 'Entradas financeiras (captação) no mês (caixa)',
         captacao_M),
+      custoFixoPec: buildInd(cfPec,
+        'CUSTO FIXO PECUÁRIA', 'Custo Fixo Pecuária',
+        isPer ? 'Custo fixo pecuário acumulado Jan→mês (caixa)'
+              : 'Custo fixo pecuário no mês (caixa)',
+        cfPec_M),
+      custoVariavelPec: buildInd(cvPec,
+        'CUSTO VARIÁVEL PECUÁRIA', 'Custo Variável Pecuária',
+        isPer ? 'Custo variável pecuário acumulado Jan→mês (caixa)'
+              : 'Custo variável pecuário no mês (caixa)',
+        cvPec_M),
+      custoFixoAgri: buildInd(cfAgri,
+        'CUSTO FIXO AGRICULTURA', 'Custo Fixo Agricultura',
+        isPer ? 'Custo fixo agrícola acumulado Jan→mês (caixa)'
+              : 'Custo fixo agrícola no mês (caixa)',
+        cfAgri_M),
+      custoFixoSilvi: buildInd(cfSilvi,
+        'CUSTO FIXO SILVICULTURA', 'Custo Fixo Silvicultura',
+        isPer ? 'Custo fixo silvícola acumulado Jan→mês (caixa)'
+              : 'Custo fixo silvícola no mês (caixa)',
+        cfSilvi_M),
+      deducoesPec: buildInd(dedPec,
+        'DEDUÇÕES PECUÁRIA', 'Deduções Pecuária',
+        isPer ? 'Deduções pecuárias acumulado Jan→mês (caixa)'
+              : 'Deduções pecuárias no mês (caixa)',
+        dedPec_M),
+      deducoesAgri: buildInd(dedAgri,
+        'DEDUÇÕES AGRICULTURA', 'Deduções Agricultura',
+        isPer ? 'Deduções agrícolas acumulado Jan→mês (caixa)'
+              : 'Deduções agrícolas no mês (caixa)',
+        dedAgri_M),
+      deducoesSilvi: buildInd(dedSilvi,
+        'DEDUÇÕES SILVICULTURA', 'Deduções Silvicultura',
+        isPer ? 'Deduções silvícolas acumulado Jan→mês (caixa)'
+              : 'Deduções silvícolas no mês (caixa)',
+        dedSilvi_M),
+      aportePessoal: buildInd(aporte,
+        'APORTE PESSOAL', 'Aporte Pessoal',
+        isPer ? 'Aporte pessoal acumulado Jan→mês (caixa)'
+              : 'Aporte pessoal no mês (caixa)',
+        aporte_M),
+      retornoEmprestimos: buildInd(retEmp,
+        'RETORNO DE EMPRÉSTIMOS', 'Retorno de Empréstimos',
+        isPer ? 'Retorno de empréstimos acumulado Jan→mês (caixa)'
+              : 'Retorno de empréstimos no mês (caixa)',
+        retEmp_M),
+      jurosSilvi: buildInd(jurSilvi,
+        'JUROS SILVICULTURA', 'Juros Silvicultura',
+        isPer ? 'Juros silvícolas acumulado Jan→mês (caixa)'
+              : 'Juros silvícolas no mês (caixa)',
+        jurSilvi_M),
       captacaoPec: buildInd(captPec,
         'CAPTAÇÃO PECUÁRIA', 'Captação Pecuária',
         isPer ? 'Captação de financiamento pecuário acumulada Jan→mês (caixa)'
@@ -3664,6 +3769,16 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     investSilviIndicador:         _finSoberano.investSilvi,
     amortizacaoSilviIndicador:    _finSoberano.amortizacaoSilvi,
     captacaoIndicador:            _finSoberano.captacao,
+    jurosSilviIndicador:           _finSoberano.jurosSilvi,
+    custoFixoPecIndicador:         _finSoberano.custoFixoPec,
+    custoVariavelPecIndicador:     _finSoberano.custoVariavelPec,
+    custoFixoAgriIndicador:        _finSoberano.custoFixoAgri,
+    custoFixoSilviIndicador:       _finSoberano.custoFixoSilvi,
+    deducoesPecIndicador:          _finSoberano.deducoesPec,
+    deducoesAgriIndicador:         _finSoberano.deducoesAgri,
+    deducoesSilviIndicador:        _finSoberano.deducoesSilvi,
+    aportePessoalIndicador:        _finSoberano.aportePessoal,
+    retornoEmprestimosIndicador:   _finSoberano.retornoEmprestimos,
     captacaoPecIndicador:         _finSoberano.captacaoPec,
     captacaoAgriIndicador:        _finSoberano.captacaoAgri,
     captacaoSilviIndicador:       _finSoberano.captacaoSilvi,
@@ -3742,7 +3857,17 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       investSilviIndicador:         _finSoberano.investSilvi,
       amortizacaoSilviIndicador:    _finSoberano.amortizacaoSilvi,
       captacaoIndicador:            _finSoberano.captacao,
-      captacaoPecIndicador:         _finSoberano.captacaoPec,
+      jurosSilviIndicador:           _finSoberano.jurosSilvi,
+    custoFixoPecIndicador:         _finSoberano.custoFixoPec,
+    custoVariavelPecIndicador:     _finSoberano.custoVariavelPec,
+    custoFixoAgriIndicador:        _finSoberano.custoFixoAgri,
+    custoFixoSilviIndicador:       _finSoberano.custoFixoSilvi,
+    deducoesPecIndicador:          _finSoberano.deducoesPec,
+    deducoesAgriIndicador:         _finSoberano.deducoesAgri,
+    deducoesSilviIndicador:        _finSoberano.deducoesSilvi,
+    aportePessoalIndicador:        _finSoberano.aportePessoal,
+    retornoEmprestimosIndicador:   _finSoberano.retornoEmprestimos,
+    captacaoPecIndicador:         _finSoberano.captacaoPec,
       captacaoAgriIndicador:        _finSoberano.captacaoAgri,
       captacaoSilviIndicador:       _finSoberano.captacaoSilvi,
       captacaoSemEscopoIndicador:   _finSoberano.captacaoSemEscopo,

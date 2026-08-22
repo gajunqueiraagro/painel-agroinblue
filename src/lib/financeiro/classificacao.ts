@@ -381,6 +381,37 @@ export function isCustoFixoPecuaria(l: LancamentoClassificavel): boolean {
   return l.grupo_custo === 'Custo Fixo Pecuária';
 }
 
+/* Custo fixo e deducoes por ESCOPO — grupo_custo literal, igual aos irmaos.
+   Os onze nomes foram conferidos em financeiro_plano_contas em 22/08/2026.
+   Quatro deles tem ZERO lancamento hoje — Custo Fixo Silvicultura, Deducoes
+   Agricultura, Deducoes Silvicultura e Juros de Financiamento Silvicultura.
+   A linha nasce zerada, como venda_pe: o grupo existe no plano, e o
+   predicate existir e o que faz o dado aparecer no dia em que houver.
+
+   ATENCAO — `isCusteioProducaoPecuaria` (acima) soma FIXO + VARIAVEL. Quem
+   precisa de uma das duas isoladas usa o predicate estrito; usar o custeio
+   faria a linha conter a irma e duplicar o maior grupo de saida da base
+   (Custo Fixo Pecuaria, R$ 49,85 mi medidos em 22/08). */
+export function isCustoFixoAgricultura(l: LancamentoClassificavel): boolean {
+  return l.grupo_custo === 'Custo Fixo Agricultura';
+}
+
+export function isCustoFixoSilvicultura(l: LancamentoClassificavel): boolean {
+  return l.grupo_custo === 'Custo Fixo Silvicultura';
+}
+
+export function isDeducoesPecuaria(l: LancamentoClassificavel): boolean {
+  return l.grupo_custo === 'Deduções Pecuária';
+}
+
+export function isDeducoesAgricultura(l: LancamentoClassificavel): boolean {
+  return l.grupo_custo === 'Deduções Agricultura';
+}
+
+export function isDeducoesSilvicultura(l: LancamentoClassificavel): boolean {
+  return l.grupo_custo === 'Deduções Silvicultura';
+}
+
 /** É Receita operacional (macro_custo = "receitas") */
 export function isReceita(l: LancamentoClassificavel): boolean {
   return canonicalMacro(l) === 'receitas';
@@ -585,14 +616,30 @@ export const isCaptacaoAgricultura = (l: LancamentoClassificavel): boolean =>
 export const isCaptacaoSilvicultura = (l: LancamentoClassificavel): boolean =>
   isEntradaFinanceira(l) && l.subcentro === 'Entrada de Financiamento Silvicultura';
 
-/** Entrada financeira sem escopo: Aporte Pessoal, Retorno de Emprestimos e
- *  qualquer subcentro novo ainda nao mapeado. Definido por NEGACAO das tres
- *  acima, para que nada suma quando o plano crescer. */
+/* Aporte Pessoal e Retorno de Emprestimos — os dois maiores subcentros que
+   viviam dentro de isCaptacaoSemEscopo. Medido em 22/08/2026: Aporte Pessoal
+   R$ 33,90 mi em 583 lancamentos, Retorno de Emprestimos R$ 2,41 mi em 44.
+   Grandes o bastante para linha propria.
+   Por SUBCENTRO, nao por grupo: o grupo dos dois e 'Entradas de Capital',
+   o mesmo dos financiamentos — quem distingue e o subcentro. */
+export const isAportePessoal = (l: LancamentoClassificavel): boolean =>
+  isEntradaFinanceira(l) && l.subcentro === 'Aporte Pessoal';
+
+export const isRetornoEmprestimos = (l: LancamentoClassificavel): boolean =>
+  isEntradaFinanceira(l) && l.subcentro === 'Retorno de Empréstimos';
+
+/** Entrada financeira sem escopo: qualquer subcentro do macro 'Entrada
+ *  Financeira' ainda nao mapeado. Definido por NEGACAO das cinco acima, para
+ *  que nada suma quando o plano crescer — e para que a verificacao de
+ *  fechamento (captacao = pec + agri + silvi + aporte + retorno + semEscopo)
+ *  acuse subcentro novo em vez de escondê-lo. */
 export const isCaptacaoSemEscopo = (l: LancamentoClassificavel): boolean =>
   isEntradaFinanceira(l) &&
   !isCaptacaoPecuaria(l) &&
   !isCaptacaoAgricultura(l) &&
-  !isCaptacaoSilvicultura(l);
+  !isCaptacaoSilvicultura(l) &&
+  !isAportePessoal(l) &&
+  !isRetornoEmprestimos(l);
 
 /**
  * Entrada que não casa com nenhum grupo oficial de entrada.

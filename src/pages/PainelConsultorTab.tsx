@@ -78,7 +78,11 @@ interface Row {
   format: PainelFormatType;
   valores: number[];     // 12 values
   noTotal?: boolean;     // true = total column stays blank (stock indicators)
-  nivel?: 'familia' | 'destino';  // ausente = linha normal
+  /* Tres niveis. O terceiro se distingue SO POR RECUO: nao ha degrau de
+     fonte sobrando (o segundo ja esta em 9px) e 8px fica ilegivel em
+     tabela de 13 colunas. O prefixo → marca o nivel 2; o nivel 3 usa pl-6
+     e nenhum prefixo — duas setas empilhadas poluiriam. */
+  nivel?: 'familia' | 'destino' | 'subitem';  // ausente = linha normal
 }
 
 interface Bloco {
@@ -269,6 +273,44 @@ function agregarGridMetaPainelConsultor(
   return { entradas, saidas, recPec, custoProd, recOper, outrasSaidas, resOper, resFinal };
 }
 
+interface CaixaSerie12 {
+  saldoCaixa: number[];
+  receitaPecCaixa: number[];
+  receitaAgri: number[];
+  receitaSilvicola: number[];
+  receitaOutras: number[];
+  captacao: number[];
+  captacaoPec: number[];
+  captacaoAgri: number[];
+  captacaoSilvi: number[];
+  aportePessoal: number[];
+  retornoEmprestimos: number[];
+  desembolsoPec: number[];
+  deducoesPec: number[];
+  custoFixoPec: number[];
+  jurosPec: number[];
+  custoVariavelPec: number[];
+  investPec: number[];
+  investBovinos: number[];
+  desembolsoAgri: number[];
+  deducoesAgri: number[];
+  custoFixoAgri: number[];
+  jurosAgri: number[];
+  custeioAgri: number[];
+  investAgri: number[];
+  deducoesSilvi: number[];
+  custoFixoSilvi: number[];
+  jurosSilvi: number[];
+  custeioSilvi: number[];
+  investSilvi: number[];
+  amortizacaoSilvi: number[];
+  amortizacoes: number[];
+  amortizacaoPec: number[];
+  amortizacaoAgri: number[];
+  tributos: number[];
+  dividendos: number[];
+}
+
 interface SoberanoSerie12 {
   custeioPecSemJuros:   number[];
   jurosPec:             number[];
@@ -338,6 +380,7 @@ function buildBlocosForTab(
   caixaSaldoMensal?: number[],
   saidasDesfruteCabMensal?: number[],
   pcd?: ReturnType<typeof usePainelConsultorData> | null,
+  caixa?: CaixaSerie12,
 ): Bloco[] {
   // Saldo bancário consolidado (estoque) Jan..Dez — alimenta linha "Saldo Final de Caixa".
   // Fonte oficial: pc100.caixaIndicador.serieAno (length 13; slice(1) = Jan..Dez).
@@ -464,7 +507,7 @@ function buildBlocosForTab(
   const NAN12: number[] = Array(12).fill(NaN);
   const linha = (
     abas: ViewTab[], indicador: string, format: PainelFormatType, raw: number[],
-    indicadorId?: string, noTotal?: boolean, nivel?: 'familia' | 'destino',
+    indicadorId?: string, noTotal?: boolean, nivel?: 'familia' | 'destino' | 'subitem',
     bruto?: boolean,
   ): Row => (
     abas.includes(tab)
@@ -602,6 +645,78 @@ function buildBlocosForTab(
     ],
   };
 
+  /* Derivadas — nao ha indicador para elas, e sao somas EXATAS das partes.
+     `desembolsoSilvi` nao existe no hook (ha desembolsoPec e desembolsoAgri,
+     nao o silvicola); aqui ele e a soma dos seis componentes silvicolas.
+     `entradas`/`saidas` sao as somas dos filhos de nivel 2, e nao entFin/saiFin
+     do MonthlyData — e isso que faz a coluna FECHAR: Resultado = Entradas −
+     Saidas, e Saldo Final = Saldo Inicial + Resultado.
+     `saldoInicial` deriva do final menos o resultado: o hook expoe o SALDO
+     FINAL por mes (caixaIndicador) e nao o inicial de janeiro. Derivar mantem
+     a identidade fechada por construcao em todos os doze meses. */
+  const somaSerie = (...xs: number[][]): number[] =>
+    Array.from({ length: 12 }, (_, i) =>
+      xs.reduce((acc, x) => acc + (Number.isFinite(x[i]) ? x[i] : 0), 0));
+  const c = caixa ? (() => {
+    const desembolsoSilvi = somaSerie(
+      caixa.deducoesSilvi, caixa.custoFixoSilvi, caixa.jurosSilvi,
+      caixa.custeioSilvi, caixa.investSilvi, caixa.amortizacaoSilvi);
+    const entradas = somaSerie(
+      caixa.receitaPecCaixa, caixa.receitaAgri, caixa.receitaSilvicola,
+      caixa.receitaOutras, caixa.captacao);
+    const saidas = somaSerie(
+      caixa.desembolsoPec, caixa.desembolsoAgri, desembolsoSilvi,
+      caixa.amortizacoes, caixa.tributos, caixa.dividendos);
+    const resultado = entradas.map((v, i) => v - saidas[i]);
+    const saldoInicial = caixa.saldoCaixa.map((v, i) => v - resultado[i]);
+    return { ...caixa, desembolsoSilvi, entradas, saidas, resultado, saldoInicial };
+  })() : null;
+  const blocoCaixa: Bloco | null = c ? {
+    nome: 'Financeiro (Caixa)',
+    rows: [
+      linha(['mensal','medio','acumulado','media_periodo'], 'Saldo Inicial', 'money', c.saldoInicial, 'cx_saldo_inicial', true, undefined, true),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Entradas Financeiras', 'money', c.entradas, 'cx_entradas', false, 'familia'),
+      linha(['mensal','medio','acumulado','media_periodo'], '→ Receitas Pecuária', 'money', c.receitaPecCaixa, 'cx_rec_pec', false, 'destino'),
+      linha(['mensal','medio','acumulado','media_periodo'], '→ Receita Agrícola', 'money', c.receitaAgri, 'cx_rec_agri', false, 'destino'),
+      linha(['mensal','medio','acumulado','media_periodo'], '→ Receita Silvícola', 'money', c.receitaSilvicola, 'cx_rec_silvi', false, 'destino'),
+      linha(['mensal','medio','acumulado','media_periodo'], '→ Outras Receitas', 'money', c.receitaOutras, 'cx_rec_outras', false, 'destino'),
+      linha(['mensal','medio','acumulado','media_periodo'], '→ Entradas de Capital', 'money', c.captacao, 'cx_capital', false, 'destino'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Aporte Pessoal', 'money', c.aportePessoal, 'cx_cap_aporte', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Financiamento Agricultura', 'money', c.captacaoAgri, 'cx_cap_fin_agri', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Financiamento Pecuária', 'money', c.captacaoPec, 'cx_cap_fin_pec', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Financiamento Silvicultura', 'money', c.captacaoSilvi, 'cx_cap_fin_silvi', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Retorno de Empréstimos', 'money', c.retornoEmprestimos, 'cx_cap_retorno', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Saídas Financeiras', 'money', c.saidas, 'cx_saidas', false, 'familia'),
+      linha(['mensal','medio','acumulado','media_periodo'], '→ Saídas Pecuária', 'money', c.desembolsoPec, 'cx_sai_pec', false, 'destino'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Deduções Pecuária', 'money', c.deducoesPec, 'cx_pec_deducoes', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Custo Fixo Pecuária', 'money', c.custoFixoPec, 'cx_pec_custo_fixo', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Juros de Financiamento Pecuária', 'money', c.jurosPec, 'cx_pec_juros', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Custo Variável Pecuária', 'money', c.custoVariavelPec, 'cx_pec_custo_var', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Investimento Pecuária', 'money', c.investPec, 'cx_pec_investimento', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Compra de Bovinos', 'money', c.investBovinos, 'cx_pec_bovinos', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], '→ Saídas Agricultura', 'money', c.desembolsoAgri, 'cx_sai_agri', false, 'destino'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Deduções Agricultura', 'money', c.deducoesAgri, 'cx_agri_deducoes', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Custo Fixo Agricultura', 'money', c.custoFixoAgri, 'cx_agri_custo_fixo', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Juros de Financiamento Agricultura', 'money', c.jurosAgri, 'cx_agri_juros', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Custo Variável Agricultura', 'money', c.custeioAgri, 'cx_agri_custo_var', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Investimento Agricultura', 'money', c.investAgri, 'cx_agri_investimento', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], '→ Saídas Silvicultura', 'money', c.desembolsoSilvi, 'cx_sai_silvi', false, 'destino'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Deduções Silvicultura', 'money', c.deducoesSilvi, 'cx_silvi_deducoes', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Custo Fixo Silvicultura', 'money', c.custoFixoSilvi, 'cx_silvi_custo_fixo', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Juros de Financiamento Silvicultura', 'money', c.jurosSilvi, 'cx_silvi_juros', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Custo Variável Silvicultura', 'money', c.custeioSilvi, 'cx_silvi_custo_var', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Investimento Silvicultura', 'money', c.investSilvi, 'cx_silvi_investimento', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], '→ Amortizações', 'money', c.amortizacoes, 'cx_amortizacoes', false, 'destino'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Pecuária', 'money', c.amortizacaoPec, 'cx_amort_pec', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Agricultura', 'money', c.amortizacaoAgri, 'cx_amort_agri', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Silvicultura', 'money', c.amortizacaoSilvi, 'cx_amort_silvi', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], '→ Tributos e Impostos', 'money', c.tributos, 'cx_tributos', false, 'destino'),
+      linha(['mensal','medio','acumulado','media_periodo'], '→ Dividendos', 'money', c.dividendos, 'cx_dividendos', false, 'destino'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Resultado de Caixa', 'money', c.resultado, 'cx_resultado', false, 'familia'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Saldo Final', 'money', c.saldoCaixa, 'cx_saldo_final', true, undefined, true),
+    ],
+  } : null;
+
   switch (tab) {
     case 'mensal':
       return [
@@ -609,16 +724,7 @@ function buildBlocosForTab(
         blocoPesoKg,
         blocoPesoArroba,
         blocoProducao,
-        {
-          nome: 'Financeiro (Caixa)',
-          rows: [
-            r('Entradas Financeiras', 'money', finEntradas, 'ent_fin_mensal'),
-            r('Saídas Financeiras', 'money', finSaidas, 'sai_fin_mensal'),
-            r('Receita Pecuária', 'money', finRecPec, 'rec_pec_mensal'),
-            r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_mensal'),
-            r('Saldo Final de Caixa', 'money', _saldoCaixaMes12, 'saldo_caixa_mensal'),
-          ],
-        },
+        ...(blocoCaixa ? [blocoCaixa] : []),
         ...(blocoSoberano ? [blocoSoberano] : []),
         ...(blocoEndividamentoMensal ? [blocoEndividamentoMensal] : []),
         {
@@ -638,16 +744,7 @@ function buildBlocosForTab(
         blocoPesoKg,
         blocoPesoArroba,
         blocoProducao,
-        {
-          nome: 'Financeiro (Caixa)',
-          rows: [
-            r('Entradas Financeiras', 'money', finEntradas, 'ent_fin_med'),
-            r('Saídas Financeiras', 'money', finSaidas, 'sai_fin_med'),
-            r('Receita Pecuária', 'money', finRecPec, 'rec_pec_med'),
-            r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_med'),
-            r('Saldo Final de Caixa', 'money', _saldoCaixaMes12, 'saldo_caixa_med'),
-          ],
-        },
+        ...(blocoCaixa ? [blocoCaixa] : []),
         ...(blocoSoberano ? [blocoSoberano] : []),
         {
           nome: 'Patrimônio',
@@ -665,15 +762,7 @@ function buildBlocosForTab(
         blocoPesoKg,
         blocoPesoArroba,
         blocoProducao,
-        {
-          nome: 'Financeiro (Caixa)',
-          rows: [
-            r('Entradas Financeiras', 'money', finEntradas, 'ent_fin_acum'),
-            r('Saídas Financeiras', 'money', finSaidas, 'sai_fin_acum'),
-            r('Receita Pecuária', 'money', finRecPec, 'rec_pec_acum'),
-            r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_acum'),
-          ],
-        },
+        ...(blocoCaixa ? [blocoCaixa] : []),
         ...(blocoSoberano ? [blocoSoberano] : []),
         ...(blocoEndividamentoAcum ? [blocoEndividamentoAcum] : []),
         {
@@ -696,16 +785,7 @@ function buildBlocosForTab(
         blocoPesoKg,
         blocoPesoArroba,
         blocoProducao,
-        {
-          nome: 'Financeiro (Caixa)',
-          rows: [
-            r('Entradas Financeiras', 'money', finEntradas, 'ent_fin_periodo'),
-            r('Saídas Financeiras', 'money', finSaidas, 'sai_fin_periodo'),
-            r('Receita Pecuária', 'money', finRecPec, 'receita_media', true),
-            r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_medio', true),
-            r('Saldo Final de Caixa', 'money', _saldoCaixaMes12, 'saldo_caixa_medio', true),
-          ],
-        },
+        ...(blocoCaixa ? [blocoCaixa] : []),
         ...(blocoSoberano ? [blocoSoberano] : []),
         {
           nome: 'Patrimônio',
@@ -753,7 +833,7 @@ function buildBlocoSoberano(
 }
 
 // ─── Build blocos from vw_zoot_fazenda_mensal (for Meta cenário) ───
-function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanhoMetaMes?: number[], valorRebanhoMetaMesAnteriorOuDez?: number[], metaValorCabMes?: number[], metaPrecoArrMes?: number[], pesoSnap?: PesoSnapshot, dezRealizadoSnap?: { cabecas: number; pesoMedioKg: number; arrobas: number }, finMeta?: FinMetaPainel | null, soberano?: SoberanoSerie12, arrobasSaidasMensal?: number[], caixaSaldoMensal?: number[], saidasDesfruteCabMensal?: number[], pcd?: ReturnType<typeof usePainelConsultorData> | null): Bloco[] {
+function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanhoMetaMes?: number[], valorRebanhoMetaMesAnteriorOuDez?: number[], metaValorCabMes?: number[], metaPrecoArrMes?: number[], pesoSnap?: PesoSnapshot, dezRealizadoSnap?: { cabecas: number; pesoMedioKg: number; arrobas: number }, finMeta?: FinMetaPainel | null, soberano?: SoberanoSerie12, arrobasSaidasMensal?: number[], caixaSaldoMensal?: number[], saidasDesfruteCabMensal?: number[], pcd?: ReturnType<typeof usePainelConsultorData> | null, caixa?: CaixaSerie12): Bloco[] {
   // Saldo bancário consolidado (estoque) Jan..Dez — alimenta "Saldo Final de Caixa".
   const _saldoCaixaMes12: number[] = caixaSaldoMensal ?? Array(12).fill(NaN);
   const byMes = indexByMes(rows);
@@ -898,7 +978,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
   const NAN12: number[] = Array(12).fill(NaN);
   const linha = (
     abas: ViewTab[], indicador: string, format: PainelFormatType, raw: number[],
-    indicadorId?: string, noTotal?: boolean, nivel?: 'familia' | 'destino',
+    indicadorId?: string, noTotal?: boolean, nivel?: 'familia' | 'destino' | 'subitem',
     bruto?: boolean,
   ): Row => (
     abas.includes(tab)
@@ -1024,6 +1104,78 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
     ],
   };
 
+  /* Derivadas — nao ha indicador para elas, e sao somas EXATAS das partes.
+     `desembolsoSilvi` nao existe no hook (ha desembolsoPec e desembolsoAgri,
+     nao o silvicola); aqui ele e a soma dos seis componentes silvicolas.
+     `entradas`/`saidas` sao as somas dos filhos de nivel 2, e nao entFin/saiFin
+     do MonthlyData — e isso que faz a coluna FECHAR: Resultado = Entradas −
+     Saidas, e Saldo Final = Saldo Inicial + Resultado.
+     `saldoInicial` deriva do final menos o resultado: o hook expoe o SALDO
+     FINAL por mes (caixaIndicador) e nao o inicial de janeiro. Derivar mantem
+     a identidade fechada por construcao em todos os doze meses. */
+  const somaSerie = (...xs: number[][]): number[] =>
+    Array.from({ length: 12 }, (_, i) =>
+      xs.reduce((acc, x) => acc + (Number.isFinite(x[i]) ? x[i] : 0), 0));
+  const c = caixa ? (() => {
+    const desembolsoSilvi = somaSerie(
+      caixa.deducoesSilvi, caixa.custoFixoSilvi, caixa.jurosSilvi,
+      caixa.custeioSilvi, caixa.investSilvi, caixa.amortizacaoSilvi);
+    const entradas = somaSerie(
+      caixa.receitaPecCaixa, caixa.receitaAgri, caixa.receitaSilvicola,
+      caixa.receitaOutras, caixa.captacao);
+    const saidas = somaSerie(
+      caixa.desembolsoPec, caixa.desembolsoAgri, desembolsoSilvi,
+      caixa.amortizacoes, caixa.tributos, caixa.dividendos);
+    const resultado = entradas.map((v, i) => v - saidas[i]);
+    const saldoInicial = caixa.saldoCaixa.map((v, i) => v - resultado[i]);
+    return { ...caixa, desembolsoSilvi, entradas, saidas, resultado, saldoInicial };
+  })() : null;
+  const blocoCaixa: Bloco | null = c ? {
+    nome: 'Financeiro (Caixa)',
+    rows: [
+      linha(['mensal','medio','acumulado','media_periodo'], 'Saldo Inicial', 'money', c.saldoInicial, 'cx_saldo_inicial', true, undefined, true),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Entradas Financeiras', 'money', c.entradas, 'cx_entradas', false, 'familia'),
+      linha(['mensal','medio','acumulado','media_periodo'], '→ Receitas Pecuária', 'money', c.receitaPecCaixa, 'cx_rec_pec', false, 'destino'),
+      linha(['mensal','medio','acumulado','media_periodo'], '→ Receita Agrícola', 'money', c.receitaAgri, 'cx_rec_agri', false, 'destino'),
+      linha(['mensal','medio','acumulado','media_periodo'], '→ Receita Silvícola', 'money', c.receitaSilvicola, 'cx_rec_silvi', false, 'destino'),
+      linha(['mensal','medio','acumulado','media_periodo'], '→ Outras Receitas', 'money', c.receitaOutras, 'cx_rec_outras', false, 'destino'),
+      linha(['mensal','medio','acumulado','media_periodo'], '→ Entradas de Capital', 'money', c.captacao, 'cx_capital', false, 'destino'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Aporte Pessoal', 'money', c.aportePessoal, 'cx_cap_aporte', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Financiamento Agricultura', 'money', c.captacaoAgri, 'cx_cap_fin_agri', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Financiamento Pecuária', 'money', c.captacaoPec, 'cx_cap_fin_pec', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Financiamento Silvicultura', 'money', c.captacaoSilvi, 'cx_cap_fin_silvi', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Retorno de Empréstimos', 'money', c.retornoEmprestimos, 'cx_cap_retorno', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Saídas Financeiras', 'money', c.saidas, 'cx_saidas', false, 'familia'),
+      linha(['mensal','medio','acumulado','media_periodo'], '→ Saídas Pecuária', 'money', c.desembolsoPec, 'cx_sai_pec', false, 'destino'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Deduções Pecuária', 'money', c.deducoesPec, 'cx_pec_deducoes', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Custo Fixo Pecuária', 'money', c.custoFixoPec, 'cx_pec_custo_fixo', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Juros de Financiamento Pecuária', 'money', c.jurosPec, 'cx_pec_juros', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Custo Variável Pecuária', 'money', c.custoVariavelPec, 'cx_pec_custo_var', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Investimento Pecuária', 'money', c.investPec, 'cx_pec_investimento', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Compra de Bovinos', 'money', c.investBovinos, 'cx_pec_bovinos', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], '→ Saídas Agricultura', 'money', c.desembolsoAgri, 'cx_sai_agri', false, 'destino'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Deduções Agricultura', 'money', c.deducoesAgri, 'cx_agri_deducoes', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Custo Fixo Agricultura', 'money', c.custoFixoAgri, 'cx_agri_custo_fixo', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Juros de Financiamento Agricultura', 'money', c.jurosAgri, 'cx_agri_juros', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Custo Variável Agricultura', 'money', c.custeioAgri, 'cx_agri_custo_var', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Investimento Agricultura', 'money', c.investAgri, 'cx_agri_investimento', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], '→ Saídas Silvicultura', 'money', c.desembolsoSilvi, 'cx_sai_silvi', false, 'destino'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Deduções Silvicultura', 'money', c.deducoesSilvi, 'cx_silvi_deducoes', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Custo Fixo Silvicultura', 'money', c.custoFixoSilvi, 'cx_silvi_custo_fixo', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Juros de Financiamento Silvicultura', 'money', c.jurosSilvi, 'cx_silvi_juros', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Custo Variável Silvicultura', 'money', c.custeioSilvi, 'cx_silvi_custo_var', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Investimento Silvicultura', 'money', c.investSilvi, 'cx_silvi_investimento', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], '→ Amortizações', 'money', c.amortizacoes, 'cx_amortizacoes', false, 'destino'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Pecuária', 'money', c.amortizacaoPec, 'cx_amort_pec', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Agricultura', 'money', c.amortizacaoAgri, 'cx_amort_agri', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Silvicultura', 'money', c.amortizacaoSilvi, 'cx_amort_silvi', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], '→ Tributos e Impostos', 'money', c.tributos, 'cx_tributos', false, 'destino'),
+      linha(['mensal','medio','acumulado','media_periodo'], '→ Dividendos', 'money', c.dividendos, 'cx_dividendos', false, 'destino'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Resultado de Caixa', 'money', c.resultado, 'cx_resultado', false, 'familia'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Saldo Final', 'money', c.saldoCaixa, 'cx_saldo_final', true, undefined, true),
+    ],
+  } : null;
+
   switch (tab) {
     case 'mensal':
       return [
@@ -1031,16 +1183,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
         blocoPesoKg,
         blocoPesoArroba,
         blocoProducao,
-        {
-          nome: 'Financeiro (Caixa)',
-          rows: [
-            r('Entradas Financeiras', 'money', finEntradas, 'ent_fin_mensal'),
-            r('Saídas Financeiras', 'money', finSaidas, 'sai_fin_mensal'),
-            r('Receita Pecuária', 'money', finRecPec, 'rec_pec_mensal'),
-            r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_mensal'),
-            r('Saldo Final de Caixa', 'money', _saldoCaixaMes12, 'saldo_caixa_mensal'),
-          ],
-        },
+        ...(blocoCaixa ? [blocoCaixa] : []),
         ...(blocoSoberano ? [blocoSoberano] : []),
         {
           nome: 'Patrimônio',
@@ -1058,16 +1201,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
         blocoPesoKg,
         blocoPesoArroba,
         blocoProducao,
-        {
-          nome: 'Financeiro (Caixa)',
-          rows: [
-            r('Entradas Financeiras', 'money', finEntradas, 'ent_fin_med'),
-            r('Saídas Financeiras', 'money', finSaidas, 'sai_fin_med'),
-            r('Receita Pecuária', 'money', finRecPec, 'rec_pec_med'),
-            r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_med'),
-            r('Saldo Final de Caixa', 'money', _saldoCaixaMes12, 'saldo_caixa_med'),
-          ],
-        },
+        ...(blocoCaixa ? [blocoCaixa] : []),
         ...(blocoSoberano ? [blocoSoberano] : []),
         {
           nome: 'Patrimônio',
@@ -1084,15 +1218,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
         blocoPesoKg,
         blocoPesoArroba,
         blocoProducao,
-        {
-          nome: 'Financeiro (Caixa)',
-          rows: [
-            r('Entradas Financeiras', 'money', finEntradas, 'ent_fin_acum'),
-            r('Saídas Financeiras', 'money', finSaidas, 'sai_fin_acum'),
-            r('Receita Pecuária', 'money', finRecPec, 'rec_pec_acum'),
-            r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_acum'),
-          ],
-        },
+        ...(blocoCaixa ? [blocoCaixa] : []),
         ...(blocoSoberano ? [blocoSoberano] : []),
         {
           nome: 'Patrimônio',
@@ -1110,16 +1236,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
         blocoPesoKg,
         blocoPesoArroba,
         blocoProducao,
-        {
-          nome: 'Financeiro (Caixa)',
-          rows: [
-            r('Entradas Financeiras', 'money', finEntradas, 'ent_fin_periodo'),
-            r('Saídas Financeiras', 'money', finSaidas, 'sai_fin_periodo'),
-            r('Receita Pecuária', 'money', finRecPec, 'receita_media', true),
-            r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_medio', true),
-            r('Saldo Final de Caixa', 'money', _saldoCaixaMes12, 'saldo_caixa_medio', true),
-          ],
-        },
+        ...(blocoCaixa ? [blocoCaixa] : []),
         ...(blocoSoberano ? [blocoSoberano] : []),
         {
           nome: 'Patrimônio',
@@ -1136,7 +1253,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
 }
 
 // ─── Build blocos from MetaConsolidacao (validated consolidation) ───
-function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: ViewTab, areaProd: number, gmdMetaRows: MetaGmdRow[], valorRebanhoMetaMes?: number[], dezAnoAnteriorRealizado?: number, metaValorCabMes?: number[], metaPrecoArrMes?: number[], pesoSnap?: PesoSnapshot, dezRealizadoSnap?: { cabecas: number; pesoMedioKg: number; arrobas: number }, finMeta?: FinMetaPainel | null, soberano?: SoberanoSerie12, arrobasSaidasMensal?: number[], caixaSaldoMensal?: number[], saidasDesfruteCabMensal?: number[], pcd?: ReturnType<typeof usePainelConsultorData> | null): Bloco[] {
+function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: ViewTab, areaProd: number, gmdMetaRows: MetaGmdRow[], valorRebanhoMetaMes?: number[], dezAnoAnteriorRealizado?: number, metaValorCabMes?: number[], metaPrecoArrMes?: number[], pesoSnap?: PesoSnapshot, dezRealizadoSnap?: { cabecas: number; pesoMedioKg: number; arrobas: number }, finMeta?: FinMetaPainel | null, soberano?: SoberanoSerie12, arrobasSaidasMensal?: number[], caixaSaldoMensal?: number[], saidasDesfruteCabMensal?: number[], pcd?: ReturnType<typeof usePainelConsultorData> | null, caixa?: CaixaSerie12): Bloco[] {
   // Saldo bancário consolidado (estoque) Jan..Dez — alimenta "Saldo Final de Caixa".
   const _saldoCaixaMes12: number[] = caixaSaldoMensal ?? Array(12).fill(NaN);
   // Aggregate across all categories per month
@@ -1291,7 +1408,7 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
   const NAN12: number[] = Array(12).fill(NaN);
   const linha = (
     abas: ViewTab[], indicador: string, format: PainelFormatType, raw: number[],
-    indicadorId?: string, noTotal?: boolean, nivel?: 'familia' | 'destino',
+    indicadorId?: string, noTotal?: boolean, nivel?: 'familia' | 'destino' | 'subitem',
     bruto?: boolean,
   ): Row => (
     abas.includes(tab)
@@ -1417,6 +1534,78 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
     ],
   };
 
+  /* Derivadas — nao ha indicador para elas, e sao somas EXATAS das partes.
+     `desembolsoSilvi` nao existe no hook (ha desembolsoPec e desembolsoAgri,
+     nao o silvicola); aqui ele e a soma dos seis componentes silvicolas.
+     `entradas`/`saidas` sao as somas dos filhos de nivel 2, e nao entFin/saiFin
+     do MonthlyData — e isso que faz a coluna FECHAR: Resultado = Entradas −
+     Saidas, e Saldo Final = Saldo Inicial + Resultado.
+     `saldoInicial` deriva do final menos o resultado: o hook expoe o SALDO
+     FINAL por mes (caixaIndicador) e nao o inicial de janeiro. Derivar mantem
+     a identidade fechada por construcao em todos os doze meses. */
+  const somaSerie = (...xs: number[][]): number[] =>
+    Array.from({ length: 12 }, (_, i) =>
+      xs.reduce((acc, x) => acc + (Number.isFinite(x[i]) ? x[i] : 0), 0));
+  const c = caixa ? (() => {
+    const desembolsoSilvi = somaSerie(
+      caixa.deducoesSilvi, caixa.custoFixoSilvi, caixa.jurosSilvi,
+      caixa.custeioSilvi, caixa.investSilvi, caixa.amortizacaoSilvi);
+    const entradas = somaSerie(
+      caixa.receitaPecCaixa, caixa.receitaAgri, caixa.receitaSilvicola,
+      caixa.receitaOutras, caixa.captacao);
+    const saidas = somaSerie(
+      caixa.desembolsoPec, caixa.desembolsoAgri, desembolsoSilvi,
+      caixa.amortizacoes, caixa.tributos, caixa.dividendos);
+    const resultado = entradas.map((v, i) => v - saidas[i]);
+    const saldoInicial = caixa.saldoCaixa.map((v, i) => v - resultado[i]);
+    return { ...caixa, desembolsoSilvi, entradas, saidas, resultado, saldoInicial };
+  })() : null;
+  const blocoCaixa: Bloco | null = c ? {
+    nome: 'Financeiro (Caixa)',
+    rows: [
+      linha(['mensal','medio','acumulado','media_periodo'], 'Saldo Inicial', 'money', c.saldoInicial, 'cx_saldo_inicial', true, undefined, true),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Entradas Financeiras', 'money', c.entradas, 'cx_entradas', false, 'familia'),
+      linha(['mensal','medio','acumulado','media_periodo'], '→ Receitas Pecuária', 'money', c.receitaPecCaixa, 'cx_rec_pec', false, 'destino'),
+      linha(['mensal','medio','acumulado','media_periodo'], '→ Receita Agrícola', 'money', c.receitaAgri, 'cx_rec_agri', false, 'destino'),
+      linha(['mensal','medio','acumulado','media_periodo'], '→ Receita Silvícola', 'money', c.receitaSilvicola, 'cx_rec_silvi', false, 'destino'),
+      linha(['mensal','medio','acumulado','media_periodo'], '→ Outras Receitas', 'money', c.receitaOutras, 'cx_rec_outras', false, 'destino'),
+      linha(['mensal','medio','acumulado','media_periodo'], '→ Entradas de Capital', 'money', c.captacao, 'cx_capital', false, 'destino'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Aporte Pessoal', 'money', c.aportePessoal, 'cx_cap_aporte', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Financiamento Agricultura', 'money', c.captacaoAgri, 'cx_cap_fin_agri', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Financiamento Pecuária', 'money', c.captacaoPec, 'cx_cap_fin_pec', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Financiamento Silvicultura', 'money', c.captacaoSilvi, 'cx_cap_fin_silvi', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Retorno de Empréstimos', 'money', c.retornoEmprestimos, 'cx_cap_retorno', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Saídas Financeiras', 'money', c.saidas, 'cx_saidas', false, 'familia'),
+      linha(['mensal','medio','acumulado','media_periodo'], '→ Saídas Pecuária', 'money', c.desembolsoPec, 'cx_sai_pec', false, 'destino'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Deduções Pecuária', 'money', c.deducoesPec, 'cx_pec_deducoes', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Custo Fixo Pecuária', 'money', c.custoFixoPec, 'cx_pec_custo_fixo', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Juros de Financiamento Pecuária', 'money', c.jurosPec, 'cx_pec_juros', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Custo Variável Pecuária', 'money', c.custoVariavelPec, 'cx_pec_custo_var', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Investimento Pecuária', 'money', c.investPec, 'cx_pec_investimento', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Compra de Bovinos', 'money', c.investBovinos, 'cx_pec_bovinos', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], '→ Saídas Agricultura', 'money', c.desembolsoAgri, 'cx_sai_agri', false, 'destino'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Deduções Agricultura', 'money', c.deducoesAgri, 'cx_agri_deducoes', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Custo Fixo Agricultura', 'money', c.custoFixoAgri, 'cx_agri_custo_fixo', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Juros de Financiamento Agricultura', 'money', c.jurosAgri, 'cx_agri_juros', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Custo Variável Agricultura', 'money', c.custeioAgri, 'cx_agri_custo_var', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Investimento Agricultura', 'money', c.investAgri, 'cx_agri_investimento', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], '→ Saídas Silvicultura', 'money', c.desembolsoSilvi, 'cx_sai_silvi', false, 'destino'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Deduções Silvicultura', 'money', c.deducoesSilvi, 'cx_silvi_deducoes', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Custo Fixo Silvicultura', 'money', c.custoFixoSilvi, 'cx_silvi_custo_fixo', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Juros de Financiamento Silvicultura', 'money', c.jurosSilvi, 'cx_silvi_juros', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Custo Variável Silvicultura', 'money', c.custeioSilvi, 'cx_silvi_custo_var', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Investimento Silvicultura', 'money', c.investSilvi, 'cx_silvi_investimento', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], '→ Amortizações', 'money', c.amortizacoes, 'cx_amortizacoes', false, 'destino'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Pecuária', 'money', c.amortizacaoPec, 'cx_amort_pec', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Agricultura', 'money', c.amortizacaoAgri, 'cx_amort_agri', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Silvicultura', 'money', c.amortizacaoSilvi, 'cx_amort_silvi', false, 'subitem'),
+      linha(['mensal','medio','acumulado','media_periodo'], '→ Tributos e Impostos', 'money', c.tributos, 'cx_tributos', false, 'destino'),
+      linha(['mensal','medio','acumulado','media_periodo'], '→ Dividendos', 'money', c.dividendos, 'cx_dividendos', false, 'destino'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Resultado de Caixa', 'money', c.resultado, 'cx_resultado', false, 'familia'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Saldo Final', 'money', c.saldoCaixa, 'cx_saldo_final', true, undefined, true),
+    ],
+  } : null;
+
   switch (tab) {
     case 'mensal':
       return [
@@ -1424,16 +1613,7 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
         blocoPesoKg,
         blocoPesoArroba,
         blocoProducao,
-        {
-          nome: 'Financeiro (Caixa)',
-          rows: [
-            r('Entradas Financeiras', 'money', finEntradas, 'ent_fin_mensal'),
-            r('Saídas Financeiras', 'money', finSaidas, 'sai_fin_mensal'),
-            r('Receita Pecuária', 'money', finRecPec, 'rec_pec_mensal'),
-            r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_mensal'),
-            r('Saldo Final de Caixa', 'money', _saldoCaixaMes12, 'saldo_caixa_mensal'),
-          ],
-        },
+        ...(blocoCaixa ? [blocoCaixa] : []),
         ...(blocoSoberano ? [blocoSoberano] : []),
         {
           nome: 'Patrimônio',
@@ -1451,16 +1631,7 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
         blocoPesoKg,
         blocoPesoArroba,
         blocoProducao,
-        {
-          nome: 'Financeiro (Caixa)',
-          rows: [
-            r('Entradas Financeiras', 'money', finEntradas, 'ent_fin_med'),
-            r('Saídas Financeiras', 'money', finSaidas, 'sai_fin_med'),
-            r('Receita Pecuária', 'money', finRecPec, 'rec_pec_med'),
-            r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_med'),
-            r('Saldo Final de Caixa', 'money', _saldoCaixaMes12, 'saldo_caixa_med'),
-          ],
-        },
+        ...(blocoCaixa ? [blocoCaixa] : []),
         ...(blocoSoberano ? [blocoSoberano] : []),
         {
           nome: 'Patrimônio',
@@ -1477,15 +1648,7 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
         blocoPesoKg,
         blocoPesoArroba,
         blocoProducao,
-        {
-          nome: 'Financeiro (Caixa)',
-          rows: [
-            r('Entradas Financeiras', 'money', finEntradas, 'ent_fin_acum'),
-            r('Saídas Financeiras', 'money', finSaidas, 'sai_fin_acum'),
-            r('Receita Pecuária', 'money', finRecPec, 'rec_pec_acum'),
-            r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_acum'),
-          ],
-        },
+        ...(blocoCaixa ? [blocoCaixa] : []),
         ...(blocoSoberano ? [blocoSoberano] : []),
         {
           nome: 'Patrimônio',
@@ -1503,16 +1666,7 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
         blocoPesoKg,
         blocoPesoArroba,
         blocoProducao,
-        {
-          nome: 'Financeiro (Caixa)',
-          rows: [
-            r('Entradas Financeiras', 'money', finEntradas, 'ent_fin_periodo'),
-            r('Saídas Financeiras', 'money', finSaidas, 'sai_fin_periodo'),
-            r('Receita Pecuária', 'money', finRecPec, 'receita_media', true),
-            r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_medio', true),
-            r('Saldo Final de Caixa', 'money', _saldoCaixaMes12, 'saldo_caixa_medio', true),
-          ],
-        },
+        ...(blocoCaixa ? [blocoCaixa] : []),
         ...(blocoSoberano ? [blocoSoberano] : []),
         {
           nome: 'Patrimônio',
@@ -1940,13 +2094,69 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
   // Cada indicador.serieAno tem 13 posições; [0]=NaN contexto, [1..12]=Jan..Dez raw (porque
   // chamamos usePCD com viewMode='mes'). NaNs são neutralizados para 0 — coluna em branco
   // só aconteceria por loading; o bloco fica oculto até pcdSoberano.custeioPecIndicador existir.
+  /* CaixaSerie12 — no MOLDE do soberanoSerie: montado aqui, no componente, a
+     partir dos indicadores, e passado aos tres builders como parametro. Os
+     builders leem MonthlyData, nao indicadores; este objeto e a ponte que o
+     soberanoSerie ja tinha construido.
+     Nenhum indicador novo e criado aqui: os 47 do hook ja cobrem as 40 linhas. */
+  const caixaSerie = useMemo<CaixaSerie12 | undefined>(() => {
+    const slice12 = (ind: { serieAno: number[]; serieMeta?: number[] } | null | undefined) => {
+      const serie = isPrevisto ? ind?.serieMeta : ind?.serieAno;
+      return serie ? serie.slice(1, 13).map(v => (typeof v === 'number' && !isNaN(v) ? v : NaN)) : Array(12).fill(NaN);
+    };
+    if (!pcdSoberano.custeioPecIndicador) return undefined;
+    return {
+      saldoCaixa: slice12(pcdSoberano.caixaIndicador),
+      receitaPecCaixa: slice12(pcdSoberano.receitaPecCaixaIndicador),
+      receitaAgri: slice12(pcdSoberano.receitaAgriIndicador),
+      receitaSilvicola: slice12(pcdSoberano.receitaSilvicolaIndicador),
+      receitaOutras: slice12(pcdSoberano.receitaOutrasIndicador),
+      captacao: slice12(pcdSoberano.captacaoIndicador),
+      captacaoPec: slice12(pcdSoberano.captacaoPecIndicador),
+      captacaoAgri: slice12(pcdSoberano.captacaoAgriIndicador),
+      captacaoSilvi: slice12(pcdSoberano.captacaoSilviIndicador),
+      aportePessoal: slice12(pcdSoberano.aportePessoalIndicador),
+      retornoEmprestimos: slice12(pcdSoberano.retornoEmprestimosIndicador),
+      desembolsoPec: slice12(pcdSoberano.desembolsoPecIndicador),
+      deducoesPec: slice12(pcdSoberano.deducoesPecIndicador),
+      custoFixoPec: slice12(pcdSoberano.custoFixoPecIndicador),
+      jurosPec: slice12(pcdSoberano.jurosPecIndicador),
+      custoVariavelPec: slice12(pcdSoberano.custoVariavelPecIndicador),
+      investPec: slice12(pcdSoberano.investPecIndicador),
+      investBovinos: slice12(pcdSoberano.investBovinosIndicador),
+      desembolsoAgri: slice12(pcdSoberano.desembolsoAgriIndicador),
+      deducoesAgri: slice12(pcdSoberano.deducoesAgriIndicador),
+      custoFixoAgri: slice12(pcdSoberano.custoFixoAgriIndicador),
+      jurosAgri: slice12(pcdSoberano.jurosAgriIndicador),
+      custeioAgri: slice12(pcdSoberano.custeioAgriIndicador),
+      investAgri: slice12(pcdSoberano.investAgriIndicador),
+      deducoesSilvi: slice12(pcdSoberano.deducoesSilviIndicador),
+      custoFixoSilvi: slice12(pcdSoberano.custoFixoSilviIndicador),
+      jurosSilvi: slice12(pcdSoberano.jurosSilviIndicador),
+      custeioSilvi: slice12(pcdSoberano.custeioSilviIndicador),
+      investSilvi: slice12(pcdSoberano.investSilviIndicador),
+      amortizacaoSilvi: slice12(pcdSoberano.amortizacaoSilviIndicador),
+      amortizacoes: slice12(pcdSoberano.amortizacoesIndicador),
+      amortizacaoPec: slice12(pcdSoberano.amortizacaoPecIndicador),
+      amortizacaoAgri: slice12(pcdSoberano.amortizacaoAgriIndicador),
+      tributos: slice12(pcdSoberano.tributosIndicador),
+      dividendos: slice12(pcdSoberano.dividendosIndicador),
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pcdSoberano, isPrevisto]);
+
   const soberanoSerie = useMemo<SoberanoSerie12 | undefined>(() => {
     // A5: slice12 cenario-aware. Em modo Meta, usa serieMeta (populada via gridMetaExterno em A4).
     // Quando serieMeta é undefined (cliente sem META configurada), retorna Array(12).fill(0) — zeros.
     // Meta NUNCA faz fallback para Realizado (regra do catálogo: permite_fallback: false).
     const slice12 = (ind: { serieAno: number[]; serieMeta?: number[] } | null | undefined) => {
       const serie = isPrevisto ? ind?.serieMeta : ind?.serieAno;
-      return serie ? serie.slice(1, 13).map(v => (typeof v === 'number' && !isNaN(v) ? v : 0)) : Array(12).fill(0);
+      /* Sem meta devolve NaN, nao zero: zero afirma "nao houve movimento" onde
+         o fato e "nao ha meta configurada". Mesma regra de sentinela do resto
+         do painel. Corrige tambem o soberanoSerie existente — cliente sem meta
+         deixa de ver quatorze linhas de R$ 0,00. Nenhuma linha do Realizado e
+         afetada: este ramo so roda com isPrevisto. */
+      return serie ? serie.slice(1, 13).map(v => (typeof v === 'number' && !isNaN(v) ? v : NaN)) : Array(12).fill(NaN);
     };
     if (!pcdSoberano.custeioPecIndicador) return undefined;
     return {
@@ -2131,10 +2341,10 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
 
       // Fonte oficial: view convertida para MetaCategoriaMes[]
       if (metaConsolidacaoView.length > 0) {
-        result = buildBlocosFromMetaConsolidacao(metaConsolidacaoView, viewTab, areaProdutiva, gmdMetaRows, valorRebanhoMetaMes, valorRebanhoMes[0], metaValorCabMes, metaPrecoArrMes, metaPesoSnap, dezSnap, finMetaPainel, soberanoSerie, arrobasSaidasMeta12, pcdSoberano.caixaIndicador?.serieAno?.slice(1), saidasDesfruteCabMeta12, pcdSoberano);
+        result = buildBlocosFromMetaConsolidacao(metaConsolidacaoView, viewTab, areaProdutiva, gmdMetaRows, valorRebanhoMetaMes, valorRebanhoMes[0], metaValorCabMes, metaPrecoArrMes, metaPesoSnap, dezSnap, finMetaPainel, soberanoSerie, arrobasSaidasMeta12, pcdSoberano.caixaIndicador?.serieAno?.slice(1), saidasDesfruteCabMeta12, pcdSoberano, caixaSerie);
       } else {
         // Fallback: dados de fazenda (vw_zoot_fazenda_mensal)
-        result = buildBlocosFromZootMensal(zootMeta || [], viewTab, valorRebanhoMetaMes, valorRebIniMeta, metaValorCabMes, metaPrecoArrMes, metaPesoSnap, dezSnap, finMetaPainel, soberanoSerie, arrobasSaidasMeta12, pcdSoberano.caixaIndicador?.serieAno?.slice(1), saidasDesfruteCabMeta12, pcdSoberano);
+        result = buildBlocosFromZootMensal(zootMeta || [], viewTab, valorRebanhoMetaMes, valorRebIniMeta, metaValorCabMes, metaPrecoArrMes, metaPesoSnap, dezSnap, finMetaPainel, soberanoSerie, arrobasSaidasMeta12, pcdSoberano.caixaIndicador?.serieAno?.slice(1), saidasDesfruteCabMeta12, pcdSoberano, caixaSerie);
       }
     } else {
       // Realizado: slice(1) removes Dec prev year index for 12-month arrays
@@ -2144,7 +2354,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
         arrobas: realPesoSnap.arrobas.slice(1),
       };
       const dezArrobasKg = (realPesoSnap.arrobas[0] || 0) * 30;
-      result = buildBlocosForTab(monthlyData, viewTab, realValorCabMes.slice(1), realPrecoArrMes.slice(1), realPesoSnap12, dezArrobasKg > 0 ? dezArrobasKg : undefined, soberanoSerie, endividamento.hasData ? endividamento.series : undefined, pcdSoberano.caixaIndicador?.serieAno?.slice(1), saidasDesfruteCabReal12, pcdSoberano);
+      result = buildBlocosForTab(monthlyData, viewTab, realValorCabMes.slice(1), realPrecoArrMes.slice(1), realPesoSnap12, dezArrobasKg > 0 ? dezArrobasKg : undefined, soberanoSerie, endividamento.hasData ? endividamento.series : undefined, pcdSoberano.caixaIndicador?.serieAno?.slice(1), saidasDesfruteCabReal12, pcdSoberano, caixaSerie);
     }
 
     // C4.1 — injetar bloco ÁREAS META logo APÓS "Financeiro Soberano (Auditoria)";
@@ -2161,7 +2371,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
       }
     }
     return result;
-  }, [isPrevisto, monthlyData, zootMeta, viewTab, metaConsolidacaoView, gmdMetaRows, areaProdutiva, valorRebanhoMetaMes, metaValorCabMes, metaPrecoArrMes, valorRebanhoMes, realValorCabMes, realPrecoArrMes, realPesoSnap, metaPesoSnap, finMetaPainel, soberanoSerie, endividamento.hasData, endividamento.series, blocoAreas, arrobasSaidasMeta12, saidasDesfruteCabReal12, saidasDesfruteCabMeta12, pcdSoberano]);
+  }, [isPrevisto, monthlyData, zootMeta, viewTab, metaConsolidacaoView, gmdMetaRows, areaProdutiva, valorRebanhoMetaMes, metaValorCabMes, metaPrecoArrMes, valorRebanhoMes, realValorCabMes, realPrecoArrMes, realPesoSnap, metaPesoSnap, finMetaPainel, soberanoSerie, endividamento.hasData, endividamento.series, blocoAreas, caixaSerie, arrobasSaidasMeta12, saidasDesfruteCabReal12, saidasDesfruteCabMeta12, pcdSoberano]);
 
   useEffect(() => {
     if (blocos.length > 0) {
@@ -2247,6 +2457,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
                 <td className={`sticky left-0 z-20 bg-card py-0.5 px-1.5 leading-tight border-r border-border/30 ${
                   row.nivel === 'familia' ? 'text-[10px] font-bold'
                     : row.nivel === 'destino' ? 'text-[9px] font-normal text-muted-foreground pl-3'
+                    : row.nivel === 'subitem' ? 'text-[9px] font-normal text-muted-foreground pl-6'
                     : 'text-[10px] font-medium'
                 }`} title={row.indicador} style={{ boxShadow: '2px 0 4px -1px rgba(0,0,0,0.06)' }}>
                   <span className="truncate inline-block max-w-[170px] align-middle">{row.indicador}</span>

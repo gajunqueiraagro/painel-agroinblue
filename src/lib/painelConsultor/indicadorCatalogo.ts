@@ -114,6 +114,43 @@ const FONTE_PESO_MOV_PREVISTO: FonteIndicador = {
     + 'Sem carcaca: por isso "Peso saidas (@)" e travessao no cenario Meta.',
 };
 
+/* Fluxo de caixa por ESCOPO — realizado. Fonte: financeiro_lancamentos_v2,
+   classificado por `grupo_custo` LITERAL (e por `subcentro` no caso de Aporte
+   Pessoal e Retorno de Emprestimos, cujo grupo e o generico 'Entradas de
+   Capital'). Nunca por keyword ou substring.
+   Medido em 22/08/2026: Custo Fixo Pecuaria R$ 49,85 mi e o maior grupo de
+   saida da base; Aporte Pessoal R$ 33,90 mi. Quatro grupos existem no plano
+   com ZERO lancamento (Custo Fixo Silvicultura, Deducoes Agricultura,
+   Deducoes Silvicultura, Juros de Financiamento Silvicultura) — a linha nasce
+   zerada, e o predicate existe para o dia em que houver. */
+const FONTE_CAIXA_ESCOPO_REAL: FonteIndicador = {
+  fonte_tipo: 'financeiro_v2',
+  fonte_tabela: 'financeiro_lancamentos_v2',
+  fonte_campo: 'grupo_custo / subcentro (literal)',
+  regra_calculo: 'Agregado por agregadosFinanceiros.ts, um predicate literal por linha. '
+    + 'ATENCAO: Custo Fixo e Custo Variavel usam predicates ESTRITOS — '
+    + 'isCusteioProducaoPecuaria soma os DOIS, e usa-lo numa das linhas faria '
+    + 'ela conter a irma. custoFixo + custoVariavel = custeioPecSemJuros.',
+  regra_prioridade: '1. grupo_custo oficial; 2. residual em captacaoSemEscopo (entradas)',
+  tela_origem: '/financeiro-v2',
+  tela_label: 'Financeiro V2',
+  permite_fallback: false,
+  observacao: 'Linhas derivadas (Saidas Silvicultura, Entradas, Saidas, Resultado, Saldo Inicial) sao somas exatas das partes, calculadas na tela.',
+};
+
+const FONTE_CAIXA_ESCOPO_META: FonteIndicador = {
+  fonte_tipo: 'meta',
+  fonte_tabela: 'planejamento_financeiro (grid consolidado)',
+  fonte_campo: 'valor_planejado por subcentro/mes',
+  regra_calculo: 'Mesmos predicates do realizado, aplicados ao grid de planejamento. '
+    + 'Meta NUNCA faz fallback para Realizado.',
+  regra_prioridade: '1. grid meta; 2. TRAVESSAO se o cliente nao tem meta configurada',
+  tela_origem: '/planejamento-financeiro',
+  tela_label: 'Planejamento Financeiro',
+  permite_fallback: false,
+  observacao: 'Sem grid, slice12 devolve NaN — nao zero: zero afirmaria "nao houve movimento".',
+};
+
 // ─── Rebanho ───
 const FONTE_REBANHO_REAL: FonteIndicador = {
   fonte_tipo: 'fechamento',
@@ -634,6 +671,91 @@ export const CATALOGO_INDICADORES: Record<string, IndicadorMeta> = {
     realizado: FONTE_ZOOT_VIEW_REAL, previsto: SEM_PREVISTO },
   'desfrute_pct_arr': { id: 'desfrute_pct_arr', nome: 'Desfrute % (@)', aba: 'todas', bloco: 'Produção',
     realizado: FONTE_ZOOT_VIEW_REAL, previsto: SEM_PREVISTO },
+
+  // ─── PR-PC100-BLOCO-CAIXA-01 — 40 ids do bloco Financeiro (Caixa) ───
+  // Um id por LINHA, valido nas quatro abas. Os 12 antigos (ent_fin_mensal /
+  // _med / _periodo) sao por ABA e saem no PR de legado, junto com o bloco
+  // Financeiro Soberano.
+  'cx_saldo_inicial': { id: 'cx_saldo_inicial', nome: 'Saldo Inicial', aba: 'todas', bloco: 'Financeiro (Caixa)',
+    realizado: FONTE_CAIXA_ESCOPO_REAL, previsto: FONTE_CAIXA_ESCOPO_META },
+  'cx_entradas': { id: 'cx_entradas', nome: 'Entradas Financeiras', aba: 'todas', bloco: 'Financeiro (Caixa)',
+    realizado: FONTE_CAIXA_ESCOPO_REAL, previsto: FONTE_CAIXA_ESCOPO_META },
+  'cx_rec_pec': { id: 'cx_rec_pec', nome: '→ Receitas Pecuária', aba: 'todas', bloco: 'Financeiro (Caixa)',
+    realizado: FONTE_CAIXA_ESCOPO_REAL, previsto: FONTE_CAIXA_ESCOPO_META },
+  'cx_rec_agri': { id: 'cx_rec_agri', nome: '→ Receita Agrícola', aba: 'todas', bloco: 'Financeiro (Caixa)',
+    realizado: FONTE_CAIXA_ESCOPO_REAL, previsto: FONTE_CAIXA_ESCOPO_META },
+  'cx_rec_silvi': { id: 'cx_rec_silvi', nome: '→ Receita Silvícola', aba: 'todas', bloco: 'Financeiro (Caixa)',
+    realizado: FONTE_CAIXA_ESCOPO_REAL, previsto: FONTE_CAIXA_ESCOPO_META },
+  'cx_rec_outras': { id: 'cx_rec_outras', nome: '→ Outras Receitas', aba: 'todas', bloco: 'Financeiro (Caixa)',
+    realizado: FONTE_CAIXA_ESCOPO_REAL, previsto: FONTE_CAIXA_ESCOPO_META },
+  'cx_capital': { id: 'cx_capital', nome: '→ Entradas de Capital', aba: 'todas', bloco: 'Financeiro (Caixa)',
+    realizado: FONTE_CAIXA_ESCOPO_REAL, previsto: FONTE_CAIXA_ESCOPO_META },
+  'cx_cap_aporte': { id: 'cx_cap_aporte', nome: 'Aporte Pessoal', aba: 'todas', bloco: 'Financeiro (Caixa)',
+    realizado: FONTE_CAIXA_ESCOPO_REAL, previsto: FONTE_CAIXA_ESCOPO_META },
+  'cx_cap_fin_agri': { id: 'cx_cap_fin_agri', nome: 'Financiamento Agricultura', aba: 'todas', bloco: 'Financeiro (Caixa)',
+    realizado: FONTE_CAIXA_ESCOPO_REAL, previsto: FONTE_CAIXA_ESCOPO_META },
+  'cx_cap_fin_pec': { id: 'cx_cap_fin_pec', nome: 'Financiamento Pecuária', aba: 'todas', bloco: 'Financeiro (Caixa)',
+    realizado: FONTE_CAIXA_ESCOPO_REAL, previsto: FONTE_CAIXA_ESCOPO_META },
+  'cx_cap_fin_silvi': { id: 'cx_cap_fin_silvi', nome: 'Financiamento Silvicultura', aba: 'todas', bloco: 'Financeiro (Caixa)',
+    realizado: FONTE_CAIXA_ESCOPO_REAL, previsto: FONTE_CAIXA_ESCOPO_META },
+  'cx_cap_retorno': { id: 'cx_cap_retorno', nome: 'Retorno de Empréstimos', aba: 'todas', bloco: 'Financeiro (Caixa)',
+    realizado: FONTE_CAIXA_ESCOPO_REAL, previsto: FONTE_CAIXA_ESCOPO_META },
+  'cx_saidas': { id: 'cx_saidas', nome: 'Saídas Financeiras', aba: 'todas', bloco: 'Financeiro (Caixa)',
+    realizado: FONTE_CAIXA_ESCOPO_REAL, previsto: FONTE_CAIXA_ESCOPO_META },
+  'cx_sai_pec': { id: 'cx_sai_pec', nome: '→ Saídas Pecuária', aba: 'todas', bloco: 'Financeiro (Caixa)',
+    realizado: FONTE_CAIXA_ESCOPO_REAL, previsto: FONTE_CAIXA_ESCOPO_META },
+  'cx_pec_deducoes': { id: 'cx_pec_deducoes', nome: 'Deduções Pecuária', aba: 'todas', bloco: 'Financeiro (Caixa)',
+    realizado: FONTE_CAIXA_ESCOPO_REAL, previsto: FONTE_CAIXA_ESCOPO_META },
+  'cx_pec_custo_fixo': { id: 'cx_pec_custo_fixo', nome: 'Custo Fixo Pecuária', aba: 'todas', bloco: 'Financeiro (Caixa)',
+    realizado: FONTE_CAIXA_ESCOPO_REAL, previsto: FONTE_CAIXA_ESCOPO_META },
+  'cx_pec_juros': { id: 'cx_pec_juros', nome: 'Juros de Financiamento Pecuária', aba: 'todas', bloco: 'Financeiro (Caixa)',
+    realizado: FONTE_CAIXA_ESCOPO_REAL, previsto: FONTE_CAIXA_ESCOPO_META },
+  'cx_pec_custo_var': { id: 'cx_pec_custo_var', nome: 'Custo Variável Pecuária', aba: 'todas', bloco: 'Financeiro (Caixa)',
+    realizado: FONTE_CAIXA_ESCOPO_REAL, previsto: FONTE_CAIXA_ESCOPO_META },
+  'cx_pec_investimento': { id: 'cx_pec_investimento', nome: 'Investimento Pecuária', aba: 'todas', bloco: 'Financeiro (Caixa)',
+    realizado: FONTE_CAIXA_ESCOPO_REAL, previsto: FONTE_CAIXA_ESCOPO_META },
+  'cx_pec_bovinos': { id: 'cx_pec_bovinos', nome: 'Compra de Bovinos', aba: 'todas', bloco: 'Financeiro (Caixa)',
+    realizado: FONTE_CAIXA_ESCOPO_REAL, previsto: FONTE_CAIXA_ESCOPO_META },
+  'cx_sai_agri': { id: 'cx_sai_agri', nome: '→ Saídas Agricultura', aba: 'todas', bloco: 'Financeiro (Caixa)',
+    realizado: FONTE_CAIXA_ESCOPO_REAL, previsto: FONTE_CAIXA_ESCOPO_META },
+  'cx_agri_deducoes': { id: 'cx_agri_deducoes', nome: 'Deduções Agricultura', aba: 'todas', bloco: 'Financeiro (Caixa)',
+    realizado: FONTE_CAIXA_ESCOPO_REAL, previsto: FONTE_CAIXA_ESCOPO_META },
+  'cx_agri_custo_fixo': { id: 'cx_agri_custo_fixo', nome: 'Custo Fixo Agricultura', aba: 'todas', bloco: 'Financeiro (Caixa)',
+    realizado: FONTE_CAIXA_ESCOPO_REAL, previsto: FONTE_CAIXA_ESCOPO_META },
+  'cx_agri_juros': { id: 'cx_agri_juros', nome: 'Juros de Financiamento Agricultura', aba: 'todas', bloco: 'Financeiro (Caixa)',
+    realizado: FONTE_CAIXA_ESCOPO_REAL, previsto: FONTE_CAIXA_ESCOPO_META },
+  'cx_agri_custo_var': { id: 'cx_agri_custo_var', nome: 'Custo Variável Agricultura', aba: 'todas', bloco: 'Financeiro (Caixa)',
+    realizado: FONTE_CAIXA_ESCOPO_REAL, previsto: FONTE_CAIXA_ESCOPO_META },
+  'cx_agri_investimento': { id: 'cx_agri_investimento', nome: 'Investimento Agricultura', aba: 'todas', bloco: 'Financeiro (Caixa)',
+    realizado: FONTE_CAIXA_ESCOPO_REAL, previsto: FONTE_CAIXA_ESCOPO_META },
+  'cx_sai_silvi': { id: 'cx_sai_silvi', nome: '→ Saídas Silvicultura', aba: 'todas', bloco: 'Financeiro (Caixa)',
+    realizado: FONTE_CAIXA_ESCOPO_REAL, previsto: FONTE_CAIXA_ESCOPO_META },
+  'cx_silvi_deducoes': { id: 'cx_silvi_deducoes', nome: 'Deduções Silvicultura', aba: 'todas', bloco: 'Financeiro (Caixa)',
+    realizado: FONTE_CAIXA_ESCOPO_REAL, previsto: FONTE_CAIXA_ESCOPO_META },
+  'cx_silvi_custo_fixo': { id: 'cx_silvi_custo_fixo', nome: 'Custo Fixo Silvicultura', aba: 'todas', bloco: 'Financeiro (Caixa)',
+    realizado: FONTE_CAIXA_ESCOPO_REAL, previsto: FONTE_CAIXA_ESCOPO_META },
+  'cx_silvi_juros': { id: 'cx_silvi_juros', nome: 'Juros de Financiamento Silvicultura', aba: 'todas', bloco: 'Financeiro (Caixa)',
+    realizado: FONTE_CAIXA_ESCOPO_REAL, previsto: FONTE_CAIXA_ESCOPO_META },
+  'cx_silvi_custo_var': { id: 'cx_silvi_custo_var', nome: 'Custo Variável Silvicultura', aba: 'todas', bloco: 'Financeiro (Caixa)',
+    realizado: FONTE_CAIXA_ESCOPO_REAL, previsto: FONTE_CAIXA_ESCOPO_META },
+  'cx_silvi_investimento': { id: 'cx_silvi_investimento', nome: 'Investimento Silvicultura', aba: 'todas', bloco: 'Financeiro (Caixa)',
+    realizado: FONTE_CAIXA_ESCOPO_REAL, previsto: FONTE_CAIXA_ESCOPO_META },
+  'cx_amortizacoes': { id: 'cx_amortizacoes', nome: '→ Amortizações', aba: 'todas', bloco: 'Financeiro (Caixa)',
+    realizado: FONTE_CAIXA_ESCOPO_REAL, previsto: FONTE_CAIXA_ESCOPO_META },
+  'cx_amort_pec': { id: 'cx_amort_pec', nome: 'Pecuária', aba: 'todas', bloco: 'Financeiro (Caixa)',
+    realizado: FONTE_CAIXA_ESCOPO_REAL, previsto: FONTE_CAIXA_ESCOPO_META },
+  'cx_amort_agri': { id: 'cx_amort_agri', nome: 'Agricultura', aba: 'todas', bloco: 'Financeiro (Caixa)',
+    realizado: FONTE_CAIXA_ESCOPO_REAL, previsto: FONTE_CAIXA_ESCOPO_META },
+  'cx_amort_silvi': { id: 'cx_amort_silvi', nome: 'Silvicultura', aba: 'todas', bloco: 'Financeiro (Caixa)',
+    realizado: FONTE_CAIXA_ESCOPO_REAL, previsto: FONTE_CAIXA_ESCOPO_META },
+  'cx_tributos': { id: 'cx_tributos', nome: '→ Tributos e Impostos', aba: 'todas', bloco: 'Financeiro (Caixa)',
+    realizado: FONTE_CAIXA_ESCOPO_REAL, previsto: FONTE_CAIXA_ESCOPO_META },
+  'cx_dividendos': { id: 'cx_dividendos', nome: '→ Dividendos', aba: 'todas', bloco: 'Financeiro (Caixa)',
+    realizado: FONTE_CAIXA_ESCOPO_REAL, previsto: FONTE_CAIXA_ESCOPO_META },
+  'cx_resultado': { id: 'cx_resultado', nome: 'Resultado de Caixa', aba: 'todas', bloco: 'Financeiro (Caixa)',
+    realizado: FONTE_CAIXA_ESCOPO_REAL, previsto: FONTE_CAIXA_ESCOPO_META },
+  'cx_saldo_final': { id: 'cx_saldo_final', nome: 'Saldo Final', aba: 'todas', bloco: 'Financeiro (Caixa)',
+    realizado: FONTE_CAIXA_ESCOPO_REAL, previsto: FONTE_CAIXA_ESCOPO_META },
 };
 
 /** Lookup by indicator name (display name) */

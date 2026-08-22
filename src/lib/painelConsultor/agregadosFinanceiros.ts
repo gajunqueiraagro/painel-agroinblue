@@ -59,6 +59,13 @@ import {
   datePagtoMes,
   datePagtoAno,
   type LancamentoClassificavel,
+  isCustoFixoAgricultura,
+  isCustoFixoSilvicultura,
+  isDeducoesPecuaria,
+  isDeducoesAgricultura,
+  isDeducoesSilvicultura,
+  isAportePessoal,
+  isRetornoEmprestimos,
 } from '@/lib/financeiro/classificacao';
 
 type Predicate = (l: LancamentoClassificavel) => boolean;
@@ -217,6 +224,38 @@ export function agregaCustoVariavelPec(lancFin: FinanceiroLancamento[], ano: num
 /** Marco 1.1.E — Custo Fixo Pecuária separado (grupo_custo estrito). */
 export function agregaCustoFixoPec(lancFin: FinanceiroLancamento[], ano: number): number[] {
   return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isCustoFixoPecuaria);
+}
+
+
+/* PR-PC100-BLOCO-CAIXA-01 — sete agregadores novos, no idioma dos irmaos.
+   Os de ENTRADA usam makeRealizadoSourceEntrada; os de SAIDA, o source
+   padrao. Nenhum inventa conta: cada um delega a um predicate literal. */
+export function agregaCustoFixoAgri(lancFin: FinanceiroLancamento[], ano: number): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isCustoFixoAgricultura);
+}
+
+export function agregaCustoFixoSilvi(lancFin: FinanceiroLancamento[], ano: number): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isCustoFixoSilvicultura);
+}
+
+export function agregaDeducoesPec(lancFin: FinanceiroLancamento[], ano: number): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isDeducoesPecuaria);
+}
+
+export function agregaDeducoesAgri(lancFin: FinanceiroLancamento[], ano: number): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isDeducoesAgricultura);
+}
+
+export function agregaDeducoesSilvi(lancFin: FinanceiroLancamento[], ano: number): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isDeducoesSilvicultura);
+}
+
+export function agregaAportePessoal(lancFin: FinanceiroLancamento[], ano: number): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSourceEntrada(lancFin, ano), isAportePessoal);
+}
+
+export function agregaRetornoEmprestimos(lancFin: FinanceiroLancamento[], ano: number): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSourceEntrada(lancFin, ano), isRetornoEmprestimos);
 }
 
 export function agregaJurosPec(lancFin: FinanceiroLancamento[], ano: number): number[] {
@@ -496,6 +535,47 @@ export function agregaEntradasFinanceirasMeta(grid: SubcentroGrid[]): number[] {
 
 /* Par META obrigatorio dos quatro: agregador REALIZADO sem irmao META deixaria a
    Meta cega, e a comparacao realizado x meta mentiria por omissao. */
+
+/* Pares META que faltavam aos agregadores do Marco 1.1.E: eles nasceram sem
+   contraparte de meta porque nenhum indicador os consumia ainda. */
+export function agregaCustoFixoPecMeta(grid: SubcentroGrid[]): number[] {
+  return agregaPorPredicadoGenerico(makeMetaSource(grid), isCustoFixoPecuaria);
+}
+
+export function agregaCustoVariavelPecMeta(grid: SubcentroGrid[]): number[] {
+  return agregaPorPredicadoGenerico(makeMetaSource(grid), isCustoVariavelPecuaria);
+}
+
+/* Pares META dos sete. Mesmo predicate, source do grid de planejamento —
+   e a regra do catalogo: Meta NUNCA faz fallback para Realizado. */
+export function agregaCustoFixoAgriMeta(grid: SubcentroGrid[]): number[] {
+  return agregaPorPredicadoGenerico(makeMetaSource(grid), isCustoFixoAgricultura);
+}
+
+export function agregaCustoFixoSilviMeta(grid: SubcentroGrid[]): number[] {
+  return agregaPorPredicadoGenerico(makeMetaSource(grid), isCustoFixoSilvicultura);
+}
+
+export function agregaDeducoesPecMeta(grid: SubcentroGrid[]): number[] {
+  return agregaPorPredicadoGenerico(makeMetaSource(grid), isDeducoesPecuaria);
+}
+
+export function agregaDeducoesAgriMeta(grid: SubcentroGrid[]): number[] {
+  return agregaPorPredicadoGenerico(makeMetaSource(grid), isDeducoesAgricultura);
+}
+
+export function agregaDeducoesSilviMeta(grid: SubcentroGrid[]): number[] {
+  return agregaPorPredicadoGenerico(makeMetaSource(grid), isDeducoesSilvicultura);
+}
+
+export function agregaAportePessoalMeta(grid: SubcentroGrid[]): number[] {
+  return agregaPorPredicadoGenerico(makeMetaSource(grid), isAportePessoal);
+}
+
+export function agregaRetornoEmprestimosMeta(grid: SubcentroGrid[]): number[] {
+  return agregaPorPredicadoGenerico(makeMetaSource(grid), isRetornoEmprestimos);
+}
+
 export function agregaCaptacaoPecMeta(grid: SubcentroGrid[]): number[] {
   return agregaPorPredicadoGenerico(makeMetaSource(grid), isCaptacaoPecuaria);
 }
