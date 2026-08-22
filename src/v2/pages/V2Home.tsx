@@ -1535,7 +1535,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
             feita para MetricTile. Sem isso a barra ocupava meia largura e o rodape
             subia para a coluna da direita, ao lado dos numeros em vez de abaixo. */}
         <SectionBlock
-          title={isPeriodo ? 'Área — Média no Período' : 'Área'}
+          title={isPeriodo ? 'Área média no período' : 'Área no mês'}
           subtitle="como a terra está dividida e onde a operação está"
         >
           <div className="col-span-2 space-y-3">
@@ -1703,16 +1703,16 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
                 <div className="col-span-2">
                   <table className="w-full text-[10px] tabular-nums">
                     <thead className="bg-muted/50">
-                      <tr className="text-muted-foreground">
+                      {/* Unidade voltou para as CELULAS: o cabecalho fica limpo e o
+                          numero carrega a propria unidade. A linha "% da area" nao
+                          ganha sufixo — e percentual, nao hectare. */}
+                      <tr className="text-foreground">
                         <th className="text-left font-normal px-1.5 py-1">Fazenda</th>
-                        {/* Unidade no CABECALHO, nao em cada celula: repetir "ha" em ~24
-                            celulas poluiria a tabela e desalinharia as colunas numericas.
-                            A linha "% da area" nao ganha sufixo — e percentual, nao hectare. */}
-                        <th className="text-right px-1.5 py-1 font-medium text-foreground">Total (ha)</th>
-                        <th className="text-right px-1.5 py-1 font-medium text-foreground">Produtiva (ha)</th>
-                        <th className="text-right font-normal px-1.5 py-1">Pec. (ha)</th>
-                        <th className="text-right font-normal px-1.5 py-1">Agri. (ha)</th>
-                        <th className="text-right font-normal px-1.5 py-1">Silvi. (ha)</th>
+                        <th className="text-right px-1.5 py-1 font-medium">Total</th>
+                        <th className="text-right px-1.5 py-1 font-medium">Produtiva</th>
+                        <th className="text-right font-normal px-1.5 py-1">Pec.</th>
+                        <th className="text-right font-normal px-1.5 py-1">Agri.</th>
+                        <th className="text-right font-normal px-1.5 py-1">Silvi.</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1721,29 +1721,67 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
                         return (
                           <tr key={f.fazenda_id} className="odd:bg-muted/20">
                             <td className="text-left px-1.5 py-0.5 truncate max-w-[140px]">{nomeFazendaPorId[f.fazenda_id] ?? 'Fazenda'}</td>
-                            <td className="text-right px-1.5 py-0.5 font-medium text-foreground">{fmtHaInt(f.area_total_ha)}</td>
+                            <td className="text-right px-1.5 py-0.5 font-medium text-foreground">
+                              {f.area_total_ha == null || f.area_total_ha === 0
+                                ? '—'
+                                : <>{fmtHaInt(f.area_total_ha)} <span className="text-muted-foreground font-normal">ha</span></>}
+                            </td>
                             <td
                               className={`text-right px-1.5 py-0.5 font-medium${excede ? ' text-warning' : ' text-foreground'}`}
                               title={excede ? `Área além da matrícula: ${fmtHa(f.area_produtiva_ha - f.area_total_ha)}` : undefined}
                             >
-                              {fmtHaInt(f.area_produtiva_ha)}
+                              {f.area_produtiva_ha == null || f.area_produtiva_ha === 0
+                                ? '—'
+                                : <>{fmtHaInt(f.area_produtiva_ha)} <span className="text-muted-foreground font-normal">ha</span></>}
                             </td>
-                            <td className="text-right px-1.5 py-0.5 text-muted-foreground">{fmtHaInt(f.area_pecuaria_ha)}</td>
-                            <td className="text-right px-1.5 py-0.5 text-muted-foreground">{fmtHaInt(f.area_agricultura_ha)}</td>
-                            <td className="text-right px-1.5 py-0.5 text-muted-foreground">{fmtHaInt(f.area_silvicultura_ha)}</td>
+                            <td className="text-right px-1.5 py-0.5 text-muted-foreground">
+                              {f.area_pecuaria_ha == null || f.area_pecuaria_ha === 0
+                                ? '—'
+                                : <>{fmtHaInt(f.area_pecuaria_ha)} <span className="text-muted-foreground font-normal">ha</span></>}
+                            </td>
+                            <td className="text-right px-1.5 py-0.5 text-muted-foreground">
+                              {f.area_agricultura_ha == null || f.area_agricultura_ha === 0
+                                ? '—'
+                                : <>{fmtHaInt(f.area_agricultura_ha)} <span className="text-muted-foreground font-normal">ha</span></>}
+                            </td>
+                            <td className="text-right px-1.5 py-0.5 text-muted-foreground">
+                              {f.area_silvicultura_ha == null || f.area_silvicultura_ha === 0
+                                ? '—'
+                                : <>{fmtHaInt(f.area_silvicultura_ha)} <span className="text-muted-foreground font-normal">ha</span></>}
+                            </td>
                           </tr>
                         );
                       })}
                       {/* A linha Total sai dos agregados do bloco acima, NAO da soma das
                           linhas: se as duas fontes divergirem, isso precisa APARECER — uma
                           soma das proprias linhas fecharia sempre e esconderia a divergencia. */}
-                      <tr className="bg-muted/50 font-medium text-foreground border-t border-border">
+                      <tr className="bg-muted/70 font-medium text-foreground border-t border-border">
                         <td className="text-left px-1.5 py-0.5">Total</td>
-                        <td className="text-right px-1.5 py-0.5">{fmtHaInt(areaTotal)}</td>
-                        <td className="text-right px-1.5 py-0.5">{fmtHaInt(areaProdutiva)}</td>
-                        <td className="text-right px-1.5 py-0.5">{fmtHaInt(areaPec)}</td>
-                        <td className="text-right px-1.5 py-0.5">{fmtHaInt(areaAgri)}</td>
-                        <td className="text-right px-1.5 py-0.5">{fmtHaInt(areaSilvi)}</td>
+                        <td className="text-right px-1.5 py-0.5">
+                          {areaTotal == null || areaTotal === 0
+                            ? '—'
+                            : <>{fmtHaInt(areaTotal)} <span className="text-muted-foreground font-normal">ha</span></>}
+                        </td>
+                        <td className="text-right px-1.5 py-0.5">
+                          {areaProdutiva == null || areaProdutiva === 0
+                            ? '—'
+                            : <>{fmtHaInt(areaProdutiva)} <span className="text-muted-foreground font-normal">ha</span></>}
+                        </td>
+                        <td className="text-right px-1.5 py-0.5">
+                          {areaPec == null || areaPec === 0
+                            ? '—'
+                            : <>{fmtHaInt(areaPec)} <span className="text-muted-foreground font-normal">ha</span></>}
+                        </td>
+                        <td className="text-right px-1.5 py-0.5">
+                          {areaAgri == null || areaAgri === 0
+                            ? '—'
+                            : <>{fmtHaInt(areaAgri)} <span className="text-muted-foreground font-normal">ha</span></>}
+                        </td>
+                        <td className="text-right px-1.5 py-0.5">
+                          {areaSilvi == null || areaSilvi === 0
+                            ? '—'
+                            : <>{fmtHaInt(areaSilvi)} <span className="text-muted-foreground font-normal">ha</span></>}
+                        </td>
                       </tr>
                       {/* Bases DIFERENTES por coluna: Produtiva sobre o total da matricula,
                           as tres familias sobre a produtiva. Por isso Produtiva pode passar
