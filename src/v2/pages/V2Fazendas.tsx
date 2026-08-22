@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda, GLOBAL_FAZENDA } from '@/contexts/FazendaContext';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useCliente } from '@/contexts/ClienteContext';
 import { usePastos } from '@/hooks/usePastos';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { Save, Pencil, ArrowLeft } from 'lucide-react';
+import { Save, Pencil, ArrowLeft, Plus } from 'lucide-react';
 import { PastosTab } from '@/pages/PastosTab';
 import { agruparPastosPorFamilia } from '@/lib/pastos/agruparPorFamilia';
 import { formatarAreaBR, parseAreaBR } from '@/lib/areaBR';
@@ -51,7 +52,7 @@ const EMPTY: CadastroRow = {
 const n = (v: string) => (v.trim() === '' ? 0 : Number(v));
 
 export function V2Fazendas() {
-  const { fazendaAtual, isGlobal, fazendas, setFazendaAtual, reloadFazendas } = useFazenda();
+  const { fazendaAtual, isGlobal, fazendas, setFazendaAtual, reloadFazendas, criarFazenda } = useFazenda();
   const { clienteAtual } = useCliente();
   const { pastos } = usePastos();
 
@@ -123,6 +124,14 @@ export function V2Fazendas() {
   const [codigoFazenda, setCodigoFazenda] = useState('');
   const [nomeFazenda, setNomeFazenda] = useState('');
 
+  /* Criacao de fazenda — estado do dialog do consolidado. Fica aqui, no topo,
+     e nao dentro do ramo `isGlobal`: hook e estado nao podem nascer depois de
+     um early return. */
+  const [novaOpen, setNovaOpen] = useState(false);
+  const [novaNome, setNovaNome] = useState('');
+  const [novaCodigo, setNovaCodigo] = useState('');
+  const [criando, setCriando] = useState(false);
+
   const loadData = useCallback(async () => {
     if (isGlobal || !fazendaAtual?.id || fazendaAtual.id === '__global__' || !clienteAtual?.id) {
       setData(EMPTY);
@@ -179,6 +188,29 @@ export function V2Fazendas() {
   }, [fazendaAtual, clienteAtual?.id, isGlobal]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  /* Caminho (ii) do briefing: formulario minimo chamando `criarFazenda` do
+     CONTEXTO — que ja e o escritor real e ja faz cliente_id, owner_id, codigo +
+     codigo_importacao, recarga do contexto e navegacao para a fazenda nova
+     (FazendaContext:150-167). Nao ha insert novo aqui.
+     O (i) foi descartado: `FazendaSetup` e uma PAGINA de onboarding —
+     `min-h-screen`, emoji 5xl e titulo "Cadastre sua Fazenda" — e caberia num
+     dialog so alterando-o, o que o anti-escopo proibe.
+     `criarFazenda` valida o CODIGO (FazendaContext:152) mas nao o NOME; a
+     guarda do nome e a mesma forma da aba Cadastro: trim, toast, return. */
+  const handleCriarFazenda = async () => {
+    if (!novaNome.trim()) {
+      toast.error('Nome é obrigatório.');
+      return;
+    }
+    setCriando(true);
+    const criada = await criarFazenda(novaNome.trim(), novaCodigo.trim());
+    setCriando(false);
+    if (!criada) return;
+    setNovaNome('');
+    setNovaCodigo('');
+    setNovaOpen(false);
+  };
 
   const handleSave = async () => {
     if (!fazendaAtual?.id || !clienteAtual?.id) {
@@ -308,11 +340,63 @@ export function V2Fazendas() {
        mesma celula. Nao "completar" a tabela depois sem resolver isso. */
     return (
       <div className="px-4 py-4 w-full max-w-[1100px]">
-        <div className="mb-3">
-          <h2 className="text-sm font-bold text-foreground">Fazendas e Pastos</h2>
-          <p className="text-[10px] text-muted-foreground">
-            Composição da área por fazenda — clique no nome de uma coluna para entrar nela
-          </p>
+        <div className="mb-3 flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-sm font-bold text-foreground">Fazendas e Pastos</h2>
+            <p className="text-[10px] text-muted-foreground">
+              Composição da área por fazenda — clique no nome de uma coluna para entrar nela
+            </p>
+          </div>
+          <Dialog open={novaOpen} onOpenChange={(o) => { setNovaOpen(o); if (!o) { setNovaNome(''); setNovaCodigo(''); } }}>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm" className="h-7 text-xs shrink-0">
+                <Plus className="h-3 w-3 mr-1" /> Adicionar fazenda
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-sm">
+              <DialogHeader>
+                <DialogTitle className="text-sm font-semibold">Nova fazenda</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <Label className="text-[10px] font-semibold text-foreground uppercase tracking-wide">
+                    Nome da Fazenda
+                  </Label>
+                  <Input
+                    value={novaNome}
+                    onChange={e => setNovaNome(e.target.value)}
+                    placeholder="Ex: Faz. 3 Muchachas"
+                    className="h-8 text-xs"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px] font-semibold text-foreground uppercase tracking-wide">
+                    Código da Fazenda
+                  </Label>
+                  <Input
+                    value={novaCodigo}
+                    onChange={e => setNovaCodigo(e.target.value)}
+                    placeholder="Ex: 3M, BG, ADM"
+                    className="h-8 text-xs uppercase"
+                    maxLength={20}
+                  />
+                  {/* O codigo vira MAIUSCULO dentro de criarFazenda (FazendaContext:153)
+                      e alimenta a coluna "Fazenda" do Excel financeiro. */}
+                  <p className="text-[10px] text-muted-foreground">
+                    Código único, usado na importação financeira.
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  className="w-full h-8 text-xs"
+                  onClick={handleCriarFazenda}
+                  disabled={criando || !novaNome.trim() || !novaCodigo.trim()}
+                >
+                  <Save className="h-3 w-3 mr-1" /> {criando ? 'Criando...' : 'Criar fazenda'}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
 
         {fazendasDoConsolidado.length === 0 ? (
@@ -400,11 +484,40 @@ export function V2Fazendas() {
           </div>
         )}
 
-        {/* FazendasList PERMANECE, abaixo da tabela. O briefing pedia o consolidado
-            "em vez do estado atual", mas esta e a UNICA porta do /v2 para CRIAR e
-            renomear fazenda (FazendasList.tsx:172 "Nova Fazenda"); remove-la seria
-            perder capacidade que o briefing nao pediu para perder. */}
-        <FazendasList />
+        {/* FazendasList fora do /v2: criar tem destino no botao do cabecalho, e
+            renomear na aba Cadastro desde 91c8352d. O componente continua vivo no
+            app legado (CadastrosTab:286). */}
+
+        {/* Fazenda sem pasto NAO vira coluna — a regra de e821e4ab continua de pe,
+            porque uma coluna de zeros afirmaria "zero hectare" onde o fato e "nao
+            cadastrou pasto". Mas ela tambem nao pode sumir da tela: fazenda recem
+            criada ficaria invisivel, e o Administrativo ja estava. Entao ela vira
+            NOME, sem numero nenhum — o que e exatamente o que se sabe dela. Clicavel,
+            para ser a porta de entrada que os cards eram. */}
+        {(() => {
+          const semPasto = fazendas
+            .filter(f => f.id !== '__global__' && !fazendasDoConsolidado.some(x => x.id === f.id))
+            .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+          if (semPasto.length === 0) return null;
+          return (
+            <p className="text-[10px] text-muted-foreground">
+              Sem pasto cadastrado:{' '}
+              {semPasto.map((f, i) => (
+                <span key={f.id}>
+                  {i > 0 && ' · '}
+                  <button
+                    type="button"
+                    onClick={() => setFazendaAtual(f)}
+                    title={`Abrir ${f.nome}`}
+                    className="underline underline-offset-2 hover:text-foreground"
+                  >
+                    {f.nome}
+                  </button>
+                </span>
+              ))}
+            </p>
+          );
+        })()}
       </div>
     );
   }
