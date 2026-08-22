@@ -67,6 +67,16 @@ interface Props {
   anoInicio?: number;
   /** Subtítulo opcional exibido abaixo do título. */
   subtitulo?: string;
+  /* Titulo e subtitulo POR LEITURA. `titulo`/`subtitulo` chegam colapsados
+     pelo viewMode do pai (o hook escolhe entre "Rebanho Final do mes" e
+     "Rebanho Medio no periodo" em `isPeriodo`), e com os dois graficos na
+     tela um deles estaria sempre errado.
+     Enquanto o hook nao expuser os dois, os dois cabecalhos caem no `titulo`
+     unico e quem distingue os lados e o rotulo do modo acima dele. */
+  titulos?: {
+    mes:     { titulo: string; subtitulo?: string };
+    periodo: { titulo: string; subtitulo?: string };
+  };
   /** Variação % vs mês anterior — calculado fora; null oculta a linha. */
   deltaMes?: number | null;
   /** Variação % vs ano anterior — calculado fora; null oculta a linha. */
@@ -144,6 +154,7 @@ export function IndicadorHistoricoModal({
   fazendaIds,
   anoInicio,
   subtitulo,
+  titulos,
   deltaMes,
   deltaAno,
   series,
@@ -162,6 +173,13 @@ export function IndicadorHistoricoModal({
   // são aceitas por compatibilidade com V2Home — não usadas aqui pois o modal não consulta banco.
   void clienteId; void fazendaId; void fazendaIds; void anoInicio;
   void tipoAcumulado; void indicadorKey;
+  /* deltaMes/deltaAno vinham prontos do V2Home para o cabecalho unico, ja
+     colapsados pelo viewMode. Cada cabecalho agora calcula os SEUS tres com
+     a mesma formula do hook — ver `deltasDoTrio`. As props ficam por
+     compatibilidade com os 12 call sites do V2Home.
+     viewMode/onViewModeChange: o toggle saiu daqui. Ele continua na Home
+     (V2Home.tsx:1656-1677), entao nenhum controle se perdeu. */
+  void deltaMes; void deltaAno; void viewMode; void onViewModeChange;
   // labelPeriodo é usado abaixo no bloco de histórico inferior
 
   if (!open) return null;
@@ -208,14 +226,26 @@ export function IndicadorHistoricoModal({
     return v != null && !isNaN(v) ? v : null;
   };
 
-  const valorAtual = getMesValue(serieAno, mesAtual);
-
   const calcDelta = (a: number | null, b: number | null): number | null => {
     if (a == null || b == null || isNaN(a) || isNaN(b) || b === 0) return null;
     return ((a - b) / b) * 100;
   };
 
-  const deltaMetaInterno = calcDelta(valorAtual, getMesValue(serieMeta, mesAtual));
+  /* Os TRES deltas de UMA leitura. Formula reaproveitada, nao inventada: e a
+     mesma do hook — ((curr - ref) / ref) * 100 no ponto `mesAtual`, com guarda
+     de nulo/NaN/zero (usePainelConsultorData.ts:1723, :1765 e :1797 para
+     cabecas; os demais indicadores repetem o mesmo bloco).
+     `vs mes` compara com o mes anterior da PROPRIA serie; o `mesIdx <= 1` do
+     hook fica implicito porque getMesValue devolve null para mes < 1. */
+  const deltasDoTrio = (trio: { ano: number[]; anoAnt?: number[]; meta?: number[] }) => {
+    const valor = getMesValue(trio.ano, mesAtual);
+    return {
+      valor,
+      mes:  calcDelta(valor, getMesValue(trio.ano, mesAtual - 1)),
+      ano:  calcDelta(valor, getMesValue(trio.anoAnt, mesAtual)),
+      meta: calcDelta(valor, getMesValue(trio.meta, mesAtual)),
+    };
+  };
 
   /* Um `dados` por MODO, com a MESMA forma do original — so muda de qual
      trio de series ele parte. Nada aqui calcula: as duas leituras chegam
@@ -230,10 +260,21 @@ export function IndicadorHistoricoModal({
     const meta        = getMesValue(sMeta, idx + 1);
     return { mes, atual, anoAnterior, meta, atualArea: atual, anoAnteriorArea: anoAnterior };
   });
-  const dadosMes = montaDados(
-    series?.mes.ano ?? serieAno, series?.mes.anoAnt ?? serieAnoAnt, series?.mes.meta ?? serieMeta);
-  const dadosPeriodo = montaDados(
-    series?.periodo.ano ?? serieAno, series?.periodo.anoAnt ?? serieAnoAnt, series?.periodo.meta ?? serieMeta);
+  /* Os dois trios, nomeados uma vez so: o grafico e o cabecalho de cada lado
+     leem exatamente a MESMA serie, entao o numero grande nunca pode discordar
+     da curva embaixo dele. */
+  const trioMes = {
+    ano:    series?.mes.ano    ?? serieAno,
+    anoAnt: series?.mes.anoAnt ?? serieAnoAnt,
+    meta:   series?.mes.meta   ?? serieMeta,
+  };
+  const trioPeriodo = {
+    ano:    series?.periodo.ano    ?? serieAno,
+    anoAnt: series?.periodo.anoAnt ?? serieAnoAnt,
+    meta:   series?.periodo.meta   ?? serieMeta,
+  };
+  const dadosMes     = montaDados(trioMes.ano,     trioMes.anoAnt,     trioMes.meta);
+  const dadosPeriodo = montaDados(trioPeriodo.ano, trioPeriodo.anoAnt, trioPeriodo.meta);
 
   /* O `dados` unico saiu: ele lia `serieAno`, que muda com o viewMode do
      pai, e era exatamente o que impedia os dois graficos de coexistir.
@@ -288,6 +329,45 @@ export function IndicadorHistoricoModal({
     );
   };
 
+  /* Um cabecalho por grafico: com as duas leituras visiveis ao mesmo
+     tempo, um titulo unico teria de mentir sobre uma delas. Os dois trios
+     de serie ja chegam pelo `series`. */
+  const linhaDelta = (v: number | null, rotulo: string) =>
+    v == null ? null : (
+      <div className={`text-[10px] font-normal leading-[1.2] flex items-center gap-0.5 ${v >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+        <span>{v >= 0 ? '↗' : '↙'}</span>
+        <span>{v >= 0 ? '+' : ''}{v.toFixed(1)}% {rotulo}</span>
+      </div>
+    );
+
+  const cabecalhoLeitura = (
+    modoLabel: string,
+    t: { titulo: string; subtitulo?: string },
+    trio: { ano: number[]; anoAnt?: number[]; meta?: number[] },
+  ) => {
+    const d = deltasDoTrio(trio);
+    return (
+      <div className="px-1 pb-1.5 mb-1 border-b border-border/30">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70 leading-tight">{modoLabel}</p>
+        <h3 className="text-[13px] font-semibold text-foreground leading-tight mt-0.5">{t.titulo}</h3>
+        {t.subtitulo && (
+          <p className="text-[10px] font-light text-muted-foreground/70 leading-snug">{t.subtitulo}</p>
+        )}
+        <div className="flex items-baseline gap-1.5 mt-1">
+          <span className={`text-2xl font-bold leading-none ${COR_ATUAL.text}`}>{fmtValor(d.valor)}</span>
+          <span className="text-[11px] text-muted-foreground">
+            · {MESES_LABELS[mesAtual - 1]} {anoAtual}
+          </span>
+        </div>
+        <div className="mt-0.5">
+          {linhaDelta(d.mes,  'vs mês')}
+          {linhaDelta(d.ano,  'vs ano ant.')}
+          {linhaDelta(d.meta, 'vs META')}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
@@ -297,70 +377,15 @@ export function IndicadorHistoricoModal({
         className="w-full max-w-2xl mx-4 rounded-lg border border-border/40 bg-background shadow-xl flex flex-col max-h-[94vh]"
         onClick={e => e.stopPropagation()}
       >
-        {/* Header executivo (two-column) — fixo, fora do scroll */}
-        <div className="shrink-0 flex items-start justify-between gap-4 px-5 py-3 border-b border-border/40">
-          {/* Esquerda — título + subtítulo + toggle */}
-          <div className="flex-1 min-w-0">
-            <h2 className="text-base font-semibold text-foreground leading-tight">{titulo}</h2>
-            {subtitulo && (
-              <p className="text-[11px] font-light text-muted-foreground/70 leading-snug mt-0.5">{subtitulo}</p>
-            )}
-            {onViewModeChange && (
-              <div className="flex gap-1 mt-1.5">
-                <button
-                  type="button"
-                  onClick={() => onViewModeChange('mes')}
-                  className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-colors ${
-                    viewMode === 'mes'
-                      ? 'bg-primary text-primary-foreground border-primary'
-                      : 'bg-transparent text-muted-foreground border-border hover:border-primary/50'
-                  }`}
-                >
-                  No mês
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onViewModeChange('periodo')}
-                  className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-colors ${
-                    viewMode === 'periodo'
-                      ? 'bg-primary text-primary-foreground border-primary'
-                      : 'bg-transparent text-muted-foreground border-border hover:border-primary/50'
-                  }`}
-                >
-                  No período
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Direita — valor + variações */}
-          <div className="text-right shrink-0">
-            <div className="flex items-baseline gap-1.5 justify-end">
-              <span className={`text-3xl font-bold ${COR_ATUAL.text}`}>{fmtValor(valorAtual)}</span>
-              <span className="text-sm text-muted-foreground">
-                {MESES_LABELS[mesAtual - 1]} {anoAtual}
-              </span>
-            </div>
-            {deltaMes != null && (
-              <div className={`text-[10px] font-normal leading-[1.2] flex items-center justify-end gap-0.5 ${deltaMes >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                <span>{deltaMes >= 0 ? '↗' : '↙'}</span>
-                <span>{deltaMes >= 0 ? '+' : ''}{deltaMes.toFixed(1)}% vs mês</span>
-              </div>
-            )}
-            {deltaAno != null && (
-              <div className={`text-[10px] font-normal leading-[1.2] flex items-center justify-end gap-0.5 ${deltaAno >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                <span>{deltaAno >= 0 ? '↗' : '↙'}</span>
-                <span>{deltaAno >= 0 ? '+' : ''}{deltaAno.toFixed(1)}% vs ano ant.</span>
-              </div>
-            )}
-            {deltaMetaInterno != null && (
-              <div className={`text-[10px] font-normal leading-[1.2] flex items-center justify-end gap-0.5 ${deltaMetaInterno >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                <span>{deltaMetaInterno >= 0 ? '↗' : '↙'}</span>
-                <span>{deltaMetaInterno >= 0 ? '+' : ''}{deltaMetaInterno.toFixed(1)}% vs META</span>
-              </div>
-            )}
-          </div>
-        </div>
+        {/* O cabecalho unico do topo saiu inteiro: um titulo, um numero e um
+           trio de deltas nao conseguem descrever duas leituras ao mesmo tempo.
+           Foi para dentro de cada coluna, em `cabecalhoLeitura`.
+           O toggle "No mes / No periodo" saiu junto — ele era `setViewMode` do
+           pai e governa a aplicacao inteira; conferido antes de remover que
+           ele CONTINUA na Home, em V2Home.tsx:1656-1677, logo abaixo da regua
+           de meses. Nenhum controle se perdeu.
+           Fechar continua sendo o clique fora, anunciado no rodape — nao havia
+           botao de fechar aqui para preservar.  */}
 
         {/* Corpo rolável — gráfico + histórico + rodapé */}
         <div className="flex-1 overflow-y-auto">
@@ -375,7 +400,7 @@ export function IndicadorHistoricoModal({
         <div className="px-3 pb-2">
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <p className="text-[10px] font-semibold text-muted-foreground text-center mb-0.5">No mês</p>
+              {cabecalhoLeitura('No mês', titulos?.mes ?? { titulo, subtitulo }, trioMes)}
               <ResponsiveContainer width="100%" height={190}>
                 <ComposedChart data={dadosMes} margin={{ top: 8, right: 16, left: 8, bottom: 4 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#E8E6DF" vertical={false} />
@@ -450,7 +475,7 @@ export function IndicadorHistoricoModal({
               </ResponsiveContainer>
             </div>
             <div>
-              <p className="text-[10px] font-semibold text-muted-foreground text-center mb-0.5">Média no período</p>
+              {cabecalhoLeitura('Média no período', titulos?.periodo ?? { titulo, subtitulo }, trioPeriodo)}
               <ResponsiveContainer width="100%" height={190}>
                 <ComposedChart data={dadosPeriodo} margin={{ top: 8, right: 16, left: 8, bottom: 4 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#E8E6DF" vertical={false} />
