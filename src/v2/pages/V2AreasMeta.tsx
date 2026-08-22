@@ -8,7 +8,7 @@ import { AlertTriangle, Globe, Loader2, Save } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
-import { useFazendaCadastro } from '@/hooks/useFazendaCadastro';
+import { useFazendaCadastro, useMatriculasDoCliente } from '@/hooks/useFazendaCadastro';
 import { usePastos } from '@/hooks/usePastos';
 import { agruparPastosPorFamilia } from '@/lib/pastos/agruparPorFamilia';
 import {
@@ -140,7 +140,11 @@ function media(arr: (number | null)[]): number | null {
 export function V2AreasMeta({ ano: anoInicial }: Props) {
   // Contexts (API real — ver comentário acima)
   const { clienteAtual } = useCliente();
-  const { fazendaAtual, isGlobal } = useFazenda();
+  /* `fazendas`, nao `fazendasComPecuaria`: a Retiro Agricultura tem
+     tem_pecuaria=false e e justamente a fazenda dos 69,76 ha desmembrados.
+     Mesmo par de variaveis que o V2Home enfrentou no
+     PR-HOME-AREA-TABELA-FAZENDA-01. */
+  const { fazendaAtual, isGlobal, fazendas } = useFazenda();
   const clienteId = clienteAtual?.id ?? null;
   const fazendaId = isGlobal ? null : (fazendaAtual?.id ?? null);
 
@@ -156,7 +160,7 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
      de dentro deixava os dois mostrando anos diferentes — e quem governava a query
      era o de dentro. */
 
-  const { loading, saving, error, data, upsertAno } = useAreaPlanejamento(
+  const { loading, saving, error, data, porFazenda, upsertAno } = useAreaPlanejamento(
     clienteId, fazendaId, anoInicialNum, isGlobal
   );
 
@@ -267,6 +271,39 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
       .filter(b => b.total > 0 && Math.abs(b.total - matricula) > 0.01)
       .map(b => MESES[b.mes - 1]);
   }, [barras, matricula, isGlobal]);
+
+  /* ── Painel do modo GLOBAL: uma linha por FAZENDA ──
+     Matricula de fazenda_cadastros; media meta da quebra por fazenda que o
+     useAreaPlanejamento passou a expor. Nenhuma das duas passa por
+     usePastos — o bloqueio do tem_pecuaria nao se aplica aqui. */
+  const { data: matriculas } = useMatriculasDoCliente(clienteId ?? undefined, isGlobal);
+
+  const linhasGlobal = useMemo(() => {
+    if (!isGlobal) return [];
+    const matPorFaz = new Map((matriculas ?? []).map(m => [m.fazenda_id, m.area_total_ha]));
+    const metaPorFaz = new Map(porFazenda.map(m => [m.fazenda_id, m.mediaTotal]));
+    return fazendas
+      .filter(f => f.id !== '__global__')
+      .map(f => ({
+        id: f.id,
+        nome: f.nome,
+        matricula: matPorFaz.get(f.id) ?? null,
+        meta: metaPorFaz.get(f.id) ?? null,
+      }))
+      .sort((a, b) => (b.matricula ?? -1) - (a.matricula ?? -1));
+  }, [isGlobal, fazendas, matriculas, porFazenda]);
+
+  /* Fazenda sem matricula NAO entra na soma — travessao e ausencia, nao zero. */
+  const totaisGlobal = useMemo(() => {
+    const somaOuNull = (vals: (number | null)[]) => {
+      const v = vals.filter((x): x is number => x != null);
+      return v.length ? v.reduce((s2, x) => s2 + x, 0) : null;
+    };
+    return {
+      matricula: somaOuNull(linhasGlobal.map(l => l.matricula)),
+      meta: somaOuNull(linhasGlobal.map(l => l.meta)),
+    };
+  }, [linhasGlobal]);
 
   // Detectar dirty (apenas modo individual)
   const dirty = useMemo(() => {
@@ -415,11 +452,15 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
           justificam recharts, e a tela nao usa a lib em mais nada. */}
       <Card>
         <CardContent className="p-3">
-          {/* Largura limitada e centralizado: em tela larga, 12 barras esticadas
-              viram faixas, nao colunas. */}
-          <div className="mx-auto w-full max-w-[640px]">
+          {/* Duas colunas: grafico a esquerda, painel de comparacao a direita.
+              3fr/2fr — o grafico tem 12 barras e precisa da maior parte. */}
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+          <div className="lg:col-span-3 min-w-0">
+            <p className="text-[11px] font-semibold text-foreground pb-1">Composição da área planejada</p>
             {(() => {
-              const H = 120, TOPO = 6, BASE = H - 6, EIXO = 13;
+              /* Altura reduzida de 120 para 96: o grafico ganhou titulo e o card
+                 nao deve crescer. TOPO/BASE mantem as margens proporcionais. */
+              const H = 96, TOPO = 5, BASE = H - 5, EIXO = 13;
               const alt = BASE - TOPO;
               const larg = (100 - EIXO) / 12;
               const yDe = (v: number) => BASE - (v / escalaMax) * alt;
@@ -427,7 +468,7 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
               return (
                 <>
                   <div className="relative">
-                    <svg viewBox="0 0 100 120" preserveAspectRatio="none" className="w-full h-[120px]">
+                    <svg viewBox="0 0 100 120" preserveAspectRatio="none" className="w-full h-[96px]">
                       {/* Grade horizontal: cinco marcas, do zero ao topo da escala. */}
                       {marcas.map(v => (
                         <line key={v} x1={EIXO} x2="100" y1={yDe(v)} y2={yDe(v)}
@@ -490,7 +531,13 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
                       const itens = b.partes.filter(pt => pt.valor > 0);
                       return (
                         <div
-                          className="pointer-events-none absolute z-10 rounded-md border border-border bg-popover/90 backdrop-blur-sm px-2 py-1 shadow-md"
+                          /* z-40: UM nivel acima do cabecalho sticky (z-30, linha ~351). O tooltip e
+                             transitorio e deve cobrir tudo enquanto existe. Regressao introduzida
+                             pelo sticky em a05bd710 — antes dele o cabecalho nao tinha camada.
+                             Reduzir a altura do grafico NAO resolveria: o tooltip ancora em
+                             top:0 + translateY(-100%), entao sobe a partir do TOPO do grafico e
+                             encurtar o SVG move os dois juntos. */
+                          className="pointer-events-none absolute z-40 rounded-md border border-border bg-popover/90 backdrop-blur-sm px-2 py-1 shadow-md"
                           style={{
                             left: `${centro}%`,
                             top: 0,
@@ -542,6 +589,62 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
                 </>
               );
             })()}
+          </div>
+
+          {/* Painel de comparacao. GLOBAL: uma linha por FAZENDA. INDIVIDUAL:
+              uma por TIPO DE USO, REAPROVEITANDO refPorArea/mediasPorArea que a
+              tabela ja calcula — nenhuma conta nova. Mesma estrutura de colunas
+              nos dois: rotulo, referencia, media meta, diferenca. */}
+          <div className="lg:col-span-2 min-w-0">
+            <p className="text-[11px] font-semibold text-foreground pb-1">
+              {isGlobal ? 'Por fazenda' : 'Por tipo de uso'}
+            </p>
+            <table className="w-full text-[9px] tabular-nums">
+              <thead>
+                <tr className="text-muted-foreground border-b border-border">
+                  <th className="text-left font-normal py-0.5">{isGlobal ? 'Fazenda' : 'Tipo de uso'}</th>
+                  <th className="text-right font-normal py-0.5 px-1">{isGlobal ? 'Matrícula' : 'Referência'}</th>
+                  <th className="text-right font-normal py-0.5 px-1">Média Meta</th>
+                  <th className="text-right font-normal py-0.5 pl-1 text-[8px]">Dif.</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(isGlobal
+                  ? linhasGlobal.map(l => ({ chave: l.id, rotulo: l.nome, ref: l.matricula, meta: l.meta }))
+                  : AREAS.map((a, ai) => ({ chave: a.campo, rotulo: a.label, ref: refPorArea[ai], meta: mediasPorArea[ai] }))
+                ).map(l => {
+                  const d = l.ref == null || l.meta == null ? null : l.meta - l.ref;
+                  const zero = d == null || Math.abs(d) <= TOL;
+                  return (
+                    <tr key={l.chave} className="odd:bg-muted/20">
+                      <td className="text-left py-0.5 truncate max-w-[120px]">{l.rotulo}</td>
+                      <td className="text-right py-0.5 px-1 text-muted-foreground">{fmt(l.ref)}</td>
+                      <td className="text-right py-0.5 px-1 italic text-meta">{fmt(l.meta)}</td>
+                      <td className={`text-right py-0.5 pl-1 text-[8px] ${zero ? 'text-muted-foreground' : 'text-destructive'}`}>
+                        {fmtDif(d)}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {(() => {
+                  const ref = isGlobal ? totaisGlobal.matricula : matricula;
+                  const meta = isGlobal ? totaisGlobal.meta : mediaTot;
+                  const d = ref == null || meta == null ? null : meta - ref;
+                  const zero = d == null || Math.abs(d) <= TOL;
+                  return (
+                    <tr className="border-t border-border font-medium text-foreground">
+                      <td className="text-left py-0.5">Total</td>
+                      <td className="text-right py-0.5 px-1">{fmt(ref)}</td>
+                      <td className="text-right py-0.5 px-1 italic text-meta">{fmt(meta)}</td>
+                      <td className={`text-right py-0.5 pl-1 text-[8px] ${zero ? 'text-muted-foreground' : 'text-destructive'}`}>
+                        {fmtDif(d)}
+                      </td>
+                    </tr>
+                  );
+                })()}
+              </tbody>
+            </table>
+          </div>
           </div>
         </CardContent>
       </Card>

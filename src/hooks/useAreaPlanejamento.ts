@@ -53,8 +53,20 @@ export interface UpsertLinhaArea {
   area_outras_ha: number | null;
 }
 
+/* Media anual de `area_total_ha` de UMA fazenda. `null` = fazenda sem linha
+   no ano — nao planejado, nunca zero. */
+export interface MetaTotalPorFazenda {
+  fazenda_id: string;
+  mediaTotal: number | null;
+}
+
 export interface UseAreaPlanejamentoResult {
   loading: boolean;
+  /* Quebra por fazenda ao lado do agregado: o painel do Global precisa de
+     media meta POR fazenda, e o ramo Global descartava fazenda_id no select.
+     Aditivo — o agregado por mes que a tabela consome nao muda.
+     Vazio fora do modo Global. */
+  porFazenda: MetaTotalPorFazenda[];
   saving: boolean;
   error: Error | null;
   data: AreaMetaAnual | null;
@@ -173,6 +185,7 @@ export function useAreaPlanejamento(
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [data, setData] = useState<AreaMetaAnual | null>(null);
+  const [porFazenda, setPorFazenda] = useState<MetaTotalPorFazenda[]>([]);
   const [reloadKey, setReloadKey] = useState(0);
 
   const refresh = useCallback(() => setReloadKey(k => k + 1), []);
@@ -201,7 +214,7 @@ export function useAreaPlanejamento(
           // tiver linha. A completude por fazenda será tratada na UI/PC-100 em etapa futura.
           const { data: rows, error: err } = await sbLoose
             .from('planejamento_area_meta')
-            .select('mes, area_pecuaria_ha, area_agricultura_ha, area_silvicultura_ha, area_reserva_ha, area_app_ha, area_benfeitorias_ha, area_outras_ha, area_total_ha')
+            .select('fazenda_id, mes, area_pecuaria_ha, area_agricultura_ha, area_silvicultura_ha, area_reserva_ha, area_app_ha, area_benfeitorias_ha, area_outras_ha, area_total_ha')
             .eq('cliente_id', clienteId)
             .eq('ano', ano);
           if (err) throw err;
@@ -230,7 +243,24 @@ export function useAreaPlanejamento(
             prev.area_total_ha          = (prev.area_total_ha          ?? 0) + Number(r.area_total_ha ?? 0);
             porMes.set(mes, prev);
           }
+          /* Segunda passagem sobre as MESMAS linhas: media anual de
+             area_total_ha por fazenda. Divisor = meses COM linha daquela
+             fazenda; sem linha nenhuma, ela nem entra no mapa e o painel
+             mostra travessao. */
+          const totPorFaz = new Map<string, { soma: number; n: number }>();
+          for (const r of rowsTyped) {
+            const fid = (r as unknown as { fazenda_id?: string }).fazenda_id;
+            if (!fid || r.area_total_ha == null) continue;
+            const acc = totPorFaz.get(fid) ?? { soma: 0, n: 0 };
+            acc.soma += Number(r.area_total_ha);
+            acc.n += 1;
+            totPorFaz.set(fid, acc);
+          }
           if (!cancelled) {
+            setPorFazenda(Array.from(totPorFaz.entries()).map(([fazenda_id, a]) => ({
+              fazenda_id,
+              mediaTotal: a.n > 0 ? a.soma / a.n : null,
+            })));
             setData(agregarPorMes(Array.from(porMes.values())));
             setLoading(false);
           }
@@ -243,6 +273,7 @@ export function useAreaPlanejamento(
             .eq('ano', ano);
           if (err) throw err;
           if (!cancelled) {
+            setPorFazenda([]);
             setData(agregarPorMes((rows ?? []) as RowArea[]));
             setLoading(false);
           }
@@ -250,6 +281,7 @@ export function useAreaPlanejamento(
       } catch (e) {
         if (!cancelled) {
           setError(e instanceof Error ? e : new Error(String(e)));
+          setPorFazenda([]);
           setData(null);
           setLoading(false);
         }
@@ -299,5 +331,5 @@ export function useAreaPlanejamento(
     }
   }, [clienteId, fazendaId, ano, isGlobal, refresh]);
 
-  return { loading, saving, error, data, refresh, upsertAno };
+  return { loading, saving, error, data, porFazenda, refresh, upsertAno };
 }

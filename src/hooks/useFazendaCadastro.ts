@@ -44,6 +44,42 @@ const COLS = [
   'area_outras_ha',
 ] as const;
 
+/** Matricula de UMA fazenda, para o painel do Global. */
+export interface MatriculaPorFazenda {
+  fazenda_id: string;
+  area_total_ha: number | null;
+}
+
+/**
+ * Variante de CLIENTE: todas as matriculas de uma vez, para o painel do modo
+ * Global. Mesmos casts e mesma regra de nulidade da leitura individual —
+ * fazenda sem linha ou sem `area_total_ha` devolve null, nunca 0. Somar zero
+ * afirmaria "matricula zero"; null diz "nao cadastrada", que e o fato.
+ */
+export function useMatriculasDoCliente(clienteId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: ['matriculas-do-cliente', clienteId],
+    queryFn: async (): Promise<MatriculaPorFazenda[]> => {
+      const { data, error } = await (supabase
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .from('fazenda_cadastros' as any)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .select('fazenda_id, area_total_ha') as any)
+        .eq('cliente_id', clienteId!);
+      if (error) throw error;
+      return ((data ?? []) as Record<string, unknown>[])
+        .filter(r => !!r.fazenda_id)
+        .map(r => ({
+          fazenda_id: String(r.fazenda_id),
+          area_total_ha: r.area_total_ha == null ? null : Number(r.area_total_ha),
+        }));
+    },
+    enabled: enabled && !!clienteId,
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+}
+
 export function useFazendaCadastro(
   clienteId: string | undefined,
   fazendaId: string | undefined,
