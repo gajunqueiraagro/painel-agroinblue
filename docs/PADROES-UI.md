@@ -160,3 +160,33 @@ Referência viva: `select.tsx` (PR-UI-DROPDOWN-VIEWPORT-01).
   **PR-UI-MODAL-RETROFIT-01**.
 - **A9 em `popover.tsx` e `dropdown-menu.tsx`** — hoje sem `max-h` nenhum: crescem com o
   conteúdo e vazam do mesmo jeito, por caminho diferente. Auditar quando houver caso real.
+
+## Tabelas de dados (padrão AGROinBLUE)
+
+Estabelecido em `5d691b8d` (22/08/2026), aplicado às tabelas da Visão Geral.
+Vale para toda tabela nova.
+
+| elemento | classe |
+|---|---|
+| `<tr>` do `<thead>` | `bg-primary text-primary-foreground` |
+| linhas de dado | `odd:bg-muted/30 even:bg-card` |
+| linha de Total | `bg-primary text-primary-foreground font-medium` |
+| bordas | nenhuma — o fundo azul já separa |
+
+**Sobre fundo azul, nenhum texto pode ficar em `text-foreground` ou
+`text-muted-foreground`.** Use `text-primary-foreground` no dado e
+`text-primary-foreground/70` em sufixos de unidade ("ha", "cab"). Conferir
+célula a célula: uma célula esquecida fica ilegível sem erro nenhum.
+
+**NÃO usar `.financeiro-table-head` / `.financeiro-table-foot`** de
+`src/index.css`. Elas produzem o mesmo visual mas carregam `position: sticky`
+e `z-index`, que existem para a listagem financeira e atrapalham em tabela
+comum. Use os tokens direto pelo Tailwind.
+
+**Zebra:** `even:bg-card` sobre um card que já é `bg-card` deixa as linhas
+pares transparentes — a alternância é cinza / fundo-do-card, não cinza /
+branco. É o comportamento certo em tema escuro. Se ficar sutil demais no
+tema claro, subir a ímpar para `/40`; nunca pintar a par de branco.
+
+**Linha de nota** (ex.: "% da área") fica FORA do padrão: sem fundo,
+`text-muted-foreground`, um passo menor. Ela é rodapé da tabela, não dado.
