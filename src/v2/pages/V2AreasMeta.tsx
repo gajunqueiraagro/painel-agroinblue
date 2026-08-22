@@ -57,6 +57,11 @@ interface LinhaLocal {
   outras: string;
 }
 
+/* Separador de trimestre: derivado do MES, nunca de posicao na lista de
+   colunas — inserir ou remover coluna nao pode deslocar a divisao. Dez nao
+   recebe: a coluna Media logo em seguida ja tem fundo proprio. */
+const bordaTrimestre = (mes: number) => (mes % 3 === 0 && mes !== 12 ? ' border-r border-border/60' : '');
+
 const linhaVazia = (mes: number): LinhaLocal =>
   ({ mes, pec: '', agric: '', silvi: '', reserva: '', app: '', benf: '', outras: '' });
 
@@ -295,8 +300,8 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
               <thead className="bg-orange-50 dark:bg-orange-950/20 border-b border-orange-200/60 dark:border-orange-900/40">
                 <tr>
                   <th className="text-left px-2 py-1.5 font-semibold sticky left-0 bg-orange-50 dark:bg-orange-950/20 min-w-[100px] text-orange-900 dark:text-orange-200">Linha (ha)</th>
-                  {MESES.map(m => (
-                    <th key={m} className="px-1 py-1.5 font-semibold text-center min-w-[56px] text-orange-900 dark:text-orange-200">{m}</th>
+                  {MESES.map((m, i) => (
+                    <th key={m} className={`px-1 py-1.5 font-semibold text-center min-w-[56px] text-orange-900 dark:text-orange-200${bordaTrimestre(i + 1)}`}>{m}</th>
                   ))}
                   <th className="px-2 py-1.5 font-semibold text-center bg-orange-100/60 dark:bg-orange-900/30 min-w-[68px] text-orange-900 dark:text-orange-200">Média</th>
                 </tr>
@@ -320,7 +325,7 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
                     }`}>{a.label}</td>
                     {linhas.map((l, idx) => {
                       return (
-                        <td key={l.mes} className="px-0.5 py-0.5 text-center">
+                        <td key={l.mes} className={`px-0.5 py-0.5 text-center${bordaTrimestre(l.mes)}`}>
                           {isGlobal ? (
                             <span className="text-[9px] italic text-meta">
                               {fmt(data?.porMes[idx]?.[a.col] ?? null)}
@@ -332,7 +337,14 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
                             <Input
                               type="text"
                               inputMode="decimal"
-                              className="h-6 w-full text-right px-0.5 tabular-nums text-[9px] italic text-meta"
+                              /* Sem moldura em repouso: a tabela do individual passa a ler
+                                 igual a do Global. `border-0 bg-transparent` sobrescrevem a
+                                 base do Input via twMerge, e o fundo transparente herda a
+                                 zebra da linha — inclusive o tom mais escuro das
+                                 patrimoniais. O contorno volta no FOCO, com o mesmo
+                                 focus-visible:ring da base; so o offset cai para 0, que em
+                                 celula de 6px de altura vazaria para as vizinhas. */
+                              className="h-6 w-full text-right px-0.5 tabular-nums text-[9px] italic text-meta border-0 bg-transparent focus-visible:ring-offset-0"
                               value={l[a.campo]}
                               onChange={(e) => onChangeCelula(idx, a.campo, e.target.value)}
                               /* O state guarda o texto CRU enquanto se digita; o blur
@@ -355,7 +367,7 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
                 <tr className="bg-orange-100/50 dark:bg-orange-900/25 border-t-2 border-orange-200/70 dark:border-orange-900/50">
                   <td className="px-2 py-1.5 font-semibold sticky left-0 bg-orange-100/50 dark:bg-orange-900/25 text-orange-900 dark:text-orange-200">Total</td>
                   {linhas.map((_, idx) => (
-                    <td key={idx} className="px-0.5 py-1.5 text-center font-semibold text-[9px] italic text-meta">
+                    <td key={idx} className={`px-0.5 py-1.5 text-center font-semibold text-[9px] italic text-meta${bordaTrimestre(idx + 1)}`}>
                       {fmt(totalsLocal[idx])}
                     </td>
                   ))}
