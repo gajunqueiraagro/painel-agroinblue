@@ -112,7 +112,7 @@ function parseAreaBR(texto: string): number | null {
 const TOL = 0.01;
 function fmtDif(v: number | null): string {
   if (v == null || Math.abs(v) <= TOL) return '—';
-  const abs = Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const abs = Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   return `${v > 0 ? '+' : '\u2212'}${abs}`;
 }
 
@@ -123,10 +123,12 @@ function fmtEixo(v: number): string {
 
 function fmt(n: number | null | undefined): string {
   if (n === null || n === undefined || !Number.isFinite(n)) return '—';
-  /* Padrao numerico do sistema: pt-BR, 2 casas fixas, separador de milhar.
-     Vale para valor EXIBIDO; o valor editado no input segue o que o componente
-     ja faz — nao alterar parsing. */
-  return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  /* UMA casa decimal: area em hectare nao precisa de centesimo para decisao de
+     planejamento, e a segunda casa custava largura em 16 colunas. O valor
+     GRAVADO nao muda — a precisao continua no banco, e `formatarAreaBR`, que
+     alimenta os inputs, permanece em 2 casas de proposito: arredondar la
+     destruiria o centavo no proximo blur. */
+  return n.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 }
 
 function media(arr: (number | null)[]): number | null {
@@ -534,11 +536,9 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
                     ))}
                   </div>
 
-                  {!isGlobal && matricula != null && (
-                    <p className="pt-1 text-[9px] text-muted-foreground tabular-nums">
-                      Linha tracejada — matrícula {fmt(matricula)} ha
-                    </p>
-                  )}
+                  {/* Rotulo removido: a linha tracejada e autoexplicativa no contexto,
+                      e o valor da matricula ja aparece na coluna Referencia, linha
+                      Total. O texto custava altura sem acrescentar informacao. */}
                 </>
               );
             })()}
@@ -569,10 +569,10 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
                   )}
                   <th className="px-1 py-1 font-semibold text-center bg-orange-100/60 dark:bg-orange-900/30 min-w-[58px] text-[9px] text-orange-900 dark:text-orange-200">Média Meta</th>
                   {!isGlobal && (
-                    <th className="px-1 py-1 font-semibold text-center min-w-[58px] text-[9px] border-r border-border text-orange-900 dark:text-orange-200">Dif.</th>
+                    <th className="px-1 py-1 font-semibold text-center min-w-[40px] text-[8px] border-r border-border text-orange-900 dark:text-orange-200">Dif.</th>
                   )}
                   {MESES.map((m, i) => (
-                    <th key={m} className={`px-1 py-1 font-semibold text-center min-w-[56px] text-[9px] text-orange-900 dark:text-orange-200${bordaTrimestre(i + 1)}`}>{m}</th>
+                    <th key={m} className={`px-0 py-1 font-semibold text-center min-w-[44px] text-[9px] text-orange-900 dark:text-orange-200${bordaTrimestre(i + 1)}`}>{m}</th>
                   ))}
                 </tr>
               </thead>
@@ -609,14 +609,14 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
                       const d = ref == null || med == null ? null : med - ref;
                       const zero = d == null || Math.abs(d) <= TOL;
                       return (
-                        <td className={`px-1 pr-2 py-0.5 text-right text-[9px] tabular-nums border-r border-border ${zero ? 'text-muted-foreground' : 'text-destructive'}`}>
+                        <td className={`px-1 pr-1.5 py-0.5 text-right text-[8px] tabular-nums border-r border-border ${zero ? 'text-muted-foreground' : 'text-destructive'}`}>
                           {fmtDif(d)}
                         </td>
                       );
                     })()}
                     {linhas.map((l, idx) => {
                       return (
-                        <td key={l.mes} className={`px-0.5 py-0${bordaTrimestre(l.mes)}`}>
+                        <td key={l.mes} className={`px-0 py-0${bordaTrimestre(l.mes)}`}>
                           {isGlobal ? (
                             <span className="block pr-1.5 text-right text-[9px] italic text-meta tabular-nums">
                               {fmt(data?.porMes[idx]?.[a.col] ?? null)}
@@ -635,7 +635,7 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
                                  patrimoniais. O contorno volta no FOCO, com o mesmo
                                  focus-visible:ring da base; so o offset cai para 0, que em
                                  celula de 6px de altura vazaria para as vizinhas. */
-                              className="h-5 w-full text-right pl-0.5 pr-1.5 tabular-nums text-[9px] italic text-meta border-0 bg-transparent focus-visible:ring-offset-0"
+                              className="h-5 w-full text-right pl-0 pr-1 tabular-nums text-[9px] italic text-meta border-0 bg-transparent focus-visible:ring-offset-0"
                               value={l[a.campo]}
                               onChange={(e) => onChangeCelula(idx, a.campo, e.target.value)}
                               /* O state guarda o texto CRU enquanto se digita; o blur
@@ -666,13 +666,13 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
                     const d = mediaTot == null || matricula == null ? null : mediaTot - matricula;
                     const zero = d == null || Math.abs(d) <= TOL;
                     return (
-                      <td className={`px-1 pr-2 py-1 text-right text-[9px] tabular-nums font-semibold border-r border-border ${zero ? 'text-muted-foreground' : 'text-destructive'}`}>
+                      <td className={`px-1 pr-1.5 py-1 text-right text-[8px] tabular-nums font-semibold border-r border-border ${zero ? 'text-muted-foreground' : 'text-destructive'}`}>
                         {fmtDif(d)}
                       </td>
                     );
                   })()}
                   {linhas.map((_, idx) => (
-                    <td key={idx} className={`px-0.5 pr-1.5 py-1 text-right font-semibold text-[9px] italic text-meta tabular-nums${bordaTrimestre(idx + 1)}`}>
+                    <td key={idx} className={`px-0 pr-1 py-1 text-right font-semibold text-[9px] italic text-meta tabular-nums${bordaTrimestre(idx + 1)}`}>
                       {fmt(totalsLocal[idx])}
                     </td>
                   ))}
@@ -691,7 +691,7 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
                       const d = somaRef != null && matricula != null ? somaRef - matricula : null;
                       const zero = d == null || Math.abs(d) <= TOL;
                       return (
-                        <td className={`px-1 pr-2 py-0.5 text-right tabular-nums ${zero ? 'text-muted-foreground' : 'text-destructive'}`}>
+                        <td className={`px-1 pr-1.5 py-0.5 text-right text-[8px] tabular-nums ${zero ? 'text-muted-foreground' : 'text-destructive'}`}>
                           {fmtDif(d)}
                         </td>
                       );
@@ -702,7 +702,7 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
                       const d = matricula == null ? null : b.total - matricula;
                       const zero = d == null || Math.abs(d) <= TOL;
                       return (
-                        <td key={b.mes} className={`px-0.5 pr-1.5 py-0.5 text-right tabular-nums ${zero ? 'text-muted-foreground' : 'text-destructive'}${bordaTrimestre(idx + 1)}`}>
+                        <td key={b.mes} className={`px-0 pr-1 py-0.5 text-right text-[8px] tabular-nums ${zero ? 'text-muted-foreground' : 'text-destructive'}${bordaTrimestre(idx + 1)}`}>
                           {fmtDif(d)}
                         </td>
                       );
