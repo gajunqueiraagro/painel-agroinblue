@@ -523,11 +523,45 @@ function buildBlocosForTab(
     ],
   };
 
+  /* PESOS TOTAIS — @: espelho do kg, com a CONVERSAO DA ARROBA.
+     Abate por CARCACA/15, todo o resto por peso vivo/30 — regra canonica do
+     calcArrobas (economicos.ts:37). Dividir peso_abate/30 subestimaria 6,7%
+     (411.951 contra 439.605 @, medido em 22/08) e divergiria do desfrute_arr
+     que o resto do sistema exibe.
+     As linhas-mae sao a SOMA das setas JA CONVERTIDAS, nao o total em kg sobre
+     um divisor so: as saidas misturam os dois divisores. Medido — divisor
+     unico daria 885.063,5 @, a soma das setas da 912.717,8 @, e a diferenca
+     de 27.654,3 e exatamente o abate.
+     A linha de saidas subtrai o abate VIVO do total antes de dividir por 30 e
+     soma a carcaca/15 — assim a neutralizacao de transferencia do Global, que
+     ja esta em `pesoSaidas`, continua valendo sem ser recalculada. */
+  const arr30 = (v: number[]): number[] => v.map(x => x / 30);
+  const arr15 = (v: number[]): number[] => v.map(x => x / 15);
+  const blocoPesoArroba: Bloco = {
+    nome: 'PESOS TOTAIS — @',
+    rows: [
+      linha(['mensal'], 'Peso inicial (@)', 'padrao', arr30(pesoTotalIni), undefined, true),
+      linha(['mensal','acumulado'], 'Peso entradas (@)', 'padrao', arr30(d.pesoEntradas), undefined, false, 'familia'),
+      linha(['mensal','acumulado'], '→ Nascimentos', 'padrao', arr30(d.pesoMovNascimento), undefined, false, 'destino'),
+      linha(['mensal','acumulado'], '→ Compras', 'padrao', arr30(d.pesoMovCompra), undefined, false, 'destino'),
+      linha(['mensal','acumulado'], '→ Transf. Interna', 'padrao', arr30(d.pesoMovTransfEntrada), undefined, false, 'destino'),
+      linha(['mensal','acumulado'], 'Peso saídas (@)', 'padrao', d.pesoSaidas.map((v, i) => (v - d.pesoMovAbate[i]) / 30 + d.pesoCarcacaAbate[i] / 15), undefined, false, 'familia'),
+      linha(['mensal','acumulado'], '→ Abates', 'padrao', arr15(d.pesoCarcacaAbate), undefined, false, 'destino'),
+      linha(['mensal','acumulado'], '→ Vendas', 'padrao', arr30(d.pesoMovVenda), undefined, false, 'destino'),
+      linha(['mensal','acumulado'], '→ Venda em pé', 'padrao', arr30(d.pesoMovVendaPe), undefined, false, 'destino'),
+      linha(['mensal','acumulado'], '→ Mortes', 'padrao', arr30(d.pesoMovMorte), undefined, false, 'destino'),
+      linha(['mensal','acumulado'], '→ Consumo', 'padrao', arr30(d.pesoMovConsumo), undefined, false, 'destino'),
+      linha(['mensal','acumulado'], '→ Transf. Interna', 'padrao', arr30(d.pesoMovTransfSaida), undefined, false, 'destino'),
+      linha(['mensal'], 'Peso final (@)', 'padrao', arr30(pesoTotalFin), undefined, true),
+    ],
+  };
+
   switch (tab) {
     case 'mensal':
       return [
         blocoRebanho,
         blocoPesoKg,
+        blocoPesoArroba,
         {
           nome: 'Produção',
           rows: [
@@ -566,6 +600,7 @@ function buildBlocosForTab(
       return [
         blocoRebanho,
         blocoPesoKg,
+        blocoPesoArroba,
         {
           nome: 'Produção',
           rows: [
@@ -602,6 +637,7 @@ function buildBlocosForTab(
       return [
         blocoRebanho,
         blocoPesoKg,
+        blocoPesoArroba,
         {
           nome: 'Produção',
           rows: [
@@ -641,6 +677,7 @@ function buildBlocosForTab(
       return [
         blocoRebanho,
         blocoPesoKg,
+        blocoPesoArroba,
         {
           nome: 'Produção',
           rows: [
@@ -909,11 +946,37 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
     ],
   };
 
+  /* Sem carcaca nesta fonte: nem a view nem o agg da Meta tem
+     peso_carcaca_abate, e a arroba do abate DEPENDE dela. A linha-mae de
+     SAIDAS fica em travessao — `peso_saidas/30` daria um numero conhecidamente
+     errado (3,1% abaixo), e numero errado e pior que ausencia declarada.
+     Entradas, inicial e final tem valor: as tres usam so o divisor 30. */
+  const arr30 = (v: number[]): number[] => v.map(x => x / 30);
+  const blocoPesoArroba: Bloco = {
+    nome: 'PESOS TOTAIS — @',
+    rows: [
+      linha(['mensal'], 'Peso inicial (@)', 'padrao', arr30(pesoIni), undefined, true),
+      linha(['mensal','acumulado'], 'Peso entradas (@)', 'padrao', arr30(pesoEntKg), undefined, false, 'familia'),
+      linha([], '→ Nascimentos', 'padrao', NAN12, undefined, false, 'destino'),
+      linha([], '→ Compras', 'padrao', NAN12, undefined, false, 'destino'),
+      linha([], '→ Transf. Interna', 'padrao', NAN12, undefined, false, 'destino'),
+      linha([], 'Peso saídas (@)', 'padrao', NAN12, undefined, false, 'familia'),
+      linha([], '→ Abates', 'padrao', NAN12, undefined, false, 'destino'),
+      linha([], '→ Vendas', 'padrao', NAN12, undefined, false, 'destino'),
+      linha([], '→ Venda em pé', 'padrao', NAN12, undefined, false, 'destino'),
+      linha([], '→ Mortes', 'padrao', NAN12, undefined, false, 'destino'),
+      linha([], '→ Consumo', 'padrao', NAN12, undefined, false, 'destino'),
+      linha([], '→ Transf. Interna', 'padrao', NAN12, undefined, false, 'destino'),
+      linha(['mensal'], 'Peso final (@)', 'padrao', arr30(pesoFin), undefined, true),
+    ],
+  };
+
   switch (tab) {
     case 'mensal':
       return [
         blocoRebanho,
         blocoPesoKg,
+        blocoPesoArroba,
         {
           nome: 'Produção',
           rows: [
@@ -950,6 +1013,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
       return [
         blocoRebanho,
         blocoPesoKg,
+        blocoPesoArroba,
         {
           nome: 'Produção',
           rows: [
@@ -985,6 +1049,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
       return [
         blocoRebanho,
         blocoPesoKg,
+        blocoPesoArroba,
         {
           nome: 'Produção',
           rows: [
@@ -1019,6 +1084,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
       return [
         blocoRebanho,
         blocoPesoKg,
+        blocoPesoArroba,
         {
           nome: 'Produção',
           rows: [
@@ -1266,11 +1332,37 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
     ],
   };
 
+  /* Sem carcaca nesta fonte: nem a view nem o agg da Meta tem
+     peso_carcaca_abate, e a arroba do abate DEPENDE dela. A linha-mae de
+     SAIDAS fica em travessao — `peso_saidas/30` daria um numero conhecidamente
+     errado (3,1% abaixo), e numero errado e pior que ausencia declarada.
+     Entradas, inicial e final tem valor: as tres usam so o divisor 30. */
+  const arr30 = (v: number[]): number[] => v.map(x => x / 30);
+  const blocoPesoArroba: Bloco = {
+    nome: 'PESOS TOTAIS — @',
+    rows: [
+      linha(['mensal'], 'Peso inicial (@)', 'padrao', arr30(pesoIni), undefined, true),
+      linha(['mensal','acumulado'], 'Peso entradas (@)', 'padrao', arr30(pesoEntKg), undefined, false, 'familia'),
+      linha([], '→ Nascimentos', 'padrao', NAN12, undefined, false, 'destino'),
+      linha([], '→ Compras', 'padrao', NAN12, undefined, false, 'destino'),
+      linha([], '→ Transf. Interna', 'padrao', NAN12, undefined, false, 'destino'),
+      linha([], 'Peso saídas (@)', 'padrao', NAN12, undefined, false, 'familia'),
+      linha([], '→ Abates', 'padrao', NAN12, undefined, false, 'destino'),
+      linha([], '→ Vendas', 'padrao', NAN12, undefined, false, 'destino'),
+      linha([], '→ Venda em pé', 'padrao', NAN12, undefined, false, 'destino'),
+      linha([], '→ Mortes', 'padrao', NAN12, undefined, false, 'destino'),
+      linha([], '→ Consumo', 'padrao', NAN12, undefined, false, 'destino'),
+      linha([], '→ Transf. Interna', 'padrao', NAN12, undefined, false, 'destino'),
+      linha(['mensal'], 'Peso final (@)', 'padrao', arr30(pesoFin), undefined, true),
+    ],
+  };
+
   switch (tab) {
     case 'mensal':
       return [
         blocoRebanho,
         blocoPesoKg,
+        blocoPesoArroba,
         {
           nome: 'Produção',
           rows: [
@@ -1307,6 +1399,7 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
       return [
         blocoRebanho,
         blocoPesoKg,
+        blocoPesoArroba,
         {
           nome: 'Produção',
           rows: [
@@ -1342,6 +1435,7 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
       return [
         blocoRebanho,
         blocoPesoKg,
+        blocoPesoArroba,
         {
           nome: 'Produção',
           rows: [
@@ -1376,6 +1470,7 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
       return [
         blocoRebanho,
         blocoPesoKg,
+        blocoPesoArroba,
         {
           nome: 'Produção',
           rows: [

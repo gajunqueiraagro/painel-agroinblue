@@ -106,6 +106,11 @@ export interface MonthlyData {
   pesoMovTransfSaida: number[];
   pesoMovConsumo: number[];
   pesoMovMorte: number[];
+  /* CARCACA do abate, em kg. Existe SO para o bloco @: a regra canonica
+     (calcArrobas, economicos.ts:37) converte o abate por carcaca/15 e todo
+     o resto por peso vivo/30. `pesoMovAbate` continua sendo o peso VIVO e
+     e ele que o bloco kg mostra. */
+  pesoCarcacaAbate: number[];
 }
 
 export function buildMonthlyDataFromView(
@@ -154,6 +159,7 @@ export function buildMonthlyDataFromView(
     pesoMovTransfSaida: mk(m => viewTotals[m]?.peso_transf_saida ?? 0),
     pesoMovConsumo: mk(m => viewTotals[m]?.peso_consumo ?? 0),
     pesoMovMorte: mk(m => viewTotals[m]?.peso_morte ?? 0),
+    pesoCarcacaAbate: mk(m => viewTotals[m]?.peso_carcaca_abate ?? 0),
   };
   let pesoEntradas = mk(m => viewTotals[m]?.peso_entradas_externas ?? 0);
   let pesoSaidas = mk(m => viewTotals[m]?.peso_saidas_externas ?? 0);

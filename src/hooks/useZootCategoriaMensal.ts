@@ -71,6 +71,10 @@ export interface ZootCategoriaMensal {
   peso_transf_saida?: number | null;
   peso_consumo?: number | null;
   peso_morte?: number | null;
+  /* CARCACA do abate — migration 20260914120000. Base da arroba do abate
+     (carcaca/15). NAO substitui `peso_abate`, que e peso VIVO: as duas
+     convivem, uma serve ao bloco kg e a outra ao bloco @. */
+  peso_carcaca_abate?: number | null;
   fonte_oficial_mes: 'fechamento' | 'fallback_movimentacao' | 'projecao' | 'parcial';
 }
 
@@ -308,6 +312,7 @@ export function totalizarPorMes(rows: ZootCategoriaMensal[]): Record<number, {
   peso_transf_saida: number;
   peso_consumo: number;
   peso_morte: number;
+  peso_carcaca_abate: number;
 }> {
   const byMes = groupByMes(rows);
   const result: Record<number, any> = {};
@@ -355,6 +360,7 @@ export function totalizarPorMes(rows: ZootCategoriaMensal[]): Record<number, {
       peso_transf_saida: cats.reduce((s, c2) => s + (c2.peso_transf_saida ?? 0), 0),
       peso_consumo: cats.reduce((s, c2) => s + (c2.peso_consumo ?? 0), 0),
       peso_morte: cats.reduce((s, c2) => s + (c2.peso_morte ?? 0), 0),
+      peso_carcaca_abate: cats.reduce((s, c2) => s + (c2.peso_carcaca_abate ?? 0), 0),
     };
   }
 
