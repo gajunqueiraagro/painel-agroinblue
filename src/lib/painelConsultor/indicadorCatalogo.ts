@@ -91,7 +91,30 @@ const FONTE_MOV_TIPO_REAL: FonteIndicador = {
   observacao: 'Arroba do abate usa peso_carcaca_abate/15; os demais tipos, peso vivo/30.',
 };
 
-/* Peso de movimentacao — META. A fonte NAO e o zoot_mensal_cache: e
+/* Espelho META da FONTE_MOV_TIPO_REAL. Mesma tabela, mesma quebra, outro
+   cenario — o zoot_mensal_cache guarda os dois lado a lado, e o caminho Meta
+   sempre o leu; era o adaptador viewToMetaCategoriaMes que descartava as 19
+   colunas por tipo (corrigido em PR-PC100-UNIFICAR-FONTE-META-01). */
+const FONTE_MOV_TIPO_PREVISTO: FonteIndicador = {
+  fonte_tipo: 'meta',
+  fonte_tabela: 'zoot_mensal_cache (cenario = meta)',
+  fonte_campo: 'cab_* / peso_* / peso_carcaca_abate, por tipo de movimentacao',
+  regra_calculo: 'Mesma fn_zoot_categoria_mensal do realizado, ramo mov_meta. '
+    + 'Reclassificacao NAO entra: ela vive em evol_cat_*, separada, nos dois cenarios.',
+  regra_prioridade: '1. zoot_mensal_cache cenario=meta; 2. vazio se o mes nao foi reconstruido',
+  tela_origem: '/fluxo-anual',
+  tela_label: 'Fluxo Anual / Meta',
+  permite_fallback: false,
+  observacao: 'Arroba do abate usa peso_carcaca_abate/15; os demais tipos, peso vivo/30.',
+};
+
+/* APOSENTADA em PR-PC100-UNIFICAR-FONTE-META-01 — sem consumidor.
+   Descrevia a fonte antiga das linhas-mae de peso do Meta: `lancamentos` cru
+   agregado por useMetaConsolidacao, COM a reclassificacao dentro. Medido em
+   22/08 que isso inflava o Meta em ate 100% (RRCC 2026). A fonte passou a ser
+   o cache, e a constante fica aqui como registro do que era — remove-la
+   apagaria a explicacao de por que os numeros mudaram.
+   Peso de movimentacao — META (antiga). A fonte NAO e o zoot_mensal_cache: e
    `lancamentos` cru do cenario meta, agregado em memoria por
    useMetaConsolidacao (:60-95). E a reclassificacao ENTRA no peso aqui, ao
    contrario do realizado, onde ela vive em evol_cat_*. Sao as duas coisas
@@ -610,75 +633,75 @@ export const CATALOGO_INDICADORES: Record<string, IndicadorMeta> = {
   // tem quebra por tipo, entao previsto = SEM_PREVISTO — que agora rende
   // TRAVESSAO na celula, nao vazio.
   'mov_cab_nascimento': { id: 'mov_cab_nascimento', nome: '→ Nascimentos (cab)', aba: 'todas', bloco: 'Rebanho',
-    realizado: FONTE_MOV_TIPO_REAL, previsto: SEM_PREVISTO },
+    realizado: FONTE_MOV_TIPO_REAL, previsto: FONTE_MOV_TIPO_PREVISTO },
   'mov_cab_compra': { id: 'mov_cab_compra', nome: '→ Compras (cab)', aba: 'todas', bloco: 'Rebanho',
-    realizado: FONTE_MOV_TIPO_REAL, previsto: SEM_PREVISTO },
+    realizado: FONTE_MOV_TIPO_REAL, previsto: FONTE_MOV_TIPO_PREVISTO },
   'mov_cab_transf_ent': { id: 'mov_cab_transf_ent', nome: '→ Transf. Interna (cab)', aba: 'todas', bloco: 'Rebanho',
-    realizado: FONTE_MOV_TIPO_REAL, previsto: SEM_PREVISTO },
+    realizado: FONTE_MOV_TIPO_REAL, previsto: FONTE_MOV_TIPO_PREVISTO },
   'mov_cab_abate': { id: 'mov_cab_abate', nome: '→ Abates (cab)', aba: 'todas', bloco: 'Rebanho',
-    realizado: FONTE_MOV_TIPO_REAL, previsto: SEM_PREVISTO },
+    realizado: FONTE_MOV_TIPO_REAL, previsto: FONTE_MOV_TIPO_PREVISTO },
   'mov_cab_venda': { id: 'mov_cab_venda', nome: '→ Vendas (cab)', aba: 'todas', bloco: 'Rebanho',
-    realizado: FONTE_MOV_TIPO_REAL, previsto: SEM_PREVISTO },
+    realizado: FONTE_MOV_TIPO_REAL, previsto: FONTE_MOV_TIPO_PREVISTO },
   'mov_cab_venda_pe': { id: 'mov_cab_venda_pe', nome: '→ Venda em pé (cab)', aba: 'todas', bloco: 'Rebanho',
-    realizado: FONTE_MOV_TIPO_REAL, previsto: SEM_PREVISTO },
+    realizado: FONTE_MOV_TIPO_REAL, previsto: FONTE_MOV_TIPO_PREVISTO },
   'mov_cab_morte': { id: 'mov_cab_morte', nome: '→ Mortes (cab)', aba: 'todas', bloco: 'Rebanho',
-    realizado: FONTE_MOV_TIPO_REAL, previsto: SEM_PREVISTO },
+    realizado: FONTE_MOV_TIPO_REAL, previsto: FONTE_MOV_TIPO_PREVISTO },
   'mov_cab_consumo': { id: 'mov_cab_consumo', nome: '→ Consumo (cab)', aba: 'todas', bloco: 'Rebanho',
-    realizado: FONTE_MOV_TIPO_REAL, previsto: SEM_PREVISTO },
+    realizado: FONTE_MOV_TIPO_REAL, previsto: FONTE_MOV_TIPO_PREVISTO },
   'mov_cab_transf_sai': { id: 'mov_cab_transf_sai', nome: '→ Transf. Interna (cab)', aba: 'todas', bloco: 'Rebanho',
-    realizado: FONTE_MOV_TIPO_REAL, previsto: SEM_PREVISTO },
+    realizado: FONTE_MOV_TIPO_REAL, previsto: FONTE_MOV_TIPO_PREVISTO },
   'mov_kg_nascimento': { id: 'mov_kg_nascimento', nome: '→ Nascimentos (kg)', aba: 'todas', bloco: 'PESOS TOTAIS — kg',
-    realizado: FONTE_MOV_TIPO_REAL, previsto: SEM_PREVISTO },
+    realizado: FONTE_MOV_TIPO_REAL, previsto: FONTE_MOV_TIPO_PREVISTO },
   'mov_kg_compra': { id: 'mov_kg_compra', nome: '→ Compras (kg)', aba: 'todas', bloco: 'PESOS TOTAIS — kg',
-    realizado: FONTE_MOV_TIPO_REAL, previsto: SEM_PREVISTO },
+    realizado: FONTE_MOV_TIPO_REAL, previsto: FONTE_MOV_TIPO_PREVISTO },
   'mov_kg_transf_ent': { id: 'mov_kg_transf_ent', nome: '→ Transf. Interna (kg)', aba: 'todas', bloco: 'PESOS TOTAIS — kg',
-    realizado: FONTE_MOV_TIPO_REAL, previsto: SEM_PREVISTO },
+    realizado: FONTE_MOV_TIPO_REAL, previsto: FONTE_MOV_TIPO_PREVISTO },
   'mov_kg_abate': { id: 'mov_kg_abate', nome: '→ Abates (kg)', aba: 'todas', bloco: 'PESOS TOTAIS — kg',
-    realizado: FONTE_MOV_TIPO_REAL, previsto: SEM_PREVISTO },
+    realizado: FONTE_MOV_TIPO_REAL, previsto: FONTE_MOV_TIPO_PREVISTO },
   'mov_kg_venda': { id: 'mov_kg_venda', nome: '→ Vendas (kg)', aba: 'todas', bloco: 'PESOS TOTAIS — kg',
-    realizado: FONTE_MOV_TIPO_REAL, previsto: SEM_PREVISTO },
+    realizado: FONTE_MOV_TIPO_REAL, previsto: FONTE_MOV_TIPO_PREVISTO },
   'mov_kg_venda_pe': { id: 'mov_kg_venda_pe', nome: '→ Venda em pé (kg)', aba: 'todas', bloco: 'PESOS TOTAIS — kg',
-    realizado: FONTE_MOV_TIPO_REAL, previsto: SEM_PREVISTO },
+    realizado: FONTE_MOV_TIPO_REAL, previsto: FONTE_MOV_TIPO_PREVISTO },
   'mov_kg_morte': { id: 'mov_kg_morte', nome: '→ Mortes (kg)', aba: 'todas', bloco: 'PESOS TOTAIS — kg',
-    realizado: FONTE_MOV_TIPO_REAL, previsto: SEM_PREVISTO },
+    realizado: FONTE_MOV_TIPO_REAL, previsto: FONTE_MOV_TIPO_PREVISTO },
   'mov_kg_consumo': { id: 'mov_kg_consumo', nome: '→ Consumo (kg)', aba: 'todas', bloco: 'PESOS TOTAIS — kg',
-    realizado: FONTE_MOV_TIPO_REAL, previsto: SEM_PREVISTO },
+    realizado: FONTE_MOV_TIPO_REAL, previsto: FONTE_MOV_TIPO_PREVISTO },
   'mov_kg_transf_sai': { id: 'mov_kg_transf_sai', nome: '→ Transf. Interna (kg)', aba: 'todas', bloco: 'PESOS TOTAIS — kg',
-    realizado: FONTE_MOV_TIPO_REAL, previsto: SEM_PREVISTO },
+    realizado: FONTE_MOV_TIPO_REAL, previsto: FONTE_MOV_TIPO_PREVISTO },
   'mov_arr_nascimento': { id: 'mov_arr_nascimento', nome: '→ Nascimentos (@)', aba: 'todas', bloco: 'PESOS TOTAIS — @',
-    realizado: FONTE_MOV_TIPO_REAL, previsto: SEM_PREVISTO },
+    realizado: FONTE_MOV_TIPO_REAL, previsto: FONTE_MOV_TIPO_PREVISTO },
   'mov_arr_compra': { id: 'mov_arr_compra', nome: '→ Compras (@)', aba: 'todas', bloco: 'PESOS TOTAIS — @',
-    realizado: FONTE_MOV_TIPO_REAL, previsto: SEM_PREVISTO },
+    realizado: FONTE_MOV_TIPO_REAL, previsto: FONTE_MOV_TIPO_PREVISTO },
   'mov_arr_transf_ent': { id: 'mov_arr_transf_ent', nome: '→ Transf. Interna (@)', aba: 'todas', bloco: 'PESOS TOTAIS — @',
-    realizado: FONTE_MOV_TIPO_REAL, previsto: SEM_PREVISTO },
+    realizado: FONTE_MOV_TIPO_REAL, previsto: FONTE_MOV_TIPO_PREVISTO },
   'mov_arr_abate': { id: 'mov_arr_abate', nome: '→ Abates (@)', aba: 'todas', bloco: 'PESOS TOTAIS — @',
-    realizado: FONTE_MOV_TIPO_REAL, previsto: SEM_PREVISTO },
+    realizado: FONTE_MOV_TIPO_REAL, previsto: FONTE_MOV_TIPO_PREVISTO },
   'mov_arr_venda': { id: 'mov_arr_venda', nome: '→ Vendas (@)', aba: 'todas', bloco: 'PESOS TOTAIS — @',
-    realizado: FONTE_MOV_TIPO_REAL, previsto: SEM_PREVISTO },
+    realizado: FONTE_MOV_TIPO_REAL, previsto: FONTE_MOV_TIPO_PREVISTO },
   'mov_arr_venda_pe': { id: 'mov_arr_venda_pe', nome: '→ Venda em pé (@)', aba: 'todas', bloco: 'PESOS TOTAIS — @',
-    realizado: FONTE_MOV_TIPO_REAL, previsto: SEM_PREVISTO },
+    realizado: FONTE_MOV_TIPO_REAL, previsto: FONTE_MOV_TIPO_PREVISTO },
   'mov_arr_morte': { id: 'mov_arr_morte', nome: '→ Mortes (@)', aba: 'todas', bloco: 'PESOS TOTAIS — @',
-    realizado: FONTE_MOV_TIPO_REAL, previsto: SEM_PREVISTO },
+    realizado: FONTE_MOV_TIPO_REAL, previsto: FONTE_MOV_TIPO_PREVISTO },
   'mov_arr_consumo': { id: 'mov_arr_consumo', nome: '→ Consumo (@)', aba: 'todas', bloco: 'PESOS TOTAIS — @',
-    realizado: FONTE_MOV_TIPO_REAL, previsto: SEM_PREVISTO },
+    realizado: FONTE_MOV_TIPO_REAL, previsto: FONTE_MOV_TIPO_PREVISTO },
   'mov_arr_transf_sai': { id: 'mov_arr_transf_sai', nome: '→ Transf. Interna (@)', aba: 'todas', bloco: 'PESOS TOTAIS — @',
-    realizado: FONTE_MOV_TIPO_REAL, previsto: SEM_PREVISTO },
+    realizado: FONTE_MOV_TIPO_REAL, previsto: FONTE_MOV_TIPO_PREVISTO },
   // 8 LINHAS-MAE de peso: inicial/final do snapshot validado; entradas/saidas
   // do agregado de lancamentos meta — fonte diferente, constante diferente.
   'peso_tot_ini_kg': { id: 'peso_tot_ini_kg', nome: 'Peso inicial (kg)', aba: 'todas', bloco: 'PESOS TOTAIS — kg',
     realizado: FONTE_PESO_REAL, previsto: FONTE_PESO_PREVISTO },
   'peso_tot_ent_kg': { id: 'peso_tot_ent_kg', nome: 'Peso entradas (kg)', aba: 'todas', bloco: 'PESOS TOTAIS — kg',
-    realizado: FONTE_MOV_TIPO_REAL, previsto: FONTE_PESO_MOV_PREVISTO },
+    realizado: FONTE_MOV_TIPO_REAL, previsto: FONTE_MOV_TIPO_PREVISTO },
   'peso_tot_sai_kg': { id: 'peso_tot_sai_kg', nome: 'Peso saídas (kg)', aba: 'todas', bloco: 'PESOS TOTAIS — kg',
-    realizado: FONTE_MOV_TIPO_REAL, previsto: FONTE_PESO_MOV_PREVISTO },
+    realizado: FONTE_MOV_TIPO_REAL, previsto: FONTE_MOV_TIPO_PREVISTO },
   'peso_tot_fin_kg': { id: 'peso_tot_fin_kg', nome: 'Peso final (kg)', aba: 'todas', bloco: 'PESOS TOTAIS — kg',
     realizado: FONTE_PESO_REAL, previsto: FONTE_PESO_PREVISTO },
   'peso_tot_ini_arr': { id: 'peso_tot_ini_arr', nome: 'Peso inicial (@)', aba: 'todas', bloco: 'PESOS TOTAIS — @',
     realizado: FONTE_PESO_REAL, previsto: FONTE_PESO_PREVISTO },
   'peso_tot_ent_arr': { id: 'peso_tot_ent_arr', nome: 'Peso entradas (@)', aba: 'todas', bloco: 'PESOS TOTAIS — @',
-    realizado: FONTE_MOV_TIPO_REAL, previsto: FONTE_PESO_MOV_PREVISTO },
+    realizado: FONTE_MOV_TIPO_REAL, previsto: FONTE_MOV_TIPO_PREVISTO },
   'peso_tot_sai_arr': { id: 'peso_tot_sai_arr', nome: 'Peso saídas (@)', aba: 'todas', bloco: 'PESOS TOTAIS — @',
-    realizado: FONTE_MOV_TIPO_REAL, previsto: FONTE_PESO_MOV_PREVISTO },
+    realizado: FONTE_MOV_TIPO_REAL, previsto: FONTE_MOV_TIPO_PREVISTO },
   'peso_tot_fin_arr': { id: 'peso_tot_fin_arr', nome: 'Peso final (@)', aba: 'todas', bloco: 'PESOS TOTAIS — @',
     realizado: FONTE_PESO_REAL, previsto: FONTE_PESO_PREVISTO },
   // 4 do bloco Producao: base ANUAL e percentuais acumulados. Sem meta.

@@ -24,6 +24,34 @@ export interface MetaCategoriaMes {
   gmd: number;
   dias: number;
   producaoBio: number;
+  /* Quebra por tipo — PR-PC100-UNIFICAR-FONTE-META-01. O cenario Meta ja
+     lia o zoot_mensal_cache; o adaptador viewToMetaCategoriaMes e que
+     descartava estas 19 colunas. Opcionais porque `useMetaConsolidacao`
+     (que da nome ao tipo) monta o objeto a partir de `lancamentos` e NAO
+     as tem — so o adaptador do PainelConsultorTab as preenche. */
+  /* Externas SEM reclassificacao — o `pesoEntradas`/`pesoSaidas` acima soma
+     a reclassificacao junto, e no cenario Meta isso inflava a conta. */
+  peso_entradas_externas?: number;
+  peso_saidas_externas?: number;
+  cab_nascimento?: number;
+  cab_compra?: number;
+  cab_transf_entrada?: number;
+  cab_abate?: number;
+  cab_venda?: number;
+  cab_venda_pe?: number;
+  cab_transf_saida?: number;
+  cab_consumo?: number;
+  cab_morte?: number;
+  peso_nascimento?: number;
+  peso_compra?: number;
+  peso_transf_entrada?: number;
+  peso_abate?: number;
+  peso_venda?: number;
+  peso_venda_pe?: number;
+  peso_transf_saida?: number;
+  peso_consumo?: number;
+  peso_morte?: number;
+  peso_carcaca_abate?: number;
   pesoTotalFinal: number;
   pesoMedioFinal: number | null;
 }

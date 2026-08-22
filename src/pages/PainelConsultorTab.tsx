@@ -123,6 +123,29 @@ function viewToMetaCategoriaMes(rows: ZootCategoriaMensal[]): MetaCategoriaMes[]
       producaoBio: r.producao_biologica,
       pesoTotalFinal: r.peso_total_final,
       pesoMedioFinal: r.peso_medio_final,
+      /* As 19 por tipo, direto da linha do cache. O dado ja estava no
+         argumento — este map e que o jogava fora. */
+      peso_entradas_externas: r.peso_entradas_externas ?? 0,
+      peso_saidas_externas: r.peso_saidas_externas ?? 0,
+      cab_nascimento: r.cab_nascimento ?? 0,
+      cab_compra: r.cab_compra ?? 0,
+      cab_transf_entrada: r.cab_transf_entrada ?? 0,
+      cab_abate: r.cab_abate ?? 0,
+      cab_venda: r.cab_venda ?? 0,
+      cab_venda_pe: r.cab_venda_pe ?? 0,
+      cab_transf_saida: r.cab_transf_saida ?? 0,
+      cab_consumo: r.cab_consumo ?? 0,
+      cab_morte: r.cab_morte ?? 0,
+      peso_nascimento: r.peso_nascimento ?? 0,
+      peso_compra: r.peso_compra ?? 0,
+      peso_transf_entrada: r.peso_transf_entrada ?? 0,
+      peso_abate: r.peso_abate ?? 0,
+      peso_venda: r.peso_venda ?? 0,
+      peso_venda_pe: r.peso_venda_pe ?? 0,
+      peso_transf_saida: r.peso_transf_saida ?? 0,
+      peso_consumo: r.peso_consumo ?? 0,
+      peso_morte: r.peso_morte ?? 0,
+      peso_carcaca_abate: r.peso_carcaca_abate ?? 0,
     };
   });
 }
@@ -1380,8 +1403,40 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
   // Bloco "Financeiro Soberano (Auditoria)" — helper compartilhado
   /* Peso de entradas/saidas ja agregado na fonte deste builder; ela nao tem
      quebra por tipo, entao as nove setas ficam em travessao. */
-  const pesoEntKg = agg('pesoEntradas');
-  const pesoSaiKg = agg('pesoSaidas');
+  /* PR-PC100-UNIFICAR-FONTE-META-01 — as 19 series por tipo, do CACHE.
+     O caminho Meta ja lia zoot_mensal_cache; o adaptador e que descartava.
+     Nenhuma query nova: `agg` soma a coluna que ja chegava na linha.
+
+     ATENCAO — `pesoEntKg`/`pesoSaiKg` passam a sair de
+     peso_entradas_externas / peso_saidas_externas, SEM a reclassificacao que
+     o adaptador somava em `pesoEntradas`/`pesoSaidas`.
+     Reclassificacao fora de entradas/saidas no Meta: ela e mudanca de
+        categoria, nao movimento externo — e no Realizado ja vive em
+        evol_cat_*, separada. Conta-la como entrada inflava o Meta em ate 100%
+        (RRCC 2026) e fazia os dois cenarios medirem coisas diferentes.
+        Medido em 22/08.
+     Medido: NJ 1.561.090 -> 319.090 kg (-80%); RRCC 303.650 -> 0 (-100%). */
+  const movNascimento = agg('cab_nascimento');
+  const movCompra = agg('cab_compra');
+  const movTransfEntrada = agg('cab_transf_entrada');
+  const movAbate = agg('cab_abate');
+  const movVenda = agg('cab_venda');
+  const movVendaPe = agg('cab_venda_pe');
+  const movTransfSaida = agg('cab_transf_saida');
+  const movConsumo = agg('cab_consumo');
+  const movMorte = agg('cab_morte');
+  const pesoMovNascimento = agg('peso_nascimento');
+  const pesoMovCompra = agg('peso_compra');
+  const pesoMovTransfEntrada = agg('peso_transf_entrada');
+  const pesoMovAbate = agg('peso_abate');
+  const pesoMovVenda = agg('peso_venda');
+  const pesoMovVendaPe = agg('peso_venda_pe');
+  const pesoMovTransfSaida = agg('peso_transf_saida');
+  const pesoMovConsumo = agg('peso_consumo');
+  const pesoMovMorte = agg('peso_morte');
+  const pesoCarcacaAbate = agg('peso_carcaca_abate');
+  const pesoEntKg = agg('peso_entradas_externas');
+  const pesoSaiKg = agg('peso_saidas_externas');
   const blocoSoberano = buildBlocoSoberano(soberano, r);
 
   /* ── BLOCO REBANHO — 14 linhas, IGUAIS nas quatro abas e nos tres cenarios ──
@@ -1418,16 +1473,16 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
     rows: [
       linha(['mensal'], 'Rebanho inicial (cab)', 'cab', cabIni, 'reb_inicial', true),
       linha(['mensal','acumulado'], 'Entradas (cab)', 'cab', entradas, 'entradas_cab', false, 'familia'),
-      linha([], '→ Nascimentos', 'cab', NAN12, 'mov_cab_nascimento', false, 'destino'),
-      linha([], '→ Compras', 'cab', NAN12, 'mov_cab_compra', false, 'destino'),
-      linha([], '→ Transf. Interna', 'cab', NAN12, 'mov_cab_transf_ent', false, 'destino'),
+      linha(['mensal','acumulado'], '→ Nascimentos', 'cab', movNascimento, 'mov_cab_nascimento', false, 'destino'),
+      linha(['mensal','acumulado'], '→ Compras', 'cab', movCompra, 'mov_cab_compra', false, 'destino'),
+      linha(['mensal','acumulado'], '→ Transf. Interna', 'cab', movTransfEntrada, 'mov_cab_transf_ent', false, 'destino'),
       linha(['mensal','acumulado'], 'Saídas (cab)', 'cab', saidas, 'saidas_cab', false, 'familia'),
-      linha([], '→ Abates', 'cab', NAN12, 'mov_cab_abate', false, 'destino'),
-      linha([], '→ Vendas', 'cab', NAN12, 'mov_cab_venda', false, 'destino'),
-      linha([], '→ Venda em pé', 'cab', NAN12, 'mov_cab_venda_pe', false, 'destino'),
-      linha([], '→ Mortes', 'cab', NAN12, 'mov_cab_morte', false, 'destino'),
-      linha([], '→ Consumo', 'cab', NAN12, 'mov_cab_consumo', false, 'destino'),
-      linha([], '→ Transf. Interna', 'cab', NAN12, 'mov_cab_transf_sai', false, 'destino'),
+      linha(['mensal','acumulado'], '→ Abates', 'cab', movAbate, 'mov_cab_abate', false, 'destino'),
+      linha(['mensal','acumulado'], '→ Vendas', 'cab', movVenda, 'mov_cab_venda', false, 'destino'),
+      linha(['mensal','acumulado'], '→ Venda em pé', 'cab', movVendaPe, 'mov_cab_venda_pe', false, 'destino'),
+      linha(['mensal','acumulado'], '→ Mortes', 'cab', movMorte, 'mov_cab_morte', false, 'destino'),
+      linha(['mensal','acumulado'], '→ Consumo', 'cab', movConsumo, 'mov_cab_consumo', false, 'destino'),
+      linha(['mensal','acumulado'], '→ Transf. Interna', 'cab', movTransfSaida, 'mov_cab_transf_sai', false, 'destino'),
       linha(['mensal'], 'Rebanho final (cab)', 'cab', cabFin, 'reb_final', true),
       linha(['mensal','medio','media_periodo'], 'Rebanho médio (cab)', 'cab', cabMedia.map(Math.round), 'reb_medio', true),
       linha(['mensal','medio','media_periodo'], 'Peso médio do rebanho (kg)', 'med2', pesoMedFin, 'peso_med_reb', true),
@@ -1448,16 +1503,16 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
     rows: [
       linha(['mensal'], 'Peso inicial (kg)', 'padrao', pesoIni, 'peso_tot_ini_kg', true),
       linha(['mensal','acumulado'], 'Peso entradas (kg)', 'padrao', pesoEntKg, 'peso_tot_ent_kg', false, 'familia'),
-      linha([], '→ Nascimentos', 'padrao', NAN12, 'mov_kg_nascimento', false, 'destino'),
-      linha([], '→ Compras', 'padrao', NAN12, 'mov_kg_compra', false, 'destino'),
-      linha([], '→ Transf. Interna', 'padrao', NAN12, 'mov_kg_transf_ent', false, 'destino'),
+      linha(['mensal','acumulado'], '→ Nascimentos', 'padrao', pesoMovNascimento, 'mov_kg_nascimento', false, 'destino'),
+      linha(['mensal','acumulado'], '→ Compras', 'padrao', pesoMovCompra, 'mov_kg_compra', false, 'destino'),
+      linha(['mensal','acumulado'], '→ Transf. Interna', 'padrao', pesoMovTransfEntrada, 'mov_kg_transf_ent', false, 'destino'),
       linha(['mensal','acumulado'], 'Peso saídas (kg)', 'padrao', pesoSaiKg, 'peso_tot_sai_kg', false, 'familia'),
-      linha([], '→ Abates', 'padrao', NAN12, 'mov_kg_abate', false, 'destino'),
-      linha([], '→ Vendas', 'padrao', NAN12, 'mov_kg_venda', false, 'destino'),
-      linha([], '→ Venda em pé', 'padrao', NAN12, 'mov_kg_venda_pe', false, 'destino'),
-      linha([], '→ Mortes', 'padrao', NAN12, 'mov_kg_morte', false, 'destino'),
-      linha([], '→ Consumo', 'padrao', NAN12, 'mov_kg_consumo', false, 'destino'),
-      linha([], '→ Transf. Interna', 'padrao', NAN12, 'mov_kg_transf_sai', false, 'destino'),
+      linha(['mensal','acumulado'], '→ Abates', 'padrao', pesoMovAbate, 'mov_kg_abate', false, 'destino'),
+      linha(['mensal','acumulado'], '→ Vendas', 'padrao', pesoMovVenda, 'mov_kg_venda', false, 'destino'),
+      linha(['mensal','acumulado'], '→ Venda em pé', 'padrao', pesoMovVendaPe, 'mov_kg_venda_pe', false, 'destino'),
+      linha(['mensal','acumulado'], '→ Mortes', 'padrao', pesoMovMorte, 'mov_kg_morte', false, 'destino'),
+      linha(['mensal','acumulado'], '→ Consumo', 'padrao', pesoMovConsumo, 'mov_kg_consumo', false, 'destino'),
+      linha(['mensal','acumulado'], '→ Transf. Interna', 'padrao', pesoMovTransfSaida, 'mov_kg_transf_sai', false, 'destino'),
       linha(['mensal'], 'Peso final (kg)', 'padrao', pesoFin, 'peso_tot_fin_kg', true),
     ],
   };
@@ -1468,21 +1523,25 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
      errado (3,1% abaixo), e numero errado e pior que ausencia declarada.
      Entradas, inicial e final tem valor: as tres usam so o divisor 30. */
   const arr30 = (v: number[]): number[] => v.map(x => x / 30);
+  const arr15 = (v: number[]): number[] => v.map(x => x / 15);
   const blocoPesoArroba: Bloco = {
     nome: 'PESOS TOTAIS — @',
     rows: [
       linha(['mensal'], 'Peso inicial (@)', 'padrao', arr30(pesoIni), 'peso_tot_ini_arr', true),
       linha(['mensal','acumulado'], 'Peso entradas (@)', 'padrao', arr30(pesoEntKg), 'peso_tot_ent_arr', false, 'familia'),
-      linha([], '→ Nascimentos', 'padrao', NAN12, 'mov_arr_nascimento', false, 'destino'),
-      linha([], '→ Compras', 'padrao', NAN12, 'mov_arr_compra', false, 'destino'),
-      linha([], '→ Transf. Interna', 'padrao', NAN12, 'mov_arr_transf_ent', false, 'destino'),
-      linha([], 'Peso saídas (@)', 'padrao', NAN12, 'peso_tot_sai_arr', false, 'familia'),
-      linha([], '→ Abates', 'padrao', NAN12, 'mov_arr_abate', false, 'destino'),
-      linha([], '→ Vendas', 'padrao', NAN12, 'mov_arr_venda', false, 'destino'),
-      linha([], '→ Venda em pé', 'padrao', NAN12, 'mov_arr_venda_pe', false, 'destino'),
-      linha([], '→ Mortes', 'padrao', NAN12, 'mov_arr_morte', false, 'destino'),
-      linha([], '→ Consumo', 'padrao', NAN12, 'mov_arr_consumo', false, 'destino'),
-      linha([], '→ Transf. Interna', 'padrao', NAN12, 'mov_arr_transf_sai', false, 'destino'),
+      linha(['mensal','acumulado'], '→ Nascimentos', 'padrao', arr30(pesoMovNascimento), 'mov_arr_nascimento', false, 'destino'),
+      linha(['mensal','acumulado'], '→ Compras', 'padrao', arr30(pesoMovCompra), 'mov_arr_compra', false, 'destino'),
+      linha(['mensal','acumulado'], '→ Transf. Interna', 'padrao', arr30(pesoMovTransfEntrada), 'mov_arr_transf_ent', false, 'destino'),
+      /* Sai do travessao: peso_carcaca_abate existe no cenario META desde a
+         migration 20260914120000. Mesma composicao do builder do Global —
+         subtrai o abate VIVO do total e devolve a carcaca por 15. */
+      linha(['mensal','acumulado'], 'Peso saídas (@)', 'padrao', pesoSaiKg.map((v, i) => (v - pesoMovAbate[i]) / 30 + pesoCarcacaAbate[i] / 15), 'peso_tot_sai_arr', false, 'familia'),
+      linha(['mensal','acumulado'], '→ Abates', 'padrao', arr15(pesoCarcacaAbate), 'mov_arr_abate', false, 'destino'),
+      linha(['mensal','acumulado'], '→ Vendas', 'padrao', arr30(pesoMovVenda), 'mov_arr_venda', false, 'destino'),
+      linha(['mensal','acumulado'], '→ Venda em pé', 'padrao', arr30(pesoMovVendaPe), 'mov_arr_venda_pe', false, 'destino'),
+      linha(['mensal','acumulado'], '→ Mortes', 'padrao', arr30(pesoMovMorte), 'mov_arr_morte', false, 'destino'),
+      linha(['mensal','acumulado'], '→ Consumo', 'padrao', arr30(pesoMovConsumo), 'mov_arr_consumo', false, 'destino'),
+      linha(['mensal','acumulado'], '→ Transf. Interna', 'padrao', arr30(pesoMovTransfSaida), 'mov_arr_transf_sai', false, 'destino'),
       linha(['mensal'], 'Peso final (@)', 'padrao', arr30(pesoFin), 'peso_tot_fin_arr', true),
     ],
   };
