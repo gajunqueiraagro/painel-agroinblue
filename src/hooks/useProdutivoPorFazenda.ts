@@ -28,6 +28,10 @@
  * para @ produzidas e @ vendidas. Mesma assimetria dos tiles: arroba acumula,
  * o resto e media. Mes sem dado e AUSENCIA, nao zero: divisor por fazenda.
  *
+ * CABECAS no PERIODO e MEDIA DE MEDIAS MENSAIS, nao media dos finais — ver o
+ * comentario em `cabecas` abaixo. No MES e o saldo FINAL, que e o que o PC-100
+ * usa (`cabFinSerie13`, usePainelConsultorData:1602 e :1617).
+ *
  * CASTS: `zoot_mensal_cache` NAO esta em src/integrations/supabase/types.ts.
  * `vw_zoot_fazenda_mensal` esta, mas o client nao resolve view sem
  * relationship e o repo ja a le com `as any` (useZootMensal, ResumoTab).
@@ -72,7 +76,7 @@ export function useProdutivoPorFazenda(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (supabase.from('vw_zoot_fazenda_mensal' as any)
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          .select('fazenda_id, mes, cabecas_final, gmd_kg_cab_dia, ua_media, peso_inicio_kg') as any)
+          .select('fazenda_id, mes, cabecas_inicio, cabecas_final, gmd_kg_cab_dia, ua_media, peso_inicio_kg') as any)
           .eq('cliente_id', clienteId!)
           .eq('ano', ano)
           .in('mes', meses)
@@ -146,6 +150,7 @@ export function useProdutivoPorFazenda(
          GMD nao deve diluir a media dos meses que tem. */
       type LinhaVw = {
         fazenda_id: string | null;
+        cabecas_inicio: number | null;
         cabecas_final: number | null;
         gmd_kg_cab_dia: number | null;
         ua_media: number | null;
@@ -154,13 +159,20 @@ export function useProdutivoPorFazenda(
       type Acc = {
         cab: number; ua: number; arrIni: number;
         n: number; gmdSoma: number; gmdN: number;
+        /* Divisor PROPRIO para a media mensal, igual ao do GMD: o PC-100
+           descarta mes com media <= 0 (`filter(v => !isNaN(v) && v > 0)`,
+           usePainelConsultorData:1609-1611), e um mes zerado nao pode
+           diluir a media dos meses que tem rebanho. */
+        medSoma: number; medN: number;
       };
       const acc = new Map<string, Acc>();
       for (const row of (vwRes.data ?? []) as LinhaVw[]) {
         if (!row.fazenda_id) continue;
         let a = acc.get(row.fazenda_id);
-        if (!a) { a = { cab: 0, ua: 0, arrIni: 0, n: 0, gmdSoma: 0, gmdN: 0 }; acc.set(row.fazenda_id, a); }
+        if (!a) { a = { cab: 0, ua: 0, arrIni: 0, n: 0, gmdSoma: 0, gmdN: 0, medSoma: 0, medN: 0 }; acc.set(row.fazenda_id, a); }
         a.cab += Number(row.cabecas_final) || 0;
+        const mediaMes = ((Number(row.cabecas_inicio) || 0) + (Number(row.cabecas_final) || 0)) / 2;
+        if (mediaMes > 0) { a.medSoma += mediaMes; a.medN += 1; }
         a.ua += Number(row.ua_media) || 0;
         a.arrIni += (Number(row.peso_inicio_kg) || 0) / KG_POR_ARROBA;
         a.n += 1;
@@ -172,7 +184,18 @@ export function useProdutivoPorFazenda(
         if (a.n === 0) continue;
         out.push({
           fazenda_id,
-          cabecas: a.cab / a.n,
+          /* Media de medias mensais, nao media dos finais: e a regra do
+             cabMediaAcumulada do PC-100 (usePainelConsultorData:1607-1615),
+             que promedia `cabMediaMes = (cabIni + cabFin) / 2`. Medido em
+             22/08 na Santa Rita, Jan-Jul/2026 — media dos finais dava 3.817
+             contra 3.909 do indicador, e a linha divergia do Total com uma
+             fazenda so.
+             No MES o divisor e 1 e o valor tem de ser o saldo FINAL, que e o
+             que o PC-100 usa fora do periodo — dai o ramo, e nao uma formula
+             so. Medido: julho/2026 = 3.316 nos dois. */
+          cabecas: isPeriodo
+            ? (a.medN > 0 ? a.medSoma / a.medN : 0)
+            : a.cab / a.n,
           /* GMD null e AUSENCIA, nao zero: fazenda sem fechamento nao ganhou 0 kg/dia. */
           gmd: a.gmdN > 0 ? a.gmdSoma / a.gmdN : null,
           ua_media: a.ua / a.n,

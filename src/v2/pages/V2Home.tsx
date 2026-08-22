@@ -1749,7 +1749,10 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
                         e o que aproxima "Pecuaria" do numero. Valor e % em
                         <span> separados: juntos, a largura variavel do %
                         deslocava o numero. */}
-                    <div className="grid grid-cols-[auto_auto_auto] justify-start gap-x-3 gap-y-0.5 text-[11px]">
+                    {/* text-[10px]: os rotulos de familia competiam em peso com os
+                        numeros da propria legenda. O bloco inteiro desce um degrau —
+                        rotulo, valor e % juntos, para nao desalinhar a grade. */}
+                    <div className="grid grid-cols-[auto_auto_auto] justify-start gap-x-3 gap-y-0.5 text-[10px]">
                       {partesLegenda.map(f => (
                         <div key={f.label} className="contents">
                           <span className="flex items-center gap-1.5 text-muted-foreground">
@@ -2041,9 +2044,12 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
         {/* Bloco proprio, PRIMEIRO item do wrapper da esquerda — nao filho direto
             do grid: Area e Caixa sao os unicos diretos, para alinharem a altura.
             Saiu do card de Area porque responde outra pergunta: la e como a terra
-            se divide, aqui e o que o rebanho produziu nela. */}
+            se divide, aqui e o que o rebanho produziu nela.
+            O TITULO diz o MODO: as colunas mudam de significado entre um e outro
+            (rebanho no periodo e media de medias mensais; no mes, saldo final),
+            e "Pecuária" sozinho nao dizia qual leitura estava na tela. */}
         {isGlobal && linhasProdutivas.length > 0 && (
-          <SectionBlock title="Pecuária" subtitle="produção por fazenda">
+          <SectionBlock title={isPeriodo ? 'Pecuária no período' : 'Pecuária no mês'} subtitle="produção por fazenda">
             <div className="col-span-2">
             <table className="w-full text-[10px] tabular-nums">
               <thead>
@@ -2062,8 +2068,20 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
                 {linhasProdutivas.map(l => (
                   <tr key={l.fazenda_id} className="odd:bg-muted/30 even:bg-card">
                     <td className="text-left px-1.5 py-0.5 truncate max-w-[140px]">{nomeFazendaPorId[l.fazenda_id] ?? 'Fazenda'}</td>
-                    <td className="text-right px-1.5 py-0.5 font-medium text-foreground">{fmtHaInt(l.areaPec)}</td>
-                    <td className="text-right px-1.5 py-0.5 font-medium text-foreground">{fmtN(l.cabecas) ?? '—'}</td>
+                    {/* Sufixo no idioma da legenda de area (:1763): unidade em
+                        text-muted-foreground font-normal, ao lado do numero. O
+                        travessao NAO leva sufixo — "— ha" afirmaria unidade sobre
+                        dado ausente. Dai o ternario em vez de sufixo solto. */}
+                    <td className="text-right px-1.5 py-0.5 font-medium text-foreground">
+                      {fmtHaInt(l.areaPec) === '—'
+                        ? '—'
+                        : <>{fmtHaInt(l.areaPec)} <span className="text-muted-foreground font-normal">ha</span></>}
+                    </td>
+                    <td className="text-right px-1.5 py-0.5 font-medium text-foreground">
+                      {fmtN(l.cabecas) == null
+                        ? '—'
+                        : <>{fmtN(l.cabecas)} <span className="text-muted-foreground font-normal">cab</span></>}
+                    </td>
                     <td className="text-right px-1.5 py-0.5 text-muted-foreground w-[64px]">{fmtN(l.lotacao, 2) ?? '—'}</td>
                     <td className="text-right px-1.5 py-0.5 text-muted-foreground">{fmtN(l.gmd, 3) ?? '—'}</td>
                     <td className="text-right px-1.5 py-0.5 text-muted-foreground">{fmtN(l.arrobas, 1) ?? '—'}</td>
@@ -2078,8 +2096,19 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
                     (e area, nao indicador); Desfrute divide SOMAS. */}
                 <tr className="bg-primary text-primary-foreground font-medium">
                   <td className="text-left px-1.5 py-0.5">Total</td>
-                  <td className="text-right px-1.5 py-0.5">{fmtHaInt(totProdutivo.areaPec)}</td>
-                  <td className="text-right px-1.5 py-0.5">{fmtN(cabecasIndicador?.valor ?? null) ?? '—'}</td>
+                  {/* A10: sobre azul o sufixo NAO leva text-muted-foreground —
+                      herda primary-foreground como o resto da linha. Fica so o
+                      font-normal, que e o degrau de peso contra o numero. */}
+                  <td className="text-right px-1.5 py-0.5">
+                    {fmtHaInt(totProdutivo.areaPec) === '—'
+                      ? '—'
+                      : <>{fmtHaInt(totProdutivo.areaPec)} <span className="font-normal">ha</span></>}
+                  </td>
+                  <td className="text-right px-1.5 py-0.5">
+                    {fmtN(cabecasIndicador?.valor ?? null) == null
+                      ? '—'
+                      : <>{fmtN(cabecasIndicador?.valor ?? null)} <span className="font-normal">cab</span></>}
+                  </td>
                   <td className="text-right px-1.5 py-0.5 w-[64px]">{fmtN(uaHaIndicador?.valor ?? null, 2) ?? '—'}</td>
                   <td className="text-right px-1.5 py-0.5">{fmtN(gmdIndicador?.valor ?? null, 3) ?? '—'}</td>
                   <td className="text-right px-1.5 py-0.5">{fmtN(arrobasIndicador?.valor ?? null, 1) ?? '—'}</td>
