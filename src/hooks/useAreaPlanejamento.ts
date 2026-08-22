@@ -17,6 +17,9 @@ export interface AreaMetaMes {
   area_agricultura_ha: number | null;
   area_reserva_ha: number | null;
   area_benfeitorias_ha: number | null;
+  area_silvicultura_ha: number | null;
+  area_app_ha: number | null;
+  area_outras_ha: number | null;
   area_total_ha: number | null;
 }
 
@@ -38,10 +41,16 @@ export interface AreaMetaAnual {
 
 export interface UpsertLinhaArea {
   mes: number;
-  area_pecuaria_ha: number;
-  area_agricultura_ha: number;
-  area_reserva_ha?: number;               // omitido = 0
-  area_benfeitorias_ha?: number;          // omitido = 0
+  /* Os SETE campos de area, todos `number | null`. NULL = nao planejado;
+     0 = planejado como zero. A distincao e a razao da migration
+     20260912120000 e nao pode ser apagada no caminho ate o banco. */
+  area_pecuaria_ha: number | null;
+  area_agricultura_ha: number | null;
+  area_silvicultura_ha: number | null;
+  area_reserva_ha: number | null;
+  area_app_ha: number | null;
+  area_benfeitorias_ha: number | null;
+  area_outras_ha: number | null;
 }
 
 export interface UseAreaPlanejamentoResult {
@@ -62,6 +71,9 @@ function emptyMes(mes: number): AreaMetaMes {
     area_agricultura_ha: null,
     area_reserva_ha: null,
     area_benfeitorias_ha: null,
+    area_silvicultura_ha: null,
+    area_app_ha: null,
+    area_outras_ha: null,
     area_total_ha: null,
   };
 }
@@ -102,6 +114,9 @@ interface RowArea {
   area_agricultura_ha: number | null;
   area_reserva_ha: number | null;
   area_benfeitorias_ha: number | null;
+  area_silvicultura_ha: number | null;
+  area_app_ha: number | null;
+  area_outras_ha: number | null;
   area_total_ha: number | null;
 }
 
@@ -117,6 +132,9 @@ function agregarPorMes(rows: RowArea[]): AreaMetaAnual {
     slot.area_agricultura_ha = Number(row.area_agricultura_ha ?? 0);
     slot.area_reserva_ha = Number(row.area_reserva_ha ?? 0);
     slot.area_benfeitorias_ha = Number(row.area_benfeitorias_ha ?? 0);
+    slot.area_silvicultura_ha = Number(row.area_silvicultura_ha ?? 0);
+    slot.area_app_ha = Number(row.area_app_ha ?? 0);
+    slot.area_outras_ha = Number(row.area_outras_ha ?? 0);
     slot.area_total_ha = Number(row.area_total_ha ?? 0);
   }
   anual.mesesCadastrados = anual.porMes.filter(m => m.area_total_ha !== null).length;
@@ -176,7 +194,7 @@ export function useAreaPlanejamento(
           // tiver linha. A completude por fazenda será tratada na UI/PC-100 em etapa futura.
           const { data: rows, error: err } = await sbLoose
             .from('planejamento_area_meta')
-            .select('mes, area_pecuaria_ha, area_agricultura_ha, area_reserva_ha, area_benfeitorias_ha, area_total_ha')
+            .select('mes, area_pecuaria_ha, area_agricultura_ha, area_silvicultura_ha, area_reserva_ha, area_app_ha, area_benfeitorias_ha, area_outras_ha, area_total_ha')
             .eq('cliente_id', clienteId)
             .eq('ano', ano);
           if (err) throw err;
@@ -190,12 +208,18 @@ export function useAreaPlanejamento(
               area_agricultura_ha: 0,
               area_reserva_ha: 0,
               area_benfeitorias_ha: 0,
+              area_silvicultura_ha: 0,
+              area_app_ha: 0,
+              area_outras_ha: 0,
               area_total_ha: 0,
             };
             prev.area_pecuaria_ha       = (prev.area_pecuaria_ha       ?? 0) + Number(r.area_pecuaria_ha ?? 0);
             prev.area_agricultura_ha    = (prev.area_agricultura_ha    ?? 0) + Number(r.area_agricultura_ha ?? 0);
             prev.area_reserva_ha      = (prev.area_reserva_ha      ?? 0) + Number(r.area_reserva_ha ?? 0);
             prev.area_benfeitorias_ha = (prev.area_benfeitorias_ha ?? 0) + Number(r.area_benfeitorias_ha ?? 0);
+            prev.area_silvicultura_ha = (prev.area_silvicultura_ha ?? 0) + Number(r.area_silvicultura_ha ?? 0);
+            prev.area_app_ha          = (prev.area_app_ha          ?? 0) + Number(r.area_app_ha ?? 0);
+            prev.area_outras_ha       = (prev.area_outras_ha       ?? 0) + Number(r.area_outras_ha ?? 0);
             prev.area_total_ha          = (prev.area_total_ha          ?? 0) + Number(r.area_total_ha ?? 0);
             porMes.set(mes, prev);
           }
@@ -206,7 +230,7 @@ export function useAreaPlanejamento(
         } else {
           const { data: rows, error: err } = await sbLoose
             .from('planejamento_area_meta')
-            .select('mes, area_pecuaria_ha, area_agricultura_ha, area_reserva_ha, area_benfeitorias_ha, area_total_ha')
+            .select('mes, area_pecuaria_ha, area_agricultura_ha, area_silvicultura_ha, area_reserva_ha, area_app_ha, area_benfeitorias_ha, area_outras_ha, area_total_ha')
             .eq('cliente_id', clienteId)
             .eq('fazenda_id', fazendaId!)
             .eq('ano', ano);
@@ -244,15 +268,16 @@ export function useAreaPlanejamento(
         fazenda_id: fazendaId,
         ano,
         mes: l.mes,
-        area_pecuaria_ha: Number(l.area_pecuaria_ha) || 0,
-        area_agricultura_ha: Number(l.area_agricultura_ha) || 0,
-        /* area_reserva_ha e area_benfeitorias_ha NAO sao enviadas: a tela nao as
-           edita, e mandar `0` desfaria a migration que converteu esses zeros em
-           NULL. Coluna ausente do payload fica INTACTA no UPDATE do upsert e
-           assume o default (agora NULL) no INSERT — que e o estado correto de
-           "nao planejado". Elas voltam ao payload no PR-2, quando a tela passar
-           a edita-las de fato.
+        /* NULL = nao planejado; 0 = planejado como zero. `|| 0` apagaria a
+           distincao — e ela e a razao da migration 20260912120000.
            area_total_ha NAO enviado — e GENERATED no banco. */
+        area_pecuaria_ha: l.area_pecuaria_ha,
+        area_agricultura_ha: l.area_agricultura_ha,
+        area_silvicultura_ha: l.area_silvicultura_ha,
+        area_reserva_ha: l.area_reserva_ha,
+        area_app_ha: l.area_app_ha,
+        area_benfeitorias_ha: l.area_benfeitorias_ha,
+        area_outras_ha: l.area_outras_ha,
       }));
       const { error: err } = await sbLoose
         .from('planejamento_area_meta')

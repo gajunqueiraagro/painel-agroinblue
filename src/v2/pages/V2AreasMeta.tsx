@@ -28,15 +28,52 @@ interface Props {
 
 const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
+/* As SETE areas, na ordem da tabela. `campo` e a chave no estado local,
+   `col` e a coluna do banco — assim a tabela, o payload e o dirty se
+   derivam de UMA lista, e acrescentar area nao exige tocar em cinco lugares. */
+const AREAS = [
+  { campo: 'pec',    col: 'area_pecuaria_ha',     label: 'Pecuária' },
+  { campo: 'agric',  col: 'area_agricultura_ha',  label: 'Agricultura' },
+  { campo: 'silvi',  col: 'area_silvicultura_ha', label: 'Silvicultura' },
+  { campo: 'reserva', col: 'area_reserva_ha',     label: 'Reserva' },
+  { campo: 'app',    col: 'area_app_ha',          label: 'APP' },
+  { campo: 'benf',   col: 'area_benfeitorias_ha', label: 'Benfeitorias' },
+  { campo: 'outras', col: 'area_outras_ha',       label: 'Outras' },
+] as const;
+
+type CampoArea = typeof AREAS[number]['campo'];
+
 interface LinhaLocal {
   mes: number;
-  pec: string;       // string para permitir input vazio
+  /* string para permitir input vazio — vazio e "nao planejado", nao zero */
+  pec: string;
   agric: string;
+  silvi: string;
+  reserva: string;
+  app: string;
+  benf: string;
+  outras: string;
 }
 
-function parseNumOrZero(v: string): number {
-  const n = Number(String(v).replace(',', '.'));
-  return Number.isFinite(n) && n >= 0 ? n : 0;
+const linhaVazia = (mes: number): LinhaLocal =>
+  ({ mes, pec: '', agric: '', silvi: '', reserva: '', app: '', benf: '', outras: '' });
+
+/* Parser e formatador pt-BR — copia VERBATIM de V2Fazendas.tsx:59-69 e
+   PastosTab.tsx:55. Terceiro consumidor: a extracao para src/lib/ e a
+   decisao registrada do projeto e vira PR proprio; aqui manter identico,
+   nunca divergir.
+   `parseAreaBR` devolve NULL para vazio E para invalido — que e o contrato
+   deste PR. O `parseNumOrZero` que estava aqui devolvia 0 nos dois casos, e
+   nem removia separador de milhar: "3.403,20" virava NaN e gravava ZERO. */
+function formatarAreaBR(v: number | null): string {
+  if (v === null || !Number.isFinite(v)) return '';
+  return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function parseAreaBR(texto: string): number | null {
+  const limpo = texto.replace(/\./g, '').replace(',', '.').trim();
+  if (!limpo) return null;
+  const n = Number(limpo);
+  return Number.isFinite(n) ? n : null;
 }
 
 function fmt(n: number | null | undefined): string {
@@ -78,7 +115,7 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
 
   // Estado local editável (12 linhas)
   const [linhas, setLinhas] = useState<LinhaLocal[]>(() =>
-    Array.from({ length: 12 }, (_, i) => ({ mes: i + 1, pec: '', agric: '' }))
+    Array.from({ length: 12 }, (_, i) => linhaVazia(i + 1))
   );
 
   // Sincronizar linhas locais com data quando carrega ou troca contexto.
@@ -89,14 +126,19 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
     if (key === lastSyncKeyRef.current && data == null) return;
     lastSyncKeyRef.current = key;
     if (!data) {
-      setLinhas(Array.from({ length: 12 }, (_, i) => ({ mes: i + 1, pec: '', agric: '' })));
+      setLinhas(Array.from({ length: 12 }, (_, i) => linhaVazia(i + 1)));
       return;
     }
-    setLinhas(data.porMes.map(m => ({
-      mes: m.mes,
-      pec:   m.area_pecuaria_ha   == null ? '' : String(m.area_pecuaria_ha),
-      agric: m.area_agricultura_ha == null ? '' : String(m.area_agricultura_ha),
-    })));
+    /* Texto do state ja em pt-BR: e o formato que parseAreaBR espera de volta.
+       String(3403.2) daria "3403.2", e o ponto seria lido como MILHAR. */
+    setLinhas(data.porMes.map(m => {
+      const l = linhaVazia(m.mes);
+      for (const a of AREAS) {
+        const v = m[a.col];
+        l[a.campo] = v == null ? '' : formatarAreaBR(Number(v));
+      }
+      return l;
+    }));
   }, [data, clienteId, fazendaId, anoInicialNum, isGlobal]);
 
   // Detectar dirty (apenas modo individual)
@@ -104,11 +146,7 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
     if (isGlobal || !data) return false;
     return data.porMes.some((m, idx) => {
       const ll = linhas[idx];
-      const pecDb = m.area_pecuaria_ha;
-      const agrDb = m.area_agricultura_ha;
-      const pecLocal = ll.pec === '' ? null : parseNumOrZero(ll.pec);
-      const agrLocal = ll.agric === '' ? null : parseNumOrZero(ll.agric);
-      return pecLocal !== pecDb || agrLocal !== agrDb;
+      return AREAS.some(a => parseAreaBR(ll[a.campo]) !== m[a.col]);
     });
   }, [linhas, data, isGlobal]);
 
@@ -117,14 +155,19 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
   // - Individual: pec + agric do estado local (ambiental e infra ficam zero na V1)
   const totalsLocal = useMemo(() => linhas.map((l, idx) => {
     if (isGlobal) return data?.porMes[idx]?.area_total_ha ?? null;
-    const pec = l.pec === '' ? null : parseNumOrZero(l.pec);
-    const agr = l.agric === '' ? null : parseNumOrZero(l.agric);
-    if (pec === null && agr === null) return null;
-    return (pec ?? 0) + (agr ?? 0);
+    const vals = AREAS.map(a => parseAreaBR(l[a.campo]));
+    /* Mes sem NENHUM campo preenchido devolve null — "—" na tela, nao zero. */
+    if (vals.every(v => v === null)) return null;
+    return vals.reduce<number>((s2, v) => s2 + (v ?? 0), 0);
   }), [linhas, data, isGlobal]);
 
-  const mediaPec = useMemo(() => media(linhas.map(l => l.pec === '' ? null : parseNumOrZero(l.pec))), [linhas]);
-  const mediaAgr = useMemo(() => media(linhas.map(l => l.agric === '' ? null : parseNumOrZero(l.agric))), [linhas]);
+  /* Media por AREA, na ordem de AREAS. No Global vem do proprio banco. */
+  const mediasPorArea = useMemo(
+    () => AREAS.map(a => (isGlobal
+      ? media((data?.porMes ?? []).map(m => m[a.col]))
+      : media(linhas.map(l => parseAreaBR(l[a.campo]))))),
+    [linhas, data, isGlobal],
+  );
   // Média Total:
   // - Global: usa data.mediaTotal (já calculada pelo hook)
   // - Individual: média de totalsLocal (que é pec+agric)
@@ -133,7 +176,7 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
     return media(totalsLocal);
   }, [isGlobal, data, totalsLocal]);
 
-  function onChangeCelula(idx: number, campo: 'pec' | 'agric', valor: string) {
+  function onChangeCelula(idx: number, campo: CampoArea, valor: string) {
     setLinhas(prev => prev.map((l, i) => i === idx ? { ...l, [campo]: valor } : l));
   }
 
@@ -146,16 +189,14 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
     // Construir payload — só os meses preenchidos com pec OU agric
     const payload: UpsertLinhaArea[] = [];
     for (const l of linhas) {
-      const pec = l.pec === '' ? null : parseNumOrZero(l.pec);
-      const agr = l.agric === '' ? null : parseNumOrZero(l.agric);
-      // Mês sem nada → não envia (preserva ausência no banco)
-      if (pec === null && agr === null) continue;
-      payload.push({
-        mes: l.mes,
-        area_pecuaria_ha: pec ?? 0,
-        area_agricultura_ha: agr ?? 0,
-        // ambiental e infra V1 = 0 (default no hook)
-      });
+      const vals = AREAS.map(a => parseAreaBR(l[a.campo]));
+      /* Mes sem NENHUM campo preenchido nao e enviado — preserva a ausencia
+         no banco. Campo vazio dentro de um mes que TEM algo vai como null,
+         nunca como 0: nao planejado e diferente de planejado como zero. */
+      if (vals.every(v => v === null)) continue;
+      const linha = { mes: l.mes } as UpsertLinhaArea;
+      AREAS.forEach((a, i) => { linha[a.col] = vals[i]; });
+      payload.push(linha);
     }
     try {
       await upsertAno(payload);
@@ -259,59 +300,41 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
                 </tr>
               </thead>
               <tbody>
-                {/* Pecuária */}
-                <tr className="border-b border-border/60 hover:bg-orange-50/40 dark:hover:bg-orange-950/10 transition-colors">
-                  <td className="px-2 py-1 font-medium sticky left-0 bg-background">Pecuária</td>
-                  {linhas.map((l, idx) => (
-                    <td key={l.mes} className="px-0.5 py-0.5 text-center">
-                      {isGlobal ? (
-                        <span className="text-[11px] italic text-meta">
-                          {fmt(data?.porMes[idx]?.area_pecuaria_ha ?? null)}
-                        </span>
-                      ) : (
-                        <Input
-                          type="number"
-                          inputMode="decimal"
-                          step="0.1"
-                          min="0"
-                          className="h-6 w-full text-right px-1 tabular-nums text-[11px] italic text-meta"
-                          value={l.pec}
-                          onChange={(e) => onChangeCelula(idx, 'pec', e.target.value)}
-                          disabled={saving}
-                          placeholder="—"
-                        />
-                      )}
-                    </td>
-                  ))}
-                  <td className="px-2 py-1 text-center font-medium bg-orange-50/60 dark:bg-orange-950/15 text-[11px] italic text-meta">{fmt(mediaPec)}</td>
-                </tr>
-
-                {/* Agricultura */}
-                <tr className="border-b border-border/60 hover:bg-orange-50/40 dark:hover:bg-orange-950/10 transition-colors">
-                  <td className="px-2 py-1 font-medium sticky left-0 bg-background">Agricultura</td>
-                  {linhas.map((l, idx) => (
-                    <td key={l.mes} className="px-0.5 py-0.5 text-center">
-                      {isGlobal ? (
-                        <span className="text-[11px] italic text-meta">
-                          {fmt(data?.porMes[idx]?.area_agricultura_ha ?? null)}
-                        </span>
-                      ) : (
-                        <Input
-                          type="number"
-                          inputMode="decimal"
-                          step="0.1"
-                          min="0"
-                          className="h-6 w-full text-right px-1 tabular-nums text-[11px] italic text-meta"
-                          value={l.agric}
-                          onChange={(e) => onChangeCelula(idx, 'agric', e.target.value)}
-                          disabled={saving}
-                          placeholder="—"
-                        />
-                      )}
-                    </td>
-                  ))}
-                  <td className="px-2 py-1 text-center font-medium bg-orange-50/60 dark:bg-orange-950/15 text-[11px] italic text-meta">{fmt(mediaAgr)}</td>
-                </tr>
+                {/* As SETE areas, geradas de AREAS — uma lista, uma anatomia. */}
+                {AREAS.map((a, ai) => (
+                  <tr key={a.campo} className="border-b border-border/60 hover:bg-orange-50/40 dark:hover:bg-orange-950/10 transition-colors">
+                    <td className="px-2 py-1 font-medium sticky left-0 bg-background">{a.label}</td>
+                    {linhas.map((l, idx) => {
+                      return (
+                        <td key={l.mes} className="px-0.5 py-0.5 text-center">
+                          {isGlobal ? (
+                            <span className="text-[11px] italic text-meta">
+                              {fmt(data?.porMes[idx]?.[a.col] ?? null)}
+                            </span>
+                          ) : (
+                            /* type="text" + inputMode: `type="number"` nao exibe
+                               separador de milhar nem virgula decimal (veta do A6).
+                               Foco mostra o valor CRU; blur reformata em pt-BR. */
+                            <Input
+                              type="text"
+                              inputMode="decimal"
+                              className="h-6 w-full text-right px-1 tabular-nums text-[11px] italic text-meta"
+                              value={l[a.campo]}
+                              onChange={(e) => onChangeCelula(idx, a.campo, e.target.value)}
+                              /* O state guarda o texto CRU enquanto se digita; o blur
+                                 reformata. Nao precisa de estado de foco: "3.403,20"
+                                 volta a ser parseavel se o operador reeditar. */
+                              onBlur={() => onChangeCelula(idx, a.campo, formatarAreaBR(parseAreaBR(l[a.campo])))}
+                              disabled={saving}
+                              placeholder="—"
+                            />
+                          )}
+                        </td>
+                      );
+                    })}
+                    <td className="px-2 py-1 text-center font-medium bg-orange-50/60 dark:bg-orange-950/15 text-[11px] italic text-meta">{fmt(mediasPorArea[ai])}</td>
+                  </tr>
+                ))}
 
                 {/* Total — sempre read-only, paleta META destaque */}
                 <tr className="bg-orange-100/50 dark:bg-orange-900/25 border-t-2 border-orange-200/70 dark:border-orange-900/50">
@@ -333,7 +356,7 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
       <p className="text-[11px] text-muted-foreground">
         {isGlobal
           ? 'Global: Total = soma de todas as áreas cadastradas no banco. Em modo Global, mês é considerado cadastrado se ao menos uma fazenda tiver linha.'
-          : 'Individual: Total = Pecuária + Agricultura. V1 edita apenas Pecuária e Agricultura. As demais áreas ficam em branco até a fase seguinte — não são gravadas como zero.'}
+          : 'Total = soma das sete áreas. Campo em branco significa não planejado, diferente de planejado como zero.'}
       </p>
     </div>
   );
