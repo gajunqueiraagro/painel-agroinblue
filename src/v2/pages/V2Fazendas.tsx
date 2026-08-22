@@ -330,9 +330,15 @@ export function V2Fazendas() {
     );
   };
 
+  /* 10px, nao 9, nos DEZ rotulos de "Dados da Fazenda": a cor ja e
+     --foreground (222 47% 11%, quase preto), tem definicao unica no projeto e
+     e a MESMA que os valores herdam — nao ha tom mais escuro para onde ir.
+     O que lia como cinza era o traco fino de 9px em uppercase com
+     tracking-wide. Tamanho ataca a causa; cor nao tinha alavanca.
+     Custo aceito: ~1px de altura por rotulo. */
   const textField = (label: string, key: keyof CadastroRow) => (
     <div className="space-y-0.5">
-      <Label className="text-[9px] font-semibold text-foreground uppercase tracking-wide">
+      <Label className="text-[10px] font-semibold text-foreground uppercase tracking-wide">
         {label}
       </Label>
       {editing ? (
@@ -520,7 +526,7 @@ export function V2Fazendas() {
               {/* NOME é SOMENTE LEITURA: quem grava é FazendasList.tsx. Um segundo
                   escritor recriaria o problema que esta frente desmontou. */}
               <div className="space-y-0.5">
-                <Label className="text-[9px] font-semibold text-foreground uppercase tracking-wide">
+                <Label className="text-[10px] font-semibold text-foreground uppercase tracking-wide">
                   Nome da Fazenda
                 </Label>
                 <p className="text-[11px] font-medium px-2 py-0.5 rounded bg-muted/50 min-h-[24px]">
@@ -528,7 +534,7 @@ export function V2Fazendas() {
                 </p>
               </div>
               <div className="space-y-0.5">
-                <Label className="text-[9px] font-semibold text-foreground uppercase tracking-wide">
+                <Label className="text-[10px] font-semibold text-foreground uppercase tracking-wide">
                   Código da Fazenda
                 </Label>
                 {editing ? (
@@ -559,7 +565,7 @@ export function V2Fazendas() {
 
               {/* Status Operacional — fonte: tabela fazendas */}
               <div className="space-y-0.5 py-1">
-                <label className="text-[9px] font-semibold text-foreground uppercase tracking-wide">
+                <label className="text-[10px] font-semibold text-foreground uppercase tracking-wide">
                   Status Operacional
                 </label>
                 {editing ? (
@@ -588,7 +594,7 @@ export function V2Fazendas() {
               </div>
 
             <div className="space-y-0.5 py-1">
-              <Label className="text-[9px] font-semibold text-foreground uppercase tracking-wide">
+              <Label className="text-[10px] font-semibold text-foreground uppercase tracking-wide">
                 Roteiro
               </Label>
               {editing ? (
@@ -609,7 +615,7 @@ export function V2Fazendas() {
                 ao lado dos pastos e do fechamento. Alterar o valor limpa a conferência:
                 número novo é número não conferido. */}
             <div className="space-y-0.5 py-1">
-              <Label className="text-[9px] font-semibold text-foreground uppercase tracking-wide">
+              <Label className="text-[10px] font-semibold text-foreground uppercase tracking-wide">
                 Área da Matrícula (ha)
               </Label>
               {editing ? (
