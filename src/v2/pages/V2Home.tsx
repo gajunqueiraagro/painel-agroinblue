@@ -547,6 +547,10 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
 
   const [modalIndicador, setModalIndicador] = useState<string | null>(null);
 
+  /* Fatia do donut sob o mouse. Guarda o LABEL, nao o indice: `fatias` muda de
+     tamanho conforme familias zeram, e indice apontaria para outra fatia. */
+  const [fatiaHover, setFatiaHover] = useState<string | null>(null);
+
   const [globalParcial, setGlobalParcial] = useState(false);
   const gapCheckedRef = useRef<string | null>(null);
 
@@ -1575,10 +1579,34 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
                   <svg viewBox="0 0 80 80" className="h-28 w-28 shrink-0 -rotate-90">
                     {fatias.map(f => (
                       <circle key={f.label} cx="40" cy="40" r={R} fill="none"
-                        strokeWidth="12" className={f.stroke}
+                        strokeWidth="12" className={`${f.stroke} cursor-default`}
                         strokeDasharray={`${f.dash} ${C - f.dash}`}
-                        strokeDashoffset={f.offset} />
+                        strokeDashoffset={f.offset}
+                        onMouseEnter={() => setFatiaHover(f.label)}
+                        onMouseLeave={() => setFatiaHover(null)} />
                     ))}
+                    {/* Miolo do donut. O <svg> tem -rotate-90: sem o <g> que
+                        desfaz, o texto sairia deitado. Sem hover o miolo fica
+                        VAZIO — nao mostrar total fixo. */}
+                    {fatiaHover && (() => {
+                      const f = fatias.find(x => x.label === fatiaHover);
+                      if (!f) return null;
+                      /* Rotulo curto: o miolo comporta ~12 caracteres por linha.
+                         "Reserva, APP, benf." nao cabe — so essa precisa abreviar. */
+                      const curto = f.label.startsWith('Reserva') ? 'Reserva' : f.label;
+                      return (
+                        <g transform="rotate(90 40 40)">
+                          <text x="40" y="38" textAnchor="middle"
+                                className="fill-foreground text-[7px] font-medium">
+                            {curto}
+                          </text>
+                          <text x="40" y="47" textAnchor="middle"
+                                className="fill-muted-foreground text-[8px] tabular-nums">
+                            {((f.valor / soma) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}%
+                          </text>
+                        </g>
+                      );
+                    })()}
                   </svg>
                   <div className="min-w-0 flex-1">
                     {/* Grid de 3 colunas com largura de conteudo: rotulo, valor e
@@ -1610,7 +1638,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
                       <div className="contents">
                         <span className="flex items-center gap-1.5 pt-1 font-medium text-foreground border-t border-border">
                           <span className="inline-block h-2 w-2 shrink-0" />
-                          Total
+                          Área Total
                         </span>
                         <span className="tabular-nums text-right pt-1 font-medium text-foreground border-t border-border">
                           {/* Sem sufixo quando o valor nao existe: fmtHaInt devolve "—" para
@@ -1635,7 +1663,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
                       <div className="contents">
                         <span className="flex items-center gap-1.5 font-medium text-foreground">
                           <span className="inline-block h-2 w-2 shrink-0" />
-                          Produtiva
+                          Área Produtiva
                         </span>
                         <span className="tabular-nums text-right font-medium text-foreground">
                           {areaProdutiva == null || areaProdutiva === 0
@@ -1668,7 +1696,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
             {isGlobal && areaPorFazendaMes.length > 0 && (
               <div className="pt-1 border-t border-border">
                 <p className="text-[10px] font-medium text-muted-foreground pb-1">
-                  Por fazenda
+                  Distribuição de áreas por fazenda
                 </p>
                 {/* col-span-2 pelo mesmo motivo do bloco acima: a tabela precisa da
                     largura inteira do miolo, que e uma grade de duas colunas. */}
@@ -1731,61 +1759,6 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
                     </tbody>
                   </table>
                 </div>
-              </div>
-            )}
-
-            {/* Segunda tabela do card: a MESMA quebra por fazenda, do lado
-                zootecnico. Estava no bloco Eficiencia; veio para ca porque
-                responde a mesma pergunta que a tabela acima — onde a operacao
-                esta — e as duas se conferem contra os tiles. */}
-            {isGlobal && linhasProdutivas.length > 0 && (
-              <div className="pt-1 border-t border-border">
-                <p className="text-[10px] font-medium text-muted-foreground pb-1">
-                  Pecuária
-                </p>
-                <table className="w-full text-[10px] tabular-nums">
-                  <thead className="bg-muted/50">
-                    <tr className="text-muted-foreground">
-                      <th className="text-left font-normal px-1.5 py-1">Fazenda</th>
-                      <th className="text-right px-1.5 py-1 font-medium text-foreground">Área pec. (ha)</th>
-                      <th className="text-right px-1.5 py-1 font-medium text-foreground">Rebanho (cab)</th>
-                      <th className="text-right font-normal px-1.5 py-1 w-[64px]">Lot. (UA/ha)</th>
-                      <th className="text-right font-normal px-1.5 py-1">GMD</th>
-                      <th className="text-right font-normal px-1.5 py-1">@ prod.</th>
-                      <th className="text-right font-normal px-1.5 py-1">Desfrute</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {linhasProdutivas.map(l => (
-                      <tr key={l.fazenda_id} className="odd:bg-muted/20">
-                        <td className="text-left px-1.5 py-0.5 truncate max-w-[140px]">{nomeFazendaPorId[l.fazenda_id] ?? 'Fazenda'}</td>
-                        <td className="text-right px-1.5 py-0.5 font-medium text-foreground">{fmtHaInt(l.areaPec)}</td>
-                        <td className="text-right px-1.5 py-0.5 font-medium text-foreground">{fmtN(l.cabecas) ?? '—'}</td>
-                        <td className="text-right px-1.5 py-0.5 text-muted-foreground w-[64px]">{fmtN(l.lotacao, 2) ?? '—'}</td>
-                        <td className="text-right px-1.5 py-0.5 text-muted-foreground">{fmtN(l.gmd, 3) ?? '—'}</td>
-                        <td className="text-right px-1.5 py-0.5 text-muted-foreground">{fmtN(l.arrobas, 1) ?? '—'}</td>
-                        {/* Denominador zero exibe "—", nunca divisao por zero. */}
-                        <td className="text-right px-1.5 py-0.5 text-muted-foreground">
-                          {l.arrIniciais > 0 ? `${fmtN((l.arrVendidas / l.arrIniciais) * 100, 1)}%` : '—'}
-                        </td>
-                      </tr>
-                    ))}
-                    {/* Total: os MESMOS objetos que alimentam os tiles do bloco
-                        Eficiencia — bate por construcao. Area soma as linhas
-                        (e area, nao indicador); Desfrute divide SOMAS. */}
-                    <tr className="bg-muted/50 font-medium text-foreground border-t border-border">
-                      <td className="text-left px-1.5 py-0.5">Total</td>
-                      <td className="text-right px-1.5 py-0.5">{fmtHaInt(totProdutivo.areaPec)}</td>
-                      <td className="text-right px-1.5 py-0.5">{fmtN(cabecasIndicador?.valor ?? null) ?? '—'}</td>
-                      <td className="text-right px-1.5 py-0.5 w-[64px]">{fmtN(uaHaIndicador?.valor ?? null, 2) ?? '—'}</td>
-                      <td className="text-right px-1.5 py-0.5">{fmtN(gmdIndicador?.valor ?? null, 3) ?? '—'}</td>
-                      <td className="text-right px-1.5 py-0.5">{fmtN(arrobasIndicador?.valor ?? null, 1) ?? '—'}</td>
-                      <td className="text-right px-1.5 py-0.5">
-                        {totProdutivo.desfrute != null ? `${fmtN(totProdutivo.desfrute, 1)}%` : '—'}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
               </div>
             )}
           </div>
@@ -1861,6 +1834,60 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
         </div>
 
         <div className="lg:col-span-3 space-y-4">
+        {/* Bloco proprio, PRIMEIRO item do wrapper da esquerda — nao filho direto
+            do grid: Area e Caixa sao os unicos diretos, para alinharem a altura.
+            Saiu do card de Area porque responde outra pergunta: la e como a terra
+            se divide, aqui e o que o rebanho produziu nela. */}
+        {isGlobal && linhasProdutivas.length > 0 && (
+          <SectionBlock title="Pecuária" subtitle="produção por fazenda">
+            <div className="col-span-2">
+            <table className="w-full text-[10px] tabular-nums">
+              <thead className="bg-muted/50">
+                <tr className="text-muted-foreground">
+                  <th className="text-left font-normal px-1.5 py-1">Fazenda</th>
+                  <th className="text-right px-1.5 py-1 font-medium text-foreground">Área pec. (ha)</th>
+                  <th className="text-right px-1.5 py-1 font-medium text-foreground">Rebanho (cab)</th>
+                  <th className="text-right font-normal px-1.5 py-1 w-[64px]">Lot. (UA/ha)</th>
+                  <th className="text-right font-normal px-1.5 py-1">GMD</th>
+                  <th className="text-right font-normal px-1.5 py-1">@ prod.</th>
+                  <th className="text-right font-normal px-1.5 py-1">Desfrute</th>
+                </tr>
+              </thead>
+              <tbody>
+                {linhasProdutivas.map(l => (
+                  <tr key={l.fazenda_id} className="odd:bg-muted/20">
+                    <td className="text-left px-1.5 py-0.5 truncate max-w-[140px]">{nomeFazendaPorId[l.fazenda_id] ?? 'Fazenda'}</td>
+                    <td className="text-right px-1.5 py-0.5 font-medium text-foreground">{fmtHaInt(l.areaPec)}</td>
+                    <td className="text-right px-1.5 py-0.5 font-medium text-foreground">{fmtN(l.cabecas) ?? '—'}</td>
+                    <td className="text-right px-1.5 py-0.5 text-muted-foreground w-[64px]">{fmtN(l.lotacao, 2) ?? '—'}</td>
+                    <td className="text-right px-1.5 py-0.5 text-muted-foreground">{fmtN(l.gmd, 3) ?? '—'}</td>
+                    <td className="text-right px-1.5 py-0.5 text-muted-foreground">{fmtN(l.arrobas, 1) ?? '—'}</td>
+                    {/* Denominador zero exibe "—", nunca divisao por zero. */}
+                    <td className="text-right px-1.5 py-0.5 text-muted-foreground">
+                      {l.arrIniciais > 0 ? `${fmtN((l.arrVendidas / l.arrIniciais) * 100, 1)}%` : '—'}
+                    </td>
+                  </tr>
+                ))}
+                {/* Total: os MESMOS objetos que alimentam os tiles do bloco
+                    Eficiencia — bate por construcao. Area soma as linhas
+                    (e area, nao indicador); Desfrute divide SOMAS. */}
+                <tr className="bg-muted/50 font-medium text-foreground border-t border-border">
+                  <td className="text-left px-1.5 py-0.5">Total</td>
+                  <td className="text-right px-1.5 py-0.5">{fmtHaInt(totProdutivo.areaPec)}</td>
+                  <td className="text-right px-1.5 py-0.5">{fmtN(cabecasIndicador?.valor ?? null) ?? '—'}</td>
+                  <td className="text-right px-1.5 py-0.5 w-[64px]">{fmtN(uaHaIndicador?.valor ?? null, 2) ?? '—'}</td>
+                  <td className="text-right px-1.5 py-0.5">{fmtN(gmdIndicador?.valor ?? null, 3) ?? '—'}</td>
+                  <td className="text-right px-1.5 py-0.5">{fmtN(arrobasIndicador?.valor ?? null, 1) ?? '—'}</td>
+                  <td className="text-right px-1.5 py-0.5">
+                    {totProdutivo.desfrute != null ? `${fmtN(totProdutivo.desfrute, 1)}%` : '—'}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            </div>
+          </SectionBlock>
+        )}
+
         <SectionBlock title="Produção" subtitle="o que a fazenda entregou" naoFechado={mesSemFechamento} avisoNaoFechado={avisoMes}>
           <MetricTile label={cabecasIndicador?.label ?? 'CABEÇAS'} value={fmtN(cabecasIndicador?.valor ?? null)} unit="cab" loading={loadingPainel}
             deltaMes={cabecasIndicador?.deltaMes ?? null}
