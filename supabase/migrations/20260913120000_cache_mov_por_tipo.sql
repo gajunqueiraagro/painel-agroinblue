@@ -161,7 +161,7 @@ mov_real AS (
     sum(CASE WHEN l.tipo = 'venda_pe' THEN l.quantidade::numeric * COALESCE(l.peso_medio_kg, l.peso_carcaca_kg, 0) ELSE 0 END) AS peso_venda_pe,
     sum(CASE WHEN l.tipo = 'transferencia_saida' THEN l.quantidade::numeric * COALESCE(l.peso_medio_kg, l.peso_carcaca_kg, 0) ELSE 0 END) AS peso_transf_saida,
     sum(CASE WHEN l.tipo = 'consumo' THEN l.quantidade::numeric * COALESCE(l.peso_medio_kg, l.peso_carcaca_kg, 0) ELSE 0 END) AS peso_consumo,
-    sum(CASE WHEN l.tipo = 'morte' THEN l.quantidade::numeric * COALESCE(l.peso_medio_kg, l.peso_carcaca_kg, 0) ELSE 0 END) AS peso_morte,
+    sum(CASE WHEN l.tipo = 'morte' THEN l.quantidade::numeric * COALESCE(l.peso_medio_kg, l.peso_carcaca_kg, 0) ELSE 0 END) AS peso_morte
   FROM lancamentos l JOIN categorias cr ON cr.codigo = l.categoria
   WHERE l.fazenda_id = p_fazenda_id AND EXTRACT(year FROM l.data)::integer = p_ano
     AND l.cancelado = false AND l.tipo <> 'reclassificacao' AND l.cenario = 'realizado' AND l.status_operacional = 'realizado'
@@ -211,7 +211,7 @@ mov_meta AS (
     sum(CASE WHEN l.tipo = 'venda_pe' THEN l.quantidade::numeric * COALESCE(l.peso_medio_kg, l.peso_carcaca_kg, 0) ELSE 0 END) AS peso_venda_pe,
     sum(CASE WHEN l.tipo = 'transferencia_saida' THEN l.quantidade::numeric * COALESCE(l.peso_medio_kg, l.peso_carcaca_kg, 0) ELSE 0 END) AS peso_transf_saida,
     sum(CASE WHEN l.tipo = 'consumo' THEN l.quantidade::numeric * COALESCE(l.peso_medio_kg, l.peso_carcaca_kg, 0) ELSE 0 END) AS peso_consumo,
-    sum(CASE WHEN l.tipo = 'morte' THEN l.quantidade::numeric * COALESCE(l.peso_medio_kg, l.peso_carcaca_kg, 0) ELSE 0 END) AS peso_morte,
+    sum(CASE WHEN l.tipo = 'morte' THEN l.quantidade::numeric * COALESCE(l.peso_medio_kg, l.peso_carcaca_kg, 0) ELSE 0 END) AS peso_morte
   FROM lancamentos l JOIN categorias cr ON cr.codigo = l.categoria
   WHERE l.fazenda_id = p_fazenda_id AND EXTRACT(year FROM l.data)::integer = p_ano
     AND l.cancelado = false AND l.tipo <> 'reclassificacao' AND l.cenario = 'meta'
