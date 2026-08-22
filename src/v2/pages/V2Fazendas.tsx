@@ -289,17 +289,31 @@ export function V2Fazendas() {
   // responde "como esta fazenda se reparte", que é a leitura para a qual a tabela
   // existe. O valor em ha vira apoio. Destinos encolhem (text-[9px], py-0) porque
   // são 10 linhas no pior caso e é neles que há altura a recuperar.
-  const linhaArea = (rotulo: string, valor: number, base: number, opts?: { destino?: boolean }) => (
-    <div key={rotulo} className={`grid grid-cols-[1fr_84px_58px] gap-1 items-baseline border-b border-border/30 last:border-b-0 ${opts?.destino ? 'py-0' : 'py-1'}`}>
+  /* Hierarquia de TRES niveis, padrao A10 do PADROES-UI:
+       cabecalho e TOTAL -> bg-primary (azul, texto branco)
+       FAMILIA           -> bg-primary/10 (azul claro)
+       TIPO              -> zebra odd:bg-muted/30 even:bg-card
+     `idx` so existe para a zebra dos tipos: `odd:`/`even:` do CSS contam
+     filhos do mesmo pai, e cada familia e um <div> proprio — a alternancia
+     reiniciaria em cada bloco. */
+  const linhaArea = (
+    rotulo: string, valor: number, base: number,
+    opts?: { destino?: boolean; idx?: number },
+  ) => (
+    <div key={rotulo} className={`grid grid-cols-[1fr_84px_58px] gap-1 items-baseline ${
+      opts?.destino
+        ? `py-0 ${(opts.idx ?? 0) % 2 === 0 ? 'bg-muted/30' : 'bg-card'}`
+        : 'py-1 bg-primary/10'
+    }`}>
       <span className={opts?.destino
         ? 'text-[9px] text-muted-foreground pl-4'
-        : 'text-[11px] font-semibold text-foreground'}>
+        : 'text-[11px] font-medium text-foreground pl-1'}>
         {rotulo}
       </span>
       <span className={`tabular-nums text-right px-1 ${opts?.destino ? 'text-[9px] text-muted-foreground' : 'text-[11px] font-medium text-foreground'}`}>
         {formatNum(valor, 2)}
       </span>
-      <span className={`tabular-nums text-right px-1 ${opts?.destino ? 'text-[9px] text-muted-foreground/70' : 'text-[11px] font-semibold text-foreground'}`}>
+      <span className={`tabular-nums text-right px-1 ${opts?.destino ? 'text-[9px] text-muted-foreground/70' : 'text-[11px] font-medium text-foreground'}`}>
         {valor > 0 ? pct(valor, base) : '—'}
       </span>
     </div>
@@ -311,14 +325,14 @@ export function V2Fazendas() {
     return (
       <div key={grupo}>
         {linhaArea(rotulo, soma, somaPastosTotal)}
-        {destinosDaFamilia(grupo).map(d => linhaArea(d.label, d.somaHa, soma, { destino: true }))}
+        {destinosDaFamilia(grupo).map((d, i) => linhaArea(d.label, d.somaHa, soma, { destino: true, idx: i }))}
       </div>
     );
   };
 
   const textField = (label: string, key: keyof CadastroRow) => (
     <div className="space-y-0.5">
-      <Label className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide">
+      <Label className="text-[9px] font-semibold text-foreground uppercase tracking-wide">
         {label}
       </Label>
       {editing ? (
@@ -465,12 +479,15 @@ export function V2Fazendas() {
             </div>
 
             <div>
-              <div className="grid grid-cols-[1fr_84px_58px] gap-1 pb-0.5 border-b border-border">
-                <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
+              {/* A10: cabecalho em bg-primary. NENHUM texto sobre azul pode ficar
+                  em text-foreground ou text-muted-foreground — o <tr> inteiro leva
+                  primary-foreground e as celulas nao redefinem cor. */}
+              <div className="grid grid-cols-[1fr_84px_58px] gap-1 py-1 bg-primary text-primary-foreground">
+                <p className="text-[9px] font-semibold uppercase tracking-wide pl-1">
                   Composição da Área
                 </p>
-                <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground text-right px-1">ha</p>
-                <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground text-right px-1">%</p>
+                <p className="text-[9px] font-semibold uppercase tracking-wide text-right px-1">ha</p>
+                <p className="text-[9px] font-semibold uppercase tracking-wide text-right px-1">%</p>
               </div>
 
               {blocoFamilia('pecuaria', 'Pecuária')}
@@ -479,10 +496,10 @@ export function V2Fazendas() {
               {blocoFamilia('ambiental', 'Ambiental')}
               {blocoFamilia('infraestrutura', 'Infraestrutura')}
 
-              <div className="grid grid-cols-[1fr_84px_58px] gap-1 items-baseline pt-1 mt-1 border-t border-border">
-                <span className="text-xs font-semibold uppercase tracking-wide">Total</span>
+              <div className="grid grid-cols-[1fr_84px_58px] gap-1 items-baseline py-1 bg-primary text-primary-foreground">
+                <span className="text-xs font-semibold uppercase tracking-wide pl-1">Total</span>
                 <span className="text-xs font-semibold tabular-nums text-right px-1">{formatNum(somaPastosTotal, 2)}</span>
-                <span className="text-[10px] tabular-nums text-right px-1 text-muted-foreground">
+                <span className="text-[10px] tabular-nums text-right px-1">
                   {somaPastosTotal > 0 ? '100,0%' : '—'}
                 </span>
               </div>
@@ -503,7 +520,7 @@ export function V2Fazendas() {
               {/* NOME é SOMENTE LEITURA: quem grava é FazendasList.tsx. Um segundo
                   escritor recriaria o problema que esta frente desmontou. */}
               <div className="space-y-0.5">
-                <Label className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide">
+                <Label className="text-[9px] font-semibold text-foreground uppercase tracking-wide">
                   Nome da Fazenda
                 </Label>
                 <p className="text-[11px] font-medium px-2 py-0.5 rounded bg-muted/50 min-h-[24px]">
@@ -511,7 +528,7 @@ export function V2Fazendas() {
                 </p>
               </div>
               <div className="space-y-0.5">
-                <Label className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide">
+                <Label className="text-[9px] font-semibold text-foreground uppercase tracking-wide">
                   Código da Fazenda
                 </Label>
                 {editing ? (
@@ -542,7 +559,7 @@ export function V2Fazendas() {
 
               {/* Status Operacional — fonte: tabela fazendas */}
               <div className="space-y-0.5 py-1">
-                <label className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide">
+                <label className="text-[9px] font-semibold text-foreground uppercase tracking-wide">
                   Status Operacional
                 </label>
                 {editing ? (
@@ -571,7 +588,7 @@ export function V2Fazendas() {
               </div>
 
             <div className="space-y-0.5 py-1">
-              <Label className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide">
+              <Label className="text-[9px] font-semibold text-foreground uppercase tracking-wide">
                 Roteiro
               </Label>
               {editing ? (
@@ -592,7 +609,7 @@ export function V2Fazendas() {
                 ao lado dos pastos e do fechamento. Alterar o valor limpa a conferência:
                 número novo é número não conferido. */}
             <div className="space-y-0.5 py-1">
-              <Label className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide">
+              <Label className="text-[9px] font-semibold text-foreground uppercase tracking-wide">
                 Área da Matrícula (ha)
               </Label>
               {editing ? (
