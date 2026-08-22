@@ -13,6 +13,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { useStatusPilaresLote, type StatusFazenda } from '@/hooks/useStatusPilaresLote';
 import { useSaldosPorConta } from '@/hooks/useSaldosPorConta';
 import { useProdutivoPorFazenda } from '@/hooks/useProdutivoPorFazenda';
+import {
+  makeRealizadoSource, makeRealizadoSourceEntrada, agregaPorSubcentroGenerico,
+} from '@/lib/painelConsultor/agregadosFinanceiros';
+import {
+  isReposicaoBovinos, isDividendoOuRetirada, isCaptacaoSemEscopo,
+  isDeducaoReceitas, isTributos, isEntradaNaoClassificada,
+} from '@/lib/financeiro/classificacao';
 import type { StatusPilar } from '@/hooks/useStatusPilares';
 import { useStatusPilaresAno, type StatusCelulaAno } from '@/hooks/useStatusPilaresAno';
 import type { V2Section } from '@/v2/lib/navGrupos';
@@ -219,6 +226,25 @@ function LinhaArea({ label, valor, tipo = 'detalhe' }: {
       <span className="truncate">{label}</span>
       <span className="tabular-nums shrink-0">{fmtHa(valor)}</span>
     </div>
+  );
+}
+
+/* Irmao de LinhaCaixa para o modo Resumido: mesma anatomia, com afordancia de
+   clique. No modo Macro as linhas NAO sao clicaveis — elas ja sao o detalhe. */
+function LinhaCaixaClicavel({ label, valor, onClick }: {
+  label: string;
+  valor: number | null;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-baseline justify-between gap-3 rounded px-1 -mx-1 text-[9px] leading-tight text-muted-foreground pl-2 text-left transition-colors hover:bg-muted/30 cursor-pointer"
+    >
+      <span className="truncate">{label}</span>
+      <span className="tabular-nums shrink-0">{valor == null ? '—' : fmtR(valor)}</span>
+    </button>
   );
 }
 
@@ -551,6 +577,12 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
      tamanho conforme familias zeram, e indice apontaria para outra fatia. */
   const [fatiaHover, setFatiaHover] = useState<string | null>(null);
 
+  /* Modo do bloco Caixa. NAO persiste: abre sempre em 'resumido', inclusive
+     ao trocar de mes ou de viewMode. */
+  const [modoCaixa, setModoCaixa] = useState<'resumido' | 'macro'>('resumido');
+  /* Linha do Resumido cujo modal esta aberto. null = fechado. */
+  const [linhaCaixaModal, setLinhaCaixaModal] = useState<string | null>(null);
+
   const [globalParcial, setGlobalParcial] = useState(false);
   const gapCheckedRef = useRef<string | null>(null);
 
@@ -819,8 +851,111 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
   /* Totais = SOMA DAS LINHAS EXIBIDAS. NAO usar saidasTotaisIndicador: ele tem regra
      propria (deducao e ajuste de entrada e nao entra nele), e o total divergiria das
      partes logo abaixo — o pior defeito possivel num bloco que existe para fechar conta. */
-  const totalEntradas = somaLinhas(entradasVisiveis.map(l => l.valor));
-  const totalSaidas   = somaLinhas(saidasCaixa.map(l => l.valor));
+  /* ── PR-HOME-CAIXA-RESUMIDO-MODAL-01 ──
+     Agregados do modo Resumido somam os MESMOS indicadores que o modo Macro
+     exibe linha a linha. Fecha por construcao: nao existe caminho em que o
+     agrupado difira das partes, porque sao as mesmas parcelas.
+     NAO agregar no hook: custeioPecIndicador e um memo legado com regra
+     propria de rateio, e custeioAgriIndicador e a versao SEM juros —
+     somar os arrays do _finSoberano produziria numero parecido e diferente. */
+  const somaInd = (...xs: (number | null | undefined)[]) =>
+    xs.reduce<number>((acc, v) => acc + (v ?? 0), 0);
+
+  /* Cada parcela vira item de modal: rotulo + o MESMO `?.valor` que entra na
+     soma. Total do modal e valor da linha sao o mesmo numero, sempre. */
+  const parcelasAtividade: Record<string, { label: string; valor: number | null }[]> = {
+    'Receitas': [
+      { label: 'Pecuária',     valor: receitaPecCaixaIndicador?.valor ?? null },
+      { label: 'Agricultura',  valor: receitaAgriIndicador?.valor ?? null },
+      { label: 'Silvicultura', valor: receitaSilvicolaIndicador?.valor ?? null },
+      { label: 'Outras receitas', valor: receitaOutrasIndicador?.valor ?? null },
+    ],
+    'Captação': [
+      { label: 'Pecuária',     valor: captacaoPecIndicador?.valor ?? null },
+      { label: 'Agricultura',  valor: captacaoAgriIndicador?.valor ?? null },
+      { label: 'Silvicultura', valor: captacaoSilviIndicador?.valor ?? null },
+    ],
+    'Custeio': [
+      { label: 'Pecuária',     valor: custeioPecIndicador?.valor ?? null },
+      { label: 'Agricultura',  valor: custeioAgriIndicador?.valor ?? null },
+      { label: 'Silvicultura', valor: custeioSilviIndicador?.valor ?? null },
+    ],
+    'Investimento': [
+      { label: 'Pecuária',     valor: investPecIndicador?.valor ?? null },
+      { label: 'Agricultura',  valor: investAgriIndicador?.valor ?? null },
+      { label: 'Silvicultura', valor: investSilviIndicador?.valor ?? null },
+    ],
+    'Amortização': [
+      { label: 'Pecuária',     valor: amortizacaoPecIndicador?.valor ?? null },
+      { label: 'Agricultura',  valor: amortizacaoAgriIndicador?.valor ?? null },
+      { label: 'Silvicultura', valor: amortizacaoSilviIndicador?.valor ?? null },
+    ],
+  };
+
+  const recResumo   = somaInd(...parcelasAtividade['Receitas'].map(x => x.valor));
+  const captResumo  = somaInd(...parcelasAtividade['Captação'].map(x => x.valor));
+  const custResumo  = somaInd(...parcelasAtividade['Custeio'].map(x => x.valor));
+  const invResumo   = somaInd(...parcelasAtividade['Investimento'].map(x => x.valor));
+  const amortResumo = somaInd(...parcelasAtividade['Amortização'].map(x => x.valor));
+  const dedTribResumo = somaInd(deducoesTributosIndicador?.valor, tributosIndicador?.valor);
+
+  const entradasResumo = [
+    { label: 'Receitas',          valor: recResumo },
+    { label: 'Captação',          valor: captResumo },
+    { label: 'Aportes e outras',  valor: captacaoSemEscopoIndicador?.valor ?? null },
+    { label: 'Não classificado',  valor: entradasNaoClassificadasIndicador?.valor ?? null },
+  ].filter(l => temValor(l.valor));
+
+  const saidasResumo = [
+    { label: 'Custeio',              valor: custResumo },
+    { label: 'Investimento',         valor: invResumo },
+    { label: 'Reposição de bovinos', valor: investBovinosIndicador?.valor ?? null },
+    { label: 'Amortização',          valor: amortResumo },
+    { label: 'Dividendos',           valor: dividendosIndicador?.valor ?? null },
+    { label: 'Deduções e tributos',  valor: dedTribResumo },
+  ].filter(l => temValor(l.valor));
+
+  /* Quebra por SUBCENTRO das linhas que nao tem atividade. Usa os MESMOS
+     adapters e predicates dos agregadores oficiais sobre `lancFinShared`, que
+     ja esta carregado — nenhuma consulta nova. `agregaPorSubcentroGenerico`
+     devolve meses[12]; o recorte segue o viewMode, como o resto do bloco. */
+  const parcelasSubcentro = useMemo<Record<string, { label: string; valor: number | null }[]>>(() => {
+    if (!lancFinShared.length) return {};
+    const srcSaida   = makeRealizadoSource(lancFinShared, anoNum);
+    const srcEntrada = makeRealizadoSourceEntrada(lancFinShared, anoNum);
+    const recorte = (meses: number[]) =>
+      isPeriodo ? meses.slice(0, mesNum).reduce((a, b) => a + b, 0) : (meses[mesNum - 1] ?? 0);
+    const lista = (rec: Record<string, { meses: number[] }>) =>
+      Object.entries(rec)
+        .map(([label, v]) => ({ label, valor: recorte(v.meses) }))
+        .filter(x => x.valor !== 0)
+        .sort((a, b) => Math.abs(b.valor) - Math.abs(a.valor));
+    /* Deducoes e tributos e a soma de DOIS predicates: concatenar as duas
+       quebras, cada uma com o seu, em vez de inventar um predicate novo. */
+    const dedTrib = [
+      ...lista(agregaPorSubcentroGenerico(srcSaida, isDeducaoReceitas, 'modalDeducoes')),
+      ...lista(agregaPorSubcentroGenerico(srcSaida, isTributos, 'modalTributos')),
+    ].sort((a, b) => Math.abs(b.valor) - Math.abs(a.valor));
+    return {
+      'Reposição de bovinos': lista(agregaPorSubcentroGenerico(srcSaida, isReposicaoBovinos, 'modalReposicao')),
+      'Dividendos':           lista(agregaPorSubcentroGenerico(srcSaida, isDividendoOuRetirada, 'modalDividendos')),
+      'Aportes e outras':     lista(agregaPorSubcentroGenerico(srcEntrada, isCaptacaoSemEscopo, 'modalAportes')),
+      'Deduções e tributos':  dedTrib,
+      'Não classificado':     lista(agregaPorSubcentroGenerico(srcEntrada, isEntradaNaoClassificada, 'modalNaoClassif')),
+    };
+  }, [lancFinShared, anoNum, mesNum, isPeriodo]);
+
+  /* Quebra de qualquer linha do Resumido: por atividade quando ha, por
+     subcentro no resto. Itens zerados nao entram. */
+  const quebraDaLinha = (label: string) =>
+    (parcelasAtividade[label] ?? parcelasSubcentro[label] ?? [])
+      .filter(x => temValor(x.valor))
+      .sort((a, b) => Math.abs(b.valor ?? 0) - Math.abs(a.valor ?? 0));
+
+  const resumido = modoCaixa === 'resumido';
+
+  const totalEntradas = somaLinhas((resumido ? entradasResumo : entradasVisiveis).map(l => l.valor));
+  const totalSaidas   = somaLinhas((resumido ? saidasResumo : saidasCaixa).map(l => l.valor));
 
   /* MOSTRAR, NAO FORCAR. Se a conta nao fecha, a diferenca aparece — maquiar seria
      inventar. Tolerancia de R$ 1,00 para nao exibir centavo de arredondamento. */
@@ -1817,14 +1952,38 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
              SO aqui: o respiro vem do SectionBlock, que e usado por todos os blocos
              e nao pode ser alterado por causa de um. */}
           <div className="col-span-2 -mt-1 space-y-0.5">
+            {/* Alternancia Resumido/Macro. Estado NAO persiste — trocar de mes ou de
+                viewMode remonta o card em 'resumido'. */}
+            <div className="flex justify-end gap-1 pb-1">
+              {(['resumido', 'macro'] as const).map(m => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setModoCaixa(m)}
+                  className={`rounded px-1.5 py-0.5 text-[9px] capitalize transition-colors ${
+                    modoCaixa === m
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:bg-muted/50'
+                  }`}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+
             <LinhaCaixa label={rotuloSaldoInicial} valor={saldoInicial} tipo="total" />
 
             <div className="pt-1 space-y-0.5">
               <LinhaCaixa label="Entradas" valor={totalEntradas} tipo="total"
                 corValor="text-emerald-600" />
-              {entradasVisiveis.map(l => (
-                <LinhaCaixa key={l.label} label={l.label} valor={l.valor} />
-              ))}
+              {resumido
+                ? entradasResumo.map(l => (
+                    <LinhaCaixaClicavel key={l.label} label={l.label} valor={l.valor}
+                      onClick={() => setLinhaCaixaModal(l.label)} />
+                  ))
+                : entradasVisiveis.map(l => (
+                    <LinhaCaixa key={l.label} label={l.label} valor={l.valor} />
+                  ))}
               {(() => {
                 const somaCaptacao =
                   (captacaoPecIndicador?.valor ?? 0) +
@@ -1846,14 +2005,19 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
             <div className="pt-1 space-y-0.5">
               <LinhaCaixa label="Saídas" valor={totalSaidas} tipo="total"
                 corValor="text-red-500" />
-              {saidasGruposVisiveis.map((g, i) => (
-                <div key={g.familia} className="space-y-0.5">
-                  {i > 0 && <div className="h-px bg-border/50 my-1" />}
-                  {g.linhas.map(l => (
-                    <LinhaCaixa key={l.label} label={l.label} valor={l.valor} />
+              {resumido
+                ? saidasResumo.map(l => (
+                    <LinhaCaixaClicavel key={l.label} label={l.label} valor={l.valor}
+                      onClick={() => setLinhaCaixaModal(l.label)} />
+                  ))
+                : saidasGruposVisiveis.map((g, i) => (
+                    <div key={g.familia} className="space-y-0.5">
+                      {i > 0 && <div className="h-px bg-border/50 my-1" />}
+                      {g.linhas.map(l => (
+                        <LinhaCaixa key={l.label} label={l.label} valor={l.valor} />
+                      ))}
+                    </div>
                   ))}
-                </div>
-              ))}
             </div>
 
             <div className="pt-1 border-t border-border/40">
@@ -2147,6 +2311,39 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
 
       </div>
       </div>
+
+      {/* Modal da linha do Resumido. A quebra sai das MESMAS parcelas que compoem
+          a linha — total do modal e valor da linha sao o mesmo numero, por
+          construcao. Nenhuma consulta: por atividade vem dos indicadores, por
+          subcentro vem de lancFinShared, ja carregado. */}
+      {linhaCaixaModal && (() => {
+        const itens = quebraDaLinha(linhaCaixaModal);
+        const total = somaInd(...itens.map(i => i.valor));
+        return (
+          <Dialog open onOpenChange={(v) => { if (!v) setLinhaCaixaModal(null); }}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle className="flex items-baseline justify-between gap-4 text-sm">
+                  <span>{linhaCaixaModal}</span>
+                  <span className="tabular-nums text-base">{fmtR(total)}</span>
+                </DialogTitle>
+              </DialogHeader>
+              {itens.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Sem composição no período.</p>
+              ) : (
+                <div className="space-y-1">
+                  {itens.map(i => (
+                    <div key={i.label} className="flex items-baseline justify-between gap-3 text-xs">
+                      <span className="truncate text-muted-foreground">{i.label}</span>
+                      <span className="tabular-nums shrink-0 text-foreground">{fmtR(i.valor)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
 
       {modalIndicador === 'cabecas' && (
         <IndicadorHistoricoModal
