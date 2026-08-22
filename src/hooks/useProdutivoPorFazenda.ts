@@ -109,7 +109,13 @@ export function useProdutivoPorFazenda(
           .eq('cenario', 'realizado'),
         supabase
           .from('lancamentos')
-          .select('fazenda_origem, tipo, quantidade, peso_medio_kg, peso_carcaca_kg')
+          /* Chave e fazenda_id, nao fazenda_origem: os 1.224 lancamentos de
+             desfrute tem fazenda_id em 100% dos casos, contra menos de um terco
+             com fazenda_origem — que e text livre com nomes, UUIDs e lixo
+             (medido 22/08). Nao ha normalizacao a fazer; havia coluna errada em
+             uso, e o efeito era `arrVendidas` zerado em toda fazenda, porque o
+             mapa era montado por NOME e lido por UUID. */
+          .select('fazenda_id, tipo, quantidade, peso_medio_kg, peso_carcaca_kg')
           .eq('cliente_id', clienteId!)
           .eq('cancelado', false)
           .eq('status_operacional', 'realizado')
@@ -138,9 +144,9 @@ export function useProdutivoPorFazenda(
         );
       }
 
-      /* @ vendidas por fazenda de ORIGEM. Tambem acumulada no periodo. */
+      /* @ vendidas por FAZENDA. Tambem acumulada no periodo. */
       type LinhaLanc = {
-        fazenda_origem: string | null;
+        fazenda_id: string | null;
         tipo: string | null;
         quantidade: number | null;
         peso_medio_kg: number | null;
@@ -148,7 +154,7 @@ export function useProdutivoPorFazenda(
       };
       const vendPorFazenda = new Map<string, number>();
       for (const r of (lancRes.data ?? []) as LinhaLanc[]) {
-        if (!r.fazenda_origem) continue;
+        if (!r.fazenda_id) continue;
         const qtd = Number(r.quantidade) || 0;
         let arr = 0;
         if (r.tipo === 'abate') {
@@ -159,7 +165,7 @@ export function useProdutivoPorFazenda(
           if (pmk > 0) arr = (qtd * pmk) / KG_POR_ARROBA;
         }
         if (arr > 0) {
-          vendPorFazenda.set(r.fazenda_origem, (vendPorFazenda.get(r.fazenda_origem) ?? 0) + arr);
+          vendPorFazenda.set(r.fazenda_id, (vendPorFazenda.get(r.fazenda_id) ?? 0) + arr);
         }
       }
 
