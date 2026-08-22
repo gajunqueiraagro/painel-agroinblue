@@ -1702,11 +1702,13 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
                     largura inteira do miolo, que e uma grade de duas colunas. */}
                 <div className="col-span-2">
                   <table className="w-full text-[10px] tabular-nums">
-                    <thead className="bg-muted/50">
-                      {/* Unidade voltou para as CELULAS: o cabecalho fica limpo e o
-                          numero carrega a propria unidade. A linha "% da area" nao
-                          ganha sufixo — e percentual, nao hectare. */}
-                      <tr className="text-foreground">
+                    <thead>
+                      {/* PADRAO DE TABELA DO SISTEMA: cabecalho e Total em bg-primary
+                          com texto primary-foreground, mesmos TOKENS de
+                          .financeiro-table-head. Nao usar aquela classe: ela traz
+                          position:sticky e z-index, que aqui nao fazem sentido.
+                          Unidade nas CELULAS; a linha "% da area" nao ganha sufixo. */}
+                      <tr className="bg-primary text-primary-foreground">
                         <th className="text-left font-normal px-1.5 py-1">Fazenda</th>
                         <th className="text-right px-1.5 py-1 font-medium">Total</th>
                         <th className="text-right px-1.5 py-1 font-medium">Produtiva</th>
@@ -1719,7 +1721,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
                       {areaPorFazendaMes.map(f => {
                         const excede = f.area_produtiva_ha > f.area_total_ha;
                         return (
-                          <tr key={f.fazenda_id} className="odd:bg-muted/20">
+                          <tr key={f.fazenda_id} className="odd:bg-muted/30 even:bg-card">
                             <td className="text-left px-1.5 py-0.5 truncate max-w-[140px]">{nomeFazendaPorId[f.fazenda_id] ?? 'Fazenda'}</td>
                             <td className="text-right px-1.5 py-0.5 font-medium text-foreground">
                               {f.area_total_ha == null || f.area_total_ha === 0
@@ -1755,32 +1757,32 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
                       {/* A linha Total sai dos agregados do bloco acima, NAO da soma das
                           linhas: se as duas fontes divergirem, isso precisa APARECER — uma
                           soma das proprias linhas fecharia sempre e esconderia a divergencia. */}
-                      <tr className="bg-muted/70 font-medium text-foreground border-t border-border">
+                      <tr className="bg-primary text-primary-foreground font-medium">
                         <td className="text-left px-1.5 py-0.5">Total</td>
                         <td className="text-right px-1.5 py-0.5">
                           {areaTotal == null || areaTotal === 0
                             ? '—'
-                            : <>{fmtHaInt(areaTotal)} <span className="text-muted-foreground font-normal">ha</span></>}
+                            : <>{fmtHaInt(areaTotal)} <span className="text-primary-foreground/70 font-normal">ha</span></>}
                         </td>
                         <td className="text-right px-1.5 py-0.5">
                           {areaProdutiva == null || areaProdutiva === 0
                             ? '—'
-                            : <>{fmtHaInt(areaProdutiva)} <span className="text-muted-foreground font-normal">ha</span></>}
+                            : <>{fmtHaInt(areaProdutiva)} <span className="text-primary-foreground/70 font-normal">ha</span></>}
                         </td>
                         <td className="text-right px-1.5 py-0.5">
                           {areaPec == null || areaPec === 0
                             ? '—'
-                            : <>{fmtHaInt(areaPec)} <span className="text-muted-foreground font-normal">ha</span></>}
+                            : <>{fmtHaInt(areaPec)} <span className="text-primary-foreground/70 font-normal">ha</span></>}
                         </td>
                         <td className="text-right px-1.5 py-0.5">
                           {areaAgri == null || areaAgri === 0
                             ? '—'
-                            : <>{fmtHaInt(areaAgri)} <span className="text-muted-foreground font-normal">ha</span></>}
+                            : <>{fmtHaInt(areaAgri)} <span className="text-primary-foreground/70 font-normal">ha</span></>}
                         </td>
                         <td className="text-right px-1.5 py-0.5">
                           {areaSilvi == null || areaSilvi === 0
                             ? '—'
-                            : <>{fmtHaInt(areaSilvi)} <span className="text-muted-foreground font-normal">ha</span></>}
+                            : <>{fmtHaInt(areaSilvi)} <span className="text-primary-foreground/70 font-normal">ha</span></>}
                         </td>
                       </tr>
                       {/* Bases DIFERENTES por coluna: Produtiva sobre o total da matricula,
@@ -1880,11 +1882,12 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           <SectionBlock title="Pecuária" subtitle="produção por fazenda">
             <div className="col-span-2">
             <table className="w-full text-[10px] tabular-nums">
-              <thead className="bg-muted/50">
-                <tr className="text-muted-foreground">
+              <thead>
+                {/* Mesmo PADRAO da tabela de area: bg-primary + primary-foreground. */}
+                <tr className="bg-primary text-primary-foreground">
                   <th className="text-left font-normal px-1.5 py-1">Fazenda</th>
-                  <th className="text-right px-1.5 py-1 font-medium text-foreground">Área pec. (ha)</th>
-                  <th className="text-right px-1.5 py-1 font-medium text-foreground">Rebanho (cab)</th>
+                  <th className="text-right px-1.5 py-1 font-medium">Área pec. (ha)</th>
+                  <th className="text-right px-1.5 py-1 font-medium">Rebanho (cab)</th>
                   <th className="text-right font-normal px-1.5 py-1 w-[64px]">Lot. (UA/ha)</th>
                   <th className="text-right font-normal px-1.5 py-1">GMD</th>
                   <th className="text-right font-normal px-1.5 py-1">@ prod.</th>
@@ -1893,7 +1896,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
               </thead>
               <tbody>
                 {linhasProdutivas.map(l => (
-                  <tr key={l.fazenda_id} className="odd:bg-muted/20">
+                  <tr key={l.fazenda_id} className="odd:bg-muted/30 even:bg-card">
                     <td className="text-left px-1.5 py-0.5 truncate max-w-[140px]">{nomeFazendaPorId[l.fazenda_id] ?? 'Fazenda'}</td>
                     <td className="text-right px-1.5 py-0.5 font-medium text-foreground">{fmtHaInt(l.areaPec)}</td>
                     <td className="text-right px-1.5 py-0.5 font-medium text-foreground">{fmtN(l.cabecas) ?? '—'}</td>
@@ -1909,7 +1912,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
                 {/* Total: os MESMOS objetos que alimentam os tiles do bloco
                     Eficiencia — bate por construcao. Area soma as linhas
                     (e area, nao indicador); Desfrute divide SOMAS. */}
-                <tr className="bg-muted/50 font-medium text-foreground border-t border-border">
+                <tr className="bg-primary text-primary-foreground font-medium">
                   <td className="text-left px-1.5 py-0.5">Total</td>
                   <td className="text-right px-1.5 py-0.5">{fmtHaInt(totProdutivo.areaPec)}</td>
                   <td className="text-right px-1.5 py-0.5">{fmtN(cabecasIndicador?.valor ?? null) ?? '—'}</td>
