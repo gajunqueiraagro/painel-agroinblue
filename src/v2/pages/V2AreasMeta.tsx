@@ -458,9 +458,14 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
           <div className="lg:col-span-3 min-w-0">
             <p className="text-[11px] font-semibold text-foreground pb-1">Composição da área planejada</p>
             {(() => {
-              /* Altura reduzida de 120 para 96: o grafico ganhou titulo e o card
-                 nao deve crescer. TOPO/BASE mantem as margens proporcionais. */
-              const H = 96, TOPO = 5, BASE = H - 5, EIXO = 13;
+              /* BASE = H, sem margem inferior. Antes era H-5: as barras TOCAVAM a
+                 linha de grade do zero (medido: base do rect = BASE, sempre), mas a
+                 propria linha do zero ficava 5px acima da borda do SVG, e a leitura
+                 na tela era de barra flutuando. Nao era erro de calculo nem da regua
+                 HTML — o zero dos rotulos caia no MESMO pixel do zero das barras.
+                 Era margem. Zerando-a, o zero encosta nos rotulos dos meses.
+                 Altura de 96 para 112: a legenda saiu do card e liberou espaco. */
+              const H = 112, TOPO = 5, BASE = H, EIXO = 13;
               const alt = BASE - TOPO;
               const larg = (100 - EIXO) / 12;
               const yDe = (v: number) => BASE - (v / escalaMax) * alt;
@@ -468,7 +473,12 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
               return (
                 <>
                   <div className="relative">
-                    <svg viewBox="0 0 100 120" preserveAspectRatio="none" className="w-full h-[96px]">
+                    {/* viewBox DERIVADO de H, nunca literal. Estava fixo em 120 enquanto H
+                        caiu para 96 em 44e5f354: as barras liam o zero em 91/120 do
+                        viewBox e a regua HTML em 91/96 do container — 18px de
+                        distancia, ~1.232 ha de erro de LEITURA do eixo. As barras
+                        sempre estiveram certas entre si; quem mentia era a regua. */}
+                    <svg viewBox={`0 0 100 ${H}`} preserveAspectRatio="none" className="w-full h-[112px]">
                       {/* Grade horizontal: cinco marcas, do zero ao topo da escala. */}
                       {marcas.map(v => (
                         <line key={v} x1={EIXO} x2="100" y1={yDe(v)} y2={yDe(v)}
@@ -573,16 +583,6 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
                     ))}
                   </div>
 
-                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 pt-1.5 text-[9px] text-muted-foreground">
-                    {AREAS.map(a => (
-                      <span key={a.campo} className="flex items-center gap-1">
-                        <span className="inline-block h-2 w-2 rounded-full shrink-0"
-                          style={{ background: COR_AREA[a.campo] }} />
-                        {a.label}
-                      </span>
-                    ))}
-                  </div>
-
                   {/* Rotulo removido: a linha tracejada e autoexplicativa no contexto,
                       e o valor da matricula ja aparece na coluna Referencia, linha
                       Total. O texto custava altura sem acrescentar informacao. */}
@@ -601,11 +601,14 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
             </p>
             <table className="w-full text-[9px] tabular-nums">
               <thead>
-                <tr className="text-muted-foreground border-b border-border">
-                  <th className="text-left font-normal py-0.5">{isGlobal ? 'Fazenda' : 'Tipo de uso'}</th>
+                {/* A10: cabecalho e Total em bg-primary. NENHUM texto sobre azul
+                    pode ficar em text-meta ou text-destructive — as duas linhas
+                    azuis levam primary-foreground e as celulas nao redefinem cor. */}
+                <tr className="bg-primary text-primary-foreground">
+                  <th className="text-left font-normal py-0.5 px-1">{isGlobal ? 'Fazenda' : 'Tipo de uso'}</th>
                   <th className="text-right font-normal py-0.5 px-1">{isGlobal ? 'Matrícula' : 'Referência'}</th>
                   <th className="text-right font-normal py-0.5 px-1">Média Meta</th>
-                  <th className="text-right font-normal py-0.5 pl-1 text-[8px]">Dif.</th>
+                  <th className="text-right font-normal py-0.5 px-1 text-[8px]">Dif.</th>
                 </tr>
               </thead>
               <tbody>
@@ -617,10 +620,10 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
                   const zero = d == null || Math.abs(d) <= TOL;
                   return (
                     <tr key={l.chave} className="odd:bg-muted/20">
-                      <td className="text-left py-0.5 truncate max-w-[120px]">{l.rotulo}</td>
-                      <td className="text-right py-0.5 px-1 text-muted-foreground">{fmt(l.ref)}</td>
-                      <td className="text-right py-0.5 px-1 italic text-meta">{fmt(l.meta)}</td>
-                      <td className={`text-right py-0.5 pl-1 text-[8px] ${zero ? 'text-muted-foreground' : 'text-destructive'}`}>
+                      <td className="text-left py-0 px-1 truncate max-w-[120px]">{l.rotulo}</td>
+                      <td className="text-right py-0 px-1 text-muted-foreground">{fmt(l.ref)}</td>
+                      <td className="text-right py-0 px-1 italic text-meta">{fmt(l.meta)}</td>
+                      <td className={`text-right py-0 px-1 text-[8px] ${zero ? 'text-muted-foreground' : 'text-destructive'}`}>
                         {fmtDif(d)}
                       </td>
                     </tr>
@@ -630,15 +633,15 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
                   const ref = isGlobal ? totaisGlobal.matricula : matricula;
                   const meta = isGlobal ? totaisGlobal.meta : mediaTot;
                   const d = ref == null || meta == null ? null : meta - ref;
-                  const zero = d == null || Math.abs(d) <= TOL;
+                  /* Dif. do Total perde o vermelho sobre azul e fica branca — o
+                     SINAL continua dizendo a direcao. Sem ramo condicional, `zero`
+                     deixou de ter consumidor nesta linha e saiu junto. */
                   return (
-                    <tr className="border-t border-border font-medium text-foreground">
-                      <td className="text-left py-0.5">Total</td>
+                    <tr className="bg-primary text-primary-foreground font-medium">
+                      <td className="text-left py-0.5 px-1">Total</td>
                       <td className="text-right py-0.5 px-1">{fmt(ref)}</td>
-                      <td className="text-right py-0.5 px-1 italic text-meta">{fmt(meta)}</td>
-                      <td className={`text-right py-0.5 pl-1 text-[8px] ${zero ? 'text-muted-foreground' : 'text-destructive'}`}>
-                        {fmtDif(d)}
-                      </td>
+                      <td className="text-right py-0.5 px-1 italic">{fmt(meta)}</td>
+                      <td className="text-right py-0.5 px-1 text-[8px]">{fmtDif(d)}</td>
                     </tr>
                   );
                 })()}
@@ -648,6 +651,19 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
           </div>
         </CardContent>
       </Card>
+
+      {/* Legenda FORA do card: atravessa a largura toda e serve ao grafico e ao
+          painel de uma vez. Dentro da coluna do grafico ela roubava altura de
+          quem mais precisa — 12 barras. */}
+      <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[9px] text-muted-foreground">
+        {AREAS.map(a => (
+          <span key={a.campo} className="flex items-center gap-1">
+            <span className="inline-block h-2 w-2 rounded-full shrink-0"
+              style={{ background: COR_AREA[a.campo] }} />
+            {a.label}
+          </span>
+        ))}
+      </div>
 
       {/* Tabela — compacta, paleta META (laranja muito leve), sem scroll horizontal em notebook padrão */}
       <Card>
