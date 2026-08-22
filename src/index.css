@@ -29,6 +29,14 @@
     --cta: 43 87% 63%;
     --cta-foreground: 222 47% 11%;
     --cta-hover: 43 80% 55%;
+
+    /* Laranja escuro para VALOR DE META. Distinto de --cta e --warning
+       (ambos 43 87% 63%, amarelos de fundo de botao/faixa): este e para
+       TEXTO sobre fundo claro, e precisa de luminosidade baixa para
+       contraste. Nome semantico — e a cor de meta/planejamento, nao "o
+       laranja". */
+    --meta: 25 85% 45%;
+    --meta-foreground: 0 0% 100%;
     --border: 218 12% 89%;
     --input: 218 12% 89%;
     --ring: 213 52% 24%;

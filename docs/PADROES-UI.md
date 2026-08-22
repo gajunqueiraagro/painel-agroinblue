@@ -173,6 +173,19 @@ tema claro, subir a ímpar para `/40`; nunca pintar a par de branco.
 **Linha de nota** (ex.: "% da área") fica FORA do padrão: sem fundo,
 `text-muted-foreground`, um passo menor. Ela é rodapé da tabela, não dado.
 
+## A11 — Cor de valor de meta
+
+**Valor de meta/planejamento usa `text-meta`** — laranja escuro
+(`--meta: 25 85% 45%`), criado para TEXTO. Não usar `text-cta` nem
+`text-warning`: os dois são o mesmo amarelo (`43 87% 63%`), feitos para
+fundo de botão e faixa de aviso, e ficam ilegíveis como texto sobre branco.
+
+A regra vale para qualquer superfície que mostre meta — tabela, tile ou
+linha —, por isso é padrão próprio e não parágrafo do A10.
+
+`bg-cta` e `bg-warning` continuam sendo o certo para o que foram feitos:
+botão de ação e faixa de aviso. O que muda é só o uso como cor de texto.
+
 ---
 
 ## Pendências deste documento

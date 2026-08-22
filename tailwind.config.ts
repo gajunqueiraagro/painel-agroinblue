@@ -44,6 +44,10 @@ export default {
           foreground: "hsl(var(--cta-foreground))",
           hover: "hsl(var(--cta-hover))",
         },
+        meta: {
+          DEFAULT: "hsl(var(--meta))",
+          foreground: "hsl(var(--meta-foreground))",
+        },
         muted: {
           DEFAULT: "hsl(var(--muted))",
           foreground: "hsl(var(--muted-foreground))",

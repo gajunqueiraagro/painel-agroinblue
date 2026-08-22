@@ -265,7 +265,7 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
                   {linhas.map((l, idx) => (
                     <td key={l.mes} className="px-0.5 py-0.5 text-center">
                       {isGlobal ? (
-                        <span className="text-[11px] italic text-cta">
+                        <span className="text-[11px] italic text-meta">
                           {fmt(data?.porMes[idx]?.area_pecuaria_ha ?? null)}
                         </span>
                       ) : (
@@ -274,7 +274,7 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
                           inputMode="decimal"
                           step="0.1"
                           min="0"
-                          className="h-6 w-full text-right px-1 tabular-nums text-[11px] italic text-cta"
+                          className="h-6 w-full text-right px-1 tabular-nums text-[11px] italic text-meta"
                           value={l.pec}
                           onChange={(e) => onChangeCelula(idx, 'pec', e.target.value)}
                           disabled={saving}
@@ -283,7 +283,7 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
                       )}
                     </td>
                   ))}
-                  <td className="px-2 py-1 text-center font-medium bg-orange-50/60 dark:bg-orange-950/15 text-[11px] italic text-cta">{fmt(mediaPec)}</td>
+                  <td className="px-2 py-1 text-center font-medium bg-orange-50/60 dark:bg-orange-950/15 text-[11px] italic text-meta">{fmt(mediaPec)}</td>
                 </tr>
 
                 {/* Agricultura */}
@@ -292,7 +292,7 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
                   {linhas.map((l, idx) => (
                     <td key={l.mes} className="px-0.5 py-0.5 text-center">
                       {isGlobal ? (
-                        <span className="text-[11px] italic text-cta">
+                        <span className="text-[11px] italic text-meta">
                           {fmt(data?.porMes[idx]?.area_agricultura_ha ?? null)}
                         </span>
                       ) : (
@@ -301,7 +301,7 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
                           inputMode="decimal"
                           step="0.1"
                           min="0"
-                          className="h-6 w-full text-right px-1 tabular-nums text-[11px] italic text-cta"
+                          className="h-6 w-full text-right px-1 tabular-nums text-[11px] italic text-meta"
                           value={l.agric}
                           onChange={(e) => onChangeCelula(idx, 'agric', e.target.value)}
                           disabled={saving}
@@ -310,18 +310,18 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
                       )}
                     </td>
                   ))}
-                  <td className="px-2 py-1 text-center font-medium bg-orange-50/60 dark:bg-orange-950/15 text-[11px] italic text-cta">{fmt(mediaAgr)}</td>
+                  <td className="px-2 py-1 text-center font-medium bg-orange-50/60 dark:bg-orange-950/15 text-[11px] italic text-meta">{fmt(mediaAgr)}</td>
                 </tr>
 
                 {/* Total — sempre read-only, paleta META destaque */}
                 <tr className="bg-orange-100/50 dark:bg-orange-900/25 border-t-2 border-orange-200/70 dark:border-orange-900/50">
                   <td className="px-2 py-1.5 font-semibold sticky left-0 bg-orange-100/50 dark:bg-orange-900/25 text-orange-900 dark:text-orange-200">Total</td>
                   {linhas.map((_, idx) => (
-                    <td key={idx} className="px-1 py-1.5 text-center font-semibold text-[11px] italic text-cta">
+                    <td key={idx} className="px-1 py-1.5 text-center font-semibold text-[11px] italic text-meta">
                       {fmt(totalsLocal[idx])}
                     </td>
                   ))}
-                  <td className="px-2 py-1.5 text-center font-semibold bg-orange-200/40 dark:bg-orange-900/40 text-[11px] italic text-cta">{fmt(mediaTot)}</td>
+                  <td className="px-2 py-1.5 text-center font-semibold bg-orange-200/40 dark:bg-orange-900/40 text-[11px] italic text-meta">{fmt(mediaTot)}</td>
                 </tr>
               </tbody>
             </table>
