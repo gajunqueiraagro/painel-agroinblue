@@ -51,7 +51,7 @@ const EMPTY: CadastroRow = {
 const n = (v: string) => (v.trim() === '' ? 0 : Number(v));
 
 export function V2Fazendas() {
-  const { fazendaAtual, isGlobal, fazendas, setFazendaAtual } = useFazenda();
+  const { fazendaAtual, isGlobal, fazendas, setFazendaAtual, reloadFazendas } = useFazenda();
   const { clienteAtual } = useCliente();
   const { pastos } = usePastos();
 
@@ -121,11 +121,13 @@ export function V2Fazendas() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [codigoFazenda, setCodigoFazenda] = useState('');
+  const [nomeFazenda, setNomeFazenda] = useState('');
 
   const loadData = useCallback(async () => {
     if (isGlobal || !fazendaAtual?.id || fazendaAtual.id === '__global__' || !clienteAtual?.id) {
       setData(EMPTY);
       setCodigoFazenda('');
+      setNomeFazenda('');
       return;
     }
     setLoading(true);
@@ -172,6 +174,7 @@ export function V2Fazendas() {
       setEditing(true);
     }
     setCodigoFazenda((fazendaAtual as any).codigo_importacao ?? (fazendaAtual as any).codigo ?? '');
+    setNomeFazenda(fazendaAtual.nome ?? '');
     setLoading(false);
   }, [fazendaAtual, clienteAtual?.id, isGlobal]);
 
@@ -180,6 +183,16 @@ export function V2Fazendas() {
   const handleSave = async () => {
     if (!fazendaAtual?.id || !clienteAtual?.id) {
       toast.error('Cliente ou fazenda não selecionado.');
+      return;
+    }
+
+    /* Mesma forma da regra que ja existe em FazendasList:47-51 — trim, toast e
+       return antes de qualquer escrita. Restrita ao NOME de proposito: a regra
+       de la e "Nome e Codigo sao obrigatorios", e o codigo aqui e OPCIONAL
+       desde sempre (`codigo_importacao: codigoFazenda || null`, logo abaixo).
+       Exigi-lo agora mudaria o comportamento de um campo fora do escopo. */
+    if (!nomeFazenda.trim()) {
+      toast.error('Nome é obrigatório.');
       return;
     }
 
@@ -231,13 +244,18 @@ export function V2Fazendas() {
 
     const { error: fazendaError } = await supabase
       .from('fazendas')
-      .update({ codigo_importacao: codigoFazenda || null, status_operacional: data.status_operacional } as any)
+      .update({ nome: nomeFazenda.trim(), codigo_importacao: codigoFazenda || null, status_operacional: data.status_operacional } as any)
       .eq('id', fazendaAtual.id);
     if (fazendaError) {
       toast.error('Erro ao salvar código da fazenda: ' + fazendaError.message);
       setSaving(false);
       return;
     }
+
+    /* `fazendas` vive no contexto, nao em loadData — sem recarregar, o seletor
+       lateral e o proprio cabecalho desta tela seguiriam no nome antigo ate um
+       refresh. Mesmo gesto do handleUpdate da FazendasList:70. */
+    await reloadFazendas();
 
     toast.success('Área salva com sucesso!');
     setEditing(false);
@@ -702,15 +720,27 @@ export function V2Fazendas() {
 
             <div className="divide-y divide-border/40">
             <div className="grid grid-cols-2 gap-1.5 py-1">
-              {/* NOME é SOMENTE LEITURA: quem grava é FazendasList.tsx. Um segundo
-                  escritor recriaria o problema que esta frente desmontou. */}
+              {/* NOME editavel: esta tela e a escritora de `fazendas` no /v2 — ja
+                  grava codigo_importacao e status_operacional no mesmo update. A
+                  restricao anterior existia para impedir dois escritores enquanto a
+                  FazendasList vivia no /v2; ela sai em PR proprio, e ate la os dois
+                  gravam o mesmo campo pelo mesmo caminho, sem conflito de fonte. */}
               <div className="space-y-0.5">
                 <Label className="text-[10px] font-semibold text-foreground uppercase tracking-wide">
                   Nome da Fazenda
                 </Label>
-                <p className="text-[11px] font-medium px-2 py-0.5 rounded bg-muted/50 min-h-[24px]">
-                  {fazendaAtual?.nome || <span className="text-muted-foreground italic">—</span>}
-                </p>
+                {editing ? (
+                  <Input
+                    value={nomeFazenda}
+                    onChange={e => setNomeFazenda(e.target.value)}
+                    className="h-6 text-[11px]"
+                    placeholder="Ex: Faz. 3 Muchachas"
+                  />
+                ) : (
+                  <p className="text-[11px] font-medium px-2 py-0.5 rounded bg-muted/50 min-h-[24px]">
+                    {nomeFazenda || <span className="text-muted-foreground italic">—</span>}
+                  </p>
+                )}
               </div>
               <div className="space-y-0.5">
                 <Label className="text-[10px] font-semibold text-foreground uppercase tracking-wide">
