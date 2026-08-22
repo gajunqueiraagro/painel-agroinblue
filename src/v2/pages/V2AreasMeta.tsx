@@ -31,14 +31,16 @@ const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov'
 /* As SETE areas, na ordem da tabela. `campo` e a chave no estado local,
    `col` e a coluna do banco — assim a tabela, o payload e o dirty se
    derivam de UMA lista, e acrescentar area nao exige tocar em cinco lugares. */
+/* O grupo vive no DADO, nao em indice de posicao: inserir area nova no meio
+   nao pode quebrar a separacao visual. */
 const AREAS = [
-  { campo: 'pec',    col: 'area_pecuaria_ha',     label: 'Pecuária' },
-  { campo: 'agric',  col: 'area_agricultura_ha',  label: 'Agricultura' },
-  { campo: 'silvi',  col: 'area_silvicultura_ha', label: 'Silvicultura' },
-  { campo: 'reserva', col: 'area_reserva_ha',     label: 'Reserva' },
-  { campo: 'app',    col: 'area_app_ha',          label: 'APP' },
-  { campo: 'benf',   col: 'area_benfeitorias_ha', label: 'Benfeitorias' },
-  { campo: 'outras', col: 'area_outras_ha',       label: 'Outras' },
+  { campo: 'pec',     col: 'area_pecuaria_ha',     label: 'Pecuária',     grupo: 'produtiva' },
+  { campo: 'agric',   col: 'area_agricultura_ha',  label: 'Agricultura',  grupo: 'produtiva' },
+  { campo: 'silvi',   col: 'area_silvicultura_ha', label: 'Silvicultura', grupo: 'produtiva' },
+  { campo: 'reserva', col: 'area_reserva_ha',      label: 'Reserva',      grupo: 'patrimonial' },
+  { campo: 'app',     col: 'area_app_ha',          label: 'APP',          grupo: 'patrimonial' },
+  { campo: 'benf',    col: 'area_benfeitorias_ha', label: 'Benfeitorias', grupo: 'patrimonial' },
+  { campo: 'outras',  col: 'area_outras_ha',       label: 'Outras',       grupo: 'patrimonial' },
 ] as const;
 
 type CampoArea = typeof AREAS[number]['campo'];
@@ -301,14 +303,26 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
               </thead>
               <tbody>
                 {/* As SETE areas, geradas de AREAS — uma lista, uma anatomia. */}
-                {AREAS.map((a, ai) => (
-                  <tr key={a.campo} className="border-b border-border/60 hover:bg-orange-50/40 dark:hover:bg-orange-950/10 transition-colors">
-                    <td className="px-2 py-1 font-medium sticky left-0 bg-background">{a.label}</td>
+                {AREAS.map((a, ai) => {
+                  const patri = a.grupo === 'patrimonial';
+                  /* Divisoria acima da PRIMEIRA patrimonial, derivada do grupo —
+                     nao do indice, para sobreviver a insercao de area nova. */
+                  const primeiraPatri = patri && AREAS[ai - 1]?.grupo !== 'patrimonial';
+                  return (
+                  <tr key={a.campo} className={`hover:bg-orange-50/40 dark:hover:bg-orange-950/10 transition-colors${
+                    primeiraPatri ? ' border-t border-border' : ''
+                  } ${patri ? 'odd:bg-muted/60 even:bg-muted/40' : 'odd:bg-muted/30 even:bg-card'}`}>
+                    {/* A celula sticky precisa de fundo OPACO — senao o conteudo
+                        rolado aparece por baixo. Por isso ela nao herda a zebra;
+                        acompanha o GRUPO, que e a distincao que importa. */}
+                    <td className={`px-2 py-1 font-medium sticky left-0 ${
+                      patri ? 'bg-muted/50 text-muted-foreground' : 'bg-background'
+                    }`}>{a.label}</td>
                     {linhas.map((l, idx) => {
                       return (
                         <td key={l.mes} className="px-0.5 py-0.5 text-center">
                           {isGlobal ? (
-                            <span className="text-[11px] italic text-meta">
+                            <span className="text-[9px] italic text-meta">
                               {fmt(data?.porMes[idx]?.[a.col] ?? null)}
                             </span>
                           ) : (
@@ -318,7 +332,7 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
                             <Input
                               type="text"
                               inputMode="decimal"
-                              className="h-6 w-full text-right px-1 tabular-nums text-[11px] italic text-meta"
+                              className="h-6 w-full text-right px-0.5 tabular-nums text-[9px] italic text-meta"
                               value={l[a.campo]}
                               onChange={(e) => onChangeCelula(idx, a.campo, e.target.value)}
                               /* O state guarda o texto CRU enquanto se digita; o blur
@@ -332,19 +346,20 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
                         </td>
                       );
                     })}
-                    <td className="px-2 py-1 text-center font-medium bg-orange-50/60 dark:bg-orange-950/15 text-[11px] italic text-meta">{fmt(mediasPorArea[ai])}</td>
+                    <td className="px-1 py-1 text-center font-medium bg-orange-50/60 dark:bg-orange-950/15 text-[9px] italic text-meta">{fmt(mediasPorArea[ai])}</td>
                   </tr>
-                ))}
+                  );
+                })}
 
                 {/* Total — sempre read-only, paleta META destaque */}
                 <tr className="bg-orange-100/50 dark:bg-orange-900/25 border-t-2 border-orange-200/70 dark:border-orange-900/50">
                   <td className="px-2 py-1.5 font-semibold sticky left-0 bg-orange-100/50 dark:bg-orange-900/25 text-orange-900 dark:text-orange-200">Total</td>
                   {linhas.map((_, idx) => (
-                    <td key={idx} className="px-1 py-1.5 text-center font-semibold text-[11px] italic text-meta">
+                    <td key={idx} className="px-0.5 py-1.5 text-center font-semibold text-[9px] italic text-meta">
                       {fmt(totalsLocal[idx])}
                     </td>
                   ))}
-                  <td className="px-2 py-1.5 text-center font-semibold bg-orange-200/40 dark:bg-orange-900/40 text-[11px] italic text-meta">{fmt(mediaTot)}</td>
+                  <td className="px-1 py-1.5 text-center font-semibold bg-orange-200/40 dark:bg-orange-900/40 text-[9px] italic text-meta">{fmt(mediaTot)}</td>
                 </tr>
               </tbody>
             </table>
