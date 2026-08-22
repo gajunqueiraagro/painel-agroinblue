@@ -343,7 +343,7 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
       <p className="text-[11px] text-muted-foreground">
         {isGlobal
           ? 'Global: Total = soma completa cadastrada no banco, incluindo campos futuros Ambiental e Infraestrutura.'
-          : 'Individual: Total = Pecuária + Agricultura. V1 não edita áreas Ambiental e Infraestrutura (gravadas como 0 no banco; estrutura preparada para fases futuras).'}
+          : 'Individual: Total = Pecuária + Agricultura. V1 edita apenas Pecuária e Agricultura. As demais áreas ficam em branco até a fase seguinte — não são gravadas como zero.'}
         {isGlobal && ' Em modo Global, mês é considerado cadastrado se ao menos uma fazenda tiver linha.'}
       </p>
     </div>

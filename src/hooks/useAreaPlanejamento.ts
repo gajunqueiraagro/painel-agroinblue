@@ -15,8 +15,8 @@ export interface AreaMetaMes {
   mes: number;                              // 1-12
   area_pecuaria_ha: number | null;          // null = sem cadastro nesse mês
   area_agricultura_ha: number | null;
-  area_ambiental_ha: number | null;
-  area_infraestrutura_ha: number | null;
+  area_reserva_ha: number | null;
+  area_benfeitorias_ha: number | null;
   area_total_ha: number | null;
 }
 
@@ -24,13 +24,13 @@ export interface AreaMetaAnual {
   porMes: AreaMetaMes[];                    // SEMPRE length 12, jan→dez
   mediaPecuaria: number | null;             // ignora meses null
   mediaAgricultura: number | null;
-  mediaAmbiental: number | null;
-  mediaInfraestrutura: number | null;
+  mediaReserva: number | null;
+  mediaBenfeitorias: number | null;
   mediaTotal: number | null;
   totalAcumPecuaria: number | null;
   totalAcumAgricultura: number | null;
-  totalAcumAmbiental: number | null;
-  totalAcumInfraestrutura: number | null;
+  totalAcumReserva: number | null;
+  totalAcumBenfeitorias: number | null;
   totalAcumTotal: number | null;
   mesesCadastrados: number;                 // 0-12
   isCompleto: boolean;                      // mesesCadastrados === 12
@@ -40,8 +40,8 @@ export interface UpsertLinhaArea {
   mes: number;
   area_pecuaria_ha: number;
   area_agricultura_ha: number;
-  area_ambiental_ha?: number;               // omitido = 0
-  area_infraestrutura_ha?: number;          // omitido = 0
+  area_reserva_ha?: number;               // omitido = 0
+  area_benfeitorias_ha?: number;          // omitido = 0
 }
 
 export interface UseAreaPlanejamentoResult {
@@ -60,8 +60,8 @@ function emptyMes(mes: number): AreaMetaMes {
     mes,
     area_pecuaria_ha: null,
     area_agricultura_ha: null,
-    area_ambiental_ha: null,
-    area_infraestrutura_ha: null,
+    area_reserva_ha: null,
+    area_benfeitorias_ha: null,
     area_total_ha: null,
   };
 }
@@ -71,13 +71,13 @@ function buildEmptyAnual(): AreaMetaAnual {
     porMes: Array.from({ length: 12 }, (_, i) => emptyMes(i + 1)),
     mediaPecuaria: null,
     mediaAgricultura: null,
-    mediaAmbiental: null,
-    mediaInfraestrutura: null,
+    mediaReserva: null,
+    mediaBenfeitorias: null,
     mediaTotal: null,
     totalAcumPecuaria: null,
     totalAcumAgricultura: null,
-    totalAcumAmbiental: null,
-    totalAcumInfraestrutura: null,
+    totalAcumReserva: null,
+    totalAcumBenfeitorias: null,
     totalAcumTotal: null,
     mesesCadastrados: 0,
     isCompleto: false,
@@ -100,8 +100,8 @@ interface RowArea {
   mes: number;
   area_pecuaria_ha: number | null;
   area_agricultura_ha: number | null;
-  area_ambiental_ha: number | null;
-  area_infraestrutura_ha: number | null;
+  area_reserva_ha: number | null;
+  area_benfeitorias_ha: number | null;
   area_total_ha: number | null;
 }
 
@@ -115,21 +115,21 @@ function agregarPorMes(rows: RowArea[]): AreaMetaAnual {
     const slot = anual.porMes[mesIdx];
     slot.area_pecuaria_ha = Number(row.area_pecuaria_ha ?? 0);
     slot.area_agricultura_ha = Number(row.area_agricultura_ha ?? 0);
-    slot.area_ambiental_ha = Number(row.area_ambiental_ha ?? 0);
-    slot.area_infraestrutura_ha = Number(row.area_infraestrutura_ha ?? 0);
+    slot.area_reserva_ha = Number(row.area_reserva_ha ?? 0);
+    slot.area_benfeitorias_ha = Number(row.area_benfeitorias_ha ?? 0);
     slot.area_total_ha = Number(row.area_total_ha ?? 0);
   }
   anual.mesesCadastrados = anual.porMes.filter(m => m.area_total_ha !== null).length;
   anual.isCompleto = anual.mesesCadastrados === 12;
   anual.mediaPecuaria        = mediaSafe(anual.porMes.map(m => m.area_pecuaria_ha));
   anual.mediaAgricultura     = mediaSafe(anual.porMes.map(m => m.area_agricultura_ha));
-  anual.mediaAmbiental       = mediaSafe(anual.porMes.map(m => m.area_ambiental_ha));
-  anual.mediaInfraestrutura  = mediaSafe(anual.porMes.map(m => m.area_infraestrutura_ha));
+  anual.mediaReserva       = mediaSafe(anual.porMes.map(m => m.area_reserva_ha));
+  anual.mediaBenfeitorias  = mediaSafe(anual.porMes.map(m => m.area_benfeitorias_ha));
   anual.mediaTotal           = mediaSafe(anual.porMes.map(m => m.area_total_ha));
   anual.totalAcumPecuaria       = somaSafe(anual.porMes.map(m => m.area_pecuaria_ha));
   anual.totalAcumAgricultura    = somaSafe(anual.porMes.map(m => m.area_agricultura_ha));
-  anual.totalAcumAmbiental      = somaSafe(anual.porMes.map(m => m.area_ambiental_ha));
-  anual.totalAcumInfraestrutura = somaSafe(anual.porMes.map(m => m.area_infraestrutura_ha));
+  anual.totalAcumReserva      = somaSafe(anual.porMes.map(m => m.area_reserva_ha));
+  anual.totalAcumBenfeitorias = somaSafe(anual.porMes.map(m => m.area_benfeitorias_ha));
   anual.totalAcumTotal          = somaSafe(anual.porMes.map(m => m.area_total_ha));
   return anual;
 }
@@ -176,7 +176,7 @@ export function useAreaPlanejamento(
           // tiver linha. A completude por fazenda será tratada na UI/PC-100 em etapa futura.
           const { data: rows, error: err } = await sbLoose
             .from('planejamento_area_meta')
-            .select('mes, area_pecuaria_ha, area_agricultura_ha, area_ambiental_ha, area_infraestrutura_ha, area_total_ha')
+            .select('mes, area_pecuaria_ha, area_agricultura_ha, area_reserva_ha, area_benfeitorias_ha, area_total_ha')
             .eq('cliente_id', clienteId)
             .eq('ano', ano);
           if (err) throw err;
@@ -188,14 +188,14 @@ export function useAreaPlanejamento(
               mes,
               area_pecuaria_ha: 0,
               area_agricultura_ha: 0,
-              area_ambiental_ha: 0,
-              area_infraestrutura_ha: 0,
+              area_reserva_ha: 0,
+              area_benfeitorias_ha: 0,
               area_total_ha: 0,
             };
             prev.area_pecuaria_ha       = (prev.area_pecuaria_ha       ?? 0) + Number(r.area_pecuaria_ha ?? 0);
             prev.area_agricultura_ha    = (prev.area_agricultura_ha    ?? 0) + Number(r.area_agricultura_ha ?? 0);
-            prev.area_ambiental_ha      = (prev.area_ambiental_ha      ?? 0) + Number(r.area_ambiental_ha ?? 0);
-            prev.area_infraestrutura_ha = (prev.area_infraestrutura_ha ?? 0) + Number(r.area_infraestrutura_ha ?? 0);
+            prev.area_reserva_ha      = (prev.area_reserva_ha      ?? 0) + Number(r.area_reserva_ha ?? 0);
+            prev.area_benfeitorias_ha = (prev.area_benfeitorias_ha ?? 0) + Number(r.area_benfeitorias_ha ?? 0);
             prev.area_total_ha          = (prev.area_total_ha          ?? 0) + Number(r.area_total_ha ?? 0);
             porMes.set(mes, prev);
           }
@@ -206,7 +206,7 @@ export function useAreaPlanejamento(
         } else {
           const { data: rows, error: err } = await sbLoose
             .from('planejamento_area_meta')
-            .select('mes, area_pecuaria_ha, area_agricultura_ha, area_ambiental_ha, area_infraestrutura_ha, area_total_ha')
+            .select('mes, area_pecuaria_ha, area_agricultura_ha, area_reserva_ha, area_benfeitorias_ha, area_total_ha')
             .eq('cliente_id', clienteId)
             .eq('fazenda_id', fazendaId!)
             .eq('ano', ano);
@@ -246,9 +246,13 @@ export function useAreaPlanejamento(
         mes: l.mes,
         area_pecuaria_ha: Number(l.area_pecuaria_ha) || 0,
         area_agricultura_ha: Number(l.area_agricultura_ha) || 0,
-        area_ambiental_ha: Number(l.area_ambiental_ha ?? 0) || 0,
-        area_infraestrutura_ha: Number(l.area_infraestrutura_ha ?? 0) || 0,
-        // area_total_ha NÃO enviado — é GENERATED no banco
+        /* area_reserva_ha e area_benfeitorias_ha NAO sao enviadas: a tela nao as
+           edita, e mandar `0` desfaria a migration que converteu esses zeros em
+           NULL. Coluna ausente do payload fica INTACTA no UPDATE do upsert e
+           assume o default (agora NULL) no INSERT — que e o estado correto de
+           "nao planejado". Elas voltam ao payload no PR-2, quando a tela passar
+           a edita-las de fato.
+           area_total_ha NAO enviado — e GENERATED no banco. */
       }));
       const { error: err } = await sbLoose
         .from('planejamento_area_meta')
