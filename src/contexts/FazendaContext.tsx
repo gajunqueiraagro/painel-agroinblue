@@ -12,6 +12,11 @@ export interface Fazenda {
   codigo?: string | null;
   codigo_importacao?: string | null;
   tem_pecuaria?: boolean;
+  /* `text` NULLABLE com default 'ativa'::text — nao e enum (conferido no
+     information_schema em 22/08/2026). Opcional e anulavel de proposito: o
+     tipo tem de admitir a ausencia, senao volta o fallback que este PR
+     desmonta. Hoje ha 0 linhas NULL (13 'ativa' + 6 'inativa'). */
+  status_operacional?: string | null;
   papel?: string;
 }
 
@@ -75,10 +80,26 @@ export function FazendaProvider({ children }: { children: ReactNode }) {
     try {
       const _tQ1 = performance.now();
       console.log('[FazendaContext] query fazendas START');
-      const { data: fazendasCliente, error: errFaz } = await supabase
-        .from('fazendas')
-        .select('id, nome, codigo, owner_id, cliente_id, codigo_importacao, tem_pecuaria')
-        .eq('cliente_id', clienteAtual.id);
+      /* status_operacional carregado: sem ele, V2Fazendas caia no fallback
+         `?? 'ativa'` e REGRAVAVA 'ativa' por cima de 'inativa' a cada save.
+         O campo e o unico mecanismo de "excluir" fazenda que o sistema tem.
+
+         DOIS CASTS: a coluna EXISTE no banco (text, nullable, default 'ativa')
+         mas NAO em src/integrations/supabase/types.ts, que esta defasado — o
+         mesmo defeito que ja produz 1 erro de baseline em
+         useFazendasPecuariaAtivas.ts. Sem os casts o select inteiro degrada
+         para SelectQueryError e o arquivo passa a acusar 4 erros novos
+         (medido: 79 -> 83). E o idioma do repo para este caso; a correcao de
+         raiz e regenerar types.ts, frente propria ja registrada.
+         O `as FazendaRow[]` abaixo devolve o tipo na saida do `any`, para o
+         `.map` seguinte nao propagar `any` pelo contexto inteiro. */
+      type FazendaRow = Pick<Fazenda, 'id' | 'nome' | 'codigo' | 'owner_id' | 'cliente_id' | 'codigo_importacao' | 'tem_pecuaria' | 'status_operacional'>;
+      const { data: fazendasCliente, error: errFaz } = await (supabase
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .from('fazendas' as any)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .select('id, nome, codigo, owner_id, cliente_id, codigo_importacao, tem_pecuaria, status_operacional') as any)
+        .eq('cliente_id', clienteAtual.id) as { data: FazendaRow[] | null; error: unknown };
       console.log(`[FazendaContext] query fazendas END (${(performance.now() - _tQ1).toFixed(0)}ms)`, { rows: fazendasCliente?.length ?? 0, error: errFaz });
 
       if (fazendasCliente && fazendasCliente.length > 0) {

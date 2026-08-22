@@ -173,13 +173,16 @@ export function V2Fazendas() {
         area_reserva_ha: (row as any).area_reserva_ha != null ? String((row as any).area_reserva_ha) : '',
         area_benfeitorias_ha: (row as any).area_benfeitorias_ha != null ? String((row as any).area_benfeitorias_ha) : '',
         area_outras_ha: (row as any).area_outras_ha != null ? String((row as any).area_outras_ha) : '',
-        status_operacional: (fazendaAtual as any).status_operacional ?? 'ativa',
+        /* Sem `as any` e sem `?? 'ativa'`: o campo agora vem tipado do contexto.
+           Ausencia vira STRING VAZIA, nunca 'ativa' — era esse default silencioso
+           que regravava 'ativa' por cima de 'inativa' a cada save. */
+        status_operacional: fazendaAtual.status_operacional ?? '',
         roteiro: (row as any).roteiro ?? '',
         matricula_conferida_em: (row as any).matricula_conferida_em ?? '',
       });
       setEditing(false);
     } else {
-      setData({ ...EMPTY, status_operacional: (fazendaAtual as any).status_operacional ?? 'ativa' });
+      setData({ ...EMPTY, status_operacional: fazendaAtual.status_operacional ?? '' });
       setEditing(true);
     }
     setCodigoFazenda((fazendaAtual as any).codigo_importacao ?? (fazendaAtual as any).codigo ?? '');
@@ -276,7 +279,13 @@ export function V2Fazendas() {
 
     const { error: fazendaError } = await supabase
       .from('fazendas')
-      .update({ nome: nomeFazenda.trim(), codigo_importacao: codigoFazenda || null, status_operacional: data.status_operacional } as any)
+      /* `|| null` no status: com a leitura corrigida, string vazia so aparece se a
+         coluna estiver NULL no banco (0 linhas hoje). Gravar '' inventaria um
+         status que nao existe; null devolve a ausencia que se leu.
+         O `as any` PERMANECE e nao e escolha: o Update gerado de `fazendas` em
+         types.ts nao tem status_operacional — mesma defasagem que obrigou os dois
+         casts no FazendaContext. Sai quando types.ts for regenerado. */
+      .update({ nome: nomeFazenda.trim(), codigo_importacao: codigoFazenda || null, status_operacional: data.status_operacional || null } as any)
       .eq('id', fazendaAtual.id);
     if (fazendaError) {
       toast.error('Erro ao salvar código da fazenda: ' + fazendaError.message);
