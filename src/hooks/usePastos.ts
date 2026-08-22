@@ -185,10 +185,15 @@ export function usePastos() {
   const fazendaId = isGlobal ? undefined : fazendaAtual?.id;
   const clienteId = clienteAtual?.id;
 
+  /* Sem filtro de tem_pecuaria: a flag responde "tem gado?", nao "a fazenda
+     opera?". Retiro Agricultura e Faz. Sta. Luzia tem pastos e area reais.
+     Terceira ocorrencia do mesmo defeito — PC-100 (9086ea6e), painel do
+     Global e agora o consolidado de Fazendas. Auditados os 13 consumidores
+     que nao declaravam recorte. */
   const globalFazendaIds = useMemo(() => {
     if (!isGlobal) return [];
     return todasFazendas
-      .filter(f => f.id !== '__global__' && f.tem_pecuaria !== false)
+      .filter(f => f.id !== '__global__')
       .map(f => f.id);
   }, [isGlobal, todasFazendas]);
 

@@ -210,7 +210,9 @@ export const NAV_GRUPOS: NavGrupo[] = [
       {
         titulo: 'Cadastros',
         itens: [
-          { id: 'config-fazendas',   label: 'Fazendas',            status: 'ready' },
+          /* O item abre a tela com as abas Cadastro e Pastos — "Fazendas" sozinho
+             escondia metade do que ha ali. */
+          { id: 'config-fazendas',   label: 'Fazendas e Pastos',   status: 'ready' },
           { id: 'contas-bancarias',  label: 'Contas Bancárias',    status: 'needs-wrapper' },
           { id: 'fornecedores',      label: 'Fornecedores',        status: 'needs-wrapper' },
           { id: 'plano-contas',      label: 'Plano de Contas',     status: 'needs-wrapper' },
