@@ -465,9 +465,18 @@ function buildBlocosForTab(
   const linha = (
     abas: ViewTab[], indicador: string, format: PainelFormatType, raw: number[],
     indicadorId?: string, noTotal?: boolean, nivel?: 'familia' | 'destino',
+    bruto?: boolean,
   ): Row => (
     abas.includes(tab)
-      ? { ...r(indicador, format, raw, indicadorId, noTotal), nivel }
+      /* `bruto` entrega a serie COMO ESTA, sem a transformacao por aba do r().
+         Serve a duas familias de linha: a que ja nasce acumulada (os dois
+         "Desfrute %", que sao Jan->mes por definicao e teriam de aparecer
+         iguais em Acumulados e Media do Periodo) e a que e CONSTANTE nas doze
+         colunas (as duas "iniciais no ano"). Sem isto, `rollingAvg` promediaria
+         um acumulado e `cumSum` somaria uma constante. */
+      ? (bruto
+          ? { indicador, format, valores: raw, indicadorId, noTotal, nivel }
+          : { ...r(indicador, format, raw, indicadorId, noTotal), nivel })
       : { indicador, format, valores: NAN12, indicadorId, noTotal: true, nivel }
   );
   const blocoRebanho: Bloco = {
@@ -556,23 +565,50 @@ function buildBlocosForTab(
     ],
   };
 
+  /* BLOCO PRODUCAO — 10 linhas, IGUAIS nas quatro abas.
+     Cinco linhas trocavam de nome entre abas ("Producao mensal (kg)" /
+     "Producao media (kg)" / "Producao acumulada (kg)" / "Producao media do
+     periodo (kg)" — quatro nomes, UM indicador). Agora a aba informa a
+     leitura e o rotulo nomeia o indicador, como Financeiro (Caixa) e
+     Patrimonio ja faziam.
+     GMD sai de ACUMULADOS e vira travessao: GMD nao e grandeza acumulavel —
+     somar sete meses nao significa nada, e o GMD do periodo ja e o que
+     "Media do Periodo" mostra. A linha permanece para o conjunto ser o mesmo
+     nas quatro abas.
+     Desfrute (cab) e (@) ganham travessao em Medios e Media do Periodo:
+     fluxo nao promedia. */
+  const cabIniAno: number[] = Array(12).fill(cabIni[0] ?? NaN);
+  const arrIniAno: number[] = Array(12).fill((pesoTotalIni[0] ?? 0) / 30);
+  /* Desfrute % so existe ACUMULADO: a base e o rebanho inicial do ANO, e a
+     leitura e "quanto do rebanho com que comecei ja foi desfrutado ate
+     aqui". Percentual de um mes isolado sobre a base do ano nao significa
+     nada, e sobre a base do proprio mes nao e somavel.
+     Decisao de Gabriel, 22/08. */
+  const desfPctCab = cumSum(desfruteCab).map((v, i) => (cabIniAno[i] > 0 ? (v / cabIniAno[i]) * 100 : NaN));
+  const desfPctArr = cumSum(desfrute_arr).map((v, i) => (arrIniAno[i] > 0 ? (v / arrIniAno[i]) * 100 : NaN));
+  const blocoProducao: Bloco = {
+    nome: 'Produção',
+    rows: [
+      linha(['mensal','medio','acumulado','media_periodo'], 'Produção (kg)', 'padrao', d.prodKg, 'prod_kg'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Arrobas produzidas', 'padrao', d.arrobasProd, 'arrobas_prod'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Arrobas/ha', 'med2', arrHa, 'arr_ha'),
+      linha(['mensal','medio','media_periodo'], 'GMD (kg/cab/dia)', 'gmd', d.gmd, 'gmd', true),
+      linha(['mensal'], 'Cabeças iniciais no ano', 'cab', cabIniAno, undefined, true, undefined, true),
+      linha(['mensal'], 'Arrobas iniciais no ano', 'padrao', arrIniAno, undefined, true, undefined, true),
+      linha(['mensal','acumulado'], 'Desfrute (cab)', 'cab', desfruteCab, 'desfrute_cab'),
+      linha(['acumulado','media_periodo'], 'Desfrute % (cab)', 'med2', desfPctCab, undefined, true, undefined, true),
+      linha(['mensal','acumulado'], 'Desfrute (@)', 'padrao', desfrute_arr, 'desfrute_arr'),
+      linha(['acumulado','media_periodo'], 'Desfrute % (@)', 'med2', desfPctArr, undefined, true, undefined, true),
+    ],
+  };
+
   switch (tab) {
     case 'mensal':
       return [
         blocoRebanho,
         blocoPesoKg,
         blocoPesoArroba,
-        {
-          nome: 'Produção',
-          rows: [
-            r('Produção mensal (kg)', 'padrao', d.prodKg, 'prod_kg'),
-            r('Arrobas produzidas', 'padrao', d.arrobasProd, 'arrobas_prod'),
-            r('Arrobas/ha', 'med2', arrHa, 'arr_ha'),
-            r('GMD (kg/cab/dia)', 'gmd', d.gmd, 'gmd'),
-            r('Desfrute (cab)', 'cab', desfruteCab, 'desfrute_cab'),
-            r('Desfrute (@)', 'padrao', desfrute_arr, 'desfrute_arr'),
-          ],
-        },
+        blocoProducao,
         {
           nome: 'Financeiro (Caixa)',
           rows: [
@@ -601,17 +637,7 @@ function buildBlocosForTab(
         blocoRebanho,
         blocoPesoKg,
         blocoPesoArroba,
-        {
-          nome: 'Produção',
-          rows: [
-            r('Produção média (kg)', 'padrao', d.prodKg, 'prod_kg_med'),
-            r('Arrobas médias', 'padrao', d.arrobasProd, 'arrobas_prod_med'),
-            r('Arrobas/ha média', 'med2', arrHa, 'arr_ha_med'),
-            r('GMD médio', 'gmd', d.gmd, 'gmd_med', true),
-            r('Desfrute (cab)', 'cab', desfruteCab, 'desfrute_cab'),
-            r('Desfrute (@)', 'padrao', desfrute_arr, 'desfrute_arr'),
-          ],
-        },
+        blocoProducao,
         {
           nome: 'Financeiro (Caixa)',
           rows: [
@@ -638,16 +664,7 @@ function buildBlocosForTab(
         blocoRebanho,
         blocoPesoKg,
         blocoPesoArroba,
-        {
-          nome: 'Produção',
-          rows: [
-            r('Produção acumulada (kg)', 'padrao', d.prodKg, 'prod_kg_acum'),
-            r('Arrobas acumuladas', 'padrao', d.arrobasProd, 'arrobas_acum'),
-            r('Arrobas/ha acumulado', 'med2', arrHa, 'arr_ha_acum'),
-            r('Desfrute Acumulado (cab)', 'cab', desfruteCab, 'desfrute_acum_cab'),
-            r('Desfrute Acumulado (@)', 'padrao', desfrute_arr, 'desfrute_acum_arr'),
-          ],
-        },
+        blocoProducao,
         {
           nome: 'Financeiro (Caixa)',
           rows: [
@@ -678,17 +695,7 @@ function buildBlocosForTab(
         blocoRebanho,
         blocoPesoKg,
         blocoPesoArroba,
-        {
-          nome: 'Produção',
-          rows: [
-            r('Produção média do período (@)', 'padrao', d.arrobasProd, 'prod_media_arr', true),
-            r('Produção média do período (kg)', 'padrao', d.prodKg, 'prod_media_kg', true),
-            r('Arrobas/ha período', 'med2', arrHa, 'arr_ha_media', true),
-            { indicador: 'GMD do período', format: 'gmd', valores: gmdPeriodo, indicadorId: 'gmd_periodo', noTotal: true },
-            r('Desfrute médio período (cab)', 'cab', desfruteCab, 'desfrute_cab_periodo', true),
-            r('Desfrute médio período (@)', 'padrao', desfrute_arr, 'desfrute_arr_periodo', true),
-          ],
-        },
+        blocoProducao,
         {
           nome: 'Financeiro (Caixa)',
           rows: [
@@ -892,9 +899,18 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
   const linha = (
     abas: ViewTab[], indicador: string, format: PainelFormatType, raw: number[],
     indicadorId?: string, noTotal?: boolean, nivel?: 'familia' | 'destino',
+    bruto?: boolean,
   ): Row => (
     abas.includes(tab)
-      ? { ...r(indicador, format, raw, indicadorId, noTotal), nivel }
+      /* `bruto` entrega a serie COMO ESTA, sem a transformacao por aba do r().
+         Serve a duas familias de linha: a que ja nasce acumulada (os dois
+         "Desfrute %", que sao Jan->mes por definicao e teriam de aparecer
+         iguais em Acumulados e Media do Periodo) e a que e CONSTANTE nas doze
+         colunas (as duas "iniciais no ano"). Sem isto, `rollingAvg` promediaria
+         um acumulado e `cumSum` somaria uma constante. */
+      ? (bruto
+          ? { indicador, format, valores: raw, indicadorId, noTotal, nivel }
+          : { ...r(indicador, format, raw, indicadorId, noTotal), nivel })
       : { indicador, format, valores: NAN12, indicadorId, noTotal: true, nivel }
   );
   const blocoRebanho: Bloco = {
@@ -971,23 +987,50 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
     ],
   };
 
+  /* BLOCO PRODUCAO — 10 linhas, IGUAIS nas quatro abas.
+     Cinco linhas trocavam de nome entre abas ("Producao mensal (kg)" /
+     "Producao media (kg)" / "Producao acumulada (kg)" / "Producao media do
+     periodo (kg)" — quatro nomes, UM indicador). Agora a aba informa a
+     leitura e o rotulo nomeia o indicador, como Financeiro (Caixa) e
+     Patrimonio ja faziam.
+     GMD sai de ACUMULADOS e vira travessao: GMD nao e grandeza acumulavel —
+     somar sete meses nao significa nada, e o GMD do periodo ja e o que
+     "Media do Periodo" mostra. A linha permanece para o conjunto ser o mesmo
+     nas quatro abas.
+     Desfrute (cab) e (@) ganham travessao em Medios e Media do Periodo:
+     fluxo nao promedia. */
+  const cabIniAno: number[] = Array(12).fill(cabIni[0] ?? NaN);
+  const arrIniAno: number[] = Array(12).fill((pesoIni[0] ?? 0) / 30);
+  /* Desfrute % so existe ACUMULADO: a base e o rebanho inicial do ANO, e a
+     leitura e "quanto do rebanho com que comecei ja foi desfrutado ate
+     aqui". Percentual de um mes isolado sobre a base do ano nao significa
+     nada, e sobre a base do proprio mes nao e somavel.
+     Decisao de Gabriel, 22/08. */
+  const desfPctCab = cumSum(desfruteCab).map((v, i) => (cabIniAno[i] > 0 ? (v / cabIniAno[i]) * 100 : NaN));
+  const desfPctArr = cumSum(desfrute_arr).map((v, i) => (arrIniAno[i] > 0 ? (v / arrIniAno[i]) * 100 : NaN));
+  const blocoProducao: Bloco = {
+    nome: 'Produção',
+    rows: [
+      linha(['mensal','medio','acumulado','media_periodo'], 'Produção (kg)', 'padrao', prodKg, 'prod_kg'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Arrobas produzidas', 'padrao', arrobasProd, 'arrobas_prod'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Arrobas/ha', 'med2', arrHa, 'arr_ha'),
+      linha(['mensal','medio','media_periodo'], 'GMD (kg/cab/dia)', 'gmd', gmd, 'gmd', true),
+      linha(['mensal'], 'Cabeças iniciais no ano', 'cab', cabIniAno, undefined, true, undefined, true),
+      linha(['mensal'], 'Arrobas iniciais no ano', 'padrao', arrIniAno, undefined, true, undefined, true),
+      linha(['mensal','acumulado'], 'Desfrute (cab)', 'cab', desfruteCab, 'desfrute_cab'),
+      linha(['acumulado','media_periodo'], 'Desfrute % (cab)', 'med2', desfPctCab, undefined, true, undefined, true),
+      linha(['mensal','acumulado'], 'Desfrute (@)', 'padrao', desfrute_arr, 'desfrute_arr'),
+      linha(['acumulado','media_periodo'], 'Desfrute % (@)', 'med2', desfPctArr, undefined, true, undefined, true),
+    ],
+  };
+
   switch (tab) {
     case 'mensal':
       return [
         blocoRebanho,
         blocoPesoKg,
         blocoPesoArroba,
-        {
-          nome: 'Produção',
-          rows: [
-            r('Produção mensal (kg)', 'padrao', prodKg, 'prod_kg'),
-            r('Arrobas produzidas', 'padrao', arrobasProd, 'arrobas_prod'),
-            r('Arrobas/ha', 'med2', arrHa, 'arr_ha'),
-            r('GMD (kg/cab/dia)', 'gmd', gmd, 'gmd'),
-            r('Desfrute (cab)', 'cab', desfruteCab, 'desfrute_cab'),
-            r('Desfrute (@)', 'padrao', desfrute_arr, 'desfrute_arr'),
-          ],
-        },
+        blocoProducao,
         {
           nome: 'Financeiro (Caixa)',
           rows: [
@@ -1014,17 +1057,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
         blocoRebanho,
         blocoPesoKg,
         blocoPesoArroba,
-        {
-          nome: 'Produção',
-          rows: [
-            r('Produção média (kg)', 'padrao', prodKg, 'prod_kg_med'),
-            r('Arrobas médias', 'padrao', arrobasProd, 'arrobas_prod_med'),
-            r('Arrobas/ha média', 'med2', arrHa, 'arr_ha_med'),
-            r('GMD médio', 'gmd', gmd, 'gmd_med', true),
-            r('Desfrute (cab)', 'cab', desfruteCab, 'desfrute_cab'),
-            r('Desfrute (@)', 'padrao', desfrute_arr, 'desfrute_arr'),
-          ],
-        },
+        blocoProducao,
         {
           nome: 'Financeiro (Caixa)',
           rows: [
@@ -1050,16 +1083,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
         blocoRebanho,
         blocoPesoKg,
         blocoPesoArroba,
-        {
-          nome: 'Produção',
-          rows: [
-            r('Produção acumulada (kg)', 'padrao', prodKg, 'prod_kg_acum'),
-            r('Arrobas acumuladas', 'padrao', arrobasProd, 'arrobas_acum'),
-            r('Arrobas/ha acumulado', 'med2', arrHa, 'arr_ha_acum'),
-            r('Desfrute acum. (cab)', 'cab', desfruteCab, 'desfrute_acum_cab'),
-            r('Desfrute acum. (@)', 'padrao', desfrute_arr, 'desfrute_acum_arr'),
-          ],
-        },
+        blocoProducao,
         {
           nome: 'Financeiro (Caixa)',
           rows: [
@@ -1085,17 +1109,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
         blocoRebanho,
         blocoPesoKg,
         blocoPesoArroba,
-        {
-          nome: 'Produção',
-          rows: [
-            r('Produção média do período (@)', 'padrao', arrobasProd, 'prod_media_arr', true),
-            r('Produção média do período (kg)', 'padrao', prodKg, 'prod_media_kg', true),
-            r('Arrobas/ha período', 'med2', arrHa, 'arr_ha_media', true),
-            r('Desfrute médio período (cab)', 'cab', desfruteCab, 'desfrute_cab_periodo', true),
-            r('Desfrute médio período (@)', 'padrao', desfrute_arr, 'desfrute_arr_periodo', true),
-            { indicador: 'GMD do período', format: 'gmd', valores: gmdPeriodo, indicadorId: 'gmd_periodo', noTotal: true },
-          ],
-        },
+        blocoProducao,
         {
           nome: 'Financeiro (Caixa)',
           rows: [
@@ -1278,9 +1292,18 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
   const linha = (
     abas: ViewTab[], indicador: string, format: PainelFormatType, raw: number[],
     indicadorId?: string, noTotal?: boolean, nivel?: 'familia' | 'destino',
+    bruto?: boolean,
   ): Row => (
     abas.includes(tab)
-      ? { ...r(indicador, format, raw, indicadorId, noTotal), nivel }
+      /* `bruto` entrega a serie COMO ESTA, sem a transformacao por aba do r().
+         Serve a duas familias de linha: a que ja nasce acumulada (os dois
+         "Desfrute %", que sao Jan->mes por definicao e teriam de aparecer
+         iguais em Acumulados e Media do Periodo) e a que e CONSTANTE nas doze
+         colunas (as duas "iniciais no ano"). Sem isto, `rollingAvg` promediaria
+         um acumulado e `cumSum` somaria uma constante. */
+      ? (bruto
+          ? { indicador, format, valores: raw, indicadorId, noTotal, nivel }
+          : { ...r(indicador, format, raw, indicadorId, noTotal), nivel })
       : { indicador, format, valores: NAN12, indicadorId, noTotal: true, nivel }
   );
   const blocoRebanho: Bloco = {
@@ -1357,23 +1380,50 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
     ],
   };
 
+  /* BLOCO PRODUCAO — 10 linhas, IGUAIS nas quatro abas.
+     Cinco linhas trocavam de nome entre abas ("Producao mensal (kg)" /
+     "Producao media (kg)" / "Producao acumulada (kg)" / "Producao media do
+     periodo (kg)" — quatro nomes, UM indicador). Agora a aba informa a
+     leitura e o rotulo nomeia o indicador, como Financeiro (Caixa) e
+     Patrimonio ja faziam.
+     GMD sai de ACUMULADOS e vira travessao: GMD nao e grandeza acumulavel —
+     somar sete meses nao significa nada, e o GMD do periodo ja e o que
+     "Media do Periodo" mostra. A linha permanece para o conjunto ser o mesmo
+     nas quatro abas.
+     Desfrute (cab) e (@) ganham travessao em Medios e Media do Periodo:
+     fluxo nao promedia. */
+  const cabIniAno: number[] = Array(12).fill(cabIni[0] ?? NaN);
+  const arrIniAno: number[] = Array(12).fill((pesoIni[0] ?? 0) / 30);
+  /* Desfrute % so existe ACUMULADO: a base e o rebanho inicial do ANO, e a
+     leitura e "quanto do rebanho com que comecei ja foi desfrutado ate
+     aqui". Percentual de um mes isolado sobre a base do ano nao significa
+     nada, e sobre a base do proprio mes nao e somavel.
+     Decisao de Gabriel, 22/08. */
+  const desfPctCab = cumSum(desfruteCab).map((v, i) => (cabIniAno[i] > 0 ? (v / cabIniAno[i]) * 100 : NaN));
+  const desfPctArr = cumSum(desfrute_arr).map((v, i) => (arrIniAno[i] > 0 ? (v / arrIniAno[i]) * 100 : NaN));
+  const blocoProducao: Bloco = {
+    nome: 'Produção',
+    rows: [
+      linha(['mensal','medio','acumulado','media_periodo'], 'Produção (kg)', 'padrao', prodKgArr, 'prod_kg'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Arrobas produzidas', 'padrao', arrobasProd, 'arrobas_prod'),
+      linha(['mensal','medio','acumulado','media_periodo'], 'Arrobas/ha', 'med2', arrHa, 'arr_ha'),
+      linha(['mensal','medio','media_periodo'], 'GMD (kg/cab/dia)', 'gmd', gmd, 'gmd', true),
+      linha(['mensal'], 'Cabeças iniciais no ano', 'cab', cabIniAno, undefined, true, undefined, true),
+      linha(['mensal'], 'Arrobas iniciais no ano', 'padrao', arrIniAno, undefined, true, undefined, true),
+      linha(['mensal','acumulado'], 'Desfrute (cab)', 'cab', desfruteCab, 'desfrute_cab'),
+      linha(['acumulado','media_periodo'], 'Desfrute % (cab)', 'med2', desfPctCab, undefined, true, undefined, true),
+      linha(['mensal','acumulado'], 'Desfrute (@)', 'padrao', desfrute_arr, 'desfrute_arr'),
+      linha(['acumulado','media_periodo'], 'Desfrute % (@)', 'med2', desfPctArr, undefined, true, undefined, true),
+    ],
+  };
+
   switch (tab) {
     case 'mensal':
       return [
         blocoRebanho,
         blocoPesoKg,
         blocoPesoArroba,
-        {
-          nome: 'Produção',
-          rows: [
-            r('Produção mensal (kg)', 'padrao', prodKgArr, 'prod_kg'),
-            r('Arrobas produzidas', 'padrao', arrobasProd, 'arrobas_prod'),
-            r('Arrobas/ha', 'med2', arrHa, 'arr_ha'),
-            r('GMD (kg/cab/dia)', 'gmd', gmd, 'gmd'),
-            r('Desfrute (cab)', 'cab', desfruteCab, 'desfrute_cab'),
-            r('Desfrute (@)', 'padrao', desfrute_arr, 'desfrute_arr'),
-          ],
-        },
+        blocoProducao,
         {
           nome: 'Financeiro (Caixa)',
           rows: [
@@ -1400,17 +1450,7 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
         blocoRebanho,
         blocoPesoKg,
         blocoPesoArroba,
-        {
-          nome: 'Produção',
-          rows: [
-            r('Produção média (kg)', 'padrao', prodKgArr, 'prod_kg_med'),
-            r('Arrobas médias', 'padrao', arrobasProd, 'arrobas_prod_med'),
-            r('Arrobas/ha média', 'med2', arrHa, 'arr_ha_med'),
-            r('GMD médio', 'gmd', gmd, 'gmd_med', true),
-            r('Desfrute (cab)', 'cab', desfruteCab, 'desfrute_cab'),
-            r('Desfrute (@)', 'padrao', desfrute_arr, 'desfrute_arr'),
-          ],
-        },
+        blocoProducao,
         {
           nome: 'Financeiro (Caixa)',
           rows: [
@@ -1436,16 +1476,7 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
         blocoRebanho,
         blocoPesoKg,
         blocoPesoArroba,
-        {
-          nome: 'Produção',
-          rows: [
-            r('Produção acumulada (kg)', 'padrao', prodKgArr, 'prod_kg_acum'),
-            r('Arrobas acumuladas', 'padrao', arrobasProd, 'arrobas_acum'),
-            r('Arrobas/ha acumulado', 'med2', arrHa, 'arr_ha_acum'),
-            r('Desfrute acum. (cab)', 'cab', desfruteCab, 'desfrute_acum_cab'),
-            r('Desfrute acum. (@)', 'padrao', desfrute_arr, 'desfrute_acum_arr'),
-          ],
-        },
+        blocoProducao,
         {
           nome: 'Financeiro (Caixa)',
           rows: [
@@ -1471,17 +1502,7 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
         blocoRebanho,
         blocoPesoKg,
         blocoPesoArroba,
-        {
-          nome: 'Produção',
-          rows: [
-            r('Produção média do período (@)', 'padrao', arrobasProd, 'prod_media_arr', true),
-            r('Produção média do período (kg)', 'padrao', prodKgArr, 'prod_media_kg', true),
-            r('Arrobas/ha período', 'med2', arrHa, 'arr_ha_media', true),
-            r('Desfrute médio período (cab)', 'cab', desfruteCab, 'desfrute_cab_periodo', true),
-            r('Desfrute médio período (@)', 'padrao', desfrute_arr, 'desfrute_arr_periodo', true),
-            { indicador: 'GMD do período', format: 'gmd', valores: gmdPeriodo, indicadorId: 'gmd_periodo', noTotal: true },
-          ],
-        },
+        blocoProducao,
         {
           nome: 'Financeiro (Caixa)',
           rows: [
