@@ -1,6 +1,6 @@
 import { useState, useMemo, type ReactNode, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
-import { usePastos, type Pasto } from '@/hooks/usePastos';
+import { usePastos, isPastoAtivoNoMes, type Pasto } from '@/hooks/usePastos';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
@@ -402,8 +402,38 @@ function lerMatriculaConferida(bruto: unknown): boolean {
   return typeof v === 'string' && v.trim() !== '';
 }
 
+/* Piso de 220px na coluna de rotulo (era minmax(0,1.4fr), sem piso): com
+   `truncate` no label, "INFRAESTRUTURA" saia como "INFRAESTRU..." e
+   "Divergencia Campo" tambem cortava. 220px cobrem o pior caso pedido —
+   chevron (12) + gap (4) + "Divergencia Campo" em text-xs bold uppercase
+   com tracking-wide (~140) + gap (4) + a contagem shrink-0 (~50).
+   O piso NAO desalinha nada: GRID_LINHA e a MESMA grade da familia, do
+   tipo, da linha de pasto, do cabecalho de colunas e do total — os cinco
+   deslocam juntos. Os cinco tracks "em breve" tem piso zero, entao a
+   grade so passa a transbordar abaixo de ~480px de largura util.
+   "Legado — fora da taxonomia" (26 caracteres) SEGUE truncando: caberia
+   so com ~330px, e o briefing pediu duas etiquetas, nao esta. */
 const GRID_LINHA =
-  'minmax(0,1.4fr) 96px repeat(5, minmax(0,0.8fr)) 108px';
+  'minmax(220px,1.4fr) 96px repeat(5, minmax(0,0.8fr)) 108px';
+
+/* Item 6 — cor por FAMILIA, no texto do rotulo. Nao e derivada de
+   corDoTipoUso: aquela funcao responde por DESTINO (cria verde, recria
+   laranja, engorda azul, reforma vermelho) e essas cores permanecem
+   intactas um nivel abaixo. Familia sem entrada cai em text-foreground,
+   nunca em string vazia — apagar a cor sem avisar seria pior que herdar.
+   Divergencia e legado NAO entram aqui: sao alerta, nao familia, e
+   mantem o ambar proprio. */
+const COR_FAMILIA: Record<string, string> = {
+  pecuaria: 'text-success',
+  /* text-meta (25 85% 45%) e nao text-cta: o --cta e amarelo de FUNDO de
+     botao (mesmo valor literal de --warning, 43 87% 63%) e le fraco como
+     texto sobre branco. Mesma razao pela qual o token --meta foi criado em
+     fb72b86e. O amarelo permanece onde e fundo. */
+  agricultura: 'text-meta',
+  silvicultura: 'text-primary',
+  ambiental: 'text-muted-foreground',
+  infraestrutura: 'text-muted-foreground',
+};
 
 /**
  * Percentual de `valor` sobre `base`, com uma casa. Base zero ou ausente devolve
@@ -416,14 +446,23 @@ function percentualBR(valor: number, base: number | null | undefined): string {
 }
 
 function LinhaPasto({
-  pasto, onEdit, onToggle,
-}: { pasto: Pasto; onEdit: () => void; onToggle: (v: boolean) => void }) {
+  pasto, zebra, onEdit, onToggle,
+}: { pasto: Pasto; zebra: boolean; onEdit: () => void; onToggle: (v: boolean) => void }) {
   return (
+    /* Zebra vem de `zebra`, calculado em JS, NAO de odd:/even: do CSS. As
+       variantes do CSS contam irmaos do MESMO pai, e cada destino renderiza
+       seus pastos em container proprio: a alternancia reiniciaria a cada
+       destino e o ultimo pasto da Cria sairia da mesma cor que o primeiro da
+       Recria. Foi exatamente o defeito de 7a6fd296 na Composicao da Area. */
     <div
-      className={`grid gap-2 items-center px-2 py-0.5 border-b last:border-b-0 hover:bg-muted/40 leading-tight ${!pasto.ativo ? 'opacity-45' : ''}`}
+      className={`grid gap-2 items-center px-2 py-0.5 border-b last:border-b-0 hover:bg-muted/40 leading-tight ${zebra ? 'bg-muted/30' : 'bg-card'} ${!pasto.ativo ? 'opacity-45' : ''}`}
       style={{ gridTemplateColumns: GRID_LINHA }}
     >
-      <span className="text-[10px] font-medium truncate" title={pasto.nome}>{pasto.nome}</span>
+      {/* Terceiro degrau do recuo: familia 0, destino pl-4, pasto pl-8. O recuo
+          fica DENTRO da primeira celula, nunca no container — padding no
+          container mudaria a largura disponivel e os tracks `fr` seriam
+          calculados sobre bases diferentes em cada nivel. */}
+      <span className="text-[10px] font-medium truncate pl-8" title={pasto.nome}>{pasto.nome}</span>
       <span className="text-[10px] font-medium tabular-nums text-right">
         {formatarAreaBR(pasto.area_produtiva_ha ?? null) || '—'}
       </span>
@@ -505,8 +544,8 @@ function BlocoColapsavel({
 
 /** Um tipo de uso dentro de uma família. Vazio aparece, recolhido. */
 function GrupoTipo({
-  tipo, label, pastos: doTipo, basePercentual, onEdit, onToggle,
-}: { tipo: string; label: string; pastos: Pasto[]; basePercentual?: number; onEdit: (p: Pasto) => void; onToggle: (p: Pasto, v: boolean) => void }) {
+  tipo, label, pastos: doTipo, basePercentual, zebraOffset = 0, onEdit, onToggle,
+}: { tipo: string; label: string; pastos: Pasto[]; basePercentual?: number; zebraOffset?: number; onEdit: (p: Pasto) => void; onToggle: (p: Pasto, v: boolean) => void }) {
   // PR-PASTOS-LISTA-01 — grupo VAZIO aparece recolhido, nunca omitido: um
   // "Reserva Legal · 0 pastos" é INFORMAÇÃO, não ausência dela. Omitir esconderia
   // exatamente a lacuna que esta frente quer tornar visível — a repartição só fecha
@@ -523,6 +562,8 @@ function GrupoTipo({
   // PR-UI-PASTOS-BLOCO-01 — a caixa (border rounded-md) saiu daqui e foi para o
   // container da família: cinco destinos com moldura própria liam-se como cinco
   // ilhas, e a família não se lia como unidade. Aqui fica só o overflow.
+  // PR-PASTOSTAB-01 — a caixa da FAMÍLIA também saiu: a hierarquia agora é
+  // recuo progressivo dentro de um bloco só, sem moldura envolvendo destino.
   return (
     <div className="overflow-hidden">
       {/* PR-CORES-TEXTO-01 — a cor sai da BARRA e fica só no TEXTO do label.
@@ -530,29 +571,54 @@ function GrupoTipo({
           do produto é cor em título e subtítulo, nunca tint na linha. A barra perde
           fundo, texto e borda; o que separa as faixas é o divide-y do container da
           família, que já existe desde o BLOCO-01. */}
+      {/* PR-PASTOSTAB-01 itens 2 e 3 — o cabeçalho do destino deixa de ser flex com
+          texto corrido encostado na borda direita e passa a ser a MESMA grade da
+          família (GRID_LINHA), com a MESMA anatomia: contagem ao lado do rótulo na
+          primeira célula, área na segunda, percentual na terceira. Família e destino
+          passam a ler na mesma vertical.
+          Segundo degrau do recuo: pl-4 DENTRO da primeira célula. Fora dela,
+          deslocaria a base dos tracks `fr` e quebraria justamente o alinhamento
+          que este item constrói. */}
       <button
         type="button"
         onClick={() => setAberto(!aberto)}
-        className="w-full flex items-center gap-2 px-2 py-0.5 text-left font-medium hover:bg-muted/40"
+        className="w-full text-left grid gap-2 px-2 py-0.5 items-baseline font-medium hover:bg-muted/40"
+        style={{ gridTemplateColumns: GRID_LINHA }}
       >
-        {aberto ? <ChevronDown className="h-3 w-3 shrink-0" /> : <ChevronRight className="h-3 w-3 shrink-0" />}
-        {/* Cor mantida também no grupo VAZIO: "Reserva Legal · 0 pastos" é informação,
-            e apagar a cor dele o esconderia de novo — o oposto do que a lista quer. */}
-        <span className={`text-[11px] font-semibold ${corTextoDoTipoUso(tipo)}`}>
-          {label}
+        <span className="flex items-baseline gap-1 min-w-0 pl-4">
+          {aberto ? <ChevronDown className="h-3 w-3 shrink-0" /> : <ChevronRight className="h-3 w-3 shrink-0" />}
+          {/* Cor mantida também no grupo VAZIO: "Reserva Legal · 0 pastos" é informação,
+              e apagar a cor dele o esconderia de novo — o oposto do que a lista quer. */}
+          <span className={`text-[11px] font-semibold truncate ${corTextoDoTipoUso(tipo)}`}>
+            {label}
+          </span>
+          {/* A contagem herdava a cor do BOTÃO, que agora não tem nenhuma — sem isto ela
+              cairia na cor de texto padrão, mais forte que o label colorido ao lado.
+              Vazio segue mais esmaecido: ali a informação é a AUSÊNCIA, não o destino. */}
+          <span className={`text-[10px] tabular-nums shrink-0 whitespace-nowrap ${vazio ? 'text-muted-foreground/60' : 'text-muted-foreground'}`}>
+            {doTipo.length} pasto{doTipo.length !== 1 ? 's' : ''}
+          </span>
         </span>
-        {/* A contagem herdava a cor do BOTÃO, que agora não tem nenhuma — sem isto ela
-            cairia na cor de texto padrão, mais forte que o label colorido ao lado.
-            Vazio segue mais esmaecido: ali a informação é a AUSÊNCIA, não o destino. */}
-        <span className={`text-[10px] tabular-nums ml-auto ${vazio ? 'text-muted-foreground/60' : 'text-muted-foreground'}`}>
-          {doTipo.length} pasto{doTipo.length !== 1 ? 's' : ''} · {formatarAreaBR(somaHa)} ha · {percentualBR(somaHa, basePercentual)}
+        <span className="text-[11px] tabular-nums font-semibold text-foreground text-right">
+          {formatarAreaBR(somaHa)}
+        </span>
+        <span className="text-[10px] tabular-nums text-muted-foreground pl-2">
+          {percentualBR(somaHa, basePercentual)}
         </span>
       </button>
       {aberto && !vazio && (
         <div>
           <CabecalhoColunas />
-          {doTipo.map(p => (
-            <LinhaPasto key={p.id} pasto={p} onEdit={() => onEdit(p)} onToggle={(v) => onToggle(p, v)} />
+          {doTipo.map((p, i) => (
+            <LinhaPasto
+              key={p.id}
+              pasto={p}
+              /* Índice CORRIDO na família (offset + i), não o índice local: é o que
+                 impede a zebra de reiniciar na virada de destino. */
+              zebra={(zebraOffset + i) % 2 === 0}
+              onEdit={() => onEdit(p)}
+              onToggle={(v) => onToggle(p, v)}
+            />
           ))}
         </div>
       )}
@@ -634,11 +700,41 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
   // verbatim: a aba Área do V2Fazendas vai consumir a MESMA repartição, e duas
   // cópias divergiriam. O filtro de `ativo` fica aqui, em `filtered`, porque só
   // esta tela tem o modo "Inativos".
-  const agrupado = useMemo(() => agruparPastosPorFamilia(filtered), [filtered]);
+  //
+  // PR-PASTOSTAB-01 item 1 — MÊS CORRENTE, declarado, no mesmo idioma do
+  // V2Fazendas:88-93. Esta tela NÃO tem seletor de mês nem de ano: o único mês
+  // que ela pode oferecer honestamente é o de hoje, e é o certo, porque é
+  // cadastro ATUAL. A comparação é contra o mês CONSULTADO e nunca contra
+  // now() dentro do predicado — daí o mês entrar como valor, não como default
+  // escondido em `isPastoAtivoNoMes`.
+  const mesCorrente = useMemo(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  }, []);
+
+  // Vigência (data_inicio/data_fim) é UM conjunto, usado por DOIS consumidores:
+  // o agrupamento e o total do rodapé. Filtrar só no agrupamento deixaria o
+  // "Total dos pastos" contando pasto encerrado — foi assim que a Pureza
+  // acusava 4.725,96 contra matrícula de 4.656,20, os 69,76 ha de IND.05 e
+  // IND.06, desmembrados para o Retiro Agricultura em 2025-05-31.
+  // `ativo` continua em `filtered`, separado: vigência e ativo são coisas
+  // diferentes, e só esta tela tem o modo "Inativos".
+  const vigentes = useMemo(
+    () => filtered.filter(p => isPastoAtivoNoMes(p, mesCorrente)),
+    [filtered, mesCorrente],
+  );
+
+  // `mesCorrente` vai TAMBÉM para a função, como o briefing pede: a filtragem
+  // é idempotente (mesmo predicado, mesmo mês) e deixa a regra explícita na
+  // chamada, sem depender de quem montou `vigentes` acima.
+  const agrupado = useMemo(
+    () => agruparPastosPorFamilia(vigentes, mesCorrente),
+    [vigentes, mesCorrente],
+  );
 
   const somaPastos = useMemo(
-    () => filtered.reduce((s, p) => s + (p.area_produtiva_ha ?? 0), 0),
-    [filtered],
+    () => vigentes.reduce((s, p) => s + (p.area_produtiva_ha ?? 0), 0),
+    [vigentes],
   );
 
   const jaTemDivergencia = useMemo(
@@ -879,6 +975,12 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
         </DndContext>
       ) : (
         <div className="space-y-1">
+          {/* Item 7 — título do agrupamento, com a MESMA palavra do botão do toggle
+              ("Por destino", na barra): a lista deixa de começar sem sujeito, e o
+              rótulo repetido amarra o que se vê ao modo que o produziu. */}
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground pb-0.5">
+            Por destino
+          </p>
           {/* PR-AREA-LISTA-03 — moldura contínua: com tudo recolhido, as cinco famílias
               eram cinco linhas soltas no branco. Antes o bloco de destinos abaixo de cada
               uma dava a estrutura; recolhido, sumiu. divide-y no mesmo idioma do container
@@ -911,7 +1013,7 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
                     de pasto, que é o que o BLOCO-01 construiu. */}
                 <span className="flex items-baseline gap-1 min-w-0">
                   {chevron}
-                  <span className="text-xs uppercase tracking-wide font-bold text-foreground truncate">
+                  <span className={`text-xs uppercase tracking-wide font-bold truncate ${COR_FAMILIA[f.grupo] ?? 'text-foreground'}`}>
                     {f.label}
                   </span>
                   <span className="text-[10px] font-normal text-muted-foreground shrink-0 whitespace-nowrap">
@@ -929,17 +1031,24 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
                 </span>
               </>)}
             >
-              {/* PR-UI-PASTOS-BLOCO-01 — bloco contínuo: a moldura é da FAMÍLIA e os
-                  destinos são faixas dentro dela, separadas por 1px. Sem space-y, para
-                  as barras coloridas ficarem coladas. */}
-              <div className="divide-y divide-border/30 border rounded-md overflow-hidden ml-2">
-                {f.tipos.map(t => (
+              {/* PR-PASTOSTAB-01 item 2 — a moldura da família SAIU: `border` virou
+                  `border-transparent`. A caixa deixa de ser desenhada, mas a
+                  GEOMETRIA fica: ml-2 (8px) + borda (1px) são exatamente o que
+                  alinha as linhas de pasto com o cabeçalho da família. Trocar por
+                  nada desalinharia 9px a coluna de área. Hierarquia agora é recuo
+                  progressivo — família 0, destino pl-4, pasto pl-8 — dentro do
+                  bloco único que a lista inteira já é. */}
+              <div className="divide-y divide-border/30 border border-transparent overflow-hidden ml-2">
+                {f.tipos.map((t, i) => (
                   <GrupoTipo
                     key={t.tipo}
                     tipo={t.tipo}
                     label={t.label}
                     pastos={t.pastos}
                     basePercentual={f.somaHa}
+                    /* Zebra CORRIDA na família: soma dos pastos dos destinos
+                       anteriores. Sem isto a alternância reinicia a cada destino. */
+                    zebraOffset={f.tipos.slice(0, i).reduce((acc, x) => acc + x.pastos.length, 0)}
                     onEdit={(p) => { setEditingPasto(p); setDialogOpen(true); }}
                     onToggle={(p, v) => toggleAtivo(p.id, v)}
                   />
@@ -976,9 +1085,9 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
                 </span>
               </>)}
             >
-              {/* Mesma moldura de bloco das famílias (PR-UI-PASTOS-BLOCO-01): sem ela
-                  a barra ficaria solta, já que a caixa saiu do GrupoTipo. */}
-              <div className="divide-y divide-border/30 border rounded-md overflow-hidden ml-2">
+              {/* Mesma anatomia das famílias (item 2): sem desenho de caixa, com a
+                  geometria ml-2 + 1px que alinha as linhas de pasto. */}
+              <div className="divide-y divide-border/30 border border-transparent overflow-hidden ml-2">
                 <GrupoTipo
                   tipo="divergencia"
                   label="Pendente"
@@ -1020,19 +1129,20 @@ export function PastosTab({ hostBarra }: { hostBarra?: HTMLElement | null } = {}
                 </span>
               </>)}
             >
-              <div className="divide-y divide-border/30 border rounded-md overflow-hidden ml-2">
+              <div className="divide-y divide-border/30 border border-transparent overflow-hidden ml-2">
               {Object.entries(
                 agrupado.legado.reduce<Record<string, Pasto[]>>((acc, p) => {
                   (acc[p.tipo_uso] ??= []).push(p);
                   return acc;
                 }, {}),
-              ).map(([tipo, lista]) => (
+              ).map(([tipo, lista], i, todos) => (
                 <GrupoTipo
                   key={tipo}
                   tipo={tipo}
                   label={`${labelDoTipoUso(tipo)} — legado`}
                   pastos={lista}
                   basePercentual={agrupado.legado.reduce((s, p) => s + (p.area_produtiva_ha ?? 0), 0)}
+                  zebraOffset={todos.slice(0, i).reduce((acc, [, l]) => acc + l.length, 0)}
                   onEdit={(p) => { setEditingPasto(p); setDialogOpen(true); }}
                   onToggle={(p, v) => toggleAtivo(p.id, v)}
                 />
