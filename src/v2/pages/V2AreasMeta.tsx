@@ -2,9 +2,6 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, Globe, Loader2, Save } from 'lucide-react';
@@ -44,7 +41,10 @@ function parseNumOrZero(v: string): number {
 
 function fmt(n: number | null | undefined): string {
   if (n === null || n === undefined || !Number.isFinite(n)) return '—';
-  return n.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  /* Padrao numerico do sistema: pt-BR, 2 casas fixas, separador de milhar.
+     Vale para valor EXIBIDO; o valor editado no input segue o que o componente
+     ja faz — nao alterar parsing. */
+  return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function media(arr: (number | null)[]): number | null {
@@ -67,11 +67,13 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
     const n = Number(anoInicial);
     return Number.isFinite(n) && n > 0 ? n : new Date().getFullYear();
   }, [anoInicial]);
-  const [anoLocal, setAnoLocal] = useState<number>(anoInicialNum);
-  useEffect(() => { setAnoLocal(anoInicialNum); }, [anoInicialNum]);
+  /* Ano vem do cabecalho da pagina, fonte unica. Havia um seletor proprio no card
+     com estado `anoLocal`: o useEffect so sincronizava local <- prop, entao trocar o
+     de dentro deixava os dois mostrando anos diferentes — e quem governava a query
+     era o de dentro. */
 
   const { loading, saving, error, data, upsertAno } = useAreaPlanejamento(
-    clienteId, fazendaId, anoLocal, isGlobal
+    clienteId, fazendaId, anoInicialNum, isGlobal
   );
 
   // Estado local editável (12 linhas)
@@ -83,7 +85,7 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
   // Comportamento V1: descarta alterações não-salvas silenciosamente, com aviso visual via dirty.
   const lastSyncKeyRef = useRef<string>('');
   useEffect(() => {
-    const key = `${clienteId ?? ''}|${fazendaId ?? ''}|${anoLocal}|${isGlobal ? 'g' : 'i'}`;
+    const key = `${clienteId ?? ''}|${fazendaId ?? ''}|${anoInicialNum}|${isGlobal ? 'g' : 'i'}`;
     if (key === lastSyncKeyRef.current && data == null) return;
     lastSyncKeyRef.current = key;
     if (!data) {
@@ -95,7 +97,7 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
       pec:   m.area_pecuaria_ha   == null ? '' : String(m.area_pecuaria_ha),
       agric: m.area_agricultura_ha == null ? '' : String(m.area_agricultura_ha),
     })));
-  }, [data, clienteId, fazendaId, anoLocal, isGlobal]);
+  }, [data, clienteId, fazendaId, anoInicialNum, isGlobal]);
 
   // Detectar dirty (apenas modo individual)
   const dirty = useMemo(() => {
@@ -130,10 +132,6 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
     if (isGlobal) return data?.mediaTotal ?? null;
     return media(totalsLocal);
   }, [isGlobal, data, totalsLocal]);
-
-  // Lista de anos no dropdown (ano corrente +/- 5)
-  const anoCorrente = new Date().getFullYear();
-  const anosOpts = Array.from({ length: 11 }, (_, i) => anoCorrente - 5 + i);
 
   function onChangeCelula(idx: number, campo: 'pec' | 'agric', valor: string) {
     setLinhas(prev => prev.map((l, i) => i === idx ? { ...l, [campo]: valor } : l));
@@ -196,14 +194,6 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
               </CardDescription>
             </div>
             <div className="flex items-center gap-2">
-              <Select value={String(anoLocal)} onValueChange={(v) => setAnoLocal(Number(v))}>
-                <SelectTrigger className="w-24 h-8 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {anosOpts.map(a => <SelectItem key={a} value={String(a)}>{a}</SelectItem>)}
-                </SelectContent>
-              </Select>
               {!isGlobal && (
                 <Button
                   size="sm"
@@ -275,7 +265,7 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
                   {linhas.map((l, idx) => (
                     <td key={l.mes} className="px-0.5 py-0.5 text-center">
                       {isGlobal ? (
-                        <span className="text-muted-foreground">
+                        <span className="text-[11px] italic text-cta">
                           {fmt(data?.porMes[idx]?.area_pecuaria_ha ?? null)}
                         </span>
                       ) : (
@@ -284,7 +274,7 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
                           inputMode="decimal"
                           step="0.1"
                           min="0"
-                          className="h-6 w-full text-xs text-right px-1 tabular-nums"
+                          className="h-6 w-full text-right px-1 tabular-nums text-[11px] italic text-cta"
                           value={l.pec}
                           onChange={(e) => onChangeCelula(idx, 'pec', e.target.value)}
                           disabled={saving}
@@ -293,7 +283,7 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
                       )}
                     </td>
                   ))}
-                  <td className="px-2 py-1 text-center font-medium bg-orange-50/60 dark:bg-orange-950/15">{fmt(mediaPec)}</td>
+                  <td className="px-2 py-1 text-center font-medium bg-orange-50/60 dark:bg-orange-950/15 text-[11px] italic text-cta">{fmt(mediaPec)}</td>
                 </tr>
 
                 {/* Agricultura */}
@@ -302,7 +292,7 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
                   {linhas.map((l, idx) => (
                     <td key={l.mes} className="px-0.5 py-0.5 text-center">
                       {isGlobal ? (
-                        <span className="text-muted-foreground">
+                        <span className="text-[11px] italic text-cta">
                           {fmt(data?.porMes[idx]?.area_agricultura_ha ?? null)}
                         </span>
                       ) : (
@@ -311,7 +301,7 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
                           inputMode="decimal"
                           step="0.1"
                           min="0"
-                          className="h-6 w-full text-xs text-right px-1 tabular-nums"
+                          className="h-6 w-full text-right px-1 tabular-nums text-[11px] italic text-cta"
                           value={l.agric}
                           onChange={(e) => onChangeCelula(idx, 'agric', e.target.value)}
                           disabled={saving}
@@ -320,18 +310,18 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
                       )}
                     </td>
                   ))}
-                  <td className="px-2 py-1 text-center font-medium bg-orange-50/60 dark:bg-orange-950/15">{fmt(mediaAgr)}</td>
+                  <td className="px-2 py-1 text-center font-medium bg-orange-50/60 dark:bg-orange-950/15 text-[11px] italic text-cta">{fmt(mediaAgr)}</td>
                 </tr>
 
                 {/* Total — sempre read-only, paleta META destaque */}
                 <tr className="bg-orange-100/50 dark:bg-orange-900/25 border-t-2 border-orange-200/70 dark:border-orange-900/50">
                   <td className="px-2 py-1.5 font-semibold sticky left-0 bg-orange-100/50 dark:bg-orange-900/25 text-orange-900 dark:text-orange-200">Total</td>
                   {linhas.map((_, idx) => (
-                    <td key={idx} className="px-1 py-1.5 text-center font-semibold text-orange-900 dark:text-orange-200">
+                    <td key={idx} className="px-1 py-1.5 text-center font-semibold text-[11px] italic text-cta">
                       {fmt(totalsLocal[idx])}
                     </td>
                   ))}
-                  <td className="px-2 py-1.5 text-center font-semibold bg-orange-200/40 dark:bg-orange-900/40 text-orange-900 dark:text-orange-200">{fmt(mediaTot)}</td>
+                  <td className="px-2 py-1.5 text-center font-semibold bg-orange-200/40 dark:bg-orange-900/40 text-[11px] italic text-cta">{fmt(mediaTot)}</td>
                 </tr>
               </tbody>
             </table>
@@ -342,9 +332,8 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
       {/* Rodapé informativo */}
       <p className="text-[11px] text-muted-foreground">
         {isGlobal
-          ? 'Global: Total = soma completa cadastrada no banco, incluindo campos futuros Ambiental e Infraestrutura.'
+          ? 'Global: Total = soma de todas as áreas cadastradas no banco. Em modo Global, mês é considerado cadastrado se ao menos uma fazenda tiver linha.'
           : 'Individual: Total = Pecuária + Agricultura. V1 edita apenas Pecuária e Agricultura. As demais áreas ficam em branco até a fase seguinte — não são gravadas como zero.'}
-        {isGlobal && ' Em modo Global, mês é considerado cadastrado se ao menos uma fazenda tiver linha.'}
       </p>
     </div>
   );
