@@ -627,7 +627,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     areaPorFazendaMes,
     snapshotsFazenda,
     lotUaHa, kgHa, statusArea, faltandoCount,
-    seriesMensais, seriesMeta, cabecasIndicador, pesoMedioIndicador, gmdIndicador, uaHaIndicador, kgHaIndicador, arrobasIndicador, desfruteIndicador, valorRebanhoIndicador,
+    seriesMensais, seriesMeta, cabecasIndicador, pesoMedioIndicador, gmdIndicador, uaHaIndicador, kgHaIndicador, arrobasIndicador, desfruteIndicador, desfrutePctArrIndicador, valorRebanhoIndicador,
     receitaPecIndicador, custeioPecIndicador, custoArrIndicador, precoArrIndicador, custoCabIndicador, margemArrIndicador,
     // PR-HOME-CAIXA-CONSOLIDADO-01 — as 15 linhas de fluxo e o saldo.
     receitaPecCaixaIndicador, receitaAgriIndicador, receitaOutrasIndicador, captacaoIndicador, entradasNaoClassificadasIndicador,
@@ -2095,7 +2095,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
                   <th className="text-right font-normal px-1.5 py-1 w-[64px]">Lot. (UA/ha)</th>
                   <th className="text-right font-normal px-1.5 py-1">GMD</th>
                   <th className="text-right font-normal px-1.5 py-1">@ prod.</th>
-                  <th className="text-right font-normal px-1.5 py-1">Desfrute</th>
+                  {/* "(@)" no cabecalho: havia DOIS desfrutes com o mesmo nome na
+                      tela — esta coluna em arrobas e o tile em cabecas. */}
+                  <th className="text-right font-normal px-1.5 py-1">Desfrute (@)</th>
                 </tr>
               </thead>
               <tbody>
@@ -2119,9 +2121,13 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
                     <td className="text-right px-1.5 py-0.5 text-muted-foreground w-[64px]">{fmtN(l.lotacao, 2) ?? '—'}</td>
                     <td className="text-right px-1.5 py-0.5 text-muted-foreground">{fmtN(l.gmd, 3) ?? '—'}</td>
                     <td className="text-right px-1.5 py-0.5 text-muted-foreground">{fmtN(l.arrobas, 1) ?? '—'}</td>
-                    {/* Denominador zero exibe "—", nunca divisao por zero. */}
+                    {/* Razao de SOMAS, a MESMA regra do desfrutePctArrIndicador:
+                        Σ @ vendidas / Σ @ iniciais. Antes dividia a SOMA das
+                        vendidas pela MEDIA das iniciais — no mes dava o mesmo, no
+                        periodo dava um numero que nao era nem um nem outro.
+                        Denominador zero exibe "—", nunca divisao por zero. */}
                     <td className="text-right px-1.5 py-0.5 text-muted-foreground">
-                      {l.arrIniciais > 0 ? `${fmtN((l.arrVendidas / l.arrIniciais) * 100, 1)}%` : '—'}
+                      {l.arrIniciaisSoma > 0 ? `${fmtN((l.arrVendidas / l.arrIniciaisSoma) * 100, 1)}%` : '—'}
                     </td>
                   </tr>
                 ))}
@@ -2146,8 +2152,10 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
                   <td className="text-right px-1.5 py-0.5 w-[64px]">{fmtN(uaHaIndicador?.valor ?? null, 2) ?? '—'}</td>
                   <td className="text-right px-1.5 py-0.5">{fmtN(gmdIndicador?.valor ?? null, 3) ?? '—'}</td>
                   <td className="text-right px-1.5 py-0.5">{fmtN(arrobasIndicador?.valor ?? null, 1) ?? '—'}</td>
+                  {/* Total consome o INDICADOR, como as outras quatro colunas —
+                      nao um total recalculado na tela. Bate por construcao. */}
                   <td className="text-right px-1.5 py-0.5">
-                    {totProdutivo.desfrute != null ? `${fmtN(totProdutivo.desfrute, 1)}%` : '—'}
+                    {desfrutePctArrIndicador?.valor != null ? `${fmtN(desfrutePctArrIndicador.valor, 1)}%` : '—'}
                   </td>
                 </tr>
               </tbody>
@@ -2177,6 +2185,14 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
             deltaAno={desfruteIndicador?.deltaAno ?? null}
             deltaMeta={desfruteIndicador?.deltaMeta ?? null}
             onClick={() => setModalIndicador('desfrute')} />
+          {/* Desfrute (@) LOGO ABAIXO do de cabecas — os dois lado a lado e com
+              rotulos distintos e o que impede a confusao que existia. Sem
+              onClick: o modal de historico so conhece os indicadores do mapa de
+              `modalIndicador`, e acrescentar um id novo la e outro escopo. */}
+          <MetricTile label={desfrutePctArrIndicador?.label ?? 'DESFRUTE (@) NO MÊS'} value={fmtN(desfrutePctArrIndicador?.valor ?? null, 1)} unit="%" loading={loadingPainel}
+            deltaMes={desfrutePctArrIndicador?.deltaMes ?? null}
+            deltaAno={desfrutePctArrIndicador?.deltaAno ?? null}
+            deltaMeta={desfrutePctArrIndicador?.deltaMeta ?? null} />
           <MetricTile label={gmdIndicador?.label ?? 'GMD'} value={fmtN(gmdIndicador?.valor ?? null, 3)} unit="kg/dia" loading={loadingPainel}
             deltaMes={gmdIndicador?.deltaMes ?? null}
             deltaAno={gmdIndicador?.deltaAno ?? null}

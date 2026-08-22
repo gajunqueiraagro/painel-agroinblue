@@ -56,6 +56,11 @@ export interface ProdutivoPorFazenda {
   ua_media: number;
   arrobas: number;
   arrIniciais: number;
+  /* SOMA das @ iniciais do periodo. `arrIniciais` e a MEDIA e continua
+     intacta; a soma existe porque o desfrute do periodo e RAZAO DE SOMAS
+     (Σ @ vendidas / Σ @ iniciais), e dividir uma soma por uma media daria
+     um numero que nao e nem um nem outro. No mes os dois coincidem. */
+  arrIniciaisSoma: number;
   arrVendidas: number;
   /* Serie mensal de UA, indice 0 = Jan, `null` em mes sem linha. O valor
      colapsado `ua_media` CONTINUA existindo e nao mudou — quem precisa da
@@ -256,6 +261,7 @@ export function useProdutivoPorFazenda(
           ua_media: a.ua / a.n,
           uaPorMes: a.ua12,
           arrIniciais: a.arrIni / a.n,
+          arrIniciaisSoma: a.arrIni,
           arrobas: (bioPorFazenda.get(fazenda_id) ?? 0) / KG_POR_ARROBA,
           arrVendidas: vendPorFazenda.get(fazenda_id) ?? 0,
         });

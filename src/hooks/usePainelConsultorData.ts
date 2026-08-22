@@ -376,6 +376,24 @@ export interface PainelConsultorDataResult {
     serieMeta?:  number[];
   } | null;
   /**
+   * Desfrute (@) em PERCENTUAL — @ desfrutadas / @ iniciais.
+   * Mês = desfrute_arr[m] / (pesoTotalIni[m]/30). Período = razão de SOMAS.
+   * NÃO confundir com `desfruteArrIndicador` (arrobas absolutas, 3 consumidores)
+   * nem com `desfruteIndicador` (cabeças). São três indicadores distintos.
+   */
+  desfrutePctArrIndicador: {
+    label:      string;
+    titulo:     string;
+    subtitulo:  string;
+    valor:      number | null;
+    deltaMes:   number | null;
+    deltaAno:   number | null;
+    deltaMeta:  number | null;
+    serieAno:   number[];
+    serieAnoAnt?: number[];
+    serieMeta?:  number[];
+  } | null;
+  /**
    * Indicador Valor do Rebanho — patrimônio (estoque).
    * Mês = posição final do mês. Período = MESMO VALOR (não soma, não média).
    * Fonte: valor_rebanho_realizado_validado (Fazenda) / vw_valor_rebanho_realizado_global_mensal (Global).
@@ -2306,6 +2324,95 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
   })();
 
   // ─────────────────────────────────────────────────────────────
+  // ── Desfrute (@) em PERCENTUAL — @ desfrutadas / @ iniciais ──
+  //
+  /* Distinto do desfruteArrIndicador, que entrega arrobas ABSOLUTAS e tem
+     tres consumidores esperando isso (buildPlanejamentoVisaoGeralData:1050,
+     buildProducaoRealizadaData:153, BlocoReuniaoExecutiva:25), e do
+     desfruteIndicador, que e em CABECAS. Sao tres indicadores diferentes —
+     nao unificar.
+     Derivado: reusa desfrute_arr como numerador, sem fonte nova.
+     @ INICIAIS = pesoTotalIni / 30, a definicao canonica do PC-100
+     (consolidacaoGlobal.ts:86, `peso_ini_arr = Σ peso_total_inicial / 30`).
+     Conferido em 22/08 contra o `peso_inicio_kg` da vw_zoot_fazenda_mensal
+     que a tabela por fazenda usa: IDENTICOS nos 7 meses do NJ/2026 — as duas
+     fontes de @ iniciais concordam, entao a linha e o tile partem do mesmo
+     denominador.
+     PERIODO = razao de SOMAS (Σ desfrute_arr / Σ @ iniciais), nunca media dos
+     percentuais mensais: e a regra que os PRs de 22/08 fixaram para o periodo,
+     a mesma do precoArr (Σ recPecComp / Σ desfrute_arr, :453). */
+  // ─────────────────────────────────────────────────────────────
+  const KG_ARROBA_PC100 = 30;
+  const arrIni12 = monthlyData.pesoTotalIni.map(kg => (kg ?? 0) / KG_ARROBA_PC100);
+  const pctArr = (num: number, den: number) => (den > 0 ? (num / den) * 100 : NaN);
+
+  const desfrutePctArrMesSerie13 = Array.from({ length: 13 }, (_, i) =>
+    i === 0 ? NaN : pctArr(monthlyData.desfrute_arr[i - 1] ?? 0, arrIni12[i - 1] ?? 0)
+  );
+  const desfrutePctArrPeriodoSerie13 = Array.from({ length: 13 }, (_, i) =>
+    i === 0 ? NaN : pctArr(
+      sumArr(sliceUpTo(monthlyData.desfrute_arr, i - 1)),
+      sumArr(sliceUpTo(arrIni12, i - 1)),
+    )
+  );
+  const desfrutePctArrSerie = isPeriodo ? desfrutePctArrPeriodoSerie13 : desfrutePctArrMesSerie13;
+  const desfrutePctArrValor = safe(desfrutePctArrSerie[mesIdx]);
+
+  const desfrutePctArrDeltaMes = (() => {
+    if (mesIdx <= 1) return null;
+    const curr = safe(desfrutePctArrSerie[mesIdx]);
+    const prev = safe(desfrutePctArrSerie[mesIdx - 1]);
+    if (curr == null || prev == null || prev === 0) return null;
+    return ((curr - prev) / prev) * 100;
+  })();
+
+  /* Ano-1: numerador de pecAnoAnt12.desfArr (o MESMO do desfruteArr) e
+     denominador de viewTotalsAnoAnt.peso_total_inicial — a fonte ano-1 que o
+     prodKg ano-1 ja usa (:1826). Sem os dois, nao ha razao: devolve null e o
+     delta simplesmente nao aparece, como nos irmaos. */
+  const arrIniAnoAnt12 = viewTotalsAnoAnt
+    ? Array.from({ length: 12 }, (_, i) => (viewTotalsAnoAnt[i + 1]?.peso_total_inicial ?? 0) / KG_ARROBA_PC100)
+    : null;
+  const desfrutePctArrAnoAntPossui = desfruteArrAnoAntPossui && !!arrIniAnoAnt12 && arrIniAnoAnt12.some(v => v > 0);
+  const desfrutePctArrSerieAnoAnt = (desfrutePctArrAnoAntPossui && arrIniAnoAnt12)
+    ? Array.from({ length: 13 }, (_, i) => {
+        if (i === 0) return NaN;
+        return isPeriodo
+          ? pctArr(sumArr(sliceUpTo(pecAnoAnt12.desfArr, i - 1)), sumArr(sliceUpTo(arrIniAnoAnt12, i - 1)))
+          : pctArr(pecAnoAnt12.desfArr[i - 1] ?? 0, arrIniAnoAnt12[i - 1] ?? 0);
+      })
+    : null;
+  const desfrutePctArrDeltaAno = (() => {
+    if (!desfrutePctArrSerieAnoAnt) return null;
+    const curr = safe(desfrutePctArrSerie[mesIdx]);
+    const ant  = safe(desfrutePctArrSerieAnoAnt[mesIdx]);
+    if (curr == null || ant == null || ant === 0) return null;
+    return ((curr - ant) / ant) * 100;
+  })();
+
+  /* Meta: numerador de pecMeta12.desfArr, denominador de
+     monthlyDataMeta.pesoTotalIni — o mesmo par que o cenario realizado usa. */
+  const arrIniMeta12 = monthlyDataMeta
+    ? monthlyDataMeta.pesoTotalIni.map(kg => (kg ?? 0) / KG_ARROBA_PC100)
+    : null;
+  const desfrutePctArrMetaPossui = desfruteArrMetaPossui && !!arrIniMeta12 && arrIniMeta12.some(v => v > 0);
+  const desfrutePctArrSerieMeta = (desfrutePctArrMetaPossui && arrIniMeta12)
+    ? Array.from({ length: 13 }, (_, i) => {
+        if (i === 0) return NaN;
+        return isPeriodo
+          ? pctArr(sumArr(sliceUpTo(pecMeta12.desfArr, i - 1)), sumArr(sliceUpTo(arrIniMeta12, i - 1)))
+          : pctArr(pecMeta12.desfArr[i - 1] ?? 0, arrIniMeta12[i - 1] ?? 0);
+      })
+    : null;
+  const desfrutePctArrDeltaMeta = (() => {
+    if (!desfrutePctArrSerieMeta) return null;
+    const curr = safe(desfrutePctArrSerie[mesIdx]);
+    const meta = safe(desfrutePctArrSerieMeta[mesIdx]);
+    if (curr == null || meta == null || meta === 0) return null;
+    return ((curr - meta) / meta) * 100;
+  })();
+
+  // ─────────────────────────────────────────────────────────────
   // ── Valor do Rebanho oficial — patrimônio/estoque (1-based, length 13) ──
   // mes = posição do mês. periodo = MESMO valor (estoque, sem soma/média).
   // Fonte: valor_rebanho_realizado_validado / vw_valor_rebanho_realizado_global_mensal.
@@ -3417,6 +3524,20 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       serieAnoAnt: desfruteSerieAnoAnt ?? undefined,
       serieMeta:   desfruteSerieMeta ?? undefined,
     } : null,
+    desfrutePctArrIndicador: monthlyData ? {
+      label:     isPeriodo ? 'DESFRUTE (@) NO PERÍODO' : 'DESFRUTE (@) NO MÊS',
+      titulo:    isPeriodo ? 'Desfrute (@) no período' : 'Desfrute (@) no mês',
+      subtitulo: isPeriodo
+        ? '@ desfrutadas ÷ @ iniciais no período (razão de somas)'
+        : '@ desfrutadas ÷ @ iniciais no mês',
+      valor:     desfrutePctArrValor,
+      deltaMes:  desfrutePctArrDeltaMes,
+      deltaAno:  desfrutePctArrDeltaAno,
+      deltaMeta: desfrutePctArrDeltaMeta,
+      serieAno:    desfrutePctArrSerie,
+      serieAnoAnt: desfrutePctArrSerieAnoAnt ?? undefined,
+      serieMeta:   desfrutePctArrSerieMeta ?? undefined,
+    } : null,
     desfruteArrIndicador: monthlyData ? {
       label:     isPeriodo ? 'DESFRUTE (@) NO PERÍODO' : 'DESFRUTE (@) NO MÊS',
       titulo:    isPeriodo ? 'Desfrute (@) no período' : 'Desfrute (@) no mês',
@@ -3589,6 +3710,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       kgHaIndicador: null,
       arrobasIndicador: null,
       desfruteIndicador: null,
+      desfrutePctArrIndicador: null,
       desfruteArrIndicador: null,
       valorRebanhoIndicador: null,
       receitaPecIndicador: null,
