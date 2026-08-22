@@ -46,6 +46,31 @@ export interface ZootCategoriaMensal {
   dias_mes: number;
   gmd: number | null;
   producao_biologica: number;
+  /* Quebra por tipo — migration 20260913120000. Chegam pelo `select('*')`
+     da query, sem alteracao de consulta. `entradas_externas` continua
+     sendo a soma das tres de entrada, e `saidas_externas` das seis de
+     saida: as colunas novas detalham, nao substituem.
+     OPCIONAL e anulavel: linha de cache anterior ao rebuild traz NULL, e o
+     tipo tem de admitir isso — declarar `number` seria mentir sobre o dado e
+     obrigaria todo fixture de teste a inventar 18 zeros. */
+  cab_nascimento?: number | null;
+  cab_compra?: number | null;
+  cab_transf_entrada?: number | null;
+  cab_abate?: number | null;
+  cab_venda?: number | null;
+  cab_venda_pe?: number | null;
+  cab_transf_saida?: number | null;
+  cab_consumo?: number | null;
+  cab_morte?: number | null;
+  peso_nascimento?: number | null;
+  peso_compra?: number | null;
+  peso_transf_entrada?: number | null;
+  peso_abate?: number | null;
+  peso_venda?: number | null;
+  peso_venda_pe?: number | null;
+  peso_transf_saida?: number | null;
+  peso_consumo?: number | null;
+  peso_morte?: number | null;
   fonte_oficial_mes: 'fechamento' | 'fallback_movimentacao' | 'projecao' | 'parcial';
 }
 
@@ -260,6 +285,24 @@ export function totalizarPorMes(rows: ZootCategoriaMensal[]): Record<number, {
   peso_total_inicial: number;
   peso_total_final: number;
   producao_biologica: number;
+  cab_nascimento: number;
+  cab_compra: number;
+  cab_transf_entrada: number;
+  cab_abate: number;
+  cab_venda: number;
+  cab_venda_pe: number;
+  cab_transf_saida: number;
+  cab_consumo: number;
+  cab_morte: number;
+  peso_nascimento: number;
+  peso_compra: number;
+  peso_transf_entrada: number;
+  peso_abate: number;
+  peso_venda: number;
+  peso_venda_pe: number;
+  peso_transf_saida: number;
+  peso_consumo: number;
+  peso_morte: number;
 }> {
   const byMes = groupByMes(rows);
   const result: Record<number, any> = {};
@@ -284,6 +327,27 @@ export function totalizarPorMes(rows: ZootCategoriaMensal[]): Record<number, {
       peso_total_inicial: cats.reduce((s, c) => s + c.peso_total_inicial, 0),
       peso_total_final: cats.reduce((s, c) => s + c.peso_total_final, 0),
       producao_biologica: cats.reduce((s, c) => s + c.producao_biologica, 0),
+      /* As 18 somam por categoria igual as irmas. `?? 0` porque linha de cache
+         anterior ao rebuild traz NULL — e ali zero e a leitura correta: a
+         categoria nao movimentou naquele tipo. */
+      cab_nascimento: cats.reduce((s, c2) => s + (c2.cab_nascimento ?? 0), 0),
+      cab_compra: cats.reduce((s, c2) => s + (c2.cab_compra ?? 0), 0),
+      cab_transf_entrada: cats.reduce((s, c2) => s + (c2.cab_transf_entrada ?? 0), 0),
+      cab_abate: cats.reduce((s, c2) => s + (c2.cab_abate ?? 0), 0),
+      cab_venda: cats.reduce((s, c2) => s + (c2.cab_venda ?? 0), 0),
+      cab_venda_pe: cats.reduce((s, c2) => s + (c2.cab_venda_pe ?? 0), 0),
+      cab_transf_saida: cats.reduce((s, c2) => s + (c2.cab_transf_saida ?? 0), 0),
+      cab_consumo: cats.reduce((s, c2) => s + (c2.cab_consumo ?? 0), 0),
+      cab_morte: cats.reduce((s, c2) => s + (c2.cab_morte ?? 0), 0),
+      peso_nascimento: cats.reduce((s, c2) => s + (c2.peso_nascimento ?? 0), 0),
+      peso_compra: cats.reduce((s, c2) => s + (c2.peso_compra ?? 0), 0),
+      peso_transf_entrada: cats.reduce((s, c2) => s + (c2.peso_transf_entrada ?? 0), 0),
+      peso_abate: cats.reduce((s, c2) => s + (c2.peso_abate ?? 0), 0),
+      peso_venda: cats.reduce((s, c2) => s + (c2.peso_venda ?? 0), 0),
+      peso_venda_pe: cats.reduce((s, c2) => s + (c2.peso_venda_pe ?? 0), 0),
+      peso_transf_saida: cats.reduce((s, c2) => s + (c2.peso_transf_saida ?? 0), 0),
+      peso_consumo: cats.reduce((s, c2) => s + (c2.peso_consumo ?? 0), 0),
+      peso_morte: cats.reduce((s, c2) => s + (c2.peso_morte ?? 0), 0),
     };
   }
 

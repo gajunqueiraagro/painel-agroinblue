@@ -450,19 +450,53 @@ function buildBlocosForTab(
     ? buildBlocoEndividamento(endividamento, 'acumulado')
     : null;
 
+  /* ── BLOCO REBANHO — 14 linhas, IGUAIS nas quatro abas e nos tres cenarios ──
+     A aba informa a LEITURA; o rotulo nomeia o INDICADOR. Por isso nao ha mais
+     "Entradas acum. (cab)": e a mesma linha, lida de outro jeito.
+     `linha()` decide entre valor e TRAVESSAO: fora das abas em que o indicador
+     se aplica, devolve uma Row literal de NaN.
+     NAO usar r() com NaN nesse caso — `cumSum` (:130) IGNORA nao-finitos
+     (`if (Number.isFinite(v)) s += v`), entao NaN na aba Acumulados sairia
+     como ZERO, afirmando "nao houve movimento" onde o fato e "nao se aplica".
+     Estoque nao acumula nem promedia; fluxo acumula, nao promedia; media nao
+     acumula.
+     `nivel` reusa o padrao que o blocoAreas ja estabeleceu (:81 e :1997). */
+  const NAN12: number[] = Array(12).fill(NaN);
+  const linha = (
+    abas: ViewTab[], indicador: string, format: PainelFormatType, raw: number[],
+    indicadorId?: string, noTotal?: boolean, nivel?: 'familia' | 'destino',
+  ): Row => (
+    abas.includes(tab)
+      ? { ...r(indicador, format, raw, indicadorId, noTotal), nivel }
+      : { indicador, format, valores: NAN12, indicadorId, noTotal: true, nivel }
+  );
+  const blocoRebanho: Bloco = {
+    nome: 'Rebanho',
+    rows: [
+      linha(['mensal'], 'Rebanho inicial (cab)', 'cab', cabIni, 'reb_inicial', true),
+      linha(['mensal','acumulado'], 'Entradas (cab)', 'cab', d.entradas, 'entradas_cab', false, 'familia'),
+      linha(['mensal','acumulado'], '→ Nascimentos', 'cab', d.movNascimento, undefined, false, 'destino'),
+      linha(['mensal','acumulado'], '→ Compras', 'cab', d.movCompra, undefined, false, 'destino'),
+      linha(['mensal','acumulado'], '→ Transf. Interna', 'cab', d.movTransfEntrada, undefined, false, 'destino'),
+      linha(['mensal','acumulado'], 'Saídas (cab)', 'cab', d.saidas, 'saidas_cab', false, 'familia'),
+      linha(['mensal','acumulado'], '→ Abates', 'cab', d.movAbate, undefined, false, 'destino'),
+      linha(['mensal','acumulado'], '→ Vendas', 'cab', d.movVenda, undefined, false, 'destino'),
+      linha(['mensal','acumulado'], '→ Venda em pé', 'cab', d.movVendaPe, undefined, false, 'destino'),
+      linha(['mensal','acumulado'], '→ Mortes', 'cab', d.movMorte, undefined, false, 'destino'),
+      linha(['mensal','acumulado'], '→ Consumo', 'cab', d.movConsumo, undefined, false, 'destino'),
+      linha(['mensal','acumulado'], '→ Transf. Interna', 'cab', d.movTransfSaida, undefined, false, 'destino'),
+      linha(['mensal'], 'Rebanho final (cab)', 'cab', cabFin, 'reb_final', true),
+      linha(['mensal','medio','media_periodo'], 'Rebanho médio (cab)', 'cab', cabMedia.map(Math.round), 'reb_medio', true),
+      linha(['mensal','medio','media_periodo'], 'Peso médio do rebanho (kg)', 'med2', pesoMedioFin, 'peso_med_reb', true),
+      linha(['mensal','medio','media_periodo'], 'UA média', 'med2', uaMedia, 'ua_media', true),
+      linha(['mensal','medio','media_periodo'], 'Lotação (UA/ha)', 'med2', lotUaHa, 'lotacao', true),
+    ],
+  };
+
   switch (tab) {
     case 'mensal':
       return [
-        {
-          nome: 'Rebanho',
-          rows: [
-            r('Rebanho inicial (cab)', 'cab', cabIni, 'reb_inicial', true),
-            r('Entradas (cab)', 'cab', d.entradas, 'entradas_cab'),
-            r('Saídas (cab)', 'cab', d.saidas, 'saidas_cab'),
-            r('Rebanho final (cab)', 'cab', cabFin, 'reb_final', true),
-            r('Rebanho médio (cab)', 'cab', cabMedia.map(Math.round), 'reb_medio', true),
-          ],
-        },
+        blocoRebanho,
         {
           nome: 'Produção',
           rows: [
@@ -499,15 +533,7 @@ function buildBlocosForTab(
 
     case 'medio':
       return [
-        {
-          nome: 'Rebanho',
-          rows: [
-            r('Rebanho médio (cab)', 'cab', cabMedia.map(Math.round), 'reb_medio', true),
-            r('Peso méd. reb. (kg)', 'med2', pesoMedioFin, 'peso_med_reb', true),
-            r('UA média', 'med2', uaMedia, 'ua_media', true),
-            r('Lotação (UA/ha)', 'med2', lotUaHa, 'lotacao', true),
-          ],
-        },
+        blocoRebanho,
         {
           nome: 'Produção',
           rows: [
@@ -542,14 +568,7 @@ function buildBlocosForTab(
 
     case 'acumulado':
       return [
-        {
-          nome: 'Rebanho',
-          rows: [
-            r('Entradas Acumuladas (cab)', 'cab', d.entradas, 'entradas_acum'),
-            r('Saídas Acumuladas (cab)', 'cab', d.saidas, 'saidas_acum'),
-            r('Saldo Acumulado (cab)', 'cab', d.entradas.map((v, i) => v - d.saidas[i]), 'saldo_acum'),
-          ],
-        },
+        blocoRebanho,
         {
           nome: 'Produção',
           rows: [
@@ -587,15 +606,7 @@ function buildBlocosForTab(
       const gmdPeriodo = computePeriodGmd(d.prodKg, cabMedia, diasMes);
       const rebMedioPeriodoVals = rollingAvg(cabMedia);
       return [
-        {
-          nome: 'Rebanho',
-          rows: [
-            { indicador: 'Rebanho médio período (cab)', format: 'cab', valores: rebMedioPeriodoVals.map(v => Math.round(v)), indicadorId: 'reb_medio_periodo', noTotal: true },
-            r('Peso médio período (kg)', 'med2', pesoMedioFin, 'peso_medio_periodo', true),
-            r('UA média período', 'med2', uaMedia, 'ua_media_periodo', true),
-            r('Lotação média (UA/ha)', 'med2', lotUaHa, 'lotacao_media', true),
-          ],
-        },
+        blocoRebanho,
         {
           nome: 'Produção',
           rows: [
@@ -791,19 +802,53 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
   // Bloco "Financeiro Soberano (Auditoria)" — helper compartilhado
   const blocoSoberano = buildBlocoSoberano(soberano, r);
 
+  /* ── BLOCO REBANHO — 14 linhas, IGUAIS nas quatro abas e nos tres cenarios ──
+     A aba informa a LEITURA; o rotulo nomeia o INDICADOR. Por isso nao ha mais
+     "Entradas acum. (cab)": e a mesma linha, lida de outro jeito.
+     `linha()` decide entre valor e TRAVESSAO: fora das abas em que o indicador
+     se aplica, devolve uma Row literal de NaN.
+     NAO usar r() com NaN nesse caso — `cumSum` (:130) IGNORA nao-finitos
+     (`if (Number.isFinite(v)) s += v`), entao NaN na aba Acumulados sairia
+     como ZERO, afirmando "nao houve movimento" onde o fato e "nao se aplica".
+     Estoque nao acumula nem promedia; fluxo acumula, nao promedia; media nao
+     acumula.
+     `nivel` reusa o padrao que o blocoAreas ja estabeleceu (:81 e :1997). */
+  const NAN12: number[] = Array(12).fill(NaN);
+  const linha = (
+    abas: ViewTab[], indicador: string, format: PainelFormatType, raw: number[],
+    indicadorId?: string, noTotal?: boolean, nivel?: 'familia' | 'destino',
+  ): Row => (
+    abas.includes(tab)
+      ? { ...r(indicador, format, raw, indicadorId, noTotal), nivel }
+      : { indicador, format, valores: NAN12, indicadorId, noTotal: true, nivel }
+  );
+  const blocoRebanho: Bloco = {
+    nome: 'Rebanho',
+    rows: [
+      linha(['mensal'], 'Rebanho inicial (cab)', 'cab', cabIni, 'reb_inicial', true),
+      linha(['mensal','acumulado'], 'Entradas (cab)', 'cab', entradas, 'entradas_cab', false, 'familia'),
+      linha([], '→ Nascimentos', 'cab', NAN12, undefined, false, 'destino'),
+      linha([], '→ Compras', 'cab', NAN12, undefined, false, 'destino'),
+      linha([], '→ Transf. Interna', 'cab', NAN12, undefined, false, 'destino'),
+      linha(['mensal','acumulado'], 'Saídas (cab)', 'cab', saidas, 'saidas_cab', false, 'familia'),
+      linha([], '→ Abates', 'cab', NAN12, undefined, false, 'destino'),
+      linha([], '→ Vendas', 'cab', NAN12, undefined, false, 'destino'),
+      linha([], '→ Venda em pé', 'cab', NAN12, undefined, false, 'destino'),
+      linha([], '→ Mortes', 'cab', NAN12, undefined, false, 'destino'),
+      linha([], '→ Consumo', 'cab', NAN12, undefined, false, 'destino'),
+      linha([], '→ Transf. Interna', 'cab', NAN12, undefined, false, 'destino'),
+      linha(['mensal'], 'Rebanho final (cab)', 'cab', cabFin, 'reb_final', true),
+      linha(['mensal','medio','media_periodo'], 'Rebanho médio (cab)', 'cab', cabMedia.map(Math.round), 'reb_medio', true),
+      linha(['mensal','medio','media_periodo'], 'Peso médio do rebanho (kg)', 'med2', pesoMedFin, 'peso_med_reb', true),
+      linha(['mensal','medio','media_periodo'], 'UA média', 'med2', uaMedia, 'ua_media', true),
+      linha(['mensal','medio','media_periodo'], 'Lotação (UA/ha)', 'med2', lotacao, 'lotacao', true),
+    ],
+  };
+
   switch (tab) {
     case 'mensal':
       return [
-        {
-          nome: 'Rebanho',
-          rows: [
-            r('Rebanho inicial (cab)', 'cab', cabIni, 'reb_inicial', true),
-            r('Entradas (cab)', 'cab', entradas, 'entradas_cab'),
-            r('Saídas (cab)', 'cab', saidas, 'saidas_cab'),
-            r('Rebanho final (cab)', 'cab', cabFin, 'reb_final', true),
-            r('Rebanho médio (cab)', 'cab', cabMedia.map(Math.round), 'reb_medio', true),
-          ],
-        },
+        blocoRebanho,
         {
           nome: 'Produção',
           rows: [
@@ -838,15 +883,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
       ];
     case 'medio':
       return [
-        {
-          nome: 'Rebanho',
-          rows: [
-            r('Rebanho médio (cab)', 'cab', cabMedia.map(Math.round), 'reb_medio', true),
-            r('Peso méd. reb. (kg)', 'med2', pesoMedFin, 'peso_med_reb', true),
-            r('UA média', 'med2', uaMedia, 'ua_media', true),
-            r('Lotação (UA/ha)', 'med2', lotacao, 'lotacao', true),
-          ],
-        },
+        blocoRebanho,
         {
           nome: 'Produção',
           rows: [
@@ -880,14 +917,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
       ];
     case 'acumulado':
       return [
-        {
-          nome: 'Rebanho',
-          rows: [
-            r('Entradas acum. (cab)', 'cab', entradas, 'entradas_acum'),
-            r('Saídas acum. (cab)', 'cab', saidas, 'saidas_acum'),
-            r('Saldo acum. reb.', 'cab', entradas.map((v, i) => v - saidas[i]), 'saldo_acum'),
-          ],
-        },
+        blocoRebanho,
         {
           nome: 'Produção',
           rows: [
@@ -920,15 +950,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
       ];
     case 'media_periodo':
       return [
-        {
-          nome: 'Rebanho',
-          rows: [
-            { indicador: 'Rebanho médio período (cab)', format: 'cab', valores: rebMedioPeriodoVals.map(v => Math.round(v)), indicadorId: 'reb_medio_periodo', noTotal: true },
-            r('Peso médio período (kg)', 'med2', pesoMedFin, 'peso_medio_periodo'),
-            r('UA média período', 'med2', uaMedia, 'ua_media_periodo'),
-            r('Lotação média (UA/ha)', 'med2', lotacao, 'lotacao_media'),
-          ],
-        },
+        blocoRebanho,
         {
           nome: 'Produção',
           rows: [
@@ -1103,19 +1125,53 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
   // Bloco "Financeiro Soberano (Auditoria)" — helper compartilhado
   const blocoSoberano = buildBlocoSoberano(soberano, r);
 
+  /* ── BLOCO REBANHO — 14 linhas, IGUAIS nas quatro abas e nos tres cenarios ──
+     A aba informa a LEITURA; o rotulo nomeia o INDICADOR. Por isso nao ha mais
+     "Entradas acum. (cab)": e a mesma linha, lida de outro jeito.
+     `linha()` decide entre valor e TRAVESSAO: fora das abas em que o indicador
+     se aplica, devolve uma Row literal de NaN.
+     NAO usar r() com NaN nesse caso — `cumSum` (:130) IGNORA nao-finitos
+     (`if (Number.isFinite(v)) s += v`), entao NaN na aba Acumulados sairia
+     como ZERO, afirmando "nao houve movimento" onde o fato e "nao se aplica".
+     Estoque nao acumula nem promedia; fluxo acumula, nao promedia; media nao
+     acumula.
+     `nivel` reusa o padrao que o blocoAreas ja estabeleceu (:81 e :1997). */
+  const NAN12: number[] = Array(12).fill(NaN);
+  const linha = (
+    abas: ViewTab[], indicador: string, format: PainelFormatType, raw: number[],
+    indicadorId?: string, noTotal?: boolean, nivel?: 'familia' | 'destino',
+  ): Row => (
+    abas.includes(tab)
+      ? { ...r(indicador, format, raw, indicadorId, noTotal), nivel }
+      : { indicador, format, valores: NAN12, indicadorId, noTotal: true, nivel }
+  );
+  const blocoRebanho: Bloco = {
+    nome: 'Rebanho',
+    rows: [
+      linha(['mensal'], 'Rebanho inicial (cab)', 'cab', cabIni, 'reb_inicial', true),
+      linha(['mensal','acumulado'], 'Entradas (cab)', 'cab', entradas, 'entradas_cab', false, 'familia'),
+      linha([], '→ Nascimentos', 'cab', NAN12, undefined, false, 'destino'),
+      linha([], '→ Compras', 'cab', NAN12, undefined, false, 'destino'),
+      linha([], '→ Transf. Interna', 'cab', NAN12, undefined, false, 'destino'),
+      linha(['mensal','acumulado'], 'Saídas (cab)', 'cab', saidas, 'saidas_cab', false, 'familia'),
+      linha([], '→ Abates', 'cab', NAN12, undefined, false, 'destino'),
+      linha([], '→ Vendas', 'cab', NAN12, undefined, false, 'destino'),
+      linha([], '→ Venda em pé', 'cab', NAN12, undefined, false, 'destino'),
+      linha([], '→ Mortes', 'cab', NAN12, undefined, false, 'destino'),
+      linha([], '→ Consumo', 'cab', NAN12, undefined, false, 'destino'),
+      linha([], '→ Transf. Interna', 'cab', NAN12, undefined, false, 'destino'),
+      linha(['mensal'], 'Rebanho final (cab)', 'cab', cabFin, 'reb_final', true),
+      linha(['mensal','medio','media_periodo'], 'Rebanho médio (cab)', 'cab', cabMedia.map(Math.round), 'reb_medio', true),
+      linha(['mensal','medio','media_periodo'], 'Peso médio do rebanho (kg)', 'med2', pesoMedFin, 'peso_med_reb', true),
+      linha(['mensal','medio','media_periodo'], 'UA média', 'med2', uaMedia, 'ua_media', true),
+      linha(['mensal','medio','media_periodo'], 'Lotação (UA/ha)', 'med2', lotacao, 'lotacao', true),
+    ],
+  };
+
   switch (tab) {
     case 'mensal':
       return [
-        {
-          nome: 'Rebanho',
-          rows: [
-            r('Rebanho inicial (cab)', 'cab', cabIni, 'reb_inicial', true),
-            r('Entradas (cab)', 'cab', entradas, 'entradas_cab'),
-            r('Saídas (cab)', 'cab', saidas, 'saidas_cab'),
-            r('Rebanho final (cab)', 'cab', cabFin, 'reb_final', true),
-            r('Rebanho médio (cab)', 'cab', cabMedia.map(Math.round), 'reb_medio', true),
-          ],
-        },
+        blocoRebanho,
         {
           nome: 'Produção',
           rows: [
@@ -1150,15 +1206,7 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
       ];
     case 'medio':
       return [
-        {
-          nome: 'Rebanho',
-          rows: [
-            r('Rebanho médio (cab)', 'cab', cabMedia.map(Math.round), 'reb_medio', true),
-            r('Peso méd. reb. (kg)', 'med2', pesoMedFin, 'peso_med_reb', true),
-            r('UA média', 'med2', uaMedia, 'ua_media', true),
-            r('Lotação (UA/ha)', 'med2', lotacao, 'lotacao', true),
-          ],
-        },
+        blocoRebanho,
         {
           nome: 'Produção',
           rows: [
@@ -1192,14 +1240,7 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
       ];
     case 'acumulado':
       return [
-        {
-          nome: 'Rebanho',
-          rows: [
-            r('Entradas acum. (cab)', 'cab', entradas, 'entradas_acum'),
-            r('Saídas acum. (cab)', 'cab', saidas, 'saidas_acum'),
-            r('Saldo acum. reb.', 'cab', entradas.map((v, i) => v - saidas[i]), 'saldo_acum'),
-          ],
-        },
+        blocoRebanho,
         {
           nome: 'Produção',
           rows: [
@@ -1232,15 +1273,7 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
       ];
     case 'media_periodo':
       return [
-        {
-          nome: 'Rebanho',
-          rows: [
-            { indicador: 'Rebanho médio período (cab)', format: 'cab', valores: rebMedioPeriodoVals.map(v => Math.round(v)), indicadorId: 'reb_medio_periodo', noTotal: true },
-            r('Peso médio período (kg)', 'med2', pesoMedFin, 'peso_medio_periodo'),
-            r('UA média período', 'med2', uaMedia, 'ua_media_periodo'),
-            r('Lotação média (UA/ha)', 'med2', lotacao, 'lotacao_media'),
-          ],
-        },
+        blocoRebanho,
         {
           nome: 'Produção',
           rows: [

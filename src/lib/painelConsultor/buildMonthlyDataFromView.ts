@@ -73,6 +73,24 @@ export interface MonthlyData {
   varValorReb: number[];
   desfruteCab: number[];
   desfrute_arr: number[];
+  /* Quebra por tipo, em CABECAS — uma serie de 12 por tipo, direto do
+     zoot_mensal_cache (migration 20260913120000). Sao as nove linhas-seta do
+     bloco Rebanho do PC-100.
+     `entradas`/`saidas` NAO derivam daqui: continuam vindo de
+     entradas_externas/saidas_externas, e no Global ainda passam pela
+     neutralizacao de transferencia. As series abaixo sao o DETALHE, e no
+     Global as duas de transferencia ficam FORA da soma de propósito.
+     Peso por tipo existe no cache (peso_*) e nao foi trazido: nenhuma linha
+     deste PR o consome, e serie sem consumidor e peso morto. */
+  movNascimento: number[];
+  movCompra: number[];
+  movTransfEntrada: number[];
+  movAbate: number[];
+  movVenda: number[];
+  movVendaPe: number[];
+  movTransfSaida: number[];
+  movConsumo: number[];
+  movMorte: number[];
 }
 
 export function buildMonthlyDataFromView(
@@ -124,9 +142,26 @@ export function buildMonthlyDataFromView(
         .filter(l => l.tipo === 'transferencia_saida' && l.data.startsWith(mesPrefix(m)))
         .reduce((s, l) => s + l.quantidade, 0),
     );
+    /* ALTERNATIVA NO CACHE: desde a migration 20260913120000, esta varredura
+       de `lancPec` tem equivalente pronto em `cab_transf_entrada` /
+       `cab_transf_saida` — os dois dao o MESMO numero. Nao trocado agora para
+       nao misturar refatoracao de fonte com o PR do bloco Rebanho; quem mexer
+       aqui depois deve saber que existem duas fontes para este valor. */
     entradas = entradas.map((v, i) => Math.max(0, v - transfEntMes[i]));
     saidas = saidas.map((v, i) => Math.max(0, v - transfSaiMes[i]));
   }
+  const movPorTipo = {
+    movNascimento: mk(m => viewTotals[m]?.cab_nascimento ?? 0),
+    movCompra: mk(m => viewTotals[m]?.cab_compra ?? 0),
+    movTransfEntrada: mk(m => viewTotals[m]?.cab_transf_entrada ?? 0),
+    movAbate: mk(m => viewTotals[m]?.cab_abate ?? 0),
+    movVenda: mk(m => viewTotals[m]?.cab_venda ?? 0),
+    movVendaPe: mk(m => viewTotals[m]?.cab_venda_pe ?? 0),
+    movTransfSaida: mk(m => viewTotals[m]?.cab_transf_saida ?? 0),
+    movConsumo: mk(m => viewTotals[m]?.cab_consumo ?? 0),
+    movMorte: mk(m => viewTotals[m]?.cab_morte ?? 0),
+  };
+
   const pesoTotalIni = mk(m => viewTotals[m]?.peso_total_inicial ?? 0);
   const pesoTotalFin = mk(m => viewTotals[m]?.peso_total_final ?? 0);
   const pesoMedioIni = mk(m => { const c = cabIni[m - 1]; return c > 0 ? pesoTotalIni[m - 1] / c : NaN; });
@@ -230,6 +265,7 @@ export function buildMonthlyDataFromView(
     cabIni, cabFin, cabMediaMes, entradas, saidas,
     pesoTotalIni, pesoTotalFin, pesoMedioIni, pesoMedioFin,
     gmd, arrobasProd, prodKg, areaProd: areaProdutiva,
+    ...movPorTipo,
     areaProdMensal: Array.from({ length: 12 }, (_, i) => {
       const v = areaProdutivaMensal?.[i];
       return typeof v === 'number' && !Number.isNaN(v) ? v : areaProdutiva;
