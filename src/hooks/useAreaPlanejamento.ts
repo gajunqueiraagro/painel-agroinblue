@@ -128,14 +128,21 @@ function agregarPorMes(rows: RowArea[]): AreaMetaAnual {
     const mesIdx = row.mes - 1;
     if (mesIdx < 0 || mesIdx > 11) continue;
     const slot = anual.porMes[mesIdx];
-    slot.area_pecuaria_ha = Number(row.area_pecuaria_ha ?? 0);
-    slot.area_agricultura_ha = Number(row.area_agricultura_ha ?? 0);
-    slot.area_reserva_ha = Number(row.area_reserva_ha ?? 0);
-    slot.area_benfeitorias_ha = Number(row.area_benfeitorias_ha ?? 0);
-    slot.area_silvicultura_ha = Number(row.area_silvicultura_ha ?? 0);
-    slot.area_app_ha = Number(row.area_app_ha ?? 0);
-    slot.area_outras_ha = Number(row.area_outras_ha ?? 0);
-    slot.area_total_ha = Number(row.area_total_ha ?? 0);
+    /* Sem `?? 0`: NULL do banco e AUSENCIA de planejamento, nao zero
+       planejado. O tipo AreaMetaMes ja declara number | null — o `?? 0`
+       contradizia a propria declaracao e apagava a distincao criada pela
+       migration 20260912120000.
+       O modo GLOBAL nao e afetado: ele soma as fazendas ANTES, no proprio
+       laco de acumulacao, e entrega numeros a esta funcao — nunca null. */
+    const num = (v: number | null) => (v == null ? null : Number(v));
+    slot.area_pecuaria_ha = num(row.area_pecuaria_ha);
+    slot.area_agricultura_ha = num(row.area_agricultura_ha);
+    slot.area_reserva_ha = num(row.area_reserva_ha);
+    slot.area_benfeitorias_ha = num(row.area_benfeitorias_ha);
+    slot.area_silvicultura_ha = num(row.area_silvicultura_ha);
+    slot.area_app_ha = num(row.area_app_ha);
+    slot.area_outras_ha = num(row.area_outras_ha);
+    slot.area_total_ha = num(row.area_total_ha);
   }
   anual.mesesCadastrados = anual.porMes.filter(m => m.area_total_ha !== null).length;
   anual.isCompleto = anual.mesesCadastrados === 12;
