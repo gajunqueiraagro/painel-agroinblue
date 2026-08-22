@@ -32,6 +32,14 @@
  * comentario em `cabecas` abaixo. No MES e o saldo FINAL, que e o que o PC-100
  * usa (`cabFinSerie13`, usePainelConsultorData:1602 e :1617).
  *
+ * GMD no PERIODO usa `computePeriodGmd`, a MESMA funcao do PC-100 — cujo
+ * cabecalho diz "Usada pelo PainelConsultor e pela V2Home. Nao duplicar".
+ * Numerador: `gmd_numerador_kg` da view, conferido IDENTICO a
+ * `producao_biologica` do zoot_mensal_cache nos 7 meses da Santa Rita
+ * (22/08/2026) — que e o `prodKg` que o PC-100 consome
+ * (buildMonthlyDataFromView:172). Usar a view evita somar por categoria e
+ * dispensa consulta nova.
+ *
  * CASTS: `zoot_mensal_cache` NAO esta em src/integrations/supabase/types.ts.
  * `vw_zoot_fazenda_mensal` esta, mas o client nao resolve view sem
  * relationship e o repo ja a le com `as any` (useZootMensal, ResumoTab).
@@ -39,7 +47,7 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { TIPOS_DESFRUTE_OFICIAL } from '@/lib/calculos/painelConsultorIndicadores';
+import { TIPOS_DESFRUTE_OFICIAL, computePeriodGmd } from '@/lib/calculos/painelConsultorIndicadores';
 
 export interface ProdutivoPorFazenda {
   fazenda_id: string;
@@ -76,7 +84,7 @@ export function useProdutivoPorFazenda(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (supabase.from('vw_zoot_fazenda_mensal' as any)
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          .select('fazenda_id, mes, cabecas_inicio, cabecas_final, gmd_kg_cab_dia, ua_media, peso_inicio_kg') as any)
+          .select('fazenda_id, mes, cabecas_inicio, cabecas_final, dias_mes, gmd_kg_cab_dia, gmd_numerador_kg, ua_media, peso_inicio_kg') as any)
           .eq('cliente_id', clienteId!)
           .eq('ano', ano)
           .in('mes', meses)
@@ -150,9 +158,12 @@ export function useProdutivoPorFazenda(
          GMD nao deve diluir a media dos meses que tem. */
       type LinhaVw = {
         fazenda_id: string | null;
+        mes: number | null;
         cabecas_inicio: number | null;
         cabecas_final: number | null;
+        dias_mes: number | null;
         gmd_kg_cab_dia: number | null;
+        gmd_numerador_kg: number | null;
         ua_media: number | null;
         peso_inicio_kg: number | null;
       };
@@ -164,15 +175,33 @@ export function useProdutivoPorFazenda(
            usePainelConsultorData:1609-1611), e um mes zerado nao pode
            diluir a media dos meses que tem rebanho. */
         medSoma: number; medN: number;
+        /* Series de 12 posicoes (indice 0 = Jan), no formato que
+           `computePeriodGmd` exige. Mes sem linha fica em zero: prodBio 0 nao
+           soma, cabMedia 0 e descartada pelo `cm > 0` da funcao, e dias 0 nao
+           acumula — entao o resultado no indice `ateMes-1` cobre exatamente
+           Jan..ateMes, sem meses futuros contaminarem. */
+        prodBio12: number[]; cabMedia12: number[]; dias12: number[];
       };
       const acc = new Map<string, Acc>();
       for (const row of (vwRes.data ?? []) as LinhaVw[]) {
         if (!row.fazenda_id) continue;
         let a = acc.get(row.fazenda_id);
-        if (!a) { a = { cab: 0, ua: 0, arrIni: 0, n: 0, gmdSoma: 0, gmdN: 0, medSoma: 0, medN: 0 }; acc.set(row.fazenda_id, a); }
+        if (!a) {
+          a = {
+            cab: 0, ua: 0, arrIni: 0, n: 0, gmdSoma: 0, gmdN: 0, medSoma: 0, medN: 0,
+            prodBio12: Array(12).fill(0), cabMedia12: Array(12).fill(0), dias12: Array(12).fill(0),
+          };
+          acc.set(row.fazenda_id, a);
+        }
         a.cab += Number(row.cabecas_final) || 0;
         const mediaMes = ((Number(row.cabecas_inicio) || 0) + (Number(row.cabecas_final) || 0)) / 2;
         if (mediaMes > 0) { a.medSoma += mediaMes; a.medN += 1; }
+        const idx = (Number(row.mes) || 0) - 1;
+        if (idx >= 0 && idx < 12) {
+          a.prodBio12[idx] = Number(row.gmd_numerador_kg) || 0;
+          a.cabMedia12[idx] = mediaMes;
+          a.dias12[idx] = Number(row.dias_mes) || 0;
+        }
         a.ua += Number(row.ua_media) || 0;
         a.arrIni += (Number(row.peso_inicio_kg) || 0) / KG_POR_ARROBA;
         a.n += 1;
@@ -196,8 +225,24 @@ export function useProdutivoPorFazenda(
           cabecas: isPeriodo
             ? (a.medN > 0 ? a.medSoma / a.medN : 0)
             : a.cab / a.n,
-          /* GMD null e AUSENCIA, nao zero: fazenda sem fechamento nao ganhou 0 kg/dia. */
-          gmd: a.gmdN > 0 ? a.gmdSoma / a.gmdN : null,
+          /* GMD acumulado, nao media simples: e a regra do computePeriodGmd do
+             PC-100. Media simples trata julho e janeiro como iguais; o acumulado
+             pesa pelo rebanho e pelos dias de cada mes. Medido em 22/08 na Santa
+             Rita, Jan-Jul/2026 — 0,3803 na media simples contra 0,3872 do
+             acumulado, 1,81% de diferenca, e ela cresce com a variacao do
+             rebanho (4.545 -> 3.208 cab no periodo).
+             No MES a funcao nao se aplica: o valor e o gmd_kg_cab_dia do proprio
+             mes, e a view ja o calcula como prodBio/cabMedia/dias — a MESMA
+             formula pontual do PC-100 (useHistoricoIndicador:899-902).
+             Conferido: julho/2026 = 0,2619 nos dois. Por isso o ramo.
+             NaN vira null: GMD ausente e AUSENCIA, nao zero — fazenda sem
+             fechamento nao ganhou 0 kg/dia. */
+          gmd: (() => {
+            if (!isPeriodo) return a.gmdN > 0 ? a.gmdSoma / a.gmdN : null;
+            const serie = computePeriodGmd(a.prodBio12, a.cabMedia12, a.dias12);
+            const v = serie[ateMes - 1];
+            return v == null || isNaN(v) ? null : v;
+          })(),
           ua_media: a.ua / a.n,
           arrIniciais: a.arrIni / a.n,
           arrobas: (bioPorFazenda.get(fazenda_id) ?? 0) / KG_POR_ARROBA,
