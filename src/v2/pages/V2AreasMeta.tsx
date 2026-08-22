@@ -11,6 +11,7 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { useFazendaCadastro, useMatriculasDoCliente } from '@/hooks/useFazendaCadastro';
 import { usePastos } from '@/hooks/usePastos';
 import { agruparPastosPorFamilia } from '@/lib/pastos/agruparPorFamilia';
+import { formatarAreaBR, parseAreaBR } from '@/lib/areaBR';
 import {
   useAreaPlanejamento,
   type UpsertLinhaArea,
@@ -85,24 +86,6 @@ const bordaTrimestre = (mes: number) => (mes % 3 === 0 && mes !== 12 ? ' border-
 
 const linhaVazia = (mes: number): LinhaLocal =>
   ({ mes, pec: '', agric: '', silvi: '', reserva: '', app: '', benf: '', outras: '' });
-
-/* Parser e formatador pt-BR — copia VERBATIM de V2Fazendas.tsx:59-69 e
-   PastosTab.tsx:55. Terceiro consumidor: a extracao para src/lib/ e a
-   decisao registrada do projeto e vira PR proprio; aqui manter identico,
-   nunca divergir.
-   `parseAreaBR` devolve NULL para vazio E para invalido — que e o contrato
-   deste PR. O `parseNumOrZero` que estava aqui devolvia 0 nos dois casos, e
-   nem removia separador de milhar: "3.403,20" virava NaN e gravava ZERO. */
-function formatarAreaBR(v: number | null): string {
-  if (v === null || !Number.isFinite(v)) return '';
-  return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-function parseAreaBR(texto: string): number | null {
-  const limpo = texto.replace(/\./g, '').replace(',', '.').trim();
-  if (!limpo) return null;
-  const n = Number(limpo);
-  return Number.isFinite(n) ? n : null;
-}
 
 /* Eixo Y em milhares quando o numero e grande: "4.656,20" em 8px ocuparia
    mais que a propria coluna do eixo. */

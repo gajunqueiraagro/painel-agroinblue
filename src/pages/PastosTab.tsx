@@ -1,6 +1,7 @@
 import { useState, useMemo, type ReactNode, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { usePastos, isPastoAtivoNoMes, type Pasto } from '@/hooks/usePastos';
+import { formatarAreaBR, parseAreaBR } from '@/lib/areaBR';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
@@ -48,21 +49,6 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-
-// ── PR-PASTO-DESTINO-01 — formatação de área no padrão BR (0.000,00) ──
-// Input é texto, não number: `type="number"` não exibe separador de milhar nem
-// vírgula decimal. Digitação livre; a formatação acontece no blur.
-function formatarAreaBR(v: number | null): string {
-  if (v === null || !Number.isFinite(v)) return '';
-  return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function parseAreaBR(texto: string): number | null {
-  const limpo = texto.replace(/\./g, '').replace(',', '.').trim();
-  if (!limpo) return null;
-  const n = Number(limpo);
-  return Number.isFinite(n) ? n : null;
-}
 
 /** Último dia do mês 'YYYY-MM' → 'YYYY-MM-DD'. data_fim é fim INCLUSIVO. */
 function ultimoDiaDoMes(anoMes: string): string {

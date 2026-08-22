@@ -1,15 +1,16 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useFazenda } from '@/contexts/FazendaContext';
+import { useFazenda, GLOBAL_FAZENDA } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import { usePastos } from '@/hooks/usePastos';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { Save, Pencil } from 'lucide-react';
+import { Save, Pencil, ArrowLeft } from 'lucide-react';
 import { PastosTab } from '@/pages/PastosTab';
 import { agruparPastosPorFamilia } from '@/lib/pastos/agruparPorFamilia';
+import { formatarAreaBR, parseAreaBR } from '@/lib/areaBR';
 import { FazendasList } from '@/components/FazendasList';
 import { formatNum } from '@/lib/calculos/formatters';
 
@@ -49,27 +50,8 @@ const EMPTY: CadastroRow = {
 
 const n = (v: string) => (v.trim() === '' ? 0 : Number(v));
 
-// PR-AREA-MATRICULA-01 — área da matrícula no padrão BR (0.000,00).
-// Input é TEXTO, não `type="number"`: number não exibe separador de milhar nem
-// vírgula decimal. Digitação livre; a formatação acontece no blur.
-//
-// Mesmo idioma de PastosTab.tsx:46-56, declarado LOCAL de propósito: lá as duas
-// funções não são exportadas, e extrair para lib/ com só dois consumidores seria
-// criar módulo antes de haver o terceiro. Extrair quando ele aparecer.
-function formatarAreaBR(v: number | null): string {
-  if (v === null || !Number.isFinite(v)) return '';
-  return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function parseAreaBR(texto: string): number | null {
-  const limpo = texto.replace(/\./g, '').replace(',', '.').trim();
-  if (!limpo) return null;
-  const num = Number(limpo);
-  return Number.isFinite(num) ? num : null;
-}
-
 export function V2Fazendas() {
-  const { fazendaAtual, isGlobal } = useFazenda();
+  const { fazendaAtual, isGlobal, fazendas, setFazendaAtual } = useFazenda();
   const { clienteAtual } = useCliente();
   const { pastos } = usePastos();
 
@@ -95,6 +77,39 @@ export function V2Fazendas() {
   const agrupado = useMemo(
     () => agruparPastosPorFamilia(pastos.filter(p => p.ativo !== false), mesCorrente),
     [pastos, mesCorrente],
+  );
+
+  // ── MODO GLOBAL — consolidado transposto ───────────────────────────────────
+  // Uma COLUNA por fazenda, uma LINHA por família/destino. Mesma fonte e mesma
+  // função do individual, só que aplicada por fazenda: nenhuma conta nova, e por
+  // construção a coluna de uma fazenda é idêntica ao que a tela dela mostra.
+  //
+  // `mesRef` vai em TODAS as chamadas. Sem ele, pasto encerrado por data_fim
+  // contaria para sempre e o consolidado divergiria do individual — que passou a
+  // filtrar em 98a1eebf. Uma vigência aplicada só de um lado é pior que nenhuma:
+  // produz dois números defensáveis para a mesma pergunta.
+  //
+  // Só fazendas COM pasto vigente ganham coluna. Fazenda sem nenhum apareceria
+  // como uma coluna inteira de zeros, afirmando "zero hectare" onde o fato é
+  // "não cadastrou pasto" — a sentinela do projeto proíbe.
+  const fazendasDoConsolidado = useMemo(() => {
+    const comPasto = new Set(
+      pastos.filter(p => p.ativo !== false).map(p => p.fazenda_id),
+    );
+    return fazendas
+      .filter(f => f.id !== '__global__' && comPasto.has(f.id))
+      .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  }, [pastos, fazendas]);
+
+  const agrupadoPorFazenda = useMemo(
+    () => new Map(fazendasDoConsolidado.map(f => [
+      f.id,
+      agruparPastosPorFamilia(
+        pastos.filter(p => p.fazenda_id === f.id && p.ativo !== false),
+        mesCorrente,
+      ),
+    ])),
+    [fazendasDoConsolidado, pastos, mesCorrente],
   );
 
   // Callback ref, NÃO useRef: useRef não dispara re-render quando o nó monta, e o
@@ -230,7 +245,153 @@ export function V2Fazendas() {
     setSaving(false);
   };
 
-  if (!fazendaAtual || isGlobal || fazendaAtual.id === '__global__') {
+  /* A guarda unica virou DOIS ramos, porque os dois casos deixaram de ter a
+     mesma resposta:
+       Global        -> consolidado transposto (abaixo)
+       sem fazenda   -> a lista de hoje, intacta (mais abaixo)
+     Antes os dois caiam em <FazendasList />. Fundi-los de novo apagaria o
+     consolidado no dia em que o contexto devolver null por um instante. */
+
+  // Cinco familias, MESMA ordem e MESMOS rotulos do individual — as cinco
+  // chamadas literais de blocoFamilia mais abaixo. Duas listas para a mesma
+  // taxonomia e' divida declarada; unifica-las e' refatoracao, nao este PR.
+  const FAMILIAS_CONSOLIDADO: [string, string][] = [
+    ['pecuaria', 'Pecuária'],
+    ['agricultura', 'Agricultura'],
+    ['silvicultura', 'Silvicultura'],
+    ['ambiental', 'Ambiental'],
+    ['infraestrutura', 'Infraestrutura'],
+  ];
+
+  /* Leitores sobre um agrupamento qualquer — o de UMA fazenda ou o consolidado.
+     Sao os mesmos calculos de somaFamilia/somaDestino/somaPastosTotal do modo
+     individual, parametrizados pelo agrupamento em vez de fechados sobre
+     `agrupado`. Nao ha conta nova em lugar nenhum deste PR. */
+  type Agrupamento = ReturnType<typeof agruparPastosPorFamilia>;
+  const somaFamDe = (ag: Agrupamento | undefined, grupo: string) =>
+    ag?.familias.find(f => f.grupo === grupo)?.somaHa ?? 0;
+  const somaTipoDe = (ag: Agrupamento | undefined, tipo: string) => {
+    for (const f of ag?.familias ?? []) {
+      const t = f.tipos.find(x => x.tipo === tipo);
+      if (t) return t.pastos.reduce((acc, p) => acc + (p.area_produtiva_ha ?? 0), 0);
+    }
+    return 0;
+  };
+  const totalDe = (ag: Agrupamento | undefined) =>
+    (ag?.familias ?? []).reduce((acc, f) => acc + f.somaHa, 0);
+
+  if (isGlobal) {
+    /* Uma coluna de rotulo + uma por fazenda + TOTAL. O template e derivado da
+       contagem: com 4 fazendas (maximo medido no cliente NJ) sao 6 colunas. */
+    const gridConsolidado =
+      `minmax(140px,1.6fr) repeat(${fazendasDoConsolidado.length + 1}, minmax(0,1fr))`;
+    /* Sem coluna de %: no transposto o denominador deixa de ser obvio —
+       "% da fazenda" e "% do consolidado" seriam leituras diferentes na
+       mesma celula. Nao "completar" a tabela depois sem resolver isso. */
+    return (
+      <div className="px-4 py-4 w-full max-w-[1100px]">
+        <div className="mb-3">
+          <h2 className="text-sm font-bold text-foreground">Fazendas e Pastos</h2>
+          <p className="text-[10px] text-muted-foreground">
+            Composição da área por fazenda — clique no nome de uma coluna para entrar nela
+          </p>
+        </div>
+
+        {fazendasDoConsolidado.length === 0 ? (
+          <p className="text-xs text-muted-foreground mb-4">
+            Nenhuma fazenda com pasto vigente neste mês.
+          </p>
+        ) : (
+          <div className="border rounded-md overflow-hidden mb-4">
+            {/* A10 — cabecalho e TOTAL em bg-primary. NENHUM texto sobre azul pode
+                ficar em text-foreground ou text-muted-foreground: a linha inteira
+                leva primary-foreground e as celulas nao redefinem cor. */}
+            <div className="grid gap-1 py-1 bg-primary text-primary-foreground items-baseline"
+                 style={{ gridTemplateColumns: gridConsolidado }}>
+              <span className="text-[10px] font-semibold uppercase tracking-wide pl-1">
+                Composição da Área
+              </span>
+              {fazendasDoConsolidado.map(f => (
+                /* Entrar na fazenda e' setFazendaAtual do PROPRIO contexto — sem
+                   estado de navegacao paralelo, entao o seletor lateral acompanha
+                   sozinho. Um estado local aqui faria a tela e o seletor divergirem. */
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setFazendaAtual(f)}
+                  title={`Abrir ${f.nome}`}
+                  className="text-[10px] font-semibold text-right px-1 truncate cursor-pointer rounded-sm hover:bg-primary-foreground/20"
+                >
+                  {f.nome}
+                </button>
+              ))}
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-right px-1">
+                Total
+              </span>
+            </div>
+
+            {FAMILIAS_CONSOLIDADO.map(([grupo, rotulo]) => (
+              <div key={grupo}>
+                <div className="grid gap-1 py-1 bg-primary/10 items-baseline"
+                     style={{ gridTemplateColumns: gridConsolidado }}>
+                  <span className="text-[11px] font-medium text-foreground pl-1">{rotulo}</span>
+                  {fazendasDoConsolidado.map(f => (
+                    <span key={f.id} className="text-[11px] font-medium text-foreground tabular-nums text-right px-1">
+                      {formatNum(somaFamDe(agrupadoPorFazenda.get(f.id), grupo), 2)}
+                    </span>
+                  ))}
+                  <span className="text-[11px] font-semibold text-foreground tabular-nums text-right px-1">
+                    {formatNum(somaFamDe(agrupado, grupo), 2)}
+                  </span>
+                </div>
+                {/* Zebra por INDICE em JS, nunca odd:/even: — cada familia e um
+                    <div> proprio e as variantes do CSS contam irmaos do mesmo pai,
+                    entao a alternancia reiniciaria em cada bloco. Mesma decisao de
+                    7a6fd296 no individual, e o indice reinicia por familia
+                    exatamente como la. */}
+                {(agrupado.familias.find(f => f.grupo === grupo)?.tipos ?? []).map((t, i) => (
+                  <div key={t.tipo}
+                       className={`grid gap-1 py-0 items-baseline ${i % 2 === 0 ? 'bg-muted/30' : 'bg-card'}`}
+                       style={{ gridTemplateColumns: gridConsolidado }}>
+                    <span className="text-[9px] text-muted-foreground pl-4 truncate">{t.label}</span>
+                    {fazendasDoConsolidado.map(f => (
+                      <span key={f.id} className="text-[9px] text-muted-foreground tabular-nums text-right px-1">
+                        {formatNum(somaTipoDe(agrupadoPorFazenda.get(f.id), t.tipo), 2)}
+                      </span>
+                    ))}
+                    <span className="text-[9px] text-muted-foreground tabular-nums text-right px-1">
+                      {formatNum(somaTipoDe(agrupado, t.tipo), 2)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ))}
+
+            <div className="grid gap-1 py-1 bg-primary text-primary-foreground items-baseline"
+                 style={{ gridTemplateColumns: gridConsolidado }}>
+              <span className="text-[11px] font-bold uppercase tracking-wide pl-1">Total</span>
+              {fazendasDoConsolidado.map(f => (
+                <span key={f.id} className="text-[11px] font-bold tabular-nums text-right px-1">
+                  {formatNum(totalDe(agrupadoPorFazenda.get(f.id)), 2)}
+                </span>
+              ))}
+              <span className="text-[11px] font-bold tabular-nums text-right px-1">
+                {formatNum(totalDe(agrupado), 2)}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* FazendasList PERMANECE, abaixo da tabela. O briefing pedia o consolidado
+            "em vez do estado atual", mas esta e a UNICA porta do /v2 para CRIAR e
+            renomear fazenda (FazendasList.tsx:172 "Nova Fazenda"); remove-la seria
+            perder capacidade que o briefing nao pediu para perder. */}
+        <FazendasList />
+      </div>
+    );
+  }
+
+  if (!fazendaAtual) {
     return (
       <div className="px-4 py-4">
         <FazendasList />
@@ -366,9 +527,27 @@ export function V2Fazendas() {
           para que nada deslize por baixo do outro. */}
       <div className="sticky top-0 z-30 bg-background pt-1 -mx-4 px-4">
       <div className="flex items-center justify-between mb-3">
-        <div>
-          <h2 className="text-sm font-bold text-foreground">{fazendaAtual.nome}</h2>
-          <p className="text-[10px] text-muted-foreground">Cadastro da fazenda</p>
+        <div className="flex items-center gap-1.5">
+          {/* Voltar ao Global. Condiciona em fazendas.length > 1, NAO em isGlobal:
+              cliente de fazenda unica nunca entra em Global — FazendaContext:108 e
+              :110 caem direto em list[0] nos dois ramos, o do localStorage e o do
+              default — e o botao levaria a lugar nenhum.
+              O sentinela GLOBAL_FAZENDA vem do proprio contexto; construir um
+              objeto equivalente aqui criaria uma segunda definicao de "Global". */}
+          {fazendas.filter(f => f.id !== '__global__').length > 1 && (
+            <button
+              type="button"
+              onClick={() => setFazendaAtual(GLOBAL_FAZENDA)}
+              title="Voltar ao consolidado de todas as fazendas"
+              className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </button>
+          )}
+          <div>
+            <h2 className="text-sm font-bold text-foreground">{fazendaAtual.nome}</h2>
+            <p className="text-[10px] text-muted-foreground">Cadastro da fazenda</p>
+          </div>
         </div>
         <div className="flex gap-1.5">
           {!editing && (
