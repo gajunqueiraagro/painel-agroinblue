@@ -9,6 +9,8 @@ import { useToast } from '@/hooks/use-toast';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useFazendaCadastro } from '@/hooks/useFazendaCadastro';
+import { usePastos } from '@/hooks/usePastos';
+import { agruparPastosPorFamilia } from '@/lib/pastos/agruparPorFamilia';
 import {
   useAreaPlanejamento,
   type UpsertLinhaArea,
@@ -34,14 +36,18 @@ const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov'
    derivam de UMA lista, e acrescentar area nao exige tocar em cinco lugares. */
 /* O grupo vive no DADO, nao em indice de posicao: inserir area nova no meio
    nao pode quebrar a separacao visual. */
+/* `familia` e `tipo` mapeiam a linha para a taxonomia dos PASTOS, de onde vem
+   a coluna Referencia. `ambiental` agrega Reserva e APP, e os dois se separam
+   pelo TIPO — `agruparPastosPorFamilia` expoe `familias[].tipos[]`.
+   "Outras" nao tem familia correspondente: fica sem referencia. */
 const AREAS = [
-  { campo: 'pec',     col: 'area_pecuaria_ha',     label: 'Pecuária',     grupo: 'produtiva' },
-  { campo: 'agric',   col: 'area_agricultura_ha',  label: 'Agricultura',  grupo: 'produtiva' },
-  { campo: 'silvi',   col: 'area_silvicultura_ha', label: 'Silvicultura', grupo: 'produtiva' },
-  { campo: 'reserva', col: 'area_reserva_ha',      label: 'Reserva',      grupo: 'patrimonial' },
-  { campo: 'app',     col: 'area_app_ha',          label: 'APP',          grupo: 'patrimonial' },
-  { campo: 'benf',    col: 'area_benfeitorias_ha', label: 'Benfeitorias', grupo: 'patrimonial' },
-  { campo: 'outras',  col: 'area_outras_ha',       label: 'Outras',       grupo: 'patrimonial' },
+  { campo: 'pec',     col: 'area_pecuaria_ha',     label: 'Pecuária',     grupo: 'produtiva',   familia: 'pecuaria',       tipo: null },
+  { campo: 'agric',   col: 'area_agricultura_ha',  label: 'Agricultura',  grupo: 'produtiva',   familia: 'agricultura',    tipo: null },
+  { campo: 'silvi',   col: 'area_silvicultura_ha', label: 'Silvicultura', grupo: 'produtiva',   familia: 'silvicultura',   tipo: null },
+  { campo: 'reserva', col: 'area_reserva_ha',      label: 'Reserva',      grupo: 'patrimonial', familia: 'ambiental',      tipo: 'reserva' },
+  { campo: 'app',     col: 'area_app_ha',          label: 'APP',          grupo: 'patrimonial', familia: 'ambiental',      tipo: 'app' },
+  { campo: 'benf',    col: 'area_benfeitorias_ha', label: 'Benfeitorias', grupo: 'patrimonial', familia: 'infraestrutura', tipo: null },
+  { campo: 'outras',  col: 'area_outras_ha',       label: 'Outras',       grupo: 'patrimonial', familia: null,             tipo: null },
 ] as const;
 
 type CampoArea = typeof AREAS[number]['campo'];
@@ -98,6 +104,13 @@ function parseAreaBR(texto: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+/* Eixo Y em milhares quando o numero e grande: "4.656,20" em 8px ocuparia
+   mais que a propria coluna do eixo. */
+function fmtEixo(v: number): string {
+  if (v >= 1000) return `${(v / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}k`;
+  return v.toLocaleString('pt-BR', { maximumFractionDigits: 0 });
+}
+
 function fmt(n: number | null | undefined): string {
   if (n === null || n === undefined || !Number.isFinite(n)) return '—';
   /* Padrao numerico do sistema: pt-BR, 2 casas fixas, separador de milhar.
@@ -136,6 +149,9 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
   );
 
   // Estado local editável (12 linhas)
+  /* Mes sob o cursor no grafico. Guarda o MES, nao o indice. */
+  const [mesHover, setMesHover] = useState<number | null>(null);
+
   const [linhas, setLinhas] = useState<LinhaLocal[]>(() =>
     Array.from({ length: 12 }, (_, i) => linhaVazia(i + 1))
   );
@@ -175,6 +191,30 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
      Reserva declarada diz 108,49. Referencia por familia exigiria ler os
      pastos: fonte diferente, PR proprio. */
   const matricula = cadastro?.area_total_ha ?? null;
+
+  /* Decomposicao vem dos PASTOS via agruparPastosPorFamilia — mesma fonte da
+     aba Cadastro do V2Fazendas, sem query nova (usePastos ja carrega). So
+     ATIVOS: o helper nao filtra por decisao declarada no proprio modulo. */
+  const { pastos } = usePastos();
+  const refPorArea = useMemo<(number | null)[]>(() => {
+    if (isGlobal) return AREAS.map(() => null);
+    const { familias } = agruparPastosPorFamilia(pastos.filter(p => p.ativo !== false));
+    return AREAS.map(a => {
+      if (!a.familia) return null;
+      const f = familias.find(x => x.grupo === a.familia);
+      if (!f) return null;
+      if (!a.tipo) return f.somaHa;
+      const t = f.tipos.find(x => x.tipo === a.tipo);
+      return t ? t.pastos.reduce((s2, p) => s2 + (p.area_produtiva_ha ?? 0), 0) : null;
+    });
+  }, [pastos, isGlobal]);
+
+  /* Soma das sete familias derivadas — confrontada com area_total_ha na linha
+     de Diferenca. Diz se o proprio cadastro fecha contra os pastos. */
+  const somaRef = useMemo(() => {
+    const vals = refPorArea.filter((v): v is number => v != null);
+    return vals.length ? vals.reduce((s2, v) => s2 + v, 0) : null;
+  }, [refPorArea]);
 
   /* Barras do grafico: lem o MESMO state dos inputs, nao o banco — por isso
      o grafico muda enquanto se digita, sem salvar. */
@@ -348,41 +388,118 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
           justificam recharts, e a tela nao usa a lib em mais nada. */}
       <Card>
         <CardContent className="p-3">
-          {(() => {
-            const H = 120, TOPO = 6, BASE = H - 14;
-            const alt = BASE - TOPO;
-            const larg = 100 / 12;
-            const yDe = (v: number) => BASE - (v / escalaMax) * alt;
-            return (
-              <>
-                <svg viewBox="0 0 100 120" preserveAspectRatio="none" className="w-full h-[120px]">
-                  {barras.map((b, i) => {
-                    let acc = 0;
-                    return (
-                      <g key={b.mes}>
-                        {b.partes.map(pt => {
-                          if (pt.valor <= 0) return null;
-                          const y = yDe(acc + pt.valor);
-                          const h = (pt.valor / escalaMax) * alt;
-                          acc += pt.valor;
-                          return (
-                            <rect key={pt.campo}
-                              x={i * larg + larg * 0.18} width={larg * 0.64}
-                              y={y} height={h} fill={COR_AREA[pt.campo]} />
-                          );
-                        })}
-                      </g>
-                    );
-                  })}
-                  {/* Linha da matricula: so no individual — ela e por fazenda. */}
-                  {!isGlobal && matricula != null && (
-                    <line x1="0" x2="100" y1={yDe(matricula)} y2={yDe(matricula)}
-                      stroke="hsl(var(--foreground))" strokeWidth="0.4"
-                      strokeDasharray="1.5 1.5" vectorEffect="non-scaling-stroke" />
-                  )}
-                </svg>
-                <div className="flex items-baseline justify-between gap-2">
-                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[9px] text-muted-foreground">
+          {/* Largura limitada e centralizado: em tela larga, 12 barras esticadas
+              viram faixas, nao colunas. */}
+          <div className="mx-auto w-full max-w-[640px]">
+            {(() => {
+              const H = 120, TOPO = 6, BASE = H - 6, EIXO = 13;
+              const alt = BASE - TOPO;
+              const larg = (100 - EIXO) / 12;
+              const yDe = (v: number) => BASE - (v / escalaMax) * alt;
+              const marcas = [0, 0.25, 0.5, 0.75, 1].map(f => f * escalaMax);
+              return (
+                <>
+                  <div className="relative">
+                    <svg viewBox="0 0 100 120" preserveAspectRatio="none" className="w-full h-[120px]">
+                      {/* Grade horizontal: cinco marcas, do zero ao topo da escala. */}
+                      {marcas.map(v => (
+                        <line key={v} x1={EIXO} x2="100" y1={yDe(v)} y2={yDe(v)}
+                          className="stroke-border" strokeWidth="0.3"
+                          vectorEffect="non-scaling-stroke" />
+                      ))}
+                      {barras.map((b, i) => {
+                        let acc = 0;
+                        return (
+                          <g key={b.mes}>
+                            {b.partes.map(pt => {
+                              if (pt.valor <= 0) return null;
+                              const y = yDe(acc + pt.valor);
+                              const h = (pt.valor / escalaMax) * alt;
+                              acc += pt.valor;
+                              return (
+                                <rect key={pt.campo}
+                                  x={EIXO + i * larg + larg * 0.18} width={larg * 0.64}
+                                  y={y} height={h} fill={COR_AREA[pt.campo]} />
+                              );
+                            })}
+                            {/* Alvo de hover: cobre a coluna inteira, inclusive o
+                                vazio acima da barra — senao mes baixo seria quase
+                                impossivel de acertar com o mouse. */}
+                            <rect x={EIXO + i * larg} y={TOPO} width={larg} height={alt}
+                              fill="transparent"
+                              onMouseEnter={() => setMesHover(b.mes)}
+                              onMouseLeave={() => setMesHover(null)} />
+                          </g>
+                        );
+                      })}
+                      {/* Linha da matricula: so no individual — ela e por fazenda. */}
+                      {!isGlobal && matricula != null && (
+                        <line x1={EIXO} x2="100" y1={yDe(matricula)} y2={yDe(matricula)}
+                          stroke="hsl(var(--foreground))" strokeWidth="0.4"
+                          strokeDasharray="1.5 1.5" vectorEffect="non-scaling-stroke" />
+                      )}
+                    </svg>
+
+                    {/* Valores do eixo Y sobre o SVG: dentro dele o texto sairia
+                        esticado pelo preserveAspectRatio="none". */}
+                    <div className="pointer-events-none absolute inset-0">
+                      {marcas.map(v => (
+                        <span key={v}
+                          className="absolute text-[8px] text-muted-foreground tabular-nums"
+                          style={{ top: `${(yDe(v) / H) * 100}%`, left: 0, transform: 'translateY(-50%)' }}>
+                          {fmtEixo(v)}
+                        </span>
+                      ))}
+                    </div>
+
+                    {/* TOOLTIP ancorado ACIMA da coluna — nao segue o cursor: com
+                        12 alvos fixos, ancorar e mais estavel e nao exige rastrear
+                        posicao do mouse. */}
+                    {mesHover != null && (() => {
+                      const b = barras.find(x => x.mes === mesHover);
+                      if (!b) return null;
+                      const i = mesHover - 1;
+                      const centro = EIXO + i * larg + larg / 2;
+                      const itens = b.partes.filter(pt => pt.valor > 0);
+                      return (
+                        <div
+                          className="pointer-events-none absolute z-10 rounded-md border border-border bg-popover/90 backdrop-blur-sm px-2 py-1 shadow-md"
+                          style={{
+                            left: `${centro}%`,
+                            top: 0,
+                            transform: `translate(${centro > 70 ? '-100%' : centro < 30 ? '0' : '-50%'}, -100%)`,
+                          }}
+                        >
+                          <div className="text-[9px] font-medium text-foreground">{MESES[i]}</div>
+                          {itens.length === 0 ? (
+                            <div className="text-[9px] text-muted-foreground">Sem planejamento</div>
+                          ) : itens.map(pt => (
+                            <div key={pt.campo} className="flex items-baseline justify-between gap-3 text-[9px]">
+                              <span className="flex items-center gap-1 text-muted-foreground">
+                                <span className="inline-block h-1.5 w-1.5 rounded-full shrink-0"
+                                  style={{ background: COR_AREA[pt.campo] }} />
+                                {AREAS.find(a => a.campo === pt.campo)?.label}
+                              </span>
+                              <span className="tabular-nums text-foreground">{fmt(pt.valor)}</span>
+                            </div>
+                          ))}
+                          <div className="mt-0.5 flex items-baseline justify-between gap-3 border-t border-border pt-0.5 text-[9px] font-medium">
+                            <span>Total</span>
+                            <span className="tabular-nums">{fmt(b.total)}</span>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Ordem vertical: barras -> meses -> legenda -> matricula. */}
+                  <div className="flex text-[8px] text-muted-foreground" style={{ paddingLeft: `${EIXO}%` }}>
+                    {MESES.map(m => (
+                      <span key={m} className="flex-1 text-center">{m}</span>
+                    ))}
+                  </div>
+
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 pt-1.5 text-[9px] text-muted-foreground">
                     {AREAS.map(a => (
                       <span key={a.campo} className="flex items-center gap-1">
                         <span className="inline-block h-2 w-2 rounded-full shrink-0"
@@ -391,20 +508,16 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
                       </span>
                     ))}
                   </div>
+
                   {!isGlobal && matricula != null && (
-                    <span className="text-[9px] text-muted-foreground shrink-0 tabular-nums">
-                      Matrícula {fmt(matricula)} ha
-                    </span>
+                    <p className="pt-1 text-[9px] text-muted-foreground tabular-nums">
+                      Linha tracejada — matrícula {fmt(matricula)} ha
+                    </p>
                   )}
-                </div>
-                <div className="flex text-[8px] text-muted-foreground">
-                  {MESES.map(m => (
-                    <span key={m} className="flex-1 text-center">{m}</span>
-                  ))}
-                </div>
-              </>
-            );
-          })()}
+                </>
+              );
+            })()}
+          </div>
         </CardContent>
       </Card>
 
@@ -421,15 +534,15 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
             <table className="w-full text-xs tabular-nums">
               <thead className="bg-orange-50 dark:bg-orange-950/20 border-b border-orange-200/60 dark:border-orange-900/40">
                 <tr>
-                  <th className="text-left px-2 py-1.5 font-semibold sticky left-0 bg-orange-50 dark:bg-orange-950/20 min-w-[100px] text-orange-900 dark:text-orange-200">Linha (ha)</th>
+                  <th className="text-left px-2 py-1 font-semibold sticky left-0 bg-orange-50 dark:bg-orange-950/20 min-w-[92px] text-[9px] text-orange-900 dark:text-orange-200">Tipo de uso</th>
                   {/* Referencia da matricula — so no individual: ela e por fazenda. */}
                   {!isGlobal && (
-                    <th className="px-1 py-1.5 font-semibold text-center min-w-[58px] border-r border-border text-orange-900 dark:text-orange-200">Matrícula</th>
+                    <th className="px-1 py-1 font-semibold text-center min-w-[58px] text-[9px] border-r border-border text-orange-900 dark:text-orange-200">Referência</th>
                   )}
                   {MESES.map((m, i) => (
-                    <th key={m} className={`px-1 py-1.5 font-semibold text-center min-w-[56px] text-orange-900 dark:text-orange-200${bordaTrimestre(i + 1)}`}>{m}</th>
+                    <th key={m} className={`px-1 py-1 font-semibold text-center min-w-[56px] text-[9px] text-orange-900 dark:text-orange-200${bordaTrimestre(i + 1)}`}>{m}</th>
                   ))}
-                  <th className="px-2 py-1.5 font-semibold text-center bg-orange-100/60 dark:bg-orange-900/30 min-w-[68px] text-orange-900 dark:text-orange-200">Média</th>
+                  <th className="px-2 py-1 font-semibold text-center bg-orange-100/60 dark:bg-orange-900/30 min-w-[62px] text-[9px] text-orange-900 dark:text-orange-200">Média</th>
                 </tr>
               </thead>
               <tbody>
@@ -446,12 +559,14 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
                     {/* A celula sticky precisa de fundo OPACO — senao o conteudo
                         rolado aparece por baixo. Por isso ela nao herda a zebra;
                         acompanha o GRUPO, que e a distincao que importa. */}
-                    <td className={`px-2 py-1 font-medium sticky left-0 ${
+                    <td className={`px-2 py-0.5 font-medium text-[9px] sticky left-0 ${
                       patri ? 'bg-muted/50 text-muted-foreground' : 'bg-background'
                     }`}>{a.label}</td>
-                    {/* Sem valor por familia: so o total da matricula confere. */}
+                    {/* Referencia, nao meta: `text-muted-foreground`, nunca `text-meta`. */}
                     {!isGlobal && (
-                      <td className="px-1 py-1 border-r border-border" />
+                      <td className="px-1 py-0.5 text-right text-[9px] tabular-nums text-muted-foreground border-r border-border">
+                        {fmt(refPorArea[ai])}
+                      </td>
                     )}
                     {linhas.map((l, idx) => {
                       return (
@@ -508,6 +623,35 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
                   ))}
                   <td className="px-1 py-1.5 text-center font-semibold bg-orange-200/40 dark:bg-orange-900/40 text-[9px] italic text-meta">{fmt(mediaTot)}</td>
                 </tr>
+
+                {/* Diferenca = planejado − referencia. Zero (tol. 0,01) vira
+                    travessao; qualquer outro valor fica em warning. Na coluna
+                    Referencia, a diferenca e a soma das sete familias contra
+                    area_total_ha — diz se o proprio cadastro fecha. */}
+                {!isGlobal && (
+                  <tr className="text-[9px]">
+                    <td className="px-2 py-0.5 font-medium sticky left-0 bg-background text-muted-foreground">Diferença</td>
+                    {(() => {
+                      const d = somaRef != null && matricula != null ? somaRef - matricula : null;
+                      const zero = d == null || Math.abs(d) <= 0.01;
+                      return (
+                        <td className={`px-1 py-0.5 text-right tabular-nums border-r border-border ${zero ? 'text-muted-foreground' : 'text-warning'}`}>
+                          {zero ? '—' : fmt(d)}
+                        </td>
+                      );
+                    })()}
+                    {barras.map((b, idx) => {
+                      const d = matricula == null ? null : b.total - matricula;
+                      const zero = d == null || Math.abs(d) <= 0.01;
+                      return (
+                        <td key={b.mes} className={`px-0.5 py-0.5 text-center tabular-nums ${zero ? 'text-muted-foreground' : 'text-warning'}${bordaTrimestre(idx + 1)}`}>
+                          {zero ? '—' : fmt(d)}
+                        </td>
+                      );
+                    })}
+                    <td className="px-1 py-0.5" />
+                  </tr>
+                )}
               </tbody>
             </table>
           )}
