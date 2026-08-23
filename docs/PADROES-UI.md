@@ -228,6 +228,21 @@ de erro de leitura. Usar `` viewBox={`0 0 100 ${H}`} ``.
 dot aberto é a cor de fundo de quem o contém: `--background` fora de
 card, `--card` dentro. Errar deixa miolo cinza em card branco.
 
+**Ausência não é zero, e negativo não é ausência.** Em gráfico de barras,
+ano sem dado mantém o slot no eixo e não desenha barra — nunca barra de
+altura zero, que afirmaria "foi zero". E a guarda de "tem dado" testa
+`!== 0`, não `> 0`: produção biológica pode ser negativa (a NJ tem
+−2.877,2 @ em jul/2021), e `> 0` apagaria o ano.
+
+**Barras agrupadas: uma paleta só.** Ano anterior em `#B4B2A9`, realizado
+na cor da série, meta em laranja sólido claro (`#FCB27F`). A meta vazada é
+o idioma das **linhas**; misturar os dois deixa duas paletas para a mesma
+semântica na mesma tela.
+
+**Eixo Y não precisa de casa decimal acima de mil.** `"50.000,0"` tem oito
+caracteres e não cabe em canaleta de 46px. Formatador do eixo separado do
+formatador de rótulo de barra — no rótulo há espaço e a decimal importa.
+
 ## A13 — Armadilhas de JSX e CSS
 
 **Zebra por índice, não por `nth-child`.** `odd:`/`even:` só funcionam
@@ -236,6 +251,30 @@ contagem em cada bloco. Alternar pelo índice em JS.
 
 **`{/* */}` como primeiro filho de `return (…)` não é comentário** — é
 bloco vazio, e quebra o JSX. Já custou 14 erros de sintaxe.
+
+## A14 — Direção do indicador
+
+**A cor do delta segue a direção BOA do indicador, não o sinal.** Custo
+que subiu 40% em verde afirma melhora sobre a pior notícia da tela.
+Indicadores onde subir é ruim: custeio, custo por @, custo por cabeça,
+endividamento e alavancagem. O critério é "subir é ruim para o produtor"
+— inclui dívida, não só custo e despesa.
+
+**A seta nunca inverte.** Ela indica direção, não qualidade: número que
+subiu aponta para cima mesmo quando subir é ruim. Inverter esconderia o
+fato.
+
+**Direção não é cor da série.** São props distintas: `margemArr` pinta a
+série de vermelho quando o valor é negativo, e ainda assim subir é bom.
+
+**Tile e modal têm de concordar.** `MetricTile` usa `inverseDelta`; o
+modal usa `polaridade`. Dar direção a um e não ao outro cria tile verde e
+modal vermelho sobre o mesmo número, na mesma tela.
+
+**Duas exceções registradas, ambas mantidas no default:** lotação
+(`uaHa`) — subir é bom até a capacidade de suporte e ruim depois, e não há
+teto no dado; e `precoArr`, que no PC-100 é receita ÷ arrobas
+desfrutadas, ou seja preço de venda, onde subir é bom.
 
 ---
 
