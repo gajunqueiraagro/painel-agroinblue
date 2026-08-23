@@ -148,6 +148,15 @@ const MESES_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'S
 const DOT_V1        = { r: 2, strokeWidth: 1.5, fill: 'hsl(var(--card))' };
 const DOT_META_V1   = { r: 3, strokeWidth: 1.5, fill: 'hsl(var(--card))' };
 const ACTIVE_DOT_V1 = { r: 4, strokeWidth: 2, fill: 'hsl(var(--primary))' };
+
+/* Paleta das COLUNAS — uma so para o grafico do mes e para o
+   historico. Ano anterior no mesmo cinza que o historico ja usava;
+   meta em laranja SOLIDO e mais claro, para nao competir com o
+   realizado.
+   NAO vale para as LINHAS: la a meta e vazada (DOT_META_V1) e o traco e
+   #F97316 cheio — idioma proprio, preservado. */
+const BAR_ANO_ANT = '#B4B2A9';
+const BAR_META    = '#FCB27F';   // #F97316 a ~55% sobre branco
 /* strokeWidth por serie no V1: atual 2.5, meta 2, ano anterior 1.5.
    Tracejado SO no ano anterior ('4 2') — a meta e CHEIA. A opacidade 0.55 que
    havia no ano anterior saiu: o V1 nao usa nenhuma, e com #B4B2A9 (68% de
@@ -357,7 +366,7 @@ export function IndicadorHistoricoModal({
      vir sobrescrito pela prop `labelPeriodo` e serve ao bloco de historico. */
   const yy = String(anoAtual).slice(-2);
   /* Uma barra por ano, por LEITURA. A logica e a mesma de antes — barra do
-     ano atual em COR_ATUAL, demais em '#B4B2A9', "Meta {ano}" ao final,
+     ano atual em COR_ATUAL, demais em BAR_ANO_ANT, "Meta {ano}" ao final,
      filtro de nulos. So passou a receber o historico do modo em vez do
      historico unico, que chegava ja colapsado pelo viewMode do pai. */
   const montaBarras = (hist?: AnoValor[], metaHist?: AnoValor[]) => {
@@ -367,10 +376,10 @@ export function IndicadorHistoricoModal({
       ...hist.map(h => ({
         nome: String(h.ano),
         valor: h.valor,
-        cor: h.ano === anoAtual ? COR_ATUAL.stroke : '#B4B2A9',
+        cor: h.ano === anoAtual ? COR_ATUAL.stroke : BAR_ANO_ANT,
       })),
       ...(metaAtual != null && !isNaN(metaAtual)
-        ? [{ nome: `Meta ${anoAtual}`, valor: metaAtual, cor: '#F97316' }]
+        ? [{ nome: `Meta ${anoAtual}`, valor: metaAtual, cor: BAR_META }]
         : []),
     ];
     /* O filtro de nulos saiu: o slot do ano FICA no eixo, com o rotulo, e o
@@ -619,7 +628,7 @@ export function IndicadorHistoricoModal({
                           seis numeros de 9px se sobrepoem — a leitura e pelo
                           Tooltip, que ja lista as tres series. */}
                       {modoColuna && hasAnoAnt && (
-                        <Bar dataKey="anoAnterior" fill="hsl(var(--muted-foreground) / 0.28)"
+                        <Bar dataKey="anoAnterior" fill={BAR_ANO_ANT}
                              radius={[2, 2, 0, 0]} isAnimationActive={false} />
                       )}
                       {modoColuna && (
@@ -627,7 +636,7 @@ export function IndicadorHistoricoModal({
                              radius={[2, 2, 0, 0]} isAnimationActive={false} />
                       )}
                       {modoColuna && hasMeta && (
-                        <Bar dataKey="meta" fill="transparent" stroke="#F97316" strokeWidth={1.5}
+                        <Bar dataKey="meta" fill={BAR_META}
                              radius={[2, 2, 0, 0]} isAnimationActive={false} />
                       )}
                     </ComposedChart>
