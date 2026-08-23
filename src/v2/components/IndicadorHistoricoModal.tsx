@@ -1065,8 +1065,11 @@ export function IndicadorHistoricoModal({
            Fechar continua sendo o clique fora, anunciado no rodape — nao havia
            botao de fechar aqui para preservar.  */}
 
-        {/* Corpo rolável — gráfico + histórico + rodapé */}
-        <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
+        {/* Corpo — NAO rola. Medido em 578 de viewport: excesso zero aqui,
+           255 dentro do painel da aba. Quem transborda e o TabsContent, entao
+           e nele que a rolagem vive; deixa-la aqui faria a TabsList subir
+           junto com o conteudo. */}
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
 
           {/* Aba unica nao e aba. Catorze dos dezoito indicadores nao recebem
               `seriesPorFazenda`; para eles uma TabsList com o botao "Global"
@@ -1085,11 +1088,24 @@ export function IndicadorHistoricoModal({
                 <TabsTrigger value="fazenda" className="text-[11px] px-3 h-6">Por Fazenda</TabsTrigger>
               </TabsList>
 
-              <TabsContent value="global" className="flex-1 min-h-0 flex flex-col mt-0">
+              {/* `data-[state=inactive]:hidden` NAO e decorativo — sem ele o
+                  modal perde metade da altura. O Presence do Radix recebe
+                  `children` como FUNCAO, entao `forceMount` e true e o painel
+                  inativo fica no DOM (`[role="tabpanel"]` = 2 com o modal
+                  aberto). O atributo `hidden` nao o tira do layout: a regra
+                  `[hidden]{display:none}` e do USER-AGENT e a classe `flex` e
+                  de AUTOR, que vence na cascata. Resultado medido: dois paineis
+                  `flex: 1 1 0%` dividindo 461 em 230,5 cada — e como o basis e
+                  0%, a divisao ignora o conteudo, que foi por que o 230 nunca
+                  mudou. Esta classe gera `.…[data-state=inactive]{display:none}`,
+                  classe + atributo, especificidade acima de `.flex`. */}
+              <TabsContent value="global"
+                           className="flex-1 min-h-0 flex flex-col mt-0 overflow-y-auto data-[state=inactive]:hidden">
                 {conteudoGlobal}
               </TabsContent>
 
-              <TabsContent value="fazenda" className="flex-1 min-h-0 flex flex-col mt-0">
+              <TabsContent value="fazenda"
+                           className="flex-1 min-h-0 flex flex-col mt-0 overflow-y-auto data-[state=inactive]:hidden">
                 {/* Por fazenda: mesma grade e mesmo wrapper dos de cima, mais a
                     tabela dos numeros embaixo. SEM meta e SEM ano anterior — a
                     aba Global responde "como estou contra o planejado"; esta
