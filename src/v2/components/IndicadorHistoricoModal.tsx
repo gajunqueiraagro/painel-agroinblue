@@ -551,7 +551,7 @@ export function IndicadorHistoricoModal({
            botao de fechar aqui para preservar.  */}
 
         {/* Corpo rolável — gráfico + histórico + rodapé */}
-        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+        <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
 
           <Tabs value={aba}
                 onValueChange={v => setAba(v === 'fazenda' ? 'fazenda' : 'global')}
@@ -574,7 +574,8 @@ export function IndicadorHistoricoModal({
                 O idioma (Line + Area, #B4B2A9 tracejado, strokeWidth 1.5, dot r=2,
                 CartesianGrid "3 3") e o que ja existia no ramo periodo deste arquivo.
                 A legenda abaixo e UMA SO e serve os dois. */}
-            <div className="px-4 pt-3 pb-2 flex-1 min-h-0 flex flex-col">
+            <div className="px-4 pt-3 pb-2 flex-1 flex flex-col"
+                 style={{ minHeight: 260 }}>
               <div className="grid grid-cols-2 gap-3 flex-1 min-h-0">
                 <Card className="flex flex-col min-h-0">
                   <CardContent className="p-3 flex flex-col flex-1 min-h-0">
@@ -874,7 +875,7 @@ export function IndicadorHistoricoModal({
                 repetiria o defeito do 6.281 que o PR e6706153 corrigiu.
                 Altura 96px inalterada neste PR. */}
             {historicoAno != null && (
-              <div className="px-4 pb-2">
+              <div className="px-4 pb-2 shrink-0">
                 <div className="grid grid-cols-2 gap-3">
                   <Card>
                     <CardContent className="p-3">
