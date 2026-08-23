@@ -12,7 +12,9 @@ import {
   Cell,
   ReferenceLine,
 } from 'recharts';
+import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
 // REGRA ARQUITETURAL — modal puro de renderização:
 // - Modal NÃO calcula
@@ -129,6 +131,17 @@ interface Props {
    *  nao uma curva. O grafico do PERIODO segue sempre linha: acumulado e
    *  curva por definicao. */
   tipoGraficoMes?: 'linha' | 'coluna';
+  /** Series por fazenda, do useSeriePorFazenda. Quando ausente ou vazio,
+   *  a aba "Por Fazenda" NAO e renderizada — aba vazia e proibida.
+   *  ⚠ COMPRIMENTO 12, indexado 0=Jan. As series do PC-100 e do
+   *  useHistoricoZootCache tem 13, com a posicao 0 reservada a "Dez ano
+   *  anterior". `getMesValue` e 1-based e serve AS DE 13 — nunca a estas. */
+  seriesPorFazenda?: Array<{
+    fazendaId: string;
+    nome: string;
+    mes: Array<number | null>;
+    periodo: Array<number | null>;
+  }>;
 }
 
 const MESES_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -157,6 +170,15 @@ const ACTIVE_DOT_V1 = { r: 4, strokeWidth: 2, fill: 'hsl(var(--primary))' };
    #F97316 cheio — idioma proprio, preservado. */
 const BAR_ANO_ANT = '#B4B2A9';
 const BAR_META    = '#FCB27F';   // #F97316 a ~55% sobre branco
+
+/* Identidade de FAZENDA. Uso exclusivo: series onde cada linha e um
+   lugar, nao um cenario. NAO reutilizar as cores semanticas
+   (realizado/ano anterior/meta) aqui — a mesma cor nao pode significar
+   coisas diferentes em duas abas do mesmo modal.
+   Seis tons distinguiveis; acima de seis fazendas, ciclo. */
+export const COR_FAZENDA = [
+  '#185FA5', '#0E9F6E', '#D97706', '#7C3AED', '#DB2777', '#0891B2',
+] as const;
 /* strokeWidth por serie no V1: atual 2.5, meta 2, ano anterior 1.5.
    Tracejado SO no ano anterior ('4 2') — a meta e CHEIA. A opacidade 0.55 que
    havia no ano anterior saiu: o V1 nao usa nenhuma, e com #B4B2A9 (68% de
@@ -211,6 +233,7 @@ export function IndicadorHistoricoModal({
   corPrincipal = 'azul',
   polaridade = 'positivoBom',
   tipoGraficoMes = 'linha',
+  seriesPorFazenda,
 }: Props) {
   const modoColuna = tipoGraficoMes === 'coluna';
   // Paleta da linha/valor do ano atual — ano anterior e meta ficam intocados.
@@ -229,6 +252,13 @@ export function IndicadorHistoricoModal({
      (V2Home.tsx:1656-1677), entao nenhum controle se perdeu. */
   void deltaMes; void deltaAno; void viewMode; void onViewModeChange;
   // labelPeriodo é usado abaixo no bloco de histórico inferior
+
+  /* Estado local, reiniciado por `key={indicadorKey}` no <Tabs>: abrir outro
+     indicador nao deve cair na aba que ficou aberta no anterior.
+     Declarado ANTES do early return — hook nao pode ficar depois de um
+     return condicional. */
+  const [aba, setAba] = useState<'global' | 'fazenda'>('global');
+  const temPorFazenda = (seriesPorFazenda?.length ?? 0) > 0;
 
   if (!open) return null;
 
@@ -363,6 +393,20 @@ export function IndicadorHistoricoModal({
   const iniAtualPeriodo = offPeriodo ? dadosPeriodo[0].atual : null;
   const iniPeriodo      = typeof iniAtualPeriodo === 'number' ? iniAtualPeriodo : null;
 
+  /* Uma linha por MES, com uma coluna por fazenda — a forma que o recharts
+     espera para varias <Line> no mesmo grafico. As series de fazenda tem 12
+     posicoes indexadas 0=Jan: leitura por indice DIRETO, `[idx]`, nunca por
+     `getMesValue`, que e 1-based e serve as series de 13 do PC-100. */
+  const dadosFazenda = (campo: 'mes' | 'periodo') =>
+    MESES_LABELS.map((rotulo, idx) => {
+      const linha: Record<string, string | number | null> = { mes: rotulo };
+      for (const f of seriesPorFazenda ?? []) {
+        const v = f[campo][idx];
+        linha[f.nome] = typeof v === 'number' && Number.isFinite(v) ? v : null;
+      }
+      return linha;
+    });
+
   /* O `dados` unico saiu: ele lia `serieAno`, que muda com o viewMode do
      pai, e era exatamente o que impedia os dois graficos de coexistir.
      Deixa-lo aqui sem consumidor convidaria alguem a religa-lo. */
@@ -493,7 +537,7 @@ export function IndicadorHistoricoModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-4xl mx-4 rounded-lg border border-border/40 bg-background shadow-xl flex flex-col max-h-[92vh]"
+        className="w-full max-w-4xl mx-4 rounded-lg border border-border/40 bg-background shadow-xl flex flex-col h-[92vh] max-h-[92vh]"
         onClick={e => e.stopPropagation()}
       >
         {/* O cabecalho unico do topo saiu inteiro: um titulo, um numero e um
@@ -507,392 +551,493 @@ export function IndicadorHistoricoModal({
            botao de fechar aqui para preservar.  */}
 
         {/* Corpo rolável — gráfico + histórico + rodapé */}
-        <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
 
-        {/* Gráfico — DOIS de linha, lado a lado.
-            Esquerda le SEMPRE a serie mensal; direita, SEMPRE a do periodo.
-            Nenhum dos dois olha `serieAno`, que muda com o viewMode do pai —
-            e por isso alternar o toggle NAO troca os graficos entre si.
-            O idioma (Line + Area, #B4B2A9 tracejado, strokeWidth 1.5, dot r=2,
-            CartesianGrid "3 3") e o que ja existia no ramo periodo deste arquivo.
-            A legenda abaixo e UMA SO e serve os dois. */}
-        <div className="px-4 pt-3 pb-2 flex-1 min-h-0 flex flex-col">
-          <div className="grid grid-cols-2 gap-3 flex-1 min-h-0">
-            <Card className="flex flex-col min-h-0">
-              <CardContent className="p-3 flex flex-col flex-1 min-h-0">
-                {cabecalhoLeitura(titulos?.mes ?? { titulo, subtitulo }, trioMes,
-                    `${MESES_LABELS[mesAtual - 1]}/${yy}`)}
-                {/* Altura DERIVADA: literal nao cabe em todo viewport. Piso 140px
-                    mantem os 12 rotulos de mes legiveis; teto 240px impede o
-                    grafico de inchar em tela grande. */}
-                <div className="flex-1" style={{ minHeight: 140, maxHeight: 240 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart data={dadosMes} margin={{ top: 6, right: 8, left: 4, bottom: 2 }}
-                                   barCategoryGap="18%" barGap={1}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted-foreground) / 0.15)" />
-                      {iniMes != null && (
-                        <ReferenceLine y={iniMes} stroke={COR_ATUAL.stroke} strokeDasharray="4 3"
-                                       strokeWidth={1} opacity={0.4} />
-                      )}
-                      <XAxis dataKey="mes" tick={{ fontSize: 8, fill: '#888780' }} stroke="hsl(var(--muted-foreground) / 0.22)" />
-                      <YAxis tick={{ fontSize: 8, fill: '#888780' }} tickFormatter={fmtEixo} stroke="hsl(var(--muted-foreground) / 0.22)" width={46} />
-                      <Tooltip content={<CustomTooltip />} />
-                      {/* Areas (sob as linhas) — dataKey separado p/ não duplicar no tooltip */}
-                      {!modoColuna && hasAnoAnt && (
-                        <Area
-                          type="monotone"
-                          dataKey="anoAnteriorArea"
-                          stroke="none"
-                          fill="#000000"
-                          fillOpacity={0.03}
-                          isAnimationActive={false}
-                          connectNulls={false}
-                          legendType="none"
-                          activeDot={false}
-                        />
-                      )}
-                      {!modoColuna && (
-                        <Area
-                          type="monotone"
-                          dataKey="atualArea"
-                          stroke="none"
-                          fill="#000000"
-                          fillOpacity={0.16}
-                          isAnimationActive={false}
-                          connectNulls={false}
-                          legendType="none"
-                          activeDot={false}
-                        />
-                      )}
-                      {/* Lines (por cima das áreas).
-                          As duas areas acima separam PASSADO de FUTURO sem legenda:
-                          `atualArea` so existe ate `mesAtual` (a serie do ano corrente
-                          para ali), entao ela e o passado — 0.16. `anoAnteriorArea`
-                          cobre Jan–Dez, entao depois do mes atual ela fica sozinha —
-                          0.03. O contraste subiu de 0.09/0.04 para 0.16/0.03.
-                          Este par NAO veio do V1: la as duas opacidades separam SERIES
-                          (0.3 atual, 0.1 ano anterior), nao tempo. Valores escolhidos
-                          aqui; a estrutura de duas Areas ja existia. */}
-                      {!modoColuna && hasAnoAnt && (
-                        <Line
-                          type="monotone"
-                          dataKey="anoAnterior"
-                          stroke="hsl(var(--muted-foreground))"
-                          strokeWidth={1.5}
-                          strokeDasharray="4 2"
-                          dot={DOT_V1}
-                          activeDot={ACTIVE_DOT_V1}
-                          connectNulls={false}
-                          isAnimationActive={false}
-                        />
-                      )}
-                      {!modoColuna && hasMeta && (
-                        <Line
-                          type="monotone"
-                          dataKey="meta"
-                          stroke="#F97316"
-                          strokeWidth={2}
-                          dot={DOT_META_V1}
-                          activeDot={ACTIVE_DOT_V1}
-                          connectNulls={false}
-                          isAnimationActive={false}
-                        />
-                      )}
-                      {!modoColuna && (
-                        <Line
-                          type="monotone"
-                          dataKey="atual"
-                          stroke={COR_ATUAL.stroke}
-                          strokeWidth={2.5}
-                          connectNulls={false}
-                          isAnimationActive={false}
-                          dot={(props: any) => {
-                            /* Guard de nulo. `montaDados` devolve `atual: null` para
-                               mes > mesAtual, mas o dot custom era chamado para TODO
-                               indice: sem `cy` valido o <circle> ia para o topo e o
-                               clip cortava a metade de cima — as cinco marcas azuis
-                               sobre Ago–Dez. <g/> vazio, nunca null: a assinatura do
-                               dot do recharts espera ReactElement. */
-                            if (props.value == null || !Number.isFinite(props.cy)) {
-                              return <g key={props.index} />;
-                            }
-                            /* O mes selecionado continua cheio e maior — e a unica
-                               marca que o V1 nao tem, e ela diz qual mes o painel
-                               esta olhando. Os demais viram circulo ABERTO. */
-                            const isSel = props.index === mesAtual - 1 + offMes;
-                            return isSel
-                              ? <circle key={props.index} cx={props.cx} cy={props.cy} r={6} fill={COR_ATUAL.stroke} />
-                              : <circle key={props.index} cx={props.cx} cy={props.cy} r={2}
-                                        fill="hsl(var(--card))" stroke={COR_ATUAL.stroke} strokeWidth={1.5} />;
-                          }}
-                        />
-                      )}
-                      {/* Colunas agrupadas — fluxo mensal le melhor como barra:
-                          mes a mes sao valores discretos, nao uma curva.
-                          Ordem 2025 · 2026 · Meta, a mesma em que aparecem lado
-                          a lado. Tres condicionais INDEPENDENTES: o recharts
-                          inspeciona os filhos por TIPO e pode nao detectar
-                          <Bar> dentro de Fragment.
-                          Meta VAZADA — repete o idioma do marcador de meta, que
-                          virou circulo aberto no PR-IDIOMA-03: meta nunca e massa.
-                          SEM rotulo em cima: `max-w-4xl` da ~350px de plotagem por
-                          card, e 12 meses x 3 barras sao ~9px por barra. Trinta e
-                          seis numeros de 9px se sobrepoem — a leitura e pelo
-                          Tooltip, que ja lista as tres series. */}
-                      {modoColuna && hasAnoAnt && (
-                        <Bar dataKey="anoAnterior" fill={BAR_ANO_ANT}
-                             radius={[2, 2, 0, 0]} isAnimationActive={false} />
-                      )}
-                      {modoColuna && (
-                        <Bar dataKey="atual" fill={COR_ATUAL.stroke}
-                             radius={[2, 2, 0, 0]} isAnimationActive={false} />
-                      )}
-                      {modoColuna && hasMeta && (
-                        <Bar dataKey="meta" fill={BAR_META}
-                             radius={[2, 2, 0, 0]} isAnimationActive={false} />
-                      )}
-                    </ComposedChart>
-                  </ResponsiveContainer>
-                </div>
-                {/* Legenda — uma por card, como no ChartCard V1. Duplicada de
-                    proposito: cada card e autonomo. O card NAO cresce — quem
-                    cede altura e o grafico (flex-1, piso 140). */}
-                <div className="flex justify-center gap-2.5 px-0 mt-1.5 flex-wrap">
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-3 h-[2px] rounded" style={{ background: COR_ATUAL.stroke }} />
-                    <span className="text-[9px] text-muted-foreground">{anoAtual}</span>
-                  </div>
-                  {hasAnoAnt && (
-                    <div className="flex items-center gap-1.5">
-                      <svg width="14" height="4"><line x1="0" y1="2" x2="14" y2="2" stroke="hsl(var(--muted-foreground))" strokeWidth="2" strokeDasharray="4 3"/></svg>
-                      <span className="text-[9px] text-muted-foreground">{anoAtual - 1}</span>
+          <Tabs value={aba}
+                onValueChange={v => setAba(v === 'fazenda' ? 'fazenda' : 'global')}
+                key={indicadorKey}
+                className="flex-1 min-h-0 flex flex-col">
+            <TabsList className="mx-4 mt-3 h-7 w-fit">
+              <TabsTrigger value="global" className="text-[11px] px-3 h-6">Global</TabsTrigger>
+              {/* Aba vazia e proibida: catorze dos dezoito indicadores nao
+                  recebem `seriesPorFazenda` e nao mostram este gatilho. */}
+              {temPorFazenda && (
+                <TabsTrigger value="fazenda" className="text-[11px] px-3 h-6">Por Fazenda</TabsTrigger>
+              )}
+            </TabsList>
+
+            <TabsContent value="global" className="flex-1 min-h-0 flex flex-col mt-0">
+            {/* Gráfico — DOIS de linha, lado a lado.
+                Esquerda le SEMPRE a serie mensal; direita, SEMPRE a do periodo.
+                Nenhum dos dois olha `serieAno`, que muda com o viewMode do pai —
+                e por isso alternar o toggle NAO troca os graficos entre si.
+                O idioma (Line + Area, #B4B2A9 tracejado, strokeWidth 1.5, dot r=2,
+                CartesianGrid "3 3") e o que ja existia no ramo periodo deste arquivo.
+                A legenda abaixo e UMA SO e serve os dois. */}
+            <div className="px-4 pt-3 pb-2 flex-1 min-h-0 flex flex-col">
+              <div className="grid grid-cols-2 gap-3 flex-1 min-h-0">
+                <Card className="flex flex-col min-h-0">
+                  <CardContent className="p-3 flex flex-col flex-1 min-h-0">
+                    {cabecalhoLeitura(titulos?.mes ?? { titulo, subtitulo }, trioMes,
+                        `${MESES_LABELS[mesAtual - 1]}/${yy}`)}
+                    {/* Altura DERIVADA: literal nao cabe em todo viewport. Piso 140px
+                        mantem os 12 rotulos de mes legiveis; teto 240px impede o
+                        grafico de inchar em tela grande. */}
+                    <div className="flex-1" style={{ minHeight: 140, maxHeight: 240 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart data={dadosMes} margin={{ top: 6, right: 8, left: 4, bottom: 2 }}
+                                       barCategoryGap="18%" barGap={1}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted-foreground) / 0.15)" />
+                          {iniMes != null && (
+                            <ReferenceLine y={iniMes} stroke={COR_ATUAL.stroke} strokeDasharray="4 3"
+                                           strokeWidth={1} opacity={0.4} />
+                          )}
+                          <XAxis dataKey="mes" tick={{ fontSize: 8, fill: '#888780' }} stroke="hsl(var(--muted-foreground) / 0.22)" />
+                          <YAxis tick={{ fontSize: 8, fill: '#888780' }} tickFormatter={fmtEixo} stroke="hsl(var(--muted-foreground) / 0.22)" width={46} />
+                          <Tooltip content={<CustomTooltip />} />
+                          {/* Areas (sob as linhas) — dataKey separado p/ não duplicar no tooltip */}
+                          {!modoColuna && hasAnoAnt && (
+                            <Area
+                              type="monotone"
+                              dataKey="anoAnteriorArea"
+                              stroke="none"
+                              fill="#000000"
+                              fillOpacity={0.03}
+                              isAnimationActive={false}
+                              connectNulls={false}
+                              legendType="none"
+                              activeDot={false}
+                            />
+                          )}
+                          {!modoColuna && (
+                            <Area
+                              type="monotone"
+                              dataKey="atualArea"
+                              stroke="none"
+                              fill="#000000"
+                              fillOpacity={0.16}
+                              isAnimationActive={false}
+                              connectNulls={false}
+                              legendType="none"
+                              activeDot={false}
+                            />
+                          )}
+                          {/* Lines (por cima das áreas).
+                              As duas areas acima separam PASSADO de FUTURO sem legenda:
+                              `atualArea` so existe ate `mesAtual` (a serie do ano corrente
+                              para ali), entao ela e o passado — 0.16. `anoAnteriorArea`
+                              cobre Jan–Dez, entao depois do mes atual ela fica sozinha —
+                              0.03. O contraste subiu de 0.09/0.04 para 0.16/0.03.
+                              Este par NAO veio do V1: la as duas opacidades separam SERIES
+                              (0.3 atual, 0.1 ano anterior), nao tempo. Valores escolhidos
+                              aqui; a estrutura de duas Areas ja existia. */}
+                          {!modoColuna && hasAnoAnt && (
+                            <Line
+                              type="monotone"
+                              dataKey="anoAnterior"
+                              stroke="hsl(var(--muted-foreground))"
+                              strokeWidth={1.5}
+                              strokeDasharray="4 2"
+                              dot={DOT_V1}
+                              activeDot={ACTIVE_DOT_V1}
+                              connectNulls={false}
+                              isAnimationActive={false}
+                            />
+                          )}
+                          {!modoColuna && hasMeta && (
+                            <Line
+                              type="monotone"
+                              dataKey="meta"
+                              stroke="#F97316"
+                              strokeWidth={2}
+                              dot={DOT_META_V1}
+                              activeDot={ACTIVE_DOT_V1}
+                              connectNulls={false}
+                              isAnimationActive={false}
+                            />
+                          )}
+                          {!modoColuna && (
+                            <Line
+                              type="monotone"
+                              dataKey="atual"
+                              stroke={COR_ATUAL.stroke}
+                              strokeWidth={2.5}
+                              connectNulls={false}
+                              isAnimationActive={false}
+                              dot={(props: any) => {
+                                /* Guard de nulo. `montaDados` devolve `atual: null` para
+                                   mes > mesAtual, mas o dot custom era chamado para TODO
+                                   indice: sem `cy` valido o <circle> ia para o topo e o
+                                   clip cortava a metade de cima — as cinco marcas azuis
+                                   sobre Ago–Dez. <g/> vazio, nunca null: a assinatura do
+                                   dot do recharts espera ReactElement. */
+                                if (props.value == null || !Number.isFinite(props.cy)) {
+                                  return <g key={props.index} />;
+                                }
+                                /* O mes selecionado continua cheio e maior — e a unica
+                                   marca que o V1 nao tem, e ela diz qual mes o painel
+                                   esta olhando. Os demais viram circulo ABERTO. */
+                                const isSel = props.index === mesAtual - 1 + offMes;
+                                return isSel
+                                  ? <circle key={props.index} cx={props.cx} cy={props.cy} r={6} fill={COR_ATUAL.stroke} />
+                                  : <circle key={props.index} cx={props.cx} cy={props.cy} r={2}
+                                            fill="hsl(var(--card))" stroke={COR_ATUAL.stroke} strokeWidth={1.5} />;
+                              }}
+                            />
+                          )}
+                          {/* Colunas agrupadas — fluxo mensal le melhor como barra:
+                              mes a mes sao valores discretos, nao uma curva.
+                              Ordem 2025 · 2026 · Meta, a mesma em que aparecem lado
+                              a lado. Tres condicionais INDEPENDENTES: o recharts
+                              inspeciona os filhos por TIPO e pode nao detectar
+                              <Bar> dentro de Fragment.
+                              Meta VAZADA — repete o idioma do marcador de meta, que
+                              virou circulo aberto no PR-IDIOMA-03: meta nunca e massa.
+                              SEM rotulo em cima: `max-w-4xl` da ~350px de plotagem por
+                              card, e 12 meses x 3 barras sao ~9px por barra. Trinta e
+                              seis numeros de 9px se sobrepoem — a leitura e pelo
+                              Tooltip, que ja lista as tres series. */}
+                          {modoColuna && hasAnoAnt && (
+                            <Bar dataKey="anoAnterior" fill={BAR_ANO_ANT}
+                                 radius={[2, 2, 0, 0]} isAnimationActive={false} />
+                          )}
+                          {modoColuna && (
+                            <Bar dataKey="atual" fill={COR_ATUAL.stroke}
+                                 radius={[2, 2, 0, 0]} isAnimationActive={false} />
+                          )}
+                          {modoColuna && hasMeta && (
+                            <Bar dataKey="meta" fill={BAR_META}
+                                 radius={[2, 2, 0, 0]} isAnimationActive={false} />
+                          )}
+                        </ComposedChart>
+                      </ResponsiveContainer>
                     </div>
-                  )}
-                  {hasMeta && (
-                    <div className="flex items-center gap-1.5">
-                      <svg width="14" height="4"><line x1="0" y1="2" x2="14" y2="2" stroke="#F97316" strokeWidth="2" strokeDasharray="6 3"/></svg>
-                      <span className="text-[9px] text-muted-foreground">Meta {anoAtual}</span>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="flex flex-col min-h-0">
-              <CardContent className="p-3 flex flex-col flex-1 min-h-0">
-                {cabecalhoLeitura(titulos?.periodo ?? { titulo, subtitulo }, trioPeriodo,
-                    `Jan–${MESES_LABELS[mesAtual - 1]}/${yy}`)}
-                {/* Altura DERIVADA: literal nao cabe em todo viewport. Piso 140px
-                    mantem os 12 rotulos de mes legiveis; teto 240px impede o
-                    grafico de inchar em tela grande. */}
-                <div className="flex-1" style={{ minHeight: 140, maxHeight: 240 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart data={dadosPeriodo} margin={{ top: 6, right: 8, left: 4, bottom: 2 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted-foreground) / 0.15)" />
-                      {iniPeriodo != null && (
-                        <ReferenceLine y={iniPeriodo} stroke={COR_ATUAL.stroke} strokeDasharray="4 3"
-                                       strokeWidth={1} opacity={0.4} />
-                      )}
-                      <XAxis dataKey="mes" tick={{ fontSize: 8, fill: '#888780' }} stroke="hsl(var(--muted-foreground) / 0.22)" />
-                      <YAxis tick={{ fontSize: 8, fill: '#888780' }} tickFormatter={fmtEixo} stroke="hsl(var(--muted-foreground) / 0.22)" width={46} />
-                      <Tooltip content={<CustomTooltip />} />
-                      {/* Areas (sob as linhas) — dataKey separado p/ não duplicar no tooltip */}
+                    {/* Legenda — uma por card, como no ChartCard V1. Duplicada de
+                        proposito: cada card e autonomo. O card NAO cresce — quem
+                        cede altura e o grafico (flex-1, piso 140). */}
+                    <div className="flex justify-center gap-2.5 px-0 mt-1.5 flex-wrap">
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-3 h-[2px] rounded" style={{ background: COR_ATUAL.stroke }} />
+                        <span className="text-[9px] text-muted-foreground">{anoAtual}</span>
+                      </div>
                       {hasAnoAnt && (
-                        <Area
-                          type="monotone"
-                          dataKey="anoAnteriorArea"
-                          stroke="none"
-                          fill="#000000"
-                          fillOpacity={0.03}
-                          isAnimationActive={false}
-                          connectNulls={false}
-                          legendType="none"
-                          activeDot={false}
-                        />
-                      )}
-                      <Area
-                        type="monotone"
-                        dataKey="atualArea"
-                        stroke="none"
-                        fill="#000000"
-                        fillOpacity={0.16}
-                        isAnimationActive={false}
-                        connectNulls={false}
-                        legendType="none"
-                        activeDot={false}
-                      />
-                      {/* Lines (por cima das áreas).
-                          As duas areas acima separam PASSADO de FUTURO sem legenda:
-                          `atualArea` so existe ate `mesAtual` (a serie do ano corrente
-                          para ali), entao ela e o passado — 0.16. `anoAnteriorArea`
-                          cobre Jan–Dez, entao depois do mes atual ela fica sozinha —
-                          0.03. O contraste subiu de 0.09/0.04 para 0.16/0.03.
-                          Este par NAO veio do V1: la as duas opacidades separam SERIES
-                          (0.3 atual, 0.1 ano anterior), nao tempo. Valores escolhidos
-                          aqui; a estrutura de duas Areas ja existia. */}
-                      {hasAnoAnt && (
-                        <Line
-                          type="monotone"
-                          dataKey="anoAnterior"
-                          stroke="hsl(var(--muted-foreground))"
-                          strokeWidth={1.5}
-                          strokeDasharray="4 2"
-                          dot={DOT_V1}
-                          activeDot={ACTIVE_DOT_V1}
-                          connectNulls={false}
-                          isAnimationActive={false}
-                        />
+                        <div className="flex items-center gap-1.5">
+                          <svg width="14" height="4"><line x1="0" y1="2" x2="14" y2="2" stroke="hsl(var(--muted-foreground))" strokeWidth="2" strokeDasharray="4 3"/></svg>
+                          <span className="text-[9px] text-muted-foreground">{anoAtual - 1}</span>
+                        </div>
                       )}
                       {hasMeta && (
-                        <Line
-                          type="monotone"
-                          dataKey="meta"
-                          stroke="#F97316"
-                          strokeWidth={2}
-                          dot={DOT_META_V1}
-                          activeDot={ACTIVE_DOT_V1}
-                          connectNulls={false}
-                          isAnimationActive={false}
-                        />
+                        <div className="flex items-center gap-1.5">
+                          <svg width="14" height="4"><line x1="0" y1="2" x2="14" y2="2" stroke="#F97316" strokeWidth="2" strokeDasharray="6 3"/></svg>
+                          <span className="text-[9px] text-muted-foreground">Meta {anoAtual}</span>
+                        </div>
                       )}
-                      <Line
-                        type="monotone"
-                        dataKey="atual"
-                        stroke={COR_ATUAL.stroke}
-                        strokeWidth={2.5}
-                        connectNulls={false}
-                        isAnimationActive={false}
-                        dot={(props: any) => {
-                          /* Guard de nulo. `montaDados` devolve `atual: null` para
-                             mes > mesAtual, mas o dot custom era chamado para TODO
-                             indice: sem `cy` valido o <circle> ia para o topo e o
-                             clip cortava a metade de cima — as cinco marcas azuis
-                             sobre Ago–Dez. <g/> vazio, nunca null: a assinatura do
-                             dot do recharts espera ReactElement. */
-                          if (props.value == null || !Number.isFinite(props.cy)) {
-                            return <g key={props.index} />;
-                          }
-                          /* O mes selecionado continua cheio e maior — e a unica
-                             marca que o V1 nao tem, e ela diz qual mes o painel
-                             esta olhando. Os demais viram circulo ABERTO. */
-                          const isSel = props.index === mesAtual - 1 + offPeriodo;
-                          return isSel
-                            ? <circle key={props.index} cx={props.cx} cy={props.cy} r={6} fill={COR_ATUAL.stroke} />
-                            : <circle key={props.index} cx={props.cx} cy={props.cy} r={2}
-                                      fill="hsl(var(--card))" stroke={COR_ATUAL.stroke} strokeWidth={1.5} />;
-                        }}
-                      />
-                    </ComposedChart>
-                  </ResponsiveContainer>
-                </div>
-                {/* Legenda — uma por card, como no ChartCard V1. Duplicada de
-                    proposito: cada card e autonomo. O card NAO cresce — quem
-                    cede altura e o grafico (flex-1, piso 140). */}
-                <div className="flex justify-center gap-2.5 px-0 mt-1.5 flex-wrap">
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-3 h-[2px] rounded" style={{ background: COR_ATUAL.stroke }} />
-                    <span className="text-[9px] text-muted-foreground">{anoAtual}</span>
-                  </div>
-                  {hasAnoAnt && (
-                    <div className="flex items-center gap-1.5">
-                      <svg width="14" height="4"><line x1="0" y1="2" x2="14" y2="2" stroke="hsl(var(--muted-foreground))" strokeWidth="2" strokeDasharray="4 3"/></svg>
-                      <span className="text-[9px] text-muted-foreground">{anoAtual - 1}</span>
                     </div>
-                  )}
-                  {hasMeta && (
-                    <div className="flex items-center gap-1.5">
-                      <svg width="14" height="4"><line x1="0" y1="2" x2="14" y2="2" stroke="#F97316" strokeWidth="2" strokeDasharray="6 3"/></svg>
-                      <span className="text-[9px] text-muted-foreground">Meta {anoAtual}</span>
+                  </CardContent>
+                </Card>
+                <Card className="flex flex-col min-h-0">
+                  <CardContent className="p-3 flex flex-col flex-1 min-h-0">
+                    {cabecalhoLeitura(titulos?.periodo ?? { titulo, subtitulo }, trioPeriodo,
+                        `Jan–${MESES_LABELS[mesAtual - 1]}/${yy}`)}
+                    {/* Altura DERIVADA: literal nao cabe em todo viewport. Piso 140px
+                        mantem os 12 rotulos de mes legiveis; teto 240px impede o
+                        grafico de inchar em tela grande. */}
+                    <div className="flex-1" style={{ minHeight: 140, maxHeight: 240 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart data={dadosPeriodo} margin={{ top: 6, right: 8, left: 4, bottom: 2 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted-foreground) / 0.15)" />
+                          {iniPeriodo != null && (
+                            <ReferenceLine y={iniPeriodo} stroke={COR_ATUAL.stroke} strokeDasharray="4 3"
+                                           strokeWidth={1} opacity={0.4} />
+                          )}
+                          <XAxis dataKey="mes" tick={{ fontSize: 8, fill: '#888780' }} stroke="hsl(var(--muted-foreground) / 0.22)" />
+                          <YAxis tick={{ fontSize: 8, fill: '#888780' }} tickFormatter={fmtEixo} stroke="hsl(var(--muted-foreground) / 0.22)" width={46} />
+                          <Tooltip content={<CustomTooltip />} />
+                          {/* Areas (sob as linhas) — dataKey separado p/ não duplicar no tooltip */}
+                          {hasAnoAnt && (
+                            <Area
+                              type="monotone"
+                              dataKey="anoAnteriorArea"
+                              stroke="none"
+                              fill="#000000"
+                              fillOpacity={0.03}
+                              isAnimationActive={false}
+                              connectNulls={false}
+                              legendType="none"
+                              activeDot={false}
+                            />
+                          )}
+                          <Area
+                            type="monotone"
+                            dataKey="atualArea"
+                            stroke="none"
+                            fill="#000000"
+                            fillOpacity={0.16}
+                            isAnimationActive={false}
+                            connectNulls={false}
+                            legendType="none"
+                            activeDot={false}
+                          />
+                          {/* Lines (por cima das áreas).
+                              As duas areas acima separam PASSADO de FUTURO sem legenda:
+                              `atualArea` so existe ate `mesAtual` (a serie do ano corrente
+                              para ali), entao ela e o passado — 0.16. `anoAnteriorArea`
+                              cobre Jan–Dez, entao depois do mes atual ela fica sozinha —
+                              0.03. O contraste subiu de 0.09/0.04 para 0.16/0.03.
+                              Este par NAO veio do V1: la as duas opacidades separam SERIES
+                              (0.3 atual, 0.1 ano anterior), nao tempo. Valores escolhidos
+                              aqui; a estrutura de duas Areas ja existia. */}
+                          {hasAnoAnt && (
+                            <Line
+                              type="monotone"
+                              dataKey="anoAnterior"
+                              stroke="hsl(var(--muted-foreground))"
+                              strokeWidth={1.5}
+                              strokeDasharray="4 2"
+                              dot={DOT_V1}
+                              activeDot={ACTIVE_DOT_V1}
+                              connectNulls={false}
+                              isAnimationActive={false}
+                            />
+                          )}
+                          {hasMeta && (
+                            <Line
+                              type="monotone"
+                              dataKey="meta"
+                              stroke="#F97316"
+                              strokeWidth={2}
+                              dot={DOT_META_V1}
+                              activeDot={ACTIVE_DOT_V1}
+                              connectNulls={false}
+                              isAnimationActive={false}
+                            />
+                          )}
+                          <Line
+                            type="monotone"
+                            dataKey="atual"
+                            stroke={COR_ATUAL.stroke}
+                            strokeWidth={2.5}
+                            connectNulls={false}
+                            isAnimationActive={false}
+                            dot={(props: any) => {
+                              /* Guard de nulo. `montaDados` devolve `atual: null` para
+                                 mes > mesAtual, mas o dot custom era chamado para TODO
+                                 indice: sem `cy` valido o <circle> ia para o topo e o
+                                 clip cortava a metade de cima — as cinco marcas azuis
+                                 sobre Ago–Dez. <g/> vazio, nunca null: a assinatura do
+                                 dot do recharts espera ReactElement. */
+                              if (props.value == null || !Number.isFinite(props.cy)) {
+                                return <g key={props.index} />;
+                              }
+                              /* O mes selecionado continua cheio e maior — e a unica
+                                 marca que o V1 nao tem, e ela diz qual mes o painel
+                                 esta olhando. Os demais viram circulo ABERTO. */
+                              const isSel = props.index === mesAtual - 1 + offPeriodo;
+                              return isSel
+                                ? <circle key={props.index} cx={props.cx} cy={props.cy} r={6} fill={COR_ATUAL.stroke} />
+                                : <circle key={props.index} cx={props.cx} cy={props.cy} r={2}
+                                          fill="hsl(var(--card))" stroke={COR_ATUAL.stroke} strokeWidth={1.5} />;
+                            }}
+                          />
+                        </ComposedChart>
+                      </ResponsiveContainer>
                     </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-
-        {/* Resumo do período (histórico multi-ano — auxiliar legado de zoot_mensal_cache).
-            DOIS paineis, um por leitura: o historico chegava colapsado pelo
-            viewMode do pai, entao duplicar o bloco sem duplicar o dado
-            repetiria o defeito do 6.281 que o PR e6706153 corrigiu.
-            Altura 96px inalterada neste PR. */}
-        {historicoAno != null && (
-          <div className="px-4 pb-2">
-            <div className="grid grid-cols-2 gap-3">
-              <Card>
-                <CardContent className="p-3">
-                  <p className="text-xs font-bold text-foreground mb-0.5 leading-tight">Histórico no mês</p>
-                  <p className="text-[10px] text-muted-foreground/70 leading-snug">{`${MESES_LABELS[mesAtual - 1]}/${yy}`}</p>
-                {loadingHistorico ? (
-                  <p className="text-[10px] text-muted-foreground/70 py-2">Carregando...</p>
-                ) : temDadoMes ? (
-                  <ResponsiveContainer width="100%" height={160}>
-                    <BarChart data={barDadosMes} margin={{ top: 18, right: 8, left: 8, bottom: 0 }} barCategoryGap="10%">
-                      <XAxis dataKey="nome" tick={{ fontSize: 8, fill: '#888780' }} axisLine={false} tickLine={false} />
-                      <YAxis hide />
-                      {refAnoAtualMes != null && !isNaN(refAnoAtualMes) && (
-                        <ReferenceLine y={refAnoAtualMes} stroke={COR_ATUAL.stroke} strokeDasharray="4 3" strokeWidth={1} opacity={0.5} />
+                    {/* Legenda — uma por card, como no ChartCard V1. Duplicada de
+                        proposito: cada card e autonomo. O card NAO cresce — quem
+                        cede altura e o grafico (flex-1, piso 140). */}
+                    <div className="flex justify-center gap-2.5 px-0 mt-1.5 flex-wrap">
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-3 h-[2px] rounded" style={{ background: COR_ATUAL.stroke }} />
+                        <span className="text-[9px] text-muted-foreground">{anoAtual}</span>
+                      </div>
+                      {hasAnoAnt && (
+                        <div className="flex items-center gap-1.5">
+                          <svg width="14" height="4"><line x1="0" y1="2" x2="14" y2="2" stroke="hsl(var(--muted-foreground))" strokeWidth="2" strokeDasharray="4 3"/></svg>
+                          <span className="text-[9px] text-muted-foreground">{anoAtual - 1}</span>
+                        </div>
                       )}
-                      <Bar
-                        dataKey="valor"
-                        radius={[3, 3, 0, 0]}
-                        isAnimationActive={false}
-                        label={{
-                          position: 'top',
-                          fontSize: 9,
-                          fill: 'hsl(var(--muted-foreground))',
-                          formatter: (v: number) => fmtAxis(v),
-                        }}
-                      >
-                        {barDadosMes.map((entry, i) => (
-                          <Cell key={i} fill={entry.cor} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <p className="text-[10px] text-muted-foreground/70 py-2">Sem dados históricos</p>
-                )}
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-3">
-                  <p className="text-xs font-bold text-foreground mb-0.5 leading-tight">Histórico do período</p>
-                  <p className="text-[10px] text-muted-foreground/70 leading-snug">{`Jan–${MESES_LABELS[mesAtual - 1]}/${yy}`}</p>
-                {loadingHistorico ? (
-                  <p className="text-[10px] text-muted-foreground/70 py-2">Carregando...</p>
-                ) : temDadoPeriodo ? (
-                  <ResponsiveContainer width="100%" height={160}>
-                    <BarChart data={barDadosPeriodo} margin={{ top: 18, right: 8, left: 8, bottom: 0 }} barCategoryGap="10%">
-                      <XAxis dataKey="nome" tick={{ fontSize: 8, fill: '#888780' }} axisLine={false} tickLine={false} />
-                      <YAxis hide />
-                      {refAnoAtualPeriodo != null && !isNaN(refAnoAtualPeriodo) && (
-                        <ReferenceLine y={refAnoAtualPeriodo} stroke={COR_ATUAL.stroke} strokeDasharray="4 3" strokeWidth={1} opacity={0.5} />
+                      {hasMeta && (
+                        <div className="flex items-center gap-1.5">
+                          <svg width="14" height="4"><line x1="0" y1="2" x2="14" y2="2" stroke="#F97316" strokeWidth="2" strokeDasharray="6 3"/></svg>
+                          <span className="text-[9px] text-muted-foreground">Meta {anoAtual}</span>
+                        </div>
                       )}
-                      <Bar
-                        dataKey="valor"
-                        radius={[3, 3, 0, 0]}
-                        isAnimationActive={false}
-                        label={{
-                          position: 'top',
-                          fontSize: 9,
-                          fill: 'hsl(var(--muted-foreground))',
-                          formatter: (v: number) => fmtAxis(v),
-                        }}
-                      >
-                        {barDadosPeriodo.map((entry, i) => (
-                          <Cell key={i} fill={entry.cor} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <p className="text-[10px] text-muted-foreground/70 py-2">Sem dados históricos</p>
-                )}
-                </CardContent>
-              </Card>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
             </div>
-          </div>
-        )}
+
+            {/* Resumo do período (histórico multi-ano — auxiliar legado de zoot_mensal_cache).
+                DOIS paineis, um por leitura: o historico chegava colapsado pelo
+                viewMode do pai, entao duplicar o bloco sem duplicar o dado
+                repetiria o defeito do 6.281 que o PR e6706153 corrigiu.
+                Altura 96px inalterada neste PR. */}
+            {historicoAno != null && (
+              <div className="px-4 pb-2">
+                <div className="grid grid-cols-2 gap-3">
+                  <Card>
+                    <CardContent className="p-3">
+                      <p className="text-xs font-bold text-foreground mb-0.5 leading-tight">Histórico no mês</p>
+                      <p className="text-[10px] text-muted-foreground/70 leading-snug">{`${MESES_LABELS[mesAtual - 1]}/${yy}`}</p>
+                    {loadingHistorico ? (
+                      <p className="text-[10px] text-muted-foreground/70 py-2">Carregando...</p>
+                    ) : temDadoMes ? (
+                      <ResponsiveContainer width="100%" height={160}>
+                        <BarChart data={barDadosMes} margin={{ top: 18, right: 8, left: 8, bottom: 0 }} barCategoryGap="10%">
+                          <XAxis dataKey="nome" tick={{ fontSize: 8, fill: '#888780' }} axisLine={false} tickLine={false} />
+                          <YAxis hide />
+                          {refAnoAtualMes != null && !isNaN(refAnoAtualMes) && (
+                            <ReferenceLine y={refAnoAtualMes} stroke={COR_ATUAL.stroke} strokeDasharray="4 3" strokeWidth={1} opacity={0.5} />
+                          )}
+                          <Bar
+                            dataKey="valor"
+                            radius={[3, 3, 0, 0]}
+                            isAnimationActive={false}
+                            label={{
+                              position: 'top',
+                              fontSize: 9,
+                              fill: 'hsl(var(--muted-foreground))',
+                              formatter: (v: number) => fmtAxis(v),
+                            }}
+                          >
+                            {barDadosMes.map((entry, i) => (
+                              <Cell key={i} fill={entry.cor} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <p className="text-[10px] text-muted-foreground/70 py-2">Sem dados históricos</p>
+                    )}
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-3">
+                      <p className="text-xs font-bold text-foreground mb-0.5 leading-tight">Histórico do período</p>
+                      <p className="text-[10px] text-muted-foreground/70 leading-snug">{`Jan–${MESES_LABELS[mesAtual - 1]}/${yy}`}</p>
+                    {loadingHistorico ? (
+                      <p className="text-[10px] text-muted-foreground/70 py-2">Carregando...</p>
+                    ) : temDadoPeriodo ? (
+                      <ResponsiveContainer width="100%" height={160}>
+                        <BarChart data={barDadosPeriodo} margin={{ top: 18, right: 8, left: 8, bottom: 0 }} barCategoryGap="10%">
+                          <XAxis dataKey="nome" tick={{ fontSize: 8, fill: '#888780' }} axisLine={false} tickLine={false} />
+                          <YAxis hide />
+                          {refAnoAtualPeriodo != null && !isNaN(refAnoAtualPeriodo) && (
+                            <ReferenceLine y={refAnoAtualPeriodo} stroke={COR_ATUAL.stroke} strokeDasharray="4 3" strokeWidth={1} opacity={0.5} />
+                          )}
+                          <Bar
+                            dataKey="valor"
+                            radius={[3, 3, 0, 0]}
+                            isAnimationActive={false}
+                            label={{
+                              position: 'top',
+                              fontSize: 9,
+                              fill: 'hsl(var(--muted-foreground))',
+                              formatter: (v: number) => fmtAxis(v),
+                            }}
+                          >
+                            {barDadosPeriodo.map((entry, i) => (
+                              <Cell key={i} fill={entry.cor} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <p className="text-[10px] text-muted-foreground/70 py-2">Sem dados históricos</p>
+                    )}
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            )}
+            </TabsContent>
+
+            <TabsContent value="fazenda" className="flex-1 min-h-0 flex flex-col mt-0">
+              {/* Por fazenda: 2x2 tambem, mesma grade e mesmo wrapper dos de
+                  cima. SEM meta e SEM ano anterior — a aba Global responde
+                  "como estou contra o planejado"; esta responde "quem esta
+                  puxando". Para ver a meta de uma fazenda, o seletor do
+                  cabecalho do app.
+                  SEM historico: "como este ano se compara com os anteriores"
+                  nao muda ao olhar por fazenda, e N x 6 barras seria ilegivel.
+                  Sao dois cards, nao quatro — o espaco vazio embaixo e o preco
+                  da altura constante (A7), e e o comportamento CORRETO.
+                  ⚠ Estas series tem 12 posicoes, 0=Jan. Leitura por indice
+                  direto `[mes - 1]`; `getMesValue` e 1-based e serve as de 13. */}
+              <div className="px-4 pb-2 flex-1 min-h-0 flex flex-col">
+                <div className="grid grid-cols-2 gap-3 flex-1 min-h-0">
+                  <Card className="flex flex-col min-h-0">
+                    <CardContent className="p-3 flex flex-col flex-1 min-h-0">
+                      <p className="text-xs font-bold text-foreground mb-0.5 leading-tight">Por fazenda · no mês</p>
+                      <p className="text-[10px] text-muted-foreground/70 leading-snug">{`${MESES_LABELS[mesAtual - 1]}/${yy}`}</p>
+                      <div className="flex-1" style={{ minHeight: 140, maxHeight: 240 }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <ComposedChart data={dadosFazenda('mes')} margin={{ top: 6, right: 8, left: 4, bottom: 2 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted-foreground) / 0.15)" />
+                            <XAxis dataKey="mes" tick={{ fontSize: 8, fill: '#888780' }} stroke="hsl(var(--muted-foreground) / 0.22)" />
+                            <YAxis tick={{ fontSize: 8, fill: '#888780' }} tickFormatter={fmtEixo} stroke="hsl(var(--muted-foreground) / 0.22)" width={46} />
+                            <Tooltip content={<CustomTooltip />} />
+                            {(seriesPorFazenda ?? []).map((f, i) => (
+                              <Line
+                                key={f.fazendaId}
+                                type="monotone"
+                                dataKey={f.nome}
+                                stroke={COR_FAZENDA[i % COR_FAZENDA.length]}
+                                strokeWidth={2}
+                                dot={DOT_V1}
+                                connectNulls={false}
+                                isAnimationActive={false}
+                              />
+                            ))}
+                          </ComposedChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card className="flex flex-col min-h-0">
+                    <CardContent className="p-3 flex flex-col flex-1 min-h-0">
+                      <p className="text-xs font-bold text-foreground mb-0.5 leading-tight">Por fazenda · no período</p>
+                      <p className="text-[10px] text-muted-foreground/70 leading-snug">{`Jan–${MESES_LABELS[mesAtual - 1]}/${yy}`}</p>
+                      <div className="flex-1" style={{ minHeight: 140, maxHeight: 240 }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <ComposedChart data={dadosFazenda('periodo')} margin={{ top: 6, right: 8, left: 4, bottom: 2 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted-foreground) / 0.15)" />
+                            <XAxis dataKey="mes" tick={{ fontSize: 8, fill: '#888780' }} stroke="hsl(var(--muted-foreground) / 0.22)" />
+                            <YAxis tick={{ fontSize: 8, fill: '#888780' }} tickFormatter={fmtEixo} stroke="hsl(var(--muted-foreground) / 0.22)" width={46} />
+                            <Tooltip content={<CustomTooltip />} />
+                            {(seriesPorFazenda ?? []).map((f, i) => (
+                              <Line
+                                key={f.fazendaId}
+                                type="monotone"
+                                dataKey={f.nome}
+                                stroke={COR_FAZENDA[i % COR_FAZENDA.length]}
+                                strokeWidth={2}
+                                dot={DOT_V1}
+                                connectNulls={false}
+                                isAnimationActive={false}
+                              />
+                            ))}
+                          </ComposedChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+                {/* Legenda propria — uma so, serve os dois cards. */}
+                <div className="flex justify-center gap-2.5 px-0 mt-1.5 flex-wrap">
+                  {(seriesPorFazenda ?? []).map((f, i) => (
+                    <div key={f.fazendaId} className="flex items-center gap-1.5">
+                      <div className="w-3 h-[2px] rounded"
+                           style={{ background: COR_FAZENDA[i % COR_FAZENDA.length] }} />
+                      <span className="text-[10px] text-muted-foreground">{f.nome}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </TabsContent>
+          </Tabs>
+
 
         {/* Rodapé */}
         <div className="px-4 pb-2 pt-1.5 text-[10px] text-muted-foreground text-center">

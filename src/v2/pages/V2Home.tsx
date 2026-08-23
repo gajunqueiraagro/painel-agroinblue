@@ -9,6 +9,7 @@ import { useFluxoCaixa } from '@/hooks/useFluxoCaixa';
 import { useEndividamentoAtual } from '@/hooks/useEndividamentoAtual';
 import { IndicadorHistoricoModal } from '@/v2/components/IndicadorHistoricoModal';
 import { useHistoricoZootCache } from '@/hooks/useHistoricoZootCache';
+import { useSeriePorFazenda } from '@/hooks/useSeriePorFazenda';
 import { useHistoricoIndicador, type HistoricoIndicadorKey } from '@/hooks/useHistoricoIndicador';
 import { supabase } from '@/integrations/supabase/client';
 import { useStatusPilaresLote, type StatusFazenda } from '@/hooks/useStatusPilaresLote';
@@ -1157,6 +1158,17 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     fazendaIds: fazendaIdsPecuaria,
     anoInicio: anoNum - 5,
     anoFim: anoNum,
+    mesAtual: mesNum,
+  });
+
+  /* Series por fazenda — base da aba "Por Fazenda" do modal. Uma query, do
+     mesmo cache. So os QUATRO indicadores que o hook cobre recebem a prop;
+     nos catorze restantes a aba nao e renderizada. */
+  const seriePorFaz = useSeriePorFazenda({
+    enabled: !!modalIndicador,
+    clienteId: clienteAtual?.id,
+    fazendaIds: fazendaIdsPecuaria,
+    ano: anoNum,
     mesAtual: mesNum,
   });
 
@@ -2449,6 +2461,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           titulos={cabecasIndicador?.titulos}
           tipoAcumulado="posicao"
           indicadorKey="cabecas"
+          seriesPorFazenda={seriePorFaz.cabecas}
           clienteId={clienteAtual?.id}
           fazendaId={isGlobal ? null : fazendaAtual?.id}
           fazendaIds={fazendaIdsPecuaria}
@@ -2476,6 +2489,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           titulos={pesoMedioIndicador?.titulos}
           tipoAcumulado="posicao"
           indicadorKey="pesoMedio"
+          seriesPorFazenda={seriePorFaz.pesoMedio}
           clienteId={clienteAtual?.id}
           fazendaId={isGlobal ? null : fazendaAtual?.id}
           fazendaIds={fazendaIdsPecuaria}
@@ -2503,6 +2517,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           titulos={arrobasIndicador?.titulos}
           tipoAcumulado="soma"
           indicadorKey="arrobas"
+          seriesPorFazenda={seriePorFaz.arrobas}
           tipoGraficoMes="coluna"
           clienteId={clienteAtual?.id}
           fazendaId={isGlobal ? null : fazendaAtual?.id}
@@ -2531,6 +2546,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           titulos={gmdIndicador?.titulos}
           tipoAcumulado="media"
           indicadorKey="gmd"
+          seriesPorFazenda={seriePorFaz.gmd}
           tipoGraficoMes="coluna"
           clienteId={clienteAtual?.id}
           fazendaId={isGlobal ? null : fazendaAtual?.id}
