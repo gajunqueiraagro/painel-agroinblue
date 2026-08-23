@@ -442,8 +442,9 @@ export function IndicadorHistoricoModal({
     : 'Global';
 
   /* A <Line> do Global, identica nos dois cards. Tracejada e mais grossa
-     que as fazendas (2.5 contra 2), sem dot: e pano de fundo, nao um
-     lugar que se aponta. */
+     que as fazendas (2.5 contra 2). O marcador e o MESMO DOT_V1 delas — o
+     que distingue referencia de lugar e o tracejado e a espessura, nao a
+     ausencia de ponto; sem marcador nao dava para ler o valor de um mes. */
   const linhaGlobal = (
     <Line
       type="monotone"
@@ -452,7 +453,7 @@ export function IndicadorHistoricoModal({
       stroke={COR_GLOBAL}
       strokeWidth={2.5}
       strokeDasharray="4 2"
-      dot={false}
+      dot={DOT_V1}
       connectNulls={false}
       isAnimationActive={false}
     />
@@ -480,43 +481,6 @@ export function IndicadorHistoricoModal({
     </div>
   );
 
-  /* Os numeros, abaixo dos dois cards. Rotulo sobre cada ponto poluiria:
-     sete meses x N fazendas x dois graficos. Estilo do A10 — cabecalho e
-     linha de Total em `bg-primary text-primary-foreground`, zebra
-     `odd:bg-muted/30 even:bg-card`, sem bordas. Sobre o azul nenhum texto
-     fica em `text-foreground`: as tres celulas do Global sao explicitas.
-     Nulo vira travessao, NUNCA zero — zero e valor real. */
-  const celFaz = (f: { mes: Array<number | null>; periodo: Array<number | null> },
-                  campo: 'mes' | 'periodo'): number | null => {
-    const v = f[campo][mesAtual - 1];
-    return typeof v === 'number' && Number.isFinite(v) ? v : null;
-  };
-  const fmtCel = (v: number | null) => (v == null ? '—' : fmtValor(v));
-  const tabelaFazendas = (
-    <table className="w-full text-[10px] leading-tight">
-      <thead>
-        <tr className="bg-primary text-primary-foreground">
-          <th className="text-left  font-medium px-2 py-1">Fazenda</th>
-          <th className="text-right font-medium px-2 py-1">No mês</th>
-          <th className="text-right font-medium px-2 py-1">No período</th>
-        </tr>
-      </thead>
-      <tbody>
-        {(seriesPorFazenda ?? []).map(f => (
-          <tr key={f.fazendaId} className="odd:bg-muted/30 even:bg-card">
-            <td className="text-left  px-2 py-0.5 text-foreground">{f.nome}</td>
-            <td className="text-right px-2 py-0.5 tabular-nums text-foreground">{fmtCel(celFaz(f, 'mes'))}</td>
-            <td className="text-right px-2 py-0.5 tabular-nums text-foreground">{fmtCel(celFaz(f, 'periodo'))}</td>
-          </tr>
-        ))}
-        <tr className="bg-primary text-primary-foreground font-medium">
-          <td className="text-left  px-2 py-0.5 text-primary-foreground">{rotuloGlobal}</td>
-          <td className="text-right px-2 py-0.5 tabular-nums text-primary-foreground">{fmtCel(getMesValue(trioMes.ano, mesAtual))}</td>
-          <td className="text-right px-2 py-0.5 tabular-nums text-primary-foreground">{fmtCel(getMesValue(trioPeriodo.ano, mesAtual))}</td>
-        </tr>
-      </tbody>
-    </table>
-  );
 
   /* O `dados` unico saiu: ele lia `serieAno`, que muda com o viewMode do
      pai, e era exatamente o que impedia os dois graficos de coexistir.
@@ -532,6 +496,52 @@ export function IndicadorHistoricoModal({
   /* Ano curto para os dois cabecalhos. NAO reaproveitar `labelPer`: ele pode
      vir sobrescrito pela prop `labelPeriodo` e serve ao bloco de historico. */
   const yy = String(anoAtual).slice(-2);
+
+  /* Os numeros, abaixo dos dois cards. Rotulo sobre cada ponto poluiria:
+     sete meses x N fazendas x dois graficos. Estilo do A10 — cabecalho e
+     linha de Total em `bg-primary text-primary-foreground`, zebra
+     `odd:bg-muted/30 even:bg-card`, sem bordas. Sobre o azul nenhum texto
+     fica em `text-foreground`: as tres celulas do Global sao explicitas.
+     Nulo vira travessao, NUNCA zero — zero e valor real. */
+  const celFaz = (f: { mes: Array<number | null>; periodo: Array<number | null> },
+                  campo: 'mes' | 'periodo'): number | null => {
+    const v = f[campo][mesAtual - 1];
+    return typeof v === 'number' && Number.isFinite(v) ? v : null;
+  };
+  const fmtCel = (v: number | null) => (v == null ? '—' : fmtValor(v));
+  const tabelaFazendas = (
+    <>
+      <p className="text-xs font-bold text-foreground mb-0.5 leading-tight">
+        Números por fazenda
+      </p>
+      <p className="text-[10px] text-muted-foreground/70 leading-snug mb-1.5">
+        {`${MESES_LABELS[mesAtual - 1]}/${yy} · Jan–${MESES_LABELS[mesAtual - 1]}/${yy}`}
+      </p>
+      <table className="w-full text-[10px] leading-tight">
+        <thead>
+          <tr className="bg-primary text-primary-foreground">
+            <th className="text-left  font-medium px-2 py-1">Fazenda</th>
+            <th className="text-right font-medium px-2 py-1">No mês</th>
+            <th className="text-right font-medium px-2 py-1">No período</th>
+          </tr>
+        </thead>
+        <tbody>
+          {(seriesPorFazenda ?? []).map(f => (
+            <tr key={f.fazendaId} className="odd:bg-muted/30 even:bg-card">
+              <td className="text-left  px-2 py-0.5 text-foreground">{f.nome}</td>
+              <td className="text-right px-2 py-0.5 tabular-nums text-foreground">{fmtCel(celFaz(f, 'mes'))}</td>
+              <td className="text-right px-2 py-0.5 tabular-nums text-foreground">{fmtCel(celFaz(f, 'periodo'))}</td>
+            </tr>
+          ))}
+          <tr className="bg-primary text-primary-foreground font-medium">
+            <td className="text-left  px-2 py-0.5 text-primary-foreground">{rotuloGlobal}</td>
+            <td className="text-right px-2 py-0.5 tabular-nums text-primary-foreground">{fmtCel(getMesValue(trioMes.ano, mesAtual))}</td>
+            <td className="text-right px-2 py-0.5 tabular-nums text-primary-foreground">{fmtCel(getMesValue(trioPeriodo.ano, mesAtual))}</td>
+          </tr>
+        </tbody>
+      </table>
+    </>
+  );
   /* Uma barra por ano, por LEITURA. A logica e a mesma de antes — barra do
      ano atual em COR_ATUAL, demais em BAR_ANO_ANT, "Meta {ano}" ao final,
      filtro de nulos. So passou a receber o historico do modo em vez do
@@ -642,42 +652,12 @@ export function IndicadorHistoricoModal({
     );
   };
 
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-4xl mx-4 rounded-lg border border-border/40 bg-background shadow-xl flex flex-col h-[92vh] max-h-[92vh]"
-        onClick={e => e.stopPropagation()}
-      >
-        {/* O cabecalho unico do topo saiu inteiro: um titulo, um numero e um
-           trio de deltas nao conseguem descrever duas leituras ao mesmo tempo.
-           Foi para dentro de cada coluna, em `cabecalhoLeitura`.
-           O toggle "No mes / No periodo" saiu junto — ele era `setViewMode` do
-           pai e governa a aplicacao inteira; conferido antes de remover que
-           ele CONTINUA na Home, em V2Home.tsx:1656-1677, logo abaixo da regua
-           de meses. Nenhum controle se perdeu.
-           Fechar continua sendo o clique fora, anunciado no rodape — nao havia
-           botao de fechar aqui para preservar.  */}
-
-        {/* Corpo rolável — gráfico + histórico + rodapé */}
-        <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
-
-          <Tabs value={aba}
-                onValueChange={v => setAba(v === 'fazenda' ? 'fazenda' : 'global')}
-                key={indicadorKey}
-                className="flex-1 min-h-0 flex flex-col">
-            <TabsList className="mx-4 mt-3 h-7 w-fit">
-              <TabsTrigger value="global" className="text-[11px] px-3 h-6">Global</TabsTrigger>
-              {/* Aba vazia e proibida: catorze dos dezoito indicadores nao
-                  recebem `seriesPorFazenda` e nao mostram este gatilho. */}
-              {temPorFazenda && (
-                <TabsTrigger value="fazenda" className="text-[11px] px-3 h-6">Por Fazenda</TabsTrigger>
-              )}
-            </TabsList>
-
-            <TabsContent value="global" className="flex-1 min-h-0 flex flex-col mt-0">
+  /* O conteudo da aba Global, nomeado UMA vez. Ele aparece em dois
+     caminhos — dentro de <TabsContent> quando ha aba Por Fazenda, e solto
+     no corpo quando nao ha — e duplicar o bloco seria repetir o erro dos
+     dois graficos identicos, que ja custou atencao em tres PRs. */
+  const conteudoGlobal = (
+    <>
             {/* Gráfico — DOIS de linha, lado a lado.
                 Esquerda le SEMPRE a serie mensal; direita, SEMPRE a do periodo.
                 Nenhum dos dois olha `serieAno`, que muda com o viewMode do pai —
@@ -1063,101 +1043,148 @@ export function IndicadorHistoricoModal({
                 </div>
               </div>
             )}
-            </TabsContent>
+    </>
+  );
 
-            <TabsContent value="fazenda" className="flex-1 min-h-0 flex flex-col mt-0">
-              {/* Por fazenda: mesma grade e mesmo wrapper dos de cima, mais a
-                  tabela dos numeros embaixo. SEM meta e SEM ano anterior — a
-                  aba Global responde "como estou contra o planejado"; esta
-                  responde "quem esta puxando". Para ver a meta de uma fazenda,
-                  o seletor do cabecalho do app.
-                  SEM historico: "como este ano se compara com os anteriores"
-                  nao muda ao olhar por fazenda, e N x 6 barras seria ilegivel.
-                  Sao dois cards, nao quatro.
-                  O Global entra como <Line> tracejada cinza junto das fazendas,
-                  e a legenda vive DENTRO de cada card.
-                  ⚠ DOIS comprimentos convivem aqui. As series por fazenda tem
-                  12 posicoes, 0=Jan, lidas por indice DIRETO. O trio do Global
-                  vem do PC-100 e pode ter 13, com a posicao 0 reservada a "Dez
-                  ano anterior" — por isso ele passa por `getMesValue`, que
-                  decide o offset pelo comprimento. Nunca misturar as duas
-                  leituras. */}
-              <div className="px-4 pb-2 flex-1 flex flex-col"
-                   style={{ minHeight: 260 }}>
-                <div className="grid grid-cols-2 gap-3 flex-1 min-h-0">
-                  <Card className="flex flex-col min-h-0">
-                    <CardContent className="p-3 flex flex-col flex-1 min-h-0">
-                      <p className="text-xs font-bold text-foreground mb-0.5 leading-tight">Por fazenda · no mês</p>
-                      <p className="text-[10px] text-muted-foreground/70 leading-snug">{`${MESES_LABELS[mesAtual - 1]}/${yy}`}</p>
-                      <div className="flex-1" style={{ minHeight: 140, maxHeight: 240 }}>
-                        <ResponsiveContainer width="100%" height="100%">
-                          <ComposedChart data={dadosFazenda('mes')} margin={{ top: 6, right: 8, left: 4, bottom: 2 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted-foreground) / 0.15)" />
-                            <XAxis dataKey="mes" tick={{ fontSize: 8, fill: '#888780' }} stroke="hsl(var(--muted-foreground) / 0.22)" />
-                            <YAxis tick={{ fontSize: 8, fill: '#888780' }} tickFormatter={fmtEixo} stroke="hsl(var(--muted-foreground) / 0.22)" width={46} />
-                            <Tooltip content={<CustomTooltip />} />
-                            {(seriesPorFazenda ?? []).map((f, i) => (
-                              <Line
-                                key={f.fazendaId}
-                                type="monotone"
-                                dataKey={f.nome}
-                                stroke={COR_FAZENDA[i % COR_FAZENDA.length]}
-                                strokeWidth={2}
-                                dot={DOT_V1}
-                                connectNulls={false}
-                                isAnimationActive={false}
-                              />
-                            ))}
-                            {linhaGlobal}
-                          </ComposedChart>
-                        </ResponsiveContainer>
-                      </div>
-                      {legendaFazendas}
-                    </CardContent>
-                  </Card>
-                  <Card className="flex flex-col min-h-0">
-                    <CardContent className="p-3 flex flex-col flex-1 min-h-0">
-                      <p className="text-xs font-bold text-foreground mb-0.5 leading-tight">Por fazenda · no período</p>
-                      <p className="text-[10px] text-muted-foreground/70 leading-snug">{`Jan–${MESES_LABELS[mesAtual - 1]}/${yy}`}</p>
-                      <div className="flex-1" style={{ minHeight: 140, maxHeight: 240 }}>
-                        <ResponsiveContainer width="100%" height="100%">
-                          <ComposedChart data={dadosFazenda('periodo')} margin={{ top: 6, right: 8, left: 4, bottom: 2 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted-foreground) / 0.15)" />
-                            <XAxis dataKey="mes" tick={{ fontSize: 8, fill: '#888780' }} stroke="hsl(var(--muted-foreground) / 0.22)" />
-                            <YAxis tick={{ fontSize: 8, fill: '#888780' }} tickFormatter={fmtEixo} stroke="hsl(var(--muted-foreground) / 0.22)" width={46} />
-                            <Tooltip content={<CustomTooltip />} />
-                            {(seriesPorFazenda ?? []).map((f, i) => (
-                              <Line
-                                key={f.fazendaId}
-                                type="monotone"
-                                dataKey={f.nome}
-                                stroke={COR_FAZENDA[i % COR_FAZENDA.length]}
-                                strokeWidth={2}
-                                dot={DOT_V1}
-                                connectNulls={false}
-                                isAnimationActive={false}
-                              />
-                            ))}
-                            {linhaGlobal}
-                          </ComposedChart>
-                        </ResponsiveContainer>
-                      </div>
-                      {legendaFazendas}
-                    </CardContent>
-                  </Card>
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-4xl mx-4 rounded-lg border border-border/40 bg-background shadow-xl flex flex-col h-[92vh] max-h-[92vh]"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* O cabecalho unico do topo saiu inteiro: um titulo, um numero e um
+           trio de deltas nao conseguem descrever duas leituras ao mesmo tempo.
+           Foi para dentro de cada coluna, em `cabecalhoLeitura`.
+           O toggle "No mes / No periodo" saiu junto — ele era `setViewMode` do
+           pai e governa a aplicacao inteira; conferido antes de remover que
+           ele CONTINUA na Home, em V2Home.tsx:1656-1677, logo abaixo da regua
+           de meses. Nenhum controle se perdeu.
+           Fechar continua sendo o clique fora, anunciado no rodape — nao havia
+           botao de fechar aqui para preservar.  */}
+
+        {/* Corpo rolável — gráfico + histórico + rodapé */}
+        <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
+
+          {/* Aba unica nao e aba. Catorze dos dezoito indicadores nao recebem
+              `seriesPorFazenda`; para eles uma TabsList com o botao "Global"
+              sozinho e rotulo inutil ocupando altura, entao o conteudo vai
+              direto no corpo, como era antes do PR-26.
+              A altura muda entre um indicador com aba e outro sem, e isso e
+              ACEITAVEL: a A7 fala de trocar de aba DENTRO do mesmo modal, nao
+              de indicadores diferentes. */}
+          {temPorFazenda ? (
+            <Tabs value={aba}
+                  onValueChange={v => setAba(v === 'fazenda' ? 'fazenda' : 'global')}
+                  key={indicadorKey}
+                  className="flex-1 min-h-0 flex flex-col">
+              <TabsList className="mx-4 mt-3 h-7 w-fit">
+                <TabsTrigger value="global" className="text-[11px] px-3 h-6">Global</TabsTrigger>
+                <TabsTrigger value="fazenda" className="text-[11px] px-3 h-6">Por Fazenda</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="global" className="flex-1 min-h-0 flex flex-col mt-0">
+                {conteudoGlobal}
+              </TabsContent>
+
+              <TabsContent value="fazenda" className="flex-1 min-h-0 flex flex-col mt-0">
+                {/* Por fazenda: mesma grade e mesmo wrapper dos de cima, mais a
+                    tabela dos numeros embaixo. SEM meta e SEM ano anterior — a
+                    aba Global responde "como estou contra o planejado"; esta
+                    responde "quem esta puxando". Para ver a meta de uma fazenda,
+                    o seletor do cabecalho do app.
+                    SEM historico: "como este ano se compara com os anteriores"
+                    nao muda ao olhar por fazenda, e N x 6 barras seria ilegivel.
+                    Sao dois cards, nao quatro.
+                    O Global entra como <Line> tracejada cinza junto das fazendas,
+                    e a legenda vive DENTRO de cada card.
+                    ⚠ DOIS comprimentos convivem aqui. As series por fazenda tem
+                    12 posicoes, 0=Jan, lidas por indice DIRETO. O trio do Global
+                    vem do PC-100 e pode ter 13, com a posicao 0 reservada a "Dez
+                    ano anterior" — por isso ele passa por `getMesValue`, que
+                    decide o offset pelo comprimento. Nunca misturar as duas
+                    leituras. */}
+                {/* Os numeros vem PRIMEIRO. Medido: o TabsContent tem 230px e o
+                    conteudo dos graficos, 260 — os cards encostam embaixo e sobra
+                    area util no topo. A tabela preenche esse vazio e passa a ser a
+                    primeira coisa lida.
+                    IRMA do wrapper dos graficos, nao filha, e com `shrink-0`: ela
+                    nao cede, o wrapper de baixo e quem tem `flex-1` com piso. Sem
+                    esse par o colapso de 20px do PR-26 voltaria aqui — ver A13 em
+                    docs/PADROES-UI.md. O `pt-3` e dela agora, por ser a primeira. */}
+                <div className="px-4 pt-3 pb-2 shrink-0">
+                  {tabelaFazendas}
                 </div>
-              </div>
-              {/* Os numeros — IRMAO do wrapper dos graficos, nao filho, e com
-                  `shrink-0`. Ate o PR-28 esta aba tinha um filho so, entao o
-                  `flex-1 min-h-0` sem piso do wrapper nao machucava: nao havia
-                  quem disputasse altura. A tabela e esse irmao. Sem o par
-                  piso + `shrink-0` o colapso de 20px do PR-26 voltaria aqui —
-                  ver A13 em docs/PADROES-UI.md. */}
-              <div className="px-4 pb-2 shrink-0">
-                {tabelaFazendas}
-              </div>
-            </TabsContent>
-          </Tabs>
+                <div className="px-4 pb-2 flex-1 flex flex-col"
+                     style={{ minHeight: 260 }}>
+                  <div className="grid grid-cols-2 gap-3 flex-1 min-h-0">
+                    <Card className="flex flex-col min-h-0">
+                      <CardContent className="p-3 flex flex-col flex-1 min-h-0">
+                        <p className="text-xs font-bold text-foreground mb-0.5 leading-tight">Por fazenda · no mês</p>
+                        <p className="text-[10px] text-muted-foreground/70 leading-snug">{`${MESES_LABELS[mesAtual - 1]}/${yy}`}</p>
+                        <div className="flex-1" style={{ minHeight: 140, maxHeight: 240 }}>
+                          <ResponsiveContainer width="100%" height="100%">
+                            <ComposedChart data={dadosFazenda('mes')} margin={{ top: 6, right: 8, left: 4, bottom: 2 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted-foreground) / 0.15)" />
+                              <XAxis dataKey="mes" tick={{ fontSize: 8, fill: '#888780' }} stroke="hsl(var(--muted-foreground) / 0.22)" />
+                              <YAxis tick={{ fontSize: 8, fill: '#888780' }} tickFormatter={fmtEixo} stroke="hsl(var(--muted-foreground) / 0.22)" width={46} />
+                              <Tooltip content={<CustomTooltip />} />
+                              {(seriesPorFazenda ?? []).map((f, i) => (
+                                <Line
+                                  key={f.fazendaId}
+                                  type="monotone"
+                                  dataKey={f.nome}
+                                  stroke={COR_FAZENDA[i % COR_FAZENDA.length]}
+                                  strokeWidth={2}
+                                  dot={DOT_V1}
+                                  connectNulls={false}
+                                  isAnimationActive={false}
+                                />
+                              ))}
+                              {linhaGlobal}
+                            </ComposedChart>
+                          </ResponsiveContainer>
+                        </div>
+                        {legendaFazendas}
+                      </CardContent>
+                    </Card>
+                    <Card className="flex flex-col min-h-0">
+                      <CardContent className="p-3 flex flex-col flex-1 min-h-0">
+                        <p className="text-xs font-bold text-foreground mb-0.5 leading-tight">Por fazenda · no período</p>
+                        <p className="text-[10px] text-muted-foreground/70 leading-snug">{`Jan–${MESES_LABELS[mesAtual - 1]}/${yy}`}</p>
+                        <div className="flex-1" style={{ minHeight: 140, maxHeight: 240 }}>
+                          <ResponsiveContainer width="100%" height="100%">
+                            <ComposedChart data={dadosFazenda('periodo')} margin={{ top: 6, right: 8, left: 4, bottom: 2 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted-foreground) / 0.15)" />
+                              <XAxis dataKey="mes" tick={{ fontSize: 8, fill: '#888780' }} stroke="hsl(var(--muted-foreground) / 0.22)" />
+                              <YAxis tick={{ fontSize: 8, fill: '#888780' }} tickFormatter={fmtEixo} stroke="hsl(var(--muted-foreground) / 0.22)" width={46} />
+                              <Tooltip content={<CustomTooltip />} />
+                              {(seriesPorFazenda ?? []).map((f, i) => (
+                                <Line
+                                  key={f.fazendaId}
+                                  type="monotone"
+                                  dataKey={f.nome}
+                                  stroke={COR_FAZENDA[i % COR_FAZENDA.length]}
+                                  strokeWidth={2}
+                                  dot={DOT_V1}
+                                  connectNulls={false}
+                                  isAnimationActive={false}
+                                />
+                              ))}
+                              {linhaGlobal}
+                            </ComposedChart>
+                          </ResponsiveContainer>
+                        </div>
+                        {legendaFazendas}
+                      </CardContent>
+                    </Card>
+                  </div>
+                </div>
+              </TabsContent>
+            </Tabs>
+          ) : conteudoGlobal}
 
 
         {/* Rodapé */}
