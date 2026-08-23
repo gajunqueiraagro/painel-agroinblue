@@ -186,6 +186,57 @@ linha —, por isso é padrão próprio e não parágrafo do A10.
 `bg-cta` e `bg-warning` continuam sendo o certo para o que foram feitos:
 botão de ação e faixa de aviso. O que muda é só o uso como cor de texto.
 
+## A12 — Séries e marcadores em gráficos
+
+**Dot custom precisa de guard de nulo.** O recharts chama o renderizador
+de dot para todo índice da série, inclusive os de valor nulo. Um
+`<circle>` com `cy` inválido é desenhado em y=0 e o clip corta a metade
+de cima — vira uma marca cortada no topo do gráfico. Em jul/2026 eram
+cinco, uma para cada mês futuro (Ago–Dez). Primeira instrução do dot:
+
+```
+if (props.value == null || !Number.isFinite(props.cy)) {
+  return <g key={props.index} />;
+}
+```
+
+Retornar `<g/>` vazio, não `null` — a assinatura de `dot` espera
+`ReactElement`.
+
+**Prepender categoria desloca todos os índices.** Ao acrescentar uma
+categoria antes da primeira (ex.: "Ini" antes de Jan), qualquer
+comparação por índice — `props.index === mesAtual - 1` — passa a apontar
+um item antes, e o marcador do mês selecionado cai no mês errado.
+Derivar o deslocamento do próprio array (`dados.length > 12 ? 1 : 0`),
+nunca fixá-lo.
+
+**Hierarquia de contraste, do mais forte ao mais fraco:** série de dados
+> eixo > grade. Valores em uso: série do ano anterior
+`hsl(var(--muted-foreground))` cheia; eixos a `0.22`; grade a `0.15`.
+
+**Ligar as verticais da grade dobra o traço na mesma área.** A opacidade
+calibrada com `vertical={false}` fica forte demais quando as verticais
+entram — a tinta total dobra sem que a opacidade por linha mude.
+Recalibrar sempre que mudar o número de linhas, não só a cor.
+
+**`viewBox` derivado da altura, nunca literal.** Um `viewBox="0 0 100 120"`
+com `H = 96` faz as barras lerem o zero em 91/120 e a régua de rótulos em
+91/96 — 18,2px de desalinhamento, que num gráfico de área viraram 1,23 ha
+de erro de leitura. Usar `` viewBox={`0 0 100 ${H}`} ``.
+
+**Fundo dos marcadores vazados acompanha o contêiner.** O `fill` de um
+dot aberto é a cor de fundo de quem o contém: `--background` fora de
+card, `--card` dentro. Errar deixa miolo cinza em card branco.
+
+## A13 — Armadilhas de JSX e CSS
+
+**Zebra por índice, não por `nth-child`.** `odd:`/`even:` só funcionam
+entre irmãos diretos. Linhas agrupadas em contêineres reiniciam a
+contagem em cada bloco. Alternar pelo índice em JS.
+
+**`{/* */}` como primeiro filho de `return (…)` não é comentário** — é
+bloco vazio, e quebra o JSX. Já custou 14 erros de sintaxe.
+
 ---
 
 ## Pendências deste documento
