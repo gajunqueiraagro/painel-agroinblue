@@ -439,9 +439,9 @@ export function IndicadorHistoricoModal({
                 <div className="flex-1" style={{ minHeight: 140, maxHeight: 200 }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={dadosMes} margin={{ top: 6, right: 8, left: 4, bottom: 2 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted-foreground) / 0.35)" />
-                      <XAxis dataKey="mes" tick={{ fontSize: 9, fill: '#888780' }} stroke="hsl(var(--muted-foreground) / 0.35)" />
-                      <YAxis tick={{ fontSize: 9, fill: '#888780' }} tickFormatter={fmtAxis} stroke="hsl(var(--muted-foreground) / 0.35)" width={40} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted-foreground) / 0.15)" />
+                      <XAxis dataKey="mes" tick={{ fontSize: 9, fill: '#888780' }} stroke="hsl(var(--muted-foreground) / 0.22)" />
+                      <YAxis tick={{ fontSize: 9, fill: '#888780' }} tickFormatter={fmtAxis} stroke="hsl(var(--muted-foreground) / 0.22)" width={40} />
                       <Tooltip content={<CustomTooltip />} />
                       {/* Areas (sob as linhas) — dataKey separado p/ não duplicar no tooltip */}
                       {hasAnoAnt && (
@@ -565,9 +565,9 @@ export function IndicadorHistoricoModal({
                 <div className="flex-1" style={{ minHeight: 140, maxHeight: 200 }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={dadosPeriodo} margin={{ top: 6, right: 8, left: 4, bottom: 2 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted-foreground) / 0.35)" />
-                      <XAxis dataKey="mes" tick={{ fontSize: 9, fill: '#888780' }} stroke="hsl(var(--muted-foreground) / 0.35)" />
-                      <YAxis tick={{ fontSize: 9, fill: '#888780' }} tickFormatter={fmtAxis} stroke="hsl(var(--muted-foreground) / 0.35)" width={40} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted-foreground) / 0.15)" />
+                      <XAxis dataKey="mes" tick={{ fontSize: 9, fill: '#888780' }} stroke="hsl(var(--muted-foreground) / 0.22)" />
+                      <YAxis tick={{ fontSize: 9, fill: '#888780' }} tickFormatter={fmtAxis} stroke="hsl(var(--muted-foreground) / 0.22)" width={40} />
                       <Tooltip content={<CustomTooltip />} />
                       {/* Areas (sob as linhas) — dataKey separado p/ não duplicar no tooltip */}
                       {hasAnoAnt && (
