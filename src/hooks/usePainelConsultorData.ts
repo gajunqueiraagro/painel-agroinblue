@@ -3664,6 +3664,22 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       serieAno:  cabSerie,
       serieAnoAnt: cabSerieAnoAnt ?? undefined,
       serieMetaIndicador: cabSerieMeta ?? undefined,
+      /* As DUAS leituras. Nada calculado aqui: as seis series ja existem no
+         corpo do hook, e sao as MESMAS que os colapsos de :1747, :1792 e
+         :1824 escolhem por viewMode. `?? undefined` porque as quatro de
+         anoAnt/meta sao `number[] | null` e SeriesPorModo nao aceita null. */
+      series: {
+        mes: {
+          ano:    cabFinSerie13,
+          anoAnt: cabFinAnoAntSerie  ?? undefined,
+          meta:   cabFinMetaSerie13  ?? undefined,
+        },
+        periodo: {
+          ano:    cabMediaAcumulada,
+          anoAnt: cabMediaAcumAnoAnt ?? undefined,
+          meta:   cabMediaAcumMeta   ?? undefined,
+        },
+      },
     } : null,
     pesoMedioIndicador: monthlyData ? {
       label:     isPeriodo ? 'PESO MÉDIO PERÍODO' : 'PESO MÉDIO FINAL',
