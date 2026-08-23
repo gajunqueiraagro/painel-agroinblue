@@ -1904,6 +1904,15 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
 
   const pesoSerieAnoAnt = isPeriodo ? pesoMedioPeriodoAnoAnt13 : pesoMedioFinAnoAnt13;
 
+  /* Peso medio INICIAL do ano — a foto de Dez do ano anterior. Mesmo desenho
+     de `cabFotoIniAnoAnt`: o valor ja era calculado inline no return
+     (`pesoMedioFinFotoAnoAnt`), e aqui ganha um dono so para servir tambem ao
+     `series`. Reaproveita o helper `comInicial` (:1839). */
+  const pesoMedioFotoIniAnoAnt: number | null =
+    pesoMedioFinAnoAnt13 && Number.isFinite(pesoMedioFinAnoAnt13[12])
+      ? pesoMedioFinAnoAnt13[12]
+      : null;
+
   // Meta — usa monthlyDataMeta (gate carregarMetaEffective já existente)
   const pesoMedioMetaSerie13 = monthlyDataMeta
     ? Array.from({ length: 13 }, (_, i) =>
@@ -3661,9 +3670,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       gmd:          monthlyDataMeta.gmd,
     } : null,
     cabecasFinFotoAnoAnt: cabFotoIniAnoAnt,
-    pesoMedioFinFotoAnoAnt: pesoMedioFinAnoAnt13 && Number.isFinite(pesoMedioFinAnoAnt13[12])
-      ? pesoMedioFinAnoAnt13[12]
-      : null,
+    pesoMedioFinFotoAnoAnt: pesoMedioFotoIniAnoAnt,
     pesoMedioFinMetaSnap: Number.isFinite(pesoMedioFinMetaSnap12[11])
       ? pesoMedioFinMetaSnap12[11]
       : null,
@@ -3717,8 +3724,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       serieAnoAnt: pesoSerieAnoAnt ?? undefined,
       serieMeta:   pesoMetaSerie ?? undefined,
       series: {
-        mes:     { ano: pesoMedioFinSerie13, anoAnt: pesoMedioFinAnoAnt13, meta: pesoMedioMetaSerie13 },
-        periodo: { ano: pesoMedioPeriodoSerie13, anoAnt: pesoMedioPeriodoAnoAnt13, meta: pesoMedioPeriodoMetaSerie13 },
+        /* So o realizado recebe a posicao 0. Para o ano anterior o inicial
+           seria Dez/ano-2, que nao existe; a meta nao tem foto inicial. */
+        mes:     { ano: comInicial(pesoMedioFinSerie13, pesoMedioFotoIniAnoAnt), anoAnt: pesoMedioFinAnoAnt13, meta: pesoMedioMetaSerie13 },
+        periodo: { ano: comInicial(pesoMedioPeriodoSerie13, pesoMedioFotoIniAnoAnt), anoAnt: pesoMedioPeriodoAnoAnt13, meta: pesoMedioPeriodoMetaSerie13 },
       },
     } : null,
     gmdIndicador: monthlyData ? {
