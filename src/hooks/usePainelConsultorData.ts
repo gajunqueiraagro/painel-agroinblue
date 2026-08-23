@@ -178,6 +178,8 @@ export interface IndicadorFinanceiroShape {
   serieAno:     number[];
   serieAnoAnt?: number[];
   serieMeta?:   number[];
+  /** As duas leituras. Ver SeriesPorModo. */
+  series?:      SeriesPorModo;
 }
 
 /* PR-HOME-MODAL-DOIS-GRAFICOS-01 — as DUAS leituras, sempre ambas.
@@ -495,6 +497,7 @@ export interface PainelConsultorDataResult {
     serieAno:   number[];
     serieAnoAnt?: number[];
     serieMeta?:  number[];
+    series?: SeriesPorModo;
   } | null;
   /**
    * Custo Produtivo R$/@ — derivado: custeioPec / arrobasProd.
@@ -3069,9 +3072,17 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       // Série META (mesmo formato 13 com NaN no [0]) e deltaMeta — só quando gridMeta foi fornecido
       let serieMeta: number[] | undefined = undefined;
       let deltaMeta: number | null = null;
+      /* mesSerie13Meta e periodoSerie13Meta hoisted para fora do if: as duas ja
+         eram calculadas e uma era descartada ao escolher por viewMode. O hoist
+         nao criou calculo — parou de jogar fora o que estava pronto. Com isso o
+         `series` atende os 31 indicadores do _finSoberano, nao so o custeioPec.
+         `serieMeta` continua colapsada por `isPer` — quem precisa das duas
+         leituras usa `series`. */
+      let mesSerie13Meta: number[] | undefined = undefined;
+      let periodoSerie13Meta: number[] | undefined = undefined;
       if (serie12Meta && serie12Meta.length === 12) {
-        const mesSerie13Meta = Array.from({ length: 13 }, (_, i) => i === 0 ? NaN : (serie12Meta[i - 1] ?? NaN));
-        const periodoSerie13Meta = cumSumTo13(serie12Meta);
+        mesSerie13Meta = Array.from({ length: 13 }, (_, i) => i === 0 ? NaN : (serie12Meta[i - 1] ?? NaN));
+        periodoSerie13Meta = cumSumTo13(serie12Meta);
         serieMeta = isPer ? periodoSerie13Meta : mesSerie13Meta;
         const meta = safe(serieMeta[mesPos]);
         if (valor != null && meta != null && meta !== 0) {
@@ -3087,6 +3098,13 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
         serieAno,
         serieAnoAnt: undefined,
         serieMeta,
+        /* As DUAS leituras, para os 31 indicadores do _finSoberano de uma vez.
+           `anoAnt` fica ausente porque este builder nao produz ano anterior —
+           e a ausencia local e legivel, que e a razao do formato aninhado. */
+        series: {
+          mes:     { ano: mesSerie13,     anoAnt: undefined, meta: mesSerie13Meta },
+          periodo: { ano: periodoSerie13, anoAnt: undefined, meta: periodoSerie13Meta },
+        },
       };
     };
 
@@ -3359,6 +3377,20 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       serieAno:    custeioPecSerie,
       serieAnoAnt: custeioPecSerieAnoAnt ?? undefined,
       serieMeta:   custeioPecSerieMeta ?? undefined,
+      /* As duas leituras, do proprio memo. A meta daqui pode ser substituida
+         pela do soberano no wrapper abaixo — nos DOIS modos, nunca so num. */
+      series: {
+        mes: {
+          ano:    custeioPecMesSerie13,
+          anoAnt: custeioPecMesAnoAntSerie13 ?? undefined,
+          meta:   custeioPecMesMetaSerie13 ?? undefined,
+        },
+        periodo: {
+          ano:    custeioPecPeriodoSerie13,
+          anoAnt: custeioPecPeriodoAnoAntSerie13 ?? undefined,
+          meta:   custeioPecPeriodoMetaSerie13 ?? undefined,
+        },
+      },
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [monthlyData, isPeriodo, mesIdx, custeioPecAnoAnt12, custeioPecMeta12]);
@@ -3369,9 +3401,25 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
   // retorna o memo legado intacto — preservando comportamento Realizado.
   const _custeioPecIndicadorMerged = useMemo<IndicadorFinanceiroShape | null>(() => {
     if (!_custeioPecIndicadorMemo) return null;
-    const sobMetaSerie = _finSoberano.custeioPecSemJuros?.serieMeta;
+    const sob = _finSoberano.custeioPecSemJuros;
+    const sobMetaSerie = sob?.serieMeta;
     if (!sobMetaSerie) return _custeioPecIndicadorMemo;
-    return { ..._custeioPecIndicadorMemo, serieMeta: sobMetaSerie };
+    /* O merge do soberano vale para as duas leituras: substituir so o
+       serieMeta de topo deixaria o `series` com a meta antiga, e os dois
+       graficos discordariam do numero grande.
+       `sob.serieMeta` sozinha nao serviria — ela e colapsada por viewMode
+       dentro do buildInd. As duas variantes vem de `sob.series`, que passou
+       a expo-las neste PR. Sem elas, mantem a meta do memo: melhor a antiga
+       nos dois modos do que a mesma serie repetida nos dois. */
+    const base = _custeioPecIndicadorMemo;
+    return {
+      ...base,
+      serieMeta: sobMetaSerie,
+      series: base.series && {
+        mes:     { ...base.series.mes,     meta: sob?.series?.mes.meta     ?? base.series.mes.meta },
+        periodo: { ...base.series.periodo, meta: sob?.series?.periodo.meta ?? base.series.periodo.meta },
+      },
+    };
   }, [_custeioPecIndicadorMemo, _finSoberano.custeioPecSemJuros]);
 
   // C5.1: derivações de áreas por cenário foram movidas para CIMA (após

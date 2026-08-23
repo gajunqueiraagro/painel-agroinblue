@@ -2694,6 +2694,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           serieAno={custeioPecIndicador?.serieAno ?? []}
           serieAnoAnt={custeioPecIndicador?.serieAnoAnt}
           serieMeta={custeioPecIndicador?.serieMeta}
+          series={custeioPecIndicador?.series}
           tipoAcumulado={isPeriodo ? 'soma' : 'posicao'}
           indicadorKey="custeioPec"
           clienteId={clienteAtual?.id}
