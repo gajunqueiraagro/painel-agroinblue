@@ -2928,21 +2928,30 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     return ((curr - meta) / meta) * 100;
   })();
 
+  /* Margem = preco - custo, elemento a elemento. Guarda de NaN em
+     qualquer dos dois lados: sem preco ou sem custo nao ha margem, e
+     zero afirmaria margem nula. A posicao 0 fica NaN de proposito —
+     margem por @ e RAZAO, nao estoque: nao existe "margem inicial", e o
+     modal so prepende "Ini" quando a posicao 0 e finita. */
+  const margem13 = (p: number[] | null, c: number[] | null): number[] | null => {
+    if (!p || !c) return null;
+    return Array.from({ length: 13 }, (_, i) => {
+      if (i === 0) return NaN;
+      const pv = p[i];
+      const cv = c[i];
+      if (isNaN(pv) || isNaN(cv)) return NaN;
+      return pv - cv;
+    });
+  };
+  /* Fallback de tipo para os dois casos NAO-nulos abaixo: `precoArr*Serie13` e
+     `custoArr*Serie13` sao `number[]`, nunca null, entao este ramo e
+     inalcancavel. Existe so para o resultado continuar `number[]` — um
+     `Array(13).fill(NaN)` daria `any[]` e alargaria o tipo. */
+  const nan13 = (): number[] => Array.from({ length: 13 }, () => NaN);
+
   // === 6) Margem por @ — preçoArr − custoArr ===
-  const margemArrMesSerie13 = Array.from({ length: 13 }, (_, i) => {
-    if (i === 0) return NaN;
-    const p = precoArrMesSerie13[i];
-    const c = custoArrMesSerie13[i];
-    if (isNaN(p) || isNaN(c)) return NaN;
-    return p - c;
-  });
-  const margemArrPeriodoSerie13 = Array.from({ length: 13 }, (_, i) => {
-    if (i === 0) return NaN;
-    const p = precoArrPeriodoSerie13[i];
-    const c = custoArrPeriodoSerie13[i];
-    if (isNaN(p) || isNaN(c)) return NaN;
-    return p - c;
-  });
+  const margemArrMesSerie13     = margem13(precoArrMesSerie13,     custoArrMesSerie13)     ?? nan13();
+  const margemArrPeriodoSerie13 = margem13(precoArrPeriodoSerie13, custoArrPeriodoSerie13) ?? nan13();
   const margemArrSerie = isPeriodo ? margemArrPeriodoSerie13 : margemArrMesSerie13;
   const margemArrValor = safe(margemArrSerie[mesIdx]);
   const margemArrDeltaMes = (() => {
@@ -2953,16 +2962,17 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     return ((curr - prev) / prev) * 100;
   })();
 
-  // Margem por @ — ano-1 e meta. Deriva: precoArr − custoArr (mesma série/modo).
-  const margemArrSerieAnoAnt = (precoArrSerieAnoAnt && custoArrSerieAnoAnt)
-    ? Array.from({ length: 13 }, (_, i) => {
-        if (i === 0) return NaN;
-        const p = precoArrSerieAnoAnt[i];
-        const c = custoArrSerieAnoAnt[i];
-        if (isNaN(p) || isNaN(c)) return NaN;
-        return p - c;
-      })
-    : null;
+  /* Margem por @ — ano-1 e meta, agora nas DUAS leituras. Antes cada uma
+     subtraia as series JA COLAPSADAS por `isPeriodo`, entao existia uma
+     leitura so de cada e o modal ficava sem linha de ano anterior e sem meta.
+     Subtrair depois de escolher o modo e escolher o modo depois de subtrair
+     dao o mesmo array — os deltas nao mudam. */
+  const margemArrMesAnoAntSerie13     = margem13(precoArrMesAnoAntSerie13,     custoArrMesAnoAntSerie13);
+  const margemArrPeriodoAnoAntSerie13 = margem13(precoArrPeriodoAnoAntSerie13, custoArrPeriodoAnoAntSerie13);
+  const margemArrMesMetaSerie13       = margem13(precoArrMesMetaSerie13,       custoArrMesMetaSerie13);
+  const margemArrPeriodoMetaSerie13   = margem13(precoArrPeriodoMetaSerie13,   custoArrPeriodoMetaSerie13);
+
+  const margemArrSerieAnoAnt = isPeriodo ? margemArrPeriodoAnoAntSerie13 : margemArrMesAnoAntSerie13;
   const margemArrDeltaAno = (() => {
     if (!margemArrSerieAnoAnt) return null;
     const curr = safe(margemArrSerie[mesIdx]);
@@ -2971,15 +2981,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     return ((curr - ant) / ant) * 100;
   })();
 
-  const margemArrSerieMeta = (precoArrSerieMeta && custoArrSerieMeta)
-    ? Array.from({ length: 13 }, (_, i) => {
-        if (i === 0) return NaN;
-        const p = precoArrSerieMeta[i];
-        const c = custoArrSerieMeta[i];
-        if (isNaN(p) || isNaN(c)) return NaN;
-        return p - c;
-      })
-    : null;
+  const margemArrSerieMeta = isPeriodo ? margemArrPeriodoMetaSerie13 : margemArrMesMetaSerie13;
   const margemArrDeltaMeta = (() => {
     if (!margemArrSerieMeta) return null;
     const curr = safe(margemArrSerie[mesIdx]);
@@ -3973,8 +3975,16 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       serieAnoAnt: margemArrSerieAnoAnt ?? undefined,
       serieMeta:   margemArrSerieMeta ?? undefined,
       series: {
-        mes:     { ano: margemArrMesSerie13, anoAnt: undefined, meta: undefined },
-        periodo: { ano: margemArrPeriodoSerie13, anoAnt: undefined, meta: undefined },
+        mes: {
+          ano:    margemArrMesSerie13,
+          anoAnt: margemArrMesAnoAntSerie13 ?? undefined,
+          meta:   margemArrMesMetaSerie13   ?? undefined,
+        },
+        periodo: {
+          ano:    margemArrPeriodoSerie13,
+          anoAnt: margemArrPeriodoAnoAntSerie13 ?? undefined,
+          meta:   margemArrPeriodoMetaSerie13   ?? undefined,
+        },
       },
     } : null,
 
