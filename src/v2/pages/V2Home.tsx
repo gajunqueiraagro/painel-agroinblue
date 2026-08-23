@@ -2281,6 +2281,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
             deltaMes={custeioPecIndicador?.deltaMes ?? null}
             deltaAno={custeioPecIndicador?.deltaAno ?? null}
             deltaMeta={custeioPecIndicador?.deltaMeta ?? null}
+            inverseDelta
             onClick={() => setModalIndicador('custeioPec')} />
           <MetricTile
             label={custoArrIndicador?.label ?? 'CUSTO PRODUTIVO R$/@'}
@@ -2291,6 +2292,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
             deltaMes={custoArrIndicador?.deltaMes ?? null}
             deltaAno={custoArrIndicador?.deltaAno ?? null}
             deltaMeta={custoArrIndicador?.deltaMeta ?? null}
+            inverseDelta
             onClick={() => setModalIndicador('custoArr')} />
           <MetricTile
             label={precoArrIndicador?.label ?? 'PREÇO DE VENDA R$/@'}
@@ -2311,6 +2313,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
             deltaMes={custoCabIndicador?.deltaMes ?? null}
             deltaAno={custoCabIndicador?.deltaAno ?? null}
             deltaMeta={custoCabIndicador?.deltaMeta ?? null}
+            inverseDelta
             onClick={() => setModalIndicador('custoCab')} />
           <MetricTile
             label={margemArrIndicador?.label ?? 'MARGEM POR @'}
