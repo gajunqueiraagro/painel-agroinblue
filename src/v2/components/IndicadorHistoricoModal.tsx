@@ -525,7 +525,7 @@ export function IndicadorHistoricoModal({
                 {/* Altura DERIVADA: literal nao cabe em todo viewport. Piso 140px
                     mantem os 12 rotulos de mes legiveis; teto 200px impede o
                     grafico de inchar em tela grande. */}
-                <div className="flex-1" style={{ minHeight: 140, maxHeight: 200 }}>
+                <div className="flex-1" style={{ minHeight: 140, maxHeight: 240 }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={dadosMes} margin={{ top: 6, right: 8, left: 4, bottom: 2 }}
                                    barCategoryGap="18%" barGap={1}>
@@ -684,7 +684,7 @@ export function IndicadorHistoricoModal({
                 {/* Altura DERIVADA: literal nao cabe em todo viewport. Piso 140px
                     mantem os 12 rotulos de mes legiveis; teto 200px impede o
                     grafico de inchar em tela grande. */}
-                <div className="flex-1" style={{ minHeight: 140, maxHeight: 200 }}>
+                <div className="flex-1" style={{ minHeight: 140, maxHeight: 240 }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={dadosPeriodo} margin={{ top: 6, right: 8, left: 4, bottom: 2 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted-foreground) / 0.15)" />
@@ -825,7 +825,7 @@ export function IndicadorHistoricoModal({
                 {loadingHistorico ? (
                   <p className="text-[10px] text-muted-foreground/70 py-2">Carregando...</p>
                 ) : temDadoMes ? (
-                  <ResponsiveContainer width="100%" height={96}>
+                  <ResponsiveContainer width="100%" height={160}>
                     <BarChart data={barDadosMes} margin={{ top: 18, right: 8, left: 8, bottom: 0 }} barCategoryGap="10%">
                       <XAxis dataKey="nome" tick={{ fontSize: 8, fill: '#888780' }} axisLine={false} tickLine={false} />
                       <YAxis hide />
@@ -861,7 +861,7 @@ export function IndicadorHistoricoModal({
                 {loadingHistorico ? (
                   <p className="text-[10px] text-muted-foreground/70 py-2">Carregando...</p>
                 ) : temDadoPeriodo ? (
-                  <ResponsiveContainer width="100%" height={96}>
+                  <ResponsiveContainer width="100%" height={160}>
                     <BarChart data={barDadosPeriodo} margin={{ top: 18, right: 8, left: 8, bottom: 0 }} barCategoryGap="10%">
                       <XAxis dataKey="nome" tick={{ fontSize: 8, fill: '#888780' }} axisLine={false} tickLine={false} />
                       <YAxis hide />
