@@ -124,6 +124,11 @@ interface Props {
    *  diferentes: `margemArr` usa corPrincipal condicional ao valor ser
    *  negativo, e ainda assim subir e BOM. */
   polaridade?: 'positivoBom' | 'positivoRuim';
+  /** Forma do grafico da leitura MENSAL. 'linha' (default) ou 'coluna'.
+   *  Fluxo mensal le melhor como barra — mes a mes sao valores discretos,
+   *  nao uma curva. O grafico do PERIODO segue sempre linha: acumulado e
+   *  curva por definicao. */
+  tipoGraficoMes?: 'linha' | 'coluna';
 }
 
 const MESES_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -196,7 +201,9 @@ export function IndicadorHistoricoModal({
   loadingHistorico = false,
   corPrincipal = 'azul',
   polaridade = 'positivoBom',
+  tipoGraficoMes = 'linha',
 }: Props) {
+  const modoColuna = tipoGraficoMes === 'coluna';
   // Paleta da linha/valor do ano atual — ano anterior e meta ficam intocados.
   const COR_ATUAL = corPrincipal === 'vermelho'
     ? { stroke: '#DC2626', dotLight: '#FCA5A5', text: 'text-red-700' }
@@ -499,7 +506,8 @@ export function IndicadorHistoricoModal({
                     grafico de inchar em tela grande. */}
                 <div className="flex-1" style={{ minHeight: 140, maxHeight: 200 }}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart data={dadosMes} margin={{ top: 6, right: 8, left: 4, bottom: 2 }}>
+                    <ComposedChart data={dadosMes} margin={{ top: 6, right: 8, left: 4, bottom: 2 }}
+                                   barCategoryGap="18%" barGap={1}>
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted-foreground) / 0.15)" />
                       {iniMes != null && (
                         <ReferenceLine y={iniMes} stroke={COR_ATUAL.stroke} strokeDasharray="4 3"
@@ -509,7 +517,7 @@ export function IndicadorHistoricoModal({
                       <YAxis tick={{ fontSize: 9, fill: '#888780' }} tickFormatter={fmtAxis} stroke="hsl(var(--muted-foreground) / 0.22)" width={40} />
                       <Tooltip content={<CustomTooltip />} />
                       {/* Areas (sob as linhas) — dataKey separado p/ não duplicar no tooltip */}
-                      {hasAnoAnt && (
+                      {!modoColuna && hasAnoAnt && (
                         <Area
                           type="monotone"
                           dataKey="anoAnteriorArea"
@@ -522,17 +530,19 @@ export function IndicadorHistoricoModal({
                           activeDot={false}
                         />
                       )}
-                      <Area
-                        type="monotone"
-                        dataKey="atualArea"
-                        stroke="none"
-                        fill="#000000"
-                        fillOpacity={0.16}
-                        isAnimationActive={false}
-                        connectNulls={false}
-                        legendType="none"
-                        activeDot={false}
-                      />
+                      {!modoColuna && (
+                        <Area
+                          type="monotone"
+                          dataKey="atualArea"
+                          stroke="none"
+                          fill="#000000"
+                          fillOpacity={0.16}
+                          isAnimationActive={false}
+                          connectNulls={false}
+                          legendType="none"
+                          activeDot={false}
+                        />
+                      )}
                       {/* Lines (por cima das áreas).
                           As duas areas acima separam PASSADO de FUTURO sem legenda:
                           `atualArea` so existe ate `mesAtual` (a serie do ano corrente
@@ -542,7 +552,7 @@ export function IndicadorHistoricoModal({
                           Este par NAO veio do V1: la as duas opacidades separam SERIES
                           (0.3 atual, 0.1 ano anterior), nao tempo. Valores escolhidos
                           aqui; a estrutura de duas Areas ja existia. */}
-                      {hasAnoAnt && (
+                      {!modoColuna && hasAnoAnt && (
                         <Line
                           type="monotone"
                           dataKey="anoAnterior"
@@ -555,7 +565,7 @@ export function IndicadorHistoricoModal({
                           isAnimationActive={false}
                         />
                       )}
-                      {hasMeta && (
+                      {!modoColuna && hasMeta && (
                         <Line
                           type="monotone"
                           dataKey="meta"
@@ -567,33 +577,59 @@ export function IndicadorHistoricoModal({
                           isAnimationActive={false}
                         />
                       )}
-                      <Line
-                        type="monotone"
-                        dataKey="atual"
-                        stroke={COR_ATUAL.stroke}
-                        strokeWidth={2.5}
-                        connectNulls={false}
-                        isAnimationActive={false}
-                        dot={(props: any) => {
-                          /* Guard de nulo. `montaDados` devolve `atual: null` para
-                             mes > mesAtual, mas o dot custom era chamado para TODO
-                             indice: sem `cy` valido o <circle> ia para o topo e o
-                             clip cortava a metade de cima — as cinco marcas azuis
-                             sobre Ago–Dez. <g/> vazio, nunca null: a assinatura do
-                             dot do recharts espera ReactElement. */
-                          if (props.value == null || !Number.isFinite(props.cy)) {
-                            return <g key={props.index} />;
-                          }
-                          /* O mes selecionado continua cheio e maior — e a unica
-                             marca que o V1 nao tem, e ela diz qual mes o painel
-                             esta olhando. Os demais viram circulo ABERTO. */
-                          const isSel = props.index === mesAtual - 1 + offMes;
-                          return isSel
-                            ? <circle key={props.index} cx={props.cx} cy={props.cy} r={6} fill={COR_ATUAL.stroke} />
-                            : <circle key={props.index} cx={props.cx} cy={props.cy} r={2}
-                                      fill="hsl(var(--card))" stroke={COR_ATUAL.stroke} strokeWidth={1.5} />;
-                        }}
-                      />
+                      {!modoColuna && (
+                        <Line
+                          type="monotone"
+                          dataKey="atual"
+                          stroke={COR_ATUAL.stroke}
+                          strokeWidth={2.5}
+                          connectNulls={false}
+                          isAnimationActive={false}
+                          dot={(props: any) => {
+                            /* Guard de nulo. `montaDados` devolve `atual: null` para
+                               mes > mesAtual, mas o dot custom era chamado para TODO
+                               indice: sem `cy` valido o <circle> ia para o topo e o
+                               clip cortava a metade de cima — as cinco marcas azuis
+                               sobre Ago–Dez. <g/> vazio, nunca null: a assinatura do
+                               dot do recharts espera ReactElement. */
+                            if (props.value == null || !Number.isFinite(props.cy)) {
+                              return <g key={props.index} />;
+                            }
+                            /* O mes selecionado continua cheio e maior — e a unica
+                               marca que o V1 nao tem, e ela diz qual mes o painel
+                               esta olhando. Os demais viram circulo ABERTO. */
+                            const isSel = props.index === mesAtual - 1 + offMes;
+                            return isSel
+                              ? <circle key={props.index} cx={props.cx} cy={props.cy} r={6} fill={COR_ATUAL.stroke} />
+                              : <circle key={props.index} cx={props.cx} cy={props.cy} r={2}
+                                        fill="hsl(var(--card))" stroke={COR_ATUAL.stroke} strokeWidth={1.5} />;
+                          }}
+                        />
+                      )}
+                      {/* Colunas agrupadas — fluxo mensal le melhor como barra:
+                          mes a mes sao valores discretos, nao uma curva.
+                          Ordem 2025 · 2026 · Meta, a mesma em que aparecem lado
+                          a lado. Tres condicionais INDEPENDENTES: o recharts
+                          inspeciona os filhos por TIPO e pode nao detectar
+                          <Bar> dentro de Fragment.
+                          Meta VAZADA — repete o idioma do marcador de meta, que
+                          virou circulo aberto no PR-IDIOMA-03: meta nunca e massa.
+                          SEM rotulo em cima: `max-w-4xl` da ~350px de plotagem por
+                          card, e 12 meses x 3 barras sao ~9px por barra. Trinta e
+                          seis numeros de 9px se sobrepoem — a leitura e pelo
+                          Tooltip, que ja lista as tres series. */}
+                      {modoColuna && hasAnoAnt && (
+                        <Bar dataKey="anoAnterior" fill="hsl(var(--muted-foreground) / 0.28)"
+                             radius={[2, 2, 0, 0]} isAnimationActive={false} />
+                      )}
+                      {modoColuna && (
+                        <Bar dataKey="atual" fill={COR_ATUAL.stroke}
+                             radius={[2, 2, 0, 0]} isAnimationActive={false} />
+                      )}
+                      {modoColuna && hasMeta && (
+                        <Bar dataKey="meta" fill="transparent" stroke="#F97316" strokeWidth={1.5}
+                             radius={[2, 2, 0, 0]} isAnimationActive={false} />
+                      )}
                     </ComposedChart>
                   </ResponsiveContainer>
                 </div>
