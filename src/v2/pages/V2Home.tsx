@@ -8,6 +8,7 @@ import { useFinanceiro } from '@/hooks/useFinanceiro';
 import { useFluxoCaixa } from '@/hooks/useFluxoCaixa';
 import { useEndividamentoAtual } from '@/hooks/useEndividamentoAtual';
 import { IndicadorHistoricoModal } from '@/v2/components/IndicadorHistoricoModal';
+import { useHistoricoZootCache } from '@/hooks/useHistoricoZootCache';
 import { useHistoricoIndicador, type HistoricoIndicadorKey } from '@/hooks/useHistoricoIndicador';
 import { supabase } from '@/integrations/supabase/client';
 import { useStatusPilaresLote, type StatusFazenda } from '@/hooks/useStatusPilaresLote';
@@ -1146,76 +1147,35 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
   const histArr4 = usePainelConsultorData({ ano: anoNum - 4, mes: mesNum, viewMode, enabled: modalUsaHistoricoOficial });
   const histArr5 = usePainelConsultorData({ ano: anoNum - 5, mes: mesNum, viewMode, enabled: modalUsaHistoricoOficial });
 
-  const arrobasHistoricoOficial = useMemo<HistoricoPorModo>(() => {
-    if (modalIndicador !== 'arrobas') return { mes: [], periodo: [] };
-    const linha = (modo: 'mes' | 'periodo') => [
-        { ano: anoNum - 5, valor: pontoHist(histArr5.arrobasIndicador, modo) },
-        { ano: anoNum - 4, valor: pontoHist(histArr4.arrobasIndicador, modo) },
-        { ano: anoNum - 3, valor: pontoHist(histArr3.arrobasIndicador, modo) },
-        { ano: anoNum - 2, valor: pontoHist(histArr2.arrobasIndicador, modo) },
-        { ano: anoNum - 1, valor: pontoHist(dadosAnoAnt.arrobasIndicador, modo) },
-        { ano: anoNum,     valor: pontoHist(arrobasIndicador, modo) },
-    ];
-    return { mes: linha('mes'), periodo: linha('periodo') };
-  }, [
-    modalIndicador, anoNum,
-    histArr5.arrobasIndicador, histArr4.arrobasIndicador, histArr3.arrobasIndicador,
-    histArr2.arrobasIndicador, dadosAnoAnt.arrobasIndicador,
-    arrobasIndicador,
-  ]);
+  /* Historico zootecnico direto do zoot_mensal_cache: UMA consulta paginada
+     cobrindo a faixa inteira, em vez de quatro copias do painel. As quatro
+     instancias histArr2..histArr5 continuam vivas para os sete financeiros e
+     para uaHa/kgHa, que cruzam com fechamento_area_snapshot. */
+  const histZoot = useHistoricoZootCache({
+    enabled: modalUsaHistoricoOficial,
+    clienteId: clienteAtual?.id,
+    fazendaIds: fazendaIdsPecuaria,
+    anoInicio: anoNum - 5,
+    anoFim: anoNum,
+    mesAtual: mesNum,
+  });
 
-  const loadingArrobasHistorico = modalIndicador === 'arrobas' && (
-    histArr5.loading || histArr4.loading ||
-    histArr3.loading || histArr2.loading
-  );
+  const arrobasHistoricoOficial: HistoricoPorModo =
+    modalIndicador === 'arrobas' ? histZoot.arrobas : { mes: [], periodo: [] };
+
+  const loadingArrobasHistorico = modalIndicador === 'arrobas' && histZoot.loading;
 
   // ── pesoMedio histórico oficial PC-100 (Opção B) ──
-  const pesoMedioHistoricoOficial = useMemo<HistoricoPorModo>(() => {
-    if (modalIndicador !== 'pesoMedio') return { mes: [], periodo: [] };
-    const linha = (modo: 'mes' | 'periodo') => [
-        { ano: anoNum - 5, valor: pontoHist(histArr5.pesoMedioIndicador, modo) },
-        { ano: anoNum - 4, valor: pontoHist(histArr4.pesoMedioIndicador, modo) },
-        { ano: anoNum - 3, valor: pontoHist(histArr3.pesoMedioIndicador, modo) },
-        { ano: anoNum - 2, valor: pontoHist(histArr2.pesoMedioIndicador, modo) },
-        { ano: anoNum - 1, valor: pontoHist(dadosAnoAnt.pesoMedioIndicador, modo) },
-        { ano: anoNum,     valor: pontoHist(pesoMedioIndicador, modo) },
-    ];
-    return { mes: linha('mes'), periodo: linha('periodo') };
-  }, [
-    modalIndicador, anoNum,
-    histArr5.pesoMedioIndicador, histArr4.pesoMedioIndicador, histArr3.pesoMedioIndicador,
-    histArr2.pesoMedioIndicador, dadosAnoAnt.pesoMedioIndicador,
-    pesoMedioIndicador,
-  ]);
+  const pesoMedioHistoricoOficial: HistoricoPorModo =
+    modalIndicador === 'pesoMedio' ? histZoot.pesoMedio : { mes: [], periodo: [] };
 
-  const loadingPesoMedioHistorico = modalIndicador === 'pesoMedio' && (
-    histArr5.loading || histArr4.loading ||
-    histArr3.loading || histArr2.loading
-  );
+  const loadingPesoMedioHistorico = modalIndicador === 'pesoMedio' && histZoot.loading;
 
   // ── gmd histórico oficial PC-100 (Opção B 3º indicador) ──
-  const gmdHistoricoOficial = useMemo<HistoricoPorModo>(() => {
-    if (modalIndicador !== 'gmd') return { mes: [], periodo: [] };
-    const linha = (modo: 'mes' | 'periodo') => [
-        { ano: anoNum - 5, valor: pontoHist(histArr5.gmdIndicador, modo) },
-        { ano: anoNum - 4, valor: pontoHist(histArr4.gmdIndicador, modo) },
-        { ano: anoNum - 3, valor: pontoHist(histArr3.gmdIndicador, modo) },
-        { ano: anoNum - 2, valor: pontoHist(histArr2.gmdIndicador, modo) },
-        { ano: anoNum - 1, valor: pontoHist(dadosAnoAnt.gmdIndicador, modo) },
-        { ano: anoNum,     valor: pontoHist(gmdIndicador, modo) },
-    ];
-    return { mes: linha('mes'), periodo: linha('periodo') };
-  }, [
-    modalIndicador, anoNum,
-    histArr5.gmdIndicador, histArr4.gmdIndicador, histArr3.gmdIndicador,
-    histArr2.gmdIndicador, dadosAnoAnt.gmdIndicador,
-    gmdIndicador,
-  ]);
+  const gmdHistoricoOficial: HistoricoPorModo =
+    modalIndicador === 'gmd' ? histZoot.gmd : { mes: [], periodo: [] };
 
-  const loadingGmdHistorico = modalIndicador === 'gmd' && (
-    histArr5.loading || histArr4.loading ||
-    histArr3.loading || histArr2.loading
-  );
+  const loadingGmdHistorico = modalIndicador === 'gmd' && histZoot.loading;
 
   // ── uaHa histórico oficial PC-100 (Opção B 4º indicador) ──
   const uaHaHistoricoOficial = useMemo<HistoricoPorModo>(() => {
