@@ -1104,7 +1104,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     indicadorKey: (histAtivo ? modalIndicador : 'cabecas') as HistoricoIndicadorKey,
     mesAtual: mesNum,
     anoAtual: anoNum,
-    anoInicio: anoNum - 6,
+    anoInicio: anoNum - 4,
   };
   const histLegadoMes = useHistoricoIndicador({
     ...histLegadoParams,
@@ -1144,14 +1144,10 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
   const histArr2 = usePainelConsultorData({ ano: anoNum - 2, mes: mesNum, viewMode, enabled: modalUsaHistoricoOficial });
   const histArr3 = usePainelConsultorData({ ano: anoNum - 3, mes: mesNum, viewMode, enabled: modalUsaHistoricoOficial });
   const histArr4 = usePainelConsultorData({ ano: anoNum - 4, mes: mesNum, viewMode, enabled: modalUsaHistoricoOficial });
-  const histArr5 = usePainelConsultorData({ ano: anoNum - 5, mes: mesNum, viewMode, enabled: modalUsaHistoricoOficial });
-  const histArr6 = usePainelConsultorData({ ano: anoNum - 6, mes: mesNum, viewMode, enabled: modalUsaHistoricoOficial });
 
   const arrobasHistoricoOficial = useMemo<HistoricoPorModo>(() => {
     if (modalIndicador !== 'arrobas') return { mes: [], periodo: [] };
     const linha = (modo: 'mes' | 'periodo') => [
-        { ano: anoNum - 6, valor: pontoHist(histArr6.arrobasIndicador, modo) },
-        { ano: anoNum - 5, valor: pontoHist(histArr5.arrobasIndicador, modo) },
         { ano: anoNum - 4, valor: pontoHist(histArr4.arrobasIndicador, modo) },
         { ano: anoNum - 3, valor: pontoHist(histArr3.arrobasIndicador, modo) },
         { ano: anoNum - 2, valor: pontoHist(histArr2.arrobasIndicador, modo) },
@@ -1161,23 +1157,19 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     return { mes: linha('mes'), periodo: linha('periodo') };
   }, [
     modalIndicador, anoNum,
-    histArr6.arrobasIndicador, histArr5.arrobasIndicador,
     histArr4.arrobasIndicador, histArr3.arrobasIndicador,
     histArr2.arrobasIndicador, dadosAnoAnt.arrobasIndicador,
     arrobasIndicador,
   ]);
 
   const loadingArrobasHistorico = modalIndicador === 'arrobas' && (
-    histArr6.loading || histArr5.loading || histArr4.loading ||
-    histArr3.loading || histArr2.loading
+    histArr4.loading || histArr3.loading || histArr2.loading
   );
 
   // ── pesoMedio histórico oficial PC-100 (Opção B) ──
   const pesoMedioHistoricoOficial = useMemo<HistoricoPorModo>(() => {
     if (modalIndicador !== 'pesoMedio') return { mes: [], periodo: [] };
     const linha = (modo: 'mes' | 'periodo') => [
-        { ano: anoNum - 6, valor: pontoHist(histArr6.pesoMedioIndicador, modo) },
-        { ano: anoNum - 5, valor: pontoHist(histArr5.pesoMedioIndicador, modo) },
         { ano: anoNum - 4, valor: pontoHist(histArr4.pesoMedioIndicador, modo) },
         { ano: anoNum - 3, valor: pontoHist(histArr3.pesoMedioIndicador, modo) },
         { ano: anoNum - 2, valor: pontoHist(histArr2.pesoMedioIndicador, modo) },
@@ -1187,23 +1179,19 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     return { mes: linha('mes'), periodo: linha('periodo') };
   }, [
     modalIndicador, anoNum,
-    histArr6.pesoMedioIndicador, histArr5.pesoMedioIndicador,
     histArr4.pesoMedioIndicador, histArr3.pesoMedioIndicador,
     histArr2.pesoMedioIndicador, dadosAnoAnt.pesoMedioIndicador,
     pesoMedioIndicador,
   ]);
 
   const loadingPesoMedioHistorico = modalIndicador === 'pesoMedio' && (
-    histArr6.loading || histArr5.loading || histArr4.loading ||
-    histArr3.loading || histArr2.loading
+    histArr4.loading || histArr3.loading || histArr2.loading
   );
 
   // ── gmd histórico oficial PC-100 (Opção B 3º indicador) ──
   const gmdHistoricoOficial = useMemo<HistoricoPorModo>(() => {
     if (modalIndicador !== 'gmd') return { mes: [], periodo: [] };
     const linha = (modo: 'mes' | 'periodo') => [
-        { ano: anoNum - 6, valor: pontoHist(histArr6.gmdIndicador, modo) },
-        { ano: anoNum - 5, valor: pontoHist(histArr5.gmdIndicador, modo) },
         { ano: anoNum - 4, valor: pontoHist(histArr4.gmdIndicador, modo) },
         { ano: anoNum - 3, valor: pontoHist(histArr3.gmdIndicador, modo) },
         { ano: anoNum - 2, valor: pontoHist(histArr2.gmdIndicador, modo) },
@@ -1213,23 +1201,19 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     return { mes: linha('mes'), periodo: linha('periodo') };
   }, [
     modalIndicador, anoNum,
-    histArr6.gmdIndicador, histArr5.gmdIndicador,
     histArr4.gmdIndicador, histArr3.gmdIndicador,
     histArr2.gmdIndicador, dadosAnoAnt.gmdIndicador,
     gmdIndicador,
   ]);
 
   const loadingGmdHistorico = modalIndicador === 'gmd' && (
-    histArr6.loading || histArr5.loading || histArr4.loading ||
-    histArr3.loading || histArr2.loading
+    histArr4.loading || histArr3.loading || histArr2.loading
   );
 
   // ── uaHa histórico oficial PC-100 (Opção B 4º indicador) ──
   const uaHaHistoricoOficial = useMemo<HistoricoPorModo>(() => {
     if (modalIndicador !== 'uaHa') return { mes: [], periodo: [] };
     const linha = (modo: 'mes' | 'periodo') => [
-        { ano: anoNum - 6, valor: pontoHist(histArr6.uaHaIndicador, modo) },
-        { ano: anoNum - 5, valor: pontoHist(histArr5.uaHaIndicador, modo) },
         { ano: anoNum - 4, valor: pontoHist(histArr4.uaHaIndicador, modo) },
         { ano: anoNum - 3, valor: pontoHist(histArr3.uaHaIndicador, modo) },
         { ano: anoNum - 2, valor: pontoHist(histArr2.uaHaIndicador, modo) },
@@ -1239,23 +1223,19 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     return { mes: linha('mes'), periodo: linha('periodo') };
   }, [
     modalIndicador, anoNum,
-    histArr6.uaHaIndicador, histArr5.uaHaIndicador,
     histArr4.uaHaIndicador, histArr3.uaHaIndicador,
     histArr2.uaHaIndicador, dadosAnoAnt.uaHaIndicador,
     uaHaIndicador,
   ]);
 
   const loadingUaHaHistorico = modalIndicador === 'uaHa' && (
-    histArr6.loading || histArr5.loading || histArr4.loading ||
-    histArr3.loading || histArr2.loading
+    histArr4.loading || histArr3.loading || histArr2.loading
   );
 
   // ── kgHa histórico oficial PC-100 (Opção B 5º indicador) ──
   const kgHaHistoricoOficial = useMemo<HistoricoPorModo>(() => {
     if (modalIndicador !== 'kgHa') return { mes: [], periodo: [] };
     const linha = (modo: 'mes' | 'periodo') => [
-        { ano: anoNum - 6, valor: pontoHist(histArr6.kgHaIndicador, modo) },
-        { ano: anoNum - 5, valor: pontoHist(histArr5.kgHaIndicador, modo) },
         { ano: anoNum - 4, valor: pontoHist(histArr4.kgHaIndicador, modo) },
         { ano: anoNum - 3, valor: pontoHist(histArr3.kgHaIndicador, modo) },
         { ano: anoNum - 2, valor: pontoHist(histArr2.kgHaIndicador, modo) },
@@ -1265,15 +1245,13 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     return { mes: linha('mes'), periodo: linha('periodo') };
   }, [
     modalIndicador, anoNum,
-    histArr6.kgHaIndicador, histArr5.kgHaIndicador,
     histArr4.kgHaIndicador, histArr3.kgHaIndicador,
     histArr2.kgHaIndicador, dadosAnoAnt.kgHaIndicador,
     kgHaIndicador,
   ]);
 
   const loadingKgHaHistorico = modalIndicador === 'kgHa' && (
-    histArr6.loading || histArr5.loading || histArr4.loading ||
-    histArr3.loading || histArr2.loading
+    histArr4.loading || histArr3.loading || histArr2.loading
   );
 
   // Helper: lê o ano-1 financeiro pela série oficial da chamada principal,
@@ -1289,8 +1267,6 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
   const custeioPecHistoricoOficial = useMemo<HistoricoPorModo>(() => {
     if (modalIndicador !== 'custeioPec') return { mes: [], periodo: [] };
     const linha = (modo: 'mes' | 'periodo') => [
-        { ano: anoNum - 6, valor: pontoHist(histArr6.custeioPecIndicador, modo) },
-        { ano: anoNum - 5, valor: pontoHist(histArr5.custeioPecIndicador, modo) },
         { ano: anoNum - 4, valor: pontoHist(histArr4.custeioPecIndicador, modo) },
         { ano: anoNum - 3, valor: pontoHist(histArr3.custeioPecIndicador, modo) },
         { ano: anoNum - 2, valor: pontoHist(histArr2.custeioPecIndicador, modo) },
@@ -1300,23 +1276,19 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     return { mes: linha('mes'), periodo: linha('periodo') };
   }, [
     modalIndicador, anoNum, mesNum,
-    histArr6.custeioPecIndicador, histArr5.custeioPecIndicador,
     histArr4.custeioPecIndicador, histArr3.custeioPecIndicador,
     histArr2.custeioPecIndicador,
     custeioPecIndicador,
   ]);
 
   const loadingCusteioPecHistorico = modalIndicador === 'custeioPec' && (
-    histArr6.loading || histArr5.loading || histArr4.loading ||
-    histArr3.loading || histArr2.loading
+    histArr4.loading || histArr3.loading || histArr2.loading
   );
 
   // ── custoArr histórico oficial PC-100 (Opção B 8º indicador) ──
   const custoArrHistoricoOficial = useMemo<HistoricoPorModo>(() => {
     if (modalIndicador !== 'custoArr') return { mes: [], periodo: [] };
     const linha = (modo: 'mes' | 'periodo') => [
-        { ano: anoNum - 6, valor: pontoHist(histArr6.custoArrIndicador, modo) },
-        { ano: anoNum - 5, valor: pontoHist(histArr5.custoArrIndicador, modo) },
         { ano: anoNum - 4, valor: pontoHist(histArr4.custoArrIndicador, modo) },
         { ano: anoNum - 3, valor: pontoHist(histArr3.custoArrIndicador, modo) },
         { ano: anoNum - 2, valor: pontoHist(histArr2.custoArrIndicador, modo) },
@@ -1326,23 +1298,19 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     return { mes: linha('mes'), periodo: linha('periodo') };
   }, [
     modalIndicador, anoNum, mesNum,
-    histArr6.custoArrIndicador, histArr5.custoArrIndicador,
     histArr4.custoArrIndicador, histArr3.custoArrIndicador,
     histArr2.custoArrIndicador,
     custoArrIndicador,
   ]);
 
   const loadingCustoArrHistorico = modalIndicador === 'custoArr' && (
-    histArr6.loading || histArr5.loading || histArr4.loading ||
-    histArr3.loading || histArr2.loading
+    histArr4.loading || histArr3.loading || histArr2.loading
   );
 
   // ── custoCab histórico oficial PC-100 (Opção B 9º indicador) ──
   const custoCabHistoricoOficial = useMemo<HistoricoPorModo>(() => {
     if (modalIndicador !== 'custoCab') return { mes: [], periodo: [] };
     const linha = (modo: 'mes' | 'periodo') => [
-        { ano: anoNum - 6, valor: pontoHist(histArr6.custoCabIndicador, modo) },
-        { ano: anoNum - 5, valor: pontoHist(histArr5.custoCabIndicador, modo) },
         { ano: anoNum - 4, valor: pontoHist(histArr4.custoCabIndicador, modo) },
         { ano: anoNum - 3, valor: pontoHist(histArr3.custoCabIndicador, modo) },
         { ano: anoNum - 2, valor: pontoHist(histArr2.custoCabIndicador, modo) },
@@ -1352,23 +1320,19 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     return { mes: linha('mes'), periodo: linha('periodo') };
   }, [
     modalIndicador, anoNum, mesNum,
-    histArr6.custoCabIndicador, histArr5.custoCabIndicador,
     histArr4.custoCabIndicador, histArr3.custoCabIndicador,
     histArr2.custoCabIndicador,
     custoCabIndicador,
   ]);
 
   const loadingCustoCabHistorico = modalIndicador === 'custoCab' && (
-    histArr6.loading || histArr5.loading || histArr4.loading ||
-    histArr3.loading || histArr2.loading
+    histArr4.loading || histArr3.loading || histArr2.loading
   );
 
   // ── margemArr histórico oficial PC-100 (Opção B 10º indicador) ──
   const margemArrHistoricoOficial = useMemo<HistoricoPorModo>(() => {
     if (modalIndicador !== 'margemArr') return { mes: [], periodo: [] };
     const linha = (modo: 'mes' | 'periodo') => [
-        { ano: anoNum - 6, valor: pontoHist(histArr6.margemArrIndicador, modo) },
-        { ano: anoNum - 5, valor: pontoHist(histArr5.margemArrIndicador, modo) },
         { ano: anoNum - 4, valor: pontoHist(histArr4.margemArrIndicador, modo) },
         { ano: anoNum - 3, valor: pontoHist(histArr3.margemArrIndicador, modo) },
         { ano: anoNum - 2, valor: pontoHist(histArr2.margemArrIndicador, modo) },
@@ -1378,15 +1342,13 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     return { mes: linha('mes'), periodo: linha('periodo') };
   }, [
     modalIndicador, anoNum, mesNum,
-    histArr6.margemArrIndicador, histArr5.margemArrIndicador,
     histArr4.margemArrIndicador, histArr3.margemArrIndicador,
     histArr2.margemArrIndicador,
     margemArrIndicador,
   ]);
 
   const loadingMargemArrHistorico = modalIndicador === 'margemArr' && (
-    histArr6.loading || histArr5.loading || histArr4.loading ||
-    histArr3.loading || histArr2.loading
+    histArr4.loading || histArr3.loading || histArr2.loading
   );
 
   // precoArr migrado do hook legado useHistoricoIndicador para o histórico oficial PC-100.
@@ -1397,8 +1359,6 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
   const precoArrHistoricoOficial = useMemo<HistoricoPorModo>(() => {
     if (modalIndicador !== 'precoArr') return { mes: [], periodo: [] };
     const linha = (modo: 'mes' | 'periodo') => [
-        { ano: anoNum - 6, valor: pontoHist(histArr6.precoArrIndicador, modo) },
-        { ano: anoNum - 5, valor: pontoHist(histArr5.precoArrIndicador, modo) },
         { ano: anoNum - 4, valor: pontoHist(histArr4.precoArrIndicador, modo) },
         { ano: anoNum - 3, valor: pontoHist(histArr3.precoArrIndicador, modo) },
         { ano: anoNum - 2, valor: pontoHist(histArr2.precoArrIndicador, modo) },
@@ -1408,15 +1368,13 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     return { mes: linha('mes'), periodo: linha('periodo') };
   }, [
     modalIndicador, anoNum, mesNum,
-    histArr6.precoArrIndicador, histArr5.precoArrIndicador,
     histArr4.precoArrIndicador, histArr3.precoArrIndicador,
     histArr2.precoArrIndicador,
     precoArrIndicador,
   ]);
 
   const loadingPrecoArrHistorico = modalIndicador === 'precoArr' && (
-    histArr6.loading || histArr5.loading || histArr4.loading ||
-    histArr3.loading || histArr2.loading
+    histArr4.loading || histArr3.loading || histArr2.loading
   );
 
   // receitaPec migrado do hook legado useHistoricoIndicador para o historico oficial PC-100.
@@ -1428,8 +1386,6 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
   const receitaPecHistoricoOficial = useMemo<HistoricoPorModo>(() => {
     if (modalIndicador !== 'receitaPec') return { mes: [], periodo: [] };
     const linha = (modo: 'mes' | 'periodo') => [
-        { ano: anoNum - 6, valor: pontoHist(histArr6.receitaPecIndicador, modo) },
-        { ano: anoNum - 5, valor: pontoHist(histArr5.receitaPecIndicador, modo) },
         { ano: anoNum - 4, valor: pontoHist(histArr4.receitaPecIndicador, modo) },
         { ano: anoNum - 3, valor: pontoHist(histArr3.receitaPecIndicador, modo) },
         { ano: anoNum - 2, valor: pontoHist(histArr2.receitaPecIndicador, modo) },
@@ -1439,15 +1395,13 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     return { mes: linha('mes'), periodo: linha('periodo') };
   }, [
     modalIndicador, anoNum, mesNum,
-    histArr6.receitaPecIndicador, histArr5.receitaPecIndicador,
     histArr4.receitaPecIndicador, histArr3.receitaPecIndicador,
     histArr2.receitaPecIndicador,
     receitaPecIndicador,
   ]);
 
   const loadingReceitaPecHistorico = modalIndicador === 'receitaPec' && (
-    histArr6.loading || histArr5.loading || histArr4.loading ||
-    histArr3.loading || histArr2.loading
+    histArr4.loading || histArr3.loading || histArr2.loading
   );
 
   // Helper local: média acumulada Jan→mes (1-based) ignorando null/NaN.
@@ -1558,14 +1512,12 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
        cru. `computar` passa a receber o MODO em vez de ler `isPeriodoArea`
        — mesma formula, sem o colapso. O ano corrente tambem: usava
        `areaProdutivaPecValor`, um useMemo ja colapsado, o que deixaria a
-       ultima barra numa leitura e as seis anteriores na outra. */
+       ultima barra numa leitura e as anteriores na outra. */
     const computar = (porMes: ReadonlyArray<number | null> | null | undefined, valorMes: number | null | undefined, modo: 'mes' | 'periodo'): number | null => {
       if (modo === 'periodo') return mediaAcumuladaArea(porMes, mesNum);
       return valorMes ?? null;
     };
     const linha = (modo: 'mes' | 'periodo') => [
-      { ano: anoNum - 6, valor: computar(histArr6.areaPecuariaRealPorMes, histArr6.areaPecuariaRealMes, modo) },
-      { ano: anoNum - 5, valor: computar(histArr5.areaPecuariaRealPorMes, histArr5.areaPecuariaRealMes, modo) },
       { ano: anoNum - 4, valor: computar(histArr4.areaPecuariaRealPorMes, histArr4.areaPecuariaRealMes, modo) },
       { ano: anoNum - 3, valor: computar(histArr3.areaPecuariaRealPorMes, histArr3.areaPecuariaRealMes, modo) },
       { ano: anoNum - 2, valor: computar(histArr2.areaPecuariaRealPorMes, histArr2.areaPecuariaRealMes, modo) },
@@ -1575,8 +1527,6 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     return { mes: linha('mes'), periodo: linha('periodo') };
   }, [
     modalIndicador, anoNum, mesNum,
-    histArr6.areaPecuariaRealPorMes, histArr6.areaPecuariaRealMes,
-    histArr5.areaPecuariaRealPorMes, histArr5.areaPecuariaRealMes,
     histArr4.areaPecuariaRealPorMes, histArr4.areaPecuariaRealMes,
     histArr3.areaPecuariaRealPorMes, histArr3.areaPecuariaRealMes,
     histArr2.areaPecuariaRealPorMes, histArr2.areaPecuariaRealMes,
@@ -1585,8 +1535,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
   ]);
 
   const loadingAreaProdutivaPecHistorico = modalIndicador === 'areaProdutivaPec' && (
-    histArr6.loading || histArr5.loading || histArr4.loading ||
-    histArr3.loading || histArr2.loading
+    histArr4.loading || histArr3.loading || histArr2.loading
   );
 
   const calcVar = (atual: number | null, base: number | null): number | null => {
@@ -2514,7 +2463,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           clienteId={clienteAtual?.id}
           fazendaId={isGlobal ? null : fazendaAtual?.id}
           fazendaIds={fazendaIdsPecuaria}
-          anoInicio={anoNum - 6}
+          anoInicio={anoNum - 4}
           deltaMes={cabecasIndicador?.deltaMes ?? null}
           deltaAno={cabecasIndicador?.deltaAno ?? null}
           viewMode={viewMode}
@@ -2541,7 +2490,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           clienteId={clienteAtual?.id}
           fazendaId={isGlobal ? null : fazendaAtual?.id}
           fazendaIds={fazendaIdsPecuaria}
-          anoInicio={anoNum - 6}
+          anoInicio={anoNum - 4}
           deltaMes={pesoMedioIndicador?.deltaMes ?? null}
           deltaAno={pesoMedioIndicador?.deltaAno ?? null}
           viewMode={viewMode}
@@ -2568,7 +2517,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           clienteId={clienteAtual?.id}
           fazendaId={isGlobal ? null : fazendaAtual?.id}
           fazendaIds={fazendaIdsPecuaria}
-          anoInicio={anoNum - 6}
+          anoInicio={anoNum - 4}
           deltaMes={arrobasIndicador?.deltaMes ?? null}
           deltaAno={arrobasIndicador?.deltaAno ?? null}
           viewMode={viewMode}
@@ -2595,7 +2544,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           clienteId={clienteAtual?.id}
           fazendaId={isGlobal ? null : fazendaAtual?.id}
           fazendaIds={fazendaIdsPecuaria}
-          anoInicio={anoNum - 6}
+          anoInicio={anoNum - 4}
           deltaMes={gmdIndicador?.deltaMes ?? null}
           deltaAno={gmdIndicador?.deltaAno ?? null}
           viewMode={viewMode}
@@ -2622,7 +2571,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           clienteId={clienteAtual?.id}
           fazendaId={isGlobal ? null : fazendaAtual?.id}
           fazendaIds={fazendaIdsPecuaria}
-          anoInicio={anoNum - 6}
+          anoInicio={anoNum - 4}
           deltaMes={uaHaIndicador?.deltaMes ?? null}
           deltaAno={uaHaIndicador?.deltaAno ?? null}
           viewMode={viewMode}
@@ -2649,7 +2598,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           clienteId={clienteAtual?.id}
           fazendaId={isGlobal ? null : fazendaAtual?.id}
           fazendaIds={fazendaIdsPecuaria}
-          anoInicio={anoNum - 6}
+          anoInicio={anoNum - 4}
           deltaMes={kgHaIndicador?.deltaMes ?? null}
           deltaAno={kgHaIndicador?.deltaAno ?? null}
           viewMode={viewMode}
@@ -2674,7 +2623,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           clienteId={clienteAtual?.id}
           fazendaId={isGlobal ? null : fazendaAtual?.id}
           fazendaIds={fazendaIdsPecuaria}
-          anoInicio={anoNum - 6}
+          anoInicio={anoNum - 4}
           deltaMes={areaProdutivaPecDeltaMes}
           deltaAno={areaProdutivaPecDeltaAno}
           viewMode={viewMode}
@@ -2701,7 +2650,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           clienteId={clienteAtual?.id}
           fazendaId={isGlobal ? null : fazendaAtual?.id}
           fazendaIds={fazendaIdsPecuaria}
-          anoInicio={anoNum - 6}
+          anoInicio={anoNum - 4}
           deltaMes={desfruteIndicador?.deltaMes ?? null}
           deltaAno={desfruteIndicador?.deltaAno ?? null}
           viewMode={viewMode}
@@ -2728,7 +2677,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           clienteId={clienteAtual?.id}
           fazendaId={isGlobal ? null : fazendaAtual?.id}
           fazendaIds={fazendaIdsPecuaria}
-          anoInicio={anoNum - 6}
+          anoInicio={anoNum - 4}
           deltaMes={valorRebanhoIndicador?.deltaMes ?? null}
           deltaAno={valorRebanhoIndicador?.deltaAno ?? null}
           viewMode={viewMode}
@@ -2755,7 +2704,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           clienteId={clienteAtual?.id}
           fazendaId={isGlobal ? null : fazendaAtual?.id}
           fazendaIds={fazendaIdsPecuaria}
-          anoInicio={anoNum - 6}
+          anoInicio={anoNum - 4}
           deltaMes={receitaPecIndicador?.deltaMes ?? null}
           deltaAno={receitaPecIndicador?.deltaAno ?? null}
           viewMode={viewMode}
@@ -2783,7 +2732,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           clienteId={clienteAtual?.id}
           fazendaId={isGlobal ? null : fazendaAtual?.id}
           fazendaIds={fazendaIdsPecuaria}
-          anoInicio={anoNum - 6}
+          anoInicio={anoNum - 4}
           deltaMes={custeioPecIndicador?.deltaMes ?? null}
           deltaAno={custeioPecIndicador?.deltaAno ?? null}
           viewMode={viewMode}
@@ -2811,7 +2760,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           clienteId={clienteAtual?.id}
           fazendaId={isGlobal ? null : fazendaAtual?.id}
           fazendaIds={fazendaIdsPecuaria}
-          anoInicio={anoNum - 6}
+          anoInicio={anoNum - 4}
           deltaMes={custoArrIndicador?.deltaMes ?? null}
           deltaAno={custoArrIndicador?.deltaAno ?? null}
           viewMode={viewMode}
@@ -2839,7 +2788,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           clienteId={clienteAtual?.id}
           fazendaId={isGlobal ? null : fazendaAtual?.id}
           fazendaIds={fazendaIdsPecuaria}
-          anoInicio={anoNum - 6}
+          anoInicio={anoNum - 4}
           deltaMes={precoArrIndicador?.deltaMes ?? null}
           deltaAno={precoArrIndicador?.deltaAno ?? null}
           viewMode={viewMode}
@@ -2867,7 +2816,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           clienteId={clienteAtual?.id}
           fazendaId={isGlobal ? null : fazendaAtual?.id}
           fazendaIds={fazendaIdsPecuaria}
-          anoInicio={anoNum - 6}
+          anoInicio={anoNum - 4}
           deltaMes={custoCabIndicador?.deltaMes ?? null}
           deltaAno={custoCabIndicador?.deltaAno ?? null}
           viewMode={viewMode}
@@ -2893,7 +2842,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           clienteId={clienteAtual?.id}
           fazendaId={isGlobal ? null : fazendaAtual?.id}
           fazendaIds={fazendaIdsPecuaria}
-          anoInicio={anoNum - 6}
+          anoInicio={anoNum - 4}
           deltaMes={margemArrIndicador?.deltaMes ?? null}
           deltaAno={margemArrIndicador?.deltaAno ?? null}
           viewMode={viewMode}
@@ -2918,7 +2867,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           clienteId={clienteAtual?.id}
           fazendaId={isGlobal ? null : fazendaAtual?.id}
           fazendaIds={fazendaIdsPecuaria}
-          anoInicio={anoNum - 6}
+          anoInicio={anoNum - 4}
           deltaMes={deltaMesCaixa}
           deltaAno={deltaAnoCaixa}
           viewMode={viewMode}
@@ -2939,7 +2888,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           clienteId={clienteAtual?.id}
           fazendaId={isGlobal ? null : fazendaAtual?.id}
           fazendaIds={fazendaIdsPecuaria}
-          anoInicio={anoNum - 6}
+          anoInicio={anoNum - 4}
           deltaMes={finEndDeltaMes}
           deltaAno={finEndDeltaAno}
           viewMode={viewMode}
@@ -2967,7 +2916,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           clienteId={clienteAtual?.id}
           fazendaId={isGlobal ? null : fazendaAtual?.id}
           fazendaIds={fazendaIdsPecuaria}
-          anoInicio={anoNum - 6}
+          anoInicio={anoNum - 4}
           deltaMes={finAlavancagem?.deltaMes ?? null}
           deltaAno={finAlavancagem?.deltaAno ?? null}
           viewMode={viewMode}
