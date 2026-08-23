@@ -171,6 +171,8 @@ export interface IndicadorFinanceiroShape {
   label:        string;
   titulo:       string;
   subtitulo:    string;
+  /** As duas leituras. Ver TitulosPorModo. */
+  titulos?:     TitulosPorModo;
   valor:        number | null;
   deltaMes:     number | null;
   deltaAno:     number | null;
@@ -190,6 +192,17 @@ export interface IndicadorFinanceiroShape {
    Existe porque o modal mostra os dois graficos AO MESMO TEMPO e nao pode
    calcular: a regra do IndicadorHistoricoModal:16-20 existe para o modal
    nunca discordar do tile que o abriu. */
+/* Titulo e subtitulo POR LEITURA, ao lado de `titulo`/`subtitulo`.
+   Com as duas leituras visiveis ao mesmo tempo, um titulo unico mente sobre
+   uma delas. `titulo` continua colapsado por viewMode — nenhum consumidor
+   atual muda. Mesmo padrao do `series`.
+   As quatro strings sao as MESMAS do ternario acima em cada indicador: se um
+   dos dois mudar, o outro tem de mudar junto. */
+export interface TitulosPorModo {
+  mes:     { titulo: string; subtitulo: string };
+  periodo: { titulo: string; subtitulo: string };
+}
+
 export interface SeriesPorModo {
   mes:     { ano: number[]; anoAnt?: number[]; meta?: number[] };
   periodo: { ano: number[]; anoAnt?: number[]; meta?: number[] };
@@ -298,6 +311,7 @@ export interface PainelConsultorDataResult {
     label:     string;
     titulo:    string;
     subtitulo: string;
+    titulos?:   TitulosPorModo;
     valor:     number | null;
     deltaMes:  number | null;
     deltaAno:  number | null;
@@ -313,6 +327,7 @@ export interface PainelConsultorDataResult {
     label:      string;
     titulo:     string;
     subtitulo:  string;
+    titulos?:   TitulosPorModo;
     valor:      number | null;
     deltaMes:   number | null;
     deltaAno:   number | null;
@@ -328,6 +343,7 @@ export interface PainelConsultorDataResult {
     label:      string;
     titulo:     string;
     subtitulo:  string;
+    titulos?:   TitulosPorModo;
     valor:      number | null;
     deltaMes:   number | null;
     deltaAno:   number | null;
@@ -343,6 +359,7 @@ export interface PainelConsultorDataResult {
     label:      string;
     titulo:     string;
     subtitulo:  string;
+    titulos?:   TitulosPorModo;
     valor:      number | null;
     deltaMes:   number | null;
     deltaAno:   number | null;   // sempre null nesta fase
@@ -358,6 +375,7 @@ export interface PainelConsultorDataResult {
     label:      string;
     titulo:     string;
     subtitulo:  string;
+    titulos?:   TitulosPorModo;
     valor:      number | null;
     deltaMes:   number | null;
     deltaAno:   number | null;   // sempre null nesta fase
@@ -373,6 +391,7 @@ export interface PainelConsultorDataResult {
     label:      string;
     titulo:     string;
     subtitulo:  string;
+    titulos?:   TitulosPorModo;
     valor:      number | null;
     deltaMes:   number | null;
     deltaAno:   number | null;
@@ -391,6 +410,7 @@ export interface PainelConsultorDataResult {
     label:      string;
     titulo:     string;
     subtitulo:  string;
+    titulos?:   TitulosPorModo;
     valor:      number | null;
     deltaMes:   number | null;
     deltaAno:   number | null;   // sempre null nesta fase
@@ -414,6 +434,7 @@ export interface PainelConsultorDataResult {
     label:      string;
     titulo:     string;
     subtitulo:  string;
+    titulos?:   TitulosPorModo;
     valor:      number | null;
     deltaMes:   number | null;
     deltaAno:   number | null;
@@ -432,6 +453,7 @@ export interface PainelConsultorDataResult {
     label:      string;
     titulo:     string;
     subtitulo:  string;
+    titulos?:   TitulosPorModo;
     valor:      number | null;
     deltaMes:   number | null;
     deltaAno:   number | null;
@@ -450,6 +472,7 @@ export interface PainelConsultorDataResult {
     label:      string;
     titulo:     string;
     subtitulo:  string;
+    titulos?:   TitulosPorModo;
     valor:      number | null;
     deltaMes:   number | null;
     deltaAno:   number | null;
@@ -469,6 +492,7 @@ export interface PainelConsultorDataResult {
     label:      string;
     titulo:     string;
     subtitulo:  string;
+    titulos?:   TitulosPorModo;
     valor:      number | null;
     deltaMes:   number | null;
     deltaAno:   number | null;
@@ -490,6 +514,7 @@ export interface PainelConsultorDataResult {
     label:      string;
     titulo:     string;
     subtitulo:  string;
+    titulos?:   TitulosPorModo;
     valor:      number | null;
     deltaMes:   number | null;
     deltaAno:   number | null;
@@ -508,6 +533,7 @@ export interface PainelConsultorDataResult {
     label:      string;
     titulo:     string;
     subtitulo:  string;
+    titulos?:   TitulosPorModo;
     valor:      number | null;
     deltaMes:   number | null;
     deltaAno:   number | null;
@@ -529,6 +555,7 @@ export interface PainelConsultorDataResult {
     label:      string;
     titulo:     string;
     subtitulo:  string;
+    titulos?:   TitulosPorModo;
     valor:      number | null;
     deltaMes:   number | null;
     deltaAno:   number | null;
@@ -548,6 +575,7 @@ export interface PainelConsultorDataResult {
     label:      string;
     titulo:     string;
     subtitulo:  string;
+    titulos?:   TitulosPorModo;
     valor:      number | null;
     deltaMes:   number | null;
     deltaAno:   number | null;
@@ -569,6 +597,7 @@ export interface PainelConsultorDataResult {
     label:      string;
     titulo:     string;
     subtitulo:  string;
+    titulos?:   TitulosPorModo;
     valor:      number | null;
     deltaMes:   number | null;
     deltaAno:   number | null;
@@ -3370,6 +3399,8 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       subtitulo: isPeriodo
         ? 'Custo Fixo + Custo Variável Pecuária acumulado Jan→mês (caixa)'
         : 'Custo Fixo + Custo Variável Pecuária no mês (caixa)',
+      titulos:   { mes:     { titulo: 'Custeio Produção Pecuária no mês', subtitulo: 'Custo Fixo + Custo Variável Pecuária no mês (caixa)' },
+                   periodo: { titulo: 'Custeio Produção Pecuária acum.', subtitulo: 'Custo Fixo + Custo Variável Pecuária acumulado Jan→mês (caixa)' } },
       valor:     custeioPecValor,
       deltaMes:  custeioPecDeltaMes,
       deltaAno:  custeioPecDeltaAno,
@@ -3624,6 +3655,8 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       subtitulo: isPeriodo
         ? 'Quantidade média de cabeças no período selecionado'
         : 'Quantidade de cabeças no final do mês',
+      titulos:   { mes:     { titulo: 'Rebanho Final do mês', subtitulo: 'Quantidade de cabeças no final do mês' },
+                   periodo: { titulo: 'Rebanho Médio no período', subtitulo: 'Quantidade média de cabeças no período selecionado' } },
       valor:     cabValor,
       deltaMes:  cabDeltaMes,
       deltaAno:  cabDeltaAno,
@@ -3638,6 +3671,8 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       subtitulo: isPeriodo
         ? 'Peso médio do rebanho na média do período'
         : 'Peso médio do rebanho no final do mês',
+      titulos:   { mes:     { titulo: 'Peso Médio Final', subtitulo: 'Peso médio do rebanho no final do mês' },
+                   periodo: { titulo: 'Peso Médio Período', subtitulo: 'Peso médio do rebanho na média do período' } },
       valor:     safe(pesoSerie[mesIdx]),
       deltaMes:  pesoDeltaMes,
       deltaAno:  pesoDeltaAno,
@@ -3656,6 +3691,8 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       subtitulo: isPeriodo
         ? 'Ganho médio diário no período'
         : 'Ganho médio diário no mês',
+      titulos:   { mes:     { titulo: 'GMD no mês', subtitulo: 'Ganho médio diário no mês' },
+                   periodo: { titulo: 'GMD no Período', subtitulo: 'Ganho médio diário no período' } },
       valor:     gmdValor,
       deltaMes:  gmdDeltaMes,
       deltaAno:  gmdDeltaAno,
@@ -3674,6 +3711,8 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       subtitulo: isPeriodo
         ? 'Taxa de lotação média no período'
         : 'Taxa de lotação no mês',
+      titulos:   { mes:     { titulo: 'UA/ha no mês', subtitulo: 'Taxa de lotação no mês' },
+                   periodo: { titulo: 'UA/ha no período', subtitulo: 'Taxa de lotação média no período' } },
       valor:     uaHaValor,
       deltaMes:  uaHaDeltaMes,
       deltaAno:  uaHaDeltaAno,
@@ -3692,6 +3731,8 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       subtitulo: isPeriodo
         ? 'Peso vivo médio do rebanho por hectare no período'
         : 'Peso vivo do rebanho por hectare no final do mês',
+      titulos:   { mes:     { titulo: 'kg vivo/ha no mês', subtitulo: 'Peso vivo do rebanho por hectare no final do mês' },
+                   periodo: { titulo: 'kg vivo/ha no período', subtitulo: 'Peso vivo médio do rebanho por hectare no período' } },
       valor:     kgHaValor,
       deltaMes:  kgHaDeltaMes,
       deltaAno:  kgHaDeltaAno,
@@ -3710,6 +3751,8 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       subtitulo: isPeriodo
         ? 'Arrobas produzidas acumuladas no período'
         : 'Arrobas produzidas no mês',
+      titulos:   { mes:     { titulo: '@ produzidas no mês', subtitulo: 'Arrobas produzidas no mês' },
+                   periodo: { titulo: '@ produzidas no período', subtitulo: 'Arrobas produzidas acumuladas no período' } },
       valor:     arrobasValor,
       deltaMes:  arrobasDeltaMes,
       deltaAno:  arrobasDeltaAno,
@@ -3728,6 +3771,8 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       subtitulo: isPeriodo
         ? 'Animais abatidos, vendidos em pé e consumidos no período'
         : 'Animais abatidos, vendidos em pé e consumidos no mês',
+      titulos:   { mes:     { titulo: 'Desfrute no mês', subtitulo: 'Animais abatidos, vendidos em pé e consumidos no mês' },
+                   periodo: { titulo: 'Desfrute no período', subtitulo: 'Animais abatidos, vendidos em pé e consumidos no período' } },
       valor:     desfruteValor,
       deltaMes:  desfruteDeltaMes,
       deltaAno:  desfruteDeltaAno,
@@ -3772,6 +3817,8 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       label:     isPeriodo ? 'VALOR DO REBANHO NO PERÍODO' : 'VALOR DO REBANHO NO MÊS',
       titulo:    isPeriodo ? 'Valor do Rebanho no período' : 'Valor do Rebanho no mês',
       subtitulo: 'Valor patrimonial do rebanho no final do mês selecionado',
+      titulos:   { mes:     { titulo: 'Valor do Rebanho no mês', subtitulo: 'Valor patrimonial do rebanho no final do mês selecionado' },
+                   periodo: { titulo: 'Valor do Rebanho no período', subtitulo: 'Valor patrimonial do rebanho no final do mês selecionado' } },
       valor:     valorRebanhoValor,
       deltaMes:  valorRebanhoDeltaMes,
       deltaAno:  valorRebanhoDeltaAno,
@@ -3790,6 +3837,8 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       subtitulo: isPeriodo
         ? 'Receita pecuária acumulada Jan→mês (competência)'
         : 'Receita pecuária do mês (competência)',
+      titulos:   { mes:     { titulo: 'Receitas Pecuárias Competência no mês', subtitulo: 'Receita pecuária do mês (competência)' },
+                   periodo: { titulo: 'Receitas Pecuárias Competência acum.', subtitulo: 'Receita pecuária acumulada Jan→mês (competência)' } },
       valor:     receitaPecValor,
       deltaMes:  receitaPecDeltaMes,
       deltaAno:  receitaPecDeltaAno,
@@ -3809,6 +3858,8 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       subtitulo: isPeriodo
         ? 'Custo produtivo pecuário por @ produzida (acumulado Jan→mês)'
         : 'Custo produtivo pecuário por @ produzida no mês',
+      titulos:   { mes:     { titulo: 'Custo Produtivo R$/@', subtitulo: 'Custo produtivo pecuário por @ produzida no mês' },
+                   periodo: { titulo: 'Custo Produtivo R$/@', subtitulo: 'Custo produtivo pecuário por @ produzida (acumulado Jan→mês)' } },
       valor:     custoArrValor,
       deltaMes:  custoArrDeltaMes,
       deltaAno:  custoArrDeltaAno,
@@ -3828,6 +3879,8 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       subtitulo: isPeriodo
         ? 'Receita pecuária por @ desfrutada (acumulado Jan→mês)'
         : 'Receita pecuária por @ desfrutada no mês',
+      titulos:   { mes:     { titulo: 'Preço de Venda R$/@', subtitulo: 'Receita pecuária por @ desfrutada no mês' },
+                   periodo: { titulo: 'Preço de Venda R$/@', subtitulo: 'Receita pecuária por @ desfrutada (acumulado Jan→mês)' } },
       valor:     precoArrValor,
       deltaMes:  precoArrDeltaMes,
       deltaAno:  precoArrDeltaAno,
@@ -3846,6 +3899,8 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       subtitulo: isPeriodo
         ? 'Custeio pecuário por cabeça média (acumulado Jan→mês, R$/cab.mês)'
         : 'Custeio pecuário por cabeça média no mês',
+      titulos:   { mes:     { titulo: 'Custo Cab. mês R$/cab.', subtitulo: 'Custeio pecuário por cabeça média no mês' },
+                   periodo: { titulo: 'Custo Cab. período R$/cab.', subtitulo: 'Custeio pecuário por cabeça média (acumulado Jan→mês, R$/cab.mês)' } },
       valor:     custoCabValor,
       deltaMes:  custoCabDeltaMes,
       deltaAno:  custoCabDeltaAno,

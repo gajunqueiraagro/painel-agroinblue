@@ -118,6 +118,21 @@ interface Props {
 
 const MESES_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
+/* Idioma visual do V1 — copiado do ChartCard, o componente que desenha
+   "Rebanho Final do mês (cab)" nas telas V1 (GraficosAnaliseTab.tsx:38-40 e
+   :605-613; o mesmo bloco existe identico em ZootecnicoTab e VisaoZooHubTab).
+   NAO veio do ResOpDashboard: aquele arquivo nao tem este grafico.
+
+   DOT_V1 e o marcador CIRCULAR ABERTO — o `fill` e a cor de FUNDO da pagina,
+   entao o circulo le como vazado e a borda fica na cor da serie. E o unico
+   detalhe do idioma que nao se descreve por si: sem o fill de fundo o ponto
+   vira bolinha cheia. */
+const DOT_V1        = { r: 2, strokeWidth: 1.5, fill: 'hsl(var(--background))' };
+const DOT_META_V1   = { r: 3, strokeWidth: 1.5, fill: '#f97316' };
+const ACTIVE_DOT_V1 = { r: 4, strokeWidth: 2, fill: 'hsl(var(--primary))' };
+/* strokeWidth por serie no V1: atual 2.5, meta 2, ano anterior 1.5.
+   Tracejado SO no ano anterior ('4 2', opacidade 0.55) — a meta e CHEIA. */
+
 const fmtN = (v: number | null | undefined, casas: number) =>
   v == null || isNaN(v) ? '—' : v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });
 
@@ -349,12 +364,12 @@ export function IndicadorHistoricoModal({
     return (
       <div className="px-1 pb-1.5 mb-1 border-b border-border/30">
         <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70 leading-tight">{modoLabel}</p>
-        <h3 className="text-[13px] font-semibold text-foreground leading-tight mt-0.5">{t.titulo}</h3>
+        <h3 className="text-sm font-semibold text-foreground leading-tight mt-0.5">{t.titulo}</h3>
         {t.subtitulo && (
-          <p className="text-[10px] font-light text-muted-foreground/70 leading-snug">{t.subtitulo}</p>
+          <p className="text-[11px] font-light text-muted-foreground/70 leading-snug">{t.subtitulo}</p>
         )}
         <div className="flex items-baseline gap-1.5 mt-1">
-          <span className={`text-2xl font-bold leading-none ${COR_ATUAL.text}`}>{fmtValor(d.valor)}</span>
+          <span className={`text-3xl font-bold leading-none ${COR_ATUAL.text}`}>{fmtValor(d.valor)}</span>
           <span className="text-[11px] text-muted-foreground">
             · {MESES_LABELS[mesAtual - 1]} {anoAtual}
           </span>
@@ -374,7 +389,7 @@ export function IndicadorHistoricoModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-2xl mx-4 rounded-lg border border-border/40 bg-background shadow-xl flex flex-col max-h-[94vh]"
+        className="w-full max-w-6xl mx-4 rounded-lg border border-border/40 bg-background shadow-xl flex flex-col max-h-[94vh]"
         onClick={e => e.stopPropagation()}
       >
         {/* O cabecalho unico do topo saiu inteiro: um titulo, um numero e um
@@ -401,7 +416,7 @@ export function IndicadorHistoricoModal({
           <div className="grid grid-cols-2 gap-2">
             <div>
               {cabecalhoLeitura('No mês', titulos?.mes ?? { titulo, subtitulo }, trioMes)}
-              <ResponsiveContainer width="100%" height={190}>
+              <ResponsiveContainer width="100%" height={260}>
                 <ComposedChart data={dadosMes} margin={{ top: 8, right: 16, left: 8, bottom: 4 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#E8E6DF" vertical={false} />
                   <XAxis dataKey="mes" tick={{ fontSize: 10, fill: '#888780' }} stroke="#E8E6DF" />
@@ -414,7 +429,7 @@ export function IndicadorHistoricoModal({
                       dataKey="anoAnteriorArea"
                       stroke="none"
                       fill="#000000"
-                      fillOpacity={0.04}
+                      fillOpacity={0.03}
                       isAnimationActive={false}
                       connectNulls={false}
                       legendType="none"
@@ -426,21 +441,31 @@ export function IndicadorHistoricoModal({
                     dataKey="atualArea"
                     stroke="none"
                     fill="#000000"
-                    fillOpacity={0.09}
+                    fillOpacity={0.16}
                     isAnimationActive={false}
                     connectNulls={false}
                     legendType="none"
                     activeDot={false}
                   />
-                  {/* Lines (por cima das áreas) */}
+                  {/* Lines (por cima das áreas).
+                      As duas areas acima separam PASSADO de FUTURO sem legenda:
+                      `atualArea` so existe ate `mesAtual` (a serie do ano corrente
+                      para ali), entao ela e o passado — 0.16. `anoAnteriorArea`
+                      cobre Jan–Dez, entao depois do mes atual ela fica sozinha —
+                      0.03. O contraste subiu de 0.09/0.04 para 0.16/0.03.
+                      Este par NAO veio do V1: la as duas opacidades separam SERIES
+                      (0.3 atual, 0.1 ano anterior), nao tempo. Valores escolhidos
+                      aqui; a estrutura de duas Areas ja existia. */}
                   {hasAnoAnt && (
                     <Line
                       type="monotone"
                       dataKey="anoAnterior"
                       stroke="#B4B2A9"
                       strokeWidth={1.5}
-                      strokeDasharray="4 4"
-                      dot={{ r: 2, fill: '#B4B2A9' }}
+                      strokeDasharray="4 2"
+                      strokeOpacity={0.55}
+                      dot={DOT_V1}
+                      activeDot={ACTIVE_DOT_V1}
                       connectNulls={false}
                       isAnimationActive={false}
                     />
@@ -450,9 +475,9 @@ export function IndicadorHistoricoModal({
                       type="monotone"
                       dataKey="meta"
                       stroke="#F97316"
-                      strokeWidth={1.5}
-                      strokeDasharray="6 3"
-                      dot={{ r: 2, fill: '#F97316' }}
+                      strokeWidth={2}
+                      dot={DOT_META_V1}
+                      activeDot={ACTIVE_DOT_V1}
                       connectNulls={false}
                       isAnimationActive={false}
                     />
@@ -461,14 +486,18 @@ export function IndicadorHistoricoModal({
                     type="monotone"
                     dataKey="atual"
                     stroke={COR_ATUAL.stroke}
-                    strokeWidth={2}
+                    strokeWidth={2.5}
                     connectNulls={false}
                     isAnimationActive={false}
                     dot={(props: any) => {
+                      /* O mes selecionado continua cheio e maior — e a unica
+                         marca que o V1 nao tem, e ela diz qual mes o painel
+                         esta olhando. Os demais viram circulo ABERTO. */
                       const isSel = props.index === mesAtual - 1;
                       return isSel
                         ? <circle key={props.index} cx={props.cx} cy={props.cy} r={6} fill={COR_ATUAL.stroke} />
-                        : <circle key={props.index} cx={props.cx} cy={props.cy} r={2} fill={COR_ATUAL.dotLight} />;
+                        : <circle key={props.index} cx={props.cx} cy={props.cy} r={2}
+                                  fill="hsl(var(--background))" stroke={COR_ATUAL.stroke} strokeWidth={1.5} />;
                     }}
                   />
                 </ComposedChart>
@@ -476,7 +505,7 @@ export function IndicadorHistoricoModal({
             </div>
             <div>
               {cabecalhoLeitura('Média no período', titulos?.periodo ?? { titulo, subtitulo }, trioPeriodo)}
-              <ResponsiveContainer width="100%" height={190}>
+              <ResponsiveContainer width="100%" height={260}>
                 <ComposedChart data={dadosPeriodo} margin={{ top: 8, right: 16, left: 8, bottom: 4 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#E8E6DF" vertical={false} />
                   <XAxis dataKey="mes" tick={{ fontSize: 10, fill: '#888780' }} stroke="#E8E6DF" />
@@ -489,7 +518,7 @@ export function IndicadorHistoricoModal({
                       dataKey="anoAnteriorArea"
                       stroke="none"
                       fill="#000000"
-                      fillOpacity={0.04}
+                      fillOpacity={0.03}
                       isAnimationActive={false}
                       connectNulls={false}
                       legendType="none"
@@ -501,21 +530,31 @@ export function IndicadorHistoricoModal({
                     dataKey="atualArea"
                     stroke="none"
                     fill="#000000"
-                    fillOpacity={0.09}
+                    fillOpacity={0.16}
                     isAnimationActive={false}
                     connectNulls={false}
                     legendType="none"
                     activeDot={false}
                   />
-                  {/* Lines (por cima das áreas) */}
+                  {/* Lines (por cima das áreas).
+                      As duas areas acima separam PASSADO de FUTURO sem legenda:
+                      `atualArea` so existe ate `mesAtual` (a serie do ano corrente
+                      para ali), entao ela e o passado — 0.16. `anoAnteriorArea`
+                      cobre Jan–Dez, entao depois do mes atual ela fica sozinha —
+                      0.03. O contraste subiu de 0.09/0.04 para 0.16/0.03.
+                      Este par NAO veio do V1: la as duas opacidades separam SERIES
+                      (0.3 atual, 0.1 ano anterior), nao tempo. Valores escolhidos
+                      aqui; a estrutura de duas Areas ja existia. */}
                   {hasAnoAnt && (
                     <Line
                       type="monotone"
                       dataKey="anoAnterior"
                       stroke="#B4B2A9"
                       strokeWidth={1.5}
-                      strokeDasharray="4 4"
-                      dot={{ r: 2, fill: '#B4B2A9' }}
+                      strokeDasharray="4 2"
+                      strokeOpacity={0.55}
+                      dot={DOT_V1}
+                      activeDot={ACTIVE_DOT_V1}
                       connectNulls={false}
                       isAnimationActive={false}
                     />
@@ -525,9 +564,9 @@ export function IndicadorHistoricoModal({
                       type="monotone"
                       dataKey="meta"
                       stroke="#F97316"
-                      strokeWidth={1.5}
-                      strokeDasharray="6 3"
-                      dot={{ r: 2, fill: '#F97316' }}
+                      strokeWidth={2}
+                      dot={DOT_META_V1}
+                      activeDot={ACTIVE_DOT_V1}
                       connectNulls={false}
                       isAnimationActive={false}
                     />
@@ -536,14 +575,18 @@ export function IndicadorHistoricoModal({
                     type="monotone"
                     dataKey="atual"
                     stroke={COR_ATUAL.stroke}
-                    strokeWidth={2}
+                    strokeWidth={2.5}
                     connectNulls={false}
                     isAnimationActive={false}
                     dot={(props: any) => {
+                      /* O mes selecionado continua cheio e maior — e a unica
+                         marca que o V1 nao tem, e ela diz qual mes o painel
+                         esta olhando. Os demais viram circulo ABERTO. */
                       const isSel = props.index === mesAtual - 1;
                       return isSel
                         ? <circle key={props.index} cx={props.cx} cy={props.cy} r={6} fill={COR_ATUAL.stroke} />
-                        : <circle key={props.index} cx={props.cx} cy={props.cy} r={2} fill={COR_ATUAL.dotLight} />;
+                        : <circle key={props.index} cx={props.cx} cy={props.cy} r={2}
+                                  fill="hsl(var(--background))" stroke={COR_ATUAL.stroke} strokeWidth={1.5} />;
                     }}
                   />
                 </ComposedChart>
