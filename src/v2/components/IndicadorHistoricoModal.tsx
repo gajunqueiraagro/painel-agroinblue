@@ -276,12 +276,26 @@ export function IndicadorHistoricoModal({
     sAno: number[] | undefined,
     sAnt: number[] | undefined,
     sMeta: number[] | undefined,
-  ) => MESES_LABELS.map((mes, idx) => {
-    const atual       = idx + 1 <= mesAtual ? getMesValue(sAno, idx + 1) : null;
-    const anoAnterior = getMesValue(sAnt, idx + 1);
-    const meta        = getMesValue(sMeta, idx + 1);
-    return { mes, atual, anoAnterior, meta, atualArea: atual, anoAnteriorArea: anoAnterior };
-  });
+  ) => {
+    const meses = MESES_LABELS.map((mes, idx) => {
+      const atual       = idx + 1 <= mesAtual ? getMesValue(sAno, idx + 1) : null;
+      const anoAnterior = getMesValue(sAnt, idx + 1);
+      const meta        = getMesValue(sMeta, idx + 1);
+      return { mes, atual, anoAnterior, meta, atualArea: atual, anoAnteriorArea: anoAnterior };
+    });
+    /* Categoria "Ini" — o rebanho inicial do ano, publicado pelo hook na
+       posicao 0 da serie do realizado. Prependada SO quando essa posicao
+       existe e e finita: os outros indicadores seguem com doze categorias,
+       sem slot vazio. `anoAnterior` e `meta` ficam nulos de proposito — para
+       o ano anterior o inicial seria Dez/ano-2, que nao existe. */
+    const ini = sAno && sAno.length >= 13 && Number.isFinite(sAno[0]) ? sAno[0] : null;
+    if (ini == null) return meses;
+    return [
+      { mes: 'Ini', atual: ini, anoAnterior: null, meta: null,
+        atualArea: ini, anoAnteriorArea: null },
+      ...meses,
+    ];
+  };
   /* Os dois trios, nomeados uma vez so: o grafico e o cabecalho de cada lado
      leem exatamente a MESMA serie, entao o numero grande nunca pode discordar
      da curva embaixo dele. */
@@ -297,6 +311,19 @@ export function IndicadorHistoricoModal({
   };
   const dadosMes     = montaDados(trioMes.ano,     trioMes.anoAnt,     trioMes.meta);
   const dadosPeriodo = montaDados(trioPeriodo.ano, trioPeriodo.anoAnt, trioPeriodo.meta);
+
+  /* Com a categoria "Ini" prependada os indices andam UM. O dot custom marca
+     o mes selecionado por indice, entao sem este offset o ponto grande cairia
+     no mes errado. Zero quando nao ha inicial. */
+  const offMes     = dadosMes.length     > 12 ? 1 : 0;
+  const offPeriodo = dadosPeriodo.length > 12 ? 1 : 0;
+  /* Valor do inicial, para a linha de referencia horizontal. Sem cast: o
+     `atual` do item prependado e sempre `number`, mas o tipo do array e o da
+     uniao com os meses, entao a checagem explicita e o que estreita. */
+  const iniAtualMes     = offMes     ? dadosMes[0].atual     : null;
+  const iniMes          = typeof iniAtualMes     === 'number' ? iniAtualMes     : null;
+  const iniAtualPeriodo = offPeriodo ? dadosPeriodo[0].atual : null;
+  const iniPeriodo      = typeof iniAtualPeriodo === 'number' ? iniAtualPeriodo : null;
 
   /* O `dados` unico saiu: ele lia `serieAno`, que muda com o viewMode do
      pai, e era exatamente o que impedia os dois graficos de coexistir.
@@ -440,6 +467,10 @@ export function IndicadorHistoricoModal({
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={dadosMes} margin={{ top: 6, right: 8, left: 4, bottom: 2 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted-foreground) / 0.15)" />
+                      {iniMes != null && (
+                        <ReferenceLine y={iniMes} stroke={COR_ATUAL.stroke} strokeDasharray="4 3"
+                                       strokeWidth={1} opacity={0.4} />
+                      )}
                       <XAxis dataKey="mes" tick={{ fontSize: 9, fill: '#888780' }} stroke="hsl(var(--muted-foreground) / 0.22)" />
                       <YAxis tick={{ fontSize: 9, fill: '#888780' }} tickFormatter={fmtAxis} stroke="hsl(var(--muted-foreground) / 0.22)" width={40} />
                       <Tooltip content={<CustomTooltip />} />
@@ -522,7 +553,7 @@ export function IndicadorHistoricoModal({
                           /* O mes selecionado continua cheio e maior — e a unica
                              marca que o V1 nao tem, e ela diz qual mes o painel
                              esta olhando. Os demais viram circulo ABERTO. */
-                          const isSel = props.index === mesAtual - 1;
+                          const isSel = props.index === mesAtual - 1 + offMes;
                           return isSel
                             ? <circle key={props.index} cx={props.cx} cy={props.cy} r={6} fill={COR_ATUAL.stroke} />
                             : <circle key={props.index} cx={props.cx} cy={props.cy} r={2}
@@ -566,6 +597,10 @@ export function IndicadorHistoricoModal({
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={dadosPeriodo} margin={{ top: 6, right: 8, left: 4, bottom: 2 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted-foreground) / 0.15)" />
+                      {iniPeriodo != null && (
+                        <ReferenceLine y={iniPeriodo} stroke={COR_ATUAL.stroke} strokeDasharray="4 3"
+                                       strokeWidth={1} opacity={0.4} />
+                      )}
                       <XAxis dataKey="mes" tick={{ fontSize: 9, fill: '#888780' }} stroke="hsl(var(--muted-foreground) / 0.22)" />
                       <YAxis tick={{ fontSize: 9, fill: '#888780' }} tickFormatter={fmtAxis} stroke="hsl(var(--muted-foreground) / 0.22)" width={40} />
                       <Tooltip content={<CustomTooltip />} />
@@ -648,7 +683,7 @@ export function IndicadorHistoricoModal({
                           /* O mes selecionado continua cheio e maior — e a unica
                              marca que o V1 nao tem, e ela diz qual mes o painel
                              esta olhando. Os demais viram circulo ABERTO. */
-                          const isSel = props.index === mesAtual - 1;
+                          const isSel = props.index === mesAtual - 1 + offPeriodo;
                           return isSel
                             ? <circle key={props.index} cx={props.cx} cy={props.cy} r={6} fill={COR_ATUAL.stroke} />
                             : <circle key={props.index} cx={props.cx} cy={props.cy} r={2}

@@ -1823,6 +1823,26 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
 
   const cabSerieMeta = isPeriodo ? cabMediaAcumMeta : cabFinMetaSerie13;
 
+  /* Rebanho INICIAL do ano — a foto de Dez do ano anterior. O valor ja era
+     calculado inline no return (`cabecasFinFotoAnoAnt`); aqui ele ganha um
+     dono so, para servir tambem ao `series`. */
+  const cabFotoIniAnoAnt: number | null =
+    cabFinAnoAntSerie && Number.isFinite(cabFinAnoAntSerie[12])
+      ? cabFinAnoAntSerie[12]
+      : null;
+
+  /* A posicao 0 das series de 13 e declarada como "Dez ano anterior"
+     (:1018) e nasce NaN. Aqui ela recebe a foto — o rebanho inicial do
+     ano — SO nas series publicadas ao modal. `cabSerie`, `cabValor` e
+     os deltas continuam lendo os arrays originais.
+     Devolve array NOVO: nenhuma mutacao em cabFinSerie13/cabMediaAcumulada. */
+  const comInicial = (s: number[], ini: number | null): number[] => {
+    if (ini == null) return s;
+    const out = [...s];
+    out[0] = ini;
+    return out;
+  };
+
   const cabDeltaMeta = (() => {
     if (!cabSerieMeta) return null;
     const curr = cabSerie[mesIdx];
@@ -3640,9 +3660,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       arrobasProd:  monthlyDataMeta.arrobasProd,
       gmd:          monthlyDataMeta.gmd,
     } : null,
-    cabecasFinFotoAnoAnt: cabFinAnoAntSerie && Number.isFinite(cabFinAnoAntSerie[12])
-      ? cabFinAnoAntSerie[12]
-      : null,
+    cabecasFinFotoAnoAnt: cabFotoIniAnoAnt,
     pesoMedioFinFotoAnoAnt: pesoMedioFinAnoAnt13 && Number.isFinite(pesoMedioFinAnoAnt13[12])
       ? pesoMedioFinAnoAnt13[12]
       : null,
@@ -3670,12 +3688,14 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
          anoAnt/meta sao `number[] | null` e SeriesPorModo nao aceita null. */
       series: {
         mes: {
-          ano:    cabFinSerie13,
+          /* So o realizado recebe a posicao 0. Para o ano anterior o inicial
+             seria Dez/ano-2, que nao existe; a meta nao tem foto inicial. */
+          ano:    comInicial(cabFinSerie13, cabFotoIniAnoAnt),
           anoAnt: cabFinAnoAntSerie  ?? undefined,
           meta:   cabFinMetaSerie13  ?? undefined,
         },
         periodo: {
-          ano:    cabMediaAcumulada,
+          ano:    comInicial(cabMediaAcumulada, cabFotoIniAnoAnt),
           anoAnt: cabMediaAcumAnoAnt ?? undefined,
           meta:   cabMediaAcumMeta   ?? undefined,
         },
