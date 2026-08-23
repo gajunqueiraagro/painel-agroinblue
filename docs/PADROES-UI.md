@@ -107,7 +107,13 @@ defeito a corrigir, não é caso para encolher o modal, não é caso para preenc
 vazio. Modal que encolhe e reposiciona a cada clique de aba é o defeito; espaço em
 branco é o preço aceito da estabilidade, e é sempre o preço certo.
 
-Referência viva: `LancamentoV2Dialog.tsx:1017` (PR-FIN-MODAL-02C).
+**Altura constante não é o mesmo que caber.** Em viewport curto o modal **rola**,
+e isso está correto. O critério "cabe sem rolar" vale para telas maiores; entre
+rolar e espremer um bloco a nada, rola. Medido no `IndicadorHistoricoModal` em
+viewport de 578px (PR-FIX-ABA-GLOBAL-27): shell 532, e o corpo rolando.
+
+Referências vivas: `LancamentoV2Dialog.tsx:1017` (PR-FIN-MODAL-02C);
+`IndicadorHistoricoModal.tsx:540` (`h-[92vh] max-h-[92vh]`, PR-27).
 
 ## A8 — Cabeçalho e rodapé de modal não rolam
 
@@ -251,6 +257,20 @@ contagem em cada bloco. Alternar pelo índice em JS.
 
 **`{/* */}` como primeiro filho de `return (…)` não é comentário** — é
 bloco vazio, e quebra o JSX. Já custou 14 erros de sintaxe.
+
+**Mover bloco entre contêineres flex exige medir na tela.** TSC, build e
+contagem de linhas **não veem CSS**: no PR-26 o bloco movido tinha 383
+linhas idênticas, zero diferenças de conteúdo, todos os gates verdes — e o
+layout quebrou. Antes de reportar verde, medir
+`getBoundingClientRect().height` de cada elo da cadeia, com a tela aberta.
+
+**Numa coluna flex, `flex-1 min-h-0` cede até zero; sem `min-h-0` o irmão
+não cede.** Blocos irmãos com regras diferentes fazem um só absorver todo o
+aperto. Piso inline num filho (`style={{ minHeight }}`) **não** protege o
+wrapper — governa só o elemento que o carrega, e o conteúdo transborda em
+vez de segurar a altura. Dar piso ao wrapper e `shrink-0` a quem não deve
+ceder. E `max-h-[…]` sozinho nunca aperta: altura indefinida faz
+`flex: 1 1 0%` não distribuir nada.
 
 ## A14 — Direção do indicador
 
