@@ -142,6 +142,14 @@ interface Props {
     mes: Array<number | null>;
     periodo: Array<number | null>;
   }>;
+  /** Como o Global se relaciona com as fazendas: 'soma' (cabecas,
+   *  arrobas) ou 'ponderada' (pesoMedio, gmd). So muda o rotulo da
+   *  legenda e da tabela — a linha e a mesma serie em ambos.
+   *  Na ponderada o Global passa ENTRE as fazendas, nao acima: medido na
+   *  NJ, Pureza 320,4 kg, Sto. Expedito 352,1 e Global 326,0, porque a
+   *  Pureza tem 5.165 das 6.281 cabecas. Esta correto, mas le como erro
+   *  para quem nao sabe — o rotulo e o que avisa. */
+  globalPorFazenda?: 'soma' | 'ponderada';
 }
 
 const MESES_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -179,6 +187,14 @@ const BAR_META    = '#FCB27F';   // #F97316 a ~55% sobre branco
 export const COR_FAZENDA = [
   '#185FA5', '#0E9F6E', '#D97706', '#7C3AED', '#DB2777', '#0891B2',
 ] as const;
+/* O Global na aba Por Fazenda e REFERENCIA, nao mais uma fazenda: cinza
+   neutro e tracejado, para ler como "o conjunto" e nao como um lugar.
+   NAO usa COR_FAZENDA — aquela paleta e identidade de fazenda. */
+const COR_GLOBAL = 'hsl(var(--muted-foreground))';
+/* Chave da coluna do Global nas linhas de `dadosFazenda`. Com dois
+   sublinhados para nao colidir com nome de fazenda, que e o dataKey das
+   outras Lines. */
+const CHAVE_GLOBAL = '__global';
 /* strokeWidth por serie no V1: atual 2.5, meta 2, ano anterior 1.5.
    Tracejado SO no ano anterior ('4 2') — a meta e CHEIA. A opacidade 0.55 que
    havia no ano anterior saiu: o V1 nao usa nenhuma, e com #B4B2A9 (68% de
@@ -234,6 +250,7 @@ export function IndicadorHistoricoModal({
   polaridade = 'positivoBom',
   tipoGraficoMes = 'linha',
   seriesPorFazenda,
+  globalPorFazenda,
 }: Props) {
   const modoColuna = tipoGraficoMes === 'coluna';
   // Paleta da linha/valor do ano atual — ano anterior e meta ficam intocados.
@@ -404,8 +421,102 @@ export function IndicadorHistoricoModal({
         const v = f[campo][idx];
         linha[f.nome] = typeof v === 'number' && Number.isFinite(v) ? v : null;
       }
+      /* O Global sai do MESMO trio que alimenta o numero grande do
+         cabecalho e a curva da aba Global — por construcao a linha e o
+         numero do tile e do PC-100, nao uma segunda derivacao que possa
+         divergir. Leitura por `getMesValue`, 1-based: ele decide o offset
+         pelo COMPRIMENTO e cobre tanto as series de 13 (posicao 0 = "Dez
+         ano anterior") quanto as de 12. Acesso literal `trio.ano[idx + 1]`
+         valeria so para as de 13 e deslocaria um mes inteiro nas de 12,
+         com o grafico continuando a parecer certo.
+         Recorte em `mesAtual`, o mesmo de `montaDados`. */
+      const trio = campo === 'mes' ? trioMes : trioPeriodo;
+      const g = idx + 1 <= mesAtual ? getMesValue(trio.ano, idx + 1) : null;
+      linha[CHAVE_GLOBAL] = g != null && Number.isFinite(g) ? g : null;
       return linha;
     });
+
+  /* Rotulo do Global — so ele muda entre 'soma' e 'ponderada'. */
+  const rotuloGlobal = globalPorFazenda === 'ponderada'
+    ? 'Global (média ponderada)'
+    : 'Global';
+
+  /* A <Line> do Global, identica nos dois cards. Tracejada e mais grossa
+     que as fazendas (2.5 contra 2), sem dot: e pano de fundo, nao um
+     lugar que se aponta. */
+  const linhaGlobal = (
+    <Line
+      type="monotone"
+      dataKey={CHAVE_GLOBAL}
+      name={rotuloGlobal}
+      stroke={COR_GLOBAL}
+      strokeWidth={2.5}
+      strokeDasharray="4 2"
+      dot={false}
+      connectNulls={false}
+      isAnimationActive={false}
+    />
+  );
+
+  /* Legenda das fazendas — passa a viver DENTRO de cada card, depois do
+     wrapper do grafico, como no PR-IDIOMA-03 da aba Global. O card NAO
+     cresce: ele e dimensionado pelo grid, entao quem cede altura e o
+     wrapper do grafico, que mantem `minHeight: 140`.
+     O Global vem PRIMEIRO, com a amostra tracejada. */
+  const legendaFazendas = (
+    <div className="flex justify-center gap-2.5 px-0 mt-1.5 flex-wrap">
+      <div className="flex items-center gap-1.5">
+        <div className="w-3 border-t-[2px] border-dashed"
+             style={{ borderColor: COR_GLOBAL }} />
+        <span className="text-[9px] text-muted-foreground">{rotuloGlobal}</span>
+      </div>
+      {(seriesPorFazenda ?? []).map((f, i) => (
+        <div key={f.fazendaId} className="flex items-center gap-1.5">
+          <div className="w-3 h-[2px] rounded"
+               style={{ background: COR_FAZENDA[i % COR_FAZENDA.length] }} />
+          <span className="text-[9px] text-muted-foreground">{f.nome}</span>
+        </div>
+      ))}
+    </div>
+  );
+
+  /* Os numeros, abaixo dos dois cards. Rotulo sobre cada ponto poluiria:
+     sete meses x N fazendas x dois graficos. Estilo do A10 — cabecalho e
+     linha de Total em `bg-primary text-primary-foreground`, zebra
+     `odd:bg-muted/30 even:bg-card`, sem bordas. Sobre o azul nenhum texto
+     fica em `text-foreground`: as tres celulas do Global sao explicitas.
+     Nulo vira travessao, NUNCA zero — zero e valor real. */
+  const celFaz = (f: { mes: Array<number | null>; periodo: Array<number | null> },
+                  campo: 'mes' | 'periodo'): number | null => {
+    const v = f[campo][mesAtual - 1];
+    return typeof v === 'number' && Number.isFinite(v) ? v : null;
+  };
+  const fmtCel = (v: number | null) => (v == null ? '—' : fmtValor(v));
+  const tabelaFazendas = (
+    <table className="w-full text-[10px] leading-tight">
+      <thead>
+        <tr className="bg-primary text-primary-foreground">
+          <th className="text-left  font-medium px-2 py-1">Fazenda</th>
+          <th className="text-right font-medium px-2 py-1">No mês</th>
+          <th className="text-right font-medium px-2 py-1">No período</th>
+        </tr>
+      </thead>
+      <tbody>
+        {(seriesPorFazenda ?? []).map(f => (
+          <tr key={f.fazendaId} className="odd:bg-muted/30 even:bg-card">
+            <td className="text-left  px-2 py-0.5 text-foreground">{f.nome}</td>
+            <td className="text-right px-2 py-0.5 tabular-nums text-foreground">{fmtCel(celFaz(f, 'mes'))}</td>
+            <td className="text-right px-2 py-0.5 tabular-nums text-foreground">{fmtCel(celFaz(f, 'periodo'))}</td>
+          </tr>
+        ))}
+        <tr className="bg-primary text-primary-foreground font-medium">
+          <td className="text-left  px-2 py-0.5 text-primary-foreground">{rotuloGlobal}</td>
+          <td className="text-right px-2 py-0.5 tabular-nums text-primary-foreground">{fmtCel(getMesValue(trioMes.ano, mesAtual))}</td>
+          <td className="text-right px-2 py-0.5 tabular-nums text-primary-foreground">{fmtCel(getMesValue(trioPeriodo.ano, mesAtual))}</td>
+        </tr>
+      </tbody>
+    </table>
+  );
 
   /* O `dados` unico saiu: ele lia `serieAno`, que muda com o viewMode do
      pai, e era exatamente o que impedia os dois graficos de coexistir.
@@ -955,18 +1066,24 @@ export function IndicadorHistoricoModal({
             </TabsContent>
 
             <TabsContent value="fazenda" className="flex-1 min-h-0 flex flex-col mt-0">
-              {/* Por fazenda: 2x2 tambem, mesma grade e mesmo wrapper dos de
-                  cima. SEM meta e SEM ano anterior — a aba Global responde
-                  "como estou contra o planejado"; esta responde "quem esta
-                  puxando". Para ver a meta de uma fazenda, o seletor do
-                  cabecalho do app.
+              {/* Por fazenda: mesma grade e mesmo wrapper dos de cima, mais a
+                  tabela dos numeros embaixo. SEM meta e SEM ano anterior — a
+                  aba Global responde "como estou contra o planejado"; esta
+                  responde "quem esta puxando". Para ver a meta de uma fazenda,
+                  o seletor do cabecalho do app.
                   SEM historico: "como este ano se compara com os anteriores"
                   nao muda ao olhar por fazenda, e N x 6 barras seria ilegivel.
-                  Sao dois cards, nao quatro — o espaco vazio embaixo e o preco
-                  da altura constante (A7), e e o comportamento CORRETO.
-                  ⚠ Estas series tem 12 posicoes, 0=Jan. Leitura por indice
-                  direto `[mes - 1]`; `getMesValue` e 1-based e serve as de 13. */}
-              <div className="px-4 pb-2 flex-1 min-h-0 flex flex-col">
+                  Sao dois cards, nao quatro.
+                  O Global entra como <Line> tracejada cinza junto das fazendas,
+                  e a legenda vive DENTRO de cada card.
+                  ⚠ DOIS comprimentos convivem aqui. As series por fazenda tem
+                  12 posicoes, 0=Jan, lidas por indice DIRETO. O trio do Global
+                  vem do PC-100 e pode ter 13, com a posicao 0 reservada a "Dez
+                  ano anterior" — por isso ele passa por `getMesValue`, que
+                  decide o offset pelo comprimento. Nunca misturar as duas
+                  leituras. */}
+              <div className="px-4 pb-2 flex-1 flex flex-col"
+                   style={{ minHeight: 260 }}>
                 <div className="grid grid-cols-2 gap-3 flex-1 min-h-0">
                   <Card className="flex flex-col min-h-0">
                     <CardContent className="p-3 flex flex-col flex-1 min-h-0">
@@ -991,9 +1108,11 @@ export function IndicadorHistoricoModal({
                                 isAnimationActive={false}
                               />
                             ))}
+                            {linhaGlobal}
                           </ComposedChart>
                         </ResponsiveContainer>
                       </div>
+                      {legendaFazendas}
                     </CardContent>
                   </Card>
                   <Card className="flex flex-col min-h-0">
@@ -1019,22 +1138,23 @@ export function IndicadorHistoricoModal({
                                 isAnimationActive={false}
                               />
                             ))}
+                            {linhaGlobal}
                           </ComposedChart>
                         </ResponsiveContainer>
                       </div>
+                      {legendaFazendas}
                     </CardContent>
                   </Card>
                 </div>
-                {/* Legenda propria — uma so, serve os dois cards. */}
-                <div className="flex justify-center gap-2.5 px-0 mt-1.5 flex-wrap">
-                  {(seriesPorFazenda ?? []).map((f, i) => (
-                    <div key={f.fazendaId} className="flex items-center gap-1.5">
-                      <div className="w-3 h-[2px] rounded"
-                           style={{ background: COR_FAZENDA[i % COR_FAZENDA.length] }} />
-                      <span className="text-[10px] text-muted-foreground">{f.nome}</span>
-                    </div>
-                  ))}
-                </div>
+              </div>
+              {/* Os numeros — IRMAO do wrapper dos graficos, nao filho, e com
+                  `shrink-0`. Ate o PR-28 esta aba tinha um filho so, entao o
+                  `flex-1 min-h-0` sem piso do wrapper nao machucava: nao havia
+                  quem disputasse altura. A tabela e esse irmao. Sem o par
+                  piso + `shrink-0` o colapso de 20px do PR-26 voltaria aqui —
+                  ver A13 em docs/PADROES-UI.md. */}
+              <div className="px-4 pb-2 shrink-0">
+                {tabelaFazendas}
               </div>
             </TabsContent>
           </Tabs>
