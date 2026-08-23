@@ -990,11 +990,22 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
   const usarLancPecExterno = Array.isArray(lancPecExterno) && lancPecExterno.length > 0;
   const usarLancFinExterno = Array.isArray(lancFinExterno) && lancFinExterno.length > 0;
 
+  /* `ano` no fetch, nao so no filtro. Sem ele os dois hooks baixam o
+     historico INTEIRO do cliente, paginado de mil em mil, e o hook joga
+     fora tudo menos um ano: `buildMonthlyDataFromView` recorta por
+     `l.data.startsWith(String(ano))` e `montarMovimentacoes` descarta com
+     `if (a !== ano) return false`. Nenhum consumo de lancPec/lancFin
+     atravessa anos — o ano-1 vem de queries proprias (viewTotalsAnoAnt,
+     pecAnoAnt12, custeioPecAnoAnt12), e o comentario de :2598 ja dizia
+     que "lancPec/lancFin ano-1 nao fetched".
+     Medido: abrir um modal migrado dispara quatro instancias sem
+     `sharedLanc`, e o historico ficava mais de quinze segundos em
+     "Carregando...". */
   const { lancamentos: lancPecInterno, loading: loadingLancInterno } =
-    useLancamentos({ enabled: enabled && !usarLancPecExterno });
+    useLancamentos({ enabled: enabled && !usarLancPecExterno, ano });
 
   const { lancamentos: lancFinInterno, loading: loadingFinInterno } =
-    useFinanceiro({ enabled: enabled && !usarLancFinExterno });
+    useFinanceiro({ enabled: enabled && !usarLancFinExterno, ano });
 
   // Etapa 2D — caixaIndicador.
   // Caixa: fonte oficial de saldo bancário consolidado por cliente
