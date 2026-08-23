@@ -523,7 +523,7 @@ export function IndicadorHistoricoModal({
                 {cabecalhoLeitura(titulos?.mes ?? { titulo, subtitulo }, trioMes,
                     `${MESES_LABELS[mesAtual - 1]}/${yy}`)}
                 {/* Altura DERIVADA: literal nao cabe em todo viewport. Piso 140px
-                    mantem os 12 rotulos de mes legiveis; teto 200px impede o
+                    mantem os 12 rotulos de mes legiveis; teto 240px impede o
                     grafico de inchar em tela grande. */}
                 <div className="flex-1" style={{ minHeight: 140, maxHeight: 240 }}>
                   <ResponsiveContainer width="100%" height="100%">
@@ -682,7 +682,7 @@ export function IndicadorHistoricoModal({
                 {cabecalhoLeitura(titulos?.periodo ?? { titulo, subtitulo }, trioPeriodo,
                     `Jan–${MESES_LABELS[mesAtual - 1]}/${yy}`)}
                 {/* Altura DERIVADA: literal nao cabe em todo viewport. Piso 140px
-                    mantem os 12 rotulos de mes legiveis; teto 200px impede o
+                    mantem os 12 rotulos de mes legiveis; teto 240px impede o
                     grafico de inchar em tela grande. */}
                 <div className="flex-1" style={{ minHeight: 140, maxHeight: 240 }}>
                   <ResponsiveContainer width="100%" height="100%">
