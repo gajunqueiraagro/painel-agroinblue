@@ -260,6 +260,18 @@ export function IndicadorHistoricoModal({
     return fmtN(v, 0);
   };
 
+  /* Formatador do EIXO Y. Difere de `fmtAxis` num ponto so: acima de mil,
+     sem casa decimal — "50.000,0" tem oito caracteres e nao cabe na
+     canaleta. Abaixo de mil, delega a `fmtAxis`, porque e onde a decimal
+     significa alguma coisa (GMD 0,403). `moedaAbreviada` tambem delega:
+     ela ja abrevia em K/M/B e nunca estoura. */
+  const fmtEixo = (v: number | null | undefined): string => {
+    if (v == null || isNaN(v)) return '';
+    if (formatoValor === 'moedaAbreviada') return fmtAxis(v);
+    if (Math.abs(v) >= 1000) return fmtN(v, 0);
+    return fmtAxis(v);
+  };
+
   const getMesValue = (serie: number[] | null | undefined, mes: number): number | null => {
     if (!serie || mes < 1 || mes > 12) return null;
 
@@ -522,8 +534,8 @@ export function IndicadorHistoricoModal({
                         <ReferenceLine y={iniMes} stroke={COR_ATUAL.stroke} strokeDasharray="4 3"
                                        strokeWidth={1} opacity={0.4} />
                       )}
-                      <XAxis dataKey="mes" tick={{ fontSize: 9, fill: '#888780' }} stroke="hsl(var(--muted-foreground) / 0.22)" />
-                      <YAxis tick={{ fontSize: 9, fill: '#888780' }} tickFormatter={fmtAxis} stroke="hsl(var(--muted-foreground) / 0.22)" width={40} />
+                      <XAxis dataKey="mes" tick={{ fontSize: 8, fill: '#888780' }} stroke="hsl(var(--muted-foreground) / 0.22)" />
+                      <YAxis tick={{ fontSize: 8, fill: '#888780' }} tickFormatter={fmtEixo} stroke="hsl(var(--muted-foreground) / 0.22)" width={46} />
                       <Tooltip content={<CustomTooltip />} />
                       {/* Areas (sob as linhas) — dataKey separado p/ não duplicar no tooltip */}
                       {!modoColuna && hasAnoAnt && (
@@ -680,8 +692,8 @@ export function IndicadorHistoricoModal({
                         <ReferenceLine y={iniPeriodo} stroke={COR_ATUAL.stroke} strokeDasharray="4 3"
                                        strokeWidth={1} opacity={0.4} />
                       )}
-                      <XAxis dataKey="mes" tick={{ fontSize: 9, fill: '#888780' }} stroke="hsl(var(--muted-foreground) / 0.22)" />
-                      <YAxis tick={{ fontSize: 9, fill: '#888780' }} tickFormatter={fmtAxis} stroke="hsl(var(--muted-foreground) / 0.22)" width={40} />
+                      <XAxis dataKey="mes" tick={{ fontSize: 8, fill: '#888780' }} stroke="hsl(var(--muted-foreground) / 0.22)" />
+                      <YAxis tick={{ fontSize: 8, fill: '#888780' }} tickFormatter={fmtEixo} stroke="hsl(var(--muted-foreground) / 0.22)" width={46} />
                       <Tooltip content={<CustomTooltip />} />
                       {/* Areas (sob as linhas) — dataKey separado p/ não duplicar no tooltip */}
                       {hasAnoAnt && (
@@ -815,7 +827,7 @@ export function IndicadorHistoricoModal({
                 ) : temDadoMes ? (
                   <ResponsiveContainer width="100%" height={96}>
                     <BarChart data={barDadosMes} margin={{ top: 18, right: 8, left: 8, bottom: 0 }} barCategoryGap="10%">
-                      <XAxis dataKey="nome" tick={{ fontSize: 9, fill: '#888780' }} axisLine={false} tickLine={false} />
+                      <XAxis dataKey="nome" tick={{ fontSize: 8, fill: '#888780' }} axisLine={false} tickLine={false} />
                       <YAxis hide />
                       {refAnoAtualMes != null && !isNaN(refAnoAtualMes) && (
                         <ReferenceLine y={refAnoAtualMes} stroke={COR_ATUAL.stroke} strokeDasharray="4 3" strokeWidth={1} opacity={0.5} />
@@ -851,7 +863,7 @@ export function IndicadorHistoricoModal({
                 ) : temDadoPeriodo ? (
                   <ResponsiveContainer width="100%" height={96}>
                     <BarChart data={barDadosPeriodo} margin={{ top: 18, right: 8, left: 8, bottom: 0 }} barCategoryGap="10%">
-                      <XAxis dataKey="nome" tick={{ fontSize: 9, fill: '#888780' }} axisLine={false} tickLine={false} />
+                      <XAxis dataKey="nome" tick={{ fontSize: 8, fill: '#888780' }} axisLine={false} tickLine={false} />
                       <YAxis hide />
                       {refAnoAtualPeriodo != null && !isNaN(refAnoAtualPeriodo) && (
                         <ReferenceLine y={refAnoAtualPeriodo} stroke={COR_ATUAL.stroke} strokeDasharray="4 3" strokeWidth={1} opacity={0.5} />
