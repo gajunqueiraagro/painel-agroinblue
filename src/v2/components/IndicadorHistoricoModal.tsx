@@ -124,15 +124,21 @@ const MESES_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'S
    :605-613; o mesmo bloco existe identico em ZootecnicoTab e VisaoZooHubTab).
    NAO veio do ResOpDashboard: aquele arquivo nao tem este grafico.
 
-   DOT_V1 e o marcador CIRCULAR ABERTO — o `fill` e a cor de FUNDO da pagina,
-   entao o circulo le como vazado e a borda fica na cor da serie. E o unico
-   detalhe do idioma que nao se descreve por si: sem o fill de fundo o ponto
-   vira bolinha cheia. */
-const DOT_V1        = { r: 2, strokeWidth: 1.5, fill: 'hsl(var(--background))' };
-const DOT_META_V1   = { r: 3, strokeWidth: 1.5, fill: '#f97316' };
+   DOT_V1 e o marcador CIRCULAR ABERTO — o `fill` e a cor do CARD, nao a da
+   pagina: desde que os graficos passaram a viver dentro de <Card>, o fundo
+   atras deles e `--card` (branco), e apontar para `--background` (cinza 97%)
+   deixava um miolo cinza dentro de card branco. E o unico detalhe do idioma
+   que nao se descreve por si: sem o fill do fundo o ponto vira bolinha cheia.
+   DOT_META_V1 passa a ser vazado tambem — a borda laranja vem do stroke da
+   Line. ACTIVE_DOT_V1 fica solido: e o hover. */
+const DOT_V1        = { r: 2, strokeWidth: 1.5, fill: 'hsl(var(--card))' };
+const DOT_META_V1   = { r: 3, strokeWidth: 1.5, fill: 'hsl(var(--card))' };
 const ACTIVE_DOT_V1 = { r: 4, strokeWidth: 2, fill: 'hsl(var(--primary))' };
 /* strokeWidth por serie no V1: atual 2.5, meta 2, ano anterior 1.5.
-   Tracejado SO no ano anterior ('4 2', opacidade 0.55) — a meta e CHEIA. */
+   Tracejado SO no ano anterior ('4 2') — a meta e CHEIA. A opacidade 0.55 que
+   havia no ano anterior saiu: o V1 nao usa nenhuma, e com #B4B2A9 (68% de
+   luminosidade) a 0.55 a linha ficava quase invisivel. Agora a cor e
+   `--muted-foreground` cheia, como em ZootecnicoTab:613. */
 
 const fmtN = (v: number | null | undefined, casas: number) =>
   v == null || isNaN(v) ? '—' : v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });
@@ -303,6 +309,9 @@ export function IndicadorHistoricoModal({
   // Dados vêm prontos via prop historicoAno/historicoMeta de useHistoricoIndicador.
   // Modal NÃO calcula nada aqui. Bloco fica oculto se historicoAno for undefined.
   const labelPer = labelPeriodo ?? `Jan–${MESES_LABELS[mesAtual - 1]}`;
+  /* Ano curto para os dois cabecalhos. NAO reaproveitar `labelPer`: ele pode
+     vir sobrescrito pela prop `labelPeriodo` e serve ao bloco de historico. */
+  const yy = String(anoAtual).slice(-2);
   const metaAtualValor = historicoMeta?.find(h => h.ano === anoAtual)?.valor ?? null;
   const refValAnoAtual = historicoAno?.find(h => h.ano === anoAtual)?.valor ?? null;
   const barDados = historicoAno != null
@@ -350,7 +359,7 @@ export function IndicadorHistoricoModal({
      de serie ja chegam pelo `series`. */
   const linhaDelta = (v: number | null, rotulo: string) =>
     v == null ? null : (
-      <div className={`text-[10px] font-normal leading-[1.2] flex items-center gap-0.5 ${v >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+      <div className={`text-[9px] font-normal leading-[1.2] flex items-center gap-0.5 ${v >= 0 ? 'text-green-600' : 'text-red-500'}`}>
         <span>{v >= 0 ? '↗' : '↙'}</span>
         <span>{v >= 0 ? '+' : ''}{v.toFixed(1)}% {rotulo}</span>
       </div>
@@ -365,6 +374,7 @@ export function IndicadorHistoricoModal({
   const cabecalhoLeitura = (
     t: { titulo: string; subtitulo?: string },
     trio: { ano: number[]; anoAnt?: number[]; meta?: number[] },
+    dataLabel: string,
   ) => {
     const d = deltasDoTrio(trio);
     return (
@@ -378,11 +388,11 @@ export function IndicadorHistoricoModal({
         <div className="flex flex-col items-end gap-0.5 shrink-0 ml-2">
           <span className={`text-lg font-bold leading-none ${COR_ATUAL.text}`}>{fmtValor(d.valor)}</span>
           <span className="text-[10px] text-muted-foreground leading-none">
-            {MESES_LABELS[mesAtual - 1]} {anoAtual}
+            {dataLabel}
           </span>
+          {linhaDelta(d.meta, 'vs META')}
           {linhaDelta(d.mes,  'vs mês')}
           {linhaDelta(d.ano,  'vs ano ant.')}
-          {linhaDelta(d.meta, 'vs META')}
         </div>
       </div>
     );
@@ -421,16 +431,17 @@ export function IndicadorHistoricoModal({
           <div className="grid grid-cols-2 gap-3 flex-1 min-h-0">
             <Card className="flex flex-col min-h-0">
               <CardContent className="p-3 flex flex-col flex-1 min-h-0">
-                {cabecalhoLeitura(titulos?.mes ?? { titulo, subtitulo }, trioMes)}
+                {cabecalhoLeitura(titulos?.mes ?? { titulo, subtitulo }, trioMes,
+                    `${MESES_LABELS[mesAtual - 1]}/${yy}`)}
                 {/* Altura DERIVADA: literal nao cabe em todo viewport. Piso 140px
                     mantem os 12 rotulos de mes legiveis; teto 200px impede o
                     grafico de inchar em tela grande. */}
                 <div className="flex-1" style={{ minHeight: 140, maxHeight: 200 }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={dadosMes} margin={{ top: 6, right: 8, left: 4, bottom: 2 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#E8E6DF" vertical={false} />
-                      <XAxis dataKey="mes" tick={{ fontSize: 9, fill: '#888780' }} stroke="#E8E6DF" />
-                      <YAxis tick={{ fontSize: 9, fill: '#888780' }} tickFormatter={fmtAxis} stroke="#E8E6DF" width={40} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted-foreground) / 0.35)" />
+                      <XAxis dataKey="mes" tick={{ fontSize: 9, fill: '#888780' }} stroke="hsl(var(--muted-foreground) / 0.35)" />
+                      <YAxis tick={{ fontSize: 9, fill: '#888780' }} tickFormatter={fmtAxis} stroke="hsl(var(--muted-foreground) / 0.35)" width={40} />
                       <Tooltip content={<CustomTooltip />} />
                       {/* Areas (sob as linhas) — dataKey separado p/ não duplicar no tooltip */}
                       {hasAnoAnt && (
@@ -470,10 +481,9 @@ export function IndicadorHistoricoModal({
                         <Line
                           type="monotone"
                           dataKey="anoAnterior"
-                          stroke="#B4B2A9"
+                          stroke="hsl(var(--muted-foreground))"
                           strokeWidth={1.5}
                           strokeDasharray="4 2"
-                          strokeOpacity={0.55}
                           dot={DOT_V1}
                           activeDot={ACTIVE_DOT_V1}
                           connectNulls={false}
@@ -516,26 +526,48 @@ export function IndicadorHistoricoModal({
                           return isSel
                             ? <circle key={props.index} cx={props.cx} cy={props.cy} r={6} fill={COR_ATUAL.stroke} />
                             : <circle key={props.index} cx={props.cx} cy={props.cy} r={2}
-                                      fill="hsl(var(--background))" stroke={COR_ATUAL.stroke} strokeWidth={1.5} />;
+                                      fill="hsl(var(--card))" stroke={COR_ATUAL.stroke} strokeWidth={1.5} />;
                         }}
                       />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </div>
+                {/* Legenda — uma por card, como no ChartCard V1. Duplicada de
+                    proposito: cada card e autonomo. O card NAO cresce — quem
+                    cede altura e o grafico (flex-1, piso 140). */}
+                <div className="flex justify-center gap-2.5 px-0 mt-1.5 flex-wrap">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-[2px] rounded" style={{ background: COR_ATUAL.stroke }} />
+                    <span className="text-[9px] text-muted-foreground">{anoAtual}</span>
+                  </div>
+                  {hasAnoAnt && (
+                    <div className="flex items-center gap-1.5">
+                      <svg width="14" height="4"><line x1="0" y1="2" x2="14" y2="2" stroke="hsl(var(--muted-foreground))" strokeWidth="2" strokeDasharray="4 3"/></svg>
+                      <span className="text-[9px] text-muted-foreground">{anoAtual - 1}</span>
+                    </div>
+                  )}
+                  {hasMeta && (
+                    <div className="flex items-center gap-1.5">
+                      <svg width="14" height="4"><line x1="0" y1="2" x2="14" y2="2" stroke="#F97316" strokeWidth="2" strokeDasharray="6 3"/></svg>
+                      <span className="text-[9px] text-muted-foreground">Meta {anoAtual}</span>
+                    </div>
+                  )}
+                </div>
               </CardContent>
             </Card>
             <Card className="flex flex-col min-h-0">
               <CardContent className="p-3 flex flex-col flex-1 min-h-0">
-                {cabecalhoLeitura(titulos?.periodo ?? { titulo, subtitulo }, trioPeriodo)}
+                {cabecalhoLeitura(titulos?.periodo ?? { titulo, subtitulo }, trioPeriodo,
+                    `Jan–${MESES_LABELS[mesAtual - 1]}/${yy}`)}
                 {/* Altura DERIVADA: literal nao cabe em todo viewport. Piso 140px
                     mantem os 12 rotulos de mes legiveis; teto 200px impede o
                     grafico de inchar em tela grande. */}
                 <div className="flex-1" style={{ minHeight: 140, maxHeight: 200 }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={dadosPeriodo} margin={{ top: 6, right: 8, left: 4, bottom: 2 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#E8E6DF" vertical={false} />
-                      <XAxis dataKey="mes" tick={{ fontSize: 9, fill: '#888780' }} stroke="#E8E6DF" />
-                      <YAxis tick={{ fontSize: 9, fill: '#888780' }} tickFormatter={fmtAxis} stroke="#E8E6DF" width={40} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted-foreground) / 0.35)" />
+                      <XAxis dataKey="mes" tick={{ fontSize: 9, fill: '#888780' }} stroke="hsl(var(--muted-foreground) / 0.35)" />
+                      <YAxis tick={{ fontSize: 9, fill: '#888780' }} tickFormatter={fmtAxis} stroke="hsl(var(--muted-foreground) / 0.35)" width={40} />
                       <Tooltip content={<CustomTooltip />} />
                       {/* Areas (sob as linhas) — dataKey separado p/ não duplicar no tooltip */}
                       {hasAnoAnt && (
@@ -575,10 +607,9 @@ export function IndicadorHistoricoModal({
                         <Line
                           type="monotone"
                           dataKey="anoAnterior"
-                          stroke="#B4B2A9"
+                          stroke="hsl(var(--muted-foreground))"
                           strokeWidth={1.5}
                           strokeDasharray="4 2"
-                          strokeOpacity={0.55}
                           dot={DOT_V1}
                           activeDot={ACTIVE_DOT_V1}
                           connectNulls={false}
@@ -621,34 +652,35 @@ export function IndicadorHistoricoModal({
                           return isSel
                             ? <circle key={props.index} cx={props.cx} cy={props.cy} r={6} fill={COR_ATUAL.stroke} />
                             : <circle key={props.index} cx={props.cx} cy={props.cy} r={2}
-                                      fill="hsl(var(--background))" stroke={COR_ATUAL.stroke} strokeWidth={1.5} />;
+                                      fill="hsl(var(--card))" stroke={COR_ATUAL.stroke} strokeWidth={1.5} />;
                         }}
                       />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </div>
+                {/* Legenda — uma por card, como no ChartCard V1. Duplicada de
+                    proposito: cada card e autonomo. O card NAO cresce — quem
+                    cede altura e o grafico (flex-1, piso 140). */}
+                <div className="flex justify-center gap-2.5 px-0 mt-1.5 flex-wrap">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-[2px] rounded" style={{ background: COR_ATUAL.stroke }} />
+                    <span className="text-[9px] text-muted-foreground">{anoAtual}</span>
+                  </div>
+                  {hasAnoAnt && (
+                    <div className="flex items-center gap-1.5">
+                      <svg width="14" height="4"><line x1="0" y1="2" x2="14" y2="2" stroke="hsl(var(--muted-foreground))" strokeWidth="2" strokeDasharray="4 3"/></svg>
+                      <span className="text-[9px] text-muted-foreground">{anoAtual - 1}</span>
+                    </div>
+                  )}
+                  {hasMeta && (
+                    <div className="flex items-center gap-1.5">
+                      <svg width="14" height="4"><line x1="0" y1="2" x2="14" y2="2" stroke="#F97316" strokeWidth="2" strokeDasharray="6 3"/></svg>
+                      <span className="text-[9px] text-muted-foreground">Meta {anoAtual}</span>
+                    </div>
+                  )}
+                </div>
               </CardContent>
             </Card>
-          </div>
-
-          {/* Legenda — abaixo do gráfico */}
-          <div className="flex justify-center gap-3 px-1 mt-2 flex-wrap">
-            <div className="flex items-center gap-1.5">
-              <div className="w-4 h-[2px] rounded" style={{ background: COR_ATUAL.stroke }} />
-              <span className="text-[10px] text-muted-foreground">{anoAtual}</span>
-            </div>
-            {hasAnoAnt && (
-              <div className="flex items-center gap-1.5">
-                <svg width="18" height="4"><line x1="0" y1="2" x2="18" y2="2" stroke="#B4B2A9" strokeWidth="2" strokeDasharray="4 3"/></svg>
-                <span className="text-[10px] text-muted-foreground">{anoAtual - 1}</span>
-              </div>
-            )}
-            {hasMeta && (
-              <div className="flex items-center gap-1.5">
-                <svg width="18" height="4"><line x1="0" y1="2" x2="18" y2="2" stroke="#F97316" strokeWidth="2" strokeDasharray="6 3"/></svg>
-                <span className="text-[10px] text-muted-foreground">Meta {anoAtual}</span>
-              </div>
-            )}
           </div>
         </div>
 
