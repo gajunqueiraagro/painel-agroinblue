@@ -1043,6 +1043,14 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     const v = ind?.series?.[modo]?.meta?.[mesNum];
     return typeof v === 'number' && Number.isFinite(v) ? v : null;
   };
+  /* A barra de meta do historico e uma so: "Meta {anoAtual}". O
+     `montaBarras` do modal a procura por `find(h => h.ano === anoAtual)`,
+     entao um item por leitura basta. Valor nulo = sem barra, que e o
+     correto quando o indicador nao tem meta. */
+  const metaPar = (ind: IndicadorComSeries | null | undefined): HistoricoPorModo => ({
+    mes:     [{ ano: anoNum, valor: metaHist(ind, 'mes') }],
+    periodo: [{ ano: anoNum, valor: metaHist(ind, 'periodo') }],
+  });
 
   type HistoricoPorModo = {
     mes:     Array<{ ano: number; valor: number | null }>;
@@ -1163,10 +1171,6 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     histArr6.loading || histArr5.loading || histArr4.loading ||
     histArr3.loading || histArr2.loading
   );
-
-  // Meta histórica não migra agora — array vazio. O modal vai exibir só a barra "Meta {anoAtual}"
-  // via lookup em historicoMeta.find(h => h.ano === anoAtual), que continua null.
-  const arrobasHistoricoMetaOficial: HistoricoPorModo = { mes: [], periodo: [] };
 
   // ── pesoMedio histórico oficial PC-100 (Opção B) ──
   const pesoMedioHistoricoOficial = useMemo<HistoricoPorModo>(() => {
@@ -2543,7 +2547,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           viewMode={viewMode}
           onViewModeChange={onViewModeChange}
           historicoAno={pesoMedioHistoricoOficial}
-          historicoMeta={{ mes: [], periodo: [] }}
+          historicoMeta={metaPar(pesoMedioIndicador)}
           loadingHistorico={loadingPesoMedioHistorico}
         />
       )}
@@ -2570,7 +2574,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           viewMode={viewMode}
           onViewModeChange={onViewModeChange}
           historicoAno={arrobasHistoricoOficial}
-          historicoMeta={arrobasHistoricoMetaOficial}
+          historicoMeta={metaPar(arrobasIndicador)}
           loadingHistorico={loadingArrobasHistorico}
         />
       )}
@@ -2597,7 +2601,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           viewMode={viewMode}
           onViewModeChange={onViewModeChange}
           historicoAno={gmdHistoricoOficial}
-          historicoMeta={{ mes: [], periodo: [] }}
+          historicoMeta={metaPar(gmdIndicador)}
           loadingHistorico={loadingGmdHistorico}
         />
       )}
@@ -2624,7 +2628,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           viewMode={viewMode}
           onViewModeChange={onViewModeChange}
           historicoAno={uaHaHistoricoOficial}
-          historicoMeta={{ mes: [], periodo: [] }}
+          historicoMeta={metaPar(uaHaIndicador)}
           loadingHistorico={loadingUaHaHistorico}
         />
       )}
@@ -2651,7 +2655,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           viewMode={viewMode}
           onViewModeChange={onViewModeChange}
           historicoAno={kgHaHistoricoOficial}
-          historicoMeta={{ mes: [], periodo: [] }}
+          historicoMeta={metaPar(kgHaIndicador)}
           loadingHistorico={loadingKgHaHistorico}
         />
       )}
@@ -2757,7 +2761,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           viewMode={viewMode}
           onViewModeChange={onViewModeChange}
           historicoAno={receitaPecHistoricoOficial}
-          historicoMeta={{ mes: [], periodo: [] }}
+          historicoMeta={metaPar(receitaPecIndicador)}
           loadingHistorico={loadingReceitaPecHistorico}
           corPrincipal="azul"
         />
@@ -2785,7 +2789,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           viewMode={viewMode}
           onViewModeChange={onViewModeChange}
           historicoAno={custeioPecHistoricoOficial}
-          historicoMeta={{ mes: [], periodo: [] }}
+          historicoMeta={metaPar(custeioPecIndicador)}
           loadingHistorico={loadingCusteioPecHistorico}
           corPrincipal="vermelho"
         />
@@ -2813,7 +2817,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           viewMode={viewMode}
           onViewModeChange={onViewModeChange}
           historicoAno={custoArrHistoricoOficial}
-          historicoMeta={{ mes: [], periodo: [] }}
+          historicoMeta={metaPar(custoArrIndicador)}
           loadingHistorico={loadingCustoArrHistorico}
           corPrincipal="vermelho"
         />
@@ -2841,7 +2845,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           viewMode={viewMode}
           onViewModeChange={onViewModeChange}
           historicoAno={precoArrHistoricoOficial}
-          historicoMeta={{ mes: [], periodo: [] }}
+          historicoMeta={metaPar(precoArrIndicador)}
           loadingHistorico={loadingPrecoArrHistorico}
           corPrincipal="azul"
         />
@@ -2869,7 +2873,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           viewMode={viewMode}
           onViewModeChange={onViewModeChange}
           historicoAno={custoCabHistoricoOficial}
-          historicoMeta={{ mes: [], periodo: [] }}
+          historicoMeta={metaPar(custoCabIndicador)}
           loadingHistorico={loadingCustoCabHistorico}
           corPrincipal="vermelho"
         />
@@ -2895,7 +2899,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           viewMode={viewMode}
           onViewModeChange={onViewModeChange}
           historicoAno={margemArrHistoricoOficial}
-          historicoMeta={{ mes: [], periodo: [] }}
+          historicoMeta={metaPar(margemArrIndicador)}
           loadingHistorico={loadingMargemArrHistorico}
           corPrincipal={(margemArrIndicador?.valor ?? 0) >= 0 ? 'azul' : 'vermelho'}
         />

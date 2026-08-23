@@ -769,7 +769,7 @@ export function IndicadorHistoricoModal({
                         label={{
                           position: 'top',
                           fontSize: 9,
-                          fill: 'var(--color-text-secondary)',
+                          fill: 'hsl(var(--muted-foreground))',
                           formatter: (v: number) => fmtAxis(v),
                         }}
                       >
@@ -805,7 +805,7 @@ export function IndicadorHistoricoModal({
                         label={{
                           position: 'top',
                           fontSize: 9,
-                          fill: 'var(--color-text-secondary)',
+                          fill: 'hsl(var(--muted-foreground))',
                           formatter: (v: number) => fmtAxis(v),
                         }}
                       >
