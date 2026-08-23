@@ -121,16 +121,7 @@ export function useHistoricoIndicador({
             return;
           }
 
-          // Query 1: fechamento_area_snapshot (range completo)
-          let areaQuery = supabase
-            .from('fechamento_area_snapshot')
-            .select('fazenda_id, ano_mes, area_pecuaria_ha')
-            .eq('cliente_id', clienteId)
-            .gte('ano_mes', `${inicio}-01-01`)
-            .lte('ano_mes', `${anoAtual}-12-31`);
-          if (fazendaId) areaQuery = areaQuery.eq('fazenda_id', fazendaId);
-
-          // Query 2: zoot_mensal_cache (range completo, paginado)
+          // Query 1: zoot_mensal_cache (range completo, paginado)
           const PAGE = 1000;
           const zootRows: any[] = [];
           let zfrom = 0;
@@ -155,13 +146,35 @@ export function useHistoricoIndicador({
             zfrom += PAGE;
           }
 
-          const areaRes = await areaQuery;
-          if (cancelled) return;
-          if (areaRes.error) {
-            setHistorico([]); setHistoricoMeta([]);
-            return;
+          /* Query 2: fechamento_area_snapshot — paginada pelo mesmo motivo da
+             branch padrao. Sao 252 linhas no NJ hoje, entao o corte de 1.000
+             ainda nao morde; a tabela cresce um mes por fazenda por mes, e
+             quem cruzar mais anos ou mais fazendas chega la. Medido em 22/08.
+             Ordenacao total: (ano_mes, fazenda_id) e unica de fato — 740 de
+             740 linhas na tabela inteira. */
+          const areaRows: any[] = [];
+          let afrom = 0;
+          while (true) {
+            let aq = supabase
+              .from('fechamento_area_snapshot')
+              .select('fazenda_id, ano_mes, area_pecuaria_ha')
+              .eq('cliente_id', clienteId)
+              .gte('ano_mes', `${inicio}-01-01`)
+              .lte('ano_mes', `${anoAtual}-12-31`);
+            if (fazendaId) aq = aq.eq('fazenda_id', fazendaId);
+            const { data, error } = await aq
+              .order('ano_mes').order('fazenda_id')
+              .range(afrom, afrom + PAGE - 1);
+            if (cancelled) return;
+            if (error) {
+              setHistorico([]); setHistoricoMeta([]);
+              return;
+            }
+            if (!data || data.length === 0) break;
+            areaRows.push(...data);
+            if (data.length < PAGE) break;
+            afrom += PAGE;
           }
-          const areaRows = areaRes.data ?? [];
 
           // Agrupa: por ano → array 12 com soma area_pecuaria_ha
           const areaPorAnoMes: Record<number, number[]> = {};
@@ -799,19 +812,9 @@ export function useHistoricoIndicador({
         }
 
         // ───── Branch padrão — zoot_mensal_cache (cabecas/pesoMedio/arrobas/gmd) ─────
-        let query = supabase
-          .from('zoot_mensal_cache')
-          .select('ano, mes, cenario, saldo_inicial, saldo_final, peso_total_final, producao_biologica, saidas_externas, gmd')
-          .in('cenario', ['realizado', 'meta'])
-          .gte('ano', inicio)
-          .lte('ano', anoAtual)
-          .lte('mes', mesAtual);
-
-        if (fazendaId) {
-          query = query.eq('fazenda_id', fazendaId);
-        } else if (fazendaIds && fazendaIds.length > 0) {
-          query = query.in('fazenda_id', fazendaIds);
-        } else {
+        // Guarda de escopo antes da paginacao: sem fazenda nenhuma nao ha o que
+        // consultar. Mesma forma das outras branches (:117, :252, :328, :412, :540).
+        if (!fazendaId && !(fazendaIds && fazendaIds.length > 0)) {
           if (!cancelled) {
             setHistorico([]);
             setHistoricoMeta([]);
@@ -820,17 +823,47 @@ export function useHistoricoIndicador({
           return;
         }
 
-        const { data, error } = await query;
-        if (cancelled) return;
-        if (error || !data) {
-          setHistorico([]);
-          setHistoricoMeta([]);
-          return;
+        /* Paginacao na branch padrao: `zoot_mensal_cache` e granular por
+           categoria_id (~8 linhas por fazenda/ano/mes/cenario) e o PostgREST
+           corta em 1.000. NJ Global julho sao 1.703 linhas — o historico mostrava
+           2.467 onde o banco tem 6.858. Sem ORDER BY a vitima do corte era
+           indeterminada, entao os numeros podiam mudar sem deploy.
+           Medido em 22/08.
+           A ordenacao e total: a tabela nao tem PK nem UNIQUE declarada, mas
+           (fazenda_id, ano, mes, cenario, categoria_id) e unica de fato — 9.275
+           de 9.275 linhas. Sem ordem total, paginar repete ou pula linhas. */
+        const PAGE = 1000;
+        const cacheRows: any[] = [];
+        let qfrom = 0;
+        while (true) {
+          let query = supabase
+            .from('zoot_mensal_cache')
+            .select('ano, mes, cenario, saldo_inicial, saldo_final, peso_total_final, producao_biologica, saidas_externas, gmd')
+            .in('cenario', ['realizado', 'meta'])
+            .gte('ano', inicio)
+            .lte('ano', anoAtual)
+            .lte('mes', mesAtual);
+          if (fazendaId) query = query.eq('fazenda_id', fazendaId);
+          else if (fazendaIds && fazendaIds.length > 0) query = query.in('fazenda_id', fazendaIds);
+          const { data, error } = await query
+            .order('ano').order('mes').order('cenario')
+            .order('fazenda_id').order('categoria_id')
+            .range(qfrom, qfrom + PAGE - 1);
+          if (cancelled) return;
+          if (error) {
+            setHistorico([]);
+            setHistoricoMeta([]);
+            return;
+          }
+          if (!data || data.length === 0) break;
+          cacheRows.push(...data);
+          if (data.length < PAGE) break;
+          qfrom += PAGE;
         }
 
         const porAnoR: Record<number, any[]> = {};
         const porAnoM: Record<number, any[]> = {};
-        for (const r of data as any[]) {
+        for (const r of cacheRows as any[]) {
           if (r.cenario === 'meta') {
             (porAnoM[r.ano] ??= []).push(r);
           } else {
