@@ -32,6 +32,9 @@ import { Card, CardContent } from '@/components/ui/card';
 // Histórico inferior usa serieAno mês a mês — a série já vem com o modo
 // (mês ou período) aplicado pelo hook. Nunca recalcular nada aqui.
 
+/** Um ponto do historico multi-ano. */
+type AnoValor = { ano: number; valor: number | null };
+
 interface Props {
   open: boolean;
   onClose: () => void;
@@ -104,8 +107,8 @@ interface Props {
    * Vem de useHistoricoIndicador no V2Home — modal só renderiza.
    * Quando undefined: bloco de histórico fica oculto.
    */
-  historicoAno?: Array<{ ano: number; valor: number | null }>;
-  historicoMeta?: Array<{ ano: number; valor: number | null }>;
+  historicoAno?: { mes: AnoValor[]; periodo: AnoValor[] };
+  historicoMeta?: { mes: AnoValor[]; periodo: AnoValor[] };
   loadingHistorico?: boolean;
   /**
    * Cor principal do indicador (semântica financeira):
@@ -339,20 +342,28 @@ export function IndicadorHistoricoModal({
   /* Ano curto para os dois cabecalhos. NAO reaproveitar `labelPer`: ele pode
      vir sobrescrito pela prop `labelPeriodo` e serve ao bloco de historico. */
   const yy = String(anoAtual).slice(-2);
-  const metaAtualValor = historicoMeta?.find(h => h.ano === anoAtual)?.valor ?? null;
-  const refValAnoAtual = historicoAno?.find(h => h.ano === anoAtual)?.valor ?? null;
-  const barDados = historicoAno != null
-    ? [
-        ...historicoAno.map(h => ({
-          nome: String(h.ano),
-          valor: h.valor,
-          cor: h.ano === anoAtual ? COR_ATUAL.stroke : '#B4B2A9',
-        })),
-        ...(metaAtualValor != null && !isNaN(metaAtualValor)
-          ? [{ nome: `Meta ${anoAtual}`, valor: metaAtualValor, cor: '#F97316' }]
-          : []),
-      ].filter(b => b.valor != null && !isNaN(b.valor as number))
-    : [];
+  /* Uma barra por ano, por LEITURA. A logica e a mesma de antes — barra do
+     ano atual em COR_ATUAL, demais em '#B4B2A9', "Meta {ano}" ao final,
+     filtro de nulos. So passou a receber o historico do modo em vez do
+     historico unico, que chegava ja colapsado pelo viewMode do pai. */
+  const montaBarras = (hist?: AnoValor[], metaHist?: AnoValor[]) => {
+    if (hist == null) return [];
+    const metaAtual = metaHist?.find(h => h.ano === anoAtual)?.valor ?? null;
+    return [
+      ...hist.map(h => ({
+        nome: String(h.ano),
+        valor: h.valor,
+        cor: h.ano === anoAtual ? COR_ATUAL.stroke : '#B4B2A9',
+      })),
+      ...(metaAtual != null && !isNaN(metaAtual)
+        ? [{ nome: `Meta ${anoAtual}`, valor: metaAtual, cor: '#F97316' }]
+        : []),
+    ].filter(b => b.valor != null && !isNaN(b.valor as number));
+  };
+  const barDadosMes     = montaBarras(historicoAno?.mes,     historicoMeta?.mes);
+  const barDadosPeriodo = montaBarras(historicoAno?.periodo, historicoMeta?.periodo);
+  const refAnoAtualMes     = historicoAno?.mes?.find(h => h.ano === anoAtual)?.valor ?? null;
+  const refAnoAtualPeriodo = historicoAno?.periodo?.find(h => h.ano === anoAtual)?.valor ?? null;
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload || !payload.length) return null;
@@ -724,46 +735,93 @@ export function IndicadorHistoricoModal({
           <div className="border-t border-border/30 mx-0 mt-2" />
         )}
 
-        {/* Resumo do período (histórico multi-ano — auxiliar legado de zoot_mensal_cache) */}
+        {/* Resumo do período (histórico multi-ano — auxiliar legado de zoot_mensal_cache).
+            DOIS paineis, um por leitura: o historico chegava colapsado pelo
+            viewMode do pai, entao duplicar o bloco sem duplicar o dado
+            repetiria o defeito do 6.281 que o PR e6706153 corrigiu.
+            Altura 96px inalterada neste PR. */}
         {historicoAno != null && (
           <div style={{ padding: '0 1rem', marginTop: '0.375rem' }}>
-            <div style={{
-              borderTop: '0.5px solid var(--color-border-tertiary)',
-              paddingTop: '0.5rem', marginBottom: '0.25rem'
-            }}>
-              <p className="text-xs font-medium text-muted-foreground" style={{ margin: 0 }}>Histórico do período</p>
-              <p className="text-xs text-muted-foreground/70" style={{ margin: 0 }}>{labelPer}</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <div style={{
+                  borderTop: '0.5px solid var(--color-border-tertiary)',
+                  paddingTop: '0.5rem', marginBottom: '0.25rem'
+                }}>
+                  <p className="text-xs font-medium text-muted-foreground" style={{ margin: 0 }}>Histórico no mês</p>
+                  <p className="text-xs text-muted-foreground/70" style={{ margin: 0 }}>{`${MESES_LABELS[mesAtual - 1]}/${yy}`}</p>
+                </div>
+                {loadingHistorico ? (
+                  <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', padding: '1rem 0' }}>Carregando...</p>
+                ) : barDadosMes.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={96}>
+                    <BarChart data={barDadosMes} margin={{ top: 18, right: 8, left: 8, bottom: 0 }} barCategoryGap="25%">
+                      <XAxis dataKey="nome" tick={{ fontSize: 9, fill: '#888780' }} axisLine={false} tickLine={false} />
+                      <YAxis hide />
+                      {refAnoAtualMes != null && !isNaN(refAnoAtualMes) && (
+                        <ReferenceLine y={refAnoAtualMes} stroke={COR_ATUAL.stroke} strokeDasharray="4 3" strokeWidth={1} opacity={0.5} />
+                      )}
+                      <Bar
+                        dataKey="valor"
+                        radius={[3, 3, 0, 0]}
+                        isAnimationActive={false}
+                        label={{
+                          position: 'top',
+                          fontSize: 9,
+                          fill: 'var(--color-text-secondary)',
+                          formatter: (v: number) => fmtAxis(v),
+                        }}
+                      >
+                        {barDadosMes.map((entry, i) => (
+                          <Cell key={i} fill={entry.cor} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', padding: '0.5rem 0' }}>Sem dados históricos</p>
+                )}
+              </div>
+              <div>
+                <div style={{
+                  borderTop: '0.5px solid var(--color-border-tertiary)',
+                  paddingTop: '0.5rem', marginBottom: '0.25rem'
+                }}>
+                  <p className="text-xs font-medium text-muted-foreground" style={{ margin: 0 }}>Histórico do período</p>
+                  <p className="text-xs text-muted-foreground/70" style={{ margin: 0 }}>{`Jan–${MESES_LABELS[mesAtual - 1]}/${yy}`}</p>
+                </div>
+                {loadingHistorico ? (
+                  <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', padding: '1rem 0' }}>Carregando...</p>
+                ) : barDadosPeriodo.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={96}>
+                    <BarChart data={barDadosPeriodo} margin={{ top: 18, right: 8, left: 8, bottom: 0 }} barCategoryGap="25%">
+                      <XAxis dataKey="nome" tick={{ fontSize: 9, fill: '#888780' }} axisLine={false} tickLine={false} />
+                      <YAxis hide />
+                      {refAnoAtualPeriodo != null && !isNaN(refAnoAtualPeriodo) && (
+                        <ReferenceLine y={refAnoAtualPeriodo} stroke={COR_ATUAL.stroke} strokeDasharray="4 3" strokeWidth={1} opacity={0.5} />
+                      )}
+                      <Bar
+                        dataKey="valor"
+                        radius={[3, 3, 0, 0]}
+                        isAnimationActive={false}
+                        label={{
+                          position: 'top',
+                          fontSize: 9,
+                          fill: 'var(--color-text-secondary)',
+                          formatter: (v: number) => fmtAxis(v),
+                        }}
+                      >
+                        {barDadosPeriodo.map((entry, i) => (
+                          <Cell key={i} fill={entry.cor} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', padding: '0.5rem 0' }}>Sem dados históricos</p>
+                )}
+              </div>
             </div>
-            {loadingHistorico ? (
-              <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', padding: '1rem 0' }}>Carregando...</p>
-            ) : barDados.length > 0 ? (
-              <ResponsiveContainer width="100%" height={96}>
-                <BarChart data={barDados} margin={{ top: 18, right: 8, left: 8, bottom: 0 }} barCategoryGap="25%">
-                  <XAxis dataKey="nome" tick={{ fontSize: 9, fill: '#888780' }} axisLine={false} tickLine={false} />
-                  <YAxis hide />
-                  {refValAnoAtual != null && !isNaN(refValAnoAtual) && (
-                    <ReferenceLine y={refValAnoAtual} stroke={COR_ATUAL.stroke} strokeDasharray="4 3" strokeWidth={1} opacity={0.5} />
-                  )}
-                  <Bar
-                    dataKey="valor"
-                    radius={[3, 3, 0, 0]}
-                    isAnimationActive={false}
-                    label={{
-                      position: 'top',
-                      fontSize: 9,
-                      fill: 'var(--color-text-secondary)',
-                      formatter: (v: number) => fmtAxis(v),
-                    }}
-                  >
-                    {barDados.map((entry, i) => (
-                      <Cell key={i} fill={entry.cor} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', padding: '0.5rem 0' }}>Sem dados históricos</p>
-            )}
           </div>
         )}
 
