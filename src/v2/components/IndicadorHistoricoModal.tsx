@@ -118,6 +118,12 @@ interface Props {
    * NÃO afeta ano anterior (cinza) nem meta (laranja).
    */
   corPrincipal?: 'azul' | 'vermelho';
+  /** Direcao boa do indicador. 'positivoBom' (default): subir e verde.
+   *  'positivoRuim': subir e vermelho — custos e despesas.
+   *  NAO confundir com `corPrincipal`, que e a cor da SERIE. Sao coisas
+   *  diferentes: `margemArr` usa corPrincipal condicional ao valor ser
+   *  negativo, e ainda assim subir e BOM. */
+  polaridade?: 'positivoBom' | 'positivoRuim';
 }
 
 const MESES_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -189,6 +195,7 @@ export function IndicadorHistoricoModal({
   historicoMeta,
   loadingHistorico = false,
   corPrincipal = 'azul',
+  polaridade = 'positivoBom',
 }: Props) {
   // Paleta da linha/valor do ano atual — ano anterior e meta ficam intocados.
   const COR_ATUAL = corPrincipal === 'vermelho'
@@ -405,13 +412,19 @@ export function IndicadorHistoricoModal({
   /* Um cabecalho por grafico: com as duas leituras visiveis ao mesmo
      tempo, um titulo unico teria de mentir sobre uma delas. Os dois trios
      de serie ja chegam pelo `series`. */
-  const linhaDelta = (v: number | null, rotulo: string) =>
-    v == null ? null : (
-      <div className={`text-[9px] font-normal leading-[1.2] flex items-center gap-0.5 ${v >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+  const linhaDelta = (v: number | null, rotulo: string) => {
+    if (v == null) return null;
+    /* A COR diz qualidade; a SETA diz direcao. Em indicador de custo, subir
+       e ruim — mas o numero subiu, e a seta tem de dizer isso. Inverter a
+       seta esconderia o fato. */
+    const bom = polaridade === 'positivoRuim' ? v < 0 : v >= 0;
+    return (
+      <div className={`text-[9px] font-normal leading-[1.2] flex items-center gap-0.5 ${bom ? 'text-green-600' : 'text-red-500'}`}>
         <span>{v >= 0 ? '↗' : '↙'}</span>
         <span>{v >= 0 ? '+' : ''}{v.toFixed(1)}% {rotulo}</span>
       </div>
     );
+  };
 
   /* Padrao do ChartCard V1 (ZootecnicoTab.tsx:664-679): titulo/subtitulo a
      esquerda, numero + data + deltas numa coluna a direita, na mesma linha.
