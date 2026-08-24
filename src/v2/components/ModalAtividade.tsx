@@ -82,6 +82,12 @@ export interface IndicadorAtividade {
   serieMetaPeriodo?: number[];
   valorMes: number | null;
   valorPeriodo: number | null;
+  /* ⚠ INERTES desde o PR-06. Chegam do PC-100 ja COLAPSADOS pelo `viewMode`
+   *  do pai (`cabDeltaMeta` le `cabSerie`, que e mes OU periodo conforme o
+   *  toggle da Home), entao mostravam o MESMO numero nas duas leituras
+   *  enquanto o valor grande trocava. O modal calcula o delta por leitura,
+   *  a partir das series que ja recebe. Mantidos no contrato porque o
+   *  V2Home os passa; NAO voltar a le-los. */
   deltaMes: number | null;
   deltaAno: number | null;
   deltaMeta: number | null;
@@ -117,7 +123,10 @@ const ASSUNTOS: Array<{ id: Assunto; rotulo: string }> = [
 /* Ordem de leitura da grade — decisao de apresentacao, entao mora aqui e
    nao em quem monta o array. Chave desconhecida vai para o fim, em vez de
    sumir: card que desaparece por causa de um rotulo novo e defeito mudo. */
-const ORDEM_CARDS = ['cabecas', 'gmd', 'arrobas', 'uaHa', 'pesoMedio', 'valorRebanho'];
+/* Linha 1 e ESTOQUE — o que a fazenda TEM. Linha 2 e EFICIENCIA e
+   PRODUCAO — o que ela FAZ com o estoque. A grade de tres colunas faz a
+   divisao coincidir com as linhas. */
+const ORDEM_CARDS = ['cabecas', 'pesoMedio', 'valorRebanho', 'uaHa', 'gmd', 'arrobas'];
 
 /* Indicadores cujo REALIZADO do mes le melhor como coluna: fluxo mensal e
    valor discreto, e a curva liga janeiro a fevereiro como se houvesse
@@ -140,6 +149,13 @@ const H_GRAFICO = 190;   // 170 -> 190 no PR-05; o mesmo N nos SEIS cards,
                          // senao volta o desalinhamento do PR-03.
 const H_LEGENDA = 16;   // reservada SEMPRE: some-la em Global mudaria a
                         // altura do card ao trocar de nivel.
+/* Quantas fazendas cabem sob o valor, na aba Por fazenda. O bloco superior
+   tem H_TITULO + H_DELTAS = 88; o valor e o respiro comem ~16, e cada linha
+   de `text-[10px] leading-tight` mede ~12. Sobram 72, ou seis linhas
+   exatas — fico em CINCO e mostro "+N" no lugar da sexta, para nao gastar a
+   ultima folga: estourar aqui empurraria o grafico e traria de volta o
+   desalinhamento que o PR-03 tirou. */
+const MAX_FAZ_CABECALHO = 5;
 
 const fmtN = (v: number | null | undefined, casas: number) =>
   v == null || isNaN(v) ? '—' : v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });
@@ -371,11 +387,22 @@ export function ModalAtividade({
      entra aqui e NAO desenha linha no grafico. */
   const Deltas = ({ ind }: { ind: IndicadorAtividade }) => {
     const sel = marcados(ind.chave);
-    const val = leitura === 'periodo' ? ind.valorPeriodo : ind.valorMes;
+    /* DELTAS POR LEITURA. Os `ind.delta*` que chegam do hook vem colapsados
+       pelo `viewMode` do pai e davam o MESMO numero em "No mes" e "No
+       periodo" — mesma classe do 6.281 duplicado que o e6706153 corrigiu:
+       dois recortes mostrando um numero so.
+       A formula e a do hook, ((curr - ref) / ref) * 100 no ponto `mesAtual`;
+       o que muda e a serie de onde ela le. */
+    const sAtual = serieAtual(ind);
+    const sMeta  = leitura === 'periodo' ? ind.serieMetaPeriodo   : ind.serieMetaMes;
+    const sAnt   = leitura === 'periodo' ? ind.serieAnoAntPeriodo : ind.serieAnoAntMes;
+    const val    = valorDoMes(sAtual, mesAtual);
     const TODOS: Array<{ op: Comparador; rot: string; d: number | null }> = [
-      { op: 'meta',   rot: 'meta',     d: ind.deltaMeta },
-      { op: 'mes',    rot: 'mês',      d: ind.deltaMes  },
-      { op: 'anoAnt', rot: 'ano ant.', d: ind.deltaAno  },
+      { op: 'meta',   rot: 'meta',     d: calcDelta(val, valorDoMes(sMeta, mesAtual)) },
+      /* `mes` compara com o mes ANTERIOR da propria serie — por isso ele nao
+         desenha linha: e um ponto, nao uma serie. */
+      { op: 'mes',    rot: 'mês',      d: calcDelta(val, valorDoMes(sAtual, mesAtual - 1)) },
+      { op: 'anoAnt', rot: 'ano ant.', d: calcDelta(val, valorDoMes(sAnt, mesAtual)) },
       /* `no ano` compara com a foto do inicio do ano — os dois pontos ja
          estao aqui, entao nao ha prop nova nem fonte nova. */
       { op: 'noAno',  rot: 'no ano',   d: calcDelta(val, inicial(ind)) },
@@ -481,8 +508,37 @@ export function ModalAtividade({
               </span>
               <div className="mt-0.5">
                 {escopo === 'global' && leitura !== 'historico' && <Deltas ind={ind} />}
-              </div>
+                {/* Na aba Por fazenda o espaco sob o valor global recebe os
+                    numeros de cada fazenda — a mesma informacao que o E5
+                    tentaria por rotulo no grafico, mas aqui garantidamente
+                    legivel. Ordem de CADASTRO, para a cor e a posicao serem
+                    as mesmas em todo grafico e em toda sessao. */}
+                {escopo === 'fazenda' && leitura !== 'historico' && (ind.porFazenda?.length ?? 0) > 0 && (
+                  <div className="flex flex-col items-end">
+                    {(ind.porFazenda ?? []).slice(0, MAX_FAZ_CABECALHO).map((f, i) => {
+                      const v = (leitura === 'periodo' ? f.periodo : f.mes)[mesAtual - 1];
+                      return (
+                        <span key={f.fazendaId} className="flex items-center gap-1 text-[10px] leading-tight">
+                          <span className="w-1.5 h-1.5 rounded-full shrink-0"
+                                style={{ background: COR_FAZENDA[i % COR_FAZENDA.length] }} />
+                          <span className="text-muted-foreground/70">{f.codigo}</span>
+                          <span className="text-foreground/90 tabular-nums">
+                            {typeof v === 'number' && Number.isFinite(v)
+                              ? fmtValor(v, ind.formatoValor, undefined)
+                              : '—'}
+                          </span>
+                        </span>
+                      );
+                    })}
+                    {(ind.porFazenda?.length ?? 0) > MAX_FAZ_CABECALHO && (
+                      <span className="text-[10px] leading-tight text-muted-foreground/60">
+                        +{(ind.porFazenda?.length ?? 0) - MAX_FAZ_CABECALHO}
+                      </span>
+                    )}
+                  </div>
+                )}
             </div>
+          </div>
           </div>
 
           {/* FAIXA 3 — os chips, logo acima do grafico e a DIREITA: valor,
