@@ -227,6 +227,506 @@ const EmConstrucao = ({ motivo }: { motivo: string }) => (
   </div>
 );
 
+/* ─────────────────────────────────────────────────────────────────────
+   COMPONENTES E HELPERS NO NIVEL DE MODULO — nao mover para dentro.
+
+   Ate o PR-07 `CardIndicador`, `Deltas` e `CustomTooltip` eram declarados
+   DENTRO do corpo de `ModalAtividade`. A cada render eles viravam funcoes
+   NOVAS, e o React reconcilia comparando `element.type` por REFERENCIA:
+   tipo diferente nao e atualizado, e desmontado e remontado. A `key` nao
+   salva — ela so desempata entre irmaos do MESMO tipo.
+
+   Como o estado dos chips mora em `ModalAtividade`, cada clique remontava
+   os SEIS cards inteiros. O miolo rolavel ficava sem filhos por um
+   instante, o `scrollHeight` colapsava, o navegador clampava o `scrollTop`
+   para zero — e a tela saltava para o topo.
+
+   `EmConstrucao` sempre esteve aqui fora e nunca teve o problema; foi o
+   contraste que fechou o diagnostico.
+
+   O preco de morar aqui e receber por PROP o que antes vinha do closure.
+   E o preco certo: componente que se recria a cada render tambem perde o
+   estado interno dos graficos e paga render a toa.
+   ───────────────────────────────────────────────────────────────────── */
+
+/* Uma linha por mes, colunas por serie. `atual` para em `mesAtual`; meta e
+   ano anterior seguem Jan–Dez, que e o padrao dos modais executivos. */
+const serieAtual = (ind: IndicadorAtividade, leitura: Leitura) =>
+  leitura === 'periodo' ? ind.seriePeriodo : ind.serieMes;
+
+/* A FOTO DO INICIO DO ANO. O hook publica o inicial na posicao 0 das
+   series de 13, e SO no realizado de `cabecas` e `pesoMedio`
+   (`comInicial`, usePainelConsultorData:1850). Onde ela e finita, o card
+   ganha a categoria "Ini" e a horizontal; onde nao, segue com doze
+   categorias, sem slot vazio. Um teste serve as duas coisas — e ao chip
+   `no ano`, que compara contra esse mesmo ponto. */
+const inicial = (ind: IndicadorAtividade, leitura: Leitura): number | null => {
+  const s = serieAtual(ind, leitura);
+  return s && s.length >= 13 && Number.isFinite(s[0]) ? s[0] : null;
+};
+
+const dadosGlobal = (ind: IndicadorAtividade, leitura: Leitura, mesAtual: number) => {
+  const sAtual = serieAtual(ind, leitura);
+  const sAnt   = leitura === 'periodo' ? ind.serieAnoAntPeriodo : ind.serieAnoAntMes;
+  const sMeta  = leitura === 'periodo' ? ind.serieMetaPeriodo : ind.serieMetaMes;
+  const meses = MESES.map((m, idx) => ({
+    mes: m,
+    atual:       idx + 1 <= mesAtual ? valorDoMes(sAtual, idx + 1) : null,
+    anoAnterior: valorDoMes(sAnt, idx + 1),
+    meta:        valorDoMes(sMeta, idx + 1),
+  }));
+  const ini = inicial(ind, leitura);
+  if (ini == null) return meses;
+  /* `anoAnterior` e `meta` ficam nulos de proposito: para o ano anterior o
+     inicial seria dezembro de dois anos atras, que nao existe. */
+  return [{ mes: 'Ini', atual: ini, anoAnterior: null, meta: null }, ...meses];
+};
+
+/* Series por fazenda tem 12 posicoes, 0=Jan — leitura por indice DIRETO.
+   O Global entra como coluna propria, tracejado por cima. */
+const dadosFazenda = (ind: IndicadorAtividade, leitura: Leitura, mesAtual: number) => {
+  const campo = leitura === 'periodo' ? 'periodo' : 'mes';
+  const sGlobal = leitura === 'periodo' ? ind.seriePeriodo : ind.serieMes;
+  return MESES.map((m, idx) => {
+    const linha: Record<string, string | number | null> = { mes: m };
+    for (const f of ind.porFazenda ?? []) {
+      const v = f[campo][idx];
+      linha[f.codigo] = typeof v === 'number' && Number.isFinite(v) ? v : null;
+    }
+    linha[CHAVE_GLOBAL] = idx + 1 <= mesAtual ? valorDoMes(sGlobal, idx + 1) : null;
+    return linha;
+  });
+};
+
+/* O nivel 3 SUBSTITUI mes/periodo, entao nao ha leitura selecionada aqui.
+   As barras usam a serie do MES — "quanto foi julho de cada ano" — que e a
+   comparacao que o historico responde. A serie do periodo chega no mesmo
+   objeto e fica sem consumidor: se o quarto botao ("Histórico acumulado")
+   existir um dia, e so ela. */
+const barrasHistorico = (ind: IndicadorAtividade, anoAtual: number) => {
+  const lista = ind.historico?.mes;
+  return (lista ?? [])
+    .filter(p => p.valor != null && !isNaN(p.valor))
+    .map(p => ({ nome: String(p.ano), valor: p.valor as number, atual: p.ano === anoAtual }));
+};
+
+/* Tooltip proprio, COPIADO do `IndicadorHistoricoModal` — nao e um
+   terceiro desenho. Nao foi extraido para lib porque aquele arquivo esta
+   em homologacao (PR-31/32) e mexer nele arriscaria uma regressao que so
+   apareceria ao abrir o outro modal. Unificar tooltip, cores e
+   formatadores num modulo de idioma e a mesma frente ja registrada.
+   Resolve os dois defeitos do default do recharts: o tamanho, e a
+   DUPLICATA — Area e Line da mesma chave entram as duas no payload, e o
+   filtro por chave conhecida deixa passar uma so. */
+const CustomTooltip = ({ active, payload, label, ind, escopo, anoAtual }: {
+  active?: boolean;
+  payload?: Array<{ dataKey?: string | number; value?: number; color?: string }>;
+  label?: string;
+  ind: IndicadorAtividade;
+  escopo: Escopo;
+  anoAtual: number;
+}) => {
+  if (!active || !payload || payload.length === 0) return null;
+
+  type Ln = { rotulo: string; cor: string; valor: number; tracejado: boolean };
+  const linhas: Ln[] = [];
+  const vistos = new Set<string>();
+  const push = (chave: string, rotulo: string, tracejado: boolean) => {
+    if (vistos.has(chave)) return;
+    const e = payload.find(x => String(x.dataKey) === chave);
+    if (!e || e.value == null) return;
+    vistos.add(chave);
+    linhas.push({ rotulo, cor: e.color ?? COR_ATUAL, valor: e.value, tracejado });
+  };
+
+  if (escopo === 'fazenda') {
+    /* Global PRIMEIRO, com o rotulo legivel — `__global` e chave interna e
+       nunca aparece na UI. Depois as fazendas, na ordem das series. */
+    push(CHAVE_GLOBAL, 'Global', true);
+    for (const f of ind.porFazenda ?? []) push(f.codigo, f.codigo, false);
+  } else {
+    /* Ordem 2026 · 2025 · Meta, e rotulo pelo ANO — nunca o nome cru da
+       chave. */
+    push('atual', String(anoAtual), false);
+    push('anoAnterior', String(anoAtual - 1), true);
+    push('meta', `Meta ${anoAtual}`, false);
+  }
+  if (linhas.length === 0) return null;
+
+  return (
+    <div className="rounded-sm border border-border/20 bg-background/60 backdrop-blur-[2px] px-1.5 py-0.5 text-[9px] leading-tight">
+      <p className="font-medium text-foreground/85 text-[9px] mb-0.5">{label}</p>
+      {linhas.map((l, i) => (
+        <div key={i} className="flex items-center gap-1">
+          {l.tracejado
+            ? <div className="w-2 border-t-[2px] border-dashed" style={{ borderColor: l.cor }} />
+            : <div className="w-1 h-1 rounded-full" style={{ background: l.cor }} />}
+          <span className="text-foreground/90">{fmtValor(l.valor, ind.formatoValor, ind.unidade)}</span>
+          <span className="text-muted-foreground/80 text-[8px]">{l.rotulo}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+/* Um delta por comparador MARCADO, empilhados. `mes` compara com o mes
+   anterior da propria serie — e um ponto, nao uma serie, por isso ele
+   entra aqui e NAO desenha linha no grafico. */
+const Deltas = ({ ind, sel, leitura, mesAtual }: {
+  ind: IndicadorAtividade; sel: Comparador[]; leitura: Leitura; mesAtual: number;
+}) => {
+  /* DELTAS POR LEITURA. Os `ind.delta*` que chegam do hook vem colapsados
+     pelo `viewMode` do pai e davam o MESMO numero em "No mes" e "No
+     periodo" — mesma classe do 6.281 duplicado que o e6706153 corrigiu:
+     dois recortes mostrando um numero so.
+     A formula e a do hook, ((curr - ref) / ref) * 100 no ponto `mesAtual`;
+     o que muda e a serie de onde ela le. */
+  const sAtual = serieAtual(ind, leitura);
+  const sMeta  = leitura === 'periodo' ? ind.serieMetaPeriodo   : ind.serieMetaMes;
+  const sAnt   = leitura === 'periodo' ? ind.serieAnoAntPeriodo : ind.serieAnoAntMes;
+  const val    = valorDoMes(sAtual, mesAtual);
+  const TODOS: Array<{ op: Comparador; rot: string; d: number | null }> = [
+    { op: 'meta',   rot: 'meta',     d: calcDelta(val, valorDoMes(sMeta, mesAtual)) },
+    /* `mes` compara com o mes ANTERIOR da propria serie — por isso ele nao
+       desenha linha: e um ponto, nao uma serie. */
+    { op: 'mes',    rot: 'mês',      d: calcDelta(val, valorDoMes(sAtual, mesAtual - 1)) },
+    { op: 'anoAnt', rot: 'ano ant.', d: calcDelta(val, valorDoMes(sAnt, mesAtual)) },
+    /* `no ano` compara com a foto do inicio do ano — os dois pontos ja
+       estao aqui, entao nao ha prop nova nem fonte nova. */
+    { op: 'noAno',  rot: 'no ano',   d: calcDelta(val, inicial(ind, leitura)) },
+  ];
+  const itens = TODOS.filter(x => sel.includes(x.op));
+  if (itens.length === 0) return null;
+  return (
+    <div className="flex flex-col items-end gap-0">
+      {itens.map(({ op, rot, d }) => {
+        if (d == null || isNaN(d)) {
+          return <span key={op} className="text-[9px] text-muted-foreground/60">— {rot}</span>;
+        }
+        const bom = ind.polaridade === 'positivoRuim' ? d < 0 : d > 0;
+        /* A SETA E DIRECAO, NAO QUALIDADE (A14): numero que subiu aponta
+           para cima mesmo quando subir e ruim. Quem carrega o juizo e a
+           COR. */
+        return (
+          <span key={op} className={`text-[9px] font-medium ${bom ? 'text-emerald-600' : 'text-red-600'}`}>
+            {d >= 0 ? '↗' : '↙'} {d > 0 ? '+' : ''}{d.toFixed(1)}%
+            <span className="text-muted-foreground/60 font-normal"> {rot}</span>
+          </span>
+        );
+      })}
+    </div>
+  );
+};
+
+/* O rotulo do valor SO sobre o ponto/barra do mes filtrado — em todos os
+   meses, treze numeros de 9px em ~450px de plotagem se sobrepoem.
+   ⚠ O offset vem do PROPRIO array: prepender "Ini" desloca todos os
+   indices em um, e fixar o numero e a armadilha do A12. */
+const rotuloDoMes = (ind: IndicadorAtividade, leitura: Leitura, mesAtual: number) =>
+  (props: { index?: number; x?: number | string; y?: number | string; width?: number | string; value?: number | string }) => {
+    const off = dadosGlobal(ind, leitura, mesAtual).length > 12 ? 1 : 0;
+    if (props.index !== mesAtual - 1 + off) return null;
+    const v = typeof props.value === 'number' ? props.value : null;
+    if (v == null) return null;
+    /* Na barra o `x` e a borda esquerda e vem `width`; na linha, o proprio
+       ponto. Centralizar exige somar meia largura quando ela existe. */
+    const cx = Number(props.x) + (props.width != null ? Number(props.width) / 2 : 0);
+    return (
+      <text x={cx} y={Number(props.y) - 6} fontSize={9}
+            fill="hsl(var(--foreground))" textAnchor="middle">
+        {fmtValor(v, ind.formatoValor, ind.unidade)}
+      </text>
+    );
+  };
+
+const CardIndicador = ({
+  ind, escopo, leitura, mesAtual, anoAtual, rotuloMes, rotuloPer, sel, alterna,
+}: {
+  ind: IndicadorAtividade;
+  escopo: Escopo;
+  leitura: Leitura;
+  mesAtual: number;
+  anoAtual: number;
+  rotuloMes: string;
+  rotuloPer: string;
+  sel: Comparador[];
+  alterna: (chave: string, op: Comparador) => void;
+}) => {
+  const titulo = leitura === 'periodo'
+    ? (ind.tituloPeriodo ?? ind.titulo)
+    : (ind.tituloMes ?? ind.titulo);
+  /* No historico o recorte de cada barra continua sendo o do nivel
+     anterior — mas o nivel 3 substitui mes/periodo, entao o subtitulo
+     declara a janela de anos, nao o mes. */
+  const sub = leitura === 'historico'
+    ? `${anoAtual - 5}–${anoAtual}`
+    : leitura === 'periodo' ? rotuloPer : rotuloMes;
+  const valor = leitura === 'periodo' ? ind.valorPeriodo : ind.valorMes;
+  const colunaRealizado =
+    escopo === 'global' && leitura === 'mes' && COLUNA_NO_MES.includes(ind.chave);
+  /* Chip DESABILITADO, nunca invisivel, quando a serie nao existe: sumir
+     com o controle esconde a ausencia; desabilitar declara. O motivo vai
+     no `title`. `mes` nunca desabilita — o mes anterior sai da propria
+     serie do realizado. */
+  const temSerie = (op: Comparador) =>
+    op === 'mes'   ? true
+    : op === 'noAno' ? inicial(ind, leitura) != null
+    : op === 'meta'
+      ? !!(leitura === 'periodo' ? ind.serieMetaPeriodo : ind.serieMetaMes)
+      : !!(leitura === 'periodo' ? ind.serieAnoAntPeriodo : ind.serieAnoAntMes);
+  const mostra = (op: Comparador) => sel.includes(op) && temSerie(op);
+
+  return (
+    <Card>
+      <CardContent className="p-3">
+        {/* BLOCO SUPERIOR — duas COLUNAS, nao duas faixas empilhadas.
+            O vao que aparecia entre o valor e o primeiro delta nascia aqui:
+            o valor era irmao do titulo numa faixa de altura fixa
+            dimensionada pelo pior caso do TITULO (duas linhas), e ancorado
+            no topo. Com titulo de uma linha sobravam ~30px MORTOS abaixo do
+            valor, e os deltas so comecavam depois deles.
+            Agora valor e deltas sao a MESMA coluna: os deltas encostam no
+            valor por construcao e o branco reservado sobra no FIM, onde nao
+            se ve.
+            A altura total continua FIXA — H_TITULO + H_DELTAS — e igual nos
+            seis cards. Foi o que o PR-03 estabeleceu e o que impede o pulo
+            ao marcar chip; se ela passar a depender do conteudo, e
+            regressao, nao ajuste. */}
+        <div className="flex items-start justify-between gap-2 overflow-hidden"
+             style={{ height: H_TITULO + H_DELTAS }}>
+          {/* Coluna esquerda: o titulo agora tem a largura inteira dela —
+              ate duas linhas, sem truncar, em `text-xs`. */}
+          <div className="min-w-0">
+            <p className="text-xs font-bold text-foreground leading-tight">{titulo}</p>
+            <p className="text-[10px] text-muted-foreground/70 leading-snug">{sub}</p>
+          </div>
+          {/* Coluna direita: valor no topo, deltas colados abaixo. */}
+          <div className="flex flex-col items-end justify-start shrink-0">
+            <span className="text-sm font-bold text-foreground leading-none tabular-nums">
+              {fmtValor(valor, ind.formatoValor, ind.unidade)}
+            </span>
+            <div className="mt-0.5">
+              {escopo === 'global' && leitura !== 'historico' && <Deltas ind={ind} sel={sel} leitura={leitura} mesAtual={mesAtual} />}
+              {/* Na aba Por fazenda o espaco sob o valor global recebe os
+                  numeros de cada fazenda — a mesma informacao que o E5
+                  tentaria por rotulo no grafico, mas aqui garantidamente
+                  legivel. Ordem de CADASTRO, para a cor e a posicao serem
+                  as mesmas em todo grafico e em toda sessao. */}
+              {escopo === 'fazenda' && leitura !== 'historico' && (ind.porFazenda?.length ?? 0) > 0 && (
+                <div className="flex flex-col items-end">
+                  {(ind.porFazenda ?? []).slice(0, MAX_FAZ_CABECALHO).map((f, i) => {
+                    const v = (leitura === 'periodo' ? f.periodo : f.mes)[mesAtual - 1];
+                    return (
+                      <span key={f.fazendaId} className="flex items-center gap-1 text-[10px] leading-tight">
+                        <span className="w-1.5 h-1.5 rounded-full shrink-0"
+                              style={{ background: COR_FAZENDA[i % COR_FAZENDA.length] }} />
+                        <span className="text-muted-foreground/70">{f.codigo}</span>
+                        <span className="text-foreground/90 tabular-nums">
+                          {typeof v === 'number' && Number.isFinite(v)
+                            ? fmtValor(v, ind.formatoValor, undefined)
+                            : '—'}
+                        </span>
+                      </span>
+                    );
+                  })}
+                  {(ind.porFazenda?.length ?? 0) > MAX_FAZ_CABECALHO && (
+                    <span className="text-[10px] leading-tight text-muted-foreground/60">
+                      +{(ind.porFazenda?.length ?? 0) - MAX_FAZ_CABECALHO}
+                    </span>
+                  )}
+                </div>
+              )}
+          </div>
+        </div>
+        </div>
+
+        {/* FAIXA 3 — os chips, logo acima do grafico e a DIREITA: valor,
+            deltas e chips sao a mesma coluna de leitura — o numero, a
+            comparacao, e o controle da comparacao. Alinhados a direita o
+            olho desce uma coluna so; a esquerda ele volta atras.
+            SO no Global: na aba Por fazenda as series sao LUGARES, nao
+            cenarios, e comparar com meta ali seria outra pergunta. */}
+        <div className="flex items-center justify-end overflow-hidden" style={{ height: H_CHIPS }}>
+          {escopo === 'global' && leitura !== 'historico' && (
+                <div className="flex gap-0.5">
+                  {(['meta', 'mes', 'anoAnt', 'noAno'] as Comparador[]).map(op => {
+                    const ok = temSerie(op);
+                    const on = sel.includes(op);
+                    return (
+                      <button
+                        key={op}
+                        disabled={!ok}
+                        title={ok
+                          ? undefined
+                          : op === 'meta'  ? 'sem série de meta para este indicador'
+                          : op === 'noAno' ? 'sem foto do início do ano para este indicador'
+                                           : 'sem série de ano anterior para este indicador'}
+                        onClick={() => alterna(ind.chave, op)}
+                        className={`px-1 h-4 rounded text-[8px] border ${
+                          !ok
+                            ? 'bg-transparent text-muted-foreground/30 border-transparent line-through cursor-not-allowed'
+                            : on
+                              ? 'bg-muted text-foreground border-border'
+                              : 'bg-transparent text-muted-foreground/60 border-transparent hover:bg-muted/40'
+                        }`}
+                      >
+                        {op === 'meta' ? 'meta' : op === 'mes' ? 'mês'
+                          : op === 'anoAnt' ? 'ano ant.' : 'no ano'}
+                      </button>
+                    );
+                  })}
+                </div>
+          )}
+        </div>
+
+        {escopo === 'fazenda' && !ind.porFazenda ? (
+          <EmConstrucao motivo="sem série por fazenda" />
+        ) : leitura === 'historico' && !ind.historico ? (
+          <EmConstrucao motivo="sem histórico multi-ano" />
+        ) : leitura === 'historico' && escopo === 'fazenda' ? (
+          <EmConstrucao motivo="histórico por fazenda ainda não existe" />
+        ) : (
+          <>
+            {/* Altura FIXA, nao `flex-1`: e o `flex-1` que faz o grafico
+                ceder e crescer conforme o irmao, e era ele que movia a base
+                dos cards. Com N igual nos seis, a grade alinha em cima
+                (faixas fixas) e embaixo (grafico fixo). */}
+            <div style={{ height: H_GRAFICO }}>
+            <ResponsiveContainer width="100%" height="100%">
+              {leitura === 'historico' ? (
+                <BarChart data={barrasHistorico(ind, anoAtual)}
+                          margin={{ top: 16, right: 8, left: 8, bottom: 0 }} barCategoryGap="14%">
+                  <XAxis dataKey="nome" tick={{ fontSize: 8, fill: '#888780' }} axisLine={false} tickLine={false} />
+                  <YAxis hide />
+                  <Bar dataKey="valor" radius={[3, 3, 0, 0]} isAnimationActive={false}>
+                    {barrasHistorico(ind, anoAtual).map((e, i) => (
+                      <Cell key={i} fill={e.atual ? COR_ATUAL : BAR_ANO_ANT} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              ) : escopo === 'fazenda' ? (
+                <ComposedChart data={dadosFazenda(ind, leitura, mesAtual)} margin={{ top: 6, right: 8, left: 4, bottom: 2 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted-foreground) / 0.15)" />
+                  <XAxis dataKey="mes" tick={{ fontSize: 8, fill: '#888780' }} stroke="hsl(var(--muted-foreground) / 0.22)" />
+                  <YAxis tick={{ fontSize: 8, fill: '#888780' }} width={46}
+                         tickFormatter={v => fmtEixo(v, ind.formatoValor)}
+                         stroke="hsl(var(--muted-foreground) / 0.22)" />
+                  <Tooltip content={<CustomTooltip ind={ind} escopo={escopo} anoAtual={anoAtual} />} />
+                  {/* Por `map`, NUNCA em fragmento: o recharts inspeciona
+                      filhos por tipo e nao acha o que estiver embrulhado. */}
+                  {(ind.porFazenda ?? []).map((f, i) => (
+                    <Line key={f.fazendaId} type="monotone" dataKey={f.codigo}
+                          stroke={COR_FAZENDA[i % COR_FAZENDA.length]} strokeWidth={2}
+                          dot={DOT_V1} connectNulls={false} isAnimationActive={false} />
+                  ))}
+                  {/* Global DEPOIS, para ficar por cima. Tracejado porque e
+                      referencia, nao mais um lugar. */}
+                  <Line type="monotone" dataKey={CHAVE_GLOBAL} stroke={COR_GLOBAL}
+                        strokeWidth={2.5} strokeDasharray="4 2" dot={DOT_V1}
+                        connectNulls={false} isAnimationActive={false} />
+                </ComposedChart>
+              ) : (
+                <ComposedChart data={dadosGlobal(ind, leitura, mesAtual)} margin={{ top: 14, right: 8, left: 4, bottom: 2 }}
+                               barCategoryGap="18%">
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted-foreground) / 0.15)" />
+                  {/* A horizontal na altura do inicial: da para ler de
+                      relance se o ano esta acima ou abaixo de onde comecou. */}
+                  {inicial(ind, leitura) != null && (
+                    <ReferenceLine y={inicial(ind, leitura) as number} stroke={COR_ATUAL}
+                                   strokeDasharray="4 3" strokeWidth={1} opacity={0.5} />
+                  )}
+                  <XAxis dataKey="mes" tick={{ fontSize: 8, fill: '#888780' }} stroke="hsl(var(--muted-foreground) / 0.22)" />
+                  <YAxis tick={{ fontSize: 8, fill: '#888780' }} width={46}
+                         tickFormatter={v => fmtEixo(v, ind.formatoValor)}
+                         stroke="hsl(var(--muted-foreground) / 0.22)" />
+                  <Tooltip content={<CustomTooltip ind={ind} escopo={escopo} anoAtual={anoAtual} />} />
+                  {/* Os chips governam O GRAFICO, nao so o numero do delta.
+                      `mes` NAO aparece aqui de proposito: o mes anterior e um
+                      PONTO da propria serie do realizado, nao uma serie —
+                      ele move o delta e nao desenha linha. */}
+                  {mostra('anoAnt') && (
+                    <Area type="monotone" dataKey="anoAnterior" stroke="none"
+                          fill={COR_ANO_ANT} fillOpacity={0.12} isAnimationActive={false} />
+                  )}
+                  {mostra('anoAnt') && (
+                    <Line type="monotone" dataKey="anoAnterior" stroke={COR_ANO_ANT}
+                          strokeWidth={1.5} strokeDasharray="4 2" dot={DOT_V1}
+                          connectNulls={false} isAnimationActive={false} />
+                  )}
+                  {mostra('meta') && (
+                    <Line type="monotone" dataKey="meta" stroke={COR_META}
+                          strokeWidth={2} dot={DOT_META_V1} connectNulls={false}
+                          isAnimationActive={false} />
+                  )}
+                  {/* O REALIZADO nunca e condicional: ele e o assunto do
+                      card. Com zero chips marcados sobra so ele, e isso e
+                      leitura legitima.
+                      Em `arrobas` e `gmd` ele vira BARRA no nivel do mes —
+                      meta e ano anterior seguem linha, por cima.
+                      Condicionais INDIVIDUAIS, nunca um fragmento: o
+                      recharts inspeciona filhos por tipo e nao acha <Bar>
+                      embrulhado. */}
+                  {colunaRealizado && (
+                    <Bar dataKey="atual" fill={COR_ATUAL} radius={[2, 2, 0, 0]}
+                         isAnimationActive={false}>
+                      {/* Com o realizado em barra o rotulo do mes filtrado
+                          muda de ancora: a LabelList vive na <Bar>, nao na
+                          <Line>, senao ela apontaria para uma serie que nao
+                          esta desenhada. */}
+                      <LabelList dataKey="atual" content={rotuloDoMes(ind, leitura, mesAtual)} />
+                    </Bar>
+                  )}
+                  {!colunaRealizado && (
+                    <Area type="monotone" dataKey="atual" stroke="none"
+                          fill={COR_ATUAL} fillOpacity={0.10} isAnimationActive={false} />
+                  )}
+                  {!colunaRealizado && (
+                  <Line type="monotone" dataKey="atual" stroke={COR_ATUAL}
+                        strokeWidth={2.5} dot={DOT_V1} connectNulls={false} isAnimationActive={false}>
+                    {/* E11 — o valor SO sobre o ponto do mes filtrado. Em
+                        todos os meses poluiria: treze rotulos de 9px em
+                        ~450px de plotagem se sobrepoem.
+                        ⚠ O offset vem do PROPRIO array. Prepender "Ini"
+                        desloca todos os indices em um, e fixar o numero e a
+                        armadilha do A12 — ja cobrou uma vez. */}
+                    <LabelList dataKey="atual" content={rotuloDoMes(ind, leitura, mesAtual)} />
+                  </Line>
+                  )}
+                </ComposedChart>
+              )}
+            </ResponsiveContainer>
+            </div>
+            {/* Legenda com AMOSTRA: sem o tracinho o codigo nao liga a
+                linha nenhuma. O piso do grafico cai de 150 para 132 quando
+                ela aparece, entao o card NAO cresce — a legenda entra no
+                espaco que ja existia. */}
+            {/* Faixa da legenda RESERVADA sempre: escondida em Global ela
+                encolheria o card ao trocar de nivel, que e o mesmo pulo que
+                este PR esta tirando. */}
+            <div className="overflow-hidden" style={{ height: H_LEGENDA }}>
+            {escopo === 'fazenda' && leitura !== 'historico' && (
+              <div className="flex justify-center gap-2.5 px-0 mt-0.5 flex-wrap">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-3 border-t-[2px] border-dashed" style={{ borderColor: COR_GLOBAL }} />
+                  <span className="text-[9px] text-muted-foreground">Global</span>
+                </div>
+                {(ind.porFazenda ?? []).map((f, i) => (
+                  <div key={f.fazendaId} className="flex items-center gap-1.5">
+                    <div className="w-3 h-[2px] rounded"
+                         style={{ background: COR_FAZENDA[i % COR_FAZENDA.length] }} />
+                    <span className="text-[9px] text-muted-foreground">{f.codigo}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
+
 export function ModalAtividade({
   open, onClose, mesAtual, anoAtual, clienteNome, indicadores, codigosFazendas,
   loadingHistorico,
@@ -264,469 +764,6 @@ export function ModalAtividade({
   const rotuloMes = `${MESES[mesAtual - 1]}/${yy}`;
   const rotuloPer = `Jan–${MESES[mesAtual - 1]}/${yy}`;
 
-  /* Uma linha por mes, colunas por serie. `atual` para em `mesAtual`; meta e
-     ano anterior seguem Jan–Dez, que e o padrao dos modais executivos. */
-  const serieAtual = (ind: IndicadorAtividade) =>
-    leitura === 'periodo' ? ind.seriePeriodo : ind.serieMes;
-
-  /* A FOTO DO INICIO DO ANO. O hook publica o inicial na posicao 0 das
-     series de 13, e SO no realizado de `cabecas` e `pesoMedio`
-     (`comInicial`, usePainelConsultorData:1850). Onde ela e finita, o card
-     ganha a categoria "Ini" e a horizontal; onde nao, segue com doze
-     categorias, sem slot vazio. Um teste serve as duas coisas — e ao chip
-     `no ano`, que compara contra esse mesmo ponto. */
-  const inicial = (ind: IndicadorAtividade): number | null => {
-    const s = serieAtual(ind);
-    return s && s.length >= 13 && Number.isFinite(s[0]) ? s[0] : null;
-  };
-
-  const dadosGlobal = (ind: IndicadorAtividade) => {
-    const sAtual = serieAtual(ind);
-    const sAnt   = leitura === 'periodo' ? ind.serieAnoAntPeriodo : ind.serieAnoAntMes;
-    const sMeta  = leitura === 'periodo' ? ind.serieMetaPeriodo : ind.serieMetaMes;
-    const meses = MESES.map((m, idx) => ({
-      mes: m,
-      atual:       idx + 1 <= mesAtual ? valorDoMes(sAtual, idx + 1) : null,
-      anoAnterior: valorDoMes(sAnt, idx + 1),
-      meta:        valorDoMes(sMeta, idx + 1),
-    }));
-    const ini = inicial(ind);
-    if (ini == null) return meses;
-    /* `anoAnterior` e `meta` ficam nulos de proposito: para o ano anterior o
-       inicial seria dezembro de dois anos atras, que nao existe. */
-    return [{ mes: 'Ini', atual: ini, anoAnterior: null, meta: null }, ...meses];
-  };
-
-  /* Series por fazenda tem 12 posicoes, 0=Jan — leitura por indice DIRETO.
-     O Global entra como coluna propria, tracejado por cima. */
-  const dadosFazenda = (ind: IndicadorAtividade) => {
-    const campo = leitura === 'periodo' ? 'periodo' : 'mes';
-    const sGlobal = leitura === 'periodo' ? ind.seriePeriodo : ind.serieMes;
-    return MESES.map((m, idx) => {
-      const linha: Record<string, string | number | null> = { mes: m };
-      for (const f of ind.porFazenda ?? []) {
-        const v = f[campo][idx];
-        linha[f.codigo] = typeof v === 'number' && Number.isFinite(v) ? v : null;
-      }
-      linha[CHAVE_GLOBAL] = idx + 1 <= mesAtual ? valorDoMes(sGlobal, idx + 1) : null;
-      return linha;
-    });
-  };
-
-  /* O nivel 3 SUBSTITUI mes/periodo, entao nao ha leitura selecionada aqui.
-     As barras usam a serie do MES — "quanto foi julho de cada ano" — que e a
-     comparacao que o historico responde. A serie do periodo chega no mesmo
-     objeto e fica sem consumidor: se o quarto botao ("Histórico acumulado")
-     existir um dia, e so ela. */
-  const barrasHistorico = (ind: IndicadorAtividade) => {
-    const lista = ind.historico?.mes;
-    return (lista ?? [])
-      .filter(p => p.valor != null && !isNaN(p.valor))
-      .map(p => ({ nome: String(p.ano), valor: p.valor as number, atual: p.ano === anoAtual }));
-  };
-
-  /* Tooltip proprio, COPIADO do `IndicadorHistoricoModal` — nao e um
-     terceiro desenho. Nao foi extraido para lib porque aquele arquivo esta
-     em homologacao (PR-31/32) e mexer nele arriscaria uma regressao que so
-     apareceria ao abrir o outro modal. Unificar tooltip, cores e
-     formatadores num modulo de idioma e a mesma frente ja registrada.
-     Resolve os dois defeitos do default do recharts: o tamanho, e a
-     DUPLICATA — Area e Line da mesma chave entram as duas no payload, e o
-     filtro por chave conhecida deixa passar uma so. */
-  const CustomTooltip = ({ active, payload, label, ind }: {
-    active?: boolean;
-    payload?: Array<{ dataKey?: string | number; value?: number; color?: string }>;
-    label?: string;
-    ind: IndicadorAtividade;
-  }) => {
-    if (!active || !payload || payload.length === 0) return null;
-
-    type Ln = { rotulo: string; cor: string; valor: number; tracejado: boolean };
-    const linhas: Ln[] = [];
-    const vistos = new Set<string>();
-    const push = (chave: string, rotulo: string, tracejado: boolean) => {
-      if (vistos.has(chave)) return;
-      const e = payload.find(x => String(x.dataKey) === chave);
-      if (!e || e.value == null) return;
-      vistos.add(chave);
-      linhas.push({ rotulo, cor: e.color ?? COR_ATUAL, valor: e.value, tracejado });
-    };
-
-    if (escopo === 'fazenda') {
-      /* Global PRIMEIRO, com o rotulo legivel — `__global` e chave interna e
-         nunca aparece na UI. Depois as fazendas, na ordem das series. */
-      push(CHAVE_GLOBAL, 'Global', true);
-      for (const f of ind.porFazenda ?? []) push(f.codigo, f.codigo, false);
-    } else {
-      /* Ordem 2026 · 2025 · Meta, e rotulo pelo ANO — nunca o nome cru da
-         chave. */
-      push('atual', String(anoAtual), false);
-      push('anoAnterior', String(anoAtual - 1), true);
-      push('meta', `Meta ${anoAtual}`, false);
-    }
-    if (linhas.length === 0) return null;
-
-    return (
-      <div className="rounded-sm border border-border/20 bg-background/60 backdrop-blur-[2px] px-1.5 py-0.5 text-[9px] leading-tight">
-        <p className="font-medium text-foreground/85 text-[9px] mb-0.5">{label}</p>
-        {linhas.map((l, i) => (
-          <div key={i} className="flex items-center gap-1">
-            {l.tracejado
-              ? <div className="w-2 border-t-[2px] border-dashed" style={{ borderColor: l.cor }} />
-              : <div className="w-1 h-1 rounded-full" style={{ background: l.cor }} />}
-            <span className="text-foreground/90">{fmtValor(l.valor, ind.formatoValor, ind.unidade)}</span>
-            <span className="text-muted-foreground/80 text-[8px]">{l.rotulo}</span>
-          </div>
-        ))}
-      </div>
-    );
-  };
-
-  /* Um delta por comparador MARCADO, empilhados. `mes` compara com o mes
-     anterior da propria serie — e um ponto, nao uma serie, por isso ele
-     entra aqui e NAO desenha linha no grafico. */
-  const Deltas = ({ ind }: { ind: IndicadorAtividade }) => {
-    const sel = marcados(ind.chave);
-    /* DELTAS POR LEITURA. Os `ind.delta*` que chegam do hook vem colapsados
-       pelo `viewMode` do pai e davam o MESMO numero em "No mes" e "No
-       periodo" — mesma classe do 6.281 duplicado que o e6706153 corrigiu:
-       dois recortes mostrando um numero so.
-       A formula e a do hook, ((curr - ref) / ref) * 100 no ponto `mesAtual`;
-       o que muda e a serie de onde ela le. */
-    const sAtual = serieAtual(ind);
-    const sMeta  = leitura === 'periodo' ? ind.serieMetaPeriodo   : ind.serieMetaMes;
-    const sAnt   = leitura === 'periodo' ? ind.serieAnoAntPeriodo : ind.serieAnoAntMes;
-    const val    = valorDoMes(sAtual, mesAtual);
-    const TODOS: Array<{ op: Comparador; rot: string; d: number | null }> = [
-      { op: 'meta',   rot: 'meta',     d: calcDelta(val, valorDoMes(sMeta, mesAtual)) },
-      /* `mes` compara com o mes ANTERIOR da propria serie — por isso ele nao
-         desenha linha: e um ponto, nao uma serie. */
-      { op: 'mes',    rot: 'mês',      d: calcDelta(val, valorDoMes(sAtual, mesAtual - 1)) },
-      { op: 'anoAnt', rot: 'ano ant.', d: calcDelta(val, valorDoMes(sAnt, mesAtual)) },
-      /* `no ano` compara com a foto do inicio do ano — os dois pontos ja
-         estao aqui, entao nao ha prop nova nem fonte nova. */
-      { op: 'noAno',  rot: 'no ano',   d: calcDelta(val, inicial(ind)) },
-    ];
-    const itens = TODOS.filter(x => sel.includes(x.op));
-    if (itens.length === 0) return null;
-    return (
-      <div className="flex flex-col items-end gap-0">
-        {itens.map(({ op, rot, d }) => {
-          if (d == null || isNaN(d)) {
-            return <span key={op} className="text-[9px] text-muted-foreground/60">— {rot}</span>;
-          }
-          const bom = ind.polaridade === 'positivoRuim' ? d < 0 : d > 0;
-          /* A SETA E DIRECAO, NAO QUALIDADE (A14): numero que subiu aponta
-             para cima mesmo quando subir e ruim. Quem carrega o juizo e a
-             COR. */
-          return (
-            <span key={op} className={`text-[9px] font-medium ${bom ? 'text-emerald-600' : 'text-red-600'}`}>
-              {d >= 0 ? '↗' : '↙'} {d > 0 ? '+' : ''}{d.toFixed(1)}%
-              <span className="text-muted-foreground/60 font-normal"> {rot}</span>
-            </span>
-          );
-        })}
-      </div>
-    );
-  };
-
-  /* O rotulo do valor SO sobre o ponto/barra do mes filtrado — em todos os
-     meses, treze numeros de 9px em ~450px de plotagem se sobrepoem.
-     ⚠ O offset vem do PROPRIO array: prepender "Ini" desloca todos os
-     indices em um, e fixar o numero e a armadilha do A12. */
-  const rotuloDoMes = (ind: IndicadorAtividade) =>
-    (props: { index?: number; x?: number | string; y?: number | string; width?: number | string; value?: number | string }) => {
-      const off = dadosGlobal(ind).length > 12 ? 1 : 0;
-      if (props.index !== mesAtual - 1 + off) return null;
-      const v = typeof props.value === 'number' ? props.value : null;
-      if (v == null) return null;
-      /* Na barra o `x` e a borda esquerda e vem `width`; na linha, o proprio
-         ponto. Centralizar exige somar meia largura quando ela existe. */
-      const cx = Number(props.x) + (props.width != null ? Number(props.width) / 2 : 0);
-      return (
-        <text x={cx} y={Number(props.y) - 6} fontSize={9}
-              fill="hsl(var(--foreground))" textAnchor="middle">
-          {fmtValor(v, ind.formatoValor, ind.unidade)}
-        </text>
-      );
-    };
-
-  const CardIndicador = ({ ind }: { ind: IndicadorAtividade }) => {
-    const titulo = leitura === 'periodo'
-      ? (ind.tituloPeriodo ?? ind.titulo)
-      : (ind.tituloMes ?? ind.titulo);
-    /* No historico o recorte de cada barra continua sendo o do nivel
-       anterior — mas o nivel 3 substitui mes/periodo, entao o subtitulo
-       declara a janela de anos, nao o mes. */
-    const sub = leitura === 'historico'
-      ? `${anoAtual - 5}–${anoAtual}`
-      : leitura === 'periodo' ? rotuloPer : rotuloMes;
-    const valor = leitura === 'periodo' ? ind.valorPeriodo : ind.valorMes;
-    const sel = marcados(ind.chave);
-    const colunaRealizado =
-      escopo === 'global' && leitura === 'mes' && COLUNA_NO_MES.includes(ind.chave);
-    /* Chip DESABILITADO, nunca invisivel, quando a serie nao existe: sumir
-       com o controle esconde a ausencia; desabilitar declara. O motivo vai
-       no `title`. `mes` nunca desabilita — o mes anterior sai da propria
-       serie do realizado. */
-    const temSerie = (op: Comparador) =>
-      op === 'mes'   ? true
-      : op === 'noAno' ? inicial(ind) != null
-      : op === 'meta'
-        ? !!(leitura === 'periodo' ? ind.serieMetaPeriodo : ind.serieMetaMes)
-        : !!(leitura === 'periodo' ? ind.serieAnoAntPeriodo : ind.serieAnoAntMes);
-    const mostra = (op: Comparador) => sel.includes(op) && temSerie(op);
-
-    return (
-      <Card>
-        <CardContent className="p-3">
-          {/* BLOCO SUPERIOR — duas COLUNAS, nao duas faixas empilhadas.
-              O vao que aparecia entre o valor e o primeiro delta nascia aqui:
-              o valor era irmao do titulo numa faixa de altura fixa
-              dimensionada pelo pior caso do TITULO (duas linhas), e ancorado
-              no topo. Com titulo de uma linha sobravam ~30px MORTOS abaixo do
-              valor, e os deltas so comecavam depois deles.
-              Agora valor e deltas sao a MESMA coluna: os deltas encostam no
-              valor por construcao e o branco reservado sobra no FIM, onde nao
-              se ve.
-              A altura total continua FIXA — H_TITULO + H_DELTAS — e igual nos
-              seis cards. Foi o que o PR-03 estabeleceu e o que impede o pulo
-              ao marcar chip; se ela passar a depender do conteudo, e
-              regressao, nao ajuste. */}
-          <div className="flex items-start justify-between gap-2 overflow-hidden"
-               style={{ height: H_TITULO + H_DELTAS }}>
-            {/* Coluna esquerda: o titulo agora tem a largura inteira dela —
-                ate duas linhas, sem truncar, em `text-xs`. */}
-            <div className="min-w-0">
-              <p className="text-xs font-bold text-foreground leading-tight">{titulo}</p>
-              <p className="text-[10px] text-muted-foreground/70 leading-snug">{sub}</p>
-            </div>
-            {/* Coluna direita: valor no topo, deltas colados abaixo. */}
-            <div className="flex flex-col items-end justify-start shrink-0">
-              <span className="text-sm font-bold text-foreground leading-none tabular-nums">
-                {fmtValor(valor, ind.formatoValor, ind.unidade)}
-              </span>
-              <div className="mt-0.5">
-                {escopo === 'global' && leitura !== 'historico' && <Deltas ind={ind} />}
-                {/* Na aba Por fazenda o espaco sob o valor global recebe os
-                    numeros de cada fazenda — a mesma informacao que o E5
-                    tentaria por rotulo no grafico, mas aqui garantidamente
-                    legivel. Ordem de CADASTRO, para a cor e a posicao serem
-                    as mesmas em todo grafico e em toda sessao. */}
-                {escopo === 'fazenda' && leitura !== 'historico' && (ind.porFazenda?.length ?? 0) > 0 && (
-                  <div className="flex flex-col items-end">
-                    {(ind.porFazenda ?? []).slice(0, MAX_FAZ_CABECALHO).map((f, i) => {
-                      const v = (leitura === 'periodo' ? f.periodo : f.mes)[mesAtual - 1];
-                      return (
-                        <span key={f.fazendaId} className="flex items-center gap-1 text-[10px] leading-tight">
-                          <span className="w-1.5 h-1.5 rounded-full shrink-0"
-                                style={{ background: COR_FAZENDA[i % COR_FAZENDA.length] }} />
-                          <span className="text-muted-foreground/70">{f.codigo}</span>
-                          <span className="text-foreground/90 tabular-nums">
-                            {typeof v === 'number' && Number.isFinite(v)
-                              ? fmtValor(v, ind.formatoValor, undefined)
-                              : '—'}
-                          </span>
-                        </span>
-                      );
-                    })}
-                    {(ind.porFazenda?.length ?? 0) > MAX_FAZ_CABECALHO && (
-                      <span className="text-[10px] leading-tight text-muted-foreground/60">
-                        +{(ind.porFazenda?.length ?? 0) - MAX_FAZ_CABECALHO}
-                      </span>
-                    )}
-                  </div>
-                )}
-            </div>
-          </div>
-          </div>
-
-          {/* FAIXA 3 — os chips, logo acima do grafico e a DIREITA: valor,
-              deltas e chips sao a mesma coluna de leitura — o numero, a
-              comparacao, e o controle da comparacao. Alinhados a direita o
-              olho desce uma coluna so; a esquerda ele volta atras.
-              SO no Global: na aba Por fazenda as series sao LUGARES, nao
-              cenarios, e comparar com meta ali seria outra pergunta. */}
-          <div className="flex items-center justify-end overflow-hidden" style={{ height: H_CHIPS }}>
-            {escopo === 'global' && leitura !== 'historico' && (
-                  <div className="flex gap-0.5">
-                    {(['meta', 'mes', 'anoAnt', 'noAno'] as Comparador[]).map(op => {
-                      const ok = temSerie(op);
-                      const on = sel.includes(op);
-                      return (
-                        <button
-                          key={op}
-                          disabled={!ok}
-                          title={ok
-                            ? undefined
-                            : op === 'meta'  ? 'sem série de meta para este indicador'
-                            : op === 'noAno' ? 'sem foto do início do ano para este indicador'
-                                             : 'sem série de ano anterior para este indicador'}
-                          onClick={() => alterna(ind.chave, op)}
-                          className={`px-1 h-4 rounded text-[8px] border ${
-                            !ok
-                              ? 'bg-transparent text-muted-foreground/30 border-transparent line-through cursor-not-allowed'
-                              : on
-                                ? 'bg-muted text-foreground border-border'
-                                : 'bg-transparent text-muted-foreground/60 border-transparent hover:bg-muted/40'
-                          }`}
-                        >
-                          {op === 'meta' ? 'meta' : op === 'mes' ? 'mês'
-                            : op === 'anoAnt' ? 'ano ant.' : 'no ano'}
-                        </button>
-                      );
-                    })}
-                  </div>
-            )}
-          </div>
-
-          {escopo === 'fazenda' && !ind.porFazenda ? (
-            <EmConstrucao motivo="sem série por fazenda" />
-          ) : leitura === 'historico' && !ind.historico ? (
-            <EmConstrucao motivo="sem histórico multi-ano" />
-          ) : leitura === 'historico' && escopo === 'fazenda' ? (
-            <EmConstrucao motivo="histórico por fazenda ainda não existe" />
-          ) : (
-            <>
-              {/* Altura FIXA, nao `flex-1`: e o `flex-1` que faz o grafico
-                  ceder e crescer conforme o irmao, e era ele que movia a base
-                  dos cards. Com N igual nos seis, a grade alinha em cima
-                  (faixas fixas) e embaixo (grafico fixo). */}
-              <div style={{ height: H_GRAFICO }}>
-              <ResponsiveContainer width="100%" height="100%">
-                {leitura === 'historico' ? (
-                  <BarChart data={barrasHistorico(ind)}
-                            margin={{ top: 16, right: 8, left: 8, bottom: 0 }} barCategoryGap="14%">
-                    <XAxis dataKey="nome" tick={{ fontSize: 8, fill: '#888780' }} axisLine={false} tickLine={false} />
-                    <YAxis hide />
-                    <Bar dataKey="valor" radius={[3, 3, 0, 0]} isAnimationActive={false}>
-                      {barrasHistorico(ind).map((e, i) => (
-                        <Cell key={i} fill={e.atual ? COR_ATUAL : BAR_ANO_ANT} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                ) : escopo === 'fazenda' ? (
-                  <ComposedChart data={dadosFazenda(ind)} margin={{ top: 6, right: 8, left: 4, bottom: 2 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted-foreground) / 0.15)" />
-                    <XAxis dataKey="mes" tick={{ fontSize: 8, fill: '#888780' }} stroke="hsl(var(--muted-foreground) / 0.22)" />
-                    <YAxis tick={{ fontSize: 8, fill: '#888780' }} width={46}
-                           tickFormatter={v => fmtEixo(v, ind.formatoValor)}
-                           stroke="hsl(var(--muted-foreground) / 0.22)" />
-                    <Tooltip content={<CustomTooltip ind={ind} />} />
-                    {/* Por `map`, NUNCA em fragmento: o recharts inspeciona
-                        filhos por tipo e nao acha o que estiver embrulhado. */}
-                    {(ind.porFazenda ?? []).map((f, i) => (
-                      <Line key={f.fazendaId} type="monotone" dataKey={f.codigo}
-                            stroke={COR_FAZENDA[i % COR_FAZENDA.length]} strokeWidth={2}
-                            dot={DOT_V1} connectNulls={false} isAnimationActive={false} />
-                    ))}
-                    {/* Global DEPOIS, para ficar por cima. Tracejado porque e
-                        referencia, nao mais um lugar. */}
-                    <Line type="monotone" dataKey={CHAVE_GLOBAL} stroke={COR_GLOBAL}
-                          strokeWidth={2.5} strokeDasharray="4 2" dot={DOT_V1}
-                          connectNulls={false} isAnimationActive={false} />
-                  </ComposedChart>
-                ) : (
-                  <ComposedChart data={dadosGlobal(ind)} margin={{ top: 14, right: 8, left: 4, bottom: 2 }}
-                                 barCategoryGap="18%">
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted-foreground) / 0.15)" />
-                    {/* A horizontal na altura do inicial: da para ler de
-                        relance se o ano esta acima ou abaixo de onde comecou. */}
-                    {inicial(ind) != null && (
-                      <ReferenceLine y={inicial(ind) as number} stroke={COR_ATUAL}
-                                     strokeDasharray="4 3" strokeWidth={1} opacity={0.5} />
-                    )}
-                    <XAxis dataKey="mes" tick={{ fontSize: 8, fill: '#888780' }} stroke="hsl(var(--muted-foreground) / 0.22)" />
-                    <YAxis tick={{ fontSize: 8, fill: '#888780' }} width={46}
-                           tickFormatter={v => fmtEixo(v, ind.formatoValor)}
-                           stroke="hsl(var(--muted-foreground) / 0.22)" />
-                    <Tooltip content={<CustomTooltip ind={ind} />} />
-                    {/* Os chips governam O GRAFICO, nao so o numero do delta.
-                        `mes` NAO aparece aqui de proposito: o mes anterior e um
-                        PONTO da propria serie do realizado, nao uma serie —
-                        ele move o delta e nao desenha linha. */}
-                    {mostra('anoAnt') && (
-                      <Area type="monotone" dataKey="anoAnterior" stroke="none"
-                            fill={COR_ANO_ANT} fillOpacity={0.12} isAnimationActive={false} />
-                    )}
-                    {mostra('anoAnt') && (
-                      <Line type="monotone" dataKey="anoAnterior" stroke={COR_ANO_ANT}
-                            strokeWidth={1.5} strokeDasharray="4 2" dot={DOT_V1}
-                            connectNulls={false} isAnimationActive={false} />
-                    )}
-                    {mostra('meta') && (
-                      <Line type="monotone" dataKey="meta" stroke={COR_META}
-                            strokeWidth={2} dot={DOT_META_V1} connectNulls={false}
-                            isAnimationActive={false} />
-                    )}
-                    {/* O REALIZADO nunca e condicional: ele e o assunto do
-                        card. Com zero chips marcados sobra so ele, e isso e
-                        leitura legitima.
-                        Em `arrobas` e `gmd` ele vira BARRA no nivel do mes —
-                        meta e ano anterior seguem linha, por cima.
-                        Condicionais INDIVIDUAIS, nunca um fragmento: o
-                        recharts inspeciona filhos por tipo e nao acha <Bar>
-                        embrulhado. */}
-                    {colunaRealizado && (
-                      <Bar dataKey="atual" fill={COR_ATUAL} radius={[2, 2, 0, 0]}
-                           isAnimationActive={false}>
-                        {/* Com o realizado em barra o rotulo do mes filtrado
-                            muda de ancora: a LabelList vive na <Bar>, nao na
-                            <Line>, senao ela apontaria para uma serie que nao
-                            esta desenhada. */}
-                        <LabelList dataKey="atual" content={rotuloDoMes(ind)} />
-                      </Bar>
-                    )}
-                    {!colunaRealizado && (
-                      <Area type="monotone" dataKey="atual" stroke="none"
-                            fill={COR_ATUAL} fillOpacity={0.10} isAnimationActive={false} />
-                    )}
-                    {!colunaRealizado && (
-                    <Line type="monotone" dataKey="atual" stroke={COR_ATUAL}
-                          strokeWidth={2.5} dot={DOT_V1} connectNulls={false} isAnimationActive={false}>
-                      {/* E11 — o valor SO sobre o ponto do mes filtrado. Em
-                          todos os meses poluiria: treze rotulos de 9px em
-                          ~450px de plotagem se sobrepoem.
-                          ⚠ O offset vem do PROPRIO array. Prepender "Ini"
-                          desloca todos os indices em um, e fixar o numero e a
-                          armadilha do A12 — ja cobrou uma vez. */}
-                      <LabelList dataKey="atual" content={rotuloDoMes(ind)} />
-                    </Line>
-                    )}
-                  </ComposedChart>
-                )}
-              </ResponsiveContainer>
-              </div>
-              {/* Legenda com AMOSTRA: sem o tracinho o codigo nao liga a
-                  linha nenhuma. O piso do grafico cai de 150 para 132 quando
-                  ela aparece, entao o card NAO cresce — a legenda entra no
-                  espaco que ja existia. */}
-              {/* Faixa da legenda RESERVADA sempre: escondida em Global ela
-                  encolheria o card ao trocar de nivel, que e o mesmo pulo que
-                  este PR esta tirando. */}
-              <div className="overflow-hidden" style={{ height: H_LEGENDA }}>
-              {escopo === 'fazenda' && leitura !== 'historico' && (
-                <div className="flex justify-center gap-2.5 px-0 mt-0.5 flex-wrap">
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-3 border-t-[2px] border-dashed" style={{ borderColor: COR_GLOBAL }} />
-                    <span className="text-[9px] text-muted-foreground">Global</span>
-                  </div>
-                  {(ind.porFazenda ?? []).map((f, i) => (
-                    <div key={f.fazendaId} className="flex items-center gap-1.5">
-                      <div className="w-3 h-[2px] rounded"
-                           style={{ background: COR_FAZENDA[i % COR_FAZENDA.length] }} />
-                      <span className="text-[9px] text-muted-foreground">{f.codigo}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-              </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
-    );
-  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
@@ -808,7 +845,20 @@ export function ModalAtividade({
                   const ib = ORDEM_CARDS.indexOf(b.chave);
                   return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
                 })
-                .map(ind => <CardIndicador key={ind.chave} ind={ind} />)}
+                .map(ind => (
+                  <CardIndicador
+                    key={ind.chave}
+                    ind={ind}
+                    escopo={escopo}
+                    leitura={leitura}
+                    mesAtual={mesAtual}
+                    anoAtual={anoAtual}
+                    rotuloMes={rotuloMes}
+                    rotuloPer={rotuloPer}
+                    sel={marcados(ind.chave)}
+                    alterna={alterna}
+                  />
+                ))}
             </div>
           )}
         </div>
