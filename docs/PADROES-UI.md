@@ -295,6 +295,17 @@ confirmar `data-state="active"` lê o painel que ainda está montado — foi ass
 que uma medição concluiu "regressão na aba Por Fazenda" quando não havia
 regressão nenhuma, com número na mão.
 
+**Número que diverge pouco não é arredondamento até que se meça.** O PR-23
+registrou "16.914,0 contra 16.912,7 — arredondamento" e seguiu. Não era: era o
+overlay de fechamento, medido no cliente onde ele quase não aparece. Num
+cliente menor a mesma causa deu 11,6% e apareceu como dois números diferentes
+na mesma tela. **Diferença pequena em base grande é diferença grande em base
+pequena** — conferir a causa, ou medir em mais de um cliente antes de atribuir
+a ruído.
+
+**Medição em um cliente não é medição.** Escala esconde defeito: base sete
+vezes maior dilui o mesmo desencontro para perto de zero.
+
 ## A14 — Direção do indicador
 
 **A cor do delta segue a direção BOA do indicador, não o sinal.** Custo
