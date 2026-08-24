@@ -63,7 +63,11 @@ import {
 } from '@/lib/painelConsultor/rebanho/overlayFechamento';
 import type { ZootCategoriaMensal } from '@/hooks/useZootCategoriaMensal';
 import type { SnapshotAreaFazendaMes } from '@/hooks/useFechamentoArea';
-import { calcularArrHaMensal, calcularArrHaAcumulado } from '@/lib/calculos/eficienciaArea';
+import {
+  calcularArrHaMensal, calcularArrHaAcumulado,
+  calcularIndicadoresEficienciaArea, calcularRazaoEstoqueAcumulada,
+  mediaIgnorandoZero,
+} from '@/lib/calculos/eficienciaArea';
 
 export interface SerieFazenda {
   fazendaId: string;
@@ -113,8 +117,12 @@ interface Result {
   arrobasEstoque: SerieFazenda[];
   /** Hectares de pecuaria da fazenda. Periodo = MEDIA, como o card Global. */
   areaProdutivaPec: SerieFazenda[];
-  /** @ produzidas / area. Periodo = `calcularArrHaAcumulado`. */
+  /** @ produzidas / area. Periodo = `calcularArrHaAcumulado` (fluxo). */
   arrobasHa: SerieFazenda[];
+  /** UA/ha. Periodo = `calcularRazaoEstoqueAcumulada` (estoque). */
+  uaHa: SerieFazenda[];
+  /** kg vivo/ha. Periodo = `calcularRazaoEstoqueAcumulada` (estoque). */
+  kgHa: SerieFazenda[];
   loading:   boolean;
 }
 
@@ -222,7 +230,7 @@ export function useSeriePorFazenda({
 
   const vazio: Result = {
     cabecas: [], pesoMedio: [], arrobas: [], gmd: [],
-    arrobasEstoque: [], areaProdutivaPec: [], arrobasHa: [],
+    arrobasEstoque: [], areaProdutivaPec: [], arrobasHa: [], uaHa: [], kgHa: [],
     loading,
   };
   if (rows.length === 0) return vazio;
@@ -347,24 +355,9 @@ export function useSeriePorFazenda({
       return s ? s.area_pecuaria_ha : null;
     });
 
-  /* ⚠ QUARTA ocorrencia desta media no repo — `calcularArrHaAcumulado`
-     (eficienciaArea), `mediaAreaAcumulada12` (usePainelConsultorData) e
-     `mediaIgnorandoNulos` (PainelConsultorTab) sao as outras tres, alinhadas
-     em 24/08. A regra e' a mesma: mes sem area — nulo, NaN ou ZERO — nao
-     entra no divisor, porque area zero e' mes sem fechamento, nao area
-     pequena. Extrair as quatro para `eficienciaArea` e' frente propria:
-     este PR tem gate de arquivos e nao alcanca aquele modulo. */
-  const mediaAreaAcum12 = (serie: (number | null)[]): number[] => {
-    const out: number[] = [];
-    let soma = 0;
-    let n = 0;
-    for (let i = 0; i < MESES; i++) {
-      const v = serie[i];
-      if (v != null && Number.isFinite(v) && v > 0) { soma += v; n += 1; }
-      out.push(n > 0 ? soma / n : NaN);
-    }
-    return out;
-  };
+  /* A media vem de `eficienciaArea` — UMA implementacao no repo desde o
+     PR-RAZAO-ESTOQUE-01. Era a quarta copia. */
+  const mediaAreaAcum12 = (serie: (number | null)[]) => mediaIgnorandoZero(serie, MESES);
 
   /* Corta mes futuro e NaN — a mesma guarda do `gmd`. */
   const corta = (v: number | null | undefined, m: number) =>
@@ -404,6 +397,56 @@ export function useSeriePorFazenda({
     };
   });
 
+  /* ── PR-RAZAO-ESTOQUE-01 · UA/ha e kg vivo/ha por fazenda ────────────
+     Os dois faltaram no PR anterior porque o Global calculava o periodo com
+     media de razoes, que nao comuta com agregacao. Com a regra unificada em
+     `calcularRazaoEstoqueAcumulada`, a soma ponderada das fazendas reproduz
+     o Global e a aba pode existir sem contradizer o card ao lado.
+     Zero query nova: os numeradores ja estao no cache. */
+  const soma12De = (id: string, campo: keyof LinhaCache): number[] =>
+    Array.from({ length: MESES }, (_, i) =>
+      linhas.filter(r => String(r.fazenda_id) === id && Number(r.mes) === i + 1)
+            .reduce((acc, r) => acc + num(r[campo]), 0));
+
+  const uaHa: SerieFazenda[] = idsComDado.map(id => {
+    const a12 = areaDe(id);
+    /* A formula do UA (450 kg) mora na `eficienciaArea` e e' reusada inteira:
+       nenhuma divisao por 450 escrita aqui. */
+    const ef = calcularIndicadoresEficienciaArea({
+      cabIni: soma12De(id, 'saldo_inicial'),
+      cabFin: soma12De(id, 'saldo_final'),
+      pesoMedioFin: Array.from({ length: MESES }, (_, i) =>
+        pesoMedioPonderadoFromRows(
+          linhas.filter(r => String(r.fazenda_id) === id && Number(r.mes) === i + 1),
+        ) ?? 0),
+      arrobasProd: arrobasProd12De(id),
+      areaProdMensal: a12.map(v => (v == null ? NaN : v)),
+    });
+    const per12 = calcularRazaoEstoqueAcumulada(ef.uaMedia, a12, MESES);
+    return {
+      fazendaId: id, nome: nomeDe(id), codigo: codigoDe(id),
+      mes:     Array.from({ length: MESES }, (_, i) => corta(ef.lotUaHa[i], i + 1)),
+      periodo: Array.from({ length: MESES }, (_, i) => corta(per12[i], i + 1)),
+    };
+  });
+
+  const kgHa: SerieFazenda[] = idsComDado.map(id => {
+    const a12 = areaDe(id);
+    const pt12 = soma12De(id, 'peso_total_final');
+    /* Mensal: mesma expressao do `kgHaPorMes` do PC-100 — peso vivo total
+       sobre area pecuaria, zero e ausencia devolvem NaN, nunca zero. */
+    const mes12 = pt12.map((p, i) => {
+      const area = a12[i] ?? 0;
+      return p > 0 && area > 0 ? p / area : NaN;
+    });
+    const per12 = calcularRazaoEstoqueAcumulada(pt12, a12, MESES);
+    return {
+      fazendaId: id, nome: nomeDe(id), codigo: codigoDe(id),
+      mes:     Array.from({ length: MESES }, (_, i) => corta(mes12[i], i + 1)),
+      periodo: Array.from({ length: MESES }, (_, i) => corta(per12[i], i + 1)),
+    };
+  });
+
   return { cabecas, pesoMedio, arrobas, gmd,
-           arrobasEstoque, areaProdutivaPec, arrobasHa, loading };
+           arrobasEstoque, areaProdutivaPec, arrobasHa, uaHa, kgHa, loading };
 }

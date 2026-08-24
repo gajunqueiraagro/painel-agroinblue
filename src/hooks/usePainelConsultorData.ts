@@ -114,7 +114,8 @@ import {
   buildDesfruteCabMensal,
   TIPOS_DESFRUTE_OFICIAL,
 } from '@/lib/calculos/painelConsultorIndicadores';
-import { calcularIndicadoresEficienciaArea, calcularArrHaAcumulado } from '@/lib/calculos/eficienciaArea';
+import { calcularIndicadoresEficienciaArea, calcularArrHaAcumulado,
+         calcularRazaoEstoqueAcumulada, mediaIgnorandoZero } from '@/lib/calculos/eficienciaArea';
 import type { StatusPilares } from '@/hooks/useStatusPilares';
 
 interface Params {
@@ -1015,17 +1016,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
      coincidirem e o que mantem o circuito fechado nas duas telas:
      @ produzidas (periodo) ÷ area (periodo) = @/ha (periodo),
      no Executivo e no modal. */
-  const mediaAreaAcumulada12 = (serie: (number | null)[]): number[] => {
-    const out: number[] = [];
-    let soma = 0;
-    let n = 0;
-    for (let i = 0; i < 12; i++) {
-      const v = serie[i];
-      if (v != null && Number.isFinite(v) && v > 0) { soma += v; n += 1; }
-      out.push(n > 0 ? soma / n : NaN);
-    }
-    return out;
-  };
+  const mediaAreaAcumulada12 = mediaIgnorandoZero;
   /* 12 -> 13 com NaN em [0], como `arrobasHa` ja faz. O chip "no ano" nasce
      desabilitado por consequencia, e esta correto: nao ha dezembro do ano-1
      nesta serie. */
@@ -2196,13 +2187,17 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
 
   // ─────────────────────────────────────────────────────────────
   // ── UA/ha oficial (1-based, length 13) ──
-  // Fórmula período = rollingAvg(lotUaHa) (PC-100). Sem ano anterior nesta fase.
+  // PERIODO = RAZAO DE AGREGADOS (PR-RAZAO-ESTOQUE-01): media do UA ÷ media da
+  // area, nao media das razoes mensais. `rollingAvg` dava o mesmo peso a um mes
+  // de 4.750 ha e a um de 4.942 ha; com area variando muito o erro cresce, e a
+  // soma ponderada das fazendas nao reproduzia este numero. Ver
+  // `calcularRazaoEstoqueAcumulada`.
   // ─────────────────────────────────────────────────────────────
   const uaHaMesSerie13 = Array.from({ length: 13 }, (_, i) =>
     i === 0 ? NaN : (monthlyData.lotUaHa[i - 1] ?? NaN)
   );
 
-  const uaHaPeriodo12 = rollingAvg(monthlyData.lotUaHa);
+  const uaHaPeriodo12 = calcularRazaoEstoqueAcumulada(monthlyData.uaMedia, areaPecuariaRealPorMes);
   const uaHaPeriodoSerie13 = Array.from({ length: 13 }, (_, i) =>
     i === 0 ? NaN : (uaHaPeriodo12[i - 1] ?? NaN)
   );
@@ -2227,7 +2222,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
 
   const uaHaPeriodoMetaSerie13 = monthlyDataMeta
     ? (() => {
-        const arr12 = rollingAvg(monthlyDataMeta.lotUaHa);
+        const arr12 = calcularRazaoEstoqueAcumulada(monthlyDataMeta.uaMedia, areaPecuariaMetaPorMes);
         return Array.from({ length: 13 }, (_, i) =>
           i === 0 ? NaN : (arr12[i - 1] ?? NaN)
         );
@@ -2280,7 +2275,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
 
   const uaHaPeriodoAnoAntSerie13 = eficienciaAreaAnoAnt
     ? (() => {
-        const arr12 = rollingAvg(eficienciaAreaAnoAnt.lotUaHa);
+        const arr12 = calcularRazaoEstoqueAcumulada(eficienciaAreaAnoAnt.uaMedia, areaMensalAnoAnt);
         return Array.from({ length: 13 }, (_, i) =>
           i === 0 ? NaN : (arr12[i - 1] ?? NaN)
         );
@@ -2300,13 +2295,15 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
   // ─────────────────────────────────────────────────────────────
   // ── kg vivo/ha oficial (1-based, length 13) ──
   // peso vivo total do rebanho ÷ área produtiva (estoque, NÃO produção).
-  // Período = rollingAvg PC-100. Sem ano anterior nesta fase.
+  // PERIODO = RAZAO DE AGREGADOS, mesma regra do UA/ha: media do peso vivo ÷
+  // media da area. O numerador e ESTOQUE — somar peso de doze meses nao produz
+  // numero nenhum —, por isso NAO e' `calcularArrHaAcumulado`.
   // ─────────────────────────────────────────────────────────────
   const kgHaMesSerie13 = Array.from({ length: 13 }, (_, i) =>
     i === 0 ? NaN : (kgHaPorMes[i - 1] ?? NaN)
   );
 
-  const kgHaPeriodo12 = rollingAvg(kgHaPorMes);
+  const kgHaPeriodo12 = calcularRazaoEstoqueAcumulada(monthlyData.pesoTotalFin ?? [], areaPecuariaRealPorMes);
   const kgHaPeriodoSerie13 = Array.from({ length: 13 }, (_, i) =>
     i === 0 ? NaN : (kgHaPeriodo12[i - 1] ?? NaN)
   );
@@ -2340,7 +2337,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
 
   const kgHaPeriodoMetaSerie13 = kgHaPorMesMeta
     ? (() => {
-        const arr12 = rollingAvg(kgHaPorMesMeta);
+        const arr12 = calcularRazaoEstoqueAcumulada(monthlyDataMeta?.pesoTotalFin ?? [], areaPecuariaMetaPorMes);
         return Array.from({ length: 13 }, (_, i) =>
           i === 0 ? NaN : (arr12[i - 1] ?? NaN)
         );
@@ -2374,7 +2371,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
 
   const kgHaPeriodoAnoAntSerie13 = kgHaPorMesAnoAnt
     ? (() => {
-        const arr12 = rollingAvg(kgHaPorMesAnoAnt);
+        const arr12 = calcularRazaoEstoqueAcumulada(
+          Array.from({ length: 12 }, (_, i) => viewTotalsAnoAnt?.[i + 1]?.peso_total_final ?? 0),
+          areaMensalAnoAnt,
+        );
         return Array.from({ length: 13 }, (_, i) =>
           i === 0 ? NaN : (arr12[i - 1] ?? NaN)
         );
@@ -4086,7 +4086,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     areaPorFazendaMes,
     snapshotsFazenda,
 
-    // UA/ha: série oficial (mês = monthlyData.lotUaHa; período = rollingAvg PC-100)
+    // UA/ha: série oficial (mês = monthlyData.lotUaHa; período = razão de agregados)
     lotUaHa: uaHaValor,
 
     /* Era `meanArr` das razoes mensais — uma TERCEIRA agregacao, e errada

@@ -1272,7 +1272,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     return [
       monta('cabecas',      cabecasIndicador,      'inteiro',  'cab',  seriePorFazAtiv.cabecas),
       monta('arrobas',      arrobasIndicador,      'decimal1', '@',    seriePorFazAtiv.arrobas,   histZootAtiv.arrobas),
-      monta('uaHa',         uaHaIndicador,         'decimal2', 'UA/ha'),
+      monta('uaHa',         uaHaIndicador,         'decimal2', 'UA/ha', seriePorFazAtiv.uaHa),
       monta('gmd',          gmdIndicador,          'decimal3', 'kg',   seriePorFazAtiv.gmd,       histZootAtiv.gmd),
       monta('pesoMedio',    pesoMedioIndicador,    'decimal1', 'kg',   seriePorFazAtiv.pesoMedio, histZootAtiv.pesoMedio),
       monta('valorRebanho', valorRebanhoIndicador, 'moedaAbreviada', undefined),
@@ -1281,7 +1281,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
          cobrem estas chaves, e o card declara a falta em vez de mostrar o
          Global com rotulo de fazenda. */
       monta('arrobasEstoque', arrobasEstoqueIndicador, 'decimal1', '@', seriePorFazAtiv.arrobasEstoque),
-      monta('kgHa', kgHaIndicador, 'decimal1', 'kg/ha'),
+      monta('kgHa', kgHaIndicador, 'decimal1', 'kg/ha', seriePorFazAtiv.kgHa),
       monta('arrobasHa', arrobasHaIndicador, 'decimal2', '@/ha', seriePorFazAtiv.arrobasHa),
       monta('precoArrEstoque', precoArrEstoqueIndicador, 'moeda', 'R$/@'),
       monta('valorRebanhoSemEfeito', valorRebanhoSemEfeitoIndicador, 'moedaAbreviada', undefined),

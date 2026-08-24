@@ -42,6 +42,84 @@ export function calcularIndicadoresEficienciaArea(
 }
 
 /**
+ * MEDIA ACUMULADA ate cada mes, ignorando mes sem valor — nulo, NaN ou ZERO.
+ *
+ * POR QUE ZERO NAO ENTRA. Area zero nao e area pequena: e mes sem fechamento.
+ * Conta-lo no divisor rebaixaria a media como se a fazenda tivesse operado
+ * zero hectare naquele mes. Medido na NJ em 24/08: com agosto zerado, a media
+ * Jan-Ago caia de 4.861,42 para 4.253,74 ha.
+ *
+ * FONTE UNICA desta regra. Antes do PR-RAZAO-ESTOQUE-01 ela existia QUATRO
+ * vezes — aqui dentro do `calcularArrHaAcumulado`, no `mediaAreaAcumulada12`
+ * do `usePainelConsultorData`, no `mediaIgnorandoNulos` do
+ * `PainelConsultorTab` e no `mediaAreaAcum12` do `useSeriePorFazenda`. Tres
+ * consomem esta; a do PainelConsultorTab espera autorizacao (quarto arquivo).
+ */
+export function mediaIgnorandoZero(
+  serie: (number | null | undefined)[],
+  meses = 12,
+): number[] {
+  const out: number[] = [];
+  let soma = 0;
+  let n = 0;
+  for (let i = 0; i < meses; i++) {
+    const v = serie[i];
+    if (v != null && Number.isFinite(v) && v > 0) { soma += v; n += 1; }
+    out.push(n > 0 ? soma / n : NaN);
+  }
+  return out;
+}
+
+/**
+ * RAZAO DE ESTOQUE ACUMULADA — media do numerador ÷ media da area.
+ *
+ * ⚠ NAO CONFUNDIR com `calcularArrHaAcumulado`. La o numerador SOMA, porque
+ * producao e FLUXO: @ de janeiro mais @ de fevereiro sao @ do periodo. Aqui o
+ * numerador e MEDIA, porque rebanho e peso sao ESTOQUE: somar o rebanho de
+ * doze meses nao produz numero nenhum. O denominador e o mesmo nos dois — a
+ * media da area.
+ *
+ * POR QUE NAO A MEDIA DAS RAZOES. Fazenda que perde area no meio do ano:
+ *     Jan-Jun  500 UA em 1.000 ha -> 0,50
+ *     Jul-Dez  500 UA em   200 ha -> 2,50
+ *   media das razoes  (0,50x6 + 2,50x6)/12 = 1,50 UA/ha
+ *   razao das medias  500 UA ÷ 600 ha      = 0,83 UA/ha   <- a verdade
+ * O 1,50 aparece porque os meses de area pequena entram com o mesmo peso dos
+ * de area grande, tendo cinco vezes menos hectare para representar.
+ *
+ * E o teste estrutural: media de razoes NAO comuta com agregacao, entao a
+ * soma ponderada das fazendas nao reproduz o Global. Razao de agregados
+ * reproduz — e e' o que permite a aba Por fazenda existir sem contradizer o
+ * card ao lado.
+ *
+ * O mes so entra quando TEM AREA: e a area que define o conjunto de meses,
+ * para que as duas medias corram sobre os mesmos meses.
+ */
+export function calcularRazaoEstoqueAcumulada(
+  numerador: (number | null | undefined)[],
+  areaMensal: (number | null)[],
+  meses = 12,
+): number[] {
+  const out: number[] = [];
+  let somaNum = 0;
+  let somaArea = 0;
+  let n = 0;
+  for (let i = 0; i < meses; i++) {
+    const area = areaMensal[i];
+    if (area != null && Number.isFinite(area) && area > 0) {
+      const v = numerador[i];
+      somaNum += (v != null && Number.isFinite(v)) ? v : 0;
+      somaArea += area;
+      n += 1;
+    }
+    /* (somaNum/n) ÷ (somaArea/n) — os `n` se cancelam, mas a leitura e'
+       media ÷ media, nao soma ÷ soma. */
+    out.push(n > 0 && somaArea > 0 ? somaNum / somaArea : NaN);
+  }
+  return out;
+}
+
+/**
  * `@/ha` MENSAL. Extraida para que os consumidores que precisam SO dela —
  * como as tres linhas de `Arrobas/ha` do PainelConsultorTab — a chamem sem
  * arrastar `uaMedia` e `lotUaHa` junto, e sem escrever a divisao de novo.
@@ -90,21 +168,22 @@ export function calcularArrHaAcumulado(
   arrobasProd: number[],
   areaProdMensal: (number | null)[],
 ): number[] {
+  /* A media da area vem de `mediaIgnorandoZero` — mesma regra, uma
+     implementacao so. O numerador continua SOMANDO, porque producao e fluxo,
+     e soma sob a MESMA condicao da area: mes que nao entra no divisor nao
+     entra no dividendo. */
+  const areaMedia12 = mediaIgnorandoZero(areaProdMensal);
   const out: number[] = [];
   let somaArrobas = 0;
-  let somaArea = 0;
-  let mesesComArea = 0;
 
   for (let i = 0; i < 12; i++) {
     const area = areaProdMensal[i];
     const arr = arrobasProd[i];
     if (area != null && Number.isFinite(area) && area > 0) {
-      somaArea += area;
-      mesesComArea += 1;
       if (arr != null && Number.isFinite(arr)) somaArrobas += arr;
     }
-    const areaMedia = mesesComArea > 0 ? somaArea / mesesComArea : 0;
-    out.push(areaMedia > 0 ? somaArrobas / areaMedia : NaN);
+    const areaMedia = areaMedia12[i];
+    out.push(Number.isFinite(areaMedia) && areaMedia > 0 ? somaArrobas / areaMedia : NaN);
   }
   return out;
 }
