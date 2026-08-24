@@ -1318,6 +1318,23 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     enabled: assuntoAtivo === 'movimentacoes',
   });
 
+  /* Delta contra a META do MESMO recorte, como o bloco Zootecnico. O hook
+     agrega `mesAtual` e `meta` sobre os MESMOS meses (`mesesPeriodo`), entao
+     os dois seguem o `viewMode` da tela juntos: em "No período" a comparacao
+     ja e acumulada, e a irregularidade do planejamento mensal se dilui sem
+     precisar de teto nem supressao.
+     ⚠ Meta ZERO devolve `null`, nunca `+∞` nem `0%`: sem meta no recorte nao
+     ha o que comparar, e o travessao ali passa a ser VERDADEIRO em vez de
+     acidental — que era o defeito, quatro `delta: null` escritos a mao. */
+  const deltaMetaMov = (tipo: TipoMov): number | null => {
+    const cd = movAgg.porTipo[tipo];
+    const real = cd?.mesAtual?.cab;
+    const meta = cd?.meta?.cab;
+    if (real == null || meta == null) return null;
+    if (!Number.isFinite(real) || !Number.isFinite(meta) || meta === 0) return null;
+    return ((real - meta) / meta) * 100;
+  };
+
   const indicadoresMovimentacoes = useMemo<IndicadorAtividade[]>(() => {
     const ponto = (s: number[] | undefined) => {
       if (!s || s.length === 0) return null;
@@ -3210,14 +3227,14 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           onClick={() => setModalAtividade('movimentacoes')}
           metricas={[
             { rotulo: 'Nascimentos', valor: (fmtN(movAgg.porTipo.nascimentos?.mesAtual?.cab ?? null) ?? '—') + ' cab',
-              delta: null },
+              delta: deltaMetaMov('nascimentos'), deltaRotulo: 'vs meta' },
             { rotulo: 'Compras',     valor: (fmtN(movAgg.porTipo.compras?.mesAtual?.cab ?? null) ?? '—') + ' cab',
-              delta: null },
+              delta: deltaMetaMov('compras'), deltaRotulo: 'vs meta' },
             { rotulo: 'Desfrute',    valor: (fmtN(movAgg.porTipo.desfrute?.mesAtual?.cab ?? null) ?? '—') + ' cab',
-              delta: null },
+              delta: deltaMetaMov('desfrute'), deltaRotulo: 'vs meta' },
             /* Morte e o unico onde subir e RUIM. */
             { rotulo: 'Mortes',      valor: (fmtN(movAgg.porTipo.mortes?.mesAtual?.cab ?? null) ?? '—') + ' cab',
-              delta: null, inverseDelta: true },
+              delta: deltaMetaMov('mortes'), deltaRotulo: 'vs meta', inverseDelta: true },
           ]}
         />
       </div>
