@@ -178,6 +178,9 @@ const COLUNA_NO_MES = ['arrobas', 'gmd', 'arrobasHa'];
    ⚠ Em `max-w-7xl` com quatro colunas o card fica em ~280px, e treze rotulos
    de mes so cabem com UMA LETRA. O piso de 8px do A12 continua valendo — se
    colidirem, o caminho e outro, nao fonte menor. */
+/* Ver a prop `comparadores` do card. */
+const COMPARADORES_MOV: Comparador[] = ['meta', 'anoAnt'];
+
 const ORDEM_CARDS_MOV = [
   'nasc_cab',      'nasc_peso',      'nasc_preco',      'nasc_valor',
   'compra_cab',    'compra_peso',    'compra_preco',    'compra_valor',
@@ -319,7 +322,15 @@ const inicial = (ind: IndicadorAtividade, leitura: Leitura): number | null => {
   return s && s.length >= 13 && Number.isFinite(s[0]) ? s[0] : null;
 };
 
-const dadosGlobal = (ind: IndicadorAtividade, leitura: Leitura, mesAtual: number) => {
+const dadosGlobal = (
+  ind: IndicadorAtividade, leitura: Leitura, mesAtual: number,
+  /* `Ini` e a foto do INICIO DO ANO — estoque. Movimentacao nao tem estoque
+     inicial, entao a categoria so deslocaria os indices sem significar nada.
+     ⚠ O offset do rotulo continua derivado do PROPRIO array (`length > 12`),
+     e `rotuloDoMes` recebe o MESMO flag — e' isso que mantem a regra do A12
+     valendo depois desta mudanca, em vez de fixar um numero. */
+  semInicial?: boolean,
+) => {
   const sAtual = serieAtual(ind, leitura);
   const sAnt   = leitura === 'periodo' ? ind.serieAnoAntPeriodo : ind.serieAnoAntMes;
   const sMeta  = leitura === 'periodo' ? ind.serieMetaPeriodo : ind.serieMetaMes;
@@ -330,7 +341,7 @@ const dadosGlobal = (ind: IndicadorAtividade, leitura: Leitura, mesAtual: number
     meta:        valorDoMes(sMeta, idx + 1),
   }));
   const ini = inicial(ind, leitura);
-  if (ini == null) return meses;
+  if (semInicial || ini == null) return meses;
   /* `anoAnterior` e `meta` ficam nulos de proposito: para o ano anterior o
      inicial seria dezembro de dois anos atras, que nao existe. */
   return [{ mes: 'Ini', atual: ini, anoAnterior: null, meta: null }, ...meses];
@@ -476,9 +487,9 @@ const Deltas = ({ ind, sel, leitura, mesAtual }: {
    meses, treze numeros de 9px em ~450px de plotagem se sobrepoem.
    ⚠ O offset vem do PROPRIO array: prepender "Ini" desloca todos os
    indices em um, e fixar o numero e a armadilha do A12. */
-const rotuloDoMes = (ind: IndicadorAtividade, leitura: Leitura, mesAtual: number) =>
+const rotuloDoMes = (ind: IndicadorAtividade, leitura: Leitura, mesAtual: number, semInicial?: boolean) =>
   (props: { index?: number; x?: number | string; y?: number | string; width?: number | string; value?: number | string }) => {
-    const off = dadosGlobal(ind, leitura, mesAtual).length > 12 ? 1 : 0;
+    const off = dadosGlobal(ind, leitura, mesAtual, semInicial).length > 12 ? 1 : 0;
     if (props.index !== mesAtual - 1 + off) return null;
     const v = typeof props.value === 'number' ? props.value : null;
     if (v == null) return null;
@@ -495,7 +506,7 @@ const rotuloDoMes = (ind: IndicadorAtividade, leitura: Leitura, mesAtual: number
 
 const CardIndicador = ({
   ind, escopo, leitura, mesAtual, anoAtual, rotuloMes, rotuloPer, sel, alterna,
-  colunaSempre, eixoCurto,
+  colunaSempre, eixoCurto, comparadores, semInicial,
 }: {
   ind: IndicadorAtividade;
   escopo: Escopo;
@@ -511,6 +522,14 @@ const CardIndicador = ({
      nascimento de julho. No Zootecnico a regra segue por chave, porque ali
      convivem estoque (trajetoria) e producao (evento). */
   colunaSempre?: boolean;
+  /* E1 — em Movimentacoes os comparadores sao `meta` e `ano ant.` apenas.
+     `mes` compara com o mes anterior, e movimentacao de um mes nao continua a
+     do anterior; `no ano` compara com a foto do inicio do ano, que so existe
+     para estoque. Diferente do chip DESABILITADO: la o comparador faria
+     sentido e falta dado; aqui ele nao faz sentido, entao nao existe. */
+  comparadores?: Comparador[];
+  /* E2 — sem a categoria `Ini` no eixo. Ver `dadosGlobal`. */
+  semInicial?: boolean;
   /* E4 — uma letra por mes. So onde o card e estreito: em Movimentacoes sao
      quatro colunas e ~230px, e com tres letras o recharts OMITE meses
      alternados em vez de encolher. O Zootecnico tem ~319px e mostra os treze
@@ -615,7 +634,7 @@ const CardIndicador = ({
         <div className="flex items-center justify-end overflow-hidden" style={{ height: H_CHIPS }}>
           {escopo === 'global' && leitura !== 'historico' && (
                 <div className="flex gap-0.5">
-                  {(['meta', 'mes', 'anoAnt', 'noAno'] as Comparador[]).map(op => {
+                  {(comparadores ?? (['meta', 'mes', 'anoAnt', 'noAno'] as Comparador[])).map(op => {
                     const ok = temSerie(op);
                     const on = sel.includes(op);
                     return (
@@ -694,7 +713,7 @@ const CardIndicador = ({
                         connectNulls={false} isAnimationActive={false} />
                 </ComposedChart>
               ) : (
-                <ComposedChart data={dadosGlobal(ind, leitura, mesAtual)} margin={{ top: 14, right: 8, left: 4, bottom: 2 }}
+                <ComposedChart data={dadosGlobal(ind, leitura, mesAtual, semInicial)} margin={{ top: 14, right: 8, left: 4, bottom: 2 }}
                                barCategoryGap="18%">
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted-foreground) / 0.15)" />
                   {/* A horizontal na altura do inicial: da para ler de
@@ -745,7 +764,7 @@ const CardIndicador = ({
                           muda de ancora: a LabelList vive na <Bar>, nao na
                           <Line>, senao ela apontaria para uma serie que nao
                           esta desenhada. */}
-                      <LabelList dataKey="atual" content={rotuloDoMes(ind, leitura, mesAtual)} />
+                      <LabelList dataKey="atual" content={rotuloDoMes(ind, leitura, mesAtual, semInicial)} />
                     </Bar>
                   )}
                   {!colunaRealizado && (
@@ -761,7 +780,7 @@ const CardIndicador = ({
                         ⚠ O offset vem do PROPRIO array. Prepender "Ini"
                         desloca todos os indices em um, e fixar o numero e a
                         armadilha do A12 — ja cobrou uma vez. */}
-                    <LabelList dataKey="atual" content={rotuloDoMes(ind, leitura, mesAtual)} />
+                    <LabelList dataKey="atual" content={rotuloDoMes(ind, leitura, mesAtual, semInicial)} />
                   </Line>
                   )}
                 </ComposedChart>
@@ -913,14 +932,16 @@ export function ModalAtividade({
             /* QUATRO colunas — ver `ORDEM_CARDS_MOV`. Mesma casca de card, mesma
                altura, mesmos chips: muda a largura da grade e o conjunto de
                cards, nao a forma do card. */
+            /* A ORDEM dirige a grade, nao a lista: percorre `ORDEM_CARDS_MOV` e
+               busca o indicador de cada chave. Chave SEM indicador vira celula
+               VAZIA — e o que segura a leitura horizontal quando um tipo tem
+               menos de quatro cards. Sem isso o grid puxaria os primeiros
+               cards de Compras para a linha de Nascimentos, e a leitura por
+               linha, que e o que justifica o desenho, se perderia. */
             <div className="grid grid-cols-4 gap-3">
-              {[...(indicadoresMovimentacoes ?? [])]
-                .sort((a, b) => {
-                  const ia = ORDEM_CARDS_MOV.indexOf(a.chave);
-                  const ib = ORDEM_CARDS_MOV.indexOf(b.chave);
-                  return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
-                })
-                .map(ind => (
+              {ORDEM_CARDS_MOV
+                .map(chave => (indicadoresMovimentacoes ?? []).find(i => i.chave === chave))
+                .map((ind, i) => ind == null ? <div key={`vazio-${i}`} /> : (
                   <CardIndicador
                     key={ind.chave}
                     ind={ind}
@@ -934,6 +955,8 @@ export function ModalAtividade({
                     alterna={alterna}
                     colunaSempre
                     eixoCurto
+                    semInicial
+                    comparadores={COMPARADORES_MOV}
                   />
                 ))}
             </div>

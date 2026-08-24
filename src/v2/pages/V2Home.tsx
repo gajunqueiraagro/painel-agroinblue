@@ -1364,7 +1364,15 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
       card(`${pref}_valor`, tipo, 'valor_total', `${rotulo} — valor total`, 'Soma no recorte', 'moedaAbreviada'),
     ];
     return [
-      ...linha('nasc',     'nascimentos', 'Nascimentos',        false),
+      /* E3 — NASCIMENTOS fica so com cabecas. Peso, preco e valor saem, e
+         nao viram travessao: valor de nascimento nao e preco de mercado, e
+         CUSTO DE PRODUCAO, e provavelmente nunca vai acender. Diferente de
+         consumo e morte, que acendem quando o campo voltar ao formulario —
+         mostrar travessao ali seria prometer dado que nao vem.
+         As tres chaves seguem em `ORDEM_CARDS_MOV` e, sem indicador, viram
+         celula VAZIA: e o que impede o grid de puxar Compras para esta
+         linha e quebrar a leitura horizontal. */
+      card('nasc_cab', 'nascimentos', 'cab', 'Nascimentos — cabeças', 'Quantidade no recorte', 'inteiro', 'cab'),
       ...linha('compra',   'compras',     'Compras',            false),
       ...linha('venda',    'vendas',      'Vendas em pé',       false),
       ...linha('abate',    'abates',      'Abates',             true),
