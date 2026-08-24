@@ -510,9 +510,26 @@ export interface PainelConsultorDataResult {
   /** @ produzidas por hectare de area PECUARIA. Fluxo.
    *  Mensal: `monthlyData.arrHa`, da fonte unica `eficienciaArea`.
    *  Acumulado: Σ arrobas ÷ MEDIA da area, nao Σ das razoes — ver
-   *  `calcularArrHaAcumulado`. Sem ano anterior: a area do ano-1 nao esta
-   *  carregada neste hook. */
+   *  `calcularArrHaAcumulado`. Ano anterior desde o PR-ATIVIDADE-09: a area
+   *  do ano-1 entrou por `snapshotsAnoAnt`, sem query nova. */
   arrobasHaIndicador: {
+    label:      string;
+    titulo:     string;
+    subtitulo:  string;
+    titulos?:   TitulosPorModo;
+    valor:      number | null;
+    deltaMes:   number | null;
+    deltaAno:   number | null;
+    deltaMeta:  number | null;
+    serieAno:   number[];
+    serieAnoAnt?: number[];
+    serieMeta?:  number[];
+    series?: SeriesPorModo;
+  } | null;
+  /** Hectares de pecuaria. A MESMA serie que divide `@/ha`, `lotUaHa` e
+   *  `kgHa` — declarada no rotulo para nao colidir com as outras duas
+   *  "produtivas" do hook. `mes` e a foto; `periodo` e a MEDIA acumulada. */
+  areaProdutivaPecIndicador: {
     label:      string;
     titulo:     string;
     subtitulo:  string;
@@ -795,7 +812,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
   // Área do ano anterior — necessária para deltaAno de UA/ha e kg vivo/ha.
   // useSnapshotAreaAnual não tem param `enabled`; carrega incondicionalmente.
   // Custo: +3 queries leves; aceitável conforme decisão D1 prévia.
-  const { areaMensal: areaMensalAnoAnt } = useSnapshotAreaAnual(
+  /* PR-ATIVIDADE-09 — `snapshots` entrou na desestruturacao: a requisicao
+     ja acontecia e o resultado era descartado. Nenhuma query nova. E o que
+     destrava o ano anterior do `areaProdutivaPec` E do `arrobasHa`. */
+  const { areaMensal: areaMensalAnoAnt, snapshots: snapshotsAnoAnt } = useSnapshotAreaAnual(
     ano - 1,
     isGlobal ? undefined : fazendaId,
     isGlobal,
@@ -839,6 +859,17 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       return s ? s.area_pecuaria_ha : null;
     }),
     [snapshots],
+  );
+  /* Ano anterior da MESMA coluna, mesmo idioma. `snapshots` de
+     `useFechamentoArea` traz a pecuaria RECALCULADA de `fechamento_pastos`
+     (useFechamentoArea:343), nao a coluna crua do snapshot — e' por isso
+     que a media Jan-Jul da NJ da 4.861,42 e nao 4.832,96. */
+  const areaPecuariaRealAnoAntPorMes = useMemo<(number | null)[]>(
+    () => Array.from({ length: 12 }, (_, i) => {
+      const s = snapshotsAnoAnt.find(x => x.mes === i + 1);
+      return s ? s.area_pecuaria_ha : null;
+    }),
+    [snapshotsAnoAnt],
   );
   const areaAgriculturaRealPorMes = useMemo<(number | null)[]>(
     () => Array.from({ length: 12 }, (_, i) => {
@@ -973,6 +1004,34 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     () => areaPecuariaMetaPorMes.map(v => v ?? NaN),
     [areaPecuariaMetaPorMes],
   );
+  const areaPecuariaRealAnoAntNumPorMes = useMemo<number[]>(
+    () => areaPecuariaRealAnoAntPorMes.map(v => v ?? NaN),
+    [areaPecuariaRealAnoAntPorMes],
+  );
+  /* Media ACUMULADA da area ate cada mes. A regra e' a de
+     `calcularArrHaAcumulado`: mes sem area — nulo, NaN ou ZERO — nao entra
+     no divisor. E' isso que faz o circuito fechar na tela, porque o `@/ha`
+     do periodo divide por ESTA media:
+         area (periodo) x @/ha (periodo) = @ produzidas (periodo).
+     ⚠ NAO e' a regra de `mediaIgnorandoNulos` (PainelConsultorTab), que
+     ignora nulo mas NAO ignora zero. Na NJ as duas so divergem a partir de
+     agosto, quando a serie tem 0: 4.228,84 contra 4.861,42. */
+  const mediaAreaAcumulada12 = (serie: (number | null)[]): number[] => {
+    const out: number[] = [];
+    let soma = 0;
+    let n = 0;
+    for (let i = 0; i < 12; i++) {
+      const v = serie[i];
+      if (v != null && Number.isFinite(v) && v > 0) { soma += v; n += 1; }
+      out.push(n > 0 ? soma / n : NaN);
+    }
+    return out;
+  };
+  /* 12 -> 13 com NaN em [0], como `arrobasHa` ja faz. O chip "no ano" nasce
+     desabilitado por consequencia, e esta correto: nao ha dezembro do ano-1
+     nesta serie. */
+  const areaTo13 = (serie12: (number | null)[]): number[] =>
+    Array.from({ length: 13 }, (_, i) => (i === 0 ? NaN : (serie12[i - 1] ?? NaN)));
 
   const {
     rawCategorias: viewDataRealizado,
@@ -2892,8 +2951,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
   // parametro diz "produtiva" e o insumo e pecuaria — por isso `lotUaHa` e
   // `kgHa` NAO mudam de valor com este PR: eles ja dividiam certo.
   //
-  // SEM ANO ANTERIOR: a area pecuaria do ano-1 nao esta carregada neste
-  // hook. Declarado como `undefined`, nao inventado.
+  // ANO ANTERIOR (PR-ATIVIDADE-09): passou a existir. A producao do ano-1 ja
+  // estava aqui (`arrobasProdAnoAnt12`, :2367) e a area do ano-1 entrou com
+  // `snapshotsAnoAnt` — a requisicao ja rodava e o resultado era descartado.
+  // E' divisao, nao fonte nova.
   // ─────────────────────────────────────────────────────────────
   const arrobasHaMesSerie13 = Array.from({ length: 13 }, (_, i) =>
     i === 0 ? NaN : (monthlyData?.arrHa?.[i - 1] ?? NaN));
@@ -2927,6 +2988,53 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
   };
   const arrobasHaDeltaMes  = mesIdx < 1 ? null : deltaArrHa(arrobasHaSerie, mesIdx - 1);
   const arrobasHaDeltaMeta = deltaArrHa(arrobasHaMetaSerie13, mesIdx);
+
+  /* @/ha do ano anterior — producao do ano-1 sobre area pecuaria do ano-1.
+     No mes e' a razao mes a mes; no periodo e' `calcularArrHaAcumulado`, a
+     MESMA funcao do realizado, para que as duas leituras respondam a mesma
+     pergunta em anos diferentes. */
+  const arrobasHaMesAnoAntSerie13 = arrobasProdAnoAnt12
+    ? Array.from({ length: 13 }, (_, i) => {
+        if (i === 0) return NaN;
+        const a = areaPecuariaRealAnoAntNumPorMes[i - 1];
+        const prod = arrobasProdAnoAnt12[i - 1];
+        return Number.isFinite(a) && a > 0 && Number.isFinite(prod) ? prod / a : NaN;
+      })
+    : null;
+  const arrobasHaPeriodoAnoAntSerie13 = arrobasProdAnoAnt12
+    ? (() => {
+        const s12 = calcularArrHaAcumulado(arrobasProdAnoAnt12, areaPecuariaRealAnoAntNumPorMes);
+        return Array.from({ length: 13 }, (_, i) => (i === 0 ? NaN : (s12[i - 1] ?? NaN)));
+      })()
+    : null;
+  const arrobasHaSerieAnoAnt = isPeriodo ? arrobasHaPeriodoAnoAntSerie13 : arrobasHaMesAnoAntSerie13;
+  const arrobasHaDeltaAno = deltaArrHa(arrobasHaSerieAnoAnt, mesIdx);
+
+  /* ── E1 · AREA PRODUTIVA PECUARIA ──
+     O nome resolve a ambiguidade que parou o PR-08: ha tres series de area
+     no hook e duas se chamam "produtiva". Esta declara no rotulo qual e —
+     a MESMA que divide o `@/ha`, `lotUaHa` e o `kgHa`.
+     `areaProdutivaRealPorMes` e `areaProdutivaMes` seguem intocados, com os
+     donos que tem. Este indicador nao participa da colisao: usa outro nome.
+     PERIODO E MEDIA, nao a foto do mes — ver `mediaAreaAcumulada12`. */
+  const areaPecMesSerie13     = areaTo13(areaPecuariaRealPorMes);
+  const areaPecPeriodoSerie13 = areaTo13(mediaAreaAcumulada12(areaPecuariaRealPorMes));
+  const areaPecMesAnoAntSerie13     = areaTo13(areaPecuariaRealAnoAntPorMes);
+  const areaPecPeriodoAnoAntSerie13 = areaTo13(mediaAreaAcumulada12(areaPecuariaRealAnoAntPorMes));
+  const areaPecMesMetaSerie13     = areaTo13(areaPecuariaMetaPorMes);
+  const areaPecPeriodoMetaSerie13 = areaTo13(mediaAreaAcumulada12(areaPecuariaMetaPorMes));
+  const areaPecSerie = isPeriodo ? areaPecPeriodoSerie13 : areaPecMesSerie13;
+  const areaPecValor = safe(areaPecSerie[mesIdx]);
+  const deltaAreaPec = (ref: number[] | null, idx: number): number | null => {
+    if (!ref) return null;
+    const curr = safe(areaPecSerie[mesIdx]);
+    const r = safe(ref[idx]);
+    if (curr == null || r == null || r === 0) return null;
+    return ((curr - r) / r) * 100;
+  };
+  const areaPecDeltaMes  = mesIdx < 1 ? null : deltaAreaPec(areaPecSerie, mesIdx - 1);
+  const areaPecDeltaAno  = deltaAreaPec(isPeriodo ? areaPecPeriodoAnoAntSerie13 : areaPecMesAnoAntSerie13, mesIdx);
+  const areaPecDeltaMeta = deltaAreaPec(isPeriodo ? areaPecPeriodoMetaSerie13 : areaPecMesMetaSerie13, mesIdx);
 
   // ─────────────────────────────────────────────────────────────
   // ── Financeiro Produtivo — 6 indicadores (1-based, length 13) ──
@@ -4248,22 +4356,40 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
                    periodo: { titulo: 'Arrobas produzidas por hectare', subtitulo: 'Produção acumulada ÷ área pecuária média do período' } },
       valor:     arrobasHaValor,
       deltaMes:  arrobasHaDeltaMes,
-      deltaAno:  null,
+      deltaAno:  arrobasHaDeltaAno,
       deltaMeta: arrobasHaDeltaMeta,
       serieAno:    arrobasHaSerie,
-      serieAnoAnt: undefined,
+      serieAnoAnt: arrobasHaSerieAnoAnt ?? undefined,
       serieMeta:   arrobasHaMetaSerie13 ?? undefined,
       series: {
-        mes:     { ano: arrobasHaMesSerie13,     meta: monthlyDataMeta ? Array.from({ length: 13 }, (_, i) => i === 0 ? NaN : ((monthlyDataMeta.arrHa ?? [])[i - 1] ?? NaN)) : undefined },
-        periodo: { ano: arrobasHaPeriodoSerie13, meta: monthlyDataMeta ? Array.from({ length: 13 }, (_, i) => i === 0 ? NaN : (calcularArrHaAcumulado(monthlyDataMeta.arrobasProd ?? [], areaPecuariaMetaNumPorMes)[i - 1] ?? NaN)) : undefined },
+        mes:     { ano: arrobasHaMesSerie13,     anoAnt: arrobasHaMesAnoAntSerie13 ?? undefined,     meta: monthlyDataMeta ? Array.from({ length: 13 }, (_, i) => i === 0 ? NaN : ((monthlyDataMeta.arrHa ?? [])[i - 1] ?? NaN)) : undefined },
+        periodo: { ano: arrobasHaPeriodoSerie13, anoAnt: arrobasHaPeriodoAnoAntSerie13 ?? undefined, meta: monthlyDataMeta ? Array.from({ length: 13 }, (_, i) => i === 0 ? NaN : (calcularArrHaAcumulado(monthlyDataMeta.arrobasProd ?? [], areaPecuariaMetaNumPorMes)[i - 1] ?? NaN)) : undefined },
+      },
+    } : null,
+    areaProdutivaPecIndicador: monthlyData ? {
+      label:     isPeriodo ? 'ÁREA PRODUTIVA PECUÁRIA MÉDIA' : 'ÁREA PRODUTIVA PECUÁRIA',
+      titulo:    'Área Produtiva Pecuária',
+      subtitulo: 'Hectares de pecuária',
+      titulos:   { mes:     { titulo: 'Área Produtiva Pecuária', subtitulo: 'Hectares de pecuária' },
+                   periodo: { titulo: 'Área Produtiva Pecuária', subtitulo: 'Hectares de pecuária — média do período' } },
+      valor:     areaPecValor,
+      deltaMes:  areaPecDeltaMes,
+      deltaAno:  areaPecDeltaAno,
+      deltaMeta: areaPecDeltaMeta,
+      serieAno:    areaPecSerie,
+      serieAnoAnt: (isPeriodo ? areaPecPeriodoAnoAntSerie13 : areaPecMesAnoAntSerie13),
+      serieMeta:   (isPeriodo ? areaPecPeriodoMetaSerie13 : areaPecMesMetaSerie13),
+      series: {
+        mes:     { ano: areaPecMesSerie13,     anoAnt: areaPecMesAnoAntSerie13,     meta: areaPecMesMetaSerie13 },
+        periodo: { ano: areaPecPeriodoSerie13, anoAnt: areaPecPeriodoAnoAntSerie13, meta: areaPecPeriodoMetaSerie13 },
       },
     } : null,
     precoArrEstoqueIndicador: monthlyData ? {
       label:     'R$/@ EM ESTOQUE',
-      titulo:    'R$ por arroba em estoque',
+      titulo:    'Valor da arroba do estoque',
       subtitulo: 'Valor do rebanho ÷ arrobas em estoque',
-      titulos:   { mes:     { titulo: 'R$ por arroba em estoque', subtitulo: 'Valor do rebanho ÷ arrobas em estoque' },
-                   periodo: { titulo: 'R$ por arroba em estoque', subtitulo: 'Valor do rebanho ÷ arrobas em estoque' } },
+      titulos:   { mes:     { titulo: 'Valor da arroba do estoque', subtitulo: 'Valor do rebanho ÷ arrobas em estoque' },
+                   periodo: { titulo: 'Valor da arroba do estoque', subtitulo: 'Valor do rebanho ÷ arrobas em estoque' } },
       valor:     precoArrEstoqueValor,
       deltaMes:  precoArrEstoqueDeltaMes,
       deltaAno:  precoArrEstoqueDeltaAno,

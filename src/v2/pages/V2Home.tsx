@@ -638,7 +638,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
        Saem da MESMA desestruturacao: nenhuma chamada nova ao hook.
        `kgHaIndicador` ja vinha, na linha de cima. */
     arrobasEstoqueIndicador, arrobasHaIndicador, precoArrEstoqueIndicador,
-    valorRebanhoSemEfeitoIndicador,
+    valorRebanhoSemEfeitoIndicador, areaProdutivaPecIndicador,
     loading: loadingPainel,
   } = usePainelConsultorData({ ano: anoNum, mes: mesNum, viewMode, incluirComparativos: true, ...sharedLanc });
 
@@ -1195,11 +1195,11 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     mesAtual: mesNum,
   });
 
-  /* Os DOZE indicadores do assunto Zootecnico, prontos para o modal.
-     ONZE com dado; AREA PRODUTIVA entra declarada em construcao, porque
-     `areaProdutivaPecIndicador` nao existe no PC-100 e area tem calculos
-     paralelos conhecidos — frente propria. Ela ocupa o lugar dela na grade:
-     onze cards em tres colunas deixariam um vao mudo na quarta linha.
+  /* Os DOZE indicadores do assunto Zootecnico, prontos para o modal, TODOS
+     com dado desde o PR-ATIVIDADE-09: `areaProdutivaPecIndicador` nasceu no
+     hook e o card em construcao saiu. O nome resolveu a ambiguidade que
+     parou o PR-08 — ha tres series de area e duas se chamam "produtiva";
+     esta declara no rotulo que e' a pecuaria, a mesma que divide o @/ha.
      `porFazenda` e `historico` ficam UNDEFINED quando nao ha fonte, e o card
      mostra "em construção" naquela aba: mostrar o Global disfarcado de
      por-fazenda seria dado errado com rotulo certo, e esconder o card faria o
@@ -1280,31 +1280,15 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
       monta('arrobasEstoque', arrobasEstoqueIndicador, 'decimal1', '@'),
       monta('kgHa', kgHaIndicador, 'decimal1', 'kg/ha'),
       monta('arrobasHa', arrobasHaIndicador, 'decimal2', '@/ha'),
-      monta('precoArrEstoque', precoArrEstoqueIndicador, 'moeda', undefined),
+      monta('precoArrEstoque', precoArrEstoqueIndicador, 'moeda', 'R$/@'),
       monta('valorRebanhoSemEfeito', valorRebanhoSemEfeitoIndicador, 'moedaAbreviada', undefined),
-      /* O decimo segundo. NAO e um indicador: e o lugar dele, declarado.
-         Series vazias, valor null e `emConstrucao` com o motivo — as faixas
-         de cima continuam sendo desenhadas, entao a altura do card e a
-         mesma dos outros onze e a grade nao desalinha. */
-      {
-        chave: 'areaProdutiva',
-        titulo: 'Área produtiva',
-        subtitulo: 'Área pecuária efetiva',
-        unidade: 'ha',
-        formatoValor: 'decimal1',
-        serieMes: [],
-        seriePeriodo: [],
-        valorMes: null,
-        valorPeriodo: null,
-        deltaMes: null,
-        deltaAno: null,
-        deltaMeta: null,
-        emConstrucao: 'não existe como indicador do PC-100',
-      },
+      /* O decimo segundo, agora com dado. O rotulo diz QUAL das tres series
+         de area do hook e' esta — a mesma que divide o @/ha. */
+      monta('areaProdutiva', areaProdutivaPecIndicador, 'decimal1', 'ha'),
     ];
   }, [cabecasIndicador, arrobasIndicador, uaHaIndicador, gmdIndicador, pesoMedioIndicador,
       valorRebanhoIndicador, arrobasEstoqueIndicador, kgHaIndicador, arrobasHaIndicador,
-      precoArrEstoqueIndicador, valorRebanhoSemEfeitoIndicador,
+      precoArrEstoqueIndicador, valorRebanhoSemEfeitoIndicador, areaProdutivaPecIndicador,
       seriePorFazAtiv, histZootAtiv, mesNum]);
 
   const arrobasHistoricoOficial: HistoricoPorModo =

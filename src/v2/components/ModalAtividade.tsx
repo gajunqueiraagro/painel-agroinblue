@@ -153,7 +153,7 @@ const ORDEM_CARDS = [
    valor discreto, e a curva liga janeiro a fevereiro como se houvesse
    trajetoria entre meses independentes. Mesma decisao do PR-16 e do PR-32.
    So no nivel "No mes" — periodo e acumulado, e acumulado e curva. */
-const COLUNA_NO_MES = ['arrobas', 'gmd'];
+const COLUNA_NO_MES = ['arrobas', 'gmd', 'arrobasHa'];
 
 /* ALTURAS FIXAS DAS FAIXAS DO CARD — o remedio do PR-ATIVIDADE-03.
    O cabecalho tinha altura VARIAVEL: um chip marcado dava dois deltas,
