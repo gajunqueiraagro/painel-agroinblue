@@ -27,14 +27,20 @@
  */
 import { useEffect, useState } from 'react';
 import {
-  ComposedChart, Line, Area, Bar, BarChart, Cell,
+  ComposedChart, Line, Area, Bar, BarChart, Cell, LabelList, ReferenceLine,
   XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts';
+import { X } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { COR_FAZENDA } from '@/v2/components/IndicadorHistoricoModal';
 
 /* ── Idioma visual V1, copiado ─────────────────────────────────────── */
+/* Marcadores do idioma V1, copiados. Vazados: o `fill` e a cor do CARD,
+   nao a da pagina — dentro de <Card> o fundo e `--card`, e apontar para
+   `--background` deixa miolo cinza em card branco. */
 const DOT_V1      = { r: 2, strokeWidth: 1.5, fill: 'hsl(var(--card))' };
+const DOT_META_V1 = { r: 3, strokeWidth: 1.5, fill: 'hsl(var(--card))' };
+/* `COR_ATUAL.stroke` do IndicadorHistoricoModal no ramo padrao. */
 const COR_ATUAL   = '#185FA5';
 const COR_ANO_ANT = '#B4B2A9';
 const COR_META    = '#F97316';
@@ -99,7 +105,7 @@ interface Props {
 type Assunto  = 'zootecnico' | 'movimentacoes' | 'financeiro' | 'operacional';
 type Escopo   = 'global' | 'fazenda';
 type Leitura  = 'mes' | 'periodo' | 'historico';
-type Comparador = 'meta' | 'mes' | 'anoAnt';
+type Comparador = 'meta' | 'mes' | 'anoAnt' | 'noAno';
 
 const ASSUNTOS: Array<{ id: Assunto; rotulo: string }> = [
   { id: 'zootecnico',    rotulo: 'Zootécnico' },
@@ -107,6 +113,11 @@ const ASSUNTOS: Array<{ id: Assunto; rotulo: string }> = [
   { id: 'financeiro',    rotulo: 'Financeiro' },
   { id: 'operacional',   rotulo: 'Operacional' },
 ];
+
+/* Ordem de leitura da grade — decisao de apresentacao, entao mora aqui e
+   nao em quem monta o array. Chave desconhecida vai para o fim, em vez de
+   sumir: card que desaparece por causa de um rotulo novo e defeito mudo. */
+const ORDEM_CARDS = ['cabecas', 'gmd', 'arrobas', 'uaHa', 'pesoMedio', 'valorRebanho'];
 
 const fmtN = (v: number | null | undefined, casas: number) =>
   v == null || isNaN(v) ? '—' : v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });
@@ -145,6 +156,11 @@ const fmtEixo = (v: number | null | undefined, fmt: FormatoValor): string => {
   return fmtN(v, 0);
 };
 
+/* Mesma formula do hook: ((curr - ref) / ref) * 100, com guarda de
+   nulo/NaN/zero. Nao e regra nova — e a que o PC-100 ja aplica. */
+const calcDelta = (a: number | null, b: number | null): number | null =>
+  a == null || b == null || isNaN(a) || isNaN(b) || b === 0 ? null : ((a - b) / b) * 100;
+
 /** 13 posicoes, 1=Jan; 12 posicoes, 0=Jan. Decide pelo comprimento. */
 const valorDoMes = (serie: number[] | undefined, mes: number): number | null => {
   if (!serie || mes < 1 || mes > 12) return null;
@@ -177,9 +193,18 @@ export function ModalAtividade({
   const [assunto, setAssunto] = useState<Assunto>('zootecnico');
   const [escopo,  setEscopo]  = useState<Escopo>('global');
   const [leitura, setLeitura] = useState<Leitura>('mes');
-  /* Um comparador por card — o seletor vive no topo direito de cada
-     grafico, nao no cabecalho do modal. Abre em `meta`. */
-  const [comparador, setComparador] = useState<Record<string, Comparador>>({});
+  /* MULTI-selecao por GRAFICO — nao por modal. O seletor nao troca so o
+     numero do delta: ele decide QUAIS COMPARADORES aparecem no grafico.
+     Qualquer combinacao vale, inclusive NENHUMA: sem nada marcado o card
+     mostra so a linha do realizado, que e leitura legitima e nao estado
+     invalido. O realizado nunca some — ele e o assunto, nao um comparador. */
+  const [comparadores, setComparadores] = useState<Record<string, Comparador[]>>({});
+  const marcados = (chave: string) => comparadores[chave] ?? ['meta'];
+  const alterna = (chave: string, op: Comparador) =>
+    setComparadores(s => {
+      const atual = s[chave] ?? ['meta'];
+      return { ...s, [chave]: atual.includes(op) ? atual.filter(c => c !== op) : [...atual, op] };
+    });
 
   /* Estado reiniciado a cada abertura: reabrir num nivel que ficou de uma
      sessao anterior desorienta — o modal sempre comeca no mesmo lugar. */
@@ -188,7 +213,7 @@ export function ModalAtividade({
       setAssunto('zootecnico');
       setEscopo('global');
       setLeitura('mes');
-      setComparador({});
+      setComparadores({});
     }
   }, [open]);
 
@@ -200,16 +225,35 @@ export function ModalAtividade({
 
   /* Uma linha por mes, colunas por serie. `atual` para em `mesAtual`; meta e
      ano anterior seguem Jan–Dez, que e o padrao dos modais executivos. */
+  const serieAtual = (ind: IndicadorAtividade) =>
+    leitura === 'periodo' ? ind.seriePeriodo : ind.serieMes;
+
+  /* A FOTO DO INICIO DO ANO. O hook publica o inicial na posicao 0 das
+     series de 13, e SO no realizado de `cabecas` e `pesoMedio`
+     (`comInicial`, usePainelConsultorData:1850). Onde ela e finita, o card
+     ganha a categoria "Ini" e a horizontal; onde nao, segue com doze
+     categorias, sem slot vazio. Um teste serve as duas coisas — e ao chip
+     `no ano`, que compara contra esse mesmo ponto. */
+  const inicial = (ind: IndicadorAtividade): number | null => {
+    const s = serieAtual(ind);
+    return s && s.length >= 13 && Number.isFinite(s[0]) ? s[0] : null;
+  };
+
   const dadosGlobal = (ind: IndicadorAtividade) => {
-    const sAtual = leitura === 'periodo' ? ind.seriePeriodo : ind.serieMes;
+    const sAtual = serieAtual(ind);
     const sAnt   = leitura === 'periodo' ? ind.serieAnoAntPeriodo : ind.serieAnoAntMes;
     const sMeta  = leitura === 'periodo' ? ind.serieMetaPeriodo : ind.serieMetaMes;
-    return MESES.map((m, idx) => ({
+    const meses = MESES.map((m, idx) => ({
       mes: m,
       atual:       idx + 1 <= mesAtual ? valorDoMes(sAtual, idx + 1) : null,
       anoAnterior: valorDoMes(sAnt, idx + 1),
       meta:        valorDoMes(sMeta, idx + 1),
     }));
+    const ini = inicial(ind);
+    if (ini == null) return meses;
+    /* `anoAnterior` e `meta` ficam nulos de proposito: para o ano anterior o
+       inicial seria dezembro de dois anos atras, que nao existe. */
+    return [{ mes: 'Ini', atual: ini, anoAnterior: null, meta: null }, ...meses];
   };
 
   /* Series por fazenda tem 12 posicoes, 0=Jan — leitura por indice DIRETO.
@@ -240,15 +284,97 @@ export function ModalAtividade({
       .map(p => ({ nome: String(p.ano), valor: p.valor as number, atual: p.ano === anoAtual }));
   };
 
-  const Comparacao = ({ ind }: { ind: IndicadorAtividade }) => {
-    const c = comparador[ind.chave] ?? 'meta';
-    const d = c === 'meta' ? ind.deltaMeta : c === 'mes' ? ind.deltaMes : ind.deltaAno;
-    if (d == null || isNaN(d)) return <span className="text-[9px] text-muted-foreground/60">—</span>;
-    const bom = ind.polaridade === 'positivoRuim' ? d < 0 : d > 0;
+  /* Tooltip proprio, COPIADO do `IndicadorHistoricoModal` — nao e um
+     terceiro desenho. Nao foi extraido para lib porque aquele arquivo esta
+     em homologacao (PR-31/32) e mexer nele arriscaria uma regressao que so
+     apareceria ao abrir o outro modal. Unificar tooltip, cores e
+     formatadores num modulo de idioma e a mesma frente ja registrada.
+     Resolve os dois defeitos do default do recharts: o tamanho, e a
+     DUPLICATA — Area e Line da mesma chave entram as duas no payload, e o
+     filtro por chave conhecida deixa passar uma so. */
+  const CustomTooltip = ({ active, payload, label, ind }: {
+    active?: boolean;
+    payload?: Array<{ dataKey?: string | number; value?: number; color?: string }>;
+    label?: string;
+    ind: IndicadorAtividade;
+  }) => {
+    if (!active || !payload || payload.length === 0) return null;
+
+    type Ln = { rotulo: string; cor: string; valor: number; tracejado: boolean };
+    const linhas: Ln[] = [];
+    const vistos = new Set<string>();
+    const push = (chave: string, rotulo: string, tracejado: boolean) => {
+      if (vistos.has(chave)) return;
+      const e = payload.find(x => String(x.dataKey) === chave);
+      if (!e || e.value == null) return;
+      vistos.add(chave);
+      linhas.push({ rotulo, cor: e.color ?? COR_ATUAL, valor: e.value, tracejado });
+    };
+
+    if (escopo === 'fazenda') {
+      /* Global PRIMEIRO, com o rotulo legivel — `__global` e chave interna e
+         nunca aparece na UI. Depois as fazendas, na ordem das series. */
+      push(CHAVE_GLOBAL, 'Global', true);
+      for (const f of ind.porFazenda ?? []) push(f.codigo, f.codigo, false);
+    } else {
+      /* Ordem 2026 · 2025 · Meta, e rotulo pelo ANO — nunca o nome cru da
+         chave. */
+      push('atual', String(anoAtual), false);
+      push('anoAnterior', String(anoAtual - 1), true);
+      push('meta', `Meta ${anoAtual}`, false);
+    }
+    if (linhas.length === 0) return null;
+
     return (
-      <span className={`text-[10px] font-medium ${bom ? 'text-emerald-600' : 'text-red-600'}`}>
-        {d > 0 ? '+' : ''}{d.toFixed(1)}%
-      </span>
+      <div className="rounded-sm border border-border/20 bg-background/60 backdrop-blur-[2px] px-1.5 py-0.5 text-[9px] leading-tight">
+        <p className="font-medium text-foreground/85 text-[9px] mb-0.5">{label}</p>
+        {linhas.map((l, i) => (
+          <div key={i} className="flex items-center gap-1">
+            {l.tracejado
+              ? <div className="w-2 border-t-[2px] border-dashed" style={{ borderColor: l.cor }} />
+              : <div className="w-1 h-1 rounded-full" style={{ background: l.cor }} />}
+            <span className="text-foreground/90">{fmtValor(l.valor, ind.formatoValor, ind.unidade)}</span>
+            <span className="text-muted-foreground/80 text-[8px]">{l.rotulo}</span>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  /* Um delta por comparador MARCADO, empilhados. `mes` compara com o mes
+     anterior da propria serie — e um ponto, nao uma serie, por isso ele
+     entra aqui e NAO desenha linha no grafico. */
+  const Deltas = ({ ind }: { ind: IndicadorAtividade }) => {
+    const sel = marcados(ind.chave);
+    const val = leitura === 'periodo' ? ind.valorPeriodo : ind.valorMes;
+    const TODOS: Array<{ op: Comparador; rot: string; d: number | null }> = [
+      { op: 'meta',   rot: 'meta',     d: ind.deltaMeta },
+      { op: 'mes',    rot: 'mês',      d: ind.deltaMes  },
+      { op: 'anoAnt', rot: 'ano ant.', d: ind.deltaAno  },
+      /* `no ano` compara com a foto do inicio do ano — os dois pontos ja
+         estao aqui, entao nao ha prop nova nem fonte nova. */
+      { op: 'noAno',  rot: 'no ano',   d: calcDelta(val, inicial(ind)) },
+    ];
+    const itens = TODOS.filter(x => sel.includes(x.op));
+    if (itens.length === 0) return null;
+    return (
+      <div className="flex flex-col items-end gap-0">
+        {itens.map(({ op, rot, d }) => {
+          if (d == null || isNaN(d)) {
+            return <span key={op} className="text-[9px] text-muted-foreground/60">— {rot}</span>;
+          }
+          const bom = ind.polaridade === 'positivoRuim' ? d < 0 : d > 0;
+          /* A SETA E DIRECAO, NAO QUALIDADE (A14): numero que subiu aponta
+             para cima mesmo quando subir e ruim. Quem carrega o juizo e a
+             COR. */
+          return (
+            <span key={op} className={`text-[9px] font-medium ${bom ? 'text-emerald-600' : 'text-red-600'}`}>
+              {d >= 0 ? '↗' : '↙'} {d > 0 ? '+' : ''}{d.toFixed(1)}%
+              <span className="text-muted-foreground/60 font-normal"> {rot}</span>
+            </span>
+          );
+        })}
+      </div>
     );
   };
 
@@ -263,7 +389,18 @@ export function ModalAtividade({
       ? `${anoAtual - 5}–${anoAtual}`
       : leitura === 'periodo' ? rotuloPer : rotuloMes;
     const valor = leitura === 'periodo' ? ind.valorPeriodo : ind.valorMes;
-    const c = comparador[ind.chave] ?? 'meta';
+    const sel = marcados(ind.chave);
+    /* Chip DESABILITADO, nunca invisivel, quando a serie nao existe: sumir
+       com o controle esconde a ausencia; desabilitar declara. O motivo vai
+       no `title`. `mes` nunca desabilita — o mes anterior sai da propria
+       serie do realizado. */
+    const temSerie = (op: Comparador) =>
+      op === 'mes'   ? true
+      : op === 'noAno' ? inicial(ind) != null
+      : op === 'meta'
+        ? !!(leitura === 'periodo' ? ind.serieMetaPeriodo : ind.serieMetaMes)
+        : !!(leitura === 'periodo' ? ind.serieAnoAntPeriodo : ind.serieAnoAntMes);
+    const mostra = (op: Comparador) => sel.includes(op) && temSerie(op);
 
     return (
       <Card className="flex flex-col min-h-0">
@@ -281,22 +418,35 @@ export function ModalAtividade({
                   fazenda as series sao LUGARES, nao cenarios, e comparar com
                   meta ali seria outra pergunta. */}
               {escopo === 'global' && leitura !== 'historico' && (
-                <div className="flex items-center gap-1">
-                  <Comparacao ind={ind} />
+                <div className="flex items-start gap-1.5">
+                  <Deltas ind={ind} />
                   <div className="flex gap-0.5">
-                    {(['meta', 'mes', 'anoAnt'] as Comparador[]).map(op => (
-                      <button
-                        key={op}
-                        onClick={() => setComparador(s => ({ ...s, [ind.chave]: op }))}
-                        className={`px-1 h-4 rounded text-[8px] border ${
-                          c === op
-                            ? 'bg-muted text-foreground border-border'
-                            : 'bg-transparent text-muted-foreground/60 border-transparent hover:bg-muted/40'
-                        }`}
-                      >
-                        {op === 'meta' ? 'meta' : op === 'mes' ? 'mês' : 'ano ant.'}
-                      </button>
-                    ))}
+                    {(['meta', 'mes', 'anoAnt', 'noAno'] as Comparador[]).map(op => {
+                      const ok = temSerie(op);
+                      const on = sel.includes(op);
+                      return (
+                        <button
+                          key={op}
+                          disabled={!ok}
+                          title={ok
+                            ? undefined
+                            : op === 'meta'  ? 'sem série de meta para este indicador'
+                            : op === 'noAno' ? 'sem foto do início do ano para este indicador'
+                                             : 'sem série de ano anterior para este indicador'}
+                          onClick={() => alterna(ind.chave, op)}
+                          className={`px-1 h-4 rounded text-[8px] border ${
+                            !ok
+                              ? 'bg-transparent text-muted-foreground/30 border-transparent line-through cursor-not-allowed'
+                              : on
+                                ? 'bg-muted text-foreground border-border'
+                                : 'bg-transparent text-muted-foreground/60 border-transparent hover:bg-muted/40'
+                          }`}
+                        >
+                          {op === 'meta' ? 'meta' : op === 'mes' ? 'mês'
+                            : op === 'anoAnt' ? 'ano ant.' : 'no ano'}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -310,7 +460,10 @@ export function ModalAtividade({
           ) : leitura === 'historico' && escopo === 'fazenda' ? (
             <EmConstrucao motivo="histórico por fazenda ainda não existe" />
           ) : (
-            <div className="flex-1" style={{ minHeight: 150, maxHeight: 210 }}>
+            <>
+              <div className="flex-1"
+                 style={{ minHeight: escopo === 'fazenda' && leitura !== 'historico' ? 132 : 150,
+                          maxHeight: 210 }}>
               <ResponsiveContainer width="100%" height="100%">
                 {leitura === 'historico' ? (
                   <BarChart data={barrasHistorico(ind)}
@@ -330,7 +483,7 @@ export function ModalAtividade({
                     <YAxis tick={{ fontSize: 8, fill: '#888780' }} width={46}
                            tickFormatter={v => fmtEixo(v, ind.formatoValor)}
                            stroke="hsl(var(--muted-foreground) / 0.22)" />
-                    <Tooltip formatter={(v: number) => fmtValor(v, ind.formatoValor, ind.unidade)} />
+                    <Tooltip content={<CustomTooltip ind={ind} />} />
                     {/* Por `map`, NUNCA em fragmento: o recharts inspeciona
                         filhos por tipo e nao acha o que estiver embrulhado. */}
                     {(ind.porFazenda ?? []).map((f, i) => (
@@ -345,28 +498,91 @@ export function ModalAtividade({
                           connectNulls={false} isAnimationActive={false} />
                   </ComposedChart>
                 ) : (
-                  <ComposedChart data={dadosGlobal(ind)} margin={{ top: 6, right: 8, left: 4, bottom: 2 }}>
+                  <ComposedChart data={dadosGlobal(ind)} margin={{ top: 14, right: 8, left: 4, bottom: 2 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted-foreground) / 0.15)" />
+                    {/* A horizontal na altura do inicial: da para ler de
+                        relance se o ano esta acima ou abaixo de onde comecou. */}
+                    {inicial(ind) != null && (
+                      <ReferenceLine y={inicial(ind) as number} stroke={COR_ATUAL}
+                                     strokeDasharray="4 3" strokeWidth={1} opacity={0.5} />
+                    )}
                     <XAxis dataKey="mes" tick={{ fontSize: 8, fill: '#888780' }} stroke="hsl(var(--muted-foreground) / 0.22)" />
                     <YAxis tick={{ fontSize: 8, fill: '#888780' }} width={46}
                            tickFormatter={v => fmtEixo(v, ind.formatoValor)}
                            stroke="hsl(var(--muted-foreground) / 0.22)" />
-                    <Tooltip formatter={(v: number) => fmtValor(v, ind.formatoValor, ind.unidade)} />
-                    <Area type="monotone" dataKey="anoAnterior" stroke="none"
-                          fill={COR_ANO_ANT} fillOpacity={0.12} isAnimationActive={false} />
-                    <Line type="monotone" dataKey="anoAnterior" stroke={COR_ANO_ANT}
-                          strokeWidth={1.5} strokeDasharray="4 2" dot={false}
-                          connectNulls={false} isAnimationActive={false} />
-                    <Line type="monotone" dataKey="meta" stroke={COR_META}
-                          strokeWidth={2} dot={false} connectNulls={false} isAnimationActive={false} />
+                    <Tooltip content={<CustomTooltip ind={ind} />} />
+                    {/* Os chips governam O GRAFICO, nao so o numero do delta.
+                        `mes` NAO aparece aqui de proposito: o mes anterior e um
+                        PONTO da propria serie do realizado, nao uma serie —
+                        ele move o delta e nao desenha linha. */}
+                    {mostra('anoAnt') && (
+                      <Area type="monotone" dataKey="anoAnterior" stroke="none"
+                            fill={COR_ANO_ANT} fillOpacity={0.12} isAnimationActive={false} />
+                    )}
+                    {mostra('anoAnt') && (
+                      <Line type="monotone" dataKey="anoAnterior" stroke={COR_ANO_ANT}
+                            strokeWidth={1.5} strokeDasharray="4 2" dot={DOT_V1}
+                            connectNulls={false} isAnimationActive={false} />
+                    )}
+                    {mostra('meta') && (
+                      <Line type="monotone" dataKey="meta" stroke={COR_META}
+                            strokeWidth={2} dot={DOT_META_V1} connectNulls={false}
+                            isAnimationActive={false} />
+                    )}
+                    {/* O REALIZADO nunca e condicional: ele e o assunto do
+                        card. Com zero chips marcados sobra so ele, e isso e
+                        leitura legitima. */}
                     <Area type="monotone" dataKey="atual" stroke="none"
                           fill={COR_ATUAL} fillOpacity={0.10} isAnimationActive={false} />
                     <Line type="monotone" dataKey="atual" stroke={COR_ATUAL}
-                          strokeWidth={2.5} dot={DOT_V1} connectNulls={false} isAnimationActive={false} />
+                          strokeWidth={2.5} dot={DOT_V1} connectNulls={false} isAnimationActive={false}>
+                      {/* E11 — o valor SO sobre o ponto do mes filtrado. Em
+                          todos os meses poluiria: treze rotulos de 9px em
+                          ~450px de plotagem se sobrepoem.
+                          ⚠ O offset vem do PROPRIO array. Prepender "Ini"
+                          desloca todos os indices em um, e fixar o numero e a
+                          armadilha do A12 — ja cobrou uma vez. */}
+                      <LabelList
+                        dataKey="atual"
+                        content={(props: { index?: number; x?: number | string; y?: number | string; value?: number | string }) => {
+                          const off = dadosGlobal(ind).length > 12 ? 1 : 0;
+                          const alvo = mesAtual - 1 + off;
+                          if (props.index !== alvo) return null;
+                          const v = typeof props.value === 'number' ? props.value : null;
+                          if (v == null) return null;
+                          return (
+                            <text x={Number(props.x)} y={Number(props.y) - 6} fontSize={9}
+                                  fill="hsl(var(--foreground))" textAnchor="middle">
+                              {fmtValor(v, ind.formatoValor, ind.unidade)}
+                            </text>
+                          );
+                        }}
+                      />
+                    </Line>
                   </ComposedChart>
                 )}
               </ResponsiveContainer>
-            </div>
+              </div>
+              {/* Legenda com AMOSTRA: sem o tracinho o codigo nao liga a
+                  linha nenhuma. O piso do grafico cai de 150 para 132 quando
+                  ela aparece, entao o card NAO cresce — a legenda entra no
+                  espaco que ja existia. */}
+              {escopo === 'fazenda' && leitura !== 'historico' && (
+                <div className="flex justify-center gap-2.5 px-0 mt-1 flex-wrap">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 border-t-[2px] border-dashed" style={{ borderColor: COR_GLOBAL }} />
+                    <span className="text-[9px] text-muted-foreground">Global</span>
+                  </div>
+                  {(ind.porFazenda ?? []).map((f, i) => (
+                    <div key={f.fazendaId} className="flex items-center gap-1.5">
+                      <div className="w-3 h-[2px] rounded"
+                           style={{ background: COR_FAZENDA[i % COR_FAZENDA.length] }} />
+                      <span className="text-[9px] text-muted-foreground">{f.codigo}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>
@@ -376,18 +592,31 @@ export function ModalAtividade({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
       <div
-        className="w-full max-w-6xl mx-4 rounded-lg border border-border/40 bg-background shadow-xl flex flex-col h-[92vh] max-h-[92vh]"
+        className="w-full max-w-7xl mx-4 rounded-lg border border-border/40 bg-background shadow-xl flex flex-col h-[92vh] max-h-[92vh]"
         onClick={e => e.stopPropagation()}
       >
         {/* CABECALHO congelado. `shrink-0` explicito: sem ele o cabecalho
             cederia altura para o miolo em viewport curto (A13). */}
         <div className="shrink-0 px-4 pt-3 pb-2 border-b border-border/40 space-y-2">
-          <div className="flex flex-wrap gap-1.5">
-            {ASSUNTOS.map(a => (
-              <button key={a.id} onClick={() => setAssunto(a.id)} className={btn(assunto === a.id, 'g')}>
-                {a.rotulo}
-              </button>
-            ))}
+          <div className="flex items-start gap-2">
+            <div className="flex flex-wrap gap-1.5">
+              {ASSUNTOS.map(a => (
+                <button key={a.id} onClick={() => setAssunto(a.id)} className={btn(assunto === a.id, 'g')}>
+                  {a.rotulo}
+                </button>
+              ))}
+            </div>
+            {/* O clique fora CONTINUA fechando — o botao acrescenta, nao
+                substitui. Num modal deste tamanho a borda fica longe do
+                cursor, e "clique fora" vira instrucao em vez de gesto. */}
+            <button
+              onClick={onClose}
+              aria-label="Fechar"
+              className="ml-auto shrink-0 h-7 w-7 rounded-md border border-border/50 text-muted-foreground
+                         hover:bg-muted/50 flex items-center justify-center"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex gap-1">
@@ -404,6 +633,15 @@ export function ModalAtividade({
                 </button>
               ))}
             </div>
+            {/* O contexto ocupa a largura livre a direita e SEGUE o nivel: em
+                "No período" mostra o intervalo, em "Histórico" a faixa de
+                anos. O escopo tambem muda, porque "Global" e "Por fazenda"
+                respondem perguntas diferentes sobre o mesmo mes. */}
+            <span className="ml-auto text-[11px] text-muted-foreground text-right">
+              {clienteNome} · {escopo === 'global' ? 'Global' : 'Por fazenda'} ·{' '}
+              {leitura === 'historico' ? `${anoAtual - 5}–${anoAtual}`
+                : leitura === 'periodo' ? rotuloPer : rotuloMes}
+            </span>
           </div>
         </div>
 
@@ -421,8 +659,17 @@ export function ModalAtividade({
           ) : (
             /* Grade IGUAL nas duas abas: muda o conteudo do grafico, nao a
                forma da tela. */
-            <div className="grid grid-cols-2 gap-3">
-              {indicadores.map(ind => <CardIndicador key={ind.chave} ind={ind} />)}
+            /* Tres por linha. Em `max-w-6xl` cada card teria ~370px e treze
+               rotulos de mes nao caberiam — o mesmo calculo que barrou rotulo
+               sobre barra no PR-16. Em 7xl volta a ~450px. */
+            <div className="grid grid-cols-3 gap-3">
+              {[...indicadores]
+                .sort((a, b) => {
+                  const ia = ORDEM_CARDS.indexOf(a.chave);
+                  const ib = ORDEM_CARDS.indexOf(b.chave);
+                  return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+                })
+                .map(ind => <CardIndicador key={ind.chave} ind={ind} />)}
             </div>
           )}
         </div>
@@ -431,9 +678,15 @@ export function ModalAtividade({
             sem linha no cache nao entra na aba Por fazenda, e quem some da
             lista some declaradamente (Art. 19, item 9). */}
         <div className="shrink-0 px-4 pb-2 pt-1.5 border-t border-border/40 flex items-center justify-between text-[10px] text-muted-foreground">
+          {/* Cliente, escopo e recorte subiram para o cabecalho no E4 —
+              repetir aqui seria a mesma frase duas vezes na mesma tela. O
+              rodape fica com o que o cabecalho NAO diz: quais fazendas estao
+              na base. Fazenda sem linha no cache nao entra, e por isso a
+              lista e a forma de a ausencia ser legivel (C2, Art. 19.9). */}
           <span>
-            {clienteNome} · {rotuloMes}
-            {codigosFazendas.length > 0 && ` · ${codigosFazendas.join(' · ')}`}
+            {codigosFazendas.length > 0
+              ? `Fazendas: ${codigosFazendas.join(' · ')}`
+              : ''}
           </span>
           <span>Clique fora para fechar</span>
         </div>
