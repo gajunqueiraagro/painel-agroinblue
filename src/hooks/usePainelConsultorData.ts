@@ -114,7 +114,7 @@ import {
   buildDesfruteCabMensal,
   TIPOS_DESFRUTE_OFICIAL,
 } from '@/lib/calculos/painelConsultorIndicadores';
-import { calcularIndicadoresEficienciaArea } from '@/lib/calculos/eficienciaArea';
+import { calcularIndicadoresEficienciaArea, calcularArrHaAcumulado } from '@/lib/calculos/eficienciaArea';
 import type { StatusPilares } from '@/hooks/useStatusPilares';
 
 interface Params {
@@ -494,6 +494,25 @@ export interface PainelConsultorDataResult {
   /** @ em ESTOQUE — peso vivo total / 30. Par patrimonial do "@ produzidas".
    *  `mes` e `periodo` sao a MESMA serie: estoque nao acumula. */
   arrobasEstoqueIndicador: {
+    label:      string;
+    titulo:     string;
+    subtitulo:  string;
+    titulos?:   TitulosPorModo;
+    valor:      number | null;
+    deltaMes:   number | null;
+    deltaAno:   number | null;
+    deltaMeta:  number | null;
+    serieAno:   number[];
+    serieAnoAnt?: number[];
+    serieMeta?:  number[];
+    series?: SeriesPorModo;
+  } | null;
+  /** @ produzidas por hectare de area PECUARIA. Fluxo.
+   *  Mensal: `monthlyData.arrHa`, da fonte unica `eficienciaArea`.
+   *  Acumulado: Σ arrobas ÷ MEDIA da area, nao Σ das razoes — ver
+   *  `calcularArrHaAcumulado`. Sem ano anterior: a area do ano-1 nao esta
+   *  carregada neste hook. */
+  arrobasHaIndicador: {
     label:      string;
     titulo:     string;
     subtitulo:  string;
@@ -2859,6 +2878,57 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
   const precoArrEstoqueDeltaAno = deltaPrecoEst(precoArrEstoqueSerieAnoAnt, mesIdx);
 
   // ─────────────────────────────────────────────────────────────
+  // ── @ PRODUZIDAS POR HECTARE (1-based, length 13) ──
+  //
+  // NENHUMA FORMULA NOVA AQUI. O mensal e `monthlyData.arrHa`, que sai de
+  // `calcularIndicadoresEficienciaArea` — a fonte unica declarada. O
+  // acumulado e `calcularArrHaAcumulado`, que passou a morar no MESMO
+  // modulo em vez de nascer aqui: `arrHa` ja tinha tres copias no
+  // PainelConsultorTab, e uma quarta no hook seria a quinta implementacao.
+  //
+  // A AREA JA E A PECUARIA. Conferido: `buildMonthlyDataFromView` recebe
+  // `areaPecuariaRealNumPorMes` no parametro `areaProdutivaMensal`
+  // (:1694) e `areaPecuariaMetaNumPorMes` na meta (:1712). O nome do
+  // parametro diz "produtiva" e o insumo e pecuaria — por isso `lotUaHa` e
+  // `kgHa` NAO mudam de valor com este PR: eles ja dividiam certo.
+  //
+  // SEM ANO ANTERIOR: a area pecuaria do ano-1 nao esta carregada neste
+  // hook. Declarado como `undefined`, nao inventado.
+  // ─────────────────────────────────────────────────────────────
+  const arrobasHaMesSerie13 = Array.from({ length: 13 }, (_, i) =>
+    i === 0 ? NaN : (monthlyData?.arrHa?.[i - 1] ?? NaN));
+
+  const arrobasHaAcum12 = calcularArrHaAcumulado(
+    monthlyData?.arrobasProd ?? [],
+    areaPecuariaRealNumPorMes,
+  );
+  const arrobasHaPeriodoSerie13 = Array.from({ length: 13 }, (_, i) =>
+    i === 0 ? NaN : (arrobasHaAcum12[i - 1] ?? NaN));
+
+  const arrobasHaSerie = isPeriodo ? arrobasHaPeriodoSerie13 : arrobasHaMesSerie13;
+  const arrobasHaValor = safe(arrobasHaSerie[mesIdx]);
+
+  const arrobasHaMetaSerie13 = monthlyDataMeta
+    ? (() => {
+        const s12 = isPeriodo
+          ? calcularArrHaAcumulado(monthlyDataMeta.arrobasProd ?? [], areaPecuariaMetaNumPorMes)
+          : (monthlyDataMeta.arrHa ?? []);
+        const s13 = Array.from({ length: 13 }, (_, i) => i === 0 ? NaN : (s12[i - 1] ?? NaN));
+        return s13.some(v => !isNaN(v)) ? s13 : null;
+      })()
+    : null;
+
+  const deltaArrHa = (ref: number[] | null, idx: number): number | null => {
+    if (!ref) return null;
+    const curr = safe(arrobasHaSerie[mesIdx]);
+    const r = safe(ref[idx]);
+    if (curr == null || r == null || r === 0) return null;
+    return ((curr - r) / r) * 100;
+  };
+  const arrobasHaDeltaMes  = mesIdx < 1 ? null : deltaArrHa(arrobasHaSerie, mesIdx - 1);
+  const arrobasHaDeltaMeta = deltaArrHa(arrobasHaMetaSerie13, mesIdx);
+
+  // ─────────────────────────────────────────────────────────────
   // ── Financeiro Produtivo — 6 indicadores (1-based, length 13) ──
   // Sem ano-1 nem meta nas fontes auditadas (lancPec/lancFin ano-1
   // não fetched; monthlyDataMeta não tem recPecComp/custOper).
@@ -3912,8 +3982,12 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     // UA/ha: série oficial (mês = monthlyData.lotUaHa; período = rollingAvg PC-100)
     lotUaHa: uaHaValor,
 
+    /* Era `meanArr` das razoes mensais — uma TERCEIRA agregacao, e errada
+       pelo mesmo motivo da soma. Passa a usar `calcularArrHaAcumulado`.
+       Zero consumidores externos hoje, entao a troca nao move tela
+       nenhuma; alinha o campo antes que alguem o leia. */
     arrHa: isPeriodo
-      ? meanArr(sliceUpTo(monthlyData.arrHa, idx))
+      ? safe(arrobasHaAcum12[idx])
       : safe(monthlyData.arrHa[idx]),
 
     kgHa: kgHaValor,
@@ -4164,6 +4238,24 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       series: {
         mes:     { ano: arrobasEstoqueSerie, anoAnt: arrobasEstoqueSerieAnoAnt ?? undefined, meta: arrobasEstoqueSerieMeta ?? undefined },
         periodo: { ano: arrobasEstoqueSerie, anoAnt: arrobasEstoqueSerieAnoAnt ?? undefined, meta: arrobasEstoqueSerieMeta ?? undefined },
+      },
+    } : null,
+    arrobasHaIndicador: monthlyData ? {
+      label:     isPeriodo ? 'ARROBAS/HA NO PERÍODO' : 'ARROBAS/HA NO MÊS',
+      titulo:    'Arrobas produzidas por hectare',
+      subtitulo: 'Produção de pecuária por hectare de área pecuária',
+      titulos:   { mes:     { titulo: 'Arrobas produzidas por hectare', subtitulo: 'Produção de pecuária por hectare de área pecuária' },
+                   periodo: { titulo: 'Arrobas produzidas por hectare', subtitulo: 'Produção acumulada ÷ área pecuária média do período' } },
+      valor:     arrobasHaValor,
+      deltaMes:  arrobasHaDeltaMes,
+      deltaAno:  null,
+      deltaMeta: arrobasHaDeltaMeta,
+      serieAno:    arrobasHaSerie,
+      serieAnoAnt: undefined,
+      serieMeta:   arrobasHaMetaSerie13 ?? undefined,
+      series: {
+        mes:     { ano: arrobasHaMesSerie13,     meta: monthlyDataMeta ? Array.from({ length: 13 }, (_, i) => i === 0 ? NaN : ((monthlyDataMeta.arrHa ?? [])[i - 1] ?? NaN)) : undefined },
+        periodo: { ano: arrobasHaPeriodoSerie13, meta: monthlyDataMeta ? Array.from({ length: 13 }, (_, i) => i === 0 ? NaN : (calcularArrHaAcumulado(monthlyDataMeta.arrobasProd ?? [], areaPecuariaMetaNumPorMes)[i - 1] ?? NaN)) : undefined },
       },
     } : null,
     precoArrEstoqueIndicador: monthlyData ? {

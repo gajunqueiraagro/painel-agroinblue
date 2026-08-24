@@ -42,3 +42,51 @@ export function calcularIndicadoresEficienciaArea(
 
   return { uaMedia, lotUaHa, arrHa };
 }
+
+/**
+ * `@/ha` ACUMULADO — Σ arrobas ÷ MEDIA da area, nunca Σ das razoes.
+ *
+ * POR QUE NAO SOMAR AS RAZOES. Fazenda que dobra de area no meio do ano e
+ * nao dobra a producao:
+ *     Jan–Jun  100 @ em 100 ha -> 1,0 @/ha por mes
+ *     Jul–Dez  100 @ em 200 ha -> 0,5 @/ha por mes
+ *   verdade:          1.200 @ / 150 ha medios = 8,0
+ *   soma das razoes:  6 x 1,0 + 6 x 0,5       = 9,0   ← superestima
+ * Os meses de area pequena entram com o mesmo peso dos de area grande, e
+ * eles tinham menos hectare para "gastar". E o mesmo principio que ja
+ * governa o peso medio e o GMD: RAZAO DE AGREGADOS, nao media de razoes.
+ *
+ * Medido no Proto (Jan–Jul/2026): onde a area nao varia o erro e zero; no
+ * Raul Juliato, com 11% de variacao, a soma das razoes da 3,193 contra
+ * 3,106 — 2,8% a mais.
+ *
+ * Mes sem area (zero, nulo ou NaN) NAO entra em nenhum dos dois
+ * somatorios: nao ha como atribuir producao a hectare que nao existe, e
+ * deixa-lo no divisor da media rebaixaria o denominador.
+ *
+ * Devolve 12 posicoes, 0=Jan, com o acumulado ATE cada mes. `NaN` onde
+ * nao ha area — NaN, nunca zero: zero afirmaria "nao produziu por
+ * hectare", que e diferente de "nao ha hectare".
+ */
+export function calcularArrHaAcumulado(
+  arrobasProd: number[],
+  areaProdMensal: number[],
+): number[] {
+  const out: number[] = [];
+  let somaArrobas = 0;
+  let somaArea = 0;
+  let mesesComArea = 0;
+
+  for (let i = 0; i < 12; i++) {
+    const area = areaProdMensal[i];
+    const arr = arrobasProd[i];
+    if (area != null && Number.isFinite(area) && area > 0) {
+      somaArea += area;
+      mesesComArea += 1;
+      if (arr != null && Number.isFinite(arr)) somaArrobas += arr;
+    }
+    const areaMedia = mesesComArea > 0 ? somaArea / mesesComArea : 0;
+    out.push(areaMedia > 0 ? somaArrobas / areaMedia : NaN);
+  }
+  return out;
+}
