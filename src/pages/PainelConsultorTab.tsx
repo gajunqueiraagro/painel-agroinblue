@@ -357,6 +357,46 @@ interface SoberanoSerie12 {
  * Estoques (Dívida Inicial/Final) são mantidos como ponto-no-tempo (noTotal=true).
  * Fluxos (Captação, Amortização, Juros) acumulam em modo='acumulado'.
  */
+/* O rollingAvg existente incrementa o divisor a cada iteracao,
+   independente de o valor existir — mes sem area rebaixaria a media
+   como se fosse zero hectare. E um NaN contamina toda a serie seguinte.
+   Tem 28 consumidores e NAO deve ser alterado. Esta funcao aplica a
+   mesma regra de calcularArrHaAcumulado: mes sem valor nao entra no
+   divisor. */
+function mediaIgnorandoNulos(valores: (number | null)[]): number[] {
+  const out: number[] = [];
+  let soma = 0;
+  let n = 0;
+  for (let i = 0; i < 12; i++) {
+    const v = valores[i];
+    if (v != null && Number.isFinite(v)) { soma += v; n += 1; }
+    out.push(n > 0 ? soma / n : NaN);
+  }
+  return out;
+}
+
+/* Helper de aba para linhas de ESTOQUE (area). Nasce separado dos tres
+   r()/linha() locais as builders porque eles nao estao ao alcance do
+   corpo do componente, onde blocoAreas e montado.
+   ISTO E DIVIDA CONHECIDA: sao QUATRO mecanismos de aba no arquivo.
+   A unificacao — uma `valoresPorAba` de modulo consumida pelos quatro
+   — e frente propria, e exige homologar a tela inteira do Executivo,
+   nao so as linhas de area. Nao unificar aqui foi decisao deliberada:
+   PR de area nao arrasta toda a tela.
+
+   AS QUATRO ABAS, para area:
+     Valores Mensais   -> a area do mes
+     Medios do Mes     -> travessao: media de estoque mensal nao e media
+                          de nada, e o mes ja e o proprio valor
+     Acumulados        -> travessao: hectare nao SOMA de janeiro a julho
+     Media do Periodo  -> media aritmetica dos meses ate o filtrado
+   Travessao e NaN, nunca zero — zero afirmaria "nao ha area". */
+function valoresAreaPorAba(tab: ViewTab, valores: (number | null)[]): number[] {
+  if (tab === 'mensal') return valores.map(v => (v == null ? NaN : v));
+  if (tab === 'media_periodo') return mediaIgnorandoNulos(valores);
+  return Array(12).fill(NaN);
+}
+
 function buildBlocoEndividamento(
   series: EndividamentoSeries,
   modo: 'mensal' | 'acumulado',
@@ -2295,7 +2335,6 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
   const areaDestReal = pcdSoberano.areaDestinoRealPorMes;
 
   const blocoAreas: Bloco = useMemo(() => {
-    const toNan = (arr: (number | null)[]): number[] => arr.map(v => v == null ? NaN : v);
     const vazio: (number | null)[] = Array(12).fill(null);
     // Destino só existe no Realizado; na Meta a série inteira é nula → "—".
     const dest = (d: DestinoArea): (number | null)[] =>
@@ -2319,10 +2358,17 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
     const infra = somaFamilias([dest('benfeitorias')]);
     const total = somaFamilias([areaPecAtiva, areaAgriAtiva, silvicultura, ambiental, infra]);
 
+    /* As quatro abas passam pelo helper de MODULO `valoresAreaPorAba`.
+       Ate este PR os Row eram montados com o array mensal CRU, sem passar
+       por `linha(…)` nem por `r(…)` — e `viewTab` nem estava nas
+       dependencias deste useMemo. As quatro abas mostravam o mesmo numero.
+       Contornar o mecanismo impedia o `cumSum` em Acumulados, que era a
+       intencao, mas levava junto a media do periodo, que era a resposta
+       certa. */
     const familia = (indicador: string, valores: (number | null)[], indicadorId?: string): Row =>
-      ({ indicador, format: 'padrao', valores: toNan(valores), indicadorId, noTotal: true, nivel: 'familia' });
+      ({ indicador, format: 'padrao', valores: valoresAreaPorAba(viewTab, valores), indicadorId, noTotal: true, nivel: 'familia' });
     const destino = (indicador: string, d: DestinoArea): Row =>
-      ({ indicador, format: 'padrao', valores: toNan(dest(d)), noTotal: true, nivel: 'destino' });
+      ({ indicador, format: 'padrao', valores: valoresAreaPorAba(viewTab, dest(d)), noTotal: true, nivel: 'destino' });
 
     return {
       nome: 'ÁREAS — USO DO SOLO',
@@ -2348,7 +2394,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
         familia('ÁREA TOTAL (ha)', total, 'area_total'),
       ],
     };
-  }, [areaPecAtiva, areaAgriAtiva, areaDestReal, isPrevisto]);
+  }, [areaPecAtiva, areaAgriAtiva, areaDestReal, isPrevisto, viewTab]);
 
   // @ produzidas METa — Σ por mês via calcArrobasSafe (abate/15 c/ carcaça,
   // venda/consumo/30) sobre lançamentos cenario='meta'. Filtro TIPOS_DESFRUTE_GLOBAL
