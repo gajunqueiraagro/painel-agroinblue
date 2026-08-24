@@ -45,9 +45,22 @@ function loteTotal(criterio: CriterioValor, quantidade: string, pesoMedioKg: str
   return criterio === 'kg' ? pt * v : criterio === 'cabeca' ? q * v : v;
 }
 
-// Resumo compacto por lote — indicadores DERIVADOS dos dados já existentes (reusa loteTotal; sem
-//   novo cálculo de negócio, sem alterar totais). Cada indicador só aparece quando sua base existe;
-//   ausência nunca vira zero (parte omitida). String vazia → nenhuma linha (não aumenta a altura).
+/* ⚠ `loteTotal` acima e `resumoLote` abaixo sao a SEGUNDA implementacao da regra
+   do valor do lote — a primeira e `_oc_valor_do_lote`, no banco, consumida por
+   `oc_salvar_lotes` e pela ponte em `oc_registrar_movimentacao`.
+   A duplicacao e DELIBERADA e nao da para eliminar: este calculo e o preview
+   durante a DIGITACAO, quando o lote ainda nao foi salvo e a funcao de banco
+   nao tem o que ler.
+   O comentario anterior dizia "sem novo calculo de negocio". Nao era verdade —
+   a regra esta reescrita aqui, e agora esta declarado.
+   ⚠ SE VOCE MUDAR UMA, MUDE A OUTRA e rode o teste de concordancia
+   (supabase/tests/pr_oc_valor_02_concordancia.sql), que compara as duas nos
+   lotes existentes. Ele ja pegou uma divergencia: a guarda `total > 0` da
+   linha do R$/cab, que o banco nao tinha — sem ela um lote de valor zero
+   produzia R$ 0,00/cab e a ponte gravaria zero no lancamento.
+
+   Resumo compacto por lote — cada indicador so aparece quando sua base existe;
+   ausencia nunca vira zero (parte omitida). String vazia → nenhuma linha. */
 function resumoLote(criterio: CriterioValor, quantidade: string, pesoMedioKg: string, valorInformado: string): string {
   const q = parseNumericValue(quantidade) || 0;
   const pm = parseNumericValue(pesoMedioKg) || 0;
