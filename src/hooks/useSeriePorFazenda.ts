@@ -123,7 +123,23 @@ interface Result {
   uaHa: SerieFazenda[];
   /** kg vivo/ha. Periodo = `calcularRazaoEstoqueAcumulada` (estoque). */
   kgHa: SerieFazenda[];
+  /** Valor do rebanho validado. ESTOQUE: mes = periodo. */
+  valorRebanho: SerieFazenda[];
+  /** R$/@ em estoque — valor ÷ arrobas da MESMA linha. */
+  precoArrEstoque: SerieFazenda[];
+  /** Valor ao R$/@ congelado de dez do ano-1, POR FAZENDA. */
+  valorRebanhoSemEfeito: SerieFazenda[];
   loading:   boolean;
+}
+
+/* Linha de `valor_rebanho_realizado_validado`, so o que este hook le. A tabela
+   e' a fonte POR FAZENDA; a `vw_valor_rebanho_realizado_global_mensal` e'
+   agregada e nao serve aqui. */
+interface LinhaValor {
+  fazenda_id: string;
+  ano_mes:    string;
+  valor_total:   number;
+  arrobas_total: number | null;
 }
 
 const PAGE = 1000;
@@ -135,6 +151,7 @@ export function useSeriePorFazenda({
   const { fazendas } = useFazenda();
   const [rows, setRows] = useState<LinhaCache[]>([]);
   const [fech, setFech] = useState<FechamentoConsolidado[]>([]);
+  const [valores, setValores] = useState<LinhaValor[]>([]);
   const [loading, setLoading] = useState(false);
 
   const fazendasKey = fazendaIds.join(',');
@@ -143,6 +160,7 @@ export function useSeriePorFazenda({
     if (!enabled || !clienteId || fazendaIds.length === 0) {
       setRows([]);
       setFech([]);
+      setValores([]);
       setLoading(false);
       return;
     }
@@ -167,7 +185,7 @@ export function useSeriePorFazenda({
             .order('fazenda_id').order('mes').order('categoria_id')
             .range(from, from + PAGE - 1);
           if (cancelled) return;
-          if (error) { setRows([]); setFech([]); return; }
+          if (error) { setRows([]); setFech([]); setValores([]); return; }
           if (!data || data.length === 0) break;
           acc.push(...(data as LinhaCache[]));
           if (data.length < PAGE) break;
@@ -220,6 +238,33 @@ export function useSeriePorFazenda({
           });
         }
         if (!cancelled) setFech(accF);
+
+        /* TERCEIRA e ultima query: valor do rebanho por fazenda-mes. UMA pagina
+           basta — medido no proto, 14 linhas no maior cliente de 2026.
+           A faixa comeca em `${ano - 1}-12` porque o "sem efeito de mercado"
+           congela o R$/@ de dezembro do ano anterior, POR FAZENDA. */
+        const { data: dv, error: ev } = await (supabase
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .from('valor_rebanho_realizado_validado' as any)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .select('fazenda_id, ano_mes, valor_total, arrobas_total, status') as any)
+          .in('fazenda_id', fazendaIds)
+          .gte('ano_mes', `${ano - 1}-12`)
+          .lte('ano_mes', `${ano}-12`);
+        if (cancelled) return;
+        if (ev || !dv) { setValores([]); }
+        else {
+          /* So `validado`: a mesma guarda do PC-100 (usePainelConsultorData:1216).
+             Linha em rascunho nao e patrimonio publicado. */
+          setValores((dv as Array<Record<string, unknown>>)
+            .filter(r => r.status === 'validado')
+            .map(r => ({
+              fazenda_id: String(r.fazenda_id),
+              ano_mes: String(r.ano_mes),
+              valor_total: Number(r.valor_total) || 0,
+              arrobas_total: r.arrobas_total == null ? null : Number(r.arrobas_total),
+            })));
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -231,6 +276,7 @@ export function useSeriePorFazenda({
   const vazio: Result = {
     cabecas: [], pesoMedio: [], arrobas: [], gmd: [],
     arrobasEstoque: [], areaProdutivaPec: [], arrobasHa: [], uaHa: [], kgHa: [],
+    valorRebanho: [], precoArrEstoque: [], valorRebanhoSemEfeito: [],
     loading,
   };
   if (rows.length === 0) return vazio;
@@ -447,6 +493,54 @@ export function useSeriePorFazenda({
     };
   });
 
+  /* ── PR-SERIE-FAZENDA-02 · o grupo VALOR ─────────────────────────────
+     Fonte unica dos tres: `valor_rebanho_realizado_validado`, por fazenda.
+     As arrobas saem da PROPRIA linha, nunca do cache — as duas divergem, e a
+     divergencia ja tem nome (Sto. Expedito, dez/2025, 902,9 @). Usar a mesma
+     fonte do numerador mantem o preco coerente com o valor que ele explica.
+
+     ⚠ Fazenda sem linha validada nao entra: `idsComValor` e' construido do
+     dado que existe, nao das fazendas pedidas. Serie de nulos com legenda
+     seria pior — declara ausencia sem dizer de que. */
+  const valorPorFazMes = new Map<string, LinhaValor>();
+  for (const v of valores) valorPorFazMes.set(`${v.fazenda_id}|${v.ano_mes}`, v);
+  const mesKey = (m: number) => `${ano}-${String(m).padStart(2, '0')}`;
+  const idsComValor = Array.from(new Set(valores
+    .filter(v => v.ano_mes.startsWith(`${ano}-`))
+    .map(v => v.fazenda_id)));
+
+  const serieValor = (
+    calc: (linha: LinhaValor | undefined, id: string) => number | null,
+  ): SerieFazenda[] => idsComValor.map(id => {
+    /* ESTOQUE: `mes` e `periodo` sao a MESMA serie — valor de rebanho nao
+       acumula, pela mesma razao que `arrobasEstoque` nao acumula. */
+    const s = Array.from({ length: MESES }, (_, i) =>
+      corta(calc(valorPorFazMes.get(`${id}|${mesKey(i + 1)}`), id), i + 1));
+    return { fazendaId: id, nome: nomeDe(id), codigo: codigoDe(id), mes: s, periodo: s };
+  });
+
+  const valorRebanho = serieValor(l => (l ? l.valor_total : null));
+
+  const precoArrEstoque = serieValor(l =>
+    (l && l.arrobas_total != null && l.arrobas_total > 0)
+      ? l.valor_total / l.arrobas_total
+      : null);
+
+  /* Preco congelado POR FAZENDA — cada uma congela o proprio R$/@ de dezembro.
+     Usar o preco global em todas faria a soma das fazendas nao reproduzir o
+     Global. Fazenda sem dezembro validado devolve null, nunca zero. */
+  const precoCongeladoDe = (id: string): number | null => {
+    const dez = valorPorFazMes.get(`${id}|${ano - 1}-12`);
+    if (!dez || dez.arrobas_total == null || dez.arrobas_total <= 0) return null;
+    return dez.valor_total / dez.arrobas_total;
+  };
+  const valorRebanhoSemEfeito = serieValor((l, id) => {
+    const preco = precoCongeladoDe(id);
+    if (preco == null || !l || l.arrobas_total == null) return null;
+    return preco * l.arrobas_total;
+  });
+
   return { cabecas, pesoMedio, arrobas, gmd,
-           arrobasEstoque, areaProdutivaPec, arrobasHa, uaHa, kgHa, loading };
+           arrobasEstoque, areaProdutivaPec, arrobasHa, uaHa, kgHa,
+           valorRebanho, precoArrEstoque, valorRebanhoSemEfeito, loading };
 }

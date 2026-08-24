@@ -1273,7 +1273,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
       monta('uaHa',         uaHaIndicador,         'decimal2', 'UA/ha', seriePorFazAtiv.uaHa),
       monta('gmd',          gmdIndicador,          'decimal3', 'kg',   seriePorFazAtiv.gmd,       histZootAtiv.gmd),
       monta('pesoMedio',    pesoMedioIndicador,    'decimal1', 'kg',   seriePorFazAtiv.pesoMedio, histZootAtiv.pesoMedio),
-      monta('valorRebanho', valorRebanhoIndicador, 'moedaAbreviada', undefined),
+      monta('valorRebanho', valorRebanhoIndicador, 'moedaAbreviada', undefined, seriePorFazAtiv.valorRebanho),
       /* ── PR-ATIVIDADE-08 · os cinco ligados ──
          Sem `porFazenda` e sem `historico` em nenhum dos cinco: as fontes nao
          cobrem estas chaves, e o card declara a falta em vez de mostrar o
@@ -1281,8 +1281,8 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
       monta('arrobasEstoque', arrobasEstoqueIndicador, 'decimal1', '@', seriePorFazAtiv.arrobasEstoque),
       monta('kgHa', kgHaIndicador, 'decimal1', 'kg/ha', seriePorFazAtiv.kgHa),
       monta('arrobasHa', arrobasHaIndicador, 'decimal2', '@/ha', seriePorFazAtiv.arrobasHa),
-      monta('precoArrEstoque', precoArrEstoqueIndicador, 'moeda', 'R$/@'),
-      monta('valorRebanhoSemEfeito', valorRebanhoSemEfeitoIndicador, 'moedaAbreviada', undefined),
+      monta('precoArrEstoque', precoArrEstoqueIndicador, 'moeda', 'R$/@', seriePorFazAtiv.precoArrEstoque),
+      monta('valorRebanhoSemEfeito', valorRebanhoSemEfeitoIndicador, 'moedaAbreviada', undefined, seriePorFazAtiv.valorRebanhoSemEfeito),
       /* O decimo segundo, agora com dado. O rotulo diz QUAL das tres series
          de area do hook e' esta — a mesma que divide o @/ha. */
       monta('areaProdutiva', areaProdutivaPecIndicador, 'decimal1', 'ha', seriePorFazAtiv.areaProdutivaPec),
