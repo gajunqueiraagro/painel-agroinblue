@@ -26,7 +26,13 @@ import { useLancamentos } from '@/hooks/useLancamentos';
 import { calcArrobasSafe, calcValorTotal, calcDesfrute } from '@/lib/calculos/economicos';
 import type { Lancamento } from '@/types/cattle';
 
-export type Lente = 'cab' | 'arroba_total' | 'arroba_media' | 'preco_arroba' | 'valor_total';
+export type Lente =
+  | 'cab' | 'arroba_total' | 'arroba_media' | 'preco_arroba' | 'valor_total'
+  /* PR-MOVIMENTACOES-01 — peso e preco em QUILO, para os tipos cuja unidade
+     de negocio nao e a arroba: compra, venda em pe, consumo e morte. Abate e
+     desfrute seguem em @, porque a arroba de abate e carcaca/15 e converter
+     de volta para quilo introduziria erro. */
+  | 'peso_medio_kg' | 'preco_kg';
 
 export type TipoMov =
   | 'nascimentos' | 'compras' | 'transf_entradas' | 'soma_entradas'
@@ -116,20 +122,31 @@ function getTiposLancDeMov(isGlobal: boolean): Record<TipoMov, Lancamento['tipo'
  */
 const TIPOS_DESFRUTE_RECEITA: Lancamento['tipo'][] = ['abate', 'venda'];
 
+/* ⚠ FILTRO DE EXIBICAO, nao regra de negocio. Uso unico, no guard de
+   `valorPorLente` — nao filtra agregacao nem lancamento. Prova de que era
+   escolha de apresentacao: `consumo` ja entrava em `desfrute` COM valor
+   (:105), entao o mesmo tipo tinha valor somado e nao tinha valor sozinho.
+   PR-MOVIMENTACOES-01 — `consumos` e `mortes` ganham `valor_total` e
+   `preco_kg`. O campo de valor ainda NAO existe em `EditMorteSheet` nem em
+   `EditConsumoSheet` (frente propria, junto da Operacao Comercial), entao
+   as colunas nascem em travessao. Estao aqui para acenderem SOZINHAS quando
+   o dado chegar: sem isto seriam trava invisivel, e acender depois exigiria
+   voltar ao hook. `preco_arroba` fica de fora dos dois de proposito — a
+   unidade deles e o QUILO. */
 const LENTES_APLICAVEIS: Record<TipoMov, ReadonlySet<Lente>> = {
-  nascimentos:     new Set(['cab']),
-  compras:         new Set(['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total']),
-  transf_entradas: new Set(['cab']),
-  soma_entradas:   new Set(['cab', 'arroba_total', 'arroba_media', 'valor_total']),
-  vendas:          new Set(['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total']),
-  abates:          new Set(['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total']),
-  consumos:        new Set(['cab', 'arroba_total', 'arroba_media']),
-  mortes:          new Set(['cab', 'arroba_total', 'arroba_media']),
-  transf_saidas:   new Set(['cab']),
-  soma_saidas:     new Set(['cab', 'arroba_total', 'arroba_media', 'valor_total']),
-  desfrute:        new Set(['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total']),
-  desfrute_pct:    new Set(['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total']),
-  reposicao:       new Set(['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total']),
+  nascimentos:     new Set(['cab', 'peso_medio_kg']),
+  compras:         new Set(['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total', 'peso_medio_kg', 'preco_kg']),
+  transf_entradas: new Set(['cab', 'peso_medio_kg']),
+  soma_entradas:   new Set(['cab', 'arroba_total', 'arroba_media', 'valor_total', 'peso_medio_kg']),
+  vendas:          new Set(['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total', 'peso_medio_kg', 'preco_kg']),
+  abates:          new Set(['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total', 'peso_medio_kg']),
+  consumos:        new Set(['cab', 'arroba_total', 'arroba_media', 'valor_total', 'peso_medio_kg', 'preco_kg']),
+  mortes:          new Set(['cab', 'arroba_total', 'arroba_media', 'valor_total', 'peso_medio_kg', 'preco_kg']),
+  transf_saidas:   new Set(['cab', 'peso_medio_kg']),
+  soma_saidas:     new Set(['cab', 'arroba_total', 'arroba_media', 'valor_total', 'peso_medio_kg']),
+  desfrute:        new Set(['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total', 'peso_medio_kg']),
+  desfrute_pct:    new Set(['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total', 'peso_medio_kg']),
+  reposicao:       new Set(['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total', 'peso_medio_kg', 'preco_kg']),
 };
 
 const TIPOS_TODOS: TipoMov[] = [
@@ -139,14 +156,14 @@ const TIPOS_TODOS: TipoMov[] = [
   'reposicao',
 ];
 
-const LENTES_TODAS: Lente[] = ['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total'];
+const LENTES_TODAS: Lente[] = ['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total', 'peso_medio_kg', 'preco_kg'];
 
 // ─── HELPERS DE AGREGAÇÃO ────────────────────────────────────────────────────
 
-type Agreg = { cab: number; arrobas: number; valor: number };
+type Agreg = { cab: number; arrobas: number; valor: number; peso: number };
 
 function emptyAgreg(): Agreg {
-  return { cab: 0, arrobas: 0, valor: 0 };
+  return { cab: 0, arrobas: 0, valor: 0, peso: 0 };
 }
 
 /** Agrega lançamentos em Record<mes, Record<tipoLanc, Agreg>>. */
@@ -162,6 +179,15 @@ function agregarPorMesPorTipo(lancs: Lancamento[]): Record<number, Record<string
     slot.cab += Number(l.quantidade) || 0;
     slot.arrobas += calcArrobasSafe(l);
     slot.valor += calcValorTotal(l);
+    /* PESO VIVO — `pesoMedioKg x quantidade`, a MESMA base de `calcArrobasSafe`
+       (economicos.ts:88), entao peso e arroba ficam coerentes por construcao.
+       NAO usar `l.pesoTotal`: medido no proto em 2026, ele esta nulo ou zero em
+       17 de 22 COMPRAS (77%) e em 14 de 27 transferencias de entrada, enquanto
+       `peso_medio_kg` esta preenchido em 100% dos lancamentos de todos os tipos.
+       ⚠ E' esse o defeito de `montarMovimentacoes` (lib/painelConsultor/rebanho),
+       que soma `l.pesoTotal` e por isso subestima o peso de compras hoje, em
+       producao — independente deste bloco, e frente propria. */
+    slot.peso += (Number(l.pesoMedioKg) || 0) * (Number(l.quantidade) || 0);
   }
   return result;
 }
@@ -182,6 +208,7 @@ function somarAgreg(
         out.cab += a.cab;
         out.arrobas += a.arrobas;
         out.valor += a.valor;
+        out.peso += a.peso;
       }
     }
   }
@@ -226,6 +253,15 @@ function valorPorLente(
       const base = (tipo === 'desfrute' && agregReceita) ? agregReceita : agreg;
       if (base.arrobas <= 0 || base.valor <= 0) return null;
       return base.valor / base.arrobas;
+    }
+    case 'peso_medio_kg':
+      return agreg.cab > 0 ? agreg.peso / agreg.cab : null;
+    case 'preco_kg': {
+      /* Mesma guarda do `preco_arroba`: denominador ou numerador <= 0 devolve
+         null, nunca zero — R$ 0,00/kg afirmaria preco, e o que ha e ausencia. */
+      const base = (tipo === 'desfrute' && agregReceita) ? agregReceita : agreg;
+      if (base.peso <= 0 || base.valor <= 0) return null;
+      return base.valor / base.peso;
     }
     case 'valor_total':
       return agreg.valor;

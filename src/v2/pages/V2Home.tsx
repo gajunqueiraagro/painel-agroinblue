@@ -27,9 +27,10 @@ import { useStatusPilaresAno, type StatusCelulaAno } from '@/hooks/useStatusPila
 import type { V2Section } from '@/v2/lib/navGrupos';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { BlocoAtividade } from '@/v2/components/BlocoAtividade';
+import { useMovimentacoesAgregadas, type Lente, type TipoMov } from '@/v2/hooks/useMovimentacoesAgregadas';
 import { ModalAtividade, type IndicadorAtividade } from '@/v2/components/ModalAtividade';
 import { calcularRazaoEstoqueAcumulada, mediaIgnorandoZero } from '@/lib/calculos/eficienciaArea';
-import { BarChart3 } from 'lucide-react';
+import { BarChart3, ArrowLeftRight } from 'lucide-react';
 
 const fmtN = (v: number | null | undefined, dec = 0) =>
   v == null || isNaN(v) ? null
@@ -1291,6 +1292,79 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
       valorRebanhoIndicador, arrobasEstoqueIndicador, kgHaIndicador, arrobasHaIndicador,
       precoArrEstoqueIndicador, valorRebanhoSemEfeitoIndicador, areaProdutivaPecIndicador,
       seriePorFazAtiv, histZootAtiv, mesNum]);
+
+  /* ── PR-MOVIMENTACOES-01 · os 28 cards do assunto Movimentacoes ──────────
+     FONTE UNICA: `useMovimentacoesAgregadas`, que ja entrega os treze tipos e
+     as lentes com serie mensal, acumulada, ano anterior e meta — e cujas
+     arrobas saem de `calcArrobasSafe` (carcaca/15 no abate, peso/30 no resto).
+     NENHUMA divisao de arroba e escrita aqui.
+
+     ⚠ NAO usar `rebanho.movimentacoes` do PC-100: ele nao tem arrobas, e soma
+     `l.pesoTotal`, que esta nulo em 77% das compras. Derivar R$/@ dali
+     significaria reimplementar a regra da arroba sobre um peso furado.
+
+     Sete tipos x quatro lentes. A unidade segue a decisao de Gabriel: @ para
+     abate e desfrute, QUILO para o resto. Card sem dado nao some da grade —
+     mostra travessao, e a ausencia fica legivel. */
+  const movAgg = useMovimentacoesAgregadas({
+    ano: anoNum, mes: mesNum, viewMode, isGlobal,
+  });
+
+  const indicadoresMovimentacoes = useMemo<IndicadorAtividade[]>(() => {
+    const ponto = (s: number[] | undefined) => {
+      if (!s || s.length === 0) return null;
+      const v = s.length >= 13 ? s[mesNum] : s[mesNum - 1];
+      return v != null && !isNaN(v) ? v : null;
+    };
+    const card = (
+      chave: string, tipo: TipoMov, lente: Lente,
+      titulo: string, subtitulo: string,
+      formatoValor: IndicadorAtividade['formatoValor'], unidade?: string,
+    ): IndicadorAtividade => {
+      const cd = movAgg.porTipo[tipo];
+      const mes = cd?.seriesJanDez?.[lente];
+      const per = cd?.seriesAcumulada?.[lente];
+      return {
+        chave, titulo, subtitulo,
+        tituloMes: titulo, tituloPeriodo: titulo,
+        unidade, formatoValor,
+        serieMes:     mes?.real   ?? [],
+        seriePeriodo: per?.real   ?? [],
+        serieAnoAntMes:     mes?.anoAnt,
+        serieAnoAntPeriodo: per?.anoAnt,
+        serieMetaMes:       mes?.meta,
+        serieMetaPeriodo:   per?.meta,
+        valorMes:     ponto(mes?.real),
+        valorPeriodo: ponto(per?.real),
+        /* INERTES, como no Zootecnico: o modal calcula o delta por leitura a
+           partir das series. Ficam no contrato porque a prop os exige. */
+        deltaMes: null, deltaAno: null, deltaMeta: null,
+      };
+    };
+    /* Uma LINHA por tipo. `pesoLente`/`precoLente` mudam com a unidade do tipo:
+       abate e desfrute em @, os demais em quilo. */
+    const linha = (
+      pref: string, tipo: TipoMov, rotulo: string, emArroba: boolean,
+    ): IndicadorAtividade[] => [
+      card(`${pref}_cab`, tipo, 'cab', `${rotulo} — cabeças`, 'Quantidade no recorte', 'inteiro', 'cab'),
+      emArroba
+        ? card(`${pref}_peso`, tipo, 'arroba_media', `${rotulo} — peso médio`, 'Arrobas por cabeça', 'decimal2', '@')
+        : card(`${pref}_peso`, tipo, 'peso_medio_kg', `${rotulo} — peso médio`, 'Quilos por cabeça', 'decimal1', 'kg'),
+      emArroba
+        ? card(`${pref}_preco`, tipo, 'preco_arroba', `${rotulo} — preço`, 'Valor ÷ arrobas', 'moeda', 'R$/@')
+        : card(`${pref}_preco`, tipo, 'preco_kg', `${rotulo} — preço`, 'Valor ÷ quilos', 'moeda', 'R$/kg'),
+      card(`${pref}_valor`, tipo, 'valor_total', `${rotulo} — valor total`, 'Soma no recorte', 'moedaAbreviada'),
+    ];
+    return [
+      ...linha('nasc',     'nascimentos', 'Nascimentos',        false),
+      ...linha('compra',   'compras',     'Compras',            false),
+      ...linha('venda',    'vendas',      'Vendas em pé',       false),
+      ...linha('abate',    'abates',      'Abates',             true),
+      ...linha('consumo',  'consumos',    'Consumo / Doações',  false),
+      ...linha('morte',    'mortes',      'Mortes',             false),
+      ...linha('desfrute', 'desfrute',    'Desfrute',           true),
+    ];
+  }, [movAgg, mesNum]);
 
   const arrobasHistoricoOficial: HistoricoPorModo =
     modalIndicador === 'arrobas' ? histZoot.arrobas : { mes: [], periodo: [] };
@@ -3084,6 +3158,43 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           ]}
         />
       </div>
+
+      {/* E6 — Movimentacoes. Mesma casca do Zootecnico: `BlocoAtividade` nao
+          calcula nada, recebe metrica pronta. As quatro sao em CABECAS, a
+          unidade que responde "o que entrou e saiu" sem exigir conversao. */}
+      <div className="mt-4">
+        <BlocoAtividade
+          titulo="Movimentações"
+          subtitulo="o que entrou e saiu do rebanho"
+          icone={ArrowLeftRight}
+          loading={movAgg.loading}
+          onClick={() => setModalAtividade('movimentacoes')}
+          metricas={[
+            { rotulo: 'Nascimentos', valor: (fmtN(movAgg.porTipo.nascimentos?.mesAtual?.cab ?? null) ?? '—') + ' cab',
+              delta: null },
+            { rotulo: 'Compras',     valor: (fmtN(movAgg.porTipo.compras?.mesAtual?.cab ?? null) ?? '—') + ' cab',
+              delta: null },
+            { rotulo: 'Desfrute',    valor: (fmtN(movAgg.porTipo.desfrute?.mesAtual?.cab ?? null) ?? '—') + ' cab',
+              delta: null },
+            /* Morte e o unico onde subir e RUIM. */
+            { rotulo: 'Mortes',      valor: (fmtN(movAgg.porTipo.mortes?.mesAtual?.cab ?? null) ?? '—') + ' cab',
+              delta: null, inverseDelta: true },
+          ]}
+        />
+      </div>
+
+      {modalAtividade === 'movimentacoes' && (
+        <ModalAtividade
+          open
+          onClose={() => setModalAtividade(null)}
+          mesAtual={mesNum}
+          anoAtual={anoNum}
+          clienteNome={clienteAtual?.nome ?? ''}
+          indicadores={indicadoresAtividade}
+          indicadoresMovimentacoes={indicadoresMovimentacoes}
+          codigosFazendas={seriePorFazAtiv.cabecas.map(f => f.codigo)}
+        />
+      )}
 
       {modalAtividade === 'zootecnico' && (
         <ModalAtividade

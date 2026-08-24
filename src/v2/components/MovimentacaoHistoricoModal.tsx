@@ -46,11 +46,16 @@ export interface MovimentacaoHistoricoModalProps {
 const MESES_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
 const LENTES_LABELS: Record<Lente, string> = {
-  cab:          'Cabeças',
-  arroba_total: '@ Totais',
-  arroba_media: '@ Média',
-  preco_arroba: 'R$/@',
-  valor_total:  'R$ Total',
+  cab:           'Cabeças',
+  arroba_total:  '@ Totais',
+  arroba_media:  '@ Média',
+  preco_arroba:  'R$/@',
+  valor_total:   'R$ Total',
+  /* PR-MOVIMENTACOES-01 — as duas lentes de QUILO nasceram para o assunto
+     Movimentacoes do ModalAtividade. Entram aqui so para o `Record<Lente,…>`
+     continuar total; este modal nao as oferece no seletor. */
+  peso_medio_kg: 'Peso médio (kg)',
+  preco_kg:      'R$/kg',
 };
 
 // ─── Helpers de lente (locais ao modal — dependem do state de lente) ────────

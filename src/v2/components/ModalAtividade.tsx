@@ -114,6 +114,11 @@ interface Props {
   anoAtual: number;
   clienteNome: string;
   indicadores: IndicadorAtividade[];
+  /* Assunto MOVIMENTACOES. Prop-bag separado, nao um `indicadores` unico
+     filtrado por chave: os dois assuntos tem grades de larguras diferentes e
+     ordens proprias, e misturar as chaves faria o `ORDEM_CARDS` de um decidir
+     a posicao do outro. */
+  indicadoresMovimentacoes?: IndicadorAtividade[];
   codigosFazendas: string[];
   loadingHistorico?: boolean;
 }
@@ -154,6 +159,24 @@ const ORDEM_CARDS = [
    trajetoria entre meses independentes. Mesma decisao do PR-16 e do PR-32.
    So no nivel "No mes" — periodo e acumulado, e acumulado e curva. */
 const COLUNA_NO_MES = ['arrobas', 'gmd', 'arrobasHa'];
+
+/* MOVIMENTACOES — QUATRO por linha, nao tres. Cada LINHA e um tipo de
+   movimento e cada COLUNA e uma lente, entao a leitura horizontal conta a
+   historia de um movimento: quantos, de que peso, a que preco, por quanto.
+   O Zootecnico continua em tres: os doze cards dele foram dimensionados para
+   aquela largura, e mudar quebraria o que ja foi homologado.
+   ⚠ Em `max-w-7xl` com quatro colunas o card fica em ~280px, e treze rotulos
+   de mes so cabem com UMA LETRA. O piso de 8px do A12 continua valendo — se
+   colidirem, o caminho e outro, nao fonte menor. */
+const ORDEM_CARDS_MOV = [
+  'nasc_cab',      'nasc_peso',      'nasc_preco',      'nasc_valor',
+  'compra_cab',    'compra_peso',    'compra_preco',    'compra_valor',
+  'venda_cab',     'venda_peso',     'venda_preco',     'venda_valor',
+  'abate_cab',     'abate_peso',     'abate_preco',     'abate_valor',
+  'consumo_cab',   'consumo_peso',   'consumo_preco',   'consumo_valor',
+  'morte_cab',     'morte_peso',     'morte_preco',     'morte_valor',
+  'desfrute_cab',  'desfrute_peso',  'desfrute_preco',  'desfrute_valor',
+];
 
 /* ALTURAS FIXAS DAS FAIXAS DO CARD — o remedio do PR-ATIVIDADE-03.
    O cabecalho tinha altura VARIAVEL: um chip marcado dava dois deltas,
@@ -752,7 +775,7 @@ const CardIndicador = ({
 
 export function ModalAtividade({
   open, onClose, mesAtual, anoAtual, clienteNome, indicadores, codigosFazendas,
-  loadingHistorico,
+  loadingHistorico, indicadoresMovimentacoes,
 }: Props) {
   const [assunto, setAssunto] = useState<Assunto>('zootecnico');
   const [escopo,  setEscopo]  = useState<Escopo>('global');
@@ -847,11 +870,37 @@ export function ModalAtividade({
         {/* MIOLO — o unico que rola. Piso INLINE, nao so `min-h-0`: irmao que
             nao cede empurra este a zero e o conteudo transborda (A13). */}
         <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3" style={{ minHeight: 200 }}>
-          {assunto !== 'zootecnico' ? (
+          {assunto !== 'zootecnico' && assunto !== 'movimentacoes' ? (
             <div className="h-full flex items-center justify-center">
               <p className="text-xs text-muted-foreground/70 italic">
                 em construção — este assunto entra num PR próprio
               </p>
+            </div>
+          ) : assunto === 'movimentacoes' ? (
+            /* QUATRO colunas — ver `ORDEM_CARDS_MOV`. Mesma casca de card, mesma
+               altura, mesmos chips: muda a largura da grade e o conjunto de
+               cards, nao a forma do card. */
+            <div className="grid grid-cols-4 gap-3">
+              {[...(indicadoresMovimentacoes ?? [])]
+                .sort((a, b) => {
+                  const ia = ORDEM_CARDS_MOV.indexOf(a.chave);
+                  const ib = ORDEM_CARDS_MOV.indexOf(b.chave);
+                  return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+                })
+                .map(ind => (
+                  <CardIndicador
+                    key={ind.chave}
+                    ind={ind}
+                    escopo={escopo}
+                    leitura={leitura}
+                    mesAtual={mesAtual}
+                    anoAtual={anoAtual}
+                    rotuloMes={rotuloMes}
+                    rotuloPer={rotuloPer}
+                    sel={marcados(ind.chave)}
+                    alterna={alterna}
+                  />
+                ))}
             </div>
           ) : loadingHistorico && leitura === 'historico' ? (
             <p className="text-[10px] text-muted-foreground/70 py-2">Carregando...</p>
