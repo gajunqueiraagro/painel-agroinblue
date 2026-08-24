@@ -972,12 +972,13 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
      do PC-100 e NAO depende de `carregarMeta`.
      Fallback para a area antiga so quando o `pcd` nao chegar: numero
      antigo e melhor que travessao, e a origem fica declarada.
-     ⚠ PENDENTE: o ACUMULADO desta aba continua sendo a soma das razoes,
-     que e errada — corrigi-la exige `monthlyDataMeta`, e ele so existe com
-     `carregarMeta: true`, que custa 3 queries mais uma passagem inteira do
-     `buildMonthlyDataFromView`. Medicao de abertura de tela pendente. */
+     O ACUMULADO e razao de agregados, como no realizado — por isso a linha
+     escolhe a serie pela aba e vai com `bruto`, para o `r()` nao somar as
+     razoes por cima. */
   const areaPecMeta = pcd?.areaPecuariaMetaPorMes ?? areaProd;
-  const arrHa = calcularArrHaMensal(arrobasProd, areaPecMeta);
+  const arrHaMensalMeta = calcularArrHaMensal(arrobasProd, areaPecMeta);
+  const arrHaAcumMeta   = calcularArrHaAcumulado(arrobasProd, areaPecMeta);
+  const arrHa = tab === 'acumulado' ? arrHaAcumMeta : arrHaMensalMeta;
   // Desfrute (cab.) oficial: APENAS abate + venda + consumo. NUNCA mortes ou
   // transferências. Fonte: saidasDesfruteCabMensal (calculado fora a partir de
   // lancPec/lancPecMeta filtrando TIPOS_DESFRUTE_GLOBAL). Sem fallback para
@@ -1173,7 +1174,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
     rows: [
       linha(['mensal','medio','acumulado','media_periodo'], 'Produção (kg)', 'padrao', prodKg, 'prod_kg'),
       linha(['mensal','medio','acumulado','media_periodo'], 'Arrobas produzidas', 'padrao', arrobasProd, 'arrobas_prod'),
-      linha(['mensal','acumulado'], 'Arrobas/ha', 'med2', arrHa, 'arr_ha'),
+      linha(['mensal','acumulado'], 'Arrobas/ha', 'med2', arrHa, 'arr_ha', undefined, undefined, true),
       linha(['mensal','medio','media_periodo'], 'GMD (kg/cab/dia)', 'gmd', gmd, 'gmd', true),
       linha(['mensal'], 'Cabeças iniciais no ano', 'cab', cabIniAno, 'cab_ini_ano', true, undefined, true),
       linha(['mensal'], 'Arrobas iniciais no ano', 'padrao', arrIniAno, 'arr_ini_ano', true, undefined, true),
@@ -1400,10 +1401,11 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
      area so para os doze meses — e ainda por cima produtiva TOTAL. As
      duas coisas mudam aqui; a area meta por mes vem do PC-100 e nao
      depende de `carregarMeta`.
-     ⚠ PENDENTE: mesmo caso do builder de zootMensal — o acumulado desta
-     aba segue somando razoes ate `carregarMeta` ser viavel. */
+     O acumulado segue a mesma regra das outras duas copias. */
   const areaPecMetaCons = pcd?.areaPecuariaMetaPorMes ?? Array(12).fill(areaProd);
-  const arrHa = calcularArrHaMensal(arrobasProd, areaPecMetaCons);
+  const arrHaMensalCons = calcularArrHaMensal(arrobasProd, areaPecMetaCons);
+  const arrHaAcumCons   = calcularArrHaAcumulado(arrobasProd, areaPecMetaCons);
+  const arrHa = tab === 'acumulado' ? arrHaAcumCons : arrHaMensalCons;
   // Desfrute (cab.) oficial: APENAS abate + venda + consumo. NUNCA mortes ou
   // transferências. Fonte: saidasDesfruteCabMensal (calculado fora a partir de
   // lancPec/lancPecMeta filtrando TIPOS_DESFRUTE_GLOBAL). Sem fallback para
@@ -1641,7 +1643,7 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
     rows: [
       linha(['mensal','medio','acumulado','media_periodo'], 'Produção (kg)', 'padrao', prodKgArr, 'prod_kg'),
       linha(['mensal','medio','acumulado','media_periodo'], 'Arrobas produzidas', 'padrao', arrobasProd, 'arrobas_prod'),
-      linha(['mensal','acumulado'], 'Arrobas/ha', 'med2', arrHa, 'arr_ha'),
+      linha(['mensal','acumulado'], 'Arrobas/ha', 'med2', arrHa, 'arr_ha', undefined, undefined, true),
       linha(['mensal','medio','media_periodo'], 'GMD (kg/cab/dia)', 'gmd', gmd, 'gmd', true),
       linha(['mensal'], 'Cabeças iniciais no ano', 'cab', cabIniAno, 'cab_ini_ano', true, undefined, true),
       linha(['mensal'], 'Arrobas iniciais no ano', 'padrao', arrIniAno, 'arr_ini_ano', true, undefined, true),
@@ -1939,6 +1941,16 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
     ano: anoNum,
     mes: filtroGlobal?.mes || (new Date().getMonth() + 1),
     viewMode: 'mes',
+    /* Necessario para `monthlyDataMeta`, que alimenta o ACUMULADO do @/ha
+       nas duas abas de meta. Medido antes de ligar: a tela ja abre com 144
+       queries, 25 delas de meta, e isto acrescenta DUAS — o
+       `useRebanhoOficial({cenario:'meta'})` ja e chamado abaixo com a MESMA
+       queryKey e o React Query deduplica. E o `buildMonthlyDataFromView` da
+       meta recebe `lancFin: []` e `lancPec: []` contra 4.291 e 196 do
+       realizado: os lacos que dominam o build viram no-op.
+       `incluirComparativos` fica FALSE de proposito — ele carrega o ano-1
+       inteiro, que nenhuma linha desta tela pede. */
+    carregarMeta: true,
     lancPecExterno: lancPec.length > 0 ? lancPec : undefined,
     lancFinExterno: lancFin.length > 0 ? lancFin : undefined,
     gridMetaExterno: gridMetaPara_PCD,
