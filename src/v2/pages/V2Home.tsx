@@ -634,6 +634,11 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     custeioAgriIndicador, investAgriIndicador, amortizacaoAgriIndicador,
     dividendosIndicador, deducoesTributosIndicador, tributosIndicador,
     caixaIndicador,
+    /* PR-ATIVIDADE-08 — quatro que o PC-100 ja produzia e nenhuma tela lia.
+       Saem da MESMA desestruturacao: nenhuma chamada nova ao hook.
+       `kgHaIndicador` ja vinha, na linha de cima. */
+    arrobasEstoqueIndicador, arrobasHaIndicador, precoArrEstoqueIndicador,
+    valorRebanhoSemEfeitoIndicador,
     loading: loadingPainel,
   } = usePainelConsultorData({ ano: anoNum, mes: mesNum, viewMode, incluirComparativos: true, ...sharedLanc });
 
@@ -1190,13 +1195,18 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     mesAtual: mesNum,
   });
 
-  /* Os SEIS indicadores do assunto Zootecnico, prontos para o modal.
-     AREA PRODUTIVA ficou de fora: `areaProdutivaPecIndicador` nao existe no
-     PC-100, e area tem calculos paralelos conhecidos — frente propria.
+  /* Os DOZE indicadores do assunto Zootecnico, prontos para o modal.
+     ONZE com dado; AREA PRODUTIVA entra declarada em construcao, porque
+     `areaProdutivaPecIndicador` nao existe no PC-100 e area tem calculos
+     paralelos conhecidos — frente propria. Ela ocupa o lugar dela na grade:
+     onze cards em tres colunas deixariam um vao mudo na quarta linha.
      `porFazenda` e `historico` ficam UNDEFINED quando nao ha fonte, e o card
-     mostra "em construção": mostrar o Global disfarcado de por-fazenda seria
-     dado errado com rotulo certo, e esconder o card faria o buraco na grade
-     sumir sem explicar. */
+     mostra "em construção" naquela aba: mostrar o Global disfarcado de
+     por-fazenda seria dado errado com rotulo certo, e esconder o card faria o
+     buraco na grade sumir sem explicar.
+     Dos cinco que entraram no PR-ATIVIDADE-08, NENHUM tem serie por fazenda
+     (`useSeriePorFazenda` cobre quatro chaves, e uaHa/kgHa exigiriam area por
+     fazenda) nem historico multi-ano (`useHistoricoZootCache` cobre tres). */
   const indicadoresAtividade = useMemo<IndicadorAtividade[]>(() => {
     const serie = (ind: { series?: SeriesPorModo; serieAno?: number[] } | null | undefined,
                    modo: 'mes' | 'periodo', campo: 'ano' | 'anoAnt' | 'meta') => {
@@ -1209,7 +1219,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
       const v = s.length >= 13 ? s[mesNum] : s[mesNum - 1];
       return v != null && !isNaN(v) ? v : null;
     };
-    /* Forma MINIMA comum aos seis indicadores do PC-100 — evita `any` num
+    /* Forma MINIMA comum aos indicadores do PC-100 — evita `any` num
        PR novo (regra zero-cast). Nao e o tipo deles: e o subconjunto que
        este bloco le. */
     type IndicadorPC = {
@@ -1263,9 +1273,39 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
       monta('gmd',          gmdIndicador,          'decimal3', 'kg',   seriePorFazAtiv.gmd,       histZootAtiv.gmd),
       monta('pesoMedio',    pesoMedioIndicador,    'decimal1', 'kg',   seriePorFazAtiv.pesoMedio, histZootAtiv.pesoMedio),
       monta('valorRebanho', valorRebanhoIndicador, 'moedaAbreviada', undefined),
+      /* ── PR-ATIVIDADE-08 · os cinco ligados ──
+         Sem `porFazenda` e sem `historico` em nenhum dos cinco: as fontes nao
+         cobrem estas chaves, e o card declara a falta em vez de mostrar o
+         Global com rotulo de fazenda. */
+      monta('arrobasEstoque', arrobasEstoqueIndicador, 'decimal1', '@'),
+      monta('kgHa', kgHaIndicador, 'decimal1', 'kg/ha'),
+      monta('arrobasHa', arrobasHaIndicador, 'decimal2', '@/ha'),
+      monta('precoArrEstoque', precoArrEstoqueIndicador, 'moeda', undefined),
+      monta('valorRebanhoSemEfeito', valorRebanhoSemEfeitoIndicador, 'moedaAbreviada', undefined),
+      /* O decimo segundo. NAO e um indicador: e o lugar dele, declarado.
+         Series vazias, valor null e `emConstrucao` com o motivo — as faixas
+         de cima continuam sendo desenhadas, entao a altura do card e a
+         mesma dos outros onze e a grade nao desalinha. */
+      {
+        chave: 'areaProdutiva',
+        titulo: 'Área produtiva',
+        subtitulo: 'Área pecuária efetiva',
+        unidade: 'ha',
+        formatoValor: 'decimal1',
+        serieMes: [],
+        seriePeriodo: [],
+        valorMes: null,
+        valorPeriodo: null,
+        deltaMes: null,
+        deltaAno: null,
+        deltaMeta: null,
+        emConstrucao: 'não existe como indicador do PC-100',
+      },
     ];
   }, [cabecasIndicador, arrobasIndicador, uaHaIndicador, gmdIndicador, pesoMedioIndicador,
-      valorRebanhoIndicador, seriePorFazAtiv, histZootAtiv, mesNum]);
+      valorRebanhoIndicador, arrobasEstoqueIndicador, kgHaIndicador, arrobasHaIndicador,
+      precoArrEstoqueIndicador, valorRebanhoSemEfeitoIndicador,
+      seriePorFazAtiv, histZootAtiv, mesNum]);
 
   const arrobasHistoricoOficial: HistoricoPorModo =
     modalIndicador === 'arrobas' ? histZoot.arrobas : { mes: [], periodo: [] };

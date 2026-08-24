@@ -16,7 +16,7 @@
  *     simples e sem a armadilha. Nao trocar por <Tabs> sem `data-[state=
  *     inactive]:hidden`.
  *
- * FONTE UNICA. Este componente NAO chama `usePainelConsultorData`. Sao seis
+ * FONTE UNICA. Este componente NAO chama `usePainelConsultorData`. Sao doze
  * indicadores; se cada card montasse a propria fonte, abrir o modal montaria
  * o painel seis vezes. Tudo chega por prop, da instancia principal do
  * V2Home. A proibicao e do briefing e vale para qualquer indicador novo.
@@ -100,6 +100,11 @@ export interface IndicadorAtividade {
   porFazenda?: SerieFazendaAtiv[];
   /** `undefined` = sem historico; o card mostra "em construção". */
   historico?: { mes: AnoValor[]; periodo: AnoValor[] };
+  /* Card INTEIRO em construcao, com o motivo. Diferente dos dois campos
+     acima, que declaram a falta de UMA aba: aqui nao ha indicador nenhum,
+     e o card so ocupa o lugar dele na grade. As faixas de cima seguem
+     sendo desenhadas, entao a altura nao muda. */
+  emConstrucao?: string;
 }
 
 interface Props {
@@ -131,7 +136,18 @@ const ASSUNTOS: Array<{ id: Assunto; rotulo: string }> = [
 /* Linha 1 e ESTOQUE — o que a fazenda TEM. Linha 2 e EFICIENCIA e
    PRODUCAO — o que ela FAZ com o estoque. A grade de tres colunas faz a
    divisao coincidir com as linhas. */
-const ORDEM_CARDS = ['cabecas', 'pesoMedio', 'valorRebanho', 'uaHa', 'gmd', 'arrobas'];
+/* A grade de Gabriel, lida em Z — tres por linha, quatro linhas:
+     Rebanho · Peso Medio · Arrobas em Estoque
+     Area Produtiva · UA/ha · Kg vivo/ha
+     GMD · @ produzidas/ha · @ produzidas Totais
+     R$/@ Estoque · Valor do Rebanho · Valor sem Efeito
+   Chave desconhecida vai para o fim (o `99` do sort abaixo). */
+const ORDEM_CARDS = [
+  'cabecas',         'pesoMedio',    'arrobasEstoque',
+  'areaProdutiva',   'uaHa',         'kgHa',
+  'gmd',             'arrobasHa',    'arrobas',
+  'precoArrEstoque', 'valorRebanho', 'valorRebanhoSemEfeito',
+];
 
 /* Indicadores cujo REALIZADO do mes le melhor como coluna: fluxo mensal e
    valor discreto, e a curva liga janeiro a fevereiro como se houvesse
@@ -150,7 +166,7 @@ const COLUNA_NO_MES = ['arrobas', 'gmd'];
 const H_TITULO  = 44;   // duas linhas de titulo + subtitulo
 const H_DELTAS  = 44;   // quatro deltas de 11px — o pior caso
 const H_CHIPS   = 20;   // uma fileira de chips h-4
-const H_GRAFICO = 190;   // 170 -> 190 no PR-05; o mesmo N nos SEIS cards,
+const H_GRAFICO = 190;   // 170 -> 190 no PR-05; o mesmo N nos DOZE cards,
                          // senao volta o desalinhamento do PR-03.
 const H_LEGENDA = 16;   // reservada SEMPRE: some-la em Global mudaria a
                         // altura do card ao trocar de nivel.
@@ -242,7 +258,7 @@ const EmConstrucao = ({ motivo }: { motivo: string }) => (
    salva — ela so desempata entre irmaos do MESMO tipo.
 
    Como o estado dos chips mora em `ModalAtividade`, cada clique remontava
-   os SEIS cards inteiros. O miolo rolavel ficava sem filhos por um
+   os cards inteiros. O miolo rolavel ficava sem filhos por um
    instante, o `scrollHeight` colapsava, o navegador clampava o `scrollTop`
    para zero — e a tela saltava para o topo.
 
@@ -494,7 +510,7 @@ const CardIndicador = ({
             valor por construcao e o branco reservado sobra no FIM, onde nao
             se ve.
             A altura total continua FIXA — H_TITULO + H_DELTAS — e igual nos
-            seis cards. Foi o que o PR-03 estabeleceu e o que impede o pulo
+            doze cards. Foi o que o PR-03 estabeleceu e o que impede o pulo
             ao marcar chip; se ela passar a depender do conteudo, e
             regressao, nao ajuste. */}
         <div className="flex items-start justify-between gap-2 overflow-hidden"
@@ -584,7 +600,9 @@ const CardIndicador = ({
           )}
         </div>
 
-        {escopo === 'fazenda' && !ind.porFazenda ? (
+        {ind.emConstrucao ? (
+          <EmConstrucao motivo={ind.emConstrucao} />
+        ) : escopo === 'fazenda' && !ind.porFazenda ? (
           <EmConstrucao motivo="sem série por fazenda" />
         ) : leitura === 'historico' && !ind.historico ? (
           <EmConstrucao motivo="sem histórico multi-ano" />
@@ -594,7 +612,7 @@ const CardIndicador = ({
           <>
             {/* Altura FIXA, nao `flex-1`: e o `flex-1` que faz o grafico
                 ceder e crescer conforme o irmao, e era ele que movia a base
-                dos cards. Com N igual nos seis, a grade alinha em cima
+                dos cards. Com N igual nos doze, a grade alinha em cima
                 (faixas fixas) e embaixo (grafico fixo). */}
             <div style={{ height: H_GRAFICO }}>
             <ResponsiveContainer width="100%" height="100%">
