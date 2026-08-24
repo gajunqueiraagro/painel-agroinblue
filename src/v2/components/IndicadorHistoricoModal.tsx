@@ -1200,12 +1200,23 @@ export function IndicadorHistoricoModal({
                         <p className="text-[10px] text-muted-foreground/70 leading-snug">{`${MESES_LABELS[mesAtual - 1]}/${yy}`}</p>
                         <div className="flex-1" style={{ minHeight: 140, maxHeight: 240 }}>
                           <ResponsiveContainer width="100%" height="100%">
-                            <ComposedChart data={dadosFazenda('mes')} margin={{ top: 6, right: 8, left: 4, bottom: 2 }}>
+                            <ComposedChart data={dadosFazenda('mes')} margin={{ top: 6, right: 8, left: 4, bottom: 2 }}
+                                           barCategoryGap="18%" barGap={1}>
                               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted-foreground) / 0.15)" />
                               <XAxis dataKey="mes" tick={{ fontSize: 8, fill: '#888780' }} stroke="hsl(var(--muted-foreground) / 0.22)" />
                               <YAxis tick={{ fontSize: 8, fill: '#888780' }} tickFormatter={fmtEixo} stroke="hsl(var(--muted-foreground) / 0.22)" width={46} />
                               <Tooltip content={<CustomTooltip />} />
-                              {(seriesPorFazenda ?? []).map((f, i) => (
+                              {/* Mesma prop `tipoGraficoMes` que governa a aba Global desde o
+                                  PR-16 — nao ha flag paralela. Fluxo mensal le melhor como
+                                  barra: medido no print da Vera Ligia, arrobas marcam 1.650 em
+                                  janeiro e 100 em fevereiro, e a curva liga os dois como se
+                                  houvesse trajetoria entre meses que sao independentes.
+                                  `cabecas` e `pesoMedio` nao recebem a prop e seguem em linha.
+                                  SEM rotulo sobre as barras: N fazendas x 12 meses em ~350px de
+                                  plotagem, mesma razao do PR-16 — a leitura e pelo Tooltip.
+                                  Por `map`, NUNCA dentro de um fragmento: o recharts inspeciona
+                                  os filhos por tipo e nao acha <Bar> embrulhado. */}
+                              {!modoColuna && (seriesPorFazenda ?? []).map((f, i) => (
                                 <Line
                                   key={f.fazendaId}
                                   type="monotone"
@@ -1217,6 +1228,20 @@ export function IndicadorHistoricoModal({
                                   isAnimationActive={false}
                                 />
                               ))}
+                              {modoColuna && (seriesPorFazenda ?? []).map((f, i) => (
+                                <Bar
+                                  key={f.fazendaId}
+                                  dataKey={f.nome}
+                                  fill={COR_FAZENDA[i % COR_FAZENDA.length]}
+                                  radius={[2, 2, 0, 0]}
+                                  isAnimationActive={false}
+                                />
+                              ))}
+                              {/* DEPOIS das barras, para ficar por cima. O Global NAO vira
+                                  barra: em arrobas e desfrute ele e a SOMA das fazendas e,
+                                  agrupado ao lado das partes, ditaria a escala e achataria as
+                                  menores. Como linha, as fazendas se comparam entre si e o
+                                  total continua legivel. */}
                               {linhaGlobal}
                             </ComposedChart>
                           </ResponsiveContainer>
