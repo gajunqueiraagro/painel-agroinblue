@@ -1888,13 +1888,40 @@ function SourceInfoTooltip({ indicadorId, cenario }: { indicadorId?: string; cen
 export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaConsolidacao }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const { pastos, categorias } = usePastos();
-  const { lancamentos: lancPec, saldosIniciais } = useLancamentos();
+  /* `ano` e `anoNum` subiram para ca: as duas chamadas de `useLancamentos`
+     abaixo precisam do ano, e eles dependem so da prop `filtroGlobal`. */
+  const ano = filtroGlobal?.ano || String(new Date().getFullYear());
+  const anoNum = Number(ano);
+  /* Filtra por ano: nenhum consumidor desta tela usa lancamento de outro
+     ano — os tres lacos descartam com `dataAno !== anoNum` e o
+     buildMonthlyDataFromView filtra por mesPrefix. Sem o filtro o
+     `fetchLancamentosPaginated` traz a base inteira: 2.153 linhas na NJ
+     contra 181 de 2026, em TRES paginas sequenciais.
+     E alinha com o usePainelConsultorData, que ja passa `ano` quando busca
+     sozinho.
+     ⚠ A queryKey inclui o ano, entao o cache 'all' das outras telas
+     (Index, FechamentoTab, ResOp*, MapaGeoPastos, AnaliseOperacional)
+     deixa de ser alimentado por aqui. Navegar do Executivo para elas
+     refaz a busca completa — custo DESLOCADO, nao eliminado. Elimina-lo
+     exige que elas tambem filtrem, e e frente propria. */
+  const { lancamentos: lancPec } = useLancamentos({ ano: anoNum });
   // useLancamentos() default cenario='realizado' — para arrobasSaidasMeta12 precisamos
   // de lançamentos META explicitamente. Sem isso o array fica sempre zerado e Desfrute(@) META vazio.
-  const { lancamentos: lancPecMeta } = useLancamentos({ cenario: 'meta' });
+  /* Filtra por ano: nenhum consumidor desta tela usa lancamento de outro
+     ano — os tres lacos descartam com `dataAno !== anoNum` e o
+     buildMonthlyDataFromView filtra por mesPrefix. Sem o filtro o
+     `fetchLancamentosPaginated` traz a base inteira: 2.153 linhas na NJ
+     contra 181 de 2026, em TRES paginas sequenciais.
+     E alinha com o usePainelConsultorData, que ja passa `ano` quando busca
+     sozinho.
+     ⚠ A queryKey inclui o ano, entao o cache 'all' das outras telas
+     (Index, FechamentoTab, ResOp*, MapaGeoPastos, AnaliseOperacional)
+     deixa de ser alimentado por aqui. Navegar do Executivo para elas
+     refaz a busca completa — custo DESLOCADO, nao eliminado. Elimina-lo
+     exige que elas tambem filtrem, e e frente propria. */
+  const { lancamentos: lancPecMeta } = useLancamentos({ cenario: 'meta', ano: anoNum });
   const { lancamentos: lancFin } = useFinanceiro();
 
-  const ano = filtroGlobal?.ano || String(new Date().getFullYear());
   const [viewTab, setViewTab] = useState<ViewTab>('mensal');
   const [cenario, setCenario] = useState<Cenario>('realizado');
   const [valorRebanhoMes, setValorRebanhoMes] = useState<number[]>(Array(13).fill(0));
@@ -1902,7 +1929,6 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
   const [showDivP1, setShowDivP1] = useState(false);
   const [showReabrirP1, setShowReabrirP1] = useState(false);
 
-  const anoNum = Number(ano);
 
   // usePlanejamentoFinanceiro movido para CIMA (A4) — necessário para materializar
   // gridMeta antes de chamar usePainelConsultorData. buildGridMeta passa a alimentar
