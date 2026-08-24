@@ -362,14 +362,17 @@ interface SoberanoSerie12 {
    como se fosse zero hectare. E um NaN contamina toda a serie seguinte.
    Tem 28 consumidores e NAO deve ser alterado. Esta funcao aplica a
    mesma regra de calcularArrHaAcumulado: mes sem valor nao entra no
-   divisor. */
+   divisor — e ZERO conta como sem valor, porque area zero nao e area
+   pequena, e ausencia de fechamento. Sem o `> 0` a NJ divergia em
+   agosto: 4.253,74 aqui contra 4.861,42 no divisor do @/ha do mesmo
+   bloco. */
 function mediaIgnorandoNulos(valores: (number | null)[]): number[] {
   const out: number[] = [];
   let soma = 0;
   let n = 0;
   for (let i = 0; i < 12; i++) {
     const v = valores[i];
-    if (v != null && Number.isFinite(v)) { soma += v; n += 1; }
+    if (v != null && Number.isFinite(v) && v > 0) { soma += v; n += 1; }
     out.push(n > 0 ? soma / n : NaN);
   }
   return out;

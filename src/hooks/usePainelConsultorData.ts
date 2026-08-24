@@ -1008,14 +1008,13 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     () => areaPecuariaRealAnoAntPorMes.map(v => v ?? NaN),
     [areaPecuariaRealAnoAntPorMes],
   );
-  /* Media ACUMULADA da area ate cada mes. A regra e' a de
-     `calcularArrHaAcumulado`: mes sem area — nulo, NaN ou ZERO — nao entra
-     no divisor. E' isso que faz o circuito fechar na tela, porque o `@/ha`
-     do periodo divide por ESTA media:
-         area (periodo) x @/ha (periodo) = @ produzidas (periodo).
-     ⚠ NAO e' a regra de `mediaIgnorandoNulos` (PainelConsultorTab), que
-     ignora nulo mas NAO ignora zero. Na NJ as duas so divergem a partir de
-     agosto, quando a serie tem 0: 4.228,84 contra 4.861,42. */
+  /* Regra do periodo: media ACUMULADA dos meses COM area, ignorando nulo,
+     NaN e ZERO. Area zero nao e area pequena: e mes sem fechamento.
+     E a MESMA regra do `mediaIgnorandoNulos` do PainelConsultorTab
+     (alinhadas em 24/08) e do `calcularArrHaAcumulado`. As tres
+     coincidirem e o que mantem o circuito fechado nas duas telas:
+     @ produzidas (periodo) ÷ area (periodo) = @/ha (periodo),
+     no Executivo e no modal. */
   const mediaAreaAcumulada12 = (serie: (number | null)[]): number[] => {
     const out: number[] = [];
     let soma = 0;
