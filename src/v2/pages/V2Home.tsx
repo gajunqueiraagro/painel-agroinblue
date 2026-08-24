@@ -28,6 +28,7 @@ import type { V2Section } from '@/v2/lib/navGrupos';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { BlocoAtividade } from '@/v2/components/BlocoAtividade';
 import { ModalAtividade, type IndicadorAtividade } from '@/v2/components/ModalAtividade';
+import { calcularRazaoEstoqueAcumulada, mediaIgnorandoZero } from '@/lib/calculos/eficienciaArea';
 import { BarChart3 } from 'lucide-react';
 
 const fmtN = (v: number | null | undefined, dec = 0) =>
@@ -733,32 +734,28 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
         const area = areaPorFazendaMes.find(a => a.fazenda_id === p.fazenda_id);
         const areaPec = area?.area_pecuaria_ha ?? 0;
 
-        /* Media dos UA/ha MENSAIS, nao razao de medias: e a regra do
-           rollingAvg(monthlyData.lotUaHa) do PC-100
-           (usePainelConsultorData:1911). Os dois so coincidem se a area for
-           constante no periodo — e ela muda (vigencia de pastos, 98a1eebf: a
-           Pureza perdeu 69,76 ha em maio/2025). Medido em 22/08.
+        /* RAZAO DE AGREGADOS — media do UA ÷ media da area, pela funcao unica
+           da `eficienciaArea`. Ate 24/08 este bloco fazia media das RAZOES
+           mensais, deliberadamente, para espelhar o `rollingAvg(lotUaHa)` que o
+           PC-100 usava. O PR-RAZAO-ESTOQUE-01 trocou a regra do PC-100 e este
+           bloco ficaria para tras — com o tile UA/ha do bloco Eficiencia e esta
+           coluna na MESMA tela, discordando.
 
-           Divisor proprio, nao rollingAvg: a funcao soma e conta
-           INCONDICIONALMENTE (painelConsultorIndicadores.ts:86-91) e nao
-           descarta mes vazio — no PC-100 e seguro porque a serie agregada e
-           densa, mas por fazenda ela tem buracos, e uma fazenda com 3 de 7
-           meses fechados dividiria por 7. Mesmo tratamento que o rebanho e o
-           GMD receberam.
+           O divisor proprio que motivava o codigo a mao continua garantido: a
+           funcao so conta o mes que TEM area, entao fazenda com 3 de 7 meses
+           fechados divide por 3, nunca por 7. Era esse o cuidado, e ele nao se
+           perde — muda so o que se promedia.
 
            Area do MES, do snapshot oficial — nunca a `area_produtiva_ha` da
            view, que e lixo conhecido (Pureza jul/2026: 4.726 contra 3.595). */
         const lotacaoPeriodo = (() => {
-          let soma = 0, n = 0;
-          for (let m = 1; m <= mesNum; m++) {
-            const ua = p.uaPorMes[m - 1];
-            const snap = snapshotsFazenda.find(x => x.fazenda_id === p.fazenda_id && x.mes === m);
-            const aPec = snap?.area_pecuaria_ha ?? 0;
-            if (ua == null || aPec <= 0) continue;
-            soma += ua / aPec;
-            n += 1;
-          }
-          return n > 0 ? soma / n : null;
+          const area12 = Array.from({ length: 12 }, (_, i) =>
+            snapshotsFazenda.find(x => x.fazenda_id === p.fazenda_id && x.mes === i + 1)
+              ?.area_pecuaria_ha ?? null);
+          /* A serie acumula ate cada mes; ler em `mesNum - 1` ja recorta o
+             periodo, e mes futuro nao influencia a posicao lida. */
+          const v = calcularRazaoEstoqueAcumulada(p.uaPorMes, area12)[mesNum - 1];
+          return Number.isFinite(v) ? v : null;
         })();
 
         return {
@@ -1208,8 +1205,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
      por-fazenda seria dado errado com rotulo certo, e esconder o card faria o
      buraco na grade sumir sem explicar.
      Dos cinco que entraram no PR-ATIVIDADE-08, NENHUM tem serie por fazenda
-     (`useSeriePorFazenda` cobre quatro chaves, e uaHa/kgHa exigiriam area por
-     fazenda) nem historico multi-ano (`useHistoricoZootCache` cobre tres). */
+     nem historico multi-ano (`useHistoricoZootCache` cobre tres). Serie por
+     fazenda: NOVE dos doze cards tem, desde o PR-RAZAO-ESTOQUE-01; faltam os
+     tres de VALOR. */
   const indicadoresAtividade = useMemo<IndicadorAtividade[]>(() => {
     const serie = (ind: { series?: SeriesPorModo; serieAno?: number[] } | null | undefined,
                    modo: 'mes' | 'periodo', campo: 'ano' | 'anoAnt' | 'meta') => {
@@ -1521,17 +1519,17 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     histArr3.loading || histArr2.loading
   );
 
-  // Helper local: média acumulada Jan→mes (1-based) ignorando null/NaN.
-  // Usado para Área Produtiva Pec. no modo período (estoque com semântica média,
-  // mesmo padrão de Cabeças/UA-ha/KG-ha no PC-100).
+  /* Media acumulada Jan->mes (1-based) da area, pela funcao unica da
+     `eficienciaArea`. Ate 24/08 este corpo era escrito a mao e ignorava null e
+     NaN mas NAO ZERO — o mesmo defeito corrigido no `mediaIgnorandoNulos` do
+     Executivo no PR-FIX-MEDIA-ZERO. Area zero e' mes sem fechamento, nao area
+     pequena: contando-a, o card da Home daria 4.253,74 ha em agosto contra
+     4.861,42 do card do modal, dois numeros para a mesma area na mesma sessao.
+     Os oito chamadores abaixo passam a ler a MESMA regra do modal e do PC-100. */
   const mediaAcumuladaArea = (porMes: ReadonlyArray<number | null> | null | undefined, ateMes: number): number | null => {
     if (!porMes || ateMes < 1 || ateMes > 12) return null;
-    let soma = 0, n = 0;
-    for (let i = 0; i < ateMes; i++) {
-      const v = porMes[i];
-      if (v != null && !isNaN(v)) { soma += v; n++; }
-    }
-    return n > 0 ? soma / n : null;
+    const v = mediaIgnorandoZero(porMes as (number | null)[], ateMes)[ateMes - 1];
+    return Number.isFinite(v) ? v : null;
   };
 
   // ── Área Produtiva Pecuária — semântica estoque com média acumulada no período ──
