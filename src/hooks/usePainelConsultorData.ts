@@ -491,6 +491,39 @@ export interface PainelConsultorDataResult {
    * `null` quando `incluirComparativos` e false — sem o ano anterior nao ha
    * de onde tirar o preco congelado, e zero afirmaria patrimonio nulo.
    */
+  /** @ em ESTOQUE — peso vivo total / 30. Par patrimonial do "@ produzidas".
+   *  `mes` e `periodo` sao a MESMA serie: estoque nao acumula. */
+  arrobasEstoqueIndicador: {
+    label:      string;
+    titulo:     string;
+    subtitulo:  string;
+    titulos?:   TitulosPorModo;
+    valor:      number | null;
+    deltaMes:   number | null;
+    deltaAno:   number | null;
+    deltaMeta:  number | null;
+    serieAno:   number[];
+    serieAnoAnt?: number[];
+    serieMeta?:  number[];
+    series?: SeriesPorModo;
+  } | null;
+  /** R$ por @ em ESTOQUE. Pode divergir do `preco_arroba_medio` publicado
+   *  quando avaliacao e fechamento discordam do peso — ver o comentario no
+   *  corpo do hook. Sem meta: nao ha meta de preco de estoque. */
+  precoArrEstoqueIndicador: {
+    label:      string;
+    titulo:     string;
+    subtitulo:  string;
+    titulos?:   TitulosPorModo;
+    valor:      number | null;
+    deltaMes:   number | null;
+    deltaAno:   number | null;
+    deltaMeta:  number | null;
+    serieAno:   number[];
+    serieAnoAnt?: number[];
+    serieMeta?:  number[];
+    series?: SeriesPorModo;
+  } | null;
   valorRebanhoSemEfeitoIndicador: {
     label:      string;
     titulo:     string;
@@ -2729,6 +2762,103 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
   const valorSemEfeitoDeltaMeta = delta13(valorSemEfeitoSerieMeta, mesIdx);
 
   // ─────────────────────────────────────────────────────────────
+  // ── @ EM ESTOQUE (1-based, length 13) ──
+  //
+  // O par patrimonial do "@ produzidas": aquele e fluxo, este e estoque.
+  // `peso_vivo / 30` — a regra da arroba do sistema para tudo que nao e
+  // abate. Mesmo insumo do `kgHa` e do `pesoMedio`, so que sem divisor.
+  //
+  // `mes` e `periodo` recebem a MESMA serie: estoque NAO acumula, igual ao
+  // `valorRebanho` e ao `cabecas`. Somar o estoque de doze meses contaria o
+  // mesmo boi doze vezes.
+  //
+  // A posicao 0 reusa `pesoTotalFinDezAnoAnt`, ja derivado de
+  // `viewTotalsAnoAnt[12]` no bloco do valor sem efeito — nenhuma leitura
+  // nova, e a mesma foto que o ponto "Ini" usa.
+  // ─────────────────────────────────────────────────────────────
+  const arrEstoque = (peso: number | null | undefined): number =>
+    peso != null && Number.isFinite(peso) ? peso / 30 : NaN;
+
+  const arrobasEstoqueSerie = Array.from({ length: 13 }, (_, i) =>
+    i === 0
+      ? arrEstoque(pesoTotalFinDezAnoAnt)
+      : arrEstoque(monthlyData?.pesoTotalFin?.[i - 1]));
+
+  const arrobasEstoqueValor = safe(arrobasEstoqueSerie[mesIdx]);
+
+  const arrobasEstoqueSerieAnoAnt = viewTotalsAnoAnt
+    ? Array.from({ length: 13 }, (_, i) =>
+        i === 0 ? NaN : arrEstoque(viewTotalsAnoAnt[i]?.peso_total_final))
+    : null;
+
+  const arrobasEstoqueSerieMeta = monthlyDataMeta
+    ? (() => {
+        const s = Array.from({ length: 13 }, (_, i) =>
+          i === 0 ? NaN : arrEstoque(monthlyDataMeta.pesoTotalFin?.[i - 1]));
+        return s.some(v => !isNaN(v)) ? s : null;
+      })()
+    : null;
+
+  const deltaEstoque = (ref: number[] | null, idx: number): number | null => {
+    if (!ref) return null;
+    const curr = safe(arrobasEstoqueSerie[mesIdx]);
+    const r = safe(ref[idx]);
+    if (curr == null || r == null || r === 0) return null;
+    return ((curr - r) / r) * 100;
+  };
+  const arrobasEstoqueDeltaMes  = mesIdx < 1 ? null : deltaEstoque(arrobasEstoqueSerie, mesIdx - 1);
+  const arrobasEstoqueDeltaAno  = deltaEstoque(arrobasEstoqueSerieAnoAnt, mesIdx);
+  const arrobasEstoqueDeltaMeta = deltaEstoque(arrobasEstoqueSerieMeta, mesIdx);
+
+
+  // ─────────────────────────────────────────────────────────────
+  // ── R$ POR @ EM ESTOQUE (1-based, length 13) ──
+  //
+  // `valorRebanhoMes[m] / arrobasEstoque[m]` — liga patrimonio a peso.
+  // Estoque, entao `mes` e `periodo` recebem a mesma serie.
+  //
+  // ⚠ ESTE NUMERO JA EXISTE PUBLICADO como `preco_arroba_medio` em
+  // `valor_rebanho_realizado_validado`, e os dois NEM SEMPRE BATEM. Medido
+  // em dez/2025, Faz. Sto. Expedito: R$ 320,30 derivado contra R$ 335,32
+  // publicado, porque as duas fontes discordam de quantas arrobas existem
+  // naquele mes — 577.651 kg na avaliacao contra 604.738 no fechamento.
+  // Nos outros oito pares fazenda-mes daquele mes elas batem.
+  //
+  // E a divergencia NAO e permanente: medido em jul/2026, as NOVE fazendas
+  // batem com diferenca 0,00 — inclusive o proprio Sto. Expedito, 322,05
+  // contra 322,05. O desencontro e daquele mes, nao da formula.
+  //
+  // A divergencia e ANTERIOR a este indicador (ver o bloco do valor sem
+  // efeito, acima) e nao e resolvida aqui. O que muda e que ela passa a
+  // aparecer na tela quando acontecer — e aparecer e melhor que ficar
+  // escondida.
+  // ─────────────────────────────────────────────────────────────
+  const precoArrEstoqueSerie = Array.from({ length: 13 }, (_, i) => {
+    const valor = safe(valorRebanhoMes[i]);
+    const arr   = safe(arrobasEstoqueSerie[i]);
+    return valor != null && arr != null && arr !== 0 ? valor / arr : NaN;
+  });
+  const precoArrEstoqueValor = safe(precoArrEstoqueSerie[mesIdx]);
+
+  const precoArrEstoqueSerieAnoAnt = (valorRebanhoSerieAnoAnt && arrobasEstoqueSerieAnoAnt)
+    ? Array.from({ length: 13 }, (_, i) => {
+        const valor = safe(valorRebanhoSerieAnoAnt[i]);
+        const arr   = safe(arrobasEstoqueSerieAnoAnt[i]);
+        return valor != null && arr != null && arr !== 0 ? valor / arr : NaN;
+      })
+    : null;
+
+  const deltaPrecoEst = (ref: number[] | null, idx: number): number | null => {
+    if (!ref) return null;
+    const curr = safe(precoArrEstoqueSerie[mesIdx]);
+    const r = safe(ref[idx]);
+    if (curr == null || r == null || r === 0) return null;
+    return ((curr - r) / r) * 100;
+  };
+  const precoArrEstoqueDeltaMes = mesIdx < 1 ? null : deltaPrecoEst(precoArrEstoqueSerie, mesIdx - 1);
+  const precoArrEstoqueDeltaAno = deltaPrecoEst(precoArrEstoqueSerieAnoAnt, mesIdx);
+
+  // ─────────────────────────────────────────────────────────────
   // ── Financeiro Produtivo — 6 indicadores (1-based, length 13) ──
   // Sem ano-1 nem meta nas fontes auditadas (lancPec/lancFin ano-1
   // não fetched; monthlyDataMeta não tem recPecComp/custOper).
@@ -4018,6 +4148,42 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
        efeito" e de APRESENTACAO e vem depois, na UI.
        `series.mes` e `series.periodo` recebem a MESMA serie: valor de
        estoque nao acumula — mesma regra do irmao (:3888-3889). */
+    arrobasEstoqueIndicador: monthlyData ? {
+      label:     'ARROBAS EM ESTOQUE',
+      titulo:    'Arrobas em estoque',
+      subtitulo: 'Peso vivo do rebanho no final do mês, em arrobas',
+      titulos:   { mes:     { titulo: 'Arrobas em estoque', subtitulo: 'Peso vivo do rebanho no final do mês, em arrobas' },
+                   periodo: { titulo: 'Arrobas em estoque', subtitulo: 'Peso vivo do rebanho no final do mês, em arrobas' } },
+      valor:     arrobasEstoqueValor,
+      deltaMes:  arrobasEstoqueDeltaMes,
+      deltaAno:  arrobasEstoqueDeltaAno,
+      deltaMeta: arrobasEstoqueDeltaMeta,
+      serieAno:    arrobasEstoqueSerie,
+      serieAnoAnt: arrobasEstoqueSerieAnoAnt ?? undefined,
+      serieMeta:   arrobasEstoqueSerieMeta ?? undefined,
+      series: {
+        mes:     { ano: arrobasEstoqueSerie, anoAnt: arrobasEstoqueSerieAnoAnt ?? undefined, meta: arrobasEstoqueSerieMeta ?? undefined },
+        periodo: { ano: arrobasEstoqueSerie, anoAnt: arrobasEstoqueSerieAnoAnt ?? undefined, meta: arrobasEstoqueSerieMeta ?? undefined },
+      },
+    } : null,
+    precoArrEstoqueIndicador: monthlyData ? {
+      label:     'R$/@ EM ESTOQUE',
+      titulo:    'R$ por arroba em estoque',
+      subtitulo: 'Valor do rebanho ÷ arrobas em estoque',
+      titulos:   { mes:     { titulo: 'R$ por arroba em estoque', subtitulo: 'Valor do rebanho ÷ arrobas em estoque' },
+                   periodo: { titulo: 'R$ por arroba em estoque', subtitulo: 'Valor do rebanho ÷ arrobas em estoque' } },
+      valor:     precoArrEstoqueValor,
+      deltaMes:  precoArrEstoqueDeltaMes,
+      deltaAno:  precoArrEstoqueDeltaAno,
+      deltaMeta: null,
+      serieAno:    precoArrEstoqueSerie,
+      serieAnoAnt: precoArrEstoqueSerieAnoAnt ?? undefined,
+      serieMeta:   undefined,
+      series: {
+        mes:     { ano: precoArrEstoqueSerie, anoAnt: precoArrEstoqueSerieAnoAnt ?? undefined },
+        periodo: { ano: precoArrEstoqueSerie, anoAnt: precoArrEstoqueSerieAnoAnt ?? undefined },
+      },
+    } : null,
     valorRebanhoSemEfeitoIndicador: monthlyData && valorSemEfeitoSerie ? {
       label:     isPeriodo ? 'VALOR DO REBANHO S/ EFEITO NO PERÍODO' : 'VALOR DO REBANHO S/ EFEITO NO MÊS',
       titulo:    'Valor do Rebanho sem efeito de mercado',
