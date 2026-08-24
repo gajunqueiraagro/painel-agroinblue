@@ -2646,21 +2646,38 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     ? viewTotalsAnoAnt[12]?.peso_total_final ?? null
     : null;
 
-  /* ⚠ O PRECO DERIVADO NAO E O `preco_arroba_medio` PUBLICADO, e a diferenca
-     e real. Ele sai de `valor_total` da avaliacao dividido pelas arrobas do
-     `zoot_mensal_cache`, e as duas fontes nem sempre concordam sobre quantas
-     arrobas existem. Medido em dez/2025:
-       Agnaldo, RRCC, Sta. Rita  — cache e avaliacao batem
-       NJ Pecuaria   76.087,1 (cache) x 75.162,1 (avaliacao) = 1,2%
-       Vera Ligia    22.241,5        x 22.926,2              = 3,0%
-       Sto. Expedito 20.157,9        x 19.255,0 -> 320,30 derivado
-                                                  contra 335,32 publicado
-     Dividir pelo peso do CACHE e deliberado: e ele que move a serie mes a
+  /* O PRECO DERIVADO E O `preco_arroba_medio` PUBLICADO COINCIDEM, salvo um
+     caso. Ele sai de `valor_total` da avaliacao dividido pelas arrobas que
+     `viewTotalsAnoAnt` entrega — e essas ja vem do cache COM o overlay de
+     fechamento aplicado (`rawCategorias`), nao do cache cru.
+
+     Medido em dez/2025, arrobas com overlay contra as da avaliacao:
+       Agnaldo, Raul Juliato, RRCC, Sta. Rita, Vera Ligia  →  0,0
+       NJ Pecuaria                                         →  902,9 @
+
+     Cinco dos seis batem EXATAMENTE. Os 902,9 da NJ sao integralmente uma
+     fazenda num mes: Faz. Sto. Expedito, dez/2025, onde a avaliacao traz
+     577.651 kg em 1.873 cabecas e o fechamento traz 604.738 kg em 1.869 —
+     MAIS cabecas e MENOS peso, peso medio 308,4 contra 323,6. Nao e
+     categoria faltando de um lado: e a mesma tropa pesada de outro jeito.
+
+     Fora esse caso a avaliacao SEGUE o fechamento — bate em 8 das 9
+     fazendas, com diferenca de 0 a 2 kg. As duas fontes concordam por
+     construcao, e o Sto. Expedito e excecao a decidir, nao regra.
+
+     ⚠ COMO A MEDICAO ERRADA ACONTECEU. A primeira versao deste comentario
+     afirmava 1,2% na NJ e 3,0% na Vera Ligia. Era artefato de comparar com o
+     cache CRU enquanto o codigo consome o cache COM overlay: o cru estava
+     20.539 kg atrasado nas 3 Muchachas e 660 kg na Pureza. Corrigido o lado
+     da comparacao, a Vera Ligia bate exatamente.
+     E a MESMA armadilha que pos 273,3 @ na tela quando o correto era 245,0
+     (PR-OVERLAY-EXTRAI-34): ler o cache cru onde a fonte soberana e o cache
+     com overlay. Ao conferir qualquer numero de peso ou arroba contra este
+     hook, comparar sempre com o overlay aplicado.
+
+     Dividir pelo peso do cache e deliberado: e ele que move a serie mes a
      mes, e so assim dezembro coincide com o valor COM efeito — que e o teste
-     do indicador. Usar o preco publicado faria dezembro divergir logo na
-     primeira posicao.
-     A divergencia entre as duas fontes de arrobas e anterior a este
-     indicador e nao e resolvida aqui: frente propria. */
+     do indicador. */
   const precoArrCongelado = (() => {
     const valorDez = safe(valorRebanhoMes[0]);     // [0] = dez do ano anterior
     if (valorDez == null || pesoTotalFinDezAnoAnt == null) return null;
