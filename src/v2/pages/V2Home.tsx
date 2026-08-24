@@ -28,7 +28,7 @@ import type { V2Section } from '@/v2/lib/navGrupos';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { BlocoAtividade } from '@/v2/components/BlocoAtividade';
 import { useMovimentacoesAgregadas, type Lente, type TipoMov } from '@/v2/hooks/useMovimentacoesAgregadas';
-import { ModalAtividade, type IndicadorAtividade } from '@/v2/components/ModalAtividade';
+import { ModalAtividade, type IndicadorAtividade, type Assunto } from '@/v2/components/ModalAtividade';
 import { calcularRazaoEstoqueAcumulada, mediaIgnorandoZero } from '@/lib/calculos/eficienciaArea';
 import { BarChart3, ArrowLeftRight } from 'lucide-react';
 
@@ -581,7 +581,12 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
   const [modalIndicador, setModalIndicador] = useState<string | null>(null);
   /* PR-ATIVIDADE-01 — o modal por ASSUNTO. Estado proprio: ele nao e um
      `modalIndicador` com outro valor, e sim outra pergunta. */
-  const [modalAtividade, setModalAtividade] = useState<string | null>(null);
+  const [modalAtividade, setModalAtividade] = useState<Assunto | null>(null);
+  /* O assunto ATIVO dentro do modal, informado por ele. `modalAtividade` diz
+     por qual bloco o modal foi aberto e NAO acompanha a troca de assunto no
+     cabecalho — usar um pelo outro foi o defeito de 24/08: as series do
+     Zootecnico nunca carregavam quando se chegava nele por dentro do modal. */
+  const [assuntoAtivo, setAssuntoAtivo] = useState<Assunto | null>(null);
 
   /* Fatia do donut sob o mouse. Guarda o LABEL, nao o indice: `fatias` muda de
      tamanho conforme familias zeram, e indice apontaria para outra fatia. */
@@ -1178,7 +1183,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
      `useHistoricoZootCache` e a consulta barata do PR-23 (uma paginada), e
      `useSeriePorFazenda` ja aplica o overlay de fechamento (dcaa1f11). */
   const histZootAtiv = useHistoricoZootCache({
-    enabled: modalAtividade === 'zootecnico',
+    enabled: assuntoAtivo === 'zootecnico',
     clienteId: clienteAtual?.id,
     fazendaIds: fazendaIdsPecuaria,
     anoInicio: anoNum - 5,
@@ -1189,7 +1194,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     /* `snapshotsFazenda` ja esta desestruturado acima e ja e consumido em
        outro bloco desta pagina: passa por prop, sem requisicao nova. */
     areaPorFazendaMes: snapshotsFazenda,
-    enabled: modalAtividade === 'zootecnico',
+    enabled: assuntoAtivo === 'zootecnico',
     clienteId: clienteAtual?.id,
     fazendaIds: fazendaIdsPecuaria,
     ano: anoNum,
@@ -1308,6 +1313,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
      mostra travessao, e a ausencia fica legivel. */
   const movAgg = useMovimentacoesAgregadas({
     ano: anoNum, mes: mesNum, viewMode, isGlobal,
+    /* Tres `useLancamentos`. Sem guarda eles rodavam SEMPRE, inclusive com o
+       modal fechado, no caminho de carga da Home. */
+    enabled: assuntoAtivo === 'movimentacoes',
   });
 
   const indicadoresMovimentacoes = useMemo<IndicadorAtividade[]>(() => {
@@ -3206,27 +3214,25 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
         />
       </div>
 
-      {modalAtividade === 'movimentacoes' && (
+      {/* UM ponto de montagem. Eram dois, um por assunto, e so o de
+          Movimentacoes recebia `indicadoresMovimentacoes` — entao trocar de
+          assunto dentro do modal aberto pelo Zootecnico dava `?? []`, grade
+          com zero filhos, TELA EM BRANCO. Sem nem "em construção", porque o
+          `EmConstrucao` vive DENTRO do card e nao havia card nenhum.
+          Com um ponto so, os dois prop-bags chegam sempre e nenhum assunto
+          pode cair em array vazio — o defeito morre por construcao, nao por
+          guarda. */}
+      {modalAtividade && (
         <ModalAtividade
           open
-          onClose={() => setModalAtividade(null)}
+          onClose={() => { setModalAtividade(null); setAssuntoAtivo(null); }}
           mesAtual={mesNum}
           anoAtual={anoNum}
           clienteNome={clienteAtual?.nome ?? ''}
+          assuntoInicial={modalAtividade}
+          onAssuntoChange={setAssuntoAtivo}
           indicadores={indicadoresAtividade}
           indicadoresMovimentacoes={indicadoresMovimentacoes}
-          codigosFazendas={seriePorFazAtiv.cabecas.map(f => f.codigo)}
-        />
-      )}
-
-      {modalAtividade === 'zootecnico' && (
-        <ModalAtividade
-          open
-          onClose={() => setModalAtividade(null)}
-          mesAtual={mesNum}
-          anoAtual={anoNum}
-          clienteNome={clienteAtual?.nome ?? ''}
-          indicadores={indicadoresAtividade}
           codigosFazendas={seriePorFazAtiv.cabecas.map(f => f.codigo)}
           loadingHistorico={histZootAtiv.loading}
         />

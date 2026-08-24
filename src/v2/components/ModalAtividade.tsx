@@ -121,9 +121,19 @@ interface Props {
   indicadoresMovimentacoes?: IndicadorAtividade[];
   codigosFazendas: string[];
   loadingHistorico?: boolean;
+  /* O assunto pelo qual o modal foi ABERTO. Ate 24/08 o bloco decidia qual
+     INSTANCIA montar e o reset forcava 'zootecnico', entao clicar em
+     Movimentacoes abria no Zootecnico. Instancia e assunto sao coisas
+     diferentes, e esta prop e a que faltava. */
+  assuntoInicial?: Assunto;
+  /* O assunto ATIVO sobe para a pagina. O modal e' quem sabe qual botao esta
+     aceso; sem avisar, o `enabled` dos hooks continuaria olhando o assunto de
+     ENTRADA e as series do Zootecnico nunca carregariam quando se chega nele
+     por dentro do modal. Inverte o fluxo de proposito. */
+  onAssuntoChange?: (a: Assunto) => void;
 }
 
-type Assunto  = 'zootecnico' | 'movimentacoes' | 'financeiro' | 'operacional';
+export type Assunto = 'zootecnico' | 'movimentacoes' | 'financeiro' | 'operacional';
 type Escopo   = 'global' | 'fazenda';
 type Leitura  = 'mes' | 'periodo' | 'historico';
 type Comparador = 'meta' | 'mes' | 'anoAnt' | 'noAno';
@@ -791,7 +801,7 @@ const CardIndicador = ({
 
 export function ModalAtividade({
   open, onClose, mesAtual, anoAtual, clienteNome, indicadores, codigosFazendas,
-  loadingHistorico, indicadoresMovimentacoes,
+  loadingHistorico, indicadoresMovimentacoes, assuntoInicial, onAssuntoChange,
 }: Props) {
   const [assunto, setAssunto] = useState<Assunto>('zootecnico');
   const [escopo,  setEscopo]  = useState<Escopo>('global');
@@ -813,12 +823,19 @@ export function ModalAtividade({
      sessao anterior desorienta — o modal sempre comeca no mesmo lugar. */
   useEffect(() => {
     if (open) {
-      setAssunto('zootecnico');
+      setAssunto(assuntoInicial ?? 'zootecnico');
       setEscopo('global');
       setLeitura('mes');
       setComparadores({});
     }
-  }, [open]);
+  }, [open, assuntoInicial]);
+
+  /* O assunto ativo sobe. Roda tambem na abertura, para a pagina ja nascer
+     sabendo em que assunto o modal abriu — e nao so a partir da primeira
+     troca. Fechado, nao avisa: quem zera e a pagina, no `onClose`. */
+  useEffect(() => {
+    if (open) onAssuntoChange?.(assunto);
+  }, [open, assunto, onAssuntoChange]);
 
   if (!open) return null;
 

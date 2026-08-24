@@ -88,6 +88,12 @@ interface Args {
   viewMode: 'mes' | 'periodo';
   /** Quando true, Σ Entradas exclui transf entrada (movimentação interna do cliente). */
   isGlobal: boolean;
+  /* OPCIONAL, default `true`: os tres consumidores que existiam antes de
+     24/08 — V2VisaoGeralRebanho e os dois blocos do Fechamento — nao passam
+     nada e seguem carregando como sempre. So o V2Home passa `false`, porque
+     la o hook vive no corpo da pagina e sao TRES `useLancamentos` no caminho
+     de carga de uma tela que ja e' o gargalo. */
+  enabled?: boolean;
 }
 
 // ─── CONSTANTES ──────────────────────────────────────────────────────────────
@@ -313,11 +319,11 @@ function calcularSaldoInicialAno(saldos: SaldoInicialLike[], ano: number): numbe
 
 // ─── HOOK ────────────────────────────────────────────────────────────────────
 
-export function useMovimentacoesAgregadas({ ano, mes, viewMode, isGlobal }: Args): MovimentacoesAgregadas {
+export function useMovimentacoesAgregadas({ ano, mes, viewMode, isGlobal, enabled = true }: Args): MovimentacoesAgregadas {
   // 3 useLancamentos com queryKeys distintos (TanStack Query cacheia separado).
-  const corr   = useLancamentos({ cenario: 'realizado', ano });
-  const anoAnt = useLancamentos({ cenario: 'realizado', ano: ano - 1 });
-  const meta   = useLancamentos({ cenario: 'meta',      ano });
+  const corr   = useLancamentos({ cenario: 'realizado', ano, enabled });
+  const anoAnt = useLancamentos({ cenario: 'realizado', ano: ano - 1, enabled });
+  const meta   = useLancamentos({ cenario: 'meta',      ano, enabled });
 
   const loading = !!(corr.loading || anoAnt.loading || meta.loading);
 
