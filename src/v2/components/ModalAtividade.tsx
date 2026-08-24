@@ -119,6 +119,27 @@ const ASSUNTOS: Array<{ id: Assunto; rotulo: string }> = [
    sumir: card que desaparece por causa de um rotulo novo e defeito mudo. */
 const ORDEM_CARDS = ['cabecas', 'gmd', 'arrobas', 'uaHa', 'pesoMedio', 'valorRebanho'];
 
+/* Indicadores cujo REALIZADO do mes le melhor como coluna: fluxo mensal e
+   valor discreto, e a curva liga janeiro a fevereiro como se houvesse
+   trajetoria entre meses independentes. Mesma decisao do PR-16 e do PR-32.
+   So no nivel "No mes" — periodo e acumulado, e acumulado e curva. */
+const COLUNA_NO_MES = ['arrobas', 'gmd'];
+
+/* ALTURAS FIXAS DAS FAIXAS DO CARD — o remedio do PR-ATIVIDADE-03.
+   O cabecalho tinha altura VARIAVEL: um chip marcado dava dois deltas,
+   quatro davam cinco linhas, e como cada card se dimensiona sozinho eles
+   desalinhavam entre si e PULAVAM ao marcar. Cada faixa passa a ter altura
+   do PIOR CASO, e sobrar branco com menos chips e o comportamento CORRETO —
+   e a logica da A7: estabilidade vale mais que compactacao.
+   ⚠ O grafico tem altura FIXA, nao `flex-1`. E o oposto do PR-27 e e
+   deliberado: la o defeito era colapso, aqui e instabilidade. */
+const H_TITULO  = 44;   // duas linhas de titulo + subtitulo
+const H_DELTAS  = 44;   // quatro deltas de 11px — o pior caso
+const H_CHIPS   = 20;   // uma fileira de chips h-4
+const H_GRAFICO = 170;
+const H_LEGENDA = 16;   // reservada SEMPRE: some-la em Global mudaria a
+                        // altura do card ao trocar de nivel.
+
 const fmtN = (v: number | null | undefined, casas: number) =>
   v == null || isNaN(v) ? '—' : v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });
 
@@ -177,8 +198,11 @@ const btn = (ativo: boolean, tamanho: 'g' | 'p') =>
       : 'bg-card text-muted-foreground border-border/50 hover:bg-muted/50',
   ].join(' ');
 
+/* Ocupa exatamente o mesmo espaco do grafico mais a legenda: card que
+   encolhe por falta de dado desalinha a grade e faz o buraco parecer erro
+   de layout, nao ausencia declarada. */
 const EmConstrucao = ({ motivo }: { motivo: string }) => (
-  <div className="flex-1 flex items-center justify-center" style={{ minHeight: 150 }}>
+  <div className="flex items-center justify-center" style={{ height: H_GRAFICO + H_LEGENDA }}>
     <p className="text-[10px] text-muted-foreground/70 italic text-center px-4">
       em construção<br />
       <span className="text-[9px] not-italic">{motivo}</span>
@@ -378,6 +402,27 @@ export function ModalAtividade({
     );
   };
 
+  /* O rotulo do valor SO sobre o ponto/barra do mes filtrado — em todos os
+     meses, treze numeros de 9px em ~450px de plotagem se sobrepoem.
+     ⚠ O offset vem do PROPRIO array: prepender "Ini" desloca todos os
+     indices em um, e fixar o numero e a armadilha do A12. */
+  const rotuloDoMes = (ind: IndicadorAtividade) =>
+    (props: { index?: number; x?: number | string; y?: number | string; width?: number | string; value?: number | string }) => {
+      const off = dadosGlobal(ind).length > 12 ? 1 : 0;
+      if (props.index !== mesAtual - 1 + off) return null;
+      const v = typeof props.value === 'number' ? props.value : null;
+      if (v == null) return null;
+      /* Na barra o `x` e a borda esquerda e vem `width`; na linha, o proprio
+         ponto. Centralizar exige somar meia largura quando ela existe. */
+      const cx = Number(props.x) + (props.width != null ? Number(props.width) / 2 : 0);
+      return (
+        <text x={cx} y={Number(props.y) - 6} fontSize={9}
+              fill="hsl(var(--foreground))" textAnchor="middle">
+          {fmtValor(v, ind.formatoValor, ind.unidade)}
+        </text>
+      );
+    };
+
   const CardIndicador = ({ ind }: { ind: IndicadorAtividade }) => {
     const titulo = leitura === 'periodo'
       ? (ind.tituloPeriodo ?? ind.titulo)
@@ -390,6 +435,8 @@ export function ModalAtividade({
       : leitura === 'periodo' ? rotuloPer : rotuloMes;
     const valor = leitura === 'periodo' ? ind.valorPeriodo : ind.valorMes;
     const sel = marcados(ind.chave);
+    const colunaRealizado =
+      escopo === 'global' && leitura === 'mes' && COLUNA_NO_MES.includes(ind.chave);
     /* Chip DESABILITADO, nunca invisivel, quando a serie nao existe: sumir
        com o controle esconde a ausencia; desabilitar declara. O motivo vai
        no `title`. `mes` nunca desabilita — o mes anterior sai da propria
@@ -403,23 +450,35 @@ export function ModalAtividade({
     const mostra = (op: Comparador) => sel.includes(op) && temSerie(op);
 
     return (
-      <Card className="flex flex-col min-h-0">
-        <CardContent className="p-3 flex flex-col flex-1 min-h-0">
-          <div className="flex items-start justify-between gap-2 mb-0.5">
+      <Card>
+        <CardContent className="p-3">
+          {/* FAIXA 1 — titulo e valor. Sem `truncate`: com os chips fora
+              desta faixa sobra largura, e onde ainda faltar o titulo quebra
+              em DUAS linhas em vez de virar "Rebanho Fin...". A altura ja e
+              a do pior caso, entao quebrar nao empurra nada. */}
+          <div className="flex items-start justify-between gap-2 overflow-hidden"
+               style={{ height: H_TITULO }}>
             <div className="min-w-0">
-              <p className="text-xs font-bold text-foreground leading-tight truncate">{titulo}</p>
+              <p className="text-xs font-bold text-foreground leading-tight">{titulo}</p>
               <p className="text-[10px] text-muted-foreground/70 leading-snug">{sub}</p>
             </div>
-            <div className="flex flex-col items-end gap-0.5 shrink-0">
-              <span className="text-sm font-bold text-foreground leading-none tabular-nums">
-                {fmtValor(valor, ind.formatoValor, ind.unidade)}
-              </span>
-              {/* O seletor de comparacao SO existe no Global: na aba Por
-                  fazenda as series sao LUGARES, nao cenarios, e comparar com
-                  meta ali seria outra pergunta. */}
-              {escopo === 'global' && leitura !== 'historico' && (
-                <div className="flex items-start gap-1.5">
-                  <Deltas ind={ind} />
+            <span className="text-sm font-bold text-foreground leading-none tabular-nums shrink-0">
+              {fmtValor(valor, ind.formatoValor, ind.unidade)}
+            </span>
+          </div>
+
+          {/* FAIXA 2 — os deltas dos chips MARCADOS, sob o valor. Altura do
+              pior caso (quatro); com menos, sobra branco de proposito. */}
+          <div className="flex justify-end items-start overflow-hidden" style={{ height: H_DELTAS }}>
+            {escopo === 'global' && leitura !== 'historico' && <Deltas ind={ind} />}
+          </div>
+
+          {/* FAIXA 3 — os chips, logo acima do grafico e a ESQUERDA, para o
+              olho ligar chip e linha sem atravessar o card.
+              SO no Global: na aba Por fazenda as series sao LUGARES, nao
+              cenarios, e comparar com meta ali seria outra pergunta. */}
+          <div className="flex items-center overflow-hidden" style={{ height: H_CHIPS }}>
+            {escopo === 'global' && leitura !== 'historico' && (
                   <div className="flex gap-0.5">
                     {(['meta', 'mes', 'anoAnt', 'noAno'] as Comparador[]).map(op => {
                       const ok = temSerie(op);
@@ -448,9 +507,7 @@ export function ModalAtividade({
                       );
                     })}
                   </div>
-                </div>
-              )}
-            </div>
+            )}
           </div>
 
           {escopo === 'fazenda' && !ind.porFazenda ? (
@@ -461,9 +518,11 @@ export function ModalAtividade({
             <EmConstrucao motivo="histórico por fazenda ainda não existe" />
           ) : (
             <>
-              <div className="flex-1"
-                 style={{ minHeight: escopo === 'fazenda' && leitura !== 'historico' ? 132 : 150,
-                          maxHeight: 210 }}>
+              {/* Altura FIXA, nao `flex-1`: e o `flex-1` que faz o grafico
+                  ceder e crescer conforme o irmao, e era ele que movia a base
+                  dos cards. Com N igual nos seis, a grade alinha em cima
+                  (faixas fixas) e embaixo (grafico fixo). */}
+              <div style={{ height: H_GRAFICO }}>
               <ResponsiveContainer width="100%" height="100%">
                 {leitura === 'historico' ? (
                   <BarChart data={barrasHistorico(ind)}
@@ -498,7 +557,8 @@ export function ModalAtividade({
                           connectNulls={false} isAnimationActive={false} />
                   </ComposedChart>
                 ) : (
-                  <ComposedChart data={dadosGlobal(ind)} margin={{ top: 14, right: 8, left: 4, bottom: 2 }}>
+                  <ComposedChart data={dadosGlobal(ind)} margin={{ top: 14, right: 8, left: 4, bottom: 2 }}
+                                 barCategoryGap="18%">
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted-foreground) / 0.15)" />
                     {/* A horizontal na altura do inicial: da para ler de
                         relance se o ano esta acima ou abaixo de onde comecou. */}
@@ -531,9 +591,27 @@ export function ModalAtividade({
                     )}
                     {/* O REALIZADO nunca e condicional: ele e o assunto do
                         card. Com zero chips marcados sobra so ele, e isso e
-                        leitura legitima. */}
-                    <Area type="monotone" dataKey="atual" stroke="none"
-                          fill={COR_ATUAL} fillOpacity={0.10} isAnimationActive={false} />
+                        leitura legitima.
+                        Em `arrobas` e `gmd` ele vira BARRA no nivel do mes —
+                        meta e ano anterior seguem linha, por cima.
+                        Condicionais INDIVIDUAIS, nunca um fragmento: o
+                        recharts inspeciona filhos por tipo e nao acha <Bar>
+                        embrulhado. */}
+                    {colunaRealizado && (
+                      <Bar dataKey="atual" fill={COR_ATUAL} radius={[2, 2, 0, 0]}
+                           isAnimationActive={false}>
+                        {/* Com o realizado em barra o rotulo do mes filtrado
+                            muda de ancora: a LabelList vive na <Bar>, nao na
+                            <Line>, senao ela apontaria para uma serie que nao
+                            esta desenhada. */}
+                        <LabelList dataKey="atual" content={rotuloDoMes(ind)} />
+                      </Bar>
+                    )}
+                    {!colunaRealizado && (
+                      <Area type="monotone" dataKey="atual" stroke="none"
+                            fill={COR_ATUAL} fillOpacity={0.10} isAnimationActive={false} />
+                    )}
+                    {!colunaRealizado && (
                     <Line type="monotone" dataKey="atual" stroke={COR_ATUAL}
                           strokeWidth={2.5} dot={DOT_V1} connectNulls={false} isAnimationActive={false}>
                       {/* E11 — o valor SO sobre o ponto do mes filtrado. Em
@@ -542,23 +620,9 @@ export function ModalAtividade({
                           ⚠ O offset vem do PROPRIO array. Prepender "Ini"
                           desloca todos os indices em um, e fixar o numero e a
                           armadilha do A12 — ja cobrou uma vez. */}
-                      <LabelList
-                        dataKey="atual"
-                        content={(props: { index?: number; x?: number | string; y?: number | string; value?: number | string }) => {
-                          const off = dadosGlobal(ind).length > 12 ? 1 : 0;
-                          const alvo = mesAtual - 1 + off;
-                          if (props.index !== alvo) return null;
-                          const v = typeof props.value === 'number' ? props.value : null;
-                          if (v == null) return null;
-                          return (
-                            <text x={Number(props.x)} y={Number(props.y) - 6} fontSize={9}
-                                  fill="hsl(var(--foreground))" textAnchor="middle">
-                              {fmtValor(v, ind.formatoValor, ind.unidade)}
-                            </text>
-                          );
-                        }}
-                      />
+                      <LabelList dataKey="atual" content={rotuloDoMes(ind)} />
                     </Line>
+                    )}
                   </ComposedChart>
                 )}
               </ResponsiveContainer>
@@ -567,8 +631,12 @@ export function ModalAtividade({
                   linha nenhuma. O piso do grafico cai de 150 para 132 quando
                   ela aparece, entao o card NAO cresce — a legenda entra no
                   espaco que ja existia. */}
+              {/* Faixa da legenda RESERVADA sempre: escondida em Global ela
+                  encolheria o card ao trocar de nivel, que e o mesmo pulo que
+                  este PR esta tirando. */}
+              <div className="overflow-hidden" style={{ height: H_LEGENDA }}>
               {escopo === 'fazenda' && leitura !== 'historico' && (
-                <div className="flex justify-center gap-2.5 px-0 mt-1 flex-wrap">
+                <div className="flex justify-center gap-2.5 px-0 mt-0.5 flex-wrap">
                   <div className="flex items-center gap-1.5">
                     <div className="w-3 border-t-[2px] border-dashed" style={{ borderColor: COR_GLOBAL }} />
                     <span className="text-[9px] text-muted-foreground">Global</span>
@@ -582,6 +650,7 @@ export function ModalAtividade({
                   ))}
                 </div>
               )}
+              </div>
             </>
           )}
         </CardContent>
