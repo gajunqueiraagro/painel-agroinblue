@@ -1188,6 +1188,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     mesAtual: mesNum,
   });
   const seriePorFazAtiv = useSeriePorFazenda({
+    /* `snapshotsFazenda` ja esta desestruturado acima e ja e consumido em
+       outro bloco desta pagina: passa por prop, sem requisicao nova. */
+    areaPorFazendaMes: snapshotsFazenda,
     enabled: modalAtividade === 'zootecnico',
     clienteId: clienteAtual?.id,
     fazendaIds: fazendaIdsPecuaria,
@@ -1277,14 +1280,14 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
          Sem `porFazenda` e sem `historico` em nenhum dos cinco: as fontes nao
          cobrem estas chaves, e o card declara a falta em vez de mostrar o
          Global com rotulo de fazenda. */
-      monta('arrobasEstoque', arrobasEstoqueIndicador, 'decimal1', '@'),
+      monta('arrobasEstoque', arrobasEstoqueIndicador, 'decimal1', '@', seriePorFazAtiv.arrobasEstoque),
       monta('kgHa', kgHaIndicador, 'decimal1', 'kg/ha'),
-      monta('arrobasHa', arrobasHaIndicador, 'decimal2', '@/ha'),
+      monta('arrobasHa', arrobasHaIndicador, 'decimal2', '@/ha', seriePorFazAtiv.arrobasHa),
       monta('precoArrEstoque', precoArrEstoqueIndicador, 'moeda', 'R$/@'),
       monta('valorRebanhoSemEfeito', valorRebanhoSemEfeitoIndicador, 'moedaAbreviada', undefined),
       /* O decimo segundo, agora com dado. O rotulo diz QUAL das tres series
          de area do hook e' esta — a mesma que divide o @/ha. */
-      monta('areaProdutiva', areaProdutivaPecIndicador, 'decimal1', 'ha'),
+      monta('areaProdutiva', areaProdutivaPecIndicador, 'decimal1', 'ha', seriePorFazAtiv.areaProdutivaPec),
     ];
   }, [cabecasIndicador, arrobasIndicador, uaHaIndicador, gmdIndicador, pesoMedioIndicador,
       valorRebanhoIndicador, arrobasEstoqueIndicador, kgHaIndicador, arrobasHaIndicador,
