@@ -484,6 +484,28 @@ export interface PainelConsultorDataResult {
     series?: SeriesPorModo;
   } | null;
   /**
+   * Valor do rebanho AO PRECO DE DEZEMBRO DO ANO ANTERIOR — irmao do
+   * `valorRebanhoIndicador`, mesma forma. A diferenca entre os dois E o
+   * efeito de mercado: com ele, "quanto vale hoje"; sem ele, "quanto
+   * valeria ao preco do inicio do ano".
+   * `null` quando `incluirComparativos` e false — sem o ano anterior nao ha
+   * de onde tirar o preco congelado, e zero afirmaria patrimonio nulo.
+   */
+  valorRebanhoSemEfeitoIndicador: {
+    label:      string;
+    titulo:     string;
+    subtitulo:  string;
+    titulos?:   TitulosPorModo;
+    valor:      number | null;
+    deltaMes:   number | null;
+    deltaAno:   number | null;
+    deltaMeta:  number | null;
+    serieAno:   number[];
+    serieAnoAnt?: number[];
+    serieMeta?:  number[];
+    series?: SeriesPorModo;
+  } | null;
+  /**
    * Receita Pecuária Competência — fonte: monthlyData.recPecComp (lancPec desfrute, valorTotal/competência).
    * Mês = recPecComp[m]. Período = Σ recPecComp Jan→m.
    * Ano-1 e meta: queries diretas a 'lancamentos' (cenario='realizado'/'meta', TIPOS_DESFRUTE).
@@ -2604,6 +2626,91 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     return ((curr - meta) / meta) * 100;
   })();
 
+  // ── Valor do Rebanho SEM efeito de mercado (1-based, length 13) ──
+  //
+  // A PERGUNTA: o patrimonio cresceu porque ha mais boi, ou porque o boi
+  // subiu de preco? Hoje as duas causas estao somadas num numero so, e a
+  // diferenca entre este indicador e o irmao COM efeito E o efeito de
+  // mercado.
+  //
+  // O preco e congelado em DEZEMBRO DO ANO ANTERIOR e vale o ano inteiro.
+  //
+  // R$/@ e nao R$/cabeca: assim o valor acompanha o PESO. Rebanho que
+  // engordou tem de aparecer valendo mais, e por cabeca ficaria parado.
+  //
+  // `peso_total_final` de dez/ano-1 sai de `viewTotalsAnoAnt[12]` — a mesma
+  // fonte que `pesoMedioFinAnoAnt13` (:1898) ja le. NENHUMA query nova: o
+  // ano anterior so existe quando `incluirComparativos` e true, e sem ele o
+  // indicador e null, nunca zero.
+  const pesoTotalFinDezAnoAnt = viewTotalsAnoAnt
+    ? viewTotalsAnoAnt[12]?.peso_total_final ?? null
+    : null;
+
+  /* ⚠ O PRECO DERIVADO NAO E O `preco_arroba_medio` PUBLICADO, e a diferenca
+     e real. Ele sai de `valor_total` da avaliacao dividido pelas arrobas do
+     `zoot_mensal_cache`, e as duas fontes nem sempre concordam sobre quantas
+     arrobas existem. Medido em dez/2025:
+       Agnaldo, RRCC, Sta. Rita  — cache e avaliacao batem
+       NJ Pecuaria   76.087,1 (cache) x 75.162,1 (avaliacao) = 1,2%
+       Vera Ligia    22.241,5        x 22.926,2              = 3,0%
+       Sto. Expedito 20.157,9        x 19.255,0 -> 320,30 derivado
+                                                  contra 335,32 publicado
+     Dividir pelo peso do CACHE e deliberado: e ele que move a serie mes a
+     mes, e so assim dezembro coincide com o valor COM efeito — que e o teste
+     do indicador. Usar o preco publicado faria dezembro divergir logo na
+     primeira posicao.
+     A divergencia entre as duas fontes de arrobas e anterior a este
+     indicador e nao e resolvida aqui: frente propria. */
+  const precoArrCongelado = (() => {
+    const valorDez = safe(valorRebanhoMes[0]);     // [0] = dez do ano anterior
+    if (valorDez == null || pesoTotalFinDezAnoAnt == null) return null;
+    const arrobasDez = pesoTotalFinDezAnoAnt / 30;
+    // Divisao por zero devolve null: rebanho sem peso nao define preco.
+    return arrobasDez > 0 ? valorDez / arrobasDez : null;
+  })();
+
+  /* A posicao 0 sai da MESMA formula das outras, nao do valor com efeito
+     copiado: assim a coincidencia de dezembro e estrutural, nao um caso
+     especial escrito a mao — e o gate do PR e verificar que ela acontece. */
+  const semEfeitoDe = (pesoTotalFin: number[] | undefined, i: number): number => {
+    if (precoArrCongelado == null) return NaN;
+    const peso = i === 0 ? pesoTotalFinDezAnoAnt : pesoTotalFin?.[i - 1];
+    if (peso == null || !Number.isFinite(peso)) return NaN;
+    return precoArrCongelado * (peso / 30);
+  };
+
+  const valorSemEfeitoSerie = precoArrCongelado == null
+    ? null
+    : Array.from({ length: 13 }, (_, i) => semEfeitoDe(monthlyData?.pesoTotalFin, i));
+
+  const valorSemEfeitoValor = valorSemEfeitoSerie ? safe(valorSemEfeitoSerie[mesIdx]) : null;
+
+  /* Ano anterior: o valor COM efeito do ano-1. Nao existe preco congelado
+     do ano-2 para refaze-lo sem efeito, e inventar um seria pior que
+     declarar a assimetria — ela fica no comentario e no subtitulo. */
+  const valorSemEfeitoSerieAnoAnt = valorRebanhoSerieAnoAnt;
+
+  /* Meta com o MESMO preco congelado: a meta mede so a evolucao PLANEJADA
+     do rebanho, sem embutir aposta de preco. */
+  const valorSemEfeitoSerieMeta = (() => {
+    if (precoArrCongelado == null || !monthlyDataMeta) return null;
+    const s = Array.from({ length: 13 }, (_, i) =>
+      i === 0 ? NaN : semEfeitoDe(monthlyDataMeta.pesoTotalFin, i));
+    return s.some(v => !isNaN(v)) ? s : null;
+  })();
+
+  const delta13 = (serie: number[] | null, idx: number): number | null => {
+    if (!serie || !valorSemEfeitoSerie) return null;
+    const curr = safe(valorSemEfeitoSerie[mesIdx]);
+    const ref  = safe(serie[idx]);
+    if (curr == null || ref == null || ref === 0) return null;
+    return ((curr - ref) / ref) * 100;
+  };
+
+  const valorSemEfeitoDeltaMes  = mesIdx < 1 ? null : delta13(valorSemEfeitoSerie, mesIdx - 1);
+  const valorSemEfeitoDeltaAno  = delta13(valorSemEfeitoSerieAnoAnt, mesIdx);
+  const valorSemEfeitoDeltaMeta = delta13(valorSemEfeitoSerieMeta, mesIdx);
+
   // ─────────────────────────────────────────────────────────────
   // ── Financeiro Produtivo — 6 indicadores (1-based, length 13) ──
   // Sem ano-1 nem meta nas fontes auditadas (lancPec/lancFin ano-1
@@ -3887,6 +3994,29 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       series: {
         mes:     { ano: valorRebanhoMes, anoAnt: valorRebanhoSerieAnoAnt, meta: valorRebanhoSerieMeta },
         periodo: { ano: valorRebanhoMes, anoAnt: valorRebanhoSerieAnoAnt, meta: valorRebanhoSerieMeta },
+      },
+    } : null,
+    /* Irmao, NAO substituto: `valorRebanhoIndicador` fica com o nome e a
+       forma que os consumidores ja usam. O agrupamento "Com efeito / Sem
+       efeito" e de APRESENTACAO e vem depois, na UI.
+       `series.mes` e `series.periodo` recebem a MESMA serie: valor de
+       estoque nao acumula — mesma regra do irmao (:3888-3889). */
+    valorRebanhoSemEfeitoIndicador: monthlyData && valorSemEfeitoSerie ? {
+      label:     isPeriodo ? 'VALOR DO REBANHO S/ EFEITO NO PERÍODO' : 'VALOR DO REBANHO S/ EFEITO NO MÊS',
+      titulo:    'Valor do Rebanho sem efeito de mercado',
+      subtitulo: 'Ao preço de dezembro do ano anterior',
+      titulos:   { mes:     { titulo: 'Valor do Rebanho sem efeito de mercado', subtitulo: 'Ao preço de dezembro do ano anterior' },
+                   periodo: { titulo: 'Valor do Rebanho sem efeito de mercado', subtitulo: 'Ao preço de dezembro do ano anterior' } },
+      valor:     valorSemEfeitoValor,
+      deltaMes:  valorSemEfeitoDeltaMes,
+      deltaAno:  valorSemEfeitoDeltaAno,
+      deltaMeta: valorSemEfeitoDeltaMeta,
+      serieAno:    valorSemEfeitoSerie,
+      serieAnoAnt: valorSemEfeitoSerieAnoAnt ?? undefined,
+      serieMeta:   valorSemEfeitoSerieMeta ?? undefined,
+      series: {
+        mes:     { ano: valorSemEfeitoSerie, anoAnt: valorSemEfeitoSerieAnoAnt ?? undefined, meta: valorSemEfeitoSerieMeta ?? undefined },
+        periodo: { ano: valorSemEfeitoSerie, anoAnt: valorSemEfeitoSerieAnoAnt ?? undefined, meta: valorSemEfeitoSerieMeta ?? undefined },
       },
     } : null,
     receitaPecIndicador: monthlyData ? {
