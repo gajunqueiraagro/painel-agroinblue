@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { usePainelConsultorData } from '@/hooks/usePainelConsultorData';
@@ -12,7 +12,6 @@ import { IndicadorHistoricoModal } from '@/v2/components/IndicadorHistoricoModal
 import { useHistoricoZootCache } from '@/hooks/useHistoricoZootCache';
 import { useSeriePorFazenda } from '@/hooks/useSeriePorFazenda';
 import { useHistoricoIndicador, type HistoricoIndicadorKey } from '@/hooks/useHistoricoIndicador';
-import { supabase } from '@/integrations/supabase/client';
 import { useStatusPilaresLote, type StatusFazenda } from '@/hooks/useStatusPilaresLote';
 import { useSaldosPorConta } from '@/hooks/useSaldosPorConta';
 import { useProdutivoPorFazenda } from '@/hooks/useProdutivoPorFazenda';
@@ -592,28 +591,17 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
   /* Linha do Resumido cujo modal esta aberto. null = fechado. */
   const [linhaCaixaModal, setLinhaCaixaModal] = useState<string | null>(null);
 
-  const [globalParcial, setGlobalParcial] = useState(false);
-  const gapCheckedRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (!isGlobal || !clienteAtual?.id) {
-      setGlobalParcial(false);
-      gapCheckedRef.current = null;
-      return;
-    }
-    const key = `${clienteAtual.id}-${anoNum}`;
-    if (gapCheckedRef.current === key) return;
-    gapCheckedRef.current = key;
-
-    let cancelled = false;
-    supabase.rpc('fn_zoot_cache_has_gap' as any, {
-      p_cliente_id: clienteAtual.id,
-      p_ano: anoNum,
-    }).then(({ data }) => {
-      if (!cancelled) setGlobalParcial(!!data);
-    });
-    return () => { cancelled = true; };
-  }, [isGlobal, clienteAtual?.id, anoNum]);
+  /* A verificacao de integridade do cache (fn_zoot_cache_has_gap) foi
+     REMOVIDA daqui em 24/08. Custava 2,3s de servidor e ~3,9s de parede
+     por abertura da Home em Global, e a medicao contra a base inteira —
+     todos os clientes, todos os anos, os dois cenarios — achou UMA
+     divergencia, na meta de 2027 de um cliente.
+     Ela tambem NAO detecta valor errado: compara contagem de linhas,
+     entao as 12 linhas de dez/2025 das 3 Muchachas passaram com 20.539
+     kg a menos.
+     A funcao continua existindo no banco e vai para a tela de Auditoria,
+     onde quem abre esta investigando. NAO recolocar no caminho de
+     abertura. */
 
   // Lançamentos compartilhados — carregados uma única vez, reutilizados pelas 3 chamadas de usePainelConsultorData abaixo.
   const { lancamentos: lancPecShared } = useLancamentos({ ano: anoNum });
@@ -1806,16 +1794,6 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
         )}
       </div>
       <div className="space-y-4">
-
-      {globalParcial && isGlobal && (
-        <div className="mx-4 mb-3 flex items-start gap-2 rounded-md border border-yellow-400/60 bg-yellow-50/80 px-4 py-2.5 text-sm text-yellow-800 dark:border-yellow-500/40 dark:bg-yellow-900/20 dark:text-yellow-300">
-          <span className="mt-0.5 shrink-0">⚠</span>
-          <span>
-            Dados globais podem estar incompletos — existem fazendas pecuárias sem
-            fechamento ou cache zootécnico no ano {anoNum}.
-          </span>
-        </div>
-      )}
 
 
       {/* PRIMEIRA LINHA: Area e Caixa sao filhos DIRETOS do grid, entao a linha
