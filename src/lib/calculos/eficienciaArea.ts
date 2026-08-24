@@ -36,11 +36,29 @@ export function calcularIndicadoresEficienciaArea(
     (areaProdMensal[i] ?? 0) > 0 ? v / areaProdMensal[i] : NaN,
   );
 
-  const arrHa = arrobasProd.map((v, i) =>
-    (areaProdMensal[i] ?? 0) > 0 ? v / areaProdMensal[i] : NaN,
-  );
+  const arrHa = calcularArrHaMensal(arrobasProd, areaProdMensal);
 
   return { uaMedia, lotUaHa, arrHa };
+}
+
+/**
+ * `@/ha` MENSAL. Extraida para que os consumidores que precisam SO dela —
+ * como as tres linhas de `Arrobas/ha` do PainelConsultorTab — a chamem sem
+ * arrastar `uaMedia` e `lotUaHa` junto, e sem escrever a divisao de novo.
+ * `calcularIndicadoresEficienciaArea` passou a usa-la: a formula continua
+ * existindo UMA vez.
+ *
+ * Area zero, nula ou ausente devolve NaN — nunca zero. Zero afirmaria
+ * "nao produziu por hectare"; NaN diz "nao ha hectare".
+ */
+export function calcularArrHaMensal(
+  arrobasProd: number[],
+  areaProdMensal: (number | null)[],
+): number[] {
+  return arrobasProd.map((v, i) => {
+    const area = areaProdMensal[i];
+    return area != null && Number.isFinite(area) && area > 0 ? v / area : NaN;
+  });
 }
 
 /**
@@ -70,7 +88,7 @@ export function calcularIndicadoresEficienciaArea(
  */
 export function calcularArrHaAcumulado(
   arrobasProd: number[],
-  areaProdMensal: number[],
+  areaProdMensal: (number | null)[],
 ): number[] {
   const out: number[] = [];
   let somaArrobas = 0;

@@ -37,6 +37,7 @@ import { DivergenciaP1Dialog } from '@/components/DivergenciaP1Dialog';
 import { ReabrirP1Dialog } from '@/components/ReabrirP1Dialog';
 import { useFinanceiro } from '@/hooks/useFinanceiro';
 import { usePainelConsultorData } from '@/hooks/usePainelConsultorData';
+import { calcularArrHaMensal, calcularArrHaAcumulado } from '@/lib/calculos/eficienciaArea';
 import { usePlanejamentoFinanceiro, type SubcentroGrid } from '@/hooks/usePlanejamentoFinanceiro';
 import { usePastos } from '@/hooks/usePastos';
 import { useRebanhoOficial, indexByMes, type ZootMensal, type ZootCategoriaMensal, totalizarPorMes as totalizarViewPorMes } from '@/hooks/useRebanhoOficial';
@@ -456,7 +457,16 @@ function buildBlocosForTab(
     return pm > 0 ? (v * pm) / 450 : NaN;
   });
   const lotUaHa = uaMedia.map((v, i) => (d.areaProdMensal[i] ?? 0) > 0 ? v / d.areaProdMensal[i] : NaN);
-  const arrHa = d.arrobasProd.map((v, i) => (d.areaProdMensal[i] ?? 0) > 0 ? v / d.areaProdMensal[i] : NaN);
+  /* `@/ha` da fonte unica (`eficienciaArea`), nao mais divisao local.
+     `d.areaProdMensal` ja e a area PECUARIA: o hook passa
+     `areaPecuariaRealNumPorMes` no parametro chamado `areaProdutivaMensal`
+     — o nome mente, o valor esta certo.
+     O ACUMULADO e razao de agregados (Σ arrobas ÷ media da area), nao a
+     soma das razoes que o `r()` produziria: por isso a linha vai com
+     `bruto` e escolhe a serie pela aba. */
+  const arrHaMensal = calcularArrHaMensal(d.arrobasProd, d.areaProdMensal);
+  const arrHaAcum   = calcularArrHaAcumulado(d.arrobasProd, d.areaProdMensal);
+  const arrHa = tab === 'acumulado' ? arrHaAcum : arrHaMensal;
   // Custo/@prod acumulado: custeio acumulado / arrobas produzidas acumuladas no período
   const custoPorArrAcum = (() => {
     const custAcum = cumSum(d.custOper);
@@ -657,7 +667,7 @@ function buildBlocosForTab(
     rows: [
       linha(['mensal','medio','acumulado','media_periodo'], 'Produção (kg)', 'padrao', d.prodKg, 'prod_kg'),
       linha(['mensal','medio','acumulado','media_periodo'], 'Arrobas produzidas', 'padrao', d.arrobasProd, 'arrobas_prod'),
-      linha(['mensal','medio','acumulado','media_periodo'], 'Arrobas/ha', 'med2', arrHa, 'arr_ha'),
+      linha(['mensal','acumulado'], 'Arrobas/ha', 'med2', arrHa, 'arr_ha', undefined, undefined, true),
       linha(['mensal','medio','media_periodo'], 'GMD (kg/cab/dia)', 'gmd', d.gmd, 'gmd', true),
       linha(['mensal'], 'Cabeças iniciais no ano', 'cab', cabIniAno, 'cab_ini_ano', true, undefined, true),
       linha(['mensal'], 'Arrobas iniciais no ano', 'padrao', arrIniAno, 'arr_ini_ano', true, undefined, true),
@@ -915,7 +925,19 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
     if (temRebanho && v === 0) return NaN;
     return v;
   });
-  const arrHa = arrobasProd.map((v, i) => areaProd[i] > 0 && !isNaN(v) ? v / areaProd[i] : NaN);
+  /* AREA PECUARIA, nao produtiva total. `areaProd` aqui e
+     `get('area_produtiva_ha')` — soma pecuaria + agricultura +
+     silvicultura —, e dividir producao de GADO por hectare de soja
+     subestima a eficiencia em fazenda mista. A area meta por mes ja vem
+     do PC-100 e NAO depende de `carregarMeta`.
+     Fallback para a area antiga so quando o `pcd` nao chegar: numero
+     antigo e melhor que travessao, e a origem fica declarada.
+     ⚠ PENDENTE: o ACUMULADO desta aba continua sendo a soma das razoes,
+     que e errada — corrigi-la exige `monthlyDataMeta`, e ele so existe com
+     `carregarMeta: true`, que custa 3 queries mais uma passagem inteira do
+     `buildMonthlyDataFromView`. Medicao de abertura de tela pendente. */
+  const areaPecMeta = pcd?.areaPecuariaMetaPorMes ?? areaProd;
+  const arrHa = calcularArrHaMensal(arrobasProd, areaPecMeta);
   // Desfrute (cab.) oficial: APENAS abate + venda + consumo. NUNCA mortes ou
   // transferências. Fonte: saidasDesfruteCabMensal (calculado fora a partir de
   // lancPec/lancPecMeta filtrando TIPOS_DESFRUTE_GLOBAL). Sem fallback para
@@ -1111,7 +1133,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
     rows: [
       linha(['mensal','medio','acumulado','media_periodo'], 'Produção (kg)', 'padrao', prodKg, 'prod_kg'),
       linha(['mensal','medio','acumulado','media_periodo'], 'Arrobas produzidas', 'padrao', arrobasProd, 'arrobas_prod'),
-      linha(['mensal','medio','acumulado','media_periodo'], 'Arrobas/ha', 'med2', arrHa, 'arr_ha'),
+      linha(['mensal','acumulado'], 'Arrobas/ha', 'med2', arrHa, 'arr_ha'),
       linha(['mensal','medio','media_periodo'], 'GMD (kg/cab/dia)', 'gmd', gmd, 'gmd', true),
       linha(['mensal'], 'Cabeças iniciais no ano', 'cab', cabIniAno, 'cab_ini_ano', true, undefined, true),
       linha(['mensal'], 'Arrobas iniciais no ano', 'padrao', arrIniAno, 'arr_ini_ano', true, undefined, true),
@@ -1334,7 +1356,14 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
 
   const uaMedia = cabMedia.map((v, i) => pesoMedFin[i] > 0 ? (v * pesoMedFin[i]) / 450 : NaN);
   const lotacao = uaMedia.map(v => areaProd > 0 ? v / areaProd : NaN);
-  const arrHa = arrobasProd.map(v => areaProd > 0 ? v / areaProd : NaN);
+  /* AREA PECUARIA e MENSAL. O `areaProd` deste builder e ESCALAR — uma
+     area so para os doze meses — e ainda por cima produtiva TOTAL. As
+     duas coisas mudam aqui; a area meta por mes vem do PC-100 e nao
+     depende de `carregarMeta`.
+     ⚠ PENDENTE: mesmo caso do builder de zootMensal — o acumulado desta
+     aba segue somando razoes ate `carregarMeta` ser viavel. */
+  const areaPecMetaCons = pcd?.areaPecuariaMetaPorMes ?? Array(12).fill(areaProd);
+  const arrHa = calcularArrHaMensal(arrobasProd, areaPecMetaCons);
   // Desfrute (cab.) oficial: APENAS abate + venda + consumo. NUNCA mortes ou
   // transferências. Fonte: saidasDesfruteCabMensal (calculado fora a partir de
   // lancPec/lancPecMeta filtrando TIPOS_DESFRUTE_GLOBAL). Sem fallback para
@@ -1572,7 +1601,7 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
     rows: [
       linha(['mensal','medio','acumulado','media_periodo'], 'Produção (kg)', 'padrao', prodKgArr, 'prod_kg'),
       linha(['mensal','medio','acumulado','media_periodo'], 'Arrobas produzidas', 'padrao', arrobasProd, 'arrobas_prod'),
-      linha(['mensal','medio','acumulado','media_periodo'], 'Arrobas/ha', 'med2', arrHa, 'arr_ha'),
+      linha(['mensal','acumulado'], 'Arrobas/ha', 'med2', arrHa, 'arr_ha'),
       linha(['mensal','medio','media_periodo'], 'GMD (kg/cab/dia)', 'gmd', gmd, 'gmd', true),
       linha(['mensal'], 'Cabeças iniciais no ano', 'cab', cabIniAno, 'cab_ini_ano', true, undefined, true),
       linha(['mensal'], 'Arrobas iniciais no ano', 'padrao', arrIniAno, 'arr_ini_ano', true, undefined, true),
