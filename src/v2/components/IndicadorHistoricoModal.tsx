@@ -15,6 +15,7 @@ import {
 import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { COR_FAZENDA } from '@/lib/idiomaVisual';
 
 // REGRA ARQUITETURAL — modal puro de renderização:
 // - Modal NÃO calcula
@@ -183,18 +184,13 @@ const ACTIVE_DOT_V1 = { r: 4, strokeWidth: 2, fill: 'hsl(var(--primary))' };
 const BAR_ANO_ANT = '#B4B2A9';
 const BAR_META    = '#FCB27F';   // #F97316 a ~55% sobre branco
 
-/* Identidade de FAZENDA. Uso exclusivo: series onde cada linha e um
-   lugar, nao um cenario. NAO reutilizar as cores semanticas
-   (realizado/ano anterior/meta) aqui — a mesma cor nao pode significar
-   coisas diferentes em duas abas do mesmo modal.
-   Seis tons distinguiveis; acima de seis fazendas, ciclo. */
-export const COR_FAZENDA = [
-  '#185FA5', '#0E9F6E', '#D97706', '#7C3AED', '#DB2777', '#0891B2',
-] as const;
-/* O Global na aba Por Fazenda e REFERENCIA, nao mais uma fazenda: cinza
-   neutro e tracejado, para ler como "o conjunto" e nao como um lugar.
-   NAO usa COR_FAZENDA — aquela paleta e identidade de fazenda. */
-const COR_GLOBAL = 'hsl(var(--muted-foreground))';
+/* `COR_FAZENDA` mudou para `@/lib/idiomaVisual` no PR-IDIOMA-VISUAL-01.
+   Ficava declarada aqui e ja tinha consumidor em outro arquivo — paleta
+   dentro de uma tela e paleta que o proximo copia.
+   O `COR_GLOBAL` que existia aqui SAIU: o Global deixou de ser cinza. Ele
+   e AZUL nas duas abas, a mesma cor do realizado, porque e o mesmo numero.
+   O que distingue agregado de lugar e o TRACEJADO, nao a cor — e a cor,
+   sendo `COR_ATUAL.stroke`, acompanha a polaridade do indicador. */
 /* Chave da coluna do Global nas linhas de `dadosFazenda`. Com dois
    sublinhados para nao colidir com nome de fazenda, que e o dataKey das
    outras Lines. */
@@ -466,7 +462,7 @@ export function IndicadorHistoricoModal({
       type="monotone"
       dataKey={CHAVE_GLOBAL}
       name={rotuloGlobal}
-      stroke={COR_GLOBAL}
+      stroke={COR_ATUAL.stroke}
       strokeWidth={2.5}
       strokeDasharray="4 2"
       dot={DOT_V1}
@@ -484,7 +480,7 @@ export function IndicadorHistoricoModal({
     <div className="flex justify-center gap-2.5 px-0 mt-1.5 flex-wrap">
       <div className="flex items-center gap-1.5">
         <div className="w-3 border-t-[2px] border-dashed"
-             style={{ borderColor: COR_GLOBAL }} />
+             style={{ borderColor: COR_ATUAL.stroke }} />
         <span className="text-[9px] text-muted-foreground">{rotuloGlobal}</span>
       </div>
       {(seriesPorFazenda ?? []).map((f, i) => (

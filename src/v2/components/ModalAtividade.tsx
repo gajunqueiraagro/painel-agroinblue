@@ -32,7 +32,7 @@ import {
 } from 'recharts';
 import { X } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
-import { COR_FAZENDA } from '@/v2/components/IndicadorHistoricoModal';
+import { COR_FAZENDA } from '@/lib/idiomaVisual';
 
 /* ── Idioma visual V1, copiado ─────────────────────────────────────── */
 /* Marcadores do idioma V1, copiados. Vazados: o `fill` e a cor do CARD,
@@ -45,7 +45,12 @@ const COR_ATUAL   = '#185FA5';
 const COR_ANO_ANT = '#B4B2A9';
 const COR_META    = '#F97316';
 const BAR_ANO_ANT = '#B4B2A9';
-const COR_GLOBAL  = 'hsl(var(--muted-foreground))';
+/* O Global e AZUL, a mesma cor do realizado, nas DUAS abas — e o mesmo
+   numero visto de outro angulo. Ate o PR-IDIOMA-VISUAL-01 ele era cinza
+   aqui enquanto a primeira fazenda ficava azul: a mesma cor significando
+   "o total" numa aba e "a Pureza" na outra.
+   O que distingue agregado de lugar e o TRACEJADO, nao a cor. */
+const COR_GLOBAL  = COR_ATUAL;
 const CHAVE_GLOBAL = '__global';
 const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
