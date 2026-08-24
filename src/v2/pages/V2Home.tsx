@@ -1361,7 +1361,30 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
       ...linha('venda',    'vendas',      'Vendas em pé',       false),
       ...linha('abate',    'abates',      'Abates',             true),
       ...linha('consumo',  'consumos',    'Consumo / Doações',  false),
-      ...linha('morte',    'mortes',      'Mortes',             false),
+      /* E3 — a linha de Mortes deixa de ser cabecas/peso/preco/valor. Valor de
+         morte nao existe hoje (o campo saiu do formulario), e mortalidade e o
+         indicador que importa.
+         DENOMINADOR: `saldoInicialAnual` do proprio hook — o rebanho de
+         JANEIRO, nao o do mes nem a media. E' o MESMO denominador do
+         `desfrute_pct`, pela mesma funcao (`calcDesfrute`), entao as duas
+         taxas da tela sao comparaveis entre si. Sendo fixo no ano, o
+         acumulado cresce e o numero se compara mes a mes. */
+      card('morte_cab',   'mortes',          'cab', 'Mortes Global — cabeças',      'Quantidade no recorte', 'inteiro', 'cab'),
+      card('morte_pct',   'mortalidade_pct', 'cab', 'Mortes Global — mortalidade',  'Mortes ÷ rebanho inicial do ano', 'decimal2', '%'),
+      /* MAMOTES — `useMovimentacoesAgregadas` agrega por (mes, tipo), sem
+         dimensao de CATEGORIA. Abrir por categoria e frente do PC-100, ja
+         registrada. Os dois cards ocupam o lugar deles na grade em vez de
+         deixar a quarta linha com dois vaos mudos. */
+      { chave: 'morte_mamote_cab', titulo: 'Mortes Mamotes — cabeças', subtitulo: 'Quantidade no recorte',
+        unidade: 'cab', formatoValor: 'inteiro' as const,
+        serieMes: [], seriePeriodo: [], valorMes: null, valorPeriodo: null,
+        deltaMes: null, deltaAno: null, deltaMeta: null,
+        emConstrucao: 'o hook agrega por tipo, sem categoria' },
+      { chave: 'morte_mamote_pct', titulo: 'Mortes Mamotes — mortalidade', subtitulo: 'Mortes ÷ rebanho inicial do ano',
+        unidade: '%', formatoValor: 'decimal2' as const,
+        serieMes: [], seriePeriodo: [], valorMes: null, valorPeriodo: null,
+        deltaMes: null, deltaAno: null, deltaMeta: null,
+        emConstrucao: 'o hook agrega por tipo, sem categoria' },
       ...linha('desfrute', 'desfrute',    'Desfrute',           true),
     ];
   }, [movAgg, mesNum]);

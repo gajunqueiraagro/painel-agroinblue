@@ -38,6 +38,12 @@ export type TipoMov =
   | 'nascimentos' | 'compras' | 'transf_entradas' | 'soma_entradas'
   | 'vendas' | 'abates' | 'consumos' | 'mortes' | 'transf_saidas'
   | 'soma_saidas' | 'desfrute' | 'desfrute_pct'
+  /* PR-MOVIMENTACOES-02 — mortalidade% = mortes ÷ REBANHO INICIAL DO ANO,
+     no mes E no acumulado. Nunca sobre o rebanho do mes nem sobre a media:
+     o denominador e o mesmo o ano inteiro, entao o acumulado cresce e o
+     numero e comparavel entre meses. Mesma forma do `desfrute_pct`, e o
+     mesmo denominador — `saldoInicialAnual`, ja calculado aqui. */
+  | 'mortalidade_pct'
   | 'reposicao';
 
 export type PorLente = Record<Lente, number | null>;
@@ -103,6 +109,7 @@ function getTiposLancDeMov(isGlobal: boolean): Record<TipoMov, Lancamento['tipo'
     vendas:          ['venda'],
     abates:          ['abate'],
     consumos:        ['consumo'],
+    mortalidade_pct: ['morte'],
     mortes:          ['morte'],
     transf_saidas:   ['transferencia_saida'],
     soma_saidas:     isGlobal
@@ -141,6 +148,8 @@ const LENTES_APLICAVEIS: Record<TipoMov, ReadonlySet<Lente>> = {
   vendas:          new Set(['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total', 'peso_medio_kg', 'preco_kg']),
   abates:          new Set(['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total', 'peso_medio_kg']),
   consumos:        new Set(['cab', 'arroba_total', 'arroba_media', 'valor_total', 'peso_medio_kg', 'preco_kg']),
+  /* Percentual em qualquer lente, como o `desfrute_pct`: o card e a taxa. */
+  mortalidade_pct: new Set(['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total', 'peso_medio_kg', 'preco_kg']),
   mortes:          new Set(['cab', 'arroba_total', 'arroba_media', 'valor_total', 'peso_medio_kg', 'preco_kg']),
   transf_saidas:   new Set(['cab', 'peso_medio_kg']),
   soma_saidas:     new Set(['cab', 'arroba_total', 'arroba_media', 'valor_total', 'peso_medio_kg']),
@@ -152,7 +161,7 @@ const LENTES_APLICAVEIS: Record<TipoMov, ReadonlySet<Lente>> = {
 const TIPOS_TODOS: TipoMov[] = [
   'nascimentos', 'compras', 'transf_entradas', 'soma_entradas',
   'vendas', 'abates', 'consumos', 'mortes', 'transf_saidas',
-  'soma_saidas', 'desfrute', 'desfrute_pct',
+  'soma_saidas', 'desfrute', 'desfrute_pct', 'mortalidade_pct',
   'reposicao',
 ];
 
@@ -237,12 +246,21 @@ function valorPorLente(
     return calcDesfrute(agreg.cab, saldoInicialAno);
   }
 
+  /* Mortalidade — a MESMA razao do desfrute (x ÷ saldo inicial x 100), entao
+     a funcao e a mesma. Nao ha formula nova neste PR. */
+  if (tipo === 'mortalidade_pct') {
+    return calcDesfrute(agreg.cab, saldoInicialAno);
+  }
+
   switch (lente) {
     case 'cab':
       // Antes 'desfrute' em cab retornava %; agora retorna Σ cabeças desfrutadas.
       // O % foi extraído para o card próprio 'desfrute_pct'.
       return agreg.cab;
     case 'arroba_total':
+      /* Houve movimento e nao ha peso lancado -> AUSENCIA, nao zero arrobas.
+         Sem cabeca nenhuma, zero e o numero certo: nada aconteceu. */
+      if (agreg.cab > 0 && agreg.arrobas <= 0) return null;
       return agreg.arrobas;
     case 'arroba_media':
       return agreg.cab > 0 ? agreg.arrobas / agreg.cab : null;
@@ -264,6 +282,16 @@ function valorPorLente(
       return base.valor / base.peso;
     }
     case 'valor_total':
+      /* ⚠ A CORRECAO DO R$ 0,00. `Nascimentos — valor total` desenhava uma
+         LINHA RETA NO ZERO nos treze meses, afirmando "houve 943 nascimentos
+         e valeram nada". O certo e' travessao: houve movimento e o valor NAO
+         FOI LANCADO — o campo nem existe em `EditMorteSheet`/`EditConsumoSheet`.
+         Sem cabeca nenhuma o zero fica, porque ai nada aconteceu mesmo.
+         ⚠ Zero EXPLICITO no banco e indistinguivel de ausencia: medido em
+         2024-2026, ha 17 compras e 14 transferencias com `valor_total = 0`
+         gravado. Nao ha como separar "lancado como zero" de "nao lancado",
+         entao `<= 0` com movimento vira ausencia — a leitura conservadora. */
+      if (agreg.cab > 0 && agreg.valor <= 0) return null;
       return agreg.valor;
   }
 }
@@ -379,9 +407,15 @@ export function useMovimentacoesAgregadas({ ano, mes, viewMode, isGlobal }: Args
             aRec_A = somarAgreg(agAnoAnt, TIPOS_DESFRUTE_RECEITA, [m]);
             aRec_M = somarAgreg(agMeta,   TIPOS_DESFRUTE_RECEITA, [m]);
           }
-          real.push(   valorPorLente(tipo, lente, aR, saldoInicialAnoCorr, aRec_R) ?? 0);
-          anoAntS.push(valorPorLente(tipo, lente, aA, saldoInicialAnoAnt,  aRec_A) ?? 0);
-          metaS.push(  valorPorLente(tipo, lente, aM, saldoInicialMeta,    aRec_M) ?? 0);
+          /* NaN, nao zero: e' aqui que a ausencia virava R$ 0,00 e desenhava
+             a linha reta. NaN e' o idioma de ausencia das series do repo, e o
+             recharts o trata como buraco com `connectNulls={false}`.
+             ⚠ SEGURO para os tres consumidores existentes (V2VisaoGeralRebanho
+             e os dois blocos de Fechamento): todos leem a lente `cab`, e `cab`
+             nunca devolve null — contagem zero e' fato, nao ausencia. */
+          real.push(   valorPorLente(tipo, lente, aR, saldoInicialAnoCorr, aRec_R) ?? NaN);
+          anoAntS.push(valorPorLente(tipo, lente, aA, saldoInicialAnoAnt,  aRec_A) ?? NaN);
+          metaS.push(  valorPorLente(tipo, lente, aM, saldoInicialMeta,    aRec_M) ?? NaN);
 
           // ── Acumulado Jan→m: sempre via Σ raw + valorPorLente (taxa/média correta) ──
           const mesesAteM = Array.from({ length: m }, (_, i) => i + 1);
@@ -396,9 +430,9 @@ export function useMovimentacoesAgregadas({ ano, mes, viewMode, isGlobal }: Args
             aRec_A_acum = somarAgreg(agAnoAnt, TIPOS_DESFRUTE_RECEITA, mesesAteM);
             aRec_M_acum = somarAgreg(agMeta,   TIPOS_DESFRUTE_RECEITA, mesesAteM);
           }
-          realAcum.push(   valorPorLente(tipo, lente, aR_acum, saldoInicialAnoCorr, aRec_R_acum) ?? 0);
-          anoAntAcum.push( valorPorLente(tipo, lente, aA_acum, saldoInicialAnoAnt,  aRec_A_acum) ?? 0);
-          metaAcum.push(   valorPorLente(tipo, lente, aM_acum, saldoInicialMeta,    aRec_M_acum) ?? 0);
+          realAcum.push(   valorPorLente(tipo, lente, aR_acum, saldoInicialAnoCorr, aRec_R_acum) ?? NaN);
+          anoAntAcum.push( valorPorLente(tipo, lente, aA_acum, saldoInicialAnoAnt,  aRec_A_acum) ?? NaN);
+          metaAcum.push(   valorPorLente(tipo, lente, aM_acum, saldoInicialMeta,    aRec_M_acum) ?? NaN);
         }
         seriesJanDez[lente]    = { real, anoAnt: anoAntS, meta: metaS };
         seriesAcumulada[lente] = { real: realAcum, anoAnt: anoAntAcum, meta: metaAcum };

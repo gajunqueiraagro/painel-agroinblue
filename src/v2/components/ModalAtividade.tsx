@@ -174,7 +174,7 @@ const ORDEM_CARDS_MOV = [
   'venda_cab',     'venda_peso',     'venda_preco',     'venda_valor',
   'abate_cab',     'abate_peso',     'abate_preco',     'abate_valor',
   'consumo_cab',   'consumo_peso',   'consumo_preco',   'consumo_valor',
-  'morte_cab',     'morte_peso',     'morte_preco',     'morte_valor',
+  'morte_cab',     'morte_pct',      'morte_mamote_cab', 'morte_mamote_pct',
   'desfrute_cab',  'desfrute_peso',  'desfrute_preco',  'desfrute_valor',
 ];
 
@@ -485,6 +485,7 @@ const rotuloDoMes = (ind: IndicadorAtividade, leitura: Leitura, mesAtual: number
 
 const CardIndicador = ({
   ind, escopo, leitura, mesAtual, anoAtual, rotuloMes, rotuloPer, sel, alterna,
+  colunaSempre, eixoCurto,
 }: {
   ind: IndicadorAtividade;
   escopo: Escopo;
@@ -495,6 +496,16 @@ const CardIndicador = ({
   rotuloPer: string;
   sel: Comparador[];
   alterna: (chave: string, op: Comparador) => void;
+  /* E1 — em Movimentacoes TODO card e coluna no mes, nao so os de fluxo.
+     La cada card e um EVENTO DISCRETO do mes: nascimento de junho nao vira
+     nascimento de julho. No Zootecnico a regra segue por chave, porque ali
+     convivem estoque (trajetoria) e producao (evento). */
+  colunaSempre?: boolean;
+  /* E4 — uma letra por mes. So onde o card e estreito: em Movimentacoes sao
+     quatro colunas e ~230px, e com tres letras o recharts OMITE meses
+     alternados em vez de encolher. O Zootecnico tem ~319px e mostra os treze
+     com tres letras — nao mexer la. */
+  eixoCurto?: boolean;
 }) => {
   const titulo = leitura === 'periodo'
     ? (ind.tituloPeriodo ?? ind.titulo)
@@ -507,7 +518,8 @@ const CardIndicador = ({
     : leitura === 'periodo' ? rotuloPer : rotuloMes;
   const valor = leitura === 'periodo' ? ind.valorPeriodo : ind.valorMes;
   const colunaRealizado =
-    escopo === 'global' && leitura === 'mes' && COLUNA_NO_MES.includes(ind.chave);
+    escopo === 'global' && leitura === 'mes'
+    && (colunaSempre || COLUNA_NO_MES.includes(ind.chave));
   /* Chip DESABILITADO, nunca invisivel, quando a serie nao existe: sumir
      com o controle esconde a ausencia; desabilitar declara. O motivo vai
      no `title`. `mes` nunca desabilita — o mes anterior sai da propria
@@ -681,7 +693,11 @@ const CardIndicador = ({
                     <ReferenceLine y={inicial(ind, leitura) as number} stroke={COR_ATUAL}
                                    strokeDasharray="4 3" strokeWidth={1} opacity={0.5} />
                   )}
-                  <XAxis dataKey="mes" tick={{ fontSize: 8, fill: '#888780' }} stroke="hsl(var(--muted-foreground) / 0.22)" />
+                  {/* `interval={0}` e' obrigatorio com o rotulo curto: sem ele o
+                      recharts continua decidindo omitir, mesmo cabendo. */}
+                  <XAxis dataKey="mes" tick={{ fontSize: 8, fill: '#888780' }} stroke="hsl(var(--muted-foreground) / 0.22)"
+                         interval={eixoCurto ? 0 : undefined}
+                         tickFormatter={eixoCurto ? (v: string) => String(v).slice(0, 1) : undefined} />
                   <YAxis tick={{ fontSize: 8, fill: '#888780' }} width={46}
                          tickFormatter={v => fmtEixo(v, ind.formatoValor)}
                          stroke="hsl(var(--muted-foreground) / 0.22)" />
@@ -899,6 +915,8 @@ export function ModalAtividade({
                     rotuloPer={rotuloPer}
                     sel={marcados(ind.chave)}
                     alterna={alterna}
+                    colunaSempre
+                    eixoCurto
                   />
                 ))}
             </div>
