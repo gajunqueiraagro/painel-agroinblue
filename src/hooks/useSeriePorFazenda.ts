@@ -38,6 +38,12 @@ export interface SerieFazenda {
   fazendaId: string;
   /** Rotulo da linha no grafico. */
   nome: string;
+  /** Sigla do CADASTRO (`fazendas.codigo`), para tooltip e tabela, onde o
+   *  nome inteiro nao cabe. NUNCA derivar abreviacao do nome: as dez
+   *  fazendas de pecuaria tem a coluna preenchida (3M, BG, PUR, LUZ, EXP,
+   *  SM, ST, MTR, UM, SR). Cai para o nome quando vier nulo — nunca vazio,
+   *  que produziria linha sem rotulo no grafico. */
+  codigo: string;
   /** 12 posicoes, 0=Jan. `null` = sem dado ou mes futuro. */
   mes:     Array<number | null>;
   periodo: Array<number | null>;
@@ -135,6 +141,10 @@ export function useSeriePorFazenda({
   if (rows.length === 0) return vazio;
 
   const nomeDe = (id: string) => fazendas.find(f => f.id === id)?.nome ?? id;
+  /* Mesmo caminho do nome: o contexto ja traz `codigo` no select
+     (FazendaContext.tsx:101). Nenhuma query nova. */
+  const codigoDe = (id: string) =>
+    fazendas.find(f => f.id === id)?.codigo?.trim() || nomeDe(id);
   const num = (v: unknown) => Number(v) || 0;
 
   /* As fazendas que o cache DE FATO tem — nao as pedidas. Fazenda sem linha
@@ -155,7 +165,8 @@ export function useSeriePorFazenda({
           : linhasFaz.filter(r => Number(r.mes) === m);
         return calc(alvo, m, linhasFaz);
       });
-    return { fazendaId: id, nome: nomeDe(id), mes: serie('mes'), periodo: serie('periodo') };
+    return { fazendaId: id, nome: nomeDe(id), codigo: codigoDe(id),
+             mes: serie('mes'), periodo: serie('periodo') };
   });
 
   /* Cabecas — mes: Σ saldo_final; periodo: media acumulada das medias mensais.
@@ -205,6 +216,7 @@ export function useSeriePorFazenda({
     return {
       fazendaId: id,
       nome: nomeDe(id),
+      codigo: codigoDe(id),
       mes: Array.from({ length: MESES }, (_, i) => {
         const cm = cabMedia12[i], pb = prodKg12[i], d = dias12[i];
         return corta(cm > 0 && d > 0 ? pb / cm / d : null, i + 1);

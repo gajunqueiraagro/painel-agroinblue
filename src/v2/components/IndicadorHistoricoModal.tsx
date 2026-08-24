@@ -139,6 +139,10 @@ interface Props {
   seriesPorFazenda?: Array<{
     fazendaId: string;
     nome: string;
+    /** Sigla do cadastro (`fazendas.codigo`), ja com fallback para o nome
+     *  aplicado no hook. Rotulo do tooltip e da tabela, onde o nome inteiro
+     *  nao cabe; o grafico segue usando `nome` como dataKey. */
+    codigo: string;
     mes: Array<number | null>;
     periodo: Array<number | null>;
   }>;
@@ -436,6 +440,18 @@ export function IndicadorHistoricoModal({
       return linha;
     });
 
+  /* Nome do indicador para os rotulos da aba Por Fazenda.
+     NAO usa a prop `titulo`: ela nasce `isPeriodo ? A : B` no hook
+     (usePainelConsultorData.ts:3692, :3726, :3748), ou seja segue o
+     viewMode do PAI — os rotulos virariam ao mexer no toggle da Home, que
+     e exatamente o defeito que o PR-HISTORICO-DUPLO-10 tirou daqui.
+     `titulos.{mes,periodo}.titulo` sao fixos por leitura, e por isso sao a
+     fonte. Tambem NAO levam sufixo " · no mes": a string ja carrega a
+     leitura ("Rebanho Final do mes", "Peso Medio Periodo", "GMD no mes"),
+     e concatenar produziria "Rebanho Final do mes · no mes". */
+  const nomeMes     = titulos?.mes?.titulo     ?? titulo;
+  const nomePeriodo = titulos?.periodo?.titulo ?? titulo;
+
   /* Rotulo do Global — so ele muda entre 'soma' e 'ponderada'. */
   const rotuloGlobal = globalPorFazenda === 'ponderada'
     ? 'Global (média ponderada)'
@@ -512,7 +528,7 @@ export function IndicadorHistoricoModal({
   const tabelaFazendas = (
     <>
       <p className="text-xs font-bold text-foreground mb-0.5 leading-tight">
-        Números por fazenda
+        {`${nomeMes} por fazenda`}
       </p>
       <p className="text-[10px] text-muted-foreground/70 leading-snug mb-1.5">
         {`${MESES_LABELS[mesAtual - 1]}/${yy} · Jan–${MESES_LABELS[mesAtual - 1]}/${yy}`}
@@ -528,7 +544,7 @@ export function IndicadorHistoricoModal({
         <tbody>
           {(seriesPorFazenda ?? []).map(f => (
             <tr key={f.fazendaId} className="odd:bg-muted/30 even:bg-card">
-              <td className="text-left  px-2 py-0.5 text-foreground">{f.nome}</td>
+              <td className="text-left  px-2 py-0.5 text-foreground" title={f.nome}>{f.codigo}</td>
               <td className="text-right px-2 py-0.5 tabular-nums text-foreground">{fmtCel(celFaz(f, 'mes'))}</td>
               <td className="text-right px-2 py-0.5 tabular-nums text-foreground">{fmtCel(celFaz(f, 'periodo'))}</td>
             </tr>
@@ -585,6 +601,48 @@ export function IndicadorHistoricoModal({
       if (key === 'meta')         return `Meta ${anoAtual}`;
       return key;
     };
+    /* DOIS payloads passam por aqui. O da aba Global traz as tres chaves
+       classicas; o da aba Por Fazenda traz uma chave por fazenda mais
+       CHAVE_GLOBAL, e NENHUMA delas esta em `allowedKeys` — ate o PR-31 a
+       caixa abria sem uma linha sequer. O ramo abaixo so vale quando o
+       payload nao e o classico, entao a aba Global segue intacta, com a
+       ordem 2026 · 2025 · Meta, que e decisao registrada. */
+    const ehClassico = payload.some((e: any) => allowedKeys.has(String(e.dataKey)));
+    if (!ehClassico) {
+      const porChave = new Map<string, any>(
+        payload.map((e: any) => [String(e.dataKey), e]),
+      );
+      /* Global PRIMEIRO, como na legenda e na tabela; depois as fazendas na
+         ordem das series. Rotulo pelo CODIGO — o mesmo das outras duas
+         superficies, para a leitura casar. */
+      const linhas: Array<{ rotulo: string; cor: string; valor: number; tracejado: boolean }> = [];
+      const g = porChave.get(CHAVE_GLOBAL);
+      if (g && g.value != null) {
+        linhas.push({ rotulo: rotuloGlobal, cor: g.color, valor: g.value, tracejado: true });
+      }
+      for (const f of seriesPorFazenda ?? []) {
+        const e = porChave.get(f.nome);
+        if (e && e.value != null) {
+          linhas.push({ rotulo: f.codigo, cor: e.color, valor: e.value, tracejado: false });
+        }
+      }
+      if (linhas.length === 0) return null;
+      return (
+        <div className="rounded-sm border border-border/20 bg-background/60 backdrop-blur-[2px] px-1.5 py-0.5 text-[9px] leading-tight">
+          <p className="font-medium text-foreground/85 text-[9px] mb-0.5">{label}</p>
+          {linhas.map((l, i) => (
+            <div key={i} className="flex items-center gap-1">
+              {l.tracejado
+                ? <div className="w-2 border-t-[2px] border-dashed" style={{ borderColor: l.cor }} />
+                : <div className="w-1 h-1 rounded-full" style={{ background: l.cor }} />}
+              <span className="text-muted-foreground/80 text-[8px] w-8 shrink-0">{l.rotulo}</span>
+              <span className="text-foreground/90">{fmtValor(l.valor)}</span>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
     const entries = payload
       .filter((e: any) => allowedKeys.has(String(e.dataKey)) && e.value != null)
       .sort((a: any, b: any) => order.indexOf(a.dataKey) - order.indexOf(b.dataKey));
@@ -1138,7 +1196,7 @@ export function IndicadorHistoricoModal({
                   <div className="grid grid-cols-2 gap-3 flex-1 min-h-0">
                     <Card className="flex flex-col min-h-0">
                       <CardContent className="p-3 flex flex-col flex-1 min-h-0">
-                        <p className="text-xs font-bold text-foreground mb-0.5 leading-tight">Por fazenda · no mês</p>
+                        <p className="text-xs font-bold text-foreground mb-0.5 leading-tight">{`${nomeMes} · por fazenda`}</p>
                         <p className="text-[10px] text-muted-foreground/70 leading-snug">{`${MESES_LABELS[mesAtual - 1]}/${yy}`}</p>
                         <div className="flex-1" style={{ minHeight: 140, maxHeight: 240 }}>
                           <ResponsiveContainer width="100%" height="100%">
@@ -1168,7 +1226,7 @@ export function IndicadorHistoricoModal({
                     </Card>
                     <Card className="flex flex-col min-h-0">
                       <CardContent className="p-3 flex flex-col flex-1 min-h-0">
-                        <p className="text-xs font-bold text-foreground mb-0.5 leading-tight">Por fazenda · no período</p>
+                        <p className="text-xs font-bold text-foreground mb-0.5 leading-tight">{`${nomePeriodo} · por fazenda`}</p>
                         <p className="text-[10px] text-muted-foreground/70 leading-snug">{`Jan–${MESES_LABELS[mesAtual - 1]}/${yy}`}</p>
                         <div className="flex-1" style={{ minHeight: 140, maxHeight: 240 }}>
                           <ResponsiveContainer width="100%" height="100%">
