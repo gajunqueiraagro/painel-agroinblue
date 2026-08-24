@@ -136,7 +136,8 @@ const COLUNA_NO_MES = ['arrobas', 'gmd'];
 const H_TITULO  = 44;   // duas linhas de titulo + subtitulo
 const H_DELTAS  = 44;   // quatro deltas de 11px — o pior caso
 const H_CHIPS   = 20;   // uma fileira de chips h-4
-const H_GRAFICO = 170;
+const H_GRAFICO = 190;   // 170 -> 190 no PR-05; o mesmo N nos SEIS cards,
+                         // senao volta o desalinhamento do PR-03.
 const H_LEGENDA = 16;   // reservada SEMPRE: some-la em Global mudaria a
                         // altura do card ao trocar de nivel.
 
@@ -452,32 +453,45 @@ export function ModalAtividade({
     return (
       <Card>
         <CardContent className="p-3">
-          {/* FAIXA 1 — titulo e valor. Sem `truncate`: com os chips fora
-              desta faixa sobra largura, e onde ainda faltar o titulo quebra
-              em DUAS linhas em vez de virar "Rebanho Fin...". A altura ja e
-              a do pior caso, entao quebrar nao empurra nada. */}
+          {/* BLOCO SUPERIOR — duas COLUNAS, nao duas faixas empilhadas.
+              O vao que aparecia entre o valor e o primeiro delta nascia aqui:
+              o valor era irmao do titulo numa faixa de altura fixa
+              dimensionada pelo pior caso do TITULO (duas linhas), e ancorado
+              no topo. Com titulo de uma linha sobravam ~30px MORTOS abaixo do
+              valor, e os deltas so comecavam depois deles.
+              Agora valor e deltas sao a MESMA coluna: os deltas encostam no
+              valor por construcao e o branco reservado sobra no FIM, onde nao
+              se ve.
+              A altura total continua FIXA — H_TITULO + H_DELTAS — e igual nos
+              seis cards. Foi o que o PR-03 estabeleceu e o que impede o pulo
+              ao marcar chip; se ela passar a depender do conteudo, e
+              regressao, nao ajuste. */}
           <div className="flex items-start justify-between gap-2 overflow-hidden"
-               style={{ height: H_TITULO }}>
+               style={{ height: H_TITULO + H_DELTAS }}>
+            {/* Coluna esquerda: o titulo agora tem a largura inteira dela —
+                ate duas linhas, sem truncar, em `text-xs`. */}
             <div className="min-w-0">
               <p className="text-xs font-bold text-foreground leading-tight">{titulo}</p>
               <p className="text-[10px] text-muted-foreground/70 leading-snug">{sub}</p>
             </div>
-            <span className="text-sm font-bold text-foreground leading-none tabular-nums shrink-0">
-              {fmtValor(valor, ind.formatoValor, ind.unidade)}
-            </span>
+            {/* Coluna direita: valor no topo, deltas colados abaixo. */}
+            <div className="flex flex-col items-end justify-start shrink-0">
+              <span className="text-sm font-bold text-foreground leading-none tabular-nums">
+                {fmtValor(valor, ind.formatoValor, ind.unidade)}
+              </span>
+              <div className="mt-0.5">
+                {escopo === 'global' && leitura !== 'historico' && <Deltas ind={ind} />}
+              </div>
+            </div>
           </div>
 
-          {/* FAIXA 2 — os deltas dos chips MARCADOS, sob o valor. Altura do
-              pior caso (quatro); com menos, sobra branco de proposito. */}
-          <div className="flex justify-end items-start overflow-hidden" style={{ height: H_DELTAS }}>
-            {escopo === 'global' && leitura !== 'historico' && <Deltas ind={ind} />}
-          </div>
-
-          {/* FAIXA 3 — os chips, logo acima do grafico e a ESQUERDA, para o
-              olho ligar chip e linha sem atravessar o card.
+          {/* FAIXA 3 — os chips, logo acima do grafico e a DIREITA: valor,
+              deltas e chips sao a mesma coluna de leitura — o numero, a
+              comparacao, e o controle da comparacao. Alinhados a direita o
+              olho desce uma coluna so; a esquerda ele volta atras.
               SO no Global: na aba Por fazenda as series sao LUGARES, nao
               cenarios, e comparar com meta ali seria outra pergunta. */}
-          <div className="flex items-center overflow-hidden" style={{ height: H_CHIPS }}>
+          <div className="flex items-center justify-end overflow-hidden" style={{ height: H_CHIPS }}>
             {escopo === 'global' && leitura !== 'historico' && (
                   <div className="flex gap-0.5">
                     {(['meta', 'mes', 'anoAnt', 'noAno'] as Comparador[]).map(op => {
