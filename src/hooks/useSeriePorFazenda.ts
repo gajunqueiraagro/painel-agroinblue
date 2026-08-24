@@ -24,6 +24,15 @@
  * As formulas vem de `painelConsultorIndicadores`; as que nao tem funcao
  * canonica (soma de saldo_final, soma de producao_biologica / 30) reproduzem a
  * expressao de `useHistoricoIndicador`, citada em cada ponto.
+ *
+ * OVERLAY DE FECHAMENTO — desde o PR-34. Este hook nasceu (PR-25) lendo o
+ * cache RAW e por isso divergia do tile pelo mesmo motivo que o historico:
+ * medido na Agnaldo Cedenho, jul/2026, a Sta. Tereza dava 85,1 @ aqui contra
+ * 56,8 oficiais, e a soma das fazendas dava 273,3 contra 245,0 do tile.
+ * Aplica `aplicarOverlayFechamento`, a MESMA funcao do `useRebanhoOficial` e
+ * do `useHistoricoZootCache` — a regra tem uma implementacao so no repo.
+ * A conferencia do PR-25 (soma das fazendas = Global) continua valendo: com o
+ * overlay, 188,2 + 56,8 = 245,0, que e exatamente o tile.
  */
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -33,6 +42,11 @@ import {
   pesoMedioPonderadoFromRows,
   computePeriodGmd,
 } from '@/lib/calculos/painelConsultorIndicadores';
+import {
+  aplicarOverlayFechamento,
+  type FechamentoConsolidado,
+} from '@/lib/painelConsultor/rebanho/overlayFechamento';
+import type { ZootCategoriaMensal } from '@/hooks/useZootCategoriaMensal';
 
 export interface SerieFazenda {
   fazendaId: string;
@@ -49,20 +63,11 @@ export interface SerieFazenda {
   periodo: Array<number | null>;
 }
 
-interface LinhaCache {
-  fazenda_id: string;
-  /* `ano` e constante nesta query (`.eq('ano', ano)`), mas entra no select
-     porque `CacheRowZoot` — o tipo que as funcoes canonicas recebem — o
-     declara obrigatorio. Sem ele so passaria com cast, e cast aqui seria
-     mascarar incompatibilidade de contrato. */
-  ano: number;
-  mes: number;
-  saldo_inicial?: number | null;
-  saldo_final?: number | null;
-  peso_total_final?: number | null;
-  producao_biologica?: number | null;
-  gmd?: number | null;
-}
+/* A linha e a do cache INTEIRA: `aplicarOverlayFechamento` precisa de
+   categoria_id, dos quatro pesos de movimentacao, de dias_mes e do
+   peso_total_inicial para refazer a producao. O select cresceu; a contagem de
+   linhas, nao. `ano` ja era obrigatorio aqui por causa de `CacheRowZoot`. */
+type LinhaCache = ZootCategoriaMensal;
 
 interface Params {
   enabled: boolean;
@@ -91,6 +96,7 @@ export function useSeriePorFazenda({
 }: Params): Result {
   const { fazendas } = useFazenda();
   const [rows, setRows] = useState<LinhaCache[]>([]);
+  const [fech, setFech] = useState<FechamentoConsolidado[]>([]);
   const [loading, setLoading] = useState(false);
 
   const fazendasKey = fazendaIds.join(',');
@@ -98,6 +104,7 @@ export function useSeriePorFazenda({
   useEffect(() => {
     if (!enabled || !clienteId || fazendaIds.length === 0) {
       setRows([]);
+      setFech([]);
       setLoading(false);
       return;
     }
@@ -115,20 +122,66 @@ export function useSeriePorFazenda({
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             .from('zoot_mensal_cache' as any)
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            .select('fazenda_id, ano, mes, saldo_inicial, saldo_final, peso_total_final, producao_biologica, gmd') as any)
+            .select('*') as any)
             .eq('cenario', 'realizado')
             .eq('ano', ano)
             .in('fazenda_id', fazendaIds)
             .order('fazenda_id').order('mes').order('categoria_id')
             .range(from, from + PAGE - 1);
           if (cancelled) return;
-          if (error) { setRows([]); return; }
+          if (error) { setRows([]); setFech([]); return; }
           if (!data || data.length === 0) break;
           acc.push(...(data as LinhaCache[]));
           if (data.length < PAGE) break;
           from += PAGE;
         }
         if (!cancelled) setRows(acc);
+
+        /* Fechamento de dez do ano ANTERIOR ate dez deste: a cadeia do overlay
+           e semeada em `${ano - 1}-12`, entao comecar em janeiro perderia a
+           correcao do primeiro mes. Mesma faixa do `useRebanhoOficial`. */
+        const agg = new Map<string, { qtd: number; pesoTotal: number }>();
+        let fromF = 0;
+        while (true) {
+          const { data, error } = await (supabase
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            .from('fechamento_pasto_itens' as any)
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            .select('id, categoria_id, quantidade, peso_medio_kg, fechamento_pastos!inner(ano_mes, status, fazenda_id)') as any)
+            .eq('fechamento_pastos.status', 'fechado')
+            .gte('fechamento_pastos.ano_mes', `${ano - 1}-12`)
+            .lte('fechamento_pastos.ano_mes', `${ano}-12`)
+            .in('fechamento_pastos.fazenda_id', fazendaIds)
+            .order('id')
+            .range(fromF, fromF + PAGE - 1);
+          if (cancelled) return;
+          if (error) { setFech([]); break; }
+          if (!data || data.length === 0) break;
+          for (const item of data as Array<Record<string, unknown>>) {
+            const fp = item.fechamento_pastos as Record<string, unknown> | Array<Record<string, unknown>>;
+            const fpObj = Array.isArray(fp) ? fp[0] : fp;
+            const anoMes = fpObj?.ano_mes as string | undefined;
+            const fazId  = fpObj?.fazenda_id as string | undefined;
+            if (!anoMes || !fazId) continue;
+            const key = `${anoMes}|${fazId}|${String(item.categoria_id)}`;
+            const cur = agg.get(key) || { qtd: 0, pesoTotal: 0 };
+            cur.qtd += Number(item.quantidade) || 0;
+            cur.pesoTotal += (Number(item.quantidade) || 0) * (Number(item.peso_medio_kg) || 0);
+            agg.set(key, cur);
+          }
+          if (data.length < PAGE) break;
+          fromF += PAGE;
+        }
+        const accF: FechamentoConsolidado[] = [];
+        for (const [key, val] of agg) {
+          const [anoMes, fazId, categoriaId] = key.split('|');
+          accF.push({
+            ano_mes: anoMes, fazenda_id: fazId, categoria_id: categoriaId,
+            qtd: val.qtd, peso_total: val.pesoTotal,
+            peso_medio: val.qtd > 0 ? val.pesoTotal / val.qtd : null,
+          });
+        }
+        if (!cancelled) setFech(accF);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -140,6 +193,17 @@ export function useSeriePorFazenda({
   const vazio: Result = { cabecas: [], pesoMedio: [], arrobas: [], gmd: [], loading };
   if (rows.length === 0) return vazio;
 
+  /* AQUI a serie deixa de ser cache cru. UMA chamada basta: a query e de um
+     ano so (`.eq('ano', ano)`), entao nao ha cadeias de anos diferentes para
+     separar — ao contrario do `useHistoricoZootCache`, que aplica por ano. */
+  const overlayMap = new Map<string, FechamentoConsolidado>();
+  const mesesFechados = new Set<string>();
+  for (const fc of fech) {
+    overlayMap.set(`${fc.ano_mes}|${fc.fazenda_id}|${fc.categoria_id}`, fc);
+    mesesFechados.add(`${fc.ano_mes}|${fc.fazenda_id}`);
+  }
+  const linhas = aplicarOverlayFechamento(rows, overlayMap, mesesFechados, ano, 'realizado');
+
   const nomeDe = (id: string) => fazendas.find(f => f.id === id)?.nome ?? id;
   /* Mesmo caminho do nome: o contexto ja traz `codigo` no select
      (FazendaContext.tsx:101). Nenhuma query nova. */
@@ -150,12 +214,12 @@ export function useSeriePorFazenda({
   /* As fazendas que o cache DE FATO tem — nao as pedidas. Fazenda sem linha
      nenhuma nao vira serie de nulos: some da lista, e o grafico nao desenha
      uma reta vazia com legenda. */
-  const idsComDado = Array.from(new Set(rows.map(r => String(r.fazenda_id))));
+  const idsComDado = Array.from(new Set(linhas.map(r => String(r.fazenda_id))));
 
   const montar = (
     calc: (linhasFaz: LinhaCache[], mes: number, todas12: LinhaCache[]) => number | null,
   ): SerieFazenda[] => idsComDado.map(id => {
-    const linhasFaz = rows.filter(r => String(r.fazenda_id) === id);
+    const linhasFaz = linhas.filter(r => String(r.fazenda_id) === id);
     const serie = (recorte: 'mes' | 'periodo') =>
       Array.from({ length: MESES }, (_, i) => {
         const m = i + 1;
@@ -208,7 +272,7 @@ export function useSeriePorFazenda({
     return { prodKg12, cabMedia12, dias12 };
   };
   const gmd: SerieFazenda[] = idsComDado.map(id => {
-    const linhasFaz = rows.filter(r => String(r.fazenda_id) === id);
+    const linhasFaz = linhas.filter(r => String(r.fazenda_id) === id);
     const { prodKg12, cabMedia12, dias12 } = seriesDoAno(linhasFaz);
     const per12 = computePeriodGmd(prodKg12, cabMedia12, dias12);
     const corta = (v: number | null | undefined, m: number) =>
