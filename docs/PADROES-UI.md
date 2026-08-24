@@ -272,6 +272,29 @@ vez de segurar a altura. Dar piso ao wrapper e `shrink-0` a quem não deve
 ceder. E `max-h-[…]` sozinho nunca aperta: altura indefinida faz
 `flex: 1 1 0%` não distribuir nada.
 
+**O painel inativo do Radix Tabs continua no DOM e divide o espaço.** O
+`Presence` recebe `children` como função, então `forceMount` é sempre
+verdadeiro e o painel inativo nunca é desmontado. E o `hidden` não o tira do
+layout: `[hidden] { display: none }` é regra de **user-agent** e
+`.flex { display: flex }` é de **autor** — autor vence na cascata. Com
+`flex-1` nos dois, `flex-basis: 0%` faz a divisão ser puro `flex-grow`, e o
+painel ativo recebe **metade** do espaço, independentemente do conteúdo.
+
+Medido: um modal de 501px com `TabsList` de 40 deu 230px a cada painel — e o
+número não variou quando o conteúdo foi de 20 para 260px, nem quando uma
+tabela entrou. O conteúdo não tem voto.
+
+A correção é `data-[state=inactive]:hidden` no `TabsContent`: classe mais
+atributo tem especificidade maior que `.flex`. **Vale para todo `Tabs` do app
+cujo `TabsContent` tenha classe de display** — não só o modal de indicador.
+Referência viva: `IndicadorHistoricoModal.tsx` (PR-FIX-TABPANEL-30).
+
+**Trocar aba do Radix exige clique de ponteiro real.** `element.click()` e
+`KeyboardEvent` sintético **não** mudam o estado. Medir um painel sem antes
+confirmar `data-state="active"` lê o painel que ainda está montado — foi assim
+que uma medição concluiu "regressão na aba Por Fazenda" quando não havia
+regressão nenhuma, com número na mão.
+
 ## A14 — Direção do indicador
 
 **A cor do delta segue a direção BOA do indicador, não o sinal.** Custo
