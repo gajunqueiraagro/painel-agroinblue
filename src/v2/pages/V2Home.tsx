@@ -3,6 +3,7 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { usePainelConsultorData } from '@/hooks/usePainelConsultorData';
 import type { StatusValidacaoArea } from '@/hooks/usePainelConsultorData';
+import type { SeriesPorModo } from '@/hooks/usePainelConsultorData';
 import { useLancamentos } from '@/hooks/useLancamentos';
 import { useFinanceiro } from '@/hooks/useFinanceiro';
 import { useFluxoCaixa } from '@/hooks/useFluxoCaixa';
@@ -26,6 +27,9 @@ import type { StatusPilar } from '@/hooks/useStatusPilares';
 import { useStatusPilaresAno, type StatusCelulaAno } from '@/hooks/useStatusPilaresAno';
 import type { V2Section } from '@/v2/lib/navGrupos';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { BlocoAtividade } from '@/v2/components/BlocoAtividade';
+import { ModalAtividade, type IndicadorAtividade } from '@/v2/components/ModalAtividade';
+import { BarChart3 } from 'lucide-react';
 
 const fmtN = (v: number | null | undefined, dec = 0) =>
   v == null || isNaN(v) ? null
@@ -574,6 +578,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     : new Date(anoNum, mesNum - 1).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
 
   const [modalIndicador, setModalIndicador] = useState<string | null>(null);
+  /* PR-ATIVIDADE-01 — o modal por ASSUNTO. Estado proprio: ele nao e um
+     `modalIndicador` com outro valor, e sim outra pergunta. */
+  const [modalAtividade, setModalAtividade] = useState<string | null>(null);
 
   /* Fatia do donut sob o mouse. Guarda o LABEL, nao o indice: `fatias` muda de
      tamanho conforme familias zeram, e indice apontaria para outra fatia. */
@@ -1171,6 +1178,106 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     ano: anoNum,
     mesAtual: mesNum,
   });
+
+  /* ── PR-ATIVIDADE-01 · as fontes do modal por assunto ───────────────
+     Instancias PROPRIAS em vez de reaproveitar as de cima: as existentes
+     sao governadas por `modalIndicador`, e mudar o `enabled` delas seria
+     REMOVER linha do V2Home — o PR e aditivo por contrato. Ligam so quando
+     o modal de atividade abre, entao nao ha custo com ele fechado.
+     `useHistoricoZootCache` e a consulta barata do PR-23 (uma paginada), e
+     `useSeriePorFazenda` ja aplica o overlay de fechamento (dcaa1f11). */
+  const histZootAtiv = useHistoricoZootCache({
+    enabled: modalAtividade === 'zootecnico',
+    clienteId: clienteAtual?.id,
+    fazendaIds: fazendaIdsPecuaria,
+    anoInicio: anoNum - 5,
+    anoFim: anoNum,
+    mesAtual: mesNum,
+  });
+  const seriePorFazAtiv = useSeriePorFazenda({
+    enabled: modalAtividade === 'zootecnico',
+    clienteId: clienteAtual?.id,
+    fazendaIds: fazendaIdsPecuaria,
+    ano: anoNum,
+    mesAtual: mesNum,
+  });
+
+  /* Os SEIS indicadores do assunto Zootecnico, prontos para o modal.
+     AREA PRODUTIVA ficou de fora: `areaProdutivaPecIndicador` nao existe no
+     PC-100, e area tem calculos paralelos conhecidos — frente propria.
+     `porFazenda` e `historico` ficam UNDEFINED quando nao ha fonte, e o card
+     mostra "em construção": mostrar o Global disfarcado de por-fazenda seria
+     dado errado com rotulo certo, e esconder o card faria o buraco na grade
+     sumir sem explicar. */
+  const indicadoresAtividade = useMemo<IndicadorAtividade[]>(() => {
+    const serie = (ind: { series?: SeriesPorModo; serieAno?: number[] } | null | undefined,
+                   modo: 'mes' | 'periodo', campo: 'ano' | 'anoAnt' | 'meta') => {
+      const s = ind?.series?.[modo]?.[campo];
+      if (s) return s;
+      return campo === 'ano' ? (ind?.serieAno ?? []) : undefined;
+    };
+    const ponto = (s: number[] | undefined) => {
+      if (!s || s.length === 0) return null;
+      const v = s.length >= 13 ? s[mesNum] : s[mesNum - 1];
+      return v != null && !isNaN(v) ? v : null;
+    };
+    /* Forma MINIMA comum aos seis indicadores do PC-100 — evita `any` num
+       PR novo (regra zero-cast). Nao e o tipo deles: e o subconjunto que
+       este bloco le. */
+    type IndicadorPC = {
+      titulo?: string;
+      subtitulo?: string;
+      titulos?: { mes?: { titulo?: string }; periodo?: { titulo?: string } };
+      deltaMes?: number | null;
+      deltaAno?: number | null;
+      deltaMeta?: number | null;
+      serieAno?: number[];
+      series?: SeriesPorModo;
+    } | null | undefined;
+    const monta = (
+      chave: string,
+      ind: IndicadorPC,
+      formatoValor: IndicadorAtividade['formatoValor'],
+      unidade: string | undefined,
+      porFazenda?: Array<{ fazendaId: string; nome: string; codigo: string; mes: Array<number | null>; periodo: Array<number | null> }>,
+      historico?: { mes: Array<{ ano: number; valor: number | null }>; periodo: Array<{ ano: number; valor: number | null }> },
+    ): IndicadorAtividade => {
+      const sMes = serie(ind, 'mes', 'ano') as number[];
+      const sPer = serie(ind, 'periodo', 'ano') as number[];
+      const temHist = !!historico && (historico.mes.some(p => p.valor != null));
+      return {
+        chave,
+        titulo: ind?.titulo ?? '',
+        subtitulo: ind?.subtitulo ?? '',
+        tituloMes: ind?.titulos?.mes?.titulo,
+        tituloPeriodo: ind?.titulos?.periodo?.titulo,
+        unidade,
+        formatoValor,
+        serieMes: sMes,
+        seriePeriodo: sPer,
+        serieAnoAntMes: serie(ind, 'mes', 'anoAnt'),
+        serieAnoAntPeriodo: serie(ind, 'periodo', 'anoAnt'),
+        serieMetaMes: serie(ind, 'mes', 'meta'),
+        serieMetaPeriodo: serie(ind, 'periodo', 'meta'),
+        valorMes: ponto(sMes),
+        valorPeriodo: ponto(sPer),
+        deltaMes: ind?.deltaMes ?? null,
+        deltaAno: ind?.deltaAno ?? null,
+        deltaMeta: ind?.deltaMeta ?? null,
+        porFazenda: porFazenda && porFazenda.length > 0 ? porFazenda : undefined,
+        historico: temHist ? historico : undefined,
+      };
+    };
+    return [
+      monta('cabecas',      cabecasIndicador,      'inteiro',  'cab',  seriePorFazAtiv.cabecas),
+      monta('arrobas',      arrobasIndicador,      'decimal1', '@',    seriePorFazAtiv.arrobas,   histZootAtiv.arrobas),
+      monta('uaHa',         uaHaIndicador,         'decimal2', 'UA/ha'),
+      monta('gmd',          gmdIndicador,          'decimal3', 'kg',   seriePorFazAtiv.gmd,       histZootAtiv.gmd),
+      monta('pesoMedio',    pesoMedioIndicador,    'decimal1', 'kg',   seriePorFazAtiv.pesoMedio, histZootAtiv.pesoMedio),
+      monta('valorRebanho', valorRebanhoIndicador, 'moedaAbreviada', undefined),
+    ];
+  }, [cabecasIndicador, arrobasIndicador, uaHaIndicador, gmdIndicador, pesoMedioIndicador,
+      valorRebanhoIndicador, seriePorFazAtiv, histZootAtiv, mesNum]);
 
   const arrobasHistoricoOficial: HistoricoPorModo =
     modalIndicador === 'arrobas' ? histZoot.arrobas : { mes: [], periodo: [] };
@@ -2943,6 +3050,48 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           viewMode={viewMode}
           onViewModeChange={onViewModeChange}
           corPrincipal="vermelho"
+        />
+      )}
+
+      {/* ── PR-ATIVIDADE-01 ─────────────────────────────────────────────
+          O bloco nasce ABAIXO de tudo que existe, empilhado. NADA foi
+          removido da Home: Gabriel decidiu comparar os dois desenhos lado a
+          lado e so depois apagar os dezoito tiles. A divida de ter dois
+          caminhos para a mesma informacao e deliberada e TEMPORARIA — o PR
+          que remove os tiles e parte do plano, nao esquecimento.
+          Os valores seguem o `viewMode` da tela, como os tiles ao lado: um
+          segundo controle para a mesma pergunta faria a Visao Geral falar
+          com duas vozes. */}
+      <div className="mt-4">
+        <BlocoAtividade
+          titulo="Zootécnico"
+          subtitulo="o que a fazenda tem e produz"
+          icone={BarChart3}
+          loading={loadingPainel}
+          onClick={() => setModalAtividade('zootecnico')}
+          metricas={[
+            { rotulo: 'Rebanho',      valor: (fmtN(cabecasIndicador?.valor ?? null) ?? '—') + ' cab',
+              delta: cabecasIndicador?.deltaMeta ?? null, deltaRotulo: 'vs meta' },
+            { rotulo: '@ produzidas', valor: (fmtN(arrobasIndicador?.valor ?? null, 1) ?? '—') + ' @',
+              delta: arrobasIndicador?.deltaMeta ?? null, deltaRotulo: 'vs meta' },
+            { rotulo: 'GMD',          valor: (fmtN(gmdIndicador?.valor ?? null, 3) ?? '—') + ' kg',
+              delta: gmdIndicador?.deltaMeta ?? null, deltaRotulo: 'vs meta' },
+            { rotulo: 'Lotação',      valor: (fmtN(uaHaIndicador?.valor ?? null, 2) ?? '—') + ' UA/ha',
+              delta: uaHaIndicador?.deltaMeta ?? null, deltaRotulo: 'vs meta' },
+          ]}
+        />
+      </div>
+
+      {modalAtividade === 'zootecnico' && (
+        <ModalAtividade
+          open
+          onClose={() => setModalAtividade(null)}
+          mesAtual={mesNum}
+          anoAtual={anoNum}
+          clienteNome={clienteAtual?.nome ?? ''}
+          indicadores={indicadoresAtividade}
+          codigosFazendas={seriePorFazAtiv.cabecas.map(f => f.codigo)}
+          loadingHistorico={histZootAtiv.loading}
         />
       )}
     </div>
