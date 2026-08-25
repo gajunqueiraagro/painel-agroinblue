@@ -1366,13 +1366,31 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
      mostra travessao, e a ausencia fica legivel. */
   const movAgg = useMovimentacoesAgregadas({
     ano: anoNum, mes: mesNum, viewMode, isGlobal,
-    /* Tres `useLancamentos`. Sem guarda eles rodavam SEMPRE, inclusive com o
-       modal fechado, no caminho de carga da Home.
-       O GERAL tambem liga: tres das suas oito linhas sao de movimentacao, e
-       sem isto o resumo executivo nasceria com travessao justo na metade que
-       responde "o que entrou e saiu". Como o Geral e a PRIMEIRA aba, o custo
-       volta a cada abertura do modal — mas so do modal, nunca da Home. */
-    enabled: assuntoAtivo === 'movimentacoes' || assuntoAtivo === 'geral',
+    /* PR-VG-MOV-ENABLED-01 — a guarda por `assuntoAtivo` SAIU daqui.
+       HISTORICO, para nao se perder: ela existia porque as tres
+       `useLancamentos` rodavam SEMPRE, inclusive com o modal fechado, no
+       caminho de carga da Home; e o GERAL tinha de ligar junto, porque tres
+       das suas oito linhas sao de movimentacao e sem isso o resumo executivo
+       nasceria com travessao justo na metade que responde "o que entrou e
+       saiu".
+       POR QUE FOI REVERTIDA: o card Movimentacoes EXIBE quatro deltas "vs
+       meta" que dependem deste dado. Com a guarda, `assuntoAtivo` nasce null
+       (:596) e os quatro mostravam travessao no estado NORMAL da tela,
+       acertando so por efeito colateral de quem tivesse aberto um modal antes
+       e aquecido o cache. Mentir por omissao no estado normal e pior que o
+       custo das consultas. Os aceleradores do PR seguinte leem o mesmo dado.
+       O CUSTO E MENOR DO QUE PARECE, e foi medido antes de reverter:
+       - os outros TRES chamadores do hook (V2VisaoGeralRebanho:149,
+         BlocoMovimentacoesRebanhoFechamento:327 e
+         BlocoConferenciaMensalRebanhoFechamento:215) NUNCA passaram `enabled`
+         e sempre rodaram no default true. O V2Home era a UNICA excecao do
+         repo — isto alinha, nao inaugura;
+       - `enabled` NAO entra na queryKey (useLancamentos:181-183, deliberado),
+         entao o cache e compartilhado app-wide: quem ja visitou aquelas telas
+         no mesmo cliente e ano nao paga nada aqui, e a Home passa a aquecer
+         as outras. As tres requisicoes so aparecem em sessao fria de quem
+         entra direto na Home. */
+    enabled: true,
   });
 
   /* Delta contra a META do MESMO recorte, como o bloco Zootecnico. O hook
