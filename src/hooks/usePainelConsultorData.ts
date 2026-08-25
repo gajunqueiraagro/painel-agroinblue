@@ -2772,9 +2772,29 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
 
   // Meta — só Fazenda. valorRebanhoMetaMes é 0-based (length 12).
   // Convertemos para 1-based length 13 para padronizar com as outras séries.
+/* ⚠ EXCECAO DELIBERADA AO IDIOMA `i === 0 ? NaN : arr[i-1]`, QUE APARECE 69
+     VEZES NESTE ARQUIVO. A razao geral daquele idioma e' boa: o indice 0 e'
+     DEZEMBRO DO ANO ANTERIOR, e um plano de 2026 nao contem dezembro de 2025.
+     Aqui e' diferente, e e' decisao de Gabriel: O PLANO DE 2026 PARTE DO
+     REBANHO REAL DE DEZEMBRO DE 2025. O ponto inicial nao e' coisa que o plano
+     define — e' de onde a fazenda esta. Entao as duas series de META ancoram no
+     MESMO dezembro real que a serie realizada usa.
+     ⚠ SO ESTAS DUAS. Nao estender as outras 67 ocorrencias.
+     ⚠ POR QUE IMPORTA: `dif12` faz `s13[1] - s13[0]`, e com NaN no inicio o
+     resultado de janeiro era NaN — que `cumSumTo13` ACHATA EM ZERO
+     (`acc += isNaN(v) ? 0 : v`). O acumulado da meta media a variacao a partir
+     de JANEIRO enquanto o realizado media a partir de DEZEMBRO: duas colunas da
+     mesma linha com pontos de partida diferentes, e o numero nao aparentava
+     ausencia porque o achatamento o transformava em valor plausivel.
+     Medido na NJ 2026 Jul antes da correcao: meta de "por preco" -R$ 3,9M
+     contra realizado +R$ 1,4M.
+     O achatamento em si e' a divida PR-SENTINELA-01 e o conserto e' a montante;
+     com o indice 0 preenchido ele deixa de morder AQUI. */
   const valorRebanhoSerieMeta = valorRebanhoMetaMes.some(v => !isNaN(v))
     ? Array.from({ length: 13 }, (_, i) =>
-        i === 0 ? NaN : (valorRebanhoMetaMes[i - 1] ?? NaN)
+        /* Indice 0 = dezembro REAL, o mesmo que `precoArrCongelado` le em
+           :2842. Com efeito, porque esta serie e' a do valor com efeito. */
+        i === 0 ? (valorRebanhoMes[0] ?? NaN) : (valorRebanhoMetaMes[i - 1] ?? NaN)
       )
     : null;
 
@@ -2868,11 +2888,16 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
   const valorSemEfeitoSerieAnoAnt = valorRebanhoSerieAnoAnt;
 
   /* Meta com o MESMO preco congelado: a meta mede so a evolucao PLANEJADA
-     do rebanho, sem embutir aposta de preco. */
+     do rebanho, sem embutir aposta de preco.
+     ⚠ MESMA EXCECAO da serie com efeito acima — o indice 0 tambem ancora no
+     dezembro REAL, e sai de graca: `semEfeitoDe` IGNORA o array recebido quando
+     `i === 0` (:2854, `i === 0 ? pesoTotalFinDezAnoAnt : pesoTotalFin?.[i-1]`),
+     entao devolve exatamente o mesmo numero da serie realizada. Nao ha dado
+     novo, nao ha fonte nova: e' o mesmo dezembro. */
   const valorSemEfeitoSerieMeta = (() => {
     if (precoArrCongelado == null || !monthlyDataMeta) return null;
     const s = Array.from({ length: 13 }, (_, i) =>
-      i === 0 ? NaN : semEfeitoDe(monthlyDataMeta.pesoTotalFin, i));
+      semEfeitoDe(monthlyDataMeta.pesoTotalFin, i));
     return s.some(v => !isNaN(v)) ? s : null;
   })();
 
