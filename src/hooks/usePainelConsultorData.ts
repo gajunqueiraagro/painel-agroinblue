@@ -3392,7 +3392,23 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       if (i === 0) return NaN;
       const pv = p[i];
       const cv = c[i];
-      if (isNaN(pv) || isNaN(cv)) return NaN;
+      /* ⚠ `pv === 0` E' AUSENCIA, NAO VALOR. O preco sai de receita / arrobas de
+         DESFRUTE, e desfrute e' abate + venda + CONSUMO — a definicao esta certa
+         e NAO esta em discussao. So que consumo produz arroba sem produzir
+         receita: mes em que o unico desfrute foi consumo da denominador positivo
+         com numerador zero, e `r / d` devolve 0. Zero legitimo na divisao, sem
+         sentido nenhum como preco.
+         O resto da cadeia JA trata esse zero como ausencia: o card de Preco de
+         Venda mostra travessao no mesmo mes, porque `calcDelta` desiste em
+         `b === 0`. Sem a guarda abaixo so a MARGEM ignorava, e o resultado era
+         `0 - custo` — a meta de margem saindo como o simetrico exato da meta de
+         custo (medido na NJ, jun e jul de 2026: -R$ 470,64 contra R$ 470,64).
+         ⚠ So `pv`. Custo zero e' implausivel mas nao e' ausencia disfarcada, e
+         barra-lo esconderia dado real.
+         ⚠ NaN, nunca null nem 0: e' a sentinela que o resto da cadeia entende,
+         a mesma das outras guardas desta funcao.
+         ⚠ Quem "simplificar" esta condicao traz o -R$ 470,64 de volta. */
+      if (isNaN(pv) || isNaN(cv) || pv === 0) return NaN;
       return pv - cv;
     });
   };
