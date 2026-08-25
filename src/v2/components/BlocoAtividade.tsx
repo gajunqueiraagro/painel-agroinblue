@@ -165,6 +165,22 @@ function ArcoMetrica({ pctAno, pctRitmo, rotuloMeta, legenda, estouroGrave, inve
   const numero = pctAno > 999
     ? `${(pctAno / 100).toFixed(1).replace('.', ',')}×`
     : `${Math.round(pctAno)}%`;
+  /* A fonte responde ao COMPRIMENTO do texto ja formatado, nunca ao valor: e' o
+     comprimento que decide se cabe, e '100' e '100%' tem comprimentos
+     diferentes. Medido: 23px no viewBox de 104 comporta 3 caracteres folgado,
+     4 apertado, 5 estoura — '255%' e '100%' encostavam nas bordas do arco.
+     ⚠ ISTO NAO VIOLA O A12. O padrao diz "encurtar rotulo, nunca reduzir
+     fonte", e trata de ROTULOS, que podem ser reescritos. Aqui e' um NUMERO:
+     nao ha como encurtar '255%' sem mentir. Reduzir a fonte mantendo piso
+     legivel e' a unica saida, e o valor continua exato.
+     ⚠ O piso e' 16px. Caso real que estoure mesmo em 16px e' para REPORTAR,
+     nao para descer mais.
+     ⚠ Aumentar o arco tambem nao serve: ele ja foi de 88 para 104px e cresce
+     junto com as quatro colunas dos tres cards — empurrar de novo custa largura
+     em toda a Visao Geral para resolver o caso minoritario. */
+  const fonteNumero = numero.length <= 3 ? 'text-[23px]'
+    : numero.length === 4 ? 'text-[19px]'
+    : 'text-[16px]';
   /* Marca por TRIGONOMETRIA, jamais coordenada fixa: pctRitmo varia por tipo,
      cliente e mes. 0% em 180 graus, 100% em 0 grau — 1,8 grau por ponto. */
   const fRitmo = Math.min(Math.max(pctRitmo, 0), 100);
@@ -193,7 +209,7 @@ function ArcoMetrica({ pctAno, pctRitmo, rotuloMeta, legenda, estouroGrave, inve
         <line x1={mx(32)} y1={my(32)} x2={mx(44)} y2={my(44)}
           strokeWidth="2.6" strokeLinecap="round" className="stroke-meta" />
         <text x="52" y="46" textAnchor="middle"
-          className="fill-foreground text-[23px] font-medium">{numero}</text>
+          className={`fill-foreground ${fonteNumero} font-medium`}>{numero}</text>
         <text x="52" y="56" textAnchor="middle"
           className="fill-muted-foreground text-[9px]">no ano</text>
       </svg>
