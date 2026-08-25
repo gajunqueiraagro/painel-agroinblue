@@ -1602,6 +1602,21 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     const metaAno  = vivo(at(i?.serieMetaPeriodo, 12));
     if (metaAno == null || metaAno === 0) return null;
     if (realAcum == null || metaAcum == null) return null;
+    /* ⚠ ESTA GUARDA EXISTE PARA O ARCO E O DELTA CONCORDAREM. `deltaFin` desiste
+       quando a meta DO MES e' zero (:1577); sem a linha abaixo o arco seguia,
+       porque a guarda dele olha dezembro. A mesma metrica exibia travessao no
+       delta e "54,9×" no arco, lado a lado — medido em Amortizacoes na NJ, com
+       meta de amortizacao pecuaria zerada de janeiro a julho.
+       ⚠ NAO da' para saber se este zero e' "plano de zero" ou "mes sem plano":
+       `agregaPorPredicadoGenerico` parte de `emptyMeses()` e so soma, e
+       `cumSumTo13` acumula tratando ausencia como zero — a informacao ja se
+       perdeu duas vezes antes de chegar aqui. Divida a montante, PR-SENTINELA-01.
+       Como nao distingue, o arco cala: com meta anual > 0 e acumulada 0, o plano
+       existe no ano mas nao cobre o recorte, e nao ha ritmo a declarar. Desenhar
+       "0,0%" com a marca encostada na borda afirmaria que o plano previa NADA
+       ate aqui, que e' diferente de nao haver plano.
+       ⚠ Quem "melhorar" isto para o arco reaparecer traz a contradicao de volta. */
+    if (metaAcum === 0) return null;
     const pctRitmo = (metaAcum / metaAno) * 100;
     return {
       pctAno: (realAcum / metaAno) * 100,
