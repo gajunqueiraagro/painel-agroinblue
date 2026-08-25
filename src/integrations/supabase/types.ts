@@ -3988,28 +3988,34 @@ export type Database = {
       meta_valor_rebanho_status: {
         Row: {
           ano_mes: string
-          cliente_id: string
-          created_at: string
+          cliente_id: string | null
+          created_at: string | null
+          fazenda_id: string
           id: string
           status: string
+          updated_at: string | null
           validado_em: string | null
           validado_por: string | null
         }
         Insert: {
           ano_mes: string
-          cliente_id: string
-          created_at?: string
+          cliente_id?: string | null
+          created_at?: string | null
+          fazenda_id: string
           id?: string
           status?: string
+          updated_at?: string | null
           validado_em?: string | null
           validado_por?: string | null
         }
         Update: {
           ano_mes?: string
-          cliente_id?: string
-          created_at?: string
+          cliente_id?: string | null
+          created_at?: string | null
+          fazenda_id?: string
           id?: string
           status?: string
+          updated_at?: string | null
           validado_em?: string | null
           validado_por?: string | null
         }
@@ -4019,6 +4025,13 @@ export type Database = {
             columns: ["cliente_id"]
             isOneToOne: false
             referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_valor_rebanho_status_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
             referencedColumns: ["id"]
           },
         ]

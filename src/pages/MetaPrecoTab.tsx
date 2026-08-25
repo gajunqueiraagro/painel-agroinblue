@@ -110,12 +110,6 @@ export function MetaPrecoTab({ onBack }: Props) {
   const [mes, setMes] = useState(String(now.getMonth() + 1).padStart(2, '0'));
   const anoMes = `${ano}-${mes}`;
 
-  const {
-    precos, statusMes, loading, saving, isValidado,
-    salvar, reabrir, copiarMesAnterior,
-    statusAno, loadStatusAno,
-  } = useMetaValorRebanhoPrecos(anoMes);
-
   const { perfil } = usePermissions();
   const isAdmin = perfil === 'admin_agroinblue';
 
@@ -123,6 +117,15 @@ export function MetaPrecoTab({ onBack }: Props) {
   const { clienteAtual } = useCliente();
   const { user } = useAuth();
   const fazendaId = fazendaAtual?.id;
+
+  /* `fazendaId` SOBE para antes desta chamada: o hook passou a receber a
+     fazenda em PR-META-VALIDACAO-STATUS-02, e `const` em TDZ nao pode ser lido
+     acima da propria declaracao — a leitura estouraria em runtime. */
+  const {
+    precos, statusMes, loading, saving, isValidado,
+    salvar, reabrir, copiarMesAnterior,
+    statusAno, loadStatusAno,
+  } = useMetaValorRebanhoPrecos(anoMes, fazendaId);
 
   // FONTE OFICIAL: useRebanhoOficial (camada única obrigatória)
   const { rawCategorias: viewDataMeta } = useRebanhoOficial({ ano: Number(ano), cenario: 'meta' });

@@ -20,7 +20,24 @@ export interface MetaPrecoStatus {
   validado_em?: string | null;
 }
 
-export function useMetaValorRebanhoPrecos(anoMes: string) {
+/**
+ * ⚠ TODA OPERACAO EXIGE FAZENDA. O status de validacao passou a ser gravado por
+ * FAZENDA-mes em PR-META-VALIDACAO-STATUS-02 — antes era por cliente-mes, e
+ * validar uma fazenda marcava o mes como pronto para o cliente inteiro,
+ * silenciando as outras. Custou R$ 5,2 mi ausentes por sete meses na NJ.
+ *
+ * ⚠ A GUARDA VIVE AQUI, e nao so na tela, porque a tela tem DOIS pontos de
+ * montagem: V2Index:991 (que bloqueia Global) e Index:838 (que so passou a
+ * bloquear em 8f370a9a). O hook nao pode depender de quem o monta — um ponto
+ * de montagem futuro nao vai lembrar desta regra.
+ *
+ * ⚠ Sem fazenda, DESISTIR EM SILENCIO: sem erro, sem toast, sem estado
+ * parcial. O hook sem fazenda nao tem o que responder, e um `.eq('fazenda_id',
+ * undefined)` devolveria vazio fingindo que nada foi validado.
+ * ⚠ NUNCA gravar `fazenda_id` undefined ou null. O banco tambem barra (NOT NULL
+ * desde a migracao), mas o erro tem de morrer antes de chegar la.
+ */
+export function useMetaValorRebanhoPrecos(anoMes: string, fazendaId?: string) {
   const { user } = useAuth();
   const { clienteAtual } = useCliente();
   const clienteId = clienteAtual?.id;
@@ -32,12 +49,12 @@ export function useMetaValorRebanhoPrecos(anoMes: string) {
   const isValidado = statusMes.status === 'validado';
 
   const loadData = useCallback(async () => {
-    if (!anoMes || !clienteId) return;
+    if (!anoMes || !clienteId || !fazendaId) return;
     setLoading(true);
     try {
       const [{ data: precosData, error: e1 }, { data: st, error: e2 }] = await Promise.all([
         supabase.from('meta_valor_rebanho_precos' as any).select('*').eq('cliente_id', clienteId).eq('ano_mes', anoMes),
-        supabase.from('meta_valor_rebanho_status' as any).select('*').eq('cliente_id', clienteId).eq('ano_mes', anoMes).maybeSingle(),
+        supabase.from('meta_valor_rebanho_status' as any).select('*').eq('fazenda_id', fazendaId).eq('ano_mes', anoMes).maybeSingle(),
       ]);
       if (e1) throw e1;
       if (e2) throw e2;
@@ -92,11 +109,12 @@ export function useMetaValorRebanhoPrecos(anoMes: string) {
 
       const { error: sErr } = await supabase.from('meta_valor_rebanho_status' as any).upsert({
         cliente_id: clienteId,
+        fazenda_id: fazendaId,
         ano_mes: anoMes,
         status: novoStatus,
         validado_por: novoStatus === 'validado' ? user?.id || null : null,
         validado_em: novoStatus === 'validado' ? new Date().toISOString() : null,
-      }, { onConflict: 'cliente_id,ano_mes' });
+      }, { onConflict: 'fazenda_id,ano_mes' });
       if (sErr) throw sErr;
 
       const labels = { rascunho: 'Rascunho salvo', parcial: 'Salvo como parcial', validado: 'Preços META validados' };
@@ -112,13 +130,13 @@ export function useMetaValorRebanhoPrecos(anoMes: string) {
   }, [anoMes, clienteId, user, loadData]);
 
   const reabrir = useCallback(async () => {
-    if (!anoMes || !clienteId) return;
+    if (!anoMes || !clienteId || !fazendaId) return;
     try {
       const { error } = await supabase.from('meta_valor_rebanho_status' as any).update({
         status: 'rascunho',
         validado_por: null,
         validado_em: null,
-      }).eq('cliente_id', clienteId).eq('ano_mes', anoMes);
+      }).eq('fazenda_id', fazendaId).eq('ano_mes', anoMes);
       if (error) throw error;
       toast.success('Mês reaberto para edição');
       await loadData();
@@ -153,17 +171,64 @@ export function useMetaValorRebanhoPrecos(anoMes: string) {
   // Load all months status for year (for month ruler)
   const [statusAno, setStatusAno] = useState<Record<string, string>>({});
   
+  /* A REGUA E' DO CLIENTE, nao da fazenda selecionada — decisao de Gabriel. E' o
+     que faz o defeito aparecer: em 05/05/2026 seis meses da NJ foram validados
+     so com a Pureza, e a regua verde escondia que faltava a Sto. Expedito.
+     Agora aquele caso sairia AMARELO.
+
+       verde     todas as fazendas COM PLANO META do mes validadas
+       amarelo   ao menos uma validada, faltando outra
+       neutro    nenhuma validada
+
+     ⚠ O DENOMINADOR E' "COM PLANO META", nao "com pecuaria". A Faz. Sta. Luzia
+     tem `tem_pecuaria = true` e ZERO linhas de plano meta — e' silvicultura.
+     Conta-la deixaria todo mes da NJ amarelo para sempre, e a regua viraria
+     ruido em vez de sinal. O conjunto sai de `vw_zoot_categoria_mensal` com
+     `cenario = 'meta'`, que e' onde o plano de fato existe.
+
+     ⚠ UMA consulta a mais por ANO, dentro deste callback — nao por render. A
+     tela ja consultava aqui; o custo e' a segunda query da mesma chamada. */
   const loadStatusAno = useCallback(async (ano: string) => {
     if (!clienteId) return;
     const meses = Array.from({ length: 12 }, (_, i) => `${ano}-${String(i + 1).padStart(2, '0')}`);
-    const { data, error } = await supabase
-      .from('meta_valor_rebanho_status' as any)
-      .select('ano_mes, status')
-      .eq('cliente_id', clienteId)
-      .in('ano_mes', meses);
+    const [{ data, error }, { data: planoData }] = await Promise.all([
+      supabase
+        .from('meta_valor_rebanho_status' as any)
+        .select('ano_mes, status, fazenda_id')
+        .eq('cliente_id', clienteId)
+        .in('ano_mes', meses),
+      supabase
+        .from('vw_zoot_categoria_mensal' as any)
+        .select('ano_mes, fazenda_id')
+        .eq('cliente_id', clienteId)
+        .eq('cenario', 'meta')
+        .in('ano_mes', meses),
+    ]);
     if (error) return;
+
+    /* Quantas fazendas TEM plano em cada mes, e quantas foram validadas nele.
+       Set por mes: a view devolve uma linha por categoria, entao a mesma
+       fazenda aparece varias vezes no mesmo mes. */
+    const comPlano: Record<string, Set<string>> = {};
+    ((planoData as any[]) || []).forEach((r: any) => {
+      if (!r.fazenda_id) return;
+      (comPlano[r.ano_mes] ??= new Set()).add(r.fazenda_id);
+    });
+    const validadas: Record<string, Set<string>> = {};
+    ((data as any[]) || []).forEach((r: any) => {
+      if (r.status !== 'validado' || !r.fazenda_id) return;
+      (validadas[r.ano_mes] ??= new Set()).add(r.fazenda_id);
+    });
+
     const map: Record<string, string> = {};
-    ((data as any[]) || []).forEach((r: any) => { map[r.ano_mes] = r.status; });
+    for (const m of meses) {
+      const total = comPlano[m]?.size ?? 0;
+      /* So conta validacao de fazenda que TEM plano: uma validacao orfa nao
+         deve pintar o mes de verde. */
+      const ok = [...(validadas[m] ?? [])].filter(f => comPlano[m]?.has(f)).length;
+      if (total === 0 || ok === 0) continue;          // neutro: sem marca
+      map[m] = ok >= total ? 'validado' : 'parcial';
+    }
     setStatusAno(map);
   }, [clienteId]);
 
