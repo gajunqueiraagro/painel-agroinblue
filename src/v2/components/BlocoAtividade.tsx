@@ -25,9 +25,8 @@ import type { LucideIcon } from 'lucide-react';
 /**
  * Acelerador de UMA metrica — o arco que fica a esquerda do numero.
  *
- * ⚠ NAO e' o mesmo shape do prop `acelerador` do card (que o Zootecnico usa):
- * la o rotulo da marca vai DENTRO do SVG; aqui os dois textos sao HTML, entao
- * o componente recebe as duas linhas ja escritas.
+ * Os dois textos que o acompanham sao HTML, fora do SVG, entao o componente
+ * recebe as duas linhas ja escritas.
  */
 export interface AcelMetrica {
   /** Pode passar de 100 — e' informacao, nao transbordo. */
@@ -52,6 +51,74 @@ export interface MetricaBloco {
   inverseDelta?: boolean;
   /** Arco de progresso ANUAL a esquerda deste numero. Ausente: so o numero. */
   acel?: AcelMetrica | null;
+  /** Barra de posicao contra a meta DO RECORTE. Exclusiva com `acel`. */
+  barra?: BarraMetricaDados | null;
+}
+
+/**
+ * Barra de UMA metrica — posicao contra a meta DO RECORTE da tela.
+ *
+ * POR QUE BARRA E NAO ARCO. Arco responde "quanto do ano ja andei", e so faz
+ * sentido para acumulado. Rebanho medio de 6.182 nao e' "6.182 dos X do ano", e
+ * GMD de 0,386 kg/dia nao vira outro numero em dezembro — sao estoque e taxa.
+ * Para esses a pergunta e' "estou acima ou abaixo da meta DO RECORTE", que e' o
+ * que a barra desenha.
+ *
+ * ⚠ ESCALA: META NO CENTRO. A marca e' FIXA em 50% do trilho e o preenchimento
+ * representa o DESVIO contra ela — a mesma razao `(real - meta) / meta` que o
+ * delta ao lado ja mostra, saturando em ±100%.
+ *   meta exata -> 50% · +33% -> 66,5% · -33,7% -> 33,2% · dobro -> 100% · zero -> 0%
+ *
+ * A ESCALA ANTERIOR ERA `max(real, meta) * 1,25`, e foi trocada por um defeito
+ * que so aparece na conta: quando o realizado supera a meta, a base E' o
+ * realizado, entao o preenchido trava em 1/1,25 = 80% SEMPRE. Tres barras acima
+ * da meta ficavam com preenchimento identico e a unica diferenca era a marca —
+ * de 0,6px a 3px num trilho de 88px. Barra que nao varia nao informa.
+ *
+ * ⚠ `pctReal` e `pctMeta` chegam como dois numeros PROPORCIONAIS a real e meta;
+ * o que este componente usa e' a RAZAO entre eles, e a base em que foram
+ * calculados se cancela. Por isso a escala pode mudar aqui sem tocar em quem
+ * monta o prop-bag.
+ *
+ * Saturado, o trilho para de crescer mas o numero real continua no delta ao
+ * lado — nao ha indicador de estouro porque ele seria redundante.
+ *
+ * Tudo em HTML: sem SVG, nao ha unidade de viewBox e o texto nao encolhe junto
+ * com a caixa (foi o que obrigou o ArcoMetrica a tirar os rotulos de dentro).
+ */
+export interface BarraMetricaDados {
+  /** Proporcional ao REALIZADO. Só a razao com `pctMeta` e' usada. */
+  pctReal: number;
+  /** Proporcional a META, na MESMA base. Divisor da escala: <= 0 nao desenha. */
+  pctMeta: number;
+  /** Ex.: "meta 6.026" — ja formatado pelo chamador, como o valor. */
+  rotuloMeta: string;
+  /** "no mes" ou "no periodo": declara que a barra segue o filtro da tela. */
+  rotuloRecorte: string;
+  /** Realizado abaixo da meta. Nos tres, mais e' melhor — nenhum inverte. */
+  abaixo: boolean;
+}
+
+function BarraMetrica({ pctReal, pctMeta, rotuloMeta, rotuloRecorte, abaixo }: BarraMetricaDados) {
+  /* A meta e' o DIVISOR da escala: sem ela nao ha contra o que medir, e a razao
+     abaixo estouraria. Barra some, o par vira so a metrica. */
+  if (!(pctMeta > 0) || !Number.isFinite(pctReal)) return null;
+  const desvio = pctReal / pctMeta - 1;
+  const pos = 50 + Math.max(-1, Math.min(1, desvio)) * 50;
+  return (
+    <div className="shrink-0 w-[88px] flex flex-col items-center gap-1">
+      <p className="text-[8px] text-muted-foreground leading-tight whitespace-nowrap">{rotuloMeta}</p>
+      <div className="relative w-full h-[9px] rounded-full bg-muted-foreground/30">
+        <div className={`absolute inset-y-0 left-0 rounded-full ${abaixo ? 'bg-warning' : 'bg-success'}`}
+          style={{ width: `${pos}%` }} />
+        {/* Marca FIXA no meio — e' a meta, e a meta e' o centro da escala. Ela
+            transborda o trilho em 3px para cima e para baixo: dentro dele, sobre
+            o preenchido, sumiria. */}
+        <div className="absolute w-[2px] -top-[3px] -bottom-[3px] bg-foreground left-1/2" />
+      </div>
+      <p className="text-[8px] text-muted-foreground/70 leading-tight whitespace-nowrap">{rotuloRecorte}</p>
+    </div>
+  );
 }
 
 /**
@@ -117,80 +184,9 @@ interface Props {
   metricas: MetricaBloco[];
   onClick: () => void;
   loading?: boolean;
-  /** Progresso contra a meta do ANO — SEMPRE anual, mesmo com o filtro da tela
-      em "No mes". Ausente ou `null`: o card renderiza como sempre renderizou. */
-  acelerador?: {
-    /** Pode passar de 100. Superar a meta e' informacao, nao transbordo. */
-    pctAno: number;
-    /** Onde o PROPRIO plano previa estar neste mes. Nunca mesNum/12. */
-    pctRitmo: number;
-    /** Rotulo curto da marca, ex.: "meta Jul". */
-    rotuloMarca: string;
-  } | null;
 }
 
-/**
- * Arco de 180 graus: quanto do ANO ja andou, e onde o plano dizia que estaria
- * no mes selecionado.
- *
- * Mesma mecanica do bloco Area (V2Home:2201-2206): geometria em SVG puro com
- * strokeDasharray, sem recharts e sem componente em outro arquivo. A diferenca
- * e' o semicirculo — um <path> em vez de <circle>, porque meio arco nao se
- * descreve por raio.
- *
- * `strokeDashoffset` NAO entra: os dois tracos partem do mesmo ponto do path,
- * entao o offset seria zero — prop inerte.
- *
- * O ARCO satura em 100; o NUMERO nunca satura. Passar da meta e' informacao.
- */
-function Acelerador({ pctAno, pctRitmo, rotuloMarca }: {
-  pctAno: number; pctRitmo: number; rotuloMarca: string;
-}) {
-  /* Semicirculo de raio 38 centrado em (52,60). O `d` vai de (14,60) a (90,60)
-     com sweep-flag 1, que em SVG — eixo y para BAIXO — desenha por CIMA. */
-  const D = 'M14 60 A38 38 0 0 1 90 60';
-  const ARCO = Math.PI * 38;
-  const cheio = Math.min(Math.max(pctAno, 0), 100) / 100;
-  /* Atraso NAO e' erro: warning, nunca destructive. */
-  const cor = pctAno >= pctRitmo ? 'stroke-success' : 'stroke-warning';
-  /* Marca por TRIGONOMETRIA, jamais coordenada fixa: pctRitmo muda por cliente
-     e por mes. 0% fica em 180 graus (esquerda) e 100% em 0 grau (direita), logo
-     1,8 grau por ponto percentual. O y subtrai porque o eixo cresce para baixo. */
-  const fRitmo = Math.min(Math.max(pctRitmo, 0), 100);
-  const rad = (180 - 1.8 * fRitmo) * Math.PI / 180;
-  const mx = (r: number) => 52 + r * Math.cos(rad);
-  const my = (r: number) => 60 - r * Math.sin(rad);
-  return (
-    <div className="shrink-0 flex flex-col items-center">
-      <svg viewBox="0 0 104 74" className="w-[104px]">
-        <path d={D} fill="none" strokeWidth="8" strokeLinecap="round"
-          className="stroke-muted-foreground/30" />
-        <path d={D} fill="none" strokeWidth="8" strokeLinecap="round"
-          className={cor}
-          strokeDasharray={`${ARCO * cheio} ${ARCO}`} />
-        <line x1={mx(32)} y1={my(32)} x2={mx(44)} y2={my(44)}
-          strokeWidth="2.4" strokeLinecap="round" className="stroke-foreground" />
-        {/* Ancora troca de lado no meio do arco para o rotulo nao vazar da caixa. */}
-        <text x={mx(44)} y={my(44) - 3} textAnchor={fRitmo < 50 ? 'start' : 'end'}
-          className="fill-muted-foreground text-[8px]">
-          {rotuloMarca}
-        </text>
-        {/* y=52, nao 56: nos extremos (ritmo 0 ou 100) a caixa do rotulo desce a
-            y~57 e a do numero, com baseline em 56, subia so ate ~41 — as duas se
-            cruzavam. Em 52 o numero termina antes de onde o rotulo comeca.
-            O extremo de 100% nao e' hipotetico: `cumSumTo13` soma mes sem plano
-            como zero, entao plano parcial produz metaAcum == metaAno. */}
-        <text x="52" y="52" textAnchor="middle"
-          className="fill-foreground text-[21px] font-medium">
-          {pctAno.toFixed(0)}%
-        </text>
-      </svg>
-      <p className="text-[9px] text-muted-foreground/70 leading-tight">do ano</p>
-    </div>
-  );
-}
-
-export function BlocoAtividade({ titulo, subtitulo, icone: Icone, metricas, onClick, loading, acelerador }: Props) {
+export function BlocoAtividade({ titulo, subtitulo, icone: Icone, metricas, onClick, loading }: Props) {
   /* O corpo da metrica — rotulo, numero e delta — e' o MESMO nos dois layouts.
      Sai daqui uma vez so para que acrescentar o arco ao lado nao possa mudar,
      por descuido, nem a fonte nem a cor do numero que ja estava na tela. */
@@ -224,14 +220,23 @@ export function BlocoAtividade({ titulo, subtitulo, icone: Icone, metricas, onCl
   ));
   /* Um arco por metrica: o fio fica DENTRO do par, na borda esquerda, para
      nunca sobrar fio no fim da linha. */
-  const temAcelPorMetrica = metricas.some(m => m.acel);
-  const pares = metricas.map((m, i) => (
-    <div key={m.rotulo} className="flex items-center gap-2 flex-1 min-w-0">
-      {i > 0 && <div className="w-[0.5px] self-stretch bg-border shrink-0" />}
-      {m.acel ? <ArcoMetrica {...m.acel} inverso={!!m.inverseDelta} /> : null}
-      <div className="min-w-0">{corpo(m)}</div>
-    </div>
-  ));
+  const temDesenho = metricas.some(m => m.acel || m.barra);
+  const pares = metricas.map((m, i) => {
+    /* Arco e barra respondem perguntas diferentes sobre o MESMO numero; as duas
+       ao lado dele diriam que ha duas verdades. O arco vence por ser o mais
+       especifico, e o aviso existe para o defeito nao passar calado. */
+    if (m.acel && m.barra) {
+      console.warn(`BlocoAtividade: metrica "${m.rotulo}" trouxe acel E barra; renderizando o arco.`);
+    }
+    return (
+      <div key={m.rotulo} className="flex items-center gap-2 flex-1 min-w-0">
+        {i > 0 && <div className="w-[0.5px] self-stretch bg-border shrink-0" />}
+        {m.acel ? <ArcoMetrica {...m.acel} inverso={!!m.inverseDelta} />
+          : m.barra ? <BarraMetrica {...m.barra} /> : null}
+        <div className="min-w-0">{corpo(m)}</div>
+      </div>
+    );
+  });
 
   return (
     <Card
@@ -253,15 +258,7 @@ export function BlocoAtividade({ titulo, subtitulo, icone: Icone, metricas, onCl
           </div>
         </div>
 
-        {acelerador ? (
-          /* O arco fica DENTRO do mesmo card e do mesmo alvo de clique — nao e'
-             um controle proprio. O grid das metricas segue grid-cols-4. */
-          <div className="flex items-center gap-3">
-            <Acelerador pctAno={acelerador.pctAno} pctRitmo={acelerador.pctRitmo}
-              rotuloMarca={acelerador.rotuloMarca} />
-            <div className="grid grid-cols-4 gap-2 flex-1 min-w-0">{celulas}</div>
-          </div>
-        ) : temAcelPorMetrica ? (
+        {temDesenho ? (
           <div className="flex items-stretch gap-2">{pares}</div>
         ) : (
           <div className="grid grid-cols-4 gap-2">{celulas}</div>

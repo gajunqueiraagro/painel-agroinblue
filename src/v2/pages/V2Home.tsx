@@ -1602,12 +1602,61 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
       acel: {
         pctAno: (realizadoAcum / metaAno) * 100,
         pctRitmo,
-        rotuloMarca: `meta ${mesAbrev}`,
+        rotuloMeta: `meta ${mesAbrev.toLowerCase()} · ${pctRitmo.toFixed(1)}%`,
+        legenda: `${fmtN(realizadoAcum, 1) ?? '—'} de ${fmtN(metaAno, 1) ?? '—'}`,
       },
       subtitulo: `@ produzidas · ${fmtN(realizadoAcum, 1) ?? '—'} de `
         + `${fmtN(metaAno, 1) ?? '—'} @ · plano previa ${pctRitmo.toFixed(1)}% até ${mesAbrev}`,
     };
   })(arrobasIndicador);
+
+  /* As TRES barras do Zootecnico: posicao contra a meta DO RECORTE.
+     ⚠ O CARD FALA DUAS LINGUAS, e e' deliberado (decisao de Gabriel): ao
+     alternar No mes / No periodo as tres barras MUDAM e o arco de @ produzidas
+     NAO — ele e' sempre anual. Os rotulos declaram qual e' qual: "no ano" dentro
+     do arco, "no mes"/"no periodo" sob cada barra. Sem eles, a proxima pessoa le
+     como defeito.
+     ⚠ NADA e' reagregado aqui. As series de periodo do PC-100 ja sao o agregado
+     certo por natureza — rebanho e' media acumulada (:1954), GMD e'
+     computePeriodGmd recalculado (:2182), lotacao e'
+     calcularRazaoEstoqueAcumulada (:2236). A regra "razao de agregados, nunca
+     media de razoes" ja esta honrada la; refazer a conta aqui a quebraria.
+     ⚠ Ler `series.*.meta`, que e' uniforme nos tres. O campo raso do rebanho
+     chama-se `serieMetaIndicador` (usePainelConsultorData:4165), fora do padrao
+     dos outros dois — quem procurar `.serieMeta` nele recebe undefined calado.
+     ⚠ Indice 0 destas series e' NaN (nao zero literal como nas de
+     Movimentacoes): indexar sempre, nunca varrer a serie inteira.
+     ⚠ As seis series sao null quando `monthlyDataMeta` e' null, o que depende de
+     `carregarMetaEffective` (usePainelConsultorData:1045). Nesta tela esta
+     satisfeito — :669 passa `incluirComparativos: true`. Se um dia a barra ler
+     de instancia lean (as historicas de :1202-1205 sao), a meta vem null POR
+     CONSTRUCAO, nao por ausencia de plano: barra sumida ali nao significa que
+     ninguem planejou. */
+  const barraZoot = (
+    ind: { series?: SeriesPorModo; valor?: number | null } | null | undefined,
+    dec: number,
+  ) => {
+    const at = (sr: number[] | undefined, i: number) =>
+      !sr || sr.length === 0 ? null : (sr.length >= 13 ? sr[i] : sr[i - 1]);
+    const vivo = (v: number | null | undefined) =>
+      v != null && Number.isFinite(v) ? v : null;
+    const serieMeta = isPeriodo ? ind?.series?.periodo?.meta : ind?.series?.mes?.meta;
+    const meta = vivo(at(serieMeta, mesNum));
+    const real = vivo(ind?.valor);
+    if (meta == null || real == null) return null;
+    /* Folga de 25% sobre o MAIOR dos dois: com a meta como base, realizado acima
+       dela estouraria o trilho e o excedente — o caso que mais interessa ver —
+       ficaria invisivel. */
+    const base = Math.max(real, meta) * 1.25;
+    if (!(base > 0)) return null;
+    return {
+      pctReal: (real / base) * 100,
+      pctMeta: (meta / base) * 100,
+      rotuloMeta: `meta ${fmtN(meta, dec) ?? '—'}`,
+      rotuloRecorte: isPeriodo ? 'no período' : 'no mês',
+      abaixo: real < meta,
+    };
+  };
 
   const arrobasHistoricoOficial: HistoricoPorModo =
     modalIndicador === 'arrobas' ? histZoot.arrobas : { mes: [], periodo: [] };
@@ -2698,8 +2747,10 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           icone={BarChart3}
           loading={loadingPainel}
           onClick={() => setModalAtividade('zootecnico')}
-          acelerador={aceleradorArrobas?.acel ?? null}
-          /* Os rotulos DERIVAM dos titulos oficiais do PC-100
+          /* ORDEM DELIBERADA: a meta do ANO vem primeiro (@ produzidas, em
+             arco), e o monitoramento que leva ate ela vem depois (rebanho, GMD
+             e lotacao, em barra). Nao reordenar — a sequencia e' o raciocinio.
+             Os rotulos DERIVAM dos titulos oficiais do PC-100
              (usePainelConsultorData 4157/4158 e 4273/4274), encurtados: o
              rotulo do card e text-[9px] uppercase truncate em coluna de 1/4
              da largura, e "REBANHO MEDIO NO PERIODO" truncaria. A12 do
@@ -2710,16 +2761,20 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
              leitura. Rebanho (final x media) e @ (do mes x acumulada) mudam
              de sentido, e e' isso que o rotulo precisa dizer. */
           metricas={[
-            { rotulo: isPeriodo ? 'Rebanho médio' : 'Rebanho final',
-              valor: (fmtN(cabecasIndicador?.valor ?? null) ?? '—') + ' cab',
-              delta: cabecasIndicador?.deltaMeta ?? null, deltaRotulo: 'vs meta' },
             { rotulo: isPeriodo ? '@ produzidas acum.' : '@ produzidas',
               valor: (fmtN(arrobasIndicador?.valor ?? null, 1) ?? '—') + ' @',
-              delta: arrobasIndicador?.deltaMeta ?? null, deltaRotulo: 'vs meta' },
+              delta: arrobasIndicador?.deltaMeta ?? null, deltaRotulo: 'vs meta',
+              acel: aceleradorArrobas?.acel ?? null },
+            { rotulo: isPeriodo ? 'Rebanho médio' : 'Rebanho final',
+              valor: (fmtN(cabecasIndicador?.valor ?? null) ?? '—') + ' cab',
+              delta: cabecasIndicador?.deltaMeta ?? null, deltaRotulo: 'vs meta',
+              barra: barraZoot(cabecasIndicador, 0) },
             { rotulo: 'GMD',          valor: (fmtN(gmdIndicador?.valor ?? null, 3) ?? '—') + ' kg',
-              delta: gmdIndicador?.deltaMeta ?? null, deltaRotulo: 'vs meta' },
+              delta: gmdIndicador?.deltaMeta ?? null, deltaRotulo: 'vs meta',
+              barra: barraZoot(gmdIndicador, 3) },
             { rotulo: 'Lotação',      valor: (fmtN(uaHaIndicador?.valor ?? null, 2) ?? '—') + ' UA/ha',
-              delta: uaHaIndicador?.deltaMeta ?? null, deltaRotulo: 'vs meta' },
+              delta: uaHaIndicador?.deltaMeta ?? null, deltaRotulo: 'vs meta',
+              barra: barraZoot(uaHaIndicador, 2) },
           ]}
         />
       </div>
