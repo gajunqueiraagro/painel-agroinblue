@@ -80,7 +80,14 @@ export function useMetaValorRebanhoPrecos(anoMes: string, fazendaId?: string) {
     } finally {
       setLoading(false);
     }
-  }, [anoMes, clienteId]);
+    /* ⚠ `fazendaId` PRECISA estar nas deps. As guardas deste hook desistem sem
+       fazenda, e `useCallback` congela o valor do render em que foi criado — na
+       primeira renderizacao o FazendaContext ainda nao resolveu e `fazendaId` e'
+       undefined. Sem ele aqui o callback nunca era recriado, `loadData` desistia
+       para sempre e a tabela de precos ficava vazia: todas as categorias em
+       0,00. Foi o defeito de 475a571e — e NAO tinha a ver com a tabela de
+       precos, cujas queries nunca sairam de `cliente_id`. */
+  }, [anoMes, clienteId, fazendaId]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -127,7 +134,7 @@ export function useMetaValorRebanhoPrecos(anoMes: string, fazendaId?: string) {
     } finally {
       setSaving(false);
     }
-  }, [anoMes, clienteId, user, loadData]);
+  }, [anoMes, clienteId, fazendaId, user, loadData]);
 
   const reabrir = useCallback(async () => {
     if (!anoMes || !clienteId || !fazendaId) return;
@@ -143,7 +150,7 @@ export function useMetaValorRebanhoPrecos(anoMes: string, fazendaId?: string) {
     } catch (e: any) {
       toast.error('Erro ao reabrir: ' + e.message);
     }
-  }, [anoMes, clienteId, loadData]);
+  }, [anoMes, clienteId, fazendaId, loadData]);
 
   const copiarMesAnterior = useCallback(async (anoMesAtual: string): Promise<MetaPrecoCategoria[] | null> => {
     if (!clienteId) return null;
