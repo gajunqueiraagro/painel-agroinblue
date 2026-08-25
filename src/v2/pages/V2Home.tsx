@@ -1579,7 +1579,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
      onde o PLANO dizia que estariamos neste mes.
      ⚠ E' SEMPRE do ano, mesmo com o filtro da tela em "No mes". As quatro
      metricas ao lado seguem o recorte; esta nao. Sao leituras diferentes de
-     proposito, e o subtitulo do card declara a conta.
+     proposito, e quem declara isso e' o "no ano" DENTRO do arco.
      ⚠ A marca de ritmo sai da META ACUMULADA, jamais de mesNum/12: medido no
      banco, a meta ate julho vai de 36,6% (RRCC) a 88,2% (Raul Juliato) da meta
      anual — marca fixa erraria em 5 dos 6 clientes.
@@ -1588,9 +1588,10 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
      `at` repete a regra das duas convencoes de serie (12 zero-indexada, 13
      1-indexada), a mesma do deltaFin acima. Local de proposito: unificar as
      copias e' o PR-SERIE-INDICE-01.
-     Devolve o par {acel, subtitulo}: o prop-bag fica com a forma EXATA que o
-     BlocoAtividade declara, e o texto por extenso — para quem nao decodificar o
-     desenho — sai dos MESMOS tres numeros, sem recalcular nada. */
+     Devolve o proprio prop-bag, com a forma EXATA que o BlocoAtividade declara.
+     Ja devolveu o par {acel, subtitulo}, quando o subtitulo do card repetia a
+     conta por extenso; a conta saiu de la porque o arco ao lado ja a mostra
+     duas vezes, no rotuloMeta e na legenda. */
   const aceleradorArrobas = ((ind: { series?: SeriesPorModo } | null | undefined) => {
     const at = (sr: number[] | undefined, i: number) =>
       !sr || sr.length === 0 ? null : (sr.length >= 13 ? sr[i] : sr[i - 1]);
@@ -1604,14 +1605,10 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     const pctRitmo = (metaAcum / metaAno) * 100;
     const mesAbrev = MES_ABREV[mesNum - 1];
     return {
-      acel: {
-        pctAno: (realizadoAcum / metaAno) * 100,
-        pctRitmo,
-        rotuloMeta: `meta ${mesAbrev.toLowerCase()} · ${pctRitmo.toFixed(1)}%`,
-        legenda: `${fmtN(realizadoAcum, 1) ?? '—'} de ${fmtN(metaAno, 1) ?? '—'}`,
-      },
-      subtitulo: `@ produzidas · ${fmtN(realizadoAcum, 1) ?? '—'} de `
-        + `${fmtN(metaAno, 1) ?? '—'} @ · plano previa ${pctRitmo.toFixed(1)}% até ${mesAbrev}`,
+      pctAno: (realizadoAcum / metaAno) * 100,
+      pctRitmo,
+      rotuloMeta: `meta ${mesAbrev.toLowerCase()} · ${pctRitmo.toFixed(1)}%`,
+      legenda: `${fmtN(realizadoAcum, 1) ?? '—'} de ${fmtN(metaAno, 1) ?? '—'}`,
     };
   })(arrobasIndicador);
 
@@ -2746,9 +2743,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
       <div>
         <BlocoAtividade
           titulo="Zootécnico"
-          subtitulo={aceleradorArrobas
-            ? aceleradorArrobas.subtitulo
-            : 'o que a fazenda tem e produz'}
+          subtitulo="o que a fazenda tem e produz"
           icone={BarChart3}
           loading={loadingPainel}
           onClick={() => setModalAtividade('zootecnico')}
@@ -2769,7 +2764,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
             { rotulo: isPeriodo ? '@ produzidas acum.' : '@ produzidas',
               valor: (fmtN(arrobasIndicador?.valor ?? null, 1) ?? '—') + ' @',
               delta: arrobasIndicador?.deltaMeta ?? null, deltaRotulo: isPeriodo ? 'vs meta per.' : 'vs meta mês',
-              acel: aceleradorArrobas?.acel ?? null },
+              acel: aceleradorArrobas },
             { rotulo: isPeriodo ? 'Rebanho médio' : 'Rebanho final',
               valor: (fmtN(cabecasIndicador?.valor ?? null) ?? '—') + ' cab',
               delta: cabecasIndicador?.deltaMeta ?? null, deltaRotulo: isPeriodo ? 'vs meta per.' : 'vs meta mês',
