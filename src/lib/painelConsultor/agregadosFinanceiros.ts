@@ -61,6 +61,8 @@ import {
   type LancamentoClassificavel,
   isCustoFixoAgricultura,
   isCustoFixoSilvicultura,
+  isCustoVariavelAgricultura,
+  isCustoVariavelSilvicultura,
   isDeducoesPecuaria,
   isDeducoesAgricultura,
   isDeducoesSilvicultura,
@@ -236,6 +238,16 @@ export function agregaCustoFixoAgri(lancFin: FinanceiroLancamento[], ano: number
 
 export function agregaCustoFixoSilvi(lancFin: FinanceiroLancamento[], ano: number): number[] {
   return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isCustoFixoSilvicultura);
+}
+
+/* PR-FINANCEIRO-01 — os pares variaveis de agricultura e silvicultura. Ver o
+   comentario dos predicates em `classificacao.ts`. */
+export function agregaCustoVariavelAgri(lancFin: FinanceiroLancamento[], ano: number): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isCustoVariavelAgricultura);
+}
+
+export function agregaCustoVariavelSilvi(lancFin: FinanceiroLancamento[], ano: number): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isCustoVariavelSilvicultura);
 }
 
 export function agregaDeducoesPec(lancFin: FinanceiroLancamento[], ano: number): number[] {

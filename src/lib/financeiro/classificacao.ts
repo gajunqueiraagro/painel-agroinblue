@@ -400,6 +400,20 @@ export function isCustoFixoSilvicultura(l: LancamentoClassificavel): boolean {
   return l.grupo_custo === 'Custo Fixo Silvicultura';
 }
 
+/* PR-FINANCEIRO-01 — os dois que faltavam. Havia `Custo Fixo` nos tres escopos
+   e `Custo Variavel` so na pecuaria; numa tabela HIERARQUICA a assimetria
+   mentiria, porque `Custo fixo` somaria tres escopos e `Custo variavel` um so,
+   e os dois nao fechariam no Custeio. Filho que nao soma no pai e pior que
+   ausencia. Mesmo idioma dos irmaos: `grupo_custo` literal, nada inferido por
+   subcentro nem por nome. */
+export function isCustoVariavelAgricultura(l: LancamentoClassificavel): boolean {
+  return l.grupo_custo === 'Custo Variável Agricultura';
+}
+
+export function isCustoVariavelSilvicultura(l: LancamentoClassificavel): boolean {
+  return l.grupo_custo === 'Custo Variável Silvicultura';
+}
+
 export function isDeducoesPecuaria(l: LancamentoClassificavel): boolean {
   return l.grupo_custo === 'Deduções Pecuária';
 }

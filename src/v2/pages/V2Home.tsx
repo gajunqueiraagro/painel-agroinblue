@@ -30,7 +30,7 @@ import { BlocoAtividade } from '@/v2/components/BlocoAtividade';
 import { useMovimentacoesAgregadas, type Lente, type TipoMov } from '@/v2/hooks/useMovimentacoesAgregadas';
 import { ModalAtividade, type IndicadorAtividade, type Assunto } from '@/v2/components/ModalAtividade';
 import { calcularRazaoEstoqueAcumulada, mediaIgnorandoZero } from '@/lib/calculos/eficienciaArea';
-import { BarChart3, ArrowLeftRight } from 'lucide-react';
+import { BarChart3, ArrowLeftRight, Wallet } from 'lucide-react';
 
 const fmtN = (v: number | null | undefined, dec = 0) =>
   v == null || isNaN(v) ? null
@@ -638,6 +638,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     captacaoPecIndicador, captacaoAgriIndicador, captacaoSilviIndicador, captacaoSemEscopoIndicador,
     receitaSilvicolaIndicador, custeioSilviIndicador, investSilviIndicador, amortizacaoSilviIndicador,
     investPecIndicador, investBovinosIndicador, amortizacaoPecIndicador,
+    amortizacoesIndicador,
     custeioAgriIndicador, investAgriIndicador, amortizacaoAgriIndicador,
     dividendosIndicador, deducoesTributosIndicador, tributosIndicador,
     caixaIndicador,
@@ -646,6 +647,14 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
        `kgHaIndicador` ja vinha, na linha de cima. */
     arrobasEstoqueIndicador, arrobasHaIndicador, precoArrEstoqueIndicador,
     valorRebanhoSemEfeitoIndicador, areaProdutivaPecIndicador,
+    /* PR-FINANCEIRO-01 — o DRE de caixa. Quase todos ja existiam no PC-100
+       com a MESMA forma dos zootecnicos; so os dois `custoVariavel` de
+       agricultura e silvicultura nasceram neste PR, porque o par existia
+       apenas na pecuaria e a hierarquia nao fechava. */
+    custoFixoPecIndicador, custoVariavelPecIndicador,
+    custoFixoAgriIndicador, custoVariavelAgriIndicador,
+    custoFixoSilviIndicador, custoVariavelSilviIndicador,
+    jurosPecIndicador, jurosAgriIndicador, jurosSilviIndicador,
     loading: loadingPainel,
   } = usePainelConsultorData({ ano: anoNum, mes: mesNum, viewMode, incluirComparativos: true, ...sharedLanc });
 
@@ -1433,6 +1442,14 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     ];
   }, [movAgg, mesNum]);
 
+  /* Le do MESMO array que o modal consome, entao bloco e tabela nunca
+     divergem: um numero, uma fonte. Segue o `viewMode` como os outros dois. */
+  const valorFin = (chave: string): string => {
+    const i = indicadoresFinanceiro.find(x => x.chave === chave);
+    const v = isPeriodo ? i?.valorPeriodo : i?.valorMes;
+    return fmtRAbreviado(v ?? null) ?? '—';
+  };
+
   const arrobasHistoricoOficial: HistoricoPorModo =
     modalIndicador === 'arrobas' ? histZoot.arrobas : { mes: [], periodo: [] };
 
@@ -1885,6 +1902,91 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     serieAlavancagemAnoAnt: finSerieAlavAnoAnt,
     loading: loadingDivida,
   } = useEndividamentoAtual(anoNum);
+
+
+  /* ── PR-FINANCEIRO-01 · o DRE de caixa ─────────────────────────────────
+     FIACAO, nao construcao: os indicadores financeiros do PC-100 tem a MESMA
+     forma dos zootecnicos, entao o mesmo `monta()` serve.
+     `soma` existe porque a estrutura de Gabriel pede totais que o PC-100 nao
+     expoe agregados — Receitas e a soma dos quatro escopos, Custeio a dos
+     tres. Ela soma SERIE a serie e nao inventa meta: onde uma parcela nao
+     tem meta, o total tambem nao tem. */
+  const indicadoresFinanceiro = useMemo<IndicadorAtividade[]>(() => {
+    type IndFin = { valor?: number | null; series?: SeriesPorModo; serieAno?: number[];
+                    titulo?: string; subtitulo?: string } | null | undefined;
+    const serie = (i: IndFin, modo: 'mes' | 'periodo', campo: 'ano' | 'meta') =>
+      i?.series?.[modo]?.[campo] ?? (campo === 'ano' ? i?.serieAno : undefined);
+    const ponto = (s: number[] | undefined) => {
+      if (!s || s.length === 0) return null;
+      const v = s.length >= 13 ? s[mesNum] : s[mesNum - 1];
+      return v != null && !isNaN(v) ? v : null;
+    };
+    const somaSeries = (ss: Array<number[] | undefined>): number[] | undefined => {
+      const vivas = ss.filter((x): x is number[] => !!x && x.length > 0);
+      if (vivas.length === 0) return undefined;
+      const n = Math.max(...vivas.map(v => v.length));
+      return Array.from({ length: n }, (_, i) =>
+        vivas.reduce((acc, v) => acc + (Number.isFinite(v[i]) ? v[i] : 0), 0));
+    };
+    const card = (chave: string, rotulo: string, partes: IndFin[]): IndicadorAtividade => {
+      const sMes = somaSeries(partes.map(i => serie(i, 'mes', 'ano'))) ?? [];
+      const sPer = somaSeries(partes.map(i => serie(i, 'periodo', 'ano'))) ?? [];
+      /* Meta so quando TODAS as parcelas tem: um total com meta parcial
+         compararia o realizado inteiro contra a meta de um pedaco. */
+      const metasMes = partes.map(i => serie(i, 'mes', 'meta'));
+      const metasPer = partes.map(i => serie(i, 'periodo', 'meta'));
+      const temTodas = metasMes.every(m => !!m && m.length > 0);
+      return {
+        chave, titulo: rotulo, subtitulo: '',
+        formatoValor: 'moedaAbreviada',
+        serieMes: sMes, seriePeriodo: sPer,
+        serieMetaMes:     temTodas ? somaSeries(metasMes) : undefined,
+        serieMetaPeriodo: temTodas ? somaSeries(metasPer) : undefined,
+        valorMes: ponto(sMes), valorPeriodo: ponto(sPer),
+        deltaMes: null, deltaAno: null, deltaMeta: null,
+      };
+    };
+    const recPec = receitaPecCaixaIndicador, recAgri = receitaAgriIndicador;
+    const recSilvi = receitaSilvicolaIndicador, recOutras = receitaOutrasIndicador;
+    const cFixo = [custoFixoPecIndicador, custoFixoAgriIndicador, custoFixoSilviIndicador];
+    const cVar  = [custoVariavelPecIndicador, custoVariavelAgriIndicador, custoVariavelSilviIndicador];
+    const juros = [jurosPecIndicador, jurosAgriIndicador, jurosSilviIndicador];
+    const invFaz = [investPecIndicador, investAgriIndicador, investSilviIndicador];
+    return [
+      card('fin_receitas',   'Receitas',      [recPec, recAgri, recSilvi, recOutras]),
+      card('fin_rec_pec',    'Pecuária',      [recPec]),
+      card('fin_rec_agri',   'Agrícola',      [recAgri]),
+      card('fin_rec_silvi',  'Silvícola',     [recSilvi]),
+      card('fin_rec_outras', 'Outras',        [recOutras]),
+      card('fin_captacao',   'Captação',      [captacaoIndicador]),
+      card('fin_desembolso', 'Desembolso operacional', [...cFixo, ...cVar, ...juros, ...invFaz, investBovinosIndicador]),
+      card('fin_custeio',    'Custeio',       [...cFixo, ...cVar, ...juros]),
+      card('fin_custo_fixo', 'Custo fixo',    cFixo),
+      card('fin_custo_var',  'Custo variável', cVar),
+      card('fin_juros',      'Juros de financiamento', juros),
+      card('fin_investimento', 'Investimento', [...invFaz, investBovinosIndicador]),
+      card('fin_inv_fazenda', 'Na fazenda',   invFaz),
+      card('fin_inv_bovinos', 'Em bovinos',   [investBovinosIndicador]),
+      card('fin_amortizacoes', 'Amortizações', [amortizacoesIndicador]),
+      /* O INDICE VEM DO `useEndividamentoAtual`, ja montado nesta pagina — a
+         formula (divida pecuaria / valor do rebanho) NAO e reescrita aqui.
+         Serie propria em vez de soma: e uma razao, nao um agregado. */
+      {
+        chave: 'fin_indice', titulo: 'Índice de endividamento', subtitulo: '',
+        unidade: '%', formatoValor: 'decimal1',
+        serieMes: [], seriePeriodo: [],
+        valorMes: finAlavancagem?.percentual ?? null,
+        valorPeriodo: finAlavancagem?.percentual ?? null,
+        deltaMes: null, deltaAno: null, deltaMeta: null,
+      },
+    ];
+  }, [receitaPecCaixaIndicador, receitaAgriIndicador, receitaSilvicolaIndicador,
+      receitaOutrasIndicador, captacaoIndicador,
+      custoFixoPecIndicador, custoFixoAgriIndicador, custoFixoSilviIndicador,
+      custoVariavelPecIndicador, custoVariavelAgriIndicador, custoVariavelSilviIndicador,
+      jurosPecIndicador, jurosAgriIndicador, jurosSilviIndicador,
+      investPecIndicador, investAgriIndicador, investSilviIndicador,
+      investBovinosIndicador, amortizacoesIndicador, finAlavancagem, mesNum]);
   const endividamentoValor = loadingDivida ? null : endividamentoTotal;
 
   // Séries mensais para o modal histórico do Caixa (saldoFinal Jan→Dez).
@@ -3258,6 +3360,26 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           Com um ponto so, os dois prop-bags chegam sempre e nenhum assunto
           pode cair em array vazio — o defeito morre por construcao, nao por
           guarda. */}
+      {/* E6 — Financeiro. Terceiro bloco, mesma casca dos dois anteriores.
+          ⚠ NAO confundir com o chip "Financeiro (em construção)" da faixa de
+          status: aquele e o P3 dos pilares de fechamento, declarado
+          nao_implementado, e continua onde esta. */}
+      <div className="mt-4">
+        <BlocoAtividade
+          titulo="Financeiro"
+          subtitulo="o dinheiro que entrou e saiu"
+          icone={Wallet}
+          loading={loadingPainel}
+          onClick={() => setModalAtividade('financeiro')}
+          metricas={[
+            { rotulo: 'Receitas',     valor: valorFin('fin_receitas'),    delta: null },
+            { rotulo: 'Desembolso',   valor: valorFin('fin_desembolso'),  delta: null, inverseDelta: true },
+            { rotulo: 'Captação',     valor: valorFin('fin_captacao'),    delta: null },
+            { rotulo: 'Amortizações', valor: valorFin('fin_amortizacoes'), delta: null },
+          ]}
+        />
+      </div>
+
       {modalAtividade && (
         <ModalAtividade
           open
@@ -3269,6 +3391,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           onAssuntoChange={setAssuntoAtivo}
           indicadores={indicadoresAtividade}
           indicadoresMovimentacoes={indicadoresMovimentacoes}
+          indicadoresFinanceiro={indicadoresFinanceiro}
           codigosFazendas={seriePorFazAtiv.cabecas.map(f => f.codigo)}
           loadingHistorico={histZootAtiv.loading}
         />

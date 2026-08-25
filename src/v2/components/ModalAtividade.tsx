@@ -119,6 +119,8 @@ interface Props {
      ordens proprias, e misturar as chaves faria o `ORDEM_CARDS` de um decidir
      a posicao do outro. */
   indicadoresMovimentacoes?: IndicadorAtividade[];
+  /** Assunto FINANCEIRO — ver `LINHAS_FINANCEIRO`. */
+  indicadoresFinanceiro?: IndicadorAtividade[];
   codigosFazendas: string[];
   loadingHistorico?: boolean;
   /* O assunto pelo qual o modal foi ABERTO. Ate 24/08 o bloco decidia qual
@@ -191,11 +193,15 @@ const COLUNA_NO_MES = ['arrobas', 'gmd', 'arrobasHa'];
 type LinhaResumo = {
   rotulo: string;
   chave: string;
-  bag: 'zoo' | 'mov';
+  bag: 'zoo' | 'mov' | 'fin';
   /** Assunto de destino do clique. `undefined` = a linha nao navega. */
   destino?: Assunto;
   /** Linha de MENSAGEM: ocupa as quatro colunas e nao mostra valores. */
   mensagem?: string;
+  /** SECAO: cabecalho sem valor proprio (ENTRADAS, SAIDAS, ENDIVIDAMENTO). */
+  secao?: boolean;
+  /** Nivel de indentacao — 0 = raiz. A tabela plana nunca passa disto. */
+  nivel?: number;
   /** `undefined` = a linha existe no desenho e o indicador ainda nao. */
   emConstrucao?: boolean;
 };
@@ -242,11 +248,52 @@ const BLOCOS_GERAL: Array<{ titulo: string; destino?: Assunto; linhas: LinhaResu
      linha propria, e junta-los custa menos que espremer as duas primeiras.
      ⚠ SEM `destino`: com dois assuntos na mesma coluna o cabecalho nao teria
      para onde levar. O clique fica por LINHA. */
-  { titulo: 'Financeiro e Operacional', linhas: [
+  { titulo: 'Financeiro', destino: 'financeiro', linhas: [
+      { rotulo: 'Receitas',    chave: 'fin_receitas',    bag: 'fin', destino: 'financeiro' },
+      { rotulo: 'Desembolso',  chave: 'fin_desembolso',  bag: 'fin', destino: 'financeiro' },
+      { rotulo: 'Captação',    chave: 'fin_captacao',    bag: 'fin', destino: 'financeiro' },
+      { rotulo: 'Amortizações', chave: 'fin_amortizacoes', bag: 'fin', destino: 'financeiro' },
+    ] },
+  { titulo: 'Operacional', linhas: [
       ...LINHAS_GERAL.filter(l => l.destino === 'operacional'),
       { rotulo: 'Financeiro', chave: '', bag: 'zoo', emConstrucao: true,
         mensagem: 'em construção (Financeiro)' },
     ] },
+];
+
+/* ── PR-FINANCEIRO-01 · o DRE de caixa ───────────────────────────────────
+   HIERARQUICA por decisao de Gabriel: na forma plana, os R$ 12,5 mi do
+   desembolso apareceriam duas vezes — uma como total, outra dividida em
+   custeio e investimento. A indentacao diz que sao o mesmo dinheiro.
+   ⚠ "DESEMBOLSO OPERACIONAL", nao "total": os dividendos (R$ 1,48 mi na NJ)
+   ficam fora por decisao de Gabriel, e um rotulo com "total" mentiria sobre
+   dinheiro que saiu do caixa e nao esta ali.
+   ⚠ CUSTEIO E O SEM JUROS, com os juros como IRMAO indentado. Duas linhas de
+   "Custeio" obrigariam o leitor a descobrir qual e qual pelo valor.
+   ⚠ Nada dividido por arroba ou cabeca: custo/@, custo/cab e margem sao
+   CRUZADOS e vao para Operacional. Financeiro e dinheiro puro. */
+const LINHAS_FINANCEIRO: LinhaResumo[] = [
+  { rotulo: 'Entradas',      chave: '', bag: 'fin', secao: true },
+  { rotulo: 'Receitas',            chave: 'fin_receitas',    bag: 'fin', nivel: 1 },
+  { rotulo: 'Pecuária',            chave: 'fin_rec_pec',     bag: 'fin', nivel: 2 },
+  { rotulo: 'Agrícola',            chave: 'fin_rec_agri',    bag: 'fin', nivel: 2 },
+  { rotulo: 'Silvícola',           chave: 'fin_rec_silvi',   bag: 'fin', nivel: 2 },
+  { rotulo: 'Outras',              chave: 'fin_rec_outras',  bag: 'fin', nivel: 2 },
+  { rotulo: 'Captação',            chave: 'fin_captacao',    bag: 'fin', nivel: 1 },
+
+  { rotulo: 'Saídas',        chave: '', bag: 'fin', secao: true },
+  { rotulo: 'Desembolso operacional', chave: 'fin_desembolso', bag: 'fin', nivel: 1 },
+  { rotulo: 'Custeio',             chave: 'fin_custeio',     bag: 'fin', nivel: 2 },
+  { rotulo: 'Custo fixo',          chave: 'fin_custo_fixo',  bag: 'fin', nivel: 3 },
+  { rotulo: 'Custo variável',      chave: 'fin_custo_var',   bag: 'fin', nivel: 3 },
+  { rotulo: 'Juros de financiamento', chave: 'fin_juros',    bag: 'fin', nivel: 3 },
+  { rotulo: 'Investimento',        chave: 'fin_investimento', bag: 'fin', nivel: 2 },
+  { rotulo: 'Na fazenda',          chave: 'fin_inv_fazenda', bag: 'fin', nivel: 3 },
+  { rotulo: 'Em bovinos',          chave: 'fin_inv_bovinos', bag: 'fin', nivel: 3 },
+
+  { rotulo: 'Endividamento', chave: '', bag: 'fin', secao: true },
+  { rotulo: 'Amortizações',        chave: 'fin_amortizacoes', bag: 'fin', nivel: 1 },
+  { rotulo: 'Índice de endividamento', chave: 'fin_indice',   bag: 'fin', nivel: 1 },
 ];
 
 const LINHAS_POR_ASSUNTO: Record<string, LinhaResumo[]> = {
@@ -587,7 +634,7 @@ const rotuloDoMes = (ind: IndicadorAtividade, leitura: Leitura, mesAtual: number
    Respeita `leitura`, como todo o resto do modal.
    Padrao A10: cabecalho `bg-primary`, zebra `odd:bg-muted/30 even:bg-card`,
    sem bordas. Meta em `text-meta` (A11). */
-const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, leitura, mesAtual, colunas, onIr }: {
+const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, leitura, mesAtual, colunas, onIr }: {
   /* DUAS formas de entrada, um componente so:
        `linhas` + `colunas` -> divide por CONTAGEM, sem titulo. E o que as
                                tabelas dos ASSUNTOS usam.
@@ -598,6 +645,7 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, leitura, mesAtual,
   blocos?: Array<{ titulo: string; destino?: Assunto; linhas: LinhaResumo[] }>;
   zoo: IndicadorAtividade[];
   mov: IndicadorAtividade[];
+  fin: IndicadorAtividade[];
   leitura: Leitura;
   mesAtual: number;
   colunas?: number;
@@ -605,7 +653,7 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, leitura, mesAtual,
   onIr?: (a: Assunto) => void;
 }) => {
   const acha = (l: LinhaResumo) =>
-    (l.bag === 'zoo' ? zoo : mov).find(i => i.chave === l.chave);
+    (l.bag === 'zoo' ? zoo : l.bag === 'fin' ? fin : mov).find(i => i.chave === l.chave);
   const ponto = (s: number[] | undefined, mes: number) => {
     if (!s || s.length === 0) return null;
     const v = s.length >= 13 ? s[mes] : s[mes - 1];
@@ -657,6 +705,15 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, leitura, mesAtual,
               </tr>
             )}
             {bloco.linhas.map(l => {
+              /* SECAO — cabecalho de grupo, sem valor. Nao e zebra nem clique:
+                 ela organiza a leitura, nao e um dado. */
+              if (l.secao) return (
+                <tr key={l.rotulo}>
+                  <td colSpan={4} className="px-1.5 pt-2 pb-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    {l.rotulo}
+                  </td>
+                </tr>
+              );
               if (l.mensagem) return (
                 <tr key={l.rotulo} className="odd:bg-muted/30 even:bg-card">
                   <td colSpan={4} className="px-1.5 py-0.5 text-center text-muted-foreground/70 italic">
@@ -680,8 +737,11 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, leitura, mesAtual,
                     className={`odd:bg-muted/30 even:bg-card ${clicavel ? 'cursor-pointer hover:bg-muted/60' : ''}`}
                     onClick={clicavel ? () => onIr!(l.destino!) : undefined}>
                   {/* `max-w` subiu de 120 para 180: com TRES colunas de ~420px o
-                      rotulo cabe inteiro — `Preço médio venda` era o apertado. */}
-                  <td className="text-left px-1.5 py-0.5 truncate max-w-[180px]">{l.rotulo}</td>
+                      rotulo cabe inteiro — `Preço médio venda` era o apertado.
+                      A indentacao e PADDING, nao caractere: com espaco o
+                      `truncate` cortaria o recuo antes do texto. */}
+                  <td className="text-left px-1.5 py-0.5 truncate max-w-[180px]"
+                      style={{ paddingLeft: 6 + (l.nivel ?? 0) * 12 }}>{l.rotulo}</td>
                   <td className="text-right px-1.5 py-0.5 font-medium text-foreground whitespace-nowrap">
                     {ind && real != null ? fmtValor(real, ind.formatoValor, ind.unidade) : '—'}
                   </td>
@@ -1023,7 +1083,8 @@ const CardIndicador = ({
 
 export function ModalAtividade({
   open, onClose, mesAtual, anoAtual, clienteNome, indicadores, codigosFazendas,
-  loadingHistorico, indicadoresMovimentacoes, assuntoInicial, onAssuntoChange,
+  loadingHistorico, indicadoresMovimentacoes, indicadoresFinanceiro,
+  assuntoInicial, onAssuntoChange,
 }: Props) {
   const [assunto, setAssunto] = useState<Assunto>('zootecnico');
   const [escopo,  setEscopo]  = useState<Escopo>('global');
@@ -1133,9 +1194,22 @@ export function ModalAtividade({
               blocos={BLOCOS_GERAL}
               zoo={indicadores}
               mov={indicadoresMovimentacoes ?? []}
+              fin={indicadoresFinanceiro ?? []}
               leitura={leitura}
               mesAtual={mesAtual}
               onIr={setAssunto}
+            />
+          ) : assunto === 'financeiro' ? (
+            /* DRE de caixa. So tabela por enquanto — os oito cards entram
+               quando o desenho estiver homologado. */
+            <TabelaResumo
+              linhas={LINHAS_FINANCEIRO}
+              zoo={indicadores}
+              mov={indicadoresMovimentacoes ?? []}
+              fin={indicadoresFinanceiro ?? []}
+              leitura={leitura}
+              mesAtual={mesAtual}
+              colunas={1}
             />
           ) : assunto !== 'zootecnico' && assunto !== 'movimentacoes' ? (
             <div className="h-full flex items-center justify-center">
@@ -1155,6 +1229,7 @@ export function ModalAtividade({
               linhas={LINHAS_POR_ASSUNTO.movimentacoes}
               zoo={indicadores}
               mov={indicadoresMovimentacoes ?? []}
+              fin={indicadoresFinanceiro ?? []}
               leitura={leitura}
               mesAtual={mesAtual}
               colunas={2}
@@ -1204,6 +1279,7 @@ export function ModalAtividade({
               linhas={LINHAS_POR_ASSUNTO.zootecnico}
               zoo={indicadores}
               mov={indicadoresMovimentacoes ?? []}
+              fin={indicadoresFinanceiro ?? []}
               leitura={leitura}
               mesAtual={mesAtual}
               colunas={2}

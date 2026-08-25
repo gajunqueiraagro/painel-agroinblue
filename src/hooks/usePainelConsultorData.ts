@@ -90,6 +90,8 @@ import {
   agregaCustoVariavelPec,
   agregaCustoFixoAgri,
   agregaCustoFixoSilvi,
+  agregaCustoVariavelAgri,
+  agregaCustoVariavelSilvi,
   agregaDeducoesPec,
   agregaDeducoesAgri,
   agregaDeducoesSilvi,
@@ -765,6 +767,11 @@ export interface PainelConsultorDataResult {
   custoVariavelPecIndicador:     IndicadorFinanceiroShape | null;
   custoFixoAgriIndicador:        IndicadorFinanceiroShape | null;
   custoFixoSilviIndicador:       IndicadorFinanceiroShape | null;
+  /* PR-FINANCEIRO-01 — os pares variaveis. Havia fixo nos tres escopos e
+     variavel so na pecuaria; numa tabela hierarquica a assimetria faria
+     `Custo fixo` e `Custo variavel` nao fecharem no `Custeio`. */
+  custoVariavelAgriIndicador:    IndicadorFinanceiroShape | null;
+  custoVariavelSilviIndicador:   IndicadorFinanceiroShape | null;
   deducoesPecIndicador:          IndicadorFinanceiroShape | null;
   deducoesAgriIndicador:         IndicadorFinanceiroShape | null;
   deducoesSilviIndicador:        IndicadorFinanceiroShape | null;
@@ -3469,6 +3476,8 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     const cvPec       = agregaCustoVariavelPec(lancFin, ano);
     const cfAgri       = agregaCustoFixoAgri(lancFin, ano);
     const cfSilvi       = agregaCustoFixoSilvi(lancFin, ano);
+    const cvAgri        = agregaCustoVariavelAgri(lancFin, ano);
+    const cvSilvi       = agregaCustoVariavelSilvi(lancFin, ano);
     const dedPec       = agregaDeducoesPec(lancFin, ano);
     const dedAgri       = agregaDeducoesAgri(lancFin, ano);
     const dedSilvi       = agregaDeducoesSilvi(lancFin, ano);
@@ -3726,6 +3735,19 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
         isPer ? 'Custo fixo silvícola acumulado Jan→mês (caixa)'
               : 'Custo fixo silvícola no mês (caixa)',
         cfSilvi_M),
+      /* Sem meta: `agregaCustoVariavelAgriMeta`/`SilviMeta` nao existem, e
+         inventar o grid seria criar numero. `buildInd` com null declara a
+         ausencia, e a linha nasce sem meta em vez de com meta errada. */
+      custoVariavelAgri: buildInd(cvAgri,
+        'CUSTO VARIÁVEL AGRICULTURA', 'Custo Variável Agricultura',
+        isPer ? 'Custo variável agrícola acumulado Jan→mês (caixa)'
+              : 'Custo variável agrícola no mês (caixa)',
+        null),
+      custoVariavelSilvi: buildInd(cvSilvi,
+        'CUSTO VARIÁVEL SILVICULTURA', 'Custo Variável Silvicultura',
+        isPer ? 'Custo variável silvícola acumulado Jan→mês (caixa)'
+              : 'Custo variável silvícola no mês (caixa)',
+        null),
       deducoesPec: buildInd(dedPec,
         'DEDUÇÕES PECUÁRIA', 'Deduções Pecuária',
         isPer ? 'Deduções pecuárias acumulado Jan→mês (caixa)'
@@ -4560,6 +4582,8 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     custoVariavelPecIndicador:     _finSoberano.custoVariavelPec,
     custoFixoAgriIndicador:        _finSoberano.custoFixoAgri,
     custoFixoSilviIndicador:       _finSoberano.custoFixoSilvi,
+    custoVariavelAgriIndicador:    _finSoberano.custoVariavelAgri,
+    custoVariavelSilviIndicador:   _finSoberano.custoVariavelSilvi,
     deducoesPecIndicador:          _finSoberano.deducoesPec,
     deducoesAgriIndicador:         _finSoberano.deducoesAgri,
     deducoesSilviIndicador:        _finSoberano.deducoesSilvi,
@@ -4648,6 +4672,8 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     custoVariavelPecIndicador:     _finSoberano.custoVariavelPec,
     custoFixoAgriIndicador:        _finSoberano.custoFixoAgri,
     custoFixoSilviIndicador:       _finSoberano.custoFixoSilvi,
+    custoVariavelAgriIndicador:    _finSoberano.custoVariavelAgri,
+    custoVariavelSilviIndicador:   _finSoberano.custoVariavelSilvi,
     deducoesPecIndicador:          _finSoberano.deducoesPec,
     deducoesAgriIndicador:         _finSoberano.deducoesAgri,
     deducoesSilviIndicador:        _finSoberano.deducoesSilvi,
