@@ -823,6 +823,16 @@ export interface PainelConsultorDataResult {
   dreLucroLiquidoIndicador:             IndicadorFinanceiroShape | null;
   dreTributoPatrimonialIndicador:       IndicadorFinanceiroShape | null;
   dreImpostoSobreLucroIndicador:        IndicadorFinanceiroShape | null;
+  /* As OITO parcelas, em competencia. Par deliberado dos indicadores de CAIXA
+     de mesmo conceito — ver o comentario no `_finSoberano`. */
+  dreReceitaPecIndicador:               IndicadorFinanceiroShape | null;
+  dreOutrasReceitasIndicador:           IndicadorFinanceiroShape | null;
+  dreDeducoesIndicador:                 IndicadorFinanceiroShape | null;
+  dreCustoFixoIndicador:                IndicadorFinanceiroShape | null;
+  dreCustoVariavelIndicador:            IndicadorFinanceiroShape | null;
+  dreInvestimentoIndicador:             IndicadorFinanceiroShape | null;
+  dreReposicaoBovinosIndicador:         IndicadorFinanceiroShape | null;
+  dreJurosIndicador:                    IndicadorFinanceiroShape | null;
 
   /** Domínio rebanho · estruturas executivas (Fase 0 Step 2.2). */
   rebanho: PC100_Rebanho;
@@ -4145,6 +4155,41 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
             per('Resultado operacional menos resultado financeiro'), resAntM),
           dreLucroLiquido: buildInd(lucro ?? nada12, 'LUCRO LÍQUIDO', 'Lucro Líquido',
             per('Resultado antes dos tributos, menos tributos patrimoniais e impostos sobre lucro'), lucroM),
+          /* ── AS OITO PARCELAS ────────────────────────────────────────────
+             Os MESMOS arrays que os subtotais acima consomem, publicados com
+             chave propria. Nao ha recalculo: `dreFaturamento` e' som12(dreRec,
+             dreRecOut) e estas duas linhas expoem `dreRec` e `dreRecOut`, entao
+             a soma das parcelas bate com o subtotal POR CONSTRUCAO — nao ha
+             caminho para divergirem.
+
+             ⚠ EXISTE PAR CAIXA/COMPETENCIA para os mesmos oito conceitos, e a
+             duplicacao e' DELIBERADA. `receitaPecCaixaIndicador`,
+             `receitaOutrasIndicador`, `deducoesPecIndicador`,
+             `custoFixoPecIndicador`, `custoVariavelPecIndicador`,
+             `investPecIndicador`, `investBovinosIndicador` e
+             `jurosPecIndicador` seguem existindo, em CAIXA, com consumidores no
+             bloco Caixa e no card Financeiro — aqueles respondem "quanto
+             dinheiro entrou e saiu". Estas oito, com prefixo `dre`, sao as
+             versoes em COMPETENCIA, e respondem "quanto a operacao gerou".
+             Sao perguntas diferentes sobre o mesmo conceito, e os numeros
+             divergem de proposito. Quem "limpar a duplicacao" vai colocar caixa
+             dentro de um demonstrativo de resultado. */
+          dreReceitaPec: buildInd(dreRec, 'RECEITA PECUÁRIA', 'Receita Pecuária',
+            per('Receita pecuária'), recPecCx_M),
+          dreOutrasReceitas: buildInd(dreRecOut, 'OUTRAS RECEITAS', 'Outras Receitas',
+            per('Outras receitas operacionais'), recOutras_M),
+          dreDeducoes: buildInd(dreDed, 'DEDUÇÕES DE RECEITA', 'Deduções de Receita',
+            per('Deduções sobre a receita pecuária'), dedPec_M),
+          dreCustoFixo: buildInd(dreCf, 'CUSTO FIXO', 'Custo Fixo Pecuária',
+            per('Custo fixo pecuário'), cfPec_M),
+          dreCustoVariavel: buildInd(dreCv, 'CUSTO VARIÁVEL', 'Custo Variável Pecuária',
+            per('Custo variável pecuário'), cvPec_M),
+          dreInvestimento: buildInd(dreInvFaz, 'INVESTIMENTO NA FAZENDA', 'Investimento na Fazenda',
+            per('Investimento em fazenda pecuária'), invFazPec_M),
+          dreReposicaoBovinos: buildInd(dreInvBov, 'REPOSIÇÃO DE BOVINOS', 'Reposição de Bovinos',
+            per('Investimento em bovinos'), invBov_M),
+          dreJuros: buildInd(dreJuros, 'RESULTADO FINANCEIRO', 'Resultado Financeiro',
+            per('Juros de financiamento pecuário'), jurPec_M),
           dreTributoPatrimonial: buildInd(dreTribPat, 'TRIBUTOS PATRIMONIAIS', 'Tributos Patrimoniais',
             per('ITR e taxas patrimoniais'), tribPatr_M),
           dreImpostoSobreLucro: buildInd(dreImpLuc, 'IMPOSTOS SOBRE LUCRO', 'Impostos sobre Lucro',
@@ -4942,6 +4987,14 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     dreLucroLiquidoIndicador: _finSoberano.dreLucroLiquido,
     dreTributoPatrimonialIndicador: _finSoberano.dreTributoPatrimonial,
     dreImpostoSobreLucroIndicador: _finSoberano.dreImpostoSobreLucro,
+    dreReceitaPecIndicador: _finSoberano.dreReceitaPec,
+    dreOutrasReceitasIndicador: _finSoberano.dreOutrasReceitas,
+    dreDeducoesIndicador: _finSoberano.dreDeducoes,
+    dreCustoFixoIndicador: _finSoberano.dreCustoFixo,
+    dreCustoVariavelIndicador: _finSoberano.dreCustoVariavel,
+    dreInvestimentoIndicador: _finSoberano.dreInvestimento,
+    dreReposicaoBovinosIndicador: _finSoberano.dreReposicaoBovinos,
+    dreJurosIndicador: _finSoberano.dreJuros,
 
     rebanho,
     financeiro,
@@ -5050,6 +5103,14 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       dreLucroLiquidoIndicador: _finSoberano.dreLucroLiquido,
       dreTributoPatrimonialIndicador: _finSoberano.dreTributoPatrimonial,
       dreImpostoSobreLucroIndicador: _finSoberano.dreImpostoSobreLucro,
+      dreReceitaPecIndicador: _finSoberano.dreReceitaPec,
+      dreOutrasReceitasIndicador: _finSoberano.dreOutrasReceitas,
+      dreDeducoesIndicador: _finSoberano.dreDeducoes,
+      dreCustoFixoIndicador: _finSoberano.dreCustoFixo,
+      dreCustoVariavelIndicador: _finSoberano.dreCustoVariavel,
+      dreInvestimentoIndicador: _finSoberano.dreInvestimento,
+      dreReposicaoBovinosIndicador: _finSoberano.dreReposicaoBovinos,
+      dreJurosIndicador: _finSoberano.dreJuros,
       // Step 2.2: dominio rebanho preservado (composicao depende de getCategoriasDetalhe,
       // que pode existir mesmo em estado incompleto — funcao filtra saldoFinal > 0 e
       // retorna null quando vazio).
