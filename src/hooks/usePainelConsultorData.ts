@@ -808,6 +808,21 @@ export interface PainelConsultorDataResult {
   /* Linhas 8 e 9 do DRE. Particionam `tributosIndicador`, que segue intacto. */
   tributoPatrimonialIndicador:  IndicadorFinanceiroShape | null;
   impostoSobreLucroIndicador:   IndicadorFinanceiroShape | null;
+  /* ── DRE (competencia) ── os sete derivados mais as duas linhas de tributo e
+     as duas partes da variacao de estoque. Ver o comentario no `_finSoberano`:
+     o regime aqui e' 'competencia' LITERAL, nao o do chamador. */
+  dreFaturamentoIndicador:              IndicadorFinanceiroShape | null;
+  dreReceitaLiquidaIndicador:           IndicadorFinanceiroShape | null;
+  dreResultadoBrutoIndicador:           IndicadorFinanceiroShape | null;
+  dreResultadoComInvestimentoIndicador: IndicadorFinanceiroShape | null;
+  dreVariacaoEstoqueIndicador:          IndicadorFinanceiroShape | null;
+  dreVariacaoEstoquePorProducaoIndicador: IndicadorFinanceiroShape | null;
+  dreVariacaoEstoquePorPrecoIndicador:  IndicadorFinanceiroShape | null;
+  dreResultadoOperacionalIndicador:     IndicadorFinanceiroShape | null;
+  dreResultadoAntesTributosIndicador:   IndicadorFinanceiroShape | null;
+  dreLucroLiquidoIndicador:             IndicadorFinanceiroShape | null;
+  dreTributoPatrimonialIndicador:       IndicadorFinanceiroShape | null;
+  dreImpostoSobreLucroIndicador:        IndicadorFinanceiroShape | null;
 
   /** Domínio rebanho · estruturas executivas (Fase 0 Step 2.2). */
   rebanho: PC100_Rebanho;
@@ -3528,6 +3543,35 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     const tributos    = agregaTributos(lancFin, ano, regime);
     const tribPatr    = agregaTributoPatrimonial(lancFin, ano, regime);
     const impLucro    = agregaImpostoSobreLucro(lancFin, ano, regime);
+
+    /* ── DRE · AS DEZ FONTES, SEMPRE EM COMPETENCIA ────────────────────────
+       ⚠ `'competencia'` LITERAL, nao o `regime` do hook. Aquele e' parametro do
+       CHAMADOR e nasce 'caixa'; nenhum chamador passa outro valor ate hoje. Um
+       demonstrativo de resultado nao pode depender de quem o abriu — e um DRE
+       com metade em caixa e metade em competencia nao fecha.
+       A camada de regime existe desde 3edfbd25 e NUNCA foi executada; este e' o
+       primeiro consumidor real dela.
+       O que muda (makeRealizadoSource): em competencia o filtro e'
+       `!cancelado && isFinSaida && dateCompAno === ano`, SEM filtro de status —
+       entao `previsto` e `programado` ENTRAM, e o mes vem de `data_competencia`.
+       Em caixa exige `isFinRealizado` e conta por `data_pagamento`.
+       ⚠ A META nao tem regime: `makeMetaSource` nao aplica filtro de status nem
+       de data, porque plano nao tem data de pagamento — meta ja E' competencia
+       por natureza. Consequencia que precisa estar escrita: o delta vs meta do
+       DRE compara COMPETENCIA contra plano, enquanto o mesmo indicador no bloco
+       Caixa compara CAIXA contra o MESMO plano. Os dois deltas divergem sobre a
+       mesma meta e AMBOS estao certos. */
+    const C: Regime = 'competencia';
+    const dreRec     = agregaReceitaPec(lancFin, ano, C);
+    const dreRecOut  = agregaOutrasReceitas(lancFin, ano, C);
+    const dreDed     = agregaDeducoesPec(lancFin, ano, C);
+    const dreCf      = agregaCustoFixoPec(lancFin, ano, C);
+    const dreCv      = agregaCustoVariavelPec(lancFin, ano, C);
+    const dreInvFaz  = agregaInvFazendaPec(lancFin, ano, C);
+    const dreInvBov  = agregaInvBovinos(lancFin, ano, C);
+    const dreJuros   = agregaJurosPec(lancFin, ano, C);
+    const dreTribPat = agregaTributoPatrimonial(lancFin, ano, C);
+    const dreImpLuc  = agregaImpostoSobreLucro(lancFin, ano, C);
     const cusPecComJ  = addArr12(cusPecSemJ, jurPec);
     const cusAgriComJ = addArr12(cusAgriSemJ, jurAgri);
     const cusSilviComJ  = addArr12(cusSilviSemJ, jurSilvi);
@@ -3988,6 +4032,125 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
         isPer ? 'Impostos sobre lucro acumulados Jan→mês (caixa) — IRPJ, CSLL, IRPF'
               : 'Impostos sobre lucro no mês (caixa) — IRPJ, CSLL, IRPF',
         impLucro_M),
+
+      /* ── DRE · OS SETE DERIVADOS ─────────────────────────────────────────
+         Subtracao de series, mes a mes. Passam pelo MESMO `buildInd`: o periodo
+         sai de `cumSumTo13`, e como subtracao e' linear, acumular o subtotal
+         mensal da o mesmo que subtrair os acumulados. Nao ha caminho para os
+         dois discordarem.
+         ⚠ NaN e' a sentinela: parcela ausente num mes torna o derivado ausente
+         NAQUELE mes. `sub12` nao trata NaN como zero — seria replicar a divida
+         PR-SENTINELA-01, que e' justamente o que faz ausencia virar afirmacao.
+         ⚠ `emptyMeses()` nao aparece aqui.
+         ⚠ SEM ANO ANTERIOR nos sete: `_finSoberano` nao produz serie ano-1 para
+         nenhuma das dez fontes, entao `buildInd` deixa `serieAnoAnt` undefined e
+         `deltaAno` null. Ausencia real, sem fallback.
+         ⚠ DIVIDENDOS E RETIRADAS NAO ENTRAM em nenhuma linha: sao caixa e
+         patrimonio, nao resultado. */
+      ...(() => {
+        const sub12 = (a: number[], b: number[]): number[] =>
+          a.map((v, i) => {
+            const w = b[i];
+            return (v == null || isNaN(v) || w == null || isNaN(w)) ? NaN : v - w;
+          });
+        const subM = (a: number[] | null, b: number[] | null): number[] | null =>
+          (a && b) ? sub12(a, b) : null;
+        const som12 = (a: number[], b: number[]): number[] =>
+          a.map((v, i) => {
+            const w = b[i];
+            return (v == null || isNaN(v) || w == null || isNaN(w)) ? NaN : v + w;
+          });
+        const somM = (a: number[] | null, b: number[] | null): number[] | null =>
+          (a && b) ? som12(a, b) : null;
+        /* Estoque e' ESTOQUE, nao fluxo: a "variacao do mes" e' a diferenca
+           entre o fim e o inicio do mes. A serie de 13 ja carrega o ponto
+           inicial no indice 0 (dezembro do ano anterior), entao a diferenca
+           telescopa — o acumulado de `cumSumTo13` sobre estas diferencas da
+           exatamente `valor[mes] - valor[0]`, que e' a variacao do periodo. */
+        const dif12 = (s13: number[] | null | undefined): number[] | null => {
+          if (!s13 || s13.length < 13) return null;
+          return Array.from({ length: 12 }, (_, i) => {
+            const fim = s13[i + 1], ini = s13[i];
+            return (fim == null || isNaN(fim) || ini == null || isNaN(ini)) ? NaN : fim - ini;
+          });
+        };
+        /* POR PRECO = a parte do valor que o preco explica, isto e', o quanto o
+           valor COM efeito se afasta do valor SEM efeito. POR PRODUCAO = o que
+           sobra, medido a preco congelado.
+           ⚠ "POR DESFRUTE" NAO E' UMA TERCEIRA PARTE, e esta e' a pergunta que a
+           proxima pessoa vai fazer: o gado vendido ja esta no FATURAMENTO
+           (linha 1) e sai do estoque por consequencia. Conta-lo aqui seria
+           contar a mesma venda duas vezes. */
+        const efeitoPreco13 = (comEfeito: number[] | null | undefined,
+                               semEfeito: number[] | null | undefined): number[] | null =>
+          (comEfeito && semEfeito)
+            ? Array.from({ length: 13 }, (_, i) => {
+                const c = comEfeito[i], se = semEfeito[i];
+                return (c == null || isNaN(c) || se == null || isNaN(se)) ? NaN : c - se;
+              })
+            : null;
+
+        const varProd   = dif12(valorSemEfeitoSerie);
+        const varPreco  = dif12(efeitoPreco13(valorRebanhoSerie, valorSemEfeitoSerie));
+        const varTotal  = (varProd && varPreco) ? som12(varProd, varPreco) : null;
+        /* ⚠ ANO ANTERIOR DA VARIACAO: NAO EXISTE. `valorSemEfeitoSerieAnoAnt` e'
+           o proprio `valorRebanhoSerieAnoAnt` (ver :2839-2841 — nao ha preco
+           congelado do ano-2 para refazer sem efeito). A parte "por preco" do
+           ano-1 sairia zero POR CONSTRUCAO, que e' numero falso, nao ausencia.
+           Declarar undefined e' o unico caminho honesto. */
+        const varProdM  = dif12(valorSemEfeitoSerieMeta);
+        const varPrecoM = dif12(efeitoPreco13(valorRebanhoSerieMeta, valorSemEfeitoSerieMeta));
+        const varTotalM = (varProdM && varPrecoM) ? som12(varProdM, varPrecoM) : null;
+
+        const fatur   = som12(dreRec, dreRecOut);
+        const faturM  = somM(recPecCx_M, recOutras_M);
+        const recLiq  = sub12(fatur, dreDed);
+        const recLiqM = subM(faturM, dedPec_M);
+        const custeio  = som12(dreCf, dreCv);
+        const custeioM = somM(cfPec_M, cvPec_M);
+        const resBruto  = sub12(recLiq, custeio);
+        const resBrutoM = subM(recLiqM, custeioM);
+        const resInv  = sub12(resBruto, dreInvFaz);
+        const resInvM = subM(resBrutoM, invFazPec_M);
+        const semRepo  = sub12(resInv, dreInvBov);
+        const semRepoM = subM(resInvM, invBov_M);
+        const resOper  = varTotal  ? som12(semRepo, varTotal)   : null;
+        const resOperM = (semRepoM && varTotalM) ? som12(semRepoM, varTotalM) : null;
+        const resAnt   = resOper  ? sub12(resOper, dreJuros)    : null;
+        const resAntM  = (resOperM && jurPec_M) ? sub12(resOperM, jurPec_M) : null;
+        const lucro    = resAnt ? sub12(sub12(resAnt, dreTribPat), dreImpLuc) : null;
+        const lucroM   = (resAntM && tribPatr_M && impLucro_M)
+          ? sub12(sub12(resAntM, tribPatr_M), impLucro_M) : null;
+
+        const nada12 = Array(12).fill(NaN) as number[];
+        const per = (t: string) => isPer ? `${t} acumulado Jan→mês (competência)` : `${t} no mês (competência)`;
+        return {
+          dreFaturamento: buildInd(fatur, 'FATURAMENTO', 'Faturamento',
+            per('Receita pecuária mais outras receitas'), faturM),
+          dreReceitaLiquida: buildInd(recLiq, 'RECEITA LÍQUIDA', 'Receita Líquida',
+            per('Faturamento menos deduções'), recLiqM),
+          dreResultadoBruto: buildInd(resBruto, 'RESULTADO BRUTO', 'Resultado Bruto',
+            per('Receita líquida menos custeio pecuário'), resBrutoM),
+          dreResultadoComInvestimento: buildInd(resInv, 'RESULTADO COM INVESTIMENTO', 'Resultado com Investimento',
+            per('Resultado bruto menos investimento na fazenda'), resInvM),
+          dreVariacaoEstoque: buildInd(varTotal ?? nada12, 'VARIAÇÃO DO ESTOQUE', 'Variação do Estoque',
+            per('Variação do valor do rebanho, por produção e por preço'), varTotalM),
+          dreVariacaoEstoquePorProducao: buildInd(varProd ?? nada12, 'VARIAÇÃO POR PRODUÇÃO', 'Variação do Estoque por Produção',
+            per('Variação do rebanho a preço congelado'), varProdM),
+          dreVariacaoEstoquePorPreco: buildInd(varPreco ?? nada12, 'VARIAÇÃO POR PREÇO', 'Variação do Estoque por Preço',
+            per('Parte da variação do rebanho que o preço explica'), varPrecoM),
+          dreResultadoOperacional: buildInd(resOper ?? nada12, 'RESULTADO OPERACIONAL', 'Resultado Operacional',
+            per('Resultado com investimento, menos reposição, mais variação do estoque'), resOperM),
+          dreResultadoAntesTributos: buildInd(resAnt ?? nada12, 'RESULTADO ANTES DOS TRIBUTOS', 'Resultado antes dos Tributos',
+            per('Resultado operacional menos resultado financeiro'), resAntM),
+          dreLucroLiquido: buildInd(lucro ?? nada12, 'LUCRO LÍQUIDO', 'Lucro Líquido',
+            per('Resultado antes dos tributos, menos tributos patrimoniais e impostos sobre lucro'), lucroM),
+          dreTributoPatrimonial: buildInd(dreTribPat, 'TRIBUTOS PATRIMONIAIS', 'Tributos Patrimoniais',
+            per('ITR e taxas patrimoniais'), tribPatr_M),
+          dreImpostoSobreLucro: buildInd(dreImpLuc, 'IMPOSTOS SOBRE LUCRO', 'Impostos sobre Lucro',
+            per('IRPJ, CSLL e IRPF'), impLucro_M),
+        };
+      })(),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lancFin, ano, mes, viewMode, gridMetaConsolidado,
@@ -4767,6 +4930,18 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     tributosIndicador:            _finSoberano.tributos,
     tributoPatrimonialIndicador:  _finSoberano.tributoPatrimonial,
     impostoSobreLucroIndicador:   _finSoberano.impostoSobreLucro,
+    dreFaturamentoIndicador: _finSoberano.dreFaturamento,
+    dreReceitaLiquidaIndicador: _finSoberano.dreReceitaLiquida,
+    dreResultadoBrutoIndicador: _finSoberano.dreResultadoBruto,
+    dreResultadoComInvestimentoIndicador: _finSoberano.dreResultadoComInvestimento,
+    dreVariacaoEstoqueIndicador: _finSoberano.dreVariacaoEstoque,
+    dreVariacaoEstoquePorProducaoIndicador: _finSoberano.dreVariacaoEstoquePorProducao,
+    dreVariacaoEstoquePorPrecoIndicador: _finSoberano.dreVariacaoEstoquePorPreco,
+    dreResultadoOperacionalIndicador: _finSoberano.dreResultadoOperacional,
+    dreResultadoAntesTributosIndicador: _finSoberano.dreResultadoAntesTributos,
+    dreLucroLiquidoIndicador: _finSoberano.dreLucroLiquido,
+    dreTributoPatrimonialIndicador: _finSoberano.dreTributoPatrimonial,
+    dreImpostoSobreLucroIndicador: _finSoberano.dreImpostoSobreLucro,
 
     rebanho,
     financeiro,
@@ -4863,6 +5038,18 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       tributosIndicador:            _finSoberano.tributos,
       tributoPatrimonialIndicador:  _finSoberano.tributoPatrimonial,
       impostoSobreLucroIndicador:   _finSoberano.impostoSobreLucro,
+      dreFaturamentoIndicador: _finSoberano.dreFaturamento,
+      dreReceitaLiquidaIndicador: _finSoberano.dreReceitaLiquida,
+      dreResultadoBrutoIndicador: _finSoberano.dreResultadoBruto,
+      dreResultadoComInvestimentoIndicador: _finSoberano.dreResultadoComInvestimento,
+      dreVariacaoEstoqueIndicador: _finSoberano.dreVariacaoEstoque,
+      dreVariacaoEstoquePorProducaoIndicador: _finSoberano.dreVariacaoEstoquePorProducao,
+      dreVariacaoEstoquePorPrecoIndicador: _finSoberano.dreVariacaoEstoquePorPreco,
+      dreResultadoOperacionalIndicador: _finSoberano.dreResultadoOperacional,
+      dreResultadoAntesTributosIndicador: _finSoberano.dreResultadoAntesTributos,
+      dreLucroLiquidoIndicador: _finSoberano.dreLucroLiquido,
+      dreTributoPatrimonialIndicador: _finSoberano.dreTributoPatrimonial,
+      dreImpostoSobreLucroIndicador: _finSoberano.dreImpostoSobreLucro,
       // Step 2.2: dominio rebanho preservado (composicao depende de getCategoriasDetalhe,
       // que pode existir mesmo em estado incompleto — funcao filtra saldoFinal > 0 e
       // retorna null quando vazio).
