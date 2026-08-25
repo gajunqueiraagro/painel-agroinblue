@@ -211,6 +211,14 @@ type LinhaResumo = {
   secao?: boolean;
   /** Nivel de indentacao — 0 = raiz. A tabela plana nunca passa disto. */
   nivel?: number;
+  /** SAIDA: dinheiro saindo. Pinta o VALOR de vermelho — e' a NATUREZA da
+      linha, nao o sinal do numero: uma saida de R$ 2,3 mi e' vermelha mesmo
+      positiva na coluna, porque representa saida.
+      ⚠ NAO se aplica a SUBTOTAL. Subtotal segue o SINAL: negativo em vermelho,
+      positivo na cor padrao — um Resultado Bruto positivo nao e' vermelho.
+      ⚠ NAO toca a coluna `Dif.`, que mantem verde/vermelho por DESEMPENHO.
+      OPT-IN: ausente renderiza como hoje. */
+  saida?: boolean;
   /** SUBTOTAL: linha de soma, com valor proprio. Peso maior e fio em cima.
       OPT-IN estrito — ausente ou `false` renderiza EXATAMENTE como hoje, e as
       cinco abas existentes nao passam o campo.
@@ -378,28 +386,28 @@ const LINHAS_DRE: LinhaResumo[] = [
   { rotulo: '1. Faturamento',              chave: 'dre_faturamento',   bag: 'dre' },
   { rotulo: 'Receita pecuária',            chave: 'dre_rec_pec',       bag: 'dre', nivel: 1 },
   { rotulo: 'Outras receitas',             chave: 'dre_rec_outras',    bag: 'dre', nivel: 1 },
-  { rotulo: '2. (−) Deduções de receita',  chave: 'dre_deducoes',      bag: 'dre' },
+  { rotulo: '2. (−) Deduções de receita',  chave: 'dre_deducoes',      bag: 'dre', saida: true },
   { rotulo: '= Receita Líquida',           chave: 'dre_receita_liquida', bag: 'dre', subtotal: true },
 
-  { rotulo: '3. (−) Custeio pecuária',     chave: 'dre_custeio',       bag: 'dre' },
-  { rotulo: 'Custo fixo',                  chave: 'dre_custo_fixo',    bag: 'dre', nivel: 1 },
-  { rotulo: 'Custo variável',              chave: 'dre_custo_var',     bag: 'dre', nivel: 1 },
+  { rotulo: '3. (−) Custeio pecuária',     chave: 'dre_custeio',       bag: 'dre', saida: true },
+  { rotulo: 'Custo fixo',                  chave: 'dre_custo_fixo',    bag: 'dre', nivel: 1, saida: true },
+  { rotulo: 'Custo variável',              chave: 'dre_custo_var',     bag: 'dre', nivel: 1, saida: true },
   { rotulo: '= Resultado Bruto',           chave: 'dre_resultado_bruto', bag: 'dre', subtotal: true },
 
-  { rotulo: '4. (−) Investimento na fazenda', chave: 'dre_investimento', bag: 'dre' },
+  { rotulo: '4. (−) Investimento na fazenda', chave: 'dre_investimento', bag: 'dre', saida: true },
   { rotulo: '= Resultado com Investimento', chave: 'dre_resultado_investimento', bag: 'dre', subtotal: true },
 
-  { rotulo: '5. (−) Reposição de bovinos', chave: 'dre_reposicao',     bag: 'dre' },
+  { rotulo: '5. (−) Reposição de bovinos', chave: 'dre_reposicao',     bag: 'dre', saida: true },
   { rotulo: '6. (−/+) Variação do estoque', chave: 'dre_variacao',     bag: 'dre' },
   { rotulo: 'por produção',                chave: 'dre_variacao_producao', bag: 'dre', nivel: 1 },
   { rotulo: 'por preço',                   chave: 'dre_variacao_preco', bag: 'dre', nivel: 1 },
   { rotulo: '= Resultado Operacional',     chave: 'dre_resultado_operacional', bag: 'dre', subtotal: true },
 
-  { rotulo: '7. (−/+) Resultado financeiro', chave: 'dre_financeiro',  bag: 'dre' },
+  { rotulo: '7. (−/+) Resultado financeiro', chave: 'dre_financeiro',  bag: 'dre', saida: true },
   { rotulo: '= Resultado antes dos Tributos', chave: 'dre_antes_tributos', bag: 'dre', subtotal: true },
 
-  { rotulo: '8. (−) Tributos patrimoniais', chave: 'dre_tributo_patrimonial', bag: 'dre' },
-  { rotulo: '9. (−) Impostos sobre lucro', chave: 'dre_imposto_lucro', bag: 'dre' },
+  { rotulo: '8. (−) Tributos patrimoniais', chave: 'dre_tributo_patrimonial', bag: 'dre', saida: true },
+  { rotulo: '9. (−) Impostos sobre lucro', chave: 'dre_imposto_lucro', bag: 'dre', saida: true },
   { rotulo: '= Lucro Líquido',             chave: 'dre_lucro_liquido', bag: 'dre', subtotal: true },
 ];
 
@@ -736,7 +744,7 @@ const rotuloDoMes = (ind: IndicadorAtividade, leitura: Leitura, mesAtual: number
    Respeita `leitura`, como todo o resto do modal.
    Padrao A10: cabecalho `bg-primary`, zebra `odd:bg-muted/30 even:bg-card`,
    sem bordas. Meta em `text-meta` (A11). */
-const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, leitura, mesAtual, colunas, onIr }: {
+const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, leitura, mesAtual, colunas, onIr, realizadoPrimeiro, compacta }: {
   /* DUAS formas de entrada, um componente so:
        `linhas` + `colunas` -> divide por CONTAGEM, sem titulo. E o que as
                                tabelas dos ASSUNTOS usam.
@@ -755,7 +763,25 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
   colunas?: number;
   /** `undefined` = linha nao navega (tabela do proprio assunto). */
   onIr?: (a: Assunto) => void;
+  /** Inverte as duas colunas do meio: Realizado antes de Meta. Ver o comentario
+      do <thead>. OPT-IN — ausente mantem a ordem de sempre. */
+  realizadoPrimeiro?: boolean;
+  /** Aperta as linhas: menos padding vertical, e PARCELA um degrau abaixo na
+      fonte. SUBTOTAL mantem o tamanho — e' o que se le primeiro.
+      OPT-IN — ausente mantem padding e fonte de sempre. */
+  compacta?: boolean;
 }) => {
+  /* MODO COMPACTO. Duas alavancas, e so estas:
+       padding vertical  py-0.5 (2px cada lado) -> py-0
+       fonte da PARCELA  text-[10px] -> text-[9px]
+     O SUBTOTAL mantem os 10px mesmo em modo compacto: e' o que se le primeiro,
+     e apertar tudo por igual apagaria a hierarquia que o `subtotal` criou.
+     ⚠ PISO 8px do A12 respeitado — 9px esta no limite, nao abaixo.
+     ⚠ Ausente, `padY` volta a `py-0.5` e `fonteLinha` a string vazia: a classe
+     final fica byte a byte igual a de antes desta prop. */
+  const padY = compacta ? 'py-0' : 'py-0.5';
+  const fonteParcela = compacta ? ' text-[9px]' : '';
+
   const acha = (l: LinhaResumo) =>
     (l.bag === 'zoo' ? zoo : l.bag === 'fin' ? fin : l.bag === 'oper' ? oper
       : l.bag === 'dre' ? dre : mov).find(i => i.chave === l.chave);
@@ -794,10 +820,24 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
                   onClick={cabClicavel ? () => onIr!(bloco.destino) : undefined}>
                 {bloco.titulo}
               </th>
-              {/* META primeiro: le-se o planejado e depois o que aconteceu.
-                  So a ORDEM VISUAL muda — o `Dif.` segue (real − meta) / meta. */}
-              <th className="text-right font-normal px-1.5 py-1">Meta</th>
-              <th className="text-right font-medium px-1.5 py-1">Realizado</th>
+              {/* META primeiro nas CINCO abas: le-se o planejado e depois o que
+                  aconteceu. O DRE INVERTE, por decisao de Gabriel — num
+                  demonstrativo o realizado e' o FATO e a meta e' a referencia,
+                  entao o fato vem antes.
+                  So a ORDEM VISUAL muda em qualquer dos dois: o `Dif.` segue
+                  (real − meta) / meta, e o cabecalho nunca diverge do corpo
+                  porque os dois leem a MESMA flag. */}
+              {realizadoPrimeiro ? (
+                <>
+                  <th className="text-right font-medium px-1.5 py-1">Realizado</th>
+                  <th className="text-right font-normal px-1.5 py-1">Meta</th>
+                </>
+              ) : (
+                <>
+                  <th className="text-right font-normal px-1.5 py-1">Meta</th>
+                  <th className="text-right font-medium px-1.5 py-1">Realizado</th>
+                </>
+              )}
               {/* `whitespace-nowrap` + largura maior: em quatro colunas o `Dif.`
                   das Movimentacoes saia cortado contra a coluna seguinte. */}
               <th className="text-right font-normal px-1.5 py-1 w-[64px] whitespace-nowrap">Dif.</th>
@@ -839,6 +879,28 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
               const dif = (real != null && metaV != null && metaV !== 0)
                 ? ((real - metaV) / metaV) * 100 : null;
               const clicavel = !!onIr && !!l.destino;
+              /* As duas celulas do meio nascem aqui para que a ORDEM seja uma
+                 decisao so, no JSX abaixo — cabecalho e corpo leem a mesma flag
+                 e nao ha como divergirem. */
+              const celMeta = (
+                <td className={`text-right ${padY} px-1.5 text-meta whitespace-nowrap${l.subtotal ? '' : fonteParcela}`}>
+                  {ind && metaV != null ? fmtValor(metaV, ind.formatoValor, ind.unidade) : '—'}
+                </td>
+              );
+              /* TRES regras de cor, e elas nao se misturam:
+                 SAIDA    -> vermelho pela NATUREZA (dinheiro saindo), qualquer que
+                             seja o sinal;
+                 SUBTOTAL -> vermelho pelo SINAL (resultado negativo);
+                 demais   -> cor padrao.
+                 Sem `saida` nem `subtotal` a classe e' identica a de antes. */
+              const celReal = (
+                <td className={`text-right ${padY} px-1.5 font-medium whitespace-nowrap${l.subtotal ? '' : fonteParcela} ${
+                  l.saida ? 'text-destructive'
+                  : (l.subtotal && real != null && real < 0) ? 'text-destructive'
+                  : 'text-foreground'}`}>
+                  {ind && real != null ? fmtValor(real, ind.formatoValor, ind.unidade) : '—'}
+                </td>
+              );
               return (
                 <tr key={l.rotulo}
                     className={`odd:bg-muted/30 even:bg-card${l.subtotal ? ' border-t border-border' : ''} ${clicavel ? 'cursor-pointer hover:bg-muted/60' : ''}`}
@@ -847,17 +909,12 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
                       rotulo cabe inteiro — `Preço médio venda` era o apertado.
                       A indentacao e PADDING, nao caractere: com espaco o
                       `truncate` cortaria o recuo antes do texto. */}
-                  <td className={`text-left px-1.5 py-0.5 truncate max-w-[180px]${l.subtotal ? ' font-semibold' : ''}`}
+                  <td className={`text-left px-1.5 ${padY} truncate max-w-[180px]${l.subtotal ? ' font-semibold' : fonteParcela}`}
                       style={{ paddingLeft: 6 + (l.nivel ?? 0) * 12 }}>{l.rotulo}</td>
-                  <td className="text-right px-1.5 py-0.5 text-meta whitespace-nowrap">
-                    {ind && metaV != null ? fmtValor(metaV, ind.formatoValor, ind.unidade) : '—'}
-                  </td>
-                  <td className="text-right px-1.5 py-0.5 font-medium text-foreground whitespace-nowrap">
-                    {ind && real != null ? fmtValor(real, ind.formatoValor, ind.unidade) : '—'}
-                  </td>
+                  {realizadoPrimeiro ? <>{celReal}{celMeta}</> : <>{celMeta}{celReal}</>}
                   {/* Verde/vermelho so aqui; a linha nunca tem fundo azul, entao
                       o aviso do A10 sobre texto sobre primary nao se aplica. */}
-                  <td className={`text-right px-1.5 py-0.5 whitespace-nowrap ${
+                  <td className={`text-right px-1.5 ${padY} whitespace-nowrap ${
                     dif == null ? 'text-muted-foreground'
                     : dif >= 0 ? 'text-emerald-600 dark:text-emerald-400'
                     : 'text-red-600 dark:text-red-400'}`}>
@@ -1330,6 +1387,8 @@ export function ModalAtividade({
                acumulado por natureza. */
             <TabelaResumo
               linhas={LINHAS_DRE}
+              realizadoPrimeiro
+              compacta
               zoo={indicadores}
               mov={indicadoresMovimentacoes ?? []}
               fin={indicadoresFinanceiro ?? []}

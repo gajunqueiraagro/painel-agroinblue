@@ -1667,6 +1667,35 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     return fmtRAbreviado(v != null && Number.isFinite(v) ? v : null) ?? '—';
   };
 
+  /* Arco do card DRE. Irmao do `acelFin`, com uma diferenca que importa: aqui
+     nao ha escolha de recorte a fazer. O DRE JA e' acumulado por natureza —
+     `valorDre` le `series.periodo` literal — entao card e arco falam a mesma
+     lingua, e o "no ano" dentro do arco descreve o card inteiro, nao so ele.
+     ⚠ Mesmas duas guardas dos outros arcos: sem meta anual nao renderiza, e sem
+     meta ACUMULADA tambem nao (a de 0d3dcec0, que impede o arco de mostrar
+     numero enquanto o delta ao lado mostra travessao).
+     ⚠ Os quatro sao RESULTADO: maior e' melhor, nenhum inverte, nenhum usa
+     destructive. `estouroGrave` continua exclusivo de Mortes. */
+  const acelDre = (ind: { series?: SeriesPorModo } | null | undefined) => {
+    const at = (sr: number[] | undefined, i: number) =>
+      !sr || sr.length === 0 ? null : (sr.length >= 13 ? sr[i] : sr[i - 1]);
+    const vivo = (v: number | null | undefined) =>
+      v != null && Number.isFinite(v) ? v : null;
+    const realAcum = vivo(at(ind?.series?.periodo?.ano, mesNum));
+    const metaAcum = vivo(at(ind?.series?.periodo?.meta, mesNum));
+    const metaAno  = vivo(at(ind?.series?.periodo?.meta, 12));
+    if (metaAno == null || metaAno === 0) return null;
+    if (realAcum == null || metaAcum == null) return null;
+    if (metaAcum === 0) return null;
+    const pctRitmo = (metaAcum / metaAno) * 100;
+    return {
+      pctAno: (realAcum / metaAno) * 100,
+      pctRitmo,
+      rotuloMeta: `meta ${MES_ABREV[mesNum - 1].toLowerCase()} · ${pctRitmo.toFixed(1)}%`,
+      legenda: `${fmtRAbreviado(realAcum) ?? '—'} de ${fmtRAbreviado(metaAno) ?? '—'}`,
+    };
+  };
+
   /* Arco do card Financeiro: quanto do ANO ja passou, contra a meta anual.
      ⚠ Le do MESMO `indicadoresFinanceiro` que `valorFin` e `deltaFin` — nao dos
      indicadores crus do PC-100. Tres leituras do mesmo card discordarem seria o
@@ -3032,10 +3061,14 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           loading={loadingPainel}
           onClick={() => setModalAtividade('dre')}
           metricas={[
-            { rotulo: 'Receita líquida',  valor: valorDre(dreReceitaLiquidaIndicador),      delta: null },
-            { rotulo: 'Resultado bruto',  valor: valorDre(dreResultadoBrutoIndicador),      delta: null },
-            { rotulo: 'Result. operac.',  valor: valorDre(dreResultadoOperacionalIndicador), delta: null },
-            { rotulo: 'Lucro líquido',    valor: valorDre(dreLucroLiquidoIndicador),        delta: null },
+            { rotulo: 'Receita líquida',  valor: valorDre(dreReceitaLiquidaIndicador),      delta: null,
+              acel: acelDre(dreReceitaLiquidaIndicador) },
+            { rotulo: 'Resultado bruto',  valor: valorDre(dreResultadoBrutoIndicador),      delta: null,
+              acel: acelDre(dreResultadoBrutoIndicador) },
+            { rotulo: 'Result. operac.',  valor: valorDre(dreResultadoOperacionalIndicador), delta: null,
+              acel: acelDre(dreResultadoOperacionalIndicador) },
+            { rotulo: 'Lucro líquido',    valor: valorDre(dreLucroLiquidoIndicador),        delta: null,
+              acel: acelDre(dreLucroLiquidoIndicador) },
           ]}
         />
       </div>
