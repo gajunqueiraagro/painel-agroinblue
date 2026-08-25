@@ -33,6 +33,15 @@ export interface AcelMetrica {
   pctAno: number;
   /** Onde o PROPRIO plano previa estar. Nunca mesNum/12. */
   pctRitmo: number;
+  /** ⚠ EXCECAO DE UM CASO SO, NAO REGRA POR POLARIDADE: com `true`, estourar o
+      ritmo pinta VERMELHO em vez de ambar. Hoje so Mortes recebe — morrer acima
+      do plano e' a unica das oito metricas onde o excesso e' erro. As outras
+      sete, INCLUSIVE as invertidas (Desembolso e Amortizacoes), seguem
+      verde/ambar. Decisao explicita de Gabriel: amarrar isto a `inverseDelta`
+      NAO seria corrigir um esquecimento, seria desfazer a decisao.
+      O campo DECLARA a excecao. Antes ela era deduzida de `rotulo === 'Mortes'`,
+      e renomear o rotulo na tela apagaria o vermelho em silencio. */
+  estouroGrave?: boolean;
   /** Linha de cima, ex.: "meta jul · 39,7%". */
   rotuloMeta: string;
   /** Linha de baixo, os numeros crus, ex.: "943 de 2.570". */
@@ -107,14 +116,18 @@ function BarraMetrica({ pctReal, pctMeta, rotuloMeta, rotuloRecorte, abaixo }: B
   const pos = 50 + Math.max(-1, Math.min(1, desvio)) * 50;
   return (
     <div className="shrink-0 w-[88px] flex flex-col items-center gap-1">
-      <p className="text-[8px] text-muted-foreground leading-tight whitespace-nowrap">{rotuloMeta}</p>
+      {/* Meta em laranja aqui pelo MESMO motivo do arco: token `--meta`
+          (index.css:38, nome semantico) e A11 do PADROES-UI. Nao e' escolha
+          local — antes disto a mesma informacao aparecia em duas cores no
+          mesmo card, laranja no arco e preta/cinza na barra ao lado. */}
+      <p className="text-[8px] text-meta leading-tight whitespace-nowrap">{rotuloMeta}</p>
       <div className="relative w-full h-[9px] rounded-full bg-muted-foreground/30">
         <div className={`absolute inset-y-0 left-0 rounded-full ${abaixo ? 'bg-warning' : 'bg-success'}`}
           style={{ width: `${pos}%` }} />
         {/* Marca FIXA no meio — e' a meta, e a meta e' o centro da escala. Ela
             transborda o trilho em 3px para cima e para baixo: dentro dele, sobre
             o preenchido, sumiria. */}
-        <div className="absolute w-[2px] -top-[3px] -bottom-[3px] bg-foreground left-1/2" />
+        <div className="absolute w-[2px] -top-[3px] -bottom-[3px] bg-meta left-1/2" />
       </div>
       <p className="text-[8px] text-muted-foreground/70 leading-tight whitespace-nowrap">{rotuloRecorte}</p>
     </div>
@@ -135,13 +148,16 @@ function BarraMetrica({ pctReal, pctMeta, rotuloMeta, rotuloRecorte, abaixo }: B
  * A polaridade vem de `inverso`, que o chamador liga ao MESMO `inverseDelta`
  * da metrica — assim arco e delta nao tem como se contradizer.
  */
-function ArcoMetrica({ pctAno, pctRitmo, rotuloMeta, legenda, inverso }: AcelMetrica & { inverso: boolean }) {
+function ArcoMetrica({ pctAno, pctRitmo, rotuloMeta, legenda, estouroGrave, inverso }: AcelMetrica & { inverso: boolean }) {
   const D = 'M14 54 A38 38 0 0 1 90 54';
   const ARCO = Math.PI * 38;
   const cheio = Math.min(Math.max(pctAno, 0), 100) / 100;
-  /* Atraso ou excesso NAO sao erro: warning, nunca destructive. */
+  /* Atraso ou excesso NAO sao erro: warning, nunca destructive — salvo quem
+     DECLARA `estouroGrave`. Fora do ramo de estouro nada muda: abaixo do ritmo,
+     Mortes segue verde como as outras. */
   const noRitmo = inverso ? pctAno <= pctRitmo : pctAno >= pctRitmo;
-  const cor = noRitmo ? 'stroke-success' : 'stroke-warning';
+  const cor = noRitmo ? 'stroke-success'
+    : estouroGrave ? 'stroke-destructive' : 'stroke-warning';
   /* Acima de 999% o numero deixa de caber E deixa de ser leitura de progresso:
      vira multiplo. Abaixo disso fica em %, porque dois formatos convivendo na
      mesma faixa confundiriam mais do que resolvem. Os numeros crus da linha de
@@ -157,15 +173,25 @@ function ArcoMetrica({ pctAno, pctRitmo, rotuloMeta, legenda, inverso }: AcelMet
   const my = (r: number) => 54 - r * Math.sin(rad);
   return (
     <div className="shrink-0 flex flex-col items-center">
-      <p className="text-[8px] text-muted-foreground leading-tight whitespace-nowrap">{rotuloMeta}</p>
-      <svg viewBox="0 0 104 58" className="w-[88px]">
+      <p className="text-[8px] text-meta leading-tight whitespace-nowrap">{rotuloMeta}</p>
+      {/* 104px = escala 1,0, a NATIVA do viewBox. A 88px a escala era 0,846 e
+          o numero de 23px renderizava a 19,5px — tres digitos mais "%" ("255%")
+          passavam da largura interna do arco. Crescer a caixa resolve sem tocar
+          na fonte: encolher o texto pioraria o caso comum (dois digitos, que ja
+          estava bem) para salvar o raro. A altura acompanha sozinha, porque o
+          SVG preserva a proporcao do viewBox. */}
+      <svg viewBox="0 0 104 58" className="w-[104px]">
         <path d={D} fill="none" strokeWidth="9" strokeLinecap="round"
           className="stroke-muted-foreground/30" />
         <path d={D} fill="none" strokeWidth="9" strokeLinecap="round"
           className={cor}
           strokeDasharray={`${ARCO * cheio} ${ARCO}`} />
+        {/* A11 do PADROES-UI: meta em `text-meta`/`stroke-meta`. O token existe
+            com nome semantico (--meta, index.css:38) justamente porque e' "a cor
+            de meta/planejamento", nao "o laranja". Em preto a marca competia com
+            o resto do desenho. */}
         <line x1={mx(32)} y1={my(32)} x2={mx(44)} y2={my(44)}
-          strokeWidth="2.6" strokeLinecap="round" className="stroke-foreground" />
+          strokeWidth="2.6" strokeLinecap="round" className="stroke-meta" />
         <text x="52" y="46" textAnchor="middle"
           className="fill-foreground text-[23px] font-medium">{numero}</text>
         <text x="52" y="56" textAnchor="middle"
@@ -196,16 +222,25 @@ export function BlocoAtividade({ titulo, subtitulo, icone: Icone, metricas, onCl
        Zero nao e nem um nem outro — fica neutro. */
     const bom = !temDelta ? false
       : m.inverseDelta ? (m.delta as number) < 0 : (m.delta as number) > 0;
+    /* A linha do delta leva `whitespace-nowrap`: "vs meta mês" quebrava em duas
+       linhas nos quatro rotulos mais largos. Largura sozinha nao impede quebra —
+       e' o mesmo caso ja registrado no PADROES-UI para valores. */
     return (
       <>
-        <p className="text-[9px] uppercase tracking-wide text-muted-foreground/70 leading-tight truncate">
+        {/* text-foreground/70 e' variante nova neste arquivo, e e' deliberado.
+            O tom anterior era muted-foreground/70: sobre o branco do Card da
+            L=62%, ~2,6:1 de contraste, abaixo do minimo para texto de 9px. O
+            token que ja existia aqui (muted-foreground puro) daria L=46% e
+            ~4,6:1 — passa raspando, e e' exatamente o tom que o briefing
+            apontou como "apagado demais". foreground/70 da L=38% e ~6,3:1. */}
+        <p className="text-[9px] uppercase tracking-wide text-foreground/70 leading-tight truncate">
           {m.rotulo}
         </p>
         <p className="text-sm font-bold text-foreground leading-tight tabular-nums truncate">
           {loading ? '…' : m.valor}
         </p>
         {temDelta ? (
-          <p className={`text-[9px] leading-tight ${bom ? 'text-emerald-600' : 'text-red-600'}`}>
+          <p className={`text-[9px] leading-tight whitespace-nowrap ${bom ? 'text-emerald-600' : 'text-red-600'}`}>
             {(m.delta as number) > 0 ? '+' : ''}{(m.delta as number).toFixed(1)}%
             {m.deltaRotulo ? <span className="text-muted-foreground/60"> {m.deltaRotulo}</span> : null}
           </p>

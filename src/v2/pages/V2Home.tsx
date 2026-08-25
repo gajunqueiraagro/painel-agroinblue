@@ -1426,7 +1426,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
      ⚠ metaAno ausente ou zero: AQUELE arco nao renderiza e o par vira so a
      metrica, como era antes. Os outros tres seguem. Sem fallback e sem
      mesNum/12 — inventar plano que ninguem escreveu e' pior que nao mostrar. */
-  const acelMov = (tipo: TipoMov) => {
+  const acelMov = (tipo: TipoMov, estouroGrave?: boolean) => {
     const at = (sr: number[] | undefined, i: number) =>
       !sr || sr.length === 0 ? null : (sr.length >= 13 ? sr[i] : sr[i - 1]);
     const vivo = (v: number | null | undefined) =>
@@ -1443,6 +1443,11 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
       pctRitmo,
       rotuloMeta: `meta ${MES_ABREV[mesNum - 1].toLowerCase()} · ${pctRitmo.toFixed(1)}%`,
       legenda: `${fmtN(realAcum) ?? '—'} de ${fmtN(metaAno) ?? '—'}`,
+      /* Emitido so quando pedido: ausente = comportamento normal. Espalhar o
+         retorno no ponto de chamada nao serviria — `acelMov` devolve null
+         quando falta meta, e `{...null}` viraria um objeto sem os demais
+         campos, mudando a cor de um arco que nem deveria existir. */
+      ...(estouroGrave ? { estouroGrave: true } : {}),
     };
   };
 
@@ -2763,17 +2768,17 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           metricas={[
             { rotulo: isPeriodo ? '@ produzidas acum.' : '@ produzidas',
               valor: (fmtN(arrobasIndicador?.valor ?? null, 1) ?? '—') + ' @',
-              delta: arrobasIndicador?.deltaMeta ?? null, deltaRotulo: 'vs meta',
+              delta: arrobasIndicador?.deltaMeta ?? null, deltaRotulo: isPeriodo ? 'vs meta per.' : 'vs meta mês',
               acel: aceleradorArrobas?.acel ?? null },
             { rotulo: isPeriodo ? 'Rebanho médio' : 'Rebanho final',
               valor: (fmtN(cabecasIndicador?.valor ?? null) ?? '—') + ' cab',
-              delta: cabecasIndicador?.deltaMeta ?? null, deltaRotulo: 'vs meta',
+              delta: cabecasIndicador?.deltaMeta ?? null, deltaRotulo: isPeriodo ? 'vs meta per.' : 'vs meta mês',
               barra: barraZoot(cabecasIndicador, 0) },
             { rotulo: 'GMD',          valor: (fmtN(gmdIndicador?.valor ?? null, 3) ?? '—') + ' kg',
-              delta: gmdIndicador?.deltaMeta ?? null, deltaRotulo: 'vs meta',
+              delta: gmdIndicador?.deltaMeta ?? null, deltaRotulo: isPeriodo ? 'vs meta per.' : 'vs meta mês',
               barra: barraZoot(gmdIndicador, 3) },
             { rotulo: 'Lotação',      valor: (fmtN(uaHaIndicador?.valor ?? null, 2) ?? '—') + ' UA/ha',
-              delta: uaHaIndicador?.deltaMeta ?? null, deltaRotulo: 'vs meta',
+              delta: uaHaIndicador?.deltaMeta ?? null, deltaRotulo: isPeriodo ? 'vs meta per.' : 'vs meta mês',
               barra: barraZoot(uaHaIndicador, 2) },
           ]}
         />
@@ -2791,14 +2796,18 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           onClick={() => setModalAtividade('movimentacoes')}
           metricas={[
             { rotulo: 'Nascimentos', valor: (fmtN(movAgg.porTipo.nascimentos?.mesAtual?.cab ?? null) ?? '—') + ' cab',
-              delta: deltaMetaMov('nascimentos'), deltaRotulo: 'vs meta', acel: acelMov('nascimentos') },
+              delta: deltaMetaMov('nascimentos'), deltaRotulo: isPeriodo ? 'vs meta per.' : 'vs meta mês', acel: acelMov('nascimentos') },
             { rotulo: 'Compras',     valor: (fmtN(movAgg.porTipo.compras?.mesAtual?.cab ?? null) ?? '—') + ' cab',
-              delta: deltaMetaMov('compras'), deltaRotulo: 'vs meta', acel: acelMov('compras') },
+              delta: deltaMetaMov('compras'), deltaRotulo: isPeriodo ? 'vs meta per.' : 'vs meta mês', acel: acelMov('compras') },
             { rotulo: 'Desfrute',    valor: (fmtN(movAgg.porTipo.desfrute?.mesAtual?.cab ?? null) ?? '—') + ' cab',
-              delta: deltaMetaMov('desfrute'), deltaRotulo: 'vs meta', acel: acelMov('desfrute') },
+              delta: deltaMetaMov('desfrute'), deltaRotulo: isPeriodo ? 'vs meta per.' : 'vs meta mês', acel: acelMov('desfrute') },
             /* Morte e o unico onde subir e RUIM. */
             { rotulo: 'Mortes',      valor: (fmtN(movAgg.porTipo.mortes?.mesAtual?.cab ?? null) ?? '—') + ' cab',
-              delta: deltaMetaMov('mortes'), deltaRotulo: 'vs meta', inverseDelta: true, acel: acelMov('mortes') },
+              delta: deltaMetaMov('mortes'), deltaRotulo: isPeriodo ? 'vs meta per.' : 'vs meta mês', inverseDelta: true,
+              /* UNICA das oito metricas com `estouroGrave`. Nao decorre de
+                 `inverseDelta`: Desembolso e Amortizacoes tambem invertem e
+                 seguem em ambar. Excecao DECLARADA, nao deduzida do rotulo. */
+              acel: acelMov('mortes', true) },
           ]}
         />
       </div>
