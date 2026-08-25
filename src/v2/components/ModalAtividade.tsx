@@ -307,7 +307,43 @@ const LINHAS_POR_ASSUNTO: Record<string, LinhaResumo[]> = {
 /* Do que GERA para o que SOBRA: preco entra, custo sai, a diferenca e' a margem,
    e o custo por cabeca fecha pelo outro denominador.
    A ORDEM dirige a grade, nao a lista — chave ausente vira celula vazia. */
-const ORDEM_CARDS_OPER = ['precoArr', 'custoArr', 'margemArr', 'custoCab'];
+const ORDEM_CARDS_OPER = [
+  'precoArr', 'custoArr', 'margemArr', 'custoCab',
+  /* Col 2 — POR HECTARE, depois dos quatro cruzados. Com oito chaves em
+     `grid-cols-3` saem tres linhas, a ultima com dois cards e uma celula vazia:
+     a ORDEM dirige a grade e nao se redistribui para equilibrar. */
+  'faturamentoHa', 'custoHa', 'investimentoHa', 'desembolsoHa',
+];
+
+/* ── Col 2 do OPERACIONAL · POR HECTARE ───────────────────────────────────
+   Constante PROPRIA, deliberadamente FORA de `LINHAS_GERAL`.
+   `LINHAS_POR_ASSUNTO.operacional` deriva de
+   `LINHAS_GERAL.filter(destino === 'operacional')`, entao pendurar estas quatro
+   la colocaria SEIS linhas na coluna Operacional da aba GERAL — que responde
+   outra pergunta e tem largura para duas.
+   As duas que ja vivem no `LINHAS_GERAL` (Custo @ produzida e Margem de venda)
+   FICAM la e seguem alimentando o Geral; a tabela do Operacional monta seus
+   blocos a partir das duas MAIS estas quatro.
+   ⚠ "Lucro por hectare" NAO entra: vem depois do DRE. Sem linha, sem
+   placeholder, sem `emConstrucao`. */
+const LINHAS_OPER_POR_HA: LinhaResumo[] = [
+  { rotulo: 'Faturamento',   chave: 'faturamentoHa',  bag: 'oper', destino: 'operacional' },
+  { rotulo: 'Custo',         chave: 'custoHa',        bag: 'oper', destino: 'operacional' },
+  { rotulo: 'Investimento',  chave: 'investimentoHa', bag: 'oper', destino: 'operacional' },
+  { rotulo: 'Desembolso',    chave: 'desembolsoHa',   bag: 'oper', destino: 'operacional' },
+];
+
+/* MODO BLOCOS, nao `colunas`. Os dois nao coexistem: sem `blocos` a
+   `TabelaResumo` reparte por CONTAGEM (`Math.ceil(ls.length / n)`), entao
+   `colunas={3}` com seis linhas daria 2/2/2 e partiria "Por hectare" entre duas
+   colunas — todas com o cabecalho generico "Indicador". Nomear coluna exige
+   bloco, e e' o nome que diz de que recorte cada numero fala.
+   Renderiza DUAS colunas nesta rodada; a terceira (R$ por cabeca) entra no PR
+   dela. Coluna vazia nao existe: a `TabelaResumo` filtra bloco sem linha. */
+const BLOCOS_OPERACIONAL: Array<{ titulo: string; destino?: Assunto; linhas: LinhaResumo[] }> = [
+  { titulo: 'Fechamento Produtivo', linhas: LINHAS_POR_ASSUNTO.operacional },
+  { titulo: 'Por hectare',          linhas: LINHAS_OPER_POR_HA },
+];
 
 /* Ver a prop `comparadores` do card. */
 const COMPARADORES_MOV: Comparador[] = ['meta', 'anoAnt'];
@@ -1236,16 +1272,15 @@ export function ModalAtividade({
                so por existir no array. */
             <>
             <TabelaResumo
-              linhas={LINHAS_POR_ASSUNTO.operacional}
+              blocos={BLOCOS_OPERACIONAL}
               zoo={indicadores}
               mov={indicadoresMovimentacoes ?? []}
               fin={indicadoresFinanceiro ?? []}
               oper={indicadoresOperacional ?? []}
               leitura={leitura}
               mesAtual={mesAtual}
-              colunas={2}
             />
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               {ORDEM_CARDS_OPER
                 .map(chave => (indicadoresOperacional ?? []).find(i => i.chave === chave))
                 .map((ind, i) => ind ? (

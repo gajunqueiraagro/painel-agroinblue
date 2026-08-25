@@ -651,6 +651,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     /* Existia no PC-100 (usePainelConsultorData:4564) e nunca fora consumido
        aqui — o card montava o desembolso somando parcelas dos tres escopos. */
     desembolsoPecIndicador,
+    /* PR-PC100-POR-HECTARE-01 — financeiro de escopo pecuaria dividido pela area
+       produtiva pecuaria. Nasceram sem leitor; a aba Operacional e' o primeiro. */
+    faturamentoHaIndicador, custoHaIndicador, investimentoHaIndicador, desembolsoHaIndicador,
     amortizacoesIndicador,
     custeioAgriIndicador, investAgriIndicador, amortizacaoAgriIndicador,
     dividendosIndicador, deducoesTributosIndicador, tributosIndicador,
@@ -1368,10 +1371,26 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
       monta('custoArr',  custoArrIndicador,  'moeda', 'R$/@'),
       monta('margemArr', margemArrIndicador, 'moeda', 'R$/@'),
       monta('custoCab',  custoCabIndicador,  'moeda', 'R$/cab'),
+      /* POR HECTARE. Mesmo `monta` dos quatro acima — o helper so da forma, nao
+         calcula; a razao ja veio pronta do PC-100.
+         ⚠ O CHIP "ano ant." NASCE EM TRAVESSAO NOS QUATRO, e esta CERTO:
+         `_finSoberano` nao produz serie de ano anterior para nenhum dos
+         numeradores (recPecCx, cusPecComJ, invFazPec, desembPec), entao
+         `serieAnoAnt` vem undefined e `deltaAno` null. E' ausencia real.
+         ⚠ O chip "meta" cai em travessao nos meses em que
+         `areaPecuariaMetaPorMes` for zero ou nula — mesma regra do denominador
+         do realizado: sem hectare nao ha valor por hectare.
+         ⚠ Nenhum dos dois recebe fallback e nenhum chip e' escondido. Quem
+         "consertar" isso vai inventar numero que ninguem mediu. */
+      monta('faturamentoHa',   faturamentoHaIndicador,   'moeda', 'R$/ha'),
+      monta('custoHa',         custoHaIndicador,         'moeda', 'R$/ha'),
+      monta('investimentoHa',  investimentoHaIndicador,  'moeda', 'R$/ha'),
+      monta('desembolsoHa',    desembolsoHaIndicador,    'moeda', 'R$/ha'),
     ];
     return { atividade, operacional };
   }, [
-    custoArrIndicador, precoArrIndicador, custoCabIndicador, margemArrIndicador,cabecasIndicador, arrobasIndicador, uaHaIndicador, gmdIndicador, pesoMedioIndicador,
+    custoArrIndicador, precoArrIndicador, custoCabIndicador, margemArrIndicador,
+    faturamentoHaIndicador, custoHaIndicador, investimentoHaIndicador, desembolsoHaIndicador,cabecasIndicador, arrobasIndicador, uaHaIndicador, gmdIndicador, pesoMedioIndicador,
       valorRebanhoIndicador, arrobasEstoqueIndicador, kgHaIndicador, arrobasHaIndicador,
       precoArrEstoqueIndicador, valorRebanhoSemEfeitoIndicador, areaProdutivaPecIndicador,
       seriePorFazAtiv, histZootAtiv, mesNum]);
