@@ -881,12 +881,22 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
   const saidasGrupos: { familia: string; linhas: { label: string; valor: number | null }[] }[] = [
     { familia: 'Pecuária', linhas: [
       { label: 'Custeio pecuária',          valor: custeioPecIndicador?.valor       ?? null },
+      /* ⚠ IRMA de Custeio, nunca dentro dele. `isCusteioProducaoPecuaria` filtra
+         so `Custo Fixo` e `Custo Variavel`, e o comentario dela e' explicito —
+         "NAO inclui: Juros Financ. Pec." —, entao `custeioPecIndicador` e' a
+         versao SEM juros e nao ha contagem dupla. Existe
+         `custeioPecComJurosIndicador` no PC-100; se alguma linha daqui passasse
+         a consumi-lo, esta teria de sair no mesmo movimento.
+         Sem ela, R$ 16.551 de juros nao entravam em saida nenhuma — mesmo
+         padrao do Aporte Pessoal: indicador no PC-100, tela sem consumidor. */
+      { label: 'Juros financ. pec.',        valor: jurosPecIndicador?.valor         ?? null },
       { label: 'Investimento pecuária',     valor: investPecIndicador?.valor        ?? null },
       { label: 'Reposição de bovinos',      valor: investBovinosIndicador?.valor    ?? null },
       { label: 'Amortização financ. pec.',  valor: amortizacaoPecIndicador?.valor   ?? null },
     ] },
     { familia: 'Agricultura', linhas: [
       { label: 'Custeio agricultura',       valor: custeioAgriIndicador?.valor      ?? null },
+      { label: 'Juros financ. agri.',       valor: jurosAgriIndicador?.valor        ?? null },
       { label: 'Investimento agricultura',  valor: investAgriIndicador?.valor       ?? null },
       { label: 'Amortização financ. agri.', valor: amortizacaoAgriIndicador?.valor  ?? null },
     ] },
@@ -897,6 +907,8 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     { familia: 'Silvicultura', linhas: [
       ...(((custeioSilviIndicador?.valor ?? 0) > 0)
         ? [{ label: 'Custeio silvicultura', valor: custeioSilviIndicador?.valor ?? null }] : []),
+        ...(((jurosSilviIndicador?.valor ?? 0) > 0)
+          ? [{ label: 'Juros financ. silvi.', valor: jurosSilviIndicador?.valor ?? null }] : []),
       ...(((investSilviIndicador?.valor ?? 0) > 0)
         ? [{ label: 'Investimento silvicultura', valor: investSilviIndicador?.valor ?? null }] : []),
       ...(((amortizacaoSilviIndicador?.valor ?? 0) > 0)
@@ -981,6 +993,13 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
 
   const saidasResumo = [
     { label: 'Custeio',              valor: custResumo },
+    /* `somaInd`, como as outras: ele preserva a distincao entre null e zero,
+       que `(a ?? 0) + (b ?? 0)` apagaria — sem juros no periodo a linha some
+       pelo `temValor` em vez de exibir R$ 0,00. Ver a irma no Detalhado,
+       aberta por familia. */
+    { label: 'Juros de financiamento', valor: somaInd(jurosPecIndicador?.valor,
+                                                     jurosAgriIndicador?.valor,
+                                                     jurosSilviIndicador?.valor) },
     { label: 'Investimento',         valor: invResumo },
     { label: 'Reposição de bovinos', valor: investBovinosIndicador?.valor ?? null },
     { label: 'Amortização',          valor: amortResumo },
