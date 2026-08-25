@@ -1270,7 +1270,16 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
      nem historico multi-ano (`useHistoricoZootCache` cobre tres). Serie por
      fazenda: NOVE dos doze cards tem, desde o PR-RAZAO-ESTOQUE-01; faltam os
      tres de VALOR. */
-  const indicadoresAtividade = useMemo<IndicadorAtividade[]>(() => {
+  /* UM memo, DOIS arrays. `monta` e' o helper que da forma a todos os cards de
+     indicador; escrever uma montagem propria para o Operacional faria os cards
+     dele divergirem dos outros sem ninguem decidir isso — e a divergencia so
+     apareceria numa tela, meses depois.
+     ⚠ Arrays SEPARADOS, nao um array com filtro: a grade do Zootecnico mapeia
+     `indicadores` INTEIRO e apenas ordena por `ORDEM_CARDS`
+     (ModalAtividade:1287-1292), entao pendurar os cruzados naquele array criaria
+     quatro cards na aba do Zootecnico. */
+  const { atividade: indicadoresAtividade, operacional: indicadoresOperacional } =
+      useMemo<{ atividade: IndicadorAtividade[]; operacional: IndicadorAtividade[] }>(() => {
     const serie = (ind: { series?: SeriesPorModo; serieAno?: number[] } | null | undefined,
                    modo: 'mes' | 'periodo', campo: 'ano' | 'anoAnt' | 'meta') => {
       const s = ind?.series?.[modo]?.[campo];
@@ -1329,7 +1338,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
         historico: temHist ? historico : undefined,
       };
     };
-    return [
+    const atividade = [
       monta('cabecas',      cabecasIndicador,      'inteiro',  'cab',  seriePorFazAtiv.cabecas),
       monta('arrobas',      arrobasIndicador,      'decimal1', '@',    seriePorFazAtiv.arrobas,   histZootAtiv.arrobas),
       monta('uaHa',         uaHaIndicador,         'decimal2', 'UA/ha', seriePorFazAtiv.uaHa),
@@ -1349,7 +1358,20 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
          de area do hook e' esta — a mesma que divide o @/ha. */
       monta('areaProdutiva', areaProdutivaPecIndicador, 'decimal1', 'ha', seriePorFazAtiv.areaProdutivaPec),
     ];
-  }, [cabecasIndicador, arrobasIndicador, uaHaIndicador, gmdIndicador, pesoMedioIndicador,
+    /* Os CRUZADOS. Nenhum e' zootecnico nem financeiro puro: custo da arroba e'
+       custeio pecuario dividido por @ produzidas, preco vem da movimentacao, e a
+       margem e' a diferenca dos dois. Sem `porFazenda` nem `historico` — as
+       fontes nao cobrem estas chaves, e o card declara a falta em vez de mostrar
+       o Global com rotulo de fazenda. */
+    const operacional = [
+      monta('precoArr',  precoArrIndicador,  'moeda', 'R$/@'),
+      monta('custoArr',  custoArrIndicador,  'moeda', 'R$/@'),
+      monta('margemArr', margemArrIndicador, 'moeda', 'R$/@'),
+      monta('custoCab',  custoCabIndicador,  'moeda', 'R$/cab'),
+    ];
+    return { atividade, operacional };
+  }, [
+    custoArrIndicador, precoArrIndicador, custoCabIndicador, margemArrIndicador,cabecasIndicador, arrobasIndicador, uaHaIndicador, gmdIndicador, pesoMedioIndicador,
       valorRebanhoIndicador, arrobasEstoqueIndicador, kgHaIndicador, arrobasHaIndicador,
       precoArrEstoqueIndicador, valorRebanhoSemEfeitoIndicador, areaProdutivaPecIndicador,
       seriePorFazAtiv, histZootAtiv, mesNum]);
@@ -3907,6 +3929,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           indicadores={indicadoresAtividade}
           indicadoresMovimentacoes={indicadoresMovimentacoes}
           indicadoresFinanceiro={indicadoresFinanceiro}
+          indicadoresOperacional={indicadoresOperacional}
           codigosFazendas={seriePorFazAtiv.cabecas.map(f => f.codigo)}
           loadingHistorico={histZootAtiv.loading}
         />

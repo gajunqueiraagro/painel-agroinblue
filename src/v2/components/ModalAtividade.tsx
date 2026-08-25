@@ -121,6 +121,10 @@ interface Props {
   indicadoresMovimentacoes?: IndicadorAtividade[];
   /** Assunto FINANCEIRO — ver `LINHAS_FINANCEIRO`. */
   indicadoresFinanceiro?: IndicadorAtividade[];
+  /** Assunto OPERACIONAL — os CRUZADOS. Bag proprio, nao subconjunto do `zoo`:
+      a grade do Zootecnico mapeia o array INTEIRO e so ordena por `ORDEM_CARDS`,
+      entao pendurar estes quatro la criaria quatro cards naquela aba. */
+  indicadoresOperacional?: IndicadorAtividade[];
   codigosFazendas: string[];
   loadingHistorico?: boolean;
   /* O assunto pelo qual o modal foi ABERTO. Ate 24/08 o bloco decidia qual
@@ -193,7 +197,7 @@ const COLUNA_NO_MES = ['arrobas', 'gmd', 'arrobasHa'];
 type LinhaResumo = {
   rotulo: string;
   chave: string;
-  bag: 'zoo' | 'mov' | 'fin';
+  bag: 'zoo' | 'mov' | 'fin' | 'oper';
   /** Assunto de destino do clique. `undefined` = a linha nao navega. */
   destino?: Assunto;
   /** Linha de MENSAGEM: ocupa as quatro colunas e nao mostra valores. */
@@ -222,8 +226,8 @@ const LINHAS_GERAL: LinhaResumo[] = [
      Nenhuma pertence a um assunto so, e por isso ficam com destino proprio.
      A linha declara a ausencia em vez de sumir — sem elas a coluna nasceria
      vazia e o desenho ficaria incompleto. */
-  { rotulo: 'Custo @ produzida', chave: '', bag: 'zoo', destino: 'operacional', emConstrucao: true },
-  { rotulo: 'Margem de venda',   chave: '', bag: 'zoo', destino: 'operacional', emConstrucao: true },
+  { rotulo: 'Custo @ produzida', chave: 'custoArr',   bag: 'oper', destino: 'operacional' },
+  { rotulo: 'Margem de venda',   chave: 'margemArr',  bag: 'oper', destino: 'operacional' },
 ];
 
 /* ── PR-RESUMO-02 · UMA COLUNA POR ASSUNTO ────────────────────────────────
@@ -231,8 +235,9 @@ const LINHAS_GERAL: LinhaResumo[] = [
    `@/ha` — zootecnico — caia no mesmo bloco de desfrute e mortalidade.
    Agrupado, o cabecalho vira o NOME do assunto e a coluna inteira e a porta
    dele.
-   ⚠ AS ALTURAS FICAM DESIGUAIS de proposito — cinco linhas contra duas — e o
-   desequilibrio some quando Financeiro e Operacional tiverem as suas.
+   ⚠ AS ALTURAS FICAM DESIGUAIS de proposito — cinco linhas contra duas. O
+   Operacional ja tem as suas desde PR-VG-OPERACIONAL-01, com chave real no
+   lugar do `emConstrucao`; falta o FINANCEIRO, e ate la o desequilibrio fica.
    Redistribuir para equilibrar desfaria o agrupamento, que e o ponto.
    FINANCEIRO entra sem linhas: com a coluna ja se chamando Financeiro, uma
    linha chamada "Financeiro" seria redundante. O corpo vazio recebe a
@@ -296,7 +301,13 @@ const LINHAS_FINANCEIRO: LinhaResumo[] = [
 const LINHAS_POR_ASSUNTO: Record<string, LinhaResumo[]> = {
   zootecnico:    LINHAS_GERAL.filter(l => l.destino === 'zootecnico'),
   movimentacoes: LINHAS_GERAL.filter(l => l.destino === 'movimentacoes'),
+  operacional:   LINHAS_GERAL.filter(l => l.destino === 'operacional'),
 };
+
+/* Do que GERA para o que SOBRA: preco entra, custo sai, a diferenca e' a margem,
+   e o custo por cabeca fecha pelo outro denominador.
+   A ORDEM dirige a grade, nao a lista — chave ausente vira celula vazia. */
+const ORDEM_CARDS_OPER = ['precoArr', 'custoArr', 'margemArr', 'custoCab'];
 
 /* Ver a prop `comparadores` do card. */
 const COMPARADORES_MOV: Comparador[] = ['meta', 'anoAnt'];
@@ -631,7 +642,7 @@ const rotuloDoMes = (ind: IndicadorAtividade, leitura: Leitura, mesAtual: number
    Respeita `leitura`, como todo o resto do modal.
    Padrao A10: cabecalho `bg-primary`, zebra `odd:bg-muted/30 even:bg-card`,
    sem bordas. Meta em `text-meta` (A11). */
-const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, leitura, mesAtual, colunas, onIr }: {
+const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, leitura, mesAtual, colunas, onIr }: {
   /* DUAS formas de entrada, um componente so:
        `linhas` + `colunas` -> divide por CONTAGEM, sem titulo. E o que as
                                tabelas dos ASSUNTOS usam.
@@ -643,6 +654,7 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, leitura, mesA
   zoo: IndicadorAtividade[];
   mov: IndicadorAtividade[];
   fin: IndicadorAtividade[];
+  oper: IndicadorAtividade[];
   leitura: Leitura;
   mesAtual: number;
   colunas?: number;
@@ -650,7 +662,8 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, leitura, mesA
   onIr?: (a: Assunto) => void;
 }) => {
   const acha = (l: LinhaResumo) =>
-    (l.bag === 'zoo' ? zoo : l.bag === 'fin' ? fin : mov).find(i => i.chave === l.chave);
+    (l.bag === 'zoo' ? zoo : l.bag === 'fin' ? fin : l.bag === 'oper' ? oper : mov)
+      .find(i => i.chave === l.chave);
   const ponto = (s: number[] | undefined, mes: number) => {
     if (!s || s.length === 0) return null;
     const v = s.length >= 13 ? s[mes] : s[mes - 1];
@@ -1082,7 +1095,7 @@ const CardIndicador = ({
 
 export function ModalAtividade({
   open, onClose, mesAtual, anoAtual, clienteNome, indicadores, codigosFazendas,
-  loadingHistorico, indicadoresMovimentacoes, indicadoresFinanceiro,
+  loadingHistorico, indicadoresMovimentacoes, indicadoresFinanceiro, indicadoresOperacional,
   assuntoInicial, onAssuntoChange,
 }: Props) {
   const [assunto, setAssunto] = useState<Assunto>('zootecnico');
@@ -1194,6 +1207,7 @@ export function ModalAtividade({
               zoo={indicadores}
               mov={indicadoresMovimentacoes ?? []}
               fin={indicadoresFinanceiro ?? []}
+              oper={indicadoresOperacional ?? []}
               leitura={leitura}
               mesAtual={mesAtual}
               onIr={setAssunto}
@@ -1206,10 +1220,50 @@ export function ModalAtividade({
               zoo={indicadores}
               mov={indicadoresMovimentacoes ?? []}
               fin={indicadoresFinanceiro ?? []}
+              oper={indicadoresOperacional ?? []}
               leitura={leitura}
               mesAtual={mesAtual}
               colunas={1}
             />
+          ) : assunto === 'operacional' ? (
+            /* Os CRUZADOS: custo da arroba e' financeiro dividido por zootecnico,
+               margem e' preco de movimentacao menos custo. Nenhum pertence a um
+               assunto so, e por isso tem destino proprio — ver o comentario das
+               duas linhas em LINHAS_GERAL.
+               Mesma casca do Zootecnico: tabela de duas colunas no topo, grade de
+               cards abaixo. A grade percorre `ORDEM_CARDS_OPER`, nao a lista:
+               chave ausente vira celula vazia, e nenhum indicador entra na tela
+               so por existir no array. */
+            <>
+            <TabelaResumo
+              linhas={LINHAS_POR_ASSUNTO.operacional}
+              zoo={indicadores}
+              mov={indicadoresMovimentacoes ?? []}
+              fin={indicadoresFinanceiro ?? []}
+              oper={indicadoresOperacional ?? []}
+              leitura={leitura}
+              mesAtual={mesAtual}
+              colunas={2}
+            />
+            <div className="grid grid-cols-2 gap-3">
+              {ORDEM_CARDS_OPER
+                .map(chave => (indicadoresOperacional ?? []).find(i => i.chave === chave))
+                .map((ind, i) => ind ? (
+                  <CardIndicador
+                    key={ind.chave}
+                    ind={ind}
+                    escopo={escopo}
+                    leitura={leitura}
+                    mesAtual={mesAtual}
+                    anoAtual={anoAtual}
+                    rotuloMes={rotuloMes}
+                    rotuloPer={rotuloPer}
+                    sel={marcados(ind.chave)}
+                    alterna={alterna}
+                  />
+                ) : <div key={`vazio-${i}`} />)}
+            </div>
+            </>
           ) : assunto !== 'zootecnico' && assunto !== 'movimentacoes' ? (
             <div className="h-full flex items-center justify-center">
               <p className="text-xs text-muted-foreground/70 italic">
@@ -1229,6 +1283,7 @@ export function ModalAtividade({
               zoo={indicadores}
               mov={indicadoresMovimentacoes ?? []}
               fin={indicadoresFinanceiro ?? []}
+              oper={indicadoresOperacional ?? []}
               leitura={leitura}
               mesAtual={mesAtual}
               colunas={2}
@@ -1279,6 +1334,7 @@ export function ModalAtividade({
               zoo={indicadores}
               mov={indicadoresMovimentacoes ?? []}
               fin={indicadoresFinanceiro ?? []}
+              oper={indicadoresOperacional ?? []}
               leitura={leitura}
               mesAtual={mesAtual}
               colunas={2}
