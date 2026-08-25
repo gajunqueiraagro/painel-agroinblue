@@ -1314,8 +1314,12 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
   const movAgg = useMovimentacoesAgregadas({
     ano: anoNum, mes: mesNum, viewMode, isGlobal,
     /* Tres `useLancamentos`. Sem guarda eles rodavam SEMPRE, inclusive com o
-       modal fechado, no caminho de carga da Home. */
-    enabled: assuntoAtivo === 'movimentacoes',
+       modal fechado, no caminho de carga da Home.
+       O GERAL tambem liga: tres das suas oito linhas sao de movimentacao, e
+       sem isto o resumo executivo nasceria com travessao justo na metade que
+       responde "o que entrou e saiu". Como o Geral e a PRIMEIRA aba, o custo
+       volta a cada abertura do modal — mas so do modal, nunca da Home. */
+    enabled: assuntoAtivo === 'movimentacoes' || assuntoAtivo === 'geral',
   });
 
   /* Delta contra a META do MESMO recorte, como o bloco Zootecnico. O hook
@@ -1392,6 +1396,13 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
       card('nasc_cab', 'nascimentos', 'cab', 'Nascimentos — cabeças', 'Quantidade no recorte', 'inteiro', 'cab'),
       ...linha('compra',   'compras',     'Compras',            false),
       ...linha('venda',    'vendas',      'Vendas em pé',       false),
+      /* SO PARA A TABELA do resumo, fora de `ORDEM_CARDS_MOV` — a grade
+         percorre a ordem e ignora chave que nao esta la, entao este card nao
+         aparece entre os 25.
+         O CARD de Vendas em Pe continua em R$/kg: venda em pe se negocia por
+         quilo. No resumo executivo o mercado fala em ARROBA, e sao publicos
+         diferentes lendo o mesmo fato. */
+      card('venda_preco_arroba', 'vendas', 'preco_arroba', 'Preço médio venda', 'Valor ÷ arrobas', 'moeda', 'R$/@'),
       ...linha('abate',    'abates',      'Abates',             true),
       ...linha('consumo',  'consumos',    'Consumo / Doações',  false),
       /* E3 — a linha de Mortes deixa de ser cabecas/peso/preco/valor. Valor de

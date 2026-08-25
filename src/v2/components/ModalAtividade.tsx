@@ -133,12 +133,16 @@ interface Props {
   onAssuntoChange?: (a: Assunto) => void;
 }
 
-export type Assunto = 'zootecnico' | 'movimentacoes' | 'financeiro' | 'operacional';
+export type Assunto = 'geral' | 'zootecnico' | 'movimentacoes' | 'financeiro' | 'operacional';
 type Escopo   = 'global' | 'fazenda';
 type Leitura  = 'mes' | 'periodo' | 'historico';
 type Comparador = 'meta' | 'mes' | 'anoAnt' | 'noAno';
 
 const ASSUNTOS: Array<{ id: Assunto; rotulo: string }> = [
+  /* PRIMEIRO de proposito: o modal so tinha graficos, e para saber se o mes
+     foi bom era preciso ler os doze. Esta aba e a leitura de cinco segundos —
+     tabela, sem card de grafico —, e cada linha e' a porta do assunto. */
+  { id: 'geral',         rotulo: 'Geral' },
   { id: 'zootecnico',    rotulo: 'Zootécnico' },
   { id: 'movimentacoes', rotulo: 'Movimentações' },
   { id: 'financeiro',    rotulo: 'Financeiro' },
@@ -178,6 +182,43 @@ const COLUNA_NO_MES = ['arrobas', 'gmd', 'arrobasHa'];
    ⚠ Em `max-w-7xl` com quatro colunas o card fica em ~280px, e treze rotulos
    de mes so cabem com UMA LETRA. O piso de 8px do A12 continua valendo — se
    colidirem, o caminho e outro, nao fonte menor. */
+/* ── PR-RESUMO-01 · as linhas do resumo ──────────────────────────────────
+   `bag` diz de qual prop-bag a chave vem — o Geral cruza os dois, e e' a
+   unica superficie do modal que faz isso.
+   `lente` fica so onde a tabela mostra OUTRA leitura que o card: `venda` no
+   card e' R$/kg (venda em pe fala em quilo), mas no resumo executivo o
+   mercado fala em ARROBA. Card e tabela respondem publicos diferentes. */
+type LinhaResumo = {
+  rotulo: string;
+  chave: string;
+  bag: 'zoo' | 'mov';
+  /** Assunto de destino do clique. */
+  destino: Assunto;
+  /** `undefined` = a linha existe no desenho e o indicador ainda nao. */
+  emConstrucao?: boolean;
+};
+
+const LINHAS_GERAL: LinhaResumo[] = [
+  { rotulo: 'Área produtiva',    chave: 'areaProdutiva', bag: 'zoo', destino: 'zootecnico' },
+  { rotulo: 'Rebanho final',     chave: 'cabecas',       bag: 'zoo', destino: 'zootecnico' },
+  { rotulo: 'GMD',               chave: 'gmd',           bag: 'zoo', destino: 'zootecnico' },
+  { rotulo: '@ produzidas',      chave: 'arrobas',       bag: 'zoo', destino: 'zootecnico' },
+  { rotulo: '@ produzidas/ha',   chave: 'arrobasHa',     bag: 'zoo', destino: 'zootecnico' },
+  { rotulo: 'Desfrute',          chave: 'desfrute_cab',  bag: 'mov', destino: 'movimentacoes' },
+  { rotulo: 'Preço médio venda', chave: 'venda_preco_arroba', bag: 'mov', destino: 'movimentacoes' },
+  { rotulo: 'Mortalidade',       chave: 'morte_pct',     bag: 'mov', destino: 'movimentacoes' },
+  /* O desenho fica completo mesmo sem os dois blocos pesados: a linha declara
+     a ausencia em vez de sumir, senao o Geral parece so de zootecnico. */
+  { rotulo: 'Custo @ produzida', chave: '', bag: 'zoo', destino: 'operacional', emConstrucao: true },
+  { rotulo: 'Margem de venda',   chave: '', bag: 'zoo', destino: 'operacional', emConstrucao: true },
+  { rotulo: 'Financeiro',        chave: '', bag: 'zoo', destino: 'financeiro',  emConstrucao: true },
+];
+
+const LINHAS_POR_ASSUNTO: Record<string, LinhaResumo[]> = {
+  zootecnico:    LINHAS_GERAL.filter(l => l.bag === 'zoo' && !l.emConstrucao),
+  movimentacoes: LINHAS_GERAL.filter(l => l.bag === 'mov'),
+};
+
 /* Ver a prop `comparadores` do card. */
 const COMPARADORES_MOV: Comparador[] = ['meta', 'anoAnt'];
 
@@ -503,6 +544,91 @@ const rotuloDoMes = (ind: IndicadorAtividade, leitura: Leitura, mesAtual: number
       </text>
     );
   };
+
+/* ── PR-RESUMO-01 · A TABELA DE RESUMO ───────────────────────────────────
+   Indicador · Realizado · Meta · Diferenca, em BLOCOS lado a lado. Uma
+   coluna longa ficaria estreita e alta, e empurraria os graficos para fora
+   da primeira dobra — o oposto do que a tabela existe para resolver.
+   Respeita `leitura`, como todo o resto do modal.
+   Padrao A10: cabecalho `bg-primary`, zebra `odd:bg-muted/30 even:bg-card`,
+   sem bordas. Meta em `text-meta` (A11). */
+const TabelaResumo = ({ linhas, zoo, mov, leitura, mesAtual, colunas, onIr }: {
+  linhas: LinhaResumo[];
+  zoo: IndicadorAtividade[];
+  mov: IndicadorAtividade[];
+  leitura: Leitura;
+  mesAtual: number;
+  colunas: number;
+  /** `undefined` = linha nao navega (tabela do proprio assunto). */
+  onIr?: (a: Assunto) => void;
+}) => {
+  const acha = (l: LinhaResumo) =>
+    (l.bag === 'zoo' ? zoo : mov).find(i => i.chave === l.chave);
+  const ponto = (s: number[] | undefined, mes: number) => {
+    if (!s || s.length === 0) return null;
+    const v = s.length >= 13 ? s[mes] : s[mes - 1];
+    return v != null && !isNaN(v) ? v : null;
+  };
+  /* Divide em N blocos VERTICAIS: o bloco 1 leva as primeiras linhas, nao as
+     alternadas — a leitura de cima para baixo em cada bloco e' a que o olho
+     espera numa tabela. */
+  const porBloco = Math.ceil(linhas.length / colunas);
+  const blocos = Array.from({ length: colunas }, (_, i) =>
+    linhas.slice(i * porBloco, (i + 1) * porBloco)).filter(b => b.length > 0);
+
+  return (
+    <div className="grid gap-3 mb-3" style={{ gridTemplateColumns: `repeat(${blocos.length}, minmax(0, 1fr))` }}>
+      {blocos.map((bloco, bi) => (
+        <table key={bi} className="w-full text-[10px] tabular-nums">
+          <thead>
+            <tr className="bg-primary text-primary-foreground">
+              <th className="text-left font-normal px-1.5 py-1">Indicador</th>
+              <th className="text-right font-medium px-1.5 py-1">Realizado</th>
+              <th className="text-right font-normal px-1.5 py-1">Meta</th>
+              <th className="text-right font-normal px-1.5 py-1 w-[62px]">Dif.</th>
+            </tr>
+          </thead>
+          <tbody>
+            {bloco.map(l => {
+              const ind = l.emConstrucao ? undefined : acha(l);
+              const per = leitura === 'periodo';
+              const real = ind ? (per ? ind.valorPeriodo : ind.valorMes) : null;
+              /* A meta e' lida no MESMO mes do realizado: `valorMes`/`valorPeriodo`
+                 ja vem do mes filtrado, e ler a serie de meta em outro indice
+                 compararia meses diferentes. `ponto` faz o mesmo tratamento de
+                 13-vs-12 posicoes que o resto do modal. */
+              const metaV = ind ? ponto(per ? ind.serieMetaPeriodo : ind.serieMetaMes, mesAtual) : null;
+              const dif = (real != null && metaV != null && metaV !== 0)
+                ? ((real - metaV) / metaV) * 100 : null;
+              const clicavel = !!onIr;
+              return (
+                <tr key={l.rotulo}
+                    className={`odd:bg-muted/30 even:bg-card ${clicavel ? 'cursor-pointer hover:bg-muted/60' : ''}`}
+                    onClick={clicavel ? () => onIr!(l.destino) : undefined}>
+                  <td className="text-left px-1.5 py-0.5 truncate max-w-[120px]">{l.rotulo}</td>
+                  <td className="text-right px-1.5 py-0.5 font-medium text-foreground">
+                    {ind && real != null ? fmtValor(real, ind.formatoValor, ind.unidade) : '—'}
+                  </td>
+                  <td className="text-right px-1.5 py-0.5 text-meta">
+                    {ind && metaV != null ? fmtValor(metaV, ind.formatoValor, ind.unidade) : '—'}
+                  </td>
+                  {/* Verde/vermelho so aqui; a linha nunca tem fundo azul, entao
+                      o aviso do A10 sobre texto sobre primary nao se aplica. */}
+                  <td className={`text-right px-1.5 py-0.5 ${
+                    dif == null ? 'text-muted-foreground'
+                    : dif >= 0 ? 'text-emerald-600 dark:text-emerald-400'
+                    : 'text-red-600 dark:text-red-400'}`}>
+                    {dif == null ? '—' : `${dif >= 0 ? '+' : ''}${dif.toFixed(1)}%`}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      ))}
+    </div>
+  );
+};
 
 const CardIndicador = ({
   ind, escopo, leitura, mesAtual, anoAtual, rotuloMes, rotuloPer, sel, alterna,
@@ -842,7 +968,7 @@ export function ModalAtividade({
      sessao anterior desorienta — o modal sempre comeca no mesmo lugar. */
   useEffect(() => {
     if (open) {
-      setAssunto(assuntoInicial ?? 'zootecnico');
+      setAssunto(assuntoInicial ?? 'geral');
       setEscopo('global');
       setLeitura('mes');
       setComparadores({});
@@ -922,16 +1048,41 @@ export function ModalAtividade({
         {/* MIOLO — o unico que rola. Piso INLINE, nao so `min-h-0`: irmao que
             nao cede empurra este a zero e o conteudo transborda (A13). */}
         <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3" style={{ minHeight: 200 }}>
-          {assunto !== 'zootecnico' && assunto !== 'movimentacoes' ? (
+          {assunto === 'geral' ? (
+            /* SO TABELA, sem card de grafico: o Geral existe para responder "o
+               mes foi bom?" antes de qualquer leitura de serie. Tres blocos —
+               onze linhas numa coluna so ficariam altas e estreitas. */
+            <TabelaResumo
+              linhas={LINHAS_GERAL}
+              zoo={indicadores}
+              mov={indicadoresMovimentacoes ?? []}
+              leitura={leitura}
+              mesAtual={mesAtual}
+              colunas={3}
+              onIr={setAssunto}
+            />
+          ) : assunto !== 'zootecnico' && assunto !== 'movimentacoes' ? (
             <div className="h-full flex items-center justify-center">
               <p className="text-xs text-muted-foreground/70 italic">
                 em construção — este assunto entra num PR próprio
               </p>
             </div>
           ) : assunto === 'movimentacoes' ? (
-            /* QUATRO colunas — ver `ORDEM_CARDS_MOV`. Mesma casca de card, mesma
-               altura, mesmos chips: muda a largura da grade e o conjunto de
-               cards, nao a forma do card. */
+            /* Tabela FIXA no topo, sem recolher: rola junto e some quando o
+               usuario desce, entao so ocupa a primeira dobra. Sem `onIr` — ja
+               se esta no assunto.
+               A grade abaixo tem QUATRO colunas (ver `ORDEM_CARDS_MOV`): mesma
+               casca de card, mesma altura, mesmos chips — muda a largura da
+               grade e o conjunto de cards, nao a forma do card. */
+            <>
+            <TabelaResumo
+              linhas={LINHAS_POR_ASSUNTO.movimentacoes}
+              zoo={indicadores}
+              mov={indicadoresMovimentacoes ?? []}
+              leitura={leitura}
+              mesAtual={mesAtual}
+              colunas={2}
+            />
             /* A ORDEM dirige a grade, nao a lista: percorre `ORDEM_CARDS_MOV` e
                busca o indicador de cada chave. Chave SEM indicador vira celula
                VAZIA — e o que segura a leitura horizontal quando um tipo tem
@@ -960,14 +1111,27 @@ export function ModalAtividade({
                   />
                 ))}
             </div>
+            </>
           ) : loadingHistorico && leitura === 'historico' ? (
             <p className="text-[10px] text-muted-foreground/70 py-2">Carregando...</p>
           ) : (
-            /* Grade IGUAL nas duas abas: muda o conteudo do grafico, nao a
+            /* Tabela FIXA no topo, mesma regra do assunto Movimentacoes: rola
+               junto, so ocupa a primeira dobra, e sem `onIr` porque ja se esta
+               no assunto. DOIS blocos — cinco linhas em tres ficaria ralo.
+               Grade IGUAL nas duas abas: muda o conteudo do grafico, nao a
                forma da tela. */
             /* Tres por linha. Em `max-w-6xl` cada card teria ~370px e treze
                rotulos de mes nao caberiam — o mesmo calculo que barrou rotulo
                sobre barra no PR-16. Em 7xl volta a ~450px. */
+            <>
+            <TabelaResumo
+              linhas={LINHAS_POR_ASSUNTO.zootecnico}
+              zoo={indicadores}
+              mov={indicadoresMovimentacoes ?? []}
+              leitura={leitura}
+              mesAtual={mesAtual}
+              colunas={2}
+            />
             <div className="grid grid-cols-3 gap-3">
               {[...indicadores]
                 .sort((a, b) => {
@@ -990,6 +1154,7 @@ export function ModalAtividade({
                   />
                 ))}
             </div>
+            </>
           )}
         </div>
 
