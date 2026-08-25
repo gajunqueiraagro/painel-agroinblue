@@ -2546,6 +2546,91 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
         </SectionBlock>
         </div>
 
+        <div className="lg:col-span-5">
+          <p className="text-xs font-medium text-foreground pb-1.5">
+            Fechamento Pecuária
+          </p>
+          <div className="space-y-1.5">
+      {/* ── PR-ATIVIDADE-01 ─────────────────────────────────────────────
+          O bloco NASCEU abaixo de tudo que existe, empilhado. Desde
+          PR-VG-FECHAMENTO-PEC-01 os tres vivem DENTRO do grid, agrupados
+          sob o titulo "Fechamento Pecuaria" logo depois de Area e Caixa:
+          respondem pela mesma pecuaria que aquelas duas acabaram de
+          descrever, e alcanca-los exigia rolar a Home inteira.
+          NADA foi removido da Home: Gabriel decidiu comparar os dois
+          desenhos lado a lado e so depois apagar os dezoito tiles. A
+          divida de ter dois caminhos para a mesma informacao e deliberada
+          e TEMPORARIA — o PR que remove os tiles e parte do plano, nao
+          esquecimento.
+          Os valores seguem o `viewMode` da tela, como os tiles ao lado: um
+          segundo controle para a mesma pergunta faria a Visao Geral falar
+          com duas vozes. */}
+      <div>
+        <BlocoAtividade
+          titulo="Zootécnico"
+          subtitulo="o que a fazenda tem e produz"
+          icone={BarChart3}
+          loading={loadingPainel}
+          onClick={() => setModalAtividade('zootecnico')}
+          metricas={[
+            { rotulo: 'Rebanho',      valor: (fmtN(cabecasIndicador?.valor ?? null) ?? '—') + ' cab',
+              delta: cabecasIndicador?.deltaMeta ?? null, deltaRotulo: 'vs meta' },
+            { rotulo: '@ produzidas', valor: (fmtN(arrobasIndicador?.valor ?? null, 1) ?? '—') + ' @',
+              delta: arrobasIndicador?.deltaMeta ?? null, deltaRotulo: 'vs meta' },
+            { rotulo: 'GMD',          valor: (fmtN(gmdIndicador?.valor ?? null, 3) ?? '—') + ' kg',
+              delta: gmdIndicador?.deltaMeta ?? null, deltaRotulo: 'vs meta' },
+            { rotulo: 'Lotação',      valor: (fmtN(uaHaIndicador?.valor ?? null, 2) ?? '—') + ' UA/ha',
+              delta: uaHaIndicador?.deltaMeta ?? null, deltaRotulo: 'vs meta' },
+          ]}
+        />
+      </div>
+
+      {/* E6 — Movimentacoes. Mesma casca do Zootecnico: `BlocoAtividade` nao
+          calcula nada, recebe metrica pronta. As quatro sao em CABECAS, a
+          unidade que responde "o que entrou e saiu" sem exigir conversao. */}
+      <div>
+        <BlocoAtividade
+          titulo="Movimentações"
+          subtitulo="o que entrou e saiu do rebanho"
+          icone={ArrowLeftRight}
+          loading={movAgg.loading}
+          onClick={() => setModalAtividade('movimentacoes')}
+          metricas={[
+            { rotulo: 'Nascimentos', valor: (fmtN(movAgg.porTipo.nascimentos?.mesAtual?.cab ?? null) ?? '—') + ' cab',
+              delta: deltaMetaMov('nascimentos'), deltaRotulo: 'vs meta' },
+            { rotulo: 'Compras',     valor: (fmtN(movAgg.porTipo.compras?.mesAtual?.cab ?? null) ?? '—') + ' cab',
+              delta: deltaMetaMov('compras'), deltaRotulo: 'vs meta' },
+            { rotulo: 'Desfrute',    valor: (fmtN(movAgg.porTipo.desfrute?.mesAtual?.cab ?? null) ?? '—') + ' cab',
+              delta: deltaMetaMov('desfrute'), deltaRotulo: 'vs meta' },
+            /* Morte e o unico onde subir e RUIM. */
+            { rotulo: 'Mortes',      valor: (fmtN(movAgg.porTipo.mortes?.mesAtual?.cab ?? null) ?? '—') + ' cab',
+              delta: deltaMetaMov('mortes'), deltaRotulo: 'vs meta', inverseDelta: true },
+          ]}
+        />
+      </div>
+
+      {/* E6 — Financeiro. Terceiro bloco, mesma casca dos dois anteriores.
+          ⚠ NAO confundir com o chip "Financeiro (em construção)" da faixa de
+          status: aquele e o P3 dos pilares de fechamento, declarado
+          nao_implementado, e continua onde esta. */}
+      <div>
+        <BlocoAtividade
+          titulo="Financeiro"
+          subtitulo="o dinheiro que entrou e saiu"
+          icone={Wallet}
+          loading={loadingPainel}
+          onClick={() => setModalAtividade('financeiro')}
+          metricas={[
+            { rotulo: 'Receitas',     valor: valorFin('fin_receitas'),    delta: null },
+            { rotulo: 'Desembolso',   valor: valorFin('fin_desembolso'),  delta: null, inverseDelta: true },
+            { rotulo: 'Captação',     valor: valorFin('fin_captacao'),    delta: null },
+            { rotulo: 'Amortizações', valor: valorFin('fin_amortizacoes'), delta: null },
+          ]}
+        />
+      </div>
+          </div>
+        </div>
+
         <div className="lg:col-span-3 space-y-4">
         {/* Bloco proprio, PRIMEIRO item do wrapper da esquerda — nao filho direto
             do grid: Area e Caixa sao os unicos diretos, para alinharem a altura.
@@ -3516,59 +3601,6 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
         />
       )}
 
-      {/* ── PR-ATIVIDADE-01 ─────────────────────────────────────────────
-          O bloco nasce ABAIXO de tudo que existe, empilhado. NADA foi
-          removido da Home: Gabriel decidiu comparar os dois desenhos lado a
-          lado e so depois apagar os dezoito tiles. A divida de ter dois
-          caminhos para a mesma informacao e deliberada e TEMPORARIA — o PR
-          que remove os tiles e parte do plano, nao esquecimento.
-          Os valores seguem o `viewMode` da tela, como os tiles ao lado: um
-          segundo controle para a mesma pergunta faria a Visao Geral falar
-          com duas vozes. */}
-      <div className="mt-4">
-        <BlocoAtividade
-          titulo="Zootécnico"
-          subtitulo="o que a fazenda tem e produz"
-          icone={BarChart3}
-          loading={loadingPainel}
-          onClick={() => setModalAtividade('zootecnico')}
-          metricas={[
-            { rotulo: 'Rebanho',      valor: (fmtN(cabecasIndicador?.valor ?? null) ?? '—') + ' cab',
-              delta: cabecasIndicador?.deltaMeta ?? null, deltaRotulo: 'vs meta' },
-            { rotulo: '@ produzidas', valor: (fmtN(arrobasIndicador?.valor ?? null, 1) ?? '—') + ' @',
-              delta: arrobasIndicador?.deltaMeta ?? null, deltaRotulo: 'vs meta' },
-            { rotulo: 'GMD',          valor: (fmtN(gmdIndicador?.valor ?? null, 3) ?? '—') + ' kg',
-              delta: gmdIndicador?.deltaMeta ?? null, deltaRotulo: 'vs meta' },
-            { rotulo: 'Lotação',      valor: (fmtN(uaHaIndicador?.valor ?? null, 2) ?? '—') + ' UA/ha',
-              delta: uaHaIndicador?.deltaMeta ?? null, deltaRotulo: 'vs meta' },
-          ]}
-        />
-      </div>
-
-      {/* E6 — Movimentacoes. Mesma casca do Zootecnico: `BlocoAtividade` nao
-          calcula nada, recebe metrica pronta. As quatro sao em CABECAS, a
-          unidade que responde "o que entrou e saiu" sem exigir conversao. */}
-      <div className="mt-4">
-        <BlocoAtividade
-          titulo="Movimentações"
-          subtitulo="o que entrou e saiu do rebanho"
-          icone={ArrowLeftRight}
-          loading={movAgg.loading}
-          onClick={() => setModalAtividade('movimentacoes')}
-          metricas={[
-            { rotulo: 'Nascimentos', valor: (fmtN(movAgg.porTipo.nascimentos?.mesAtual?.cab ?? null) ?? '—') + ' cab',
-              delta: deltaMetaMov('nascimentos'), deltaRotulo: 'vs meta' },
-            { rotulo: 'Compras',     valor: (fmtN(movAgg.porTipo.compras?.mesAtual?.cab ?? null) ?? '—') + ' cab',
-              delta: deltaMetaMov('compras'), deltaRotulo: 'vs meta' },
-            { rotulo: 'Desfrute',    valor: (fmtN(movAgg.porTipo.desfrute?.mesAtual?.cab ?? null) ?? '—') + ' cab',
-              delta: deltaMetaMov('desfrute'), deltaRotulo: 'vs meta' },
-            /* Morte e o unico onde subir e RUIM. */
-            { rotulo: 'Mortes',      valor: (fmtN(movAgg.porTipo.mortes?.mesAtual?.cab ?? null) ?? '—') + ' cab',
-              delta: deltaMetaMov('mortes'), deltaRotulo: 'vs meta', inverseDelta: true },
-          ]}
-        />
-      </div>
-
       {/* UM ponto de montagem. Eram dois, um por assunto, e so o de
           Movimentacoes recebia `indicadoresMovimentacoes` — entao trocar de
           assunto dentro do modal aberto pelo Zootecnico dava `?? []`, grade
@@ -3577,26 +3609,6 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           Com um ponto so, os dois prop-bags chegam sempre e nenhum assunto
           pode cair em array vazio — o defeito morre por construcao, nao por
           guarda. */}
-      {/* E6 — Financeiro. Terceiro bloco, mesma casca dos dois anteriores.
-          ⚠ NAO confundir com o chip "Financeiro (em construção)" da faixa de
-          status: aquele e o P3 dos pilares de fechamento, declarado
-          nao_implementado, e continua onde esta. */}
-      <div className="mt-4">
-        <BlocoAtividade
-          titulo="Financeiro"
-          subtitulo="o dinheiro que entrou e saiu"
-          icone={Wallet}
-          loading={loadingPainel}
-          onClick={() => setModalAtividade('financeiro')}
-          metricas={[
-            { rotulo: 'Receitas',     valor: valorFin('fin_receitas'),    delta: null },
-            { rotulo: 'Desembolso',   valor: valorFin('fin_desembolso'),  delta: null, inverseDelta: true },
-            { rotulo: 'Captação',     valor: valorFin('fin_captacao'),    delta: null },
-            { rotulo: 'Amortizações', valor: valorFin('fin_amortizacoes'), delta: null },
-          ]}
-        />
-      </div>
-
       {modalAtividade && (
         <ModalAtividade
           open
