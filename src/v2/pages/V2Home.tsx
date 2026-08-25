@@ -165,14 +165,21 @@ function SectionBlock({ title, subtitle, children, naoFechado, avisoNaoFechado }
 function LinhaCaixa({ label, valor, tipo = 'detalhe', corValor }: {
   label: string;
   valor: number | null;
-  tipo?: 'detalhe' | 'total';
+  tipo?: 'detalhe' | 'subtotal' | 'total';
   corValor?: string;
 }) {
   /* Hierarquia: TOTAL em text-xs, DETALHE em text-[9px] + leading-tight. O bloco
      "Disponivel em conta" reusa este componente e herda a mesma hierarquia —
-     subtotal de tipo maior que as contas, que e o efeito desejado la tambem. */
+     subtotal de tipo maior que as contas, que e o efeito desejado la tambem.
+     SUBTOTAL e' o degrau do meio, criado para o Saldo INICIAL: ele abre o bloco
+     mas nao e' a conclusao dele, e com o mesmo peso do Saldo final os dois
+     competiam. Sem `pl-2` — nao e' detalhe indentado, e' cabeca de bloco.
+     Prop nova em vez de embrulhar em <div> com classe: a hierarquia mora no
+     componente, e quem chamar de fora herda a mesma escala. */
   const base = tipo === 'total'
     ? 'text-xs font-medium text-foreground'
+    : tipo === 'subtotal'
+    ? 'text-[10px] font-medium text-muted-foreground'
     : 'text-[9px] leading-tight text-muted-foreground pl-2';
   return (
     <div className={`flex items-baseline justify-between gap-3 ${base}`}>
@@ -636,6 +643,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     // PR-HOME-CAIXA-CONSOLIDADO-01 — as 15 linhas de fluxo e o saldo.
     receitaPecCaixaIndicador, receitaAgriIndicador, receitaOutrasIndicador, captacaoIndicador, entradasNaoClassificadasIndicador,
     captacaoPecIndicador, captacaoAgriIndicador, captacaoSilviIndicador, captacaoSemEscopoIndicador,
+    /* PR-VG-CAIXA-01 — ja existiam no PC-100 desde 22/08; a tela e' que nao os
+       consumia. Ver o comentario em `entradasCaixa`. */
+    aportePessoalIndicador, retornoEmprestimosIndicador,
     receitaSilvicolaIndicador, custeioSilviIndicador, investSilviIndicador, amortizacaoSilviIndicador,
     investPecIndicador, investBovinosIndicador, amortizacaoPecIndicador,
     amortizacoesIndicador,
@@ -838,6 +848,17 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     { label: 'Captação pecuária',     valor: captacaoPecIndicador?.valor       ?? null },
     { label: 'Captação agricultura',  valor: captacaoAgriIndicador?.valor      ?? null },
     { label: 'Captação silvicultura', valor: captacaoSilviIndicador?.valor     ?? null },
+    /* ⚠ AS DUAS QUE SUMIRAM. Em 22/08 `isAportePessoal` e `isRetornoEmprestimos`
+       viraram predicates proprios e passaram a ser NEGADOS dentro de
+       `isCaptacaoSemEscopo` (classificacao.ts:655-661). Os indicadores nasceram
+       no PC-100, a tela nunca ganhou as linhas, e R$ 904.898 sairam de "Aportes
+       e outras" sem entrar em lugar nenhum — some do bloco e quebrava a
+       verificacao de captacao logo abaixo.
+       "Aportes e outras" FICA: com estas duas ao lado, ela passa a ser o residuo
+       verdadeiro — subcentro novo que ninguem mapeou. O `temValor` a esconde
+       quando zera. */
+    { label: 'Aporte pessoal',        valor: aportePessoalIndicador?.valor      ?? null },
+    { label: 'Retorno de empréstimos', valor: retornoEmprestimosIndicador?.valor ?? null },
     { label: 'Aportes e outras',      valor: captacaoSemEscopoIndicador?.valor ?? null },
     /* Residuo de entrada: grupo fora dos oficiais. A condicional propria que existia
        aqui saiu — `temValor` faz a mesma coisa para TODAS as linhas, e duas regras
@@ -950,6 +971,10 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
   const entradasResumo = [
     { label: 'Receitas',          valor: recResumo },
     { label: 'Captação',          valor: captResumo },
+    /* Ver o comentario em `entradasCaixa`: as duas mesmas linhas, para o
+       Resumido e o Detalhado nao contarem coisas diferentes. */
+    { label: 'Aporte pessoal',        valor: aportePessoalIndicador?.valor      ?? null },
+    { label: 'Retorno de empréstimos', valor: retornoEmprestimosIndicador?.valor ?? null },
     { label: 'Aportes e outras',  valor: captacaoSemEscopoIndicador?.valor ?? null },
     { label: 'Não classificado',  valor: entradasNaoClassificadasIndicador?.valor ?? null },
   ].filter(l => temValor(l.valor));
@@ -2426,7 +2451,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
               ))}
             </div>
 
-            <LinhaCaixa label={rotuloSaldoInicial} valor={saldoInicial} tipo="total" />
+            <LinhaCaixa label={rotuloSaldoInicial} valor={saldoInicial} tipo="subtotal" />
 
             <div className="pt-1 space-y-0.5">
               <LinhaCaixa label="Entradas" valor={totalEntradas} tipo="total"
@@ -2440,10 +2465,17 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
                     <LinhaCaixa key={l.label} label={l.label} valor={l.valor} />
                   ))}
               {(() => {
+                /* SEIS parcelas, nao quatro: `classificacao.ts:653` documenta que
+                   `isEntradaFinanceira` e' particionada por pec + agri + silvi +
+                   aporte + retorno + semEscopo. A soma antiga ignorava as duas do
+                   meio e o aviso amarelo acusava divergencia de R$ 904.898 que era
+                   da PROPRIA verificacao, nao do dado. */
                 const somaCaptacao =
                   (captacaoPecIndicador?.valor ?? 0) +
                   (captacaoAgriIndicador?.valor ?? 0) +
                   (captacaoSilviIndicador?.valor ?? 0) +
+                  (aportePessoalIndicador?.valor ?? 0) +
+                  (retornoEmprestimosIndicador?.valor ?? 0) +
                   (captacaoSemEscopoIndicador?.valor ?? 0);
                 const total = captacaoIndicador?.valor ?? 0;
                 /* Os quatro predicates PARTICIONAM isEntradaFinanceira: a soma tem que
@@ -2481,7 +2513,10 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
 
             {mostrarDifCaixa && (
               <p className="text-[10px] text-amber-700">
-                Diferença de {fmtR(difCaixa)} — não conciliado
+                {/* O aviso nunca falou de conciliacao BANCARIA: ele diz que
+                    saldoInicial + entradas − saidas ≠ saldoFinal. O rotulo antigo
+                    mandava o operador procurar defeito no extrato. */}
+                Diferença de {fmtR(difCaixa)} — entradas e saídas não explicam a variação do saldo
               </p>
             )}
 
