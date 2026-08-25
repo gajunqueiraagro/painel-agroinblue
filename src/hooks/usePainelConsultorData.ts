@@ -117,7 +117,7 @@ import {
   buildDesfruteCabMensal,
   TIPOS_DESFRUTE_OFICIAL,
 } from '@/lib/calculos/painelConsultorIndicadores';
-import { calcularIndicadoresEficienciaArea, calcularArrHaAcumulado,
+import { calcularIndicadoresEficienciaArea, calcularArrHaAcumulado, calcularArrHaMensal,
          calcularRazaoEstoqueAcumulada, mediaIgnorandoZero } from '@/lib/calculos/eficienciaArea';
 import type { StatusPilares } from '@/hooks/useStatusPilares';
 
@@ -714,6 +714,12 @@ export interface PainelConsultorDataResult {
   custeioPecComJurosIndicador:  IndicadorFinanceiroShape | null;
   investPecIndicador:           IndicadorFinanceiroShape | null;
   desembolsoPecIndicador:       IndicadorFinanceiroShape | null;
+  /* POR HECTARE — financeiro de escopo pecuaria ÷ area produtiva pecuaria.
+     'Lucro por hectare' NAO existe aqui por decisao: vem depois do DRE. */
+  faturamentoHaIndicador:       IndicadorFinanceiroShape | null;
+  custoHaIndicador:             IndicadorFinanceiroShape | null;
+  investimentoHaIndicador:      IndicadorFinanceiroShape | null;
+  desembolsoHaIndicador:        IndicadorFinanceiroShape | null;
   custeioAgriIndicador:         IndicadorFinanceiroShape | null;
   jurosAgriIndicador:           IndicadorFinanceiroShape | null;
   custeioAgriComJurosIndicador: IndicadorFinanceiroShape | null;
@@ -3639,6 +3645,86 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       };
     };
 
+    /* ── POR HECTARE ────────────────────────────────────────────────────────
+       Financeiro de escopo PECUARIA dividido pela area produtiva PECUARIA. O
+       denominador nunca e' a area produtiva total: o bloco e' Fechamento
+       Pecuaria e o numerador ja e' pecuario — area agricola no divisor diluiria
+       o indicador.
+
+       ⚠ NAO USA `buildInd`. Aquele monta o periodo com `cumSumTo13`, que SOMA a
+       serie mensal; somar razoes por hectare daria a soma das razoes, nao a
+       razao dos agregados. Aqui o periodo e' Σ numerador ÷ MEDIA da area.
+
+       ⚠ NAO USA `calcularRazaoEstoqueAcumulada`. Aquela e' a variante de
+       ESTOQUE — media do numerador ÷ media da area (`somaNum / somaArea`) — e
+       serve a rebanho e UA. Estes quatro numeradores sao FLUXO: receita de
+       janeiro mais receita de fevereiro sao receita do periodo. Usar a variante
+       de estoque devolveria o valor dividido pelo numero de meses: em Jan→Jul,
+       um setimo do certo.
+       A funcao de fluxo ja existe e e' `calcularArrHaAcumulado` — o nome fala de
+       arroba, a conta e' generica (numerador de fluxo ÷ media da area), e ela ja
+       chama `mediaIgnorandoZero` internamente. Uma implementacao so.
+
+       ⚠ Mes sem area (zero, nulo ou NaN) sai NaN, nunca zero: area zero e' mes
+       sem fechamento, nao area pequena, e zero afirmaria "nao faturou por
+       hectare" onde a verdade e' "nao ha hectare". Vale para os dois lados —
+       mes que nao entra no divisor tambem nao entra no dividendo.
+
+       ⚠ SEM ano anterior: `_finSoberano` nao produz serie ano-1 para nenhum dos
+       numeradores (ver o comentario do `series` no buildInd). O campo fica
+       `undefined` e o card declara a ausencia — sem fallback. */
+    const serie13 = (a12: number[] | null): number[] | null =>
+      a12 ? Array.from({ length: 13 }, (_, i) => i === 0 ? NaN : (a12[i - 1] ?? NaN)) : null;
+
+    const buildPorHa = (
+      num12: number[],
+      label: string,
+      titulo: string,
+      subMes: string,
+      subPer: string,
+      num12Meta: number[] | null = null,
+    ): IndicadorFinanceiroShape => {
+      const mesSerie13     = serie13(calcularArrHaMensal(num12, areaPecuariaRealPorMes))!;
+      const periodoSerie13 = serie13(calcularArrHaAcumulado(num12, areaPecuariaRealPorMes))!;
+      const serieAno = isPer ? periodoSerie13 : mesSerie13;
+      const valor = safe(serieAno[mesPos]);
+
+      const mesSerie13Meta     = num12Meta ? serie13(calcularArrHaMensal(num12Meta, areaPecuariaMetaPorMes)) ?? undefined : undefined;
+      const periodoSerie13Meta = num12Meta ? serie13(calcularArrHaAcumulado(num12Meta, areaPecuariaMetaPorMes)) ?? undefined : undefined;
+      const serieMeta = isPer ? periodoSerie13Meta : mesSerie13Meta;
+
+      const deltaMes = (() => {
+        if (mesPos <= 1) return null;
+        const curr = safe(serieAno[mesPos]);
+        const prev = safe(serieAno[mesPos - 1]);
+        if (curr == null || prev == null || prev === 0) return null;
+        return ((curr - prev) / prev) * 100;
+      })();
+      const deltaMeta = (() => {
+        if (!serieMeta) return null;
+        const meta = safe(serieMeta[mesPos]);
+        if (valor == null || meta == null || meta === 0) return null;
+        return ((valor - meta) / meta) * 100;
+      })();
+
+      return {
+        label, titulo,
+        subtitulo: isPer ? subPer : subMes,
+        titulos: { mes: { titulo, subtitulo: subMes }, periodo: { titulo, subtitulo: subPer } },
+        valor,
+        deltaMes,
+        deltaAno: null,
+        deltaMeta,
+        serieAno,
+        serieAnoAnt: undefined,
+        serieMeta,
+        series: {
+          mes:     { ano: mesSerie13,     anoAnt: undefined, meta: mesSerie13Meta },
+          periodo: { ano: periodoSerie13, anoAnt: undefined, meta: periodoSerie13Meta },
+        },
+      };
+    };
+
     return {
       saidasTotais: buildInd(saidasTot, 'SAÍDAS TOTAIS', 'Saídas Totais',
         isPer ? 'Saída total de caixa acumulada Jan→mês (espelho do Dashboard Financeiro)'
@@ -3660,6 +3746,22 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
         isPer ? 'Investimento na Fazenda escopo Pecuária acumulado Jan→mês (caixa)'
               : 'Investimento na Fazenda escopo Pecuária no mês (caixa)',
         invFazPec_M),
+      faturamentoHa: buildPorHa(recPecCx, 'FATURAMENTO POR HECTARE', 'Faturamento por hectare',
+        'Receita pecuária recebida no mês ÷ área produtiva pecuária do mês',
+        'Receita pecuária recebida Jan→mês ÷ área produtiva pecuária média do período',
+        recPecCx_M),
+      custoHa: buildPorHa(cusPecComJ, 'CUSTO POR HECTARE', 'Custo por hectare',
+        'Custeio pecuário com juros no mês ÷ área produtiva pecuária do mês',
+        'Custeio pecuário com juros Jan→mês ÷ área produtiva pecuária média do período',
+        cusPecComJ_M),
+      investimentoHa: buildPorHa(invFazPec, 'INVESTIMENTO POR HECTARE', 'Investimento por hectare',
+        'Investimento em fazenda pecuária no mês ÷ área produtiva pecuária do mês',
+        'Investimento em fazenda pecuária Jan→mês ÷ área produtiva pecuária média do período',
+        invFazPec_M),
+      desembolsoHa: buildPorHa(desembPec, 'DESEMBOLSO POR HECTARE', 'Desembolso por hectare',
+        'Desembolso pecuário no mês ÷ área produtiva pecuária do mês',
+        'Desembolso pecuário Jan→mês ÷ área produtiva pecuária média do período',
+        desembPec_M),
       desembolsoPec: buildInd(desembPec, 'DESEMBOLSO PECUÁRIA', 'Desembolso Pecuária',
         isPer ? 'Custeio Pec. com Juros + Inv. Fazenda Pec. acumulado Jan→mês (caixa)'
               : 'Custeio Pec. com Juros + Inv. Fazenda Pec. no mês (caixa)',
@@ -3848,7 +3950,8 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
         tributos_M),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lancFin, ano, mes, viewMode, gridMetaConsolidado]);
+  }, [lancFin, ano, mes, viewMode, gridMetaConsolidado,
+      areaPecuariaRealPorMes, areaPecuariaMetaPorMes]);
 
   // ─── custeioPecIndicador legado memoizado (Opção D) ─────────────────
   // Estabiliza a referência do objeto retornado para evitar render loop em
@@ -4578,6 +4681,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     custeioPecComJurosIndicador:  _finSoberano.custeioPecComJuros,
     investPecIndicador:           _finSoberano.investPec,
     desembolsoPecIndicador:       _finSoberano.desembolsoPec,
+    faturamentoHaIndicador:       _finSoberano.faturamentoHa,
+    custoHaIndicador:             _finSoberano.custoHa,
+    investimentoHaIndicador:      _finSoberano.investimentoHa,
+    desembolsoHaIndicador:        _finSoberano.desembolsoHa,
     custeioAgriIndicador:         _finSoberano.custeioAgri,
     jurosAgriIndicador:           _finSoberano.jurosAgri,
     custeioAgriComJurosIndicador: _finSoberano.custeioAgriComJuros,
@@ -4670,6 +4777,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       custeioPecComJurosIndicador:  _finSoberano.custeioPecComJuros,
       investPecIndicador:           _finSoberano.investPec,
       desembolsoPecIndicador:       _finSoberano.desembolsoPec,
+      faturamentoHaIndicador:       _finSoberano.faturamentoHa,
+      custoHaIndicador:             _finSoberano.custoHa,
+      investimentoHaIndicador:      _finSoberano.investimentoHa,
+      desembolsoHaIndicador:        _finSoberano.desembolsoHa,
       custeioAgriIndicador:         _finSoberano.custeioAgri,
       jurosAgriIndicador:           _finSoberano.jurosAgri,
       custeioAgriComJurosIndicador: _finSoberano.custeioAgriComJuros,
