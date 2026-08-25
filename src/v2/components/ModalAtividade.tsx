@@ -121,6 +121,10 @@ interface Props {
   indicadoresMovimentacoes?: IndicadorAtividade[];
   /** Assunto FINANCEIRO — ver `LINHAS_FINANCEIRO`. */
   indicadoresFinanceiro?: IndicadorAtividade[];
+  /** Assunto DRE — as dez linhas do modelo oficial mais os sete subtotais.
+      Bag proprio pelo mesmo motivo do `oper`: nenhuma grade de outro assunto
+      deve alcancar estes indicadores por acidente. */
+  indicadoresDre?: IndicadorAtividade[];
   /** Assunto OPERACIONAL — os CRUZADOS. Bag proprio, nao subconjunto do `zoo`:
       a grade do Zootecnico mapeia o array INTEIRO e so ordena por `ORDEM_CARDS`,
       entao pendurar estes quatro la criaria quatro cards naquela aba. */
@@ -139,7 +143,7 @@ interface Props {
   onAssuntoChange?: (a: Assunto) => void;
 }
 
-export type Assunto = 'geral' | 'zootecnico' | 'movimentacoes' | 'financeiro' | 'operacional';
+export type Assunto = 'geral' | 'zootecnico' | 'movimentacoes' | 'financeiro' | 'operacional' | 'dre';
 type Escopo   = 'global' | 'fazenda';
 type Leitura  = 'mes' | 'periodo' | 'historico';
 type Comparador = 'meta' | 'mes' | 'anoAnt' | 'noAno';
@@ -153,6 +157,7 @@ const ASSUNTOS: Array<{ id: Assunto; rotulo: string }> = [
   { id: 'movimentacoes', rotulo: 'Movimentações' },
   { id: 'financeiro',    rotulo: 'Financeiro' },
   { id: 'operacional',   rotulo: 'Operacional' },
+  { id: 'dre',           rotulo: 'DRE' },
 ];
 
 /* Ordem de leitura da grade — decisao de apresentacao, entao mora aqui e
@@ -197,7 +202,7 @@ const COLUNA_NO_MES = ['arrobas', 'gmd', 'arrobasHa'];
 type LinhaResumo = {
   rotulo: string;
   chave: string;
-  bag: 'zoo' | 'mov' | 'fin' | 'oper';
+  bag: 'zoo' | 'mov' | 'fin' | 'oper' | 'dre';
   /** Assunto de destino do clique. `undefined` = a linha nao navega. */
   destino?: Assunto;
   /** Linha de MENSAGEM: ocupa as quatro colunas e nao mostra valores. */
@@ -206,6 +211,15 @@ type LinhaResumo = {
   secao?: boolean;
   /** Nivel de indentacao — 0 = raiz. A tabela plana nunca passa disto. */
   nivel?: number;
+  /** SUBTOTAL: linha de soma, com valor proprio. Peso maior e fio em cima.
+      OPT-IN estrito — ausente ou `false` renderiza EXATAMENTE como hoje, e as
+      cinco abas existentes nao passam o campo.
+      ⚠ NAO e' `secao`: aquele e' <td colSpan={4}> e o subtotal perderia valor,
+      meta e diferenca — o DRE ficaria sem Lucro Liquido, que e' a linha pela
+      qual o demonstrativo existe.
+      ⚠ NAO e' `nivel`: indentacao diz "isto pertence aquilo", nao "isto e' a
+      soma daquilo"; um subtotal e uma linha de topo ficariam identicos. */
+  subtotal?: boolean;
   /** `undefined` = a linha existe no desenho e o indicador ainda nao. */
   emConstrucao?: boolean;
 };
@@ -343,6 +357,50 @@ const LINHAS_OPER_POR_HA: LinhaResumo[] = [
 const BLOCOS_OPERACIONAL: Array<{ titulo: string; destino?: Assunto; linhas: LinhaResumo[] }> = [
   { titulo: 'Fechamento Produtivo', linhas: LINHAS_POR_ASSUNTO.operacional },
   { titulo: 'Por hectare',          linhas: LINHAS_OPER_POR_HA },
+];
+
+/* ── DRE · O MODELO OFICIAL, NA ORDEM ─────────────────────────────────────
+   Dez linhas numeradas mais sete subtotais. As parcelas ficam indentadas por
+   `nivel`; os subtotais levam `subtotal` e nao `secao`, porque tem valor.
+
+   ⚠ ACUMULADO POR NATUREZA. A aba passa `leitura="periodo"` FIXO, e por isso
+   nenhum numero desta tabela responde ao filtro No mes / No periodo — mas todos
+   respondem ao MES selecionado (Jan→Jul em julho, Jan→Mar em marco).
+   Demonstrativo e' acumulado por natureza; um DRE de julho isolado nao e' uma
+   peca contabil. Quem fizer isto seguir o filtro achando que corrige uma
+   inconsistencia vai transformar o demonstrativo em outra coisa.
+
+   ⚠ DIVIDENDOS E RETIRADAS NAO APARECEM: sao caixa e patrimonio, nao resultado.
+
+   ⚠ Sinal e cor, nunca parenteses contabeis — deducoes, custeio, investimento,
+   reposicao, juros e tributos sao SAIDAS, e os subtotais podem ser negativos. */
+const LINHAS_DRE: LinhaResumo[] = [
+  { rotulo: '1. Faturamento',              chave: 'dre_faturamento',   bag: 'dre' },
+  { rotulo: 'Receita pecuária',            chave: 'dre_rec_pec',       bag: 'dre', nivel: 1 },
+  { rotulo: 'Outras receitas',             chave: 'dre_rec_outras',    bag: 'dre', nivel: 1 },
+  { rotulo: '2. (−) Deduções de receita',  chave: 'dre_deducoes',      bag: 'dre' },
+  { rotulo: '= Receita Líquida',           chave: 'dre_receita_liquida', bag: 'dre', subtotal: true },
+
+  { rotulo: '3. (−) Custeio pecuária',     chave: 'dre_custeio',       bag: 'dre' },
+  { rotulo: 'Custo fixo',                  chave: 'dre_custo_fixo',    bag: 'dre', nivel: 1 },
+  { rotulo: 'Custo variável',              chave: 'dre_custo_var',     bag: 'dre', nivel: 1 },
+  { rotulo: '= Resultado Bruto',           chave: 'dre_resultado_bruto', bag: 'dre', subtotal: true },
+
+  { rotulo: '4. (−) Investimento na fazenda', chave: 'dre_investimento', bag: 'dre' },
+  { rotulo: '= Resultado com Investimento', chave: 'dre_resultado_investimento', bag: 'dre', subtotal: true },
+
+  { rotulo: '5. (−) Reposição de bovinos', chave: 'dre_reposicao',     bag: 'dre' },
+  { rotulo: '6. (−/+) Variação do estoque', chave: 'dre_variacao',     bag: 'dre' },
+  { rotulo: 'por produção',                chave: 'dre_variacao_producao', bag: 'dre', nivel: 1 },
+  { rotulo: 'por preço',                   chave: 'dre_variacao_preco', bag: 'dre', nivel: 1 },
+  { rotulo: '= Resultado Operacional',     chave: 'dre_resultado_operacional', bag: 'dre', subtotal: true },
+
+  { rotulo: '7. (−/+) Resultado financeiro', chave: 'dre_financeiro',  bag: 'dre' },
+  { rotulo: '= Resultado antes dos Tributos', chave: 'dre_antes_tributos', bag: 'dre', subtotal: true },
+
+  { rotulo: '8. (−) Tributos patrimoniais', chave: 'dre_tributo_patrimonial', bag: 'dre' },
+  { rotulo: '9. (−) Impostos sobre lucro', chave: 'dre_imposto_lucro', bag: 'dre' },
+  { rotulo: '= Lucro Líquido',             chave: 'dre_lucro_liquido', bag: 'dre', subtotal: true },
 ];
 
 /* Ver a prop `comparadores` do card. */
@@ -678,7 +736,7 @@ const rotuloDoMes = (ind: IndicadorAtividade, leitura: Leitura, mesAtual: number
    Respeita `leitura`, como todo o resto do modal.
    Padrao A10: cabecalho `bg-primary`, zebra `odd:bg-muted/30 even:bg-card`,
    sem bordas. Meta em `text-meta` (A11). */
-const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, leitura, mesAtual, colunas, onIr }: {
+const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, leitura, mesAtual, colunas, onIr }: {
   /* DUAS formas de entrada, um componente so:
        `linhas` + `colunas` -> divide por CONTAGEM, sem titulo. E o que as
                                tabelas dos ASSUNTOS usam.
@@ -691,6 +749,7 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, leitura
   mov: IndicadorAtividade[];
   fin: IndicadorAtividade[];
   oper: IndicadorAtividade[];
+  dre: IndicadorAtividade[];
   leitura: Leitura;
   mesAtual: number;
   colunas?: number;
@@ -698,8 +757,8 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, leitura
   onIr?: (a: Assunto) => void;
 }) => {
   const acha = (l: LinhaResumo) =>
-    (l.bag === 'zoo' ? zoo : l.bag === 'fin' ? fin : l.bag === 'oper' ? oper : mov)
-      .find(i => i.chave === l.chave);
+    (l.bag === 'zoo' ? zoo : l.bag === 'fin' ? fin : l.bag === 'oper' ? oper
+      : l.bag === 'dre' ? dre : mov).find(i => i.chave === l.chave);
   const ponto = (s: number[] | undefined, mes: number) => {
     if (!s || s.length === 0) return null;
     const v = s.length >= 13 ? s[mes] : s[mes - 1];
@@ -782,13 +841,13 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, leitura
               const clicavel = !!onIr && !!l.destino;
               return (
                 <tr key={l.rotulo}
-                    className={`odd:bg-muted/30 even:bg-card ${clicavel ? 'cursor-pointer hover:bg-muted/60' : ''}`}
+                    className={`odd:bg-muted/30 even:bg-card${l.subtotal ? ' border-t border-border' : ''} ${clicavel ? 'cursor-pointer hover:bg-muted/60' : ''}`}
                     onClick={clicavel ? () => onIr!(l.destino!) : undefined}>
                   {/* `max-w` subiu de 120 para 180: com TRES colunas de ~420px o
                       rotulo cabe inteiro — `Preço médio venda` era o apertado.
                       A indentacao e PADDING, nao caractere: com espaco o
                       `truncate` cortaria o recuo antes do texto. */}
-                  <td className="text-left px-1.5 py-0.5 truncate max-w-[180px]"
+                  <td className={`text-left px-1.5 py-0.5 truncate max-w-[180px]${l.subtotal ? ' font-semibold' : ''}`}
                       style={{ paddingLeft: 6 + (l.nivel ?? 0) * 12 }}>{l.rotulo}</td>
                   <td className="text-right px-1.5 py-0.5 text-meta whitespace-nowrap">
                     {ind && metaV != null ? fmtValor(metaV, ind.formatoValor, ind.unidade) : '—'}
@@ -1131,7 +1190,7 @@ const CardIndicador = ({
 
 export function ModalAtividade({
   open, onClose, mesAtual, anoAtual, clienteNome, indicadores, codigosFazendas,
-  loadingHistorico, indicadoresMovimentacoes, indicadoresFinanceiro, indicadoresOperacional,
+  loadingHistorico, indicadoresMovimentacoes, indicadoresFinanceiro, indicadoresOperacional, indicadoresDre,
   assuntoInicial, onAssuntoChange,
 }: Props) {
   const [assunto, setAssunto] = useState<Assunto>('zootecnico');
@@ -1244,6 +1303,7 @@ export function ModalAtividade({
               mov={indicadoresMovimentacoes ?? []}
               fin={indicadoresFinanceiro ?? []}
               oper={indicadoresOperacional ?? []}
+              dre={indicadoresDre ?? []}
               leitura={leitura}
               mesAtual={mesAtual}
               onIr={setAssunto}
@@ -1257,7 +1317,25 @@ export function ModalAtividade({
               mov={indicadoresMovimentacoes ?? []}
               fin={indicadoresFinanceiro ?? []}
               oper={indicadoresOperacional ?? []}
+              dre={indicadoresDre ?? []}
               leitura={leitura}
+              mesAtual={mesAtual}
+              colunas={1}
+            />
+          ) : assunto === 'dre' ? (
+            /* ⚠ `leitura="periodo"` FIXO, nao a `leitura` do modal: a
+               `TabelaResumo` escolhe a serie por essa prop (:479, :503), entao
+               fixa-la deixa a tabela inteira acumulada sem tocar no componente.
+               Ver o comentario de `LINHAS_DRE` sobre por que um demonstrativo e'
+               acumulado por natureza. */
+            <TabelaResumo
+              linhas={LINHAS_DRE}
+              zoo={indicadores}
+              mov={indicadoresMovimentacoes ?? []}
+              fin={indicadoresFinanceiro ?? []}
+              oper={indicadoresOperacional ?? []}
+              dre={indicadoresDre ?? []}
+              leitura="periodo"
               mesAtual={mesAtual}
               colunas={1}
             />
@@ -1277,6 +1355,7 @@ export function ModalAtividade({
               mov={indicadoresMovimentacoes ?? []}
               fin={indicadoresFinanceiro ?? []}
               oper={indicadoresOperacional ?? []}
+              dre={indicadoresDre ?? []}
               leitura={leitura}
               mesAtual={mesAtual}
             />
@@ -1319,6 +1398,7 @@ export function ModalAtividade({
               mov={indicadoresMovimentacoes ?? []}
               fin={indicadoresFinanceiro ?? []}
               oper={indicadoresOperacional ?? []}
+              dre={indicadoresDre ?? []}
               leitura={leitura}
               mesAtual={mesAtual}
               colunas={2}
@@ -1370,6 +1450,7 @@ export function ModalAtividade({
               mov={indicadoresMovimentacoes ?? []}
               fin={indicadoresFinanceiro ?? []}
               oper={indicadoresOperacional ?? []}
+              dre={indicadoresDre ?? []}
               leitura={leitura}
               mesAtual={mesAtual}
               colunas={2}

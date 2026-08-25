@@ -828,6 +828,7 @@ export interface PainelConsultorDataResult {
   dreReceitaPecIndicador:               IndicadorFinanceiroShape | null;
   dreOutrasReceitasIndicador:           IndicadorFinanceiroShape | null;
   dreDeducoesIndicador:                 IndicadorFinanceiroShape | null;
+  dreCusteioIndicador:                  IndicadorFinanceiroShape | null;
   dreCustoFixoIndicador:                IndicadorFinanceiroShape | null;
   dreCustoVariavelIndicador:            IndicadorFinanceiroShape | null;
   dreInvestimentoIndicador:             IndicadorFinanceiroShape | null;
@@ -3554,22 +3555,47 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     const tribPatr    = agregaTributoPatrimonial(lancFin, ano, regime);
     const impLucro    = agregaImpostoSobreLucro(lancFin, ano, regime);
 
-    /* ── DRE · AS DEZ FONTES, SEMPRE EM COMPETENCIA ────────────────────────
-       ⚠ `'competencia'` LITERAL, nao o `regime` do hook. Aquele e' parametro do
-       CHAMADOR e nasce 'caixa'; nenhum chamador passa outro valor ate hoje. Um
-       demonstrativo de resultado nao pode depender de quem o abriu — e um DRE
-       com metade em caixa e metade em competencia nao fecha.
-       A camada de regime existe desde 3edfbd25 e NUNCA foi executada; este e' o
-       primeiro consumidor real dela.
-       O que muda (makeRealizadoSource): em competencia o filtro e'
-       `!cancelado && isFinSaida && dateCompAno === ano`, SEM filtro de status —
-       entao `previsto` e `programado` ENTRAM, e o mes vem de `data_competencia`.
-       Em caixa exige `isFinRealizado` e conta por `data_pagamento`.
+    /* ── DRE · REALIZADOS, RECORTADOS POR COMPETENCIA ──────────────────────
+       ⚠⚠ CORRECAO DE UMA AFIRMACAO FALSA JA COMMITADA. O corpo do commit
+       f110c45d diz que este bloco e' "a primeira execucao real da camada
+       publicada em 3edfbd25" e que a linha 8 "da R$ 55.000 em competencia".
+       AS DUAS SAO FALSAS. Nao ha como corrigir a mensagem daquele commit
+       (amend e rebase estao fora), entao a correcao mora aqui. Quem ler o
+       historico vai encontrar aquela afirmacao — este comentario e' a resposta.
+
+       O REGIME TEM DUAS DIMENSOES, e elas moram em lugares diferentes:
+         1. QUAL DATA RECORTA — decidida na AGREGACAO, em memoria
+            (makeRealizadoSource: `data_competencia` vs `data_pagamento`);
+         2. QUAIS STATUS ENTRAM — decidida na QUERY SQL, em
+            useFinanceiro:454 (`if (!competencia) q.eq('status_transacao',
+            'realizado')`), governada pelo `regime` do CHAMADOR.
+
+       O `C` abaixo fixa a PRIMEIRA em competencia. A SEGUNDA e' herdada do
+       chamador, que e' 'caixa' — entao `lancFin` chega ao navegador JA SEM
+       `previsto` e SEM `programado`, e nenhum literal aqui os traz de volta:
+       nao se agrega linha que nunca foi buscada.
+
+       RESULTADO, e e' o que Gabriel quer: DRE de lancamentos REALIZADOS,
+       recortados pela data do FATO em vez da data do pagamento. Previsto e
+       programado NAO entram, DE PROPOSITO — o demonstrativo mostra o que
+       aconteceu, nao o que esta planejado. Misturar resultado com projecao
+       seria outra peca.
+
+       ⚠ CONSEQUENCIA VISIVEL, e nao e' defeito: na NJ 2026 a linha 8
+       (Tributos Patrimoniais) mostra R$ 0, porque os quatro lancamentos de ITR
+       do ano estao em `previsto` e `programado`. ZERO ALI E' AUSENCIA LEGITIMA.
+       Nao criar aviso, nao esconder a linha, nao ir busca-los.
+
+       ⚠ A CAMADA DE 3edfbd25 — regime na BUSCA — CONTINUA NAO EXECUTADA por
+       nenhum chamador do repo. Passar `regime: 'competencia'` ao
+       `usePainelConsultorData` mudaria o conjunto de linhas buscadas e e'
+       decisao de produto, nao ajuste tecnico.
+
        ⚠ A META nao tem regime: `makeMetaSource` nao aplica filtro de status nem
        de data, porque plano nao tem data de pagamento — meta ja E' competencia
-       por natureza. Consequencia que precisa estar escrita: o delta vs meta do
-       DRE compara COMPETENCIA contra plano, enquanto o mesmo indicador no bloco
-       Caixa compara CAIXA contra o MESMO plano. Os dois deltas divergem sobre a
+       por natureza. Entao o delta vs meta do DRE compara realizado-por-fato
+       contra plano, enquanto o mesmo indicador no bloco Caixa compara
+       realizado-por-pagamento contra o MESMO plano. Os dois divergem sobre a
        mesma meta e AMBOS estao certos. */
     const C: Regime = 'competencia';
     const dreRec     = agregaReceitaPec(lancFin, ano, C);
@@ -4180,6 +4206,14 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
             per('Outras receitas operacionais'), recOutras_M),
           dreDeducoes: buildInd(dreDed, 'DEDUÇÕES DE RECEITA', 'Deduções de Receita',
             per('Deduções sobre a receita pecuária'), dedPec_M),
+          /* PAI de dreCustoFixo e dreCustoVariavel — os tres saem dos MESMOS
+             arrays, e `custeio` e' o proprio que `resBruto` consome (:4111), nao
+             uma soma refeita. Parece redundante e NAO e': "3. (−) Custeio
+             Pecuaria" e' linha NUMERADA do modelo oficial, e sem ela a tabela
+             mostra as duas partes sem o total que o DRE cobra. Quem "otimizar"
+             removendo o pai tira uma linha do demonstrativo. */
+          dreCusteio: buildInd(custeio, 'CUSTEIO PECUÁRIA', 'Custeio Pecuária',
+            per('Custo fixo mais custo variável pecuário'), somM(cfPec_M, cvPec_M)),
           dreCustoFixo: buildInd(dreCf, 'CUSTO FIXO', 'Custo Fixo Pecuária',
             per('Custo fixo pecuário'), cfPec_M),
           dreCustoVariavel: buildInd(dreCv, 'CUSTO VARIÁVEL', 'Custo Variável Pecuária',
@@ -4990,6 +5024,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     dreReceitaPecIndicador: _finSoberano.dreReceitaPec,
     dreOutrasReceitasIndicador: _finSoberano.dreOutrasReceitas,
     dreDeducoesIndicador: _finSoberano.dreDeducoes,
+    dreCusteioIndicador: _finSoberano.dreCusteio,
     dreCustoFixoIndicador: _finSoberano.dreCustoFixo,
     dreCustoVariavelIndicador: _finSoberano.dreCustoVariavel,
     dreInvestimentoIndicador: _finSoberano.dreInvestimento,
@@ -5106,6 +5141,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       dreReceitaPecIndicador: _finSoberano.dreReceitaPec,
       dreOutrasReceitasIndicador: _finSoberano.dreOutrasReceitas,
       dreDeducoesIndicador: _finSoberano.dreDeducoes,
+      dreCusteioIndicador: _finSoberano.dreCusteio,
       dreCustoFixoIndicador: _finSoberano.dreCustoFixo,
       dreCustoVariavelIndicador: _finSoberano.dreCustoVariavel,
       dreInvestimentoIndicador: _finSoberano.dreInvestimento,

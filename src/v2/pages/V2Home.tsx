@@ -654,6 +654,17 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     /* PR-PC100-POR-HECTARE-01 — financeiro de escopo pecuaria dividido pela area
        produtiva pecuaria. Nasceram sem leitor; a aba Operacional e' o primeiro. */
     faturamentoHaIndicador, custoHaIndicador, investimentoHaIndicador, desembolsoHaIndicador,
+    /* PR-PC100-DRE-01 e -PARCELAS-01 — o modelo oficial inteiro, sempre em
+       COMPETENCIA por construcao. Nasceram sem leitor; esta aba e' o primeiro. */
+    dreFaturamentoIndicador, dreReceitaPecIndicador, dreOutrasReceitasIndicador,
+    dreDeducoesIndicador, dreReceitaLiquidaIndicador,
+    dreCusteioIndicador, dreCustoFixoIndicador, dreCustoVariavelIndicador, dreResultadoBrutoIndicador,
+    dreInvestimentoIndicador, dreResultadoComInvestimentoIndicador,
+    dreReposicaoBovinosIndicador, dreVariacaoEstoqueIndicador,
+    dreVariacaoEstoquePorProducaoIndicador, dreVariacaoEstoquePorPrecoIndicador,
+    dreResultadoOperacionalIndicador, dreJurosIndicador,
+    dreResultadoAntesTributosIndicador, dreTributoPatrimonialIndicador,
+    dreImpostoSobreLucroIndicador, dreLucroLiquidoIndicador,
     amortizacoesIndicador,
     custeioAgriIndicador, investAgriIndicador, amortizacaoAgriIndicador,
     dividendosIndicador, deducoesTributosIndicador, tributosIndicador,
@@ -1281,8 +1292,8 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
      `indicadores` INTEIRO e apenas ordena por `ORDEM_CARDS`
      (ModalAtividade:1287-1292), entao pendurar os cruzados naquele array criaria
      quatro cards na aba do Zootecnico. */
-  const { atividade: indicadoresAtividade, operacional: indicadoresOperacional } =
-      useMemo<{ atividade: IndicadorAtividade[]; operacional: IndicadorAtividade[] }>(() => {
+  const { atividade: indicadoresAtividade, operacional: indicadoresOperacional, dre: indicadoresDre } =
+      useMemo<{ atividade: IndicadorAtividade[]; operacional: IndicadorAtividade[]; dre: IndicadorAtividade[] }>(() => {
     const serie = (ind: { series?: SeriesPorModo; serieAno?: number[] } | null | undefined,
                    modo: 'mes' | 'periodo', campo: 'ano' | 'anoAnt' | 'meta') => {
       const s = ind?.series?.[modo]?.[campo];
@@ -1387,7 +1398,33 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
       monta('investimentoHa',  investimentoHaIndicador,  'moeda', 'R$/ha'),
       monta('desembolsoHa',    desembolsoHaIndicador,    'moeda', 'R$/ha'),
     ];
-    return { atividade, operacional };
+    /* DRE — vinte chaves, todas em moeda. Mesmo `monta` de todos os outros
+       cards: o helper so da forma, e a razao/subtracao ja veio pronta do
+       PC-100. Nenhuma conta acontece aqui. */
+    const dre = [
+      monta('dre_faturamento',             dreFaturamentoIndicador,               'moedaAbreviada', undefined),
+      monta('dre_rec_pec',                 dreReceitaPecIndicador,                'moedaAbreviada', undefined),
+      monta('dre_rec_outras',              dreOutrasReceitasIndicador,            'moedaAbreviada', undefined),
+      monta('dre_deducoes',                dreDeducoesIndicador,                  'moedaAbreviada', undefined),
+      monta('dre_receita_liquida',         dreReceitaLiquidaIndicador,            'moedaAbreviada', undefined),
+      monta('dre_custeio',                 dreCusteioIndicador,                   'moedaAbreviada', undefined),
+      monta('dre_custo_fixo',              dreCustoFixoIndicador,                 'moedaAbreviada', undefined),
+      monta('dre_custo_var',               dreCustoVariavelIndicador,             'moedaAbreviada', undefined),
+      monta('dre_resultado_bruto',         dreResultadoBrutoIndicador,            'moedaAbreviada', undefined),
+      monta('dre_investimento',            dreInvestimentoIndicador,              'moedaAbreviada', undefined),
+      monta('dre_resultado_investimento',  dreResultadoComInvestimentoIndicador,  'moedaAbreviada', undefined),
+      monta('dre_reposicao',               dreReposicaoBovinosIndicador,          'moedaAbreviada', undefined),
+      monta('dre_variacao',                dreVariacaoEstoqueIndicador,           'moedaAbreviada', undefined),
+      monta('dre_variacao_producao',       dreVariacaoEstoquePorProducaoIndicador,'moedaAbreviada', undefined),
+      monta('dre_variacao_preco',          dreVariacaoEstoquePorPrecoIndicador,   'moedaAbreviada', undefined),
+      monta('dre_resultado_operacional',   dreResultadoOperacionalIndicador,      'moedaAbreviada', undefined),
+      monta('dre_financeiro',              dreJurosIndicador,                     'moedaAbreviada', undefined),
+      monta('dre_antes_tributos',          dreResultadoAntesTributosIndicador,    'moedaAbreviada', undefined),
+      monta('dre_tributo_patrimonial',     dreTributoPatrimonialIndicador,        'moedaAbreviada', undefined),
+      monta('dre_imposto_lucro',           dreImpostoSobreLucroIndicador,         'moedaAbreviada', undefined),
+      monta('dre_lucro_liquido',           dreLucroLiquidoIndicador,              'moedaAbreviada', undefined),
+    ];
+    return { atividade, operacional, dre };
   }, [
     custoArrIndicador, precoArrIndicador, custoCabIndicador, margemArrIndicador,
     faturamentoHaIndicador, custoHaIndicador, investimentoHaIndicador, desembolsoHaIndicador,cabecasIndicador, arrobasIndicador, uaHaIndicador, gmdIndicador, pesoMedioIndicador,
@@ -1617,6 +1654,17 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     if (real == null || meta == null) return null;
     if (!Number.isFinite(real) || !Number.isFinite(meta) || meta === 0) return null;
     return ((real - meta) / meta) * 100;
+  };
+
+  /* Leitor do DRE: SEMPRE `series.periodo`, nunca `series.mes`, qualquer que
+     seja o `viewMode`. Ver o comentario do card — demonstrativo e' acumulado por
+     natureza. O indice segue a regra das duas convencoes, decima copia; o
+     PR-SERIE-INDICE-01 unifica. */
+  const valorDre = (ind: { series?: SeriesPorModo } | null | undefined): string => {
+    const sr = ind?.series?.periodo?.ano;
+    const v = !sr || sr.length === 0 ? null
+      : (sr.length >= 13 ? sr[mesNum] : sr[mesNum - 1]);
+    return fmtRAbreviado(v != null && Number.isFinite(v) ? v : null) ?? '—';
   };
 
   /* Arco do card Financeiro: quanto do ANO ja passou, contra a meta anual.
@@ -2952,6 +3000,45 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           ]}
         />
       </div>
+
+      {/* ── DRE ──────────────────────────────────────────────────────────────
+          ⚠ REALIZADOS, PELA DATA DO FATO. O subtitulo diz "realizados" de
+          proposito: "por competencia" sozinho sugeriria que previsto e
+          programado entram, e eles NAO entram — o filtro de status vive na
+          query (useFinanceiro:454) e segue em caixa. Ver o comentario extenso
+          no `_finSoberano`, que corrige uma afirmacao falsa do commit f110c45d.
+
+          ⚠ ACUMULADO POR NATUREZA. `valorDre` le SEMPRE `series.periodo`,
+          qualquer que seja o `viewMode` — alternar No mes / No periodo nao muda
+          nenhum numero deste card. Responde, sim, ao MES selecionado: Jan→Jul em
+          julho, Jan→Mar em marco. Demonstrativo e' acumulado por natureza; um
+          DRE de julho isolado nao e' uma peca contabil. Mesmo raciocinio do arco
+          de @ produzidas (a87f4184), que tambem e' anual e ignora o filtro.
+          Quem fizer este card seguir o filtro achando que corrige uma
+          inconsistencia vai transforma-lo em outra coisa.
+
+          ⚠ NAO FECHA COM O CARD FINANCEIRO ACIMA, E ESTA CERTO. Aquele mostra
+          Receitas em CAIXA e escopo pecuaria; este mostra Faturamento em
+          COMPETENCIA (Receita Pecuaria + Outras). Sao vizinhos, com nomes
+          parecidos e numeros diferentes: aquele responde quanto DINHEIRO
+          entrou, este quanto a OPERACAO gerou. Tentar fazer bater desfaz um dos
+          dois. O subtitulo do card declara as duas coisas — acumulado e
+          competencia — para que a divergencia nao pareca defeito. */}
+      <div>
+        <BlocoAtividade
+          titulo="DRE"
+          subtitulo="o resultado da operação — realizados, acumulado no ano, pela data do fato"
+          icone={Wallet}
+          loading={loadingPainel}
+          onClick={() => setModalAtividade('dre')}
+          metricas={[
+            { rotulo: 'Receita líquida',  valor: valorDre(dreReceitaLiquidaIndicador),      delta: null },
+            { rotulo: 'Resultado bruto',  valor: valorDre(dreResultadoBrutoIndicador),      delta: null },
+            { rotulo: 'Result. operac.',  valor: valorDre(dreResultadoOperacionalIndicador), delta: null },
+            { rotulo: 'Lucro líquido',    valor: valorDre(dreLucroLiquidoIndicador),        delta: null },
+          ]}
+        />
+      </div>
           </div>
         </div>
 
@@ -3949,6 +4036,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           indicadoresMovimentacoes={indicadoresMovimentacoes}
           indicadoresFinanceiro={indicadoresFinanceiro}
           indicadoresOperacional={indicadoresOperacional}
+          indicadoresDre={indicadoresDre}
           codigosFazendas={seriePorFazAtiv.cabecas.map(f => f.codigo)}
           loadingHistorico={histZootAtiv.loading}
         />
