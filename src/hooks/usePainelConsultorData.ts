@@ -57,6 +57,8 @@ import {
   agregaAmortizacaoPec,
   agregaAmortizacaoAgri,
   agregaTributos,
+  agregaTributoPatrimonial,
+  agregaImpostoSobreLucro,
   agregaCusteioPecSemJurosMeta,
   agregaJurosPecMeta,
   agregaInvFazendaPecMeta,
@@ -84,6 +86,8 @@ import {
   agregaAmortizacaoPecMeta,
   agregaAmortizacaoAgriMeta,
   agregaTributosMeta,
+  agregaTributoPatrimonialMeta,
+  agregaImpostoSobreLucroMeta,
   agregaSaidasTotais,
   agregaSaidasTotaisMeta,
   agregaCustoFixoPec,
@@ -801,6 +805,9 @@ export interface PainelConsultorDataResult {
      deducoesTributosIndicador acima: ele entrega SO deducoes de receitas. Deducao e
      ajuste de receita; tributo e saida patrimonial e fiscal. */
   tributosIndicador:            IndicadorFinanceiroShape | null;
+  /* Linhas 8 e 9 do DRE. Particionam `tributosIndicador`, que segue intacto. */
+  tributoPatrimonialIndicador:  IndicadorFinanceiroShape | null;
+  impostoSobreLucroIndicador:   IndicadorFinanceiroShape | null;
 
   /** Domínio rebanho · estruturas executivas (Fase 0 Step 2.2). */
   rebanho: PC100_Rebanho;
@@ -3519,6 +3526,8 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     const amortPec    = agregaAmortizacaoPec(lancFin, ano, regime);
     const amortAgri   = agregaAmortizacaoAgri(lancFin, ano, regime);
     const tributos    = agregaTributos(lancFin, ano, regime);
+    const tribPatr    = agregaTributoPatrimonial(lancFin, ano, regime);
+    const impLucro    = agregaImpostoSobreLucro(lancFin, ano, regime);
     const cusPecComJ  = addArr12(cusPecSemJ, jurPec);
     const cusAgriComJ = addArr12(cusAgriSemJ, jurAgri);
     const cusSilviComJ  = addArr12(cusSilviSemJ, jurSilvi);
@@ -3576,6 +3585,8 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     const amortPec_M    = hasGridMeta ? agregaAmortizacaoPecMeta(gridMetaConsolidado) : null;
     const amortAgri_M   = hasGridMeta ? agregaAmortizacaoAgriMeta(gridMetaConsolidado) : null;
     const tributos_M    = hasGridMeta ? agregaTributosMeta(gridMetaConsolidado) : null;
+    const tribPatr_M    = hasGridMeta ? agregaTributoPatrimonialMeta(gridMetaConsolidado) : null;
+    const impLucro_M    = hasGridMeta ? agregaImpostoSobreLucroMeta(gridMetaConsolidado) : null;
     const cusPecComJ_M  = (cusPecSemJ_M && jurPec_M) ? addArr12(cusPecSemJ_M, jurPec_M) : null;
     const cusAgriComJ_M = (cusAgriSemJ_M && jurAgri_M) ? addArr12(cusAgriSemJ_M, jurAgri_M) : null;
     const cusSilviComJ_M = (cusSilviSemJ_M && jurSilvi_M) ? addArr12(cusSilviSemJ_M, jurSilvi_M) : null;
@@ -3948,6 +3959,35 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
         isPer ? 'Tributos e impostos acumulados Jan→mês (caixa) — ITR, taxas, IRPF, IRPJ'
               : 'Tributos e impostos no mês (caixa) — ITR, taxas, IRPF, IRPJ',
         tributos_M),
+      /* ── As duas linhas 8 e 9 do DRE oficial ──────────────────────────────
+         `tributos` acima CONTINUA sendo o total e nao muda — tem consumidores.
+         Estas duas o PARTICIONAM por centro_custo.
+
+         ⚠ VERIFICACAO DE FECHAMENTO: tributoPatrimonial + impostoSobreLucro
+         DEVE bater com tributos, mes a mes. Nao ha residual, entao centro novo
+         no macro 'Tributos' entra no total e em nenhuma das duas: a diferenca e'
+         o sinal de que o plano cresceu e o mapa de `classificacao.ts` ficou para
+         tras. O aviso em tela NAO existe nesta rodada — sem consumidor ainda —,
+         mas quem montar o DRE tem de conferir.
+
+         ⚠ A LICAO E' DA CAPTACAO, e custou uma tarde: la as partes somavam
+         quatro de seis subcentros, e o aviso amarelo acusava a propria
+         verificacao em vez do dado. Duas saidas quando o plano crescer — mapear
+         o centro novo aqui, ou criar o residual por negacao, como
+         `isCaptacaoSemEscopo` faz. A segunda e' a que garante que nada suma.
+
+         Medido no proto em 2026-08-25, base inteira, cancelados fora:
+         Tributos Patrimoniais 143 lancs / R$ 1.250.189,53 (ITR, Taxas) e
+         Impostos sobre Lucro 37 / R$ 362.944,70 (IRPF, IRPJ). Soma exata do
+         total, nenhum terceiro centro. */
+      tributoPatrimonial: buildInd(tribPatr, 'TRIBUTOS PATRIMONIAIS', 'Tributos Patrimoniais',
+        isPer ? 'Tributos patrimoniais acumulados Jan→mês (caixa) — ITR, taxas patrimoniais'
+              : 'Tributos patrimoniais no mês (caixa) — ITR, taxas patrimoniais',
+        tribPatr_M),
+      impostoSobreLucro: buildInd(impLucro, 'IMPOSTOS SOBRE LUCRO', 'Impostos sobre Lucro',
+        isPer ? 'Impostos sobre lucro acumulados Jan→mês (caixa) — IRPJ, CSLL, IRPF'
+              : 'Impostos sobre lucro no mês (caixa) — IRPJ, CSLL, IRPF',
+        impLucro_M),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lancFin, ano, mes, viewMode, gridMetaConsolidado,
@@ -4725,6 +4765,8 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     amortizacaoAgriIndicador:     _finSoberano.amortizacaoAgri,
     deducoesTributosIndicador:    _finSoberano.deducoesTributos,
     tributosIndicador:            _finSoberano.tributos,
+    tributoPatrimonialIndicador:  _finSoberano.tributoPatrimonial,
+    impostoSobreLucroIndicador:   _finSoberano.impostoSobreLucro,
 
     rebanho,
     financeiro,
@@ -4819,6 +4861,8 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       amortizacaoAgriIndicador:     _finSoberano.amortizacaoAgri,
       deducoesTributosIndicador:    _finSoberano.deducoesTributos,
       tributosIndicador:            _finSoberano.tributos,
+      tributoPatrimonialIndicador:  _finSoberano.tributoPatrimonial,
+      impostoSobreLucroIndicador:   _finSoberano.impostoSobreLucro,
       // Step 2.2: dominio rebanho preservado (composicao depende de getCategoriasDetalhe,
       // que pode existir mesmo em estado incompleto — funcao filtra saldoFinal > 0 e
       // retorna null quando vazio).

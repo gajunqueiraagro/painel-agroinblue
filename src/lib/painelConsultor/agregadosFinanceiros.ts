@@ -43,6 +43,8 @@ import {
   isDividendoOuRetirada,
   isDeducaoReceitas,
   isTributos,
+  isTributoPatrimonial,
+  isImpostoSobreLucro,
   isReceitaPecuaria,
   isReceitaAgricola,
   isReceitaSilvicola,
@@ -424,6 +426,17 @@ export function agregaTributos(lancFin: FinanceiroLancamento[], ano: number, reg
   return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano, regime), isTributos);
 }
 
+/* As duas linhas que o DRE separa. PARTICIONAM `agregaTributos`, que nao muda —
+   a soma das duas tem de bater com ele, e divergir significa centro novo no
+   macro 'Tributos' fora do mapa de `classificacao.ts`. */
+export function agregaTributoPatrimonial(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano, regime), isTributoPatrimonial);
+}
+
+export function agregaImpostoSobreLucro(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano, regime), isImpostoSobreLucro);
+}
+
 export function agregaAmortizacaoPec(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
   return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano, regime), isAmortizacaoPecuaria);
 }
@@ -645,6 +658,14 @@ export function agregaDeducoesSaidaMeta(grid: SubcentroGrid[]): number[] {
 
 export function agregaTributosMeta(grid: SubcentroGrid[]): number[] {
   return agregaPorPredicadoGenerico(makeMetaSource(grid), isTributos);
+}
+
+export function agregaTributoPatrimonialMeta(grid: SubcentroGrid[]): number[] {
+  return agregaPorPredicadoGenerico(makeMetaSource(grid), isTributoPatrimonial);
+}
+
+export function agregaImpostoSobreLucroMeta(grid: SubcentroGrid[]): number[] {
+  return agregaPorPredicadoGenerico(makeMetaSource(grid), isImpostoSobreLucro);
 }
 
 export function agregaAmortizacaoPecMeta(grid: SubcentroGrid[]): number[] {

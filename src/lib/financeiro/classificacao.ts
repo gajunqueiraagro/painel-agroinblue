@@ -547,6 +547,37 @@ export function isTributos(l: LancamentoClassificavel): boolean {
   return canonicalMacro(l) === 'tributos';
 }
 
+/**
+ * Tributo PATRIMONIAL x imposto SOBRE LUCRO — as duas linhas que o DRE oficial
+ * separa (8. Tributos Patrimoniais, 9. Impostos sobre Lucro). O plano de contas
+ * ja distingue por CENTRO, e nao por macro: o macro dos dois e 'Tributos'.
+ *
+ * Literal do campo, sem normalizacao — a mesma forma de `isCaptacaoPecuaria`.
+ * NAO por `escopo_negocio`: ver a regra critica no topo deste arquivo.
+ *
+ * `isTributos` CONTINUA sendo o total e nao muda; as duas abaixo o PARTICIONAM.
+ *
+ * ⚠ A SOMA DAS PARTES TEM DE BATER COM O TOTAL. Nao ha residual aqui, entao
+ * centro novo no macro 'Tributos' nao cai em lugar nenhum: ele soma no total e
+ * nao soma em nenhuma das duas, e a diferenca e' o sinal. Medido no proto em
+ * 2026-08-25, base inteira, cancelados fora: `Tributos Patrimoniais` 143 lancs
+ * / R$ 1.250.189,53 (ITR, Taxas Patrimoniais) e `Impostos sobre Lucro` 37 /
+ * R$ 362.944,70 (IRPF, IRPJ). Nenhum terceiro centro, nenhuma variante de
+ * grafia, nenhum centro nulo.
+ *
+ * ⚠ E' EXATAMENTE O DEFEITO QUE A CAPTACAO TEVE. La as partes somavam quatro de
+ * seis subcentros e o aviso de fechamento acusava a propria verificacao, nao o
+ * dado. A licao: quando o plano crescer, ou se mapeia o centro novo aqui, ou se
+ * cria o residual por negacao que `isCaptacaoSemEscopo` (:655) implementa — que
+ * e' o caminho de nada sumir. Enquanto forem dois, a verificacao de fechamento
+ * e' o que protege.
+ */
+export const isTributoPatrimonial = (l: LancamentoClassificavel): boolean =>
+  isTributos(l) && l.centro_custo === 'Tributos Patrimoniais';
+
+export const isImpostoSobreLucro = (l: LancamentoClassificavel): boolean =>
+  isTributos(l) && l.centro_custo === 'Impostos sobre Lucro';
+
 // ---------------------------------------------------------------------------
 // Bloco 1 Executivo — predicates atômicos por macro/escopo.
 //
