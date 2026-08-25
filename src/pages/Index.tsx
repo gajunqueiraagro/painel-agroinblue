@@ -294,7 +294,12 @@ const Index = () => {
   }, []);
 
   // Tabs operacionais bloqueadas no modo Global
-  const BLOCKED_TABS_GLOBAL: TabId[] = ['fechamento', 'conciliacao', 'lancamentos'];
+  /* `meta_preco` entrou aqui em PR-META-VALIDACAO-STATUS-01. A tela e' montada
+     em DOIS pontos — V2Index:991, que ja bloqueia Global, e a linha desta pagina
+     — e so o primeiro tinha guarda. Ela grava validacao POR FAZENDA; em Global
+     nao ha fazenda, e o que a tela mostrasse seria de um escopo que ela nao sabe
+     representar. */
+  const BLOCKED_TABS_GLOBAL: TabId[] = ['fechamento', 'conciliacao', 'lancamentos', 'meta_preco'];
 
   const handleTabChange = useCallback((tab: TabId, filtro?: { ano: string; mes: number }) => {
     if (isGlobal && BLOCKED_TABS_GLOBAL.includes(tab)) {
@@ -835,7 +840,11 @@ const Index = () => {
       {activeTab === 'precos_mercado_hub' && (
         <PrecosMercadoHubTab onTabChange={handleTabChange} onBack={() => setActiveTab('painel_consultor_hub')} />
       )}
-      {canEditMeta && activeTab === 'meta_preco' && (
+      {/* `!isGlobal` ALEM do BLOCKED_TABS_GLOBAL: aquele so barra a NAVEGACAO
+          (`handleTabChange`), e nao cobre quem ja esta na aba e troca o seletor
+          para Global — ali a tela continuaria montada. As duas guardas cobrem
+          entradas diferentes. */}
+      {canEditMeta && !isGlobal && activeTab === 'meta_preco' && (
         <MetaPrecoTab onBack={() => setActiveTab('precos_mercado_hub')} />
       )}
       {activeTab === 'preco_mercado' && (
