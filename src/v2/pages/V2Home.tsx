@@ -648,6 +648,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     aportePessoalIndicador, retornoEmprestimosIndicador,
     receitaSilvicolaIndicador, custeioSilviIndicador, investSilviIndicador, amortizacaoSilviIndicador,
     investPecIndicador, investBovinosIndicador, amortizacaoPecIndicador,
+    /* Existia no PC-100 (usePainelConsultorData:4564) e nunca fora consumido
+       aqui — o card montava o desembolso somando parcelas dos tres escopos. */
+    desembolsoPecIndicador,
     amortizacoesIndicador,
     custeioAgriIndicador, investAgriIndicador, amortizacaoAgriIndicador,
     dividendosIndicador, deducoesTributosIndicador, tributosIndicador,
@@ -2192,6 +2195,19 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
       card('fin_inv_fazenda', 'Na fazenda',   invFaz),
       card('fin_inv_bovinos', 'Em bovinos',   [investBovinosIndicador]),
       card('fin_amortizacoes', 'Amortizações', [amortizacoesIndicador]),
+      /* ── PR-VG-FIN-ESCOPO-PEC-01 · quatro chaves NOVAS, nao reaproveitadas ──
+         O card do bloco "Fechamento Pecuaria" precisa de escopo pecuaria, mas as
+         quatro chaves acima sao lidas TAMBEM pela aba Financeiro do
+         ModalAtividade, que as resolve por nome (`LINHAS_FINANCEIRO`, e o
+         `find(i => i.chave === l.chave)` de ModalAtividade:653). Repontar
+         `fin_receitas` mudaria a DRE do modal junto — que responde outra
+         pergunta e fica como esta.
+         Chave nova e' invisivel para o modal: ele so procura o que a lista dele
+         nomeia, nunca varre o array. */
+      card('fin_receitas_pec',     'Receitas pecuária',     [recPec]),
+      card('fin_desembolso_pec',   'Desembolso pecuária',   [desembolsoPecIndicador]),
+      card('fin_captacao_pec',     'Captação pecuária',     [captacaoPecIndicador]),
+      card('fin_amortizacoes_pec', 'Amortizações pecuária', [amortizacaoPecIndicador]),
       /* O INDICE VEM DO `useEndividamentoAtual`, ja montado nesta pagina — a
          formula (divida pecuaria / valor do rebanho) NAO e reescrita aqui.
          Serie propria em vez de soma: e uma razao, nao um agregado. */
@@ -2807,26 +2823,33 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
         />
       </div>
 
-      {/* E6 — Financeiro. Terceiro bloco, mesma casca dos dois anteriores.
+      {/* ⚠ ESTE CARD NAO FECHA COM O BLOCO CAIXA, E ESTA CERTO. Aqui e' escopo
+          PECUARIA; o bloco Caixa la em cima soma os TRES escopos, porque
+          responde "quanto dinheiro entrou e saiu da empresa". Sao perguntas
+          diferentes e os numeros divergem pela agricultura e pela silvicultura.
+          Quem tentar "fazer bater" vai reintroduzir receita agricola dentro de
+          um bloco chamado Fechamento Pecuaria — foi o defeito que este PR
+          corrigiu, medido na NJ: R$ 3,4 mi de R$ 14,4 mi nao eram pecuaria.
+          E6 — Financeiro. Terceiro bloco, mesma casca dos dois anteriores.
           ⚠ NAO confundir com o chip "Financeiro (em construção)" da faixa de
           status: aquele e o P3 dos pilares de fechamento, declarado
           nao_implementado, e continua onde esta. */}
       <div>
         <BlocoAtividade
           titulo="Financeiro"
-          subtitulo="o dinheiro que entrou e saiu"
+          subtitulo="o dinheiro da pecuária que entrou e saiu"
           icone={Wallet}
           loading={loadingPainel}
           onClick={() => setModalAtividade('financeiro')}
           metricas={[
-            { rotulo: 'Receitas',     valor: valorFin('fin_receitas'),
-              delta: deltaFin('fin_receitas'), deltaRotulo: 'vs meta' },
-            { rotulo: 'Desembolso',   valor: valorFin('fin_desembolso'),
-              delta: deltaFin('fin_desembolso'), deltaRotulo: 'vs meta', inverseDelta: true },
-            { rotulo: 'Captação',     valor: valorFin('fin_captacao'),
-              delta: deltaFin('fin_captacao'), deltaRotulo: 'vs meta' },
-            { rotulo: 'Amortizações', valor: valorFin('fin_amortizacoes'),
-              delta: deltaFin('fin_amortizacoes'), deltaRotulo: 'vs meta', inverseDelta: true },
+            { rotulo: 'Receitas',     valor: valorFin('fin_receitas_pec'),
+              delta: deltaFin('fin_receitas_pec'), deltaRotulo: 'vs meta' },
+            { rotulo: 'Desembolso',   valor: valorFin('fin_desembolso_pec'),
+              delta: deltaFin('fin_desembolso_pec'), deltaRotulo: 'vs meta', inverseDelta: true },
+            { rotulo: 'Captação',     valor: valorFin('fin_captacao_pec'),
+              delta: deltaFin('fin_captacao_pec'), deltaRotulo: 'vs meta' },
+            { rotulo: 'Amortizações', valor: valorFin('fin_amortizacoes_pec'),
+              delta: deltaFin('fin_amortizacoes_pec'), deltaRotulo: 'vs meta', inverseDelta: true },
           ]}
         />
       </div>
