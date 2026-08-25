@@ -33,6 +33,11 @@ export interface LancamentoClassificavel {
   ano_mes?: string | null;
   /** PR-FLUXO-SEM-CLASSIFICACAO: usado pelo helper isSemClassificacao. */
   plano_conta_id?: string | null;
+  /* PR-FIN-COMP-01 — os dois campos que o regime COMPETENCIA le. Em caixa
+     nada os consulta. `data_realizacao` e' o nome que `mapV2ToLancamento`
+     (useFinanceiro:217) da a `data_competencia` do banco. */
+  data_realizacao?: string | null;
+  cancelado?: boolean | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -761,6 +766,20 @@ export function datePagtoMes(l: LancamentoClassificavel): number | null {
 export function datePagtoAno(l: LancamentoClassificavel): number | null {
   if (!l.data_pagamento || l.data_pagamento.length < 4) return null;
   return Number(l.data_pagamento.substring(0, 4));
+}
+
+/* PR-FIN-COMP-01 — os irmaos de COMPETENCIA. MESMA forma dos de caixa:
+   substring sobre a string, sem `Date` e sem fuso — `new Date('2026-01-31')`
+   e' UTC e vira 30/01 em fuso negativo, e o mes inteiro se desloca.
+   Ausencia devolve null, e o chamador decide; nunca 0, que seria um mes. */
+export function dateCompMes(l: LancamentoClassificavel): number | null {
+  if (!l.data_realizacao || l.data_realizacao.length < 7) return null;
+  return Number(l.data_realizacao.substring(5, 7));
+}
+
+export function dateCompAno(l: LancamentoClassificavel): number | null {
+  if (!l.data_realizacao || l.data_realizacao.length < 4) return null;
+  return Number(l.data_realizacao.substring(0, 4));
 }
 
 /** Soma absoluta de valores */

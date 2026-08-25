@@ -349,6 +349,15 @@ function isFazendaAtivaMes(rebanhoMap: Map<string, Map<string, number>>, fazenda
 interface UseFinanceiroOptions {
   enabled?: boolean;
   ano?: number;
+  /* PR-FIN-COMP-01 — REGIME. Default 'caixa': todo chamador de hoje segue com
+     o conjunto identico ao de antes deste PR.
+       caixa       -> so `status_transacao = 'realizado'`, recortado por
+                      `data_pagamento`. A venda conta quando o dinheiro entra.
+       competencia -> TODOS os status vivos, recortado por `data_competencia`.
+                      A venda conta quando acontece, mesmo a prazo.
+     `cancelado`, `cenario` e `sem_movimentacao_caixa` NAO mudam: o regime
+     decide QUANDO o lancamento conta, nunca O QUE e' valido. */
+  regime?: 'caixa' | 'competencia';
 }
 
 interface FinanceiroQueryData {
@@ -374,6 +383,8 @@ const EMPTY_RAW_LANCS: RawLancPec[] = [];
 export function useFinanceiro(options: UseFinanceiroOptions = {}) {
   const enabled = options.enabled ?? true;
   const anoFiltro = options.ano;
+  const regime = options.regime ?? 'caixa';
+  const competencia = regime === 'competencia';
   const { fazendaAtual, fazendas } = useFazenda();
   const { clienteAtual } = useCliente();
   const { user } = useAuth();
@@ -406,7 +417,9 @@ export function useFinanceiro(options: UseFinanceiroOptions = {}) {
   // queryKey segue spec: [tag, clienteId, ano, escopo, enabled].
   // Cache local (staleTime/gcTime) — sem mexer no QueryClient global.
   const query = useQuery<FinanceiroQueryData>({
-    queryKey: ['financeiro-data', clienteId, anoFiltro ?? 'all', isGlobal ? 'global' : fazendaId, enabled] as const,
+    /* `regime` na chave: sem ele os dois modos compartilhariam cache e o
+       segundo a abrir receberia o conjunto do primeiro, em silencio. */
+    queryKey: ['financeiro-data', clienteId, anoFiltro ?? 'all', isGlobal ? 'global' : fazendaId, enabled, regime] as const,
     enabled: enabled && !!clienteId,
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
@@ -437,9 +450,12 @@ export function useFinanceiro(options: UseFinanceiroOptions = {}) {
           const [allLancsRaw, ccResult, impResult, contasResult, saldoResult, lancPecResult] = await Promise.all([
             fetchAllPaginated<any>((from, to) => {
               let q = (supabase.from('financeiro_lancamentos_v2').select('*') as any).eq('cliente_id', clienteId).eq('cancelado', false)
-                .eq('sem_movimentacao_caixa', false).eq('status_transacao', 'realizado').eq('cenario', 'realizado');
-              if (anoFiltro) q = q.gte('data_pagamento', `${anoFiltro}-01-01`).lte('data_pagamento', `${anoFiltro}-12-31`);
-              return q.order('data_pagamento', { ascending: false }).order('id', { ascending: false }).range(from, to);
+                .eq('sem_movimentacao_caixa', false).eq('cenario', 'realizado');
+              if (!competencia) q = q.eq('status_transacao', 'realizado');
+              if (anoFiltro) q = competencia
+                ? q.gte('data_competencia', `${anoFiltro}-01-01`).lte('data_competencia', `${anoFiltro}-12-31`)
+                : q.gte('data_pagamento', `${anoFiltro}-01-01`).lte('data_pagamento', `${anoFiltro}-12-31`);
+              return q.order(competencia ? 'data_competencia' : 'data_pagamento', { ascending: false }).order('id', { ascending: false }).range(from, to);
             }),
             supabase.from('financeiro_centros_custo').select('tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro').in('fazenda_id', allFazendaIds).eq('ativo', true),
             supabase.from('financeiro_importacoes_v2').select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro').eq('cliente_id', clienteId!).neq('status', 'cancelada').order('data_importacao', { ascending: false }),
@@ -465,17 +481,23 @@ export function useFinanceiro(options: UseFinanceiroOptions = {}) {
 
         const lancPromise = fetchAllPaginated<any>((from, to) => {
           let q = (supabase.from('financeiro_lancamentos_v2').select('*') as any).eq('fazenda_id', fazendaId).eq('cancelado', false)
-              .eq('sem_movimentacao_caixa', false).eq('status_transacao', 'realizado').eq('cenario', 'realizado');
-          if (anoFiltro) q = q.gte('data_pagamento', `${anoFiltro}-01-01`).lte('data_pagamento', `${anoFiltro}-12-31`);
-          return q.order('data_pagamento', { ascending: false }).order('id', { ascending: false }).range(from, to);
+              .eq('sem_movimentacao_caixa', false).eq('cenario', 'realizado');
+          if (!competencia) q = q.eq('status_transacao', 'realizado');
+          if (anoFiltro) q = competencia
+            ? q.gte('data_competencia', `${anoFiltro}-01-01`).lte('data_competencia', `${anoFiltro}-12-31`)
+            : q.gte('data_pagamento', `${anoFiltro}-01-01`).lte('data_pagamento', `${anoFiltro}-12-31`);
+          return q.order(competencia ? 'data_competencia' : 'data_pagamento', { ascending: false }).order('id', { ascending: false }).range(from, to);
         }).then(rows => rows.map(mapV2ToLancamento));
 
         const admPromise = needsRateio
           ? fetchAllPaginated<any>((from, to) => {
               let q = (supabase.from('financeiro_lancamentos_v2').select('*') as any).eq('fazenda_id', fazendaADM.id).eq('cancelado', false)
-              .eq('sem_movimentacao_caixa', false).eq('status_transacao', 'realizado').eq('cenario', 'realizado');
-              if (anoFiltro) q = q.gte('data_pagamento', `${anoFiltro}-01-01`).lte('data_pagamento', `${anoFiltro}-12-31`);
-              return q.order('data_pagamento', { ascending: false }).order('id', { ascending: false }).range(from, to);
+              .eq('sem_movimentacao_caixa', false).eq('cenario', 'realizado');
+              if (!competencia) q = q.eq('status_transacao', 'realizado');
+              if (anoFiltro) q = competencia
+                ? q.gte('data_competencia', `${anoFiltro}-01-01`).lte('data_competencia', `${anoFiltro}-12-31`)
+                : q.gte('data_pagamento', `${anoFiltro}-01-01`).lte('data_pagamento', `${anoFiltro}-12-31`);
+              return q.order(competencia ? 'data_competencia' : 'data_pagamento', { ascending: false }).order('id', { ascending: false }).range(from, to);
             }).then(rows => rows.map(mapV2ToLancamento))
           : Promise.resolve([] as FinanceiroLancamento[]);
 

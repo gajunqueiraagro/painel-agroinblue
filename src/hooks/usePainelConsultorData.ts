@@ -92,6 +92,7 @@ import {
   agregaCustoFixoSilvi,
   agregaCustoVariavelAgri,
   agregaCustoVariavelSilvi,
+  type Regime,
   agregaDeducoesPec,
   agregaDeducoesAgri,
   agregaDeducoesSilvi,
@@ -153,6 +154,9 @@ interface Params {
    * realizado estar completo.
    */
   preservarMetaQuandoGlobalIncompleto?: boolean;
+  /* PR-FIN-COMP-01 — repassado a `useFinanceiro` e aos adapters. Default
+     'caixa': nenhum chamador de hoje muda de numero. */
+  regime?: Regime;
 }
 
 export type StatusValidacaoArea =
@@ -804,7 +808,7 @@ export interface PainelConsultorDataResult {
   loading: boolean;
 }
 
-export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMeta = false, incluirComparativos = false, enabled = true, lancPecExterno, lancFinExterno, gridMetaExterno, preservarMetaQuandoGlobalIncompleto = false }: Params): PainelConsultorDataResult {
+export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMeta = false, incluirComparativos = false, enabled = true, lancPecExterno, lancFinExterno, gridMetaExterno, preservarMetaQuandoGlobalIncompleto = false, regime = 'caixa' }: Params): PainelConsultorDataResult {
   const { fazendaAtual, isGlobal, fazendasComPecuaria } = useFazenda();
   const fazendaId = fazendaAtual?.id;
   const { clienteAtual } = useCliente();
@@ -1135,7 +1139,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     useLancamentos({ enabled: enabled && !usarLancPecExterno, ano });
 
   const { lancamentos: lancFinInterno, loading: loadingFinInterno } =
-    useFinanceiro({ enabled: enabled && !usarLancFinExterno, ano });
+    useFinanceiro({ enabled: enabled && !usarLancFinExterno, ano, regime });
 
   // Etapa 2D — caixaIndicador.
   // Caixa: fonte oficial de saldo bancário consolidado por cliente
@@ -3451,48 +3455,48 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
   const _finSoberano = useMemo(() => {
     const addArr12 = (a: number[], b: number[]) => a.map((v, i) => v + (b[i] ?? 0));
 
-    const cusPecSemJ  = agregaCusteioPecSemJuros(lancFin, ano);
-    const jurPec      = agregaJurosPec(lancFin, ano);
-    const invFazPec   = agregaInvFazendaPec(lancFin, ano);
-    const cusAgriSemJ = agregaCusteioAgriSemJuros(lancFin, ano);
-    const jurAgri     = agregaJurosAgri(lancFin, ano);
-    const invFazAgri  = agregaInvFazendaAgri(lancFin, ano);
-    const invBov      = agregaInvBovinos(lancFin, ano);
-    const amort       = agregaAmortizacoes(lancFin, ano);
-    const div         = agregaDividendos(lancFin, ano);
-    const recPecCx    = agregaReceitaPec(lancFin, ano);
-    const recSilvi      = agregaReceitaSilvicola(lancFin, ano);
-    const cusSilviSemJ  = agregaCusteioSilviSemJuros(lancFin, ano);
-    const invFazSilvi   = agregaInvFazendaSilvi(lancFin, ano);
-    const amortSilvi    = agregaAmortizacaoSilvi(lancFin, ano);
-    const recAgri     = agregaReceitaAgri(lancFin, ano);
-    const recOutras   = agregaOutrasReceitas(lancFin, ano);
-    const captacao    = agregaEntradasFinanceiras(lancFin, ano);
+    const cusPecSemJ  = agregaCusteioPecSemJuros(lancFin, ano, regime);
+    const jurPec      = agregaJurosPec(lancFin, ano, regime);
+    const invFazPec   = agregaInvFazendaPec(lancFin, ano, regime);
+    const cusAgriSemJ = agregaCusteioAgriSemJuros(lancFin, ano, regime);
+    const jurAgri     = agregaJurosAgri(lancFin, ano, regime);
+    const invFazAgri  = agregaInvFazendaAgri(lancFin, ano, regime);
+    const invBov      = agregaInvBovinos(lancFin, ano, regime);
+    const amort       = agregaAmortizacoes(lancFin, ano, regime);
+    const div         = agregaDividendos(lancFin, ano, regime);
+    const recPecCx    = agregaReceitaPec(lancFin, ano, regime);
+    const recSilvi      = agregaReceitaSilvicola(lancFin, ano, regime);
+    const cusSilviSemJ  = agregaCusteioSilviSemJuros(lancFin, ano, regime);
+    const invFazSilvi   = agregaInvFazendaSilvi(lancFin, ano, regime);
+    const amortSilvi    = agregaAmortizacaoSilvi(lancFin, ano, regime);
+    const recAgri     = agregaReceitaAgri(lancFin, ano, regime);
+    const recOutras   = agregaOutrasReceitas(lancFin, ano, regime);
+    const captacao    = agregaEntradasFinanceiras(lancFin, ano, regime);
 /* PR-PC100-BLOCO-CAIXA-01 — dez series novas. Custo Fixo e Custo Variavel
    PECUARIA saem dos predicates ESTRITOS: `custeioPecSemJuros` soma os dois,
    e usa-lo numa das linhas faria ela conter a irma (Custo Fixo Pecuaria,
    R$ 49,85 mi, o maior grupo de saida da base). */
-    const cfPec       = agregaCustoFixoPec(lancFin, ano);
-    const cvPec       = agregaCustoVariavelPec(lancFin, ano);
-    const cfAgri       = agregaCustoFixoAgri(lancFin, ano);
-    const cfSilvi       = agregaCustoFixoSilvi(lancFin, ano);
-    const cvAgri        = agregaCustoVariavelAgri(lancFin, ano);
-    const cvSilvi       = agregaCustoVariavelSilvi(lancFin, ano);
-    const dedPec       = agregaDeducoesPec(lancFin, ano);
-    const dedAgri       = agregaDeducoesAgri(lancFin, ano);
-    const dedSilvi       = agregaDeducoesSilvi(lancFin, ano);
-    const jurSilvi       = agregaJurosSilvi(lancFin, ano);
-    const aporte       = agregaAportePessoal(lancFin, ano);
-    const retEmp       = agregaRetornoEmprestimos(lancFin, ano);
-    const captPec     = agregaCaptacaoPec(lancFin, ano);
-    const captAgri    = agregaCaptacaoAgri(lancFin, ano);
-    const captSilvi   = agregaCaptacaoSilvi(lancFin, ano);
-    const captSemEsc  = agregaCaptacaoSemEscopo(lancFin, ano);
-    const naoClassif  = agregaEntradasNaoClassificadas(lancFin, ano);
-    const deducoes    = agregaDeducoesSaida(lancFin, ano);
-    const amortPec    = agregaAmortizacaoPec(lancFin, ano);
-    const amortAgri   = agregaAmortizacaoAgri(lancFin, ano);
-    const tributos    = agregaTributos(lancFin, ano);
+    const cfPec       = agregaCustoFixoPec(lancFin, ano, regime);
+    const cvPec       = agregaCustoVariavelPec(lancFin, ano, regime);
+    const cfAgri       = agregaCustoFixoAgri(lancFin, ano, regime);
+    const cfSilvi       = agregaCustoFixoSilvi(lancFin, ano, regime);
+    const cvAgri        = agregaCustoVariavelAgri(lancFin, ano, regime);
+    const cvSilvi       = agregaCustoVariavelSilvi(lancFin, ano, regime);
+    const dedPec       = agregaDeducoesPec(lancFin, ano, regime);
+    const dedAgri       = agregaDeducoesAgri(lancFin, ano, regime);
+    const dedSilvi       = agregaDeducoesSilvi(lancFin, ano, regime);
+    const jurSilvi       = agregaJurosSilvi(lancFin, ano, regime);
+    const aporte       = agregaAportePessoal(lancFin, ano, regime);
+    const retEmp       = agregaRetornoEmprestimos(lancFin, ano, regime);
+    const captPec     = agregaCaptacaoPec(lancFin, ano, regime);
+    const captAgri    = agregaCaptacaoAgri(lancFin, ano, regime);
+    const captSilvi   = agregaCaptacaoSilvi(lancFin, ano, regime);
+    const captSemEsc  = agregaCaptacaoSemEscopo(lancFin, ano, regime);
+    const naoClassif  = agregaEntradasNaoClassificadas(lancFin, ano, regime);
+    const deducoes    = agregaDeducoesSaida(lancFin, ano, regime);
+    const amortPec    = agregaAmortizacaoPec(lancFin, ano, regime);
+    const amortAgri   = agregaAmortizacaoAgri(lancFin, ano, regime);
+    const tributos    = agregaTributos(lancFin, ano, regime);
     const cusPecComJ  = addArr12(cusPecSemJ, jurPec);
     const cusAgriComJ = addArr12(cusAgriSemJ, jurAgri);
     const cusSilviComJ  = addArr12(cusSilviSemJ, jurSilvi);
@@ -3501,7 +3505,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     // Modelo Caixa puro — inclui Deduções de Receitas (lado saída).
     // Espelha agregaSaidasTotais oficial; eliminamos a soma manual paralela
     // que excluía dedução e gerava divergência com Dashboard.
-    const saidasTot = agregaSaidasTotais(lancFin, ano);
+    const saidasTot = agregaSaidasTotais(lancFin, ano, regime);
 
     // ─── META — só calcula se grid disponível (A3) ───────────────────────
     // Indicadores soberanos META consomem o grid consolidado interno único.

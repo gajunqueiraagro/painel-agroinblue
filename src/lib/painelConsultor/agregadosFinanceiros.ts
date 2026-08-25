@@ -58,6 +58,8 @@ import {
   isAmortizacaoSilvicultura,
   datePagtoMes,
   datePagtoAno,
+  dateCompMes,
+  dateCompAno,
   type LancamentoClassificavel,
   isCustoFixoAgricultura,
   isCustoFixoSilvicultura,
@@ -123,6 +125,15 @@ export function agregaPorPredicadoGenerico<T>(
 
 // ─── Adapters ────────────────────────────────────────────────────────
 
+/* PR-FIN-COMP-01 — o REGIME muda QUANDO o lancamento conta, nunca O QUE ele
+   e'. Nenhum `is*()` de classificacao foi tocado: `isReceitaPecuaria` e os
+   demais valem igual nos dois regimes.
+     caixa       -> conta no mes do PAGAMENTO, e so o que ja foi pago
+     competencia -> conta no mes do FATO, pago ou nao
+   UM adapter parametrizado, nunca dois caminhos paralelos: dois caminhos e'
+   como nasce divergencia que ninguem percebe ate os numeros discordarem. */
+export type Regime = 'caixa' | 'competencia';
+
 /**
  * Adapter REALIZADO: contribuições a partir de FinanceiroLancamento.
  * Filtros base oficiais: realizado + saída + ano de data_pagamento === ano.
@@ -131,13 +142,17 @@ export function agregaPorPredicadoGenerico<T>(
 export function makeRealizadoSource(
   lancFin: FinanceiroLancamento[],
   ano: number,
+  regime: Regime = 'caixa',
 ): AggregaSource<FinanceiroLancamento> {
+  const comp = regime === 'competencia';
   return {
     items: lancFin,
     toClassificavel: (l) => l,
-    passesBase: (l) => isFinRealizado(l) && isFinSaida(l) && datePagtoAno(l) === ano,
+    passesBase: (l) => comp
+      ? (!l.cancelado && isFinSaida(l) && dateCompAno(l) === ano)
+      : (isFinRealizado(l) && isFinSaida(l) && datePagtoAno(l) === ano),
     forEachContribution: (l, emit) => {
-      const m = datePagtoMes(l);
+      const m = comp ? dateCompMes(l) : datePagtoMes(l);
       if (m && m >= 1 && m <= 12) {
         emit(m - 1, Math.abs(Number(l.valor) || 0));
       }
@@ -152,13 +167,17 @@ export function makeRealizadoSource(
 export function makeRealizadoSourceEntrada(
   lancFin: FinanceiroLancamento[],
   ano: number,
+  regime: Regime = 'caixa',
 ): AggregaSource<FinanceiroLancamento> {
+  const comp = regime === 'competencia';
   return {
     items: lancFin,
     toClassificavel: (l) => l,
-    passesBase: (l) => isFinRealizado(l) && isFinEntrada(l) && datePagtoAno(l) === ano,
+    passesBase: (l) => comp
+      ? (!l.cancelado && isFinEntrada(l) && dateCompAno(l) === ano)
+      : (isFinRealizado(l) && isFinEntrada(l) && datePagtoAno(l) === ano),
     forEachContribution: (l, emit) => {
-      const m = datePagtoMes(l);
+      const m = comp ? dateCompMes(l) : datePagtoMes(l);
       if (m && m >= 1 && m <= 12) {
         emit(m - 1, Math.abs(Number(l.valor) || 0));
       }
@@ -214,146 +233,146 @@ export function agregaPorPredicado(
 
 // ─── Atômicos REALIZADO ──────────────────────────────────────────────
 
-export function agregaCusteioPecSemJuros(lancFin: FinanceiroLancamento[], ano: number): number[] {
-  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isCusteioProducaoPecuaria);
+export function agregaCusteioPecSemJuros(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano, regime), isCusteioProducaoPecuaria);
 }
 
 /** Marco 1.1.E — Custo Variável Pecuária separado (grupo_custo estrito). */
-export function agregaCustoVariavelPec(lancFin: FinanceiroLancamento[], ano: number): number[] {
-  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isCustoVariavelPecuaria);
+export function agregaCustoVariavelPec(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano, regime), isCustoVariavelPecuaria);
 }
 
 /** Marco 1.1.E — Custo Fixo Pecuária separado (grupo_custo estrito). */
-export function agregaCustoFixoPec(lancFin: FinanceiroLancamento[], ano: number): number[] {
-  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isCustoFixoPecuaria);
+export function agregaCustoFixoPec(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano, regime), isCustoFixoPecuaria);
 }
 
 
 /* PR-PC100-BLOCO-CAIXA-01 — sete agregadores novos, no idioma dos irmaos.
    Os de ENTRADA usam makeRealizadoSourceEntrada; os de SAIDA, o source
    padrao. Nenhum inventa conta: cada um delega a um predicate literal. */
-export function agregaCustoFixoAgri(lancFin: FinanceiroLancamento[], ano: number): number[] {
-  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isCustoFixoAgricultura);
+export function agregaCustoFixoAgri(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano, regime), isCustoFixoAgricultura);
 }
 
-export function agregaCustoFixoSilvi(lancFin: FinanceiroLancamento[], ano: number): number[] {
-  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isCustoFixoSilvicultura);
+export function agregaCustoFixoSilvi(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano, regime), isCustoFixoSilvicultura);
 }
 
 /* PR-FINANCEIRO-01 — os pares variaveis de agricultura e silvicultura. Ver o
    comentario dos predicates em `classificacao.ts`. */
-export function agregaCustoVariavelAgri(lancFin: FinanceiroLancamento[], ano: number): number[] {
-  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isCustoVariavelAgricultura);
+export function agregaCustoVariavelAgri(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano, regime), isCustoVariavelAgricultura);
 }
 
-export function agregaCustoVariavelSilvi(lancFin: FinanceiroLancamento[], ano: number): number[] {
-  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isCustoVariavelSilvicultura);
+export function agregaCustoVariavelSilvi(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano, regime), isCustoVariavelSilvicultura);
 }
 
-export function agregaDeducoesPec(lancFin: FinanceiroLancamento[], ano: number): number[] {
-  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isDeducoesPecuaria);
+export function agregaDeducoesPec(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano, regime), isDeducoesPecuaria);
 }
 
-export function agregaDeducoesAgri(lancFin: FinanceiroLancamento[], ano: number): number[] {
-  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isDeducoesAgricultura);
+export function agregaDeducoesAgri(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano, regime), isDeducoesAgricultura);
 }
 
-export function agregaDeducoesSilvi(lancFin: FinanceiroLancamento[], ano: number): number[] {
-  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isDeducoesSilvicultura);
+export function agregaDeducoesSilvi(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano, regime), isDeducoesSilvicultura);
 }
 
-export function agregaAportePessoal(lancFin: FinanceiroLancamento[], ano: number): number[] {
-  return agregaPorPredicadoGenerico(makeRealizadoSourceEntrada(lancFin, ano), isAportePessoal);
+export function agregaAportePessoal(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSourceEntrada(lancFin, ano, regime), isAportePessoal);
 }
 
-export function agregaRetornoEmprestimos(lancFin: FinanceiroLancamento[], ano: number): number[] {
-  return agregaPorPredicadoGenerico(makeRealizadoSourceEntrada(lancFin, ano), isRetornoEmprestimos);
+export function agregaRetornoEmprestimos(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSourceEntrada(lancFin, ano, regime), isRetornoEmprestimos);
 }
 
-export function agregaJurosPec(lancFin: FinanceiroLancamento[], ano: number): number[] {
-  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isJurosPecuaria);
+export function agregaJurosPec(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano, regime), isJurosPecuaria);
 }
 
-export function agregaInvFazendaPec(lancFin: FinanceiroLancamento[], ano: number): number[] {
-  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isInvestimentoFazendaPecuaria);
+export function agregaInvFazendaPec(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano, regime), isInvestimentoFazendaPecuaria);
 }
 
-export function agregaCusteioAgriSemJuros(lancFin: FinanceiroLancamento[], ano: number): number[] {
-  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isCusteioProducaoAgricultura);
+export function agregaCusteioAgriSemJuros(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano, regime), isCusteioProducaoAgricultura);
 }
 
-export function agregaJurosAgri(lancFin: FinanceiroLancamento[], ano: number): number[] {
-  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isJurosAgricultura);
+export function agregaJurosAgri(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano, regime), isJurosAgricultura);
 }
 
-export function agregaInvFazendaAgri(lancFin: FinanceiroLancamento[], ano: number): number[] {
-  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isInvestimentoFazendaAgricultura);
+export function agregaInvFazendaAgri(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano, regime), isInvestimentoFazendaAgricultura);
 }
 
 /* Silvicultura — os quatro de SAIDA usam makeRealizadoSource; a receita acima usa
    makeRealizadoSourceEntrada. Trocar o adapter inverte o filtro de sinal e zera a linha. */
-export function agregaCusteioSilviSemJuros(lancFin: FinanceiroLancamento[], ano: number): number[] {
-  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isCusteioProducaoSilvicultura);
+export function agregaCusteioSilviSemJuros(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano, regime), isCusteioProducaoSilvicultura);
 }
 
-export function agregaJurosSilvi(lancFin: FinanceiroLancamento[], ano: number): number[] {
-  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isJurosSilvicultura);
+export function agregaJurosSilvi(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano, regime), isJurosSilvicultura);
 }
 
-export function agregaInvFazendaSilvi(lancFin: FinanceiroLancamento[], ano: number): number[] {
-  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isInvestimentoFazendaSilvicultura);
+export function agregaInvFazendaSilvi(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano, regime), isInvestimentoFazendaSilvicultura);
 }
 
-export function agregaInvBovinos(lancFin: FinanceiroLancamento[], ano: number): number[] {
-  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isReposicaoBovinos);
+export function agregaInvBovinos(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano, regime), isReposicaoBovinos);
 }
 
-export function agregaAmortizacoes(lancFin: FinanceiroLancamento[], ano: number): number[] {
-  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isAmortizacao);
+export function agregaAmortizacoes(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano, regime), isAmortizacao);
 }
 
-export function agregaDividendos(lancFin: FinanceiroLancamento[], ano: number): number[] {
-  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isDividendoOuRetirada);
+export function agregaDividendos(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano, regime), isDividendoOuRetirada);
 }
 
 // ─── Atômicos REALIZADO — Bloco 1 Executivo ──────────────────────────
 
-export function agregaReceitaPec(lancFin: FinanceiroLancamento[], ano: number): number[] {
-  return agregaPorPredicadoGenerico(makeRealizadoSourceEntrada(lancFin, ano), isReceitaPecuaria);
+export function agregaReceitaPec(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSourceEntrada(lancFin, ano, regime), isReceitaPecuaria);
 }
 
-export function agregaReceitaAgri(lancFin: FinanceiroLancamento[], ano: number): number[] {
-  return agregaPorPredicadoGenerico(makeRealizadoSourceEntrada(lancFin, ano), isReceitaAgricola);
+export function agregaReceitaAgri(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSourceEntrada(lancFin, ano, regime), isReceitaAgricola);
 }
 
-export function agregaReceitaSilvicola(lancFin: FinanceiroLancamento[], ano: number): number[] {
-  return agregaPorPredicadoGenerico(makeRealizadoSourceEntrada(lancFin, ano), isReceitaSilvicola);
+export function agregaReceitaSilvicola(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSourceEntrada(lancFin, ano, regime), isReceitaSilvicola);
 }
 
-export function agregaOutrasReceitas(lancFin: FinanceiroLancamento[], ano: number): number[] {
-  return agregaPorPredicadoGenerico(makeRealizadoSourceEntrada(lancFin, ano), isOutrasReceitas);
+export function agregaOutrasReceitas(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSourceEntrada(lancFin, ano, regime), isOutrasReceitas);
 }
 
-export function agregaEntradasFinanceiras(lancFin: FinanceiroLancamento[], ano: number): number[] {
-  return agregaPorPredicadoGenerico(makeRealizadoSourceEntrada(lancFin, ano), isEntradaFinanceira);
+export function agregaEntradasFinanceiras(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSourceEntrada(lancFin, ano, regime), isEntradaFinanceira);
 }
 
 /* Captacao por escopo — os quatro PARTICIONAM agregaEntradasFinanceiras acima,
    que permanece como TOTAL e e o que permite verificar o fechamento na tela. */
-export function agregaCaptacaoPec(lancFin: FinanceiroLancamento[], ano: number): number[] {
-  return agregaPorPredicadoGenerico(makeRealizadoSourceEntrada(lancFin, ano), isCaptacaoPecuaria);
+export function agregaCaptacaoPec(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSourceEntrada(lancFin, ano, regime), isCaptacaoPecuaria);
 }
 
-export function agregaCaptacaoAgri(lancFin: FinanceiroLancamento[], ano: number): number[] {
-  return agregaPorPredicadoGenerico(makeRealizadoSourceEntrada(lancFin, ano), isCaptacaoAgricultura);
+export function agregaCaptacaoAgri(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSourceEntrada(lancFin, ano, regime), isCaptacaoAgricultura);
 }
 
-export function agregaCaptacaoSilvi(lancFin: FinanceiroLancamento[], ano: number): number[] {
-  return agregaPorPredicadoGenerico(makeRealizadoSourceEntrada(lancFin, ano), isCaptacaoSilvicultura);
+export function agregaCaptacaoSilvi(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSourceEntrada(lancFin, ano, regime), isCaptacaoSilvicultura);
 }
 
-export function agregaCaptacaoSemEscopo(lancFin: FinanceiroLancamento[], ano: number): number[] {
-  return agregaPorPredicadoGenerico(makeRealizadoSourceEntrada(lancFin, ano), isCaptacaoSemEscopo);
+export function agregaCaptacaoSemEscopo(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSourceEntrada(lancFin, ano, regime), isCaptacaoSemEscopo);
 }
 
 /**
@@ -362,10 +381,10 @@ export function agregaCaptacaoSemEscopo(lancFin: FinanceiroLancamento[], ano: nu
  * simplesmente nao entraria em linha nenhuma.
  */
 export function agregaEntradasNaoClassificadas(
-  lancFin: FinanceiroLancamento[], ano: number,
+  lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa',
 ): number[] {
   return agregaPorPredicadoGenerico(
-    makeRealizadoSourceEntrada(lancFin, ano), isEntradaNaoClassificada);
+    makeRealizadoSourceEntrada(lancFin, ano, regime), isEntradaNaoClassificada);
 }
 
 /**
@@ -373,9 +392,9 @@ export function agregaEntradasNaoClassificadas(
  * entrada (sinal de redução) quanto como saída (alguns clientes legados),
  * portanto agregamos os dois lados e somamos.
  */
-export function agregaDeducoes(lancFin: FinanceiroLancamento[], ano: number): number[] {
-  const entrada = agregaPorPredicadoGenerico(makeRealizadoSourceEntrada(lancFin, ano), isDeducaoReceitas);
-  const saida   = agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isDeducaoReceitas);
+export function agregaDeducoes(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
+  const entrada = agregaPorPredicadoGenerico(makeRealizadoSourceEntrada(lancFin, ano, regime), isDeducaoReceitas);
+  const saida   = agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano, regime), isDeducaoReceitas);
   return addArrays(entrada, saida);
 }
 
@@ -392,8 +411,8 @@ export function agregaDeducoes(lancFin: FinanceiroLancamento[], ano: number): nu
  * Use este atômico em agregaSaidasTotais (modelo Caixa puro) para garantir
  * paridade com Dashboard Financeiro.
  */
-export function agregaDeducoesSaida(lancFin: FinanceiroLancamento[], ano: number): number[] {
-  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isDeducaoReceitas);
+export function agregaDeducoesSaida(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano, regime), isDeducaoReceitas);
 }
 
 /**
@@ -401,51 +420,51 @@ export function agregaDeducoesSaida(lancFin: FinanceiroLancamento[], ano: number
  * Sempre SAIDA: os 171 lancamentos medidos sao todos tipo_operacao='2-Saidas',
  * entao o adapter e o de saida, o mesmo de agregaDeducoesSaida.
  */
-export function agregaTributos(lancFin: FinanceiroLancamento[], ano: number): number[] {
-  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isTributos);
+export function agregaTributos(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano, regime), isTributos);
 }
 
-export function agregaAmortizacaoPec(lancFin: FinanceiroLancamento[], ano: number): number[] {
-  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isAmortizacaoPecuaria);
+export function agregaAmortizacaoPec(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano, regime), isAmortizacaoPecuaria);
 }
 
-export function agregaAmortizacaoAgri(lancFin: FinanceiroLancamento[], ano: number): number[] {
-  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isAmortizacaoAgricultura);
+export function agregaAmortizacaoAgri(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano, regime), isAmortizacaoAgricultura);
 }
 
-export function agregaAmortizacaoSilvi(lancFin: FinanceiroLancamento[], ano: number): number[] {
-  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isAmortizacaoSilvicultura);
+export function agregaAmortizacaoSilvi(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano, regime), isAmortizacaoSilvicultura);
 }
 
 // ─── Derivados REALIZADO (somas de atômicos) ─────────────────────────
 
-export function agregaCusteioPecComJuros(lancFin: FinanceiroLancamento[], ano: number): number[] {
+export function agregaCusteioPecComJuros(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
   return addArrays(
-    agregaCusteioPecSemJuros(lancFin, ano),
-    agregaJurosPec(lancFin, ano),
+    agregaCusteioPecSemJuros(lancFin, ano, regime),
+    agregaJurosPec(lancFin, ano, regime),
   );
 }
 
-export function agregaCusteioAgriComJuros(lancFin: FinanceiroLancamento[], ano: number): number[] {
+export function agregaCusteioAgriComJuros(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
   return addArrays(
-    agregaCusteioAgriSemJuros(lancFin, ano),
-    agregaJurosAgri(lancFin, ano),
+    agregaCusteioAgriSemJuros(lancFin, ano, regime),
+    agregaJurosAgri(lancFin, ano, regime),
   );
 }
 
 /** Desembolso Pec = Custeio Pec com juros + Inv Fazenda Pec (sem Inv Bovinos). */
-export function agregaDesembolsoPec(lancFin: FinanceiroLancamento[], ano: number): number[] {
+export function agregaDesembolsoPec(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
   return addArrays(
-    agregaCusteioPecComJuros(lancFin, ano),
-    agregaInvFazendaPec(lancFin, ano),
+    agregaCusteioPecComJuros(lancFin, ano, regime),
+    agregaInvFazendaPec(lancFin, ano, regime),
   );
 }
 
 /** Desembolso Agri = Custeio Agri com juros + Inv Fazenda Agri. */
-export function agregaDesembolsoAgri(lancFin: FinanceiroLancamento[], ano: number): number[] {
+export function agregaDesembolsoAgri(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
   return addArrays(
-    agregaCusteioAgriComJuros(lancFin, ano),
-    agregaInvFazendaAgri(lancFin, ano),
+    agregaCusteioAgriComJuros(lancFin, ano, regime),
+    agregaInvFazendaAgri(lancFin, ano, regime),
   );
 }
 
@@ -461,13 +480,13 @@ export function agregaDesembolsoAgri(lancFin: FinanceiroLancamento[], ano: numbe
  * Modelo Caixa puro: tudo que SAI do caixa entra em "Saídas Totais".
  * Receita Pec continua bruta (sem desconto de dedução).
  */
-export function agregaSaidasTotais(lancFin: FinanceiroLancamento[], ano: number): number[] {
-  let out = agregaDesembolsoPec(lancFin, ano);
-  out = addArrays(out, agregaDesembolsoAgri(lancFin, ano));
-  out = addArrays(out, agregaInvBovinos(lancFin, ano));
-  out = addArrays(out, agregaAmortizacoes(lancFin, ano));
-  out = addArrays(out, agregaDividendos(lancFin, ano));
-  out = addArrays(out, agregaDeducoesSaida(lancFin, ano));
+export function agregaSaidasTotais(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
+  let out = agregaDesembolsoPec(lancFin, ano, regime);
+  out = addArrays(out, agregaDesembolsoAgri(lancFin, ano, regime));
+  out = addArrays(out, agregaInvBovinos(lancFin, ano, regime));
+  out = addArrays(out, agregaAmortizacoes(lancFin, ano, regime));
+  out = addArrays(out, agregaDividendos(lancFin, ano, regime));
+  out = addArrays(out, agregaDeducoesSaida(lancFin, ano, regime));
   return out;
 }
 
