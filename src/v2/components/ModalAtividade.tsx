@@ -240,24 +240,21 @@ const LINHAS_GERAL: LinhaResumo[] = [
 const BLOCOS_GERAL: Array<{ titulo: string; destino?: Assunto; linhas: LinhaResumo[] }> = [
   { titulo: 'Zootécnico',    destino: 'zootecnico',    linhas: LINHAS_GERAL.filter(l => l.destino === 'zootecnico') },
   { titulo: 'Movimentações', destino: 'movimentacoes', linhas: LINHAS_GERAL.filter(l => l.destino === 'movimentacoes') },
-  /* PR-RESUMO-03 — TRES colunas, nao quatro. Medido na tela em ~310px:
-     `4.861,4 ha` e `16.879,7 @` quebravam em duas linhas, as alturas
-     desalinhavam entre colunas e o cabecalho `Dif.` das Movimentacoes ficava
-     cortado. Em ~420px cabe rotulo mais tres numeros com unidade.
-     Os dois assuntos que faltam dividem a terceira: sao os que ainda nao tem
-     linha propria, e junta-los custa menos que espremer as duas primeiras.
+  /* ⚠ TRES colunas, SEMPRE — medido duas vezes na tela. Em `max-w-7xl`,
+     quatro dao ~310px: `4.861,4 ha` e `16.879,7 @` quebram em duas linhas, as
+     alturas desalinham e o `Dif.` das Movimentacoes fica cortado contra a
+     coluna seguinte. Em ~420px cabe rotulo mais tres numeros com unidade.
+     O PR-RESUMO-03 resolveu isso; o PR-FINANCEIRO-01 deu coluna propria ao
+     Financeiro e trouxe o defeito de volta. Os dois assuntos dividem a
+     terceira, e a mensagem "em construção" saiu porque agora ha linhas.
      ⚠ SEM `destino`: com dois assuntos na mesma coluna o cabecalho nao teria
      para onde levar. O clique fica por LINHA. */
-  { titulo: 'Financeiro', destino: 'financeiro', linhas: [
-      { rotulo: 'Receitas',    chave: 'fin_receitas',    bag: 'fin', destino: 'financeiro' },
-      { rotulo: 'Desembolso',  chave: 'fin_desembolso',  bag: 'fin', destino: 'financeiro' },
-      { rotulo: 'Captação',    chave: 'fin_captacao',    bag: 'fin', destino: 'financeiro' },
+  { titulo: 'Financeiro e Operacional', linhas: [
+      { rotulo: 'Receitas',     chave: 'fin_receitas',     bag: 'fin', destino: 'financeiro' },
+      { rotulo: 'Desembolso',   chave: 'fin_desembolso',   bag: 'fin', destino: 'financeiro' },
+      { rotulo: 'Captação',     chave: 'fin_captacao',     bag: 'fin', destino: 'financeiro' },
       { rotulo: 'Amortizações', chave: 'fin_amortizacoes', bag: 'fin', destino: 'financeiro' },
-    ] },
-  { titulo: 'Operacional', linhas: [
       ...LINHAS_GERAL.filter(l => l.destino === 'operacional'),
-      { rotulo: 'Financeiro', chave: '', bag: 'zoo', emConstrucao: true,
-        mensagem: 'em construção (Financeiro)' },
     ] },
 ];
 
@@ -689,8 +686,10 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, leitura, mesA
                   onClick={cabClicavel ? () => onIr!(bloco.destino) : undefined}>
                 {bloco.titulo}
               </th>
-              <th className="text-right font-medium px-1.5 py-1">Realizado</th>
+              {/* META primeiro: le-se o planejado e depois o que aconteceu.
+                  So a ORDEM VISUAL muda — o `Dif.` segue (real − meta) / meta. */}
               <th className="text-right font-normal px-1.5 py-1">Meta</th>
+              <th className="text-right font-medium px-1.5 py-1">Realizado</th>
               {/* `whitespace-nowrap` + largura maior: em quatro colunas o `Dif.`
                   das Movimentacoes saia cortado contra a coluna seguinte. */}
               <th className="text-right font-normal px-1.5 py-1 w-[64px] whitespace-nowrap">Dif.</th>
@@ -742,11 +741,11 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, leitura, mesA
                       `truncate` cortaria o recuo antes do texto. */}
                   <td className="text-left px-1.5 py-0.5 truncate max-w-[180px]"
                       style={{ paddingLeft: 6 + (l.nivel ?? 0) * 12 }}>{l.rotulo}</td>
-                  <td className="text-right px-1.5 py-0.5 font-medium text-foreground whitespace-nowrap">
-                    {ind && real != null ? fmtValor(real, ind.formatoValor, ind.unidade) : '—'}
-                  </td>
                   <td className="text-right px-1.5 py-0.5 text-meta whitespace-nowrap">
                     {ind && metaV != null ? fmtValor(metaV, ind.formatoValor, ind.unidade) : '—'}
+                  </td>
+                  <td className="text-right px-1.5 py-0.5 font-medium text-foreground whitespace-nowrap">
+                    {ind && real != null ? fmtValor(real, ind.formatoValor, ind.unidade) : '—'}
                   </td>
                   {/* Verde/vermelho so aqui; a linha nunca tem fundo azul, entao
                       o aviso do A10 sobre texto sobre primary nao se aplica. */}

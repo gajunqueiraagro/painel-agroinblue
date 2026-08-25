@@ -1931,11 +1931,25 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     const card = (chave: string, rotulo: string, partes: IndFin[]): IndicadorAtividade => {
       const sMes = somaSeries(partes.map(i => serie(i, 'mes', 'ano'))) ?? [];
       const sPer = somaSeries(partes.map(i => serie(i, 'periodo', 'ano'))) ?? [];
-      /* Meta so quando TODAS as parcelas tem: um total com meta parcial
-         compararia o realizado inteiro contra a meta de um pedaco. */
+      /* ⚠ Meta so quando TODAS as parcelas tem, e "ter" e' TER VALOR — nao
+         basta o array existir. A primeira versao checava `m.length > 0`, e
+         uma parcela com meta de doze zeros passava: `Receitas` mostrava
+         R$ 1,8 mi contra meta de R$ 14,0 mil (so a de "Outras") e a
+         diferenca dava +12.937,2%.
+         Um total com meta parcial compara o realizado INTEIRO contra a meta
+         de um pedaco — e o numero grande parece precisao, nao ausencia. */
+      // temValor nao distingue meta-zero-declarada de meta-ausente:
+      // testa v !== 0 porque metasMes chega denso, com 0 no lugar de
+      // mes sem meta. A distincao NULL vs zero teria de ser preservada
+      // no builder da serie — o conserto real e la, nao aqui.
+      const temValor = (m: number[] | undefined) =>
+        !!m && m.some(v => Number.isFinite(v) && v !== 0);
       const metasMes = partes.map(i => serie(i, 'mes', 'meta'));
       const metasPer = partes.map(i => serie(i, 'periodo', 'meta'));
-      const temTodas = metasMes.every(m => !!m && m.length > 0);
+      /* `every([])` e' true: sem a guarda, um total sem filhos visiveis
+         somaria meta 0 e a linha 737 dividiria por zero. Inalcancavel hoje;
+         alcancavel assim que linhas zeradas passarem a ser escondidas. */
+      const temTodas = metasMes.length > 0 && metasMes.every(temValor);
       return {
         chave, titulo: rotulo, subtitulo: '',
         formatoValor: 'moedaAbreviada',
