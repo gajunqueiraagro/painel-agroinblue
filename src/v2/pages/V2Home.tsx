@@ -2873,25 +2873,143 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
       {linhaCaixaModal && (() => {
         const itens = quebraDaLinha(linhaCaixaModal);
         const total = somaInd(...itens.map(i => i.valor));
+
+        /* PALETA — seis tokens do design system, nesta ordem. `destructive`
+           fica de fora de proposito: vermelho numa fatia de receita le como
+           erro, nao como categoria. A ultima e' tambem a de 'Outros'. */
+        const PALETA = [
+          { stroke: 'stroke-primary',                bola: 'bg-primary' },
+          { stroke: 'stroke-success',                bola: 'bg-success' },
+          { stroke: 'stroke-cta',                    bola: 'bg-cta' },
+          /* `cta` e `warning` renderizam com a MESMA cor neste tema (43 87% 63%,
+             ver A11 do PADROES-UI), entao a 3a e a 4a fatia ficavam
+             indistinguiveis — verificado na tela em Receitas e Dividendos.
+             `/70` tira do vermelho cheio a leitura de "erro": aqui ele e'
+             categoria, nao alerta. */
+          { stroke: 'stroke-destructive/70',         bola: 'bg-destructive/70' },
+          { stroke: 'stroke-muted-foreground/60',    bola: 'bg-muted-foreground/60' },
+          { stroke: 'stroke-muted-foreground/30',    bola: 'bg-muted-foreground/30' },
+        ];
+
+        /* O donut RESUME, a tabela MOSTRA TUDO. Seis fatias e o limite do que
+           se distingue a olho num anel de 128px; do setimo item em diante o
+           valor entra em 'Outros' — mas a linha continua na tabela, com
+           espacador no lugar da bolinha. Medido: Dividendos chega a NOVE
+           subcentros na base, entao este ramo e' exercitado, nao defesa. */
+        const MAX_FATIAS = 6;
+        const cabem = itens.slice(0, MAX_FATIAS);
+        const resto = itens.slice(MAX_FATIAS);
+        const restoSoma = resto.reduce((acc, i) => acc + (i.valor ?? 0), 0);
+        const paraDonut = resto.length > 0
+          ? [...cabem.slice(0, MAX_FATIAS - 1), { label: 'Outros', valor: restoSoma }]
+          : cabem;
+
+        /* `valor` e' sempre >= 0 no banco — o sentido entrada/saida vive no
+           campo `sinal`, nao no valor —, entao nao ha tratamento de fatia
+           negativa. O filtro `> 0` existe pelo motivo do bloco Area: arco de
+           comprimento zero nao renderiza e ainda consome offset. */
+        const somaDonut = paraDonut.reduce((acc, i) => acc + (i.valor ?? 0), 0);
+        const R = 34, C = 2 * Math.PI * R;
+        let acc = 0;
+        const fatias = somaDonut > 0
+          ? paraDonut.filter(i => (i.valor ?? 0) > 0).map((i, idx) => {
+              const frac = (i.valor ?? 0) / somaDonut;
+              const el = { ...i, ...PALETA[Math.min(idx, PALETA.length - 1)],
+                           dash: frac * C, offset: -acc * C };
+              acc += frac;
+              return el;
+            })
+          : [];
+        /* Cor da bolinha por ROTULO: a tabela lista mais itens que o donut,
+           e casar por indice pintaria o setimo com a cor do primeiro. */
+        const corDe = (label: string) => fatias.find(f => f.label === label)?.bola ?? null;
+
+        const pct = (v: number | null) =>
+          (total == null || total === 0 || v == null)
+            ? '—'
+            : `${((v / total) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+        /* Media MENSAL do periodo: divide por `mesNum`, nao pelo numero de
+           meses em que o item teve movimento. O recorte do bloco e' sempre
+           Jan→mes selecionado, entao `mesNum` E' o numero de meses. */
+        const media = (v: number | null) => (v == null ? null : v / mesNum);
+        const recorte = isPeriodo
+          ? `Jan–${MES_ABREV[mesNum - 1]} ${anoNum}`
+          : `${MES_ABREV[mesNum - 1]} ${anoNum}`;
+
         return (
           <Dialog open onOpenChange={(v) => { if (!v) setLinhaCaixaModal(null); }}>
-            <DialogContent className="max-w-md">
+            <DialogContent className="max-w-2xl">
               <DialogHeader>
                 <DialogTitle className="flex items-baseline justify-between gap-4 text-sm">
                   <span>{linhaCaixaModal}</span>
                   <span className="tabular-nums text-base">{fmtR(total)}</span>
                 </DialogTitle>
+                <p className="text-[10px] text-muted-foreground">{recorte}</p>
               </DialogHeader>
               {itens.length === 0 ? (
                 <p className="text-xs text-muted-foreground">Sem composição no período.</p>
               ) : (
-                <div className="space-y-1">
-                  {itens.map(i => (
-                    <div key={i.label} className="flex items-baseline justify-between gap-3 text-xs">
-                      <span className="truncate text-muted-foreground">{i.label}</span>
-                      <span className="tabular-nums shrink-0 text-foreground">{fmtR(i.valor)}</span>
-                    </div>
-                  ))}
+                <div className="flex flex-col sm:flex-row gap-6 items-start">
+                  {/* `flex-col` no estreito: lado a lado, o donut espremeria a
+                      tabela e os valores quebrariam. */}
+                  <svg viewBox="0 0 80 80" className="h-32 w-32 shrink-0 -rotate-90">
+                    {fatias.map(f => (
+                      <circle key={f.label} cx="40" cy="40" r={R} fill="none"
+                        strokeWidth="12" className={f.stroke}
+                        strokeDasharray={`${f.dash} ${C - f.dash}`}
+                        strokeDashoffset={f.offset} />
+                    ))}
+                    {/* Miolo VAZIO: sem hover nao ha o que mostrar, e um total
+                        fixo no centro repetiria o do cabecalho. */}
+                  </svg>
+                  <table className="flex-1 w-full text-xs tabular-nums">
+                    <thead>
+                      <tr className="text-[9px] text-muted-foreground">
+                        <th />
+                        <th className="text-right font-normal px-1.5 pb-1">Valor</th>
+                        <th className="text-right font-normal px-1.5 pb-1">%</th>
+                        {isPeriodo && <th className="text-right font-normal px-1.5 pb-1">Média</th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {itens.map(i => {
+                        const bola = corDe(i.label);
+                        return (
+                          <tr key={i.label}>
+                            <td className="py-0.5 pr-2">
+                              <span className="flex items-center gap-1.5 text-muted-foreground">
+                                {/* Item agrupado em 'Outros' nao tem cor propria no
+                                    donut: espacador do mesmo tamanho, como o bloco
+                                    Area faz nas linhas sem fatia. */}
+                                <span className={`inline-block h-2 w-2 rounded-full shrink-0 ${bola ?? ''}`} />
+                                <span className="truncate">{i.label}</span>
+                              </span>
+                            </td>
+                            <td className="text-right px-1.5 py-0.5 text-foreground">{fmtR(i.valor)}</td>
+                            <td className="text-right px-1.5 py-0.5 text-muted-foreground">{pct(i.valor)}</td>
+                            {isPeriodo && (
+                              <td className="text-right px-1.5 py-0.5 text-muted-foreground">{fmtR(media(i.valor))}</td>
+                            )}
+                          </tr>
+                        );
+                      })}
+                      <tr className="border-t border-border font-medium">
+                        <td className="py-1 pr-2">
+                          <span className="flex items-center gap-1.5">
+                            <span className="inline-block h-2 w-2 shrink-0" />
+                            Total
+                          </span>
+                        </td>
+                        <td className="text-right px-1.5 py-1 text-foreground">{fmtR(total)}</td>
+                        <td className="text-right px-1.5 py-1 text-muted-foreground">
+                          {total == null || total === 0 ? '—' : '100,0%'}
+                        </td>
+                        {isPeriodo && (
+                          <td className="text-right px-1.5 py-1 text-muted-foreground">{fmtR(media(total))}</td>
+                        )}
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               )}
             </DialogContent>
