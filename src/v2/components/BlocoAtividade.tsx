@@ -22,6 +22,24 @@ import { Card, CardContent } from '@/components/ui/card';
 import { ChevronRight } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
+/**
+ * Acelerador de UMA metrica — o arco que fica a esquerda do numero.
+ *
+ * ⚠ NAO e' o mesmo shape do prop `acelerador` do card (que o Zootecnico usa):
+ * la o rotulo da marca vai DENTRO do SVG; aqui os dois textos sao HTML, entao
+ * o componente recebe as duas linhas ja escritas.
+ */
+export interface AcelMetrica {
+  /** Pode passar de 100 — e' informacao, nao transbordo. */
+  pctAno: number;
+  /** Onde o PROPRIO plano previa estar. Nunca mesNum/12. */
+  pctRitmo: number;
+  /** Linha de cima, ex.: "meta jul · 39,7%". */
+  rotuloMeta: string;
+  /** Linha de baixo, os numeros crus, ex.: "943 de 2.570". */
+  legenda: string;
+}
+
 export interface MetricaBloco {
   rotulo: string;
   /** Ja formatado pelo chamador — o bloco nao formata nem arredonda. */
@@ -32,6 +50,63 @@ export interface MetricaBloco {
   deltaRotulo?: string;
   /** Onde subir e RUIM (PR-14). */
   inverseDelta?: boolean;
+  /** Arco de progresso ANUAL a esquerda deste numero. Ausente: so o numero. */
+  acel?: AcelMetrica | null;
+}
+
+/**
+ * Arco de UMA metrica: quanto do ANO ja andou contra a meta anual.
+ *
+ * ⚠ TODO texto fora do SVG, em HTML — este e' o ponto do desenho. `font-size`
+ * dentro de SVG e' unidade de viewBox, entao encolher a caixa renderizada
+ * encolheria a fonte junto e furaria o piso de 8px do A12. So o percentual e
+ * "no ano" ficam dentro, e os dois sao grandes o bastante para aguentar.
+ *
+ * "no ano" e' OBRIGATORIO: distingue o arco (anual) da metrica ao lado (do
+ * recorte da tela). Sem ele o card afirmaria duas coisas sem dizer qual e qual.
+ *
+ * A polaridade vem de `inverso`, que o chamador liga ao MESMO `inverseDelta`
+ * da metrica — assim arco e delta nao tem como se contradizer.
+ */
+function ArcoMetrica({ pctAno, pctRitmo, rotuloMeta, legenda, inverso }: AcelMetrica & { inverso: boolean }) {
+  const D = 'M14 54 A38 38 0 0 1 90 54';
+  const ARCO = Math.PI * 38;
+  const cheio = Math.min(Math.max(pctAno, 0), 100) / 100;
+  /* Atraso ou excesso NAO sao erro: warning, nunca destructive. */
+  const noRitmo = inverso ? pctAno <= pctRitmo : pctAno >= pctRitmo;
+  const cor = noRitmo ? 'stroke-success' : 'stroke-warning';
+  /* Acima de 999% o numero deixa de caber E deixa de ser leitura de progresso:
+     vira multiplo. Abaixo disso fica em %, porque dois formatos convivendo na
+     mesma faixa confundiriam mais do que resolvem. Os numeros crus da linha de
+     baixo nao mudam — sao eles que sustentam o "×". */
+  const numero = pctAno > 999
+    ? `${(pctAno / 100).toFixed(1).replace('.', ',')}×`
+    : `${Math.round(pctAno)}%`;
+  /* Marca por TRIGONOMETRIA, jamais coordenada fixa: pctRitmo varia por tipo,
+     cliente e mes. 0% em 180 graus, 100% em 0 grau — 1,8 grau por ponto. */
+  const fRitmo = Math.min(Math.max(pctRitmo, 0), 100);
+  const rad = (180 - 1.8 * fRitmo) * Math.PI / 180;
+  const mx = (r: number) => 52 + r * Math.cos(rad);
+  const my = (r: number) => 54 - r * Math.sin(rad);
+  return (
+    <div className="shrink-0 flex flex-col items-center">
+      <p className="text-[8px] text-muted-foreground leading-tight whitespace-nowrap">{rotuloMeta}</p>
+      <svg viewBox="0 0 104 58" className="w-[88px]">
+        <path d={D} fill="none" strokeWidth="9" strokeLinecap="round"
+          className="stroke-muted-foreground/30" />
+        <path d={D} fill="none" strokeWidth="9" strokeLinecap="round"
+          className={cor}
+          strokeDasharray={`${ARCO * cheio} ${ARCO}`} />
+        <line x1={mx(32)} y1={my(32)} x2={mx(44)} y2={my(44)}
+          strokeWidth="2.6" strokeLinecap="round" className="stroke-foreground" />
+        <text x="52" y="46" textAnchor="middle"
+          className="fill-foreground text-[23px] font-medium">{numero}</text>
+        <text x="52" y="56" textAnchor="middle"
+          className="fill-muted-foreground text-[9px]">no ano</text>
+      </svg>
+      <p className="text-[8px] text-muted-foreground/70 leading-tight whitespace-nowrap">{legenda}</p>
+    </div>
+  );
 }
 
 interface Props {
@@ -116,14 +191,17 @@ function Acelerador({ pctAno, pctRitmo, rotuloMarca }: {
 }
 
 export function BlocoAtividade({ titulo, subtitulo, icone: Icone, metricas, onClick, loading, acelerador }: Props) {
-  const celulas = metricas.map(m => {
+  /* O corpo da metrica — rotulo, numero e delta — e' o MESMO nos dois layouts.
+     Sai daqui uma vez so para que acrescentar o arco ao lado nao possa mudar,
+     por descuido, nem a fonte nem a cor do numero que ja estava na tela. */
+  const corpo = (m: MetricaBloco) => {
     const temDelta = m.delta != null && !isNaN(m.delta);
     /* Positivo e BOM por padrao; com `inverseDelta`, positivo e ruim.
        Zero nao e nem um nem outro — fica neutro. */
     const bom = !temDelta ? false
       : m.inverseDelta ? (m.delta as number) < 0 : (m.delta as number) > 0;
     return (
-      <div key={m.rotulo} className="min-w-0">
+      <>
         <p className="text-[9px] uppercase tracking-wide text-muted-foreground/70 leading-tight truncate">
           {m.rotulo}
         </p>
@@ -138,9 +216,22 @@ export function BlocoAtividade({ titulo, subtitulo, icone: Icone, metricas, onCl
         ) : (
           <p className="text-[9px] leading-tight text-muted-foreground/50">—</p>
         )}
-      </div>
+      </>
     );
-  });
+  };
+  const celulas = metricas.map(m => (
+    <div key={m.rotulo} className="min-w-0">{corpo(m)}</div>
+  ));
+  /* Um arco por metrica: o fio fica DENTRO do par, na borda esquerda, para
+     nunca sobrar fio no fim da linha. */
+  const temAcelPorMetrica = metricas.some(m => m.acel);
+  const pares = metricas.map((m, i) => (
+    <div key={m.rotulo} className="flex items-center gap-2 flex-1 min-w-0">
+      {i > 0 && <div className="w-[0.5px] self-stretch bg-border shrink-0" />}
+      {m.acel ? <ArcoMetrica {...m.acel} inverso={!!m.inverseDelta} /> : null}
+      <div className="min-w-0">{corpo(m)}</div>
+    </div>
+  ));
 
   return (
     <Card
@@ -170,6 +261,8 @@ export function BlocoAtividade({ titulo, subtitulo, icone: Icone, metricas, onCl
               rotuloMarca={acelerador.rotuloMarca} />
             <div className="grid grid-cols-4 gap-2 flex-1 min-w-0">{celulas}</div>
           </div>
+        ) : temAcelPorMetrica ? (
+          <div className="flex items-stretch gap-2">{pares}</div>
         ) : (
           <div className="grid grid-cols-4 gap-2">{celulas}</div>
         )}

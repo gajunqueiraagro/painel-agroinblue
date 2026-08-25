@@ -1410,6 +1410,42 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     return ((real - meta) / meta) * 100;
   };
 
+  /* Acelerador POR METRICA do card Movimentacoes: quanto das cabecas do ANO ja
+     passaram, contra a meta anual, com marca onde o plano previa estar no mes.
+     ⚠ ANUAL: nao muda entre "No mes" e "No periodo". As quatro metricas ao lado
+     seguem o recorte da tela; os quatro arcos, nao. Por isso o SVG carrega a
+     palavra "no ano" — sem ela o card afirmaria as duas coisas sem dizer qual.
+     ⚠ `seriesAcumulada.cab` ja vem acumulada Jan→mes do proprio hook
+     (useMovimentacoesAgregadas:443-444): nada e' reagregado aqui.
+     ⚠ Serie de 13 posicoes, 1-indexada, com ZERO literal no indice 0 — o tipo
+     diz isso em SeriesJanDez:52. Difere das series de arrobas, onde o indice 0
+     e' NaN; nao afeta estes indices, mas quem varrer a serie inteira precisa
+     saber. `at` e' a mesma regra das duas convencoes usada no acelerador do
+     Zootecnico e no deltaFin. Local de proposito: a unificacao das copias e'
+     o PR-SERIE-INDICE-01.
+     ⚠ metaAno ausente ou zero: AQUELE arco nao renderiza e o par vira so a
+     metrica, como era antes. Os outros tres seguem. Sem fallback e sem
+     mesNum/12 — inventar plano que ninguem escreveu e' pior que nao mostrar. */
+  const acelMov = (tipo: TipoMov) => {
+    const at = (sr: number[] | undefined, i: number) =>
+      !sr || sr.length === 0 ? null : (sr.length >= 13 ? sr[i] : sr[i - 1]);
+    const vivo = (v: number | null | undefined) =>
+      v != null && Number.isFinite(v) ? v : null;
+    const serie = movAgg.porTipo[tipo]?.seriesAcumulada?.cab;
+    const realAcum = vivo(at(serie?.real, mesNum));
+    const metaAcum = vivo(at(serie?.meta, mesNum));
+    const metaAno  = vivo(at(serie?.meta, 12));
+    if (metaAno == null || metaAno === 0) return null;
+    if (realAcum == null || metaAcum == null) return null;
+    const pctRitmo = (metaAcum / metaAno) * 100;
+    return {
+      pctAno: (realAcum / metaAno) * 100,
+      pctRitmo,
+      rotuloMeta: `meta ${MES_ABREV[mesNum - 1].toLowerCase()} · ${pctRitmo.toFixed(1)}%`,
+      legenda: `${fmtN(realAcum) ?? '—'} de ${fmtN(metaAno) ?? '—'}`,
+    };
+  };
+
   const indicadoresMovimentacoes = useMemo<IndicadorAtividade[]>(() => {
     const ponto = (s: number[] | undefined) => {
       if (!s || s.length === 0) return null;
@@ -2700,14 +2736,14 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           onClick={() => setModalAtividade('movimentacoes')}
           metricas={[
             { rotulo: 'Nascimentos', valor: (fmtN(movAgg.porTipo.nascimentos?.mesAtual?.cab ?? null) ?? '—') + ' cab',
-              delta: deltaMetaMov('nascimentos'), deltaRotulo: 'vs meta' },
+              delta: deltaMetaMov('nascimentos'), deltaRotulo: 'vs meta', acel: acelMov('nascimentos') },
             { rotulo: 'Compras',     valor: (fmtN(movAgg.porTipo.compras?.mesAtual?.cab ?? null) ?? '—') + ' cab',
-              delta: deltaMetaMov('compras'), deltaRotulo: 'vs meta' },
+              delta: deltaMetaMov('compras'), deltaRotulo: 'vs meta', acel: acelMov('compras') },
             { rotulo: 'Desfrute',    valor: (fmtN(movAgg.porTipo.desfrute?.mesAtual?.cab ?? null) ?? '—') + ' cab',
-              delta: deltaMetaMov('desfrute'), deltaRotulo: 'vs meta' },
+              delta: deltaMetaMov('desfrute'), deltaRotulo: 'vs meta', acel: acelMov('desfrute') },
             /* Morte e o unico onde subir e RUIM. */
             { rotulo: 'Mortes',      valor: (fmtN(movAgg.porTipo.mortes?.mesAtual?.cab ?? null) ?? '—') + ' cab',
-              delta: deltaMetaMov('mortes'), deltaRotulo: 'vs meta', inverseDelta: true },
+              delta: deltaMetaMov('mortes'), deltaRotulo: 'vs meta', inverseDelta: true, acel: acelMov('mortes') },
           ]}
         />
       </div>
