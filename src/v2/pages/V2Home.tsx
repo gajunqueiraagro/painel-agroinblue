@@ -2633,7 +2633,10 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
 
         <div className="lg:col-span-3 space-y-4">
         {/* Bloco proprio, PRIMEIRO item do wrapper da esquerda — nao filho direto
-            do grid: Area e Caixa sao os unicos diretos, para alinharem a altura.
+            do grid: Area e Caixa sao os unicos diretos NA PRIMEIRA LINHA, para
+            alinharem a altura. O Fechamento Pecuaria, abaixo, tambem e filho
+            direto — em col-span-5, ocupando a largura inteira sem quebrar
+            aquele alinhamento.
             Saiu do card de Area porque responde outra pergunta: la e como a terra
             se divide, aqui e o que o rebanho produziu nela.
             O TITULO diz o MODO: as colunas mudam de significado entre um e outro
