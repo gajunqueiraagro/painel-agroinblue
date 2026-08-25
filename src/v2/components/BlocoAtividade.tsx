@@ -283,9 +283,16 @@ export function BlocoAtividade({ titulo, subtitulo, icone: Icone, metricas, onCl
     >
       <CardContent className="p-3">
         <div className="flex items-start justify-between gap-2 mb-2">
-          <div className="min-w-0">
-            <p className="text-sm font-bold text-foreground leading-tight">{titulo}</p>
-            <p className="text-[10px] text-muted-foreground/70 leading-snug">{subtitulo}</p>
+          {/* Titulo e subtitulo na MESMA linha: empilhados custavam uma altura
+              de linha por card, tres por bloco. `items-baseline` alinha pela
+              base do texto, nao pelo topo da caixa — os dois tamanhos de fonte
+              ficam assentados na mesma reta.
+              O subtitulo trunca ANTES do titulo: ele so qualifica, e some sem
+              perda quando a largura aperta; `min-w-0` no filho e' o que permite
+              o truncate dentro do flex. Tamanhos inalterados de proposito. */}
+          <div className="flex items-baseline gap-1.5 min-w-0">
+            <p className="text-sm font-bold text-foreground leading-tight shrink-0">{titulo}</p>
+            <p className="text-[10px] text-muted-foreground/70 leading-snug min-w-0 truncate">{subtitulo}</p>
           </div>
           <div className="flex items-center gap-0.5 shrink-0 text-muted-foreground/60">
             <Icone className="w-4 h-4" />

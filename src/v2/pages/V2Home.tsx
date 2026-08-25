@@ -1578,6 +1578,39 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     return ((real - meta) / meta) * 100;
   };
 
+  /* Arco do card Financeiro: quanto do ANO ja passou, contra a meta anual.
+     ⚠ Le do MESMO `indicadoresFinanceiro` que `valorFin` e `deltaFin` — nao dos
+     indicadores crus do PC-100. Tres leituras do mesmo card discordarem seria o
+     pior defeito possivel num bloco que existe para fechar conta.
+     As quatro metricas ACUMULAM ao longo do ano; nenhuma e' estoque nem taxa,
+     entao as quatro sao arco e nenhuma e' barra.
+     ⚠ `seriePeriodo` e `serieMetaPeriodo` ja vem ACUMULADAS Jan→mes do proprio
+     `card()` (:2169-2171), que por sua vez soma as series `periodo` do PC-100,
+     produzidas por `cumSumTo13` em `buildInd`. Nada e' reagregado aqui.
+     ⚠ 13 posicoes com NaN no indice 0 — indexar sempre, nunca varrer. `at` e' a
+     mesma regra das duas convencoes; oitava copia, e PR-SERIE-INDICE-01 unifica.
+     ⚠ Sem meta anual (ausente, NaN ou zero) o arco NAO renderiza e o par vira so
+     a metrica. Amortizacoes cai nesse caso hoje, por meta ausente de verdade. */
+  const acelFin = (chave: string) => {
+    const at = (sr: number[] | undefined, i: number) =>
+      !sr || sr.length === 0 ? null : (sr.length >= 13 ? sr[i] : sr[i - 1]);
+    const vivo = (v: number | null | undefined) =>
+      v != null && Number.isFinite(v) ? v : null;
+    const i = indicadoresFinanceiro.find(x => x.chave === chave);
+    const realAcum = vivo(at(i?.seriePeriodo, mesNum));
+    const metaAcum = vivo(at(i?.serieMetaPeriodo, mesNum));
+    const metaAno  = vivo(at(i?.serieMetaPeriodo, 12));
+    if (metaAno == null || metaAno === 0) return null;
+    if (realAcum == null || metaAcum == null) return null;
+    const pctRitmo = (metaAcum / metaAno) * 100;
+    return {
+      pctAno: (realAcum / metaAno) * 100,
+      pctRitmo,
+      rotuloMeta: `meta ${MES_ABREV[mesNum - 1].toLowerCase()} · ${pctRitmo.toFixed(1)}%`,
+      legenda: `${fmtRAbreviado(realAcum) ?? '—'} de ${fmtRAbreviado(metaAno) ?? '—'}`,
+    };
+  };
+
   /* Acelerador do bloco Zootecnico: quanto das @ do ANO ja foram produzidas, e
      onde o PLANO dizia que estariamos neste mes.
      ⚠ E' SEMPRE do ano, mesmo com o filtro da tela em "No mes". As quatro
@@ -2777,7 +2810,10 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
              leitura. Rebanho (final x media) e @ (do mes x acumulada) mudam
              de sentido, e e' isso que o rotulo precisa dizer. */
           metricas={[
-            { rotulo: isPeriodo ? '@ produzidas acum.' : '@ produzidas',
+            /* '@ produzidas' nos DOIS modos: o 'acum.' truncava na coluna, e e'
+               redundante — o arco ao lado diz "no ano" e o delta diz o recorte.
+               A12: encurtar o rotulo, nunca reduzir a fonte. */
+            { rotulo: '@ produzidas',
               valor: (fmtN(arrobasIndicador?.valor ?? null, 1) ?? '—') + ' @',
               delta: arrobasIndicador?.deltaMeta ?? null, deltaRotulo: isPeriodo ? 'vs meta per.' : 'vs meta mês',
               acel: aceleradorArrobas },
@@ -2843,13 +2879,20 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           onClick={() => setModalAtividade('financeiro')}
           metricas={[
             { rotulo: 'Receitas',     valor: valorFin('fin_receitas_pec'),
-              delta: deltaFin('fin_receitas_pec'), deltaRotulo: 'vs meta' },
+              delta: deltaFin('fin_receitas_pec'), deltaRotulo: 'vs meta',
+              acel: acelFin('fin_receitas_pec') },
+            /* ⚠ O arco de Desembolso NAO inverte a cor nesta rodada: gastar
+               acima do plano e' ruim, mas quem ja diz isso e' o `inverseDelta`
+               do delta ao lado. Trocar tambem o arco estenderia o pedido. */
             { rotulo: 'Desembolso',   valor: valorFin('fin_desembolso_pec'),
-              delta: deltaFin('fin_desembolso_pec'), deltaRotulo: 'vs meta', inverseDelta: true },
+              delta: deltaFin('fin_desembolso_pec'), deltaRotulo: 'vs meta', inverseDelta: true,
+              acel: acelFin('fin_desembolso_pec') },
             { rotulo: 'Captação',     valor: valorFin('fin_captacao_pec'),
-              delta: deltaFin('fin_captacao_pec'), deltaRotulo: 'vs meta' },
+              delta: deltaFin('fin_captacao_pec'), deltaRotulo: 'vs meta',
+              acel: acelFin('fin_captacao_pec') },
             { rotulo: 'Amortizações', valor: valorFin('fin_amortizacoes_pec'),
-              delta: deltaFin('fin_amortizacoes_pec'), deltaRotulo: 'vs meta', inverseDelta: true },
+              delta: deltaFin('fin_amortizacoes_pec'), deltaRotulo: 'vs meta', inverseDelta: true,
+              acel: acelFin('fin_amortizacoes_pec') },
           ]}
         />
       </div>
