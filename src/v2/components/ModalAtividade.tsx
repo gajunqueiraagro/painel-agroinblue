@@ -192,8 +192,10 @@ type LinhaResumo = {
   rotulo: string;
   chave: string;
   bag: 'zoo' | 'mov';
-  /** Assunto de destino do clique. */
-  destino: Assunto;
+  /** Assunto de destino do clique. `undefined` = a linha nao navega. */
+  destino?: Assunto;
+  /** Linha de MENSAGEM: ocupa as quatro colunas e nao mostra valores. */
+  mensagem?: string;
   /** `undefined` = a linha existe no desenho e o indicador ainda nao. */
   emConstrucao?: boolean;
 };
@@ -229,11 +231,22 @@ const LINHAS_GERAL: LinhaResumo[] = [
    FINANCEIRO entra sem linhas: com a coluna ja se chamando Financeiro, uma
    linha chamada "Financeiro" seria redundante. O corpo vazio recebe a
    mensagem de ausencia. */
-const BLOCOS_GERAL: Array<{ titulo: string; destino: Assunto; linhas: LinhaResumo[] }> = [
+const BLOCOS_GERAL: Array<{ titulo: string; destino?: Assunto; linhas: LinhaResumo[] }> = [
   { titulo: 'Zootécnico',    destino: 'zootecnico',    linhas: LINHAS_GERAL.filter(l => l.destino === 'zootecnico') },
   { titulo: 'Movimentações', destino: 'movimentacoes', linhas: LINHAS_GERAL.filter(l => l.destino === 'movimentacoes') },
-  { titulo: 'Financeiro',    destino: 'financeiro',    linhas: [] },
-  { titulo: 'Operacional',   destino: 'operacional',   linhas: LINHAS_GERAL.filter(l => l.destino === 'operacional') },
+  /* PR-RESUMO-03 — TRES colunas, nao quatro. Medido na tela em ~310px:
+     `4.861,4 ha` e `16.879,7 @` quebravam em duas linhas, as alturas
+     desalinhavam entre colunas e o cabecalho `Dif.` das Movimentacoes ficava
+     cortado. Em ~420px cabe rotulo mais tres numeros com unidade.
+     Os dois assuntos que faltam dividem a terceira: sao os que ainda nao tem
+     linha propria, e junta-los custa menos que espremer as duas primeiras.
+     ⚠ SEM `destino`: com dois assuntos na mesma coluna o cabecalho nao teria
+     para onde levar. O clique fica por LINHA. */
+  { titulo: 'Financeiro e Operacional', linhas: [
+      ...LINHAS_GERAL.filter(l => l.destino === 'operacional'),
+      { rotulo: 'Financeiro', chave: '', bag: 'zoo', emConstrucao: true,
+        mensagem: 'em construção (Financeiro)' },
+    ] },
 ];
 
 const LINHAS_POR_ASSUNTO: Record<string, LinhaResumo[]> = {
@@ -582,7 +595,7 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, leitura, mesAtual,
      Duplicar o componente para isso separaria duas tabelas que sao a mesma
      tabela, e a proxima mudanca de A10 teria de ser feita duas vezes. */
   linhas?: LinhaResumo[];
-  blocos?: Array<{ titulo: string; destino: Assunto; linhas: LinhaResumo[] }>;
+  blocos?: Array<{ titulo: string; destino?: Assunto; linhas: LinhaResumo[] }>;
   zoo: IndicadorAtividade[];
   mov: IndicadorAtividade[];
   leitura: Leitura;
@@ -606,7 +619,7 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, leitura, mesAtual,
     const n = colunas ?? 1;
     const porBloco = Math.ceil(ls.length / n);
     return Array.from({ length: n }, (_, i) =>
-      ({ titulo: 'Indicador', destino: 'geral' as Assunto,
+      ({ titulo: 'Indicador', destino: undefined as Assunto | undefined,
          linhas: ls.slice(i * porBloco, (i + 1) * porBloco) }))
       .filter(b => b.linhas.length > 0);
   })();
@@ -616,7 +629,10 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, leitura, mesAtual,
       {blocos.map((bloco, bi) => {
         /* Coluna SEM linhas nao navega: levar a uma aba vazia e pior que nao
            levar. O cabecalho so vira porta quando ha o que abrir. */
-        const cabClicavel = !!onIr && bloco.linhas.length > 0 && bloco.destino !== 'geral';
+        /* So navega quando a coluna E um assunto: no modo de contagem nao ha
+           destino, e na terceira coluna do Geral ha DOIS assuntos — para onde
+           o cabecalho levaria? */
+        const cabClicavel = !!onIr && !!bloco.destino;
         return (
         <table key={bi} className="w-full text-[10px] tabular-nums">
           <thead>
@@ -627,7 +643,9 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, leitura, mesAtual,
               </th>
               <th className="text-right font-medium px-1.5 py-1">Realizado</th>
               <th className="text-right font-normal px-1.5 py-1">Meta</th>
-              <th className="text-right font-normal px-1.5 py-1 w-[56px]">Dif.</th>
+              {/* `whitespace-nowrap` + largura maior: em quatro colunas o `Dif.`
+                  das Movimentacoes saia cortado contra a coluna seguinte. */}
+              <th className="text-right font-normal px-1.5 py-1 w-[64px] whitespace-nowrap">Dif.</th>
             </tr>
           </thead>
           <tbody>
@@ -639,6 +657,13 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, leitura, mesAtual,
               </tr>
             )}
             {bloco.linhas.map(l => {
+              if (l.mensagem) return (
+                <tr key={l.rotulo} className="odd:bg-muted/30 even:bg-card">
+                  <td colSpan={4} className="px-1.5 py-0.5 text-center text-muted-foreground/70 italic">
+                    {l.mensagem}
+                  </td>
+                </tr>
+              );
               const ind = l.emConstrucao ? undefined : acha(l);
               const per = leitura === 'periodo';
               const real = ind ? (per ? ind.valorPeriodo : ind.valorMes) : null;
@@ -649,21 +674,23 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, leitura, mesAtual,
               const metaV = ind ? ponto(per ? ind.serieMetaPeriodo : ind.serieMetaMes, mesAtual) : null;
               const dif = (real != null && metaV != null && metaV !== 0)
                 ? ((real - metaV) / metaV) * 100 : null;
-              const clicavel = !!onIr;
+              const clicavel = !!onIr && !!l.destino;
               return (
                 <tr key={l.rotulo}
                     className={`odd:bg-muted/30 even:bg-card ${clicavel ? 'cursor-pointer hover:bg-muted/60' : ''}`}
-                    onClick={clicavel ? () => onIr!(l.destino) : undefined}>
-                  <td className="text-left px-1.5 py-0.5 truncate max-w-[120px]">{l.rotulo}</td>
-                  <td className="text-right px-1.5 py-0.5 font-medium text-foreground">
+                    onClick={clicavel ? () => onIr!(l.destino!) : undefined}>
+                  {/* `max-w` subiu de 120 para 180: com TRES colunas de ~420px o
+                      rotulo cabe inteiro — `Preço médio venda` era o apertado. */}
+                  <td className="text-left px-1.5 py-0.5 truncate max-w-[180px]">{l.rotulo}</td>
+                  <td className="text-right px-1.5 py-0.5 font-medium text-foreground whitespace-nowrap">
                     {ind && real != null ? fmtValor(real, ind.formatoValor, ind.unidade) : '—'}
                   </td>
-                  <td className="text-right px-1.5 py-0.5 text-meta">
+                  <td className="text-right px-1.5 py-0.5 text-meta whitespace-nowrap">
                     {ind && metaV != null ? fmtValor(metaV, ind.formatoValor, ind.unidade) : '—'}
                   </td>
                   {/* Verde/vermelho so aqui; a linha nunca tem fundo azul, entao
                       o aviso do A10 sobre texto sobre primary nao se aplica. */}
-                  <td className={`text-right px-1.5 py-0.5 ${
+                  <td className={`text-right px-1.5 py-0.5 whitespace-nowrap ${
                     dif == null ? 'text-muted-foreground'
                     : dif >= 0 ? 'text-emerald-600 dark:text-emerald-400'
                     : 'text-red-600 dark:text-red-400'}`}>
