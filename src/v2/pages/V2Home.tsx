@@ -2164,7 +2164,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
                       );
                     })()}
                   </svg>
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0">
                     {/* Grid de 3 colunas com largura de conteudo: rotulo, valor e
                         percentual alinham entre si, e o rotulo NAO e esticado —
                         e o que aproxima "Pecuaria" do numero. Valor e % em
@@ -2173,7 +2173,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
                     {/* text-[10px]: os rotulos de familia competiam em peso com os
                         numeros da propria legenda. O bloco inteiro desce um degrau —
                         rotulo, valor e % juntos, para nao desalinhar a grade. */}
-                    <div className="grid grid-cols-[auto_auto_auto] justify-start gap-x-3 gap-y-0.5 text-[10px]">
+                    <div className="grid grid-cols-[auto_auto_auto] justify-start gap-x-3 gap-y-0.5 text-[9px]">
                       {partesLegenda.map(f => (
                         <div key={f.label} className="contents">
                           <span className="flex items-center gap-1.5 text-muted-foreground">
@@ -2219,17 +2219,20 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
                           escondendo o caso de terra arrendada de terceiro. Mesma base da
                           linha "% da area" da tabela por fazenda. PODE ultrapassar 100%:
                           nao truncar. */}
+                      {/* Cinza leve, ao contrario do Total: o numero grande a direita
+                          passou a ser o destaque de Area Produtiva, e dois destaques
+                          para o mesmo dado competiriam. Aqui ela vira conferencia. */}
                       <div className="contents">
-                        <span className="flex items-center gap-1.5 font-medium text-foreground">
+                        <span className="flex items-center gap-1.5 font-normal text-muted-foreground">
                           <span className="inline-block h-2 w-2 shrink-0" />
                           Área Produtiva
                         </span>
-                        <span className="tabular-nums text-right font-medium text-foreground">
+                        <span className="tabular-nums text-right font-normal text-muted-foreground">
                           {areaProdutiva == null || areaProdutiva === 0
                             ? '—'
                             : <>{fmtHaInt(areaProdutiva)} <span className="text-muted-foreground font-normal">ha</span></>}
                         </span>
-                        <span className="tabular-nums text-right font-medium text-muted-foreground">
+                        <span className="tabular-nums text-right font-normal text-muted-foreground">
                           {(areaProdutiva == null || areaTotal == null || areaTotal <= 0)
                             ? '—'
                             : `${((areaProdutiva / areaTotal) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`}
@@ -2243,6 +2246,28 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
                         Área além da matrícula: {fmtHa(areaExcedente)}
                       </p>
                     )}
+                  </div>
+                  {/* AJUSTE 3 — o espaco a direita da legenda estava vazio: o grid
+                      e' `justify-start` e a coluna nao usava a largura toda. O
+                      destaque ocupa esse vao e da a Area Produtiva a leitura de um
+                      olhar, que era o que a linha da legenda nao entregava.
+                      ⚠ A expressao do percentual e' COPIA LITERAL da linha de Area
+                      Produtiva acima — mesma base (`areaTotal`, a matricula, nao
+                      `soma`) e mesmo arredondamento. Nao extrair para variavel: o
+                      valor de manter as duas identicas esta em serem visivelmente a
+                      mesma conta, e um helper esconderia uma divergencia futura. */}
+                  <div className="flex-1 self-center flex flex-col items-center gap-0.5">
+                    <span className="text-2xl font-semibold tabular-nums text-foreground leading-none">
+                      {areaProdutiva == null || areaProdutiva === 0
+                        ? '—'
+                        : <>{fmtHaInt(areaProdutiva)} <span className="text-sm font-normal text-muted-foreground">ha</span></>}
+                    </span>
+                    <span className="text-[9px] text-muted-foreground/70">Área Produtiva</span>
+                    <span className="text-base font-semibold tabular-nums text-foreground leading-none">
+                      {(areaProdutiva == null || areaTotal == null || areaTotal <= 0)
+                        ? '—'
+                        : `${((areaProdutiva / areaTotal) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`}
+                    </span>
                   </div>
                 </div>
               );
@@ -2260,7 +2285,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
                 {/* col-span-2 pelo mesmo motivo do bloco acima: a tabela precisa da
                     largura inteira do miolo, que e uma grade de duas colunas. */}
                 <div className="col-span-2">
-                  <table className="w-full text-[10px] tabular-nums">
+                  {/* `leading-tight` e o que baixa a altura da linha; `py-0.5` ja
+                      e o minimo, e reduzir a zero colaria o texto na borda. */}
+                  <table className="w-full text-[10px] leading-tight tabular-nums">
                     <thead>
                       {/* PADRAO DE TABELA DO SISTEMA: cabecalho e Total em bg-primary
                           com texto primary-foreground, mesmos TOKENS de
@@ -2279,8 +2306,12 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
                     <tbody>
                       {areaPorFazendaMes.map(f => {
                         const excede = f.area_produtiva_ha > f.area_total_ha;
+                        /* AJUSTE 5 — zebra mais forte que o A10 (`muted/30`) por
+                           decisao explicita de Gabriel: com `leading-tight` as linhas
+                           ficaram juntas e a alternancia sumia. DIVERGE do padrao —
+                           ver o relatorio do PR sobre a outra tabela desta tela. */
                         return (
-                          <tr key={f.fazenda_id} className="odd:bg-muted/30 even:bg-card">
+                          <tr key={f.fazenda_id} className="odd:bg-muted/60 even:bg-card">
                             <td className="text-left px-1.5 py-0.5 truncate max-w-[140px]">{nomeFazendaPorId[f.fazenda_id] ?? 'Fazenda'}</td>
                             <td className="text-right px-1.5 py-0.5 font-medium text-foreground">
                               {f.area_total_ha == null || f.area_total_ha === 0
