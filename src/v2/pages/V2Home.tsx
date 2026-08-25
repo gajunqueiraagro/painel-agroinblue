@@ -1494,6 +1494,28 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     return fmtRAbreviado(v ?? null) ?? '—';
   };
 
+  /* Espelha valorFin: MESMO array, MESMO recorte por isPeriodo. Duas leituras
+     do mesmo indicador nunca podem discordar.
+     ⚠ O ponto do mes NAO e' `serie[mesNum - 1]`. Estas series chegam em DUAS
+     convencoes: `usePainelConsultorData:1035` converte a de 12 posicoes
+     (0-indexada) numa de 13 com NaN no indice 0 (1-indexada), e `somaSeries`
+     (1972) devolve o MAIOR comprimento entre as parcelas — entao a serie
+     somada pode sair com 12 OU com 13. A regra abaixo e' a MESMA que `ponto`
+     aplica ao valor do mesmo card (1963-1967); usar outra faria as duas
+     metades de um so delta lerem meses diferentes.
+     A regra esta triplicada neste arquivo (1277, 1396, 1963) e mais duas vezes
+     em ModalAtividade (382, 656). Unificar e' PR proprio. */
+  const deltaFin = (chave: string): number | null => {
+    const i = indicadoresFinanceiro.find(x => x.chave === chave);
+    const real = isPeriodo ? i?.valorPeriodo : i?.valorMes;
+    const serieMeta = isPeriodo ? i?.serieMetaPeriodo : i?.serieMetaMes;
+    const meta = !serieMeta || serieMeta.length === 0 ? null
+      : (serieMeta.length >= 13 ? serieMeta[mesNum] : serieMeta[mesNum - 1]);
+    if (real == null || meta == null) return null;
+    if (!Number.isFinite(real) || !Number.isFinite(meta) || meta === 0) return null;
+    return ((real - meta) / meta) * 100;
+  };
+
   const arrobasHistoricoOficial: HistoricoPorModo =
     modalIndicador === 'arrobas' ? histZoot.arrobas : { mes: [], periodo: [] };
 
@@ -2546,10 +2568,19 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
         </SectionBlock>
         </div>
 
-        <div className="lg:col-span-5">
-          <p className="text-xs font-medium text-foreground pb-1.5">
-            Fechamento Pecuária
-          </p>
+        {/* Container proprio, nao SectionBlock: o miolo do SectionBlock e
+            um grid-cols-2 e os tres blocos precisam de largura inteira.
+            Fundo em accent/40 e NAO em bg-card: cada BlocoAtividade ja e um
+            Card com bg-card, e mesma cor nos dois niveis apagaria os internos.
+            Tambem NAO em muted: --muted e --background sao ambos 220 17% 97%
+            (index.css:9 e :19), entao muted sobre o fundo da pagina nao pinta
+            nada. --accent (220 14% 94%) e o unico neutro do tema que difere do
+            fundo — 3 pontos de luminosidade abaixo, o container recua e os
+            cards em branco puro seguem saltando. */}
+        <div className="lg:col-span-5 bg-accent/40 rounded-xl border border-border/40 p-4">
+          <h3 className="text-base font-bold text-foreground mb-3">
+            {isPeriodo ? 'Fechamento Pecuária — no período' : 'Fechamento Pecuária — no mês'}
+          </h3>
           <div className="space-y-1.5">
       {/* ── PR-ATIVIDADE-01 ─────────────────────────────────────────────
           O bloco NASCEU abaixo de tudo que existe, empilhado. Desde
@@ -2572,10 +2603,22 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           icone={BarChart3}
           loading={loadingPainel}
           onClick={() => setModalAtividade('zootecnico')}
+          /* Os rotulos DERIVAM dos titulos oficiais do PC-100
+             (usePainelConsultorData 4157/4158 e 4273/4274), encurtados: o
+             rotulo do card e text-[9px] uppercase truncate em coluna de 1/4
+             da largura, e "REBANHO MEDIO NO PERIODO" truncaria. A12 do
+             PADROES-UI manda encurtar o texto, nunca reduzir a fonte.
+             ⚠ Se o titulo no PC-100 mudar, revisar estes dois aqui.
+             GMD e Lotacao ficam iguais nos dois modos DE PROPOSITO: la o
+             PC-100 so troca "no mes"/"no periodo", sem mudar o sentido da
+             leitura. Rebanho (final x media) e @ (do mes x acumulada) mudam
+             de sentido, e e' isso que o rotulo precisa dizer. */
           metricas={[
-            { rotulo: 'Rebanho',      valor: (fmtN(cabecasIndicador?.valor ?? null) ?? '—') + ' cab',
+            { rotulo: isPeriodo ? 'Rebanho médio' : 'Rebanho final',
+              valor: (fmtN(cabecasIndicador?.valor ?? null) ?? '—') + ' cab',
               delta: cabecasIndicador?.deltaMeta ?? null, deltaRotulo: 'vs meta' },
-            { rotulo: '@ produzidas', valor: (fmtN(arrobasIndicador?.valor ?? null, 1) ?? '—') + ' @',
+            { rotulo: isPeriodo ? '@ produzidas acum.' : '@ produzidas',
+              valor: (fmtN(arrobasIndicador?.valor ?? null, 1) ?? '—') + ' @',
               delta: arrobasIndicador?.deltaMeta ?? null, deltaRotulo: 'vs meta' },
             { rotulo: 'GMD',          valor: (fmtN(gmdIndicador?.valor ?? null, 3) ?? '—') + ' kg',
               delta: gmdIndicador?.deltaMeta ?? null, deltaRotulo: 'vs meta' },
@@ -2621,10 +2664,14 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
           loading={loadingPainel}
           onClick={() => setModalAtividade('financeiro')}
           metricas={[
-            { rotulo: 'Receitas',     valor: valorFin('fin_receitas'),    delta: null },
-            { rotulo: 'Desembolso',   valor: valorFin('fin_desembolso'),  delta: null, inverseDelta: true },
-            { rotulo: 'Captação',     valor: valorFin('fin_captacao'),    delta: null },
-            { rotulo: 'Amortizações', valor: valorFin('fin_amortizacoes'), delta: null },
+            { rotulo: 'Receitas',     valor: valorFin('fin_receitas'),
+              delta: deltaFin('fin_receitas'), deltaRotulo: 'vs meta' },
+            { rotulo: 'Desembolso',   valor: valorFin('fin_desembolso'),
+              delta: deltaFin('fin_desembolso'), deltaRotulo: 'vs meta', inverseDelta: true },
+            { rotulo: 'Captação',     valor: valorFin('fin_captacao'),
+              delta: deltaFin('fin_captacao'), deltaRotulo: 'vs meta' },
+            { rotulo: 'Amortizações', valor: valorFin('fin_amortizacoes'),
+              delta: deltaFin('fin_amortizacoes'), deltaRotulo: 'vs meta', inverseDelta: true },
           ]}
         />
       </div>
