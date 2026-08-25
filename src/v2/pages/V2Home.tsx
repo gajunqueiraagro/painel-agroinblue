@@ -1516,6 +1516,45 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     return ((real - meta) / meta) * 100;
   };
 
+  /* Acelerador do bloco Zootecnico: quanto das @ do ANO ja foram produzidas, e
+     onde o PLANO dizia que estariamos neste mes.
+     ⚠ E' SEMPRE do ano, mesmo com o filtro da tela em "No mes". As quatro
+     metricas ao lado seguem o recorte; esta nao. Sao leituras diferentes de
+     proposito, e o subtitulo do card declara a conta.
+     ⚠ A marca de ritmo sai da META ACUMULADA, jamais de mesNum/12: medido no
+     banco, a meta ate julho vai de 36,6% (RRCC) a 88,2% (Raul Juliato) da meta
+     anual — marca fixa erraria em 5 dos 6 clientes.
+     ⚠ Sem meta anual (nula ou zero) o acelerador NAO aparece. Nada de fallback
+     para 7/12, que inventaria um plano que ninguem escreveu.
+     `at` repete a regra das duas convencoes de serie (12 zero-indexada, 13
+     1-indexada), a mesma do deltaFin acima. Local de proposito: unificar as
+     copias e' o PR-SERIE-INDICE-01.
+     Devolve o par {acel, subtitulo}: o prop-bag fica com a forma EXATA que o
+     BlocoAtividade declara, e o texto por extenso — para quem nao decodificar o
+     desenho — sai dos MESMOS tres numeros, sem recalcular nada. */
+  const aceleradorArrobas = ((ind: { series?: SeriesPorModo } | null | undefined) => {
+    const at = (sr: number[] | undefined, i: number) =>
+      !sr || sr.length === 0 ? null : (sr.length >= 13 ? sr[i] : sr[i - 1]);
+    const vivo = (v: number | null | undefined) =>
+      v != null && Number.isFinite(v) ? v : null;
+    const realizadoAcum = vivo(at(ind?.series?.periodo?.ano, mesNum));
+    const metaAcum      = vivo(at(ind?.series?.periodo?.meta, mesNum));
+    const metaAno       = vivo(at(ind?.series?.periodo?.meta, 12));
+    if (metaAno == null || metaAno === 0) return null;
+    if (realizadoAcum == null || metaAcum == null) return null;
+    const pctRitmo = (metaAcum / metaAno) * 100;
+    const mesAbrev = MES_ABREV[mesNum - 1];
+    return {
+      acel: {
+        pctAno: (realizadoAcum / metaAno) * 100,
+        pctRitmo,
+        rotuloMarca: `meta ${mesAbrev}`,
+      },
+      subtitulo: `@ produzidas · ${fmtN(realizadoAcum, 1) ?? '—'} de `
+        + `${fmtN(metaAno, 1) ?? '—'} @ · plano previa ${pctRitmo.toFixed(1)}% até ${mesAbrev}`,
+    };
+  })(arrobasIndicador);
+
   const arrobasHistoricoOficial: HistoricoPorModo =
     modalIndicador === 'arrobas' ? histZoot.arrobas : { mes: [], periodo: [] };
 
@@ -2599,10 +2638,13 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
       <div>
         <BlocoAtividade
           titulo="Zootécnico"
-          subtitulo="o que a fazenda tem e produz"
+          subtitulo={aceleradorArrobas
+            ? aceleradorArrobas.subtitulo
+            : 'o que a fazenda tem e produz'}
           icone={BarChart3}
           loading={loadingPainel}
           onClick={() => setModalAtividade('zootecnico')}
+          acelerador={aceleradorArrobas?.acel ?? null}
           /* Os rotulos DERIVAM dos titulos oficiais do PC-100
              (usePainelConsultorData 4157/4158 e 4273/4274), encurtados: o
              rotulo do card e text-[9px] uppercase truncate em coluna de 1/4
