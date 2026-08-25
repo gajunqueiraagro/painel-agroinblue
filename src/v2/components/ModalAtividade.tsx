@@ -209,14 +209,36 @@ const LINHAS_GERAL: LinhaResumo[] = [
   { rotulo: 'Mortalidade',       chave: 'morte_pct',     bag: 'mov', destino: 'movimentacoes' },
   /* O desenho fica completo mesmo sem os dois blocos pesados: a linha declara
      a ausencia em vez de sumir, senao o Geral parece so de zootecnico. */
+  /* Estas duas sao OPERACIONAIS porque cruzam: custo da arroba e financeiro
+     dividido por zootecnico, margem e preco de movimentacao menos custo.
+     Nenhuma pertence a um assunto so, e por isso ficam com destino proprio.
+     A linha declara a ausencia em vez de sumir — sem elas a coluna nasceria
+     vazia e o desenho ficaria incompleto. */
   { rotulo: 'Custo @ produzida', chave: '', bag: 'zoo', destino: 'operacional', emConstrucao: true },
   { rotulo: 'Margem de venda',   chave: '', bag: 'zoo', destino: 'operacional', emConstrucao: true },
-  { rotulo: 'Financeiro',        chave: '', bag: 'zoo', destino: 'financeiro',  emConstrucao: true },
+];
+
+/* ── PR-RESUMO-02 · UMA COLUNA POR ASSUNTO ────────────────────────────────
+   Dividir por CONTAGEM misturava assuntos: com onze linhas em tres blocos, o
+   `@/ha` — zootecnico — caia no mesmo bloco de desfrute e mortalidade.
+   Agrupado, o cabecalho vira o NOME do assunto e a coluna inteira e a porta
+   dele.
+   ⚠ AS ALTURAS FICAM DESIGUAIS de proposito — cinco linhas contra duas — e o
+   desequilibrio some quando Financeiro e Operacional tiverem as suas.
+   Redistribuir para equilibrar desfaria o agrupamento, que e o ponto.
+   FINANCEIRO entra sem linhas: com a coluna ja se chamando Financeiro, uma
+   linha chamada "Financeiro" seria redundante. O corpo vazio recebe a
+   mensagem de ausencia. */
+const BLOCOS_GERAL: Array<{ titulo: string; destino: Assunto; linhas: LinhaResumo[] }> = [
+  { titulo: 'Zootécnico',    destino: 'zootecnico',    linhas: LINHAS_GERAL.filter(l => l.destino === 'zootecnico') },
+  { titulo: 'Movimentações', destino: 'movimentacoes', linhas: LINHAS_GERAL.filter(l => l.destino === 'movimentacoes') },
+  { titulo: 'Financeiro',    destino: 'financeiro',    linhas: [] },
+  { titulo: 'Operacional',   destino: 'operacional',   linhas: LINHAS_GERAL.filter(l => l.destino === 'operacional') },
 ];
 
 const LINHAS_POR_ASSUNTO: Record<string, LinhaResumo[]> = {
-  zootecnico:    LINHAS_GERAL.filter(l => l.bag === 'zoo' && !l.emConstrucao),
-  movimentacoes: LINHAS_GERAL.filter(l => l.bag === 'mov'),
+  zootecnico:    LINHAS_GERAL.filter(l => l.destino === 'zootecnico'),
+  movimentacoes: LINHAS_GERAL.filter(l => l.destino === 'movimentacoes'),
 };
 
 /* Ver a prop `comparadores` do card. */
@@ -552,13 +574,20 @@ const rotuloDoMes = (ind: IndicadorAtividade, leitura: Leitura, mesAtual: number
    Respeita `leitura`, como todo o resto do modal.
    Padrao A10: cabecalho `bg-primary`, zebra `odd:bg-muted/30 even:bg-card`,
    sem bordas. Meta em `text-meta` (A11). */
-const TabelaResumo = ({ linhas, zoo, mov, leitura, mesAtual, colunas, onIr }: {
-  linhas: LinhaResumo[];
+const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, leitura, mesAtual, colunas, onIr }: {
+  /* DUAS formas de entrada, um componente so:
+       `linhas` + `colunas` -> divide por CONTAGEM, sem titulo. E o que as
+                               tabelas dos ASSUNTOS usam.
+       `blocos`             -> ja vem agrupado e com titulo. E o Geral.
+     Duplicar o componente para isso separaria duas tabelas que sao a mesma
+     tabela, e a proxima mudanca de A10 teria de ser feita duas vezes. */
+  linhas?: LinhaResumo[];
+  blocos?: Array<{ titulo: string; destino: Assunto; linhas: LinhaResumo[] }>;
   zoo: IndicadorAtividade[];
   mov: IndicadorAtividade[];
   leitura: Leitura;
   mesAtual: number;
-  colunas: number;
+  colunas?: number;
   /** `undefined` = linha nao navega (tabela do proprio assunto). */
   onIr?: (a: Assunto) => void;
 }) => {
@@ -569,27 +598,47 @@ const TabelaResumo = ({ linhas, zoo, mov, leitura, mesAtual, colunas, onIr }: {
     const v = s.length >= 13 ? s[mes] : s[mes - 1];
     return v != null && !isNaN(v) ? v : null;
   };
-  /* Divide em N blocos VERTICAIS: o bloco 1 leva as primeiras linhas, nao as
-     alternadas — a leitura de cima para baixo em cada bloco e' a que o olho
-     espera numa tabela. */
-  const porBloco = Math.ceil(linhas.length / colunas);
-  const blocos = Array.from({ length: colunas }, (_, i) =>
-    linhas.slice(i * porBloco, (i + 1) * porBloco)).filter(b => b.length > 0);
+  /* Sem `blocos`, divide em N blocos VERTICAIS por contagem: o bloco 1 leva as
+     primeiras linhas, nao as alternadas — a leitura de cima para baixo em cada
+     bloco e' a que o olho espera numa tabela. */
+  const blocos = blocosProp ?? (() => {
+    const ls = linhas ?? [];
+    const n = colunas ?? 1;
+    const porBloco = Math.ceil(ls.length / n);
+    return Array.from({ length: n }, (_, i) =>
+      ({ titulo: 'Indicador', destino: 'geral' as Assunto,
+         linhas: ls.slice(i * porBloco, (i + 1) * porBloco) }))
+      .filter(b => b.linhas.length > 0);
+  })();
 
   return (
     <div className="grid gap-3 mb-3" style={{ gridTemplateColumns: `repeat(${blocos.length}, minmax(0, 1fr))` }}>
-      {blocos.map((bloco, bi) => (
+      {blocos.map((bloco, bi) => {
+        /* Coluna SEM linhas nao navega: levar a uma aba vazia e pior que nao
+           levar. O cabecalho so vira porta quando ha o que abrir. */
+        const cabClicavel = !!onIr && bloco.linhas.length > 0 && bloco.destino !== 'geral';
+        return (
         <table key={bi} className="w-full text-[10px] tabular-nums">
           <thead>
             <tr className="bg-primary text-primary-foreground">
-              <th className="text-left font-normal px-1.5 py-1">Indicador</th>
+              <th className={`text-left font-medium px-1.5 py-1 ${cabClicavel ? 'cursor-pointer hover:underline' : ''}`}
+                  onClick={cabClicavel ? () => onIr!(bloco.destino) : undefined}>
+                {bloco.titulo}
+              </th>
               <th className="text-right font-medium px-1.5 py-1">Realizado</th>
               <th className="text-right font-normal px-1.5 py-1">Meta</th>
-              <th className="text-right font-normal px-1.5 py-1 w-[62px]">Dif.</th>
+              <th className="text-right font-normal px-1.5 py-1 w-[56px]">Dif.</th>
             </tr>
           </thead>
           <tbody>
-            {bloco.map(l => {
+            {bloco.linhas.length === 0 && (
+              <tr className="bg-muted/30">
+                <td colSpan={4} className="px-1.5 py-2 text-center text-muted-foreground/70 italic">
+                  em construção
+                </td>
+              </tr>
+            )}
+            {bloco.linhas.map(l => {
               const ind = l.emConstrucao ? undefined : acha(l);
               const per = leitura === 'periodo';
               const real = ind ? (per ? ind.valorPeriodo : ind.valorMes) : null;
@@ -625,7 +674,8 @@ const TabelaResumo = ({ linhas, zoo, mov, leitura, mesAtual, colunas, onIr }: {
             })}
           </tbody>
         </table>
-      ))}
+        );
+      })}
     </div>
   );
 };
@@ -1050,15 +1100,14 @@ export function ModalAtividade({
         <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3" style={{ minHeight: 200 }}>
           {assunto === 'geral' ? (
             /* SO TABELA, sem card de grafico: o Geral existe para responder "o
-               mes foi bom?" antes de qualquer leitura de serie. Tres blocos —
-               onze linhas numa coluna so ficariam altas e estreitas. */
+               mes foi bom?" antes de qualquer leitura de serie.
+               QUATRO colunas, uma por assunto — ver `BLOCOS_GERAL`. */
             <TabelaResumo
-              linhas={LINHAS_GERAL}
+              blocos={BLOCOS_GERAL}
               zoo={indicadores}
               mov={indicadoresMovimentacoes ?? []}
               leitura={leitura}
               mesAtual={mesAtual}
-              colunas={3}
               onIr={setAssunto}
             />
           ) : assunto !== 'zootecnico' && assunto !== 'movimentacoes' ? (
