@@ -395,7 +395,7 @@ const LINHAS_DRE: LinhaResumo[] = [
   { rotulo: '= Resultado Bruto',           chave: 'dre_resultado_bruto', bag: 'dre', subtotal: true },
 
   { rotulo: '4. (−) Investimento na fazenda', chave: 'dre_investimento', bag: 'dre', saida: true },
-  { rotulo: '= Resultado com Investimento', chave: 'dre_resultado_investimento', bag: 'dre', subtotal: true },
+  { rotulo: '= Resultado após Investimento', chave: 'dre_resultado_investimento', bag: 'dre', subtotal: true },
 
   { rotulo: '5. (−) Reposição de bovinos', chave: 'dre_reposicao',     bag: 'dre', saida: true },
   { rotulo: '6. (−/+) Variação do estoque', chave: 'dre_variacao',     bag: 'dre' },
@@ -403,7 +403,9 @@ const LINHAS_DRE: LinhaResumo[] = [
   { rotulo: 'por preço',                   chave: 'dre_variacao_preco', bag: 'dre', nivel: 1 },
   { rotulo: '= Resultado Operacional',     chave: 'dre_resultado_operacional', bag: 'dre', subtotal: true },
 
-  { rotulo: '7. (−/+) Resultado financeiro', chave: 'dre_financeiro',  bag: 'dre', saida: true },
+  /* '(−)' e nao '(−/+)': juros sao SEMPRE saida. O rotulo mudou; a chave, a
+     ordem e a fonte nao — o indicador continua sendo `dre_financeiro`. */
+  { rotulo: '7. (−) Juros Financeiros', chave: 'dre_financeiro',  bag: 'dre', saida: true },
   { rotulo: '= Resultado antes dos Tributos', chave: 'dre_antes_tributos', bag: 'dre', subtotal: true },
 
   { rotulo: '8. (−) Tributos patrimoniais', chave: 'dre_tributo_patrimonial', bag: 'dre', saida: true },
@@ -744,7 +746,7 @@ const rotuloDoMes = (ind: IndicadorAtividade, leitura: Leitura, mesAtual: number
    Respeita `leitura`, como todo o resto do modal.
    Padrao A10: cabecalho `bg-primary`, zebra `odd:bg-muted/30 even:bg-card`,
    sem bordas. Meta em `text-meta` (A11). */
-const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, leitura, mesAtual, colunas, onIr, realizadoPrimeiro, compacta }: {
+const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, leitura, mesAtual, colunas, onIr, realizadoPrimeiro, compacta, rotuloEstreito }: {
   /* DUAS formas de entrada, um componente so:
        `linhas` + `colunas` -> divide por CONTAGEM, sem titulo. E o que as
                                tabelas dos ASSUNTOS usam.
@@ -770,6 +772,10 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
       fonte. SUBTOTAL mantem o tamanho — e' o que se le primeiro.
       OPT-IN — ausente mantem padding e fonte de sempre. */
   compacta?: boolean;
+  /** Encolhe a coluna do rotulo ate o conteudo e joga a folga numa celula
+      vazia no fim, aproximando os numeros do rotulo. Ver o comentario de
+      `nCols`. OPT-IN — ausente mantem a tabela de quatro colunas de sempre. */
+  rotuloEstreito?: boolean;
 }) => {
   /* MODO COMPACTO. Duas alavancas, e so estas:
        padding vertical  py-0.5 (2px cada lado) -> py-0
@@ -781,6 +787,58 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
      final fica byte a byte igual a de antes desta prop. */
   const padY = compacta ? 'py-0' : 'py-0.5';
   const fonteParcela = compacta ? ' text-[9px]' : '';
+
+  /* SUBTOTAL com padding PROPRIO, maior que o da parcela MESMO em modo
+     compacto. Ate aqui o `subtotal` se distinguia so por peso e fio; com 21
+     linhas apertadas isso e pouco, e o olho perde as seis somas no meio das
+     quinze parcelas. Altura e a terceira alavanca, e a mais barata: nao mexe
+     em fonte (piso A12) nem em largura.
+       parcela   compacta py-0    (0px)  · normal py-0.5 (2px cada lado)
+       subtotal  compacta py-0    (0px)  · normal py-1.5 (6px cada lado)
+     ⚠ NO COMPACTO O SUBTOTAL NAO GANHA ALTURA, e isto foi MEDIDO, nao
+     escolhido. A area visivel do miolo e 367px — menos da METADE dos ~742px
+     que uma projecao minha supos, e por isso a projecao passou. Com 21 linhas
+     a tabela mede 368px e ja nasce 1px no limite: qualquer padding extra
+     empurra o Lucro Liquido, a linha pela qual o demonstrativo existe, para
+     fora da tela. py-1 custava +48px, py-0.5 +24px; os dois estouravam.
+     No modo NORMAL a altura fica (py-1.5): la nao ha aperto.
+     No compacto o subtotal segue distinto por NEGRITO e FIO, que e o que
+     havia antes deste PR e cabia justo.
+     ⚠ OPT-IN pelo proprio `subtotal`, que so o DRE marca — as cinco outras
+     abas nao tem nenhuma linha com o campo, entao `padDe` devolve `padY` para
+     todas elas e a classe sai byte a byte igual a de antes. */
+  const padDe = (sub?: boolean) =>
+    sub ? (compacta ? padY : 'py-1.5') : padY;
+
+  /* Coluna do rotulo ENCOLHIDA ate o conteudo + coluna de sobra no fim.
+     Sem isto a coluna Indicador absorve toda a folga da tabela `w-full` e os
+     numeros ficam longe do rotulo, dificultando a leitura de linha.
+     Duas partes, e as duas importam:
+       `whitespace-nowrap` sem `max-w`  -> a coluna mede o rotulo mais longo e
+          NUNCA trunca. Truncar era o risco proibido do E4, e aqui ele nao
+          existe por construcao, nao por um numero de pixels que eu teria de
+          adivinhar sem navegador.
+       celula VAZIA com `w-full`        -> e ela que come a folga, no fim da
+          linha. Sem essa celula a folga voltaria a se espalhar entre as
+          quatro colunas e os numeros se afastariam de novo.
+     ⚠ OPT-IN: ausente, nenhuma celula extra e emitida e o `colSpan` volta a 4.
+     ⚠ `truncate max-w-[180px]` continua valendo para quem NAO passa a prop —
+     nas outras abas o rotulo divide espaco com ate quatro tabelas lado a lado
+     e encolher ate o conteudo estouraria a grade. */
+  const nCols = rotuloEstreito ? 5 : 4;
+
+  /* Os ultimos 13px, e de onde eles saem — MEDIDOS no DOM, nao projetados.
+     A area visivel do miolo e 367px e a tabela de 21 linhas media 380px.
+       `mb-0`   no lugar de `mb-3`  -> 12px. No DRE a tabela e o UNICO conteudo
+                do miolo, entao a margem de baixo nao separa nada de nada: e
+                folga pura, e era ela que empurrava o Lucro Liquido.
+       `py-0.5` no lugar de `py-1`  ->  4px. So no CABECALHO, que e rotulo e
+                nao dado. As 21 linhas nao sao tocadas.
+     16px contra 13px: sobra 3px de folga, e nenhuma fonte foi reduzida.
+     ⚠ As duas so valem com `rotuloEstreito`, que so o DRE passa — sem a prop
+     as strings saem `mb-3` e `py-1`, identicas as de antes. */
+  const padTh = rotuloEstreito ? 'py-0.5' : 'py-1';
+  const margemBaixo = rotuloEstreito ? 'mb-0' : 'mb-3';
 
   const acha = (l: LinhaResumo) =>
     (l.bag === 'zoo' ? zoo : l.bag === 'fin' ? fin : l.bag === 'oper' ? oper
@@ -804,7 +862,7 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
   })();
 
   return (
-    <div className="grid gap-3 mb-3" style={{ gridTemplateColumns: `repeat(${blocos.length}, minmax(0, 1fr))` }}>
+    <div className={`grid gap-3 ${margemBaixo}`} style={{ gridTemplateColumns: `repeat(${blocos.length}, minmax(0, 1fr))` }}>
       {blocos.map((bloco, bi) => {
         /* Coluna SEM linhas nao navega: levar a uma aba vazia e pior que nao
            levar. O cabecalho so vira porta quando ha o que abrir. */
@@ -816,7 +874,7 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
         <table key={bi} className="w-full text-[10px] tabular-nums">
           <thead>
             <tr className="bg-primary text-primary-foreground">
-              <th className={`text-left font-medium px-1.5 py-1 ${cabClicavel ? 'cursor-pointer hover:underline' : ''}`}
+              <th className={`text-left font-medium px-1.5 ${padTh} ${cabClicavel ? 'cursor-pointer hover:underline' : ''}`}
                   onClick={cabClicavel ? () => onIr!(bloco.destino) : undefined}>
                 {bloco.titulo}
               </th>
@@ -829,24 +887,25 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
                   porque os dois leem a MESMA flag. */}
               {realizadoPrimeiro ? (
                 <>
-                  <th className="text-right font-medium px-1.5 py-1">Realizado</th>
-                  <th className="text-right font-normal px-1.5 py-1">Meta</th>
+                  <th className={`text-right font-medium px-1.5 ${padTh}`}>Realizado</th>
+                  <th className={`text-right font-normal px-1.5 ${padTh}`}>Meta</th>
                 </>
               ) : (
                 <>
-                  <th className="text-right font-normal px-1.5 py-1">Meta</th>
-                  <th className="text-right font-medium px-1.5 py-1">Realizado</th>
+                  <th className={`text-right font-normal px-1.5 ${padTh}`}>Meta</th>
+                  <th className={`text-right font-medium px-1.5 ${padTh}`}>Realizado</th>
                 </>
               )}
               {/* `whitespace-nowrap` + largura maior: em quatro colunas o `Dif.`
                   das Movimentacoes saia cortado contra a coluna seguinte. */}
-              <th className="text-right font-normal px-1.5 py-1 w-[64px] whitespace-nowrap">Dif.</th>
+              <th className={`text-right font-normal px-1.5 ${padTh} w-[64px] whitespace-nowrap`}>Dif.</th>
+              {rotuloEstreito && <th className="w-full p-0" aria-hidden />}
             </tr>
           </thead>
           <tbody>
             {bloco.linhas.length === 0 && (
               <tr className="bg-muted/30">
-                <td colSpan={4} className="px-1.5 py-2 text-center text-muted-foreground/70 italic">
+                <td colSpan={nCols} className="px-1.5 py-2 text-center text-muted-foreground/70 italic">
                   em construção
                 </td>
               </tr>
@@ -856,14 +915,14 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
                  ela organiza a leitura, nao e um dado. */
               if (l.secao) return (
                 <tr key={l.rotulo}>
-                  <td colSpan={4} className="px-1.5 pt-2 pb-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  <td colSpan={nCols} className="px-1.5 pt-2 pb-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
                     {l.rotulo}
                   </td>
                 </tr>
               );
               if (l.mensagem) return (
                 <tr key={l.rotulo} className="odd:bg-muted/30 even:bg-card">
-                  <td colSpan={4} className="px-1.5 py-0.5 text-center text-muted-foreground/70 italic">
+                  <td colSpan={nCols} className="px-1.5 py-0.5 text-center text-muted-foreground/70 italic">
                     {l.mensagem}
                   </td>
                 </tr>
@@ -883,7 +942,7 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
                  decisao so, no JSX abaixo — cabecalho e corpo leem a mesma flag
                  e nao ha como divergirem. */
               const celMeta = (
-                <td className={`text-right ${padY} px-1.5 text-meta whitespace-nowrap${l.subtotal ? '' : fonteParcela}`}>
+                <td className={`text-right ${padDe(l.subtotal)} px-1.5 text-meta whitespace-nowrap${l.subtotal ? '' : fonteParcela}`}>
                   {ind && metaV != null ? fmtValor(metaV, ind.formatoValor, ind.unidade) : '—'}
                 </td>
               );
@@ -894,7 +953,7 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
                  demais   -> cor padrao.
                  Sem `saida` nem `subtotal` a classe e' identica a de antes. */
               const celReal = (
-                <td className={`text-right ${padY} px-1.5 font-medium whitespace-nowrap${l.subtotal ? '' : fonteParcela} ${
+                <td className={`text-right ${padDe(l.subtotal)} px-1.5 font-medium whitespace-nowrap${l.subtotal ? '' : fonteParcela} ${
                   l.saida ? 'text-destructive'
                   : (l.subtotal && real != null && real < 0) ? 'text-destructive'
                   : 'text-foreground'}`}>
@@ -909,17 +968,27 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
                       rotulo cabe inteiro — `Preço médio venda` era o apertado.
                       A indentacao e PADDING, nao caractere: com espaco o
                       `truncate` cortaria o recuo antes do texto. */}
-                  <td className={`text-left px-1.5 ${padY} truncate max-w-[180px]${l.subtotal ? ' font-semibold' : fonteParcela}`}
+                  <td className={`text-left px-1.5 ${padDe(l.subtotal)} ${rotuloEstreito ? 'whitespace-nowrap' : 'truncate max-w-[180px]'}${l.subtotal ? ' font-semibold' : fonteParcela}`}
                       style={{ paddingLeft: 6 + (l.nivel ?? 0) * 12 }}>{l.rotulo}</td>
                   {realizadoPrimeiro ? <>{celReal}{celMeta}</> : <>{celMeta}{celReal}</>}
                   {/* Verde/vermelho so aqui; a linha nunca tem fundo azul, entao
                       o aviso do A10 sobre texto sobre primary nao se aplica. */}
-                  <td className={`text-right px-1.5 ${padY} whitespace-nowrap ${
+                  {/* POLARIDADE. `dif` continua sendo (real - meta)/meta e o
+                      TEXTO nao muda — o que muda e' o que conta como BOM.
+                      Numa linha de SAIDA gastar acima do planejado e' ruim,
+                      entao a cor inverte: acima -> vermelho, abaixo -> verde.
+                      ⚠ SUBTOTAL e Faturamento NAO invertem, e nao precisam de
+                      excecao: nenhum deles tem `saida`. As nove linhas que
+                      invertem sao exatamente as nove ja marcadas.
+                      ⚠ Esta e a coluna Dif. A cor do VALOR (vermelho por
+                      natureza da saida, em `celReal`) nao e tocada aqui. */}
+                  <td className={`text-right px-1.5 ${padDe(l.subtotal)} whitespace-nowrap ${
                     dif == null ? 'text-muted-foreground'
-                    : dif >= 0 ? 'text-emerald-600 dark:text-emerald-400'
+                    : (l.saida ? dif < 0 : dif >= 0) ? 'text-emerald-600 dark:text-emerald-400'
                     : 'text-red-600 dark:text-red-400'}`}>
                     {dif == null ? '—' : `${dif >= 0 ? '+' : ''}${dif.toFixed(1)}%`}
                   </td>
+                  {rotuloEstreito && <td className="p-0" />}
                 </tr>
               );
             })}
@@ -1389,6 +1458,7 @@ export function ModalAtividade({
               linhas={LINHAS_DRE}
               realizadoPrimeiro
               compacta
+              rotuloEstreito
               zoo={indicadores}
               mov={indicadoresMovimentacoes ?? []}
               fin={indicadoresFinanceiro ?? []}
