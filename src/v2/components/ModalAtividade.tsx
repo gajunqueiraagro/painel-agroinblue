@@ -1198,6 +1198,17 @@ const TabelaMensalDre = ({ linhas, dre, modo, mesAtual }: {
    tabela que esta atras dele.
    ⚠ Linha sem base NAO entra: meta ausente, ou Janeiro, que nao tem anterior.
    Nao se inventa base para preencher o ranking. */
+/* ⚠ O CASO QUE PROVA POR QUE NAO SE AFIRMA CAUSA AQUI.
+   A tentacao natural, lendo o Bloco 1, e escrever "o estoque desvalorizou
+   DEVIDO ao aumento de desfrute". Na NJ essa frase seria FALSA, e foi MEDIDO:
+   o desfrute de julho foi o MENOR do ano, e o preco COMPENSOU a perda de
+   volume em vez de acompanha-la. Uma causalidade automatica teria invertido o
+   sentido do fato para o operador.
+   Por isso os blocos LIGAM numeros e param ai. Proibido: 'devido a', 'por
+   causa de', 'refletindo', 'impactado por'. Proibido adjetivo de valor:
+   'forte', 'elevado', 'preocupante'. Explicar a causa — nutricao, GMD, preco
+   da arroba — e a Parte B, PR proprio, e la a explicacao vem de indicador
+   operacional MEDIDO, nao de inferencia sobre o proprio DRE. */
 type BaseDesvio = 'meta' | 'mesAnterior' | 'acumuladoAnterior';
 
 /* '3. (−) Custeio pecuária' -> 'Custeio pecuária'. A numeracao e o marcador de
@@ -1205,9 +1216,24 @@ type BaseDesvio = 'meta' | 'mesAnterior' | 'acumuladoAnterior';
 const nomeCurto = (r: string) =>
   r.replace(/^\d+\.\s*/, '').replace(/^=\s*/, '').replace(/^\([^)]*\)\s*/, '');
 
-const ModalDesvios = ({ linhas, dre, mesAtual, base, onClose }: {
+const Bloco = ({ titulo, contexto, children }: {
+  titulo: string; contexto: string; children: React.ReactNode;
+}) => (
+  <div className="rounded-md border border-border/50 px-3 py-2">
+    <div className="flex items-baseline gap-2 mb-1">
+      <p className="text-[11px] font-semibold leading-tight">{titulo}</p>
+      <p className="text-[10px] text-muted-foreground leading-tight">{contexto}</p>
+    </div>
+    {children}
+  </div>
+);
+
+const ModalDesvios = ({ linhas, dre, fin, mesAtual, base, onClose }: {
   linhas: LinhaResumo[];
   dre: IndicadorAtividade[];
+  /** A aba Financeiro E' o DRE de CAIXA — ver o comentario do ponto de chamada
+      dela. E' de la que sai o lado "caixa" do Bloco 2; nada foi inventado. */
+  fin: IndicadorAtividade[];
   mesAtual: number;
   /** Contra o que medir. Segue a VISAO em que o usuario esta. */
   base: BaseDesvio;
@@ -1216,21 +1242,73 @@ const ModalDesvios = ({ linhas, dre, mesAtual, base, onClose }: {
   const mesAnt = mesAtual - 1;
   const temAnterior = mesAnt >= 1;
   const nomeAnt = temAnterior ? MESES[mesAnt - 1] : '';
+  const nomeMes = MESES[mesAtual - 1];
 
+  /* O RECORTE dos numeros de cada bloco segue a visao: no mensal "Por mes" eles
+     sao DAQUELE mes; nas outras duas sao acumulados de Janeiro ate o filtro.
+     Os blocos 1 a 3 nao comparam contra base — eles LIGAM numeros do mesmo
+     recorte —, entao o que declaram e o RECORTE. So o bloco 4 declara base. */
+  const recorte = base === 'mesAnterior' ? nomeMes : `Jan–${nomeMes}`;
   const rotuloBase =
     base === 'meta'          ? 'da meta'
     : base === 'mesAnterior' ? `de ${nomeAnt}`
                              : `do acumulado até ${nomeAnt}`;
+  const declaracaoBase =
+    base === 'meta'          ? `contra a meta do período`
+    : !temAnterior           ? 'sem mês anterior'
+    : base === 'mesAnterior' ? `contra ${nomeAnt}`
+                             : `contra o acumulado até ${nomeAnt}`;
 
-  /* Declarar contra o que se mede: sem isso o numero nao significa nada. */
-  const declaracao =
-    base === 'meta'          ? `Medidos contra a META do período, até ${MESES[mesAtual - 1]}.`
-    : !temAnterior           ? 'Janeiro não tem mês anterior neste recorte.'
-    : base === 'mesAnterior' ? `Medidos contra ${nomeAnt}, o mês anterior.`
-                             : `Medidos contra o acumulado até ${nomeAnt}.`;
+  /* UMA leitura, usada por TODOS os blocos: le a mesma serie que a tabela atras
+     do modal esta mostrando. Se cada bloco escolhesse a sua, o modal poderia
+     discordar da tabela — e de si mesmo. */
+  const ler = (chave: string, fonte: IndicadorAtividade[]): number | null => {
+    const ind = fonte.find(i => i.chave === chave);
+    if (!ind) return null;
+    return base === 'meta'
+      ? ind.valorPeriodo
+      : valorDoMes(base === 'mesAnterior' ? ind.serieMes : ind.seriePeriodo, mesAtual);
+  };
+  const lerDre = (chave: string) => ler(chave, dre);
+  const sinal = (v: number) => `${v >= 0 ? '+' : '−'}${fmtRAbrev(Math.abs(v))}`;
 
-  /* Acumulador TIPADO em vez de `.filter(Boolean)`: o filter nao estreita o
-     tipo em TS e a alternativa seria um cast, proibido em codigo novo. */
+  /* ── BLOCO 1 · composicao do estoque ── */
+  const varTotal = lerDre('dre_variacao');
+  const varProd  = lerDre('dre_variacao_producao');
+  const varPreco = lerDre('dre_variacao_preco');
+  const temBloco1 = varTotal != null && varProd != null && varPreco != null;
+
+  /* ── BLOCO 2 · caixa contra competencia ── */
+  const recCaixa = ler('fin_rec_pec', fin);
+  const recComp  = lerDre('dre_rec_pec');
+  const temBloco2 = recCaixa != null && recComp != null;
+
+  /* ── BLOCO 3 · onde o resultado se formou ──
+     As linhas ENTRE os dois subtotais, so as de topo: incluir 'Custo fixo' ou
+     'por preco' contaria duas vezes, porque elas ja estao dentro de 'Custeio' e
+     de 'Variacao'. */
+  const receitaLiq = lerDre('dre_receita_liquida');
+  const lucroLiq   = lerDre('dre_lucro_liquido');
+  const iRL = linhas.findIndex(l => l.chave === 'dre_receita_liquida');
+  const iLL = linhas.findIndex(l => l.chave === 'dre_lucro_liquido');
+  const subtracoes: Array<{ nome: string; valor: number }> = [];
+  if (iRL >= 0 && iLL > iRL) {
+    for (const l of linhas.slice(iRL + 1, iLL)) {
+      if (l.subtotal || (l.nivel ?? 0) > 0) continue;
+      const v = lerDre(l.chave);
+      if (v == null) continue;
+      /* SUBTRAI de fato? Saida sempre subtrai. A variacao do estoque so subtrai
+         quando e negativa — positiva ela SOMA, e chama-la de subtracao seria
+         falso. Por isso ela pode simplesmente nao aparecer aqui. */
+      const quanto = l.saida ? (v > 0 ? v : null) : (v < 0 ? -v : null);
+      if (quanto == null) continue;
+      subtracoes.push({ nome: nomeCurto(l.rotulo), valor: quanto });
+    }
+    subtracoes.sort((a, b) => b.valor - a.valor);
+  }
+  const temBloco3 = receitaLiq != null && lucroLiq != null && subtracoes.length > 0;
+
+  /* ── BLOCO 4 · o ranking, agora em CINCO e sem barras ── */
   const itens: Array<{ linha: LinhaResumo; desvio: number; pct: number | null }> = [];
   for (const l of linhas) {
     const ind = l.emConstrucao ? undefined : dre.find(i => i.chave === l.chave);
@@ -1242,27 +1320,22 @@ const ModalDesvios = ({ linhas, dre, mesAtual, base, onClose }: {
                                   : null;
     if (atual == null || ref == null) continue;
     const desvio = atual - ref;
-    /* Base ZERO tem desvio mas nao tem percentual — dividir por zero daria
-       infinito. O item entra no ranking (a ordem e por reais) e sai sem o %. */
     itens.push({ linha: l, desvio, pct: ref !== 0 ? (desvio / Math.abs(ref)) * 100 : null });
   }
   itens.sort((a, b) => Math.abs(b.desvio) - Math.abs(a.desvio));
-  const top = itens.slice(0, 8);
-  const maxAbs = top.length ? Math.abs(top[0].desvio) : 1;
+  const top = itens.slice(0, 5);
+
+  const frase = 'text-[11px] leading-[17px] text-foreground';
 
   return (
-    /* `z-[60]` sobre o z-50 do modal de fora. Nao ha Dialog nem portal neste
-       projeto — o modal do DRE e overlay proprio —, entao empilhar e so isto.
-       O backdrop daqui fecha SO este: o painel de fora ja corta a propagacao,
-       entao o clique nunca alcanca o `onClose` dele. */
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50" onClick={onClose}>
-      <div className="w-full max-w-4xl mx-4 rounded-lg border border-border/40 bg-background shadow-xl flex flex-col max-h-[80vh]"
+      <div className="w-full max-w-5xl mx-4 rounded-lg border border-border/40 bg-background shadow-xl flex flex-col max-h-[85vh]"
            onClick={e => e.stopPropagation()}>
         <div className="shrink-0 px-4 pt-3 pb-2 border-b border-border/40 flex items-start gap-2">
           <div>
-            <p className="text-[13px] font-semibold leading-tight">Maiores desvios</p>
+            <p className="text-[13px] font-semibold leading-tight">Leitura do resultado</p>
             <p className="text-[11px] text-muted-foreground leading-tight">
-              {declaracao} Ordenados pelo tamanho em reais.
+              Números do recorte {recorte}, ligados entre si. Nenhuma relação de causa é afirmada.
             </p>
           </div>
           <button onClick={onClose} aria-label="Fechar"
@@ -1271,35 +1344,60 @@ const ModalDesvios = ({ linhas, dre, mesAtual, base, onClose }: {
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
-        <div className="flex-1 min-h-0 overflow-y-auto px-4 py-2">
-          {top.length === 0 ? (
-            <p className="text-[11px] text-muted-foreground/70 italic py-6 text-center">
-              Sem base de comparação neste recorte.
-            </p>
-          ) : top.map(({ linha, desvio, pct }) => (
-            /* A COR e `corDeValor`, a mesma da tabela — saida vermelha por
-               natureza, demais pelo sinal. A barra usa `bg-current`, entao
-               herda a cor do texto e a regra continua existindo em UM lugar
-               so: nao ha mapa de cor duplicado para o grafico. */
-            <div key={linha.chave} className={`flex items-center gap-3 py-0.5 ${corDeValor(linha, desvio)}`}>
-              <span className="text-[11px] leading-[16px] flex-1 text-foreground">
-                {nomeCurto(linha.rotulo)} ficou {fmtRAbrev(Math.abs(desvio))}{' '}
-                {desvio >= 0 ? 'acima' : 'abaixo'} {rotuloBase}
-                {pct != null && ` (${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%)`}
-              </span>
-              {/* Eixo no CENTRO: positivo cresce para a direita, negativo para a
-                  esquerda. Comprimento proporcional ao desvio em REAIS, com o
-                  maior do ranking valendo os 50% de cada lado. Divs e nao SVG,
-                  como as barras da Visao Geral — sem biblioteca nova. */}
-              <div className="relative h-3 w-[38%] shrink-0">
-                <div className="absolute inset-y-0 left-1/2 w-px bg-border" />
-                <div className="absolute inset-y-[3px] bg-current rounded-[1px]"
-                     style={desvio >= 0
-                       ? { left: '50%', width: `${(Math.abs(desvio) / maxAbs) * 50}%` }
-                       : { right: '50%', width: `${(Math.abs(desvio) / maxAbs) * 50}%` }} />
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-2">
+
+          {temBloco1 && (
+            <Bloco titulo="Composição do estoque" contexto={recorte}>
+              <p className={frase}>
+                O valor do rebanho variou {sinal(varTotal)}:{' '}
+                {varProd >= 0 ? 'subiu' : 'caiu'} {fmtRAbrev(Math.abs(varProd))} por volume e{' '}
+                {varPreco >= 0 ? 'subiu' : 'caiu'} {fmtRAbrev(Math.abs(varPreco))} por preço.
+              </p>
+            </Bloco>
+          )}
+
+          {temBloco2 && (
+            <Bloco titulo="Caixa contra competência" contexto={recorte}>
+              <p className={frase}>
+                A receita pecuária somou {fmtRAbrev(recCaixa)} em caixa e{' '}
+                {fmtRAbrev(recComp)} por competência — diferença de {sinal(recCaixa - recComp)}.
+              </p>
+            </Bloco>
+          )}
+
+          {temBloco3 && (
+            <Bloco titulo="Onde o resultado se formou" contexto={recorte}>
+              <p className={frase}>
+                Da Receita Líquida de {fmtRAbrev(receitaLiq)} ao Lucro Líquido de{' '}
+                {fmtRAbrev(lucroLiq)}, as maiores subtrações foram:{' '}
+                {subtracoes.slice(0, 3).map((x, i, a) => (
+                  <span key={x.nome}>
+                    {x.nome} ({fmtRAbrev(x.valor)}){i < a.length - 1 ? ', ' : '.'}
+                  </span>
+                ))}
+              </p>
+            </Bloco>
+          )}
+
+          <Bloco titulo="Maiores desvios" contexto={`${declaracaoBase} · ordenados em reais`}>
+            {top.length === 0 ? (
+              <p className="text-[11px] text-muted-foreground/70 italic">
+                Sem base de comparação neste recorte.
+              </p>
+            ) : (
+              <div className="space-y-0.5">
+                {top.map(({ linha, desvio, pct }) => (
+                  <p key={linha.chave} className={frase}>
+                    <span className={corDeValor(linha, desvio)}>■</span>{' '}
+                    {nomeCurto(linha.rotulo)} ficou {fmtRAbrev(Math.abs(desvio))}{' '}
+                    {desvio >= 0 ? 'acima' : 'abaixo'} {rotuloBase}
+                    {pct != null && ` (${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%)`}
+                  </p>
+                ))}
               </div>
-            </div>
-          ))}
+            )}
+          </Bloco>
+
         </div>
       </div>
     </div>
@@ -2009,6 +2107,7 @@ export function ModalAtividade({
             linhas={LINHAS_DRE}
             dre={indicadoresDre ?? []}
             mesAtual={mesAtual}
+            fin={indicadoresFinanceiro ?? []}
             base={visaoDre === 'mensal'
               ? (modoMensal === 'acumulado' ? 'acumuladoAnterior' : 'mesAnterior')
               : 'meta'}
