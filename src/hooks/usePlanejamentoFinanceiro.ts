@@ -441,7 +441,24 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string, enabl
             )
           )
         `)
-        .eq('status', 'pendente')
+        /* ⚠ META LE PARCELA DE QUALQUER STATUS, EXCETO CANCELADA. Antes era
+           `.eq('status','pendente')`, e isso fazia o REALIZADO ALTERAR A META:
+           ao pagar, a parcela virava 'pago' e SAIA do planejamento. A meta do
+           ano encolhia conforme o ano avancava, e em dezembro, com tudo pago,
+           a meta de amortizacao seria ZERO.
+           O compromisso foi planejado independente de ja ter sido pago — o que
+           foi planejado nao muda em funcao do que aconteceu depois.
+           Medido em 26/08/2026, Santa Rita 2026 (15 pagas, 3 pendentes):
+             amortizacao  R$ 1.992.000 -> R$ 7.189.110
+             juros        R$   626.339 -> R$ 1.918.048
+           CANCELADA fica de fora porque deixou de existir como compromisso —
+           uma so na base em 2026, R$ 21.000 do Agnaldo. Os status sao
+           exatamente tres (pago 432, pendente 120, cancelado 25): o `.neq` nao
+           deixa entrar nada inesperado hoje, mas passaria a incluir um status
+           novo caso surja.
+           ⚠ Quem voltar a filtrar 'pendente' traz de volta a meta que encolhe:
+           meta NAO e' "o que falta pagar". */
+        .neq('status', 'cancelado')
         .eq('financiamentos.cliente_id', clienteId)
         .gte('data_vencimento', `${ano}-01-01`)
         .lte('data_vencimento', `${ano}-12-31`);
