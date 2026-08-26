@@ -759,6 +759,26 @@ const rotuloDoMes = (ind: IndicadorAtividade, leitura: Leitura, mesAtual: number
    ⚠ Os tokens sao os MESMOS da coluna Dif. (emerald/red). Uma terceira paleta
    no mesmo demonstrativo faria o leitor perguntar se o verde do valor quer
    dizer outra coisa que o verde da diferenca. */
+/* TRES NIVEIS DE TIPOGRAFIA do DRE — o demonstrativo tem hierarquia e a tela
+   nao mostrava nenhuma: numeradas e parcelas dividiam os mesmos 10px.
+     SUBTOTAL   11px/17px  negrito   e' onde a leitura para
+     NUMERADA   10px/15px  normal    o corpo do demonstrativo
+     PARCELA     9px/13px  normal    detalhe de quem abre a numerada acima
+   ⚠ ORCAMENTO NEUTRO, e isto foi feito de proposito: 6 parcelas x -2px
+   devolvem os 30px que 9 numeradas e 6 subtotais consomem. A tabela continua
+   em 340px contra o teto de 343px (o scroller tem 367 menos os 24 do `py-3`).
+   Subir fonte sem devolver altura em outro lugar tiraria o Lucro Liquido da
+   tela — ja aconteceu duas vezes nesta frente.
+   ⚠ `leading` EXPLICITO em cada nivel. Herdado, ele se recalcula por fonte e o
+   custo em pixels deixa de ser previsivel antes de abrir a tela.
+   ⚠ PISO A12 = 8px. A parcela para em 9px; abaixo disso o briefing manda PARAR.
+   ⚠ Nivel derivado de `nivel`/`subtotal`, mas o CHAMADOR e' que decide aplicar:
+   ha 5 linhas com `nivel: 1` FORA do DRE, e sem o portao elas encolheriam. */
+const tipografiaDre = (l: LinhaResumo): string =>
+  l.subtotal            ? 'text-[11px] leading-[17px]'
+  : (l.nivel ?? 0) > 0  ? 'text-[9px] leading-[13px]'
+                        : 'text-[10px] leading-[15px]';
+
 const corDeValor = (l: LinhaResumo, v: number | null): string =>
   l.saida               ? 'text-destructive'
   : v == null || v === 0 ? 'text-foreground'
@@ -978,6 +998,9 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
                 </tr>
               );
               const ind = l.emConstrucao ? undefined : acha(l);
+              /* Portao em `compacta`, cujo unico chamador e o DRE: sem ele as
+                 cinco outras abas herdariam a escala de tres niveis. */
+              const tipo = compacta ? ' ' + tipografiaDre(l) : '';
               const per = leitura === 'periodo';
               const real = ind ? (per ? ind.valorPeriodo : ind.valorMes) : null;
               /* A meta e' lida no MESMO mes do realizado: `valorMes`/`valorPeriodo`
@@ -992,7 +1015,7 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
                  decisao so, no JSX abaixo — cabecalho e corpo leem a mesma flag
                  e nao ha como divergirem. */
               const celMeta = (
-                <td className={`text-right ${padDe(l.subtotal)} px-1.5 text-meta whitespace-nowrap`}>
+                <td className={`text-right ${padDe(l.subtotal)} px-1.5 text-meta whitespace-nowrap${tipo}`}>
                   {ind && metaV != null ? fmtValor(metaV, ind.formatoValor, ind.unidade) : '—'}
                 </td>
               );
@@ -1003,11 +1026,11 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
                  demais   -> cor padrao.
                  Sem `saida` nem `subtotal` a classe e' identica a de antes. */
               const celReal = (
-                <td className={`text-right ${padDe(l.subtotal)} px-1.5 ${l.subtotal ? 'font-bold' : 'font-medium'} whitespace-nowrap ${
+                <td className={`text-right ${padDe(l.subtotal)} px-1.5 ${l.subtotal ? 'font-bold' : compacta ? 'font-normal' : 'font-medium'} whitespace-nowrap ${
                   corPorSinal ? corDeValor(l, real)
                   : l.saida ? 'text-destructive'
                   : (l.subtotal && real != null && real < 0) ? 'text-destructive'
-                  : 'text-foreground'}`}>
+                  : 'text-foreground'}${tipo}`}>
                   {ind && real != null ? fmtValor(real, ind.formatoValor, ind.unidade) : '—'}
                 </td>
               );
@@ -1019,7 +1042,7 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
                       rotulo cabe inteiro — `Preço médio venda` era o apertado.
                       A indentacao e PADDING, nao caractere: com espaco o
                       `truncate` cortaria o recuo antes do texto. */}
-                  <td className={`text-left px-1.5 ${padDe(l.subtotal)} ${rotuloEstreito ? 'whitespace-nowrap pr-6' : 'truncate max-w-[180px]'}${l.subtotal ? ' font-semibold' : ''}`}
+                  <td className={`text-left px-1.5 ${padDe(l.subtotal)} ${rotuloEstreito ? 'whitespace-nowrap pr-6' : 'truncate max-w-[180px]'}${l.subtotal ? ' font-semibold' : ''}${tipo}`}
                       style={{ paddingLeft: 6 + (l.nivel ?? 0) * 12 }}>{l.rotulo}</td>
                   {realizadoPrimeiro ? <>{celReal}{celMeta}</> : <>{celMeta}{celReal}</>}
                   {/* Verde/vermelho so aqui; a linha nunca tem fundo azul, entao
@@ -1036,7 +1059,7 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
                   <td className={`text-right px-1.5 ${padDe(l.subtotal)} whitespace-nowrap ${
                     dif == null ? 'text-muted-foreground'
                     : (l.saida ? dif < 0 : dif >= 0) ? 'text-emerald-600 dark:text-emerald-400'
-                    : 'text-red-600 dark:text-red-400'}`}>
+                    : 'text-red-600 dark:text-red-400'}${tipo}`}>
                     {dif == null ? '—' : `${dif >= 0 ? '+' : ''}${dif.toFixed(1)}%`}
                   </td>
                   {rotuloEstreito && <td className="p-0" />}
@@ -1067,11 +1090,14 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
    ja era. Quem escolhe a leitura e o toggle Por mes/Acumulado.
    ⚠ ZERO calculo: `serieMes` e `seriePeriodo` ja chegam prontas de `monta()`.
    Serie ausente vira travessao, nunca zero. */
-const TabelaMensalDre = ({ linhas, dre, modo }: {
+const TabelaMensalDre = ({ linhas, dre, modo, mesAtual }: {
   linhas: LinhaResumo[];
   dre: IndicadorAtividade[];
   /** `mes` -> o valor DAQUELE mes. `acumulado` -> de Janeiro ate aquele mes. */
   modo: 'mes' | 'acumulado';
+  /** Mes do FILTRO — o recorte que o usuario escolheu, nao "o ultimo mes com
+      dado". Coluna depois dele nasce vazia. Ver o comentario da celula. */
+  mesAtual: number;
 }) => (
   <table className="w-full text-[10px] tabular-nums leading-[15px]">
     <thead>
@@ -1080,29 +1106,59 @@ const TabelaMensalDre = ({ linhas, dre, modo }: {
         {MESES.map(m => (
           <th key={m} className="text-right font-medium px-1.5 py-0.5 whitespace-nowrap">{m}</th>
         ))}
+        {/* CELULA DE SOBRA — a mesma do `rotuloEstreito`, e pela mesma razao.
+            Sem ela a tabela `w-full` joga a folga na coluna do rotulo, que e a
+            unica flexivel; e como a folga MUDA com o modo (os valores do
+            Acumulado sao mais largos que os de Por mes, entao sobra menos), a
+            coluna Indicador nascia com larguras DIFERENTES nas duas visoes e o
+            Jan aparecia mais longe no Por mes. Com a sobra indo toda para ca, o
+            rotulo encolhe ate o conteudo — que e o mesmo texto nos dois modos —
+            e o recuo passa a ser identico por construcao, sem ajuste por modo. */}
+        <th className="w-full p-0" aria-hidden />
       </tr>
     </thead>
     <tbody>
       {linhas.map(l => {
         const ind = l.emConstrucao ? undefined : dre.find(i => i.chave === l.chave);
         const serie = modo === 'acumulado' ? ind?.seriePeriodo : ind?.serieMes;
+        const tipo = tipografiaDre(l);
         return (
           <tr key={l.rotulo}
               className={`odd:bg-muted/30 even:bg-card${l.subtotal ? ' border-t border-border' : ''}`}>
             {/* Indentacao por PADDING, como na outra tabela: com espaco em
                 branco o recuo viraria caractere e nao sobreviveria ao nowrap. */}
-            <td className={`text-left px-1.5 pr-6 py-0 whitespace-nowrap${l.subtotal ? ' font-semibold' : ''}`}
+            <td className={`text-left px-1.5 pr-6 py-0 whitespace-nowrap${l.subtotal ? ' font-semibold' : ''} ${tipo}`}
                 style={{ paddingLeft: 6 + (l.nivel ?? 0) * 12 }}>{l.rotulo}</td>
             {MESES.map((rot, i) => {
-              const v = valorDoMes(serie, i + 1);
+              /* COLUNA FUTURA FICA VAZIA MESMO COM LANCAMENTO GRAVADO — o
+                 recorte do filtro manda, nao a existencia do dado.
+                 ⚠ NAO "corrigir" isto achando que esconde informacao. Nao e
+                 sobre ausencia: e sobre o RECORTE que o usuario escolheu. O DRE
+                 de julho mostra ate julho, ponto. Um lancamento de agosto
+                 existe no banco e simplesmente NAO PERTENCE aquele recorte.
+                 Medido: com o filtro em julho, agosto trazia R$ 50,0K de
+                 Investimento na visao Por mes — custo ja lancado num mes que o
+                 usuario ainda nao fechou. Mostra-lo faria o demonstrativo de
+                 julho responder por um mes que ele nao esta demonstrando.
+                 ⚠ Por isso o corte vem ANTES de olhar a serie: nao se pergunta
+                 se ha valor, pergunta-se se a coluna esta dentro do recorte.
+                 Criterio unico, sem caso especial.
+                 ⚠ Mes DENTRO do recorte mostra o valor, inclusive "R$ 0"
+                 legitimo — zero e fato e nao se apaga.
+                 ⚠ VAZIO, nao travessao: numa grade de doze colunas, doze
+                 travessoes viram ruido e competem com os numeros que importam.
+                 Na tabela de UMA coluna o travessao continua, porque la ele e a
+                 unica marca de que a linha existe e nao tem valor. */
+              const v = i + 1 > mesAtual ? null : valorDoMes(serie, i + 1);
               return (
                 <td key={rot}
                     className={`text-right px-1.5 py-0 whitespace-nowrap ${
-                      l.subtotal ? 'font-bold' : 'font-medium'} ${corDeValor(l, v)}`}>
-                  {ind && v != null ? fmtValor(v, ind.formatoValor, ind.unidade) : '—'}
+                      l.subtotal ? 'font-bold' : 'font-normal'} ${corDeValor(l, v)} ${tipo}`}>
+                  {ind && v != null ? fmtValor(v, ind.formatoValor, ind.unidade) : ''}
                 </td>
               );
             })}
+            <td className="p-0" />
           </tr>
         );
       })}
@@ -1599,6 +1655,7 @@ export function ModalAtividade({
               linhas={LINHAS_DRE}
               dre={indicadoresDre ?? []}
               modo={modoMensal}
+              mesAtual={mesAtual}
             />
             ) : (
             <TabelaResumo
