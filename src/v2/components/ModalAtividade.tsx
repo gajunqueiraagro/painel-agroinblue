@@ -775,7 +775,11 @@ const rotuloDoMes = (ind: IndicadorAtividade, leitura: Leitura, mesAtual: number
    ⚠ Nivel derivado de `nivel`/`subtotal`, mas o CHAMADOR e' que decide aplicar:
    ha 5 linhas com `nivel: 1` FORA do DRE, e sem o portao elas encolheriam. */
 const tipografiaDre = (l: LinhaResumo): string =>
-  l.subtotal            ? 'text-[11px] leading-[17px]'
+  /* leading 16 e nao 17 porque o subtotal ganhou border-b alem do border-t: a
+     linha continua com 18px (16 + 1 + 1) e o orcamento nao mexe. A FONTE segue
+     em 11px — 16/11 = 1,45, folgado para nao cortar altura de caractere.
+     ⚠ Trocar por 17 devolve os 6px que estouram o teto de 343px. */
+  l.subtotal            ? 'text-[11px] leading-[16px]'
   : (l.nivel ?? 0) > 0  ? 'text-[9px] leading-[13px]'
                         : 'text-[10px] leading-[15px]';
 
@@ -1036,7 +1040,7 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
               );
               return (
                 <tr key={l.rotulo}
-                    className={`odd:bg-muted/30 even:bg-card${l.subtotal ? ' border-t border-border' : ''} ${clicavel ? 'cursor-pointer hover:bg-muted/60' : ''}`}
+                    className={`${l.subtotal ? 'bg-muted border-y border-border' : 'odd:bg-muted/30 even:bg-card'} ${clicavel ? 'cursor-pointer hover:bg-muted/60' : ''}`}
                     onClick={clicavel ? () => onIr!(l.destino!) : undefined}>
                   {/* `max-w` subiu de 120 para 180: com TRES colunas de ~420px o
                       rotulo cabe inteiro — `Preço médio venda` era o apertado.
@@ -1103,8 +1107,20 @@ const TabelaMensalDre = ({ linhas, dre, modo, mesAtual }: {
     <thead>
       <tr className="bg-primary text-primary-foreground">
         <th className="text-left font-medium px-1.5 py-0.5 pr-6 whitespace-nowrap">Indicador</th>
+        {/* LARGURA EXPLICITA, e IGUAL nas doze — cheia ou vazia. Sem ela a
+            tabela dimensiona cada coluna pelo conteudo, e Ago a Dez, que o
+            recorte do filtro deixa em branco, nasciam visivelmente mais
+            estreitas que Jan a Jul.
+            76px: a maior string que `fmtRAbrev` produz e 'R$ -999,9M', 10
+            caracteres, ~62px a 11px em tabular-nums, mais os 12px do `px-1.5`
+            = 74px. 12 x 76 + 195 do Indicador = 1107px dos 1248 uteis.
+            ⚠ `table-auto` DE PROPOSITO, sem `table-fixed`. Em auto a largura e'
+            um MINIMO: se a estimativa acima ficar curta a coluna cresce e a
+            uniformidade se degrada, que e' visivel e inofensivo. Em `fixed` o
+            valor seria TRUNCADO, que e' perda de informacao silenciosa. Entre
+            errar para o lado feio e errar para o lado mudo, escolhe-se o feio. */}
         {MESES.map(m => (
-          <th key={m} className="text-right font-medium px-1.5 py-0.5 whitespace-nowrap">{m}</th>
+          <th key={m} className="text-right font-medium px-1.5 py-0.5 whitespace-nowrap w-[76px]">{m}</th>
         ))}
         {/* CELULA DE SOBRA — a mesma do `rotuloEstreito`, e pela mesma razao.
             Sem ela a tabela `w-full` joga a folga na coluna do rotulo, que e a
@@ -1124,7 +1140,7 @@ const TabelaMensalDre = ({ linhas, dre, modo, mesAtual }: {
         const tipo = tipografiaDre(l);
         return (
           <tr key={l.rotulo}
-              className={`odd:bg-muted/30 even:bg-card${l.subtotal ? ' border-t border-border' : ''}`}>
+              className={`${l.subtotal ? 'bg-muted border-y border-border' : 'odd:bg-muted/30 even:bg-card'}`}>
             {/* Indentacao por PADDING, como na outra tabela: com espaco em
                 branco o recuo viraria caractere e nao sobreviveria ao nowrap. */}
             <td className={`text-left px-1.5 pr-6 py-0 whitespace-nowrap${l.subtotal ? ' font-semibold' : ''} ${tipo}`}
