@@ -746,7 +746,26 @@ const rotuloDoMes = (ind: IndicadorAtividade, leitura: Leitura, mesAtual: number
    Respeita `leitura`, como todo o resto do modal.
    Padrao A10: cabecalho `bg-primary`, zebra `odd:bg-muted/30 even:bg-card`,
    sem bordas. Meta em `text-meta` (A11). */
-const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, leitura, mesAtual, colunas, onIr, realizadoPrimeiro, compacta, rotuloEstreito }: {
+/* COR DO VALOR — UMA regra, dois consumidores: a tabela do DRE e a visao
+   mensal. Fica em modulo, e nao dentro de um dos dois, porque duas copias
+   divergem no primeiro ajuste e o mesmo numero apareceria verde numa tela e
+   vermelho na outra.
+     SAIDA  -> vermelho pela NATUREZA (dinheiro saindo), qualquer que seja o
+               sinal: um custeio de R$ 6,0 mi e' vermelho por ser custeio.
+     demais -> pelo SINAL: positivo verde, negativo vermelho.
+   ⚠ ZERO nao pinta. Zero e' fato, e um fato neutro; verde ou vermelho leriam
+   como desempenho onde nao ha nenhum. Ausencia ja sai como travessao antes de
+   chegar aqui.
+   ⚠ Os tokens sao os MESMOS da coluna Dif. (emerald/red). Uma terceira paleta
+   no mesmo demonstrativo faria o leitor perguntar se o verde do valor quer
+   dizer outra coisa que o verde da diferenca. */
+const corDeValor = (l: LinhaResumo, v: number | null): string =>
+  l.saida               ? 'text-destructive'
+  : v == null || v === 0 ? 'text-foreground'
+  : v > 0               ? 'text-emerald-600 dark:text-emerald-400'
+                        : 'text-red-600 dark:text-red-400';
+
+const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, leitura, mesAtual, colunas, onIr, realizadoPrimeiro, compacta, rotuloEstreito, corPorSinal }: {
   /* DUAS formas de entrada, um componente so:
        `linhas` + `colunas` -> divide por CONTAGEM, sem titulo. E o que as
                                tabelas dos ASSUNTOS usam.
@@ -776,17 +795,48 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
       vazia no fim, aproximando os numeros do rotulo. Ver o comentario de
       `nCols`. OPT-IN — ausente mantem a tabela de quatro colunas de sempre. */
   rotuloEstreito?: boolean;
+  /** Pinta a coluna do VALOR por `corDeValor` — saida vermelha por natureza,
+      demais pelo sinal. OPT-IN: ausente, o valor segue a regra antiga (saida
+      vermelha, subtotal negativo vermelho, resto neutro).
+      ⚠ Precisa ser opt-in e nao derivado de `subtotal`/`saida`: a regra "demais
+      linhas pelo sinal" alcancaria TODA linha das cinco outras abas, que nao
+      tem nenhum dos dois campos, e pintaria o painel inteiro de verde. */
+  corPorSinal?: boolean;
 }) => {
   /* MODO COMPACTO. Duas alavancas, e so estas:
        padding vertical  py-0.5 (2px cada lado) -> py-0
        fonte da PARCELA  text-[10px] -> text-[9px]
      O SUBTOTAL mantem os 10px mesmo em modo compacto: e' o que se le primeiro,
      e apertar tudo por igual apagaria a hierarquia que o `subtotal` criou.
-     ⚠ PISO 8px do A12 respeitado — 9px esta no limite, nao abaixo.
-     ⚠ Ausente, `padY` volta a `py-0.5` e `fonteLinha` a string vazia: a classe
-     final fica byte a byte igual a de antes desta prop. */
+     ⚠ Ausente, `padY` volta a `py-0.5`: a classe final fica byte a byte igual
+     a de antes desta prop. */
   const padY = compacta ? 'py-0' : 'py-0.5';
-  const fonteParcela = compacta ? ' text-[9px]' : '';
+
+  /* ALTURA DA LINHA explicita no modo compacto, e a PARCELA de volta aos 10px
+     da tabela. Ate aqui a parcela era `text-[9px]` e a linha media 15px, com o
+     Lucro Liquido rente ao fim da area visivel — 340px de tabela contra 367px
+     visiveis, MEDIDOS no DOM. Sobravam 27px de espaco vazio embaixo, e o
+     orcamento desta mudanca e exatamente esses 27px.
+       fonte da parcela  9px -> 10px  (some o `text-[9px]`; o piso A12 e 8px,
+                         e aqui se SOBE, nao se desce)
+       altura da linha   `leading-[15px]` EXPLICITO
+     A fonte sobe e a entrelinha NAO: 15px e' exatamente 1,5 x 10px, a
+     entrelinha natural desse tamanho, entao nada e' espremido — o texto e' que
+     ficou maior dentro da mesma linha.
+     ⚠ O `leading` ja foi 16px e ESTOUROU por 19px. O que derrubou a conta nao
+     foi a tabela (362px previstos, 362px medidos, altura de parcela e de
+     subtotal certas na casa do pixel): foi eu ter tratado a tabela como se
+     fosse TODO o conteudo do scroller. O miolo tem `py-3`, 12px em cima e 12
+     embaixo, e esses 24px entram no `scrollHeight` sem estar na tabela.
+     Conta correta: conteudo = tabela + 24. Com 367px visiveis, o teto da
+     TABELA e' 343px, nao 367.
+     ⚠ `leading` explicito de proposito. A altura vinha de `line-height: 1.5`
+     herdado, que se recalcula por fonte e ja me fez errar uma projecao inteira;
+     com um numero fixo o custo em pixels e determinavel antes de abrir a tela.
+     ⚠ A parcela deixa de se distinguir do subtotal pela FONTE. Nao e perda: o
+     subtotal ficou com negrito no rotulo, negrito no valor (E3), fio em cima e
+     cor por sinal — quatro marcas, contra a diferenca de 1px que existia. */
+  const alturaCompacta = compacta ? ' leading-[15px]' : '';
 
   /* SUBTOTAL com padding PROPRIO, maior que o da parcela MESMO em modo
      compacto. Ate aqui o `subtotal` se distinguia so por peso e fio; com 21
@@ -871,7 +921,7 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
            o cabecalho levaria? */
         const cabClicavel = !!onIr && !!bloco.destino;
         return (
-        <table key={bi} className="w-full text-[10px] tabular-nums">
+        <table key={bi} className={`w-full text-[10px] tabular-nums${alturaCompacta}`}>
           <thead>
             <tr className="bg-primary text-primary-foreground">
               <th className={`text-left font-medium px-1.5 ${padTh} ${cabClicavel ? 'cursor-pointer hover:underline' : ''}`}
@@ -942,7 +992,7 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
                  decisao so, no JSX abaixo — cabecalho e corpo leem a mesma flag
                  e nao ha como divergirem. */
               const celMeta = (
-                <td className={`text-right ${padDe(l.subtotal)} px-1.5 text-meta whitespace-nowrap${l.subtotal ? '' : fonteParcela}`}>
+                <td className={`text-right ${padDe(l.subtotal)} px-1.5 text-meta whitespace-nowrap`}>
                   {ind && metaV != null ? fmtValor(metaV, ind.formatoValor, ind.unidade) : '—'}
                 </td>
               );
@@ -953,8 +1003,9 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
                  demais   -> cor padrao.
                  Sem `saida` nem `subtotal` a classe e' identica a de antes. */
               const celReal = (
-                <td className={`text-right ${padDe(l.subtotal)} px-1.5 font-medium whitespace-nowrap${l.subtotal ? '' : fonteParcela} ${
-                  l.saida ? 'text-destructive'
+                <td className={`text-right ${padDe(l.subtotal)} px-1.5 ${l.subtotal ? 'font-bold' : 'font-medium'} whitespace-nowrap ${
+                  corPorSinal ? corDeValor(l, real)
+                  : l.saida ? 'text-destructive'
                   : (l.subtotal && real != null && real < 0) ? 'text-destructive'
                   : 'text-foreground'}`}>
                   {ind && real != null ? fmtValor(real, ind.formatoValor, ind.unidade) : '—'}
@@ -968,7 +1019,7 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
                       rotulo cabe inteiro — `Preço médio venda` era o apertado.
                       A indentacao e PADDING, nao caractere: com espaco o
                       `truncate` cortaria o recuo antes do texto. */}
-                  <td className={`text-left px-1.5 ${padDe(l.subtotal)} ${rotuloEstreito ? 'whitespace-nowrap' : 'truncate max-w-[180px]'}${l.subtotal ? ' font-semibold' : fonteParcela}`}
+                  <td className={`text-left px-1.5 ${padDe(l.subtotal)} ${rotuloEstreito ? 'whitespace-nowrap pr-6' : 'truncate max-w-[180px]'}${l.subtotal ? ' font-semibold' : ''}`}
                       style={{ paddingLeft: 6 + (l.nivel ?? 0) * 12 }}>{l.rotulo}</td>
                   {realizadoPrimeiro ? <>{celReal}{celMeta}</> : <>{celMeta}{celReal}</>}
                   {/* Verde/vermelho so aqui; a linha nunca tem fundo azul, entao
@@ -999,6 +1050,65 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
     </div>
   );
 };
+
+/* VISAO MENSAL DO DRE — componente PROPRIO, deliberadamente.
+   `TabelaResumo` e' FIXA em quatro colunas: <thead> com quatro <th>, tres
+   `colSpan` e quatro <td> por linha. E a prop `colunas` dela nao e' "colunas de
+   valores" — reparte LINHAS em N tabelas lado a lado, entao `colunas={12}` daria
+   doze tabelas, nao doze meses. Generalizar aquilo mexeria nas CINCO abas que
+   ela serve para atender uma so; o risco de regressao nao compensa.
+   O que as duas COMPARTILHAM e o que precisa mesmo ser unico: `corDeValor`,
+   `valorDoMes`, `fmtValor` e a propria lista `LINHAS_DRE`. As 21 linhas saem na
+   mesma ordem, com a mesma hierarquia e as mesmas cores das duas telas.
+   ⚠ SO REALIZADO. Sem meta e sem Dif.: doze colunas mais duas por mes nao
+   caberiam nos 1248px uteis do modal.
+   ⚠ SEMPRE GLOBAL. O toggle Global/Por fazenda nao passa a valer aqui — rateio
+   por fazenda e frente futura, e o No mes/No periodo segue inerte no DRE, como
+   ja era. Quem escolhe a leitura e o toggle Por mes/Acumulado.
+   ⚠ ZERO calculo: `serieMes` e `seriePeriodo` ja chegam prontas de `monta()`.
+   Serie ausente vira travessao, nunca zero. */
+const TabelaMensalDre = ({ linhas, dre, modo }: {
+  linhas: LinhaResumo[];
+  dre: IndicadorAtividade[];
+  /** `mes` -> o valor DAQUELE mes. `acumulado` -> de Janeiro ate aquele mes. */
+  modo: 'mes' | 'acumulado';
+}) => (
+  <table className="w-full text-[10px] tabular-nums leading-[15px]">
+    <thead>
+      <tr className="bg-primary text-primary-foreground">
+        <th className="text-left font-medium px-1.5 py-0.5 pr-6 whitespace-nowrap">Indicador</th>
+        {MESES.map(m => (
+          <th key={m} className="text-right font-medium px-1.5 py-0.5 whitespace-nowrap">{m}</th>
+        ))}
+      </tr>
+    </thead>
+    <tbody>
+      {linhas.map(l => {
+        const ind = l.emConstrucao ? undefined : dre.find(i => i.chave === l.chave);
+        const serie = modo === 'acumulado' ? ind?.seriePeriodo : ind?.serieMes;
+        return (
+          <tr key={l.rotulo}
+              className={`odd:bg-muted/30 even:bg-card${l.subtotal ? ' border-t border-border' : ''}`}>
+            {/* Indentacao por PADDING, como na outra tabela: com espaco em
+                branco o recuo viraria caractere e nao sobreviveria ao nowrap. */}
+            <td className={`text-left px-1.5 pr-6 py-0 whitespace-nowrap${l.subtotal ? ' font-semibold' : ''}`}
+                style={{ paddingLeft: 6 + (l.nivel ?? 0) * 12 }}>{l.rotulo}</td>
+            {MESES.map((rot, i) => {
+              const v = valorDoMes(serie, i + 1);
+              return (
+                <td key={rot}
+                    className={`text-right px-1.5 py-0 whitespace-nowrap ${
+                      l.subtotal ? 'font-bold' : 'font-medium'} ${corDeValor(l, v)}`}>
+                  {ind && v != null ? fmtValor(v, ind.formatoValor, ind.unidade) : '—'}
+                </td>
+              );
+            })}
+          </tr>
+        );
+      })}
+    </tbody>
+  </table>
+);
 
 const CardIndicador = ({
   ind, escopo, leitura, mesAtual, anoAtual, rotuloMes, rotuloPer, sel, alterna,
@@ -1322,6 +1432,11 @@ export function ModalAtividade({
   const [assunto, setAssunto] = useState<Assunto>('zootecnico');
   const [escopo,  setEscopo]  = useState<Escopo>('global');
   const [leitura, setLeitura] = useState<Leitura>('mes');
+  /* VISAO da aba DRE. Estado do MODAL, e nao da tabela, porque o botao que a
+     troca mora na barra de cima, junto de Global/Por fazenda e No mes/No
+     periodo. So o DRE oferece as duas. */
+  const [visaoDre,  setVisaoDre]  = useState<'padrao' | 'mensal'>('padrao');
+  const [modoMensal, setModoMensal] = useState<'mes' | 'acumulado'>('mes');
   /* MULTI-selecao por GRAFICO — nao por modal. O seletor nao troca so o
      numero do delta: ele decide QUAIS COMPARADORES aparecem no grafico.
      Qualquer combinacao vale, inclusive NENHUMA: sem nada marcado o card
@@ -1342,6 +1457,8 @@ export function ModalAtividade({
       setAssunto(assuntoInicial ?? 'geral');
       setEscopo('global');
       setLeitura('mes');
+      setVisaoDre('padrao');
+      setModoMensal('mes');
       setComparadores({});
     }
   }, [open, assuntoInicial]);
@@ -1404,6 +1521,29 @@ export function ModalAtividade({
                 </button>
               ))}
             </div>
+            {/* SO no DRE. `Mensal` e um interruptor, nao um par: o estado
+                desligado ja e a visao padrao, e inventar um rotulo para ela
+                ("Resumo"? "Acumulado"?) criaria um nome que o briefing nao tem
+                e que colidiria com o proprio toggle Acumulado abaixo.
+                O segundo grupo so aparece com o primeiro ligado — oferecer
+                Por mes/Acumulado fora da visao mensal seria controle morto. */}
+            {assunto === 'dre' && (
+              <div className="flex gap-1">
+                <button onClick={() => setVisaoDre(v => v === 'mensal' ? 'padrao' : 'mensal')}
+                        className={btn(visaoDre === 'mensal', 'p')}>
+                  Mensal
+                </button>
+              </div>
+            )}
+            {assunto === 'dre' && visaoDre === 'mensal' && (
+              <div className="flex gap-1">
+                {(['mes', 'acumulado'] as const).map(m => (
+                  <button key={m} onClick={() => setModoMensal(m)} className={btn(modoMensal === m, 'p')}>
+                    {m === 'mes' ? 'Por mês' : 'Acumulado'}
+                  </button>
+                ))}
+              </div>
+            )}
             {/* O contexto ocupa a largura livre a direita e SEGUE o nivel: em
                 "No período" mostra o intervalo, em "Histórico" a faixa de
                 anos. O escopo tambem muda, porque "Global" e "Por fazenda"
@@ -1454,11 +1594,19 @@ export function ModalAtividade({
                fixa-la deixa a tabela inteira acumulada sem tocar no componente.
                Ver o comentario de `LINHAS_DRE` sobre por que um demonstrativo e'
                acumulado por natureza. */
+            visaoDre === 'mensal' ? (
+            <TabelaMensalDre
+              linhas={LINHAS_DRE}
+              dre={indicadoresDre ?? []}
+              modo={modoMensal}
+            />
+            ) : (
             <TabelaResumo
               linhas={LINHAS_DRE}
               realizadoPrimeiro
               compacta
               rotuloEstreito
+              corPorSinal
               zoo={indicadores}
               mov={indicadoresMovimentacoes ?? []}
               fin={indicadoresFinanceiro ?? []}
@@ -1468,6 +1616,7 @@ export function ModalAtividade({
               mesAtual={mesAtual}
               colunas={1}
             />
+            )
           ) : assunto === 'operacional' ? (
             /* Os CRUZADOS: custo da arroba e' financeiro dividido por zootecnico,
                margem e' preco de movimentacao menos custo. Nenhum pertence a um
