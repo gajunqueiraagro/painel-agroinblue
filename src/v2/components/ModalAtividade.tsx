@@ -30,7 +30,7 @@ import {
   ComposedChart, Line, Area, Bar, BarChart, Cell, LabelList, ReferenceLine,
   XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts';
-import { X } from 'lucide-react';
+import { X, ArrowUpDown } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { COR_FAZENDA } from '@/lib/idiomaVisual';
 
@@ -1185,6 +1185,127 @@ const TabelaMensalDre = ({ linhas, dre, modo, mesAtual }: {
   </table>
 );
 
+/* MAIORES DESVIOS — PARTE A: so o RANKING.
+   ⚠ SEM JULGAMENTO, e isto e decisao explicita do Gabriel: o sistema APONTA o
+   desvio, o operador INTERPRETA. As frases sao factuais e nao levam adjetivo
+   ('preocupante', 'ruim'), nem recomendacao ('deveria', 'sugere'), nem causa
+   inferida. Explicar POR QUE o desvio aconteceu — nutricao, GMD, preco — e a
+   Parte B, PR proprio. NAO acrescentar opiniao aqui depois.
+   ⚠ ORDENA POR REAIS, nao por percentual. +2000% sobre R$ 500 e ruido; R$ 600K
+   sobre custeio decide o resultado. O % aparece ao lado, como contexto.
+   ⚠ ZERO calculo novo: le as MESMAS series que a tabela le, pelo mesmo
+   `valorDoMes`. Se o ranking calculasse por conta propria, poderia discordar da
+   tabela que esta atras dele.
+   ⚠ Linha sem base NAO entra: meta ausente, ou Janeiro, que nao tem anterior.
+   Nao se inventa base para preencher o ranking. */
+type BaseDesvio = 'meta' | 'mesAnterior' | 'acumuladoAnterior';
+
+/* '3. (−) Custeio pecuária' -> 'Custeio pecuária'. A numeracao e o marcador de
+   sinal orientam a LEITURA DA TABELA; dentro de uma frase eles atrapalham. */
+const nomeCurto = (r: string) =>
+  r.replace(/^\d+\.\s*/, '').replace(/^=\s*/, '').replace(/^\([^)]*\)\s*/, '');
+
+const ModalDesvios = ({ linhas, dre, mesAtual, base, onClose }: {
+  linhas: LinhaResumo[];
+  dre: IndicadorAtividade[];
+  mesAtual: number;
+  /** Contra o que medir. Segue a VISAO em que o usuario esta. */
+  base: BaseDesvio;
+  onClose: () => void;
+}) => {
+  const mesAnt = mesAtual - 1;
+  const temAnterior = mesAnt >= 1;
+  const nomeAnt = temAnterior ? MESES[mesAnt - 1] : '';
+
+  const rotuloBase =
+    base === 'meta'          ? 'da meta'
+    : base === 'mesAnterior' ? `de ${nomeAnt}`
+                             : `do acumulado até ${nomeAnt}`;
+
+  /* Declarar contra o que se mede: sem isso o numero nao significa nada. */
+  const declaracao =
+    base === 'meta'          ? `Medidos contra a META do período, até ${MESES[mesAtual - 1]}.`
+    : !temAnterior           ? 'Janeiro não tem mês anterior neste recorte.'
+    : base === 'mesAnterior' ? `Medidos contra ${nomeAnt}, o mês anterior.`
+                             : `Medidos contra o acumulado até ${nomeAnt}.`;
+
+  /* Acumulador TIPADO em vez de `.filter(Boolean)`: o filter nao estreita o
+     tipo em TS e a alternativa seria um cast, proibido em codigo novo. */
+  const itens: Array<{ linha: LinhaResumo; desvio: number; pct: number | null }> = [];
+  for (const l of linhas) {
+    const ind = l.emConstrucao ? undefined : dre.find(i => i.chave === l.chave);
+    if (!ind) continue;
+    const serie = base === 'mesAnterior' ? ind.serieMes : ind.seriePeriodo;
+    const atual = base === 'meta' ? ind.valorPeriodo : valorDoMes(serie, mesAtual);
+    const ref   = base === 'meta' ? valorDoMes(ind.serieMetaPeriodo, mesAtual)
+                : temAnterior     ? valorDoMes(serie, mesAnt)
+                                  : null;
+    if (atual == null || ref == null) continue;
+    const desvio = atual - ref;
+    /* Base ZERO tem desvio mas nao tem percentual — dividir por zero daria
+       infinito. O item entra no ranking (a ordem e por reais) e sai sem o %. */
+    itens.push({ linha: l, desvio, pct: ref !== 0 ? (desvio / Math.abs(ref)) * 100 : null });
+  }
+  itens.sort((a, b) => Math.abs(b.desvio) - Math.abs(a.desvio));
+  const top = itens.slice(0, 8);
+  const maxAbs = top.length ? Math.abs(top[0].desvio) : 1;
+
+  return (
+    /* `z-[60]` sobre o z-50 do modal de fora. Nao ha Dialog nem portal neste
+       projeto — o modal do DRE e overlay proprio —, entao empilhar e so isto.
+       O backdrop daqui fecha SO este: o painel de fora ja corta a propagacao,
+       entao o clique nunca alcanca o `onClose` dele. */
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50" onClick={onClose}>
+      <div className="w-full max-w-4xl mx-4 rounded-lg border border-border/40 bg-background shadow-xl flex flex-col max-h-[80vh]"
+           onClick={e => e.stopPropagation()}>
+        <div className="shrink-0 px-4 pt-3 pb-2 border-b border-border/40 flex items-start gap-2">
+          <div>
+            <p className="text-[13px] font-semibold leading-tight">Maiores desvios</p>
+            <p className="text-[11px] text-muted-foreground leading-tight">
+              {declaracao} Ordenados pelo tamanho em reais.
+            </p>
+          </div>
+          <button onClick={onClose} aria-label="Fechar"
+                  className="ml-auto shrink-0 h-7 w-7 rounded-md border border-border/50 text-muted-foreground
+                             hover:bg-muted/50 flex items-center justify-center">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 py-2">
+          {top.length === 0 ? (
+            <p className="text-[11px] text-muted-foreground/70 italic py-6 text-center">
+              Sem base de comparação neste recorte.
+            </p>
+          ) : top.map(({ linha, desvio, pct }) => (
+            /* A COR e `corDeValor`, a mesma da tabela — saida vermelha por
+               natureza, demais pelo sinal. A barra usa `bg-current`, entao
+               herda a cor do texto e a regra continua existindo em UM lugar
+               so: nao ha mapa de cor duplicado para o grafico. */
+            <div key={linha.chave} className={`flex items-center gap-3 py-0.5 ${corDeValor(linha, desvio)}`}>
+              <span className="text-[11px] leading-[16px] flex-1 text-foreground">
+                {nomeCurto(linha.rotulo)} ficou {fmtRAbrev(Math.abs(desvio))}{' '}
+                {desvio >= 0 ? 'acima' : 'abaixo'} {rotuloBase}
+                {pct != null && ` (${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%)`}
+              </span>
+              {/* Eixo no CENTRO: positivo cresce para a direita, negativo para a
+                  esquerda. Comprimento proporcional ao desvio em REAIS, com o
+                  maior do ranking valendo os 50% de cada lado. Divs e nao SVG,
+                  como as barras da Visao Geral — sem biblioteca nova. */}
+              <div className="relative h-3 w-[38%] shrink-0">
+                <div className="absolute inset-y-0 left-1/2 w-px bg-border" />
+                <div className="absolute inset-y-[3px] bg-current rounded-[1px]"
+                     style={desvio >= 0
+                       ? { left: '50%', width: `${(Math.abs(desvio) / maxAbs) * 50}%` }
+                       : { right: '50%', width: `${(Math.abs(desvio) / maxAbs) * 50}%` }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const CardIndicador = ({
   ind, escopo, leitura, mesAtual, anoAtual, rotuloMes, rotuloPer, sel, alterna,
   colunaSempre, eixoCurto, comparadores, semInicial,
@@ -1512,6 +1633,7 @@ export function ModalAtividade({
      periodo. So o DRE oferece as duas. */
   const [visaoDre,  setVisaoDre]  = useState<'padrao' | 'mensal'>('padrao');
   const [modoMensal, setModoMensal] = useState<'mes' | 'acumulado'>('mes');
+  const [desviosAberto, setDesviosAberto] = useState(false);
   /* MULTI-selecao por GRAFICO — nao por modal. O seletor nao troca so o
      numero do delta: ele decide QUAIS COMPARADORES aparecem no grafico.
      Qualquer combinacao vale, inclusive NENHUMA: sem nada marcado o card
@@ -1534,6 +1656,7 @@ export function ModalAtividade({
       setLeitura('mes');
       setVisaoDre('padrao');
       setModoMensal('mes');
+      setDesviosAberto(false);
       setComparadores({});
     }
   }, [open, assuntoInicial]);
@@ -1628,6 +1751,22 @@ export function ModalAtividade({
               {leitura === 'historico' ? `${anoAtual - 5}–${anoAtual}`
                 : leitura === 'periodo' ? rotuloPer : rotuloMes}
             </span>
+            {/* MAIORES DESVIOS — no FIM desta linha, e nao numa faixa propria
+                acima da tabela. Uma faixa custaria ~20px e o orcamento vertical
+                do DRE tem 4px de folga (tabela 355px contra teto de 359); ela
+                empurraria o Lucro Liquido para fora da tela. Aqui o custo e
+                zero: a linha ja existe, e o rotulo de contexto ao lado apenas
+                cede alguns pixels de largura.
+                ⚠ Depois do `ml-auto` do rotulo, entao encosta na direita. */}
+            {assunto === 'dre' && (
+              <button onClick={() => setDesviosAberto(true)}
+                      aria-label="Maiores desvios"
+                      title="Maiores desvios"
+                      className="shrink-0 h-6 w-6 rounded-md border border-border/50 text-muted-foreground
+                                 hover:bg-muted/50 flex items-center justify-center">
+                <ArrowUpDown className="w-3 h-3" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -1859,6 +1998,23 @@ export function ModalAtividade({
           </span>
           <span>Clique fora para fechar</span>
         </div>
+
+        {/* DENTRO do painel de proposito: o painel corta a propagacao do
+            clique, entao o backdrop deste modal fecha SO ele e nunca alcanca o
+            `onClose` do modal de fora.
+            A BASE segue a visao em que o usuario esta — foi decisao do Gabriel,
+            e por isso o proprio modal declara contra o que mede no topo. */}
+        {desviosAberto && (
+          <ModalDesvios
+            linhas={LINHAS_DRE}
+            dre={indicadoresDre ?? []}
+            mesAtual={mesAtual}
+            base={visaoDre === 'mensal'
+              ? (modoMensal === 'acumulado' ? 'acumuladoAnterior' : 'mesAnterior')
+              : 'meta'}
+            onClose={() => setDesviosAberto(false)}
+          />
+        )}
       </div>
     </div>
   );
