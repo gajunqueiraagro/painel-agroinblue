@@ -772,6 +772,13 @@ const rotuloDoMes = (ind: IndicadorAtividade, leitura: Leitura, mesAtual: number
    ⚠ `leading` EXPLICITO em cada nivel. Herdado, ele se recalcula por fonte e o
    custo em pixels deixa de ser previsivel antes de abrir a tela.
    ⚠ PISO A12 = 8px. A parcela para em 9px; abaixo disso o briefing manda PARAR.
+     ⚠ ESCADA DE LINHA 14 / 16 / 18 (a do subtotal ja inclui as duas bordas).
+     As FONTES seguem em 9/10/11 DE PROPOSITO, e nao por falta de orcamento
+     vertical: o limite e HORIZONTAL. A visao mensal ancora o Indicador em
+     195px com `table-fixed`, e o rotulo mais longo ('= Resultado antes dos
+     Tributos') ja ocupa quase tudo; subir a fonte o alargaria e ele
+     transbordaria na coluna de Janeiro. Subir fonte exige antes MEDIR quanta
+     folga sobra naqueles 195px.
    ⚠ Nivel derivado de `nivel`/`subtotal`, mas o CHAMADOR e' que decide aplicar:
    ha 5 linhas com `nivel: 1` FORA do DRE, e sem o portao elas encolheriam. */
 const tipografiaDre = (l: LinhaResumo): string =>
@@ -780,8 +787,8 @@ const tipografiaDre = (l: LinhaResumo): string =>
      em 11px — 16/11 = 1,45, folgado para nao cortar altura de caractere.
      ⚠ Trocar por 17 devolve os 6px que estouram o teto de 343px. */
   l.subtotal            ? 'text-[11px] leading-[16px]'
-  : (l.nivel ?? 0) > 0  ? 'text-[9px] leading-[13px]'
-                        : 'text-[10px] leading-[15px]';
+  : (l.nivel ?? 0) > 0  ? 'text-[9px] leading-[14px]'
+                        : 'text-[10px] leading-[16px]';
 
 const corDeValor = (l: LinhaResumo, v: number | null): string =>
   l.saida               ? 'text-destructive'
@@ -1040,7 +1047,7 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
               );
               return (
                 <tr key={l.rotulo}
-                    className={`${l.subtotal ? 'bg-muted border-y border-border' : 'odd:bg-muted/30 even:bg-card'} ${clicavel ? 'cursor-pointer hover:bg-muted/60' : ''}`}
+                    className={`${l.subtotal ? 'bg-muted-foreground/20 border-y border-border' : 'odd:bg-muted/30 even:bg-card'} ${clicavel ? 'cursor-pointer hover:bg-muted/60' : ''}`}
                     onClick={clicavel ? () => onIr!(l.destino!) : undefined}>
                   {/* `max-w` subiu de 120 para 180: com TRES colunas de ~420px o
                       rotulo cabe inteiro — `Preço médio venda` era o apertado.
@@ -1103,34 +1110,31 @@ const TabelaMensalDre = ({ linhas, dre, modo, mesAtual }: {
       dado". Coluna depois dele nasce vazia. Ver o comentario da celula. */
   mesAtual: number;
 }) => (
-  <table className="w-full text-[10px] tabular-nums leading-[15px]">
+  /* `table-fixed` — a versao anterior, com largura no <th> em layout AUTO, NAO
+     funcionou: Ago a Dez continuaram estreitas. A causa nao era purge (a regra
+     `w-[76px]{width:76px}` esta no CSS publicado) nem o <td> vazio: era a
+     CELULA DE FOLGA. A tabela pedia `width:100%` e a ultima coluna tambem, o
+     que super-restringe o layout automatico; o navegador entao descarta as
+     larguras declaradas e volta ao conteudo minimo, que numa coluna vazia e
+     zero. Dai as futuras colapsarem e as cheias nao.
+     Em `fixed` a primeira linha e' autoridade e a folga saiu de cena: com o
+     Indicador ancorado em 195px as doze colunas ficam `auto` e o algoritmo as
+     divide POR IGUAL — (1248 - 195) / 12 = 87,75px cada. Uniformidade por
+     CONSTRUCAO, sem numero magico a acertar, contra ~74px do pior caso
+     ('R$ -999,9M'): 19% de margem.
+     ⚠ Eu havia rejeitado `fixed` dizendo que ele troca erro visivel por erro
+     mudo. O argumento estava INCOMPLETO: sem `truncate` e sem `overflow-hidden`
+     o texto largo demais TRANSBORDA a celula — continua visivel. O que `fixed`
+     nao faz e' reflowar a tabela, e era so isso.
+     ⚠ A `TabelaResumo` continua em AUTO com a celula de folga: la a queixa
+     nunca existiu, e trocar o layout dela alcancaria as cinco outras abas. */
+  <table className="w-full table-fixed text-[10px] tabular-nums leading-[15px]">
     <thead>
       <tr className="bg-primary text-primary-foreground">
-        <th className="text-left font-medium px-1.5 py-0.5 pr-6 whitespace-nowrap">Indicador</th>
-        {/* LARGURA EXPLICITA, e IGUAL nas doze — cheia ou vazia. Sem ela a
-            tabela dimensiona cada coluna pelo conteudo, e Ago a Dez, que o
-            recorte do filtro deixa em branco, nasciam visivelmente mais
-            estreitas que Jan a Jul.
-            76px: a maior string que `fmtRAbrev` produz e 'R$ -999,9M', 10
-            caracteres, ~62px a 11px em tabular-nums, mais os 12px do `px-1.5`
-            = 74px. 12 x 76 + 195 do Indicador = 1107px dos 1248 uteis.
-            ⚠ `table-auto` DE PROPOSITO, sem `table-fixed`. Em auto a largura e'
-            um MINIMO: se a estimativa acima ficar curta a coluna cresce e a
-            uniformidade se degrada, que e' visivel e inofensivo. Em `fixed` o
-            valor seria TRUNCADO, que e' perda de informacao silenciosa. Entre
-            errar para o lado feio e errar para o lado mudo, escolhe-se o feio. */}
+        <th className="text-left font-medium px-1.5 py-0.5 pr-6 whitespace-nowrap w-[195px]">Indicador</th>
         {MESES.map(m => (
-          <th key={m} className="text-right font-medium px-1.5 py-0.5 whitespace-nowrap w-[76px]">{m}</th>
+          <th key={m} className="text-right font-medium px-1.5 py-0.5 whitespace-nowrap">{m}</th>
         ))}
-        {/* CELULA DE SOBRA — a mesma do `rotuloEstreito`, e pela mesma razao.
-            Sem ela a tabela `w-full` joga a folga na coluna do rotulo, que e a
-            unica flexivel; e como a folga MUDA com o modo (os valores do
-            Acumulado sao mais largos que os de Por mes, entao sobra menos), a
-            coluna Indicador nascia com larguras DIFERENTES nas duas visoes e o
-            Jan aparecia mais longe no Por mes. Com a sobra indo toda para ca, o
-            rotulo encolhe ate o conteudo — que e o mesmo texto nos dois modos —
-            e o recuo passa a ser identico por construcao, sem ajuste por modo. */}
-        <th className="w-full p-0" aria-hidden />
       </tr>
     </thead>
     <tbody>
@@ -1140,7 +1144,7 @@ const TabelaMensalDre = ({ linhas, dre, modo, mesAtual }: {
         const tipo = tipografiaDre(l);
         return (
           <tr key={l.rotulo}
-              className={`${l.subtotal ? 'bg-muted border-y border-border' : 'odd:bg-muted/30 even:bg-card'}`}>
+              className={`${l.subtotal ? 'bg-muted-foreground/20 border-y border-border' : 'odd:bg-muted/30 even:bg-card'}`}>
             {/* Indentacao por PADDING, como na outra tabela: com espaco em
                 branco o recuo viraria caractere e nao sobreviveria ao nowrap. */}
             <td className={`text-left px-1.5 pr-6 py-0 whitespace-nowrap${l.subtotal ? ' font-semibold' : ''} ${tipo}`}
@@ -1174,7 +1178,6 @@ const TabelaMensalDre = ({ linhas, dre, modo, mesAtual }: {
                 </td>
               );
             })}
-            <td className="p-0" />
           </tr>
         );
       })}
@@ -1630,7 +1633,15 @@ export function ModalAtividade({
 
         {/* MIOLO — o unico que rola. Piso INLINE, nao so `min-h-0`: irmao que
             nao cede empurra este a zero e o conteudo transborda (A13). */}
-        <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3" style={{ minHeight: 200 }}>
+        {/* `py-1` NO DRE — o branco sob a tabela que o print mostra e' este
+            padding, nao espaco livre: o `clientHeight` de 367px JA o inclui, e
+            por isso a conta dizia 3px de folga enquanto a tela parecia ter
+            mais. Reduzir de `py-3` para `py-1` converte 16px de padding em
+            espaco util, e e' o que paga a escada de linha maior.
+            ⚠ So no DRE: as cinco outras abas tem grade de cards abaixo da
+            tabela, e la o respiro faz falta. */}
+        <div className={`flex-1 min-h-0 overflow-y-auto px-4 ${assunto === 'dre' ? 'py-1' : 'py-3'}`}
+             style={{ minHeight: 200 }}>
           {assunto === 'geral' ? (
             /* SO TABELA, sem card de grafico: o Geral existe para responder "o
                mes foi bom?" antes de qualquer leitura de serie.
