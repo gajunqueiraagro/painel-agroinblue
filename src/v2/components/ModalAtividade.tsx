@@ -393,9 +393,7 @@ const BLOCOS_OPERACIONAL: Array<{ titulo: string; destino?: Assunto; linhas: Lin
    ⚠ Sinal e cor, nunca parenteses contabeis — deducoes, custeio, investimento,
    reposicao, juros e tributos sao SAIDAS, e os subtotais podem ser negativos. */
 const LINHAS_DRE: LinhaResumo[] = [
-  { rotulo: '1. Faturamento',              chave: 'dre_faturamento',   bag: 'dre' },
-  { rotulo: 'Receita pecuária',            chave: 'dre_rec_pec',       bag: 'dre', nivel: 1 },
-  { rotulo: 'Outras receitas',             chave: 'dre_rec_outras',    bag: 'dre', nivel: 1 },
+  { rotulo: '1. Faturamento',              chave: 'dre_faturamento',   bag: 'dre', detalhe: true },
   { rotulo: '2. (−) Deduções de receita',  chave: 'dre_deducoes',      bag: 'dre', saida: true },
   { rotulo: '= RECEITA LÍQUIDA',           chave: 'dre_receita_liquida', bag: 'dre', subtotal: true },
 
@@ -403,7 +401,7 @@ const LINHAS_DRE: LinhaResumo[] = [
      indicadores `dreCustoFixo` e `dreCustoVariavel` seguem intactos no PC-100,
      e o modal da Variacao pode precisar deles. Aqui a abertura do custeio nao
      estava pagando o espaco que ocupava. */
-  { rotulo: '3. (−) Custeio pecuária',     chave: 'dre_custeio',       bag: 'dre', saida: true },
+  { rotulo: '3. (−) Custeio pecuária',     chave: 'dre_custeio',       bag: 'dre', saida: true, detalhe: true },
   { rotulo: '= LUCRO BRUTO',               chave: 'dre_resultado_bruto', bag: 'dre', subtotal: true, espacoDepois: true },
 
   { rotulo: '4. (−) Investimento na fazenda', chave: 'dre_investimento', bag: 'dre', saida: true },
@@ -412,8 +410,6 @@ const LINHAS_DRE: LinhaResumo[] = [
   { rotulo: '5. (−) Reposição de bovinos', chave: 'dre_reposicao',     bag: 'dre', saida: true },
   { rotulo: '6. (−/+) Variação do estoque', chave: 'dre_variacao',     bag: 'dre',
     subtitulo: 'após vendas e reposição', detalhe: true },
-  { rotulo: 'por produção',                chave: 'dre_variacao_producao', bag: 'dre', nivel: 1 },
-  { rotulo: 'por preço',                   chave: 'dre_variacao_preco', bag: 'dre', nivel: 1 },
   /* RESULTADO DA ATIVIDADE, e nao "Resultado Operacional": entre o LUCRO
      OPERACIONAL e esta linha entram a reposicao de bovinos e a variacao do
      estoque, que sao PATRIMONIO — o rebanho — e nao operacao do periodo. O
@@ -432,6 +428,29 @@ const LINHAS_DRE: LinhaResumo[] = [
   { rotulo: '= LUCRO LÍQUIDO',             chave: 'dre_lucro_liquido', bag: 'dre', subtotal: true },
 ];
 
+
+/* AS PARCELAS DE CADA LINHA — sairam da TABELA, nao do sistema. Os indicadores
+   seguem intactos no PC-100; o que mudou e onde eles aparecem.
+   ⚠ Motivo, e nao e so espaco: cada linha pede uma explicacao DIFERENTE. A
+   Variacao quer duas series no tempo mais a ponte; o Custeio quer a divisao
+   fixo/variavel mes a mes; o Faturamento quer as duas origens de receita. Duas
+   linhas espremidas na tabela nao davam nada disso.
+   ⚠ Linha sem entrada aqui NAO ganha icone: nao se inventa detalhe onde nao ha
+   parcela. */
+const DETALHE_DRE: Record<string, Array<{ chave: string; rotulo: string }>> = {
+  dre_faturamento: [
+    { chave: 'dre_rec_pec',           rotulo: 'Receita pecuária' },
+    { chave: 'dre_rec_outras',        rotulo: 'Outras receitas' },
+  ],
+  dre_custeio: [
+    { chave: 'dre_custo_fixo',        rotulo: 'Custo fixo' },
+    { chave: 'dre_custo_var',         rotulo: 'Custo variável' },
+  ],
+  dre_variacao: [
+    { chave: 'dre_variacao_producao', rotulo: 'por produção' },
+    { chave: 'dre_variacao_preco',    rotulo: 'por preço' },
+  ],
+};
 
 /* Ver a prop `comparadores` do card. */
 const COMPARADORES_MOV: Comparador[] = ['meta', 'anoAnt'];
@@ -792,7 +811,15 @@ const rotuloDoMes = (ind: IndicadorAtividade, leitura: Leitura, mesAtual: number
    ⚠ `leading` EXPLICITO em cada nivel. Herdado, ele se recalcula por fonte e o
    custo em pixels deixa de ser previsivel antes de abrir a tela.
    ⚠ PISO A12 = 8px. A parcela para em 9px; abaixo disso o briefing manda PARAR.
-     ⚠ ESCADA DE LINHA 14 / 16 / 18 (a do subtotal ja inclui as duas bordas).
+     ⚠ ESCADA DE LINHA 16 / 19 / 23 (a do subtotal ja inclui as duas bordas).
+     As quatro PARCELAS sairam da tabela e viraram modal por linha, entao hoje
+     NENHUMA linha do DRE cai no ramo do meio — ele fica para quem voltar. Com
+     15 linhas em vez de 19 sobrou espaco, e a fonte subiu: numerada 10 -> 12px,
+     subtotal 11 -> 15px. Conta contra o teto de 359px:
+       thead 20 + 8x19 + (19 + 11 do subtitulo) + 6x23 + 4x4 = 356px, folga 3px.
+     ⚠ Nao chega aos ~28px por linha do slide: aquilo pediria 484px, 125px alem
+     do que o miolo tem. Medido, reportado, e a escolha de ficar em 12/15 foi
+     do Gabriel.
      As FONTES seguem em 9/10/11 DE PROPOSITO, e nao por falta de orcamento
      vertical: o limite e HORIZONTAL. A visao mensal ancora o Indicador em
      195px com `table-fixed`, e o rotulo mais longo ('= Resultado antes dos
@@ -806,9 +833,9 @@ const tipografiaDre = (l: LinhaResumo): string =>
      linha continua com 18px (16 + 1 + 1) e o orcamento nao mexe. A FONTE segue
      em 11px — 16/11 = 1,45, folgado para nao cortar altura de caractere.
      ⚠ Trocar por 17 devolve os 6px que estouram o teto de 343px. */
-  l.subtotal            ? 'text-[11px] leading-[16px]'
-  : (l.nivel ?? 0) > 0  ? 'text-[9px] leading-[14px]'
-                        : 'text-[10px] leading-[16px]';
+  l.subtotal            ? 'text-[15px] leading-[21px]'
+  : (l.nivel ?? 0) > 0  ? 'text-[10px] leading-[16px]'
+                        : 'text-[12px] leading-[19px]';
 
 const corDeValor = (l: LinhaResumo, v: number | null): string =>
   l.saida               ? 'text-destructive'
@@ -855,7 +882,7 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
   corPorSinal?: boolean;
   /** Abre o detalhe da linha marcada com `detalhe`. Sem a prop nenhum icone e
       emitido, e as cinco outras abas nem marcam o campo. */
-  onDetalhe?: () => void;
+  onDetalhe?: (l: LinhaResumo) => void;
 }) => {
   /* MODO COMPACTO. Duas alavancas, e so estas:
        padding vertical  py-0.5 (2px cada lado) -> py-0
@@ -1100,7 +1127,7 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
                         seguranca — no DRE a linha nao e clicavel (o ponto de
                         chamada nao passa `onIr`), mas isso pode mudar. */}
                     {l.detalhe && onDetalhe && (
-                      <button onClick={e => { e.stopPropagation(); onDetalhe(); }}
+                      <button onClick={e => { e.stopPropagation(); onDetalhe(l); }}
                               aria-label={`Detalhe de ${l.rotulo}`}
                               title="O que esta linha significa"
                               className="ml-1 inline-flex align-middle text-muted-foreground hover:text-foreground">
@@ -1111,7 +1138,7 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
                         linha nova custaria altura cheia e entraria no zebrado.
                         Sem `subtitulo` nenhum no' extra e emitido. */}
                     {l.subtitulo && (
-                      <span className="block text-[9px] leading-[10px] font-normal text-muted-foreground">
+                      <span className="block text-[9px] leading-[11px] font-normal text-muted-foreground">
                         {l.subtitulo}
                       </span>
                     )}
@@ -1166,7 +1193,7 @@ const TabelaMensalDre = ({ linhas, dre, modo, mesAtual, onDetalhe }: {
   linhas: LinhaResumo[];
   dre: IndicadorAtividade[];
   /** Ver a prop de mesmo nome em `TabelaResumo`. */
-  onDetalhe?: () => void;
+  onDetalhe?: (l: LinhaResumo) => void;
   /** `mes` -> o valor DAQUELE mes. `acumulado` -> de Janeiro ate aquele mes. */
   modo: 'mes' | 'acumulado';
   /** Mes do FILTRO — o recorte que o usuario escolheu, nao "o ultimo mes com
@@ -1216,7 +1243,7 @@ const TabelaMensalDre = ({ linhas, dre, modo, mesAtual, onDetalhe }: {
                 style={{ paddingLeft: 6 + (l.nivel ?? 0) * 12 }}>
               {l.rotulo}
               {l.detalhe && onDetalhe && (
-                <button onClick={e => { e.stopPropagation(); onDetalhe(); }}
+                <button onClick={e => { e.stopPropagation(); onDetalhe(l); }}
                         aria-label={`Detalhe de ${l.rotulo}`}
                         title="O que esta linha significa"
                         className="ml-1 inline-flex align-middle text-muted-foreground hover:text-foreground">
@@ -1224,7 +1251,7 @@ const TabelaMensalDre = ({ linhas, dre, modo, mesAtual, onDetalhe }: {
                 </button>
               )}
               {l.subtitulo && (
-                <span className="block text-[9px] leading-[10px] font-normal text-muted-foreground">
+                <span className="block text-[9px] leading-[11px] font-normal text-muted-foreground">
                   {l.subtitulo}
                 </span>
               )}
@@ -1318,15 +1345,24 @@ const Bloco = ({ titulo, contexto, children }: {
    ⚠ Vale aqui a mesma proibicao do modal de desvios: nada de 'devido a', 'por
    causa de', 'refletindo', 'impactado por', nem adjetivo de valor. Ver o
    contraexemplo do desfrute, no comentario de `BaseDesvio`. */
-const ModalVariacaoEstoque = ({ dre, mesAtual, onClose }: {
+const ModalDetalheDre = ({ linha, dre, mesAtual, onClose }: {
+  /** A linha da tabela que abriu o modal. Suas parcelas vem de `DETALHE_DRE`. */
+  linha: LinhaResumo;
   dre: IndicadorAtividade[];
   mesAtual: number;
   onClose: () => void;
 }) => {
   const ind = (chave: string) => dre.find(i => i.chave === chave);
-  const indProd  = ind('dre_variacao_producao');
-  const indPreco = ind('dre_variacao_preco');
   const nomeMes  = MESES[mesAtual - 1];
+  const parcelas = DETALHE_DRE[linha.chave] ?? [];
+  /* A PONTE e o texto explicativo sao EXCLUSIVOS da Variacao do estoque. Nao se
+     replicam para Faturamento nem Custeio: a ponte e uma identidade contabil
+     daquela linha, e o texto explica um calculo que so ela tem. */
+  const ehVariacao = linha.chave === 'dre_variacao';
+
+  /* Composicao: acumulado do periodo, como a tabela do DRE, que roda com
+     `leitura="periodo"` fixa. O % e sobre o total da PROPRIA linha. */
+  const totalLinha = ind(linha.chave)?.valorPeriodo ?? null;
 
   /* A PONTE E DO MES, e por isso le `serieMes` mesmo quando a tabela atras
      esta acumulada: a pergunta que ela responde — "vendi e o caixa nao
@@ -1336,18 +1372,18 @@ const ModalVariacaoEstoque = ({ dre, mesAtual, onClose }: {
   const variacao = doMes(ind('dre_variacao'));
   const temPonte = receita != null && variacao != null;
 
-  /* Linhas SO para a cor: `corDeValor` recebe a linha para saber se e saida.
-     Nenhuma das duas e, entao a cor sai pelo sinal — que e o que interessa no
-     grafico. Construidas aqui para nao depender da ordem de `LINHAS_DRE`. */
-  const lProd:  LinhaResumo = { rotulo: 'por produção', chave: 'dre_variacao_producao', bag: 'dre', nivel: 1 };
-  const lPreco: LinhaResumo = { rotulo: 'por preço',    chave: 'dre_variacao_preco',    bag: 'dre', nivel: 1 };
+  /* Linha SO para a cor: `corDeValor` precisa saber se e saida. A parcela herda
+     a natureza da linha-mae — custo fixo dentro do Custeio e saida, e sai
+     vermelho como no DRE; as parcelas da Variacao nao sao, e saem pelo sinal. */
+  const linhaCor = (chave: string): LinhaResumo =>
+    ({ rotulo: '', chave, bag: 'dre', nivel: 1, saida: linha.saida });
 
   /* Escala UNICA para as duas series: escalas separadas fariam uma barra de
      R$ 200 mil parecer do mesmo tamanho de uma de R$ 3 mi. */
   let maxAbs = 0;
   for (let m = 1; m <= mesAtual; m++) {
-    for (const i of [indProd, indPreco]) {
-      const v = valorDoMes(i?.serieMes, m);
+    for (const p of parcelas) {
+      const v = valorDoMes(ind(p.chave)?.serieMes, m);
       if (v != null && Math.abs(v) > maxAbs) maxAbs = Math.abs(v);
     }
   }
@@ -1361,9 +1397,9 @@ const ModalVariacaoEstoque = ({ dre, mesAtual, onClose }: {
            onClick={e => e.stopPropagation()}>
         <div className="shrink-0 px-4 pt-3 pb-2 border-b border-border/40 flex items-start gap-2">
           <div>
-            <p className="text-[13px] font-semibold leading-tight">Variação do estoque</p>
+            <p className="text-[13px] font-semibold leading-tight">{nomeCurto(linha.rotulo)}</p>
             <p className="text-[11px] text-muted-foreground leading-tight">
-              Como o valor do rebanho se move. Nenhuma relação de causa é afirmada.
+              Jan–{nomeMes} · competência. Nenhuma relação de causa é afirmada.
             </p>
           </div>
           <button onClick={onClose} aria-label="Fechar"
@@ -1374,7 +1410,7 @@ const ModalVariacaoEstoque = ({ dre, mesAtual, onClose }: {
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-2">
 
-          {temPonte && (
+          {ehVariacao && temPonte && (
             <Bloco titulo="A ponte do mês" contexto={nomeMes}>
               <p className={frase}>
                 Receita pecuária {fmtRAbrev(receita)} · Variação do estoque{' '}
@@ -1388,31 +1424,53 @@ const ModalVariacaoEstoque = ({ dre, mesAtual, onClose }: {
             </Bloco>
           )}
 
+          <Bloco titulo="Composição" contexto={`Jan–${nomeMes} · competência`}>
+            {parcelas.map(p => {
+              const v = ind(p.chave)?.valorPeriodo ?? null;
+              const pct = v != null && totalLinha != null && totalLinha !== 0
+                ? (v / totalLinha) * 100 : null;
+              return (
+                <p key={p.chave} className={`${frase} flex items-baseline gap-2`}>
+                  <span className="flex-1">{p.rotulo}</span>
+                  <span className={`tabular-nums ${corDeValor(linhaCor(p.chave), v)}`}>
+                    {v != null ? fmtRAbrev(v) : '—'}
+                  </span>
+                  {/* O % e do TOTAL DA LINHA, nao do faturamento inteiro: e a
+                      pergunta que a linha-mae faz. Total zero nao vira 0% —
+                      seria dividir por zero e afirmar o que nao se sabe. */}
+                  <span className="tabular-nums text-muted-foreground w-[52px] text-right">
+                    {pct != null ? `${pct.toFixed(1)}%` : '—'}
+                  </span>
+                </p>
+              );
+            })}
+          </Bloco>
+
           <Bloco titulo="Evolução no ano" contexto={`Jan–Dez · escala comum às duas séries`}>
             <div className="flex items-end gap-1 pt-1">
               {MESES.map((rot, i) => {
                 /* Mes futuro nasce VAZIO — mesmo criterio da visao mensal: o
                    recorte do filtro manda, nao a existencia do dado. */
                 const futuro = i + 1 > mesAtual;
-                const vProd  = futuro ? null : valorDoMes(indProd?.serieMes, i + 1);
-                const vPreco = futuro ? null : valorDoMes(indPreco?.serieMes, i + 1);
-                const barra = (v: number | null, l: LinhaResumo, clara: boolean) => (
-                  <div className="relative w-[7px] h-full">
+                const barra = (chave: string, clara: boolean) => {
+                  const v = futuro ? null : valorDoMes(ind(chave)?.serieMes, i + 1);
+                  return (
+                  <div key={chave} className="relative w-[7px] h-full">
                     {v != null && (
-                      <div className={`absolute left-0 right-0 bg-current rounded-[1px] ${corDeValor(l, v)}${clara ? ' opacity-50' : ''}`}
+                      <div className={`absolute left-0 right-0 bg-current rounded-[1px] ${corDeValor(linhaCor(chave), v)}${clara ? ' opacity-50' : ''}`}
                            style={v >= 0
                              ? { bottom: '50%', height: `${(Math.abs(v) / maxAbs) * 50}%` }
                              : { top: '50%',    height: `${(Math.abs(v) / maxAbs) * 50}%` }} />
                     )}
                   </div>
-                );
+                  );
+                };
                 return (
                   <div key={rot} className="flex-1 flex flex-col items-center gap-0.5">
                     <div className="relative w-full h-[64px]">
                       <div className="absolute inset-x-0 top-1/2 h-px bg-border" />
                       <div className="absolute inset-0 flex justify-center gap-[2px]">
-                        {barra(vProd, lProd, false)}
-                        {barra(vPreco, lPreco, true)}
+                        {parcelas.map((p, k) => barra(p.chave, k > 0))}
                       </div>
                     </div>
                     <span className="text-[9px] leading-[12px] text-muted-foreground">{rot}</span>
@@ -1421,11 +1479,12 @@ const ModalVariacaoEstoque = ({ dre, mesAtual, onClose }: {
               })}
             </div>
             <p className="text-[10px] leading-[15px] text-muted-foreground mt-1.5">
-              Barra cheia: por produção · Barra clara: por preço · Acima da linha, positivo;
-              abaixo, negativo. A cor segue o sinal, como na tabela.
+              Barra cheia: {parcelas[0]?.rotulo} · Barra clara: {parcelas[1]?.rotulo} ·
+              Acima da linha, positivo; abaixo, negativo. A cor segue a mesma regra da tabela.
             </p>
           </Bloco>
 
+          {ehVariacao && (
           <Bloco titulo="O que cada parte significa" contexto="texto fixo">
             <p className={frase}>
               <span className="font-semibold">por preço</span> — quanto do valor mudou porque a
@@ -1438,6 +1497,7 @@ const ModalVariacaoEstoque = ({ dre, mesAtual, onClose }: {
               nascimento e compra, e saem por venda, morte e transferência.
             </p>
           </Bloco>
+          )}
 
         </div>
       </div>
@@ -1949,7 +2009,9 @@ export function ModalAtividade({
   const [visaoDre,  setVisaoDre]  = useState<'padrao' | 'mensal'>('padrao');
   const [modoMensal, setModoMensal] = useState<'mes' | 'acumulado'>('mes');
   const [desviosAberto, setDesviosAberto] = useState(false);
-  const [variacaoAberta, setVariacaoAberta] = useState(false);
+  /* QUAL linha abriu o detalhe, nao um booleano: o modal e um so e o conteudo
+     vem da linha. `null` = fechado. */
+  const [detalheLinha, setDetalheLinha] = useState<LinhaResumo | null>(null);
   /* MULTI-selecao por GRAFICO — nao por modal. O seletor nao troca so o
      numero do delta: ele decide QUAIS COMPARADORES aparecem no grafico.
      Qualquer combinacao vale, inclusive NENHUMA: sem nada marcado o card
@@ -1973,7 +2035,7 @@ export function ModalAtividade({
       setVisaoDre('padrao');
       setModoMensal('mes');
       setDesviosAberto(false);
-      setVariacaoAberta(false);
+      setDetalheLinha(null);
       setComparadores({});
     }
   }, [open, assuntoInicial]);
@@ -2139,7 +2201,7 @@ export function ModalAtividade({
               dre={indicadoresDre ?? []}
               modo={modoMensal}
               mesAtual={mesAtual}
-              onDetalhe={() => setVariacaoAberta(true)}
+              onDetalhe={setDetalheLinha}
             />
             ) : (
             <TabelaResumo
@@ -2148,7 +2210,7 @@ export function ModalAtividade({
               compacta
               rotuloEstreito
               corPorSinal
-              onDetalhe={() => setVariacaoAberta(true)}
+              onDetalhe={setDetalheLinha}
               zoo={indicadores}
               mov={indicadoresMovimentacoes ?? []}
               fin={indicadoresFinanceiro ?? []}
@@ -2323,11 +2385,12 @@ export function ModalAtividade({
             `onClose` do modal de fora.
             A BASE segue a visao em que o usuario esta — foi decisao do Gabriel,
             e por isso o proprio modal declara contra o que mede no topo. */}
-        {variacaoAberta && (
-          <ModalVariacaoEstoque
+        {detalheLinha && (
+          <ModalDetalheDre
+            linha={detalheLinha}
             dre={indicadoresDre ?? []}
             mesAtual={mesAtual}
-            onClose={() => setVariacaoAberta(false)}
+            onClose={() => setDetalheLinha(null)}
           />
         )}
 
