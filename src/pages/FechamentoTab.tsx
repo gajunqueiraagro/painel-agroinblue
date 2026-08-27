@@ -307,6 +307,22 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   const fechadosCount = statusCounts.fechado;
   const pendentesCount = pastosAtivos.length - fechadosCount;
 
+  /* OS QUE SERAO FECHADOS, POR NOME. O dialogo dizia so "83 pasto(s)": fechando 83 de
+     uma vez, ninguem consegue conferir o que esta prestes a fechar nem notar um pasto
+     que nao deveria estar ali. Foi exatamente esse silencio que escondeu os IND.05 e
+     IND.06 encerrados (PR-P1-DATA-FIM-01).
+
+     ⚠ MESMA FONTE DA CONTAGEM, de proposito. `pendentesCount` e' derivado de
+     `getPastoStatus`, e `getPastoStatus` devolve 'fechado' exatamente quando
+     `fech.status === 'fechado'` — o mesmo predicado que `handleBulkClose` usa para
+     pular. Derivar a lista de qualquer outro lugar abriria espaco para o botao dizer
+     um numero e a lista mostrar outro. A ordem sai de `pastosAtivos`, que ja e' a da
+     tela (normais primeiro, divergencia no fim), e filtrar preserva ordem. */
+  const pastosPendentes = useMemo(
+    () => pastosAtivos.filter(p => getPastoStatus(p) !== 'fechado'),
+    [pastosAtivos, getPastoStatus],
+  );
+
   const canBulkClose = useMemo(() => {
     if (!anoMes) return false;
     if (pendentesCount === 0) return false;
@@ -1300,7 +1316,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
       {/* ═══ DIALOGS ═══ */}
       {/* Fechar Mês */}
       <AlertDialog open={confirmBulkOpen} onOpenChange={setConfirmBulkOpen}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-lg">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <Lock className="h-5 w-5 text-primary" />
@@ -1311,10 +1327,43 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
               {fazendaAtual ? ` "${fazendaAtual.nome}"` : ''} para <strong>{formatAnoMes(anoMes)}</strong>.
               <br /><br />
               <strong>{pendentesCount} pasto(s)</strong> serão fechados. Pastos já fechados não serão alterados.
-              <br /><br />
-              <span className="text-muted-foreground text-xs">Ação registrada para auditoria.</span>
             </AlertDialogDescription>
           </AlertDialogHeader>
+
+          {/* A LISTA FICA FORA DO AlertDialogDescription: ele renderiza um <p>, e <div>
+              dentro de <p> e' HTML invalido — o navegador fecha o paragrafo sozinho e o
+              layout quebra. Por isso o texto acima ficou so com o que e' inline.
+              ROLA, NAO TRUNCA: com 83 pastos a lista precisa caber sem estourar a tela,
+              e "e mais 60" esconderia justamente o pasto que o operador precisa ver.
+              Nome, cabecas e tipo de uso saem do MESMO que o card da tela ja mostra —
+              nenhum campo novo. */}
+          {pastosPendentes.length > 0 && (
+            <div className="rounded-md border bg-muted/20">
+              <div className="max-h-56 overflow-y-auto divide-y divide-border/60">
+                {pastosPendentes.map(p => {
+                  const fech = getFechamento(p.id);
+                  const resumo = getResumo(fech, p);
+                  const tipoUsoEfetivo = fech?.tipo_uso_mes || p.tipo_uso;
+                  const isDiv = isPastoDivergencia(tipoUsoEfetivo);
+                  return (
+                    <div key={p.id} className="flex items-center justify-between gap-2 px-2 py-1 text-xs">
+                      <span className="font-medium text-foreground truncate">{p.nome}</span>
+                      <span className="flex shrink-0 items-center gap-2 tabular-nums text-muted-foreground">
+                        <span>{resumo.totalCabecas > 0 ? `${formatNum(resumo.totalCabecas, 0)} cab` : '—'}</span>
+                        {isDiv ? (
+                          <span className="text-[9px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400">⚠️ Divergência</span>
+                        ) : tipoUsoEfetivo ? (
+                          <span className="text-[9px] font-bold uppercase tracking-wider">{tipoUsoEfetivo.toUpperCase()}</span>
+                        ) : null}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <p className="text-muted-foreground text-xs">Ação registrada para auditoria.</p>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={bulkClosing}>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={handleBulkClose} disabled={bulkClosing}>
