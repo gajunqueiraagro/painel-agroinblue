@@ -72,8 +72,19 @@ BEGIN
   ---------------------------------------------------------------- cria recebimento
   v_res := public.oc_confirmar(v_op, v_cli, v_v);
   v_v := (v_res->>'versao')::int;
-  PERFORM public.oc_registrar_movimentacao(v_op, v_cli, v_id1, jsonb_build_object(
-    'data', CURRENT_DATE, 'categoria','desmama_f', 'quantidade', 10, 'peso_medio', 200));
+  /* ⚠ NOVE argumentos POSICIONAIS, nao jsonb — assinatura lida de
+     `pg_get_function_identity_arguments`, nao de memoria:
+       p_operacao_id, p_cliente_id, p_lote_id, p_data, p_categoria,
+       p_quantidade, p_peso_medio_kg, p_peso_total_kg, p_observacao
+     Nao ha overload que aceite jsonb; a primeira versao deste teste inventou um
+     e morreu com 42883 antes do primeiro caso.
+     ⚠ A ORDEM DA FIXTURE vem dos guards da propria RPC: ela recusa rascunho
+     (tecnico ou legado), entao `oc_confirmar` tem de vir antes; e recusa entrega
+     encerrada, entao `oc_reabrir` tem de vir depois. Nao e' cerimonia.
+     ⚠ `peso_total` = 10 x 200 = 2000, coerente com o medio, para nao depender de
+     a funcao derivar um a partir do outro. */
+  PERFORM public.oc_registrar_movimentacao(
+    v_op, v_cli, v_id1, CURRENT_DATE, 'desmama_f', 10, 200::numeric, 2000::numeric, 'fixture');
   SELECT versao INTO v_v FROM public.zoo_operacoes_comerciais WHERE id=v_op;
   v_res := public.oc_reabrir(v_op, v_cli, v_v, 'teste');
   v_v := (v_res->>'versao')::int;
@@ -101,7 +112,9 @@ BEGIN
 
   ---------------------------------------------------------------- C7 · recalculo
   v_val := (v_res->>'valor_acordado')::numeric;
-  -- 10 cab x 200 kg x 15 = 30000 · 5 cab x 300 kg x 13 = 19500 · total 49500
+  -- `_oc_valor_do_lote` com criterio 'kg' faz qtd x peso_medio x valor_informado
+  -- (lido da funcao no banco, nao suposto):
+  --   10 cab x 200 kg x 15 = 30000 · 5 cab x 300 kg x 13 = 19500 · total 49500
   IF v_val IS DISTINCT FROM 49500 THEN
     RAISE EXCEPTION 'C7 FALHOU: valor_acordado esperado 49500, veio %', v_val;
   END IF;
