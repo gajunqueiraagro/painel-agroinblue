@@ -7,6 +7,9 @@ import { supabase } from '@/integrations/supabase/client';
 
 export interface ContaBancariaLeve {
   id: string;
+  /** Fallback do rotulo quando `nome_exibicao` e' nulo — e' o que
+   *  ContaBancariaSelect (padrao do sistema) usa: `nome_exibicao || nome_conta`. */
+  nome_conta: string;
   nome_exibicao: string | null;
   banco: string | null;
   agencia: string | null;
@@ -34,12 +37,13 @@ export function useContasBancariasLeves(clienteId: string | null) {
     setLoading(true);
     const { data } = await supabase
       .from('financeiro_contas_bancarias')
-      .select('id, nome_exibicao, banco, agencia, numero_conta, tipo_conta')
+      .select('id, nome_conta, nome_exibicao, banco, agencia, numero_conta, tipo_conta')
       .eq('cliente_id', clienteId)
       .eq('ativa', true)
       .order('ordem_exibicao');
     setContas((data ?? []).map(r => ({
       id: r.id,
+      nome_conta: r.nome_conta,
       nome_exibicao: r.nome_exibicao,
       banco: r.banco,
       agencia: r.agencia,

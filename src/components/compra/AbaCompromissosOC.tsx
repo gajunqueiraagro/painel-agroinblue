@@ -4,7 +4,8 @@ import type { OcCompromissosApi, CompromissoResumo, ParcelaMaterializacao, Criar
 import { classificarLotesCompra, SUBCENTRO_OBRIGACAO_COMPRA, CENTRO_CUSTO_COMPRA_BOVINOS, type LoteOC } from '@/hooks/useOperacaoLiquidacao';
 import { usePlanoContasOC } from '@/hooks/usePlanoContasOC';
 import { useComponentesFinanceiros } from '@/hooks/useComponentesFinanceiros';
-import { useContasBancariasLeves, rotuloContaLeve } from '@/hooks/useContasBancariasLeves';
+import { useContasBancariasLeves } from '@/hooks/useContasBancariasLeves';
+import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import { produtoOCCompromisso, produtoOCCompromissoLote } from '@/lib/financeiro/produtoOC';
 import { CATEGORIAS } from '@/types/cattle';
 import { Button } from '@/components/ui/button';
@@ -96,6 +97,18 @@ interface Props {
   darkSelectClass: string;
   recarregarDados?: () => void | Promise<void>;   // refresh da API de negociação antes de abrir "Novo compromisso"
 }
+
+/* Tema escuro para o painel do `SearchableSelect` (Lote, Subcentro, Favorecido).
+   O componente do sistema para CONTA e' o `ContaBancariaSelect`, que ja traz o seu
+   `DARK_GLASS_CONTENT`; aqui o alvo e' um dropdown de outra familia, cujos itens sao
+   <button> e nao `[role=option]` — por isso os seletores descendentes apontam para
+   `button` e `input` em vez de `[role=option]`. As cores sao as mesmas do
+   DARK_GLASS_CONTENT, para as duas familias se lerem como uma so. */
+const DARK_SEARCHABLE_CONTENT =
+  'bg-zinc-950/85 backdrop-blur-xl border-zinc-700/40 text-zinc-100 ' +
+  '[&_input]:bg-zinc-900/60 [&_input]:border-zinc-700/50 [&_input]:text-zinc-100 [&_input]:placeholder:text-zinc-500 ' +
+  '[&_button]:text-zinc-100 [&_button:hover]:bg-zinc-800/45 ' +
+  '[&_.bg-accent]:bg-zinc-800/55 [&_.bg-accent]:text-zinc-100';
 
 const badgeStatusCompromisso = (s: string) => (s === 'programado' ? 'default' : s === 'cancelado' ? 'destructive' : 'secondary');
 const badgeStatusParcela = (s: string) => (s === 'materializada' ? 'default' : s === 'paga' ? 'default' : s === 'cancelada' ? 'destructive' : 'secondary');
@@ -955,6 +968,7 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
                 value={loteId || '__none__'} onValueChange={(v) => setLoteId(v === '__none__' ? '' : v)}
                 options={loteOptions} placeholder="Selecione o lote"
                 allLabel="— operação inteira —" allValue="__none__" dense className="[&>button]:h-8 [&>button]:text-[12px]"
+                contentClassName={DARK_SEARCHABLE_CONTENT}
               />
               {loteOptions.length > 1 && (
                 <label className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer">
@@ -976,6 +990,7 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
               value={subcentro || '__none__'} onValueChange={(v) => setSubcentro(v === '__none__' ? '' : v)}
               options={subcentroOptions} placeholder="Selecione o subcentro"
               allLabel="— selecione —" allValue="__none__" dense className="[&>button]:h-8 [&>button]:text-[12px]"
+              contentClassName={DARK_SEARCHABLE_CONTENT}
             />
           </div>
           <div className="grid grid-cols-2 gap-2">
@@ -989,6 +1004,7 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
                 value={favorecidoId || '__none__'} onValueChange={(v) => setFavorecidoId(v === '__none__' ? '' : v)}
                 options={fornecedores.map(f => ({ value: f.id, label: f.nome }))} placeholder="Opcional"
                 allLabel="— nenhum —" allValue="__none__" dense className="[&>button]:h-8 [&>button]:text-[12px]"
+                contentClassName={DARK_SEARCHABLE_CONTENT}
               />
             </div>
           </div>
@@ -1055,24 +1071,13 @@ function ProgramarDialog({ onClose, onSubmit, saving, clienteId, valorCompromiss
     setLinhas(prev => prev.map(l => (l.idLocal === idLocal ? { ...l, ...patch } : l)));
   const removerLinha = (idLocal: string) => setLinhas(prev => prev.filter(l => l.idLocal !== idLocal));
 
-  /* ITEM 9 — contas organizadas por TIPO, na ordem do cadastro dentro de cada tipo
-     (o hook ja ordena por `ordem_exibicao`, e `sort` estavel preserva isso).
-     ⚠ NAO E' AGRUPAMENTO VISUAL COM CABECALHO: `SearchableSelect` recebe uma lista
-     PLANA e e' compartilhado com Abate/Venda/Mapa/FinV2 — dar-lhe grupos seria mexer
-     em componente de terceiros neste PR. O tipo entra como prefixo do rotulo, que
-     agrupa na leitura e ainda entra na busca. Reportado.
-     Tipo fora do vocabulario vai para o fim, sem quebrar a ordem. */
-  const ORDEM_TIPO_CONTA: Record<string, number> = { cc: 1, inv: 2, cartao: 3 };
-  const ROTULO_TIPO_CONTA: Record<string, string> = { cc: 'Corrente', inv: 'Investimento', cartao: 'Cartão' };
-  const contaOptions = useMemo(() => {
-    const ordenadas = [...contas].sort(
-      (a, b) => (ORDEM_TIPO_CONTA[a.tipo_conta ?? ''] ?? 99) - (ORDEM_TIPO_CONTA[b.tipo_conta ?? ''] ?? 99),
-    );
-    return ordenadas.map(c => {
-      const tipo = ROTULO_TIPO_CONTA[c.tipo_conta ?? ''] ?? null;
-      return { value: c.id, label: tipo ? `${tipo} · ${rotuloContaLeve(c)}` : rotuloContaLeve(c) };
-    });
-  }, [contas]);
+  /* O AGRUPAMENTO NAO E' DESTA TELA — o padrao do sistema ja existe em
+     `ContaBancariaSelect` (shared), o mesmo do filtro Conta Origem do Financeiro V2:
+     fundo dark/glass, grupos com cabecalho (CONTAS CORRENTES · INVESTIMENTOS ·
+     CARTOES) e o NOME PURO da conta no item.
+     ⚠ O PR anterior criou uma TERCEIRA variacao — lista plana ordenada por tipo com
+     "Corrente · " grudado no rotulo. Ela sai inteira aqui: convergir era o objetivo,
+     e reusar o componente e' mais barato do que reproduzir o tratamento. */
 
   // Sequência é derivada 1..N na ordem visual, na hora de emitir (nunca guardada por linha).
   const emitir = () => {
@@ -1121,10 +1126,12 @@ function ProgramarDialog({ onClose, onSubmit, saving, clienteId, valorCompromiss
                 </div>
                 <div>
                   <Label className="text-[10px]">Conta</Label>
-                  <SearchableSelect
-                    value={l.contaId || '__none__'} onValueChange={(v) => setLinha(l.idLocal, { contaId: v === '__none__' ? '' : v })}
-                    options={contaOptions} placeholder="Definir depois"
-                    allLabel="— definir depois —" allValue="__none__" dense className="[&>button]:h-8 [&>button]:text-[11px]"
+                  <ContaBancariaSelect
+                    value={l.contaId}
+                    onValueChange={(v) => setLinha(l.idLocal, { contaId: v === '__none__' ? '' : v })}
+                    contas={contas}
+                    prependItems={[{ value: '__none__', label: '— definir depois —' }]}
+                    className="h-8 text-[11px]"
                   />
                 </div>
                 <Button variant="ghost" size="sm" className="h-8 w-8 p-0" disabled={linhas.length === 1}

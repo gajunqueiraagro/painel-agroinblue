@@ -15,6 +15,12 @@ interface SearchableSelectProps {
   /** Densidade opt-in (usada só pela Compra): itens ~12px, busca sticky, lista mais alta.
    *  Default false → visual idêntico ao atual nos demais fluxos (Abate/Venda/Mapa/FinV2). */
   dense?: boolean;
+  /** Classes extras no PAINEL aberto (dropdown), para o tema escuro do sistema.
+   *  ADITIVO: `undefined` mantém `bg-popover` e o visual de hoje — Abate, Venda, Mapa
+   *  e FinV2 não passam a prop e não mudam em nada. Quem quiser escurecer usa
+   *  seletores descendentes (`[&_input]`, `[&_button]`), porque os itens desta lista
+   *  são <button> e não `[role=option]`. */
+  contentClassName?: string;
 }
 
 export function SearchableSelect({
@@ -27,6 +33,7 @@ export function SearchableSelect({
   disabled = false,
   className,
   dense = false,
+  contentClassName,
 }: SearchableSelectProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -188,7 +195,7 @@ export function SearchableSelect({
       </button>
 
       {open && (
-        <div className={cn("absolute z-50 w-full min-w-[140px] rounded-md border bg-popover shadow-md", openUp ? "bottom-full mb-0.5" : "top-full mt-0.5")}>
+        <div className={cn("absolute z-50 w-full min-w-[140px] rounded-md border bg-popover shadow-md", openUp ? "bottom-full mb-0.5" : "top-full mt-0.5", contentClassName)}>
           <div className={cn('px-0.5 pt-0.5 pb-0', dense && 'sticky top-0 z-10 bg-popover px-1 pt-1 pb-1')}>
             <input
               ref={inputRef}
