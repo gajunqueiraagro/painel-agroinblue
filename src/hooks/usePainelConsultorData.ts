@@ -838,6 +838,12 @@ export interface PainelConsultorDataResult {
   /* Os TRES da leitura gerencial — ver o comentario no `_finSoberano`.
      ⚠ `dreResOperIndicador` (VBP menos os dois custos) NAO e o mesmo que
      `dreResultadoOperacionalIndicador` (o RESULTADO DA ATIVIDADE antigo). */
+  /* Os tres COM MERCADO (`_MER`) — os subtotais ACIMA da linha da variacao por
+     preco, com o efeito somado. Ver a simetria no `_finSoberano`. */
+  dreVbpMerIndicador:                   IndicadorFinanceiroShape | null;
+  dreMargemMerIndicador:                IndicadorFinanceiroShape | null;
+  dreResOperMerIndicador:               IndicadorFinanceiroShape | null;
+
   /* Os tres SEM MERCADO (`_SM`) e o lucro por hectare. Ver o comentario no
      `_finSoberano`: os `_SM` sao ADICIONAIS aos originais, nao substitutos. */
   dreLucroOperacionalSMIndicador:       IndicadorFinanceiroShape | null;
@@ -4264,6 +4270,44 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
         const lucroSM      = (lucro && varPreco)   ? sub12(lucro, varPreco)   : null;
         const lucroSMM     = subM(lucroM, varPrecoM);
 
+        /* ── OS TRES COM MERCADO ───────────────────────────────────────
+           `_MER` = COM MERCADO. Sao os tres subtotais ACIMA da linha da variacao
+           por preco, com o efeito de mercado SOMADO. Existem porque na aba
+           "DRE var. mercado" aquela linha sobe para dentro do bloco do VBP, e um
+           bloco tem de FECHAR: se a variacao por preco esta dentro dele, o
+           subtotal que o encerra tem de conte-la.
+
+           ⚠ A SIMETRIA E A PROVA DE QUE A DECOMPOSICAO FECHA:
+             _SM  = sub12(x, varPreco)  nos TRES ABAIXO da linha
+             _MER = som12(x, varPreco)  nos TRES ACIMA
+           Mesma operacao, lados opostos, mesmo operando. Se um dos lados
+           precisasse de outra formula, a decomposicao entre producao e preco
+           estaria errada — e o Lucro Liquido nao bateria nas duas abas.
+           ⚠ Por isso o LUCRO OPERACIONAL para baixo NAO tem versao `_MER`: a
+           variacao por preco entra UMA VEZ, e ali ela ja entrou. Muda de
+           posicao, nao de contagem.
+
+           ⚠ `dreVbpMer` NAO E IGUAL A NADA EXISTENTE, e vale dizer por que
+           antes que alguem procure: vbp + varPreco = RL + varTotal − Reposicao,
+           e nenhum indicador publicado tem essa forma. `dreResultadoOperacional`
+           chega perto — RL + varTotal − Reposicao − Custeio − Investimento —,
+           mas leva os dois abatimentos a mais.
+
+           ⚠⚠ QUATRO FAMILIAS DE NOMES PARECIDOS convivem neste arquivo agora:
+             1. os tres subtotais gerenciais  `dreVbp` `dreMargem` `dreResOper`
+             2. os `_SM`, sem mercado, tres ABAIXO da linha 7
+             3. os `_MER`, com mercado, tres ACIMA da linha 7
+             4. os por-hectare, em CAIXA (249b6a51) x COMPETENCIA
+           Some-se a isso que `dreResOper` nao e `dreResultadoOperacional` e que
+           nenhum dos dois e `dreResultadoInvestimento`. LER A CHAVE INTEIRA
+           antes de usar; o sufixo e a unica diferenca e o tipo nao protege. */
+        const vbpMer      = (vbp && varPreco)        ? som12(vbp, varPreco)        : null;
+        const vbpMerM     = somM(vbpM, varPrecoM);
+        const margemMer   = (margem && varPreco)     ? som12(margem, varPreco)     : null;
+        const margemMerM  = somM(margemM, varPrecoM);
+        const resOperMer  = (resOperGer && varPreco) ? som12(resOperGer, varPreco) : null;
+        const resOperMerM = somM(resOperGerM, varPrecoM);
+
         const nada12 = Array(12).fill(NaN) as number[];
         const per = (t: string) => isPer ? `${t} acumulado Jan→mês (competência)` : `${t} no mês (competência)`;
         return {
@@ -4287,6 +4331,12 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
             per('Resultado operacional menos resultado financeiro'), resAntM),
           dreLucroLiquido: buildInd(lucro ?? nada12, 'LUCRO LÍQUIDO', 'Lucro Líquido',
             per('Resultado antes dos tributos, menos tributos patrimoniais e impostos sobre lucro'), lucroM),
+          dreVbpMer: buildInd(vbpMer ?? nada12, 'VALOR BRUTO DA PRODUÇÃO A PREÇO DE MERCADO', 'Valor Bruto da Produção a preço de mercado',
+            per('Valor bruto da produção mais a variação do rebanho por preço'), vbpMerM),
+          dreMargemMer: buildInd(margemMer ?? nada12, 'MARGEM DE CONTRIBUIÇÃO COM MERCADO', 'Margem de Contribuição com Mercado',
+            per('Margem de contribuição mais a variação do rebanho por preço'), margemMerM),
+          dreResOperMer: buildInd(resOperMer ?? nada12, 'RESULTADO OPERACIONAL COM MERCADO', 'Resultado Operacional com Mercado',
+            per('Resultado operacional mais a variação do rebanho por preço'), resOperMerM),
           dreLucroOperacionalSM: buildInd(lucroOperSM ?? nada12, 'LUCRO OPERACIONAL SEM MERCADO', 'Lucro Operacional sem Mercado',
             per('Lucro operacional menos a variação do rebanho por preço'), lucroOperSMM),
           dreAntesTributosSM: buildInd(antesTribSM ?? nada12, 'LUCRO ANTES DOS TRIBUTOS SEM MERCADO', 'Lucro antes dos Tributos sem Mercado',
@@ -5162,6 +5212,9 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     dreReposicaoBovinosIndicador: _finSoberano.dreReposicaoBovinos,
     dreJurosIndicador: _finSoberano.dreJuros,
     dreVbpIndicador: _finSoberano.dreVbp,
+    dreVbpMerIndicador: _finSoberano.dreVbpMer,
+    dreMargemMerIndicador: _finSoberano.dreMargemMer,
+    dreResOperMerIndicador: _finSoberano.dreResOperMer,
     dreLucroOperacionalSMIndicador: _finSoberano.dreLucroOperacionalSM,
     dreAntesTributosSMIndicador: _finSoberano.dreAntesTributosSM,
     dreLucroLiquidoSMIndicador: _finSoberano.dreLucroLiquidoSM,
@@ -5286,6 +5339,9 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       dreReposicaoBovinosIndicador: _finSoberano.dreReposicaoBovinos,
       dreJurosIndicador: _finSoberano.dreJuros,
       dreVbpIndicador: _finSoberano.dreVbp,
+      dreVbpMerIndicador: _finSoberano.dreVbpMer,
+      dreMargemMerIndicador: _finSoberano.dreMargemMer,
+      dreResOperMerIndicador: _finSoberano.dreResOperMer,
       dreLucroOperacionalSMIndicador: _finSoberano.dreLucroOperacionalSM,
       dreAntesTributosSMIndicador: _finSoberano.dreAntesTributosSM,
       dreLucroLiquidoSMIndicador: _finSoberano.dreLucroLiquidoSM,
