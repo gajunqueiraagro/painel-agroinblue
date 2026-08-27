@@ -320,6 +320,21 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
     return `${cat}${lote.qtd ? ` · ${lote.qtd} cab` : ''}`;
   };
 
+  /* O COMPONENTE SO ACRESCENTA quando diz algo alem da natureza. `principal/principal`
+     e' a mesma palavra duas vezes; frete, comissao e taxa_aquisicao informam. */
+  const componenteAdicional = (c: CompromissoResumo): string | null => {
+    const comp = c.componente ?? '';
+    return (comp === '' || comp === c.natureza) ? null : comp;
+  };
+
+  /* ⚠ UMA REGRA, DOIS CONSUMIDORES. A coluna Componente e o cabecalho da Programacao
+     precisam dizer a MESMA coisa sobre o mesmo compromisso — foram duas copias que
+     deixaram o cabecalho preso em "principal/principal" depois que a coluna ja tinha
+     sido corrigida. Com cinco compromissos na tabela, um cabecalho que nao identifica
+     nao diz de qual deles e' a programacao aberta logo abaixo. */
+  const rotuloCompromisso = (c: CompromissoResumo): string =>
+    identidadeCompromisso(c) ?? componenteAdicional(c) ?? (c.natureza ?? '—');
+
   const sugestaoSubcentro = useMemo(() => {
     const c = classificarLotesCompra(lotes);
     if (c.status !== 'ok') return '';
@@ -503,19 +518,16 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
                           O subtexto so aparece quando o componente ACRESCENTA (frete,
                           comissao, taxa de aquisicao). O par completo segue no `title`. */}
                       <td className="py-0.5 pr-1.5 whitespace-nowrap" title={`${c.natureza ?? '—'}/${c.componente ?? '—'}`}>
-                        {(() => {
-                          const comp = c.componente ?? '';
-                          const redundante = comp === '' || comp === c.natureza;
-                          if (ident) {
-                            return (
-                              <span className="leading-tight block">
-                                <span className="block">{ident}</span>
-                                {!redundante && <span className="block text-[9px] text-muted-foreground">{comp}</span>}
-                              </span>
-                            );
-                          }
-                          return <>{redundante ? (c.natureza ?? '—') : comp}</>;
-                        })()}
+                        {ident ? (
+                          <span className="leading-tight block">
+                            <span className="block">{ident}</span>
+                            {componenteAdicional(c) && (
+                              <span className="block text-[9px] text-muted-foreground">{componenteAdicional(c)}</span>
+                            )}
+                          </span>
+                        ) : (
+                          <>{rotuloCompromisso(c)}</>
+                        )}
                       </td>
                       <td className="py-0.5 pr-1.5 max-w-[110px] truncate" title={favNome}>{favNome}</td>
                       <td className="py-0.5 pr-1.5 text-right whitespace-nowrap">{brl(c.valorCompromisso)}</td>
@@ -582,7 +594,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
         <div className="rounded-md border bg-card p-1.5 shadow-sm">
           <div className="flex items-center justify-between mb-1">
             <div className="text-[11px] font-semibold text-muted-foreground">
-              Programação — {identidadeCompromisso(selecionado) ?? `${selecionado.natureza}/${selecionado.componente}`} ({brl(selecionado.valorCompromisso)})
+              Programação — {rotuloCompromisso(selecionado)} ({brl(selecionado.valorCompromisso)})
             </div>
             <span className="inline-flex gap-1">
               {!selecionado.temProgramacaoAtiva && selecionado.status === 'aberto' && (
