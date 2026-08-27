@@ -19,6 +19,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
+import { DatePicker } from '@/components/ui/date-picker';
 import { MoreVertical, Search, Eye, Filter, Ban, Undo2 } from 'lucide-react';
 
 // Central de Operações Comerciais — PR-OC-CENTRAL-UX-01 (UX/operacional; sem backend novo).
@@ -45,6 +46,10 @@ interface FinRow {
   tem_compromissos: boolean; tem_partes_legadas: boolean;
 }
 interface LiqRow { operacao_id: string; estado_liquidacao: string | null; }
+/* Fazenda na coluna e' o CODIGO (SM, ST, PUR...): o nome inteiro empurra a tabela
+   para o scroll horizontal e nao acrescenta nada a quem opera. Nome completo no
+   title. `codigo` NULL cai no nome — celula vazia nunca. */
+interface FazendaRef { nome: string; codigo: string | null; }
 interface RecLoteRow { operacao_id: string; estado_recebimento: string; }
 
 const TIPO_LABEL: Record<string, string> = { compra: 'Compra', venda: 'Venda em Pé', abate: 'Abate' };
@@ -74,6 +79,26 @@ const REC_TONE: Record<string, string> = {
   Encerrado: 'bg-blue-100 text-blue-700',
 };
 
+/* Tons por TOKEN do design system (--success / --warning / --muted), nunca cor
+   crua: a paleta literal acima e' idioma anterior desta tela e fica onde esta.
+   EXCEDENTE nao e' sucesso — e' divergencia, entao ganha o warning com enfase
+   (peso + anel), e nao um verde que faria o operador ler "deu certo". */
+const PILULA = 'inline-block rounded px-1.5 py-0.5 text-[9px] whitespace-nowrap';
+const TOM_SUCESSO = 'bg-success text-success-foreground';
+const TOM_ATENCAO = 'bg-warning text-warning-foreground';
+const TOM_ATENCAO_FORTE = 'bg-warning text-warning-foreground font-semibold ring-1 ring-warning-foreground/40';
+const TOM_NEUTRO = 'bg-muted text-muted-foreground';
+
+const LIQ_TOM: Record<string, string> = {
+  quitada: TOM_SUCESSO,
+  parcial: TOM_ATENCAO,
+  excedente: TOM_ATENCAO_FORTE,
+  nao_iniciada: TOM_NEUTRO,
+  em_aberto: TOM_NEUTRO,
+  base_indefinida: TOM_NEUTRO,
+  sem_base: TOM_NEUTRO,
+};
+
 // Financeiro: figura soberana "mais avançada" da View 3 (nunca length de array). Sem modelo → null.
 function finResumo(f: FinRow | undefined): { valor: number; rotulo: string; modo: string } | null {
   if (!f || (!f.tem_compromissos && !f.tem_partes_legadas)) return null;
@@ -84,9 +109,12 @@ function finResumo(f: FinRow | undefined): { valor: number; rotulo: string; modo
   return { valor: 0, rotulo: '', modo: f.modo };
 }
 
+/* ⚠ `nao_iniciada` deixou de imprimir '—'. A view SABE que nao houve liquidacao:
+   isso e' fato, e '—' e' reservado a dado ausente/desconhecido. Trocar os dois
+   faz o operador ler "nao sei" onde a resposta existe. */
 const LIQ_LABEL: Record<string, string> = {
   quitada: 'Liquidada', parcial: 'Parcial', excedente: 'Excedente',
-  nao_iniciada: '—', base_indefinida: 'Base indefinida', sem_base: 'Base indefinida', em_aberto: 'Em aberto',
+  nao_iniciada: 'Não liquidada', base_indefinida: 'Base indefinida', sem_base: 'Base indefinida', em_aberto: 'Em aberto',
 };
 function liqLabel(estado: string | null | undefined): string {
   if (!estado) return '—';
@@ -94,15 +122,16 @@ function liqLabel(estado: string | null | undefined): string {
 }
 
 function BadgeComercial({ status, rascunho }: { status: string; rascunho: boolean }) {
+  // Mesmos tokens da Liquidação, para os dois eixos se lerem juntos sem traduzir paleta.
   const cor =
-    status === 'fechada' ? 'bg-green-100 text-green-700'
-    : status === 'cancelada' ? 'bg-muted text-muted-foreground'
-    : 'bg-blue-100 text-blue-700';
+    status === 'fechada' ? TOM_SUCESSO
+    : status === 'cancelada' ? TOM_NEUTRO
+    : 'bg-secondary text-secondary-foreground';
   const label = status === 'fechada' ? 'Fechada' : status === 'cancelada' ? 'Cancelada' : 'Programada';
   return (
     <span className="inline-flex items-center gap-1 whitespace-nowrap">
-      <span className={`rounded px-1.5 py-0.5 text-[9px] ${cor}`}>{label}</span>
-      {rascunho && <span className="rounded bg-amber-100 text-amber-700 px-1 py-0.5 text-[9px]">Rascunho</span>}
+      <span className={`${PILULA} ${cor}`}>{label}</span>
+      {rascunho && <span className={`${PILULA} ${TOM_ATENCAO}`}>Rascunho</span>}
     </span>
   );
 }
@@ -120,7 +149,7 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
   const rpc = useOperacaoComercial();
 
   const [rows, setRows] = useState<OpRow[]>([]);
-  const [fazendas, setFazendas] = useState<Record<string, string>>({});
+  const [fazendas, setFazendas] = useState<Record<string, FazendaRef>>({});
   const [contrapartes, setContrapartes] = useState<Record<string, string>>({});
   const [finMap, setFinMap] = useState<Record<string, FinRow>>({});
   const [liqMap, setLiqMap] = useState<Record<string, LiqRow>>({});
@@ -131,6 +160,14 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
   const [fTipo, setFTipo] = useState('__all__');
   const [fComercial, setFComercial] = useState('__all__');
   const [fFazenda, setFFazenda] = useState('__all__');
+  /* ⚠ O FILTRO PROMETIA MAIS DO QUE ENTREGAVA. Rotulado "Situação", filtrava so
+     `status_comercial` enquanto a tabela mostra QUATRO eixos: quem escolhia
+     "Programada" achava que filtrava a operacao e filtrava um eixo so. Agora o
+     rotulo diz o eixo, e a Liquidacao ganhou o seu.
+     Recebimento e Financeiro seguem SEM filtro — pendencia registrada. */
+  const [fLiquidacao, setFLiquidacao] = useState('__all__');
+  const [dtIni, setDtIni] = useState('');   // '' = sem limite naquela ponta
+  const [dtFim, setDtFim] = useState('');
   const [mostrarRascunhos, setMostrarRascunhos] = useState(false);
   const [page, setPage] = useState(1);
 
@@ -164,7 +201,7 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
 
       // FASE 2 — auxiliares em lote, filtradas pelo CONJUNTO FECHADO de IDs da lista carregada.
       const [faz, forn, fin, liq, rec] = await Promise.all([
-        fazendaIds.length ? sb.from('fazendas').select('id, nome').in('id', fazendaIds) : Promise.resolve({ data: [] }),
+        fazendaIds.length ? sb.from('fazendas').select('id, nome, codigo').in('id', fazendaIds) : Promise.resolve({ data: [] }),
         contraparteIds.length ? sb.from('financeiro_fornecedores').select('id, nome').in('id', contraparteIds) : Promise.resolve({ data: [] }),
         sb.from('vw_oc_operacao_compromissos_resumo')
           .select('operacao_id, modo, n_compromissos, obrigacao_total, total_programado, total_materializado, total_liquidado, tem_compromissos, tem_partes_legadas')
@@ -173,8 +210,9 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
         sb.from('vw_oc_lotes_recebimento').select('operacao_id, estado_recebimento').eq('cliente_id', clienteId).in('operacao_id', operacaoIds),
       ]);
 
-      const fmap: Record<string, string> = {};
-      ((faz?.data as { id: string; nome: string }[] | null) ?? []).forEach(f => { fmap[f.id] = f.nome; });
+      const fmap: Record<string, FazendaRef> = {};
+      ((faz?.data as { id: string; nome: string; codigo: string | null }[] | null) ?? [])
+        .forEach(f => { fmap[f.id] = { nome: f.nome, codigo: f.codigo }; });
       setFazendas(fmap);
       const cmap: Record<string, string> = {};
       ((forn?.data as { id: string; nome: string }[] | null) ?? []).forEach(c => { cmap[c.id] = c.nome; });
@@ -204,6 +242,12 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
     () => Array.from(new Set(rows.map(r => r.fazenda_id).filter((v): v is string => !!v))),
     [rows],
   );
+  /* Opcoes derivadas do que FOI CARREGADO, mesmo idioma do fazendaOptions: lista
+     fixa criaria opcao morta (estado que a base nao tem) e esconderia estado novo. */
+  const liquidacaoOptions = useMemo(
+    () => Array.from(new Set(Object.values(liqMap).map(l => l.estado_liquidacao).filter((v): v is string => !!v))).sort(),
+    [liqMap],
+  );
 
   const filtradas = useMemo(() => {
     const q = busca.trim().toLowerCase();
@@ -214,21 +258,29 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
       if (fTipo !== '__all__' && r.tipo_operacao !== fTipo) return false;
       if (fComercial !== '__all__' && r.status_comercial !== fComercial) return false;
       if (fFazenda !== '__all__' && r.fazenda_id !== fFazenda) return false;
+      if (fLiquidacao !== '__all__' && (liqMap[r.id]?.estado_liquidacao ?? '') !== fLiquidacao) return false;
+      /* data_operacao e' 'yyyy-MM-dd' e o DatePicker devolve o mesmo formato:
+         comparacao de string ja e' cronologica, sem Date nem fuso no meio.
+         INCLUSIVO nas duas pontas. */
+      if (dtIni && r.data_operacao < dtIni) return false;
+      if (dtFim && r.data_operacao > dtFim) return false;
       if (q) {
         const nome = (r.contraparte_id ? contrapartes[r.contraparte_id] : '') ?? '';
         if (!nome.toLowerCase().includes(q)) return false;
       }
       return true;
     });
-  }, [rows, busca, fTipo, fComercial, fFazenda, mostrarRascunhos, contrapartes]);
+  }, [rows, busca, fTipo, fComercial, fFazenda, fLiquidacao, dtIni, dtFim, mostrarRascunhos, contrapartes, liqMap]);
 
   const totalPages = Math.max(1, Math.ceil(filtradas.length / PAGE_SIZE));
   const pageSafe = Math.min(page, totalPages);
   const pageRows = filtradas.slice((pageSafe - 1) * PAGE_SIZE, pageSafe * PAGE_SIZE);
-  useEffect(() => { setPage(1); }, [busca, fTipo, fComercial, fFazenda, mostrarRascunhos]);
+  useEffect(() => { setPage(1); }, [busca, fTipo, fComercial, fFazenda, fLiquidacao, dtIni, dtFim, mostrarRascunhos]);
 
   const nomeContraparte = (r: OpRow) => (r.contraparte_id ? contrapartes[r.contraparte_id] ?? '—' : '—');
-  const nomeFazenda = (r: OpRow) => (r.fazenda_id ? fazendas[r.fazenda_id] ?? '—' : '—');
+  const fazendaRef = (r: OpRow): FazendaRef | null => (r.fazenda_id ? fazendas[r.fazenda_id] ?? null : null);
+  const nomeFazenda = (r: OpRow) => fazendaRef(r)?.nome ?? '—';
+  const siglaFazenda = (r: OpRow) => { const f = fazendaRef(r); return f ? (f.codigo ?? f.nome) : '—'; };
 
   // Abertura soberana por tipo (Compra → SPA via parent; venda/abate ainda indisponíveis na Central).
   const abrirOperacaoPorTipo = (r: OpRow) => {
@@ -270,19 +322,19 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
   };
 
   return (
-    <div className="space-y-2 w-full">
+    <div className="space-y-2 w-full px-3">
       {/* Cabeçalho compacto (sem banner, sem botão do fluxo legado) */}
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-[15px] font-semibold leading-none">Operações Comerciais</h2>
         <span className="text-[10px] text-muted-foreground">{filtradas.length} operação(ões)</span>
       </div>
 
-      {/* Filtros em uma linha */}
-      <div className="flex flex-wrap items-center gap-1.5">
-        <div className="relative">
-          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
-          <Input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Contraparte…" className="h-8 w-44 pl-7 text-[11px]" />
-        </div>
+      {/* Barra de filtros — QUEBRA EM DUAS LINHAS quando nao cabe (`flex-wrap`), nunca
+          scroll horizontal. Ordem: Data inicial · Data final · Tipo · Contraparte ·
+          Fazenda · Comercial · Liquidacao · Rascunhos. */}
+      <div className="sticky top-0 z-20 flex flex-wrap items-center gap-1.5 bg-background pb-1.5">
+        <DatePicker value={dtIni} onChange={setDtIni} placeholder="Data inicial" size="compact" className="w-[124px]" />
+        <DatePicker value={dtFim} onChange={setDtFim} placeholder="Data final" size="compact" className="w-[124px]" />
         <Select value={fTipo} onValueChange={setFTipo}>
           <SelectTrigger className="h-8 w-32 text-[11px]"><SelectValue placeholder="Tipo" /></SelectTrigger>
           <SelectContent>
@@ -292,20 +344,31 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
             <SelectItem value="abate">Abate</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={fComercial} onValueChange={setFComercial}>
-          <SelectTrigger className="h-8 w-36 text-[11px]"><SelectValue placeholder="Situação" /></SelectTrigger>
+        <div className="relative">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+          <Input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Contraparte…" className="h-8 w-40 pl-7 text-[11px]" />
+        </div>
+        <Select value={fFazenda} onValueChange={setFFazenda}>
+          <SelectTrigger className="h-8 w-36 text-[11px]"><SelectValue placeholder="Fazenda" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="__all__">Toda situação</SelectItem>
+            <SelectItem value="__all__">Todas as fazendas</SelectItem>
+            {fazendaOptions.map(id => <SelectItem key={id} value={id}>{fazendas[id]?.nome ?? id}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={fComercial} onValueChange={setFComercial}>
+          <SelectTrigger className="h-8 w-36 text-[11px]"><SelectValue placeholder="Comercial" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">Todo comercial</SelectItem>
             <SelectItem value="programada">Programada</SelectItem>
             <SelectItem value="fechada">Fechada</SelectItem>
             <SelectItem value="cancelada">Cancelada</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={fFazenda} onValueChange={setFFazenda}>
-          <SelectTrigger className="h-8 w-40 text-[11px]"><SelectValue placeholder="Fazenda" /></SelectTrigger>
+        <Select value={fLiquidacao} onValueChange={setFLiquidacao}>
+          <SelectTrigger className="h-8 w-36 text-[11px]"><SelectValue placeholder="Liquidação" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="__all__">Todas as fazendas</SelectItem>
-            {fazendaOptions.map(id => <SelectItem key={id} value={id}>{fazendas[id] ?? id}</SelectItem>)}
+            <SelectItem value="__all__">Toda liquidação</SelectItem>
+            {liquidacaoOptions.map(e => <SelectItem key={e} value={e}>{liqLabel(e)}</SelectItem>)}
           </SelectContent>
         </Select>
         <Button variant={mostrarRascunhos ? 'secondary' : 'outline'} size="sm" className="h-8 gap-1 text-[11px]"
@@ -314,23 +377,28 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
         </Button>
       </div>
 
-      {/* Tabela densa, largura total */}
-      <div className="rounded-md border overflow-x-auto">
-        <Table className="w-full">
-          <TableHeader>
+      {/* ⚠ O SCROLL E' DESTE CONTAINER, nao da pagina: e' isso que faz o `sticky` do
+          thead colar no topo da LISTA e nao no topo do documento. So o corpo rola.
+          `bg-card` solido no thead — translucido deixaria a linha rolar por baixo.
+          `table-fixed` + larguras explicitas nos th: sem elas o navegador redistribui
+          por conteudo e uma contraparte longa reintroduz o scroll horizontal.
+          CONTRAPARTE e' a unica sem largura — fica com a sobra, truncada, nome no title. */}
+      <div className="rounded-md border overflow-y-auto max-h-[calc(100vh-260px)]">
+        <Table className="w-full table-fixed">
+          <TableHeader className="sticky top-0 z-10 bg-card">
             <TableRow>
-              <TableHead className={TH}>OC</TableHead>
-              <TableHead className={TH}>Data</TableHead>
-              <TableHead className={TH}>Tipo</TableHead>
+              <TableHead className={`${TH} w-[70px]`}>OC</TableHead>
+              <TableHead className={`${TH} w-[74px]`}>Data</TableHead>
+              <TableHead className={`${TH} w-[64px]`}>Tipo</TableHead>
               <TableHead className={TH}>Contraparte</TableHead>
-              <TableHead className={TH}>Fazenda</TableHead>
-              <TableHead className={`${TH} text-right`}>Animais</TableHead>
-              <TableHead className={`${TH} text-right`}>Valor</TableHead>
-              <TableHead className={TH}>Comercial</TableHead>
-              <TableHead className={TH}>Recebimento</TableHead>
-              <TableHead className={TH}>Financeiro</TableHead>
-              <TableHead className={TH}>Liquidação</TableHead>
-              <TableHead className={`${TH} text-right`}>Ações</TableHead>
+              <TableHead className={`${TH} w-[56px]`}>Fazenda</TableHead>
+              <TableHead className={`${TH} w-[76px] text-right`}>Animais</TableHead>
+              <TableHead className={`${TH} w-[92px] text-right`}>Valor</TableHead>
+              <TableHead className={`${TH} w-[104px]`}>Comercial</TableHead>
+              <TableHead className={`${TH} w-[92px]`}>Recebimento</TableHead>
+              <TableHead className={`${TH} w-[104px]`}>Financeiro</TableHead>
+              <TableHead className={`${TH} w-[100px]`}>Liquidação</TableHead>
+              <TableHead className={`${TH} w-[44px] text-right`}>Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -351,8 +419,8 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
                   <TableCell className={`${TD} font-mono whitespace-nowrap`} title={r.id}>#{r.id.slice(0, 8)}</TableCell>
                   <TableCell className={`${TD} whitespace-nowrap`}>{fmtData(r.data_operacao)}</TableCell>
                   <TableCell className={`${TD} whitespace-nowrap`}>{TIPO_LABEL[r.tipo_operacao] ?? r.tipo_operacao}</TableCell>
-                  <TableCell className={`${TD} max-w-[150px] truncate`} title={nomeContraparte(r)}>{nomeContraparte(r)}</TableCell>
-                  <TableCell className={`${TD} max-w-[130px] truncate`} title={nomeFazenda(r)}>{nomeFazenda(r)}</TableCell>
+                  <TableCell className={`${TD} truncate`} title={nomeContraparte(r)}>{nomeContraparte(r)}</TableCell>
+                  <TableCell className={`${TD} truncate`} title={nomeFazenda(r)}>{siglaFazenda(r)}</TableCell>
                   <TableCell className={`${TD} text-right whitespace-nowrap tabular-nums`}>
                     <div className="leading-tight">
                       <div>{r.qtd_negociada != null ? `${r.qtd_negociada} cab` : '—'}</div>
@@ -373,12 +441,19 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
                       ? (
                         <div className="leading-tight">
                           <div className="tabular-nums font-medium">{brl(fin.valor)}</div>
-                          <div className="text-[9px] text-muted-foreground">{fin.rotulo} · {fin.modo}</div>
+                          {/* `modo` era diagnostico interno de migracao (novo_modelo / nova_vazia),
+                              sem valor para quem opera, e roubava a largura da coluna. */}
+                          <div className="text-[9px] text-muted-foreground">{fin.rotulo}</div>
                         </div>
                       )
                       : <span className="text-muted-foreground">—</span>}
                   </TableCell>
-                  <TableCell className={`${TD} whitespace-nowrap`}>{liqLabel(liqMap[r.id]?.estado_liquidacao)}</TableCell>
+                  <TableCell className={`${TD} whitespace-nowrap`}>{(() => {
+                    const est = liqMap[r.id]?.estado_liquidacao;
+                    // Sem estado = a fonte não classifica: '—' de texto, NUNCA pílula colorida.
+                    if (!est) return <span className="text-muted-foreground">—</span>;
+                    return <span className={`${PILULA} ${LIQ_TOM[est] ?? TOM_NEUTRO}`}>{liqLabel(est)}</span>;
+                  })()}</TableCell>
                   <TableCell className={`${TD} text-right`}>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
