@@ -132,6 +132,13 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
   const [recemMaterializada, setRecemMaterializada] = useState<string | null>(null);
   const [novoAberto, setNovoAberto] = useState(false);
   const [programarAberto, setProgramarAberto] = useState(false);
+  /* ACRESCENTAR SALDO e' caminho DISTINTO de programar, nao um modo do mesmo botao:
+     um cria a programacao (writer `oc_programar_compromisso`, exige que nao exista),
+     o outro cresce a que ja existe (`oc_acrescentar_parcelas`, exige que exista).
+     Guardar o compromisso alvo aqui deixa a acao viver na LINHA dele, como o
+     cancelamento — com tres compromissos, uma acao no bloco de detalhe nao diz sobre
+     qual deles age. */
+  const [saldoAlvo, setSaldoAlvo] = useState<CompromissoResumo | null>(null);
   const [confirmarParcela, setConfirmarParcela] = useState<ParcelaMaterializacao | null>(null);
   /* CANCELADOS OCULTOS por padrao, com toggle para auditoria — mesmo idioma da
      Central, que ja esconde OC cancelada. Cancelado nao e' trabalho pendente:
@@ -366,6 +373,19 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
       setProgramarAberto(false);
     } catch { /* toast pelo hook */ }
   }
+  async function acrescentar(lista: ProgramarParcelaInput[]) {
+    if (versao == null || !saldoAlvo?.compromissoId) return;
+    try {
+      /* `sequencia` e' descartada de proposito: quem numera e' o servidor, a partir de
+         max+1 da programacao. O dialogo e' o mesmo do Programar e a produz; aqui ela
+         morre, em vez de virar um numero que o writer ignora. */
+      await ocApi.acrescentarParcelas(versao, saldoAlvo.compromissoId, {
+        parcelas: lista.map(({ valor, vencimento, conta_bancaria_id, forma }) => ({ valor, vencimento, conta_bancaria_id, forma })),
+      });
+      setSelectedId(saldoAlvo.compromissoId);   // o resultado aparece na lista deste compromisso
+      setSaldoAlvo(null);
+    } catch { /* toast pelo hook */ }
+  }
   async function materializar(p: ParcelaMaterializacao) {
     if (versao == null || !p.programacaoId || !p.parcelaId) return;
     setConfirmarParcela(null);                       // fecha JÁ (nunca congela)
@@ -483,7 +503,17 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
                           oferecia a acao no bloco de detalhe, longe de qual compromisso
                           ela agiria. `stopPropagation` para o clique abrir o menu sem que
                           a selecao da linha engula o evento. */}
-                      <td className="py-0.5 pl-0.5 text-right" onClick={(e) => e.stopPropagation()}>
+                      <td className="py-0.5 pl-0.5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        {/* PROGRAMAR SALDO — so quando JA existe programacao ativa e ainda
+                            sobra saldo. Sem programacao ativa quem aparece e' o "Programar"
+                            do bloco de detalhe: sao writers diferentes e nao devem se
+                            confundir num botao so. Cancelado nao recebe parcela. */}
+                        {podeEscrever && c.status !== 'cancelado' && c.temProgramacaoAtiva && c.saldoAProgramar > 0 && (
+                          <Button size="sm" variant="outline" className="h-5 mr-1 px-1.5 text-[10px]"
+                            onClick={() => setSaldoAlvo(c)}>
+                            Programar saldo
+                          </Button>
+                        )}
                         {(() => {
                           const g = gateCancelarCompromisso(c);
                           return (
@@ -643,6 +673,21 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
           identificacao={identidadeCompromisso(selecionado)}
           naturezaComponente={`${selecionado.natureza ?? '—'}/${selecionado.componente ?? '—'}`}
           favorecidoNome={fornecedores.find(f => f.id === selecionado.favorecidoId)?.nome ?? null}
+        />
+      )}
+      {/* MESMO dialogo, outro writer. O que muda e' o titulo, o teto (o saldo, nao o
+          valor cheio) e para onde o submit vai — a mecanica de parcelas e' identica e
+          duplicar o componente so criaria dois lugares para consertar. */}
+      {saldoAlvo && (
+        <ProgramarDialog
+          onClose={() => setSaldoAlvo(null)} onSubmit={acrescentar} saving={saving}
+          clienteId={clienteId} valorCompromisso={saldoAlvo.valorCompromisso}
+          valorAcordado={valorAcordado} totalComprometido={resumoOperacao?.obrigacaoTotal ?? 0}
+          saldoAProgramar={saldoAlvo.saldoAProgramar}
+          identificacao={identidadeCompromisso(saldoAlvo)}
+          naturezaComponente={`${saldoAlvo.natureza ?? '—'}/${saldoAlvo.componente ?? '—'}`}
+          favorecidoNome={fornecedores.find(f => f.id === saldoAlvo.favorecidoId)?.nome ?? null}
+          titulo="Programar saldo"
         />
       )}
       {confirmarParcela && (
@@ -973,10 +1018,11 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
 type LinhaParcela = { idLocal: string; valor: number | null; vencimento: string; contaId: string };
 
 function ProgramarDialog({ onClose, onSubmit, saving, clienteId, valorCompromisso, valorAcordado, totalComprometido,
-  saldoAProgramar, identificacao, naturezaComponente, favorecidoNome }: {
+  saldoAProgramar, identificacao, naturezaComponente, favorecidoNome, titulo = 'Programar parcelas' }: {
   onClose: () => void; onSubmit: (p: ProgramarParcelaInput[]) => void; saving: boolean;
   clienteId: string | null; valorCompromisso: number; valorAcordado: number | null; totalComprometido: number;
   saldoAProgramar: number; identificacao: string | null; naturezaComponente: string; favorecidoNome: string | null;
+  titulo?: string;
 }) {
   const { contas } = useContasBancariasLeves(clienteId);
   const idRef = useRef(0);
@@ -995,7 +1041,12 @@ function ProgramarDialog({ onClose, onSubmit, saving, clienteId, valorCompromiss
 
   const soma = useMemo(() => round2(linhas.reduce((s, l) => s + (l.valor ?? 0), 0)), [linhas]);
   const todasComValor = linhas.length > 0 && linhas.every(l => l.valor != null && l.valor > 0);
-  const tetoCompromisso = round2(valorCompromisso);
+  /* ⚠ O TETO E' O SALDO, NAO O VALOR CHEIO. Acrescentando a uma programacao que ja
+     consome parte do compromisso, medir contra `valorCompromisso` deixaria a tela
+     aceitar uma soma que o writer recusa — o backend compara Sigma novo + Sigma
+     existente contra o valor total. Na PRIMEIRA programacao os dois numeros sao o
+     mesmo (nada foi programado ainda), entao este teto vale para os dois caminhos. */
+  const tetoCompromisso = round2(saldoAProgramar);
   const podeSubmeter = todasComValor && soma <= tetoCompromisso && !saving;
   const restanteOC = (valorAcordado ?? 0) - totalComprometido;
   const restanteCompromisso = round2(tetoCompromisso - soma);
@@ -1043,7 +1094,7 @@ function ProgramarDialog({ onClose, onSubmit, saving, clienteId, valorCompromiss
               o operador nao sabia qual estava programando sem fechar e reabrir.
               ITEM 9 — mesma faixa azul do Novo compromisso e do CompraModalShell. */}
           <DialogHeader className="-mx-6 -mt-6 mb-1 space-y-0 bg-primary px-6 py-3">
-            <DialogTitle className="text-[15px] text-primary-foreground">Programar parcelas</DialogTitle>
+            <DialogTitle className="text-[15px] text-primary-foreground">{titulo}</DialogTitle>
             <DialogDescription className="text-[11px] text-primary-foreground/80">
               {identificacao ?? naturezaComponente} · {brl(valorCompromisso)}
               {identificacao ? ` · ${naturezaComponente}` : ''}
@@ -1086,7 +1137,13 @@ function ProgramarDialog({ onClose, onSubmit, saving, clienteId, valorCompromiss
               <Plus className="h-3.5 w-3.5 mr-1" /> Adicionar parcela
             </Button>
             {soma > tetoCompromisso && (
-              <div className="text-[11px] text-destructive">A soma das parcelas excede o valor do compromisso.</div>
+              /* Diz o numero e o que fazer, nao so que esta errado — mesmo criterio do
+                 aviso de base coberta (d9aae3aa): a mensagem do backend continua sendo
+                 a do backend, e aqui se orienta antes de chegar la. */
+              <div className="text-[11px] text-destructive leading-snug">
+                As parcelas somam {brl(soma)} e só há {brl(tetoCompromisso)} a programar neste
+                compromisso. Reduza o valor ou remova uma parcela.
+              </div>
             )}
           </div>
           <DialogFooter>

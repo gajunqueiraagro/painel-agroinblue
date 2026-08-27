@@ -125,10 +125,24 @@ export interface ProgramarCompromissoPayload {
   condicoes?: string | null;
   parcelas: ProgramarParcelaInput[];
 }
+/* PR-OC-FIN-PARCELAS-01 — acrescentar parcelas a programacao ATIVA.
+   ⚠ SEM `sequencia`: quem numera e' o SERVIDOR, a partir de max+1 da propria
+   programacao. Mandar sequencia daqui seria adivinhar um numero que o writer
+   descarta — por isso o tipo nao a oferece. */
+export interface AcrescentarParcelaInput {
+  valor: number;
+  vencimento?: string | null;
+  conta_bancaria_id?: string | null;
+  forma?: string | null;
+}
+export interface AcrescentarParcelasPayload {
+  parcelas: AcrescentarParcelaInput[];
+}
 
 // ── Resultados dos writers (IDs OBRIGATÓRIOS no sucesso — validados; nunca nulláveis) ─────────────
 export interface CriarCompromissoResultado { operacaoVersao: number; compromissoId: string; }
 export interface ProgramarCompromissoResultado { operacaoVersao: number; programacaoId: string; parcelaIds: string[]; }
+export interface AcrescentarParcelasResultado { operacaoVersao: number; programacaoId: string; parcelaIds: string[]; somaProgramada: number; }
 export interface MaterializarResultado { operacaoVersao: number; parcelaId: string; parteId: string; tituloId: string; }
 
 export interface OcCompromissosApi {
@@ -141,6 +155,7 @@ export interface OcCompromissosApi {
   // writers: NUNCA retornam null; lançam OcCompromissoError tipado em falha.
   criarCompromisso: (versaoEsperada: number, payload: CriarCompromissoPayload) => Promise<CriarCompromissoResultado>;
   programarCompromisso: (versaoEsperada: number, compromissoId: string, payload: ProgramarCompromissoPayload) => Promise<ProgramarCompromissoResultado>;
+  acrescentarParcelas: (versaoEsperada: number, compromissoId: string, payload: AcrescentarParcelasPayload) => Promise<AcrescentarParcelasResultado>;
   materializarParcela: (versaoEsperada: number, programacaoId: string, parcelaId: string) => Promise<MaterializarResultado>;
   recarregar: () => Promise<void>;
 }
@@ -237,6 +252,25 @@ function mapProgramarCompromissoResultado(data: unknown): ProgramarCompromissoRe
   }
   return { operacaoVersao: versaoRet, programacaoId: programacao.id, parcelaIds };
 }
+/* Envelope proprio: `parcelas_criadas` traz SO as novas, e `soma_programada` e' a
+   soma resultante que o writer calculou — a tela nao a recalcula. */
+function mapAcrescentarParcelasResultado(data: unknown): AcrescentarParcelasResultado {
+  if (!isRecord(data)) throw respostaInvalida('acrescentar parcelas');
+  const versaoRet = data.operacao_versao;
+  const programacaoId = data.programacao_id;
+  const criadas = data.parcelas_criadas;
+  if (!versaoRetornoValida(versaoRet)) throw respostaInvalida('acrescentar parcelas');
+  if (!idStringNaoVazio(programacaoId)) throw respostaInvalida('acrescentar parcelas');
+  if (!Array.isArray(criadas) || criadas.length === 0) throw respostaInvalida('acrescentar parcelas');
+  const parcelaIds: string[] = [];
+  for (const p of criadas) {
+    if (!isRecord(p) || !idStringNaoVazio(p.id)) throw respostaInvalida('acrescentar parcelas');
+    parcelaIds.push(p.id);
+  }
+  const soma = Number(data.soma_programada);
+  return { operacaoVersao: versaoRet, programacaoId, parcelaIds, somaProgramada: Number.isFinite(soma) ? soma : 0 };
+}
+
 function mapMaterializarResultado(data: unknown): MaterializarResultado {
   if (!isRecord(data)) throw respostaInvalida('materializar parcela');
   const versaoRet = data.operacao_versao;
@@ -423,6 +457,35 @@ export function useOcCompromissos({ operacaoId, clienteId, enabled }: Params): O
     } finally { setSaving(false); }
   }, [operacaoId, clienteId, carregar]);
 
+  /* Irma de `programarCompromisso`, mesmo idioma ponta a ponta: exige versao valida,
+     normaliza o erro do banco, propaga a versao nova e recarrega. A diferenca esta no
+     writer, nao aqui — este acrescenta a programacao ATIVA e nunca cria uma segunda. */
+  const acrescentarParcelas = useCallback(async (versaoEsperada: number, compromissoId: string, payload: AcrescentarParcelasPayload): Promise<AcrescentarParcelasResultado> => {
+    if (!operacaoId || !clienteId) {
+      const err = new OcCompromissoError('operacao_inexistente', 'Operação não iniciada.');
+      toast.error(err.message); throw err;
+    }
+    exigirVersaoValida(versaoEsperada);
+    setSaving(true);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: RPC fora de types.ts
+      const { data, error } = await (supabase as any).rpc('oc_acrescentar_parcelas', {
+        p_operacao_id: operacaoId, p_versao_esperada: versaoEsperada, p_compromisso_id: compromissoId, p_payload: payload,
+      });
+      if (error) throw normalizarErroRpc(error);
+      const resultado = mapAcrescentarParcelasResultado(data);
+      setVersao((atual) => Math.max(atual ?? 0, resultado.operacaoVersao));
+      toast.success('Parcelas acrescentadas.');
+      await carregar();
+      return resultado;
+    } catch (e) {
+      const normalizado = e instanceof OcCompromissoError ? e : new OcCompromissoError('erro_desconhecido', e instanceof Error ? e.message : 'Falha ao acrescentar parcelas.');
+      toast.error(normalizado.message);
+      if (normalizado.code === 'versao_conflito') await carregar();
+      throw normalizado;
+    } finally { setSaving(false); }
+  }, [operacaoId, clienteId, carregar]);
+
   const materializarParcela = useCallback(async (versaoEsperada: number, programacaoId: string, parcelaId: string): Promise<MaterializarResultado> => {
     if (!operacaoId || !clienteId) {
       const err = new OcCompromissoError('operacao_inexistente', 'Operação não iniciada.');
@@ -451,7 +514,7 @@ export function useOcCompromissos({ operacaoId, clienteId, enabled }: Params): O
 
   return useMemo(() => ({
     resumoOperacao, compromissos, parcelas, versao, loading, saving,
-    criarCompromisso, programarCompromisso, materializarParcela, recarregar: carregar,
+    criarCompromisso, programarCompromisso, acrescentarParcelas, materializarParcela, recarregar: carregar,
   }), [resumoOperacao, compromissos, parcelas, versao, loading, saving,
-    criarCompromisso, programarCompromisso, materializarParcela, carregar]);
+    criarCompromisso, programarCompromisso, acrescentarParcelas, materializarParcela, carregar]);
 }
