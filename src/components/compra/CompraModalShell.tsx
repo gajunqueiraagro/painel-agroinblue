@@ -175,7 +175,13 @@ export function CompraModalShell(api: CompraModalShellProps) {
   const temRecebimentoAtivo = (api.recebimentoApi?.movimentacoes ?? [])
     .some(m => m.cancelado !== true);
   const permissoes: CompraPermissoesPorEixo = {
-    negociacaoReadOnly: !!api.somenteLeitura || temRecebimentoAtivo,
+    /* ⚠ VOLTOU a ser so `somenteLeitura`. Em 376aa17d o recebimento ativo
+       trancava a aba INTEIRA — era o unico jeito de nao oferecer edicao que o
+       banco recusa. Agora `oc_salvar_lotes` aceita corrigir criterio e valor com
+       recebimento registrado, entao trancar tudo passaria a esconder uma edicao
+       LEGITIMA. O congelamento do fisico virou granular, via `fisicoBloqueado`
+       na grade de lotes. */
+    negociacaoReadOnly: !!api.somenteLeitura,
     // PR-OC-CONSOLIDACAO-A2 — Recebimento opera em operação existente elegível: gate depende SÓ do eixo
     //   próprio (cancelada = RO). As demais travas (sem operação salva, status ≠ 'fechada', entrega
     //   encerrada) já são aplicadas dentro de AbaRecebimentoLotes; título materializado NÃO bloqueia a
@@ -308,6 +314,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
               operacaoPronta={!!api.ocOperacaoId}
               lotesApi={api.lotesApi}
               somenteLeitura={permissoes.negociacaoReadOnly}
+              fisicoBloqueado={temRecebimentoAtivo}
               onVoltarCompra={() => setAbaAtiva('compra')}
             />
           ) : abaAtiva === 'recebimento' && api.recebimentoApi ? (
@@ -367,16 +374,17 @@ export function CompraModalShell(api: CompraModalShellProps) {
                 </div>
                 {/* PR-OC-HOMOLOG-01 item 3 — edição da data liberada quando não há registros financeiros;
                     bloqueada (via negociacaoReadOnly = título materializado / fechada / cancelada) com aviso. */}
-                {permissoes.negociacaoReadOnly && (
-                  /* DUAS CAUSAS, DOIS TEXTOS. Bloqueio por RECEBIMENTO e por
-                     TITULO/status sao coisas diferentes e pedem saidas
-                     diferentes: um se resolve estornando o recebimento aqui
-                     mesmo, o outro exige ajuste historico. Reaproveitar a frase
-                     mandaria o usuario para o caminho errado. */
+                {(permissoes.negociacaoReadOnly || temRecebimentoAtivo) && (
+                  /* DUAS CAUSAS, DOIS TEXTOS, e a diferenca agora e' maior: com
+                     recebimento o usuario PODE corrigir criterio e valor ali
+                     mesmo — manda-lo estornar seria desfazer movimentacao de
+                     rebanho a toa, que e' justamente o que bate no guard P1 de
+                     mes fechado. O estorno so e' necessario para o FISICO.
+                     ⚠ `somenteLeitura` tem precedencia: ali nada e editavel. */
                   temRecebimentoAtivo && !api.somenteLeitura ? (
                     <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">
-                      Esta compra já teve recebimento registrado. Para renegociar os lotes,
-                      estorne o recebimento primeiro.
+                      Esta compra já teve recebimento registrado. É possível corrigir critério e
+                      valor; para alterar categoria, quantidade ou peso, estorne o recebimento.
                     </p>
                   ) : (
                     <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">

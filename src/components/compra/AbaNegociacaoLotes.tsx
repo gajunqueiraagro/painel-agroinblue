@@ -22,6 +22,12 @@ interface Props {
   operacaoPronta?: boolean;      // já existe operacao_id (salvo na aba Compra)
   lotesApi?: CompraLotesApi;
   somenteLeitura?: boolean;      // OPEN-01: abertura de operação existente — grade read-only
+  /** Recebimento ativo: o FISICO congela (categoria, quantidade, peso) e some o
+      botao de adicionar/remover lote, mas CRITERIO e VALOR seguem editaveis.
+      ⚠ `somenteLeitura` TEM PRECEDENCIA: com ele tudo trava, sem excecao. Os
+      dois nao sao alternativos — um e' "a operacao inteira esta fechada", o
+      outro e' "o fisico ja aconteceu". */
+  fisicoBloqueado?: boolean;
   onVoltarCompra?: () => void;   // navegar de volta à aba Compra
 }
 
@@ -94,11 +100,14 @@ function ValorInput({ value, onChange, disabled, placeholder }: {
 
 export function AbaNegociacaoLotes({
   categoria, categoriasDisponiveis, quantidadeNum, pesoKgNum, darkSelectClass,
-  modoOC, operacaoPronta, lotesApi, somenteLeitura, onVoltarCompra,
+  modoOC, operacaoPronta, lotesApi, somenteLeitura, fisicoBloqueado, onVoltarCompra,
 }: Props) {
   // ── MODO OC: grade editável de múltiplos lotes ──
   if (modoOC && lotesApi) {
     const { lotes, adicionarLote, editarLote, removerLote, totais, loading } = lotesApi;
+    /* Um so lugar decide o congelamento do fisico, para as tres colunas nao
+       divergirem entre si numa edicao futura. */
+    const fisicoRO = !!somenteLeitura || !!fisicoBloqueado;
     return (
       <div className="rounded-md border bg-card p-2 shadow-sm space-y-1 min-w-0">
         <div className="flex items-center justify-between gap-2">
@@ -106,7 +115,7 @@ export function AbaNegociacaoLotes({
             <div className="text-[12px] font-semibold text-foreground">Negociação dos Lotes</div>
             <div className="text-[11px] text-muted-foreground">Cadastre, edite e precifique cada lote da compra.</div>
           </div>
-          {!somenteLeitura && (
+          {!fisicoRO && (
             <Button type="button" variant="outline" size="sm" disabled={!operacaoPronta} onClick={adicionarLote}
               className="h-7 text-[11px] gap-1" title={operacaoPronta ? undefined : 'Salve a operação na aba Compra primeiro'}>
               <Plus className="h-3 w-3" /> Adicionar lote
@@ -138,14 +147,14 @@ export function AbaNegociacaoLotes({
                 return (
                   <div key={l.idLocal} className="rounded-md border bg-muted/20 px-1 py-0.5">
                     <div className={`${GRID_OC} items-center`}>
-                      <Select value={l.categoria || undefined} onValueChange={v => editarLote(l.idLocal, { categoria: v })} disabled={somenteLeitura}>
+                      <Select value={l.categoria || undefined} onValueChange={v => editarLote(l.idLocal, { categoria: v })} disabled={fisicoRO}>
                         <SelectTrigger className="h-6 text-[11px]"><SelectValue placeholder="Categoria" /></SelectTrigger>
                         <SelectContent className={`${darkSelectClass} max-h-[70vh] overflow-y-auto`}>
                           {categoriasDisponiveis.map(c => <SelectItem key={c.value} value={c.value} className="text-[11px] py-1">{c.label}</SelectItem>)}
                         </SelectContent>
                       </Select>
-                      <Input inputMode="numeric" value={l.quantidade} onChange={e => editarLote(l.idLocal, { quantidade: e.target.value })} placeholder="0" disabled={somenteLeitura} className="h-6 text-[11px] text-right tabular-nums" />
-                      <Input inputMode="decimal" value={l.pesoMedioKg} onChange={e => editarLote(l.idLocal, { pesoMedioKg: e.target.value })} placeholder="0,00" disabled={somenteLeitura} className="h-6 text-[11px] text-right tabular-nums" />
+                      <Input inputMode="numeric" value={l.quantidade} onChange={e => editarLote(l.idLocal, { quantidade: e.target.value })} placeholder="0" disabled={fisicoRO} className="h-6 text-[11px] text-right tabular-nums" />
+                      <Input inputMode="decimal" value={l.pesoMedioKg} onChange={e => editarLote(l.idLocal, { pesoMedioKg: e.target.value })} placeholder="0,00" disabled={fisicoRO} className="h-6 text-[11px] text-right tabular-nums" />
                       <div className="text-[11px] text-right tabular-nums text-muted-foreground">{fmtKg(pt)}</div>
                       <Select value={l.criterioValor} onValueChange={v => editarLote(l.idLocal, { criterioValor: v as CriterioValor })} disabled={somenteLeitura}>
                         <SelectTrigger className="h-6 text-[11px]"><SelectValue /></SelectTrigger>
@@ -156,7 +165,7 @@ export function AbaNegociacaoLotes({
                       <ValorInput value={l.valorInformado} onChange={v => editarLote(l.idLocal, { valorInformado: v })} placeholder={unidade} disabled={somenteLeitura} />
                       <div className="text-[11px] text-right tabular-nums font-semibold">{brl(loteTotal(l.criterioValor, l.quantidade, l.pesoMedioKg, l.valorInformado))}</div>
                       <div className="text-center">
-                        {!somenteLeitura && (
+                        {!fisicoRO && (
                           <button type="button" onClick={() => removerLote(l.idLocal)} className="text-muted-foreground/60 hover:text-destructive" aria-label="Remover lote">
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
