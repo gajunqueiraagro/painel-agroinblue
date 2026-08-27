@@ -20,7 +20,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
 import { DatePicker } from '@/components/ui/date-picker';
-import { MoreVertical, Search, Eye, Filter, Ban, Undo2 } from 'lucide-react';
+import { MoreVertical, Search, Eye, Filter, Ban, Undo2, ArrowUp, ArrowDown } from 'lucide-react';
 
 // Central de Operações Comerciais — PR-OC-CENTRAL-UX-01 (UX/operacional; sem backend novo).
 //   Lê em LOTE (ZERO N+1): operações + 3 views soberanas + nomes, filtradas por cliente, mapeadas por
@@ -93,7 +93,7 @@ const LIQ_TOM: Record<string, string> = {
   quitada: TOM_SUCESSO,
   parcial: TOM_ATENCAO,
   excedente: TOM_ATENCAO_FORTE,
-  nao_iniciada: TOM_NEUTRO,
+  nao_liquidada: TOM_NEUTRO,
   em_aberto: TOM_NEUTRO,
   base_indefinida: TOM_NEUTRO,
   sem_base: TOM_NEUTRO,
@@ -109,16 +109,94 @@ function finResumo(f: FinRow | undefined): { valor: number; rotulo: string; modo
   return { valor: 0, rotulo: '', modo: f.modo };
 }
 
-/* ⚠ `nao_iniciada` deixou de imprimir '—'. A view SABE que nao houve liquidacao:
+/* ⚠ `nao_liquidada` deixou de imprimir '—'. A view SABE que nao houve liquidacao:
    isso e' fato, e '—' e' reservado a dado ausente/desconhecido. Trocar os dois
-   faz o operador ler "nao sei" onde a resposta existe. */
+   faz o operador ler "nao sei" onde a resposta existe.
+
+   ⚠ A CHAVE ERA `nao_iniciada` E NUNCA DISPARAVA. `nao_iniciada` e' o valor
+   INTERNO de _oc_estado_liquidacao; a view o renomeia antes de publicar
+   (`WHEN 'nao_iniciada' THEN 'nao_liquidada'`, 20260722120000). Com a chave
+   errada aqui, o rotulo com til ficava inerte e a celula caia no fallback,
+   imprimindo "Nao liquidada" sem acento; o tom vinha do `?? TOM_NEUTRO`, certo
+   por acidente. Vocabulario publicado desta view, medido no banco:
+   nao_liquidada | parcial | quitada | excedente | base_indefinida.
+   `em_aberto` e `sem_base` ficam como entradas inertes de outra fonte. */
 const LIQ_LABEL: Record<string, string> = {
   quitada: 'Liquidada', parcial: 'Parcial', excedente: 'Excedente',
-  nao_iniciada: 'Não liquidada', base_indefinida: 'Base indefinida', sem_base: 'Base indefinida', em_aberto: 'Em aberto',
+  nao_liquidada: 'Não liquidada', base_indefinida: 'Base indefinida', sem_base: 'Base indefinida', em_aberto: 'Em aberto',
 };
 function liqLabel(estado: string | null | undefined): string {
   if (!estado) return '—';
   return LIQ_LABEL[estado] ?? (estado.charAt(0).toUpperCase() + estado.slice(1).replace(/_/g, ' '));
+}
+
+/* ORDEM DOS EIXOS POR GRAVIDADE, nunca alfabetica: alfabetica poria "Liquidada"
+   antes de "Nao liquidada" e faria o operador ler a lista ao contrario do risco.
+   Crescente = do menos resolvido ao mais resolvido. Mapa EXPLICITO de posicao —
+   nada inferido do nome do estado.
+
+   AS CHAVES SAO O VOCABULARIO PUBLICADO, conferido no banco, nao o interno:
+   - comercial: CHECK da tabela — programada | fechada | cancelada;
+   - liquidacao: a view publica nao_liquidada | parcial | quitada | excedente |
+     base_indefinida. `nao_iniciada` e `em_aberto` NAO sao publicados por ela
+     (`nao_iniciada` e' o valor interno, renomeado na view) e por isso ficam fora;
+   - recebimento: a chave e' o rotulo do ROLLUP (recStatus), nao o estado por lote
+     da view — a view so tem nao_iniciado|completo, e quem a Central mostra e o
+     rollup. Os CINCO rotulos que ele emite estao mapeados.
+
+   DIVERGENCIA ANTES DO QUE JA FECHOU, nos dois eixos: `excedente` vem antes de
+   `quitada` e `Diferenca` antes de `Concluido`. Quem diverge precisa ser visto;
+   quem fechou pode esperar. `base_indefinida` fica logo depois de nao_liquidada:
+   a base do calculo e' desconhecida, entao nao ha o que dar por resolvido. */
+const ORD_COMERCIAL: Record<string, number> = { programada: 1, fechada: 2, cancelada: 3 };
+const ORD_RECEBIMENTO: Record<string, number> = {
+  'Não iniciado': 1, Parcial: 2, Diferença: 3, Concluído: 4, Encerrado: 5,
+};
+const ORD_LIQUIDACAO: Record<string, number> = {
+  nao_liquidada: 1, base_indefinida: 2, parcial: 3, excedente: 4, quitada: 5,
+};
+// Rede de seguranca, nao rotina: hoje os tres mapas cobrem todo o vocabulario.
+//   Vale para estado NOVO que a fonte passe a emitir sem passar por aqui.
+const FIM_DA_ESCALA = 99;
+
+/* Estado AUSENTE (null/vazio) → null, que a comparacao joga para o fim nas duas
+   direcoes. Estado CONHECIDO fora do mapa → fim da escala, mas ainda ordenavel:
+   ausencia e desconhecimento sao coisas diferentes e nao se confundem aqui. */
+function posicao(mapa: Record<string, number>, estado: string | null | undefined): number | null {
+  if (estado == null || estado === '') return null;
+  return mapa[estado] ?? FIM_DA_ESCALA;
+}
+
+type ColunaOrd =
+  | 'oc' | 'data' | 'tipo' | 'contraparte' | 'fazenda' | 'animais'
+  | 'valor' | 'comercial' | 'recebimento' | 'financeiro' | 'liquidacao';
+interface Ordenacao { col: ColunaOrd; dir: 'asc' | 'desc'; }
+
+/* Cabecalho ordenavel. O `th` INTEIRO e' a area de clique (o onClick no th pega
+   tambem o padding, o que um button interno nao pegaria). A seta so aparece na
+   coluna ativa; sobre o azul opaco ela herda text-primary-foreground, e o realce
+   de hover e' o mesmo `primary-foreground/10` que o resto do /v2 usa sobre azul.
+   AÇÕES nao usa este componente: nao ordena, nao tem cursor nem seta. */
+function ThOrd({ col, rotulo, ord, onOrdenar, direita }: {
+  col: ColunaOrd; rotulo: string; ord: Ordenacao | null;
+  onOrdenar: (col: ColunaOrd) => void; direita?: boolean;
+}) {
+  const dirAtiva = ord && ord.col === col ? ord.dir : null;
+  return (
+    <TableHead
+      className={`${TH}${direita ? ' text-right' : ''} cursor-pointer select-none hover:bg-primary-foreground/10`}
+      onClick={() => onOrdenar(col)}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOrdenar(col); } }}
+      tabIndex={0}
+      aria-sort={dirAtiva === 'asc' ? 'ascending' : dirAtiva === 'desc' ? 'descending' : 'none'}
+    >
+      <span className="inline-flex items-center gap-0.5">
+        {rotulo}
+        {dirAtiva === 'asc' && <ArrowUp className="h-2.5 w-2.5" />}
+        {dirAtiva === 'desc' && <ArrowDown className="h-2.5 w-2.5" />}
+      </span>
+    </TableHead>
+  );
 }
 
 function BadgeComercial({ status, rascunho }: { status: string; rascunho: boolean }) {
@@ -172,6 +250,9 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
   const [dtIni, setDtIni] = useState('');   // '' = sem limite naquela ponta
   const [dtFim, setDtFim] = useState('');
   const [mostrarRascunhos, setMostrarRascunhos] = useState(false);
+  /* null = ordem PADRAO (a que veio do banco, data_operacao desc) e TERCEIRO
+     estado do ciclo asc -> desc -> padrao. Uma coluna ativa por vez. */
+  const [ord, setOrd] = useState<Ordenacao | null>(null);
   const [page, setPage] = useState(1);
 
   // Ação de escrita (menu): cancelar/reabrir com motivo obrigatório e saving anti-duplo-clique.
@@ -283,15 +364,69 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
     });
   }, [rows, busca, fTipo, fComercial, fFazenda, fLiquidacao, fRecebimento, dtIni, dtFim, mostrarRascunhos, contrapartes, liqMap, recMap]);
 
-  const totalPages = Math.max(1, Math.ceil(filtradas.length / PAGE_SIZE));
-  const pageSafe = Math.min(page, totalPages);
-  const pageRows = filtradas.slice((pageSafe - 1) * PAGE_SIZE, pageSafe * PAGE_SIZE);
-  useEffect(() => { setPage(1); }, [busca, fTipo, fComercial, fFazenda, fLiquidacao, fRecebimento, dtIni, dtFim, mostrarRascunhos]);
-
   const nomeContraparte = (r: OpRow) => (r.contraparte_id ? contrapartes[r.contraparte_id] ?? '—' : '—');
   const fazendaRef = (r: OpRow): FazendaRef | null => (r.fazenda_id ? fazendas[r.fazenda_id] ?? null : null);
   const nomeFazenda = (r: OpRow) => fazendaRef(r)?.nome ?? '—';
   const siglaFazenda = (r: OpRow) => { const f = fazendaRef(r); return f ? (f.codigo ?? f.nome) : '—'; };
+
+  const alternarOrd = (col: ColunaOrd) => setOrd(atual =>
+    atual?.col !== col ? { col, dir: 'asc' }
+    : atual.dir === 'asc' ? { col, dir: 'desc' }
+    : null);
+
+  /* ORDENA `filtradas` INTEIRA, ANTES da paginacao. Ordenar so a pagina visivel
+     mostraria "o maior valor" que e' apenas o maior daquelas 25 linhas — mentira.
+     Nada aqui toca o fetch: a leitura em lote continua identica, isto e' memoria.
+     Copia antes de `sort` (filtradas e' resultado de memo, nao se mutila).
+     `sort` estavel: empate mantem a ordem padrao que veio do banco.
+     A CHAVE E' SEMPRE O QUE A CELULA MOSTRA — nome da contraparte e nao o uuid,
+     codigo da fazenda e nao o id, valor do financeiro e nao o rotulo. */
+  const ordenadas = useMemo(() => {
+    if (!ord) return filtradas;
+    const chave = (r: OpRow): string | number | null => {
+      switch (ord.col) {
+        case 'oc': return r.id;
+        // Cronologica de verdade: 'yyyy-MM-dd' vira 20260731 (numero), sem Date e
+        //   sem fuso no meio. Data vazia/invalida e' ausencia.
+        case 'data': {
+          const n = Number((r.data_operacao ?? '').replace(/-/g, ''));
+          return Number.isFinite(n) && n > 0 ? n : null;
+        }
+        case 'tipo': return TIPO_LABEL[r.tipo_operacao] ?? r.tipo_operacao ?? null;
+        case 'contraparte': return (r.contraparte_id ? contrapartes[r.contraparte_id] : null) ?? null;
+        case 'fazenda': { const f = fazendaRef(r); return f ? (f.codigo ?? f.nome) : null; }
+        case 'animais': return r.qtd_negociada ?? null;
+        case 'valor': return r.valor_acordado ?? r.valor_total ?? null;
+        case 'comercial': return posicao(ORD_COMERCIAL, r.status_comercial);
+        case 'recebimento': return posicao(ORD_RECEBIMENTO, recStatus(recMap[r.id], r.entrega_encerrada));
+        // Mesmo criterio da celula: ela so imprime valor quando fin.valor > 0;
+        //   fora disso mostra '—', e '—' ordena como ausencia.
+        case 'financeiro': { const f = finResumo(finMap[r.id]); return f && f.valor > 0 ? f.valor : null; }
+        case 'liquidacao': return posicao(ORD_LIQUIDACAO, liqMap[r.id]?.estado_liquidacao);
+      }
+    };
+    const dir = ord.dir === 'asc' ? 1 : -1;
+    return [...filtradas].sort((a, b) => {
+      const ka = chave(a), kb = chave(b);
+      /* AUSENCIA POR ULTIMO NAS DUAS DIRECOES. Nulo nao e' menor nem maior — e'
+         ausencia, e ausencia fica por ultimo em qualquer leitura. E' por isso que
+         estes tres retornos ficam FORA da multiplicacao por `dir`. */
+      if (ka === null && kb === null) return 0;
+      if (ka === null) return 1;
+      if (kb === null) return -1;
+      const base = typeof ka === 'number' && typeof kb === 'number'
+        ? ka - kb
+        : String(ka).localeCompare(String(kb), 'pt-BR');
+      return base * dir;
+    });
+  }, [filtradas, ord, contrapartes, fazendas, finMap, liqMap, recMap]);
+
+  const totalPages = Math.max(1, Math.ceil(ordenadas.length / PAGE_SIZE));
+  const pageSafe = Math.min(page, totalPages);
+  const pageRows = ordenadas.slice((pageSafe - 1) * PAGE_SIZE, pageSafe * PAGE_SIZE);
+  // Reordenar volta para a pagina 1 pelo mesmo motivo que filtrar volta: pagina 3
+  //   de uma lista reordenada e' um recorte sem sentido.
+  useEffect(() => { setPage(1); }, [busca, fTipo, fComercial, fFazenda, fLiquidacao, fRecebimento, dtIni, dtFim, mostrarRascunhos, ord]);
 
   // Abertura soberana por tipo (Compra → SPA via parent; venda/abate ainda indisponíveis na Central).
   const abrirOperacaoPorTipo = (r: OpRow) => {
@@ -443,17 +578,17 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
           </colgroup>
           <TableHeader className="sticky top-0 z-10 bg-primary">
             <TableRow className="hover:bg-primary">
-              <TableHead className={TH}>OC</TableHead>
-              <TableHead className={TH}>Data</TableHead>
-              <TableHead className={TH}>Tipo</TableHead>
-              <TableHead className={TH}>Contraparte</TableHead>
-              <TableHead className={TH}>Fazenda</TableHead>
-              <TableHead className={`${TH} text-right`}>Animais</TableHead>
-              <TableHead className={`${TH} text-right`}>Valor</TableHead>
-              <TableHead className={TH}>Comercial</TableHead>
-              <TableHead className={TH}>Recebimento</TableHead>
-              <TableHead className={TH}>Financeiro</TableHead>
-              <TableHead className={TH}>Liquidação</TableHead>
+              <ThOrd col="oc" rotulo="OC" ord={ord} onOrdenar={alternarOrd} />
+              <ThOrd col="data" rotulo="Data" ord={ord} onOrdenar={alternarOrd} />
+              <ThOrd col="tipo" rotulo="Tipo" ord={ord} onOrdenar={alternarOrd} />
+              <ThOrd col="contraparte" rotulo="Contraparte" ord={ord} onOrdenar={alternarOrd} />
+              <ThOrd col="fazenda" rotulo="Fazenda" ord={ord} onOrdenar={alternarOrd} />
+              <ThOrd col="animais" rotulo="Animais" ord={ord} onOrdenar={alternarOrd} direita />
+              <ThOrd col="valor" rotulo="Valor" ord={ord} onOrdenar={alternarOrd} direita />
+              <ThOrd col="comercial" rotulo="Comercial" ord={ord} onOrdenar={alternarOrd} />
+              <ThOrd col="recebimento" rotulo="Recebimento" ord={ord} onOrdenar={alternarOrd} />
+              <ThOrd col="financeiro" rotulo="Financeiro" ord={ord} onOrdenar={alternarOrd} />
+              <ThOrd col="liquidacao" rotulo="Liquidação" ord={ord} onOrdenar={alternarOrd} />
               <TableHead className={`${TH} text-right`}>Ações</TableHead>
             </TableRow>
           </TableHeader>
