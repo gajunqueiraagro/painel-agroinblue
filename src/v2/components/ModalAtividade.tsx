@@ -393,7 +393,7 @@ const BLOCOS_OPERACIONAL: Array<{ titulo: string; destino?: Assunto; linhas: Lin
    ⚠ Sinal e cor, nunca parenteses contabeis — deducoes, custeio, investimento,
    reposicao, juros e tributos sao SAIDAS, e os subtotais podem ser negativos. */
 const LINHAS_DRE: LinhaResumo[] = [
-  { rotulo: '1. Faturamento',              chave: 'dre_faturamento',   bag: 'dre', detalhe: true },
+  { rotulo: '1. (+) Faturamento',          chave: 'dre_faturamento',   bag: 'dre', detalhe: true },
   { rotulo: '2. (−) Deduções de receita',  chave: 'dre_deducoes',      bag: 'dre', saida: true },
   { rotulo: '= RECEITA LÍQUIDA',           chave: 'dre_receita_liquida', bag: 'dre', subtotal: true },
 
@@ -811,15 +811,26 @@ const rotuloDoMes = (ind: IndicadorAtividade, leitura: Leitura, mesAtual: number
    ⚠ `leading` EXPLICITO em cada nivel. Herdado, ele se recalcula por fonte e o
    custo em pixels deixa de ser previsivel antes de abrir a tela.
    ⚠ PISO A12 = 8px. A parcela para em 9px; abaixo disso o briefing manda PARAR.
-     ⚠ ESCADA DE LINHA 16 / 19 / 23 (a do subtotal ja inclui as duas bordas).
+     ⚠ ESCADA DE LINHA 14 / 16 / 20 (a do subtotal ja inclui as duas bordas).
      As quatro PARCELAS sairam da tabela e viraram modal por linha, entao hoje
-     NENHUMA linha do DRE cai no ramo do meio — ele fica para quem voltar. Com
-     15 linhas em vez de 19 sobrou espaco, e a fonte subiu: numerada 10 -> 12px,
-     subtotal 11 -> 15px. Conta contra o teto de 359px:
-       thead 20 + 8x19 + (19 + 11 do subtitulo) + 6x23 + 4x4 = 356px, folga 3px.
-     ⚠ Nao chega aos ~28px por linha do slide: aquilo pediria 484px, 125px alem
-     do que o miolo tem. Medido, reportado, e a escolha de ficar em 12/15 foi
-     do Gabriel.
+     NENHUMA linha do DRE cai no ramo do meio — ele fica para quem voltar.
+
+     ⚠⚠ A FONTE E LIMITADA PELA LARGURA, NAO PELA ALTURA. Na visao Mensal o
+     Indicador esta ANCORADO em 195px por `table-fixed`, e o rotulo mais longo
+     e '= LUCRO ANTES DOS TRIBUTOS'. Em 8b774cc0 o subtotal foi a 15px e
+     TRANSBORDOU, colidindo com a coluna de Janeiro na tela do Gabriel:
+       '= RECEITA LIQUIDAR$ 834,3K'  ·  '= LUCRO ANTES DOS TRIBUTOSR$ 1,7M'
+     Os 11px de agora nao sao estimativa: sao o valor que rodou em 5e1dca32 e
+     fb7df52c, COM os rotulos maiusculos ja em vigor e a coluna ja ancorada,
+     sem colisao. 12, 13 e 14px sao territorio NAO MEDIDO — subir para la exige
+     medir na tela antes, nao deduzir. Alargar a coluna nao e saida: 195 x 12
+     ja consome 1107px dos 1248 uteis, e alargar comprime os meses.
+
+     ⚠ FONTE MENOR NAO LIBERA ALTURA por si: o `leading` e explicito desde o
+     PR-02, entao trocar 15px por 11px mantendo leading 21 daria exatamente os
+     mesmos 355px. O ganho vem do LEADING, que aqui acompanha a fonte:
+       thead 19 + 8x16 + (16 + 10 do subtitulo) + 6x20 + 4x4 = 309px de 359,
+       folga 50px — e a faixa do rodape (~17px) cabe com 33px de sobra.
      As FONTES seguem em 9/10/11 DE PROPOSITO, e nao por falta de orcamento
      vertical: o limite e HORIZONTAL. A visao mensal ancora o Indicador em
      195px com `table-fixed`, e o rotulo mais longo ('= Resultado antes dos
@@ -833,9 +844,9 @@ const tipografiaDre = (l: LinhaResumo): string =>
      linha continua com 18px (16 + 1 + 1) e o orcamento nao mexe. A FONTE segue
      em 11px — 16/11 = 1,45, folgado para nao cortar altura de caractere.
      ⚠ Trocar por 17 devolve os 6px que estouram o teto de 343px. */
-  l.subtotal            ? 'text-[15px] leading-[21px]'
-  : (l.nivel ?? 0) > 0  ? 'text-[10px] leading-[16px]'
-                        : 'text-[12px] leading-[19px]';
+  l.subtotal            ? 'text-[11px] leading-[18px]'
+  : (l.nivel ?? 0) > 0  ? 'text-[9px] leading-[14px]'
+                        : 'text-[10px] leading-[16px]';
 
 const corDeValor = (l: LinhaResumo, v: number | null): string =>
   l.saida               ? 'text-destructive'
@@ -1138,7 +1149,7 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
                         linha nova custaria altura cheia e entraria no zebrado.
                         Sem `subtitulo` nenhum no' extra e emitido. */}
                     {l.subtitulo && (
-                      <span className="block text-[9px] leading-[11px] font-normal text-muted-foreground">
+                      <span className="block text-[9px] leading-[10px] font-normal text-muted-foreground">
                         {l.subtitulo}
                       </span>
                     )}
@@ -1251,7 +1262,7 @@ const TabelaMensalDre = ({ linhas, dre, modo, mesAtual, onDetalhe }: {
                 </button>
               )}
               {l.subtitulo && (
-                <span className="block text-[9px] leading-[11px] font-normal text-muted-foreground">
+                <span className="block text-[9px] leading-[10px] font-normal text-muted-foreground">
                   {l.subtitulo}
                 </span>
               )}
