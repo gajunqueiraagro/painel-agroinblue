@@ -889,7 +889,7 @@ const corDeValor = (l: LinhaResumo, v: number | null): string =>
   : v > 0               ? 'text-emerald-600 dark:text-emerald-400'
                         : 'text-red-600 dark:text-red-400';
 
-const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, leitura, mesAtual, colunas, onIr, realizadoPrimeiro, compacta, rotuloEstreito, corPorSinal, colunaPercentual, onDetalhe }: {
+const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, leitura, mesAtual, colunas, onIr, realizadoPrimeiro, compacta, rotuloEstreito, corPorSinal, onDetalhe }: {
   /* DUAS formas de entrada, um componente so:
        `linhas` + `colunas` -> divide por CONTAGEM, sem titulo. E o que as
                                tabelas dos ASSUNTOS usam.
@@ -926,14 +926,6 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
       linhas pelo sinal" alcancaria TODA linha das cinco outras abas, que nao
       tem nenhum dos dois campos, e pintaria o painel inteiro de verde. */
   corPorSinal?: boolean;
-  /** Emite a 5a coluna de %, sobre o VALOR BRUTO DA PRODUCAO, nas linhas
-      marcadas com `percentual`. OPT-IN: sem a prop nenhuma celula extra e
-      emitida e o `colSpan` nao muda, entao as cinco outras abas nao veem
-      diferenca.
-      ⚠ NAO existe na visao Mensal, e nao por esquecimento: la cada coluna e um
-      mes, e doze percentuais por linha seriam ilegiveis. A `TabelaMensalDre` e
-      componente separado e simplesmente nao tem esta coluna. */
-  colunaPercentual?: boolean;
   /** Abre o detalhe da linha marcada com `detalhe`. Sem a prop nenhum icone e
       emitido, e as cinco outras abas nem marcam o campo. */
   onDetalhe?: (l: LinhaResumo) => void;
@@ -1010,16 +1002,8 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
      ⚠ `truncate max-w-[180px]` continua valendo para quem NAO passa a prop —
      nas outras abas o rotulo divide espaco com ate quatro tabelas lado a lado
      e encolher ate o conteudo estouraria a grade. */
-  const nCols = 4 + (rotuloEstreito ? 1 : 0) + (colunaPercentual ? 1 : 0);
+  const nCols = rotuloEstreito ? 5 : 4;
 
-  /* A BASE do percentual e' UMA so para a tabela inteira — o VBP do mesmo
-     recorte —, entao e' lida uma vez e nao por linha. */
-  const vbpBase = colunaPercentual
-    ? (() => {
-        const i = dre.find(x => x.chave === 'dre_vbp');
-        return i ? (leitura === 'periodo' ? i.valorPeriodo : i.valorMes) : null;
-      })()
-    : null;
 
   /* Os ultimos 13px, e de onde eles saem — MEDIDOS no DOM, nao projetados.
      A area visivel do miolo e 367px e a tabela de 21 linhas media 380px.
@@ -1042,6 +1026,17 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
     const v = s.length >= 13 ? s[mes] : s[mes - 1];
     return v != null && !isNaN(v) ? v : null;
   };
+
+  /* AS DUAS BASES do percentual — realizado e meta —, lidas UMA vez para a
+     tabela inteira. O VBP da meta vem da serie de meta do proprio `dre_vbp`,
+     entao o % da meta e' "a meta sobre a base da meta", nao sobre a base do
+     realizado: comparar as duas colunas na vertical so faz sentido se cada uma
+     estiver dividida pela sua propria base. */
+  const vbpInd  = dre.find(x => x.chave === 'dre_vbp');
+  const vbpReal = vbpInd ? (leitura === 'periodo' ? vbpInd.valorPeriodo : vbpInd.valorMes) : null;
+  const vbpMeta = vbpInd
+    ? ponto(leitura === 'periodo' ? vbpInd.serieMetaPeriodo : vbpInd.serieMetaMes, mesAtual)
+    : null;
   /* Sem `blocos`, divide em N blocos VERTICAIS por contagem: o bloco 1 leva as
      primeiras linhas, nao as alternadas — a leitura de cima para baixo em cada
      bloco e' a que o olho espera numa tabela. */
@@ -1093,9 +1088,6 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
               {/* `whitespace-nowrap` + largura maior: em quatro colunas o `Dif.`
                   das Movimentacoes saia cortado contra a coluna seguinte. */}
               <th className={`text-right font-normal px-1.5 ${padTh} w-[64px] whitespace-nowrap`}>Dif.</th>
-              {colunaPercentual && (
-                <th className={`text-right font-normal px-1.5 ${padTh} w-[54px] whitespace-nowrap`}>%</th>
-              )}
               {rotuloEstreito && <th className="w-full p-0" aria-hidden />}
             </tr>
           </thead>
@@ -1153,6 +1145,23 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
               const metaV = ind ? ponto(per ? ind.serieMetaPeriodo : ind.serieMetaMes, mesAtual) : null;
               const dif = (real != null && metaV != null && metaV !== 0)
                 ? ((real - metaV) / metaV) * 100 : null;
+              /* MICRO-LINHA DE % — dentro da PROPRIA celula do subtotal, como
+                 uma segunda linha, e nao como <tr> novo.
+                 ⚠ E' o mesmo resultado visual que uma linha propria (rotulo a
+                 esquerda, % alinhado sob Realizado e sob Meta), mas sem custo
+                 estrutural: um <tr> extra entraria no `:nth-child` e deslocaria
+                 o ZEBRADO de tudo que vem abaixo dele — cinco vezes, uma por
+                 subtotal. Aqui a paridade das linhas nao muda.
+                 ⚠ Cada coluna divide pela SUA base: realizado sobre VBP
+                 realizado, meta sobre VBP meta. Dividir as duas pela mesma base
+                 faria a coluna Meta responder outra pergunta. */
+              const pctR = l.percentual ? pctSobreVbp(real, vbpReal) : null;
+              const pctM = l.percentual ? pctSobreVbp(metaV, vbpMeta) : null;
+              const microPct = (v: number | null) => (
+                <span className={'block text-[8px] leading-[10px] font-normal text-muted-foreground tabular-nums'}>
+                  {v != null ? `${v.toFixed(1)}%` : '—'}
+                </span>
+              );
               const clicavel = !!onIr && !!l.destino;
               /* As duas celulas do meio nascem aqui para que a ORDEM seja uma
                  decisao so, no JSX abaixo — cabecalho e corpo leem a mesma flag
@@ -1160,6 +1169,7 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
               const celMeta = (
                 <td className={`text-right ${padDe(l.subtotal)} px-1.5 text-meta whitespace-nowrap${tipo}${gap}`}>
                   {ind && metaV != null ? fmtValor(metaV, ind.formatoValor, ind.unidade) : '—'}
+                  {l.percentual && microPct(pctM)}
                 </td>
               );
               /* TRES regras de cor, e elas nao se misturam:
@@ -1175,6 +1185,7 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
                   : (l.subtotal && real != null && real < 0) ? 'text-destructive'
                   : 'text-foreground'}${tipo}${gap}`}>
                   {ind && real != null ? fmtValor(real, ind.formatoValor, ind.unidade) : '—'}
+                  {l.percentual && microPct(pctR)}
                 </td>
               );
               return (
@@ -1208,6 +1219,11 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
                         {l.subtitulo}
                       </span>
                     )}
+                    {l.percentual && (
+                      <span className={'block text-[8px] leading-[10px] font-normal text-muted-foreground tabular-nums'} style={{ paddingLeft: 10 }}>
+                        % sobre VBP
+                      </span>
+                    )}
                   </td>
                   {realizadoPrimeiro ? <>{celReal}{celMeta}</> : <>{celMeta}{celReal}</>}
                   {/* Verde/vermelho so aqui; a linha nunca tem fundo azul, entao
@@ -1226,18 +1242,10 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
                     : (l.saida ? dif < 0 : dif >= 0) ? 'text-emerald-600 dark:text-emerald-400'
                     : 'text-red-600 dark:text-red-400'}${tipo}${gap}`}>
                     {dif == null ? '—' : `${dif >= 0 ? '+' : ''}${dif.toFixed(1)}%`}
+                    {/* Espacador: sem ele a celula Dif. ficaria mais baixa que as
+                        vizinhas e o texto dela flutuaria no meio da linha. */}
+                    {l.percentual && <span className={'block text-[8px] leading-[10px] font-normal text-muted-foreground tabular-nums'}>&nbsp;</span>}
                   </td>
-                  {/* % do VBP. Cor SECUNDARIA e nao `corDeValor`: o subtotal na
-                      mesma linha ja esta colorido pelo sinal, e repetir a cor na
-                      celula vizinha duplicaria o mesmo aviso lado a lado. */}
-                  {colunaPercentual && (() => {
-                    const pct = l.percentual ? pctSobreVbp(real, vbpBase) : null;
-                    return (
-                      <td className={`text-right px-1.5 ${padDe(l.subtotal)} whitespace-nowrap tabular-nums text-muted-foreground${tipo}${gap}`}>
-                        {l.percentual ? (pct != null ? `${pct.toFixed(1)}%` : '—') : ''}
-                      </td>
-                    );
-                  })()}
                   {rotuloEstreito && <td className="p-0" />}
                 </tr>
               );
@@ -1266,6 +1274,57 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
    ja era. Quem escolhe a leitura e o toggle Por mes/Acumulado.
    ⚠ ZERO calculo: `serieMes` e `seriePeriodo` ja chegam prontas de `monta()`.
    Serie ausente vira travessao, nunca zero. */
+/* FAIXA DE INDICADORES DERIVADOS — depois do LUCRO LIQUIDO, fora da tabela.
+   ⚠ SAO DOIS, e nao tres. "Lucro por hectare" NAO existe no PC-100: ha quatro
+   R$/ha (`faturamentoHa`, `custoHa`, `investimentoHa`, `desembolsoHa`), todos
+   de `buildPorHa`, e nenhum de lucro. NAO derivar aqui: `buildPorHa` faz
+   somaFluxo / MEDIA da area, e reimplementar essa media num componente de
+   apresentacao criaria um segundo lugar onde "razao de agregados, nunca media
+   de razoes" pode divergir. O terceiro entra quando o PR do PC-100 subir.
+   ⚠ POR QUE DOIS MARKUPS: um mede quanto sobrou do custo de PRODUZIR, o outro
+   de TUDO que saiu do caixa. A diferenca entre os dois e o peso do investimento
+   e da reposicao no periodo.
+   ⚠ POR QUE O NUMERADOR E O RESULTADO OPERACIONAL, e nao o Lucro Liquido: ele
+   ja traz a variacao por producao embutida, que e o que corrige o gado comprado
+   e ainda nao vendido. Quando entra gado, a Reposicao subtrai o desembolso e a
+   variacao soma o valor — uma anula a outra. Sem isso o estoque parado
+   penalizaria o markup indevidamente.
+   ⚠ Denominador zero ou ausente -> TRAVESSAO, nunca 0%. */
+const FaixaDerivadosDre = ({ dre, leitura, mesAtual }: {
+  dre: IndicadorAtividade[];
+  leitura: Leitura;
+  mesAtual: number;
+}) => {
+  const ler = (chave: string): number | null => {
+    const i = dre.find(x => x.chave === chave);
+    return i ? (leitura === 'periodo' ? i.valorPeriodo : i.valorMes) : null;
+  };
+  const soma = (...chaves: string[]): number | null => {
+    let t = 0;
+    for (const c of chaves) { const v = ler(c); if (v == null) return null; t += v; }
+    return t;
+  };
+  const razao = (num: number | null, den: number | null): string =>
+    (num == null || den == null || den === 0) ? '—' : `${((num / den) * 100).toFixed(1)}%`;
+
+  const resOper = ler('dre_res_oper');
+  const custeio = soma('dre_custo_var', 'dre_custo_fixo');
+  const desemb  = soma('dre_custo_var', 'dre_custo_fixo', 'dre_investimento', 'dre_reposicao');
+
+  const item = (rot: string, val: string) => (
+    <span key={rot} className="whitespace-nowrap">
+      <span className="text-muted-foreground">{rot} </span>
+      <span className="tabular-nums font-medium text-foreground">{val}</span>
+    </span>
+  );
+  return (
+    <div className="flex flex-wrap items-baseline gap-x-4 gap-y-0.5 px-1.5 pt-1.5 text-[9px] leading-[14px]">
+      {item('Markup - custeio', razao(resOper, custeio))}
+      {item('Markup - desembolso', razao(resOper, desemb))}
+    </div>
+  );
+};
+
 const TabelaMensalDre = ({ linhas, dre, modo, mesAtual, onDetalhe }: {
   linhas: LinhaResumo[];
   dre: IndicadorAtividade[];
@@ -2149,7 +2208,7 @@ export function ModalAtividade({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
       <div
-        className="w-full max-w-7xl mx-4 rounded-lg border border-border/40 bg-background shadow-xl flex flex-col h-[92vh] max-h-[92vh]"
+        className="w-full max-w-7xl mx-4 rounded-lg border border-border/40 bg-background shadow-xl flex flex-col h-[95vh] max-h-[95vh]"
         onClick={e => e.stopPropagation()}
       >
         {/* CABECALHO congelado. `shrink-0` explicito: sem ele o cabecalho
@@ -2296,13 +2355,13 @@ export function ModalAtividade({
               onDetalhe={setDetalheLinha}
             />
             ) : (
+            <>
             <TabelaResumo
               linhas={LINHAS_DRE}
               realizadoPrimeiro
               compacta
               rotuloEstreito
               corPorSinal
-              colunaPercentual
               onDetalhe={setDetalheLinha}
               zoo={indicadores}
               mov={indicadoresMovimentacoes ?? []}
@@ -2313,6 +2372,12 @@ export function ModalAtividade({
               mesAtual={mesAtual}
               colunas={1}
             />
+            {/* So na visao normal: na Mensal cada coluna e um mes, e um par de
+                razoes de um periodo unico embaixo de doze colunas convidaria o
+                leitor a casar com a coluna errada — a mesma razao pela qual o
+                percentual nao existe la. */}
+            <FaixaDerivadosDre dre={indicadoresDre ?? []} leitura="periodo" mesAtual={mesAtual} />
+            </>
             )
           ) : assunto === 'operacional' ? (
             /* Os CRUZADOS: custo da arroba e' financeiro dividido por zootecnico,
