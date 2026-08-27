@@ -133,19 +133,41 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
   const [novoAberto, setNovoAberto] = useState(false);
   const [programarAberto, setProgramarAberto] = useState(false);
   const [confirmarParcela, setConfirmarParcela] = useState<ParcelaMaterializacao | null>(null);
+  /* CANCELADOS OCULTOS por padrao, com toggle para auditoria — mesmo idioma da
+     Central, que ja esconde OC cancelada. Cancelado nao e' trabalho pendente:
+     poluia a lista e competia com o que ainda pede acao. */
+  const [mostrarCancelados, setMostrarCancelados] = useState(false);
+  /* Complemento (nao substituto) da mensagem do backend quando a base ja esta
+     coberta. O hook segue exibindo o texto do banco no toast; aqui entra o que
+     fazer a seguir, que a mensagem do banco nao tem como saber. */
+  const [avisoBaseCoberta, setAvisoBaseCoberta] = useState('');
 
-  // Seleção ESTÁVEL por compromisso_id: preserva o selecionado após refetch; senão 1º não-cancelado.
+  const compromissosVisiveis = useMemo(
+    () => compromissos.filter(c => mostrarCancelados || c.status !== 'cancelado'),
+    [compromissos, mostrarCancelados],
+  );
+  const qtdCancelados = useMemo(() => compromissos.filter(c => c.status === 'cancelado').length, [compromissos]);
+
+  /* Seleção ESTÁVEL por compromisso_id: preserva o selecionado após refetch; senão 1º não-cancelado.
+     ⚠ Roda sobre a lista VISIVEL: com o cancelado escondido, manter a selecao nele
+     deixaria o bloco de detalhe falando de uma linha que nao esta na tabela. */
   useEffect(() => {
-    if (compromissos.length === 0) { if (selectedId !== null) setSelectedId(null); return; }
-    if (!compromissos.some(c => c.compromissoId === selectedId)) {
-      const alvo = compromissos.find(c => c.status !== 'cancelado') ?? compromissos[0];
+    if (compromissosVisiveis.length === 0) { if (selectedId !== null) setSelectedId(null); return; }
+    if (!compromissosVisiveis.some(c => c.compromissoId === selectedId)) {
+      const alvo = compromissosVisiveis.find(c => c.status !== 'cancelado') ?? compromissosVisiveis[0];
       setSelectedId(alvo?.compromissoId ?? null);
     }
-  }, [compromissos, selectedId]);
+  }, [compromissosVisiveis, selectedId]);
 
   const selecionado = useMemo(() => compromissos.find(c => c.compromissoId === selectedId) ?? null, [compromissos, selectedId]);
   const parcelasDoComp = useMemo(
-    () => parcelas.filter(p => p.compromissoId === selectedId).sort((a, b) => a.sequencia - b.sequencia),
+    () => parcelas
+      .filter(p => p.compromissoId === selectedId && (mostrarCancelados || p.status !== 'cancelada'))
+      .sort((a, b) => a.sequencia - b.sequencia),
+    [parcelas, selectedId, mostrarCancelados],
+  );
+  const qtdParcelasCanceladas = useMemo(
+    () => parcelas.filter(p => p.compromissoId === selectedId && p.status === 'cancelada').length,
     [parcelas, selectedId],
   );
   const podeEscrever = !bloqueado && versao != null && !saving;
@@ -256,6 +278,28 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
     setSearchParams(next, { replace: true });
   };
 
+  /* ITEM 2 — "quanto falta programar?" e' a pergunta do operador, e a resposta
+     estava escondida numa coluna do meio. Soma dos saldos dos NAO cancelados
+     (cancelado nao tem saldo a programar; incluir inflaria o numero). Somar
+     `saldoAProgramar` da view nao e' calcular regra: e' totalizar coluna soberana. */
+  const totalAProgramar = useMemo(
+    () => compromissos.filter(c => c.status !== 'cancelado').reduce((s, c) => s + c.saldoAProgramar, 0),
+    [compromissos],
+  );
+
+  /* ITEM 4 — a coluna dizia natureza/componente, iguais em todos: quatro linhas
+     "principal/principal" nao distinguem a Desmama da Vaca. Quem identifica e' o
+     LOTE. `lote_id` vem da view; a categoria sai do proprio array `lotes` que a
+     aba ja recebe — nenhuma leitura nova. Sem lote (compromisso da operacao
+     inteira) permanece natureza/componente, que ali E' a identidade. */
+  const identidadeCompromisso = (c: CompromissoResumo): string | null => {
+    if (!c.loteId) return null;
+    const lote = lotes.find(l => l.id === c.loteId);
+    if (!lote) return null;
+    const cat = CATEGORIAS.find(x => x.value === lote.categoria)?.label ?? lote.categoria;
+    return `${cat}${lote.qtd ? ` · ${lote.qtd} cab` : ''}`;
+  };
+
   const sugestaoSubcentro = useMemo(() => {
     const c = classificarLotesCompra(lotes);
     if (c.status !== 'ok') return '';
@@ -290,6 +334,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
     if (versao == null || payloads.length === 0) return;
     let v = versao;
     let ultimo: string | null = null;
+    setAvisoBaseCoberta('');
     try {
       for (const payload of payloads) {
         const r = await ocApi.criarCompromisso(v, payload);
@@ -298,7 +343,21 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
       }
       setSelectedId(ultimo);
       setNovoAberto(false);
-    } catch { /* o hook já exibiu o toast (OcCompromissoError) */ }
+    } catch (e) {
+      /* O hook já exibiu o toast com o texto do banco — que está CORRETO e não é
+         mascarado aqui. O que falta a ele é o proximo passo: quem tentou criar um
+         segundo compromisso queria, quase sempre, programar o saldo do que ja
+         existe. Ler a mensagem do backend e' o unico jeito de distinguir esse erro
+         dos outros sem inventar um codigo novo no writer. */
+      const msg = e instanceof Error ? e.message : String(e);
+      if (/excede a base da opera/i.test(msg)) {
+        setAvisoBaseCoberta(
+          'A base desta operação já está totalmente coberta pelos compromissos existentes — '
+          + 'por isso o banco recusou mais um. Se o que você quer é o saldo ainda não programado, '
+          + 'ele pertence a um compromisso que já existe: feche esta janela e use Programar na linha dele.',
+        );
+      }
+    }
   }
   async function programar(lista: ProgramarParcelaInput[]) {
     if (versao == null || !selecionado?.compromissoId) return;
@@ -340,7 +399,11 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
             <ResumoCard rotulo="Programado" valor={resumoOperacao.totalProgramado} />
             <ResumoCard rotulo="Materializado" valor={resumoOperacao.totalMaterializado} />
             <ResumoCard rotulo="Liquidado" valor={resumoOperacao.totalLiquidado} />
-            <ResumoCard rotulo="Saldo fin." valor={resumoOperacao.saldoFinanceiro} />
+            {/* "Saldo fin." (materializado − liquidado) saiu daqui: na 765058f8 marcava
+                R$ 0,00 porque tudo que virou titulo foi pago — verdadeiro e inutil.
+                Continua na coluna Saldo da tabela, que e' onde ele e' detalhe por
+                compromisso. O topo passa a responder "quanto falta programar?". */}
+            <ResumoCard rotulo="A programar" valor={totalAProgramar} />
           </div>
         </div>
       )}
@@ -349,12 +412,20 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
       <div className="rounded-md border bg-card p-1.5 shadow-sm">
         <div className="flex items-center justify-between mb-1">
           <div className="text-[11px] font-semibold text-muted-foreground">Compromissos</div>
-          <Button size="sm" className="h-6 text-[11px] px-2" disabled={!podeEscrever} onClick={abrirNovo}>
-            <Plus className="h-3 w-3 mr-1" /> Novo compromisso
-          </Button>
+          <div className="flex items-center gap-1.5">
+            {(qtdCancelados > 0 || qtdParcelasCanceladas > 0) && (
+              <label className="flex items-center gap-1 text-[10px] text-muted-foreground cursor-pointer">
+                <Checkbox checked={mostrarCancelados} onCheckedChange={(v) => setMostrarCancelados(v === true)} className="h-3 w-3" />
+                mostrar cancelados
+              </label>
+            )}
+            <Button size="sm" className="h-6 text-[11px] px-2" disabled={!podeEscrever} onClick={abrirNovo}>
+              <Plus className="h-3 w-3 mr-1" /> Novo compromisso
+            </Button>
+          </div>
         </div>
 
-        {compromissos.length === 0 ? (
+        {compromissosVisiveis.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 py-6 text-center">
             <div className="text-[11px] text-muted-foreground">Nenhum compromisso nesta operação.</div>
             <Button size="sm" className="h-7 text-[11px]" disabled={!podeEscrever} onClick={abrirNovo}>
@@ -380,12 +451,24 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
                 </tr>
               </thead>
               <tbody>
-                {compromissos.map(c => {
+                {compromissosVisiveis.map(c => {
                   const favNome = fornecedores.find(f => f.id === c.favorecidoId)?.nome ?? (c.favorecidoId ? '—' : '');
+                  const ident = identidadeCompromisso(c);
                   return (
                     <tr key={c.compromissoId ?? ''} onClick={() => setSelectedId(c.compromissoId)}
                       className={`border-b cursor-pointer hover:bg-muted/50 ${selectedId === c.compromissoId ? 'bg-muted' : ''}`}>
-                      <td className="py-0.5 pr-1.5 whitespace-nowrap">{c.natureza ?? '—'}/{c.componente ?? '—'}</td>
+                      {/* Identidade em cima, natureza/componente embaixo em corpo menor:
+                          continua disponivel, deixa de ser a unica coisa dita. */}
+                      <td className="py-0.5 pr-1.5 whitespace-nowrap" title={`${c.natureza ?? '—'}/${c.componente ?? '—'}`}>
+                        {ident ? (
+                          <span className="leading-tight block">
+                            <span className="block">{ident}</span>
+                            <span className="block text-[9px] text-muted-foreground">{c.natureza ?? '—'}/{c.componente ?? '—'}</span>
+                          </span>
+                        ) : (
+                          <>{c.natureza ?? '—'}/{c.componente ?? '—'}</>
+                        )}
+                      </td>
                       <td className="py-0.5 pr-1.5 max-w-[110px] truncate" title={favNome}>{favNome}</td>
                       <td className="py-0.5 pr-1.5 text-right whitespace-nowrap">{brl(c.valorCompromisso)}</td>
                       <td className="py-0.5 pr-1.5 text-right whitespace-nowrap">{brl(c.totalProgramado)}</td>
@@ -441,7 +524,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
         <div className="rounded-md border bg-card p-1.5 shadow-sm">
           <div className="flex items-center justify-between mb-1">
             <div className="text-[11px] font-semibold text-muted-foreground">
-              Programação — {selecionado.natureza}/{selecionado.componente} ({brl(selecionado.valorCompromisso)})
+              Programação — {identidadeCompromisso(selecionado) ?? `${selecionado.natureza}/${selecionado.componente}`} ({brl(selecionado.valorCompromisso)})
             </div>
             <span className="inline-flex gap-1">
               {!selecionado.temProgramacaoAtiva && selecionado.status === 'aberto' && (
@@ -544,10 +627,11 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
 
       {novoAberto && (
         <NovoCompromissoDialog
-          onClose={() => setNovoAberto(false)} onSubmit={criar} saving={saving}
+          onClose={() => { setNovoAberto(false); setAvisoBaseCoberta(''); }} onSubmit={criar} saving={saving}
           clienteId={clienteId} tipoOperacao={tipoOperacao} fornecedores={fornecedores} darkSelectClass={darkSelectClass}
           valorAcordado={valorAcordado} sugestaoSubcentro={sugestaoSubcentro} descricaoDefault={descricaoDefault}
           contraparteId={contraparteId} lotesProntos={lotesProntos} lotes={lotes}
+          avisoBaseCoberta={avisoBaseCoberta}
         />
       )}
       {programarAberto && selecionado && (
@@ -555,6 +639,10 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
           onClose={() => setProgramarAberto(false)} onSubmit={programar} saving={saving}
           clienteId={clienteId} valorCompromisso={selecionado.valorCompromisso}
           valorAcordado={valorAcordado} totalComprometido={resumoOperacao?.obrigacaoTotal ?? 0}
+          saldoAProgramar={selecionado.saldoAProgramar}
+          identificacao={identidadeCompromisso(selecionado)}
+          naturezaComponente={`${selecionado.natureza ?? '—'}/${selecionado.componente ?? '—'}`}
+          favorecidoNome={fornecedores.find(f => f.id === selecionado.favorecidoId)?.nome ?? null}
         />
       )}
       {confirmarParcela && (
@@ -639,11 +727,11 @@ function ResumoCard({ rotulo, valor }: { rotulo: string; valor: number }) {
 }
 
 // ===== Dialog: Novo compromisso =====
-function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOperacao, fornecedores, darkSelectClass, valorAcordado, sugestaoSubcentro, descricaoDefault, contraparteId, lotesProntos, lotes }: {
+function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOperacao, fornecedores, darkSelectClass, valorAcordado, sugestaoSubcentro, descricaoDefault, contraparteId, lotesProntos, lotes, avisoBaseCoberta }: {
   onClose: () => void; onSubmit: (p: CriarCompromissoPayload[]) => void; saving: boolean;
   clienteId: string | null; tipoOperacao: string | null; fornecedores: { id: string; nome: string }[]; darkSelectClass: string;
   valorAcordado: number | null; sugestaoSubcentro: string; descricaoDefault: string; contraparteId: string | null; lotesProntos: boolean;
-  lotes: LoteOC[];
+  lotes: LoteOC[]; avisoBaseCoberta: string;
 }) {
   const plano = usePlanoContasOC(clienteId ?? undefined);
   const comps = useComponentesFinanceiros();
@@ -681,25 +769,55 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
     else { setValor(null); setSubcentro(tipoOperacao === 'compra' ? SUBCENTRO_OBRIGACAO_COMPRA : ''); setFavorecidoId(''); }
   }, [natureza, valorAcordado, sugestaoSubcentro, contraparteId, tipoOperacao]);
 
+  /* ⚠ ITEM 3 — A GUARDA LIA O REF DEPOIS DE ELE JA TER MUDADO. O padrao antigo era
+
+         setDescricao(prev => (prev === ultimoDefaultRef.current ? alvo : prev));
+         ultimoDefaultRef.current = alvo;
+
+     e parece certo lendo de cima para baixo, mas nao e': o updater funcional NAO roda
+     na chamada, roda no render seguinte — depois da linha de baixo. Quando ele
+     finalmente le `ultimoDefaultRef.current`, o ref JA VALE `alvo`. A comparacao
+     virava "default novo === default novo?" contra um `prev` que e' o ANTERIOR, dava
+     false, e o campo nunca era atualizado. Por isso valor e subcentro (setters diretos)
+     seguiam o lote e so a descricao ficava para tras — medido na 69115ef9, e a prova
+     final foi trocar de lote tres vezes seguidas e o texto nao sair de "Compra 029 DF".
+
+     Correcao: capturar o default anterior em CONSTANTE, antes de mexer no ref. O
+     closure guarda o valor certo e a comparacao volta a ser a pretendida.
+     `descricaoDefault` entra junto porque o texto da operacao inteira tambem foi
+     escrito pela tela e tambem pode ser sobrescrito. Digitacao a mao nao casa com
+     nenhum dos tres e segue intocada — o contrato original nao mudou. */
+  const aplicarDefaultDescricao = (alvo: string) => {
+    const anterior = ultimoDefaultRef.current;
+    const daOperacao = descricaoDefault;
+    ultimoDefaultRef.current = alvo;
+    setDescricao(prev => (prev === '' || prev === anterior || prev === daOperacao ? alvo : prev));
+  };
+
   /* LOTE ESCOLHIDO -> valor, subcentro e descricao daquele lote. Os tres seguem
-     EDITAVEIS: o default e' ponto de partida, nao trava. A descricao respeita a
-     mesma regra dos outros defaults (so sobrescreve o que nao foi editado a mao). */
+     EDITAVEIS: o default e' ponto de partida, nao trava. */
   useEffect(() => {
     if (!itemSel) return;
     setValor(itemSel.valorBruto);
     setSubcentro(itemSel.subcentro);
-    const alvo = produtoOCCompromissoLote(tipoOperacao ?? 'compra', itemSel.lote.qtd ?? 0, itemSel.lote.categoria);
-    setDescricao(prev => (prev === '' || prev === ultimoDefaultRef.current ? alvo : prev));
-    ultimoDefaultRef.current = alvo;
-  }, [itemSel, tipoOperacao]);
+    aplicarDefaultDescricao(produtoOCCompromissoLote(tipoOperacao ?? 'compra', itemSel.lote.qtd ?? 0, itemSel.lote.categoria));
+  }, [itemSel, tipoOperacao, descricaoDefault]);
 
-  // Descrição = DEFAULT EDITÁVEL: principal → descricaoDefault; obrigacao → ''. Só atualiza se o campo está
-  // vazio OU ainda contém o último default gerado. Após edição manual do usuário, NUNCA sobrescreve.
+  /* Descrição = DEFAULT EDITÁVEL: principal → descricaoDefault; obrigacao → ''. Só atualiza se o campo está
+     vazio OU ainda contém o último default gerado. Após edição manual do usuário, NUNCA sobrescreve.
+
+     ⚠ ITEM 3 — ESTE EFEITO ATROPELAVA O DO LOTE. Valor e subcentro seguiam o lote
+     (medido: 76.760/Femeas, 4.500/Femeas, 5.115/Machos, todos certos no banco), mas
+     a descricao dos tres saiu "Compra 031 Desmama F/Vacas/Garrotes" — a da operacao
+     inteira. Motivo: o efeito do lote deixa `ultimoDefaultRef` valendo a descricao
+     DELE; quando `descricaoDefault` mudava depois (os lotes chegam via
+     `recarregarDados`, entao ele vai de "Compra principal" para o texto final DEPOIS
+     do dialogo abrir), a guarda `prev === ultimoDefaultRef.current` dava true e este
+     efeito reescrevia por cima. Com lote escolhido, quem manda e' o lote. */
   useEffect(() => {
-    const alvo = natureza === 'principal' ? descricaoDefault : '';
-    setDescricao(prev => (prev === '' || prev === ultimoDefaultRef.current ? alvo : prev));
-    ultimoDefaultRef.current = alvo;
-  }, [natureza, descricaoDefault]);
+    if (itemSel) return;
+    aplicarDefaultDescricao(natureza === 'principal' ? descricaoDefault : '');
+  }, [natureza, descricaoDefault, itemSel]);
 
   const planoTipo = tipoOperacao === 'compra' ? '2-Saídas' : '1-Entradas';
   const componenteOptions = useMemo(() => comps.porNatureza(natureza), [comps, natureza]);
@@ -751,8 +869,18 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      {/* ITEM 9 — cabecalho no azul do sistema, o mesmo do header do CompraModalShell.
+          Margens negativas + padding devolvem a faixa a borda do dialogo, que tem
+          padding proprio; sem isso o azul flutuaria com moldura branca em volta. */}
       <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle>Novo compromisso</DialogTitle></DialogHeader>
+        <DialogHeader className="-mx-6 -mt-6 mb-1 space-y-0 bg-primary px-6 py-3">
+          <DialogTitle className="text-[15px] text-primary-foreground">Novo compromisso</DialogTitle>
+        </DialogHeader>
+        {avisoBaseCoberta && (
+          <div className="rounded-md border border-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2 py-1.5 text-[11px] leading-snug text-amber-800 dark:text-amber-200">
+            {avisoBaseCoberta}
+          </div>
+        )}
         <div className="space-y-2">
           <div className="grid grid-cols-2 gap-2">
             <div>
@@ -844,16 +972,25 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
 // ===== Dialog: Programar (parcelas; conta OPCIONAL por parcela; identidade estável por idLocal) =====
 type LinhaParcela = { idLocal: string; valor: number | null; vencimento: string; contaId: string };
 
-function ProgramarDialog({ onClose, onSubmit, saving, clienteId, valorCompromisso, valorAcordado, totalComprometido }: {
+function ProgramarDialog({ onClose, onSubmit, saving, clienteId, valorCompromisso, valorAcordado, totalComprometido,
+  saldoAProgramar, identificacao, naturezaComponente, favorecidoNome }: {
   onClose: () => void; onSubmit: (p: ProgramarParcelaInput[]) => void; saving: boolean;
   clienteId: string | null; valorCompromisso: number; valorAcordado: number | null; totalComprometido: number;
+  saldoAProgramar: number; identificacao: string | null; naturezaComponente: string; favorecidoNome: string | null;
 }) {
   const { contas } = useContasBancariasLeves(clienteId);
   const idRef = useRef(0);
   // idLocal ESTÁVEL por linha (ajuste vinculante 2): React key E identidade do estado. Add/remove só recalcula
   // a sequência 1..N na submissão — nunca desloca valor/vencimento/conta entre linhas.
   const novaLinha = (): LinhaParcela => ({ idLocal: `p${idRef.current++}`, valor: null, vencimento: '', contaId: '' });
-  const [linhas, setLinhas] = useState<LinhaParcela[]>(() => [novaLinha()]);
+  /* ITEM 5 — a primeira parcela nasce com o SALDO A PROGRAMAR DAQUELE compromisso,
+     nao vazia e nunca com o total da operacao. `saldoAProgramar` e' o mesmo campo
+     soberano da coluna "A prog." — nao se deriva outro aqui.
+     So a PRIMEIRA: "Adicionar parcela" segue criando linha vazia, senao cada nova
+     linha estouraria o teto sozinha. */
+  const [linhas, setLinhas] = useState<LinhaParcela[]>(
+    () => [{ ...novaLinha(), valor: saldoAProgramar > 0 ? round2(saldoAProgramar) : null }],
+  );
   const [confirmarParcial, setConfirmarParcial] = useState(false);
 
   const soma = useMemo(() => round2(linhas.reduce((s, l) => s + (l.valor ?? 0), 0)), [linhas]);
@@ -867,7 +1004,24 @@ function ProgramarDialog({ onClose, onSubmit, saving, clienteId, valorCompromiss
     setLinhas(prev => prev.map(l => (l.idLocal === idLocal ? { ...l, ...patch } : l)));
   const removerLinha = (idLocal: string) => setLinhas(prev => prev.filter(l => l.idLocal !== idLocal));
 
-  const contaOptions = useMemo(() => contas.map(c => ({ value: c.id, label: rotuloContaLeve(c) })), [contas]);
+  /* ITEM 9 — contas organizadas por TIPO, na ordem do cadastro dentro de cada tipo
+     (o hook ja ordena por `ordem_exibicao`, e `sort` estavel preserva isso).
+     ⚠ NAO E' AGRUPAMENTO VISUAL COM CABECALHO: `SearchableSelect` recebe uma lista
+     PLANA e e' compartilhado com Abate/Venda/Mapa/FinV2 — dar-lhe grupos seria mexer
+     em componente de terceiros neste PR. O tipo entra como prefixo do rotulo, que
+     agrupa na leitura e ainda entra na busca. Reportado.
+     Tipo fora do vocabulario vai para o fim, sem quebrar a ordem. */
+  const ORDEM_TIPO_CONTA: Record<string, number> = { cc: 1, inv: 2, cartao: 3 };
+  const ROTULO_TIPO_CONTA: Record<string, string> = { cc: 'Corrente', inv: 'Investimento', cartao: 'Cartão' };
+  const contaOptions = useMemo(() => {
+    const ordenadas = [...contas].sort(
+      (a, b) => (ORDEM_TIPO_CONTA[a.tipo_conta ?? ''] ?? 99) - (ORDEM_TIPO_CONTA[b.tipo_conta ?? ''] ?? 99),
+    );
+    return ordenadas.map(c => {
+      const tipo = ROTULO_TIPO_CONTA[c.tipo_conta ?? ''] ?? null;
+      return { value: c.id, label: tipo ? `${tipo} · ${rotuloContaLeve(c)}` : rotuloContaLeve(c) };
+    });
+  }, [contas]);
 
   // Sequência é derivada 1..N na ordem visual, na hora de emitir (nunca guardada por linha).
   const emitir = () => {
@@ -885,13 +1039,23 @@ function ProgramarDialog({ onClose, onSubmit, saving, clienteId, valorCompromiss
     <>
       <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
         <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>Programar parcelas</DialogTitle></DialogHeader>
+          {/* ITEM 6 — o modal mostrava so valor e saldo: com tres compromissos na tela
+              o operador nao sabia qual estava programando sem fechar e reabrir.
+              ITEM 9 — mesma faixa azul do Novo compromisso e do CompraModalShell. */}
+          <DialogHeader className="-mx-6 -mt-6 mb-1 space-y-0 bg-primary px-6 py-3">
+            <DialogTitle className="text-[15px] text-primary-foreground">Programar parcelas</DialogTitle>
+            <DialogDescription className="text-[11px] text-primary-foreground/80">
+              {identificacao ?? naturezaComponente} · {brl(valorCompromisso)}
+              {identificacao ? ` · ${naturezaComponente}` : ''}
+              {favorecidoNome ? ` · ${favorecidoNome}` : ''}
+            </DialogDescription>
+          </DialogHeader>
           <div className="space-y-2">
             <div className="grid grid-cols-2 gap-1.5 text-[11px]">
               <div className="rounded border bg-muted/30 px-1.5 py-0.5"><span className="text-muted-foreground">OC (acordado): </span><b>{valorAcordado != null ? brl(valorAcordado) : '—'}</b></div>
               <div className="rounded border bg-muted/30 px-1.5 py-0.5"><span className="text-muted-foreground">Comprometido: </span><b>{brl(totalComprometido)}</b></div>
               <div className="rounded border bg-muted/30 px-1.5 py-0.5"><span className="text-muted-foreground">Restante OC: </span><b>{brl(restanteOC)}</b></div>
-              <div className="rounded border bg-muted/30 px-1.5 py-0.5"><span className="text-muted-foreground">Compromisso: </span><b>{brl(valorCompromisso)}</b> · Σ {brl(soma)}</div>
+              <div className="rounded border bg-muted/30 px-1.5 py-0.5"><span className="text-muted-foreground">A programar: </span><b>{brl(saldoAProgramar)}</b> · Σ {brl(soma)}</div>
             </div>
             {linhas.map((l, i) => (
               <div key={l.idLocal} className="grid grid-cols-[16px_1fr_1fr_1fr_24px] items-end gap-1.5">

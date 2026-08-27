@@ -11,6 +11,9 @@ export interface ContaBancariaLeve {
   banco: string | null;
   agencia: string | null;
   numero_conta: string | null;
+  /** `cc` | `inv` | `cartao` — vocabulário medido no proto. Usado só para AGRUPAR a
+   *  lista; a ordem dentro do grupo continua sendo `ordem_exibicao` (a do cadastro). */
+  tipo_conta: string | null;
 }
 
 // Rótulo de exibição estável: nome_exibicao → "banco ag/conta" → id curto. Nunca vazio.
@@ -31,7 +34,7 @@ export function useContasBancariasLeves(clienteId: string | null) {
     setLoading(true);
     const { data } = await supabase
       .from('financeiro_contas_bancarias')
-      .select('id, nome_exibicao, banco, agencia, numero_conta')
+      .select('id, nome_exibicao, banco, agencia, numero_conta, tipo_conta')
       .eq('cliente_id', clienteId)
       .eq('ativa', true)
       .order('ordem_exibicao');
@@ -41,6 +44,7 @@ export function useContasBancariasLeves(clienteId: string | null) {
       banco: r.banco,
       agencia: r.agencia,
       numero_conta: r.numero_conta,
+      tipo_conta: r.tipo_conta,
     })));
     setLoading(false);
   }, [clienteId]);
