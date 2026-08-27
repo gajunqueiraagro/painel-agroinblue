@@ -17,17 +17,29 @@ DECLARE
   v_st text; v_cnt int; v_mes text;
 BEGIN
   v_tag := current_setting('app.p1df_tag');
-  SELECT cm.user_id, cm.cliente_id INTO v_admin, v_cli FROM public.cliente_membros cm
-    WHERE cm.perfil='admin_agroinblue' AND cm.ativo=true ORDER BY cm.user_id LIMIT 1;
-  IF v_admin IS NULL THEN RAISE EXCEPTION 'fixture: sem admin'; END IF;
+  /* ⚠ O JOIN COM auth.users NAO E' DECORATIVO. `cliente_membros` nao tem FK para
+     `auth.users`, entao ha admin ativo apontando para usuario que nao existe — MEDIDO
+     no proto: 4 dos 6 registros com perfil='admin_agroinblue' e ativo=true sao orfaos.
+     Sem o JOIN, o `ORDER BY cm.user_id LIMIT 1` pegava um deles e a fixture morria em
+     23503 (fazendas_owner_id_fkey) antes de qualquer assercao rodar.
+     PENDENCIA REGISTRADA, fora do escopo deste PR: auditar esses 4 registros. */
+  SELECT cm.user_id, cm.cliente_id INTO v_admin, v_cli
+    FROM public.cliente_membros cm
+    JOIN auth.users u ON u.id = cm.user_id
+   WHERE cm.perfil='admin_agroinblue' AND cm.ativo=true
+   ORDER BY cm.user_id LIMIT 1;
+  IF v_admin IS NULL THEN RAISE EXCEPTION 'fixture: sem admin com usuario valido em auth.users'; END IF;
   PERFORM set_config('request.jwt.claims', json_build_object('sub', v_admin::text, 'role','authenticated')::text, true);
   PERFORM set_config('request.jwt.claim.sub', '', true);
 
   -- ===================== FIXTURE SINTETICA =====================
   -- Mes de referencia: 2026-03 (01/03 a 31/03).
-  -- `codigo` e' NOT NULL sem default — conferido no schema; omiti-lo quebraria o insert.
-  INSERT INTO public.fazendas (cliente_id, nome, codigo)
-    VALUES (v_cli, 'ZZ TESTE P1 '||v_tag, 'ZZ'||left(v_tag,6)) RETURNING id INTO v_faz;
+  /* `codigo` e' NOT NULL sem default — conferido no schema; omiti-lo quebraria o insert.
+     `owner_id` tambem e' obrigatorio na pratica, ainda que a coluna aceite NULL: o
+     trigger `auto_add_owner_as_membro` insere em `fazenda_membros` usando NEW.owner_id,
+     e la o user_id e' NOT NULL — sem owner o trigger grava NULL e estoura 23502. */
+  INSERT INTO public.fazendas (cliente_id, nome, codigo, owner_id)
+    VALUES (v_cli, 'ZZ TESTE P1 '||v_tag, 'ZZ'||left(v_tag,6), v_admin) RETURNING id INTO v_faz;
 
   -- (a) encerrado ANTES do mes — nao esteve la nenhum dia
   INSERT INTO public.pastos (fazenda_id, nome, ativo, tipo_uso, data_inicio, data_fim)
