@@ -110,6 +110,11 @@ export interface OcEstado {
   partes: Record<string, unknown>[];
   movimentacoes: Record<string, unknown>[];
   eventos: Record<string, unknown>[];
+  /** Quantos titulos financeiros estao REALMENTE vivos. Resolvido em
+      `carregarOperacao` cruzando as partes com `financeiro_lancamentos_v2`.
+      ⚠ NAO derivar isto de `partes` no consumidor: a parte guarda o vinculo, nao
+      o estado do lancamento. Ver o comentario da resolucao. */
+  titulosAtivos: number;
 }
 
 // (supabase as any).rpc é o idioma vigente para RPCs ainda não presentes em types.ts.
@@ -163,11 +168,52 @@ export function useOperacaoComercial() {
       (supabase as any).from('zoo_operacao_movimentacoes').select('*').eq('operacao_id', operacaoId).order('created_at'),
       (supabase as any).from('zoo_operacao_eventos').select('*').eq('operacao_id', operacaoId).order('created_at'),
     ]);
+    /* TITULO VIVO = parte ativa CUJO LANCAMENTO tambem esta vivo.
+       `zoo_operacao_partes` guarda o vinculo (`financeiro_lancamento_id`) e o
+       cancelamento DA PARTE, mas nao sabe se o LANCAMENTO foi cancelado. Quem
+       olhasse so a parte concluiria que ha titulo onde nao ha — e a UI trancaria
+       a operacao inteira contra um titulo que nao existe mais.
+       Medido no proto em 27/08/2026: 4 operacoes nesse estado, 13 partes ativas
+       apontando para lancamentos cancelados. Cruzando as 29 operacoes existentes
+       com a `vw_oc_titulos_liquidacao`, que ja filtra certo, a derivacao antiga
+       divergia em exatamente essas 4 e concordava nas outras 25.
+
+       ⚠⚠ FAIL-CLOSED, e nao e detalhe de implementacao. Na duvida, o titulo
+       conta como ATIVO:
+         - erro na consulta      -> todos os ids contam como ativos;
+         - id que NAO volta      -> conta como ativo (RLS pode te-lo ocultado);
+         - so conta como inativo o que voltou com `cancelado === true`.
+       Sem isso, uma policy de RLS restritiva DESTRAVARIA a edicao de operacoes
+       com titulo legitimo — que e' exatamente a dupla verdade de pagamento que o
+       ADR-2026-18 §10 registra. Falhar para o lado de trancar demais e'
+       recuperavel; falhar para o lado de abrir nao e'. */
+    const partes = pr.data ?? [];
+    const idsTitulo: string[] = partes
+      .filter((p: Record<string, unknown>) => p.cancelada !== true && !!p.financeiro_lancamento_id)
+      .map((p: Record<string, unknown>) => String(p.financeiro_lancamento_id));
+
+    let titulosAtivos = 0;
+    if (idsTitulo.length > 0) {
+      const { data: lancs, error: eLanc } = await (supabase as any)
+        .from('financeiro_lancamentos_v2').select('id, cancelado').in('id', idsTitulo);
+      if (eLanc || !lancs) {
+        titulosAtivos = idsTitulo.length;
+      } else {
+        const cancelados = new Set(
+          (lancs as Array<{ id: string; cancelado: boolean }>)
+            .filter(l => l.cancelado === true)
+            .map(l => String(l.id)),
+        );
+        titulosAtivos = idsTitulo.filter(id => !cancelados.has(id)).length;
+      }
+    }
+
     return {
       operacao,
-      partes: pr.data ?? [],
+      partes,
       movimentacoes: mv.data ?? [],
       eventos: ev.data ?? [],
+      titulosAtivos,
     };
   };
 

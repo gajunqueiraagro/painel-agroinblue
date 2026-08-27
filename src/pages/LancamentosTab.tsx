@@ -541,11 +541,17 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         setOcVersao(op.versao);
         setOcStatusComercial(op.status_comercial);
         setOcEntregaEncerrada(!!op.entrega_encerrada);   // PR-HOTFIX-P0 — hidrata entrega soberana (habilita Reabrir)
-        // PR-OC-EDIT-01A — título financeiro materializado = parte ativa com financeiro_lancamento_id.
-        const temTitulo = (estado.partes ?? []).some(
-          (p) => Boolean(p.financeiro_lancamento_id) && p.cancelada !== true,
-        );
-        setOcTemTitulo(temTitulo);
+        /* TITULO MATERIALIZADO — vem RESOLVIDO de `carregarOperacao`.
+           ⚠ A flag da PARTE nao basta, e era esse o defeito: a parte guarda o
+           vinculo e o proprio cancelamento, mas nao sabe se o LANCAMENTO foi
+           cancelado. Com lancamento cancelado e parte ativa, a derivacao antiga
+           concluia que havia titulo vivo e trancava a operacao INTEIRA —
+           negociacao em somente-leitura e Reabrir, Cancelar e Salvar sumindo do
+           rodape. A operacao ficava sem saida pela interface, protegida contra
+           um titulo que nao existe mais.
+           ⚠ A resolucao e FAIL-CLOSED: na duvida conta como ativo. O porque
+           esta no comentario de `carregarOperacao`. */
+        setOcTemTitulo((estado.titulosAtivos ?? 0) > 0);
         setOcRascunho(op.rascunho);
         setOcAberturaExistente(true);
         setTipo('compra');            // abre o CompraModalShell (isCompra), não o modal default.
