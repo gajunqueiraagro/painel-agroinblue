@@ -143,7 +143,7 @@ interface Props {
   onAssuntoChange?: (a: Assunto) => void;
 }
 
-export type Assunto = 'geral' | 'zootecnico' | 'movimentacoes' | 'financeiro' | 'operacional' | 'dre';
+export type Assunto = 'geral' | 'zootecnico' | 'movimentacoes' | 'financeiro' | 'operacional' | 'dre' | 'dreSemMercado';
 type Escopo   = 'global' | 'fazenda';
 type Leitura  = 'mes' | 'periodo' | 'historico';
 type Comparador = 'meta' | 'mes' | 'anoAnt' | 'noAno';
@@ -157,7 +157,12 @@ const ASSUNTOS: Array<{ id: Assunto; rotulo: string }> = [
   { id: 'movimentacoes', rotulo: 'Movimentações' },
   { id: 'financeiro',    rotulo: 'Financeiro' },
   { id: 'operacional',   rotulo: 'Operacional' },
-  { id: 'dre',           rotulo: 'DRE' },
+  /* DUAS ABAS DE DRE, e nao um toggle dentro de uma: sao demonstrativos
+     DIFERENTES, com Lucro Liquido diferente, e um toggle sugeriria que e a mesma
+     tabela vista de outro angulo. Medido: 7 botoes ocupam ~672px de ~1212px,
+     entao a barra nao quebra linha e o custo vertical e zero. */
+  { id: 'dre',           rotulo: 'DRE var. mercado' },
+  { id: 'dreSemMercado', rotulo: 'DRE sem var. mercado' },
 ];
 
 /* Ordem de leitura da grade — decisao de apresentacao, entao mora aqui e
@@ -394,60 +399,89 @@ const BLOCOS_OPERACIONAL: Array<{ titulo: string; destino?: Assunto; linhas: Lin
 
    ⚠ Sinal e cor, nunca parenteses contabeis — deducoes, custeio, investimento,
    reposicao, juros e tributos sao SAIDAS, e os subtotais podem ser negativos. */
-const LINHAS_DRE: LinhaResumo[] = [
+/* AS DUAS TABELAS DO DRE, de UMA funcao — e nao uma derivada da outra.
+   A primeira versao derivava a lista "sem mercado" da "com" por filter+map. Com
+   a variacao por preco MUDANDO DE POSICAO e as chaves de CIMA tambem mudando, a
+   derivacao passaria a desfazer duas coisas em sentidos opostos, e ninguem
+   leria a segunda tabela sem simular a primeira na cabeca. Aqui as duas nascem
+   da mesma funcao e as tres diferencas ficam VISIVEIS onde acontecem.
+
+   AS TRES DIFERENCAS, e sao so estas:
+     1. a VARIACAO POR PRECO existe na aba COM e nao existe na SEM;
+     2. os TRES SUBTOTAIS ACIMA dela usam `_MER` na COM (que a somam);
+     3. os TRES SUBTOTAIS ABAIXO usam `_SM` na SEM (que a subtraem).
+
+   ⚠ POR QUE A LINHA SOBE PARA DENTRO DO BLOCO DO VBP na aba COM: a MARGEM DE
+   CONTRIBUICAO e o RESULTADO OPERACIONAL vem antes dela e NAO a continham, mas
+   eram divididos por uma base que a incluia — percentual subestimado. Medido na
+   Vera Ligia, Jul/26: a Margem mostrava 49,6% quando deveria mostrar 78,1%.
+   Com a linha dentro do bloco, numerador e denominador contem as mesmas
+   parcelas e a base volta a ser UMA SO em cada aba.
+
+   ⚠ NAO E' O VBP MUDANDO DE SIGNIFICADO: e o mesmo conceito com parametro
+   diferente, como `valorRebanho` e `valorRebanhoSemEfeito`, que ja convivem no
+   sistema. Na aba sem mercado o preco fica congelado para isolar volume; na com
+   mercado ele corre.
+   ⚠ CONSEQUENCIA ASSUMIDA: na aba com mercado a Margem de Contribuicao passa a
+   incluir efeito de preco, o que NAO e margem de contribuicao contabil. O
+   demonstrativo inteiro ja e gerencial — o investimento tambem nao pertence a
+   um DRE contabil e esta la — e o rotulo do cabecalho avisa qual leitura esta
+   na tela.
+   ⚠ O LUCRO OPERACIONAL nao muda de valor por causa da MUDANCA DE POSICAO: a
+   variacao por preco continua somando uma vez. O que difere entre as abas e'
+   outra coisa — a SEM a retira de vez.
+
+   ⚠ NUMERACAO: a aba SEM MERCADO mantem os numeros da COM, com o 5 AUSENTE em
+   vez de renumerar de 1 a 10. As duas abas existem para ser COMPARADAS, e uma
+   linha que troca de numero ao trocar de aba destruiria a comparacao. O buraco
+   e' auto-explicativo: a linha que falta e' exatamente a que o nome da aba diz
+   que falta. */
+const montaLinhasDre = (comMercado: boolean): LinhaResumo[] => [
   { rotulo: '1. (+) Faturamento',          chave: 'dre_faturamento',   bag: 'dre', detalhe: true },
   { rotulo: '2. (−) Deduções de receita',  chave: 'dre_deducoes',      bag: 'dre', saida: true },
   { rotulo: '= RECEITA LÍQUIDA',           chave: 'dre_receita_liquida', bag: 'dre', subtotal: true, espacoDepois: true },
 
-  /* A VARIACAO DO ESTOQUE SE PARTE, e a linha agregada deixa de existir.
-     "por producao" sobe para ANTES dos custos porque e' PRODUCAO: rebanho que
-     a fazenda gerou. "por preco" desce para o bloco nao operacional (linha 7)
-     porque e' MERCADO: a arroba mudou de preco sem ninguem na fazenda ter
-     feito nada. Misturar as duas num numero so era o que impedia o percentual
-     de fechar — o numerador ganhava uma parcela de mercado que o denominador
-     nao tinha. */
   { rotulo: '3. (+/−) Variação por produção', chave: 'dre_variacao_producao', bag: 'dre', detalhe: true },
   { rotulo: '4. (−) Reposição de bovinos',  chave: 'dre_reposicao',     bag: 'dre', saida: true },
-  { rotulo: '= VALOR BRUTO DA PRODUÇÃO',    chave: 'dre_vbp',           bag: 'dre', subtotal: true, espacoDepois: true },
+  ...(comMercado
+    ? [{ rotulo: '5. (+/−) Variação por preço', chave: 'dre_variacao_preco', bag: 'dre' } as LinhaResumo]
+    : []),
+  { rotulo: comMercado ? '= VALOR BRUTO DA PRODUÇÃO (a preço de mercado)' : '= VALOR BRUTO DA PRODUÇÃO',
+    chave: comMercado ? 'dre_vbp_mer' : 'dre_vbp', bag: 'dre', subtotal: true, espacoDepois: true },
 
-  /* VARIAVEL ANTES DO FIXO, e nao por ordem alfabetica: o variavel e' da
-     PRODUCAO — anda com o rebanho — e o fixo e' da FAZENDA, existe com gado ou
-     sem. Por isso a MARGEM DE CONTRIBUICAO mora entre os dois: ela responde
-     "quanto sobra depois do que a producao consumiu", antes de a estrutura da
-     fazenda entrar na conta. */
-  { rotulo: '5. (−) Custo variável',        chave: 'dre_custo_var',     bag: 'dre', saida: true },
-  { rotulo: '= MARGEM DE CONTRIBUIÇÃO',     chave: 'dre_margem',        bag: 'dre', subtotal: true, percentual: true, espacoDepois: true },
+  { rotulo: '6. (−) Custo variável',        chave: 'dre_custo_var',     bag: 'dre', saida: true },
+  { rotulo: '= MARGEM DE CONTRIBUIÇÃO',     chave: comMercado ? 'dre_margem_mer' : 'dre_margem',
+    bag: 'dre', subtotal: true, percentual: true, espacoDepois: true },
 
-  { rotulo: '6. (−) Custo fixo',            chave: 'dre_custo_fixo',    bag: 'dre', saida: true },
-  { rotulo: '= RESULTADO OPERACIONAL',      chave: 'dre_res_oper',      bag: 'dre', subtotal: true, percentual: true, espacoDepois: true },
+  { rotulo: '7. (−) Custo fixo',            chave: 'dre_custo_fixo',    bag: 'dre', saida: true },
+  { rotulo: '= RESULTADO OPERACIONAL',      chave: comMercado ? 'dre_res_oper_mer' : 'dre_res_oper',
+    bag: 'dre', subtotal: true, percentual: true, espacoDepois: true },
 
-  { rotulo: '7. (+/−) Variação por preço',  chave: 'dre_variacao_preco', bag: 'dre' },
   { rotulo: '8. (−) Investimento na fazenda', chave: 'dre_investimento', bag: 'dre', saida: true },
-  /* ⚠⚠ OS DOIS NOMES SE CRUZAM, e esta e a armadilha desta tabela.
-     Este LUCRO OPERACIONAL le `dre_resultado_operacional`, que e o indicador do
-     RESULTADO DA ATIVIDADE do modelo antigo. Nao e engano: a algebra e a mesma.
-       LUCRO OPERACIONAL = (VBP − CustoVar − CustoFixo) + VarPreco − Invest
-                         = RL − Custeio − Invest − Reposicao + VarTotal
-       dre_resultado_operacional = (RL − Custeio − Invest) − Reposicao + VarTotal
-     Sao identicos termo a termo.
-     ⚠ NAO trocar por `dre_resultado_investimento`, que parece o candidato pelo
-     nome: aquele e RL − Custeio − Invest, SEM reposicao e SEM variacao.
-     ⚠ E `dre_res_oper` (a linha acima) e outro indicador ainda, o novo do
-     ecf50533. Tres nomes parecidos, tres quantidades distintas. */
-  { rotulo: '= LUCRO OPERACIONAL',          chave: 'dre_resultado_operacional', bag: 'dre', subtotal: true, percentual: true, espacoDepois: true },
+  /* ⚠ OS NOMES SE CRUZAM: na aba COM, este LUCRO OPERACIONAL le
+     `dre_resultado_operacional`, que e o indicador do RESULTADO DA ATIVIDADE do
+     modelo antigo — identicos termo a termo. NAO trocar por
+     `dre_resultado_investimento`, o candidato aparente pelo nome: aquele nao tem
+     reposicao nem variacao. */
+  { rotulo: '= LUCRO OPERACIONAL',          chave: comMercado ? 'dre_resultado_operacional' : 'dre_lucro_oper_sm',
+    bag: 'dre', subtotal: true, percentual: true, espacoDepois: true },
 
   { rotulo: '9. (−) Juros Financeiros',     chave: 'dre_financeiro',    bag: 'dre', saida: true },
-  { rotulo: '= LUCRO ANTES DOS TRIBUTOS',   chave: 'dre_antes_tributos', bag: 'dre', subtotal: true, percentual: true, espacoDepois: true },
+  { rotulo: '= LUCRO ANTES DOS TRIBUTOS',   chave: comMercado ? 'dre_antes_tributos' : 'dre_antes_tributos_sm',
+    bag: 'dre', subtotal: true, percentual: true, espacoDepois: true },
 
   { rotulo: '10. (−) Tributos patrimoniais', chave: 'dre_tributo_patrimonial', bag: 'dre', saida: true },
   { rotulo: '11. (−) Impostos sobre lucro', chave: 'dre_imposto_lucro', bag: 'dre', saida: true },
-  /* Da linha LUCRO OPERACIONAL para baixo a cadeia usa os MESMOS indicadores do
-     modelo antigo, entao o Lucro Liquido e' o mesmo POR CONSTRUCAO. LUCRO BRUTO
-     e RESULTADO DA ATIVIDADE sairam da TABELA; os indicadores ficam no PC-100. */
-  { rotulo: '= LUCRO LÍQUIDO',              chave: 'dre_lucro_liquido', bag: 'dre', subtotal: true, percentual: true },
+  /* ⚠ O LUCRO LIQUIDO E DIFERENTE NAS DUAS ABAS, e isso e CORRETO: sao
+     demonstrativos diferentes. Medido na Santa Rita, Jan–Jul 2026: R$ 881,0K com
+     mercado contra R$ 46,2K sem, e a diferenca sao os R$ 834,8K de variacao por
+     preco. Quem vir os dois numeros lado a lado pode achar que um quebrou. */
+  { rotulo: '= LUCRO LÍQUIDO',              chave: comMercado ? 'dre_lucro_liquido' : 'dre_lucro_liquido_sm',
+    bag: 'dre', subtotal: true, percentual: true },
 ];
 
-
+const LINHAS_DRE    = montaLinhasDre(true);
+const LINHAS_DRE_SM = montaLinhasDre(false);
 
 /* AS PARCELAS DE CADA LINHA — sairam da TABELA, nao do sistema. Os indicadores
    seguem intactos no PC-100; o que mudou e onde eles aparecem.
@@ -893,7 +927,7 @@ const corDeValor = (l: LinhaResumo, v: number | null): string =>
   : v > 0               ? 'text-emerald-600 dark:text-emerald-400'
                         : 'text-red-600 dark:text-red-400';
 
-const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, leitura, mesAtual, colunas, onIr, realizadoPrimeiro, compacta, rotuloEstreito, corPorSinal, onDetalhe }: {
+const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, leitura, mesAtual, colunas, onIr, realizadoPrimeiro, compacta, rotuloEstreito, corPorSinal, basePercentual, onDetalhe }: {
   /* DUAS formas de entrada, um componente so:
        `linhas` + `colunas` -> divide por CONTAGEM, sem titulo. E o que as
                                tabelas dos ASSUNTOS usam.
@@ -930,6 +964,12 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
       linhas pelo sinal" alcancaria TODA linha das cinco outras abas, que nao
       tem nenhum dos dois campos, e pintaria o painel inteiro de verde. */
   corPorSinal?: boolean;
+  /** Chaves que SOMADAS formam a base dos percentuais. Duas, com mercado
+      (`dre_vbp` + `dre_variacao_preco`); uma, sem (`dre_vbp` puro). Vem de fora
+      porque quem sabe qual demonstrativo esta na tela e o chamador — e porque
+      somar a variacao por preco numa aba que nao a mostra poria no denominador
+      algo que o numerador nao tem. */
+  basePercentual?: string[];
   /** Abre o detalhe da linha marcada com `detalhe`. Sem a prop nenhum icone e
       emitido, e as cinco outras abas nem marcam o campo. */
   onDetalhe?: (l: LinhaResumo) => void;
@@ -1019,7 +1059,9 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
      16px contra 13px: sobra 3px de folga, e nenhuma fonte foi reduzida.
      ⚠ As duas so valem com `rotuloEstreito`, que so o DRE passa — sem a prop
      as strings saem `mb-3` e `py-1`, identicas as de antes. */
-  const padTh = rotuloEstreito ? 'py-0.5' : 'py-1';
+  /* `py-0` no DRE: o cabecalho e rotulo, nao dado, e os 4px que ele devolve
+     entram na faixa de derivados. Ver o comentario de `margemBaixo`. */
+  const padTh = rotuloEstreito ? 'py-0' : 'py-1';
   const margemBaixo = rotuloEstreito ? 'mb-0' : 'mb-3';
 
   const acha = (l: LinhaResumo) =>
@@ -1048,11 +1090,15 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
   const somaBase = (
     ler: (i: IndicadorAtividade) => number | null,
   ): number | null => {
-    const a = dre.find(x => x.chave === 'dre_vbp');
-    const b = dre.find(x => x.chave === 'dre_variacao_preco');
-    if (!a || !b) return null;
-    const va = ler(a), vb = ler(b);
-    return (va == null || vb == null) ? null : va + vb;
+    let t = 0;
+    for (const c of basePercentual ?? []) {
+      const i = dre.find(x => x.chave === c);
+      if (!i) return null;
+      const v = ler(i);
+      if (v == null) return null;
+      t += v;
+    }
+    return t;
   };
   const baseReal = somaBase(i => (leitura === 'periodo' ? i.valorPeriodo : i.valorMes));
   const baseMeta = somaBase(i => ponto(leitura === 'periodo' ? i.serieMetaPeriodo : i.serieMetaMes, mesAtual));
@@ -1134,7 +1180,7 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
                  (invisivel) ou `bg-muted/30` (leve), conforme a paridade. E
                  espaco simbolico, nao faixa branca garantida.
                  ⚠ OPT-IN por `espacoDepois`, que so o DRE marca. */
-              const gap = bloco.linhas[idx - 1]?.espacoDepois ? ' pt-[4px]' : '';
+              const gap = bloco.linhas[idx - 1]?.espacoDepois ? ' pt-[3px]' : '';
               /* SECAO — cabecalho de grupo, sem valor. Nao e zebra nem clique:
                  ela organiza a leitura, nao e um dado. */
               if (l.secao) return (
@@ -1329,15 +1375,24 @@ const FaixaDerivadosDre = ({ dre, leitura, mesAtual }: {
   const resOper = ler('dre_res_oper');
   const custeio = soma('dre_custo_var', 'dre_custo_fixo');
   const desemb  = soma('dre_custo_var', 'dre_custo_fixo', 'dre_investimento', 'dre_reposicao');
+  /* O lucro/ha vem PRONTO do `dreLucroLiquidoHa` (15cca72f), que e' construido
+     por `buildPorHa`: soma do fluxo dividida pela MEDIA da area pecuaria. Nao se
+     divide aqui — `buildInd` somaria razoes, e razao de mes com razao de mes
+     nao da razao de periodo. */
+  const lucroHa = ler('dre_lucro_ha');
 
+  /* EMPILHADOS, um por linha, e nao lado a lado: o rotulo do markup e longo e
+     os tres em fileira empurravam o ultimo para fora do olhar. Alinhados a
+     esquerda, o olho desce a coluna de valores. */
   const item = (rot: string, val: string) => (
-    <span key={rot} className="whitespace-nowrap">
-      <span className="text-muted-foreground">{rot} </span>
+    <div key={rot} className="flex items-baseline gap-2">
+      <span className="text-muted-foreground w-[112px] shrink-0">{rot}</span>
       <span className="tabular-nums font-medium text-foreground">{val}</span>
-    </span>
+    </div>
   );
   return (
-    <div className="flex flex-wrap items-baseline gap-x-4 gap-y-0.5 px-1.5 pt-1.5 text-[9px] leading-[14px]">
+    <div className="flex flex-col px-1.5 pt-1 text-[9px] leading-[11px]">
+      {item('Lucro por hectare', lucroHa != null ? fmtR(lucroHa) : '—')}
       {item('Markup - custeio', razao(resOper, custeio))}
       {item('Markup - desembolso', razao(resOper, desemb))}
     </div>
@@ -1388,7 +1443,7 @@ const TabelaMensalDre = ({ linhas, dre, modo, mesAtual, onDetalhe }: {
         const serie = modo === 'acumulado' ? ind?.seriePeriodo : ind?.serieMes;
         const tipo = tipografiaDre(l);
         /* Mesmo espacamento da tabela normal — ver o comentario de `gap` la. */
-        const gap = linhas[idx - 1]?.espacoDepois ? ' pt-[4px]' : '';
+        const gap = linhas[idx - 1]?.espacoDepois ? ' pt-[3px]' : '';
         return (
           <tr key={l.rotulo}
               className={`${l.subtotal ? 'bg-muted-foreground/20 border-y border-border' : 'odd:bg-muted/30 even:bg-card'}`}>
@@ -2227,7 +2282,7 @@ export function ModalAtividade({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
       <div
-        className="w-full max-w-7xl mx-4 rounded-lg border border-border/40 bg-background shadow-xl flex flex-col h-[95vh] max-h-[95vh]"
+        className="w-full max-w-7xl mx-4 rounded-lg border border-border/40 bg-background shadow-xl flex flex-col h-[96vh] max-h-[96vh]"
         onClick={e => e.stopPropagation()}
       >
         {/* CABECALHO congelado. `shrink-0` explicito: sem ele o cabecalho
@@ -2274,7 +2329,7 @@ export function ModalAtividade({
                 e que colidiria com o proprio toggle Acumulado abaixo.
                 O segundo grupo so aparece com o primeiro ligado — oferecer
                 Por mes/Acumulado fora da visao mensal seria controle morto. */}
-            {assunto === 'dre' && (
+            {(assunto === 'dre' || assunto === 'dreSemMercado') && (
               <div className="flex gap-1">
                 <button onClick={() => setVisaoDre(v => v === 'mensal' ? 'padrao' : 'mensal')}
                         className={btn(visaoDre === 'mensal', 'p')}>
@@ -2282,7 +2337,7 @@ export function ModalAtividade({
                 </button>
               </div>
             )}
-            {assunto === 'dre' && visaoDre === 'mensal' && (
+            {(assunto === 'dre' || assunto === 'dreSemMercado') && visaoDre === 'mensal' && (
               <div className="flex gap-1">
                 {(['mes', 'acumulado'] as const).map(m => (
                   <button key={m} onClick={() => setModoMensal(m)} className={btn(modoMensal === m, 'p')}>
@@ -2299,6 +2354,12 @@ export function ModalAtividade({
               {clienteNome} · {escopo === 'global' ? 'Global' : 'Por fazenda'} ·{' '}
               {leitura === 'historico' ? `${anoAtual - 5}–${anoAtual}`
                 : leitura === 'periodo' ? rotuloPer : rotuloMes}
+              {/* QUARTO SEGMENTO so no DRE: as duas abas tem o mesmo desenho e
+                  numeros diferentes, entao sem dizer QUAL demonstrativo esta na
+                  tela o leitor nao tem como saber por que o Lucro Liquido mudou
+                  ao trocar de aba. */}
+              {assunto === 'dre' && ' · inclui o efeito do preço da arroba'}
+              {assunto === 'dreSemMercado' && ' · só a operação, sem efeito do preço'}
             </span>
             {/* MAIORES DESVIOS — no FIM desta linha, e nao numa faixa propria
                 acima da tabela. Uma faixa custaria ~20px e o orcamento vertical
@@ -2307,7 +2368,7 @@ export function ModalAtividade({
                 zero: a linha ja existe, e o rotulo de contexto ao lado apenas
                 cede alguns pixels de largura.
                 ⚠ Depois do `ml-auto` do rotulo, entao encosta na direita. */}
-            {assunto === 'dre' && (
+            {(assunto === 'dre' || assunto === 'dreSemMercado') && (
               <button onClick={() => setDesviosAberto(true)}
                       aria-label="Maiores desvios"
                       title="Maiores desvios"
@@ -2328,7 +2389,7 @@ export function ModalAtividade({
             espaco util, e e' o que paga a escada de linha maior.
             ⚠ So no DRE: as cinco outras abas tem grade de cards abaixo da
             tabela, e la o respiro faz falta. */}
-        <div className={`flex-1 min-h-0 overflow-y-auto px-4 ${assunto === 'dre' ? 'py-1' : 'py-3'}`}
+        <div className={`flex-1 min-h-0 overflow-y-auto px-4 ${assunto === 'dre' || assunto === 'dreSemMercado' ? 'py-1' : 'py-3'}`}
              style={{ minHeight: 200 }}>
           {assunto === 'geral' ? (
             /* SO TABELA, sem card de grafico: o Geral existe para responder "o
@@ -2359,7 +2420,7 @@ export function ModalAtividade({
               mesAtual={mesAtual}
               colunas={1}
             />
-          ) : assunto === 'dre' ? (
+          ) : (assunto === 'dre' || assunto === 'dreSemMercado') ? (
             /* ⚠ `leitura="periodo"` FIXO, nao a `leitura` do modal: a
                `TabelaResumo` escolhe a serie por essa prop (:479, :503), entao
                fixa-la deixa a tabela inteira acumulada sem tocar no componente.
@@ -2367,7 +2428,7 @@ export function ModalAtividade({
                acumulado por natureza. */
             visaoDre === 'mensal' ? (
             <TabelaMensalDre
-              linhas={LINHAS_DRE}
+              linhas={assunto === 'dre' ? LINHAS_DRE : LINHAS_DRE_SM}
               dre={indicadoresDre ?? []}
               modo={modoMensal}
               mesAtual={mesAtual}
@@ -2376,7 +2437,8 @@ export function ModalAtividade({
             ) : (
             <>
             <TabelaResumo
-              linhas={LINHAS_DRE}
+              linhas={assunto === 'dre' ? LINHAS_DRE : LINHAS_DRE_SM}
+              basePercentual={assunto === 'dre' ? ['dre_vbp_mer'] : ['dre_vbp']}
               realizadoPrimeiro
               compacta
               rotuloEstreito

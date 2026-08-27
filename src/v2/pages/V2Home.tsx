@@ -659,6 +659,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
     dreFaturamentoIndicador, dreReceitaPecIndicador, dreOutrasReceitasIndicador,
     dreDeducoesIndicador, dreReceitaLiquidaIndicador,
     dreVbpIndicador, dreMargemIndicador, dreResOperIndicador,
+    dreVbpMerIndicador, dreMargemMerIndicador, dreResOperMerIndicador,
+    dreLucroOperacionalSMIndicador, dreAntesTributosSMIndicador,
+    dreLucroLiquidoSMIndicador, dreLucroLiquidoHaIndicador,
     dreCusteioIndicador, dreCustoFixoIndicador, dreCustoVariavelIndicador, dreResultadoBrutoIndicador,
     dreInvestimentoIndicador, dreResultadoComInvestimentoIndicador,
     dreReposicaoBovinosIndicador, dreVariacaoEstoqueIndicador,
@@ -1413,6 +1416,19 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
       monta('dre_vbp',                     dreVbpIndicador,                       'moedaAbreviada', undefined),
       monta('dre_margem',                  dreMargemIndicador,                    'moedaAbreviada', undefined),
       monta('dre_res_oper',                dreResOperIndicador,                   'moedaAbreviada', undefined),
+      /* Os tres SEM MERCADO e o lucro/ha (15cca72f). Os `_SM` sao ADICIONAIS
+         aos originais: a aba 'DRE var. mercado' le os originais, a 'sem var.
+         mercado' le estes. O lucro/ha e MOEDA, nao abreviada — R$ 444,66 diz
+         mais que R$ 0,4K num numero dessa ordem. */
+      /* Os tres COM MERCADO (158120ef): os subtotais ACIMA da variacao por
+         preco, com ela somada. Simetricos aos `_SM`. */
+      monta('dre_vbp_mer',                 dreVbpMerIndicador,                    'moedaAbreviada', undefined),
+      monta('dre_margem_mer',              dreMargemMerIndicador,                 'moedaAbreviada', undefined),
+      monta('dre_res_oper_mer',            dreResOperMerIndicador,                'moedaAbreviada', undefined),
+      monta('dre_lucro_oper_sm',           dreLucroOperacionalSMIndicador,        'moedaAbreviada', undefined),
+      monta('dre_antes_tributos_sm',       dreAntesTributosSMIndicador,           'moedaAbreviada', undefined),
+      monta('dre_lucro_liquido_sm',        dreLucroLiquidoSMIndicador,            'moedaAbreviada', undefined),
+      monta('dre_lucro_ha',                dreLucroLiquidoHaIndicador,            'moeda', 'R$/ha'),
       monta('dre_custeio',                 dreCusteioIndicador,                   'moedaAbreviada', undefined),
       monta('dre_custo_fixo',              dreCustoFixoIndicador,                 'moedaAbreviada', undefined),
       monta('dre_custo_var',               dreCustoVariavelIndicador,             'moedaAbreviada', undefined),
