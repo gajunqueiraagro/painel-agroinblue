@@ -228,6 +228,13 @@ type LinhaResumo = {
       ⚠ NAO e' `nivel`: indentacao diz "isto pertence aquilo", nao "isto e' a
       soma daquilo"; um subtotal e uma linha de topo ficariam identicos. */
   subtotal?: boolean;
+  /** Espaco simbolico DEPOIS desta linha, separando blocos do demonstrativo.
+      Implementado como `pt` nas celulas da linha SEGUINTE — ver o comentario
+      de `gap` na tabela. OPT-IN: so o DRE marca. */
+  espacoDepois?: boolean;
+  /** Segunda linha no rotulo, menor e em cor secundaria. Nao e linha nova da
+      tabela: mora na MESMA celula, abaixo do rotulo. OPT-IN. */
+  subtitulo?: string;
   /** `undefined` = a linha existe no desenho e o indicador ainda nao. */
   emConstrucao?: boolean;
 };
@@ -387,31 +394,41 @@ const LINHAS_DRE: LinhaResumo[] = [
   { rotulo: 'Receita pecuária',            chave: 'dre_rec_pec',       bag: 'dre', nivel: 1 },
   { rotulo: 'Outras receitas',             chave: 'dre_rec_outras',    bag: 'dre', nivel: 1 },
   { rotulo: '2. (−) Deduções de receita',  chave: 'dre_deducoes',      bag: 'dre', saida: true },
-  { rotulo: '= Receita Líquida',           chave: 'dre_receita_liquida', bag: 'dre', subtotal: true },
+  { rotulo: '= RECEITA LÍQUIDA',           chave: 'dre_receita_liquida', bag: 'dre', subtotal: true },
 
+  /* Custo fixo e Custo variavel sairam do DESENHO, nao do sistema: os
+     indicadores `dreCustoFixo` e `dreCustoVariavel` seguem intactos no PC-100,
+     e o modal da Variacao pode precisar deles. Aqui a abertura do custeio nao
+     estava pagando o espaco que ocupava. */
   { rotulo: '3. (−) Custeio pecuária',     chave: 'dre_custeio',       bag: 'dre', saida: true },
-  { rotulo: 'Custo fixo',                  chave: 'dre_custo_fixo',    bag: 'dre', nivel: 1, saida: true },
-  { rotulo: 'Custo variável',              chave: 'dre_custo_var',     bag: 'dre', nivel: 1, saida: true },
-  { rotulo: '= Resultado Bruto',           chave: 'dre_resultado_bruto', bag: 'dre', subtotal: true },
+  { rotulo: '= LUCRO BRUTO',               chave: 'dre_resultado_bruto', bag: 'dre', subtotal: true, espacoDepois: true },
 
   { rotulo: '4. (−) Investimento na fazenda', chave: 'dre_investimento', bag: 'dre', saida: true },
-  { rotulo: '= Resultado após Investimento', chave: 'dre_resultado_investimento', bag: 'dre', subtotal: true },
+  { rotulo: '= LUCRO OPERACIONAL',         chave: 'dre_resultado_investimento', bag: 'dre', subtotal: true, espacoDepois: true },
 
   { rotulo: '5. (−) Reposição de bovinos', chave: 'dre_reposicao',     bag: 'dre', saida: true },
-  { rotulo: '6. (−/+) Variação do estoque', chave: 'dre_variacao',     bag: 'dre' },
+  { rotulo: '6. (−/+) Variação do estoque', chave: 'dre_variacao',     bag: 'dre',
+    subtitulo: 'após vendas e reposição' },
   { rotulo: 'por produção',                chave: 'dre_variacao_producao', bag: 'dre', nivel: 1 },
   { rotulo: 'por preço',                   chave: 'dre_variacao_preco', bag: 'dre', nivel: 1 },
-  { rotulo: '= Resultado Operacional',     chave: 'dre_resultado_operacional', bag: 'dre', subtotal: true },
+  /* RESULTADO DA ATIVIDADE, e nao "Resultado Operacional": entre o LUCRO
+     OPERACIONAL e esta linha entram a reposicao de bovinos e a variacao do
+     estoque, que sao PATRIMONIO — o rebanho — e nao operacao do periodo. O
+     nome sinaliza a mudanca de natureza da conta; chama-lo de operacional
+     diria que reposicao e variacao de estoque sao custo de operar, e nao sao.
+     Por isso tambem os marcos acima levam "LUCRO" e este leva "RESULTADO":
+     e' a pratica da Lei 6.404 / CPC 26, decisao do Gabriel. */
+  { rotulo: '= RESULTADO DA ATIVIDADE',    chave: 'dre_resultado_operacional', bag: 'dre', subtotal: true, espacoDepois: true },
 
-  /* '(−)' e nao '(−/+)': juros sao SEMPRE saida. O rotulo mudou; a chave, a
-     ordem e a fonte nao — o indicador continua sendo `dre_financeiro`. */
   { rotulo: '7. (−) Juros Financeiros', chave: 'dre_financeiro',  bag: 'dre', saida: true },
-  { rotulo: '= Resultado antes dos Tributos', chave: 'dre_antes_tributos', bag: 'dre', subtotal: true },
+  { rotulo: '= LUCRO ANTES DOS TRIBUTOS', chave: 'dre_antes_tributos', bag: 'dre', subtotal: true, espacoDepois: true },
 
   { rotulo: '8. (−) Tributos patrimoniais', chave: 'dre_tributo_patrimonial', bag: 'dre', saida: true },
   { rotulo: '9. (−) Impostos sobre lucro', chave: 'dre_imposto_lucro', bag: 'dre', saida: true },
-  { rotulo: '= Lucro Líquido',             chave: 'dre_lucro_liquido', bag: 'dre', subtotal: true },
+  /* Sem `espacoDepois`: e' o fim do demonstrativo, nao ha bloco seguinte. */
+  { rotulo: '= LUCRO LÍQUIDO',             chave: 'dre_lucro_liquido', bag: 'dre', subtotal: true },
 ];
+
 
 /* Ver a prop `comparadores` do card. */
 const COMPARADORES_MOV: Comparador[] = ['meta', 'anoAnt'];
@@ -878,7 +895,7 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
        subtotal  compacta py-0    (0px)  · normal py-1.5 (6px cada lado)
      ⚠ NO COMPACTO O SUBTOTAL NAO GANHA ALTURA, e isto foi MEDIDO, nao
      escolhido. A area visivel do miolo e 367px — menos da METADE dos ~742px
-     que uma projecao minha supos, e por isso a projecao passou. Com 21 linhas
+     que uma projecao minha supos, e por isso a projecao passou. Com 19 linhas
      a tabela mede 368px e ja nasce 1px no limite: qualquer padding extra
      empurra o Lucro Liquido, a linha pela qual o demonstrativo existe, para
      fora da tela. py-1 custava +48px, py-0.5 +24px; os dois estouravam.
@@ -914,7 +931,7 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
                 do miolo, entao a margem de baixo nao separa nada de nada: e
                 folga pura, e era ela que empurrava o Lucro Liquido.
        `py-0.5` no lugar de `py-1`  ->  4px. So no CABECALHO, que e rotulo e
-                nao dado. As 21 linhas nao sao tocadas.
+                nao dado. As 19 linhas nao sao tocadas.
      16px contra 13px: sobra 3px de folga, e nenhuma fonte foi reduzida.
      ⚠ As duas so valem com `rotuloEstreito`, que so o DRE passa — sem a prop
      as strings saem `mb-3` e `py-1`, identicas as de antes. */
@@ -991,7 +1008,23 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
                 </td>
               </tr>
             )}
-            {bloco.linhas.map(l => {
+            {bloco.linhas.map((l, idx) => {
+              /* ESPACO ENTRE BLOCOS — `pt` nas celulas da linha SEGUINTE.
+                 Tres tecnicas foram descartadas, e por motivos concretos:
+                   linha espacadora  -> entraria no `:nth-child` e deslocaria o
+                      zebrado de tudo que vem depois dela;
+                   borda na linha seguinte -> o preflight do Tailwind poe
+                      `border-collapse: collapse`, e em colapso a borda MAIS
+                      LARGA vence: 4px cor-de-fundo apagariam o `border-b` de
+                      1px do subtotal, que e a faixa que o PR anterior instalou;
+                   padding-bottom no subtotal -> o fundo da faixa preenche o
+                      proprio padding, entao a faixa ficaria mais ALTA em vez de
+                      surgir um espaco depois dela.
+                 ⚠ Os 4px herdam o zebrado da linha seguinte: `bg-card`
+                 (invisivel) ou `bg-muted/30` (leve), conforme a paridade. E
+                 espaco simbolico, nao faixa branca garantida.
+                 ⚠ OPT-IN por `espacoDepois`, que so o DRE marca. */
+              const gap = bloco.linhas[idx - 1]?.espacoDepois ? ' pt-[4px]' : '';
               /* SECAO — cabecalho de grupo, sem valor. Nao e zebra nem clique:
                  ela organiza a leitura, nao e um dado. */
               if (l.secao) return (
@@ -1026,7 +1059,7 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
                  decisao so, no JSX abaixo — cabecalho e corpo leem a mesma flag
                  e nao ha como divergirem. */
               const celMeta = (
-                <td className={`text-right ${padDe(l.subtotal)} px-1.5 text-meta whitespace-nowrap${tipo}`}>
+                <td className={`text-right ${padDe(l.subtotal)} px-1.5 text-meta whitespace-nowrap${tipo}${gap}`}>
                   {ind && metaV != null ? fmtValor(metaV, ind.formatoValor, ind.unidade) : '—'}
                 </td>
               );
@@ -1041,7 +1074,7 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
                   corPorSinal ? corDeValor(l, real)
                   : l.saida ? 'text-destructive'
                   : (l.subtotal && real != null && real < 0) ? 'text-destructive'
-                  : 'text-foreground'}${tipo}`}>
+                  : 'text-foreground'}${tipo}${gap}`}>
                   {ind && real != null ? fmtValor(real, ind.formatoValor, ind.unidade) : '—'}
                 </td>
               );
@@ -1053,8 +1086,18 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
                       rotulo cabe inteiro — `Preço médio venda` era o apertado.
                       A indentacao e PADDING, nao caractere: com espaco o
                       `truncate` cortaria o recuo antes do texto. */}
-                  <td className={`text-left px-1.5 ${padDe(l.subtotal)} ${rotuloEstreito ? 'whitespace-nowrap pr-6' : 'truncate max-w-[180px]'}${l.subtotal ? ' font-semibold' : ''}${tipo}`}
-                      style={{ paddingLeft: 6 + (l.nivel ?? 0) * 12 }}>{l.rotulo}</td>
+                  <td className={`text-left px-1.5 ${padDe(l.subtotal)} ${rotuloEstreito ? 'whitespace-nowrap pr-6' : 'truncate max-w-[180px]'}${l.subtotal ? ' font-semibold' : ''}${tipo}${gap}`}
+                      style={{ paddingLeft: 6 + (l.nivel ?? 0) * 12 }}>
+                    {l.rotulo}
+                    {/* SUBTITULO na MESMA celula, abaixo. Nao e linha da tabela:
+                        linha nova custaria altura cheia e entraria no zebrado.
+                        Sem `subtitulo` nenhum no' extra e emitido. */}
+                    {l.subtitulo && (
+                      <span className="block text-[9px] leading-[10px] font-normal text-muted-foreground">
+                        {l.subtitulo}
+                      </span>
+                    )}
+                  </td>
                   {realizadoPrimeiro ? <>{celReal}{celMeta}</> : <>{celMeta}{celReal}</>}
                   {/* Verde/vermelho so aqui; a linha nunca tem fundo azul, entao
                       o aviso do A10 sobre texto sobre primary nao se aplica. */}
@@ -1070,7 +1113,7 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
                   <td className={`text-right px-1.5 ${padDe(l.subtotal)} whitespace-nowrap ${
                     dif == null ? 'text-muted-foreground'
                     : (l.saida ? dif < 0 : dif >= 0) ? 'text-emerald-600 dark:text-emerald-400'
-                    : 'text-red-600 dark:text-red-400'}${tipo}`}>
+                    : 'text-red-600 dark:text-red-400'}${tipo}${gap}`}>
                     {dif == null ? '—' : `${dif >= 0 ? '+' : ''}${dif.toFixed(1)}%`}
                   </td>
                   {rotuloEstreito && <td className="p-0" />}
@@ -1092,7 +1135,7 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
    doze tabelas, nao doze meses. Generalizar aquilo mexeria nas CINCO abas que
    ela serve para atender uma so; o risco de regressao nao compensa.
    O que as duas COMPARTILHAM e o que precisa mesmo ser unico: `corDeValor`,
-   `valorDoMes`, `fmtValor` e a propria lista `LINHAS_DRE`. As 21 linhas saem na
+   `valorDoMes`, `fmtValor` e a propria lista `LINHAS_DRE`. As 19 linhas saem na
    mesma ordem, com a mesma hierarquia e as mesmas cores das duas telas.
    ⚠ SO REALIZADO. Sem meta e sem Dif.: doze colunas mais duas por mes nao
    caberiam nos 1248px uteis do modal.
@@ -1138,17 +1181,26 @@ const TabelaMensalDre = ({ linhas, dre, modo, mesAtual }: {
       </tr>
     </thead>
     <tbody>
-      {linhas.map(l => {
+      {linhas.map((l, idx) => {
         const ind = l.emConstrucao ? undefined : dre.find(i => i.chave === l.chave);
         const serie = modo === 'acumulado' ? ind?.seriePeriodo : ind?.serieMes;
         const tipo = tipografiaDre(l);
+        /* Mesmo espacamento da tabela normal — ver o comentario de `gap` la. */
+        const gap = linhas[idx - 1]?.espacoDepois ? ' pt-[4px]' : '';
         return (
           <tr key={l.rotulo}
               className={`${l.subtotal ? 'bg-muted-foreground/20 border-y border-border' : 'odd:bg-muted/30 even:bg-card'}`}>
             {/* Indentacao por PADDING, como na outra tabela: com espaco em
                 branco o recuo viraria caractere e nao sobreviveria ao nowrap. */}
-            <td className={`text-left px-1.5 pr-6 py-0 whitespace-nowrap${l.subtotal ? ' font-semibold' : ''} ${tipo}`}
-                style={{ paddingLeft: 6 + (l.nivel ?? 0) * 12 }}>{l.rotulo}</td>
+            <td className={`text-left px-1.5 pr-6 py-0 whitespace-nowrap${l.subtotal ? ' font-semibold' : ''} ${tipo}${gap}`}
+                style={{ paddingLeft: 6 + (l.nivel ?? 0) * 12 }}>
+              {l.rotulo}
+              {l.subtitulo && (
+                <span className="block text-[9px] leading-[10px] font-normal text-muted-foreground">
+                  {l.subtitulo}
+                </span>
+              )}
+            </td>
             {MESES.map((rot, i) => {
               /* COLUNA FUTURA FICA VAZIA MESMO COM LANCAMENTO GRAVADO — o
                  recorte do filtro manda, nao a existencia do dado.
@@ -1173,7 +1225,7 @@ const TabelaMensalDre = ({ linhas, dre, modo, mesAtual }: {
               return (
                 <td key={rot}
                     className={`text-right px-1.5 py-0 whitespace-nowrap ${
-                      l.subtotal ? 'font-bold' : 'font-normal'} ${corDeValor(l, v)} ${tipo}`}>
+                      l.subtotal ? 'font-bold' : 'font-normal'} ${corDeValor(l, v)} ${tipo}${gap}`}>
                   {ind && v != null ? fmtValor(v, ind.formatoValor, ind.unidade) : ''}
                 </td>
               );
