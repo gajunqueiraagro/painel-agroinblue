@@ -838,6 +838,13 @@ export interface PainelConsultorDataResult {
   /* Os TRES da leitura gerencial — ver o comentario no `_finSoberano`.
      ⚠ `dreResOperIndicador` (VBP menos os dois custos) NAO e o mesmo que
      `dreResultadoOperacionalIndicador` (o RESULTADO DA ATIVIDADE antigo). */
+  /* Os tres SEM MERCADO (`_SM`) e o lucro por hectare. Ver o comentario no
+     `_finSoberano`: os `_SM` sao ADICIONAIS aos originais, nao substitutos. */
+  dreLucroOperacionalSMIndicador:       IndicadorFinanceiroShape | null;
+  dreAntesTributosSMIndicador:          IndicadorFinanceiroShape | null;
+  dreLucroLiquidoSMIndicador:           IndicadorFinanceiroShape | null;
+  dreLucroLiquidoHaIndicador:           IndicadorFinanceiroShape | null;
+
   dreVbpIndicador:                      IndicadorFinanceiroShape | null;
   dreMargemIndicador:                   IndicadorFinanceiroShape | null;
   dreResOperIndicador:                  IndicadorFinanceiroShape | null;
@@ -4228,6 +4235,35 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
         const resOperGer = margem ? sub12(margem, dreCf) : null;
         const resOperGerM = subM(margemM, cfPec_M);
 
+        /* ── OS TRES SEM MERCADO ───────────────────────────────────────
+           `_SM` = SEM MERCADO. Sao os mesmos tres subtotais de baixo, com a
+           VARIACAO POR PRECO retirada: o efeito de mercado sai e sobra so o que
+           a operacao fez. Os originais CONTINUAM — nao sao substitutos. A aba
+           "DRE var. mercado" le os originais; a "DRE sem var. mercado" le estes.
+
+           ⚠ POR QUE SO ESTES TRES: a variacao por preco entra no demonstrativo
+           uma unica vez, na linha 7, entao so os subtotais ABAIXO dela mudam.
+           Receita Liquida, VBP, Margem de Contribuicao e Resultado Operacional
+           ficam identicos nas duas abas — o VBP ja exclui o efeito de preco por
+           construcao.
+
+           ⚠ O LUCRO LIQUIDO E DIFERENTE ENTRE AS DUAS ABAS, e isso e CORRETO:
+           sao demonstrativos diferentes. Medido na Santa Rita, Jan–Jul 2026:
+           R$ 881,0K com mercado contra R$ 46,2K sem, e a diferenca sao os
+           R$ 834,8K de variacao por preco. Quem vir os dois numeros lado a lado
+           e' capaz de achar que um deles quebrou; nao quebrou.
+
+           ⚠ TERCEIRA FAMILIA DE NOMES PARECIDOS deste arquivo, depois dos tres
+           subtotais gerenciais (`dreResOper` x `dreResultadoOperacional` x
+           `dreResultadoInvestimento`) e dos por-hectare em caixa x competencia.
+           O sufixo e a unica diferenca; ler a chave inteira antes de usar. */
+        const lucroOperSM  = (resOper && varPreco) ? sub12(resOper, varPreco) : null;
+        const lucroOperSMM = subM(resOperM, varPrecoM);
+        const antesTribSM  = (resAnt && varPreco)  ? sub12(resAnt, varPreco)  : null;
+        const antesTribSMM = subM(resAntM, varPrecoM);
+        const lucroSM      = (lucro && varPreco)   ? sub12(lucro, varPreco)   : null;
+        const lucroSMM     = subM(lucroM, varPrecoM);
+
         const nada12 = Array(12).fill(NaN) as number[];
         const per = (t: string) => isPer ? `${t} acumulado Jan→mês (competência)` : `${t} no mês (competência)`;
         return {
@@ -4251,6 +4287,25 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
             per('Resultado operacional menos resultado financeiro'), resAntM),
           dreLucroLiquido: buildInd(lucro ?? nada12, 'LUCRO LÍQUIDO', 'Lucro Líquido',
             per('Resultado antes dos tributos, menos tributos patrimoniais e impostos sobre lucro'), lucroM),
+          dreLucroOperacionalSM: buildInd(lucroOperSM ?? nada12, 'LUCRO OPERACIONAL SEM MERCADO', 'Lucro Operacional sem Mercado',
+            per('Lucro operacional menos a variação do rebanho por preço'), lucroOperSMM),
+          dreAntesTributosSM: buildInd(antesTribSM ?? nada12, 'LUCRO ANTES DOS TRIBUTOS SEM MERCADO', 'Lucro antes dos Tributos sem Mercado',
+            per('Lucro antes dos tributos menos a variação do rebanho por preço'), antesTribSMM),
+          dreLucroLiquidoSM: buildInd(lucroSM ?? nada12, 'LUCRO LÍQUIDO SEM MERCADO', 'Lucro Líquido sem Mercado',
+            per('Lucro líquido menos a variação do rebanho por preço'), lucroSMM),
+          /* ⚠ POR HECTARE, e por isso `buildPorHa` e NAO `buildInd`: o acumulado
+             de uma razao nao e a soma das razoes. `buildInd` roda `cumSumTo13`,
+             que somaria R$/ha de cada mes — numero sem significado. `buildPorHa`
+             divide a SOMA do fluxo pela MEDIA da area, que e a regra do repo.
+             ⚠ Area produtiva PECUARIA, nunca a total: `buildPorHa` ja le
+             `areaPecuariaRealPorMes` e `areaPecuariaMetaPorMes` internamente.
+             ⚠ COMPETENCIA. Os quatro por-hectare de 249b6a51 (`faturamentoHa`,
+             `custoHa`, `investimentoHa`, `desembolsoHa`) sao de CAIXA, e
+             respondem outra pergunta. Nao comparar este com aqueles. */
+          dreLucroLiquidoHa: buildPorHa(lucro ?? nada12, 'LUCRO LÍQUIDO POR HECTARE', 'Lucro Líquido por hectare',
+            'Lucro líquido do mês ÷ área produtiva pecuária do mês',
+            'Lucro líquido Jan→mês ÷ área produtiva pecuária média do período',
+            lucroM),
           dreVbp: buildInd(vbp ?? nada12, 'VALOR BRUTO DA PRODUÇÃO', 'Valor Bruto da Produção',
             per('Receita líquida mais variação por produção, menos reposição de bovinos'), vbpM),
           dreMargem: buildInd(margem ?? nada12, 'MARGEM DE CONTRIBUIÇÃO', 'Margem de Contribuição',
@@ -5107,6 +5162,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     dreReposicaoBovinosIndicador: _finSoberano.dreReposicaoBovinos,
     dreJurosIndicador: _finSoberano.dreJuros,
     dreVbpIndicador: _finSoberano.dreVbp,
+    dreLucroOperacionalSMIndicador: _finSoberano.dreLucroOperacionalSM,
+    dreAntesTributosSMIndicador: _finSoberano.dreAntesTributosSM,
+    dreLucroLiquidoSMIndicador: _finSoberano.dreLucroLiquidoSM,
+    dreLucroLiquidoHaIndicador: _finSoberano.dreLucroLiquidoHa,
     dreMargemIndicador: _finSoberano.dreMargem,
     dreResOperIndicador: _finSoberano.dreResOper,
 
@@ -5227,6 +5286,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       dreReposicaoBovinosIndicador: _finSoberano.dreReposicaoBovinos,
       dreJurosIndicador: _finSoberano.dreJuros,
       dreVbpIndicador: _finSoberano.dreVbp,
+      dreLucroOperacionalSMIndicador: _finSoberano.dreLucroOperacionalSM,
+      dreAntesTributosSMIndicador: _finSoberano.dreAntesTributosSM,
+      dreLucroLiquidoSMIndicador: _finSoberano.dreLucroLiquidoSM,
+      dreLucroLiquidoHaIndicador: _finSoberano.dreLucroLiquidoHa,
       dreMargemIndicador: _finSoberano.dreMargem,
       dreResOperIndicador: _finSoberano.dreResOper,
       // Step 2.2: dominio rebanho preservado (composicao depende de getCategoriasDetalhe,
