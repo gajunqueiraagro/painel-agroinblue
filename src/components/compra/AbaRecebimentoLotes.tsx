@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Textarea } from '@/components/ui/textarea';
 import { DatePicker } from '@/components/ui/date-picker';
 import { parseNumericValue } from '@/lib/calculos/abate';
+import { formatMed2 } from '@/lib/calculos/formatters';
 import type { RecebimentoApi, EstadoRecebimento, LoteRecebimento } from '@/hooks/useOperacaoRecebimento';
 import type { DocumentosApi } from '@/hooks/useOperacaoDocumentos';
 import { DocumentoFormOC, FORM_VAZIO } from './DocumentoFormOC';
@@ -25,17 +26,41 @@ interface Props {
   onVoltarNegociacao?: () => void;
 }
 
-/* Colunas independentes: #, Categoria, Negociado, Recebido, Diferença, Data, Qtd. a receber, Peso méd., Estado, Ações.
-   `minmax(0,Nfr)` e nao `Nfr` puro: trilha `fr` tem minimo AUTOMATICO de conteudo,
-   entao o mesmo GRID resolvia larguras DIFERENTES no cabecalho e na linha — la a
-   trilha era empurrada pela palavra ("NEGOCIADO", "DIFERENÇA"), aqui pelo input e
-   pelo DatePicker. Com o minimo em 0 as dez trilhas passam a depender so da largura
-   do container, que e' a mesma nos dois, e as colunas coincidem.
-   Com o minimo em 0 a trilha deixa de ceder a palavra do cabecalho, e "NEGOCIADO"
-   (64px) passava a estourar os 58px que 0.6fr dava. Compensado no proprio peso:
-   0.6 -> 0.66 em Negociado e 1.4 -> 1.34 em Data, que sobrava. A SOMA (8.05) nao
-   muda, entao nenhuma outra coluna se mexe. */
-const GRID = 'grid grid-cols-[minmax(0,0.35fr)_minmax(0,1.3fr)_minmax(0,0.66fr)_minmax(0,0.6fr)_minmax(0,0.7fr)_minmax(0,1.34fr)_minmax(0,0.65fr)_minmax(0,0.75fr)_minmax(0,0.8fr)_minmax(0,0.9fr)] gap-1.5';
+/* GRADES DA ABA. `minmax(0,Nfr)` e nao `Nfr` puro em TODAS as trilhas: `fr` tem
+   minimo automatico de conteudo, entao o mesmo grid resolvia larguras diferentes
+   no cabecalho e na linha — la empurrado pela palavra ("NEGOCIADO"), aqui pelo
+   input e pelo DatePicker. Com o minimo em 0 a trilha depende so da largura do
+   container, que e' a mesma nos dois, e as colunas coincidem (f3f55e43).
+
+   OS PESOS SAO PIXELS MEDIDOS / 100, e o `min-w` e' a soma desses pixels mais os
+   gaps. Assim, no minimo, cada coluna recebe EXATAMENTE o que seu conteudo pede;
+   acima disso todas crescem juntas. Antes as trilhas eram arbitrarias: Data levava
+   1.34fr (131px) para um dd/mm/aaaa, e sobrava min-w-[840px] que nao cabia no modal
+   e forcava rolagem horizontal.
+     #  26 · Categoria 110 · Negociado 64 · Recebido 57 · Diferenca 66
+     Data 95 · Qtd. a receber 55 · Peso med. 66 · Estado 74 · Acoes 105  = 718 (+54 de gap)
+   Negociado/Recebido/Diferenca/Estado sao ditados pelo ROTULO, nao pela celula;
+   Acoes pelo par "Receber" + "Doc."; Categoria leva folga por causa dos nomes. */
+const GRID = 'grid grid-cols-[minmax(0,0.26fr)_minmax(0,1.1fr)_minmax(0,0.64fr)_minmax(0,0.57fr)_minmax(0,0.66fr)_minmax(0,0.95fr)_minmax(0,0.55fr)_minmax(0,0.66fr)_minmax(0,0.74fr)_minmax(0,1.05fr)] gap-1.5';
+const MINW = 'min-w-[772px]';
+/* ENTREGA ENCERRADA: Data, Qtd. a receber, Peso med. e Acoes so teriam travessao —
+   nao ha mais o que fazer. A COLUNA INTEIRA sai, nao a celula: coluna vazia ocupa
+   espaco e ainda sugere que falta preencher algo. Sobram as que informam. */
+const GRID_ENC = 'grid grid-cols-[minmax(0,0.26fr)_minmax(0,1.1fr)_minmax(0,0.64fr)_minmax(0,0.57fr)_minmax(0,0.66fr)_minmax(0,0.74fr)] gap-1.5';
+const MINW_ENC = 'min-w-[427px]';
+/* MOVIMENTACOES: era texto corrido separado por bolinhas, que nao alinha coluna
+   nenhuma. Mesmas regras de cima. Acoes some junto com o "Estornar" que ela abriga
+   — em somente leitura a coluna nao existe, pelo mesmo motivo do GRID_ENC.
+     Data 72 · Categoria 110 · Quantidade 80 · Peso med. 80 · Acoes 90 = 432 (+24 de gap) */
+const GRID_MOV = 'grid grid-cols-[minmax(0,0.72fr)_minmax(0,1.1fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,0.9fr)] gap-1.5';
+const GRID_MOV_RO = 'grid grid-cols-[minmax(0,0.72fr)_minmax(0,1.1fr)_minmax(0,0.8fr)_minmax(0,0.8fr)] gap-1.5';
+const MINW_MOV = 'min-w-[456px]';
+const MINW_MOV_RO = 'min-w-[360px]';
+// Caixa horizontal COMUM ao cabecalho e a linha: a linha tem `border`, e borda entra
+//   na largura. Sem a transparente aqui o cabecalho comeca 1px antes e distribui as
+//   colunas sobre 2px a mais.
+const CX_CAB = 'border border-transparent px-1';
+const CX_LIN = 'border px-1';
 const TONE: Record<EstadoRecebimento, string> = {
   nao_iniciado: 'bg-slate-100 text-slate-600',
   parcial: 'bg-amber-100 text-amber-700',
@@ -85,7 +110,7 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
   // Valor INICIAL do input Peso méd. = peso médio negociado oficial do lote (por loteId; nunca por
   //   ordem/categoria/posição). Ausência → vazio (nunca 0). Só inicializa: não persiste sozinho.
   const pesoInicial = (l: LoteRecebimento) =>
-    (l.pesoMedioNegociadoKg != null && Number.isFinite(l.pesoMedioNegociadoKg)) ? String(l.pesoMedioNegociadoKg) : '';
+    (l.pesoMedioNegociadoKg != null && Number.isFinite(l.pesoMedioNegociadoKg)) ? formatMed2(l.pesoMedioNegociadoKg) : '';
 
   const registrar = (l: LoteRecebimento) => {
     const q = parseNumericValue(qtd[l.loteId] ?? '') || 0;
@@ -142,9 +167,26 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
     <div className="rounded-md border bg-card p-1.5 shadow-sm space-y-1.5 min-w-0">{/* PR-OC-UX-DENSIDADE-01 item 5 — padding/gap reduzidos */}
       <div className="flex items-center justify-between gap-2">
         <div>
-          <div className="text-[12px] font-semibold text-foreground">Recebimento por lote</div>
+          {/* "na fazenda" desfaz a confusao com recebimento FINANCEIRO, que e' outra
+              coisa inteiramente e mora na aba Financeiro. */}
+          <div className="text-[12px] font-semibold text-foreground">Recebimento por lote na fazenda</div>
+          {/* Bloqueio informa MOTIVO e CAMINHO, nao so o estado: "Somente leitura." dizia
+              o que o operador ja via na tela e nao dizia como sair de la.
+
+              ⚠ O SEGUNDO RAMO ESTA INALCANCAVEL HOJE, e o texto ficou como o briefing
+              pediu para nao inventar outro. Nesta aba `somenteLeitura` vem de
+              `recebimentoReadOnly`, que e' SO `status_comercial === 'cancelada'`
+              (CompraModalShell:189, que documenta: "titulo materializado NAO bloqueia a
+              chegada fisica"). E operacao cancelada nao chega ate aqui: `concluida` e'
+              false e o early return de "negociacao ainda nao concluida" pega antes.
+              Ou seja: fechada-com-titulo NAO deixa esta aba em leitura — ela segue
+              editavel, medido na OC 6a44fb9b. Reportado; a decisao e' do briefing. */}
           <div className="text-[11px] text-muted-foreground">
-            {encerrada ? 'Recebimento encerrado — somente leitura.' : somenteLeitura ? 'Somente leitura.' : 'Registre a quantidade efetivamente recebida por lote.'}
+            {encerrada
+              ? 'Recebimento encerrado. Use Reabrir recebimento para registrar mais movimentações.'
+              : somenteLeitura
+                ? 'Operação fechada com título financeiro. Para editar, estorne a materialização na aba Financeiro e reabra a operação.'
+                : 'Registre a quantidade efetivamente recebida por lote.'}
           </div>
         </div>
         {!readOnly && algumLoteComSaldo && (
@@ -155,54 +197,56 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
       </div>
 
       <div className="overflow-x-auto">
-        <div className="min-w-[840px]">
-          {/* `border border-transparent` NAO e' decoracao: a LINHA tem `border`, e a
-              borda entra na largura da caixa. Sem ela aqui, o conteudo do cabecalho
-              comeca 1px antes e distribui as dez colunas sobre 2px a mais que a
-              linha — o GRID e' o mesmo, o envoltorio e' que nao era. */}
-          <div className={`${GRID} border border-transparent px-1 pb-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground [&>span]:text-center`}>
+        <div className={encerrada ? MINW_ENC : MINW}>
+          <div className={`${encerrada ? GRID_ENC : GRID} ${CX_CAB} pb-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground [&>span]:text-center`}>
             <span>#</span><span>Categoria</span><span>Negociado</span>
-            <span>Recebido</span><span>Diferença</span><span>Data</span>
-            <span>Qtd. a receber</span><span>Peso méd.</span>
-            <span>Estado</span><span>Ações</span>
+            <span>Recebido</span><span>Diferença</span>
+            {!encerrada && (<><span>Data</span><span>Qtd. a receber</span><span>Peso méd.</span></>)}
+            <span>Estado</span>
+            {!encerrada && <span>Ações</span>}
           </div>
           {api.lotes.length === 0 ? (
             <div className="rounded-md border border-dashed bg-muted/10 px-3 py-3 text-center text-[11px] text-muted-foreground">
               {api.loading ? 'Carregando…' : 'Nenhum lote negociado.'}
             </div>
           ) : api.lotes.map(l => (
-            <div key={l.loteId} className={`${GRID} items-center rounded-md border bg-muted/20 px-1 py-0.5`}>
+            <div key={l.loteId} className={`${encerrada ? GRID_ENC : GRID} items-center rounded-md ${CX_LIN} bg-muted/20 py-0.5`}>
               <div className="text-[11px] text-center text-muted-foreground tabular-nums">{l.ordem}</div>
               <div className="text-[11px] break-words">{catLabel(l.categoria)}</div>
               <div className="text-[11px] text-right tabular-nums">{l.qtdNegociada ?? '—'}</div>
               <div className="text-[11px] text-right tabular-nums font-semibold">{l.qtdRecebida}</div>
               <div className={`text-[11px] text-right tabular-nums ${l.diferenca !== 0 ? 'text-amber-600' : ''}`}>{l.diferenca}</div>
-              {/* Data (default hoje, editável, enviada no payload existente) */}
-              {readOnly ? (
-                <div className="text-[11px] text-center text-muted-foreground">—</div>
-              ) : (
-                <DatePicker value={dataReb[l.loteId] ?? hoje} onChange={v => setDataReb(s => ({ ...s, [l.loteId]: v }))}
-                  className="h-6 text-[10px]" />
-              )}
-              {/* Qtd. a receber */}
-              {readOnly ? (
-                <div className="text-[11px] text-center text-muted-foreground">—</div>
-              ) : (
-                <Input inputMode="numeric" value={qtd[l.loteId] ?? ''} onChange={e => setQtd(s => ({ ...s, [l.loteId]: e.target.value }))}
-                  placeholder="0" className="h-6 w-full text-[11px] text-right tabular-nums" />
-              )}
-              {/* Peso méd. */}
-              {readOnly || !isCompra ? (
-                <div className="text-[11px] text-center text-muted-foreground">—</div>
-              ) : (
-                <Input inputMode="decimal" value={peso[l.loteId] ?? pesoInicial(l)} onChange={e => setPeso(s => ({ ...s, [l.loteId]: e.target.value }))}
-                  placeholder="—" className="h-6 w-full text-[11px] text-right tabular-nums" />
-              )}
+              {!encerrada && (<>
+                {/* Data (default hoje, editável, enviada no payload existente) */}
+                {readOnly ? (
+                  <div className="text-[11px] text-center text-muted-foreground">—</div>
+                ) : (
+                  <DatePicker value={dataReb[l.loteId] ?? hoje} onChange={v => setDataReb(s => ({ ...s, [l.loteId]: v }))}
+                    className="h-6 text-[10px]" />
+                )}
+                {/* Qtd. a receber */}
+                {readOnly ? (
+                  <div className="text-[11px] text-center text-muted-foreground">—</div>
+                ) : (
+                  <Input inputMode="numeric" value={qtd[l.loteId] ?? ''} onChange={e => setQtd(s => ({ ...s, [l.loteId]: e.target.value }))}
+                    placeholder="0" className="h-6 w-full text-[11px] text-right tabular-nums" />
+                )}
+                {/* Peso méd. — em leitura NAO e' campo, mas o peso medio negociado EXISTE:
+                    imprimi-lo como texto, e nao '—'. Travessao e' dado ausente, e este
+                    nao esta ausente; so nao e' editavel. '—' fica para quando for null. */}
+                {readOnly || !isCompra ? (
+                  <div className="text-[11px] text-right tabular-nums text-muted-foreground">{pesoInicial(l) || '—'}</div>
+                ) : (
+                  <Input inputMode="decimal" value={peso[l.loteId] ?? pesoInicial(l)} onChange={e => setPeso(s => ({ ...s, [l.loteId]: e.target.value }))}
+                    placeholder="—" className="h-6 w-full text-[11px] text-right tabular-nums" />
+                )}
+              </>)}
               {/* Estado (coluna própria) */}
               <div className="text-center">
                 <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${TONE[l.estado]}`}>{LABEL[l.estado]}</span>
               </div>
               {/* Ações */}
+              {!encerrada && (
               <div className="flex items-center justify-center gap-1">
                 {!readOnly && !semSaldo(l) && (
                   <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-[10px]" disabled={api.saving} onClick={() => registrar(l)}>
@@ -215,6 +259,7 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
                   </Button>
                 )}
               </div>
+              )}
             </div>
           ))}
         </div>
@@ -224,17 +269,33 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
       {movsAtivas.length > 0 && (
         <div className="space-y-0.5">
           <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Movimentações registradas</div>
-          {movsAtivas.map(m => (
-            <div key={m.id} className="flex items-center justify-between gap-2 rounded border bg-muted/10 px-2 py-0.5 text-[11px]">
-              <span className="tabular-nums">{m.data ? m.data.split('-').reverse().join('/') : '—'} • {catLabel(m.categoria)} • {m.quantidade} cab{m.pesoMedio != null ? ` • ${m.pesoMedio.toLocaleString('pt-BR')} kg` : ''}</span>
-              {!readOnly && (
-                <Button type="button" variant="ghost" size="sm" className="h-5 px-1.5 text-[10px] text-muted-foreground hover:text-destructive gap-1"
-                  disabled={api.saving} onClick={() => void api.estornar(m.id, 'estorno pela aba Recebimento')}>
-                  <Undo2 className="h-3 w-3" /> Estornar
-                </Button>
-              )}
+          {/* Era uma frase por movimentacao, com os campos separados por bolinhas: nada
+              alinhava com nada e comparar duas linhas exigia ler a frase inteira.
+              Vira tabela, com as MESMAS regras da tabela de lotes. */}
+          <div className="overflow-x-auto">
+            <div className={readOnly ? MINW_MOV_RO : MINW_MOV}>
+              <div className={`${readOnly ? GRID_MOV_RO : GRID_MOV} ${CX_CAB} pb-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground [&>span]:text-center`}>
+                <span>Data</span><span>Categoria</span><span>Quantidade</span><span>Peso méd.</span>
+                {!readOnly && <span>Ações</span>}
+              </div>
+              {movsAtivas.map(m => (
+                <div key={m.id} className={`${readOnly ? GRID_MOV_RO : GRID_MOV} items-center rounded-md ${CX_LIN} bg-muted/10 py-0.5`}>
+                  <div className="text-[11px] text-center tabular-nums">{m.data ? m.data.split('-').reverse().join('/') : '—'}</div>
+                  <div className="text-[11px] break-words">{catLabel(m.categoria)}</div>
+                  <div className="text-[11px] text-right tabular-nums">{m.quantidade} cab</div>
+                  <div className="text-[11px] text-right tabular-nums">{m.pesoMedio != null ? `${formatMed2(m.pesoMedio)} kg` : '—'}</div>
+                  {!readOnly && (
+                    <div className="flex items-center justify-center">
+                      <Button type="button" variant="ghost" size="sm" className="h-5 px-1.5 text-[10px] text-muted-foreground hover:text-destructive gap-1"
+                        disabled={api.saving} onClick={() => void api.estornar(m.id, 'estorno pela aba Recebimento')}>
+                        <Undo2 className="h-3 w-3" /> Estornar
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
         </div>
       )}
 
