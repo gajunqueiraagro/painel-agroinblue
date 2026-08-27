@@ -835,6 +835,13 @@ export interface PainelConsultorDataResult {
   dreReposicaoBovinosIndicador:         IndicadorFinanceiroShape | null;
   dreJurosIndicador:                    IndicadorFinanceiroShape | null;
 
+  /* Os TRES da leitura gerencial — ver o comentario no `_finSoberano`.
+     ⚠ `dreResOperIndicador` (VBP menos os dois custos) NAO e o mesmo que
+     `dreResultadoOperacionalIndicador` (o RESULTADO DA ATIVIDADE antigo). */
+  dreVbpIndicador:                      IndicadorFinanceiroShape | null;
+  dreMargemIndicador:                   IndicadorFinanceiroShape | null;
+  dreResOperIndicador:                  IndicadorFinanceiroShape | null;
+
   /** Domínio rebanho · estruturas executivas (Fase 0 Step 2.2). */
   rebanho: PC100_Rebanho;
 
@@ -4183,6 +4190,44 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
         const lucroM   = (resAntM && tribPatr_M && impLucro_M)
           ? sub12(sub12(resAntM, tribPatr_M), impLucro_M) : null;
 
+        /* ── OS TRES DA LEITURA GERENCIAL ─────────────────────────────
+           Modelo que separa o que a fazenda PRODUZIU do que o MERCADO pagou:
+           a variacao do estoque se parte, "por producao" entra ANTES dos
+           custos (e producao) e "por preco" fica no bloco nao operacional (e
+           mercado, nao gestao).
+
+           ⚠ REORDENAR NAO MUDA O TOTAL, e esta e a suspeita que a proxima
+           pessoa vai ter. As duas estruturas dao o MESMO Lucro Liquido, e a
+           equivalencia se apoia em duas identidades:
+             Variacao = VarProducao + VarPreco   — a propria decomposicao,
+                por construcao (`varTotal = som12(varProd, varPreco)`, :4155);
+             Custeio  = CustoFixo + CustoVariavel — MEDIDO em :4170, onde
+                `custeio = som12(dreCf, dreCv)`. E soma exata, nao aproximacao.
+           Com as duas valendo, a soma algebrica das duas ordenacoes e' identica
+           termo a termo: nenhuma linha entra duas vezes nem fica de fora.
+
+           ⚠ VBP NEGATIVO NAO E' DEFEITO. Medido na Santa Rita, marco/2026:
+           −R$ 333,3K (receita 198,2K menos variacao por producao 531,5K).
+           Significa que o desfrute superou a producao no mes — vendeu-se mais
+           rebanho do que se produziu —, e e' exatamente o que a auditoria
+           procura. Quem consumir estes indicadores deve tratar base <= 0 como
+           SEM PERCENTUAL (travessao), nunca como zero.
+
+           ⚠ ADITIVOS: os sete derivados acima continuam. `dreResultadoBruto` e
+           `dreResultadoOperacional` saem da TABELA num PR seguinte, mas ficam
+           publicados aqui — outros consumidores podem existir.
+           ⚠ `dreResOper` NAO e' `dreResultadoOperacional`: aquele e o
+           RESULTADO DA ATIVIDADE do modelo antigo (com investimento, reposicao
+           e variacao INTEIRA); este e VBP menos os dois custos. Nomes parecidos,
+           quantidades diferentes — por isso os dois coexistem com chaves
+           distintas em vez de um sobrescrever o outro. */
+        const vbp        = varProd ? sub12(som12(recLiq, varProd), dreInvBov) : null;
+        const vbpM       = subM(somM(recLiqM, varProdM), invBov_M);
+        const margem     = vbp ? sub12(vbp, dreCv) : null;
+        const margemM    = subM(vbpM, cvPec_M);
+        const resOperGer = margem ? sub12(margem, dreCf) : null;
+        const resOperGerM = subM(margemM, cfPec_M);
+
         const nada12 = Array(12).fill(NaN) as number[];
         const per = (t: string) => isPer ? `${t} acumulado Jan→mês (competência)` : `${t} no mês (competência)`;
         return {
@@ -4206,6 +4251,12 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
             per('Resultado operacional menos resultado financeiro'), resAntM),
           dreLucroLiquido: buildInd(lucro ?? nada12, 'LUCRO LÍQUIDO', 'Lucro Líquido',
             per('Resultado antes dos tributos, menos tributos patrimoniais e impostos sobre lucro'), lucroM),
+          dreVbp: buildInd(vbp ?? nada12, 'VALOR BRUTO DA PRODUÇÃO', 'Valor Bruto da Produção',
+            per('Receita líquida mais variação por produção, menos reposição de bovinos'), vbpM),
+          dreMargem: buildInd(margem ?? nada12, 'MARGEM DE CONTRIBUIÇÃO', 'Margem de Contribuição',
+            per('Valor bruto da produção menos custo variável'), margemM),
+          dreResOper: buildInd(resOperGer ?? nada12, 'RESULTADO OPERACIONAL', 'Resultado Operacional',
+            per('Margem de contribuição menos custo fixo'), resOperGerM),
           /* ── AS OITO PARCELAS ────────────────────────────────────────────
              Os MESMOS arrays que os subtotais acima consomem, publicados com
              chave propria. Nao ha recalculo: `dreFaturamento` e' som12(dreRec,
@@ -5055,6 +5106,9 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     dreInvestimentoIndicador: _finSoberano.dreInvestimento,
     dreReposicaoBovinosIndicador: _finSoberano.dreReposicaoBovinos,
     dreJurosIndicador: _finSoberano.dreJuros,
+    dreVbpIndicador: _finSoberano.dreVbp,
+    dreMargemIndicador: _finSoberano.dreMargem,
+    dreResOperIndicador: _finSoberano.dreResOper,
 
     rebanho,
     financeiro,
@@ -5172,6 +5226,9 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       dreInvestimentoIndicador: _finSoberano.dreInvestimento,
       dreReposicaoBovinosIndicador: _finSoberano.dreReposicaoBovinos,
       dreJurosIndicador: _finSoberano.dreJuros,
+      dreVbpIndicador: _finSoberano.dreVbp,
+      dreMargemIndicador: _finSoberano.dreMargem,
+      dreResOperIndicador: _finSoberano.dreResOper,
       // Step 2.2: dominio rebanho preservado (composicao depende de getCategoriasDetalhe,
       // que pode existir mesmo em estado incompleto — funcao filtra saldoFinal > 0 e
       // retorna null quando vazio).
