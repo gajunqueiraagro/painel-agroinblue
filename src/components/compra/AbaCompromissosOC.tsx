@@ -150,27 +150,47 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
   }>(null);
   const [estEtapa, setEstEtapa] = useState<1 | 2>(1);
   const [estMotivo, setEstMotivo] = useState('');
-  const estRodando = estorno.saving;
+  /* ⚠ ESTADO PROPRIO, NAO `estorno.saving`. As guardas de Esc/clique-fora e o
+     botao Voltar leem esta flag; se ela ficar presa em true o dialogo modal
+     recusa QUALQUER fechamento e a pagina inteira fica inerte sob o overlay —
+     sem saida a nao ser recarregar. Por isso o `finally` de `confirmarEstorno`
+     e' o unico ponto que a limpa, e ele roda em todo caminho, inclusive quando
+     um guard do backend recusa. Guard disparando e' operacao NORMAL. */
+  const [estRodando, setEstRodando] = useState(false);
 
   /* ⚠ SO OFERECE O QUE O ESTADO PERMITE. O banco recusa cancelar programacao
      com parcela materializada e compromisso com programacao ativa; mostrar o
-     botao assim mesmo seria prometer o que sera negado. */
+     botao assim mesmo seria prometer o que sera negado.
+
+     ⚠⚠ DOIS CAMPOS PARECIDOS, PERGUNTAS DIFERENTES — nao trocar um pelo outro:
+       `p.status === 'materializada'`  coluna CRUA da parcela: "ja foi materializada?"
+       `p.materializada`               derivado (20260828140000): "existe titulo VIVO?"
+     Com o titulo cancelado o derivado vira false enquanto a parcela segue
+     materializada — medido na OC 69115ef9, parcela d77762fd, titulo 802deece.
+     `totalMaterializado` e `totalLiquidado` sao da MESMA familia derivada
+     (a view soma partes com `f.cancelado IS NOT TRUE`), entao tambem nao
+     servem de gate. Os guards do banco olham `pp.status IN ('materializada',
+     'paga')`; os gates abaixo espelham isso literalmente. */
   const parcelasSel = parcelas.filter(p => p.compromissoId === selectedId);
+  const temParcelaComEfeito = parcelasSel.some(
+    p => p.status === 'materializada' || p.status === 'paga');
   const podeCancelarProgramacao = podeEscrever
     && !!selecionado?.temProgramacaoAtiva
-    && !parcelasSel.some(p => p.materializada);
+    && !temParcelaComEfeito;
+  /* `temProgramacaoAtiva` E' cru: a view o define como `pr.status = 'ativa'`,
+     o mesmo predicado do guard. Este continua correto e fica. */
   const podeCancelarCompromisso = podeEscrever
     && !!selecionado
     && !selecionado.temProgramacaoAtiva
     && selecionado.status !== 'cancelado'
-    && selecionado.totalMaterializado === 0
-    && selecionado.totalLiquidado === 0;
+    && !temParcelaComEfeito;
 
   const abrirEstorno = (alvo: NonNullable<typeof estAlvo>) => {
     setEstMotivo(''); setEstEtapa(1); setEstAlvo(alvo);
   };
   const confirmarEstorno = async () => {
     if (!estAlvo || versao == null) return;
+    setEstRodando(true);
     try {
       if (estAlvo.nivel === 'materializacao' && estAlvo.programacaoId && estAlvo.parcelaId) {
         await estorno.estornarMaterializacao(versao, estAlvo.programacaoId, estAlvo.parcelaId, estMotivo.trim());
@@ -183,6 +203,8 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
     } catch {
       /* Fica aberto com o motivo digitado: o usuario corrige e tenta de novo
          sem redigitar. A mensagem ja foi exibida pelo hook. */
+    } finally {
+      setEstRodando(false);
     }
   };
 
