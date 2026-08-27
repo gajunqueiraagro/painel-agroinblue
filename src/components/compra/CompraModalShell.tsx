@@ -538,10 +538,10 @@ export function CompraModalShell(api: CompraModalShellProps) {
           {api.aberturaExistente && api.ocTemTitulo && (
             <span
               className="text-white/80 text-[11px] flex items-center gap-1.5 leading-tight whitespace-nowrap"
-              title="Esta operação possui títulos financeiros materializados. A negociação está protegida para preservar a consistência financeira. O Recebimento permanece disponível conforme o estado da entrega. Ajustes nos valores materializados dependerão dos fluxos de estorno ou renegociação."
+              title="Esta operação possui títulos financeiros lançados. A negociação está protegida para preservar a consistência financeira. O Recebimento permanece disponível conforme o estado da entrega. Ajustes nos valores lançados dependerão dos fluxos de estorno ou renegociação."
             >
               <Lock className="h-3.5 w-3.5 shrink-0" />
-              Valores financeiros materializados. Ajustes dependem de estorno ou renegociação.
+              Valores financeiros lançados. Ajustes dependem de estorno ou renegociação.
             </span>
           )}
         </div>
