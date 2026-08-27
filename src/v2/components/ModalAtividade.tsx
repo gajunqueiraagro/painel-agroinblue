@@ -872,7 +872,11 @@ const tipografiaDre = (l: LinhaResumo): string =>
   : (l.nivel ?? 0) > 0  ? 'text-[9px] leading-[14px]'
                         : 'text-[10px] leading-[16px]';
 
-/* PERCENTUAL SOBRE O VALOR BRUTO DA PRODUCAO.
+/* PERCENTUAL SOBRE A BASE DO DEMONSTRATIVO — hoje VBP + variacao por preco.
+   Ver o comentario de `somaBase` na tabela para POR QUE a variacao por preco
+   entra: sem ela o numerador tem uma parcela que o denominador nao tem, e o
+   percentual estoura 100%.
+   Historico do nome: nasceu `pctSobreVbp` quando a base era so o VBP.
    ⚠ O VBP e' a unica base que FECHA. A Receita Liquida nao serve: medido na
    Santa Rita, JANEIRO, o resultado daria 203% dela, porque o numerador carrega
    variacao de estoque que nunca passou pela receita. O VBP ja contem a variacao
@@ -1028,15 +1032,30 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
   };
 
   /* AS DUAS BASES do percentual — realizado e meta —, lidas UMA vez para a
-     tabela inteira. O VBP da meta vem da serie de meta do proprio `dre_vbp`,
-     entao o % da meta e' "a meta sobre a base da meta", nao sobre a base do
-     realizado: comparar as duas colunas na vertical so faz sentido se cada uma
-     estiver dividida pela sua propria base. */
-  const vbpInd  = dre.find(x => x.chave === 'dre_vbp');
-  const vbpReal = vbpInd ? (leitura === 'periodo' ? vbpInd.valorPeriodo : vbpInd.valorMes) : null;
-  const vbpMeta = vbpInd
-    ? ponto(leitura === 'periodo' ? vbpInd.serieMetaPeriodo : vbpInd.serieMetaMes, mesAtual)
-    : null;
+     tabela inteira. Cada coluna divide pela SUA base: o % da meta e' "a meta
+     sobre a base da meta". Comparar as duas colunas na vertical so faz sentido
+     se cada uma estiver dividida pela propria base.
+
+     ⚠ A BASE E VBP + VARIACAO POR PRECO, e nao o VBP puro. O VBP mede
+     PRODUCAO, mas o LUCRO OPERACIONAL para baixo ja inclui o efeito de PRECO —
+     numerador com parcela que o denominador nao tinha, o mesmo defeito que o
+     modelo antigo tinha do lado do realizado. Medido: Vera Ligia, julho, META —
+     com base no VBP puro o Lucro Operacional dava 215,5%. Com VBP 961,5K mais
+     variacao por preco 2,3M = 3,26M, os mesmos 2,1M dao 64%. Fecha.
+     ⚠ Parcela ausente derruba a base para null -> travessao, e nao um numero
+     quase certo: se a variacao por preco nao tem meta, o numerador dela existe
+     e o denominador nao, e a razao nao significa nada. */
+  const somaBase = (
+    ler: (i: IndicadorAtividade) => number | null,
+  ): number | null => {
+    const a = dre.find(x => x.chave === 'dre_vbp');
+    const b = dre.find(x => x.chave === 'dre_variacao_preco');
+    if (!a || !b) return null;
+    const va = ler(a), vb = ler(b);
+    return (va == null || vb == null) ? null : va + vb;
+  };
+  const baseReal = somaBase(i => (leitura === 'periodo' ? i.valorPeriodo : i.valorMes));
+  const baseMeta = somaBase(i => ponto(leitura === 'periodo' ? i.serieMetaPeriodo : i.serieMetaMes, mesAtual));
   /* Sem `blocos`, divide em N blocos VERTICAIS por contagem: o bloco 1 leva as
      primeiras linhas, nao as alternadas — a leitura de cima para baixo em cada
      bloco e' a que o olho espera numa tabela. */
@@ -1155,8 +1174,8 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
                  ⚠ Cada coluna divide pela SUA base: realizado sobre VBP
                  realizado, meta sobre VBP meta. Dividir as duas pela mesma base
                  faria a coluna Meta responder outra pergunta. */
-              const pctR = l.percentual ? pctSobreVbp(real, vbpReal) : null;
-              const pctM = l.percentual ? pctSobreVbp(metaV, vbpMeta) : null;
+              const pctR = l.percentual ? pctSobreVbp(real, baseReal) : null;
+              const pctM = l.percentual ? pctSobreVbp(metaV, baseMeta) : null;
               const microPct = (v: number | null) => (
                 <span className={'block text-[8px] leading-[10px] font-normal text-muted-foreground tabular-nums'}>
                   {v != null ? `${v.toFixed(1)}%` : '—'}
@@ -1221,7 +1240,7 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
                     )}
                     {l.percentual && (
                       <span className={'block text-[8px] leading-[10px] font-normal text-muted-foreground tabular-nums'} style={{ paddingLeft: 10 }}>
-                        % sobre VBP
+                        % sobre VBP + preço
                       </span>
                     )}
                   </td>
