@@ -1859,9 +1859,13 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setOcStatusComercial(op.status_comercial);
     setOcEntregaEncerrada(!!op.entrega_encerrada);   // PR-HOTFIX-P0 — reidrata entrega soberana no refetch
     setOcRascunho(op.rascunho);
-    setOcTemTitulo((estado.partes ?? []).some(
-      (p) => Boolean(p.financeiro_lancamento_id) && p.cancelada !== true,
-    ));
+    /* ⚠ SEGUNDA COPIA DA DERIVACAO ANTIGA, corrigida aqui. Ler so `p.cancelada`
+       ve o vinculo da PARTE e nao sabe se o LANCAMENTO foi cancelado: apos
+       Confirmar, o recarregar recalculava titulo vivo a partir de titulo morto e
+       o rodape escondia Reabrir. Fechar e reabrir o modal "consertava" porque a
+       hidratacao usa o campo resolvido. Agora as duas usam a MESMA fonte, que ja
+       vem fail-closed de `carregarOperacao`. */
+    setOcTemTitulo((estado.titulosAtivos ?? 0) > 0);
     // PR-OC-FIN-REFRESH-01 — propaga os dados persistidos da OC (lotes/valor_acordado/contraparte) ao
     //   Financeiro no FLUXO CONTÍNUO. useOperacaoLiquidacao só busca por operacaoId (não por versão): sem
     //   este refetch soberano, após Confirmar os defaults do "Novo compromisso" (subcentro/valor/descrição)

@@ -59,3 +59,13 @@ export function produtoOCCompromisso(
 ): string {
   return `${verboOC(tipoOperacao)} ${qtd3(qtd)}${categoriaLabel ? ` ${categoriaLabel}` : ''}`.trim();
 }
+
+// Compromisso de UM LOTE: "{Verbo} {qtd:3} {SIGLA}" — ex. "Compra 029 DF", "Compra 001 V".
+//   Irmao do de cima; a unica diferenca e' a SIGLA no lugar do label completo, porque o
+//   compromisso por lote convive com os irmaos na mesma tela e o nome precisa ser curto.
+//   O verbo sai de verboOC, entao Venda e Abate ja saem prontos na replicacao.
+export function produtoOCCompromissoLote(
+  tipoOperacao: string, qtd: number, categoriaSlug: string,
+): string {
+  return `${verboOC(tipoOperacao)} ${qtd3(qtd)} ${siglaCategoria(categoriaSlug)}`;
+}

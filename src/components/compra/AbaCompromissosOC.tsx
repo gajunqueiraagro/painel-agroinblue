@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useOperacaoEstornoFinanceiro } from '@/hooks/useOperacaoEstornoFinanceiro';
 import type { OcCompromissosApi, CompromissoResumo, ParcelaMaterializacao, CriarCompromissoPayload, ProgramarParcelaInput } from '@/hooks/useOcCompromissos';
-import { classificarLotesCompra, type LoteOC } from '@/hooks/useOperacaoLiquidacao';
+import { classificarLotesCompra, SUBCENTRO_OBRIGACAO_COMPRA, CENTRO_CUSTO_COMPRA_BOVINOS, type LoteOC } from '@/hooks/useOperacaoLiquidacao';
 import { usePlanoContasOC } from '@/hooks/usePlanoContasOC';
 import { useComponentesFinanceiros } from '@/hooks/useComponentesFinanceiros';
 import { useContasBancariasLeves, rotuloContaLeve } from '@/hooks/useContasBancariasLeves';
-import { produtoOCCompromisso } from '@/lib/financeiro/produtoOC';
+import { produtoOCCompromisso, produtoOCCompromissoLote } from '@/lib/financeiro/produtoOC';
 import { CATEGORIAS } from '@/types/cattle';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -16,7 +16,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { DatePicker } from '@/components/ui/date-picker';
-import { Plus, AlertTriangle, Trash2, Pencil } from 'lucide-react';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Plus, AlertTriangle, Trash2, Pencil, MoreHorizontal } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 
 // PR-OC-UI-FIN-VIEW / FIX-01 / FIX-01b — aba Financeiro do modelo de compromissos (Blocos A/B/C).
@@ -101,14 +103,26 @@ const badgeStatusParcela = (s: string) => (s === 'materializada' ? 'default' : s
 // PR-OC-HOMOLOG-01 item 2 — status financeiro em LINGUAGEM DE USUÁRIO (estados internos preservados).
 //   materializado + liquidado total → 🟢 Pago; materializado sem liquidação → 🟡 Programado;
 //   liquidação parcial → 🟠 Parcial; prevista → Previsto; cancelada → Cancelado.
-function statusFinanceiroParcela(p: ParcelaMaterializacao): { icon: string; label: string } {
-  if (p.status === 'cancelada') return { icon: '', label: 'Cancelado' };
-  if (!p.materializada && p.status === 'prevista') return { icon: '', label: 'Previsto' };
+/* ⚠ O ESTADO QUE FALTAVA. `status` (cru) e `materializada` (derivado, "existe
+   titulo VIVO?") discordam quando o titulo foi cancelado. Antes, uma parcela
+   materializada com titulo morto nao casava com nenhuma condicao e caia no
+   fallback: a tela escrevia "Programado" sobre uma parcela cujo lancamento nao
+   existe mais. Agora ela tem estado proprio e diz o que fazer. */
+function statusFinanceiroParcela(p: ParcelaMaterializacao): { icon: string; label: string; title: string; alerta: boolean } {
+  if (p.status === 'cancelada') return { icon: '', label: 'Cancelado', title: 'Parcela cancelada.', alerta: false };
+  if (!p.materializada && p.status === 'prevista') return { icon: '', label: 'Previsto', title: 'Parcela prevista; ainda sem título.', alerta: false };
+  if (!p.materializada && (p.status === 'materializada' || p.status === 'paga')) {
+    return {
+      icon: '⚠️', label: 'Sem título', alerta: true,
+      title: 'A parcela foi materializada, mas o lançamento financeiro foi cancelado. '
+        + 'Estorne a materialização para devolver a parcela a PREVISTA.',
+    };
+  }
   const liq = p.totalLiquidadoTitulo ?? 0;
   const tot = p.tituloValor ?? p.valor ?? 0;
-  if (tot > 0 && liq >= tot - 0.005) return { icon: '🟢', label: 'Pago' };
-  if (liq > 0) return { icon: '🟠', label: 'Parcial' };
-  return { icon: '🟡', label: 'Programado' };
+  if (tot > 0 && liq >= tot - 0.005) return { icon: '🟢', label: 'Pago', title: 'Título liquidado por completo.', alerta: false };
+  if (liq > 0) return { icon: '🟠', label: 'Parcial', title: 'Título com liquidação parcial.', alerta: false };
+  return { icon: '🟡', label: 'Programado', title: 'Título gerado, ainda sem liquidação.', alerta: false };
 }
 
 export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, fornecedores, valorAcordado, lotes, contraparteId, dataOperacao, dataChegada, darkSelectClass, recarregarDados }: Props) {
@@ -171,19 +185,33 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
      (a view soma partes com `f.cancelado IS NOT TRUE`), entao tambem nao
      servem de gate. Os guards do banco olham `pp.status IN ('materializada',
      'paga')`; os gates abaixo espelham isso literalmente. */
+  const parcelaComEfeito = (p: ParcelaMaterializacao) => p.status === 'materializada' || p.status === 'paga';
   const parcelasSel = parcelas.filter(p => p.compromissoId === selectedId);
-  const temParcelaComEfeito = parcelasSel.some(
-    p => p.status === 'materializada' || p.status === 'paga');
-  const podeCancelarProgramacao = podeEscrever
-    && !!selecionado?.temProgramacaoAtiva
-    && !temParcelaComEfeito;
+  const temParcelaComEfeito = parcelasSel.some(parcelaComEfeito);
+
+  /* ⚠ O GATE DEVOLVE O MOTIVO, NAO SO UM BOOLEANO. Botao escondido nao ensina
+     nada: o usuario ve a acao sumir e nao descobre o que falta fazer. Visivel e
+     desabilitado, com o motivo no tooltip, e' o que fecha a duvida. Os
+     predicados sao os mesmos de antes — mudou o que se faz com o resultado.
+     `motivo` vazio = desabilitado sem explicacao (ja cancelado, ou sem
+     permissao de escrita): nao ha o que ensinar. */
+  type Gate = { pode: boolean; motivo: string };
+  const podeCancelarProgramacao: Gate =
+    !podeEscrever || !selecionado?.temProgramacaoAtiva ? { pode: false, motivo: '' }
+    : temParcelaComEfeito ? { pode: false, motivo: 'Estorne a materialização da parcela antes de cancelar a programação.' }
+    : { pode: true, motivo: '' };
+
   /* `temProgramacaoAtiva` E' cru: a view o define como `pr.status = 'ativa'`,
-     o mesmo predicado do guard. Este continua correto e fica. */
-  const podeCancelarCompromisso = podeEscrever
-    && !!selecionado
-    && !selecionado.temProgramacaoAtiva
-    && selecionado.status !== 'cancelado'
-    && !temParcelaComEfeito;
+     o mesmo predicado do guard. Por LINHA, para a acao viver na propria linha
+     da tabela — com tres compromissos, uma acao no bloco de detalhe nao diz
+     sobre qual deles ela age. */
+  const gateCancelarCompromisso = (c: CompromissoResumo): Gate => {
+    if (!podeEscrever || c.status === 'cancelado') return { pode: false, motivo: '' };
+    if (c.temProgramacaoAtiva) return { pode: false, motivo: 'Cancele a programação antes de cancelar o compromisso.' };
+    const suas = parcelas.filter(p => p.compromissoId === c.compromissoId);
+    if (suas.some(parcelaComEfeito)) return { pode: false, motivo: 'Estorne a materialização da parcela antes de cancelar o compromisso.' };
+    return { pode: true, motivo: '' };
+  };
 
   const abrirEstorno = (alvo: NonNullable<typeof estAlvo>) => {
     setEstMotivo(''); setEstEtapa(1); setEstAlvo(alvo);
@@ -250,11 +278,25 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
     return produtoOCCompromisso(tipoOperacao ?? 'compra', qtd, catLabel);
   }, [lotes, tipoOperacao]);
 
-  async function criar(payload: CriarCompromissoPayload) {
-    if (versao == null) return;
+  /* Cria N compromissos em SEQUENCIA (N=1 e' o caso normal).
+     ⚠ VERSION-LOCK: cada criacao incrementa a versao da operacao, entao a
+     chamada seguinte precisa da versao que a anterior DEVOLVEU. Reusar a versao
+     do state faria a segunda falhar com 40001 — e o state so atualiza depois do
+     recarregar, que nao acontece dentro do laco.
+     Falha no meio: os ja criados PERMANECEM (cada RPC e' sua propria transacao)
+     e o dialogo fica aberto com o toast do hook. Nao ha rollback a fazer pela
+     tela; o usuario ve na tabela o que entrou e refaz o que falta. */
+  async function criar(payloads: CriarCompromissoPayload[]) {
+    if (versao == null || payloads.length === 0) return;
+    let v = versao;
+    let ultimo: string | null = null;
     try {
-      const r = await ocApi.criarCompromisso(versao, payload);   // versão explícita
-      setSelectedId(r.compromissoId);
+      for (const payload of payloads) {
+        const r = await ocApi.criarCompromisso(v, payload);
+        v = r.operacaoVersao;
+        ultimo = r.compromissoId;
+      }
+      setSelectedId(ultimo);
       setNovoAberto(false);
     } catch { /* o hook já exibiu o toast (OcCompromissoError) */ }
   }
@@ -334,6 +376,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
                   <th className="py-0.5 pr-1.5 text-right whitespace-nowrap">Saldo</th>
                   <th className="py-0.5 pr-1.5">Status</th>
                   <th className="py-0.5 pr-0.5"></th>
+                  <th className="py-0.5 pl-0.5"></th>
                 </tr>
               </thead>
               <tbody>
@@ -352,6 +395,38 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
                       <td className="py-0.5 pr-1.5 text-right whitespace-nowrap">{brl(c.saldoFinanceiro)}</td>
                       <td className="py-0.5 pr-1.5"><Badge variant={badgeStatusCompromisso(c.status)} className="text-[9px] px-1">{c.status}</Badge></td>
                       <td className="py-0.5 pr-0.5 text-right">{c.temDivergencia && <AlertTriangle className="h-3 w-3 text-amber-600 inline" aria-label="divergência" />}</td>
+                      {/* ⚠ ACAO NA PROPRIA LINHA. A RPC sempre recebeu p_compromisso_id — o
+                          backend suporta por linha desde o inicio; era a tela que so
+                          oferecia a acao no bloco de detalhe, longe de qual compromisso
+                          ela agiria. `stopPropagation` para o clique abrir o menu sem que
+                          a selecao da linha engula o evento. */}
+                      <td className="py-0.5 pl-0.5 text-right" onClick={(e) => e.stopPropagation()}>
+                        {(() => {
+                          const g = gateCancelarCompromisso(c);
+                          return (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-muted-foreground hover:text-foreground"
+                                  aria-label={`Ações de ${c.natureza ?? ''}/${c.componente ?? ''}`}>
+                                  <MoreHorizontal className="h-3 w-3" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="text-[11px]">
+                                <DropdownMenuItem
+                                  disabled={!g.pode || estRodando}
+                                  title={g.motivo || undefined}
+                                  onSelect={() => abrirEstorno({ nivel: 'compromisso', compromissoId: c.compromissoId ?? undefined,
+                                    descricao: `o compromisso ${c.natureza ?? ''}/${c.componente ?? ''} de ${brl(c.valorCompromisso)} é cancelado` })}>
+                                  Cancelar compromisso
+                                </DropdownMenuItem>
+                                {g.motivo !== '' && (
+                                  <div className="px-2 py-1 text-[10px] text-muted-foreground max-w-[220px] leading-tight">{g.motivo}</div>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          );
+                        })()}
+                      </td>
                     </tr>
                   );
                 })}
@@ -372,24 +447,20 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
               {!selecionado.temProgramacaoAtiva && selecionado.status === 'aberto' && (
                 <Button size="sm" className="h-6 text-[11px] px-2" disabled={!podeEscrever} onClick={() => setProgramarAberto(true)}>Programar</Button>
               )}
-              {/* So aparece quando NENHUMA parcela esta materializada: o banco recusaria,
-                  e oferecer o que sera negado e' o defeito que este PR existe para nao
-                  repetir. Mesma regra no compromisso: so sem programacao ativa. */}
-              {podeCancelarProgramacao && selecionado.programacaoAtivaId && (
-                <Button size="sm" variant="ghost" className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground"
-                  disabled={estRodando}
-                  onClick={() => abrirEstorno({ nivel: 'programacao', programacaoId: selecionado.programacaoAtivaId ?? undefined,
-                    descricao: 'as parcelas previstas são canceladas, a programação é cancelada e o compromisso volta a ABERTO' })}>
-                  Cancelar programação
-                </Button>
-              )}
-              {podeCancelarCompromisso && selecionado.compromissoId && (
-                <Button size="sm" variant="ghost" className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground"
-                  disabled={estRodando}
-                  onClick={() => abrirEstorno({ nivel: 'compromisso', compromissoId: selecionado.compromissoId ?? undefined,
-                    descricao: `o compromisso ${selecionado.natureza ?? ''}/${selecionado.componente ?? ''} de ${brl(selecionado.valorCompromisso)} é cancelado` })}>
-                  Cancelar compromisso
-                </Button>
+              {/* VISIVEL e DESABILITADO com o motivo, nunca escondido. O `title` vai no
+                  SPAN e nao no Button: botao desabilitado nao dispara evento de mouse
+                  em todos os navegadores, entao o tooltip do proprio botao nao aparece.
+                  "Cancelar compromisso" NAO mora aqui — vive na linha da tabela, um
+                  lugar so, porque e' acao daquele compromisso e nao da programacao. */}
+              {selecionado.programacaoAtivaId && (
+                <span title={podeCancelarProgramacao.motivo || undefined} className="inline-flex">
+                  <Button size="sm" variant="ghost" className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground"
+                    disabled={!podeCancelarProgramacao.pode || estRodando}
+                    onClick={() => abrirEstorno({ nivel: 'programacao', programacaoId: selecionado.programacaoAtivaId ?? undefined,
+                      descricao: 'as parcelas previstas são canceladas, a programação é cancelada e o compromisso volta a ABERTO' })}>
+                    Cancelar programação
+                  </Button>
+                </span>
               )}
             </span>
           </div>
@@ -427,7 +498,8 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
                       <td className="py-0.5 pr-2">{fmtData(p.vencimento)}</td>
                       <td className="py-0.5 pr-2 text-right whitespace-nowrap">{brl(p.valor)}</td>
                       <td className="py-0.5 pr-2">{(() => { const s = statusFinanceiroParcela(p); return (
-                        <Badge variant={badgeStatusParcela(p.status)} className="text-[9px] px-1" title={p.status}>{s.icon ? `${s.icon} ` : ''}{s.label}</Badge>
+                        <Badge variant={s.alerta ? 'destructive' : badgeStatusParcela(p.status)} className="text-[9px] px-1"
+                          title={`${s.title} (estado interno: ${p.status})`}>{s.icon ? `${s.icon} ` : ''}{s.label}</Badge>
                       ); })()}</td>
                       <td className="py-0.5 pr-2">
                         {p.tituloId
@@ -435,12 +507,19 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
                           : <span className="text-[10px] text-muted-foreground">—</span>}
                       </td>
                       <td className="py-0.5 pr-1 text-right">
-                        {p.materializada
-                          ? (p.tituloId
+                        {/* ⚠ RAMO PELO STATUS CRU, e nao por `p.materializada`. Com o titulo
+                            cancelado o derivado e' false e a linha caia em "Materializar",
+                            desabilitado pelo gate — a parcela dizia "Sem titulo" e o Estornar,
+                            que e' justamente o caminho de saida, ficava inalcancavel.
+                            EDITAR continua atras do derivado: titulo morto nao se edita. */}
+                        {(p.status === 'materializada' || p.status === 'paga')
+                          ? (p.parcelaId
                               ? <span className="inline-flex gap-1">
-                                  <Button size="sm" variant="outline" className="h-5 text-[10px] px-1.5" onClick={() => { if (p.tituloId) editarTitulo(p.tituloId); }}>
-                                    <Pencil className="h-2.5 w-2.5 mr-0.5" /> Editar
-                                  </Button>
+                                  {p.materializada && p.tituloId && (
+                                    <Button size="sm" variant="outline" className="h-5 text-[10px] px-1.5" onClick={() => { if (p.tituloId) editarTitulo(p.tituloId); }}>
+                                      <Pencil className="h-2.5 w-2.5 mr-0.5" /> Editar
+                                    </Button>
+                                  )}
                                   {/* GHOST, e nao `outline` como o Editar: desfazer nao pode ter o
                                       mesmo peso visual de uma acao corriqueira. */}
                                   <Button size="sm" variant="ghost" className="h-5 text-[10px] px-1.5 text-muted-foreground hover:text-foreground"
@@ -468,7 +547,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
           onClose={() => setNovoAberto(false)} onSubmit={criar} saving={saving}
           clienteId={clienteId} tipoOperacao={tipoOperacao} fornecedores={fornecedores} darkSelectClass={darkSelectClass}
           valorAcordado={valorAcordado} sugestaoSubcentro={sugestaoSubcentro} descricaoDefault={descricaoDefault}
-          contraparteId={contraparteId} lotesProntos={lotesProntos}
+          contraparteId={contraparteId} lotesProntos={lotesProntos} lotes={lotes}
         />
       )}
       {programarAberto && selecionado && (
@@ -560,10 +639,11 @@ function ResumoCard({ rotulo, valor }: { rotulo: string; valor: number }) {
 }
 
 // ===== Dialog: Novo compromisso =====
-function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOperacao, fornecedores, darkSelectClass, valorAcordado, sugestaoSubcentro, descricaoDefault, contraparteId, lotesProntos }: {
-  onClose: () => void; onSubmit: (p: CriarCompromissoPayload) => void; saving: boolean;
+function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOperacao, fornecedores, darkSelectClass, valorAcordado, sugestaoSubcentro, descricaoDefault, contraparteId, lotesProntos, lotes }: {
+  onClose: () => void; onSubmit: (p: CriarCompromissoPayload[]) => void; saving: boolean;
   clienteId: string | null; tipoOperacao: string | null; fornecedores: { id: string; nome: string }[]; darkSelectClass: string;
   valorAcordado: number | null; sugestaoSubcentro: string; descricaoDefault: string; contraparteId: string | null; lotesProntos: boolean;
+  lotes: LoteOC[];
 }) {
   const plano = usePlanoContasOC(clienteId ?? undefined);
   const comps = useComponentesFinanceiros();
@@ -574,14 +654,44 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
   const [favorecidoId, setFavorecidoId] = useState('');
   const [descricao, setDescricao] = useState('');
   const ultimoDefaultRef = useRef('');   // último default de descrição aplicado automaticamente (ajuste vinculante 3)
+  /* LOTE — 1 OC vira N lancamentos, um por categoria, que podem ir para
+     favorecidos e bancos diferentes. `''` = compromisso da OPERACAO INTEIRA,
+     que e' o comportamento de sempre (lote_id nulo no payload). */
+  const [loteId, setLoteId] = useState('');
+  const [varios, setVarios] = useState(false);   // DESMARCADO por padrao: separado e' o normal
+
+  const itensLote = useMemo(() => {
+    const c = classificarLotesCompra(lotes);
+    return c.status === 'ok' ? c.itens : [];
+  }, [lotes]);
+  const loteOptions = useMemo(() => itensLote.map(i => ({
+    value: i.lote.id,
+    label: `${CATEGORIAS.find(c => c.value === i.lote.categoria)?.label ?? i.lote.categoria} · ${i.lote.qtd ?? 0} cab · ${brl(i.valorBruto)}`,
+  })), [itensLote]);
+  const itemSel = useMemo(() => itensLote.find(i => i.lote.id === loteId) ?? null, [itensLote, loteId]);
 
   // Defaults por natureza: principal pré-carrega valor acordado, subcentro sugerido e favorecido = contraparte
   // da OC; obrigacao zera. Campos seguem editáveis (mesma semântica de valor/subcentro).
   useEffect(() => {
     setComponente('');
+    setLoteId(''); setVarios(false);
     if (natureza === 'principal') { setValor(valorAcordado); setSubcentro(sugestaoSubcentro); setFavorecidoId(contraparteId ?? ''); }
-    else { setValor(null); setSubcentro(''); setFavorecidoId(''); }
-  }, [natureza, valorAcordado, sugestaoSubcentro, contraparteId]);
+    /* Obrigacao da compra (frete, comissao, taxa de aquisicao) tem subcentro proprio
+       e unico — sugerir e' melhor do que deixar em branco. Segue editavel. */
+    else { setValor(null); setSubcentro(tipoOperacao === 'compra' ? SUBCENTRO_OBRIGACAO_COMPRA : ''); setFavorecidoId(''); }
+  }, [natureza, valorAcordado, sugestaoSubcentro, contraparteId, tipoOperacao]);
+
+  /* LOTE ESCOLHIDO -> valor, subcentro e descricao daquele lote. Os tres seguem
+     EDITAVEIS: o default e' ponto de partida, nao trava. A descricao respeita a
+     mesma regra dos outros defaults (so sobrescreve o que nao foi editado a mao). */
+  useEffect(() => {
+    if (!itemSel) return;
+    setValor(itemSel.valorBruto);
+    setSubcentro(itemSel.subcentro);
+    const alvo = produtoOCCompromissoLote(tipoOperacao ?? 'compra', itemSel.lote.qtd ?? 0, itemSel.lote.categoria);
+    setDescricao(prev => (prev === '' || prev === ultimoDefaultRef.current ? alvo : prev));
+    ultimoDefaultRef.current = alvo;
+  }, [itemSel, tipoOperacao]);
 
   // Descrição = DEFAULT EDITÁVEL: principal → descricaoDefault; obrigacao → ''. Só atualiza se o campo está
   // vazio OU ainda contém o último default gerado. Após edição manual do usuário, NUNCA sobrescreve.
@@ -593,16 +703,51 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
 
   const planoTipo = tipoOperacao === 'compra' ? '2-Saídas' : '1-Entradas';
   const componenteOptions = useMemo(() => comps.porNatureza(natureza), [comps, natureza]);
+  /* ⚠ RESTRITO AO CENTRO DE CUSTO DA COMPRA. Sem isto a lista traz TODOS os
+     subcentros de saida do plano, e os tres que interessam se perdem no meio.
+     Medido no proto: `Compra de Bovinos` agrupa exatamente Femeas, Machos e
+     Frete/Comissao. So vale para tipo_operacao 'compra' — os outros tipos ficam
+     como estao ate haver regra propria.
+     ⚠ FAIL-OPEN: se o centro nao existir no plano do cliente a lista voltaria
+     VAZIA e ninguem conseguiria criar compromisso. Nesse caso cai na lista
+     inteira — restringir e' conveniencia, nunca uma parede. */
   const subcentroOptions = useMemo(() => {
+    const doTipo = plano.rows.filter(r => r.tipo_operacao === planoTipo && r.subcentro);
+    const restritos = tipoOperacao === 'compra'
+      ? doTipo.filter(r => r.centro_custo === CENTRO_CUSTO_COMPRA_BOVINOS)
+      : [];
+    const base = restritos.length > 0 ? restritos : doTipo;
     const set = new Set<string>();
-    plano.rows.forEach(r => { if (r.tipo_operacao === planoTipo && r.subcentro) set.add(r.subcentro); });
+    base.forEach(r => { if (r.subcentro) set.add(r.subcentro); });
     return Array.from(set).sort().map(s => ({ value: s, label: s }));
-  }, [plano.rows, planoTipo]);
+  }, [plano.rows, planoTipo, tipoOperacao]);
 
   // GUARD "Compra principal": um compromisso PRINCIPAL não pode ser criado sem os lotes carregados,
   //   pois o Produto seria o fallback "Compra principal" (dados de negociação obsoletos/ausentes).
   const principalSemLotes = natureza === 'principal' && !lotesProntos;
-  const podeSubmeter = !!componente && valor != null && valor > 0 && !!subcentro && !saving && !principalSemLotes;
+  /* No modo JUNTO valor/subcentro/descricao saem de cada lote, entao os campos da
+     tela deixam de ser requisito — o que precisa existir e' a lista de lotes. */
+  const podeSubmeter = !!componente && !!(varios ? itensLote.length > 0 : (valor != null && valor > 0 && subcentro))
+    && !saving && !principalSemLotes;
+
+  /* UM payload por lote no modo junto; um so no modo separado. Favorecido e
+     componente sao os comuns e se repetem — foi a decisao: separado e' o normal
+     porque favorecido e banco mudam por categoria; junto e' atalho para quando
+     e' tudo igual. */
+  const montarPayloads = (): CriarCompromissoPayload[] => {
+    const comum = { natureza, componente, favorecido_id: favorecidoId || null };
+    if (varios) {
+      return itensLote.map(i => ({
+        ...comum,
+        valor_total: i.valorBruto,
+        subcentro: i.subcentro,
+        lote_id: i.lote.id,
+        descricao: produtoOCCompromissoLote(tipoOperacao ?? 'compra', i.lote.qtd ?? 0, i.lote.categoria),
+      }));
+    }
+    if (valor == null || valor <= 0 || !subcentro) return [];
+    return [{ ...comum, valor_total: valor, subcentro, lote_id: loteId || null, descricao: descricao || null }];
+  };
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
@@ -630,6 +775,28 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
               </Select>
             </div>
           </div>
+          {natureza === 'principal' && loteOptions.length > 0 && (
+            <div>
+              <Label className="text-[11px]">Lote · categoria {loteId ? '· valor, classificação e descrição preenchidos (editáveis)' : '· opcional'}</Label>
+              <SearchableSelect
+                value={loteId || '__none__'} onValueChange={(v) => setLoteId(v === '__none__' ? '' : v)}
+                options={loteOptions} placeholder="Selecione o lote"
+                allLabel="— operação inteira —" allValue="__none__" dense className="[&>button]:h-8 [&>button]:text-[12px]"
+              />
+              {loteOptions.length > 1 && (
+                <label className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer">
+                  <Checkbox checked={varios} onCheckedChange={(v) => setVarios(v === true)} className="h-3.5 w-3.5" />
+                  lançar os {loteOptions.length} lotes de uma vez
+                </label>
+              )}
+              {varios && (
+                <div className="mt-0.5 text-[10px] text-muted-foreground leading-tight">
+                  Cria um compromisso por lote, repetindo favorecido e componente. Valor, classificação
+                  e descrição vêm de cada lote.
+                </div>
+              )}
+            </div>
+          )}
           <div>
             <Label className="text-[11px]">Classificação (subcentro) *{natureza === 'principal' && sugestaoSubcentro ? ' · sugerido dos lotes (editável)' : ''}</Label>
             <SearchableSelect
@@ -665,8 +832,8 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
         <DialogFooter>
           <Button variant="outline" size="sm" onClick={onClose}>Cancelar</Button>
           <Button size="sm" disabled={!podeSubmeter}
-            onClick={() => { if (componente && valor != null && valor > 0 && subcentro && !principalSemLotes) onSubmit({ natureza, componente, valor_total: valor, subcentro, favorecido_id: favorecidoId || null, descricao: descricao || null }); }}>
-            Criar
+            onClick={() => { if (podeSubmeter) { const ps = montarPayloads(); if (ps.length > 0) onSubmit(ps); } }}>
+            {varios ? `Criar ${itensLote.length}` : 'Criar'}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -22,6 +22,13 @@ export type NaturezaFluxo = 'pagar' | 'receber';
 // (tipo_operacao '2-Saídas' + subcentro). Frete/Comissão (subcentro dedicado) = escopo futuro.
 export const SUBCENTRO_PRINCIPAL_COMPRA_FEMEAS = 'Investimento Compra Bovinos Fêmeas';
 export const SUBCENTRO_PRINCIPAL_COMPRA_MACHOS = 'Investimento Compra Bovinos Machos';
+/* As obrigacoes da compra (frete, comissao, taxa de aquisicao) tem subcentro
+   proprio, irmao dos dois acima. Os TRES — e so eles — vivem sob este centro de
+   custo no plano de contas (medido no proto, tipo_operacao '2-Saídas'). Ficam
+   aqui, e nao no componente, porque sao strings do plano: duplicar em tela e'
+   como a classificacao passa a divergir do cadastro sem ninguem notar. */
+export const SUBCENTRO_OBRIGACAO_COMPRA = 'Investimento Frete/Comissão Compra Bovinos';
+export const CENTRO_CUSTO_COMPRA_BOVINOS = 'Compra de Bovinos';
 const CATEGORIAS_FEMEAS_COMPRA = new Set<string>(['mamotes_f', 'desmama_f', 'novilhas', 'vacas']);
 const CATEGORIAS_VALIDAS = new Set<string>(CATEGORIAS.map(c => c.value));
 
