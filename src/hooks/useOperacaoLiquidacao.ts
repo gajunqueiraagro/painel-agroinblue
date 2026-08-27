@@ -268,19 +268,70 @@ export function useOperacaoLiquidacao({ operacaoId, clienteId, enabled }: Params
     }
     setLoading(true);
     try {
-      const [res, obr, liq, partes, docs, comps, forns, opMeta, lotesRes] = await Promise.all([
+      const [res, obr, liq, partes, docs, comps, opMeta, lotesRes] = await Promise.all([
         (supabase as any).from('vw_oc_operacao_liquidacao').select('*').eq('operacao_id', operacaoId).maybeSingle(),
         (supabase as any).from('vw_oc_obrigacoes').select('*').eq('operacao_id', operacaoId).order('sequencia_parcela'),
         (supabase as any).from('zoo_operacao_liquidacoes').select('id, data, natureza, forma, valor, descricao, financeiro_lancamento_id, estornado, estorno_motivo, permuta_tipo_bem, permuta_valor_atribuido').eq('operacao_id', operacaoId).order('data'),
         (supabase as any).from('zoo_operacao_partes').select('id, descricao').eq('operacao_id', operacaoId),
         (supabase as any).from('zoo_operacao_documentos').select('id, especie, numero, serie').eq('operacao_id', operacaoId).eq('cancelado', false),
         (supabase as any).from('zoo_componentes_financeiros').select('natureza, codigo, nome, categoria').eq('ativo', true).order('natureza').order('ordem_exibicao'),
-        (supabase as any).from('financeiro_fornecedores').select('id, nome').eq('cliente_id', clienteId).order('nome'),
         (supabase as any).from('zoo_operacoes_comerciais').select('tipo_operacao, versao, contraparte_id, valor_acordado').eq('id', operacaoId).maybeSingle(),
         (supabase as any).from('zoo_operacao_lotes').select('id, categoria_negociada, qtd_negociada, peso_medio_negociado_kg, criterio_valor, valor_informado').eq('operacao_id', operacaoId),
       ]);
-      for (const r of [res, obr, liq, partes, docs, comps, forns, opMeta, lotesRes]) {
+      for (const r of [res, obr, liq, partes, docs, comps, opMeta, lotesRes]) {
         if (r.error) throw new Error(r.error.message);
+      }
+
+      /* FORNECEDORES — PAGINADO. A query anterior era
+           .select('id, nome').eq('cliente_id', clienteId).order('nome')
+         sem `range` e sem laco: o PostgREST corta em 1000 linhas e para EM SILENCIO.
+         A NJ tem 3.274 fornecedores (2.571 ativos), entao quem vinha depois do
+         milesimo nome simplesmente nao existia para a tela — inclusive a contraparte
+         da propria operacao. Era por isso que o campo Favorecido exibia UUID: o
+         componente recebia um id ausente da sua lista de opcoes e nao tinha nome.
+
+         ESPELHO de LancamentosTab.tsx:~1743, que ja resolvia isto: paginas de 1000,
+         `order('nome').order('id')` para a ordenacao ser ESTAVEL entre paginas quando
+         ha nomes repetidos (sem o tiebreaker, uma linha pode aparecer duas vezes ou
+         nenhuma), para quando a pagina vem incompleta, e dedup por id de salvaguarda.
+         A referencia nao foi tocada (fora do escopo), entao seguem DUAS copias da
+         mesma regra — extrair para helper compartilhado fica registrado como pendencia. */
+      const FORNECEDORES_PAGE_SIZE = 1000;
+      const fornAcumulado: FornRow[] = [];
+      let fornFrom = 0;
+      for (;;) {
+        const pagina = await (supabase as any).from('financeiro_fornecedores')
+          .select('id, nome')
+          .eq('cliente_id', clienteId)
+          .eq('ativo', true)
+          .order('nome').order('id')
+          .range(fornFrom, fornFrom + FORNECEDORES_PAGE_SIZE - 1);
+        if (pagina.error) throw new Error(pagina.error.message);
+        const linhas = (pagina.data ?? []) as FornRow[];
+        fornAcumulado.push(...linhas);
+        if (linhas.length < FORNECEDORES_PAGE_SIZE) break;
+        fornFrom += FORNECEDORES_PAGE_SIZE;
+      }
+
+      /* ⚠ O FILTRO `ativo` ABRE UM BURACO, e o buraco e' o MESMO defeito. Favorecido
+         ja gravado que depois foi inativado sairia da lista e o campo voltaria a
+         mostrar UUID — trocar um truncamento por outro. Entao os ids EM USO nesta
+         operacao (contraparte + favorecidos das obrigacoes) entram de volta, custe o
+         que custar ao filtro: quem ja esta no dado precisa ter nome na tela.
+         Medido hoje no proto: ZERO compromissos, partes ou contrapartes apontam para
+         fornecedor inativo — a busca extra e' salvaguarda, nao rotina, e por isso so
+         dispara quando de fato falta alguem. */
+      const opMetaRow = opMeta.data as OpMetaRow | null;   // idioma existente p/ tipar o retorno (supabase as any)
+      const idsEmUso = new Set<string>();
+      if (opMetaRow?.contraparte_id) idsEmUso.add(opMetaRow.contraparte_id);
+      ((obr.data ?? []) as ObrigacaoRow[]).forEach(o => { if (o.favorecido_id) idsEmUso.add(o.favorecido_id); });
+      const jaNaLista = new Set(fornAcumulado.map(f => f.id));
+      const faltantes = Array.from(idsEmUso).filter(id => !jaNaLista.has(id));
+      if (faltantes.length > 0) {
+        const extra = await (supabase as any).from('financeiro_fornecedores')
+          .select('id, nome').in('id', faltantes);
+        if (extra.error) throw new Error(extra.error.message);
+        fornAcumulado.push(...((extra.data ?? []) as FornRow[]));
       }
 
       const descMap = new Map<string, string>();
@@ -288,7 +339,9 @@ export function useOperacaoLiquidacao({ operacaoId, clienteId, enabled }: Params
       const docRows = (docs.data ?? []) as DocRow[];
       const docLabelMap = new Map<string, string>();
       docRows.forEach(d => docLabelMap.set(d.id, docLabelOf(d)));
-      const fornRows = (forns.data ?? []) as FornRow[];
+      // Dedup por id: salvaguarda contra pagina repetida e contra o reforco acima.
+      const fornVistos = new Set<string>();
+      const fornRows = fornAcumulado.filter(f => (fornVistos.has(f.id) ? false : (fornVistos.add(f.id), true)));
       const fornMap = new Map<string, string>();
       fornRows.forEach(f => fornMap.set(f.id, f.nome ?? ''));
 
@@ -332,7 +385,6 @@ export function useOperacaoLiquidacao({ operacaoId, clienteId, enabled }: Params
       setDocumentos(docRows.map(d => ({ id: d.id, label: docLabelOf(d) })));
       setComponentes(((comps.data ?? []) as CompRow[]).map(c => ({ natureza: c.natureza, codigo: c.codigo, nome: c.nome ?? c.codigo, categoria: c.categoria })));
       setFornecedores(fornRows.map(f => ({ id: f.id, nome: f.nome ?? '' })));
-      const opMetaRow = opMeta.data as OpMetaRow | null;   // idioma existente p/ tipar o retorno (supabase as any)
       setTipoOperacao(opMetaRow?.tipo_operacao ?? null);
       setContraparteId(opMetaRow?.contraparte_id ?? null);
       setValorAcordado(opMetaRow?.valor_acordado == null ? null : Number(opMetaRow.valor_acordado));
