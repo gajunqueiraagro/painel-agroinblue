@@ -30,7 +30,7 @@ import {
   ComposedChart, Line, Area, Bar, BarChart, Cell, LabelList, ReferenceLine,
   XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts';
-import { X, ArrowUpDown } from 'lucide-react';
+import { X, ArrowUpDown, Info } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { COR_FAZENDA } from '@/lib/idiomaVisual';
 
@@ -232,6 +232,9 @@ type LinhaResumo = {
       Implementado como `pt` nas celulas da linha SEGUINTE — ver o comentario
       de `gap` na tabela. OPT-IN: so o DRE marca. */
   espacoDepois?: boolean;
+  /** Abre o detalhe daquela linha por um icone no rotulo. OPT-IN, e hoje so a
+      Variacao do estoque marca. */
+  detalhe?: boolean;
   /** Segunda linha no rotulo, menor e em cor secundaria. Nao e linha nova da
       tabela: mora na MESMA celula, abaixo do rotulo. OPT-IN. */
   subtitulo?: string;
@@ -408,7 +411,7 @@ const LINHAS_DRE: LinhaResumo[] = [
 
   { rotulo: '5. (−) Reposição de bovinos', chave: 'dre_reposicao',     bag: 'dre', saida: true },
   { rotulo: '6. (−/+) Variação do estoque', chave: 'dre_variacao',     bag: 'dre',
-    subtitulo: 'após vendas e reposição' },
+    subtitulo: 'após vendas e reposição', detalhe: true },
   { rotulo: 'por produção',                chave: 'dre_variacao_producao', bag: 'dre', nivel: 1 },
   { rotulo: 'por preço',                   chave: 'dre_variacao_preco', bag: 'dre', nivel: 1 },
   /* RESULTADO DA ATIVIDADE, e nao "Resultado Operacional": entre o LUCRO
@@ -813,7 +816,7 @@ const corDeValor = (l: LinhaResumo, v: number | null): string =>
   : v > 0               ? 'text-emerald-600 dark:text-emerald-400'
                         : 'text-red-600 dark:text-red-400';
 
-const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, leitura, mesAtual, colunas, onIr, realizadoPrimeiro, compacta, rotuloEstreito, corPorSinal }: {
+const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, leitura, mesAtual, colunas, onIr, realizadoPrimeiro, compacta, rotuloEstreito, corPorSinal, onDetalhe }: {
   /* DUAS formas de entrada, um componente so:
        `linhas` + `colunas` -> divide por CONTAGEM, sem titulo. E o que as
                                tabelas dos ASSUNTOS usam.
@@ -850,6 +853,9 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
       linhas pelo sinal" alcancaria TODA linha das cinco outras abas, que nao
       tem nenhum dos dois campos, e pintaria o painel inteiro de verde. */
   corPorSinal?: boolean;
+  /** Abre o detalhe da linha marcada com `detalhe`. Sem a prop nenhum icone e
+      emitido, e as cinco outras abas nem marcam o campo. */
+  onDetalhe?: () => void;
 }) => {
   /* MODO COMPACTO. Duas alavancas, e so estas:
        padding vertical  py-0.5 (2px cada lado) -> py-0
@@ -1089,6 +1095,18 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
                   <td className={`text-left px-1.5 ${padDe(l.subtotal)} ${rotuloEstreito ? 'whitespace-nowrap pr-6' : 'truncate max-w-[180px]'}${l.subtotal ? ' font-semibold' : ''}${tipo}${gap}`}
                       style={{ paddingLeft: 6 + (l.nivel ?? 0) * 12 }}>
                     {l.rotulo}
+                    {/* Icone do detalhe: `inline-flex` de 12px dentro de uma caixa de
+                        16px, entao NAO cresce a linha. `stopPropagation` por
+                        seguranca — no DRE a linha nao e clicavel (o ponto de
+                        chamada nao passa `onIr`), mas isso pode mudar. */}
+                    {l.detalhe && onDetalhe && (
+                      <button onClick={e => { e.stopPropagation(); onDetalhe(); }}
+                              aria-label={`Detalhe de ${l.rotulo}`}
+                              title="O que esta linha significa"
+                              className="ml-1 inline-flex align-middle text-muted-foreground hover:text-foreground">
+                        <Info className="w-3 h-3" />
+                      </button>
+                    )}
                     {/* SUBTITULO na MESMA celula, abaixo. Nao e linha da tabela:
                         linha nova custaria altura cheia e entraria no zebrado.
                         Sem `subtitulo` nenhum no' extra e emitido. */}
@@ -1144,9 +1162,11 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
    ja era. Quem escolhe a leitura e o toggle Por mes/Acumulado.
    ⚠ ZERO calculo: `serieMes` e `seriePeriodo` ja chegam prontas de `monta()`.
    Serie ausente vira travessao, nunca zero. */
-const TabelaMensalDre = ({ linhas, dre, modo, mesAtual }: {
+const TabelaMensalDre = ({ linhas, dre, modo, mesAtual, onDetalhe }: {
   linhas: LinhaResumo[];
   dre: IndicadorAtividade[];
+  /** Ver a prop de mesmo nome em `TabelaResumo`. */
+  onDetalhe?: () => void;
   /** `mes` -> o valor DAQUELE mes. `acumulado` -> de Janeiro ate aquele mes. */
   modo: 'mes' | 'acumulado';
   /** Mes do FILTRO — o recorte que o usuario escolheu, nao "o ultimo mes com
@@ -1195,6 +1215,14 @@ const TabelaMensalDre = ({ linhas, dre, modo, mesAtual }: {
             <td className={`text-left px-1.5 pr-6 py-0 whitespace-nowrap${l.subtotal ? ' font-semibold' : ''} ${tipo}${gap}`}
                 style={{ paddingLeft: 6 + (l.nivel ?? 0) * 12 }}>
               {l.rotulo}
+              {l.detalhe && onDetalhe && (
+                <button onClick={e => { e.stopPropagation(); onDetalhe(); }}
+                        aria-label={`Detalhe de ${l.rotulo}`}
+                        title="O que esta linha significa"
+                        className="ml-1 inline-flex align-middle text-muted-foreground hover:text-foreground">
+                  <Info className="w-3 h-3" />
+                </button>
+              )}
               {l.subtitulo && (
                 <span className="block text-[9px] leading-[10px] font-normal text-muted-foreground">
                   {l.subtitulo}
@@ -1279,6 +1307,143 @@ const Bloco = ({ titulo, contexto, children }: {
     {children}
   </div>
 );
+
+/* VARIACAO DO ESTOQUE — o que a linha 6 significa.
+   ⚠ NAO ESCREVER "engordou", e este e o segundo contraexemplo medido desta
+   frente. "Por producao" mede variacao de ARROBAS, nao ganho de peso: arrobas
+   entram por engorda, NASCIMENTO e COMPRA, e saem por venda, morte e
+   transferencia. Num mes de compra a palavra "engordou" seria falsa — o
+   rebanho cresceu sem ninguem ter engordado. O texto do Bloco 3 diz "mudou de
+   tamanho" e enumera as entradas e saidas justamente para fechar essa porta.
+   ⚠ Vale aqui a mesma proibicao do modal de desvios: nada de 'devido a', 'por
+   causa de', 'refletindo', 'impactado por', nem adjetivo de valor. Ver o
+   contraexemplo do desfrute, no comentario de `BaseDesvio`. */
+const ModalVariacaoEstoque = ({ dre, mesAtual, onClose }: {
+  dre: IndicadorAtividade[];
+  mesAtual: number;
+  onClose: () => void;
+}) => {
+  const ind = (chave: string) => dre.find(i => i.chave === chave);
+  const indProd  = ind('dre_variacao_producao');
+  const indPreco = ind('dre_variacao_preco');
+  const nomeMes  = MESES[mesAtual - 1];
+
+  /* A PONTE E DO MES, e por isso le `serieMes` mesmo quando a tabela atras
+     esta acumulada: a pergunta que ela responde — "vendi e o caixa nao
+     acompanhou" — e sobre UM mes. O rotulo do bloco declara qual. */
+  const doMes = (i: IndicadorAtividade | undefined) => valorDoMes(i?.serieMes, mesAtual);
+  const receita  = doMes(ind('dre_rec_pec'));
+  const variacao = doMes(ind('dre_variacao'));
+  const temPonte = receita != null && variacao != null;
+
+  /* Linhas SO para a cor: `corDeValor` recebe a linha para saber se e saida.
+     Nenhuma das duas e, entao a cor sai pelo sinal — que e o que interessa no
+     grafico. Construidas aqui para nao depender da ordem de `LINHAS_DRE`. */
+  const lProd:  LinhaResumo = { rotulo: 'por produção', chave: 'dre_variacao_producao', bag: 'dre', nivel: 1 };
+  const lPreco: LinhaResumo = { rotulo: 'por preço',    chave: 'dre_variacao_preco',    bag: 'dre', nivel: 1 };
+
+  /* Escala UNICA para as duas series: escalas separadas fariam uma barra de
+     R$ 200 mil parecer do mesmo tamanho de uma de R$ 3 mi. */
+  let maxAbs = 0;
+  for (let m = 1; m <= mesAtual; m++) {
+    for (const i of [indProd, indPreco]) {
+      const v = valorDoMes(i?.serieMes, m);
+      if (v != null && Math.abs(v) > maxAbs) maxAbs = Math.abs(v);
+    }
+  }
+  if (maxAbs === 0) maxAbs = 1;
+
+  const frase = 'text-[11px] leading-[17px] text-foreground';
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50" onClick={onClose}>
+      <div className="w-full max-w-5xl mx-4 rounded-lg border border-border/40 bg-background shadow-xl flex flex-col max-h-[85vh]"
+           onClick={e => e.stopPropagation()}>
+        <div className="shrink-0 px-4 pt-3 pb-2 border-b border-border/40 flex items-start gap-2">
+          <div>
+            <p className="text-[13px] font-semibold leading-tight">Variação do estoque</p>
+            <p className="text-[11px] text-muted-foreground leading-tight">
+              Como o valor do rebanho se move. Nenhuma relação de causa é afirmada.
+            </p>
+          </div>
+          <button onClick={onClose} aria-label="Fechar"
+                  className="ml-auto shrink-0 h-7 w-7 rounded-md border border-border/50 text-muted-foreground
+                             hover:bg-muted/50 flex items-center justify-center">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-2">
+
+          {temPonte && (
+            <Bloco titulo="A ponte do mês" contexto={nomeMes}>
+              <p className={frase}>
+                Receita pecuária {fmtRAbrev(receita)} · Variação do estoque{' '}
+                {`${variacao >= 0 ? '+' : '−'}${fmtRAbrev(Math.abs(variacao))}`} ·{' '}
+                Valor gerado {fmtRAbrev(receita + variacao)}.
+              </p>
+              <p className="text-[10px] leading-[15px] text-muted-foreground mt-1">
+                O gado vendido sai do estoque pelo valor que tinha: a receita entra
+                e o estoque diminui na mesma operação.
+              </p>
+            </Bloco>
+          )}
+
+          <Bloco titulo="Evolução no ano" contexto={`Jan–Dez · escala comum às duas séries`}>
+            <div className="flex items-end gap-1 pt-1">
+              {MESES.map((rot, i) => {
+                /* Mes futuro nasce VAZIO — mesmo criterio da visao mensal: o
+                   recorte do filtro manda, nao a existencia do dado. */
+                const futuro = i + 1 > mesAtual;
+                const vProd  = futuro ? null : valorDoMes(indProd?.serieMes, i + 1);
+                const vPreco = futuro ? null : valorDoMes(indPreco?.serieMes, i + 1);
+                const barra = (v: number | null, l: LinhaResumo, clara: boolean) => (
+                  <div className="relative w-[7px] h-full">
+                    {v != null && (
+                      <div className={`absolute left-0 right-0 bg-current rounded-[1px] ${corDeValor(l, v)}${clara ? ' opacity-50' : ''}`}
+                           style={v >= 0
+                             ? { bottom: '50%', height: `${(Math.abs(v) / maxAbs) * 50}%` }
+                             : { top: '50%',    height: `${(Math.abs(v) / maxAbs) * 50}%` }} />
+                    )}
+                  </div>
+                );
+                return (
+                  <div key={rot} className="flex-1 flex flex-col items-center gap-0.5">
+                    <div className="relative w-full h-[64px]">
+                      <div className="absolute inset-x-0 top-1/2 h-px bg-border" />
+                      <div className="absolute inset-0 flex justify-center gap-[2px]">
+                        {barra(vProd, lProd, false)}
+                        {barra(vPreco, lPreco, true)}
+                      </div>
+                    </div>
+                    <span className="text-[9px] leading-[12px] text-muted-foreground">{rot}</span>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="text-[10px] leading-[15px] text-muted-foreground mt-1.5">
+              Barra cheia: por produção · Barra clara: por preço · Acima da linha, positivo;
+              abaixo, negativo. A cor segue o sinal, como na tabela.
+            </p>
+          </Bloco>
+
+          <Bloco titulo="O que cada parte significa" contexto="texto fixo">
+            <p className={frase}>
+              <span className="font-semibold">por preço</span> — quanto do valor mudou porque a
+              arroba mudou de preço. O rebanho é calculado duas vezes: com o preço atual e com o
+              preço congelado de dezembro. A diferença entre os dois é o efeito preço.
+            </p>
+            <p className={`${frase} mt-1`}>
+              <span className="font-semibold">por produção</span> — quanto o rebanho mudou de
+              tamanho, medido a preço congelado. Tamanho em arrobas: arrobas entram por engorda,
+              nascimento e compra, e saem por venda, morte e transferência.
+            </p>
+          </Bloco>
+
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const ModalDesvios = ({ linhas, dre, fin, mesAtual, base, onClose }: {
   linhas: LinhaResumo[];
@@ -1784,6 +1949,7 @@ export function ModalAtividade({
   const [visaoDre,  setVisaoDre]  = useState<'padrao' | 'mensal'>('padrao');
   const [modoMensal, setModoMensal] = useState<'mes' | 'acumulado'>('mes');
   const [desviosAberto, setDesviosAberto] = useState(false);
+  const [variacaoAberta, setVariacaoAberta] = useState(false);
   /* MULTI-selecao por GRAFICO — nao por modal. O seletor nao troca so o
      numero do delta: ele decide QUAIS COMPARADORES aparecem no grafico.
      Qualquer combinacao vale, inclusive NENHUMA: sem nada marcado o card
@@ -1807,6 +1973,7 @@ export function ModalAtividade({
       setVisaoDre('padrao');
       setModoMensal('mes');
       setDesviosAberto(false);
+      setVariacaoAberta(false);
       setComparadores({});
     }
   }, [open, assuntoInicial]);
@@ -1972,6 +2139,7 @@ export function ModalAtividade({
               dre={indicadoresDre ?? []}
               modo={modoMensal}
               mesAtual={mesAtual}
+              onDetalhe={() => setVariacaoAberta(true)}
             />
             ) : (
             <TabelaResumo
@@ -1980,6 +2148,7 @@ export function ModalAtividade({
               compacta
               rotuloEstreito
               corPorSinal
+              onDetalhe={() => setVariacaoAberta(true)}
               zoo={indicadores}
               mov={indicadoresMovimentacoes ?? []}
               fin={indicadoresFinanceiro ?? []}
@@ -2154,6 +2323,14 @@ export function ModalAtividade({
             `onClose` do modal de fora.
             A BASE segue a visao em que o usuario esta — foi decisao do Gabriel,
             e por isso o proprio modal declara contra o que mede no topo. */}
+        {variacaoAberta && (
+          <ModalVariacaoEstoque
+            dre={indicadoresDre ?? []}
+            mesAtual={mesAtual}
+            onClose={() => setVariacaoAberta(false)}
+          />
+        )}
+
         {desviosAberto && (
           <ModalDesvios
             linhas={LINHAS_DRE}
