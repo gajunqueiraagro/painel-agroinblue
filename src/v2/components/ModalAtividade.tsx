@@ -232,6 +232,8 @@ type LinhaResumo = {
       Implementado como `pt` nas celulas da linha SEGUINTE — ver o comentario
       de `gap` na tabela. OPT-IN: so o DRE marca. */
   espacoDepois?: boolean;
+  /** Ganha percentual na 5a coluna, sobre o VALOR BRUTO DA PRODUCAO. OPT-IN. */
+  percentual?: boolean;
   /** Abre o detalhe daquela linha por um icone no rotulo. OPT-IN, e hoje so a
       Variacao do estoque marca. */
   detalhe?: boolean;
@@ -395,38 +397,56 @@ const BLOCOS_OPERACIONAL: Array<{ titulo: string; destino?: Assunto; linhas: Lin
 const LINHAS_DRE: LinhaResumo[] = [
   { rotulo: '1. (+) Faturamento',          chave: 'dre_faturamento',   bag: 'dre', detalhe: true },
   { rotulo: '2. (−) Deduções de receita',  chave: 'dre_deducoes',      bag: 'dre', saida: true },
-  { rotulo: '= RECEITA LÍQUIDA',           chave: 'dre_receita_liquida', bag: 'dre', subtotal: true },
+  { rotulo: '= RECEITA LÍQUIDA',           chave: 'dre_receita_liquida', bag: 'dre', subtotal: true, espacoDepois: true },
 
-  /* Custo fixo e Custo variavel sairam do DESENHO, nao do sistema: os
-     indicadores `dreCustoFixo` e `dreCustoVariavel` seguem intactos no PC-100,
-     e o modal da Variacao pode precisar deles. Aqui a abertura do custeio nao
-     estava pagando o espaco que ocupava. */
-  { rotulo: '3. (−) Custeio pecuária',     chave: 'dre_custeio',       bag: 'dre', saida: true, detalhe: true },
-  { rotulo: '= LUCRO BRUTO',               chave: 'dre_resultado_bruto', bag: 'dre', subtotal: true, espacoDepois: true },
+  /* A VARIACAO DO ESTOQUE SE PARTE, e a linha agregada deixa de existir.
+     "por producao" sobe para ANTES dos custos porque e' PRODUCAO: rebanho que
+     a fazenda gerou. "por preco" desce para o bloco nao operacional (linha 7)
+     porque e' MERCADO: a arroba mudou de preco sem ninguem na fazenda ter
+     feito nada. Misturar as duas num numero so era o que impedia o percentual
+     de fechar — o numerador ganhava uma parcela de mercado que o denominador
+     nao tinha. */
+  { rotulo: '3. (+/−) Variação por produção', chave: 'dre_variacao_producao', bag: 'dre', detalhe: true },
+  { rotulo: '4. (−) Reposição de bovinos',  chave: 'dre_reposicao',     bag: 'dre', saida: true },
+  { rotulo: '= VALOR BRUTO DA PRODUÇÃO',    chave: 'dre_vbp',           bag: 'dre', subtotal: true, espacoDepois: true },
 
-  { rotulo: '4. (−) Investimento na fazenda', chave: 'dre_investimento', bag: 'dre', saida: true },
-  { rotulo: '= LUCRO OPERACIONAL',         chave: 'dre_resultado_investimento', bag: 'dre', subtotal: true, espacoDepois: true },
+  /* VARIAVEL ANTES DO FIXO, e nao por ordem alfabetica: o variavel e' da
+     PRODUCAO — anda com o rebanho — e o fixo e' da FAZENDA, existe com gado ou
+     sem. Por isso a MARGEM DE CONTRIBUICAO mora entre os dois: ela responde
+     "quanto sobra depois do que a producao consumiu", antes de a estrutura da
+     fazenda entrar na conta. */
+  { rotulo: '5. (−) Custo variável',        chave: 'dre_custo_var',     bag: 'dre', saida: true },
+  { rotulo: '= MARGEM DE CONTRIBUIÇÃO',     chave: 'dre_margem',        bag: 'dre', subtotal: true, percentual: true, espacoDepois: true },
 
-  { rotulo: '5. (−) Reposição de bovinos', chave: 'dre_reposicao',     bag: 'dre', saida: true },
-  { rotulo: '6. (−/+) Variação do estoque', chave: 'dre_variacao',     bag: 'dre',
-    subtitulo: 'após vendas e reposição', detalhe: true },
-  /* RESULTADO DA ATIVIDADE, e nao "Resultado Operacional": entre o LUCRO
-     OPERACIONAL e esta linha entram a reposicao de bovinos e a variacao do
-     estoque, que sao PATRIMONIO — o rebanho — e nao operacao do periodo. O
-     nome sinaliza a mudanca de natureza da conta; chama-lo de operacional
-     diria que reposicao e variacao de estoque sao custo de operar, e nao sao.
-     Por isso tambem os marcos acima levam "LUCRO" e este leva "RESULTADO":
-     e' a pratica da Lei 6.404 / CPC 26, decisao do Gabriel. */
-  { rotulo: '= RESULTADO DA ATIVIDADE',    chave: 'dre_resultado_operacional', bag: 'dre', subtotal: true, espacoDepois: true },
+  { rotulo: '6. (−) Custo fixo',            chave: 'dre_custo_fixo',    bag: 'dre', saida: true },
+  { rotulo: '= RESULTADO OPERACIONAL',      chave: 'dre_res_oper',      bag: 'dre', subtotal: true, percentual: true, espacoDepois: true },
 
-  { rotulo: '7. (−) Juros Financeiros', chave: 'dre_financeiro',  bag: 'dre', saida: true },
-  { rotulo: '= LUCRO ANTES DOS TRIBUTOS', chave: 'dre_antes_tributos', bag: 'dre', subtotal: true, espacoDepois: true },
+  { rotulo: '7. (+/−) Variação por preço',  chave: 'dre_variacao_preco', bag: 'dre' },
+  { rotulo: '8. (−) Investimento na fazenda', chave: 'dre_investimento', bag: 'dre', saida: true },
+  /* ⚠⚠ OS DOIS NOMES SE CRUZAM, e esta e a armadilha desta tabela.
+     Este LUCRO OPERACIONAL le `dre_resultado_operacional`, que e o indicador do
+     RESULTADO DA ATIVIDADE do modelo antigo. Nao e engano: a algebra e a mesma.
+       LUCRO OPERACIONAL = (VBP − CustoVar − CustoFixo) + VarPreco − Invest
+                         = RL − Custeio − Invest − Reposicao + VarTotal
+       dre_resultado_operacional = (RL − Custeio − Invest) − Reposicao + VarTotal
+     Sao identicos termo a termo.
+     ⚠ NAO trocar por `dre_resultado_investimento`, que parece o candidato pelo
+     nome: aquele e RL − Custeio − Invest, SEM reposicao e SEM variacao.
+     ⚠ E `dre_res_oper` (a linha acima) e outro indicador ainda, o novo do
+     ecf50533. Tres nomes parecidos, tres quantidades distintas. */
+  { rotulo: '= LUCRO OPERACIONAL',          chave: 'dre_resultado_operacional', bag: 'dre', subtotal: true, percentual: true, espacoDepois: true },
 
-  { rotulo: '8. (−) Tributos patrimoniais', chave: 'dre_tributo_patrimonial', bag: 'dre', saida: true },
-  { rotulo: '9. (−) Impostos sobre lucro', chave: 'dre_imposto_lucro', bag: 'dre', saida: true },
-  /* Sem `espacoDepois`: e' o fim do demonstrativo, nao ha bloco seguinte. */
-  { rotulo: '= LUCRO LÍQUIDO',             chave: 'dre_lucro_liquido', bag: 'dre', subtotal: true },
+  { rotulo: '9. (−) Juros Financeiros',     chave: 'dre_financeiro',    bag: 'dre', saida: true },
+  { rotulo: '= LUCRO ANTES DOS TRIBUTOS',   chave: 'dre_antes_tributos', bag: 'dre', subtotal: true, percentual: true, espacoDepois: true },
+
+  { rotulo: '10. (−) Tributos patrimoniais', chave: 'dre_tributo_patrimonial', bag: 'dre', saida: true },
+  { rotulo: '11. (−) Impostos sobre lucro', chave: 'dre_imposto_lucro', bag: 'dre', saida: true },
+  /* Da linha LUCRO OPERACIONAL para baixo a cadeia usa os MESMOS indicadores do
+     modelo antigo, entao o Lucro Liquido e' o mesmo POR CONSTRUCAO. LUCRO BRUTO
+     e RESULTADO DA ATIVIDADE sairam da TABELA; os indicadores ficam no PC-100. */
+  { rotulo: '= LUCRO LÍQUIDO',              chave: 'dre_lucro_liquido', bag: 'dre', subtotal: true, percentual: true },
 ];
+
 
 
 /* AS PARCELAS DE CADA LINHA — sairam da TABELA, nao do sistema. Os indicadores
@@ -442,15 +462,19 @@ const DETALHE_DRE: Record<string, Array<{ chave: string; rotulo: string }>> = {
     { chave: 'dre_rec_pec',           rotulo: 'Receita pecuária' },
     { chave: 'dre_rec_outras',        rotulo: 'Outras receitas' },
   ],
-  dre_custeio: [
-    { chave: 'dre_custo_fixo',        rotulo: 'Custo fixo' },
-    { chave: 'dre_custo_var',         rotulo: 'Custo variável' },
-  ],
-  dre_variacao: [
+  /* CUSTEIO saiu: a linha deixou de existir e as duas parcelas dela viraram
+     LINHAS PROPRIAS da tabela. Detalhe de linha ja aberta seria redundancia.
+     ⚠ A VARIACAO fica, e pendurada na linha da PRODUCAO — mas as duas "parcelas"
+     aqui nao sao partes dela: sao as duas METADES da variacao, que agora moram
+     em linhas distantes uma da outra (3 e 7). E' exatamente por isso que o
+     modal existe: e o unico lugar onde as duas voltam a aparecer juntas, que e
+     o que torna a diferenca entre elas visivel. */
+  dre_variacao_producao: [
     { chave: 'dre_variacao_producao', rotulo: 'por produção' },
     { chave: 'dre_variacao_preco',    rotulo: 'por preço' },
   ],
 };
+
 
 /* Ver a prop `comparadores` do card. */
 const COMPARADORES_MOV: Comparador[] = ['meta', 'anoAnt'];
@@ -848,13 +872,24 @@ const tipografiaDre = (l: LinhaResumo): string =>
   : (l.nivel ?? 0) > 0  ? 'text-[9px] leading-[14px]'
                         : 'text-[10px] leading-[16px]';
 
+/* PERCENTUAL SOBRE O VALOR BRUTO DA PRODUCAO.
+   ⚠ O VBP e' a unica base que FECHA. A Receita Liquida nao serve: medido na
+   Santa Rita, JANEIRO, o resultado daria 203% dela, porque o numerador carrega
+   variacao de estoque que nunca passou pela receita. O VBP ja contem a variacao
+   por producao, entao numerador e denominador falam da mesma producao.
+   ⚠ VBP <= 0 devolve null -> TRAVESSAO, nunca 0%. Medido na Santa Rita, MARCO:
+   VBP de −R$ 333,3K. Nao e defeito — e' o sinal de que o desfrute superou a
+   producao no mes, e e' o que a auditoria procura. */
+const pctSobreVbp = (valor: number | null, vbp: number | null): number | null =>
+  (valor == null || vbp == null || vbp <= 0) ? null : (valor / vbp) * 100;
+
 const corDeValor = (l: LinhaResumo, v: number | null): string =>
   l.saida               ? 'text-destructive'
   : v == null || v === 0 ? 'text-foreground'
   : v > 0               ? 'text-emerald-600 dark:text-emerald-400'
                         : 'text-red-600 dark:text-red-400';
 
-const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, leitura, mesAtual, colunas, onIr, realizadoPrimeiro, compacta, rotuloEstreito, corPorSinal, onDetalhe }: {
+const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, leitura, mesAtual, colunas, onIr, realizadoPrimeiro, compacta, rotuloEstreito, corPorSinal, colunaPercentual, onDetalhe }: {
   /* DUAS formas de entrada, um componente so:
        `linhas` + `colunas` -> divide por CONTAGEM, sem titulo. E o que as
                                tabelas dos ASSUNTOS usam.
@@ -891,6 +926,14 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
       linhas pelo sinal" alcancaria TODA linha das cinco outras abas, que nao
       tem nenhum dos dois campos, e pintaria o painel inteiro de verde. */
   corPorSinal?: boolean;
+  /** Emite a 5a coluna de %, sobre o VALOR BRUTO DA PRODUCAO, nas linhas
+      marcadas com `percentual`. OPT-IN: sem a prop nenhuma celula extra e
+      emitida e o `colSpan` nao muda, entao as cinco outras abas nao veem
+      diferenca.
+      ⚠ NAO existe na visao Mensal, e nao por esquecimento: la cada coluna e um
+      mes, e doze percentuais por linha seriam ilegiveis. A `TabelaMensalDre` e
+      componente separado e simplesmente nao tem esta coluna. */
+  colunaPercentual?: boolean;
   /** Abre o detalhe da linha marcada com `detalhe`. Sem a prop nenhum icone e
       emitido, e as cinco outras abas nem marcam o campo. */
   onDetalhe?: (l: LinhaResumo) => void;
@@ -967,7 +1010,16 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
      ⚠ `truncate max-w-[180px]` continua valendo para quem NAO passa a prop —
      nas outras abas o rotulo divide espaco com ate quatro tabelas lado a lado
      e encolher ate o conteudo estouraria a grade. */
-  const nCols = rotuloEstreito ? 5 : 4;
+  const nCols = 4 + (rotuloEstreito ? 1 : 0) + (colunaPercentual ? 1 : 0);
+
+  /* A BASE do percentual e' UMA so para a tabela inteira — o VBP do mesmo
+     recorte —, entao e' lida uma vez e nao por linha. */
+  const vbpBase = colunaPercentual
+    ? (() => {
+        const i = dre.find(x => x.chave === 'dre_vbp');
+        return i ? (leitura === 'periodo' ? i.valorPeriodo : i.valorMes) : null;
+      })()
+    : null;
 
   /* Os ultimos 13px, e de onde eles saem — MEDIDOS no DOM, nao projetados.
      A area visivel do miolo e 367px e a tabela de 21 linhas media 380px.
@@ -1041,6 +1093,9 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
               {/* `whitespace-nowrap` + largura maior: em quatro colunas o `Dif.`
                   das Movimentacoes saia cortado contra a coluna seguinte. */}
               <th className={`text-right font-normal px-1.5 ${padTh} w-[64px] whitespace-nowrap`}>Dif.</th>
+              {colunaPercentual && (
+                <th className={`text-right font-normal px-1.5 ${padTh} w-[54px] whitespace-nowrap`}>%</th>
+              )}
               {rotuloEstreito && <th className="w-full p-0" aria-hidden />}
             </tr>
           </thead>
@@ -1172,6 +1227,17 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
                     : 'text-red-600 dark:text-red-400'}${tipo}${gap}`}>
                     {dif == null ? '—' : `${dif >= 0 ? '+' : ''}${dif.toFixed(1)}%`}
                   </td>
+                  {/* % do VBP. Cor SECUNDARIA e nao `corDeValor`: o subtotal na
+                      mesma linha ja esta colorido pelo sinal, e repetir a cor na
+                      celula vizinha duplicaria o mesmo aviso lado a lado. */}
+                  {colunaPercentual && (() => {
+                    const pct = l.percentual ? pctSobreVbp(real, vbpBase) : null;
+                    return (
+                      <td className={`text-right px-1.5 ${padDe(l.subtotal)} whitespace-nowrap tabular-nums text-muted-foreground${tipo}${gap}`}>
+                        {l.percentual ? (pct != null ? `${pct.toFixed(1)}%` : '—') : ''}
+                      </td>
+                    );
+                  })()}
                   {rotuloEstreito && <td className="p-0" />}
                 </tr>
               );
@@ -1366,10 +1432,10 @@ const ModalDetalheDre = ({ linha, dre, mesAtual, onClose }: {
   const ind = (chave: string) => dre.find(i => i.chave === chave);
   const nomeMes  = MESES[mesAtual - 1];
   const parcelas = DETALHE_DRE[linha.chave] ?? [];
-  /* A PONTE e o texto explicativo sao EXCLUSIVOS da Variacao do estoque. Nao se
-     replicam para Faturamento nem Custeio: a ponte e uma identidade contabil
-     daquela linha, e o texto explica um calculo que so ela tem. */
-  const ehVariacao = linha.chave === 'dre_variacao';
+  /* A PONTE e o texto explicativo sao EXCLUSIVOS da Variacao. Nao se replicam
+     para o Faturamento: a ponte e uma identidade contabil daquela linha, e o
+     texto explica um calculo que so ela tem. */
+  const ehVariacao = linha.chave === 'dre_variacao_producao';
 
   /* Composicao: acumulado do periodo, como a tabela do DRE, que roda com
      `leitura="periodo"` fixa. O % e sobre o total da PROPRIA linha. */
@@ -1380,7 +1446,12 @@ const ModalDetalheDre = ({ linha, dre, mesAtual, onClose }: {
      acompanhou" — e sobre UM mes. O rotulo do bloco declara qual. */
   const doMes = (i: IndicadorAtividade | undefined) => valorDoMes(i?.serieMes, mesAtual);
   const receita  = doMes(ind('dre_rec_pec'));
-  const variacao = doMes(ind('dre_variacao'));
+  /* ⚠ varPRODUCAO, e nao a variacao total — e isto e' CORRECAO, nao copia.
+     A pergunta que a ponte responde ("vendi e o caixa nao acompanhou") e' sobre
+     VOLUME: o gado que saiu levou arrobas embora. O efeito de PRECO nunca fez
+     parte dessa pergunta; ele entrava junto so porque as duas metades dividiam
+     a mesma linha no modelo antigo. Separadas, a ponte fica mais exata. */
+  const variacao = doMes(ind('dre_variacao_producao'));
   const temPonte = receita != null && variacao != null;
 
   /* Linha SO para a cor: `corDeValor` precisa saber se e saida. A parcela herda
@@ -1424,7 +1495,7 @@ const ModalDetalheDre = ({ linha, dre, mesAtual, onClose }: {
           {ehVariacao && temPonte && (
             <Bloco titulo="A ponte do mês" contexto={nomeMes}>
               <p className={frase}>
-                Receita pecuária {fmtRAbrev(receita)} · Variação do estoque{' '}
+                Receita pecuária {fmtRAbrev(receita)} · Variação por produção{' '}
                 {`${variacao >= 0 ? '+' : '−'}${fmtRAbrev(Math.abs(variacao))}`} ·{' '}
                 Valor gerado {fmtRAbrev(receita + variacao)}.
               </p>
@@ -1435,6 +1506,11 @@ const ModalDetalheDre = ({ linha, dre, mesAtual, onClose }: {
             </Bloco>
           )}
 
+          {/* COMPOSICAO so onde as parcelas SOMAM a linha. No Faturamento elas
+              somam; na Variacao nao — "por preco" nao e parte de "por producao",
+              e o % daria 100% para uma e um numero sem sentido para a outra. La
+              quem mostra as duas juntas e o grafico. */}
+          {!ehVariacao && (
           <Bloco titulo="Composição" contexto={`Jan–${nomeMes} · competência`}>
             {parcelas.map(p => {
               const v = ind(p.chave)?.valorPeriodo ?? null;
@@ -1456,6 +1532,7 @@ const ModalDetalheDre = ({ linha, dre, mesAtual, onClose }: {
               );
             })}
           </Bloco>
+          )}
 
           <Bloco titulo="Evolução no ano" contexto={`Jan–Dez · escala comum às duas séries`}>
             <div className="flex items-end gap-1 pt-1">
@@ -1506,6 +1583,10 @@ const ModalDetalheDre = ({ linha, dre, mesAtual, onClose }: {
               <span className="font-semibold">por produção</span> — quanto o rebanho mudou de
               tamanho, medido a preço congelado. Tamanho em arrobas: arrobas entram por engorda,
               nascimento e compra, e saem por venda, morte e transferência.
+            </p>
+            <p className={`${frase} mt-1 text-muted-foreground`}>
+              A parte de preço aparece separada, mais abaixo, entre os resultados
+              não operacionais.
             </p>
           </Bloco>
           )}
@@ -2221,6 +2302,7 @@ export function ModalAtividade({
               compacta
               rotuloEstreito
               corPorSinal
+              colunaPercentual
               onDetalhe={setDetalheLinha}
               zoo={indicadores}
               mov={indicadoresMovimentacoes ?? []}
