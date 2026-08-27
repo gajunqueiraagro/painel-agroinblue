@@ -20,7 +20,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
 import { DatePicker } from '@/components/ui/date-picker';
-import { MoreVertical, Search, Eye, Filter, Ban, Undo2, ArrowUp, ArrowDown } from 'lucide-react';
+import { MoreVertical, Search, Eye, Filter, Ban, Undo2, ArrowUp, ArrowDown, Lock } from 'lucide-react';
 
 // Central de Operações Comerciais — PR-OC-CENTRAL-UX-01 (UX/operacional; sem backend novo).
 //   Lê em LOTE (ZERO N+1): operações + 3 views soberanas + nomes, filtradas por cliente, mapeadas por
@@ -61,23 +61,24 @@ const kg = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 0 }
 const TH = 'px-1.5 py-1 text-[9px] font-semibold uppercase tracking-wide text-primary-foreground whitespace-nowrap';
 const TD = 'px-1.5 py-1 text-[10px] align-middle';
 
-// Rollup soberano do recebimento a partir do estado por lote (nunca soma quantidades). entrega_encerrada
-//   tem precedência (estado terminal). Sem lotes e sem encerramento → null ("—").
-function recStatus(estados: string[] | undefined, entregaEncerrada: boolean): string | null {
-  if (entregaEncerrada) return 'Encerrado';
+/* Rollup soberano do recebimento a partir do estado por lote (nunca soma quantidades).
+   A coluna responde UMA pergunta: os animais chegaram?
+
+   ⚠ `entregaEncerrada` SAIU daqui. Ele retornava 'Encerrado' antes de olhar os
+   lotes e, com isso, ESCONDIA a resposta: toda operacao encerrada dizia so que
+   fechou, nunca se recebeu tudo, parte ou nada. Encerramento e' outro eixo —
+   virou o cadeado ao lado da pilula. Alem disso "Encerrado" e "Concluido" sao
+   sinonimos em portugues e o operador nao distinguia os dois.
+   Sem lotes → null ("—"): sem lote nao ha o que afirmar sobre a chegada. */
+function recStatus(estados: string[] | undefined): string | null {
   if (!estados || estados.length === 0) return null;
-  if (estados.some(e => e === 'excedente')) return 'Diferença';
+  // 'Com diferença' e nao 'Diferença': a aba Recebimento tem uma COLUNA Diferença,
+  //   e o mesmo nome para as duas coisas faria o operador ler numero onde ha estado.
+  if (estados.some(e => e === 'excedente')) return 'Com diferença';
   if (estados.every(e => e === 'completo')) return 'Concluído';
   if (estados.every(e => e === 'nao_iniciado')) return 'Não iniciado';
   return 'Parcial';
 }
-const REC_TONE: Record<string, string> = {
-  'Não iniciado': 'bg-slate-100 text-slate-600',
-  Parcial: 'bg-amber-100 text-amber-700',
-  Concluído: 'bg-emerald-100 text-emerald-700',
-  Diferença: 'bg-rose-100 text-rose-700',
-  Encerrado: 'bg-blue-100 text-blue-700',
-};
 
 /* Tons por TOKEN do design system (--success / --warning / --muted), nunca cor
    crua: a paleta literal acima e' idioma anterior desta tela e fica onde esta.
@@ -88,6 +89,19 @@ const TOM_SUCESSO = 'bg-success text-success-foreground';
 const TOM_ATENCAO = 'bg-warning text-warning-foreground';
 const TOM_ATENCAO_FORTE = 'bg-warning text-warning-foreground font-semibold ring-1 ring-warning-foreground/40';
 const TOM_NEUTRO = 'bg-muted text-muted-foreground';
+
+/* Recebimento passou a falar a MESMA lingua de Comercial e Liquidacao. Era a
+   unica coluna em cor literal (bg-slate/amber/emerald/rose/blue-100): duas
+   linguagens de cor na mesma linha, e o operador traduzindo paleta.
+   Precisa ficar DEPOIS dos TOM_* — const de modulo lida antes da declaracao e' TDZ.
+   'Com diferença' leva o ATENCAO_FORTE pela mesma logica do excedente: divergencia
+   nao e' sucesso, ainda que a entrega tenha acontecido. */
+const REC_TONE: Record<string, string> = {
+  'Não iniciado': TOM_NEUTRO,
+  Parcial: TOM_ATENCAO,
+  'Com diferença': TOM_ATENCAO_FORTE,
+  Concluído: TOM_SUCESSO,
+};
 
 const LIQ_TOM: Record<string, string> = {
   quitada: TOM_SUCESSO,
@@ -142,7 +156,9 @@ function liqLabel(estado: string | null | undefined): string {
      (`nao_iniciada` e' o valor interno, renomeado na view) e por isso ficam fora;
    - recebimento: a chave e' o rotulo do ROLLUP (recStatus), nao o estado por lote
      da view — a view so tem nao_iniciado|completo, e quem a Central mostra e o
-     rollup. Os CINCO rotulos que ele emite estao mapeados.
+     rollup. Os QUATRO rotulos que ele emite estao mapeados; 'Encerrado' saiu
+     porque encerramento deixou de ser estado de chegada e virou o cadeado, que
+     NAO entra na ordenacao — e' outro eixo.
 
    DIVERGENCIA ANTES DO QUE JA FECHOU, nos dois eixos: `excedente` vem antes de
    `quitada` e `Diferenca` antes de `Concluido`. Quem diverge precisa ser visto;
@@ -150,7 +166,7 @@ function liqLabel(estado: string | null | undefined): string {
    a base do calculo e' desconhecida, entao nao ha o que dar por resolvido. */
 const ORD_COMERCIAL: Record<string, number> = { programada: 1, fechada: 2, cancelada: 3 };
 const ORD_RECEBIMENTO: Record<string, number> = {
-  'Não iniciado': 1, Parcial: 2, Diferença: 3, Concluído: 4, Encerrado: 5,
+  'Não iniciado': 1, Parcial: 2, 'Com diferença': 3, Concluído: 4,
 };
 const ORD_LIQUIDACAO: Record<string, number> = {
   nao_liquidada: 1, base_indefinida: 2, parcial: 3, excedente: 4, quitada: 5,
@@ -333,10 +349,11 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
     [liqMap],
   );
   /* Recebimento nao tem coluna crua para derivar: o valor exibido e' o ROLLUP
-     (recStatus), que depende de entrega_encerrada. Entao as opcoes saem do mesmo
-     rollup, linha a linha — assim opcao e coluna nunca discordam. */
+     (recStatus). Entao as opcoes saem do mesmo rollup, linha a linha — assim opcao
+     e coluna nunca discordam, e foi por isso que 'Encerrado' sumiu das opcoes
+     sozinho quando recStatus parou de emiti-lo. */
   const recebimentoOptions = useMemo(
-    () => Array.from(new Set(rows.map(r => recStatus(recMap[r.id], r.entrega_encerrada)).filter((v): v is string => !!v))).sort(),
+    () => Array.from(new Set(rows.map(r => recStatus(recMap[r.id])).filter((v): v is string => !!v))).sort(),
     [rows, recMap],
   );
 
@@ -350,7 +367,7 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
       if (fComercial !== '__all__' && r.status_comercial !== fComercial) return false;
       if (fFazenda !== '__all__' && r.fazenda_id !== fFazenda) return false;
       if (fLiquidacao !== '__all__' && (liqMap[r.id]?.estado_liquidacao ?? '') !== fLiquidacao) return false;
-      if (fRecebimento !== '__all__' && (recStatus(recMap[r.id], r.entrega_encerrada) ?? '') !== fRecebimento) return false;
+      if (fRecebimento !== '__all__' && (recStatus(recMap[r.id]) ?? '') !== fRecebimento) return false;
       /* data_operacao e' 'yyyy-MM-dd' e o DatePicker devolve o mesmo formato:
          comparacao de string ja e' cronologica, sem Date nem fuso no meio.
          INCLUSIVO nas duas pontas. */
@@ -398,7 +415,7 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
         case 'animais': return r.qtd_negociada ?? null;
         case 'valor': return r.valor_acordado ?? r.valor_total ?? null;
         case 'comercial': return posicao(ORD_COMERCIAL, r.status_comercial);
-        case 'recebimento': return posicao(ORD_RECEBIMENTO, recStatus(recMap[r.id], r.entrega_encerrada));
+        case 'recebimento': return posicao(ORD_RECEBIMENTO, recStatus(recMap[r.id]));
         // Mesmo criterio da celula: ela so imprime valor quando fin.valor > 0;
         //   fora disso mostra '—', e '—' ordena como ausencia.
         case 'financeiro': { const f = finResumo(finMap[r.id]); return f && f.valor > 0 ? f.valor : null; }
@@ -571,7 +588,12 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
             <col className="w-[66px]" />{/* Animais — cab + kg */}
             <col className="w-[80px]" />{/* Valor — R$ 1.234.567 */}
             <col className="w-[72px]" />{/* Comercial — pilula */}
-            <col className="w-[82px]" />{/* Recebimento — pilula */}
+            {/* 102 e nao 82: o item 3 do PR-OC-RECEB-UX-01 alargou o conteudo desta
+                celula. Pior caso medido no DOM — pilula "Com diferença" (76) + gap (4)
+                + cadeado (10) = 90 de conteudo, mais 12 de padding. Os 82 antigos
+                cortariam justamente a divergencia, que e' o que nao pode sumir.
+                Os 20px saem de Contraparte, a coluna da sobra, que cai de 108 para 88. */}
+            <col className="w-[102px]" />{/* Recebimento — pilula + cadeado */}
             <col className="w-[88px]" />{/* Financeiro — valor + rotulo */}
             <col className="w-[88px]" />{/* Liquidação — pilula */}
             <col className="w-[46px]" />{/* Ações */}
@@ -602,7 +624,7 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
               </TableCell></TableRow>
             )}
             {!loading && pageRows.map(r => {
-              const rec = recStatus(recMap[r.id], r.entrega_encerrada);
+              const rec = recStatus(recMap[r.id]);
               const fin = finResumo(finMap[r.id]);
               const valorOp = r.valor_acordado ?? r.valor_total ?? 0;
               return (
@@ -623,9 +645,20 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
                   <TableCell className={`${TD} text-right whitespace-nowrap tabular-nums font-medium`}>{valorOp > 0 ? brl(valorOp) : '—'}</TableCell>
                   <TableCell className={TD}><BadgeComercial status={r.status_comercial} rascunho={r.rascunho} /></TableCell>
                   <TableCell className={TD}>
-                    {rec
-                      ? <span className={`rounded px-1.5 py-0.5 text-[9px] whitespace-nowrap ${REC_TONE[rec] ?? 'bg-slate-100 text-slate-600'}`}>{rec}</span>
-                      : <span className="text-muted-foreground">—</span>}
+                    {/* Cadeado = EIXO SEPARADO, ao lado da pilula e nunca dentro dela: o
+                        encerramento nao responde "chegou?", so "ainda mexe?". Por isso
+                        aparece igual sobre 'Concluído', 'Parcial' ou '—'. O `title` vai no
+                        span, nao no svg: em <svg> o atributo nao vira tooltip confiavel. */}
+                    <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                      {rec
+                        ? <span className={`${PILULA} ${REC_TONE[rec] ?? TOM_NEUTRO}`}>{rec}</span>
+                        : <span className="text-muted-foreground">—</span>}
+                      {r.entrega_encerrada && (
+                        <span title="Entrega encerrada" className="text-muted-foreground">
+                          <Lock className="h-2.5 w-2.5" />
+                        </span>
+                      )}
+                    </span>
                   </TableCell>
                   <TableCell className={`${TD} whitespace-nowrap`}>
                     {fin && fin.valor > 0

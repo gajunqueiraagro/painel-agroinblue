@@ -25,8 +25,17 @@ interface Props {
   onVoltarNegociacao?: () => void;
 }
 
-// Colunas independentes: #, Categoria, Negociado, Recebido, Diferença, Data, Qtd. a receber, Peso méd., Estado, Ações.
-const GRID = 'grid grid-cols-[0.35fr_1.3fr_0.6fr_0.6fr_0.7fr_1.4fr_0.65fr_0.75fr_0.8fr_0.9fr] gap-1.5';
+/* Colunas independentes: #, Categoria, Negociado, Recebido, Diferença, Data, Qtd. a receber, Peso méd., Estado, Ações.
+   `minmax(0,Nfr)` e nao `Nfr` puro: trilha `fr` tem minimo AUTOMATICO de conteudo,
+   entao o mesmo GRID resolvia larguras DIFERENTES no cabecalho e na linha — la a
+   trilha era empurrada pela palavra ("NEGOCIADO", "DIFERENÇA"), aqui pelo input e
+   pelo DatePicker. Com o minimo em 0 as dez trilhas passam a depender so da largura
+   do container, que e' a mesma nos dois, e as colunas coincidem.
+   Com o minimo em 0 a trilha deixa de ceder a palavra do cabecalho, e "NEGOCIADO"
+   (64px) passava a estourar os 58px que 0.6fr dava. Compensado no proprio peso:
+   0.6 -> 0.66 em Negociado e 1.4 -> 1.34 em Data, que sobrava. A SOMA (8.05) nao
+   muda, entao nenhuma outra coluna se mexe. */
+const GRID = 'grid grid-cols-[minmax(0,0.35fr)_minmax(0,1.3fr)_minmax(0,0.66fr)_minmax(0,0.6fr)_minmax(0,0.7fr)_minmax(0,1.34fr)_minmax(0,0.65fr)_minmax(0,0.75fr)_minmax(0,0.8fr)_minmax(0,0.9fr)] gap-1.5';
 const TONE: Record<EstadoRecebimento, string> = {
   nao_iniciado: 'bg-slate-100 text-slate-600',
   parcial: 'bg-amber-100 text-amber-700',
@@ -94,6 +103,17 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
 
   const movsAtivas = api.movimentacoes.filter(m => !m.cancelado);
 
+  /* SALDO — nao confundir com o gate de leitura. `readOnly` responde "pode
+     escrever?"; isto responde "sobrou o que receber?". Faltava a segunda, e por
+     isso uma entrega 29/29 ainda oferecia "Receber".
+     Le o MESMO saldo que a linha exibe (Negociado x Recebido), sem derivar de
+     outra fonte. `estado === 'completo'` cobre o que a view ja fechou.
+     qtdNegociada NULA e' negociado DESCONHECIDO, nao zero: sem saber o alvo nao
+     da' para afirmar que nao ha saldo, entao o botao fica. */
+  const semSaldo = (l: LoteRecebimento) =>
+    l.estado === 'completo' || (l.qtdNegociada != null && l.qtdRecebida >= l.qtdNegociada);
+  const algumLoteComSaldo = api.lotes.some(l => !semSaldo(l));
+
   // Totais soberanos (soma dos lotes) para o dialog de encerramento. Motivo obrigatório quando há
   //   diferença ou zero recebido — a UI torna a consequência explícita; o writer já exige o motivo.
   const totalNegociado = api.lotes.reduce((s, l) => s + (l.qtdNegociada ?? 0), 0);
@@ -127,7 +147,7 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
             {encerrada ? 'Recebimento encerrado — somente leitura.' : somenteLeitura ? 'Somente leitura.' : 'Registre a quantidade efetivamente recebida por lote.'}
           </div>
         </div>
-        {!readOnly && (
+        {!readOnly && algumLoteComSaldo && (
           <Button type="button" variant="outline" size="sm" className="h-7 text-[11px] gap-1" disabled={api.saving} onClick={() => void api.receberTodos()}>
             <Check className="h-3 w-3" /> Receber todos conforme negociado
           </Button>
@@ -136,7 +156,11 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
 
       <div className="overflow-x-auto">
         <div className="min-w-[840px]">
-          <div className={`${GRID} px-1 pb-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground [&>span]:text-center`}>
+          {/* `border border-transparent` NAO e' decoracao: a LINHA tem `border`, e a
+              borda entra na largura da caixa. Sem ela aqui, o conteudo do cabecalho
+              comeca 1px antes e distribui as dez colunas sobre 2px a mais que a
+              linha — o GRID e' o mesmo, o envoltorio e' que nao era. */}
+          <div className={`${GRID} border border-transparent px-1 pb-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground [&>span]:text-center`}>
             <span>#</span><span>Categoria</span><span>Negociado</span>
             <span>Recebido</span><span>Diferença</span><span>Data</span>
             <span>Qtd. a receber</span><span>Peso méd.</span>
@@ -180,7 +204,7 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
               </div>
               {/* Ações */}
               <div className="flex items-center justify-center gap-1">
-                {!readOnly && (
+                {!readOnly && !semSaldo(l) && (
                   <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-[10px]" disabled={api.saving} onClick={() => registrar(l)}>
                     Receber
                   </Button>
