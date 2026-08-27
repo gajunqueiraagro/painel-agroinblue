@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-  Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
+  TableHeader, TableBody, TableRow, TableHead, TableCell,
 } from '@/components/ui/table';
 import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
@@ -58,7 +58,7 @@ const fmtData = (iso: string): string => (iso ? iso.split('-').reverse().join('/
 const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0, maximumFractionDigits: 0 });
 const kg = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 0 });
 
-const TH = 'px-1.5 py-1 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground whitespace-nowrap';
+const TH = 'px-1.5 py-1 text-[9px] font-semibold uppercase tracking-wide text-primary-foreground whitespace-nowrap';
 const TD = 'px-1.5 py-1 text-[10px] align-middle';
 
 // Rollup soberano do recebimento a partir do estado por lote (nunca soma quantidades). entrega_encerrada
@@ -164,8 +164,11 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
      `status_comercial` enquanto a tabela mostra QUATRO eixos: quem escolhia
      "Programada" achava que filtrava a operacao e filtrava um eixo so. Agora o
      rotulo diz o eixo, e a Liquidacao ganhou o seu.
-     Recebimento e Financeiro seguem SEM filtro — pendencia registrada. */
+     Recebimento ganhou o seu em PR-OC-CENTRAL-UX-03, sobre o MESMO rollup que
+     pinta a coluna (recStatus), nunca sobre uma segunda leitura da view.
+     Financeiro segue SEM filtro — pendencia registrada. */
   const [fLiquidacao, setFLiquidacao] = useState('__all__');
+  const [fRecebimento, setFRecebimento] = useState('__all__');
   const [dtIni, setDtIni] = useState('');   // '' = sem limite naquela ponta
   const [dtFim, setDtFim] = useState('');
   const [mostrarRascunhos, setMostrarRascunhos] = useState(false);
@@ -248,6 +251,13 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
     () => Array.from(new Set(Object.values(liqMap).map(l => l.estado_liquidacao).filter((v): v is string => !!v))).sort(),
     [liqMap],
   );
+  /* Recebimento nao tem coluna crua para derivar: o valor exibido e' o ROLLUP
+     (recStatus), que depende de entrega_encerrada. Entao as opcoes saem do mesmo
+     rollup, linha a linha — assim opcao e coluna nunca discordam. */
+  const recebimentoOptions = useMemo(
+    () => Array.from(new Set(rows.map(r => recStatus(recMap[r.id], r.entrega_encerrada)).filter((v): v is string => !!v))).sort(),
+    [rows, recMap],
+  );
 
   const filtradas = useMemo(() => {
     const q = busca.trim().toLowerCase();
@@ -259,6 +269,7 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
       if (fComercial !== '__all__' && r.status_comercial !== fComercial) return false;
       if (fFazenda !== '__all__' && r.fazenda_id !== fFazenda) return false;
       if (fLiquidacao !== '__all__' && (liqMap[r.id]?.estado_liquidacao ?? '') !== fLiquidacao) return false;
+      if (fRecebimento !== '__all__' && (recStatus(recMap[r.id], r.entrega_encerrada) ?? '') !== fRecebimento) return false;
       /* data_operacao e' 'yyyy-MM-dd' e o DatePicker devolve o mesmo formato:
          comparacao de string ja e' cronologica, sem Date nem fuso no meio.
          INCLUSIVO nas duas pontas. */
@@ -270,12 +281,12 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
       }
       return true;
     });
-  }, [rows, busca, fTipo, fComercial, fFazenda, fLiquidacao, dtIni, dtFim, mostrarRascunhos, contrapartes, liqMap]);
+  }, [rows, busca, fTipo, fComercial, fFazenda, fLiquidacao, fRecebimento, dtIni, dtFim, mostrarRascunhos, contrapartes, liqMap, recMap]);
 
   const totalPages = Math.max(1, Math.ceil(filtradas.length / PAGE_SIZE));
   const pageSafe = Math.min(page, totalPages);
   const pageRows = filtradas.slice((pageSafe - 1) * PAGE_SIZE, pageSafe * PAGE_SIZE);
-  useEffect(() => { setPage(1); }, [busca, fTipo, fComercial, fFazenda, fLiquidacao, dtIni, dtFim, mostrarRascunhos]);
+  useEffect(() => { setPage(1); }, [busca, fTipo, fComercial, fFazenda, fLiquidacao, fRecebimento, dtIni, dtFim, mostrarRascunhos]);
 
   const nomeContraparte = (r: OpRow) => (r.contraparte_id ? contrapartes[r.contraparte_id] ?? '—' : '—');
   const fazendaRef = (r: OpRow): FazendaRef | null => (r.fazenda_id ? fazendas[r.fazenda_id] ?? null : null);
@@ -322,83 +333,128 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
   };
 
   return (
-    <div className="space-y-2 w-full px-3">
+    <div className="space-y-2 w-full px-3 pt-3">
       {/* Cabeçalho compacto (sem banner, sem botão do fluxo legado) */}
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-[15px] font-semibold leading-none">Operações Comerciais</h2>
         <span className="text-[10px] text-muted-foreground">{filtradas.length} operação(ões)</span>
       </div>
 
-      {/* Barra de filtros — QUEBRA EM DUAS LINHAS quando nao cabe (`flex-wrap`), nunca
-          scroll horizontal. Ordem: Data inicial · Data final · Tipo · Contraparte ·
-          Fazenda · Comercial · Liquidacao · Rascunhos. */}
-      <div className="sticky top-0 z-20 flex flex-wrap items-center gap-1.5 bg-background pb-1.5">
-        <DatePicker value={dtIni} onChange={setDtIni} placeholder="Data inicial" size="compact" className="w-[124px]" />
-        <DatePicker value={dtFim} onChange={setDtFim} placeholder="Data final" size="compact" className="w-[124px]" />
-        <Select value={fTipo} onValueChange={setFTipo}>
-          <SelectTrigger className="h-8 w-32 text-[11px]"><SelectValue placeholder="Tipo" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__all__">Todos os tipos</SelectItem>
-            <SelectItem value="compra">Compra</SelectItem>
-            <SelectItem value="venda">Venda em Pé</SelectItem>
-            <SelectItem value="abate">Abate</SelectItem>
-          </SelectContent>
-        </Select>
-        <div className="relative">
-          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
-          <Input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Contraparte…" className="h-8 w-40 pl-7 text-[11px]" />
+      {/* Barra de filtros — DUAS LINHAS FIXAS, nao `flex-wrap`: a quebra e' decidida
+          aqui, nao pelo espaco que sobrar. Linha 1 = recorte da operacao (quando,
+          o que, com quem, onde); linha 2 = os TRES EIXOS de estado, que sao lidos
+          juntos porque respondem a mesma pergunta, mais o pedal de Rascunhos.
+          A altura desta barra (32 + 6 + 32 + 6 = 76px) entra no calc da tabela. */}
+      <div className="sticky top-0 z-20 space-y-1.5 bg-background pb-1.5">
+        <div className="flex items-center gap-1.5">
+          <DatePicker value={dtIni} onChange={setDtIni} placeholder="Data inicial" size="compact" className="w-[124px]" />
+          <DatePicker value={dtFim} onChange={setDtFim} placeholder="Data final" size="compact" className="w-[124px]" />
+          <Select value={fTipo} onValueChange={setFTipo}>
+            <SelectTrigger className="h-8 w-32 text-[11px]"><SelectValue placeholder="Tipo" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">Todos os tipos</SelectItem>
+              <SelectItem value="compra">Compra</SelectItem>
+              <SelectItem value="venda">Venda em Pé</SelectItem>
+              <SelectItem value="abate">Abate</SelectItem>
+            </SelectContent>
+          </Select>
+          <div className="relative">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+            <Input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Contraparte…" className="h-8 w-40 pl-7 text-[11px]" />
+          </div>
+          <Select value={fFazenda} onValueChange={setFFazenda}>
+            <SelectTrigger className="h-8 w-36 text-[11px]"><SelectValue placeholder="Fazenda" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">Todas as fazendas</SelectItem>
+              {fazendaOptions.map(id => <SelectItem key={id} value={id}>{fazendas[id]?.nome ?? id}</SelectItem>)}
+            </SelectContent>
+          </Select>
         </div>
-        <Select value={fFazenda} onValueChange={setFFazenda}>
-          <SelectTrigger className="h-8 w-36 text-[11px]"><SelectValue placeholder="Fazenda" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__all__">Todas as fazendas</SelectItem>
-            {fazendaOptions.map(id => <SelectItem key={id} value={id}>{fazendas[id]?.nome ?? id}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={fComercial} onValueChange={setFComercial}>
-          <SelectTrigger className="h-8 w-36 text-[11px]"><SelectValue placeholder="Comercial" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__all__">Todo comercial</SelectItem>
-            <SelectItem value="programada">Programada</SelectItem>
-            <SelectItem value="fechada">Fechada</SelectItem>
-            <SelectItem value="cancelada">Cancelada</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={fLiquidacao} onValueChange={setFLiquidacao}>
-          <SelectTrigger className="h-8 w-36 text-[11px]"><SelectValue placeholder="Liquidação" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__all__">Toda liquidação</SelectItem>
-            {liquidacaoOptions.map(e => <SelectItem key={e} value={e}>{liqLabel(e)}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Button variant={mostrarRascunhos ? 'secondary' : 'outline'} size="sm" className="h-8 gap-1 text-[11px]"
-          onClick={() => setMostrarRascunhos(v => !v)}>
-          <Filter className="h-3 w-3" /> Rascunhos
-        </Button>
+        <div className="flex items-center gap-1.5">
+          <Select value={fComercial} onValueChange={setFComercial}>
+            <SelectTrigger className="h-8 w-36 text-[11px]"><SelectValue placeholder="Comercial" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">Todo comercial</SelectItem>
+              <SelectItem value="programada">Programada</SelectItem>
+              <SelectItem value="fechada">Fechada</SelectItem>
+              <SelectItem value="cancelada">Cancelada</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={fRecebimento} onValueChange={setFRecebimento}>
+            <SelectTrigger className="h-8 w-36 text-[11px]"><SelectValue placeholder="Recebimento" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">Todo recebimento</SelectItem>
+              {recebimentoOptions.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={fLiquidacao} onValueChange={setFLiquidacao}>
+            <SelectTrigger className="h-8 w-36 text-[11px]"><SelectValue placeholder="Liquidação" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">Toda liquidação</SelectItem>
+              {liquidacaoOptions.map(e => <SelectItem key={e} value={e}>{liqLabel(e)}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Button variant={mostrarRascunhos ? 'secondary' : 'outline'} size="sm" className="h-8 gap-1 text-[11px]"
+            onClick={() => setMostrarRascunhos(v => !v)}>
+            <Filter className="h-3 w-3" /> Rascunhos
+          </Button>
+        </div>
       </div>
 
-      {/* ⚠ O SCROLL E' DESTE CONTAINER, nao da pagina: e' isso que faz o `sticky` do
-          thead colar no topo da LISTA e nao no topo do documento. So o corpo rola.
-          `bg-card` solido no thead — translucido deixaria a linha rolar por baixo.
-          `table-fixed` + larguras explicitas nos th: sem elas o navegador redistribui
-          por conteudo e uma contraparte longa reintroduz o scroll horizontal.
-          CONTRAPARTE e' a unica sem largura — fica com a sobra, truncada, nome no title. */}
-      <div className="rounded-md border overflow-y-auto max-h-[calc(100vh-260px)]">
-        <Table className="w-full table-fixed">
-          <TableHeader className="sticky top-0 z-10 bg-card">
-            <TableRow>
-              <TableHead className={`${TH} w-[70px]`}>OC</TableHead>
-              <TableHead className={`${TH} w-[74px]`}>Data</TableHead>
-              <TableHead className={`${TH} w-[64px]`}>Tipo</TableHead>
+      {/* ⚠ `<table>` CRU, e nao o primitivo `<Table>`: aquele embrulha a tabela num
+          `div.overflow-auto` (ui/table.tsx:7). Esse div e' um scroll container, entao
+          era ELE — e nao este container com max-h — o scrollport do `sticky` do thead.
+          Como nunca rola, o cabecalho tinha zero curso e subia junto com a lista: era
+          essa a causa do cabecalho que sumia, e nenhum ajuste de `top` a corrigiria.
+          Sem o embrulho, o scroll e' DESTE container e o thead cola no topo da LISTA —
+          que comeca imediatamente abaixo da barra de filtros, que e' onde ele deve
+          ficar. `top-0` aqui NAO e' o topo da pagina: a pagina nao rola (V2Index e'
+          h-screen + overflow-hidden), quem rola e' a lista.
+
+          LARGURAS NO `<colgroup>`, nao nos `<th>`: o col rege a coluna inteira, corpo
+          incluso, enquanto a largura declarada no th sticky so valia para o th. Era
+          por isso que Contraparte invadia Fazenda enquanto Comercial e Recebimento
+          sobravam. CONTRAPARTE e' a unica sem largura — fica com toda a sobra (nomes
+          como "Eduardo Alves de Oliveira"), truncada, nome completo no title; os tres
+          eixos ficam no tamanho da pilula e Fazenda, que mostra so o codigo, e estreita.
+
+          ALTURA MEDIDA, nao arbitrada. Acima: V2FilterBar 45 (py-2 + h-7 + border) +
+          pt-3 12 + titulo 15 + space-y-2 8 + barra 76 (32+6+32+6) + space-y-2 8 = 164.
+          Abaixo: space-y-2 8 + paginacao h-6 24 + respiro 8 = 40. Total 204. */}
+      <div className="rounded-md border overflow-y-auto max-h-[calc(100vh-204px)]">
+        <table className="w-full table-fixed caption-bottom text-sm">
+          <colgroup>
+            {/* Medido no DOM (Chrome, 10px/9px desta tela), nao estimado: cada largura e' o
+                maior entre o rotulo do cabecalho e o conteudo mais largo do corpo. Quem
+                manda em Fazenda e Recebimento e' o CABECALHO ("FAZENDA", "RECEBIMENTO"),
+                nao a celula — por isso nao encolhem mais do que isto. */}
+            <col className="w-[62px]" />{/* OC — "#" + 8 hex mono */}
+            <col className="w-[72px]" />{/* Data — 31/07/2026 */}
+            <col className="w-[68px]" />{/* Tipo — "Venda em Pé" */}
+            <col />{/* Contraparte — TODA a sobra */}
+            <col className="w-[58px]" />{/* Fazenda — so o codigo; o rotulo e' que pede 56 */}
+            <col className="w-[66px]" />{/* Animais — cab + kg */}
+            <col className="w-[80px]" />{/* Valor — R$ 1.234.567 */}
+            <col className="w-[72px]" />{/* Comercial — pilula */}
+            <col className="w-[82px]" />{/* Recebimento — pilula */}
+            <col className="w-[88px]" />{/* Financeiro — valor + rotulo */}
+            <col className="w-[88px]" />{/* Liquidação — pilula */}
+            <col className="w-[46px]" />{/* Ações */}
+          </colgroup>
+          <TableHeader className="sticky top-0 z-10 bg-primary">
+            <TableRow className="hover:bg-primary">
+              <TableHead className={TH}>OC</TableHead>
+              <TableHead className={TH}>Data</TableHead>
+              <TableHead className={TH}>Tipo</TableHead>
               <TableHead className={TH}>Contraparte</TableHead>
-              <TableHead className={`${TH} w-[56px]`}>Fazenda</TableHead>
-              <TableHead className={`${TH} w-[76px] text-right`}>Animais</TableHead>
-              <TableHead className={`${TH} w-[92px] text-right`}>Valor</TableHead>
-              <TableHead className={`${TH} w-[104px]`}>Comercial</TableHead>
-              <TableHead className={`${TH} w-[92px]`}>Recebimento</TableHead>
-              <TableHead className={`${TH} w-[104px]`}>Financeiro</TableHead>
-              <TableHead className={`${TH} w-[100px]`}>Liquidação</TableHead>
-              <TableHead className={`${TH} w-[44px] text-right`}>Ações</TableHead>
+              <TableHead className={TH}>Fazenda</TableHead>
+              <TableHead className={`${TH} text-right`}>Animais</TableHead>
+              <TableHead className={`${TH} text-right`}>Valor</TableHead>
+              <TableHead className={TH}>Comercial</TableHead>
+              <TableHead className={TH}>Recebimento</TableHead>
+              <TableHead className={TH}>Financeiro</TableHead>
+              <TableHead className={TH}>Liquidação</TableHead>
+              <TableHead className={`${TH} text-right`}>Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -481,7 +537,7 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
               );
             })}
           </TableBody>
-        </Table>
+        </table>
       </div>
 
       {/* Paginação */}
