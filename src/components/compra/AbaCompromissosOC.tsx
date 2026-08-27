@@ -419,7 +419,9 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
               <span>· Chegada {fmtData(dataChegada)}</span>
             </div>
             <div className="flex items-center gap-1">
-              <Badge variant="outline" className="text-[10px]">{resumoOperacao.modo}</Badge>
+              {/* `modo` (novo_modelo / nova_vazia) era TELEMETRIA DE MIGRACAO, nao
+                  informacao de produtor. Saiu da Central em c1aaffbd pelo mesmo motivo;
+                  o campo segue na view e no hook, so nao e' mais exibido. */}
               {resumoOperacao.temDivergencia && (
                 <span className="inline-flex items-center gap-1 text-[10px] text-amber-600" title="Divergência detectada">
                   <AlertTriangle className="h-3 w-3" /> divergência
@@ -430,7 +432,11 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
           <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
             <ResumoCard rotulo="Obrigação" valor={resumoOperacao.obrigacaoTotal} />
             <ResumoCard rotulo="Programado" valor={resumoOperacao.totalProgramado} />
-            <ResumoCard rotulo="Materializado" valor={resumoOperacao.totalMaterializado} />
+            {/* "Lancado", nao "Materializado": materializado e' jargao do modelo. Lancado
+                casa com o vocabulario do Financeiro e contrasta com Liquidado — lancado e'
+                compromisso registrado, liquidado e' dinheiro que saiu. So o ROTULO muda:
+                `totalMaterializado` segue sendo o nome do campo da view. */}
+            <ResumoCard rotulo="Lançado" valor={resumoOperacao.totalMaterializado} />
             <ResumoCard rotulo="Liquidado" valor={resumoOperacao.totalLiquidado} />
             {/* "Saldo fin." (materializado − liquidado) saiu daqui: na 765058f8 marcava
                 R$ 0,00 porque tudo que virou titulo foi pago — verdadeiro e inutil.
@@ -470,13 +476,13 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
             <table className="w-full text-[10px] tabular-nums">
               <thead>
                 <tr className="text-left text-[9px] text-muted-foreground border-b">
-                  <th className="py-0.5 pr-1.5">Nat./Comp.</th>
+                  <th className="py-0.5 pr-1.5">Componente</th>
                   <th className="py-0.5 pr-1.5">Favorecido</th>
                   <th className="py-0.5 pr-1.5 text-right whitespace-nowrap">Valor</th>
-                  <th className="py-0.5 pr-1.5 text-right whitespace-nowrap">Prog.</th>
-                  <th className="py-0.5 pr-1.5 text-right whitespace-nowrap">A prog.</th>
-                  <th className="py-0.5 pr-1.5 text-right whitespace-nowrap">Mat.</th>
-                  <th className="py-0.5 pr-1.5 text-right whitespace-nowrap">Liq.</th>
+                  <th className="py-0.5 pr-1.5 text-right whitespace-nowrap">Programado</th>
+                  <th className="py-0.5 pr-1.5 text-right whitespace-nowrap">A programar</th>
+                  <th className="py-0.5 pr-1.5 text-right whitespace-nowrap">Lançado</th>
+                  <th className="py-0.5 pr-1.5 text-right whitespace-nowrap">Liquidado</th>
                   <th className="py-0.5 pr-1.5 text-right whitespace-nowrap">Saldo</th>
                   <th className="py-0.5 pr-1.5">Status</th>
                   <th className="py-0.5 pr-0.5"></th>
@@ -491,16 +497,25 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
                     <tr key={c.compromissoId ?? ''} onClick={() => setSelectedId(c.compromissoId)}
                       className={`border-b cursor-pointer hover:bg-muted/50 ${selectedId === c.compromissoId ? 'bg-muted' : ''}`}>
                       {/* Identidade em cima, natureza/componente embaixo em corpo menor:
-                          continua disponivel, deixa de ser a unica coisa dita. */}
+                          continua disponivel, deixa de ser a unica coisa dita.
+                          ⚠ `principal/principal` NAO e' mais impresso: dizer duas vezes a
+                          mesma palavra nao informa nada e ainda competia com a identidade.
+                          O subtexto so aparece quando o componente ACRESCENTA (frete,
+                          comissao, taxa de aquisicao). O par completo segue no `title`. */}
                       <td className="py-0.5 pr-1.5 whitespace-nowrap" title={`${c.natureza ?? '—'}/${c.componente ?? '—'}`}>
-                        {ident ? (
-                          <span className="leading-tight block">
-                            <span className="block">{ident}</span>
-                            <span className="block text-[9px] text-muted-foreground">{c.natureza ?? '—'}/{c.componente ?? '—'}</span>
-                          </span>
-                        ) : (
-                          <>{c.natureza ?? '—'}/{c.componente ?? '—'}</>
-                        )}
+                        {(() => {
+                          const comp = c.componente ?? '';
+                          const redundante = comp === '' || comp === c.natureza;
+                          if (ident) {
+                            return (
+                              <span className="leading-tight block">
+                                <span className="block">{ident}</span>
+                                {!redundante && <span className="block text-[9px] text-muted-foreground">{comp}</span>}
+                              </span>
+                            );
+                          }
+                          return <>{redundante ? (c.natureza ?? '—') : comp}</>;
+                        })()}
                       </td>
                       <td className="py-0.5 pr-1.5 max-w-[110px] truncate" title={favNome}>{favNome}</td>
                       <td className="py-0.5 pr-1.5 text-right whitespace-nowrap">{brl(c.valorCompromisso)}</td>
@@ -595,7 +610,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
               direta é bloqueada; ajustes seguem por renegociação/estorno. */}
           {selecionado.totalMaterializado > 0 && (
             <div className="mb-1 rounded-md border border-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2 py-1 text-[10px] text-amber-800 dark:text-amber-200 leading-tight">
-              Compromisso materializado. Para alterações utilize renegociação ou estorno.
+              Compromisso lançado. Para alterações utilize renegociação ou estorno.
             </div>
           )}
 
