@@ -49,6 +49,9 @@ export interface RecebimentoApi {
   estornar: (movimentacaoId: string, motivo: string) => Promise<void>;
   encerrar: (motivo: string) => Promise<void>;
   reabrir: (motivo: string) => Promise<void>;
+  /** Estorna TODO o recebimento da operacao e reconstroi o cache zootecnico dos
+      anos afetados. `true` = estornado; `false` = falhou (mensagem ja exibida). */
+  estornarTudo: (motivo: string) => Promise<boolean>;
 }
 
 interface Params {
@@ -236,8 +239,80 @@ export function useOperacaoRecebimento({ operacaoId, clienteId, versao, onVersao
     } finally { setSaving(false); }
   }, [operacaoId, clienteId, versao, onVersaoChange, onEntregaChange, carregar]);
 
+  /* ESTORNO TOTAL — desfaz TODAS as movimentacoes de recebimento da operacao.
+     E o unico caminho para renegociar lotes de uma compra ja recebida:
+     `oc_salvar_lotes` recusa com "Operacao com movimentacao de recebimento" e o
+     guard e legitimo. Sem esta funcao, a operacao ficava sem saida pela UI.
+
+     ⚠ A ORDEM DEPOIS DO SUCESSO NAO E ARBITRARIA:
+       1. cache zootecnico dos anos afetados — ANTES de propagar versao, para que
+          quem recarregar ja leia numero coerente;
+       2. versao nova;
+       3. entrega REABERTA (o estorno sempre reabre);
+       4. recarregar o proprio painel.
+     ⚠ `fn_zoot_cache_rebuild` recebe CLIENTE e ANO, nao fazenda, e itera as
+     fazendas internamente. Por isso percorre-se `anos_afetados` e NAO
+     `fazendas_afetadas` — iterar fazenda chamaria a funcao N vezes para o mesmo
+     trabalho. Custo medido no maior cliente da base: ~850 ms por ano.
+     ⚠ FALHA NO REBUILD NAO REVERTE NADA: o estorno ja esta commitado no banco, e
+     um `throw` aqui deixaria a UI mentindo sobre o que aconteceu. Avisa-se que os
+     indicadores podem estar defasados e segue-se — o dado esta certo, a leitura
+     derivada e' que pode estar velha. */
+  const estornarTudo = useCallback(async (motivo: string): Promise<boolean> => {
+    if (!operacaoId || !clienteId) { toast.error('Operação não iniciada.'); return false; }
+    if (versao == null) { toast.error('Versão da operação indisponível.'); return false; }
+    const m = motivo.trim();
+    if (m === '') { toast.error('Informe o motivo do estorno.'); return false; }
+    setSaving(true);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase as any).rpc('oc_estornar_recebimento', {
+        p_operacao_id: operacaoId, p_cliente_id: clienteId, p_versao_esperada: versao, p_motivo: m,
+      });
+      if (error) {
+        if (error.code === '40001') {
+          await carregar();
+          throw new Error('A operação mudou enquanto você trabalhava. Recarregue e tente de novo.');
+        }
+        const bruto = error.message ?? '';
+        if (/nao possui recebimento ativo|não possui recebimento ativo/i.test(bruto)) {
+          throw new Error('A operação não possui recebimento ativo para estornar.');
+        }
+        if (/cancelada/i.test(bruto)) {
+          throw new Error('Operação cancelada: o estorno exige reabertura administrativa.');
+        }
+        throw new Error(bruto || 'Falha ao estornar recebimento.');
+      }
+
+      const anos: number[] = Array.isArray(data?.anos_afetados) ? data.anos_afetados : [];
+      let rebuildOk = true;
+      for (const ano of anos) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error: eRb } = await (supabase as any).rpc('fn_zoot_cache_rebuild', {
+          p_cliente_id: clienteId, p_ano: ano,
+        });
+        if (eRb) rebuildOk = false;
+      }
+
+      if (data?.operacao_versao != null) onVersaoChange(data.operacao_versao);
+      if (onEntregaChange) onEntregaChange(false);
+
+      const qtdMov = data?.movimentacoes_estornadas ?? 0;
+      const qtdCab = data?.quantidade_estornada ?? 0;
+      toast.success(`Recebimento estornado: ${qtdMov} movimentação(ões), ${qtdCab} cabeça(s).`);
+      if (!rebuildOk) {
+        toast.warning('Estorno concluído, mas o recálculo de indicadores falhou — eles podem estar defasados.');
+      }
+      await carregar();
+      return true;
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Falha ao estornar recebimento.');
+      return false;
+    } finally { setSaving(false); }
+  }, [operacaoId, clienteId, versao, onVersaoChange, onEntregaChange, carregar]);
+
   return useMemo(() => ({
     lotes, movimentacoes, loading, saving,
-    concluirNegociacao, receberTodos, registrar, estornar, encerrar, reabrir,
-  }), [lotes, movimentacoes, loading, saving, concluirNegociacao, receberTodos, registrar, estornar, encerrar, reabrir]);
+    concluirNegociacao, receberTodos, registrar, estornar, encerrar, reabrir, estornarTudo,
+  }), [lotes, movimentacoes, loading, saving, concluirNegociacao, receberTodos, registrar, estornar, encerrar, reabrir, estornarTudo]);
 }

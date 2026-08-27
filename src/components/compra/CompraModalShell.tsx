@@ -149,14 +149,33 @@ export function CompraModalShell(api: CompraModalShellProps) {
   // PR-OC-EDIT-01B — diálogo de confirmação das ações de ciclo (motivo obrigatório no cancelamento).
   const [acaoConfirm, setAcaoConfirm] = useState<null | 'confirmar' | 'cancelar' | 'reabrir'>(null);
   const [motivoAcao, setMotivoAcao] = useState('');
+  /* ESTORNO EM DUAS ETAPAS, decisao de produto: `null` fechado, 1 = o que sera
+     desfeito, 2 = motivo. Separar existe porque a etapa 1 e' informacao (quantas
+     movimentacoes, quantas cabecas, que a entrega reabre) e a 2 e' compromisso.
+     Juntas, o usuario le o motivo e ignora o resumo. */
+  const [estornoEtapa, setEstornoEtapa] = useState<null | 1 | 2>(null);
+  const [motivoEstorno, setMotivoEstorno] = useState('');
+  const [estornando, setEstornando] = useState<null | 'estornando' | 'recalculando'>(null);
   // PR-OC-CONSOLIDACAO-A1 — FONTE ÚNICA dos 5 gates por eixo (calculada aqui; distribuída por props).
   //   Comportamento PRESERVADO do 01A: Recebimento/Documentos/Financeiro-legado seguem RO em operação
   //   existente — o desacoplamento por eixo é deliberadamente adiado para A2 (Recebimento) e A3 (Documentos).
   //   negociacaoReadOnly = somenteLeitura TOTAL (fechada/cancelada OU título materializado); financeiroNovo
   //   = regra homologada do modelo novo (rascunho/cancelada bloqueiam; 'fechada' permanece operacional).
   const somenteLeituraDownstream = !!(api.somenteLeitura || api.aberturaExistente);
+
+  /* RECEBIMENTO ATIVO TRANCA A NEGOCIACAO, e isto alinha a UI ao backend em vez
+     de deixar o usuario descobrir sozinho. `oc_salvar_lotes` tem guard duro:
+     com qualquer movimentacao de recebimento existente ele recusa com
+     "Operacao com movimentacao de recebimento; nao e possivel re-negociar os
+     lotes". Ate agora a aba oferecia os campos editaveis, o usuario digitava,
+     clicava Salvar e PERDIA a digitacao. Oferecer edicao que o backend recusa e
+     pior do que nao oferecer.
+     ⚠ Movimentacao CANCELADA nao conta: `cancelado !== true` e a mesma leitura
+     que o resto do modal faz. */
+  const temRecebimentoAtivo = (api.recebimentoApi?.movimentacoes ?? [])
+    .some(m => m.cancelado !== true);
   const permissoes: CompraPermissoesPorEixo = {
-    negociacaoReadOnly: !!api.somenteLeitura,
+    negociacaoReadOnly: !!api.somenteLeitura || temRecebimentoAtivo,
     // PR-OC-CONSOLIDACAO-A2 — Recebimento opera em operação existente elegível: gate depende SÓ do eixo
     //   próprio (cancelada = RO). As demais travas (sem operação salva, status ≠ 'fechada', entrega
     //   encerrada) já são aplicadas dentro de AbaRecebimentoLotes; título materializado NÃO bloqueia a
@@ -349,9 +368,21 @@ export function CompraModalShell(api: CompraModalShellProps) {
                 {/* PR-OC-HOMOLOG-01 item 3 — edição da data liberada quando não há registros financeiros;
                     bloqueada (via negociacaoReadOnly = título materializado / fechada / cancelada) com aviso. */}
                 {permissoes.negociacaoReadOnly && (
-                  <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">
-                    Esta operação já possui registros financeiros. Para alterar a data, utilize ajuste histórico.
-                  </p>
+                  /* DUAS CAUSAS, DOIS TEXTOS. Bloqueio por RECEBIMENTO e por
+                     TITULO/status sao coisas diferentes e pedem saidas
+                     diferentes: um se resolve estornando o recebimento aqui
+                     mesmo, o outro exige ajuste historico. Reaproveitar a frase
+                     mandaria o usuario para o caminho errado. */
+                  temRecebimentoAtivo && !api.somenteLeitura ? (
+                    <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">
+                      Esta compra já teve recebimento registrado. Para renegociar os lotes,
+                      estorne o recebimento primeiro.
+                    </p>
+                  ) : (
+                    <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">
+                      Esta operação já possui registros financeiros. Para alterar a data, utilize ajuste histórico.
+                    </p>
+                  )
                 )}
               </div>
               <div>
@@ -522,6 +553,17 @@ export function CompraModalShell(api: CompraModalShellProps) {
               <Check className="h-4 w-4" /> Concluir negociação
             </Button>
           )}
+          {/* ESTORNAR RECEBIMENTO — discreto de proposito (`ghost`): e' acao de
+              correcao, nao o caminho normal da tela, e destacar convidaria a
+              usa-la sem necessidade. Aparece so quando ha o que estornar. */}
+          {api.modoOC && api.ocOperacaoId && api.ocStatusComercial !== 'cancelada'
+            && temRecebimentoAtivo && api.recebimentoApi && (
+            <Button type="button" variant="ghost" disabled={!!api.recebimentoApi.saving || estornando !== null}
+              onClick={() => { setMotivoEstorno(''); setEstornoEtapa(1); }}
+              className="gap-1.5 text-muted-foreground hover:text-foreground">
+              Estornar recebimento
+            </Button>
+          )}
           {api.aberturaExistente ? (
             // === PR-OC-EDIT-01B — ações de ciclo da OPERAÇÃO EXISTENTE (visíveis pelo estado real) ===
             //   Confirmar/Cancelar/Reabrir via RPCs oficiais; título materializado bloqueia tudo (só
@@ -611,6 +653,76 @@ export function CompraModalShell(api: CompraModalShellProps) {
       </div>
 
       {/* PR-OC-EDIT-01B — confirmação das ações de ciclo. Cancelamento exige motivo (contrato oc_cancelar). */}
+      {/* ⚠ `onOpenChange` so fecha quando NAO esta rodando: Esc e clique fora
+          ficam inertes durante o estorno. Fechar no meio deixaria o usuario sem
+          saber se as movimentacoes voltaram e se o cache foi refeito. */}
+      <Dialog open={estornoEtapa !== null}
+              onOpenChange={(o) => { if (!o && estornando === null) setEstornoEtapa(null); }}>
+        <DialogContent className="sm:max-w-md" onInteractOutside={(e) => { if (estornando !== null) e.preventDefault(); }}
+                       onEscapeKeyDown={(e) => { if (estornando !== null) e.preventDefault(); }}>
+          <DialogHeader>
+            <DialogTitle>Estornar recebimento</DialogTitle>
+            <DialogDescription>
+              {estornoEtapa === 1
+                ? 'Confira o que será desfeito antes de continuar.'
+                : 'Informe o motivo do estorno. Ele fica registrado na auditoria da operação.'}
+            </DialogDescription>
+          </DialogHeader>
+
+          {estornoEtapa === 1 && (
+            <div className="text-[12px] space-y-1.5 leading-snug">
+              <p>
+                <span className="font-semibold">
+                  {(api.recebimentoApi?.movimentacoes ?? []).filter(m => m.cancelado !== true).length}
+                </span>{' '}movimentação(ões) de recebimento serão desfeitas, devolvendo{' '}
+                <span className="font-semibold">
+                  {(api.recebimentoApi?.movimentacoes ?? [])
+                    .filter(m => m.cancelado !== true)
+                    .reduce((t, m) => t + (m.quantidade ?? 0), 0)}
+                </span>{' '}cabeça(s).
+              </p>
+              <p className="text-muted-foreground">A entrega será reaberta.</p>
+              <p className="text-muted-foreground">Os indicadores do rebanho serão recalculados.</p>
+            </div>
+          )}
+
+          {estornoEtapa === 2 && (
+            <textarea
+              value={motivoEstorno}
+              onChange={(e) => setMotivoEstorno(e.target.value)}
+              disabled={estornando !== null}
+              rows={3}
+              placeholder="Motivo do estorno (obrigatório)"
+              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+            />
+          )}
+
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" disabled={estornando !== null}
+              onClick={() => setEstornoEtapa(null)}>Voltar</Button>
+            {estornoEtapa === 1 ? (
+              <Button type="button" onClick={() => setEstornoEtapa(2)}>Continuar</Button>
+            ) : (
+              <Button type="button" disabled={motivoEstorno.trim() === '' || estornando !== null}
+                onClick={async () => {
+                  setEstornando('estornando');
+                  const ok = await api.recebimentoApi?.estornarTudo(motivoEstorno.trim());
+                  setEstornando(null);
+                  /* Fecha SO no sucesso. Falhou, o dialogo fica de pe com o motivo
+                     digitado — o usuario corrige e tenta de novo sem redigitar.
+                     ⚠ NAO navegar de aba: o modal permanece onde estava, e quem
+                     decide o proximo passo e' o usuario. */
+                  if (ok) setEstornoEtapa(null);
+                }}>
+                {estornando === 'estornando' ? 'Estornando...'
+                  : estornando === 'recalculando' ? 'Recalculando indicadores...'
+                  : 'Estornar recebimento'}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={acaoConfirm !== null} onOpenChange={(o) => { if (!o) setAcaoConfirm(null); }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
