@@ -20,7 +20,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
 import { DatePicker } from '@/components/ui/date-picker';
-import { MoreVertical, Search, Eye, Filter, Ban, Undo2, ArrowUp, ArrowDown, Lock } from 'lucide-react';
+import { MoreVertical, Search, Eye, Filter, Ban, Undo2, ArrowUp, ArrowDown, Lock, Trash2 } from 'lucide-react';
 
 // Central de Operações Comerciais — PR-OC-CENTRAL-UX-01 (UX/operacional; sem backend novo).
 //   Lê em LOTE (ZERO N+1): operações + 3 views soberanas + nomes, filtradas por cliente, mapeadas por
@@ -275,6 +275,14 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
   const [acao, setAcao] = useState<{ tipo: 'cancelar' | 'reabrir'; op: OpRow } | null>(null);
   const [motivo, setMotivo] = useState('');
   const [saving, setSaving] = useState(false);
+  /* EXCLUSAO DEFINITIVA — estado PROPRIO, nao mais um `tipo` em `acao`. Aquele dialogo
+     e' de uma etapa; este exige DUAS, no mesmo padrao do estorno em tres niveis: a
+     primeira mostra o que sera removido, a segunda pede o motivo. Acao irreversivel
+     nao pode compartilhar caminho com acao desfazivel. */
+  const [excluirAlvo, setExcluirAlvo] = useState<OpRow | null>(null);
+  const [excluirEtapa, setExcluirEtapa] = useState<1 | 2>(1);
+  const [excluirMotivo, setExcluirMotivo] = useState('');
+  const [excluindo, setExcluindo] = useState(false);
 
   // ZERO N+1, BOUNDED pelo conjunto carregado: FASE 1 = lista de operações; FASE 2 = auxiliares em lote,
   //   filtradas pelos IDs da lista (nunca por cliente inteiro; nunca .in([]); nunca consulta no render/map).
@@ -458,6 +466,30 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
   }, [initialOcId, loading, rows]);
 
   // Ações de escrita — SÓ contratos vivos; versão explícita; motivo obrigatório; recarrega a lista (mantém filtros).
+  const confirmarExclusao = async () => {
+    if (!excluirAlvo || excluindo) return;
+    const m = excluirMotivo.trim();
+    if (m === '') { toast.error('Informe o motivo.'); return; }
+    setExcluindo(true);
+    try {
+      const { data, error } = await sb.rpc('oc_excluir_definitivamente', {
+        p_operacao_id: excluirAlvo.id, p_cliente_id: clienteId, p_motivo: m,
+      });
+      /* ⚠ ERRO DO GUARD INTEGRAL, sem mascarar. A RPC diz O QUE impede e QUANTOS
+         ("2 titulo(s) financeiro(s) ativo(s)"); resumir isso para "nao foi possivel"
+         devolveria o operador ao escuro que este PR veio tirar. */
+      if (error) throw new Error(error.message);
+      void data;
+      toast.success('Operação excluída definitivamente.');
+      setExcluirAlvo(null); setExcluirMotivo(''); setExcluirEtapa(1);
+      await carregar();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Falha ao excluir a operação.');
+    } finally {
+      setExcluindo(false);
+    }
+  };
+
   const confirmarAcao = async () => {
     if (!acao || saving) return;
     const m = motivo.trim();
@@ -698,6 +730,14 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
                             <Ban className="h-3.5 w-3.5 mr-2" /> Cancelar operação
                           </DropdownMenuItem>
                         )}
+                        {/* SO para cancelada — o mesmo predicado que a RPC exige. Oferecer
+                            em outro estado seria prometer o que o banco nega. */}
+                        {r.status_comercial === 'cancelada' && (
+                          <DropdownMenuItem className="text-destructive focus:text-destructive"
+                            onSelect={() => { setExcluirMotivo(''); setExcluirEtapa(1); setExcluirAlvo(r); }}>
+                            <Trash2 className="h-3.5 w-3.5 mr-2" /> Excluir definitivamente
+                          </DropdownMenuItem>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
@@ -717,6 +757,61 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
           <Button variant="outline" size="sm" className="h-6 text-[10px]" disabled={pageSafe >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>Próximo ›</Button>
         </div>
       </div>
+
+      {/* EXCLUSAO DEFINITIVA — duas etapas, espelhando o dialogo de estorno.
+          `onOpenChange` so fecha quando NAO esta rodando: Esc e clique fora ficam inertes
+          durante a execucao, senao o usuario fica sem saber se a exclusao aconteceu. */}
+      {excluirAlvo && (
+        <Dialog open onOpenChange={(o) => { if (!o && !excluindo) { setExcluirAlvo(null); setExcluirMotivo(''); setExcluirEtapa(1); } }}>
+          <DialogContent className="sm:max-w-md"
+            onInteractOutside={(e) => { if (excluindo) e.preventDefault(); }}
+            onEscapeKeyDown={(e) => { if (excluindo) e.preventDefault(); }}>
+            <DialogHeader>
+              <DialogTitle className="text-[14px]">Excluir definitivamente</DialogTitle>
+            </DialogHeader>
+            {excluirEtapa === 1 && (
+              <div className="text-[12px] space-y-1.5 leading-snug">
+                <p>
+                  A operação <span className="font-mono">#{excluirAlvo.id.slice(0, 8)}</span> de{' '}
+                  {fmtData(excluirAlvo.data_operacao)}, {nomeContraparte(excluirAlvo)}
+                  {excluirAlvo.qtd_negociada != null ? `, ${excluirAlvo.qtd_negociada} cab` : ''}
+                  {(excluirAlvo.valor_acordado ?? excluirAlvo.valor_total) ? ` de ${brl(excluirAlvo.valor_acordado ?? excluirAlvo.valor_total ?? 0)}` : ''}
+                  {' '}será removida com lotes, compromissos, programações, parcelas, documentos,
+                  liquidações, movimentações, partes e todo o histórico de eventos.
+                </p>
+                {/* Diz o que NAO sai, porque e' a duvida obvia de quem le a lista acima. */}
+                <p className="text-muted-foreground">
+                  Os lançamentos financeiros e zootécnicos <b>não</b> são apagados — some apenas o
+                  vínculo com esta operação.
+                </p>
+                <p className="text-destructive font-medium">Não há como desfazer.</p>
+              </div>
+            )}
+            {excluirEtapa === 2 && (
+              <div className="space-y-2 text-[12px]">
+                <div className="text-[11px] text-muted-foreground">
+                  O motivo fica registrado na auditoria e sobrevive à exclusão.
+                </div>
+                <Textarea value={excluirMotivo} onChange={e => setExcluirMotivo(e.target.value)} rows={2}
+                  disabled={excluindo} className="text-[12px]" placeholder="Justifique a exclusão" />
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" size="sm" disabled={excluindo}
+                onClick={() => { setExcluirAlvo(null); setExcluirMotivo(''); setExcluirEtapa(1); }}>Voltar</Button>
+              {excluirEtapa === 1 ? (
+                <Button size="sm" variant="destructive" onClick={() => setExcluirEtapa(2)}>Continuar</Button>
+              ) : (
+                /* O ultimo clique diz a PALAVRA. "Confirmar" nao avisa ninguem. */
+                <Button size="sm" variant="destructive" disabled={excluindo || excluirMotivo.trim() === ''}
+                  onClick={confirmarExclusao}>
+                  {excluindo ? 'Excluindo…' : 'Excluir definitivamente'}
+                </Button>
+              )}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Dialog de ação (Cancelar / Reabrir recebimento) — motivo obrigatório, saving anti-duplo-clique */}
       <Dialog open={acao !== null} onOpenChange={o => { if (!o) { setAcao(null); setMotivo(''); } }}>
