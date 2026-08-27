@@ -252,7 +252,11 @@ function mapMaterializarResultado(data: unknown): MaterializarResultado {
 
 // SQLSTATE → OcCompromissoError (meio-termo aprovado): P0001/demais → mensagem soberana verbatim;
 //   40001/42501/P0002 → texto guiado. `error` é o objeto do PostgREST (code + message).
-function normalizarErroRpc(error: { code?: string | null; message: string }): OcCompromissoError {
+/* EXPORTADA a partir do PR-OC-ESTORNO-FIN-01: `useOperacaoEstornoFinanceiro`
+   precisa do MESMO mapa de erro. Duplica-lo faria a mesma RPC devolver textos
+   diferentes conforme quem chamou — e o P0001 aqui repassa a mensagem do banco
+   VERBATIM, que e' justamente o que um guard precisa dizer ao usuario. */
+export function normalizarErroRpc(error: { code?: string | null; message: string }): OcCompromissoError {
   switch (error.code) {
     case '40001': return new OcCompromissoError('versao_conflito', 'Operação atualizada em outra sessão. Recarregue e tente novamente.');
     case '42501': return new OcCompromissoError('sem_permissao', 'Sem permissão para esta operação.');

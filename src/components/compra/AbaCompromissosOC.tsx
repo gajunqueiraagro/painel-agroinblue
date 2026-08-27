@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { useOperacaoEstornoFinanceiro } from '@/hooks/useOperacaoEstornoFinanceiro';
 import type { OcCompromissosApi, CompromissoResumo, ParcelaMaterializacao, CriarCompromissoPayload, ProgramarParcelaInput } from '@/hooks/useOcCompromissos';
 import { classificarLotesCompra, type LoteOC } from '@/hooks/useOperacaoLiquidacao';
 import { usePlanoContasOC } from '@/hooks/usePlanoContasOC';
@@ -11,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -134,6 +135,56 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
     [parcelas, selectedId],
   );
   const podeEscrever = !bloqueado && versao != null && !saving;
+
+  /* ESTORNO — `onSucesso` ligado ao `recarregar`, que rele a versao do banco.
+     E' o que impede o 40001 na acao seguinte da cadeia folha -> raiz. */
+  const estorno = useOperacaoEstornoFinanceiro({
+    operacaoId: resumoOperacao?.operacaoId ?? null,
+    clienteId,
+    onSucesso: ocApi.recarregar,
+  });
+  /* Qual estorno esta em confirmacao, e em que etapa. `null` fechado. */
+  const [estAlvo, setEstAlvo] = useState<null | {
+    nivel: 'materializacao' | 'programacao' | 'compromisso';
+    programacaoId?: string; parcelaId?: string; compromissoId?: string; descricao: string;
+  }>(null);
+  const [estEtapa, setEstEtapa] = useState<1 | 2>(1);
+  const [estMotivo, setEstMotivo] = useState('');
+  const estRodando = estorno.saving;
+
+  /* ⚠ SO OFERECE O QUE O ESTADO PERMITE. O banco recusa cancelar programacao
+     com parcela materializada e compromisso com programacao ativa; mostrar o
+     botao assim mesmo seria prometer o que sera negado. */
+  const parcelasSel = parcelas.filter(p => p.compromissoId === selectedId);
+  const podeCancelarProgramacao = podeEscrever
+    && !!selecionado?.temProgramacaoAtiva
+    && !parcelasSel.some(p => p.materializada);
+  const podeCancelarCompromisso = podeEscrever
+    && !!selecionado
+    && !selecionado.temProgramacaoAtiva
+    && selecionado.status !== 'cancelado'
+    && selecionado.totalMaterializado === 0
+    && selecionado.totalLiquidado === 0;
+
+  const abrirEstorno = (alvo: NonNullable<typeof estAlvo>) => {
+    setEstMotivo(''); setEstEtapa(1); setEstAlvo(alvo);
+  };
+  const confirmarEstorno = async () => {
+    if (!estAlvo || versao == null) return;
+    try {
+      if (estAlvo.nivel === 'materializacao' && estAlvo.programacaoId && estAlvo.parcelaId) {
+        await estorno.estornarMaterializacao(versao, estAlvo.programacaoId, estAlvo.parcelaId, estMotivo.trim());
+      } else if (estAlvo.nivel === 'programacao' && estAlvo.programacaoId) {
+        await estorno.cancelarProgramacao(versao, estAlvo.programacaoId, estMotivo.trim());
+      } else if (estAlvo.nivel === 'compromisso' && estAlvo.compromissoId) {
+        await estorno.cancelarCompromisso(versao, estAlvo.compromissoId, estMotivo.trim());
+      }
+      setEstAlvo(null);
+    } catch {
+      /* Fica aberto com o motivo digitado: o usuario corrige e tenta de novo
+         sem redigitar. A mensagem ja foi exibida pelo hook. */
+    }
+  };
 
   // Abre "Novo compromisso" AGUARDANDO o refresh da OC (valor_acordado/lotes/contraparte) concluir,
   // para o dialog herdar o snapshot atual — evita compor o Produto com lotes obsoletos/vazios
@@ -295,9 +346,30 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
             <div className="text-[11px] font-semibold text-muted-foreground">
               Programação — {selecionado.natureza}/{selecionado.componente} ({brl(selecionado.valorCompromisso)})
             </div>
-            {!selecionado.temProgramacaoAtiva && selecionado.status === 'aberto' && (
-              <Button size="sm" className="h-6 text-[11px] px-2" disabled={!podeEscrever} onClick={() => setProgramarAberto(true)}>Programar</Button>
-            )}
+            <span className="inline-flex gap-1">
+              {!selecionado.temProgramacaoAtiva && selecionado.status === 'aberto' && (
+                <Button size="sm" className="h-6 text-[11px] px-2" disabled={!podeEscrever} onClick={() => setProgramarAberto(true)}>Programar</Button>
+              )}
+              {/* So aparece quando NENHUMA parcela esta materializada: o banco recusaria,
+                  e oferecer o que sera negado e' o defeito que este PR existe para nao
+                  repetir. Mesma regra no compromisso: so sem programacao ativa. */}
+              {podeCancelarProgramacao && selecionado.programacaoAtivaId && (
+                <Button size="sm" variant="ghost" className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground"
+                  disabled={estRodando}
+                  onClick={() => abrirEstorno({ nivel: 'programacao', programacaoId: selecionado.programacaoAtivaId ?? undefined,
+                    descricao: 'as parcelas previstas são canceladas, a programação é cancelada e o compromisso volta a ABERTO' })}>
+                  Cancelar programação
+                </Button>
+              )}
+              {podeCancelarCompromisso && selecionado.compromissoId && (
+                <Button size="sm" variant="ghost" className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground"
+                  disabled={estRodando}
+                  onClick={() => abrirEstorno({ nivel: 'compromisso', compromissoId: selecionado.compromissoId ?? undefined,
+                    descricao: `o compromisso ${selecionado.natureza ?? ''}/${selecionado.componente ?? ''} de ${brl(selecionado.valorCompromisso)} é cancelado` })}>
+                  Cancelar compromisso
+                </Button>
+              )}
+            </span>
           </div>
 
           {/* PR-OC-HOMOLOG-01 item 4 — gate de edição do compromisso: após materialização, alteração
@@ -343,9 +415,20 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
                       <td className="py-0.5 pr-1 text-right">
                         {p.materializada
                           ? (p.tituloId
-                              ? <Button size="sm" variant="outline" className="h-5 text-[10px] px-1.5" onClick={() => { if (p.tituloId) editarTitulo(p.tituloId); }}>
-                                  <Pencil className="h-2.5 w-2.5 mr-0.5" /> Editar
-                                </Button>
+                              ? <span className="inline-flex gap-1">
+                                  <Button size="sm" variant="outline" className="h-5 text-[10px] px-1.5" onClick={() => { if (p.tituloId) editarTitulo(p.tituloId); }}>
+                                    <Pencil className="h-2.5 w-2.5 mr-0.5" /> Editar
+                                  </Button>
+                                  {/* GHOST, e nao `outline` como o Editar: desfazer nao pode ter o
+                                      mesmo peso visual de uma acao corriqueira. */}
+                                  <Button size="sm" variant="ghost" className="h-5 text-[10px] px-1.5 text-muted-foreground hover:text-foreground"
+                                    disabled={!podeEscrever || estRodando}
+                                    onClick={() => abrirEstorno({ nivel: 'materializacao', programacaoId: p.programacaoId ?? undefined,
+                                      parcelaId: p.parcelaId ?? undefined,
+                                      descricao: `a parcela ${p.sequencia} de ${brl(p.valor)} volta a PREVISTA e o título é cancelado` })}>
+                                    Estornar
+                                  </Button>
+                                </span>
                               : <span className="text-[10px] text-green-600">ok</span>)
                           : <Button size="sm" variant="outline" className="h-5 text-[10px] px-1.5" disabled={!podeMaterializar} onClick={() => setConfirmarParcela(p)}>Materializar</Button>}
                       </td>
@@ -381,6 +464,62 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
             <DialogFooter>
               <Button variant="outline" size="sm" onClick={() => setConfirmarParcela(null)}>Cancelar</Button>
               <Button size="sm" disabled={saving} onClick={() => materializar(confirmarParcela)}>Materializar</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* ⚠ `onOpenChange` so fecha quando NAO esta rodando: Esc e clique fora ficam
+          inertes durante a execucao. Fechar no meio deixaria o usuario sem saber se
+          o desfazimento chegou a acontecer. Mesmo padrao de 376aa17d. */}
+      {estAlvo && (
+        <Dialog open onOpenChange={(o) => { if (!o && !estRodando) setEstAlvo(null); }}>
+          <DialogContent className="sm:max-w-md"
+            onInteractOutside={(e) => { if (estRodando) e.preventDefault(); }}
+            onEscapeKeyDown={(e) => { if (estRodando) e.preventDefault(); }}>
+            <DialogHeader>
+              <DialogTitle>
+                {estAlvo.nivel === 'materializacao' ? 'Estornar materialização'
+                : estAlvo.nivel === 'programacao' ? 'Cancelar programação'
+                : 'Cancelar compromisso'}
+              </DialogTitle>
+              <DialogDescription>
+                {estEtapa === 1
+                  ? 'Confira o que será desfeito antes de continuar.'
+                  : 'Informe o motivo. Ele fica registrado na auditoria da operação.'}
+              </DialogDescription>
+            </DialogHeader>
+
+            {estEtapa === 1 && (
+              <div className="text-[12px] space-y-1.5 leading-snug">
+                <p>Será desfeito: {estAlvo.descricao}.</p>
+                <p className="text-muted-foreground">A operação permanece aberta e o passo pode ser refeito.</p>
+              </div>
+            )}
+
+            {estEtapa === 2 && (
+              <textarea
+                value={estMotivo}
+                onChange={(e) => setEstMotivo(e.target.value)}
+                disabled={estRodando}
+                rows={3}
+                placeholder="Motivo (obrigatório)"
+                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+              />
+            )}
+
+            <DialogFooter className="gap-2">
+              <Button type="button" variant="outline" size="sm" disabled={estRodando}
+                onClick={() => setEstAlvo(null)}>Voltar</Button>
+              {estEtapa === 1 ? (
+                <Button type="button" size="sm" onClick={() => setEstEtapa(2)}>Continuar</Button>
+              ) : (
+                <Button type="button" size="sm" variant="destructive"
+                  disabled={estMotivo.trim() === '' || estRodando}
+                  onClick={confirmarEstorno}>
+                  {estRodando ? 'Desfazendo...' : 'Confirmar'}
+                </Button>
+              )}
             </DialogFooter>
           </DialogContent>
         </Dialog>
