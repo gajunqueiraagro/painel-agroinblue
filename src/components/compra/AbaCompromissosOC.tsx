@@ -21,6 +21,9 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { Checkbox } from '@/components/ui/checkbox';
 import { Plus, AlertTriangle, Trash2, Pencil, MoreHorizontal } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import { NovoFornecedorDialog } from '@/components/financeiro-v2/NovoFornecedorDialog';
 
 // PR-OC-UI-FIN-VIEW / FIX-01 / FIX-01b — aba Financeiro do modelo de compromissos (Blocos A/B/C).
 //   Consome APENAS useOcCompromissos (totais/flags/modo soberanos da view; React nunca soma). Escrita
@@ -355,6 +358,30 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
   // Lotes prontos = há quantidade negociada carregada. Guarda contra criar compromisso PRINCIPAL
   // com o fallback "Compra principal" (lotes stale/vazios). Ver descricaoDefault + NovoCompromissoDialog.
   const lotesProntos = useMemo(() => lotes.reduce((s, l) => s + (l.qtd ?? 0), 0) > 0, [lotes]);
+
+  /* PR-OC-COMPROMISSO-UX-01 — cadastro rapido de favorecido SEM sair do modal.
+     Reusa o `NovoFornecedorDialog` que a aba Compra ja usa (LancamentosTab:4414);
+     nao ha segundo cadastro, so um segundo acesso ao mesmo.
+     ⚠ O refresh e' `recarregarDados` (= liquidacaoApi.recarregar), que reconstroi
+     a lista de fornecedores paginada. Sem ele o registro nasce e nao aparece.
+     ⚠ `ativo` nao vai no insert de proposito: a coluna tem DEFAULT true, e a
+     lista filtra por ativo — conferido no schema. Sem esse default o fornecedor
+     seria criado invisivel.
+     ⚠ `fazenda_id` vai NULO: a aba Financeiro nao tem fazenda em maos, e o banco
+     aceita (337 dos 6.770 fornecedores ja sao assim). A lista filtra so por
+     cliente e ativo, entao a visibilidade nao muda. O tipo gerado dizia o
+     contrario e foi corrigido em PR-TYPES-PATCH-FORN-01. */
+  const criarFornecedor = async (nome: string, cpfCnpj: string): Promise<{ id: string; nome: string } | null> => {
+    const { data, error } = await supabase
+      .from('financeiro_fornecedores')
+      .insert({ cliente_id: clienteId, nome, cpf_cnpj: cpfCnpj || null })
+      .select('id, nome')
+      .single();
+    if (error || !data) { toast.error('Erro ao salvar fornecedor'); return null; }
+    try { await recarregarDados?.(); } catch { /* o registro ja existe; a lista volta no proximo refresh */ }
+    toast.success(`Fornecedor "${data.nome}" criado e selecionado`);
+    return data;
+  };
 
   const descricaoDefault = useMemo(() => {
     const qtd = lotes.reduce((s, l) => s + (l.qtd ?? 0), 0);
@@ -709,6 +736,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
         <NovoCompromissoDialog
           onClose={() => { setNovoAberto(false); setAvisoBaseCoberta(''); }} onSubmit={criar} saving={saving}
           clienteId={clienteId} tipoOperacao={tipoOperacao} fornecedores={fornecedores} darkSelectClass={darkSelectClass}
+          onCriarFornecedor={criarFornecedor}
           valorAcordado={valorAcordado} sugestaoSubcentro={sugestaoSubcentro} descricaoDefault={descricaoDefault}
           contraparteId={contraparteId} lotesProntos={lotesProntos} lotes={lotes}
           avisoBaseCoberta={avisoBaseCoberta}
@@ -822,10 +850,11 @@ function ResumoCard({ rotulo, valor }: { rotulo: string; valor: number }) {
 }
 
 // ===== Dialog: Novo compromisso =====
-function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOperacao, fornecedores, darkSelectClass, valorAcordado, sugestaoSubcentro, descricaoDefault, contraparteId, lotesProntos, lotes, avisoBaseCoberta }: {
+function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOperacao, fornecedores, darkSelectClass, valorAcordado, sugestaoSubcentro, descricaoDefault, contraparteId, lotesProntos, lotes, avisoBaseCoberta, onCriarFornecedor }: {
   onClose: () => void; onSubmit: (p: CriarCompromissoPayload[]) => void; saving: boolean;
   clienteId: string | null; tipoOperacao: string | null; fornecedores: { id: string; nome: string }[]; darkSelectClass: string;
   valorAcordado: number | null; sugestaoSubcentro: string; descricaoDefault: string; contraparteId: string | null; lotesProntos: boolean;
+  onCriarFornecedor?: (nome: string, cpfCnpj: string) => Promise<{ id: string; nome: string } | null>;
   lotes: LoteOC[]; avisoBaseCoberta: string;
 }) {
   const plano = usePlanoContasOC(clienteId ?? undefined);
@@ -835,6 +864,7 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
   const [valor, setValor] = useState<number | null>(null);
   const [subcentro, setSubcentro] = useState('');
   const [favorecidoId, setFavorecidoId] = useState('');
+  const [novoFornecedorOpen, setNovoFornecedorOpen] = useState(false);
   const [descricao, setDescricao] = useState('');
   const ultimoDefaultRef = useRef('');   // último default de descrição aplicado automaticamente (ajuste vinculante 3)
   /* LOTE — 1 OC vira N lancamentos, um por categoria, que podem ir para
@@ -1053,12 +1083,27 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
             </div>
             <div>
               <Label className="text-[11px]">Favorecido</Label>
-              <SearchableSelect
-                value={favorecidoId || '__none__'} onValueChange={(v) => setFavorecidoId(v === '__none__' ? '' : v)}
-                options={fornecedores.map(f => ({ value: f.id, label: f.nome }))} placeholder="Opcional"
-                allLabel="— nenhum —" allValue="__none__" dense className="[&>button]:h-8 [&>button]:text-[12px]"
-                contentClassName={DARK_SEARCHABLE_CONTENT}
-              />
+              {/* PR-OC-COMPROMISSO-UX-01 — o "+" abre o MESMO cadastro rapido da aba
+                  Compra. Sem ele o usuario precisava abandonar o compromisso, ir ao
+                  cadastro e voltar. `min-w-0` no seletor para ele ceder largura ao
+                  botao em vez de estourar a coluna. */}
+              <div className="flex items-center gap-1">
+                <div className="flex-1 min-w-0">
+                  <SearchableSelect
+                    value={favorecidoId || '__none__'} onValueChange={(v) => setFavorecidoId(v === '__none__' ? '' : v)}
+                    options={fornecedores.map(f => ({ value: f.id, label: f.nome }))} placeholder="Opcional"
+                    allLabel="— nenhum —" allValue="__none__" dense className="[&>button]:h-8 [&>button]:text-[12px]"
+                    contentClassName={DARK_SEARCHABLE_CONTENT}
+                  />
+                </div>
+                {onCriarFornecedor && (
+                  <Button type="button" variant="outline" size="icon" className="h-8 w-8 shrink-0 mt-0.5"
+                    aria-label="Novo favorecido" title="Cadastrar favorecido"
+                    onClick={() => setNovoFornecedorOpen(true)}>
+                    <Plus className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
           <div>
@@ -1066,6 +1111,16 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
             <Textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={2} className="mt-0.5 text-[12px]" placeholder="Opcional" />
           </div>
         </div>
+        {/* Criar e' meio trabalho; o contrato e' criar E SELECIONAR. */}
+        <NovoFornecedorDialog
+          open={novoFornecedorOpen}
+          onClose={() => setNovoFornecedorOpen(false)}
+          onSave={async (nome, cpfCnpj) => {
+            const rec = await onCriarFornecedor?.(nome, cpfCnpj);
+            if (rec) setFavorecidoId(rec.id);
+            setNovoFornecedorOpen(false);
+          }}
+        />
         {principalSemLotes && (
           <div className="rounded-md border border-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2 py-1 text-[11px] text-amber-800 dark:text-amber-200">
             Aguardando os dados da negociação (lotes) para compor o Produto. Feche e reabra o compromisso em instantes — o compromisso principal não pode ser criado sem os lotes carregados.

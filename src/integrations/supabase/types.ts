@@ -2135,7 +2135,16 @@ export type Database = {
           cpf_cnpj?: string | null
           cpf_cnpj_pagamento?: string | null
           created_at?: string
-          fazenda_id: string
+          // PATCH MANUAL (PR-TYPES-PATCH-FORN-01) — o gerador escreveu `fazenda_id: string`,
+          // obrigatorio e nao-nulo. O BANCO diz o contrario: a coluna e NULLABLE e o nulo
+          // esta em uso — 337 dos 6.770 fornecedores, medido em 28/08. Com o tipo errado,
+          // cadastro de favorecido a partir da aba Financeiro (que nao tem fazenda em maos)
+          // nao compilava.
+          // ⚠ POR QUE PATCH A MAO AQUI, se em client.ts nao pode: o client.ts e regenerado
+          // ATIVAMENTE pela ferramenta e um patch ali evapora. Este arquivo esta parado ha
+          // semanas, com 5 motivos de regeneracao acumulados; e quando alguem regenerar, o
+          // tipo vira do banco e CONVERGE com este patch em vez de brigar com ele.
+          fazenda_id?: string | null
           id?: string
           nome: string
           nome_favorecido?: string | null
@@ -2156,7 +2165,7 @@ export type Database = {
           cpf_cnpj?: string | null
           cpf_cnpj_pagamento?: string | null
           created_at?: string
-          fazenda_id?: string
+          fazenda_id?: string | null   // idem Insert — ver PATCH MANUAL acima
           id?: string
           nome?: string
           nome_favorecido?: string | null
