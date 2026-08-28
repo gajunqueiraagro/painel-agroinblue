@@ -136,7 +136,11 @@ export function AbaNegociacaoLotes({
           <div className="overflow-x-auto">
             <div className="min-w-[720px]">
               <div className={`${GRID_OC} px-1 pb-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground`}>
-                <span className="text-center">Categoria</span><span className="text-center">Qtde</span><span className="text-center">Peso Méd.</span>
+                <span className="text-center">Categoria</span><span className="text-center">Qtde</span>
+                {/* PR-OC-PESO-OBRIGATORIO-01 — o asterisco e' o mesmo marcador de
+                    obrigatorio usado no cabecalho da aba Compra. So o peso leva:
+                    e' o unico campo do lote que o banco passou a exigir. */}
+                <span className="text-center">Peso Méd. <span className="text-destructive">*</span></span>
                 <span className="text-center">Peso Tot.</span><span className="text-center">Critério</span><span className="text-center">Valor</span>
                 <span className="text-center">Total</span><span className="text-center">Ações</span>
               </div>
@@ -158,7 +162,9 @@ export function AbaNegociacaoLotes({
                         </SelectContent>
                       </Select>
                       <Input inputMode="numeric" value={l.quantidade} onChange={e => editarLote(l.idLocal, { quantidade: e.target.value })} placeholder="0" disabled={fisicoRO} className="h-6 text-[11px] text-right tabular-nums" />
-                      <Input inputMode="decimal" value={l.pesoMedioKg} onChange={e => editarLote(l.idLocal, { pesoMedioKg: e.target.value })} placeholder="0,00" disabled={fisicoRO} className="h-6 text-[11px] text-right tabular-nums" />
+                      <Input inputMode="decimal" value={l.pesoMedioKg} onChange={e => editarLote(l.idLocal, { pesoMedioKg: e.target.value })} placeholder="0,00" disabled={fisicoRO}
+                        title={(parseNumericValue(l.pesoMedioKg) || 0) > 0 ? undefined : 'Peso obrigatório — sem ele o lote não pode ser salvo'}
+                        className={`h-6 text-[11px] text-right tabular-nums ${(parseNumericValue(l.pesoMedioKg) || 0) > 0 ? '' : 'border-destructive focus-visible:ring-destructive'}`} />
                       <div className="text-[11px] text-right tabular-nums text-muted-foreground">{fmtKg(pt)}</div>
                       <Select value={l.criterioValor} onValueChange={v => editarLote(l.idLocal, { criterioValor: v as CriterioValor })} disabled={somenteLeitura}>
                         <SelectTrigger className="h-6 text-[11px]"><SelectValue /></SelectTrigger>

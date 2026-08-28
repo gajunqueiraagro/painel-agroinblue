@@ -90,6 +90,18 @@ export function useCompraLotes({ operacaoId, clienteId, versao, onVersaoChange, 
   // Retorna a NOVA versão oficial da operação em sucesso, null em falha (permite encadear
   //   salvar → concluir sem versão stale). `silent` controla APENAS o toast — não muda regra/persistência.
   const salvar = useCallback(async (opts?: { silent?: boolean }): Promise<number | null> => {
+    /* PR-OC-PESO-OBRIGATORIO-01 — PESO E' OBRIGATORIO. A recusa mora aqui, no unico
+       lugar que grava lotes, e nao nos botoes: "Salvar rascunho" e "Concluir lotes e
+       continuar" chamam esta mesma funcao, e duplicar a regra nos dois seria criar as
+       duas copias que ja nos custaram correcao esta semana.
+       ⚠ Espelha a guarda do banco (`oc_salvar_lotes`, migration 20260831120000), que
+       continua sendo a soberana — esta aqui existe para o operador saber QUAL lote
+       corrigir sem esperar a ida ao servidor. Mensagem no mesmo formato da RPC. */
+    const semPeso = lotes.find(l => (parseNumericValue(l.pesoMedioKg) || 0) <= 0);
+    if (semPeso) {
+      toast.error(`Informe o peso médio do lote ${semPeso.categoria || 'sem categoria'} (ordem ${semPeso.ordem}). Lote sem peso não pode ser salvo.`);
+      return null;
+    }
     if (!operacaoId || !clienteId) { toast.error('Operação não iniciada (salve a operação na aba Compra).'); return null; }
     setSaving(true);
     try {
