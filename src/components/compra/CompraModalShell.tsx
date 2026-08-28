@@ -60,7 +60,7 @@ export interface CompraModalShellProps {
   // fornecedor
   compraFornecedorId: string;
   setCompraFornecedorId: (v: string) => void;
-  fornecedores: { id: string; nome: string }[];
+  fornecedores: { id: string; nome: string; cpfCnpj?: string | null }[];
   setNovoFornecedorCompraOpen: (v: boolean) => void;
   // financeiro (compra)
   compraDetalhes: CompraDetalhes | null;
@@ -247,6 +247,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
   const cenarioOptions: (StatusOperacional | 'meta')[] = ['realizado', 'meta'];
   const cenarioAtual = CENARIO_UI[api.statusOp] ?? CENARIO_UI.realizado;
   const fornecedorNome = api.fornecedores.find(f => f.id === api.compraFornecedorId)?.nome || '';
+  const fornecedorDocumento = api.fornecedores.find(f => f.id === api.compraFornecedorId)?.cpfCnpj || '';
   const canOpenModal = !!(api.data && api.quantidadeNum > 0 && api.pesoKgNum > 0 && api.categoria);
   // Peso Total = derivado de exibição (Peso Médio × Quantidade). O estado legado `pesoKg`
   // JÁ é o peso médio (vira pesoMedioKg no payload); portanto nada é escrito de volta.
@@ -376,7 +377,13 @@ export function CompraModalShell(api: CompraModalShellProps) {
             {/* Linha 1: Status · Data · Fazenda · Observações (larguras justas; Obs ocupa o resto) */}
             <div className="grid grid-cols-1 lg:grid-cols-[170px_150px_180px_minmax(0,1fr)] gap-2">
               <div>
-                <Label className="font-bold text-[11px]">Status</Label>
+                {/* PR-OC-UX-LOTE-C1-01 — rotulos no padrao canonico do sistema, que e' o
+                    do modal Novo Lancamento do Financeiro: `text-[10px]` SEM negrito.
+                    A aba Compra era a unica com rotulo em negrito, e a 11px: em negrito
+                    o 11 pesa mais que o 10 regular, e era esse o "pulo" de tamanho ao
+                    trocar de aba. Os INPUTS ficam como estao (h-8, o mesmo da
+                    referencia) — o objetivo e' coerencia, nao miniatura. */}
+                <Label className="text-[10px]">Status</Label>
                 <Select value={api.statusOp} onValueChange={(v) => api.setStatusOp(v as StatusOperacional | 'meta')} disabled={permissoes.negociacaoReadOnly}>
                   <SelectTrigger className={`mt-0.5 h-8 text-[12px] font-semibold border-2 gap-1 ${cenarioAtual.chip}`}>
                     <span className="flex items-center gap-1"><span>{cenarioAtual.icon}</span><span>{cenarioAtual.label}</span></span>
@@ -392,7 +399,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
                 </Select>
               </div>
               <div>
-                <Label className="font-bold text-[11px]">Data da Compra</Label>
+                <Label className="text-[10px]">Data da Compra</Label>
                 <div className={permissoes.dadosOperacaoReadOnly ? 'pointer-events-none opacity-60' : ''}>
                   <DatePicker value={api.data} onChange={api.setData} className="mt-0.5" />
                 </div>
@@ -418,7 +425,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
                 )}
               </div>
               <div>
-                <Label className="font-bold text-[11px]">Fazenda <span className="text-destructive">*</span></Label>
+                <Label className="text-[10px]">Fazenda <span className="text-destructive">*</span></Label>
                 {/* PR-NAV-CONTEXTO-FAZENDA-01A — `api.fazendas` já vem filtrada ao domínio pecuário na
                     origem (critério único isFazendaPecuaria: sem Global, sem administrativas, só aptas).
                     A fazenda gravada só aparece selecionada se continuar válida para o domínio. */}
@@ -433,14 +440,14 @@ export function CompraModalShell(api: CompraModalShellProps) {
                 )}
               </div>
               <div>
-                <Label className="font-bold text-[11px]">Observações/Lote</Label>
+                <Label className="text-[10px]">Observações/Lote</Label>
                 <Input value={api.observacao} onChange={e => api.setObservacao(e.target.value)} placeholder="Opcional" className="mt-0.5 h-8 text-[12px]" disabled={permissoes.dadosOperacaoReadOnly} />
               </div>
             </div>
             {/* Linha 2: Fornecedor · Propriedade de origem */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
               <div className="min-w-0">
-                <Label className="font-bold text-[11px]">Fornecedor <span className="text-destructive">*</span></Label>
+                <Label className="text-[10px]">Fornecedor <span className="text-destructive">*</span></Label>
                 <div className="flex items-center gap-1 mt-0.5">
                   <div className="min-w-0 flex-1">
                     <SearchableSelect
@@ -459,9 +466,16 @@ export function CompraModalShell(api: CompraModalShellProps) {
                     <Plus className="h-3.5 w-3.5" />
                   </Button>
                 </div>
+                {/* PR-OC-UX-LOTE-C1-01 — documento do fornecedor SELECIONADO, abaixo do
+                    nome. So aparece quando existe: fornecedor sem documento cadastrado
+                    nao ganha linha vazia nem traco solto — a ausencia de documento nao
+                    e' informacao util aqui, ao contrario de um valor ausente. */}
+                {fornecedorDocumento && (
+                  <div className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{fornecedorDocumento}</div>
+                )}
               </div>
               <div>
-                <Label className="font-bold text-[11px]">Propriedade de origem</Label>
+                <Label className="text-[10px]">Propriedade de origem</Label>
                 {/* OPEN-01: sem coluna persistida no modelo — no modo leitura, vazio e desabilitado (não inferir). */}
                 <Input value={permissoes.negociacaoReadOnly ? '' : api.fazendaOrigem} onChange={e => api.setFazendaOrigem(e.target.value)} placeholder={permissoes.negociacaoReadOnly ? '—' : 'Ex: Faz. Boa Vista'} className="mt-0.5 h-8 text-[12px]" disabled={permissoes.negociacaoReadOnly} />
               </div>

@@ -54,8 +54,16 @@ const MINW_ENC = 'min-w-[427px]';
      Data 72 · Categoria 110 · Quantidade 80 · Peso med. 80 · Acoes 90 = 432 (+24 de gap) */
 const GRID_MOV = 'grid grid-cols-[minmax(0,0.72fr)_minmax(0,1.1fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,0.9fr)] gap-1.5';
 const GRID_MOV_RO = 'grid grid-cols-[minmax(0,0.72fr)_minmax(0,1.1fr)_minmax(0,0.8fr)_minmax(0,0.8fr)] gap-1.5';
-const MINW_MOV = 'min-w-[456px]';
-const MINW_MOV_RO = 'min-w-[360px]';
+/* ⚠ PR-OC-UX-LOTE-C1-01 — `max-w` ENTROU, e e' ele que resolve o espaco em branco.
+   `min-w` e' PISO, nao teto: o wrapper e' bloco e ocupava a largura inteira do corpo
+   do modal (~1.100px), enquanto as colunas `minmax(0,Nfr)` esticavam para preencher.
+   Conteudo de 456px espalhado em ~1.100px = ~130px de vazio POR COLUNA, que era o que
+   se via entre Data, Categoria, Quantidade e Peso. O problema NUNCA foi altura de
+   linha nem tamanho de fonte — esta aba ja usa text-[10px]/h-6/py-0.5, das mais densas
+   do sistema. Com piso = teto a grade fica do tamanho do conteudo, e o
+   `overflow-x-auto` do pai continua cobrindo tela estreita. */
+const MINW_MOV = 'min-w-[456px] max-w-[456px]';
+const MINW_MOV_RO = 'min-w-[360px] max-w-[360px]';
 // Caixa horizontal COMUM ao cabecalho e a linha: a linha tem `border`, e borda entra
 //   na largura. Sem a transparente aqui o cabecalho comeca 1px antes e distribui as
 //   colunas sobre 2px a mais.

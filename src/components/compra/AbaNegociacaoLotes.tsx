@@ -136,12 +136,15 @@ export function AbaNegociacaoLotes({
           <div className="overflow-x-auto">
             <div className="min-w-[720px]">
               <div className={`${GRID_OC} px-1 pb-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground`}>
-                <span className="text-center">Categoria</span><span className="text-center">Qtde</span>
-                {/* PR-OC-PESO-OBRIGATORIO-01 — o asterisco e' o mesmo marcador de
-                    obrigatorio usado no cabecalho da aba Compra. So o peso leva:
-                    e' o unico campo do lote que o banco passou a exigir. */}
+                {/* PR-OC-UX-LOTE-C1-01 — asterisco nas QUATRO que podem ficar vazias e sao
+                    exigidas para concluir (guard `loteCompleto`, CompraModalShell). Criterio
+                    NAO leva: nasce com 'kg' em `adicionarLote` e nunca fica vazio, entao
+                    marca-lo seria ruido. Peso e' o unico que o BANCO tambem exige
+                    (PR-OC-PESO-OBRIGATORIO-01); os outros tres sao gate de tela. */}
+                <span className="text-center">Categoria <span className="text-destructive">*</span></span>
+                <span className="text-center">Qtde <span className="text-destructive">*</span></span>
                 <span className="text-center">Peso Méd. <span className="text-destructive">*</span></span>
-                <span className="text-center">Peso Tot.</span><span className="text-center">Critério</span><span className="text-center">Valor</span>
+                <span className="text-center">Peso Tot.</span><span className="text-center">Critério</span><span className="text-center">Valor <span className="text-destructive">*</span></span>
                 <span className="text-center">Total</span><span className="text-center">Ações</span>
               </div>
               {lotes.length === 0 ? (

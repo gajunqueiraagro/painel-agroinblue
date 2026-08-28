@@ -245,6 +245,10 @@ type FornecedorOption = {
   nome: string;
   nomeNormalizado?: string | null;
   aliases?: string[] | null;
+  /* PR-OC-UX-LOTE-C1-01 — documento (CNPJ/CPF) exibido sob o nome na aba Compra.
+     Coluna REAL conferida no schema: `cpf_cnpj` (existe tambem `cpf_cnpj_pagamento`,
+     que e' outro campo e nao serve). Uma coluna a mais numa consulta ja paginada. */
+  cpfCnpj?: string | null;
 };
 
 function normalizeFornecedorText(value?: string | null) {
@@ -1228,14 +1232,14 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     if (pending.id) {
       supabase
         .from('financeiro_fornecedores')
-        .select('id, nome, nome_normalizado, aliases')
+        .select('id, nome, nome_normalizado, aliases, cpf_cnpj')
         .eq('id', pending.id)
         .maybeSingle()
         .then(({ data: forn }) => {
           if (forn) {
             setAbateFornecedores(prev => {
               if (prev.some(f => f.id === forn.id)) return prev;
-              return [...prev, { id: forn.id, nome: forn.nome, nomeNormalizado: forn.nome_normalizado, aliases: forn.aliases as string[] | null }].sort((a, b) => a.nome.localeCompare(b.nome));
+              return [...prev, { id: forn.id, nome: forn.nome, nomeNormalizado: forn.nome_normalizado, aliases: forn.aliases as string[] | null, cpfCnpj: forn.cpf_cnpj }].sort((a, b) => a.nome.localeCompare(b.nome));
             });
             if (pending.tipo === 'abate') setAbateFornecedorId(forn.id);
             else if (pending.tipo === 'venda') setVendaDestinoFornecedorId(forn.id);
@@ -1265,14 +1269,14 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           } else {
             supabase
               .from('financeiro_fornecedores')
-              .select('id, nome, nome_normalizado, aliases')
+              .select('id, nome, nome_normalizado, aliases, cpf_cnpj')
               .eq('id', favId)
               .maybeSingle()
               .then(({ data: forn }) => {
                 if (forn) {
                   setAbateFornecedores(prev => {
                     if (prev.some(f => f.id === forn.id)) return prev;
-                    return [...prev, { id: forn.id, nome: forn.nome, nomeNormalizado: forn.nome_normalizado, aliases: forn.aliases as string[] | null }].sort((a, b) => a.nome.localeCompare(b.nome));
+                    return [...prev, { id: forn.id, nome: forn.nome, nomeNormalizado: forn.nome_normalizado, aliases: forn.aliases as string[] | null, cpfCnpj: forn.cpf_cnpj }].sort((a, b) => a.nome.localeCompare(b.nome));
                   });
                   if (pending.tipo === 'abate') setAbateFornecedorId(forn.id);
                   else if (pending.tipo === 'venda') setVendaDestinoFornecedorId(forn.id);
@@ -1757,13 +1761,13 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     const FORNECEDORES_PAGE_SIZE = 1000;
 
     (async () => {
-      const acumulado: { id: string; nome: string; nome_normalizado: string | null; aliases: string[] | null }[] = [];
+      const acumulado: { id: string; nome: string; nome_normalizado: string | null; aliases: string[] | null; cpf_cnpj: string | null }[] = [];
       let from = 0;
 
       while (true) {
         const { data, error } = await supabase
           .from('financeiro_fornecedores')
-          .select('id, nome, nome_normalizado, aliases')
+          .select('id, nome, nome_normalizado, aliases, cpf_cnpj')
           .eq('cliente_id', clienteAtual.id)
           .eq('ativo', true)
           .order('nome')
@@ -1793,6 +1797,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           nome: item.nome,
           nomeNormalizado: item.nome_normalizado ?? null,
           aliases: item.aliases ?? null,
+          cpfCnpj: item.cpf_cnpj ?? null,
         })));
     })();
 
