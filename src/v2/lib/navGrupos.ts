@@ -49,6 +49,13 @@ export type V2Section =
   | 'divergencias'           // (em construção)
   | 'logs'                   // (em construção)
   | 'validacoes'             // (em construção)
+  /* ⚠ AS QUATRO ABAIXO NAO TEM ROTA e nao devem ganhar uma sem tela por tras. Existem
+     porque `NavItem.id` e' tipado como V2Section e o menu anuncia o rumo do produto
+     (PR-NAV-PRODUCAO-01): sao itens `emConstrucao`, nao clicaveis. Ficam FORA de
+     SECTION_TO_GROUP e de SECTION_PERIODO de proposito — os tres mapas sao `Partial`,
+     entao ausencia ali nao quebra nada. */
+  | 'lancamentos-agricultura' | 'lancamentos-silvicultura'
+  | 'agricultura-home' | 'silvicultura-home'
   | 'fechamento-periodo'    // Marco 2.4 — cockpit Fechamento do Período
   | 'executive-preview';    // FASE 3 / PR3.3A — sandbox isolado do ExecutiveSlide (fake data)
 
@@ -59,9 +66,15 @@ export interface NavItem {
   label: string;
   status: ItemStatus;
   primary?: boolean;
+  /* Area anunciada e ainda nao construida: aparece SEMPRE, cinza, com a marca "em
+     construção" e sem clique. Decisao do Gabriel — o menu anuncia o rumo. Nao e'
+     `status`, que fala de wrapper de rota; e' outro eixo. */
+  emConstrucao?: boolean;
 }
 
 export interface NavSecao {
+  /* Vazio = secao SEM cabecalho. Usado por "Fechamento Área", que deixou de ser
+     exclusivo da pecuaria e por isso nao mora sob nenhum dos escopos. */
   titulo: string;
   itens: NavItem[];
 }
@@ -75,27 +88,54 @@ export interface NavGrupo {
 export const NAV_GRUPOS: NavGrupo[] = [
 
   // ── REBANHO ────────────────────────────────────────────────────────────────
+  /* ⚠ SO ROTULO E ESTRUTURA MUDARAM (PR-NAV-PRODUCAO-01). O `id` do grupo continua
+     'rebanho' e todos os `id` de item continuam os mesmos: rota, URL e envelope
+     intactos. SECTION_TO_GROUP segue apontando para 'rebanho' — trocar aquela chave
+     seria trocar identificador, que este PR nao faz.
+     ⚠ AS TELAS NAO MUDARAM. "Fechamento Área" abre a MESMA tela que so sabe de
+     pastos; o rename antecipa o escopo, nao o implementa. */
   {
     id: 'rebanho',
-    label: 'Rebanho',
+    label: 'Produção',
     drawer: [
       {
-        titulo: 'Operação',
+        titulo: 'Lançar',
         itens: [
-          { id: 'lancamentos-zoot',    label: 'Lançamentos de Movimentações', status: 'ready', primary: true },
-          { id: 'operacoes-comerciais', label: 'Operações Comerciais',        status: 'ready', primary: true },
-          { id: 'fechamento',          label: 'Fechamento Pastos',            status: 'ready', primary: true },
+          { id: 'lancamentos-zoot',          label: 'Pecuária',     status: 'ready', primary: true },
+          { id: 'lancamentos-agricultura',   label: 'Agricultura',  status: 'ready', emConstrucao: true },
+          { id: 'lancamentos-silvicultura',  label: 'Silvicultura', status: 'ready', emConstrucao: true },
         ],
       },
       {
-        titulo: 'Gestão',
+        /* SEM CABECALHO, e e' o ponto: o fechamento deixou de ser exclusivo da
+           pecuaria, entao pendura-lo sob "Pecuária" diria o contrario. */
+        titulo: '',
         itens: [
-          { id: 'rebanho-home',            label: 'Visão Geral',            status: 'ready' },
-          { id: 'conferencia-lancamentos', label: 'Conferência Lançamentos', status: 'ready' },
-          { id: 'conferencia-mensal',      label: 'Conferência Mensal',     status: 'ready' },
-          { id: 'mapa-pastos',             label: 'Mapa Pastos',            status: 'ready' },
-          { id: 'mapa-geo-pastos',         label: 'Geo Pastos',             status: 'ready' },
-          { id: 'chuvas',                  label: 'Chuvas',                 status: 'ready' },
+          { id: 'fechamento', label: 'Fechamento Área', status: 'ready', primary: true },
+        ],
+      },
+      {
+        titulo: 'Pecuária',
+        itens: [
+          { id: 'rebanho-home',            label: 'Visão Geral',          status: 'ready' },
+          { id: 'conferencia-lancamentos', label: 'Lançamentos',          status: 'ready' },
+          { id: 'operacoes-comerciais',    label: 'Operações Comerciais', status: 'ready', primary: true },
+          { id: 'conferencia-mensal',      label: 'Evolução no Ano',      status: 'ready' },
+          { id: 'mapa-pastos',             label: 'Mapa de Pastos',       status: 'ready' },
+          { id: 'mapa-geo-pastos',         label: 'Geo Pastos',           status: 'ready' },
+          { id: 'chuvas',                  label: 'Chuvas',               status: 'ready' },
+        ],
+      },
+      {
+        titulo: 'Agricultura',
+        itens: [
+          { id: 'agricultura-home', label: 'Visão Geral', status: 'ready', emConstrucao: true },
+        ],
+      },
+      {
+        titulo: 'Silvicultura',
+        itens: [
+          { id: 'silvicultura-home', label: 'Visão Geral', status: 'ready', emConstrucao: true },
         ],
       },
     ],
