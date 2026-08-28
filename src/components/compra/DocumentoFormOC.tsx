@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Trash2, ArrowLeft, FileText, Paperclip } from 'lucide-react';
+import { SearchableSelect } from '@/components/ui/searchable-select';
+import { Plus, Trash2, ArrowLeft, FileText, Paperclip, ChevronRight, ChevronDown } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { NovoFornecedorDialog } from '@/components/financeiro-v2/NovoFornecedorDialog';
 import { motivoArquivoInvalido } from '@/lib/oc/caminhoDocumento';
@@ -36,7 +37,37 @@ const TIPOS: { value: string; label: string }[] = [
 ];
 export const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
+/* ── NUMERO DA NOTA EM 000.000.000 (PR-OC-DOC-TABELA-01) ────────────────────────
+   O campo `nNF` da NF-e tem NOVE digitos por definicao do leiaute, e e assim que a
+   nota se le. Medida no proto: o unico documento com numero preenchido tem
+   '007.086.649' — digitado A MAO com os pontos, porque a tela nao os punha.
+   ⚠ DUAS FORMAS, de proposito. Enquanto se DIGITA nao ha zeros a esquerda: teclar "7"
+   viraria "000.000.007" e o cursor saltaria para o fim a cada tecla. Os zeros entram
+   EM REPOUSO — no blur e na lista —, quando o numero acabou.
+   ⚠ SO PARA NF. Recibo e "outro documento" nao tem numero de nove digitos; mascarar o
+   numero de um recibo inventaria um formato que ele nao tem.
+   ⚠ Numero com MAIS de nove digitos volta como veio: nao e' nNF, e truncar para caber
+   na mascara apagaria dado na tela. */
+const agrupar3 = (d: string) => d.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+export const ehNotaFiscal = (e: EspecieDoc) => e === 'nf_principal' || e === 'nf_complementar';
+export const numeroDigitando = (s: string) => agrupar3(s.replace(/\D/g, '').slice(0, 9));
+export const numeroEmRepouso = (s: string) => {
+  const d = s.replace(/\D/g, '');
+  if (!d || d.length > 9) return s;
+  return agrupar3(d.padStart(9, '0'));
+};
+/** O que a lista mostra: mascara so quando e' NF e o numero existe. */
+export const fmtNumeroDoc = (numero: string | null, especie: EspecieDoc) =>
+  (numero && ehNotaFiscal(especie) ? numeroEmRepouso(numero) : numero);
+
 interface CompRow { tipo: string; natureza: NaturezaComp; valor: string; descricao: string; }
+
+/* A NOTA SIMPLES tem UM componente, valor bruto em acrescimo — que e' exatamente o
+   `FORM_VAZIO`. Enquanto ela tem essa forma, "Valor total da nota" a representa
+   inteira e a decomposicao fica fechada. Deixou de ter: a decomposicao ABRE e nao
+   fecha mais, porque um valor escondido seria pior que um formulario feio. */
+const formaSimples = (cs: CompRow[]) =>
+  cs.length <= 1 && (cs.length === 0 || (cs[0].tipo === 'valor_bruto' && cs[0].natureza === 'acrescimo'));
 export interface FormState {
   documentoId: string | null; versao: number;
   especie: EspecieDoc; numero: string; serie: string; chaveAcesso: string; dataEmissao: string;
@@ -73,6 +104,12 @@ export function DocumentoFormOC({ api, somenteLeitura, fornecedores, contraparte
      porque o upload so acontece quando ja existe `documento_id` — ver o submit. */
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [novoFornecedorOpen, setNovoFornecedorOpen] = useState(false);
+  /* O seletor de arquivo nativo e' largo e feio; o gesto vira um botao que o aciona.
+     O input segue existindo — escondido — porque e' ele quem abre o dialogo do SO. */
+  const fileRef = useRef<HTMLInputElement>(null);
+  /* Abre JA se o documento que chegou tem quebra de valores (edicao de nota com frete,
+     Funrural etc.). Nota simples nasce fechada. */
+  const [detalharAberto, setDetalharAberto] = useState(() => !formaSimples(initialForm.componentes));
 
   /* ── LEITURA DA NOTA (PR-OC-DOC-EXTRACAO-01) ───────────────────────────────
      ⚠ SUGESTAO, NUNCA GRAVACAO. O que a nota diz entra no formulario MARCADO, e o
@@ -107,10 +144,26 @@ export function DocumentoFormOC({ api, somenteLeitura, fornecedores, contraparte
         (novo[campo] as string) = valor;
         marcados.add(campo as string);
       };
-      por('numero', d.numero);
+      /* O numero chega da chave como inteiro cru ("7086649"); a tela o le em repouso,
+         com os zeros do leiaute — ver o bloco da mascara no topo. */
+      por('numero', d.numero ? numeroEmRepouso(d.numero) : null);
       por('serie', d.serie);
       por('dataEmissao', d.dataEmissao);
       por('chaveAcesso', d.chaveAcesso);
+      /* ⚠ O VALOR LIDO NAO ENTRAVA EM LUGAR NENHUM. Ele so aparecia no aviso, e o
+         documento ia gravado por R$ 0,00 — medido no proto: o primeiro documento
+         registrado tem arquivo, ZERO componentes e liquido zero, exatamente o caso
+         relatado. O valor da nota E' o componente `valor_bruto`: `valor_liquido` na
+         view e' derivado SO dos componentes, e nao existe coluna de valor no
+         documento. Sem componente o documento nao vale nada. */
+      if (d.valorTotal && formaSimples(novo.componentes) && !(novo.componentes[0]?.valor ?? '').trim()) {
+        novo.componentes = [{
+          tipo: 'valor_bruto', natureza: 'acrescimo',
+          valor: d.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+          descricao: novo.componentes[0]?.descricao ?? '',
+        }];
+        marcados.add('valorTotal');
+      }
       /* EMITENTE — a decisao das tres situacoes acontece FORA deste setForm, logo
          abaixo, porque situacao 2 exige PERGUNTAR e nao se pergunta dentro de um
          atualizador de estado. Aqui so entra o que e' certo: o documento da nota. */
@@ -217,6 +270,14 @@ export function DocumentoFormOC({ api, somenteLeitura, fornecedores, contraparte
   const emitenteSelecionado = form.emitenteId || contraparteId || '';
   const emitenteEhContraparte = !form.emitenteId || form.emitenteId === contraparteId;
 
+  /* A contraparte SEMPRE esta em `fornecedores`: `useOperacaoLiquidacao` poe o
+     `contraparte_id` em `idsEmUso` e busca a parte quando o filtro `ativo` a deixaria
+     de fora. Entao nao ha prop nova a pedir — o nome ja estava na mao, so nao era dito. */
+  const contraparte = (fornecedores ?? []).find(f => f.id === contraparteId) ?? null;
+  const rotuloContraparte = contraparte?.nome
+    ? `Mesmo da operação — ${contraparte.nome}`
+    : 'Mesmo da operação';
+
   const totais = useMemo(() => {
     let acr = 0, desc = 0, ret = 0, desp = 0;
     for (const c of form.componentes) {
@@ -228,6 +289,19 @@ export function DocumentoFormOC({ api, somenteLeitura, fornecedores, contraparte
     }
     return { acr, desc, ret, desp, liquido: acr - desc - ret - desp };
   }, [form.componentes]);
+
+  /* `detalhar` NAO e' so o toggle: nota que deixou de ser simples abre e permanece
+     aberta, ainda que o operador tivesse fechado antes. O estado da nota manda. */
+  const simples = formaSimples(form.componentes);
+  const detalhar = detalharAberto || !simples;
+  /* O campo unico E' o componente `valor_bruto`/`acrescimo` — nao ha estado paralelo a
+     sincronizar. So aparece com a forma simples, entao reescrever o componente 0 na
+     forma canonica nao pode apagar decomposicao nenhuma. */
+  const valorSimples = form.componentes[0]?.valor ?? '';
+  const setValorSimples = (v: string) => setForm(f => ({
+    ...f,
+    componentes: [{ tipo: 'valor_bruto', natureza: 'acrescimo', valor: v, descricao: f.componentes[0]?.descricao ?? '' }],
+  }));
 
   const setComp = (i: number, patch: Partial<CompRow>) =>
     setForm(f => ({ ...f, componentes: f.componentes.map((c, j) => (j === i ? { ...c, ...patch } : c)) }));
@@ -307,34 +381,42 @@ export function DocumentoFormOC({ api, somenteLeitura, fornecedores, contraparte
           Arrastar-e-soltar porque a nota chega por e-mail ou WhatsApp — arrastar do
           Finder e' menos passos que abrir o seletor.
           ⚠ NAO E' OBSTACULO: sem arquivo o formulario segue manual, e quem nao tem PDF
-          digita como sempre digitou. */}
+          digita como sempre digitou.
+          ⚠ UMA FAIXA, NAO UM PAINEL. A area nasceu com ~130px de altura para uma acao de
+          um clique, e empurrava o formulario inteiro para fora da tela. Ser o ponto de
+          partida e' questao de ORDEM — vir primeiro —, nao de tamanho. O arrastar-e-
+          soltar continua valendo na faixa toda; o seletor nativo, largo e feio, fica
+          escondido atras de um botao. */}
       {!somenteLeitura && (
         <div
           onDragOver={e => { e.preventDefault(); setArrastando(true); }}
           onDragLeave={() => setArrastando(false)}
           onDrop={e => { e.preventDefault(); setArrastando(false); receberArquivo(e.dataTransfer.files?.[0] ?? null); }}
-          className={`rounded-md border-2 border-dashed px-3 py-4 text-center transition-colors ${
+          className={`rounded-md border border-dashed px-2 py-1.5 transition-colors ${
             arrastando ? 'border-primary bg-primary/10' : 'border-muted-foreground/30 bg-muted/20'
           }`}>
-          <Paperclip className="h-4 w-4 mx-auto mb-1 text-muted-foreground" />
-          <div className="text-[12px] font-medium text-foreground">
-            {arquivo ? arquivo.name : 'Anexe a nota ou recibo'}
+          <div className="flex items-center gap-2 min-w-0">
+            <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            <div className="min-w-0 flex-1 leading-tight">
+              <div className="text-[11px] font-medium text-foreground truncate">
+                {arquivo ? arquivo.name : 'Anexe a nota ou recibo — arraste aqui'}
+              </div>
+              <div className="text-[10px] text-muted-foreground truncate">
+                {lendoNota ? 'Lendo a nota…'
+                  : arquivo ? `${(arquivo.size / 1024 / 1024).toFixed(1)} MB · NF em PDF preenche os campos abaixo`
+                  : 'PDF, JPG ou PNG até 10 MB · NF em PDF preenche os campos abaixo'}
+              </div>
+            </div>
+            <Button type="button" variant="outline" size="sm" className="h-6 text-[10px] shrink-0"
+              onClick={() => fileRef.current?.click()}>{arquivo ? 'Trocar' : 'Escolher'}</Button>
           </div>
-          <div className="text-[10px] text-muted-foreground mt-0.5">
-            {arquivo
-              ? `${(arquivo.size / 1024 / 1024).toFixed(1)} MB · arraste outro para substituir`
-              : 'Arraste o arquivo aqui, ou escolha abaixo · PDF, JPG ou PNG, até 10 MB'}
-          </div>
-          <Input type="file" accept="application/pdf,image/jpeg,image/png"
-            onChange={e => receberArquivo(e.target.files?.[0] ?? null)}
-            className="h-7 text-[11px] file:text-[11px] mt-2 max-w-xs mx-auto" />
-          <div className="text-[10px] text-muted-foreground mt-1">
-            {lendoNota
-              ? 'Lendo a nota…'
-              : 'Se for uma NF em PDF, os campos abaixo vêm preenchidos a partir dela — confira antes de salvar.'}
-          </div>
+          {/* ⚠ `value=''` no clique: sem isso, reescolher O MESMO arquivo nao dispara
+              `change`, e quem tentasse reler a nota apos uma falha ficaria sem resposta. */}
+          <input ref={fileRef} type="file" accept="application/pdf,image/jpeg,image/png" className="hidden"
+            onClick={e => { (e.target as HTMLInputElement).value = ''; }}
+            onChange={e => receberArquivo(e.target.files?.[0] ?? null)} />
           {form.url && !arquivo && (
-            <div className="text-[10px] text-muted-foreground mt-1">Já há um arquivo anexado. Enviar outro substitui.</div>
+            <div className="text-[10px] text-muted-foreground mt-0.5">Já há um arquivo anexado. Enviar outro substitui.</div>
           )}
         </div>
       )}
@@ -393,7 +475,16 @@ export function DocumentoFormOC({ api, somenteLeitura, fornecedores, contraparte
             <SelectContent>{ESPECIES.map(e => <SelectItem key={e} value={e} className="text-[11px]">{ESPECIE_LABEL[e]}</SelectItem>)}</SelectContent>
           </Select>
         </div>
-        <div><label className="text-[10px] text-muted-foreground">Número</label><Input value={form.numero} onChange={e => setForm(f => ({ ...f, numero: e.target.value }))} className={`h-7 text-[11px] ${marcaSugerido('numero')}`} /></div>
+        <div>
+          <label className="text-[10px] text-muted-foreground">Número</label>
+          {/* Mascara 000.000.000 — so em NF, e os zeros so no repouso. Ver o bloco do
+              numero no topo do arquivo. */}
+          <Input value={form.numero}
+            inputMode={ehNotaFiscal(form.especie) ? 'numeric' : undefined}
+            onChange={e => setForm(f => ({ ...f, numero: ehNotaFiscal(f.especie) ? numeroDigitando(e.target.value) : e.target.value }))}
+            onBlur={() => setForm(f => (ehNotaFiscal(f.especie) && f.numero ? { ...f, numero: numeroEmRepouso(f.numero) } : f))}
+            className={`h-7 text-[11px] ${marcaSugerido('numero')}`} />
+        </div>
         <div><label className="text-[10px] text-muted-foreground">Série</label><Input value={form.serie} onChange={e => setForm(f => ({ ...f, serie: e.target.value }))} className={`h-7 text-[11px] ${marcaSugerido('serie')}`} /></div>
         <div><label className="text-[10px] text-muted-foreground">Emissão</label><Input type="date" value={form.dataEmissao} onChange={e => setForm(f => ({ ...f, dataEmissao: e.target.value }))} className={`h-7 text-[11px] ${marcaSugerido('dataEmissao')}`} /></div>
         <div className="lg:col-span-2"><label className="text-[10px] text-muted-foreground">Chave de acesso</label><Input value={form.chaveAcesso} onChange={e => setForm(f => ({ ...f, chaveAcesso: e.target.value }))} className={`h-7 text-[11px] ${marcaSugerido('chaveAcesso')}`} /></div>
@@ -406,20 +497,25 @@ export function DocumentoFormOC({ api, somenteLeitura, fornecedores, contraparte
           <Label className="text-[10px] text-muted-foreground">Emitente da nota</Label>
           <div className="flex items-center gap-1">
             <div className="flex-1 min-w-0">
-              <Select value={form.emitenteId || '__contraparte__'}
+              {/* ⚠ SEARCHABLESELECT, e nao o `Select` do shadcn: com 2.571 fornecedores
+                  ativos so na NJ, uma lista sem busca e' um rolo infinito. E' o MESMO
+                  componente que a aba Compromissos usa para o Favorecido, sobre a MESMA
+                  lista — nao ha segundo seletor de fornecedor nesta familia.
+                  O "X" do componente devolve ao sentinela, que aqui significa "e' a
+                  propria contraparte": limpar o emitente e' exatamente isso. */}
+              <SearchableSelect
+                value={form.emitenteId || '__contraparte__'}
                 onValueChange={v => setForm(f => ({
                   ...f,
                   emitenteId: v === '__contraparte__' ? '' : v,
                   emitenteNome: v === '__contraparte__' ? '' : (fornecedores?.find(x => x.id === v)?.nome ?? ''),
                   emitenteDocumento: v === '__contraparte__' ? '' : (fornecedores?.find(x => x.id === v)?.cpfCnpj ?? ''),
                 }))}
-                disabled={somenteLeitura}>
-                <SelectTrigger className="h-7 text-[11px]"><SelectValue /></SelectTrigger>
-                <SelectContent className="max-h-[50vh]">
-                  <SelectItem value="__contraparte__" className="text-[11px]">Mesmo da operação</SelectItem>
-                  {(fornecedores ?? []).map(f => <SelectItem key={f.id} value={f.id} className="text-[11px]">{f.nome}</SelectItem>)}
-                </SelectContent>
-              </Select>
+                options={(fornecedores ?? []).map(f => ({ value: f.id, label: f.nome }))}
+                allValue="__contraparte__" allLabel={rotuloContraparte}
+                placeholder="Buscar emitente…" disabled={somenteLeitura} dense
+                className="[&>button]:h-7 [&>button]:text-[11px]"
+              />
             </div>
             {onCriarFornecedor && !somenteLeitura && (
               <Button type="button" variant="outline" size="icon" className="h-7 w-7 shrink-0"
@@ -428,10 +524,19 @@ export function DocumentoFormOC({ api, somenteLeitura, fornecedores, contraparte
               </Button>
             )}
           </div>
-          {!emitenteEhContraparte && (
-            <Input value={form.emitenteDocumento} onChange={e => setForm(f => ({ ...f, emitenteDocumento: e.target.value }))}
-              placeholder="CNPJ/CPF impresso na nota" disabled={somenteLeitura} className="h-7 text-[11px] mt-1" />
-          )}
+          {/* ⚠ "MESMO DA OPERACAO" NAO DIZ QUEM E'. O default estava certo no modelo e
+              mudo na tela: quem le precisa do NOME, nao da palavra "mesmo". O nome vai
+              no proprio rotulo do seletor; o documento da contraparte vem aqui embaixo,
+              em leitura — nao e' campo deste documento, e' o cadastro dela.
+              Quando ha documento proprio, o campo editavel volta como antes. */}
+          {emitenteEhContraparte
+            ? contraparte?.cpfCnpj && (
+                <div className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{contraparte.cpfCnpj}</div>
+              )
+            : (
+              <Input value={form.emitenteDocumento} onChange={e => setForm(f => ({ ...f, emitenteDocumento: e.target.value }))}
+                placeholder="CNPJ/CPF impresso na nota" disabled={somenteLeitura} className="h-7 text-[11px] mt-1" />
+            )}
         </div>
 
         {form.especie === 'nf_complementar' && (
@@ -449,7 +554,47 @@ export function DocumentoFormOC({ api, somenteLeitura, fornecedores, contraparte
         <div className="lg:col-span-2"><label className="text-[10px] text-muted-foreground">Observação</label><Input value={form.observacao} onChange={e => setForm(f => ({ ...f, observacao: e.target.value }))} className="h-7 text-[11px]" /></div>
       </div>
 
-      {/* Componentes */}
+      {/* ── VALOR DA NOTA (PR-OC-DOC-TABELA-01) ──────────────────────────────────
+          ⚠ A DECOMPOSICAO CONTABIL DEIXOU DE SER A PORTA DE ENTRADA. Ela pedia TIPO e
+          NATUREZA — 'retencao_sem_caixa', 'despesa_desembolso' — de quem so quer anexar
+          um PDF de uma nota de gado sem retencao nenhuma. Palavras do Gabriel: "nao
+          tenho ideia (leigo) sobre esses campos"; se ele nao sabe, o cliente dele
+          tambem nao vai saber.
+          ⚠ CONFERIDO NA ESTRUTURA antes de mudar a forma: componente NAO e' obrigatorio
+          (sem CHECK, e as duas RPCs fazem COALESCE(p_componentes,'[]')), MAS e' o UNICO
+          lugar onde o valor mora — `valor_liquido` em vw_oc_documentos e' derivado so
+          dos componentes, e nao existe coluna de valor no documento. Entao a secao nao
+          pode simplesmente sumir: o total precisa continuar entrando, e entra como o
+          componente que a nota simples sempre teve, `valor_bruto`/`acrescimo` — que ja
+          era o default de FORM_VAZIO. Zero mudanca de contrato, zero migration. */}
+      <div className="space-y-1">
+        {!detalhar && (
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-2 items-end">
+            <div>
+              <label className="text-[10px] text-muted-foreground">Valor total da nota</label>
+              <Input inputMode="decimal" value={valorSimples} disabled={somenteLeitura}
+                onChange={e => setValorSimples(e.target.value)} placeholder="0,00"
+                className={`h-7 text-[11px] text-right tabular-nums ${marcaSugerido('valorTotal')}`} />
+            </div>
+            <div className="lg:col-span-3 text-[10px] leading-tight pb-1.5">
+              {valorSimples.trim()
+                ? <span className="text-muted-foreground">Valor cheio da nota. Havendo retenção, frete ou bonificação, use “Detalhar valores”.</span>
+                : <span className="text-amber-700 dark:text-amber-500">Sem valor, o documento é registrado por R$&nbsp;0,00.</span>}
+            </div>
+          </div>
+        )}
+
+        {/* Enquanto a nota e' simples o operador abre e fecha. Deixando de ser, o bloco
+            FICA ABERTO: esconder um valor decomposto seria pior que um formulario feio. */}
+        <button type="button" onClick={() => setDetalharAberto(v => !v)} disabled={!simples}
+          title={simples ? undefined : 'A nota tem mais de um valor; a decomposição fica visível.'}
+          className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground disabled:cursor-default">
+          {detalhar ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+          Detalhar valores (bonificação, Funrural, frete…)
+        </button>
+      </div>
+
+      {detalhar && (
       <div className="space-y-1">
         <div className="flex items-center justify-between">
           <div className="text-[11px] font-semibold text-muted-foreground">Componentes</div>
@@ -474,8 +619,12 @@ export function DocumentoFormOC({ api, somenteLeitura, fornecedores, contraparte
           </div>
         ))}
       </div>
+      )}
 
-      {/* Totais em tempo real (fórmula da view) */}
+      {/* Totais em tempo real (fórmula da view). Só com a decomposição aberta: na nota
+          simples o líquido é o próprio "Valor total da nota", e repeti-lo em cinco
+          quadros não informa nada. */}
+      {detalhar && (
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-1 rounded-md border bg-muted/20 px-2 py-1 text-[11px]">
         <div><div className="text-[9px] text-muted-foreground">Acréscimos</div><div className="tabular-nums">{brl(totais.acr)}</div></div>
         <div><div className="text-[9px] text-muted-foreground">Descontos com.</div><div className="tabular-nums">− {brl(totais.desc)}</div></div>
@@ -483,6 +632,7 @@ export function DocumentoFormOC({ api, somenteLeitura, fornecedores, contraparte
         <div><div className="text-[9px] text-muted-foreground">Despesas</div><div className="tabular-nums">− {brl(totais.desp)}</div></div>
         <div><div className="text-[9px] text-muted-foreground">Valor líquido</div><div className="font-bold text-primary tabular-nums">{brl(totais.liquido)}</div></div>
       </div>
+      )}
 
       {/* Lotes vinculados (opcional/múltiplo) */}
       <div className="space-y-1">

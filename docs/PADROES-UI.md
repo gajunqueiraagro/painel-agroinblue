@@ -386,6 +386,49 @@ Referência viva: o "Resumo da operação" (`ResumoLateralOC.tsx`) e o resumo do
 
 ---
 
+## A18 — Lista densa de registros, sem cabeçalho de coluna
+
+Quando cada registro tem uma **identidade**, um **contexto**, um **valor**, um **estado**
+e **ações**, a tabela deixa de servir: são cinco larguras disputando a mesma linha, e a
+disputa só piora conforme a tela estreita. O padrão é uma **linha de duas alturas**,
+sem `<table>` e sem cabeçalho:
+
+```
+NF 007.086.649                        R$ 69.300  [Ativo]  📎 ✎ ⊘
+Tarciso Ferreira Honorio · 29/07/2024
+```
+
+- **linha 1 — identidade**: 13px, peso 500. É por ela que o operador procura o registro.
+  Não havendo identidade própria (documento sem número), o **rótulo do tipo sobe para
+  cá** — nunca "—" em cima com a informação real embaixo (mesma regra do A17: a
+  identidade nunca fica no corpo menor).
+- **linha 2 — contexto**: 11px, cinza, partes separadas por ` · `. É o que confirma a
+  escolha, não o que a motiva.
+- **à direita**: valor (13px, peso 500, `tabular-nums`), estado como pílula pequena
+  (10px) e as ações como **ícones** com `title` e `aria-label`.
+- **altura**: `px-3.5 py-[7px]` e `leading-[1.35]` — ~34px por linha.
+- separação por `divide-y` num container `rounded-md border`; sem zebra e sem
+  `overflow-x`.
+
+A razão é medida, não estética. A versão em colunas da mesma lista somava ~996px de
+conteúdo contra 812px de espaço real, e o que sobrava virava barra de rolagem
+horizontal — que, no macOS, é **sobreposta** e cobria justamente o estado e as ações.
+`scrollbar-gutter` não resolve barra sobreposta. Em duas alturas o problema não é
+contornado, **deixa de existir**: o contexto desce em vez de disputar largura, e a
+mesma linha serve tela estreita e mobile.
+
+Um estado que substitui o contexto entra **no lugar da linha 2**, em âmbar
+("Sem arquivo anexado"), e não como coluna nova — a linha já tem onde dizer.
+
+> ⚠ **É referência, não retrofit.** Há telas prontas e aprovadas em tabela; cada uma
+> será avaliada individualmente antes de qualquer conversão. Aplicado hoje apenas em
+> `AbaDocumentosOC.tsx` (PR-OC-DOC-TABELA-02).
+
+Não confundir com o **A17**: lá o par rótulo-valor serve para **comparar** grandezas de
+um mesmo registro; aqui a linha serve para **escolher** um registro entre vários.
+
+---
+
 ## Pendências deste documento
 
 - **Seletor de mês/ano com setas** — não existe. Enquanto não houver, `type="month"`

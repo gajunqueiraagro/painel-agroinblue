@@ -83,7 +83,10 @@ export function extrairDanfe(textoBruto: string): DanfeExtraido {
       out.chaveAcesso = d;
       out.daChave = true;
       out.emitenteCnpj = formatarCnpj(d.slice(6, 20));
-      // Série e número vêm com zeros à esquerda na chave; a tela mostra sem eles.
+      /* Série e número vêm com zeros à esquerda na chave; aqui saem como inteiro cru.
+         ⚠ A TELA REPÕE os zeros do número (000.000.000) desde PR-OC-DOC-TABELA-01 —
+         é assim que nota fiscal se lê. A máscara mora no formulário, não aqui: esta
+         função devolve o dado, não a apresentação dele. */
       out.serie = String(Number(d.slice(22, 25)));
       out.numero = String(Number(d.slice(25, 34)));
     }

@@ -378,6 +378,11 @@ export function CompraModalShell(api: CompraModalShellProps) {
               fornecedores={api.liquidacaoApi?.fornecedores}
               contraparteId={api.compraFornecedorId || null}
               clienteId={api.liquidacaoApi?.clienteId ?? null}
+              /* Negociado = `valor_acordado` da operacao, a MESMA ancora que a aba
+                 Financeiro usa para validar a soma das obrigacoes principais. Nao e'
+                 recalculado dos lotes aqui: derivar de novo criaria uma segunda
+                 verdade que envelheceria sozinha. */
+              valorNegociado={api.liquidacaoApi?.valorAcordado ?? null}
               recarregarFornecedores={api.liquidacaoApi?.recarregar} />
           ) : abaAtiva === 'financeiro' && api.liquidacaoApi ? (
             <AbaFinanceiroOC
