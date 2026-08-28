@@ -76,6 +76,12 @@ const MINW_MOV_RO = 'min-w-[388px] max-w-[388px]';
 //   colunas sobre 2px a mais.
 const CX_CAB = 'border border-transparent px-1';
 const CX_LIN = 'border px-1';
+/* ⚠ SEGUNDA FORMA da mesma formatacao de data, e e' deliberado: a grade de
+   movimentacoes tem a versao inline e esta CONGELADA byte a byte pela bifurcacao do
+   PR-OC-A18-RECEBIMENTO-01. Unificar exige tocar aquele ramo, o que e' de
+   PR-OC-RECEB-REGISTRO-02. */
+const fmtBr = (iso: string | null) => (iso ? iso.split('-').reverse().join('/') : null);
+
 const TONE: Record<EstadoRecebimento, string> = {
   nao_iniciado: 'bg-slate-100 text-slate-600',
   parcial: 'bg-amber-100 text-amber-700',
@@ -160,6 +166,35 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
   const totalRecebido = api.lotes.reduce((s, l) => s + l.qtdRecebida, 0);
   const diferencaTotal = totalNegociado - totalRecebido;
   const zeroRecebido = totalRecebido === 0;
+
+  /* ── DERIVACOES DA LISTA ENCERRADA (PR-OC-A18-RECEBIMENTO-01) ────────────────
+     ⚠ O ESTADO GERAL COMPOE OS VEREDITOS DOS LOTES, nao refaz o limiar.
+     `estado_recebimento` vem da VIEW, por lote; recalcular aqui recebido x
+     negociado seria a segunda copia de uma regra que ja tem dono. Compor os
+     quatro estados existentes nao inventa nenhum quinto. */
+  const semLote = api.lotes.length === 0;
+  const estadoGeral: EstadoRecebimento | null =
+    semLote ? null
+    : api.lotes.some(l => l.estado === 'excedente') ? 'excedente'
+    : api.lotes.every(l => l.estado === 'completo') ? 'completo'
+    : api.lotes.every(l => l.estado === 'nao_iniciado') ? 'nao_iniciado'
+    : 'parcial';
+
+  /* Quantas entradas cada lote teve, e a mais recente. `MovimentacaoOC` ja carrega
+     `loteId`, entao e' agrupamento do que a aba tem em maos — nenhuma consulta nova.
+     Canceladas ficam de fora porque a fonte e' `movsAtivas`, a MESMA lista que a
+     grade de movimentacoes exibe.
+     ⚠ Comparacao lexicografica sobre a ISO: 'AAAA-MM-DD' ordena como string, sem
+     Date e sem fuso. Movimentacao SEM data nao vira "ultima" — ausencia nao ganha
+     de data conhecida. */
+  const entradasPorLote = new Map<string, { n: number; ultimaIso: string | null }>();
+  for (const m of movsAtivas) {
+    const a = entradasPorLote.get(m.loteId);
+    entradasPorLote.set(m.loteId, {
+      n: (a?.n ?? 0) + 1,
+      ultimaIso: m.data && (!a?.ultimaIso || m.data > a.ultimaIso) ? m.data : (a?.ultimaIso ?? null),
+    });
+  }
   const motivoEncerrarObrigatorio = diferencaTotal !== 0 || zeroRecebido;
   const podeEncerrar = !api.saving && (!motivoEncerrarObrigatorio || motivoEncerrar.trim() !== '');
   const podeReabrir = !api.saving && motivoReabrir.trim() !== '';
@@ -180,6 +215,113 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
 
   return (
     <div className="rounded-md border bg-card p-1.5 shadow-sm space-y-1.5 min-w-0">{/* PR-OC-UX-DENSIDADE-01 item 5 — padding/gap reduzidos */}
+      {/* ══ BIFURCACAO POR ESTADO (PR-OC-A18-RECEBIMENTO-01) ══════════════════════
+          Os dois estados desta aba sao telas diferentes: ENCERRADO e' consulta, e
+          ABERTO e' formulario — dez colunas com DatePicker, dois Inputs e os botoes
+          Receber e Doc. por linha. Ate aqui os dois dividiam o MESMO `map`, com
+          ternarios e guardas inline; reescrever a linha de um mexia na peca do outro.
+          A bifurcacao acontece no CONTAINER, e o ramo de baixo entrou byte a byte,
+          sem uma alteracao — nem de indentacao.
+          ⚠ CODIGO MORTO NO RAMO DE BAIXO, DELIBERADO. La dentro `encerrada` e' sempre
+          falso, entao os ternarios e as guardas que testam esse estado nunca disparam.
+          NAO EDITAR: mexer neles reabre exatamente o risco que esta bifurcacao fecha.
+          Quem reescreve aquele ramo e' PR-OC-RECEB-REGISTRO-02, e a limpeza e' de la. */}
+      {encerrada ? (
+        <>
+          {/* ── A21 — TITULO E NUMEROS NAO ROLAM ────────────────────────────────
+              ⚠ `-mt-1.5 pt-1.5` e nao `-mt-2 pt-2`: o cartao desta aba e' `p-1.5`
+              (PR-OC-UX-DENSIDADE-01), nao `p-2` como o das irmas. A compensacao tem
+              de casar com o padding REAL, senao sobra faixa por onde as linhas
+              aparecem ao rolar. So no eixo vertical. */}
+          <div className="sticky top-0 z-10 -mt-1.5 space-y-1.5 border-b bg-card pt-1.5 pb-1.5">
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-[15px] font-medium text-foreground min-w-0 truncate">Recebimento por lote na fazenda</span>
+              <span className="text-[11px] font-normal text-muted-foreground shrink-0">encerrado</span>
+            </div>
+            {/* ── DOIS NUMEROS ────────────────────────────────────────────────
+                `totalRecebido` e `totalNegociado` sao os MESMOS que o dialog de
+                encerramento ja usa — nao ha soma nova aqui.
+                ⚠ SEM LOTE NENHUM os dois imprimem traco. Zero seria mentira: dizer
+                "0 / 0" afirma que nada foi recebido de nada negociado, quando o que
+                ha e' ausencia de negociacao. */}
+            <div className="grid grid-cols-2 gap-2 rounded-md border bg-muted/20 px-3.5 py-[11px]">
+              <div className="min-w-0">
+                <div className="text-[11px] font-normal text-muted-foreground leading-none">Recebido</div>
+                <div className="mt-1 flex items-baseline gap-2">
+                  <span className="text-[20px] font-medium tabular-nums leading-none">
+                    {semLote ? '—' : `${totalRecebido} / ${totalNegociado}`}
+                  </span>
+                  {estadoGeral && (
+                    <span className={`shrink-0 rounded-full px-1.5 py-px text-[10px] font-normal ${TONE[estadoGeral]}`}>
+                      {LABEL[estadoGeral]}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="min-w-0">
+                <div className="text-[11px] font-normal text-muted-foreground leading-none">Cabeças</div>
+                <div className="mt-1 text-[20px] font-medium tabular-nums leading-none">
+                  {semLote ? '—' : `${totalNegociado} negociadas`}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* O aviso permanece com o texto e o comportamento atuais. */}
+          <div className="text-[11px] text-muted-foreground">
+            Recebimento encerrado. Use Reabrir recebimento para registrar mais movimentações.
+          </div>
+
+          {/* ── LISTA A18 ───────────────────────────────────────────────────────
+              Sem cabecalho de coluna, sem `#`, sem `min-w`, sem rolagem lateral — a
+              grade encerrada carregava `min-w-[427px] max-w-[427px]` e um
+              `overflow-x-auto` que agora ficam so no ramo aberto, onde as dez
+              colunas ainda precisam deles.
+              ⚠ DIFERENCA ZERO NAO E' RENDERIZADA: "0" numa coluna de diferenca e'
+              ruido que o operador aprende a ignorar, e ai deixa de ver o que nao e'
+              zero. Havendo falta, ela OCUPA a linha 2 inteira em ambar e a data sai:
+              o que falta vale mais que quando chegou. */}
+          {api.lotes.length === 0 ? (
+            <div className="rounded-md border border-dashed bg-muted/10 px-3 py-3 text-center text-[11px] text-muted-foreground">
+              {api.loading ? 'Carregando…' : 'Nenhum lote negociado.'}
+            </div>
+          ) : (
+            <div className="rounded-md border divide-y divide-border/60">
+              {api.lotes.map(l => {
+                const ent = entradasPorLote.get(l.loteId);
+                const falta = l.qtdNegociada != null ? l.qtdNegociada - l.qtdRecebida : 0;
+                const temFalta = falta > 0;
+                const contexto = temFalta
+                  ? `negociado ${l.qtdNegociada} · recebido ${l.qtdRecebida} · falta ${falta}`
+                  : [
+                      `negociado ${l.qtdNegociada ?? '—'}`,
+                      `recebido ${l.qtdRecebida}`,
+                      /* Uma entrada diz so a data; varias dizem quantas foram e a
+                         ultima — "3 entradas" sem data nao situa, e a data sozinha
+                         esconderia que houve mais de uma remessa. */
+                      ent == null ? null
+                        : ent.n > 1 ? `${ent.n} entradas, última ${fmtBr(ent.ultimaIso) ?? '—'}`
+                        : fmtBr(ent.ultimaIso),
+                    ].filter(Boolean).join(' · ');
+                return (
+                  <div key={l.loteId} className="px-3.5 py-1.5 leading-[1.35]">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="min-w-0 truncate text-[12px] font-medium text-foreground">{catLabel(l.categoria)}</span>
+                      <span className={`shrink-0 rounded-full px-1.5 py-px text-[10px] font-normal ${TONE[l.estado]}`}>
+                        {LABEL[l.estado]}
+                      </span>
+                    </div>
+                    <div className={`truncate text-[10px] font-normal ${temFalta ? 'text-amber-700 dark:text-amber-500' : 'text-muted-foreground'}`}>
+                      {contexto}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      ) : (
+      <>
       <div className="flex items-center justify-between gap-2">
         <div>
           {/* "na fazenda" desfaz a confusao com recebimento FINANCEIRO, que e' outra
@@ -287,6 +429,9 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
           ))}
         </div>
       </div>
+
+      </>
+      )}
 
       {/* Movimentações registradas (com estorno antes do encerramento) */}
       {movsAtivas.length > 0 && (
