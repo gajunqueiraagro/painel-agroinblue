@@ -96,7 +96,7 @@ export interface CompraModalShellProps {
   ocRascunho?: boolean;                 // rascunho técnico (cadastro incompleto) → "Confirmar" desabilitado
   ocFazendaValida?: boolean;            // PR-NAV-CONTEXTO-FAZENDA-01A — há fazenda real p/ persistir (bloqueia Salvar)
   acaoOcLoading?: 'confirmar' | 'cancelar' | 'reabrir' | null;
-  onConfirmarOC?: () => void;
+  onConfirmarOC?: () => void | Promise<boolean>;   // devolve true quando a operacao fechou de verdade
   onCancelarOC?: (motivo: string) => void;
   onReabrirOC?: (motivo: string) => void;
   onClose: () => void;
@@ -614,7 +614,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
                             disabled={!!api.acaoOcLoading || !!api.lotesApi?.saving || !!api.ocRascunho}
                             onClick={() => setAcaoConfirm('confirmar')}
                             className="bg-white text-primary font-bold gap-1.5 hover:bg-white/90 disabled:opacity-60">
-                            <Check className="h-4 w-4" /> {api.acaoOcLoading === 'confirmar' ? 'Confirmando...' : 'Confirmar negociação'}
+                            <Check className="h-4 w-4" /> {api.acaoOcLoading === 'confirmar' ? 'Confirmando...' : 'Confirmar negociação e seguir'}
                           </Button>
                         </span>
                       </TooltipTrigger>
@@ -758,10 +758,16 @@ export function CompraModalShell(api: CompraModalShellProps) {
             <Button variant="ghost" onClick={() => setAcaoConfirm(null)}>Voltar</Button>
             <Button
               disabled={acaoConfirm === 'cancelar' && motivoAcao.trim() === ''}
-              onClick={() => {
+              onClick={async () => {
                 const a = acaoConfirm;
                 setAcaoConfirm(null);
-                if (a === 'confirmar') api.onConfirmarOC?.();
+                if (a === 'confirmar') {
+                  // "e seguir": Recebimento e' o proximo passo do trabalho real. So
+                  // navega se a confirmacao deu certo — validacao barrada ou conflito
+                  // de versao deixam o usuario onde esta, vendo o motivo.
+                  const fechou = await api.onConfirmarOC?.();
+                  if (fechou) setAbaAtiva('recebimento');
+                }
                 else if (a === 'cancelar') api.onCancelarOC?.(motivoAcao.trim());
                 else if (a === 'reabrir') api.onReabrirOC?.(motivoAcao.trim());
               }}

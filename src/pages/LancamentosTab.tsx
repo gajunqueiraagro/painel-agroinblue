@@ -1805,14 +1805,41 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     ? ocFazendaDestinoId
     : (fazendaAtual?.id && fazendaAtual.id !== '__global__' ? fazendaAtual.id : null);
 
+  // PR-OC-AUTOSAVE-01 (fatia 1) — PONTO UNICO DE FECHAMENTO do modal.
+  //   Antes o mesmo corpo estava escrito duas vezes: no `onOpenChange` do Dialog
+  //   (Esc) e no `onClose` passado ao shell (X do cabecalho e botao Fechar).
+  //   `setLancModalOpen(false)` NAO dispara `onOpenChange`, entao os dois
+  //   caminhos eram mesmo independentes — regra duplicada, do tipo que ja custou
+  //   duas correcoes falhas esta semana.
+  //   Comportamento INALTERADO; e' preparo para o autosave no fechamento, que
+  //   precisa de um lugar so onde entrar.
+  //   ⚠ Clique fora NAO fecha este modal e nunca fechou: o DialogContent
+  //   previne `onPointerDownOutside`/`onInteractOutside`. Os gatilhos reais sao
+  //   Esc, o X e o botao Fechar.
+  const fecharModalOC = useCallback(() => {
+    setLancModalOpen(false);
+    if (modoOCCompra) onFecharOperacaoOC?.();
+  }, [modoOCCompra, onFecharOperacaoOC]);
+
   // Modo OC: cria/atualiza a operação comercial (só identificação) e guarda operacao_id/versao.
   //   Sem lotes (COM-3), sem físico (onAdicionar) e sem financeiro (gerarFinanceiroCompra).
-  const salvarOperacaoOC = async () => {
+  //   PR-OC-AUTOSAVE-01 (fatia 2) — DEVOLVE o estado oficial pos-gravacao, ou null se
+  //   nao gravou (validacao barrou ou a RPC falhou).
+  //   ⚠ Devolver e' o que torna "confirmar salvando antes" possivel: `setOcVersao`
+  //   e' setState do React e NAO reflete na closure de quem chamou — quem lesse
+  //   `ocVersao` logo apos o await pegaria a versao ANTIGA e o oc_confirmar
+  //   estouraria 40001 (conflito de versao). A RPC ja devolve a versao nova; nada
+  //   muda no banco.
+  const salvarOperacaoOC = async (): Promise<{ operacaoId: string; versao: number } | null> => {
     const clienteId = clienteAtual?.id;
-    if (!clienteId) { toast.error('Cliente não selecionado.'); return; }
-    if (!data) { toast.error('Informe a data da compra.'); return; }
+    if (!clienteId) { toast.error('Cliente não selecionado.'); return null; }
+    if (!data) { toast.error('Informe a data da compra.'); return null; }
     // PR-NAV-CONTEXTO-FAZENDA-01A — exige fazenda real; nunca envia '__global__'/'__atual__' como UUID.
-    if (!ocFazendaId) { toast.error('Selecione a fazenda da operação antes de salvar.'); return; }
+    if (!ocFazendaId) { toast.error('Selecione a fazenda da operação antes de salvar.'); return null; }
+    // PR-OC-AUTOSAVE-01 — fornecedor passa a ser obrigatorio como fazenda e data.
+    //   Ate aqui dava para gravar compra sem contraparte: a coluna e' NULLABLE no
+    //   banco e nao havia gate no front.
+    if (!compraFornecedorId) { toast.error('Selecione o fornecedor.'); return null; }
     const criandoOperacao = !ocOperacaoId;
     setSubmitting(true);
     try {
@@ -1834,8 +1861,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       setOcVersao(env.versao);
       if (env.status_comercial) setOcStatusComercial(env.status_comercial);
       toast.success(criandoOperacao ? 'Operação criada. Agora informe os lotes negociados.' : 'Alterações salvas.');
+      return { operacaoId: env.operacao_id, versao: env.versao };
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Falha ao salvar a operação comercial.');
+      return null;
     } finally {
       setSubmitting(false);
     }
@@ -1875,16 +1904,29 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   // PR-OC-EDIT-01B — ações de ciclo (RPCs oficiais; backend soberano). Erro real do backend é exibido
   //   e o modal permanece aberto; nunca há atualização otimista. Sem escrita direta em tabela/FINV2.
-  const confirmarOperacaoOC = async () => {
+  //   PR-OC-AUTOSAVE-01 (fatia 2) — CONFIRMAR GRAVA ANTES, SEMPRE.
+  //   Antes ia direto ao `oc_confirmar` com a versao carregada, enquanto as edicoes
+  //   da aba Compra seguiam so no React: quem editasse e clicasse em Confirmar
+  //   PERDIA a edicao sem aviso nenhum — a RPC nem falhava, porque nada havia sido
+  //   gravado e a versao continuava a mesma.
+  //   ⚠ Falha de validacao ABORTA. `salvarOperacaoOC` avisa por toast e devolve
+  //   null; confirmar por cima seria fechar a operacao com a edicao perdida.
+  //   Devolve `true` so quando fechou de verdade — o shell usa isso para "seguir".
+  const confirmarOperacaoOC = async (): Promise<boolean> => {
     const clienteId = clienteAtual?.id;
-    if (!ocOperacaoId || !clienteId || ocVersao == null || acaoOcLoading) return;
+    if (!ocOperacaoId || !clienteId || ocVersao == null || acaoOcLoading) return false;
     setAcaoOcLoading('confirmar');
     try {
-      await ocRpc.confirmar(ocOperacaoId, clienteId, ocVersao);
+      const salvo = await salvarOperacaoOC();
+      if (!salvo) return false;
+      // Versao NOVA, vinda da propria gravacao — nunca `ocVersao`, que aqui ja e stale.
+      await ocRpc.confirmar(salvo.operacaoId, clienteId, salvo.versao);
       await recarregarOperacaoOC();
       toast.success('Negociação confirmada — operação fechada.');
+      return true;
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Falha ao confirmar a negociação.');
+      return false;
     } finally {
       setAcaoOcLoading(null);
     }
@@ -3851,7 +3893,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     onCancelarOC: cancelarOperacaoOC,
     onReabrirOC: reabrirOperacaoOC,
     // PR-OC-NAV-01 — fechar em modo OC retorna à Central e limpa a URL; fora do modo OC, apenas fecha.
-    onClose: () => { setLancModalOpen(false); if (modoOCCompra) onFecharOperacaoOC?.(); },
+    onClose: fecharModalOC,
   };
 
   return (
@@ -3906,7 +3948,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         - Submit: handlers continuam idênticos; modal NÃO fecha após salvar
           (auto-close será endereçado na Etapa 2).
       */}
-      <Dialog open={lancModalOpen} onOpenChange={(open) => { setLancModalOpen(open); if (!open && modoOCCompra) onFecharOperacaoOC?.(); }}>
+      <Dialog open={lancModalOpen} onOpenChange={(open) => { if (open) setLancModalOpen(true); else fecharModalOC(); }}>
       <DialogContent
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
