@@ -174,15 +174,18 @@ const TIPO_CARDS_GROUPS: TipoCardGroup[] = [
   {
     grupo: 'saidas', label: 'Saídas', items: [
       { value: 'abate',                aba: 'saida', label: 'Abate',                icon: '🔪', desc: 'Envio ao frigorífico' },
-      { value: 'venda',                aba: 'saida', label: 'Venda em Pé',          icon: '💰', desc: 'Venda direta de animais' },
-      { value: 'transferencia_saida',  aba: 'saida', label: 'Transferência (saída)',icon: '📤', desc: 'Movimentação para outra fazenda' },
+      { value: 'venda',                aba: 'saida', label: 'Venda em pé',          icon: '💰', desc: 'Venda direta de animais' },
+      /* ⚠ O "(saída)" saiu do TITULO e desceu para o subtitulo. A informacao nao se
+         perde — ela muda de lugar, para o titulo caber em caixa de frase sem parenteses
+         carregando semantica. */
+      { value: 'transferencia_saida',  aba: 'saida', label: 'Transferência',        icon: '📤', desc: 'Saída para outra fazenda' },
       { value: 'consumo',              aba: 'saida', label: 'Consumo',              icon: '🍖', desc: 'Animais consumidos internamente' },
       { value: 'morte',                aba: 'saida', label: 'Morte',                icon: '💀', desc: 'Perdas no rebanho' },
     ],
   },
   {
     grupo: 'outros', label: 'Outros', items: [
-      { value: 'reclassificacao', aba: 'reclassificacao', label: 'Evoluir Categoria', icon: '🔄', desc: 'Mudar a categoria do animal' },
+      { value: 'reclassificacao', aba: 'reclassificacao', label: 'Evoluir categoria', icon: '🔄', desc: 'Mudar a categoria do animal' },
       // Atalho de navegação — NÃO é um tipo de lançamento. Vai para a tela de Chuvas.
       { value: 'chuvas',          aba: 'reclassificacao', label: 'Chuvas',            icon: '🌧️', desc: 'Registro pluviométrico', navOnly: true },
     ],
@@ -2956,16 +2959,27 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       !it.navOnly && it.aba === aba && (it.aba === 'reclassificacao' || tipo === it.value);
 
     return (
-      <div className="space-y-2 mb-2">
+      /* ⚠ RITMO VERTICAL DE 18px (PR-UI-LANCAR-CARDS-01): o mesmo respiro entre a
+         faixa de IA e o primeiro grupo, e entre grupos. Amarrar os dois blocos no
+         mesmo valor e' o que impede a tela de parecer duas telas empilhadas — a
+         faixa mora em V2Index e os grupos aqui. */
+      <div className="space-y-[18px] mb-2">
         {/* PR-OC-ENTRYPOINT-COMPRA-01 — o wizard legado de operação comercial foi desconectado
             daqui e, em PR-OC-LIMPAR-MODAL-ORFAO-01, removido do repositório. O fluxo oficial de
             Compra é o CompraModalShell (card Compra → modo OC). */}
         {TIPO_CARDS_GROUPS.map(g => (
           <div key={g.grupo}>
-            <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">
+            {/* Caixa alta por ESTILO, nao por texto: o rotulo no dado ja e' "Entradas". */}
+            <div className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground mb-[7px]">
               {g.label}
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-1.5">
+            {/* ⚠ DUAS COLUNAS LISAS. A escada `sm:3 lg:4 xl:5` saiu: com cinco colunas
+                num monitor largo o cartao encolhia ate o subtitulo truncar em todos.
+                O mobile ja era duas colunas, entao ali nada muda.
+                ⚠ Saidas fica com CINCO cartoes e o quinto sozinho na ultima fileira. E'
+                aceito: manter o agrupamento honesto vale mais que preencher a grade, e
+                mover um cartao de grupo para equilibrar seria mentir sobre o que ele e'. */}
+            <div className="grid grid-cols-2 gap-2">
               {g.items
                 // Esconde Chuvas se o parent não passou callback de navegação.
                 .filter(it => !it.navOnly || (it.value === 'chuvas' && !!onNavegarChuvas))
@@ -2983,7 +2997,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                     type="button"
                     onClick={() => handleClick(it)}
                     disabled={disabled}
-                    className={`flex items-center gap-2 px-2 py-1.5 rounded-md border-2 transition-all text-left ${
+                    aria-label={`Lançar ${it.label} — ${it.desc}`}
+                    title={it.desc}
+                    className={`flex items-center gap-2 px-3 py-2.5 rounded-md border-2 transition-all text-left ${
                       active
                         ? 'border-primary bg-primary/10 shadow-sm'
                         : disabled
@@ -2993,8 +3009,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   >
                     <span className="text-lg shrink-0 leading-none">{it.icon}</span>
                     <div className="min-w-0">
-                      <div className="text-xs font-bold leading-tight text-foreground truncate">{it.label}</div>
-                      <div className="text-[10px] text-muted-foreground leading-snug truncate">{it.desc}</div>
+                      {/* ⚠ PESO 500, nao 700. Com borda de 2px em TODOS os cartoes, o
+                          negrito somava enfase demais e o conjunto virava ruido: a borda
+                          ja destaca, e o titulo repetia o destaque. */}
+                      <div className="text-xs font-medium leading-tight text-foreground truncate">{it.label}</div>
+                      <div className="mt-px text-[10px] text-muted-foreground leading-snug truncate">{it.desc}</div>
                     </div>
                   </button>
                 );

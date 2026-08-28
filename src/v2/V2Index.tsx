@@ -71,7 +71,10 @@ import { ClientesTab } from '@/pages/ClientesTab';
 import { AuditoriaTab } from '@/pages/AuditoriaTab';
 import { toast } from 'sonner';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Camera, Sparkles } from 'lucide-react';
+/* `Sparkles` saiu com o selo "Lançar com IA" (PR-UI-LANCAR-CARDS-01): o icone de
+   camera ja diz que a entrada e' por foto, e o brilho ao lado do rotulo era enfase
+   sobre enfase. */
+import { Camera } from 'lucide-react';
 
 /**
  * V2 → Financeiro → Financiamentos.
@@ -201,32 +204,24 @@ function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEd
   return (
     <div className="w-full">
       {mostrarCardsIA && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 px-4 pt-3">
+        /* ⚠ FAIXA DE UMA LINHA (PR-UI-LANCAR-CARDS-01). Eram dois cartoes altos, cada
+           um com selo "Lançar com IA", titulo e subtitulo — tres niveis de texto para
+           uma acao de um clique, ocupando o topo da tela de lancamento. O selo dizia o
+           que o icone de camera ja diz, e o subtitulo explicava o que a tela de destino
+           explica melhor.
+           ⚠ `pb-[18px]` amarra o ritmo com os grupos de cartoes, que rolam em
+           LancamentosTab com o mesmo respiro. Sao dois arquivos, uma tela so. */
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 px-4 pt-3 pb-[18px]">
           {/* Card 1: Movimentações por Foto — navega para /caderno-importacao */}
           <button
             type="button"
             onClick={() => navigate('/caderno-importacao', { state: { from: 'v2-lancamentos-zoot' } })}
-            className="group relative overflow-hidden text-left rounded-lg border border-amber-200 dark:border-amber-800/50 bg-gradient-to-br from-amber-50 to-amber-100/60 dark:from-amber-950/30 dark:to-amber-900/20 px-3 py-2 hover:shadow-md hover:scale-[1.01] active:scale-[0.99] transition-all"
+            aria-label="Movimentações por foto — extração automática via foto do caderno"
+            title="Extração automática via foto do caderno do peão"
+            className="group flex items-center gap-2 text-left rounded-md border border-amber-200 dark:border-amber-800/50 bg-gradient-to-br from-amber-50 to-amber-100/60 dark:from-amber-950/30 dark:to-amber-900/20 px-2.5 py-1.5 hover:shadow-md transition-all"
           >
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-md bg-amber-200 dark:bg-amber-900/50 flex items-center justify-center shrink-0">
-                <Camera className="w-4 h-4 text-amber-700 dark:text-amber-400" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1 mb-0.5">
-                  <Sparkles className="w-3 h-3 text-amber-600 dark:text-amber-400 shrink-0" />
-                  <span className="text-[9px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400">
-                    Lançar com IA
-                  </span>
-                </div>
-                <h3 className="text-sm font-bold text-foreground leading-tight truncate">
-                  Movimentações por Foto
-                </h3>
-                <p className="text-[10px] text-muted-foreground leading-snug truncate">
-                  Extração automática via foto do caderno do peão
-                </p>
-              </div>
-            </div>
+            <Camera className="h-[15px] w-[15px] shrink-0 text-amber-700 dark:text-amber-400" />
+            <span className="min-w-0 truncate text-[11px] font-medium text-foreground">Movimentações por foto</span>
           </button>
 
           {/* Card 2: Rebanho em Pastos por Foto — placeholder; handler real ainda aguarda confirmação */}
@@ -236,27 +231,12 @@ function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEd
               if (onNavegarMapaRebanho) onNavegarMapaRebanho();
               else alert('aguardando confirmação Gabriel — handler pendente');
             }}
-            className="group relative overflow-hidden text-left rounded-lg border border-amber-200 dark:border-amber-800/50 bg-gradient-to-br from-amber-50 to-amber-100/60 dark:from-amber-950/30 dark:to-amber-900/20 px-3 py-2 hover:shadow-md hover:scale-[1.01] active:scale-[0.99] transition-all"
+            aria-label="Rebanho em pastos por foto — importar o Mapa do Rebanho via IA"
+            title="Importar Mapa do Rebanho via IA"
+            className="group flex items-center gap-2 text-left rounded-md border border-amber-200 dark:border-amber-800/50 bg-gradient-to-br from-amber-50 to-amber-100/60 dark:from-amber-950/30 dark:to-amber-900/20 px-2.5 py-1.5 hover:shadow-md transition-all"
           >
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-md bg-amber-200 dark:bg-amber-900/50 flex items-center justify-center shrink-0">
-                <Camera className="w-4 h-4 text-amber-700 dark:text-amber-400" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1 mb-0.5">
-                  <Sparkles className="w-3 h-3 text-amber-600 dark:text-amber-400 shrink-0" />
-                  <span className="text-[9px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400">
-                    Lançar com IA
-                  </span>
-                </div>
-                <h3 className="text-sm font-bold text-foreground leading-tight truncate">
-                  Rebanho em Pastos por Foto
-                </h3>
-                <p className="text-[10px] text-muted-foreground leading-snug truncate">
-                  Importar Mapa do Rebanho via IA
-                </p>
-              </div>
-            </div>
+            <Camera className="h-[15px] w-[15px] shrink-0 text-amber-700 dark:text-amber-400" />
+            <span className="min-w-0 truncate text-[11px] font-medium text-foreground">Rebanho em pastos por foto</span>
           </button>
         </div>
       )}
