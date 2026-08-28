@@ -117,7 +117,8 @@ const LIQ_TOM: Record<string, string> = {
 function finResumo(f: FinRow | undefined): { valor: number; rotulo: string; modo: string } | null {
   if (!f || (!f.tem_compromissos && !f.tem_partes_legadas)) return null;
   if (f.total_liquidado > 0) return { valor: f.total_liquidado, rotulo: 'liquidado', modo: f.modo };
-  if (f.total_materializado > 0) return { valor: f.total_materializado, rotulo: 'materializado', modo: f.modo };
+  // "lancado" acompanha o vocabulario da tela; `total_materializado` segue sendo o nome da coluna.
+  if (f.total_materializado > 0) return { valor: f.total_materializado, rotulo: 'lançado', modo: f.modo };
   if (f.total_programado > 0) return { valor: f.total_programado, rotulo: 'programado', modo: f.modo };
   if (f.obrigacao_total > 0) return { valor: f.obrigacao_total, rotulo: 'obrigação', modo: f.modo };
   return { valor: 0, rotulo: '', modo: f.modo };

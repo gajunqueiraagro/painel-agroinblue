@@ -185,7 +185,7 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
             {encerrada
               ? 'Recebimento encerrado. Use Reabrir recebimento para registrar mais movimentações.'
               : somenteLeitura
-                ? 'Operação fechada com título financeiro. Para editar, estorne a materialização na aba Financeiro e reabra a operação.'
+                ? 'Operação fechada com título financeiro. Para editar, estorne o lançamento na aba Financeiro e reabra a operação.'
                 : 'Registre a quantidade efetivamente recebida por lote.'}
           </div>
         </div>

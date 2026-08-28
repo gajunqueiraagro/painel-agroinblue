@@ -272,15 +272,15 @@ function mapAcrescentarParcelasResultado(data: unknown): AcrescentarParcelasResu
 }
 
 function mapMaterializarResultado(data: unknown): MaterializarResultado {
-  if (!isRecord(data)) throw respostaInvalida('materializar parcela');
+  if (!isRecord(data)) throw respostaInvalida('lançar parcela');
   const versaoRet = data.operacao_versao;
   const parcela = data.parcela;
   const parte = data.parte;
   const titulo = data.titulo;
-  if (!versaoRetornoValida(versaoRet)) throw respostaInvalida('materializar parcela');
-  if (!isRecord(parcela) || !idStringNaoVazio(parcela.id)) throw respostaInvalida('materializar parcela');
-  if (!isRecord(parte) || !idStringNaoVazio(parte.id)) throw respostaInvalida('materializar parcela');
-  if (!isRecord(titulo) || !idStringNaoVazio(titulo.id)) throw respostaInvalida('materializar parcela');
+  if (!versaoRetornoValida(versaoRet)) throw respostaInvalida('lançar parcela');
+  if (!isRecord(parcela) || !idStringNaoVazio(parcela.id)) throw respostaInvalida('lançar parcela');
+  if (!isRecord(parte) || !idStringNaoVazio(parte.id)) throw respostaInvalida('lançar parcela');
+  if (!isRecord(titulo) || !idStringNaoVazio(titulo.id)) throw respostaInvalida('lançar parcela');
   return { operacaoVersao: versaoRet, parcelaId: parcela.id, parteId: parte.id, tituloId: titulo.id };
 }
 
@@ -501,11 +501,11 @@ export function useOcCompromissos({ operacaoId, clienteId, enabled }: Params): O
       if (error) throw normalizarErroRpc(error);
       const resultado = mapMaterializarResultado(data);
       setVersao((atual) => Math.max(atual ?? 0, resultado.operacaoVersao));
-      toast.success('Parcela materializada.');
+      toast.success('Parcela lançada.');
       await carregar();
       return resultado;
     } catch (e) {
-      const normalizado = e instanceof OcCompromissoError ? e : new OcCompromissoError('erro_desconhecido', e instanceof Error ? e.message : 'Falha ao materializar parcela.');
+      const normalizado = e instanceof OcCompromissoError ? e : new OcCompromissoError('erro_desconhecido', e instanceof Error ? e.message : 'Falha ao lançar parcela.');
       toast.error(normalizado.message);
       if (normalizado.code === 'versao_conflito') await carregar();
       throw normalizado;

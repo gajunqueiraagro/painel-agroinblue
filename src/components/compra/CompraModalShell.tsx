@@ -585,8 +585,15 @@ export function CompraModalShell(api: CompraModalShellProps) {
           )}
           {/* ESTORNAR RECEBIMENTO — discreto de proposito (`ghost`): e' acao de
               correcao, nao o caminho normal da tela, e destacar convidaria a
-              usa-la sem necessidade. Aparece so quando ha o que estornar. */}
-          {api.modoOC && api.ocOperacaoId && api.ocStatusComercial !== 'cancelada'
+              usa-la sem necessidade. Aparece so quando ha o que estornar.
+              PR-OC-UX-LOTE-A-01: e SO na aba Recebimento. Acao de recebimento
+              pertence a aba de recebimento; no rodape global ela seguia o usuario
+              ate a Compra e o Financeiro, onde nao tem o que fazer.
+              ⚠ Nao cria beco sem saida: a aba Recebimento fica habilitada sempre
+              que `modoOC` (barra de abas, CompraModalShell:295), independente de
+              status ou de entrega encerrada — os gates internos mudam o QUE a aba
+              mostra, nunca se da para chegar nela. */}
+          {abaAtiva === 'recebimento' && api.modoOC && api.ocOperacaoId && api.ocStatusComercial !== 'cancelada'
             && temRecebimentoAtivo && api.recebimentoApi && (
             <Button type="button" variant="ghost" disabled={!!api.recebimentoApi.saving || estornando !== null}
               onClick={() => { setMotivoEstorno(''); setEstornoEtapa(1); }}

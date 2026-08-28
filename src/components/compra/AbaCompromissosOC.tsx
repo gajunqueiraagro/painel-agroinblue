@@ -130,8 +130,8 @@ function statusFinanceiroParcela(p: ParcelaMaterializacao): { icon: string; labe
   if (!p.materializada && (p.status === 'materializada' || p.status === 'paga')) {
     return {
       icon: '⚠️', label: 'Sem título', alerta: true,
-      title: 'A parcela foi materializada, mas o lançamento financeiro foi cancelado. '
-        + 'Estorne a materialização para devolver a parcela a PREVISTA.',
+      title: 'A parcela foi lançada, mas o título financeiro foi cancelado. '
+        + 'Estorne o lançamento para devolver a parcela a PREVISTA.',
     };
   }
   const liq = p.totalLiquidadoTitulo ?? 0;
@@ -243,7 +243,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
   type Gate = { pode: boolean; motivo: string };
   const podeCancelarProgramacao: Gate =
     !podeEscrever || !selecionado?.temProgramacaoAtiva ? { pode: false, motivo: '' }
-    : temParcelaComEfeito ? { pode: false, motivo: 'Estorne a materialização da parcela antes de cancelar a programação.' }
+    : temParcelaComEfeito ? { pode: false, motivo: 'Estorne o lançamento da parcela antes de cancelar a programação.' }
     : { pode: true, motivo: '' };
 
   /* `temProgramacaoAtiva` E' cru: a view o define como `pr.status = 'ativa'`,
@@ -254,7 +254,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
     if (!podeEscrever || c.status === 'cancelado') return { pode: false, motivo: '' };
     if (c.temProgramacaoAtiva) return { pode: false, motivo: 'Cancele a programação antes de cancelar o compromisso.' };
     const suas = parcelas.filter(p => p.compromissoId === c.compromissoId);
-    if (suas.some(parcelaComEfeito)) return { pode: false, motivo: 'Estorne a materialização da parcela antes de cancelar o compromisso.' };
+    if (suas.some(parcelaComEfeito)) return { pode: false, motivo: 'Estorne o lançamento da parcela antes de cancelar o compromisso.' };
     return { pode: true, motivo: '' };
   };
 
@@ -721,7 +721,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
                                   </Button>
                                 </span>
                               : <span className="text-[10px] text-green-600">ok</span>)
-                          : <Button size="sm" variant="outline" className="h-5 text-[10px] px-1.5" disabled={!podeMaterializar} onClick={() => setConfirmarParcela(p)}>Materializar</Button>}
+                          : <Button size="sm" variant="outline" className="h-5 text-[10px] px-1.5" disabled={!podeMaterializar} onClick={() => setConfirmarParcela(p)}>Lançar</Button>}
                       </td>
                     </tr>
                   );
@@ -771,11 +771,11 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
       {confirmarParcela && (
         <Dialog open onOpenChange={(o) => { if (!o) setConfirmarParcela(null); }}>
           <DialogContent className="max-w-sm">
-            <DialogHeader><DialogTitle>Materializar parcela</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>Lançar parcela</DialogTitle></DialogHeader>
             <div className="text-[13px]">Gerar título de <b>{brl(confirmarParcela.valor)}</b> com vencimento <b>{fmtData(confirmarParcela.vencimento)}</b>?</div>
             <DialogFooter>
               <Button variant="outline" size="sm" onClick={() => setConfirmarParcela(null)}>Cancelar</Button>
-              <Button size="sm" disabled={saving} onClick={() => materializar(confirmarParcela)}>Materializar</Button>
+              <Button size="sm" disabled={saving} onClick={() => materializar(confirmarParcela)}>Lançar</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -791,7 +791,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
             onEscapeKeyDown={(e) => { if (estRodando) e.preventDefault(); }}>
             <DialogHeader>
               <DialogTitle>
-                {estAlvo.nivel === 'materializacao' ? 'Estornar materialização'
+                {estAlvo.nivel === 'materializacao' ? 'Estornar lançamento'
                 : estAlvo.nivel === 'programacao' ? 'Cancelar programação'
                 : 'Cancelar compromisso'}
               </DialogTitle>
