@@ -20,7 +20,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
 import { DatePicker } from '@/components/ui/date-picker';
-import { MoreVertical, Search, Eye, Filter, Ban, Undo2, ArrowUp, ArrowDown, Lock, Trash2 } from 'lucide-react';
+import { MoreVertical, Search, Eye, Filter, Ban, ArrowUp, ArrowDown, Lock, Trash2 } from 'lucide-react';
 
 // Central de Operações Comerciais — PR-OC-CENTRAL-UX-01 (UX/operacional; sem backend novo).
 //   Lê em LOTE (ZERO N+1): operações + 3 views soberanas + nomes, filtradas por cliente, mapeadas por
@@ -272,7 +272,11 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
   const [page, setPage] = useState(1);
 
   // Ação de escrita (menu): cancelar/reabrir com motivo obrigatório e saving anti-duplo-clique.
-  const [acao, setAcao] = useState<{ tipo: 'cancelar' | 'reabrir'; op: OpRow } | null>(null);
+  /* PR-OC-EDICAO-POS-FECHAMENTO-02 — so 'cancelar'. "Reabrir recebimento" saiu daqui:
+     ele JA EXISTIA dentro da aba Recebimento (AbaRecebimentoLotes:315), com o mesmo
+     dialogo de motivo e a mesma RPC `oc_reabrir_entrega`. Eram duas copias da mesma
+     acao; ficou a que mora ao lado do que ela reabre. */
+  const [acao, setAcao] = useState<{ tipo: 'cancelar'; op: OpRow } | null>(null);
   const [motivo, setMotivo] = useState('');
   const [saving, setSaving] = useState(false);
   /* EXCLUSAO DEFINITIVA — estado PROPRIO, nao mais um `tipo` em `acao`. Aquele dialogo
@@ -496,17 +500,8 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
     if (m === '') { toast.error('Informe o motivo.'); return; }
     setSaving(true);
     try {
-      if (acao.tipo === 'cancelar') {
-        await rpc.cancelar(acao.op.id, clienteId, acao.op.versao, m);   // oc_cancelar (hook existente)
-        toast.success('Operação cancelada.');
-      } else {
-        const { data, error } = await sb.rpc('oc_reabrir_entrega', {
-          p_operacao_id: acao.op.id, p_cliente_id: clienteId, p_versao_esperada: acao.op.versao, p_motivo: m,
-        });
-        if (error) throw new Error(error.message);
-        void data;
-        toast.success('Recebimento reaberto.');
-      }
+      await rpc.cancelar(acao.op.id, clienteId, acao.op.versao, m);   // oc_cancelar (hook existente)
+      toast.success('Operação cancelada.');
       setAcao(null); setMotivo('');
       await carregar();
     } catch (e) {
@@ -660,7 +655,13 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
               const fin = finResumo(finMap[r.id]);
               const valorOp = r.valor_acordado ?? r.valor_total ?? 0;
               return (
-                <TableRow key={r.id}>
+                <TableRow key={r.id}
+                  /* PR-OC-EDICAO-POS-FECHAMENTO-02 — a LINHA abre a operacao, padrao do
+                     resto do sistema. O menu de tres pontos fica para as acoes
+                     destrutivas. Cursor so muda no que de fato abre: hoje apenas
+                     Compra tem tela; prometer clique em venda/abate seria mentir. */
+                  onClick={r.tipo_operacao === 'compra' ? () => abrirOperacaoPorTipo(r) : undefined}
+                  className={r.tipo_operacao === 'compra' ? 'cursor-pointer' : undefined}>
                   <TableCell className={`${TD} font-mono whitespace-nowrap`} title={r.id}>#{r.id.slice(0, 8)}</TableCell>
                   <TableCell className={`${TD} whitespace-nowrap`}>{fmtData(r.data_operacao)}</TableCell>
                   <TableCell className={`${TD} whitespace-nowrap`}>{TIPO_LABEL[r.tipo_operacao] ?? r.tipo_operacao}</TableCell>
@@ -710,7 +711,8 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
                     if (!est) return <span className="text-muted-foreground">—</span>;
                     return <span className={`${PILULA} ${LIQ_TOM[est] ?? TOM_NEUTRO}`}>{liqLabel(est)}</span>;
                   })()}</TableCell>
-                  <TableCell className={`${TD} text-right`}>
+                  {/* stopPropagation: sem isto, abrir o menu abriria a operacao junto. */}
+                  <TableCell className={`${TD} text-right`} onClick={e => e.stopPropagation()}>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="icon" className="h-6 w-6"><MoreVertical className="h-3.5 w-3.5" /></Button>
@@ -719,11 +721,6 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
                         {r.tipo_operacao === 'compra'
                           ? <DropdownMenuItem onSelect={() => abrirOperacaoPorTipo(r)}><Eye className="h-3.5 w-3.5 mr-2" /> Abrir operação</DropdownMenuItem>
                           : <DropdownMenuItem disabled><Eye className="h-3.5 w-3.5 mr-2" /> Abrir (só Compra)</DropdownMenuItem>}
-                        {r.entrega_encerrada && (
-                          <DropdownMenuItem onSelect={() => { setMotivo(''); setAcao({ tipo: 'reabrir', op: r }); }}>
-                            <Undo2 className="h-3.5 w-3.5 mr-2" /> Reabrir recebimento
-                          </DropdownMenuItem>
-                        )}
                         {r.status_comercial !== 'cancelada' && (
                           <DropdownMenuItem className="text-destructive focus:text-destructive"
                             onSelect={() => { setMotivo(''); setAcao({ tipo: 'cancelar', op: r }); }}>
@@ -813,17 +810,15 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
         </Dialog>
       )}
 
-      {/* Dialog de ação (Cancelar / Reabrir recebimento) — motivo obrigatório, saving anti-duplo-clique */}
+      {/* Dialog de cancelamento — motivo obrigatório, saving anti-duplo-clique */}
       <Dialog open={acao !== null} onOpenChange={o => { if (!o) { setAcao(null); setMotivo(''); } }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-[14px]">{acao?.tipo === 'cancelar' ? 'Cancelar operação' : 'Reabrir recebimento'}</DialogTitle>
+            <DialogTitle className="text-[14px]">Cancelar operação</DialogTitle>
           </DialogHeader>
           <div className="space-y-2 text-[12px]">
             <div className="text-[11px] text-muted-foreground">
-              {acao?.tipo === 'cancelar'
-                ? 'A operação será cancelada (contrato oc_cancelar), sujeita às regras do backend.'
-                : 'A entrega será reaberta (contrato oc_reabrir_entrega). Não altera a negociação.'}
+              A operação será cancelada (contrato oc_cancelar), sujeita às regras do backend.
               {acao && <> Operação <span className="font-mono">#{acao.op.id.slice(0, 8)}</span>.</>}
             </div>
             <div>
@@ -833,9 +828,9 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
           </div>
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => { setAcao(null); setMotivo(''); }}>Voltar</Button>
-            <Button size="sm" variant={acao?.tipo === 'cancelar' ? 'destructive' : 'default'}
+            <Button size="sm" variant="destructive"
               disabled={saving || motivo.trim() === ''} onClick={confirmarAcao}>
-              {acao?.tipo === 'cancelar' ? 'Cancelar operação' : 'Reabrir'}
+              Cancelar operação
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -96,6 +96,7 @@ export interface CompraModalShellProps {
   ocRascunho?: boolean;                 // rascunho técnico (cadastro incompleto) → "Confirmar" desabilitado
   ocFazendaValida?: boolean;            // PR-NAV-CONTEXTO-FAZENDA-01A — há fazenda real p/ persistir (bloqueia Salvar)
   acaoOcLoading?: 'confirmar' | 'cancelar' | 'reabrir' | null;
+  ocDadosSujos?: boolean;               // ha edicao nao gravada nos dados da operacao
   onConfirmarOC?: () => void | Promise<boolean>;   // devolve true quando a operacao fechou de verdade
   onCancelarOC?: (motivo: string) => void;
   onReabrirOC?: (motivo: string) => void;
@@ -132,6 +133,7 @@ const CENARIO_UI: Record<string, { icon: string; label: string; chip: string }> 
 //   um só ponto da árvore (CompraModalShell) e distribuída por props; nenhuma aba reconstrói seu gate.
 export interface CompraPermissoesPorEixo {
   negociacaoReadOnly: boolean;
+  dadosOperacaoReadOnly: boolean;
   recebimentoReadOnly: boolean;
   documentosReadOnly: boolean;
   financeiroLegadoReadOnly: boolean;
@@ -182,6 +184,19 @@ export function CompraModalShell(api: CompraModalShellProps) {
        LEGITIMA. O congelamento do fisico virou granular, via `fisicoBloqueado`
        na grade de lotes. */
     negociacaoReadOnly: !!api.somenteLeitura,
+    /* PR-OC-EDICAO-POS-FECHAMENTO-02 — DADOS DA OPERACAO (fornecedor, data, observacao,
+       numero do documento) sao um eixo PROPRIO, e so `cancelada` os tranca.
+       ⚠ ISTO SUPERA a regra do 01A, que trancava tudo em `fechada` OU com titulo
+       materializado, "inclusive Observacao". Aquilo se justificava porque nao havia
+       caminho de gravacao parcial: qualquer save mexia na base economica. Agora ha —
+       `oc_editar_dados_operacao` tem lista branca de quatro campos e recusa o resto
+       nominalmente, entao nenhuma alteracao economica passa por aqui.
+       ⚠ TITULO MATERIALIZADO NAO BLOQUEIA MAIS ESTES QUATRO. Medido na FASE 0: o titulo
+       carimba `v_comp.favorecido_id`, o favorecido do COMPROMISSO, e nunca a contraparte
+       da operacao; e nada deriva de `data_operacao` retroativamente. A suite T4 do
+       PR-...-01 prova que trocar a contraparte nao move o favorecido do titulo.
+       A base economica segue trancada por `negociacaoReadOnly`, intacta. */
+    dadosOperacaoReadOnly: api.ocStatusComercial === 'cancelada',
     // PR-OC-CONSOLIDACAO-A2 — Recebimento opera em operação existente elegível: gate depende SÓ do eixo
     //   próprio (cancelada = RO). As demais travas (sem operação salva, status ≠ 'fechada', entrega
     //   encerrada) já são aplicadas dentro de AbaRecebimentoLotes; título materializado NÃO bloqueia a
@@ -293,6 +308,13 @@ export function CompraModalShell(api: CompraModalShellProps) {
               }`}
             >
               {a.label}{!enabled && <span className="ml-1 text-[9px] uppercase tracking-wide">em breve</span>}
+              {/* PR-OC-EDICAO-POS-FECHAMENTO-02 — ponto de pendencia. Marcador, nao parede:
+                  a navegacao NUNCA e' bloqueada; o usuario so precisa saber que deixou
+                  algo por gravar, inclusive olhando de outra aba. */}
+              {a.key === 'compra' && api.ocDadosSujos && (
+                <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-amber-500 align-middle"
+                  title="Há alterações não salvas nesta aba" aria-label="Alterações não salvas" />
+              )}
             </button>
           );
         })}
@@ -369,26 +391,26 @@ export function CompraModalShell(api: CompraModalShellProps) {
               </div>
               <div>
                 <Label className="font-bold text-[11px]">Data da Compra</Label>
-                <div className={permissoes.negociacaoReadOnly ? 'pointer-events-none opacity-60' : ''}>
+                <div className={permissoes.dadosOperacaoReadOnly ? 'pointer-events-none opacity-60' : ''}>
                   <DatePicker value={api.data} onChange={api.setData} className="mt-0.5" />
                 </div>
                 {/* PR-OC-HOMOLOG-01 item 3 — edição da data liberada quando não há registros financeiros;
                     bloqueada (via negociacaoReadOnly = título materializado / fechada / cancelada) com aviso. */}
-                {(permissoes.negociacaoReadOnly || temRecebimentoAtivo) && (
+                {(permissoes.dadosOperacaoReadOnly || temRecebimentoAtivo || permissoes.negociacaoReadOnly) && (
                   /* DUAS CAUSAS, DOIS TEXTOS, e a diferenca agora e' maior: com
                      recebimento o usuario PODE corrigir criterio e valor ali
                      mesmo — manda-lo estornar seria desfazer movimentacao de
                      rebanho a toa, que e' justamente o que bate no guard P1 de
                      mes fechado. O estorno so e' necessario para o FISICO.
                      ⚠ `somenteLeitura` tem precedencia: ali nada e editavel. */
-                  temRecebimentoAtivo && !api.somenteLeitura ? (
+                  permissoes.dadosOperacaoReadOnly ? (
                     <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">
-                      Esta compra já teve recebimento registrado. É possível corrigir critério e
-                      valor; para alterar categoria, quantidade ou peso, estorne o recebimento.
+                      Operação cancelada — somente leitura.
                     </p>
                   ) : (
                     <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">
-                      Esta operação já possui registros financeiros. Para alterar a data, utilize ajuste histórico.
+                      Fornecedor, data e observação seguem editáveis. Categoria, quantidade e peso
+                      exigem estorno do recebimento; valores e lotes têm caminho próprio.
                     </p>
                   )
                 )}
@@ -410,7 +432,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
               </div>
               <div>
                 <Label className="font-bold text-[11px]">Observações/Lote</Label>
-                <Input value={api.observacao} onChange={e => api.setObservacao(e.target.value)} placeholder="Opcional" className="mt-0.5 h-8 text-[12px]" disabled={permissoes.negociacaoReadOnly} />
+                <Input value={api.observacao} onChange={e => api.setObservacao(e.target.value)} placeholder="Opcional" className="mt-0.5 h-8 text-[12px]" disabled={permissoes.dadosOperacaoReadOnly} />
               </div>
             </div>
             {/* Linha 2: Fornecedor · Propriedade de origem */}
@@ -427,11 +449,11 @@ export function CompraModalShell(api: CompraModalShellProps) {
                       allLabel="Nenhum selecionado"
                       allValue="__all__"
                       dense
-                      disabled={permissoes.negociacaoReadOnly}
+                      disabled={permissoes.dadosOperacaoReadOnly}
                       className="[&>button]:h-8 [&>button]:text-[12px] [&>button]:px-2"
                     />
                   </div>
-                  <Button type="button" variant="outline" size="icon" className="h-8 w-8 shrink-0" aria-label="Novo fornecedor" disabled={permissoes.negociacaoReadOnly} onClick={() => api.setNovoFornecedorCompraOpen(true)}>
+                  <Button type="button" variant="outline" size="icon" className="h-8 w-8 shrink-0" aria-label="Novo fornecedor" disabled={permissoes.dadosOperacaoReadOnly} onClick={() => api.setNovoFornecedorCompraOpen(true)}>
                     <Plus className="h-3.5 w-3.5" />
                   </Button>
                 </div>
@@ -590,6 +612,20 @@ export function CompraModalShell(api: CompraModalShellProps) {
                   {api.acaoOcLoading === 'cancelar' ? 'Cancelando...' : 'Cancelar operação'}
                 </Button>
               )}
+              {/* PR-OC-EDICAO-POS-FECHAMENTO-02 — FECHADA ganha Salvar proprio, so na aba
+                  Compra. Vai por `handleRequestRegister`, que roteia pelo status:
+                  fechada -> oc_editar_dados_operacao; demais -> oc_salvar_rascunho.
+                  ⚠ Desabilitado quando NAO ha alteracao pendente: e' o que impede a
+                  versao de subir e a auditoria de encher de evento vazio. Sem titulo
+                  aqui: os quatro campos nao tocam a base economica. */}
+              {api.ocStatusComercial === 'fechada' && abaAtiva === 'compra' && (
+                <Button onClick={api.handleRequestRegister}
+                  disabled={api.submitting || !!api.acaoOcLoading || !api.ocDadosSujos}
+                  title={api.ocDadosSujos ? undefined : 'Nenhuma alteração pendente'}
+                  className="bg-white text-primary hover:bg-white/90 font-bold gap-1.5 disabled:opacity-60">
+                  <ShoppingCart className="h-4 w-4" /> {api.submitting ? 'Salvando...' : 'Salvar'}
+                </Button>
+              )}
               {api.ocStatusComercial === 'programada' && !api.ocTemTitulo && (
                 <>
                   {abaAtiva === 'negociacao' ? (
@@ -601,7 +637,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
                   ) : (abaAtiva === 'recebimento' || abaAtiva === 'documentos' || abaAtiva === 'financeiro') ? null : (
                     <Button onClick={api.handleRequestRegister} disabled={api.submitting || !!api.acaoOcLoading || !api.ocFazendaValida}
                       className="bg-white text-primary hover:bg-white/90 font-bold gap-1.5 disabled:opacity-60">
-                      <ShoppingCart className="h-4 w-4" /> {api.submitting ? 'Salvando...' : 'Salvar alterações'}
+                      <ShoppingCart className="h-4 w-4" /> {api.submitting ? 'Salvando...' : 'Salvar'}
                     </Button>
                   )}
                   {/* PR-OC-EDIT-01B — desabilitado em rascunho técnico; motivo via Tooltip padrão do projeto
@@ -625,7 +661,11 @@ export function CompraModalShell(api: CompraModalShellProps) {
                   </TooltipProvider>
                 </>
               )}
-              {api.somenteLeitura && (
+              {/* So quando NADA e' editavel. Em `fechada` os dados da operacao seguem
+                  abertos, e dizer "somente leitura" ao lado de um Salvar habilitado
+                  seria contradizer a propria tela. Titulo materializado ja tem o seu
+                  aviso proprio, a esquerda do rodape. */}
+              {permissoes.dadosOperacaoReadOnly && (
                 <span className="text-white/80 text-xs flex items-center gap-1"><Lock className="h-3.5 w-3.5" /> Somente leitura</span>
               )}
             </>

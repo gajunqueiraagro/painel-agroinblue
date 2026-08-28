@@ -118,9 +118,23 @@ export interface OcEstado {
 }
 
 // (supabase as any).rpc é o idioma vigente para RPCs ainda não presentes em types.ts.
+/* PR-OC-EDICAO-POS-FECHAMENTO-02 — o codigo do erro PostgREST era descartado aqui, e
+   sem ele quem chama nao distingue um conflito de versao (40001, que pede recarregar)
+   de uma regra de negocio (P0001, que pede corrigir e tentar de novo). Estende `Error`
+   em vez de trocar o que e' lancado: todo `catch` existente que faz
+   `e instanceof Error ? e.message : ...` continua funcionando igual. */
+export class OcRpcError extends Error {
+  readonly code?: string;
+  constructor(message: string, code?: string) {
+    super(message);
+    this.name = 'OcRpcError';
+    this.code = code;
+  }
+}
+
 async function callRpc(fn: string, args: Record<string, unknown>): Promise<OcEnvelope> {
   const { data, error } = await (supabase as any).rpc(fn, args);
-  if (error) throw new Error(error.message || 'Falha na operação comercial.');
+  if (error) throw new OcRpcError(error.message || 'Falha na operação comercial.', error.code);
   return data;
 }
 
@@ -131,6 +145,17 @@ export function useOperacaoComercial() {
     operacaoId: string | null, clienteId: string, versaoEsperada: number | null, payload: OcRascunhoPayload,
   ) =>
     callRpc('oc_salvar_rascunho', {
+      p_operacao_id: operacaoId, p_cliente_id: clienteId, p_versao_esperada: versaoEsperada, p_payload: payload,
+    });
+
+  /* PR-OC-EDICAO-POS-FECHAMENTO-01/02 — dados da OPERACAO (contraparte, data,
+     observacoes, numero do documento) sem reabrir, inclusive com status 'fechada'.
+     Contrato: lista branca no banco — chave fora dela e' RECUSADA nominalmente, nao
+     ignorada. Enviar SO as chaves alteradas; ausente preserva. */
+  const editarDadosOperacao = (
+    operacaoId: string, clienteId: string, versaoEsperada: number, payload: Record<string, unknown>,
+  ) =>
+    callRpc('oc_editar_dados_operacao', {
       p_operacao_id: operacaoId, p_cliente_id: clienteId, p_versao_esperada: versaoEsperada, p_payload: payload,
     });
 
@@ -217,5 +242,5 @@ export function useOperacaoComercial() {
     };
   };
 
-  return { salvarRascunho, reabrir, confirmar, sincronizar, cancelar, carregarOperacao };
+  return { salvarRascunho, editarDadosOperacao, reabrir, confirmar, sincronizar, cancelar, carregarOperacao };
 }

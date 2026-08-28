@@ -35,7 +35,7 @@ import { CompraDetalhesDialog, CompraDetalhes, EMPTY_COMPRA_DETALHES } from '@/c
 import { CompraResumoPanel } from '@/components/compra/CompraResumoPanel';
 import { CompraModalShell } from '@/components/compra/CompraModalShell';
 import { gerarFinanceiroCompra } from '@/components/compra/gerarFinanceiroCompra';
-import { useOperacaoComercial } from '@/hooks/useOperacaoComercial';
+import { OcRpcError, useOperacaoComercial } from '@/hooks/useOperacaoComercial';
 import { useCompraLotes } from '@/hooks/useCompraLotes';
 import { useOperacaoRecebimento } from '@/hooks/useOperacaoRecebimento';
 import { useOperacaoDocumentos } from '@/hooks/useOperacaoDocumentos';
@@ -318,6 +318,16 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   //   atualiza numero_documento/cenario; edição de programada é PR posterior).
   const ocIdParam = ocSearchParams.get('oc_id');
   const [ocAberturaExistente, setOcAberturaExistente] = useState<boolean>(false);
+
+  /* PR-OC-EDICAO-POS-FECHAMENTO-02 (dirty tracking) — retrato dos DADOS DA OPERACAO
+     como vieram do banco. Serve para responder duas perguntas que antes ninguem fazia:
+     "mudou alguma coisa?" e "o que exatamente mudou?".
+     ⚠ E' ref, nao state, de proposito: ninguem re-renderiza por causa dele, e ele
+     precisa estar atualizado DENTRO da mesma funcao que acabou de gravar — state
+     nao reflete na closure (a armadilha que mordeu na fatia 2).
+     ⚠ Sem isto o salvamento automatico gravaria a cada navegacao, subindo `versao` e
+     enchendo a auditoria de eventos que nao mudaram nada. */
+  const ocSnapshotRef = useRef({ contraparte_id: '', data_operacao: '', observacoes: '', numero_documento: '' });
   // PR-OC-EDIT-01A — existe título financeiro materializado nesta operação? (parte ativa com
   //   financeiro_lancamento_id). Bloqueia a edição da base econômica (ADR Soberania Financeira).
   const [ocTemTitulo, setOcTemTitulo] = useState<boolean>(false);
@@ -537,6 +547,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         setObservacao(op.observacoes ?? '');
         setStatusOp(op.cenario === 'meta' ? 'meta' : 'realizado');
         setNotaFiscal(op.numero_documento ?? '');   // PR-OC-EDIT-01A — hidrata sempre (evita valor legado no salvar).
+        ocSnapshotRef.current = {
+          contraparte_id: op.contraparte_id ?? '', data_operacao: op.data_operacao ?? '',
+          observacoes: op.observacoes ?? '', numero_documento: op.numero_documento ?? '',
+        };
         setOcOperacaoId(op.id);
         setOcVersao(op.versao);
         setOcStatusComercial(op.status_comercial);
@@ -1823,6 +1837,70 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   // Modo OC: cria/atualiza a operação comercial (só identificação) e guarda operacao_id/versao.
   //   Sem lotes (COM-3), sem físico (onAdicionar) e sem financeiro (gerarFinanceiroCompra).
+  /* DIRTY TRACKING — o que dos DADOS DA OPERACAO mudou desde o que foi carregado.
+     Chave AUSENTE do objeto significa "nao mudou", e a RPC preserva o valor atual;
+     por isso o payload sai enxuto por construcao, sem lista de campos duplicada.
+     Recalculado a cada render de proposito: sao quatro comparacoes de string, e
+     memorizar traria o risco de dependencia esquecida — caro justamente aqui, onde
+     errar significa gravar (ou nao gravar) sem o usuario perceber. */
+  const camposSujosOC = (): Record<string, string | null> => {
+    const snap = ocSnapshotRef.current;
+    const sujo: Record<string, string | null> = {};
+    if ((compraFornecedorId || '') !== snap.contraparte_id)   sujo.contraparte_id   = compraFornecedorId || null;
+    if ((data || '')               !== snap.data_operacao)    sujo.data_operacao    = data || null;
+    if ((observacao || '')         !== snap.observacoes)      sujo.observacoes      = observacao || null;
+    if ((notaFiscal || '')         !== snap.numero_documento) sujo.numero_documento = notaFiscal || null;
+    return sujo;
+  };
+  const ocDadosSujos = Object.keys(camposSujosOC()).length > 0;
+
+  const marcarSnapshotOCComoSalvo = () => {
+    ocSnapshotRef.current = {
+      contraparte_id: compraFornecedorId || '', data_operacao: data || '',
+      observacoes: observacao || '', numero_documento: notaFiscal || '',
+    };
+  };
+
+  /* Gravacao dos DADOS DA OPERACAO com a operacao FECHADA, via `oc_editar_dados_operacao`
+     (PR-OC-EDICAO-POS-FECHAMENTO-01). Nao reabre nada: a RPC aceita 'fechada' e recusa
+     nominalmente qualquer chave fora da lista branca.
+     ⚠ A versao nova vem do RETORNO, nunca de `ocVersao` — setState nao reflete na
+     closure de quem chamou, e ja custou um bug nesta mesma tela. */
+  const salvarDadosOperacaoOC = async (): Promise<boolean> => {
+    const clienteId = clienteAtual?.id;
+    if (!ocOperacaoId || !clienteId || ocVersao == null) return false;
+    const sujo = camposSujosOC();
+    // Nada mudou => nao chama a RPC. E' o que impede a versao de subir e a auditoria
+    // de encher de evento vazio a cada navegacao.
+    if (Object.keys(sujo).length === 0) { toast.info('Nenhuma alteração pendente.'); return true; }
+    // Mesmos obrigatorios do outro caminho — a regra de produto nao muda com o status.
+    if ('data_operacao' in sujo && !sujo.data_operacao) { toast.error('Informe a data da compra.'); return false; }
+    if ('contraparte_id' in sujo && !sujo.contraparte_id) { toast.error('Selecione o fornecedor.'); return false; }
+    setSubmitting(true);
+    try {
+      const env = await ocRpc.editarDadosOperacao(ocOperacaoId, clienteId, ocVersao, sujo);
+      setOcVersao(env.versao);
+      if (env.status_comercial) setOcStatusComercial(env.status_comercial);
+      marcarSnapshotOCComoSalvo();
+      toast.success('Alterações salvas.');
+      return true;
+    } catch (e) {
+      // 40001: outra acao mexeu na operacao. Recarregar e' obrigatorio — insistir com a
+      // versao velha so repetiria o erro, e o usuario precisa ver o estado real.
+      if (e instanceof OcRpcError && e.code === '40001') {
+        toast.error('Esta operação mudou em outro lugar. Recarregamos os dados — confira e salve de novo.');
+        await recarregarOperacaoOC();
+      } else {
+        // P0001 e demais: a mensagem da RPC e' escrita para ser lida, inclusive a que
+        // NOMEIA a chave recusada. Exibir integral.
+        toast.error(e instanceof Error ? e.message : 'Falha ao salvar os dados da operação.');
+      }
+      return false;
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   //   PR-OC-AUTOSAVE-01 (fatia 2) — DEVOLVE o estado oficial pos-gravacao, ou null se
   //   nao gravou (validacao barrou ou a RPC falhou).
   //   ⚠ Devolver e' o que torna "confirmar salvando antes" possivel: `setOcVersao`
@@ -1860,6 +1938,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       setOcOperacaoId(env.operacao_id);
       setOcVersao(env.versao);
       if (env.status_comercial) setOcStatusComercial(env.status_comercial);
+      marcarSnapshotOCComoSalvo();
       toast.success(criandoOperacao ? 'Operação criada. Agora informe os lotes negociados.' : 'Alterações salvas.');
       return { operacaoId: env.operacao_id, versao: env.versao };
     } catch (e) {
@@ -1884,6 +1963,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setObservacao(op.observacoes ?? '');
     setStatusOp(op.cenario === 'meta' ? 'meta' : 'realizado');
     setNotaFiscal(op.numero_documento ?? '');
+    ocSnapshotRef.current = {
+      contraparte_id: op.contraparte_id ?? '', data_operacao: op.data_operacao ?? '',
+      observacoes: op.observacoes ?? '', numero_documento: op.numero_documento ?? '',
+    };
     setOcVersao(op.versao);
     setOcStatusComercial(op.status_comercial);
     setOcEntregaEncerrada(!!op.entrega_encerrada);   // PR-HOTFIX-P0 — reidrata entrega soberana no refetch
@@ -1965,11 +2048,16 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     //    caminho legado — não abre o confirm dialog, então handleSubmit (onAdicionar +
     //    gerarFinanceiroCompra) nunca roda. Sem dupla escrita. ──
     if (modoOCCompra && isCompra) {
-      // PR-OC-EDIT-01A — fechada/cancelada permanecem somente leitura; programada/rascunho salvam
-      //   o cabeçalho via oc_salvar_rascunho (que já bloqueia fechada/cancelada e não toca o FINV2).
-      if (ocAberturaExistente && (ocStatusComercial === 'fechada' || ocStatusComercial === 'cancelada')) {
-        toast.info('Operação fechada ou cancelada — somente leitura.'); return;
+      /* SALVAR UNICO — o status escolhe o caminho, o botao e' um so.
+           cancelada -> nada grava; e' imutavel nos dois contratos.
+           fechada   -> `oc_editar_dados_operacao`, so os campos sujos (PR-...-01).
+           demais    -> `oc_salvar_rascunho`, comportamento de sempre.
+         Ate aqui 'fechada' caia no mesmo balde de 'cancelada' e devolvia "somente
+         leitura" — era o que obrigava a REABRIR a operacao para corrigir um texto. */
+      if (ocStatusComercial === 'cancelada') {
+        toast.info('Operação cancelada — somente leitura.'); return;
       }
+      if (ocStatusComercial === 'fechada') { void salvarDadosOperacaoOC(); return; }
       void salvarOperacaoOC(); return;
     }
     // ── P1 governance: selective block (NÃO se aplica ao cenário META) ──
@@ -3883,6 +3971,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     somenteLeitura: ocAberturaExistente
       && (ocStatusComercial === 'fechada' || ocStatusComercial === 'cancelada' || ocTemTitulo),
     aberturaExistente: ocAberturaExistente,
+    // PR-OC-EDICAO-POS-FECHAMENTO-02 — ha edicao nao gravada nos dados da operacao?
+    ocDadosSujos,
     // PR-NAV-CONTEXTO-FAZENDA-01A — há fazenda real para persistir a OC? (Global exige escolha no modal).
     ocFazendaValida: !!ocFazendaId,
     // PR-OC-EDIT-01B — ações de ciclo (RPCs oficiais) + título materializado (explicação/gating).
