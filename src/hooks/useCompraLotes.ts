@@ -22,7 +22,7 @@ export interface CompraLotesApi {
   lotes: LoteForm[];
   loading: boolean;
   saving: boolean;
-  adicionarLote: () => void;
+  adicionarLote: () => string;   // devolve o idLocal do lote criado (quem chama abre o modal nele)
   editarLote: (idLocal: string, patch: Partial<LoteForm>) => void;
   removerLote: (idLocal: string) => void;
   salvar: (opts?: { silent?: boolean }) => Promise<number | null>;   // retorna a nova versão oficial | null em falha
@@ -70,12 +70,18 @@ export function useCompraLotes({ operacaoId, clienteId, versao, onVersaoChange, 
 
   useEffect(() => { carregar(); }, [carregar]);
 
+  /* PR-OC-UX-LOTE-C2-02 — DEVOLVE o idLocal criado. A tela precisa abrir o modal no
+     lote novo, e antes isso dependia de um efeito observando `lotes` crescer: mecanismo
+     com timing, que na homologacao nao abriu. Devolvendo o id, a abertura e' direta e
+     nao ha nada para dar errado no meio. */
   const adicionarLote = useCallback(() => {
+    const idLocal = novoIdLocal();
     setLotes(prev => [...prev, {
-      idLocal: novoIdLocal(),
+      idLocal,
       ordem: prev.reduce((m, l) => Math.max(m, l.ordem), 0) + 1,
       categoria: '', quantidade: '', pesoMedioKg: '', criterioValor: 'kg', valorInformado: '',
     }]);
+    return idLocal;
   }, []);
 
   const editarLote = useCallback((idLocal: string, patch: Partial<LoteForm>) => {

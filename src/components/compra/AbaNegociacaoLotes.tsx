@@ -1,4 +1,17 @@
-import { useState, useEffect } from 'react';
+/* ═══ TRES PADROES DO SISTEMA — valem em QUALQUER tela, nao so aqui ════════════
+   Definidos pelo Gabriel em 28/08 e registrados aqui como referencia, porque
+   estavam sendo pedidos caso a caso em vez de valer por padrao.
+
+   (a) PESO SEMPRE COM DUAS CASAS. "200,00", nunca "200" — na entrada e na exibicao.
+       Peso e' medida, e medida sem casa decimal parece arredondada quando nao e'.
+   (b) CAMPOS DO MESMO FORMULARIO TEM A MESMA ALTURA. Nunca misturar h-6 com h-8 na
+       mesma linha: a diferenca le como defeito, ainda que ninguem saiba dizer o que
+       esta errado.
+   (c) PAR ROTULO-VALOR EM COLUNA ALINHADA, nunca texto corrido com pontos separando.
+       Referencia viva: o "Resumo da operacao" (ResumoLateralOC) — rotulo cinza a
+       esquerda, valor a direita, uma linha por par. Texto corrido obriga a LER para
+       comparar; coluna deixa COMPARAR sem ler. */
+import { useState } from 'react';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -43,7 +56,8 @@ const CRITERIOS: { value: CriterioValor; label: string; unidade: string }[] = [
 const GRID_LEG = 'grid grid-cols-[1.3fr_0.7fr_0.9fr_1fr_1.1fr_1fr_1fr] gap-2';
 
 const brl = (n: number) => (n > 0 ? n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'R$ —');
-const fmtKg = (n: number) => (n > 0 ? `${n.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} kg` : '—');
+// Regra (a) do topo: peso SEMPRE com duas casas.
+const fmtKg = (n: number) => (n > 0 ? `${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg` : '—');
 
 function loteTotal(criterio: CriterioValor, quantidade: string, pesoMedioKg: string, valorInformado: string): number {
   const q = parseNumericValue(quantidade) || 0;
@@ -53,7 +67,7 @@ function loteTotal(criterio: CriterioValor, quantidade: string, pesoMedioKg: str
   return criterio === 'kg' ? pt * v : criterio === 'cabeca' ? q * v : v;
 }
 
-/* ⚠ `loteTotal` acima e `resumoLote` abaixo sao a SEGUNDA implementacao da regra
+/* ⚠ `loteTotal` acima e a SEGUNDA implementacao da regra
    do valor do lote — a primeira e `_oc_valor_do_lote`, no banco, consumida por
    `oc_salvar_lotes` e pela ponte em `oc_registrar_movimentacao`.
    A duplicacao e DELIBERADA e nao da para eliminar: este calculo e o preview
@@ -67,27 +81,18 @@ function loteTotal(criterio: CriterioValor, quantidade: string, pesoMedioKg: str
    linha do R$/cab, que o banco nao tinha — sem ela um lote de valor zero
    produzia R$ 0,00/cab e a ponte gravaria zero no lancamento.
 
-   Resumo compacto por lote — cada indicador so aparece quando sua base existe;
-   ausencia nunca vira zero (parte omitida). String vazia → nenhuma linha. */
-function resumoLote(criterio: CriterioValor, quantidade: string, pesoMedioKg: string, valorInformado: string): string {
-  const q = parseNumericValue(quantidade) || 0;
-  const pm = parseNumericValue(pesoMedioKg) || 0;
-  const pt = q * pm;
-  const total = loteTotal(criterio, quantidade, pesoMedioKg, valorInformado);
-  // PR-OC-UX-DENSIDADE-01 item 3 — linha rotulada compacta (Qtd · Peso méd. · R$/cab · R$/kg).
-  const parts: string[] = [];
-  if (q > 0) parts.push(`Qtd: ${q.toLocaleString('pt-BR')} cab`);
-  if (pm > 0) parts.push(`Peso méd.: ${pm.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} kg`);
-  if (q > 0 && total > 0) parts.push(`R$/cab: ${brl(total / q)}`);
-  if (pt > 0 && total > 0) parts.push(`R$/kg: ${brl(total / pt)}`);
-  return parts.join(' · ');
-}
+   ⚠ A GUARDA `total > 0` do R$/cab, citada acima, continua valendo mesmo sem
+   `resumoLote`: quem imprime e' `brl`, que devolve 'R$ —' para qualquer valor <= 0.
+   Nao ha caminho que produza "R$ 0,00/cab" na tela. */
 
 // Campo Valor — apresentação monetária pt-BR SEM prejudicar a edição (format-on-blur):
 //   foco → string crua editável (a que é persistida); blur → exibe brl(valor). O valor persistido
 //   (valorInformado) NUNCA é reformatado; cursor, arredondamento, unidade e cálculo permanecem intactos.
-function ValorInput({ value, onChange, disabled, placeholder }: {
+function ValorInput({ value, onChange, disabled, placeholder, className }: {
   value: string; onChange: (v: string) => void; disabled?: boolean; placeholder?: string;
+  /* Regra (b): a altura vem de QUEM USA. Fixa-la aqui era o motivo de o Valor ficar
+     mais baixo que os vizinhos dentro do modal. O default preserva a grade legada. */
+  className?: string;
 }) {
   const [focused, setFocused] = useState(false);
   const num = parseNumericValue(value) || 0;
@@ -96,7 +101,7 @@ function ValorInput({ value, onChange, disabled, placeholder }: {
     <Input inputMode="decimal" value={display} onChange={e => onChange(e.target.value)}
       onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
       placeholder={placeholder} disabled={disabled}
-      className="h-6 text-[11px] text-right tabular-nums" />
+      className={className ?? 'h-6 text-[11px] text-right tabular-nums'} />
   );
 }
 
@@ -160,26 +165,31 @@ function NegociacaoOC({
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const emEdicao = lotes.find(l => l.idLocal === editandoId) ?? null;
 
-  /* "Adicionar lote" cria a linha E ja abre o modal nela. Sem isto, trocar a grade
-     pelo modal deixaria o cadastro MAIS lento: o usuario clicaria em adicionar, a
-     linha apareceria vazia na lista, e ele teria de clicar de novo para editar. */
-  const [pendenteAbrirNovo, setPendenteAbrirNovo] = useState(false);
-  const abrirNovo = () => {
-    adicionarLote();
-    setPendenteAbrirNovo(true);
-  };
-  useEffect(() => {
-    if (!pendenteAbrirNovo || lotes.length === 0) return;
-    setEditandoId(lotes[lotes.length - 1].idLocal);
-    setPendenteAbrirNovo(false);
-  }, [pendenteAbrirNovo, lotes]);
+  /* ABERTURA DIRETA. "Adicionar lote" cria E abre, num gesto so — `adicionarLote`
+     devolve o id. Antes isso passava por um efeito que observava a lista crescer, e
+     na homologacao o modal simplesmente nao abriu: o operador via a linha vazia
+     aparecer e nao tinha como saber que precisava clicar nela. */
+  const abrirNovo = () => setEditandoId(adicionarLote());
 
   const rotuloCategoria = (slug: string) =>
     categoriasDisponiveis.find(c => c.value === slug)?.label || slug || 'Sem categoria';
 
+  const GRID_LISTA = 'grid grid-cols-[minmax(0,1.4fr)_0.7fr_1fr_1.1fr_0.9fr_1.1fr_auto] gap-2 items-center';
+
   return (
-    <div className="rounded-md border bg-card p-2 shadow-sm space-y-1 min-w-0">
-      <div className="flex items-center justify-between gap-2">
+    <div className="rounded-md border bg-card p-2 shadow-sm space-y-1.5 min-w-0">
+      {/* TOTAIS NO TOPO — sao o cabecalho da aba: dizem onde a negociacao esta antes
+          de o olho descer para o detalhe de cada lote. */}
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+        <div className="rounded-md border bg-muted/20 px-1.5 py-0.5"><div className="text-[9px] text-muted-foreground leading-none">Lotes</div><div className="font-bold text-[12px] tabular-nums">{totais.lotes || '—'}</div></div>
+        <div className="rounded-md border bg-muted/20 px-1.5 py-0.5"><div className="text-[9px] text-muted-foreground leading-none">Animais</div><div className="font-bold text-[12px] tabular-nums">{totais.animais || '—'}</div></div>
+        <div className="rounded-md border bg-muted/20 px-1.5 py-0.5"><div className="text-[9px] text-muted-foreground leading-none">Peso Méd.</div><div className="font-bold text-[12px] tabular-nums">{pesoMedio == null ? '—' : fmtKg(pesoMedio)}</div></div>
+        <div className="rounded-md border bg-muted/20 px-1.5 py-0.5"><div className="text-[9px] text-muted-foreground leading-none">R$/cab Méd.</div><div className="font-bold text-[12px] tabular-nums">{totais.animais > 0 ? brl(totais.valorNegociado / totais.animais) : '—'}</div></div>
+        <div className="rounded-md border bg-muted/20 px-1.5 py-0.5"><div className="text-[9px] text-muted-foreground leading-none">R$/kg Méd.</div><div className="font-bold text-[12px] tabular-nums">{valorKg == null ? '—' : brl(valorKg)}</div></div>
+        <div className="rounded-md border-2 border-primary/40 bg-primary/5 px-1.5 py-0.5"><div className="text-[9px] text-muted-foreground leading-none">Valor Principal</div><div className="font-bold text-[13px] text-primary tabular-nums">{brl(totais.valorNegociado)}</div></div>
+      </div>
+
+      <div className="flex items-center justify-between gap-2 pt-0.5">
         <div>
           <div className="text-[12px] font-semibold text-foreground">Negociação dos Lotes</div>
           <div className="text-[11px] text-muted-foreground">Clique num lote para editar.</div>
@@ -202,47 +212,55 @@ function NegociacaoOC({
           {loading ? 'Carregando lotes…' : 'Nenhum lote. Clique em "Adicionar lote".'}
         </div>
       ) : (
-        <div className="space-y-0.5">
-          {lotes.map(l => {
-            const q = parseNumericValue(l.quantidade) || 0;
-            const pm = parseNumericValue(l.pesoMedioKg) || 0;
-            const semPeso = pm <= 0;
-            return (
-              <div key={l.idLocal}
-                onClick={() => setEditandoId(l.idLocal)}
-                className="flex items-center gap-2 rounded-md border bg-muted/20 px-2 py-1 cursor-pointer hover:bg-muted/40">
-                <div className="min-w-0 flex-1 text-[11px] leading-tight">
-                  <span className="font-medium">{rotuloCategoria(l.categoria)}</span>
-                  <span className="text-muted-foreground"> · {q || '—'} cab · {fmtKg(pm)}</span>
-                  {/* O lote invalido se anuncia na LISTA, nao so quando o modal abre:
-                      quem tem cinco lotes precisa ver qual esta pendente sem abrir os cinco. */}
-                  {semPeso && <span className="text-destructive"> · sem peso</span>}
+        <div className="overflow-x-auto">
+          <div className="min-w-[560px] space-y-0.5">
+            {/* Regra (c) — COLUNAS ALINHADAS. Antes era texto corrido separado por
+                pontos, que obriga a LER cada linha para comparar duas. */}
+            <div className={`${GRID_LISTA} px-2 text-[9px] font-bold uppercase tracking-wide text-muted-foreground`}>
+              <span>Categoria</span>
+              <span className="text-right">Qtde</span>
+              <span className="text-right">Peso méd.</span>
+              <span className="text-right">R$/cab</span>
+              <span className="text-right">R$/kg</span>
+              <span className="text-right">Total</span>
+              <span className="w-4" />
+            </div>
+            {lotes.map(l => {
+              const q = parseNumericValue(l.quantidade) || 0;
+              const pm = parseNumericValue(l.pesoMedioKg) || 0;
+              const pt = q * pm;
+              const total = loteTotal(l.criterioValor, l.quantidade, l.pesoMedioKg, l.valorInformado);
+              const semPeso = pm <= 0;
+              return (
+                <div key={l.idLocal}
+                  onClick={() => setEditandoId(l.idLocal)}
+                  className={`${GRID_LISTA} rounded-md border bg-muted/20 px-2 py-1 cursor-pointer hover:bg-muted/40 text-[11px]`}>
+                  <div className="min-w-0 truncate font-medium">
+                    {rotuloCategoria(l.categoria)}
+                    {/* O lote invalido se anuncia na LISTA: quem tem cinco precisa ver
+                        qual esta pendente sem abrir os cinco. */}
+                    {semPeso && <span className="text-destructive font-normal"> · sem peso</span>}
+                  </div>
+                  <div className="text-right tabular-nums">{q || '—'}</div>
+                  <div className={`text-right tabular-nums ${semPeso ? 'text-destructive' : ''}`}>{fmtKg(pm)}</div>
+                  <div className="text-right tabular-nums text-muted-foreground">{q > 0 ? brl(total / q) : '—'}</div>
+                  <div className="text-right tabular-nums text-muted-foreground">{pt > 0 ? brl(total / pt) : '—'}</div>
+                  <div className="text-right tabular-nums font-semibold">{brl(total)}</div>
+                  <div className="w-4 flex justify-end">
+                    {!fisicoRO && (
+                      <button type="button" aria-label="Remover lote"
+                        onClick={(e) => { e.stopPropagation(); removerLote(l.idLocal); }}
+                        className="text-muted-foreground/60 hover:text-destructive">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div className="text-[11px] tabular-nums font-semibold whitespace-nowrap">
-                  {brl(loteTotal(l.criterioValor, l.quantidade, l.pesoMedioKg, l.valorInformado))}
-                </div>
-                {!fisicoRO && (
-                  <button type="button" aria-label="Remover lote"
-                    onClick={(e) => { e.stopPropagation(); removerLote(l.idLocal); }}
-                    className="text-muted-foreground/60 hover:text-destructive shrink-0">
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       )}
-
-      {/* Totais — os mesmos seis, sem a grade competindo por atencao ao lado deles. */}
-      <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 pt-1">
-        <div className="rounded-md border bg-muted/20 px-1.5 py-0.5"><div className="text-[9px] text-muted-foreground leading-none">Lotes</div><div className="font-bold text-[12px] tabular-nums">{totais.lotes || '—'}</div></div>
-        <div className="rounded-md border bg-muted/20 px-1.5 py-0.5"><div className="text-[9px] text-muted-foreground leading-none">Animais</div><div className="font-bold text-[12px] tabular-nums">{totais.animais || '—'}</div></div>
-        <div className="rounded-md border bg-muted/20 px-1.5 py-0.5"><div className="text-[9px] text-muted-foreground leading-none">Peso Méd.</div><div className="font-bold text-[12px] tabular-nums">{pesoMedio == null ? '—' : fmtKg(pesoMedio)}</div></div>
-        <div className="rounded-md border bg-muted/20 px-1.5 py-0.5"><div className="text-[9px] text-muted-foreground leading-none">R$/cab Méd.</div><div className="font-bold text-[12px] tabular-nums">{totais.animais > 0 ? brl(totais.valorNegociado / totais.animais) : '—'}</div></div>
-        <div className="rounded-md border bg-muted/20 px-1.5 py-0.5"><div className="text-[9px] text-muted-foreground leading-none">R$/kg Méd.</div><div className="font-bold text-[12px] tabular-nums">{valorKg == null ? '—' : brl(valorKg)}</div></div>
-        <div className="rounded-md border-2 border-primary/40 bg-primary/5 px-1.5 py-0.5"><div className="text-[9px] text-muted-foreground leading-none">Valor Principal</div><div className="font-bold text-[13px] text-primary tabular-nums">{brl(totais.valorNegociado)}</div></div>
-      </div>
 
       {emEdicao && (
         <LoteDialog
@@ -270,6 +288,17 @@ function NegociacaoOC({
   return <NegociacaoLegado categoria={categoria} categoriasDisponiveis={categoriasDisponiveis} quantidadeNum={quantidadeNum} pesoKgNum={pesoKgNum} darkSelectClass={darkSelectClass} />;
 }
 
+/* Par rotulo-valor do resumo do lote — regra (c) do topo, mesmo tratamento do
+   "Resumo da operacao": rotulo cinza a esquerda, valor a direita, tabular. */
+function ParLote({ rotulo, valor }: { rotulo: string; valor: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-2 leading-tight">
+      <span className="text-[10px] text-muted-foreground">{rotulo}</span>
+      <span className="text-[11px] font-medium tabular-nums">{valor}</span>
+    </div>
+  );
+}
+
 /* O MODAL DE UM LOTE. Densidade do padrao canonico do sistema (modal Novo Lancamento
    do Financeiro): rotulo `text-[10px]` sem negrito, campo `h-8`.
    Edita um RASCUNHO local e so devolve o patch ao aplicar — fechar pelo X ou pelo Esc
@@ -295,9 +324,10 @@ function LoteDialog({
   const [valorInformado, setValorInformado] = useState(lote.valorInformado);
 
   const pm = parseNumericValue(pesoMedioKg) || 0;
+  const qtdNum = parseNumericValue(quantidade) || 0;
+  const pesoTotal = qtdNum * pm;
   const semPeso = pm <= 0;
   const unidade = CRITERIOS.find(c => c.value === criterioValor)?.unidade || 'Valor';
-  const resumo = resumoLote(criterioValor, quantidade, pesoMedioKg, valorInformado);
   const total = loteTotal(criterioValor, quantidade, pesoMedioKg, valorInformado);
   const patch = { categoria, quantidade, pesoMedioKg, criterioValor, valorInformado };
 
@@ -312,42 +342,47 @@ function LoteDialog({
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onFechar(); }}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle className="text-[13px]">{rotuloCategoria(categoria)}</DialogTitle>
-          <DialogDescription className="text-[11px]">
+      {/* Cabecalho AZUL, o mesmo dos demais modais do sistema (CompraModalShell).
+          `p-0 gap-0` + faixa propria: o padding default do DialogContent deixaria a
+          faixa flutuando dentro de uma borda branca. */}
+      <DialogContent className="max-w-lg p-0 gap-0 overflow-hidden">
+        <DialogHeader className="bg-primary px-4 py-2.5 space-y-0.5">
+          <DialogTitle className="text-[13px] text-primary-foreground">{rotuloCategoria(categoria)}</DialogTitle>
+          <DialogDescription className="text-[11px] text-primary-foreground/80">
             {fisicoRO
               ? 'Esta compra já teve recebimento: categoria, quantidade e peso ficam bloqueados. Critério e valor seguem editáveis.'
               : 'Os campos do lote negociado.'}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-2">
-          <div>
-            <Label className="text-[10px]">Categoria <span className="text-destructive">*</span></Label>
-            <Select value={categoria || undefined} onValueChange={setCategoria} disabled={fisicoRO}>
-              <SelectTrigger className="h-8 text-[12px] mt-0.5"><SelectValue placeholder="Selecione a categoria" /></SelectTrigger>
-              <SelectContent className={`${darkSelectClass} max-h-[60vh] overflow-y-auto`}>
-                {categoriasDisponiveis.map(c => <SelectItem key={c.value} value={c.value} className="text-[12px]">{c.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-2 px-4 pt-3">
+          {/* Categoria nao precisa da largura inteira; e Qtde/Peso guardam 3 digitos,
+              entao nao merecem coluna larga. Regra (b): TODOS h-8 nesta tela. */}
+          <div className="grid grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] gap-2">
+            <div>
+              <Label className="text-[10px]">Categoria <span className="text-destructive">*</span></Label>
+              <Select value={categoria || undefined} onValueChange={setCategoria} disabled={fisicoRO}>
+                <SelectTrigger className="h-8 text-[12px] mt-0.5"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectContent className={`${darkSelectClass} max-h-[60vh] overflow-y-auto`}>
+                  {categoriasDisponiveis.map(c => <SelectItem key={c.value} value={c.value} className="text-[12px]">{c.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
             <div>
               <Label className="text-[10px]">Quantidade <span className="text-destructive">*</span></Label>
               <Input inputMode="numeric" value={quantidade} onChange={e => setQuantidade(e.target.value)} placeholder="0"
                 disabled={fisicoRO} className="h-8 text-[12px] mt-0.5 text-right tabular-nums" />
             </div>
-            <div>
-              <Label className="text-[10px]">Peso médio (kg) <span className="text-destructive">*</span></Label>
-              <Input inputMode="decimal" value={pesoMedioKg} onChange={e => setPesoMedioKg(e.target.value)} placeholder="0,00"
-                disabled={fisicoRO} title={motivoBloqueio}
-                className={`h-8 text-[12px] mt-0.5 text-right tabular-nums ${semPeso ? 'border-destructive focus-visible:ring-destructive' : ''}`} />
-            </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,1.2fr)] gap-2">
+            <div>
+              <Label className="text-[10px]">Peso méd. (kg) <span className="text-destructive">*</span></Label>
+              <Input inputMode="decimal" value={pesoMedioKg} onChange={e => setPesoMedioKg(e.target.value)}
+                onBlur={() => { const n = parseNumericValue(pesoMedioKg); if (n) setPesoMedioKg(n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })); }}
+                placeholder="0,00" disabled={fisicoRO} title={motivoBloqueio}
+                className={`h-8 text-[12px] mt-0.5 text-right tabular-nums ${semPeso ? 'border-destructive focus-visible:ring-destructive' : ''}`} />
+            </div>
             <div>
               <Label className="text-[10px]">Critério</Label>
               <Select value={criterioValor} onValueChange={v => setCriterioValor(v as CriterioValor)} disabled={somenteLeitura}>
@@ -360,15 +395,23 @@ function LoteDialog({
             <div>
               <Label className="text-[10px]">Valor <span className="text-destructive">*</span></Label>
               <div className="mt-0.5">
-                <ValorInput value={valorInformado} onChange={setValorInformado} placeholder={unidade} disabled={somenteLeitura} />
+                {/* Regra (b) — a altura vem daqui, nao do componente. */}
+                <ValorInput value={valorInformado} onChange={setValorInformado} placeholder={unidade}
+                  disabled={somenteLeitura} className="h-8 text-[12px] text-right tabular-nums" />
               </div>
             </div>
           </div>
 
-          {/* Derivados AO VIVO, como a grade ja mostrava na linha de baixo. */}
-          <div className="rounded-md border bg-muted/20 px-2 py-1 space-y-0.5">
-            {resumo && <div className="text-[10px] text-muted-foreground leading-tight">{resumo}</div>}
-            <div className="flex items-baseline justify-between">
+          {/* Derivados AO VIVO, em PARES ALINHADOS (regra `c` do topo). Antes era uma
+              frase corrida com pontos separando: para comparar dois lotes era preciso
+              LER a frase inteira duas vezes. */}
+          <div className="rounded-md border bg-muted/20 px-2 py-1.5 space-y-0.5">
+            <ParLote rotulo="Quantidade" valor={qtdNum > 0 ? `${qtdNum} cab` : '—'} />
+            <ParLote rotulo="Peso médio" valor={fmtKg(pm)} />
+            <ParLote rotulo="Peso total" valor={fmtKg(pesoTotal)} />
+            <ParLote rotulo="R$/cab" valor={qtdNum > 0 ? brl(total / qtdNum) : '—'} />
+            <ParLote rotulo="R$/kg" valor={pesoTotal > 0 ? brl(total / pesoTotal) : '—'} />
+            <div className="flex items-baseline justify-between gap-2 border-t pt-1 mt-1">
               <span className="text-[10px] text-muted-foreground">Total do lote</span>
               <span className="text-[13px] font-bold text-primary tabular-nums">{brl(total)}</span>
             </div>
@@ -377,7 +420,7 @@ function LoteDialog({
           {semPeso && <div className="text-[10px] text-destructive leading-tight">{motivoBloqueio}</div>}
         </div>
 
-        <DialogFooter className="gap-1.5 sm:gap-1.5">
+        <DialogFooter className="gap-1.5 sm:gap-1.5 px-4 pb-4 pt-3">
           <span className="mr-auto text-[10px] text-muted-foreground leading-tight self-center">
             Gravado ao salvar a negociação.
           </span>
