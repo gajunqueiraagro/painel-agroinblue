@@ -23,7 +23,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { format, parseISO, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -1840,6 +1840,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     if (modoOCCompra) onFecharOperacaoOC?.();
   }, [modoOCCompra, onFecharOperacaoOC]);
 
+
   // Modo OC: cria/atualiza a operação comercial (só identificação) e guarda operacao_id/versao.
   //   Sem lotes (COM-3), sem físico (onAdicionar) e sem financeiro (gerarFinanceiroCompra).
   /* DIRTY TRACKING — o que dos DADOS DA OPERACAO mudou desde o que foi carregado.
@@ -1887,7 +1888,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       setOcVersao(env.versao);
       if (env.status_comercial) setOcStatusComercial(env.status_comercial);
       marcarSnapshotOCComoSalvo();
-      toast.success('Alterações salvas.');
+      /* PR-OC-AUTOSAVE-01 (fatia 5) — SEM toast de sucesso. Com o autosave, "Alteracoes
+         salvas." apareceria a cada troca de aba e viraria ruido; e aviso que aparece
+         sempre deixa de ser aviso. O ponto ambar sumindo da aba ja diz que gravou.
+         Erro continua aparecendo — falha silenciosa e' outra coisa. */
       return true;
     } catch (e) {
       // 40001: outra acao mexeu na operacao. Recarregar e' obrigatorio — insistir com a
@@ -1913,16 +1917,25 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   //   `ocVersao` logo apos o await pegaria a versao ANTIGA e o oc_confirmar
   //   estouraria 40001 (conflito de versao). A RPC ja devolve a versao nova; nada
   //   muda no banco.
+  /* PR-OC-AUTOSAVE-01 (fatia 4) — as obrigatorias em UM lugar. O autosave precisa
+     PERGUNTAR se a gravacao passaria, sem tentar e sem disparar toast: ao fechar o
+     modal ele decide entre gravar e avisar, e para isso precisa do MOTIVO antes.
+     ⚠ Devolve o motivo, nao um booleano: quem avisa precisa dizer o que falta.
+     ⚠ Fornecedor entrou aqui em debb6091 — a coluna e' NULLABLE no banco e nao havia
+     gate no front; a regra e' de produto. */
+  const motivoImpedeSalvarOC = (): string | null => {
+    if (!clienteAtual?.id) return 'Cliente não selecionado.';
+    if (!data) return 'Informe a data da compra.';
+    // PR-NAV-CONTEXTO-FAZENDA-01A — exige fazenda real; nunca envia '__global__'/'__atual__' como UUID.
+    if (!ocFazendaId) return 'Selecione a fazenda da operação antes de salvar.';
+    if (!compraFornecedorId) return 'Selecione o fornecedor.';
+    return null;
+  };
+
   const salvarOperacaoOC = async (): Promise<{ operacaoId: string; versao: number } | null> => {
     const clienteId = clienteAtual?.id;
-    if (!clienteId) { toast.error('Cliente não selecionado.'); return null; }
-    if (!data) { toast.error('Informe a data da compra.'); return null; }
-    // PR-NAV-CONTEXTO-FAZENDA-01A — exige fazenda real; nunca envia '__global__'/'__atual__' como UUID.
-    if (!ocFazendaId) { toast.error('Selecione a fazenda da operação antes de salvar.'); return null; }
-    // PR-OC-AUTOSAVE-01 — fornecedor passa a ser obrigatorio como fazenda e data.
-    //   Ate aqui dava para gravar compra sem contraparte: a coluna e' NULLABLE no
-    //   banco e nao havia gate no front.
-    if (!compraFornecedorId) { toast.error('Selecione o fornecedor.'); return null; }
+    const impedimento = motivoImpedeSalvarOC();
+    if (impedimento || !clienteId) { toast.error(impedimento ?? 'Cliente não selecionado.'); return null; }
     const criandoOperacao = !ocOperacaoId;
     setSubmitting(true);
     try {
@@ -1944,7 +1957,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       setOcVersao(env.versao);
       if (env.status_comercial) setOcStatusComercial(env.status_comercial);
       marcarSnapshotOCComoSalvo();
-      toast.success(criandoOperacao ? 'Operação criada. Agora informe os lotes negociados.' : 'Alterações salvas.');
+      /* A mensagem de CRIACAO sobrevive: ela orienta o proximo passo, e criar operacao
+         e' gesto raro. O que sai e' so o "Alteracoes salvas." repetitivo. */
+      if (criandoOperacao) toast.success('Operação criada. Agora informe os lotes negociados.');
       return { operacaoId: env.operacao_id, versao: env.versao };
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Falha ao salvar a operação comercial.');
@@ -1953,6 +1968,46 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       setSubmitting(false);
     }
   };
+
+  /* ── PR-OC-AUTOSAVE-01 (fatia 4) · GRAVAR SOZINHO ─────────────────────────
+     Dispara ao TROCAR DE ABA e ao FECHAR. Nao substitui o botao Salvar: quem quiser
+     gravar sem sair continua podendo.
+     ⚠ NAO BLOQUEIA NAVEGACAO. Se uma obrigatoria falta, avisa e deixa passar — o
+     ponto ambar continua marcando a pendencia. Salvar nunca deve prender o usuario
+     onde ele nao quer ficar.
+     ⚠ NAO ESPERA a gravacao terminar (`void`): a aba troca na hora. Erro e conflito
+     chegam por toast depois, que e' o comportamento certo para algo que o usuario
+     nao pediu — inclusive o 40001, que recarrega e avisa dentro de
+     `salvarDadosOperacaoOC`.
+     ⚠ Nada sujo => nao chama nada. E' o que impede a versao de subir e a auditoria
+     de encher de evento vazio a cada navegacao.
+     ⚠ RECEBIMENTO segue VETADO e nao passa por aqui: o estado local daquela aba e'
+     COMANDO, nao rascunho — um numero digitado por engano viraria entrada de animais. */
+  const autoSalvarOC = useCallback(() => {
+    if (!modoOCCompra || !ocDadosSujos) return;
+    const impedimento = motivoImpedeSalvarOC();
+    if (impedimento) { toast.error(impedimento); return; }
+    if (ocStatusComercial === 'cancelada') return;
+    void (ocStatusComercial === 'fechada' ? salvarDadosOperacaoOC() : salvarOperacaoOC());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modoOCCompra, ocDadosSujos, ocStatusComercial, data, ocFazendaId, compraFornecedorId, clienteAtual?.id]);
+
+  /* FECHAR e' diferente de trocar de aba: fechar PERDE a edicao (o estado da OC e'
+     resetado no efeito de `lancModalOpen`). Entao aqui nao da para "avisar e seguir":
+     seria descartar trabalho do usuario com um toast de consolo. Tambem nao da para
+     travar — o modal precisa poder fechar. Fica a terceira via: PERGUNTAR, dizendo o
+     que falta e o que se perde. So aparece no caso raro de haver pendencia que NAO
+     pode ser gravada; com tudo valido, grava e fecha sem interromper. */
+  const [fecharPendente, setFecharPendente] = useState<string | null>(null);
+  const fecharModalOCComAutosave = useCallback(() => {
+    if (modoOCCompra && ocDadosSujos && ocStatusComercial !== 'cancelada') {
+      const impedimento = motivoImpedeSalvarOC();
+      if (impedimento) { setFecharPendente(impedimento); return; }
+      void (ocStatusComercial === 'fechada' ? salvarDadosOperacaoOC() : salvarOperacaoOC());
+    }
+    fecharModalOC();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modoOCCompra, ocDadosSujos, ocStatusComercial, fecharModalOC, data, ocFazendaId, compraFornecedorId, clienteAtual?.id]);
 
   // PR-OC-EDIT-01B — recarrega a OP aberta pelo backend (SOBERANO) após uma ação de ciclo, sem fechar
   //   o modal. Re-hidrata status/versão/título → a editabilidade volta a ser derivada pelas regras do 01A.
@@ -3988,7 +4043,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     onCancelarOC: cancelarOperacaoOC,
     onReabrirOC: reabrirOperacaoOC,
     // PR-OC-NAV-01 — fechar em modo OC retorna à Central e limpa a URL; fora do modo OC, apenas fecha.
-    onClose: fecharModalOC,
+    onClose: fecharModalOCComAutosave,
+    // Troca de aba dentro do modal: a casca chama antes de trocar.
+    onAutoSalvarOC: autoSalvarOC,
   };
 
   return (
@@ -4043,7 +4100,25 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         - Submit: handlers continuam idênticos; modal NÃO fecha após salvar
           (auto-close será endereçado na Etapa 2).
       */}
-      <Dialog open={lancModalOpen} onOpenChange={(open) => { if (open) setLancModalOpen(true); else fecharModalOC(); }}>
+      {/* PR-OC-AUTOSAVE-01 (fatia 4) — so aparece quando ha edicao pendente que NAO
+          pode ser gravada. Com tudo valido, grava e fecha sem interromper ninguem. */}
+      <Dialog open={fecharPendente !== null} onOpenChange={(o) => { if (!o) setFecharPendente(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-[14px]">Alterações não salvas</DialogTitle>
+            <DialogDescription className="text-[12px]">
+              {fecharPendente} Se fechar agora, a alteração será perdida.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setFecharPendente(null)}>Voltar e corrigir</Button>
+            <Button variant="destructive" size="sm"
+              onClick={() => { setFecharPendente(null); fecharModalOC(); }}>Fechar e descartar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={lancModalOpen} onOpenChange={(open) => { if (open) setLancModalOpen(true); else fecharModalOCComAutosave(); }}>
       <DialogContent
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}

@@ -97,6 +97,7 @@ export interface CompraModalShellProps {
   ocFazendaValida?: boolean;            // PR-NAV-CONTEXTO-FAZENDA-01A — há fazenda real p/ persistir (bloqueia Salvar)
   acaoOcLoading?: 'confirmar' | 'cancelar' | 'reabrir' | null;
   ocDadosSujos?: boolean;               // ha edicao nao gravada nos dados da operacao
+  onAutoSalvarOC?: () => void;          // grava sozinho ao trocar de aba (fatia 4)
   onConfirmarOC?: () => void | Promise<boolean>;   // devolve true quando a operacao fechou de verdade
   onCancelarOC?: (motivo: string) => void;
   onReabrirOC?: (motivo: string) => void;
@@ -176,6 +177,15 @@ export function CompraModalShell(api: CompraModalShellProps) {
      que o resto do modal faz. */
   const temRecebimentoAtivo = (api.recebimentoApi?.movimentacoes ?? [])
     .some(m => m.cancelado !== true);
+  /* PR-OC-AUTOSAVE-01 (fatia 4) — FUNIL UNICO de troca de aba. Eram sete pontos
+     chamando `setAbaAtiva` direto; com o autosave, cada um teria de lembrar de gravar,
+     e o que ficasse de fora perderia a edicao em silencio. Agora ha um lugar so.
+     ⚠ Nao espera a gravacao: a aba troca na hora e o erro chega por toast. */
+  const irParaAba = (chave: string) => {
+    api.onAutoSalvarOC?.();
+    setAbaAtiva(chave);
+  };
+
   const permissoes: CompraPermissoesPorEixo = {
     /* ⚠ VOLTOU a ser so `somenteLeitura`. Em 376aa17d o recebimento ativo
        trancava a aba INTEIRA — era o unico jeito de nao oferecer edicao que o
@@ -231,7 +241,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
     if (!ok) { setFluxoNeg(null); return; }                               //    falha → permanece
     toast.success('Lotes concluídos. Continue com o recebimento.');
     setFluxoNeg(null);
-    setAbaAtiva('recebimento');                                           // 3) avança
+    irParaAba('recebimento');                                             // 3) avança
   };
   // Modo OC: ao CRIAR a operação (ocOperacaoId passa de vazio→preenchido), navega
   // automaticamente para a aba Negociação (informar os lotes).
@@ -240,7 +250,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
     // Ao CRIAR (ocOperacaoId vazio→preenchido) navega para Negociação. Na ABERTURA de operação
     // existente (somente leitura) permanece na aba Compra para conferência do cabeçalho (OPEN-01).
     if (api.modoOC && api.ocOperacaoId && !prevOcRef.current && !api.somenteLeitura && !api.aberturaExistente) {
-      setAbaAtiva('negociacao');
+      irParaAba('negociacao');
     }
     prevOcRef.current = api.ocOperacaoId ?? null;
   }, [api.modoOC, api.ocOperacaoId, api.somenteLeitura, api.aberturaExistente]);
@@ -300,7 +310,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
               key={a.key}
               type="button"
               disabled={!enabled}
-              onClick={() => enabled && setAbaAtiva(a.key)}
+              onClick={() => enabled && irParaAba(a.key)}
               title={enabled ? undefined : 'em breve'}
               className={`shrink-0 px-3 py-1 text-[12px] font-semibold border-b-2 -mb-px transition-colors ${
                 active ? 'border-primary text-primary'
@@ -340,7 +350,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
               lotesApi={api.lotesApi}
               somenteLeitura={permissoes.negociacaoReadOnly}
               fisicoBloqueado={temRecebimentoAtivo}
-              onVoltarCompra={() => setAbaAtiva('compra')}
+              onVoltarCompra={() => irParaAba('compra')}
             />
           ) : abaAtiva === 'recebimento' && api.recebimentoApi ? (
             <AbaRecebimentoLotes
@@ -352,7 +362,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
               categoriasDisponiveis={api.categoriasDisponiveis}
               documentosApi={api.documentosApi}
               somenteLeitura={permissoes.recebimentoReadOnly}
-              onVoltarNegociacao={() => setAbaAtiva('negociacao')}
+              onVoltarNegociacao={() => irParaAba('negociacao')}
             />
           ) : abaAtiva === 'documentos' && api.documentosApi ? (
             <AbaDocumentosOC api={api.documentosApi} operacaoPronta={!!api.ocOperacaoId} somenteLeitura={permissoes.documentosReadOnly} />
@@ -363,7 +373,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
               darkSelectClass={DARK_SELECT_CONTENT}
               financeiroLegadoReadOnly={permissoes.financeiroLegadoReadOnly}
               financeiroNovoReadOnly={permissoes.financeiroNovoReadOnly}
-              onIrParaDocumentos={() => setAbaAtiva('documentos')}
+              onIrParaDocumentos={() => irParaAba('documentos')}
               operacaoId={api.ocOperacaoId ?? null}
               clienteId={api.liquidacaoApi.clienteId}
               dataOperacao={api.ocDataOperacao ?? null}
@@ -830,7 +840,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
                   // navega se a confirmacao deu certo — validacao barrada ou conflito
                   // de versao deixam o usuario onde esta, vendo o motivo.
                   const fechou = await api.onConfirmarOC?.();
-                  if (fechou) setAbaAtiva('recebimento');
+                  if (fechou) irParaAba('recebimento');
                 }
                 else if (a === 'cancelar') api.onCancelarOC?.(motivoAcao.trim());
                 else if (a === 'reabrir') api.onReabrirOC?.(motivoAcao.trim());
