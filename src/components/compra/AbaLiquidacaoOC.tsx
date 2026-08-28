@@ -18,10 +18,9 @@ import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter,
   AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel,
 } from '@/components/ui/alert-dialog';
-import {
-  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
-} from '@/components/ui/dropdown-menu';
-import { RefreshCw, Plus, MoreHorizontal, FileText, Undo2, Ban } from 'lucide-react';
+/* ⚠ `DropdownMenu`, `MoreHorizontal` e `FileText` SAIRAM com a tabela: o menu por linha
+   virou clique na linha, e o icone de documento foi para o detalhe como texto. */
+import { RefreshCw, Plus, Undo2, Ban } from 'lucide-react';
 import { parseNumericValue } from '@/lib/calculos/abate';
 import { usePlanoContasOC, planoTipoOperacao } from '@/hooks/usePlanoContasOC';
 import { classificarLotesCompra } from '@/hooks/useOperacaoLiquidacao';
@@ -99,23 +98,67 @@ export function AbaLiquidacaoOC({ api, operacaoPronta, darkSelectClass, somenteL
   const r = api.resumo;
   const fluxoLabel = api.naturezaFluxo === 'pagar' ? 'A pagar' : api.naturezaFluxo === 'receber' ? 'A receber' : '—';
 
+  /* CONFRONTO obrigacao x pago. O VEREDITO E' DA VIEW: `estadoLiquidacao` ja saiu de
+     `_oc_estado_liquidacao`, que aplica a tolerancia canonica de R$ 0,01. Aqui so se
+     escolhe a palavra e a cor. Base indefinida nao confronta nada.
+     `saldoOperacao` e' `base - pago`, entao no excedente ele vem negativo. */
+  const confronto = r == null || r.base == null ? null
+    : r.estadoLiquidacao === 'quitada' ? { ok: true, texto: 'quitado' }
+    : r.estadoLiquidacao === 'excedente' ? { ok: false, texto: `excede ${brl(-(r.saldoOperacao ?? 0))}` }
+    : { ok: false, texto: `faltam ${brl(r.saldoOperacao ?? 0)}` };
+
   return (
     <div className="space-y-2">
-      {/* RESUMO COMPACTO — valores soberanos da view (React não soma) */}
-      <div className="rounded-md border bg-card p-2 shadow-sm">
-        <div className="flex items-center justify-between">
-          <div className="text-[12px] font-semibold text-muted-foreground">Resumo dos pagamentos · {fluxoLabel}</div>
-          <Badge variant={ESTADO_VARIANT[r?.estadoLiquidacao ?? ''] ?? 'outline'} className="text-[10px]">
-            {ESTADO_LABEL[r?.estadoLiquidacao ?? ''] ?? (r?.estadoLiquidacao ?? '—')}
-          </Badge>
+      {/* ── TOPO: OBRIGACAO x PAGO ────────────────────────────────────────────────
+          ⚠ NENHUM DESTES NUMEROS E' SOMADO AQUI. `base`, `totalLiquidadoValido`,
+          `saldoOperacao` e `estadoLiquidacao` vem prontos de vw_oc_operacao_liquidacao —
+          o cabecalho deste arquivo diz que o React nunca calcula financeiro, e continua
+          valendo.
+          ⚠ A TOLERANCIA DE R$ 0,01 NAO E' REESCRITA AQUI. Ela mora em
+          `_oc_estado_liquidacao` (`abs(base - liquidado) <= 0.01 -> 'liquidada'`), e a
+          view ja devolve o veredito em `estadoLiquidacao`. Repetir a conta no React seria
+          a segunda copia da mesma regra — o defeito que ja custou correcao nesta frente. */}
+      <div className="rounded-md border bg-card p-2 shadow-sm space-y-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[12px] font-semibold text-muted-foreground min-w-0 truncate">Pagamentos · {fluxoLabel}</span>
+          <div className="flex items-center gap-2 shrink-0">
+            {api.obrigacoes.length > 0 && (
+              <span className="text-[11px] text-muted-foreground">
+                {api.obrigacoes.length} obrigaç{api.obrigacoes.length > 1 ? 'ões' : 'ão'}
+              </span>
+            )}
+            <Badge variant={ESTADO_VARIANT[r?.estadoLiquidacao ?? ''] ?? 'outline'} className="text-[10px]">
+              {ESTADO_LABEL[r?.estadoLiquidacao ?? ''] ?? (r?.estadoLiquidacao ?? '—')}
+            </Badge>
+          </div>
         </div>
-        <div className="mt-1 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-[11px]">
-          <ResumoItem rotulo={`Base${r?.baseOrigem ? ` (${r.baseOrigem})` : ''}`} valor={r?.base == null ? '—' : brl(r.base)} />
-          <ResumoItem rotulo="Obrigações" valor={String(api.obrigacoes.length)} />
-          <ResumoItem rotulo="Em dinheiro" valor={brl(r?.totalLiquidadoMonetario ?? 0)} />
-          <ResumoItem rotulo="Permuta e compensação" valor={brl(r?.totalLiquidadoNaoMonetario ?? 0)} />
-          <ResumoItem rotulo="Saldo em aberto" valor={r?.saldoOperacao == null ? '—' : brl(r.saldoOperacao)} destaque />
-          <ResumoItem rotulo="Total pago" valor={brl(r?.totalLiquidadoValido ?? 0)} />
+        <div className="grid grid-cols-2 gap-2 rounded-md border bg-muted/20 px-3 py-1.5">
+          <div className="min-w-0">
+            <div className="text-[10px] text-muted-foreground leading-none">Obrigação</div>
+            <div className="mt-1 text-[13px] font-medium tabular-nums leading-none">
+              {r?.base == null ? <span className="text-muted-foreground">—</span> : brl(r.base)}
+            </div>
+            {/* De onde a base saiu — a resposta para "por que este numero?". */}
+            {r?.baseOrigem && <div className="mt-0.5 text-[9px] text-muted-foreground">{r.baseOrigem}</div>}
+          </div>
+          <div className="min-w-0">
+            <div className="text-[10px] text-muted-foreground leading-none">Pago</div>
+            <div className="mt-1 text-[13px] font-medium tabular-nums leading-none">
+              {brl(r?.totalLiquidadoValido ?? 0)}
+              {confronto && (
+                <span className={`ml-2 text-[11px] font-normal ${confronto.ok
+                  ? 'text-emerald-700 dark:text-emerald-500'
+                  : 'text-amber-700 dark:text-amber-500'}`}>{confronto.texto}</span>
+              )}
+            </div>
+            {/* Permuta e compensacao saiu de coluna, mas nao pode sumir: e' dinheiro que
+                NAO passou pelo caixa. So aparece quando existe. */}
+            {(r?.totalLiquidadoNaoMonetario ?? 0) > 0 && (
+              <div className="mt-0.5 text-[9px] text-muted-foreground">
+                inclui {brl(r!.totalLiquidadoNaoMonetario)} em permuta ou compensação
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -134,102 +177,69 @@ export function AbaLiquidacaoOC({ api, operacaoPronta, darkSelectClass, somenteL
         </div>
       </div>
 
-      {/* TABELA DE OBRIGAÇÕES */}
-      <div className="overflow-x-auto rounded-md border bg-card">
-        {/* Densidade das irmas: tabela 10px, cabecalho 9px — o mesmo pente de
-            AbaCompromissosOC e da lista de Documentos. So as TABELAS mudam; rotulo,
-            botao e campo de modal seguem em 11/12px, que e' o tamanho que as irmas
-            tambem usam fora da tabela. */}
-        <table className="w-full text-[10px] min-w-[900px]">
-          <thead className="bg-muted/50 text-[9px] uppercase tracking-wide text-muted-foreground">
-            <tr>
-              <th className="px-2 py-1 text-left">Origem</th>
-              <th className="px-2 py-1 text-left">Componente</th>
-              <th className="px-2 py-1 text-left">Documento</th>
-              <th className="px-2 py-1 text-center">Parc.</th>
-              <th className="px-2 py-1 text-left">Venc.</th>
-              <th className="px-2 py-1 text-left">Favorecido</th>
-              <th className="px-2 py-1 text-right">Nominal</th>
-              <th className="px-2 py-1 text-right">Liq. mon.</th>
-              <th className="px-2 py-1 text-right">Liq. n/mon.</th>
-              <th className="px-2 py-1 text-right">Saldo</th>
-              <th className="px-2 py-1 text-center">Estado</th>
-              <th className="px-2 py-1 text-right">Título</th>
-              <th className="px-2 py-1 text-center w-8"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {api.loading && api.obrigacoes.length === 0 && (
-              <tr><td colSpan={13} className="px-2 py-6 text-center text-muted-foreground">Carregando…</td></tr>
-            )}
-            {!api.loading && api.obrigacoes.length === 0 && (
-              <tr><td colSpan={13} className="px-2 py-6 text-center text-muted-foreground">Nenhuma obrigação. Use <strong>Gerar obrigação</strong>.</td></tr>
-            )}
-            {api.obrigacoes.map(o => {
-              const podeLiquidar = !o.cancelada && !!o.tituloId && o.estado !== 'quitada';
-              const podeCancelar = !o.cancelada;
-              return (
-                <tr key={o.obrigacaoId}
-                  className={`border-t hover:bg-muted/30 cursor-pointer ${detalheId === o.obrigacaoId ? 'bg-primary/5' : ''} ${o.cancelada ? 'opacity-60' : ''}`}
-                  onClick={() => setDetalheId(detalheId === o.obrigacaoId ? null : o.obrigacaoId)}>
-                  <td className="px-2 py-1"><Badge variant="outline" className="text-[9px]">{ORIGEM_LABEL[o.origem] ?? o.origem}</Badge></td>
-                  <td className="px-2 py-1">
-                    <div className="font-medium">{o.componente}</div>
-                    {o.descricao && <div className="text-[9px] text-muted-foreground truncate max-w-[160px]">{o.descricao}</div>}
-                  </td>
-                  <td className="px-2 py-1">
-                    {o.documentoId
-                      ? <button type="button" className="text-primary hover:underline inline-flex items-center gap-0.5" onClick={(e) => { e.stopPropagation(); onIrParaDocumentos?.(); }}>
-                          <FileText className="h-3 w-3" /> {o.documentoLabel}
-                        </button>
-                      : <span className="text-muted-foreground">—</span>}
-                  </td>
-                  <td className="px-2 py-1 text-center tabular-nums">{o.sequenciaParcela}/{o.quantidadeParcelas}</td>
-                  <td className="px-2 py-1">{fmtData(o.dataVencimento)}</td>
-                  <td className="px-2 py-1 truncate max-w-[120px]">{o.favorecidoNome || '—'}</td>
-                  <td className="px-2 py-1 text-right tabular-nums">{brl(o.valorNominal)}</td>
-                  <td className="px-2 py-1 text-right tabular-nums">{o.totalLiquidadoMonetario ? brl(o.totalLiquidadoMonetario) : '—'}</td>
-                  <td className="px-2 py-1 text-right tabular-nums">{o.totalLiquidadoNaoMonetario ? brl(o.totalLiquidadoNaoMonetario) : '—'}</td>
-                  <td className="px-2 py-1 text-right tabular-nums font-semibold">{o.semMovimentacaoCaixa && !o.tituloId ? '—' : brl(o.saldoAberto)}</td>
-                  <td className="px-2 py-1 text-center"><Badge variant={ESTADO_VARIANT[o.estado] ?? 'outline'} className="text-[9px]">{ESTADO_LABEL[o.estado] ?? o.estado}</Badge></td>
-                  <td className="px-2 py-1 text-right font-mono text-[9px] text-muted-foreground">{o.tituloId ? o.tituloId.slice(0, 8) : '—'}</td>
-                  <td className="px-2 py-1 text-center" onClick={(e) => e.stopPropagation()}>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button type="button" variant="ghost" size="icon" className="h-6 w-6"><MoreHorizontal className="h-3.5 w-3.5" /></Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="text-[12px]">
-                        <DropdownMenuItem disabled={!podeLiquidar || somenteLeitura} onClick={() => setModal({ type: 'liquidar', obr: o })}>Registrar pagamento</DropdownMenuItem>
-                        <DropdownMenuItem disabled={!podeCancelar || somenteLeitura} className="text-destructive" onClick={() => setModal({ type: 'cancelar', obr: o })}>Cancelar obrigação</DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => setDetalheId(o.obrigacaoId)}>Ver detalhe</DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      {/* ── LISTA A18 ─────────────────────────────────────────────────────────────
+          Eram TREZE colunas com `min-w-[900px]` numa coluna de conteudo de ~812px: a
+          rolagem horizontal era garantida por construcao, e a barra sobreposta do macOS
+          cobria a ultima linha. Em duas alturas o problema deixa de existir.
+          ⚠ IDENTIDADE = `descricao`. Nao e' substituto pobre de "Touros · 14 cab": o
+          sistema preenche esse campo pelo padrao {Compra|Venda|Abate} {qtd 3 digitos}
+          {sigla} — "Compra 003 DM" JA E' a identidade do lote, na forma canonica que o
+          proprio projeto definiu. `ObrigacaoLinha` nao carrega lote_id, categoria nem
+          quantidade; levar isso ate aqui e' PR-OC-OBRIGACAO-LOTE-01. Vazia, cai no
+          componente (frete, comissao), como a coluna Componente fazia. */}
+      <div className="rounded-md border bg-card divide-y">
+        {api.loading && api.obrigacoes.length === 0 && (
+          <div className="px-3.5 py-4 text-center text-[11px] text-muted-foreground">Carregando…</div>
+        )}
+        {!api.loading && api.obrigacoes.length === 0 && (
+          <div className="px-3.5 py-4 text-center text-[11px] text-muted-foreground">
+            Nenhuma obrigação. Use <strong>Gerar obrigação</strong>.
+          </div>
+        )}
+        {api.obrigacoes.map(o => {
+          const identidade = o.descricao.trim() || o.componente;
+          /* ⚠ SEM MOVIMENTACAO DE CAIXA E SEM TITULO nao tem saldo a cobrar — a tabela
+             antiga ja imprimia "—" nesse caso, e dizer "falta pagar" seria cobrar o que
+             nao se paga. Cancelada tambem nao cobra nada. */
+          const cobravel = !o.cancelada && (!o.semMovimentacaoCaixa || !!o.tituloId);
+          const falta = cobravel && o.saldoAberto > 0.01 ? o.saldoAberto : null;
+          return (
+            <button key={o.obrigacaoId} type="button"
+              onClick={() => setDetalheId(o.obrigacaoId)}
+              className={`flex w-full items-center gap-3 px-3.5 py-[7px] text-left hover:bg-muted/30 ${o.cancelada ? 'opacity-60' : ''}`}>
+              <div className="min-w-0 flex-1 leading-[1.35]">
+                <div className="text-[13px] font-medium text-foreground truncate">{identidade}</div>
+                <div className="text-[11px] text-muted-foreground truncate">
+                  {o.favorecidoNome || 'sem favorecido'}
+                  {' · '}
+                  {/* Havendo saldo, o que falta OCUPA O LUGAR do vencimento: entre "vence
+                      em 28/02" e "falta pagar R$ 1.500", quem opera precisa do segundo. */}
+                  {falta != null
+                    ? <span className="text-amber-700 dark:text-amber-500">falta pagar {brl(falta)}</span>
+                    : <>venc. {fmtData(o.dataVencimento)}</>}
+                </div>
+              </div>
+              <div className="text-[13px] font-medium tabular-nums shrink-0">{brl(o.valorNominal)}</div>
+              <Badge variant={ESTADO_VARIANT[o.estado] ?? 'outline'} className="text-[9px] shrink-0">
+                {ESTADO_LABEL[o.estado] ?? o.estado}
+              </Badge>
+            </button>
+          );
+        })}
       </div>
 
-      {/* DETALHE — liquidações do título + estorno */}
+      {/* ⚠ DETALHE EM MODAL, nao abaixo da lista. Com varias obrigacoes, o bloco embaixo
+          fica longe da linha que o abriu e nao se identifica — foi o mesmo conserto de
+          22e0d2bf nos compromissos. */}
       {detalhe && (
-        <div className="rounded-md border bg-card p-2 shadow-sm space-y-1">
-          <div className="flex items-center justify-between">
-            <div className="text-[12px] font-semibold">
-              Detalhe · {detalhe.componente} {detalhe.sequenciaParcela}/{detalhe.quantidadeParcelas}
-              {detalhe.tituloId && <span className="ml-2 font-mono text-[10px] text-muted-foreground">título {detalhe.tituloId.slice(0, 8)}</span>}
-            </div>
-            <Button type="button" variant="ghost" size="sm" className="h-6 text-[11px]" onClick={() => setDetalheId(null)}>Fechar</Button>
-          </div>
-          {detalhe.documentoId && (
-            <div className="text-[11px] text-muted-foreground">
-              Documento de origem: <strong className="text-foreground">{detalhe.documentoLabel}</strong>
-              {onIrParaDocumentos && <button type="button" className="ml-2 text-primary hover:underline" onClick={onIrParaDocumentos}>abrir aba Documentos</button>}
-            </div>
-          )}
-          <LiquidacoesDetalhe api={api} obr={detalhe} somenteLeitura={somenteLeitura} onEstornar={(liqId, label) => setModal({ type: 'estornar', liqId, label })} onLiquidar={() => setModal({ type: 'liquidar', obr: detalhe })} />
-        </div>
+        <DetalheObrigacaoDialog
+          api={api} obr={detalhe} somenteLeitura={somenteLeitura}
+          onIrParaDocumentos={onIrParaDocumentos}
+          onClose={() => setDetalheId(null)}
+          onLiquidar={() => setModal({ type: 'liquidar', obr: detalhe })}
+          onCancelarObrigacao={() => setModal({ type: 'cancelar', obr: detalhe })}
+          onEstornar={(liqId, label) => setModal({ type: 'estornar', liqId, label })}
+        />
       )}
 
       {modal?.type === 'gerar' && (
@@ -262,58 +272,125 @@ export function AbaLiquidacaoOC({ api, operacaoPronta, darkSelectClass, somenteL
   );
 }
 
-function ResumoItem({ rotulo, valor, destaque }: { rotulo: string; valor: string; destaque?: boolean }) {
+/* DETALHE DA OBRIGACAO — em MODAL (PR-OC-LIQUIDACAO-A18-01).
+   Recolhe o que saiu da lista: origem, documento, parcela, a quebra entre dinheiro e
+   permuta, e o titulo. Nenhum desses seis identifica uma linha; todos importam depois de
+   escolhida.
+   ⚠ AS ACOES VIERAM PARA CA junto com o detalhe. Antes havia um menu por linha; com a
+   linha virando alvo de clique, dois gestos no mesmo lugar disputariam o mesmo pixel. */
+function DetalheObrigacaoDialog({ api, obr, somenteLeitura, onIrParaDocumentos, onClose, onLiquidar, onCancelarObrigacao, onEstornar }: {
+  api: LiquidacaoApi; obr: ObrigacaoLinha; somenteLeitura?: boolean;
+  onIrParaDocumentos?: () => void; onClose: () => void;
+  onLiquidar: () => void; onCancelarObrigacao: () => void;
+  onEstornar: (liqId: string, label: string) => void;
+}) {
+  const eventos = obr.tituloId ? (api.liquidacoesPorTitulo[obr.tituloId] ?? []) : [];
+  const identidade = obr.descricao.trim() || obr.componente;
+  const podeLiquidar = !obr.cancelada && !!obr.tituloId && obr.estado !== 'quitada';
   return (
-    <div className="rounded border bg-muted/20 px-2 py-1">
-      <div className="text-[9px] uppercase tracking-wide text-muted-foreground truncate">{rotulo}</div>
-      <div className={`tabular-nums ${destaque ? 'font-bold text-foreground' : 'font-semibold'}`}>{valor}</div>
-    </div>
+    <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-lg max-h-[90vh] flex flex-col gap-2">
+        <DialogHeader className="shrink-0">
+          <DialogTitle className="text-[14px]">{identidade}</DialogTitle>
+        </DialogHeader>
+
+        <div className="overflow-y-auto min-h-0 space-y-2 pr-1">
+          {/* Pares rotulo-valor em coluna (A17): sao grandezas que se comparam. */}
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1 rounded-md border bg-muted/20 px-2 py-1.5 text-[11px]">
+            <Par rotulo="Origem" valor={ORIGEM_LABEL[obr.origem] ?? obr.origem} />
+            <Par rotulo="Parcela" valor={`${obr.sequenciaParcela}/${obr.quantidadeParcelas}`} />
+            <Par rotulo="Favorecido" valor={obr.favorecidoNome || '—'} />
+            <Par rotulo="Vencimento" valor={fmtData(obr.dataVencimento)} />
+            <Par rotulo="Valor da obrigação" valor={brl(obr.valorNominal)} />
+            {/* ⚠ "—" e' o estado real de obrigacao sem caixa e sem titulo: nao ha saldo a
+                cobrar. Imprimir R$ 0,00 diria que esta paga, que e' outra coisa. */}
+            <Par rotulo="Saldo em aberto" valor={obr.semMovimentacaoCaixa && !obr.tituloId ? '—' : brl(obr.saldoAberto)} />
+            {/* Os dois totais que deixaram de ser coluna. So aparecem quando existem —
+                "R$ 0,00 em permuta" nao informa nada. */}
+            {obr.totalLiquidadoMonetario > 0 && <Par rotulo="Em dinheiro" valor={brl(obr.totalLiquidadoMonetario)} />}
+            {obr.totalLiquidadoNaoMonetario > 0 && <Par rotulo="Permuta e compensação" valor={brl(obr.totalLiquidadoNaoMonetario)} />}
+            {obr.documentoId && (
+              <div className="col-span-2 flex items-baseline justify-between gap-2">
+                <span className="text-muted-foreground shrink-0">Documento</span>
+                <span className="min-w-0 truncate text-right">
+                  {obr.documentoLabel}
+                  {onIrParaDocumentos && (
+                    <button type="button" className="ml-2 text-primary hover:underline" onClick={onIrParaDocumentos}>abrir</button>
+                  )}
+                </span>
+              </div>
+            )}
+            {obr.tituloId && (
+              <div className="col-span-2 flex items-baseline justify-between gap-2">
+                <span className="text-muted-foreground shrink-0">Título financeiro</span>
+                <span className="font-mono text-[10px] text-muted-foreground">{obr.tituloId.slice(0, 8)}</span>
+              </div>
+            )}
+          </div>
+
+          {/* PAGAMENTOS — mesma cura A18: duas alturas, sem cabecalho de coluna. */}
+          <div>
+            <div className="flex items-center justify-between">
+              <div className="text-[11px] font-semibold text-muted-foreground">Pagamentos</div>
+              {!somenteLeitura && podeLiquidar && (
+                <Button type="button" size="sm" variant="outline" className="h-6 text-[11px] gap-1" onClick={onLiquidar}>
+                  <Plus className="h-3 w-3" /> Registrar
+                </Button>
+              )}
+            </div>
+            {eventos.length === 0
+              ? <div className="text-[11px] text-muted-foreground py-1">
+                  Sem pagamentos{obr.tituloId ? '' : ' (obrigação sem título financeiro)'}.
+                </div>
+              : (
+                <div className="mt-1 rounded-md border divide-y">
+                  {eventos.map(ev => {
+                    const formaLabel = FORMAS.find(f => f.value === ev.forma)?.label ?? ev.forma;
+                    const naoMon = ev.forma === 'permuta' || ev.forma === 'compensacao';
+                    const complemento = ev.descricao || (ev.permutaTipoBem ? `permuta: ${ev.permutaTipoBem}` : null);
+                    return (
+                      <div key={ev.id} className={`flex items-center gap-3 px-3.5 py-[7px] ${ev.estornado ? 'opacity-50' : ''}`}>
+                        <div className="min-w-0 flex-1 leading-[1.35]">
+                          <div className={`text-[13px] font-medium text-foreground truncate ${ev.estornado ? 'line-through' : ''}`}>
+                            {brl(ev.valor)} · {formaLabel}
+                            {naoMon && <span className="ml-1 text-[9px] font-normal text-muted-foreground">não monetária</span>}
+                          </div>
+                          <div className="text-[11px] text-muted-foreground truncate">
+                            {[fmtData(ev.data), complemento].filter(x => x && x !== '—').join(' · ') || '—'}
+                          </div>
+                        </div>
+                        {ev.estornado
+                          ? <Badge variant="destructive" className="text-[9px] shrink-0">estornado</Badge>
+                          : !somenteLeitura && (
+                            <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0"
+                              title="Estornar pagamento" aria-label="Estornar pagamento"
+                              onClick={() => onEstornar(ev.id, `${formaLabel} ${brl(ev.valor)}`)}><Undo2 className="h-3.5 w-3.5" /></Button>
+                          )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+          </div>
+        </div>
+
+        <DialogFooter className="shrink-0 sm:justify-between">
+          {!somenteLeitura && !obr.cancelada
+            ? <Button type="button" variant="ghost" size="sm" className="text-destructive hover:text-destructive"
+                onClick={onCancelarObrigacao}><Ban className="h-3.5 w-3.5 mr-1" /> Cancelar obrigação</Button>
+            : <span />}
+          <Button type="button" variant="outline" size="sm" onClick={onClose}>Fechar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
-function LiquidacoesDetalhe({ api, obr, somenteLeitura, onEstornar, onLiquidar }: {
-  api: LiquidacaoApi; obr: ObrigacaoLinha; somenteLeitura?: boolean; onEstornar: (liqId: string, label: string) => void; onLiquidar: () => void;
-}) {
-  const eventos = obr.tituloId ? (api.liquidacoesPorTitulo[obr.tituloId] ?? []) : [];
+function Par({ rotulo, valor }: { rotulo: string; valor: string }) {
   return (
-    <div className="space-y-1">
-      <div className="flex items-center justify-between">
-        <div className="text-[11px] font-semibold text-muted-foreground">Pagamentos</div>
-        {!somenteLeitura && !obr.cancelada && obr.tituloId && obr.estado !== 'quitada' && (
-          <Button type="button" size="sm" variant="outline" className="h-6 text-[11px] gap-1" onClick={onLiquidar}><Plus className="h-3 w-3" /> Registrar</Button>
-        )}
-      </div>
-      {eventos.length === 0
-        ? <div className="text-[11px] text-muted-foreground py-1">Sem pagamentos{obr.tituloId ? '' : ' (obrigação sem título financeiro)'}.</div>
-        : (
-          <table className="w-full text-[10px]">
-            <thead className="text-[9px] uppercase text-muted-foreground"><tr>
-              <th className="px-1 py-0.5 text-left">Data</th><th className="px-1 py-0.5 text-left">Forma</th>
-              <th className="px-1 py-0.5 text-right">Valor</th><th className="px-1 py-0.5 text-left">Descrição</th>
-              <th className="px-1 py-0.5 text-center">Situação</th><th className="px-1 py-0.5"></th>
-            </tr></thead>
-            <tbody>
-              {eventos.map(ev => {
-                const naoMon = ev.forma === 'permuta' || ev.forma === 'compensacao';
-                return (
-                  <tr key={ev.id} className={`border-t ${ev.estornado ? 'opacity-50 line-through' : ''}`}>
-                    <td className="px-1 py-0.5">{fmtData(ev.data)}</td>
-                    <td className="px-1 py-0.5">{ev.forma}{naoMon && <span className="ml-1 text-[9px] text-muted-foreground">(n/mon.)</span>}</td>
-                    <td className="px-1 py-0.5 text-right tabular-nums">{brl(ev.valor)}</td>
-                    <td className="px-1 py-0.5 truncate max-w-[180px]">{ev.descricao || (ev.permutaTipoBem ? `permuta: ${ev.permutaTipoBem}` : '—')}</td>
-                    <td className="px-1 py-0.5 text-center">{ev.estornado ? <Badge variant="destructive" className="text-[9px]">estornada</Badge> : <Badge variant="secondary" className="text-[9px]">válida</Badge>}</td>
-                    <td className="px-1 py-0.5 text-right">
-                      {!somenteLeitura && !ev.estornado && (
-                        <Button type="button" variant="ghost" size="icon" className="h-5 w-5" title="Estornar"
-                          onClick={() => onEstornar(ev.id, `${ev.forma} ${brl(ev.valor)}`)}><Undo2 className="h-3 w-3" /></Button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
+    <div className="flex items-baseline justify-between gap-2 min-w-0">
+      <span className="text-muted-foreground shrink-0">{rotulo}</span>
+      <span className="min-w-0 truncate text-right tabular-nums">{valor}</span>
     </div>
   );
 }
