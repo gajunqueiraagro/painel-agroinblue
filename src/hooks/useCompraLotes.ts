@@ -137,3 +137,23 @@ export function useCompraLotes({ operacaoId, clienteId, versao, onVersaoChange, 
 
   return { lotes, loading, saving, adicionarLote, editarLote, removerLote, salvar, totais };
 }
+
+/* PR-OC-UX-LOTE-B-02 — MEDIAS DA NEGOCIACAO, um lugar so.
+   A aba Negociacao ja exibia "Peso Med." e "R$/kg Med." no rodape; o resumo lateral
+   passou a exibir os mesmos indicadores. Em vez de repetir a divisao nos dois lugares
+   — que e' exatamente como dois numeros para a mesma pergunta comecam a divergir —
+   a conta mora aqui, ao lado de `totais`, que e' de onde ela sai.
+   Devolvem `null`, nunca 0, quando o denominador e' zero: a tela imprime '—'.
+
+   ⚠ LIMITE CONHECIDO do R$/kg, herdado de `totais` e NAO introduzido aqui:
+   `pesoTotal` soma `quantidade x pesoMedioKg` de todo lote, enquanto `valorNegociado`
+   respeita o criterio (kg, cabeca ou valor fechado). Lote cotado POR CABECA sem peso
+   informado entra no valor e nao entra no peso, e o R$/kg resultante fica alto. O
+   numero e' o MESMO que a aba Negociacao ja mostrava; alinhar as duas telas vale mais
+   que corrigir so uma e criar divergencia. Corrigir de verdade e' frente propria. */
+export function pesoMedioPorCabeca(t: { animais: number; pesoTotal: number }): number | null {
+  return t.animais > 0 ? t.pesoTotal / t.animais : null;
+}
+export function valorPorKgNegociado(t: { pesoTotal: number; valorNegociado: number }): number | null {
+  return t.pesoTotal > 0 ? t.valorNegociado / t.pesoTotal : null;
+}

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { formatMoeda } from '@/lib/calculos/formatters';
-import type { CompraLotesApi } from '@/hooks/useCompraLotes';
+import { pesoMedioPorCabeca, valorPorKgNegociado, type CompraLotesApi } from '@/hooks/useCompraLotes';
 import type { LoteRecebimento, EstadoRecebimento } from '@/hooks/useOperacaoRecebimento';
 import type { DocumentoLista } from '@/hooks/useOperacaoDocumentos';
 import type { ResumoLiquidacao, ObrigacaoLinha } from '@/hooks/useOperacaoLiquidacao';
@@ -91,6 +91,11 @@ export function ResumoLateralOC({
   void ocId;
 
   const temNegociacao = !!negociacaoTotais && negociacaoTotais.lotes > 0;
+  /* MESMA FONTE do rodape da aba Negociacao (`useCompraLotes`), nao uma segunda conta.
+     Sem peso informado o valor por kg e' null e sai '—': dividir por zero nao vira
+     numero, e inventar um aqui seria pior que nao dizer. */
+  const pesoMedio = temNegociacao ? pesoMedioPorCabeca(negociacaoTotais!) : null;
+  const valorKg = temNegociacao ? valorPorKgNegociado(negociacaoTotais!) : null;
 
   const recEstadoLabel =
     rec.estadoGeral == null || rec.estadoGeral === 'nao_iniciado' ? 'Não iniciado'
@@ -134,9 +139,11 @@ export function ResumoLateralOC({
 
         <BlocoHead titulo="Negociação" />
         <div className="px-3 space-y-0.5">
-          <Linha rotulo="Valor" valor={temNegociacao ? moneyOr(negociacaoTotais!.valorNegociado) : null} valorClassName="text-primary" />
+          {/* O QUE se comprou antes de QUANTO custou. */}
           <Linha rotulo="Animais" valor={temNegociacao ? `${nOr(negociacaoTotais!.animais)} cab` : null} />
-          <Linha rotulo="Peso" valor={temNegociacao ? kgOr(negociacaoTotais!.pesoTotal) : null} />
+          <Linha rotulo="Peso médio" valor={kgOr(pesoMedio)} />
+          <Linha rotulo="Valor por kg" valor={moneyOr(valorKg)} />
+          <Linha rotulo="Valor total" valor={temNegociacao ? moneyOr(negociacaoTotais!.valorNegociado) : null} valorClassName="text-primary" />
         </div>
 
         <BlocoHead titulo="Recebimento" />

@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Trash2 } from 'lucide-react';
 import { parseNumericValue } from '@/lib/calculos/abate';
+import { pesoMedioPorCabeca, valorPorKgNegociado } from '@/hooks/useCompraLotes';
 import type { CompraLotesApi, CriterioValor } from '@/hooks/useCompraLotes';
 
 // Aba Negociação.
@@ -108,6 +109,9 @@ export function AbaNegociacaoLotes({
     /* Um so lugar decide o congelamento do fisico, para as tres colunas nao
        divergirem entre si numa edicao futura. */
     const fisicoRO = !!somenteLeitura || !!fisicoBloqueado;
+    // Mesmas medias que o resumo lateral exibe — a conta mora em useCompraLotes.
+    const pesoMedio = pesoMedioPorCabeca(totais);
+    const valorKg = valorPorKgNegociado(totais);
     return (
       <div className="rounded-md border bg-card p-2 shadow-sm space-y-1 min-w-0">
         <div className="flex items-center justify-between gap-2">
@@ -185,9 +189,9 @@ export function AbaNegociacaoLotes({
         <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 pt-1">
           <div className="rounded-md border bg-muted/20 px-1.5 py-0.5"><div className="text-[9px] text-muted-foreground leading-none">Lotes</div><div className="font-bold text-[12px] tabular-nums">{totais.lotes || '—'}</div></div>
           <div className="rounded-md border bg-muted/20 px-1.5 py-0.5"><div className="text-[9px] text-muted-foreground leading-none">Animais</div><div className="font-bold text-[12px] tabular-nums">{totais.animais || '—'}</div></div>
-          <div className="rounded-md border bg-muted/20 px-1.5 py-0.5"><div className="text-[9px] text-muted-foreground leading-none">Peso Méd.</div><div className="font-bold text-[12px] tabular-nums">{totais.animais > 0 ? fmtKg(totais.pesoTotal / totais.animais) : '—'}</div></div>
+          <div className="rounded-md border bg-muted/20 px-1.5 py-0.5"><div className="text-[9px] text-muted-foreground leading-none">Peso Méd.</div><div className="font-bold text-[12px] tabular-nums">{pesoMedio == null ? '—' : fmtKg(pesoMedio)}</div></div>
           <div className="rounded-md border bg-muted/20 px-1.5 py-0.5"><div className="text-[9px] text-muted-foreground leading-none">R$/cab Méd.</div><div className="font-bold text-[12px] tabular-nums">{totais.animais > 0 ? brl(totais.valorNegociado / totais.animais) : '—'}</div></div>
-          <div className="rounded-md border bg-muted/20 px-1.5 py-0.5"><div className="text-[9px] text-muted-foreground leading-none">R$/kg Méd.</div><div className="font-bold text-[12px] tabular-nums">{totais.pesoTotal > 0 ? brl(totais.valorNegociado / totais.pesoTotal) : '—'}</div></div>
+          <div className="rounded-md border bg-muted/20 px-1.5 py-0.5"><div className="text-[9px] text-muted-foreground leading-none">R$/kg Méd.</div><div className="font-bold text-[12px] tabular-nums">{valorKg == null ? '—' : brl(valorKg)}</div></div>
           <div className="rounded-md border-2 border-primary/40 bg-primary/5 px-1.5 py-0.5"><div className="text-[9px] text-muted-foreground leading-none">Valor Principal</div><div className="font-bold text-[13px] text-primary tabular-nums">{brl(totais.valorNegociado)}</div></div>
         </div>
       </div>
