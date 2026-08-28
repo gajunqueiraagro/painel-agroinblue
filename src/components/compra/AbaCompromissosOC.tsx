@@ -135,9 +135,9 @@ function statusFinanceiroParcela(p: ParcelaMaterializacao): { icon: string; labe
   }
   const liq = p.totalLiquidadoTitulo ?? 0;
   const tot = p.tituloValor ?? p.valor ?? 0;
-  if (tot > 0 && liq >= tot - 0.005) return { icon: '🟢', label: 'Pago', title: 'Título liquidado por completo.', alerta: false };
-  if (liq > 0) return { icon: '🟠', label: 'Parcial', title: 'Título com liquidação parcial.', alerta: false };
-  return { icon: '🟡', label: 'Programado', title: 'Título gerado, ainda sem liquidação.', alerta: false };
+  if (tot > 0 && liq >= tot - 0.005) return { icon: '🟢', label: 'Pago', title: 'Título pago por completo.', alerta: false };
+  if (liq > 0) return { icon: '🟠', label: 'Parcial', title: 'Título com pagamento parcial.', alerta: false };
+  return { icon: '🟡', label: 'Programado', title: 'Título gerado, ainda sem pagamento.', alerta: false };
 }
 
 /* PR-OC-UX-LOTE-B-01 — tolerancia de centavo, a mesma ja usada em
@@ -154,7 +154,7 @@ function desvioCompromisso(c: CompromissoResumo): string | null {
   if (c.saldoAProgramar > TOL_CENTAVO) return `falta programar ${brl(c.saldoAProgramar)}`;
   const aLancar = c.totalProgramado - c.totalMaterializado;
   if (aLancar > TOL_CENTAVO) return `falta lançar ${brl(aLancar)}`;
-  if (c.saldoFinanceiro > TOL_CENTAVO) return `falta liquidar ${brl(c.saldoFinanceiro)}`;
+  if (c.saldoFinanceiro > TOL_CENTAVO) return `falta pagar ${brl(c.saldoFinanceiro)}`;
   return null;
 }
 
@@ -543,7 +543,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
                 compromisso registrado, liquidado e' dinheiro que saiu. So o ROTULO muda:
                 `totalMaterializado` segue sendo o nome do campo da view. */}
             <ResumoCard rotulo="Lançado" valor={resumoOperacao.totalMaterializado} />
-            <ResumoCard rotulo="Liquidado" valor={resumoOperacao.totalLiquidado} />
+            <ResumoCard rotulo="Pago" valor={resumoOperacao.totalLiquidado} />
             {/* "Saldo fin." (materializado − liquidado) saiu daqui: na 765058f8 marcava
                 R$ 0,00 porque tudo que virou titulo foi pago — verdadeiro e inutil.
                 Continua na coluna Saldo da tabela, que e' onde ele e' detalhe por
@@ -710,7 +710,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
             <ResumoCard rotulo="Programado" valor={selecionado.totalProgramado} />
             <ResumoCard rotulo="A programar" valor={selecionado.saldoAProgramar} />
             <ResumoCard rotulo="Lançado" valor={selecionado.totalMaterializado} />
-            <ResumoCard rotulo="Liquidado" valor={selecionado.totalLiquidado} />
+            <ResumoCard rotulo="Pago" valor={selecionado.totalLiquidado} />
             <ResumoCard rotulo="Saldo" valor={selecionado.saldoFinanceiro} />
           </div>
 

@@ -136,9 +136,14 @@ function finResumo(f: FinRow | undefined): { valor: number; rotulo: string; modo
    por acidente. Vocabulario publicado desta view, medido no banco:
    nao_liquidada | parcial | quitada | excedente | base_indefinida.
    `em_aberto` e `sem_base` ficam como entradas inertes de outra fonte. */
+/* PR-OC-VOCABULARIO-PAGAMENTO-01 — o produtor diz PAGA, nao "liquidada".
+   ⚠ AS CHAVES NAO MUDAM: sao o vocabulario da view (`estado_liquidacao`), usado
+   tambem como `value` do filtro e no mapa de gravidade abaixo. So o texto muda.
+   ⚠ Muda JUNTO com `ESTADO_LABEL` de AbaLiquidacaoOC: e' o mesmo estado da mesma
+   fonte, e chamar de "paga" num lugar e "quitada" no outro seria pior que o jargao. */
 const LIQ_LABEL: Record<string, string> = {
-  quitada: 'Liquidada', parcial: 'Parcial', excedente: 'Excedente',
-  nao_liquidada: 'Não liquidada', base_indefinida: 'Base indefinida', sem_base: 'Base indefinida', em_aberto: 'Em aberto',
+  quitada: 'Paga', parcial: 'Parcial', excedente: 'Excedente',
+  nao_liquidada: 'Não paga', base_indefinida: 'Base indefinida', sem_base: 'Base indefinida', em_aberto: 'Em aberto',
 };
 function liqLabel(estado: string | null | undefined): string {
   if (!estado) return '—';
@@ -568,7 +573,7 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
             </SelectContent>
           </Select>
           <Select value={fLiquidacao} onValueChange={setFLiquidacao}>
-            <SelectTrigger className="h-8 w-36 text-[11px]"><SelectValue placeholder="Liquidação" /></SelectTrigger>
+            <SelectTrigger className="h-8 w-36 text-[11px]"><SelectValue placeholder="Pagamento" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="__all__">Toda liquidação</SelectItem>
               {liquidacaoOptions.map(e => <SelectItem key={e} value={e}>{liqLabel(e)}</SelectItem>)}
@@ -638,7 +643,7 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
               <ThOrd col="comercial" rotulo="Comercial" ord={ord} onOrdenar={alternarOrd} />
               <ThOrd col="recebimento" rotulo="Recebimento" ord={ord} onOrdenar={alternarOrd} />
               <ThOrd col="financeiro" rotulo="Financeiro" ord={ord} onOrdenar={alternarOrd} />
-              <ThOrd col="liquidacao" rotulo="Liquidação" ord={ord} onOrdenar={alternarOrd} />
+              <ThOrd col="liquidacao" rotulo="Pagamento" ord={ord} onOrdenar={alternarOrd} />
               <TableHead className={`${TH} text-right`}>Ações</TableHead>
             </TableRow>
           </TableHeader>

@@ -32,8 +32,12 @@ const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', curren
 const fmtData = (iso: string | null) => (iso ? iso.split('-').reverse().join('/') : '—');
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+/* PR-OC-VOCABULARIO-PAGAMENTO-01 — a tela fala PAGAMENTO; "liquidacao" ficou nos
+   identificadores (RPC, tabela, view, coluna derivada), onde e' o nome do contrato.
+   ⚠ `quitada` -> "paga" muda JUNTO com o rotulo da Central (LIQ_LABEL): e' o MESMO
+   estado da mesma view, e dois nomes para ele seria pior que um nome tecnico. */
 const ESTADO_LABEL: Record<string, string> = {
-  nao_liquidada: 'aberta', parcial: 'parcial', quitada: 'quitada',
+  nao_liquidada: 'aberta', parcial: 'parcial', quitada: 'paga',
   sem_caixa: 'sem caixa', cancelada: 'cancelada', excedente: 'excedente',
 };
 const ESTADO_VARIANT: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
@@ -82,7 +86,7 @@ export function AbaLiquidacaoOC({ api, operacaoPronta, darkSelectClass, somenteL
   if (!operacaoPronta) {
     return (
       <div className="rounded-md border bg-card p-6 text-center text-[12px] text-muted-foreground">
-        Salve a operação na aba <strong>Compra</strong> e conclua a negociação para liquidar.
+        Salve a operação na aba <strong>Compra</strong> e conclua a negociação para registrar pagamentos.
       </div>
     );
   }
@@ -95,7 +99,7 @@ export function AbaLiquidacaoOC({ api, operacaoPronta, darkSelectClass, somenteL
       {/* RESUMO COMPACTO — valores soberanos da view (React não soma) */}
       <div className="rounded-md border bg-card p-2 shadow-sm">
         <div className="flex items-center justify-between">
-          <div className="text-[12px] font-semibold text-muted-foreground">Resumo da liquidação · {fluxoLabel}</div>
+          <div className="text-[12px] font-semibold text-muted-foreground">Resumo dos pagamentos · {fluxoLabel}</div>
           <Badge variant={ESTADO_VARIANT[r?.estadoLiquidacao ?? ''] ?? 'outline'} className="text-[10px]">
             {ESTADO_LABEL[r?.estadoLiquidacao ?? ''] ?? (r?.estadoLiquidacao ?? '—')}
           </Badge>
@@ -103,10 +107,10 @@ export function AbaLiquidacaoOC({ api, operacaoPronta, darkSelectClass, somenteL
         <div className="mt-1 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-[11px]">
           <ResumoItem rotulo={`Base${r?.baseOrigem ? ` (${r.baseOrigem})` : ''}`} valor={r?.base == null ? '—' : brl(r.base)} />
           <ResumoItem rotulo="Obrigações" valor={String(api.obrigacoes.length)} />
-          <ResumoItem rotulo="Liq. monetária" valor={brl(r?.totalLiquidadoMonetario ?? 0)} />
-          <ResumoItem rotulo="Liq. não monetária" valor={brl(r?.totalLiquidadoNaoMonetario ?? 0)} />
-          <ResumoItem rotulo="Saldo aberto" valor={r?.saldoOperacao == null ? '—' : brl(r.saldoOperacao)} destaque />
-          <ResumoItem rotulo="Total liquidado" valor={brl(r?.totalLiquidadoValido ?? 0)} />
+          <ResumoItem rotulo="Em dinheiro" valor={brl(r?.totalLiquidadoMonetario ?? 0)} />
+          <ResumoItem rotulo="Permuta e compensação" valor={brl(r?.totalLiquidadoNaoMonetario ?? 0)} />
+          <ResumoItem rotulo="Saldo em aberto" valor={r?.saldoOperacao == null ? '—' : brl(r.saldoOperacao)} destaque />
+          <ResumoItem rotulo="Total pago" valor={brl(r?.totalLiquidadoValido ?? 0)} />
         </div>
       </div>
 
@@ -186,7 +190,7 @@ export function AbaLiquidacaoOC({ api, operacaoPronta, darkSelectClass, somenteL
                         <Button type="button" variant="ghost" size="icon" className="h-6 w-6"><MoreHorizontal className="h-3.5 w-3.5" /></Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="text-[12px]">
-                        <DropdownMenuItem disabled={!podeLiquidar || somenteLeitura} onClick={() => setModal({ type: 'liquidar', obr: o })}>Registrar liquidação</DropdownMenuItem>
+                        <DropdownMenuItem disabled={!podeLiquidar || somenteLeitura} onClick={() => setModal({ type: 'liquidar', obr: o })}>Registrar pagamento</DropdownMenuItem>
                         <DropdownMenuItem disabled={!podeCancelar || somenteLeitura} className="text-destructive" onClick={() => setModal({ type: 'cancelar', obr: o })}>Cancelar obrigação</DropdownMenuItem>
                         <DropdownMenuItem onClick={() => setDetalheId(o.obrigacaoId)}>Ver detalhe</DropdownMenuItem>
                       </DropdownMenuContent>
@@ -237,7 +241,7 @@ export function AbaLiquidacaoOC({ api, operacaoPronta, darkSelectClass, somenteL
       )}
       {modal?.type === 'estornar' && (
         <MotivoDialog
-          titulo="Estornar liquidação"
+          titulo="Estornar pagamento"
           descricao={`Estorno append-only de ${modal.label}. O registro é preservado; saldo e estado são recalculados pelas views.`}
           confirmLabel="Estornar"
           saving={api.saving}
@@ -265,13 +269,13 @@ function LiquidacoesDetalhe({ api, obr, somenteLeitura, onEstornar, onLiquidar }
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between">
-        <div className="text-[11px] font-semibold text-muted-foreground">Liquidações</div>
+        <div className="text-[11px] font-semibold text-muted-foreground">Pagamentos</div>
         {!somenteLeitura && !obr.cancelada && obr.tituloId && obr.estado !== 'quitada' && (
           <Button type="button" size="sm" variant="outline" className="h-6 text-[11px] gap-1" onClick={onLiquidar}><Plus className="h-3 w-3" /> Registrar</Button>
         )}
       </div>
       {eventos.length === 0
-        ? <div className="text-[11px] text-muted-foreground py-1">Sem liquidações{obr.tituloId ? '' : ' (obrigação sem título financeiro)'}.</div>
+        ? <div className="text-[11px] text-muted-foreground py-1">Sem pagamentos{obr.tituloId ? '' : ' (obrigação sem título financeiro)'}.</div>
         : (
           <table className="w-full text-[11px]">
             <thead className="text-[10px] uppercase text-muted-foreground"><tr>
@@ -523,8 +527,8 @@ function RegistrarLiquidacaoDialog({ api, darkSelectClass, obr, onClose }: { api
   return (
     <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent className="max-w-md max-h-[90vh] flex flex-col gap-2">
-        <DialogHeader className="shrink-0"><DialogTitle>Registrar liquidação · {obr.componente} {obr.sequenciaParcela}/{obr.quantidadeParcelas}</DialogTitle></DialogHeader>
-        <div className="text-[11px] text-muted-foreground shrink-0">Saldo aberto: <strong className="text-foreground tabular-nums">{brl(obr.saldoAberto)}</strong></div>
+        <DialogHeader className="shrink-0"><DialogTitle>Registrar pagamento · {obr.componente} {obr.sequenciaParcela}/{obr.quantidadeParcelas}</DialogTitle></DialogHeader>
+        <div className="text-[11px] text-muted-foreground shrink-0">Saldo em aberto: <strong className="text-foreground tabular-nums">{brl(obr.saldoAberto)}</strong></div>
         <div className="grid grid-cols-2 gap-2 text-[12px] overflow-y-auto min-h-0 pr-1">
           <div><Label className="text-[11px]">Data</Label>
             <Input type="date" value={data} onChange={(e) => setData(e.target.value)} className="h-8 text-[12px]" /></div>
