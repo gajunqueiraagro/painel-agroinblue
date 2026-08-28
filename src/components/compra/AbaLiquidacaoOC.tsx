@@ -6,6 +6,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SearchableSelect } from '@/components/ui/searchable-select';
+import { DatePicker } from '@/components/ui/date-picker';
+/* ⚠ O campo de dinheiro E' o compartilhado (A19). Esta tela nao formatava nada: o
+   valor do pagamento era um <Input> cru, e o operador digitava contra o saldo em
+   aberto — que a linha ao lado ja mostrava formatado. */
+import { CampoMoeda } from '@/components/ui/campo-moeda';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
@@ -131,8 +136,12 @@ export function AbaLiquidacaoOC({ api, operacaoPronta, darkSelectClass, somenteL
 
       {/* TABELA DE OBRIGAÇÕES */}
       <div className="overflow-x-auto rounded-md border bg-card">
-        <table className="w-full text-[11px] min-w-[900px]">
-          <thead className="bg-muted/50 text-[10px] uppercase tracking-wide text-muted-foreground">
+        {/* Densidade das irmas: tabela 10px, cabecalho 9px — o mesmo pente de
+            AbaCompromissosOC e da lista de Documentos. So as TABELAS mudam; rotulo,
+            botao e campo de modal seguem em 11/12px, que e' o tamanho que as irmas
+            tambem usam fora da tabela. */}
+        <table className="w-full text-[10px] min-w-[900px]">
+          <thead className="bg-muted/50 text-[9px] uppercase tracking-wide text-muted-foreground">
             <tr>
               <th className="px-2 py-1 text-left">Origem</th>
               <th className="px-2 py-1 text-left">Componente</th>
@@ -166,7 +175,7 @@ export function AbaLiquidacaoOC({ api, operacaoPronta, darkSelectClass, somenteL
                   <td className="px-2 py-1"><Badge variant="outline" className="text-[9px]">{ORIGEM_LABEL[o.origem] ?? o.origem}</Badge></td>
                   <td className="px-2 py-1">
                     <div className="font-medium">{o.componente}</div>
-                    {o.descricao && <div className="text-[10px] text-muted-foreground truncate max-w-[160px]">{o.descricao}</div>}
+                    {o.descricao && <div className="text-[9px] text-muted-foreground truncate max-w-[160px]">{o.descricao}</div>}
                   </td>
                   <td className="px-2 py-1">
                     {o.documentoId
@@ -183,7 +192,7 @@ export function AbaLiquidacaoOC({ api, operacaoPronta, darkSelectClass, somenteL
                   <td className="px-2 py-1 text-right tabular-nums">{o.totalLiquidadoNaoMonetario ? brl(o.totalLiquidadoNaoMonetario) : '—'}</td>
                   <td className="px-2 py-1 text-right tabular-nums font-semibold">{o.semMovimentacaoCaixa && !o.tituloId ? '—' : brl(o.saldoAberto)}</td>
                   <td className="px-2 py-1 text-center"><Badge variant={ESTADO_VARIANT[o.estado] ?? 'outline'} className="text-[9px]">{ESTADO_LABEL[o.estado] ?? o.estado}</Badge></td>
-                  <td className="px-2 py-1 text-right font-mono text-[10px] text-muted-foreground">{o.tituloId ? o.tituloId.slice(0, 8) : '—'}</td>
+                  <td className="px-2 py-1 text-right font-mono text-[9px] text-muted-foreground">{o.tituloId ? o.tituloId.slice(0, 8) : '—'}</td>
                   <td className="px-2 py-1 text-center" onClick={(e) => e.stopPropagation()}>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -277,8 +286,8 @@ function LiquidacoesDetalhe({ api, obr, somenteLeitura, onEstornar, onLiquidar }
       {eventos.length === 0
         ? <div className="text-[11px] text-muted-foreground py-1">Sem pagamentos{obr.tituloId ? '' : ' (obrigação sem título financeiro)'}.</div>
         : (
-          <table className="w-full text-[11px]">
-            <thead className="text-[10px] uppercase text-muted-foreground"><tr>
+          <table className="w-full text-[10px]">
+            <thead className="text-[9px] uppercase text-muted-foreground"><tr>
               <th className="px-1 py-0.5 text-left">Data</th><th className="px-1 py-0.5 text-left">Forma</th>
               <th className="px-1 py-0.5 text-right">Valor</th><th className="px-1 py-0.5 text-left">Descrição</th>
               <th className="px-1 py-0.5 text-center">Situação</th><th className="px-1 py-0.5"></th>
@@ -479,7 +488,10 @@ function GerarObrigacaoDialog({ api, onClose }: { api: LiquidacaoApi; onClose: (
           </div>
           <div>
             <Label className="text-[11px]">1º vencimento *</Label>
-            <Input type="date" value={primeiroVenc} onChange={(e) => setPrimeiroVenc(e.target.value)} className="h-8 text-[12px]" />
+            {/* A20 — DatePicker do sistema. SEM `compact`: o default do componente ja e'
+                `h-8 text-[12px]`, exatamente a altura desta grade de modal; compact e'
+                para grade densa de linha, que nao e' o caso aqui. */}
+            <DatePicker value={primeiroVenc} onChange={setPrimeiroVenc} className="h-8 text-[12px]" />
           </div>
           <div>
             <Label className="text-[11px]">Parcelas</Label>
@@ -531,7 +543,7 @@ function RegistrarLiquidacaoDialog({ api, darkSelectClass, obr, onClose }: { api
         <div className="text-[11px] text-muted-foreground shrink-0">Saldo em aberto: <strong className="text-foreground tabular-nums">{brl(obr.saldoAberto)}</strong></div>
         <div className="grid grid-cols-2 gap-2 text-[12px] overflow-y-auto min-h-0 pr-1">
           <div><Label className="text-[11px]">Data</Label>
-            <Input type="date" value={data} onChange={(e) => setData(e.target.value)} className="h-8 text-[12px]" /></div>
+            <DatePicker value={data} onChange={setData} className="h-8 text-[12px]" /></div>
           <div><Label className="text-[11px]">Forma</Label>
             <Select value={forma} onValueChange={(v) => setForma(v as FormaLiquidacao)}>
               <SelectTrigger className="h-8 text-[12px]"><SelectValue /></SelectTrigger>
@@ -541,7 +553,13 @@ function RegistrarLiquidacaoDialog({ api, darkSelectClass, obr, onClose }: { api
             </Select>
           </div>
           <div className="col-span-2"><Label className="text-[11px]">Valor</Label>
-            <Input inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="0,00" className={`h-8 text-[12px] text-right tabular-nums ${excedeSaldo ? 'border-destructive' : ''}`} />
+            {/* PONTE string<->number, e SO isso: `valor` segue string porque
+                `parseNumericValue` e o gate `excedeSaldo` leem dela; a formatacao e' toda
+                do campo. Vazio e' AUSENCIA e nao zero — sem a distincao, digitar "0,00"
+                limparia o campo. */}
+            <CampoMoeda valor={valor.trim() === '' ? null : parseNumericValue(valor)}
+              onChange={(n) => setValor(n == null ? '' : String(n))} placeholder="R$ 0,00"
+              className={`h-8 text-[12px] text-right tabular-nums ${excedeSaldo ? 'border-destructive' : ''}`} />
             {excedeSaldo && <div className="text-[10px] text-destructive mt-0.5">Valor excede o saldo aberto.</div>}
           </div>
           {isPermuta && (
