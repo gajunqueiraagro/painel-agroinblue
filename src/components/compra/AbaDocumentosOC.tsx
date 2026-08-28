@@ -38,6 +38,22 @@ export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedo
     toast.success(`Emitente "${data.nome}" criado e selecionado`);
     return data;
   };
+
+  /* GRAVA o CNPJ da nota num fornecedor QUE JA EXISTE — o que completa o cadastro pelo
+     uso. Mesmo caminho de escrita do "+": update direto na tabela, sem RPC nova.
+     ⚠ SO E' CHAMADA COM AVAL EXPLICITO do operador. Nome parecido nao e' prova — "Joao
+     Silva" pode ser dois — entao a tela pergunta e so aqui grava. */
+  const gravarDocumentoFornecedor = async (fornecedorId: string, cpfCnpj: string): Promise<boolean> => {
+    if (!clienteId) { toast.error('Cliente não identificado.'); return false; }
+    const { error } = await supabase
+      .from('financeiro_fornecedores')
+      .update({ cpf_cnpj: cpfCnpj })
+      .eq('id', fornecedorId).eq('cliente_id', clienteId);
+    if (error) { toast.error('Não foi possível gravar o documento no cadastro.'); return false; }
+    try { await recarregarFornecedores?.(); } catch { /* gravou; a lista volta no proximo refresh */ }
+    toast.success('Documento gravado no cadastro do fornecedor.');
+    return true;
+  };
   const [modo, setModo] = useState<'lista' | 'form'>('lista');
   const [formInicial, setFormInicial] = useState<FormState>(FORM_VAZIO);
   const [formKey, setFormKey] = useState(0);
@@ -94,6 +110,7 @@ export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedo
         fornecedores={fornecedores}
         contraparteId={contraparteId}
         onCriarFornecedor={clienteId ? criarFornecedor : undefined}
+        onGravarDocumentoFornecedor={clienteId ? gravarDocumentoFornecedor : undefined}
         initialForm={formInicial}
         onSaved={() => setModo('lista')}
         onCancel={() => setModo('lista')}

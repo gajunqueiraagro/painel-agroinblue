@@ -8,6 +8,7 @@ import { NovoFornecedorDialog } from '@/components/financeiro-v2/NovoFornecedorD
 import { motivoArquivoInvalido } from '@/lib/oc/caminhoDocumento';
 import { extractPdfText } from '@/lib/financeiro/parser/extractPdfText';
 import { extrairDanfe, type DanfeExtraido } from '@/lib/oc/extrairDanfe';
+import { candidatosPorNome, soDigitosDoc, raizCnpj, type CandidatoFornecedor } from '@/lib/oc/similaridadeFornecedor';
 import { toast } from 'sonner';
 import { parseNumericValue } from '@/lib/calculos/abate';
 import type {
@@ -58,13 +59,15 @@ interface Props {
   fornecedores?: { id: string; nome: string; cpfCnpj?: string | null }[];
   contraparteId?: string | null;
   onCriarFornecedor?: (nome: string, cpfCnpj: string) => Promise<{ id: string; nome: string } | null>;
+  /* Grava o CNPJ da nota num fornecedor ja existente — so com aval do operador. */
+  onGravarDocumentoFornecedor?: (fornecedorId: string, cpfCnpj: string) => Promise<boolean>;
   initialForm: FormState;
   hideHeader?: boolean;         // dialog fornece seu próprio título
   onSaved: () => void;          // salvar OK: aba → volta à lista; dialog → fecha e permanece no Recebimento
   onCancel: () => void;
 }
 
-export function DocumentoFormOC({ api, somenteLeitura, fornecedores, contraparteId, onCriarFornecedor, initialForm, hideHeader, onSaved, onCancel }: Props) {
+export function DocumentoFormOC({ api, somenteLeitura, fornecedores, contraparteId, onCriarFornecedor, onGravarDocumentoFornecedor, initialForm, hideHeader, onSaved, onCancel }: Props) {
   const [form, setForm] = useState<FormState>(initialForm);
   /* ⚠ O ARQUIVO NAO E' CAMPO DO FORMULARIO, e' um passo DEPOIS. Fica em estado proprio
      porque o upload so acontece quando ja existe `documento_id` — ver o submit. */
@@ -80,6 +83,19 @@ export function DocumentoFormOC({ api, somenteLeitura, fornecedores, contraparte
   const [sugeridos, setSugeridos] = useState<Set<string>>(new Set());
   const [lendoNota, setLendoNota] = useState(false);
   const [arrastando, setArrastando] = useState(false);
+
+  /* ── AS TRES SITUACOES DO EMITENTE (PR-OC-DOC-ENRIQUECER-FORNECEDOR-01) ────
+     1. CNPJ ja existe  -> seleciona direto, sem perguntar. Documento e' chave exata.
+     2. Nao existe, ha nome parecido -> PERGUNTA, e so com o aval grava o CNPJ naquele
+        fornecedor. Nome parecido NAO e' prova: "Joao Silva" pode ser dois.
+     3. Nada parecido -> oferece criar, com nome e documento prontos.
+     Motivo de existir: 5.568 dos 5.794 fornecedores ativos estao SEM documento (96%).
+     Cada nota traz nome oficial e CNPJ; aproveitar completa o cadastro PELO USO, sem
+     ninguem parar para digitar cinco mil documentos. */
+  const [candidatos, setCandidatos] = useState<CandidatoFornecedor[]>([]);
+  const [cnpjDaNota, setCnpjDaNota] = useState<string | null>(null);
+  const [nomeDaNota, setNomeDaNota] = useState<string | null>(null);
+  const [conflitoDoc, setConflitoDoc] = useState<string | null>(null);
   const [avisoLeitura, setAvisoLeitura] = useState<string | null>(null);
 
   const aplicarSugestao = (d: DanfeExtraido) => {
@@ -95,22 +111,64 @@ export function DocumentoFormOC({ api, somenteLeitura, fornecedores, contraparte
       por('serie', d.serie);
       por('dataEmissao', d.dataEmissao);
       por('chaveAcesso', d.chaveAcesso);
-      /* EMITENTE pelo CNPJ, que a chave garante. Achou no cadastro, seleciona; nao
-         achou, deixa nome e documento prontos para o "+" criar sem redigitar. */
-      if (d.emitenteCnpj) {
-        const achado = (fornecedores ?? []).find(x => (x.cpfCnpj ?? '').replace(/\D/g, '') === d.emitenteCnpj!.replace(/\D/g, ''));
-        if (achado && !novo.emitenteId) {
-          novo.emitenteId = achado.id; novo.emitenteNome = achado.nome;
-          marcados.add('emitenteId');
-        } else if (!novo.emitenteId) {
-          novo.emitenteNome = d.emitenteNome ?? novo.emitenteNome;
-          marcados.add('emitenteNome');
-        }
-        por('emitenteDocumento', d.emitenteCnpj);
-      }
+      /* EMITENTE — a decisao das tres situacoes acontece FORA deste setForm, logo
+         abaixo, porque situacao 2 exige PERGUNTAR e nao se pergunta dentro de um
+         atualizador de estado. Aqui so entra o que e' certo: o documento da nota. */
+      if (d.emitenteCnpj) por('emitenteDocumento', d.emitenteCnpj);
       return novo;
     });
     setSugeridos(marcados);
+
+    setCandidatos([]); setConflitoDoc(null);
+    setCnpjDaNota(d.emitenteCnpj); setNomeDaNota(d.emitenteNome);
+    if (!d.emitenteCnpj) return;
+
+    const digitosNota = soDigitosDoc(d.emitenteCnpj);
+    const lista = fornecedores ?? [];
+
+    // 1 — CNPJ e chave exata: seleciona e nao pergunta nada.
+    const exato = lista.find(f => soDigitosDoc(f.cpfCnpj) === digitosNota);
+    if (exato) {
+      setForm(f => ({ ...f, emitenteId: exato.id, emitenteNome: exato.nome }));
+      setSugeridos(prev => new Set([...prev, 'emitenteId']));
+      return;
+    }
+
+    // 2 — sem CNPJ igual: procura nome parecido, em memoria (ver similaridadeFornecedor).
+    const parecidos = d.emitenteNome ? candidatosPorNome(d.emitenteNome, lista) : [];
+    if (parecidos.length > 0) { setCandidatos(parecidos); return; }
+
+    // 3 — nada parecido: deixa nome e documento prontos para o "+" criar sem redigitar.
+    setForm(f => (f.emitenteId ? f : { ...f, emitenteNome: d.emitenteNome ?? f.emitenteNome }));
+  };
+
+  /* Escolha do operador na situacao 2: grava o CNPJ NAQUELE fornecedor e o seleciona.
+     ⚠ Conflito: se o escolhido JA TEM outro documento, NAO sobrescreve — avisa e deixa
+     o operador resolver. Pode ser filial (mesma raiz) ou fornecedor trocado; ignorar
+     esconderia erro de cadastro. */
+  const escolherCandidato = async (c: CandidatoFornecedor) => {
+    if (!cnpjDaNota) return;
+    const jaTem = soDigitosDoc(c.cpfCnpj);
+    const daNota = soDigitosDoc(cnpjDaNota);
+    if (jaTem && jaTem !== daNota) {
+      const mesmaRaiz = raizCnpj(c.cpfCnpj) === raizCnpj(cnpjDaNota);
+      setConflitoDoc(
+        `${c.nome} já tem o documento ${c.cpfCnpj}, e a nota traz ${cnpjDaNota}. `
+        + (mesmaRaiz
+            ? 'A raiz é a mesma, então parece ser outra filial da mesma empresa — talvez caiba um cadastro próprio.'
+            : 'São empresas diferentes; confira se o fornecedor não foi trocado.')
+        + ' Nada foi alterado.');
+      setForm(f => ({ ...f, emitenteId: c.id, emitenteNome: c.nome, emitenteDocumento: c.cpfCnpj ?? '' }));
+      setCandidatos([]);
+      return;
+    }
+    if (!jaTem) {
+      const ok = await onGravarDocumentoFornecedor?.(c.id, cnpjDaNota);
+      if (!ok) return;
+    }
+    setForm(f => ({ ...f, emitenteId: c.id, emitenteNome: c.nome, emitenteDocumento: cnpjDaNota }));
+    setSugeridos(prev => new Set([...prev, 'emitenteId']));
+    setCandidatos([]);
   };
 
   const lerNota = async (file: File) => {
@@ -286,6 +344,43 @@ export function DocumentoFormOC({ api, somenteLeitura, fornecedores, contraparte
       {avisoLeitura && (
         <div className="rounded-md border border-primary/30 bg-primary/5 px-2 py-1 text-[11px] text-foreground">
           {avisoLeitura}
+        </div>
+      )}
+
+      {/* ── SITUACAO 2: nome parecido, sem CNPJ igual ────────────────────────────
+          A pergunta e' explicita porque a resposta ESCREVE no cadastro. Nome parecido
+          nao e' prova: "Joao Silva" pode ser dois. Nada e gravado antes do clique. */}
+      {candidatos.length > 0 && cnpjDaNota && (
+        <div className="rounded-md border border-primary/40 bg-primary/5 px-2 py-1.5 space-y-1">
+          <div className="text-[11px] leading-tight">
+            A nota é de <strong>{nomeDaNota ?? 'emitente não identificado'}</strong>, CNPJ <strong>{cnpjDaNota}</strong>.
+            Encontrei no cadastro:
+          </div>
+          <div className="space-y-0.5">
+            {candidatos.map(c => (
+              <div key={c.id} className="flex items-center justify-between gap-2">
+                <span className="text-[11px] min-w-0 truncate">
+                  {c.nome}
+                  <span className="text-muted-foreground">
+                    {c.cpfCnpj ? ` · ${c.cpfCnpj}` : ' · sem documento'}
+                  </span>
+                </span>
+                <Button type="button" variant="outline" size="sm" className="h-6 text-[10px] shrink-0"
+                  onClick={() => void escolherCandidato(c)}>É este</Button>
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-end">
+            <Button type="button" variant="ghost" size="sm" className="h-6 text-[10px]"
+              onClick={() => setCandidatos([])}>Nenhum destes — criar novo</Button>
+          </div>
+        </div>
+      )}
+
+      {/* Conflito de documento: avisa e nao altera nada. */}
+      {conflitoDoc && (
+        <div className="rounded-md border border-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2 py-1 text-[11px] text-amber-800 dark:text-amber-200 leading-tight">
+          {conflitoDoc}
         </div>
       )}
 

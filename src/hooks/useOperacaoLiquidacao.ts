@@ -180,7 +180,7 @@ export interface LiquidacaoApi {
   liquidacoesPorTitulo: Record<string, LiquidacaoEvento[]>;
   documentos: DocumentoOpcao[];
   componentes: ComponenteCatalogo[];
-  fornecedores: { id: string; nome: string }[];
+  fornecedores: { id: string; nome: string; cpfCnpj: string | null }[];
   tipoOperacao: string | null;
   naturezaFluxo: NaturezaFluxo | null;
   clienteId: string | null;        // para a cascata de classificação (usePlanoContasOC)
@@ -223,7 +223,12 @@ interface LiqRow {
 interface ParteMetaRow { id: string; descricao: string | null; }
 interface DocRow { id: string; especie: string | null; numero: string | null; serie: string | null; }
 interface CompRow { natureza: string; codigo: string; nome: string | null; categoria: string | null; }
-interface FornRow { id: string; nome: string | null; }
+/* ⚠ `cpf_cnpj` ENTROU em PR-OC-DOC-ENRIQUECER-FORNECEDOR-01, e a ausencia dele era um
+   DEFEITO VIVO: o casamento do emitente por CNPJ (1b99b09e) comparava contra um campo
+   que a lista nunca trouxe, entao NUNCA casava. Uma coluna a mais numa consulta ja
+   paginada; o custo e' desprezivel e o beneficio e' a busca por semelhanca acontecer no
+   NAVEGADOR, sobre a lista que ja esta em memoria, sem ida ao banco. */
+interface FornRow { id: string; nome: string | null; cpf_cnpj: string | null; }
 interface OpMetaRow { tipo_operacao: string; versao: number; contraparte_id: string | null; valor_acordado: number | null; }
 interface LoteRow {
   id: string;
@@ -251,7 +256,7 @@ export function useOperacaoLiquidacao({ operacaoId, clienteId, enabled }: Params
   const [liquidacoesPorTitulo, setLiquidacoesPorTitulo] = useState<Record<string, LiquidacaoEvento[]>>({});
   const [documentos, setDocumentos] = useState<DocumentoOpcao[]>([]);
   const [componentes, setComponentes] = useState<ComponenteCatalogo[]>([]);
-  const [fornecedores, setFornecedores] = useState<{ id: string; nome: string }[]>([]);
+  const [fornecedores, setFornecedores] = useState<{ id: string; nome: string; cpfCnpj: string | null }[]>([]);
   const [tipoOperacao, setTipoOperacao] = useState<string | null>(null);
   const [contraparteId, setContraparteId] = useState<string | null>(null);   // favorecido default (não altera a contraparte comercial)
   const [lotes, setLotes] = useState<LoteOC[]>([]);
@@ -301,7 +306,7 @@ export function useOperacaoLiquidacao({ operacaoId, clienteId, enabled }: Params
       let fornFrom = 0;
       for (;;) {
         const pagina = await (supabase as any).from('financeiro_fornecedores')
-          .select('id, nome')
+          .select('id, nome, cpf_cnpj')
           .eq('cliente_id', clienteId)
           .eq('ativo', true)
           .order('nome').order('id')
@@ -329,7 +334,7 @@ export function useOperacaoLiquidacao({ operacaoId, clienteId, enabled }: Params
       const faltantes = Array.from(idsEmUso).filter(id => !jaNaLista.has(id));
       if (faltantes.length > 0) {
         const extra = await (supabase as any).from('financeiro_fornecedores')
-          .select('id, nome').in('id', faltantes);
+          .select('id, nome, cpf_cnpj').in('id', faltantes);
         if (extra.error) throw new Error(extra.error.message);
         fornAcumulado.push(...((extra.data ?? []) as FornRow[]));
       }
@@ -384,7 +389,7 @@ export function useOperacaoLiquidacao({ operacaoId, clienteId, enabled }: Params
 
       setDocumentos(docRows.map(d => ({ id: d.id, label: docLabelOf(d) })));
       setComponentes(((comps.data ?? []) as CompRow[]).map(c => ({ natureza: c.natureza, codigo: c.codigo, nome: c.nome ?? c.codigo, categoria: c.categoria })));
-      setFornecedores(fornRows.map(f => ({ id: f.id, nome: f.nome ?? '' })));
+      setFornecedores(fornRows.map(f => ({ id: f.id, nome: f.nome ?? '', cpfCnpj: f.cpf_cnpj ?? null })));
       setTipoOperacao(opMetaRow?.tipo_operacao ?? null);
       setContraparteId(opMetaRow?.contraparte_id ?? null);
       setValorAcordado(opMetaRow?.valor_acordado == null ? null : Number(opMetaRow.valor_acordado));
