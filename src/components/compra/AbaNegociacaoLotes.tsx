@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -39,7 +41,6 @@ const CRITERIOS: { value: CriterioValor; label: string; unidade: string }[] = [
 ];
 
 const GRID_LEG = 'grid grid-cols-[1.3fr_0.7fr_0.9fr_1fr_1.1fr_1fr_1fr] gap-2';
-const GRID_OC = 'grid grid-cols-[1.2fr_0.7fr_0.8fr_0.9fr_1.5fr_1fr_1fr_0.5fr] gap-2';
 
 const brl = (n: number) => (n > 0 ? n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'R$ —');
 const fmtKg = (n: number) => (n > 0 ? `${n.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} kg` : '—');
@@ -103,112 +104,295 @@ export function AbaNegociacaoLotes({
   categoria, categoriasDisponiveis, quantidadeNum, pesoKgNum, darkSelectClass,
   modoOC, operacaoPronta, lotesApi, somenteLeitura, fisicoBloqueado, onVoltarCompra,
 }: Props) {
-  // ── MODO OC: grade editável de múltiplos lotes ──
+  /* ── MODO OC — delegado a um componente PROPRIO (PR-OC-UX-LOTE-C2-01) ──────
+     O modal de lote precisa de estado (qual lote esta aberto), e hook nao pode
+     morar dentro de `if`. Extrair era a unica saida correta — e e' o mesmo padrao
+     que `NegociacaoLegado` ja seguia logo abaixo. */
   if (modoOC && lotesApi) {
-    const { lotes, adicionarLote, editarLote, removerLote, totais, loading } = lotesApi;
-    /* Um so lugar decide o congelamento do fisico, para as tres colunas nao
-       divergirem entre si numa edicao futura. */
-    const fisicoRO = !!somenteLeitura || !!fisicoBloqueado;
-    // Mesmas medias que o resumo lateral exibe — a conta mora em useCompraLotes.
-    const pesoMedio = pesoMedioPorCabeca(totais);
-    const valorKg = valorPorKgNegociado(totais);
     return (
-      <div className="rounded-md border bg-card p-2 shadow-sm space-y-1 min-w-0">
-        <div className="flex items-center justify-between gap-2">
-          <div>
-            <div className="text-[12px] font-semibold text-foreground">Negociação dos Lotes</div>
-            <div className="text-[11px] text-muted-foreground">Cadastre, edite e precifique cada lote da compra.</div>
-          </div>
-          {!fisicoRO && (
-            <Button type="button" variant="outline" size="sm" disabled={!operacaoPronta} onClick={adicionarLote}
-              className="h-7 text-[11px] gap-1" title={operacaoPronta ? undefined : 'Salve a operação na aba Compra primeiro'}>
-              <Plus className="h-3 w-3" /> Adicionar lote
-            </Button>
-          )}
-        </div>
-
-        {!operacaoPronta ? (
-          <div className="rounded-md border border-dashed bg-muted/10 px-3 py-5 text-center space-y-2">
-            <div className="text-[11px] text-muted-foreground">Salve a identificação da compra para adicionar os lotes da negociação.</div>
-            <Button type="button" variant="outline" size="sm" className="h-7 text-[11px]" onClick={onVoltarCompra}>Voltar para Compra</Button>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <div className="min-w-[720px]">
-              <div className={`${GRID_OC} px-1 pb-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground`}>
-                {/* PR-OC-UX-LOTE-C1-01 — asterisco nas QUATRO que podem ficar vazias e sao
-                    exigidas para concluir (guard `loteCompleto`, CompraModalShell). Criterio
-                    NAO leva: nasce com 'kg' em `adicionarLote` e nunca fica vazio, entao
-                    marca-lo seria ruido. Peso e' o unico que o BANCO tambem exige
-                    (PR-OC-PESO-OBRIGATORIO-01); os outros tres sao gate de tela. */}
-                <span className="text-center">Categoria <span className="text-destructive">*</span></span>
-                <span className="text-center">Qtde <span className="text-destructive">*</span></span>
-                <span className="text-center">Peso Méd. <span className="text-destructive">*</span></span>
-                <span className="text-center">Peso Tot.</span><span className="text-center">Critério</span><span className="text-center">Valor <span className="text-destructive">*</span></span>
-                <span className="text-center">Total</span><span className="text-center">Ações</span>
-              </div>
-              {lotes.length === 0 ? (
-                <div className="rounded-md border border-dashed bg-muted/10 px-3 py-3 text-center text-[11px] text-muted-foreground">
-                  {loading ? 'Carregando lotes…' : 'Nenhum lote. Clique em "Adicionar lote".'}
-                </div>
-              ) : lotes.map(l => {
-                const pt = (parseNumericValue(l.quantidade) || 0) * (parseNumericValue(l.pesoMedioKg) || 0);
-                const unidade = CRITERIOS.find(c => c.value === l.criterioValor)?.unidade || 'Valor';
-                const resumo = resumoLote(l.criterioValor, l.quantidade, l.pesoMedioKg, l.valorInformado);
-                return (
-                  <div key={l.idLocal} className="rounded-md border bg-muted/20 px-1 py-0.5">
-                    <div className={`${GRID_OC} items-center`}>
-                      <Select value={l.categoria || undefined} onValueChange={v => editarLote(l.idLocal, { categoria: v })} disabled={fisicoRO}>
-                        <SelectTrigger className="h-6 text-[11px]"><SelectValue placeholder="Categoria" /></SelectTrigger>
-                        <SelectContent className={`${darkSelectClass} max-h-[70vh] overflow-y-auto`}>
-                          {categoriasDisponiveis.map(c => <SelectItem key={c.value} value={c.value} className="text-[11px] py-1">{c.label}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                      <Input inputMode="numeric" value={l.quantidade} onChange={e => editarLote(l.idLocal, { quantidade: e.target.value })} placeholder="0" disabled={fisicoRO} className="h-6 text-[11px] text-right tabular-nums" />
-                      <Input inputMode="decimal" value={l.pesoMedioKg} onChange={e => editarLote(l.idLocal, { pesoMedioKg: e.target.value })} placeholder="0,00" disabled={fisicoRO}
-                        title={(parseNumericValue(l.pesoMedioKg) || 0) > 0 ? undefined : 'Peso obrigatório — sem ele o lote não pode ser salvo'}
-                        className={`h-6 text-[11px] text-right tabular-nums ${(parseNumericValue(l.pesoMedioKg) || 0) > 0 ? '' : 'border-destructive focus-visible:ring-destructive'}`} />
-                      <div className="text-[11px] text-right tabular-nums text-muted-foreground">{fmtKg(pt)}</div>
-                      <Select value={l.criterioValor} onValueChange={v => editarLote(l.idLocal, { criterioValor: v as CriterioValor })} disabled={somenteLeitura}>
-                        <SelectTrigger className="h-6 text-[11px]"><SelectValue /></SelectTrigger>
-                        <SelectContent className={darkSelectClass}>
-                          {CRITERIOS.map(c => <SelectItem key={c.value} value={c.value} className="text-[11px] py-1">{c.label}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                      <ValorInput value={l.valorInformado} onChange={v => editarLote(l.idLocal, { valorInformado: v })} placeholder={unidade} disabled={somenteLeitura} />
-                      <div className="text-[11px] text-right tabular-nums font-semibold">{brl(loteTotal(l.criterioValor, l.quantidade, l.pesoMedioKg, l.valorInformado))}</div>
-                      <div className="text-center">
-                        {!fisicoRO && (
-                          <button type="button" onClick={() => removerLote(l.idLocal)} className="text-muted-foreground/60 hover:text-destructive" aria-label="Remover lote">
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    {resumo && <div className="text-[10px] text-muted-foreground leading-tight pl-1 pt-0.5">{resumo}</div>}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* PR-OC-UX-DENSIDADE-01 item 4 — cards compactos em UMA linha; destaque só p/ Valor Principal.
-            Médias derivadas dos totais (sem alterar cálculo/estado): peso méd, R$/cab méd, R$/kg méd. */}
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 pt-1">
-          <div className="rounded-md border bg-muted/20 px-1.5 py-0.5"><div className="text-[9px] text-muted-foreground leading-none">Lotes</div><div className="font-bold text-[12px] tabular-nums">{totais.lotes || '—'}</div></div>
-          <div className="rounded-md border bg-muted/20 px-1.5 py-0.5"><div className="text-[9px] text-muted-foreground leading-none">Animais</div><div className="font-bold text-[12px] tabular-nums">{totais.animais || '—'}</div></div>
-          <div className="rounded-md border bg-muted/20 px-1.5 py-0.5"><div className="text-[9px] text-muted-foreground leading-none">Peso Méd.</div><div className="font-bold text-[12px] tabular-nums">{pesoMedio == null ? '—' : fmtKg(pesoMedio)}</div></div>
-          <div className="rounded-md border bg-muted/20 px-1.5 py-0.5"><div className="text-[9px] text-muted-foreground leading-none">R$/cab Méd.</div><div className="font-bold text-[12px] tabular-nums">{totais.animais > 0 ? brl(totais.valorNegociado / totais.animais) : '—'}</div></div>
-          <div className="rounded-md border bg-muted/20 px-1.5 py-0.5"><div className="text-[9px] text-muted-foreground leading-none">R$/kg Méd.</div><div className="font-bold text-[12px] tabular-nums">{valorKg == null ? '—' : brl(valorKg)}</div></div>
-          <div className="rounded-md border-2 border-primary/40 bg-primary/5 px-1.5 py-0.5"><div className="text-[9px] text-muted-foreground leading-none">Valor Principal</div><div className="font-bold text-[13px] text-primary tabular-nums">{brl(totais.valorNegociado)}</div></div>
-        </div>
-      </div>
+      <NegociacaoOC
+        lotesApi={lotesApi}
+        categoriasDisponiveis={categoriasDisponiveis}
+        darkSelectClass={darkSelectClass}
+        operacaoPronta={!!operacaoPronta}
+        somenteLeitura={!!somenteLeitura}
+        fisicoBloqueado={!!fisicoBloqueado}
+        onVoltarCompra={onVoltarCompra}
+      />
     );
   }
 
+/* ═══ MODO OC — LISTA COMPACTA + MODAL POR LOTE (PR-OC-UX-LOTE-C2-01) ═══════════
+   Antes: grade de 8 colunas editaveis inline, todos os lotes editaveis ao mesmo
+   tempo, mais 6 caixas de totais embaixo. A tela pedia atencao para tudo de uma vez.
+   Agora: uma linha somente-leitura por lote; a edicao acontece num modal, um lote
+   de cada vez, com espaco para respirar.
+
+   ⚠ O MODAL NAO GRAVA NO BANCO, e isso e' deliberado. Ele edita o ESTADO LOCAL, que
+   e' exatamente o que a grade fazia: quem persiste continua sendo `lotesApi.salvar()`,
+   acionado pelos botoes do rodape ("Salvar rascunho" / "Concluir lotes e continuar").
+   Duas razoes:
+     1. Contrato — nao criar caminho novo de escrita.
+     2. Armadilha real — `salvar` e' `useCallback` sobre `lotes`; chama-lo logo apos
+        `editarLote` no mesmo clique persistiria a lista ANTERIOR, sem a edicao. E' a
+        mesma familia do bug de closure que ja custou correcao nesta tela.
+   Por isso o botao do modal diz "Aplicar", nao "Salvar": dizer Salvar sem gravar
+   seria mentir para o operador. */
+function NegociacaoOC({
+  lotesApi, categoriasDisponiveis, darkSelectClass, operacaoPronta, somenteLeitura, fisicoBloqueado, onVoltarCompra,
+}: {
+  lotesApi: NonNullable<Props['lotesApi']>;
+  categoriasDisponiveis: Props['categoriasDisponiveis'];
+  darkSelectClass?: string;
+  operacaoPronta: boolean;
+  somenteLeitura: boolean;
+  fisicoBloqueado: boolean;
+  onVoltarCompra?: () => void;
+}) {
+  const { lotes, adicionarLote, editarLote, removerLote, totais, loading } = lotesApi;
+  /* Um so lugar decide o congelamento do fisico, para as tres colunas nao divergirem
+     entre si numa edicao futura. Mantido do desenho anterior — e' regra de negocio
+     (PR-OC-LOTE-VALOR-01), nao detalhe visual, e vale igual dentro do modal. */
+  const fisicoRO = somenteLeitura || fisicoBloqueado;
+  const pesoMedio = pesoMedioPorCabeca(totais);
+  const valorKg = valorPorKgNegociado(totais);
+
+  const [editandoId, setEditandoId] = useState<string | null>(null);
+  const emEdicao = lotes.find(l => l.idLocal === editandoId) ?? null;
+
+  /* "Adicionar lote" cria a linha E ja abre o modal nela. Sem isto, trocar a grade
+     pelo modal deixaria o cadastro MAIS lento: o usuario clicaria em adicionar, a
+     linha apareceria vazia na lista, e ele teria de clicar de novo para editar. */
+  const [pendenteAbrirNovo, setPendenteAbrirNovo] = useState(false);
+  const abrirNovo = () => {
+    adicionarLote();
+    setPendenteAbrirNovo(true);
+  };
+  useEffect(() => {
+    if (!pendenteAbrirNovo || lotes.length === 0) return;
+    setEditandoId(lotes[lotes.length - 1].idLocal);
+    setPendenteAbrirNovo(false);
+  }, [pendenteAbrirNovo, lotes]);
+
+  const rotuloCategoria = (slug: string) =>
+    categoriasDisponiveis.find(c => c.value === slug)?.label || slug || 'Sem categoria';
+
+  return (
+    <div className="rounded-md border bg-card p-2 shadow-sm space-y-1 min-w-0">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <div className="text-[12px] font-semibold text-foreground">Negociação dos Lotes</div>
+          <div className="text-[11px] text-muted-foreground">Clique num lote para editar.</div>
+        </div>
+        {!fisicoRO && (
+          <Button type="button" variant="outline" size="sm" disabled={!operacaoPronta} onClick={abrirNovo}
+            className="h-7 text-[11px] gap-1" title={operacaoPronta ? undefined : 'Salve a operação na aba Compra primeiro'}>
+            <Plus className="h-3 w-3" /> Adicionar lote
+          </Button>
+        )}
+      </div>
+
+      {!operacaoPronta ? (
+        <div className="rounded-md border border-dashed bg-muted/10 px-3 py-5 text-center space-y-2">
+          <div className="text-[11px] text-muted-foreground">Salve a identificação da compra para adicionar os lotes da negociação.</div>
+          <Button type="button" variant="outline" size="sm" className="h-7 text-[11px]" onClick={onVoltarCompra}>Voltar para Compra</Button>
+        </div>
+      ) : lotes.length === 0 ? (
+        <div className="rounded-md border border-dashed bg-muted/10 px-3 py-3 text-center text-[11px] text-muted-foreground">
+          {loading ? 'Carregando lotes…' : 'Nenhum lote. Clique em "Adicionar lote".'}
+        </div>
+      ) : (
+        <div className="space-y-0.5">
+          {lotes.map(l => {
+            const q = parseNumericValue(l.quantidade) || 0;
+            const pm = parseNumericValue(l.pesoMedioKg) || 0;
+            const semPeso = pm <= 0;
+            return (
+              <div key={l.idLocal}
+                onClick={() => setEditandoId(l.idLocal)}
+                className="flex items-center gap-2 rounded-md border bg-muted/20 px-2 py-1 cursor-pointer hover:bg-muted/40">
+                <div className="min-w-0 flex-1 text-[11px] leading-tight">
+                  <span className="font-medium">{rotuloCategoria(l.categoria)}</span>
+                  <span className="text-muted-foreground"> · {q || '—'} cab · {fmtKg(pm)}</span>
+                  {/* O lote invalido se anuncia na LISTA, nao so quando o modal abre:
+                      quem tem cinco lotes precisa ver qual esta pendente sem abrir os cinco. */}
+                  {semPeso && <span className="text-destructive"> · sem peso</span>}
+                </div>
+                <div className="text-[11px] tabular-nums font-semibold whitespace-nowrap">
+                  {brl(loteTotal(l.criterioValor, l.quantidade, l.pesoMedioKg, l.valorInformado))}
+                </div>
+                {!fisicoRO && (
+                  <button type="button" aria-label="Remover lote"
+                    onClick={(e) => { e.stopPropagation(); removerLote(l.idLocal); }}
+                    className="text-muted-foreground/60 hover:text-destructive shrink-0">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Totais — os mesmos seis, sem a grade competindo por atencao ao lado deles. */}
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 pt-1">
+        <div className="rounded-md border bg-muted/20 px-1.5 py-0.5"><div className="text-[9px] text-muted-foreground leading-none">Lotes</div><div className="font-bold text-[12px] tabular-nums">{totais.lotes || '—'}</div></div>
+        <div className="rounded-md border bg-muted/20 px-1.5 py-0.5"><div className="text-[9px] text-muted-foreground leading-none">Animais</div><div className="font-bold text-[12px] tabular-nums">{totais.animais || '—'}</div></div>
+        <div className="rounded-md border bg-muted/20 px-1.5 py-0.5"><div className="text-[9px] text-muted-foreground leading-none">Peso Méd.</div><div className="font-bold text-[12px] tabular-nums">{pesoMedio == null ? '—' : fmtKg(pesoMedio)}</div></div>
+        <div className="rounded-md border bg-muted/20 px-1.5 py-0.5"><div className="text-[9px] text-muted-foreground leading-none">R$/cab Méd.</div><div className="font-bold text-[12px] tabular-nums">{totais.animais > 0 ? brl(totais.valorNegociado / totais.animais) : '—'}</div></div>
+        <div className="rounded-md border bg-muted/20 px-1.5 py-0.5"><div className="text-[9px] text-muted-foreground leading-none">R$/kg Méd.</div><div className="font-bold text-[12px] tabular-nums">{valorKg == null ? '—' : brl(valorKg)}</div></div>
+        <div className="rounded-md border-2 border-primary/40 bg-primary/5 px-1.5 py-0.5"><div className="text-[9px] text-muted-foreground leading-none">Valor Principal</div><div className="font-bold text-[13px] text-primary tabular-nums">{brl(totais.valorNegociado)}</div></div>
+      </div>
+
+      {emEdicao && (
+        <LoteDialog
+          /* ⚠ `key` NAO E' DECORACAO. O estado do modal e' inicializado no MOUNT a
+             partir do lote. Sem a key, "Aplicar e adicionar outro" mantinha o
+             componente montado e o lote NOVO abriria com os valores do ANTERIOR —
+             o usuario cadastraria o segundo lote por cima do primeiro sem perceber. */
+          key={emEdicao.idLocal}
+          lote={emEdicao}
+          categoriasDisponiveis={categoriasDisponiveis}
+          darkSelectClass={darkSelectClass}
+          fisicoRO={fisicoRO}
+          somenteLeitura={somenteLeitura}
+          rotuloCategoria={rotuloCategoria}
+          onAplicar={(patch) => { editarLote(emEdicao.idLocal, patch); setEditandoId(null); }}
+          onAplicarEAdicionar={(patch) => { editarLote(emEdicao.idLocal, patch); abrirNovo(); }}
+          onFechar={() => setEditandoId(null)}
+        />
+      )}
+    </div>
+  );
+}
+
   // ── MODO LEGADO: linha read-only (inalterado) ──
   return <NegociacaoLegado categoria={categoria} categoriasDisponiveis={categoriasDisponiveis} quantidadeNum={quantidadeNum} pesoKgNum={pesoKgNum} darkSelectClass={darkSelectClass} />;
+}
+
+/* O MODAL DE UM LOTE. Densidade do padrao canonico do sistema (modal Novo Lancamento
+   do Financeiro): rotulo `text-[10px]` sem negrito, campo `h-8`.
+   Edita um RASCUNHO local e so devolve o patch ao aplicar — fechar pelo X ou pelo Esc
+   descarta, que e' o que "Cancelar" significa. */
+function LoteDialog({
+  lote, categoriasDisponiveis, darkSelectClass, fisicoRO, somenteLeitura, rotuloCategoria,
+  onAplicar, onAplicarEAdicionar, onFechar,
+}: {
+  lote: NonNullable<Props['lotesApi']>['lotes'][number];
+  categoriasDisponiveis: Props['categoriasDisponiveis'];
+  darkSelectClass?: string;
+  fisicoRO: boolean;
+  somenteLeitura: boolean;
+  rotuloCategoria: (slug: string) => string;
+  onAplicar: (patch: Partial<NonNullable<Props['lotesApi']>['lotes'][number]>) => void;
+  onAplicarEAdicionar: (patch: Partial<NonNullable<Props['lotesApi']>['lotes'][number]>) => void;
+  onFechar: () => void;
+}) {
+  const [categoria, setCategoria] = useState(lote.categoria);
+  const [quantidade, setQuantidade] = useState(lote.quantidade);
+  const [pesoMedioKg, setPesoMedioKg] = useState(lote.pesoMedioKg);
+  const [criterioValor, setCriterioValor] = useState<CriterioValor>(lote.criterioValor);
+  const [valorInformado, setValorInformado] = useState(lote.valorInformado);
+
+  const pm = parseNumericValue(pesoMedioKg) || 0;
+  const semPeso = pm <= 0;
+  const unidade = CRITERIOS.find(c => c.value === criterioValor)?.unidade || 'Valor';
+  const resumo = resumoLote(criterioValor, quantidade, pesoMedioKg, valorInformado);
+  const total = loteTotal(criterioValor, quantidade, pesoMedioKg, valorInformado);
+  const patch = { categoria, quantidade, pesoMedioKg, criterioValor, valorInformado };
+
+  /* PESO OBRIGATORIO na porta do modal, e nao so no salvar: `oc_salvar_lotes` recusa a
+     OPERACAO INTEIRA por um lote sem peso (PR-OC-PESO-OBRIGATORIO-01), entao deixar o
+     lote sair daqui invalido so adia a recusa para o rodape, longe de onde se corrige.
+     A mensagem nomeia o lote pela categoria, como a do banco. */
+  const podeAplicar = !semPeso;
+  const motivoBloqueio = semPeso
+    ? `Informe o peso médio do lote ${rotuloCategoria(categoria)}. Lote sem peso não pode ser salvo.`
+    : undefined;
+
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onFechar(); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-[13px]">{rotuloCategoria(categoria)}</DialogTitle>
+          <DialogDescription className="text-[11px]">
+            {fisicoRO
+              ? 'Esta compra já teve recebimento: categoria, quantidade e peso ficam bloqueados. Critério e valor seguem editáveis.'
+              : 'Os campos do lote negociado.'}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-2">
+          <div>
+            <Label className="text-[10px]">Categoria <span className="text-destructive">*</span></Label>
+            <Select value={categoria || undefined} onValueChange={setCategoria} disabled={fisicoRO}>
+              <SelectTrigger className="h-8 text-[12px] mt-0.5"><SelectValue placeholder="Selecione a categoria" /></SelectTrigger>
+              <SelectContent className={`${darkSelectClass} max-h-[60vh] overflow-y-auto`}>
+                {categoriasDisponiveis.map(c => <SelectItem key={c.value} value={c.value} className="text-[12px]">{c.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label className="text-[10px]">Quantidade <span className="text-destructive">*</span></Label>
+              <Input inputMode="numeric" value={quantidade} onChange={e => setQuantidade(e.target.value)} placeholder="0"
+                disabled={fisicoRO} className="h-8 text-[12px] mt-0.5 text-right tabular-nums" />
+            </div>
+            <div>
+              <Label className="text-[10px]">Peso médio (kg) <span className="text-destructive">*</span></Label>
+              <Input inputMode="decimal" value={pesoMedioKg} onChange={e => setPesoMedioKg(e.target.value)} placeholder="0,00"
+                disabled={fisicoRO} title={motivoBloqueio}
+                className={`h-8 text-[12px] mt-0.5 text-right tabular-nums ${semPeso ? 'border-destructive focus-visible:ring-destructive' : ''}`} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label className="text-[10px]">Critério</Label>
+              <Select value={criterioValor} onValueChange={v => setCriterioValor(v as CriterioValor)} disabled={somenteLeitura}>
+                <SelectTrigger className="h-8 text-[12px] mt-0.5"><SelectValue /></SelectTrigger>
+                <SelectContent className={darkSelectClass}>
+                  {CRITERIOS.map(c => <SelectItem key={c.value} value={c.value} className="text-[12px]">{c.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-[10px]">Valor <span className="text-destructive">*</span></Label>
+              <div className="mt-0.5">
+                <ValorInput value={valorInformado} onChange={setValorInformado} placeholder={unidade} disabled={somenteLeitura} />
+              </div>
+            </div>
+          </div>
+
+          {/* Derivados AO VIVO, como a grade ja mostrava na linha de baixo. */}
+          <div className="rounded-md border bg-muted/20 px-2 py-1 space-y-0.5">
+            {resumo && <div className="text-[10px] text-muted-foreground leading-tight">{resumo}</div>}
+            <div className="flex items-baseline justify-between">
+              <span className="text-[10px] text-muted-foreground">Total do lote</span>
+              <span className="text-[13px] font-bold text-primary tabular-nums">{brl(total)}</span>
+            </div>
+          </div>
+
+          {semPeso && <div className="text-[10px] text-destructive leading-tight">{motivoBloqueio}</div>}
+        </div>
+
+        <DialogFooter className="gap-1.5 sm:gap-1.5">
+          <span className="mr-auto text-[10px] text-muted-foreground leading-tight self-center">
+            Gravado ao salvar a negociação.
+          </span>
+          <Button variant="outline" size="sm" onClick={onFechar}>Cancelar</Button>
+          {!fisicoRO && (
+            <Button variant="secondary" size="sm" disabled={!podeAplicar} title={motivoBloqueio}
+              onClick={() => onAplicarEAdicionar(patch)}>
+              Aplicar e adicionar outro
+            </Button>
+          )}
+          <Button size="sm" disabled={!podeAplicar} title={motivoBloqueio} onClick={() => onAplicar(patch)}>Aplicar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 function NegociacaoLegado({ categoria, categoriasDisponiveis, quantidadeNum, pesoKgNum, darkSelectClass }: Pick<Props, 'categoria' | 'categoriasDisponiveis' | 'quantidadeNum' | 'pesoKgNum' | 'darkSelectClass'>) {
