@@ -37,6 +37,11 @@ export interface DocumentoLista {
      a divergencia e' que se grava. Quem exibir isso tem de dizer a contraparte, nunca "—". */
   emitenteId: string | null;
   emitenteNome: string | null;
+  /* ⚠ O DOCUMENTO DO EMITENTE ja vinha da view (o select e' `*`) e simplesmente nao era
+     mapeado — por isso a lista nao tinha como mostra-lo. E' o CNPJ IMPRESSO NA NOTA,
+     nao o do cadastro: sao coisas diferentes e a nota e' que vale aqui. Emitente
+     proprio ausente => nulo, e quem exibe usa o documento da CONTRAPARTE. */
+  emitenteDocumento: string | null;
 }
 
 export interface ComponentePayload { tipo: string; natureza: NaturezaComp; valor: number; descricao?: string; ordem: number; }
@@ -152,6 +157,7 @@ export function useOperacaoDocumentos({ operacaoId, clienteId, enabled }: Params
         qtdComponentes: d.qtd_componentes, qtdLotes: d.qtd_lotes, documentoOrigemId: d.documento_origem_id,
         url: d.url ?? null,
         emitenteId: d.emitente_id ?? null, emitenteNome: d.emitente_nome ?? null,
+        emitenteDocumento: d.emitente_documento ?? null,
       })));
       setLotes(((los.data ?? []) as LoteRow[]).map(l => ({ loteId: l.id, ordem: l.ordem, categoria: l.categoria_negociada })));
     } catch (e) {

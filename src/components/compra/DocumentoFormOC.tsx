@@ -3,6 +3,10 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SearchableSelect } from '@/components/ui/searchable-select';
+/* ⚠ O CAMPO DE DINHEIRO DO SISTEMA, nao um segundo. Ele ja existia — dentro de
+   AbaCompromissosOC, como funcao local e nao exportada — e era exatamente por isso que
+   este formulario mostrava `106425` cru: nao havia como reusar. Saiu de la inteiro. */
+import { CampoMoeda } from '@/components/ui/campo-moeda';
 import { Plus, Trash2, ArrowLeft, FileText, Paperclip, ChevronRight, ChevronDown } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { NovoFornecedorDialog } from '@/components/financeiro-v2/NovoFornecedorDialog';
@@ -297,6 +301,14 @@ export function DocumentoFormOC({ api, somenteLeitura, fornecedores, contraparte
   /* O campo unico E' o componente `valor_bruto`/`acrescimo` — nao ha estado paralelo a
      sincronizar. So aparece com a forma simples, entao reescrever o componente 0 na
      forma canonica nao pode apagar decomposicao nenhuma. */
+  /* PONTE string<->number, e SO isso: `CompRow.valor` e' string porque o payload a le
+     com `parseNumericValue`, e `CampoMoeda` trabalha com `number | null`. Formatacao
+     nenhuma acontece aqui — ela e' toda do campo.
+     ⚠ VAZIO E' AUSENCIA, NAO ZERO. Sem essa distincao, digitar "0,00" seria lido como
+     campo em branco e o valor sumiria da tela. */
+  const numeroDoCampo = (s: string) => (s.trim() === '' ? null : parseNumericValue(s));
+  const textoDoCampo = (n: number | null) => (n == null ? '' : String(n));
+
   const valorSimples = form.componentes[0]?.valor ?? '';
   const setValorSimples = (v: string) => setForm(f => ({
     ...f,
@@ -572,8 +584,8 @@ export function DocumentoFormOC({ api, somenteLeitura, fornecedores, contraparte
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-2 items-end">
             <div>
               <label className="text-[10px] text-muted-foreground">Valor total da nota</label>
-              <Input inputMode="decimal" value={valorSimples} disabled={somenteLeitura}
-                onChange={e => setValorSimples(e.target.value)} placeholder="0,00"
+              <CampoMoeda valor={numeroDoCampo(valorSimples)} disabled={somenteLeitura}
+                onChange={n => setValorSimples(textoDoCampo(n))} placeholder="R$ 0,00"
                 className={`h-7 text-[11px] text-right tabular-nums ${marcaSugerido('valorTotal')}`} />
             </div>
             <div className="lg:col-span-3 text-[10px] leading-tight pb-1.5">
@@ -613,7 +625,10 @@ export function DocumentoFormOC({ api, somenteLeitura, fornecedores, contraparte
               <SelectTrigger className="h-6 text-[11px]"><SelectValue /></SelectTrigger>
               <SelectContent>{NATUREZAS.map(n => <SelectItem key={n} value={n} className="text-[11px]">{NATUREZA_LABEL[n]}</SelectItem>)}</SelectContent>
             </Select>
-            <Input inputMode="decimal" value={c.valor} onChange={e => setComp(i, { valor: e.target.value })} placeholder="0,00" className="h-6 text-[11px] text-right tabular-nums" />
+            {/* MESMO campo do total: e' o MESMO dado. Sem isto, o valor apareceria
+                formatado com a decomposicao fechada e cru com ela aberta. */}
+            <CampoMoeda valor={numeroDoCampo(c.valor)} onChange={n => setComp(i, { valor: textoDoCampo(n) })}
+              placeholder="R$ 0,00" className="h-6 text-[11px] text-right tabular-nums" />
             <Input value={c.descricao} onChange={e => setComp(i, { descricao: e.target.value })} placeholder="opcional" className="h-6 text-[11px]" />
             <button type="button" onClick={() => rmComp(i)} className="text-muted-foreground/60 hover:text-destructive" aria-label="Remover"><Trash2 className="h-3.5 w-3.5" /></button>
           </div>

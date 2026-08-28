@@ -24,67 +24,17 @@ import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { NovoFornecedorDialog } from '@/components/financeiro-v2/NovoFornecedorDialog';
+/* ⚠ `CampoMoeda`, `brl`, `round2` e `parseMoeda` SAIRAM daqui para
+   @/components/ui/campo-moeda em PR-OC-DOC-AJUSTES-03, sem uma linha alterada. Eram
+   locais e nao exportados, entao outra tela nao tinha como reusar o campo — e a aba
+   Documentos exibia valor cru por isso. Aqui nao ha mais copia: esta e' a unica. */
+import { CampoMoeda, brl, round2 } from '@/components/ui/campo-moeda';
 
 // PR-OC-UI-FIN-VIEW / FIX-01 / FIX-01b — aba Financeiro do modelo de compromissos (Blocos A/B/C).
 //   Consome APENAS useOcCompromissos (totais/flags/modo soberanos da view; React nunca soma). Escrita
 //   via os 3 writers homologados, com oc.versao SEMPRE explícita. Sem estorno/renegociação/lote.
 
-const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtData = (iso: string | null) => (iso ? iso.split('-').reverse().join('/') : '—');
-const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
-
-// FIX-01b — parser monetário NATURAL: não força centavos durante a digitação. Retorna null p/ vazio/inválido
-//   (nunca NaN). Regra de separadores: último separador = decimal quando há '.' e ','; só ',' = decimal;
-//   só '.' = decimal se 1-2 dígitos após, senão milhar (ex.: 10.000). Arredonda só na normalização final.
-function parseMoeda(raw: string | null | undefined): number | null {
-  if (raw == null) return null;
-  const s = raw.replace(/[^\d.,]/g, '');           // remove R$, espaços, letras — mantém dígitos . ,
-  if (s === '') return null;
-  const hasDot = s.includes('.'), hasComma = s.includes(',');
-  let intRaw = '', decRaw = '';
-  if (hasDot && hasComma) {
-    const last = Math.max(s.lastIndexOf('.'), s.lastIndexOf(','));
-    intRaw = s.slice(0, last).replace(/[.,]/g, '');
-    decRaw = s.slice(last + 1).replace(/[.,]/g, '');
-  } else if (hasComma) {
-    const i = s.lastIndexOf(',');
-    intRaw = s.slice(0, i).replace(/,/g, '');
-    decRaw = s.slice(i + 1).replace(/,/g, '');
-  } else if (hasDot) {
-    const i = s.lastIndexOf('.');
-    const dec = s.slice(i + 1);
-    if (dec.length === 1 || dec.length === 2) { intRaw = s.slice(0, i).replace(/\./g, ''); decRaw = dec; }
-    else { intRaw = s.replace(/\./g, ''); decRaw = ''; }
-  } else {
-    intRaw = s;
-  }
-  if (intRaw === '' && decRaw === '') return null;
-  const n = Number(`${intRaw === '' ? '0' : intRaw}.${decRaw === '' ? '0' : decRaw}`);
-  return Number.isFinite(n) ? n : null;
-}
-
-// Campo monetário: texto de edição livre enquanto foca; normaliza p/ BRL (2 casas) no blur; emite o número.
-function CampoMoeda({ valor, onChange, placeholder, className }: {
-  valor: number | null; onChange: (n: number | null) => void; placeholder?: string; className?: string;
-}) {
-  const [texto, setTexto] = useState(valor != null ? brl(valor) : '');
-  const [editando, setEditando] = useState(false);
-  useEffect(() => { if (!editando) setTexto(valor != null ? brl(valor) : ''); }, [valor, editando]);
-  return (
-    <Input
-      inputMode="decimal" value={texto} placeholder={placeholder} className={className}
-      onFocus={() => setEditando(true)}
-      onChange={(e) => { setTexto(e.target.value); onChange(parseMoeda(e.target.value)); }}
-      onBlur={() => {
-        setEditando(false);
-        const n = parseMoeda(texto);
-        const r = n != null ? round2(n) : null;
-        onChange(r);
-        setTexto(r != null ? brl(r) : '');
-      }}
-    />
-  );
-}
 
 interface Props {
   ocApi: OcCompromissosApi;

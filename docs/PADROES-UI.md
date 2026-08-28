@@ -429,6 +429,41 @@ um mesmo registro; aqui a linha serve para **escolher** um registro entre vário
 
 ---
 
+## A19 — Valor monetário nunca aparece cru
+
+**Prefixo `R$`, separador de milhar e duas casas decimais — na exibição e na entrada.**
+Nunca número cru numa tela de dinheiro.
+
+```
+❌  106425
+✅  R$ 106.425,00
+```
+
+Na **entrada**, o campo se comporta como o peso em A15: **texto livre enquanto está em
+foco, normalizado ao sair dele.** Forçar a máscara a cada tecla briga com o cursor e
+impede digitar `1.234,5` de trás para frente; normalizar no `blur` dá as duas coisas.
+
+O campo do sistema é **`CampoMoeda`, em `src/components/ui/campo-moeda.tsx`**, junto do
+parser `parseMoeda`. **Não escrever um segundo.** Ele resolve a ambiguidade dos
+separadores de um jeito que não se acerta por improviso: com `.` e `,` juntos o último
+manda; só `,` é decimal; só `.` é decimal quando há 1-2 dígitos depois (`10.50`) e
+milhar quando há mais (`10.000`).
+
+> Este padrão nasceu de um defeito com causa conhecida: o campo já existia, mas **como
+> função local não exportada** dentro de `AbaCompromissosOC.tsx`. Nenhuma outra tela
+> conseguia reusá-lo, e a aba Documentos exibia `106425`. Componente compartilhado que
+> mora dentro de um componente de tela **não é compartilhado** — é só um que ainda não
+> foi duplicado. (PR-OC-DOC-AJUSTES-03.)
+
+Para **exibição** não há ainda um formatador único: existem **6** definições locais de
+`brl` em `src/`, e elas **não são equivalentes** — `CentralOperacoesComerciais` usa zero
+casas, `AbaNegociacaoLotes` devolve `'R$ —'` para valor não positivo, as demais usam o
+padrão de 2 casas. Unificar exige decidir caso a caso o que cada divergência significa,
+e por isso é frente própria: **PR-UI-BRL-UNICO-01**. Enquanto ela não acontece, A19
+obriga o formato; não obriga a origem da função.
+
+---
+
 ## Pendências deste documento
 
 - **Seletor de mês/ano com setas** — não existe. Enquanto não houver, `type="month"`

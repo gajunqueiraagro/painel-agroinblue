@@ -135,6 +135,11 @@ export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedo
     );
   }
 
+  /* A contraparte SEMPRE esta em `fornecedores`: `useOperacaoLiquidacao` poe o
+     `contraparte_id` em `idsEmUso` e a busca mesmo quando o filtro `ativo` a deixaria de
+     fora. Mesma origem que o formulario usa — nao ha segunda lista nem prop nova. */
+  const contraparte = (fornecedores ?? []).find(f => f.id === contraparteId) ?? null;
+
   const ativos = api.documentos.filter(d => !d.cancelado);
   const totalDocumentado = ativos.reduce((s, d) => s + d.valorLiquido, 0);
 
@@ -222,9 +227,17 @@ export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedo
              vira prefixo curto: "NF 007.086.649" se le de uma vez. */
           const identidade = numero ? `${PREFIXO_ESPECIE[d.especie]} ${numero}`.trim() : ESPECIE_LABEL[d.especie];
           /* ⚠ SEM emitente proprio NAO e' ausencia: significa que quem emitiu foi a
-             propria contraparte. Imprimir "—" faria o operador procurar um dado que
-             esta ali, so que no cabecalho da operacao. */
-          const contexto = [d.emitenteNome ?? 'Mesmo da operação', fmtData(d.dataEmissao)]
+             propria contraparte — entao a linha diz O NOME DELA. "Mesmo da operação"
+             nao informa nada numa lista onde todas as linhas dizem o mesmo, e o nome
+             ja estava na mao (mesma origem que o formulario usa).
+             ⚠ Sem documento cadastrado nao entra traco nem espaco: ausencia de CPF/CNPJ
+             nao e' informacao. So 4% dos fornecedores tem — vai aparecer pouco, e esta
+             certo. Cabe na MESMA linha: o pior caso medido (nome de 40 caracteres +
+             documento + data) da ~437px contra os ~553px do bloco, e o `truncate`
+             continua de rede. Terceira linha engordaria a lista que acabou de encolher. */
+          const emitenteNome = d.emitenteNome ?? contraparte?.nome ?? 'Mesmo da operação';
+          const emitenteDoc = d.emitenteNome ? d.emitenteDocumento : (contraparte?.cpfCnpj ?? null);
+          const contexto = [emitenteNome, emitenteDoc, fmtData(d.dataEmissao)]
             .filter(x => x && x !== '—').join(' · ');
           /* ⚠ DOCUMENTO SEM ARQUIVO E' UM ESTADO REAL, nao um erro escondido: o fluxo
              registra primeiro e sobe depois, entao uma falha no upload deixa a linha
