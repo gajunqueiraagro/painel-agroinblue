@@ -322,8 +322,10 @@ export function CompraModalShell(api: CompraModalShellProps) {
 
       {/* CORPO — altura FIXA (h-[62vh]) para a casca não mudar de tamanho entre abas; só o
           corpo rola (header/barra de abas/rodapé permanecem fixos fora do scroll). */}
-      {/* PR-OC-UX-DENSIDADE-01 — lateral 320px→240px (−25%), menos padding/gap, mais área útil vertical. */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_240px] gap-3 p-4 h-[66vh] overflow-y-auto bg-muted/30">
+      {/* PR-OC-UX-DENSIDADE-01 encolheu a lateral de 320px para 240px porque o conteudo nao
+          cabia. PR-OC-UX-LOTE-B-01 devolve 280px: com o resumo em pares rotulo-valor o
+          conteudo ficou enxuto, e 240px espremia os valores monetarios contra o rotulo. */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-3 p-4 h-[66vh] overflow-y-auto bg-muted/30">
         <div className="space-y-2 min-w-0">
           {abaAtiva === 'negociacao' ? (
             <AbaNegociacaoLotes
@@ -509,6 +511,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
             mini-card Situação/Fazenda + CompraResumoPanel preservado (outros callers). */}
         {api.modoOC ? (
           <ResumoLateralOC
+            tipoLabel={api.liquidacaoApi?.tipoOperacao ?? null}
             dataLabel={dataLabel}
             statusComercial={api.ocStatusComercial ?? null}
             fornecedorNome={fornecedorNome}

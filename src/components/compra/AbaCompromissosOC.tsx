@@ -113,7 +113,6 @@ const DARK_SEARCHABLE_CONTENT =
   '[&_button]:text-zinc-100 [&_button:hover]:bg-zinc-800/45 ' +
   '[&_.bg-accent]:bg-zinc-800/55 [&_.bg-accent]:text-zinc-100';
 
-const badgeStatusCompromisso = (s: string) => (s === 'programado' ? 'default' : s === 'cancelado' ? 'destructive' : 'secondary');
 const badgeStatusParcela = (s: string) => (s === 'materializada' ? 'default' : s === 'paga' ? 'default' : s === 'cancelada' ? 'destructive' : 'secondary');
 
 // PR-OC-HOMOLOG-01 item 2 — status financeiro em LINGUAGEM DE USUÁRIO (estados internos preservados).
@@ -141,6 +140,40 @@ function statusFinanceiroParcela(p: ParcelaMaterializacao): { icon: string; labe
   return { icon: '🟡', label: 'Programado', title: 'Título gerado, ainda sem liquidação.', alerta: false };
 }
 
+/* PR-OC-UX-LOTE-B-01 — tolerancia de centavo, a mesma ja usada em
+   `statusFinanceiroParcela` e no resumo lateral. Nao e' numero novo: e' o mesmo
+   criterio, escrito uma vez so. */
+const TOL_CENTAVO = 0.005;
+
+/* O DESVIO, NUNCA O CAMINHO. A tabela mostrava obrigacao -> programado -> lancado
+   -> liquidado em sete colunas; com a operacao paga, o MESMO numero aparecia seis
+   vezes na linha. Aqui so sai o que FALTA, e so quando falta. Cadeia inteira igual
+   ao valor => null, e a linha fica limpa: o Status ja diz tudo. */
+function desvioCompromisso(c: CompromissoResumo): string | null {
+  if (c.status === 'cancelado') return null;
+  if (c.saldoAProgramar > TOL_CENTAVO) return `falta programar ${brl(c.saldoAProgramar)}`;
+  const aLancar = c.totalProgramado - c.totalMaterializado;
+  if (aLancar > TOL_CENTAVO) return `falta lançar ${brl(aLancar)}`;
+  if (c.saldoFinanceiro > TOL_CENTAVO) return `falta liquidar ${brl(c.saldoFinanceiro)}`;
+  return null;
+}
+
+/* ESTADO do compromisso — MESMA regra ja aplicada as parcelas
+   (`statusFinanceiroParcela`) e ao resumo lateral (`statusFinanceiro`), agora no
+   nivel do compromisso. Nao ha fonte nem calculo novo: sao os totais que a view ja
+   entrega, lidos na ordem em que a cadeia acontece.
+   ⚠ O `status` CRU (aberto/programado/cancelado) nao some — vai no `title`, porque
+   e' ele que os gates do banco usam e quem depura precisa dele. */
+function estadoCompromisso(c: CompromissoResumo): { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' } {
+  if (c.status === 'cancelado') return { label: 'Cancelado', variant: 'destructive' };
+  if (c.valorCompromisso <= 0) return { label: '—', variant: 'outline' };
+  if (c.totalLiquidado >= c.valorCompromisso - TOL_CENTAVO) return { label: 'Pago', variant: 'default' };
+  if (c.totalLiquidado > TOL_CENTAVO) return { label: 'Parcial', variant: 'secondary' };
+  if (c.totalMaterializado > TOL_CENTAVO) return { label: 'Lançado', variant: 'secondary' };
+  if (c.totalProgramado > TOL_CENTAVO) return { label: 'Programado', variant: 'secondary' };
+  return { label: 'Aberto', variant: 'outline' };
+}
+
 export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, fornecedores, valorAcordado, lotes, contraparteId, dataOperacao, dataChegada, darkSelectClass, recarregarDados }: Props) {
   const { resumoOperacao, compromissos, parcelas, versao, saving } = ocApi;
   const [searchParams, setSearchParams] = useSearchParams();
@@ -156,6 +189,12 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
      qual deles age. */
   const [saldoAlvo, setSaldoAlvo] = useState<CompromissoResumo | null>(null);
   const [confirmarParcela, setConfirmarParcela] = useState<ParcelaMaterializacao | null>(null);
+  /* PR-OC-UX-LOTE-B-01 — o detalhe virou MODAL. `selectedId` continua existindo e
+     seguindo a regra de estabilidade apos refetch (ver acima): e' o que mantem o
+     modal aberto e no mesmo compromisso quando uma acao interna recarrega os dados.
+     A abertura e' um estado SEPARADO porque `selecionado` ja nasce preenchido (1o
+     nao-cancelado) — usar ele como "aberto" faria o modal saltar na tela sozinho. */
+  const [detalheAberto, setDetalheAberto] = useState(false);
   /* CANCELADOS OCULTOS por padrao, com toggle para auditoria — mesmo idioma da
      Central, que ja esconde OC cancelada. Cancelado nao e' trabalho pendente:
      poluia a lista e competia com o que ainda pede acao. */
@@ -183,6 +222,21 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
   }, [compromissosVisiveis, selectedId]);
 
   const selecionado = useMemo(() => compromissos.find(c => c.compromissoId === selectedId) ?? null, [compromissos, selectedId]);
+
+  /* PROXIMO VENCIMENTO EM ABERTO do compromisso. Um compromisso pode ter N parcelas
+     com N vencimentos; o que interessa na lista e' a proxima que ainda cobra algo.
+     'paga' e 'cancelada' saem; do resto, o MENOR vencimento. Sem parcela em aberto
+     (ou sem programacao) devolve null e a coluna imprime '—' — ausencia nunca vira
+     data. */
+  const proximoVencimento = (compromissoId: string | null): string | null => {
+    if (!compromissoId) return null;
+    const emAberto = parcelas
+      .filter(p => p.compromissoId === compromissoId && p.status !== 'paga' && p.status !== 'cancelada')
+      .map(p => p.vencimento)
+      .filter((v): v is string => !!v);
+    if (emAberto.length === 0) return null;
+    return emAberto.reduce((a, b) => (a <= b ? a : b));
+  };
   const parcelasDoComp = useMemo(
     () => parcelas
       .filter(p => p.compromissoId === selectedId && (mostrarCancelados || p.status !== 'cancelada'))
@@ -530,12 +584,8 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
                 <tr className="text-left text-[9px] text-muted-foreground border-b">
                   <th className="py-0.5 pr-1.5">Componente</th>
                   <th className="py-0.5 pr-1.5">Favorecido</th>
+                  <th className="py-0.5 pr-1.5 whitespace-nowrap">Vencimento</th>
                   <th className="py-0.5 pr-1.5 text-right whitespace-nowrap">Valor</th>
-                  <th className="py-0.5 pr-1.5 text-right whitespace-nowrap">Programado</th>
-                  <th className="py-0.5 pr-1.5 text-right whitespace-nowrap">A programar</th>
-                  <th className="py-0.5 pr-1.5 text-right whitespace-nowrap">Lançado</th>
-                  <th className="py-0.5 pr-1.5 text-right whitespace-nowrap">Liquidado</th>
-                  <th className="py-0.5 pr-1.5 text-right whitespace-nowrap">Saldo</th>
                   <th className="py-0.5 pr-1.5">Status</th>
                   <th className="py-0.5 pr-0.5"></th>
                   <th className="py-0.5 pl-0.5"></th>
@@ -545,8 +595,11 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
                 {compromissosVisiveis.map(c => {
                   const favNome = fornecedores.find(f => f.id === c.favorecidoId)?.nome ?? (c.favorecidoId ? '—' : '');
                   const ident = identidadeCompromisso(c);
+                  const desvio = desvioCompromisso(c);
+                  const estado = estadoCompromisso(c);
                   return (
-                    <tr key={c.compromissoId ?? ''} onClick={() => setSelectedId(c.compromissoId)}
+                    <tr key={c.compromissoId ?? ''}
+                      onClick={() => { setSelectedId(c.compromissoId); setDetalheAberto(true); }}
                       className={`border-b cursor-pointer hover:bg-muted/50 ${selectedId === c.compromissoId ? 'bg-muted' : ''}`}>
                       {/* Identidade em cima, natureza/componente embaixo em corpo menor:
                           continua disponivel, deixa de ser a unica coisa dita.
@@ -567,13 +620,16 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
                         )}
                       </td>
                       <td className="py-0.5 pr-1.5 max-w-[110px] truncate" title={favNome}>{favNome}</td>
-                      <td className="py-0.5 pr-1.5 text-right whitespace-nowrap">{brl(c.valorCompromisso)}</td>
-                      <td className="py-0.5 pr-1.5 text-right whitespace-nowrap">{brl(c.totalProgramado)}</td>
-                      <td className="py-0.5 pr-1.5 text-right whitespace-nowrap">{brl(c.saldoAProgramar)}</td>
-                      <td className="py-0.5 pr-1.5 text-right whitespace-nowrap">{brl(c.totalMaterializado)}</td>
-                      <td className="py-0.5 pr-1.5 text-right whitespace-nowrap">{brl(c.totalLiquidado)}</td>
-                      <td className="py-0.5 pr-1.5 text-right whitespace-nowrap">{brl(c.saldoFinanceiro)}</td>
-                      <td className="py-0.5 pr-1.5"><Badge variant={badgeStatusCompromisso(c.status)} className="text-[9px] px-1">{c.status}</Badge></td>
+                      <td className="py-0.5 pr-1.5 whitespace-nowrap">{fmtData(proximoVencimento(c.compromissoId))}</td>
+                      {/* O desvio entra como segunda linha DISCRETA sob o valor, e so quando
+                          existe. Cadeia completa nao gera texto: a coluna Status ja diz. */}
+                      <td className="py-0.5 pr-1.5 text-right whitespace-nowrap">
+                        <span className="block">{brl(c.valorCompromisso)}</span>
+                        {desvio && <span className="block text-[9px] text-amber-700 dark:text-amber-500 font-normal">{desvio}</span>}
+                      </td>
+                      <td className="py-0.5 pr-1.5" title={`status: ${c.status}`}>
+                        <Badge variant={estado.variant} className="text-[9px] px-1">{estado.label}</Badge>
+                      </td>
                       <td className="py-0.5 pr-0.5 text-right">{c.temDivergencia && <AlertTriangle className="h-3 w-3 text-amber-600 inline" aria-label="divergência" />}</td>
                       {/* ⚠ ACAO NA PROPRIA LINHA. A RPC sempre recebeu p_compromisso_id — o
                           backend suporta por linha desde o inicio; era a tela que so
@@ -626,12 +682,42 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
         )}
       </div>
 
-      {/* ===== BLOCO B/C — PROGRAMAÇÃO + MATERIALIZAÇÃO ===== */}
-      {selecionado && (
-        <div className="rounded-md border bg-card p-1.5 shadow-sm">
+      {/* ===== DETALHE DO COMPROMISSO — em MODAL (PR-OC-UX-LOTE-B-01) =====
+          Antes este bloco abria ABAIXO da tabela. Com varios compromissos o detalhe
+          ficava longe da linha clicada e o cabecalho nem sempre dizia de qual era —
+          confusao relatada em 27/08. Agora abre por cima, com o titulo IDENTIFICANDO
+          o compromisso pela mesma regra da coluna Componente (`rotuloCompromisso`).
+          ⚠ O conteudo foi MOVIDO, nao reescrito: as acoes chamam as mesmas funcoes.
+          A cadeia (obrigacao -> programado -> lancado -> liquidado) mora aqui agora,
+          que e' onde ela responde uma pergunta; na tabela ela so se repetia. */}
+      <Dialog open={detalheAberto && !!selecionado} onOpenChange={(o) => { if (!o) setDetalheAberto(false); }}>
+        <DialogContent className="max-w-4xl">
+          {selecionado && (
+          <div className="space-y-2">
+          <DialogHeader>
+            <DialogTitle className="text-[13px]">
+              {rotuloCompromisso(selecionado)} — {brl(selecionado.valorCompromisso)}
+            </DialogTitle>
+            <DialogDescription className="text-[11px]">
+              {fornecedores.find(f => f.id === selecionado.favorecidoId)?.nome ?? 'Sem favorecido'}
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* A CADEIA COMPLETA — os numeros que sairam da tabela. Mesmo `ResumoCard`
+              das caixas do topo da aba, para o olho nao aprender dois formatos. */}
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+            <ResumoCard rotulo="Obrigação" valor={selecionado.valorCompromisso} />
+            <ResumoCard rotulo="Programado" valor={selecionado.totalProgramado} />
+            <ResumoCard rotulo="A programar" valor={selecionado.saldoAProgramar} />
+            <ResumoCard rotulo="Lançado" valor={selecionado.totalMaterializado} />
+            <ResumoCard rotulo="Liquidado" valor={selecionado.totalLiquidado} />
+            <ResumoCard rotulo="Saldo" valor={selecionado.saldoFinanceiro} />
+          </div>
+
+          <div className="rounded-md border bg-card p-1.5 shadow-sm">
           <div className="flex items-center justify-between mb-1">
             <div className="text-[11px] font-semibold text-muted-foreground">
-              Programação — {rotuloCompromisso(selecionado)} ({brl(selecionado.valorCompromisso)})
+              Programação
             </div>
             <span className="inline-flex gap-1">
               {!selecionado.temProgramacaoAtiva && selecionado.status === 'aberto' && (
@@ -729,8 +815,11 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
               </tbody>
             </table>
           )}
-        </div>
-      )}
+          </div>
+          </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {novoAberto && (
         <NovoCompromissoDialog

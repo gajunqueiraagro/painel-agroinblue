@@ -65,52 +65,8 @@ const nOr = (v: number | null | undefined) => (v == null || !Number.isFinite(v) 
 const moneyOr = (v: number | null | undefined) => (v == null || !Number.isFinite(v) ? '—' : formatMoeda(v));
 const kgOr = (v: number | null | undefined) => (v == null || !Number.isFinite(v) ? '—' : `${v.toLocaleString('pt-BR')} kg`);
 
-// Indicador-sentinela por etapa — dot CSS (SEM emoji) usando tokens do design system, mapeando
-//   ESTADOS JÁ EXISTENTES (nenhum status novo): success · warning · destructive · muted.
-type Sinal = 'ok' | 'atencao' | 'divergencia' | 'neutro';
-const DOT_CLASS: Record<Sinal, string> = {
-  ok: 'bg-success', atencao: 'bg-warning', divergencia: 'bg-destructive', neutro: 'bg-muted-foreground/40',
-};
-
-// Blocos de conteúdo (hierarquia visual — apresentação pura, sem novo dado):
-//   Principal = dado-chave da etapa (13px semibold) · Ctx = contexto secundário (11px muted).
-function Principal({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <div className={`text-[12px] font-semibold text-foreground leading-tight break-words ${className}`}>{children}</div>;
-}
-function Ctx({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <div className={`text-[11px] text-muted-foreground leading-tight break-words ${className}`}>{children}</div>;
-}
-
-// aria-label = estado textual da etapa (acessibilidade); passado explicitamente por seção.
-//   Cabeçalho = dot + TÍTULO 11px semibold uppercase. Separação entre blocos: hairline curta (divisor),
-//   nunca separator de largura total. Cada Secao é um "mini-card invisível" (sem borda/caixa).
-function Secao({ sinal, estadoLabel, titulo, divisor, children }: { sinal: Sinal; estadoLabel: string; titulo: string; divisor?: boolean; children: ReactNode }) {
-  return (
-    <div>
-      {divisor && <div className="w-8 border-t border-border/40 mb-1" />}
-      <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-foreground/70 leading-none">
-        <span role="img" aria-label={estadoLabel} className={`inline-block h-2 w-2 shrink-0 rounded-full ${DOT_CLASS[sinal]}`} />
-        {titulo}
-      </div>
-      <div className="pl-3.5 mt-1 space-y-0.5">{children}</div>
-    </div>
-  );
-}
-
-// PR-OC-FIN-VISAO-02 — status financeiro por natureza (mesma regra do PR-OC-HOMOLOG-01):
-//   liquidado ≥ base → Pago; liquidado 0 → Programado; parcial → Parcial.
-function statusFinanceiro(base: number, liquidado: number): { icon: string; label: string; sinal: Sinal } {
-  if (base <= 0) return { icon: '', label: '—', sinal: 'neutro' };
-  if (liquidado >= base - 0.005) return { icon: '🟢', label: 'Pago', sinal: 'ok' };
-  if (liquidado > 0) return { icon: '🟠', label: 'Parcial', sinal: 'atencao' };
-  return { icon: '🟡', label: 'Programado', sinal: 'atencao' };
-}
-const COMPONENTE_LABEL: Record<string, string> = {
-  frete: 'Frete', comissao: 'Comissão', taxa_aquisicao: 'Taxa aquisição', taxa: 'Taxas', imposto: 'Impostos',
-};
-const rotuloComponente = (c: string) => COMPONENTE_LABEL[c] ?? (c ? c.charAt(0).toUpperCase() + c.slice(1).replace(/_/g, ' ') : 'Outros');
-
 interface Props {
+  tipoLabel: string | null;                             // 'compra' | 'venda' | 'abate' — fonte: liquidacaoApi.tipoOperacao
   dataLabel: string;                                    // Compra — data já disponível no shell (sem consulta)
   statusComercial: string | null;                       // Compra — fonte oficial status_comercial: 'programada'|'fechada'|'cancelada'
   fornecedorNome: string;
@@ -126,135 +82,107 @@ interface Props {
 }
 
 export function ResumoLateralOC({
-  dataLabel, statusComercial, fornecedorNome, fazendaNome, ocId,
+  tipoLabel, dataLabel, statusComercial, fornecedorNome, fazendaNome, ocId,
   negociacaoTotais, recebimentoLotes, entregaEncerrada, documentos, obrigacoes,
 }: Props) {
   const rec = consolidarRecebimento(recebimentoLotes);
   const doc = consolidarDocumentos(documentos);
+  void statusComercial;   // "Programada" saiu do resumo: a Central ja tem a coluna Comercial.
+  void ocId;
 
-  // Sinais visuais derivados EXCLUSIVAMENTE de estados oficiais já existentes (nenhuma inferência nova).
-  // Compra — status_comercial: fechada(=realizada)→success · cancelada→destructive · programada/ausente→muted.
-  //   Fornecedor/fazenda/data/identidade NÃO determinam success.
-  const compraSinal: Sinal =
-    statusComercial === 'fechada' ? 'ok'
-    : statusComercial === 'cancelada' ? 'divergencia'
-    : 'neutro';
-  const compraEstadoLabel =
-    statusComercial === 'fechada' ? 'Realizada'
-    : statusComercial === 'cancelada' ? 'Cancelada'
-    : statusComercial === 'programada' ? 'Programada'
-    : '—';
-  const negSinal: Sinal = negociacaoTotais && negociacaoTotais.lotes > 0 ? 'ok' : 'neutro';
-  const recSinal: Sinal =
-    rec.estadoGeral == null || rec.estadoGeral === 'nao_iniciado' ? 'neutro'
-    : rec.estadoGeral === 'completo' ? 'ok'
-    : rec.estadoGeral === 'excedente' ? 'divergencia'
-    : 'atencao';                                         // parcial (encerrado-com-diferença NÃO é estado distinto na fonte → recai em parcial)
+  const temNegociacao = !!negociacaoTotais && negociacaoTotais.lotes > 0;
+
   const recEstadoLabel =
     rec.estadoGeral == null || rec.estadoGeral === 'nao_iniciado' ? 'Não iniciado'
-    : rec.estadoGeral === 'completo' ? 'Completo'
+    : rec.estadoGeral === 'completo' ? (entregaEncerrada ? 'Completo · encerrado' : 'Completo')
     : rec.estadoGeral === 'excedente' ? 'Excedente'
     : 'Parcial';
-  // Documentos — possuir documento(s)=success; muted quando vazio. Cancelamento é informação
-  //   textual, não pendência (vw_oc_documentos só distingue ativo/cancelado; sem estado de pendência ativa).
-  const docSinal: Sinal = !doc || doc.total === 0 ? 'neutro' : 'ok';
-  const docEstadoLabel = !doc || doc.total === 0 ? 'Sem documentos' : doc.situacao;
-  // PR-OC-FIN-VISAO-02 — visão financeira SEPARADA por natureza (substitui saldo/excedente misto).
-  //   Fonte: obrigacoes (vw_oc_obrigacoes) — cada linha tem natureza/componente/valorNominal/totalLiquidado.
-  //   O "excedente" da view legada não é mais exibido (base era só principal × liquidado principal+obrigações).
+  const recRealce =
+    rec.estadoGeral === 'excedente' ? 'text-destructive'
+    : rec.estadoGeral === 'parcial' ? 'text-amber-700 dark:text-amber-500'
+    : undefined;
+
+  /* FINANCEIRO — tres numeros, todos da MESMA fonte que ja chegava aqui
+     (`obrigacoes`, de vw_oc_obrigacoes). Nenhuma consulta, nenhum calculo novo:
+       Lançado   = obrigacao ATIVA que ja tem titulo (`tituloId`). Ter titulo E' ter
+                   sido lancada; nao ha estado intermediario.
+       Liquidado = `totalLiquidado`, campo da propria view.
+       Saldo     = `saldoAberto`, campo da propria view — somado, nunca subtraido
+                   aqui, para nao criar uma segunda definicao de saldo.
+     ⚠ Cancelada nao entra em nenhum dos tres: cancelamento e' logico e sem efeito
+     economico, criterio ja usado em `consolidarDocumentos`. */
   const obrAtivas = (obrigacoes ?? []).filter(o => !o.cancelada);
-  const aggNat = (nat: string) => obrAtivas.filter(o => o.natureza === nat)
-    .reduce((a, o) => ({ base: a.base + (o.valorNominal || 0), liq: a.liq + (o.totalLiquidado || 0) }), { base: 0, liq: 0 });
-  const finPrincipal = aggNat('principal');
-  const finObrig = aggNat('obrigacao');
-  const finTotalBase = finPrincipal.base + finObrig.base;
-  const finTotalLiq = finPrincipal.liq + finObrig.liq;
   const temFinanceiro = obrAtivas.length > 0;
-  const stPrincipal = statusFinanceiro(finPrincipal.base, finPrincipal.liq);
-  const stObrig = statusFinanceiro(finObrig.base, finObrig.liq);
-  const componentesObrig = Array.from(new Set(obrAtivas.filter(o => o.natureza === 'obrigacao').map(o => o.componente))).map(rotuloComponente);
-  const stTotal = statusFinanceiro(finTotalBase, finTotalLiq);
-  const finSinal: Sinal = !temFinanceiro ? 'neutro' : stTotal.sinal;
-  const finEstadoLabel = !temFinanceiro ? 'Indisponível' : stTotal.label;
+  const finLancado = obrAtivas.filter(o => o.tituloId).reduce((a, o) => a + (o.valorNominal || 0), 0);
+  const finLiquidado = obrAtivas.reduce((a, o) => a + (o.totalLiquidado || 0), 0);
+  const finSaldo = obrAtivas.reduce((a, o) => a + (o.saldoAberto || 0), 0);
 
   return (
-    <div className="bg-card rounded-md border shadow-sm p-1.5 space-y-1.5 self-start">{/* PR-OC-UX-DENSIDADE-01 — padding/gap reduzidos */}
-      <h3 className="text-[11px] font-semibold text-foreground leading-none">Resumo</h3>
+    <aside className="bg-card rounded-md border shadow-sm overflow-hidden self-start text-[10px]">
+      {/* Faixa de titulo — mesma altura/fundo/tipografia do aside do LancamentoV2Dialog. */}
+      <div className="h-8 shrink-0 border-b border-border bg-accent/40 flex items-center px-3 text-[11px] font-bold uppercase tracking-wide text-primary">
+        Resumo da operação
+      </div>
+      <div className="pb-1">
+        <BlocoHead titulo="Identificação" />
+        <div className="px-3 space-y-0.5">
+          <Linha rotulo="Tipo" valor={TIPO_LABEL[tipoLabel ?? ''] ?? null} />
+          <Linha rotulo="Contraparte" valor={fornecedorNome || null} />
+          <Linha rotulo="Data" valor={dataLabel || null} />
+          <Linha rotulo="Fazenda" valor={fazendaNome || null} />
+        </div>
 
-      <Secao sinal={compraSinal} estadoLabel={compraEstadoLabel} titulo="Compra">
-        <Principal>{fornecedorNome || '—'}</Principal>
-        <Ctx>{dataLabel}{fazendaNome ? ` • ${fazendaNome}` : ''}</Ctx>
-        <Ctx>{compraEstadoLabel}</Ctx>
-      </Secao>
+        <BlocoHead titulo="Negociação" />
+        <div className="px-3 space-y-0.5">
+          <Linha rotulo="Valor" valor={temNegociacao ? moneyOr(negociacaoTotais!.valorNegociado) : null} valorClassName="text-primary" />
+          <Linha rotulo="Animais" valor={temNegociacao ? `${nOr(negociacaoTotais!.animais)} cab` : null} />
+          <Linha rotulo="Peso" valor={temNegociacao ? kgOr(negociacaoTotais!.pesoTotal) : null} />
+        </div>
 
-      <Secao sinal={negSinal} estadoLabel={negSinal === 'ok' ? 'Negociada' : 'Não iniciada'} titulo="Negociação" divisor>
-        {negociacaoTotais && negociacaoTotais.lotes > 0 ? (
-          <>
-            <Principal className="text-primary">{moneyOr(negociacaoTotais.valorNegociado)}</Principal>
-            <Ctx>{nOr(negociacaoTotais.animais)} cab • {kgOr(negociacaoTotais.pesoTotal)}</Ctx>
-          </>
-        ) : (
-          <Ctx>Não iniciada</Ctx>
-        )}
-      </Secao>
+        <BlocoHead titulo="Recebimento" />
+        <div className="px-3 space-y-0.5">
+          {/* ATENCAO DESTACA O VALOR, nao a linha: parcial e excedente sao estados
+              que pedem o olho, mas o rotulo continua neutro como nos demais. */}
+          <Linha rotulo="Situação" valor={recEstadoLabel} valorClassName={recRealce} />
+          <Linha rotulo="Recebido" valor={rec.recebido == null ? null : `${nOr(rec.recebido)} / ${nOr(rec.negociado)} cab`} />
+        </div>
 
-      <Secao sinal={recSinal} estadoLabel={recEstadoLabel} titulo="Recebimento" divisor>
-        {rec.estadoGeral == null || rec.estadoGeral === 'nao_iniciado' ? (
-          <Ctx>Não iniciado</Ctx>
-        ) : (
-          <>
-            <Principal className={rec.estadoGeral === 'excedente' ? 'text-destructive' : ''}>{recEstadoLabel}</Principal>
-            {rec.estadoGeral === 'completo' ? (
-              <Ctx>{nOr(rec.recebido)} / {nOr(rec.negociado)} cab{entregaEncerrada ? ' • encerrado' : ''}</Ctx>
-            ) : (
-              <Ctx>{nOr(rec.recebido)} / {nOr(rec.negociado)} cab • {rec.estadoGeral === 'excedente' ? 'Excedente' : 'Diferença'}: {rec.diferenca == null ? '—' : Math.abs(rec.diferenca).toLocaleString('pt-BR')}</Ctx>
-            )}
-          </>
-        )}
-      </Secao>
+        <BlocoHead titulo="Financeiro" />
+        <div className="px-3 space-y-0.5">
+          <Linha rotulo="Lançado" valor={temFinanceiro ? moneyOr(finLancado) : null} />
+          <Linha rotulo="Liquidado" valor={temFinanceiro ? moneyOr(finLiquidado) : null} />
+          <Linha rotulo="Saldo" valor={temFinanceiro ? moneyOr(finSaldo) : null}
+            valorClassName={finSaldo > 0.005 ? 'text-amber-700 dark:text-amber-500' : undefined} />
+        </div>
 
-      <Secao sinal={docSinal} estadoLabel={docEstadoLabel} titulo="Documentos" divisor>
-        {!doc || doc.total === 0 ? (
-          <Ctx>Sem documentos</Ctx>
-        ) : (
-          <>
-            <Principal>{doc.total.toLocaleString('pt-BR')} documento{doc.total === 1 ? '' : 's'}</Principal>
-            <Ctx>
-              {doc.cancelados === 0
-                ? 'Ativos'
-                : `${doc.ativos} ativo${doc.ativos === 1 ? '' : 's'} • ${doc.cancelados} cancelado${doc.cancelados === 1 ? '' : 's'}`}
-            </Ctx>
-            {doc.valorLiquidoTotal != null && doc.valorLiquidoTotal > 0 && (
-              <Ctx>Líq. {moneyOr(doc.valorLiquidoTotal)}</Ctx>
-            )}
-          </>
-        )}
-      </Secao>
+        <BlocoHead titulo="Documentos" />
+        <div className="px-3 space-y-0.5">
+          <Linha rotulo="Situação" valor={doc ? doc.situacao : null} />
+        </div>
+      </div>
+    </aside>
+  );
+}
 
-      {/* PR-OC-FIN-VISAO-02 — Financeiro separado por natureza: Principal (animais) × Obrigações × Total.
-          Sem "Excedente" falso (base agora é comparada por natureza, não principal × liquidado total). */}
-      <Secao sinal={finSinal} estadoLabel={finEstadoLabel} titulo="Financeiro" divisor>
-        {!temFinanceiro ? (
-          <Ctx>—</Ctx>
-        ) : (
-          <div className="space-y-1">
-            <div>
-              <div className="text-[10px] font-semibold text-foreground/80 leading-none">Principal (animais)</div>
-              <Ctx>{stPrincipal.icon ? `${stPrincipal.icon} ` : ''}{stPrincipal.label} · {moneyOr(finPrincipal.liq)} / {moneyOr(finPrincipal.base)}</Ctx>
-            </div>
-            {finObrig.base > 0 && (
-              <div>
-                <div className="text-[10px] font-semibold text-foreground/80 leading-none">Obrigações</div>
-                <Ctx>{stObrig.icon ? `${stObrig.icon} ` : ''}{stObrig.label} · {moneyOr(finObrig.liq)} / {moneyOr(finObrig.base)}</Ctx>
-                {componentesObrig.length > 0 && <Ctx>{componentesObrig.join(' · ')}</Ctx>}
-              </div>
-            )}
-            <div className="pt-0.5">
-              <Principal className="text-primary">Total {moneyOr(finTotalBase)}</Principal>
-            </div>
-          </div>
-        )}
-      </Secao>
+const TIPO_LABEL: Record<string, string> = { compra: 'Compra', venda: 'Venda', abate: 'Abate' };
+
+/* Faixa de secao e par rotulo-valor — ESPELHO de `ResumoBlocoHead` / `ResumoRow` do
+   LancamentoV2Dialog (a referencia que o Gabriel definiu). Copiados na aparencia, nao
+   importados: aqueles sao internos daquele arquivo, e exporta-los para ca acoplaria os
+   dois modais por um detalhe visual. Se um dia virarem componente compartilhado, este
+   e' o segundo chamador. */
+function BlocoHead({ titulo }: { titulo: string }) {
+  return (
+    <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 first:mt-0 mb-0.5">
+      <span className="text-[9px] font-bold uppercase tracking-wide text-primary/90 leading-none">{titulo}</span>
+    </div>
+  );
+}
+function Linha({ rotulo, valor, valorClassName }: { rotulo: string; valor: string | null; valorClassName?: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-1.5 leading-tight">
+      <span className="text-muted-foreground shrink-0">{rotulo}</span>
+      <span className={`font-medium text-right truncate ${valorClassName ?? ''}`}>{valor || '—'}</span>
     </div>
   );
 }
