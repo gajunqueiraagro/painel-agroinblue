@@ -23,6 +23,8 @@ import { ptBR } from 'date-fns/locale';
 import { Pencil, Trash2, DollarSign, AlertTriangle } from 'lucide-react';
 import { AbateShareButtons } from '@/components/AbateExportMenu';
 import { useFazenda } from '@/contexts/FazendaContext';
+import { useCliente } from '@/contexts/ClienteContext';
+import { useOcCompromissos } from '@/hooks/useOcCompromissos';
 import { STATUS_OPTIONS_ZOOTECNICO_COM_META, getStatusBadge, getStatus, isMeta, type StatusOperacional } from '@/lib/statusOperacional';
 import { CompraFinanceiroPanel } from '@/components/CompraFinanceiroPanel';
 import { EditCompraForm } from '@/components/edit/EditCompraForm';
@@ -150,6 +152,31 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
   // Financial records summary for purchases
   interface FinResumo { id: string; descricao: string; valor: number; data_pagamento: string | null; cancelado: boolean; origem_tipo: string | null; }
   const [finRecords, setFinRecords] = useState<FinResumo[]>([]);
+
+  /* ── PR-ZOOT-MODAL-RESUMO-01 · VINCULO PELA OPERACAO COMERCIAL ─────────────
+     `finRecords` acima busca por `movimentacao_rebanho_id`, que e' o vinculo do fluxo
+     LEGADO (compra antiga -> titulo direto). Na OC esse campo NAO existe, e por isso o
+     modal dizia "nenhum lancamento financeiro" para 26 compras que tinham titulo pago.
+     O caminho da OC tem seis saltos (lancamento -> ligacao -> operacao -> compromisso
+     -> programacao -> parcela -> parte -> titulo). NAO os reconstruo aqui: duas VIEWS
+     ja entregam o resultado pronto por `operacao_id`, e `useOcCompromissos` ja e' o
+     leitor delas. Do front sai apenas UM salto — descobrir a operacao do lancamento.
+     ⚠ `zoo_operacao_movimentacoes` nao esta em types.ts (conferido); `as any` no nome
+     da tabela e' o idioma ja estabelecido no repo para as tabelas zoo_*. */
+  const { clienteAtual } = useCliente();
+  const [ocOperacaoId, setOcOperacaoId] = useState<string | null>(null);
+  const [ocBuscando, setOcBuscando] = useState(false);
+  /* Reusa o leitor das views (`vw_oc_compromissos_resumo` e
+     `vw_oc_parcelas_materializacao`) em vez de escrever uma segunda consulta para os
+     mesmos dados. `enabled` desliga tudo quando o lancamento nao vem de OC. */
+  const ocApi = useOcCompromissos({
+    operacaoId: ocOperacaoId,
+    clienteId: clienteAtual?.id ?? null,
+    enabled: !!ocOperacaoId && !!clienteAtual?.id,
+  });
+  const ocPrincipal = ocApi.compromissos.filter(c => c.natureza === 'principal' && c.status !== 'cancelado');
+  const ocObrigacoes = ocApi.compromissos.filter(c => c.natureza === 'obrigacao' && c.status !== 'cancelado');
+  const temOC = !!ocOperacaoId && ocApi.compromissos.length > 0;
   const [finLoading, setFinLoading] = useState(false);
   const [detalheFornecedorId, setDetalheFornecedorId] = useState('');
 
@@ -160,6 +187,18 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
 
   const loadFinRecords = useCallback(() => {
     if (!isCompra) return;
+    setOcBuscando(true);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any)
+      .from('zoo_operacao_movimentacoes')
+      .select('operacao_id')
+      .eq('movimentacao_id', lancamento.id)
+      .maybeSingle()
+      .then(({ data }: { data: { operacao_id: string } | null }) => {
+        setOcOperacaoId(data?.operacao_id ?? null);
+        setOcBuscando(false);
+      });
+
     setFinLoading(true);
     supabase
       .from('financeiro_lancamentos_v2')
@@ -372,6 +411,15 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                 />
                 <Row label="Categoria" value={catInfo?.label || '-'} />
 
+                {/* PR-ZOOT-MODAL-RESUMO-01 — o fornecedor passou a ser gravado nas compras
+                    de OC (20260901120000 + backfill). O literal '[nao informado]' NAO chega
+                    aqui: `useLancamentos` ja o converte em undefined (linha 100), entao a
+                    linha some sozinha quando nao ha fornecedor — ausencia declarada, sem
+                    ruido de banco na tela. */}
+                {lancamento.fornecedorNomeSnapshot && (
+                  <Row label="Fornecedor" value={lancamento.fornecedorNomeSnapshot} />
+                )}
+
                 {catDestinoInfo && <Row label="Cat. Destino" value={catDestinoInfo.label} />}
 
                 {lancamento.pesoMedioKg && (
@@ -513,8 +561,14 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                     {ind.liqCabeca > 0 && (
                       <Row label="R$/Cabeça" value={formatMoeda(ind.liqCabeca)} />
                     )}
-                    {totalArrobas && totalArrobas > 0 && ind.liqArroba > 0 && (
-                      <Row label="R$/@ Líq." value={formatMoeda(ind.liqArroba)} />
+                    {/* PR-ZOOT-MODAL-RESUMO-01 — em COMPRA o produtor negocia por QUILO;
+                        a arroba e' a unidade do ABATE, onde se paga carcaca. Os blocos de
+                        abate e venda seguem em R$/@ e NAO foram tocados.
+                        ⚠ Sem formula nova: `liqKg` ja existia em `calcIndicadoresLancamento`
+                        (economicos.ts:177), ao lado de `liqArroba`. A guarda mudou junto —
+                        R$/kg depende do peso, nao das arrobas. */}
+                    {ind.liqKg > 0 && (
+                      <Row label="R$/kg Líq." value={formatMoeda(ind.liqKg)} />
                     )}
                   </div>
                   <div className="bg-primary/10 rounded px-2.5 py-1.5 flex items-center justify-between">
@@ -632,13 +686,66 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                   <div className="flex items-center gap-1.5 text-[8px] font-bold uppercase text-muted-foreground tracking-wider">
                     <DollarSign className="h-3 w-3" /> Financeiro vinculado
                   </div>
-                  {finLoading ? (
+                  {/* ⚠ AS DUAS FONTES CONVIVEM. Compra antiga usa o vinculo direto
+                      (`finRecords`); compra de OC usa a cadeia de compromissos. O modal
+                      mostra a que existir, e se as DUAS existirem mostra as duas com um
+                      aviso — esconder uma delas seria decidir por conta propria qual e' a
+                      verdadeira num caso que nao deveria acontecer. */}
+                  {temOC && finRecords.length > 0 && (
+                    <div className="rounded border border-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2 py-1 text-[9px] text-amber-800 dark:text-amber-200">
+                      Esta compra tem vínculo financeiro pelos dois caminhos (direto e por operação comercial). Confira antes de agir.
+                    </div>
+                  )}
+
+                  {temOC && (
+                    <div className="bg-muted/20 rounded px-2 py-1 space-y-1">
+                      {ocPrincipal.map(c => (
+                        <div key={c.compromissoId ?? ''} className="flex items-baseline justify-between gap-2">
+                          <span className="text-[9px] font-bold uppercase text-muted-foreground tracking-wider">Principal</span>
+                          <span className="text-[10px] tabular-nums font-semibold">{formatMoeda(c.valorCompromisso)}</span>
+                        </div>
+                      ))}
+
+                      {ocObrigacoes.length > 0 && (
+                        <div className="space-y-px pt-0.5 border-t">
+                          <p className="text-[8px] font-bold uppercase text-muted-foreground tracking-wider">Obrigações</p>
+                          {ocObrigacoes.map(c => (
+                            <div key={c.compromissoId ?? ''} className="flex items-baseline justify-between gap-2">
+                              <span className="text-[9px] text-muted-foreground capitalize">{(c.componente ?? '').replace(/_/g, ' ') || '—'}</span>
+                              <span className="text-[10px] tabular-nums">{formatMoeda(c.valorCompromisso)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {ocApi.parcelas.length > 0 && (
+                        <div className="space-y-px pt-0.5 border-t">
+                          <p className="text-[8px] font-bold uppercase text-muted-foreground tracking-wider">Parcelas</p>
+                          {ocApi.parcelas.map(pc => (
+                            <div key={pc.parcelaId ?? ''} className="flex items-baseline justify-between gap-2">
+                              <span className="text-[9px] text-muted-foreground">
+                                {pc.sequencia}ª · {pc.vencimento ? format(parseISO(pc.vencimento), 'dd/MM/yyyy', { locale: ptBR }) : '—'}
+                                {/* O TITULO e' o que o Gabriel perdeu ao migrar para a OC:
+                                    sem ele a parcela e' promessa, com ele e' dinheiro. */}
+                                {pc.tituloId
+                                  ? ` · título ${pc.tituloStatusTransacao ?? 'lançado'}`
+                                  : ' · sem título'}
+                              </span>
+                              <span className="text-[10px] tabular-nums">{formatMoeda(pc.valor)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {finLoading || ocBuscando || ocApi.loading ? (
                     <p className="text-[9px] text-muted-foreground">Carregando...</p>
-                  ) : finRecords.length === 0 ? (
+                  ) : finRecords.length === 0 && !temOC ? (
                     <div className="bg-muted/30 rounded px-2 py-1 text-[9px] text-muted-foreground">
                       Nenhum lançamento financeiro gerado para esta compra.
                     </div>
-                  ) : (() => {
+                  ) : finRecords.length === 0 ? null : (() => {
                     const bovinos = finRecords.filter(r => !r.origem_tipo?.includes('frete') && !r.origem_tipo?.includes('comissao'));
                     const despesas = finRecords.filter(r => r.origem_tipo?.includes('frete') || r.origem_tipo?.includes('comissao'));
                     const totalBov = bovinos.reduce((s, r) => s + r.valor, 0);
