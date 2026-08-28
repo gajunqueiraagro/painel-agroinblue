@@ -464,6 +464,43 @@ obriga o formato; não obriga a origem da função.
 
 ---
 
+## A20 — Data sempre pelo DatePicker do sistema
+
+**Nunca `<input type="date">`.** O campo de data é o `DatePicker` de
+`src/components/ui/date-picker.tsx`.
+
+O nativo abre o calendário **do navegador**: ignora os tokens de cor, não tem a faixa
+azul do sistema, traz botões que não são nossos ("Limpar", "Hoje") e muda de aparência
+entre Chrome, Safari e Firefox. Some o cabeçalho, some o idioma, some a identidade.
+
+Há um segundo motivo, que não se vê na tela e aparece depois: o componente próprio é
+**TZ-safe por construção** — *"só aritmética de calendário local, nunca `toISOString`"* —,
+que é exatamente a armadilha de a data gravada voltar um dia. O nativo não garante o que
+o consumidor faz com o valor; o componente garante.
+
+Contrato drop-in: entra e sai `'yyyy-MM-dd'`, exibe `dd/MM/yyyy`, aceita digitação e
+colagem, valida no blur/Enter e preserva o último valor válido quando o texto está pela
+metade. Tem `disabled` e `size="compact"` para grids densos.
+
+```tsx
+❌  <Input type="date" value={data} onChange={e => setData(e.target.value)} />
+✅  <DatePicker value={data} onChange={setData} size="compact" className="h-7 text-[11px]" />
+```
+
+> **Retrofit A20 — 52 ocorrências em 35 arquivos** (varredura de 28/08). Só 5 arquivos já
+> usam o `DatePicker`. Os maiores focos: `LancamentosTab` e `AbateDetalhesDialog` (4 cada),
+> `FinanciamentoCadastro` e `ModalBaixaParcela` (3 cada). Boa parte é **grade de parcelas**
+> (`p.data`), que é justamente o caso da variante `compact`. Frente própria:
+> **PR-UI-DATA-RETROFIT-01**. Aplicado até aqui apenas no campo Emissão de
+> `DocumentoFormOC` (PR-OC-DATA-PADRAO-01); dentro do mesmo modal, as abas Compra e
+> Recebimento já usavam o componente e a Liquidação ainda não.
+
+Este é o **terceiro** caso da mesma família em um só dia — A19 (`CampoMoeda` existia
+trancado dentro de uma tela), A18 (a tabela repetida) e agora A20. A lição vale para os
+três: **antes de escrever um campo, procurar o campo.** O sistema costuma já ter.
+
+---
+
 ## Pendências deste documento
 
 - **Seletor de mês/ano com setas** — não existe. Enquanto não houver, `type="month"`

@@ -3,6 +3,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SearchableSelect } from '@/components/ui/searchable-select';
+import { DatePicker } from '@/components/ui/date-picker';
 /* ⚠ O CAMPO DE DINHEIRO DO SISTEMA, nao um segundo. Ele ja existia — dentro de
    AbaCompromissosOC, como funcao local e nao exportada — e era exatamente por isso que
    este formulario mostrava `106425` cru: nao havia como reusar. Saiu de la inteiro. */
@@ -498,7 +499,17 @@ export function DocumentoFormOC({ api, somenteLeitura, fornecedores, contraparte
             className={`h-7 text-[11px] ${marcaSugerido('numero')}`} />
         </div>
         <div><label className="text-[10px] text-muted-foreground">Série</label><Input value={form.serie} onChange={e => setForm(f => ({ ...f, serie: e.target.value }))} className={`h-7 text-[11px] ${marcaSugerido('serie')}`} /></div>
-        <div><label className="text-[10px] text-muted-foreground">Emissão</label><Input type="date" value={form.dataEmissao} onChange={e => setForm(f => ({ ...f, dataEmissao: e.target.value }))} className={`h-7 text-[11px] ${marcaSugerido('dataEmissao')}`} /></div>
+        <div>
+          <label className="text-[10px] text-muted-foreground">Emissão</label>
+          {/* ⚠ O DATEPICKER DO SISTEMA, nao `<input type="date">` (padrao A20). O nativo abre
+              o calendario DO NAVEGADOR: sem a faixa azul, sem os tokens de cor, com botoes
+              que nao sao nossos. E ha o motivo silencioso, que so aparece depois: o
+              componente proprio e' TZ-safe por construcao — so aritmetica de calendario
+              local, nunca `toISOString` —, que e' a armadilha de a data gravar o dia
+              anterior. As abas Compra e Recebimento deste mesmo modal ja o usavam. */}
+          <DatePicker value={form.dataEmissao} onChange={v => setForm(f => ({ ...f, dataEmissao: v }))}
+            size="compact" className={`h-7 text-[11px] ${marcaSugerido('dataEmissao')}`} />
+        </div>
         <div className="lg:col-span-2"><label className="text-[10px] text-muted-foreground">Chave de acesso</label><Input value={form.chaveAcesso} onChange={e => setForm(f => ({ ...f, chaveAcesso: e.target.value }))} className={`h-7 text-[11px] ${marcaSugerido('chaveAcesso')}`} /></div>
         {/* ── EMITENTE ─────────────────────────────────────────────────────────
             Quem ASSINOU a nota, que nem sempre e quem negociou. Caso real: a
