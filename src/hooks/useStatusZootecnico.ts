@@ -19,7 +19,8 @@ import {
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
-// FONTE OFICIAL: vw_zoot_categoria_mensal (sem calcSaldoPorCategoriaLegado)
+// FONTE OFICIAL: zoot_mensal_cache (materializacao de vw_zoot_categoria_mensal;
+// sem calcSaldoPorCategoriaLegado)
 import {
   statusFinanceiro as calcStatusFinanceiro,
   statusCategorias as calcStatusCategorias,
@@ -272,7 +273,7 @@ export function useStatusZootecnico(
       setPastosRascunho(detalhesPastos.reduce((s, f) => s + f.rascunho, 0));
       setPastosNaoIniciados(detalhesPastos.reduce((s, f) => s + f.naoIniciados, 0));
 
-      // --- Categorias comparison (FONTE OFICIAL: vw_zoot_categoria_mensal) ---
+      // --- Categorias comparison (FONTE OFICIAL: zoot_mensal_cache) ---
       // Deduplicate: keep only the most recent fechamento per pasto ATIVO
       const activePastoIds = new Set(pastosData.map((p: any) => p.id));
       const dedupFechByPasto = new Map<string, { id: string; updated_at: string }>();
@@ -285,23 +286,109 @@ export function useStatusZootecnico(
       });
       const fechIds = Array.from(dedupFechByPasto.values()).map(v => v.id);
 
-      // FONTE OFICIAL: buscar saldo final por categoria da view validada
-      let viewQuery = supabase
-        .from('vw_zoot_categoria_mensal' as any)
-        .select('categoria_codigo, saldo_final')
-        .eq('ano', ano)
-        .eq('mes', mes)
-        .eq('cenario', 'realizado');
+      // FONTE OFICIAL: saldo final por categoria, lido do `zoot_mensal_cache`.
+      // Antes lia `vw_zoot_categoria_mensal` direto: 3 a 5 SEGUNDOS por carga,
+      // nesta que e' a tela de entrada. A view continua sendo a definicao da
+      // verdade; o cache e' a mesma verdade ja materializada.
+      //
+      // ⚠ O ENSURE VEM JUNTO, e nao e' opcional. Ler o cache sem garantir que
+      // ele cobre as fazendas esperadas faz cliente com cache incompleto ver
+      // numero MENOR em silencio — sem erro, sem "—", so um total menor. E' o
+      // pior modo de falha do sistema. Padrao reusado de
+      // useZootCategoriaMensal.ts:184: mesmo criterio de "fazendas esperadas"
+      // (saldo inicial de janeiro > 0), mesma RPC e o mesmo teto de 2 voltas.
+      //
+      // ⚠ A RPC do padrao chama-se `fn_zoot_cache_rebuild`, NAO
+      // `fn_zoot_cache_ensure` — esta existe no banco mas nao e' chamada por
+      // nenhum ponto do front. Ver relatorio.
+      //
+      // Le o ANO INTEIRO e filtra o mes em memoria, em vez de filtrar o mes no
+      // banco: com `.eq('mes', mes)`, fazenda sem linha NAQUELE mes (mes futuro,
+      // p.ex.) pareceria ausente do cache e dispararia rebuild de ~2-3s a cada
+      // carga da tela. Cobertura se afere no ano, como no hook original.
+      const clienteIdCache = clienteAtual?.id;
 
-      if (isGlobal) {
-        if (clienteAtual?.id) viewQuery = viewQuery.eq('cliente_id', clienteAtual.id);
-      } else {
-        viewQuery = viewQuery.eq('fazenda_id', fazendaId);
+      const fazendasEsperadas = new Set<string>();
+      let siFalhou = false;
+      if (clienteIdCache) {
+        const { data: siRows, error: siError } = await supabase
+          .from('saldos_iniciais')
+          .select('fazenda_id, quantidade')
+          .eq('cliente_id', clienteIdCache)
+          .eq('ano', ano)
+          .eq('mes', 1)
+          .in('fazenda_id', fazendaIdsPecuaria);
+        if (siError) {
+          siFalhou = true;
+          console.warn('[zoot-cache] saldos_iniciais lookup failed, guarda degradada:', siError);
+        } else {
+          const totaisPorFazenda = new Map<string, number>();
+          for (const r of (siRows ?? []) as Array<{ fazenda_id: string; quantidade: number | null }>) {
+            totaisPorFazenda.set(r.fazenda_id, (totaisPorFazenda.get(r.fazenda_id) ?? 0) + Number(r.quantidade ?? 0));
+          }
+          // Fazenda esvaziada (saldo 0) nao gera linha de cache — nao esperamos por ela.
+          for (const [id, qtd] of totaisPorFazenda) if (qtd > 0) fazendasEsperadas.add(id);
+        }
       }
 
-      const { data: viewRows } = await viewQuery;
+      type LinhaCache = { fazenda_id: string; mes: number; categoria_codigo: string; saldo_final: number | null };
+      const MAX_ENSURE_ATTEMPTS = 2;
+      let linhasCache: LinhaCache[] = [];
+
+      for (let tentativa = 0; tentativa < MAX_ENSURE_ATTEMPTS; tentativa++) {
+        const { data: pagina } = await fetchAllPaginated<LinhaCache>({
+          query: () => {
+            let q = supabase
+              .from('zoot_mensal_cache' as any)
+              .select('fazenda_id, mes, categoria_codigo, saldo_final')
+              .eq('ano', ano)
+              .eq('cenario', 'realizado');
+            // Mesmo recorte de tenant de antes — trocar de cliente_id para
+            // fazenda_id mudaria o conjunto e, com ele, os numeros da tela.
+            if (isGlobal) {
+              if (clienteIdCache) q = q.eq('cliente_id', clienteIdCache);
+            } else {
+              q = q.eq('fazenda_id', fazendaId);
+            }
+            // Ordem total: OFFSET so e' correto sob ordenacao deterministica.
+            return q.order('fazenda_id').order('mes').order('categoria_codigo');
+          },
+          getKey: (r) => `${r.fazenda_id}|${r.mes}|${r.categoria_codigo}`,
+          maxRows: MAX_ROWS,
+          context: 'useStatusZootecnico/zoot_mensal_cache',
+        });
+        linhasCache = pagina;
+
+        // Sem cliente em maos nao ha como pedir rebuild (a RPC recebe cliente e
+        // ano). Entrega o que leu em vez de girar em falso.
+        if (!clienteIdCache) break;
+
+        const fazendasNoCache = new Set(linhasCache.map(r => r.fazenda_id));
+        const cacheCobreEsperadas = siFalhou
+          ? linhasCache.length > 0
+          : Array.from(fazendasEsperadas).every(id => fazendasNoCache.has(id));
+
+        if (cacheCobreEsperadas || tentativa > 0) break;
+
+        console.warn('[zoot-cache-partial] useStatusZootecnico', {
+          clienteId: clienteIdCache,
+          ano,
+          esperadas: Array.from(fazendasEsperadas),
+          presentes: Array.from(fazendasNoCache),
+        });
+        const { error: rebuildError } = await (supabase as any).rpc('fn_zoot_cache_rebuild', {
+          p_cliente_id: clienteIdCache,
+          p_ano: ano,
+        });
+        if (rebuildError) {
+          console.warn('[zoot-cache] fn_zoot_cache_rebuild failed:', rebuildError);
+          break;
+        }
+      }
+
       const saldoMap = new Map<string, number>();
-      (viewRows || []).forEach((r: any) => {
+      linhasCache.forEach((r) => {
+        if (Number(r.mes) !== mes) return;
         const current = saldoMap.get(r.categoria_codigo) || 0;
         saldoMap.set(r.categoria_codigo, current + (Number(r.saldo_final) || 0));
       });
@@ -342,7 +429,7 @@ export function useStatusZootecnico(
       }
 
       console.log(`[STATUS-ZOO] anoMes=${anoMes} fazenda=${fazendaId}`);
-      console.log('[STATUS-ZOO] SALDO OFICIAL (view)', Array.from(saldoMap.entries()));
+      console.log('[STATUS-ZOO] SALDO OFICIAL (cache)', Array.from(saldoMap.entries()));
       console.log('[STATUS-ZOO] ALOCADO PASTOS (fechamento)', Array.from(alocadoPastosCodigo.entries()));
 
       // Use calcStatusCategorias — THE official rule
