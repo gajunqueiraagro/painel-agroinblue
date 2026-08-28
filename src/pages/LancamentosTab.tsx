@@ -179,7 +179,9 @@ const TIPO_CARDS_GROUPS: TipoCardGroup[] = [
          perde — ela muda de lugar, para o titulo caber em caixa de frase sem parenteses
          carregando semantica. */
       { value: 'transferencia_saida',  aba: 'saida', label: 'Transferência',        icon: '📤', desc: 'Saída para outra fazenda' },
-      { value: 'consumo',              aba: 'saida', label: 'Consumo',              icon: '🍖', desc: 'Animais consumidos internamente' },
+      /* "Animais consumidos internamente" quebrava em duas linhas em meia largura e
+         desalinhava a lista; o sujeito ja esta no titulo. */
+      { value: 'consumo',              aba: 'saida', label: 'Consumo',              icon: '🍖', desc: 'Consumidos internamente' },
       { value: 'morte',                aba: 'saida', label: 'Morte',                icon: '💀', desc: 'Perdas no rebanho' },
     ],
   },
@@ -2756,7 +2758,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         } else if (returnedId) {
           setLastSavedLancamentoId(null);
           setQuantidade(''); setCategoria('');
-          setPesoKg(tipo === 'nascimento' ? '30' : '');
+          setPesoKg(tipo === 'nascimento' ? '30,00' : '');   // A15 — peso com duas casas
           setFazendaOrigem(''); setFazendaDestino('');
           setData(format(new Date(), 'yyyy-MM-dd'));
           setObservacao(''); setStatusOp(defaultCenario);
@@ -2953,74 +2955,94 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       setAba(it.aba);
       setTipo(it.value as TipoMovimentacao);
       resetAllFields();
+      /* ⚠ PESO SUGERIDO DO NASCIMENTO — 30,00 kg, e SO em lancamento novo. Ja existia
+         no reset pos-salvamento; faltava na abertura, entao o primeiro nascimento do
+         dia comecava vazio e o segundo nao.
+         ⚠ FORA de `resetAllFields`, e de proposito: `setTipo` acima e' assincrono, e la
+         dentro `tipo` ainda seria o ANTERIOR. Aqui o valor vem de `it`, que e' o que o
+         operador acabou de clicar — sem depender de estado que ainda nao chegou.
+         ⚠ EDICAO NAO PASSA POR AQUI: os loaders de registro existente tem caminho
+         proprio e escrevem o peso gravado. O padrao nunca sobrescreve o que foi salvo. */
+      if (it.value === 'nascimento') setPesoKg('30,00');
       setLancModalOpen(true);
     };
     const isItemActive = (it: TipoCardItem) =>
       !it.navOnly && it.aba === aba && (it.aba === 'reclassificacao' || tipo === it.value);
 
+    /* Os dois filtros de visibilidade que ja existiam, agora num lugar so porque tres
+       chamadas de `cartaoGrupo` os repetiriam.
+         · Chuvas some sem callback de navegacao;
+         · Compra so aparece onde existe o fluxo OC — sem ele (contexto meta/Planejamento)
+           o item e' OCULTADO, nunca abre o shell em modo legado. */
+    const itensVisiveis = (g: TipoCardGroup) => g.items
+      .filter(it => !it.navOnly || (it.value === 'chuvas' && !!onNavegarChuvas))
+      .filter(it => !(it.value === 'compra' && !onNovaCompraOC));
+
+    /* ── UM CARTAO POR GRUPO (PR-UI-LANCAR-CARDS-02) ───────────────────────────
+       Eram NOVE cartoes com borda de 2px cada, sob cabecalhos soltos: nove molduras
+       competindo viravam grade visual, e o olho nao achava onde comecar. Agora e' uma
+       borda por grupo, o cabecalho DENTRO dela e cada item como linha separada por
+       filete.
+       ⚠ O EMOJI SAIU e nao foi trocado por icone nenhum. Emoji tem desenho e cor
+       proprios de cada sistema operacional — nunca parece desenhado junto com o resto
+       da interface. A hierarquia passa a ser so tipografica.
+       ⚠ O DESTAQUE MUDOU DE PECA, nao de regra: sem borda por item, o estado ativo
+       passa a ser o fundo da LINHA. As tres classes sao as mesmas de antes. */
+    const cartaoGrupo = (g: TipoCardGroup, classePos: string) => (
+      <div key={g.grupo} role="group" aria-label={g.label}
+        className={`rounded-lg border border-border/60 bg-card ${classePos}`}>
+        {/* Caixa alta por ESTILO, nao por texto: o rotulo no dado ja e' "Entradas". */}
+        <div className="border-b border-border/60 px-3.5 py-[9px] text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">
+          {g.label}
+        </div>
+        <div className="divide-y divide-border/60">
+          {itensVisiveis(g).map(it => {
+            const active = isItemActive(it);
+            // navOnly nunca é "disabled" durante edição — atalho continua acessível
+            const disabled = !it.navOnly && isEditing && !active;
+            return (
+              <button
+                key={it.value}
+                type="button"
+                onClick={() => handleClick(it)}
+                disabled={disabled}
+                aria-label={`Lançar ${it.label} — ${it.desc}`}
+                title={it.desc}
+                className={`flex w-full items-baseline gap-2 px-3.5 py-2 text-left transition-colors ${
+                  active
+                    ? 'bg-primary/10'
+                    : disabled
+                      ? 'opacity-25 pointer-events-none'
+                      : 'hover:bg-muted/40'
+                }`}
+              >
+                <span className="shrink-0 text-[13px] font-medium text-foreground">{it.label}</span>
+                <span className="min-w-0 truncate text-[11px] text-muted-foreground">{it.desc}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+
+    const grupo = (id: TipoCardGroup['grupo']) => TIPO_CARDS_GROUPS.find(g => g.grupo === id);
+    const gEntradas = grupo('entradas'); const gSaidas = grupo('saidas'); const gOutros = grupo('outros');
+
     return (
-      /* ⚠ RITMO VERTICAL DE 18px (PR-UI-LANCAR-CARDS-01): o mesmo respiro entre a
-         faixa de IA e o primeiro grupo, e entre grupos. Amarrar os dois blocos no
-         mesmo valor e' o que impede a tela de parecer duas telas empilhadas — a
-         faixa mora em V2Index e os grupos aqui. */
-      <div className="space-y-[18px] mb-2">
+      /* ⚠ COLOCACAO EXPLICITA NA GRADE, e nao duas colunas aninhadas. A ORDEM DO DOM e'
+         Entradas, Saidas, Outros — que e' a ordem correta no mobile, em coluna unica.
+         No desktop, `col-start`/`row-start` levam Saidas para a esquerda ocupando as
+         duas fileiras, e Entradas e Outros empilham a direita. Colunas aninhadas dariam
+         o desktop certo e o mobile na ordem errada (Saidas primeiro).
+         As alturas fecham parecidas por construcao: Saidas tem 5 itens, Entradas e
+         Outros somam 4 mais um cabecalho a mais. */
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-[10px] items-start mb-2">
         {/* PR-OC-ENTRYPOINT-COMPRA-01 — o wizard legado de operação comercial foi desconectado
             daqui e, em PR-OC-LIMPAR-MODAL-ORFAO-01, removido do repositório. O fluxo oficial de
             Compra é o CompraModalShell (card Compra → modo OC). */}
-        {TIPO_CARDS_GROUPS.map(g => (
-          <div key={g.grupo}>
-            {/* Caixa alta por ESTILO, nao por texto: o rotulo no dado ja e' "Entradas". */}
-            <div className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground mb-[7px]">
-              {g.label}
-            </div>
-            {/* ⚠ DUAS COLUNAS LISAS. A escada `sm:3 lg:4 xl:5` saiu: com cinco colunas
-                num monitor largo o cartao encolhia ate o subtitulo truncar em todos.
-                O mobile ja era duas colunas, entao ali nada muda.
-                ⚠ Saidas fica com CINCO cartoes e o quinto sozinho na ultima fileira. E'
-                aceito: manter o agrupamento honesto vale mais que preencher a grade, e
-                mover um cartao de grupo para equilibrar seria mentir sobre o que ele e'. */}
-            <div className="grid grid-cols-2 gap-2">
-              {g.items
-                // Esconde Chuvas se o parent não passou callback de navegação.
-                .filter(it => !it.navOnly || (it.value === 'chuvas' && !!onNavegarChuvas))
-                // PR-OC-ENTRYPOINT-COMPRA-01 — Compra só aparece onde existe o fluxo OC (onNovaCompraOC).
-                //   Sem ele (ex.: contexto meta/Planejamento) o card é OCULTADO — nunca abre CompraModalShell
-                //   em modo legado. Zero ponto de entrada visível de Compra legada.
-                .filter(it => !(it.value === 'compra' && !onNovaCompraOC))
-                .map(it => {
-                const active = isItemActive(it);
-                // navOnly nunca é "disabled" durante edição — atalho continua acessível
-                const disabled = !it.navOnly && isEditing && !active;
-                return (
-                  <button
-                    key={it.value}
-                    type="button"
-                    onClick={() => handleClick(it)}
-                    disabled={disabled}
-                    aria-label={`Lançar ${it.label} — ${it.desc}`}
-                    title={it.desc}
-                    className={`flex items-center gap-2 px-3 py-2.5 rounded-md border-2 transition-all text-left ${
-                      active
-                        ? 'border-primary bg-primary/10 shadow-sm'
-                        : disabled
-                          ? 'opacity-25 pointer-events-none border-transparent bg-muted/10'
-                          : 'border-border hover:border-primary/40 hover:bg-muted/40'
-                    }`}
-                  >
-                    <span className="text-lg shrink-0 leading-none">{it.icon}</span>
-                    <div className="min-w-0">
-                      {/* ⚠ PESO 500, nao 700. Com borda de 2px em TODOS os cartoes, o
-                          negrito somava enfase demais e o conjunto virava ruido: a borda
-                          ja destaca, e o titulo repetia o destaque. */}
-                      <div className="text-xs font-medium leading-tight text-foreground truncate">{it.label}</div>
-                      <div className="mt-px text-[10px] text-muted-foreground leading-snug truncate">{it.desc}</div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ))}
+        {gEntradas && cartaoGrupo(gEntradas, 'md:col-start-2 md:row-start-1')}
+        {gSaidas   && cartaoGrupo(gSaidas,   'md:col-start-1 md:row-start-1 md:row-span-2')}
+        {gOutros   && cartaoGrupo(gOutros,   'md:col-start-2 md:row-start-2')}
       </div>
     );
   };
@@ -3475,6 +3497,15 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       </div>
 
       {/* STATUS — destaque forte: Realizado / META (programado removido no PR-0C) */}
+      {/* ⚠ NASCIMENTO NAO ESCOLHE CENARIO (PR-UI-NASCIMENTO-PADRAO-01). Este caminho
+          registra apenas realizado; meta tem caminho proprio. O que sai e' a
+          POSSIBILIDADE DE ESCOLHER — o payload segue enviando o mesmo valor de sempre.
+          ⚠ Esconder e' seguro porque este bloco NAO inicializa estado: `statusOp` nasce
+          de `defaultCenario` no `useState` e e' resetado nos handlers de salvar,
+          montado o seletor ou nao. Conferido antes de esconder.
+          Condicao LOCAL, no mesmo padrao do `isNascimento` que ja restringe as
+          categorias — os demais tipos seguem com o seletor como esta. */}
+      {!isNascimento && (
       <div className="space-y-2">
         <div className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">Status</div>
         <div className="grid grid-cols-3 gap-2">
@@ -3512,9 +3543,58 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
            {getStatusDescription(tipo, statusOp)}
         </div>
       </div>
+      )}
 
       <Separator />
 
+      {/* ══ GRADE BIFURCADA POR TIPO (PR-UI-NASCIMENTO-PADRAO-01) ═══════════════
+          Esta grade servia SEIS tipos de lancamento com uma linha so de campos. O
+          Nascimento precisava de outra ordem, outros rotulos e outra tipografia, e
+          mexer na grade unica mudaria Morte, Consumo, Venda, Abate e Transferencia por
+          efeito colateral. A bifurcacao acontece no CONTAINER: o ramo de baixo entrou
+          byte a byte, sem uma alteracao — nem de indentacao.
+          ⚠ A DUPLICACAO E' TEMPORARIA e tem dono: PR-UI-LANCAMENTOS-SIMPLES-PADRAO-02
+          leva os demais tipos ao mesmo padrao e reunifica a grade. Ate la, alterar
+          campo comum exige mexer NOS DOIS ramos — foi o preco de nao mudar cinco telas
+          sem mandato. */}
+      {isNascimento ? (
+        /* ⚠ ROTULOS 10px SEM NEGRITO: o mesmo defeito ja corrigido na aba Compra em
+           PR-OC-UX-LOTE-C1-01 — negrito a 11px pesa mais que 10 regular, e era esse o
+           pulo de tamanho ao trocar de tela.
+           ⚠ SEM FAZENDA nesta grade. Ela segue read-only fora daqui, com o rotulo
+           "Fazenda Destino" intacto: o nome atual avisa que o valor e' DERIVADO do
+           contexto, e trocar para "Fazenda" num campo que nao se escolhe pareceria
+           seletor quebrado. O rotulo muda quando o campo virar seletor de verdade,
+           com payload — PR-UI-LANCAMENTOS-SIMPLES-PADRAO-02. */
+        <div className="grid grid-cols-[1.2fr_1.5fr_0.8fr_1fr_2.5fr] gap-2 items-end">
+          <div>
+            <Label className="text-[10px] text-muted-foreground">Data</Label>
+            <Input tabIndex={1} type="date" value={data} onChange={e => setData(e.target.value)} className="mt-0.5 h-7 text-[11px]" />
+          </div>
+          <div>
+            <Label className="text-[10px] text-muted-foreground">Categoria</Label>
+            <Select value={categoria} onValueChange={v => setCategoria(v as Categoria)}>
+              <SelectTrigger tabIndex={2} className="mt-0.5 h-7 text-[11px]"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+              <SelectContent className="max-h-52 overflow-y-auto">
+                {categoriasDisponiveis.map(c => <SelectItem key={c.value} value={c.value} className="text-[11px] py-1.5">{c.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-[10px] whitespace-nowrap text-muted-foreground">Qtd. cabeças</Label>
+            <Input tabIndex={3} type="text" inputMode="numeric" value={qtdInput.displayValue} onChange={qtdInput.onChange} onBlur={qtdInput.onBlur} onFocus={qtdInput.onFocus} placeholder="0" className="mt-0.5 h-7 text-[11px] text-right font-bold tabular-nums" />
+          </div>
+          <div>
+            <Label className="text-[10px] text-muted-foreground">Peso médio</Label>
+            <Input tabIndex={4} type="text" inputMode="decimal" value={pesoInput.displayValue} onChange={pesoInput.onChange} onBlur={pesoInput.onBlur} onFocus={pesoInput.onFocus} placeholder="0,00" className="mt-0.5 h-7 text-[11px] text-right tabular-nums" />
+          </div>
+          <div>
+            <Label className="text-[10px] text-muted-foreground">Observações / Lote</Label>
+            <Input tabIndex={5} value={observacao} onChange={e => setObservacao(e.target.value)} placeholder="Opcional" className="mt-0.5 h-7 text-[11px]" />
+          </div>
+        </div>
+      ) : (
+      <>
       {/* Row 1: Data | Qtd | Peso | Categoria | Obs */}
       <div className="grid grid-cols-[1.2fr_0.8fr_1fr_1.5fr_2.5fr] gap-2 items-end">
         <div>
@@ -3543,6 +3623,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           <Input tabIndex={5} value={observacao} onChange={e => setObservacao(e.target.value)} placeholder="Opcional" className="mt-0.5 h-7 text-[11px]" />
         </div>
       </div>
+      </>
+      )}
 
       {/* Motivo da Morte */}
       {isMorte && (
