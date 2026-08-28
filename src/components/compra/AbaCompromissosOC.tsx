@@ -324,6 +324,20 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
     [compromissos],
   );
 
+  /* ── DERIVACOES DO TOPO (PR-OC-A18-COMPROMISSOS-01) ──────────────────────────
+     ⚠ SEM COMPROMISSO NAO HA OBRIGACAO — e nao ha obrigacao de zero. A view
+     devolve 0 nos totais porque nao tem o que somar; imprimir "R$ 0,00" seria a
+     tela afirmando o que a ausencia de dado nao autoriza.
+     ⚠ "A programar" so aparece quando diverge: com tudo programado ele nao informa
+     nada, e uma caixa que so sabe dizer zero treina o olho a pular a fileira.
+     ⚠ `TOL_CENTAVO` e' a MESMA constante que `estadoCompromisso` ja usa por
+     compromisso — nao ha segundo limiar nesta tela. */
+  const semCompromisso = compromissos.length === 0;
+  const mostrarAProgramar = !semCompromisso && totalAProgramar > TOL_CENTAVO;
+  const confere = !semCompromisso && !!resumoOperacao
+    && resumoOperacao.obrigacaoTotal > TOL_CENTAVO
+    && Math.abs(resumoOperacao.obrigacaoTotal - resumoOperacao.totalLiquidado) <= TOL_CENTAVO;
+
   /* ITEM 4 — a coluna dizia natureza/componente, iguais em todos: quatro linhas
      "principal/principal" nao distinguem a Desmama da Vaca. Quem identifica e' o
      LOTE. `lote_id` vem da view; a categoria sai do proprio array `lotes` que a
@@ -466,168 +480,163 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
 
   return (
     <div className="space-y-2 min-w-0 text-[12px]">
-      {resumoOperacao && (
-        <div className="rounded-md border bg-card p-1.5 shadow-sm">
-          <div className="flex items-center justify-between mb-1">
-            <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-              <span className="font-semibold">Resumo financeiro</span>
-              <span>· Compra {fmtData(dataOperacao)}</span>
-              <span>· Chegada {fmtData(dataChegada)}</span>
-            </div>
-            <div className="flex items-center gap-1">
-              {/* `modo` (novo_modelo / nova_vazia) era TELEMETRIA DE MIGRACAO, nao
-                  informacao de produtor. Saiu da Central em c1aaffbd pelo mesmo motivo;
-                  o campo segue na view e no hook, so nao e' mais exibido. */}
-              {resumoOperacao.temDivergencia && (
-                <span className="inline-flex items-center gap-1 text-[10px] text-amber-600" title="Divergência detectada">
-                  <AlertTriangle className="h-3 w-3" /> divergência
-                </span>
+      {/* ═══ CABECALHO + NUMEROS, FIXOS (PR-OC-A18-COMPROMISSOS-01) ══════════════
+          As duas metades da aba Financeiro estavam em padroes diferentes: a de
+          pagamentos recebeu o A18 em e06a4dbe e esta parou no intermediario de
+          22e0d2bf. Aqui os dois cartoes viram um: o titulo da secao, os numeros e a
+          acao no mesmo bloco fixo, porque separados o resumo rolava para fora
+          enquanto a lista descia.
+          ⚠ `-mt-1.5 pt-1.5` porque ESTE cartao e' `p-1.5`. Conferido no arquivo, nao
+          copiado das irmas, que sao `p-2`. */}
+      <div className="rounded-md border bg-card p-1.5 shadow-sm space-y-1.5">
+        <div className="sticky top-0 z-10 -mt-1.5 space-y-1.5 border-b bg-card pt-1.5 pb-1.5">
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="text-[15px] font-medium text-foreground min-w-0 truncate">Compromissos</span>
+            <div className="flex items-baseline gap-3 shrink-0">
+              {(qtdCancelados > 0 || qtdParcelasCanceladas > 0) && (
+                <label className="flex items-center gap-1 text-[10px] text-muted-foreground cursor-pointer">
+                  <Checkbox checked={mostrarCancelados} onCheckedChange={(v) => setMostrarCancelados(v === true)} className="h-3 w-3" />
+                  mostrar cancelados
+                </label>
               )}
+              {/* ⚠ UM SO BOTAO. Havia dois para a MESMA acao: este e outro no meio do
+                  estado vazio. Duas portas para o mesmo lugar fazem o operador procurar
+                  a diferenca que nao existe. */}
+              <button type="button" disabled={!podeEscrever} onClick={abrirNovo}
+                title={podeEscrever ? 'Criar um compromisso nesta operação' : undefined}
+                aria-label="Novo compromisso"
+                className="text-[11px] font-normal text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline">
+                + Novo compromisso
+              </button>
             </div>
           </div>
-          <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
-            <ResumoCard rotulo="Obrigação" valor={resumoOperacao.obrigacaoTotal} />
-            <ResumoCard rotulo="Programado" valor={resumoOperacao.totalProgramado} />
-            {/* "Lancado", nao "Materializado": materializado e' jargao do modelo. Lancado
-                casa com o vocabulario do Financeiro e contrasta com Liquidado — lancado e'
-                compromisso registrado, liquidado e' dinheiro que saiu. So o ROTULO muda:
-                `totalMaterializado` segue sendo o nome do campo da view. */}
-            <ResumoCard rotulo="Lançado" valor={resumoOperacao.totalMaterializado} />
-            <ResumoCard rotulo="Pago" valor={resumoOperacao.totalLiquidado} />
-            {/* "Saldo fin." (materializado − liquidado) saiu daqui: na 765058f8 marcava
-                R$ 0,00 porque tudo que virou titulo foi pago — verdadeiro e inutil.
-                Continua na coluna Saldo da tabela, que e' onde ele e' detalhe por
-                compromisso. O topo passa a responder "quanto falta programar?". */}
-            <ResumoCard rotulo="A programar" valor={totalAProgramar} />
-          </div>
-        </div>
-      )}
 
-      {/* ===== BLOCO A — COMPROMISSOS (FIX-01b: densidade p/ notebook 13", sem scroll horizontal) ===== */}
-      <div className="rounded-md border bg-card p-1.5 shadow-sm">
-        <div className="flex items-center justify-between mb-1">
-          <div className="text-[11px] font-semibold text-muted-foreground">Compromissos</div>
-          <div className="flex items-center gap-1.5">
-            {(qtdCancelados > 0 || qtdParcelasCanceladas > 0) && (
-              <label className="flex items-center gap-1 text-[10px] text-muted-foreground cursor-pointer">
-                <Checkbox checked={mostrarCancelados} onCheckedChange={(v) => setMostrarCancelados(v === true)} className="h-3 w-3" />
-                mostrar cancelados
-              </label>
-            )}
-            <Button size="sm" className="h-6 text-[11px] px-2" disabled={!podeEscrever} onClick={abrirNovo}>
-              <Plus className="h-3 w-3 mr-1" /> Novo compromisso
-            </Button>
-          </div>
+          {resumoOperacao && (
+            <>
+              {/* ⚠ DOIS NUMEROS, E O TERCEIRO SO QUANDO DIVERGE. "Programado" e "Lancado"
+                  sairam: sao etapas do MEIO da cadeia, e o topo existe para mostrar o
+                  desvio, nao o caminho. Elas seguem no detalhe do compromisso, que e'
+                  onde a pergunta "em que pe esta" faz sentido.
+                  ⚠ AUSENCIA NAO E' ZERO. Operacao sem compromisso nenhum nao tem
+                  obrigacao de R$ 0,00 — nao tem obrigacao. Cinco caixas de "R$ 0,00"
+                  eram cinco afirmacoes falsas sobre uma operacao que nao comecou. */}
+              <div className={`grid gap-2 rounded-md border bg-muted/20 px-3.5 py-[11px] ${mostrarAProgramar ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                <div className="min-w-0">
+                  <div className="text-[11px] font-normal text-muted-foreground leading-none">Obrigação</div>
+                  <div className="mt-1 text-[20px] font-medium tabular-nums leading-none">
+                    {semCompromisso ? '—' : brl(resumoOperacao.obrigacaoTotal)}
+                  </div>
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[11px] font-normal text-muted-foreground leading-none">Pago</div>
+                  <div className="mt-1 text-[20px] font-medium tabular-nums leading-none">
+                    {semCompromisso ? '—' : brl(resumoOperacao.totalLiquidado)}
+                  </div>
+                  {/* Tolerancia de um centavo, a mesma `TOL_CENTAVO` que `estadoCompromisso`
+                      usa por compromisso — nao ha segundo limiar nesta tela. */}
+                  {confere && (
+                    <div className="mt-1 text-[11px] font-normal leading-none text-emerald-700 dark:text-emerald-500">confere</div>
+                  )}
+                </div>
+                {mostrarAProgramar && (
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-normal text-muted-foreground leading-none">A programar</div>
+                    <div className="mt-1 text-[20px] font-medium tabular-nums leading-none text-amber-700 dark:text-amber-500">
+                      {brl(totalAProgramar)}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                <span>Compra {fmtData(dataOperacao)}</span>
+                <span>· Chegada {fmtData(dataChegada)}</span>
+                {resumoOperacao.temDivergencia && (
+                  <span className="inline-flex items-center gap-1 text-amber-600" title="Divergência detectada">
+                    <AlertTriangle className="h-3 w-3" /> divergência
+                  </span>
+                )}
+              </div>
+            </>
+          )}
         </div>
 
         {compromissosVisiveis.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-2 py-6 text-center">
-            <div className="text-[11px] text-muted-foreground">Nenhum compromisso nesta operação.</div>
-            <Button size="sm" className="h-7 text-[11px]" disabled={!podeEscrever} onClick={abrirNovo}>
-              <Plus className="h-3 w-3 mr-1" /> Novo compromisso
-            </Button>
-          </div>
+          <div className="py-6 text-center text-[11px] text-muted-foreground">Nenhum compromisso nesta operação.</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-[10px] tabular-nums">
-              <thead>
-                <tr className="text-left text-[9px] text-muted-foreground border-b">
-                  <th className="py-0.5 pr-1.5">Componente</th>
-                  <th className="py-0.5 pr-1.5">Favorecido</th>
-                  <th className="py-0.5 pr-1.5 whitespace-nowrap">Vencimento</th>
-                  <th className="py-0.5 pr-1.5 text-right whitespace-nowrap">Valor</th>
-                  <th className="py-0.5 pr-1.5">Status</th>
-                  <th className="py-0.5 pr-0.5"></th>
-                  <th className="py-0.5 pl-0.5"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {compromissosVisiveis.map(c => {
-                  const favNome = fornecedores.find(f => f.id === c.favorecidoId)?.nome ?? (c.favorecidoId ? '—' : '');
-                  const ident = identidadeCompromisso(c);
-                  const desvio = desvioCompromisso(c);
-                  const estado = estadoCompromisso(c);
-                  return (
-                    <tr key={c.compromissoId ?? ''}
-                      onClick={() => { setSelectedId(c.compromissoId); setDetalheAberto(true); }}
-                      className={`border-b cursor-pointer hover:bg-muted/50 ${selectedId === c.compromissoId ? 'bg-muted' : ''}`}>
-                      {/* Identidade em cima, natureza/componente embaixo em corpo menor:
-                          continua disponivel, deixa de ser a unica coisa dita.
-                          ⚠ `principal/principal` NAO e' mais impresso: dizer duas vezes a
-                          mesma palavra nao informa nada e ainda competia com a identidade.
-                          O subtexto so aparece quando o componente ACRESCENTA (frete,
-                          comissao, taxa de aquisicao). O par completo segue no `title`. */}
-                      <td className="py-0.5 pr-1.5 whitespace-nowrap" title={`${c.natureza ?? '—'}/${c.componente ?? '—'}`}>
-                        {ident ? (
-                          <span className="leading-tight block">
-                            <span className="block">{ident}</span>
-                            {componenteAdicional(c) && (
-                              <span className="block text-[9px] text-muted-foreground">{componenteAdicional(c)}</span>
-                            )}
-                          </span>
-                        ) : (
-                          <>{rotuloCompromisso(c)}</>
+          /* ── LISTA A18 ───────────────────────────────────────────────────────────
+              Sem `<table>`, sem cabecalho de coluna e sem `overflow-x-auto`.
+              ⚠ A LINHA NAO E' UM <button>: os botoes de acao vivem dentro dela, e botao
+              dentro de botao e' HTML invalido. E' `div` com `role="button"`, que aceita
+              filhos acionaveis e mantem o clique da linha inteira que ja existia. */
+          <div className="rounded-md border divide-y divide-border/60">
+            {compromissosVisiveis.map(c => {
+              const favNome = fornecedores.find(f => f.id === c.favorecidoId)?.nome ?? (c.favorecidoId ? '—' : '');
+              const desvio = desvioCompromisso(c);
+              const estado = estadoCompromisso(c);
+              const extra = componenteAdicional(c);
+              /* Contexto normal: quem recebe e quando. Havendo desvio, ele TOMA a linha
+                 — entre "vence em 28/02" e "falta pagar R$ 1.500", quem opera precisa do
+                 segundo. O `title` guarda o par natureza/componente, como antes. */
+              const contexto = [favNome || null, fmtData(proximoVencimento(c.compromissoId)), extra].filter(Boolean).join(' · ');
+              const g = gateCancelarCompromisso(c);
+              return (
+                <div key={c.compromissoId ?? ''} role="button" tabIndex={0}
+                  aria-label={`Abrir o compromisso ${rotuloCompromisso(c)}`}
+                  title={`${c.natureza ?? '—'}/${c.componente ?? '—'}`}
+                  onClick={() => { setSelectedId(c.compromissoId); setDetalheAberto(true); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedId(c.compromissoId); setDetalheAberto(true); } }}
+                  className={`flex items-center gap-3 px-3.5 py-1.5 leading-[1.35] cursor-pointer hover:bg-muted/40 ${selectedId === c.compromissoId ? 'bg-muted' : ''} ${c.status === 'cancelado' ? 'opacity-60' : ''}`}>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[12px] font-medium text-foreground">{rotuloCompromisso(c)}</div>
+                    <div className={`truncate text-[10px] font-normal ${desvio ? 'text-amber-700 dark:text-amber-500' : 'text-muted-foreground'}`}>
+                      {desvio ?? (contexto || '—')}
+                    </div>
+                  </div>
+                  <div className="shrink-0 text-[12px] font-medium tabular-nums text-foreground">{brl(c.valorCompromisso)}</div>
+                  <Badge variant={estado.variant} className="shrink-0 text-[10px] px-1.5 py-px font-normal">{estado.label}</Badge>
+                  {c.temDivergencia && <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600" aria-label="divergência" />}
+                  {/* ⚠ ACAO NA PROPRIA LINHA. A RPC sempre recebeu p_compromisso_id — o
+                      backend suporta por linha desde o inicio; era a tela que so oferecia
+                      a acao no bloco de detalhe, longe de qual compromisso ela agiria.
+                      `stopPropagation` para o clique agir sem que a linha engula o evento. */}
+                  <div className="flex shrink-0 items-center gap-[11px]" onClick={(e) => e.stopPropagation()}>
+                    {/* PROGRAMAR SALDO — so quando JA existe programacao ativa e ainda
+                        sobra saldo. Sem programacao ativa quem aparece e' o "Programar"
+                        do bloco de detalhe: sao writers diferentes e nao devem se
+                        confundir num botao so. Cancelado nao recebe parcela. */}
+                    {podeEscrever && c.status !== 'cancelado' && c.temProgramacaoAtiva && c.saldoAProgramar > 0 && (
+                      <button type="button" onClick={() => setSaldoAlvo(c)}
+                        title="Programar o saldo restante deste compromisso"
+                        aria-label={`Programar saldo de ${rotuloCompromisso(c)}`}
+                        className="text-[11px] font-normal text-primary hover:underline">
+                        Programar saldo
+                      </button>
+                    )}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground hover:text-foreground"
+                          title="Ações deste compromisso"
+                          aria-label={`Ações de ${rotuloCompromisso(c)}`}>
+                          <MoreHorizontal className="h-3.5 w-3.5" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="text-[11px]">
+                        <DropdownMenuItem
+                          disabled={!g.pode || estRodando}
+                          title={g.motivo || undefined}
+                          onSelect={() => abrirEstorno({ nivel: 'compromisso', compromissoId: c.compromissoId ?? undefined,
+                            descricao: `o compromisso ${c.natureza ?? ''}/${c.componente ?? ''} de ${brl(c.valorCompromisso)} é cancelado` })}>
+                          Cancelar compromisso
+                        </DropdownMenuItem>
+                        {g.motivo !== '' && (
+                          <div className="px-2 py-1 text-[10px] text-muted-foreground max-w-[220px] leading-tight">{g.motivo}</div>
                         )}
-                      </td>
-                      <td className="py-0.5 pr-1.5 max-w-[110px] truncate" title={favNome}>{favNome}</td>
-                      <td className="py-0.5 pr-1.5 whitespace-nowrap">{fmtData(proximoVencimento(c.compromissoId))}</td>
-                      {/* O desvio entra como segunda linha DISCRETA sob o valor, e so quando
-                          existe. Cadeia completa nao gera texto: a coluna Status ja diz. */}
-                      <td className="py-0.5 pr-1.5 text-right whitespace-nowrap">
-                        <span className="block">{brl(c.valorCompromisso)}</span>
-                        {desvio && <span className="block text-[9px] text-amber-700 dark:text-amber-500 font-normal">{desvio}</span>}
-                      </td>
-                      <td className="py-0.5 pr-1.5" title={`status: ${c.status}`}>
-                        <Badge variant={estado.variant} className="text-[9px] px-1">{estado.label}</Badge>
-                      </td>
-                      <td className="py-0.5 pr-0.5 text-right">{c.temDivergencia && <AlertTriangle className="h-3 w-3 text-amber-600 inline" aria-label="divergência" />}</td>
-                      {/* ⚠ ACAO NA PROPRIA LINHA. A RPC sempre recebeu p_compromisso_id — o
-                          backend suporta por linha desde o inicio; era a tela que so
-                          oferecia a acao no bloco de detalhe, longe de qual compromisso
-                          ela agiria. `stopPropagation` para o clique abrir o menu sem que
-                          a selecao da linha engula o evento. */}
-                      <td className="py-0.5 pl-0.5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                        {/* PROGRAMAR SALDO — so quando JA existe programacao ativa e ainda
-                            sobra saldo. Sem programacao ativa quem aparece e' o "Programar"
-                            do bloco de detalhe: sao writers diferentes e nao devem se
-                            confundir num botao so. Cancelado nao recebe parcela. */}
-                        {podeEscrever && c.status !== 'cancelado' && c.temProgramacaoAtiva && c.saldoAProgramar > 0 && (
-                          <Button size="sm" variant="outline" className="h-5 mr-1 px-1.5 text-[10px]"
-                            onClick={() => setSaldoAlvo(c)}>
-                            Programar saldo
-                          </Button>
-                        )}
-                        {(() => {
-                          const g = gateCancelarCompromisso(c);
-                          return (
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-muted-foreground hover:text-foreground"
-                                  aria-label={`Ações de ${c.natureza ?? ''}/${c.componente ?? ''}`}>
-                                  <MoreHorizontal className="h-3 w-3" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="text-[11px]">
-                                <DropdownMenuItem
-                                  disabled={!g.pode || estRodando}
-                                  title={g.motivo || undefined}
-                                  onSelect={() => abrirEstorno({ nivel: 'compromisso', compromissoId: c.compromissoId ?? undefined,
-                                    descricao: `o compromisso ${c.natureza ?? ''}/${c.componente ?? ''} de ${brl(c.valorCompromisso)} é cancelado` })}>
-                                  Cancelar compromisso
-                                </DropdownMenuItem>
-                                {g.motivo !== '' && (
-                                  <div className="px-2 py-1 text-[10px] text-muted-foreground max-w-[220px] leading-tight">{g.motivo}</div>
-                                )}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          );
-                        })()}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
