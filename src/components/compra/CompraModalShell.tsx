@@ -118,6 +118,13 @@ export const DARK_SELECT_CONTENT =
   '[&_[role=option]:focus]:!bg-white/10 [&_[role=option]:focus]:!text-white ' +
   '[&_[role=option][data-state=checked]]:!bg-white/20 [&_[role=option][data-state=checked]]:!text-white [&_[role=option][data-state=checked]]:font-semibold';
 
+/* ⚠ CAMPO TRAVADO PRECISA PARECER TRAVADO. Antes editavel e travado eram identicos, e o
+   operador so descobria clicando. Os tokens do desenho (--border-strong, --surface-1/2,
+   --text-secondary) NAO existem neste projeto — os equivalentes reais sao `bg-muted`,
+   `border-border/60` e `text-muted-foreground`, que ja e' o idioma de campo bloqueado em
+   AbaLiquidacaoOC. O editavel fica no default (`border-input bg-background`). */
+const CAMPO_TRAVADO = 'bg-muted border-border/60 text-muted-foreground';
+
 const ABAS = [
   { key: 'compra', label: 'Compra', enabled: true },
   { key: 'negociacao', label: 'Negociação', enabled: true },
@@ -424,21 +431,24 @@ export function CompraModalShell(api: CompraModalShellProps) {
             />
           ) : (
           <>
-          {/* CARD 1 — Identificação da Compra */}
-          <div className="rounded-md border bg-card p-2 shadow-sm space-y-1 min-w-0">
-            <div className="text-[12px] font-semibold text-muted-foreground">Identificação da Compra</div>
-            {/* Linha 1: Status · Data · Fazenda · Observações (larguras justas; Obs ocupa o resto) */}
-            <div className="grid grid-cols-1 lg:grid-cols-[170px_150px_180px_minmax(0,1fr)] gap-2">
-              <div>
-                {/* PR-OC-UX-LOTE-C1-01 — rotulos no padrao canonico do sistema, que e' o
-                    do modal Novo Lancamento do Financeiro: `text-[10px]` SEM negrito.
-                    A aba Compra era a unica com rotulo em negrito, e a 11px: em negrito
-                    o 11 pesa mais que o 10 regular, e era esse o "pulo" de tamanho ao
-                    trocar de aba. Os INPUTS ficam como estao (h-8, o mesmo da
-                    referencia) — o objetivo e' coerencia, nao miniatura. */}
-                <Label className="text-[10px]">Status</Label>
+          {/* CARD 1 — Identificação da compra (PR-OC-COMPRA-A18-01).
+              A aba e' FORMULARIO, entao o A18 nao se aplica: o que se aplica e' a
+              HIERARQUIA. Antes o operador lia seis rotulos para descobrir de quem era a
+              compra, porque nenhum dado saltava — todos com o mesmo peso.
+              ⚠ O FORNECEDOR APARECE DUAS VEZES DE PROPOSITO: no topo como informacao (20px,
+              o que se le de relance) e abaixo como campo editavel. Decisao do Gabriel. */}
+          <div className="rounded-md border bg-card p-2 shadow-sm space-y-2 min-w-0">
+            {/* A21 — titulo e numeros do topo nao rolam. Ver o mesmo bloco em
+                AbaDocumentosOC; `-mt-2 pt-2` cobre o padding do cartao. */}
+            <div className="sticky top-0 z-10 -mt-2 space-y-2 border-b bg-card pt-2 pb-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[15px] font-medium text-foreground min-w-0 truncate">Identificação da compra</span>
+                {/* ⚠ O ESTADO A DIREITA E' O PROPRIO SELETOR, nao um selo ao lado dele.
+                    O desenho tirou "Status" da lista de campos, mas ele e' EDITAVEL — e' por
+                    ele que se troca Realizado/Meta. Vira-lo em enfeite tiraria da tela a
+                    unica forma de mudar o cenario. Aqui ele e' a etiqueta E o controle. */}
                 <Select value={api.statusOp} onValueChange={(v) => api.setStatusOp(v as StatusOperacional | 'meta')} disabled={permissoes.negociacaoReadOnly}>
-                  <SelectTrigger className={`mt-0.5 h-8 text-[12px] font-semibold border-2 gap-1 ${cenarioAtual.chip}`}>
+                  <SelectTrigger className={`h-6 w-auto shrink-0 gap-1 border px-2 text-[11px] font-semibold ${cenarioAtual.chip} ${permissoes.negociacaoReadOnly ? 'opacity-70' : ''}`}>
                     <span className="flex items-center gap-1"><span>{cenarioAtual.icon}</span><span>{cenarioAtual.label}</span></span>
                   </SelectTrigger>
                   <SelectContent className={DARK_SELECT_CONTENT}>
@@ -451,57 +461,41 @@ export function CompraModalShell(api: CompraModalShellProps) {
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label className="text-[10px]">Data da Compra</Label>
-                <div className={permissoes.dadosOperacaoReadOnly ? 'pointer-events-none opacity-60' : ''}>
-                  <DatePicker value={api.data} onChange={api.setData} className="mt-0.5" />
+              {/* Hierarquia do A18: rotulo 11px cinza, valor 20px peso 500 — o topo domina
+                  o campo, senao o olho encontra primeiro o formulario e depois procura de
+                  quem e' a compra. */}
+              <div className="grid grid-cols-2 gap-2 rounded-md border bg-muted/20 px-3.5 py-[11px]">
+                <div className="min-w-0">
+                  <div className="text-[11px] text-muted-foreground leading-none">Fornecedor</div>
+                  <div className="mt-1 text-[20px] font-medium leading-none truncate" title={fornecedorNome || undefined}>
+                    {fornecedorNome || <span className="text-muted-foreground">—</span>}
+                  </div>
+                  {/* So quando existe: fornecedor sem documento nao ganha linha vazia nem
+                      traco solto — ausencia de documento nao e' informacao util aqui. */}
+                  {fornecedorDocumento && (
+                    <div className="mt-1 text-[10px] text-muted-foreground leading-none">{fornecedorDocumento}</div>
+                  )}
                 </div>
-                {/* PR-OC-HOMOLOG-01 item 3 — edição da data liberada quando não há registros financeiros;
-                    bloqueada (via negociacaoReadOnly = título materializado / fechada / cancelada) com aviso. */}
-                {(permissoes.dadosOperacaoReadOnly || temRecebimentoAtivo || permissoes.negociacaoReadOnly) && (
-                  /* DUAS CAUSAS, DOIS TEXTOS, e a diferenca agora e' maior: com
-                     recebimento o usuario PODE corrigir criterio e valor ali
-                     mesmo — manda-lo estornar seria desfazer movimentacao de
-                     rebanho a toa, que e' justamente o que bate no guard P1 de
-                     mes fechado. O estorno so e' necessario para o FISICO.
-                     ⚠ `somenteLeitura` tem precedencia: ali nada e editavel. */
-                  permissoes.dadosOperacaoReadOnly ? (
-                    <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">
-                      Operação cancelada — somente leitura.
-                    </p>
-                  ) : (
-                    <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">
-                      Fornecedor, data e observação seguem editáveis. Categoria, quantidade e peso
-                      exigem estorno do recebimento; valores e lotes têm caminho próprio.
-                    </p>
-                  )
-                )}
-              </div>
-              <div>
-                <Label className="text-[10px]">Fazenda <span className="text-destructive">*</span></Label>
-                {/* PR-NAV-CONTEXTO-FAZENDA-01A — `api.fazendas` já vem filtrada ao domínio pecuário na
-                    origem (critério único isFazendaPecuaria: sem Global, sem administrativas, só aptas).
-                    A fazenda gravada só aparece selecionada se continuar válida para o domínio. */}
-                <Select value={api.fazendaDestinoId} onValueChange={api.setFazendaDestinoId} disabled={permissoes.negociacaoReadOnly}>
-                  <SelectTrigger className="mt-0.5 h-8 text-[12px]"><SelectValue placeholder="Selecione a fazenda" /></SelectTrigger>
-                  <SelectContent className={DARK_SELECT_CONTENT}>
-                    {api.fazendas.map(f => <SelectItem key={f.id} value={f.id} className="text-[12px]">{f.nome}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                {api.modoOC && !permissoes.negociacaoReadOnly && api.ocFazendaValida === false && (
-                  <p className="mt-0.5 text-[10px] text-destructive">Selecione a fazenda da operação.</p>
-                )}
-              </div>
-              <div>
-                <Label className="text-[10px]">Observações/Lote</Label>
-                <Input value={api.observacao} onChange={e => api.setObservacao(e.target.value)} placeholder="Opcional" className="mt-0.5 h-8 text-[12px]" disabled={permissoes.dadosOperacaoReadOnly} />
+                <div className="min-w-0">
+                  <div className="text-[11px] text-muted-foreground leading-none">Data da compra</div>
+                  <div className="mt-1 text-[20px] font-medium tabular-nums leading-none">{dataLabel}</div>
+                </div>
               </div>
             </div>
-            {/* Linha 2: Fornecedor · Propriedade de origem */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+
+            {/* ── CAMPOS, duas colunas ────────────────────────────────────────────────
+                ⚠ ROTULO CONTINUA EM 10px, e nao subiu para 11. PR-OC-UX-LOTE-C1-01 baixou
+                de proposito: a aba Compra era a UNICA com rotulo 11px em negrito, e era
+                esse o pulo de tamanho ao trocar de aba. Negociacao (5) e Compromissos (3)
+                estao em 10px. Subir aqui recriaria o defeito que aquele PR consertou.
+                ⚠ `gap-x-4 gap-y-3` (16px/12px) no lugar do `gap-2` uniforme: a coluna
+                precisa de mais ar que a linha, senao os dois campos lado a lado se leem
+                como um so. */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-3">
               <div className="min-w-0">
                 <Label className="text-[10px]">Fornecedor <span className="text-destructive">*</span></Label>
-                <div className="flex items-center gap-1 mt-0.5">
+                {/* A16 — o "+" na MESMA altura do campo (h-8), nao alinhado ao rotulo. */}
+                <div className="flex items-center gap-1 mt-[3px]">
                   <div className="min-w-0 flex-1">
                     <SearchableSelect
                       value={api.compraFornecedorId || '__all__'}
@@ -512,27 +506,78 @@ export function CompraModalShell(api: CompraModalShellProps) {
                       allValue="__all__"
                       dense
                       disabled={permissoes.dadosOperacaoReadOnly}
-                      className="[&>button]:h-8 [&>button]:text-[12px] [&>button]:px-2"
+                      className={`[&>button]:h-8 [&>button]:text-[12px] [&>button]:px-2.5 ${permissoes.dadosOperacaoReadOnly ? CAMPO_TRAVADO : ''}`}
                     />
                   </div>
                   <Button type="button" variant="outline" size="icon" className="h-8 w-8 shrink-0" aria-label="Novo fornecedor" disabled={permissoes.dadosOperacaoReadOnly} onClick={() => api.setNovoFornecedorCompraOpen(true)}>
                     <Plus className="h-3.5 w-3.5" />
                   </Button>
                 </div>
-                {/* PR-OC-UX-LOTE-C1-01 — documento do fornecedor SELECIONADO, abaixo do
-                    nome. So aparece quando existe: fornecedor sem documento cadastrado
-                    nao ganha linha vazia nem traco solto — a ausencia de documento nao
-                    e' informacao util aqui, ao contrario de um valor ausente. */}
                 {fornecedorDocumento && (
-                  <div className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{fornecedorDocumento}</div>
+                  <div className="text-[10px] text-muted-foreground mt-[3px] leading-tight">{fornecedorDocumento}</div>
                 )}
               </div>
-              <div>
+
+              <div className="min-w-0">
+                <Label className="text-[10px]">Data da compra <span className="text-destructive">*</span></Label>
+                <div className={`mt-[3px] ${permissoes.dadosOperacaoReadOnly ? 'pointer-events-none' : ''}`}>
+                  <DatePicker value={api.data} onChange={api.setData}
+                    className={`px-2.5 ${permissoes.dadosOperacaoReadOnly ? CAMPO_TRAVADO : ''}`} />
+                </div>
+              </div>
+
+              <div className="min-w-0">
+                <Label className="text-[10px]">Fazenda <span className="text-destructive">*</span></Label>
+                {/* PR-NAV-CONTEXTO-FAZENDA-01A — `api.fazendas` já vem filtrada ao domínio pecuário na
+                    origem (critério único isFazendaPecuaria: sem Global, sem administrativas, só aptas).
+                    A fazenda gravada só aparece selecionada se continuar válida para o domínio. */}
+                <Select value={api.fazendaDestinoId} onValueChange={api.setFazendaDestinoId} disabled={permissoes.negociacaoReadOnly}>
+                  <SelectTrigger className={`mt-[3px] h-8 px-2.5 text-[12px] ${permissoes.negociacaoReadOnly ? CAMPO_TRAVADO : ''}`}><SelectValue placeholder="Selecione a fazenda" /></SelectTrigger>
+                  <SelectContent className={DARK_SELECT_CONTENT}>
+                    {api.fazendas.map(f => <SelectItem key={f.id} value={f.id} className="text-[12px]">{f.nome}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                {api.modoOC && !permissoes.negociacaoReadOnly && api.ocFazendaValida === false && (
+                  <p className="mt-[3px] text-[10px] text-destructive">Selecione a fazenda da operação.</p>
+                )}
+              </div>
+
+              <div className="min-w-0">
                 <Label className="text-[10px]">Propriedade de origem</Label>
                 {/* OPEN-01: sem coluna persistida no modelo — no modo leitura, vazio e desabilitado (não inferir). */}
-                <Input value={permissoes.negociacaoReadOnly ? '' : api.fazendaOrigem} onChange={e => api.setFazendaOrigem(e.target.value)} placeholder={permissoes.negociacaoReadOnly ? '—' : 'Ex: Faz. Boa Vista'} className="mt-0.5 h-8 text-[12px]" disabled={permissoes.negociacaoReadOnly} />
+                <Input value={permissoes.negociacaoReadOnly ? '' : api.fazendaOrigem} onChange={e => api.setFazendaOrigem(e.target.value)}
+                  placeholder={permissoes.negociacaoReadOnly ? '—' : 'Ex: Faz. Boa Vista'}
+                  className={`mt-[3px] h-8 px-2.5 text-[12px] ${permissoes.negociacaoReadOnly ? CAMPO_TRAVADO : ''}`}
+                  disabled={permissoes.negociacaoReadOnly} />
+              </div>
+
+              <div className="lg:col-span-2 min-w-0">
+                <Label className="text-[10px]">Observações/Lote</Label>
+                <Input value={api.observacao} onChange={e => api.setObservacao(e.target.value)} placeholder="Opcional"
+                  className={`mt-[3px] h-8 px-2.5 text-[12px] ${permissoes.dadosOperacaoReadOnly ? CAMPO_TRAVADO : ''}`}
+                  disabled={permissoes.dadosOperacaoReadOnly} />
               </div>
             </div>
+
+            {/* ── O HINT, no FIM da secao e em 10px ───────────────────────────────────
+                Estava colado sob a Data, competindo com o campo. Ele fala da SECAO
+                inteira — o que ainda se pode editar e o que exige estorno —, entao e'
+                aqui que ele pertence.
+                DUAS CAUSAS, DOIS TEXTOS: com recebimento o usuario PODE corrigir criterio
+                e valor na aba Negociacao — manda-lo estornar seria desfazer movimentacao
+                de rebanho a toa, que e' o que bate no guard P1 de mes fechado. O estorno
+                so e' necessario para o FISICO. `cancelada` tem precedencia: ali nada e'
+                editavel. */}
+            {(permissoes.dadosOperacaoReadOnly || temRecebimentoAtivo || permissoes.negociacaoReadOnly) && (
+              permissoes.dadosOperacaoReadOnly ? (
+                <p className="text-[10px] text-muted-foreground leading-tight">Operação cancelada — somente leitura.</p>
+              ) : (
+                <p className="text-[10px] text-muted-foreground leading-tight">
+                  Fornecedor, data e observação seguem editáveis. Categoria, quantidade e peso
+                  exigem estorno do recebimento; valores e lotes têm caminho próprio.
+                </p>
+              )
+            )}
           </div>
 
           {/* CARD 2 — Animais da Compra. Em modo OC os animais/lotes vivem na aba Negociação;
