@@ -42,18 +42,23 @@ interface Props {
    Negociado/Recebido/Diferenca/Estado sao ditados pelo ROTULO, nao pela celula;
    Acoes pelo par "Receber" + "Doc."; Categoria leva folga por causa dos nomes. */
 const GRID = 'grid grid-cols-[minmax(0,0.26fr)_minmax(0,1.1fr)_minmax(0,0.64fr)_minmax(0,0.57fr)_minmax(0,0.66fr)_minmax(0,0.95fr)_minmax(0,0.55fr)_minmax(0,0.66fr)_minmax(0,0.74fr)_minmax(0,1.05fr)] gap-1.5';
-const MINW = 'min-w-[772px]';
+/* ⚠ PR-OC-UX-RECEBIMENTO-01 — teto = piso, pela MESMA razao que ja valia para as
+   movimentacoes (ver o bloco de MINW_MOV abaixo): `min-w` e' piso, o wrapper e' bloco
+   e ocupava a largura inteira do modal, e as colunas `fr` esticavam para preencher.
+   Negociado, Recebido e Diferenca guardam de 1 a 3 digitos e ficavam em colunas de
+   ~200px. O C1 corrigiu a grade de baixo e deixou esta — mesmo defeito, dois lugares. */
+const MINW = 'min-w-[772px] max-w-[772px]';
 /* ENTREGA ENCERRADA: Data, Qtd. a receber, Peso med. e Acoes so teriam travessao —
    nao ha mais o que fazer. A COLUNA INTEIRA sai, nao a celula: coluna vazia ocupa
    espaco e ainda sugere que falta preencher algo. Sobram as que informam. */
 const GRID_ENC = 'grid grid-cols-[minmax(0,0.26fr)_minmax(0,1.1fr)_minmax(0,0.64fr)_minmax(0,0.57fr)_minmax(0,0.66fr)_minmax(0,0.74fr)] gap-1.5';
-const MINW_ENC = 'min-w-[427px]';
+const MINW_ENC = 'min-w-[427px] max-w-[427px]';
 /* MOVIMENTACOES: era texto corrido separado por bolinhas, que nao alinha coluna
    nenhuma. Mesmas regras de cima. Acoes some junto com o "Estornar" que ela abriga
    — em somente leitura a coluna nao existe, pelo mesmo motivo do GRID_ENC.
      Data 72 · Categoria 110 · Quantidade 80 · Peso med. 80 · Acoes 90 = 432 (+24 de gap) */
-const GRID_MOV = 'grid grid-cols-[minmax(0,0.72fr)_minmax(0,1.1fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,0.9fr)] gap-1.5';
-const GRID_MOV_RO = 'grid grid-cols-[minmax(0,0.72fr)_minmax(0,1.1fr)_minmax(0,0.8fr)_minmax(0,0.8fr)] gap-1.5';
+const GRID_MOV = 'grid grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,0.9fr)] gap-1.5';
+const GRID_MOV_RO = 'grid grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,0.8fr)_minmax(0,0.8fr)] gap-1.5';
 /* ⚠ PR-OC-UX-LOTE-C1-01 — `max-w` ENTROU, e e' ele que resolve o espaco em branco.
    `min-w` e' PISO, nao teto: o wrapper e' bloco e ocupava a largura inteira do corpo
    do modal (~1.100px), enquanto as colunas `minmax(0,Nfr)` esticavam para preencher.
@@ -62,8 +67,10 @@ const GRID_MOV_RO = 'grid grid-cols-[minmax(0,0.72fr)_minmax(0,1.1fr)_minmax(0,0
    linha nem tamanho de fonte — esta aba ja usa text-[10px]/h-6/py-0.5, das mais densas
    do sistema. Com piso = teto a grade fica do tamanho do conteudo, e o
    `overflow-x-auto` do pai continua cobrindo tela estreita. */
-const MINW_MOV = 'min-w-[456px] max-w-[456px]';
-const MINW_MOV_RO = 'min-w-[360px] max-w-[360px]';
+/* +28px em cada: a 1a coluna foi de 0.72 para 1.0fr para caber "Recebimento", e a
+   largura total acompanha para os outros pesos nao encolherem em troca. */
+const MINW_MOV = 'min-w-[484px] max-w-[484px]';
+const MINW_MOV_RO = 'min-w-[388px] max-w-[388px]';
 // Caixa horizontal COMUM ao cabecalho e a linha: a linha tem `border`, e borda entra
 //   na largura. Sem a transparente aqui o cabecalho comeca 1px antes e distribui as
 //   colunas sobre 2px a mais.
@@ -178,6 +185,10 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
           {/* "na fazenda" desfaz a confusao com recebimento FINANCEIRO, que e' outra
               coisa inteiramente e mora na aba Financeiro. */}
           <div className="text-[12px] font-semibold text-foreground">Recebimento por lote na fazenda</div>
+          {/* Uma linha dizendo O QUE a tabela compara, para quem abre a tela pela
+              primeira vez. Sem jargao: "chegou" e "negociado" sao as palavras que o
+              operador usa. O aviso de encerrado segue abaixo, em tom secundario. */}
+          <div className="text-[11px] text-muted-foreground">Confira o que chegou na fazenda contra o que foi negociado, por categoria.</div>
           {/* Bloqueio informa MOTIVO e CAMINHO, nao so o estado: "Somente leitura." dizia
               o que o operador ja via na tela e nao dizia como sair de la.
 
@@ -206,12 +217,16 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
 
       <div className="overflow-x-auto">
         <div className={encerrada ? MINW_ENC : MINW}>
-          <div className={`${encerrada ? GRID_ENC : GRID} ${CX_CAB} pb-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground [&>span]:text-center`}>
-            <span>#</span><span>Categoria</span><span>Negociado</span>
-            <span>Recebido</span><span>Diferença</span>
-            {!encerrada && (<><span>Data</span><span>Qtd. a receber</span><span>Peso méd.</span></>)}
-            <span>Estado</span>
-            {!encerrada && <span>Ações</span>}
+          {/* ⚠ O CABECALHO ACOMPANHA A CELULA, coluna a coluna. As celulas numericas ja
+              eram `text-right`; era o cabecalho que vinha todo centralizado por
+              `[&>span]:text-center`, e rotulo centrado sobre numero a direita le como
+              desalinhamento. Categoria a esquerda, numeros a direita, o resto centrado. */}
+          <div className={`${encerrada ? GRID_ENC : GRID} ${CX_CAB} pb-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground`}>
+            <span className="text-center">#</span><span className="text-left">Categoria</span><span className="text-right">Negociado</span>
+            <span className="text-right">Recebido</span><span className="text-right">Diferença</span>
+            {!encerrada && (<><span className="text-center">Data</span><span className="text-right">Qtd. a receber</span><span className="text-right">Peso méd.</span></>)}
+            <span className="text-center">Estado</span>
+            {!encerrada && <span className="text-center">Ações</span>}
           </div>
           {api.lotes.length === 0 ? (
             <div className="rounded-md border border-dashed bg-muted/10 px-3 py-3 text-center text-[11px] text-muted-foreground">
@@ -283,7 +298,14 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
           <div className="overflow-x-auto">
             <div className={readOnly ? MINW_MOV_RO : MINW_MOV}>
               <div className={`${readOnly ? GRID_MOV_RO : GRID_MOV} ${CX_CAB} pb-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground [&>span]:text-center`}>
-                <span>Data</span><span>Categoria</span><span>Quantidade</span><span>Peso méd.</span>
+                {/* "Data" era ambiguo: a mesma operacao tem data de compra, de
+                    vencimento e de chegada.
+                    ⚠ "Data do recebimento" NAO CABE: a coluna tem ~72px (0.72fr de 432px
+                    uteis) e o rotulo pede ~124px a 10px — quebraria em duas linhas.
+                    "Recebimento" sozinho ja desambigua e cabe. Abreviar para "Dt. Receb."
+                    devolveria a duvida que o rotulo existe para tirar. A coluna foi
+                    alargada de 0.72 para 1.0fr para receber o rotulo com folga. */}
+                <span>Recebimento</span><span>Categoria</span><span>Quantidade</span><span>Peso méd.</span>
                 {!readOnly && <span>Ações</span>}
               </div>
               {movsAtivas.map(m => (

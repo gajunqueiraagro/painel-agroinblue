@@ -1,16 +1,8 @@
-/* ═══ TRES PADROES DO SISTEMA — valem em QUALQUER tela, nao so aqui ════════════
-   Definidos pelo Gabriel em 28/08 e registrados aqui como referencia, porque
-   estavam sendo pedidos caso a caso em vez de valer por padrao.
-
-   (a) PESO SEMPRE COM DUAS CASAS. "200,00", nunca "200" — na entrada e na exibicao.
-       Peso e' medida, e medida sem casa decimal parece arredondada quando nao e'.
-   (b) CAMPOS DO MESMO FORMULARIO TEM A MESMA ALTURA. Nunca misturar h-6 com h-8 na
-       mesma linha: a diferenca le como defeito, ainda que ninguem saiba dizer o que
-       esta errado.
-   (c) PAR ROTULO-VALOR EM COLUNA ALINHADA, nunca texto corrido com pontos separando.
-       Referencia viva: o "Resumo da operacao" (ResumoLateralOC) — rotulo cinza a
-       esquerda, valor a direita, uma linha por par. Texto corrido obriga a LER para
-       comparar; coluna deixa COMPARAR sem ler. */
+/* Esta tela aplica tres padroes do sistema. A REGRA mora em docs/PADROES-UI.md —
+   aqui fica so o ponteiro, para ela ter um dono so e nao divergir entre copias:
+     A15  peso sempre com duas casas (exibicao e entrada)
+     A16  campos do mesmo formulario com a mesma altura
+     A17  par rotulo-valor em coluna alinhada, nunca texto corrido */
 import { useState } from 'react';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';

@@ -330,6 +330,60 @@ modal vermelho sobre o mesmo número, na mesma tela.
 teto no dado; e `precoArr`, que no PC-100 é receita ÷ arrobas
 desfrutadas, ou seja preço de venda, onde subir é bom.
 
+## A15 — Peso sempre com duas casas
+
+`200,00 kg`, nunca `200 kg`. Vale na **exibição e na entrada** — o campo reformata
+no `blur`, como em A6.
+
+```ts
+n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+```
+
+Já existe o helper: `formatMed2` (`src/lib/calculos/formatters.ts`).
+
+Peso é medida. Sem casa decimal ele **parece arredondado quando não é**, e o operador
+que digitou 200,5 e vê "200" tem motivo para desconfiar do sistema inteiro. É o mesmo
+princípio de A6, aplicado à unidade que mais aparece nas telas de rebanho.
+
+Referências: `AbaRecebimentoLotes.tsx`, `AbaNegociacaoLotes.tsx` (`fmtKg`).
+
+## A16 — Campos do mesmo formulário têm a mesma altura
+
+Nunca misturar `h-6` com `h-8` na mesma linha ou no mesmo bloco de campos.
+
+A diferença **lê como defeito** mesmo quando o observador não sabe apontar o que está
+errado — o olho percebe o desalinhamento das bases antes de a pessoa formular a
+queixa.
+
+⚠ A causa mais comum é **componente que fixa a própria altura**. `ValorInput` trazia
+`h-6` embutido e, dentro de um modal de campos `h-8`, ficava mais baixo que os
+vizinhos sem que nada no chamador dissesse isso. **Altura é decisão de quem usa, não
+do componente**: aceitar `className` e deixar o default só como conveniência.
+
+Referências: `AbaNegociacaoLotes.tsx` (`ValorInput`), `LancamentoV2Dialog.tsx`.
+
+## A17 — Par rótulo-valor em coluna alinhada
+
+Rótulo cinza à esquerda, valor à direita, **uma linha por par**. Nunca texto corrido
+separado por pontos:
+
+```
+❌  Qtd: 3 cab · Peso méd.: 200,00 kg · R$/cab: R$ 3.250,00 · R$/kg: R$ 16,25
+✅  Quantidade        3 cab
+    Peso médio    200,00 kg
+    R$/cab      R$ 3.250,00
+    R$/kg          R$ 16,25
+```
+
+A razão não é estética: **texto corrido obriga a LER para comparar; coluna deixa
+COMPARAR sem ler.** Com dois lotes lado a lado, a versão em linha exige percorrer a
+frase inteira duas vezes para achar o mesmo indicador.
+
+Valores numéricos com `tabular-nums`, para os dígitos alinharem entre linhas (A6/A10).
+
+Referência viva: o "Resumo da operação" (`ResumoLateralOC.tsx`) e o resumo do lote em
+`AbaNegociacaoLotes.tsx`.
+
 ---
 
 ## Pendências deste documento
