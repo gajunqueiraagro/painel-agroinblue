@@ -166,32 +166,63 @@ function NegociacaoOC({
   const rotuloCategoria = (slug: string) =>
     categoriasDisponiveis.find(c => c.value === slug)?.label || slug || 'Sem categoria';
 
-  const GRID_LISTA = 'grid grid-cols-[minmax(0,1.4fr)_0.7fr_1fr_1.1fr_0.9fr_1.1fr_auto] gap-2 items-center';
-
   return (
     <div className="rounded-md border bg-card p-2 shadow-sm space-y-1.5 min-w-0">
-      {/* TOTAIS NO TOPO — sao o cabecalho da aba: dizem onde a negociacao esta antes
-          de o olho descer para o detalhe de cada lote. */}
-      <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
-        <div className="rounded-md border bg-muted/20 px-1.5 py-0.5"><div className="text-[9px] text-muted-foreground leading-none">Lotes</div><div className="font-bold text-[12px] tabular-nums">{totais.lotes || '—'}</div></div>
-        <div className="rounded-md border bg-muted/20 px-1.5 py-0.5"><div className="text-[9px] text-muted-foreground leading-none">Animais</div><div className="font-bold text-[12px] tabular-nums">{totais.animais || '—'}</div></div>
-        <div className="rounded-md border bg-muted/20 px-1.5 py-0.5"><div className="text-[9px] text-muted-foreground leading-none">Peso Méd.</div><div className="font-bold text-[12px] tabular-nums">{pesoMedio == null ? '—' : fmtKg(pesoMedio)}</div></div>
-        <div className="rounded-md border bg-muted/20 px-1.5 py-0.5"><div className="text-[9px] text-muted-foreground leading-none">R$/cab Méd.</div><div className="font-bold text-[12px] tabular-nums">{totais.animais > 0 ? brl(totais.valorNegociado / totais.animais) : '—'}</div></div>
-        <div className="rounded-md border bg-muted/20 px-1.5 py-0.5"><div className="text-[9px] text-muted-foreground leading-none">R$/kg Méd.</div><div className="font-bold text-[12px] tabular-nums">{valorKg == null ? '—' : brl(valorKg)}</div></div>
-        <div className="rounded-md border-2 border-primary/40 bg-primary/5 px-1.5 py-0.5"><div className="text-[9px] text-muted-foreground leading-none">Valor Principal</div><div className="font-bold text-[13px] text-primary tabular-nums">{brl(totais.valorNegociado)}</div></div>
-      </div>
-
-      <div className="flex items-center justify-between gap-2 pt-0.5">
-        <div>
-          <div className="text-[12px] font-semibold text-foreground">Negociação dos Lotes</div>
-          <div className="text-[11px] text-muted-foreground">Clique num lote para editar.</div>
+      {/* ── A21 — TITULO E NUMEROS DO TOPO NAO ROLAM ──────────────────────────────
+          A rolagem mora na coluna de conteudo do shell (PR-UI-A21-...-02), entao o
+          `sticky` se ancora nela e o resumo lateral fica parado.
+          Fundo OPACO (`bg-card`) e `-mt-2 pt-2` cobrindo o padding do cartao — so no
+          eixo vertical, que margem negativa lateral comeria as bordas. */}
+      <div className="sticky top-0 z-10 -mt-2 space-y-1.5 border-b bg-card pt-2 pb-2">
+        <div className="flex items-baseline justify-between gap-3">
+          <span className="text-[15px] font-medium text-foreground min-w-0 truncate">Negociação dos Lotes</span>
+          <div className="flex items-baseline gap-3 shrink-0">
+            {/* A contagem SAIU do bloco de numeros: "3" nao e' grandeza que se compare
+                com peso e valor, e' quantas linhas ha logo abaixo. Aqui ela custa
+                nada e libera uma das quatro colunas para o que importa. */}
+            <span className="text-[11px] font-normal text-muted-foreground">
+              {lotes.length === 0 ? 'nenhum lote' : `${lotes.length} lote${lotes.length > 1 ? 's' : ''}`}
+            </span>
+            {!fisicoRO && (
+              <button type="button" onClick={abrirNovo} disabled={!operacaoPronta}
+                title={operacaoPronta ? 'Adicionar lote à negociação' : 'Salve a operação na aba Compra primeiro'}
+                aria-label="Adicionar lote"
+                className="text-[11px] font-normal text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline">
+                + Adicionar lote
+              </button>
+            )}
+          </div>
         </div>
-        {!fisicoRO && (
-          <Button type="button" variant="outline" size="sm" disabled={!operacaoPronta} onClick={abrirNovo}
-            className="h-7 text-[11px] gap-1" title={operacaoPronta ? undefined : 'Salve a operação na aba Compra primeiro'}>
-            <Plus className="h-3 w-3" /> Adicionar lote
-          </Button>
-        )}
+
+        {/* ── QUATRO NUMEROS ────────────────────────────────────────────────────
+            ⚠ NADA E' RECALCULADO AQUI. `animais` e `valorNegociado` vem de
+            `totais`; `pesoMedio` e `valorKg` continuam saindo de
+            `pesoMedioPorCabeca` e `valorPorKgNegociado`, exatamente como antes.
+            ⚠ SAIRAM DOIS. "Lotes" virou a contagem ao lado do titulo. "R$/cab Med."
+            saiu da tela: ele ja aparece POR LOTE na linha 2 de cada registro, e a
+            media de uma media entre categorias diferentes — desmama com vaca — nao
+            e' numero que alguem use para decidir.
+            ⚠ AUSENCIA E' TRACO. `brl` devolve 'R$ —' para valor nao positivo e
+            `fmtKg` devolve '—'; sem lote nenhum os quatro imprimem traco sozinhos,
+            sem `?? 0` tapando buraco. */}
+        <div className="grid grid-cols-4 gap-2 rounded-md border bg-muted/20 px-3.5 py-[11px]">
+          <div className="min-w-0">
+            <div className="text-[11px] font-normal text-muted-foreground leading-none">Animais</div>
+            <div className="mt-1 text-[20px] font-medium tabular-nums leading-none">{totais.animais || '—'}</div>
+          </div>
+          <div className="min-w-0">
+            <div className="text-[11px] font-normal text-muted-foreground leading-none">Peso médio</div>
+            <div className="mt-1 text-[20px] font-medium tabular-nums leading-none">{pesoMedio == null ? '—' : fmtKg(pesoMedio)}</div>
+          </div>
+          <div className="min-w-0">
+            <div className="text-[11px] font-normal text-muted-foreground leading-none">R$/kg</div>
+            <div className="mt-1 text-[20px] font-medium tabular-nums leading-none">{valorKg == null ? '—' : brl(valorKg)}</div>
+          </div>
+          <div className="min-w-0">
+            <div className="text-[11px] font-normal text-muted-foreground leading-none">Valor principal</div>
+            <div className="mt-1 text-[20px] font-medium tabular-nums leading-none text-primary">{brl(totais.valorNegociado)}</div>
+          </div>
+        </div>
       </div>
 
       {!operacaoPronta ? (
@@ -204,53 +235,56 @@ function NegociacaoOC({
           {loading ? 'Carregando lotes…' : 'Nenhum lote. Clique em "Adicionar lote".'}
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <div className="min-w-[560px] space-y-0.5">
-            {/* Regra (c) — COLUNAS ALINHADAS. Antes era texto corrido separado por
-                pontos, que obriga a LER cada linha para comparar duas. */}
-            <div className={`${GRID_LISTA} px-2 text-[9px] font-bold uppercase tracking-wide text-muted-foreground`}>
-              <span>Categoria</span>
-              <span className="text-right">Qtde</span>
-              <span className="text-right">Peso méd.</span>
-              <span className="text-right">R$/cab</span>
-              <span className="text-right">R$/kg</span>
-              <span className="text-right">Total</span>
-              <span className="w-4" />
-            </div>
-            {lotes.map(l => {
-              const q = parseNumericValue(l.quantidade) || 0;
-              const pm = parseNumericValue(l.pesoMedioKg) || 0;
-              const pt = q * pm;
-              const total = loteTotal(l.criterioValor, l.quantidade, l.pesoMedioKg, l.valorInformado);
-              const semPeso = pm <= 0;
-              return (
-                <div key={l.idLocal}
-                  onClick={() => setEditandoId(l.idLocal)}
-                  className={`${GRID_LISTA} rounded-md border bg-muted/20 px-2 py-1 cursor-pointer hover:bg-muted/40 text-[11px]`}>
-                  <div className="min-w-0 truncate font-medium">
-                    {rotuloCategoria(l.categoria)}
-                    {/* O lote invalido se anuncia na LISTA: quem tem cinco precisa ver
-                        qual esta pendente sem abrir os cinco. */}
-                    {semPeso && <span className="text-destructive font-normal"> · sem peso</span>}
+        /* ── LISTA A18 ───────────────────────────────────────────────────────────
+            SEM cabecalho de coluna, SEM `min-w`, SEM rolagem horizontal. A grade de
+            seis colunas exigia 560px de largura minima e rolava de lado em janela
+            estreita; em duas alturas o contexto desce em vez de disputar largura.
+            ⚠ A FRASE "Clique num lote para editar" SAIU. A linha inteira e' botao,
+            com cursor de ponteiro e `aria-label` proprio — instrucao escrita para
+            explicar o que a propria peca ja diz e' ruido.
+            ⚠ `divide-border/60`: 0,5px nao existe em borda CSS de um jeito confiavel;
+            a opacidade e' o que faz o filete ler mais fino que a borda cheia. */
+        <div className="rounded-md border divide-y divide-border/60">
+          {lotes.map(l => {
+            const q = parseNumericValue(l.quantidade) || 0;
+            const pm = parseNumericValue(l.pesoMedioKg) || 0;
+            const pt = q * pm;
+            const total = loteTotal(l.criterioValor, l.quantidade, l.pesoMedioKg, l.valorInformado);
+            const semPeso = pm <= 0;
+            return (
+              <div key={l.idLocal} className="flex items-center gap-2">
+                <button type="button" onClick={() => setEditandoId(l.idLocal)}
+                  aria-label={`Editar lote ${rotuloCategoria(l.categoria)}`}
+                  title="Editar este lote"
+                  className="min-w-0 flex-1 px-3.5 py-1.5 text-left leading-[1.35] hover:bg-muted/30 cursor-pointer">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="min-w-0 truncate text-[12px] font-medium text-foreground">
+                      {rotuloCategoria(l.categoria)}
+                      {q > 0 && <span className="font-normal"> · {q} cab</span>}
+                      {/* O lote invalido se anuncia na LISTA: quem tem cinco precisa ver
+                          qual esta pendente sem abrir os cinco. */}
+                      {semPeso && <span className="font-normal text-destructive"> · sem peso</span>}
+                    </span>
+                    <span className="shrink-0 text-[12px] font-medium tabular-nums text-foreground">{brl(total)}</span>
                   </div>
-                  <div className="text-right tabular-nums">{q || '—'}</div>
-                  <div className={`text-right tabular-nums ${semPeso ? 'text-destructive' : ''}`}>{fmtKg(pm)}</div>
-                  <div className="text-right tabular-nums text-muted-foreground">{q > 0 ? brl(total / q) : '—'}</div>
-                  <div className="text-right tabular-nums text-muted-foreground">{pt > 0 ? brl(total / pt) : '—'}</div>
-                  <div className="text-right tabular-nums font-semibold">{brl(total)}</div>
-                  <div className="w-4 flex justify-end">
-                    {!fisicoRO && (
-                      <button type="button" aria-label="Remover lote"
-                        onClick={(e) => { e.stopPropagation(); removerLote(l.idLocal); }}
-                        className="text-muted-foreground/60 hover:text-destructive">
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    )}
+                  <div className="truncate text-[10px] font-normal text-muted-foreground">
+                    <span className={semPeso ? 'text-destructive' : ''}>{fmtKg(pm)}</span>
+                    {' · '}{q > 0 ? brl(total / q) : '—'}/cab
+                    {' · '}{pt > 0 ? brl(total / pt) : '—'}/kg
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                </button>
+                {/* Fora do botao de editar: botao dentro de botao e' HTML invalido, e
+                    era o que a linha clicavel produziria se o remover ficasse dentro. */}
+                {!fisicoRO && (
+                  <button type="button" aria-label={`Remover lote ${rotuloCategoria(l.categoria)}`} title="Remover lote"
+                    onClick={() => removerLote(l.idLocal)}
+                    className="mr-3.5 shrink-0 text-muted-foreground/60 hover:text-destructive">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
