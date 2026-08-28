@@ -39,11 +39,16 @@ function DrawerItem({
   item,
   isActive,
   destaqueDesligado,
+  compacto,
   onSelect,
 }: {
   item: NavItem;
   isActive: boolean;
   destaqueDesligado: boolean;
+  /* ⚠ 28px E' O PISO, e o motivo nao e' estetico: este drawer tambem abre no mobile,
+     e abaixo disso o alvo de toque fica pequeno demais. Precisando de mais aperto, o
+     caminho e' o respiro dos CABECALHOS, nunca a altura do item. */
+  compacto: boolean;
   onSelect: (s: V2Section) => void;
 }) {
   const isWrapper = item.status === 'needs-wrapper';
@@ -61,7 +66,10 @@ function DrawerItem({
       <div
         aria-disabled="true"
         title="Área ainda não disponível — em construção."
-        className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-left text-xs text-white/45 cursor-default select-none"
+        className={cn(
+          'w-full flex items-center gap-2 px-3 rounded-md text-left text-xs text-white/45 cursor-default select-none',
+          compacto ? 'py-1.5' : 'py-2',
+        )}
       >
         <span className="flex-1 truncate">{item.label}</span>
         <span className="shrink-0 text-[11px] text-white/50">em construção</span>
@@ -72,7 +80,8 @@ function DrawerItem({
     <button
       onClick={() => onSelect(item.id)}
       className={cn(
-        'w-full flex items-center gap-2 px-3 py-2 rounded-md text-left text-xs transition-colors duration-150',
+        'w-full flex items-center gap-2 px-3 rounded-md text-left text-xs transition-colors duration-150',
+        compacto ? 'py-1.5' : 'py-2',
         isActive
           ? 'bg-white/[0.08] text-white font-semibold shadow-[inset_2px_0_0_0_hsl(var(--primary-foreground))]'
           : 'text-white/90 hover:bg-white/[0.06] hover:text-white',
@@ -102,6 +111,10 @@ export function V2ContextDrawer({
 }: V2ContextDrawerProps) {
   if (!grupoAtivo) return null;
   const grupo = NAV_GRUPOS.find((g) => g.id === grupoAtivo);
+  /* Produção tem cinco cabecalhos de escopo e a lista mais longa do menu: e' o grupo
+     que pede densidade. Os demais ficam como estao — a compactacao e' por grupo, pelo
+     mesmo mecanismo que ja desliga o destaque de item. */
+  const ehProducao = grupo?.id === 'rebanho';
   const isOpen = !!grupoAtivo;
 
   return (
@@ -134,7 +147,7 @@ export function V2ContextDrawer({
             </div>
 
             {/* Seções e itens */}
-            <nav className="flex-1 py-4 px-2 space-y-6">
+            <nav className={cn('flex-1 py-4 px-2', ehProducao ? 'space-y-5' : 'space-y-6')}>
               {/* ⚠ `key` PELO INDICE: desde PR-NAV-PRODUCAO-01 existe secao SEM titulo, e
                   duas vazias colidiriam numa chave feita de `titulo`.
                   ⚠ SECAO SEM CABECALHO ganha um filete abaixo, que e' a linha que separa
@@ -143,9 +156,12 @@ export function V2ContextDrawer({
               {grupo.drawer.map((secao, i) => (
                 <div key={`${secao.titulo}-${i}`} role="group"
                   aria-label={secao.titulo || undefined}
-                  className={secao.titulo ? undefined : 'pb-4 border-b border-white/10'}>
+                  className={secao.titulo ? undefined : cn('border-b border-white/10', ehProducao ? 'pb-3.5' : 'pb-4')}>
                   {secao.titulo && (
-                    <p className="px-3 pb-2 text-[11px] font-medium uppercase tracking-[0.12em] text-white/65 select-none">
+                    <p className={cn(
+                      'px-3 text-[11px] font-medium uppercase tracking-[0.12em] text-white/65 select-none',
+                      ehProducao ? 'pb-1.5' : 'pb-2',
+                    )}>
                       {secao.titulo}
                     </p>
                   )}
@@ -155,7 +171,8 @@ export function V2ContextDrawer({
                         key={item.id}
                         item={item}
                         isActive={activeSection === item.id}
-                        destaqueDesligado={grupo.id === 'rebanho'}
+                        destaqueDesligado={ehProducao}
+                        compacto={ehProducao}
                         onSelect={onSelect}
                       />
                     ))}
