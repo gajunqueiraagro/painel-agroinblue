@@ -6,6 +6,8 @@ import { Plus, Trash2, ArrowLeft, FileText, Paperclip } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { NovoFornecedorDialog } from '@/components/financeiro-v2/NovoFornecedorDialog';
 import { motivoArquivoInvalido } from '@/lib/oc/caminhoDocumento';
+import { extractPdfText } from '@/lib/financeiro/parser/extractPdfText';
+import { extrairDanfe, type DanfeExtraido } from '@/lib/oc/extrairDanfe';
 import { toast } from 'sonner';
 import { parseNumericValue } from '@/lib/calculos/abate';
 import type {
@@ -68,6 +70,89 @@ export function DocumentoFormOC({ api, somenteLeitura, fornecedores, contraparte
      porque o upload so acontece quando ja existe `documento_id` — ver o submit. */
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [novoFornecedorOpen, setNovoFornecedorOpen] = useState(false);
+
+  /* ── LEITURA DA NOTA (PR-OC-DOC-EXTRACAO-01) ───────────────────────────────
+     ⚠ SUGESTAO, NUNCA GRAVACAO. O que a nota diz entra no formulario MARCADO, e o
+     operador confere antes de salvar. Campo sugerido e aceito sem olhar e' pior que
+     campo vazio: ninguem revisa o que ja parece pronto.
+     ⚠ NAO SOBRESCREVE o que o operador ja digitou — so preenche o que esta vazio.
+     Quem digitou tem mais razao que o parser. */
+  const [sugeridos, setSugeridos] = useState<Set<string>>(new Set());
+  const [lendoNota, setLendoNota] = useState(false);
+  const [arrastando, setArrastando] = useState(false);
+  const [avisoLeitura, setAvisoLeitura] = useState<string | null>(null);
+
+  const aplicarSugestao = (d: DanfeExtraido) => {
+    const marcados = new Set<string>();
+    setForm(f => {
+      const novo = { ...f };
+      const por = (campo: keyof typeof novo, valor: string | null) => {
+        if (!valor || String(novo[campo] ?? '').trim() !== '') return;
+        (novo[campo] as string) = valor;
+        marcados.add(campo as string);
+      };
+      por('numero', d.numero);
+      por('serie', d.serie);
+      por('dataEmissao', d.dataEmissao);
+      por('chaveAcesso', d.chaveAcesso);
+      /* EMITENTE pelo CNPJ, que a chave garante. Achou no cadastro, seleciona; nao
+         achou, deixa nome e documento prontos para o "+" criar sem redigitar. */
+      if (d.emitenteCnpj) {
+        const achado = (fornecedores ?? []).find(x => (x.cpfCnpj ?? '').replace(/\D/g, '') === d.emitenteCnpj!.replace(/\D/g, ''));
+        if (achado && !novo.emitenteId) {
+          novo.emitenteId = achado.id; novo.emitenteNome = achado.nome;
+          marcados.add('emitenteId');
+        } else if (!novo.emitenteId) {
+          novo.emitenteNome = d.emitenteNome ?? novo.emitenteNome;
+          marcados.add('emitenteNome');
+        }
+        por('emitenteDocumento', d.emitenteCnpj);
+      }
+      return novo;
+    });
+    setSugeridos(marcados);
+  };
+
+  const lerNota = async (file: File) => {
+    if (file.type !== 'application/pdf') { setAvisoLeitura(null); setSugeridos(new Set()); return; }
+    setLendoNota(true); setAvisoLeitura(null);
+    try {
+      const { text, hasTextLayer } = await extractPdfText(file);
+      /* ⚠ O LIMIAR E' `hasTextLayer`, do proprio extrator, e nao um numero de
+         caracteres inventado: a NF real deu 2.653 e um scan da ~0, mas qualquer corte
+         entre os dois seria arbitrario. "Tem camada de texto ou nao" e' a pergunta
+         verdadeira; o resto e' consequencia. */
+      if (!hasTextLayer) {
+        setAvisoLeitura('Não foi possível ler esta nota automaticamente (arquivo sem texto, provavelmente foto ou digitalização). Preencha os campos manualmente.');
+        setSugeridos(new Set());
+        return;
+      }
+      const d = extrairDanfe(text);
+      if (!d.chaveAcesso && !d.numero && !d.valorTotal) {
+        setAvisoLeitura('O arquivo tem texto, mas não reconheci o formato de DANFE. Preencha os campos manualmente.');
+        setSugeridos(new Set());
+        return;
+      }
+      aplicarSugestao(d);
+      if (d.valorTotal) setAvisoLeitura(`Nota lida. Valor total na nota: ${brl(d.valorTotal)}${d.destinatarioNome ? ` · destinatário: ${d.destinatarioNome}` : ''}. Confira antes de salvar.`);
+    } catch {
+      setAvisoLeitura('Falha ao ler o arquivo. Preencha os campos manualmente.');
+    } finally {
+      setLendoNota(false);
+    }
+  };
+
+  /* UM caminho so para receber arquivo, venha do seletor ou do arrasto: validar em dois
+     lugares seria a segunda copia da regra que ja custou correcoes nesta frente. */
+  const receberArquivo = (f: File | null) => {
+    if (!f) { setArquivo(null); setAvisoLeitura(null); setSugeridos(new Set()); return; }
+    const invalido = motivoArquivoInvalido(f);
+    if (invalido) { toast.error(invalido); setArquivo(null); return; }
+    setArquivo(f);
+    void lerNota(f);
+  };
+
+  const marcaSugerido = (campo: string) => (sugeridos.has(campo) ? 'border-primary/60 bg-primary/5' : '');
 
   /* O emitente E' A CONTRAPARTE por padrao; a divergencia e' que se declara.
      Vazio no formulario significa "a propria contraparte", e a RPC grava NULL. */
@@ -158,6 +243,52 @@ export function DocumentoFormOC({ api, somenteLeitura, fornecedores, contraparte
         </div>
       )}
 
+      {/* ── O ARQUIVO VEM PRIMEIRO (PR-OC-DOC-EXTRACAO-01 item 0) ────────────────
+          Estava na quarta linha, depois de seis campos. Com a leitura automatica isso
+          inverte o gesto: o arquivo e' o PONTO DE PARTIDA, e' dele que os campos saem.
+          Arrastar-e-soltar porque a nota chega por e-mail ou WhatsApp — arrastar do
+          Finder e' menos passos que abrir o seletor.
+          ⚠ NAO E' OBSTACULO: sem arquivo o formulario segue manual, e quem nao tem PDF
+          digita como sempre digitou. */}
+      {!somenteLeitura && (
+        <div
+          onDragOver={e => { e.preventDefault(); setArrastando(true); }}
+          onDragLeave={() => setArrastando(false)}
+          onDrop={e => { e.preventDefault(); setArrastando(false); receberArquivo(e.dataTransfer.files?.[0] ?? null); }}
+          className={`rounded-md border-2 border-dashed px-3 py-4 text-center transition-colors ${
+            arrastando ? 'border-primary bg-primary/10' : 'border-muted-foreground/30 bg-muted/20'
+          }`}>
+          <Paperclip className="h-4 w-4 mx-auto mb-1 text-muted-foreground" />
+          <div className="text-[12px] font-medium text-foreground">
+            {arquivo ? arquivo.name : 'Anexe a nota ou recibo'}
+          </div>
+          <div className="text-[10px] text-muted-foreground mt-0.5">
+            {arquivo
+              ? `${(arquivo.size / 1024 / 1024).toFixed(1)} MB · arraste outro para substituir`
+              : 'Arraste o arquivo aqui, ou escolha abaixo · PDF, JPG ou PNG, até 10 MB'}
+          </div>
+          <Input type="file" accept="application/pdf,image/jpeg,image/png"
+            onChange={e => receberArquivo(e.target.files?.[0] ?? null)}
+            className="h-7 text-[11px] file:text-[11px] mt-2 max-w-xs mx-auto" />
+          <div className="text-[10px] text-muted-foreground mt-1">
+            {lendoNota
+              ? 'Lendo a nota…'
+              : 'Se for uma NF em PDF, os campos abaixo vêm preenchidos a partir dela — confira antes de salvar.'}
+          </div>
+          {form.url && !arquivo && (
+            <div className="text-[10px] text-muted-foreground mt-1">Já há um arquivo anexado. Enviar outro substitui.</div>
+          )}
+        </div>
+      )}
+
+      {/* O que a leitura conseguiu — ou nao. Nunca silencio: campo errado e silencio
+          sao piores que "nao consegui ler". */}
+      {avisoLeitura && (
+        <div className="rounded-md border border-primary/30 bg-primary/5 px-2 py-1 text-[11px] text-foreground">
+          {avisoLeitura}
+        </div>
+      )}
+
       {/* Cabeçalho do documento */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
         <div>
@@ -167,10 +298,10 @@ export function DocumentoFormOC({ api, somenteLeitura, fornecedores, contraparte
             <SelectContent>{ESPECIES.map(e => <SelectItem key={e} value={e} className="text-[11px]">{ESPECIE_LABEL[e]}</SelectItem>)}</SelectContent>
           </Select>
         </div>
-        <div><label className="text-[10px] text-muted-foreground">Número</label><Input value={form.numero} onChange={e => setForm(f => ({ ...f, numero: e.target.value }))} className="h-7 text-[11px]" /></div>
-        <div><label className="text-[10px] text-muted-foreground">Série</label><Input value={form.serie} onChange={e => setForm(f => ({ ...f, serie: e.target.value }))} className="h-7 text-[11px]" /></div>
-        <div><label className="text-[10px] text-muted-foreground">Emissão</label><Input type="date" value={form.dataEmissao} onChange={e => setForm(f => ({ ...f, dataEmissao: e.target.value }))} className="h-7 text-[11px]" /></div>
-        <div className="lg:col-span-2"><label className="text-[10px] text-muted-foreground">Chave de acesso</label><Input value={form.chaveAcesso} onChange={e => setForm(f => ({ ...f, chaveAcesso: e.target.value }))} className="h-7 text-[11px]" /></div>
+        <div><label className="text-[10px] text-muted-foreground">Número</label><Input value={form.numero} onChange={e => setForm(f => ({ ...f, numero: e.target.value }))} className={`h-7 text-[11px] ${marcaSugerido('numero')}`} /></div>
+        <div><label className="text-[10px] text-muted-foreground">Série</label><Input value={form.serie} onChange={e => setForm(f => ({ ...f, serie: e.target.value }))} className={`h-7 text-[11px] ${marcaSugerido('serie')}`} /></div>
+        <div><label className="text-[10px] text-muted-foreground">Emissão</label><Input type="date" value={form.dataEmissao} onChange={e => setForm(f => ({ ...f, dataEmissao: e.target.value }))} className={`h-7 text-[11px] ${marcaSugerido('dataEmissao')}`} /></div>
+        <div className="lg:col-span-2"><label className="text-[10px] text-muted-foreground">Chave de acesso</label><Input value={form.chaveAcesso} onChange={e => setForm(f => ({ ...f, chaveAcesso: e.target.value }))} className={`h-7 text-[11px] ${marcaSugerido('chaveAcesso')}`} /></div>
         {/* ── EMITENTE ─────────────────────────────────────────────────────────
             Quem ASSINOU a nota, que nem sempre e quem negociou. Caso real: a
             contraparte intermediou e a nota veio de outra pessoa. Importa alem da
@@ -208,26 +339,6 @@ export function DocumentoFormOC({ api, somenteLeitura, fornecedores, contraparte
           )}
         </div>
 
-        {/* ── ARQUIVO ──────────────────────────────────────────────────────────
-            O formato e o tamanho sao conferidos AQUI, antes de sair da maquina: o
-            bucket devolveria o mesmo "nao" depois de subir dez megabytes. */}
-        <div className="lg:col-span-2">
-          <Label className="text-[10px] text-muted-foreground">Arquivo (PDF, JPG ou PNG · até 10 MB)</Label>
-          <Input type="file" accept="application/pdf,image/jpeg,image/png" disabled={somenteLeitura}
-            onChange={e => {
-              const f = e.target.files?.[0] ?? null;
-              if (!f) { setArquivo(null); return; }
-              const invalido = motivoArquivoInvalido(f);
-              if (invalido) { toast.error(invalido); e.target.value = ''; setArquivo(null); return; }
-              setArquivo(f);
-            }}
-            className="h-7 text-[11px] file:text-[11px]" />
-          {form.url && !arquivo && (
-            <div className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1">
-              <Paperclip className="h-3 w-3" /> Já há um arquivo anexado. Escolher outro substitui.
-            </div>
-          )}
-        </div>
         {form.especie === 'nf_complementar' && (
           <div className="lg:col-span-2">
             <label className="text-[10px] text-muted-foreground">Documento de origem</label>
