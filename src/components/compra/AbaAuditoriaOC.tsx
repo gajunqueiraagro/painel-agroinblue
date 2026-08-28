@@ -126,20 +126,29 @@ export function AbaAuditoriaOC({ api, operacaoPronta, fornecedores, lotes }: Pro
 
   return (
     <div className="rounded-md border bg-card p-2 shadow-sm space-y-2 min-w-0">
-      <div className="flex items-center justify-between gap-2">
+      {/* ── A21 — O CABECALHO NAO ROLA ────────────────────────────────────────────
+          Aqui a regra pesa mais do que em qualquer outra tela: sao 361 eventos no proto,
+          46 numa unica operacao. Rolar uma trilha longa e perder de vista de qual
+          operacao ela e', e quantos registros existem, e ficar lendo linhas soltas.
+          Fundo opaco (`bg-card`) e `-mt-2 pt-2` cobrindo o padding do cartao — ver o
+          mesmo bloco em AbaDocumentosOC.
+          ⚠ O `sticky` so funciona porque a ROLAGEM mora na coluna de conteudo do shell,
+          e nao no corpo inteiro do modal. Enquanto rolava o corpo, este mesmo codigo
+          fixava o titulo e deixava o Resumo da operacao subir junto. */}
+      <div className="sticky top-0 z-10 -mt-2 flex items-center justify-between gap-2 border-b bg-card pt-2 pb-2">
         <span className="text-[12px] font-semibold text-foreground min-w-0 truncate">Histórico da operação</span>
-        {resumo && <span className="text-[11px] text-muted-foreground shrink-0">{resumo}</span>}
+        {resumo && <span className="text-[10px] text-muted-foreground shrink-0">{resumo}</span>}
       </div>
 
       <div className="rounded-md border overflow-hidden">
         {api.eventos.length === 0 && (
-          <div className="px-3.5 py-4 text-center text-[11px] text-muted-foreground">
+          <div className="px-3.5 py-4 text-center text-[10px] text-muted-foreground">
             {api.loading ? 'Carregando…' : 'Nenhum registro ainda. Cada ação nesta operação entra aqui.'}
           </div>
         )}
         {dias.map(([dia, doDia]) => (
           <div key={dia}>
-            <div className="bg-muted/40 px-3.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <div className="bg-muted/40 px-3.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
               {rotuloDia(dia)}
             </div>
             {doDia.map(e => {
@@ -151,13 +160,18 @@ export function AbaAuditoriaOC({ api, operacaoPronta, fornecedores, lotes }: Pro
                   {/* ⚠ A LINHA INTEIRA E' O BOTAO. Alvo de 22px ja e' pequeno; exigir
                       mira num icone tornaria o detalhe tecnico inalcancavel na pratica. */}
                   <button type="button" onClick={() => setAbertoId(aberto ? null : e.id)}
-                    className={`flex w-full items-baseline gap-2 px-3.5 py-1 text-left leading-[1.4] hover:bg-muted/30 ${aberto ? 'bg-muted/30' : ''}`}>
-                    <span className="w-[34px] shrink-0 text-[11px] tabular-nums text-muted-foreground">{hora(e.criadoEm)}</span>
+                    /* ⚠ MAIS COMPRIMIDA QUE AS IRMAS, e por um motivo: esta linha nao
+                       tem valor a direita nem pilula de estado — so hora e frase —, entao
+                       aguenta o que uma linha de documento nao aguentaria. `py-0.5` com
+                       `leading-[1.4]` da ~19px por evento contra ~26px antes: cabem cerca
+                       de sete linhas a mais por tela, que e' o ponto de uma trilha. */
+                    className={`flex w-full items-baseline gap-2 px-3.5 py-0.5 text-left leading-[1.4] hover:bg-muted/30 ${aberto ? 'bg-muted/30' : ''}`}>
+                    <span className="w-[34px] shrink-0 text-[10px] tabular-nums text-muted-foreground">{hora(e.criadoEm)}</span>
                     {mostrarAutor && (
-                      <span className="w-[62px] shrink-0 truncate text-[12px] text-muted-foreground"
+                      <span className="w-[62px] shrink-0 truncate text-[10px] text-muted-foreground"
                         title={nome ?? 'Autor não identificado nesta sessão'}>{nome ?? '—'}</span>
                     )}
-                    <span className="min-w-0 flex-1 truncate text-[13px] text-foreground">
+                    <span className="min-w-0 flex-1 truncate text-[11px] text-foreground">
                       {frase}
                       {detalhe && <span className="ml-1.5 text-muted-foreground">{detalhe}</span>}
                     </span>

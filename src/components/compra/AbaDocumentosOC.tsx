@@ -162,42 +162,55 @@ export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedo
   // ── LISTA ──
   return (
     <div className="rounded-md border bg-card p-2 shadow-sm space-y-2 min-w-0">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-[12px] font-semibold text-foreground min-w-0 truncate">Documentos da operação</span>
-        <div className="flex items-center gap-2 shrink-0">
-          {contagem.length > 0 && (
-            <span className="text-[11px] text-muted-foreground">{contagem.join(' · ')}</span>
-          )}
-          {!somenteLeitura && (
-            <Button type="button" variant="outline" size="sm" className="h-7 text-[11px] gap-1" onClick={abrirNovo}><Plus className="h-3 w-3" /> Novo documento</Button>
-          )}
-        </div>
-      </div>
-      {/* ── CONFRONTO: DOCUMENTADO x NEGOCIADO ───────────────────────────────────
-          A lista dizia quais documentos existem; nao dizia se eles COBREM a operacao.
-          ⚠ INFORMACAO, NAO ERRO. Nao bloqueia e nao alarma: nota complementar, nota
-          parcial e entrega em remessas fazem a diferenca ser legitima. Por isso a
-          divergencia e' um numero em ambar, nao um aviso vermelho.
-          ⚠ SEM DOCUMENTO ATIVO NAO HA CONFRONTO. Os dois numeros continuam a vista —
-          o negociado e' justamente a referencia de quanto falta documentar —, mas
-          "falta R$ 495.000,00" antes de existir qualquer documento nao compara coisa
-          alguma: anuncia que a operacao acabou de comecar.
-          ⚠ `valorNegociado` nulo e' AUSENCIA e imprime "—" (sentinela do CLAUDE.md):
-          operacao sem valor_acordado ainda nao tem com o que confrontar. */}
-      <div className="grid grid-cols-2 gap-2 rounded-md border bg-muted/20 px-3 py-1.5">
-        <div className="min-w-0">
-          <div className="text-[10px] text-muted-foreground leading-none">Total documentado</div>
-          <div className="mt-1 text-[13px] font-medium tabular-nums leading-none">{brl(totalDocumentado)}</div>
-        </div>
-        <div className="min-w-0">
-          <div className="text-[10px] text-muted-foreground leading-none">Negociado</div>
-          <div className="mt-1 text-[13px] font-medium tabular-nums leading-none">
-            {valorNegociado == null ? <span className="text-muted-foreground">—</span> : brl(valorNegociado)}
-            {confronto && (
-              <span className={`ml-2 text-[11px] font-normal ${confronto.ok
-                ? 'text-emerald-700 dark:text-emerald-500'
-                : 'text-amber-700 dark:text-amber-500'}`}>{confronto.texto}</span>
+      {/* ── A21 — O CABECALHO NAO ROLA ────────────────────────────────────────────
+          ⚠ NAO BASTA O `sticky`. Na primeira versao ele grudava no CORPO DO MODAL, que
+          era justamente o que rolava: o cabecalho ficava, e o Resumo da operacao subia e
+          sumia junto com o resto. O conserto foi mover a ROLAGEM para a coluna de
+          conteudo (CompraModalShell:348) — aqui o `sticky` continua igual, mas agora se
+          ancora numa coluna que nao arrasta o resumo consigo.
+          ⚠ FUNDO OPACO OBRIGATORIO (`bg-card`, o mesmo do cartao): transparente deixaria
+          as linhas passarem por baixo do titulo e do confronto.
+          ⚠ `-mt-2 pt-2` cobre o padding superior do cartao. Sem isso sobra uma faixa de
+          8px acima do bloco fixo por onde as linhas apareceriam ao rolar. So no eixo
+          vertical: margem negativa lateral comeria as bordas do cartao. */}
+      <div className="sticky top-0 z-10 -mt-2 space-y-2 border-b bg-card pt-2 pb-2">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[12px] font-semibold text-foreground min-w-0 truncate">Documentos da operação</span>
+          <div className="flex items-center gap-2 shrink-0">
+            {contagem.length > 0 && (
+              <span className="text-[10px] text-muted-foreground">{contagem.join(' · ')}</span>
             )}
+            {!somenteLeitura && (
+              <Button type="button" variant="outline" size="sm" className="h-7 text-[11px] gap-1" onClick={abrirNovo}><Plus className="h-3 w-3" /> Novo documento</Button>
+            )}
+          </div>
+        </div>
+        {/* ── CONFRONTO: DOCUMENTADO x NEGOCIADO ───────────────────────────────────
+            A lista dizia quais documentos existem; nao dizia se eles COBREM a operacao.
+            ⚠ INFORMACAO, NAO ERRO. Nao bloqueia e nao alarma: nota complementar, nota
+            parcial e entrega em remessas fazem a diferenca ser legitima. Por isso a
+            divergencia e' um numero em ambar, nao um aviso vermelho.
+            ⚠ SEM DOCUMENTO ATIVO NAO HA CONFRONTO. Os dois numeros continuam a vista —
+            o negociado e' justamente a referencia de quanto falta documentar —, mas
+            "falta R$ 495.000,00" antes de existir qualquer documento nao compara coisa
+            alguma: anuncia que a operacao acabou de comecar.
+            ⚠ `valorNegociado` nulo e' AUSENCIA e imprime "—" (sentinela do CLAUDE.md):
+            operacao sem valor_acordado ainda nao tem com o que confrontar. */}
+        <div className="grid grid-cols-2 gap-2 rounded-md border bg-muted/20 px-3 py-1.5">
+          <div className="min-w-0">
+            <div className="text-[11px] text-muted-foreground leading-none">Total documentado</div>
+            <div className="mt-1 text-[20px] font-medium tabular-nums leading-none">{brl(totalDocumentado)}</div>
+          </div>
+          <div className="min-w-0">
+            <div className="text-[11px] text-muted-foreground leading-none">Negociado</div>
+            <div className="mt-1 text-[20px] font-medium tabular-nums leading-none">
+              {valorNegociado == null ? <span className="text-muted-foreground">—</span> : brl(valorNegociado)}
+              {confronto && (
+                <span className={`ml-2 text-[11px] font-normal ${confronto.ok
+                  ? 'text-emerald-700 dark:text-emerald-500'
+                  : 'text-amber-700 dark:text-amber-500'}`}>{confronto.texto}</span>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -215,7 +228,7 @@ export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedo
           uma a uma. Registrado como A18 em docs/PADROES-UI.md. */}
       <div className="rounded-md border divide-y">
         {api.documentos.length === 0 && (
-          <div className="px-3.5 py-4 text-center text-[11px] text-muted-foreground">
+          <div className="px-3.5 py-4 text-center text-[10px] text-muted-foreground">
             {api.loading ? 'Carregando…' : 'Nenhum documento.'}
           </div>
         )}
@@ -248,14 +261,14 @@ export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedo
             <div key={d.documentoId}
               className={`flex items-center gap-3 px-3.5 py-[7px] ${d.cancelado ? 'opacity-60' : ''}`}>
               <div className="min-w-0 flex-1 leading-[1.35]">
-                <div className="text-[13px] font-medium text-foreground truncate">{identidade}</div>
-                <div className={`text-[11px] truncate ${semArquivo
+                <div className="text-[12px] font-medium text-foreground truncate">{identidade}</div>
+                <div className={`text-[10px] truncate ${semArquivo
                   ? 'text-amber-700 dark:text-amber-500'
                   : 'text-muted-foreground'}`} title={semArquivo ? undefined : contexto}>
                   {semArquivo ? 'Sem arquivo anexado' : contexto}
                 </div>
               </div>
-              <div className="text-[13px] font-medium tabular-nums shrink-0">{brl(d.valorLiquido)}</div>
+              <div className="text-[12px] font-medium tabular-nums shrink-0">{brl(d.valorLiquido)}</div>
               <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${d.cancelado
                 ? 'bg-rose-100 text-rose-700'
                 : 'bg-emerald-100 text-emerald-700'}`}>

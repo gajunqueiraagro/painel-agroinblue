@@ -118,7 +118,9 @@ export function AbaLiquidacaoOC({ api, operacaoPronta, darkSelectClass, somenteL
           `_oc_estado_liquidacao` (`abs(base - liquidado) <= 0.01 -> 'liquidada'`), e a
           view ja devolve o veredito em `estadoLiquidacao`. Repetir a conta no React seria
           a segunda copia da mesma regra — o defeito que ja custou correcao nesta frente. */}
-      <div className="rounded-md border bg-card p-2 shadow-sm space-y-1.5">
+      {/* A21 — titulo e numeros do topo NAO rolam. Ver o bloco equivalente em
+          AbaDocumentosOC; aqui o cartao e' `p-2` pelo mesmo motivo o `-mt-2 pt-2`. */}
+      <div className="sticky top-0 z-10 -mt-2 rounded-b-md border-b bg-card pt-2 pb-2 space-y-1.5">
         <div className="flex items-center justify-between gap-2">
           <span className="text-[12px] font-semibold text-muted-foreground min-w-0 truncate">Pagamentos · {fluxoLabel}</span>
           <div className="flex items-center gap-2 shrink-0">
@@ -134,16 +136,16 @@ export function AbaLiquidacaoOC({ api, operacaoPronta, darkSelectClass, somenteL
         </div>
         <div className="grid grid-cols-2 gap-2 rounded-md border bg-muted/20 px-3 py-1.5">
           <div className="min-w-0">
-            <div className="text-[10px] text-muted-foreground leading-none">Obrigação</div>
-            <div className="mt-1 text-[13px] font-medium tabular-nums leading-none">
+            <div className="text-[11px] text-muted-foreground leading-none">Obrigação</div>
+            <div className="mt-1 text-[20px] font-medium tabular-nums leading-none">
               {r?.base == null ? <span className="text-muted-foreground">—</span> : brl(r.base)}
             </div>
             {/* De onde a base saiu — a resposta para "por que este numero?". */}
             {r?.baseOrigem && <div className="mt-0.5 text-[9px] text-muted-foreground">{r.baseOrigem}</div>}
           </div>
           <div className="min-w-0">
-            <div className="text-[10px] text-muted-foreground leading-none">Pago</div>
-            <div className="mt-1 text-[13px] font-medium tabular-nums leading-none">
+            <div className="text-[11px] text-muted-foreground leading-none">Pago</div>
+            <div className="mt-1 text-[20px] font-medium tabular-nums leading-none">
               {brl(r?.totalLiquidadoValido ?? 0)}
               {confronto && (
                 <span className={`ml-2 text-[11px] font-normal ${confronto.ok
@@ -208,8 +210,8 @@ export function AbaLiquidacaoOC({ api, operacaoPronta, darkSelectClass, somenteL
               onClick={() => setDetalheId(o.obrigacaoId)}
               className={`flex w-full items-center gap-3 px-3.5 py-[7px] text-left hover:bg-muted/30 ${o.cancelada ? 'opacity-60' : ''}`}>
               <div className="min-w-0 flex-1 leading-[1.35]">
-                <div className="text-[13px] font-medium text-foreground truncate">{identidade}</div>
-                <div className="text-[11px] text-muted-foreground truncate">
+                <div className="text-[12px] font-medium text-foreground truncate">{identidade}</div>
+                <div className="text-[10px] text-muted-foreground truncate">
                   {o.favorecidoNome || 'sem favorecido'}
                   {' · '}
                   {/* Havendo saldo, o que falta OCUPA O LUGAR do vencimento: entre "vence
@@ -219,7 +221,7 @@ export function AbaLiquidacaoOC({ api, operacaoPronta, darkSelectClass, somenteL
                     : <>venc. {fmtData(o.dataVencimento)}</>}
                 </div>
               </div>
-              <div className="text-[13px] font-medium tabular-nums shrink-0">{brl(o.valorNominal)}</div>
+              <div className="text-[12px] font-medium tabular-nums shrink-0">{brl(o.valorNominal)}</div>
               <Badge variant={ESTADO_VARIANT[o.estado] ?? 'outline'} className="text-[9px] shrink-0">
                 {ESTADO_LABEL[o.estado] ?? o.estado}
               </Badge>
@@ -351,11 +353,11 @@ function DetalheObrigacaoDialog({ api, obr, somenteLeitura, onIrParaDocumentos, 
                     return (
                       <div key={ev.id} className={`flex items-center gap-3 px-3.5 py-[7px] ${ev.estornado ? 'opacity-50' : ''}`}>
                         <div className="min-w-0 flex-1 leading-[1.35]">
-                          <div className={`text-[13px] font-medium text-foreground truncate ${ev.estornado ? 'line-through' : ''}`}>
+                          <div className={`text-[12px] font-medium text-foreground truncate ${ev.estornado ? 'line-through' : ''}`}>
                             {brl(ev.valor)} · {formaLabel}
                             {naoMon && <span className="ml-1 text-[9px] font-normal text-muted-foreground">não monetária</span>}
                           </div>
-                          <div className="text-[11px] text-muted-foreground truncate">
+                          <div className="text-[10px] text-muted-foreground truncate">
                             {[fmtData(ev.data), complemento].filter(x => x && x !== '—').join(' · ') || '—'}
                           </div>
                         </div>

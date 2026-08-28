@@ -345,8 +345,23 @@ export function CompraModalShell(api: CompraModalShellProps) {
       {/* PR-OC-UX-DENSIDADE-01 encolheu a lateral de 320px para 240px porque o conteudo nao
           cabia. PR-OC-UX-LOTE-B-01 devolve 280px: com o resumo em pares rotulo-valor o
           conteudo ficou enxuto, e 240px espremia os valores monetarios contra o rotulo. */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-3 p-4 h-[66vh] overflow-y-auto bg-muted/30">
-        <div className="space-y-2 min-w-0">
+      {/* ⚠ A ROLAGEM DESCEU UM NIVEL (PR-UI-A21-CABECALHO-FIXO-02). Antes o CORPO
+          INTEIRO rolava — e como o Resumo da operacao mora dentro dele, o resumo subia e
+          sumia junto com o cabecalho da aba. Fixar o cabecalho DENTRO da aba nao resolvia:
+          o sticky grudava no topo deste corpo, que e' justamente o que estava rolando.
+          Agora o corpo NAO rola; cada coluna cuida da sua, e o `sticky` das abas passa a
+          se ancorar na coluna de conteudo — o resumo lateral fica parado por construcao,
+          porque esta FORA daquele scrollport.
+          ⚠ `grid-rows-[minmax(0,1fr)]` nao e' decorativo: sem linha de altura definida, a
+          linha implicita e' `auto` e cresce com o conteudo — a coluna nunca teria limite
+          para rolar contra, e o conteudo seria cortado pelo `overflow-hidden`.
+          ⚠ `min-h-0` pelo mesmo motivo: item de grid nasce com `min-height:auto` e se
+          recusa a encolher abaixo do conteudo, o que desliga a rolagem.
+          ⚠ SO A PARTIR DE `lg`. Abaixo disso as duas colunas VIRAM LINHAS empilhadas, e
+          altura fixa por coluna cortaria o resumo; ali o corpo continua rolando inteiro,
+          como sempre rolou. */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] lg:grid-rows-[minmax(0,1fr)] gap-3 p-4 h-[66vh] overflow-y-auto lg:overflow-hidden bg-muted/30">
+        <div className="space-y-2 min-w-0 lg:min-h-0 lg:overflow-y-auto">
           {abaAtiva === 'negociacao' ? (
             <AbaNegociacaoLotes
               categoria={api.categoria}
@@ -560,7 +575,11 @@ export function CompraModalShell(api: CompraModalShellProps) {
 
         {/* RESUMO LATERAL — coluna de 320px. Modo OC: resumo PERMANENTE das 6 etapas
             (ResumoLateralOC, consumindo as fontes oficiais já montadas). Não-OC (legado):
-            mini-card Situação/Fazenda + CompraResumoPanel preservado (outros callers). */}
+            mini-card Situação/Fazenda + CompraResumoPanel preservado (outros callers).
+            ⚠ O WRAPPER existe para dar rolagem PROPRIA a esta coluna. Ela nao deve rolar
+            — e' o ponto do PR —, mas se um dia o resumo passar da altura do corpo, rolar
+            aqui e' melhor que ser CORTADO em silencio pelo `overflow-hidden` do grid. */}
+        <div className="lg:min-h-0 lg:overflow-y-auto">
         {api.modoOC ? (
           <ResumoLateralOC
             tipoLabel={api.liquidacaoApi?.tipoOperacao ?? null}
@@ -600,6 +619,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
             />
           </div>
         )}
+        </div>
       </div>
 
       {/* RODAPÉ — template do modal aprovado (bg-primary, px-6 py-3), FIXO (fora do scroll do corpo) */}

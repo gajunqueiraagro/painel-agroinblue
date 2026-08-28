@@ -398,15 +398,29 @@ NF 007.086.649                        R$ 69.300  [Ativo]  📎 ✎ ⊘
 Tarciso Ferreira Honorio · 29/07/2024
 ```
 
-- **linha 1 — identidade**: 13px, peso 500. É por ela que o operador procura o registro.
+- **linha 1 — identidade**: 12px, peso 500. É por ela que o operador procura o registro.
   Não havendo identidade própria (documento sem número), o **rótulo do tipo sobe para
   cá** — nunca "—" em cima com a informação real embaixo (mesma regra do A17: a
   identidade nunca fica no corpo menor).
-- **linha 2 — contexto**: 11px, cinza, partes separadas por ` · `. É o que confirma a
-  escolha, não o que a motiva.
-- **à direita**: valor (13px, peso 500, `tabular-nums`), estado como pílula pequena
+- **linha 2 — contexto**: 10px, cinza, partes separadas por ` · `. É o que confirma a
+  escolha, não o que a motiva. **10px é o piso**: nada que o operador precise ler desce
+  abaixo disso (ver A21).
+- **à direita**: valor (12px, peso 500, `tabular-nums`), estado como pílula pequena
   (10px) e as ações como **ícones** com `title` e `aria-label`.
 - **altura**: `px-3.5 py-[7px]` e `leading-[1.35]` — ~34px por linha.
+
+**Hierarquia obrigatória — o cabeçalho domina:**
+
+```
+cabeçalho (números do topo)   20px, peso 500   ← rótulo 11px cinza
+identidade da linha           12px, peso 500
+contexto                      10px, cinza
+```
+
+O salto entre topo e linha tem de ser **visível**. Números do topo do mesmo tamanho da
+identidade da linha invertem a leitura: o olho encontra primeiro a linha e depois procura
+o total, quando é o total que dá sentido à lista. Se o salto não bastar, **sobe o topo** —
+nunca desce a linha, que já está no piso de 10px.
 - separação por `divide-y` num container `rounded-md border`; sem zebra e sem
   `overflow-x`.
 
@@ -419,6 +433,11 @@ mesma linha serve tela estreita e mobile.
 
 Um estado que substitui o contexto entra **no lugar da linha 2**, em âmbar
 ("Sem arquivo anexado"), e não como coluna nova — a linha já tem onde dizer.
+
+**Variante de linha única** (trilha de auditoria): quando a linha não tem valor à direita
+nem pílula de estado — só hora e frase —, ela aguenta mais compressão: hora 10px, frase
+11px, `py-0.5`. Dá ~19px por linha contra ~26px da variante cheia. A compressão é
+consequência do que a linha *não* carrega, não uma escolha estética separada.
 
 > ⚠ **É referência, não retrofit.** Há telas prontas e aprovadas em tabela; cada uma
 > será avaliada individualmente antes de qualquer conversão. Aplicado hoje apenas em
@@ -498,6 +517,68 @@ metade. Tem `disabled` e `size="compact"` para grids densos.
 Este é o **terceiro** caso da mesma família em um só dia — A19 (`CampoMoeda` existia
 trancado dentro de uma tela), A18 (a tabela repetida) e agora A20. A lição vale para os
 três: **antes de escrever um campo, procurar o campo.** O sistema costuma já ter.
+
+---
+
+## A21 — O cabeçalho nunca rola
+
+Em qualquer lista ou tabela com rolagem vertical, **o que identifica a seção fica fixo e
+só o conteúdo rola**:
+
+- o **título** da seção ("Documentos da operação", "Histórico da operação");
+- o **bloco de números** do topo (total documentado × negociado, obrigação × pago…);
+- o **cabeçalho de coluna**, onde ainda houver tabela.
+
+No A18 não existe cabeçalho de coluna — o que fica fixo é o título e o bloco de topo.
+
+A razão: rolar uma lista longa e perder de vista **o que se está lendo** e **o que os
+números do topo diziam**. A trilha de auditoria tem 361 registros no proto, 46 numa única
+operação; a partir da terceira tela de rolagem, uma linha sem cabeçalho é uma linha sem
+dono.
+
+```tsx
+<div className="sticky top-0 z-10 -mt-2 space-y-2 border-b bg-card pt-2 pb-2">
+```
+
+Três detalhes que não são opcionais:
+
+1. **Fundo opaco.** `bg-card` — o mesmo do cartão. Transparente deixa as linhas passarem
+   por baixo do título, que é pior que não fixar nada.
+2. **`z-index` acima das linhas.** `z-10` basta; sem ele o conteúdo passa por cima.
+3. **Cobrir o padding do container.** `-mt-2 pt-2` quando o cartão é `p-2`. Sem isso
+   sobra uma faixa de 8px acima do bloco fixo por onde as linhas aparecem ao rolar.
+   Só no eixo **vertical**: margem negativa lateral come as bordas do cartão.
+
+> ⚠ **O erro que originou a segunda versão desta regra.** `sticky` se ancora no
+> **scrollport mais próximo**. Se esse scrollport for o corpo inteiro do modal, fixar o
+> cabeçalho da lista não resolve nada: o cabeçalho gruda, mas **tudo o mais sobe junto** —
+> no caso, o Resumo da operação inteiro saiu da tela. Fixar o cabeçalho e deixar o corpo
+> rolando é meio conserto que parece inteiro.
+>
+> **A rolagem tem de morar no nível certo, não o sticky no lugar certo.** O corpo do modal
+> não rola; cada coluna rola a sua. Aí o resumo lateral fica parado **por construção** —
+> está fora do scrollport —, e o sticky da aba passa a se ancorar na coluna de conteúdo.
+
+Para uma coluna de grid rolar, três coisas precisam ser verdade ao mesmo tempo:
+
+1. o container tem altura definida e **não** rola (`h-[66vh] overflow-hidden`);
+2. a **linha** do grid tem altura definida — `grid-rows-[minmax(0,1fr)]`. Sem isso a linha
+   implícita é `auto`, cresce com o conteúdo, e não há limite contra o qual rolar;
+3. o item tem `min-h-0`. Item de grid nasce com `min-height: auto` e se recusa a encolher
+   abaixo do conteúdo, o que desliga a rolagem silenciosamente.
+
+Faltando qualquer uma, o conteúdo é **cortado** em vez de rolar — falha silenciosa, que é
+pior que barra a mais. E `overflow: hidden` em ancestral vira o scrollport: o elemento
+nunca gruda.
+
+Isso vale **de `lg` para cima**. Abaixo disso as colunas viram linhas empilhadas, e altura
+fixa por coluna cortaria o conteúdo — ali o corpo rola inteiro, como sempre rolou.
+
+**A barra fica na área da lista, nunca dentro de uma célula ou linha.**
+
+**Piso de leitura: 10px.** A densidade é boa até aqui e nenhum texto que o operador
+precise ler desce abaixo disso. Pílulas de estado, faixas de data e rótulos de bloco
+técnico já estão em 10px — eles **não** descem para 9px para "ganhar" espaço.
 
 ---
 
