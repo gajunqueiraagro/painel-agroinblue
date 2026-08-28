@@ -895,27 +895,43 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
     if (!itemSel) return;
     setValor(itemSel.valorBruto);
     setSubcentro(itemSel.subcentro);
-    aplicarDefaultDescricao(produtoOCCompromissoLote(tipoOperacao ?? 'compra', itemSel.lote.qtd ?? 0, itemSel.lote.categoria));
-  }, [itemSel, tipoOperacao, descricaoDefault]);
-
-  /* Descrição = DEFAULT EDITÁVEL: principal → descricaoDefault; obrigacao → ''. Só atualiza se o campo está
-     vazio OU ainda contém o último default gerado. Após edição manual do usuário, NUNCA sobrescreve.
-
-     ⚠ ITEM 3 — ESTE EFEITO ATROPELAVA O DO LOTE. Valor e subcentro seguiam o lote
-     (medido: 76.760/Femeas, 4.500/Femeas, 5.115/Machos, todos certos no banco), mas
-     a descricao dos tres saiu "Compra 031 Desmama F/Vacas/Garrotes" — a da operacao
-     inteira. Motivo: o efeito do lote deixa `ultimoDefaultRef` valendo a descricao
-     DELE; quando `descricaoDefault` mudava depois (os lotes chegam via
-     `recarregarDados`, entao ele vai de "Compra principal" para o texto final DEPOIS
-     do dialogo abrir), a guarda `prev === ultimoDefaultRef.current` dava true e este
-     efeito reescrevia por cima. Com lote escolhido, quem manda e' o lote. */
-  useEffect(() => {
-    if (itemSel) return;
-    aplicarDefaultDescricao(natureza === 'principal' ? descricaoDefault : '');
-  }, [natureza, descricaoDefault, itemSel]);
+  }, [itemSel]);
 
   const planoTipo = tipoOperacao === 'compra' ? '2-Saídas' : '1-Entradas';
   const componenteOptions = useMemo(() => comps.porNatureza(natureza), [comps, natureza]);
+
+  const nomeComponente = useMemo(
+    () => componenteOptions.find(c => c.codigo === componente)?.nome ?? '',
+    [componenteOptions, componente],
+  );
+
+  /* Descrição = DEFAULT EDITÁVEL, com UM UNICO ESCRITOR.
+       principal  → base
+       obrigacao  → "base - Componente"  (PR-OC-COMPROMISSO-UX-01)
+     onde base = descricao do LOTE escolhido, ou a da operacao inteira.
+     Só atualiza se o campo está vazio OU ainda contém o último default gerado.
+     Após edição manual do usuário, NUNCA sobrescreve — contrato inalterado.
+
+     ⚠ POR QUE UM ESCRITOR SO. Antes eram DOIS efeitos escrevendo descricao (o do
+     lote e o da natureza), e o segundo ja atropelou o primeiro uma vez: a descricao
+     de tres compromissos por lote saiu com o texto da operacao inteira, porque
+     `descricaoDefault` muda DEPOIS que o dialogo abre (os lotes chegam via
+     `recarregarDados`) e a guarda `prev === ultimoDefaultRef.current` dava true.
+     Agora o lote decide dentro do MESMO efeito, e a corrida deixa de existir.
+     O efeito do lote ficou apenas com valor/subcentro — que, de proposito, NAO
+     dependem do componente: trocar o componente nao pode reescrever o valor.
+
+     ⚠ Obrigacao SEM componente escolhido segue com '', como antes. Sugerir
+     "Compra 115 DM" sozinho numa obrigacao leria como o principal e convidaria a
+     salvar assim. Quando o componente entra, a guarda casa ('' -> sugestao). */
+  useEffect(() => {
+    const base = itemSel
+      ? produtoOCCompromissoLote(tipoOperacao ?? 'compra', itemSel.lote.qtd ?? 0, itemSel.lote.categoria)
+      : descricaoDefault;
+    if (natureza === 'principal') { aplicarDefaultDescricao(base); return; }
+    aplicarDefaultDescricao(nomeComponente ? `${base} - ${nomeComponente}` : '');
+  }, [itemSel, tipoOperacao, natureza, descricaoDefault, nomeComponente]);
+
   /* ⚠ RESTRITO AO CENTRO DE CUSTO DA COMPRA. Sem isto a lista traz TODOS os
      subcentros de saida do plano, e os tres que interessam se perdem no meio.
      Medido no proto: `Compra de Bovinos` agrupa exatamente Femeas, Machos e
