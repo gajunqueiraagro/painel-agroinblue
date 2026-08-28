@@ -726,12 +726,28 @@ export function CompraModalShell(api: CompraModalShellProps) {
             //   Confirmar/Cancelar/Reabrir via RPCs oficiais; título materializado bloqueia tudo (só
             //   leitura + explicação, à esquerda). Sem "Concluir lotes e continuar" (fluxo de criação).
             <>
-              {api.ocStatusComercial === 'fechada' && !api.ocTemTitulo && (
+              {/* ── REABRIR SAIU DE TRAS DO GATE DE TITULO (PR-OC-GATE-CONFIRMAR-01) ──
+                  MESMO beco do Confirmar, e este ja mordia: 23 operacoes fechadas tem
+                  titulo ativo hoje, e nenhuma delas podia ser reaberta pela tela.
+                  ⚠ O BANCO SEMPRE PERMITIU. `oc_reabrir` checa `cancelada` e a versao, e
+                  nada mais — nao ha uma palavra sobre titulo no `prosrc`.
+                  ⚠ E SEGURO porque reabrir devolve o status a 'programada', e ali o
+                  proprio `ocTemTitulo` volta a proteger lote e valor. O que se libera e'
+                  o mesmo que a edicao pos-fechamento (PR-...-02) ja libera: fornecedor,
+                  data e observacao.
+                  ⚠ O CUSTO DE NAO CORRIGIR era maior que o risco: fechar por engano uma
+                  operacao com titulo lancado nao tinha volta pela interface. A 156b793b
+                  precisou de chamada direta a RPC, e isso nao escala para o cliente. */}
+              {api.ocStatusComercial === 'fechada' && (
                 <Button type="button" variant="secondary" disabled={!!api.acaoOcLoading}
                   onClick={() => { setMotivoAcao(''); setAcaoConfirm('reabrir'); }} className="gap-1.5">
                   {api.acaoOcLoading === 'reabrir' ? 'Reabrindo...' : 'Reabrir operação'}
                 </Button>
               )}
+              {/* ⚠ CANCELAR FICA ATRAS DO GATE, e nao e' esquecimento: `oc_cancelar` E' a
+                  unica das cinco RPCs de ciclo que VERIFICA titulo, entao o banco
+                  recusaria de qualquer forma. Esconder o botao evita um erro que so
+                  apareceria depois do clique. Nao uniformizar com Confirmar e Reabrir. */}
               {(api.ocStatusComercial === 'programada' || api.ocStatusComercial === 'fechada') && !api.ocTemTitulo && (
                 <Button type="button" variant="outline" disabled={!!api.acaoOcLoading}
                   onClick={() => { setMotivoAcao(''); setAcaoConfirm('cancelar'); }}
@@ -753,6 +769,9 @@ export function CompraModalShell(api: CompraModalShellProps) {
                   <ShoppingCart className="h-4 w-4" /> {api.submitting ? 'Salvando...' : 'Salvar'}
                 </Button>
               )}
+              {/* ⚠ SALVAR continua atras do gate de titulo: ele EDITA a negociacao, e
+                  com dinheiro lancado a base economica nao se mexe (ADR Soberania
+                  Financeira). */}
               {api.ocStatusComercial === 'programada' && !api.ocTemTitulo && (
                 <>
                   {abaAtiva === 'negociacao' ? (
@@ -767,6 +786,24 @@ export function CompraModalShell(api: CompraModalShellProps) {
                       <ShoppingCart className="h-4 w-4" /> {api.submitting ? 'Salvando...' : 'Salvar'}
                     </Button>
                   )}
+                </>
+              )}
+              {/* ── CONFIRMAR SAIU DE TRAS DO GATE DE TITULO (PR-OC-GATE-CONFIRMAR-01) ──
+                  ⚠ O BECO: o gate de `2360f183` nao previu LANCAR O FINANCEIRO ANTES DE
+                  CONFIRMAR, que e' sequencia legitima. Nesse caso ele trancava justamente
+                  a porta que faltava atravessar: a operacao nao podia confirmar (Confirmar
+                  sumia) nem editar (negociacao protegida), e ficava sem saida pela tela.
+                  Caso real: a OC 156b793b parou em 'programada' na versao 32, com cinco
+                  titulos realizados de R$ 121.220, e so saiu por chamada direta a RPC.
+                  ⚠ O BANCO SEMPRE PERMITIU. `oc_confirmar` nao menciona titulo nenhum —
+                  conferido no `prosrc`: era a TELA escondendo o que o banco aceitava.
+                  ⚠ E SEGURO porque CONFIRMAR NAO TOCA VALOR NEM LOTE: fecha a etapa
+                  comercial e mais nada. Quem protege a base economica e' o gate do
+                  Salvar, logo acima, que continua exatamente como estava.
+                  ⚠ `ocRascunho` SEGUE desabilitando: cadastro incompleto continua sendo
+                  motivo para nao confirmar, e esse gate e' de outro eixo. */}
+              {api.ocStatusComercial === 'programada' && (
+                <>
                   {/* PR-OC-EDIT-01B — desabilitado em rascunho técnico; motivo via Tooltip padrão do projeto
                       (span envolve o botão para o hover funcionar mesmo desabilitado). */}
                   <TooltipProvider>
