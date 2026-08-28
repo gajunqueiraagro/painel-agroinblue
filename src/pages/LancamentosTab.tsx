@@ -2957,9 +2957,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
     return (
       <div className="space-y-2 mb-2">
-        {/* PR-OC-ENTRYPOINT-COMPRA-01 — acesso ao wizard legado (NovaOperacaoComercialButton /
-            ModalOperacaoComercial) desconectado. O fluxo oficial de Compra é o CompraModalShell (card Compra
-            → modo OC). Componente preservado no repo, sem caller ativo. */}
+        {/* PR-OC-ENTRYPOINT-COMPRA-01 — o wizard legado de operação comercial foi desconectado
+            daqui e, em PR-OC-LIMPAR-MODAL-ORFAO-01, removido do repositório. O fluxo oficial de
+            Compra é o CompraModalShell (card Compra → modo OC). */}
         {TIPO_CARDS_GROUPS.map(g => (
           <div key={g.grupo}>
             <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">
