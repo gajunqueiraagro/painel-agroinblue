@@ -18,6 +18,8 @@ import { AbaFinanceiroOC } from './AbaFinanceiroOC';
 import type { CompraLotesApi } from '@/hooks/useCompraLotes';
 import type { RecebimentoApi } from '@/hooks/useOperacaoRecebimento';
 import type { DocumentosApi } from '@/hooks/useOperacaoDocumentos';
+import type { EventosApi } from '@/hooks/useOperacaoEventos';
+import { AbaAuditoriaOC } from './AbaAuditoriaOC';
 import type { LiquidacaoApi } from '@/hooks/useOperacaoLiquidacao';
 import { CompraResumoPanel } from './CompraResumoPanel';
 import { ResumoLateralOC } from './ResumoLateralOC';
@@ -85,6 +87,7 @@ export interface CompraModalShellProps {
   lotesApi?: CompraLotesApi;   // COM-3: estado/handlers dos lotes (só em modo OC)
   recebimentoApi?: RecebimentoApi;      // RECEB-01: recebimento por lote (só em modo OC)
   documentosApi?: DocumentosApi;        // DOC-UI-01: documentos fiscais (só em modo OC)
+  eventosApi?: EventosApi;              // AUDITORIA-01: trilha da operação (só leitura)
   liquidacaoApi?: LiquidacaoApi;        // LIQ-UI-01: obrigações e liquidação (só em modo OC)
   ocStatusComercial?: string | null;    // 'programada' | 'fechada' | 'cancelada'
   ocDataOperacao?: string | null;       // FIX-01 item 6 — data da compra (contexto da aba Financeiro nova)
@@ -121,7 +124,7 @@ const ABAS = [
   { key: 'recebimento', label: 'Recebimento', enabled: false },
   { key: 'documentos', label: 'Documentos', enabled: false },
   { key: 'financeiro', label: 'Financeiro', enabled: false },
-  { key: 'auditoria', label: 'Auditoria', enabled: false },
+  { key: 'auditoria', label: 'Auditoria', enabled: false },   // habilita no modo OC (ver `enabled` abaixo)
 ] as const;
 
 // Indicador de cenário (norma: [✓ Realizado] / [🔵 Meta], sem texto). Programado removido no PR-0C.
@@ -309,7 +312,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
       <div className="bg-card border-b px-6 py-1.5 flex items-center gap-1 overflow-x-auto">
         {ABAS.map(a => {
           // Recebimento, Documentos e Financeiro habilitam no modo OC; demais "em breve" seguem como estão.
-          const enabled = a.enabled || ((a.key === 'recebimento' || a.key === 'documentos' || a.key === 'financeiro') && !!api.modoOC);
+          const enabled = a.enabled || ((a.key === 'recebimento' || a.key === 'documentos' || a.key === 'financeiro' || a.key === 'auditoria') && !!api.modoOC);
           const active = a.key === abaAtiva && enabled;
           return (
             <button
@@ -384,6 +387,13 @@ export function CompraModalShell(api: CompraModalShellProps) {
                  verdade que envelheceria sozinha. */
               valorNegociado={api.liquidacaoApi?.valorAcordado ?? null}
               recarregarFornecedores={api.liquidacaoApi?.recarregar} />
+          ) : abaAtiva === 'auditoria' && api.eventosApi ? (
+            /* ⚠ SO LEITURA e sem `somenteLeitura`: nao ha o que bloquear — a aba nao
+               escreve nada. Os dois resolvedores de identificador vem das listas que o
+               modal JA carregou; a auditoria nao consulta nome por evento. */
+            <AbaAuditoriaOC api={api.eventosApi} operacaoPronta={!!api.ocOperacaoId}
+              fornecedores={api.liquidacaoApi?.fornecedores}
+              lotes={api.documentosApi?.lotes} />
           ) : abaAtiva === 'financeiro' && api.liquidacaoApi ? (
             <AbaFinanceiroOC
               api={api.liquidacaoApi}

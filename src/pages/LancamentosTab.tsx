@@ -39,6 +39,7 @@ import { OcRpcError, useOperacaoComercial } from '@/hooks/useOperacaoComercial';
 import { useCompraLotes } from '@/hooks/useCompraLotes';
 import { useOperacaoRecebimento } from '@/hooks/useOperacaoRecebimento';
 import { useOperacaoDocumentos } from '@/hooks/useOperacaoDocumentos';
+import { useOperacaoEventos } from '@/hooks/useOperacaoEventos';
 import { useOperacaoLiquidacao } from '@/hooks/useOperacaoLiquidacao';
 import { AbateDetalhesDialog, AbateDetalhes, EMPTY_ABATE_DETALHES } from '@/components/abate/AbateDetalhesDialog';
 import { AbateResumoPanel } from '@/components/abate/AbateResumoPanel';
@@ -367,6 +368,13 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const liquidacaoApi = useOperacaoLiquidacao({
     operacaoId: ocOperacaoId,
     clienteId: clienteAtual?.id ?? null,
+    enabled: modoOCCompra,
+  });
+  /* Trilha de auditoria — mesma vizinhanca dos demais eixos da OC, uma api por aba.
+     Nao recebe `clienteId`: a RLS de `zoo_operacao_eventos` ja recorta por tenant, e
+     repassar o cliente aqui sugeriria um filtro que o hook nao faz. */
+  const eventosApi = useOperacaoEventos({
+    operacaoId: ocOperacaoId,
     enabled: modoOCCompra,
   });
 
@@ -4017,6 +4025,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     lotesApi,
     recebimentoApi,
     documentosApi,
+    eventosApi,
     liquidacaoApi,
     ocStatusComercial,
     ocDataOperacao: data,   // FIX-01 item 6 — data da compra p/ contexto da aba Financeiro nova
