@@ -2,7 +2,11 @@ import { useMemo, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Trash2, ArrowLeft, FileText } from 'lucide-react';
+import { Plus, Trash2, ArrowLeft, FileText, Paperclip } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { NovoFornecedorDialog } from '@/components/financeiro-v2/NovoFornecedorDialog';
+import { motivoArquivoInvalido } from '@/lib/oc/caminhoDocumento';
+import { toast } from 'sonner';
 import { parseNumericValue } from '@/lib/calculos/abate';
 import type {
   DocumentosApi, EspecieDoc, NaturezaComp, DocumentoPayload, ComponentePayload,
@@ -13,8 +17,10 @@ import type {
 //   rápido na aba Recebimento. Persistência e validação ÚNICAS: sempre api.registrar/api.editar da
 //   instância única DocumentosApi. Não duplica regras, validações nem persistência.
 
-export const ESPECIE_LABEL: Record<EspecieDoc, string> = { nf_principal: 'NF principal', nf_complementar: 'NF complementar', outro: 'Outro documento' };
-const ESPECIES: EspecieDoc[] = ['nf_principal', 'nf_complementar', 'outro'];
+/* 'recibo' entrou em 20260903120000: compra de animais vem com NF OU recibo, e deixa-lo
+   em "outro" faria o balde do desconhecido virar maioria. */
+export const ESPECIE_LABEL: Record<EspecieDoc, string> = { nf_principal: 'NF principal', nf_complementar: 'NF complementar', recibo: 'Recibo', outro: 'Outro documento' };
+const ESPECIES: EspecieDoc[] = ['nf_principal', 'nf_complementar', 'recibo', 'outro'];
 const NATUREZA_LABEL: Record<NaturezaComp, string> = {
   acrescimo: 'Acréscimo', desconto_comercial: 'Desconto comercial', retencao_sem_caixa: 'Retenção (sem caixa)',
   despesa_desembolso: 'Despesa (desembolso)', informativo: 'Informativo',
@@ -32,24 +38,41 @@ export interface FormState {
   documentoId: string | null; versao: number;
   especie: EspecieDoc; numero: string; serie: string; chaveAcesso: string; dataEmissao: string;
   observacao: string; url: string; documentoOrigemId: string;
+  emitenteId: string; emitenteNome: string; emitenteDocumento: string;
   componentes: CompRow[]; loteIds: string[];
 }
 export const FORM_VAZIO: FormState = {
   documentoId: null, versao: 0, especie: 'nf_principal', numero: '', serie: '', chaveAcesso: '', dataEmissao: '',
-  observacao: '', url: '', documentoOrigemId: '', componentes: [{ tipo: 'valor_bruto', natureza: 'acrescimo', valor: '', descricao: '' }], loteIds: [],
+  observacao: '', url: '', documentoOrigemId: '',
+  emitenteId: '', emitenteNome: '', emitenteDocumento: '',
+  componentes: [{ tipo: 'valor_bruto', natureza: 'acrescimo', valor: '', descricao: '' }], loteIds: [],
 };
 
 interface Props {
   api: DocumentosApi;
   somenteLeitura?: boolean;
+  /* EMITENTE — a lista de fornecedores e a contraparte da operacao, que e' o default.
+     `onCriarFornecedor` habilita o "+", como no modal de compromisso. */
+  fornecedores?: { id: string; nome: string; cpfCnpj?: string | null }[];
+  contraparteId?: string | null;
+  onCriarFornecedor?: (nome: string, cpfCnpj: string) => Promise<{ id: string; nome: string } | null>;
   initialForm: FormState;
   hideHeader?: boolean;         // dialog fornece seu próprio título
   onSaved: () => void;          // salvar OK: aba → volta à lista; dialog → fecha e permanece no Recebimento
   onCancel: () => void;
 }
 
-export function DocumentoFormOC({ api, somenteLeitura, initialForm, hideHeader, onSaved, onCancel }: Props) {
+export function DocumentoFormOC({ api, somenteLeitura, fornecedores, contraparteId, onCriarFornecedor, initialForm, hideHeader, onSaved, onCancel }: Props) {
   const [form, setForm] = useState<FormState>(initialForm);
+  /* ⚠ O ARQUIVO NAO E' CAMPO DO FORMULARIO, e' um passo DEPOIS. Fica em estado proprio
+     porque o upload so acontece quando ja existe `documento_id` — ver o submit. */
+  const [arquivo, setArquivo] = useState<File | null>(null);
+  const [novoFornecedorOpen, setNovoFornecedorOpen] = useState(false);
+
+  /* O emitente E' A CONTRAPARTE por padrao; a divergencia e' que se declara.
+     Vazio no formulario significa "a propria contraparte", e a RPC grava NULL. */
+  const emitenteSelecionado = form.emitenteId || contraparteId || '';
+  const emitenteEhContraparte = !form.emitenteId || form.emitenteId === contraparteId;
 
   const totais = useMemo(() => {
     let acr = 0, desc = 0, ret = 0, desp = 0;
@@ -77,21 +100,57 @@ export function DocumentoFormOC({ api, somenteLeitura, initialForm, hideHeader, 
       numero: form.numero || undefined, serie: form.serie || undefined, chaveAcesso: form.chaveAcesso || undefined,
       dataEmissao: form.dataEmissao || undefined, observacao: form.observacao || undefined, url: form.url || undefined,
       documentoOrigemId: form.especie === 'nf_complementar' ? (form.documentoOrigemId || null) : null,
+      /* Sem emitente escolhido, os TRES vao nulos: "e' a propria contraparte" se diz
+         com ausencia, nao copiando o id dela para ca. Copiar criaria uma segunda
+         verdade que envelheceria sozinha. */
+      emitenteId: form.emitenteId || null,
+      emitenteNome: form.emitenteId ? (form.emitenteNome || null) : null,
+      emitenteDocumento: form.emitenteId ? (form.emitenteDocumento || null) : null,
       componentes: form.componentes
         .filter(c => c.tipo && (parseNumericValue(c.valor) || 0) >= 0 && c.valor.trim() !== '')
         .map((c, i): ComponentePayload => ({ tipo: c.tipo, natureza: c.natureza, valor: parseNumericValue(c.valor) || 0, descricao: c.descricao || undefined, ordem: i + 1 })),
       lotes: form.loteIds,
     };
-    const ok = form.documentoId
-      ? await api.editar(form.documentoId, form.versao, payload)
-      : await api.registrar(payload);
-    if (ok) onSaved();
+    /* ⚠ REGISTRAR PRIMEIRO, SUBIR DEPOIS. Subir antes deixaria arquivo ORFAO no bucket
+       se o registro falhasse — sem linha, sem dono, sem quem limpe. Nesta ordem, falha no
+       upload deixa uma LINHA SEM ARQUIVO: visivel na lista, corrigivel pelo "Anexar".
+       Lixo visivel e melhor que lixo invisivel.
+       ⚠ O documento fica gravado MESMO se o anexo falhar — por isso `onSaved()` roda nos
+       dois casos. Dizer que nao salvou seria mentira, e o usuario tentaria de novo,
+       criando um segundo documento. */
+    if (form.documentoId) {
+      const ok = await api.editar(form.documentoId, form.versao, payload);
+      if (!ok) return;
+      if (arquivo) await api.anexarArquivo(form.documentoId, form.versao + 1, arquivo);
+      onSaved();
+      return;
+    }
+    const novoId = await api.registrar(payload);
+    if (!novoId) return;
+    // Documento recem-registrado nasce na versao 1.
+    if (arquivo) await api.anexarArquivo(novoId, 1, arquivo);
+    onSaved();
   };
 
   const origensPossiveis = api.documentos.filter(d => !d.cancelado && d.documentoId !== form.documentoId);
 
+  /* Criar e' meio trabalho; o contrato e' criar E SELECIONAR — e aqui tambem levar o
+     documento, que e' o dado que a nota carrega. */
+  const dialogoNovoEmitente = onCriarFornecedor ? (
+    <NovoFornecedorDialog
+      open={novoFornecedorOpen}
+      onClose={() => setNovoFornecedorOpen(false)}
+      onSave={async (nome, cpfCnpj) => {
+        const rec = await onCriarFornecedor(nome, cpfCnpj);
+        if (rec) setForm(f => ({ ...f, emitenteId: rec.id, emitenteNome: rec.nome, emitenteDocumento: cpfCnpj || f.emitenteDocumento }));
+        setNovoFornecedorOpen(false);
+      }}
+    />
+  ) : null;
+
   return (
     <div className="rounded-md border bg-card p-2 shadow-sm space-y-2 min-w-0">
+      {dialogoNovoEmitente}
       {!hideHeader && (
         <div className="flex items-center justify-between">
           <div className="text-[12px] font-semibold text-foreground">{form.documentoId ? 'Editar documento' : 'Novo documento'}</div>
@@ -112,7 +171,63 @@ export function DocumentoFormOC({ api, somenteLeitura, initialForm, hideHeader, 
         <div><label className="text-[10px] text-muted-foreground">Série</label><Input value={form.serie} onChange={e => setForm(f => ({ ...f, serie: e.target.value }))} className="h-7 text-[11px]" /></div>
         <div><label className="text-[10px] text-muted-foreground">Emissão</label><Input type="date" value={form.dataEmissao} onChange={e => setForm(f => ({ ...f, dataEmissao: e.target.value }))} className="h-7 text-[11px]" /></div>
         <div className="lg:col-span-2"><label className="text-[10px] text-muted-foreground">Chave de acesso</label><Input value={form.chaveAcesso} onChange={e => setForm(f => ({ ...f, chaveAcesso: e.target.value }))} className="h-7 text-[11px]" /></div>
-        <div className="lg:col-span-2"><label className="text-[10px] text-muted-foreground">URL (opcional, sem upload)</label><Input value={form.url} onChange={e => setForm(f => ({ ...f, url: e.target.value }))} placeholder="https://…" className="h-7 text-[11px]" /></div>
+        {/* ── EMITENTE ─────────────────────────────────────────────────────────
+            Quem ASSINOU a nota, que nem sempre e quem negociou. Caso real: a
+            contraparte intermediou e a nota veio de outra pessoa. Importa alem da
+            organizacao — no LCDPR e no Lucro Rural vale o emitente.
+            Vazio = a propria contraparte, e a RPC grava NULL. */}
+        <div className="lg:col-span-2">
+          <Label className="text-[10px] text-muted-foreground">Emitente da nota</Label>
+          <div className="flex items-center gap-1">
+            <div className="flex-1 min-w-0">
+              <Select value={form.emitenteId || '__contraparte__'}
+                onValueChange={v => setForm(f => ({
+                  ...f,
+                  emitenteId: v === '__contraparte__' ? '' : v,
+                  emitenteNome: v === '__contraparte__' ? '' : (fornecedores?.find(x => x.id === v)?.nome ?? ''),
+                  emitenteDocumento: v === '__contraparte__' ? '' : (fornecedores?.find(x => x.id === v)?.cpfCnpj ?? ''),
+                }))}
+                disabled={somenteLeitura}>
+                <SelectTrigger className="h-7 text-[11px]"><SelectValue /></SelectTrigger>
+                <SelectContent className="max-h-[50vh]">
+                  <SelectItem value="__contraparte__" className="text-[11px]">Mesmo da operação</SelectItem>
+                  {(fornecedores ?? []).map(f => <SelectItem key={f.id} value={f.id} className="text-[11px]">{f.nome}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            {onCriarFornecedor && !somenteLeitura && (
+              <Button type="button" variant="outline" size="icon" className="h-7 w-7 shrink-0"
+                aria-label="Novo emitente" title="Cadastrar emitente" onClick={() => setNovoFornecedorOpen(true)}>
+                <Plus className="h-3 w-3" />
+              </Button>
+            )}
+          </div>
+          {!emitenteEhContraparte && (
+            <Input value={form.emitenteDocumento} onChange={e => setForm(f => ({ ...f, emitenteDocumento: e.target.value }))}
+              placeholder="CNPJ/CPF impresso na nota" disabled={somenteLeitura} className="h-7 text-[11px] mt-1" />
+          )}
+        </div>
+
+        {/* ── ARQUIVO ──────────────────────────────────────────────────────────
+            O formato e o tamanho sao conferidos AQUI, antes de sair da maquina: o
+            bucket devolveria o mesmo "nao" depois de subir dez megabytes. */}
+        <div className="lg:col-span-2">
+          <Label className="text-[10px] text-muted-foreground">Arquivo (PDF, JPG ou PNG · até 10 MB)</Label>
+          <Input type="file" accept="application/pdf,image/jpeg,image/png" disabled={somenteLeitura}
+            onChange={e => {
+              const f = e.target.files?.[0] ?? null;
+              if (!f) { setArquivo(null); return; }
+              const invalido = motivoArquivoInvalido(f);
+              if (invalido) { toast.error(invalido); e.target.value = ''; setArquivo(null); return; }
+              setArquivo(f);
+            }}
+            className="h-7 text-[11px] file:text-[11px]" />
+          {form.url && !arquivo && (
+            <div className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1">
+              <Paperclip className="h-3 w-3" /> Já há um arquivo anexado. Escolher outro substitui.
+            </div>
+          )}
+        </div>
         {form.especie === 'nf_complementar' && (
           <div className="lg:col-span-2">
             <label className="text-[10px] text-muted-foreground">Documento de origem</label>

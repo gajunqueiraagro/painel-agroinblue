@@ -212,7 +212,13 @@ export function CompraModalShell(api: CompraModalShellProps) {
     //   encerrada) já são aplicadas dentro de AbaRecebimentoLotes; título materializado NÃO bloqueia a
     //   chegada física. Não reusa aberturaExistente/somenteLeitura/ocTemTitulo.
     recebimentoReadOnly: api.ocStatusComercial === 'cancelada',
-    documentosReadOnly: somenteLeituraDownstream,          // A3 fará o mesmo desacoplamento p/ Documentos
+    /* PR-OC-DOCUMENTOS-02 — DESACOPLADO (o "A3" que o comentario antigo prometia).
+       O banco nao bloqueia documento em operacao fechada: `oc_documento_registrar` recusa
+       so `cancelada`, e o teste da FASE 1 registrou a NF na OC f6d3e180, que ESTA fechada.
+       Manter a tela travada era a tela sendo mais rigorosa que a regra — e a nota chega
+       DEPOIS do fechamento, que e' justamente quando se precisa anexar.
+       Mesmo eixo de `dadosOperacaoReadOnly`. */
+    documentosReadOnly: api.ocStatusComercial === 'cancelada',
     financeiroLegadoReadOnly: somenteLeituraDownstream,
     financeiroNovoReadOnly: api.ocRascunho === true || api.ocStatusComercial === 'cancelada',
   };
@@ -365,7 +371,14 @@ export function CompraModalShell(api: CompraModalShellProps) {
               onVoltarNegociacao={() => irParaAba('negociacao')}
             />
           ) : abaAtiva === 'documentos' && api.documentosApi ? (
-            <AbaDocumentosOC api={api.documentosApi} operacaoPronta={!!api.ocOperacaoId} somenteLeitura={permissoes.documentosReadOnly} />
+            <AbaDocumentosOC api={api.documentosApi} operacaoPronta={!!api.ocOperacaoId}
+              somenteLeitura={permissoes.documentosReadOnly}
+              /* Mesma fonte de fornecedores da aba Financeiro (liquidacaoApi), com o
+                 mesmo `recarregar` — nao ha segunda lista nem segundo cadastro. */
+              fornecedores={api.liquidacaoApi?.fornecedores}
+              contraparteId={api.compraFornecedorId || null}
+              clienteId={api.liquidacaoApi?.clienteId ?? null}
+              recarregarFornecedores={api.liquidacaoApi?.recarregar} />
           ) : abaAtiva === 'financeiro' && api.liquidacaoApi ? (
             <AbaFinanceiroOC
               api={api.liquidacaoApi}
