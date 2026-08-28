@@ -403,10 +403,28 @@ export default function V2Index() {
   // navigate, sem URL. Section + abaInicial + setZooEditId(...) — o mount
   // soberano <LancamentoZooModal> reabre direto no mesmo lançamento de origem
   // e na aba "Custos" (ou outra que o caller tenha pedido).
-  const retornarAoZoo = (ret: { zooId: string; tab: 'dados' | 'custos' | 'itens' | 'auditoria'; section: V2Section }) => {
-    setSection(ret.section);
-    setZooAbaInicial(ret.tab);
-    setZooEditId(ret.zooId);
+  /* ⚠ UM ESTADO, DOIS DESTINOS — e' UNIAO DISCRIMINADA, nao um objeto com campos
+     opcionais. O `tab` e' tipado POR DESTINO: o Zoo nao aceita 'financeiro' e a OC nao
+     aceita 'custos'. E' o TIPO que protege o drill do Zoo, nao a separacao em dois
+     estados — um `ocReturn` irmao seria a terceira copia da mesma regra, e copia e' o
+     que ja produziu dois defeitos nesta base (a paginacao de fornecedores corrigida num
+     arquivo e esquecida no outro; o `principal/principal` corrigido na coluna e
+     esquecido no cabecalho). Quem acrescentar um terceiro destino mexe AQUI e o
+     compilador cobra os dois pontos de uso. */
+  type DrillReturn =
+    | { destino: 'zoo'; id: string; tab: 'dados' | 'custos' | 'itens' | 'auditoria'; section: V2Section }
+    | { destino: 'oc'; id: string; tab: 'financeiro' };
+
+  const retornarDoDrill = (ret: DrillReturn) => {
+    if (ret.destino === 'zoo') {
+      setSection(ret.section);
+      setZooAbaInicial(ret.tab);
+      setZooEditId(ret.id);
+      return;
+    }
+    /* OC: `abrirOperacaoOC` ja sabe recompor a URL (oc_compra + oc_id + oc_aba) e trocar
+       a secao. Reusar em vez de reescrever — e' a mesma funcao que a Central usa. */
+    abrirOperacaoOC(ret.id, ret.tab);
   };
 
   const [searchParams, setSearchParams] = useSearchParams();
@@ -511,11 +529,7 @@ export default function V2Index() {
   // junto do flancId (mesmo gesto de drill). Consumido por FinanceiroV2Tab
   // onCloseDialog: V2Index decide reabrir o Zoo no `zooId` informado e na
   // aba `tab` informada. Estado puro — sem segundo navigate.
-  const [drillReturn, setDrillReturn] = useState<{
-    zooId: string;
-    tab: 'dados' | 'custos' | 'itens' | 'auditoria';
-    section: V2Section;
-  } | null>(null);
+  const [drillReturn, setDrillReturn] = useState<DrillReturn | null>(null);
   useEffect(() => {
     const fl = searchParams.get('flancId');
     if (fl) {
@@ -535,14 +549,22 @@ export default function V2Index() {
         rawTab === 'dados' || rawTab === 'custos' || rawTab === 'itens' || rawTab === 'auditoria'
           ? rawTab
           : 'custos';
+      /* Dois destinos, UM ponto de captura. `returnOcId` chega do Editar da Programacao
+         da OC; `returnZooId` do drill zootecnico. O Zoo tem precedencia so por ser o
+         caminho antigo — na pratica os dois nunca chegam juntos, porque partem de telas
+         diferentes. A OC nao carrega `section`: `abrirOperacaoOC` ja troca a secao. */
+      const rocId = searchParams.get('returnOcId');
       if (rzId) {
-        setDrillReturn({ zooId: rzId, tab: rzTab, section: origemSection });
+        setDrillReturn({ destino: 'zoo', id: rzId, tab: rzTab, section: origemSection });
+      } else if (rocId) {
+        setDrillReturn({ destino: 'oc', id: rocId, tab: 'financeiro' });
       }
       const next = new URLSearchParams(searchParams);
       next.delete('flancId');
       next.delete('ocfin');
       next.delete('returnZooId');
       next.delete('returnZooTab');
+      next.delete('returnOcId');
       setSearchParams(next, { replace: true });
     }
   }, [searchParams, setSearchParams]);
@@ -896,7 +918,7 @@ export default function V2Index() {
         onLancamentoAlvoConsumido={() => { setFlancIdAlvo(null); setFlancOcEdit(false); }}
         onCloseDialog={() => {
           if (drillReturn) {
-            retornarAoZoo(drillReturn);
+            retornarDoDrill(drillReturn);
             setDrillReturn(null);
           }
         }}

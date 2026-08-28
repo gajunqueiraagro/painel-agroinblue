@@ -289,10 +289,20 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
   // Editar o título vinculado à parcela materializada: reutiliza o modal oficial do Financeiro V2
   // via o fluxo existente ?flancId={tituloId} (V2Index consome, troca de seção e abre o modal com a
   // proteção OC — valor/classificação/favorecido/vencimento seguem travados). Sem modal/RPC/writer novo.
+  /* ⚠ ESTA IDA APAGA `oc_compra` e `oc_id` — e' a identidade da OC morrendo aqui, nao no
+     fechamento do modal. Sem deixar endereco, o Editar era o unico drill da base que saia
+     sem dizer de onde veio: salvar, X ou clicar fora largavam o usuario no Financeiro e
+     ele refazia o caminho inteiro para reabrir a operacao.
+     `returnOcId` e' o espelho de `returnZooId` (PR-B1-R2): mesmo gesto, mesmo useEffect
+     do outro lado, mesmo estado `drillReturn`. Nao inventa convencao nova — usa a que ja
+     existia e que so a OC nao usava. */
   const editarTitulo = (tituloId: string) => {
     const next = new URLSearchParams(searchParams);
     next.set('flancId', tituloId);
     next.set('ocfin', '1');   // PR-OC-FIN-EDIT-FIX-02 — contexto OC: libera edição de favorecido no título
+    const ocId = resumoOperacao?.operacaoId ?? null;
+    // Sem id nao ha para onde voltar: melhor nao prometer retorno do que prometer errado.
+    if (ocId) next.set('returnOcId', ocId); else next.delete('returnOcId');
     next.delete('oc_compra');
     next.delete('oc_id');
     setSearchParams(next, { replace: true });
