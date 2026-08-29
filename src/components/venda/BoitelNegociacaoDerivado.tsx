@@ -130,6 +130,10 @@ export function derivadosBoitel(data: BoitelEdicao) {
   if (mc === 'parceria') { pArr = aP * (pp / 100); pParte = pArr * pva; rProd = fLiq - pParte; }
   const rLiq = rProd - cOp;
   const rLCab = q > 0 ? rLiq / q : 0;
+  /* ⚠ VOLTOU DO SIMULADOR, verbatim (`BoitelPlanningDialog.tsx:117`). Saiu no 01A entre
+     as nove linhas que o painel de então não mostrava; o painel de resultado de
+     PR-BOITEL-ACORDEAO-01 mostra "Custo da arroba", e ele é este. */
+  const cPArr = aP > 0 ? cOp / aP : 0;
   const custoTotalBoitel = cDT + cs + oc;
   const margemVenda = fba > 0 ? ((fba - cOp) / fba * 100) : 0;
 
@@ -146,7 +150,7 @@ export function derivadosBoitel(data: BoitelEdicao) {
     : 0;
   const saldoReceberBase = Math.round((fba - custoTotalBoitel - cAb + valorTotalAntecipadoCalc) * 100) / 100;
 
-  return { ple, ganho, pf, aEF, aS, aPcab, aP, aTS, sairam, gmc, fba, cAb, fLiq, cDT, cOp, coT,
+  return { ple, ganho, pf, aEF, aS, aPcab, aP, aTS, sairam, gmc, fba, cAb, fLiq, cDT, cOp, coT, cPArr,
     pParte, rProd, rLiq, rLCab, custoTotalBoitel, margemVenda,
     valorAdiantamentoDiariasCalc, valorTotalAntecipadoCalc, saldoReceberBase };
 }
@@ -203,8 +207,73 @@ function TituloGrupo({ children }: { children: React.ReactNode }) {
   );
 }
 
-/* ─── PAINEL DE RESULTADO ──────────────────────────────────────────────────────
-   240px, dois grupos: Indicadores e Operação. */
+/* ─── PAINEL DE RESULTADO — a coluna da direita ────────────────────────────────
+   PR-BOITEL-ACORDEAO-01. Quatro números, e a razão de serem quatro: o operador mexe na
+   diária olhando a margem. O que não é decisão fica de fora — memória de cálculo é o que
+   o `BoitelPainelResultado` abaixo mostra.
+   ⚠ RECALCULA A CADA TECLA, e é isso que faz o redesenho valer. Nada aqui é memoizado
+   contra o valor digitado de propósito.
+   ⚠ TRAVESSAO, NUNCA ZERO: sem dado que sustente a conta, o número não aparece. */
+export function BoitelResultadoCompacto({ boitelData }: { boitelData: BoitelEdicao | null }) {
+  const faltas = useMemo(() => boitelData ? exigencias(boitelData).filter(e => !e.presente) : [], [boitelData]);
+  const d = useMemo(() => boitelData ? derivadosBoitel(boitelData) : null, [boitelData]);
+  const pronto = !!d && faltas.length === 0;
+
+  /* A margem por cabeça é `rLCab` — o resultado líquido dividido pelo lote inteiro.
+     ⚠ O DENOMINADOR NAO ENCOLHE com morte: ver a nota em `derivadosBoitel`. */
+  const margem = pronto ? d.rLCab : null;
+
+  return (
+    <aside className="bg-card rounded-md border shadow-sm p-3 self-start">
+      <div className="text-[11px] font-medium text-muted-foreground leading-none">RESULTADO</div>
+
+      <div className="mt-2.5">
+        <div className="text-[11px] text-muted-foreground leading-none">Margem por cabeça</div>
+        <div className={`mt-1 text-[20px] font-medium leading-none tabular-nums ${
+          margem == null ? 'text-muted-foreground font-normal'
+          : margem >= 0 ? 'text-emerald-600' : 'text-destructive'}`}>
+          {margem == null ? '—' : formatMoeda(margem)}
+        </div>
+      </div>
+
+      <div className="mt-3 space-y-1.5">
+        <LinhaResultado rotulo="Peso de saída"      valor={pronto ? formatKg(d.pf) : null} />
+        <LinhaResultado rotulo="Arrobas produzidas" valor={pronto ? `${formatArroba(d.aPcab)}/cab` : null} />
+        <LinhaResultado rotulo="Custo da arroba"    valor={pronto ? formatMoeda(d.cPArr) : null} />
+      </div>
+
+      {/* ⚠ O QUE FALTA NAO SE REPETE AQUI. A pendência mora na LINHA FECHADA de cada
+          bloco, em âmbar, que é onde o operador pode resolvê-la. Dizer duas vezes faria
+          o painel competir com o acordeão pela mesma informação. Só o caso extremo —
+          nenhum planejamento — precisa de frase, porque aí não há linha a olhar. */}
+      {!boitelData && (
+        <p className="mt-3 text-[10px] text-muted-foreground leading-snug">
+          Sem planejamento gravado nesta venda.
+        </p>
+      )}
+    </aside>
+  );
+}
+
+/** Par rótulo-valor do painel — A17, com a hierarquia do mockup: rótulo 11px, valor 15px. */
+function LinhaResultado({ rotulo, valor }: { rotulo: string; valor: string | null }) {
+  return (
+    <div className="flex items-baseline justify-between gap-2 leading-tight">
+      <span className="text-[11px] text-muted-foreground shrink-0">{rotulo}</span>
+      <span className={`text-[15px] font-medium tabular-nums text-right truncate ${valor ? '' : 'text-muted-foreground font-normal'}`}>
+        {valor ?? '—'}
+      </span>
+    </div>
+  );
+}
+
+/* ─── O RESULTADO INTEIRO ──────────────────────────────────────────────────────
+   240px, dois grupos: Indicadores e Operação.
+   ⚠ FORA DA TELA DESDE PR-BOITEL-ACORDEAO-01, e de propósito: a coluna da direita passou
+   a mostrar os quatro números de decisão, e este é a memória de cálculo. Ele NAO é órfão
+   por acidente — é a peça que `PR-OC-VENDA-BOITEL-RESUMO-MODAL-01` vai abrir num modal,
+   para print e para mandar aos responsáveis. Se aquele PR morrer, este componente sai
+   junto. */
 export function BoitelPainelResultado({ boitelData }: { boitelData: BoitelEdicao | null }) {
   const faltas = useMemo(() => boitelData ? exigencias(boitelData).filter(e => !e.presente) : [], [boitelData]);
   const d = useMemo(() => boitelData ? derivadosBoitel(boitelData) : null, [boitelData]);

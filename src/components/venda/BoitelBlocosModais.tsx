@@ -7,7 +7,14 @@
  * RPC `oc_salvar_boitel` (aa4f2630); esta tela repete o AVISO para o operador não
  * descobrir o impedimento só no fim — a lição do peso da morte, em 45a7352b.
  *
- * ⚠ NÃO GRAVA. Os quatro modais editam o objeto em memória e devolvem ao pai. Quem
+ * ⚠ ACORDEAO, E NAO MODAIS — PR-BOITEL-ACORDEAO-01. Os quatro blocos nasceram como
+ * botões que abriam um Dialog cada, com um estado `aberto` de valor único: um por vez,
+ * por construção. O defeito não era de código, era de desenho. O boitel é SIMULAÇÃO — o
+ * operador mexe na diária olhando a margem, mexe no GMD olhando o custo —, e o modal
+ * escondia três blocos enquanto se editava um. Agora os campos abrem NA PRÓPRIA SEÇÃO, e
+ * o estado é um `Set`: quantos blocos o operador quiser, ao mesmo tempo.
+ *
+ * ⚠ NÃO GRAVA. As quatro seções editam o objeto em memória e devolvem ao pai. Quem
  * persiste é o botão da venda, numa chamada só — o padrão de `oc_salvar_lotes`, e a
  * mesma forma que o simulador antigo já tem (`handleSave` devolve ao pai, não ao banco).
  *
@@ -17,13 +24,12 @@
  * (dinheiro sempre formatado), A20 (DatePicker, nunca `input type=date`).
  */
 import { useMemo, useState } from 'react';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DatePicker } from '@/components/ui/date-picker';
-import { ChevronRight, X } from 'lucide-react';
+import { ChevronRight, ChevronDown } from 'lucide-react';
 import { formatMoeda, formatKg, formatArroba } from '@/lib/calculos/formatters';
 import type { BoitelData } from '@/components/BoitelPlanningDialog';
 import { derivadosBoitel, cabecasQueSairam, type BoitelEdicao } from '@/components/venda/BoitelNegociacaoDerivado';
@@ -181,71 +187,30 @@ function CampoNum({ label, valor, onChange, casas = 2, sufixo, obrigatorio, deri
   );
 }
 
-/** A casca dos quatro modais: cabeçalho azul, corpo, e o número que o bloco produz. */
-function ModalBloco({ open, onOpenChange, titulo, contexto, children, rodape }: {
-  open: boolean; onOpenChange: (v: boolean) => void; titulo: string;
-  contexto: React.ReactNode; children: React.ReactNode; rodape: React.ReactNode;
+/* ─── A SECAO DO ACORDEAO ──────────────────────────────────────────────────────
+   FECHADA: uma linha — seta, nome e o resumo à direita. O resumo diz o conteúdo sem
+   abrir, e é a mesma informação que os botões antigos já mostravam.
+   ⚠ PENDENCIA EM AMBAR NA LINHA FECHADA. O operador vê o que falta sem abrir nada, e é
+   melhor que o painel dizer: aqui ele está a um clique de resolver. */
+function SecaoAcordeao({ titulo, resumo, pendente, aberta, onToggle, children }: {
+  titulo: string; resumo: string; pendente?: boolean; aberta: boolean;
+  onToggle: () => void; children: React.ReactNode;
 }) {
+  const Seta = aberta ? ChevronDown : ChevronRight;
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl p-0 gap-0 overflow-hidden [&>button.absolute]:hidden">
-        <div className="bg-primary text-primary-foreground px-4 py-2.5 flex items-start justify-between">
-          <div className="min-w-0">
-            <h3 className="text-[15px] font-bold leading-tight">{titulo}</h3>
-            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-white/80 tabular-nums">
-              {contexto}
-            </div>
-          </div>
-          <button type="button" onClick={() => onOpenChange(false)}
-            className="text-white/80 hover:text-white shrink-0" title="Fechar" aria-label="Fechar">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-        <div className="p-4 space-y-3 bg-muted/30">
-          {children}
-          {/* RODAPÉ DO CORPO — o número que este bloco produz. */}
-          <div className="rounded-md border bg-card px-3 py-2 shadow-sm flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-            {rodape}
-          </div>
-        </div>
-        <div className="bg-card border-t px-4 py-2 flex justify-end">
-          <Button type="button" size="sm" onClick={() => onOpenChange(false)} className="h-8 text-[12px]">
-            Concluir
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-/** Par rótulo-valor do rodapé — A17. */
-function Produz({ rotulo, valor }: { rotulo: string; valor: string | null }) {
-  return (
-    <div className="flex items-baseline gap-2">
-      <span className="text-[10px] text-muted-foreground">{rotulo}</span>
-      <span className={`text-[13px] font-bold tabular-nums ${valor ? '' : 'text-muted-foreground font-normal'}`}>
-        {valor ?? '—'}
-      </span>
+    <div className="rounded-md border bg-card overflow-hidden">
+      <button type="button" onClick={onToggle}
+        className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors ${
+          aberta ? 'bg-muted/40' : 'hover:bg-muted/25'}`}>
+        <Seta className="h-3 w-3 text-muted-foreground shrink-0" />
+        <span className="text-[12px] font-medium shrink-0">{titulo}</span>
+        <span className={`ml-auto text-[11px] tabular-nums text-right truncate ${
+          pendente ? 'text-amber-700' : 'text-muted-foreground'}`}>
+          {resumo}
+        </span>
+      </button>
+      {aberta && <div className="px-3 py-2.5 border-t">{children}</div>}
     </div>
-  );
-}
-
-/** Um dos quatro blocos clicáveis — A18, duas alturas. */
-function BlocoClicavel({ identidade, contexto, numero, onClick, desabilitado }: {
-  identidade: string; contexto: string; numero: string | null; onClick: () => void; desabilitado?: boolean;
-}) {
-  return (
-    <button type="button" onClick={onClick} disabled={desabilitado}
-      className="w-full text-left rounded-md border bg-card px-3 py-2 shadow-sm transition-colors hover:bg-muted/50 disabled:opacity-60 disabled:hover:bg-card flex items-center gap-2">
-      <div className="min-w-0 flex-1">
-        <div className="text-[12px] font-medium leading-tight">{identidade}</div>
-        <div className="text-[10px] text-muted-foreground leading-tight truncate">{contexto}</div>
-      </div>
-      <div className={`text-[12px] font-medium tabular-nums shrink-0 ${numero ? '' : 'text-muted-foreground font-normal'}`}>
-        {numero ?? '—'}
-      </div>
-      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-    </button>
   );
 }
 
@@ -259,7 +224,6 @@ const porCabeca = (total: number, qtd: number) => qtd > 0 && total > 0 ? `${form
 export function BoitelBlocosModais({ valor, onChange, somenteLeitura }: {
   valor: BoitelEdicao; onChange: (proximo: BoitelEdicao) => void; somenteLeitura?: boolean;
 }) {
-  const [aberto, setAberto] = useState<null | 'desempenho' | 'custos' | 'comercializacao' | 'adiantamento'>(null);
   const d = valor;
   const set = <K extends keyof BoitelEdicao>(k: K, v: BoitelEdicao[K]) => onChange({ ...d, [k]: v });
 
@@ -270,104 +234,62 @@ export function BoitelBlocosModais({ valor, onChange, somenteLeitura }: {
   const custoTotal = custoTotalDoBoitel(d);
   const fatBruto = der.fba;
   const antecipado = antecipadoTotal(d);
-
   const temDesempenho = d.dias > 0 && d.gmd > 0 && d.rendimento > 0;
-  const abrir = (q: typeof aberto) => () => { if (!somenteLeitura) setAberto(q); };
 
-  return (
-    <div className="space-y-1.5 min-w-0">
-      <BlocoClicavel
-        identidade="Desempenho"
-        contexto={temDesempenho
-          ? `GMD ${n3(d.gmd)} kg · ${d.dias} dias · rend. saída ${n2(d.rendimento)}%`
-          : 'GMD, dias e rendimento de saída — não informados'}
-        numero={temDesempenho ? formatArroba(der.aPcab) + '/cab' : null}
-        onClick={abrir('desempenho')} desabilitado={somenteLeitura}
-      />
-      <BlocoClicavel
-        identidade="Custos"
-        contexto={diarias > 0 || custoTotal > 0
-          /* ⚠ O FRETE NÃO APARECE AQUI porque não entra no número à direita. Listar um
-             componente que a soma não usa faria a linha mentir. */
-          ? `Diárias ${formatMoeda(diarias)} · nutrição ${formatMoeda(d.custoNutricao)} · sanidade ${formatMoeda(d.custoSanidade)} · outros ${formatMoeda(d.outrosCustos)}`
-          : 'Diária, nutrição, sanidade, frete e outros — não informados'}
-        numero={custoTotal > 0 ? formatMoeda(custoTotal) : null}
-        onClick={abrir('custos')} desabilitado={somenteLeitura}
-      />
-      <BlocoClicavel
-        identidade="Comercialização"
-        contexto={d.precoVendaArroba > 0
-          ? `${formatMoeda(d.precoVendaArroba)}/@ · despesas de abate ${formatMoeda(d.despesasAbate)}`
-          : 'Preço da @ e despesas de abate — não informados'}
-        numero={fatBruto > 0 ? formatMoeda(fatBruto) : null}
-        onClick={abrir('comercializacao')} desabilitado={somenteLeitura}
-      />
-      <BlocoClicavel
-        identidade="Adiantamento"
-        contexto={d.possuiAdiantamento
-          ? (d.dataAdiantamento ? `Adiantado em ${d.dataAdiantamento.split('-').reverse().join('/')}` : 'Adiantamento sem data informada')
-          : 'Não informado'}
-        numero={d.possuiAdiantamento && antecipado > 0 ? formatMoeda(antecipado) : null}
-        onClick={abrir('adiantamento')} desabilitado={somenteLeitura}
-      />
+  /* O RESUMO DA LINHA FECHADA — o mesmo conteúdo que os botões antigos mostravam.
+     `pendente` marca a linha em âmbar e é o que decide qual seção abre sozinha. */
+  const secoes = [
+    { id: 'desempenho' as const, titulo: 'Desempenho',
+      pendente: !temDesempenho,
+      resumo: temDesempenho
+        ? `GMD ${n3(d.gmd)} · ${d.dias} dias · RC ${n2(d.rendimento)}%`
+        : 'GMD, dias e rendimento de saída pendentes' },
+    { id: 'custos' as const, titulo: 'Custos',
+      pendente: !(d.custoDiaria > 0),
+      resumo: d.custoDiaria > 0
+        ? `${qtd > 0 && custoTotal > 0 ? formatMoeda(custoTotal / qtd) + '/cab · ' : ''}diária ${formatMoeda(d.custoDiaria)}`
+        : 'diária pendente' },
+    /* ⚠ O RESUMO MOSTRA O QUE O BLOCO PRODUZ, e não só o que ele consome. Ele exibia
+       preço e despesas — os dois insumos — e escondia o faturamento, que é o número que
+       sai daqui. As despesas saíram para o faturamento caber: elas não entram no bruto
+       (são subtraídas no líquido), então listá-las ao lado dele confundiria as duas contas.
+       ⚠ A UNIDADE E R$/@, e não R$/kg: no boitel se vende arroba de carcaça. */
+    { id: 'comercializacao' as const, titulo: 'Comercialização',
+      pendente: !(d.precoVendaArroba > 0),
+      resumo: d.precoVendaArroba > 0
+        ? `${formatMoeda(d.precoVendaArroba)}/@${fatBruto > 0 ? ` · fatura ${formatMoeda(fatBruto)}` : ''}`
+        : 'preço de venda pendente' },
+    /* ⚠ O ADIANTAMENTO NAO TEM OBRIGATORIO, então nunca fica âmbar: "não informado" aqui
+       é resposta, e não pendência. */
+    { id: 'adiantamento' as const, titulo: 'Adiantamento',
+      pendente: false,
+      resumo: d.possuiAdiantamento && antecipado > 0 ? formatMoeda(antecipado) : 'não informado' },
+  ];
 
-      {/* ⚠ O CUSTO DE OPORTUNIDADE SAIU DO MODAL DE CUSTOS e ficou aqui, na aba, como
-          campo opcional — decisao do Gabriel. E o unico campo de entrada que NAO esta'
-          dentro de um modal, e por uma razao de natureza: ele nao e' um custo que o
-          boitel cobra, e' o que o capital renderia noutro lugar. Somar com diaria e frete
-          misturaria desembolso com comparacao.
-          A unidade e' R$/kg de peso de saida da fazenda — `coT = co x peso x cabecas`,
-          como no simulador antigo ("Custo oport. R$/kg").
-          ⚠ FICA NA COLUNA DA ESQUERDA, e nao junto do painel que o consome — considerado e
-          recusado em PR-OC-VENDA-BOITEL-ORDEM-NEGOCIACAO-01. Neste shell a coluna da
-          direita e' SO' LEITURA: o resumo da operacao e o resultado do boitel nao tem um
-          unico campo. Por na' um input, ainda que o unico usuario do valor esteja la',
-          quebraria a regra que a tela ensina em toda aba. Ele fica por ULTIMO na esquerda,
-          que e' o mais perto do painel que da' sem misturar as duas naturezas. */}
-      <div className="rounded-md border bg-card px-3 py-2 shadow-sm flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
-        <div className="min-w-0 w-44">
-          <CampoNum label="Custo de oportunidade" valor={d.custoOportunidade}
-            onChange={v => set('custoOportunidade', v)} sufixo="R$/kg" desabilitado={somenteLeitura} />
-        </div>
-        <div className="flex items-baseline gap-2 pb-2">
-          <span className="text-[10px] text-muted-foreground">No lote</span>
-          <span className={`text-[12px] font-medium tabular-nums ${der.coT > 0 ? '' : 'text-muted-foreground font-normal'}`}>
-            {der.coT > 0 ? formatMoeda(der.coT) : '—'}
-          </span>
-        </div>
-      </div>
+  /* ⚠ UM `Set`, E NAO UM VALOR UNICO. É o ponto do redesenho: Desempenho e Custos abertos
+     juntos, para mexer no GMD olhando o custo.
+     ⚠ TODOS FECHADOS, exceto o PRIMEIRO pendente — que abre sozinho, porque é onde o
+     operador tem de agir. Calculado uma vez, no `useState` inicial: recalcular a cada
+     render fecharia a seção no instante em que ele preenchesse o campo. */
+  const [abertas, setAbertas] = useState<Set<string>>(() => {
+    const primeiroPendente = secoes.find(x => x.pendente);
+    return new Set(primeiroPendente ? [primeiroPendente.id] : []);
+  });
+  const alternar = (id: string) => setAbertas(prev => {
+    const proximo = new Set(prev);
+    if (proximo.has(id)) proximo.delete(id); else proximo.add(id);
+    return proximo;
+  });
 
-      {/* ── DESEMPENHO ───────────────────────────────────────────────────────── */}
-      <ModalBloco open={aberto === 'desempenho'} onOpenChange={v => setAberto(v ? 'desempenho' : null)}
-        titulo="Desempenho"
-        contexto={<>
-          <span>{qtd > 0 ? `${qtd} cabeças` : 'cabeças —'}</span>
-          <span>{d.pesoInicial > 0 ? `saída da fazenda ${formatKg(d.pesoInicial)}` : 'peso de saída —'}</span>
-        </>}
-        rodape={<>
-          <Produz rotulo="GMC (ganho médio de carcaça)" valor={temDesempenho ? `${n3(der.gmc)} kg/dia` : null} />
-          <Produz rotulo="Arrobas produzidas por cabeça" valor={temDesempenho ? formatArroba(der.aPcab) : null} />
-        </>}
-      >
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3">
+  const corpos: Record<string, React.ReactNode> = {
+    desempenho: (<><div className="grid grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3">
           <CampoNum label="Dias de confinamento" valor={d.dias} onChange={v => set('dias', v)} casas={0} obrigatorio />
           <CampoNum label="GMD" valor={d.gmd} onChange={v => set('gmd', v)} casas={3} sufixo="kg/dia" obrigatorio />
           <CampoNum label="Quebra de viagem" valor={d.quebraViagem} onChange={v => set('quebraViagem', v)} sufixo="%" />
           <CampoNum label="Rendimento de entrada" valor={d.rendimentoEntrada} onChange={v => set('rendimentoEntrada', v)} sufixo="%" />
           <CampoNum label="Rendimento de saída" valor={d.rendimento} onChange={v => set('rendimento', v)} sufixo="%" obrigatorio />
-        </div>
-      </ModalBloco>
-
-      {/* ── CUSTOS ───────────────────────────────────────────────────────────── */}
-      <ModalBloco open={aberto === 'custos'} onOpenChange={v => setAberto(v ? 'custos' : null)}
-        titulo="Custos"
-        contexto={<>
-          <span>{d.dias > 0 ? `${d.dias} dias` : 'dias —'}</span>
-          <span>{qtd > 0 ? `${qtd} cabeças` : 'cabeças —'}</span>
-        </>}
-        rodape={<Produz rotulo="Custo total do boitel" valor={custoTotal > 0 ? formatMoeda(custoTotal) : null} />}
-      >
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3 items-start">
+        </div></>),
+    custos: (<><div className="grid grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3 items-start">
           <div className="min-w-0">
             <Label className="text-[10px] text-muted-foreground">Modalidade <span className="text-destructive">*</span></Label>
             <Select value="diaria" onValueChange={() => { /* só diária — ver os itens desabilitados */ }}>
@@ -415,16 +337,8 @@ export function BoitelBlocosModais({ valor, onChange, somenteLeitura }: {
             parceria somam numa obrigação chamada "Outros Custos". Ver useBoitelOperacoes.ts. */}
         <p className="text-[10px] text-muted-foreground">
           Nutrição e Outros são somados numa única obrigação, “Outros Custos”, no financeiro.
-        </p>
-      </ModalBloco>
-
-      {/* ── COMERCIALIZAÇÃO ──────────────────────────────────────────────────── */}
-      <ModalBloco open={aberto === 'comercializacao'} onOpenChange={v => setAberto(v ? 'comercializacao' : null)}
-        titulo="Comercialização"
-        contexto={<span>{temDesempenho && qtd > 0 ? `${formatArroba(der.aTS)} de carcaça na saída` : 'arrobas de carcaça —'}</span>}
-        rodape={<Produz rotulo="Faturamento bruto" valor={fatBruto > 0 ? formatMoeda(fatBruto) : null} />}
-      >
-        <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+        </p></>),
+    comercializacao: (<><div className="grid grid-cols-2 gap-x-4 gap-y-3">
           <CampoNum label="Preço de venda" valor={d.precoVendaArroba} onChange={v => set('precoVendaArroba', v)} sufixo="R$/@" obrigatorio />
           {/* ⚠ TOTAL, não por cabeça. Medido no acerto real: DAEMS/GTA de R$ 4.514,57
               contra faturamento de R$ 813 mil. */}
@@ -447,19 +361,8 @@ export function BoitelBlocosModais({ valor, onChange, somenteLeitura }: {
             A indenização soma ao faturamento. O lote continua sendo de {qtd || '—'} cabeças
             nas métricas por cabeça; o que muda é a diária, cobrada de {sairam} que saíram.
           </p>
-        </div>
-      </ModalBloco>
-
-      {/* ── ADIANTAMENTO ─────────────────────────────────────────────────────── */}
-      <ModalBloco open={aberto === 'adiantamento'} onOpenChange={v => setAberto(v ? 'adiantamento' : null)}
-        titulo="Adiantamento"
-        contexto={<span>{custoTotal > 0 ? `custo total ${formatMoeda(custoTotal)}` : 'custo total —'}</span>}
-        rodape={<>
-          <Produz rotulo="Antecipado" valor={d.possuiAdiantamento && antecipado > 0 ? formatMoeda(antecipado) : null} />
-          <span className="text-[10px] text-muted-foreground">Valor será reembolsado no acerto final.</span>
-        </>}
-      >
-        <div className="flex items-center gap-2">
+        </div></>),
+    adiantamento: (<><div className="flex items-center gap-2">
           <span className="text-[10px] text-muted-foreground">Houve adiantamento:</span>
           <Button type="button" size="sm" variant={d.possuiAdiantamento ? 'default' : 'outline'}
             className="h-8 text-[12px] px-3" onClick={() => set('possuiAdiantamento', true)}>Sim</Button>
@@ -491,8 +394,35 @@ export function BoitelBlocosModais({ valor, onChange, somenteLeitura }: {
                 placeholder="Opcional" className="mt-[3px] h-8 px-2.5 text-[12px]" />
             </div>
           </div>
-        )}
-      </ModalBloco>
+        )}</>),
+  };
+
+  return (
+    <div className="space-y-2 min-w-0">
+      {secoes.map(sec => (
+        <SecaoAcordeao key={sec.id} titulo={sec.titulo} resumo={sec.resumo} pendente={sec.pendente}
+          aberta={abertas.has(sec.id)} onToggle={() => { if (!somenteLeitura) alternar(sec.id); }}>
+          {corpos[sec.id]}
+        </SecaoAcordeao>
+      ))}
+
+      {/* ⚠ O CUSTO DE OPORTUNIDADE FICA FORA DAS SECOES, na aba — decisão do Gabriel. Não
+          é um custo que o boitel cobra: é o que o capital renderia noutro lugar, e somá-lo
+          com diária e frete misturaria desembolso com comparação.
+          A unidade é R$/kg de peso de saída da fazenda — `coT = co x peso x cabeças`, como
+          no simulador antigo ("Custo oport. R$/kg"). */}
+      <div className="rounded-md border bg-card px-3 py-2 shadow-sm flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
+        <div className="min-w-0 w-44">
+          <CampoNum label="Custo de oportunidade" valor={d.custoOportunidade}
+            onChange={v => set('custoOportunidade', v)} sufixo="R$/kg" desabilitado={somenteLeitura} />
+        </div>
+        <div className="flex items-baseline gap-2 pb-2">
+          <span className="text-[10px] text-muted-foreground">No lote</span>
+          <span className={`text-[12px] font-medium tabular-nums ${der.coT > 0 ? '' : 'text-muted-foreground font-normal'}`}>
+            {der.coT > 0 ? formatMoeda(der.coT) : '—'}
+          </span>
+        </div>
+      </div>
     </div>
   );
 }

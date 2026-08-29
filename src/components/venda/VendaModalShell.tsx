@@ -36,7 +36,7 @@ import { Calendar, Building2, X, Plus, ArrowRight } from 'lucide-react';
 import type { Categoria } from '@/types/cattle';
 import type { CompraLotesApi } from '@/hooks/useCompraLotes';
 import { AbaNegociacaoLotes } from '@/components/compra/AbaNegociacaoLotes';
-import { BoitelBaseOperacional, BoitelPainelResultado } from '@/components/venda/BoitelNegociacaoDerivado';
+import { BoitelBaseOperacional, BoitelResultadoCompacto } from '@/components/venda/BoitelNegociacaoDerivado';
 import { BoitelBlocosModais, faltamDosCinco, type BoitelEdicao } from '@/components/venda/BoitelBlocosModais';
 
 /* ⚠ "RECEBIMENTO" CHAMA-SE ENTREGA NA VENDA — o gado SAI. A coluna do banco já é
@@ -231,7 +231,9 @@ export function VendaModalShell({
                  diz em ambar o que falta em vez de oferecer onde preencher. */
               <div className="space-y-2 min-w-0">
                 <BoitelBaseOperacional boitelData={boitelData} />
-                <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_240px] gap-2 items-start">
+                {/* PR-BOITEL-ACORDEAO-01 — 1.5fr / 1fr, gap 14px. O acordeao a' esquerda, o
+                    resultado a' direita. */}
+                <div className="grid grid-cols-1 xl:grid-cols-[1.5fr_1fr] gap-[14px] items-start">
                   <div className="min-w-0 space-y-2">
                     {/* ⚠ O LOTE VEM PRIMEIRO, e a ordem nao e' estetica: ele e' o comeco da
                         negociacao. Sem lote nao ha cabecas nem peso, e os quatro blocos do
@@ -239,10 +241,10 @@ export function VendaModalShell({
                         deriva dele. Estava invertido, e a aba abria mostrando Adiantamento
                         antes de existir o que adiantar. */}
                     {abaLotes}
-                    {/* ⚠ OS QUATRO BLOCOS SO APARECEM COM VALOR E COM ONCHANGE. Sem os dois
-                        nao ha o que editar, e um bloco clicavel que nao abre nada seria a
-                        promessa nao cumprida que o proprio botao desta tela ja evitou. O
-                        painel a' direita continua dizendo, em ambar, o que falta. */}
+                    {/* ⚠ AS QUATRO SECOES SO APARECEM COM VALOR E COM ONCHANGE. Sem os dois
+                        nao ha o que editar, e uma secao que nao abre nada seria a promessa
+                        nao cumprida que o proprio botao desta tela ja evitou. A pendencia
+                        aparece em ambar na LINHA FECHADA de cada secao. */}
                     {boitelData && onBoitelChange && (
                       <BoitelBlocosModais
                         valor={boitelData}
@@ -251,7 +253,12 @@ export function VendaModalShell({
                       />
                     )}
                   </div>
-                  <BoitelPainelResultado boitelData={boitelData} />
+                  {/* ⚠ A21 — NAO ROLA COM A LISTA. `sticky top-0` dentro da coluna que rola;
+                      o painel fica a' vista enquanto o operador percorre as secoes, que e' o
+                      ponto: mexer na diaria OLHANDO a margem. */}
+                  <div className="xl:sticky xl:top-0">
+                    <BoitelResultadoCompacto boitelData={boitelData} />
+                  </div>
                 </div>
               </div>
             ) : abaLotes
