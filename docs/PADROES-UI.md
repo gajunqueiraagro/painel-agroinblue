@@ -582,6 +582,79 @@ técnico já estão em 10px — eles **não** descem para 9px para "ganhar" espa
 
 ---
 
+## Mapa de tokens — do mockup para o projeto
+
+Esta seção **não nasce de teoria: nasce de erro repetido**. Em quatro briefings seguidos
+chegaram nomes de token que não existem aqui — `--surface-1`, `--surface-2`,
+`--text-secondary`, `--border-strong` —, vindos do design system da referência visual.
+Toda vez a tradução foi feita à mão, e enquanto o mapa não estivesse no repositório ela
+dependia de alguém lembrar.
+
+O projeto é **Tailwind + shadcn**. Os tokens reais estão em `src/index.css` (`:root`) e
+são expostos como utilitários em `tailwind.config.ts`.
+
+| nome no mockup | no projeto | observação |
+|---|---|---|
+| `--surface-2` (cartão) | `bg-card` | |
+| `--surface-1` (faixa) | `bg-muted/40` ou `bg-muted` | `/40` para faixa sobre cartão; cheio para bloco |
+| `--text-secondary` | `text-muted-foreground` | ⚠ o projeto **não distingue** secundário de muted |
+| `--text-muted` | `text-muted-foreground` | mesmo token que o de cima |
+| `--border-strong` | `border-input` | ⚠ ver a nota sobre borda, abaixo |
+| `--border` | `border-border/60` | |
+| campo editável | `border-input bg-background` | é o default do `<Input>` do shadcn |
+| campo travado | `bg-muted border-border/60 text-muted-foreground` | idioma canônico — ver abaixo |
+
+**Campo travado tem idioma canônico**, o da `AbaLiquidacaoOC`, hoje centralizado na
+constante `CAMPO_TRAVADO` de `CompraModalShell.tsx`. **Não inventar outro.** Campo que
+não se pode editar precisa parecer que não se pode editar — antes disso, editável e
+bloqueado eram idênticos e o operador só descobria clicando.
+
+### ⚠ Borda forte e borda fraca são a mesma cor
+
+`--border` e `--input` têm **valor idêntico** (`218 12% 89%`). A distinção entre borda
+forte e fraca no projeto **não é de cor, é de opacidade**: `border-input` cheio contra
+`border-border/60`. Quem procurar um token "mais escuro" para a borda forte não vai
+achar, porque ele não existe.
+
+### ⚠ Estado (sucesso, atenção, erro) não usa token
+
+Existem `--success` e `--warning` em `index.css`, expostos no `tailwind.config`. **As
+pílulas e os textos de estado não os usam.** O que está em uso é a paleta direta do
+Tailwind, e é ela que se deve reusar:
+
+```
+pílula   sucesso   bg-emerald-100 text-emerald-700
+         atenção   bg-amber-100   text-amber-700
+         erro      bg-rose-100    text-rose-700
+         neutro    bg-slate-100   text-slate-600
+
+texto    sucesso   text-emerald-700 dark:text-emerald-500     ("confere", "quitado")
+         atenção   text-amber-700   dark:text-amber-500       ("faltam R$ X", "sem arquivo")
+```
+
+Os tokens `--success`/`--warning` ficam sem consumidor. Unificar é decisão em aberto;
+até lá, **reusar as classes acima** e não introduzir `bg-success`, que criaria um
+terceiro vocabulário.
+
+### ⚠ A tabela vale para superfície CLARA
+
+Em fundo escuro ela **não se aplica**. O `V2ContextDrawer` é `bg-primary/90` com texto
+branco: ali `text-muted-foreground` sairia cinza escuro sobre azul, ilegível. Nesses
+casos usa-se a escala branca que o próprio arquivo já mantém —
+
+```
+text-white/90   item ativo
+text-white/65   cabeçalho de grupo
+text-white/50   marca secundária ("em construção")
+text-white/45   item desabilitado
+border-white/10 separador
+```
+
+— e não os tokens da tabela. A regra geral: **a paleta é da superfície, não do
+componente.**
+
+---
+
 ## Pendências deste documento
 
 - **Seletor de mês/ano com setas** — não existe. Enquanto não houver, `type="month"`
