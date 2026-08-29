@@ -30,6 +30,7 @@ import { format, parseISO, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ChevronRight, ChevronDown, ArrowLeft, AlertTriangle, LogIn, LogOut, RefreshCw, Clock, Info, Edit, Calendar, Building2, X } from 'lucide-react';
 import { LancamentoDetalhe } from '@/components/LancamentoDetalhe';
+import { NascimentoModalShell } from '@/components/nascimento/NascimentoModalShell';
 import { ReclassificacaoFormFields, useReclassificacaoState } from '@/components/ReclassificacaoForm';
 import { ReclassificacaoResumoPanel } from '@/components/ReclassificacaoResumoPanel';
 import { CompraDetalhesDialog, CompraDetalhes, EMPTY_COMPRA_DETALHES } from '@/components/compra/CompraDetalhesDialog';
@@ -194,31 +195,6 @@ const TIPO_CARDS_GROUPS: TipoCardGroup[] = [
     ],
   },
 ];
-
-/* Par rotulo-valor do resumo lateral do Nascimento — mesmo idioma do `Linha` de
-   ResumoLateralOC (A17): rotulo cinza a esquerda, valor a direita, traco no vazio.
-   Copia deliberada: importar de la puxaria um componente de outra tela para dentro
-   deste arquivo, e a unificacao dos resumos e' de PR-UI-LANCAMENTOS-SIMPLES-PADRAO-02. */
-function LinhaResumoNasc({ rotulo, valor }: { rotulo: string; valor: string | null }) {
-  return (
-    <div className="flex items-baseline justify-between gap-1.5 leading-tight">
-      <span className="text-muted-foreground shrink-0">{rotulo}</span>
-      <span className="font-medium text-right truncate">{valor || '—'}</span>
-    </div>
-  );
-}
-
-/* A fazenda no resumo tem um estado que os outros pares nao tem: ela pode estar
-   FALTANDO e bloquear o registro. Traco cinza diria "ausente, tudo bem"; aqui a
-   ausencia e' erro a resolver, e a cor precisa dizer isso. */
-function LinhaResumoNascFazenda({ valor, falta }: { valor: string | null; falta: boolean }) {
-  return (
-    <div className="flex items-baseline justify-between gap-1.5 leading-tight">
-      <span className="text-muted-foreground shrink-0">Fazenda</span>
-      <span className={`font-medium text-right truncate ${falta ? 'text-destructive' : ''}`}>{valor || '—'}</span>
-    </div>
-  );
-}
 
 const STATUS_DESCRIPTIONS_DEFAULT: Partial<Record<StatusOperacional | 'meta', string>> = {
   meta: META_VISUAL.description,
@@ -672,10 +648,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const isConciliado = statusOp === 'realizado';
   const isAbate = tipo === 'abate';
   const isNascimento = tipo === 'nascimento';
-  /* ── RESUMO DO NASCIMENTO (PR-UI-NASCIMENTO-SHELL-02) ────────────────────────
-     ⚠ AUSENCIA E' TRACO. `nascPesoTotal` e' NULL quando falta quantidade ou peso —
-     nao zero. "Peso total: 0,00 kg" afirmaria que se multiplicou e deu zero, quando o
-     que ha e' um formulario pela metade. Nenhum `?? 0` no caminho. */
   /* ── FAZENDA DO NASCIMENTO (PR-UI-NASCIMENTO-PARIDADE-03) ────────────────────
      Ate aqui a fazenda era heranca SILENCIOSA do contexto, e em Global o lancamento
      era recusado sem aviso — `adicionarLancamento` devolvia `undefined` e nada
@@ -693,8 +665,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   const nascQtd = parseNumericValue(quantidade) || 0;
   const nascPeso = parseDecimalInput(pesoKg) ?? 0;
-  const nascPesoTotal = nascQtd > 0 && nascPeso > 0 ? nascQtd * nascPeso : null;
-  const fmtNum2 = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const isMorte = tipo === 'morte';
   const isCompra = tipo === 'compra';
   const isVenda = tipo === 'venda';
@@ -4232,6 +4202,25 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     onAutoSalvarOC: autoSalvarOC,
   };
 
+  /* Prop-bag do Nascimento — mesmo padrao do `compraFormApi` acima. `modo: 'criacao'`
+     e' o unico valor possivel aqui: esta tela registra, nao edita. A edicao monta o
+     seu proprio bag no LancamentoZooModal, com `modo: 'edicao'`. */
+  const nascFormApi = {
+    modo: 'criacao' as const,
+    data, setData,
+    qtdInput, pesoInput,
+    categoria, setCategoria: (v: Categoria) => setCategoria(v),
+    categoriasDisponiveis,
+    observacao, setObservacao,
+    nascFazendaId, setNascFazendaId,
+    fazendasOC,
+    nascFazendaNome, nascFazendaFalta,
+    nascQtd, nascPeso,
+    submitting,
+    handleRequestRegister,
+    fecharModalOCComAutosave,
+  };
+
   return (
     <div className="p-4 animate-fade-in pb-20 max-w-7xl mx-auto">
       {onBackToConciliacao && aba !== 'reclassificacao' && (
@@ -4319,185 +4308,14 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       {isCompra ? (
         <CompraModalShell {...compraFormApi} />
       ) : isNascimento ? (
-        /* ══ NASCIMENTO NO SHELL DA OC (PR-UI-NASCIMENTO-SHELL-02) ═══════════════
-           Mesmo modal da Compra, sem as abas: mesma largura, mesma altura, mesmo
-           cabecalho azul, mesmo resumo lateral, mesmo rodape. So o miolo e' outro.
-           Duas telas do mesmo sistema tem de parecer duas telas do mesmo sistema.
-           ⚠ SEM FAIXA DE ABAS. Nascimento nao tem contraparte, documento, recebimento
-           nem financeiro — nao ha o que preencher seis abas.
-           ⚠ MEDIDAS COPIADAS DE CompraModalShell, nao inventadas: `h-[69vh]`,
-           `px-6 py-2.5` no cabecalho, `px-6 py-2` no rodape, `lg:grid-cols-[1fr_280px]`
-           com `gap-3 p-4`, e as duas colunas com rolagem propria (`min-h-0`).
-           ⚠ A BIFURCACAO acontece aqui, no container: o ramo dos outros cinco tipos
-           entrou intocado no `else`, byte a byte. Morte, Consumo, Venda, Abate e
-           Transferencia nao mudam — inclusive as descricoes de status deles. */
-        <div className="flex flex-col">
-          <div className="bg-primary text-primary-foreground px-6 py-2.5 flex items-start justify-between">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h2 className="text-lg font-bold leading-tight">Nascimento</h2>
-                {/* ⚠ ROTULO, NAO CONTROLE. Este caminho registra apenas realizado; meta
-                    tem caminho proprio. O seletor de cenario saiu em 056054e7. */}
-                <span className="rounded-md border border-white/40 px-2 py-0.5 text-xs">Realizado</span>
-              </div>
-              <div className="mt-1 flex items-center gap-3 text-xs text-white/80">
-                <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> {data ? data.split('-').reverse().join('/') : '—'}</span>
-                {/* ⚠ A FAZENDA ESCOLHIDA, nao a do contexto. `nomeFazenda` e'
-                    `fazendaAtual?.nome`, entao em Global este cabecalho anunciava
-                    "Global" enquanto o seletor, a faixa de topo, o resumo lateral e a
-                    confirmacao mostravam a fazenda certa — quatro contra um.
-                    Sem escolha, "—": o mesmo traco de ausencia que a faixa de topo usa.
-                    "Global" ali nao e' ausencia, e' outra coisa, e foi o que confundiu. */}
-                <span className="flex items-center gap-1"><Building2 className="h-3.5 w-3.5" /> {nascFazendaNome ?? '—'}</span>
-              </div>
-            </div>
-            <button type="button" onClick={fecharModalOCComAutosave} className="text-white/80 hover:text-white shrink-0"
-              title="Fechar" aria-label="Fechar"><X className="h-5 w-5" /></button>
-          </div>
-
-          {/* ⚠ `+38px` E' A FAIXA DE ABAS QUE ESTA TELA NAO TEM. O corpo da Compra e'
-              `h-[69vh]` e ela ainda carrega 38px de abas; sem absorver isso, o modal do
-              Nascimento fecharia 38px mais baixo e os dois nunca pareceriam o mesmo.
-              Em `calc` e nao num vh novo porque o que falta e' uma altura FIXA — vh
-              acertaria numa janela e erraria em todas as outras. */}
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] lg:grid-rows-[minmax(0,1fr)] gap-3 p-4 h-[calc(69vh_+_38px)] overflow-y-auto lg:overflow-hidden bg-muted/30">
-            <div className="space-y-2 min-w-0 lg:min-h-0 lg:overflow-y-auto">
-              <div className="rounded-md border bg-card p-2 shadow-sm space-y-2 min-w-0">
-                {/* Titulo no idioma da "Identificação da compra": 15px, peso 500, cor padrao. */}
-                <div className="text-[15px] font-medium text-foreground">Identificação do nascimento</div>
-
-                {/* FAIXA DE TOPO — o que se le de relance, no idioma da Compra.
-                    ⚠ Fazenda sem valor sai em `text-destructive`, e nao com o traco
-                    cinza de dado ausente: aqui a ausencia BLOQUEIA o registro, entao ela
-                    e' erro a resolver, nao informacao a aceitar. */}
-                <div className="grid grid-cols-2 gap-2 rounded-md border bg-muted/20 px-3.5 py-[11px]">
-                  <div className="min-w-0">
-                    <div className="text-[11px] font-normal text-muted-foreground leading-none">Fazenda</div>
-                    <div className={`mt-1 text-[20px] font-medium leading-none truncate ${nascFazendaFalta ? 'text-destructive' : ''}`}>
-                      {nascFazendaNome ?? '—'}
-                    </div>
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-[11px] font-normal text-muted-foreground leading-none">Data do nascimento</div>
-                    <div className="mt-1 text-[20px] font-medium tabular-nums leading-none">
-                      {data ? data.split('-').reverse().join('/') : <span className="text-muted-foreground">—</span>}
-                    </div>
-                  </div>
-                </div>
-                <Separator />
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-3">
-                  {/* ⚠ FAZENDA E' ESCOLHA, e o payload a carrega — `Lancamento.fazendaId`
-                      vence a do contexto em `adicionarLancamento`. Antes o seletor nao
-                      existia e a fazenda era heranca silenciosa; em Global o lancamento
-                      era recusado sem que a tela dissesse nada. */}
-                  <div className="min-w-0">
-                    <Label className="text-[10px] text-muted-foreground">Fazenda <span className="text-destructive">*</span></Label>
-                    <Select value={nascFazendaId} onValueChange={setNascFazendaId}>
-                      <SelectTrigger className={`mt-[3px] h-8 px-2.5 text-[12px] ${nascFazendaFalta ? 'border-destructive' : ''}`}>
-                        <SelectValue placeholder="Selecione a fazenda" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {fazendasOC.map(f => <SelectItem key={f.id} value={f.id} className="text-[12px]">{f.nome}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                    {nascFazendaFalta && (
-                      <p className="mt-[3px] text-[10px] text-destructive">Selecione a fazenda do lançamento.</p>
-                    )}
-                  </div>
-                  <div className="min-w-0">
-                    <Label className="text-[10px] text-muted-foreground">Data do nascimento <span className="text-destructive">*</span></Label>
-                    {/* A20 — DatePicker do sistema, nunca `<input type="date">`. */}
-                    <DatePicker value={data} onChange={setData} className="mt-[3px] h-8 px-2.5 text-[12px]" />
-                  </div>
-                  <div className="min-w-0">
-                    <Label className="text-[10px] text-muted-foreground">Quantidade <span className="text-destructive">*</span></Label>
-                    <Input inputMode="numeric" value={qtdInput.displayValue} onChange={qtdInput.onChange} onBlur={qtdInput.onBlur} onFocus={qtdInput.onFocus}
-                      placeholder="0" className="mt-[3px] h-8 px-2.5 text-[12px] text-right tabular-nums" />
-                  </div>
-                  <div className="min-w-0">
-                    <Label className="text-[10px] text-muted-foreground">Categoria <span className="text-destructive">*</span></Label>
-                    <Select value={categoria} onValueChange={v => setCategoria(v as Categoria)}>
-                      <SelectTrigger className="mt-[3px] h-8 px-2.5 text-[12px]"><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                      <SelectContent className="max-h-52 overflow-y-auto">
-                        {categoriasDisponiveis.map(c => <SelectItem key={c.value} value={c.value} className="text-[12px]">{c.label}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="min-w-0">
-                    <Label className="text-[10px] text-muted-foreground">Peso médio <span className="text-destructive">*</span></Label>
-                    <Input inputMode="decimal" value={pesoInput.displayValue} onChange={pesoInput.onChange} onBlur={pesoInput.onBlur} onFocus={pesoInput.onFocus}
-                      placeholder="0,00" className="mt-[3px] h-8 px-2.5 text-[12px] text-right tabular-nums" />
-                  </div>
-                  <div className="min-w-0">
-                    <Label className="text-[10px] text-muted-foreground">Observações / Lote</Label>
-                    <Input value={observacao} onChange={e => setObservacao(e.target.value)} placeholder="Opcional"
-                      className="mt-[3px] h-8 px-2.5 text-[12px]" />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* RESUMO LATERAL — idioma do ResumoLateralOC: faixa de titulo, blocos com
-                faixa, pares rotulo-valor alinhados a direita, traco no vazio. */}
-            <div className="lg:min-h-0 lg:overflow-y-auto">
-              <aside className="bg-card rounded-md border shadow-sm overflow-hidden self-start text-[10px]">
-                <div className="h-8 shrink-0 border-b border-border bg-accent/40 flex items-center px-3 text-[11px] font-bold uppercase tracking-wide text-primary">
-                  Resumo do lançamento
-                </div>
-                {/* ⚠ FAIXA DE BLOCO EM 10px, e NAO nos 9px do ResumoLateralOC. O piso de
-                    leitura do A21 e' 10px, e copiar o idioma nao pode significar copiar
-                    uma violacao — ela se espalharia por cada tela nova. A divergencia de
-                    1px contra a OC esta declarada; quem unificar decide o lado. */}
-                <div className="pb-1">
-                  <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 first:mt-0 mb-0.5">
-                    <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Identificação</span>
-                  </div>
-                  <div className="px-3 space-y-0.5">
-                    <LinhaResumoNasc rotulo="Tipo" valor="Nascimento" />
-                    <LinhaResumoNasc rotulo="Data" valor={data ? data.split('-').reverse().join('/') : null} />
-                    <LinhaResumoNascFazenda valor={nascFazendaNome} falta={nascFazendaFalta} />
-                    <LinhaResumoNasc rotulo="Categoria" valor={categoriasDisponiveis.find(c => c.value === categoria)?.label ?? null} />
-                  </div>
-
-                  <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 mb-0.5">
-                    <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Rebanho</span>
-                  </div>
-                  {/* ⚠ AUSENCIA E' TRACO, NUNCA ZERO. Sem quantidade ou sem peso nao ha
-                      peso total — nao ha "peso total de zero". `LinhaResumoNasc` imprime
-                      "—" para null, e nenhum `?? 0` tapa buraco no caminho.
-                      ⚠ ARROBA POR PESO VIVO: peso total / 30. A divisao por 15 e' de
-                      CARCACA e vale so no abate; usa-la aqui dobraria o numero. */}
-                  <div className="px-3 space-y-0.5">
-                    <LinhaResumoNasc rotulo="Cabeças" valor={nascQtd > 0 ? `${nascQtd} cab` : null} />
-                    <LinhaResumoNasc rotulo="Peso médio" valor={nascPeso > 0 ? `${fmtNum2(nascPeso)} kg` : null} />
-                    <LinhaResumoNasc rotulo="Peso total" valor={nascPesoTotal != null ? `${fmtNum2(nascPesoTotal)} kg` : null} />
-                    <LinhaResumoNasc rotulo="Arrobas" valor={nascPesoTotal != null ? `${fmtNum2(nascPesoTotal / 30)} @` : null} />
-                  </div>
-
-                  <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 mb-0.5">
-                    <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Financeiro</span>
-                  </div>
-                  <div className="px-3 text-muted-foreground leading-tight">
-                    Nascimento não tem impacto financeiro.
-                  </div>
-                </div>
-              </aside>
-            </div>
-          </div>
-
-          <div className="bg-primary px-6 py-2 flex items-center justify-end gap-3">
-            <Button type="button" variant="ghost" onClick={fecharModalOCComAutosave}
-              className="text-white/90 hover:bg-white/10 hover:text-white" title="Fechar sem registrar" aria-label="Fechar">
-              Fechar
-            </Button>
-            <Button type="button" onClick={handleRequestRegister} disabled={submitting || nascFazendaFalta}
-              className="bg-white text-primary hover:bg-white/90 font-bold disabled:opacity-60"
-              title={nascFazendaFalta ? 'Selecione a fazenda do lançamento' : 'Registrar o nascimento'}
-              aria-label="Registrar nascimento">
-              {submitting ? 'Registrando…' : 'Registrar nascimento'}
-            </Button>
-          </div>
-        </div>
+        /* ══ NASCIMENTO NO SHELL DA OC ══════════════════════════════════════════
+           O shell saiu deste arquivo em PR-ZOO-EDICAO-NO-MODAL-01 e virou componente:
+           a EDICAO passou a abrir o mesmo modal, e um bloco inline nao se reusa de
+           outra tela. O prop-bag segue o precedente do `compraFormApi` acima.
+           ⚠ A BIFURCACAO continua aqui, no container: o ramo dos outros cinco tipos
+           segue intocado no `else`. Morte, Consumo, Venda, Abate e Transferencia nao
+           mudam — inclusive as descricoes de status deles. */
+        <NascimentoModalShell {...nascFormApi} />
       ) : (
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_22rem] gap-4 items-start overflow-visible">
         {/* Center: Form or Historico */}

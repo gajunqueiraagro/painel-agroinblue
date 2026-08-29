@@ -37,6 +37,7 @@ import { kgToArrobas } from '@/types/cattle';
 import { nomeFazendaDoRegistro as resolverNomeFazendaDoRegistro } from '@/lib/zoo/nomeFazendaDoRegistro';
 
 import { EditNascimentoSheet } from '@/components/edit/EditNascimentoSheet';
+import { NascimentoEdicaoModal } from '@/components/nascimento/NascimentoEdicaoModal';
 import { EditMorteSheet } from '@/components/edit/EditMorteSheet';
 import { EditConsumoSheet } from '@/components/edit/EditConsumoSheet';
 import { EditTransferenciaSheet } from '@/components/edit/EditTransferenciaSheet';
@@ -853,7 +854,20 @@ export function LancamentoZooModal({
 
   switch (lancamento.tipo) {
     case 'nascimento':
-      return <EditNascimentoSheet {...sheetCommonProps} />;
+      /* PR-ZOO-EDICAO-NO-MODAL-01 — o nascimento passou a editar no MESMO modal que o
+         cria. Os outros quatro tipos seguem na gaveta ate PADRAO-02; e' por isso que
+         `sheetCommonProps` continua montado logo acima, inalterado. */
+      return (
+        <NascimentoEdicaoModal
+          lancamento={lancamento}
+          open={open}
+          onOpenChange={onOpenChange}
+          onSalvar={onSalvar}
+          p1Oficial={permissions.blockReason === 'mes_fechado'}
+          temAlteracaoEstrutural={temAlteracaoEstrutural}
+          nomeFazenda={nomeFazendaDoRegistro}
+        />
+      );
 
     case 'morte':
       return <EditMorteSheet {...sheetCommonProps} />;
