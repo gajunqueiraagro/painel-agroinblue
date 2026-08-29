@@ -112,15 +112,19 @@ export function boitelVazio(qtdCabecas: number, pesoInicial: number): BoitelEdic
    ⚠ O DENOMINADOR NÃO ENCOLHE: o lote continua sendo o lote inteiro nas métricas por
    cabeça. A indenização soma ao faturamento; ela não reduz o tamanho do lote.
 
-   ⚠ O QUE CONTINUA DUPLICADO, E É DÍVIDA DECLARADA: `custoTotalDoBoitel` soma nutrição e
-   frete, e o `custoTotalBoitel` do painel não — lá é `diárias + sanidade + outros`, como no
-   simulador antigo, onde o frete só entra no custo OPERACIONAL e a nutrição não entrava em
-   conta nenhuma. Um rodapé precisa somar os campos que estão acima dele, então esta soma
-   não pode simplesmente adotar a de lá. Qual das duas é "o custo do boitel" é decisão de
-   produto, e está reportada. Frete > 0 em 6 dos 10 registros: a divergência é visível hoje. */
+   ⚠ O FRETE NÃO ENTRA NO CUSTO DO BOITEL — decisão do Gabriel, e o simulador antigo já
+   dizia o mesmo: lá `custoTotalBoitel = cDT + cs + oc` e o frete aparece só no custo
+   OPERACIONAL (`cOp = cDT + cs + oc + cf`). Ele é desembolso do produtor, pago por fora.
+   ⚠ MAS EM ALGUNS CASOS O BOITEL PAGA O FRETE e o embute na cobrança. Enquanto não houver
+   um marcador de QUEM PAGOU, o frete fica fora — a proposta está reportada e o campo
+   segue existindo, porque o custo existe de qualquer forma.
+   ⚠ A NUTRIÇÃO CONTINUA SOMANDO, e é a única diferença que resta contra o painel. O
+   simulador antigo não a soma, mas isso não decide nada: lá o campo era morto — não está
+   sequer no destructuring do `calc`. Zero em todos os 10 registros, então a diferença é
+   invisível hoje. Aguarda decisão. */
 export function custoTotalDoBoitel(d: BoitelEdicao): number {
   return derivadosBoitel(d).cDT + (d.custoSanidade || 0) + (d.custoNutricao || 0)
-       + (d.custoFrete || 0) + (d.outrosCustos || 0);
+       + (d.outrosCustos || 0);
 }
 export function antecipadoTotal(d: BoitelEdicao): number {
   if (!d.possuiAdiantamento) return 0;
@@ -279,7 +283,9 @@ export function BoitelBlocosModais({ valor, onChange, somenteLeitura }: {
       <BlocoClicavel
         identidade="Custos"
         contexto={diarias > 0 || custoTotal > 0
-          ? `Diárias ${formatMoeda(diarias)} · nutrição ${formatMoeda(d.custoNutricao)} · sanidade ${formatMoeda(d.custoSanidade)} · frete ${formatMoeda(d.custoFrete)} · outros ${formatMoeda(d.outrosCustos)}`
+          /* ⚠ O FRETE NÃO APARECE AQUI porque não entra no número à direita. Listar um
+             componente que a soma não usa faria a linha mentir. */
+          ? `Diárias ${formatMoeda(diarias)} · nutrição ${formatMoeda(d.custoNutricao)} · sanidade ${formatMoeda(d.custoSanidade)} · outros ${formatMoeda(d.outrosCustos)}`
           : 'Diária, nutrição, sanidade, frete e outros — não informados'}
         numero={custoTotal > 0 ? formatMoeda(custoTotal) : null}
         onClick={abrir('custos')} desabilitado={somenteLeitura}
@@ -385,8 +391,13 @@ export function BoitelBlocosModais({ valor, onChange, somenteLeitura }: {
             derivado={porCabeca(d.custoNutricao, qtd)} />
           <CampoNum label="Sanidade (total)" valor={d.custoSanidade} onChange={v => set('custoSanidade', v)} sufixo="R$"
             derivado={porCabeca(d.custoSanidade, qtd)} />
+          {/* ⚠ FICA NA TELA E FORA DA SOMA. O frete é custo operacional do produtor, pago
+              por fora — o rodapé abaixo não o inclui, e o campo diz isso em vez de deixar
+              o operador descobrir subtraindo. */}
           <CampoNum label="Frete (total)" valor={d.custoFrete} onChange={v => set('custoFrete', v)} sufixo="R$"
-            derivado={porCabeca(d.custoFrete, qtd)} />
+            derivado={d.custoFrete > 0
+              ? `${formatMoeda(d.custoFrete / (qtd || 1))} por cab. — custo do produtor, fora do custo do boitel`
+              : 'Custo do produtor, fora do custo do boitel'} />
           <CampoNum label="Outros (total)" valor={d.outrosCustos} onChange={v => set('outrosCustos', v)} sufixo="R$"
             derivado={porCabeca(d.outrosCustos, qtd)} />
         </div>
