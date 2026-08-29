@@ -154,8 +154,9 @@ interface V2LancamentosWrapperProps {
   onFecharOperacaoOC?: () => void;
   /** PR-OC-ENTRYPOINT-COMPRA-01 — card "Compra" abre o CompraModalShell em modo OC (nova Compra). */
   onNovaCompraOC?: () => void;
+  onNovaVendaOC?: () => void;
 }
-function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEdit, onNavegarChuvas, onNavegarMapaRebanho, cenarioInicial, cenariosPermitidos, onFecharOperacaoOC, onNovaCompraOC }: V2LancamentosWrapperProps = {}) {
+function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEdit, onNavegarChuvas, onNavegarMapaRebanho, cenarioInicial, cenariosPermitidos, onFecharOperacaoOC, onNovaCompraOC, onNovaVendaOC }: V2LancamentosWrapperProps = {}) {
   const navigate = useNavigate();
   const { isGlobal } = useFazenda();
   const { canEdit, canEditMeta } = usePermissions();
@@ -297,6 +298,7 @@ function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEd
         abaInicial={(abateParaEditar || vendaParaEditar) ? 'saida' : undefined}
         onFecharOperacaoOC={onFecharOperacaoOC}
         onNovaCompraOC={onNovaCompraOC}
+        onNovaVendaOC={onNovaVendaOC}
       />
     </div>
   );
@@ -492,6 +494,7 @@ export default function V2Index() {
     const p = new URLSearchParams(window.location.search);
     const retorno = p.get('oc_return');
     p.delete('oc_compra');
+    p.delete('oc_venda');
     p.delete('oc_id');
     p.delete('oc_aba');
     p.delete('oc_return');
@@ -512,12 +515,32 @@ export default function V2Index() {
     const origem = sectionRef.current;
     const p = new URLSearchParams(window.location.search);
     p.set('oc_compra', '1');
+    /* ⚠ APAGA O IRMAO. Os dois booleanos nao podem coexistir, e a impossibilidade e'
+       garantida por quem ABRE — nao por convencao. Ver PR-OC-VENDA-ABA-01. */
+    p.delete('oc_venda');
     p.delete('oc_id');
     if (origem === 'financeiro-lanc' || origem === 'lancamentos-zoot') p.set('oc_return', origem);
     else p.delete('oc_return');
     setSearchParams(p, { replace: true });
     setSection('lancamentos-zoot');
   }, [setSearchParams]);
+  /* PR-OC-VENDA-ABA-01 — espelho de `abrirNovaCompraOC`. Dois booleanos em vez de um
+     `oc_tipo` porque `modoOCCompra` tem 21 leitores no LancamentosTab, e este PR nao
+     pode tocar o caminho da compra.
+     ⚠ DIVIDA REGISTRADA: PR-OC-PARAM-TIPO-01 troca os dois por `oc_tipo=compra|venda`,
+     quando as seis abas estiverem prontas e a compra puder ser tocada. */
+  const abrirNovaVendaOC = useCallback(() => {
+    const origem = sectionRef.current;
+    const p = new URLSearchParams(window.location.search);
+    p.set('oc_venda', '1');
+    p.delete('oc_compra');
+    p.delete('oc_id');
+    if (origem === 'financeiro-lanc' || origem === 'lancamentos-zoot') p.set('oc_return', origem);
+    else p.delete('oc_return');
+    setSearchParams(p, { replace: true });
+    setSection('lancamentos-zoot');
+  }, [setSearchParams]);
+
   // ID alvo lido da URL (?edit=...&tipo=...). Quando o lançamento carrega
   // pelo useLancamento, useEffect roteia. Limpa-se ao consumir.
   const [editFromUrlId, setEditFromUrlId] = useState<string | null>(null);
@@ -899,6 +922,7 @@ export default function V2Index() {
         cenariosPermitidos={['realizado']}
         onFecharOperacaoOC={fecharOperacaoOC}
         onNovaCompraOC={abrirNovaCompraOC}
+        onNovaVendaOC={abrirNovaVendaOC}
         onReturnFromEdit={() => {
           limparEdicaoAvancada();
           setSection('conferencia-lancamentos');

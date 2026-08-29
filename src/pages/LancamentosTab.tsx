@@ -36,6 +36,7 @@ import { NascimentoModalShell } from '@/components/nascimento/NascimentoModalShe
 import { MorteModalShell } from '@/components/morte/MorteModalShell';
 import { CompraMetaModalShell } from '@/components/compra/CompraMetaModalShell';
 import { VendaMetaModalShell } from '@/components/venda/VendaMetaModalShell';
+import { VendaModalShell } from '@/components/venda/VendaModalShell';
 import { ReclassificacaoFormFields, useReclassificacaoState } from '@/components/ReclassificacaoForm';
 import { ReclassificacaoResumoPanel } from '@/components/ReclassificacaoResumoPanel';
 import { CompraDetalhesDialog, CompraDetalhes, EMPTY_COMPRA_DETALHES } from '@/components/compra/CompraDetalhesDialog';
@@ -120,6 +121,7 @@ interface Props {
    * ?oc_compra=1 sem oc_id). O parent (V2Index) faz a navegação SPA. Ausente = comportamento anterior.
    */
   onNovaCompraOC?: () => void;
+  onNovaVendaOC?: () => void;
   /**
    * Cenário inicial padrão da tela: 'realizado' (default) ou 'meta'.
    * Usado APENAS como valor inicial do `statusOp`. O usuário pode trocar
@@ -349,7 +351,7 @@ function matchFornecedor(options: FornecedorOption[], params: { id?: string | nu
   });
 }
 
-export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar, vendaParaEditar, compraParaEditar, transferenciaParaEditar, reclassParaEditar, morteParaEditar, consumoParaEditar, onReturnFromEdit, initialAnoFiltro, initialMesFiltro, initialReclassCenario, onNavegarChuvas, onFecharOperacaoOC, onNovaCompraOC, cenarioInicial, cenariosPermitidos }: Props) {
+export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar, vendaParaEditar, compraParaEditar, transferenciaParaEditar, reclassParaEditar, morteParaEditar, consumoParaEditar, onReturnFromEdit, initialAnoFiltro, initialMesFiltro, initialReclassCenario, onNavegarChuvas, onFecharOperacaoOC, onNovaCompraOC, onNovaVendaOC, cenarioInicial, cenariosPermitidos }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const { clienteAtual } = useCliente();
   const nomeFazenda = fazendaAtual?.nome || '';
@@ -370,6 +372,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   //   ficavam false/null para sempre — desligando a hidratação E o enabled das 4 subabas OC.
   const [ocSearchParams] = useSearchParams();
   const modoOCCompra = ocSearchParams.get('oc_compra') === '1';
+  /* PR-OC-VENDA-ABA-01 — espelho de `modoOCCompra`. Os dois nunca coexistem: quem abre
+     um apaga o outro, nos dois sentidos (ver `abrirNovaVendaOC` / `abrirNovaCompraOC`). */
+  const modoOCVenda = ocSearchParams.get('oc_venda') === '1';
   const [ocOperacaoId, setOcOperacaoId] = useState<string | null>(null);
   const [ocVersao, setOcVersao] = useState<number | null>(null);
   // Fazenda destino selecionada dentro do modal OC (default = fazenda do filtro atual).
@@ -758,7 +763,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
      acaso — e foi a discordancia entre elas que fez o rodape da Morte rolar em
      PR-ZOO-FIX-MORTE-GUARDA-GLOBAL-01: o tipo estava numa e faltava na outra. Com o
      mesmo predicado nos dois, nao ha como discordarem. */
-  const usaEnvelopeProprio = TIPOS_NO_ENVELOPE_PROPRIO.includes(tipo) || vendaMetaNoEnvelope;
+  const usaEnvelopeProprio = TIPOS_NO_ENVELOPE_PROPRIO.includes(tipo) || vendaMetaNoEnvelope || (isVenda && modoOCVenda);
   /** Quem escolhe a propria fazenda — governa os cinco pontos: a guarda de Global, os
    *  dois escritores de texto, o `fazendaId` do payload e a confirmacao. */
   const escolheFazenda = TIPOS_COM_SELETOR_DE_FAZENDA.includes(tipo) || vendaMetaNoEnvelope;
@@ -781,6 +786,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [compraFazendaId, setCompraFazendaId] = useState<string>('');
   /* Fazenda da venda em META. ⚠ Na venda a fazenda e' ORIGEM — o gado SAI dela. */
   const [vendaFazendaId, setVendaFazendaId] = useState<string>('');
+  /* Propriedade de destino da venda na OC — texto livre, a propriedade de quem compra. */
+  const [vendaPropriedadeDestino, setVendaPropriedadeDestino] = useState<string>('');
   useEffect(() => {
     if (!isVenda) return;
     setVendaFazendaId(fazendaAtual?.id && fazendaAtual.id !== '__global__' ? fazendaAtual.id : '');
@@ -2142,6 +2149,43 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     return null;
   };
 
+  /* PR-OC-VENDA-ABA-01 — a venda na OC. Nao reusa `salvarOperacaoOC` porque aquele crava
+     `tipo_operacao: 'compra'` e monta o payload com campos da compra; parametriza-lo
+     tocaria o caminho da compra, que este PR nao pode tocar.
+     ⚠ SEM `modalidade_comercial`: medido que os 89 registros com escala/a_termo/spot sao
+     TODOS abate, e nenhuma venda tem modalidade. A coluna nasceu para o abate. */
+  const salvarOperacaoVendaOC = async (): Promise<{ operacaoId: string; versao: number } | null> => {
+    const clienteId = clienteAtual?.id;
+    if (!clienteId) { toast.error('Cliente não selecionado.'); return null; }
+    if (!vendaFazendaId) { toast.error('Selecione a fazenda de origem.'); return null; }
+    if (!vendaDestinoFornecedorId) { toast.error('Selecione o comprador.'); return null; }
+    const criando = !ocOperacaoId;
+    setSubmitting(true);
+    try {
+      const env = await ocRpc.salvarRascunho(ocOperacaoId, clienteId, ocVersao, {
+        tipo_operacao: 'venda',
+        data_operacao: data,
+        cenario: isCenarioMeta ? 'meta' : 'realizado',
+        fazenda_id: vendaFazendaId,
+        contraparte_id: vendaDestinoFornecedorId || null,
+        numero_documento: notaFiscal || null,
+        observacoes: observacao || null,
+        movimentacoes: [],
+        partes: [],
+      });
+      setOcOperacaoId(env.operacao_id);
+      setOcVersao(env.versao);
+      if (env.status_comercial) setOcStatusComercial(env.status_comercial);
+      if (criando) toast.success('Operação de venda criada. Agora informe os lotes negociados.');
+      return { operacaoId: env.operacao_id, versao: env.versao };
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Falha ao salvar a operação de venda.');
+      return null;
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const salvarOperacaoOC = async (): Promise<{ operacaoId: string; versao: number } | null> => {
     const clienteId = clienteAtual?.id;
     const impedimento = motivoImpedeSalvarOC();
@@ -2317,6 +2361,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     // ── Ponte Compra→OC (modo OC isolado): salva a operação e RETORNA antes de qualquer
     //    caminho legado — não abre o confirm dialog, então handleSubmit (onAdicionar +
     //    gerarFinanceiroCompra) nunca roda. Sem dupla escrita. ──
+    /* ⚠ A VENDA NA OC SAI AQUI, como a compra: quem grava e' a RPC, e o funil legado nao
+       roda. Sem isso o `handleSubmit` criaria tambem um lancamento zootecnico. */
+    if (modoOCVenda && isVenda) {
+      void salvarOperacaoVendaOC();
+      return;
+    }
     if (modoOCCompra && isCompra) {
       /* SALVAR UNICO — o status escolhe o caminho, o botao e' um so.
            cancelada -> nada grava; e' imutavel nos dois contratos.
@@ -3225,6 +3275,16 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       //   ?oc_compra=1 (modoOCCompra=true, batched); resetContextoOC dá uma OC nova limpa COM a fazenda do
       //   contexto atual (ocFazendaDestinoId = fazendaAtual); e abrimos o modal aqui (o efeito de hidratação
       //   só abre quando há oc_id — nova Compra não tem). Demais movimentos seguem o fluxo atual.
+      /* PR-OC-VENDA-ABA-01 — espelho do card de Compra. Enquanto `onNovaVendaOC` nao for
+         passado, a Venda cai no caminho de sempre: este PR ADICIONA a OC, nao substitui
+         o formulario antigo. */
+      if (it.value === 'venda' && onNovaVendaOC) {
+        onNovaVendaOC();
+        resetContextoOC();
+        setTipo('venda');
+        setLancModalOpen(true);
+        return;
+      }
       if (it.value === 'compra' && onNovaCompraOC) {
         onNovaCompraOC();
         resetContextoOC();
@@ -4656,7 +4716,27 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           ? 'max-w-5xl p-0 gap-0 overflow-hidden [&>button.absolute]:hidden'
           : 'max-w-full sm:max-w-5xl w-full h-screen sm:h-auto sm:max-h-[92vh] overflow-y-auto p-4 sm:p-5'}
       >
-      {isCompra && isCenarioMeta ? (
+      {isVenda && modoOCVenda ? (
+        /* ══ VENDA COMO OPERACAO COMERCIAL — aba de identificacao ═══════════════════
+           Primeira de seis. Este ramo ADICIONA a OC; o formulario antigo da venda
+           continua no `else`, byte a byte, ate o Gabriel decidir a troca. */
+        <VendaModalShell
+          data={data} setData={setData}
+          compradorId={vendaDestinoFornecedorId} setCompradorId={setVendaDestinoFornecedorId}
+          contrapartes={abateFornecedores}
+          onNovoComprador={() => setNovoFornecedorCompraOpen(true)}
+          vendaFazendaId={vendaFazendaId} setVendaFazendaId={setVendaFazendaId}
+          fazendasOC={fazendasOC}
+          propriedadeDestino={vendaPropriedadeDestino} setPropriedadeDestino={setVendaPropriedadeDestino}
+          vendaTipoVenda={vendaTipoVenda} setVendaTipoVenda={setVendaTipoVenda}
+          observacao={observacao} setObservacao={setObservacao}
+          ocOperacaoId={ocOperacaoId}
+          ocStatusComercial={ocStatusComercial}
+          submitting={submitting}
+          onSalvarOperacao={() => { void salvarOperacaoVendaOC(); }}
+          onFechar={fecharModalOCComAutosave}
+        />
+      ) : isCompra && isCenarioMeta ? (
         /* ══ COMPRA EM META NO FORMULARIO SIMPLES ═════════════════════════════════
            A OC e' do realizado: contraparte, documento, recebimento e liquidacao nao
            existem numa projecao. Ao migrar a compra para a OC, o caminho de meta dela
