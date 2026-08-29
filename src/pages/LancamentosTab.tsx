@@ -2387,8 +2387,17 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     const origemFinal = campos.origem.show
       ? (campos.origem.auto ? (fazendaEscolhidaNome ?? campos.origem.value) : fazendaOrigem) || undefined
       : undefined;
+    /* ⚠ SIMETRICO AO `origemFinal` ACIMA, e pelo mesmo motivo. O nascimento tem
+       `origem: {show:false}` e `destino: {auto:true, value: nomeFazenda}` — entao o
+       lixo dele cai na coluna de DESTINO, e nao na de origem. Era o `c32e3615`.
+       Depois de PR-ZOO-FIX-MORTE-WRITER-COLUNAS-01 o nascimento ficou como unico
+       caminho VIVO produzindo 'Global': abate e venda tambem tem o registro sujo, mas
+       a guarda de 85384b55 os impede de lancar em Global desde maio.
+       ⚠ A MESMA EXPRESSAO NAS DUAS COLUNAS: quem entrar em
+       TIPOS_COM_SELETOR_DE_FAZENDA passa a gravar o nome certo na origem E no destino,
+       sem que ninguem precise lembrar de nenhuma das duas linhas. */
     let destinoFinal = campos.destino?.show
-      ? (campos.destino.auto ? campos.destino.value : fazendaDestino) || undefined
+      ? (campos.destino.auto ? (fazendaEscolhidaNome ?? campos.destino.value) : fazendaDestino) || undefined
       : undefined;
 
     // For abate, use fornecedor name as destino. Fallback to frigorifico free-text
