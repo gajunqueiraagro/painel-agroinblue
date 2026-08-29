@@ -135,6 +135,27 @@ type Aba = 'entrada' | 'saida' | 'reclassificacao';
 import { STATUS_LABEL, STATUS_OPTIONS_ZOOTECNICO, META_VISUAL, getStatusBadge, type StatusOperacional } from '@/lib/statusOperacional';
 import { usePermissions } from '@/hooks/usePermissions';
 
+/* ⚠ QUEM ESCOLHE A PROPRIA FAZENDA. Em contexto Global, so' estes podem lancar: os
+   demais herdam a fazenda do contexto, que em Global nao existe.
+   ⚠ E' LISTA, E NAO UMA CONDICAO NO FUNIL, de proposito. A guarda nasceu como
+   `isGlobal && !isNascimento` (PR-OC-FIX-NASC-FAZENDA-NAO-SALVA-01), quando o
+   Nascimento era o unico com seletor. A Morte ganhou o mesmo seletor e o mesmo
+   payload em PR-ZOO-MORTE-NO-SHELL-01 e continuou barrada — a guarda estava
+   escondida num funil de 90 linhas e ninguem lembrou dela.
+   Migrar um tipo novo passa a ser ACRESCENTAR UMA LINHA AQUI. Se esquecer, o tipo
+   nao lanca em Global e a mensagem diz o que fazer — em vez de uma negacao
+   encadeada a mais. */
+const TIPOS_COM_SELETOR_DE_FAZENDA: TipoMovimentacao[] = ['nascimento', 'morte'];
+
+/* ⚠ QUEM USA O ENVELOPE SEM PADDING (LancamentoModalEnvelope e CompraModalShell).
+   Lista SEPARADA da de cima porque diz outra coisa: aqui e' "quem desenha a propria
+   casca". Hoje os membros coincidem com a lista acima mais a Compra; conflatar as
+   duas faria um tipo herdar largura por ter seletor de fazenda, que nao tem relacao.
+   ⚠ A MORTE FALTAVA AQUI e foi o que fez o rodape rolar: sem esta classe, o
+   DialogContent generico entra com `overflow-y-auto p-4`, e ai' o modal INTEIRO —
+   cabecalho, corpo e rodape — rola dentro dele, anulando a estrutura do envelope. */
+const TIPOS_NO_ENVELOPE_PROPRIO: TipoMovimentacao[] = ['compra', 'nascimento', 'morte'];
+
 const MOTIVOS_MORTE = [
   'Raio', 'Picada de cobra', 'Doença respiratória', 'Tristeza parasitária',
   'Clostridiose', 'Intoxicação por planta', 'Acidente', 'Desidratação',
@@ -2205,8 +2226,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
        lia como falha e traduzia num toast generico de "erro ao salvar" — sem erro algum.
        Agora o writer e' o de verdade, e a recusa dos tipos SEM seletor acontece aqui, no
        funil unico, com a mensagem que diz O QUE FAZER em vez de anunciar um erro que nao
-       houve. O Nascimento passa: o campo dele ja bloqueia o botao quando vazio. */
-    if (isGlobal && !isNascimento) {
+       houve. Quem tem seletor passa: o campo deles ja bloqueia o botao quando vazio.
+       ⚠ A LISTA E' A AUTORIDADE — ver TIPOS_COM_SELETOR_DE_FAZENDA. Enquanto isto era
+       `!isNascimento`, a Morte migrou com seletor e continuou barrada
+       (PR-ZOO-FIX-MORTE-GUARDA-GLOBAL-01). */
+    if (isGlobal && !TIPOS_COM_SELETOR_DE_FAZENDA.includes(tipo)) {
       toast.error('Selecione uma fazenda específica para lançar.');
       return;
     }
@@ -4362,9 +4386,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       <DialogContent
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
-        /* Nascimento usa o MESMO envelope da Compra: sem padding proprio, sem gap e
-           com o botao de fechar nativo escondido — quem fecha e' o X do cabecalho azul. */
-        className={isCompra || isNascimento
+        /* Nascimento e Morte usam o MESMO envelope da Compra: sem padding proprio, sem
+           gap e com o botao de fechar nativo escondido — quem fecha e' o X do cabecalho.
+           ⚠ SEM ISTO O RODAPE ROLA. O ramo de baixo tem `overflow-y-auto p-4`, e com ele
+           o modal inteiro vira uma area de rolagem so' — o rodape desce junto com o
+           conteudo e some. Ver TIPOS_NO_ENVELOPE_PROPRIO. */
+        className={TIPOS_NO_ENVELOPE_PROPRIO.includes(tipo)
           /* ⚠ MESMO TETO DO MODAL SIMPLES, na linha de baixo (PR-OC-MODAL-TAMANHO-01).
              Eram 1152px contra 1024px, e a diferenca fazia os dois lerem como sistemas
              diferentes ao alternar entre eles. O shell nao declara largura: ele preenche
