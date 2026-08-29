@@ -45,7 +45,7 @@ import { CompraResumoPanel } from '@/components/compra/CompraResumoPanel';
 import { CompraModalShell } from '@/components/compra/CompraModalShell';
 import { gerarFinanceiroCompra } from '@/components/compra/gerarFinanceiroCompra';
 import { OcRpcError, useOperacaoComercial } from '@/hooks/useOperacaoComercial';
-import { useCompraLotes } from '@/hooks/useCompraLotes';
+import { useCompraLotes, pesoMedioPorCabeca } from '@/hooks/useCompraLotes';
 import { useOperacaoRecebimento } from '@/hooks/useOperacaoRecebimento';
 import { useOperacaoDocumentos } from '@/hooks/useOperacaoDocumentos';
 import { useOperacaoEventos } from '@/hooks/useOperacaoEventos';
@@ -2225,6 +2225,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
      `quantidade x pesoMedio` de cada lote, entao dividir por `animais` da o peso medio real
      do embarque. Com um lote de 100 cab a 400 kg e outro de 10 a 200 kg, da 381,8 kg — e
      nao 300, que e' o que a media das medias daria.
+     ⚠ A DIVISAO NAO E ESCRITA AQUI: `pesoMedioPorCabeca` ja existe em `useCompraLotes`, e
+     o comentario dela diz por que — "em vez de repetir a divisao nos dois lugares, que e'
+     exatamente como dois numeros para a mesma pergunta comecam a divergir". Esta era a
+     terceira copia. O `?? 0` traduz o sentinela: a funcao devolve `null` quando nao ha
+     denominador, porque a aba imprime "—"; aqui o zero e' o que faz o painel dizer, em
+     ambar, que falta o lote.
      ⚠ O NUMERO POR CABECA E MEDIA DO EMBARQUE, e nao descreve nenhum animal: com lotes de
      pesos muito diferentes, "arrobas produzidas por cabeça" e' media ponderada. E' inerente
      a haver UM planejamento por operacao, que e' o modelo fixado pela `zoo_operacao_boitel`
@@ -2234,11 +2240,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
      `peso_saida_fazenda_kg`. */
   const boitelDaVenda = useMemo<BoitelEdicao | null>(() => {
     if (vendaTipoVenda !== 'boitel') return null;
-    const { animais, pesoTotal } = lotesApi.totais;
     return {
       ...(ocBoitel ?? boitelVazio()),
-      qtdCabecas: animais,
-      pesoInicial: animais > 0 ? pesoTotal / animais : 0,
+      qtdCabecas: lotesApi.totais.animais,
+      pesoInicial: pesoMedioPorCabeca(lotesApi.totais) ?? 0,
     };
   }, [vendaTipoVenda, ocBoitel, lotesApi.totais]);
 
