@@ -104,6 +104,11 @@ export interface CompraMetaModalShellProps {
   compraFazendaFalta: boolean;
   compraQtd: number;
   compraPeso: number;
+  /** O MESMO numero que o writer grava em `valor_total` — ver `valorPrevisto` no caller.
+   *  ⚠ O shell NAO recalcula. Ate PR-ZOO-FIX-META-COMPRA-VALOR-01 ele tinha formula
+   *  propria e o writer tinha outra, e por um tempo a tela mostrou um valor enquanto o
+   *  banco guardava NULL. Uma expressao, dois leitores. */
+  valorPrevisto: number | null;
   submitting: boolean;
   handleRequestRegister: () => void;
   fecharModalOCComAutosave: () => void;
@@ -116,7 +121,7 @@ export function CompraMetaModalShell({
   notaFiscal, setNotaFiscal, precoKgBase, setPrecoKgBase,
   bonus, setBonus, descontos, setDescontos,
   compraFazendaId, setCompraFazendaId, fazendasOC, compraFazendaNome, compraFazendaFalta,
-  compraQtd, compraPeso, submitting,
+  compraQtd, compraPeso, valorPrevisto, submitting,
   handleRequestRegister, fecharModalOCComAutosave,
 }: CompraMetaModalShellProps) {
   /* ⚠ AUSENCIA E' TRACO. Sem quantidade ou sem peso nao ha peso total — nao ha "peso
@@ -127,12 +132,7 @@ export function CompraMetaModalShell({
   const fmtNum2 = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fornecedorNome = fornecedores.find(f => f.id === compraFornecedorId)?.nome ?? null;
 
-  /* Valor previsto = peso total × R$/kg base, mais bonus, menos descontos — a mesma
-     composicao dos campos do formulario antigo. NULL quando nao ha o que multiplicar. */
   const precoKgNum = Number(String(precoKgBase).replace(',', '.')) || 0;
-  const valorPrevisto = pesoTotal != null && precoKgNum > 0
-    ? pesoTotal * precoKgNum + (Number(bonus) || 0) - (Number(descontos) || 0)
-    : null;
   const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
   return (

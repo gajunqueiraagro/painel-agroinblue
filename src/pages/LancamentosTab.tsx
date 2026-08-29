@@ -2511,7 +2511,16 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
      // permanecem em colunas próprias. Fallback final preserva legado.
     const valorTotalFinal = isBoitelVenda
       ? (boitelLucroLiquido > 0 ? boitelLucroLiquido : undefined)
-      : isCompra
+      /* ⚠ SO' A COMPRA COM DIALOGO. `compraValorTotal` le EXCLUSIVAMENTE de
+         `compraDetalhes`, e em meta esse dialogo nao existe mais
+         (PR-ZOO-META-COMPRA-01) — o resultado era 0, e o valor virava `undefined`.
+         Nao foi `exigeDetalheFinanceiro` que desligou o calculo: o calculo sempre teve
+         o dialogo como unica fonte, e enquanto ele era obrigatorio isso nao aparecia.
+         Em meta a compra cai no ramo generico abaixo, que usa `calc.valorLiquido` —
+         para uma compra isso e' `pesoTotal x R$/kg + bonus - descontos`, exatamente a
+         mesma composicao que o resumo lateral mostra como "Valor previsto"
+         (comissao, frete e outras despesas nao existem naquela tela e entram zeradas). */
+      : isCompra && !isCenarioMeta
         ? (compraValorTotal > 0 ? compraValorTotal : undefined)
         : isAbate
           ? ((calc.valorBruto + calc.totalBonus) > 0 ? calc.valorBruto + calc.totalBonus : undefined)
@@ -4433,6 +4442,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     fazendasOC,
     compraFazendaNome, compraFazendaFalta,
     compraQtd: parseNumericValue(quantidade) || 0,
+    /* ⚠ A MESMA FONTE DO WRITER. `calc.valorLiquido` e' o que `valorTotalFinal` grava
+       para a compra em meta; passar daqui garante que a tela nao possa divergir do
+       banco. Zero vira null: sem preco nao ha valor previsto, e traco nao e' zero. */
+    valorPrevisto: calc.valorLiquido > 0 ? calc.valorLiquido : null,
     compraPeso: parseDecimalInput(pesoKg) ?? 0,
     submitting,
     handleRequestRegister,
