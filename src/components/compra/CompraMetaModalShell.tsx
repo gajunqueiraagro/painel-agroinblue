@@ -76,7 +76,11 @@ export interface CompraMetaModalShellProps {
   categoriasDisponiveis: { value: string; label: string }[];
   observacao: string;
   setObservacao: (v: string) => void;
-  /** Texto livre — no formulário antigo o rótulo é "Fornecedor / Fazenda Origem". */
+  /** Texto livre: o nome de QUEM VENDEU. Grava em `fazenda_origem`.
+   * ⚠ O rotulo perdeu a palavra "Fazenda" em PR-ZOO-META-COMPRA-FAZENDA-01: com o
+   * seletor "Fazenda" a dois campos daqui, duas palavras iguais a poucos centimetros
+   * convidavam ao erro — e este e' o menos obvio dos dois. O que o campo guarda e para
+   * onde grava nao mudou. */
   fazendaOrigem: string;
   setFazendaOrigem: (v: string) => void;
   compraFornecedorId: string;
@@ -263,7 +267,7 @@ export function CompraMetaModalShell({
             </div>
           </div>
           <div className="min-w-0">
-            <Label className="text-[10px] text-muted-foreground">Fornecedor / Fazenda Origem</Label>
+            <Label className="text-[10px] text-muted-foreground">Fornecedor / Origem</Label>
             <Input value={fazendaOrigem} onChange={e => setFazendaOrigem(e.target.value)} placeholder="Opcional"
               className="mt-[3px] h-8 px-2.5 text-[12px]" />
           </div>
