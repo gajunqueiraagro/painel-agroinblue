@@ -38,10 +38,24 @@ import type { BoitelData } from '@/components/BoitelPlanningDialog';
    O rótulo é o que o painel mostra em âmbar quando o campo falta. `grupo` diz qual
    metade do painel o campo trava: 'ind' entra nos indicadores zootécnicos e, por
    consequência, também na operação; 'op' trava só a operação. */
+/* ⚠ DOIS CAMPOS QUE O SIMULADOR ANTIGO NAO TEM. Estendem `BoitelData` em vez de mexer
+   nele — `BoitelPlanningDialog` nao muda. Vieram de `BoitelBlocosModais` para cá em
+   PR-OC-VENDA-BOITEL-FIX-ARROBAS-MORTE-01, porque as contas abaixo passaram a precisar
+   deles e o outro arquivo importa deste: manter lá criaria ciclo. */
+export interface BoitelEdicao extends BoitelData {
+  morteQuantidade?: number;
+  morteValorIndenizacao?: number;
+}
+
+/** As cabeças que SAÍRAM do boitel — o lote menos as mortes. */
+export function cabecasQueSairam(d: BoitelEdicao): number {
+  return Math.max(0, (d.qtdCabecas || 0) - (d.morteQuantidade || 0));
+}
+
 type Grupo = 'ind' | 'op';
 interface Exigencia { rotulo: string; grupo: Grupo; presente: boolean }
 
-function exigencias(d: BoitelData): Exigencia[] {
+function exigencias(d: BoitelEdicao): Exigencia[] {
   const base: Exigencia[] = [
     { rotulo: 'cabeças',                 grupo: 'ind', presente: d.qtdCabecas > 0 },
     { rotulo: 'peso de saída da fazenda',grupo: 'ind', presente: d.pesoInicial > 0 },
@@ -65,7 +79,7 @@ function exigencias(d: BoitelData): Exigencia[] {
 /* ─── AS CONTAS ────────────────────────────────────────────────────────────────
    Copiadas do `calc`. A única diferença deliberada está em `cAb`, e está comentada
    no lugar. */
-export function derivadosBoitel(data: BoitelData) {
+export function derivadosBoitel(data: BoitelEdicao) {
   const { qtdCabecas: q, pesoInicial: pi, quebraViagem: qv, dias, gmd, rendimentoEntrada: re, rendimento: rs, modalidadeCusto: mc, custoDiaria: cd, custoArroba: ca, percentualParceria: pp, custoFrete: cf, custoOportunidade: co, custoSanidade: cs, outrosCustos: oc, precoVendaArroba: pva, despesasAbate: da } = data;
   const ple = pi * (1 - qv / 100);
   const ganho = gmd * dias;
@@ -73,10 +87,24 @@ export function derivadosBoitel(data: BoitelData) {
   const aEF = pi / 30;
   const aS = (pf * rs / 100) / 15;
   const aPcab = aS - aEF;
-  const aP = aPcab * q;
-  const aTS = aS * q;
+  /* ⚠ TERCEIRA DIVERGENCIA DELIBERADA contra o simulador antigo (as duas primeiras: o
+     `cAb` no 01A, a diaria no 01B). ANIMAL MORTO NAO VIRA CARCACA: as arrobas de saida
+     sao das cabecas que SAIRAM, como a diaria ja e' desde o 01B. O que compensa a perda
+     e' a INDENIZACAO, e e' para isso que o campo existe.
+     ⚠ `aEF` FICA SOBRE O LOTE INTEIRO, e de proposito: as arrobas de ENTRADA sao do lote
+     que entrou, e o animal que morreu entrou. Por isso `aP` NAO e' `aPcab x cabecas` — as
+     duas pontas tem bases diferentes, e escrever a subtracao inteira e' o que impede o
+     indicador de misturar as duas sem dizer.
+     ⚠ COM ZERO MORTES OS TRES SAO IDENTICOS AO DE ANTES: `aS*q - aEF*q = (aS-aEF)*q`. A
+     conferencia lado a lado com o simulador antigo continua valendo. */
+  const sairam = cabecasQueSairam(data);
+  const aP = aS * sairam - aEF * q;
+  const aTS = aS * sairam;
   const gmc = dias > 0 ? ((pf * rs / 100) - (ple * re / 100)) / dias : 0;
-  const fba = aTS * pva;
+  /* ⚠ A INDENIZACAO SOMA AO FATURAMENTO. Estava so' no bloco de Comercializacao do 01B, e
+     o painel mostrava o faturamento sem ela — dois numeros diferentes para a mesma coisa
+     na mesma tela. Agora e' uma conta so'. */
+  const fba = aTS * pva + (data.morteValorIndenizacao || 0);
   /* ⚠ AQUI ESTA A UNIFICACAO de PR-OC-VENDA-BOITEL-01A. No simulador antigo esta linha
      é `const cAb = da + nf`, somando `despesasAbate` com `custoNfAbate`. Os dois eram o
      mesmo custo escrito duas vezes: `custo_nf_abate` NAO existe como coluna no banco —
@@ -87,7 +115,10 @@ export function derivadosBoitel(data: BoitelData) {
   const cAb = da;
   const fLiq = fba - cAb;
   let cDT = 0;
-  if (mc === 'diaria') cDT = cd * dias * q;
+  /* ⚠ CABECAS QUE SAIRAM, igual ao bloco de Custos do 01B. Ficou `q` aqui naquele PR, e o
+     painel cobrava a diaria do animal morto enquanto o bloco nao cobrava. Medido no acerto
+     real: 109 x 104 x 18,93. */
+  if (mc === 'diaria') cDT = cd * dias * sairam;
   else if (mc === 'arroba') cDT = ca * aP;
   const cOp = cDT + cs + oc + cf;
   const coT = co * pi * q;
@@ -111,7 +142,7 @@ export function derivadosBoitel(data: BoitelData) {
     : 0;
   const saldoReceberBase = Math.round((fba - custoTotalBoitel - cAb + valorTotalAntecipadoCalc) * 100) / 100;
 
-  return { ple, ganho, pf, aEF, aS, aPcab, aP, aTS, gmc, fba, cAb, fLiq, cDT, cOp, coT,
+  return { ple, ganho, pf, aEF, aS, aPcab, aP, aTS, sairam, gmc, fba, cAb, fLiq, cDT, cOp, coT,
     pParte, rProd, rLiq, rLCab, custoTotalBoitel, margemVenda,
     valorAdiantamentoDiariasCalc, valorTotalAntecipadoCalc, saldoReceberBase };
 }
@@ -122,7 +153,7 @@ const LABEL_MODALIDADE: Record<BoitelData['modalidadeCusto'], string> = {
 
 /* ─── BASE OPERACIONAL ─────────────────────────────────────────────────────────
    Faixa de leitura: quatro valores, sem campo. A18 — duas alturas na mesma linha. */
-export function BoitelBaseOperacional({ boitelData }: { boitelData: BoitelData | null }) {
+export function BoitelBaseOperacional({ boitelData }: { boitelData: BoitelEdicao | null }) {
   const itens: { rotulo: string; valor: string | null }[] = [
     { rotulo: 'Cabeças',          valor: boitelData && boitelData.qtdCabecas > 0 ? String(boitelData.qtdCabecas) : null },
     { rotulo: 'Peso saída faz.',  valor: boitelData && boitelData.pesoInicial > 0 ? formatKg(boitelData.pesoInicial) : null },
@@ -170,7 +201,7 @@ function TituloGrupo({ children }: { children: React.ReactNode }) {
 
 /* ─── PAINEL DE RESULTADO ──────────────────────────────────────────────────────
    240px, dois grupos: Indicadores e Operação. */
-export function BoitelPainelResultado({ boitelData }: { boitelData: BoitelData | null }) {
+export function BoitelPainelResultado({ boitelData }: { boitelData: BoitelEdicao | null }) {
   const faltas = useMemo(() => boitelData ? exigencias(boitelData).filter(e => !e.presente) : [], [boitelData]);
   const d = useMemo(() => boitelData ? derivadosBoitel(boitelData) : null, [boitelData]);
 

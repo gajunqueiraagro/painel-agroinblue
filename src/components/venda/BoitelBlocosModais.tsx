@@ -26,15 +26,14 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { ChevronRight, X } from 'lucide-react';
 import { formatMoeda, formatKg, formatArroba } from '@/lib/calculos/formatters';
 import type { BoitelData } from '@/components/BoitelPlanningDialog';
-import { derivadosBoitel } from '@/components/venda/BoitelNegociacaoDerivado';
+import { derivadosBoitel, cabecasQueSairam, type BoitelEdicao } from '@/components/venda/BoitelNegociacaoDerivado';
 
-/* ⚠ DOIS CAMPOS QUE O SIMULADOR ANTIGO NÃO TEM. Em vez de acrescentá-los ao `BoitelData`
-   — o que mexeria no `BoitelPlanningDialog`, que este PR não muda —, estendem-se aqui.
-   `zoo_operacao_boitel` já os tem como `morte_quantidade` e `morte_valor_indenizacao`. */
-export interface BoitelEdicao extends BoitelData {
-  morteQuantidade?: number;
-  morteValorIndenizacao?: number;
-}
+/* `BoitelEdicao` e `cabecasQueSairam` DESCERAM para `BoitelNegociacaoDerivado` em
+   PR-OC-VENDA-BOITEL-FIX-ARROBAS-MORTE-01: as contas de lá passaram a precisar da morte, e
+   este arquivo importa daquele — manter aqui criaria ciclo. Reexportados porque o
+   `VendaModalShell` e o `LancamentosTab` os pedem por este caminho. */
+export type { BoitelEdicao };
+export { cabecasQueSairam };
 
 /* ⚠ ESPELHO DA RPC, e assumido como espelho. A lista canônica é a de
    `oc_salvar_boitel`; esta existe para o botão poder desabilitar ANTES da chamada, e
@@ -105,25 +104,23 @@ export function boitelVazio(qtdCabecas: number, pesoInicial: number): BoitelEdic
   };
 }
 
-/* ═══ AS CONTAS QUE ESTE PR ACRESCENTA ═══════════════════════════════════════════
-   ⚠ A DIÁRIA É COBRADA DAS CABEÇAS QUE SAÍRAM, e não das que entraram. Medido no
-   acerto real: 109 × 104 × 18,93 = 214.590,48, exato — o boitel não cobra a diária do
-   animal que morreu. O simulador antigo usa `q` e por isso divergiria; com zero mortes
-   os dois dão o mesmo número, que é o que mantém a conferência lado a lado.
-   ⚠ O DENOMINADOR NÃO ENCOLHE: o lote continua sendo de 110 nas métricas por cabeça.
-   A indenização soma ao faturamento; ela não reduz o tamanho do lote. */
-export function cabecasQueSairam(d: BoitelEdicao): number {
-  return Math.max(0, (d.qtdCabecas || 0) - (d.morteQuantidade || 0));
-}
-export function diariasTotal(d: BoitelEdicao): number {
-  return (d.custoDiaria || 0) * (d.dias || 0) * cabecasQueSairam(d);
-}
+/* ═══ AS CONTAS DESTA TELA ═══════════════════════════════════════════════════════
+   ⚠ AS DIÁRIAS E O FATURAMENTO SAÍRAM DAQUI. No 01B eles eram escritos duas vezes — aqui
+   e no `derivadosBoitel` —, e as duas cópias divergiam: o painel cobrava a diária do
+   animal morto e mostrava o faturamento sem a indenização, enquanto estes blocos não. Dois
+   números diferentes para a mesma coisa, na mesma tela. Agora ambos leem `derivadosBoitel`.
+   ⚠ O DENOMINADOR NÃO ENCOLHE: o lote continua sendo o lote inteiro nas métricas por
+   cabeça. A indenização soma ao faturamento; ela não reduz o tamanho do lote.
+
+   ⚠ O QUE CONTINUA DUPLICADO, E É DÍVIDA DECLARADA: `custoTotalDoBoitel` soma nutrição e
+   frete, e o `custoTotalBoitel` do painel não — lá é `diárias + sanidade + outros`, como no
+   simulador antigo, onde o frete só entra no custo OPERACIONAL e a nutrição não entrava em
+   conta nenhuma. Um rodapé precisa somar os campos que estão acima dele, então esta soma
+   não pode simplesmente adotar a de lá. Qual das duas é "o custo do boitel" é decisão de
+   produto, e está reportada. Frete > 0 em 6 dos 10 registros: a divergência é visível hoje. */
 export function custoTotalDoBoitel(d: BoitelEdicao): number {
-  return diariasTotal(d) + (d.custoSanidade || 0) + (d.custoNutricao || 0)
+  return derivadosBoitel(d).cDT + (d.custoSanidade || 0) + (d.custoNutricao || 0)
        + (d.custoFrete || 0) + (d.outrosCustos || 0);
-}
-export function faturamentoBruto(d: BoitelEdicao): number {
-  return derivadosBoitel(d).fba + (d.morteValorIndenizacao || 0);
 }
 export function antecipadoTotal(d: BoitelEdicao): number {
   if (!d.possuiAdiantamento) return 0;
@@ -261,9 +258,9 @@ export function BoitelBlocosModais({ valor, onChange, somenteLeitura }: {
   const der = useMemo(() => derivadosBoitel(d), [d]);
   const qtd = d.qtdCabecas || 0;
   const sairam = cabecasQueSairam(d);
-  const diarias = diariasTotal(d);
+  const diarias = der.cDT;
   const custoTotal = custoTotalDoBoitel(d);
-  const fatBruto = faturamentoBruto(d);
+  const fatBruto = der.fba;
   const antecipado = antecipadoTotal(d);
 
   const temDesempenho = d.dias > 0 && d.gmd > 0 && d.rendimento > 0;
