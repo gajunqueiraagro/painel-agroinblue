@@ -169,7 +169,18 @@ function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEd
   const { loadData: metaLoadData } = useLancamentos('meta');
 
   const noOp = async (_id?: string) => { toast.error('Selecione uma fazenda específica para editar lançamentos.'); };
-  const canAddZoo = canEdit('zootecnico') && !isGlobal;
+  /* ⚠ `&& !isGlobal` SAIU (PR-OC-FIX-NASC-FAZENDA-NAO-SALVA-01). Ele trocava o writer
+     por um `noOp` em contexto Global, entao NADA do formulario chegava ao banco — nem o
+     lancamento que ESCOLHE a fazenda. O sintoma era um toast generico de "erro ao
+     salvar" sem erro nenhum do Supabase, porque o Supabase nunca era chamado.
+     ⚠ ISTO ALINHA COM A DOUTRINA QUE JA EXISTIA. PR-NAV-CONTEXTO-FAZENDA-01A decidiu
+     que "a fazenda passa a ser exigida na PERSISTENCIA (formulario/save), nao na
+     abertura" e tirou o bloqueio de tela em Global. Este `!isGlobal` era o resto do
+     bloqueio antigo, sobrevivendo no writer.
+     ⚠ QUEM RECUSA AGORA E' A GUARDA DE `adicionarLancamento`, que ja e' soberana e ja
+     decide por `fazendaAlvo` — a fazenda escolhida vencendo a do contexto. Um lugar so.
+     Os tipos SEM seletor seguem recusados, com aviso proprio no `handleRequestRegister`. */
+  const canAddZoo = canEdit('zootecnico');
   const canEditZoo = canEdit('zootecnico');
   const canDeleteZoo = canEdit('zootecnico');
 

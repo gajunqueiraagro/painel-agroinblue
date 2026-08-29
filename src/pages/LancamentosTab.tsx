@@ -2207,6 +2207,16 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       }
       setP1BloqueioMsg(null);
     }
+    /* ⚠ EM GLOBAL, SO LANCA QUEM ESCOLHE A FAZENDA (PR-OC-FIX-NASC-FAZENDA-NAO-SALVA-01).
+       O `noOp` do V2Index recusava TODOS em Global e devolvia `undefined`, que esta tela
+       lia como falha e traduzia num toast generico de "erro ao salvar" — sem erro algum.
+       Agora o writer e' o de verdade, e a recusa dos tipos SEM seletor acontece aqui, no
+       funil unico, com a mensagem que diz O QUE FAZER em vez de anunciar um erro que nao
+       houve. O Nascimento passa: o campo dele ja bloqueia o botao quando vazio. */
+    if (isGlobal && !isNascimento) {
+      toast.error('Selecione uma fazenda específica para lançar.');
+      return;
+    }
     if (!quantidade || parseNumericValue(quantidade) <= 0) { toast.error('Informe a quantidade'); return; }
     if (!categoria) { toast.error('Selecione a categoria'); return; }
     if (!data) { toast.error('Informe a data'); return; }
@@ -4332,7 +4342,13 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               </div>
               <div className="mt-1 flex items-center gap-3 text-xs text-white/80">
                 <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> {data ? data.split('-').reverse().join('/') : '—'}</span>
-                <span className="flex items-center gap-1"><Building2 className="h-3.5 w-3.5" /> {nomeFazenda || '—'}</span>
+                {/* ⚠ A FAZENDA ESCOLHIDA, nao a do contexto. `nomeFazenda` e'
+                    `fazendaAtual?.nome`, entao em Global este cabecalho anunciava
+                    "Global" enquanto o seletor, a faixa de topo, o resumo lateral e a
+                    confirmacao mostravam a fazenda certa — quatro contra um.
+                    Sem escolha, "—": o mesmo traco de ausencia que a faixa de topo usa.
+                    "Global" ali nao e' ausencia, e' outra coisa, e foi o que confundiu. */}
+                <span className="flex items-center gap-1"><Building2 className="h-3.5 w-3.5" /> {nascFazendaNome ?? '—'}</span>
               </div>
             </div>
             <button type="button" onClick={fecharModalOCComAutosave} className="text-white/80 hover:text-white shrink-0"
