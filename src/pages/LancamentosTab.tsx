@@ -32,6 +32,7 @@ import { ChevronRight, ChevronDown, ArrowLeft, AlertTriangle, LogIn, LogOut, Ref
 import { LancamentoDetalhe } from '@/components/LancamentoDetalhe';
 import { NascimentoModalShell } from '@/components/nascimento/NascimentoModalShell';
 import { MorteModalShell } from '@/components/morte/MorteModalShell';
+import { CompraMetaModalShell } from '@/components/compra/CompraMetaModalShell';
 import { ReclassificacaoFormFields, useReclassificacaoState } from '@/components/ReclassificacaoForm';
 import { ReclassificacaoResumoPanel } from '@/components/ReclassificacaoResumoPanel';
 import { CompraDetalhesDialog, CompraDetalhes, EMPTY_COMPRA_DETALHES } from '@/components/compra/CompraDetalhesDialog';
@@ -656,6 +657,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const pesoInput = useDecimalInput(pesoKg, setPesoKg, 2);
 
   const isCenarioMeta = statusOp === 'meta';
+  /* ⚠ CENARIO, NAO TIPO. Realizado e programado registram um fato economico e exigem o
+     detalhe financeiro; meta e' projecao e nao exige. Nomeada porque a mesma pergunta
+     e' feita em dois pontos do funil da compra, e eles se contradiziam. */
+  const exigeDetalheFinanceiro = statusOp === 'programado' || statusOp === 'realizado';
   /** StatusOperacional efetivo — preserva 'meta' para modais financeiros */
   const effectiveStatusOp: StatusOperacional | 'meta' = isCenarioMeta ? 'meta' : statusOp as StatusOperacional;
   const isMeta = isCenarioMeta; // Meta usa estilo laranja
@@ -722,6 +727,21 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setMorteFazendaId(fazendaAtual?.id && fazendaAtual.id !== '__global__' ? fazendaAtual.id : '');
   }, [isMorte, fazendaAtual?.id]);
   const morteFazendaNome = fazendasOC.find(f => f.id === morteFazendaId)?.nome ?? null;
+  /* ⚠ FORNECEDOR DA COMPRA EM META — abre com o sentinel do cliente e continua editavel.
+     Uma projecao nao tem fornecedor real, e o fluxo antigo resolvia CRIANDO um cadastro
+     novo a cada vez: sao 30 registros chamados "Meta" espalhados pelos clientes. O
+     sentinel '[META] Planejamento' (PR-ZOO-META-FORNECEDOR-SENTINEL-01) e' um so' por
+     cliente e distinguivel dos antigos.
+     ⚠ SO' PREENCHE SE O CAMPO ESTIVER VAZIO — nunca sobrescreve escolha do operador.
+     ⚠ CLIENTE SEM SENTINEL NAO GANHA UM PELO FRONT: o efeito nao faz nada e o campo
+     fica vazio, com a guarda do funil pedindo o fornecedor. Criar cadastro pela tela e'
+     o que produziu os 30. */
+  const SENTINEL_META_NOME = '[META] Planejamento';
+  useEffect(() => {
+    if (!isCompra || !isCenarioMeta || compraFornecedorId) return;
+    const sentinel = abateFornecedores.find(f => f.nome === SENTINEL_META_NOME);
+    if (sentinel) setCompraFornecedorId(sentinel.id);
+  }, [isCompra, isCenarioMeta, compraFornecedorId, abateFornecedores]);
   /* ⚠ A FAZENDA ESCOLHIDA, num lugar so'. O modal ja lia de uma fonte por tipo — o
      cabecalho, a faixa de topo, o seletor e o resumo lateral usam todos o mesmo
      `nascFazendaNome`/`morteFazendaNome`. Quem estava fora era a CONFIRMACAO, que
@@ -2292,15 +2312,28 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     if (!pesoKg || parseNumericValue(pesoKg) <= 0) { toast.error('Informe o Peso (kg)'); return; }
 
     if (isCompra) {
+      /* ⚠ A GUARDA DO FORNECEDOR FICA em todos os cenarios. Em meta o campo ja abre
+         preenchido com o sentinel '[META] Planejamento', entao ela nao atrapalha — e
+         continua protegendo o realizado. */
       if (!compraFornecedorId) { toast.error('Selecione o fornecedor para continuar'); return; }
-      if (!compraDetalhes) { toast.error('Clique em "Completar Compra" para preencher os detalhes financeiros'); return; }
+      /* ⚠ UMA CONDICAO SO' PARA AS DUAS EXIGENCIAS FINANCEIRAS, e e' o conserto.
+         Ate PR-ZOO-META-COMPRA-01 a linha do `!compraDetalhes` exigia o dialogo
+         "Completar Compra" em TODO cenario, enquanto a linha do valor logo abaixo ja
+         dispensava meta — o mesmo funil se contradizia em duas linhas seguidas, e o
+         resultado era que compra em meta nao registrava por caminho nenhum.
+         Nao e' afrouxar regra: e' fazer as duas exigencias perguntarem a mesma coisa. */
+      if (exigeDetalheFinanceiro && !compraDetalhes) {
+        toast.error('Clique em "Completar Compra" para preencher os detalhes financeiros');
+        return;
+      }
       const valorBase = (() => {
         const totalKg = (parseNumericValue(quantidade) || 0) * (parseNumericValue(pesoKg) || 0);
+        if (!compraDetalhes) return 0;
         if (compraDetalhes.tipoPreco === 'por_kg') return totalKg * (Number(compraDetalhes.precoKg) || 0);
         if (compraDetalhes.tipoPreco === 'por_cab') return (parseNumericValue(quantidade) || 0) * (Number(compraDetalhes.precoCab) || 0);
         return Number(compraDetalhes.valorTotal) || 0;
       })();
-      if ((statusOp === 'programado' || statusOp === 'realizado') && valorBase <= 0) {
+      if (exigeDetalheFinanceiro && valorBase <= 0) {
         toast.error('Preencha o preço base antes de registrar a compra.');
         return;
       }
@@ -3117,7 +3150,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
            o item e' OCULTADO, nunca abre o shell em modo legado. */
     const itensVisiveis = (g: TipoCardGroup) => g.items
       .filter(it => !it.navOnly || (it.value === 'chuvas' && !!onNavegarChuvas))
-      .filter(it => !(it.value === 'compra' && !onNovaCompraOC));
+      /* ⚠ O CARD DA COMPRA SOME QUANDO O ENTRYPOINT DA OC NAO ESTA LIGADO — regra do
+         realizado, onde comprar E' abrir uma Operacao Comercial. Em META nao ha OC:
+         o lancamento e' simples, entao a ausencia do entrypoint nao diz nada e esconder
+         o card tirava da rota de planejamento um tipo que ela precisa
+         (PR-ZOO-META-COMPRA-01). O realizado nao muda. */
+      .filter(it => !(it.value === 'compra' && !onNovaCompraOC && !isCenarioMeta));
 
     /* ── UM CARTAO POR GRUPO (PR-UI-LANCAR-CARDS-02) ───────────────────────────
        Eram NOVE cartoes com borda de 2px cada, sob cabecalhos soltos: nove molduras
@@ -4335,6 +4373,31 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     fecharModalOCComAutosave,
   };
 
+  /* Prop-bag da Compra em META — o formulario simples, nao a Operacao Comercial.
+     ⚠ `nomeFazenda` e' a do CONTEXTO e nao um seletor: a compra nunca teve seletor de
+     fazenda (origem e' texto livre, destino e' auto herdado), entao ela NAO entra em
+     TIPOS_COM_SELETOR_DE_FAZENDA e continua recusada em modo Global. */
+  const compraMetaFormApi = {
+    data, setData,
+    qtdInput, pesoInput,
+    categoria, setCategoria: (v: Categoria) => setCategoria(v),
+    categoriasDisponiveis,
+    observacao, setObservacao,
+    fazendaOrigem, setFazendaOrigem,
+    compraFornecedorId, setCompraFornecedorId,
+    fornecedores: abateFornecedores,
+    notaFiscal, setNotaFiscal,
+    precoKgBase: precoKg, setPrecoKgBase: setPrecoKg,
+    bonus, setBonus,
+    descontos, setDescontos,
+    nomeFazenda: nomeFazenda || null,
+    compraQtd: parseNumericValue(quantidade) || 0,
+    compraPeso: parseDecimalInput(pesoKg) ?? 0,
+    submitting,
+    handleRequestRegister,
+    fecharModalOCComAutosave,
+  };
+
   /* Prop-bag da Morte — mesmo padrao do `nascFormApi` acima. `modo: 'criacao'` e' o
      unico valor possivel aqui; a edicao monta o seu no LancamentoZooModal.
      ⚠ `cenarioRotulo` sai do estado REAL e nao de um literal: a rota
@@ -4449,7 +4512,14 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           ? 'max-w-5xl p-0 gap-0 overflow-hidden [&>button.absolute]:hidden'
           : 'max-w-full sm:max-w-5xl w-full h-screen sm:h-auto sm:max-h-[92vh] overflow-y-auto p-4 sm:p-5'}
       >
-      {isCompra ? (
+      {isCompra && isCenarioMeta ? (
+        /* ══ COMPRA EM META NO FORMULARIO SIMPLES ═════════════════════════════════
+           A OC e' do realizado: contraparte, documento, recebimento e liquidacao nao
+           existem numa projecao. Ao migrar a compra para a OC, o caminho de meta dela
+           sumiu da tela — e ha 9 compras de meta gravadas por um caminho que deixou de
+           existir. Nenhuma OC e' criada aqui. */
+        <CompraMetaModalShell {...compraMetaFormApi} />
+      ) : isCompra ? (
         <CompraModalShell {...compraFormApi} />
       ) : isNascimento ? (
         /* ══ NASCIMENTO NO SHELL DA OC ══════════════════════════════════════════
