@@ -31,6 +31,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { DatePicker } from '@/components/ui/date-picker';
 import { SearchableSelect } from '@/components/ui/searchable-select';
+import { FornecedorSelect } from '@/components/shared/FornecedorSelect';
 import type { Categoria } from '@/types/cattle';
 import { LancamentoModalEnvelope } from '@/components/lancamento/LancamentoModalEnvelope';
 
@@ -67,6 +68,8 @@ interface MascaraInput {
 }
 
 export interface CompraMetaModalShellProps {
+  /** 'criacao' registra um lançamento novo; 'edicao' salva um já gravado. */
+  modo?: 'criacao' | 'edicao';
   data: string;
   setData: (v: string) => void;
   qtdInput: MascaraInput;
@@ -85,7 +88,13 @@ export interface CompraMetaModalShellProps {
   setFazendaOrigem: (v: string) => void;
   compraFornecedorId: string;
   setCompraFornecedorId: (v: string) => void;
+  /** Lista pronta — o caminho de CRIACAO ja a carrega paginada em LancamentosTab. */
   fornecedores: { id: string; nome: string }[];
+  /** ⚠ SO' NA EDICAO. O modal soberano nao tem lista de fornecedores carregada, e
+   *  duplicar a consulta paginada aqui seria a segunda copia dela. `FornecedorSelect`
+   *  e' o componente compartilhado que o caminho de edicao ja usa (CompraDadosZootecnicos,
+   *  VendaDadosZootecnicos): busca sozinho por cliente, com debounce e limite. */
+  clienteIdParaFornecedor?: string;
   notaFiscal: string;
   setNotaFiscal: (v: string) => void;
   precoKgBase: string;
@@ -115,9 +124,9 @@ export interface CompraMetaModalShellProps {
 }
 
 export function CompraMetaModalShell({
-  data, setData, qtdInput, pesoInput, categoria, setCategoria, categoriasDisponiveis,
+  modo = 'criacao', data, setData, qtdInput, pesoInput, categoria, setCategoria, categoriasDisponiveis,
   observacao, setObservacao, fazendaOrigem, setFazendaOrigem,
-  compraFornecedorId, setCompraFornecedorId, fornecedores,
+  compraFornecedorId, setCompraFornecedorId, fornecedores, clienteIdParaFornecedor,
   notaFiscal, setNotaFiscal, precoKgBase, setPrecoKgBase,
   bonus, setBonus, descontos, setDescontos,
   compraFazendaId, setCompraFazendaId, fazendasOC, compraFazendaNome, compraFazendaFalta,
@@ -132,6 +141,7 @@ export function CompraMetaModalShell({
   const fmtNum2 = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fornecedorNome = fornecedores.find(f => f.id === compraFornecedorId)?.nome ?? null;
 
+  const isEdicao = modo === 'edicao';
   const precoKgNum = Number(String(precoKgBase).replace(',', '.')) || 0;
   const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -185,9 +195,12 @@ export function CompraMetaModalShell({
         <Button type="button" onClick={handleRequestRegister} disabled={submitting || !compraFornecedorId || compraFazendaFalta}
           className="bg-white text-primary hover:bg-white/90 font-bold disabled:opacity-60"
           title={compraFazendaFalta ? 'Selecione a fazenda do lançamento'
-            : !compraFornecedorId ? 'Selecione o fornecedor' : 'Registrar a compra planejada'}
-          aria-label="Registrar meta">
-          {submitting ? 'Registrando…' : 'Registrar meta'}
+            : !compraFornecedorId ? 'Selecione o fornecedor'
+            : isEdicao ? 'Salvar as alterações da compra planejada' : 'Registrar a compra planejada'}
+          aria-label={isEdicao ? 'Salvar alterações' : 'Registrar meta'}>
+          {isEdicao
+            ? (submitting ? 'Salvando…' : 'Salvar alterações')
+            : (submitting ? 'Registrando…' : 'Registrar meta')}
         </Button>
       </>}
     >
@@ -211,7 +224,16 @@ export function CompraMetaModalShell({
         <Separator />
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-3">
           <div className="min-w-0">
-            <Label className="text-[10px] text-muted-foreground">Fazenda <span className="text-destructive">*</span></Label>
+            <Label className="text-[10px] text-muted-foreground">Fazenda{!isEdicao && <span className="text-destructive"> *</span>}</Label>
+            {/* ⚠ NA EDICAO NAO HA SELETOR, e nao e' esquecimento: `editarLancamento` nao
+                envia `fazenda_id`. Mover um lancamento entre fazendas depois de gravado
+                mexe no saldo de dois rebanhos e em dois fechamentos. Oferecer a escolha
+                seria controle que mente — a licao de 5b523790. Mesma regra do Nascimento
+                e da Morte, mesmo idioma canonico de campo travado. */}
+            {isEdicao ? (
+              <Input readOnly value={compraFazendaNome ?? '—'} title="A fazenda do lançamento não muda por aqui"
+                className="mt-[3px] h-8 px-2.5 text-[12px] bg-muted border-border/60 text-muted-foreground" />
+            ) : (
             <Select value={compraFazendaId} onValueChange={setCompraFazendaId}>
               <SelectTrigger className={`mt-[3px] h-8 px-2.5 text-[12px] ${compraFazendaFalta ? 'border-destructive' : ''}`}>
                 <SelectValue placeholder="Selecione a fazenda" />
@@ -220,6 +242,7 @@ export function CompraMetaModalShell({
                 {fazendasOC.map(f => <SelectItem key={f.id} value={f.id} className="text-[12px]">{f.nome}</SelectItem>)}
               </SelectContent>
             </Select>
+            )}
             {compraFazendaFalta && (
               <p className="mt-[3px] text-[10px] text-destructive">Selecione a fazenda do lançamento.</p>
             )}
@@ -255,15 +278,24 @@ export function CompraMetaModalShell({
                 impediria projetar uma compra de fornecedor ja conhecido. */}
             <Label className="text-[10px] text-muted-foreground">Fornecedor <span className="text-destructive">*</span></Label>
             <div className="mt-[3px]">
-              <SearchableSelect
-                value={compraFornecedorId || '__all__'}
-                onValueChange={(v) => setCompraFornecedorId(v === '__all__' ? '' : v)}
-                options={fornecedores.map(f => ({ value: f.id, label: f.nome }))}
-                placeholder="Selecione o fornecedor"
-                allLabel="Nenhum selecionado"
-                allValue="__all__"
-                className="[&_button]:h-8 [&_button]:text-[12px] [&_button]:px-2.5"
-              />
+              {isEdicao && clienteIdParaFornecedor ? (
+                <FornecedorSelect
+                  fornecedorId={compraFornecedorId || null}
+                  onFornecedorChange={(id) => setCompraFornecedorId(id ?? '')}
+                  clienteId={clienteIdParaFornecedor}
+                  placeholder="Selecione o fornecedor"
+                />
+              ) : (
+                <SearchableSelect
+                  value={compraFornecedorId || '__all__'}
+                  onValueChange={(v) => setCompraFornecedorId(v === '__all__' ? '' : v)}
+                  options={fornecedores.map(f => ({ value: f.id, label: f.nome }))}
+                  placeholder="Selecione o fornecedor"
+                  allLabel="Nenhum selecionado"
+                  allValue="__all__"
+                  className="[&_button]:h-8 [&_button]:text-[12px] [&_button]:px-2.5"
+                />
+              )}
             </div>
           </div>
           <div className="min-w-0">

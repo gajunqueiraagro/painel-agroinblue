@@ -38,6 +38,7 @@ import { nomeFazendaDoRegistro as resolverNomeFazendaDoRegistro } from '@/lib/zo
 
 import { NascimentoEdicaoModal } from '@/components/nascimento/NascimentoEdicaoModal';
 import { MorteEdicaoModal } from '@/components/morte/MorteEdicaoModal';
+import { CompraMetaEdicaoModal } from '@/components/compra/CompraMetaEdicaoModal';
 import { EditConsumoSheet } from '@/components/edit/EditConsumoSheet';
 import { EditTransferenciaSheet } from '@/components/edit/EditTransferenciaSheet';
 import { EditReclassificacaoSheet } from '@/components/edit/EditReclassificacaoSheet';
@@ -910,6 +911,29 @@ export function LancamentoZooModal({
       );
 
     case 'compra':
+      /* ⚠ COMPRA EM META NAO ABRE O MODAL DO REALIZADO (PR-ZOO-META-COMPRA-EDICAO-01).
+         Criar ja tinha migrado em PR-ZOO-META-COMPRA-01; editar continuava caindo aqui,
+         com abas de Custos da Operacao, Itens e Auditoria, bloco de Vinculo Financeiro e
+         rodape "Salvar e Gerar Financeiro" — nenhum deles pertence a um formulario de
+         projecao.
+         ⚠ O PLANO FINANCEIRO DE META CONTINUA EXISTINDO. Medido: 53 linhas financeiras
+         nascem de lancamentos de meta e 52 tem `cenario='meta'` do lado financeiro — e'
+         planejamento legitimo, nenhuma paga. Este desvio nao o remove nem o esconde do
+         sistema; so' nao o traz para dentro do formulario de lancamento.
+         ⚠ A COMPRA REALIZADA NAO MUDA: cai no `if` abaixo, byte a byte como estava. */
+      if (lancamento.cenario === 'meta') {
+        return (
+          <CompraMetaEdicaoModal
+            lancamento={lancamento}
+            open={open}
+            onOpenChange={onOpenChange}
+            onSalvar={onSalvar}
+            p1Oficial={permissions.blockReason === 'mes_fechado'}
+            temAlteracaoEstrutural={temAlteracaoEstrutural}
+            nomeFazenda={nomeFazendaDoRegistro}
+          />
+        );
+      }
       if (!compraForm) return null; // aguardando init via useMemo
       return (
         <>
