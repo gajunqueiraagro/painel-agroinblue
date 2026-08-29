@@ -159,6 +159,21 @@ export function useOperacaoComercial() {
       p_operacao_id: operacaoId, p_cliente_id: clienteId, p_versao_esperada: versaoEsperada, p_payload: payload,
     });
 
+  /* PR-OC-VENDA-BOITEL-RPC-01 — o planejamento do boitel de uma OC de venda.
+     ⚠ UNICA PORTA: `zoo_operacao_boitel` nao tem grant nenhum, entao nao ha caminho por
+     PostgREST. Upsert por (operacao_id, cenario) — uma chamada de 'realizado' nunca
+     alcanca a linha 'projetado'.
+     ⚠ PAYLOAD PARCIAL PRESERVA o que nao foi enviado; e a linha RESULTANTE e' que precisa
+     ter os cinco campos obrigatorios, nao o payload. */
+  const salvarBoitel = (
+    operacaoId: string, clienteId: string, versaoEsperada: number,
+    cenario: 'projetado' | 'realizado', payload: Record<string, unknown>,
+  ) =>
+    callRpc('oc_salvar_boitel', {
+      p_operacao_id: operacaoId, p_cliente_id: clienteId, p_versao_esperada: versaoEsperada,
+      p_cenario: cenario, p_payload: payload,
+    });
+
   const reabrir = (operacaoId: string, clienteId: string, versaoEsperada: number, motivo: string) =>
     callRpc('oc_reabrir', {
       p_operacao_id: operacaoId, p_cliente_id: clienteId, p_versao_esperada: versaoEsperada, p_motivo: motivo,
@@ -242,5 +257,5 @@ export function useOperacaoComercial() {
     };
   };
 
-  return { salvarRascunho, editarDadosOperacao, reabrir, confirmar, sincronizar, cancelar, carregarOperacao };
+  return { salvarRascunho, editarDadosOperacao, salvarBoitel, reabrir, confirmar, sincronizar, cancelar, carregarOperacao };
 }

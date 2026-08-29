@@ -37,6 +37,7 @@ import { MorteModalShell } from '@/components/morte/MorteModalShell';
 import { CompraMetaModalShell } from '@/components/compra/CompraMetaModalShell';
 import { VendaMetaModalShell } from '@/components/venda/VendaMetaModalShell';
 import { VendaModalShell } from '@/components/venda/VendaModalShell';
+import { boitelVazio, payloadBoitel, type BoitelEdicao } from '@/components/venda/BoitelBlocosModais';
 import { ReclassificacaoFormFields, useReclassificacaoState } from '@/components/ReclassificacaoForm';
 import { ReclassificacaoResumoPanel } from '@/components/ReclassificacaoResumoPanel';
 import { CompraDetalhesDialog, CompraDetalhes, EMPTY_COMPRA_DETALHES } from '@/components/compra/CompraDetalhesDialog';
@@ -579,6 +580,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [vendaTipoPreco, setVendaTipoPreco] = useState<BasePrecoVenda>('por_kg');
   const [vendaPrecoInput, setVendaPrecoInput] = useState('');
   const [boitelDataForResumo, setBoitelDataForResumo] = useState<import('@/components/BoitelPlanningDialog').BoitelData | null>(null);
+  /* PR-OC-VENDA-BOITEL-01B — o planejamento do boitel DA OC, em memoria.
+     ⚠ ESTADO PROPRIO, e nao o `boitelDataForResumo` acima. Aquele e' do formulario
+     antigo, que continua ao lado para conferencia; se os dois compartilhassem o objeto,
+     editar na OC mexeria no que o formulario antigo mostra. */
+  const [ocBoitel, setOcBoitel] = useState<BoitelEdicao | null>(null);
   const [rendCarcaca, setRendCarcaca] = useState('');
   const [funruralPct, setFunruralPct] = useState('');
   const [funruralReais, setFunruralReais] = useState('');
@@ -2186,11 +2192,24 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       setOcOperacaoId(env.operacao_id);
       setOcVersao(env.versao);
       if (env.status_comercial) setOcStatusComercial(env.status_comercial);
+
+      /* ⚠ UMA CHAMADA SO, e depois do rascunho porque ela precisa da operacao existindo e
+         da versao que o rascunho acabou de devolver. Os quatro modais editaram estado
+         local; e aqui que isso vira linha.
+         ⚠ 'projetado' SEMPRE: o realizado nasce no abate, por reabertura da OC, e nao por
+         este botao. */
+      let versaoFinal = env.versao;
+      if (vendaTipoVenda === 'boitel' && ocBoitel) {
+        const envB = await ocRpc.salvarBoitel(env.operacao_id, clienteId, env.versao, 'projetado', payloadBoitel(ocBoitel));
+        versaoFinal = (envB as { versao: number }).versao;
+        setOcVersao(versaoFinal);
+      }
+
       /* A segunda frase VOLTOU em PR-OC-VENDA-ABA-NEGOCIACAO-01: a aba de Negociacao
          existe, entao a instrucao aponta para algo que da' para fazer. Ela ficou fora
          enquanto nao havia — mandar fazer o impossivel ensina a ignorar a mensagem. */
       if (criando) toast.success('Operação de venda criada. Agora informe os lotes negociados.');
-      return { operacaoId: env.operacao_id, versao: env.versao };
+      return { operacaoId: env.operacao_id, versao: versaoFinal };
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Falha ao salvar a operação de venda.');
       return null;
@@ -4749,7 +4768,13 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           /* ⚠ O MESMO ESTADO QUE O RESUMO ANTIGO JA LIA — nao ha fonte nova. Ele e'
              preenchido a partir de `detalhesSnapshot.boitelSnapshot` quando uma venda
              boitel e' aberta para edicao. */
-          boitelData={boitelDataForResumo}
+          /* ⚠ O VALOR NUNCA E NULO NUM BOITEL: sem objeto os quatro blocos nao teriam o
+             que editar. Nasce vazio com as cabecas e o peso da propria venda — os dois
+             unicos campos que a venda ja sabe. */
+          boitelData={vendaTipoVenda === 'boitel'
+            ? (ocBoitel ?? boitelVazio(parseNumericValue(quantidade) || 0, parseNumericValue(pesoKg) || 0))
+            : null}
+          onBoitelChange={setOcBoitel}
           categoria={categoria}
           categoriasDisponiveis={categoriasDisponiveis}
           quantidadeNum={parseNumericValue(quantidade) || 0}

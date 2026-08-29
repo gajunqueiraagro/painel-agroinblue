@@ -37,7 +37,7 @@ import type { Categoria } from '@/types/cattle';
 import type { CompraLotesApi } from '@/hooks/useCompraLotes';
 import { AbaNegociacaoLotes } from '@/components/compra/AbaNegociacaoLotes';
 import { BoitelBaseOperacional, BoitelPainelResultado } from '@/components/venda/BoitelNegociacaoDerivado';
-import type { BoitelData } from '@/components/BoitelPlanningDialog';
+import { BoitelBlocosModais, faltamDosCinco, type BoitelEdicao } from '@/components/venda/BoitelBlocosModais';
 
 /* ⚠ "RECEBIMENTO" CHAMA-SE ENTREGA NA VENDA — o gado SAI. A coluna do banco já é
    genérica (`entrega_encerrada`), então o vocabulário muda só na tela.
@@ -92,10 +92,10 @@ export interface VendaModalShellProps {
   ocStatusComercial: string | null;
   /** Lotes da negociação — o mesmo hook da compra, que opera sobre `zoo_operacao_lotes`. */
   lotesApi?: CompraLotesApi;
-  /** ⚠ SO LEITURA. O planejamento de boitel gravado em `detalhes_snapshot.boitelSnapshot`.
-   *  Nada nesta tela o escreve — quem escreve e' o `BoitelPlanningDialog` do formulario
-   *  antigo, que nao mudou. `null` quando a venda ainda nao tem planejamento. */
-  boitelData?: BoitelData | null;
+  /** O planejamento do boitel EM MEMORIA. Os quatro modais o editam; quem persiste e' o
+   *  botao da venda, numa chamada so' a `oc_salvar_boitel` — PR-OC-VENDA-BOITEL-01B. */
+  boitelData?: BoitelEdicao | null;
+  onBoitelChange?: (proximo: BoitelEdicao) => void;
   categoria: string;
   categoriasDisponiveis: { value: string; label: string }[];
   quantidadeNum: number;
@@ -110,7 +110,7 @@ export function VendaModalShell({
   vendaFazendaId, setVendaFazendaId, fazendasOC,
   propriedadeDestino, setPropriedadeDestino,
   vendaTipoVenda, setVendaTipoVenda, observacao, setObservacao,
-  ocOperacaoId, ocStatusComercial, lotesApi, boitelData = null, categoria, categoriasDisponiveis,
+  ocOperacaoId, ocStatusComercial, lotesApi, boitelData = null, onBoitelChange, categoria, categoriasDisponiveis,
   quantidadeNum, pesoKgNum, submitting, onSalvarOperacao, onFechar,
 }: VendaModalShellProps) {
   const [abaAtiva, setAbaAtiva] = useState<string>('venda');
@@ -122,7 +122,7 @@ export function VendaModalShell({
      guardado — muda apenas ONDE vai aparecer, e sera' dentro da Negociacao. */
 
   const fazendaFalta = !vendaFazendaId;
-  const podeSalvar = !!compradorId && !!vendaFazendaId && !!data && !!vendaTipoVenda;
+  const identificacaoPronta = !!compradorId && !!vendaFazendaId && !!data && !!vendaTipoVenda;
 
   /* ⚠ A BIFURCACAO DA NEGOCIACAO, de PR-OC-VENDA-BOITEL-01A. O boitel NAO tem aba
      propria: ele e' a Negociacao com mais coisa. Venda comum mostra os lotes como
@@ -131,6 +131,18 @@ export function VendaModalShell({
      dois ramos com a mesma lista de props seria a mesma armadilha que fez o `brl`
      chegar a seis copias. */
   const ehBoitel = vendaTipoVenda === 'boitel';
+
+  /* ⚠ A REGRA NAO E DAQUI. `faltamDosCinco` espelha a lista de `oc_salvar_boitel` para o
+     botao poder impedir ANTES da chamada — a licao de 45a7352b, onde o operador so'
+     descobria o impedimento no fim. Se as duas divergirem, quem manda e' a RPC, e o texto
+     que o operador veria seria o dela. */
+  const faltamBoitel = ehBoitel ? faltamDosCinco(boitelData) : [];
+  const podeSalvar = identificacaoPronta && faltamBoitel.length === 0;
+  const motivoNaoSalva = !identificacaoPronta
+    ? 'Informe comprador, data, fazenda e tipo de venda'
+    : faltamBoitel.length > 0
+      ? `Planejamento do boitel incompleto. Falta ${faltamBoitel.join(', ')}.`
+      : undefined;
 
   /* A MESMA ABA DA COMPRA, com quatro textos trocados por prop. O lote e' identico nos
      dois: categoria, quantidade, peso, criterio e valor. Nenhum rotulo de CAMPO muda — o
@@ -204,7 +216,20 @@ export function VendaModalShell({
               <div className="space-y-2 min-w-0">
                 <BoitelBaseOperacional boitelData={boitelData} />
                 <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_240px] gap-2 items-start">
-                  <div className="min-w-0">{abaLotes}</div>
+                  <div className="min-w-0 space-y-2">
+                    {/* ⚠ OS QUATRO BLOCOS SO APARECEM COM VALOR E COM ONCHANGE. Sem os dois
+                        nao ha o que editar, e um bloco clicavel que nao abre nada seria a
+                        promessa nao cumprida que o proprio botao desta tela ja evitou. O
+                        painel a' direita continua dizendo, em ambar, o que falta. */}
+                    {boitelData && onBoitelChange && (
+                      <BoitelBlocosModais
+                        valor={boitelData}
+                        onChange={onBoitelChange}
+                        somenteLeitura={ocStatusComercial === 'cancelada'}
+                      />
+                    )}
+                    {abaLotes}
+                  </div>
                   <BoitelPainelResultado boitelData={boitelData} />
                 </div>
               </div>
@@ -349,7 +374,7 @@ export function VendaModalShell({
         </Button>
         <Button type="button" onClick={onSalvarOperacao} disabled={submitting || !podeSalvar || ocStatusComercial === 'cancelada'}
           className="bg-white text-primary hover:bg-white/90 font-bold gap-1.5 disabled:opacity-60"
-          title={podeSalvar ? undefined : 'Informe comprador, data, fazenda e tipo de venda'}>
+          title={motivoNaoSalva}>
           {/* O TEXTO VOLTOU AO DO MOCKUP em PR-OC-VENDA-ABA-NEGOCIACAO-01, porque agora
               ha para onde ir. Ele ficou em "Salvar operação" enquanto a Negociacao nao
               existia: promessa nao cumprida ensina a desconfiar do botao, do mesmo modo
