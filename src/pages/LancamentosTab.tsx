@@ -146,7 +146,13 @@ import { usePermissions } from '@/hooks/usePermissions';
    Migrar um tipo novo passa a ser ACRESCENTAR UMA LINHA AQUI. Se esquecer, o tipo
    nao lanca em Global e a mensagem diz o que fazer — em vez de uma negacao
    encadeada a mais. */
-const TIPOS_COM_SELETOR_DE_FAZENDA: TipoMovimentacao[] = ['nascimento', 'morte'];
+const TIPOS_COM_SELETOR_DE_FAZENDA: TipoMovimentacao[] = ['nascimento', 'morte', 'compra'];
+/* ⚠ A COMPRA ENTROU EM PR-ZOO-META-COMPRA-FAZENDA-01, e so' alcanca a compra em META.
+   A compra REALIZADA sai do funil antes da guarda: `if (modoOCCompra && isCompra)`
+   termina em `return` (linha ~2259), e ela sempre roda em modo OC — o card so' aparece
+   no realizado quando o entrypoint da OC esta ligado, e clicar nele seta `oc_compra=1`.
+   A fazenda da compra realizada continua sendo a da Operacao Comercial
+   (`ocFazendaDestinoId`), por outro caminho. */
 
 /* ⚠ QUEM USA O ENVELOPE SEM PADDING (LancamentoModalEnvelope e CompraModalShell).
    Lista SEPARADA da de cima porque diz outra coisa: aqui e' "quem desenha a propria
@@ -736,6 +742,18 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setMorteFazendaId(fazendaAtual?.id && fazendaAtual.id !== '__global__' ? fazendaAtual.id : '');
   }, [isMorte, fazendaAtual?.id]);
   const morteFazendaNome = fazendasOC.find(f => f.id === morteFazendaId)?.nome ?? null;
+  /* ── FAZENDA DA COMPRA EM META (PR-ZOO-META-COMPRA-FAZENDA-01) ───────────────
+     Mesmo desenho do Nascimento e da Morte. A compra nunca teve seletor — origem e'
+     texto livre e destino era heranca silenciosa do contexto —, e isso a deixava
+     inlancavel em Global enquanto os outros dois ja podiam. */
+  const [compraFazendaId, setCompraFazendaId] = useState<string>('');
+  useEffect(() => {
+    if (!isCompra) return;
+    setCompraFazendaId(fazendaAtual?.id && fazendaAtual.id !== '__global__' ? fazendaAtual.id : '');
+  }, [isCompra, fazendaAtual?.id]);
+  const compraFazendaNome = fazendasOC.find(f => f.id === compraFazendaId)?.nome ?? null;
+  const compraFazendaFalta = isCompra && isCenarioMeta && !compraFazendaId;
+
   /* ⚠ FORNECEDOR DA COMPRA EM META — abre com o sentinel do cliente e continua editavel.
      Uma projecao nao tem fornecedor real, e o fluxo antigo resolvia CRIANDO um cadastro
      novo a cada vez: sao 30 registros chamados "Meta" espalhados pelos clientes. O
@@ -760,9 +778,14 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
      exibir" e "escolhe a propria fazenda" sao a mesma coisa, entao nao ha lista nova.
      ⚠ O payload (`fazendaId`, ~2417) mantem a sua propria cadeia. Ela e' caminho de
      ESCRITA e este PR e' de exibicao; unifica-las e' barato e fica anotado. */
-  const fazendaEscolhidaNome = TIPOS_COM_SELETOR_DE_FAZENDA.includes(tipo)
-    ? (isNascimento ? nascFazendaNome : morteFazendaNome)
-    : null;
+  /* ⚠ UMA CADEIA SO'. Havia DUAS listas de ternarios dizendo a mesma coisa — uma para o
+     nome (exibicao) e outra para o id (payload, `fazendaId:`) — e cada tipo novo obrigava
+     a lembrar das duas. Agora o id e' a fonte e o nome deriva dele; um tipo que entre em
+     TIPOS_COM_SELETOR_DE_FAZENDA precisa de UMA linha aqui, e o resto acompanha. */
+  const fazendaEscolhidaId = TIPOS_COM_SELETOR_DE_FAZENDA.includes(tipo)
+    ? (isNascimento ? nascFazendaId : isMorte ? morteFazendaId : compraFazendaId)
+    : '';
+  const fazendaEscolhidaNome = fazendasOC.find(f => f.id === fazendaEscolhidaId)?.nome ?? null;
   const morteFazendaFalta = isMorte && !morteFazendaId;
   const morteQtd = parseNumericValue(quantidade) || 0;
   const mortePeso = parseDecimalInput(pesoKg) ?? 0;
@@ -2530,9 +2553,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
          fazenda do contexto — exatamente o comportamento de sempre. Mandar
          `nascFazendaId` para todos aplicaria a escolha de uma tela em cinco que nao a
          oferecem. */
-      fazendaId: isNascimento ? (nascFazendaId || undefined)
-        : isMorte ? (morteFazendaId || undefined)
-        : undefined,
+      /* ⚠ A MESMA FONTE DA EXIBICAO. Era uma segunda cadeia de ternarios, paralela a do
+         nome — a divida anotada em PR-ZOO-FIX-MORTE-PESO-E-CONFIRMACAO-01. Vazio vira
+         `undefined` e `adicionarLancamento` cai na fazenda do contexto, como sempre. */
+      fazendaId: fazendaEscolhidaId || undefined,
       fazendaOrigem: origemFinal, fazendaDestino: destinoFinal,
       pesoMedioKg: pesoKg ? parseNumericValue(pesoKg) : undefined,
       pesoMedioArrobas: pesoKg ? kgToArrobas(parseNumericValue(pesoKg)) : undefined,
@@ -4405,7 +4429,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     precoKgBase: precoKg, setPrecoKgBase: setPrecoKg,
     bonus, setBonus,
     descontos, setDescontos,
-    nomeFazenda: nomeFazenda || null,
+    compraFazendaId, setCompraFazendaId,
+    fazendasOC,
+    compraFazendaNome, compraFazendaFalta,
     compraQtd: parseNumericValue(quantidade) || 0,
     compraPeso: parseDecimalInput(pesoKg) ?? 0,
     submitting,

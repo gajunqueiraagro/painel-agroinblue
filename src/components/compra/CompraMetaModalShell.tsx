@@ -34,9 +34,22 @@ import { SearchableSelect } from '@/components/ui/searchable-select';
 import type { Categoria } from '@/types/cattle';
 import { LancamentoModalEnvelope } from '@/components/lancamento/LancamentoModalEnvelope';
 
+/* A fazenda no resumo tem um estado que os outros pares nao tem: ela pode estar FALTANDO
+   e bloquear o registro. Traco cinza diria "ausente, tudo bem"; aqui a ausencia e' erro a
+   resolver, e a cor precisa dizer isso. */
+function LinhaResumoFazenda({ valor, falta }: { valor: string | null; falta: boolean }) {
+  return (
+    <div className="flex items-baseline justify-between gap-1.5 leading-tight">
+      <span className="text-muted-foreground shrink-0">Fazenda</span>
+      <span className={`font-medium text-right truncate ${falta ? 'text-destructive' : ''}`}>{valor || '—'}</span>
+    </div>
+  );
+}
+
 /* Par rotulo-valor do resumo lateral — mesmo idioma do `Linha` de ResumoLateralOC (A17).
-   ⚠ Quarta copia deste par. Sai na mesma extracao que levar o resumo para o envelope —
-   ver a divida declarada no topo do MorteModalShell. */
+   ⚠ Quarta copia deste par, junto com a do Nascimento e a da Morte. Sai na mesma
+   extracao que levar o resumo para o envelope — ver a divida no topo do
+   MorteModalShell. */
 function LinhaResumo({ rotulo, valor }: { rotulo: string; valor: string | null }) {
   return (
     <div className="flex items-baseline justify-between gap-1.5 leading-tight">
@@ -77,8 +90,14 @@ export interface CompraMetaModalShellProps {
   setBonus: (v: string) => void;
   descontos: string;
   setDescontos: (v: string) => void;
-  /** Fazenda do CONTEXTO — a compra não tem seletor próprio, herda daqui. */
-  nomeFazenda: string | null;
+  /* ⚠ A COMPRA GANHOU SELETOR DE FAZENDA em PR-ZOO-META-COMPRA-FAZENDA-01. Antes ela
+     herdava do contexto em silencio, e por isso era a unica do envelope que nao podia
+     ser lancada em modo Global — Nascimento e Morte ja podiam. */
+  compraFazendaId: string;
+  setCompraFazendaId: (v: string) => void;
+  fazendasOC: { id: string; nome: string }[];
+  compraFazendaNome: string | null;
+  compraFazendaFalta: boolean;
   compraQtd: number;
   compraPeso: number;
   submitting: boolean;
@@ -92,7 +111,8 @@ export function CompraMetaModalShell({
   compraFornecedorId, setCompraFornecedorId, fornecedores,
   notaFiscal, setNotaFiscal, precoKgBase, setPrecoKgBase,
   bonus, setBonus, descontos, setDescontos,
-  nomeFazenda, compraQtd, compraPeso, submitting,
+  compraFazendaId, setCompraFazendaId, fazendasOC, compraFazendaNome, compraFazendaFalta,
+  compraQtd, compraPeso, submitting,
   handleRequestRegister, fecharModalOCComAutosave,
 }: CompraMetaModalShellProps) {
   /* ⚠ AUSENCIA E' TRACO. Sem quantidade ou sem peso nao ha peso total — nao ha "peso
@@ -116,7 +136,7 @@ export function CompraMetaModalShell({
       titulo="Compra"
       cenario="meta"
       data={data}
-      fazendaNome={nomeFazenda}
+      fazendaNome={compraFazendaNome}
       onFechar={fecharModalOCComAutosave}
       resumo={<>
         <div className="pb-1">
@@ -126,7 +146,7 @@ export function CompraMetaModalShell({
           <div className="px-3 space-y-0.5">
             <LinhaResumo rotulo="Tipo" valor="Compra" />
             <LinhaResumo rotulo="Data" valor={data ? data.split('-').reverse().join('/') : null} />
-            <LinhaResumo rotulo="Fazenda" valor={nomeFazenda} />
+            <LinhaResumoFazenda valor={compraFazendaNome} falta={compraFazendaFalta} />
             <LinhaResumo rotulo="Categoria" valor={categoriasDisponiveis.find(c => c.value === categoria)?.label ?? null} />
             <LinhaResumo rotulo="Fornecedor" valor={fornecedorNome} />
             <div className="flex items-baseline justify-between gap-1.5 leading-tight">
@@ -158,9 +178,10 @@ export function CompraMetaModalShell({
         </div>
       </>}
       acao={<>
-        <Button type="button" onClick={handleRequestRegister} disabled={submitting || !compraFornecedorId}
+        <Button type="button" onClick={handleRequestRegister} disabled={submitting || !compraFornecedorId || compraFazendaFalta}
           className="bg-white text-primary hover:bg-white/90 font-bold disabled:opacity-60"
-          title={!compraFornecedorId ? 'Selecione o fornecedor' : 'Registrar a compra planejada'}
+          title={compraFazendaFalta ? 'Selecione a fazenda do lançamento'
+            : !compraFornecedorId ? 'Selecione o fornecedor' : 'Registrar a compra planejada'}
           aria-label="Registrar meta">
           {submitting ? 'Registrando…' : 'Registrar meta'}
         </Button>
@@ -172,7 +193,9 @@ export function CompraMetaModalShell({
         <div className="grid grid-cols-2 gap-2 rounded-md border bg-muted/20 px-3.5 py-[11px]">
           <div className="min-w-0">
             <div className="text-[11px] font-normal text-muted-foreground leading-none">Fazenda</div>
-            <div className="mt-1 text-[20px] font-medium leading-none truncate">{nomeFazenda ?? '—'}</div>
+            <div className={`mt-1 text-[20px] font-medium leading-none truncate ${compraFazendaFalta ? 'text-destructive' : ''}`}>
+              {compraFazendaNome ?? '—'}
+            </div>
           </div>
           <div className="min-w-0">
             <div className="text-[11px] font-normal text-muted-foreground leading-none">Data prevista</div>
@@ -183,6 +206,20 @@ export function CompraMetaModalShell({
         </div>
         <Separator />
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-3">
+          <div className="min-w-0">
+            <Label className="text-[10px] text-muted-foreground">Fazenda <span className="text-destructive">*</span></Label>
+            <Select value={compraFazendaId} onValueChange={setCompraFazendaId}>
+              <SelectTrigger className={`mt-[3px] h-8 px-2.5 text-[12px] ${compraFazendaFalta ? 'border-destructive' : ''}`}>
+                <SelectValue placeholder="Selecione a fazenda" />
+              </SelectTrigger>
+              <SelectContent>
+                {fazendasOC.map(f => <SelectItem key={f.id} value={f.id} className="text-[12px]">{f.nome}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            {compraFazendaFalta && (
+              <p className="mt-[3px] text-[10px] text-destructive">Selecione a fazenda do lançamento.</p>
+            )}
+          </div>
           <div className="min-w-0">
             <Label className="text-[10px] text-muted-foreground">Data prevista <span className="text-destructive">*</span></Label>
             {/* A20 — DatePicker do sistema, nunca `<input type="date">`. */}
