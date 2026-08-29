@@ -2376,8 +2376,16 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       }
     }
 
+    /* ⚠ A FAZENDA ESCOLHIDA, NUNCA A PALAVRA "Global". `campos.origem.value` vem de
+       `getCamposFazenda(tipo, nomeFazenda)`, e `nomeFazenda` e' `fazendaAtual?.nome` —
+       que em contexto Global e' literalmente a string 'Global'. Era ESTE o escritor que
+       sujava as colunas de texto: os 19 registros que PR-UI-LANC-CARD-FAZENDA-01
+       corrigiu na EXIBICAO nasceram aqui.
+       ⚠ So' muda para quem ESCOLHE a fazenda — `fazendaEscolhidaNome` e' null nos demais
+       e a expressao cai no valor de sempre. Tipo novo que entrar em
+       TIPOS_COM_SELETOR_DE_FAZENDA passa a gravar o nome certo sem tocar nesta linha. */
     const origemFinal = campos.origem.show
-      ? (campos.origem.auto ? campos.origem.value : fazendaOrigem) || undefined
+      ? (campos.origem.auto ? (fazendaEscolhidaNome ?? campos.origem.value) : fazendaOrigem) || undefined
       : undefined;
     let destinoFinal = campos.destino?.show
       ? (campos.destino.auto ? campos.destino.value : fazendaDestino) || undefined
