@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Input } from '@/components/ui/input';
+import { CampoPrecoVenda } from '@/components/venda/CampoPrecoVenda';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -955,27 +956,17 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
               <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
             </CollapsibleTrigger>
             <CollapsibleContent className="pt-1 space-y-1.5">
-              <div className="grid grid-cols-3 gap-1.5">
-                {(['por_kg', 'por_cab', 'por_total'] as const).map(tp => (
-                  <button key={tp} type="button"
-                    onClick={() => onVendaTipoPrecoChange(tp)}
-                    className={`h-8 rounded text-[11px] font-bold border-2 transition-all ${vendaTipoPreco === tp ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
-                    {tp === 'por_kg' ? 'Por kg' : tp === 'por_cab' ? 'R$/cabeça' : 'Por total'}
-                  </button>
-                ))}
-              </div>
-              <div>
-                <Label className="text-[11px]">
-                  {vendaTipoPreco === 'por_kg' ? 'R$/kg' : vendaTipoPreco === 'por_cab' ? 'R$/cabeça' : 'Valor total (R$)'}
-                </Label>
-                <Input
-                  type="number"
-                  value={vendaPrecoInput}
-                  onChange={e => onVendaPrecoInputChange(e.target.value)}
-                  placeholder="0,00"
-                  className="h-7 text-[11px]"
-                />
-              </div>
+              {/* ⚠ EXTRAIDO em PR-ZOO-VENDA-META-01 — a venda em META precisa dos
+                  mesmos dois controles dentro do envelope, e escrever uma segunda
+                  versao seria a terceira do mesmo controle no sistema.
+                  ⚠ SEM PROP DE TIPOGRAFIA AQUI: os defaults do componente sao os
+                  valores que este painel sempre teve, entao ele nao muda. */}
+              <CampoPrecoVenda
+                vendaTipoPreco={vendaTipoPreco}
+                onVendaTipoPrecoChange={onVendaTipoPrecoChange}
+                vendaPrecoInput={vendaPrecoInput}
+                onVendaPrecoInputChange={onVendaPrecoInputChange}
+              />
               {valorBruto > 0 && (
                 <div className="bg-muted/30 rounded-md p-2 space-y-0.5 text-[10px]">
                   {quantidade > 0 && pesoKg > 0 && vendaTipoPreco !== 'por_kg' && (

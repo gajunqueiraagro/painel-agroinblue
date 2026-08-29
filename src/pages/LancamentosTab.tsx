@@ -35,6 +35,7 @@ import { LancamentoDetalhe } from '@/components/LancamentoDetalhe';
 import { NascimentoModalShell } from '@/components/nascimento/NascimentoModalShell';
 import { MorteModalShell } from '@/components/morte/MorteModalShell';
 import { CompraMetaModalShell } from '@/components/compra/CompraMetaModalShell';
+import { VendaMetaModalShell } from '@/components/venda/VendaMetaModalShell';
 import { ReclassificacaoFormFields, useReclassificacaoState } from '@/components/ReclassificacaoForm';
 import { ReclassificacaoResumoPanel } from '@/components/ReclassificacaoResumoPanel';
 import { CompraDetalhesDialog, CompraDetalhes, EMPTY_COMPRA_DETALHES } from '@/components/compra/CompraDetalhesDialog';
@@ -743,6 +744,25 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const isCompra = tipo === 'compra';
   const isVenda = tipo === 'venda';
   const isConsumo = tipo === 'consumo';
+
+  /* ── A VENDA EM META NO ENVELOPE (PR-ZOO-VENDA-META-01) ──────────────────────
+     ⚠ PREDICADO, E NAO LISTA. A pergunta tem TRES dimensoes — tipo, cenario e subtipo —
+     e uma lista de tipos so' responde a primeira: ela nao consegue excluir o boitel nem
+     distinguir meta de realizado. Uma segunda lista seria um nome sem funcao.
+     ⚠ FALSO PARA A VENDA REALIZADA em qualquer caso, e falso para boitel em qualquer
+     cenario. E' isso que mantem os dois intocados. */
+  const vendaMetaNoEnvelope = isVenda && isCenarioMeta && vendaTipoVenda !== 'boitel';
+
+  /* ⚠ UMA FONTE PARA O ROTEAMENTO E PARA A LARGURA DO MODAL. Ate aqui o container e o
+     `className` do DialogContent eram DUAS expressoes independentes que concordavam por
+     acaso — e foi a discordancia entre elas que fez o rodape da Morte rolar em
+     PR-ZOO-FIX-MORTE-GUARDA-GLOBAL-01: o tipo estava numa e faltava na outra. Com o
+     mesmo predicado nos dois, nao ha como discordarem. */
+  const usaEnvelopeProprio = TIPOS_NO_ENVELOPE_PROPRIO.includes(tipo) || vendaMetaNoEnvelope;
+  /** Quem escolhe a propria fazenda — governa os cinco pontos: a guarda de Global, os
+   *  dois escritores de texto, o `fazendaId` do payload e a confirmacao. */
+  const escolheFazenda = TIPOS_COM_SELETOR_DE_FAZENDA.includes(tipo) || vendaMetaNoEnvelope;
+
   const isTransferencia = tipo === 'transferencia_entrada' || tipo === 'transferencia_saida';
   const isTransferenciaSaida = tipo === 'transferencia_saida';
 
@@ -759,11 +779,27 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
      texto livre e destino era heranca silenciosa do contexto —, e isso a deixava
      inlancavel em Global enquanto os outros dois ja podiam. */
   const [compraFazendaId, setCompraFazendaId] = useState<string>('');
+  /* Fazenda da venda em META. ⚠ Na venda a fazenda e' ORIGEM — o gado SAI dela. */
+  const [vendaFazendaId, setVendaFazendaId] = useState<string>('');
+  useEffect(() => {
+    if (!isVenda) return;
+    setVendaFazendaId(fazendaAtual?.id && fazendaAtual.id !== '__global__' ? fazendaAtual.id : '');
+  }, [isVenda, fazendaAtual?.id]);
   useEffect(() => {
     if (!isCompra) return;
     setCompraFazendaId(fazendaAtual?.id && fazendaAtual.id !== '__global__' ? fazendaAtual.id : '');
   }, [isCompra, fazendaAtual?.id]);
   const compraFazendaNome = fazendasOC.find(f => f.id === compraFazendaId)?.nome ?? null;
+  const vendaFazendaNome = fazendasOC.find(f => f.id === vendaFazendaId)?.nome ?? null;
+  const vendaFazendaFalta = vendaMetaNoEnvelope && !vendaFazendaId;
+  /* ⚠ O SENTINEL SERVE A VENDA IGUAL. '[META] Planejamento' e' a contraparte de
+     PROJECAO — nao importa se ela compra ou vende. So' preenche se o campo estiver
+     vazio, e nunca cria cadastro pelo front. */
+  useEffect(() => {
+    if (!vendaMetaNoEnvelope || vendaDestinoFornecedorId) return;
+    const sentinel = abateFornecedores.find(f => f.nome === SENTINEL_META_NOME);
+    if (sentinel) setVendaDestinoFornecedorId(sentinel.id);
+  }, [vendaMetaNoEnvelope, vendaDestinoFornecedorId, abateFornecedores]);
   const compraFazendaFalta = isCompra && isCenarioMeta && !compraFazendaId;
 
   /* ⚠ FORNECEDOR DA COMPRA EM META — abre com o sentinel do cliente e continua editavel.
@@ -794,8 +830,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
      nome (exibicao) e outra para o id (payload, `fazendaId:`) — e cada tipo novo obrigava
      a lembrar das duas. Agora o id e' a fonte e o nome deriva dele; um tipo que entre em
      TIPOS_COM_SELETOR_DE_FAZENDA precisa de UMA linha aqui, e o resto acompanha. */
-  const fazendaEscolhidaId = TIPOS_COM_SELETOR_DE_FAZENDA.includes(tipo)
-    ? (isNascimento ? nascFazendaId : isMorte ? morteFazendaId : compraFazendaId)
+  const fazendaEscolhidaId = escolheFazenda
+    ? (isNascimento ? nascFazendaId : isMorte ? morteFazendaId
+       : isVenda ? vendaFazendaId : compraFazendaId)
     : '';
   const fazendaEscolhidaNome = fazendasOC.find(f => f.id === fazendaEscolhidaId)?.nome ?? null;
   const morteFazendaFalta = isMorte && !morteFazendaId;
@@ -2327,7 +2364,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
        ⚠ A LISTA E' A AUTORIDADE — ver TIPOS_COM_SELETOR_DE_FAZENDA. Enquanto isto era
        `!isNascimento`, a Morte migrou com seletor e continuou barrada
        (PR-ZOO-FIX-MORTE-GUARDA-GLOBAL-01). */
-    if (isGlobal && !TIPOS_COM_SELETOR_DE_FAZENDA.includes(tipo)) {
+    if (isGlobal && !escolheFazenda) {
       toast.error('Selecione uma fazenda específica para lançar.');
       return;
     }
@@ -4464,6 +4501,32 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     fecharModalOCComAutosave,
   };
 
+  /* Prop-bag da Venda em META. ⚠ `valorPrevisto` vem de `calc.valorBruto`, o MESMO que
+     `valorTotalFinal` grava — o shell nao recalcula, entao a tela nao pode divergir do
+     banco. Foi a licao de PR-ZOO-FIX-META-COMPRA-VALOR-01. */
+  const vendaMetaFormApi = {
+    data, setData,
+    qtdInput, pesoInput,
+    categoria, setCategoria: (v: Categoria) => setCategoria(v),
+    categoriasDisponiveis,
+    observacao, setObservacao,
+    compradorId: vendaDestinoFornecedorId, setCompradorId: setVendaDestinoFornecedorId,
+    contrapartes: abateFornecedores,
+    notaFiscal, setNotaFiscal,
+    vendaTipoPreco, setVendaTipoPreco,
+    vendaPrecoInput, setVendaPrecoInput,
+    vendaTipoVenda, setVendaTipoVenda,
+    vendaFazendaId, setVendaFazendaId,
+    fazendasOC,
+    vendaFazendaNome, vendaFazendaFalta,
+    vendaQtd: parseNumericValue(quantidade) || 0,
+    vendaPeso: parseDecimalInput(pesoKg) ?? 0,
+    valorPrevisto: calc.valorBruto > 0 ? calc.valorBruto : null,
+    submitting,
+    handleRequestRegister,
+    fecharModalOCComAutosave,
+  };
+
   /* Prop-bag da Morte — mesmo padrao do `nascFormApi` acima. `modo: 'criacao'` e' o
      unico valor possivel aqui; a edicao monta o seu no LancamentoZooModal.
      ⚠ `cenarioRotulo` sai do estado REAL e nao de um literal: a rota
@@ -4570,7 +4633,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
            ⚠ SEM ISTO O RODAPE ROLA. O ramo de baixo tem `overflow-y-auto p-4`, e com ele
            o modal inteiro vira uma area de rolagem so' — o rodape desce junto com o
            conteudo e some. Ver TIPOS_NO_ENVELOPE_PROPRIO. */
-        className={TIPOS_NO_ENVELOPE_PROPRIO.includes(tipo)
+        className={usaEnvelopeProprio
           /* ⚠ MESMO TETO DO MODAL SIMPLES, na linha de baixo (PR-OC-MODAL-TAMANHO-01).
              Eram 1152px contra 1024px, e a diferenca fazia os dois lerem como sistemas
              diferentes ao alternar entre eles. O shell nao declara largura: ele preenche
@@ -4596,6 +4659,13 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
            segue intocado no `else`. Morte, Consumo, Venda, Abate e Transferencia nao
            mudam — inclusive as descricoes de status deles. */
         <NascimentoModalShell {...nascFormApi} />
+      ) : vendaMetaNoEnvelope ? (
+        /* ══ VENDA EM META NO FORMULARIO SIMPLES ═══════════════════════════════════
+           Uma projecao de venda nao tem nota emitida, entrega nem parcela liquidada.
+           ⚠ BOITEL NAO CHEGA AQUI: `vendaMetaNoEnvelope` o exclui, e ele segue no
+           formulario generico ate ganhar aba na OC. Sao 2 registros ativos.
+           ⚠ A VENDA REALIZADA TAMBEM NAO: o predicado e' falso para ela sempre. */
+        <VendaMetaModalShell {...vendaMetaFormApi} />
       ) : isMorte ? (
         /* ══ MORTE NO SHELL ══════════════════════════════════════════════════════
            Terceiro ramo da bifurcacao. O ramo generico abaixo — Venda, Abate, Consumo
