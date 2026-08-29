@@ -39,6 +39,7 @@ import { nomeFazendaDoRegistro as resolverNomeFazendaDoRegistro } from '@/lib/zo
 import { NascimentoEdicaoModal } from '@/components/nascimento/NascimentoEdicaoModal';
 import { MorteEdicaoModal } from '@/components/morte/MorteEdicaoModal';
 import { CompraMetaEdicaoModal } from '@/components/compra/CompraMetaEdicaoModal';
+import { VendaMetaEdicaoModal } from '@/components/venda/VendaMetaEdicaoModal';
 import { EditConsumoSheet } from '@/components/edit/EditConsumoSheet';
 import { EditTransferenciaSheet } from '@/components/edit/EditTransferenciaSheet';
 import { EditReclassificacaoSheet } from '@/components/edit/EditReclassificacaoSheet';
@@ -1137,6 +1138,25 @@ export function LancamentoZooModal({
     // case 'compra'). case 'abate' permanece com o redirect tático original
     // — SEM alteração de comportamento do abate neste PR.
     case 'venda': {
+      /* ⚠ VENDA EM META NAO ABRE O MODAL DO REALIZADO (PR-ZOO-VENDA-META-EDICAO-01).
+         Criar ja tinha migrado em PR-ZOO-VENDA-META-01; editar continuava caindo aqui.
+         ⚠ A CONDICAO E' A MESMA DA CRIACAO, e nao uma segunda expressao dizendo o
+         mesmo: meta, e nao boitel. O boitel tem planejamento proprio e segue no
+         caminho antigo, com 2 registros ativos.
+         ⚠ A VENDA REALIZADA NAO MUDA: cai no `if` abaixo, byte a byte. */
+      if (lancamento.cenario === 'meta' && lancamento.tipoVenda !== 'boitel') {
+        return (
+          <VendaMetaEdicaoModal
+            lancamento={lancamento}
+            open={open}
+            onOpenChange={onOpenChange}
+            onSalvar={onSalvar}
+            p1Oficial={permissions.blockReason === 'mes_fechado'}
+            temAlteracaoEstrutural={temAlteracaoEstrutural}
+            nomeFazenda={nomeFazendaDoRegistro}
+          />
+        );
+      }
       if (!vendaForm) return null;
       return (
         <ZooMovShell
