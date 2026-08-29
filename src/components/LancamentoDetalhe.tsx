@@ -393,10 +393,69 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
       </div>
     );
 
+    /* ── PR-UI-LANC-RESULTADO-4-COLUNAS-01 ──────────────────────────────────────
+       Cada linha do resultado passa a mostrar, alem do total, quanto ela representa
+       POR CABECA, POR QUILO e POR ARROBA. E' o que responde "quanto o desconto comeu
+       da arroba" sem ninguem abrir a calculadora.
+       ⚠ RAZAO DE AGREGADOS, nunca media de razoes: divide-se o total da linha pela
+       base total. As bases vem de `calcIndicadoresLancamento` (`ind`), que ja aplica
+       a regra certa — carcaca/15 no abate, peso vivo/30 no resto — e por isso nenhuma
+       divisao nova foi escrita aqui.
+       ⚠ AS BASES DE kg E @ SAO DIFERENTES NO ABATE: kg e' peso VIVO, @ e' CARCACA.
+       Ver as duas lado a lado parece contradicao ate se ler a linha de base — e' por
+       isso que ela e' obrigatoria e nao decorativa. */
+    const baseCab = lancamento.quantidade;
+    const baseKg = ind.pesoTotalKg;
+    const baseArroba = ind.pesoTotalArrobas;
+
+    /** Deriva valor/base. NULL quando nao ha o que dividir — e '—' na tela.
+     *  ⚠ Sem `?? 0`: zero e' resultado real de uma divisao que aconteceu; traco e'
+     *  a ausencia de divisao. Trocar um pelo outro faz o card afirmar o que nao sabe. */
+    const porBase = (valor: number | null, base: number): number | null =>
+      valor === null || !(base > 0) ? null : valor / base;
+
+    /** Uma linha do resultado: rotulo + total + as tres derivadas.
+     *  `sinal` prefixa os quatro valores; `tom` pinta a linha INTEIRA. */
+    const LinhaResultado = ({ rotulo, valor, sinal = '', tom = 'neutro', forte = false }: {
+      rotulo: string; valor: number | null;
+      sinal?: '' | '+' | '-';
+      tom?: 'neutro' | 'soma' | 'subtrai';
+      forte?: boolean;
+    }) => {
+      /* Classes de estado ja usadas neste arquivo — nenhum hex novo. Totalizadora fica
+         sem cor de sinal de proposito: ela nao soma nem subtrai, ela conclui. */
+      const cor = tom === 'soma' ? 'text-green-600 dark:text-green-400'
+        : tom === 'subtrai' ? 'text-destructive' : '';
+      const celula = (v: number | null) => v === null ? '—' : `${sinal}${formatMoeda(v)}`;
+      return (
+        <div className={`grid grid-cols-[1fr_100px_84px_66px_70px] gap-x-1.5 items-baseline ${forte ? 'font-bold' : ''}`}>
+          <span className={cor || 'text-muted-foreground'}>{rotulo}</span>
+          <span className={`text-right tabular-nums text-[13px] ${cor}`}>{celula(valor)}</span>
+          <span className={`text-right tabular-nums text-[13px] ${cor}`}>{celula(porBase(valor, baseCab))}</span>
+          <span className={`text-right tabular-nums text-[13px] ${cor}`}>{celula(porBase(valor, baseKg))}</span>
+          <span className={`text-right tabular-nums text-[13px] ${cor}`}>{celula(porBase(valor, baseArroba))}</span>
+        </div>
+      );
+    };
+
+    const CabecalhoResultado = () => (
+      <div className="grid grid-cols-[1fr_100px_84px_66px_70px] gap-x-1.5 text-[11px] text-muted-foreground">
+        <span />
+        <span className="text-right">total</span>
+        <span className="text-right">por cab.</span>
+        <span className="text-right">por kg</span>
+        <span className="text-right">por @</span>
+      </div>
+    );
+
     return (
       <>
         <Dialog open={open} onOpenChange={onClose}>
-          <DialogContent className="max-w-lg">
+          {/* ⚠ 620px, e nao os 512 do `max-w-lg`. Quatro colunas de valor nao cabem em
+              512: um valor como R$ 111.328,13 em 13px ocupa ~95px, e quatro deles mais o
+              rotulo estouram a largura util. A alternativa seria reduzir a fonte, que e'
+              justamente o que nao se faz — o piso de leitura e' 10px (A21). */}
+          <DialogContent className="max-w-[620px]">
             <DialogHeader className="pb-0">
               <DialogTitle className="flex items-center gap-2 text-sm">
                 <span className="text-lg">{tipoInfo?.icon}</span>
@@ -485,35 +544,37 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                     const valorBase = snapCalc?.valorBase ?? ((totalArrobas || 0) * (lancamento.precoArroba || 0));
                     const funruralTotal = snapCalc?.funruralTotal ?? (lancamento.descontoFunrural || 0);
                     const valorBruto = snapCalc?.valorBruto ?? (valorBase - funruralTotal);
-                    const bonusTotal = snapCalc?.totalBonus ?? ((lancamento.bonusPrecoce || 0) + (lancamento.bonusQualidade || 0) + (lancamento.bonusListaTrace || 0));
-                    const descontosTotal = snapCalc?.totalDescontos ?? ((lancamento.descontoQualidade || 0) + (lancamento.outrosDescontos || 0));
+                    /* ⚠ AUSENCIA E' TRACO, ZERO E' VALOR. Bonus e desconto que nao existem
+                       tem de sair como '—'; um que existe e vale R$ 0,04 divide-se, arredonda
+                       para R$ 0,00 e mostra zero — porque zero ali e' resultado medido.
+                       `somaOuNull` devolve null quando NENHUMA das parcelas foi informada, e
+                       so' entao a linha some. Era o `|| 0` que apagava a diferenca. */
+                    const somaOuNull = (...vs: (number | null | undefined)[]) =>
+                      vs.every(v => v === null || v === undefined) ? null : vs.reduce((a: number, v) => a + (v || 0), 0);
+                    const bonusTotal = snapCalc?.totalBonus ?? somaOuNull(lancamento.bonusPrecoce, lancamento.bonusQualidade, lancamento.bonusListaTrace);
+                    const descontosTotal = snapCalc?.totalDescontos ?? somaOuNull(lancamento.descontoQualidade, lancamento.outrosDescontos);
                     const valorLiquido = snapCalc?.valorLiquido ?? valorTotalCalc;
-                    const liqArrobaVal = snapCalc?.liqArroba ?? ind.liqArroba;
-                    const liqCabecaVal = snapCalc?.liqCabeca ?? ind.liqCabeca;
-                    const liqKgVal = snapCalc?.liqKg ?? ind.liqKg;
-                    const totalArrobasVal = snapCalc?.totalArrobas ?? totalArrobas;
                     return (
                       <>
-                        <div className="space-y-0.5 text-[10px]">
-                          <div className="flex justify-between"><span className="text-muted-foreground">Valor Base</span><strong className="tabular-nums">{formatMoeda(valorBase)}</strong></div>
-                          <div className="flex justify-between"><span className="text-muted-foreground">+ Bônus</span><strong className="text-green-600 dark:text-green-400 tabular-nums">+{formatMoeda(bonusTotal)}</strong></div>
-                          <div className="flex justify-between"><span className="text-muted-foreground">– Descontos</span><strong className="text-destructive tabular-nums">-{formatMoeda(descontosTotal)}</strong></div>
-                          <div className="flex justify-between font-bold text-[10px]"><span>= Valor Bruto</span><span className="tabular-nums">{formatMoeda(valorBruto)}</span></div>
+                        <div className="space-y-0.5 text-[12px]">
+                          <CabecalhoResultado />
+                          <LinhaResultado rotulo="Valor Base" valor={valorBase} />
+                          <LinhaResultado rotulo="Bônus" valor={bonusTotal} sinal="+" tom="soma" />
+                          <LinhaResultado rotulo="Descontos" valor={descontosTotal} sinal="-" tom="subtrai" />
+                          <LinhaResultado rotulo="Valor Bruto" valor={valorBruto} forte />
                           {funruralTotal > 0 && (
-                            <div className="flex justify-between"><span className="text-muted-foreground">– Funrural</span><strong className="text-destructive tabular-nums">-{formatMoeda(funruralTotal)}</strong></div>
+                            <LinhaResultado rotulo="Funrural" valor={funruralTotal} sinal="-" tom="subtrai" />
                           )}
+                          {/* ⚠ ULTIMA LINHA DA TABELA, e nao mais um bloco separado abaixo:
+                              R$/cab, R$/kg e R$/@ liquidos sao exatamente as tres colunas
+                              desta linha. O bloco de indicadores que os repetia saiu. */}
+                          <LinhaResultado rotulo="Valor Líquido (NF)" valor={valorLiquido} forte />
                         </div>
-                        <div className="bg-primary/10 rounded px-2.5 py-1.5 flex items-center justify-between">
-                          <span className="text-[10px] text-muted-foreground font-medium">Valor Líquido (NF)</span>
-                          <span className="font-extrabold text-primary text-base tabular-nums">{formatMoeda(valorLiquido)}</span>
-                        </div>
-                        <div className="grid grid-cols-4 gap-x-2 gap-y-0.5 text-[10px]">
-                          <Row label="Qtde" value={`${lancamento.quantidade} cab.`} />
-                          {totalArrobasVal > 0 && <Row label="Total @" value={formatArroba(totalArrobasVal)} />}
-                          {liqArrobaVal > 0 && <Row label="R$/@ líq." value={formatMoeda(liqArrobaVal)} />}
-                          {liqCabecaVal > 0 && <Row label="R$/cab líq." value={formatMoeda(liqCabecaVal)} />}
-                          {liqKgVal > 0 && <Row label="R$/kg líq." value={formatMoeda(liqKgVal)} />}
-                        </div>
+                        {/* LINHA DE BASE — obrigatoria. Sem ela, R$/kg e R$/@ no abate
+                            parecem incoerentes entre si, porque nao dividem o mesmo peso. */}
+                        <p className="text-[11px] text-muted-foreground">
+                          {lancamento.quantidade} cab · {formatKg(baseKg)} vivo{baseArroba > 0 ? ` · ${formatArroba(baseArroba)} de carcaça` : ''}
+                        </p>
                       </>
                     );
                   })()}
