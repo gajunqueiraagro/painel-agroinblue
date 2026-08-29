@@ -22,12 +22,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus } from 'lucide-react';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { format, parseISO, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ChevronRight, ChevronDown, ArrowLeft, AlertTriangle, LogIn, LogOut, RefreshCw, Clock, Info, Edit } from 'lucide-react';
+import { ChevronRight, ChevronDown, ArrowLeft, AlertTriangle, LogIn, LogOut, RefreshCw, Clock, Info, Edit, Calendar, Building2, X } from 'lucide-react';
 import { LancamentoDetalhe } from '@/components/LancamentoDetalhe';
 import { ReclassificacaoFormFields, useReclassificacaoState } from '@/components/ReclassificacaoForm';
 import { ReclassificacaoResumoPanel } from '@/components/ReclassificacaoResumoPanel';
@@ -193,6 +194,19 @@ const TIPO_CARDS_GROUPS: TipoCardGroup[] = [
     ],
   },
 ];
+
+/* Par rotulo-valor do resumo lateral do Nascimento — mesmo idioma do `Linha` de
+   ResumoLateralOC (A17): rotulo cinza a esquerda, valor a direita, traco no vazio.
+   Copia deliberada: importar de la puxaria um componente de outra tela para dentro
+   deste arquivo, e a unificacao dos resumos e' de PR-UI-LANCAMENTOS-SIMPLES-PADRAO-02. */
+function LinhaResumoNasc({ rotulo, valor }: { rotulo: string; valor: string | null }) {
+  return (
+    <div className="flex items-baseline justify-between gap-1.5 leading-tight">
+      <span className="text-muted-foreground shrink-0">{rotulo}</span>
+      <span className="font-medium text-right truncate">{valor || '—'}</span>
+    </div>
+  );
+}
 
 const STATUS_DESCRIPTIONS_DEFAULT: Partial<Record<StatusOperacional | 'meta', string>> = {
   meta: META_VISUAL.description,
@@ -646,6 +660,14 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const isConciliado = statusOp === 'realizado';
   const isAbate = tipo === 'abate';
   const isNascimento = tipo === 'nascimento';
+  /* ── RESUMO DO NASCIMENTO (PR-UI-NASCIMENTO-SHELL-02) ────────────────────────
+     ⚠ AUSENCIA E' TRACO. `nascPesoTotal` e' NULL quando falta quantidade ou peso —
+     nao zero. "Peso total: 0,00 kg" afirmaria que se multiplicou e deu zero, quando o
+     que ha e' um formulario pela metade. Nenhum `?? 0` no caminho. */
+  const nascQtd = parseNumericValue(quantidade) || 0;
+  const nascPeso = parseDecimalInput(pesoKg) ?? 0;
+  const nascPesoTotal = nascQtd > 0 && nascPeso > 0 ? nascQtd * nascPeso : null;
+  const fmtNum2 = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const isMorte = tipo === 'morte';
   const isCompra = tipo === 'compra';
   const isVenda = tipo === 'venda';
@@ -4232,7 +4254,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       <DialogContent
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
-        className={isCompra
+        /* Nascimento usa o MESMO envelope da Compra: sem padding proprio, sem gap e
+           com o botao de fechar nativo escondido — quem fecha e' o X do cabecalho azul. */
+        className={isCompra || isNascimento
           /* ⚠ MESMO TETO DO MODAL SIMPLES, na linha de baixo (PR-OC-MODAL-TAMANHO-01).
              Eram 1152px contra 1024px, e a diferenca fazia os dois lerem como sistemas
              diferentes ao alternar entre eles. O shell nao declara largura: ele preenche
@@ -4242,6 +4266,145 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       >
       {isCompra ? (
         <CompraModalShell {...compraFormApi} />
+      ) : isNascimento ? (
+        /* ══ NASCIMENTO NO SHELL DA OC (PR-UI-NASCIMENTO-SHELL-02) ═══════════════
+           Mesmo modal da Compra, sem as abas: mesma largura, mesma altura, mesmo
+           cabecalho azul, mesmo resumo lateral, mesmo rodape. So o miolo e' outro.
+           Duas telas do mesmo sistema tem de parecer duas telas do mesmo sistema.
+           ⚠ SEM FAIXA DE ABAS. Nascimento nao tem contraparte, documento, recebimento
+           nem financeiro — nao ha o que preencher seis abas.
+           ⚠ MEDIDAS COPIADAS DE CompraModalShell, nao inventadas: `h-[69vh]`,
+           `px-6 py-2.5` no cabecalho, `px-6 py-2` no rodape, `lg:grid-cols-[1fr_280px]`
+           com `gap-3 p-4`, e as duas colunas com rolagem propria (`min-h-0`).
+           ⚠ A BIFURCACAO acontece aqui, no container: o ramo dos outros cinco tipos
+           entrou intocado no `else`, byte a byte. Morte, Consumo, Venda, Abate e
+           Transferencia nao mudam — inclusive as descricoes de status deles. */
+        <div className="flex flex-col">
+          <div className="bg-primary text-primary-foreground px-6 py-2.5 flex items-start justify-between">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-bold leading-tight">Nascimento</h2>
+                {/* ⚠ ROTULO, NAO CONTROLE. Este caminho registra apenas realizado; meta
+                    tem caminho proprio. O seletor de cenario saiu em 056054e7. */}
+                <span className="rounded-md border border-white/40 px-2 py-0.5 text-xs">Realizado</span>
+              </div>
+              <div className="mt-1 flex items-center gap-3 text-xs text-white/80">
+                <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> {data ? data.split('-').reverse().join('/') : '—'}</span>
+                <span className="flex items-center gap-1"><Building2 className="h-3.5 w-3.5" /> {nomeFazenda || '—'}</span>
+              </div>
+            </div>
+            <button type="button" onClick={fecharModalOCComAutosave} className="text-white/80 hover:text-white shrink-0"
+              title="Fechar" aria-label="Fechar"><X className="h-5 w-5" /></button>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] lg:grid-rows-[minmax(0,1fr)] gap-3 p-4 h-[69vh] overflow-y-auto lg:overflow-hidden bg-muted/30">
+            <div className="space-y-2 min-w-0 lg:min-h-0 lg:overflow-y-auto">
+              <div className="rounded-md border bg-card p-2 shadow-sm space-y-2 min-w-0">
+                <div className="text-[12px] font-semibold text-muted-foreground">Identificação do nascimento</div>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-3">
+                  <div className="min-w-0">
+                    <Label className="text-[10px] text-muted-foreground">Data <span className="text-destructive">*</span></Label>
+                    {/* A20 — DatePicker do sistema, nunca `<input type="date">`. */}
+                    <DatePicker value={data} onChange={setData} className="mt-[3px] h-8 px-2.5 text-[12px]" />
+                  </div>
+                  <div className="min-w-0">
+                    <Label className="text-[10px] text-muted-foreground">Categoria <span className="text-destructive">*</span></Label>
+                    <Select value={categoria} onValueChange={v => setCategoria(v as Categoria)}>
+                      <SelectTrigger className="mt-[3px] h-8 px-2.5 text-[12px]"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                      <SelectContent className="max-h-52 overflow-y-auto">
+                        {categoriasDisponiveis.map(c => <SelectItem key={c.value} value={c.value} className="text-[12px]">{c.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="min-w-0">
+                    <Label className="text-[10px] text-muted-foreground">Qtd. cabeças <span className="text-destructive">*</span></Label>
+                    <Input inputMode="numeric" value={qtdInput.displayValue} onChange={qtdInput.onChange} onBlur={qtdInput.onBlur} onFocus={qtdInput.onFocus}
+                      placeholder="0" className="mt-[3px] h-8 px-2.5 text-[12px] text-right tabular-nums" />
+                  </div>
+                  <div className="min-w-0">
+                    <Label className="text-[10px] text-muted-foreground">Peso médio <span className="text-destructive">*</span></Label>
+                    <Input inputMode="decimal" value={pesoInput.displayValue} onChange={pesoInput.onChange} onBlur={pesoInput.onBlur} onFocus={pesoInput.onFocus}
+                      placeholder="0,00" className="mt-[3px] h-8 px-2.5 text-[12px] text-right tabular-nums" />
+                  </div>
+                  {/* ⚠ FAZENDA DESTINO CONTINUA DERIVADA DO CONTEXTO, e travada. Nao e'
+                      campo faltando: `fazenda_id` e' injetado por `useLancamentos` a
+                      partir da fazenda ativa, e o payload nao o carrega. Transforma-la em
+                      seletor e' frente de backend com decisao de produto —
+                      PR-ZOO-LANCAMENTO-FAZENDA-03. Ate la o rotulo avisa que o valor e'
+                      DERIVADO, e o idioma de campo travado avisa que nao se edita. */}
+                  <div className="min-w-0">
+                    <Label className="text-[10px] text-muted-foreground">Fazenda Destino</Label>
+                    <Input value={nomeFazenda} readOnly tabIndex={-1}
+                      className="mt-[3px] h-8 px-2.5 text-[12px] bg-muted border-border/60 text-muted-foreground cursor-not-allowed" />
+                  </div>
+                  <div className="lg:col-span-2 min-w-0">
+                    <Label className="text-[10px] text-muted-foreground">Observações / Lote</Label>
+                    <Input value={observacao} onChange={e => setObservacao(e.target.value)} placeholder="Opcional"
+                      className="mt-[3px] h-8 px-2.5 text-[12px]" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* RESUMO LATERAL — idioma do ResumoLateralOC: faixa de titulo, blocos com
+                faixa, pares rotulo-valor alinhados a direita, traco no vazio. */}
+            <div className="lg:min-h-0 lg:overflow-y-auto">
+              <aside className="bg-card rounded-md border shadow-sm overflow-hidden self-start text-[10px]">
+                <div className="h-8 shrink-0 border-b border-border bg-accent/40 flex items-center px-3 text-[11px] font-bold uppercase tracking-wide text-primary">
+                  Resumo do lançamento
+                </div>
+                {/* ⚠ FAIXA DE BLOCO EM 10px, e NAO nos 9px do ResumoLateralOC. O piso de
+                    leitura do A21 e' 10px, e copiar o idioma nao pode significar copiar
+                    uma violacao — ela se espalharia por cada tela nova. A divergencia de
+                    1px contra a OC esta declarada; quem unificar decide o lado. */}
+                <div className="pb-1">
+                  <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 first:mt-0 mb-0.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Identificação</span>
+                  </div>
+                  <div className="px-3 space-y-0.5">
+                    <LinhaResumoNasc rotulo="Tipo" valor="Nascimento" />
+                    <LinhaResumoNasc rotulo="Data" valor={data ? data.split('-').reverse().join('/') : null} />
+                    <LinhaResumoNasc rotulo="Fazenda" valor={nomeFazenda || null} />
+                    <LinhaResumoNasc rotulo="Categoria" valor={categoriasDisponiveis.find(c => c.value === categoria)?.label ?? null} />
+                  </div>
+
+                  <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 mb-0.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Rebanho</span>
+                  </div>
+                  {/* ⚠ AUSENCIA E' TRACO, NUNCA ZERO. Sem quantidade ou sem peso nao ha
+                      peso total — nao ha "peso total de zero". `LinhaResumoNasc` imprime
+                      "—" para null, e nenhum `?? 0` tapa buraco no caminho.
+                      ⚠ ARROBA POR PESO VIVO: peso total / 30. A divisao por 15 e' de
+                      CARCACA e vale so no abate; usa-la aqui dobraria o numero. */}
+                  <div className="px-3 space-y-0.5">
+                    <LinhaResumoNasc rotulo="Cabeças" valor={nascQtd > 0 ? `${nascQtd} cab` : null} />
+                    <LinhaResumoNasc rotulo="Peso médio" valor={nascPeso > 0 ? `${fmtNum2(nascPeso)} kg` : null} />
+                    <LinhaResumoNasc rotulo="Peso total" valor={nascPesoTotal != null ? `${fmtNum2(nascPesoTotal)} kg` : null} />
+                    <LinhaResumoNasc rotulo="Arrobas" valor={nascPesoTotal != null ? `${fmtNum2(nascPesoTotal / 30)} @` : null} />
+                  </div>
+
+                  <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 mb-0.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Financeiro</span>
+                  </div>
+                  <div className="px-3 text-muted-foreground leading-tight">
+                    Nascimento não tem impacto financeiro.
+                  </div>
+                </div>
+              </aside>
+            </div>
+          </div>
+
+          <div className="bg-primary px-6 py-2 flex items-center justify-end gap-3">
+            <Button type="button" variant="ghost" onClick={fecharModalOCComAutosave}
+              className="text-white/90 hover:bg-white/10 hover:text-white" title="Fechar sem registrar" aria-label="Fechar">
+              Fechar
+            </Button>
+            <Button type="button" onClick={handleRequestRegister} disabled={submitting}
+              className="bg-white text-primary hover:bg-white/90 font-bold" title="Registrar o nascimento" aria-label="Registrar nascimento">
+              {submitting ? 'Registrando…' : 'Registrar nascimento'}
+            </Button>
+          </div>
+        </div>
       ) : (
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_22rem] gap-4 items-start overflow-visible">
         {/* Center: Form or Historico */}
