@@ -58,6 +58,10 @@ interface Props {
   operacionais: DadosOperacionais;
   financeiros: DadosFinanceiros;
   submitting?: boolean;
+  /* Lancamento SEM dinheiro (nascimento): esconde os blocos financeiros e passa a
+     coluna unica. Nao e' inferido de `tipoOperacao` — rotulo de tela nao decide
+     estrutura. Ver PR-UI-NASCIMENTO-CONFIRMACAO-04. */
+  semFinanceiro?: boolean;
 }
 
 const STATUS_MAP: Record<string, { label: string; cls: string }> = {
@@ -71,13 +75,13 @@ function fmtDate(d?: string) {
   try { return format(parseISO(d), 'dd/MM/yyyy', { locale: ptBR }); } catch { return d; }
 }
 
-export function ConfirmacaoRegistroDialog({ open, onClose, onConfirm, operacionais, financeiros, submitting }: Props) {
+export function ConfirmacaoRegistroDialog({ open, onClose, onConfirm, operacionais, financeiros, submitting, semFinanceiro }: Props) {
   const catLabel = CATEGORIAS.find(c => c.value === operacionais.categoria)?.label || operacionais.categoria;
   const statusCfg = STATUS_MAP[operacionais.status] || STATUS_MAP.realizado;
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-3xl max-h-[92vh] flex flex-col gap-2 p-4">
+      <DialogContent className={`${semFinanceiro ? 'max-w-md' : 'max-w-3xl'} max-h-[92vh] flex flex-col gap-2 p-4`}>
         <DialogHeader className="space-y-0.5 shrink-0">
           <DialogTitle className="flex items-center gap-2 text-[14px]">
             <CheckCircle className="h-5 w-5 text-primary" />
@@ -90,6 +94,65 @@ export function ConfirmacaoRegistroDialog({ open, onClose, onConfirm, operaciona
 
         {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto min-h-0 space-y-2 pr-1">
+        {/* ══ CONFIRMACAO SEM FINANCEIRO (PR-UI-NASCIMENTO-CONFIRMACAO-04) ═══════
+            O nascimento nao tem dinheiro: nao ha valor, nota, forma de pagamento nem
+            parcela. Ate aqui ele caia no mesmo layout de duas colunas de Abate e Venda,
+            e a coluna da direita anunciava "Pagamento · À vista" num lancamento que nao
+            paga nada. Isso nao e' redundancia, e' informacao FALSA na ultima tela antes
+            de gravar — justamente onde o operador confere.
+            ⚠ Fica em coluna unica e o modal encolhe: metade vazia diria que falta
+            alguma coisa ali.
+            ⚠ A bifurcacao e' no CONTAINER; o ramo dos demais tipos entrou byte a byte,
+            sem uma alteracao. Abate, Venda, Compra, Morte, Consumo e Transferencia
+            continuam exatamente como estavam. */}
+        {semFinanceiro ? (
+          <div className="space-y-1">
+            {/* ⚠ O ROTULO DA SECAO FICA. Com um bloco so ele pesa menos, mas removê-lo
+                deixaria os pares soltos sob o titulo do dialogo, sem dizer do que sao. */}
+            <h4 className="text-[10px] font-bold uppercase text-muted-foreground tracking-wide">Dados Operacionais</h4>
+            <div className="bg-muted/30 rounded-md p-1.5 space-y-0 text-[11px] [&>div]:py-0.5">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Status</span>
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${statusCfg.cls}`}>{statusCfg.label}</span>
+              </div>
+              {/* ⚠ "FAZENDA", e nao "Destino". O nome antigo vinha do vocabulario de
+                  transferencia, onde ha origem e destino; no nascimento a cria surge
+                  na propria fazenda e nao vem de lugar nenhum. E o VALOR agora e' o do
+                  formulario, nao o do contexto — ver o comentario no chamador. */}
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Fazenda</span>
+                <strong>{operacionais.fazendaDestino || '—'}</strong>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Data</span>
+                <strong>{fmtDate(operacionais.data)}</strong>
+              </div>
+              {/* Ausencia e' traco: "0 cab." afirmaria que se contou e deu zero. */}
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Quantidade</span>
+                <strong>{operacionais.quantidade > 0 ? `${operacionais.quantidade} cab.` : '—'}</strong>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Categoria</span>
+                <strong>{catLabel || '—'}</strong>
+              </div>
+              {/* A15 — peso sempre com duas casas. */}
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Peso médio</span>
+                <strong>{operacionais.pesoKg > 0 ? `${operacionais.pesoKg.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg` : '—'}</strong>
+              </div>
+              {/* Nao estava no desenho, mas existe no dado e o operador a digitou:
+                  preservada, e so quando ha o que mostrar. */}
+              {operacionais.observacao && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Observação</span>
+                  <strong className="text-right max-w-[60%] truncate">{operacionais.observacao}</strong>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+        <>
         {/* 2-column layout: Operacionais | Financeiros */}
         <div className="grid grid-cols-2 gap-2">
         {/* Coluna Esquerda: Dados Operacionais */}
@@ -302,6 +365,8 @@ export function ConfirmacaoRegistroDialog({ open, onClose, onConfirm, operaciona
           </div>
         </div>
 
+        </>
+        )}
         </div>
         {/* end scrollable body */}
 

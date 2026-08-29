@@ -4906,10 +4906,21 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           categoria,
           pesoKg: parseNumericValue(pesoKg) || 0,
           fazendaOrigem: campos.origem.show ? (campos.origem.auto ? campos.origem.value : fazendaOrigem) : undefined,
-          fazendaDestino: isAbate ? (abateFornecedores.find(f => f.id === abateFornecedorId)?.nome || '') : (campos.destino?.show ? (campos.destino?.auto ? campos.destino?.value : fazendaDestino) : undefined),
+          /* ⚠ NO NASCIMENTO, A FAZENDA DO FORMULARIO — nao a do contexto
+             (PR-UI-NASCIMENTO-CONFIRMACAO-04). `campos.destino.value` e' `nomeFazenda`,
+             que e' `fazendaAtual?.nome`: em contexto Global a confirmacao anunciava
+             "Global" enquanto o insert gravava na fazenda ESCOLHIDA. Era defeito de
+             EXIBICAO, nao de gravacao — conferido: `lancamentoDados.fazendaId` leva
+             `nascFazendaId` e `adicionarLancamento` lhe da precedencia. Mas era o
+             defeito pior de exibir: mentir na ultima tela antes de gravar, que existe
+             exatamente para conferir. */
+          fazendaDestino: isNascimento
+            ? (nascFazendaNome ?? undefined)
+            : isAbate ? (abateFornecedores.find(f => f.id === abateFornecedorId)?.nome || '') : (campos.destino?.show ? (campos.destino?.auto ? campos.destino?.value : fazendaDestino) : undefined),
           observacao,
         }}
         financeiros={getConfirmacaoFinanceiros()}
+        semFinanceiro={isNascimento}
       />
 
       {/* Novo Fornecedor (Frigorífico) dialog for abate */}
