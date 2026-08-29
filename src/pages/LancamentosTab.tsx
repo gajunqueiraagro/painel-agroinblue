@@ -156,6 +156,15 @@ const TIPOS_COM_SELETOR_DE_FAZENDA: TipoMovimentacao[] = ['nascimento', 'morte']
    cabecalho, corpo e rodape — rola dentro dele, anulando a estrutura do envelope. */
 const TIPOS_NO_ENVELOPE_PROPRIO: TipoMovimentacao[] = ['compra', 'nascimento', 'morte'];
 
+/* ⚠ QUEM NAO MOVIMENTA CAIXA NEM COMPOE DRE. A confirmacao desses tipos nao mostra
+   bloco financeiro — mostrar colunas de dinheiro num lancamento que a propria tela
+   declara sem impacto e' contradizer a tela na ultima parada antes de gravar.
+   ⚠ CONSUMO NAO ENTRA: ele movimenta caixa e compoe DRE (decisao do Gabriel).
+   ⚠ EXISTE UM `hasFinancialImpact` na linha ~706 com uma TERCEIRA composicao — ele
+   inclui transferencia e nao tem consumidor nenhum. Nao foi reusado de proposito:
+   usa-lo mudaria a confirmacao da transferencia, que nao esta em escopo. */
+const TIPOS_SEM_IMPACTO_FINANCEIRO: TipoMovimentacao[] = ['nascimento', 'morte'];
+
 const MOTIVOS_MORTE = [
   'Raio', 'Picada de cobra', 'Doença respiratória', 'Tristeza parasitária',
   'Clostridiose', 'Intoxicação por planta', 'Acidente', 'Desidratação',
@@ -713,6 +722,18 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setMorteFazendaId(fazendaAtual?.id && fazendaAtual.id !== '__global__' ? fazendaAtual.id : '');
   }, [isMorte, fazendaAtual?.id]);
   const morteFazendaNome = fazendasOC.find(f => f.id === morteFazendaId)?.nome ?? null;
+  /* ⚠ A FAZENDA ESCOLHIDA, num lugar so'. O modal ja lia de uma fonte por tipo — o
+     cabecalho, a faixa de topo, o seletor e o resumo lateral usam todos o mesmo
+     `nascFazendaNome`/`morteFazendaNome`. Quem estava fora era a CONFIRMACAO, que
+     perguntava `isNascimento ?` e por isso nao mostrava fazenda nenhuma na morte:
+     ela caia no ramo `campos.destino`, que para a morte e' `{show:false}`.
+     ⚠ A entrada e' governada por TIPOS_COM_SELETOR_DE_FAZENDA — "tem fazenda propria a
+     exibir" e "escolhe a propria fazenda" sao a mesma coisa, entao nao ha lista nova.
+     ⚠ O payload (`fazendaId`, ~2417) mantem a sua propria cadeia. Ela e' caminho de
+     ESCRITA e este PR e' de exibicao; unifica-las e' barato e fica anotado. */
+  const fazendaEscolhidaNome = TIPOS_COM_SELETOR_DE_FAZENDA.includes(tipo)
+    ? (isNascimento ? nascFazendaNome : morteFazendaNome)
+    : null;
   const morteFazendaFalta = isMorte && !morteFazendaId;
   const morteQtd = parseNumericValue(quantidade) || 0;
   const mortePeso = parseDecimalInput(pesoKg) ?? 0;
@@ -4847,13 +4868,13 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
              `nascFazendaId` e `adicionarLancamento` lhe da precedencia. Mas era o
              defeito pior de exibir: mentir na ultima tela antes de gravar, que existe
              exatamente para conferir. */
-          fazendaDestino: isNascimento
-            ? (nascFazendaNome ?? undefined)
+          fazendaDestino: fazendaEscolhidaNome
+            ? fazendaEscolhidaNome
             : isAbate ? (abateFornecedores.find(f => f.id === abateFornecedorId)?.nome || '') : (campos.destino?.show ? (campos.destino?.auto ? campos.destino?.value : fazendaDestino) : undefined),
           observacao,
         }}
         financeiros={getConfirmacaoFinanceiros()}
-        semFinanceiro={isNascimento}
+        semFinanceiro={TIPOS_SEM_IMPACTO_FINANCEIRO.includes(tipo)}
       />
 
       {/* Novo Fornecedor (Frigorífico) dialog for abate */}

@@ -144,6 +144,13 @@ export function MorteModalShell({
     ? (motivoMorteCustom || null)
     : (motivoMorte || null);
   const motivoFalta = !motivoEfetivo;
+  /* ⚠ PESO E' OBRIGATORIO NA MORTE, e sempre foi: o funil de registro recusa sem ele
+     (`Informe o Peso (kg)`). O campo e' que nao dizia — sem asterisco e sem bloqueio,
+     o operador preenchia a tela inteira para levar um toast no fim.
+     ⚠ CONTINUA SEM VALOR PADRAO. Os 30,00 kg sao sugestao de bezerro recem-nascido, do
+     Nascimento; num animal morto o peso e' o que era, e sugerir numero seria inventar
+     dado. Obrigatorio nao quer dizer preenchido de antemao. */
+  const pesoFalta = !(mortePeso > 0);
 
   return (
     <LancamentoModalEnvelope
@@ -199,10 +206,11 @@ export function MorteModalShell({
       </>}
       acao={<>
         {/* O botao diz o que faz: registrar cria, salvar altera. */}
-        <Button type="button" onClick={handleRequestRegister} disabled={submitting || morteFazendaFalta || motivoFalta}
+        <Button type="button" onClick={handleRequestRegister} disabled={submitting || morteFazendaFalta || motivoFalta || pesoFalta}
           className="bg-white text-primary hover:bg-white/90 font-bold disabled:opacity-60"
           title={morteFazendaFalta ? 'Selecione a fazenda do lançamento'
             : motivoFalta ? 'Informe o motivo da morte'
+            : pesoFalta ? 'Informe o peso médio'
             : isEdicao ? 'Salvar as alterações da morte' : 'Registrar a morte'}
           aria-label={isEdicao ? 'Salvar alterações' : 'Registrar morte'}>
           {isEdicao
@@ -273,12 +281,15 @@ export function MorteModalShell({
                 </Select>
               </div>
               <div className="min-w-0">
-                {/* ⚠ SEM ASTERISCO E SEM PADRAO. Os 30,00 kg sao sugestao de bezerro
-                    recem-nascido, do Nascimento. Aqui o peso e' o que o animal tinha,
-                    e sugerir numero seria inventar dado. */}
-                <Label className="text-[10px] text-muted-foreground">Peso médio</Label>
+                {/* ⚠ OBRIGATORIO, MAS SEM PADRAO — ver `pesoFalta`. O asterisco entrou em
+                    PR-ZOO-FIX-MORTE-PESO-E-CONFIRMACAO-01: o funil ja recusava sem peso
+                    e so' a tela nao dizia. */}
+                <Label className="text-[10px] text-muted-foreground">Peso médio <span className="text-destructive">*</span></Label>
                 <Input inputMode="decimal" value={pesoInput.displayValue} onChange={pesoInput.onChange} onBlur={pesoInput.onBlur} onFocus={pesoInput.onFocus}
-                  placeholder="0,00" className="mt-[3px] h-8 px-2.5 text-[12px] text-right tabular-nums" />
+                  placeholder="0,00" className={`mt-[3px] h-8 px-2.5 text-[12px] text-right tabular-nums ${pesoFalta ? 'border-destructive' : ''}`} />
+                {pesoFalta && (
+                  <p className="mt-[3px] text-[10px] text-destructive">Informe o peso médio.</p>
+                )}
               </div>
               <div className="min-w-0">
                 <Label className="text-[10px] text-muted-foreground">Motivo da morte <span className="text-destructive">*</span></Label>
