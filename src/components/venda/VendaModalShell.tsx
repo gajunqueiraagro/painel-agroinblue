@@ -2,8 +2,9 @@
  * VendaModalShell — a Venda como Operação Comercial. Aba de identificação.
  *
  * ⚠ PRIMEIRA DE SEIS. Este arquivo entrega SO a aba "Venda". Negociação, Entrega,
- * Documentos, Financeiro e Auditoria vêm uma por vez, e a sétima — Boitel — só aparece
- * quando o tipo de venda é boitel.
+ * Documentos, Financeiro e Auditoria vêm uma por vez. São seis, e não sete: o boitel
+ * NÃO ganha aba própria — ele é a Negociação com campos a mais. Ver a nota em
+ * `ABAS_VENDA`.
  *
  * ⚠ DIVIDA DECLARADA: QUINTA CASCA DO SISTEMA, SEGUNDA COM FAIXA DE ABAS.
  * As outras quatro são CompraModalShell, LancamentoModalEnvelope (Nascimento e Morte),
@@ -31,12 +32,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { DatePicker } from '@/components/ui/date-picker';
 import { SearchableSelect } from '@/components/ui/searchable-select';
-import { Calendar, Building2, X, Plus, ArrowRight } from 'lucide-react';
+import { Calendar, Building2, X, Plus } from 'lucide-react';
 import type { Categoria } from '@/types/cattle';
 
 /* ⚠ "RECEBIMENTO" CHAMA-SE ENTREGA NA VENDA — o gado SAI. A coluna do banco já é
    genérica (`entrega_encerrada`), então o vocabulário muda só na tela.
-   ⚠ A sétima aba, Boitel, entra por `tipoVenda` e não faz parte desta lista fixa. */
+   ⚠ NAO HA SETIMA ABA. O boitel chegou a ter uma e ela saiu: o boitel E' a negociacao,
+   com campos a mais. Quantidade, peso, preco por arroba e valor total sao exatamente o
+   que a Negociacao pergunta — uma aba separada deixaria a Negociacao vazia numa venda
+   boitel, ou duplicada.
+   ⚠ ONDE ELE VAI FICAR: a aba de Negociacao vai BIFURCAR por tipo de venda — lotes na
+   venda comum, lotes MAIS os blocos do simulador no boitel. Mesmo padrao do
+   `AbaRecebimentoLotes`, ja bifurcado entre encerrado e aberto. */
 const ABAS_VENDA = [
   { key: 'venda', label: 'Venda', enabled: true },
   { key: 'negociacao', label: 'Negociação', enabled: false },
@@ -93,14 +100,10 @@ export function VendaModalShell({
   const [abaAtiva, setAbaAtiva] = useState<string>('venda');
   const compradorNome = contrapartes.find(f => f.id === compradorId)?.nome ?? null;
   const fazendaNome = fazendasOC.find(f => f.id === vendaFazendaId)?.nome ?? null;
-  const isBoitel = vendaTipoVenda === 'boitel';
 
-  /* ⚠ A ABA DE BOITEL APARECE E SOME, MAS O DADO NAO. Trocar o tipo esconde a aba;
-     o que o operador preencheu continua no estado, e volta se ele voltar ao boitel.
-     Nenhum campo desta aba e' limpo por troca de tipo. */
-  const abas = isBoitel
-    ? [...ABAS_VENDA, { key: 'boitel', label: 'Boitel', enabled: false } as const]
-    : ABAS_VENDA;
+  /* ⚠ O DADO PERSISTE NA TROCA DE TIPO, e isso nao mudou com a saida da aba: nenhum
+     campo e' limpo quando o operador troca o tipo de venda. O que era guardado continua
+     guardado — muda apenas ONDE vai aparecer, e sera' dentro da Negociacao. */
 
   const fazendaFalta = !vendaFazendaId;
   const podeSalvar = !!compradorId && !!vendaFazendaId && !!data && !!vendaTipoVenda;
@@ -125,7 +128,7 @@ export function VendaModalShell({
 
       {/* BARRA DE ABAS — template do CompraModalShell (bg-card, border-b, px-6 py-3). */}
       <div className="bg-card border-b px-6 py-3 flex items-center gap-1">
-        {abas.map(a => {
+        {ABAS_VENDA.map(a => {
           const active = a.key === abaAtiva && a.enabled;
           return (
             <button key={a.key} type="button" disabled={!a.enabled}
@@ -282,9 +285,12 @@ export function VendaModalShell({
         <Button type="button" onClick={onSalvarOperacao} disabled={submitting || !podeSalvar || ocStatusComercial === 'cancelada'}
           className="bg-white text-primary hover:bg-white/90 font-bold gap-1.5 disabled:opacity-60"
           title={podeSalvar ? undefined : 'Informe comprador, data, fazenda e tipo de venda'}>
-          {submitting ? 'Salvando...'
-            : ocOperacaoId ? 'Salvar alterações'
-            : (<>Salvar e continuar para Negociação <ArrowRight className="h-4 w-4" /></>)}
+          {/* ⚠ "Salvar e continuar para Negociacao" era o texto do mockup, e ele PROMETE o
+              que ainda nao acontece: a aba de Negociacao nao existe, e o botao grava e
+              fica onde esta. Promessa nao cumprida ensina a desconfiar do botao — o
+              mesmo principio do alarme falso. O texto do mockup volta quando a aba
+              existir. */}
+          {submitting ? 'Salvando...' : ocOperacaoId ? 'Salvar alterações' : 'Salvar operação'}
         </Button>
       </div>
     </div>

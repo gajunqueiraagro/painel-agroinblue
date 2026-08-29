@@ -374,7 +374,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const modoOCCompra = ocSearchParams.get('oc_compra') === '1';
   /* PR-OC-VENDA-ABA-01 — espelho de `modoOCCompra`. Os dois nunca coexistem: quem abre
      um apaga o outro, nos dois sentidos (ver `abrirNovaVendaOC` / `abrirNovaCompraOC`). */
-  const modoOCVenda = ocSearchParams.get('oc_venda') === '1';
   const [ocOperacaoId, setOcOperacaoId] = useState<string | null>(null);
   const [ocVersao, setOcVersao] = useState<number | null>(null);
   // Fazenda destino selecionada dentro do modal OC (default = fazenda do filtro atual).
@@ -691,6 +690,17 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const pesoInput = useDecimalInput(pesoKg, setPesoKg, 2);
 
   const isCenarioMeta = statusOp === 'meta';
+  /* ⚠ E' PRECISO OLHAR O CENARIO, e nao so o parametro. `oc_venda=1` fica na URL e
+     SOBREVIVE a troca de secao — quem abre a OC no realizado e navega para
+     "Lançamentos META Zoo" sem fechar leva o parametro junto, e la a Venda abria a
+     Operacao Comercial azul em vez do formulario de projecao.
+     ⚠ A OPERACAO COMERCIAL SO' EXISTE EM REALIZADO. Uma projecao nao tem contraparte
+     real, documento nem entrega; o caminho dela e' o VendaMetaModalShell.
+     ⚠ A COMPRA NAO TINHA ESTE DEFEITO, e nao por cuidado: o ternario do container testa
+     `isCompra && isCenarioMeta` ANTES de `isCompra`, entao a ordem a protegia. A venda
+     entrou como primeiro ramo da cadeia e passou na frente do teste de cenario. */
+  const modoOCVenda = ocSearchParams.get('oc_venda') === '1' && !isCenarioMeta;
+
   /* ⚠ CENARIO, NAO TIPO. Realizado e programado registram um fato economico e exigem o
      detalhe financeiro; meta e' projecao e nao exige. Nomeada porque a mesma pergunta
      e' feita em dois pontos do funil da compra, e eles se contradiziam. */
@@ -2176,7 +2186,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       setOcOperacaoId(env.operacao_id);
       setOcVersao(env.versao);
       if (env.status_comercial) setOcStatusComercial(env.status_comercial);
-      if (criando) toast.success('Operação de venda criada. Agora informe os lotes negociados.');
+      /* ⚠ SEM A SEGUNDA FRASE. "Agora informe os lotes negociados" mandava fazer algo
+         que ainda nao e' possivel — a aba de Negociacao nao existe. Volta quando ela
+         existir. */
+      if (criando) toast.success('Operação de venda criada.');
       return { operacaoId: env.operacao_id, versao: env.versao };
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Falha ao salvar a operação de venda.');
