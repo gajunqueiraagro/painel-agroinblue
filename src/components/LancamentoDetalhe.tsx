@@ -415,25 +415,40 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
       valor === null || !(base > 0) ? null : valor / base;
 
     /** Uma linha do resultado: rotulo + total + as tres derivadas.
-     *  `sinal` prefixa os quatro valores; `tom` pinta a linha INTEIRA. */
-    const LinhaResultado = ({ rotulo, valor, sinal = '', tom = 'neutro', forte = false }: {
+     *  `sinal` prefixa os quatro valores; `tom` pinta a linha INTEIRA.
+     *
+     *  ⚠ DUAS FAMILIAS, E E' O QUE DEVOLVE A HIERARQUIA. Na primeira versao todas as
+     *  seis linhas saiam em 13px: Bonus e Funrural pesavam o mesmo que Valor Base e
+     *  Valor Liquido, e o bloco inteiro ficou maior que o resto do card, que nao passa
+     *  de 13px em lugar nenhum. `principal` sao os marcos da conta; `ajuste` sao as
+     *  correcoes entre eles, e leem-se um degrau abaixo.
+     *  ⚠ NADA DESCE DE 11px. O piso do projeto e' 10px, mas aqui nao ha por que chegar
+     *  la — encolher para caber e' justamente o que a largura de coluna evita. */
+    const LinhaResultado = ({ rotulo, valor, sinal = '', tom = 'neutro', familia = 'ajuste', totalDestaque = false }: {
       rotulo: string; valor: number | null;
       sinal?: '' | '+' | '-';
       tom?: 'neutro' | 'soma' | 'subtrai';
-      forte?: boolean;
+      familia?: 'principal' | 'ajuste';
+      /** So' o total do Valor Liquido: o unico numero grande do bloco. */
+      totalDestaque?: boolean;
     }) => {
       /* Classes de estado ja usadas neste arquivo — nenhum hex novo. Totalizadora fica
          sem cor de sinal de proposito: ela nao soma nem subtrai, ela conclui. */
       const cor = tom === 'soma' ? 'text-green-600 dark:text-green-400'
         : tom === 'subtrai' ? 'text-destructive' : '';
+      /* ⚠ SEM PESO 700. Negrito cheio num bloco de seis linhas competia com o card
+         inteiro, que nao usa esse peso em canto nenhum. Marco fica em 500, e so' o
+         total do liquido sobe a 600. */
+      const tamanho = familia === 'principal' ? 'text-[12px]' : 'text-[11px]';
+      const pesoRotulo = familia === 'principal' ? 'font-medium' : 'font-normal';
       const celula = (v: number | null) => v === null ? '—' : `${sinal}${formatMoeda(v)}`;
       return (
-        <div className={`grid grid-cols-[1fr_100px_84px_66px_70px] gap-x-1.5 items-baseline ${forte ? 'font-bold' : ''}`}>
-          <span className={cor || 'text-muted-foreground'}>{rotulo}</span>
-          <span className={`text-right tabular-nums text-[13px] ${cor}`}>{celula(valor)}</span>
-          <span className={`text-right tabular-nums text-[13px] ${cor}`}>{celula(porBase(valor, baseCab))}</span>
-          <span className={`text-right tabular-nums text-[13px] ${cor}`}>{celula(porBase(valor, baseKg))}</span>
-          <span className={`text-right tabular-nums text-[13px] ${cor}`}>{celula(porBase(valor, baseArroba))}</span>
+        <div className="grid grid-cols-[1fr_100px_84px_66px_70px] gap-x-1.5 items-baseline">
+          <span className={`${tamanho} ${pesoRotulo} ${cor || 'text-muted-foreground'}`}>{rotulo}</span>
+          <span className={`text-right tabular-nums ${totalDestaque ? 'text-[13px] font-semibold' : tamanho} ${cor}`}>{celula(valor)}</span>
+          <span className={`text-right tabular-nums ${tamanho} ${cor}`}>{celula(porBase(valor, baseCab))}</span>
+          <span className={`text-right tabular-nums ${tamanho} ${cor}`}>{celula(porBase(valor, baseKg))}</span>
+          <span className={`text-right tabular-nums ${tamanho} ${cor}`}>{celula(porBase(valor, baseArroba))}</span>
         </div>
       );
     };
@@ -558,17 +573,17 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                       <>
                         <div className="space-y-0.5 text-[12px]">
                           <CabecalhoResultado />
-                          <LinhaResultado rotulo="Valor Base" valor={valorBase} />
+                          <LinhaResultado rotulo="Valor Base" valor={valorBase} familia="principal" />
                           <LinhaResultado rotulo="Bônus" valor={bonusTotal} sinal="+" tom="soma" />
                           <LinhaResultado rotulo="Descontos" valor={descontosTotal} sinal="-" tom="subtrai" />
-                          <LinhaResultado rotulo="Valor Bruto" valor={valorBruto} forte />
+                          <LinhaResultado rotulo="Valor Bruto" valor={valorBruto} familia="principal" />
                           {funruralTotal > 0 && (
                             <LinhaResultado rotulo="Funrural" valor={funruralTotal} sinal="-" tom="subtrai" />
                           )}
                           {/* ⚠ ULTIMA LINHA DA TABELA, e nao mais um bloco separado abaixo:
                               R$/cab, R$/kg e R$/@ liquidos sao exatamente as tres colunas
                               desta linha. O bloco de indicadores que os repetia saiu. */}
-                          <LinhaResultado rotulo="Valor Líquido (NF)" valor={valorLiquido} forte />
+                          <LinhaResultado rotulo="Valor Líquido (NF)" valor={valorLiquido} familia="principal" totalDestaque />
                         </div>
                         {/* LINHA DE BASE — obrigatoria. Sem ela, R$/kg e R$/@ no abate
                             parecem incoerentes entre si, porque nao dividem o mesmo peso. */}
