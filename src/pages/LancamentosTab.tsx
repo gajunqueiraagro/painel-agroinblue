@@ -1062,11 +1062,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     if (onReturnFromEdit) onReturnFromEdit();
   }, [onReturnFromEdit]);
 
-  // Helper: restore edit origin context (internal or external).
-  // SEMPRE chamado APÓS o reset de campos no handleSubmit — restaura
-  // statusOp/tipo/aba/filtros para o que estavam no momento da abertura
-  // do modal, sobrescrevendo os defaults aplicados pelo reset.
-  const restoreEditOrigin = useCallback(() => {
+  /* Restaura o contexto do modal — statusOp/tipo/aba/filtros como estavam na abertura,
+     sobrescrevendo os defaults do reset. SEMPRE chamado APOS o reset de campos.
+     ⚠ NAO devolve o usuario a outra secao: quem faz isso e' `restoreEditOrigin`. */
+  const restaurarContextoDoModal = useCallback(() => {
     const ctx = internalEditOrigin.current;
     if (ctx) {
       setAba(ctx.aba);
@@ -1077,8 +1076,21 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       internalEditOrigin.current = null;
     }
     setEditingFazendaId(null);
+  }, []);
+
+  /* Fim de uma EDICAO: restaura o contexto E devolve o usuario a secao de onde a edicao
+     partiu (`onReturnFromEdit`, que no realizado leva a Conferencia).
+     ⚠ SO NO RAMO DE EDICAO. Ate PR-ZOO-FIX-RETORNO-APOS-REGISTRAR-01 esta funcao era
+     chamada tambem no fim de um REGISTRO NOVO, e ai' quem abria por "Lançar > Pecuária"
+     caia na lista a cada lancamento. Eram dois eventos diferentes tratados como um so —
+     "voltei de uma edicao externa" e "acabei de registrar" — e o proprio nome denunciava,
+     porque fala de edit origin e rodava no fim de um registro.
+     A rota de META ja acertava, mas por ACIDENTE: ela nao passa `onReturnFromEdit`, entao
+     a chamada era no-op. Agora o realizado faz o mesmo por decisao. */
+  const restoreEditOrigin = useCallback(() => {
+    restaurarContextoDoModal();
     onReturnFromEdit?.();
-  }, [onReturnFromEdit]);
+  }, [restaurarContextoDoModal, onReturnFromEdit]);
 
   const loadAbateForEdit = useCallback((l: Lancamento) => {
     // Save current context before switching to edit mode
@@ -2828,7 +2840,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           toast.success('Compra registrada com sucesso!');
           triggerZootCacheRefresh(data);
           setLancModalOpen(false);
-          restoreEditOrigin();
+          restaurarContextoDoModal();
         } else if (isAbate && returnedId) {
           // Delegação total: o painel decide se gera (guards internos de formaReceb/parcelas).
           if (abateFinanceiroRef.current) {
@@ -2851,7 +2863,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           toast.success('Abate registrado com financeiro!');
           triggerZootCacheRefresh(data);
           setLancModalOpen(false);
-          restoreEditOrigin();
+          restaurarContextoDoModal();
         } else if (isVenda && returnedId) {
           const isBoitel = tipoPeso === 'boitel';
           try {
@@ -2871,7 +2883,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           toast.success('Venda registrada com sucesso!');
           triggerZootCacheRefresh(data);
           setLancModalOpen(false);
-          restoreEditOrigin();
+          restaurarContextoDoModal();
         } else if (isConsumo && returnedId) {
           // Consumo NÃO gera lançamento financeiro — fluxo só zootécnico.
           setLastSavedLancamentoId(null);
@@ -2883,7 +2895,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           toast.success('Consumo registrado com sucesso!');
           triggerZootCacheRefresh(data);
           setLancModalOpen(false);
-          restoreEditOrigin();
+          restaurarContextoDoModal();
         } else if (returnedId) {
           setLastSavedLancamentoId(null);
           setQuantidade(''); setCategoria('');
@@ -2895,7 +2907,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           toast.success('Lançamento registrado!');
           triggerZootCacheRefresh(data, tipo === 'reclassificacao');
           setLancModalOpen(false);
-          restoreEditOrigin();
+          restaurarContextoDoModal();
         } else if (!returnedId) {
           toast.error('Erro ao salvar lançamento. Verifique os dados e tente novamente.');
         }
