@@ -37,7 +37,7 @@ import { kgToArrobas } from '@/types/cattle';
 import { nomeFazendaDoRegistro as resolverNomeFazendaDoRegistro } from '@/lib/zoo/nomeFazendaDoRegistro';
 
 import { NascimentoEdicaoModal } from '@/components/nascimento/NascimentoEdicaoModal';
-import { EditMorteSheet } from '@/components/edit/EditMorteSheet';
+import { MorteEdicaoModal } from '@/components/morte/MorteEdicaoModal';
 import { EditConsumoSheet } from '@/components/edit/EditConsumoSheet';
 import { EditTransferenciaSheet } from '@/components/edit/EditTransferenciaSheet';
 import { EditReclassificacaoSheet } from '@/components/edit/EditReclassificacaoSheet';
@@ -869,7 +869,20 @@ export function LancamentoZooModal({
       );
 
     case 'morte':
-      return <EditMorteSheet {...sheetCommonProps} />;
+      /* PR-ZOO-MORTE-NO-SHELL-01 — a morte passou a editar no MESMO modal que a
+         registra. Consumo, Transferencia e Reclassificacao seguem na gaveta ate
+         PADRAO-02; e' por isso que `sheetCommonProps` continua montado acima. */
+      return (
+        <MorteEdicaoModal
+          lancamento={lancamento}
+          open={open}
+          onOpenChange={onOpenChange}
+          onSalvar={onSalvar}
+          p1Oficial={permissions.blockReason === 'mes_fechado'}
+          temAlteracaoEstrutural={temAlteracaoEstrutural}
+          nomeFazenda={nomeFazendaDoRegistro}
+        />
+      );
 
     case 'consumo':
       return <EditConsumoSheet {...sheetCommonProps} />;

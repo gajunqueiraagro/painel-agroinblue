@@ -31,6 +31,7 @@ import { ptBR } from 'date-fns/locale';
 import { ChevronRight, ChevronDown, ArrowLeft, AlertTriangle, LogIn, LogOut, RefreshCw, Clock, Info, Edit, Calendar, Building2, X } from 'lucide-react';
 import { LancamentoDetalhe } from '@/components/LancamentoDetalhe';
 import { NascimentoModalShell } from '@/components/nascimento/NascimentoModalShell';
+import { MorteModalShell } from '@/components/morte/MorteModalShell';
 import { ReclassificacaoFormFields, useReclassificacaoState } from '@/components/ReclassificacaoForm';
 import { ReclassificacaoResumoPanel } from '@/components/ReclassificacaoResumoPanel';
 import { CompraDetalhesDialog, CompraDetalhes, EMPTY_COMPRA_DETALHES } from '@/components/compra/CompraDetalhesDialog';
@@ -484,6 +485,16 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   const [motivoMorte, setMotivoMorte] = useState('');
   const [motivoMorteCustom, setMotivoMorteCustom] = useState('');
+  /* ⚠ FAZENDA DA MORTE E' ESCOLHA, no mesmo desenho do Nascimento
+     (PR-UI-NASCIMENTO-PARIDADE-03): nasce com a do contexto quando ha uma, em Global
+     nasce vazia e a tela diz isso ANTES de tentar gravar. */
+  const [morteFazendaId, setMorteFazendaId] = useState<string>('');
+  /* ⚠ VALOR DA MORTE — campo NOVO na tela. Ate aqui `valor_total` da morte vinha do
+     ramo generico de `valorTotalFinal` (`calc.valorLiquido`), e era isso que explicava
+     894 das 1.678 mortes com valor gravado sem que existisse campo. Com o campo, a
+     morte ganha ramo proprio no payload; sem ele o generico continuaria vencendo.
+     NULL = nao informado, e nao zero. */
+  const [valorMorte, setValorMorte] = useState<number | null>(null);
 
   const [pesoCarcacaKg, setPesoCarcacaKg] = useState('');
   const [precoArroba, setPrecoArroba] = useState('');
@@ -672,6 +683,18 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const isTransferencia = tipo === 'transferencia_entrada' || tipo === 'transferencia_saida';
   const isTransferenciaSaida = tipo === 'transferencia_saida';
   const hasFinancialImpact = !isNascimento && !isMorte && !isTransferencia;
+
+  /* ── FAZENDA DA MORTE (PR-ZOO-MORTE-NO-SHELL-01) ─────────────────────────────
+     Mesmo desenho do Nascimento acima, e pelo mesmo motivo: sem seletor, em Global o
+     lancamento era recusado sem que a tela dissesse nada. */
+  useEffect(() => {
+    if (!isMorte) return;
+    setMorteFazendaId(fazendaAtual?.id && fazendaAtual.id !== '__global__' ? fazendaAtual.id : '');
+  }, [isMorte, fazendaAtual?.id]);
+  const morteFazendaNome = fazendasOC.find(f => f.id === morteFazendaId)?.nome ?? null;
+  const morteFazendaFalta = isMorte && !morteFazendaId;
+  const morteQtd = parseNumericValue(quantidade) || 0;
+  const mortePeso = parseDecimalInput(pesoKg) ?? 0;
 
   const usaPrecoArroba = isAbate;
   const usaPrecoKg = !isAbate && !isNascimento;
@@ -2355,7 +2378,14 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           ? ((calc.valorBruto + calc.totalBonus) > 0 ? calc.valorBruto + calc.totalBonus : undefined)
           : isVenda
             ? (calc.valorBruto > 0 ? calc.valorBruto : undefined)
-            : (calc.valorLiquido > 0 ? calc.valorLiquido : undefined);
+            /* ⚠ RAMO PROPRIO DA MORTE (PR-ZOO-MORTE-NO-SHELL-01). Sem ele o generico
+               abaixo (`calc.valorLiquido`) continuaria vencendo e o campo Valor da tela
+               nao chegaria ao banco — era o generico que gravava valor em 894 das 1.678
+               mortes, sem que existisse campo. `?? undefined` e nao `?? 0`: valor nao
+               informado e' omitido pela lista branca e fica null. */
+            : isMorte
+              ? (valorMorte ?? undefined)
+              : (calc.valorLiquido > 0 ? calc.valorLiquido : undefined);
 
     const abateDataVenda = isAbate ? (abateDetalhes?.dataVenda || dataVenda || format(new Date(), 'yyyy-MM-dd')) : (dataVenda || undefined);
     const abateDataEmbarque = isAbate && data ? format(addDays(parseISO(data), -1), 'yyyy-MM-dd') : (dataEmbarque || undefined);
@@ -2384,7 +2414,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
          fazenda do contexto — exatamente o comportamento de sempre. Mandar
          `nascFazendaId` para todos aplicaria a escolha de uma tela em cinco que nao a
          oferecem. */
-      fazendaId: isNascimento ? (nascFazendaId || undefined) : undefined,
+      fazendaId: isNascimento ? (nascFazendaId || undefined)
+        : isMorte ? (morteFazendaId || undefined)
+        : undefined,
       fazendaOrigem: origemFinal, fazendaDestino: destinoFinal,
       pesoMedioKg: pesoKg ? parseNumericValue(pesoKg) : undefined,
       pesoMedioArrobas: pesoKg ? kgToArrobas(parseNumericValue(pesoKg)) : undefined,
@@ -3548,8 +3580,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           de `defaultCenario` no `useState` e e' resetado nos handlers de salvar,
           montado o seletor ou nao. Conferido antes de esconder.
           Condicao LOCAL, no mesmo padrao do `isNascimento` que ja restringe as
-          categorias — os demais tipos seguem com o seletor como esta. */}
-      {!isNascimento && (
+          categorias — os demais tipos seguem com o seletor como esta.
+          ⚠ A MORTE ENTROU EM PR-ZOO-MORTE-NO-SHELL-01, pelo mesmo motivo e com a mesma
+          conferencia: `statusOp` continua nascendo de `defaultCenario`, montado o
+          seletor ou nao. As descricoes de status (STATUS_DESCRIPTIONS_MORTE_CONSUMO)
+          seguem existindo para o CONSUMO, que ainda tem o seletor. */}
+      {!isNascimento && !isMorte && (
       <div className="space-y-2">
         <div className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">Status</div>
         <div className="grid grid-cols-3 gap-2">
@@ -4221,6 +4257,33 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     fecharModalOCComAutosave,
   };
 
+  /* Prop-bag da Morte — mesmo padrao do `nascFormApi` acima. `modo: 'criacao'` e' o
+     unico valor possivel aqui; a edicao monta o seu no LancamentoZooModal.
+     ⚠ `cenarioRotulo` sai do estado REAL e nao de um literal: a rota
+     `lancamentos-meta-zoo` abre esta tela com `statusOp` ja' em 'meta', e com o
+     seletor escondido a pilula seria a unica coisa a dizer o cenario. Cravar
+     "Realizado" ali faria a tela mentir sobre o que vai gravar. */
+  const morteFormApi = {
+    modo: 'criacao' as const,
+    data, setData,
+    qtdInput, pesoInput,
+    categoria, setCategoria: (v: Categoria) => setCategoria(v),
+    categoriasDisponiveis,
+    observacao, setObservacao,
+    morteFazendaId, setMorteFazendaId,
+    fazendasOC,
+    morteFazendaNome, morteFazendaFalta,
+    motivoMorte, setMotivoMorte,
+    motivoMorteCustom, setMotivoMorteCustom,
+    motivosDisponiveis: MOTIVOS_MORTE,
+    valorMorte, setValorMorte,
+    morteQtd, mortePeso,
+    cenarioRotulo: isCenarioMeta ? 'Meta' : 'Realizado',
+    submitting,
+    handleRequestRegister,
+    fecharModalOCComAutosave,
+  };
+
   return (
     <div className="p-4 animate-fade-in pb-20 max-w-7xl mx-auto">
       {onBackToConciliacao && aba !== 'reclassificacao' && (
@@ -4316,6 +4379,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
            segue intocado no `else`. Morte, Consumo, Venda, Abate e Transferencia nao
            mudam — inclusive as descricoes de status deles. */
         <NascimentoModalShell {...nascFormApi} />
+      ) : isMorte ? (
+        /* ══ MORTE NO SHELL ══════════════════════════════════════════════════════
+           Terceiro ramo da bifurcacao. O ramo generico abaixo — Venda, Abate, Consumo
+           e Transferencia — segue byte a byte como estava. */
+        <MorteModalShell {...morteFormApi} />
       ) : (
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_22rem] gap-4 items-start overflow-visible">
         {/* Center: Form or Historico */}
