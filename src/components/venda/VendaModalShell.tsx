@@ -32,8 +32,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { DatePicker } from '@/components/ui/date-picker';
 import { SearchableSelect } from '@/components/ui/searchable-select';
-import { Calendar, Building2, X, Plus } from 'lucide-react';
+import { Calendar, Building2, X, Plus, ArrowRight } from 'lucide-react';
 import type { Categoria } from '@/types/cattle';
+import type { CompraLotesApi } from '@/hooks/useCompraLotes';
+import { AbaNegociacaoLotes } from '@/components/compra/AbaNegociacaoLotes';
 
 /* ⚠ "RECEBIMENTO" CHAMA-SE ENTREGA NA VENDA — o gado SAI. A coluna do banco já é
    genérica (`entrega_encerrada`), então o vocabulário muda só na tela.
@@ -46,7 +48,7 @@ import type { Categoria } from '@/types/cattle';
    `AbaRecebimentoLotes`, ja bifurcado entre encerrado e aberto. */
 const ABAS_VENDA = [
   { key: 'venda', label: 'Venda', enabled: true },
-  { key: 'negociacao', label: 'Negociação', enabled: false },
+  { key: 'negociacao', label: 'Negociação', enabled: true },
   { key: 'entrega', label: 'Entrega', enabled: false },
   { key: 'documentos', label: 'Documentos', enabled: false },
   { key: 'financeiro', label: 'Financeiro', enabled: false },
@@ -85,6 +87,12 @@ export interface VendaModalShellProps {
   setObservacao: (v: string) => void;
   ocOperacaoId: string | null;
   ocStatusComercial: string | null;
+  /** Lotes da negociação — o mesmo hook da compra, que opera sobre `zoo_operacao_lotes`. */
+  lotesApi?: CompraLotesApi;
+  categoria: string;
+  categoriasDisponiveis: { value: string; label: string }[];
+  quantidadeNum: number;
+  pesoKgNum: number;
   submitting: boolean;
   onSalvarOperacao: () => void;
   onFechar: () => void;
@@ -95,7 +103,8 @@ export function VendaModalShell({
   vendaFazendaId, setVendaFazendaId, fazendasOC,
   propriedadeDestino, setPropriedadeDestino,
   vendaTipoVenda, setVendaTipoVenda, observacao, setObservacao,
-  ocOperacaoId, ocStatusComercial, submitting, onSalvarOperacao, onFechar,
+  ocOperacaoId, ocStatusComercial, lotesApi, categoria, categoriasDisponiveis,
+  quantidadeNum, pesoKgNum, submitting, onSalvarOperacao, onFechar,
 }: VendaModalShellProps) {
   const [abaAtiva, setAbaAtiva] = useState<string>('venda');
   const compradorNome = contrapartes.find(f => f.id === compradorId)?.nome ?? null;
@@ -146,6 +155,36 @@ export function VendaModalShell({
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] lg:grid-rows-[minmax(0,1fr)] gap-3 p-4 h-[69vh] overflow-y-auto lg:overflow-hidden bg-muted/30">
         <div className="space-y-2 min-w-0 lg:min-h-0 lg:overflow-y-auto">
+          {abaAtiva === 'negociacao' ? (
+            /* A MESMA ABA DA COMPRA, com quatro textos trocados por prop. O lote e'
+               identico nos dois: categoria, quantidade, peso, criterio e valor. Nenhum
+               rotulo de CAMPO muda — o lote nao e' comprado nem vendido na tela, ele e'
+               descrito.
+               NOTA: SEM A BIFURCACAO DO BOITEL, e nao por esquecimento. Ela e' de
+               PR-OC-VENDA-BOITEL-01, e entra AQUI, abaixo dos lotes: base operacional
+               derivada, quatro blocos clicaveis e painel de resultado — no padrao do
+               AbaRecebimentoLotes, que ja bifurca entre encerrado e aberto. Ficou fora
+               deste PR porque sao ~800 linhas de UI nova, que nao se conferem no mesmo
+               relatorio de uma troca de rotulos. */
+            <AbaNegociacaoLotes
+              categoria={categoria}
+              categoriasDisponiveis={categoriasDisponiveis}
+              quantidadeNum={quantidadeNum}
+              pesoKgNum={pesoKgNum}
+              darkSelectClass=""
+              modoOC
+              operacaoPronta={!!ocOperacaoId}
+              lotesApi={lotesApi}
+              somenteLeitura={ocStatusComercial === 'cancelada'}
+              onVoltarCompra={() => setAbaAtiva('venda')}
+              rotulos={{
+                salveIdentificacao: 'Salve a identificação da venda para adicionar os lotes da negociação.',
+                voltarParaIdentificacao: 'Voltar para Venda',
+                salveOperacaoPrimeiro: 'Salve a operação na aba Venda primeiro',
+                fisicoBloqueado: 'Esta venda já teve entrega: categoria, quantidade e peso ficam bloqueados. Critério e valor seguem editáveis.',
+              }}
+            />
+          ) : (
           <div className="rounded-md border bg-card p-2 shadow-sm space-y-2 min-w-0">
             <div className="text-[15px] font-medium text-foreground">Identificação da venda</div>
 
@@ -227,6 +266,7 @@ export function VendaModalShell({
               </div>
             </div>
           </div>
+          )}
         </div>
 
         {/* RESUMO LATERAL — idioma do ResumoLateralOC. */}
@@ -285,12 +325,13 @@ export function VendaModalShell({
         <Button type="button" onClick={onSalvarOperacao} disabled={submitting || !podeSalvar || ocStatusComercial === 'cancelada'}
           className="bg-white text-primary hover:bg-white/90 font-bold gap-1.5 disabled:opacity-60"
           title={podeSalvar ? undefined : 'Informe comprador, data, fazenda e tipo de venda'}>
-          {/* ⚠ "Salvar e continuar para Negociacao" era o texto do mockup, e ele PROMETE o
-              que ainda nao acontece: a aba de Negociacao nao existe, e o botao grava e
-              fica onde esta. Promessa nao cumprida ensina a desconfiar do botao — o
-              mesmo principio do alarme falso. O texto do mockup volta quando a aba
-              existir. */}
-          {submitting ? 'Salvando...' : ocOperacaoId ? 'Salvar alterações' : 'Salvar operação'}
+          {/* O TEXTO VOLTOU AO DO MOCKUP em PR-OC-VENDA-ABA-NEGOCIACAO-01, porque agora
+              ha para onde ir. Ele ficou em "Salvar operação" enquanto a Negociacao nao
+              existia: promessa nao cumprida ensina a desconfiar do botao, do mesmo modo
+              que alarme falso ensina a ignorar o alarme. */}
+          {submitting ? 'Salvando...'
+            : ocOperacaoId ? 'Salvar alterações'
+            : (<>Salvar e continuar para Negociação <ArrowRight className="h-4 w-4" /></>)}
         </Button>
       </div>
     </div>

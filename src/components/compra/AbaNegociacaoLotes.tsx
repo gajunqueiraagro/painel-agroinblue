@@ -36,8 +36,30 @@ interface Props {
       dois nao sao alternativos — um e' "a operacao inteira esta fechada", o
       outro e' "o fisico ja aconteceu". */
   fisicoBloqueado?: boolean;
-  onVoltarCompra?: () => void;   // navegar de volta à aba Compra
+  /* ⚠ O NOME DIZ COMPRA E O SIGNIFICADO E' GENERICO: "voltar para a aba de
+     identificacao". Renomear tocaria o call site no CompraModalShell e derrubaria o
+     gate de diff vazio da compra — por decisao do Gabriel, o nome fica e a venda o
+     reusa. A troca entra quando a compra puder ser tocada, junto de
+     PR-OC-PARAM-TIPO-01. */
+  onVoltarCompra?: () => void;   // navegar de volta à aba de identificação
+  /* ⚠ TEXTOS COM DEFAULT IGUAL AO DE HOJE (PR-OC-VENDA-ABA-NEGOCIACAO-01). A venda
+     descreve o mesmo lote — categoria, quantidade, peso, criterio e valor —, e por isso
+     NENHUM rotulo de campo entra aqui: o lote nao e' comprado nem vendido na tela, ele
+     e' descrito. O que muda e' so' onde o texto diz "compra" ou "recebimento".
+     O CompraModalShell nao passa nada e continua identico.
+     ⚠ DOIS TEXTOS FICARAM DE FORA e nao por esquecimento: "Defina o criterio..." e
+     "Preencha um lote na aba Compra" vivem em `NegociacaoLegado`, o modo SEM `lotesApi`.
+     A venda sempre tem `lotesApi` — ela nunca alcanca aquele ramo. Parametrizar texto
+     que ninguem le seria prometer um ponto de extensao morto. */
+  rotulos?: {
+    salveIdentificacao?: string;
+    voltarParaIdentificacao?: string;
+    salveOperacaoPrimeiro?: string;
+    fisicoBloqueado?: string;
+  };
 }
+
+export type AbaNegociacaoLotesRotulos = NonNullable<Props['rotulos']>;
 
 const CRITERIOS: { value: CriterioValor; label: string; unidade: string }[] = [
   { value: 'kg', label: 'Por kg', unidade: 'R$/kg' },
@@ -99,7 +121,7 @@ function ValorInput({ value, onChange, disabled, placeholder, className }: {
 
 export function AbaNegociacaoLotes({
   categoria, categoriasDisponiveis, quantidadeNum, pesoKgNum, darkSelectClass,
-  modoOC, operacaoPronta, lotesApi, somenteLeitura, fisicoBloqueado, onVoltarCompra,
+  modoOC, operacaoPronta, lotesApi, somenteLeitura, fisicoBloqueado, onVoltarCompra, rotulos,
 }: Props) {
   /* ── MODO OC — delegado a um componente PROPRIO (PR-OC-UX-LOTE-C2-01) ──────
      O modal de lote precisa de estado (qual lote esta aberto), e hook nao pode
@@ -115,6 +137,7 @@ export function AbaNegociacaoLotes({
         somenteLeitura={!!somenteLeitura}
         fisicoBloqueado={!!fisicoBloqueado}
         onVoltarCompra={onVoltarCompra}
+        rotulos={rotulos}
       />
     );
   }
@@ -136,7 +159,7 @@ export function AbaNegociacaoLotes({
    Por isso o botao do modal diz "Aplicar", nao "Salvar": dizer Salvar sem gravar
    seria mentir para o operador. */
 function NegociacaoOC({
-  lotesApi, categoriasDisponiveis, darkSelectClass, operacaoPronta, somenteLeitura, fisicoBloqueado, onVoltarCompra,
+  lotesApi, categoriasDisponiveis, darkSelectClass, operacaoPronta, somenteLeitura, fisicoBloqueado, onVoltarCompra, rotulos,
 }: {
   lotesApi: NonNullable<Props['lotesApi']>;
   categoriasDisponiveis: Props['categoriasDisponiveis'];
@@ -145,6 +168,7 @@ function NegociacaoOC({
   somenteLeitura: boolean;
   fisicoBloqueado: boolean;
   onVoltarCompra?: () => void;
+  rotulos?: AbaNegociacaoLotesRotulos;
 }) {
   const { lotes, adicionarLote, editarLote, removerLote, totais, loading } = lotesApi;
   /* Um so lugar decide o congelamento do fisico, para as tres colunas nao divergirem
@@ -185,7 +209,7 @@ function NegociacaoOC({
             </span>
             {!fisicoRO && (
               <button type="button" onClick={abrirNovo} disabled={!operacaoPronta}
-                title={operacaoPronta ? 'Adicionar lote à negociação' : 'Salve a operação na aba Compra primeiro'}
+                title={operacaoPronta ? 'Adicionar lote à negociação' : (rotulos?.salveOperacaoPrimeiro ?? 'Salve a operação na aba Compra primeiro')}
                 aria-label="Adicionar lote"
                 className="text-[11px] font-normal text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline">
                 + Adicionar lote
@@ -227,8 +251,8 @@ function NegociacaoOC({
 
       {!operacaoPronta ? (
         <div className="rounded-md border border-dashed bg-muted/10 px-3 py-5 text-center space-y-2">
-          <div className="text-[11px] text-muted-foreground">Salve a identificação da compra para adicionar os lotes da negociação.</div>
-          <Button type="button" variant="outline" size="sm" className="h-7 text-[11px]" onClick={onVoltarCompra}>Voltar para Compra</Button>
+          <div className="text-[11px] text-muted-foreground">{rotulos?.salveIdentificacao ?? 'Salve a identificação da compra para adicionar os lotes da negociação.'}</div>
+          <Button type="button" variant="outline" size="sm" className="h-7 text-[11px]" onClick={onVoltarCompra}>{rotulos?.voltarParaIdentificacao ?? 'Voltar para Compra'}</Button>
         </div>
       ) : lotes.length === 0 ? (
         <div className="rounded-md border border-dashed bg-muted/10 px-3 py-3 text-center text-[11px] text-muted-foreground">
@@ -290,6 +314,7 @@ function NegociacaoOC({
 
       {emEdicao && (
         <LoteDialog
+          rotulos={rotulos}
           /* ⚠ `key` NAO E' DECORACAO. O estado do modal e' inicializado no MOUNT a
              partir do lote. Sem a key, "Aplicar e adicionar outro" mantinha o
              componente montado e o lote NOVO abriria com os valores do ANTERIOR —
@@ -330,9 +355,11 @@ function ParLote({ rotulo, valor }: { rotulo: string; valor: string }) {
    Edita um RASCUNHO local e so devolve o patch ao aplicar — fechar pelo X ou pelo Esc
    descarta, que e' o que "Cancelar" significa. */
 function LoteDialog({
+  rotulos,
   lote, categoriasDisponiveis, darkSelectClass, fisicoRO, somenteLeitura, rotuloCategoria,
   onAplicar, onAplicarEAdicionar, onFechar,
 }: {
+  rotulos?: AbaNegociacaoLotesRotulos;
   lote: NonNullable<Props['lotesApi']>['lotes'][number];
   categoriasDisponiveis: Props['categoriasDisponiveis'];
   darkSelectClass?: string;
@@ -376,7 +403,7 @@ function LoteDialog({
           <DialogTitle className="text-[13px] text-primary-foreground">{rotuloCategoria(categoria)}</DialogTitle>
           <DialogDescription className="text-[11px] text-primary-foreground/80">
             {fisicoRO
-              ? 'Esta compra já teve recebimento: categoria, quantidade e peso ficam bloqueados. Critério e valor seguem editáveis.'
+              ? (rotulos?.fisicoBloqueado ?? 'Esta compra já teve recebimento: categoria, quantidade e peso ficam bloqueados. Critério e valor seguem editáveis.')
               : 'Os campos do lote negociado.'}
           </DialogDescription>
         </DialogHeader>

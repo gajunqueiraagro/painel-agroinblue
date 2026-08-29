@@ -2186,10 +2186,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       setOcOperacaoId(env.operacao_id);
       setOcVersao(env.versao);
       if (env.status_comercial) setOcStatusComercial(env.status_comercial);
-      /* ⚠ SEM A SEGUNDA FRASE. "Agora informe os lotes negociados" mandava fazer algo
-         que ainda nao e' possivel — a aba de Negociacao nao existe. Volta quando ela
-         existir. */
-      if (criando) toast.success('Operação de venda criada.');
+      /* A segunda frase VOLTOU em PR-OC-VENDA-ABA-NEGOCIACAO-01: a aba de Negociacao
+         existe, entao a instrucao aponta para algo que da' para fazer. Ela ficou fora
+         enquanto nao havia — mandar fazer o impossivel ensina a ignorar a mensagem. */
+      if (criando) toast.success('Operação de venda criada. Agora informe os lotes negociados.');
       return { operacaoId: env.operacao_id, versao: env.versao };
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Falha ao salvar a operação de venda.');
@@ -4745,6 +4745,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           observacao={observacao} setObservacao={setObservacao}
           ocOperacaoId={ocOperacaoId}
           ocStatusComercial={ocStatusComercial}
+          lotesApi={lotesApi}
+          categoria={categoria}
+          categoriasDisponiveis={categoriasDisponiveis}
+          quantidadeNum={parseNumericValue(quantidade) || 0}
+          pesoKgNum={parseNumericValue(pesoKg) || 0}
           submitting={submitting}
           onSalvarOperacao={() => { void salvarOperacaoVendaOC(); }}
           onFechar={fecharModalOCComAutosave}
