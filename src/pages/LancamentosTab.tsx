@@ -373,6 +373,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   //   ficavam false/null para sempre — desligando a hidratação E o enabled das 4 subabas OC.
   const [ocSearchParams] = useSearchParams();
   const modoOCCompra = ocSearchParams.get('oc_compra') === '1';
+  /* ⚠ SO O PARAMETRO, aqui em cima. O `modoOCVenda` completo mora la' embaixo porque
+     depende de `isCenarioMeta`, que nasce depois — e o hook de lotes precisa saber
+     antes disso. Um lugar so' le a URL; o refinamento de cenario fica onde esta'
+     documentado. */
+  const ocVendaParam = ocSearchParams.get('oc_venda') === '1';
   /* PR-OC-VENDA-ABA-01 — espelho de `modoOCCompra`. Os dois nunca coexistem: quem abre
      um apaga o outro, nos dois sentidos (ver `abrirNovaVendaOC` / `abrirNovaCompraOC`). */
   const [ocOperacaoId, setOcOperacaoId] = useState<string | null>(null);
@@ -408,12 +413,18 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [ocHidratacaoErro, setOcHidratacaoErro] = useState<string | null>(null);
   const ocHidratadoRef = useRef<boolean>(false);
   // COM-3: estado/handlers dos lotes comerciais (só em modo OC; fonte única = camada OC).
+  /* ⚠ PRIMEIRA CAUSA DO DEFEITO 1 (PR-OC-FIX-VENDA-NEGOCIACAO-NAO-GRAVA-01): estava
+     `enabled: modoOCCompra`, entao numa VENDA o `carregar` do hook saia pela guarda
+     `if (!enabled || !operacaoId)` e a grade nunca lia o que havia no banco. A venda usa a
+     MESMA aba e o MESMO hook desde PR-OC-VENDA-ABA-NEGOCIACAO-01 — o que faltava era ligar.
+     ⚠ Sem `!isCenarioMeta`: em meta o shell da OC nao e' montado, entao o hook nao tem
+     consumidor. Quem decide RENDER continua sendo `modoOCVenda`. */
   const lotesApi = useCompraLotes({
     operacaoId: ocOperacaoId,
     clienteId: clienteAtual?.id ?? null,
     versao: ocVersao,
     onVersaoChange: setOcVersao,
-    enabled: modoOCCompra,
+    enabled: modoOCCompra || ocVendaParam,
   });
   const recebimentoApi = useOperacaoRecebimento({
     operacaoId: ocOperacaoId,
@@ -705,7 +716,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
      ⚠ A COMPRA NAO TINHA ESTE DEFEITO, e nao por cuidado: o ternario do container testa
      `isCompra && isCenarioMeta` ANTES de `isCompra`, entao a ordem a protegia. A venda
      entrou como primeiro ramo da cadeia e passou na frente do teste de cenario. */
-  const modoOCVenda = ocSearchParams.get('oc_venda') === '1' && !isCenarioMeta;
+  const modoOCVenda = ocVendaParam && !isCenarioMeta;
 
   /* ⚠ CENARIO, NAO TIPO. Realizado e programado registram um fato economico e exigem o
      detalhe financeiro; meta e' projecao e nao exige. Nomeada porque a mesma pergunta
@@ -2193,26 +2204,53 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       setOcVersao(env.versao);
       if (env.status_comercial) setOcStatusComercial(env.status_comercial);
 
-      /* ⚠ UMA CHAMADA SO, e depois do rascunho porque ela precisa da operacao existindo e
-         da versao que o rascunho acabou de devolver. Os quatro modais editaram estado
-         local; e aqui que isso vira linha.
-         ⚠ 'projetado' SEMPRE: o realizado nasce no abate, por reabertura da OC, e nao por
-         este botao. */
-      let versaoFinal = env.versao;
-      if (vendaTipoVenda === 'boitel' && ocBoitel) {
-        const envB = await ocRpc.salvarBoitel(env.operacao_id, clienteId, env.versao, 'projetado', payloadBoitel(ocBoitel));
-        versaoFinal = (envB as { versao: number }).versao;
-        setOcVersao(versaoFinal);
-      }
+      /* ⚠ O BOITEL NAO GRAVA MAIS AQUI. Ele e' editado na aba de Negociacao, e passou a
+         gravar junto com os lotes, em `salvarNegociacaoVendaOC`. Ficar aqui obrigava o
+         operador a ter os cinco campos do boitel para poder CRIAR a operacao — e os
+         campos moram na aba seguinte, que so' existe depois de criada. */
 
       /* A segunda frase VOLTOU em PR-OC-VENDA-ABA-NEGOCIACAO-01: a aba de Negociacao
          existe, entao a instrucao aponta para algo que da' para fazer. Ela ficou fora
          enquanto nao havia — mandar fazer o impossivel ensina a ignorar a mensagem. */
       if (criando) toast.success('Operação de venda criada. Agora informe os lotes negociados.');
-      return { operacaoId: env.operacao_id, versao: versaoFinal };
+      return { operacaoId: env.operacao_id, versao: env.versao };
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Falha ao salvar a operação de venda.');
       return null;
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  /* PR-OC-FIX-VENDA-NEGOCIACAO-NAO-GRAVA-01 — SEGUNDA CAUSA DO DEFEITO 1.
+     ⚠ NINGUEM CHAMAVA `lotesApi.salvar()` NA VENDA. Os tres unicos callers estao no
+     `CompraModalShell` (linhas 253, 789 e 852); o rodape da venda so' chamava
+     `salvarOperacaoVendaOC`, que grava `oc_salvar_rascunho` e nada mais. Por isso os tres
+     eventos da OC cc3ced62 sao `salvar_rascunho` e nenhum e' de lotes: o botao fazia o que
+     dizia, e o que ele dizia nao incluia os lotes.
+     ⚠ NAO CHAMA `oc_salvar_rascunho` JUNTO. Duas RPCs em sequencia disputariam a versao: a
+     primeira a incrementa e a segunda receberia a antiga do state, que so' atualiza no
+     proximo render — 40001 na cara do operador. A compra tem o mesmo desenho: o botao da
+     Negociacao dela salva LOTES, e os dados da operacao vao por outro caminho. */
+  const salvarNegociacaoVendaOC = async (): Promise<boolean> => {
+    const clienteId = clienteAtual?.id;
+    if (!ocOperacaoId || !clienteId) { toast.error('Salve a operação na aba Venda primeiro.'); return false; }
+    setSubmitting(true);
+    try {
+      /* `silent` porque o aviso de sucesso sai daqui: numa venda boitel ainda falta gravar
+         o planejamento, e dois toasts seguidos para um clique so' e' ruido. */
+      const novaVersao = await lotesApi.salvar({ silent: true });
+      if (novaVersao == null) return false;   // o hook ja avisou o que impediu
+      if (vendaTipoVenda === 'boitel' && ocBoitel) {
+        /* ⚠ 'projetado' SEMPRE: o realizado nasce no abate, por reabertura da OC. */
+        const envB = await ocRpc.salvarBoitel(ocOperacaoId, clienteId, novaVersao, 'projetado', payloadBoitel(ocBoitel));
+        setOcVersao((envB as { versao: number }).versao);
+      }
+      toast.success('Negociação salva.');
+      return true;
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Falha ao salvar a negociação.');
+      return false;
     } finally {
       setSubmitting(false);
     }
@@ -4780,7 +4818,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           quantidadeNum={parseNumericValue(quantidade) || 0}
           pesoKgNum={parseNumericValue(pesoKg) || 0}
           submitting={submitting}
-          onSalvarOperacao={() => { void salvarOperacaoVendaOC(); }}
+          onSalvarOperacao={() => salvarOperacaoVendaOC()}
+          onSalvarNegociacao={() => salvarNegociacaoVendaOC()}
           onFechar={fecharModalOCComAutosave}
         />
       ) : isCompra && isCenarioMeta ? (

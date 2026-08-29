@@ -101,7 +101,15 @@ export interface VendaModalShellProps {
   quantidadeNum: number;
   pesoKgNum: number;
   submitting: boolean;
-  onSalvarOperacao: () => void;
+  /* ⚠ DEVOLVE O QUE GRAVOU, e por isso nao e' `() => void`: o botao promete "continuar
+     para Negociacao" e so' pode continuar se souber que a gravacao deu certo. Falsy = nao
+     gravou, e a aba nao muda. */
+  onSalvarOperacao: () => void | Promise<unknown>;
+  /* ⚠ O RODAPE MUDA DE FUNCAO CONFORME A ABA. Na Venda ele grava a operacao; na
+     Negociacao grava os lotes (e o planejamento do boitel, quando houver). Um botao so',
+     duas acoes, porque e' sempre "salvar o que esta' na tela" — e e' o mesmo desenho do
+     CompraModalShell, cujo rodape de Negociacao chama `lotesApi.salvar()`. */
+  onSalvarNegociacao: () => void | Promise<unknown>;
   onFechar: () => void;
 }
 
@@ -111,7 +119,7 @@ export function VendaModalShell({
   propriedadeDestino, setPropriedadeDestino,
   vendaTipoVenda, setVendaTipoVenda, observacao, setObservacao,
   ocOperacaoId, ocStatusComercial, lotesApi, boitelData = null, onBoitelChange, categoria, categoriasDisponiveis,
-  quantidadeNum, pesoKgNum, submitting, onSalvarOperacao, onFechar,
+  quantidadeNum, pesoKgNum, submitting, onSalvarOperacao, onSalvarNegociacao, onFechar,
 }: VendaModalShellProps) {
   const [abaAtiva, setAbaAtiva] = useState<string>('venda');
   const compradorNome = contrapartes.find(f => f.id === compradorId)?.nome ?? null;
@@ -137,12 +145,20 @@ export function VendaModalShell({
      descobria o impedimento no fim. Se as duas divergirem, quem manda e' a RPC, e o texto
      que o operador veria seria o dela. */
   const faltamBoitel = ehBoitel ? faltamDosCinco(boitelData) : [];
-  const podeSalvar = identificacaoPronta && faltamBoitel.length === 0;
-  const motivoNaoSalva = !identificacaoPronta
-    ? 'Informe comprador, data, fazenda e tipo de venda'
-    : faltamBoitel.length > 0
-      ? `Planejamento do boitel incompleto. Falta ${faltamBoitel.join(', ')}.`
-      : undefined;
+  const naNegociacao = abaAtiva === 'negociacao';
+
+  /* ⚠ O BOITEL SO TRAVA NA ABA ONDE ELE E EDITADO. Ate' aqui a trava valia no rodape
+     inteiro, e o efeito era o oposto do pretendido: numa venda boitel o operador nao
+     conseguia nem CRIAR a operacao, porque os cinco campos moram na aba de Negociacao —
+     que so' existe depois da operacao criada. */
+  const podeSalvar = naNegociacao
+    ? !!ocOperacaoId && faltamBoitel.length === 0
+    : identificacaoPronta;
+  const motivoNaoSalva = naNegociacao
+    ? (!ocOperacaoId ? 'Salve a operação na aba Venda primeiro'
+       : faltamBoitel.length > 0 ? `Planejamento do boitel incompleto. Falta ${faltamBoitel.join(', ')}.`
+       : undefined)
+    : (identificacaoPronta ? undefined : 'Informe comprador, data, fazenda e tipo de venda');
 
   /* A MESMA ABA DA COMPRA, com quatro textos trocados por prop. O lote e' identico nos
      dois: categoria, quantidade, peso, criterio e valor. Nenhum rotulo de CAMPO muda — o
@@ -372,7 +388,16 @@ export function VendaModalShell({
           className="text-white/90 hover:bg-white/10 hover:text-white" title="Fechar sem salvar" aria-label="Fechar">
           Fechar
         </Button>
-        <Button type="button" onClick={onSalvarOperacao} disabled={submitting || !podeSalvar || ocStatusComercial === 'cancelada'}
+        <Button type="button"
+          onClick={async () => {
+            if (naNegociacao) { await onSalvarNegociacao(); return; }
+            /* ⚠ SO NA CRIACAO. Editando, o botao diz "Salvar alteracoes" e nao promete ir
+               a lugar nenhum — mudar de aba ali seria tirar o operador de onde ele estava. */
+            const criando = !ocOperacaoId;
+            const gravou = await onSalvarOperacao();
+            if (criando && gravou) setAbaAtiva('negociacao');
+          }}
+          disabled={submitting || !podeSalvar || ocStatusComercial === 'cancelada'}
           className="bg-white text-primary hover:bg-white/90 font-bold gap-1.5 disabled:opacity-60"
           title={motivoNaoSalva}>
           {/* O TEXTO VOLTOU AO DO MOCKUP em PR-OC-VENDA-ABA-NEGOCIACAO-01, porque agora
@@ -380,6 +405,7 @@ export function VendaModalShell({
               existia: promessa nao cumprida ensina a desconfiar do botao, do mesmo modo
               que alarme falso ensina a ignorar o alarme. */}
           {submitting ? 'Salvando...'
+            : naNegociacao ? 'Salvar negociação'
             : ocOperacaoId ? 'Salvar alterações'
             : (<>Salvar e continuar para Negociação <ArrowRight className="h-4 w-4" /></>)}
         </Button>
