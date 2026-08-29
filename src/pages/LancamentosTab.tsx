@@ -2592,9 +2592,18 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     const abNotaFiscal = isAbate && abateDetalhes ? abateDetalhes.notaFiscal : notaFiscal;
 
     // For venda: save precoInput to precoArroba, tipoPreco to tipoPeso, tipoVenda to tipoVenda
+    /* ⚠ O PRECO UNITARIO NAO PODE DEPENDER DO DIALOGO. `vendaDetalhes` e' null na venda
+       em META desde PR-ZOO-VENDA-META-01 — o dialogo financeiro deixou de ser aberto —, e
+       a expressao caia no ultimo ramo, que le o `precoArroba` generico, vazio para venda.
+       O resultado era `preco_arroba` NULO, e reabrir o lancamento traria o campo em
+       branco: salvar de novo zeraria o valor. Nao era ausencia de dado, era destruicao
+       no round-trip.
+       ⚠ MESMO DEFEITO DE `valorTotalFinal`, corrigido em PR-ZOO-FIX-META-COMPRA-VALOR-01:
+       um valor amarrado a existencia do dialogo, que a dispensa do dialogo esvaziou.
+       `vendaPrecoInput` e' estado da PAGINA e vale nos dois caminhos. */
     const vendaPrecoArrobaFinal = isBoitelVenda && boitelDataForResumo
       ? (boitelDataForResumo.precoVendaArroba || undefined)
-      : isVenda && vendaDetalhes
+      : isVenda
         ? (parseNumericValue(vendaPrecoInput) || undefined)
         : (isAbate && abateDetalhes ? (parseNumericValue(abateDetalhes.precoArroba) || undefined) : (numOrUndef(precoArroba) || undefined));
     const tipoPesoFinal = isVenda ? vendaTipoPreco : abTipoPeso;
@@ -2730,7 +2739,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             } : undefined,
           };
         }
-        if (isVenda && vendaDetalhes) {
+        /* ⚠ O SNAPSHOT TAMBEM ESTAVA AMARRADO AO DIALOGO. Sem ele a venda em meta
+           gravava sem `detalhes_snapshot`, e a edicao caia no fallback — que reconstroi a
+           partir de `financeiro_lancamentos_v2`, e uma projecao nao tem financeiro.
+           `vendaMetaNoEnvelope` entra na condicao: em meta o snapshot se monta a partir
+           do estado da pagina, que e' de onde os campos vem naquele caminho. */
+        if (isVenda && (vendaDetalhes || vendaMetaNoEnvelope)) {
           const fornNome = abateFornecedores.find(f => f.id === vendaDestinoFornecedorId)?.nome;
           const vc = vendaCalc || vendaDetalhes.calculation;
           return {
@@ -2740,8 +2754,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               data, statusOperacional: isCenarioMeta ? null : effectiveStatusOp as StatusOperacional, tipoPreco: 'por_kg', precoInput: vendaPrecoInput,
             })),
             type: 'venda',
-            ...vendaDetalhes,
+            ...(vendaDetalhes ?? {}),
             tipoPreco: vendaTipoPreco, precoInput: vendaPrecoInput,
+            tipoVenda: vendaDetalhes?.tipoVenda ?? vendaTipoVenda,
             fornecedorId: vendaDestinoFornecedorId || undefined, fornecedorNome: fornNome || undefined,
           };
         }
