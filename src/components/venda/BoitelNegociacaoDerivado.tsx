@@ -57,8 +57,12 @@ interface Exigencia { rotulo: string; grupo: Grupo; presente: boolean }
 
 function exigencias(d: BoitelEdicao): Exigencia[] {
   const base: Exigencia[] = [
-    { rotulo: 'cabeças',                 grupo: 'ind', presente: d.qtdCabecas > 0 },
-    { rotulo: 'peso de saída da fazenda',grupo: 'ind', presente: d.pesoInicial > 0 },
+    /* ⚠ UMA EXIGENCIA SO PARA OS DOIS, e o texto diz ONDE resolver. Cabeças e peso deixaram
+       de ser campos em PR-OC-VENDA-BOITEL-CABECAS-DOS-LOTES-01: os dois derivam dos lotes.
+       Listá-los separados faria a frase dizer "falta cabeças" duas vezes pelo mesmo motivo,
+       e mandaria o operador procurar um campo que não existe. */
+    { rotulo: 'lote negociado (as cabeças e o peso vêm dele)',
+      grupo: 'ind', presente: d.qtdCabecas > 0 && d.pesoInicial > 0 },
     { rotulo: 'dias no boitel',          grupo: 'ind', presente: d.dias > 0 },
     { rotulo: 'GMD',                     grupo: 'ind', presente: d.gmd > 0 },
     { rotulo: 'rendimento de entrada',   grupo: 'ind', presente: d.rendimentoEntrada > 0 },

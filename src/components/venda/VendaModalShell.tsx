@@ -233,6 +233,12 @@ export function VendaModalShell({
                 <BoitelBaseOperacional boitelData={boitelData} />
                 <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_240px] gap-2 items-start">
                   <div className="min-w-0 space-y-2">
+                    {/* ⚠ O LOTE VEM PRIMEIRO, e a ordem nao e' estetica: ele e' o comeco da
+                        negociacao. Sem lote nao ha cabecas nem peso, e os quatro blocos do
+                        boitel nao tem sobre o que calcular — a base operacional do painel
+                        deriva dele. Estava invertido, e a aba abria mostrando Adiantamento
+                        antes de existir o que adiantar. */}
+                    {abaLotes}
                     {/* ⚠ OS QUATRO BLOCOS SO APARECEM COM VALOR E COM ONCHANGE. Sem os dois
                         nao ha o que editar, e um bloco clicavel que nao abre nada seria a
                         promessa nao cumprida que o proprio botao desta tela ja evitou. O
@@ -244,7 +250,6 @@ export function VendaModalShell({
                         somenteLeitura={ocStatusComercial === 'cancelada'}
                       />
                     )}
-                    {abaLotes}
                   </div>
                   <BoitelPainelResultado boitelData={boitelData} />
                 </div>

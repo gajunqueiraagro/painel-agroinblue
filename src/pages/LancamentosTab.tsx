@@ -2181,6 +2181,36 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
      tocaria o caminho da compra, que este PR nao pode tocar.
      ⚠ SEM `modalidade_comercial`: medido que os 89 registros com escala/a_termo/spot sao
      TODOS abate, e nenhuma venda tem modalidade. A coluna nasceu para o abate. */
+  /* PR-OC-VENDA-BOITEL-CABECAS-DOS-LOTES-01 — O BOITEL LE OS LOTES, e nao os campos da
+     venda. Antes era `boitelVazio(parseNumericValue(quantidade), parseNumericValue(pesoKg))`,
+     que sao os campos do formulario simples: numa OC eles ficam vazios, e o modal abria com
+     "cabeças —" enquanto o lote tinha 110. A diaria saia zero (`0 cab. x 110 dias x 18,85`)
+     e o custo total, errado.
+     ⚠ DERIVADOS A CADA RENDER, e NAO semeados uma vez. Semear corrigiria so' a primeira
+     abertura: na primeira tecla `ocBoitel` deixa de ser nulo, `boitelVazio` nunca mais e'
+     chamado, e o zero congelaria. Cabeças e peso nao sao digitados em lugar nenhum — nao
+     pertencem ao estado editavel.
+     ⚠ MEDIA PONDERADA, e nao media das medias: `totais.pesoTotal` ja e' a soma de
+     `quantidade x pesoMedio` de cada lote, entao dividir por `animais` da o peso medio real
+     do embarque. Com um lote de 100 cab a 400 kg e outro de 10 a 200 kg, da 381,8 kg — e
+     nao 300, que e' o que a media das medias daria.
+     ⚠ O NUMERO POR CABECA E MEDIA DO EMBARQUE, e nao descreve nenhum animal: com lotes de
+     pesos muito diferentes, "arrobas produzidas por cabeça" e' media ponderada. E' inerente
+     a haver UM planejamento por operacao, que e' o modelo fixado pela `zoo_operacao_boitel`
+     (uma linha por cenario, nao uma por lote). Quem ler este numero precisa saber disso.
+     ⚠ `qtdCabecas` NAO VAI NO PAYLOAD: a OC ja o guarda em `qtd_negociada`, escrito pelo
+     proprio `oc_salvar_lotes`. Uma fonte, sem copia. So' o peso desce, como
+     `peso_saida_fazenda_kg`. */
+  const boitelDaVenda = useMemo<BoitelEdicao | null>(() => {
+    if (vendaTipoVenda !== 'boitel') return null;
+    const { animais, pesoTotal } = lotesApi.totais;
+    return {
+      ...(ocBoitel ?? boitelVazio()),
+      qtdCabecas: animais,
+      pesoInicial: animais > 0 ? pesoTotal / animais : 0,
+    };
+  }, [vendaTipoVenda, ocBoitel, lotesApi.totais]);
+
   const salvarOperacaoVendaOC = async (): Promise<{ operacaoId: string; versao: number } | null> => {
     const clienteId = clienteAtual?.id;
     if (!clienteId) { toast.error('Cliente não selecionado.'); return null; }
@@ -2241,9 +2271,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
          o planejamento, e dois toasts seguidos para um clique so' e' ruido. */
       const novaVersao = await lotesApi.salvar({ silent: true });
       if (novaVersao == null) return false;   // o hook ja avisou o que impediu
-      if (vendaTipoVenda === 'boitel' && ocBoitel) {
+      if (boitelDaVenda) {
+        /* ⚠ GRAVA O DERIVADO, e nao o `ocBoitel` cru: e' nele que o peso de saida da fazenda
+           ja vem dos lotes. O cru tem zero ali, sempre. */
         /* ⚠ 'projetado' SEMPRE: o realizado nasce no abate, por reabertura da OC. */
-        const envB = await ocRpc.salvarBoitel(ocOperacaoId, clienteId, novaVersao, 'projetado', payloadBoitel(ocBoitel));
+        const envB = await ocRpc.salvarBoitel(ocOperacaoId, clienteId, novaVersao, 'projetado', payloadBoitel(boitelDaVenda));
         setOcVersao((envB as { versao: number }).versao);
       }
       toast.success('Negociação salva.');
@@ -4807,11 +4839,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
              preenchido a partir de `detalhesSnapshot.boitelSnapshot` quando uma venda
              boitel e' aberta para edicao. */
           /* ⚠ O VALOR NUNCA E NULO NUM BOITEL: sem objeto os quatro blocos nao teriam o
-             que editar. Nasce vazio com as cabecas e o peso da propria venda — os dois
-             unicos campos que a venda ja sabe. */
-          boitelData={vendaTipoVenda === 'boitel'
-            ? (ocBoitel ?? boitelVazio(parseNumericValue(quantidade) || 0, parseNumericValue(pesoKg) || 0))
-            : null}
+             que editar. Cabecas e peso vem dos LOTES — ver `boitelDaVenda`. */
+          boitelData={boitelDaVenda}
           onBoitelChange={setOcBoitel}
           categoria={categoria}
           categoriasDisponiveis={categoriasDisponiveis}

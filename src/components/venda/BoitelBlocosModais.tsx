@@ -89,10 +89,14 @@ export function payloadBoitel(d: BoitelEdicao): Record<string, unknown> {
   };
 }
 
-/** Um boitel em branco, com as cabeças e o peso vindos da própria venda. */
-export function boitelVazio(qtdCabecas: number, pesoInicial: number): BoitelEdicao {
+/** Um boitel em branco.
+ *  ⚠ SEM CABEÇAS E SEM PESO, e não por esquecimento: os dois DERIVAM DOS LOTES a cada
+ *  render, em `LancamentosTab`, e não fazem parte do estado editável. Semeá-los aqui
+ *  corrigiria só a primeira abertura — na primeira tecla o estado deixa de ser nulo,
+ *  esta função nunca mais é chamada, e o valor semeado congelaria. */
+export function boitelVazio(): BoitelEdicao {
   return {
-    qtdCabecas, pesoInicial, fazendaOrigem: '', nomeBoitel: '', lote: '', numeroContrato: '',
+    qtdCabecas: 0, pesoInicial: 0, fazendaOrigem: '', nomeBoitel: '', lote: '', numeroContrato: '',
     dataEnvio: '', quebraViagem: 0, custoOportunidade: 0, dias: 0, gmd: 0,
     rendimentoEntrada: 0, rendimento: 0, modalidadeCusto: 'diaria',
     custoDiaria: 0, custoArroba: 0, percentualParceria: 0, custosExtrasParceria: 0,
@@ -313,7 +317,13 @@ export function BoitelBlocosModais({ valor, onChange, somenteLeitura }: {
           boitel cobra, e' o que o capital renderia noutro lugar. Somar com diaria e frete
           misturaria desembolso com comparacao.
           A unidade e' R$/kg de peso de saida da fazenda — `coT = co x peso x cabecas`,
-          como no simulador antigo ("Custo oport. R$/kg"). */}
+          como no simulador antigo ("Custo oport. R$/kg").
+          ⚠ FICA NA COLUNA DA ESQUERDA, e nao junto do painel que o consome — considerado e
+          recusado em PR-OC-VENDA-BOITEL-ORDEM-NEGOCIACAO-01. Neste shell a coluna da
+          direita e' SO' LEITURA: o resumo da operacao e o resultado do boitel nao tem um
+          unico campo. Por na' um input, ainda que o unico usuario do valor esteja la',
+          quebraria a regra que a tela ensina em toda aba. Ele fica por ULTIMO na esquerda,
+          que e' o mais perto do painel que da' sem misturar as duas naturezas. */}
       <div className="rounded-md border bg-card px-3 py-2 shadow-sm flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
         <div className="min-w-0 w-44">
           <CampoNum label="Custo de oportunidade" valor={d.custoOportunidade}
