@@ -157,6 +157,15 @@ const TIPOS_COM_SELETOR_DE_FAZENDA: TipoMovimentacao[] = ['nascimento', 'morte']
    cabecalho, corpo e rodape — rola dentro dele, anulando a estrutura do envelope. */
 const TIPOS_NO_ENVELOPE_PROPRIO: TipoMovimentacao[] = ['compra', 'nascimento', 'morte'];
 
+/* ⚠ O QUE NAO SE PROJETA. Nem tudo que se lanca tem versao planejada: chuva e' FATO
+   MEDIDO — o produtor registra o que caiu, nao o que espera que caia. Oferecer o card
+   na rota de planejamento convida a um lancamento que nao existe.
+   ⚠ LISTA, e nao uma condicao por tipo, para que o proximo caso entre acrescentando uma
+   linha. Reclassificacao NAO entra: evoluir categoria e' planejamento legitimo.
+   ⚠ O tipo aceita 'chuvas' porque os cards incluem atalhos de navegacao, que nao sao
+   tipos de lancamento. */
+const TIPOS_QUE_NAO_SE_PROJETAM: Array<TipoMovimentacao | 'chuvas'> = ['chuvas'];
+
 /* ⚠ QUEM NAO MOVIMENTA CAIXA NEM COMPOE DRE. A confirmacao desses tipos nao mostra
    bloco financeiro — mostrar colunas de dinheiro num lancamento que a propria tela
    declara sem impacto e' contradizer a tela na ultima parada antes de gravar.
@@ -3155,7 +3164,13 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
          o lancamento e' simples, entao a ausencia do entrypoint nao diz nada e esconder
          o card tirava da rota de planejamento um tipo que ela precisa
          (PR-ZOO-META-COMPRA-01). O realizado nao muda. */
-      .filter(it => !(it.value === 'compra' && !onNovaCompraOC && !isCenarioMeta));
+      .filter(it => !(it.value === 'compra' && !onNovaCompraOC && !isCenarioMeta))
+      /* ⚠ FILTRO PROPRIO, e nao uma clausula a mais no de cima. Os dois falam de coisas
+         diferentes: o anterior e' sobre ENTRYPOINT indisponivel, este e' sobre o tipo
+         nao existir em projecao. Juntar faria uma condicao unica responder a duas
+         perguntas, que e' como a compra sumiu da rota de meta sem ninguem decidir isso
+         (PR-ZOO-META-SEM-CHUVAS-01). */
+      .filter(it => !(isCenarioMeta && TIPOS_QUE_NAO_SE_PROJETAM.includes(it.value)));
 
     /* ── UM CARTAO POR GRUPO (PR-UI-LANCAR-CARDS-02) ───────────────────────────
        Eram NOVE cartoes com borda de 2px cada, sob cabecalhos soltos: nove molduras
