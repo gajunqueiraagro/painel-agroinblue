@@ -111,6 +111,12 @@ export interface Lancamento {
   updatedBy?: string;
   createdByNome?: string;
   updatedByNome?: string;
+  /* ⚠ CAMPO DE MAO DUPLA desde PR-UI-NASCIMENTO-PARIDADE-03. Sempre foi preenchido na
+     LEITURA (`fazendaId: l.fazenda_id`); agora tambem e' lido na ESCRITA, onde vence a
+     fazenda do contexto — ver `adicionarLancamento`. Quem nao preenche continua
+     herdando o contexto, que era o unico comportamento ate aqui.
+     ⚠ Nao confundir com `fazendaOrigem`/`fazendaDestino`, que sao TEXTO LIVRE de
+     transferencia e venda; este e' o id da coluna `fazenda_id`. */
   fazendaId?: string;
   clienteId?: string;
   origemRegistro?: string;

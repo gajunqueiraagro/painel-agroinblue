@@ -361,7 +361,16 @@ export function useLancamentos(arg: UseLancamentosArg = 'realizado') {
   }, [enabled, fazendaId, migrated, loadData, clienteId]);
 
   const adicionarLancamento = async (lancamento: Omit<Lancamento, 'id'>): Promise<string | undefined> => {
-    if (!fazendaId || fazendaId === '__global__') return undefined;
+    /* ⚠ A FAZENDA DO LANCAMENTO VENCE A DO CONTEXTO (PR-UI-NASCIMENTO-PARIDADE-03).
+       Ate aqui o `fazenda_id` era SEMPRE o do contexto global e o payload nao o
+       carregava — um seletor na tela nao mudaria o que grava. Agora quem informa
+       decide; quem nao informa continua herdando, que e' o comportamento de todos os
+       chamadores existentes.
+       ⚠ A GUARDA CONTRA GLOBAL PERMANECE, e agora vale para os dois: sem fazenda
+       resolvida nao grava. O que muda e' que a tela avisa ANTES, em vez de o
+       lancamento sumir em silencio. */
+    const fazendaAlvo = lancamento.fazendaId || fazendaId;
+    if (!fazendaAlvo || fazendaAlvo === '__global__') return undefined;
 
     const insertData = {
       data: lancamento.data,
@@ -424,7 +433,10 @@ export function useLancamentos(arg: UseLancamentosArg = 'realizado') {
         id: `offline-${Date.now()}-${Math.random().toString(36).slice(2)}`,
         timestamp: Date.now(),
         action: 'insert',
-        fazendaId,
+        /* MESMA fazenda resolvida do caminho online. `useOfflineSync` monta o insert
+           com `item.fazendaId`, entao enfileirar a do contexto gravaria na fazenda
+           errada quando o operador tivesse escolhido outra. */
+        fazendaId: fazendaAlvo,
         data: insertData,
       });
       // Otimista: adiciona temp item ao topo da lista cacheada.
@@ -444,7 +456,7 @@ export function useLancamentos(arg: UseLancamentosArg = 'realizado') {
     const effectiveCenario = lancamento.statusOperacional === null ? 'meta' : cenario;
 
     const { data, error } = await supabase.from('lancamentos').insert({
-      fazenda_id: fazendaId,
+      fazenda_id: fazendaAlvo,
       cliente_id: clienteId!,
       cenario: effectiveCenario,
       ...insertData,

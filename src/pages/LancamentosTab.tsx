@@ -208,6 +208,18 @@ function LinhaResumoNasc({ rotulo, valor }: { rotulo: string; valor: string | nu
   );
 }
 
+/* A fazenda no resumo tem um estado que os outros pares nao tem: ela pode estar
+   FALTANDO e bloquear o registro. Traco cinza diria "ausente, tudo bem"; aqui a
+   ausencia e' erro a resolver, e a cor precisa dizer isso. */
+function LinhaResumoNascFazenda({ valor, falta }: { valor: string | null; falta: boolean }) {
+  return (
+    <div className="flex items-baseline justify-between gap-1.5 leading-tight">
+      <span className="text-muted-foreground shrink-0">Fazenda</span>
+      <span className={`font-medium text-right truncate ${falta ? 'text-destructive' : ''}`}>{valor || '—'}</span>
+    </div>
+  );
+}
+
 const STATUS_DESCRIPTIONS_DEFAULT: Partial<Record<StatusOperacional | 'meta', string>> = {
   meta: META_VISUAL.description,
   programado: 'Operação definida, ainda não executada.',
@@ -664,6 +676,21 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
      ⚠ AUSENCIA E' TRACO. `nascPesoTotal` e' NULL quando falta quantidade ou peso —
      nao zero. "Peso total: 0,00 kg" afirmaria que se multiplicou e deu zero, quando o
      que ha e' um formulario pela metade. Nenhum `?? 0` no caminho. */
+  /* ── FAZENDA DO NASCIMENTO (PR-UI-NASCIMENTO-PARIDADE-03) ────────────────────
+     Ate aqui a fazenda era heranca SILENCIOSA do contexto, e em Global o lancamento
+     era recusado sem aviso — `adicionarLancamento` devolvia `undefined` e nada
+     aparecia. Agora e' escolha: nasce com a do contexto quando ha uma, e o operador
+     pode trocar. Em Global nasce vazia, e a tela diz isso ANTES de tentar gravar.
+     ⚠ `fazendasOC` e' a mesma lista da aba Compra — dominio pecuario, sem Global e sem
+     administrativas (criterio unico `isFazendaPecuaria`). */
+  const [nascFazendaId, setNascFazendaId] = useState<string>('');
+  useEffect(() => {
+    if (!isNascimento) return;
+    setNascFazendaId(fazendaAtual?.id && fazendaAtual.id !== '__global__' ? fazendaAtual.id : '');
+  }, [isNascimento, fazendaAtual?.id]);
+  const nascFazendaNome = fazendasOC.find(f => f.id === nascFazendaId)?.nome ?? null;
+  const nascFazendaFalta = isNascimento && !nascFazendaId;
+
   const nascQtd = parseNumericValue(quantidade) || 0;
   const nascPeso = parseDecimalInput(pesoKg) ?? 0;
   const nascPesoTotal = nascQtd > 0 && nascPeso > 0 ? nascQtd * nascPeso : null;
@@ -2372,6 +2399,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
     const lancamentoDados: Partial<Omit<Lancamento, 'id'>> = {
       data, tipo, quantidade: parseNumericValue(quantidade), categoria: categoria as Categoria,
+      /* ⚠ SO O NASCIMENTO ESCOLHE FAZENDA (PR-UI-NASCIMENTO-PARIDADE-03). Os demais
+         tipos nao tem seletor e mandam `undefined`, entao `adicionarLancamento` cai na
+         fazenda do contexto — exatamente o comportamento de sempre. Mandar
+         `nascFazendaId` para todos aplicaria a escolha de uma tela em cinco que nao a
+         oferecem. */
+      fazendaId: isNascimento ? (nascFazendaId || undefined) : undefined,
       fazendaOrigem: origemFinal, fazendaDestino: destinoFinal,
       pesoMedioKg: pesoKg ? parseNumericValue(pesoKg) : undefined,
       pesoMedioArrobas: pesoKg ? kgToArrobas(parseNumericValue(pesoKg)) : undefined,
@@ -4297,15 +4330,64 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               title="Fechar" aria-label="Fechar"><X className="h-5 w-5" /></button>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] lg:grid-rows-[minmax(0,1fr)] gap-3 p-4 h-[69vh] overflow-y-auto lg:overflow-hidden bg-muted/30">
+          {/* ⚠ `+38px` E' A FAIXA DE ABAS QUE ESTA TELA NAO TEM. O corpo da Compra e'
+              `h-[69vh]` e ela ainda carrega 38px de abas; sem absorver isso, o modal do
+              Nascimento fecharia 38px mais baixo e os dois nunca pareceriam o mesmo.
+              Em `calc` e nao num vh novo porque o que falta e' uma altura FIXA — vh
+              acertaria numa janela e erraria em todas as outras. */}
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] lg:grid-rows-[minmax(0,1fr)] gap-3 p-4 h-[calc(69vh_+_38px)] overflow-y-auto lg:overflow-hidden bg-muted/30">
             <div className="space-y-2 min-w-0 lg:min-h-0 lg:overflow-y-auto">
               <div className="rounded-md border bg-card p-2 shadow-sm space-y-2 min-w-0">
-                <div className="text-[12px] font-semibold text-muted-foreground">Identificação do nascimento</div>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-3">
+                {/* Titulo no idioma da "Identificação da compra": 15px, peso 500, cor padrao. */}
+                <div className="text-[15px] font-medium text-foreground">Identificação do nascimento</div>
+
+                {/* FAIXA DE TOPO — o que se le de relance, no idioma da Compra.
+                    ⚠ Fazenda sem valor sai em `text-destructive`, e nao com o traco
+                    cinza de dado ausente: aqui a ausencia BLOQUEIA o registro, entao ela
+                    e' erro a resolver, nao informacao a aceitar. */}
+                <div className="grid grid-cols-2 gap-2 rounded-md border bg-muted/20 px-3.5 py-[11px]">
                   <div className="min-w-0">
-                    <Label className="text-[10px] text-muted-foreground">Data <span className="text-destructive">*</span></Label>
+                    <div className="text-[11px] font-normal text-muted-foreground leading-none">Fazenda</div>
+                    <div className={`mt-1 text-[20px] font-medium leading-none truncate ${nascFazendaFalta ? 'text-destructive' : ''}`}>
+                      {nascFazendaNome ?? '—'}
+                    </div>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-normal text-muted-foreground leading-none">Data do nascimento</div>
+                    <div className="mt-1 text-[20px] font-medium tabular-nums leading-none">
+                      {data ? data.split('-').reverse().join('/') : <span className="text-muted-foreground">—</span>}
+                    </div>
+                  </div>
+                </div>
+                <Separator />
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-3">
+                  {/* ⚠ FAZENDA E' ESCOLHA, e o payload a carrega — `Lancamento.fazendaId`
+                      vence a do contexto em `adicionarLancamento`. Antes o seletor nao
+                      existia e a fazenda era heranca silenciosa; em Global o lancamento
+                      era recusado sem que a tela dissesse nada. */}
+                  <div className="min-w-0">
+                    <Label className="text-[10px] text-muted-foreground">Fazenda <span className="text-destructive">*</span></Label>
+                    <Select value={nascFazendaId} onValueChange={setNascFazendaId}>
+                      <SelectTrigger className={`mt-[3px] h-8 px-2.5 text-[12px] ${nascFazendaFalta ? 'border-destructive' : ''}`}>
+                        <SelectValue placeholder="Selecione a fazenda" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {fazendasOC.map(f => <SelectItem key={f.id} value={f.id} className="text-[12px]">{f.nome}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    {nascFazendaFalta && (
+                      <p className="mt-[3px] text-[10px] text-destructive">Selecione a fazenda do lançamento.</p>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <Label className="text-[10px] text-muted-foreground">Data do nascimento <span className="text-destructive">*</span></Label>
                     {/* A20 — DatePicker do sistema, nunca `<input type="date">`. */}
                     <DatePicker value={data} onChange={setData} className="mt-[3px] h-8 px-2.5 text-[12px]" />
+                  </div>
+                  <div className="min-w-0">
+                    <Label className="text-[10px] text-muted-foreground">Quantidade <span className="text-destructive">*</span></Label>
+                    <Input inputMode="numeric" value={qtdInput.displayValue} onChange={qtdInput.onChange} onBlur={qtdInput.onBlur} onFocus={qtdInput.onFocus}
+                      placeholder="0" className="mt-[3px] h-8 px-2.5 text-[12px] text-right tabular-nums" />
                   </div>
                   <div className="min-w-0">
                     <Label className="text-[10px] text-muted-foreground">Categoria <span className="text-destructive">*</span></Label>
@@ -4317,27 +4399,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                     </Select>
                   </div>
                   <div className="min-w-0">
-                    <Label className="text-[10px] text-muted-foreground">Qtd. cabeças <span className="text-destructive">*</span></Label>
-                    <Input inputMode="numeric" value={qtdInput.displayValue} onChange={qtdInput.onChange} onBlur={qtdInput.onBlur} onFocus={qtdInput.onFocus}
-                      placeholder="0" className="mt-[3px] h-8 px-2.5 text-[12px] text-right tabular-nums" />
-                  </div>
-                  <div className="min-w-0">
                     <Label className="text-[10px] text-muted-foreground">Peso médio <span className="text-destructive">*</span></Label>
                     <Input inputMode="decimal" value={pesoInput.displayValue} onChange={pesoInput.onChange} onBlur={pesoInput.onBlur} onFocus={pesoInput.onFocus}
                       placeholder="0,00" className="mt-[3px] h-8 px-2.5 text-[12px] text-right tabular-nums" />
                   </div>
-                  {/* ⚠ FAZENDA DESTINO CONTINUA DERIVADA DO CONTEXTO, e travada. Nao e'
-                      campo faltando: `fazenda_id` e' injetado por `useLancamentos` a
-                      partir da fazenda ativa, e o payload nao o carrega. Transforma-la em
-                      seletor e' frente de backend com decisao de produto —
-                      PR-ZOO-LANCAMENTO-FAZENDA-03. Ate la o rotulo avisa que o valor e'
-                      DERIVADO, e o idioma de campo travado avisa que nao se edita. */}
                   <div className="min-w-0">
-                    <Label className="text-[10px] text-muted-foreground">Fazenda Destino</Label>
-                    <Input value={nomeFazenda} readOnly tabIndex={-1}
-                      className="mt-[3px] h-8 px-2.5 text-[12px] bg-muted border-border/60 text-muted-foreground cursor-not-allowed" />
-                  </div>
-                  <div className="lg:col-span-2 min-w-0">
                     <Label className="text-[10px] text-muted-foreground">Observações / Lote</Label>
                     <Input value={observacao} onChange={e => setObservacao(e.target.value)} placeholder="Opcional"
                       className="mt-[3px] h-8 px-2.5 text-[12px]" />
@@ -4364,7 +4430,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   <div className="px-3 space-y-0.5">
                     <LinhaResumoNasc rotulo="Tipo" valor="Nascimento" />
                     <LinhaResumoNasc rotulo="Data" valor={data ? data.split('-').reverse().join('/') : null} />
-                    <LinhaResumoNasc rotulo="Fazenda" valor={nomeFazenda || null} />
+                    <LinhaResumoNascFazenda valor={nascFazendaNome} falta={nascFazendaFalta} />
                     <LinhaResumoNasc rotulo="Categoria" valor={categoriasDisponiveis.find(c => c.value === categoria)?.label ?? null} />
                   </div>
 
@@ -4399,8 +4465,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               className="text-white/90 hover:bg-white/10 hover:text-white" title="Fechar sem registrar" aria-label="Fechar">
               Fechar
             </Button>
-            <Button type="button" onClick={handleRequestRegister} disabled={submitting}
-              className="bg-white text-primary hover:bg-white/90 font-bold" title="Registrar o nascimento" aria-label="Registrar nascimento">
+            <Button type="button" onClick={handleRequestRegister} disabled={submitting || nascFazendaFalta}
+              className="bg-white text-primary hover:bg-white/90 font-bold disabled:opacity-60"
+              title={nascFazendaFalta ? 'Selecione a fazenda do lançamento' : 'Registrar o nascimento'}
+              aria-label="Registrar nascimento">
               {submitting ? 'Registrando…' : 'Registrar nascimento'}
             </Button>
           </div>
