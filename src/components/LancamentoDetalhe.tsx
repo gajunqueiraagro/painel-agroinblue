@@ -30,11 +30,6 @@ import { STATUS_OPTIONS_ZOOTECNICO_COM_META, getStatusBadge, getStatus, isMeta, 
 import { CompraFinanceiroPanel } from '@/components/CompraFinanceiroPanel';
 import { EditCompraForm } from '@/components/edit/EditCompraForm';
 import { LancamentoZooModal } from '@/v2/components/edicao/LancamentoZooModal';
-import { EditNascimentoSheet } from '@/components/edit/EditNascimentoSheet';
-import { EditMorteSheet } from '@/components/edit/EditMorteSheet';
-import { EditTransferenciaSheet } from '@/components/edit/EditTransferenciaSheet';
-import { EditConsumoSheet } from '@/components/edit/EditConsumoSheet';
-import { EditReclassificacaoSheet } from '@/components/edit/EditReclassificacaoSheet';
 import { supabase } from '@/integrations/supabase/client';
 import { formatMoeda, formatKg, formatArroba, formatPercent } from '@/lib/calculos/formatters';
 import { calcValorTotal, calcArrobas, calcIndicadoresLancamento } from '@/lib/calculos/economicos';
@@ -133,21 +128,12 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
   const [checkingVinculos, setCheckingVinculos] = useState(false);
   const [notaFiscalEdit, setNotaFiscalEdit] = useState(lancamento.notaFiscal || '');
 
-  // Etapa 1 — sheet padronizado para Nascimento (substitui Dialog genérico)
-  const [nascimentoEditOpen, setNascimentoEditOpen] = useState(false);
-  // Etapa 2 — sheet padronizado para Morte (substitui Dialog genérico)
-  const [morteEditOpen, setMorteEditOpen] = useState(false);
-  // Etapa 3 — sheet padronizado para Transferência saída (substitui Dialog genérico)
-  const [transferenciaEditOpen, setTransferenciaEditOpen] = useState(false);
-  // Etapa 4 — sheet padronizado para Consumo (substitui Dialog genérico)
-  const [consumoEditOpen, setConsumoEditOpen] = useState(false);
-  // Etapa 5 — sheet padronizado para Reclassificação (substitui Dialog genérico)
-  const [reclassificacaoEditOpen, setReclassificacaoEditOpen] = useState(false);
-
   // Atalho arquitetural: entrypoint soberano de edição (carrega por id).
   // Substitui os caminhos paralelos antigos (navegação para aba lancamentos,
-  // sheets locais espalhados). state legado abaixo permanece declarado para
-  // não quebrar JSX dos sheets antigos (que continuam montados sem efeito).
+  // sheets locais espalhados).
+  // ⚠ O "state legado" das cinco gavetas que este comentário citava saiu em
+  // PR-ZOO-LIMPAR-GAVETAS-MORTAS-01: ele existia só para não quebrar o JSX de
+  // sheets que estavam montados sem efeito, e o JSX saiu junto.
   const [zooModalOpen, setZooModalOpen] = useState(false);
 
   // Unified purchase edit sheet
@@ -969,74 +955,14 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
           </SheetContent>
         </Sheet>
 
-        {/* Etapa 1 — Sheet padronizado de Nascimento */}
-        <EditNascimentoSheet
-          lancamento={lancamento}
-          open={nascimentoEditOpen}
-          onOpenChange={setNascimentoEditOpen}
-          onSalvar={onEditar}
-          onRemover={async () => { await onRemover(lancamento.id); onClose(); }}
-          podeRemover={true}
-          canEditMeta={canEditMeta}
-          p1Oficial={effectiveP1Oficial}
-          temAlteracaoEstrutural={temAlteracaoEstrutural}
-          nomeFazenda={nomeFazenda}
-        />
-
-        {/* Etapa 2 — Sheet padronizado de Morte */}
-        <EditMorteSheet
-          lancamento={lancamento}
-          open={morteEditOpen}
-          onOpenChange={setMorteEditOpen}
-          onSalvar={onEditar}
-          onRemover={async () => { await onRemover(lancamento.id); onClose(); }}
-          podeRemover={true}
-          canEditMeta={canEditMeta}
-          p1Oficial={effectiveP1Oficial}
-          temAlteracaoEstrutural={temAlteracaoEstrutural}
-          nomeFazenda={nomeFazenda}
-        />
-
-        {/* Etapa 3 — Sheet padronizado de Transferência (saída) */}
-        <EditTransferenciaSheet
-          lancamento={lancamento}
-          open={transferenciaEditOpen}
-          onOpenChange={setTransferenciaEditOpen}
-          onSalvar={onEditar}
-          onRemover={async () => { await onRemover(lancamento.id); onClose(); }}
-          podeRemover={true}
-          canEditMeta={canEditMeta}
-          p1Oficial={effectiveP1Oficial}
-          temAlteracaoEstrutural={temAlteracaoEstrutural}
-          nomeFazenda={nomeFazenda}
-          outrasFazendas={outrasFazendas}
-        />
-
-        {/* Etapa 4 — Sheet padronizado de Consumo */}
-        <EditConsumoSheet
-          lancamento={lancamento}
-          open={consumoEditOpen}
-          onOpenChange={setConsumoEditOpen}
-          onSalvar={onEditar}
-          onRemover={async () => { await onRemover(lancamento.id); onClose(); }}
-          podeRemover={true}
-          canEditMeta={canEditMeta}
-          p1Oficial={effectiveP1Oficial}
-          temAlteracaoEstrutural={temAlteracaoEstrutural}
-          nomeFazenda={nomeFazenda}
-        />
-
-        {/* Etapa 5 — Sheet padronizado de Reclassificação (Evoluir Categoria) */}
-        <EditReclassificacaoSheet
-          lancamento={lancamento}
-          open={reclassificacaoEditOpen}
-          onOpenChange={setReclassificacaoEditOpen}
-          onSalvar={onEditar}
-          onRemover={async () => { await onRemover(lancamento.id); onClose(); }}
-          podeRemover={true}
-          p1Oficial={effectiveP1Oficial}
-          temAlteracaoEstrutural={temAlteracaoEstrutural}
-        />
+        {/* ⚠ AS CINCO GAVETAS DE EDICAO SAIRAM DAQUI — PR-ZOO-LIMPAR-GAVETAS-MORTAS-01.
+            Estavam montadas e INALCANCAVEIS: `setNascimentoEditOpen`, `setMorteEditOpen`,
+            `setTransferenciaEditOpen`, `setConsumoEditOpen` e `setReclassificacaoEditOpen`
+            nunca eram chamados com `true`. O comentario do estado legado dizia isso por
+            escrito — "continuam montados sem efeito".
+            Quem edita e' o <LancamentoZooModal> logo abaixo, aberto por `setZooModalOpen`
+            na linha 258. Ele renderiza as gavetas que ainda existem, e o nascimento agora
+            abre no modal proprio (PR-ZOO-EDICAO-NO-MODAL-01). */}
 
         {/* Confirmation dialog for deletion */}
         <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>

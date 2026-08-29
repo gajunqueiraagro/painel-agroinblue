@@ -43,7 +43,7 @@ no mesmo arquivo.
   sai com codigo 0 e passa sempre. Era um gate vazio. O comando oficial
   varre os 671 arquivos .ts/.tsx em src/ e sai com codigo 2 enquanto
   houver erro.
-- TSC baseline: 79 erros, medidos em ARVORE LIMPA — worktree em detached
+- TSC baseline: 74 erros, medidos em ARVORE LIMPA — worktree em detached
   HEAD sobre o commit, NUNCA no checkout principal. Mesmo numero e mesmo
   conjunto de diagnosticos em c0fdb21b, 487fe1cf e c28de22a.
   O 98 que constava aqui nao decorreu de reducao posterior: foi medido com
@@ -78,6 +78,18 @@ no mesmo arquivo.
   Registrado porque a origem importa: a regeneracao futura de
   src/integrations/supabase/types.ts pode reintroduzir numeros diferentes, e
   quem ler esta baseline precisa saber de onde ela veio.
+  De 79 para 74 em PR-ZOO-LIMPAR-GAVETAS-MORTAS-01, 2026-08-29, sobre aba457d0.
+  Sairam 5, TODOS de src/components/LancamentoDetalhe.tsx e todos IDENTICOS:
+    5x TS2322 — '(id, dados) => void' nao atribuivel a '(id, dados) => Promise<void>'
+  Eram os cinco `onSalvar={onEditar}` das gavetas de Nascimento, Morte,
+  Transferencia, Consumo e Reclassificacao. A prop `onEditar` do card e' sincrona
+  e as gavetas pedem Promise; a incompatibilidade era real e nunca deu defeito
+  porque o codigo era INALCANCAVEL — nenhum dos cinco `set*EditOpen` era chamado
+  com `true`. A queda veio de APAGAR o codigo morto, nao de corrigir tipo nem de
+  suprimir erro: o conjunto restante e' identico ao de antes, sem erro novo.
+  ⚠ A divergencia de assinatura CONTINUA existindo na prop `onEditar`; ela so'
+  deixou de ser exercida. Se algum dia uma gaveta voltar a ser montada aqui, os
+  cinco erros voltam com ela.
   Como comparar antes (A) x depois (B), nesta ordem:
     1. CONTAGEM. B <= A, sempre. B > A reprova o PR.
     2. DIAGNOSTICOS. Comparar os conjuntos por
@@ -98,7 +110,7 @@ no mesmo arquivo.
 - Build verde obrigatorio antes de qualquer commit.
 
 ## RELATORIO DE EXECUCAO (formato obrigatorio, todo ciclo)
-1. TSC: N erros (baseline 79) — numero explicito, obtido com
+1. TSC: N erros (baseline 74) — numero explicito, obtido com
    `npx tsc -p tsconfig.app.json --noEmit`
 2. Build: OK/FALHOU + tempo
 3. git diff --stat completo

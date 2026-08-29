@@ -36,7 +36,6 @@ import { isMeta, type FiltroVisual } from '@/lib/statusOperacional';
 import { kgToArrobas } from '@/types/cattle';
 import { nomeFazendaDoRegistro as resolverNomeFazendaDoRegistro } from '@/lib/zoo/nomeFazendaDoRegistro';
 
-import { EditNascimentoSheet } from '@/components/edit/EditNascimentoSheet';
 import { NascimentoEdicaoModal } from '@/components/nascimento/NascimentoEdicaoModal';
 import { EditMorteSheet } from '@/components/edit/EditMorteSheet';
 import { EditConsumoSheet } from '@/components/edit/EditConsumoSheet';
