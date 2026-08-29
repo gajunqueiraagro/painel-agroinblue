@@ -4233,7 +4233,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
         className={isCompra
-          ? 'max-w-6xl p-0 gap-0 overflow-hidden [&>button.absolute]:hidden'
+          /* ⚠ MESMO TETO DO MODAL SIMPLES, na linha de baixo (PR-OC-MODAL-TAMANHO-01).
+             Eram 1152px contra 1024px, e a diferenca fazia os dois lerem como sistemas
+             diferentes ao alternar entre eles. O shell nao declara largura: ele preenche
+             o que este DialogContent lhe da. */
+          ? 'max-w-5xl p-0 gap-0 overflow-hidden [&>button.absolute]:hidden'
           : 'max-w-full sm:max-w-5xl w-full h-screen sm:h-auto sm:max-h-[92vh] overflow-y-auto p-4 sm:p-5'}
       >
       {isCompra ? (

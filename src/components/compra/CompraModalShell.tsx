@@ -285,7 +285,9 @@ export function CompraModalShell(api: CompraModalShellProps) {
   return (
     <div className="flex flex-col">
       {/* HEADER — template do modal aprovado (bg-primary, px-6 py-4, duas linhas) */}
-      <div className="bg-primary text-primary-foreground px-6 py-4 flex items-start justify-between">
+      {/* ⚠ MENOS CROMO, MAIS CONTEUDO (PR-OC-MODAL-TAMANHO-01). O padding vertical cai;
+          o conteudo do cabecalho e' o mesmo e `px-6` nao muda. */}
+      <div className="bg-primary text-primary-foreground px-6 py-2.5 flex items-start justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <span className="text-xl leading-none">🛒</span>
@@ -366,8 +368,15 @@ export function CompraModalShell(api: CompraModalShellProps) {
           recusa a encolher abaixo do conteudo, o que desliga a rolagem.
           ⚠ SO A PARTIR DE `lg`. Abaixo disso as duas colunas VIRAM LINHAS empilhadas, e
           altura fixa por coluna cortaria o resumo; ali o corpo continua rolando inteiro,
-          como sempre rolou. */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] lg:grid-rows-[minmax(0,1fr)] gap-3 p-4 h-[66vh] overflow-y-auto lg:overflow-hidden bg-muted/30">
+          como sempre rolou.
+          ⚠ 69vh, E NAO 70 (PR-OC-MODAL-TAMANHO-01). Encolher cabecalho e rodape liberou
+          20px FIXOS — 12 do cabecalho (padding 32->20) e 8 do rodape (24->16). Na janela
+          medida, 1133x578, esses 20px valem 3,46vh: com 70vh o conteudo cresceria 23px e
+          o modal ficaria 3px MAIOR do que era, que e' o oposto do pedido. Com 69vh cresce
+          17px e o total cai 3px. O cromo devolve pixel FIXO e a area de conteudo cresce em
+          PROPORCAO — os dois nunca se anulam em toda altura de janela, e o caso que
+          importa e' a janela BAIXA, onde o modal quase nao cabe. */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] lg:grid-rows-[minmax(0,1fr)] gap-3 p-4 h-[69vh] overflow-y-auto lg:overflow-hidden bg-muted/30">
         <div className="space-y-2 min-w-0 lg:min-h-0 lg:overflow-y-auto">
           {abaAtiva === 'negociacao' ? (
             <AbaNegociacaoLotes
@@ -668,7 +677,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
       </div>
 
       {/* RODAPÉ — template do modal aprovado (bg-primary, px-6 py-3), FIXO (fora do scroll do corpo) */}
-      <div className="bg-primary px-6 py-3 flex items-center justify-between gap-3">
+      <div className="bg-primary px-6 py-2 flex items-center justify-between gap-3">
         <div className="min-w-0">
           {api.editingId && (
             <Button variant="outline" onClick={api.handleCancelEdit} disabled={api.submitting}
