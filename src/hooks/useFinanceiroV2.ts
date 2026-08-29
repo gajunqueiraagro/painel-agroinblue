@@ -625,6 +625,16 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
           dados_pagamento: form.dados_pagamento || null,
           editado_manual: true,
           updated_by: user.id,
+          /* ⚠ SAFRA ENTRA NA LISTA BRANCA (PR-FIN-FIX-SAFRA-TITULO-OC-01). Ela ficava
+             de fora junto com os estruturais, e o efeito era um campo EDITAVEL na tela
+             que nunca gravava: o operador trocava, salvava, reabria e via "Sem safra".
+             Medido: dos 52 titulos de OC, ZERO tem safra — nunca nenhum teve.
+             ⚠ SAFRA NAO E' ESTRUTURAL. Valor, classificacao, tipo e competencia compoem
+             a OBRIGACAO da OC, e trava-los e coerente: muda-los aqui contradiria a OC.
+             Safra nao compoe nada da OC — e' dimensao de rateio do Financeiro, e a OC
+             nem tem esse campo. Trava-la mandaria o operador ajustar na OC algo que a
+             OC nao guarda. */
+          safra_id: form.safra_id || null,
         };
         if (form.status_transacao) restrito.status_transacao = form.status_transacao;
 
