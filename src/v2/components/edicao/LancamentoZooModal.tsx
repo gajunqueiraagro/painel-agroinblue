@@ -34,6 +34,7 @@ import { useLancamentos } from '@/hooks/useLancamentos';
 import type { Lancamento, Categoria } from '@/types/cattle';
 import { isMeta, type FiltroVisual } from '@/lib/statusOperacional';
 import { kgToArrobas } from '@/types/cattle';
+import { nomeFazendaDoRegistro as resolverNomeFazendaDoRegistro } from '@/lib/zoo/nomeFazendaDoRegistro';
 
 import { EditNascimentoSheet } from '@/components/edit/EditNascimentoSheet';
 import { EditMorteSheet } from '@/components/edit/EditMorteSheet';
@@ -237,17 +238,15 @@ export function LancamentoZooModal({
   const cenarioParam = lancamento?.cenario ?? 'realizado';
   const { editarLancamento } = useLancamentos({ cenario: cenarioParam });
 
-  // ── Nome da fazenda do registro (texto persistido > lookup por UUID > '')
-  const nomeFazendaDoRegistro = useMemo(() => {
-    if (!lancamento) return '';
-    // Lookup-first via UUID (estável). Corrige bug de display quando o campo
-    // TEXT fazenda_destino foi salvo como 'Global' ou outro lixo no writer.
-    const fz = fazendas.find(f => f.id === lancamento.fazendaId);
-    if (fz?.nome) return fz.nome;
-    if (lancamento.fazendaDestino) return lancamento.fazendaDestino;
-    if (lancamento.fazendaOrigem) return lancamento.fazendaOrigem;
-    return '';
-  }, [lancamento, fazendas]);
+  // ── Nome da fazenda do registro (lookup por UUID > texto persistido > '')
+  // A regra saiu daqui para @/lib/zoo/nomeFazendaDoRegistro em
+  // PR-UI-LANC-CARD-FAZENDA-01, sem alteração de comportamento: o card "i"
+  // (LancamentoDetalhe) tinha a mesma regra com a precedência invertida e
+  // exibia "Global". Agora as duas telas leem a MESMA definição.
+  const nomeFazendaDoRegistro = useMemo(
+    () => resolverNomeFazendaDoRegistro(lancamento, fazendas),
+    [lancamento, fazendas],
+  );
 
   // ── Outras fazendas (Transferência): exclui a fazenda DO LANÇAMENTO,
   // não a fazenda do filtro UI.

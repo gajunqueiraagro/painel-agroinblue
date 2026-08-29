@@ -10,6 +10,7 @@ import {
 } from '@/types/cattle';
 import { useStatusPilares } from '@/hooks/useStatusPilares';
 import { isEntrada, isReclassificacao } from '@/lib/calculos/zootecnicos';
+import { nomeFazendaDoRegistro, campoFazendaEDerivado } from '@/lib/zoo/nomeFazendaDoRegistro';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -69,6 +70,15 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
     const fz = fazendas.find(f => f.id === lancamento.fazendaId);
     return fz?.nome || '';
   }, [lancamento.fazendaDestino, lancamento.fazendaId, fazendas]);
+  // PR-UI-LANC-CARD-FAZENDA-01 — LEITURA de exibição, precedência UUID-first,
+  // a mesma que o painel de edição ao lado (LancamentoZooModal) já usava.
+  // ⚠ Coexiste de propósito com `nomeFazendaResolvido` acima, que é TEXT-first
+  // e alimenta os WRITES (linhas 265 e 312). Mudar aquele mudaria o que se
+  // grava — fora do escopo deste PR. Unificar os dois é dívida declarada.
+  const nomeFazendaRegistro = useMemo(
+    () => nomeFazendaDoRegistro(lancamento, fazendas),
+    [lancamento, fazendas],
+  );
   const nomeFazenda = fazendaAtual?.nome || '';
   const outrasFazendas = useMemo(() => fazendas.filter(f => f.id !== fazendaAtual?.id), [fazendas, fazendaAtual]);
   const lancamentoIsMeta = isMeta(lancamento);
@@ -426,11 +436,16 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                   <Row label="Peso Médio" value={`${formatKg(lancamento.pesoMedioKg)} (${formatArroba(ind.pesoArroba)})`} />
                 )}
 
+                {/* PR-UI-LANC-CARD-FAZENDA-01 — o LADO DERIVADO lê o registro
+                    (UUID), não a cópia textual. O lado não derivado é dado de
+                    verdade (frigorífico, comprador, motivo, outra fazenda) e
+                    segue cru. As GUARDAS não mudaram: as mesmas linhas
+                    aparecem e somem nas mesmas condições de antes. */}
                 {lancamento.fazendaOrigem && (
-                  <Row label="Fazenda Origem" value={lancamento.fazendaOrigem} />
+                  <Row label="Fazenda Origem" value={campoFazendaEDerivado(lancamento.tipo, 'origem') ? nomeFazendaRegistro : lancamento.fazendaOrigem} />
                 )}
                 {(lancamento.fazendaDestino || (isAbate && (lancamento.compradorFornecedor || (lancamento as any).abateFrigorifico))) && (
-                  <Row label={isAbate ? 'Frigorífico' : lancamento.tipo === 'morte' ? 'Motivo da Morte' : lancamento.tipo === 'consumo' ? 'Motivo' : 'Fazenda Destino'} value={isAbate ? (lancamento.fazendaDestino || lancamento.compradorFornecedor || (lancamento as any).abateFrigorifico) : lancamento.fazendaDestino} />
+                  <Row label={isAbate ? 'Frigorífico' : lancamento.tipo === 'morte' ? 'Motivo da Morte' : lancamento.tipo === 'consumo' ? 'Motivo' : 'Fazenda Destino'} value={isAbate ? (lancamento.fazendaDestino || lancamento.compradorFornecedor || (lancamento as any).abateFrigorifico) : (campoFazendaEDerivado(lancamento.tipo, 'destino') ? nomeFazendaRegistro : lancamento.fazendaDestino)} />
                 )}
                 {(lancamento.tipo === 'morte' || lancamento.tipo === 'consumo') && lancamento.notaFiscal && (
                   <Row label="Identificação" value={lancamento.notaFiscal} />
