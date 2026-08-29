@@ -28,6 +28,7 @@
  * meta tem caminho próprio. A pílula do cabeçalho é ROTULO, não controle — e por isso
  * ela diz o cenário REAL (ver `cenarioRotulo`), nunca um "Realizado" cravado.
  */
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -151,6 +152,43 @@ export function MorteModalShell({
      Nascimento; num animal morto o peso e' o que era, e sugerir numero seria inventar
      dado. Obrigatorio nao quer dizer preenchido de antemao. */
   const pesoFalta = !(mortePeso > 0);
+  const qtdFalta = !(morteQtd > 0);
+
+  /* ── BASE DO VALOR (PR-ZOO-MORTE-CAMPOS-3-COLUNAS-01) ────────────────────────
+     O campo pedia um numero sem dizer sobre o que ele era. Na cabeca de quem lanca o
+     preco costuma ser por quilo ou por cabeca; digitava-se um desses e gravava-se como
+     se fosse o total.
+     ⚠ O QUE SE GRAVA E' SEMPRE O TOTAL. `lancamentos.valor_total` e' coluna de total e
+     nao muda — a base e' so' a lente da digitacao.
+     ⚠ A BASE NAO E' GUARDADA em lugar nenhum, e por isso a EDICAO abre sempre em
+     'total', mostrando o valor gravado. E' honesto: derivar a base a partir do
+     resultado seria adivinhar qual das tres divisoes exatas foi a usada.
+     ⚠ ESTADO LOCAL de proposito. O Dialog desmonta o conteudo ao fechar, entao reabrir
+     noutro lancamento reinicia base e digitado — sem efeito de sincronizacao para
+     manter, que e' onde esse tipo de campo costuma quebrar. */
+  const [baseValor, setBaseValor] = useState<'kg' | 'cab' | 'total'>(isEdicao ? 'total' : 'kg');
+  const [valorDigitado, setValorDigitado] = useState<number | null>(isEdicao ? valorMorte : null);
+
+  /* Multiplicador da base. NULL quando a conta nao tem como acontecer — por kg sem peso
+     ou sem quantidade, por cabeca sem quantidade.
+     ⚠ NULL, E NAO ZERO. Zero faria o total virar R$ 0,00 e afirmar um valor que ninguem
+     informou; e gravar o digitado como se fosse total seria pior, porque multiplicaria
+     silenciosamente por um. */
+  const fatorBase = baseValor === 'total' ? 1
+    : baseValor === 'cab' ? (morteQtd > 0 ? morteQtd : null)
+    : (morteQtd > 0 && mortePeso > 0 ? morteQtd * mortePeso : null);
+
+  const totalCalculado = valorDigitado != null && fatorBase != null
+    ? Math.round(valorDigitado * fatorBase * 100) / 100
+    : null;
+
+  /* O total resultante e' o que sobe para o payload. Sem digitacao ou sem base
+     calculavel, sobe null — e a lista branca de `adicionarLancamento` omite o campo. */
+  useEffect(() => { setValorMorte(totalCalculado); }, [totalCalculado, setValorMorte]);
+
+  const ROTULO_BASE: Record<'kg' | 'cab' | 'total', string> = {
+    kg: 'por kg', cab: 'por cabeça', total: 'total',
+  };
 
   return (
     <LancamentoModalEnvelope
@@ -206,11 +244,12 @@ export function MorteModalShell({
       </>}
       acao={<>
         {/* O botao diz o que faz: registrar cria, salvar altera. */}
-        <Button type="button" onClick={handleRequestRegister} disabled={submitting || morteFazendaFalta || motivoFalta || pesoFalta}
+        <Button type="button" onClick={handleRequestRegister} disabled={submitting || morteFazendaFalta || motivoFalta || pesoFalta || qtdFalta}
           className="bg-white text-primary hover:bg-white/90 font-bold disabled:opacity-60"
           title={morteFazendaFalta ? 'Selecione a fazenda do lançamento'
             : motivoFalta ? 'Informe o motivo da morte'
             : pesoFalta ? 'Informe o peso médio'
+            : qtdFalta ? 'Informe a quantidade'
             : isEdicao ? 'Salvar as alterações da morte' : 'Registrar a morte'}
           aria-label={isEdicao ? 'Salvar alterações' : 'Registrar morte'}>
           {isEdicao
@@ -239,7 +278,13 @@ export function MorteModalShell({
               </div>
             </div>
             <Separator />
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-3">
+            {/* ⚠ TRES COLUNAS, e nao duas. Com oito campos em duas colunas eram quatro
+                linhas, e o corpo do modal estourava a altura do envelope — o formulario
+                rolava numa tela que cabe. Tres colunas fecham em tres linhas.
+                ⚠ TODOS OS CAMPOS NA MESMA ALTURA (A16): `h-8` em input, select e campo
+                monetario. A unica celula que cresce e' a do Motivo, quando "Outro" abre
+                o sub-input — e ela cresce para BAIXO, sem empurrar as vizinhas. */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-x-4 gap-y-3">
               <div className="min-w-0">
                 <Label className="text-[10px] text-muted-foreground">Fazenda{!isEdicao && <span className="text-destructive"> *</span>}</Label>
                 {/* ⚠ NA EDICAO NAO HA SELETOR: `editarLancamento` nao envia `fazenda_id`.
@@ -267,9 +312,16 @@ export function MorteModalShell({
                 <DatePicker value={data} onChange={setData} className="mt-[3px] h-8 px-2.5 text-[12px]" />
               </div>
               <div className="min-w-0">
+                {/* ⚠ O AVISO ACOMPANHA O BLOQUEIO. A quantidade sempre foi exigida pelo
+                    funil e agora tambem trava o botao, porque a conversao "por cabeca"
+                    depende dela. Travar sem dizer o que falta e' o defeito que o peso
+                    tinha antes de 45a7352b. */}
                 <Label className="text-[10px] text-muted-foreground">Quantidade <span className="text-destructive">*</span></Label>
                 <Input inputMode="numeric" value={qtdInput.displayValue} onChange={qtdInput.onChange} onBlur={qtdInput.onBlur} onFocus={qtdInput.onFocus}
-                  placeholder="0" className="mt-[3px] h-8 px-2.5 text-[12px] text-right tabular-nums" />
+                  placeholder="0" className={`mt-[3px] h-8 px-2.5 text-[12px] text-right tabular-nums ${qtdFalta ? 'border-destructive' : ''}`} />
+                {qtdFalta && (
+                  <p className="mt-[3px] text-[10px] text-destructive">Informe a quantidade.</p>
+                )}
               </div>
               <div className="min-w-0">
                 <Label className="text-[10px] text-muted-foreground">Categoria <span className="text-destructive">*</span></Label>
@@ -311,6 +363,17 @@ export function MorteModalShell({
                 )}
               </div>
               <div className="min-w-0">
+                <Label className="text-[10px] text-muted-foreground">Valor (base)</Label>
+                <Select value={baseValor} onValueChange={v => setBaseValor(v as 'kg' | 'cab' | 'total')}>
+                  <SelectTrigger className="mt-[3px] h-8 px-2.5 text-[12px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="kg" className="text-[12px]">por kg</SelectItem>
+                    <SelectItem value="cab" className="text-[12px]">por cabeça</SelectItem>
+                    <SelectItem value="total" className="text-[12px]">total</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="min-w-0">
                 {/* ⚠ REFERENCIA, NAO CAIXA. O valor grava em `valor_total` e NAO gera
                     lancamento financeiro: nenhum zootecnico tem contraparte em
                     financeiro_lancamentos_v2 (medido: zero em 3.938). Nao movimenta
@@ -319,8 +382,15 @@ export function MorteModalShell({
                     payload manda `undefined`, que a lista branca de
                     `adicionarLancamento` omite. */}
                 <Label className="text-[10px] text-muted-foreground">Valor</Label>
-                <CampoMoeda valor={valorMorte} onChange={setValorMorte} placeholder="R$ 0,00"
+                <CampoMoeda valor={valorDigitado} onChange={setValorDigitado} placeholder="R$ 0,00"
                   className="mt-[3px] h-8 px-2.5 text-[12px] text-right tabular-nums" />
+                {/* Le-se de relance o que a base fez com o numero digitado. Sem conta
+                    possivel, nao aparece nada — o resumo lateral ja mostra o traco. */}
+                {baseValor !== 'total' && totalCalculado != null && (
+                  <p className="mt-[3px] text-[10px] text-muted-foreground tabular-nums">
+                    {ROTULO_BASE[baseValor]} · total {brl(totalCalculado)}
+                  </p>
+                )}
               </div>
               <div className="min-w-0">
                 <Label className="text-[10px] text-muted-foreground">Observações / Lote</Label>
