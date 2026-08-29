@@ -358,6 +358,12 @@ export async function gerarFinanceiroBoitel(
   const custosDiretos = [
     { valor: plan.custo_frete, label: `Frete - ${descBase}`, origemTipo: 'boitel:custo_frete' },
     { valor: plan.custo_sanidade, label: `Sanidade - ${descBase}`, origemTipo: 'boitel:custo_sanidade' },
+    /* ⚠ TRES CAMPOS VIRAM UMA LINHA SO. Quem mexer em um precisa saber dos outros dois:
+       `outros_custos`, `custo_nutricao` e `custos_extras_parceria` somam numa unica
+       obrigacao rotulada "Outros Custos". Mexer em qualquer um deles muda o valor desta
+       linha sem mudar rotulo nenhum — e' o tipo de alteracao que nao aparece na tela do
+       financeiro. `custo_nutricao` e' o caso extremo: hoje ele nao tem campo em tela
+       nenhuma (perdeu o dele no simulador) e mesmo assim o valor gravado desagua aqui. */
     { valor: plan.outros_custos + plan.custo_nutricao + plan.custos_extras_parceria, label: `Outros Custos - ${descBase}`, origemTipo: 'boitel:custo_outros' },
   ];
 
