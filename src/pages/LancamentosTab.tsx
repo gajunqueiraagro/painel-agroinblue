@@ -4746,6 +4746,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           ocOperacaoId={ocOperacaoId}
           ocStatusComercial={ocStatusComercial}
           lotesApi={lotesApi}
+          /* ⚠ O MESMO ESTADO QUE O RESUMO ANTIGO JA LIA — nao ha fonte nova. Ele e'
+             preenchido a partir de `detalhesSnapshot.boitelSnapshot` quando uma venda
+             boitel e' aberta para edicao. */
+          boitelData={boitelDataForResumo}
           categoria={categoria}
           categoriasDisponiveis={categoriasDisponiveis}
           quantidadeNum={parseNumericValue(quantidade) || 0}

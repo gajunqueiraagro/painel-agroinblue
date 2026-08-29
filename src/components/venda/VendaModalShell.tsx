@@ -36,6 +36,8 @@ import { Calendar, Building2, X, Plus, ArrowRight } from 'lucide-react';
 import type { Categoria } from '@/types/cattle';
 import type { CompraLotesApi } from '@/hooks/useCompraLotes';
 import { AbaNegociacaoLotes } from '@/components/compra/AbaNegociacaoLotes';
+import { BoitelBaseOperacional, BoitelPainelResultado } from '@/components/venda/BoitelNegociacaoDerivado';
+import type { BoitelData } from '@/components/BoitelPlanningDialog';
 
 /* ⚠ "RECEBIMENTO" CHAMA-SE ENTREGA NA VENDA — o gado SAI. A coluna do banco já é
    genérica (`entrega_encerrada`), então o vocabulário muda só na tela.
@@ -43,9 +45,10 @@ import { AbaNegociacaoLotes } from '@/components/compra/AbaNegociacaoLotes';
    com campos a mais. Quantidade, peso, preco por arroba e valor total sao exatamente o
    que a Negociacao pergunta — uma aba separada deixaria a Negociacao vazia numa venda
    boitel, ou duplicada.
-   ⚠ ONDE ELE VAI FICAR: a aba de Negociacao vai BIFURCAR por tipo de venda — lotes na
-   venda comum, lotes MAIS os blocos do simulador no boitel. Mesmo padrao do
-   `AbaRecebimentoLotes`, ja bifurcado entre encerrado e aberto. */
+   ⚠ ONDE ELE FICOU: a aba de Negociacao BIFURCA por tipo de venda — lotes na venda
+   comum, lotes MAIS a base operacional e o painel de resultado no boitel. Mesmo padrao
+   do `AbaRecebimentoLotes`, ja bifurcado entre encerrado e aberto. Feito em
+   PR-OC-VENDA-BOITEL-01A; a ENTRADA de dado do boitel e' do 01B. */
 const ABAS_VENDA = [
   { key: 'venda', label: 'Venda', enabled: true },
   { key: 'negociacao', label: 'Negociação', enabled: true },
@@ -89,6 +92,10 @@ export interface VendaModalShellProps {
   ocStatusComercial: string | null;
   /** Lotes da negociação — o mesmo hook da compra, que opera sobre `zoo_operacao_lotes`. */
   lotesApi?: CompraLotesApi;
+  /** ⚠ SO LEITURA. O planejamento de boitel gravado em `detalhes_snapshot.boitelSnapshot`.
+   *  Nada nesta tela o escreve — quem escreve e' o `BoitelPlanningDialog` do formulario
+   *  antigo, que nao mudou. `null` quando a venda ainda nao tem planejamento. */
+  boitelData?: BoitelData | null;
   categoria: string;
   categoriasDisponiveis: { value: string; label: string }[];
   quantidadeNum: number;
@@ -103,7 +110,7 @@ export function VendaModalShell({
   vendaFazendaId, setVendaFazendaId, fazendasOC,
   propriedadeDestino, setPropriedadeDestino,
   vendaTipoVenda, setVendaTipoVenda, observacao, setObservacao,
-  ocOperacaoId, ocStatusComercial, lotesApi, categoria, categoriasDisponiveis,
+  ocOperacaoId, ocStatusComercial, lotesApi, boitelData = null, categoria, categoriasDisponiveis,
   quantidadeNum, pesoKgNum, submitting, onSalvarOperacao, onFechar,
 }: VendaModalShellProps) {
   const [abaAtiva, setAbaAtiva] = useState<string>('venda');
@@ -116,6 +123,39 @@ export function VendaModalShell({
 
   const fazendaFalta = !vendaFazendaId;
   const podeSalvar = !!compradorId && !!vendaFazendaId && !!data && !!vendaTipoVenda;
+
+  /* ⚠ A BIFURCACAO DA NEGOCIACAO, de PR-OC-VENDA-BOITEL-01A. O boitel NAO tem aba
+     propria: ele e' a Negociacao com mais coisa. Venda comum mostra os lotes como
+     sempre; venda boitel mostra os MESMOS lotes mais a base operacional e o painel de
+     resultado. O elemento dos lotes e' construido UMA VEZ e usado nos dois ramos — os
+     dois ramos com a mesma lista de props seria a mesma armadilha que fez o `brl`
+     chegar a seis copias. */
+  const ehBoitel = vendaTipoVenda === 'boitel';
+
+  /* A MESMA ABA DA COMPRA, com quatro textos trocados por prop. O lote e' identico nos
+     dois: categoria, quantidade, peso, criterio e valor. Nenhum rotulo de CAMPO muda — o
+     lote nao e' comprado nem vendido na tela, ele e' descrito. Vale igual para o boitel:
+     o que ele acrescenta fica FORA deste elemento, nao dentro dele. */
+  const abaLotes = (
+    <AbaNegociacaoLotes
+      categoria={categoria}
+      categoriasDisponiveis={categoriasDisponiveis}
+      quantidadeNum={quantidadeNum}
+      pesoKgNum={pesoKgNum}
+      darkSelectClass=""
+      modoOC
+      operacaoPronta={!!ocOperacaoId}
+      lotesApi={lotesApi}
+      somenteLeitura={ocStatusComercial === 'cancelada'}
+      onVoltarCompra={() => setAbaAtiva('venda')}
+      rotulos={{
+        salveIdentificacao: 'Salve a identificação da venda para adicionar os lotes da negociação.',
+        voltarParaIdentificacao: 'Voltar para Venda',
+        salveOperacaoPrimeiro: 'Salve a operação na aba Venda primeiro',
+        fisicoBloqueado: 'Esta venda já teve entrega: categoria, quantidade e peso ficam bloqueados. Critério e valor seguem editáveis.',
+      }}
+    />
+  );
 
   return (
     <div className="flex flex-col">
@@ -156,34 +196,19 @@ export function VendaModalShell({
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] lg:grid-rows-[minmax(0,1fr)] gap-3 p-4 h-[69vh] overflow-y-auto lg:overflow-hidden bg-muted/30">
         <div className="space-y-2 min-w-0 lg:min-h-0 lg:overflow-y-auto">
           {abaAtiva === 'negociacao' ? (
-            /* A MESMA ABA DA COMPRA, com quatro textos trocados por prop. O lote e'
-               identico nos dois: categoria, quantidade, peso, criterio e valor. Nenhum
-               rotulo de CAMPO muda — o lote nao e' comprado nem vendido na tela, ele e'
-               descrito.
-               NOTA: SEM A BIFURCACAO DO BOITEL, e nao por esquecimento. Ela e' de
-               PR-OC-VENDA-BOITEL-01, e entra AQUI, abaixo dos lotes: base operacional
-               derivada, quatro blocos clicaveis e painel de resultado — no padrao do
-               AbaRecebimentoLotes, que ja bifurca entre encerrado e aberto. Ficou fora
-               deste PR porque sao ~800 linhas de UI nova, que nao se conferem no mesmo
-               relatorio de uma troca de rotulos. */
-            <AbaNegociacaoLotes
-              categoria={categoria}
-              categoriasDisponiveis={categoriasDisponiveis}
-              quantidadeNum={quantidadeNum}
-              pesoKgNum={pesoKgNum}
-              darkSelectClass=""
-              modoOC
-              operacaoPronta={!!ocOperacaoId}
-              lotesApi={lotesApi}
-              somenteLeitura={ocStatusComercial === 'cancelada'}
-              onVoltarCompra={() => setAbaAtiva('venda')}
-              rotulos={{
-                salveIdentificacao: 'Salve a identificação da venda para adicionar os lotes da negociação.',
-                voltarParaIdentificacao: 'Voltar para Venda',
-                salveOperacaoPrimeiro: 'Salve a operação na aba Venda primeiro',
-                fisicoBloqueado: 'Esta venda já teve entrega: categoria, quantidade e peso ficam bloqueados. Critério e valor seguem editáveis.',
-              }}
-            />
+            ehBoitel ? (
+              /* ⚠ AQUI NAO SE DIGITA O BOITEL. Base operacional e painel de resultado
+                 sao LEITURA do que ja esta gravado. Os quatro modais de entrada de dado
+                 sao de PR-OC-VENDA-BOITEL-01B — este PR nao os traz, e por isso a tela
+                 diz em ambar o que falta em vez de oferecer onde preencher. */
+              <div className="space-y-2 min-w-0">
+                <BoitelBaseOperacional boitelData={boitelData} />
+                <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_240px] gap-2 items-start">
+                  <div className="min-w-0">{abaLotes}</div>
+                  <BoitelPainelResultado boitelData={boitelData} />
+                </div>
+              </div>
+            ) : abaLotes
           ) : (
           <div className="rounded-md border bg-card p-2 shadow-sm space-y-2 min-w-0">
             <div className="text-[15px] font-medium text-foreground">Identificação da venda</div>
