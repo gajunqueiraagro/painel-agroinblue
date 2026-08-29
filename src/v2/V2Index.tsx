@@ -428,22 +428,37 @@ export default function V2Index() {
     p.set('oc_compra', '1');
     p.set('oc_id', ocId);
     // PR-OC-FIN-EDIT-FIX-02 — aba inicial opcional (ex.: 'financeiro' quando aberto pelo Financeiro V2).
-    // PR-OC-FIN-RETORNO-01 — origem Financeiro V2 (abre na aba financeira): marca oc_return p/ o fecho
-    //   reconduzir à seção 'financeiro-lanc' (e restaurar os filtros). Central segue sem oc_return.
-    if (aba) {
-      p.set('oc_aba', aba);
-      if (aba === 'financeiro') p.set('oc_return', 'financeiro-lanc'); else p.delete('oc_return');
-    } else {
-      p.delete('oc_aba');
-      p.delete('oc_return');
+    if (aba) p.set('oc_aba', aba); else p.delete('oc_aba');
+    /* ── oc_return E' A ORIGEM, NAO O DESTINO (PR-OC-FIX-RETORNO-02) ─────────────
+       Antes: `if (aba === 'financeiro') p.set('oc_return','financeiro-lanc')`. O valor
+       saia do DESTINO, entao QUALQUER abertura na aba financeira carimbava "voltar ao
+       Financeiro" — inclusive a volta do drill, que reabre a OC com aba='financeiro'.
+       Quem entrava pela Central perdia a Central no caminho de volta: fechar a OC
+       largava o usuario nos lancamentos financeiros, um nivel abaixo de onde comecou.
+       ⚠ GRAVA UMA VEZ E PRESERVA. `oc_return` ja existente NAO e' reescrito, porque na
+       volta do drill `sectionRef.current` e' 'financeiro-lanc' e derivar da origem
+       carimbaria o mesmo erro por outro caminho. O parametro SOBREVIVE a ida ao
+       Financeiro: `editarTitulo` (AbaCompromissosOC) apaga `oc_compra` e `oc_id` e nao
+       toca neste — e' isso que faz a preservacao bastar.
+       ⚠ A CENTRAL PASSA A REGISTRAR ORIGEM TAMBEM. Antes ela apagava `oc_return`, e
+       "sem valor" era indistinguivel de "nunca houve" — a volta do drill preenchia o
+       vazio com o destino. Registrando `operacoes-comerciais`, ha o que preservar.
+       `fecharOperacaoOC` nao conhece esse valor e cai no fallback, que e' a Central:
+       o destino certo, pelo caminho do default.
+       ⚠ Mesmo mecanismo de `abrirNovaCompraOC`, logo abaixo — nao ha convencao nova. */
+    if (!p.get('oc_return')) {
+      const origem = sectionRef.current;
+      if (origem) p.set('oc_return', origem);
     }
     setSearchParams(p, { replace: true });
     setSection('lancamentos-zoot');
   }, [setSearchParams]);
   // Fecho do modal OC: limpa os parâmetros transitórios (sem resíduo) e retorna à seção de origem.
   //   PR-OC-FIN-RETORNO-01 — aberto pelo Financeiro V2 (oc_return='financeiro-lanc') → volta ao
-  //   Financeiro V2 (o restore-effect de filtros do FinanceiroV2Tab dispara no mount). Caso contrário,
-  //   comportamento atual: retorna à Central.
+  //   Financeiro V2 (o restore-effect de filtros do FinanceiroV2Tab dispara no mount).
+  //   PR-OC-FIX-RETORNO-02 — a Central TAMBEM registra origem agora ('operacoes-comerciais'), e ela
+  //   cai aqui no fallback de propósito: o destino é o mesmo, e a lista branca segue sendo a de
+  //   seções que precisam de tratamento próprio. Valor desconhecido → Central, como sempre.
   const fecharOperacaoOC = useCallback(() => {
     const p = new URLSearchParams(window.location.search);
     const retorno = p.get('oc_return');
