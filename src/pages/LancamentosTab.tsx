@@ -2050,15 +2050,46 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     };
   }, [clienteAtual?.id]);
 
+  /* PR-OC-FIX-VENDA-NOVA-HERDA-ESTADO-01 — IRMA de `resetContextoOC`.
+     ⚠ O DEFEITO ERA UMA LINHA: a venda caia no `else` do efeito abaixo, que zerava so'
+     `ocOperacaoId` e `ocVersao`. Todo o resto sobrevivia, e uma venda NOVA nascia com o
+     comprador, o tipo e os quatro blocos do boitel da anterior. Chegou ao banco: duas OCs
+     de venda nasceram com a contraparte herdada.
+     ⚠ O `ocOperacaoId` NUNCA sobreviveu — o `else` ja o zerava —, e por isso nenhuma
+     operacao foi gravada por cima de outra. Conferido no banco: a OC editada antes ficou
+     com `versao 1` e `updated_at` igual ao `created_at`.
+     ⚠ `setOcBoitel(null)` COBRE OS 37 CAMPOS DO BOITEL de uma vez, e cobrira' os que
+     vierem: ele e' um objeto so'. E' a unica peca desta funcao que se corrige sozinha.
+     Os quatro campos soltos da venda sao divida declarada — ver
+     PR-OC-ESTADO-DA-OPERACAO-01, que poe o estado da OC num objeto tipado e faz o
+     COMPILADOR exigir o valor inicial de todo campo novo.
+     ⚠ `key` para forcar remontagem NAO serve aqui: este estado mora no `LancamentosTab`,
+     e remonta-lo derrubaria a tela inteira junto. */
+  const resetContextoVendaOC = useCallback(() => {
+    // A ponte OC — os mesmos quatro da compra.
+    setOcOperacaoId(null); setOcVersao(null); setOcStatusComercial(null); setOcEntregaEncerrada(false);
+    // Os compartilhados que a compra ja' zerava e a venda nao.
+    setData(format(new Date(), 'yyyy-MM-dd')); setObservacao(''); setNotaFiscal('');
+    setStatusOp('realizado'); setFazendaOrigem('');
+    // Os quatro proprios da venda.
+    setVendaDestinoFornecedorId(''); setVendaTipoVenda('');
+    setVendaFazendaId(''); setVendaPropriedadeDestino('');
+    // O planejamento do boitel, inteiro, num setter so'.
+    setOcBoitel(null);
+    // As flags da OC — mesmas quatro da compra.
+    setOcAberturaExistente(false); setOcTemTitulo(false); setOcRascunho(false); setOcHidratacaoErro(null);
+  }, []);
+
   // Validate form and open confirmation dialog
   // Reset da ponte OC ao fechar o modal (higiene de estado).
   useEffect(() => {
     if (!lancModalOpen) {
       // Modo OC: reset completo (evita vazamento de estado entre operações A→B). Legado: só a ponte OC.
       if (modoOCCompra) resetContextoOC();
+      else if (modoOCVenda) resetContextoVendaOC();
       else { setOcOperacaoId(null); setOcVersao(null); }
     }
-  }, [lancModalOpen, modoOCCompra, resetContextoOC]);
+  }, [lancModalOpen, modoOCCompra, modoOCVenda, resetContextoOC, resetContextoVendaOC]);
 
   // PR-NAV-CONTEXTO-FAZENDA-01A — fazenda REAL da OC (nunca '__global__'/'__atual__'). Null => a fazenda
   //   precisa ser escolhida no modal antes de persistir (em Global não há fazenda implícita válida).
