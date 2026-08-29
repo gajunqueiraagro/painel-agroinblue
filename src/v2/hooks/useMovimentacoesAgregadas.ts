@@ -140,7 +140,7 @@ const TIPOS_DESFRUTE_RECEITA: Lancamento['tipo'][] = ['abate', 'venda'];
    escolha de apresentacao: `consumo` ja entrava em `desfrute` COM valor
    (:105), entao o mesmo tipo tinha valor somado e nao tinha valor sozinho.
    PR-MOVIMENTACOES-01 — `consumos` e `mortes` ganham `valor_total` e
-   `preco_kg`. O campo de valor ainda NAO existe em `EditMorteSheet` nem em
+   `preco_kg`. O campo de valor ainda NAO existe na edicao de morte nem em
    `EditConsumoSheet` (frente propria, junto da Operacao Comercial), entao
    as colunas nascem em travessao. Estao aqui para acenderem SOZINHAS quando
    o dado chegar: sem isto seriam trava invisivel, e acender depois exigiria
@@ -291,7 +291,7 @@ function valorPorLente(
       /* ⚠ A CORRECAO DO R$ 0,00. `Nascimentos — valor total` desenhava uma
          LINHA RETA NO ZERO nos treze meses, afirmando "houve 943 nascimentos
          e valeram nada". O certo e' travessao: houve movimento e o valor NAO
-         FOI LANCADO — o campo nem existe em `EditMorteSheet`/`EditConsumoSheet`.
+         FOI LANCADO — o campo nem existe na edicao de morte nem na de consumo.
          Sem cabeca nenhuma o zero fica, porque ai nada aconteceu mesmo.
          ⚠ Zero EXPLICITO no banco e indistinguivel de ausencia: medido em
          2024-2026, ha 17 compras e 14 transferencias com `valor_total = 0`

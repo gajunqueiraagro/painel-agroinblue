@@ -1,7 +1,8 @@
 /**
  * EditConsumoSheet — Edição de lançamento de Consumo.
  *
- * Padrão visual idêntico ao EditNascimentoSheet/EditMorteSheet (BLOCO 1 zoot,
+ * Padrão visual do BLOCO 1 zoot — o mesmo das gavetas irmãs (EditLancamentoSheet
+ * como casca),
  * sem BLOCO 2). Consumo NÃO gera lançamento financeiro (financeiro removido
  * oficialmente no commit 0d2e0bf8).
  *

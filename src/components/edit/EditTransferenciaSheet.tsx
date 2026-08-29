@@ -1,7 +1,8 @@
 /**
  * EditTransferenciaSheet — Edição de lançamento de Transferência (saída).
  *
- * Padrão visual idêntico ao EditNascimentoSheet/EditMorteSheet (BLOCO 1 zoot,
+ * Padrão visual do BLOCO 1 zoot — o mesmo das gavetas irmãs (EditLancamentoSheet
+ * como casca),
  * sem BLOCO 2). Transferência NÃO gera lançamento financeiro.
  *
  * Sobre o par transferencia_par_id:

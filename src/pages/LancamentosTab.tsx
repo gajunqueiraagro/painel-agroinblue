@@ -176,9 +176,11 @@ const TIPOS_QUE_NAO_SE_PROJETAM: Array<TipoMovimentacao | 'chuvas'> = ['chuvas']
    bloco financeiro — mostrar colunas de dinheiro num lancamento que a propria tela
    declara sem impacto e' contradizer a tela na ultima parada antes de gravar.
    ⚠ CONSUMO NAO ENTRA: ele movimenta caixa e compoe DRE (decisao do Gabriel).
-   ⚠ EXISTE UM `hasFinancialImpact` na linha ~706 com uma TERCEIRA composicao — ele
-   inclui transferencia e nao tem consumidor nenhum. Nao foi reusado de proposito:
-   usa-lo mudaria a confirmacao da transferencia, que nao esta em escopo. */
+   ⚠ ESTA E' A UNICA DEFINICAO. Havia um `hasFinancialImpact` no corpo do componente
+   nomeando o MESMO conceito com uma composicao DIFERENTE — incluia transferencia — e
+   sem consumidor nenhum. Duas definicoes de "impacto financeiro" convivendo, uma delas
+   morta, e' armadilha: quem procurasse a regra acharia a errada primeiro. Removido em
+   PR-ZOO-LIMPAR-MORTOS-01. */
 const TIPOS_SEM_IMPACTO_FINANCEIRO: TipoMovimentacao[] = ['nascimento', 'morte'];
 
 const MOTIVOS_MORTE = [
@@ -732,7 +734,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const isConsumo = tipo === 'consumo';
   const isTransferencia = tipo === 'transferencia_entrada' || tipo === 'transferencia_saida';
   const isTransferenciaSaida = tipo === 'transferencia_saida';
-  const hasFinancialImpact = !isNascimento && !isMorte && !isTransferencia;
 
   /* ── FAZENDA DA MORTE (PR-ZOO-MORTE-NO-SHELL-01) ─────────────────────────────
      Mesmo desenho do Nascimento acima, e pelo mesmo motivo: sem seletor, em Global o
