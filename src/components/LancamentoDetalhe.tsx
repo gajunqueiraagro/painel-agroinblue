@@ -501,8 +501,19 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                     verdade (frigorífico, comprador, motivo, outra fazenda) e
                     segue cru. As GUARDAS não mudaram: as mesmas linhas
                     aparecem e somem nas mesmas condições de antes. */}
+                {/* ⚠ O ROTULO SAI DA MESMA FUNCAO QUE O VALOR (PR-UI-CARD-ROTULO-ORIGEM-01).
+                    Onde a origem e' DERIVADA ela e' a fazenda do proprio registro, e
+                    "Fazenda Origem" esta certo. Onde e' DIGITADA — compra, sobretudo — o
+                    campo guarda o nome de quem vendeu, e chamar aquilo de fazenda mandava
+                    procurar no cadastro um nome que nunca esteve la.
+                    Sem lista nova e sem condicao por tipo: `campoFazendaEDerivado` ja
+                    fazia essa distincao para escolher o VALOR, e agora escolhe o nome
+                    junto — as duas decisoes nao tem como divergir. */}
                 {lancamento.fazendaOrigem && (
-                  <Row label="Fazenda Origem" value={campoFazendaEDerivado(lancamento.tipo, 'origem') ? nomeFazendaRegistro : lancamento.fazendaOrigem} />
+                  <Row
+                    label={campoFazendaEDerivado(lancamento.tipo, 'origem') ? 'Fazenda Origem' : 'Origem'}
+                    value={campoFazendaEDerivado(lancamento.tipo, 'origem') ? nomeFazendaRegistro : lancamento.fazendaOrigem}
+                  />
                 )}
                 {(lancamento.fazendaDestino || (isAbate && (lancamento.compradorFornecedor || (lancamento as any).abateFrigorifico))) && (
                   <Row label={isAbate ? 'Frigorífico' : lancamento.tipo === 'morte' ? 'Motivo da Morte' : lancamento.tipo === 'consumo' ? 'Motivo' : 'Fazenda Destino'} value={isAbate ? (lancamento.fazendaDestino || lancamento.compradorFornecedor || (lancamento as any).abateFrigorifico) : (campoFazendaEDerivado(lancamento.tipo, 'destino') ? nomeFazendaRegistro : lancamento.fazendaDestino)} />
