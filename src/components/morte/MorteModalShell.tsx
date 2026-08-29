@@ -35,9 +35,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { DatePicker } from '@/components/ui/date-picker';
 import { CampoMoeda, brl } from '@/components/ui/campo-moeda';
-import { Calendar, Building2, X } from 'lucide-react';
 import type { Categoria } from '@/types/cattle';
 import { META_VISUAL } from '@/lib/statusOperacional';
+import { LancamentoModalEnvelope } from '@/components/lancamento/LancamentoModalEnvelope';
 
 /* Par rotulo-valor do resumo lateral — mesmo idioma do `Linha` de ResumoLateralOC
    (A17): rotulo cinza a esquerda, valor a direita, traco no vazio.
@@ -126,9 +126,11 @@ export function MorteModalShell({
   /* ⚠ SO OS SINAIS MUDAM: faixa, pilula, rotulo de data, titulo do resumo e botao.
      O corpo do formulario continua igual — meta e' rotina, e tela colorida inteira
      cansa quem lanca o dia todo. */
+  /* ⚠ SO `isMeta` FICA AQUI. A cor da faixa e o rotulo da pilula passaram para o
+     LancamentoModalEnvelope em PR-ZOO-META-ENVELOPE-01 — eram identicos nos dois
+     shells. O que sobra e' o que muda POR TIPO: rotulo de data, titulo do resumo,
+     texto do botao e a linha "Cenário". */
   const isMeta = cenario === 'meta';
-  const faixa = isMeta ? META_VISUAL.faixa : 'bg-primary';
-  const cenarioRotulo = isMeta ? META_VISUAL.label : 'Realizado';
 
   /* ⚠ AUSENCIA E' TRACO. Sem quantidade ou sem peso nao ha peso total — nao ha "peso
      total de zero". Nenhum `?? 0` no caminho.
@@ -144,35 +146,71 @@ export function MorteModalShell({
   const motivoFalta = !motivoEfetivo;
 
   return (
-    <div className="flex flex-col">
-      <div className={`${faixa} text-primary-foreground px-6 py-2.5 flex items-start justify-between`}>
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            {/* ⚠ SEM EMOJI. O titulo antigo era "💀 Morte"; nenhuma outra tela do
-                sistema carrega emoji no titulo, e aqui ele ainda ilustrava a perda
-                de um animal para quem vive dela. */}
-            <h2 className="text-lg font-bold leading-tight">Morte</h2>
-            {/* ⚠ ROTULO, NAO CONTROLE — e por isso ele tem de dizer a VERDADE.
-                A rota `lancamentos-meta-zoo` abre esta tela com o cenario ja' em
-                'meta'; cravar "Realizado" aqui faria a pilula mentir sobre o que
-                sera' gravado. */}
-            <span className="rounded-md border border-white/40 px-2 py-0.5 text-xs">{cenarioRotulo}</span>
-          </div>
-          <div className="mt-1 flex items-center gap-3 text-xs text-white/80">
-            <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> {data ? data.split('-').reverse().join('/') : '—'}</span>
-            {/* A FAZENDA ESCOLHIDA, nao a do contexto — sem escolha, o mesmo traco de
-                ausencia que a faixa de topo usa. */}
-            <span className="flex items-center gap-1"><Building2 className="h-3.5 w-3.5" /> {morteFazendaNome ?? '—'}</span>
-          </div>
-        </div>
-        <button type="button" onClick={fecharModalOCComAutosave} className="text-white/80 hover:text-white shrink-0"
-          title="Fechar" aria-label="Fechar"><X className="h-5 w-5" /></button>
-      </div>
+    <LancamentoModalEnvelope
+      titulo="Morte"
+      cenario={cenario}
+      data={data}
+      fazendaNome={morteFazendaNome}
+      onFechar={fecharModalOCComAutosave}
+      resumo={<>
+            <div className="pb-1">
+              <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 first:mt-0 mb-0.5">
+                <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Identificação</span>
+              </div>
+              <div className="px-3 space-y-0.5">
+                <LinhaResumo rotulo="Tipo" valor="Morte" />
+                <LinhaResumo rotulo="Data" valor={data ? data.split('-').reverse().join('/') : null} />
+                <LinhaResumoFazenda valor={morteFazendaNome} falta={morteFazendaFalta} />
+                <LinhaResumo rotulo="Categoria" valor={categoriasDisponiveis.find(c => c.value === categoria)?.label ?? null} />
+                <LinhaResumo rotulo="Motivo" valor={motivoEfetivo} />
+                {/* ⚠ SO EM META — ver o mesmo comentario no NascimentoModalShell. */}
+                {isMeta && (
+                  <div className="flex items-baseline justify-between gap-1.5 leading-tight">
+                    <span className="text-muted-foreground shrink-0">Cenário</span>
+                    <span className={`font-medium text-right ${META_VISUAL.texto}`}>{META_VISUAL.label}</span>
+                  </div>
+                )}
+              </div>
 
-      {/* ⚠ `+38px` E' A FAIXA DE ABAS QUE ESTA TELA NAO TEM — mesma medida do
-          Nascimento, pelo mesmo motivo. */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] lg:grid-rows-[minmax(0,1fr)] gap-3 p-4 h-[calc(69vh_+_38px)] overflow-y-auto lg:overflow-hidden bg-muted/30">
-        <div className="space-y-2 min-w-0 lg:min-h-0 lg:overflow-y-auto">
+              <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 mb-0.5">
+                <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Rebanho</span>
+              </div>
+              <div className="px-3 space-y-0.5">
+                <LinhaResumo rotulo="Cabeças" valor={morteQtd > 0 ? `${morteQtd} cab` : null} />
+                <LinhaResumo rotulo="Peso médio" valor={mortePeso > 0 ? `${fmtNum2(mortePeso)} kg` : null} />
+                <LinhaResumo rotulo="Peso total" valor={mortePesoTotal != null ? `${fmtNum2(mortePesoTotal)} kg` : null} />
+                <LinhaResumo rotulo="Arrobas" valor={mortePesoTotal != null ? `${fmtNum2(mortePesoTotal / 30)} @` : null} />
+              </div>
+
+              <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 mb-0.5">
+                <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Financeiro</span>
+              </div>
+              <div className="px-3 space-y-0.5">
+                {/* ⚠ ZERO E' VALOR, AUSENCIA E' TRACO. Uma morte pode valer R$ 0,00 por
+                    decisao de quem lanca; a que nao tem valor informado mostra "—".
+                    Das 1.678 mortes ativas, 894 tem valor e as outras nao — e essa
+                    diferenca e' informacao, nao ruido. */}
+                <LinhaResumo rotulo="Valor" valor={valorMorte != null ? brl(valorMorte) : null} />
+              </div>
+              <div className="px-3 pt-1 text-muted-foreground leading-tight">
+                Morte não movimenta caixa nem compõe o DRE.
+              </div>
+            </div>
+      </>}
+      acao={<>
+        {/* O botao diz o que faz: registrar cria, salvar altera. */}
+        <Button type="button" onClick={handleRequestRegister} disabled={submitting || morteFazendaFalta || motivoFalta}
+          className="bg-white text-primary hover:bg-white/90 font-bold disabled:opacity-60"
+          title={morteFazendaFalta ? 'Selecione a fazenda do lançamento'
+            : motivoFalta ? 'Informe o motivo da morte'
+            : isEdicao ? 'Salvar as alterações da morte' : 'Registrar a morte'}
+          aria-label={isEdicao ? 'Salvar alterações' : 'Registrar morte'}>
+          {isEdicao
+            ? (submitting ? 'Salvando…' : 'Salvar alterações')
+            : (submitting ? 'Registrando…' : isMeta ? 'Registrar meta' : 'Registrar morte')}
+        </Button>
+      </>}
+    >
           <div className="rounded-md border bg-card p-2 shadow-sm space-y-2 min-w-0">
             <div className="text-[15px] font-medium text-foreground">Identificação da morte</div>
 
@@ -280,79 +318,6 @@ export function MorteModalShell({
               </div>
             </div>
           </div>
-        </div>
-
-        {/* RESUMO LATERAL — idioma do ResumoLateralOC: faixa de titulo, blocos com
-            faixa, pares rotulo-valor alinhados a direita, traco no vazio. */}
-        <div className="lg:min-h-0 lg:overflow-y-auto">
-          <aside className="bg-card rounded-md border shadow-sm overflow-hidden self-start text-[10px]">
-            <div className="h-8 shrink-0 border-b border-border bg-accent/40 flex items-center px-3 text-[11px] font-bold uppercase tracking-wide text-primary">
-              {isMeta ? 'Resumo da meta' : 'Resumo do lançamento'}
-            </div>
-            <div className="pb-1">
-              <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 first:mt-0 mb-0.5">
-                <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Identificação</span>
-              </div>
-              <div className="px-3 space-y-0.5">
-                <LinhaResumo rotulo="Tipo" valor="Morte" />
-                <LinhaResumo rotulo="Data" valor={data ? data.split('-').reverse().join('/') : null} />
-                <LinhaResumoFazenda valor={morteFazendaNome} falta={morteFazendaFalta} />
-                <LinhaResumo rotulo="Categoria" valor={categoriasDisponiveis.find(c => c.value === categoria)?.label ?? null} />
-                <LinhaResumo rotulo="Motivo" valor={motivoEfetivo} />
-                {/* ⚠ SO EM META — ver o mesmo comentario no NascimentoModalShell. */}
-                {isMeta && (
-                  <div className="flex items-baseline justify-between gap-1.5 leading-tight">
-                    <span className="text-muted-foreground shrink-0">Cenário</span>
-                    <span className={`font-medium text-right ${META_VISUAL.texto}`}>{META_VISUAL.label}</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 mb-0.5">
-                <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Rebanho</span>
-              </div>
-              <div className="px-3 space-y-0.5">
-                <LinhaResumo rotulo="Cabeças" valor={morteQtd > 0 ? `${morteQtd} cab` : null} />
-                <LinhaResumo rotulo="Peso médio" valor={mortePeso > 0 ? `${fmtNum2(mortePeso)} kg` : null} />
-                <LinhaResumo rotulo="Peso total" valor={mortePesoTotal != null ? `${fmtNum2(mortePesoTotal)} kg` : null} />
-                <LinhaResumo rotulo="Arrobas" valor={mortePesoTotal != null ? `${fmtNum2(mortePesoTotal / 30)} @` : null} />
-              </div>
-
-              <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 mb-0.5">
-                <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Financeiro</span>
-              </div>
-              <div className="px-3 space-y-0.5">
-                {/* ⚠ ZERO E' VALOR, AUSENCIA E' TRACO. Uma morte pode valer R$ 0,00 por
-                    decisao de quem lanca; a que nao tem valor informado mostra "—".
-                    Das 1.678 mortes ativas, 894 tem valor e as outras nao — e essa
-                    diferenca e' informacao, nao ruido. */}
-                <LinhaResumo rotulo="Valor" valor={valorMorte != null ? brl(valorMorte) : null} />
-              </div>
-              <div className="px-3 pt-1 text-muted-foreground leading-tight">
-                Morte não movimenta caixa nem compõe o DRE.
-              </div>
-            </div>
-          </aside>
-        </div>
-      </div>
-
-      <div className={`${faixa} px-6 py-2 flex items-center justify-end gap-3`}>
-        <Button type="button" variant="ghost" onClick={fecharModalOCComAutosave}
-          className="text-white/90 hover:bg-white/10 hover:text-white" title="Fechar sem registrar" aria-label="Fechar">
-          Fechar
-        </Button>
-        {/* O botao diz o que faz: registrar cria, salvar altera. */}
-        <Button type="button" onClick={handleRequestRegister} disabled={submitting || morteFazendaFalta || motivoFalta}
-          className="bg-white text-primary hover:bg-white/90 font-bold disabled:opacity-60"
-          title={morteFazendaFalta ? 'Selecione a fazenda do lançamento'
-            : motivoFalta ? 'Informe o motivo da morte'
-            : isEdicao ? 'Salvar as alterações da morte' : 'Registrar a morte'}
-          aria-label={isEdicao ? 'Salvar alterações' : 'Registrar morte'}>
-          {isEdicao
-            ? (submitting ? 'Salvando…' : 'Salvar alterações')
-            : (submitting ? 'Registrando…' : isMeta ? 'Registrar meta' : 'Registrar morte')}
-        </Button>
-      </div>
-    </div>
+    </LancamentoModalEnvelope>
   );
 }

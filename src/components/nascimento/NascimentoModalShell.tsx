@@ -28,9 +28,9 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { DatePicker } from '@/components/ui/date-picker';
-import { Calendar, Building2, X } from 'lucide-react';
 import type { Categoria } from '@/types/cattle';
 import { META_VISUAL } from '@/lib/statusOperacional';
+import { LancamentoModalEnvelope } from '@/components/lancamento/LancamentoModalEnvelope';
 
 /* Par rotulo-valor do resumo lateral do Nascimento — mesmo idioma do `Linha` de
    ResumoLateralOC (A17): rotulo cinza a esquerda, valor a direita, traco no vazio.
@@ -109,9 +109,11 @@ export function NascimentoModalShell({
   /* ⚠ SO OS SINAIS MUDAM: faixa, pilula, rotulo de data, titulo do resumo e botao.
      O corpo do formulario continua igual — meta e' rotina, e tela colorida inteira
      cansa quem lanca o dia todo. */
+  /* ⚠ SO `isMeta` FICA AQUI. A cor da faixa e o rotulo da pilula passaram para o
+     LancamentoModalEnvelope em PR-ZOO-META-ENVELOPE-01 — eram identicos nos dois
+     shells. O que sobra e' o que muda POR TIPO: rotulo de data, titulo do resumo,
+     texto do botao e a linha "Cenário". */
   const isMeta = cenario === 'meta';
-  const faixa = isMeta ? META_VISUAL.faixa : 'bg-primary';
-  const cenarioRotulo = isMeta ? META_VISUAL.label : 'Realizado';
   /* ── RESUMO DO NASCIMENTO (PR-UI-NASCIMENTO-SHELL-02) ────────────────────────
      ⚠ AUSENCIA E' TRACO. `nascPesoTotal` e' NULL quando falta quantidade ou peso —
      nao zero. "Peso total: 0,00 kg" afirmaria que se multiplicou e deu zero, quando o
@@ -120,41 +122,74 @@ export function NascimentoModalShell({
   const fmtNum2 = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   return (
-        <div className="flex flex-col">
-          <div className={`${faixa} text-primary-foreground px-6 py-2.5 flex items-start justify-between`}>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h2 className="text-lg font-bold leading-tight">Nascimento</h2>
-                {/* ⚠ ROTULO, NAO CONTROLE — e por isso ele tem de dizer a VERDADE.
-                    O seletor de cenario saiu em 056054e7, e o rotulo ficou o literal
-                    'Realizado'. So' que a rota `lancamentos-meta-zoo` abre esta MESMA
-                    tela com o cenario ja' em 'meta': a pilula dizia realizado enquanto
-                    o payload gravava meta. Agora sai do estado real, junto com a cor
-                    da faixa — uma fonte so' (PR-ZOO-META-IDENTIDADE-01). */}
-                <span className="rounded-md border border-white/40 px-2 py-0.5 text-xs">{cenarioRotulo}</span>
-              </div>
-              <div className="mt-1 flex items-center gap-3 text-xs text-white/80">
-                <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> {data ? data.split('-').reverse().join('/') : '—'}</span>
-                {/* ⚠ A FAZENDA ESCOLHIDA, nao a do contexto. `nomeFazenda` e'
-                    `fazendaAtual?.nome`, entao em Global este cabecalho anunciava
-                    "Global" enquanto o seletor, a faixa de topo, o resumo lateral e a
-                    confirmacao mostravam a fazenda certa — quatro contra um.
-                    Sem escolha, "—": o mesmo traco de ausencia que a faixa de topo usa.
-                    "Global" ali nao e' ausencia, e' outra coisa, e foi o que confundiu. */}
-                <span className="flex items-center gap-1"><Building2 className="h-3.5 w-3.5" /> {nascFazendaNome ?? '—'}</span>
-              </div>
-            </div>
-            <button type="button" onClick={fecharModalOCComAutosave} className="text-white/80 hover:text-white shrink-0"
-              title="Fechar" aria-label="Fechar"><X className="h-5 w-5" /></button>
-          </div>
+    <LancamentoModalEnvelope
+      titulo="Nascimento"
+      cenario={cenario}
+      data={data}
+      fazendaNome={nascFazendaNome}
+      onFechar={fecharModalOCComAutosave}
+      resumo={<>
+                {/* ⚠ FAIXA DE BLOCO EM 10px, e NAO nos 9px do ResumoLateralOC. O piso de
+                    leitura do A21 e' 10px, e copiar o idioma nao pode significar copiar
+                    uma violacao — ela se espalharia por cada tela nova. A divergencia de
+                    1px contra a OC esta declarada; quem unificar decide o lado. */}
+                <div className="pb-1">
+                  <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 first:mt-0 mb-0.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Identificação</span>
+                  </div>
+                  <div className="px-3 space-y-0.5">
+                    <LinhaResumoNasc rotulo="Tipo" valor="Nascimento" />
+                    <LinhaResumoNasc rotulo="Data" valor={data ? data.split('-').reverse().join('/') : null} />
+                    <LinhaResumoNascFazenda valor={nascFazendaNome} falta={nascFazendaFalta} />
+                    <LinhaResumoNasc rotulo="Categoria" valor={categoriasDisponiveis.find(c => c.value === categoria)?.label ?? null} />
+                    {/* ⚠ SO EM META. No realizado a linha nao aparece: repetir "Cenário:
+                        Realizado" em toda tela vira ruido, e o que precisa de aviso e' o
+                        caminho que NAO e' o padrao. */}
+                    {isMeta && (
+                      <div className="flex items-baseline justify-between gap-1.5 leading-tight">
+                        <span className="text-muted-foreground shrink-0">Cenário</span>
+                        <span className={`font-medium text-right ${META_VISUAL.texto}`}>{META_VISUAL.label}</span>
+                      </div>
+                    )}
+                  </div>
 
-          {/* ⚠ `+38px` E' A FAIXA DE ABAS QUE ESTA TELA NAO TEM. O corpo da Compra e'
-              `h-[69vh]` e ela ainda carrega 38px de abas; sem absorver isso, o modal do
-              Nascimento fecharia 38px mais baixo e os dois nunca pareceriam o mesmo.
-              Em `calc` e nao num vh novo porque o que falta e' uma altura FIXA — vh
-              acertaria numa janela e erraria em todas as outras. */}
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] lg:grid-rows-[minmax(0,1fr)] gap-3 p-4 h-[calc(69vh_+_38px)] overflow-y-auto lg:overflow-hidden bg-muted/30">
-            <div className="space-y-2 min-w-0 lg:min-h-0 lg:overflow-y-auto">
+                  <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 mb-0.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Rebanho</span>
+                  </div>
+                  {/* ⚠ AUSENCIA E' TRACO, NUNCA ZERO. Sem quantidade ou sem peso nao ha
+                      peso total — nao ha "peso total de zero". `LinhaResumoNasc` imprime
+                      "—" para null, e nenhum `?? 0` tapa buraco no caminho.
+                      ⚠ ARROBA POR PESO VIVO: peso total / 30. A divisao por 15 e' de
+                      CARCACA e vale so no abate; usa-la aqui dobraria o numero. */}
+                  <div className="px-3 space-y-0.5">
+                    <LinhaResumoNasc rotulo="Cabeças" valor={nascQtd > 0 ? `${nascQtd} cab` : null} />
+                    <LinhaResumoNasc rotulo="Peso médio" valor={nascPeso > 0 ? `${fmtNum2(nascPeso)} kg` : null} />
+                    <LinhaResumoNasc rotulo="Peso total" valor={nascPesoTotal != null ? `${fmtNum2(nascPesoTotal)} kg` : null} />
+                    <LinhaResumoNasc rotulo="Arrobas" valor={nascPesoTotal != null ? `${fmtNum2(nascPesoTotal / 30)} @` : null} />
+                  </div>
+
+                  <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 mb-0.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Financeiro</span>
+                  </div>
+                  <div className="px-3 text-muted-foreground leading-tight">
+                    Nascimento não tem impacto financeiro.
+                  </div>
+                </div>
+      </>}
+      acao={<>
+            {/* ⚠ O BOTAO DIZ O QUE FAZ. Registrar cria um lancamento que nao existia;
+                salvar altera um que ja esta gravado. Mesmo botao com o mesmo texto nos
+                dois modos faria a edicao parecer que registra de novo. */}
+            <Button type="button" onClick={handleRequestRegister} disabled={submitting || nascFazendaFalta}
+              className="bg-white text-primary hover:bg-white/90 font-bold disabled:opacity-60"
+              title={nascFazendaFalta ? 'Selecione a fazenda do lançamento' : isEdicao ? 'Salvar as alterações do nascimento' : 'Registrar o nascimento'}
+              aria-label={isEdicao ? 'Salvar alterações' : 'Registrar nascimento'}>
+              {isEdicao
+                ? (submitting ? 'Salvando…' : 'Salvar alterações')
+                : (submitting ? 'Registrando…' : isMeta ? 'Registrar meta' : 'Registrar nascimento')}
+            </Button>
+      </>}
+    >
               <div className="rounded-md border bg-card p-2 shadow-sm space-y-2 min-w-0">
                 {/* Titulo no idioma da "Identificação da compra": 15px, peso 500, cor padrao. */}
                 <div className="text-[15px] font-medium text-foreground">Identificação do nascimento</div>
@@ -236,82 +271,6 @@ export function NascimentoModalShell({
                   </div>
                 </div>
               </div>
-            </div>
-
-            {/* RESUMO LATERAL — idioma do ResumoLateralOC: faixa de titulo, blocos com
-                faixa, pares rotulo-valor alinhados a direita, traco no vazio. */}
-            <div className="lg:min-h-0 lg:overflow-y-auto">
-              <aside className="bg-card rounded-md border shadow-sm overflow-hidden self-start text-[10px]">
-                <div className="h-8 shrink-0 border-b border-border bg-accent/40 flex items-center px-3 text-[11px] font-bold uppercase tracking-wide text-primary">
-                  {isMeta ? 'Resumo da meta' : 'Resumo do lançamento'}
-                </div>
-                {/* ⚠ FAIXA DE BLOCO EM 10px, e NAO nos 9px do ResumoLateralOC. O piso de
-                    leitura do A21 e' 10px, e copiar o idioma nao pode significar copiar
-                    uma violacao — ela se espalharia por cada tela nova. A divergencia de
-                    1px contra a OC esta declarada; quem unificar decide o lado. */}
-                <div className="pb-1">
-                  <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 first:mt-0 mb-0.5">
-                    <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Identificação</span>
-                  </div>
-                  <div className="px-3 space-y-0.5">
-                    <LinhaResumoNasc rotulo="Tipo" valor="Nascimento" />
-                    <LinhaResumoNasc rotulo="Data" valor={data ? data.split('-').reverse().join('/') : null} />
-                    <LinhaResumoNascFazenda valor={nascFazendaNome} falta={nascFazendaFalta} />
-                    <LinhaResumoNasc rotulo="Categoria" valor={categoriasDisponiveis.find(c => c.value === categoria)?.label ?? null} />
-                    {/* ⚠ SO EM META. No realizado a linha nao aparece: repetir "Cenário:
-                        Realizado" em toda tela vira ruido, e o que precisa de aviso e' o
-                        caminho que NAO e' o padrao. */}
-                    {isMeta && (
-                      <div className="flex items-baseline justify-between gap-1.5 leading-tight">
-                        <span className="text-muted-foreground shrink-0">Cenário</span>
-                        <span className={`font-medium text-right ${META_VISUAL.texto}`}>{META_VISUAL.label}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 mb-0.5">
-                    <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Rebanho</span>
-                  </div>
-                  {/* ⚠ AUSENCIA E' TRACO, NUNCA ZERO. Sem quantidade ou sem peso nao ha
-                      peso total — nao ha "peso total de zero". `LinhaResumoNasc` imprime
-                      "—" para null, e nenhum `?? 0` tapa buraco no caminho.
-                      ⚠ ARROBA POR PESO VIVO: peso total / 30. A divisao por 15 e' de
-                      CARCACA e vale so no abate; usa-la aqui dobraria o numero. */}
-                  <div className="px-3 space-y-0.5">
-                    <LinhaResumoNasc rotulo="Cabeças" valor={nascQtd > 0 ? `${nascQtd} cab` : null} />
-                    <LinhaResumoNasc rotulo="Peso médio" valor={nascPeso > 0 ? `${fmtNum2(nascPeso)} kg` : null} />
-                    <LinhaResumoNasc rotulo="Peso total" valor={nascPesoTotal != null ? `${fmtNum2(nascPesoTotal)} kg` : null} />
-                    <LinhaResumoNasc rotulo="Arrobas" valor={nascPesoTotal != null ? `${fmtNum2(nascPesoTotal / 30)} @` : null} />
-                  </div>
-
-                  <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 mb-0.5">
-                    <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Financeiro</span>
-                  </div>
-                  <div className="px-3 text-muted-foreground leading-tight">
-                    Nascimento não tem impacto financeiro.
-                  </div>
-                </div>
-              </aside>
-            </div>
-          </div>
-
-          <div className={`${faixa} px-6 py-2 flex items-center justify-end gap-3`}>
-            <Button type="button" variant="ghost" onClick={fecharModalOCComAutosave}
-              className="text-white/90 hover:bg-white/10 hover:text-white" title="Fechar sem registrar" aria-label="Fechar">
-              Fechar
-            </Button>
-            {/* ⚠ O BOTAO DIZ O QUE FAZ. Registrar cria um lancamento que nao existia;
-                salvar altera um que ja esta gravado. Mesmo botao com o mesmo texto nos
-                dois modos faria a edicao parecer que registra de novo. */}
-            <Button type="button" onClick={handleRequestRegister} disabled={submitting || nascFazendaFalta}
-              className="bg-white text-primary hover:bg-white/90 font-bold disabled:opacity-60"
-              title={nascFazendaFalta ? 'Selecione a fazenda do lançamento' : isEdicao ? 'Salvar as alterações do nascimento' : 'Registrar o nascimento'}
-              aria-label={isEdicao ? 'Salvar alterações' : 'Registrar nascimento'}>
-              {isEdicao
-                ? (submitting ? 'Salvando…' : 'Salvar alterações')
-                : (submitting ? 'Registrando…' : isMeta ? 'Registrar meta' : 'Registrar nascimento')}
-            </Button>
-          </div>
-        </div>
+    </LancamentoModalEnvelope>
   );
 }
