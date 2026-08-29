@@ -203,6 +203,18 @@ function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEd
 
   return (
     <div className="w-full">
+      {/* ⚠ A TELA NAO TINHA TITULO (PR-UI-LANCAR-CABECALHO-01). O primeiro elemento era
+          a faixa de atalhos de IA, entao quem chegava via um acessorio antes de saber
+          onde estava. O cabecalho nomeia a tela e diz o que se faz nela.
+          ⚠ `pb-[2px]` NAO E' ARBITRARIO: o respiro pedido entre o subtitulo e a faixa e'
+          14px, e a propria faixa ja traz 12 no seu `pt-3`. Os 2 que faltam entram aqui,
+          porque alterar a faixa esta fora do escopo. Mexeu no `pt` dela, revise este. */}
+      <div className="px-4 pt-3 pb-[2px]">
+        <h1 className="text-[19px] font-medium leading-tight text-foreground">Lançar movimentação</h1>
+        <p className="mt-0.5 text-[12px] leading-snug text-muted-foreground">
+          Registre o que aconteceu com o rebanho. Escolha o tipo e preencha os dados do lançamento.
+        </p>
+      </div>
       {mostrarCardsIA && (
         /* ⚠ FAIXA DE UMA LINHA (PR-UI-LANCAR-CARDS-01). Eram dois cartoes altos, cada
            um com selo "Lançar com IA", titulo e subtitulo — tres niveis de texto para

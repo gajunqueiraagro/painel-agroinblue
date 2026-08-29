@@ -3063,16 +3063,25 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                 disabled={disabled}
                 aria-label={`Lançar ${it.label} — ${it.desc}`}
                 title={it.desc}
-                className={`flex w-full items-baseline gap-2 px-3.5 py-2 text-left transition-colors ${
+                className={`group flex w-full cursor-pointer items-baseline gap-2 px-3.5 py-2 text-left transition-colors ${
                   active
                     ? 'bg-primary/10'
                     : disabled
                       ? 'opacity-25 pointer-events-none'
-                      : 'hover:bg-muted/40'
+                      : 'hover:bg-primary/5'
                 }`}
               >
                 <span className="shrink-0 text-[13px] font-medium text-foreground">{it.label}</span>
                 <span className="min-w-0 truncate text-[11px] text-muted-foreground">{it.desc}</span>
+                {/* ⚠ A SETA DEVOLVE UM SINAL QUE A BORDA DAVA. Enquanto cada item era
+                    cartao com borda de 2px, a moldura dizia "isto se clica"; virando linha
+                    dentro de um cartao unico (PR-UI-LANCAR-CARDS-02), o sinal se perdeu e
+                    a lista passou a parecer texto. A seta repoe a affordance sem trazer
+                    de volta as nove molduras.
+                    ⚠ DECORATIVA: `aria-hidden`. Quem usa leitor de tela ja recebe o
+                    `aria-label` da linha dizendo o que ela lanca; a seta so repetiria
+                    ruido. `self-center` porque o resto da linha alinha pela base. */}
+                <ChevronRight aria-hidden className="ml-auto h-3.5 w-3.5 shrink-0 self-center text-muted-foreground transition-colors group-hover:text-foreground" />
               </button>
             );
           })}
