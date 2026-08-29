@@ -62,6 +62,15 @@ export const META_VISUAL = {
   activeBorder: 'border-orange-400',
   activeBg: 'bg-orange-50 dark:bg-orange-950/30',
   badgeCls: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-400',
+  /* Faixa de cabecalho/rodape dos modais em cenario META, no lugar do `bg-primary`
+     azul do realizado (PR-ZOO-META-IDENTIDADE-01).
+     ⚠ `amber-800` E' EXATAMENTE rgb(146,64,14) — o tom pedido ja e' token da paleta,
+     entao nada de hex solto. O ambar CLARO dos atalhos de foto (`amber-50/100`) nao
+     serve de fundo de faixa: texto branco sobre ele fica ilegivel. Este e' o unico
+     ambar do sistema escuro o bastante para carregar texto branco. */
+  faixa: 'bg-amber-800',
+  /** Texto de destaque sobre fundo claro no cenario meta. */
+  texto: 'text-amber-800 dark:text-amber-400',
   description: 'Planejamento oficial do consultor. Não impacta saldo nem caixa.',
 };
 

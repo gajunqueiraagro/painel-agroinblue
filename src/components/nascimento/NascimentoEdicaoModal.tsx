@@ -137,7 +137,7 @@ export function NascimentoEdicaoModal({
           nascFazendaFalta={false}
           nascQtd={nascQtd}
           nascPeso={nascPeso}
-          cenarioRotulo={lancamento.cenario === 'meta' ? 'Meta' : 'Realizado'}
+          cenario={lancamento.cenario === 'meta' ? 'meta' : 'realizado'}
           submitting={saving}
           handleRequestRegister={handleSalvar}
           fecharModalOCComAutosave={() => onOpenChange(false)}

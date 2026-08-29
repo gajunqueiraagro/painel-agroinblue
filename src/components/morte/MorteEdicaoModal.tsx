@@ -154,7 +154,7 @@ export function MorteEdicaoModal({
           setValorMorte={setValorMorte}
           morteQtd={morteQtd}
           mortePeso={mortePeso}
-          cenarioRotulo={lancamento.cenario === 'meta' ? 'Meta' : 'Realizado'}
+          cenario={lancamento.cenario === 'meta' ? 'meta' : 'realizado'}
           submitting={saving}
           handleRequestRegister={handleSalvar}
           fecharModalOCComAutosave={() => onOpenChange(false)}

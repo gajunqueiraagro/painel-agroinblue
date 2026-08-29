@@ -21,6 +21,7 @@ import { V2AreasMeta } from './pages/V2AreasMeta';
 import { V2PlanejamentoVisaoGeral } from './pages/V2PlanejamentoVisaoGeral';
 import V2FechamentoPeriodo from './pages/V2FechamentoPeriodo';
 import V2ExecutivePreview from './pages/V2ExecutivePreview';
+import { META_VISUAL } from '@/lib/statusOperacional';
 import { LancamentoZooModal } from './components/edicao/LancamentoZooModal';
 import V2VisaoGeralRebanho from './pages/V2VisaoGeralRebanho';
 import { PainelConsultorTab } from '@/pages/PainelConsultorTab';
@@ -220,10 +221,27 @@ function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEd
           ⚠ `pb-[2px]` NAO E' ARBITRARIO: o respiro pedido entre o subtitulo e a faixa e'
           14px, e a propria faixa ja traz 12 no seu `pt-3`. Os 2 que faltam entram aqui,
           porque alterar a faixa esta fora do escopo. Mexeu no `pt` dela, revise este. */}
+      {/* ⚠ META NAO PODE PARECER REALIZADO (PR-ZOO-META-IDENTIDADE-01). A rota
+          `lancamentos-meta-zoo` montava esta MESMA tela, com o MESMO texto — "Registre
+          o que aconteceu" — enquanto tudo ali vira projecao. O cabecalho e' o primeiro
+          lugar onde a tela pode dizer em que caminho o operador esta.
+          ⚠ SO OS SINAIS SAO LARANJA. Os cartoes de grupo nao mudam: lancar meta e'
+          rotina, e fundo colorido o dia todo cansa. */}
       <div className="px-4 pt-3 pb-[2px]">
-        <h1 className="text-[19px] font-medium leading-tight text-foreground">Lançar movimentação</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-[19px] font-medium leading-tight text-foreground">
+            {cenarioInicial === 'meta' ? 'Lançar meta' : 'Lançar movimentação'}
+          </h1>
+          {cenarioInicial === 'meta' && (
+            <span className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${META_VISUAL.badgeCls}`}>
+              Planejamento
+            </span>
+          )}
+        </div>
         <p className="mt-0.5 text-[12px] leading-snug text-muted-foreground">
-          Registre o que aconteceu com o rebanho. Escolha o tipo e preencha os dados do lançamento.
+          {cenarioInicial === 'meta'
+            ? 'Projete o que espera que aconteça com o rebanho. Nada aqui entra no realizado.'
+            : 'Registre o que aconteceu com o rebanho. Escolha o tipo e preencha os dados do lançamento.'}
         </p>
       </div>
       {mostrarCardsIA && (

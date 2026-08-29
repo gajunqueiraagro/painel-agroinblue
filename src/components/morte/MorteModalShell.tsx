@@ -37,6 +37,7 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { CampoMoeda, brl } from '@/components/ui/campo-moeda';
 import { Calendar, Building2, X } from 'lucide-react';
 import type { Categoria } from '@/types/cattle';
+import { META_VISUAL } from '@/lib/statusOperacional';
 
 /* Par rotulo-valor do resumo lateral — mesmo idioma do `Linha` de ResumoLateralOC
    (A17): rotulo cinza a esquerda, valor a direita, traco no vazio.
@@ -98,8 +99,11 @@ export interface MorteModalShellProps {
   setValorMorte: (v: number | null) => void;
   morteQtd: number;
   mortePeso: number;
-  /** Cenário do registro. Rótulo, nunca controle. */
-  cenarioRotulo?: string;
+  /** Cenário DO REGISTRO. Fonte única: dele saem o rótulo da pílula E a cor da faixa.
+   *  ⚠ Eram duas coisas separadas e foi assim que a pílula do Nascimento passou a
+   *  mentir — um literal 'Realizado' num caminho que grava meta. Com uma fonte só,
+   *  rótulo e cor não têm como discordar. */
+  cenario?: 'meta' | 'realizado';
   submitting: boolean;
   handleRequestRegister: () => void;
   fecharModalOCComAutosave: () => void;
@@ -115,10 +119,16 @@ export function MorteModalShell({
   morteFazendaId, setMorteFazendaId, fazendasOC, morteFazendaNome, morteFazendaFalta,
   motivoMorte, setMotivoMorte, motivoMorteCustom, setMotivoMorteCustom, motivosDisponiveis,
   valorMorte, setValorMorte,
-  morteQtd, mortePeso, cenarioRotulo = 'Realizado', submitting,
+  morteQtd, mortePeso, cenario = 'realizado', submitting,
   handleRequestRegister, fecharModalOCComAutosave,
 }: MorteModalShellProps) {
   const isEdicao = modo === 'edicao';
+  /* ⚠ SO OS SINAIS MUDAM: faixa, pilula, rotulo de data, titulo do resumo e botao.
+     O corpo do formulario continua igual — meta e' rotina, e tela colorida inteira
+     cansa quem lanca o dia todo. */
+  const isMeta = cenario === 'meta';
+  const faixa = isMeta ? META_VISUAL.faixa : 'bg-primary';
+  const cenarioRotulo = isMeta ? META_VISUAL.label : 'Realizado';
 
   /* ⚠ AUSENCIA E' TRACO. Sem quantidade ou sem peso nao ha peso total — nao ha "peso
      total de zero". Nenhum `?? 0` no caminho.
@@ -135,7 +145,7 @@ export function MorteModalShell({
 
   return (
     <div className="flex flex-col">
-      <div className="bg-primary text-primary-foreground px-6 py-2.5 flex items-start justify-between">
+      <div className={`${faixa} text-primary-foreground px-6 py-2.5 flex items-start justify-between`}>
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             {/* ⚠ SEM EMOJI. O titulo antigo era "💀 Morte"; nenhuma outra tela do
@@ -176,7 +186,7 @@ export function MorteModalShell({
                 </div>
               </div>
               <div className="min-w-0">
-                <div className="text-[11px] font-normal text-muted-foreground leading-none">Data da morte</div>
+                <div className="text-[11px] font-normal text-muted-foreground leading-none">{isMeta ? 'Data prevista' : 'Data da morte'}</div>
                 <div className="mt-1 text-[20px] font-medium tabular-nums leading-none">
                   {data ? data.split('-').reverse().join('/') : <span className="text-muted-foreground">—</span>}
                 </div>
@@ -206,7 +216,7 @@ export function MorteModalShell({
                 )}
               </div>
               <div className="min-w-0">
-                <Label className="text-[10px] text-muted-foreground">Data da morte <span className="text-destructive">*</span></Label>
+                <Label className="text-[10px] text-muted-foreground">{isMeta ? 'Data prevista' : 'Data da morte'} <span className="text-destructive">*</span></Label>
                 {/* A20 — DatePicker do sistema, nunca `<input type="date">`. */}
                 <DatePicker value={data} onChange={setData} className="mt-[3px] h-8 px-2.5 text-[12px]" />
               </div>
@@ -277,7 +287,7 @@ export function MorteModalShell({
         <div className="lg:min-h-0 lg:overflow-y-auto">
           <aside className="bg-card rounded-md border shadow-sm overflow-hidden self-start text-[10px]">
             <div className="h-8 shrink-0 border-b border-border bg-accent/40 flex items-center px-3 text-[11px] font-bold uppercase tracking-wide text-primary">
-              Resumo do lançamento
+              {isMeta ? 'Resumo da meta' : 'Resumo do lançamento'}
             </div>
             <div className="pb-1">
               <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 first:mt-0 mb-0.5">
@@ -289,6 +299,13 @@ export function MorteModalShell({
                 <LinhaResumoFazenda valor={morteFazendaNome} falta={morteFazendaFalta} />
                 <LinhaResumo rotulo="Categoria" valor={categoriasDisponiveis.find(c => c.value === categoria)?.label ?? null} />
                 <LinhaResumo rotulo="Motivo" valor={motivoEfetivo} />
+                {/* ⚠ SO EM META — ver o mesmo comentario no NascimentoModalShell. */}
+                {isMeta && (
+                  <div className="flex items-baseline justify-between gap-1.5 leading-tight">
+                    <span className="text-muted-foreground shrink-0">Cenário</span>
+                    <span className={`font-medium text-right ${META_VISUAL.texto}`}>{META_VISUAL.label}</span>
+                  </div>
+                )}
               </div>
 
               <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 mb-0.5">
@@ -319,7 +336,7 @@ export function MorteModalShell({
         </div>
       </div>
 
-      <div className="bg-primary px-6 py-2 flex items-center justify-end gap-3">
+      <div className={`${faixa} px-6 py-2 flex items-center justify-end gap-3`}>
         <Button type="button" variant="ghost" onClick={fecharModalOCComAutosave}
           className="text-white/90 hover:bg-white/10 hover:text-white" title="Fechar sem registrar" aria-label="Fechar">
           Fechar
@@ -333,7 +350,7 @@ export function MorteModalShell({
           aria-label={isEdicao ? 'Salvar alterações' : 'Registrar morte'}>
           {isEdicao
             ? (submitting ? 'Salvando…' : 'Salvar alterações')
-            : (submitting ? 'Registrando…' : 'Registrar morte')}
+            : (submitting ? 'Registrando…' : isMeta ? 'Registrar meta' : 'Registrar morte')}
         </Button>
       </div>
     </div>
