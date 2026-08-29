@@ -13,7 +13,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import { toast } from 'sonner';
-import { CATEGORIAS } from '@/types/cattle';
+import { type BasePrecoVenda, CATEGORIAS } from '@/types/cattle';
 import { parseNumericValue } from '@/lib/calculos/abate';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { BoitelPlanningDialog, type BoitelData } from '@/components/BoitelPlanningDialog';
@@ -47,8 +47,11 @@ interface Props {
   submitting?: boolean;
   tipoPeso: string;
   onTipoPesoChange: (v: string) => void;
-  vendaTipoPreco: string;
-  onVendaTipoPrecoChange: (v: string) => void;
+  /** ⚠ TIPADO em PR-ZOO-VENDA-DESATAR-TIPO-01. Era `string`, e a prop irma `tipoPeso`
+   *  — que carrega o TIPO DE VENDA, nao peso — tambem. Sendo as duas `string`, trocar
+   *  uma pela outra compilava limpo. */
+  vendaTipoPreco: BasePrecoVenda;
+  onVendaTipoPrecoChange: (v: BasePrecoVenda) => void;
   vendaPrecoInput: string;
   onVendaPrecoInputChange: (v: string) => void;
   valorBruto: number;

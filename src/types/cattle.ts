@@ -21,6 +21,29 @@ export const CATEGORIAS: { value: Categoria; label: string }[] = [
   { value: 'vacas', label: 'Vacas' },
 ];
 
+/* ── DOIS DOMINIOS QUE MORAVAM NA MESMA VARIAVEL (PR-ZOO-VENDA-DESATAR-TIPO-01) ──
+   A tela de venda tinha um estado chamado `tipoPeso` carregando o TIPO DE VENDA, e
+   outro (`vendaTipoPreco`) carregando a BASE DE PRECO. Os dois eram `string`, entao
+   trocar um pelo outro compilava limpo. O payload fazia a troca certa — por isso o
+   banco esta correto —, mas cada leitor precisava saber da inversao.
+   Com uniao, trocar um pelo outro vira erro de compilacao. */
+
+/** Como o preco da venda foi informado. Conferido contra o banco em 2026-08-29.
+ *  ⚠ 'vivo' NAO ENTRA. Ele aparece em 3 vendas com tipo_venda preenchido, mas nao e'
+ *  base de preco — nao se multiplica por "vivo". Deixa-lo fora faz o tipo APONTAR esses
+ *  registros em vez de esconde-los; alarga-lo admitiria um valor que nenhum calculo sabe
+ *  usar. Frente propria: PR-ZOO-VENDA-VIVO-BASE-PRECO-01. */
+export type BasePrecoVenda = 'por_kg' | 'por_cab' | 'por_total';
+
+/** Peso de referencia do abate. Fecha contra o banco: 734 'vivo', 95 'morto', nada fora. */
+export type TipoPesoAbate = 'vivo' | 'morto';
+
+/* ⚠ NAO HA `TipoVenda` AQUI, e a ausencia e' deliberada. `lancamentos.tipo_venda` guarda
+   'desmama'|'gado_adulto'|'boitel' nas vendas E 'escala' em 89 abates ativos — este
+   ultimo e' MODALIDADE COMERCIAL, o mesmo dominio do `modalidade_comercial` da OC.
+   Uma uniao que cobrisse os dois juntaria dois dominios num tipo so' para caber.
+   O tipo nasce quando a coluna tiver um dominio so' — PR-ZOO-ABATE-MODALIDADE-COLUNA-01. */
+
 export type TipoEntrada = 'nascimento' | 'compra' | 'transferencia_entrada';
 export type TipoSaida = 'abate' | 'venda' | 'transferencia_saida' | 'consumo' | 'morte';
 export type TipoMovimentacao = TipoEntrada | TipoSaida | 'reclassificacao';

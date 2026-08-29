@@ -14,6 +14,8 @@ import {
   isEntrada,
   isReclassificacao,
   kgToArrobas,
+  type BasePrecoVenda,
+  type TipoPesoAbate,
 } from '@/types/cattle';
 import { useStatusPilares } from '@/hooks/useStatusPilares';
 import { ReabrirP1Dialog } from '@/components/ReabrirP1Dialog';
@@ -559,8 +561,17 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [frete, setFrete] = useState('');
   const [outrasDespesas, setOutrasDespesas] = useState('');
   const [notaFiscal, setNotaFiscal] = useState('');
-  const [tipoPeso, setTipoPeso] = useState<string>('vivo');
-  const [vendaTipoPreco, setVendaTipoPreco] = useState<string>('por_kg');
+  /* ⚠ `tipoPeso` E' DO ABATE. Ate PR-ZOO-VENDA-DESATAR-TIPO-01 este mesmo estado
+     carregava, na VENDA, o TIPO DE VENDA (desmama/gado_adulto/boitel) — e o payload
+     fazia a troca na hora de gravar. O banco sempre esteve certo; o preco era que todo
+     leitor precisava saber da inversao. Agora sao dois estados. */
+  const [tipoPeso, setTipoPeso] = useState<TipoPesoAbate>('vivo');
+  /* O TIPO DE VENDA, no seu proprio estado e com o seu proprio nome.
+     ⚠ SEM UNIAO DE TIPO por enquanto: `lancamentos.tipo_venda` guarda tambem 'escala'
+     em 89 abates, que e' modalidade comercial. Tipar exigiria juntar dois dominios —
+     ver o comentario em types/cattle.ts e PR-ZOO-ABATE-MODALIDADE-COLUNA-01. */
+  const [vendaTipoVenda, setVendaTipoVenda] = useState<string>('');
+  const [vendaTipoPreco, setVendaTipoPreco] = useState<BasePrecoVenda>('por_kg');
   const [vendaPrecoInput, setVendaPrecoInput] = useState('');
   const [boitelDataForResumo, setBoitelDataForResumo] = useState<import('@/components/BoitelPlanningDialog').BoitelData | null>(null);
   const [rendCarcaca, setRendCarcaca] = useState('');
@@ -1180,7 +1191,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setAbateFrigorificoNome(abateFrigorifico);
     if (snap && snap.type === 'abate') {
       // Direct restore from snapshot
-      setTipoPeso(snap.tipoPeso || 'vivo');
+      setTipoPeso(snap.tipoPeso === 'morto' ? 'morto' : 'vivo');
       setDataVenda(snap.dataVenda || '');
       setDataEmbarque(snap.dataEmbarque || '');
       setDataAbate(snap.dataAbate || l.data || '');
@@ -1233,7 +1244,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       });
     } else {
       // FALLBACK: reconstruct from lancamento fields
-      setTipoPeso(l.tipoPeso || 'vivo');
+      setTipoPeso(l.tipoPeso === 'morto' ? 'morto' : 'vivo');
       setDataVenda(l.dataVenda || '');
       setDataEmbarque(l.dataEmbarque || '');
       setDataAbate(l.dataAbate || l.data || '');
@@ -1503,7 +1514,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     // 4. Check for snapshot first (PRIORITY 1)
     const vendaSnap = l.detalhesSnapshot;
     if (vendaSnap && vendaSnap.type === 'venda_boitel') {
-      setTipoPeso('boitel');
+      setVendaTipoVenda('boitel');
       // Store snapshot boitelData for rehydration via initialBoitelData prop
       if (vendaSnap.boitelSnapshot) {
         setBoitelDataForResumo(vendaSnap.boitelSnapshot as any);
@@ -1511,7 +1522,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       console.log('[Venda Edit] Rehydrating Boitel from snapshot', vendaSnap);
     } else if (vendaSnap && vendaSnap.type === 'venda') {
       const tv = vendaSnap.tipoVenda || l.tipoVenda || 'gado_adulto';
-      setTipoPeso(tv);
+      setVendaTipoVenda(tv);
 
       const vendaDet: VendaDetalhes = {
         tipoVenda: (tv === 'desmama' || tv === 'gado_adulto') ? tv as 'desmama' | 'gado_adulto' : 'gado_adulto',
@@ -1539,7 +1550,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     } else {
       // FALLBACK: reconstruct from lancamento + financial records
       const tv = l.tipoVenda || 'gado_adulto';
-      setTipoPeso(tv);
+      setVendaTipoVenda(tv);
 
       let tipoPreco: 'por_kg' | 'por_cab' | 'por_total' = 'por_kg';
       if (l.tipoPeso === 'por_kg' || l.tipoPeso === 'por_cab' || l.tipoPeso === 'por_total') {
@@ -2496,7 +2507,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     // Boitel venda: valor total da movimentação = LUCRO LÍQUIDO do produtor.
     // (NÃO usar `_saldoReceber` — é o saldo a receber/acerto com boitel,
     // semântica diferente do valor total da venda.)
-    const isBoitelVenda = isVenda && tipoPeso === 'boitel';
+    const isBoitelVenda = isVenda && vendaTipoVenda === 'boitel';
     const boitelLucroLiquido = boitelDataForResumo?._lucroTotal || 0;
     const compraValorTotal = (isCompra && compraDetalhes)
       ? (() => {
@@ -2550,7 +2561,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         ? (parseNumericValue(vendaPrecoInput) || undefined)
         : (isAbate && abateDetalhes ? (parseNumericValue(abateDetalhes.precoArroba) || undefined) : (numOrUndef(precoArroba) || undefined));
     const tipoPesoFinal = isVenda ? vendaTipoPreco : abTipoPeso;
-    const tipoVendaFinal = isVenda ? tipoPeso : abTipoVenda; // tipoPeso state holds desmama/gado_adulto/boitel for venda
+    const tipoVendaFinal = isVenda ? vendaTipoVenda : abTipoVenda;
 
     // Em EDIÇÃO em modo Global, preserva a fazenda real do lançamento;
     // em CRIAÇÃO, cai pro fazendaAtual.id (criação em Global está bloqueada).
@@ -2619,7 +2630,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             calculation: abateCalc || abateDetalhes.calculation || undefined,
           };
         }
-        if (isVenda && tipoPeso === 'boitel') {
+        if (isVenda && vendaTipoVenda === 'boitel') {
           // Boitel: full snapshot including ALL boitelData fields for rehydration
           const recebSnap = vendaFinanceiroRef.current?.getRecebimentoSnapshot?.();
           const bd = vendaFinanceiroRef.current?.getBoitelData?.();
@@ -2819,7 +2830,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           triggerZootCacheRefresh(data);
           setLancModalOpen(false);
           restoreEditOrigin();
-        } else if (isVenda && (calc.valorLiquido > 0 || tipoPeso === 'boitel')) {
+        } else if (isVenda && (calc.valorLiquido > 0 || vendaTipoVenda === 'boitel')) {
           // Zoo já salvo (M1). Financeiro é processo SEPARADO e best-effort:
           // nunca bloqueia o finalize do zoo. O VendaFinanceiroPanel emite os
           // próprios erros/avisos (desde PR-STAB-01A) — não duplicar mensagem aqui.
@@ -2941,7 +2952,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setLancModalOpen(false);
           restaurarContextoDoModal();
         } else if (isVenda && returnedId) {
-          const isBoitel = tipoPeso === 'boitel';
+          const isBoitel = vendaTipoVenda === 'boitel';
           try {
             if (vendaFinanceiroRef.current && (calc.valorLiquido > 0 || isBoitel)) {
               await vendaFinanceiroRef.current.generateFinanceiro(returnedId);
@@ -3067,7 +3078,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       } else {
         result.formaPagamento = 'À vista';
       }
-    } else if (isVenda && tipoPeso === 'boitel' && boitelDataForResumo) {
+    } else if (isVenda && vendaTipoVenda === 'boitel' && boitelDataForResumo) {
       // ── BOITEL-specific confirmation ──
       const bd = boitelDataForResumo;
       const saldoReceber = bd._saldoReceber || 0;
@@ -3429,8 +3440,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           // permite o painel buscar boitel_lote_id no DB como fallback.
           lancamentoId={editingAbateId || lastSavedLancamentoId || undefined}
           mode={editingAbateId ? 'update' : 'create'}
-          tipoPeso={tipoPeso}
-          onTipoPesoChange={setTipoPeso}
+          tipoPeso={vendaTipoVenda}
+          onTipoPesoChange={setVendaTipoVenda}
           vendaTipoPreco={vendaTipoPreco}
           onVendaTipoPrecoChange={setVendaTipoPreco}
           vendaPrecoInput={vendaPrecoInput}
@@ -4042,9 +4053,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             <div>
               <Label className="font-bold text-[11px]">Tipo Venda</Label>
               <Select
-                value={tipoPeso}
+                value={vendaTipoVenda}
                 onValueChange={(v) => {
-                  setTipoPeso(v);
+                  setVendaTipoVenda(v);
                   if (v === 'desmama' || v === 'gado_adulto') {
                     setVendaDetalhes(prev => prev ? { ...prev, tipoVenda: v as 'desmama' | 'gado_adulto' } : prev);
                   }
@@ -4201,12 +4212,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               Cancelar
             </Button>
           )}
-          {(vendaDetalhes || (tipoPeso === 'boitel' && boitelDataForResumo)) && (
+          {(vendaDetalhes || (vendaTipoVenda === 'boitel' && boitelDataForResumo)) && (
             <Button
               type="button"
               variant="outline"
               onClick={() => {
-                if (tipoPeso === 'boitel') {
+                if (vendaTipoVenda === 'boitel') {
                   vendaFinanceiroRef.current?.openBoitelDialog();
                 } else {
                   setVendaDialogOpen(true);
@@ -4215,7 +4226,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               disabled={submitting}
             >
               <Edit className="h-4 w-4 mr-1" />
-              {tipoPeso === 'boitel' ? 'Editar Planejamento' : 'Editar Financeiro'}
+              {vendaTipoVenda === 'boitel' ? 'Editar Planejamento' : 'Editar Financeiro'}
             </Button>
           )}
           <Button
@@ -4223,7 +4234,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             size="lg"
             className="font-bold"
             onClick={handleRequestRegister}
-            disabled={submitting || !(vendaDetalhes || (tipoPeso === 'boitel' && boitelDataForResumo))}
+            disabled={submitting || !(vendaDetalhes || (vendaTipoVenda === 'boitel' && boitelDataForResumo))}
           >
             {submitting
               ? 'Registrando...'
@@ -4756,7 +4767,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                     setNotaFiscal(det.notaFiscal);
                     setPrecoArroba(det.precoArroba);
                     setRendCarcaca(det.rendCarcaca);
-                    setTipoPeso(det.tipoPeso);
+                    setTipoPeso(det.tipoPeso === 'morto' ? 'morto' : 'vivo');
                     setTipoVenda(det.tipoVenda);
                     setBonusPrecoce(det.bonusPrecoce);
                     setBonusQualidade(det.bonusQualidade);
@@ -4831,10 +4842,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   categoria={categoria}
                   compradorNome={abateFornecedores.find(f => f.id === vendaDestinoFornecedorId)?.nome || ''}
                   detalhes={vendaDetalhes}
-                  detalhesPreenchidos={!!vendaDetalhes || (tipoPeso === 'boitel' && !!boitelDataForResumo)}
+                  detalhesPreenchidos={!!vendaDetalhes || (vendaTipoVenda === 'boitel' && !!boitelDataForResumo)}
                   canOpenModal={!!(data && quantidade && parseNumericValue(quantidade) > 0 && pesoKg && parseNumericValue(pesoKg) > 0 && categoria && vendaDestinoFornecedorId)}
                   onOpenModal={() => {
-                    if (tipoPeso === 'boitel') {
+                    if (vendaTipoVenda === 'boitel') {
                       vendaFinanceiroRef.current?.openBoitelDialog();
                     } else {
                       setVendaDialogOpen(true);
@@ -4845,7 +4856,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   registerLabel={editingAbateId ? 'Salvar Alterações' : 'Registrar Venda'}
                   onCancelEdit={editingAbateId ? handleCancelEdit : undefined}
                   calculation={vendaCalc}
-                  isBoitel={tipoPeso === 'boitel'}
+                  isBoitel={vendaTipoVenda === 'boitel'}
                   boitelData={boitelDataForResumo}
                 />
                 <VendaDetalhesDialog
@@ -4856,7 +4867,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                     setNotaFiscal(det.notaFiscal);
                     setVendaTipoPreco(det.tipoPreco);
                     setVendaPrecoInput(det.precoInput);
-                    setTipoPeso(det.tipoVenda);
+                    setVendaTipoVenda(det.tipoVenda);
                     setFrete(det.frete);
                     setComissaoPct(det.comissaoPct);
                     setOutrosDescontos(det.outrosCustos);
@@ -4891,7 +4902,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                     statusOp={effectiveStatusOp}
                     lancamentoId={editingAbateId || lastSavedLancamentoId || undefined}
                     mode="update"
-                    tipoPeso={tipoPeso}
+                    tipoPeso={vendaTipoVenda}
                     onTipoPesoChange={() => {}}
                     vendaTipoPreco={vendaTipoPreco}
                     onVendaTipoPrecoChange={() => {}}
