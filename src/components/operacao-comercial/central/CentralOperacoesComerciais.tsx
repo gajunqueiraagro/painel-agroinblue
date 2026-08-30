@@ -470,8 +470,14 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
      modal; abate segue indisponivel na Central, como antes.
      ⚠ O TIPO E' PASSADO ADIANTE, e nao inferido la' fora: quem sabe o que a linha e' e'
      esta lista, que ja o carrega em `OpRow`. */
+  /* ⚠ A REGRA MORA AQUI, e nao repetida em cada guarda — PR-OC-VENDA-REABRIR-01B. Ela ja
+     estava escrita em dois lugares (o clique da linha e o item do menu) e o 01 corrigiu
+     so' um: a tubulacao passou a aceitar venda e a porta do menu continuou trancada.
+     Duas copias da mesma condicao e' como um lado fica para tras sem ninguem notar. */
+  const abrePorTipo = (tipo: string) => tipo === 'compra' || tipo === 'venda';
+
   const abrirOperacaoPorTipo = (r: OpRow) => {
-    if (r.tipo_operacao === 'compra' || r.tipo_operacao === 'venda') onAbrirOperacao?.(r.id, r.tipo_operacao);
+    if (abrePorTipo(r.tipo_operacao)) onAbrirOperacao?.(r.id, r.tipo_operacao);
   };
 
   const ocIdHandledRef = useRef(false);
@@ -670,10 +676,15 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
                 <TableRow key={r.id}
                   /* PR-OC-EDICAO-POS-FECHAMENTO-02 — a LINHA abre a operacao, padrao do
                      resto do sistema. O menu de tres pontos fica para as acoes
-                     destrutivas. Cursor so muda no que de fato abre: hoje apenas
-                     Compra tem tela; prometer clique em venda/abate seria mentir. */
-                  onClick={r.tipo_operacao === 'compra' ? () => abrirOperacaoPorTipo(r) : undefined}
-                  className={r.tipo_operacao === 'compra' ? 'cursor-pointer' : undefined}>
+                     destrutivas. Cursor e clique valem para o que de fato abre — hoje
+                     Compra E Venda; os demais tipos seguem sem promessa, porque prometer
+                     clique no que nao abre seria mentir.
+                     ⚠ A CONDICAO E' `abrePorTipo`, e nao uma copia: ela estava escrita
+                     tres vezes — aqui no clique, aqui no cursor e no item do menu — e o
+                     PR-OC-VENDA-REABRIR-01 ensinou so' a funcao central a abrir venda. As
+                     tres copias e' que fizeram o defeito. */
+                  onClick={abrePorTipo(r.tipo_operacao) ? () => abrirOperacaoPorTipo(r) : undefined}
+                  className={abrePorTipo(r.tipo_operacao) ? 'cursor-pointer' : undefined}>
                   <TableCell className={`${TD} font-mono whitespace-nowrap`} title={r.id}>#{r.id.slice(0, 8)}</TableCell>
                   <TableCell className={`${TD} whitespace-nowrap`}>{fmtData(r.data_operacao)}</TableCell>
                   <TableCell className={`${TD} whitespace-nowrap`}>{TIPO_LABEL[r.tipo_operacao] ?? r.tipo_operacao}</TableCell>
@@ -730,9 +741,9 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
                         <Button variant="ghost" size="icon" className="h-6 w-6"><MoreVertical className="h-3.5 w-3.5" /></Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        {r.tipo_operacao === 'compra'
+                        {abrePorTipo(r.tipo_operacao)
                           ? <DropdownMenuItem onSelect={() => abrirOperacaoPorTipo(r)}><Eye className="h-3.5 w-3.5 mr-2" /> Abrir operação</DropdownMenuItem>
-                          : <DropdownMenuItem disabled><Eye className="h-3.5 w-3.5 mr-2" /> Abrir (só Compra)</DropdownMenuItem>}
+                          : <DropdownMenuItem disabled><Eye className="h-3.5 w-3.5 mr-2" /> Abrir (indisponível para este tipo)</DropdownMenuItem>}
                         {r.status_comercial !== 'cancelada' && (
                           <DropdownMenuItem className="text-destructive focus:text-destructive"
                             onSelect={() => { setMotivo(''); setAcao({ tipo: 'cancelar', op: r }); }}>
