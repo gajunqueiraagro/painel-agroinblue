@@ -1,0 +1,56 @@
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- PR-SEC-BOITEL-ACL-01
+--
+-- APLICADA no Proto em 30/08/2026 pelo arquiteto, via Management API, com GO do
+-- Gabriel. Registro em schema_migrations: versao 20260830093513.
+--
+-- zoo_operacao_boitel nasceu com os default privileges globais em vez da ACL
+-- da irma zoo_operacao_lotes: escrita para authenticated e TUDO para anon.
+-- Nada exposto hoje — o RLS nega escrita por omissao de policy e o anon nao
+-- passa na policy de SELECT — mas a defesa esta em UMA camada onde a irma
+-- tem duas. Medido em pg_class.relacl em 30/08:
+--   lotes:  postgres⟪tudo⟫, service_role⟪tudo⟫, authenticated⟪r⟫
+--   boitel: postgres⟪tudo⟫, anon⟪tudo⟫, authenticated⟪tudo⟫, service_role⟪tudo⟫
+--
+-- O GRANT de SELECT para authenticated FICA: a reabertura da OC de venda
+-- (7916d203) le o planejamento por PostgREST, filtrado pela policy de tenant.
+-- oc_salvar_boitel (SECURITY DEFINER) nao depende de ACL e segue a unica
+-- porta de escrita.
+--
+-- ⚠ COMO EU CONCLUI QUE NAO HAVIA GRANT, e por que estava errado: a medicao
+-- original usou `information_schema.role_table_grants`, que so mostra grants de
+-- papeis VISIVEIS ao usuario da conexao — e devolveu zero. `pg_class.relacl` e
+-- `has_table_privilege` mostram o que existe. A view do information_schema
+-- responde "o que eu enxergo", nao "o que ha".
+-- ═══════════════════════════════════════════════════════════════════════════════
+
+REVOKE ALL ON public.zoo_operacao_boitel FROM anon;
+REVOKE ALL ON public.zoo_operacao_boitel FROM authenticated;
+GRANT SELECT ON public.zoo_operacao_boitel TO authenticated;
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- ESTADO DEPOIS — CONFERIDO, e identico ao da irma. `pg_class.relacl` das duas:
+--   zoo_operacao_boitel: postgres=arwdDxtm | service_role=arwdDxtm | authenticated=r
+--   zoo_operacao_lotes:  postgres=arwdDxtm | service_role=arwdDxtm | authenticated=r
+-- `anon` ausente das duas.
+--
+-- O QUE ESTA MIGRATION NAO FAZ, DE PROPOSITO
+--
+-- 1. NAO toca nas outras tabelas da familia, e ha mais uma com o MESMO desvio:
+--    `zoo_operacao_exclusoes_teste` tambem tem anon⟪tudo⟫ e authenticated⟪tudo⟫.
+--    Ela guarda os snapshots de exclusao definitiva — e a policy dela e' `*`
+--    (ALL), nao apenas SELECT, entao o RLS ali nao nega escrita por omissao como
+--    nega aqui.
+--    ⚠ MEDIDA PELO ARQUITETO em 30/08: o predicado e' `is_admin_agroinblue(auth.uid())`
+--    no USING E no WITH CHECK, para todos os comandos. `anon` nao tem `auth.uid()` e
+--    nao-admin falha o predicado — HA camada, e ela e' solida. O reforco de ACL fica
+--    como PR-SEC-EXCLUSOES-TESTE-ACL-01, sem urgencia.
+--
+-- 2. NAO mexe nas cinco com `authenticated⟪tudo⟫` sem anon (compromissos,
+--    documento_componentes, documento_lotes, parcelas_programacao, programacoes).
+--    Todas com RLS ligado; quatro delas tem policy de escrita, entao a ACL larga
+--    e' intencional ou pelo menos coerente. `documento_componentes` e
+--    `documento_lotes` tem policy so' de SELECT e sao os candidatos do mesmo
+--    remedio — mas nenhuma delas nasceu neste PR, e corrigir ACL alheia por
+--    tabela vizinha e' como se perde o controle do que foi verificado.
+-- ═══════════════════════════════════════════════════════════════════════════════
