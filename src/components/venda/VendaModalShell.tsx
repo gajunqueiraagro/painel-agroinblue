@@ -388,7 +388,10 @@ export function VendaModalShell({
                  sao de PR-OC-VENDA-BOITEL-01B — este PR nao os traz, e por isso a tela
                  diz em ambar o que falta em vez de oferecer onde preencher. */
               <div className="space-y-2 min-w-0">
-                <BoitelBaseOperacional boitelData={boitelData} />
+                {/* ⚠ 'projetado' FIXO, e nao derivado: e' o unico cenario que esta tela
+                    edita — o shell grava 'projetado' sempre em `salvarNegociacaoVendaOC`.
+                    PR-OC-VENDA-BOITEL-REALIZADO-01 e' quem passa a variar isto. */}
+                <BoitelBaseOperacional boitelData={boitelData} cenario="projetado" />
                 {/* PR-BOITEL-ACORDEAO-01 — 1.5fr / 1fr, gap 14px. O acordeao a' esquerda, o
                     resultado a' direita. */}
                 <div className="grid grid-cols-1 xl:grid-cols-[1.5fr_1fr] gap-[14px] items-start">
@@ -415,7 +418,7 @@ export function VendaModalShell({
                       o painel fica a' vista enquanto o operador percorre as secoes, que e' o
                       ponto: mexer na diaria OLHANDO a margem. */}
                   <div className="xl:sticky xl:top-0">
-                    <BoitelResultadoCompacto boitelData={boitelData} />
+                    <BoitelResultadoCompacto boitelData={boitelData} cenario="projetado" />
                   </div>
                 </div>
               </div>

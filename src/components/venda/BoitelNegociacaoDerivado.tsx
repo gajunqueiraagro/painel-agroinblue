@@ -183,13 +183,36 @@ export function liquidoDaVendaBoitel(d: BoitelEdicao | null): number | null {
   return Math.round((x.fba - x.custoTotalBoitel - x.cAb) * 100) / 100;
 }
 
+/* ─── A MARCA DE PROJECAO ──────────────────────────────────────────────────────
+   PR-OC-VENDA-ROTULO-PROJECAO-01. A aba de Negociação lança EXPECTATIVA — dias, GMD,
+   diária e preço são projeção até o abate — e a tela não dizia isso em lugar nenhum.
+   ⚠ MESMA FAMILIA VISUAL da pílula do valor na lista (417342ff): o TEXTO informa e o
+   âmbar acompanha. Fora daquela tabela vale o piso de 10px do PADROES-UI.
+   ⚠ UMA POR CONJUNTO, e não uma por seção: quatro pílulas iguais viram ruído e param de
+   ser lidas.
+   ⚠ O CENARIO VEM POR PROP, com 'projetado' fixo hoje porque é o único que a tela edita —
+   o shell grava 'projetado' sempre. Quando PR-OC-VENDA-BOITEL-REALIZADO-01 existir, é
+   esta prop que passa a receber 'realizado' e a marca troca de contexto. Não se deriva do
+   banco aqui: a tela SABE o que está editando, e perguntar seria inventar incerteza. */
+export type CenarioBoitel = 'projetado' | 'realizado';
+
+export function PilulaCenario({ cenario = 'projetado' }: { cenario?: CenarioBoitel }) {
+  if (cenario !== 'projetado') return null;
+  return (
+    <span className="shrink-0 rounded-full bg-amber-100 px-1.5 py-px text-[10px] font-normal text-amber-700"
+      title="Planejamento projetado do boitel — o realizado será lançado no abate.">
+      projeção
+    </span>
+  );
+}
+
 const LABEL_MODALIDADE: Record<BoitelData['modalidadeCusto'], string> = {
   diaria: 'Diária', arroba: 'Arroba produzida', parceria: 'Parceria',
 };
 
 /* ─── BASE OPERACIONAL ─────────────────────────────────────────────────────────
    Faixa de leitura: quatro valores, sem campo. A18 — duas alturas na mesma linha. */
-export function BoitelBaseOperacional({ boitelData }: { boitelData: BoitelEdicao | null }) {
+export function BoitelBaseOperacional({ boitelData, cenario }: { boitelData: BoitelEdicao | null; cenario?: CenarioBoitel }) {
   const itens: { rotulo: string; valor: string | null }[] = [
     { rotulo: 'Cabeças',          valor: boitelData && boitelData.qtdCabecas > 0 ? String(boitelData.qtdCabecas) : null },
     { rotulo: 'Peso saída faz.',  valor: boitelData && boitelData.pesoInicial > 0 ? formatKg(boitelData.pesoInicial) : null },
@@ -198,8 +221,16 @@ export function BoitelBaseOperacional({ boitelData }: { boitelData: BoitelEdicao
   ];
   return (
     <div className="rounded-md border bg-card p-2 shadow-sm min-w-0">
-      <div className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none mb-1.5">
-        Base operacional
+      {/* ⚠ A PILULA MORA AQUI porque este e' o cabecalho do bloco do boitel na aba: a
+          faixa fica ACIMA dos lotes e do acordeao, entao a marca cobre o conjunto — o
+          planejamento E o valor do lote que dele deriva. O acordeao nao tem titulo
+          proprio, e criar um so' para pendurar a pilula seria desenhar cabecalho novo
+          para resolver rotulo. */}
+      <div className="flex items-center gap-2 mb-1.5">
+        <div className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">
+          Base operacional
+        </div>
+        <PilulaCenario cenario={cenario} />
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-1.5">
         {itens.map(i => (
@@ -242,7 +273,7 @@ function TituloGrupo({ children }: { children: React.ReactNode }) {
    ⚠ RECALCULA A CADA TECLA, e é isso que faz o redesenho valer. Nada aqui é memoizado
    contra o valor digitado de propósito.
    ⚠ TRAVESSAO, NUNCA ZERO: sem dado que sustente a conta, o número não aparece. */
-export function BoitelResultadoCompacto({ boitelData }: { boitelData: BoitelEdicao | null }) {
+export function BoitelResultadoCompacto({ boitelData, cenario }: { boitelData: BoitelEdicao | null; cenario?: CenarioBoitel }) {
   const faltas = useMemo(() => boitelData ? exigencias(boitelData).filter(e => !e.presente) : [], [boitelData]);
   const d = useMemo(() => boitelData ? derivadosBoitel(boitelData) : null, [boitelData]);
   const pronto = !!d && faltas.length === 0;
@@ -253,7 +284,10 @@ export function BoitelResultadoCompacto({ boitelData }: { boitelData: BoitelEdic
 
   return (
     <aside className="bg-card rounded-md border shadow-sm p-3 self-start">
-      <div className="text-[11px] font-medium text-muted-foreground leading-none">RESULTADO</div>
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-[11px] font-medium text-muted-foreground leading-none">RESULTADO</div>
+        <PilulaCenario cenario={cenario} />
+      </div>
 
       <div className="mt-2.5">
         <div className="text-[11px] text-muted-foreground leading-none">Margem por cabeça</div>
@@ -302,7 +336,7 @@ function LinhaResultado({ rotulo, valor }: { rotulo: string; valor: string | nul
    por acidente — é a peça que `PR-OC-VENDA-BOITEL-RESUMO-MODAL-01` vai abrir num modal,
    para print e para mandar aos responsáveis. Se aquele PR morrer, este componente sai
    junto. */
-export function BoitelPainelResultado({ boitelData }: { boitelData: BoitelEdicao | null }) {
+export function BoitelPainelResultado({ boitelData, cenario }: { boitelData: BoitelEdicao | null; cenario?: CenarioBoitel }) {
   const faltas = useMemo(() => boitelData ? exigencias(boitelData).filter(e => !e.presente) : [], [boitelData]);
   const d = useMemo(() => boitelData ? derivadosBoitel(boitelData) : null, [boitelData]);
 
@@ -316,8 +350,12 @@ export function BoitelPainelResultado({ boitelData }: { boitelData: BoitelEdicao
 
   return (
     <aside className="bg-card rounded-md border shadow-sm overflow-hidden self-start text-[10px] min-w-0">
-      <div className="h-8 shrink-0 border-b border-border bg-accent/40 flex items-center px-3 text-[11px] font-bold uppercase tracking-wide text-primary">
-        Resultado do boitel
+      {/* ⚠ JA NASCE MARCADO para quando `PR-OC-VENDA-BOITEL-RESUMO-MODAL-01` o abrir num
+          modal para print: um print que sai do sistema sem dizer que e' projecao e' o
+          mesmo risco da lista, so' que fora da tela e sem contexto. */}
+      <div className="h-8 shrink-0 border-b border-border bg-accent/40 flex items-center justify-between gap-2 px-3 text-[11px] font-bold uppercase tracking-wide text-primary">
+        <span>Resultado do boitel</span>
+        <PilulaCenario cenario={cenario} />
       </div>
       <div className="pb-1">
         <TituloGrupo>Indicadores</TituloGrupo>
