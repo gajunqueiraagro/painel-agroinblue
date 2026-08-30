@@ -41,15 +41,18 @@ interface Props {
   bloqueado: boolean;                 // gate de escrita do modelo novo (rascunho/cancelada/legado/misto)
   clienteId: string | null;
   tipoOperacao: string | null;        // 'compra'
-  /* ⚠ SEMEADURA, E NAO GERACAO — PR-OC-VENDA-FIN-PROJ-01, forma (b). Quem cria continua
-     sendo o dialogo, com o operador confirmando: o botao apenas o abre PRE-PREENCHIDO
-     pelo motor, um por vez. Compromisso financeiro que aparece sem alguem ter olhado o
-     numero e' a mesma familia de defeito de revalorar em silencio.
+  /* ⚠ PREVISAO AUTOMATICA, SEM DIALOGO — PR-OC-VENDA-FIN-PREVISAO-01. "Gerar previsao"
+     NAO pergunta nada: cria as linhas prontas do motor. O veto ao "gerar sem olhar" caiu
+     porque previsao NAO MATERIALIZA — nao pede conta, nao programa, nao gera titulo. O
+     portao humano mudou de lugar: e' o "Lancar realizado", clicado quando o dinheiro
+     acontece. Previsao nao anda de banco.
      ⚠ ADITIVO: sem a prop, nao ha botao e a compra fica identica. */
-  sugestoesProjecao?: SugestaoCompromisso[];
-  /** Selo a exibir junto aos valores nascidos de projecao. `ReactNode` para o chamador
+  linhasPrevisao?: LinhaPrevisao[];
+  /** Selo a exibir nas linhas que ainda sao previsao. `ReactNode` para o chamador
    *  decidir a marca sem que este arquivo (da compra) importe nada da venda. */
   seloProjecao?: ReactNode;
+  /** Vocabulario por tipo. Omitido = texto da compra. */
+  rotulos?: RotulosCompromissos;
   fornecedores: { id: string; nome: string }[];
   valorAcordado: number | null;       // default do principal
   lotes: LoteOC[];                     // sugestão de subcentro por categorias
@@ -133,27 +136,65 @@ function estadoCompromisso(c: CompromissoResumo): { label: string; variant: 'def
   return { label: 'Aberto', variant: 'outline' };
 }
 
-export interface SugestaoCompromisso {
+/* ─── A PREVISAO (PR-OC-VENDA-FIN-PREVISAO-01) ─────────────────────────────────
+   Uma linha de PREVISAO de caixa, calculada pelo motor de quem chama. Ela NASCE como
+   compromisso (`zoo_operacao_compromissos`, status aberto), entao tudo que ja le
+   compromissos — resumo, "a programar", cadeia, estorno — continua valendo sem
+   retrofit. O que muda e' o PORTAO: a criacao e' automatica e sem dialogo, e o gesto
+   humano passa a ser o "Lancar realizado", quando o dinheiro de fato acontece.
+   ⚠ (natureza, componente) E' A CHAVE. E' por ela que a regeracao reconhece a linha que
+   ja existe, e por ela que a tela sabe qual compromisso ainda e' previsao. As quatro
+   linhas do boitel tem pares distintos — se um dia duas linhas compartilharem o par,
+   esta chave deixa de identificar e a regeracao passa a trocar uma pela outra. */
+export interface LinhaPrevisao {
   natureza: 'principal' | 'obrigacao';
+  /** Codigo do catalogo `zoo_componentes_financeiros` — o writer valida contra ele. */
+  componente: string;
   subcentro: string;
   valor: number;
+  /** Vai para o TITULO financeiro (ex.: "Boitel 110 G - Adiantamento"). */
   descricao: string;
   favorecidoId: string | null;
-  /** Só para o aviso de substituição — o que o operador vê no texto. */
+  /** Como a linha se chama NA TELA (ex.: "Adiantamento ao boitel"). Sem ele a lista
+   *  mostraria o codigo do componente, que nao e' vocabulario de operador. */
   rotulo: string;
+  /** Data PREVISTA do movimento. Nao vai no compromisso — o banco nao tem onde guarda-la
+   *  (vencimento vive na PROGRAMACAO). Serve para semear o "Lancar realizado". */
+  vencimentoPrevisto: string | null;
 }
 
-export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, fornecedores, valorAcordado, lotes, contraparteId, dataOperacao, dataChegada, darkSelectClass, recarregarDados, sugestoesProjecao, seloProjecao }: Props) {
+/* Vocabulario por tipo de operacao. ADITIVO: sem a prop, os defaults sao o texto de hoje
+   da compra, e a compra fica byte-identica. */
+export interface RotulosCompromissos {
+  /** Rotulo da data da operacao no rodape do resumo. Compra: 'Compra'. */
+  dataOperacao: string;
+  /* ⚠ `null` NAO E' "sem texto": e' "esta operacao nao tem esse conceito", e a linha
+     inteira some. A venda nao tem chegada — o gado SAI —, e o shell dela sequer passa
+     `dataChegada`. Renderizar "· Saída —" ali seria um sentinela de dado AUSENTE onde
+     nao ha pergunta a responder. Na compra o rotulo e' 'Chegada' e a linha sai sempre,
+     inclusive com data nula: e' o comportamento de hoje, preservado. */
+  dataChegada: string | null;
+}
+const ROTULOS_PADRAO: RotulosCompromissos = { dataOperacao: 'Compra', dataChegada: 'Chegada' };
+
+export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, fornecedores, valorAcordado, lotes, contraparteId, dataOperacao, dataChegada, darkSelectClass, recarregarDados, linhasPrevisao, seloProjecao, rotulos = ROTULOS_PADRAO }: Props) {
   const { resumoOperacao, compromissos, parcelas, versao, saving } = ocApi;
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [recemMaterializada, setRecemMaterializada] = useState<string | null>(null);
   const [novoAberto, setNovoAberto] = useState(false);
-  /* A FILA DA SEMEADURA: um dialogo por vez, na ordem. `null` = criacao manual, o
-     comportamento de sempre. */
-  const [filaSugestoes, setFilaSugestoes] = useState<SugestaoCompromisso[]>([]);
-  const sementeAtual = filaSugestoes[0] ?? null;
   const [programarAberto, setProgramarAberto] = useState(false);
+  /* Geracao da previsao em curso: trava o botao para nao disparar duas vezes. O laco faz
+     N escritas encadeadas por versao, e uma segunda entrada no meio quebraria a cadeia
+     com 40001. */
+  const [gerando, setGerando] = useState(false);
+  /* O compromisso cujo REALIZADO esta sendo lancado. `null` = dialogo fechado. */
+  const [realizarAlvo, setRealizarAlvo] = useState<CompromissoResumo | null>(null);
+  /* Aviso da GERACAO — irmao do `avisoBaseCoberta`, mas de outra superficie: aquele vive
+     dentro do dialogo manual (e continua igual na compra), este aparece na propria aba,
+     que e' onde a geracao acontece agora. Um estado so' para os dois faria a mensagem da
+     geracao nascer escondida atras de um dialogo fechado. */
+  const [avisoPrevisao, setAvisoPrevisao] = useState('');
   /* ACRESCENTAR SALDO e' caminho DISTINTO de programar, nao um modo do mesmo botao:
      um cria a programacao (writer `oc_programar_compromisso`, exige que nao exista),
      o outro cresce a que ja existe (`oc_acrescentar_parcelas`, exige que exista).
@@ -313,7 +354,6 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
   // ("Compra principal"). Se o refresh falhar, ainda abre (o guard de submit protege a persistência).
   const abrirNovo = async () => {
     try { await recarregarDados?.(); } catch { /* abre mesmo assim; guard de submit protege */ }
-    setFilaSugestoes([]);          // criacao manual: sem semente
     setNovoAberto(true);
   };
 
@@ -382,13 +422,30 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
     return (comp === '' || comp === c.natureza) ? null : comp;
   };
 
+  /* ─── QUEM E' PREVISAO ─────────────────────────────────────────────────────────
+     A linha da previsao e o compromisso no banco se reconhecem pelo par
+     (natureza, componente) — ver a nota em `LinhaPrevisao`. Sem `linhasPrevisao` isto
+     devolve null para tudo, e a compra segue exatamente como era. */
+  const previsaoDe = (c: CompromissoResumo): LinhaPrevisao | null =>
+    linhasPrevisao?.find(l => l.natureza === c.natureza && l.componente === c.componente) ?? null;
+
+  /* ⚠ A PILULA APAGA QUANDO O DINHEIRO ACONTECE, e o marco e' o TITULO — nao a
+     programacao. Programar e' so' dizer quando se espera; enquanto nao ha titulo, o
+     numero continua sendo previsao. Por isso o teste e' `totalMaterializado`, e nao
+     `temProgramacaoAtiva`. O par previsto -> realizado fica visivel, nunca misturado. */
+  const aindaEPrevisao = (c: CompromissoResumo): boolean =>
+    !!previsaoDe(c) && c.status !== 'cancelado' && c.totalMaterializado <= TOL_CENTAVO;
+
   /* ⚠ UMA REGRA, DOIS CONSUMIDORES. A coluna Componente e o cabecalho da Programacao
      precisam dizer a MESMA coisa sobre o mesmo compromisso — foram duas copias que
      deixaram o cabecalho preso em "principal/principal" depois que a coluna ja tinha
      sido corrigida. Com cinco compromissos na tabela, um cabecalho que nao identifica
      nao diz de qual deles e' a programacao aberta logo abaixo. */
+  /* ⚠ E A PREVISAO VEM ANTES DE TUDO. Sem ela a linha mostraria o CODIGO do componente
+     ('adiantamento_devolvido'), que nao e' vocabulario de operador; a previsao ja sabe
+     como a linha se chama na tela. */
   const rotuloCompromisso = (c: CompromissoResumo): string =>
-    identidadeCompromisso(c) ?? componenteAdicional(c) ?? (c.natureza ?? '—');
+    previsaoDe(c)?.rotulo ?? identidadeCompromisso(c) ?? componenteAdicional(c) ?? (c.natureza ?? '—');
 
   const sugestaoSubcentro = useMemo(() => {
     const c = classificarLotesCompra(lotes);
@@ -449,32 +506,19 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
      Falha no meio: os ja criados PERMANECEM (cada RPC e' sua propria transacao)
      e o dialogo fica aberto com o toast do hook. Nao ha rollback a fazer pela
      tela; o usuario ve na tabela o que entrou e refaz o que falta. */
-  async function criar(payloads: CriarCompromissoPayload[], substituirId?: string | null) {
+  async function criar(payloads: CriarCompromissoPayload[]) {
     if (versao == null || payloads.length === 0) return;
     let v = versao;
     let ultimo: string | null = null;
     setAvisoBaseCoberta('');
     try {
-      /* ⚠ CANCELA ANTES DE CRIAR, e nesta ordem: se a criacao falhar depois do
-         cancelamento, a operacao fica SEM compromisso — estado visivel, que alguem
-         corrige. A ordem inversa deixaria dois vivos se o cancelamento falhasse, e dois
-         principais em aberto e' o estado que ninguem percebe. */
-      if (substituirId) {
-        await estorno.cancelarCompromisso(v, substituirId, 'substituído por nova geração da projeção');
-        await ocApi.recarregar();
-        v = ocApi.versao ?? v;
-      }
       for (const payload of payloads) {
         const r = await ocApi.criarCompromisso(v, payload);
         v = r.operacaoVersao;
         ultimo = r.compromissoId;
       }
       setSelectedId(ultimo);
-      /* ⚠ A FILA ANDA SO NO SUCESSO. Falhou, o dialogo fecha e a sugestao continua na
-         fila — reabrir o botao retoma de onde parou, em vez de perder a segunda. */
-      const resto = filaSugestoes.slice(1);
-      setFilaSugestoes(resto);
-      setNovoAberto(resto.length > 0);
+      setNovoAberto(false);
     } catch (e) {
       /* O hook já exibiu o toast com o texto do banco — que está CORRETO e não é
          mascarado aqui. O que falta a ele é o proximo passo: quem tentou criar um
@@ -491,6 +535,144 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
       }
     }
   }
+  /* ═══ GERAR A PREVISAO ════════════════════════════════════════════════════════
+     Cria as linhas do motor DIRETO, sem dialogo. O que autoriza isso e' que previsao
+     nao materializa: nao pede conta, nao programa, nao gera titulo. Errar aqui custa um
+     "Cancelar compromisso", nao um estorno de lancamento.
+
+     ⚠ REGERAR SUBSTITUI SO' O QUE AINDA E' PREVISAO PURA — `aberto` E sem programacao
+     ativa. Programada ou lancada nunca e' tocada por este botao: o caminho dela e' o
+     "Cancelar programação", que o operador precisa pedir de proposito. Isto espelha
+     literalmente o `gateCancelarCompromisso`, que ja recusa cancelar compromisso com
+     programacao ativa — se as duas divergirem, quem manda e' o gate.
+
+     ⚠ VALOR IGUAL NAO REGERA. Cancelar e recriar pelo mesmo numero enche a auditoria de
+     ruido e troca o id do compromisso por nada. `CompromissoResumo` nao traz subcentro
+     nem descricao (conferido na interface), entao a comparacao e' pelo VALOR — que e' o
+     que muda quando o planejamento muda.
+
+     ⚠ VERSAO ENCADEADA PELO RETORNO, nunca pelo state. Cada escrita incrementa a versao
+     da operacao, e `ocApi.versao` dentro deste laco e' o valor do render em que o laco
+     comecou — usar ele faria a segunda escrita falhar com 40001. `criarCompromisso`
+     devolve `operacaoVersao` e `cancelarCompromisso` devolve a versao nova; e' delas que
+     o `v` anda.
+
+     ⚠ FALHA NO MEIO NAO FAZ ROLLBACK, e nao ha o que fazer pela tela: cada RPC e' sua
+     propria transacao. O que ja entrou permanece e aparece na lista; o toast final diz
+     quantas linhas passaram, para o operador ver onde parou e mandar de novo. */
+  async function gerarPrevisao() {
+    if (versao == null || !linhasPrevisao?.length || gerando) return;
+    setGerando(true);
+    setAvisoPrevisao('');
+    let v = versao;
+    let criadas = 0, substituidas = 0, mantidas = 0;
+    const bloqueadas: string[] = [];
+    try {
+      /* O mesmo cuidado do "Novo compromisso": esperar o refresh da OC antes de compor,
+         para nao gerar sobre um retrato velho dos compromissos. */
+      try { await recarregarDados?.(); } catch { /* segue com o que ha em maos */ }
+      for (const linha of linhasPrevisao) {
+        const existente = compromissos.find(
+          c => c.natureza === linha.natureza && c.componente === linha.componente && c.status !== 'cancelado',
+        );
+        if (existente) {
+          if (!existente.compromissoId || existente.status !== 'aberto' || existente.temProgramacaoAtiva) {
+            bloqueadas.push(linha.rotulo);
+            continue;
+          }
+          if (Math.abs(existente.valorCompromisso - linha.valor) <= TOL_CENTAVO) { mantidas++; continue; }
+          v = await estorno.cancelarCompromisso(v, existente.compromissoId, 'substituído por nova geração da previsão');
+          substituidas++;
+        }
+        const r = await ocApi.criarCompromisso(v, {
+          natureza: linha.natureza,
+          componente: linha.componente,
+          valor_total: linha.valor,
+          subcentro: linha.subcentro,
+          favorecido_id: linha.favorecidoId,
+          lote_id: null,
+          descricao: linha.descricao,
+        });
+        v = r.operacaoVersao;
+        if (!existente) criadas++;
+      }
+      await ocApi.recarregar();
+      /* ⚠ UM RESUMO DO QUE ACONTECEU, e nao so' "pronto". Com quatro linhas em regras
+         diferentes, o operador precisa saber quais foram trocadas e quais o sistema se
+         recusou a tocar — senao ele conclui que a regeracao nao funcionou. */
+      const partes: string[] = [];
+      if (criadas) partes.push(`${criadas} criada${criadas > 1 ? 's' : ''}`);
+      if (substituidas) partes.push(`${substituidas} substituída${substituidas > 1 ? 's' : ''}`);
+      if (mantidas) partes.push(`${mantidas} sem alteração`);
+      toast.success(partes.length ? `Previsão gerada: ${partes.join(', ')}.` : 'Previsão já estava em dia.');
+      if (bloqueadas.length > 0) {
+        setAvisoPrevisao(
+          `Estas linhas não foram regeradas porque já estão programadas ou lançadas: ${bloqueadas.join(', ')}. `
+          + 'Para trocá-las, abra o compromisso e use "Cancelar programação"; depois gere a previsão de novo.',
+        );
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      const feito = criadas + substituidas;
+      if (/excede a base da opera/i.test(msg)) {
+        setAvisoPrevisao(
+          'O banco recusou uma das linhas: a soma dos compromissos PRINCIPAIS não pode passar da base da '
+          + 'operação. Confira se já existe um compromisso principal criado à mão consumindo a base — '
+          + 'cancele-o e gere a previsão de novo.',
+        );
+      } else {
+        setAvisoPrevisao(
+          `A geração parou no meio${feito > 0 ? ` (${feito} linha${feito > 1 ? 's' : ''} já gravada${feito > 1 ? 's' : ''})` : ''}. `
+          + 'O que entrou está na lista abaixo. Corrija o que a mensagem acima apontou e gere de novo — '
+          + 'as linhas que já existem não são duplicadas.',
+        );
+      }
+      await ocApi.recarregar();
+    } finally {
+      setGerando(false);
+    }
+  }
+
+  /* ═══ LANCAR O REALIZADO ══════════════════════════════════════════════════════
+     O portao humano do modelo novo, clicado QUANDO o dinheiro acontece. Um passo so':
+     o operador diz como FOI (conta, data, valor real) e o sistema programa E materializa
+     — o titulo nasce referenciado a OC, pronto para conciliar.
+
+     ⚠ SAO DOIS WRITERS, E NAO UM. `oc_programar_compromisso` cria a programacao e as
+     parcelas; `oc_materializar_parcela` gera o titulo de CADA parcela. Encadear os dois
+     aqui e' o que faz o gesto parecer unico para quem opera — o backend nao mudou.
+     ⚠ VERSAO PELO RETORNO, mesma regra do laco acima.
+     ⚠ FALHA DEPOIS DE PROGRAMAR deixa a programacao viva sem titulo. Nao se desfaz por
+     conta propria: o estado fica VISIVEL na linha ("Programado", com "falta lançar"), e o
+     botao Lançar do bloco de detalhe termina o que faltou. Desfazer em silencio apagaria
+     a data e a conta que o operador acabou de informar. */
+  async function lancarRealizado(lista: ProgramarParcelaInput[]) {
+    const alvo = realizarAlvo;
+    if (versao == null || !alvo?.compromissoId) return;
+    try {
+      const prog = await ocApi.programarCompromisso(versao, alvo.compromissoId, { parcelas: lista });
+      let v = prog.operacaoVersao;
+      let lancadas = 0;
+      for (const parcelaId of prog.parcelaIds) {
+        const r = await ocApi.materializarParcela(v, prog.programacaoId, parcelaId);
+        v = r.operacaoVersao;
+        lancadas++;
+      }
+      setRealizarAlvo(null);
+      setSelectedId(alvo.compromissoId);
+      setRecemMaterializada(prog.parcelaIds[prog.parcelaIds.length - 1] ?? null);
+      await ocApi.recarregar();
+      toast.success(lancadas === 1
+        ? 'Realizado lançado: título gerado e vinculado à operação.'
+        : `Realizado lançado: ${lancadas} títulos gerados e vinculados à operação.`);
+    } catch {
+      /* O toast do banco ja saiu pelo hook. Fecha o dialogo para o operador VER em que
+         estado a linha ficou — mantido aberto, ele nao enxerga a lista por baixo. */
+      setRealizarAlvo(null);
+      await ocApi.recarregar();
+    }
+  }
+
   async function programar(lista: ProgramarParcelaInput[]) {
     if (versao == null || !selecionado?.compromissoId) return;
     try {
@@ -544,20 +726,15 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
               {/* ⚠ UM SO BOTAO. Havia dois para a MESMA acao: este e outro no meio do
                   estado vazio. Duas portas para o mesmo lugar fazem o operador procurar
                   a diferenca que nao existe. */}
-              {/* ⚠ SEMEIA, NAO GERA — PR-OC-VENDA-FIN-PROJ-01. Abre o mesmo dialogo de
-                  sempre, pre-preenchido pelo motor, um por vez; quem cria e' o operador ao
-                  confirmar. So aparece com sugestoes (venda com planejamento boitel). */}
-              {!!sugestoesProjecao?.length && (
-                <button type="button" disabled={!podeEscrever}
-                  onClick={async () => {
-                    try { await recarregarDados?.(); } catch { /* abre mesmo assim */ }
-                    setFilaSugestoes(sugestoesProjecao);
-                    setNovoAberto(true);
-                  }}
-                  title={podeEscrever ? 'Abrir os compromissos da projeção já preenchidos, um por vez' : undefined}
-                  aria-label="Gerar da projeção"
+              {/* ⚠ ZERO PERGUNTA — PR-OC-VENDA-FIN-PREVISAO-01. Nao abre dialogo: cria as
+                  linhas prontas do motor. So aparece com previsao (venda com planejamento
+                  boitel completo). */}
+              {!!linhasPrevisao?.length && (
+                <button type="button" disabled={!podeEscrever || gerando} onClick={gerarPrevisao}
+                  title={podeEscrever ? 'Criar as linhas de previsão de caixa a partir do planejamento' : undefined}
+                  aria-label="Gerar previsão"
                   className="text-[11px] font-normal text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline">
-                  Gerar da projeção
+                  {gerando ? 'Gerando…' : 'Gerar previsão'}
                 </button>
               )}
               <button type="button" disabled={!podeEscrever} onClick={abrirNovo}
@@ -606,8 +783,13 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
                 )}
               </div>
               <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                <span>Compra {fmtData(dataOperacao)}</span>
-                <span>· Chegada {fmtData(dataChegada)}</span>
+                {/* ⚠ VOCABULARIO POR TIPO. Estas duas palavras eram literais e a venda
+                    herdava "Compra 13/05/2026" no rodape do proprio grupo.
+                    ⚠ A SEGUNDA E' OPCIONAL PELO DICIONARIO, e nao pela data: com
+                    `dataChegada: null` no dicionario a linha nao existe (venda), e com o
+                    default 'Chegada' ela sai sempre (compra, identica ao de hoje). */}
+                <span>{rotulos.dataOperacao} {fmtData(dataOperacao)}</span>
+                {rotulos.dataChegada !== null && <span>· {rotulos.dataChegada} {fmtData(dataChegada)}</span>}
                 {resumoOperacao.temDivergencia && (
                   <span className="inline-flex items-center gap-1 text-amber-600" title="Divergência detectada">
                     <AlertTriangle className="h-3 w-3" /> divergência
@@ -615,6 +797,15 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
                 )}
               </div>
             </>
+          )}
+          {/* ⚠ O AVISO DA GERACAO MORA AQUI, e nao num dialogo: a geracao acontece nesta
+              aba, e uma mensagem escondida atras de um dialogo fechado nao seria lida. */}
+          {avisoPrevisao && (
+            <div className="rounded-md border border-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2 py-1.5 text-[11px] leading-snug text-amber-800 dark:text-amber-200">
+              {avisoPrevisao}
+              <button type="button" onClick={() => setAvisoPrevisao('')}
+                className="ml-1.5 underline underline-offset-2 hover:no-underline">dispensar</button>
+            </div>
           )}
         </div>
 
@@ -652,9 +843,12 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
                   </div>
                   {/* ⚠ O SELO VEM PRONTO DE FORA, como `ReactNode`: este arquivo e' da
                       compra e nao deve importar nada da venda, e o cenario ja e' sabido
-                      la' em cima — derivar de novo aqui seria a segunda copia da regra. */}
+                      la' em cima — derivar de novo aqui seria a segunda copia da regra.
+                      ⚠ SO' NAS LINHAS QUE AINDA SAO PREVISAO. Antes ele saia em TODAS,
+                      inclusive num compromisso manual e num que ja virou titulo — e um
+                      selo que nunca apaga deixa de informar. Ver `aindaEPrevisao`. */}
                   <div className="shrink-0 flex items-center gap-1.5">
-                    {seloProjecao}
+                    {aindaEPrevisao(c) && seloProjecao}
                     <div className="text-[12px] font-medium tabular-nums text-foreground">{brl(c.valorCompromisso)}</div>
                   </div>
                   <Badge variant={estado.variant} className="shrink-0 text-[10px] px-1.5 py-px font-normal">{estado.label}</Badge>
@@ -674,6 +868,19 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
                         aria-label={`Programar saldo de ${rotuloCompromisso(c)}`}
                         className="text-[11px] font-normal text-primary hover:underline">
                         Programar saldo
+                      </button>
+                    )}
+                    {/* ⚠ LANCAR REALIZADO — o portao humano do modelo de previsao. So'
+                        aparece em linha que E' previsao e ainda nao andou: previsao pura,
+                        sem programacao e com saldo. Num compromisso MANUAL ele nao aparece,
+                        e e' o que mantem a compra identica — la o caminho segue sendo
+                        Programar e depois Lançar, dois gestos, como sempre foi. */}
+                    {podeEscrever && aindaEPrevisao(c) && !c.temProgramacaoAtiva && c.saldoAProgramar > TOL_CENTAVO && (
+                      <button type="button" onClick={() => setRealizarAlvo(c)}
+                        title="Registrar o dinheiro como ele de fato aconteceu — gera o título"
+                        aria-label={`Lançar realizado de ${rotuloCompromisso(c)}`}
+                        className="text-[11px] font-normal text-primary hover:underline">
+                        Lançar realizado
                       </button>
                     )}
                     <DropdownMenu>
@@ -751,9 +958,12 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
                   em todos os navegadores, entao o tooltip do proprio botao nao aparece.
                   "Cancelar compromisso" NAO mora aqui — vive na linha da tabela, um
                   lugar so, porque e' acao daquele compromisso e nao da programacao. */}
+              {/* ⚠ IDIOMA DESTRUTIVO. Cancelar programacao apaga as parcelas previstas e
+                  devolve o compromisso a ABERTO — e' ato destrutivo e auditado, e vinha
+                  pintado de cinza secundario, indistinguivel de uma acao neutra. */}
               {selecionado.programacaoAtivaId && (
                 <span title={podeCancelarProgramacao.motivo || undefined} className="inline-flex">
-                  <Button size="sm" variant="ghost" className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground"
+                  <Button size="sm" variant="ghost" className="h-6 text-[11px] px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
                     disabled={!podeCancelarProgramacao.pode || estRodando}
                     onClick={() => abrirEstorno({ nivel: 'programacao', programacaoId: selecionado.programacaoAtivaId ?? undefined,
                       descricao: 'as parcelas previstas são canceladas, a programação é cancelada e o compromisso volta a ABERTO' })}>
@@ -844,28 +1054,22 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
         </DialogContent>
       </Dialog>
 
+      {/* ⚠ O DIALOGO VOLTOU A SER SO' O MANUAL — PR-OC-VENDA-FIN-PREVISAO-01. Toda a
+          maquina de semeadura (fila, key por semente, aviso de substituicao, guarda da
+          natureza semeada) SAIU: a previsao nao passa mais por aqui, e o que restava era
+          um segundo caminho de criacao competindo com o primeiro. A compra nunca usou
+          nada disso.
+          ⚠ SAIU TAMBEM UM DEFEITO VIVO: o aviso de substituicao dizia "marque abaixo para
+          cancelar o anterior no mesmo gesto" e a caixa NUNCA foi renderizada —
+          `setSubstituirAnterior` nao tinha um so' chamador em f1e0389f. O texto apontava
+          para um controle inexistente. */}
       {novoAberto && (
         <NovoCompromissoDialog
-          /* ⚠ `key` POR SEMENTE — PR-OC-VENDA-FIN-PROJ-01B. O estado do dialogo nasce no
-             MOUNT (valor, subcentro, descricao vem da semente em `useState`). Sem key, ao
-             avancar a fila o React reusava a mesma instancia: o dialogo continuava aberto
-             com os numeros do PRIMEIRO compromisso, e parecia que "Criar nao fechou". E' a
-             mesma armadilha que o `ReceberLoteDialog` ja documenta com `key={loteId}`.
-             ⚠ SO O MODO SEMEADO TINHA O DEFEITO: na criacao manual a fila e' vazia, o
-             dialogo fecha como sempre, e a compra nunca passou por aqui. */
-          key={sementeAtual ? `semente:${sementeAtual.natureza}:${sementeAtual.subcentro}` : 'manual'}
-          onClose={() => { setNovoAberto(false); setFilaSugestoes([]); setAvisoBaseCoberta(''); }} onSubmit={criar} saving={saving}
+          onClose={() => { setNovoAberto(false); setAvisoBaseCoberta(''); }} onSubmit={criar} saving={saving}
           clienteId={clienteId} tipoOperacao={tipoOperacao} fornecedores={fornecedores} darkSelectClass={darkSelectClass}
           onCriarFornecedor={criarFornecedor}
           valorAcordado={valorAcordado} sugestaoSubcentro={sugestaoSubcentro} descricaoDefault={descricaoDefault}
           contraparteId={contraparteId} lotesProntos={lotesProntos} lotes={lotes}
-          semente={sementeAtual}
-          /* ⚠ O AVISO DE SUBSTITUICAO: um compromisso ABERTO da mesma natureza ja existe.
-             Materializado ou programado-liquidado NAO entra nesta conta — aquilo nao se
-             substitui por regeracao. */
-          abertoDaMesmaNatureza={sementeAtual
-            ? (compromissos.find(c => c.natureza === sementeAtual.natureza && c.status === 'aberto') ?? null)
-            : null}
           avisoBaseCoberta={avisoBaseCoberta}
         />
       )}
@@ -893,6 +1097,32 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
           naturezaComponente={`${saldoAlvo.natureza ?? '—'}/${saldoAlvo.componente ?? '—'}`}
           favorecidoNome={fornecedores.find(f => f.id === saldoAlvo.favorecidoId)?.nome ?? null}
           titulo="Programar saldo"
+        />
+      )}
+      {/* ⚠ O MESMO DIALOGO, OUTRO PORTAO — PR-OC-VENDA-FIN-PREVISAO-01. Medido na FASE 0:
+          o `ProgramarDialog` ja pergunta exatamente o que o realizado precisa — valor
+          (pre-carregado com o saldo), data e conta, por parcela. Nao havia estado a
+          semear: faltavam so' o vencimento inicial (a previsao TEM data; ele nascia
+          vazio) e o vocabulario. O que muda e' o `onSubmit`, que encadeia o
+          materializar — ver `lancarRealizado`.
+          ⚠ `key` PELO COMPROMISSO. O estado do dialogo nasce no MOUNT (a primeira linha ja
+          vem com o saldo e o vencimento). Sem key, abrir o realizado de uma segunda linha
+          reusaria a instancia e mostraria os numeros da primeira — a armadilha que o
+          `ReceberLoteDialog` documenta com `key={loteId}` e que ja custou um PR aqui. */}
+      {realizarAlvo && (
+        <ProgramarDialog
+          key={realizarAlvo.compromissoId ?? 'realizado'}
+          onClose={() => setRealizarAlvo(null)} onSubmit={lancarRealizado} saving={saving}
+          clienteId={clienteId} valorCompromisso={realizarAlvo.valorCompromisso}
+          valorAcordado={valorAcordado} totalComprometido={resumoOperacao?.obrigacaoTotal ?? 0}
+          saldoAProgramar={realizarAlvo.saldoAProgramar}
+          identificacao={rotuloCompromisso(realizarAlvo)}
+          naturezaComponente={`${realizarAlvo.natureza ?? '—'}/${realizarAlvo.componente ?? '—'}`}
+          favorecidoNome={fornecedores.find(f => f.id === realizarAlvo.favorecidoId)?.nome ?? null}
+          titulo="Lançar realizado"
+          vencimentoInicial={previsaoDe(realizarAlvo)?.vencimentoPrevisto ?? ''}
+          rotuloAcao="Lançar"
+          ajuda="Informe como o dinheiro de fato aconteceu. Ao confirmar, a parcela é programada e o título é gerado na mesma ação — pronto para conciliar."
         />
       )}
       {confirmarParcela && (
@@ -977,40 +1207,22 @@ function ResumoCard({ rotulo, valor }: { rotulo: string; valor: number }) {
 }
 
 // ===== Dialog: Novo compromisso =====
-function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOperacao, fornecedores, darkSelectClass, valorAcordado, sugestaoSubcentro, descricaoDefault, contraparteId, lotesProntos, lotes, avisoBaseCoberta, onCriarFornecedor, semente, abertoDaMesmaNatureza }: {
-  onClose: () => void; onSubmit: (p: CriarCompromissoPayload[], substituirId?: string | null) => void; saving: boolean;
+function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOperacao, fornecedores, darkSelectClass, valorAcordado, sugestaoSubcentro, descricaoDefault, contraparteId, lotesProntos, lotes, avisoBaseCoberta, onCriarFornecedor }: {
+  onClose: () => void; onSubmit: (p: CriarCompromissoPayload[]) => void; saving: boolean;
   clienteId: string | null; tipoOperacao: string | null; fornecedores: { id: string; nome: string }[]; darkSelectClass: string;
   valorAcordado: number | null; sugestaoSubcentro: string; descricaoDefault: string; contraparteId: string | null; lotesProntos: boolean;
   onCriarFornecedor?: (nome: string, cpfCnpj: string) => Promise<{ id: string; nome: string } | null>;
   lotes: LoteOC[]; avisoBaseCoberta: string;
-  semente?: SugestaoCompromisso | null;
-  abertoDaMesmaNatureza?: CompromissoResumo | null;
 }) {
   const plano = usePlanoContasOC(clienteId ?? undefined);
   const comps = useComponentesFinanceiros();
-  /* ⚠ A SEMENTE ENTRA NO ESTADO INICIAL, e nao por efeito: o efeito de `natureza` logo
-     abaixo sobrescreve valor/subcentro/favorecido, e semear por la' seria disputar com ele
-     a cada render. Aqui o valor semeado nasce no state e o efeito e' pulado UMA vez. */
-  const [natureza, setNatureza] = useState<'principal' | 'obrigacao'>(semente?.natureza ?? 'principal');
+  const [natureza, setNatureza] = useState<'principal' | 'obrigacao'>('principal');
   const [componente, setComponente] = useState('');
-  const [valor, setValor] = useState<number | null>(semente?.valor ?? null);
-  const [subcentro, setSubcentro] = useState(semente?.subcentro ?? '');
-  const [favorecidoId, setFavorecidoId] = useState(semente?.favorecidoId ?? '');
-  /* ⚠ A SEMENTE MANDA ENQUANTO A NATUREZA FOR A DELA. Pular "uma vez" nao bastava, e foi
-     o defeito: o efeito abaixo depende de `valorAcordado`, que chega ASSINCRONO (o refresh
-     da OC roda ao abrir). Na segunda volta, ja com `semeadoRef` gasto, ele sobrescrevia o
-     saldo do acerto pelo `valor_acordado` da operacao — que e' a soma dos LOTES. Era por
-     isso que o dialogo mostrava o valor do lote no lugar do saldo.
-     ⚠ Se o operador TROCAR a natureza a mao, a semeadura padrao volta a valer: a
-     comparacao e' contra a natureza semeada, nao um booleano de uma volta so'. */
-  const naturezaSemeadaRef = useRef<string | null>(semente ? semente.natureza : null);
-  /* ⚠ DESMARCADO POR PADRAO. Cancelar compromisso e' ato destrutivo e auditado; ele so'
-     acontece se o operador pedir, ainda que o aviso o convide. */
-  const [substituirAnterior, setSubstituirAnterior] = useState(false);
+  const [valor, setValor] = useState<number | null>(null);
+  const [subcentro, setSubcentro] = useState('');
+  const [favorecidoId, setFavorecidoId] = useState('');
   const [novoFornecedorOpen, setNovoFornecedorOpen] = useState(false);
-  /* Semeada tambem. O efeito do default so' reescreve quando o texto atual E' o default
-     anterior (`ultimoDefaultRef`, que nasce vazio) — entao o texto do motor sobrevive. */
-  const [descricao, setDescricao] = useState(semente?.descricao ?? '');
+  const [descricao, setDescricao] = useState('');
   const ultimoDefaultRef = useRef('');   // último default de descrição aplicado automaticamente (ajuste vinculante 3)
   /* LOTE — 1 OC vira N lancamentos, um por categoria, que podem ir para
      favorecidos e bancos diferentes. `''` = compromisso da OPERACAO INTEIRA,
@@ -1031,7 +1243,6 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
   // Defaults por natureza: principal pré-carrega valor acordado, subcentro sugerido e favorecido = contraparte
   // da OC; obrigacao zera. Campos seguem editáveis (mesma semântica de valor/subcentro).
   useEffect(() => {
-    if (naturezaSemeadaRef.current && natureza === naturezaSemeadaRef.current) return;
     setComponente('');
     setLoteId(''); setVarios(false);
     if (natureza === 'principal') { setValor(valorAcordado); setSubcentro(sugestaoSubcentro); setFavorecidoId(contraparteId ?? ''); }
@@ -1173,27 +1384,8 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
           padding proprio; sem isso o azul flutuaria com moldura branca em volta. */}
       <DialogContent className="max-w-md">
         <DialogHeader className="-mx-6 -mt-6 mb-1 space-y-0 bg-primary px-6 py-3">
-          <DialogTitle className="text-[15px] text-primary-foreground">
-            {semente ? `Novo compromisso · ${semente.rotulo}` : 'Novo compromisso'}
-          </DialogTitle>
+          <DialogTitle className="text-[15px] text-primary-foreground">Novo compromisso</DialogTitle>
         </DialogHeader>
-        {/* ⚠ CAMPOS PRE-PREENCHIDOS PELO MOTOR — o operador confere e grava. E' o
-            principio da casa: sugestao preenche, operador grava. */}
-        {semente && (
-          <div className="rounded-md border border-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2 py-1.5 text-[11px] leading-snug text-amber-800 dark:text-amber-200">
-            Valores preenchidos a partir da <b>projeção do boitel</b>. Confira antes de gravar — tudo é editável.
-          </div>
-        )}
-        {/* ⚠ JA EXISTE UM ABERTO DA MESMA NATUREZA. Regerar nao apaga nada sozinho: o
-            aviso diz o que ha e o rodape oferece substituir. Materializado ou
-            programado-liquidado nao chega aqui — a busca so' olha `status === 'aberto'`. */}
-        {semente && abertoDaMesmaNatureza && (
-          <div className="rounded-md border border-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2 py-1.5 text-[11px] leading-snug text-amber-800 dark:text-amber-200">
-            Já existe um compromisso <b>{semente.natureza === 'principal' ? 'principal' : 'de obrigação'}</b> em aberto,
-            de <b>{brl(abertoDaMesmaNatureza.valorCompromisso)}</b>. Gravar este cria um segundo —
-            marque abaixo para cancelar o anterior no mesmo gesto.
-          </div>
-        )}
         {avisoBaseCoberta && (
           <div className="rounded-md border border-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2 py-1.5 text-[11px] leading-snug text-amber-800 dark:text-amber-200">
             {avisoBaseCoberta}
@@ -1245,12 +1437,10 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
             </div>
           )}
           <div>
-            {/* ⚠ "dos lotes" e' verdade na COMPRA, onde o subcentro deriva da classificacao
-                dos lotes. Na venda boitel a sugestao vem da projecao e de um plano fixo —
-                dizer "dos lotes" ali mandaria o operador conferir a fonte errada. */}
+            {/* "dos lotes" e' verdade na COMPRA, onde o subcentro deriva da classificacao
+                dos lotes; por isso o sufixo so' aparece quando ha sugestao. */}
             <Label className="text-[11px]">Classificação (subcentro) *{
-              semente ? ' · sugerido da projeção (editável)'
-              : (natureza === 'principal' && sugestaoSubcentro ? ' · sugerido dos lotes (editável)' : '')
+              natureza === 'principal' && sugestaoSubcentro ? ' · sugerido dos lotes (editável)' : ''
             }</Label>
             <SearchableSelect
               value={subcentro || '__none__'} onValueChange={(v) => setSubcentro(v === '__none__' ? '' : v)}
@@ -1312,7 +1502,7 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
         <DialogFooter>
           <Button variant="outline" size="sm" onClick={onClose}>Cancelar</Button>
           <Button size="sm" disabled={!podeSubmeter}
-            onClick={() => { if (podeSubmeter) { const ps = montarPayloads(); if (ps.length > 0) onSubmit(ps, substituirAnterior ? (abertoDaMesmaNatureza?.compromissoId ?? null) : null); } }}>
+            onClick={() => { if (podeSubmeter) { const ps = montarPayloads(); if (ps.length > 0) onSubmit(ps); } }}>
             {varios ? `Criar ${itensLote.length}` : 'Criar'}
           </Button>
         </DialogFooter>
@@ -1325,11 +1515,21 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
 type LinhaParcela = { idLocal: string; valor: number | null; vencimento: string; contaId: string };
 
 function ProgramarDialog({ onClose, onSubmit, saving, clienteId, valorCompromisso, valorAcordado, totalComprometido,
-  saldoAProgramar, identificacao, naturezaComponente, favorecidoNome, titulo = 'Programar parcelas' }: {
+  saldoAProgramar, identificacao, naturezaComponente, favorecidoNome, titulo = 'Programar parcelas',
+  vencimentoInicial = '', rotuloAcao = 'Programar', ajuda }: {
   onClose: () => void; onSubmit: (p: ProgramarParcelaInput[]) => void; saving: boolean;
   clienteId: string | null; valorCompromisso: number; valorAcordado: number | null; totalComprometido: number;
   saldoAProgramar: number; identificacao: string | null; naturezaComponente: string; favorecidoNome: string | null;
   titulo?: string;
+  /* ⚠ OS TRES ADITIVOS DO "LANCAR REALIZADO" — PR-OC-VENDA-FIN-PREVISAO-01. Com os
+     defaults abaixo, os dois call sites da compra (Programar e Programar saldo) ficam
+     byte-identicos ao que eram. */
+  /** Vencimento da PRIMEIRA parcela. Vazio = campo em branco, como sempre foi. */
+  vencimentoInicial?: string;
+  /** Texto do botao que confirma. */
+  rotuloAcao?: string;
+  /** Frase de contexto acima das parcelas. Ausente = nenhuma frase. */
+  ajuda?: string;
 }) {
   const { contas } = useContasBancariasLeves(clienteId);
   const idRef = useRef(0);
@@ -1340,9 +1540,12 @@ function ProgramarDialog({ onClose, onSubmit, saving, clienteId, valorCompromiss
      nao vazia e nunca com o total da operacao. `saldoAProgramar` e' o mesmo campo
      soberano da coluna "A prog." — nao se deriva outro aqui.
      So a PRIMEIRA: "Adicionar parcela" segue criando linha vazia, senao cada nova
-     linha estouraria o teto sozinha. */
+     linha estouraria o teto sozinha.
+     ⚠ O VENCIMENTO ENTRA PELO MESMO CAMINHO (`vencimentoInicial`), e por isso na mesma
+     linha: quando a previsao ja diz a data, comecar com o campo vazio obrigaria o
+     operador a redigitar o que o sistema ja sabia. Vazio por padrao — a compra nao muda. */
   const [linhas, setLinhas] = useState<LinhaParcela[]>(
-    () => [{ ...novaLinha(), valor: saldoAProgramar > 0 ? round2(saldoAProgramar) : null }],
+    () => [{ ...novaLinha(), valor: saldoAProgramar > 0 ? round2(saldoAProgramar) : null, vencimento: vencimentoInicial }],
   );
   const [confirmarParcial, setConfirmarParcial] = useState(false);
 
@@ -1398,6 +1601,11 @@ function ProgramarDialog({ onClose, onSubmit, saving, clienteId, valorCompromiss
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
+            {ajuda && (
+              <div className="rounded-md border bg-muted/30 px-2 py-1.5 text-[11px] leading-snug text-muted-foreground">
+                {ajuda}
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-1.5 text-[11px]">
               <div className="rounded border bg-muted/30 px-1.5 py-0.5"><span className="text-muted-foreground">OC (acordado): </span><b>{valorAcordado != null ? brl(valorAcordado) : '—'}</b></div>
               <div className="rounded border bg-muted/30 px-1.5 py-0.5"><span className="text-muted-foreground">Comprometido: </span><b>{brl(totalComprometido)}</b></div>
@@ -1446,7 +1654,7 @@ function ProgramarDialog({ onClose, onSubmit, saving, clienteId, valorCompromiss
           </div>
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={onClose}>Cancelar</Button>
-            <Button size="sm" disabled={!podeSubmeter} onClick={aoProgramar}>Programar</Button>
+            <Button size="sm" disabled={!podeSubmeter} onClick={aoProgramar}>{rotuloAcao}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

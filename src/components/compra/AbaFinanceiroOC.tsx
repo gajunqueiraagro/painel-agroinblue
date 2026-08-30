@@ -1,5 +1,5 @@
 import { AbaLiquidacaoOC } from './AbaLiquidacaoOC';
-import { AbaCompromissosOC, type SugestaoCompromisso } from './AbaCompromissosOC';
+import { AbaCompromissosOC, type LinhaPrevisao, type RotulosCompromissos } from './AbaCompromissosOC';
 import { useOcCompromissos } from '@/hooks/useOcCompromissos';
 import { AlertTriangle } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -23,11 +23,12 @@ interface Props {
   clienteId?: string | null;
   dataOperacao?: string | null;   // FIX item 6 — data da compra
   dataChegada?: string | null;    // FIX item 6 — data de chegada (recebimento)
-  /* ⚠ ADITIVOS, so a venda passa — PR-OC-VENDA-FIN-PROJ-01. Sem eles a compra e' identica:
-     nao ha botao de gerar nem selo. Este roteador apenas repassa; quem sabe da projecao e'
-     o shell da venda. */
-  sugestoesProjecao?: SugestaoCompromisso[];
+  /* ⚠ ADITIVOS, so a venda passa — PR-OC-VENDA-FIN-PREVISAO-01. Sem eles a compra e'
+     identica: nao ha botao de gerar, nem selo, nem dicionario. Este roteador apenas
+     repassa; quem sabe da previsao e' o shell da venda. */
+  linhasPrevisao?: LinhaPrevisao[];
   seloProjecao?: ReactNode;
+  rotulos?: RotulosCompromissos;
 }
 
 export function AbaFinanceiroOC(props: Props) {
@@ -63,7 +64,7 @@ export function AbaFinanceiroOC(props: Props) {
         <AbaCompromissosOC ocApi={ocApi} bloqueado clienteId={clienteId} tipoOperacao={api.tipoOperacao} fornecedores={api.fornecedores}
           valorAcordado={api.valorAcordado} lotes={api.lotes} contraparteId={api.contraparteId} dataOperacao={props.dataOperacao ?? null} dataChegada={props.dataChegada ?? null}
           darkSelectClass={props.darkSelectClass} recarregarDados={api.recarregar}
-          seloProjecao={props.seloProjecao} />
+          seloProjecao={props.seloProjecao} rotulos={props.rotulos} />
       </div>
     );
   }
@@ -72,6 +73,6 @@ export function AbaFinanceiroOC(props: Props) {
     <AbaCompromissosOC ocApi={ocApi} bloqueado={props.financeiroNovoReadOnly} clienteId={clienteId} tipoOperacao={api.tipoOperacao} fornecedores={api.fornecedores}
       valorAcordado={api.valorAcordado} lotes={api.lotes} contraparteId={api.contraparteId} dataOperacao={props.dataOperacao ?? null} dataChegada={props.dataChegada ?? null}
       darkSelectClass={props.darkSelectClass} recarregarDados={api.recarregar}
-      sugestoesProjecao={props.sugestoesProjecao} seloProjecao={props.seloProjecao} />
+      linhasPrevisao={props.linhasPrevisao} seloProjecao={props.seloProjecao} rotulos={props.rotulos} />
   );
 }

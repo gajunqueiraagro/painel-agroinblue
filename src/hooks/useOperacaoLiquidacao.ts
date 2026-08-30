@@ -29,6 +29,46 @@ export const SUBCENTRO_PRINCIPAL_COMPRA_MACHOS = 'Investimento Compra Bovinos Ma
    como a classificacao passa a divergir do cadastro sem ninguem notar. */
 export const SUBCENTRO_OBRIGACAO_COMPRA = 'Investimento Frete/Comissão Compra Bovinos';
 export const CENTRO_CUSTO_COMPRA_BOVINOS = 'Compra de Bovinos';
+
+/* ─── OS SUBCENTROS DA VENDA (PR-OC-VENDA-FIN-PREVISAO-01) ─────────────────────
+   Irmaos dos da compra, e no mesmo lugar pelo mesmo motivo: sao strings do plano de
+   contas, e duplica-las em tela e' como a classificacao passa a divergir do cadastro
+   sem ninguem notar.
+   ⚠ DOIS EIXOS, E NAO UM. A compra classifica so' por SEXO; a venda tem sexo E faixa
+   etaria — medido no plano do proto, `1-Entradas` / centro `Venda Peso Vivo` tem
+   exatamente cinco subcentros, quatro deles deste par de eixos.
+   ⚠ `mamotes_*` CAI EM DESMAMA, e e' a unica aproximacao do mapa: mamote nao e'
+   desmama, mas o plano nao tem faixa mais nova. Decisao do Gabriel, com registro —
+   caso raro, e a classificacao segue editavel pelo compromisso manual.
+   ⚠ 'Venda em Boitel' EXISTE NO PLANO E FICOU ORFAO. O recebimento do boitel passou a
+   classificar por sexo como qualquer outra venda; nenhum escritor usa aquele subcentro
+   hoje. Registrado para a curadoria do plano — nao apagar por conta propria. */
+const SUBCENTRO_VENDA_POR_CATEGORIA: Record<string, string> = {
+  mamotes_m: 'Venda de Desmama Machos',
+  desmama_m: 'Venda de Desmama Machos',
+  mamotes_f: 'Venda de Desmama Fêmeas',
+  desmama_f: 'Venda de Desmama Fêmeas',
+  garrotes:  'Venda de Machos Adultos',
+  bois:      'Venda de Machos Adultos',
+  touros:    'Venda de Machos Adultos',
+  novilhas:  'Venda de Fêmeas Adultas',
+  vacas:     'Venda de Fêmeas Adultas',
+};
+
+/* O subcentro de ENTRADA de uma venda, pela categoria do lote. Categoria fora do mapa
+   devolve `null` — nunca um palpite: o `oc_criar_compromisso` recusa subcentro que nao
+   exista no plano, e inventar um so' trocaria o erro de lugar. */
+export function subcentroVendaPorCategoria(categoria: string): string | null {
+  return SUBCENTRO_VENDA_POR_CATEGORIA[categoria] ?? null;
+}
+
+/* O subcentro de SAIDA das despesas que o produtor paga por fora do boitel (hoje, o
+   frete). Decisao do Gabriel: usa a linha que ja existe no plano — nao ha frete de
+   venda, e a unica linha de frete cadastrada e' de COMPRA
+   ('Investimento Frete/Comissão Compra Bovinos'), que seria classificacao errada. */
+export const SUBCENTRO_DESPESA_VENDA = 'Impostos e Despesas de Abates e Vendas';
+/* O adiantamento que o produtor paga ao boitel. `2-Saídas` / centro `Ajustes`. */
+export const SUBCENTRO_ADIANTAMENTO_BOITEL = 'Adiantamento de Boitel';
 const CATEGORIAS_FEMEAS_COMPRA = new Set<string>(['mamotes_f', 'desmama_f', 'novilhas', 'vacas']);
 const CATEGORIAS_VALIDAS = new Set<string>(CATEGORIAS.map(c => c.value));
 
