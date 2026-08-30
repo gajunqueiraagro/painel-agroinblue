@@ -26,13 +26,14 @@
  */
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { DatePicker } from '@/components/ui/date-picker';
 import { SearchableSelect } from '@/components/ui/searchable-select';
-import { Calendar, Building2, X, Plus, ArrowRight, Check } from 'lucide-react';
+import { Calendar, Building2, X, Plus, ArrowRight, Check, RotateCcw } from 'lucide-react';
 import type { Categoria } from '@/types/cattle';
 import type { CompraLotesApi } from '@/hooks/useCompraLotes';
 import { AbaNegociacaoLotes } from '@/components/compra/AbaNegociacaoLotes';
@@ -136,6 +137,8 @@ export interface VendaModalShellProps {
   semAlteracoes?: boolean;
   /** `oc_confirmar` pelo `useOperacaoRecebimento`. Devolve se concluiu. */
   onConcluirNegociacao?: () => void | Promise<unknown>;
+  /** `oc_reabrir` — devolve a operacao a 'programada'. O motivo vai para a auditoria. */
+  onReabrirNegociacao?: (motivo: string) => void | Promise<unknown>;
   onFechar: () => void;
 }
 
@@ -148,9 +151,13 @@ export function VendaModalShell({
   documentosApi, eventosApi, liquidacaoApi, recebimentoApi, ocEntregaEncerrada = false,
   categoria, categoriasDisponiveis,
   quantidadeNum, pesoKgNum, submitting, onSalvarOperacao, onSalvarNegociacao, semAlteracoes = false,
-  onConcluirNegociacao, onFechar,
+  onConcluirNegociacao, onReabrirNegociacao, onFechar,
 }: VendaModalShellProps) {
   const [abaAtiva, setAbaAtiva] = useState<string>('venda');
+  /* PR-OC-VENDA-REABRIR-NEG-01 — o dialogo de reabertura. Estado local: e' um gesto da
+     tela, nao da operacao. */
+  const [reabrirAberto, setReabrirAberto] = useState(false);
+  const [motivoReabrir, setMotivoReabrir] = useState('');
   const compradorNome = contrapartes.find(f => f.id === compradorId)?.nome ?? null;
   const fazendaNome = fazendasOC.find(f => f.id === vendaFazendaId)?.nome ?? null;
 
@@ -563,6 +570,17 @@ export function VendaModalShell({
             na tela ainda nao gravado fecharia uma versao que ninguem viu.
             ⚠ SOME DEPOIS DE 'fechada': concluir e' ato unico, e reabrir tem caminho
             proprio. */}
+        {/* ⚠ O CAMINHO DE VOLTA — PR-OC-VENDA-REABRIR-NEG-01. Concluir congela a
+            negociacao de proposito, e `oc_salvar_lotes`/`oc_salvar_boitel` recusam
+            'fechada' mandando "reabra para editar". A venda nao tinha por onde reabrir:
+            instrucao certa, destino ausente — o mesmo defeito que o Concluir teve. */}
+        {naNegociacao && !!ocOperacaoId && ocStatusComercial === 'fechada' && (
+          <Button type="button" variant="secondary" className="gap-1.5" disabled={submitting}
+            title="Reabrir devolve a operação para programada e libera a edição. Fica registrado na Auditoria com o motivo."
+            onClick={() => { setMotivoReabrir(''); setReabrirAberto(true); }}>
+            <RotateCcw className="h-4 w-4" /> Reabrir negociação
+          </Button>
+        )}
         {naNegociacao && !!ocOperacaoId && ocStatusComercial === 'programada' && recebimentoApi && (
           <Button type="button" variant="secondary" className="gap-1.5"
             /* ⚠ EXIGE UMA GRAVACAO NESTA SESSAO, e nao apenas "nada mudou". A assinatura
@@ -603,6 +621,32 @@ export function VendaModalShell({
         </Button>
         )}
       </div>
+
+      {/* ⚠ MOTIVO OBRIGATORIO AQUI, e e' DIVERGENCIA DELIBERADA da compra — decisao do
+          Gabriel. Medido: `oc_reabrir` NAO exige motivo (nao ha guard sobre `p_motivo`, ele
+          so' vai para `detalhes` do evento), e o dialogo da compra o pede como "opcional".
+          Reabrir desfaz um congelamento e e' o que a Auditoria vai mostrar daqui a um ano;
+          "reaberta sem motivo" e' um registro que nao explica nada. */}
+      <Dialog open={reabrirAberto} onOpenChange={setReabrirAberto}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle className="text-[13px]">Reabrir negociação</DialogTitle></DialogHeader>
+          <p className="text-[11px] text-muted-foreground leading-snug">
+            A operação volta para <b>programada</b> e a negociação fica editável de novo.
+            Esta ação é <b>auditada</b>: o motivo abaixo fica registrado.
+          </p>
+          <textarea value={motivoReabrir} onChange={e => setMotivoReabrir(e.target.value)} rows={3}
+            placeholder="Motivo da reabertura (obrigatório)"
+            className="w-full rounded-md border bg-background px-3 py-2 text-[12px]" />
+          <DialogFooter>
+            <Button variant="ghost" size="sm" onClick={() => setReabrirAberto(false)}>Voltar</Button>
+            <Button size="sm" disabled={motivoReabrir.trim() === '' || submitting}
+              title={motivoReabrir.trim() === '' ? 'Informe o motivo da reabertura' : undefined}
+              onClick={async () => { const m = motivoReabrir.trim(); setReabrirAberto(false); await onReabrirNegociacao?.(m); }}>
+              Reabrir
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

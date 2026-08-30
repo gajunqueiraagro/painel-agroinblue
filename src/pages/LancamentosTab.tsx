@@ -2448,9 +2448,54 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
      primeira a incrementa e a segunda receberia a antiga do state, que so' atualiza no
      proximo render — 40001 na cara do operador. A compra tem o mesmo desenho: o botao da
      Negociacao dela salva LOTES, e os dados da operacao vao por outro caminho. */
+  /* PR-OC-VENDA-REABRIR-NEG-01 — `oc_reabrir` para a venda.
+     ⚠ NAO REUSA O `reabrirOperacaoOC` DA COMPRA: aquele chama `recarregarOperacaoOC`, que
+     hidrata campos da COMPRA (`compraFornecedorId`, `ocFazendaDestinoId`) e nao os da venda
+     — reusar espalharia estado de um tipo no outro. E nao e' preciso: a propria RPC devolve
+     `versao` e `status_comercial`, que e' tudo o que muda.
+     ⚠ `oc_reabrir` E IDEMPOTENTE: numa operacao ja 'programada' devolve `ok` com
+     `idempotente: true`, sem erro. */
+  const reabrirNegociacaoVendaOC = async (motivo: string): Promise<boolean> => {
+    const clienteId = clienteAtual?.id;
+    if (!ocOperacaoId || !clienteId || ocVersao == null) return false;
+    setSubmitting(true);
+    try {
+      const env = await ocRpc.reabrir(ocOperacaoId, clienteId, ocVersao, motivo);
+      const e = env as { versao: number; status_comercial?: string };
+      setOcVersao(e.versao);
+      if (e.status_comercial) setOcStatusComercial(e.status_comercial);
+      /* ⚠ A ASSINATURA VOLTA A NULA: reabrir muda a versao no servidor, e o que estava
+         "salvo" deixou de corresponder. Manter a marca faria o botao de salvar nascer
+         apagado numa tela que precisa ser gravada de novo. */
+      setOcVendaAssinaturaSalva(null);
+      toast.success('Negociação reaberta — voltou para programada.');
+      return true;
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Falha ao reabrir a negociação.');
+      return false;
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const salvarNegociacaoVendaOC = async (): Promise<boolean> => {
     const clienteId = clienteAtual?.id;
     if (!ocOperacaoId || !clienteId) { toast.error('Salve a operação na aba Venda primeiro.'); return false; }
+
+    /* ⚠ A RECUSA ENSINA O CAMINHO INTEIRO, e antes de ir ao servidor. `oc_salvar_lotes`
+       responde "Negociacao fechada; reabra para editar (oc_reabrir)" — correto e
+       incompleto: com saida ja registrada, reabrir NAO basta, porque o lote nao se
+       revaloriza com movimentacao viva. O operador tentaria reabrir, editar, e bateria no
+       segundo guard sem saber por que.
+       ⚠ SEM IR AO SERVIDOR: o estado ja esta' na tela, e uma ida para receber "nao" e' ida
+       perdida. */
+    if (ocStatusComercial === 'fechada') {
+      const temSaidaViva = (recebimentoApi.movimentacoes ?? []).some(m => !m.cancelado);
+      toast.error(temSaidaViva
+        ? 'Operação fechada e com saída registrada. Para alterar a projeção: estorne a saída na aba Entrega, reabra a negociação, edite e salve, conclua e registre a saída novamente.'
+        : 'Operação fechada. Reabra a negociação para editar — o botão está aqui no rodapé.');
+      return false;
+    }
     setSubmitting(true);
     try {
       /* ── O VALOR DO LOTE NUMA VENDA BOITEL ──────────────────────────────────
@@ -5075,6 +5120,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
              `onVersaoChange` sao os mesmos setters da venda, ligados na instanciacao. Nao
              ha nada a atualizar aqui depois — atualizar de novo seria a segunda copia. */
           onConcluirNegociacao={() => recebimentoApi.concluirNegociacao()}
+          onReabrirNegociacao={(motivo) => reabrirNegociacaoVendaOC(motivo)}
           onFechar={fecharModalOCComAutosave}
         />
       ) : isCompra && isCenarioMeta ? (
