@@ -32,13 +32,14 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { CampoMoeda } from '@/components/ui/campo-moeda';
 import type { CenarioBoitel } from '@/components/venda/BoitelNegociacaoDerivado';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Pencil } from 'lucide-react';
+import { Pencil, TrendingUp, Wallet, Tag, Banknote } from 'lucide-react';
 import { formatMoeda, formatKg, formatArroba } from '@/lib/calculos/formatters';
 import type { BoitelData } from '@/components/BoitelPlanningDialog';
 import { derivadosBoitel, cabecasQueSairam, PilulaCenario, type BoitelEdicao } from '@/components/venda/BoitelNegociacaoDerivado';
 
 const n2 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const n3 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+const n1 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 /** Derivado por cabeça — usa o LOTE INTEIRO no denominador, mortes incluídas. */
 const porCabeca = (total: number, qtd: number) => qtd > 0 && total > 0 ? `${formatMoeda(total / qtd)} por cab. no período` : null;
 
@@ -264,53 +265,81 @@ export function CampoNum({ label, valor, onChange, casas = 2, sufixo, obrigatori
     const n = parseFloat(limpo);
     return isNaN(n) ? 0 : Math.round(n * Math.pow(10, casas)) / Math.pow(10, casas);
   };
-  /* ─── UMA LINHA: ROTULO · CAMPO · SUFIXO ───────────────────────────────────
-          PR-OC-VENDA-LAYOUT-NEG-01E. O rotulo estava EM CIMA e o campo ocupava a coluna
-          inteira da grade: um input de tres digitos com 229px de largura, e um mar de
-          branco entre o numero e a borda. Largura de campo tem de vir do CONTEUDO, e nao
-          da coluna que o hospeda.
-          ⚠ A COLUNA DE ROTULO E FIXA e alinhada a' DIREITA: e' o que faz as linhas se
-          empilharem numa grade legivel em vez de cada campo comecar num lugar. Sem a
-          largura fixa, "GMD" e "Desp. notas/docs. abate" empurrariam os campos para
-          posicoes diferentes e o alinhamento morreria — que era o defeito 2.
-          ⚠ A HIERARQUIA DE CONTRASTE CONTINUA: titulo 12px/600 foreground · rotulo
-          11px/500 foreground/90 · ajuda 10px muted. Tres degraus.
-          ⚠ A AJUDA FICA INDENTADA NA COLUNA DO CAMPO, e nao sob o rotulo: ela fala do
-     numero, e alinhada a ele se le' como continuacao dele. */
+  /* ─── ROTULO EM CIMA, CAMPO DO TAMANHO DO CONTEUDO ────────────────────────
+     PR-OC-VENDA-MODAIS-PAINEIS-01 (mockup aprovado). Substitui o rotulo-a-esquerda do
+     01E, e a troca e' consciente: la' o rotulo alinhado numa coluna de 132px era o que
+     dava grade a DUAS colunas de linhas largas; aqui os campos ficam DENTRO de paineis,
+     em grade de 2-3 colunas estreitas, e uma coluna de rotulo comeria metade da celula.
+     Os dois desenhos respondem "campo veste o conteudo" — este com mais densidade.
+     ⚠ O CAMPO ENCOLHEU DE NOVO: 90px numerico, 120px moeda. Numero de 3 digitos nao
+     precisa de 150.
+     ⚠ `bg-card` NO CAMPO, e nao herdado: o painel tem chao proprio (muted/ambar), e um
+     input transparente sumiria dentro dele. E' o campo que salta do painel.
+     ⚠ AJUDA EM 9px — excecao consciente ao piso de 10px, na mesma familia da frase do
+     veredito: e' texto de APOIO sob um numero que ja esta' no campo, e nunca carrega
+     informacao que so' exista ali. */
   return (
-      <div className="flex items-baseline gap-2 min-w-0">
+      <div className="min-w-0">
         <Label title={titulo ?? label}
-          className="w-[132px] shrink-0 text-right text-[11px] font-medium text-foreground/90 leading-8 whitespace-nowrap overflow-hidden text-ellipsis">
+          className="block text-[10px] font-medium text-foreground/90 leading-none whitespace-nowrap overflow-hidden text-ellipsis">
           {label}{obrigatorio && <span className="text-destructive"> *</span>}
         </Label>
-        <div className="min-w-0">
-          <div className="flex items-center gap-1.5">
-            {/* ⚠ DUAS LARGURAS, POR TIPO DE CONTEUDO: dinheiro cabe em 150px com o R$ e o
-                separador de milhar; contagem e percentual cabem em 100px. Nao ha terceira
-                — inventar uma por campo faria a grade voltar a desalinhar. */}
-            {moeda ? (
-              <CampoMoeda valor={valor} onChange={(n) => onChange(n ?? 0)} disabled={desabilitado}
-                className="h-8 w-[150px] px-2.5 text-[13px] tabular-nums text-right" />
-            ) : (
-              <Input
-                value={rascunho ?? fmt(valor)} disabled={desabilitado} inputMode="decimal"
-                onChange={e => { setRascunho(e.target.value); onChange(parse(e.target.value)); }}
-                onFocus={() => setRascunho(valor ? String(valor).replace('.', ',') : '')}
-                onBlur={() => { if (rascunho !== null) onChange(parse(rascunho)); setRascunho(null); }}
-                className="h-8 w-[100px] px-2.5 text-[13px] tabular-nums text-right"
-              />
-            )}
-            {/* Colado ao campo — o sufixo denomina AQUELE numero, nao a coluna. */}
-            {sufixo && <span className="text-[10px] text-muted-foreground shrink-0 whitespace-nowrap">{sufixo}</span>}
-          </div>
-          {derivado !== undefined && (
-            <div className="mt-0.5 text-[10px] text-muted-foreground tabular-nums leading-snug">
-              {derivado ?? '—'}
-            </div>
+        <div className="mt-1 flex items-center gap-1">
+          {moeda ? (
+            <CampoMoeda valor={valor} onChange={(n) => onChange(n ?? 0)} disabled={desabilitado}
+              className="h-8 w-[120px] px-2 text-[12px] tabular-nums text-right bg-card" />
+          ) : (
+            <Input
+              value={rascunho ?? fmt(valor)} disabled={desabilitado} inputMode="decimal"
+              onChange={e => { setRascunho(e.target.value); onChange(parse(e.target.value)); }}
+              onFocus={() => setRascunho(valor ? String(valor).replace('.', ',') : '')}
+              onBlur={() => { if (rascunho !== null) onChange(parse(rascunho)); setRascunho(null); }}
+              className="h-8 w-[90px] px-2 text-[12px] tabular-nums text-right bg-card"
+            />
           )}
-          {extra}
+          {sufixo && <span className="text-[10px] text-muted-foreground shrink-0 whitespace-nowrap">{sufixo}</span>}
         </div>
+        {derivado !== undefined && (
+          <div className="mt-0.5 text-[9px] text-muted-foreground tabular-nums leading-snug">
+            {derivado ?? '—'}
+          </div>
+        )}
+        {extra}
       </div>
+  );
+}
+
+/* ─── O PAINEL DE UM GRUPO ─────────────────────────────────────────────────────
+   PR-OC-VENDA-MODAIS-PAINEIS-01 (mockup aprovado). Cada grupo ganha CHAO proprio, e nao
+   so' um titulo com filete: dentro de um dialogo com sete campos, o filete separava sem
+   agrupar — o olho nao sabia onde um grupo acabava.
+   ⚠ O TOM CARREGA SIGNIFICADO, e nao decoracao: `ambar` e' o mesmo do fato-x-projecao
+   (PR-...-01D), entao o painel de CUSTOS ja se le' como territorio do que ainda vai
+   acontecer. `azul` e' o `primary` da faixa do shell — a marca da casa. `cinza` e' o
+   neutro de apoio.
+   ⚠ O EXTRA VAI NO TITULO, a' direita: o custo/cab e' o veredito do painel de Custos, e
+   no titulo ele e' lido junto com o nome do grupo em vez de virar mais um campo. */
+function Painel({ titulo, tom, icone, extra, children }: {
+  titulo: string; tom: 'azul' | 'ambar' | 'cinza';
+  icone?: React.ReactNode; extra?: React.ReactNode; children: React.ReactNode;
+}) {
+  const chao = tom === 'ambar' ? 'bg-amber-50/30 dark:bg-amber-950/15 border-amber-500/40'
+    : tom === 'azul' ? 'bg-muted/50 border-border'
+    : 'bg-muted/30 border-border';
+  const corTitulo = tom === 'ambar' ? 'text-[#854F0B] dark:text-amber-500'
+    : tom === 'azul' ? 'text-primary'
+    : 'text-muted-foreground';
+  return (
+    <section className={`rounded-md border p-2.5 min-w-0 ${chao}`}>
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <div className={`flex items-center gap-1.5 min-w-0 text-[12px] font-medium leading-none ${corTitulo}`}>
+          {icone}
+          <span className="truncate">{titulo}</span>
+        </div>
+        {extra}
+      </div>
+      {children}
+    </section>
   );
 }
 
@@ -330,13 +359,17 @@ export function CampoNum({ label, valor, onChange, casas = 2, sufixo, obrigatori
 function SeletorLado({ noBoitel, onChange, desabilitado }: {
   noBoitel: boolean; onChange: (v: boolean) => void; desabilitado?: boolean;
 }) {
+  /* ⚠ PILULAS COLADAS, e nao dois botoes soltos: sao UMA escolha de duas faces, e o
+     espaco entre elas as fazia ler como duas acoes independentes. */
   return (
-    <div className="mt-1 flex w-fit items-center gap-1"
+    <div className="mt-1 inline-flex w-fit items-center overflow-hidden rounded-full border"
       title="boitel = desconta do acerto · produtor = caixa próprio, vira previsão no financeiro">
-      <Button type="button" size="sm" variant={noBoitel ? 'default' : 'outline'} disabled={desabilitado}
-        className="h-6 text-[11px] px-2" onClick={() => onChange(true)}>boitel</Button>
-      <Button type="button" size="sm" variant={!noBoitel ? 'default' : 'outline'} disabled={desabilitado}
-        className="h-6 text-[11px] px-2" onClick={() => onChange(false)}>produtor</Button>
+      <button type="button" disabled={desabilitado} onClick={() => onChange(true)}
+        className={`px-2 py-px text-[10px] leading-4 transition-colors disabled:cursor-not-allowed ${
+          noBoitel ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}>boitel</button>
+      <button type="button" disabled={desabilitado} onClick={() => onChange(false)}
+        className={`px-2 py-px text-[10px] leading-4 transition-colors disabled:cursor-not-allowed ${
+          !noBoitel ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}>produtor</button>
     </div>
   );
 }
@@ -393,10 +426,10 @@ function LinhaCampo({ label, largura, children, span }: {
    vigente: fechar sem aplicar tem de deixar a aba como estava. */
 
 const GRUPOS = {
-  desempenho: { card: 'A', titulo: 'Desempenho' },
-  custos: { card: 'A', titulo: 'Custos' },
-  comercializacao: { card: 'B', titulo: 'Comercialização' },
-  adiantamento: { card: 'B', titulo: 'Adiantamento' },
+  desempenho: { card: 'A', titulo: 'Desempenho', tom: 'azul' },
+  custos: { card: 'A', titulo: 'Custos', tom: 'ambar' },
+  comercializacao: { card: 'B', titulo: 'Comercialização', tom: 'azul' },
+  adiantamento: { card: 'B', titulo: 'Adiantamento', tom: 'cinza' },
 } as const;
 type IdGrupo = keyof typeof GRUPOS;
 type IdCard = 'A' | 'B';
@@ -464,14 +497,21 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
   const sairam = cabecasQueSairam(d);
   const diarias = der.cDT;
   const corpos: Record<string, React.ReactNode> = {
-    desempenho: (<><div className="grid grid-cols-1 gap-y-2">
+    desempenho: (<><div className="grid grid-cols-2 gap-x-3 gap-y-2.5">
           <CampoNum desabilitado={somenteLeitura} label="Dias confinamento" titulo="Dias de confinamento" valor={d.dias} onChange={v => set('dias', v)} casas={0} obrigatorio />
-          <CampoNum desabilitado={somenteLeitura} label="GMD" valor={d.gmd} onChange={v => set('gmd', v)} casas={3} sufixo="kg/dia" obrigatorio />
-          <CampoNum desabilitado={somenteLeitura} label="Quebra de viagem" valor={d.quebraViagem} onChange={v => set('quebraViagem', v)} sufixo="%" />
-          <CampoNum desabilitado={somenteLeitura} label="Rend. entrada" titulo="Rendimento de entrada" valor={d.rendimentoEntrada} onChange={v => set('rendimentoEntrada', v)} sufixo="%" />
-          <CampoNum desabilitado={somenteLeitura} label="Rend. saída" titulo="Rendimento de saída" valor={d.rendimento} onChange={v => set('rendimento', v)} sufixo="%" obrigatorio />
+          {/* ⚠ AS AJUDAS SAEM DO MOTOR, e nenhuma e' conta escrita aqui: `ganho`, `ple`,
+              `aEF`, `aS` e `pf` ja sao exportados por `derivadosBoitel`. Conferidos contra
+              os numeros do mockup — 165,0 · 395,76 · 13,60 · 21,01 · 573,00. */}
+          <CampoNum desabilitado={somenteLeitura} label="GMD" valor={d.gmd} onChange={v => set('gmd', v)} casas={3} sufixo="kg/dia" obrigatorio
+            derivado={d.gmd > 0 && d.dias > 0 ? `ganho no período: ${n1(der.ganho)} kg/cab` : null} />
+          <CampoNum desabilitado={somenteLeitura} label="Quebra de viagem" valor={d.quebraViagem} onChange={v => set('quebraViagem', v)} sufixo="%"
+            derivado={d.pesoInicial > 0 ? `peso pós-viagem: ${n2(der.ple)} kg` : null} />
+          <CampoNum desabilitado={somenteLeitura} label="Rend. entrada" titulo="Rendimento de entrada" valor={d.rendimentoEntrada} onChange={v => set('rendimentoEntrada', v)} sufixo="%"
+            derivado={d.rendimentoEntrada > 0 && d.pesoInicial > 0 ? `${n2(der.aEF)} @/cab na entrada` : null} />
+          <CampoNum desabilitado={somenteLeitura} label="Rend. saída" titulo="Rendimento de saída" valor={d.rendimento} onChange={v => set('rendimento', v)} sufixo="%" obrigatorio
+            derivado={d.rendimento > 0 && der.pf > 0 ? `${n2(der.aS)} @/cab na saída (${n2(der.pf)} kg × ${n2(d.rendimento)}% / 15)` : null} />
         </div></>),
-    custos: (<><div className="grid grid-cols-1 gap-y-2 items-start">
+    custos: (<><div className="grid grid-cols-2 gap-x-3 gap-y-2.5 items-start">
           <LinhaCampo label="Modalidade *" largura="w-[140px]">
             <Select value="diaria" onValueChange={() => { /* só diária — ver os itens desabilitados */ }} disabled={somenteLeitura}>
               <SelectTrigger className="h-8 px-2.5 text-[13px]"><SelectValue /></SelectTrigger>
@@ -522,11 +562,11 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
           <CampoNum desabilitado={somenteLeitura} label="Frete (total)" moeda
             titulo="Frete (total) — o seletor abaixo diz de que lado do acerto ele mora"
             valor={d.custoFrete} onChange={v => set('custoFrete', v)}
-            derivado={d.custoFrete > 0 ? `${formatMoeda(d.custoFrete / (qtd || 1))}/cab` : null}
+            derivado={`${formatMoeda(d.custoFrete / (qtd || 1))}/cab`}
             extra={<SeletorLado noBoitel={d.custoFreteNoBoitel ?? false} desabilitado={somenteLeitura}
               onChange={v => set('custoFreteNoBoitel', v)} />} />
           <CampoNum desabilitado={somenteLeitura} label="Outros (total)" moeda valor={d.outrosCustos} onChange={v => set('outrosCustos', v)}
-            derivado={porCabeca(d.outrosCustos, qtd)}
+            derivado={`${formatMoeda(d.outrosCustos / (qtd || 1))}/cab`}
             extra={<SeletorLado noBoitel={d.outrosNoBoitel ?? true} desabilitado={somenteLeitura}
               onChange={v => set('outrosNoBoitel', v)} />} />
           {/* ⚠ DESPESA NOVA — PR-OC-VENDA-REALIZADO-01A. As guias de envio (Fundersul,
@@ -536,19 +576,25 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
           <CampoNum desabilitado={somenteLeitura} label="Notas de envio" moeda
             titulo="Notas de envio — guias tipo Fundersul e Iagro"
             valor={d.custoNotasEnvio ?? 0} onChange={v => set('custoNotasEnvio', v)}
-            derivado={(d.custoNotasEnvio ?? 0) > 0 ? `${formatMoeda((d.custoNotasEnvio ?? 0) / (qtd || 1))}/cab` : null}
+            derivado={`${formatMoeda((d.custoNotasEnvio ?? 0) / (qtd || 1))}/cab`}
             extra={<SeletorLado noBoitel={d.notasEnvioNoBoitel ?? false} desabilitado={somenteLeitura}
               onChange={v => set('notasEnvioNoBoitel', v)} />} />
-          {/* ⚠ O CUSTO DE OPORTUNIDADE VOLTOU PARA CA — forma final do 01B. Ele chegou a
-              morar na faixa de Resultado (onde a COMPARACAO acontece), mas a faixa final
-              nao tem campo: ela e' leitura. O numero segue sendo termo de comparacao e
-              nao desembolso — quem o le' e' o veredito la' embaixo —, e e' por isso que o
-              derivado ao lado mostra o total no lote, e nao um custo por cabeca.
-              ⚠ A unidade e' R$/kg de peso de saida da fazenda: `coT = co x peso x cab`,
-              como no simulador antigo ("Custo oport. R$/kg"). */}
+        </div>
+        {/* ─── OPORTUNIDADE: FAIXA PROPRIA, FORA DO PAINEL DE CUSTOS ────────────────
+            PR-OC-VENDA-MODAIS-PAINEIS-01. Ele morava DENTRO dos custos e NAO E CUSTO: e'
+            termo de comparacao, o que o capital renderia noutro lugar. No painel ambar
+            ele se lia como mais uma despesa que o boitel cobra — e a nota ao lado tinha
+            de dizer "nao entra no custo" justamente porque o lugar dizia o contrario.
+            ⚠ FICA NO MESMO MODAL: quem digita a diaria e' quem julga se valeu, e separar
+            os dois obrigaria a abrir dois dialogos para uma decisao so'. */}
+        <div className="mt-2.5 rounded-md border bg-muted/30 px-2.5 py-2 flex flex-wrap items-end gap-x-4 gap-y-1.5">
           <CampoNum desabilitado={somenteLeitura} label="Custo oportunidade" moeda titulo="Custo de oportunidade (R$/kg de peso de saída)"
-            valor={d.custoOportunidade} onChange={v => set('custoOportunidade', v)} sufixo="/kg"
-            derivado={der.coT > 0 ? `${formatMoeda(der.coT)} no lote` : 'termo de comparação — não entra no custo'} />
+            valor={d.custoOportunidade} onChange={v => set('custoOportunidade', v)} sufixo="/kg" />
+          <div className="text-[9px] text-muted-foreground tabular-nums leading-snug pb-1.5">
+            {der.coT > 0
+              ? `${formatMoeda(der.coT)} no lote · ${formatMoeda(der.coT / (qtd || 1))}/cab · ${formatMoeda(d.custoOportunidade)}/kg`
+              : 'termo de comparação — não entra no custo'}
+          </div>
         </div>
         {/* ⚠ A LINHA "OUTROS CUSTOS" DO FINANCEIRO SOMA TRES COLUNAS — `outros_custos`,
             `custo_nutricao` e `custos_extras_parceria` (ver useBoitelOperacoes.ts). Das
@@ -559,7 +605,7 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
           title="A linha “Outros Custos” do financeiro soma outros_custos, custo_nutricao e custos_extras_parceria; das três, só “Outros” tem campo aqui.">
           “Outros” vira “Outros Custos” no financeiro.
         </p></>),
-    comercializacao: (<><div className="grid grid-cols-1 gap-y-2">
+    comercializacao: (<><div className="grid grid-cols-2 gap-x-3 gap-y-2.5">
           <CampoNum desabilitado={somenteLeitura} label="Preço de venda" moeda valor={d.precoVendaArroba} onChange={v => set('precoVendaArroba', v)} sufixo="/@" obrigatorio />
           {/* ⚠ TOTAL, não por cabeça. Medido no acerto real: DAEMS/GTA de R$ 4.514,57
               contra faturamento de R$ 813 mil. */}
@@ -573,7 +619,7 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
             modal. A quantidade também reduz as diárias, no modal de Custos. */}
         <div className="rounded-md border bg-card p-2.5 shadow-sm space-y-2">
           <div className="text-[11px] font-semibold uppercase tracking-wide text-foreground/90">Morte no período</div>
-          <div className="grid grid-cols-1 gap-y-2">
+          <div className="grid grid-cols-2 gap-x-3 gap-y-2.5">
             <CampoNum desabilitado={somenteLeitura} label="Qtd. de mortes" titulo="Quantidade de mortes" valor={d.morteQuantidade ?? 0} onChange={v => set('morteQuantidade', v)} casas={0} />
             <CampoNum desabilitado={somenteLeitura} label="Indenização" moeda titulo="Valor de indenização" valor={d.morteValorIndenizacao ?? 0} onChange={v => set('morteValorIndenizacao', v)} />
           </div>
@@ -598,7 +644,7 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
 
         {/* Com "não", os campos somem — e o estado deles some junto, no clique acima. */}
         {d.possuiAdiantamento && (
-          <div className="grid grid-cols-1 gap-y-2">
+          <div className="grid grid-cols-2 gap-x-3 gap-y-2.5">
             {/* A20 — DatePicker do sistema. */}
             <LinhaCampo label="Data do adiantamento" largura="w-[130px]">
               <DatePicker value={d.dataAdiantamento} onChange={v => set('dataAdiantamento', v)}
@@ -683,6 +729,13 @@ function GrupoIndicadores({ titulo, itens, onAbrir }: {
    e' a familia do foco perdido, escrita ao contrario.
    ⚠ SEM `useEffect` DE SINCRONIA com a prop: o valor vigente entra uma vez, no mount.
    Sincronizar durante a digitacao traria de volta exatamente o que este desenho evita. */
+const ICONE_GRUPO: Record<IdGrupo, React.ReactNode> = {
+  desempenho: <TrendingUp className="h-3.5 w-3.5 shrink-0" />,
+  custos: <Wallet className="h-3.5 w-3.5 shrink-0" />,
+  comercializacao: <Tag className="h-3.5 w-3.5 shrink-0" />,
+  adiantamento: <Banknote className="h-3.5 w-3.5 shrink-0" />,
+};
+
 function DialogoGrupo({ card, valor, somenteLeitura, onAplicar, onFechar }: {
   card: IdCard;
   valor: BoitelEdicao;
@@ -694,6 +747,14 @@ function DialogoGrupo({ card, valor, somenteLeitura, onAplicar, onFechar }: {
   const set = <K extends keyof BoitelEdicao>(k: K, v: BoitelEdicao[K]) => setLocal(a => ({ ...a, [k]: v }));
   const corpos = corposDoBoitel(local, set, setLocal, somenteLeitura);
   const ids = (Object.keys(GRUPOS) as IdGrupo[]).filter(id => GRUPOS[id].card === card);
+  /* O veredito do painel de Custos, no proprio titulo — ver a nota em `Painel`. */
+  const derLocal = derivadosBoitel(local);
+  const qtdLocal = local.qtdCabecas || 0;
+  const extraCustos = qtdLocal > 0 && derLocal.custoTotalBoitel > 0 ? (
+    <span className="shrink-0 text-[11px] tabular-nums text-[#854F0B] dark:text-amber-500">
+      {formatMoeda(derLocal.custoTotalBoitel / qtdLocal)}/cab
+    </span>
+  ) : undefined;
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onFechar(); }}>
@@ -730,16 +791,11 @@ function DialogoGrupo({ card, valor, somenteLeitura, onAplicar, onFechar }: {
         <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-5 items-start">
           {ids.map(id => (
-            <div key={id} className="min-w-0">
-              {/* ⚠ O TITULO E O TOPO DA HIERARQUIA e precisa se ler de relance: 12px/600
-                  em `text-foreground`. Estava 10px muted, do mesmo peso da ajuda derivada —
-                  tres degraus achatados em um, e a secao sumia. Separador `border-border`
-                  no proprio titulo, e nao entre os campos. */}
-              <div className="text-[12px] font-semibold uppercase tracking-wide text-foreground border-b border-border pb-1 mb-2.5">
-                {GRUPOS[id].titulo}
-              </div>
+            <Painel key={id} titulo={GRUPOS[id].titulo} tom={GRUPOS[id].tom}
+              icone={ICONE_GRUPO[id]}
+              extra={id === 'custos' ? extraCustos : undefined}>
               {corpos[id]}
-            </div>
+            </Painel>
           ))}
           </div>
         </div>
