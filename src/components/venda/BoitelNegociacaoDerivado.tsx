@@ -260,6 +260,29 @@ export function liquidoDaVendaBoitel(d: BoitelEdicao | null): number | null {
   return Math.round((x.fba - x.custoTotalBoitel - x.cAb) * 100) / 100;
 }
 
+/* ─── OS UNITARIOS DO LIQUIDO ──────────────────────────────────────────────────
+   PR-OC-VENDA-LAYOUT-NEG-01D, item 4. O liquido da venda por cabeca e por quilo — os
+   dois numeros com que o produtor compara uma venda com outra.
+   ⚠ FUNCAO IRMA, pelo mesmo motivo de `comparativoOportunidade`: sao divisoes de um
+   numero soberano por duas bases, e escritas na tela virariam a segunda copia no dia em
+   que a base mudar. `derivadosBoitel` segue intocado.
+   ⚠ O DENOMINADOR DO /kg E O PESO DE SAIDA DA FAZENDA vezes o LOTE INTEIRO — o mesmo
+   peso que o topo exibe. Nao e' o peso de carcaca: quem vende arroba de carcaca e' o
+   preco de venda, outro numero, noutra unidade.
+   ⚠ NULL, NUNCA ZERO: sem liquido ou sem base, nao ha unitario — e a tela mostra "—". */
+export interface UnitariosLiquido { porCabeca: number | null; porKg: number | null }
+
+export function unitariosDoLiquido(d: BoitelEdicao | null): UnitariosLiquido {
+  const liq = liquidoDaVendaBoitel(d);
+  if (d == null || liq == null) return { porCabeca: null, porKg: null };
+  const q = d.qtdCabecas || 0;
+  const pesoTotal = q * (d.pesoInicial || 0);
+  return {
+    porCabeca: q > 0 ? Math.round((liq / q) * 100) / 100 : null,
+    porKg: pesoTotal > 0 ? Math.round((liq / pesoTotal) * 100) / 100 : null,
+  };
+}
+
 /* ─── A MARCA DE PROJECAO ──────────────────────────────────────────────────────
    PR-OC-VENDA-ROTULO-PROJECAO-01. A aba de Negociação lança EXPECTATIVA — dias, GMD,
    diária e preço são projeção até o abate — e a tela não dizia isso em lugar nenhum.
@@ -313,30 +336,54 @@ export function BoitelTopoNegociacao({ cabecas, pesoMedioKg, valorPorKg, valorTo
   valorTotal: number;
   cenario?: CenarioBoitel;
 }) {
-  const itens: { rotulo: string; valor: string | null; destaque?: boolean }[] = [
-    { rotulo: 'Cabeças',   valor: cabecas > 0 ? String(cabecas) : null },
-    { rotulo: 'Peso',      valor: pesoMedioKg == null ? null : formatKg(pesoMedioKg) },
-    { rotulo: 'R$/kg',     valor: valorPorKg == null ? null : formatMoeda(valorPorKg) },
-    { rotulo: 'Valor',     valor: valorTotal > 0 ? formatMoeda(valorTotal) : null, destaque: true },
-  ];
+  const traco = <span className="text-muted-foreground font-normal">—</span>;
   return (
     <div className="sticky top-0 z-20 border-b bg-card pb-2">
-      <div className="grid grid-cols-4 gap-2 rounded-md border bg-muted/20 px-3.5 py-[11px]">
-        {itens.map((i, idx) => (
-          <div key={i.rotulo} className="min-w-0">
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] font-normal text-muted-foreground leading-none">{i.rotulo}</span>
-              {/* A pilula acompanha a ULTIMA coluna — o valor — porque e' dele que a
-                  projecao fala. Uma por bloco, nunca uma por numero. */}
-              {idx === itens.length - 1 && <PilulaCenario cenario={cenario} />}
-            </div>
-            {/* ⚠ `whitespace-nowrap`, NUNCA `truncate` — mesma regra da faixa do Resultado:
-                numero cortado nao e' numero. Faltando largura, a linha cresce. */}
-            <div className={`mt-1 text-[20px] font-medium leading-none whitespace-nowrap tabular-nums ${i.destaque ? 'text-primary' : ''}`}>
-              {i.valor ?? <span className="text-muted-foreground font-normal">—</span>}
+      {/* ─── FATO A ESQUERDA, PROJECAO A DIREITA ──────────────────────────────────
+          PR-OC-VENDA-LAYOUT-NEG-01D. E' a regra que organiza a tela inteira e a
+          FUNDACAO do REALIZADO: fato e' solido, projecao e' marcada. Quando o realizado
+          entrar, ele vem SOLIDO ao lado do ambar e o comparativo nasce da cor — sem
+          precisar de uma terceira coluna dizendo "previsto x realizado".
+          ⚠ CABECAS E PESO SAO FATO: vieram do lote negociado, ja acordado. R$/kg e valor
+          do lote sao PROJECAO — derivam do planejamento, que ainda vai acontecer.
+          ⚠ UMA PILULA POR GRUPO, NUNCA POR NUMERO. Marcar cada valor faria a marca virar
+          ruido de fundo e parar de informar; a moldura ambar ja diz onde ela vale. */}
+      <div className="flex flex-wrap items-stretch gap-3 rounded-md border bg-muted/20 px-3.5 py-[11px]">
+
+        <div className="flex min-w-0 flex-1 flex-wrap gap-x-7 gap-y-2">
+          <div className="min-w-0">
+            <div className="text-[11px] font-normal text-muted-foreground leading-none whitespace-nowrap">Cabeças</div>
+            <div className="mt-1 text-[22px] font-medium leading-none tabular-nums whitespace-nowrap text-foreground">
+              {cabecas > 0 ? cabecas : traco}
             </div>
           </div>
-        ))}
+          <div className="min-w-0">
+            <div className="text-[11px] font-normal text-muted-foreground leading-none whitespace-nowrap">Peso de saída da faz.</div>
+            <div className="mt-1 text-[22px] font-medium leading-none tabular-nums whitespace-nowrap text-foreground">
+              {pesoMedioKg == null ? traco : formatKg(pesoMedioKg)}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex min-w-0 flex-wrap gap-x-7 gap-y-2 border-l-2 border-amber-500 bg-amber-50/40 dark:bg-amber-950/20 pl-3.5 pr-2 py-0.5 rounded-r-md">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] font-normal text-muted-foreground leading-none whitespace-nowrap">R$/kg</span>
+              <PilulaCenario cenario={cenario} />
+            </div>
+            {/* ⚠ O AMBAR E' O DO 600 DA FAMILIA DA PILULA. `dark:` proprio porque o hex
+                fixo some no fundo escuro — a marca tem de sobreviver aos dois temas. */}
+            <div className="mt-1 text-[20px] font-medium leading-none tabular-nums whitespace-nowrap text-[#854F0B] dark:text-amber-500">
+              {valorPorKg == null ? traco : formatMoeda(valorPorKg)}
+            </div>
+          </div>
+          <div className="min-w-0">
+            <div className="text-[11px] font-normal text-muted-foreground leading-none whitespace-nowrap">Valor liq. do lote</div>
+            <div className="mt-1 text-[20px] font-medium leading-none tabular-nums whitespace-nowrap text-[#854F0B] dark:text-amber-500">
+              {valorTotal > 0 ? formatMoeda(valorTotal) : traco}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -375,61 +422,70 @@ export function BoitelResultadoCompacto({ boitelData, cenario }: {
 }) {
   const liquido = liquidoDaVendaBoitel(boitelData);
   const cmp = useMemo(() => comparativoOportunidade(boitelData), [boitelData]);
+  const uni = useMemo(() => unitariosDoLiquido(boitelData), [boitelData]);
+  const ganhou = cmp != null && cmp.diferenca >= 0;
 
   return (
-    <section className="rounded-md border bg-card px-3 py-2.5 shadow-sm min-w-0">
-      {/* ─── FAIXA ENXUTA, LARGURA TOTAL ──────────────────────────────────────────
-          PR-OC-VENDA-LAYOUT-NEG-01B (forma final). Ela ja foi a terceira coluna de uma
-          grade de tres num modal de 1024px, e sobravam ~280px: "R$ 5...." e "7,41 ..." —
-          numero TRUNCADO, que e' pior que card alto, porque numero cortado nao e' numero.
-          Depois deitou com quatro pares e o campo do custo de oportunidade; agora ficam
-          so' os DOIS numeros que decidem. Os quatro pares sao memoria de calculo e vivem
-          no `BoitelPainelResultado`; o campo do CoP voltou para o modal de Custos, que e'
-          onde se digita.
-          ⚠ NENHUM `truncate` AQUI. `whitespace-nowrap` em tudo: faltando largura, o
-          `flex-wrap` cresce em altura e nenhum digito se perde. */}
-      <div className="flex flex-wrap items-center justify-between gap-x-8 gap-y-3">
+    <section className="rounded-md border bg-card px-3.5 py-3 shadow-sm min-w-0">
+      {/* ─── A FAIXA QUE FECHA A ABA ───────────────────────────────────────────────
+          PR-OC-VENDA-LAYOUT-NEG-01D. Dois numeros e uma frase: quanto a venda rende, e
+          se valeu a pena mandar para o boitel em vez de vender vivo hoje.
+          ⚠ O LIQUIDO E PROJECAO — ambar e pilula, pela regra do 01D. Quando o realizado
+          chegar, ele entra solido ao lado, e a diferenca de cor E' o comparativo.
+          ⚠ O VEREDITO E FRASE, e nao um percentual solto. "+3,0%" exige que o leitor
+          saiba de que percentual se fala; a frase diz o negocio inteiro numa linha, e o
+          numero dentro dela e' o que ele foi buscar.
+          ⚠ NENHUM `truncate`: numero cortado nao e' numero. */}
+      <div className="flex flex-wrap items-start justify-between gap-x-8 gap-y-3">
 
-        {/* O NUMERO DA VENDA — a mesma fonte do lote e da previsao do financeiro
-            (`liquidoDaVendaBoitel`), uma verdade so'. */}
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-[11px] font-normal text-muted-foreground leading-none">Líquido projetado</span>
+            <span className="text-[11px] font-normal text-muted-foreground leading-none whitespace-nowrap">Líquido projetado</span>
             <PilulaCenario cenario={cenario} />
           </div>
-          <div className={`mt-1 text-[20px] font-medium leading-none tabular-nums whitespace-nowrap ${
-            liquido == null ? 'text-muted-foreground font-normal' : 'text-primary'}`}>
+          <div className={`mt-1 text-[22px] font-medium leading-none tabular-nums whitespace-nowrap ${
+            liquido == null ? 'text-muted-foreground font-normal' : 'text-[#854F0B] dark:text-amber-500'}`}>
             {liquido == null ? '—' : formatMoeda(liquido)}
           </div>
+          {/* ⚠ OS DOIS UNITARIOS FICAM NA MESMA COLUNA, sob o total: sao o MESMO numero
+              lido por outra base, e afastá-los faria parecer grandeza nova. Ambar como o
+              total — sao projecao pela mesma razao que ele. */}
+          {(uni.porCabeca != null || uni.porKg != null) && (
+            <div className="mt-1.5 text-[13px] leading-none tabular-nums whitespace-nowrap text-[#854F0B] dark:text-amber-500">
+              {uni.porCabeca == null ? '—' : `${formatMoeda(uni.porCabeca)}/cab`}
+              {' · '}
+              {uni.porKg == null ? '—' : `${formatMoeda(uni.porKg)}/kg liq.`}
+            </div>
+          )}
         </div>
 
-        {/* O VEREDITO — a ANALISE 1 reduzida a uma frase.
-            ⚠ "vs. vender vivo hoje" e' o que o custo de oportunidade PERGUNTA em
-            portugues: quanto o capital renderia se o gado nao fosse para o boitel.
-            ⚠ O NUMERO COMPARADO E O RESULTADO APOS O FRETE, e nao o liquido a' esquerda —
-            os dois diferem pelo frete, que o produtor paga por fora. O `title` carrega
-            isso; sem ele, a diferenca pareceria um salto sem explicacao. Ver
-            `comparativoOportunidade`.
-            ⚠ SINAL E FRASE, nao so' cor: "+3,0% acima" se le' em monocromatico. */}
-        <div className="min-w-0 text-right">
+        <div className="min-w-0 lg:max-w-[55%]">
           {cmp == null ? (
-            <span className="text-[10px] text-muted-foreground">
+            <span className="text-[11px] text-muted-foreground leading-snug">
               {boitelData && boitelData.custoOportunidade > 0
-                ? 'Faltam dados do planejamento para comparar.'
-                : 'Informe o custo de oportunidade em Custos para comparar.'}
+                ? 'Faltam dados do planejamento para comparar com a venda de hoje.'
+                : 'Informe o custo de oportunidade em Custos para comparar com a venda de hoje.'}
             </span>
           ) : (
-            <div title={`Resultado após frete ${formatMoeda(cmp.resultado)} contra custo de oportunidade ${formatMoeda(cmp.oportunidade)}`}>
-              <div className="text-[10px] font-normal text-muted-foreground leading-none whitespace-nowrap">
-                vs. vender vivo hoje
-              </div>
-              <div className={`mt-1 text-[15px] font-medium leading-none tabular-nums whitespace-nowrap ${
-                cmp.diferenca >= 0 ? 'text-emerald-700 dark:text-emerald-500' : 'text-destructive'}`}>
-                {cmp.diferenca >= 0 ? '+' : '−'}{Math.abs(cmp.percentual).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%
-                {' '}{cmp.diferenca >= 0 ? 'acima' : 'abaixo'}
-                {' · '}{cmp.diferenca >= 0 ? '+' : '−'}{formatMoeda(Math.abs(cmp.diferenca))}
-              </div>
-            </div>
+            <>
+              {/* ⚠ "esses animais" e nao "o lote": quem le' esta olhando para os animais
+                  que acabou de descrever tres linhas acima. */}
+              <p className={`text-[12px] leading-[1.5] ${ganhou ? 'text-success' : 'text-destructive'}`}>
+                Mandar para o boitel deve render{' '}
+                <span className="font-medium tabular-nums">{formatMoeda(Math.abs(cmp.diferenca))}</span>
+                {' '}<span className="font-medium">{ganhou ? 'a mais' : 'a menos'}</span>
+                {' '}(<span className="font-medium tabular-nums">{ganhou ? '+' : '−'}{Math.abs(cmp.percentual).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%</span>)
+                {' '}do que vender esses animais vivos hoje.
+              </p>
+              {/* ⚠ A LINHA DE CONFERENCIA existe porque a frase compara DOIS numeros que
+                  ela nao mostra, e um deles nao e' o liquido ao lado: o resultado do
+                  produtor ja desconta o frete, que ele paga por fora. Sem esta linha a
+                  diferenca de R$ 10.500,00 entre os dois pareceria erro. */}
+              <p className="mt-1 text-[10px] text-muted-foreground leading-snug tabular-nums">
+                comparando o resultado após frete ({formatMoeda(cmp.resultado)}) com a venda a{' '}
+                {formatMoeda(boitelData?.custoOportunidade ?? 0)}/kg hoje ({formatMoeda(cmp.oportunidade)})
+              </p>
+            </>
           )}
         </div>
       </div>
@@ -442,8 +498,6 @@ export function BoitelResultadoCompacto({ boitelData, cenario }: {
     </section>
   );
 }
-
-
 
 /* ─── O RESULTADO INTEIRO ──────────────────────────────────────────────────────
    240px, dois grupos: Indicadores e Operação.

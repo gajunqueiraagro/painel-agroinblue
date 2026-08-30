@@ -30,11 +30,12 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DatePicker } from '@/components/ui/date-picker';
 import { CampoMoeda } from '@/components/ui/campo-moeda';
+import type { CenarioBoitel } from '@/components/venda/BoitelNegociacaoDerivado';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Pencil } from 'lucide-react';
 import { formatMoeda, formatKg, formatArroba } from '@/lib/calculos/formatters';
 import type { BoitelData } from '@/components/BoitelPlanningDialog';
-import { derivadosBoitel, cabecasQueSairam, type BoitelEdicao } from '@/components/venda/BoitelNegociacaoDerivado';
+import { derivadosBoitel, cabecasQueSairam, PilulaCenario, type BoitelEdicao } from '@/components/venda/BoitelNegociacaoDerivado';
 
 const n2 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const n3 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
@@ -322,52 +323,55 @@ const GRUPOS = {
 } as const;
 type IdGrupo = keyof typeof GRUPOS;
 type IdCard = 'A' | 'B';
+/** Um numero do cartao. `pendente` = falta o dado que o sustenta (ambar + traco). */
+interface Indicador { rotulo: string; valor: string; pendente?: boolean }
 const TITULO_CARD: Record<IdCard, string> = {
   A: 'Desempenho e Custos',
   B: 'Comercialização e Adiantamento',
 };
 
-/* Os RESUMOS de cada grupo — o que a aba mostra sem abrir nada. Funcao pura do
-   planejamento: a aba e o dialogo leem a MESMA, entao o cartao nunca discorda do que o
-   modal vai mostrar. */
-function resumosDoBoitel(d: BoitelEdicao) {
+/* Os INDICADORES de cada cartao — o que a aba mostra sem abrir nada.
+   ⚠ SEIS E DOIS, e nao um por grupo. Ate' aqui cada cartao trazia UMA frase por grupo
+   ("GMD 1,500 · 110 dias · RC 55,00%"), herdada da linha fechada do acordeao. Frase
+   resume; indicador nomeado se COMPARA — e' o que o operador faz com estes numeros.
+
+   ⚠ TODOS SAEM DE `derivadosBoitel`, e nenhum e' calculado aqui:
+       Custo/cab      = custoTotalBoitel / cabecas
+       Custo @ prod.  = `cPArr`, que o motor ja exporta (`cOp / aP`) e veio VERBATIM do
+                        simulador (BoitelPlanningDialog.tsx:117). O painel longo ja o
+                        mostra como "Custo da arroba" — e' o mesmo numero, e nao uma
+                        segunda conta com o mesmo nome.
+   ⚠ A DIVISAO POR CABECAS FICA AQUI de proposito: e' apresentacao de um total que o
+   motor ja deu, e nao regra. Regra nova vira funcao irma — foi o que `comparativoOportunidade`
+   e `unitariosDoLiquido` fizeram.
+   ⚠ TRACO, NUNCA ZERO: sem o dado que sustenta a conta, o indicador nao imprime numero —
+   ele diz que falta, em ambar. */
+function indicadoresDoBoitel(d: BoitelEdicao): Record<IdCard, Indicador[]> {
   const der = derivadosBoitel(d);
   const qtd = d.qtdCabecas || 0;
-  const custoTotal = der.custoTotalBoitel;
-  const fatBruto = der.fba;
-  const antecipado = der.valorTotalAntecipadoCalc;
   const temDesempenho = d.dias > 0 && d.gmd > 0 && d.rendimento > 0;
-  /* O RESUMO DA LINHA FECHADA — o mesmo conteúdo que os botões antigos mostravam.
-     `pendente` marca a linha em âmbar e é o que decide qual seção abre sozinha. */
-  const secoes = [
-    { id: 'desempenho' as const, titulo: 'Desempenho',
-      pendente: !temDesempenho,
-      resumo: temDesempenho
-        ? `GMD ${n3(d.gmd)} · ${d.dias} dias · RC ${n2(d.rendimento)}%`
-        : 'GMD, dias e rendimento de saída pendentes' },
-    { id: 'custos' as const, titulo: 'Custos',
-      pendente: !(d.custoDiaria > 0),
-      resumo: d.custoDiaria > 0
-        ? `${qtd > 0 && custoTotal > 0 ? formatMoeda(custoTotal / qtd) + '/cab · ' : ''}diária ${formatMoeda(d.custoDiaria)}`
-        : 'diária pendente' },
-    /* ⚠ O RESUMO MOSTRA O QUE O BLOCO PRODUZ, e não só o que ele consome. Ele exibia
-       preço e despesas — os dois insumos — e escondia o faturamento, que é o número que
-       sai daqui. As despesas saíram para o faturamento caber: elas não entram no bruto
-       (são subtraídas no líquido), então listá-las ao lado dele confundiria as duas contas.
-       ⚠ A UNIDADE E R$/@, e não R$/kg: no boitel se vende arroba de carcaça. */
-    { id: 'comercializacao' as const, titulo: 'Comercialização',
-      pendente: !(d.precoVendaArroba > 0),
-      resumo: d.precoVendaArroba > 0
-        ? `${formatMoeda(d.precoVendaArroba)}/@${fatBruto > 0 ? ` · fatura ${formatMoeda(fatBruto)}` : ''}`
-        : 'preço de venda pendente' },
-    /* ⚠ O ADIANTAMENTO NAO TEM OBRIGATORIO, então nunca fica âmbar: "não informado" aqui
-       é resposta, e não pendência. */
-    { id: 'adiantamento' as const, titulo: 'Adiantamento',
-      pendente: false,
-      resumo: d.possuiAdiantamento && antecipado > 0 ? formatMoeda(antecipado) : 'não informado' },
-  ];
+  const temCusto = d.custoDiaria > 0;
+  const temPreco = d.precoVendaArroba > 0;
+  const custoCab = qtd > 0 && der.custoTotalBoitel > 0 ? der.custoTotalBoitel / qtd : null;
 
-  return secoes;
+  return {
+    A: [
+      { rotulo: 'GMD',           valor: temDesempenho ? `${n3(d.gmd)} kg` : '—', pendente: !temDesempenho },
+      { rotulo: 'Dias',          valor: temDesempenho ? String(d.dias) : '—',    pendente: !temDesempenho },
+      { rotulo: 'RC saída',      valor: temDesempenho ? `${n2(d.rendimento)}%` : '—', pendente: !temDesempenho },
+      { rotulo: 'Diária',        valor: temCusto ? formatMoeda(d.custoDiaria) : '—', pendente: !temCusto },
+      { rotulo: 'Custo/cab',     valor: custoCab == null ? '—' : formatMoeda(custoCab), pendente: !temCusto },
+      { rotulo: 'Custo @ prod.', valor: der.cPArr > 0 ? formatMoeda(der.cPArr) : '—', pendente: !temCusto },
+    ],
+    /* ⚠ O ADIANTADO SAIU DAQUI — decisao do Gabriel. Ele continua no modal, onde se
+       digita; o cartao guarda o que a Comercializacao PRODUZ. Com ele fora, o unico
+       numero que era fato saiu junto, e a marca "(fato)" nao tem hoje o que marcar —
+       ela volta quando voltar um fato ao resumo (o REALIZADO). */
+    B: [
+      { rotulo: 'Preço',  valor: temPreco ? `${formatMoeda(d.precoVendaArroba)}/@` : '—', pendente: !temPreco },
+      { rotulo: 'Fatura', valor: der.fba > 0 ? formatMoeda(der.fba) : '—', pendente: !temPreco },
+    ],
+  };
 }
 
 /* Os CAMPOS de cada grupo. Recebe o estado e o `set` de QUEM O RENDERIZA — na forma
@@ -526,27 +530,50 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
    clique do tamanho do cartao vale mais que um icone de 14px, e o `title` diz o que
    acontece — instrucao escrita na tela para explicar o que a peca ja faz e' ruido.
    ⚠ O AMBAR DA PENDENCIA SOBREVIVEU ao fim do acordeao: era a unica coisa dele que
-   informava sem exigir clique, e continua sendo. */
-function CardResumo({ titulo, itens, onAbrir }: {
+   informava sem exigir clique, e continua sendo.
+
+   ⚠ FATO x PROJECAO — PR-OC-VENDA-LAYOUT-NEG-01D. Os resumos descrevem um planejamento:
+   sao PROJECAO, e por isso vem em ambar, com UMA pilula no titulo do cartao — nunca uma
+   por numero, que faria a marca virar textura.
+   ⚠ A EXCECAO DO FATO EXISTE E ESTA DORMINDO. O unico numero solido do resumo era o
+   "Adiantado", e ele saiu do cartao por decisao do Gabriel (segue no modal, que e' onde
+   se digita). A prop `fato` FICA: e' por ela que o REALIZADO vai entrar solido ao lado
+   do ambar, e apaga-la agora so' criaria trabalho de reescrever a mesma regra depois.
+   ⚠ SEIS INDICADORES PEDEM GRADE, e nao `flex-wrap`: com larguras diferentes o wrap
+   deixa a segunda linha desalinhada da primeira, e a comparacao vertical — que e' o que
+   se faz com seis numeros — se perde. `grid-cols-3` em duas linhas de tres. */
+function CardResumo({ titulo, itens, cenario, onAbrir }: {
   titulo: string;
-  itens: { rotulo: string; valor: string; pendente?: boolean }[];
+  itens: { rotulo: string; valor: string; pendente?: boolean; fato?: boolean }[];
+  cenario?: CenarioBoitel;
   onAbrir: () => void;
 }) {
   return (
     <button type="button" onClick={onAbrir} title="Clique para editar"
       aria-label={`Editar ${titulo}`}
       className="group w-full rounded-md border bg-card p-3 shadow-sm min-w-0 text-left cursor-pointer hover:bg-muted/25 transition-colors">
-      <div className="flex items-start justify-between gap-2">
-        <span className="text-[11px] font-medium text-muted-foreground leading-none">{titulo}</span>
-        <Pencil className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60 group-hover:text-foreground" />
+      <div className="flex items-center justify-between gap-2 border-b pb-1.5">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-[13px] font-medium text-foreground leading-none truncate">{titulo}</span>
+          <PilulaCenario cenario={cenario} />
+        </div>
+        <Pencil className="h-3.5 w-3.5 shrink-0 text-secondary" />
       </div>
-      <div className="mt-2.5 flex flex-wrap gap-x-7 gap-y-2.5">
+      <div className="mt-2.5 grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3">
         {itens.map(i => (
           <div key={i.rotulo} className="min-w-0">
-            <div className="text-[10px] font-normal text-muted-foreground leading-none whitespace-nowrap">{i.rotulo}</div>
-            {/* ⚠ `whitespace-nowrap`, nunca `truncate`: numero cortado nao e' numero. */}
+            <div className="text-[10px] font-normal text-muted-foreground leading-none whitespace-nowrap">
+              {i.rotulo}
+              {i.fato && <span className="ml-1 text-[9px] font-normal">(fato)</span>}
+            </div>
+            {/* ⚠ `whitespace-nowrap`, nunca `truncate`: numero cortado nao e' numero.
+                ⚠ A PENDENCIA MANDA NA COR: um grupo incompleto se anuncia em ambar de
+                aviso antes de qualquer regra de fato/projecao — ali nao ha numero a
+                marcar, ha dado a preencher. */}
             <div className={`mt-1 text-[15px] font-medium leading-none tabular-nums whitespace-nowrap ${
-              i.pendente ? 'text-amber-700 dark:text-amber-500' : ''}`}>
+              i.pendente ? 'text-amber-700 dark:text-amber-500'
+              : i.fato ? 'text-foreground'
+              : 'text-[#854F0B] dark:text-amber-500'}`}>
               {i.valor}
             </div>
           </div>
@@ -617,24 +644,20 @@ function DialogoGrupo({ card, valor, somenteLeitura, onAplicar, onFechar }: {
 
 /* ═══ O COMPONENTE ═══════════════════════════════════════════════════════════════ */
 
-export function BoitelBlocosModais({ valor, onChange, somenteLeitura }: {
+export function BoitelBlocosModais({ valor, onChange, somenteLeitura, cenario }: {
   valor: BoitelEdicao; onChange: (proximo: BoitelEdicao) => void; somenteLeitura?: boolean;
+  /** Marca de projecao dos cartoes — uma por grupo. Ver `CardResumo`. */
+  cenario?: CenarioBoitel;
 }) {
   const [editando, setEditando] = useState<IdCard | null>(null);
-  const secoes = useMemo(() => resumosDoBoitel(valor), [valor]);
-  const resumoDe = (card: IdCard) => (Object.keys(GRUPOS) as IdGrupo[])
-    .filter(id => GRUPOS[id].card === card)
-    .map(id => {
-      const sec = secoes.find(x => x.id === id)!;
-      return { rotulo: GRUPOS[id].titulo, valor: sec.resumo, pendente: sec.pendente };
-    });
+  const indicadores = useMemo(() => indicadoresDoBoitel(valor), [valor]);
 
   /* ⚠ UM FRAGMENT COM DOIS FILHOS, e nao um `<div>`: a grade e' montada pelo shell, e um
      container aqui viraria UMA celula com dois cartoes empilhados dentro. */
   return (
     <>
-      <CardResumo titulo={TITULO_CARD.A} itens={resumoDe('A')} onAbrir={() => setEditando('A')} />
-      <CardResumo titulo={TITULO_CARD.B} itens={resumoDe('B')} onAbrir={() => setEditando('B')} />
+      <CardResumo titulo={TITULO_CARD.A} itens={indicadores.A} cenario={cenario} onAbrir={() => setEditando('A')} />
+      <CardResumo titulo={TITULO_CARD.B} itens={indicadores.B} cenario={cenario} onAbrir={() => setEditando('B')} />
       {editando && (
         <DialogoGrupo
           key={editando}

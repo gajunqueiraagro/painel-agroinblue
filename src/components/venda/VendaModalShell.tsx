@@ -590,6 +590,7 @@ export function VendaModalShell({
                       valor={boitelData}
                       onChange={onBoitelChange}
                       somenteLeitura={ocStatusComercial === 'cancelada'}
+                      cenario="projetado"
                     />
                   )}
                 </div>
