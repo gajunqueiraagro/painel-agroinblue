@@ -214,6 +214,20 @@ export function frasearEvento(e: EventoOC, r: Resolvedores): FraseEvento {
       return { frase: 'criou um compromisso', detalhe: junta(txt(nov.descricao), dinheiro(nov.valor_total)) };
     case 'cancelar_compromisso':
       return { frase: 'cancelou um compromisso', detalhe: junta(txt(ant.descricao), motivo) };
+    /* PR-OC-VENDA-FIN-PREVISAO-01D — o realizado reescrevendo o previsto.
+       ⚠ OS DOIS VALORES VEM DE `detalhes`, e nao de `dadosNovos`: a RPC grava o retrato
+       ANTERIOR do compromisso em `dados_anteriores` e o par valor_anterior/valor_novo em
+       `detalhes`. Ler o "para" de `nov` devolveria vazio — a RPC nao preenche esse campo.
+       ⚠ SEM OS DOIS LADOS, SO' O FATO. Mesmo criterio de `frasearEdicao`: um "de X para —"
+       seria meia verdade; melhor a frase sozinha, que continua correta. */
+    case 'ajustar_valor_compromisso': {
+      const de = dinheiro(d.valor_anterior);
+      const para = dinheiro(d.valor_novo);
+      return {
+        frase: 'ajustou o valor de um compromisso',
+        detalhe: junta(txt(ant.descricao), de && para ? `${de} → ${para}` : null, motivo),
+      };
+    }
     case 'programar_compromisso': {
       const ps = arr(nov.parcelas);
       const soma = ps.reduce<number>((s, p) => s + (num(obj(p)?.valor) ?? 0), 0);

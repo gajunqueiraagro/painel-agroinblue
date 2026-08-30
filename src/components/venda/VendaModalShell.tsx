@@ -307,9 +307,21 @@ export function VendaModalShell({
      "Compra 13/05/2026". O dicionario e' ADITIVO: sem ele a compra fica identica.
      ⚠ `dataChegada: null` PORQUE A VENDA NAO TEM CHEGADA. Nao e' dado que falta: o gado
      SAI, e o shell nem passa a prop. Com null a linha inteira nao e' renderizada, em vez
-     de exibir "—" como se houvesse uma data por descobrir. */
+     de exibir "—" como se houvesse uma data por descobrir.
+     ⚠ `mostrarBaseDaOperacao: false` PELO MESMO MOTIVO, um nivel acima — PR-...-01D. As
+     caixas "OC (acordado)" e "Restante OC" do dialogo de programacao comparam o valor
+     acordado com a soma de TODAS as obrigacoes; numa venda boitel essa soma tem duas
+     entradas e duas saidas, e a subtracao deu -204.132,08 na homologacao. Nao e' saldo,
+     e' residuo. Decisao do Gabriel: somem. Ver a nota em `RotulosCompromissos`. */
   const rotulosCompromissos = useMemo<RotulosCompromissos>(
-    () => ({ dataOperacao: 'Venda', dataChegada: null }), [],
+    () => ({
+      dataOperacao: 'Venda', dataChegada: null,
+      mostrarBaseDaOperacao: false,
+      /* ⚠ SO' A VENDA TEM DOIS LADOS. As quatro linhas da previsao sao duas entradas e
+         duas saidas, e sem o sinal os quatro valores se leem iguais. Na compra o sinal
+         seria uniforme — ver a nota em `RotulosCompromissos`. */
+      mostrarSentidoDoDinheiro: true,
+    }), [],
   );
 
   const faltamBoitel = ehBoitel ? faltamDosCinco(boitelData) : [];

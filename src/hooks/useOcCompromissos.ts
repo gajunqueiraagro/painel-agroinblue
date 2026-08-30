@@ -144,6 +144,9 @@ export interface CriarCompromissoResultado { operacaoVersao: number; compromisso
 export interface ProgramarCompromissoResultado { operacaoVersao: number; programacaoId: string; parcelaIds: string[]; }
 export interface AcrescentarParcelasResultado { operacaoVersao: number; programacaoId: string; parcelaIds: string[]; somaProgramada: number; }
 export interface MaterializarResultado { operacaoVersao: number; parcelaId: string; parteId: string; tituloId: string; }
+/* PR-OC-VENDA-FIN-PREVISAO-01D. `valorAnterior` e' null no caminho IDEMPOTENTE (valor
+   igual): a RPC devolve `idempotente: true` e nao ha "de X para Y" a contar. */
+export interface AjustarValorResultado { operacaoVersao: number; valorTotal: number; valorAnterior: number | null; }
 
 export interface OcCompromissosApi {
   resumoOperacao: ResumoOperacaoCompromissos | null;
@@ -157,6 +160,9 @@ export interface OcCompromissosApi {
   programarCompromisso: (versaoEsperada: number, compromissoId: string, payload: ProgramarCompromissoPayload) => Promise<ProgramarCompromissoResultado>;
   acrescentarParcelas: (versaoEsperada: number, compromissoId: string, payload: AcrescentarParcelasPayload) => Promise<AcrescentarParcelasResultado>;
   materializarParcela: (versaoEsperada: number, programacaoId: string, parcelaId: string) => Promise<MaterializarResultado>;
+  /* PR-OC-VENDA-FIN-PREVISAO-01D — ajusta o valor do compromisso ao REALIZADO, nos dois
+     sentidos. `motivo` e' exigido pelo banco (guard P0001), como em todo estorno. */
+  ajustarValorCompromisso: (versaoEsperada: number, compromissoId: string, novoValor: number, motivo: string) => Promise<AjustarValorResultado>;
   recarregar: () => Promise<void>;
 }
 
@@ -282,6 +288,19 @@ function mapMaterializarResultado(data: unknown): MaterializarResultado {
   if (!isRecord(parte) || !idStringNaoVazio(parte.id)) throw respostaInvalida('lançar parcela');
   if (!isRecord(titulo) || !idStringNaoVazio(titulo.id)) throw respostaInvalida('lançar parcela');
   return { operacaoVersao: versaoRet, parcelaId: parcela.id, parteId: parte.id, tituloId: titulo.id };
+}
+
+/* ⚠ `operacao_versao` VEM ATE' NO CAMINHO IDEMPOTENTE — a RPC devolve a versao ATUAL,
+   nao incrementada. E' isso que deixa o encadeamento do chamador seguir sem ramo especial:
+   ele sempre continua com o que voltou. */
+function mapAjustarValorResultado(data: unknown): AjustarValorResultado {
+  if (!isRecord(data)) throw respostaInvalida('ajustar valor do compromisso');
+  const versaoRet = data.operacao_versao;
+  if (!versaoRetornoValida(versaoRet)) throw respostaInvalida('ajustar valor do compromisso');
+  const total = Number(data.valor_total);
+  if (!Number.isFinite(total)) throw respostaInvalida('ajustar valor do compromisso');
+  const anterior = Number(data.valor_anterior);
+  return { operacaoVersao: versaoRet, valorTotal: total, valorAnterior: Number.isFinite(anterior) ? anterior : null };
 }
 
 // SQLSTATE → OcCompromissoError (meio-termo aprovado): P0001/demais → mensagem soberana verbatim;
@@ -512,9 +531,46 @@ export function useOcCompromissos({ operacaoId, clienteId, enabled }: Params): O
     } finally { setSaving(false); }
   }, [operacaoId, clienteId, carregar]);
 
+  /* PR-OC-VENDA-FIN-PREVISAO-01D — o realizado ajustando o compromisso.
+     ⚠ ESTA RPC PEDE `p_cliente_id`, ao contrario das quatro acima. Nao e' descuido de
+     assinatura: ela nasceu na familia do `oc_cancelar_compromisso` (motivo obrigatorio,
+     cliente explicito), e o corpo compara `v_op.cliente_id <> p_cliente_id` como primeira
+     barreira. Mandar o do hook e' o contrato.
+     ⚠ O TOAST SO' SAI QUANDO ALGO MUDOU. No caminho idempotente (valor igual) a RPC
+     devolve a versao ATUAL e nao grava evento — anunciar "valor ajustado" ali seria a tela
+     afirmando uma escrita que nao houve. */
+  const ajustarValorCompromisso = useCallback(async (versaoEsperada: number, compromissoId: string, novoValor: number, motivo: string): Promise<AjustarValorResultado> => {
+    if (!operacaoId || !clienteId) {
+      const err = new OcCompromissoError('operacao_inexistente', 'Operação não iniciada.');
+      toast.error(err.message); throw err;
+    }
+    exigirVersaoValida(versaoEsperada);
+    setSaving(true);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: RPC fora de types.ts
+      const { data, error } = await (supabase as any).rpc('oc_ajustar_valor_compromisso', {
+        p_operacao_id: operacaoId, p_cliente_id: clienteId, p_versao_esperada: versaoEsperada,
+        p_compromisso_id: compromissoId, p_novo_valor: novoValor, p_motivo: motivo,
+      });
+      if (error) throw normalizarErroRpc(error);
+      const resultado = mapAjustarValorResultado(data);
+      setVersao((atual) => Math.max(atual ?? 0, resultado.operacaoVersao));
+      if (resultado.valorAnterior != null) toast.success('Valor do compromisso ajustado ao realizado.');
+      await carregar();
+      return resultado;
+    } catch (e) {
+      const normalizado = e instanceof OcCompromissoError ? e : new OcCompromissoError('erro_desconhecido', e instanceof Error ? e.message : 'Falha ao ajustar o valor do compromisso.');
+      toast.error(normalizado.message);
+      if (normalizado.code === 'versao_conflito') await carregar();
+      throw normalizado;
+    } finally { setSaving(false); }
+  }, [operacaoId, clienteId, carregar]);
+
   return useMemo(() => ({
     resumoOperacao, compromissos, parcelas, versao, loading, saving,
-    criarCompromisso, programarCompromisso, acrescentarParcelas, materializarParcela, recarregar: carregar,
+    criarCompromisso, programarCompromisso, acrescentarParcelas, materializarParcela,
+    ajustarValorCompromisso, recarregar: carregar,
   }), [resumoOperacao, compromissos, parcelas, versao, loading, saving,
-    criarCompromisso, programarCompromisso, acrescentarParcelas, materializarParcela, carregar]);
+    criarCompromisso, programarCompromisso, acrescentarParcelas, materializarParcela,
+    ajustarValorCompromisso, carregar]);
 }

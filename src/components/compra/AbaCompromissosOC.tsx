@@ -174,12 +174,38 @@ export interface RotulosCompromissos {
      nao ha pergunta a responder. Na compra o rotulo e' 'Chegada' e a linha sai sempre,
      inclusive com data nula: e' o comportamento de hoje, preservado. */
   dataChegada: string | null;
+  /* ⚠ AS CAIXAS "OC (acordado)" e "Restante OC" DO DIALOGO DE PROGRAMACAO. Elas nasceram
+     para a COMPRA, onde toda obrigacao e' do mesmo lado e a conta fecha: acordado menos
+     comprometido responde "quanto ainda cabe". Numa VENDA boitel nao respondem nada —
+     `obrigacao_total` soma as quatro linhas, DUAS ENTRADAS E DUAS SAIDAS, enquanto
+     `valor_acordado` e' so' o valor da venda. Medido na b58bf556:
+     565.217,00 - 769.349,08 = -204.132,08, um residuo aritmetico que a tela apresentava
+     como se fosse saldo. Decisao do Gabriel: somem na venda. */
+  mostrarBaseDaOperacao: boolean;
+  /* ⚠ O SINAL SO' ONDE ELE DIZ ALGO. Numa VENDA convivem quatro linhas — duas que entram
+     e duas que saem —, e sem o "+/−" os quatro valores se leem iguais. Numa COMPRA tudo
+     e' saida: um "−" vermelho repetido em todas as linhas nao distingue nada, e' ruido
+     uniforme, e mudaria de carona uma tela ja homologada. Principio da casa: mostre o
+     DESVIO, nao o caminho. */
+  mostrarSentidoDoDinheiro: boolean;
 }
-const ROTULOS_PADRAO: RotulosCompromissos = { dataOperacao: 'Compra', dataChegada: 'Chegada' };
+const ROTULOS_PADRAO: RotulosCompromissos = {
+  dataOperacao: 'Compra', dataChegada: 'Chegada',
+  mostrarBaseDaOperacao: true, mostrarSentidoDoDinheiro: false,
+};
 
 export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, fornecedores, valorAcordado, lotes, contraparteId, dataOperacao, dataChegada, darkSelectClass, recarregarDados, linhasPrevisao, seloProjecao, rotulos = ROTULOS_PADRAO }: Props) {
   const { resumoOperacao, compromissos, parcelas, versao, saving } = ocApi;
   const [searchParams, setSearchParams] = useSearchParams();
+  /* ⚠ OS DOIS CATALOGOS SUBIRAM PARA CA — PR-OC-VENDA-FIN-PREVISAO-01D (adendo 2). Eles
+     viviam DENTRO do `NovoCompromissoDialog`, que so' monta quando o operador clica em
+     "Novo compromisso"; a LISTA passou a precisar dos dois (o plano para o sentido do
+     dinheiro, o catalogo para o nome do componente) e a lista esta' sempre montada.
+     ⚠ SUBIR, E NAO DUPLICAR. Chamar os hooks aqui E la' daria duas instancias lendo as
+     mesmas duas tabelas — por isso o dialogo passou a receber os dois por prop. Uma
+     consulta de cada, e um so' retrato: se o catalogo mudar, muda para os dois. */
+  const plano = usePlanoContasOC(clienteId ?? undefined);
+  const comps = useComponentesFinanceiros();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [recemMaterializada, setRecemMaterializada] = useState<string | null>(null);
   const [novoAberto, setNovoAberto] = useState(false);
@@ -366,15 +392,33 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
      ele refazia o caminho inteiro para reabrir a operacao.
      `returnOcId` e' o espelho de `returnZooId` (PR-B1-R2): mesmo gesto, mesmo useEffect
      do outro lado, mesmo estado `drillReturn`. Nao inventa convencao nova — usa a que ja
-     existia e que so a OC nao usava. */
+     existia e que so a OC nao usava.
+
+     ⚠ O ENDERECO PRECISA DO TIPO — PR-OC-VENDA-FIN-PREVISAO-01D. `returnOcId` dizia QUAL
+     operacao reabrir e nao dizia QUE TIPO ela e'; do outro lado, `abrirOperacaoOC` tem
+     `tipo` com default 'compra'. O retorno de uma VENDA voltava como `oc_compra=1`, a
+     hidratacao do LancamentosTab recusava ("Esta operação não é uma Compra e não pode ser
+     aberta aqui"), limpava os parametros e largava o usuario em Lancamentos sem modal.
+     Um id sem tipo e' meio endereco.
+     ⚠ E APAGA `oc_venda` TAMBEM. So' `oc_compra` era apagado, entao numa venda o
+     parametro sobrevivia a ida ao Financeiro. E' a mesma armadilha do parametro preso que
+     PR-OC-VENDA-REABRIR-01D ja pagou uma vez: `oc_venda=1` esquecido na URL reabre a
+     operacao sozinho quando a secao volta a ser Lancamentos por outro caminho. */
   const editarTitulo = (tituloId: string) => {
     const next = new URLSearchParams(searchParams);
     next.set('flancId', tituloId);
     next.set('ocfin', '1');   // PR-OC-FIN-EDIT-FIX-02 — contexto OC: libera edição de favorecido no título
     const ocId = resumoOperacao?.operacaoId ?? null;
     // Sem id nao ha para onde voltar: melhor nao prometer retorno do que prometer errado.
-    if (ocId) next.set('returnOcId', ocId); else next.delete('returnOcId');
+    if (ocId) {
+      next.set('returnOcId', ocId);
+      next.set('returnOcTipo', tipoOperacao === 'venda' ? 'venda' : 'compra');
+    } else {
+      next.delete('returnOcId');
+      next.delete('returnOcTipo');
+    }
     next.delete('oc_compra');
+    next.delete('oc_venda');
     next.delete('oc_id');
     setSearchParams(next, { replace: true });
   };
@@ -416,10 +460,19 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
   };
 
   /* O COMPONENTE SO ACRESCENTA quando diz algo alem da natureza. `principal/principal`
-     e' a mesma palavra duas vezes; frete, comissao e taxa_aquisicao informam. */
+     e' a mesma palavra duas vezes; frete, comissao e taxa_aquisicao informam.
+     ⚠ E DIZ O NOME, NAO O CODIGO — PR-OC-VENDA-FIN-PREVISAO-01D (adendo 2). A linha
+     manual exibia o slug cru (`taxas_impostos`, `taxa_aquisicao`, `adiantamento_
+     devolvido`), que e' identificador de banco e nao vocabulario de operador. O nome sai
+     do MESMO catalogo que a linha de previsao ja consome — nenhuma tabela de traducao
+     nova, que seria a segunda copia deste dicionario.
+     ⚠ FALLBACK PARA O CODIGO, nunca para vazio: `useComponentesFinanceiros` so' traz
+     `ativo=true`, entao um componente desativado nao resolve. Melhor o slug do que uma
+     linha sem identidade. */
   const componenteAdicional = (c: CompromissoResumo): string | null => {
     const comp = c.componente ?? '';
-    return (comp === '' || comp === c.natureza) ? null : comp;
+    if (comp === '' || comp === c.natureza) return null;
+    return comps.rows.find(r => r.codigo === comp && r.natureza === c.natureza)?.nome ?? comp;
   };
 
   /* ─── QUEM E' PREVISAO ─────────────────────────────────────────────────────────
@@ -441,6 +494,34 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
      deixaram o cabecalho preso em "principal/principal" depois que a coluna ja tinha
      sido corrigida. Com cinco compromissos na tabela, um cabecalho que nao identifica
      nao diz de qual deles e' a programacao aberta logo abaixo. */
+  /* ─── O SENTIDO DO DINHEIRO, POR LINHA ────────────────────────────────────────
+     PR-OC-VENDA-FIN-PREVISAO-01D (adendo 2). Numa venda boitel convivem quatro linhas —
+     duas que entram e duas que saem — e a lista mostrava os quatro valores iguais, sem
+     dizer de que lado cada um esta'.
+
+     ⚠ ESPELHO LITERAL DA REGRA SOBERANA, e nao uma segunda derivacao. A materializacao
+     decide o sinal do lancamento assim (PR-OC-SENTIDO-POR-PLANO-01, `oc_materializar_
+     programacao`):
+
+         v_fluxo := CASE (SELECT pc.tipo_operacao FROM financeiro_plano_contas pc
+                           WHERE pc.id = v_comp.plano_conta_id)
+                      WHEN '1-Entradas' THEN 'receber'
+                      WHEN '2-Saídas'   THEN 'pagar'
+                      ELSE CASE v_op.tipo_operacao WHEN 'compra' THEN 'pagar' ELSE 'receber' END
+                    END;
+
+     ⚠ O FALLBACK VEM JUNTO, e nao e' detalhe: sem ele a tela ficaria muda exatamente
+     onde o banco ainda decide algo, e um compromisso sem plano resolvido apareceria sem
+     sinal e MESMO ASSIM nasceria como saida no caixa. Espelhar a regra inteira e' o que
+     impede a tela e o banco de discordarem.
+     ⚠ COR NUNCA E' O UNICO CANAL: quem informa e' o SINAL (+/−); a cor so' reforca. */
+  const entradaDoCompromisso = (c: CompromissoResumo): boolean => {
+    const tipo = plano.rows.find(r => r.id === c.planoContaId)?.tipo_operacao;
+    if (tipo === '1-Entradas') return true;
+    if (tipo === '2-Saídas') return false;
+    return tipoOperacao !== 'compra';
+  };
+
   /* ⚠ E A PREVISAO VEM ANTES DE TUDO. Sem ela a linha mostraria o CODIGO do componente
      ('adiantamento_devolvido'), que nao e' vocabulario de operador; a previsao ja sabe
      como a linha se chama na tela. */
@@ -645,13 +726,36 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
      ⚠ FALHA DEPOIS DE PROGRAMAR deixa a programacao viva sem titulo. Nao se desfaz por
      conta propria: o estado fica VISIVEL na linha ("Programado", com "falta lançar"), e o
      botao Lançar do bloco de detalhe termina o que faltou. Desfazer em silencio apagaria
-     a data e a conta que o operador acabou de informar. */
-  async function lancarRealizado(lista: ProgramarParcelaInput[]) {
+     a data e a conta que o operador acabou de informar.
+
+     ⚠ O REALIZADO E' SOBERANO, E O AJUSTE VEM ANTES — PR-OC-VENDA-FIN-PREVISAO-01D.
+     `ajustarValorPara` chega do dialogo quando o real diverge do previsto, nos DOIS
+     sentidos. A ordem nao e' escolha: `oc_programar_compromisso` compara a soma das
+     parcelas contra `valor_total` e recusa o que exceder — programar primeiro faria a
+     RPC negar o real por causa da previsao. Ajustado, o teto passa a vigiar o numero
+     certo, e a sobra fantasma do "falta programar" some na ORIGEM: `saldo_a_programar`
+     e' `valor_total - total_programado`, e os dois viram o mesmo numero.
+     ⚠ ISTO RESOLVE OS DOIS DEFEITOS DA HOMOLOGACAO DE UMA VEZ. Real maior era bloqueado
+     pelo teto; real menor deixava a linha cobrando a diferenca. Era a mesma regra
+     faltando, vista de cada lado.
+     ⚠ AJUSTE SEM PROGRAMAR NAO E' ESTADO QUEBRADO: se a segunda chamada falhar, o
+     compromisso fica com o valor real e sem programacao — que e' exatamente o estado de
+     quem ainda vai lancar. O evento do ajuste ja esta na auditoria dizendo o que houve. */
+  async function lancarRealizado(lista: ProgramarParcelaInput[], ajustarValorPara?: number | null) {
     const alvo = realizarAlvo;
     if (versao == null || !alvo?.compromissoId) return;
     try {
-      const prog = await ocApi.programarCompromisso(versao, alvo.compromissoId, { parcelas: lista });
-      let v = prog.operacaoVersao;
+      let v = versao;
+      if (ajustarValorPara != null && Math.abs(ajustarValorPara - alvo.valorCompromisso) > TOL_CENTAVO) {
+        const desvio = round2(ajustarValorPara - alvo.valorCompromisso);
+        /* O motivo e' OBRIGATORIO no banco (guard P0001) e vai para a auditoria — por isso
+           ele diz o sentido e o tamanho, e nao so' "ajuste". */
+        const motivo = `ajustado ao realizado (${desvio > 0 ? 'acima' : 'abaixo'} do previsto em ${brl(Math.abs(desvio))})`;
+        const aj = await ocApi.ajustarValorCompromisso(v, alvo.compromissoId, ajustarValorPara, motivo);
+        v = aj.operacaoVersao;
+      }
+      const prog = await ocApi.programarCompromisso(v, alvo.compromissoId, { parcelas: lista });
+      v = prog.operacaoVersao;
       let lancadas = 0;
       for (const parcelaId of prog.parcelaIds) {
         const r = await ocApi.materializarParcela(v, prog.programacaoId, parcelaId);
@@ -847,9 +951,27 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
                       ⚠ SO' NAS LINHAS QUE AINDA SAO PREVISAO. Antes ele saia em TODAS,
                       inclusive num compromisso manual e num que ja virou titulo — e um
                       selo que nunca apaga deixa de informar. Ver `aindaEPrevisao`. */}
+                  {/* ⚠ O SINAL INFORMA, A COR REFORCA — nunca o contrario. Quem le em
+                      monocromatico, imprime ou nao distingue verde de vermelho continua
+                      sabendo o lado pelo "+"/"−". O `title` diz por extenso, e o
+                      `aria-label` do valor tambem. Ver `entradaDoCompromisso`.
+                      ⚠ SO' ONDE HA DOIS LADOS — `mostrarSentidoDoDinheiro`. O ramo `else`
+                      e' o markup de sempre, sem uma classe alterada: a compra fica byte a
+                      byte como era. */}
                   <div className="shrink-0 flex items-center gap-1.5">
                     {aindaEPrevisao(c) && seloProjecao}
-                    <div className="text-[12px] font-medium tabular-nums text-foreground">{brl(c.valorCompromisso)}</div>
+                    {rotulos.mostrarSentidoDoDinheiro ? (() => {
+                      const entra = entradaDoCompromisso(c);
+                      return (
+                        <div className={`text-[12px] font-medium tabular-nums ${entra ? 'text-emerald-700 dark:text-emerald-500' : 'text-rose-700 dark:text-rose-400'}`}
+                          title={entra ? 'entra no caixa' : 'sai do caixa'}
+                          aria-label={`${entra ? 'entrada' : 'saída'} de ${brl(c.valorCompromisso)}`}>
+                          {entra ? '+' : '−'}&nbsp;{brl(c.valorCompromisso)}
+                        </div>
+                      );
+                    })() : (
+                      <div className="text-[12px] font-medium tabular-nums text-foreground">{brl(c.valorCompromisso)}</div>
+                    )}
                   </div>
                   <Badge variant={estado.variant} className="shrink-0 text-[10px] px-1.5 py-px font-normal">{estado.label}</Badge>
                   {c.temDivergencia && <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600" aria-label="divergência" />}
@@ -1071,6 +1193,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
           valorAcordado={valorAcordado} sugestaoSubcentro={sugestaoSubcentro} descricaoDefault={descricaoDefault}
           contraparteId={contraparteId} lotesProntos={lotesProntos} lotes={lotes}
           avisoBaseCoberta={avisoBaseCoberta}
+          plano={plano} comps={comps}
         />
       )}
       {programarAberto && selecionado && (
@@ -1080,6 +1203,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
           valorAcordado={valorAcordado} totalComprometido={resumoOperacao?.obrigacaoTotal ?? 0}
           saldoAProgramar={selecionado.saldoAProgramar}
           identificacao={identidadeCompromisso(selecionado)}
+          mostrarBaseOperacao={rotulos.mostrarBaseDaOperacao}
           naturezaComponente={`${selecionado.natureza ?? '—'}/${selecionado.componente ?? '—'}`}
           favorecidoNome={fornecedores.find(f => f.id === selecionado.favorecidoId)?.nome ?? null}
         />
@@ -1094,6 +1218,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
           valorAcordado={valorAcordado} totalComprometido={resumoOperacao?.obrigacaoTotal ?? 0}
           saldoAProgramar={saldoAlvo.saldoAProgramar}
           identificacao={identidadeCompromisso(saldoAlvo)}
+          mostrarBaseOperacao={rotulos.mostrarBaseDaOperacao}
           naturezaComponente={`${saldoAlvo.natureza ?? '—'}/${saldoAlvo.componente ?? '—'}`}
           favorecidoNome={fornecedores.find(f => f.id === saldoAlvo.favorecidoId)?.nome ?? null}
           titulo="Programar saldo"
@@ -1123,6 +1248,8 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
           vencimentoInicial={previsaoDe(realizarAlvo)?.vencimentoPrevisto ?? ''}
           rotuloAcao="Lançar"
           ajuda="Informe como o dinheiro de fato aconteceu. Ao confirmar, a parcela é programada e o título é gerado na mesma ação — pronto para conciliar."
+          modoRealizado
+          mostrarBaseOperacao={rotulos.mostrarBaseDaOperacao}
         />
       )}
       {confirmarParcela && (
@@ -1207,15 +1334,18 @@ function ResumoCard({ rotulo, valor }: { rotulo: string; valor: number }) {
 }
 
 // ===== Dialog: Novo compromisso =====
-function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOperacao, fornecedores, darkSelectClass, valorAcordado, sugestaoSubcentro, descricaoDefault, contraparteId, lotesProntos, lotes, avisoBaseCoberta, onCriarFornecedor }: {
+function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOperacao, fornecedores, darkSelectClass, valorAcordado, sugestaoSubcentro, descricaoDefault, contraparteId, lotesProntos, lotes, avisoBaseCoberta, onCriarFornecedor, plano, comps }: {
   onClose: () => void; onSubmit: (p: CriarCompromissoPayload[]) => void; saving: boolean;
   clienteId: string | null; tipoOperacao: string | null; fornecedores: { id: string; nome: string }[]; darkSelectClass: string;
   valorAcordado: number | null; sugestaoSubcentro: string; descricaoDefault: string; contraparteId: string | null; lotesProntos: boolean;
   onCriarFornecedor?: (nome: string, cpfCnpj: string) => Promise<{ id: string; nome: string } | null>;
   lotes: LoteOC[]; avisoBaseCoberta: string;
+  /* ⚠ VEM DE FORA desde o adendo 2 do 01D — a lista tambem precisa dos dois, e duas
+     instancias leriam as mesmas tabelas duas vezes. `ReturnType` para nao redigitar a
+     forma dos hooks aqui: um segundo tipo escrito a mao seria a copia que diverge. */
+  plano: ReturnType<typeof usePlanoContasOC>;
+  comps: ReturnType<typeof useComponentesFinanceiros>;
 }) {
-  const plano = usePlanoContasOC(clienteId ?? undefined);
-  const comps = useComponentesFinanceiros();
   const [natureza, setNatureza] = useState<'principal' | 'obrigacao'>('principal');
   const [componente, setComponente] = useState('');
   const [valor, setValor] = useState<number | null>(null);
@@ -1516,8 +1646,12 @@ type LinhaParcela = { idLocal: string; valor: number | null; vencimento: string;
 
 function ProgramarDialog({ onClose, onSubmit, saving, clienteId, valorCompromisso, valorAcordado, totalComprometido,
   saldoAProgramar, identificacao, naturezaComponente, favorecidoNome, titulo = 'Programar parcelas',
-  vencimentoInicial = '', rotuloAcao = 'Programar', ajuda }: {
-  onClose: () => void; onSubmit: (p: ProgramarParcelaInput[]) => void; saving: boolean;
+  vencimentoInicial = '', rotuloAcao = 'Programar', ajuda,
+  modoRealizado = false, mostrarBaseOperacao = true }: {
+  onClose: () => void;
+  /* `ajustarValorPara` so' vem do modo REALIZADO; os dois call sites da compra ignoram o
+     segundo argumento e seguem com a assinatura de sempre. */
+  onSubmit: (p: ProgramarParcelaInput[], ajustarValorPara?: number | null) => void; saving: boolean;
   clienteId: string | null; valorCompromisso: number; valorAcordado: number | null; totalComprometido: number;
   saldoAProgramar: number; identificacao: string | null; naturezaComponente: string; favorecidoNome: string | null;
   titulo?: string;
@@ -1530,6 +1664,13 @@ function ProgramarDialog({ onClose, onSubmit, saving, clienteId, valorCompromiss
   rotuloAcao?: string;
   /** Frase de contexto acima das parcelas. Ausente = nenhuma frase. */
   ajuda?: string;
+  /* ⚠ O TETO DEIXA DE VALER — PR-OC-VENDA-FIN-PREVISAO-01D. No modo REALIZADO o numero
+     soberano e' o real, e o previsto vira referencia: a soma pode passar do compromisso
+     (ele e' ajustado para cima) ou ficar abaixo (ajustado para baixo, se o operador
+     confirmar que e' o valor final). Fora deste modo, teto intacto — a compra nao muda. */
+  modoRealizado?: boolean;
+  /** Exibir "OC (acordado)" e "Restante OC". Ver a nota em `RotulosCompromissos`. */
+  mostrarBaseOperacao?: boolean;
 }) {
   const { contas } = useContasBancariasLeves(clienteId);
   const idRef = useRef(0);
@@ -1548,6 +1689,11 @@ function ProgramarDialog({ onClose, onSubmit, saving, clienteId, valorCompromiss
     () => [{ ...novaLinha(), valor: saldoAProgramar > 0 ? round2(saldoAProgramar) : null, vencimento: vencimentoInicial }],
   );
   const [confirmarParcial, setConfirmarParcial] = useState(false);
+  /* ⚠ MARCADO POR PADRAO, e a decisao e' de produto: no modo realizado, informar menos do
+     que o previsto quase sempre significa "foi isto que aconteceu", nao "paguei uma
+     parte". Quem tem uma parcial legitima DESMARCA e o compromisso fica intacto — o
+     caminho existe, so' nao e' o default. */
+  const [ajustarAoRealizado, setAjustarAoRealizado] = useState(true);
 
   const soma = useMemo(() => round2(linhas.reduce((s, l) => s + (l.valor ?? 0), 0)), [linhas]);
   const todasComValor = linhas.length > 0 && linhas.every(l => l.valor != null && l.valor > 0);
@@ -1557,7 +1703,17 @@ function ProgramarDialog({ onClose, onSubmit, saving, clienteId, valorCompromiss
      existente contra o valor total. Na PRIMEIRA programacao os dois numeros sao o
      mesmo (nada foi programado ainda), entao este teto vale para os dois caminhos. */
   const tetoCompromisso = round2(saldoAProgramar);
-  const podeSubmeter = todasComValor && soma <= tetoCompromisso && !saving;
+  /* ⚠ NO MODO REALIZADO O TETO E' O PROPRIO VALOR DO COMPROMISSO, e nao ha diferenca
+     entre os dois numeros: o botao "Lançar realizado" so' aparece em compromisso SEM
+     programacao ativa, entao `total_programado` e' zero e `saldoAProgramar` E'
+     `valorCompromisso`. O alvo do ajuste e' `valorCompromisso` de proposito — e' ele que
+     a RPC reescreve, e usar o saldo aqui daria o numero errado no dia em que este
+     dialogo abrir sobre uma programacao parcial. */
+  const alvoAjuste = round2(valorCompromisso);
+  const excede = modoRealizado && soma > alvoAjuste + TOL_CENTAVO;
+  const abaixo = modoRealizado && soma < alvoAjuste - TOL_CENTAVO;
+  const desvio = round2(soma - alvoAjuste);
+  const podeSubmeter = todasComValor && (modoRealizado || soma <= tetoCompromisso) && !saving;
   const restanteOC = (valorAcordado ?? 0) - totalComprometido;
   const restanteCompromisso = round2(tetoCompromisso - soma);
 
@@ -1574,13 +1730,27 @@ function ProgramarDialog({ onClose, onSubmit, saving, clienteId, valorCompromiss
      e reusar o componente e' mais barato do que reproduzir o tratamento. */
 
   // Sequência é derivada 1..N na ordem visual, na hora de emitir (nunca guardada por linha).
-  const emitir = () => {
+  const emitir = (ajustarValorPara?: number | null) => {
     if (!podeSubmeter) return;
-    onSubmit(linhas.map((l, i) => ({ sequencia: i + 1, valor: l.valor ?? 0, vencimento: l.vencimento || null, conta_bancaria_id: l.contaId || null })));
+    onSubmit(
+      linhas.map((l, i) => ({ sequencia: i + 1, valor: l.valor ?? 0, vencimento: l.vencimento || null, conta_bancaria_id: l.contaId || null })),
+      ajustarValorPara ?? null,
+    );
   };
   // item 3: Σ = teto segue direto; Σ > teto fica bloqueado (writer); Σ < teto exige confirmação de parcial.
+  /* ⚠ NO MODO REALIZADO O CAMINHO E' OUTRO, e nao passa pelo dialogo de parcial: ali a
+     pergunta "é uma parcial?" ja foi feita pela caixa de marcar, e faze-la duas vezes
+     seria pedir a mesma confirmacao em dois lugares.
+       para CIMA  -> ajusta sempre (nao ha como programar acima do valor do compromisso);
+       para BAIXO -> ajusta se a caixa estiver marcada; desmarcada, e' parcial legitima e
+                     o compromisso fica como esta';
+       IGUAL      -> nada a ajustar. */
   const aoProgramar = () => {
     if (!podeSubmeter) return;
+    if (modoRealizado) {
+      emitir(excede || (abaixo && ajustarAoRealizado) ? soma : null);
+      return;
+    }
     if (soma < tetoCompromisso) { setConfirmarParcial(true); return; }
     emitir();
   };
@@ -1606,10 +1776,19 @@ function ProgramarDialog({ onClose, onSubmit, saving, clienteId, valorCompromiss
                 {ajuda}
               </div>
             )}
+            {/* ⚠ "OC (acordado)" e "Restante OC" SO' NA COMPRA — ver a nota em
+                `RotulosCompromissos`. Numa venda os dois numeros comparam grandezas de
+                sentidos opostos e produzem um residuo (-204.132,08 na b58bf556) que a
+                tela apresentava como saldo. As outras duas ficam: "Comprometido" e
+                "A programar" nao dependem do valor acordado. */}
             <div className="grid grid-cols-2 gap-1.5 text-[11px]">
-              <div className="rounded border bg-muted/30 px-1.5 py-0.5"><span className="text-muted-foreground">OC (acordado): </span><b>{valorAcordado != null ? brl(valorAcordado) : '—'}</b></div>
+              {mostrarBaseOperacao && (
+                <div className="rounded border bg-muted/30 px-1.5 py-0.5"><span className="text-muted-foreground">OC (acordado): </span><b>{valorAcordado != null ? brl(valorAcordado) : '—'}</b></div>
+              )}
               <div className="rounded border bg-muted/30 px-1.5 py-0.5"><span className="text-muted-foreground">Comprometido: </span><b>{brl(totalComprometido)}</b></div>
-              <div className="rounded border bg-muted/30 px-1.5 py-0.5"><span className="text-muted-foreground">Restante OC: </span><b>{brl(restanteOC)}</b></div>
+              {mostrarBaseOperacao && (
+                <div className="rounded border bg-muted/30 px-1.5 py-0.5"><span className="text-muted-foreground">Restante OC: </span><b>{brl(restanteOC)}</b></div>
+              )}
               <div className="rounded border bg-muted/30 px-1.5 py-0.5"><span className="text-muted-foreground">A programar: </span><b>{brl(saldoAProgramar)}</b> · Σ {brl(soma)}</div>
             </div>
             {linhas.map((l, i) => (
@@ -1642,7 +1821,27 @@ function ProgramarDialog({ onClose, onSubmit, saving, clienteId, valorCompromiss
             <Button variant="outline" size="sm" className="h-7 text-[12px]" onClick={() => setLinhas(prev => [...prev, novaLinha()])}>
               <Plus className="h-3.5 w-3.5 mr-1" /> Adicionar parcela
             </Button>
-            {soma > tetoCompromisso && (
+            {/* ⚠ NO REALIZADO ISTO NAO E' ERRO. Excedente informado com o previsto na mao,
+                em ambar, dizendo o que vai acontecer — nao em vermelho, dizendo que o
+                operador errou. O que ele digitou e' o que aconteceu. */}
+            {excede && (
+              <div className="rounded-md border border-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2 py-1.5 text-[11px] leading-snug text-amber-800 dark:text-amber-200">
+                O realizado excede o previsto em <b>{brl(desvio)}</b>. O compromisso será
+                ajustado de {brl(alvoAjuste)} para <b>{brl(soma)}</b> e o ajuste fica registrado na auditoria.
+              </div>
+            )}
+            {abaixo && (
+              <label className="flex items-start gap-1.5 rounded-md border border-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2 py-1.5 text-[11px] leading-snug text-amber-800 dark:text-amber-200 cursor-pointer">
+                <Checkbox checked={ajustarAoRealizado} onCheckedChange={(v) => setAjustarAoRealizado(v === true)} className="h-3.5 w-3.5 mt-[1px]" />
+                <span>
+                  Este é o valor final: o realizado ficou <b>{brl(Math.abs(desvio))}</b> abaixo do previsto e
+                  o compromisso será ajustado de {brl(alvoAjuste)} para <b>{brl(soma)}</b>.
+                  {' '}Desmarque se este é apenas um pagamento parcial — aí o compromisso fica em {brl(alvoAjuste)}
+                  {' '}e o restante segue a programar.
+                </span>
+              </label>
+            )}
+            {!modoRealizado && soma > tetoCompromisso && (
               /* Diz o numero e o que fazer, nao so que esta errado — mesmo criterio do
                  aviso de base coberta (d9aae3aa): a mensagem do backend continua sendo
                  a do backend, e aqui se orienta antes de chegar la. */

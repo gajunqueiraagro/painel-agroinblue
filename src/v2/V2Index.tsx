@@ -436,7 +436,12 @@ export default function V2Index() {
      compilador cobra os dois pontos de uso. */
   type DrillReturn =
     | { destino: 'zoo'; id: string; tab: 'dados' | 'custos' | 'itens' | 'auditoria'; section: V2Section }
-    | { destino: 'oc'; id: string; tab: 'financeiro' };
+    /* ⚠ O TIPO E' PARTE DO ENDERECO — PR-OC-VENDA-FIN-PREVISAO-01D. `abrirOperacaoOC`
+       tem `tipo` com default 'compra', entao um retorno sem tipo reabria QUALQUER
+       operacao como compra: a venda voltava com `oc_compra=1`, a hidratacao a recusava
+       e o usuario caia em Lancamentos sem modal. Guardar o id sem o tipo era guardar
+       meio endereco. */
+    | { destino: 'oc'; id: string; tab: 'financeiro'; tipo: 'compra' | 'venda' };
 
   const retornarDoDrill = (ret: DrillReturn) => {
     if (ret.destino === 'zoo') {
@@ -445,9 +450,10 @@ export default function V2Index() {
       setZooEditId(ret.id);
       return;
     }
-    /* OC: `abrirOperacaoOC` ja sabe recompor a URL (oc_compra + oc_id + oc_aba) e trocar
-       a secao. Reusar em vez de reescrever — e' a mesma funcao que a Central usa. */
-    abrirOperacaoOC(ret.id, ret.tab);
+    /* OC: `abrirOperacaoOC` ja sabe recompor a URL (oc_compra|oc_venda + oc_id + oc_aba)
+       e trocar a secao. Reusar em vez de reescrever — e' a mesma funcao que a Central usa,
+       e o terceiro argumento e' o mesmo que ela passa. */
+    abrirOperacaoOC(ret.id, ret.tab, ret.tipo);
   };
 
   const [searchParams, setSearchParams] = useSearchParams();
@@ -619,10 +625,13 @@ export default function V2Index() {
          caminho antigo — na pratica os dois nunca chegam juntos, porque partem de telas
          diferentes. A OC nao carrega `section`: `abrirOperacaoOC` ja troca a secao. */
       const rocId = searchParams.get('returnOcId');
+      /* Guard explicito, como o `rawTab` acima: estreita para a union sem `as`, e
+         qualquer valor inesperado cai em 'compra' — o default historico. */
+      const rocTipo = searchParams.get('returnOcTipo') === 'venda' ? 'venda' : 'compra';
       if (rzId) {
         setDrillReturn({ destino: 'zoo', id: rzId, tab: rzTab, section: origemSection });
       } else if (rocId) {
-        setDrillReturn({ destino: 'oc', id: rocId, tab: 'financeiro' });
+        setDrillReturn({ destino: 'oc', id: rocId, tab: 'financeiro', tipo: rocTipo });
       }
       const next = new URLSearchParams(searchParams);
       next.delete('flancId');
@@ -630,6 +639,7 @@ export default function V2Index() {
       next.delete('returnZooId');
       next.delete('returnZooTab');
       next.delete('returnOcId');
+      next.delete('returnOcTipo');
       setSearchParams(next, { replace: true });
     }
   }, [searchParams, setSearchParams]);
