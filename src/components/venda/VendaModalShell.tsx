@@ -50,7 +50,7 @@ import type { DocumentosApi } from '@/hooks/useOperacaoDocumentos';
 import type { EventosApi } from '@/hooks/useOperacaoEventos';
 import type { LiquidacaoApi } from '@/hooks/useOperacaoLiquidacao';
 import { BoitelTopoNegociacao, BoitelResultadoCompacto, liquidoDaVendaBoitel, derivadosBoitel, PilulaCenario } from '@/components/venda/BoitelNegociacaoDerivado';
-import { BoitelBlocosModais, CampoNum, faltamDosCinco, type BoitelEdicao } from '@/components/venda/BoitelBlocosModais';
+import { BoitelBlocosModais, faltamDosCinco, type BoitelEdicao } from '@/components/venda/BoitelBlocosModais';
 import { pesoMedioPorCabeca, valorPorKgNegociado } from '@/hooks/useCompraLotes';
 
 /* ⚠ "RECEBIMENTO" CHAMA-SE ENTREGA NA VENDA — o gado SAI. A coluna do banco já é
@@ -380,10 +380,9 @@ export function VendaModalShell({
       loteUnico={ehBoitel ? {
         motivo: 'Boitel é um embarque só: a operação comercial é o lote. Para negociar outro embarque, crie outra venda.',
       } : null}
-      /* ⚠ SO' NA VENDA BOITEL — PR-OC-VENDA-LAYOUT-NEG-01. Os quatro numeros ja estao no
-         topo congelado da aba; repeti-los aqui era a duplicacao que o redesenho matou.
-         Titulo, contagem e "+ Adicionar lote" ficam. */
-      ocultarTotais={ehBoitel}
+      /* ⚠ SO' NA VENDA BOITEL — PR-OC-VENDA-LAYOUT-NEG-01B. A negociacao do boitel virou
+         leitura: o lote se reduz a uma linha magra com o lapis. Ver a nota na prop. */
+      linhaMagra={ehBoitel}
       rotulos={{
         salveIdentificacao: 'Salve a identificação da venda para adicionar os lotes da negociação.',
         voltarParaIdentificacao: 'Voltar para Venda',
@@ -576,17 +575,16 @@ export function VendaModalShell({
                     tem sobre o que calcular — o topo deriva dele. */}
                 {abaLotes}
 
-                {/* ─── A GRADE DOS TRES CARDS ─────────────────────────────────────────
-                    PR-OC-VENDA-LAYOUT-NEG-01, item 2. `BoitelBlocosModais` devolve um
-                    FRAGMENT com dois cards, entao os tres sao celulas irmas deste grid.
-                    ⚠ O BREAKPOINT E' `lg` (1024px), e a escolha vem de uma medida, nao de
-                    gosto: o modal e' `max-w-5xl`, que sao exatamente 1024px — abaixo disso
-                    a janela e' que manda, e tres colunas nao cabem sem espremer campo. As
-                    proporcoes 1fr/1fr/0.8fr dao mais largura a quem tem CAMPOS e menos a
-                    quem so' tem rotulo-valor.
-                    ⚠ `items-start` para os cards nao esticarem ate' a altura do mais alto —
-                    um card curto com um vazio embaixo parece conteudo faltando. */}
-                <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_0.8fr] gap-[14px] items-start">
+                {/* ─── DOIS CARDS DE RESUMO ──────────────────────────────────────────
+                    PR-OC-VENDA-LAYOUT-NEG-01B, forma final: a aba NAO TEM CAMPOS. Cada
+                    card mostra o resumo do seu grupo e abre um dialogo com o estado local
+                    — ver a nota em `BoitelBlocosModais`.
+                    ⚠ Medido em `max-w-6xl` (1152px): coluna de conteudo 828px, 407px por
+                    card. Sem campos dentro, sobra largura para os numeros respirarem.
+                    ⚠ `BoitelBlocosModais` devolve um FRAGMENT com os dois cards, entao os
+                    dois sao celulas irmas deste grid.
+                    ⚠ Abaixo de `lg` tudo vira uma coluna. */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-[14px] items-start">
                   {boitelData && onBoitelChange && (
                     <BoitelBlocosModais
                       valor={boitelData}
@@ -594,18 +592,13 @@ export function VendaModalShell({
                       somenteLeitura={ocStatusComercial === 'cancelada'}
                     />
                   )}
-                  {/* ⚠ O CAMPO DO CUSTO DE OPORTUNIDADE E MONTADO AQUI e entregue ao card
-                      como `ReactNode`. Ele saiu do bloco de Custos por decisao do Gabriel
-                      (custo com custo, decisao com decisao) e o card de Resultado nao pode
-                      importar o `CampoNum` sem fechar um ciclo — ver a nota la'. */}
-                  <BoitelResultadoCompacto boitelData={boitelData} cenario="projetado"
-                    campoOportunidade={boitelData && onBoitelChange ? (
-                      <CampoNum label="Custo de oportunidade" valor={boitelData.custoOportunidade}
-                        sufixo="R$/kg" desabilitado={ocStatusComercial === 'cancelada'}
-                        onChange={(v) => onBoitelChange({ ...boitelData, custoOportunidade: v })} />
-                    ) : undefined}
-                  />
                 </div>
+
+                {/* ⚠ A FAIXA FECHA A ABA com os DOIS numeros que decidem: o que a venda
+                    rende e se valeu a pena contra vender vivo hoje. Os quatro pares de
+                    memoria de calculo vivem no `BoitelPainelResultado`; o campo do custo
+                    de oportunidade voltou ao modal de Custos, que e' onde se digita. */}
+                <BoitelResultadoCompacto boitelData={boitelData} cenario="projetado" />
               </div>
             ) : abaLotes
           ) : (

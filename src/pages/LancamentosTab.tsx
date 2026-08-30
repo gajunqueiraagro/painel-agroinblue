@@ -912,7 +912,13 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
      acaso — e foi a discordancia entre elas que fez o rodape da Morte rolar em
      PR-ZOO-FIX-MORTE-GUARDA-GLOBAL-01: o tipo estava numa e faltava na outra. Com o
      mesmo predicado nos dois, nao ha como discordarem. */
-  const usaEnvelopeProprio = TIPOS_NO_ENVELOPE_PROPRIO.includes(tipo) || vendaMetaNoEnvelope || (isVenda && modoOCVenda);
+  /* ⚠ A VENDA COMO OC E' O UNICO MODAL LARGO — PR-OC-VENDA-LAYOUT-NEG-01B. Predicado
+     PROPRIO, e nao um `||` reaproveitado, porque ele responde outra pergunta: o
+     `usaEnvelopeProprio` diz QUE ENVELOPE usar (padding, gap, botao de fechar), e este diz
+     QUE LARGURA. Compartilhar um so' faria a compra herdar a largura da venda no primeiro
+     ajuste de qualquer um dos dois. */
+  const vendaOCNoEnvelope = isVenda && modoOCVenda;
+  const usaEnvelopeProprio = TIPOS_NO_ENVELOPE_PROPRIO.includes(tipo) || vendaMetaNoEnvelope || vendaOCNoEnvelope;
   /** Quem escolhe a propria fazenda — governa os cinco pontos: a guarda de Global, os
    *  dois escritores de texto, o `fazendaId` do payload e a confirmacao. */
   const escolheFazenda = TIPOS_COM_SELETOR_DE_FAZENDA.includes(tipo) || vendaMetaNoEnvelope;
@@ -5074,8 +5080,13 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           /* ⚠ MESMO TETO DO MODAL SIMPLES, na linha de baixo (PR-OC-MODAL-TAMANHO-01).
              Eram 1152px contra 1024px, e a diferenca fazia os dois lerem como sistemas
              diferentes ao alternar entre eles. O shell nao declara largura: ele preenche
-             o que este DialogContent lhe da. */
-          ? 'max-w-5xl p-0 gap-0 overflow-hidden [&>button.absolute]:hidden'
+             o que este DialogContent lhe da.
+             ⚠ A VENDA COMO OC VOLTA AOS 1152px — PR-OC-VENDA-LAYOUT-NEG-01B, escopo
+             expandido pelo arquiteto. A aba de Negociacao dela carrega DOIS cards de campos
+             mais o resumo lateral de 280px; em 1024px sobravam ~100px por coluna de campo e
+             os rotulos quebravam palavra a palavra. Compra, Nascimento, Morte e a venda de
+             meta seguem em 1024px — o predicado e' so' da venda OC, conferido. */
+          ? `${vendaOCNoEnvelope ? 'max-w-6xl' : 'max-w-5xl'} p-0 gap-0 overflow-hidden [&>button.absolute]:hidden`
           : 'max-w-full sm:max-w-5xl w-full h-screen sm:h-auto sm:max-h-[92vh] overflow-y-auto p-4 sm:p-5'}
       >
       {isVenda && modoOCVenda ? (

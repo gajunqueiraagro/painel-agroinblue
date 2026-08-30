@@ -296,9 +296,14 @@ export function PilulaCenario({ cenario = 'projetado' }: { cenario?: CenarioBoit
    ⚠ A PILULA MIGROU PARA CA, e nao ha uma segunda: ela marcava a faixa "Base
    operacional", que deixou de existir. Este bloco e' o cabecalho do boitel na aba, entao
    a marca cobre o conjunto — o planejamento E o valor do lote que dele deriva.
-   ⚠ A21 — `sticky top-0` com fundo OPACO e a borda NO PROPRIO bloco. O `-mt-2 pt-2`
-   compensa o padding do container SO' no eixo vertical: margem negativa lateral comeria
-   as bordas, e sem a compensacao as linhas vazam pelo vao ao rolar.
+   ⚠ A21 — `sticky top-0`, fundo OPACO e a borda NO PROPRIO bloco.
+   ⚠ SEM `-mt/pt` AQUI, e a ausencia e' a correcao (PR-OC-VENDA-LAYOUT-NEG-01B). A regra do
+   A21 manda compensar o padding do container que rola; MEDIDO, este container nao tem
+   nenhum: quem rola e' `space-y-2 min-w-0 lg:overflow-y-auto` (VendaModalShell:438), e o
+   `p-4` mora no grid PAI, que nao rola. O `-mt-2 pt-2` que estava aqui compensava um
+   padding inexistente — puxava o bloco 8px para cima e abria um vao de 8px por onde o
+   conteudo passava ao rolar. Era o defeito do print 2. Compensar so' onde ha o que
+   compensar; medir o container antes de copiar a receita.
    ⚠ AUSENCIA E' TRACO, nunca zero — o mesmo criterio do cabecalho de lotes que ele
    substitui. */
 export function BoitelTopoNegociacao({ cabecas, pesoMedioKg, valorPorKg, valorTotal, cenario }: {
@@ -315,7 +320,7 @@ export function BoitelTopoNegociacao({ cabecas, pesoMedioKg, valorPorKg, valorTo
     { rotulo: 'Valor',     valor: valorTotal > 0 ? formatMoeda(valorTotal) : null, destaque: true },
   ];
   return (
-    <div className="sticky top-0 z-20 -mt-2 border-b bg-card pt-2 pb-2">
+    <div className="sticky top-0 z-20 border-b bg-card pb-2">
       <div className="grid grid-cols-4 gap-2 rounded-md border bg-muted/20 px-3.5 py-[11px]">
         {itens.map((i, idx) => (
           <div key={i.rotulo} className="min-w-0">
@@ -325,7 +330,9 @@ export function BoitelTopoNegociacao({ cabecas, pesoMedioKg, valorPorKg, valorTo
                   projecao fala. Uma por bloco, nunca uma por numero. */}
               {idx === itens.length - 1 && <PilulaCenario cenario={cenario} />}
             </div>
-            <div className={`mt-1 text-[20px] font-medium leading-none truncate tabular-nums ${i.destaque ? 'text-primary' : ''}`}>
+            {/* ⚠ `whitespace-nowrap`, NUNCA `truncate` — mesma regra da faixa do Resultado:
+                numero cortado nao e' numero. Faltando largura, a linha cresce. */}
+            <div className={`mt-1 text-[20px] font-medium leading-none whitespace-nowrap tabular-nums ${i.destaque ? 'text-primary' : ''}`}>
               {i.valor ?? <span className="text-muted-foreground font-normal">—</span>}
             </div>
           </div>
@@ -362,114 +369,81 @@ function TituloGrupo({ children }: { children: React.ReactNode }) {
    ⚠ RECALCULA A CADA TECLA, e é isso que faz o redesenho valer. Nada aqui é memoizado
    contra o valor digitado de propósito.
    ⚠ TRAVESSAO, NUNCA ZERO: sem dado que sustente a conta, o número não aparece. */
-export function BoitelResultadoCompacto({ boitelData, cenario, campoOportunidade }: {
+export function BoitelResultadoCompacto({ boitelData, cenario }: {
   boitelData: BoitelEdicao | null;
   cenario?: CenarioBoitel;
-  /* ⚠ ESTE CARD PASSOU A HOSPEDAR UM CAMPO — PR-OC-VENDA-LAYOUT-NEG-01, item 3. O custo
-     de oportunidade saiu do bloco de Custos por decisao do Gabriel: "custo com custo,
-     decisao com decisao". Ele nao e' desembolso que o boitel cobra, e' o que o capital
-     renderia noutro lugar — pertence a quem DECIDE, nao a quem soma.
-     ⚠ VEM PRONTO DE FORA, como `ReactNode` — mesmo idioma do `seloProjecao` da aba
-     Financeiro, e pelo mesmo motivo tecnico: o `CampoNum` (virgula no foco, pt-BR no
-     blur) mora em `BoitelBlocosModais`, que JA IMPORTA deste arquivo. Importa-lo de volta
-     fecharia um ciclo. Quem monta os dois lados e' o shell, que ja tem o `onChange` do
-     boitel em maos. Ausente, o card volta a ser leitura pura. */
-  campoOportunidade?: ReactNode;
 }) {
-  const faltas = useMemo(() => boitelData ? exigencias(boitelData).filter(e => !e.presente) : [], [boitelData]);
-  const d = useMemo(() => boitelData ? derivadosBoitel(boitelData) : null, [boitelData]);
-  const pronto = !!d && faltas.length === 0;
-
-  /* A margem por cabeça é `rLCab` — o resultado líquido dividido pelo lote inteiro.
-     ⚠ O DENOMINADOR NAO ENCOLHE com morte: ver a nota em `derivadosBoitel`. */
-  const margem = pronto ? d.rLCab : null;
   const liquido = liquidoDaVendaBoitel(boitelData);
   const cmp = useMemo(() => comparativoOportunidade(boitelData), [boitelData]);
 
   return (
-    <aside className="bg-card rounded-md border shadow-sm p-3 self-start min-w-0">
-      <div className="flex items-center justify-between gap-2">
-        <div className="text-[11px] font-medium text-muted-foreground leading-none">RESULTADO</div>
-        <PilulaCenario cenario={cenario} />
-      </div>
+    <section className="rounded-md border bg-card px-3 py-2.5 shadow-sm min-w-0">
+      {/* ─── FAIXA ENXUTA, LARGURA TOTAL ──────────────────────────────────────────
+          PR-OC-VENDA-LAYOUT-NEG-01B (forma final). Ela ja foi a terceira coluna de uma
+          grade de tres num modal de 1024px, e sobravam ~280px: "R$ 5...." e "7,41 ..." —
+          numero TRUNCADO, que e' pior que card alto, porque numero cortado nao e' numero.
+          Depois deitou com quatro pares e o campo do custo de oportunidade; agora ficam
+          so' os DOIS numeros que decidem. Os quatro pares sao memoria de calculo e vivem
+          no `BoitelPainelResultado`; o campo do CoP voltou para o modal de Custos, que e'
+          onde se digita.
+          ⚠ NENHUM `truncate` AQUI. `whitespace-nowrap` em tudo: faltando largura, o
+          `flex-wrap` cresce em altura e nenhum digito se perde. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-8 gap-y-3">
 
-      {/* ⚠ O LIQUIDO PROJETADO E O NUMERO DA VENDA, e e' o mesmo que o lote carrega e que a
-          previsao do financeiro usa — `liquidoDaVendaBoitel`, uma fonte so'
-          (PR-OC-VENDA-VALOR-LOTE-01). Ele encabeca o card porque e' a resposta da aba. */}
-      <div className="mt-2.5">
-        <div className="text-[11px] text-muted-foreground leading-none">Líquido projetado</div>
-        <div className={`mt-1 text-[20px] font-medium leading-none tabular-nums ${liquido == null ? 'text-muted-foreground font-normal' : 'text-primary'}`}>
-          {liquido == null ? '—' : formatMoeda(liquido)}
+        {/* O NUMERO DA VENDA — a mesma fonte do lote e da previsao do financeiro
+            (`liquidoDaVendaBoitel`), uma verdade so'. */}
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-normal text-muted-foreground leading-none">Líquido projetado</span>
+            <PilulaCenario cenario={cenario} />
+          </div>
+          <div className={`mt-1 text-[20px] font-medium leading-none tabular-nums whitespace-nowrap ${
+            liquido == null ? 'text-muted-foreground font-normal' : 'text-primary'}`}>
+            {liquido == null ? '—' : formatMoeda(liquido)}
+          </div>
         </div>
-      </div>
 
-      <div className="mt-3 space-y-1.5">
-        <LinhaResultado rotulo="Margem por cabeça" valor={margem == null ? null : formatMoeda(margem)} />
-        <LinhaResultado rotulo="Peso de saída"      valor={pronto ? formatKg(d.pf) : null} />
-        <LinhaResultado rotulo="Arrobas produzidas" valor={pronto ? `${formatArroba(d.aPcab)}/cab` : null} />
-        <LinhaResultado rotulo="Custo da arroba"    valor={pronto ? formatMoeda(d.cPArr) : null} />
-      </div>
-
-      {/* ─── ANALISE 1 — projecao x custo de oportunidade ─────────────────────────
-          ⚠ O CAMPO E A COMPARACAO NO MESMO LUGAR. O operador informa quanto o capital
-          renderia noutro lugar e ve, na linha seguinte, se o boitel bateu isso. Separar
-          os dois obrigaria a rolar entre a pergunta e a resposta.
-          ⚠ O NUMERO COMPARADO NAO E O LIQUIDO ACIMA: e' o resultado do PRODUTOR, com o
-          frete ja' descontado — e a linha do frete esta' escrita para que a diferenca
-          nunca apareca como um salto sem explicacao. Ver `comparativoOportunidade`. */}
-      <div className="mt-3 border-t pt-2.5">
-        <div className="text-[10px] font-normal text-muted-foreground leading-none mb-1.5">
-          Contra o custo de oportunidade
-        </div>
-        {campoOportunidade && <div className="w-40">{campoOportunidade}</div>}
-        <div className="mt-2 space-y-1.5">
-          <LinhaResultado rotulo="Resultado (após frete)" valor={cmp ? formatMoeda(cmp.resultado) : null} />
-          <LinhaResultado rotulo="Custo de oportunidade"  valor={cmp ? formatMoeda(cmp.oportunidade) : null} />
-        </div>
-        {/* ⚠ O VEREDITO E' FRASE, e nao so' cor: "3,0% acima" se le' em monocromatico.
-            ⚠ SEM CUSTO DE OPORTUNIDADE NAO HA VEREDITO — e a frase diz o que falta, em
-            vez de imprimir 0%, que leria como empate. */}
-        <div className="mt-2 text-[10px] leading-snug">
+        {/* O VEREDITO — a ANALISE 1 reduzida a uma frase.
+            ⚠ "vs. vender vivo hoje" e' o que o custo de oportunidade PERGUNTA em
+            portugues: quanto o capital renderia se o gado nao fosse para o boitel.
+            ⚠ O NUMERO COMPARADO E O RESULTADO APOS O FRETE, e nao o liquido a' esquerda —
+            os dois diferem pelo frete, que o produtor paga por fora. O `title` carrega
+            isso; sem ele, a diferenca pareceria um salto sem explicacao. Ver
+            `comparativoOportunidade`.
+            ⚠ SINAL E FRASE, nao so' cor: "+3,0% acima" se le' em monocromatico. */}
+        <div className="min-w-0 text-right">
           {cmp == null ? (
-            <span className="text-muted-foreground">
+            <span className="text-[10px] text-muted-foreground">
               {boitelData && boitelData.custoOportunidade > 0
-                ? 'Faltam dados do planejamento para a comparação.'
-                : 'Informe o custo de oportunidade para comparar.'}
+                ? 'Faltam dados do planejamento para comparar.'
+                : 'Informe o custo de oportunidade em Custos para comparar.'}
             </span>
           ) : (
-            <span className={cmp.diferenca >= 0 ? 'text-emerald-700 dark:text-emerald-500' : 'text-destructive'}>
-              Resultado <b>{cmp.percentual.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%
-              {' '}{cmp.diferenca >= 0 ? 'acima' : 'abaixo'}</b> do custo de oportunidade
-              {' '}({formatMoeda(Math.abs(cmp.diferenca))}).
-            </span>
+            <div title={`Resultado após frete ${formatMoeda(cmp.resultado)} contra custo de oportunidade ${formatMoeda(cmp.oportunidade)}`}>
+              <div className="text-[10px] font-normal text-muted-foreground leading-none whitespace-nowrap">
+                vs. vender vivo hoje
+              </div>
+              <div className={`mt-1 text-[15px] font-medium leading-none tabular-nums whitespace-nowrap ${
+                cmp.diferenca >= 0 ? 'text-emerald-700 dark:text-emerald-500' : 'text-destructive'}`}>
+                {cmp.diferenca >= 0 ? '+' : '−'}{Math.abs(cmp.percentual).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%
+                {' '}{cmp.diferenca >= 0 ? 'acima' : 'abaixo'}
+                {' · '}{cmp.diferenca >= 0 ? '+' : '−'}{formatMoeda(Math.abs(cmp.diferenca))}
+              </div>
+            </div>
           )}
         </div>
       </div>
 
-      {/* ⚠ O QUE FALTA NAO SE REPETE AQUI. A pendência mora na LINHA FECHADA de cada
-          bloco, em âmbar, que é onde o operador pode resolvê-la. Dizer duas vezes faria
-          o painel competir com o acordeão pela mesma informação. Só o caso extremo —
-          nenhum planejamento — precisa de frase, porque aí não há linha a olhar. */}
       {!boitelData && (
-        <p className="mt-3 text-[10px] text-muted-foreground leading-snug">
+        <p className="mt-2 text-[10px] text-muted-foreground leading-snug">
           Sem planejamento gravado nesta venda.
         </p>
       )}
-    </aside>
+    </section>
   );
 }
 
-/** Par rótulo-valor do painel — A17, com a hierarquia do mockup: rótulo 11px, valor 15px. */
-function LinhaResultado({ rotulo, valor }: { rotulo: string; valor: string | null }) {
-  return (
-    <div className="flex items-baseline justify-between gap-2 leading-tight">
-      <span className="text-[11px] text-muted-foreground shrink-0">{rotulo}</span>
-      <span className={`text-[15px] font-medium tabular-nums text-right truncate ${valor ? '' : 'text-muted-foreground font-normal'}`}>
-        {valor ?? '—'}
-      </span>
-    </div>
-  );
-}
+
 
 /* ─── O RESULTADO INTEIRO ──────────────────────────────────────────────────────
    240px, dois grupos: Indicadores e Operação.

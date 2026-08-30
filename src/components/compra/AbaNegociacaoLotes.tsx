@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Pencil } from 'lucide-react';
 import { parseNumericValue } from '@/lib/calculos/abate';
 import { pesoMedioPorCabeca, valorPorKgNegociado } from '@/hooks/useCompraLotes';
 import type { CompraLotesApi, CriterioValor } from '@/hooks/useCompraLotes';
@@ -64,13 +64,18 @@ interface Props {
      quatro numeros ja aparecem no topo congelado da aba, e mostra-los aqui de novo era a
      duplicacao que o redesenho veio matar: cabecas e peso liam-se duas vezes na mesma
      tela, um dos dois sempre fora de vista.
-     ⚠ SO' OS NUMEROS SOMEM. O titulo, a contagem e o "+ Adicionar lote" FICAM — sem o
-     botao, uma venda boitel nova nao teria como criar o primeiro lote, e a frase do
-     estado vazio ("Clique em 'Adicionar lote'") apontaria para um controle inexistente.
-     ⚠ E O `sticky` SAI JUNTO: com os numeros fora, quem congela e' o topo da aba, e dois
-     blocos grudados no `top-0` se sobreporiam.
+     ⚠ NA FORMA FINAL A NEGOCIACAO DO BOITEL E LEITURA. O lote e' UM so' (`loteUnico`), e
+     aqui sobra a identidade dele numa LINHA MAGRA, com o lapis que abre o MESMO
+     `LoteDialog` de sempre — nenhum caminho de edicao novo.
+     ⚠ O QUE SOME: os quatro numeros (duplicados do topo), o titulo, a contagem, a segunda
+     linha da lista (peso/cab/kg — tambem no topo), o remover, e o `sticky`, porque quem
+     congela agora e' o topo e dois blocos no `top-0` se sobreporiam.
+     ⚠ O QUE FICA, E POR QUE: o "+ Adicionar lote" continua aparecendo ENQUANTO NAO HA
+     LOTE. "Sempre 1" e' o estado final, nao o inicial — sem ele uma venda boitel nova nao
+     teria como criar o primeiro, e a frase do estado vazio apontaria para um controle
+     inexistente. Criado o lote, a acao some da tela, como pede a spec.
      ⚠ Omitido (compra e venda comum), tudo fica como era — byte a byte. */
-  ocultarTotais?: boolean;
+  linhaMagra?: boolean;
   rotulos?: {
     salveIdentificacao?: string;
     voltarParaIdentificacao?: string;
@@ -142,7 +147,7 @@ function ValorInput({ value, onChange, disabled, placeholder, className }: {
 export function AbaNegociacaoLotes({
   categoria, categoriasDisponiveis, quantidadeNum, pesoKgNum, darkSelectClass,
   modoOC, operacaoPronta, lotesApi, somenteLeitura, fisicoBloqueado, onVoltarCompra, rotulos, valorProjetado = null, loteUnico = null,
-  ocultarTotais = false,
+  linhaMagra = false,
 }: Props) {
   /* ── MODO OC — delegado a um componente PROPRIO (PR-OC-UX-LOTE-C2-01) ──────
      O modal de lote precisa de estado (qual lote esta aberto), e hook nao pode
@@ -191,7 +196,7 @@ function NegociacaoOC({
   onVoltarCompra?: () => void;
   rotulos?: AbaNegociacaoLotesRotulos;
 }) {
-  /* ⚠ `ocultarTotais`, `loteUnico` e `valorProjetado` chegam pelo CLOSURE — esta funcao e'
+  /* ⚠ `linhaMagra`, `loteUnico` e `valorProjetado` chegam pelo CLOSURE — esta funcao e'
      ANINHADA em `AbaNegociacaoLotes` (medido: 142..371). Declara-los tambem como prop e
      passa-los no call site, sem destructuring, criaria duas fontes com o corpo lendo so'
      uma — a prop seria ignorada em silencio no dia em que divergissem. */
@@ -222,17 +227,21 @@ function NegociacaoOC({
           `sticky` se ancora nela e o resumo lateral fica parado.
           Fundo OPACO (`bg-card`) e `-mt-2 pt-2` cobrindo o padding do cartao — so no
           eixo vertical, que margem negativa lateral comeria as bordas. */}
-      <div className={ocultarTotais
+      <div className={linhaMagra
         ? 'space-y-1.5'
         : 'sticky top-0 z-10 -mt-2 space-y-1.5 border-b bg-card pt-2 pb-2'}>
+        {/* Na linha magra o cabecalho so' existe ENQUANTO FALTA o lote — e ai ele e'
+            exatamente o caminho de criar o primeiro. Criado, some. */}
+        {(!linhaMagra || lotes.length === 0) && (
         <div className="flex items-baseline justify-between gap-3">
-          <span className="text-[15px] font-medium text-foreground min-w-0 truncate">Negociação dos Lotes</span>
+          <span className={`text-[15px] font-medium text-foreground min-w-0 truncate ${linhaMagra ? 'sr-only' : ''}`}>Negociação dos Lotes</span>
           <div className="flex items-baseline gap-3 shrink-0">
             {/* A contagem SAIU do bloco de numeros: "3" nao e' grandeza que se compare
                 com peso e valor, e' quantas linhas ha logo abaixo. Aqui ela custa
                 nada e libera uma das quatro colunas para o que importa. */}
             <span className="text-[11px] font-normal text-muted-foreground">
-              {lotes.length === 0 ? 'nenhum lote' : `${lotes.length} lote${lotes.length > 1 ? 's' : ''}`}
+              {linhaMagra ? 'Nenhum lote nesta venda'
+                : lotes.length === 0 ? 'nenhum lote' : `${lotes.length} lote${lotes.length > 1 ? 's' : ''}`}
             </span>
             {!fisicoRO && (
               <button type="button" onClick={abrirNovo}
@@ -247,6 +256,7 @@ function NegociacaoOC({
             )}
           </div>
         </div>
+        )}
 
         {/* ── QUATRO NUMEROS ────────────────────────────────────────────────────
             ⚠ NADA E' RECALCULADO AQUI. `animais` e `valorNegociado` vem de
@@ -259,7 +269,7 @@ function NegociacaoOC({
             ⚠ AUSENCIA E' TRACO. `brl` devolve 'R$ —' para valor nao positivo e
             `fmtKg` devolve '—'; sem lote nenhum os quatro imprimem traco sozinhos,
             sem `?? 0` tapando buraco. */}
-        {!ocultarTotais && (
+        {!linhaMagra && (
         <div className="grid grid-cols-4 gap-2 rounded-md border bg-muted/20 px-3.5 py-[11px]">
           <div className="min-w-0">
             <div className="text-[11px] font-normal text-muted-foreground leading-none">Animais</div>
@@ -313,6 +323,26 @@ function NegociacaoOC({
                   aria-label={`Editar lote ${rotuloCategoria(l.categoria)}`}
                   title="Editar este lote"
                   className="min-w-0 flex-1 px-3.5 py-1.5 text-left leading-[1.35] hover:bg-muted/30 cursor-pointer">
+                  {/* ─── LINHA MAGRA (venda boitel) ─────────────────────────────────
+                      UMA altura: "LOTE" e a identidade do embarque, com o valor por
+                      cabeca. Peso, R$/kg e valor total NAO se repetem — os tres ja estao
+                      no topo congelado, a dois centimetros daqui.
+                      ⚠ O LAPIS E' A MARCA, o alvo de clique e' a linha inteira: um icone
+                      de 14px e' alvo pior que a faixa toda, e o `title` ja diz o que
+                      acontece. */}
+                  {linhaMagra ? (
+                    <div className="flex items-baseline gap-2 min-w-0">
+                      <span className="text-[10px] font-normal uppercase tracking-wide text-muted-foreground shrink-0">Lote</span>
+                      <span className="min-w-0 truncate text-[11px] text-foreground">
+                        {rotuloCategoria(l.categoria)}
+                        {q > 0 && <span> · {q} cab</span>}
+                        {q > 0 && total > 0 && <span className="tabular-nums"> · {brl(total / q)}/cab</span>}
+                        {semPeso && <span className="text-destructive"> · sem peso</span>}
+                      </span>
+                      <Pencil className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
+                    </div>
+                  ) : (
+                  <>
                   <div className="flex items-baseline justify-between gap-3">
                     <span className="min-w-0 truncate text-[12px] font-medium text-foreground">
                       {rotuloCategoria(l.categoria)}
@@ -328,10 +358,12 @@ function NegociacaoOC({
                     {' · '}{q > 0 ? brl(total / q) : '—'}/cab
                     {' · '}{pt > 0 ? brl(total / pt) : '—'}/kg
                   </div>
+                  </>
+                  )}
                 </button>
                 {/* Fora do botao de editar: botao dentro de botao e' HTML invalido, e
                     era o que a linha clicavel produziria se o remover ficasse dentro. */}
-                {!fisicoRO && (
+                {!fisicoRO && !linhaMagra && (
                   <button type="button" aria-label={`Remover lote ${rotuloCategoria(l.categoria)}`} title="Remover lote"
                     onClick={() => removerLote(l.idLocal)}
                     className="mr-3.5 shrink-0 text-muted-foreground/60 hover:text-destructive">

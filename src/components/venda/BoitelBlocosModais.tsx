@@ -29,9 +29,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DatePicker } from '@/components/ui/date-picker';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Pencil } from 'lucide-react';
 import { formatMoeda, formatKg, formatArroba } from '@/lib/calculos/formatters';
 import type { BoitelData } from '@/components/BoitelPlanningDialog';
 import { derivadosBoitel, cabecasQueSairam, type BoitelEdicao } from '@/components/venda/BoitelNegociacaoDerivado';
+
+const n2 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const n3 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+/** Derivado por cabeça — usa o LOTE INTEIRO no denominador, mortes incluídas. */
+const porCabeca = (total: number, qtd: number) => qtd > 0 && total > 0 ? `${formatMoeda(total / qtd)} por cab. no período` : null;
 
 /* `BoitelEdicao` e `cabecasQueSairam` DESCERAM para `BoitelNegociacaoDerivado` em
    PR-OC-VENDA-BOITEL-FIX-ARROBAS-MORTE-01: as contas de lá passaram a precisar da morte, e
@@ -197,9 +204,13 @@ export function boitelVazio(): BoitelEdicao {
    RESULTADO, e quem o monta e' o shell. `BoitelNegociacaoDerivado` nao pode importa-lo
    (este arquivo ja importa de la' — fecharia ciclo), entao o campo vai ate' o card como
    `ReactNode`, no mesmo idioma do `seloProjecao`. */
-export function CampoNum({ label, valor, onChange, casas = 2, sufixo, obrigatorio, derivado, desabilitado }: {
+export function CampoNum({ label, valor, onChange, casas = 2, sufixo, obrigatorio, derivado, desabilitado, titulo }: {
   label: string; valor: number; onChange: (v: number) => void; casas?: number;
   sufixo?: string; obrigatorio?: boolean; derivado?: string | null; desabilitado?: boolean;
+  /* ⚠ O TEXTO INTEGRAL quando o rotulo visivel foi encurtado — PR-...-01B. O `label` e' o
+     que cabe numa linha; `titulo` e' o que o campo REALMENTE pergunta, e vai no `title`.
+     Omitido, o proprio label serve de titulo: nunca fica sem. */
+  titulo?: string;
 }) {
   const fmt = (v: number) => v ? v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas }) : '';
   /* ⚠ `rascunho` E' NULO QUANDO NAO SE ESTA DIGITANDO, e ai o campo mostra o valor
@@ -215,7 +226,12 @@ export function CampoNum({ label, valor, onChange, casas = 2, sufixo, obrigatori
   };
   return (
     <div className="min-w-0">
-      <Label className="text-[10px] text-muted-foreground">
+      {/* ⚠ UMA LINHA SO', SEMPRE. Rotulo que quebra palavra a palavra ("Dias de /
+          confinamento / *") empurra o campo do vizinho para baixo e desalinha a grade
+          inteira — foi o que a homologacao viu. `nowrap` + reticencia no ROTULO; nunca
+          no numero. O `title` devolve o texto completo a quem passar o mouse. */}
+      <Label title={titulo ?? label}
+        className="block text-[10px] text-muted-foreground whitespace-nowrap overflow-hidden text-ellipsis">
         {label}{obrigatorio && <span className="text-destructive"> *</span>}
       </Label>
       <div className="mt-[3px] flex items-center gap-1">
@@ -257,56 +273,45 @@ export function CampoNum({ label, valor, onChange, casas = 2, sufixo, obrigatori
    sem precisar de clique.
    ⚠ TITULO 10px/400 muted, como pede o item 2 — o card e' que tem nome; o grupo e'
    subdivisao dentro dele. */
-function Grupo({ titulo, resumo, pendente, children }: {
-  titulo: string; resumo: string; pendente?: boolean; children: React.ReactNode;
-}) {
-  return (
-    <div className="min-w-0">
-      <div className="flex items-baseline gap-2 border-b pb-1 mb-2">
-        <span className="text-[10px] font-normal uppercase tracking-wide text-muted-foreground shrink-0">{titulo}</span>
-        <span className={`ml-auto text-[10px] tabular-nums text-right truncate ${
-          pendente ? 'text-amber-700 dark:text-amber-500' : 'text-muted-foreground'}`}>
-          {resumo}
-        </span>
-      </div>
-      {children}
-    </div>
-  );
-}
+/* ═══ AS DUAS METADES DO PLANEJAMENTO ════════════════════════════════════════════
+   PR-OC-VENDA-LAYOUT-NEG-01B (forma final, mockup aprovado). A aba deixou de ter campos:
+   ela mostra o RESUMO de cada grupo e a edicao acontece num dialogo por grupo.
 
-/* O card que hospeda os grupos. `bg-card`, borda e sombra — o mesmo cartao dos outros
-   blocos da aba, para os tres da grade lerem como irmaos. */
-function CardBloco({ titulo, children }: { titulo: string; children: React.ReactNode }) {
-  return (
-    <section className="rounded-md border bg-card p-3 shadow-sm min-w-0 space-y-3">
-      <div className="text-[11px] font-medium text-muted-foreground leading-none">{titulo}</div>
-      {children}
-    </section>
-  );
-}
+   ⚠ POR QUE O DIALOGO, E NAO O CAMPO NA ABA. Com os campos na aba, cada tecla subia ate'
+   `LancamentosTab` (`onBoitelChange` -> estado do pai -> shell -> aba inteira). Alem do
+   custo, era isso que EXERCITAVA o remount do `NegociacaoOC` aninhado
+   (PR-OC-LOTES-ANINHAMENTO-01) a cada digito. Com estado LOCAL no dialogo, a digitacao
+   nao atravessa: ela vive dentro do modal e so' desce no Aplicar. A causa-raiz da
+   familia do foco perdido some por construcao, e nao por cuidado.
+   ⚠ APLICAR NAO GRAVA NO BANCO. Ele despeja o estado local em `onChange`, exatamente
+   como os campos faziam — quem persiste continua sendo o "Salvar negociação" do rodape.
+   Nenhum caminho novo de escrita.
+   ⚠ CANCELAR DESCARTA, e por isso o estado local nasce no MOUNT a partir do valor
+   vigente: fechar sem aplicar tem de deixar a aba como estava. */
 
-const n2 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const n3 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
-/** Derivado por cabeça — usa o LOTE INTEIRO no denominador, mortes incluídas. */
-const porCabeca = (total: number, qtd: number) => qtd > 0 && total > 0 ? `${formatMoeda(total / qtd)} por cab. no período` : null;
+const GRUPOS = {
+  desempenho: { card: 'A', titulo: 'Desempenho' },
+  custos: { card: 'A', titulo: 'Custos' },
+  comercializacao: { card: 'B', titulo: 'Comercialização' },
+  adiantamento: { card: 'B', titulo: 'Adiantamento' },
+} as const;
+type IdGrupo = keyof typeof GRUPOS;
+type IdCard = 'A' | 'B';
+const TITULO_CARD: Record<IdCard, string> = {
+  A: 'Desempenho e Custos',
+  B: 'Comercialização e Adiantamento',
+};
 
-/* ═══ O COMPONENTE ═══════════════════════════════════════════════════════════════ */
-
-export function BoitelBlocosModais({ valor, onChange, somenteLeitura }: {
-  valor: BoitelEdicao; onChange: (proximo: BoitelEdicao) => void; somenteLeitura?: boolean;
-}) {
-  const d = valor;
-  const set = <K extends keyof BoitelEdicao>(k: K, v: BoitelEdicao[K]) => onChange({ ...d, [k]: v });
-
-  const der = useMemo(() => derivadosBoitel(d), [d]);
+/* Os RESUMOS de cada grupo — o que a aba mostra sem abrir nada. Funcao pura do
+   planejamento: a aba e o dialogo leem a MESMA, entao o cartao nunca discorda do que o
+   modal vai mostrar. */
+function resumosDoBoitel(d: BoitelEdicao) {
+  const der = derivadosBoitel(d);
   const qtd = d.qtdCabecas || 0;
-  const sairam = cabecasQueSairam(d);
-  const diarias = der.cDT;
   const custoTotal = der.custoTotalBoitel;
   const fatBruto = der.fba;
   const antecipado = der.valorTotalAntecipadoCalc;
   const temDesempenho = d.dias > 0 && d.gmd > 0 && d.rendimento > 0;
-
   /* O RESUMO DA LINHA FECHADA — o mesmo conteúdo que os botões antigos mostravam.
      `pendente` marca a linha em âmbar e é o que decide qual seção abre sozinha. */
   const secoes = [
@@ -337,26 +342,30 @@ export function BoitelBlocosModais({ valor, onChange, somenteLeitura }: {
       resumo: d.possuiAdiantamento && antecipado > 0 ? formatMoeda(antecipado) : 'não informado' },
   ];
 
-  /* ⚠ O ESTADO DE ABERTURA SUMIU JUNTO COM O ACORDEAO — `abertas`/`alternar` e o `Set`
-     que os guardava. Com tudo visivel nao ha o que abrir.
+  return secoes;
+}
 
-     ⚠⚠ E ISSO EXPOS UMA REGRESSAO QUE O ACORDEAO ESCONDIA. `somenteLeitura` so' era lido
-     em `onToggle`: numa venda CANCELADA a secao nao abria, e era ISSO — e nada mais — que
-     impedia a edicao. Nenhum campo recebia `desabilitado`. Sem o acordeao, os mesmos
-     campos ficariam editaveis numa operacao cancelada, e o layout teria aberto uma porta
-     de escrita fingindo mexer so' na roupa. Agora a trava e' explicita e por controle: os
-     16 `CampoNum`, o Select da modalidade, o DatePicker, o Input da observacao e os dois
-     botoes Sim/Nao do adiantamento recebem `disabled`. */
-
+/* Os CAMPOS de cada grupo. Recebe o estado e o `set` de QUEM O RENDERIZA — na forma
+   final, sempre o dialogo, com o seu estado local.
+   ⚠ OS ELEMENTOS SAO OS MESMOS E NA MESMA ORDEM. O que mudou foi a FONTE do `d` e do
+   `set`; nenhum campo trocou de lugar dentro do seu grupo. E' a licao do revert do
+   abate: reordenar a sequencia de leitura dentro de um grupo e' mudanca de conteudo
+   disfarcada de layout. */
+function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: K, v: BoitelEdicao[K]) => void,
+  onChange: (proximo: BoitelEdicao) => void, somenteLeitura?: boolean) {
+  const der = derivadosBoitel(d);
+  const qtd = d.qtdCabecas || 0;
+  const sairam = cabecasQueSairam(d);
+  const diarias = der.cDT;
   const corpos: Record<string, React.ReactNode> = {
-    desempenho: (<><div className="grid grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3">
-          <CampoNum desabilitado={somenteLeitura} label="Dias de confinamento" valor={d.dias} onChange={v => set('dias', v)} casas={0} obrigatorio />
+    desempenho: (<><div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
+          <CampoNum desabilitado={somenteLeitura} label="Dias confinamento" titulo="Dias de confinamento" valor={d.dias} onChange={v => set('dias', v)} casas={0} obrigatorio />
           <CampoNum desabilitado={somenteLeitura} label="GMD" valor={d.gmd} onChange={v => set('gmd', v)} casas={3} sufixo="kg/dia" obrigatorio />
           <CampoNum desabilitado={somenteLeitura} label="Quebra de viagem" valor={d.quebraViagem} onChange={v => set('quebraViagem', v)} sufixo="%" />
-          <CampoNum desabilitado={somenteLeitura} label="Rendimento de entrada" valor={d.rendimentoEntrada} onChange={v => set('rendimentoEntrada', v)} sufixo="%" />
-          <CampoNum desabilitado={somenteLeitura} label="Rendimento de saída" valor={d.rendimento} onChange={v => set('rendimento', v)} sufixo="%" obrigatorio />
+          <CampoNum desabilitado={somenteLeitura} label="Rend. entrada" titulo="Rendimento de entrada" valor={d.rendimentoEntrada} onChange={v => set('rendimentoEntrada', v)} sufixo="%" />
+          <CampoNum desabilitado={somenteLeitura} label="Rend. saída" titulo="Rendimento de saída" valor={d.rendimento} onChange={v => set('rendimento', v)} sufixo="%" obrigatorio />
         </div></>),
-    custos: (<><div className="grid grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3 items-start">
+    custos: (<><div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3 items-start">
           <div className="min-w-0">
             <Label className="text-[10px] text-muted-foreground">Modalidade <span className="text-destructive">*</span></Label>
             <Select value="diaria" onValueChange={() => { /* só diária — ver os itens desabilitados */ }} disabled={somenteLeitura}>
@@ -395,26 +404,41 @@ export function BoitelBlocosModais({ valor, onChange, somenteLeitura }: {
           {/* ⚠ FICA NA TELA E FORA DA SOMA. O frete é custo operacional do produtor, pago
               por fora — o rodapé abaixo não o inclui, e o campo diz isso em vez de deixar
               o operador descobrir subtraindo. */}
-          <CampoNum desabilitado={somenteLeitura} label="Frete (total)" valor={d.custoFrete} onChange={v => set('custoFrete', v)} sufixo="R$"
-            derivado={d.custoFrete > 0
-              ? `${formatMoeda(d.custoFrete / (qtd || 1))} por cab. — custo do produtor, fora do custo do boitel`
-              : 'Custo do produtor, fora do custo do boitel'} />
+          {/* ⚠ A EXPLICACAO LONGA VIROU `title` — PR-...-01B. Ela ocupava tres linhas
+              abaixo do campo numa coluna de 180px e empurrava o vizinho; a informacao
+              continua inteira, so' deixou de gastar altura. Na tela fica o numero, que e'
+              o que se compara de relance. */}
+          <CampoNum desabilitado={somenteLeitura} label="Frete (total)"
+            titulo="Frete (total) — custo do produtor, pago por fora; não entra no custo do boitel"
+            valor={d.custoFrete} onChange={v => set('custoFrete', v)} sufixo="R$"
+            derivado={d.custoFrete > 0 ? `${formatMoeda(d.custoFrete / (qtd || 1))}/cab · fora do custo` : 'Fora do custo do boitel'} />
           <CampoNum desabilitado={somenteLeitura} label="Outros (total)" valor={d.outrosCustos} onChange={v => set('outrosCustos', v)} sufixo="R$"
             derivado={porCabeca(d.outrosCustos, qtd)} />
+          {/* ⚠ O CUSTO DE OPORTUNIDADE VOLTOU PARA CA — forma final do 01B. Ele chegou a
+              morar na faixa de Resultado (onde a COMPARACAO acontece), mas a faixa final
+              nao tem campo: ela e' leitura. O numero segue sendo termo de comparacao e
+              nao desembolso — quem o le' e' o veredito la' embaixo —, e e' por isso que o
+              derivado ao lado mostra o total no lote, e nao um custo por cabeca.
+              ⚠ A unidade e' R$/kg de peso de saida da fazenda: `coT = co x peso x cab`,
+              como no simulador antigo ("Custo oport. R$/kg"). */}
+          <CampoNum desabilitado={somenteLeitura} label="Custo oportunidade" titulo="Custo de oportunidade (R$/kg de peso de saída)"
+            valor={d.custoOportunidade} onChange={v => set('custoOportunidade', v)} sufixo="R$/kg"
+            derivado={der.coT > 0 ? `${formatMoeda(der.coT)} no lote` : 'termo de comparação — não entra no custo'} />
         </div>
         {/* ⚠ A LINHA "OUTROS CUSTOS" DO FINANCEIRO SOMA TRES COLUNAS — `outros_custos`,
             `custo_nutricao` e `custos_extras_parceria` (ver useBoitelOperacoes.ts). Das
             tres, so' `Outros` tem campo aqui: a nutrição saiu por ser a própria diária, e
             os extras de parceria são de uma modalidade que ainda não existe. As duas
             colunas ficam zeradas, então a linha do financeiro é o que se digita em Outros. */}
-        <p className="text-[10px] text-muted-foreground">
-          “Outros” vira uma obrigação chamada “Outros Custos” no financeiro.
+        <p className="text-[10px] text-muted-foreground leading-snug"
+          title="A linha “Outros Custos” do financeiro soma outros_custos, custo_nutricao e custos_extras_parceria; das três, só “Outros” tem campo aqui.">
+          “Outros” vira “Outros Custos” no financeiro.
         </p></>),
-    comercializacao: (<><div className="grid grid-cols-2 gap-x-4 gap-y-3">
+    comercializacao: (<><div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
           <CampoNum desabilitado={somenteLeitura} label="Preço de venda" valor={d.precoVendaArroba} onChange={v => set('precoVendaArroba', v)} sufixo="R$/@" obrigatorio />
           {/* ⚠ TOTAL, não por cabeça. Medido no acerto real: DAEMS/GTA de R$ 4.514,57
               contra faturamento de R$ 813 mil. */}
-          <CampoNum desabilitado={somenteLeitura} label="Despesas com notas e docs. no abate" valor={d.despesasAbate} onChange={v => set('despesasAbate', v)} sufixo="R$" />
+          <CampoNum desabilitado={somenteLeitura} label="Desp. notas/docs. abate" titulo="Despesas com notas e documentos no abate" valor={d.despesasAbate} onChange={v => set('despesasAbate', v)} sufixo="R$" />
         </div>
 
         {/* ⚠ A MORTE FICOU AQUI, e os dois campos juntos. É no acerto que ela se sabe e se
@@ -422,9 +446,9 @@ export function BoitelBlocosModais({ valor, onChange, somenteLeitura }: {
             modal. A quantidade também reduz as diárias, no modal de Custos. */}
         <div className="rounded-md border bg-card p-2.5 shadow-sm space-y-2">
           <div className="text-[10px] font-bold uppercase tracking-wide text-primary/90">Morte no período</div>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-            <CampoNum desabilitado={somenteLeitura} label="Quantidade de mortes" valor={d.morteQuantidade ?? 0} onChange={v => set('morteQuantidade', v)} casas={0} />
-            <CampoNum desabilitado={somenteLeitura} label="Valor de indenização" valor={d.morteValorIndenizacao ?? 0} onChange={v => set('morteValorIndenizacao', v)} sufixo="R$" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
+            <CampoNum desabilitado={somenteLeitura} label="Qtd. de mortes" titulo="Quantidade de mortes" valor={d.morteQuantidade ?? 0} onChange={v => set('morteQuantidade', v)} casas={0} />
+            <CampoNum desabilitado={somenteLeitura} label="Indenização" titulo="Valor de indenização" valor={d.morteValorIndenizacao ?? 0} onChange={v => set('morteValorIndenizacao', v)} sufixo="R$" />
           </div>
           {/* ⚠ INDENIZAÇÃO EXISTE MAS NEM SEMPRE ACONTECE — medido: 1 morte, indenização
               zero; o boitel só deixou de cobrar a diária dela. E o lote continua sendo o
@@ -447,9 +471,9 @@ export function BoitelBlocosModais({ valor, onChange, somenteLeitura }: {
 
         {/* Com "não", os campos somem — e o estado deles some junto, no clique acima. */}
         {d.possuiAdiantamento && (
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
             <div className="min-w-0">
-              <Label className="text-[10px] text-muted-foreground">Data do adiantamento</Label>
+              <Label className="text-[10px] text-muted-foreground whitespace-nowrap">Data do adiantamento</Label>
               {/* A20 — DatePicker do sistema. */}
               <DatePicker value={d.dataAdiantamento} onChange={v => set('dataAdiantamento', v)}
                 disabled={somenteLeitura} className="mt-[3px] h-8 px-2.5 text-[12px]" />
@@ -457,11 +481,11 @@ export function BoitelBlocosModais({ valor, onChange, somenteLeitura }: {
             {/* ⚠ VALOR CHEIO DIGITADO, sem dias e sem percentual: o acerto varia por
                 contrato e o cálculo é feito fora. O percentual que existia no simulador
                 antigo não vem para cá. */}
-            <CampoNum desabilitado={somenteLeitura} label="Valor total adiantado" valor={d.valorAdiantamentoDiarias} onChange={v => set('valorAdiantamentoDiarias', v)} sufixo="R$" />
-            <CampoNum desabilitado={somenteLeitura} label="Sanitário adiantado" valor={d.valorAdiantamentoSanitario} onChange={v => set('valorAdiantamentoSanitario', v)} sufixo="R$" />
-            <CampoNum desabilitado={somenteLeitura} label="Outros adiantados" valor={d.valorAdiantamentoOutros} onChange={v => set('valorAdiantamentoOutros', v)} sufixo="R$" />
-            <div className="min-w-0 lg:col-span-2">
-              <Label className="text-[10px] text-muted-foreground">Observação</Label>
+            <CampoNum desabilitado={somenteLeitura} label="Total adiantado" titulo="Valor total adiantado" valor={d.valorAdiantamentoDiarias} onChange={v => set('valorAdiantamentoDiarias', v)} sufixo="R$" />
+            <CampoNum desabilitado={somenteLeitura} label="Sanitário adiant." titulo="Sanitário adiantado" valor={d.valorAdiantamentoSanitario} onChange={v => set('valorAdiantamentoSanitario', v)} sufixo="R$" />
+            <CampoNum desabilitado={somenteLeitura} label="Outros adiant." titulo="Outros adiantados" valor={d.valorAdiantamentoOutros} onChange={v => set('valorAdiantamentoOutros', v)} sufixo="R$" />
+            <div className="min-w-0 sm:col-span-2">
+              <Label className="text-[10px] text-muted-foreground whitespace-nowrap">Observação</Label>
               <Input value={d.adiantamentoObservacao} onChange={e => set('adiantamentoObservacao', e.target.value)}
                 disabled={somenteLeitura} placeholder="Opcional" className="mt-[3px] h-8 px-2.5 text-[12px]" />
             </div>
@@ -469,33 +493,122 @@ export function BoitelBlocosModais({ valor, onChange, somenteLeitura }: {
         )}</>),
   };
 
-  /* ⚠ UM FRAGMENT COM DOIS FILHOS, e nao um `<div>` — PR-OC-VENDA-LAYOUT-NEG-01, item 2.
-     A grade dos TRES cards (estes dois mais o Resultado) e' montada pelo shell; um
-     container aqui viraria UMA celula com dois cards empilhados dentro, que e' o oposto
-     do pedido. Fragment deixa os dois serem celulas irmas do mesmo grid.
-     ⚠ OS CAMPOS SAO OS MESMOS ELEMENTOS, com os mesmos `onChange` e na MESMA ordem
-     dentro de cada grupo. Mudou o container, nao a alimentacao — a licao do revert do
-     abate: reordenar a sequencia de leitura dentro de um grupo e' mudanca de conteudo
-     disfarcada de layout.
-     ⚠ O CUSTO DE OPORTUNIDADE SAIU DAQUI e foi para o card RESULTADO (item 3): ele nao e'
-     custo que o boitel cobra, e' termo de comparacao. Quem o monta agora e' o shell, com
-     o `CampoNum` exportado abaixo. */
-  const grupo = (id: string) => secoes.find(x => x.id === id)!;
-  const g = (id: string) => {
-    const sec = grupo(id);
-    return <Grupo titulo={sec.titulo} resumo={sec.resumo} pendente={sec.pendente}>{corpos[id]}</Grupo>;
-  };
+  return corpos;
+}
+
+/* ─── O CARD DE RESUMO, CLICAVEL ───────────────────────────────────────────────
+   ⚠ A LINHA INTEIRA E' O BOTAO, e o lapis e' so' a marca de que ela abre. Um alvo de
+   clique do tamanho do cartao vale mais que um icone de 14px, e o `title` diz o que
+   acontece — instrucao escrita na tela para explicar o que a peca ja faz e' ruido.
+   ⚠ O AMBAR DA PENDENCIA SOBREVIVEU ao fim do acordeao: era a unica coisa dele que
+   informava sem exigir clique, e continua sendo. */
+function CardResumo({ titulo, itens, onAbrir }: {
+  titulo: string;
+  itens: { rotulo: string; valor: string; pendente?: boolean }[];
+  onAbrir: () => void;
+}) {
+  return (
+    <button type="button" onClick={onAbrir} title="Clique para editar"
+      aria-label={`Editar ${titulo}`}
+      className="group w-full rounded-md border bg-card p-3 shadow-sm min-w-0 text-left cursor-pointer hover:bg-muted/25 transition-colors">
+      <div className="flex items-start justify-between gap-2">
+        <span className="text-[11px] font-medium text-muted-foreground leading-none">{titulo}</span>
+        <Pencil className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60 group-hover:text-foreground" />
+      </div>
+      <div className="mt-2.5 flex flex-wrap gap-x-7 gap-y-2.5">
+        {itens.map(i => (
+          <div key={i.rotulo} className="min-w-0">
+            <div className="text-[10px] font-normal text-muted-foreground leading-none whitespace-nowrap">{i.rotulo}</div>
+            {/* ⚠ `whitespace-nowrap`, nunca `truncate`: numero cortado nao e' numero. */}
+            <div className={`mt-1 text-[15px] font-medium leading-none tabular-nums whitespace-nowrap ${
+              i.pendente ? 'text-amber-700 dark:text-amber-500' : ''}`}>
+              {i.valor}
+            </div>
+          </div>
+        ))}
+      </div>
+    </button>
+  );
+}
+
+/* ─── O DIALOGO DE UM CARD ─────────────────────────────────────────────────────
+   ⚠ MODULE-LEVEL e com estado LOCAL — as duas regras duras juntas. Declarado aqui fora,
+   a identidade do tipo e' estavel entre renders do pai; com `useState` semeado no mount,
+   digitar nao sai daqui.
+   ⚠ `key` NUNCA DE VALOR EDITAVEL: quem monta passa o id do CARD ('A'/'B'), que nao muda
+   enquanto se digita. Uma key derivada do que se edita recriaria o input a cada tecla —
+   e' a familia do foco perdido, escrita ao contrario.
+   ⚠ SEM `useEffect` DE SINCRONIA com a prop: o valor vigente entra uma vez, no mount.
+   Sincronizar durante a digitacao traria de volta exatamente o que este desenho evita. */
+function DialogoGrupo({ card, valor, somenteLeitura, onAplicar, onFechar }: {
+  card: IdCard;
+  valor: BoitelEdicao;
+  somenteLeitura?: boolean;
+  onAplicar: (proximo: BoitelEdicao) => void;
+  onFechar: () => void;
+}) {
+  const [local, setLocal] = useState<BoitelEdicao>(valor);
+  const set = <K extends keyof BoitelEdicao>(k: K, v: BoitelEdicao[K]) => setLocal(a => ({ ...a, [k]: v }));
+  const corpos = corposDoBoitel(local, set, setLocal, somenteLeitura);
+  const ids = (Object.keys(GRUPOS) as IdGrupo[]).filter(id => GRUPOS[id].card === card);
 
   return (
+    <Dialog open onOpenChange={(o) => { if (!o) onFechar(); }}>
+      <DialogContent className="max-w-lg">
+        {/* Faixa azul do CompraModalShell — o mesmo cabecalho dos outros dialogos da OC. */}
+        <DialogHeader className="-mx-6 -mt-6 mb-1 space-y-0 bg-primary px-6 py-3">
+          <DialogTitle className="text-[15px] text-primary-foreground">{TITULO_CARD[card]}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          {ids.map(id => (
+            <div key={id} className="min-w-0">
+              <div className="text-[10px] font-normal uppercase tracking-wide text-muted-foreground border-b pb-1 mb-2">
+                {GRUPOS[id].titulo}
+              </div>
+              {corpos[id]}
+            </div>
+          ))}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={onFechar}>Cancelar</Button>
+          <Button size="sm" disabled={somenteLeitura}
+            onClick={() => { onAplicar(local); onFechar(); }}>Aplicar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ═══ O COMPONENTE ═══════════════════════════════════════════════════════════════ */
+
+export function BoitelBlocosModais({ valor, onChange, somenteLeitura }: {
+  valor: BoitelEdicao; onChange: (proximo: BoitelEdicao) => void; somenteLeitura?: boolean;
+}) {
+  const [editando, setEditando] = useState<IdCard | null>(null);
+  const secoes = useMemo(() => resumosDoBoitel(valor), [valor]);
+  const resumoDe = (card: IdCard) => (Object.keys(GRUPOS) as IdGrupo[])
+    .filter(id => GRUPOS[id].card === card)
+    .map(id => {
+      const sec = secoes.find(x => x.id === id)!;
+      return { rotulo: GRUPOS[id].titulo, valor: sec.resumo, pendente: sec.pendente };
+    });
+
+  /* ⚠ UM FRAGMENT COM DOIS FILHOS, e nao um `<div>`: a grade e' montada pelo shell, e um
+     container aqui viraria UMA celula com dois cartoes empilhados dentro. */
+  return (
     <>
-      <CardBloco titulo="Desempenho e Custos">
-        {g('desempenho')}
-        {g('custos')}
-      </CardBloco>
-      <CardBloco titulo="Comercialização e Adiantamento">
-        {g('comercializacao')}
-        {g('adiantamento')}
-      </CardBloco>
+      <CardResumo titulo={TITULO_CARD.A} itens={resumoDe('A')} onAbrir={() => setEditando('A')} />
+      <CardResumo titulo={TITULO_CARD.B} itens={resumoDe('B')} onAbrir={() => setEditando('B')} />
+      {editando && (
+        <DialogoGrupo
+          key={editando}
+          card={editando}
+          valor={valor}
+          somenteLeitura={somenteLeitura}
+          onAplicar={onChange}
+          onFechar={() => setEditando(null)}
+        />
+      )}
     </>
   );
 }
