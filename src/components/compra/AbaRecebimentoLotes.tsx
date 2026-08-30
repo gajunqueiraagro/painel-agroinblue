@@ -22,6 +22,12 @@ interface Props {
   isCompra: boolean;
   categoriasDisponiveis: { value: string; label: string }[];  // catálogo oficial (tradução de slugs)
   documentosApi?: DocumentosApi;   // instância ÚNICA — registro rápido reutiliza a persistência oficial
+  /* ⚠ A DATA PADRAO DO REGISTRO E A DA OPERACAO, e nao a de hoje — PR-OC-VENDA-ENTREGA-01C.
+     Vale para os DOIS tipos: o registro pertence à operação, não ao dia em que alguém
+     clicou. Uma compra de 13/05 aberta em 30/08 trazia 30/08 e dependia de o operador
+     lembrar de corrigir — e data errada só aparece meses depois, no fechamento.
+     Sem a prop, o comportamento antigo (hoje) continua. */
+  dataOperacao?: string | null;
   somenteLeitura?: boolean;     // OPEN-01: abertura de operação existente — aba read-only
   onVoltarNegociacao?: () => void;
   /* ⚠ TEXTOS COM DEFAULT IGUAL AO DE HOJE — PR-OC-VENDA-ENTREGA-01. Mesmo idioma dos
@@ -39,7 +45,18 @@ export interface RotulosEntrega {
   informeQuantidade?: string;
   indisponivelTitulo?: string;
   indisponivelDetalhe?: string;
-  movimentarTodos?: string;
+  /* ⚠ CINCO CHAVES NOVAS — PR-OC-VENDA-ENTREGA-01C. Duas delas existiam pela METADE: eu
+     traduzi o `aria-label` do "Receber todos" e o `title` do "Receber" por lote, e deixei o
+     TEXTO VISIVEL cru. Leitor de tela dizia uma coisa e o olho lia outra — a mesma familia
+     de duas copias com uma atualizada, em miniatura.
+     ⚠ E o contador do topo aparece DUAS VEZES no arquivo: ha' um ramo para entrega aberta e
+     outro para encerrada. Uma chave, dois pontos. */
+  movimentarTodos?: string;          // aria-label do atalho
+  movimentarTodosTexto?: string;     // o texto visivel do mesmo atalho
+  acaoLote?: string;                 // o texto do botao de cada lote
+  acaoLoteAria?: (categoria: string) => string;
+  rotuloTotalTopo?: string;          // o contador do topo (X / Y), nos dois ramos
+  avisoEncerrado?: string;           // o aviso do ramo ENCERRADO, que so aparece depois de encerrar
   registrarDoLote?: string;
   colunaData?: string;
   rotuloTotal?: string;
@@ -165,7 +182,7 @@ function ReceberLoteDialog({ lote, rotulo, pesoSugerido, hoje, isCompra, saving,
   );
 }
 
-export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada, isCompra, categoriasDisponiveis, documentosApi, somenteLeitura, onVoltarNegociacao, rotulos }: Props) {
+export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada, isCompra, categoriasDisponiveis, documentosApi, dataOperacao, somenteLeitura, onVoltarNegociacao, rotulos }: Props) {
   /* ⚠ AS TRES TABELAS POR LINHA (`qtd`, `peso`, `dataReb`) SAIRAM em
      PR-OC-RECEB-REGISTRO-02. Elas so existiam para alimentar os inputs inline da
      grade de onze colunas; com os campos dentro do modal, os valores viajam por
@@ -179,6 +196,9 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
   const [reabrirOpen, setReabrirOpen] = useState(false);
   const [motivoReabrir, setMotivoReabrir] = useState('');
   const hoje = new Date().toISOString().slice(0, 10);
+  /* O que o campo de data traz aberto. Editavel: o operador corrige quando a saida (ou a
+     chegada) nao aconteceu no dia da operacao. */
+  const dataPadrao = dataOperacao || hoje;
   // OPEN-01: abertura existente = read-only (equivale ao "encerrada" para fins de escrita/exibição).
   const readOnly = encerrada || somenteLeitura;
   // Tradução slug -> nome oficial (mesmo catálogo usado na Negociação p/ escolher a categoria;
@@ -220,7 +240,7 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
     // valor efetivo: o que o operador digitou; se não tocou, o negociado que inicializa o campo.
     const pm = parseNumericValue(dados.pesoMedio || pesoInicial(l));
     void api.registrar(l.loteId, {
-      data: dados.data || hoje,
+      data: dados.data || dataPadrao,
       categoria: l.categoria ?? '',
       quantidade: Math.trunc(q),
       pesoMedio: isCompra && pm ? pm : null,
@@ -324,7 +344,7 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
                 ha e' ausencia de negociacao. */}
             <div className="grid grid-cols-2 gap-2 rounded-md border bg-muted/20 px-3.5 py-[11px]">
               <div className="min-w-0">
-                <div className="text-[11px] font-normal text-muted-foreground leading-none">Recebido</div>
+                <div className="text-[11px] font-normal text-muted-foreground leading-none">{rotulos?.rotuloTotalTopo ?? 'Recebido'}</div>
                 <div className="mt-1 flex items-baseline gap-2">
                   <span className="text-[20px] font-medium tabular-nums leading-none">
                     {semLote ? '—' : `${totalRecebido} / ${totalNegociado}`}
@@ -347,7 +367,7 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
 
           {/* O aviso permanece com o texto e o comportamento atuais. */}
           <div className="text-[11px] text-muted-foreground">
-            Recebimento encerrado. Use Reabrir recebimento para registrar mais movimentações.
+            {rotulos?.avisoEncerrado ?? 'Recebimento encerrado. Use Reabrir recebimento para registrar mais movimentações.'}
           </div>
 
           {/* ── LISTA A18 ───────────────────────────────────────────────────────
@@ -413,13 +433,13 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
                   title="Registrar em todos os lotes a quantidade negociada"
                   aria-label={rotulos?.movimentarTodos ?? 'Receber todos conforme negociado'}
                   className="shrink-0 text-[11px] font-normal text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline">
-                  Receber todos conforme negociado
+                  {rotulos?.movimentarTodosTexto ?? 'Receber todos conforme negociado'}
                 </button>
               )}
             </div>
             <div className="grid grid-cols-2 gap-2 rounded-md border bg-muted/20 px-3.5 py-[11px]">
               <div className="min-w-0">
-                <div className="text-[11px] font-normal text-muted-foreground leading-none">Recebido</div>
+                <div className="text-[11px] font-normal text-muted-foreground leading-none">{rotulos?.rotuloTotalTopo ?? 'Recebido'}</div>
                 <div className="mt-1 flex items-baseline gap-2">
                   {/* ⚠ RECEBIDO ZERO E' AUSENCIA, NAO NUMERO. "0 / 10" afirma que se
                       contou e deu zero; "— / 10" diz que ainda nao comecou. */}
@@ -496,9 +516,9 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
                       {!readOnly && !semSaldo(l) ? (
                         <button type="button" disabled={api.saving} onClick={() => setReceberLoteId(l.loteId)}
                           title={rotulos?.registrarDoLote ?? 'Registrar o recebimento deste lote'}
-                          aria-label={`Receber lote ${catLabel(l.categoria)}`}
+                          aria-label={rotulos?.acaoLoteAria ? rotulos.acaoLoteAria(catLabel(l.categoria)) : `Receber lote ${catLabel(l.categoria)}`}
                           className="text-[11px] font-normal text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline">
-                          Receber
+                          {rotulos?.acaoLote ?? 'Receber'}
                         </button>
                       ) : (
                         <span className={`rounded-full px-1.5 py-px text-[10px] font-normal ${TONE[l.estado]}`}>{LABEL[l.estado]}</span>
@@ -530,7 +550,7 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
           lote={receberLote}
           rotulo={catLabel(receberLote.categoria)}
           pesoSugerido={pesoInicial(receberLote)}
-          hoje={hoje}
+          hoje={dataPadrao}
           isCompra={isCompra}
           r={rotulos}
           saving={api.saving}

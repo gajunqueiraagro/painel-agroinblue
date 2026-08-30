@@ -175,6 +175,16 @@ export function VendaModalShell({
      que o operador veria seria o dela. */
   const faltamBoitel = ehBoitel ? faltamDosCinco(boitelData) : [];
   const naNegociacao = abaAtiva === 'negociacao';
+  /* ⚠ SALVAR SO ONDE HA O QUE SALVAR — PR-OC-VENDA-ENTREGA-01C. Nas outras quatro abas o
+     rodape oferecia "Salvar alterações" aceso, e o operador procurou um salvar depois de
+     registrar a saida — que ja tinha gravado na RPC, no ato. Um botao de salvar visivel
+     AFIRMA que ha pendencia; nao havia. Pior: na Entrega ele chamaria o salvar da
+     operacao, e depois de 'fechada' o `oc_salvar_lotes` recusa de qualquer forma.
+     ⚠ ESCONDER, e nao desabilitar: botao apagado ainda diz "existe algo a salvar aqui,
+     mas nao agora". Nas abas que gravam sozinhas, a resposta certa e' nao haver botao.
+     Documentos, Financeiro, Entrega e Auditoria persistem por conta propria ou nao
+     escrevem nada. */
+  const rodapeTemSalvar = abaAtiva === 'venda' || naNegociacao;
 
   /* ⚠ O BOITEL SO TRAVA NA ABA ONDE ELE E EDITADO. Ate' aqui a trava valia no rodape
      inteiro, e o efeito era o oposto do pretendido: numa venda boitel o operador nao
@@ -287,19 +297,32 @@ export function VendaModalShell({
               isCompra={false}
               categoriasDisponiveis={categoriasDisponiveis}
               documentosApi={documentosApi}
+              /* ⚠ A DATA DA OPERACAO, e nao a de hoje: a saida pertence a' operacao. */
+              dataOperacao={data}
               somenteLeitura={ocStatusComercial === 'cancelada'}
               onVoltarNegociacao={() => setAbaAtiva('negociacao')}
               rotulos={{
-                tituloSecao: 'Entrega por lote na fazenda',
-                tituloDialogo: (r) => `Entregar · ${r}`,
+                /* ⚠ EIXO "SAIDA/ENVIAR", e nao "entrega/entregar" — decisao do Gabriel.
+                   A ABA continua se chamando Entrega, e os motivos gravados no banco
+                   continuam dizendo "aba Entrega": o nome do lugar nao muda, o verbo do
+                   ato sim. Quem le a auditoria daqui a um ano precisa achar a aba. */
+                tituloSecao: 'Saída dos animais da fazenda',
+                tituloDialogo: (r) => `Enviar · ${r}`,
                 jaMovimentado: 'já entregue',
                 informeQuantidade: 'Informe a quantidade entregue',
                 indisponivelTitulo: 'Entrega indisponível — negociação ainda não concluída',
                 indisponivelDetalhe: 'Conclua a negociação (botão “Concluir negociação”) para registrar a entrega física.',
-                movimentarTodos: 'Entregar todos conforme negociado',
-                registrarDoLote: 'Registrar a entrega deste lote',
+                movimentarTodos: 'Enviar todos conforme negociado',
+                movimentarTodosTexto: 'Enviar todos conforme negociado',
+                acaoLote: 'Enviar',
+                acaoLoteAria: (cat) => `Enviar lote ${cat}`,
+                rotuloTotalTopo: 'Saídas',
+                avisoEncerrado: 'Saída encerrada. Use Reabrir entrega para registrar mais movimentações.',
+                registrarDoLote: 'Registrar a saída deste lote',
                 colunaData: 'Entrega',
-                rotuloTotal: 'Entregue',
+                /* ⚠ TAMBEM "Saídas" no dialogo de encerrar, por coerencia com o topo — e'
+                   o mesmo contador. Inferido do eixo aprovado, e nao pedido item a item. */
+                rotuloTotal: 'Saídas',
                 tituloEncerrar: 'Encerrar entrega',
                 nenhumMovimentado: 'Nenhum animal foi entregue. Deseja encerrar esta entrega mesmo assim?',
                 placeholderJustificativa: 'Justifique a diferença / ausência de entrega',
@@ -556,6 +579,7 @@ export function VendaModalShell({
             <Check className="h-4 w-4" /> Concluir negociação
           </Button>
         )}
+        {rodapeTemSalvar && (
         <Button type="button"
           onClick={async () => {
             if (naNegociacao) { await onSalvarNegociacao(); return; }
@@ -577,6 +601,7 @@ export function VendaModalShell({
             : ocOperacaoId ? 'Salvar alterações'
             : (<>Salvar e continuar para Negociação <ArrowRight className="h-4 w-4" /></>)}
         </Button>
+        )}
       </div>
     </div>
   );

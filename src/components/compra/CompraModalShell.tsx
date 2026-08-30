@@ -401,6 +401,13 @@ export function CompraModalShell(api: CompraModalShellProps) {
               isCompra
               categoriasDisponiveis={api.categoriasDisponiveis}
               documentosApi={api.documentosApi}
+              /* ⚠ A DATA DA OPERACAO, e nao a de hoje — PR-OC-VENDA-ENTREGA-01C. A regra e'
+                 a mesma nos dois tipos: o registro pertence a' OPERACAO, nao ao dia do
+                 clique. Uma compra de 13/05 aberta em 30/08 trazia 30/08 e dependia de o
+                 operador lembrar de corrigir — e data errada so' aparece no fechamento,
+                 meses depois. A fonte ja existia: `ocDataOperacao`, que a aba Financeiro
+                 logo abaixo ja consome. */
+              dataOperacao={api.ocDataOperacao ?? null}
               somenteLeitura={permissoes.recebimentoReadOnly}
               onVoltarNegociacao={() => irParaAba('negociacao')}
             />
