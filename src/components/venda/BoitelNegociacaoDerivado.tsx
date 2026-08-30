@@ -155,6 +155,33 @@ export function derivadosBoitel(data: BoitelEdicao) {
     valorAdiantamentoDiariasCalc, valorTotalAntecipadoCalc, saldoReceberBase };
 }
 
+/* ─── O VALOR DA VENDA BOITEL ──────────────────────────────────────────────────
+   PR-OC-VENDA-VALOR-LOTE-01. Decisão do Gabriel: o valor de uma venda boitel é SEMPRE o
+   LIQUIDO, nunca o bruto — é o que sobra para o produtor depois do que o boitel cobra e
+   do que o abate custa.
+
+       liquido = fba - custoTotalBoitel - cAb
+
+   ⚠ OS TRES SAEM DE `derivadosBoitel`, e nenhum é reescrito aqui. Uma segunda fórmula
+   para a mesma pergunta é como dois números começam a divergir — a lição do
+   `pesoMedioPorCabeca`, que este projeto já pagou uma vez.
+   ⚠ O FRETE NAO ENTRA: é custo do produtor, pago por fora, e `custoTotalBoitel` já o
+   exclui (lá é `cDT + cs + oc`). Ver PR-OC-VENDA-BOITEL-FRETE-PAGADOR-01.
+   ⚠ O ADIANTAMENTO NAO ENTRA: é caixa antecipado e reembolsado no acerto; muda QUANDO o
+   dinheiro passa, não QUANTO a venda vale.
+   ⚠ A NUTRICAO TAMBEM NAO ENTRA, e isso NAO foi decidido: `custoTotalBoitel` é
+   `cDT + cs + oc` e nunca somou nutrição, enquanto a seção de Custos da tela soma. É a
+   divergência aberta em PR-OC-VENDA-BOITEL-CUSTO-COMPOSICAO-01 — invisível hoje, porque
+   a nutrição é zero em todos os registros, mas agora ela decide um valor PERSISTIDO.
+   ⚠ DEVOLVE `null`, e nunca zero, quando não há o que calcular — sem os campos que
+   sustentam a conta não existe projeção, e zero afirmaria que a venda não vale nada. */
+export function liquidoDaVendaBoitel(d: BoitelEdicao | null): number | null {
+  if (!d) return null;
+  if (exigencias(d).some(e => !e.presente)) return null;
+  const x = derivadosBoitel(d);
+  return Math.round((x.fba - x.custoTotalBoitel - x.cAb) * 100) / 100;
+}
+
 const LABEL_MODALIDADE: Record<BoitelData['modalidadeCusto'], string> = {
   diaria: 'Diária', arroba: 'Arroba produzida', parceria: 'Parceria',
 };

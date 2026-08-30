@@ -25,7 +25,13 @@ export interface CompraLotesApi {
   adicionarLote: () => string;   // devolve o idLocal do lote criado (quem chama abre o modal nele)
   editarLote: (idLocal: string, patch: Partial<LoteForm>) => void;
   removerLote: (idLocal: string) => void;
-  salvar: (opts?: { silent?: boolean }) => Promise<number | null>;   // retorna a nova versão oficial | null em falha
+  /* ⚠ `lotesSobrescritos` GRAVA OUTRA COISA que o estado local, e existe por um motivo
+     medido: `salvar` fecha sobre `lotes`, entao chamar `editarLote` e `salvar` no mesmo
+     gesto mandaria o estado ANTERIOR — a atualizacao so' chega no render seguinte. Quem
+     precisa gravar um valor derivado passa o array pronto.
+     ⚠ ADITIVO: sem o parametro, nada muda. A compra nao o passa em nenhum dos tres
+     call sites (CompraModalShell 253, 789 e 852). */
+  salvar: (opts?: { silent?: boolean; lotesSobrescritos?: LoteForm[] }) => Promise<number | null>;   // retorna a nova versão oficial | null em falha
   totais: { lotes: number; animais: number; pesoTotal: number; valorNegociado: number };
 }
 
@@ -95,7 +101,10 @@ export function useCompraLotes({ operacaoId, clienteId, versao, onVersaoChange, 
 
   // Retorna a NOVA versão oficial da operação em sucesso, null em falha (permite encadear
   //   salvar → concluir sem versão stale). `silent` controla APENAS o toast — não muda regra/persistência.
-  const salvar = useCallback(async (opts?: { silent?: boolean }): Promise<number | null> => {
+  const salvar = useCallback(async (opts?: { silent?: boolean; lotesSobrescritos?: LoteForm[] }): Promise<number | null> => {
+    /* A FONTE DA VERDADE DESTA GRAVACAO. Sem sobrescrita, e' o estado local — o
+       comportamento de sempre, e o unico que a compra exercita. */
+    const fonte = opts?.lotesSobrescritos ?? lotes;
     /* PR-OC-PESO-OBRIGATORIO-01 — PESO E' OBRIGATORIO. A recusa mora aqui, no unico
        lugar que grava lotes, e nao nos botoes: "Salvar rascunho" e "Concluir lotes e
        continuar" chamam esta mesma funcao, e duplicar a regra nos dois seria criar as
@@ -103,7 +112,7 @@ export function useCompraLotes({ operacaoId, clienteId, versao, onVersaoChange, 
        ⚠ Espelha a guarda do banco (`oc_salvar_lotes`, migration 20260831120000), que
        continua sendo a soberana — esta aqui existe para o operador saber QUAL lote
        corrigir sem esperar a ida ao servidor. Mensagem no mesmo formato da RPC. */
-    const semPeso = lotes.find(l => (parseNumericValue(l.pesoMedioKg) || 0) <= 0);
+    const semPeso = fonte.find(l => (parseNumericValue(l.pesoMedioKg) || 0) <= 0);
     if (semPeso) {
       toast.error(`Informe o peso médio do lote ${semPeso.categoria || 'sem categoria'} (ordem ${semPeso.ordem}). Lote sem peso não pode ser salvo.`);
       return null;
@@ -111,7 +120,7 @@ export function useCompraLotes({ operacaoId, clienteId, versao, onVersaoChange, 
     if (!operacaoId || !clienteId) { toast.error('Operação não iniciada (salve a operação na aba Compra).'); return null; }
     setSaving(true);
     try {
-      const payload = lotes.map(l => {
+      const payload = fonte.map(l => {
         const q = parseNumericValue(l.quantidade);
         return {
           ordem: l.ordem,

@@ -13,6 +13,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { parseNumericValue } from '@/lib/calculos/abate';
 import { pesoMedioPorCabeca, valorPorKgNegociado } from '@/hooks/useCompraLotes';
 import type { CompraLotesApi, CriterioValor } from '@/hooks/useCompraLotes';
+import { formatMoeda } from '@/lib/calculos/formatters';
 
 // Aba Negociação.
 //   • Modo OC (lotesApi): grade EDITÁVEL de múltiplos lotes — fonte única = camada OC
@@ -51,6 +52,14 @@ interface Props {
      "Preencha um lote na aba Compra" vivem em `NegociacaoLegado`, o modo SEM `lotesApi`.
      A venda sempre tem `lotesApi` — ela nunca alcanca aquele ramo. Parametrizar texto
      que ninguem le seria prometer um ponto de extensao morto. */
+  /* ⚠ ADITIVO, E SO' A VENDA BOITEL PASSA — PR-OC-VENDA-VALOR-LOTE-01. Sem ele nada
+     muda, e o `CompraModalShell` nao o passa. Com ele, o valor do lote deixa de ser
+     digitado: numa venda de boitel ele E' a projecao, e digitar por cima seria oferecer
+     ao operador contradizer a propria conta que a tela acabou de mostrar.
+     `valor` nulo significa "ainda nao ha projecao" — a tela mostra "—", nunca zero. */
+  valorProjetado?: { valor: number | null; explicacao: string } | null;
+  /** Boitel e' UM embarque: a operacao E' o lote. Desabilita o "+ Adicionar lote". */
+  loteUnico?: { motivo: string } | null;
   rotulos?: {
     salveIdentificacao?: string;
     voltarParaIdentificacao?: string;
@@ -121,7 +130,7 @@ function ValorInput({ value, onChange, disabled, placeholder, className }: {
 
 export function AbaNegociacaoLotes({
   categoria, categoriasDisponiveis, quantidadeNum, pesoKgNum, darkSelectClass,
-  modoOC, operacaoPronta, lotesApi, somenteLeitura, fisicoBloqueado, onVoltarCompra, rotulos,
+  modoOC, operacaoPronta, lotesApi, somenteLeitura, fisicoBloqueado, onVoltarCompra, rotulos, valorProjetado = null, loteUnico = null,
 }: Props) {
   /* ── MODO OC — delegado a um componente PROPRIO (PR-OC-UX-LOTE-C2-01) ──────
      O modal de lote precisa de estado (qual lote esta aberto), e hook nao pode
@@ -208,9 +217,12 @@ function NegociacaoOC({
               {lotes.length === 0 ? 'nenhum lote' : `${lotes.length} lote${lotes.length > 1 ? 's' : ''}`}
             </span>
             {!fisicoRO && (
-              <button type="button" onClick={abrirNovo} disabled={!operacaoPronta}
-                title={operacaoPronta ? 'Adicionar lote à negociação' : (rotulos?.salveOperacaoPrimeiro ?? 'Salve a operação na aba Compra primeiro')}
-                aria-label="Adicionar lote"
+              <button type="button" onClick={abrirNovo}
+                disabled={!operacaoPronta || (!!loteUnico && lotes.length >= 1)}
+                title={!operacaoPronta ? (rotulos?.salveOperacaoPrimeiro ?? 'Salve a operação na aba Compra primeiro')
+                  : (loteUnico && lotes.length >= 1) ? loteUnico.motivo
+                  : 'Adicionar lote à negociação'}
+                aria-label={(loteUnico && lotes.length >= 1) ? loteUnico.motivo : 'Adicionar lote'}
                 className="text-[11px] font-normal text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline">
                 + Adicionar lote
               </button>
@@ -328,6 +340,7 @@ function NegociacaoOC({
           rotuloCategoria={rotuloCategoria}
           onAplicar={(patch) => { editarLote(emEdicao.idLocal, patch); setEditandoId(null); }}
           onAplicarEAdicionar={(patch) => { editarLote(emEdicao.idLocal, patch); abrirNovo(); }}
+          valorProjetado={valorProjetado}
           onFechar={() => setEditandoId(null)}
         />
       )}
@@ -357,7 +370,7 @@ function ParLote({ rotulo, valor }: { rotulo: string; valor: string }) {
 function LoteDialog({
   rotulos,
   lote, categoriasDisponiveis, darkSelectClass, fisicoRO, somenteLeitura, rotuloCategoria,
-  onAplicar, onAplicarEAdicionar, onFechar,
+  onAplicar, onAplicarEAdicionar, onFechar, valorProjetado = null,
 }: {
   rotulos?: AbaNegociacaoLotesRotulos;
   lote: NonNullable<Props['lotesApi']>['lotes'][number];
@@ -369,6 +382,7 @@ function LoteDialog({
   onAplicar: (patch: Partial<NonNullable<Props['lotesApi']>['lotes'][number]>) => void;
   onAplicarEAdicionar: (patch: Partial<NonNullable<Props['lotesApi']>['lotes'][number]>) => void;
   onFechar: () => void;
+  valorProjetado?: { valor: number | null; explicacao: string } | null;
 }) {
   const [categoria, setCategoria] = useState(lote.categoria);
   const [quantidade, setQuantidade] = useState(lote.quantidade);
@@ -438,20 +452,41 @@ function LoteDialog({
             </div>
             <div>
               <Label className="text-[10px]">Critério</Label>
+              {/* ⚠ COM PROJECAO, O CRITERIO E' "TOTAL" E NAO SE ESCOLHE: o liquido do
+                  boitel e' o valor cheio do embarque, nao uma taxa por kg ou por cabeca. */}
+              {valorProjetado ? (
+                <div className="h-8 mt-0.5 px-2.5 flex items-center rounded-md border border-border/60 bg-muted text-[12px] text-muted-foreground">
+                  Valor total
+                </div>
+              ) : (
               <Select value={criterioValor} onValueChange={v => setCriterioValor(v as CriterioValor)} disabled={somenteLeitura}>
                 <SelectTrigger className="h-8 text-[12px] mt-0.5"><SelectValue /></SelectTrigger>
                 <SelectContent className={darkSelectClass}>
                   {CRITERIOS.map(c => <SelectItem key={c.value} value={c.value} className="text-[12px]">{c.label}</SelectItem>)}
                 </SelectContent>
               </Select>
+              )}
             </div>
             <div>
-              <Label className="text-[10px]">Valor <span className="text-destructive">*</span></Label>
+              <Label className="text-[10px]">Valor {!valorProjetado && <span className="text-destructive">*</span>}</Label>
               <div className="mt-0.5">
-                {/* Regra (b) — a altura vem daqui, nao do componente. */}
+                {/* ⚠ TRAVADO NA PROJECAO. Idioma canonico de campo derivado (o mesmo da
+                    AbaLiquidacaoOC): `bg-muted border-border/60 text-muted-foreground`.
+                    A19 — dinheiro sempre formatado; "—" quando ainda nao ha projecao. */}
+                {valorProjetado ? (
+                  <div className="h-8 px-2.5 flex items-center justify-end rounded-md border border-border/60 bg-muted text-[12px] tabular-nums text-muted-foreground"
+                    title={valorProjetado.explicacao}>
+                    {valorProjetado.valor == null ? '—' : formatMoeda(valorProjetado.valor)}
+                  </div>
+                ) : (
+                /* Regra (b) — a altura vem daqui, nao do componente. */
                 <ValorInput value={valorInformado} onChange={setValorInformado} placeholder={unidade}
                   disabled={somenteLeitura} className="h-8 text-[12px] text-right tabular-nums" />
+                )}
               </div>
+              {valorProjetado && (
+                <p className="mt-1 text-[10px] text-muted-foreground leading-snug">{valorProjetado.explicacao}</p>
+              )}
             </div>
           </div>
 

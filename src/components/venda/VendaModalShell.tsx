@@ -36,7 +36,7 @@ import { Calendar, Building2, X, Plus, ArrowRight } from 'lucide-react';
 import type { Categoria } from '@/types/cattle';
 import type { CompraLotesApi } from '@/hooks/useCompraLotes';
 import { AbaNegociacaoLotes } from '@/components/compra/AbaNegociacaoLotes';
-import { BoitelBaseOperacional, BoitelResultadoCompacto } from '@/components/venda/BoitelNegociacaoDerivado';
+import { BoitelBaseOperacional, BoitelResultadoCompacto, liquidoDaVendaBoitel } from '@/components/venda/BoitelNegociacaoDerivado';
 import { BoitelBlocosModais, faltamDosCinco, type BoitelEdicao } from '@/components/venda/BoitelBlocosModais';
 
 /* ⚠ "RECEBIMENTO" CHAMA-SE ENTREGA NA VENDA — o gado SAI. A coluna do banco já é
@@ -176,6 +176,16 @@ export function VendaModalShell({
       lotesApi={lotesApi}
       somenteLeitura={ocStatusComercial === 'cancelada'}
       onVoltarCompra={() => setAbaAtiva('venda')}
+      /* ⚠ SO NA VENDA BOITEL. Numa venda comum e numa compra as duas props sao nulas e a
+         grade e' exatamente a de antes: valor digitavel, criterio livre, quantos lotes
+         quiser. */
+      valorProjetado={ehBoitel ? {
+        valor: liquidoDaVendaBoitel(boitelData),
+        explicacao: 'Valor projetado do boitel: faturamento menos o custo do boitel e as despesas de abate. Vem do planejamento, não se digita.',
+      } : null}
+      loteUnico={ehBoitel ? {
+        motivo: 'Boitel é um embarque só: a operação comercial é o lote. Para negociar outro embarque, crie outra venda.',
+      } : null}
       rotulos={{
         salveIdentificacao: 'Salve a identificação da venda para adicionar os lotes da negociação.',
         voltarParaIdentificacao: 'Voltar para Venda',

@@ -38,6 +38,7 @@ import { CompraMetaModalShell } from '@/components/compra/CompraMetaModalShell';
 import { VendaMetaModalShell } from '@/components/venda/VendaMetaModalShell';
 import { VendaModalShell } from '@/components/venda/VendaModalShell';
 import { boitelVazio, payloadBoitel, type BoitelEdicao } from '@/components/venda/BoitelBlocosModais';
+import { liquidoDaVendaBoitel } from '@/components/venda/BoitelNegociacaoDerivado';
 import { ReclassificacaoFormFields, useReclassificacaoState } from '@/components/ReclassificacaoForm';
 import { ReclassificacaoResumoPanel } from '@/components/ReclassificacaoResumoPanel';
 import { CompraDetalhesDialog, CompraDetalhes, EMPTY_COMPRA_DETALHES } from '@/components/compra/CompraDetalhesDialog';
@@ -2303,9 +2304,34 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     if (!ocOperacaoId || !clienteId) { toast.error('Salve a operação na aba Venda primeiro.'); return false; }
     setSubmitting(true);
     try {
+      /* ── O VALOR DO LOTE NUMA VENDA BOITEL ──────────────────────────────────
+         PR-OC-VENDA-VALOR-LOTE-01. O lote nascia com `criterio_valor='kg'` e
+         `valor_informado` NULL, e `_oc_valor_do_lote` devolve NULL nesse caso — o gado
+         sairia do saldo SEM VALOR quando a aba Entrega existir, e a DRE nao veria a venda.
+         ⚠ `lotesSobrescritos` E NAO `editarLote`: `salvar` fecha sobre `lotes`, entao
+         editar e salvar no mesmo gesto mandaria o estado anterior.
+         ⚠ 'total' porque `_oc_valor_do_lote` le `WHEN 'total' THEN l.valor_informado` — e'
+         o valor cheio do embarque, nao uma taxa.
+         ⚠ INTEGRAL, SEM RATEIO: boitel e' UM lote por OC. Com mais de um, nao se grava
+         valor em nenhum — ratear a projecao exigiria um criterio que ninguem definiu. */
+      let sobrescritos: typeof lotesApi.lotes | undefined;
+      if (vendaTipoVenda === 'boitel' && boitelDaVenda) {
+        const liquido = liquidoDaVendaBoitel(boitelDaVenda);
+        if (lotesApi.lotes.length > 1) {
+          toast.warning(`Esta venda de boitel tem ${lotesApi.lotes.length} lotes. O valor projetado não foi gravado em nenhum: no boitel a operação é um embarque só, e ratear a projeção entre lotes exigiria um critério que não existe. Deixe um lote para o valor voltar a ser gravado.`);
+        } else if (liquido != null && liquido <= 0) {
+          /* ⚠ NAO GRAVA E NAO BLOQUEIA. Valor negativo entraria na DRE como receita
+             negativa; o planejamento segue sendo salvo, porque a projecao ruim tambem e'
+             informacao. */
+          toast.warning(`O resultado projetado deste boitel é ${liquido < 0 ? 'negativo' : 'zero'} (${liquido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}). O valor do lote não foi alterado — revise a diária, o preço da @ ou as despesas de abate.`);
+        } else if (liquido != null && lotesApi.lotes.length === 1) {
+          sobrescritos = [{ ...lotesApi.lotes[0], criterioValor: 'total' as const, valorInformado: String(liquido) }];
+        }
+      }
+
       /* `silent` porque o aviso de sucesso sai daqui: numa venda boitel ainda falta gravar
          o planejamento, e dois toasts seguidos para um clique so' e' ruido. */
-      const novaVersao = await lotesApi.salvar({ silent: true });
+      const novaVersao = await lotesApi.salvar({ silent: true, lotesSobrescritos: sobrescritos });
       if (novaVersao == null) return false;   // o hook ja avisou o que impediu
       if (boitelDaVenda) {
         /* ⚠ GRAVA O DERIVADO, e nao o `ocBoitel` cru: e' nele que o peso de saida da fazenda
