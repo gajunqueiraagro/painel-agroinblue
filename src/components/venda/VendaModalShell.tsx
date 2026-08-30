@@ -32,7 +32,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { DatePicker } from '@/components/ui/date-picker';
 import { SearchableSelect } from '@/components/ui/searchable-select';
-import { Calendar, Building2, X, Plus, ArrowRight } from 'lucide-react';
+import { Calendar, Building2, X, Plus, ArrowRight, Check } from 'lucide-react';
 import type { Categoria } from '@/types/cattle';
 import type { CompraLotesApi } from '@/hooks/useCompraLotes';
 import { AbaNegociacaoLotes } from '@/components/compra/AbaNegociacaoLotes';
@@ -134,6 +134,8 @@ export interface VendaModalShellProps {
   ocEntregaEncerrada?: boolean;
   /** Nada mudou desde a ultima gravacao bem-sucedida — o botao apaga. */
   semAlteracoes?: boolean;
+  /** `oc_confirmar` pelo `useOperacaoRecebimento`. Devolve se concluiu. */
+  onConcluirNegociacao?: () => void | Promise<unknown>;
   onFechar: () => void;
 }
 
@@ -145,7 +147,8 @@ export function VendaModalShell({
   ocOperacaoId, ocStatusComercial, lotesApi, boitelData = null, onBoitelChange,
   documentosApi, eventosApi, liquidacaoApi, recebimentoApi, ocEntregaEncerrada = false,
   categoria, categoriasDisponiveis,
-  quantidadeNum, pesoKgNum, submitting, onSalvarOperacao, onSalvarNegociacao, semAlteracoes = false, onFechar,
+  quantidadeNum, pesoKgNum, submitting, onSalvarOperacao, onSalvarNegociacao, semAlteracoes = false,
+  onConcluirNegociacao, onFechar,
 }: VendaModalShellProps) {
   const [abaAtiva, setAbaAtiva] = useState<string>('venda');
   const compradorNome = contrapartes.find(f => f.id === compradorId)?.nome ?? null;
@@ -526,6 +529,33 @@ export function VendaModalShell({
           className="text-white/90 hover:bg-white/10 hover:text-white" title="Fechar sem salvar" aria-label="Fechar">
           Fechar
         </Button>
+        {/* ⚠ A VENDA NAO TINHA COMO CONCLUIR — PR-OC-VENDA-ENTREGA-01B. A aba Entrega
+            exige `status='fechada'` e dizia "conclua a negociação", mas o gatilho nao
+            existia em lugar nenhum do shell: o operador salvava achando que concluia.
+            ⚠ SO NA NEGOCIACAO, e a compra faz o contrario (`abaAtiva !== 'negociacao'`)
+            por historia propria — aqui o botao mora onde o ato acontece, ao lado dos lotes
+            que ele congela.
+            ⚠ NAO CONCLUI POR CIMA DE TELA SUJA: com alteracao pendente, o botao trava
+            pedindo para salvar. Concluir congela a negociacao — fazer isso com o que esta'
+            na tela ainda nao gravado fecharia uma versao que ninguem viu.
+            ⚠ SOME DEPOIS DE 'fechada': concluir e' ato unico, e reabrir tem caminho
+            proprio. */}
+        {naNegociacao && !!ocOperacaoId && ocStatusComercial === 'programada' && recebimentoApi && (
+          <Button type="button" variant="secondary" className="gap-1.5"
+            /* ⚠ EXIGE UMA GRAVACAO NESTA SESSAO, e nao apenas "nada mudou". A assinatura
+               nasce nula ao reabrir: ali nao da' para distinguir tela limpa de tela suja, e
+               na duvida o custo dos dois erros e' assimetrico. Concluir por cima de edicao
+               nao gravada fecharia a negociacao numa versao que ninguem viu — e depois de
+               'fechada' o `oc_salvar_lotes` recusa, entao a edicao morreria com um erro
+               confuso. Pedir um Salvar a mais custa um clique. */
+            disabled={submitting || recebimentoApi.saving || !semAlteracoes}
+            title={semAlteracoes
+              ? 'Concluir a negociação congela os lotes e libera a Entrega'
+              : 'Salve a negociação antes de concluir'}
+            onClick={async () => { await onConcluirNegociacao?.(); }}>
+            <Check className="h-4 w-4" /> Concluir negociação
+          </Button>
+        )}
         <Button type="button"
           onClick={async () => {
             if (naNegociacao) { await onSalvarNegociacao(); return; }

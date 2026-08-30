@@ -5071,6 +5071,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           liquidacaoApi={liquidacaoApi}
           recebimentoApi={recebimentoApi}
           ocEntregaEncerrada={ocEntregaEncerrada}
+          /* ⚠ O HOOK JA CUIDA DA VERSAO e dos callbacks de status: `onStatusChange` e
+             `onVersaoChange` sao os mesmos setters da venda, ligados na instanciacao. Nao
+             ha nada a atualizar aqui depois — atualizar de novo seria a segunda copia. */
+          onConcluirNegociacao={() => recebimentoApi.concluirNegociacao()}
           onFechar={fecharModalOCComAutosave}
         />
       ) : isCompra && isCenarioMeta ? (
