@@ -138,22 +138,50 @@ export function derivadosBoitel(data: BoitelEdicao) {
   const custoTotalBoitel = cDT + cs + oc;
   const margemVenda = fba > 0 ? ((fba - cOp) / fba * 100) : 0;
 
-  /* Do bloco de adiantamento (linhas 134-144 do simulador).
-     ⚠ `pctAdiantamentoDiarias` E A UNICA FONTE de `valorAdiantamentoDiarias`, que entra
-     no antecipado e daí no saldo. Tem valor em 3 dos 10 registros — por isso o campo
-     não sai. */
-  const custoTotalDiarias = data.custoDiaria * data.dias * data.qtdCabecas;
-  const valorAdiantamentoDiariasCalc = data.possuiAdiantamento
-    ? Math.round(custoTotalDiarias * data.pctAdiantamentoDiarias / 100 * 100) / 100
-    : 0;
+  /* ─── O ANTECIPADO ────────────────────────────────────────────────────────────
+     PR-OC-VENDA-BOITEL-ANTECIPADO-NO-MOTOR-01. Ate aqui esta conta REDERIVAVA o
+     adiantamento de diarias a partir de `pctAdiantamentoDiarias`:
+
+         const custoTotalDiarias = data.custoDiaria * data.dias * data.qtdCabecas;
+         const valorAdiantamentoDiariasCalc = data.possuiAdiantamento
+           ? Math.round(custoTotalDiarias * data.pctAdiantamentoDiarias / 100 * 100) / 100
+           : 0;
+
+     ⚠ E ESSE PERCENTUAL NAO CHEGA AQUI. `zoo_operacao_boitel` NAO tem coluna de pct de
+     adiantamento (conferido nas colunas: existem `valor_adiantamento_diarias`,
+     `valor_adiantamento_sanitario` e `valor_adiantamento_outros`, e nenhum `pct_*` de
+     adiantamento), e o campo tambem nao esta no `MAPA_BOITEL` — nao e' gravado nem
+     hidratado. A tela do boitel na OC nem o pergunta: ela pede "Valor total adiantado",
+     que escreve direto em `valorAdiantamentoDiarias`. Resultado: em toda operacao
+     REABERTA o pct valia 0, e o antecipado sumia.
+
+     ⚠ O PREJUIZO ERA VISIVEL E GRANDE. Medido na b58bf556: o painel dizia Antecipado
+     R$ 1.540,00 (so' o sanitario) e Saldo a receber R$ 566.757,00, quando os valores sao
+     R$ 96.783,50 e R$ 662.000,50 — noventa e cinco mil de diferenca, ao lado de uma
+     previsao de caixa que dizia o numero certo.
+
+     ⚠ O PCT NAO E' FANTASMA — SO' NAO E' DAQUI. Ele tem leitor vivo: e' campo de entrada
+     do simulador legado (`BoitelPlanningDialog.tsx:242`, "% diárias"), que tem a SUA
+     PROPRIA copia destas formulas (linhas 136-145), NAO importa `derivadosBoitel`, e
+     persiste `pct_adiantamento_diarias` na tabela `boitel_planejamento` — onde a coluna
+     existe de verdade. Por isso ele fica em `BoitelData` e nao se remove.
+     ⚠ E OS DOIS CAMINHOS CONVERGEM: ao salvar, aquele dialogo grava
+     `valorAdiantamentoDiarias = valorAdiantamentoDiariasCalc` (linha 153). O valor
+     derivado do pct vira campo persistido — que e' exatamente o que se le abaixo.
+
+     Agora o motor soma os TRES CAMPOS PERSISTIDOS, e nao depende de nada que a tela
+     calcule: previsao e painel passam a dizer o mesmo numero por construcao.
+     ⚠ `valorAdiantamentoDiariasCalc` SAIU DO RETORNO junto com o pct: era derivado
+     exclusivamente dele e nao tinha um so' consumidor (medido em todo o src/). */
   const valorTotalAntecipadoCalc = data.possuiAdiantamento
-    ? Math.round((valorAdiantamentoDiariasCalc + data.valorAdiantamentoSanitario + data.valorAdiantamentoOutros) * 100) / 100
+    ? Math.round(((data.valorAdiantamentoDiarias || 0) + (data.valorAdiantamentoSanitario || 0)
+                + (data.valorAdiantamentoOutros || 0)) * 100) / 100
     : 0;
   const saldoReceberBase = Math.round((fba - custoTotalBoitel - cAb + valorTotalAntecipadoCalc) * 100) / 100;
 
   return { ple, ganho, pf, aEF, aS, aPcab, aP, aTS, sairam, gmc, fba, cAb, fLiq, cDT, cOp, coT, cPArr,
     pParte, rProd, rLiq, rLCab, custoTotalBoitel, margemVenda,
-    valorAdiantamentoDiariasCalc, valorTotalAntecipadoCalc, saldoReceberBase };
+    valorTotalAntecipadoCalc, saldoReceberBase };
 }
 
 /* ─── O VALOR DA VENDA BOITEL ──────────────────────────────────────────────────
@@ -381,8 +409,12 @@ export function BoitelPainelResultado({ boitelData, cenario }: { boitelData: Boi
           <LinhaPainel rotulo="Resultado líquido" valor={op(x => formatMoeda(x.rLiq))} destaque />
           <LinhaPainel rotulo="Result./cab"       valor={op(x => formatMoeda(x.rLCab))} />
           <LinhaPainel rotulo="Margem s/ venda"   valor={op(x => `${x.margemVenda.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`)} />
-          {/* ⚠ O ANTECIPADO E DERIVADO, e é o que o mockup chamou de "valor total
-              adiant. em R$". Ele não é campo: sai do percentual das diárias. */}
+          {/* ⚠ O ANTECIPADO SAI DOS TRES CAMPOS PERSISTIDOS (diárias + sanitário +
+              outros) — é o que o mockup chamou de "valor total adiant. em R$".
+              O comentário anterior dizia "sai do percentual das diárias", e essa era a
+              descrição do defeito, não do comportamento: o percentual não existe como
+              coluna nesta tabela e zerava a linha em operação reaberta. Ver a nota em
+              `derivadosBoitel`. */}
           <LinhaPainel rotulo="Antecipado"        valor={op(x => formatMoeda(x.valorTotalAntecipadoCalc))} />
           <LinhaPainel rotulo="Saldo a receber"   valor={op(x => formatMoeda(x.saldoReceberBase))} destaque />
         </div>

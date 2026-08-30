@@ -178,12 +178,17 @@ export function boitelVazio(): BoitelEdicao {
    `derivadosBoitel`. Em vez de manter duas funções com o mesmo corpo, a tela passou a ler
    a do motor: agora os dois numeros sao o MESMO por construcao, e nao por coincidencia.
    ⚠ E O MOTOR ESTAVA CERTO O TEMPO TODO. Ele nunca somou nutrição — o que parecia
-   omissão dele era a tela cobrando duas vezes. */
-export function antecipadoTotal(d: BoitelEdicao): number {
-  if (!d.possuiAdiantamento) return 0;
-  return Math.round(((d.valorAdiantamentoDiarias || 0) + (d.valorAdiantamentoSanitario || 0)
-                   + (d.valorAdiantamentoOutros || 0)) * 100) / 100;
-}
+   omissão dele era a tela cobrando duas vezes.
+
+   ⚠ `antecipadoTotal` DEIXOU DE EXISTIR — PR-OC-VENDA-BOITEL-ANTECIPADO-NO-MOTOR-01, e
+   pela MESMA razão da `custoTotalDoBoitel` logo acima. Ela somava os três campos
+   persistidos do adiantamento porque o motor, até então, rederivava o número de um
+   percentual que a tabela da OC não guarda. Corrigido o motor, as duas expressões ficaram
+   IDÊNTICAS — conferido por md5 do texto normalizado, `bae60d01…` nas duas. Duas cópias
+   que hoje concordam são exatamente como esta doença nasce; a tela passou a ler
+   `der.valorTotalAntecipadoCalc` e não há mais o que divergir.
+   ⚠ CUSTO ZERO: `der` já é o `derivadosBoitel(d)` memoizado desta tela — não há cálculo
+   novo, só uma leitura a mais do objeto que já estava em mãos. */
 
 /* ═══ PEÇAS DE FORMA ═════════════════════════════════════════════════════════════ */
 
@@ -276,7 +281,7 @@ export function BoitelBlocosModais({ valor, onChange, somenteLeitura }: {
   const diarias = der.cDT;
   const custoTotal = der.custoTotalBoitel;
   const fatBruto = der.fba;
-  const antecipado = antecipadoTotal(d);
+  const antecipado = der.valorTotalAntecipadoCalc;
   const temDesempenho = d.dias > 0 && d.gmd > 0 && d.rendimento > 0;
 
   /* O RESUMO DA LINHA FECHADA — o mesmo conteúdo que os botões antigos mostravam.

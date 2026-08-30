@@ -49,8 +49,8 @@ import type { RecebimentoApi } from '@/hooks/useOperacaoRecebimento';
 import type { DocumentosApi } from '@/hooks/useOperacaoDocumentos';
 import type { EventosApi } from '@/hooks/useOperacaoEventos';
 import type { LiquidacaoApi } from '@/hooks/useOperacaoLiquidacao';
-import { BoitelBaseOperacional, BoitelResultadoCompacto, liquidoDaVendaBoitel, PilulaCenario } from '@/components/venda/BoitelNegociacaoDerivado';
-import { BoitelBlocosModais, faltamDosCinco, antecipadoTotal, type BoitelEdicao } from '@/components/venda/BoitelBlocosModais';
+import { BoitelBaseOperacional, BoitelResultadoCompacto, liquidoDaVendaBoitel, derivadosBoitel, PilulaCenario } from '@/components/venda/BoitelNegociacaoDerivado';
+import { BoitelBlocosModais, faltamDosCinco, type BoitelEdicao } from '@/components/venda/BoitelBlocosModais';
 
 /* ⚠ "RECEBIMENTO" CHAMA-SE ENTREGA NA VENDA — o gado SAI. A coluna do banco já é
    genérica (`entrega_encerrada`), então o vocabulário muda só na tela.
@@ -224,25 +224,13 @@ export function VendaModalShell({
      ⚠ NENHUM VALOR E' CONGELADO. Tudo sai do motor a cada render — editar o planejamento
      e regerar da os numeros novos, nunca os do dia da primeira geracao.
 
-     ⚠ O ANTECIPADO VEM DE `antecipadoTotal`, E NAO DE `derivadosBoitel`. Medido nesta
-     FASE 0, e e' a familia de defeito de sempre — a mesma verdade em dois lugares:
-
-       `derivadosBoitel` RECALCULA o adiantamento de diarias a partir de
-       `pctAdiantamentoDiarias` (BoitelNegociacaoDerivado.tsx:144-150), e esse campo NAO
-       EXISTE como coluna em `zoo_operacao_boitel` — conferido nas colunas da tabela: ha
-       `valor_adiantamento_diarias`, `valor_adiantamento_sanitario` e
-       `valor_adiantamento_outros`, e nenhum `pct_*` de adiantamento. Ele tambem nao esta
-       no `MAPA_BOITEL`, entao nao e' gravado nem hidratado: ao REABRIR a operacao vale
-       sempre 0. A tela nova nem o pergunta — ela pede "Valor total adiantado", que
-       escreve direto em `valorAdiantamentoDiarias`.
-
-     Consequencia medida na b58bf556: `valorTotalAntecipadoCalc` devolve 1.540,00 (so' o
-     sanitario) onde o valor real e' 96.783,50. `antecipadoTotal` le os tres campos
-     PERSISTIDOS e da o numero certo — e' a funcao que a propria tela do boitel usa.
-     ⚠ ISTO NAO E' SO' DAQUI: o `saldoReceberBase` do painel de resultado tem a mesma
-     raiz e mostra 566.757,00 em vez de 662.000,50 numa operacao reaberta. Corrigir o
-     motor esta FORA deste PR (o briefing o declara intocado) — registrado como
-     PR-OC-VENDA-BOITEL-ANTECIPADO-NO-MOTOR-01.
+     ⚠ O ANTECIPADO SAI DO MOTOR, como todo o resto — `valorTotalAntecipadoCalc`. Esta
+     linha ja leu uma funcao de tela (`antecipadoTotal`), e vale registrar por que:
+     ate' PR-OC-VENDA-BOITEL-ANTECIPADO-NO-MOTOR-01 o motor rederivava o adiantamento de
+     `pctAdiantamentoDiarias`, um campo que a tabela da OC nao guarda — a previsao dizia
+     96.783,50 e o painel dizia 1.540,00 na mesma tela. Corrigido o motor, a funcao de
+     tela virou copia identica dele (md5 `bae60d01…` nas duas) e deixou de existir.
+     Uma verdade so': se o antecipado mudar de regra um dia, muda em UM lugar.
 
      ⚠ A CATEGORIA VEM DOS LOTES, e nao do campo `categoria` do formulario simples. Esse
      campo NUNCA e' preenchido numa OC de venda (a hidratacao nao o seta, e nem poderia:
@@ -271,7 +259,7 @@ export function VendaModalShell({
     /* A data PROJETADA do abate: o gado sai da fazenda na data da operacao e fica `dias`
        no boitel. E' previsao, e o "~" do rotulo da linha diz isso ao operador. */
     const dataAbate = dataMaisDias(data, boitelData.dias);
-    const antecipado = antecipadoTotal(boitelData);
+    const antecipado = derivadosBoitel(boitelData).valorTotalAntecipadoCalc;
     const liquido = liquidoDaVendaBoitel(boitelData);
 
     const linhas: LinhaPrevisao[] = [];
