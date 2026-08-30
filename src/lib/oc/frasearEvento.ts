@@ -160,6 +160,23 @@ export function frasearEvento(e: EventoOC, r: Resolvedores): FraseEvento {
     }
     case 'editar_negociacao':
       return { frase: 'editou a negociação', detalhe: motivo };
+    /* ⚠ ADITIVO — PR-OC-VENDA-ABAS-01. Sem este `case`, `salvar_boitel` caia no `default`
+       e virava "salvar boitel", sem frase nem detalhe. Sao 3 dos 9 eventos da primeira
+       venda boitel: um terço da história dela aparecia como ação crua.
+       ⚠ O PAYLOAD DESCE UM NIVEL: `oc_salvar_boitel` grava
+       `{cenario, payload}` — o `cenario` fora e os campos do planejamento dentro. */
+    case 'salvar_boitel': {
+      const p = obj(nov.payload);
+      return {
+        frase: txt(nov.cenario) === 'realizado'
+          ? 'salvou o realizado do boitel'
+          : 'salvou a projeção do boitel',
+        detalhe: p ? junta(
+          num(p.dias) != null ? `${num(p.dias)} dias` : null,
+          dinheiro(p.preco_venda_arroba) != null ? `${dinheiro(p.preco_venda_arroba)}/@` : null,
+        ) : null,
+      };
+    }
 
     // ── recebimento ────────────────────────────────────────────────────────────
     case 'receber_lotes': {

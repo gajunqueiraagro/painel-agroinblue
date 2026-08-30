@@ -36,6 +36,11 @@ import { Calendar, Building2, X, Plus, ArrowRight } from 'lucide-react';
 import type { Categoria } from '@/types/cattle';
 import type { CompraLotesApi } from '@/hooks/useCompraLotes';
 import { AbaNegociacaoLotes } from '@/components/compra/AbaNegociacaoLotes';
+import { AbaDocumentosOC } from '@/components/compra/AbaDocumentosOC';
+import { AbaAuditoriaOC } from '@/components/compra/AbaAuditoriaOC';
+import type { DocumentosApi } from '@/hooks/useOperacaoDocumentos';
+import type { EventosApi } from '@/hooks/useOperacaoEventos';
+import type { LiquidacaoApi } from '@/hooks/useOperacaoLiquidacao';
 import { BoitelBaseOperacional, BoitelResultadoCompacto, liquidoDaVendaBoitel } from '@/components/venda/BoitelNegociacaoDerivado';
 import { BoitelBlocosModais, faltamDosCinco, type BoitelEdicao } from '@/components/venda/BoitelBlocosModais';
 
@@ -49,14 +54,23 @@ import { BoitelBlocosModais, faltamDosCinco, type BoitelEdicao } from '@/compone
    comum, lotes MAIS a base operacional e o painel de resultado no boitel. Mesmo padrao
    do `AbaRecebimentoLotes`, ja bifurcado entre encerrado e aberto. Feito em
    PR-OC-VENDA-BOITEL-01A; a ENTRADA de dado do boitel e' do 01B. */
-const ABAS_VENDA = [
-  { key: 'venda', label: 'Venda', enabled: true },
-  { key: 'negociacao', label: 'Negociação', enabled: true },
-  { key: 'entrega', label: 'Entrega', enabled: false },
-  { key: 'documentos', label: 'Documentos', enabled: false },
-  { key: 'financeiro', label: 'Financeiro', enabled: false },
-  { key: 'auditoria', label: 'Auditoria', enabled: false },
-] as const;
+/* ⚠ AS TRES DEPENDEM DE HAVER OPERACAO — PR-OC-VENDA-ABAS-01. Documentos, Financeiro e
+   Auditoria falam de algo que so' existe depois de salvar: sem `operacao_id` nao ha
+   documento a anexar, obrigacao a listar nem evento a mostrar. Ficam travadas com o
+   porque no `title`, em vez de abrirem vazias e deixarem o operador descobrir sozinho.
+   ⚠ ENTREGA CONTINUA FALSA em qualquer estado: ela e' a saida do rebanho e tem PR proprio.
+   Prometer a aba antes disso seria o alarme falso que este modal ja evitou no botao. */
+function abasDaVenda(temOperacao: boolean) {
+  const semOperacao = 'Salve a operação na aba Venda primeiro';
+  return [
+    { key: 'venda',        label: 'Venda',        enabled: true,        motivo: undefined },
+    { key: 'negociacao',   label: 'Negociação',   enabled: true,        motivo: undefined },
+    { key: 'entrega',      label: 'Entrega',      enabled: false,       motivo: 'em breve' },
+    { key: 'documentos',   label: 'Documentos',   enabled: temOperacao, motivo: temOperacao ? undefined : semOperacao },
+    { key: 'financeiro',   label: 'Financeiro',   enabled: temOperacao, motivo: temOperacao ? undefined : semOperacao },
+    { key: 'auditoria',    label: 'Auditoria',    enabled: temOperacao, motivo: temOperacao ? undefined : semOperacao },
+  ];
+}
 
 /* Par rotulo-valor do resumo lateral — idioma do `Linha` de ResumoLateralOC (A17).
    ⚠ SEXTA COPIA deste par. Sai na mesma extracao que levar o resumo para lugar unico. */
@@ -110,6 +124,10 @@ export interface VendaModalShellProps {
      duas acoes, porque e' sempre "salvar o que esta' na tela" — e e' o mesmo desenho do
      CompraModalShell, cujo rodape de Negociacao chama `lotesApi.salvar()`. */
   onSalvarNegociacao: () => void | Promise<unknown>;
+  /* As tres apis da OC, as MESMAS que a compra usa. A venda as monta; nao as edita. */
+  documentosApi?: DocumentosApi;
+  eventosApi?: EventosApi;
+  liquidacaoApi?: LiquidacaoApi;
   /** Nada mudou desde a ultima gravacao bem-sucedida — o botao apaga. */
   semAlteracoes?: boolean;
   onFechar: () => void;
@@ -120,7 +138,8 @@ export function VendaModalShell({
   vendaFazendaId, setVendaFazendaId, fazendasOC,
   propriedadeDestino, setPropriedadeDestino,
   vendaTipoVenda, setVendaTipoVenda, observacao, setObservacao,
-  ocOperacaoId, ocStatusComercial, lotesApi, boitelData = null, onBoitelChange, categoria, categoriasDisponiveis,
+  ocOperacaoId, ocStatusComercial, lotesApi, boitelData = null, onBoitelChange,
+  documentosApi, eventosApi, liquidacaoApi, categoria, categoriasDisponiveis,
   quantidadeNum, pesoKgNum, submitting, onSalvarOperacao, onSalvarNegociacao, semAlteracoes = false, onFechar,
 }: VendaModalShellProps) {
   const [abaAtiva, setAbaAtiva] = useState<string>('venda');
@@ -225,12 +244,12 @@ export function VendaModalShell({
 
       {/* BARRA DE ABAS — template do CompraModalShell (bg-card, border-b, px-6 py-3). */}
       <div className="bg-card border-b px-6 py-3 flex items-center gap-1">
-        {ABAS_VENDA.map(a => {
+        {abasDaVenda(!!ocOperacaoId).map(a => {
           const active = a.key === abaAtiva && a.enabled;
           return (
             <button key={a.key} type="button" disabled={!a.enabled}
               onClick={() => a.enabled && setAbaAtiva(a.key)}
-              title={a.enabled ? undefined : 'em breve'}
+              title={a.motivo}
               className={`h-8 px-3 rounded-md text-[12px] font-medium transition-colors ${
                 active ? 'bg-primary/10 text-primary'
                 : a.enabled ? 'text-muted-foreground hover:bg-muted/50'
@@ -243,7 +262,48 @@ export function VendaModalShell({
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] lg:grid-rows-[minmax(0,1fr)] gap-3 p-4 h-[69vh] overflow-y-auto lg:overflow-hidden bg-muted/30">
         <div className="space-y-2 min-w-0 lg:min-h-0 lg:overflow-y-auto">
-          {abaAtiva === 'negociacao' ? (
+          {/* ── DOCUMENTOS ─────────────────────────────────────────────────────────
+              ⚠ A MESMA ABA DA COMPRA, com as MESMAS props. Ela e' generica de operacao —
+              documento fiscal nao muda de natureza porque o gado entra ou sai.
+              ⚠ FORNECEDORES DA `liquidacaoApi`, como na compra: fonte unica, sem segunda
+              lista nem segundo cadastro. */}
+          {abaAtiva === 'documentos' && documentosApi ? (
+            <AbaDocumentosOC api={documentosApi} operacaoPronta={!!ocOperacaoId}
+              somenteLeitura={ocStatusComercial === 'cancelada'}
+              fornecedores={liquidacaoApi?.fornecedores}
+              contraparteId={compradorId || null}
+              clienteId={liquidacaoApi?.clienteId ?? null}
+              /* Negociado = `valor_acordado` da operacao, a mesma ancora da compra. Nao e'
+                 recalculado dos lotes: derivar de novo criaria uma segunda verdade. */
+              valorNegociado={liquidacaoApi?.valorAcordado ?? null}
+              recarregarFornecedores={liquidacaoApi?.recarregar} />
+          ) : abaAtiva === 'auditoria' && eventosApi ? (
+            /* ⚠ SO LEITURA e sem `somenteLeitura`: a aba nao escreve nada. */
+            <AbaAuditoriaOC api={eventosApi} operacaoPronta={!!ocOperacaoId}
+              fornecedores={liquidacaoApi?.fornecedores}
+              lotes={documentosApi?.lotes} />
+          ) : abaAtiva === 'financeiro' ? (
+            /* ── FINANCEIRO — VAZIO HONESTO ──────────────────────────────────────
+               ⚠ NAO MONTA A `AbaFinanceiroOC`. A da compra opera sobre compromissos e
+               obrigacoes que a venda ainda nao gera: montar aquela tela aqui mostraria
+               controles que nao levam a lugar nenhum, que e' pior que nao ter aba.
+               ⚠ NENHUM NUMERO. O valor projetado existe e esta no lote — repeti-lo aqui
+               como se fosse compromisso financeiro seria dizer que ha titulo quando nao
+               ha. A aba diz o que existe, o que falta e de onde vira. */
+            <div className="rounded-md border bg-card p-4 shadow-sm space-y-2 min-w-0">
+              <div className="text-[15px] font-medium text-foreground">Financeiro da venda</div>
+              <p className="text-[12px] text-muted-foreground leading-relaxed max-w-prose">
+                Esta venda ainda não gera compromissos financeiros. O valor projetado já está
+                no lote da Negociação e entra no resultado por ali; o que ainda não existe é a
+                previsão de recebimento — as parcelas, os vencimentos e a conciliação com o
+                que for recebido.
+              </p>
+              <p className="text-[12px] text-muted-foreground leading-relaxed max-w-prose">
+                Enquanto isso, o financeiro da venda continua sendo lançado por fora, como
+                sempre foi. Nada aqui está pendente de você.
+              </p>
+            </div>
+          ) : abaAtiva === 'negociacao' ? (
             ehBoitel ? (
               /* ⚠ AQUI NAO SE DIGITA O BOITEL. Base operacional e painel de resultado
                  sao LEITURA do que ja esta gravado. Os quatro modais de entrada de dado

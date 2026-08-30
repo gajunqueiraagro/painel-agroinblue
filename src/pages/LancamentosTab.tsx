@@ -455,22 +455,26 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     onEntregaChange: setOcEntregaEncerrada,
     enabled: modoOCCompra,
   });
+  /* ⚠ OS TRES SERVEM OS DOIS MODOS — PR-OC-VENDA-ABAS-01. Sao chaveados por
+     `ocOperacaoId`, que a hidratacao da venda ja seta: o que faltava era ligar. Sem
+     `!isCenarioMeta` pelo mesmo motivo do `lotesApi` — em meta o shell da OC nao e'
+     montado, entao os hooks nao tem consumidor. */
   const documentosApi = useOperacaoDocumentos({
     operacaoId: ocOperacaoId,
     clienteId: clienteAtual?.id ?? null,
-    enabled: modoOCCompra,
+    enabled: modoOCCompra || ocVendaParam,
   });
   const liquidacaoApi = useOperacaoLiquidacao({
     operacaoId: ocOperacaoId,
     clienteId: clienteAtual?.id ?? null,
-    enabled: modoOCCompra,
+    enabled: modoOCCompra || ocVendaParam,
   });
   /* Trilha de auditoria — mesma vizinhanca dos demais eixos da OC, uma api por aba.
      Nao recebe `clienteId`: a RLS de `zoo_operacao_eventos` ja recorta por tenant, e
      repassar o cliente aqui sugeriria um filtro que o hook nao faz. */
   const eventosApi = useOperacaoEventos({
     operacaoId: ocOperacaoId,
-    enabled: modoOCCompra,
+    enabled: modoOCCompra || ocVendaParam,
   });
 
   const outrasFazendas = useMemo(() => {
@@ -5056,6 +5060,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           onSalvarOperacao={() => salvarOperacaoVendaOC()}
           onSalvarNegociacao={() => salvarNegociacaoVendaOC()}
           semAlteracoes={ocVendaSemAlteracoes}
+          /* As tres apis, no mesmo idioma da compra. A venda as MONTA; nao as edita. */
+          documentosApi={documentosApi}
+          eventosApi={eventosApi}
+          liquidacaoApi={liquidacaoApi}
           onFechar={fecharModalOCComAutosave}
         />
       ) : isCompra && isCenarioMeta ? (
