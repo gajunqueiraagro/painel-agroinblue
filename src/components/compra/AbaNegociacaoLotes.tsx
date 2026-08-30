@@ -220,8 +220,12 @@ function NegociacaoOC({
   const rotuloCategoria = (slug: string) =>
     categoriasDisponiveis.find(c => c.value === slug)?.label || slug || 'Sem categoria';
 
+  /* ⚠ NA LINHA MAGRA NAO HA CARTAO. O bloco virou o TERCEIRO FATO do topo congelado
+     (PR-OC-VENDA-CASCATA-BOLSO-01, complemento C): "Lote: Garrotes" com o lapis ao lado,
+     no mesmo idioma rotulo-valor de Cabecas e Peso. Um cartao com borda e sombra dentro
+     do bloco de fatos leria como outra coisa. */
   return (
-    <div className="rounded-md border bg-card p-2 shadow-sm space-y-1.5 min-w-0">
+    <div className={linhaMagra ? 'min-w-0' : 'rounded-md border bg-card p-2 shadow-sm space-y-1.5 min-w-0'}>
       {/* ── A21 — TITULO E NUMEROS DO TOPO NAO ROLAM ──────────────────────────────
           A rolagem mora na coluna de conteudo do shell (PR-UI-A21-...-02), entao o
           `sticky` se ancora nela e o resumo lateral fica parado.
@@ -232,7 +236,24 @@ function NegociacaoOC({
         : 'sticky top-0 z-10 -mt-2 space-y-1.5 border-b bg-card pt-2 pb-2'}>
         {/* Na linha magra o cabecalho so' existe ENQUANTO FALTA o lote — e ai ele e'
             exatamente o caminho de criar o primeiro. Criado, some. */}
-        {(!linhaMagra || lotes.length === 0) && (
+        {/* ⚠ SEM LOTE, o topo mostra "Lote: —" com a acao de criar o primeiro. A maquina
+            de estados de 00d164b7 esta' preservada; so' mudou de endereco. */}
+        {linhaMagra && lotes.length === 0 && (
+          <div className="min-w-0">
+            <div className="text-[11px] font-normal text-muted-foreground leading-none whitespace-nowrap">Lote</div>
+            <div className="mt-1 flex items-center gap-2">
+              <span className="text-[22px] font-medium leading-none text-muted-foreground">—</span>
+              {!fisicoRO && (
+                <button type="button" onClick={abrirNovo} disabled={!operacaoPronta}
+                  title={!operacaoPronta ? (rotulos?.salveOperacaoPrimeiro ?? 'Salve a operação primeiro') : 'Criar o lote desta venda'}
+                  className="text-[11px] font-normal text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline">
+                  + criar
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+        {!linhaMagra && (
         <div className="flex items-baseline justify-between gap-3">
           <span className={`text-[15px] font-medium text-foreground min-w-0 truncate ${linhaMagra ? 'sr-only' : ''}`}>Negociação dos Lotes</span>
           <div className="flex items-baseline gap-3 shrink-0">
@@ -297,9 +318,11 @@ function NegociacaoOC({
           <Button type="button" variant="outline" size="sm" className="h-7 text-[11px]" onClick={onVoltarCompra}>{rotulos?.voltarParaIdentificacao ?? 'Voltar para Compra'}</Button>
         </div>
       ) : lotes.length === 0 ? (
+        linhaMagra ? null : (
         <div className="rounded-md border border-dashed bg-muted/10 px-3 py-3 text-center text-[11px] text-muted-foreground">
           {loading ? 'Carregando lotes…' : 'Nenhum lote. Clique em "Adicionar lote".'}
         </div>
+        )
       ) : (
         /* ── LISTA A18 ───────────────────────────────────────────────────────────
             SEM cabecalho de coluna, SEM `min-w`, SEM rolagem horizontal. A grade de
@@ -310,7 +333,7 @@ function NegociacaoOC({
             explicar o que a propria peca ja diz e' ruido.
             ⚠ `divide-border/60`: 0,5px nao existe em borda CSS de um jeito confiavel;
             a opacidade e' o que faz o filete ler mais fino que a borda cheia. */
-        <div className="rounded-md border divide-y divide-border/60">
+        <div className={linhaMagra ? 'min-w-0' : 'rounded-md border divide-y divide-border/60'}>
           {lotes.map(l => {
             const q = parseNumericValue(l.quantidade) || 0;
             const pm = parseNumericValue(l.pesoMedioKg) || 0;
@@ -322,7 +345,9 @@ function NegociacaoOC({
                 <button type="button" onClick={() => setEditandoId(l.idLocal)}
                   aria-label={`Editar lote ${rotuloCategoria(l.categoria)}`}
                   title="Editar este lote"
-                  className="min-w-0 flex-1 px-3.5 py-1.5 text-left leading-[1.35] hover:bg-muted/30 cursor-pointer">
+                  className={linhaMagra
+                    ? 'min-w-0 text-left cursor-pointer'
+                    : 'min-w-0 flex-1 px-3.5 py-1.5 text-left leading-[1.35] hover:bg-muted/30 cursor-pointer'}>
                   {/* ─── LINHA MAGRA (venda boitel) ─────────────────────────────────
                       UMA altura: "LOTE" e a identidade do embarque, com o valor por
                       cabeca. Peso, R$/kg e valor total NAO se repetem — os tres ja estao
@@ -330,16 +355,19 @@ function NegociacaoOC({
                       ⚠ O LAPIS E' A MARCA, o alvo de clique e' a linha inteira: um icone
                       de 14px e' alvo pior que a faixa toda, e o `title` ja diz o que
                       acontece. */}
+                  {/* ⚠ SO' A CATEGORIA. Cabecas ja esta' no fato ao lado e o R$/cab ja
+                      esta' nos unitarios da faixa de resultado — repeti-los aqui era o que
+                      fazia a linha magra existir sem ter o que dizer de proprio. */}
                   {linhaMagra ? (
-                    <div className="flex items-baseline gap-2 min-w-0">
-                      <span className="text-[10px] font-normal uppercase tracking-wide text-muted-foreground shrink-0">Lote</span>
-                      <span className="min-w-0 truncate text-[11px] text-foreground">
-                        {rotuloCategoria(l.categoria)}
-                        {q > 0 && <span> · {q} cab</span>}
-                        {q > 0 && total > 0 && <span className="tabular-nums"> · {brl(total / q)}/cab</span>}
-                        {semPeso && <span className="text-destructive"> · sem peso</span>}
-                      </span>
-                      <Pencil className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-normal text-muted-foreground leading-none whitespace-nowrap">Lote</div>
+                      <div className="mt-1 flex items-center gap-1.5">
+                        <span className="min-w-0 truncate text-[22px] font-medium leading-none text-foreground">
+                          {rotuloCategoria(l.categoria)}
+                        </span>
+                        {semPeso && <span className="text-[11px] text-destructive shrink-0">sem peso</span>}
+                        <Pencil className="h-3.5 w-3.5 shrink-0 text-secondary" />
+                      </div>
                     </div>
                   ) : (
                   <>

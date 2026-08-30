@@ -59,6 +59,8 @@ export interface BoitelEdicao extends BoitelData {
   custoFreteNoBoitel?: boolean;
   despesasAbateNoBoitel?: boolean;
   notasEnvioNoBoitel?: boolean;
+  /** ⚠ Default `true`, ao contrario dos irmaos: "Outros" SEMPRE viveu dentro do acerto. */
+  outrosNoBoitel?: boolean;
   /** Despesa nova — guias de envio. Nasce zerada, do lado do produtor. */
   custoNotasEnvio?: number;
   /** Data em que o abate aconteceu. Do cenario REALIZADO; vazia enquanto nao acontecer. */
@@ -159,6 +161,7 @@ export function derivadosBoitel(data: BoitelEdicao) {
   const freteNoBoitel = data.custoFreteNoBoitel ?? false;
   const abateNoBoitel = data.despesasAbateNoBoitel ?? true;
   const notasNoBoitel = data.notasEnvioNoBoitel ?? false;
+  const outrosNoBoitel = data.outrosNoBoitel ?? true;
 
   /* ⚠ `cne` ENTRA NO CUSTO OPERACIONAL como o frete — e' desembolso, e o custo da arroba
      produzida tem de conhecê-lo. Com a despesa nova zerada, `cOp`, `cPArr` e `rLiq` sao
@@ -175,7 +178,13 @@ export function derivadosBoitel(data: BoitelEdicao) {
      as nove linhas que o painel de então não mostrava; o painel de resultado de
      PR-BOITEL-ACORDEAO-01 mostra "Custo da arroba", e ele é este. */
   const cPArr = aP > 0 ? cOp / aP : 0;
-  const custoTotalBoitel = cDT + cs + oc;
+  /* ⚠ `custoTotalBoitel` PASSOU A SER SO' O QUE O BOITEL SEMPRE COBRA — diarias e
+     sanidade. "Outros" saiu daqui e virou parcela CONDICIONADA no `descontoDoAcerto`,
+     como frete, abate e notas de envio: era a ultima despesa sem escolha de lado.
+     ⚠ COM O DEFAULT `true` A SOMA E A MESMA, ao centavo — `oc` volta pelo condicional.
+     Quem le' este numero fora daqui (o resumo do card, o painel longo) continua vendo o
+     custo do boitel, agora sem a parte que o contrato pos no bolso do produtor. */
+  const custoTotalBoitel = cDT + cs + (outrosNoBoitel ? oc : 0);
 
   /* ─── UMA COMPOSICAO, NUNCA DOIS CAMINHOS ────────────────────────────────────
      O que o boitel desconta do repasse: o que ele sempre cobra (diarias, sanidade,
@@ -185,7 +194,8 @@ export function derivadosBoitel(data: BoitelEdicao) {
      natureza de coisa; agora e' uma parcela CONDICIONADA como as outras duas. Uma
      composicao so' — e o dia em que uma quarta despesa aparecer, ela entra aqui e em
      nenhum outro lugar. */
-  const descontoDoAcerto = custoTotalBoitel
+  const descontoDoAcerto = cDT + cs
+    + (outrosNoBoitel ? oc : 0)
     + (freteNoBoitel ? cf : 0)
     + (abateNoBoitel ? da : 0)
     + (notasNoBoitel ? cne : 0);
@@ -193,7 +203,8 @@ export function derivadosBoitel(data: BoitelEdicao) {
   /* O QUE SAI DO BOLSO DO PRODUTOR — o complemento exato do desconto. A aba Financeiro
      le' daqui para montar a linha de previsao de caixa: o que o operador marcar como
      "produtor" entra na previsao, o que marcar "boitel" sai dela. */
-  const custosDoProdutor = (freteNoBoitel ? 0 : cf)
+  const custosDoProdutor = (outrosNoBoitel ? 0 : oc)
+    + (freteNoBoitel ? 0 : cf)
     + (abateNoBoitel ? 0 : da)
     + (notasNoBoitel ? 0 : cne);
 
@@ -338,8 +349,13 @@ export function liquidoDaVendaBoitel(d: BoitelEdicao | null): number | null {
    ⚠ NULL, NUNCA ZERO: sem liquido ou sem base, nao ha unitario — e a tela mostra "—". */
 export interface UnitariosLiquido { porCabeca: number | null; porKg: number | null }
 
-export function unitariosDoLiquido(d: BoitelEdicao | null): UnitariosLiquido {
-  const liq = liquidoDaVendaBoitel(d);
+export function unitariosDoLiquido(d: BoitelEdicao | null, base?: number | null): UnitariosLiquido {
+  /* ⚠ `base` PARAMETRIZA A GRANDEZA, e nao duplica a conta — PR-OC-VENDA-CASCATA-BOLSO-01.
+     A cascata precisa dos unitarios do LIQUIDO NO BOLSO (`rLiq`), nao do acerto; escrever
+     `bolso/cabecas` na tela seria a segunda copia da mesma divisao, e ela divergiria no dia
+     em que o denominador mudasse. Omitida, vale o liquido da venda — o comportamento de
+     antes, para quem ja chamava. */
+  const liq = base !== undefined ? base : liquidoDaVendaBoitel(d);
   if (d == null || liq == null) return { porCabeca: null, porKg: null };
   const q = d.qtdCabecas || 0;
   const pesoTotal = q * (d.pesoInicial || 0);
@@ -395,12 +411,21 @@ export function PilulaCenario({ cenario = 'projetado' }: { cenario?: CenarioBoit
    compensar; medir o container antes de copiar a receita.
    ⚠ AUSENCIA E' TRACO, nunca zero — o mesmo criterio do cabecalho de lotes que ele
    substitui. */
-export function BoitelTopoNegociacao({ cabecas, pesoMedioKg, valorPorKg, valorTotal, cenario }: {
+export function BoitelTopoNegociacao({ cabecas, pesoMedioKg, valorPorKg, valorTotal, cenario, slotLote }: {
   cabecas: number;
   pesoMedioKg: number | null;
   valorPorKg: number | null;
   valorTotal: number;
   cenario?: CenarioBoitel;
+  /* ⚠ O LOTE VIROU O TERCEIRO FATO — PR-OC-VENDA-CASCATA-BOLSO-01 (complemento C). A
+     linha magra que vivia abaixo do topo MORREU: ela repetia cabecas (ja aqui) e o
+     R$/cab (ja nos unitarios da faixa), e sobrava dizendo a categoria — que e' fato, como
+     os dois vizinhos, e pertence a este bloco.
+     ⚠ VEM PRONTO DE FORA, como `ReactNode`, e a razao e' de maquina: quem sabe abrir a
+     edicao de lote e' o `AbaNegociacaoLotes`, dono do `LoteDialog` e do `editandoId`.
+     Reconstruir aquele caminho aqui seria um SEGUNDO jeito de editar lote — a doenca que
+     esta frente inteira passou consertando. O endereco mudou; a maquina, nao. */
+  slotLote?: ReactNode;
 }) {
   const traco = <span className="text-muted-foreground font-normal">—</span>;
   return (
@@ -429,6 +454,7 @@ export function BoitelTopoNegociacao({ cabecas, pesoMedioKg, valorPorKg, valorTo
               {pesoMedioKg == null ? traco : formatKg(pesoMedioKg)}
             </div>
           </div>
+          {slotLote}
         </div>
 
         <div className="flex min-w-0 flex-wrap gap-x-7 gap-y-2 border-l-2 border-amber-500 bg-amber-50/40 dark:bg-amber-950/20 pl-3.5 pr-2 py-0.5 rounded-r-md">
@@ -486,45 +512,61 @@ export function BoitelResultadoCompacto({ boitelData, cenario }: {
   boitelData: BoitelEdicao | null;
   cenario?: CenarioBoitel;
 }) {
-  const liquido = liquidoDaVendaBoitel(boitelData);
   const cmp = useMemo(() => comparativoOportunidade(boitelData), [boitelData]);
-  const uni = useMemo(() => unitariosDoLiquido(boitelData), [boitelData]);
+  const d = useMemo(() => boitelData ? derivadosBoitel(boitelData) : null, [boitelData]);
+  const faltas = useMemo(() => boitelData ? exigencias(boitelData).filter(e => !e.presente) : [], [boitelData]);
+  const pronto = !!d && faltas.length === 0;
+  /* ⚠ O BOLSO E `rLiq`, e nao um numero novo: acerto liquido menos os gastos diretos do
+     produtor. E' exatamente o que o veredito SEMPRE comparou com vender vivo hoje — a
+     cascata so' torna visivel o caminho que levava ate' ele. */
+  const bolso = pronto ? d.rLiq : null;
+  const uni = useMemo(() => unitariosDoLiquido(boitelData, bolso), [boitelData, bolso]);
   const ganhou = cmp != null && cmp.diferenca >= 0;
 
   return (
     <section className="rounded-md border bg-card px-3.5 py-3 shadow-sm min-w-0">
-      {/* ─── A FAIXA QUE FECHA A ABA ───────────────────────────────────────────────
-          PR-OC-VENDA-LAYOUT-NEG-01D. Dois numeros e uma frase: quanto a venda rende, e
-          se valeu a pena mandar para o boitel em vez de vender vivo hoje.
-          ⚠ O LIQUIDO E PROJECAO — ambar e pilula, pela regra do 01D. Quando o realizado
-          chegar, ele entra solido ao lado, e a diferenca de cor E' o comparativo.
-          ⚠ O VEREDITO E FRASE, e nao um percentual solto. "+3,0%" exige que o leitor
-          saiba de que percentual se fala; a frase diz o negocio inteiro numa linha, e o
-          numero dentro dela e' o que ele foi buscar.
-          ⚠ NENHUM `truncate`: numero cortado nao e' numero. */}
-      <div className="flex flex-wrap items-start justify-between gap-x-8 gap-y-3">
+      {/* ─── A CASCATA DO BOLSO ────────────────────────────────────────────────────
+          PR-OC-VENDA-CASCATA-BOLSO-01. O numero que decide e' o LIQUIDO NO BOLSO, e ele
+          estava invisivel: a tela mostrava o acerto (565.217) e o veredito comparava
+          outro numero (554.717), sem dizer que a diferenca era o gasto direto. Quem lia
+          via um salto sem explicacao — e a explicacao cabia em duas linhas de conta.
+          ⚠ A CASCATA SAI SEMPRE INTEIRA, mesmo com gasto direto zerado: uma linha que
+          some quando vale zero faz a conta parecer outra a cada operacao, e o leitor perde
+          a referencia de onde procurar cada degrau.
+          ⚠ "Acerto liquido" SEM DESTAQUE, de proposito: o destaque dele mora no cartao de
+          Projecao, acima. Aqui ele e' degrau, nao resposta. */}
+      <div className="flex flex-wrap items-start justify-between gap-x-8 gap-y-4">
 
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-normal text-muted-foreground leading-none whitespace-nowrap">Líquido projetado</span>
-            <PilulaCenario cenario={cenario} />
-          </div>
-          <div className={`mt-1 text-[22px] font-medium leading-none tabular-nums whitespace-nowrap ${
-            liquido == null ? 'text-muted-foreground font-normal' : 'text-[#854F0B] dark:text-amber-500'}`}>
-            {liquido == null ? '—' : formatMoeda(liquido)}
-          </div>
-          {/* ⚠ OS DOIS UNITARIOS FICAM NA MESMA COLUNA, sob o total: sao o MESMO numero
-              lido por outra base, e afastá-los faria parecer grandeza nova. Ambar como o
-              total — sao projecao pela mesma razao que ele. */}
-          {(uni.porCabeca != null || uni.porKg != null) && (
-            <div className="mt-1.5 text-[13px] leading-none tabular-nums whitespace-nowrap text-[#854F0B] dark:text-amber-500">
-              {uni.porCabeca == null ? '—' : `${formatMoeda(uni.porCabeca)}/cab`}
-              {' · '}
-              {uni.porKg == null ? '—' : `${formatMoeda(uni.porKg)}/kg liq.`}
+        <div className="min-w-0 w-fit max-w-[380px]">
+          <LinhaCascata rotulo="Faturamento projetado" valor={pronto ? formatMoeda(d.fba) : null} />
+          <LinhaCascata rotulo="− Descontos do boitel" valor={pronto ? `− ${formatMoeda(d.descontoDoAcerto)}` : null} />
+          <LinhaCascata rotulo="= Acerto líquido"      valor={pronto ? formatMoeda(d.fba - d.descontoDoAcerto) : null} />
+          <LinhaCascata rotulo="− Gastos diretos"      valor={pronto ? `− ${formatMoeda(d.custosDoProdutor)}` : null} />
+
+          <div className="mt-1.5 border-t pt-1.5">
+            <div className="flex items-center gap-2">
+              <span className="text-[12px] font-normal text-secondary leading-none whitespace-nowrap">= Líquido no bolso</span>
+              <PilulaCenario cenario={cenario} />
             </div>
-          )}
+            <div className={`mt-1 text-[20px] font-medium leading-none tabular-nums whitespace-nowrap ${
+              bolso == null ? 'text-muted-foreground font-normal' : 'text-[#854F0B] dark:text-amber-500'}`}>
+              {bolso == null ? '—' : formatMoeda(bolso)}
+            </div>
+            {/* Os unitarios do BOLSO — a mesma funcao irma, com a base trocada. */}
+            {(uni.porCabeca != null || uni.porKg != null) && (
+              <div className="mt-1.5 text-[13px] leading-none tabular-nums whitespace-nowrap text-[#854F0B] dark:text-amber-500">
+                {uni.porCabeca == null ? '—' : `${formatMoeda(uni.porCabeca)}/cab`}
+                {' · '}
+                {uni.porKg == null ? '—' : `${formatMoeda(uni.porKg)}/kg liq.`}
+              </div>
+            )}
+          </div>
         </div>
 
+        {/* O VEREDITO — a ANALISE 1 reduzida a uma frase.
+            ⚠ "apos frete" SAIU da conferencia: aquilo existia para explicar por que o
+            numero comparado nao era o liquido mostrado ao lado. A cascata acabou de
+            mostrar o caminho inteiro, entao a ressalva virou repeticao. */}
         <div className="min-w-0 lg:max-w-[55%]">
           {cmp == null ? (
             <span className="text-[11px] text-muted-foreground leading-snug">
@@ -534,12 +576,6 @@ export function BoitelResultadoCompacto({ boitelData, cenario }: {
             </span>
           ) : (
             <>
-              {/* ⚠ "esses animais" e nao "o lote": quem le' esta olhando para os animais
-                  que acabou de descrever tres linhas acima. */}
-              {/* ⚠ 11px E DELIBERADO, e nao descuido do piso: o piso de 10px da casa vale
-                  para TEXTO DE APOIO, e esta frase e' apoio — o numero que decide ja esta'
-                  a esquerda, em 22px. Reduzida duas vezes a pedido: era 13, foi a 12 e
-                  agora 11, com `leading` folgado para nao apertar a leitura. */}
               <p className={`text-[11px] leading-[1.45] ${ganhou ? 'text-success' : 'text-destructive'}`}>
                 Mandar para o boitel deve render{' '}
                 <span className="font-medium tabular-nums">{formatMoeda(Math.abs(cmp.diferenca))}</span>
@@ -547,12 +583,8 @@ export function BoitelResultadoCompacto({ boitelData, cenario }: {
                 {' '}(<span className="font-medium tabular-nums">{ganhou ? '+' : '−'}{Math.abs(cmp.percentual).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%</span>)
                 {' '}do que vender esses animais vivos hoje.
               </p>
-              {/* ⚠ A LINHA DE CONFERENCIA existe porque a frase compara DOIS numeros que
-                  ela nao mostra, e um deles nao e' o liquido ao lado: o resultado do
-                  produtor ja desconta o frete, que ele paga por fora. Sem esta linha a
-                  diferenca de R$ 10.500,00 entre os dois pareceria erro. */}
               <p className="mt-1 text-[10px] text-muted-foreground leading-snug tabular-nums">
-                comparando o resultado após frete ({formatMoeda(cmp.resultado)}) com a venda a{' '}
+                comparando o líquido no bolso ({formatMoeda(cmp.resultado)}) com a venda a{' '}
                 {formatMoeda(boitelData?.custoOportunidade ?? 0)}/kg hoje ({formatMoeda(cmp.oportunidade)})
               </p>
             </>
@@ -566,6 +598,20 @@ export function BoitelResultadoCompacto({ boitelData, cenario }: {
         </p>
       )}
     </section>
+  );
+}
+
+/* Um degrau da cascata — A18: rotulo 12px, valor 12px tabular, duas colunas `w-fit`.
+   ⚠ SEM `truncate` no valor; a tabela cresce, o numero nao encolhe. */
+function LinhaCascata({ rotulo, valor }: { rotulo: string; valor: string | null }) {
+  return (
+    <div className="flex items-baseline justify-between gap-6 leading-[1.6]">
+      <span className="text-[12px] font-normal text-secondary whitespace-nowrap">{rotulo}</span>
+      <span className={`text-[12px] tabular-nums whitespace-nowrap ${
+        valor ? 'text-[#854F0B] dark:text-amber-500' : 'text-muted-foreground'}`}>
+        {valor ?? '—'}
+      </span>
+    </div>
   );
 }
 

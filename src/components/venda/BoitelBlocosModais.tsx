@@ -125,6 +125,7 @@ const MAPA_BOITEL: CampoBoitel[] = [
   { col: 'notas_envio_no_boitel',        campo: 'notasEnvioNoBoitel',          tipo: 'bool' },
   { col: 'custo_notas_envio',            campo: 'custoNotasEnvio',             tipo: 'num', zeroEValor: true },
   { col: 'data_abate',                   campo: 'dataAbate',                   tipo: 'texto' },
+  { col: 'outros_no_boitel',             campo: 'outrosNoBoitel',              tipo: 'bool' },
 ];
 
 /** O payload de `oc_salvar_boitel` — a IDA, derivada do mapa. */
@@ -184,7 +185,7 @@ export function boitelVazio(): BoitelEdicao {
        estes valores divergissem dos `DEFAULT` da tabela, a tela mostraria uma composicao
        e o primeiro salvamento gravaria outra. Frete FORA do acerto, abate DENTRO, notas
        de envio fora e zeradas — a regra cravada de hoje, agora declarada. */
-    custoFreteNoBoitel: false, despesasAbateNoBoitel: true,
+    custoFreteNoBoitel: false, despesasAbateNoBoitel: true, outrosNoBoitel: true,
     notasEnvioNoBoitel: false, custoNotasEnvio: 0, dataAbate: '',
   };
 }
@@ -463,14 +464,14 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
   const sairam = cabecasQueSairam(d);
   const diarias = der.cDT;
   const corpos: Record<string, React.ReactNode> = {
-    desempenho: (<><div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
+    desempenho: (<><div className="grid grid-cols-1 gap-y-2">
           <CampoNum desabilitado={somenteLeitura} label="Dias confinamento" titulo="Dias de confinamento" valor={d.dias} onChange={v => set('dias', v)} casas={0} obrigatorio />
           <CampoNum desabilitado={somenteLeitura} label="GMD" valor={d.gmd} onChange={v => set('gmd', v)} casas={3} sufixo="kg/dia" obrigatorio />
           <CampoNum desabilitado={somenteLeitura} label="Quebra de viagem" valor={d.quebraViagem} onChange={v => set('quebraViagem', v)} sufixo="%" />
           <CampoNum desabilitado={somenteLeitura} label="Rend. entrada" titulo="Rendimento de entrada" valor={d.rendimentoEntrada} onChange={v => set('rendimentoEntrada', v)} sufixo="%" />
           <CampoNum desabilitado={somenteLeitura} label="Rend. saída" titulo="Rendimento de saída" valor={d.rendimento} onChange={v => set('rendimento', v)} sufixo="%" obrigatorio />
         </div></>),
-    custos: (<><div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 items-start">
+    custos: (<><div className="grid grid-cols-1 gap-y-2 items-start">
           <LinhaCampo label="Modalidade *" largura="w-[140px]">
             <Select value="diaria" onValueChange={() => { /* só diária — ver os itens desabilitados */ }} disabled={somenteLeitura}>
               <SelectTrigger className="h-8 px-2.5 text-[13px]"><SelectValue /></SelectTrigger>
@@ -525,7 +526,9 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
             extra={<SeletorLado noBoitel={d.custoFreteNoBoitel ?? false} desabilitado={somenteLeitura}
               onChange={v => set('custoFreteNoBoitel', v)} />} />
           <CampoNum desabilitado={somenteLeitura} label="Outros (total)" moeda valor={d.outrosCustos} onChange={v => set('outrosCustos', v)}
-            derivado={porCabeca(d.outrosCustos, qtd)} />
+            derivado={porCabeca(d.outrosCustos, qtd)}
+            extra={<SeletorLado noBoitel={d.outrosNoBoitel ?? true} desabilitado={somenteLeitura}
+              onChange={v => set('outrosNoBoitel', v)} />} />
           {/* ⚠ DESPESA NOVA — PR-OC-VENDA-REALIZADO-01A. As guias de envio (Fundersul,
               Iagro) nao tinham campo: iam somadas em "Outros" e perdiam a identidade, e
               sem identidade nao ha como dizer de que lado do acerto elas moram. Nasce
@@ -556,7 +559,7 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
           title="A linha “Outros Custos” do financeiro soma outros_custos, custo_nutricao e custos_extras_parceria; das três, só “Outros” tem campo aqui.">
           “Outros” vira “Outros Custos” no financeiro.
         </p></>),
-    comercializacao: (<><div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
+    comercializacao: (<><div className="grid grid-cols-1 gap-y-2">
           <CampoNum desabilitado={somenteLeitura} label="Preço de venda" moeda valor={d.precoVendaArroba} onChange={v => set('precoVendaArroba', v)} sufixo="/@" obrigatorio />
           {/* ⚠ TOTAL, não por cabeça. Medido no acerto real: DAEMS/GTA de R$ 4.514,57
               contra faturamento de R$ 813 mil. */}
@@ -570,7 +573,7 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
             modal. A quantidade também reduz as diárias, no modal de Custos. */}
         <div className="rounded-md border bg-card p-2.5 shadow-sm space-y-2">
           <div className="text-[11px] font-semibold uppercase tracking-wide text-foreground/90">Morte no período</div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
+          <div className="grid grid-cols-1 gap-y-2">
             <CampoNum desabilitado={somenteLeitura} label="Qtd. de mortes" titulo="Quantidade de mortes" valor={d.morteQuantidade ?? 0} onChange={v => set('morteQuantidade', v)} casas={0} />
             <CampoNum desabilitado={somenteLeitura} label="Indenização" moeda titulo="Valor de indenização" valor={d.morteValorIndenizacao ?? 0} onChange={v => set('morteValorIndenizacao', v)} />
           </div>
@@ -595,7 +598,7 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
 
         {/* Com "não", os campos somem — e o estado deles some junto, no clique acima. */}
         {d.possuiAdiantamento && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
+          <div className="grid grid-cols-1 gap-y-2">
             {/* A20 — DatePicker do sistema. */}
             <LinhaCampo label="Data do adiantamento" largura="w-[130px]">
               <DatePicker value={d.dataAdiantamento} onChange={v => set('dataAdiantamento', v)}
@@ -607,7 +610,7 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
             <CampoNum desabilitado={somenteLeitura} label="Total adiantado" moeda titulo="Valor total adiantado" valor={d.valorAdiantamentoDiarias} onChange={v => set('valorAdiantamentoDiarias', v)} />
             <CampoNum desabilitado={somenteLeitura} label="Sanitário adiant." moeda titulo="Sanitário adiantado" valor={d.valorAdiantamentoSanitario} onChange={v => set('valorAdiantamentoSanitario', v)} />
             <CampoNum desabilitado={somenteLeitura} label="Outros adiant." moeda titulo="Outros adiantados" valor={d.valorAdiantamentoOutros} onChange={v => set('valorAdiantamentoOutros', v)} />
-            <LinhaCampo label="Observação" largura="flex-1" span>
+            <LinhaCampo label="Observação" largura="flex-1">
               <Input value={d.adiantamentoObservacao} onChange={e => set('adiantamentoObservacao', e.target.value)}
                 disabled={somenteLeitura} placeholder="Opcional" className="h-8 px-2.5 text-[13px]" />
             </LinhaCampo>
@@ -618,41 +621,38 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
   return corpos;
 }
 
-/* ─── O CARD DE RESUMO, CLICAVEL ───────────────────────────────────────────────
-   ⚠ A LINHA INTEIRA E' O BOTAO, e o lapis e' so' a marca de que ela abre. Um alvo de
-   clique do tamanho do cartao vale mais que um icone de 14px, e o `title` diz o que
-   acontece — instrucao escrita na tela para explicar o que a peca ja faz e' ruido.
-   ⚠ O AMBAR DA PENDENCIA SOBREVIVEU ao fim do acordeao: era a unica coisa dele que
-   informava sem exigir clique, e continua sendo.
+/* ─── OS DOIS MUNDOS ──────────────────────────────────────────────────────────
+   PR-OC-VENDA-CASCATA-BOLSO-01 (adendo C), estado PRE-ABATE do mockup aprovado. Os dois
+   cartoes de resumo eram irmaos anonimos; agora sao UM cartao — a PROJECAO inteira, com
+   moldura ambar — e ao lado dele o REALIZADO, ainda vazio.
 
-   ⚠ FATO x PROJECAO — PR-OC-VENDA-LAYOUT-NEG-01D. Os resumos descrevem um planejamento:
-   sao PROJECAO, e por isso vem em ambar, com UMA pilula no titulo do cartao — nunca uma
-   por numero, que faria a marca virar textura.
-   ⚠ A EXCECAO DO FATO EXISTE E ESTA DORMINDO. O unico numero solido do resumo era o
-   "Adiantado", e ele saiu do cartao por decisao do Gabriel (segue no modal, que e' onde
-   se digita). A prop `fato` FICA: e' por ela que o REALIZADO vai entrar solido ao lado
-   do ambar, e apaga-la agora so' criaria trabalho de reescrever a mesma regra depois.
-   ⚠ SEIS INDICADORES PEDEM GRADE, e nao `flex-wrap`: com larguras diferentes o wrap
-   deixa a segunda linha desalinhada da primeira, e a comparacao vertical — que e' o que
-   se faz com seis numeros — se perde. `grid-cols-3` em duas linhas de tres. */
-function CardResumo({ titulo, itens, cenario, onAbrir }: {
+   ⚠ E ISSO E O DESENHO, NAO ENFEITE: a aba passa a mostrar os DOIS MUNDOS lado a lado
+   desde antes de existir o segundo. Quem abre a venda ve, sem ler nada, que ha um lugar
+   reservado para o que vai acontecer — e no dia do abate o realizado nasce SOLIDO ali,
+   ao lado do ambar, e o comparativo aparece por diferenca de cor. E' a regra plantada em
+   PR-OC-VENDA-LAYOUT-NEG-01D cobrando o seu encaixe.
+   ⚠ O REALIZADO NASCE SEM BOTAO, de proposito. Um "lancar realizado" que ainda nao liga
+   em lugar nenhum seria a decima instrucao sem destino desta frente — e esta sessao ja
+   apagou uma ("marque abaixo" para uma caixa que nunca existiu). O botao nasce na PARTE 2,
+   junto com o caminho que ele abre. */
+
+/* Um grupo de indicadores DENTRO do card de projecao, com o seu proprio lapis.
+   ⚠ DOIS LAPIS NUM CARTAO SO', e nao um: os dois modais continuam sendo dois, e um lapis
+   unico teria de perguntar qual abrir — pergunta que o proprio grupo ja responde. */
+function GrupoIndicadores({ titulo, itens, onAbrir }: {
   titulo: string;
   itens: { rotulo: string; valor: string; pendente?: boolean; fato?: boolean }[];
-  cenario?: CenarioBoitel;
   onAbrir: () => void;
 }) {
   return (
     <button type="button" onClick={onAbrir} title="Clique para editar"
       aria-label={`Editar ${titulo}`}
-      className="group w-full rounded-md border bg-card p-3 shadow-sm min-w-0 text-left cursor-pointer hover:bg-muted/25 transition-colors">
-      <div className="flex items-center justify-between gap-2 border-b pb-1.5">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="text-[13px] font-medium text-foreground leading-none truncate">{titulo}</span>
-          <PilulaCenario cenario={cenario} />
-        </div>
+      className="group w-full min-w-0 text-left cursor-pointer rounded-md px-2 py-1.5 -mx-2 hover:bg-muted/30 transition-colors">
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <span className="text-[11px] font-medium text-muted-foreground leading-none truncate">{titulo}</span>
         <Pencil className="h-3.5 w-3.5 shrink-0 text-secondary" />
       </div>
-      <div className="mt-2.5 grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3">
         {itens.map(i => (
           <div key={i.rotulo} className="min-w-0">
             <div className="text-[10px] font-normal text-muted-foreground leading-none whitespace-nowrap">
@@ -660,9 +660,7 @@ function CardResumo({ titulo, itens, cenario, onAbrir }: {
               {i.fato && <span className="ml-1 text-[9px] font-normal">(fato)</span>}
             </div>
             {/* ⚠ `whitespace-nowrap`, nunca `truncate`: numero cortado nao e' numero.
-                ⚠ A PENDENCIA MANDA NA COR: um grupo incompleto se anuncia em ambar de
-                aviso antes de qualquer regra de fato/projecao — ali nao ha numero a
-                marcar, ha dado a preencher. */}
+                ⚠ A PENDENCIA MANDA NA COR — ver a precedencia em `indicadoresDoBoitel`. */}
             <div className={`mt-1 text-[15px] font-medium leading-none tabular-nums whitespace-nowrap ${
               i.pendente ? 'text-amber-700 dark:text-amber-500'
               : i.fato ? 'text-foreground'
@@ -719,7 +717,18 @@ function DialogoGrupo({ card, valor, somenteLeitura, onAplicar, onFechar }: {
         <DialogHeader className="shrink-0 space-y-0 bg-primary px-5 py-3">
           <DialogTitle className="text-[15px] text-primary-foreground">{TITULO_CARD[card]}</DialogTitle>
         </DialogHeader>
-        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-5">
+        {/* ─── DOIS GRUPOS LADO A LADO ──────────────────────────────────────────
+            PR-OC-VENDA-CASCATA-BOLSO-01 (adendo B). Empilhados, os dois grupos somavam
+            altura e o modal rolava por dentro — rolagem em modal de formulario e' defeito
+            (A1), e foi cobrado repetidas vezes.
+            ⚠ E CADA GRUPO PASSA A UMA COLUNA DE CAMPOS, o que parece contraditorio e nao
+            e': lado a lado, cada grupo recebe 354px dos 728 uteis, e a linha
+            rotulo(132)+campo(150)+sufixo(46) ocupa 342. Duas colunas DENTRO de 354px
+            espremeriam o campo — exatamente o defeito que o 01E corrigiu. Uma coluna por
+            grupo, dois grupos por modal: a altura cai pela metade e nenhum campo encolhe.
+            ⚠ `items-start` para o grupo curto nao esticar ate' a altura do longo. */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-5 items-start">
           {ids.map(id => (
             <div key={id} className="min-w-0">
               {/* ⚠ O TITULO E O TOPO DA HIERARQUIA e precisa se ler de relance: 12px/600
@@ -732,6 +741,7 @@ function DialogoGrupo({ card, valor, somenteLeitura, onAplicar, onFechar }: {
               {corpos[id]}
             </div>
           ))}
+          </div>
         </div>
         <DialogFooter className="shrink-0 border-t bg-card px-5 py-3">
           <Button variant="outline" size="sm" onClick={onFechar}>Cancelar</Button>
@@ -745,10 +755,14 @@ function DialogoGrupo({ card, valor, somenteLeitura, onAplicar, onFechar }: {
 
 /* ═══ O COMPONENTE ═══════════════════════════════════════════════════════════════ */
 
-export function BoitelBlocosModais({ valor, onChange, somenteLeitura, cenario }: {
+export function BoitelBlocosModais({ valor, onChange, somenteLeitura, cenario, detalheCenario, liquidoFormatado }: {
   valor: BoitelEdicao; onChange: (proximo: BoitelEdicao) => void; somenteLeitura?: boolean;
-  /** Marca de projecao dos cartoes — uma por grupo. Ver `CardResumo`. */
+  /** Marca de projecao — UMA por cartao, no titulo. Ver `GrupoIndicadores`. */
   cenario?: CenarioBoitel;
+  /** Texto que acompanha a pilula (mockup: "enviada em 13/05"). */
+  detalheCenario?: string | null;
+  /** O liquido projetado, ja formatado — mora DENTRO do cartao de projecao. */
+  liquidoFormatado?: string | null;
 }) {
   const [editando, setEditando] = useState<IdCard | null>(null);
   const indicadores = useMemo(() => indicadoresDoBoitel(valor), [valor]);
@@ -757,8 +771,48 @@ export function BoitelBlocosModais({ valor, onChange, somenteLeitura, cenario }:
      container aqui viraria UMA celula com dois cartoes empilhados dentro. */
   return (
     <>
-      <CardResumo titulo={TITULO_CARD.A} itens={indicadores.A} cenario={cenario} onAbrir={() => setEditando('A')} />
-      <CardResumo titulo={TITULO_CARD.B} itens={indicadores.B} cenario={cenario} onAbrir={() => setEditando('B')} />
+      {/* ─── CARTAO PROJECAO — moldura ambar, tudo o que se planeja ───────────── */}
+      <section className="rounded-md border-2 border-amber-500/70 bg-card p-3 shadow-sm min-w-0 space-y-3">
+        <div className="flex items-center justify-between gap-2 border-b pb-1.5">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-[13px] font-medium text-foreground leading-none">Projeção</span>
+            <PilulaCenario cenario={cenario} />
+            {/* ⚠ O DETALHE ACOMPANHA A PILULA, e nao vira segunda marca: "enviada em
+                13/05" diz DESDE QUANDO a projecao corre, que e' o contexto que faltava
+                para julgar se ela ainda vale. */}
+            {detalheCenario && (
+              <span className="text-[10px] font-normal text-muted-foreground leading-none truncate">{detalheCenario}</span>
+            )}
+          </div>
+          {liquidoFormatado && (
+            <div className="shrink-0 text-right">
+              <div className="text-[10px] font-normal text-muted-foreground leading-none whitespace-nowrap">Líquido projetado</div>
+              <div className="mt-1 text-[20px] font-medium leading-none tabular-nums whitespace-nowrap text-[#854F0B] dark:text-amber-500">
+                {liquidoFormatado}
+              </div>
+            </div>
+          )}
+        </div>
+        <GrupoIndicadores titulo={TITULO_CARD.A} itens={indicadores.A} onAbrir={() => setEditando('A')} />
+        <GrupoIndicadores titulo={TITULO_CARD.B} itens={indicadores.B} onAbrir={() => setEditando('B')} />
+      </section>
+
+      {/* ─── CARTAO REALIZADO — o vazio HONESTO ────────────────────────────────
+          ⚠ BORDA TRACEJADA E SEM BOTAO. Ele nao promete acao nenhuma porque ainda nao ha
+          caminho: o "lancar realizado" nasce na PARTE 2, com o cenario ligado. Um botao
+          aqui seria mais uma instrucao apontando para o que nao existe.
+          ⚠ E NAO E ESPACO DESPERDICADO: e' o lugar reservado que faz a projecao ao lado
+          se ler como projecao, e nao como fato. */}
+      <section className="rounded-md border border-dashed bg-muted/10 p-3 min-w-0 flex flex-col">
+        <div className="flex items-center gap-2 border-b border-dashed pb-1.5">
+          <span className="text-[13px] font-medium text-muted-foreground leading-none">Realizado</span>
+        </div>
+        <div className="flex-1 flex items-center justify-center py-6">
+          <p className="text-[11px] text-muted-foreground text-center leading-snug max-w-[16rem]">
+            Será lançado no acerto do abate.
+          </p>
+        </div>
+      </section>
       {editando && (
         <DialogoGrupo
           key={editando}

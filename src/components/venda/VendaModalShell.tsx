@@ -577,12 +577,13 @@ export function VendaModalShell({
                   valorPorKg={lotesApi ? valorPorKgNegociado(lotesApi.totais) : null}
                   valorTotal={lotesApi?.totais.valorNegociado ?? 0}
                   cenario="projetado"
+                  /* ⚠ O LOTE ENTRA DENTRO DO TOPO — complemento C. Ele era uma linha
+                      abaixo, repetindo cabecas e R$/cab; virou o terceiro FATO, ao lado de
+                      Cabecas e Peso. `abaLotes` continua sendo o MESMO elemento de sempre,
+                      com o seu `LoteDialog` e o seu `editandoId` — mudou o endereco, nao a
+                      maquina. */
+                  slotLote={abaLotes}
                 />
-
-                {/* ⚠ O LOTE VEM PRIMEIRO, e a ordem nao e' estetica: ele e' o comeco da
-                    negociacao. Sem lote nao ha cabecas nem peso, e os blocos do boitel nao
-                    tem sobre o que calcular — o topo deriva dele. */}
-                {abaLotes}
 
                 {/* ─── DOIS CARDS DE RESUMO ──────────────────────────────────────────
                     PR-OC-VENDA-LAYOUT-NEG-01B, forma final: a aba NAO TEM CAMPOS. Cada
@@ -600,6 +601,15 @@ export function VendaModalShell({
                       onChange={onBoitelChange}
                       somenteLeitura={ocStatusComercial === 'cancelada'}
                       cenario="projetado"
+                      /* ⚠ "enviada em 13/05" — desde quando a projecao corre. Sem isso a
+                          pilula diz QUE e' projecao e nao diz de QUANDO, que e' o que
+                          permite julgar se ela ainda vale. `data` e' a data da operacao. */
+                      detalheCenario={data ? `enviada em ${data.split('-').reverse().slice(0, 2).join('/')}` : null}
+                      /* O liquido migrou da faixa para DENTRO do cartao de projecao. */
+                      liquidoFormatado={(() => {
+                        const v = liquidoDaVendaBoitel(boitelData);
+                        return v == null ? null : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                      })()}
                     />
                   )}
                 </div>
