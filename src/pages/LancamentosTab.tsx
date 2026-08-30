@@ -616,6 +616,17 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
      antigo, que continua ao lado para conferencia; se os dois compartilhassem o objeto,
      editar na OC mexeria no que o formulario antigo mostra. */
   const [ocBoitel, setOcBoitel] = useState<BoitelEdicao | null>(null);
+  /* PR-OC-VENDA-REABRIR-01E — A ASSINATURA DO QUE FOI GRAVADO NA ULTIMA VEZ.
+     ⚠ O botao da venda ficava aceso para sempre: nao havia estado de sujo/pristino, entao
+     "Salvar alteracoes" parecia prometer que havia algo a salvar mesmo logo depois de
+     salvar. E' a mesma mentira do "Salvar e Gerar Financeiro" que ja corrigimos.
+     ⚠ ASSINATURA DE CONTEUDO, e nao de identidade: `lotesApi.salvar` recarrega os lotes do
+     banco e os objetos trocam de referencia com o mesmo conteudo. Comparar por JSON e' o
+     que faz o botao apagar em vez de reacender sozinho no render seguinte.
+     ⚠ `null` = NADA FOI SALVO NESTE MODAL AINDA, e ai o botao fica aceso — inclusive logo
+     apos reabrir. E' o estado de hoje, e nao e' mentira: o operador ainda nao gravou nada
+     nesta sessao. So' a gravacao bem-sucedida apaga o botao. */
+  const [ocVendaAssinaturaSalva, setOcVendaAssinaturaSalva] = useState<string | null>(null);
   const [rendCarcaca, setRendCarcaca] = useState('');
   const [funruralPct, setFunruralPct] = useState('');
   const [funruralReais, setFunruralReais] = useState('');
@@ -917,10 +928,20 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [vendaFazendaId, setVendaFazendaId] = useState<string>('');
   /* Propriedade de destino da venda na OC — texto livre, a propriedade de quem compra. */
   const [vendaPropriedadeDestino, setVendaPropriedadeDestino] = useState<string>('');
+  /* ⚠ SEMEIA A FAZENDA SO' NUMA VENDA NOVA — PR-OC-VENDA-REABRIR-01E. Ele existe para
+     poupar um clique: com uma fazenda no filtro, a venda ja' nasce com ela.
+     Numa REABERTURA ele apagava o que o banco tinha: a hidratacao faz
+     `setVendaFazendaId(op.fazenda_id)` e, na ultima linha, `setTipo('venda')` — que vira
+     `isVenda` de falso para verdadeiro e DISPARA este efeito, sobrescrevendo. Com o filtro
+     em Global o valor semeado e' string vazia, e o campo aparecia pedindo selecao apesar de
+     a operacao ter fazenda gravada.
+     ⚠ A COMPRA NAO TINHA O DEFEITO por acidente de nomes: a OC dela guarda a fazenda em
+     `ocFazendaDestinoId`, outro estado, enquanto a venda usa `vendaFazendaId` para a meta E
+     para a OC. */
   useEffect(() => {
-    if (!isVenda) return;
+    if (!isVenda || ocAberturaExistente) return;
     setVendaFazendaId(fazendaAtual?.id && fazendaAtual.id !== '__global__' ? fazendaAtual.id : '');
-  }, [isVenda, fazendaAtual?.id]);
+  }, [isVenda, ocAberturaExistente, fazendaAtual?.id]);
   useEffect(() => {
     if (!isCompra) return;
     setCompraFazendaId(fazendaAtual?.id && fazendaAtual.id !== '__global__' ? fazendaAtual.id : '');
@@ -2212,10 +2233,15 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   //   ⚠ Clique fora NAO fecha este modal e nunca fechou: o DialogContent
   //   previne `onPointerDownOutside`/`onInteractOutside`. Os gatilhos reais sao
   //   Esc, o X e o botao Fechar.
+  /* ⚠ A VENDA USA O MESMO FECHO — PR-OC-VENDA-REABRIR-01E. `onFecharOperacaoOC` e' o
+     `fecharOperacaoOC` do V2Index: apaga os cinco parametros e devolve a secao de origem.
+     Sem ele, fechar a venda largava o usuario em Lancamentos com `oc_venda=1&oc_id=...`
+     presos — e a Central seguinte abria ja' com o modal por cima da lista, porque os
+     parametros continuavam mandando abrir. Um fecho, nao dois. */
   const fecharModalOC = useCallback(() => {
     setLancModalOpen(false);
-    if (modoOCCompra) onFecharOperacaoOC?.();
-  }, [modoOCCompra, onFecharOperacaoOC]);
+    if (modoOCCompra || modoOCVenda) onFecharOperacaoOC?.();
+  }, [modoOCCompra, modoOCVenda, onFecharOperacaoOC]);
 
 
   // Modo OC: cria/atualiza a operação comercial (só identificação) e guarda operacao_id/versao.
@@ -2349,6 +2375,18 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     };
   }, [vendaTipoVenda, ocBoitel, lotesApi.totais]);
 
+  /* A assinatura do que esta' na tela AGORA. Recalculada a cada render de proposito — sao
+     dois JSON pequenos, e memorizar traria o risco de dependencia esquecida, caro justamente
+     aqui, onde errar significa o botao mentir num dos dois sentidos. */
+  const ocVendaAssinaturaAtual = JSON.stringify({
+    comprador: vendaDestinoFornecedorId, data, fazenda: vendaFazendaId,
+    tipo: vendaTipoVenda, destino: vendaPropriedadeDestino,
+    observacao, notaFiscal,
+    lotes: lotesApi.lotes.map(l => [l.ordem, l.categoria, l.quantidade, l.pesoMedioKg, l.criterioValor, l.valorInformado]),
+    boitel: ocBoitel ? payloadBoitel(ocBoitel) : null,
+  });
+  const ocVendaSemAlteracoes = ocVendaAssinaturaSalva !== null && ocVendaAssinaturaSalva === ocVendaAssinaturaAtual;
+
   const salvarOperacaoVendaOC = async (): Promise<{ operacaoId: string; versao: number } | null> => {
     const clienteId = clienteAtual?.id;
     if (!clienteId) { toast.error('Cliente não selecionado.'); return null; }
@@ -2381,6 +2419,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
          existe, entao a instrucao aponta para algo que da' para fazer. Ela ficou fora
          enquanto nao havia — mandar fazer o impossivel ensina a ignorar a mensagem. */
       if (criando) toast.success('Operação de venda criada. Agora informe os lotes negociados.');
+      setOcVendaAssinaturaSalva(ocVendaAssinaturaAtual);
       return { operacaoId: env.operacao_id, versao: env.versao };
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Falha ao salvar a operação de venda.');
@@ -2442,6 +2481,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         setOcVersao((envB as { versao: number }).versao);
       }
       toast.success('Negociação salva.');
+      /* ⚠ A ASSINATURA DO MOMENTO DA CHAMADA, e nao a do fim: `lotesApi.salvar` recarregou
+         os lotes, mas o estado so' chega no proximo render. Assinar o que foi ENVIADO e' o
+         que corresponde ao que o banco passou a ter. */
+      setOcVendaAssinaturaSalva(ocVendaAssinaturaAtual);
       return true;
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Falha ao salvar a negociação.');
@@ -5012,6 +5055,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           submitting={submitting}
           onSalvarOperacao={() => salvarOperacaoVendaOC()}
           onSalvarNegociacao={() => salvarNegociacaoVendaOC()}
+          semAlteracoes={ocVendaSemAlteracoes}
           onFechar={fecharModalOCComAutosave}
         />
       ) : isCompra && isCenarioMeta ? (

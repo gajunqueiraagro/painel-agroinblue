@@ -110,6 +110,8 @@ export interface VendaModalShellProps {
      duas acoes, porque e' sempre "salvar o que esta' na tela" — e e' o mesmo desenho do
      CompraModalShell, cujo rodape de Negociacao chama `lotesApi.salvar()`. */
   onSalvarNegociacao: () => void | Promise<unknown>;
+  /** Nada mudou desde a ultima gravacao bem-sucedida — o botao apaga. */
+  semAlteracoes?: boolean;
   onFechar: () => void;
 }
 
@@ -119,7 +121,7 @@ export function VendaModalShell({
   propriedadeDestino, setPropriedadeDestino,
   vendaTipoVenda, setVendaTipoVenda, observacao, setObservacao,
   ocOperacaoId, ocStatusComercial, lotesApi, boitelData = null, onBoitelChange, categoria, categoriasDisponiveis,
-  quantidadeNum, pesoKgNum, submitting, onSalvarOperacao, onSalvarNegociacao, onFechar,
+  quantidadeNum, pesoKgNum, submitting, onSalvarOperacao, onSalvarNegociacao, semAlteracoes = false, onFechar,
 }: VendaModalShellProps) {
   const [abaAtiva, setAbaAtiva] = useState<string>('venda');
   const compradorNome = contrapartes.find(f => f.id === compradorId)?.nome ?? null;
@@ -154,6 +156,9 @@ export function VendaModalShell({
   const podeSalvar = naNegociacao
     ? !!ocOperacaoId && faltamBoitel.length === 0
     : identificacaoPronta;
+  /* ⚠ NAO E' O MESMO QUE "NAO PODE": o botao pode estar apto e nao ter o que gravar. Por
+     isso o motivo tem precedencia — quem NAO PODE precisa saber o que falta; quem so' nao
+     tem alteracao precisa saber que ja' esta' salvo. */
   const motivoNaoSalva = naNegociacao
     ? (!ocOperacaoId ? 'Salve a operação na aba Venda primeiro'
        : faltamBoitel.length > 0 ? `Planejamento do boitel incompleto. Falta ${faltamBoitel.join(', ')}.`
@@ -424,9 +429,9 @@ export function VendaModalShell({
             const gravou = await onSalvarOperacao();
             if (criando && gravou) setAbaAtiva('negociacao');
           }}
-          disabled={submitting || !podeSalvar || ocStatusComercial === 'cancelada'}
+          disabled={submitting || !podeSalvar || semAlteracoes || ocStatusComercial === 'cancelada'}
           className="bg-white text-primary hover:bg-white/90 font-bold gap-1.5 disabled:opacity-60"
-          title={motivoNaoSalva}>
+          title={motivoNaoSalva ?? (semAlteracoes ? 'Nada alterado desde o último salvamento' : undefined)}>
           {/* O TEXTO VOLTOU AO DO MOCKUP em PR-OC-VENDA-ABA-NEGOCIACAO-01, porque agora
               ha para onde ir. Ele ficou em "Salvar operação" enquanto a Negociacao nao
               existia: promessa nao cumprida ensina a desconfiar do botao, do mesmo modo
