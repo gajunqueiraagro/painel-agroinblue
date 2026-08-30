@@ -24,7 +24,7 @@
  * `CompraLotesApi`, `CompraPermissoesPorEixo`, o diálogo de detalhes e os gates por eixo
  * — nenhum deles tem consumidor nesta aba. Entram quando a aba que precisar deles chegar.
  */
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -40,11 +40,13 @@ import { AbaNegociacaoLotes } from '@/components/compra/AbaNegociacaoLotes';
 import { AbaDocumentosOC } from '@/components/compra/AbaDocumentosOC';
 import { AbaAuditoriaOC } from '@/components/compra/AbaAuditoriaOC';
 import { AbaRecebimentoLotes } from '@/components/compra/AbaRecebimentoLotes';
+import { AbaFinanceiroOC } from '@/components/compra/AbaFinanceiroOC';
+import type { SugestaoCompromisso } from '@/components/compra/AbaCompromissosOC';
 import type { RecebimentoApi } from '@/hooks/useOperacaoRecebimento';
 import type { DocumentosApi } from '@/hooks/useOperacaoDocumentos';
 import type { EventosApi } from '@/hooks/useOperacaoEventos';
 import type { LiquidacaoApi } from '@/hooks/useOperacaoLiquidacao';
-import { BoitelBaseOperacional, BoitelResultadoCompacto, liquidoDaVendaBoitel } from '@/components/venda/BoitelNegociacaoDerivado';
+import { BoitelBaseOperacional, BoitelResultadoCompacto, liquidoDaVendaBoitel, derivadosBoitel, PilulaCenario } from '@/components/venda/BoitelNegociacaoDerivado';
 import { BoitelBlocosModais, faltamDosCinco, type BoitelEdicao } from '@/components/venda/BoitelBlocosModais';
 
 /* ⚠ "RECEBIMENTO" CHAMA-SE ENTREGA NA VENDA — o gado SAI. A coluna do banco já é
@@ -180,6 +182,44 @@ export function VendaModalShell({
      botao poder impedir ANTES da chamada — a licao de 45a7352b, onde o operador so'
      descobria o impedimento no fim. Se as duas divergirem, quem manda e' a RPC, e o texto
      que o operador veria seria o dela. */
+  /* ─── AS SUGESTOES DA PROJECAO ────────────────────────────────────────────────
+     ⚠ SO DOIS MOVIMENTOS no caixa do boitel, e e' o modelo inteiro: a SAIDA do
+     adiantamento, quando houver, e a ENTRADA do acerto final. Diarias e despesas nunca
+     viram titulo — sao deducao DENTRO do acerto, e e' por isso que o principal usa
+     `saldoReceberBase` (fba - custoTotalBoitel - cAb + antecipado) e nao o faturamento.
+     ⚠ O ADIANTAMENTO SOMA AO PRINCIPAL de proposito: ele volta ao produtor no acerto. Sao
+     dois movimentos de caixa em datas diferentes, nao um desconto.
+     ⚠ SEM DATA: `oc_criar_compromisso` nao tem campo de vencimento — ele vive na
+     PROGRAMACAO. Ver PR-OC-VENDA-PROGRAMACAO-SEMEADA-01. */
+  const sugestoesProjecao = useMemo<SugestaoCompromisso[] | undefined>(() => {
+    if (!ehBoitel || !boitelData || faltamDosCinco(boitelData).length > 0) return undefined;
+    const d = derivadosBoitel(boitelData);
+    const qtd = boitelData.qtdCabecas || 0;
+    const rot = `Venda ${String(qtd).padStart(3, '0')}`;
+    const itens: SugestaoCompromisso[] = [{
+      natureza: 'principal',
+      subcentro: 'Venda em Boitel',
+      valor: Math.round(d.saldoReceberBase * 100) / 100,
+      descricao: rot,
+      favorecidoId: compradorId || null,
+      rotulo: 'acerto final',
+    }];
+    if (boitelData.possuiAdiantamento) {
+      const adiant = Math.round(((boitelData.valorAdiantamentoDiarias || 0)
+        + (boitelData.valorAdiantamentoSanitario || 0)
+        + (boitelData.valorAdiantamentoOutros || 0)) * 100) / 100;
+      if (adiant > 0) itens.push({
+        natureza: 'obrigacao',
+        subcentro: 'Adiantamento de Boitel',
+        valor: adiant,
+        descricao: `${rot} - Adiantamento`,
+        favorecidoId: compradorId || null,
+        rotulo: 'adiantamento',
+      });
+    }
+    return itens;
+  }, [ehBoitel, boitelData, compradorId]);
+
   const faltamBoitel = ehBoitel ? faltamDosCinco(boitelData) : [];
   const naNegociacao = abaAtiva === 'negociacao';
   /* ⚠ SALVAR SO ONDE HA O QUE SALVAR — PR-OC-VENDA-ENTREGA-01C. Nas outras quatro abas o
@@ -360,6 +400,24 @@ export function VendaModalShell({
             <AbaAuditoriaOC api={eventosApi} operacaoPronta={!!ocOperacaoId}
               fornecedores={liquidacaoApi?.fornecedores}
               lotes={documentosApi?.lotes} />
+          ) : abaAtiva === 'financeiro' && liquidacaoApi ? (
+            /* ⚠ A MESMA ABA DA COMPRA. Medido na FASE 0: ela e' tipo-agnostica por desenho
+                — `planoTipo` vira '1-Entradas' numa venda, a descricao ja sai "Venda 110 G"
+                pelo `verboOC`, e o filtro de centro de custo da compra se desliga sozinho.
+                O vazio honesto sai: agora ha o que mostrar. */
+            <AbaFinanceiroOC
+              api={liquidacaoApi}
+              operacaoPronta={!!ocOperacaoId}
+              darkSelectClass=""
+              financeiroLegadoReadOnly={ocStatusComercial === 'cancelada'}
+              financeiroNovoReadOnly={ocStatusComercial === 'cancelada'}
+              operacaoId={ocOperacaoId}
+              clienteId={liquidacaoApi.clienteId ?? null}
+              dataOperacao={data}
+              sugestoesProjecao={sugestoesProjecao}
+              seloProjecao={ehBoitel ? <PilulaCenario cenario="projetado" /> : undefined}
+              onIrParaDocumentos={() => setAbaAtiva('documentos')}
+            />
           ) : abaAtiva === 'financeiro' ? (
             /* ── FINANCEIRO — VAZIO HONESTO ──────────────────────────────────────
                ⚠ NAO MONTA A `AbaFinanceiroOC`. A da compra opera sobre compromissos e

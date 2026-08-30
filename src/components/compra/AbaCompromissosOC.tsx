@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { useOperacaoEstornoFinanceiro } from '@/hooks/useOperacaoEstornoFinanceiro';
 import type { OcCompromissosApi, CompromissoResumo, ParcelaMaterializacao, CriarCompromissoPayload, ProgramarParcelaInput } from '@/hooks/useOcCompromissos';
 import { classificarLotesCompra, SUBCENTRO_OBRIGACAO_COMPRA, CENTRO_CUSTO_COMPRA_BOVINOS, type LoteOC } from '@/hooks/useOperacaoLiquidacao';
@@ -6,7 +6,7 @@ import { usePlanoContasOC } from '@/hooks/usePlanoContasOC';
 import { useComponentesFinanceiros } from '@/hooks/useComponentesFinanceiros';
 import { useContasBancariasLeves } from '@/hooks/useContasBancariasLeves';
 import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
-import { produtoOCCompromisso, produtoOCCompromissoLote } from '@/lib/financeiro/produtoOC';
+import { produtoOCCompromisso, produtoOCCompromissoLote, verboOC } from '@/lib/financeiro/produtoOC';
 import { CATEGORIAS } from '@/types/cattle';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -41,6 +41,15 @@ interface Props {
   bloqueado: boolean;                 // gate de escrita do modelo novo (rascunho/cancelada/legado/misto)
   clienteId: string | null;
   tipoOperacao: string | null;        // 'compra'
+  /* ⚠ SEMEADURA, E NAO GERACAO — PR-OC-VENDA-FIN-PROJ-01, forma (b). Quem cria continua
+     sendo o dialogo, com o operador confirmando: o botao apenas o abre PRE-PREENCHIDO
+     pelo motor, um por vez. Compromisso financeiro que aparece sem alguem ter olhado o
+     numero e' a mesma familia de defeito de revalorar em silencio.
+     ⚠ ADITIVO: sem a prop, nao ha botao e a compra fica identica. */
+  sugestoesProjecao?: SugestaoCompromisso[];
+  /** Selo a exibir junto aos valores nascidos de projecao. `ReactNode` para o chamador
+   *  decidir a marca sem que este arquivo (da compra) importe nada da venda. */
+  seloProjecao?: ReactNode;
   fornecedores: { id: string; nome: string }[];
   valorAcordado: number | null;       // default do principal
   lotes: LoteOC[];                     // sugestão de subcentro por categorias
@@ -124,12 +133,26 @@ function estadoCompromisso(c: CompromissoResumo): { label: string; variant: 'def
   return { label: 'Aberto', variant: 'outline' };
 }
 
-export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, fornecedores, valorAcordado, lotes, contraparteId, dataOperacao, dataChegada, darkSelectClass, recarregarDados }: Props) {
+export interface SugestaoCompromisso {
+  natureza: 'principal' | 'obrigacao';
+  subcentro: string;
+  valor: number;
+  descricao: string;
+  favorecidoId: string | null;
+  /** Só para o aviso de substituição — o que o operador vê no texto. */
+  rotulo: string;
+}
+
+export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, fornecedores, valorAcordado, lotes, contraparteId, dataOperacao, dataChegada, darkSelectClass, recarregarDados, sugestoesProjecao, seloProjecao }: Props) {
   const { resumoOperacao, compromissos, parcelas, versao, saving } = ocApi;
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [recemMaterializada, setRecemMaterializada] = useState<string | null>(null);
   const [novoAberto, setNovoAberto] = useState(false);
+  /* A FILA DA SEMEADURA: um dialogo por vez, na ordem. `null` = criacao manual, o
+     comportamento de sempre. */
+  const [filaSugestoes, setFilaSugestoes] = useState<SugestaoCompromisso[]>([]);
+  const sementeAtual = filaSugestoes[0] ?? null;
   const [programarAberto, setProgramarAberto] = useState(false);
   /* ACRESCENTAR SALDO e' caminho DISTINTO de programar, nao um modo do mesmo botao:
      um cria a programacao (writer `oc_programar_compromisso`, exige que nao exista),
@@ -290,6 +313,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
   // ("Compra principal"). Se o refresh falhar, ainda abre (o guard de submit protege a persistência).
   const abrirNovo = async () => {
     try { await recarregarDados?.(); } catch { /* abre mesmo assim; guard de submit protege */ }
+    setFilaSugestoes([]);          // criacao manual: sem semente
     setNovoAberto(true);
   };
 
@@ -408,7 +432,12 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
     // Formato soberano do compromisso principal (fonte única produtoOC.ts): "Compra 007 Garrotes".
     // O fornecedor NÃO entra na descrição — permanece no campo Favorecido/dados da OC.
     // Sem lotes classificados (qtd 0), mantém o fallback simples p/ não exibir "Compra 000".
-    if (qtd <= 0) return 'Compra principal';
+    /* ⚠ O VERBO SAI DE `verboOC`, e nao literal — PR-OC-VENDA-FIN-PROJ-01. Era a unica
+       sobra de vocabulario compra-especifico em texto visivel do arquivo inteiro (as
+       outras duas ocorrencias de "Compra" estao em comentarios). Numa venda sem lotes
+       classificados a descricao dizia "Compra principal". Dicionario seria exagero: a
+       funcao que resolve o verbo ja existe e ja e' usada na linha seguinte. */
+    if (qtd <= 0) return `${verboOC(tipoOperacao ?? 'compra')} principal`;
     return produtoOCCompromisso(tipoOperacao ?? 'compra', qtd, catLabel);
   }, [lotes, tipoOperacao]);
 
@@ -420,19 +449,32 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
      Falha no meio: os ja criados PERMANECEM (cada RPC e' sua propria transacao)
      e o dialogo fica aberto com o toast do hook. Nao ha rollback a fazer pela
      tela; o usuario ve na tabela o que entrou e refaz o que falta. */
-  async function criar(payloads: CriarCompromissoPayload[]) {
+  async function criar(payloads: CriarCompromissoPayload[], substituirId?: string | null) {
     if (versao == null || payloads.length === 0) return;
     let v = versao;
     let ultimo: string | null = null;
     setAvisoBaseCoberta('');
     try {
+      /* ⚠ CANCELA ANTES DE CRIAR, e nesta ordem: se a criacao falhar depois do
+         cancelamento, a operacao fica SEM compromisso — estado visivel, que alguem
+         corrige. A ordem inversa deixaria dois vivos se o cancelamento falhasse, e dois
+         principais em aberto e' o estado que ninguem percebe. */
+      if (substituirId) {
+        await estorno.cancelarCompromisso(v, substituirId, 'substituído por nova geração da projeção');
+        await ocApi.recarregar();
+        v = ocApi.versao ?? v;
+      }
       for (const payload of payloads) {
         const r = await ocApi.criarCompromisso(v, payload);
         v = r.operacaoVersao;
         ultimo = r.compromissoId;
       }
       setSelectedId(ultimo);
-      setNovoAberto(false);
+      /* ⚠ A FILA ANDA SO NO SUCESSO. Falhou, o dialogo fecha e a sugestao continua na
+         fila — reabrir o botao retoma de onde parou, em vez de perder a segunda. */
+      const resto = filaSugestoes.slice(1);
+      setFilaSugestoes(resto);
+      setNovoAberto(resto.length > 0);
     } catch (e) {
       /* O hook já exibiu o toast com o texto do banco — que está CORRETO e não é
          mascarado aqui. O que falta a ele é o proximo passo: quem tentou criar um
@@ -502,6 +544,22 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
               {/* ⚠ UM SO BOTAO. Havia dois para a MESMA acao: este e outro no meio do
                   estado vazio. Duas portas para o mesmo lugar fazem o operador procurar
                   a diferenca que nao existe. */}
+              {/* ⚠ SEMEIA, NAO GERA — PR-OC-VENDA-FIN-PROJ-01. Abre o mesmo dialogo de
+                  sempre, pre-preenchido pelo motor, um por vez; quem cria e' o operador ao
+                  confirmar. So aparece com sugestoes (venda com planejamento boitel). */}
+              {!!sugestoesProjecao?.length && (
+                <button type="button" disabled={!podeEscrever}
+                  onClick={async () => {
+                    try { await recarregarDados?.(); } catch { /* abre mesmo assim */ }
+                    setFilaSugestoes(sugestoesProjecao);
+                    setNovoAberto(true);
+                  }}
+                  title={podeEscrever ? 'Abrir os compromissos da projeção já preenchidos, um por vez' : undefined}
+                  aria-label="Gerar da projeção"
+                  className="text-[11px] font-normal text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline">
+                  Gerar da projeção
+                </button>
+              )}
               <button type="button" disabled={!podeEscrever} onClick={abrirNovo}
                 title={podeEscrever ? 'Criar um compromisso nesta operação' : undefined}
                 aria-label="Novo compromisso"
@@ -592,7 +650,13 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
                       {desvio ?? (contexto || '—')}
                     </div>
                   </div>
-                  <div className="shrink-0 text-[12px] font-medium tabular-nums text-foreground">{brl(c.valorCompromisso)}</div>
+                  {/* ⚠ O SELO VEM PRONTO DE FORA, como `ReactNode`: este arquivo e' da
+                      compra e nao deve importar nada da venda, e o cenario ja e' sabido
+                      la' em cima — derivar de novo aqui seria a segunda copia da regra. */}
+                  <div className="shrink-0 flex items-center gap-1.5">
+                    {seloProjecao}
+                    <div className="text-[12px] font-medium tabular-nums text-foreground">{brl(c.valorCompromisso)}</div>
+                  </div>
                   <Badge variant={estado.variant} className="shrink-0 text-[10px] px-1.5 py-px font-normal">{estado.label}</Badge>
                   {c.temDivergencia && <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600" aria-label="divergência" />}
                   {/* ⚠ ACAO NA PROPRIA LINHA. A RPC sempre recebeu p_compromisso_id — o
@@ -787,6 +851,13 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
           onCriarFornecedor={criarFornecedor}
           valorAcordado={valorAcordado} sugestaoSubcentro={sugestaoSubcentro} descricaoDefault={descricaoDefault}
           contraparteId={contraparteId} lotesProntos={lotesProntos} lotes={lotes}
+          semente={sementeAtual}
+          /* ⚠ O AVISO DE SUBSTITUICAO: um compromisso ABERTO da mesma natureza ja existe.
+             Materializado ou programado-liquidado NAO entra nesta conta — aquilo nao se
+             substitui por regeracao. */
+          abertoDaMesmaNatureza={sementeAtual
+            ? (compromissos.find(c => c.natureza === sementeAtual.natureza && c.status === 'aberto') ?? null)
+            : null}
           avisoBaseCoberta={avisoBaseCoberta}
         />
       )}
@@ -898,22 +969,33 @@ function ResumoCard({ rotulo, valor }: { rotulo: string; valor: number }) {
 }
 
 // ===== Dialog: Novo compromisso =====
-function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOperacao, fornecedores, darkSelectClass, valorAcordado, sugestaoSubcentro, descricaoDefault, contraparteId, lotesProntos, lotes, avisoBaseCoberta, onCriarFornecedor }: {
-  onClose: () => void; onSubmit: (p: CriarCompromissoPayload[]) => void; saving: boolean;
+function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOperacao, fornecedores, darkSelectClass, valorAcordado, sugestaoSubcentro, descricaoDefault, contraparteId, lotesProntos, lotes, avisoBaseCoberta, onCriarFornecedor, semente, abertoDaMesmaNatureza }: {
+  onClose: () => void; onSubmit: (p: CriarCompromissoPayload[], substituirId?: string | null) => void; saving: boolean;
   clienteId: string | null; tipoOperacao: string | null; fornecedores: { id: string; nome: string }[]; darkSelectClass: string;
   valorAcordado: number | null; sugestaoSubcentro: string; descricaoDefault: string; contraparteId: string | null; lotesProntos: boolean;
   onCriarFornecedor?: (nome: string, cpfCnpj: string) => Promise<{ id: string; nome: string } | null>;
   lotes: LoteOC[]; avisoBaseCoberta: string;
+  semente?: SugestaoCompromisso | null;
+  abertoDaMesmaNatureza?: CompromissoResumo | null;
 }) {
   const plano = usePlanoContasOC(clienteId ?? undefined);
   const comps = useComponentesFinanceiros();
-  const [natureza, setNatureza] = useState<'principal' | 'obrigacao'>('principal');
+  /* ⚠ A SEMENTE ENTRA NO ESTADO INICIAL, e nao por efeito: o efeito de `natureza` logo
+     abaixo sobrescreve valor/subcentro/favorecido, e semear por la' seria disputar com ele
+     a cada render. Aqui o valor semeado nasce no state e o efeito e' pulado UMA vez. */
+  const [natureza, setNatureza] = useState<'principal' | 'obrigacao'>(semente?.natureza ?? 'principal');
   const [componente, setComponente] = useState('');
-  const [valor, setValor] = useState<number | null>(null);
-  const [subcentro, setSubcentro] = useState('');
-  const [favorecidoId, setFavorecidoId] = useState('');
+  const [valor, setValor] = useState<number | null>(semente?.valor ?? null);
+  const [subcentro, setSubcentro] = useState(semente?.subcentro ?? '');
+  const [favorecidoId, setFavorecidoId] = useState(semente?.favorecidoId ?? '');
+  const semeadoRef = useRef(!!semente);
+  /* ⚠ DESMARCADO POR PADRAO. Cancelar compromisso e' ato destrutivo e auditado; ele so'
+     acontece se o operador pedir, ainda que o aviso o convide. */
+  const [substituirAnterior, setSubstituirAnterior] = useState(false);
   const [novoFornecedorOpen, setNovoFornecedorOpen] = useState(false);
-  const [descricao, setDescricao] = useState('');
+  /* Semeada tambem. O efeito do default so' reescreve quando o texto atual E' o default
+     anterior (`ultimoDefaultRef`, que nasce vazio) — entao o texto do motor sobrevive. */
+  const [descricao, setDescricao] = useState(semente?.descricao ?? '');
   const ultimoDefaultRef = useRef('');   // último default de descrição aplicado automaticamente (ajuste vinculante 3)
   /* LOTE — 1 OC vira N lancamentos, um por categoria, que podem ir para
      favorecidos e bancos diferentes. `''` = compromisso da OPERACAO INTEIRA,
@@ -934,6 +1016,10 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
   // Defaults por natureza: principal pré-carrega valor acordado, subcentro sugerido e favorecido = contraparte
   // da OC; obrigacao zera. Campos seguem editáveis (mesma semântica de valor/subcentro).
   useEffect(() => {
+    /* ⚠ PULA UMA VEZ quando ha semente: o primeiro disparo e' o de montagem, e ele
+       apagaria justamente o que o motor acabou de sugerir. Da segunda em diante — o
+       operador trocando a natureza a mao — a semeadura padrao volta a valer. */
+    if (semeadoRef.current) { semeadoRef.current = false; return; }
     setComponente('');
     setLoteId(''); setVarios(false);
     if (natureza === 'principal') { setValor(valorAcordado); setSubcentro(sugestaoSubcentro); setFavorecidoId(contraparteId ?? ''); }
@@ -1075,8 +1161,27 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
           padding proprio; sem isso o azul flutuaria com moldura branca em volta. */}
       <DialogContent className="max-w-md">
         <DialogHeader className="-mx-6 -mt-6 mb-1 space-y-0 bg-primary px-6 py-3">
-          <DialogTitle className="text-[15px] text-primary-foreground">Novo compromisso</DialogTitle>
+          <DialogTitle className="text-[15px] text-primary-foreground">
+            {semente ? `Novo compromisso · ${semente.rotulo}` : 'Novo compromisso'}
+          </DialogTitle>
         </DialogHeader>
+        {/* ⚠ CAMPOS PRE-PREENCHIDOS PELO MOTOR — o operador confere e grava. E' o
+            principio da casa: sugestao preenche, operador grava. */}
+        {semente && (
+          <div className="rounded-md border border-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2 py-1.5 text-[11px] leading-snug text-amber-800 dark:text-amber-200">
+            Valores preenchidos a partir da <b>projeção do boitel</b>. Confira antes de gravar — tudo é editável.
+          </div>
+        )}
+        {/* ⚠ JA EXISTE UM ABERTO DA MESMA NATUREZA. Regerar nao apaga nada sozinho: o
+            aviso diz o que ha e o rodape oferece substituir. Materializado ou
+            programado-liquidado nao chega aqui — a busca so' olha `status === 'aberto'`. */}
+        {semente && abertoDaMesmaNatureza && (
+          <div className="rounded-md border border-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2 py-1.5 text-[11px] leading-snug text-amber-800 dark:text-amber-200">
+            Já existe um compromisso <b>{semente.natureza === 'principal' ? 'principal' : 'de obrigação'}</b> em aberto,
+            de <b>{brl(abertoDaMesmaNatureza.valorCompromisso)}</b>. Gravar este cria um segundo —
+            marque abaixo para cancelar o anterior no mesmo gesto.
+          </div>
+        )}
         {avisoBaseCoberta && (
           <div className="rounded-md border border-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2 py-1.5 text-[11px] leading-snug text-amber-800 dark:text-amber-200">
             {avisoBaseCoberta}
@@ -1189,7 +1294,7 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
         <DialogFooter>
           <Button variant="outline" size="sm" onClick={onClose}>Cancelar</Button>
           <Button size="sm" disabled={!podeSubmeter}
-            onClick={() => { if (podeSubmeter) { const ps = montarPayloads(); if (ps.length > 0) onSubmit(ps); } }}>
+            onClick={() => { if (podeSubmeter) { const ps = montarPayloads(); if (ps.length > 0) onSubmit(ps, substituirAnterior ? (abertoDaMesmaNatureza?.compromissoId ?? null) : null); } }}>
             {varios ? `Criar ${itensLote.length}` : 'Criar'}
           </Button>
         </DialogFooter>

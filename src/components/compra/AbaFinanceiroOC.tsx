@@ -1,7 +1,8 @@
 import { AbaLiquidacaoOC } from './AbaLiquidacaoOC';
-import { AbaCompromissosOC } from './AbaCompromissosOC';
+import { AbaCompromissosOC, type SugestaoCompromisso } from './AbaCompromissosOC';
 import { useOcCompromissos } from '@/hooks/useOcCompromissos';
 import { AlertTriangle } from 'lucide-react';
+import type { ReactNode } from 'react';
 import type { LiquidacaoApi } from '@/hooks/useOperacaoLiquidacao';
 
 // Aba Financeiro (PR-OC-UI-FIN-VIEW) — ROTEADOR por modo (soberano da view, nunca inferido):
@@ -22,6 +23,11 @@ interface Props {
   clienteId?: string | null;
   dataOperacao?: string | null;   // FIX item 6 — data da compra
   dataChegada?: string | null;    // FIX item 6 — data de chegada (recebimento)
+  /* ⚠ ADITIVOS, so a venda passa — PR-OC-VENDA-FIN-PROJ-01. Sem eles a compra e' identica:
+     nao ha botao de gerar nem selo. Este roteador apenas repassa; quem sabe da projecao e'
+     o shell da venda. */
+  sugestoesProjecao?: SugestaoCompromisso[];
+  seloProjecao?: ReactNode;
 }
 
 export function AbaFinanceiroOC(props: Props) {
@@ -56,7 +62,8 @@ export function AbaFinanceiroOC(props: Props) {
         </div>
         <AbaCompromissosOC ocApi={ocApi} bloqueado clienteId={clienteId} tipoOperacao={api.tipoOperacao} fornecedores={api.fornecedores}
           valorAcordado={api.valorAcordado} lotes={api.lotes} contraparteId={api.contraparteId} dataOperacao={props.dataOperacao ?? null} dataChegada={props.dataChegada ?? null}
-          darkSelectClass={props.darkSelectClass} recarregarDados={api.recarregar} />
+          darkSelectClass={props.darkSelectClass} recarregarDados={api.recarregar}
+          seloProjecao={props.seloProjecao} />
       </div>
     );
   }
@@ -64,6 +71,7 @@ export function AbaFinanceiroOC(props: Props) {
   return (
     <AbaCompromissosOC ocApi={ocApi} bloqueado={props.financeiroNovoReadOnly} clienteId={clienteId} tipoOperacao={api.tipoOperacao} fornecedores={api.fornecedores}
       valorAcordado={api.valorAcordado} lotes={api.lotes} contraparteId={api.contraparteId} dataOperacao={props.dataOperacao ?? null} dataChegada={props.dataChegada ?? null}
-      darkSelectClass={props.darkSelectClass} recarregarDados={api.recarregar} />
+      darkSelectClass={props.darkSelectClass} recarregarDados={api.recarregar}
+      sugestoesProjecao={props.sugestoesProjecao} seloProjecao={props.seloProjecao} />
   );
 }
