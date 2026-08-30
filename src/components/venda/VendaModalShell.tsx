@@ -42,6 +42,7 @@ import { AbaAuditoriaOC } from '@/components/compra/AbaAuditoriaOC';
 import { AbaRecebimentoLotes } from '@/components/compra/AbaRecebimentoLotes';
 import { AbaFinanceiroOC } from '@/components/compra/AbaFinanceiroOC';
 import type { SugestaoCompromisso } from '@/components/compra/AbaCompromissosOC';
+import { siglaCategoria } from '@/lib/financeiro/produtoOC';
 import type { RecebimentoApi } from '@/hooks/useOperacaoRecebimento';
 import type { DocumentosApi } from '@/hooks/useOperacaoDocumentos';
 import type { EventosApi } from '@/hooks/useOperacaoEventos';
@@ -195,7 +196,12 @@ export function VendaModalShell({
     if (!ehBoitel || !boitelData || faltamDosCinco(boitelData).length > 0) return undefined;
     const d = derivadosBoitel(boitelData);
     const qtd = boitelData.qtdCabecas || 0;
-    const rot = `Venda ${String(qtd).padStart(3, '0')}`;
+    /* ⚠ "Boitel", e nao o verbo da operacao — decisao do Gabriel. `verboOC` mapeia
+       tipo_operacao (Compra/Venda/Abate) e nao comporta "Boitel", que nao e' um tipo: e' a
+       MODALIDADE de uma venda. Por isso o rotulo e' proprio daqui, e nao uma quarta entrada
+       naquela funcao — mexer nela mudaria compra e abate para resolver o boitel.
+       ⚠ A SIGLA VEM DE `siglaCategoria`, a mesma do compromisso por lote da compra. */
+    const rot = `Boitel ${String(qtd).padStart(3, '0')} ${siglaCategoria(categoria)}`.trim();
     const itens: SugestaoCompromisso[] = [{
       natureza: 'principal',
       subcentro: 'Venda em Boitel',
@@ -218,7 +224,7 @@ export function VendaModalShell({
       });
     }
     return itens;
-  }, [ehBoitel, boitelData, compradorId]);
+  }, [ehBoitel, boitelData, compradorId, categoria]);
 
   const faltamBoitel = ehBoitel ? faltamDosCinco(boitelData) : [];
   const naNegociacao = abaAtiva === 'negociacao';

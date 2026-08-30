@@ -846,7 +846,15 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
 
       {novoAberto && (
         <NovoCompromissoDialog
-          onClose={() => { setNovoAberto(false); setAvisoBaseCoberta(''); }} onSubmit={criar} saving={saving}
+          /* ⚠ `key` POR SEMENTE — PR-OC-VENDA-FIN-PROJ-01B. O estado do dialogo nasce no
+             MOUNT (valor, subcentro, descricao vem da semente em `useState`). Sem key, ao
+             avancar a fila o React reusava a mesma instancia: o dialogo continuava aberto
+             com os numeros do PRIMEIRO compromisso, e parecia que "Criar nao fechou". E' a
+             mesma armadilha que o `ReceberLoteDialog` ja documenta com `key={loteId}`.
+             ⚠ SO O MODO SEMEADO TINHA O DEFEITO: na criacao manual a fila e' vazia, o
+             dialogo fecha como sempre, e a compra nunca passou por aqui. */
+          key={sementeAtual ? `semente:${sementeAtual.natureza}:${sementeAtual.subcentro}` : 'manual'}
+          onClose={() => { setNovoAberto(false); setFilaSugestoes([]); setAvisoBaseCoberta(''); }} onSubmit={criar} saving={saving}
           clienteId={clienteId} tipoOperacao={tipoOperacao} fornecedores={fornecedores} darkSelectClass={darkSelectClass}
           onCriarFornecedor={criarFornecedor}
           valorAcordado={valorAcordado} sugestaoSubcentro={sugestaoSubcentro} descricaoDefault={descricaoDefault}
@@ -988,7 +996,14 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
   const [valor, setValor] = useState<number | null>(semente?.valor ?? null);
   const [subcentro, setSubcentro] = useState(semente?.subcentro ?? '');
   const [favorecidoId, setFavorecidoId] = useState(semente?.favorecidoId ?? '');
-  const semeadoRef = useRef(!!semente);
+  /* ⚠ A SEMENTE MANDA ENQUANTO A NATUREZA FOR A DELA. Pular "uma vez" nao bastava, e foi
+     o defeito: o efeito abaixo depende de `valorAcordado`, que chega ASSINCRONO (o refresh
+     da OC roda ao abrir). Na segunda volta, ja com `semeadoRef` gasto, ele sobrescrevia o
+     saldo do acerto pelo `valor_acordado` da operacao — que e' a soma dos LOTES. Era por
+     isso que o dialogo mostrava o valor do lote no lugar do saldo.
+     ⚠ Se o operador TROCAR a natureza a mao, a semeadura padrao volta a valer: a
+     comparacao e' contra a natureza semeada, nao um booleano de uma volta so'. */
+  const naturezaSemeadaRef = useRef<string | null>(semente ? semente.natureza : null);
   /* ⚠ DESMARCADO POR PADRAO. Cancelar compromisso e' ato destrutivo e auditado; ele so'
      acontece se o operador pedir, ainda que o aviso o convide. */
   const [substituirAnterior, setSubstituirAnterior] = useState(false);
@@ -1016,10 +1031,7 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
   // Defaults por natureza: principal pré-carrega valor acordado, subcentro sugerido e favorecido = contraparte
   // da OC; obrigacao zera. Campos seguem editáveis (mesma semântica de valor/subcentro).
   useEffect(() => {
-    /* ⚠ PULA UMA VEZ quando ha semente: o primeiro disparo e' o de montagem, e ele
-       apagaria justamente o que o motor acabou de sugerir. Da segunda em diante — o
-       operador trocando a natureza a mao — a semeadura padrao volta a valer. */
-    if (semeadoRef.current) { semeadoRef.current = false; return; }
+    if (naturezaSemeadaRef.current && natureza === naturezaSemeadaRef.current) return;
     setComponente('');
     setLoteId(''); setVarios(false);
     if (natureza === 'principal') { setValor(valorAcordado); setSubcentro(sugestaoSubcentro); setFavorecidoId(contraparteId ?? ''); }
@@ -1233,7 +1245,13 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
             </div>
           )}
           <div>
-            <Label className="text-[11px]">Classificação (subcentro) *{natureza === 'principal' && sugestaoSubcentro ? ' · sugerido dos lotes (editável)' : ''}</Label>
+            {/* ⚠ "dos lotes" e' verdade na COMPRA, onde o subcentro deriva da classificacao
+                dos lotes. Na venda boitel a sugestao vem da projecao e de um plano fixo —
+                dizer "dos lotes" ali mandaria o operador conferir a fonte errada. */}
+            <Label className="text-[11px]">Classificação (subcentro) *{
+              semente ? ' · sugerido da projeção (editável)'
+              : (natureza === 'principal' && sugestaoSubcentro ? ' · sugerido dos lotes (editável)' : '')
+            }</Label>
             <SearchableSelect
               value={subcentro || '__none__'} onValueChange={(v) => setSubcentro(v === '__none__' ? '' : v)}
               options={subcentroOptions} placeholder="Selecione o subcentro"
