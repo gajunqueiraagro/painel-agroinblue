@@ -470,7 +470,11 @@ export function BoitelResultadoCompacto({ boitelData, cenario }: {
             <>
               {/* ⚠ "esses animais" e nao "o lote": quem le' esta olhando para os animais
                   que acabou de descrever tres linhas acima. */}
-              <p className={`text-[12px] leading-[1.5] ${ganhou ? 'text-success' : 'text-destructive'}`}>
+              {/* ⚠ 11px E DELIBERADO, e nao descuido do piso: o piso de 10px da casa vale
+                  para TEXTO DE APOIO, e esta frase e' apoio — o numero que decide ja esta'
+                  a esquerda, em 22px. Reduzida duas vezes a pedido: era 13, foi a 12 e
+                  agora 11, com `leading` folgado para nao apertar a leitura. */}
+              <p className={`text-[11px] leading-[1.45] ${ganhou ? 'text-success' : 'text-destructive'}`}>
                 Mandar para o boitel deve render{' '}
                 <span className="font-medium tabular-nums">{formatMoeda(Math.abs(cmp.diferenca))}</span>
                 {' '}<span className="font-medium">{ganhou ? 'a mais' : 'a menos'}</span>

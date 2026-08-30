@@ -238,44 +238,67 @@ export function CampoNum({ label, valor, onChange, casas = 2, sufixo, obrigatori
     const n = parseFloat(limpo);
     return isNaN(n) ? 0 : Math.round(n * Math.pow(10, casas)) / Math.pow(10, casas);
   };
+  /* ─── UMA LINHA: ROTULO · CAMPO · SUFIXO ───────────────────────────────────
+          PR-OC-VENDA-LAYOUT-NEG-01E. O rotulo estava EM CIMA e o campo ocupava a coluna
+          inteira da grade: um input de tres digitos com 229px de largura, e um mar de
+          branco entre o numero e a borda. Largura de campo tem de vir do CONTEUDO, e nao
+          da coluna que o hospeda.
+          ⚠ A COLUNA DE ROTULO E FIXA e alinhada a' DIREITA: e' o que faz as linhas se
+          empilharem numa grade legivel em vez de cada campo comecar num lugar. Sem a
+          largura fixa, "GMD" e "Desp. notas/docs. abate" empurrariam os campos para
+          posicoes diferentes e o alinhamento morreria — que era o defeito 2.
+          ⚠ A HIERARQUIA DE CONTRASTE CONTINUA: titulo 12px/600 foreground · rotulo
+          11px/500 foreground/90 · ajuda 10px muted. Tres degraus.
+          ⚠ A AJUDA FICA INDENTADA NA COLUNA DO CAMPO, e nao sob o rotulo: ela fala do
+     numero, e alinhada a ele se le' como continuacao dele. */
   return (
-    <div className="min-w-0">
-      {/* ⚠ UMA LINHA SO', SEMPRE. Rotulo que quebra palavra a palavra ("Dias de /
-          confinamento / *") empurra o campo do vizinho para baixo e desalinha a grade
-          inteira — foi o que a homologacao viu. `nowrap` + reticencia no ROTULO; nunca
-          no numero. O `title` devolve o texto completo a quem passar o mouse. */}
-      {/* ⚠ A HIERARQUIA E' DE CONTRASTE, e nao de tamanho so' — PR-...-01C. O rotulo estava
-          10px MUTED, do mesmo peso visual da ajuda derivada logo abaixo: os dois se liam
-          como nota de rodape e o campo ficava sem nome. Agora titulo > rotulo > ajuda, em
-          tres degraus visiveis: 12px/600 foreground · 11px/500 foreground/90 · 10px muted. */}
-      <Label title={titulo ?? label}
-        className="block text-[11px] font-medium text-foreground/90 whitespace-nowrap overflow-hidden text-ellipsis">
-        {label}{obrigatorio && <span className="text-destructive"> *</span>}
-      </Label>
-      <div className="mt-[3px] flex items-center gap-1">
-        {moeda ? (
-          <CampoMoeda valor={valor} onChange={(n) => onChange(n ?? 0)} disabled={desabilitado}
-            className="h-8 px-2.5 text-[13px] tabular-nums text-right" />
-        ) : (
-          <Input
-            value={rascunho ?? fmt(valor)} disabled={desabilitado} inputMode="decimal"
-            onChange={e => { setRascunho(e.target.value); onChange(parse(e.target.value)); }}
-            onFocus={() => setRascunho(valor ? String(valor).replace('.', ',') : '')}
-            onBlur={() => { if (rascunho !== null) onChange(parse(rascunho)); setRascunho(null); }}
-            className="h-8 px-2.5 text-[13px] tabular-nums text-right"
-          />
-        )}
-        {/* ⚠ O SUFIXO NAO REPETE A MOEDA. Com o R$ dentro do campo, "R$ 19,68 R$/cab/dia"
-            gagueja: a unidade monetaria ja foi dita: aqui fica so' o denominador. */}
-        {sufixo && <span className="text-[10px] text-muted-foreground shrink-0 w-10 leading-tight">{sufixo}</span>}
-      </div>
-      {/* A ajuda derivada, ABAIXO do campo — o degrau mais baixo do contraste.
-          "—" quando não há como derivar. */}
-      {derivado !== undefined && (
-        <div className="mt-[3px] text-[10px] text-muted-foreground tabular-nums leading-snug">
-          {derivado ?? '—'}
+      <div className="flex items-baseline gap-2 min-w-0">
+        <Label title={titulo ?? label}
+          className="w-[132px] shrink-0 text-right text-[11px] font-medium text-foreground/90 leading-8 whitespace-nowrap overflow-hidden text-ellipsis">
+          {label}{obrigatorio && <span className="text-destructive"> *</span>}
+        </Label>
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5">
+            {/* ⚠ DUAS LARGURAS, POR TIPO DE CONTEUDO: dinheiro cabe em 150px com o R$ e o
+                separador de milhar; contagem e percentual cabem em 100px. Nao ha terceira
+                — inventar uma por campo faria a grade voltar a desalinhar. */}
+            {moeda ? (
+              <CampoMoeda valor={valor} onChange={(n) => onChange(n ?? 0)} disabled={desabilitado}
+                className="h-8 w-[150px] px-2.5 text-[13px] tabular-nums text-right" />
+            ) : (
+              <Input
+                value={rascunho ?? fmt(valor)} disabled={desabilitado} inputMode="decimal"
+                onChange={e => { setRascunho(e.target.value); onChange(parse(e.target.value)); }}
+                onFocus={() => setRascunho(valor ? String(valor).replace('.', ',') : '')}
+                onBlur={() => { if (rascunho !== null) onChange(parse(rascunho)); setRascunho(null); }}
+                className="h-8 w-[100px] px-2.5 text-[13px] tabular-nums text-right"
+              />
+            )}
+            {/* Colado ao campo — o sufixo denomina AQUELE numero, nao a coluna. */}
+            {sufixo && <span className="text-[10px] text-muted-foreground shrink-0 whitespace-nowrap">{sufixo}</span>}
+          </div>
+          {derivado !== undefined && (
+            <div className="mt-0.5 text-[10px] text-muted-foreground tabular-nums leading-snug">
+              {derivado ?? '—'}
+            </div>
+          )}
         </div>
-      )}
+      </div>
+  );
+}
+
+/* Linha do formulario para o que NAO e' `CampoNum` (Select, DatePicker, Input de texto).
+   ⚠ A COLUNA DE ROTULO E A MESMA `w-[132px]` alinhada a' direita: se cada controle
+   escolhesse a sua, a grade voltaria a desalinhar — que e' o defeito 2 do 01E. */
+function LinhaCampo({ label, largura, children, span }: {
+  label: string; largura: string; children: React.ReactNode; span?: boolean;
+}) {
+  return (
+    <div className={`flex items-baseline gap-2 min-w-0 ${span ? 'sm:col-span-2' : ''}`}>
+      <Label className="w-[132px] shrink-0 text-right text-[11px] font-medium text-foreground/90 leading-8 whitespace-nowrap overflow-hidden text-ellipsis">
+        {label}
+      </Label>
+      <div className={`min-w-0 ${largura}`}>{children}</div>
     </div>
   );
 }
@@ -387,18 +410,17 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
   const sairam = cabecasQueSairam(d);
   const diarias = der.cDT;
   const corpos: Record<string, React.ReactNode> = {
-    desempenho: (<><div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-3">
+    desempenho: (<><div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
           <CampoNum desabilitado={somenteLeitura} label="Dias confinamento" titulo="Dias de confinamento" valor={d.dias} onChange={v => set('dias', v)} casas={0} obrigatorio />
           <CampoNum desabilitado={somenteLeitura} label="GMD" valor={d.gmd} onChange={v => set('gmd', v)} casas={3} sufixo="kg/dia" obrigatorio />
           <CampoNum desabilitado={somenteLeitura} label="Quebra de viagem" valor={d.quebraViagem} onChange={v => set('quebraViagem', v)} sufixo="%" />
           <CampoNum desabilitado={somenteLeitura} label="Rend. entrada" titulo="Rendimento de entrada" valor={d.rendimentoEntrada} onChange={v => set('rendimentoEntrada', v)} sufixo="%" />
           <CampoNum desabilitado={somenteLeitura} label="Rend. saída" titulo="Rendimento de saída" valor={d.rendimento} onChange={v => set('rendimento', v)} sufixo="%" obrigatorio />
         </div></>),
-    custos: (<><div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-3 items-start">
-          <div className="min-w-0">
-            <Label className="text-[11px] font-medium text-foreground/90 whitespace-nowrap">Modalidade <span className="text-destructive">*</span></Label>
+    custos: (<><div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 items-start">
+          <LinhaCampo label="Modalidade *" largura="w-[140px]">
             <Select value="diaria" onValueChange={() => { /* só diária — ver os itens desabilitados */ }} disabled={somenteLeitura}>
-              <SelectTrigger className="mt-[3px] h-8 px-2.5 text-[12px]"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-8 px-2.5 text-[13px]"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="diaria" className="text-[12px]">Diária</SelectItem>
                 {/* ⚠ APARECEM E DIZEM QUE NÃO DÁ. Sumir com elas faria o operador achar que
@@ -409,21 +431,23 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
                 <SelectItem value="parceria" disabled className="text-[12px]">Parceria — ainda não disponível</SelectItem>
               </SelectContent>
             </Select>
-          </div>
+          </LinhaCampo>
           <CampoNum desabilitado={somenteLeitura} label="Diária" moeda valor={d.custoDiaria} onChange={v => set('custoDiaria', v)} sufixo="/cab/dia" obrigatorio />
-          <div className="min-w-0">
-            <Label className="text-[11px] font-medium text-foreground/90 whitespace-nowrap">Diárias no período</Label>
-            <div className="mt-[3px] h-8 px-2.5 flex items-center rounded-md border bg-muted/40 text-[12px] font-medium tabular-nums">
+          {/* ⚠ ALINHADO NA MESMA GRADE — defeito 2 do 01E. Ele flutuava fora da linha
+              porque montava o proprio rotulo em cima; agora usa a `LinhaCampo`, e o valor
+              derivado ocupa a coluna do campo como qualquer outro. */}
+          <LinhaCampo label="Diárias no período" largura="w-[150px]">
+            <div className="h-8 px-2.5 flex items-center justify-end rounded-md border bg-muted/40 text-[13px] font-medium tabular-nums">
               {diarias > 0 ? formatMoeda(diarias) : <span className="text-muted-foreground font-normal">—</span>}
             </div>
             {/* ⚠ CABEÇAS QUE SAÍRAM, não as que entraram. O boitel não cobra diária de
                 animal morto — medido no acerto real: 109 × 104 × 18,93. */}
-            <div className="mt-[3px] text-[10px] text-muted-foreground tabular-nums">
+            <div className="mt-0.5 text-[10px] text-muted-foreground tabular-nums leading-snug">
               {d.custoDiaria > 0 && d.dias > 0
                 ? `${sairam} cab. × ${d.dias} dias × ${formatMoeda(d.custoDiaria)}`
                 : '—'}
             </div>
-          </div>
+          </LinhaCampo>
           {/* ⚠ NAO HA CAMPO DE NUTRICAO, e a ausencia e' a correcao — PR-OC-VENDA-NUTRICAO-DUPLICADA-01.
               A DIARIA JA E A NUTRICAO: e' o que o boitel cobra para alimentar o gado. Um
               campo "Nutrição (total)" ao lado das Diárias era o mesmo conceito pedido duas
@@ -463,7 +487,7 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
           title="A linha “Outros Custos” do financeiro soma outros_custos, custo_nutricao e custos_extras_parceria; das três, só “Outros” tem campo aqui.">
           “Outros” vira “Outros Custos” no financeiro.
         </p></>),
-    comercializacao: (<><div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-3">
+    comercializacao: (<><div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
           <CampoNum desabilitado={somenteLeitura} label="Preço de venda" moeda valor={d.precoVendaArroba} onChange={v => set('precoVendaArroba', v)} sufixo="/@" obrigatorio />
           {/* ⚠ TOTAL, não por cabeça. Medido no acerto real: DAEMS/GTA de R$ 4.514,57
               contra faturamento de R$ 813 mil. */}
@@ -475,7 +499,7 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
             modal. A quantidade também reduz as diárias, no modal de Custos. */}
         <div className="rounded-md border bg-card p-2.5 shadow-sm space-y-2">
           <div className="text-[11px] font-semibold uppercase tracking-wide text-foreground/90">Morte no período</div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
             <CampoNum desabilitado={somenteLeitura} label="Qtd. de mortes" titulo="Quantidade de mortes" valor={d.morteQuantidade ?? 0} onChange={v => set('morteQuantidade', v)} casas={0} />
             <CampoNum desabilitado={somenteLeitura} label="Indenização" moeda titulo="Valor de indenização" valor={d.morteValorIndenizacao ?? 0} onChange={v => set('morteValorIndenizacao', v)} />
           </div>
@@ -500,24 +524,22 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
 
         {/* Com "não", os campos somem — e o estado deles some junto, no clique acima. */}
         {d.possuiAdiantamento && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-3">
-            <div className="min-w-0">
-              <Label className="text-[11px] font-medium text-foreground/90 whitespace-nowrap">Data do adiantamento</Label>
-              {/* A20 — DatePicker do sistema. */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
+            {/* A20 — DatePicker do sistema. */}
+            <LinhaCampo label="Data do adiantamento" largura="w-[130px]">
               <DatePicker value={d.dataAdiantamento} onChange={v => set('dataAdiantamento', v)}
-                disabled={somenteLeitura} className="mt-[3px] h-8 px-2.5 text-[12px]" />
-            </div>
+                disabled={somenteLeitura} className="h-8 px-2.5 text-[13px]" />
+            </LinhaCampo>
             {/* ⚠ VALOR CHEIO DIGITADO, sem dias e sem percentual: o acerto varia por
                 contrato e o cálculo é feito fora. O percentual que existia no simulador
                 antigo não vem para cá. */}
             <CampoNum desabilitado={somenteLeitura} label="Total adiantado" moeda titulo="Valor total adiantado" valor={d.valorAdiantamentoDiarias} onChange={v => set('valorAdiantamentoDiarias', v)} />
             <CampoNum desabilitado={somenteLeitura} label="Sanitário adiant." moeda titulo="Sanitário adiantado" valor={d.valorAdiantamentoSanitario} onChange={v => set('valorAdiantamentoSanitario', v)} />
             <CampoNum desabilitado={somenteLeitura} label="Outros adiant." moeda titulo="Outros adiantados" valor={d.valorAdiantamentoOutros} onChange={v => set('valorAdiantamentoOutros', v)} />
-            <div className="min-w-0 sm:col-span-2 md:col-span-3">
-              <Label className="text-[11px] font-medium text-foreground/90 whitespace-nowrap">Observação</Label>
+            <LinhaCampo label="Observação" largura="flex-1" span>
               <Input value={d.adiantamentoObservacao} onChange={e => set('adiantamentoObservacao', e.target.value)}
-                disabled={somenteLeitura} placeholder="Opcional" className="mt-[3px] h-8 px-2.5 text-[12px]" />
-            </div>
+                disabled={somenteLeitura} placeholder="Opcional" className="h-8 px-2.5 text-[13px]" />
+            </LinhaCampo>
           </div>
         )}</>),
   };
@@ -613,12 +635,20 @@ function DialogoGrupo({ card, valor, somenteLeitura, onAplicar, onFechar }: {
           ⚠ A REGRA "nunca grid de 3" NAO SE APLICA AQUI, e vale registrar por que: ela
           nasceu para colunas de ~180px do modal de 512px. Com 768px as colunas passam de
           220px — a regra era sobre a LARGURA RESULTANTE, nao sobre o numero 3. */}
-      <DialogContent className="max-w-3xl">
+      {/* ⚠ A21 NO DIALOGO: cabecalho e rodape FIXOS, so' o corpo rola. Sem
+          `flex flex-col` + `flex-1 overflow-y-auto` no meio, o `max-h` faz o dialogo
+          INTEIRO rolar e o Aplicar desce para fora da tela — o operador preenche e nao
+          acha o botao. `p-0` porque o padding passa a ser de cada faixa.
+          ⚠ A LARGURA FICA EM `max-w-3xl` — ver a nota no relatorio: o A1 do PADROES-UI
+          diz "Minimo max-w-3xl" e chama modal estreito com campo espremido de defeito.
+          Encolher para 2xl violaria o padrao escrito; quem tinha de encolher era o
+          CAMPO, e encolheu. */}
+      <DialogContent className="max-w-3xl max-h-[85vh] p-0 gap-0 overflow-hidden flex flex-col">
         {/* Faixa azul do CompraModalShell — o mesmo cabecalho dos outros dialogos da OC. */}
-        <DialogHeader className="-mx-6 -mt-6 mb-1 space-y-0 bg-primary px-6 py-3">
+        <DialogHeader className="shrink-0 space-y-0 bg-primary px-5 py-3">
           <DialogTitle className="text-[15px] text-primary-foreground">{TITULO_CARD[card]}</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4">
+        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-5">
           {ids.map(id => (
             <div key={id} className="min-w-0">
               {/* ⚠ O TITULO E O TOPO DA HIERARQUIA e precisa se ler de relance: 12px/600
@@ -632,7 +662,7 @@ function DialogoGrupo({ card, valor, somenteLeitura, onAplicar, onFechar }: {
             </div>
           ))}
         </div>
-        <DialogFooter>
+        <DialogFooter className="shrink-0 border-t bg-card px-5 py-3">
           <Button variant="outline" size="sm" onClick={onFechar}>Cancelar</Button>
           <Button size="sm" disabled={somenteLeitura}
             onClick={() => { onAplicar(local); onFechar(); }}>Aplicar</Button>
