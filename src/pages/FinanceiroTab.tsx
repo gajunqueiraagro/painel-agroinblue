@@ -15,6 +15,7 @@ import { MESES_OPTIONS } from '@/lib/calculos/labels';
 import { calcIndicadoresLancamento } from '@/lib/calculos/economicos';
 import { useAnosDisponiveis } from '@/hooks/useAnosDisponiveis';
 import { useOperacoesComerciaisEmAndamento } from '@/hooks/useOperacoesComerciaisEmAndamento';
+import { useValorEmProjecao } from '@/hooks/useValorEmProjecao';
 
 type StatusFiltro = 'todos' | 'realizado' | 'meta';
 type SortDir = 'asc' | 'desc' | null;
@@ -195,6 +196,13 @@ function useSortableTable() {
 /* ── Tables ── */
 
 function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazendaMap }: { lancamentos: Lancamento[]; onEdit: (l: Lancamento) => void; showTipo?: boolean; subTipo?: string; isGlobal?: boolean; fazendaMap?: Map<string, string> }) {
+  /* ⚠ O VALOR DA VENDA BOITEL E PROJECAO ATE O ABATE — PR-OC-VENDA-VALOR-A-VALIDAR-01.
+     Sem a marca, R$ 574.292,00 de uma projecao aparecia com o mesmo peso visual de uma
+     venda liquidada, na mesma coluna e com o mesmo Realizado ao lado. Derivado do fato e
+     sem flag: apaga sozinho quando o realizado for gravado.
+     ⚠ SO NA VENDA. Nas outras abas a pergunta nao existe, e consultar seria ida ao
+     servidor por nada — a lista vazia faz o hook sair na primeira linha. */
+  const emProjecao = useValorEmProjecao(subTipo === 'venda' ? lancamentos.map(l => l.id) : []);
   const isCompra = subTipo === 'compra';
   const showFornecedorCol = ['abate', 'venda'].includes(subTipo || '');
   const showMotivoCol = ['morte', 'consumo'].includes(subTipo || '');
@@ -295,7 +303,19 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
               <td className={`${TABLE_BODY_CELL} text-right text-[9px]`}>{l.pesoMedioKg != null ? l.pesoMedioKg.toFixed(2) : '-'}</td>
               {showRendimento && <td className={`${TABLE_BODY_CELL} text-right text-[9px] text-muted-foreground`}>{rendimentoExibido != null ? `${rendimentoExibido.toFixed(1)}%` : '-'}</td>}
               <td className={`${TABLE_BODY_CELL} text-right text-[9px] text-muted-foreground`}>{c.pesoArroba ? c.pesoArroba.toFixed(2) : '-'}</td>
-              <td className={`${TABLE_BODY_CELL} text-right font-bold text-[9px] text-primary`}>{fmtValor(c.valorFinal)}</td>
+              <td className={`${TABLE_BODY_CELL} text-right font-bold text-[9px] text-primary`}>
+                {/* ⚠ A MARCA E NO NUMERO, NAO NO STATUS. O gado saiu de verdade — o
+                    Realizado da coluna de status esta certo e nao muda. O que e' provisorio
+                    e' o VALOR, e e' ao lado dele que a ressalva pertence.
+                    ⚠ A COR NAO E' O UNICO CANAL: quem nao distingue o ambar le a palavra. */}
+                {emProjecao.has(l.id) && (
+                  <span className="mr-1 rounded-full bg-amber-100 px-1.5 py-px text-[9px] font-normal text-amber-700 align-middle"
+                    title="Valor projetado do boitel — será substituído pelo real no abate.">
+                    projeção
+                  </span>
+                )}
+                {fmtValor(c.valorFinal)}
+              </td>
               <td className={`${TABLE_BODY_CELL} text-right text-[9px]`}>{fmtValor(c.liqArroba)}</td>
               {showLiqKg && <td className={`${TABLE_BODY_CELL} text-right text-[9px]`}>{fmtValor(c.liqKg)}</td>}
               <td className={`${TABLE_BODY_CELL} text-right text-[9px]`}>{fmtValor(c.liqCabeca)}</td>
