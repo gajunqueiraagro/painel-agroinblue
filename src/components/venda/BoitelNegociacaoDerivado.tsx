@@ -17,17 +17,18 @@
  * ⚠ NUNCA ZERO MUDO. Um valor que não pode ser calculado aparece como "—", e o painel
  * diz em âmbar QUAL dado falta. Zero é valor real e só aparece quando é o resultado.
  *
- * ⚠ TRES CAMPOS VIRAM UMA LINHA SO NO FINANCEIRO. Quem mexer em um precisa saber dos
- * outros dois: `outrosCustos`, `custoNutricao` e `custosExtrasParceria` são somados numa
- * única obrigação, rotulada "Outros Custos", em `useBoitelOperacoes.ts` —
+ * ⚠ TRES COLUNAS VIRAM UMA LINHA SO NO FINANCEIRO. Quem mexer em uma precisa saber das
+ * outras duas: `outros_custos`, `custo_nutricao` e `custos_extras_parceria` são somadas
+ * numa única obrigação, rotulada "Outros Custos", em `useBoitelOperacoes.ts` —
  *     { valor: plan.outros_custos + plan.custo_nutricao + plan.custos_extras_parceria,
  *       label: `Outros Custos - ${descBase}`, origemTipo: 'boitel:custo_outros' }
- * `custoNutricao` é o caso extremo disso: não tem campo em tela nenhuma hoje (perdeu a
- * dele e ainda não ganhou a do 01B) e mesmo assim o valor gravado desagua ali. É o custo
- * de ração mandada por fora — caminho legítimo, hoje zero em todos os 10 registros.
- * Nenhum dos três entra no resultado deste painel pela via da nutrição: `oc` é
- * `outrosCustos` e entra no custo do boitel; `custosExtrasParceria` não entra no `calc`
- * do simulador e por isso também não entra aqui.
+ * ⚠ DAS TRES, SO `outros_custos` TEM CAMPO NA TELA. A nutrição saiu em
+ * PR-OC-VENDA-NUTRICAO-DUPLICADA-01 — a DIARIA JA E A NUTRICAO, é o que o boitel cobra
+ * para alimentar o gado, e pedir os dois era o mesmo conceito duas vezes; os extras de
+ * parceria são de uma modalidade que nunca rodou. As duas colunas ficam zeradas no banco,
+ * então hoje aquela linha do financeiro é o que se digita em Outros.
+ * ⚠ E ESTE MOTOR ESTAVA CERTO O TEMPO TODO: `custoTotalBoitel` é `cDT + cs + oc` e nunca
+ * somou nutrição. O que parecia omissão dele era a tela cobrando em dobro.
  */
 import { useMemo } from 'react';
 import { AlertTriangle } from 'lucide-react';
@@ -169,10 +170,10 @@ export function derivadosBoitel(data: BoitelEdicao) {
    exclui (lá é `cDT + cs + oc`). Ver PR-OC-VENDA-BOITEL-FRETE-PAGADOR-01.
    ⚠ O ADIANTAMENTO NAO ENTRA: é caixa antecipado e reembolsado no acerto; muda QUANDO o
    dinheiro passa, não QUANTO a venda vale.
-   ⚠ A NUTRICAO TAMBEM NAO ENTRA, e isso NAO foi decidido: `custoTotalBoitel` é
-   `cDT + cs + oc` e nunca somou nutrição, enquanto a seção de Custos da tela soma. É a
-   divergência aberta em PR-OC-VENDA-BOITEL-CUSTO-COMPOSICAO-01 — invisível hoje, porque
-   a nutrição é zero em todos os registros, mas agora ela decide um valor PERSISTIDO.
+   ⚠ A NUTRICAO NAO ENTRA, e agora esta' DECIDIDO: a diária já é a nutrição, e o campo
+   duplicado saiu da tela em PR-OC-VENDA-NUTRICAO-DUPLICADA-01. A divergência que
+   PR-OC-VENDA-BOITEL-CUSTO-COMPOSICAO-01 registrava está ENCERRADA — e encerrada do lado
+   do motor, que estava certo: quem somava a mais era a tela.
    ⚠ DEVOLVE `null`, e nunca zero, quando não há o que calcular — sem os campos que
    sustentam a conta não existe projeção, e zero afirmaria que a venda não vale nada. */
 export function liquidoDaVendaBoitel(d: BoitelEdicao | null): number | null {

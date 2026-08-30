@@ -64,6 +64,10 @@ export function faltamDosCinco(d: BoitelEdicao | null): string[] {
    ⚠ ESCREVER A VOLTA COMO SEGUNDA LISTA seria o defeito do `TRANSLATE` de ontem em
    outra roupa: duas listas paralelas que ninguém percebe desalinhadas. Aqui, esquecer
    um campo o faz sumir da ida E da volta ao mesmo tempo — o que é visível.
+   ⚠ `custo_nutricao` SAIU DO MAPA — PR-OC-VENDA-NUTRICAO-DUPLICADA-01: a diária já é a
+   nutrição, e o campo era o mesmo conceito duas vezes. A COLUNA FICA NO BANCO, zerada em
+   todas as linhas (medido: 1 linha, zero com valor), como legado — sem migration. Fora do
+   mapa, ela deixa de ser enviada, e a RPC preserva o que lá estiver: zero.
    ⚠ `zeroEValor` MARCA OS CAMPOS EM QUE ZERO E RESPOSTA, e não ausência. Nos demais,
    zero e vazio são a mesma coisa (não informado) e viram NULL; nos de morte, zero
    significa "informado como nenhuma morte" — está no comentário da própria coluna. */
@@ -82,7 +86,6 @@ const MAPA_BOITEL: CampoBoitel[] = [
   { col: 'rendimento_entrada_pct',       campo: 'rendimentoEntrada',           tipo: 'num' },
   { col: 'rendimento_saida_pct',         campo: 'rendimento',                  tipo: 'num' },
   { col: 'custo_diaria',                 campo: 'custoDiaria',                 tipo: 'num' },
-  { col: 'custo_nutricao',               campo: 'custoNutricao',               tipo: 'num' },
   { col: 'custo_sanidade',               campo: 'custoSanidade',               tipo: 'num' },
   { col: 'custo_frete',                  campo: 'custoFrete',                  tipo: 'num' },
   { col: 'outros_custos',                campo: 'outrosCustos',                tipo: 'num' },
@@ -169,14 +172,13 @@ export function boitelVazio(): BoitelEdicao {
    ⚠ MAS EM ALGUNS CASOS O BOITEL PAGA O FRETE e o embute na cobrança. Enquanto não houver
    um marcador de QUEM PAGOU, o frete fica fora — a proposta está reportada e o campo
    segue existindo, porque o custo existe de qualquer forma.
-   ⚠ A NUTRIÇÃO CONTINUA SOMANDO, e é a única diferença que resta contra o painel. O
-   simulador antigo não a soma, mas isso não decide nada: lá o campo era morto — não está
-   sequer no destructuring do `calc`. Zero em todos os 10 registros, então a diferença é
-   invisível hoje. Aguarda decisão. */
-export function custoTotalDoBoitel(d: BoitelEdicao): number {
-  return derivadosBoitel(d).cDT + (d.custoSanidade || 0) + (d.custoNutricao || 0)
-       + (d.outrosCustos || 0);
-}
+   ⚠ `custoTotalDoBoitel` DEIXOU DE EXISTIR — PR-OC-VENDA-NUTRICAO-DUPLICADA-01. Ela
+   somava a nutrição por cima das diárias e divergia do motor; tirada a duplicação, ela
+   virava `cDT + cs + oc`, que e' letra por letra o `custoTotalBoitel` do
+   `derivadosBoitel`. Em vez de manter duas funções com o mesmo corpo, a tela passou a ler
+   a do motor: agora os dois numeros sao o MESMO por construcao, e nao por coincidencia.
+   ⚠ E O MOTOR ESTAVA CERTO O TEMPO TODO. Ele nunca somou nutrição — o que parecia
+   omissão dele era a tela cobrando duas vezes. */
 export function antecipadoTotal(d: BoitelEdicao): number {
   if (!d.possuiAdiantamento) return 0;
   return Math.round(((d.valorAdiantamentoDiarias || 0) + (d.valorAdiantamentoSanitario || 0)
@@ -272,7 +274,7 @@ export function BoitelBlocosModais({ valor, onChange, somenteLeitura }: {
   const qtd = d.qtdCabecas || 0;
   const sairam = cabecasQueSairam(d);
   const diarias = der.cDT;
-  const custoTotal = custoTotalDoBoitel(d);
+  const custoTotal = der.custoTotalBoitel;
   const fatBruto = der.fba;
   const antecipado = antecipadoTotal(d);
   const temDesempenho = d.dias > 0 && d.gmd > 0 && d.rendimento > 0;
@@ -360,8 +362,10 @@ export function BoitelBlocosModais({ valor, onChange, somenteLeitura }: {
                 : '—'}
             </div>
           </div>
-          <CampoNum label="Nutrição (total)" valor={d.custoNutricao} onChange={v => set('custoNutricao', v)} sufixo="R$"
-            derivado={porCabeca(d.custoNutricao, qtd)} />
+          {/* ⚠ NAO HA CAMPO DE NUTRICAO, e a ausencia e' a correcao — PR-OC-VENDA-NUTRICAO-DUPLICADA-01.
+              A DIARIA JA E A NUTRICAO: e' o que o boitel cobra para alimentar o gado. Um
+              campo "Nutrição (total)" ao lado das Diárias era o mesmo conceito pedido duas
+              vezes, e somava em cima. */}
           <CampoNum label="Sanidade (total)" valor={d.custoSanidade} onChange={v => set('custoSanidade', v)} sufixo="R$"
             derivado={porCabeca(d.custoSanidade, qtd)} />
           {/* ⚠ FICA NA TELA E FORA DA SOMA. O frete é custo operacional do produtor, pago
@@ -374,10 +378,13 @@ export function BoitelBlocosModais({ valor, onChange, somenteLeitura }: {
           <CampoNum label="Outros (total)" valor={d.outrosCustos} onChange={v => set('outrosCustos', v)} sufixo="R$"
             derivado={porCabeca(d.outrosCustos, qtd)} />
         </div>
-        {/* ⚠ TRÊS CAMPOS VIRAM UMA LINHA SÓ NO FINANCEIRO: nutrição, outros e os extras de
-            parceria somam numa obrigação chamada "Outros Custos". Ver useBoitelOperacoes.ts. */}
+        {/* ⚠ A LINHA "OUTROS CUSTOS" DO FINANCEIRO SOMA TRES COLUNAS — `outros_custos`,
+            `custo_nutricao` e `custos_extras_parceria` (ver useBoitelOperacoes.ts). Das
+            tres, so' `Outros` tem campo aqui: a nutrição saiu por ser a própria diária, e
+            os extras de parceria são de uma modalidade que ainda não existe. As duas
+            colunas ficam zeradas, então a linha do financeiro é o que se digita em Outros. */}
         <p className="text-[10px] text-muted-foreground">
-          Nutrição e Outros são somados numa única obrigação, “Outros Custos”, no financeiro.
+          “Outros” vira uma obrigação chamada “Outros Custos” no financeiro.
         </p></>),
     comercializacao: (<><div className="grid grid-cols-2 gap-x-4 gap-y-3">
           <CampoNum label="Preço de venda" valor={d.precoVendaArroba} onChange={v => set('precoVendaArroba', v)} sufixo="R$/@" obrigatorio />
