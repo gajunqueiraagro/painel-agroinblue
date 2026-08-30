@@ -372,7 +372,26 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   // PR-FIX-OC-OPEN-01 — fonte REATIVA da URL. O useMemo(…, []) anterior congelava
   //   window.location.search do 1º render; em mount com URL transitória, modoOCCompra/ocIdParam
   //   ficavam false/null para sempre — desligando a hidratação E o enabled das 4 subabas OC.
-  const [ocSearchParams] = useSearchParams();
+  const [ocSearchParams, setOcSearchParams] = useSearchParams();
+
+  /* ⚠ PARAMETRO PRESO REABRE SOZINHO — PR-OC-VENDA-REABRIR-01D. Quando a hidratacao
+     recusa a operacao (id malformado, nao encontrada, tipo divergente), a URL continuava
+     com `oc_compra`/`oc_venda` e `oc_id`: o modal nunca abriu, entao nao ha o que fechar,
+     e `fecharOperacaoOC` — que e' quem limpa — nunca roda. O usuario voltava a Central,
+     clicava noutra linha, e o parametro velho disparava a mesma recusa. Era o "nao abre
+     mais" da homologacao.
+     ⚠ APAGA OS CINCO, como o `fecharOperacaoOC`. `oc_return` inclusive: `abrirOperacaoOC`
+     PRESERVA um `oc_return` existente, entao um resto daqui carimbaria o retorno da
+     proxima abertura.
+     ⚠ E LIBERA O REF-GUARD: a tentativa falhou, entao "ja hidratou" e' falso. Nao ha
+     laco — sem os parametros, os dois effects saem na primeira linha. */
+  const limparParamsOC = useCallback(() => {
+    const p = new URLSearchParams(window.location.search);
+    p.delete('oc_compra'); p.delete('oc_venda'); p.delete('oc_id');
+    p.delete('oc_aba'); p.delete('oc_return');
+    setOcSearchParams(p, { replace: true });
+    ocHidratadoRef.current = false;
+  }, [setOcSearchParams]);
   const modoOCCompra = ocSearchParams.get('oc_compra') === '1';
   /* ⚠ SO O PARAMETRO, aqui em cima. O `modoOCVenda` completo mora la' embaixo porque
      depende de `isCenarioMeta`, que nasce depois — e o hook de lotes precisa saber
@@ -644,6 +663,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       if (!UUID_RE.test(ocIdParam)) {
         setOcHidratacaoErro('Identificador de operação malformado.');
         toast.error('Identificador de operação malformado.');
+        limparParamsOC();
         return;
       }
       setOcHidratando(true);
@@ -688,6 +708,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         const msg = e instanceof Error ? e.message : 'Falha ao abrir a operação.';
         setOcHidratacaoErro(msg);
         toast.error(msg);
+        limparParamsOC();
       } finally {
         if (!cancelado) setOcHidratando(false);
       }
@@ -740,6 +761,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       if (!UUID_RE.test(ocIdParam)) {
         setOcHidratacaoErro('Identificador de operação malformado.');
         toast.error('Identificador de operação malformado.');
+        limparParamsOC();
         return;
       }
       setOcHidratando(true);
@@ -789,6 +811,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         const msg = e instanceof Error ? e.message : 'Falha ao abrir a operação.';
         setOcHidratacaoErro(msg);
         toast.error(msg);
+        limparParamsOC();
       } finally {
         if (!cancelado) setOcHidratando(false);
       }

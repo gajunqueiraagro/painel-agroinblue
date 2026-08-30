@@ -243,7 +243,11 @@ interface CentralOperacoesComerciaisProps {
   /* ⚠ O TIPO VAI JUNTO — PR-OC-VENDA-REABRIR-01. Sem ele, quem recebe so' sabia abrir
      compra, e a Central mandava toda linha para o modal de compra. Opcional no consumidor:
      quem nao passa continua caindo no default 'compra'. */
-  onAbrirOperacao?: (ocId: string, tipo?: string) => void;
+  /* ⚠ `tipo` OBRIGATORIO no contrato — PR-OC-VENDA-REABRIR-01D. Opcional, ele deixava
+     passar quem recebesse `(ocId, aba)` na mesma forma: dois `string?` em sequencia sao
+     estruturalmente compativeis e o TSC nao reclamava. Exigi-lo faz o desencontro virar
+     erro de compilacao. */
+  onAbrirOperacao?: (ocId: string, tipo: string) => void;
 }
 
 export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: CentralOperacoesComerciaisProps = {}) {

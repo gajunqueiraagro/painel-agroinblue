@@ -918,7 +918,14 @@ export default function V2Index() {
     if (section === 'operacoes-comerciais') return (
       <CentralOperacoesComerciais
         initialOcId={(() => { try { return new URLSearchParams(window.location.search).get('oc_id') ?? undefined; } catch { return undefined; } })()}
-        onAbrirOperacao={abrirOperacaoOC}
+        /* ⚠ ADAPTADOR EXPLICITO, e nao a funcao direto — PR-OC-VENDA-REABRIR-01D. A Central
+           chama `(ocId, tipo)`; `abrirOperacaoOC` e' `(ocId, aba?, tipo?)`. Passada crua, a
+           'venda' entrava como ABA, o tipo caia no default 'compra', e a hidratacao da
+           compra recusava a operacao com toast, largando o usuario em Lancamentos.
+           ⚠ O TSC NAO PEGA ISSO: dois parametros `string` opcionais em sequencia sao
+           estruturalmente compativeis. Por isso o prop na Central passou a ser tipado com o
+           contrato real — o proximo desencontro e' erro de compilacao, nao toast. */
+        onAbrirOperacao={(ocId, tipo) => abrirOperacaoOC(ocId, undefined, tipo)}
       />
     );
     if (section === 'lancamentos-zoot') return (
