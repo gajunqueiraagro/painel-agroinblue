@@ -454,9 +454,15 @@ export default function V2Index() {
   // PR-OC-NAV-01 — navegação SPA soberana da Central de Operações Comerciais (sem window.location.assign,
   //   sem sessionStorage). Abertura intencional (botão "Abrir" da Central ou link direto ?oc_id) sinaliza o
   //   modal de Compra (?oc_compra=1&oc_id) e troca a seção para Lançamentos, onde o CompraModalShell vive.
-  const abrirOperacaoOC = useCallback((ocId: string, aba?: string) => {
+  /* ⚠ `tipo` COM DEFAULT 'compra' — PR-OC-VENDA-REABRIR-01. A compatibilidade nao e'
+     cortesia: o drill do Financeiro chama `abrirOperacaoOC(ocId, 'financeiro')` sem tipo,
+     e continua abrindo compra por omissao. So' a Central passa o tipo, porque so' ela sabe.
+     ⚠ UM APAGA O OUTRO, como em `abrirNovaCompraOC`/`abrirNovaVendaOC`: os dois booleanos
+     nao podem coexistir, e a impossibilidade e' garantida por quem ABRE. */
+  const abrirOperacaoOC = useCallback((ocId: string, aba?: string, tipo: string = 'compra') => {
     const p = new URLSearchParams(window.location.search);
-    p.set('oc_compra', '1');
+    if (tipo === 'venda') { p.set('oc_venda', '1'); p.delete('oc_compra'); }
+    else { p.set('oc_compra', '1'); p.delete('oc_venda'); }
     p.set('oc_id', ocId);
     // PR-OC-FIN-EDIT-FIX-02 — aba inicial opcional (ex.: 'financeiro' quando aberto pelo Financeiro V2).
     if (aba) p.set('oc_aba', aba); else p.delete('oc_aba');

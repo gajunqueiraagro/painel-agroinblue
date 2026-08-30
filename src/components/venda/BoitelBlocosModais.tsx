@@ -59,40 +59,81 @@ export function faltamDosCinco(d: BoitelEdicao | null): string[] {
   return CINCO_OBRIGATORIOS.filter(c => !c.tem(d)).map(c => c.rotulo);
 }
 
-/** O payload de `oc_salvar_boitel`. Uma função só, e é o único lugar que traduz nomes. */
+/* ─── O MAPA ENTRE `BoitelEdicao` E `zoo_operacao_boitel` ──────────────────────
+   UM mapa, e as DUAS direções derivam dele — PR-OC-VENDA-REABRIR-01.
+   ⚠ ESCREVER A VOLTA COMO SEGUNDA LISTA seria o defeito do `TRANSLATE` de ontem em
+   outra roupa: duas listas paralelas que ninguém percebe desalinhadas. Aqui, esquecer
+   um campo o faz sumir da ida E da volta ao mesmo tempo — o que é visível.
+   ⚠ `zeroEValor` MARCA OS CAMPOS EM QUE ZERO E RESPOSTA, e não ausência. Nos demais,
+   zero e vazio são a mesma coisa (não informado) e viram NULL; nos de morte, zero
+   significa "informado como nenhuma morte" — está no comentário da própria coluna. */
+type TipoCampoBoitel = 'texto' | 'num' | 'int' | 'bool';
+interface CampoBoitel { col: string; campo: keyof BoitelEdicao; tipo: TipoCampoBoitel; zeroEValor?: boolean }
+
+const MAPA_BOITEL: CampoBoitel[] = [
+  { col: 'nome_boitel',                  campo: 'nomeBoitel',                  tipo: 'texto' },
+  { col: 'lote_codigo',                  campo: 'lote',                        tipo: 'texto' },
+  { col: 'numero_contrato',              campo: 'numeroContrato',              tipo: 'texto' },
+  { col: 'data_envio',                   campo: 'dataEnvio',                   tipo: 'texto' },
+  { col: 'peso_saida_fazenda_kg',        campo: 'pesoInicial',                 tipo: 'num' },
+  { col: 'dias',                         campo: 'dias',                        tipo: 'int' },
+  { col: 'gmd',                          campo: 'gmd',                         tipo: 'num' },
+  { col: 'quebra_viagem_pct',            campo: 'quebraViagem',                tipo: 'num' },
+  { col: 'rendimento_entrada_pct',       campo: 'rendimentoEntrada',           tipo: 'num' },
+  { col: 'rendimento_saida_pct',         campo: 'rendimento',                  tipo: 'num' },
+  { col: 'custo_diaria',                 campo: 'custoDiaria',                 tipo: 'num' },
+  { col: 'custo_nutricao',               campo: 'custoNutricao',               tipo: 'num' },
+  { col: 'custo_sanidade',               campo: 'custoSanidade',               tipo: 'num' },
+  { col: 'custo_frete',                  campo: 'custoFrete',                  tipo: 'num' },
+  { col: 'outros_custos',                campo: 'outrosCustos',                tipo: 'num' },
+  { col: 'custo_oportunidade',           campo: 'custoOportunidade',           tipo: 'num' },
+  { col: 'preco_venda_arroba',           campo: 'precoVendaArroba',            tipo: 'num' },
+  /* ⚠ UM CAMPO SO — a unificação com `custoNfAbate` saiu no 01A. */
+  { col: 'despesas_abate',               campo: 'despesasAbate',               tipo: 'num' },
+  { col: 'possui_adiantamento',          campo: 'possuiAdiantamento',          tipo: 'bool' },
+  { col: 'data_adiantamento',            campo: 'dataAdiantamento',            tipo: 'texto' },
+  { col: 'valor_adiantamento_diarias',   campo: 'valorAdiantamentoDiarias',    tipo: 'num' },
+  { col: 'valor_adiantamento_sanitario', campo: 'valorAdiantamentoSanitario',  tipo: 'num' },
+  { col: 'valor_adiantamento_outros',    campo: 'valorAdiantamentoOutros',     tipo: 'num' },
+  { col: 'adiantamento_observacao',      campo: 'adiantamentoObservacao',      tipo: 'texto' },
+  { col: 'morte_quantidade',             campo: 'morteQuantidade',             tipo: 'int', zeroEValor: true },
+  { col: 'morte_valor_indenizacao',      campo: 'morteValorIndenizacao',       tipo: 'num', zeroEValor: true },
+];
+
+/** O payload de `oc_salvar_boitel` — a IDA, derivada do mapa. */
 export function payloadBoitel(d: BoitelEdicao): Record<string, unknown> {
-  return {
-    nome_boitel: d.nomeBoitel || null,
-    lote_codigo: d.lote || null,
-    numero_contrato: d.numeroContrato || null,
-    data_envio: d.dataEnvio || null,
-    peso_saida_fazenda_kg: d.pesoInicial || null,
-    dias: d.dias || null,
-    gmd: d.gmd || null,
-    quebra_viagem_pct: d.quebraViagem || null,
-    rendimento_entrada_pct: d.rendimentoEntrada || null,
-    rendimento_saida_pct: d.rendimento || null,
+  const out: Record<string, unknown> = {
     /* ⚠ SEMPRE 'diaria'. O CHECK do banco recusa as outras duas, e o seletor desta tela
        não as oferece — mandar outra coisa seria pedir um erro que a tela já sabe. */
     modalidade_custo: 'diaria',
-    custo_diaria: d.custoDiaria || null,
-    custo_nutricao: d.custoNutricao || null,
-    custo_sanidade: d.custoSanidade || null,
-    custo_frete: d.custoFrete || null,
-    outros_custos: d.outrosCustos || null,
-    custo_oportunidade: d.custoOportunidade || null,
-    preco_venda_arroba: d.precoVendaArroba || null,
-    /* ⚠ UM CAMPO SÓ — a unificação com `custoNfAbate` saiu no 01A. */
-    despesas_abate: d.despesasAbate || null,
-    possui_adiantamento: !!d.possuiAdiantamento,
-    data_adiantamento: d.dataAdiantamento || null,
-    valor_adiantamento_diarias: d.valorAdiantamentoDiarias || null,
-    valor_adiantamento_sanitario: d.valorAdiantamentoSanitario || null,
-    valor_adiantamento_outros: d.valorAdiantamentoOutros || null,
-    adiantamento_observacao: d.adiantamentoObservacao || null,
-    morte_quantidade: d.morteQuantidade ?? null,
-    morte_valor_indenizacao: d.morteValorIndenizacao ?? null,
   };
+  for (const c of MAPA_BOITEL) {
+    const v = d[c.campo];
+    if (c.tipo === 'bool') out[c.col] = !!v;
+    else if (c.zeroEValor) out[c.col] = v ?? null;
+    else out[c.col] = v || null;
+  }
+  return out;
+}
+
+/** A VOLTA: uma linha de `zoo_operacao_boitel` vira `BoitelEdicao`, pelo mesmo mapa.
+ *  ⚠ CABECAS E PESO SAO SOBRESCRITOS PELOS LOTES depois disto (ver `boitelDaVenda` em
+ *  LancamentosTab). O peso vem no mapa porque a coluna existe e é gravada; lê-lo aqui é
+ *  inofensivo, e omiti-lo criaria a assimetria que o mapa existe para impedir. */
+export function boitelDeLinha(linha: Record<string, unknown> | null | undefined): BoitelEdicao | null {
+  if (!linha) return null;
+  /* ⚠ SEM `as`. O patch é acumulado num parcial e aplicado por `Object.assign` sobre o
+     objeto vazio, que já é `BoitelEdicao` — o resultado é atribuível ao tipo sem cast,
+     e o zero-cast do projeto continua valendo. */
+  const patch: Partial<Record<keyof BoitelEdicao, unknown>> = {};
+  for (const c of MAPA_BOITEL) {
+    const v = linha[c.col];
+    if (c.tipo === 'bool')       patch[c.campo] = !!v;
+    else if (c.tipo === 'texto') patch[c.campo] = v == null ? '' : String(v);
+    else if (c.zeroEValor)       patch[c.campo] = v == null ? undefined : Number(v);
+    else                         patch[c.campo] = v == null ? 0 : Number(v);
+  }
+  return Object.assign(boitelVazio(), patch);
 }
 
 /** Um boitel em branco.

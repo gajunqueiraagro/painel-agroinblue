@@ -160,9 +160,15 @@ export function useOperacaoComercial() {
     });
 
   /* PR-OC-VENDA-BOITEL-RPC-01 — o planejamento do boitel de uma OC de venda.
-     ⚠ UNICA PORTA: `zoo_operacao_boitel` nao tem grant nenhum, entao nao ha caminho por
-     PostgREST. Upsert por (operacao_id, cenario) — uma chamada de 'realizado' nunca
-     alcanca a linha 'projetado'.
+     ⚠ UNICA PORTA DE ESCRITA, e o motivo NAO e' o que este comentario dizia. Corrigido em
+     PR-OC-VENDA-REABRIR-01: `zoo_operacao_boitel` TEM os grants padrao para
+     `authenticated` (select, insert, update, delete) — a medicao anterior usou
+     `information_schema.role_table_grants`, que so' mostra grants de papeis visiveis ao
+     usuario da conexao, e por isso devolveu zero. Quem barra a escrita e' o RLS: a tabela
+     tem UMA policy, so' de SELECT, e sem policy de INSERT/UPDATE/DELETE o RLS nega por
+     omissao. A leitura por PostgREST, essa, FUNCIONA — e e' o que a reabertura usa.
+     Upsert por (operacao_id, cenario) — uma chamada de 'realizado' nunca alcanca a linha
+     'projetado'.
      ⚠ PAYLOAD PARCIAL PRESERVA o que nao foi enviado; e a linha RESULTANTE e' que precisa
      ter os cinco campos obrigatorios, nao o payload. */
   const salvarBoitel = (

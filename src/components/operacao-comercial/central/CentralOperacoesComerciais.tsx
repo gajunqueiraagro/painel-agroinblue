@@ -240,7 +240,10 @@ interface CentralOperacoesComerciaisProps {
   /** FIN-MODAL-FECHO-01 item 2 — ao receber ?oc_id=, a Central localiza a operação do tenant e a abre. */
   initialOcId?: string;
   /** PR-OC-NAV-01 — abertura SPA soberana (sem reload) via parent (V2Index → Lançamentos/CompraModalShell). */
-  onAbrirOperacao?: (ocId: string) => void;
+  /* ⚠ O TIPO VAI JUNTO — PR-OC-VENDA-REABRIR-01. Sem ele, quem recebe so' sabia abrir
+     compra, e a Central mandava toda linha para o modal de compra. Opcional no consumidor:
+     quem nao passa continua caindo no default 'compra'. */
+  onAbrirOperacao?: (ocId: string, tipo?: string) => void;
 }
 
 export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: CentralOperacoesComerciaisProps = {}) {
@@ -463,9 +466,12 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
   //   de uma lista reordenada e' um recorte sem sentido.
   useEffect(() => { setPage(1); }, [busca, fTipo, fComercial, fFazenda, fLiquidacao, fRecebimento, dtIni, dtFim, mostrarRascunhos, ord]);
 
-  // Abertura soberana por tipo (Compra → SPA via parent; venda/abate ainda indisponíveis na Central).
+  /* Abertura soberana por tipo. Compra e VENDA vao para o parent, cada uma para o seu
+     modal; abate segue indisponivel na Central, como antes.
+     ⚠ O TIPO E' PASSADO ADIANTE, e nao inferido la' fora: quem sabe o que a linha e' e'
+     esta lista, que ja o carrega em `OpRow`. */
   const abrirOperacaoPorTipo = (r: OpRow) => {
-    if (r.tipo_operacao === 'compra') onAbrirOperacao?.(r.id);
+    if (r.tipo_operacao === 'compra' || r.tipo_operacao === 'venda') onAbrirOperacao?.(r.id, r.tipo_operacao);
   };
 
   const ocIdHandledRef = useRef(false);

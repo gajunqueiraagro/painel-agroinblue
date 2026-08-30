@@ -202,7 +202,12 @@ export function VendaModalShell({
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <h2 className="text-lg font-bold leading-tight">Venda de animais</h2>
-            <span className="rounded-md border border-white/40 px-2 py-0.5 text-xs">OC (novo)</span>
+            {/* ⚠ MESMO TERNARIO DA COMPRA (CompraModalShell:300), palavra por palavra. Ele
+                dizia "(novo)" para sempre — inclusive depois de salva, o que era mentira do
+                rotulo: a operacao ja existia e o cabecalho negava. */}
+            <span className="rounded-md border border-white/40 px-2 py-0.5 text-xs">
+              OC{ocOperacaoId ? ` #${ocOperacaoId.slice(0, 8)}` : ' (novo)'}
+            </span>
           </div>
           <div className="mt-1 flex items-center gap-3 text-xs text-white/80">
             <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> {data ? data.split('-').reverse().join('/') : '—'}</span>

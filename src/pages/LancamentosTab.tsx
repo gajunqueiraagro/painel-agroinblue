@@ -37,7 +37,7 @@ import { MorteModalShell } from '@/components/morte/MorteModalShell';
 import { CompraMetaModalShell } from '@/components/compra/CompraMetaModalShell';
 import { VendaMetaModalShell } from '@/components/venda/VendaMetaModalShell';
 import { VendaModalShell } from '@/components/venda/VendaModalShell';
-import { boitelVazio, payloadBoitel, type BoitelEdicao } from '@/components/venda/BoitelBlocosModais';
+import { boitelVazio, payloadBoitel, boitelDeLinha, type BoitelEdicao } from '@/components/venda/BoitelBlocosModais';
 import { liquidoDaVendaBoitel } from '@/components/venda/BoitelNegociacaoDerivado';
 import { ReclassificacaoFormFields, useReclassificacaoState } from '@/components/ReclassificacaoForm';
 import { ReclassificacaoResumoPanel } from '@/components/ReclassificacaoResumoPanel';
@@ -696,6 +696,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modoOCCompra, ocIdParam, clienteAtual?.id]);
 
+
   // Venda destino fornecedor state
   const [vendaDestinoFornecedorId, setVendaDestinoFornecedorId] = useState('');
   const [novoFornecedorVendaOpen, setNovoFornecedorVendaOpen] = useState(false);
@@ -718,6 +719,83 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
      `isCompra && isCenarioMeta` ANTES de `isCompra`, entao a ordem a protegia. A venda
      entrou como primeiro ramo da cadeia e passou na frente do teste de cenario. */
   const modoOCVenda = ocVendaParam && !isCenarioMeta;
+
+  /* Hidratacao de operacao de VENDA existente a partir de ?oc_id — PR-OC-VENDA-REABRIR-01.
+     ESPELHO do effect da compra logo acima: mesma guarda, mesmo ref-guard de uma execucao,
+     mesmo reset preventivo, mesma validacao de pertencimento e de tipo, e o modal so' abre
+     no fim.
+     ⚠ ATE AQUI NAO HAVIA PORTA DE REABERTURA DE VENDA em lugar nenhum: a Central mandava
+     tudo para o modal de compra e `oc_venda=1` so' sabia criar. E o modelo do produto
+     DEPENDE de reabrir — o realizado do boitel nasce por reabertura no abate.
+     ⚠ O REF-GUARD E COMPARTILHADO com a compra (`ocHidratadoRef`), e pode ser: os dois
+     booleanos nunca coexistem, entao no maximo um dos dois effects roda por abertura. */
+  useEffect(() => {
+    if (!modoOCVenda || !ocIdParam || !clienteAtual?.id) return;
+    if (ocHidratadoRef.current) return;
+    ocHidratadoRef.current = true;
+    let cancelado = false;
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    (async () => {
+      resetContextoVendaOC();
+      if (!UUID_RE.test(ocIdParam)) {
+        setOcHidratacaoErro('Identificador de operação malformado.');
+        toast.error('Identificador de operação malformado.');
+        return;
+      }
+      setOcHidratando(true);
+      try {
+        const estado = await ocRpc.carregarOperacao(ocIdParam, clienteAtual.id);
+        if (cancelado) return;
+        if (!estado) throw new Error('Operação não encontrada ou inacessível a este cliente.');
+        const op = estado.operacao;
+        if (op.tipo_operacao !== 'venda') throw new Error('Esta operação não é uma Venda e não pode ser aberta aqui.');
+
+        setData(op.data_operacao ?? format(new Date(), 'yyyy-MM-dd'));
+        setVendaDestinoFornecedorId(op.contraparte_id ?? '');
+        setVendaFazendaId(op.fazenda_id ?? '');
+        setObservacao(op.observacoes ?? '');
+        setNotaFiscal(op.numero_documento ?? '');
+        setStatusOp(op.cenario === 'meta' ? 'meta' : 'realizado');
+        setOcOperacaoId(op.id);
+        setOcVersao(op.versao);
+        setOcStatusComercial(op.status_comercial);
+        setOcEntregaEncerrada(!!op.entrega_encerrada);
+        setOcRascunho(op.rascunho);
+        setOcAberturaExistente(true);
+
+        /* ⚠ O TIPO DE VENDA VEM DA EXISTENCIA DO PLANEJAMENTO, e nao de uma coluna: a OC
+           nao guarda `tipo_venda` (conferido nas 53 colunas em PR-OC-VENDA-BOITEL-RPC-01).
+           Uma venda E' boitel se e somente se tem linha em `zoo_operacao_boitel`.
+           ⚠ LEITURA POR PostgREST, e nao por RPC: a tabela tem policy de SELECT e a
+           leitura funciona. A ESCRITA continua exclusiva de `oc_salvar_boitel`.
+           ⚠ 'projetado': o realizado nasce no abate e e' outra linha. */
+        const { data: linhaBoitel } = await (supabase as any)
+          .from('zoo_operacao_boitel').select('*')
+          .eq('operacao_id', op.id).eq('cenario', 'projetado').maybeSingle();
+        if (cancelado) return;
+        const bd = boitelDeLinha(linhaBoitel);
+        /* ⚠ VENDA COMUM REABRE SEM TIPO, e isso e' honestidade, nao esquecimento: a OC
+           nao guarda `tipo_venda`, entao escolher um por ela seria inventar dado. O botao
+           dira' "Informe comprador, data, fazenda e tipo de venda" ate' o operador marcar.
+           Ver PR-OC-VENDA-TIPO-NA-OC-01, registrado. */
+        if (bd) { setVendaTipoVenda('boitel'); setOcBoitel(bd); }
+        else { setVendaTipoVenda(''); setOcBoitel(null); }
+
+        setTipo('venda');
+        setLancModalOpen(true);
+      } catch (e) {
+        if (cancelado) return;
+        resetContextoVendaOC();
+        const msg = e instanceof Error ? e.message : 'Falha ao abrir a operação.';
+        setOcHidratacaoErro(msg);
+        toast.error(msg);
+      } finally {
+        if (!cancelado) setOcHidratando(false);
+      }
+    })();
+    return () => { cancelado = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modoOCVenda, ocIdParam, clienteAtual?.id]);
 
   /* ⚠ CENARIO, NAO TIPO. Realizado e programado registram um fato economico e exigem o
      detalhe financeiro; meta e' projecao e nao exige. Nomeada porque a mesma pergunta
