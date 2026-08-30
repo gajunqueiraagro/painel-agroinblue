@@ -60,6 +60,17 @@ interface Props {
   valorProjetado?: { valor: number | null; explicacao: string } | null;
   /** Boitel e' UM embarque: a operacao E' o lote. Desabilita o "+ Adicionar lote". */
   loteUnico?: { motivo: string } | null;
+  /* ⚠ ADITIVO, so' a venda boitel passa — PR-OC-VENDA-LAYOUT-NEG-01. La' os mesmos
+     quatro numeros ja aparecem no topo congelado da aba, e mostra-los aqui de novo era a
+     duplicacao que o redesenho veio matar: cabecas e peso liam-se duas vezes na mesma
+     tela, um dos dois sempre fora de vista.
+     ⚠ SO' OS NUMEROS SOMEM. O titulo, a contagem e o "+ Adicionar lote" FICAM — sem o
+     botao, uma venda boitel nova nao teria como criar o primeiro lote, e a frase do
+     estado vazio ("Clique em 'Adicionar lote'") apontaria para um controle inexistente.
+     ⚠ E O `sticky` SAI JUNTO: com os numeros fora, quem congela e' o topo da aba, e dois
+     blocos grudados no `top-0` se sobreporiam.
+     ⚠ Omitido (compra e venda comum), tudo fica como era — byte a byte. */
+  ocultarTotais?: boolean;
   rotulos?: {
     salveIdentificacao?: string;
     voltarParaIdentificacao?: string;
@@ -131,6 +142,7 @@ function ValorInput({ value, onChange, disabled, placeholder, className }: {
 export function AbaNegociacaoLotes({
   categoria, categoriasDisponiveis, quantidadeNum, pesoKgNum, darkSelectClass,
   modoOC, operacaoPronta, lotesApi, somenteLeitura, fisicoBloqueado, onVoltarCompra, rotulos, valorProjetado = null, loteUnico = null,
+  ocultarTotais = false,
 }: Props) {
   /* ── MODO OC — delegado a um componente PROPRIO (PR-OC-UX-LOTE-C2-01) ──────
      O modal de lote precisa de estado (qual lote esta aberto), e hook nao pode
@@ -179,6 +191,10 @@ function NegociacaoOC({
   onVoltarCompra?: () => void;
   rotulos?: AbaNegociacaoLotesRotulos;
 }) {
+  /* ⚠ `ocultarTotais`, `loteUnico` e `valorProjetado` chegam pelo CLOSURE — esta funcao e'
+     ANINHADA em `AbaNegociacaoLotes` (medido: 142..371). Declara-los tambem como prop e
+     passa-los no call site, sem destructuring, criaria duas fontes com o corpo lendo so'
+     uma — a prop seria ignorada em silencio no dia em que divergissem. */
   const { lotes, adicionarLote, editarLote, removerLote, totais, loading } = lotesApi;
   /* Um so lugar decide o congelamento do fisico, para as tres colunas nao divergirem
      entre si numa edicao futura. Mantido do desenho anterior — e' regra de negocio
@@ -206,7 +222,9 @@ function NegociacaoOC({
           `sticky` se ancora nela e o resumo lateral fica parado.
           Fundo OPACO (`bg-card`) e `-mt-2 pt-2` cobrindo o padding do cartao — so no
           eixo vertical, que margem negativa lateral comeria as bordas. */}
-      <div className="sticky top-0 z-10 -mt-2 space-y-1.5 border-b bg-card pt-2 pb-2">
+      <div className={ocultarTotais
+        ? 'space-y-1.5'
+        : 'sticky top-0 z-10 -mt-2 space-y-1.5 border-b bg-card pt-2 pb-2'}>
         <div className="flex items-baseline justify-between gap-3">
           <span className="text-[15px] font-medium text-foreground min-w-0 truncate">Negociação dos Lotes</span>
           <div className="flex items-baseline gap-3 shrink-0">
@@ -241,6 +259,7 @@ function NegociacaoOC({
             ⚠ AUSENCIA E' TRACO. `brl` devolve 'R$ —' para valor nao positivo e
             `fmtKg` devolve '—'; sem lote nenhum os quatro imprimem traco sozinhos,
             sem `?? 0` tapando buraco. */}
+        {!ocultarTotais && (
         <div className="grid grid-cols-4 gap-2 rounded-md border bg-muted/20 px-3.5 py-[11px]">
           <div className="min-w-0">
             <div className="text-[11px] font-normal text-muted-foreground leading-none">Animais</div>
@@ -259,6 +278,7 @@ function NegociacaoOC({
             <div className="mt-1 text-[20px] font-medium tabular-nums leading-none text-primary">{brl(totais.valorNegociado)}</div>
           </div>
         </div>
+        )}
       </div>
 
       {!operacaoPronta ? (

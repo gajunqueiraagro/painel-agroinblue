@@ -49,8 +49,9 @@ import type { RecebimentoApi } from '@/hooks/useOperacaoRecebimento';
 import type { DocumentosApi } from '@/hooks/useOperacaoDocumentos';
 import type { EventosApi } from '@/hooks/useOperacaoEventos';
 import type { LiquidacaoApi } from '@/hooks/useOperacaoLiquidacao';
-import { BoitelBaseOperacional, BoitelResultadoCompacto, liquidoDaVendaBoitel, derivadosBoitel, PilulaCenario } from '@/components/venda/BoitelNegociacaoDerivado';
-import { BoitelBlocosModais, faltamDosCinco, type BoitelEdicao } from '@/components/venda/BoitelBlocosModais';
+import { BoitelTopoNegociacao, BoitelResultadoCompacto, liquidoDaVendaBoitel, derivadosBoitel, PilulaCenario } from '@/components/venda/BoitelNegociacaoDerivado';
+import { BoitelBlocosModais, CampoNum, faltamDosCinco, type BoitelEdicao } from '@/components/venda/BoitelBlocosModais';
+import { pesoMedioPorCabeca, valorPorKgNegociado } from '@/hooks/useCompraLotes';
 
 /* ⚠ "RECEBIMENTO" CHAMA-SE ENTREGA NA VENDA — o gado SAI. A coluna do banco já é
    genérica (`entrega_encerrada`), então o vocabulário muda só na tela.
@@ -379,6 +380,10 @@ export function VendaModalShell({
       loteUnico={ehBoitel ? {
         motivo: 'Boitel é um embarque só: a operação comercial é o lote. Para negociar outro embarque, crie outra venda.',
       } : null}
+      /* ⚠ SO' NA VENDA BOITEL — PR-OC-VENDA-LAYOUT-NEG-01. Os quatro numeros ja estao no
+         topo congelado da aba; repeti-los aqui era a duplicacao que o redesenho matou.
+         Titulo, contagem e "+ Adicionar lote" ficam. */
+      ocultarTotais={ehBoitel}
       rotulos={{
         salveIdentificacao: 'Salve a identificação da venda para adicionar os lotes da negociação.',
         voltarParaIdentificacao: 'Voltar para Venda',
@@ -553,36 +558,53 @@ export function VendaModalShell({
               <div className="space-y-2 min-w-0">
                 {/* ⚠ 'projetado' FIXO, e nao derivado: e' o unico cenario que esta tela
                     edita — o shell grava 'projetado' sempre em `salvarNegociacaoVendaOC`.
-                    PR-OC-VENDA-BOITEL-REALIZADO-01 e' quem passa a variar isto. */}
-                <BoitelBaseOperacional boitelData={boitelData} cenario="projetado" />
-                {/* PR-BOITEL-ACORDEAO-01 — 1.5fr / 1fr, gap 14px. O acordeao a' esquerda, o
-                    resultado a' direita. */}
-                <div className="grid grid-cols-1 xl:grid-cols-[1.5fr_1fr] gap-[14px] items-start">
-                  <div className="min-w-0 space-y-2">
-                    {/* ⚠ O LOTE VEM PRIMEIRO, e a ordem nao e' estetica: ele e' o comeco da
-                        negociacao. Sem lote nao ha cabecas nem peso, e os quatro blocos do
-                        boitel nao tem sobre o que calcular — a base operacional do painel
-                        deriva dele. Estava invertido, e a aba abria mostrando Adiantamento
-                        antes de existir o que adiantar. */}
-                    {abaLotes}
-                    {/* ⚠ AS QUATRO SECOES SO APARECEM COM VALOR E COM ONCHANGE. Sem os dois
-                        nao ha o que editar, e uma secao que nao abre nada seria a promessa
-                        nao cumprida que o proprio botao desta tela ja evitou. A pendencia
-                        aparece em ambar na LINHA FECHADA de cada secao. */}
-                    {boitelData && onBoitelChange && (
-                      <BoitelBlocosModais
-                        valor={boitelData}
-                        onChange={onBoitelChange}
-                        somenteLeitura={ocStatusComercial === 'cancelada'}
-                      />
-                    )}
-                  </div>
-                  {/* ⚠ A21 — NAO ROLA COM A LISTA. `sticky top-0` dentro da coluna que rola;
-                      o painel fica a' vista enquanto o operador percorre as secoes, que e' o
-                      ponto: mexer na diaria OLHANDO a margem. */}
-                  <div className="xl:sticky xl:top-0">
-                    <BoitelResultadoCompacto boitelData={boitelData} cenario="projetado" />
-                  </div>
+                    PR-OC-VENDA-BOITEL-REALIZADO-01 e' quem passa a variar isto.
+                    ⚠ O TOPO NAO DERIVA: os quatro numeros saem de `lotesApi.totais` pelos
+                    MESMOS dois helpers que o cabecalho de lotes usa. Cabecas e peso do
+                    boitel SAO os do lote (ver `boitelDaVenda`), entao nao ha segunda
+                    fonte — ha uma so', agora mostrada uma vez so'. */}
+                <BoitelTopoNegociacao
+                  cabecas={lotesApi?.totais.animais ?? 0}
+                  pesoMedioKg={lotesApi ? pesoMedioPorCabeca(lotesApi.totais) : null}
+                  valorPorKg={lotesApi ? valorPorKgNegociado(lotesApi.totais) : null}
+                  valorTotal={lotesApi?.totais.valorNegociado ?? 0}
+                  cenario="projetado"
+                />
+
+                {/* ⚠ O LOTE VEM PRIMEIRO, e a ordem nao e' estetica: ele e' o comeco da
+                    negociacao. Sem lote nao ha cabecas nem peso, e os blocos do boitel nao
+                    tem sobre o que calcular — o topo deriva dele. */}
+                {abaLotes}
+
+                {/* ─── A GRADE DOS TRES CARDS ─────────────────────────────────────────
+                    PR-OC-VENDA-LAYOUT-NEG-01, item 2. `BoitelBlocosModais` devolve um
+                    FRAGMENT com dois cards, entao os tres sao celulas irmas deste grid.
+                    ⚠ O BREAKPOINT E' `lg` (1024px), e a escolha vem de uma medida, nao de
+                    gosto: o modal e' `max-w-5xl`, que sao exatamente 1024px — abaixo disso
+                    a janela e' que manda, e tres colunas nao cabem sem espremer campo. As
+                    proporcoes 1fr/1fr/0.8fr dao mais largura a quem tem CAMPOS e menos a
+                    quem so' tem rotulo-valor.
+                    ⚠ `items-start` para os cards nao esticarem ate' a altura do mais alto —
+                    um card curto com um vazio embaixo parece conteudo faltando. */}
+                <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_0.8fr] gap-[14px] items-start">
+                  {boitelData && onBoitelChange && (
+                    <BoitelBlocosModais
+                      valor={boitelData}
+                      onChange={onBoitelChange}
+                      somenteLeitura={ocStatusComercial === 'cancelada'}
+                    />
+                  )}
+                  {/* ⚠ O CAMPO DO CUSTO DE OPORTUNIDADE E MONTADO AQUI e entregue ao card
+                      como `ReactNode`. Ele saiu do bloco de Custos por decisao do Gabriel
+                      (custo com custo, decisao com decisao) e o card de Resultado nao pode
+                      importar o `CampoNum` sem fechar um ciclo — ver a nota la'. */}
+                  <BoitelResultadoCompacto boitelData={boitelData} cenario="projetado"
+                    campoOportunidade={boitelData && onBoitelChange ? (
+                      <CampoNum label="Custo de oportunidade" valor={boitelData.custoOportunidade}
+                        sufixo="R$/kg" desabilitado={ocStatusComercial === 'cancelada'}
+                        onChange={(v) => onBoitelChange({ ...boitelData, custoOportunidade: v })} />
+                    ) : undefined}
+                  />
                 </div>
               </div>
             ) : abaLotes
