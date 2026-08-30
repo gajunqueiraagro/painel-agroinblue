@@ -975,7 +975,17 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
     setSubcentro(itemSel.subcentro);
   }, [itemSel]);
 
-  const planoTipo = tipoOperacao === 'compra' ? '2-Saídas' : '1-Entradas';
+  /* ⚠ A VENDA VE OS DOIS LADOS — PR-OC-SENTIDO-POR-PLANO-01. Este filtro era a SEGUNDA
+     copia da premissa "o sentido vem do tipo da operacao"; a primeira estava na
+     `oc_materializar_programacao` e ja foi corrigida (o fluxo passou a sair do plano do
+     compromisso). Enquanto ele restringia, o 5010 (Ajustes · Adiantamento de Boitel, que
+     e' '2-Saidas') nao aparecia numa venda — o adiantamento do boitel nao era sequer
+     escolhivel, e uma venda TEM saida de caixa: o adiantamento que o produtor paga.
+     ⚠ A COMPRA CONTINUA SO EM SAIDAS, e nao por simetria: nao ha caso medido de entrada
+     numa compra, e as 33 linhas de '1-Entradas' do plano sao todas de receita. Abrir os
+     dois lados la seria oferecer 33 opcoes erradas para resolver zero caso real. Se
+     aparecer devolucao ou bonificacao de fornecedor, a decisao volta. */
+  const planoTipos = tipoOperacao === 'compra' ? ['2-Saídas'] : ['1-Entradas', '2-Saídas'];
   const componenteOptions = useMemo(() => comps.porNatureza(natureza), [comps, natureza]);
 
   const nomeComponente = useMemo(
@@ -1019,7 +1029,7 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
      VAZIA e ninguem conseguiria criar compromisso. Nesse caso cai na lista
      inteira — restringir e' conveniencia, nunca uma parede. */
   const subcentroOptions = useMemo(() => {
-    const doTipo = plano.rows.filter(r => r.tipo_operacao === planoTipo && r.subcentro);
+    const doTipo = plano.rows.filter(r => r.tipo_operacao && planoTipos.includes(r.tipo_operacao) && r.subcentro);
     const restritos = tipoOperacao === 'compra'
       ? doTipo.filter(r => r.centro_custo === CENTRO_CUSTO_COMPRA_BOVINOS)
       : [];
@@ -1027,7 +1037,9 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
     const set = new Set<string>();
     base.forEach(r => { if (r.subcentro) set.add(r.subcentro); });
     return Array.from(set).sort().map(s => ({ value: s, label: s }));
-  }, [plano.rows, planoTipo, tipoOperacao]);
+    /* eslint-disable-next-line react-hooks/exhaustive-deps — `planoTipos` e' derivado de
+       `tipoOperacao`, que ja esta na lista; incluir o array recriaria o memo a cada render. */
+  }, [plano.rows, tipoOperacao]);
 
   // GUARD "Compra principal": um compromisso PRINCIPAL não pode ser criado sem os lotes carregados,
   //   pois o Produto seria o fallback "Compra principal" (dados de negociação obsoletos/ausentes).
