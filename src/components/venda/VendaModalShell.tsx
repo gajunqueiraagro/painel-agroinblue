@@ -273,10 +273,19 @@ export function VendaModalShell({
       favorecidoId: compradorId || null,
       vencimentoPrevisto: boitelData.dataAdiantamento || null,
     });
-    if (boitelData.custoFrete > 0) linhas.push({
+    /* ⚠ A LINHA OBEDECE AO SELETOR — PR-OC-VENDA-REALIZADO-01A. Ela somava SO' o frete,
+       porque "fora do boitel" era regra cravada e o frete era o unico que estava fora.
+       Agora cada despesa declara o lado, e `custosDoProdutor` e' o complemento exato do
+       `descontoDoAcerto`: entra aqui o que o operador marcou como "produtor", sai o que
+       ele marcou como "boitel" — que nao tem caixa proprio, e' desconto no repasse.
+       ⚠ UMA FONTE SO'. O valor vem do motor, e nao de uma soma repetida aqui: somar
+       `custoFrete + custoNotasEnvio + despesasAbate` na tela seria a segunda copia da
+       regra, e ela divergiria do liquido no primeiro seletor que alguem virasse. */
+    const foraDoBoitel = derivadosBoitel(boitelData).custosDoProdutor;
+    if (foraDoBoitel > 0) linhas.push({
       natureza: 'obrigacao', componente: 'frete',
       subcentro: SUBCENTRO_DESPESA_VENDA,
-      valor: Math.round(boitelData.custoFrete * 100) / 100,
+      valor: Math.round(foraDoBoitel * 100) / 100,
       rotulo: 'Despesas fora do boitel',
       descricao: `${rot} - Despesas fora do boitel`,
       favorecidoId: compradorId || null,

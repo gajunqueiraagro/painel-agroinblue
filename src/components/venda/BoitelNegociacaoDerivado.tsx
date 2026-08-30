@@ -46,6 +46,23 @@ import type { BoitelData } from '@/components/BoitelPlanningDialog';
 export interface BoitelEdicao extends BoitelData {
   morteQuantidade?: number;
   morteValorIndenizacao?: number;
+  /* ─── DE QUE LADO DO ACERTO MORA CADA DESPESA ────────────────────────────────
+     PR-OC-VENDA-REALIZADO-01A. Ate' aqui a regra era CRAVADA no motor — o frete sempre
+     fora do custo do boitel, as despesas de abate sempre dentro — e nao havia como o
+     operador descrever um contrato que combinasse diferente.
+     `true` = NO BOITEL: desconta do repasse, sem caixa proprio.
+     `false` = DO PRODUTOR: fica fora do acerto e vira previsao de caixa no Financeiro.
+     ⚠ OS DEFAULTS SAO A REGRA DE HOJE (frete fora, abate dentro), e e' isso que faz
+     nenhum numero existente mudar. Diaria e sanidade NAO tem flag: sao sempre do boitel,
+     e uma pergunta sem duas respostas possiveis so' gasta a atencao de quem le'.
+     ⚠ Estendem `BoitelEdicao`, e nao `BoitelData`: o simulador legado nao os conhece. */
+  custoFreteNoBoitel?: boolean;
+  despesasAbateNoBoitel?: boolean;
+  notasEnvioNoBoitel?: boolean;
+  /** Despesa nova — guias de envio. Nasce zerada, do lado do produtor. */
+  custoNotasEnvio?: number;
+  /** Data em que o abate aconteceu. Do cenario REALIZADO; vazia enquanto nao acontecer. */
+  dataAbate?: string;
 }
 
 /** As cabeças que SAÍRAM do boitel — o lote menos as mortes. */
@@ -125,7 +142,30 @@ export function derivadosBoitel(data: BoitelEdicao) {
      real: 109 x 104 x 18,93. */
   if (mc === 'diaria') cDT = cd * dias * sairam;
   else if (mc === 'arroba') cDT = ca * aP;
-  const cOp = cDT + cs + oc + cf;
+  /* ─── DE QUE LADO DO ACERTO MORA CADA DESPESA ────────────────────────────────
+     PR-OC-VENDA-REALIZADO-01A. Ate' aqui a regra era CRAVADA: o frete SEMPRE fora do
+     custo do boitel, as despesas de abate SEMPRE dentro. Agora cada uma declara o lado, e
+     os defaults reproduzem a regra antiga — nenhum numero existente muda.
+
+     ⚠ AS FLAGS NAO MUDAM O RESULTADO DO PRODUTOR, e essa e' a chave para nao errar aqui.
+     Elas decidem ONDE cada custo e' cobrado (descontado do repasse x pago por fora), nao
+     SE ele existe. Por isso `rLiq`, `cPArr` e `coT` NAO consultam flag nenhuma: quem soma
+     tudo soma tudo, dos dois lados. O que as flags governam e' o LIQUIDO DO ACERTO (o que
+     o boitel repassa) e a PREVISAO DE CAIXA (o que sai do bolso do produtor).
+     ⚠ `?? default` em vez de `!` — os tres booleanos sao opcionais no tipo, e um registro
+     hidratado por caminho que nao passe pelo `MAPA_BOITEL` chegaria `undefined`. O default
+     e' o do banco, letra por letra. */
+  const cne = data.custoNotasEnvio || 0;
+  const freteNoBoitel = data.custoFreteNoBoitel ?? false;
+  const abateNoBoitel = data.despesasAbateNoBoitel ?? true;
+  const notasNoBoitel = data.notasEnvioNoBoitel ?? false;
+
+  /* ⚠ `cne` ENTRA NO CUSTO OPERACIONAL como o frete — e' desembolso, e o custo da arroba
+     produzida tem de conhecê-lo. Com a despesa nova zerada, `cOp`, `cPArr` e `rLiq` sao
+     identicos aos de antes, ao centavo.
+     ⚠ `cAb` NAO ENTRA NO `cOp`, e nunca entrou: ele ja e' descontado via `fLiq`. Soma-lo
+     aqui o cobraria duas vezes no `rLiq`. */
+  const cOp = cDT + cs + oc + cf + cne;
   const coT = co * pi * q;
   let rProd = fLiq, pParte = 0, pArr = 0;
   if (mc === 'parceria') { pArr = aP * (pp / 100); pParte = pArr * pva; rProd = fLiq - pParte; }
@@ -136,6 +176,27 @@ export function derivadosBoitel(data: BoitelEdicao) {
      PR-BOITEL-ACORDEAO-01 mostra "Custo da arroba", e ele é este. */
   const cPArr = aP > 0 ? cOp / aP : 0;
   const custoTotalBoitel = cDT + cs + oc;
+
+  /* ─── UMA COMPOSICAO, NUNCA DOIS CAMINHOS ────────────────────────────────────
+     O que o boitel desconta do repasse: o que ele sempre cobra (diarias, sanidade,
+     outros) MAIS as despesas que o contrato pos do lado dele.
+     ⚠ `cAb` DEIXOU DE SER SUBTRACAO SEPARADA. O liquido era
+     `fba - custoTotalBoitel - cAb`, com o abate por fora da soma como se fosse outra
+     natureza de coisa; agora e' uma parcela CONDICIONADA como as outras duas. Uma
+     composicao so' — e o dia em que uma quarta despesa aparecer, ela entra aqui e em
+     nenhum outro lugar. */
+  const descontoDoAcerto = custoTotalBoitel
+    + (freteNoBoitel ? cf : 0)
+    + (abateNoBoitel ? da : 0)
+    + (notasNoBoitel ? cne : 0);
+
+  /* O QUE SAI DO BOLSO DO PRODUTOR — o complemento exato do desconto. A aba Financeiro
+     le' daqui para montar a linha de previsao de caixa: o que o operador marcar como
+     "produtor" entra na previsao, o que marcar "boitel" sai dela. */
+  const custosDoProdutor = (freteNoBoitel ? 0 : cf)
+    + (abateNoBoitel ? 0 : da)
+    + (notasNoBoitel ? 0 : cne);
+
   const margemVenda = fba > 0 ? ((fba - cOp) / fba * 100) : 0;
 
   /* ─── O ANTECIPADO ────────────────────────────────────────────────────────────
@@ -177,10 +238,11 @@ export function derivadosBoitel(data: BoitelEdicao) {
     ? Math.round(((data.valorAdiantamentoDiarias || 0) + (data.valorAdiantamentoSanitario || 0)
                 + (data.valorAdiantamentoOutros || 0)) * 100) / 100
     : 0;
-  const saldoReceberBase = Math.round((fba - custoTotalBoitel - cAb + valorTotalAntecipadoCalc) * 100) / 100;
+  const saldoReceberBase = Math.round((fba - descontoDoAcerto + valorTotalAntecipadoCalc) * 100) / 100;
 
   return { ple, ganho, pf, aEF, aS, aPcab, aP, aTS, sairam, gmc, fba, cAb, fLiq, cDT, cOp, coT, cPArr,
     pParte, rProd, rLiq, rLCab, custoTotalBoitel, margemVenda,
+    descontoDoAcerto, custosDoProdutor, cne,
     valorTotalAntecipadoCalc, saldoReceberBase };
 }
 
@@ -238,8 +300,12 @@ export function comparativoOportunidade(d: BoitelEdicao | null): ComparativoOpor
    LIQUIDO, nunca o bruto — é o que sobra para o produtor depois do que o boitel cobra e
    do que o abate custa.
 
-       liquido = fba - custoTotalBoitel - cAb
+       liquido = fba - descontoDoAcerto
 
+   ⚠ A COMPOSICAO PASSOU A OBEDECER AS FLAGS — PR-OC-VENDA-REALIZADO-01A. Era
+   `fba - custoTotalBoitel - cAb`, com o frete sempre fora e o abate sempre dentro; agora
+   `descontoDoAcerto` reune o que o CONTRATO pos do lado do boitel. Com os defaults o
+   numero e' o mesmo ao centavo (conferido na b58bf556: R$ 565.217,00 antes e depois).
    ⚠ OS TRES SAEM DE `derivadosBoitel`, e nenhum é reescrito aqui. Uma segunda fórmula
    para a mesma pergunta é como dois números começam a divergir — a lição do
    `pesoMedioPorCabeca`, que este projeto já pagou uma vez.
@@ -257,7 +323,7 @@ export function liquidoDaVendaBoitel(d: BoitelEdicao | null): number | null {
   if (!d) return null;
   if (exigencias(d).some(e => !e.presente)) return null;
   const x = derivadosBoitel(d);
-  return Math.round((x.fba - x.custoTotalBoitel - x.cAb) * 100) / 100;
+  return Math.round((x.fba - x.descontoDoAcerto) * 100) / 100;
 }
 
 /* ─── OS UNITARIOS DO LIQUIDO ──────────────────────────────────────────────────

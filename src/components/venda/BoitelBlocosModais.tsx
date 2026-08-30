@@ -109,6 +109,22 @@ const MAPA_BOITEL: CampoBoitel[] = [
   { col: 'adiantamento_observacao',      campo: 'adiantamentoObservacao',      tipo: 'texto' },
   { col: 'morte_quantidade',             campo: 'morteQuantidade',             tipo: 'int', zeroEValor: true },
   { col: 'morte_valor_indenizacao',      campo: 'morteValorIndenizacao',       tipo: 'num', zeroEValor: true },
+  /* ─── AS CINCO DE PR-OC-VENDA-REALIZADO-01A ─────────────────────────────────────
+     ⚠ ELAS EXISTIAM NO BANCO E NAO EXISTIAM AQUI. Enquanto estiveram fora deste mapa nao
+     eram gravadas NEM hidratadas: a linha nascia com os defaults e qualquer escolha da
+     tela sumia ao reabrir. E' o mesmo defeito do `pctAdiantamentoDiarias`, visto do outro
+     lado — la' o motor lia um campo que a tabela nao tinha; aqui a tabela tinha campos
+     que o mapa nao lia.
+     ⚠ `custo_notas_envio` E' `zeroEValor`: zero e' resposta ("nao houve guia"), e nao
+     ausencia — o campo nasce zerado de proposito. Sem a marca, `v || null` mandaria nulo
+     e a hidratacao devolveria 0 de qualquer forma, mas por acidente, nao por regra.
+     ⚠ `data_abate` E 'texto' como as outras datas deste mapa (`data_envio`,
+     `data_adiantamento`): o front trafega ISO em string e o `::date` da RPC converte. */
+  { col: 'custo_frete_no_boitel',        campo: 'custoFreteNoBoitel',          tipo: 'bool' },
+  { col: 'despesas_abate_no_boitel',     campo: 'despesasAbateNoBoitel',       tipo: 'bool' },
+  { col: 'notas_envio_no_boitel',        campo: 'notasEnvioNoBoitel',          tipo: 'bool' },
+  { col: 'custo_notas_envio',            campo: 'custoNotasEnvio',             tipo: 'num', zeroEValor: true },
+  { col: 'data_abate',                   campo: 'dataAbate',                   tipo: 'texto' },
 ];
 
 /** O payload de `oc_salvar_boitel` — a IDA, derivada do mapa. */
@@ -163,6 +179,13 @@ export function boitelVazio(): BoitelEdicao {
     possuiAdiantamento: false, dataAdiantamento: '', pctAdiantamentoDiarias: 0,
     valorAdiantamentoDiarias: 0, valorAdiantamentoSanitario: 0, valorAdiantamentoOutros: 0,
     valorTotalAntecipado: 0, adiantamentoObservacao: '',
+    /* ⚠ OS DEFAULTS SAO OS DO BANCO, letra por letra — PR-OC-VENDA-REALIZADO-01A. Uma
+       venda boitel NOVA nasce aqui, antes de existir linha em `zoo_operacao_boitel`; se
+       estes valores divergissem dos `DEFAULT` da tabela, a tela mostraria uma composicao
+       e o primeiro salvamento gravaria outra. Frete FORA do acerto, abate DENTRO, notas
+       de envio fora e zeradas — a regra cravada de hoje, agora declarada. */
+    custoFreteNoBoitel: false, despesasAbateNoBoitel: true,
+    notasEnvioNoBoitel: false, custoNotasEnvio: 0, dataAbate: '',
   };
 }
 
@@ -216,11 +239,13 @@ export function boitelVazio(): BoitelEdicao {
    e linha derivada continuam morando neste invólucro, num lugar so'.
    ⚠ O NAO-MONETARIO (dias, GMD, percentuais) continua no caminho de sempre: `casas` e
    `toLocaleString`. Dinheiro tem campo proprio; contagem e percentual nao. */
-export function CampoNum({ label, valor, onChange, casas = 2, sufixo, obrigatorio, derivado, desabilitado, titulo, moeda }: {
+export function CampoNum({ label, valor, onChange, casas = 2, sufixo, obrigatorio, derivado, desabilitado, titulo, moeda, extra }: {
   label: string; valor: number; onChange: (v: number) => void; casas?: number;
   sufixo?: string; obrigatorio?: boolean; derivado?: string | null; desabilitado?: boolean;
   /** Campo de dinheiro: usa o `CampoMoeda` do sistema, com o R$ dentro do valor. */
   moeda?: boolean;
+  /** Renderizado ABAIXO do campo, indentado na coluna dele — hoje, o `SeletorLado`. */
+  extra?: React.ReactNode;
   /* ⚠ O TEXTO INTEGRAL quando o rotulo visivel foi encurtado — PR-...-01B. O `label` e' o
      que cabe numa linha; `titulo` e' o que o campo REALMENTE pergunta, e vai no `title`.
      Omitido, o proprio label serve de titulo: nunca fica sem. */
@@ -282,8 +307,36 @@ export function CampoNum({ label, valor, onChange, casas = 2, sufixo, obrigatori
               {derivado ?? '—'}
             </div>
           )}
+          {extra}
         </div>
       </div>
+  );
+}
+
+/* ─── DE QUE LADO DO ACERTO ────────────────────────────────────────────────────
+   PR-OC-VENDA-REALIZADO-01A. Duas opcoes, e a escolha muda ONDE a despesa e' cobrada:
+   "boitel" desconta do repasse; "produtor" fica fora do acerto e vira previsao de caixa
+   na aba Financeiro.
+   ⚠ O IDIOMA E O DO SIM/NAO DO ADIANTAMENTO — dois `<Button>` com
+   `variant={ativo ? 'default' : 'outline'}`, o precedente vivo deste arquivo. A casa TEM
+   um `ToggleGroup` em `ui/`, mas ele nao e' usado neste padrao em lugar nenhum do modal;
+   convergir os dois e' PR proprio, e nao carona deste.
+   ⚠ VAI NA LINHA ABAIXO DO CAMPO, indentado na coluna dele — nao cabe ao lado: rotulo 132
+   + campo 150 + sufixo 46 ja da' 328 numa coluna de 352, e o seletor estouraria. Mesmo
+   lugar das ajudas derivadas, e pela mesma razao: fala daquele numero.
+   ⚠ O `title` CARREGA A EXPLICACAO INTEIRA — o piso de 10px vale para o texto da tela,
+   nao para o que o mouse revela. */
+function SeletorLado({ noBoitel, onChange, desabilitado }: {
+  noBoitel: boolean; onChange: (v: boolean) => void; desabilitado?: boolean;
+}) {
+  return (
+    <div className="mt-1 flex w-fit items-center gap-1"
+      title="boitel = desconta do acerto · produtor = caixa próprio, vira previsão no financeiro">
+      <Button type="button" size="sm" variant={noBoitel ? 'default' : 'outline'} disabled={desabilitado}
+        className="h-6 text-[11px] px-2" onClick={() => onChange(true)}>boitel</Button>
+      <Button type="button" size="sm" variant={!noBoitel ? 'default' : 'outline'} disabled={desabilitado}
+        className="h-6 text-[11px] px-2" onClick={() => onChange(false)}>produtor</Button>
+    </div>
   );
 }
 
@@ -461,12 +514,28 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
               abaixo do campo numa coluna de 180px e empurrava o vizinho; a informacao
               continua inteira, so' deixou de gastar altura. Na tela fica o numero, que e'
               o que se compara de relance. */}
+          {/* ⚠ O `title` E O DERIVADO PARARAM DE AFIRMAR O LADO — PR-OC-VENDA-REALIZADO-01A.
+              Diziam "custo do produtor, fora do custo do boitel" como se fosse lei; agora
+              e' escolha, e quem a responde e' o seletor logo abaixo. Um texto fixo ao lado
+              de um seletor que o contradiz e' a nona instrucao sem destino. */}
           <CampoNum desabilitado={somenteLeitura} label="Frete (total)" moeda
-            titulo="Frete (total) — custo do produtor, pago por fora; não entra no custo do boitel"
+            titulo="Frete (total) — o seletor abaixo diz de que lado do acerto ele mora"
             valor={d.custoFrete} onChange={v => set('custoFrete', v)}
-            derivado={d.custoFrete > 0 ? `${formatMoeda(d.custoFrete / (qtd || 1))}/cab · fora do custo` : 'Fora do custo do boitel'} />
+            derivado={d.custoFrete > 0 ? `${formatMoeda(d.custoFrete / (qtd || 1))}/cab` : null}
+            extra={<SeletorLado noBoitel={d.custoFreteNoBoitel ?? false} desabilitado={somenteLeitura}
+              onChange={v => set('custoFreteNoBoitel', v)} />} />
           <CampoNum desabilitado={somenteLeitura} label="Outros (total)" moeda valor={d.outrosCustos} onChange={v => set('outrosCustos', v)}
             derivado={porCabeca(d.outrosCustos, qtd)} />
+          {/* ⚠ DESPESA NOVA — PR-OC-VENDA-REALIZADO-01A. As guias de envio (Fundersul,
+              Iagro) nao tinham campo: iam somadas em "Outros" e perdiam a identidade, e
+              sem identidade nao ha como dizer de que lado do acerto elas moram. Nasce
+              zerada e do lado do PRODUTOR, que e' o caso comum. */}
+          <CampoNum desabilitado={somenteLeitura} label="Notas de envio" moeda
+            titulo="Notas de envio — guias tipo Fundersul e Iagro"
+            valor={d.custoNotasEnvio ?? 0} onChange={v => set('custoNotasEnvio', v)}
+            derivado={(d.custoNotasEnvio ?? 0) > 0 ? `${formatMoeda((d.custoNotasEnvio ?? 0) / (qtd || 1))}/cab` : null}
+            extra={<SeletorLado noBoitel={d.notasEnvioNoBoitel ?? false} desabilitado={somenteLeitura}
+              onChange={v => set('notasEnvioNoBoitel', v)} />} />
           {/* ⚠ O CUSTO DE OPORTUNIDADE VOLTOU PARA CA — forma final do 01B. Ele chegou a
               morar na faixa de Resultado (onde a COMPARACAO acontece), mas a faixa final
               nao tem campo: ela e' leitura. O numero segue sendo termo de comparacao e
@@ -491,7 +560,9 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
           <CampoNum desabilitado={somenteLeitura} label="Preço de venda" moeda valor={d.precoVendaArroba} onChange={v => set('precoVendaArroba', v)} sufixo="/@" obrigatorio />
           {/* ⚠ TOTAL, não por cabeça. Medido no acerto real: DAEMS/GTA de R$ 4.514,57
               contra faturamento de R$ 813 mil. */}
-          <CampoNum desabilitado={somenteLeitura} label="Desp. notas/docs. abate" moeda titulo="Despesas com notas e documentos no abate" valor={d.despesasAbate} onChange={v => set('despesasAbate', v)} />
+          <CampoNum desabilitado={somenteLeitura} label="Desp. notas/docs. abate" moeda titulo="Despesas com notas e documentos no abate" valor={d.despesasAbate} onChange={v => set('despesasAbate', v)}
+            extra={<SeletorLado noBoitel={d.despesasAbateNoBoitel ?? true} desabilitado={somenteLeitura}
+              onChange={v => set('despesasAbateNoBoitel', v)} />} />
         </div>
 
         {/* ⚠ A MORTE FICOU AQUI, e os dois campos juntos. É no acerto que ela se sabe e se
