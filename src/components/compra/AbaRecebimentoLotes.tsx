@@ -155,15 +155,19 @@ function ReceberLoteDialog({ lote, rotulo, pesoSugerido, hoje, isCompra, saving,
               placeholder="0" className="mt-0.5 h-8 text-[12px] text-right tabular-nums" />
           </div>
           {/* A15 — peso em kg com duas casas; o sugerido e' o peso medio NEGOCIADO do
-              lote. Fora de compra nao ha peso a registrar. */}
-          {isCompra && (
-            <div>
-              <label className="text-[10px] text-muted-foreground">Peso médio (kg)</label>
-              <Input inputMode="decimal" value={pesoMedio} onChange={e => setPesoMedio(e.target.value)}
-                placeholder="—" className="mt-0.5 h-8 text-[12px] text-right tabular-nums" />
-            </div>
-          )}
-          <div className={isCompra ? 'col-span-2' : ''}>
+              lote, e e' EDITAVEL: o embarque real diverge do negociado com frequencia.
+              ⚠ TAMBEM NA VENDA — PR-OC-VENDA-ENTREGA-01F. O campo era escondido fora da
+              compra por desenho anterior a esta frente, e a saida nascia sem peso: na lista
+              de vendas, P.Vivo, P.@, R$/@ e R$/kg ficavam em travessao, porque os quatro
+              derivam dele. A RPC sempre aceitou o peso e o lancamento sempre o gravou —
+              so' o front nao mandava. */}
+          <div>
+            <label className="text-[10px] text-muted-foreground">Peso médio (kg)</label>
+            <Input inputMode="decimal" value={pesoMedio} onChange={e => setPesoMedio(e.target.value)}
+              onBlur={() => { const n = parseNumericValue(pesoMedio); if (n) setPesoMedio(formatMed2(n)); }}
+              placeholder="—" className="mt-0.5 h-8 text-[12px] text-right tabular-nums" />
+          </div>
+          <div className="col-span-2">
             <label className="text-[10px] text-muted-foreground">Data</label>
             <DatePicker value={data} onChange={setData} className="mt-0.5 h-8 text-[12px]" />
           </div>
@@ -243,7 +247,10 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
       data: dados.data || dataPadrao,
       categoria: l.categoria ?? '',
       quantidade: Math.trunc(q),
-      pesoMedio: isCompra && pm ? pm : null,
+      /* ⚠ SEM `isCompra` — PR-OC-VENDA-ENTREGA-01F. O peso vale nos dois sentidos: na
+         compra descreve o que chegou, na venda o que saiu, e os derivados da lista de
+         vendas dependem dele. Null so' quando nao ha numero. */
+      pesoMedio: pm || null,
       observacao: '',
     });
   };
