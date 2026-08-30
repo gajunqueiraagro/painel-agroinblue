@@ -38,6 +38,8 @@ import type { CompraLotesApi } from '@/hooks/useCompraLotes';
 import { AbaNegociacaoLotes } from '@/components/compra/AbaNegociacaoLotes';
 import { AbaDocumentosOC } from '@/components/compra/AbaDocumentosOC';
 import { AbaAuditoriaOC } from '@/components/compra/AbaAuditoriaOC';
+import { AbaRecebimentoLotes } from '@/components/compra/AbaRecebimentoLotes';
+import type { RecebimentoApi } from '@/hooks/useOperacaoRecebimento';
 import type { DocumentosApi } from '@/hooks/useOperacaoDocumentos';
 import type { EventosApi } from '@/hooks/useOperacaoEventos';
 import type { LiquidacaoApi } from '@/hooks/useOperacaoLiquidacao';
@@ -65,7 +67,7 @@ function abasDaVenda(temOperacao: boolean) {
   return [
     { key: 'venda',        label: 'Venda',        enabled: true,        motivo: undefined },
     { key: 'negociacao',   label: 'Negociação',   enabled: true,        motivo: undefined },
-    { key: 'entrega',      label: 'Entrega',      enabled: false,       motivo: 'em breve' },
+    { key: 'entrega',      label: 'Entrega',      enabled: temOperacao, motivo: temOperacao ? undefined : semOperacao },
     { key: 'documentos',   label: 'Documentos',   enabled: temOperacao, motivo: temOperacao ? undefined : semOperacao },
     { key: 'financeiro',   label: 'Financeiro',   enabled: temOperacao, motivo: temOperacao ? undefined : semOperacao },
     { key: 'auditoria',    label: 'Auditoria',    enabled: temOperacao, motivo: temOperacao ? undefined : semOperacao },
@@ -128,6 +130,8 @@ export interface VendaModalShellProps {
   documentosApi?: DocumentosApi;
   eventosApi?: EventosApi;
   liquidacaoApi?: LiquidacaoApi;
+  recebimentoApi?: RecebimentoApi;
+  ocEntregaEncerrada?: boolean;
   /** Nada mudou desde a ultima gravacao bem-sucedida — o botao apaga. */
   semAlteracoes?: boolean;
   onFechar: () => void;
@@ -139,7 +143,8 @@ export function VendaModalShell({
   propriedadeDestino, setPropriedadeDestino,
   vendaTipoVenda, setVendaTipoVenda, observacao, setObservacao,
   ocOperacaoId, ocStatusComercial, lotesApi, boitelData = null, onBoitelChange,
-  documentosApi, eventosApi, liquidacaoApi, categoria, categoriasDisponiveis,
+  documentosApi, eventosApi, liquidacaoApi, recebimentoApi, ocEntregaEncerrada = false,
+  categoria, categoriasDisponiveis,
   quantidadeNum, pesoKgNum, submitting, onSalvarOperacao, onSalvarNegociacao, semAlteracoes = false, onFechar,
 }: VendaModalShellProps) {
   const [abaAtiva, setAbaAtiva] = useState<string>('venda');
@@ -262,6 +267,46 @@ export function VendaModalShell({
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] lg:grid-rows-[minmax(0,1fr)] gap-3 p-4 h-[69vh] overflow-y-auto lg:overflow-hidden bg-muted/30">
         <div className="space-y-2 min-w-0 lg:min-h-0 lg:overflow-y-auto">
+          {/* ── ENTREGA ────────────────────────────────────────────────────────────
+              ⚠ A MESMA GRADE DA COMPRA, com o vocabulario trocado por dicionario. O gesto
+              e' o mesmo — dizer quantos animais de cada lote se moveram, em que dia —, e o
+              que inverte e' o SENTIDO: na compra o gado entra, aqui ele sai do saldo.
+              ⚠ `isCompra={false}` NAO E NOVIDADE: o componente ja' distinguia os dois para
+              o campo de peso, que so' a compra pede. Ele foi escrito prevendo este dia.
+              ⚠ SO O VERBO MUDA. Quantidade, data e categoria descrevem o mesmo fato nos
+              dois lados, e por isso nenhum rotulo de CAMPO entra no dicionario. */}
+          {abaAtiva === 'entrega' && recebimentoApi ? (
+            <AbaRecebimentoLotes
+              api={recebimentoApi}
+              operacaoPronta={!!ocOperacaoId}
+              concluida={ocStatusComercial === 'fechada'}
+              encerrada={ocEntregaEncerrada}
+              isCompra={false}
+              categoriasDisponiveis={categoriasDisponiveis}
+              documentosApi={documentosApi}
+              somenteLeitura={ocStatusComercial === 'cancelada'}
+              onVoltarNegociacao={() => setAbaAtiva('negociacao')}
+              rotulos={{
+                tituloSecao: 'Entrega por lote na fazenda',
+                tituloDialogo: (r) => `Entregar · ${r}`,
+                jaMovimentado: 'já entregue',
+                informeQuantidade: 'Informe a quantidade entregue',
+                indisponivelTitulo: 'Entrega indisponível — negociação ainda não concluída',
+                indisponivelDetalhe: 'Conclua a negociação (botão “Concluir negociação”) para registrar a entrega física.',
+                movimentarTodos: 'Entregar todos conforme negociado',
+                registrarDoLote: 'Registrar a entrega deste lote',
+                colunaData: 'Entrega',
+                rotuloTotal: 'Entregue',
+                tituloEncerrar: 'Encerrar entrega',
+                nenhumMovimentado: 'Nenhum animal foi entregue. Deseja encerrar esta entrega mesmo assim?',
+                placeholderJustificativa: 'Justifique a diferença / ausência de entrega',
+                tituloReabrir: 'Reabrir entrega',
+                avisoReabrir: (<>Esta ação é <b>auditada</b>: reabre a entrega para novas saídas e fica registrada com o motivo informado. <b>Não</b> altera a negociação — se a operação estiver programada, a entrega seguirá indisponível até a negociação ser concluída.</>),
+                motivoEncerrarPadrao: 'encerramento pela aba Entrega',
+                motivoEstornoPadrao: 'estorno pela aba Entrega',
+              }}
+            />
+          ) : (<>
           {/* ── DOCUMENTOS ─────────────────────────────────────────────────────────
               ⚠ A MESMA ABA DA COMPRA, com as MESMAS props. Ela e' generica de operacao —
               documento fiscal nao muda de natureza porque o gado entra ou sai.
@@ -425,6 +470,7 @@ export function VendaModalShell({
             </div>
           </div>
           )}
+          </>)}
         </div>
 
         {/* RESUMO LATERAL — idioma do ResumoLateralOC. */}

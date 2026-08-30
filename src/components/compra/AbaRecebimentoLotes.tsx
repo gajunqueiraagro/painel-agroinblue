@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Undo2, Lock, FileText, AlertTriangle } from 'lucide-react';
@@ -24,6 +24,35 @@ interface Props {
   documentosApi?: DocumentosApi;   // instância ÚNICA — registro rápido reutiliza a persistência oficial
   somenteLeitura?: boolean;     // OPEN-01: abertura de operação existente — aba read-only
   onVoltarNegociacao?: () => void;
+  /* ⚠ TEXTOS COM DEFAULT IGUAL AO DE HOJE — PR-OC-VENDA-ENTREGA-01. Mesmo idioma dos
+     `rotulos` do AbaNegociacaoLotes: o `CompraModalShell` nao passa nada e continua
+     identico. Na venda o mesmo gesto se chama ENTREGA — o gado sai —, e o que muda e' o
+     VERBO, nunca o campo: quantidade, data e categoria descrevem o mesmo fato nos dois.
+     ⚠ SO TEXTO DE TELA. Nenhum identificador, nenhum nome de prop, nenhuma chave de api. */
+  rotulos?: RotulosEntrega;
+}
+
+export interface RotulosEntrega {
+  tituloSecao?: string;
+  tituloDialogo?: (rotulo: string) => string;
+  jaMovimentado?: string;
+  informeQuantidade?: string;
+  indisponivelTitulo?: string;
+  indisponivelDetalhe?: string;
+  movimentarTodos?: string;
+  registrarDoLote?: string;
+  colunaData?: string;
+  rotuloTotal?: string;
+  tituloEncerrar?: string;
+  nenhumMovimentado?: string;
+  placeholderJustificativa?: string;
+  tituloReabrir?: string;
+  /* ⚠ `ReactNode`, e nao `string`: o aviso da compra usa <b> em "auditada" e em "Nao", e
+     reabrir e' ato serio nos dois sentidos — a venda mantem a mesma enfase. Caso aditivo:
+     com dicionario nulo, o JSX de sempre continua no `??`. */
+  avisoReabrir?: ReactNode;
+  motivoEncerrarPadrao?: string;
+  motivoEstornoPadrao?: string;
 }
 
 /* ⚠ AS GRADES DE LOTE SAIRAM. `GRID` (onze colunas, com tres campos de entrada),
@@ -80,9 +109,9 @@ const LABEL: Record<EstadoRecebimento, string> = {
    ⚠ ESTADO INICIALIZADO NO MOUNT, e o pai monta com `key={loteId}`: sem isso, abrir o
    lote B depois do A traria os numeros do A. E' a mesma armadilha que a Negociacao ja
    documentou no seu proprio modal. */
-function ReceberLoteDialog({ lote, rotulo, pesoSugerido, hoje, isCompra, saving, onGravar, onFechar }: {
+function ReceberLoteDialog({ lote, rotulo, pesoSugerido, hoje, isCompra, saving, onGravar, onFechar, r }: {
   lote: LoteRecebimento; rotulo: string; pesoSugerido: string; hoje: string;
-  isCompra: boolean; saving: boolean;
+  isCompra: boolean; saving: boolean; r?: RotulosEntrega;
   onGravar: (dados: { quantidade: string; pesoMedio: string; data: string }) => void;
   onFechar: () => void;
 }) {
@@ -97,9 +126,9 @@ function ReceberLoteDialog({ lote, rotulo, pesoSugerido, hoje, isCompra, saving,
   return (
     <Dialog open onOpenChange={o => { if (!o) onFechar(); }}>
       <DialogContent className="max-w-sm">
-        <DialogHeader><DialogTitle className="text-[13px]">Receber · {rotulo}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle className="text-[13px]">{r?.tituloDialogo ? r.tituloDialogo(rotulo) : `Receber · ${rotulo}`}</DialogTitle></DialogHeader>
         <div className="text-[11px] text-muted-foreground">
-          negociado {lote.qtdNegociada ?? '—'} · já recebido {lote.qtdRecebida === 0 ? '—' : lote.qtdRecebida}
+          negociado {lote.qtdNegociada ?? '—'} · {r?.jaMovimentado ?? 'já recebido'} {lote.qtdRecebida === 0 ? '—' : lote.qtdRecebida}
         </div>
         {/* A16 — os tres campos com a MESMA altura. */}
         <div className="grid grid-cols-2 gap-2">
@@ -125,7 +154,7 @@ function ReceberLoteDialog({ lote, rotulo, pesoSugerido, hoje, isCompra, saving,
         <DialogFooter>
           <Button type="button" variant="ghost" size="sm" onClick={onFechar}>Cancelar</Button>
           <Button type="button" size="sm" disabled={!podeGravar}
-            title={podeGravar ? undefined : 'Informe a quantidade recebida'}
+            title={podeGravar ? undefined : (r?.informeQuantidade ?? 'Informe a quantidade recebida')}
             aria-label={`Registrar recebimento do lote ${rotulo}`}
             onClick={() => onGravar({ quantidade, pesoMedio, data })}>
             {saving ? 'Registrando…' : 'Registrar'}
@@ -136,7 +165,7 @@ function ReceberLoteDialog({ lote, rotulo, pesoSugerido, hoje, isCompra, saving,
   );
 }
 
-export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada, isCompra, categoriasDisponiveis, documentosApi, somenteLeitura, onVoltarNegociacao }: Props) {
+export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada, isCompra, categoriasDisponiveis, documentosApi, somenteLeitura, onVoltarNegociacao, rotulos }: Props) {
   /* ⚠ AS TRES TABELAS POR LINHA (`qtd`, `peso`, `dataReb`) SAIRAM em
      PR-OC-RECEB-REGISTRO-02. Elas so existiam para alimentar os inputs inline da
      grade de onze colunas; com os campos dentro do modal, os valores viajam por
@@ -170,8 +199,8 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
   if (!concluida && !encerrada) {
     return (
       <div className="rounded-md border border-dashed bg-muted/10 px-3 py-5 text-center space-y-1">
-        <div className="text-[12px] font-semibold text-foreground">Recebimento indisponível — negociação ainda não concluída</div>
-        <div className="text-[11px] text-muted-foreground">Conclua a negociação (botão “Concluir negociação”) para registrar o recebimento físico.</div>
+        <div className="text-[12px] font-semibold text-foreground">{rotulos?.indisponivelTitulo ?? 'Recebimento indisponível — negociação ainda não concluída'}</div>
+        <div className="text-[11px] text-muted-foreground">{rotulos?.indisponivelDetalhe ?? 'Conclua a negociação (botão “Concluir negociação”) para registrar o recebimento físico.'}</div>
       </div>
     );
   }
@@ -257,7 +286,7 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
     if (!podeEncerrar) return;
     const m = motivoEncerrar.trim();
     setEncerrarOpen(false); setMotivoEncerrar('');
-    void api.encerrar(m || 'encerramento pela aba Recebimento');
+    void api.encerrar(m || (rotulos?.motivoEncerrarPadrao ?? 'encerramento pela aba Recebimento'));
   };
   const submitReabrir = () => {
     if (!podeReabrir) return;
@@ -284,7 +313,7 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
               aparecem ao rolar. So no eixo vertical. */}
           <div className="sticky top-0 z-10 -mt-1.5 space-y-1.5 border-b bg-card pt-1.5 pb-1.5">
             <div className="flex items-baseline justify-between gap-3">
-              <span className="text-[15px] font-medium text-foreground min-w-0 truncate">Recebimento por lote na fazenda</span>
+              <span className="text-[15px] font-medium text-foreground min-w-0 truncate">{rotulos?.tituloSecao ?? 'Recebimento por lote na fazenda'}</span>
               <span className="text-[11px] font-normal text-muted-foreground shrink-0">encerrado</span>
             </div>
             {/* ── DOIS NUMEROS ────────────────────────────────────────────────
@@ -375,14 +404,14 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
               `-mt-1.5 pt-1.5` porque o cartao desta aba e' `p-1.5`, nao `p-2`. */}
           <div className="sticky top-0 z-10 -mt-1.5 space-y-1.5 border-b bg-card pt-1.5 pb-1.5">
             <div className="flex items-baseline justify-between gap-3">
-              <span className="text-[15px] font-medium text-foreground min-w-0 truncate">Recebimento por lote na fazenda</span>
+              <span className="text-[15px] font-medium text-foreground min-w-0 truncate">{rotulos?.tituloSecao ?? 'Recebimento por lote na fazenda'}</span>
               {/* ATALHO DO CASO COMUM: resolve a entrega conforme negociada sem abrir
                   modal nenhum. Some quando nao ha saldo — acao que nao faz nada e' pior
                   que acao ausente. */}
               {!readOnly && algumLoteComSaldo && (
                 <button type="button" disabled={api.saving} onClick={() => void api.receberTodos()}
                   title="Registrar em todos os lotes a quantidade negociada"
-                  aria-label="Receber todos conforme negociado"
+                  aria-label={rotulos?.movimentarTodos ?? 'Receber todos conforme negociado'}
                   className="shrink-0 text-[11px] font-normal text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline">
                   Receber todos conforme negociado
                 </button>
@@ -466,7 +495,7 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
                     <div className="flex shrink-0 items-center gap-[11px]">
                       {!readOnly && !semSaldo(l) ? (
                         <button type="button" disabled={api.saving} onClick={() => setReceberLoteId(l.loteId)}
-                          title="Registrar o recebimento deste lote"
+                          title={rotulos?.registrarDoLote ?? 'Registrar o recebimento deste lote'}
                           aria-label={`Receber lote ${catLabel(l.categoria)}`}
                           className="text-[11px] font-normal text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline">
                           Receber
@@ -503,6 +532,7 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
           pesoSugerido={pesoInicial(receberLote)}
           hoje={hoje}
           isCompra={isCompra}
+          r={rotulos}
           saving={api.saving}
           onFechar={() => setReceberLoteId(null)}
           onGravar={(dados) => { registrar(receberLote, dados); setReceberLoteId(null); }}
@@ -526,7 +556,7 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
                     "Recebimento" sozinho ja desambigua e cabe. Abreviar para "Dt. Receb."
                     devolveria a duvida que o rotulo existe para tirar. A coluna foi
                     alargada de 0.72 para 1.0fr para receber o rotulo com folga. */}
-                <span>Recebimento</span><span>Categoria</span><span>Quantidade</span><span>Peso méd.</span>
+                <span>{rotulos?.colunaData ?? 'Recebimento'}</span><span>Categoria</span><span>Quantidade</span><span>Peso méd.</span>
                 {!readOnly && <span>Ações</span>}
               </div>
               {movsAtivas.map(m => (
@@ -538,7 +568,7 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
                   {!readOnly && (
                     <div className="flex items-center justify-center">
                       <Button type="button" variant="ghost" size="sm" className="h-5 px-1.5 text-[10px] text-muted-foreground hover:text-destructive gap-1"
-                        disabled={api.saving} onClick={() => void api.estornar(m.id, 'estorno pela aba Recebimento')}>
+                        disabled={api.saving} onClick={() => void api.estornar(m.id, rotulos?.motivoEstornoPadrao ?? 'estorno pela aba Recebimento')}>
                         <Undo2 className="h-3 w-3" /> Estornar
                       </Button>
                     </div>
@@ -573,17 +603,17 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
           há diferença ou zero recebido; alerta forte + botão destrutivo quando nada foi recebido. */}
       <Dialog open={encerrarOpen} onOpenChange={o => { if (!o) setEncerrarOpen(false); }}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle className="text-[13px]">Encerrar recebimento</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="text-[13px]">{rotulos?.tituloEncerrar ?? 'Encerrar recebimento'}</DialogTitle></DialogHeader>
           <div className="space-y-2 text-[12px]">
             <div className="grid grid-cols-3 gap-1.5">
               <div className="rounded border bg-muted/30 px-1.5 py-1"><div className="text-[10px] text-muted-foreground">Negociado</div><div className="font-semibold tabular-nums">{totalNegociado}</div></div>
-              <div className="rounded border bg-muted/30 px-1.5 py-1"><div className="text-[10px] text-muted-foreground">Recebido</div><div className="font-semibold tabular-nums">{totalRecebido}</div></div>
+              <div className="rounded border bg-muted/30 px-1.5 py-1"><div className="text-[10px] text-muted-foreground">{rotulos?.rotuloTotal ?? 'Recebido'}</div><div className="font-semibold tabular-nums">{totalRecebido}</div></div>
               <div className={`rounded border px-1.5 py-1 ${diferencaTotal !== 0 ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/30' : 'bg-muted/30'}`}><div className="text-[10px] text-muted-foreground">Diferença</div><div className={`font-semibold tabular-nums ${diferencaTotal !== 0 ? 'text-amber-700 dark:text-amber-300' : ''}`}>{diferencaTotal}</div></div>
             </div>
             {zeroRecebido ? (
               <div className="flex items-start gap-1.5 rounded border border-destructive bg-destructive/10 px-2 py-1.5 text-[11px] text-destructive">
                 <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                <span>Nenhum animal foi recebido. Deseja encerrar esta entrega mesmo assim?</span>
+                <span>{rotulos?.nenhumMovimentado ?? 'Nenhum animal foi recebido. Deseja encerrar esta entrega mesmo assim?'}</span>
               </div>
             ) : (
               <div className="text-[11px] text-muted-foreground">
@@ -593,7 +623,7 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
             <div>
               <div className="text-[11px] font-medium">Motivo{motivoEncerrarObrigatorio ? ' *' : ' (opcional)'}</div>
               <Textarea value={motivoEncerrar} onChange={e => setMotivoEncerrar(e.target.value)} rows={2}
-                className="mt-0.5 text-[12px]" placeholder={motivoEncerrarObrigatorio ? 'Justifique a diferença / ausência de recebimento' : 'Opcional'} />
+                className="mt-0.5 text-[12px]" placeholder={motivoEncerrarObrigatorio ? (rotulos?.placeholderJustificativa ?? 'Justifique a diferença / ausência de recebimento') : 'Opcional'} />
             </div>
           </div>
           <DialogFooter>
@@ -608,10 +638,10 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
       {/* Reabertura AUDITADA da entrega (não altera a negociação). Motivo obrigatório. */}
       <Dialog open={reabrirOpen} onOpenChange={o => { if (!o) setReabrirOpen(false); }}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle className="text-[13px]">Reabrir recebimento</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="text-[13px]">{rotulos?.tituloReabrir ?? 'Reabrir recebimento'}</DialogTitle></DialogHeader>
           <div className="space-y-2 text-[12px]">
             <div className="text-[11px] text-muted-foreground">
-              Esta ação é <b>auditada</b>: reabre a entrega para novos recebimentos e fica registrada com o motivo informado. <b>Não</b> altera a negociação — se a operação estiver programada, o recebimento seguirá indisponível até a negociação ser concluída.
+              {rotulos?.avisoReabrir ? rotulos.avisoReabrir : (<>Esta ação é <b>auditada</b>: reabre a entrega para novos recebimentos e fica registrada com o motivo informado. <b>Não</b> altera a negociação — se a operação estiver programada, o recebimento seguirá indisponível até a negociação ser concluída.</>)}
             </div>
             <div>
               <div className="text-[11px] font-medium">Motivo *</div>

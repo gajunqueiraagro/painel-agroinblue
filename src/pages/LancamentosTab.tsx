@@ -453,7 +453,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     onVersaoChange: setOcVersao,
     onStatusChange: setOcStatusComercial,
     onEntregaChange: setOcEntregaEncerrada,
-    enabled: modoOCCompra,
+    /* ⚠ SERVE OS DOIS MODOS — PR-OC-VENDA-ENTREGA-01. O hook e' generico da operacao e as
+       RPCs que ele chama JA se chamam entrega (`oc_encerrar_entrega`, `oc_reabrir_entrega`)
+       e JA tratam venda: `oc_registrar_movimentacao` mapeia `venda -> venda` e grava o
+       valor vindo do lote. O que faltava era ligar — os callbacks sao os mesmos porque o
+       estado da OC e' o mesmo. */
+    enabled: modoOCCompra || ocVendaParam,
   });
   /* ⚠ OS TRES SERVEM OS DOIS MODOS — PR-OC-VENDA-ABAS-01. Sao chaveados por
      `ocOperacaoId`, que a hidratacao da venda ja seta: o que faltava era ligar. Sem
@@ -5064,6 +5069,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           documentosApi={documentosApi}
           eventosApi={eventosApi}
           liquidacaoApi={liquidacaoApi}
+          recebimentoApi={recebimentoApi}
+          ocEntregaEncerrada={ocEntregaEncerrada}
           onFechar={fecharModalOCComAutosave}
         />
       ) : isCompra && isCenarioMeta ? (
