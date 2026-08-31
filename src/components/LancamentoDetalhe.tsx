@@ -225,13 +225,30 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
   // para aba lancamentos) e os Sheets inline antigos. Para abate/venda, o
   // modal mostra placeholder honesto (TODO Fase A7/A8). Demais tipos abrem
   // os Edit*Sheets existentes reroteados pelo modal.
+  /* ⚠ A ORIGEM DO /v2, PARA QUEM NAVEGA POR RELOAD — B-17/B-18. `window.location.assign`
+     recarrega a pagina e a `section` do /v2 e' estado interno que nao vive na URL; o
+     V2Index a espelha em `sessionStorage['v2:section']` justamente para atravessar isso.
+     Vazio (aba nova, storage bloqueado) = sem `oc_return` = Central, o comportamento de
+     sempre — nunca um destino errado.
+     ⚠ EXTRAIDO NO B-18: a mesma expressao ia ficar escrita TRES vezes neste arquivo
+     (compra, venda e a porta do dialogo). Tres copias de uma leitura e' como as tres
+     comecam a divergir no dia em que a chave mudar. */
+  const origemDoV2 = () => { try { return sessionStorage.getItem('v2:section') ?? ''; } catch { return ''; } };
+  const sufixoRetorno = () => { const o = origemDoV2(); return o ? `&oc_return=${o}` : ''; };
+
   const handleEditClick = () => {
     // Fonte única de edição de Compra (PR-OC-ENTRYPOINT-UNIFY-01): decisão pelo VÍNCULO OFICIAL da
     //   ponte (operacaoId), nunca por heurística. Com OC → CompraModalShell (modal novo), mesma
     //   navegação da Central. Sem OC → editor legado atual.
     if (lancamento.tipo === 'compra') {
       if (lancamento.operacaoId) {
-        window.location.assign(`/v2?oc_compra=1&oc_id=${lancamento.operacaoId}`);
+        /* ⚠ A ORIGEM VAI JUNTO TAMBEM NA COMPRA — B-18, "padrao sempre" (Gabriel). Ela era
+           a UNICA saida sem `oc_return` depois do B-17: fechar uma compra aberta pelo "i"
+           largava o operador na Central, enquanto a venda ja voltava para a lista. Mesma
+           regra, mesmas duas linhas — quem sai por aqui volta por onde entrou.
+           ⚠ SEM `oc_aba`, e de proposito: a compra nunca definiu aba de abertura, e
+           acrescentar uma seria mudar o destino a pretexto de consertar a volta. */
+        window.location.assign(`/v2?oc_compra=1&oc_id=${lancamento.operacaoId}${sufixoRetorno()}`);
         return;
       }
       if (lancamento.origemRegistro === 'operacao_comercial') {
@@ -252,9 +269,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
        ⚠ `oc_aba=negociacao` porque e' de la' que o numero da venda vem — na OC, o
        lancamento e' o lote. */
     if (lancamento.tipo === 'venda' && lancamento.operacaoId) {
-      /* ⚠ A ORIGEM VAI JUNTO — B-17 adendo; ver a nota da porta do dialogo, logo abaixo. */
-      const origem = (() => { try { return sessionStorage.getItem('v2:section') ?? ''; } catch { return ''; } })();
-      window.location.assign(`/v2?oc_venda=1&oc_id=${lancamento.operacaoId}&oc_aba=negociacao${origem ? `&oc_return=${origem}` : ''}`);
+      window.location.assign(`/v2?oc_venda=1&oc_id=${lancamento.operacaoId}&oc_aba=negociacao${sufixoRetorno()}`);
       return;
     }
     setZooModalOpen(true);
@@ -1025,8 +1040,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                vez da lista de onde saiu. O V2Index espelha a section em
                `sessionStorage['v2:section']` justamente para atravessar o reload. Vazio
                (aba nova, storage bloqueado) = sem parametro = Central, como hoje. */
-            const origem = (() => { try { return sessionStorage.getItem('v2:section') ?? ''; } catch { return ''; } })();
-            window.location.assign(`/v2?${tipo === 'venda' ? 'oc_venda' : 'oc_compra'}=1&oc_id=${ocId}&oc_aba=negociacao${origem ? `&oc_return=${origem}` : ''}`);
+            window.location.assign(`/v2?${tipo === 'venda' ? 'oc_venda' : 'oc_compra'}=1&oc_id=${ocId}&oc_aba=negociacao${sufixoRetorno()}`);
           }}
           onEditSuccess={() => {
             // Cache invalidado pelo useLancamentos.editarLancamento internamente.
