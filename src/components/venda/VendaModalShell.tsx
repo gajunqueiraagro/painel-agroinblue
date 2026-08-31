@@ -49,8 +49,8 @@ import type { RecebimentoApi } from '@/hooks/useOperacaoRecebimento';
 import type { DocumentosApi } from '@/hooks/useOperacaoDocumentos';
 import type { EventosApi } from '@/hooks/useOperacaoEventos';
 import type { LiquidacaoApi } from '@/hooks/useOperacaoLiquidacao';
-import { BoitelTopoNegociacao, BoitelResultadoCompacto, BoitelComparacoes, liquidoDaVendaBoitel, bolsoDaVendaBoitel, unitariosDoLiquido, derivadosBoitel, PilulaCenario } from '@/components/venda/BoitelNegociacaoDerivado';
-import { BoitelBlocosModais, faltamDosCinco, type BoitelEdicao } from '@/components/venda/BoitelBlocosModais';
+import { BoitelTopoNegociacao, liquidoDaVendaBoitel, bolsoDaVendaBoitel, unitariosDoLiquido, derivadosBoitel, PilulaCenario } from '@/components/venda/BoitelNegociacaoDerivado';
+import { BoitelBlocosModais, BoitelAnaliseFaixa, faltamDosCinco, type BoitelEdicao } from '@/components/venda/BoitelBlocosModais';
 import { pesoMedioPorCabeca } from '@/hooks/useCompraLotes';
 
 /* ⚠ "RECEBIMENTO" CHAMA-SE ENTREGA NA VENDA — o gado SAI. A coluna do banco já é
@@ -650,7 +650,6 @@ export function VendaModalShell({
                       realizado={boitelReal}
                       onChangeRealizado={onAplicarRealizado}
                       onIniciarRealizado={onIniciarRealizado}
-                      comparacoes={<BoitelComparacoes projetado={boitelData} realizado={boitelReal} />}
                       /* ⚠ A ENTRADA DO LOTE NO BOITEL — 02G item 2. E' a `data_operacao`
                           da OC: medido, `data_envio` do boitel esta' nula em 3 de 3
                           registros. No papel vivo, 13/05 -> 25/08 = 104 dias. */
@@ -659,11 +658,17 @@ export function VendaModalShell({
                   )}
                 </div>
 
-                {/* ⚠ A FAIXA FECHA A ABA com os DOIS numeros que decidem: o que a venda
-                    rende e se valeu a pena contra vender vivo hoje. Os quatro pares de
-                    memoria de calculo vivem no `BoitelPainelResultado`; o campo do custo
-                    de oportunidade voltou ao modal de Custos, que e' onde se digita. */}
-                <BoitelResultadoCompacto boitelData={boitelData} realizado={boitelReal} cenario="projetado" />
+                {/* ⚠ A FAIXA FECHA A ABA COM UMA LINHA — PR-OC-VENDA-ANALISE-01. Eram
+                    DOIS blocos largos aqui (as duas cascatas e o "Previsto x realizado"),
+                    para uma leitura que acontece uma vez por abate: eles empurravam para
+                    baixo os dois cartoes, que sao o que se olha todo dia. A analise
+                    inteira mora atras do clique, e nada dela se perdeu — ver a nota em
+                    `BoitelAnaliseFaixa`.
+                    ⚠ A CATEGORIA E AS CABECAS VEM DO LOTE, como tudo que e' fato nesta
+                    aba: sao o cabecalho do modal ("Analise do envio · Garrotes 110"). */}
+                <BoitelAnaliseFaixa projetado={boitelData} realizado={boitelReal}
+                  categoria={lotesApi?.lotes[0]?.categoria ?? null}
+                  cabecas={lotesApi?.totais.animais ?? 0} />
               </div>
             ) : abaLotes
           ) : (

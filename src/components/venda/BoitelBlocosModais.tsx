@@ -32,10 +32,10 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { CampoMoeda } from '@/components/ui/campo-moeda';
 import type { CenarioBoitel } from '@/components/venda/BoitelNegociacaoDerivado';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Pencil, TrendingUp, Wallet, Tag, Banknote } from 'lucide-react';
+import { Pencil, TrendingUp, Wallet, Tag, Banknote, BarChart3 } from 'lucide-react';
 import { formatMoeda, formatKg, formatArroba } from '@/lib/calculos/formatters';
 import type { BoitelData } from '@/components/BoitelPlanningDialog';
-import { derivadosBoitel, cabecasQueSairam, liquidoDaVendaBoitel, bolsoDaVendaBoitel, PilulaCenario, type BoitelEdicao } from '@/components/venda/BoitelNegociacaoDerivado';
+import { derivadosBoitel, cabecasQueSairam, liquidoDaVendaBoitel, bolsoDaVendaBoitel, unitariosDoLiquido, comparativoOportunidade, PilulaCenario, type BoitelEdicao } from '@/components/venda/BoitelNegociacaoDerivado';
 
 const n2 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const n3 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
@@ -631,6 +631,21 @@ function indicadoresDoBoitel(d: BoitelEdicao, modoRealizado?: boolean, projetado
      `gmdEfetivo` voltar a ser `gmd` —, entao a distincao so' morde no realizado. */
   const gmdMostrado = modoRealizado ? der.gmdEfetivo : d.gmd;
   const rcMostrado  = modoRealizado ? der.rcEfetivo  : d.rendimento;
+  /* ⚠ A DIARIA TAMBEM ERA COPIA — B-07 item 3, a varredura completando a decisao 1 do
+     02H. No realizado o FATO e' o total (`valorTotalDiarias`); a tarifa e' o que se
+     descobre dividindo. O campo do modal ja escreve as duas juntas, mas a linha realizada
+     NASCE COPIANDO a projecao: enquanto o operador nao abrir o modal de Custos, o cartao
+     mostrava a tarifa NEGOCIADA (19,68) ao lado de um total que dizia outra coisa.
+     ⚠ O DIVISOR E `cabAbate x dias`, EXATAMENTE o do campo (`CampoTotalOuMedia` das
+     Diarias): assim o cartao e o modal nao podem discordar — a mesma divisao, a mesma
+     base. Medido no papel: 214.590,48 / (109 x 104) = R$ 18,93/cab/dia, que e' o que o
+     acerto cobra; por 110 dariam 18,76, que nao esta escrito em lugar nenhum.
+     ⚠ SO' COM O FATO NA MAO. Sem `valorTotalDiarias` a tarifa digitada continua sendo a
+     resposta certa — reconstitui-la de um `cDT` derivado seria dividir por uma base
+     diferente da que o multiplicou. */
+  const diariaMostrada = modoRealizado && d.valorTotalDiarias != null && (der.cabAbate * d.dias) > 0
+    ? d.valorTotalDiarias / (der.cabAbate * d.dias)
+    : d.custoDiaria;
 
   /* ⚠ A VARIACAO SO' EXISTE COM OS DOIS MUNDOS NA MAO — item G. Sem projecao completa nao
      ha contra o que comparar, e inventar uma base seria pior que nao comparar.
@@ -661,8 +676,13 @@ function indicadoresDoBoitel(d: BoitelEdicao, modoRealizado?: boolean, projetado
         delta: delta(d.dias, projetado?.dias ?? null, false, v => String(Math.round(v))) },
       { rotulo: 'RC saída',      valor: temDesempenho ? `${n2(rcMostrado)}%` : '—', pendente: !temDesempenho,
         delta: delta(rcMostrado, projetado?.rendimento ?? null, true, n2) },
-      { rotulo: 'Diária',        valor: temCusto ? formatMoeda(d.custoDiaria) : '—', pendente: !temCusto,
-        delta: delta(d.custoDiaria, projetado?.custoDiaria ?? null, false, formatMoeda) },
+      { rotulo: 'Diária',        valor: temCusto ? formatMoeda(diariaMostrada) : '—', pendente: !temCusto,
+        delta: delta(diariaMostrada, projetado?.custoDiaria ?? null, false, formatMoeda) },
+      /* ⚠ "Custo/cab" DIVIDE PELO LOTE, e nao pelas abatidas — a mesma divisao de aguas
+         do 02H item L. O custo do boitel e' de quem ESTEVE la': diaria, sanidade e outros
+         correram para o lote inteiro, inclusive para o animal que morreu no meio e para o
+         que ficou no abate parcial. Dividir por `cabAbate` diria que os que foram ao
+         gancho pagaram a estadia dos que nao foram. */
       { rotulo: 'Custo/cab',     valor: custoCab == null ? '—' : formatMoeda(custoCab), pendente: !temCusto,
         delta: custoCab == null ? undefined : delta(custoCab, pCustoCab, false, formatMoeda) },
       { rotulo: 'Custo @ prod.', valor: der.cPArr > 0 ? formatMoeda(der.cPArr) : '—', pendente: !temCusto,
@@ -1327,7 +1347,7 @@ function DialogoGrupo({ card, valor, somenteLeitura, onAplicar, onFechar, modoRe
 /* ═══ O COMPONENTE ═══════════════════════════════════════════════════════════════ */
 
 export function BoitelBlocosModais({ valor, onChange, somenteLeitura, cenario, detalheCenario, bolsoFormatado,
-  realizado = null, onChangeRealizado, onIniciarRealizado, comparacoes, dataEntrada }: {
+  realizado = null, onChangeRealizado, onIniciarRealizado, dataEntrada }: {
   valor: BoitelEdicao; onChange: (proximo: BoitelEdicao) => void; somenteLeitura?: boolean;
   /** Marca de projecao — UMA por cartao, no titulo. Ver `GrupoIndicadores`. */
   cenario?: CenarioBoitel;
@@ -1350,8 +1370,6 @@ export function BoitelBlocosModais({ valor, onChange, somenteLeitura, cenario, d
   onChangeRealizado?: (proximo: BoitelEdicao) => void;
   /** Abre o fluxo do realizado — reabre a OC se preciso e devolve `true` para editar. */
   onIniciarRealizado?: () => void | Promise<boolean | void>;
-  /** Linhas de comparacao previsto x realizado, montadas por quem tem os dois. */
-  comparacoes?: React.ReactNode;
   /** `data_operacao` da OC — a entrada do lote, para os dias derivarem da data. */
   dataEntrada?: string | null;
 }) {
@@ -1439,7 +1457,10 @@ export function BoitelBlocosModais({ valor, onChange, somenteLeitura, cenario, d
         )}
       </section>
 
-      {comparacoes}
+      {/* ⚠ O SLOT DE COMPARACOES SAIU — PR-OC-VENDA-ANALISE-01. Ele recebia o cartao
+          "Previsto x realizado", que virou o rodape zootecnico do modal da analise. Os
+          dois cartoes acima ja dizem previsto e realizado lado a lado, na cor; a
+          comparacao detalhada mora na faixa, abaixo deles, no shell. */}
 
       {editando && (
         <DialogoGrupo
@@ -1455,5 +1476,302 @@ export function BoitelBlocosModais({ valor, onChange, somenteLeitura, cenario, d
         />
       )}
     </>
+  );
+}
+
+/* ═══ A ANALISE DO ENVIO ═════════════════════════════════════════════════════════
+   PR-OC-VENDA-ANALISE-01, mockup aprovado. Absorve o PR 3 (a tabela Mercado | Projecao |
+   Realizado), que deixa de existir como frente propria.
+
+   ⚠ O QUE ESTA SUPERFICIE SUBSTITUI. A aba tinha DOIS blocos largos no rodape — as duas
+   cascatas lado a lado e o cartao "Previsto x realizado" — para uma leitura que acontece
+   UMA VEZ POR ABATE. Eles empurravam para baixo o que se olha todo dia (os dois cartoes
+   editaveis) e obrigavam a rolar a aba para ver o cabecalho. Agora ha uma FAIXA de uma
+   linha, e a analise inteira mora atras de um clique.
+   ⚠ NADA FOI JOGADO FORA. Os cinco degraus da cascata viraram as LINHAS da tabela; a
+   regra de veredito por linha veio junto; os quatro indicadores do "Previsto x realizado"
+   viraram o rodape zootecnico. O que morreu foi a largura.
+   ⚠ NENHUMA CONTA MORA AQUI. Tudo sai do motor e das irmas — `derivadosBoitel`,
+   `bolsoDaVendaBoitel`, `unitariosDoLiquido`, `comparativoOportunidade` e as parcelas
+   `dAcerto*`. Uma analise que recalcula por conta propria e' a segunda copia da verdade,
+   e esta frente inteira passou consertando exatamente isso. */
+
+/* ⚠ A PALAVRA "LIQUIDO" SOZINHA E PROIBIDA — adendo do Gabriel ao B-07, e vale para toda
+   esta frente. Todo valor se chama pelo DEGRAU: "Acerto liquido" (o que o boitel repassa)
+   ou "Liquido no bolso" (o que sobra depois dos gastos diretos). Nunca "Liquido".
+   ⚠ POR QUE E REGRA E NAO ESTILO: o bloco "Previsto x realizado" comparava ACERTOS sob o
+   rotulo "Liquido", enquanto os cartoes, a cascata e o topo comparavam BOLSOS. Duas
+   reguas com o mesmo nome na mesma tela — e a diferenca entre elas sao os gastos diretos
+   do produtor, que e' justamente o que o 02H tornou visivel. O redesenho matou aquele
+   bloco; esta nota existe para a palavra orfa nao renascer no proximo rotulo.
+   ⚠ E O DELTA FINANCEIRO DA ANALISE E SEMPRE DE BOLSO: `difPrev` aqui e no modal compara
+   `bolsoDaVendaBoitel` com `bolsoDaVendaBoitel`, nunca acerto com bolso. */
+
+/** O maior conhecimento disponivel: o realizado quando ha, a projecao enquanto nao ha. */
+function melhorLinha(projetado: BoitelEdicao | null, realizado: BoitelEdicao | null) {
+  const bReal = bolsoDaVendaBoitel(realizado);
+  return bReal != null
+    ? { d: realizado, bolso: bReal, real: true }
+    : { d: projetado, bolso: bolsoDaVendaBoitel(projetado), real: false };
+}
+
+/* ⚠ VEREDITO, NUNCA SINAL CRU — a regra da casa, a mesma do cartao e da cascata. Cada
+   comparacao declara o que e' bom PARA ELA. Empate nao tem veredito. */
+function veredito(dif: number, maiorEMelhor: boolean, tol = 0.005): boolean | null {
+  return Math.abs(dif) < tol ? null : (dif > 0) === maiorEMelhor;
+}
+function classeVeredito(bom: boolean | null): string {
+  return bom == null ? 'text-muted-foreground' : bom ? 'text-success' : 'text-destructive';
+}
+function pct(parte: number, base: number): string {
+  if (!(Math.abs(base) > 0)) return '';
+  const v = (parte / base) * 100;
+  return `${v >= 0 ? '+' : '−'}${Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+}
+const assinado = (v: number) => `${v >= 0 ? '+' : '−'}${formatMoeda(Math.abs(v))}`;
+
+/* ─── A FAIXA ──────────────────────────────────────────────────────────────────
+   Uma linha, clicavel, fechando a aba. Mostra O NUMERO que decide e as DUAS comparacoes
+   que o qualificam; o resto esta' a um clique.
+   ⚠ SEGUE O MELHOR CONHECIMENTO, igual ao cabecalho (02H item K): realizado solido quando
+   existe, projecao ambar enquanto nao. Sem realizado nao ha "vs. previsto" — comparar a
+   promessa com ela mesma seria uma linha que sempre diz zero.
+   ⚠ E UM `button`, e nao uma `div` com `onClick`: teclado e leitor de tela alcancam a
+   analise pelo mesmo caminho que o mouse. */
+export function BoitelAnaliseFaixa({ projetado, realizado, categoria, cabecas }: {
+  projetado: BoitelEdicao | null;
+  realizado: BoitelEdicao | null;
+  /** Cabecalho do modal: "Analise do envio · Garrotes 110". */
+  categoria?: string | null;
+  cabecas?: number;
+}) {
+  const [aberto, setAberto] = useState(false);
+  const melhor = useMemo(() => melhorLinha(projetado, realizado), [projetado, realizado]);
+  const bolsoProj = useMemo(() => bolsoDaVendaBoitel(projetado), [projetado]);
+  const cmp = useMemo(() => comparativoOportunidade(melhor.d), [melhor.d]);
+
+  const difPrev = melhor.real && melhor.bolso != null && bolsoProj != null ? melhor.bolso - bolsoProj : null;
+  const cor = melhor.real ? 'text-foreground' : 'text-[#854F0B] dark:text-amber-500';
+
+  return (
+    <>
+      <button type="button" onClick={() => setAberto(true)}
+        aria-label="Abrir a análise do envio"
+        className="w-full min-w-0 rounded-md border bg-card px-3.5 py-2 shadow-sm text-left cursor-pointer hover:bg-muted/30 transition-colors">
+        <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+          <span className="text-[11px] font-normal text-muted-foreground leading-none whitespace-nowrap">
+            Líquido no bolso {melhor.real ? 'realizado' : 'projetado'}
+          </span>
+          <span className={`text-[17px] font-medium leading-none tabular-nums whitespace-nowrap ${
+            melhor.bolso == null ? 'text-muted-foreground font-normal' : cor}`}>
+            {melhor.bolso == null ? '—' : formatMoeda(melhor.bolso)}
+          </span>
+          {/* ⚠ A COMPARACAO COM A PROMESSA so' existe depois do abate. */}
+          {difPrev != null && bolsoProj != null && (
+            <span className={`text-[11px] tabular-nums leading-none whitespace-nowrap ${
+              classeVeredito(veredito(difPrev, true))}`}>
+              vs. previsto {assinado(difPrev)} ({pct(difPrev, bolsoProj)})
+            </span>
+          )}
+          {cmp != null && (
+            <span className={`text-[11px] tabular-nums leading-none whitespace-nowrap ${
+              classeVeredito(veredito(cmp.diferenca, true))}`}>
+              vs. vender vivo na época {assinado(cmp.diferenca)} ({pct(cmp.diferenca, cmp.oportunidade)})
+            </span>
+          )}
+          <span className="ml-auto flex items-center gap-1 text-[11px] font-medium text-primary leading-none whitespace-nowrap">
+            <BarChart3 className="h-3.5 w-3.5 shrink-0" /> Análise completa
+          </span>
+        </div>
+      </button>
+      {aberto && (
+        <BoitelAnaliseModal projetado={projetado} realizado={realizado}
+          categoria={categoria} cabecas={cabecas} onFechar={() => setAberto(false)} />
+      )}
+    </>
+  );
+}
+
+/* ─── UMA CELULA DE VALOR DA TABELA ────────────────────────────────────────────
+   ⚠ TRAVESSAO, NUNCA ZERO. A coluna do mercado nao tem desconto de boitel nem gasto
+   direto — vender vivo nao passa por nenhum dos dois —, e a do realizado esta' vazia ate'
+   o abate. Zero ali afirmaria "custou zero", que e' outra coisa. */
+function CelulaAnalise({ valor, cor, forte }: { valor: string | null; cor?: string; forte?: boolean }) {
+  return (
+    <div className={`text-right tabular-nums whitespace-nowrap ${forte ? 'text-[13px] font-semibold' : 'text-[12px]'} ${
+      valor == null ? 'text-muted-foreground font-normal' : (cor ?? '')}`}>
+      {valor ?? '—'}
+    </div>
+  );
+}
+
+/* ─── O MODAL ──────────────────────────────────────────────────────────────────
+   ⚠ TRES COLUNAS NA MESMA REGUA — o PR 3, absorvido. "Vender vivo na epoca" e' o termo de
+   comparacao (o custo de oportunidade), "Projecao" e' a promessa e "Realizado" e' o fato.
+   Na mesma tabela, com os MESMOS cinco degraus, a comparacao nao precisa ser explicada.
+   ⚠ A QUARTA COLUNA E O VEREDITO, nao um numero a mais: `real x proj.` com a cor dizendo
+   o que a variacao SIGNIFICA em cada linha.
+   ⚠ A21 — cabecalho fixo e ZERO ROLAGEM INTERNA. Medido: a tabela tem 5 linhas, um rodape
+   de unitarios, a frase e o rodape zootecnico; em `max-w-3xl` o conteudo fecha em ~330px,
+   contra os ~680px do teto de 85vh. Nao ha `overflow-y-auto` no corpo de proposito. */
+function BoitelAnaliseModal({ projetado, realizado, categoria, cabecas, onFechar }: {
+  projetado: BoitelEdicao | null;
+  realizado: BoitelEdicao | null;
+  categoria?: string | null;
+  cabecas?: number;
+  onFechar: () => void;
+}) {
+  const p = useMemo(() => projetado ? derivadosBoitel(projetado) : null, [projetado]);
+  const bolsoProj = useMemo(() => bolsoDaVendaBoitel(projetado), [projetado]);
+  const bolsoReal = useMemo(() => bolsoDaVendaBoitel(realizado), [realizado]);
+  const temReal = bolsoReal != null && realizado != null;
+  const r = useMemo(() => temReal && realizado ? derivadosBoitel(realizado) : null, [temReal, realizado]);
+  /* ⚠ O MERCADO SAI DA IRMA, e da linha de maior conhecimento: e' o `coT` — o que o mesmo
+     capital renderia vendendo vivo. Uma so' chamada, e o veredito da frase final vem dela. */
+  const cmp = useMemo(() => comparativoOportunidade(temReal ? realizado : projetado), [temReal, realizado, projetado]);
+  const mercado = cmp?.oportunidade ?? null;
+
+  const uniProj = useMemo(() => unitariosDoLiquido(projetado, bolsoProj), [projetado, bolsoProj]);
+  const uniReal = useMemo(() => unitariosDoLiquido(realizado ?? null, bolsoReal), [realizado, bolsoReal]);
+
+  const AMBAR = 'text-[#854F0B] dark:text-amber-500';
+  /* ⚠ OS CINCO DEGRAUS, NA ORDEM DA CASCATA QUE ELES VIERAM. `mercado` nulo onde vender
+     vivo nao tem a linha; `maiorEMelhor` e' o que cada degrau considera bom. */
+  const linhas: { rotulo: string; mercado: number | null; proj: number | null; real: number | null; maiorEMelhor: boolean; negativo?: boolean }[] = [
+    { rotulo: 'Faturamento',           mercado, proj: p?.fba ?? null, real: r?.fba ?? null, maiorEMelhor: true },
+    { rotulo: '− Descontos do boitel', mercado: null, proj: p?.descontoDoAcerto ?? null, real: r?.descontoDoAcerto ?? null, maiorEMelhor: false, negativo: true },
+    { rotulo: '= Acerto líquido',      mercado, proj: p ? p.fba - p.descontoDoAcerto : null, real: r ? r.fba - r.descontoDoAcerto : null, maiorEMelhor: true },
+    { rotulo: '− Gastos diretos',      mercado: null, proj: p?.custosDoProdutor ?? null, real: r?.custosDoProdutor ?? null, maiorEMelhor: false, negativo: true },
+  ];
+  const fmt = (v: number | null, neg?: boolean) => v == null ? null : (neg ? `− ${formatMoeda(v)}` : formatMoeda(v));
+  const delta = (real: number | null, proj: number | null, maiorEMelhor: boolean) => {
+    if (real == null || proj == null) return null;
+    const dif = real - proj;
+    return <span className={classeVeredito(veredito(dif, maiorEMelhor))}>{assinado(dif)}</span>;
+  };
+
+  /* ⚠ O RODAPE ZOOTECNICO — os quatro do antigo "Previsto x realizado". GMD e RC sao os
+     EFETIVOS do abate (a decisao do 02H item G): mostrar o campo copiado poria a premissa
+     da projecao ao lado de um fato que a contradiz. */
+  const zoot: { rotulo: string; real: string | null; prev: string | null }[] = [
+    { rotulo: 'GMD', real: r ? `${n3(r.gmdEfetivo)} kg/dia` : null, prev: p ? `${n3(projetado?.gmd ?? 0)} kg/dia` : null },
+    { rotulo: 'Dias', real: realizado && temReal ? String(realizado.dias) : null, prev: projetado ? String(projetado.dias) : null },
+    { rotulo: 'RC saída', real: r ? `${n2(r.rcEfetivo)}%` : null, prev: projetado ? `${n2(projetado.rendimento)}%` : null },
+    { rotulo: 'R$/@', real: realizado && temReal ? formatMoeda(realizado.precoVendaArroba) : null, prev: projetado ? formatMoeda(projetado.precoVendaArroba) : null },
+  ];
+
+  const difPrev = temReal && bolsoReal != null && bolsoProj != null ? bolsoReal - bolsoProj : null;
+  const grade = 'grid grid-cols-[1fr_repeat(4,minmax(0,7.5rem))] gap-x-3 items-baseline';
+
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onFechar(); }}>
+      <DialogContent className="max-w-3xl p-0 gap-0 overflow-hidden flex flex-col">
+        <DialogHeader className="shrink-0 border-b bg-primary/10 px-5 py-3 space-y-0.5">
+          <DialogTitle className="text-[14px] font-medium text-primary leading-none">
+            Análise do envio{categoria ? ` · ${categoria}` : ''}{cabecas ? ` ${cabecas}` : ''}
+          </DialogTitle>
+          <p className="text-[11px] font-normal text-muted-foreground leading-snug">
+            {realizado?.dataAbate
+              ? `abate em ${realizado.dataAbate.split('-').reverse().join('/')}`
+              : 'o abate ainda não foi lançado — a coluna do realizado enche no acerto'}
+          </p>
+        </DialogHeader>
+
+        <div className="px-5 py-3 min-w-0">
+          {/* ⚠ CABECALHO DA TABELA: a cor ja diz o que cada coluna e'. */}
+          <div className={`${grade} border-b pb-1.5 text-[10px] font-medium uppercase tracking-wide`}>
+            <div className="text-muted-foreground">&nbsp;</div>
+            <div className="text-right text-muted-foreground">Vender vivo na época</div>
+            <div className={`text-right ${AMBAR}`}>Projeção</div>
+            <div className="text-right text-foreground">Realizado</div>
+            <div className="text-right text-muted-foreground">real × proj.</div>
+          </div>
+
+          {linhas.map(l => (
+            <div key={l.rotulo} className={`${grade} py-1 leading-[1.45]`}>
+              <div className="text-[12px] font-normal text-secondary whitespace-nowrap">{l.rotulo}</div>
+              <CelulaAnalise valor={fmt(l.mercado)} />
+              <CelulaAnalise valor={fmt(l.proj, l.negativo)} cor={AMBAR} />
+              <CelulaAnalise valor={fmt(l.real, l.negativo)} cor="text-foreground" />
+              <div className="text-right text-[11px] tabular-nums whitespace-nowrap">
+                {delta(l.real, l.proj, l.maiorEMelhor) ?? <span className="text-muted-foreground">—</span>}
+              </div>
+            </div>
+          ))}
+
+          {/* ⚠ O TOTAL EM PESO 600 — e' a resposta, e as quatro linhas acima sao o caminho. */}
+          <div className={`${grade} border-t pt-1.5 mt-0.5`}>
+            <div className="text-[12px] font-medium text-foreground whitespace-nowrap">= Líquido no bolso</div>
+            <CelulaAnalise forte valor={mercado == null ? null : formatMoeda(mercado)} />
+            <CelulaAnalise forte valor={bolsoProj == null ? null : formatMoeda(bolsoProj)} cor={AMBAR} />
+            <CelulaAnalise forte valor={bolsoReal == null ? null : formatMoeda(bolsoReal)} cor="text-foreground" />
+            <div className="text-right text-[11px] font-medium tabular-nums whitespace-nowrap">
+              {delta(bolsoReal, bolsoProj, true) ?? <span className="text-muted-foreground">—</span>}
+            </div>
+          </div>
+          {/* ⚠ UNITARIOS EM 10px, da irma `unitariosDoLiquido` — as duas divisoes do bolso
+              que o produtor usa para comparar uma venda com outra. */}
+          <div className={`${grade} pt-0.5 text-[10px] tabular-nums text-muted-foreground`}>
+            <div>&nbsp;</div>
+            <div className="text-right">&nbsp;</div>
+            <div className={`text-right ${AMBAR}`}>
+              {uniProj.porCabeca == null ? '—' : `${formatMoeda(uniProj.porCabeca)}/cab · ${formatMoeda(uniProj.porKg ?? 0)}/kg`}
+            </div>
+            <div className="text-right text-foreground">
+              {uniReal.porCabeca == null ? '—' : `${formatMoeda(uniReal.porCabeca)}/cab · ${formatMoeda(uniReal.porKg ?? 0)}/kg`}
+            </div>
+            <div>&nbsp;</div>
+          </div>
+
+          {/* ⚠ AS DUAS VITORIAS NUMA FRASE, com os numeros vivos: contra o mercado (por que
+              mandar ao boitel) e contra a promessa (se o envio cumpriu o que prometia). */}
+          <div className="mt-3 border-t pt-2">
+            {cmp == null ? (
+              <p className="text-[11px] text-muted-foreground leading-snug">
+                {projetado && projetado.custoOportunidade > 0
+                  ? 'Faltam dados do planejamento para comparar com a venda de hoje.'
+                  : 'Informe o custo de oportunidade em Custos para comparar com a venda de hoje.'}
+              </p>
+            ) : (
+              <p className="text-[11px] leading-[1.45]">
+                <span className={classeVeredito(veredito(cmp.diferenca, true))}>
+                  O boitel {temReal ? 'rendeu' : 'deve render'}{' '}
+                  <span className="font-medium tabular-nums">{formatMoeda(Math.abs(cmp.diferenca))}</span>{' '}
+                  <span className="font-medium">{cmp.diferenca >= 0 ? 'a mais' : 'a menos'}</span>{' '}
+                  (<span className="font-medium tabular-nums">{pct(cmp.diferenca, cmp.oportunidade)}</span>)
+                  {' '}que vender vivo na época
+                </span>
+                {difPrev != null && bolsoProj != null && (
+                  <span className={classeVeredito(veredito(difPrev, true))}>
+                    {' '}e{' '}
+                    <span className="font-medium tabular-nums">{formatMoeda(Math.abs(difPrev))}</span>{' '}
+                    <span className="font-medium">{difPrev >= 0 ? 'a mais' : 'a menos'}</span>{' '}
+                    (<span className="font-medium tabular-nums">{pct(difPrev, bolsoProj)}</span>)
+                    {' '}que o previsto
+                  </span>
+                )}
+                <span className={classeVeredito(veredito(cmp.diferenca, true))}>.</span>
+              </p>
+            )}
+          </div>
+
+          {/* ⚠ RODAPE ZOOTECNICO EM 9px — o que aconteceu com o ANIMAL, sob o que aconteceu
+              com o dinheiro. Cada um com o `prev.` do lado, no ambar da projecao. */}
+          <div className="mt-2 border-t pt-2 flex flex-wrap gap-x-6 gap-y-1.5">
+            {zoot.map(z => (
+              <div key={z.rotulo} className="min-w-0">
+                <span className="text-[9px] text-muted-foreground leading-none">{z.rotulo} </span>
+                <span className="text-[9px] font-medium tabular-nums leading-none text-foreground">{z.real ?? '—'}</span>
+                <span className={`ml-1.5 text-[9px] tabular-nums leading-none ${AMBAR}`}>prev. {z.prev ?? '—'}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <DialogFooter className="shrink-0 border-t bg-card px-5 py-3">
+          <Button variant="outline" size="sm" onClick={onFechar}>Fechar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
