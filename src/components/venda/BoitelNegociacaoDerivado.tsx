@@ -113,7 +113,22 @@ export function cabecasQueSairam(d: BoitelEdicao): number {
 type Grupo = 'ind' | 'op';
 interface Exigencia { rotulo: string; grupo: Grupo; presente: boolean }
 
-function exigencias(d: BoitelEdicao): Exigencia[] {
+/* ⚠ O ROTULO TEM DE APONTAR UM CAMPO QUE EXISTE NA TELA — B-05, achado B. No PROJETADO o
+   operador digita o preco da @ e o faturamento deriva dele; no REALIZADO a direcao
+   INVERTE: digita-se o valor total do abate e as arrobas do papel, e o preco e' que
+   DERIVA (`valorTotalAbate / aTS`, ver o campo em `corposDoBoitel`). Dizer "falta preco de
+   venda da @" no realizado manda o operador procurar um campo que aquele modal nao tem —
+   e nao diz o que de fato falta.
+   ⚠ QUAL DOS DOIS FALTA depende de onde a conta quebrou: sem arrobas nao ha por que
+   dividir, entao ELAS vem primeiro; com arrobas de pe', o que falta e' o valor do abate.
+   ⚠ MINUSCULA, como as irmas: os rotulos entram numa frase unica ("Falta X, Y e Z."), e
+   uma maiuscula no meio dela leria como nome proprio. */
+function rotuloDoPreco(d: BoitelEdicao, cenario?: CenarioBoitel): string {
+  if (cenario !== 'realizado') return 'preço de venda da @';
+  return derivadosBoitel(d).aTS > 0 ? 'valor total do abate' : 'arrobas totais do abate';
+}
+
+function exigencias(d: BoitelEdicao, cenario?: CenarioBoitel): Exigencia[] {
   const base: Exigencia[] = [
     /* ⚠ UMA EXIGENCIA SO PARA OS DOIS, e o texto diz ONDE resolver. Cabeças e peso deixaram
        de ser campos em PR-OC-VENDA-BOITEL-CABECAS-DOS-LOTES-01: os dois derivam dos lotes.
@@ -125,7 +140,7 @@ function exigencias(d: BoitelEdicao): Exigencia[] {
     { rotulo: 'GMD',                     grupo: 'ind', presente: d.gmd > 0 },
     { rotulo: 'rendimento de entrada',   grupo: 'ind', presente: d.rendimentoEntrada > 0 },
     { rotulo: 'rendimento de saída',     grupo: 'ind', presente: d.rendimento > 0 },
-    { rotulo: 'preço de venda da @',     grupo: 'op',  presente: d.precoVendaArroba > 0 },
+    { rotulo: rotuloDoPreco(d, cenario), grupo: 'op',  presente: d.precoVendaArroba > 0 },
   ];
   /* O custo da operação depende da modalidade, e cada uma pergunta o seu.
      ⚠ `parceria` NAO tem custo direto: o parceiro entra como dedução da receita, e é
@@ -670,7 +685,7 @@ export function BoitelResultadoCompacto({ boitelData, cenario }: {
 }) {
   const cmp = useMemo(() => comparativoOportunidade(boitelData), [boitelData]);
   const d = useMemo(() => boitelData ? derivadosBoitel(boitelData) : null, [boitelData]);
-  const faltas = useMemo(() => boitelData ? exigencias(boitelData).filter(e => !e.presente) : [], [boitelData]);
+  const faltas = useMemo(() => boitelData ? exigencias(boitelData, cenario).filter(e => !e.presente) : [], [boitelData, cenario]);
   const pronto = !!d && faltas.length === 0;
   /* ⚠ O BOLSO E `rLiq`, e nao um numero novo: acerto liquido menos os gastos diretos do
      produtor. E' exatamente o que o veredito SEMPRE comparou com vender vivo hoje — a
@@ -856,7 +871,7 @@ export function BoitelComparacoes({ projetado, realizado }: {
    para print e para mandar aos responsáveis. Se aquele PR morrer, este componente sai
    junto. */
 export function BoitelPainelResultado({ boitelData, cenario }: { boitelData: BoitelEdicao | null; cenario?: CenarioBoitel }) {
-  const faltas = useMemo(() => boitelData ? exigencias(boitelData).filter(e => !e.presente) : [], [boitelData]);
+  const faltas = useMemo(() => boitelData ? exigencias(boitelData, cenario).filter(e => !e.presente) : [], [boitelData, cenario]);
   const d = useMemo(() => boitelData ? derivadosBoitel(boitelData) : null, [boitelData]);
 
   const faltaInd = faltas.some(f => f.grupo === 'ind');

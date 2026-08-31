@@ -35,7 +35,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Pencil, TrendingUp, Wallet, Tag, Banknote } from 'lucide-react';
 import { formatMoeda, formatKg, formatArroba } from '@/lib/calculos/formatters';
 import type { BoitelData } from '@/components/BoitelPlanningDialog';
-import { derivadosBoitel, cabecasQueSairam, liquidoDaVendaBoitel, PilulaCenario, type BoitelEdicao } from '@/components/venda/BoitelNegociacaoDerivado';
+import { derivadosBoitel, cabecasQueSairam, liquidoDaVendaBoitel, bolsoDaVendaBoitel, PilulaCenario, type BoitelEdicao } from '@/components/venda/BoitelNegociacaoDerivado';
 
 const n2 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const n3 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
@@ -260,13 +260,19 @@ export function boitelVazio(): BoitelEdicao {
    e linha derivada continuam morando neste invólucro, num lugar so'.
    ⚠ O NAO-MONETARIO (dias, GMD, percentuais) continua no caminho de sempre: `casas` e
    `toLocaleString`. Dinheiro tem campo proprio; contagem e percentual nao. */
-export function CampoNum({ label, valor, onChange, casas = 2, sufixo, obrigatorio, derivado, desabilitado, titulo, moeda, extra, previsto }: {
+export function CampoNum({ label, valor, onChange, casas = 2, sufixo, obrigatorio, derivado, desabilitado, titulo, moeda, extra, previsto, separador }: {
   label: string; valor: number; onChange: (v: number) => void; casas?: number;
   sufixo?: string; obrigatorio?: boolean; derivado?: string | null; desabilitado?: boolean;
   /** Campo de dinheiro: usa o `CampoMoeda` do sistema, com o R$ dentro do valor. */
   moeda?: boolean;
   /** Renderizado ABAIXO do campo, indentado na coluna dele — hoje, o `SeletorLado`. */
   extra?: React.ReactNode;
+  /* ⚠ SEPARADOR SOB A LINHA INTEIRA — B-05, achado E. No painel de Custos do realizado
+     cada celula carrega campo + ajuda + `previsto` + SELETOR, e numa grade de duas colunas
+     o seletor ficava a meio caminho entre o campo de cima e o de baixo: nada dizia a qual
+     dos dois ele pertencia. A borda fecha o bloco por baixo e amarra o seletor ao campo
+     dele. Custa ~1px de altura por linha (borda) mais o `pb-2`. */
+  separador?: boolean;
   /* ⚠ O QUE A PROJECAO DIZIA — PR-OC-VENDA-REALIZADO-02. So' aparece no modo realizado, e
      em AMBAR: e' o numero projetado, e a cor ja e' a marca da projecao em toda a tela. Ele
      nao compete com o campo — fica embaixo, 9px, para que digitar o real seja um ato de
@@ -303,7 +309,7 @@ export function CampoNum({ label, valor, onChange, casas = 2, sufixo, obrigatori
      veredito: e' texto de APOIO sob um numero que ja esta' no campo, e nunca carrega
      informacao que so' exista ali. */
   return (
-      <div className="min-w-0">
+      <div className={`min-w-0${separador ? ' border-b border-border/60 pb-2' : ''}`}>
         <Label title={titulo ?? label}
           className="block text-[10px] font-medium text-foreground/90 leading-none whitespace-nowrap overflow-hidden text-ellipsis">
           {label}{obrigatorio && <span className="text-destructive"> *</span>}
@@ -353,7 +359,7 @@ export function CampoNum({ label, valor, onChange, casas = 2, sufixo, obrigatori
    ⚠ O TOGGLE NAO PERSISTE: e' modo de leitura, e comeca sempre em `total` — o formato do
    fato. Estado local, module-level, sem tocar o `BoitelEdicao`. */
 function CampoTotalOuMedia({ label, titulo, total, divisor, onChangeTotal, sufixoTotal, sufixoMedia,
-  casasMedia = 5, moeda, desabilitado, obrigatorio, previsto, contexto }: {
+  casasMedia = 5, moeda, desabilitado, obrigatorio, previsto, contexto, separador }: {
   label: string; titulo?: string;
   total: number;
   /** Cabecas abatidas — ou cabecas x dias, no caso das diarias. */
@@ -364,13 +370,15 @@ function CampoTotalOuMedia({ label, titulo, total, divisor, onChangeTotal, sufix
   previsto?: string | null;
   /** Texto extra da ajuda no modo total (ex.: "109 cab × 104 dias"). */
   contexto?: string | null;
+  /** Fecha a linha por baixo — mesmo contrato do `CampoNum`; ver a nota la'. */
+  separador?: boolean;
 }) {
   const [modo, setModo] = useState<'total' | 'cab'>('total');
   const media = divisor > 0 ? total / divisor : 0;
   const nMedia = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: casasMedia, maximumFractionDigits: casasMedia });
 
   return (
-    <div className="min-w-0">
+    <div className={`min-w-0${separador ? ' border-b border-border/60 pb-2' : ''}`}>
       <div className="flex items-center gap-1.5">
         <Label title={titulo ?? label}
           className="block text-[10px] font-medium text-foreground/90 leading-none whitespace-nowrap overflow-hidden text-ellipsis">
@@ -578,7 +586,9 @@ const GRUPOS = {
 type IdGrupo = keyof typeof GRUPOS;
 type IdCard = 'A' | 'B';
 /** Um numero do cartao. `pendente` = falta o dado que o sustenta (ambar + traco). */
-interface Indicador { rotulo: string; valor: string; pendente?: boolean }
+interface Indicador { rotulo: string; valor: string; pendente?: boolean;
+  /** O nome inteiro, quando o rotulo visivel foi encurtado — mesmo contrato do `CampoNum`. */
+  titulo?: string }
 const TITULO_CARD: Record<IdCard, string> = {
   A: 'Desempenho e Custos',
   B: 'Comercialização e Adiantamento',
@@ -600,13 +610,15 @@ const TITULO_CARD: Record<IdCard, string> = {
    e `unitariosDoLiquido` fizeram.
    ⚠ TRACO, NUNCA ZERO: sem o dado que sustenta a conta, o indicador nao imprime numero —
    ele diz que falta, em ambar. */
-function indicadoresDoBoitel(d: BoitelEdicao): Record<IdCard, Indicador[]> {
+function indicadoresDoBoitel(d: BoitelEdicao, modoRealizado?: boolean): Record<IdCard, Indicador[]> {
   const der = derivadosBoitel(d);
   const qtd = d.qtdCabecas || 0;
   const temDesempenho = d.dias > 0 && d.gmd > 0 && d.rendimento > 0;
   const temCusto = d.custoDiaria > 0;
   const temPreco = d.precoVendaArroba > 0;
   const custoCab = qtd > 0 && der.custoTotalBoitel > 0 ? der.custoTotalBoitel / qtd : null;
+  const suf = modoRealizado ? 'real.' : 'proj.';
+  const sufLongo = modoRealizado ? 'Realizado' : 'Projetado';
 
   return {
     A: [
@@ -621,9 +633,20 @@ function indicadoresDoBoitel(d: BoitelEdicao): Record<IdCard, Indicador[]> {
        digita; o cartao guarda o que a Comercializacao PRODUZ. Com ele fora, o unico
        numero que era fato saiu junto, e a marca "(fato)" nao tem hoje o que marcar —
        ela volta quando voltar um fato ao resumo (o REALIZADO). */
+    /* ⚠ OS ROTULOS DIZEM O QUE SAO — B-05, achado D. "Preço" e "Fatura" eram curtos
+       demais para o que carregam: numa tela que mostra projecao e realizado lado a lado,
+       "Fatura" nao diz se e' o faturamento do abate nem de qual cenario. Os nomes agora
+       dizem as duas coisas.
+       ⚠ O SUFIXO ACOMPANHA O CARTAO, e nao e' fixo: os MESMOS indicadores montam o cartao
+       Realizado (`indReal`). Cravar "Projetado" faria o cartao da direita mentir.
+       ⚠ FORMA CURTA COM `titulo` INTEGRAL: medido, o nome inteiro nao cabe numa linha na
+       celula do cartao (~130px uteis a 10px), e `whitespace-nowrap` no rotulo faria ele
+       vazar por cima do vizinho — o defeito que o 01E ja pagou uma vez. */
     B: [
-      { rotulo: 'Preço',  valor: temPreco ? `${formatMoeda(d.precoVendaArroba)}/@` : '—', pendente: !temPreco },
-      { rotulo: 'Fatura', valor: der.fba > 0 ? formatMoeda(der.fba) : '—', pendente: !temPreco },
+      { rotulo: `Preço venda ${suf}`, titulo: `Preço de Venda ${sufLongo}`,
+        valor: temPreco ? `${formatMoeda(d.precoVendaArroba)}/@` : '—', pendente: !temPreco },
+      { rotulo: `Faturamento abate ${suf}`, titulo: `Faturamento no Abate ${sufLongo}`,
+        valor: der.fba > 0 ? formatMoeda(der.fba) : '—', pendente: !temPreco },
     ],
   };
 }
@@ -814,7 +837,7 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
               projecao continua o contrario — la' a tarifa e' o que se negocia, e o total
               deriva dela. Mesmo campo, dois sentidos, como o peso de abate ja fazia. */}
           {modoRealizado ? (
-            <CampoTotalOuMedia label="Diárias" titulo="Valor total das diárias (R$) — do papel do acerto"
+            <CampoTotalOuMedia separador={modoRealizado} label="Diárias" titulo="Valor total das diárias (R$) — do papel do acerto"
               total={d.valorTotalDiarias ?? der.cDT} divisor={cabAbate * d.dias} moeda
               onChangeTotal={v => onChange({ ...d, valorTotalDiarias: v,
                 custoDiaria: (cabAbate * d.dias) > 0 ? Math.round((v / (cabAbate * d.dias)) * 100) / 100 : 0 })}
@@ -849,7 +872,7 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
               A DIARIA JA E A NUTRICAO: e' o que o boitel cobra para alimentar o gado. Um
               campo "Nutrição (total)" ao lado das Diárias era o mesmo conceito pedido duas
               vezes, e somava em cima. */}
-          <CampoNum previsto={prev(p => formatMoeda(p.custoSanidade))} desabilitado={somenteLeitura} label="Sanidade (total)" moeda valor={d.custoSanidade} onChange={v => set('custoSanidade', v)}
+          <CampoNum separador={modoRealizado} previsto={prev(p => formatMoeda(p.custoSanidade))} desabilitado={somenteLeitura} label="Sanidade (total)" moeda valor={d.custoSanidade} onChange={v => set('custoSanidade', v)}
             derivado={porCabeca(d.custoSanidade, qtd)} />
           {/* ⚠ FICA NA TELA E FORA DA SOMA. O frete é custo operacional do produtor, pago
               por fora — o rodapé abaixo não o inclui, e o campo diz isso em vez de deixar
@@ -866,13 +889,13 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
               sao lancados quando os animais EMBARCAM, muito antes do abate; quem abre o
               acerto meses depois procurava por eles achando que faltavam, quando ja
               estavam no financeiro desde o envio. O rotulo diz quando, a ajuda diz onde. */}
-          <CampoNum previsto={prev(p => formatMoeda(p.custoFrete))} desabilitado={somenteLeitura} label="Frete · Envio (total)" moeda
+          <CampoNum separador={modoRealizado} previsto={prev(p => formatMoeda(p.custoFrete))} desabilitado={somenteLeitura} label="Frete · Envio (total)" moeda
             titulo="Frete do envio (total) — lançado quando os animais embarcam; o seletor diz de que lado do acerto ele mora"
             valor={d.custoFrete} onChange={v => set('custoFrete', v)}
             derivado={`${formatMoeda(d.custoFrete / (qtd || 1))}/cab · lançado no envio`}
             extra={<SeletorLado noBoitel={d.custoFreteNoBoitel ?? false} desabilitado={somenteLeitura}
               onChange={v => set('custoFreteNoBoitel', v)} />} />
-          <CampoNum previsto={prev(p => formatMoeda(p.outrosCustos))} desabilitado={somenteLeitura} label="Outros (total)" moeda valor={d.outrosCustos} onChange={v => set('outrosCustos', v)}
+          <CampoNum separador={modoRealizado} previsto={prev(p => formatMoeda(p.outrosCustos))} desabilitado={somenteLeitura} label="Outros (total)" moeda valor={d.outrosCustos} onChange={v => set('outrosCustos', v)}
             derivado={`${formatMoeda(d.outrosCustos / (qtd || 1))}/cab`}
             extra={<SeletorLado noBoitel={d.outrosNoBoitel ?? true} desabilitado={somenteLeitura}
               onChange={v => set('outrosNoBoitel', v)} />} />
@@ -880,7 +903,7 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
               Iagro) nao tinham campo: iam somadas em "Outros" e perdiam a identidade, e
               sem identidade nao ha como dizer de que lado do acerto elas moram. Nasce
               zerada e do lado do PRODUTOR, que e' o caso comum. */}
-          <CampoNum desabilitado={somenteLeitura} label="Notas · Envio (total)" moeda
+          <CampoNum separador={modoRealizado} desabilitado={somenteLeitura} label="Notas · Envio (total)" moeda
             titulo="Notas do envio (total) — guias tipo Fundersul e Iagro, lançadas quando os animais embarcam"
             valor={d.custoNotasEnvio ?? 0} onChange={v => set('custoNotasEnvio', v)}
             derivado={`${formatMoeda((d.custoNotasEnvio ?? 0) / (qtd || 1))}/cab · lançado no envio`}
@@ -986,13 +1009,23 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
 }
 
 /* Um degrau da conferencia do acerto — rotulo e valor, sem `truncate` no numero. */
-function LinhaConferencia({ rotulo, valor }: { rotulo: string; valor: string }) {
+/* ⚠ COR POR DIRECAO — B-05, achado F. Oito linhas de numeros iguais obrigavam a ler o
+   sinal de cada uma para saber o que somava e o que subtraia. Entrada em verde, saida em
+   vermelho, e o total NEUTRO — ele nao e' entrada nem saida, e' o resultado.
+   ⚠ A REGRA DA CASA VALE: a cor ACOMPANHA o sinal que ja esta escrito ("−", "+"), nunca e'
+   o unico canal. Quem nao distingue as duas cores le a tabela exatamente como antes.
+   ⚠ O FATURAMENTO NAO LEVA "+": ele e' a base de onde tudo parte, e um sinal ali sugeriria
+   que ha algo antes dele para somar. A cor sozinha ja diz o lado. */
+function LinhaConferencia({ rotulo, valor, direcao }: {
+  rotulo: string; valor: string; direcao?: 'entra' | 'sai';
+}) {
   return (
     /* ⚠ `leading-[1.45]`, e nao 1.6: com ate' oito itens a diferenca sao 24px, e era o
        que separava o pior caso do realizado do teto de rolagem. */
     <div className="flex items-baseline justify-between gap-6 leading-[1.45]">
       <span className="text-[11px] font-normal text-muted-foreground whitespace-nowrap">{rotulo}</span>
-      <span className="text-[11px] tabular-nums whitespace-nowrap">{valor}</span>
+      <span className={`text-[11px] tabular-nums whitespace-nowrap ${
+        direcao === 'entra' ? 'text-success' : direcao === 'sai' ? 'text-destructive' : ''}`}>{valor}</span>
     </div>
   );
 }
@@ -1017,7 +1050,7 @@ function LinhaConferencia({ rotulo, valor }: { rotulo: string; valor: string }) 
    unico teria de perguntar qual abrir — pergunta que o proprio grupo ja responde. */
 function GrupoIndicadores({ titulo, itens, onAbrir }: {
   titulo: string;
-  itens: { rotulo: string; valor: string; pendente?: boolean; fato?: boolean }[];
+  itens: { rotulo: string; valor: string; pendente?: boolean; fato?: boolean; titulo?: string }[];
   onAbrir: () => void;
 }) {
   return (
@@ -1031,7 +1064,8 @@ function GrupoIndicadores({ titulo, itens, onAbrir }: {
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3">
         {itens.map(i => (
           <div key={i.rotulo} className="min-w-0">
-            <div className="text-[10px] font-normal text-muted-foreground leading-none whitespace-nowrap">
+            <div title={i.titulo ?? i.rotulo}
+              className="text-[10px] font-normal text-muted-foreground leading-none whitespace-nowrap">
               {i.rotulo}
               {i.fato && <span className="ml-1 text-[9px] font-normal">(fato)</span>}
             </div>
@@ -1173,19 +1207,22 @@ function DialogoGrupo({ card, valor, somenteLeitura, onAplicar, onFechar, modoRe
             </div>
             <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
               <div className="min-w-0 w-fit">
-                <LinhaConferencia rotulo="Faturamento do frigorífico" valor={formatMoeda(faturamentoConferencia)} />
-                {derLocal.dAcertoDiarias > 0 && <LinhaConferencia rotulo="− Diárias do período" valor={`− ${formatMoeda(derLocal.dAcertoDiarias)}`} />}
-                {derLocal.dAcertoSanidade > 0 && <LinhaConferencia rotulo="− Sanidade" valor={`− ${formatMoeda(derLocal.dAcertoSanidade)}`} />}
-                {derLocal.dAcertoOutros > 0 && <LinhaConferencia rotulo="− Outros" valor={`− ${formatMoeda(derLocal.dAcertoOutros)}`} />}
-                {derLocal.dAcertoFrete > 0 && <LinhaConferencia rotulo="− Frete do envio" valor={`− ${formatMoeda(derLocal.dAcertoFrete)}`} />}
-                {derLocal.dAcertoNotas > 0 && <LinhaConferencia rotulo="− Notas do envio" valor={`− ${formatMoeda(derLocal.dAcertoNotas)}`} />}
-                {derLocal.dAcertoAbate > 0 && <LinhaConferencia rotulo="− Notas/docs do abate" valor={`− ${formatMoeda(derLocal.dAcertoAbate)}`} />}
+                <LinhaConferencia direcao="entra" rotulo="Faturamento do frigorífico" valor={formatMoeda(faturamentoConferencia)} />
+                {derLocal.dAcertoDiarias > 0 && <LinhaConferencia direcao="sai" rotulo="− Diárias do período" valor={`− ${formatMoeda(derLocal.dAcertoDiarias)}`} />}
+                {derLocal.dAcertoSanidade > 0 && <LinhaConferencia direcao="sai" rotulo="− Sanidade" valor={`− ${formatMoeda(derLocal.dAcertoSanidade)}`} />}
+                {derLocal.dAcertoOutros > 0 && <LinhaConferencia direcao="sai" rotulo="− Outros" valor={`− ${formatMoeda(derLocal.dAcertoOutros)}`} />}
+                {derLocal.dAcertoFrete > 0 && <LinhaConferencia direcao="sai" rotulo="− Frete do envio" valor={`− ${formatMoeda(derLocal.dAcertoFrete)}`} />}
+                {derLocal.dAcertoNotas > 0 && <LinhaConferencia direcao="sai" rotulo="− Notas do envio" valor={`− ${formatMoeda(derLocal.dAcertoNotas)}`} />}
+                {derLocal.dAcertoAbate > 0 && <LinhaConferencia direcao="sai" rotulo="− Notas/docs do abate" valor={`− ${formatMoeda(derLocal.dAcertoAbate)}`} />}
                 {derLocal.valorTotalAntecipadoCalc > 0 && (
-                  <LinhaConferencia rotulo="+ Reembolso do adiantamento" valor={`+ ${formatMoeda(derLocal.valorTotalAntecipadoCalc)}`} />
+                  <LinhaConferencia direcao="entra" rotulo="+ Reembolso do adiantamento" valor={`+ ${formatMoeda(derLocal.valorTotalAntecipadoCalc)}`} />
                 )}
                 <div className="mt-1 border-t pt-1 flex items-baseline justify-between gap-6">
+                  {/* ⚠ O TOTAL FICA NEUTRO — B-05, achado F. Ele nao e' entrada nem saida:
+                      e' o resultado das duas colunas de cor acima, e pinta-lo escolheria um
+                      lado para um numero que nao tem lado. O peso 500 e' quem o destaca. */}
                   <span className="text-[11px] font-medium text-foreground whitespace-nowrap">= A repassar pelo boitel</span>
-                  <span className="text-[13px] font-medium tabular-nums whitespace-nowrap">{formatMoeda(acertoCalculado)}</span>
+                  <span className="text-[13px] font-medium tabular-nums whitespace-nowrap text-foreground">{formatMoeda(acertoCalculado)}</span>
                 </div>
               </div>
               <div className="min-w-0">
@@ -1221,7 +1258,7 @@ function DialogoGrupo({ card, valor, somenteLeitura, onAplicar, onFechar, modoRe
 
 /* ═══ O COMPONENTE ═══════════════════════════════════════════════════════════════ */
 
-export function BoitelBlocosModais({ valor, onChange, somenteLeitura, cenario, detalheCenario, liquidoFormatado,
+export function BoitelBlocosModais({ valor, onChange, somenteLeitura, cenario, detalheCenario, bolsoFormatado,
   realizado = null, onChangeRealizado, onIniciarRealizado, comparacoes, dataEntrada }: {
   valor: BoitelEdicao; onChange: (proximo: BoitelEdicao) => void; somenteLeitura?: boolean;
   /** Marca de projecao — UMA por cartao, no titulo. Ver `GrupoIndicadores`. */
@@ -1229,7 +1266,12 @@ export function BoitelBlocosModais({ valor, onChange, somenteLeitura, cenario, d
   /** Texto que acompanha a pilula (mockup: "enviada em 13/05"). */
   detalheCenario?: string | null;
   /** O liquido projetado, ja formatado — mora DENTRO do cartao de projecao. */
-  liquidoFormatado?: string | null;
+  /* ⚠ O BOLSO, e nao mais o acerto — B-05, achado C. Ver a doutrina em
+     `bolsoDaVendaBoitel`: um liquido so' na tela, e e' o que sobra depois dos gastos
+     diretos. O ACERTO nao sumiu — ele vive inteiro na cascata e, item a item, na
+     conferencia "Acerto com o boitel" do modal do realizado, que e' onde ele responde a
+     pergunta dele ("o boitel me repassa quanto?"). */
+  bolsoFormatado?: string | null;
   /* ─── O SEGUNDO MUNDO — PR-OC-VENDA-REALIZADO-02 ──────────────────────────────
      `realizado` e' a linha `cenario='realizado'`; `null` enquanto o abate nao aconteceu,
      e e' esse null que mantem o cartao tracejado do 01D.
@@ -1247,7 +1289,7 @@ export function BoitelBlocosModais({ valor, onChange, somenteLeitura, cenario, d
 }) {
   const [editando, setEditando] = useState<{ card: IdCard; modo: CenarioBoitel } | null>(null);
   const indicadores = useMemo(() => indicadoresDoBoitel(valor), [valor]);
-  const indReal = useMemo(() => realizado ? indicadoresDoBoitel(realizado) : null, [realizado]);
+  const indReal = useMemo(() => realizado ? indicadoresDoBoitel(realizado, true) : null, [realizado]);
   const temRealizado = !!realizado;
 
   const abrir = async (card: IdCard, modo: CenarioBoitel) => {
@@ -1274,11 +1316,11 @@ export function BoitelBlocosModais({ valor, onChange, somenteLeitura, cenario, d
               <span className="text-[10px] font-normal text-muted-foreground leading-none truncate">{detalheCenario}</span>
             )}
           </div>
-          {liquidoFormatado && (
+          {bolsoFormatado && (
             <div className="shrink-0 text-right">
-              <div className="text-[10px] font-normal text-muted-foreground leading-none whitespace-nowrap">Líquido projetado</div>
+              <div className="text-[10px] font-normal text-muted-foreground leading-none whitespace-nowrap">Liq. no bolso projetado</div>
               <div className="mt-1 text-[20px] font-medium leading-none tabular-nums whitespace-nowrap text-[#854F0B] dark:text-amber-500">
-                {liquidoFormatado}
+                {bolsoFormatado}
               </div>
             </div>
           )}
@@ -1301,9 +1343,9 @@ export function BoitelBlocosModais({ valor, onChange, somenteLeitura, cenario, d
           </span>
           {temRealizado && realizado && (
             <div className="shrink-0 text-right">
-              <div className="text-[10px] font-normal text-muted-foreground leading-none whitespace-nowrap">Líquido realizado</div>
+              <div className="text-[10px] font-normal text-muted-foreground leading-none whitespace-nowrap">Liq. no bolso realizado</div>
               <div className="mt-1 text-[20px] font-medium leading-none tabular-nums whitespace-nowrap text-foreground">
-                {(() => { const v = liquidoDaVendaBoitel(realizado); return v == null ? '—' : formatMoeda(v); })()}
+                {(() => { const v = bolsoDaVendaBoitel(realizado); return v == null ? '—' : formatMoeda(v); })()}
               </div>
             </div>
           )}

@@ -630,11 +630,13 @@ export function VendaModalShell({
                           pilula diz QUE e' projecao e nao diz de QUANDO, que e' o que
                           permite julgar se ela ainda vale. `data` e' a data da operacao. */
                       detalheCenario={data ? `enviada em ${data.split('-').reverse().slice(0, 2).join('/')}` : null}
-                      /* O liquido migrou da faixa para DENTRO do cartao de projecao. */
-                      liquidoFormatado={(() => {
-                        const v = liquidoDaVendaBoitel(boitelData);
-                        return v == null ? null : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                      })()}
+                      /* ⚠ O MESMO NUMERO DO TOPO — B-05, achado C: um liquido so' na tela.
+                          Era o ACERTO (565.217,00) aqui e o BOLSO (552.717,00) no topo, os
+                          dois sob a mesma pilula de projecao, e nada dizia que eram
+                          perguntas diferentes. `bolsoProjetado` ja esta calculado acima —
+                          nao ha segunda chamada. */
+                      bolsoFormatado={bolsoProjetado == null ? null
+                        : bolsoProjetado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       realizado={boitelReal}
                       onChangeRealizado={onAplicarRealizado}
                       onIniciarRealizado={onIniciarRealizado}

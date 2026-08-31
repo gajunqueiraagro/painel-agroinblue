@@ -2410,6 +2410,32 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     };
   }, [vendaTipoVenda, ocBoitel, lotesApi.totais]);
 
+  /* ⚠ O REALIZADO PRECISA DO MESMO ENXERTO — B-05, achado A. `boitelDeLinha` devolve a
+     linha SEM cabecas e SEM peso (a propria funcao avisa: "sao sobrescritos pelos lotes
+     depois disto"), e ate' aqui so' a PROJECAO recebia o enxerto. O `ocBoitelReal`
+     hidratado do banco ia cru para a tela, com `qtdCabecas` em ZERO.
+     ⚠ O ESTRAGO ERA MUITO MAIOR QUE OS DOIS CAMPOS QUE O DENUNCIARAM. Com zero cabecas,
+     `sairam` e' zero, e no motor TUDO que multiplica por `sairam` colapsa: arrobas de
+     saida, faturamento, diarias derivadas. So' os FATOS CRUS sobreviviam — dias e o total
+     das diarias, que nao passam por `sairam`. Era exatamente a assimetria do print: 104
+     dias e 214.590,48 firmes, peso e arrobas em zero.
+     ⚠ E 02G TROCOU "MOSTRA ZERO" POR "DESCARTA O FATO": a guarda `sairam > 0` dos dois
+     novos campos os fazia cair no derivado quando as cabecas sumiam. O dado ESTAVA no
+     banco o tempo todo (medido: 62.075,5 kg e 2.251,67 @ gravados) — quem o perdia era o
+     caminho da tela.
+     ⚠ MEMO E NAO SEMEADURA NO `set`: gravar as cabecas dentro do `setOcBoitelReal` da
+     hidratacao congelaria o valor da primeira leitura, e um lote editado depois nao
+     chegaria ao realizado. E' a mesma razao que `boitelVazio` documenta para nao semear
+     cabecas la'. */
+  const boitelRealDaVenda = useMemo<BoitelEdicao | null>(() => {
+    if (vendaTipoVenda !== 'boitel' || !ocBoitelReal) return null;
+    return {
+      ...ocBoitelReal,
+      qtdCabecas: lotesApi.totais.animais,
+      pesoInicial: pesoMedioPorCabeca(lotesApi.totais) ?? 0,
+    };
+  }, [vendaTipoVenda, ocBoitelReal, lotesApi.totais]);
+
   /* A assinatura do que esta' na tela AGORA. Recalculada a cada render de proposito — sao
      dois JSON pequenos, e memorizar traria o risco de dependencia esquecida, caro justamente
      aqui, onde errar significa o botao mentir num dos dois sentidos. */
@@ -5225,7 +5251,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           /* ⚠ O SEGUNDO MUNDO. `boitelReal` e' a linha 'realizado'; o Aplicar dela
               encadeia salvar + revalorar (ver `aplicarRealizadoBoitel`), e o iniciar
               resolve o guard de `fechada` ANTES de o dialogo abrir. */
-          boitelReal={ocBoitelReal}
+          boitelReal={boitelRealDaVenda}
           onAplicarRealizado={aplicarRealizadoBoitel}
           onIniciarRealizado={iniciarRealizadoBoitel}
           categoria={categoria}
