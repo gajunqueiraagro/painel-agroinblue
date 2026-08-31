@@ -9,7 +9,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import {
-  useVinculosDoMovimento, useCandidatosDoMovimento, vincularGrupo, TOL,
+  useVinculosDoMovimento, useCandidatosDoMovimento, vincularSelecao, TOL,
   type MovimentoConciliacao, type CandidatoConciliacao,
 } from '@/hooks/useConciliacaoDoMes';
 
@@ -33,16 +33,19 @@ import {
  * sugerida, criar o lançamento da linha e criar o par de transferência. Cada uma
  * é uma feature com ADR própria, e nenhuma é "listar candidatos e vincular".
  *
- * ⚠ A GUARDA DE SOBRE-APLICAÇÃO É DAQUI, E É PALIATIVA. No original quem recusa
- * aplicar mais do que o movimento comporta é o BANCO (`fn_tg_conciliacao_coerente`),
- * e por isso o front de lá não checa nada. Medido no Proto: nem
- * `fn_vincular_grupo_conciliacao` nem `fn_vincular_extrato_lancamento` mencionam
- * sobre-aplicação, e os quatro gatilhos de `conciliacao_bancaria_itens` são
- * auditoria, mês fechado, promoção e snapshot — nenhum equivalente. Portar o
- * front verbatim daria uma estação que sobre-aplica em silêncio. Então o botão
- * se recusa a oferecer o que estouraria, com o motivo escrito ao lado. É freio
- * de tela, não invariante: a guarda de verdade é migration
- * (CONCIL-SOBRE-APLICACAO-01) e continua pendente.
+ * ⚠ A GUARDA DE SOBRE-APLICAÇÃO EXISTE DE UM LADO SÓ, e a leitura dos corpos no
+ * banco (B-28b) refinou o que o B-28 tinha registrado. No original quem recusa é
+ * um gatilho (`fn_tg_conciliacao_coerente`); aqui não há gatilho equivalente —
+ * os quatro de `conciliacao_bancaria_itens` são auditoria, mês fechado, promoção
+ * e snapshot. Mas as RPCs não são iguais entre si:
+ *   `fn_vincular_grupo_conciliacao` EXIGE que a soma feche o valor cheio do
+ *     movimento (`soma_diverge`, tolerância 0,005) — sobre-aplicar por ali é
+ *     impossível, e sub-aplicar também;
+ *   `fn_vincular_extrato_lancamento` NÃO checa valor nenhum: aceita o
+ *     `p_valor_aplicado` que mandarem, inclusive maior que o movimento.
+ * Então o freio de tela é a ÚNICA defesa no caminho unitário, e é paliativo: o
+ * botão se recusa a oferecer o que estouraria, com o motivo escrito ao lado. A
+ * guarda de verdade é migration (CONCIL-SOBRE-APLICACAO-01) e continua pendente.
  */
 interface Props {
   movimento: MovimentoConciliacao;
@@ -78,11 +81,25 @@ export function EstacaoConciliar({ movimento, aoFechar, aoMudar }: Props) {
   const restaDepois = resta - somaMarcada;
   /* ⚠ UMA FRASE, TRÊS USOS: `disabled`, `title` e a dica ao lado saem daqui.
      Botão desabilitado sempre diz por quê, e o motivo tem uma fonte só — dois
-     lugares divergiriam no primeiro ajuste. */
+     lugares divergiriam no primeiro ajuste.
+     ⚠ CADA LINHA ANTECIPA UMA RECUSA QUE EXISTE NO CORPO DA RPC, lida no banco —
+     nenhuma é regra inventada aqui. A tela antecipa; quem recusa é o banco, e a
+     mensagem dele continua chegando inteira no toast quando algo escapar.
+       · 1 marcado + extrato com vínculo ativo → a unitária levanta
+         'extrato ja possui vinculo ativo';
+       · 2+ marcados que não somam o valor CHEIO do movimento → o grupo levanta
+         'soma_diverge', porque compara com `abs(valor_do_extrato)` e não com o
+         que falta;
+       · seleção que passa do aberto → nada no banco recusa no caminho unitário,
+         e este é o único freio (CONCIL-SOBRE-APLICACAO-01, ainda pendente). */
   const impedimento: string | null =
     marcados.size === 0 ? 'Marque ao menos um lançamento.'
     : restaDepois < -TOL
       ? `A seleção passa ${formatMoeda(Math.abs(restaDepois))} do que falta neste movimento.`
+    : marcados.size === 1 && vinculos.length > 0
+      ? 'Este movimento já tem vínculo ativo — o banco só aceita um vínculo avulso por movimento. Desfaça o atual para refazer.'
+    : marcados.size > 1 && Math.abs(somaMarcada - alvo) > TOL
+      ? `Em grupo, a soma tem de fechar o valor cheio do movimento (${formatMoeda(alvo)}); a seleção soma ${formatMoeda(somaMarcada)}.`
       : null;
 
   const alternar = (c: CandidatoConciliacao) => {
@@ -99,7 +116,7 @@ export function EstacaoConciliar({ movimento, aoFechar, aoMudar }: Props) {
     setVinculando(true);
     try {
       const pares = Array.from(marcados, ([lancamentoId, valor]) => ({ lancamentoId, valor }));
-      const { ok, erro } = await vincularGrupo(movimento.id, pares, 'vinculado_na_estacao');
+      const { ok, erro } = await vincularSelecao(movimento.id, pares, 'vinculado_na_estacao');
       if (!ok) { toast.error(erro ?? 'O banco recusou o vínculo.'); return; }
       toast.success(`${pares.length} vínculo${pares.length === 1 ? '' : 's'} criado${pares.length === 1 ? '' : 's'}.`);
       setMarcados(new Map());
@@ -312,8 +329,20 @@ export function EstacaoConciliar({ movimento, aoFechar, aoMudar }: Props) {
                               </span>
                             )}
                           </td>
+                          {/* ⚠ A MARCA DE EXATO NÃO EXISTE NO ORIGINAL — medido: a
+                              célula de Δ R$ de lá é texto cru `text-muted-foreground`
+                              e escreve "0", não "exato" (a palavra foi nossa, do
+                              B-28). O que veio verbatim é a CLASSE: o verde
+                              `bg-success/15 text-success` em `text-[10px]` é o do
+                              badge de situação do movimento na estação de lá — a
+                              mesma linguagem visual, no piso de leitura da casa. */}
                           <td className="whitespace-nowrap px-2 py-1 text-right tabular-nums text-muted-foreground">
-                            {Math.abs(c.deltaValor) <= TOL ? 'exato' : formatMoeda(c.deltaValor)}
+                            {Math.abs(c.deltaValor) <= TOL ? (
+                              <span className="rounded bg-success/15 px-1.5 py-px text-[10px] font-semibold text-success"
+                                title="Δ zero: o valor do lançamento bate com o do movimento.">
+                                exato
+                              </span>
+                            ) : formatMoeda(c.deltaValor)}
                           </td>
                           <td className="whitespace-nowrap px-2 py-1 text-right tabular-nums text-muted-foreground">
                             {c.deltaDias == null ? '—' : c.deltaDias}

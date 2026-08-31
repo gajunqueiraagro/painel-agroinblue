@@ -331,21 +331,51 @@ export function useCandidatosDoMovimento(clienteId: string | null, extratoId: st
 }
 
 /**
- * GRAVA O LOTE MARCADO — `fn_vincular_grupo_conciliacao`.
+ * GRAVA A SELEÇÃO — e a RPC depende de QUANTOS foram marcados.
  *
- * ⚠ UMA CHAMADA, NÃO UM LAÇO. O original aplica um a um porque a RPC dele
- * recebe um par por vez; a nossa recebe os arrays `p_lancamentos` e `p_valores`
- * (assinatura conferida em `pg_proc`) e resolve o lote numa transação. Emular o
- * laço aqui trocaria a atomicidade do banco por um meio-vínculo em caso de erro.
+ * ⚠ SÃO DUAS FUNÇÕES, NÃO UMA COM DOIS MODOS, e mandar tudo para a de grupo era
+ * o defeito do B-28b: `fn_vincular_grupo_conciliacao` começa com
+ * `IF v_n < 2 THEN RAISE EXCEPTION 'array_vazio: grupo exige >= 2 lancamentos'`
+ * — lido no corpo dela, em `pg_proc`. Um único candidato marcado, que é o caso
+ * mais comum da estação, batia nessa linha e nunca gravava.
  *
- * ⚠ OS DOIS ARRAYS ANDAM EM PAR e a ordem é o que os liga — `p_valores[i]` é o
- * valor de `p_lancamentos[i]`. Saem da MESMA iteração, nunca de duas.
+ * ⚠ AS DUAS NÃO SÃO A MESMA REGRA COM TAMANHOS DIFERENTES, e é por isso que a
+ * tela precisa saber qual vai chamar (corpos lidos no banco):
+ *   unitária — recusa se o extrato JÁ tem vínculo ativo
+ *              (`extrato ja possui vinculo ativo`), e NÃO exige que o valor
+ *              feche: aceita deixar o movimento parcial;
+ *   grupo    — não olha vínculo existente do extrato, mas EXIGE
+ *              `abs(total - abs(valor_do_extrato)) <= 0,005`
+ *              (`soma_diverge`), contra o valor CHEIO do OFX e não contra o que
+ *              falta. Aplicar em duas rodadas de grupo é impossível por
+ *              construção.
+ * `impedimento`, na estação, antecipa exatamente essas duas recusas.
+ *
+ * ⚠ NO CAMINHO DE GRUPO, OS ARRAYS ANDAM EM PAR e a ordem é o que os liga —
+ * `p_valores[i]` é o valor de `p_lancamentos[i]`. Saem da MESMA iteração.
+ * Uma chamada, nunca um laço: emular o par-a-par do original trocaria a
+ * atomicidade do banco por meio-vínculo em caso de erro.
  */
-export async function vincularGrupo(
+export async function vincularSelecao(
   extratoId: string,
   pares: readonly { lancamentoId: string; valor: number }[],
   motivo: string,
 ): Promise<{ ok: boolean; erro: string | null }> {
+  /* A mensagem do Postgres nomeia o invariante violado; trocá-la por um texto
+     genérico tiraria do operador a única pista útil. Os dois caminhos devolvem
+     o erro do mesmo jeito, porque os dois levantam por `RAISE EXCEPTION`. */
+  if (pares.length === 1) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+    const { error } = await (supabase as any).rpc('fn_vincular_extrato_lancamento', {
+      p_extrato_id: extratoId,
+      p_lancamento_id: pares[0].lancamentoId,
+      /* ⚠ SEMPRE EXPLÍCITO. O default da função é `abs(valor_do_extrato)` — o
+         valor do MOVIMENTO —, e o que se quer aplicar é o saldo livre do
+         LANÇAMENTO. Omitir o parâmetro trocaria um pelo outro em silêncio. */
+      p_valor_aplicado: pares[0].valor,
+    });
+    return { ok: !error, erro: error?.message ?? null };
+  }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
   const { error } = await (supabase as any).rpc('fn_vincular_grupo_conciliacao', {
     p_extrato_id: extratoId,
@@ -353,8 +383,6 @@ export async function vincularGrupo(
     p_valores: pares.map(p => p.valor),
     p_motivo: motivo,
   });
-  /* A mensagem do Postgres nomeia o invariante violado; trocá-la por um texto
-     genérico tiraria do operador a única pista útil. */
   return { ok: !error, erro: error?.message ?? null };
 }
 
