@@ -3666,29 +3666,38 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
        realizado-por-pagamento contra o MESMO plano. Os dois divergem sobre a
        mesma meta e AMBOS estao certos. */
     const C: Regime = 'competencia';
-    /* ⚠ `lancFinDre` NAS TRÊS LINHAS DE RECEITA E DEDUÇÃO — PR-FIN-COMP-02.
-       O regime `C` sempre esteve certo aqui: o adapter recorta por
-       `data_competencia`. O que estava errado era o CONJUNTO — ele chegava
+    /* ⚠ O BLOCO INTEIRO LÊ `lancFinDre` — PR-FIN-COMP-02 (receitas, B-30) e 02b
+       (custos, B-30b). O regime `C` sempre esteve certo aqui: o adapter recorta
+       por `data_competencia`. O que estava errado era o CONJUNTO — ele chegava
        peneirado por caixa (`status_transacao='realizado'` + janela de
-       `data_pagamento`, defaults de `useFinanceiro`), então um título com fato
-       no ano e pagamento futuro nunca chegava a ser agregado. Medido na Vera/2026:
-       R$ 1.097.196,26 de fato gerado e não pago simplesmente não existiam para
-       o DRE. Agregar em competência sobre conjunto de caixa não é um regime —
-       é o menor dos dois.
-       ⚠ AS DEMAIS LINHAS DESTE BLOCO SEGUEM COM `lancFin` — escopo do B-30 são
-       Faturamento e Deduções. Enquanto as duas metades não se encontrarem, o DRE
-       mistura receita por fato com custo por pagamento; está declarado no
-       relatório do PR, com o número, para virar decisão e não descuido. */
+       `data_pagamento`, defaults de `useFinanceiro`), então um título com fato no
+       ano e pagamento futuro nunca chegava a ser agregado. Medido na Vera/2026:
+       R$ 1.097.196,26 de fato gerado e não pago simplesmente não existiam para o
+       DRE. Agregar em competência sobre conjunto de caixa não é um regime — é o
+       menor dos dois.
+       ⚠ AS DUAS METADES ANDAM JUNTAS, e é por isso que a segunda veio logo atrás
+       da primeira: com receita por fato e custo por pagamento, a margem sairia
+       inflada em qualquer cliente com conta a pagar — um erro maior que o
+       original, porque parece certo. Nenhuma fórmula derivada mudou; mudou o
+       insumo, e a cadeia (`custeio`, `resBruto`, `margem`, `lucro`) acompanha por
+       construção.
+       ⚠ NADA AQUI VAZA PARA O BLOCO CAIXA: `saidasTot` e os desembolsos abaixo
+       seguem com `lancFin` e com o `regime` do caller — conferido consumidor a
+       consumidor antes de trocar. */
     const dreRec     = agregaReceitaPec(lancFinDre, ano, C);
     const dreRecOut  = agregaOutrasReceitas(lancFinDre, ano, C);
     const dreDed     = agregaDeducoesPec(lancFinDre, ano, C);
-    const dreCf      = agregaCustoFixoPec(lancFin, ano, C);
-    const dreCv      = agregaCustoVariavelPec(lancFin, ano, C);
-    const dreInvFaz  = agregaInvFazendaPec(lancFin, ano, C);
-    const dreInvBov  = agregaInvBovinos(lancFin, ano, C);
-    const dreJuros   = agregaJurosPec(lancFin, ano, C);
-    const dreTribPat = agregaTributoPatrimonial(lancFin, ano, C);
-    const dreImpLuc  = agregaImpostoSobreLucro(lancFin, ano, C);
+    const dreCf      = agregaCustoFixoPec(lancFinDre, ano, C);
+    const dreCv      = agregaCustoVariavelPec(lancFinDre, ano, C);
+    const dreInvFaz  = agregaInvFazendaPec(lancFinDre, ano, C);
+    /* ⚠ `dreInvBov` ENTRA: apesar do nome, a Reposição de Bovinos desta linha sai
+       do FINANCEIRO (`lancFin` por regime), não do rebanho. As linhas zootécnicas
+       de verdade — variação por produção, por preço e VBP — vêm de `lancPec` e
+       continuam intocadas. */
+    const dreInvBov  = agregaInvBovinos(lancFinDre, ano, C);
+    const dreJuros   = agregaJurosPec(lancFinDre, ano, C);
+    const dreTribPat = agregaTributoPatrimonial(lancFinDre, ano, C);
+    const dreImpLuc  = agregaImpostoSobreLucro(lancFinDre, ano, C);
     const cusPecComJ  = addArr12(cusPecSemJ, jurPec);
     const cusAgriComJ = addArr12(cusAgriSemJ, jurAgri);
     const cusSilviComJ  = addArr12(cusSilviSemJ, jurSilvi);
