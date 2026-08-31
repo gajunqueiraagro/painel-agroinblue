@@ -302,9 +302,12 @@ export function LancamentoV2Dialog({
   //   de proveniência persistido (origem_lancamento), nunca por texto de UI. O writer
   //   (useFinanceiroV2.editarLancamento) aplica a mesma proteção de forma independente.
   const isOCTitulo = isEdit && lancamento?.origem_lancamento === 'operacao_comercial';
-  // PR-OC-FIN-EDIT-FIX-02 — favorecido de título OC bloqueado no Financeiro V2 direto; liberado só quando
-  //   a edição vem da aba Financeiro da OC (permiteEditarFavorecidoOC=true).
-  const favorecidoOCBloqueado = isOCTitulo && !permiteEditarFavorecidoOC;
+  /* ⚠ `permiteEditarFavorecidoOC` DEIXOU DE SER CONDICAO — FIN-FORNECEDOR-OC-EDIT (B-19).
+     O favorecido passou a ser editavel nos DOIS caminhos; a prop continua no contrato
+     porque e' por ela que a aba Financeiro da OC declara a sua abertura, e remove-la
+     mexeria no `FinanceiroV2Tab` por um motivo que nao e' deste PR. Ver a nota inteira no
+     campo Fornecedor. */
+  void permiteEditarFavorecidoOC;
   // Store the editing ID in a ref so it can't become stale during async save
   const editingIdRef = useRef<string | null>(null);
   useEffect(() => {
@@ -1305,14 +1308,29 @@ export function LancamentoV2Dialog({
                   label="Fornecedor *"
                   triggerClassName={fieldBg}
                   tabIndex={6}
-                  disabled={favorecidoOCBloqueado}
+                  /* ⚠ O FORNECEDOR NAO E SOBERANIA DA OC — FIN-FORNECEDOR-OC-EDIT (B-19),
+                     decisao do Gabriel. A OC manda em VALOR, CLASSIFICACAO, TIPO e
+                     COMPETENCIA: sao os campos que compoem a OBRIGACAO, e muda-los aqui
+                     contradiria a operacao. O FORNECEDOR nao compoe obrigacao nenhuma —
+                     e' o favorecido do TITULO, atributo do financeiro, e e' distinto da
+                     contraparte comercial (o vinculo da OC e' por PARTE, nunca por
+                     favorecido).
+                     ⚠ O CASO QUE FECHOU A DECISAO (maio): compromissos nascendo com
+                     favorecido errado — frete em nome do boitel em vez da transportadora.
+                     Sem poder corrigir aqui, a unica saida era cancelar e recriar, e foi
+                     assim que nasceram duplicatas.
+                     ⚠ A TRAVA ERA SO' DE TELA, E MAIS APERTADA QUE A DO GRAVADOR —
+                     medido: `protecaoTituloOC.ts:48` ja nao trata favorecido como
+                     estrutural (PR-OC-FIN-EDIT-FIX-01) e o payload restrito de
+                     `editarLancamento` JA inclui `favorecido_id`. A tela impedia o que o
+                     writer aceitava; a mesma edicao passava por uma porta e falhava por
+                     outra, e isso ensina que o sistema e' arbitrario.
+                     ⚠ O QUE CONTINUA TRAVADO, e por que: valor, tipo de operacao,
+                     classificacao (subcentro/macro/grupo/centro) e as duas datas de
+                     competencia/vencimento — os cinco compoem a obrigacao da OC e o writer
+                     tambem os recusa, entao tela e gravador dizem a mesma coisa. */
                   showCpfCnpj
                 />
-                {favorecidoOCBloqueado && (
-                  <p className="text-[9px] text-sky-700 dark:text-sky-400 mt-0.5 leading-tight">
-                    Este título pertence a uma Operação Comercial. Ajuste o favorecido pela aba Financeiro da OC.
-                  </p>
-                )}
               </div>
             </div>
 
