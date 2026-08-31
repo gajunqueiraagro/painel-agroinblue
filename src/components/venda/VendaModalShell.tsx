@@ -49,9 +49,9 @@ import type { RecebimentoApi } from '@/hooks/useOperacaoRecebimento';
 import type { DocumentosApi } from '@/hooks/useOperacaoDocumentos';
 import type { EventosApi } from '@/hooks/useOperacaoEventos';
 import type { LiquidacaoApi } from '@/hooks/useOperacaoLiquidacao';
-import { BoitelTopoNegociacao, BoitelResultadoCompacto, BoitelComparacoes, liquidoDaVendaBoitel, derivadosBoitel, PilulaCenario } from '@/components/venda/BoitelNegociacaoDerivado';
+import { BoitelTopoNegociacao, BoitelResultadoCompacto, BoitelComparacoes, liquidoDaVendaBoitel, bolsoDaVendaBoitel, unitariosDoLiquido, derivadosBoitel, PilulaCenario } from '@/components/venda/BoitelNegociacaoDerivado';
 import { BoitelBlocosModais, faltamDosCinco, type BoitelEdicao } from '@/components/venda/BoitelBlocosModais';
-import { pesoMedioPorCabeca, valorPorKgNegociado } from '@/hooks/useCompraLotes';
+import { pesoMedioPorCabeca } from '@/hooks/useCompraLotes';
 
 /* ⚠ "RECEBIMENTO" CHAMA-SE ENTREGA NA VENDA — o gado SAI. A coluna do banco já é
    genérica (`entrega_encerrada`), então o vocabulário muda só na tela.
@@ -342,6 +342,10 @@ export function VendaModalShell({
     }), [],
   );
 
+  /* ⚠ O BOLSO PROJETADO — B-04. UMA chamada, e o topo e o R$/kg saem dela: derivar duas
+     vezes seria abrir a porta para os dois numeros do cabecalho discordarem entre si, que
+     e' a versao pequena do defeito que este PR conserta. Ver `bolsoDaVendaBoitel`. */
+  const bolsoProjetado = ehBoitel ? bolsoDaVendaBoitel(boitelData) : null;
   const faltamBoitel = ehBoitel ? faltamDosCinco(boitelData) : [];
   const naNegociacao = abaAtiva === 'negociacao';
   /* ⚠ SALVAR SO ONDE HA O QUE SALVAR — PR-OC-VENDA-ENTREGA-01C. Nas outras quatro abas o
@@ -575,15 +579,28 @@ export function VendaModalShell({
                 {/* ⚠ 'projetado' FIXO, e nao derivado: e' o unico cenario que esta tela
                     edita — o shell grava 'projetado' sempre em `salvarNegociacaoVendaOC`.
                     PR-OC-VENDA-BOITEL-REALIZADO-01 e' quem passa a variar isto.
-                    ⚠ O TOPO NAO DERIVA: os quatro numeros saem de `lotesApi.totais` pelos
-                    MESMOS dois helpers que o cabecalho de lotes usa. Cabecas e peso do
-                    boitel SAO os do lote (ver `boitelDaVenda`), entao nao ha segunda
-                    fonte — ha uma so', agora mostrada uma vez so'. */}
+                    ⚠ CADA LADO TEM A SUA FONTE — B-04, e a mistura era o defeito. A
+                    ESQUERDA e' FATO e sai de `lotesApi.totais`: cabecas e peso do boitel
+                    SAO os do lote (ver `boitelDaVenda`). A DIREITA e' PROJECAO e sai do
+                    MOTOR, sobre a linha `projetado` — `boitelData` e' exatamente ela.
+                    ⚠ `valorPorKgNegociado` E `totais.valorNegociado` SAIRAM DAQUI, e a
+                    saida e' a correcao. Eles leem `zoo_operacao_lotes.valor_informado`,
+                    que e' o VALOR OFICIAL da operacao e e' realizado-soberano: assim que
+                    um rascunho de realizado revalora o lote, aquele slot passa a contar a
+                    historia do abate. Mostra-lo sob a pilula "projecao" fazia a tela
+                    afirmar como promessa um numero que era realizado — medido na
+                    b58bf556: 595.071,81 / R$ 13,26 no lugar de 552.717,00 / R$ 12,32.
+                    O slot oficial continua visivel no card do lote, ao lado, e la' esta'
+                    certo. Doutrina inteira em `bolsoDaVendaBoitel`.
+                    ⚠ O DENOMINADOR DO R$/kg E O MESMO PESO QUE O TOPO EXIBE — cabecas x
+                    peso de saida da fazenda —, e vem da irma `unitariosDoLiquido`, com a
+                    base trocada para o bolso. Escrever a divisao aqui seria a segunda
+                    copia dela. */}
                 <BoitelTopoNegociacao
                   cabecas={lotesApi?.totais.animais ?? 0}
                   pesoMedioKg={lotesApi ? pesoMedioPorCabeca(lotesApi.totais) : null}
-                  valorPorKg={lotesApi ? valorPorKgNegociado(lotesApi.totais) : null}
-                  valorTotal={lotesApi?.totais.valorNegociado ?? 0}
+                  valorPorKg={unitariosDoLiquido(boitelData, bolsoProjetado).porKg}
+                  valorTotal={bolsoProjetado ?? 0}
                   cenario="projetado"
                   /* ⚠ O LOTE ENTRA DENTRO DO TOPO — complemento C. Ele era uma linha
                       abaixo, repetindo cabecas e R$/cab; virou o terceiro FATO, ao lado de

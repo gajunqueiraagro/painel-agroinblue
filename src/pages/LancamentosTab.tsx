@@ -2472,6 +2472,21 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       v = envB.versao;
       setOcVersao(v);
 
+      /* ⚠ A DOUTRINA DOS DOIS MUNDOS, O LADO QUE ESCREVE — B-04 (o outro lado esta' em
+         `bolsoDaVendaBoitel`). Esta chamada grava o liquido REAL em
+         `zoo_operacao_lotes.valor_informado`, e e' ela que torna aquele slot
+         REALIZADO-SOBERANO. Isso e' DESEJADO e foi decidido pelo Gabriel em 858ee073: o
+         valor oficial da operacao passa a ser o do abate, e o rebanho se corrige sozinho.
+         O card do lote e o resumo lateral leem esse slot e mostram o real — certo.
+         ⚠ E POR ISSO A PROJECAO NAO PODE LER DAQUI. O lote e' UM SO' para os dois
+         cenarios (`zoo_operacao_lotes` nao tem coluna de cenario, medido), entao esta
+         escrita apaga a promessa do slot dela. A promessa nao se guarda em segundo lugar
+         — ela se DERIVA da linha `projetado`, que esta escrita e intacta. Enquanto o topo
+         ambar lia este slot, um rascunho de realizado fazia a tela anunciar 595.071,81
+         como projecao; corrigido em B-04 mudando o ENDERECO DE LEITURA, nao esta escrita.
+         ⚠ NENHUM CAMPO DA LINHA REALIZADO ENTRA EM CONTA DE PROJECAO: a projecao e'
+         historica e imutavel depois do abate — o realizado compara COM ela, nunca a
+         reescreve. */
       const liquidoReal = liquidoDaVendaBoitel(proximo);
       const loteId = lotesApi.lotes[0]?.id;
       if (liquidoReal != null && liquidoReal > 0 && loteId) {

@@ -432,6 +432,46 @@ export function liquidoDaVendaBoitel(d: BoitelEdicao | null): number | null {
   return Math.round((x.fba - x.descontoDoAcerto) * 100) / 100;
 }
 
+/* ─── O BOLSO DA VENDA BOITEL ──────────────────────────────────────────────────
+   PR-OC-VENDA-TOPO-PROJECAO-01. Funcao irma de `liquidoDaVendaBoitel`, mesma guarda e
+   mesmo contrato: le `derivadosBoitel` e nao reescreve nada.
+
+       bolso = rLiq = acerto liquido - gastos diretos do produtor
+
+   ⚠ A DOUTRINA DOS DOIS MUNDOS — decisao do Gabriel, B-04, e a razao desta funcao existir.
+   Uma venda boitel tem DUAS verdades e elas nao se misturam:
+     (1) O VALOR OFICIAL da operacao mora em `zoo_operacao_lotes.valor_informado` e e'
+         REALIZADO-SOBERANO (858ee073: "o realizado corrige o rebanho sozinho"). O
+         rebanho, o resumo lateral e o card do lote leem ELE — e esta' CERTO que mostrem o
+         real depois do abate. E' o valor da operacao, nao a promessa.
+     (2) A PROJECAO PURA deriva SEMPRE da linha `projetado` pelo motor. A promessa mora
+         la', intacta, e NAO SE GRAVA EM SEGUNDO LUGAR: seria copia de verdade derivavel,
+         e copia de verdade derivavel e' como dois numeros comecam a divergir.
+   ⚠ O DEFEITO QUE ISTO FECHA (print do Gabriel, 31/08): o topo ambar lia
+   `lotesApi.totais.valorNegociado` — o slot (1) — e mostrava R$ 595.071,81 / 13,26 como
+   se fosse projecao, porque um rascunho de realizado ja tinha revalorado o lote. A linha
+   `projetado` estava INTACTA o tempo todo; quem estava trocado era o endereco de leitura.
+   Medido: as duas linhas de boitel da b58bf556 nunca se contaminaram — o lote e' que e'
+   um so' para os dois cenarios, e nao tem coluna de cenario.
+   ⚠ NENHUM CAMPO DA LINHA REALIZADO ENTRA EM CONTA DE PROJECAO. A projecao e' historica e
+   imutavel depois do abate: ela e' a promessa, e o realizado compara COM ela, nunca a
+   reescreve.
+   ⚠ POR QUE O BOLSO E NAO O ACERTO no topo — decisao de produto do Gabriel: "tem que
+   mostrar exatamente quanto me sobraria por optar pelo boitel em vez de vender vivo". O
+   acerto (565.217,00 na b58bf556) e' o que o boitel repassa; o BOLSO (552.717,00) e' o
+   que sobra depois do frete e das guias, que o produtor paga por fora. O acerto continua
+   inteiro na cascata e no acerto itemizado — ele nao sumiu, mudou de posto.
+   ⚠ `rLiq` NAO CONSULTA FLAG, e e' o que torna o numero comparavel: as flags decidem ONDE
+   cada custo e' cobrado, nao SE ele existe. Trocar quem paga o frete nao muda quanto
+   sobra — muda so' por qual porta o dinheiro sai.
+   ⚠ NULL, NUNCA ZERO, pela mesma razao da irma: sem os campos que sustentam a conta nao
+   existe projecao, e zero afirmaria que a venda nao vale nada. */
+export function bolsoDaVendaBoitel(d: BoitelEdicao | null): number | null {
+  if (!d) return null;
+  if (exigencias(d).some(e => !e.presente)) return null;
+  return Math.round(derivadosBoitel(d).rLiq * 100) / 100;
+}
+
 /* ─── OS UNITARIOS DO LIQUIDO ──────────────────────────────────────────────────
    PR-OC-VENDA-LAYOUT-NEG-01D, item 4. O liquido da venda por cabeca e por quilo — os
    dois numeros com que o produtor compara uma venda com outra.
@@ -496,6 +536,19 @@ export function PilulaCenario({ cenario = 'projetado' }: { cenario?: CenarioBoit
    ⚠ A PILULA MIGROU PARA CA, e nao ha uma segunda: ela marcava a faixa "Base
    operacional", que deixou de existir. Este bloco e' o cabecalho do boitel na aba, entao
    a marca cobre o conjunto — o planejamento E o valor do lote que dele deriva.
+   ⚠ "O TOPO NAO DERIVA" ESTA REVOGADO — B-04, declaradamente. Aquela regra e' anterior a
+   existirem dois mundos: quando havia um cenario so', ler o valor gravado no lote e
+   derivar da linha davam o MESMO numero, e a regra so' evitava uma segunda copia. Depois
+   que o realizado passou a revalorar o lote, as duas fontes discordam — e o print do
+   Gabriel mostrou as duas na mesma tela, uma dizendo 595.071,81 e a outra 565.217,00.
+   ⚠ A DIVISAO DE TRABALHO AGORA E POR LADO: a ESQUERDA (cabecas, peso, card do lote) le o
+   OFICIAL, que e' realizado-soberano e deve mesmo mostrar o real; a DIREITA (a faixa
+   ambar) deriva da linha `projetado` pelo motor. Nao ha contradicao na tela — ha dois
+   numeros com dois nomes, cada um dizendo o que e'. Doutrina inteira em
+   `bolsoDaVendaBoitel`.
+   ⚠ E A FAIXA JA DERIVAVA de qualquer forma: o painel de resultado, a cascata e o
+   comparativo logo abaixo sempre sairam do motor. O topo era o unico ponto lendo o slot
+   gravado, e era justamente ele que destoava.
    ⚠ A21 — `sticky top-0`, fundo OPACO e a borda NO PROPRIO bloco.
    ⚠ SEM `-mt/pt` AQUI, e a ausencia e' a correcao (PR-OC-VENDA-LAYOUT-NEG-01B). A regra do
    A21 manda compensar o padding do container que rola; MEDIDO, este container nao tem
@@ -564,8 +617,16 @@ export function BoitelTopoNegociacao({ cabecas, pesoMedioKg, valorPorKg, valorTo
               {valorPorKg == null ? traco : formatMoeda(valorPorKg)}
             </div>
           </div>
+          {/* ⚠ O ROTULO MUDOU COM A FONTE — B-04. Era "Valor liq. do lote", lendo o valor
+              GRAVADO no lote (o slot oficial, realizado-soberano); virou o BOLSO
+              PROJETADO, derivado da linha `projetado` pelo motor. Ver a doutrina dos dois
+              mundos em `bolsoDaVendaBoitel`.
+              ⚠ "(proj.)" NO ROTULO alem da pilula do grupo: aqui a palavra faz trabalho
+              que a cor nao faz — ela diz que este numero NAO e' o valor da operacao, e sim
+              a promessa. Os dois convivem na mesma tela, e o card do lote, ao lado,
+              mostra o oficial de proposito. */}
           <div className="min-w-0">
-            <div className="text-[11px] font-normal text-muted-foreground leading-none whitespace-nowrap">Valor liq. do lote</div>
+            <div className="text-[11px] font-normal text-muted-foreground leading-none whitespace-nowrap">Liq. no bolso (proj.)</div>
             <div className="mt-1 text-[20px] font-medium leading-none tabular-nums whitespace-nowrap text-[#854F0B] dark:text-amber-500">
               {valorTotal > 0 ? formatMoeda(valorTotal) : traco}
             </div>
