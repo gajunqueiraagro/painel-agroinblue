@@ -72,6 +72,7 @@ import { ClientesTab } from '@/pages/ClientesTab';
 import { AuditoriaTab } from '@/pages/AuditoriaTab';
 import { toast } from 'sonner';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { buscarOperacaoDoLancamento } from '@/hooks/useOperacaoDoLancamento';
 /* `Sparkles` saiu com o selo "Lançar com IA" (PR-UI-LANCAR-CARDS-01): o icone de
    camera ja diz que a entrada e' por foto, e o brilho ao lado do rotulo era enfase
    sobre enfase. */
@@ -473,6 +474,7 @@ export default function V2Index() {
      e continua abrindo compra por omissao. So' a Central passa o tipo, porque so' ela sabe.
      ⚠ UM APAGA O OUTRO, como em `abrirNovaCompraOC`/`abrirNovaVendaOC`: os dois booleanos
      nao podem coexistir, e a impossibilidade e' garantida por quem ABRE. */
+
   const abrirOperacaoOC = useCallback((ocId: string, aba?: string, tipo: string = 'compra') => {
     const p = new URLSearchParams(window.location.search);
     if (tipo === 'venda') { p.set('oc_venda', '1'); p.delete('oc_compra'); }
@@ -504,6 +506,20 @@ export default function V2Index() {
     setSearchParams(p, { replace: true });
     setSection('lancamentos-zoot');
   }, [setSearchParams]);
+
+  /* ⚠ UMA CONSULTA NO GESTO, e nao uma coluna na lista — PR-OC-EDICAO-I-01. O elo mora em
+     `zoo_operacao_movimentacoes` e o `select('*')` da lista nao o traz (medido: `lancamentos`
+     nao tem coluna de operacao). Carregar o elo de TODA linha para servir ao clique de uma
+     seria pagar em toda rolagem por uma pergunta que se faz uma vez.
+     ⚠ SEM ELO, NADA MUDA: cai no `setZooEditId` de sempre. E' o caminho do lancamento
+     avulso, que continua existindo e continua sendo editavel onde sempre foi.
+     ⚠ A ABA E 'negociacao' porque e' de la' que o numero vem: quem clicou no "i" de uma
+     venda quer ver aquele lancamento, e na OC ele e' o lote. */
+  const abrirEdicaoZootOuOC = useCallback(async (lancamentoId: string) => {
+    const elo = await buscarOperacaoDoLancamento(lancamentoId);
+    if (!elo) { setZooEditId(lancamentoId); return; }
+    abrirOperacaoOC(elo.operacaoId, 'negociacao', elo.tipoOperacao);
+  }, [abrirOperacaoOC]);
   // Fecho do modal OC: limpa os parâmetros transitórios (sem resíduo) e retorna à seção de origem.
   //   PR-OC-FIN-RETORNO-01 — aberto pelo Financeiro V2 (oc_return='financeiro-lanc') → volta ao
   //   Financeiro V2 (o restore-effect de filtros do FinanceiroV2Tab dispara no mount).
@@ -883,8 +899,20 @@ export default function V2Index() {
             } : undefined}
             onRemover={removerLancamento}
             onEditar={editarLancamento}
-            onEditarAbate={(l) => setZooEditId(l.id)}
-            onEditarVenda={(l) => setZooEditId(l.id)}
+            /* ⚠ O "i" DE UMA VENDA DE OC ABRIA O MODELO MORTO — PR-OC-EDICAO-I-01. O
+                `LancamentoZooModal` edita o LANCAMENTO; numa venda que nasceu de Operacao
+                Comercial, o lancamento e' CONSEQUENCIA — quem manda sao os lotes, o boitel
+                e o financeiro da OC. Editar la' gravava por fora de tudo que esta frente
+                blindou (o realizado soberano, o denormalizado, as flags).
+                ⚠ O ROTEAMENTO E POR ELO, e nao por tipo: venda avulsa continua existindo e
+                continua abrindo o modal de sempre. Quem decide e' `zoo_operacao_movimentacoes`
+                — ver `useOperacaoDoLancamento`.
+                ⚠ ABATE JA VAI ROTEADO, e hoje isso e' inofensivo: medido, nenhum abate tem
+                elo (a frente de Abates ainda nao migrou). Deixar o caminho pronto lendo o
+                MESMO elo faz aquela frente herdar o roteamento sem tocar aqui — e evita que
+                alguem escreva um segundo criterio quando a hora chegar. */
+            onEditarAbate={(l) => abrirEdicaoZootOuOC(l.id)}
+            onEditarVenda={(l) => abrirEdicaoZootOuOC(l.id)}
             onVerOperacoes={() => setSection('operacoes-comerciais')}
           />
         )}
@@ -1329,6 +1357,8 @@ export default function V2Index() {
           fonte. Substitui navegação para 'lancamentos-zoot' nos handlers. */}
       {zooEditId && (
         <LancamentoZooModal
+          /* A mesma funcao que a Central usa — um jeito so' de abrir a OC. */
+          onAbrirOperacao={(ocId, tipo) => abrirOperacaoOC(ocId, 'negociacao', tipo)}
           open
           onOpenChange={(o) => { if (!o) { setZooEditId(null); setZooAbaInicial('dados'); } }}
           lancamentoId={zooEditId}

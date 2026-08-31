@@ -25,6 +25,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { formatMoeda } from '@/lib/calculos/formatters';
+import { useOperacaoDoLancamento } from '@/hooks/useOperacaoDoLancamento';
 import { AlertTriangle, Lock, Ban, ExternalLink, Trash2 } from 'lucide-react';
 
 import { useFazenda } from '@/contexts/FazendaContext';
@@ -110,6 +112,11 @@ interface LancamentoZooModalProps {
    * Se ausente, o modal mantém o placeholder honesto (zero regressão).
    */
   onAbrirNoFormPrincipal?: (lancamento: Lancamento) => void;
+  /* ⚠ ABRE A OPERACAO COMERCIAL dona deste lancamento — PR-OC-EDICAO-I-01. Opcional: quem
+     nao passa simplesmente nao oferece o botao, e o aviso continua valendo. Quem sabe
+     recompor a URL da OC e' o V2Index (`abrirOperacaoOC`); reconstruir aquilo aqui seria o
+     segundo jeito de abrir a mesma tela. */
+  onAbrirOperacao?: (operacaoId: string, tipoOperacao: string) => void;
   /**
    * PR-VENDA-V2-2C-NAVEGAR — navega para o Financeiro filtrado pelo
    * ano/mês do lançamento vinculado. Read-only: apenas navega, sem
@@ -213,10 +220,13 @@ export function LancamentoZooModal({
   onAbrirNoFormPrincipal,
   onAbrirFinanceiroVinculado,
   onAbrirLancamentoFin,
+  onAbrirOperacao,
   abaInicial,
 }: LancamentoZooModalProps) {
   const { lancamento, raw, loading, error } = useLancamento(open ? lancamentoId : null);
   const permissions = useEditPermissions(raw);
+  /* O ELO com a Operacao Comercial — `null` = lancamento avulso, o caminho de sempre. */
+  const { operacao: operacaoDoLancamento } = useOperacaoDoLancamento(open ? lancamentoId : null);
 
   // Z4.2: clienteId/fazendaId derivados do registro com fallback no raw.
   // NUNCA usar contexto visual (ClienteContext/FazendaContext) — viola
@@ -852,6 +862,62 @@ export function LancamentoZooModal({
   const handleSalvarEGerar = async () => {
     await handleSalvarCompraZoo();
   };
+
+  /* ═══ A SEGUNDA CAMADA — PR-OC-EDICAO-I-01 item 2 ═══════════════════════════════
+     ⚠ QUEM CHEGA AQUI COM ELO CHEGOU POR UMA PORTA ANTIGA (drill, rota direta, link
+     guardado). O roteamento do "i" ja manda essas vendas para a OC; esta camada existe
+     porque as portas antigas continuam abertas e nao da' para fecha-las uma a uma.
+     ⚠ NAO ABRE O FORMULARIO, e essa e' a forma FORTE do que o briefing pediu ("a tela nao
+     deve nem convidar"). O guard do banco ja recusa a escrita — mas mostrar os campos
+     editaveis e' um convite que termina em erro, e um convite que termina em erro ensina o
+     operador a desconfiar da tela.
+     ⚠ OS NUMEROS CONTINUAM VISIVEIS, em leitura: quem clicou queria CONFERIR, e mandar
+     para outra tela sem responder nada seria trocar um erro por um desvio.
+     ⚠ DIVERGENCIA DECLARADA: o briefing pediu os campos do modal em leitura. Este modal
+     ROTEIA para seis sub-modais com contratos diferentes, e impor leitura nos seis seria
+     mudanca larga e arriscada por um caminho que ja nao deveria ser usado. Entregue a
+     forma que protege mais e toca menos; os campos em leitura, se ainda fizerem falta,
+     sao PR proprio. */
+  if (operacaoDoLancamento) {
+    const linha = (rotulo: string, valor: string | null) => (
+      <div className="flex items-baseline justify-between gap-3 leading-tight text-[12px]">
+        <span className="text-muted-foreground shrink-0">{rotulo}</span>
+        <span className="font-medium text-right tabular-nums">{valor ?? '—'}</span>
+      </div>
+    );
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-[15px]">Lançamento de operação comercial</DialogTitle>
+            <DialogDescription className="text-[12px] leading-snug">
+              Este lançamento pertence a uma operação comercial — os números dele são geridos lá.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-md border bg-muted/20 px-3 py-2 space-y-1">
+            {linha('Tipo', lancamento.tipo)}
+            {linha('Data', lancamento.data ? lancamento.data.split('-').reverse().join('/') : null)}
+            {linha('Categoria', lancamento.categoria ?? null)}
+            {linha('Quantidade', lancamento.quantidade ? `${lancamento.quantidade} cab` : null)}
+            {linha('Peso médio', lancamento.pesoMedioKg ? `${lancamento.pesoMedioKg} kg` : null)}
+            {linha('Valor total', lancamento.valorTotal != null ? formatMoeda(lancamento.valorTotal) : null)}
+          </div>
+          <p className="text-[10px] text-muted-foreground leading-snug">
+            Editar por aqui gravaria por fora das regras da operação — quantidade, peso e valor
+            saem dos lotes e do acerto, e o realizado é soberano sobre eles.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>Fechar</Button>
+            {onAbrirOperacao && (
+              <Button size="sm" onClick={() => { onOpenChange(false); onAbrirOperacao(operacaoDoLancamento.operacaoId, operacaoDoLancamento.tipoOperacao); }}>
+                Abrir operação
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   switch (lancamento.tipo) {
     case 'nascimento':
