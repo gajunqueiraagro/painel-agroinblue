@@ -138,6 +138,29 @@ async function callRpc(fn: string, args: Record<string, unknown>): Promise<OcEnv
   return data;
 }
 
+/* ⚠ NEM TODA RPC DA FAMILIA DEVOLVE `versao` — PR-OC-VENDA-REALIZADO-02. As RPCs antigas
+   devolvem `versao`; as novas (`oc_ajustar_valor_compromisso`, `oc_revalorar_lote`)
+   devolvem `operacao_versao`, o nome usado pelas RPCs de compromisso. Ler `env.versao`
+   numa delas daria `undefined` e o encadeamento seguiria com versao invalida — 40001 na
+   chamada seguinte, sem pista de onde veio. Este canal tem o seu proprio envelope. */
+export interface OcRevalorarLoteEnvelope {
+  ok: boolean;
+  operacao_id: string;
+  operacao_versao: number;
+  lote_id: string;
+  valor_informado: number;
+  valor_anterior?: number | null;
+  lancamentos_afetados: number;
+  idempotente?: boolean;
+}
+
+async function callRpcRevalorar(args: Record<string, unknown>): Promise<OcRevalorarLoteEnvelope> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: RPC fora de types.ts
+  const { data, error } = await (supabase as any).rpc('oc_revalorar_lote', args);
+  if (error) throw new OcRpcError(error.message || 'Falha ao revalorar o lote.', error.code);
+  return data;
+}
+
 export function useOperacaoComercial() {
   // RPC soberana única: p_operacao_id NULL => cria (versao NULL); preenchido =>
   // atualiza (exige rascunho + versao). Substitui criar/editar/alterar-parcelas.
@@ -178,6 +201,22 @@ export function useOperacaoComercial() {
     callRpc('oc_salvar_boitel', {
       p_operacao_id: operacaoId, p_cliente_id: clienteId, p_versao_esperada: versaoEsperada,
       p_cenario: cenario, p_payload: payload,
+    });
+
+  /* PR-OC-VENDA-REALIZADO-02 — o valor real do lote, e o rebanho junto.
+     ⚠ NAO E' `oc_salvar_lotes`. Aquele tambem revaloraria o lote (o CAMINHO B aceita
+     mexer no economico com movimentacao viva), mas PARA POR AI: o lancamento zootecnico
+     ja criado ficaria com o valor da projecao. Medido na FASE 0 — nenhuma trigger,
+     nenhuma RPC reescrevia `lancamentos.valor_total`. Esta faz as duas metades na mesma
+     transacao, pela mesma formula `por_cabeca x quantidade` do registro original.
+     ⚠ MOTIVO OBRIGATORIO no banco, como todo estorno e todo ajuste. */
+  const revalorarLote = (
+    operacaoId: string, clienteId: string, versaoEsperada: number,
+    loteId: string, novoValor: number, motivo: string,
+  ) =>
+    callRpcRevalorar({
+      p_operacao_id: operacaoId, p_cliente_id: clienteId, p_versao_esperada: versaoEsperada,
+      p_lote_id: loteId, p_novo_valor: novoValor, p_motivo: motivo,
     });
 
   const reabrir = (operacaoId: string, clienteId: string, versaoEsperada: number, motivo: string) =>
@@ -263,5 +302,5 @@ export function useOperacaoComercial() {
     };
   };
 
-  return { salvarRascunho, editarDadosOperacao, salvarBoitel, reabrir, confirmar, sincronizar, cancelar, carregarOperacao };
+  return { salvarRascunho, editarDadosOperacao, salvarBoitel, revalorarLote, reabrir, confirmar, sincronizar, cancelar, carregarOperacao };
 }

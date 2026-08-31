@@ -49,7 +49,7 @@ import type { RecebimentoApi } from '@/hooks/useOperacaoRecebimento';
 import type { DocumentosApi } from '@/hooks/useOperacaoDocumentos';
 import type { EventosApi } from '@/hooks/useOperacaoEventos';
 import type { LiquidacaoApi } from '@/hooks/useOperacaoLiquidacao';
-import { BoitelTopoNegociacao, BoitelResultadoCompacto, liquidoDaVendaBoitel, derivadosBoitel, PilulaCenario } from '@/components/venda/BoitelNegociacaoDerivado';
+import { BoitelTopoNegociacao, BoitelResultadoCompacto, BoitelComparacoes, liquidoDaVendaBoitel, derivadosBoitel, PilulaCenario } from '@/components/venda/BoitelNegociacaoDerivado';
 import { BoitelBlocosModais, faltamDosCinco, type BoitelEdicao } from '@/components/venda/BoitelBlocosModais';
 import { pesoMedioPorCabeca, valorPorKgNegociado } from '@/hooks/useCompraLotes';
 
@@ -119,6 +119,13 @@ export interface VendaModalShellProps {
    *  botao da venda, numa chamada so' a `oc_salvar_boitel` — PR-OC-VENDA-BOITEL-01B. */
   boitelData?: BoitelEdicao | null;
   onBoitelChange?: (proximo: BoitelEdicao) => void;
+  /* ─── O SEGUNDO MUNDO — PR-OC-VENDA-REALIZADO-02 ─────────────────────────────
+     `boitelReal` e' a linha `cenario='realizado'`; `null` ate' o abate acontecer.
+     `onIniciarRealizado` reabre a OC quando preciso e diz se pode seguir — o guard de
+     `fechada` e' resolvido ANTES de o dialogo abrir. */
+  boitelReal?: BoitelEdicao | null;
+  onAplicarRealizado?: (proximo: BoitelEdicao) => void | Promise<void>;
+  onIniciarRealizado?: () => Promise<boolean>;
   categoria: string;
   categoriasDisponiveis: { value: string; label: string }[];
   quantidadeNum: number;
@@ -165,6 +172,7 @@ export function VendaModalShell({
   propriedadeDestino, setPropriedadeDestino,
   vendaTipoVenda, setVendaTipoVenda, observacao, setObservacao,
   ocOperacaoId, ocStatusComercial, lotesApi, boitelData = null, onBoitelChange,
+  boitelReal = null, onAplicarRealizado, onIniciarRealizado,
   documentosApi, eventosApi, liquidacaoApi, recebimentoApi, ocEntregaEncerrada = false,
   categoria, categoriasDisponiveis,
   quantidadeNum, pesoKgNum, submitting, onSalvarOperacao, onSalvarNegociacao, semAlteracoes = false,
@@ -610,6 +618,10 @@ export function VendaModalShell({
                         const v = liquidoDaVendaBoitel(boitelData);
                         return v == null ? null : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 });
                       })()}
+                      realizado={boitelReal}
+                      onChangeRealizado={onAplicarRealizado}
+                      onIniciarRealizado={onIniciarRealizado}
+                      comparacoes={<BoitelComparacoes projetado={boitelData} realizado={boitelReal} />}
                     />
                   )}
                 </div>

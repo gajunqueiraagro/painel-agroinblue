@@ -35,7 +35,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Pencil, TrendingUp, Wallet, Tag, Banknote } from 'lucide-react';
 import { formatMoeda, formatKg, formatArroba } from '@/lib/calculos/formatters';
 import type { BoitelData } from '@/components/BoitelPlanningDialog';
-import { derivadosBoitel, cabecasQueSairam, PilulaCenario, type BoitelEdicao } from '@/components/venda/BoitelNegociacaoDerivado';
+import { derivadosBoitel, cabecasQueSairam, liquidoDaVendaBoitel, PilulaCenario, type BoitelEdicao } from '@/components/venda/BoitelNegociacaoDerivado';
 
 const n2 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const n3 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
@@ -241,13 +241,18 @@ export function boitelVazio(): BoitelEdicao {
    e linha derivada continuam morando neste invólucro, num lugar so'.
    ⚠ O NAO-MONETARIO (dias, GMD, percentuais) continua no caminho de sempre: `casas` e
    `toLocaleString`. Dinheiro tem campo proprio; contagem e percentual nao. */
-export function CampoNum({ label, valor, onChange, casas = 2, sufixo, obrigatorio, derivado, desabilitado, titulo, moeda, extra }: {
+export function CampoNum({ label, valor, onChange, casas = 2, sufixo, obrigatorio, derivado, desabilitado, titulo, moeda, extra, previsto }: {
   label: string; valor: number; onChange: (v: number) => void; casas?: number;
   sufixo?: string; obrigatorio?: boolean; derivado?: string | null; desabilitado?: boolean;
   /** Campo de dinheiro: usa o `CampoMoeda` do sistema, com o R$ dentro do valor. */
   moeda?: boolean;
   /** Renderizado ABAIXO do campo, indentado na coluna dele — hoje, o `SeletorLado`. */
   extra?: React.ReactNode;
+  /* ⚠ O QUE A PROJECAO DIZIA — PR-OC-VENDA-REALIZADO-02. So' aparece no modo realizado, e
+     em AMBAR: e' o numero projetado, e a cor ja e' a marca da projecao em toda a tela. Ele
+     nao compete com o campo — fica embaixo, 9px, para que digitar o real seja um ato de
+     COMPARAR, e nao de lembrar. */
+  previsto?: string | null;
   /* ⚠ O TEXTO INTEGRAL quando o rotulo visivel foi encurtado — PR-...-01B. O `label` e' o
      que cabe numa linha; `titulo` e' o que o campo REALMENTE pergunta, e vai no `title`.
      Omitido, o proprio label serve de titulo: nunca fica sem. */
@@ -302,6 +307,11 @@ export function CampoNum({ label, valor, onChange, casas = 2, sufixo, obrigatori
         {derivado !== undefined && (
           <div className="mt-0.5 text-[9px] text-muted-foreground tabular-nums leading-snug">
             {derivado ?? '—'}
+          </div>
+        )}
+        {previsto && (
+          <div className="mt-0.5 text-[9px] tabular-nums leading-snug text-[#854F0B] dark:text-amber-500">
+            previsto: {previsto}
           </div>
         )}
         {extra}
@@ -491,24 +501,51 @@ function indicadoresDoBoitel(d: BoitelEdicao): Record<IdCard, Indicador[]> {
    abate: reordenar a sequencia de leitura dentro de um grupo e' mudanca de conteudo
    disfarcada de layout. */
 function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: K, v: BoitelEdicao[K]) => void,
-  onChange: (proximo: BoitelEdicao) => void, somenteLeitura?: boolean) {
+  onChange: (proximo: BoitelEdicao) => void, somenteLeitura?: boolean,
+  modoRealizado?: boolean, projetado?: BoitelEdicao | null) {
   const der = derivadosBoitel(d);
+  const derP = projetado ? derivadosBoitel(projetado) : null;
+  /* O "previsto: X" so' existe quando ha projecao para comparar E o modo e' o realizado. */
+  const prev = (fn: (p: BoitelEdicao, x: ReturnType<typeof derivadosBoitel>) => string | null): string | null =>
+    (modoRealizado && projetado && derP) ? fn(projetado, derP) : null;
   const qtd = d.qtdCabecas || 0;
   const sairam = cabecasQueSairam(d);
   const diarias = der.cDT;
   const corpos: Record<string, React.ReactNode> = {
     desempenho: (<><div className="grid grid-cols-2 gap-x-3 gap-y-2.5">
-          <CampoNum desabilitado={somenteLeitura} label="Dias confinamento" titulo="Dias de confinamento" valor={d.dias} onChange={v => set('dias', v)} casas={0} obrigatorio />
-          {/* ⚠ AS AJUDAS SAEM DO MOTOR, e nenhuma e' conta escrita aqui: `ganho`, `ple`,
-              `aEF`, `aS` e `pf` ja sao exportados por `derivadosBoitel`. Conferidos contra
-              os numeros do mockup — 165,0 · 395,76 · 13,60 · 21,01 · 573,00. */}
-          <CampoNum desabilitado={somenteLeitura} label="GMD" valor={d.gmd} onChange={v => set('gmd', v)} casas={3} sufixo="kg/dia" obrigatorio
-            derivado={d.gmd > 0 && d.dias > 0 ? `ganho no período: ${n1(der.ganho)} kg/cab` : null} />
+          {modoRealizado && (
+            <LinhaCampo label="Data do abate" largura="w-[130px]">
+              <DatePicker value={d.dataAbate ?? ''} onChange={v => set('dataAbate', v)}
+                disabled={somenteLeitura} className="h-8 px-2 text-[12px] bg-card" />
+            </LinhaCampo>
+          )}
+          <CampoNum previsto={prev(p => String(p.dias))} desabilitado={somenteLeitura} label="Dias confinamento" titulo="Dias de confinamento" valor={d.dias} onChange={v => set('dias', v)} casas={0} obrigatorio />
+          {/* ⚠ NO REALIZADO QUEM SE DIGITA E O PESO DE ABATE, e o GMD passa a ser
+              DERIVADO — decisao do Gabriel. Ninguem mede GMD no frigorifico; mede-se o
+              peso na balanca. A conta e' `(pesoAbate − pesoSaidaFaz) / dias`, e o que se
+              PERSISTE continua sendo o `gmd`: `pf = pi + gmd × dias` reconstroi o peso de
+              abate sem coluna nova. Uma verdade, gravada uma vez.
+              ⚠ NO PROJETADO E O CONTRARIO, e continua como sempre foi: digita-se o GMD
+              esperado e o peso final e' que deriva. Os dois modos leem e escrevem o MESMO
+              campo — nunca dois. */}
+          {modoRealizado ? (
+            <CampoNum desabilitado={somenteLeitura} label="Peso de abate" titulo="Peso de abate (kg) — o GMD deriva dele"
+              valor={der.pf} casas={2} sufixo="kg" obrigatorio
+              onChange={v => set('gmd', d.dias > 0 ? Math.round(((v - (d.pesoInicial || 0)) / d.dias) * 1000) / 1000 : 0)}
+              derivado={d.dias > 0 ? `GMD ${n3(d.gmd)} kg/dia · ganho ${n1(der.ganho)} kg/cab` : null}
+              previsto={prev((_, x) => `${n2(x.pf)} kg`)} />
+          ) : (
+            /* ⚠ AS AJUDAS SAEM DO MOTOR, e nenhuma e' conta escrita aqui: `ganho`, `ple`,
+               `aEF`, `aS` e `pf` ja sao exportados por `derivadosBoitel`. Conferidos contra
+               os numeros do mockup — 165,0 · 395,76 · 13,60 · 21,01 · 573,00. */
+            <CampoNum desabilitado={somenteLeitura} label="GMD" valor={d.gmd} onChange={v => set('gmd', v)} casas={3} sufixo="kg/dia" obrigatorio
+              derivado={d.gmd > 0 && d.dias > 0 ? `ganho no período: ${n1(der.ganho)} kg/cab` : null} />
+          )}
           <CampoNum desabilitado={somenteLeitura} label="Quebra de viagem" valor={d.quebraViagem} onChange={v => set('quebraViagem', v)} sufixo="%"
             derivado={d.pesoInicial > 0 ? `peso pós-viagem: ${n2(der.ple)} kg` : null} />
-          <CampoNum desabilitado={somenteLeitura} label="Rend. entrada" titulo="Rendimento de entrada" valor={d.rendimentoEntrada} onChange={v => set('rendimentoEntrada', v)} sufixo="%"
+          <CampoNum previsto={prev(p => `${n2(p.rendimentoEntrada)}%`)} desabilitado={somenteLeitura} label="Rend. entrada" titulo="Rendimento de entrada" valor={d.rendimentoEntrada} onChange={v => set('rendimentoEntrada', v)} sufixo="%"
             derivado={d.rendimentoEntrada > 0 && d.pesoInicial > 0 ? `${n2(der.aEF)} @/cab na entrada` : null} />
-          <CampoNum desabilitado={somenteLeitura} label="Rend. saída" titulo="Rendimento de saída" valor={d.rendimento} onChange={v => set('rendimento', v)} sufixo="%" obrigatorio
+          <CampoNum previsto={prev(p => `${n2(p.rendimento)}%`)} desabilitado={somenteLeitura} label="Rend. saída" titulo="Rendimento de saída" valor={d.rendimento} onChange={v => set('rendimento', v)} sufixo="%" obrigatorio
             derivado={d.rendimento > 0 && der.pf > 0 ? `${n2(der.aS)} @/cab na saída (${n2(der.pf)} kg × ${n2(d.rendimento)}% / 15)` : null} />
         </div></>),
     custos: (<><div className="grid grid-cols-2 gap-x-3 gap-y-2.5 items-start">
@@ -526,7 +563,7 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
               </SelectContent>
             </Select>
           </LinhaCampo>
-          <CampoNum desabilitado={somenteLeitura} label="Diária" moeda valor={d.custoDiaria} onChange={v => set('custoDiaria', v)} sufixo="/cab/dia" obrigatorio />
+          <CampoNum previsto={prev(p => formatMoeda(p.custoDiaria))} desabilitado={somenteLeitura} label="Diária" moeda valor={d.custoDiaria} onChange={v => set('custoDiaria', v)} sufixo="/cab/dia" obrigatorio />
           {/* ⚠ ALINHADO NA MESMA GRADE — defeito 2 do 01E. Ele flutuava fora da linha
               porque montava o proprio rotulo em cima; agora usa a `LinhaCampo`, e o valor
               derivado ocupa a coluna do campo como qualquer outro. */}
@@ -546,7 +583,7 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
               A DIARIA JA E A NUTRICAO: e' o que o boitel cobra para alimentar o gado. Um
               campo "Nutrição (total)" ao lado das Diárias era o mesmo conceito pedido duas
               vezes, e somava em cima. */}
-          <CampoNum desabilitado={somenteLeitura} label="Sanidade (total)" moeda valor={d.custoSanidade} onChange={v => set('custoSanidade', v)}
+          <CampoNum previsto={prev(p => formatMoeda(p.custoSanidade))} desabilitado={somenteLeitura} label="Sanidade (total)" moeda valor={d.custoSanidade} onChange={v => set('custoSanidade', v)}
             derivado={porCabeca(d.custoSanidade, qtd)} />
           {/* ⚠ FICA NA TELA E FORA DA SOMA. O frete é custo operacional do produtor, pago
               por fora — o rodapé abaixo não o inclui, e o campo diz isso em vez de deixar
@@ -559,13 +596,13 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
               Diziam "custo do produtor, fora do custo do boitel" como se fosse lei; agora
               e' escolha, e quem a responde e' o seletor logo abaixo. Um texto fixo ao lado
               de um seletor que o contradiz e' a nona instrucao sem destino. */}
-          <CampoNum desabilitado={somenteLeitura} label="Frete (total)" moeda
+          <CampoNum previsto={prev(p => formatMoeda(p.custoFrete))} desabilitado={somenteLeitura} label="Frete (total)" moeda
             titulo="Frete (total) — o seletor abaixo diz de que lado do acerto ele mora"
             valor={d.custoFrete} onChange={v => set('custoFrete', v)}
             derivado={`${formatMoeda(d.custoFrete / (qtd || 1))}/cab`}
             extra={<SeletorLado noBoitel={d.custoFreteNoBoitel ?? false} desabilitado={somenteLeitura}
               onChange={v => set('custoFreteNoBoitel', v)} />} />
-          <CampoNum desabilitado={somenteLeitura} label="Outros (total)" moeda valor={d.outrosCustos} onChange={v => set('outrosCustos', v)}
+          <CampoNum previsto={prev(p => formatMoeda(p.outrosCustos))} desabilitado={somenteLeitura} label="Outros (total)" moeda valor={d.outrosCustos} onChange={v => set('outrosCustos', v)}
             derivado={`${formatMoeda(d.outrosCustos / (qtd || 1))}/cab`}
             extra={<SeletorLado noBoitel={d.outrosNoBoitel ?? true} desabilitado={somenteLeitura}
               onChange={v => set('outrosNoBoitel', v)} />} />
@@ -606,10 +643,10 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
           “Outros” vira “Outros Custos” no financeiro.
         </p></>),
     comercializacao: (<><div className="grid grid-cols-2 gap-x-3 gap-y-2.5">
-          <CampoNum desabilitado={somenteLeitura} label="Preço de venda" moeda valor={d.precoVendaArroba} onChange={v => set('precoVendaArroba', v)} sufixo="/@" obrigatorio />
+          <CampoNum previsto={prev(p => `${formatMoeda(p.precoVendaArroba)}/@`)} desabilitado={somenteLeitura} label="Preço de venda" moeda valor={d.precoVendaArroba} onChange={v => set('precoVendaArroba', v)} sufixo="/@" obrigatorio />
           {/* ⚠ TOTAL, não por cabeça. Medido no acerto real: DAEMS/GTA de R$ 4.514,57
               contra faturamento de R$ 813 mil. */}
-          <CampoNum desabilitado={somenteLeitura} label="Desp. notas/docs. abate" moeda titulo="Despesas com notas e documentos no abate" valor={d.despesasAbate} onChange={v => set('despesasAbate', v)}
+          <CampoNum previsto={prev(p => formatMoeda(p.despesasAbate))} desabilitado={somenteLeitura} label="Desp. notas/docs. abate" moeda titulo="Despesas com notas e documentos no abate" valor={d.despesasAbate} onChange={v => set('despesasAbate', v)}
             extra={<SeletorLado noBoitel={d.despesasAbateNoBoitel ?? true} desabilitado={somenteLeitura}
               onChange={v => set('despesasAbateNoBoitel', v)} />} />
         </div>
@@ -665,6 +702,16 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
   };
 
   return corpos;
+}
+
+/* Um degrau da conferencia do acerto — rotulo e valor, sem `truncate` no numero. */
+function LinhaConferencia({ rotulo, valor }: { rotulo: string; valor: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-6 leading-[1.6]">
+      <span className="text-[11px] font-normal text-muted-foreground whitespace-nowrap">{rotulo}</span>
+      <span className="text-[11px] tabular-nums whitespace-nowrap">{valor}</span>
+    </div>
+  );
 }
 
 /* ─── OS DOIS MUNDOS ──────────────────────────────────────────────────────────
@@ -736,16 +783,20 @@ const ICONE_GRUPO: Record<IdGrupo, React.ReactNode> = {
   adiantamento: <Banknote className="h-3.5 w-3.5 shrink-0" />,
 };
 
-function DialogoGrupo({ card, valor, somenteLeitura, onAplicar, onFechar }: {
+function DialogoGrupo({ card, valor, somenteLeitura, onAplicar, onFechar, modoRealizado, projetado }: {
   card: IdCard;
   valor: BoitelEdicao;
   somenteLeitura?: boolean;
+  /** Modo realizado: peso de abate digitado, data do abate, "previsto: X" nos campos. */
+  modoRealizado?: boolean;
+  /** A linha `projetado`, para o "previsto: X". Sem ela, nada e' comparado. */
+  projetado?: BoitelEdicao | null;
   onAplicar: (proximo: BoitelEdicao) => void;
   onFechar: () => void;
 }) {
   const [local, setLocal] = useState<BoitelEdicao>(valor);
   const set = <K extends keyof BoitelEdicao>(k: K, v: BoitelEdicao[K]) => setLocal(a => ({ ...a, [k]: v }));
-  const corpos = corposDoBoitel(local, set, setLocal, somenteLeitura);
+  const corpos = corposDoBoitel(local, set, setLocal, somenteLeitura, modoRealizado, projetado);
   const ids = (Object.keys(GRUPOS) as IdGrupo[]).filter(id => GRUPOS[id].card === card);
   /* O veredito do painel de Custos, no proprio titulo — ver a nota em `Painel`. */
   const derLocal = derivadosBoitel(local);
@@ -811,7 +862,8 @@ function DialogoGrupo({ card, valor, somenteLeitura, onAplicar, onFechar }: {
 
 /* ═══ O COMPONENTE ═══════════════════════════════════════════════════════════════ */
 
-export function BoitelBlocosModais({ valor, onChange, somenteLeitura, cenario, detalheCenario, liquidoFormatado }: {
+export function BoitelBlocosModais({ valor, onChange, somenteLeitura, cenario, detalheCenario, liquidoFormatado,
+  realizado = null, onChangeRealizado, onIniciarRealizado, comparacoes }: {
   valor: BoitelEdicao; onChange: (proximo: BoitelEdicao) => void; somenteLeitura?: boolean;
   /** Marca de projecao — UMA por cartao, no titulo. Ver `GrupoIndicadores`. */
   cenario?: CenarioBoitel;
@@ -819,23 +871,44 @@ export function BoitelBlocosModais({ valor, onChange, somenteLeitura, cenario, d
   detalheCenario?: string | null;
   /** O liquido projetado, ja formatado — mora DENTRO do cartao de projecao. */
   liquidoFormatado?: string | null;
+  /* ─── O SEGUNDO MUNDO — PR-OC-VENDA-REALIZADO-02 ──────────────────────────────
+     `realizado` e' a linha `cenario='realizado'`; `null` enquanto o abate nao aconteceu,
+     e e' esse null que mantem o cartao tracejado do 01D.
+     ⚠ SEM `onChangeRealizado` NAO HA EDICAO, e sem `onIniciarRealizado` nao ha botao: o
+     cartao continua sendo o vazio honesto. E' o mesmo contrato aditivo do resto da
+     familia — quem nao passa, nao ganha. */
+  realizado?: BoitelEdicao | null;
+  onChangeRealizado?: (proximo: BoitelEdicao) => void;
+  /** Abre o fluxo do realizado — reabre a OC se preciso e devolve `true` para editar. */
+  onIniciarRealizado?: () => void | Promise<boolean | void>;
+  /** Linhas de comparacao previsto x realizado, montadas por quem tem os dois. */
+  comparacoes?: React.ReactNode;
 }) {
-  const [editando, setEditando] = useState<IdCard | null>(null);
+  const [editando, setEditando] = useState<{ card: IdCard; modo: CenarioBoitel } | null>(null);
   const indicadores = useMemo(() => indicadoresDoBoitel(valor), [valor]);
+  const indReal = useMemo(() => realizado ? indicadoresDoBoitel(realizado) : null, [realizado]);
+  const temRealizado = !!realizado;
 
-  /* ⚠ UM FRAGMENT COM DOIS FILHOS, e nao um `<div>`: a grade e' montada pelo shell, e um
-     container aqui viraria UMA celula com dois cartoes empilhados dentro. */
+  const abrir = async (card: IdCard, modo: CenarioBoitel) => {
+    if (modo === 'realizado' && !temRealizado) {
+      /* ⚠ NASCE SABENDO DO GUARD. `oc_salvar_boitel` recusa operacao `fechada` de
+         proposito — o fluxo e' reabrir, lancar, concluir. Quem resolve isso e' o
+         chamador, ANTES de o dialogo abrir: preencher tudo para levar erro no fim e' a
+         licao que o `faltamDosCinco` ja tinha ensinado. */
+      const ok = await onIniciarRealizado?.();
+      if (ok === false) return;
+    }
+    setEditando({ card, modo });
+  };
+
   return (
     <>
-      {/* ─── CARTAO PROJECAO — moldura ambar, tudo o que se planeja ───────────── */}
+      {/* ─── CARTAO PROJECAO ───────────────────────────────────────────────────── */}
       <section className="rounded-md border-2 border-amber-500/70 bg-card p-3 shadow-sm min-w-0 space-y-3">
         <div className="flex items-center justify-between gap-2 border-b pb-1.5">
           <div className="flex items-center gap-2 min-w-0">
             <span className="text-[13px] font-medium text-foreground leading-none">Projeção</span>
             <PilulaCenario cenario={cenario} />
-            {/* ⚠ O DETALHE ACOMPANHA A PILULA, e nao vira segunda marca: "enviada em
-                13/05" diz DESDE QUANDO a projecao corre, que e' o contexto que faltava
-                para julgar se ela ainda vale. */}
             {detalheCenario && (
               <span className="text-[10px] font-normal text-muted-foreground leading-none truncate">{detalheCenario}</span>
             )}
@@ -849,33 +922,63 @@ export function BoitelBlocosModais({ valor, onChange, somenteLeitura, cenario, d
             </div>
           )}
         </div>
-        <GrupoIndicadores titulo={TITULO_CARD.A} itens={indicadores.A} onAbrir={() => setEditando('A')} />
-        <GrupoIndicadores titulo={TITULO_CARD.B} itens={indicadores.B} onAbrir={() => setEditando('B')} />
+        <GrupoIndicadores titulo={TITULO_CARD.A} itens={indicadores.A} onAbrir={() => abrir('A', 'projetado')} />
+        <GrupoIndicadores titulo={TITULO_CARD.B} itens={indicadores.B} onAbrir={() => abrir('B', 'projetado')} />
       </section>
 
-      {/* ─── CARTAO REALIZADO — o vazio HONESTO ────────────────────────────────
-          ⚠ BORDA TRACEJADA E SEM BOTAO. Ele nao promete acao nenhuma porque ainda nao ha
-          caminho: o "lancar realizado" nasce na PARTE 2, com o cenario ligado. Um botao
-          aqui seria mais uma instrucao apontando para o que nao existe.
-          ⚠ E NAO E ESPACO DESPERDICADO: e' o lugar reservado que faz a projecao ao lado
-          se ler como projecao, e nao como fato. */}
-      <section className="rounded-md border border-dashed bg-muted/10 p-3 min-w-0 flex flex-col">
-        <div className="flex items-center gap-2 border-b border-dashed pb-1.5">
-          <span className="text-[13px] font-medium text-muted-foreground leading-none">Realizado</span>
+      {/* ─── CARTAO REALIZADO ──────────────────────────────────────────────────────
+          ⚠ VAZIO ENQUANTO NAO HOUVER ABATE, e ai sem numero nenhum — o tracejado e' a
+          promessa do lugar, nao um card quebrado.
+          ⚠ QUANDO PREENCHE, VEM SOLIDO: `text-foreground` contra o ambar do vizinho. E'
+          a regra plantada em PR-...-01D cobrando o encaixe — o comparativo nasce da cor,
+          sem terceira coluna dizendo "previsto x realizado". */}
+      <section className={`rounded-md p-3 min-w-0 flex flex-col ${
+        temRealizado ? 'border-2 border-border bg-card shadow-sm space-y-3' : 'border border-dashed bg-muted/10'}`}>
+        <div className={`flex items-center justify-between gap-2 pb-1.5 ${temRealizado ? 'border-b' : 'border-b border-dashed'}`}>
+          <span className={`text-[13px] font-medium leading-none ${temRealizado ? 'text-foreground' : 'text-muted-foreground'}`}>
+            Realizado
+          </span>
+          {temRealizado && realizado && (
+            <div className="shrink-0 text-right">
+              <div className="text-[10px] font-normal text-muted-foreground leading-none whitespace-nowrap">Líquido realizado</div>
+              <div className="mt-1 text-[20px] font-medium leading-none tabular-nums whitespace-nowrap text-foreground">
+                {(() => { const v = liquidoDaVendaBoitel(realizado); return v == null ? '—' : formatMoeda(v); })()}
+              </div>
+            </div>
+          )}
         </div>
-        <div className="flex-1 flex items-center justify-center py-6">
-          <p className="text-[11px] text-muted-foreground text-center leading-snug max-w-[16rem]">
-            Será lançado no acerto do abate.
-          </p>
-        </div>
+
+        {temRealizado && indReal ? (
+          <>
+            <GrupoIndicadores titulo={TITULO_CARD.A} itens={indReal.A} onAbrir={() => abrir('A', 'realizado')} />
+            <GrupoIndicadores titulo={TITULO_CARD.B} itens={indReal.B} onAbrir={() => abrir('B', 'realizado')} />
+          </>
+        ) : (
+          <div className="flex-1 flex flex-col items-center justify-center gap-3 py-6">
+            <p className="text-[11px] text-muted-foreground text-center leading-snug max-w-[16rem]">
+              Será lançado no acerto do abate.
+            </p>
+            {onIniciarRealizado && !somenteLeitura && (
+              <Button type="button" size="sm" variant="outline" className="h-7 text-[11px]"
+                onClick={() => abrir('A', 'realizado')}>
+                Lançar realizado do abate
+              </Button>
+            )}
+          </div>
+        )}
       </section>
+
+      {comparacoes}
+
       {editando && (
         <DialogoGrupo
-          key={editando}
-          card={editando}
-          valor={valor}
+          key={`${editando.modo}:${editando.card}`}
+          card={editando.card}
+          valor={editando.modo === 'realizado' ? (realizado ?? valor) : valor}
           somenteLeitura={somenteLeitura}
-          onAplicar={onChange}
+          modoRealizado={editando.modo === 'realizado'}
+          projetado={editando.modo === 'realizado' ? valor : null}
+          onAplicar={editando.modo === 'realizado' ? (onChangeRealizado ?? onChange) : onChange}
           onFechar={() => setEditando(null)}
         />
       )}

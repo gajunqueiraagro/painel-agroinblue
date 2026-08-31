@@ -167,6 +167,7 @@ function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEd
     removerLancamento,
     countFinanceirosVinculados,
     loadData,
+    invalidarZoot,
   } = useLancamentos();
   const { loadData: metaLoadData } = useLancamentos('meta');
 
@@ -289,6 +290,13 @@ function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEd
         onEditar={wrappedEditar as any}
         onRemover={wrappedRemover as any}
         onCountFinanceiros={countFinanceirosVinculados}
+        /* ⚠ O DONO DO HOOK PASSA A INVALIDACAO PARA BAIXO — PR-OC-VENDA-REALIZADO-02.
+           `oc_revalorar_lote` corrige `lancamentos.valor_total` no BANCO, fora do
+           `useLancamentos`; sem isto a tela seguiria com o retrato antigo. O
+           `LancamentosTab` nao usa aquele hook (recebe as escritas por prop), e um
+           `invalidateQueries` solto la' dentro seria um SEGUNDO lugar decidindo quais
+           chaves do zootecnico existem. A prop e' o caminho oficial. */
+        onRealizadoAplicado={invalidarZoot}
         abateParaEditar={abateParaEditar}
         vendaParaEditar={vendaParaEditar}
         onReturnFromEdit={onReturnFromEdit}

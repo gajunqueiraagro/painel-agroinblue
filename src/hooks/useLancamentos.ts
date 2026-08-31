@@ -828,6 +828,13 @@ export function useLancamentos(arg: UseLancamentosArg = 'realizado') {
     countFinanceirosVinculados,
     setSaldoInicial,
     loadData,
+    /* ⚠ EXPOSTA em PR-OC-VENDA-REALIZADO-02. Ela ja existia e so' era usada aqui dentro,
+       depois das escritas deste hook. Mas o rebanho tambem muda por FORA dele agora:
+       `oc_revalorar_lote` corrige `lancamentos.valor_total` no banco, e sem invalidar,
+       a tela seguiria mostrando o retrato antigo — dado certo no banco e errado na tela
+       e' pior que dado errado nos dois. Nao ha rebuild manual: o trigger do banco cuida
+       da derivacao; o que falta e' o front parar de reusar o cache. */
+    invalidarZoot: invalidateZootQueries,
     loading,
     isGlobal,
   };

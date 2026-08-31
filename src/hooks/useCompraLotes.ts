@@ -10,6 +10,12 @@ export type CriterioValor = 'kg' | 'cabeca' | 'total';
 
 export interface LoteForm {
   idLocal: string;               // key React (não é o id do banco)
+  /* ⚠ O ID DO BANCO, quando o lote JA existe — PR-OC-VENDA-REALIZADO-02. Ele era
+     descartado na carga (so' o `idLocal` sobrevivia), e `oc_revalorar_lote` o exige:
+     sem ele nao ha como dizer QUAL lote revalorar no acerto do abate.
+     ⚠ ADITIVO E SO' DE LEITURA: `salvar` monta o payload campo a campo e nao o envia;
+     lote novo nasce sem id, como antes. A compra nao ve diferenca. */
+  id?: string;
   ordem: number;
   categoria: string;
   quantidade: string;            // mascarado (inteiro)
@@ -60,6 +66,7 @@ export function useCompraLotes({ operacaoId, clienteId, versao, onVersaoChange, 
       if (error) throw new Error(error.message);
       setLotes((data ?? []).map((r: any) => ({
         idLocal: novoIdLocal(),
+        id: r.id,
         ordem: r.ordem,
         categoria: r.categoria_negociada ?? '',
         quantidade: r.qtd_negociada != null ? String(r.qtd_negociada) : '',

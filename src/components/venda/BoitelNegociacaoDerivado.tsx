@@ -615,6 +615,83 @@ function LinhaCascata({ rotulo, valor }: { rotulo: string; valor: string | null 
   );
 }
 
+/* ─── AS COMPARACOES — o cartao que so' existe DEPOIS DO ABATE ─────────────────
+   PR-OC-VENDA-REALIZADO-02. Enquanto ha um mundo so', nao ha o que comparar: o cartao
+   nem aparece. Com os dois, ele diz o que mudou entre o que se planejou e o que
+   aconteceu.
+   ⚠ COR E' VEREDITO, NUNCA SINAL CRU. "+3 dias" nao diz se foi bom; ficar mais tempo no
+   boitel pode ser otimo (ganhou peso) ou pessimo (atrasou o abate). Por isso cada linha
+   declara o que e' BOM para ela — `maiorEMelhor` —, e a cor sai dali. Numero cru com
+   sinal deixaria o leitor decidir, e ele decidiria errado metade das vezes.
+   ⚠ "vs. VENDER VIVO NA EPOCA" e' a analise 3: o mesmo custo de oportunidade, agora
+   contra o resultado REAL. E' a pergunta que so' o abate responde — valeu a pena? */
+export function BoitelComparacoes({ projetado, realizado }: {
+  projetado: BoitelEdicao | null; realizado: BoitelEdicao | null;
+}) {
+  const dados = useMemo(() => {
+    if (!projetado || !realizado) return null;
+    const p = derivadosBoitel(projetado);
+    const r = derivadosBoitel(realizado);
+    const lp = liquidoDaVendaBoitel(projetado);
+    const lr = liquidoDaVendaBoitel(realizado);
+    if (lp == null || lr == null) return null;
+    return { p, r, lp, lr, cmp: comparativoOportunidade(realizado) };
+  }, [projetado, realizado]);
+  if (!dados) return null;
+  const { p, r, lp, lr, cmp } = dados;
+
+  const linhas: { rotulo: string; previsto: string; real: string; delta: number; texto: string; maiorEMelhor: boolean }[] = [
+    { rotulo: 'Líquido', previsto: formatMoeda(lp), real: formatMoeda(lr),
+      delta: lr - lp, texto: formatMoeda(Math.abs(lr - lp)), maiorEMelhor: true },
+    { rotulo: 'GMD', previsto: `${projetado.gmd.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg/dia`,
+      real: `${realizado.gmd.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg/dia`,
+      delta: realizado.gmd - projetado.gmd,
+      texto: `${Math.abs(realizado.gmd - projetado.gmd).toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg/dia`,
+      maiorEMelhor: true },
+    { rotulo: 'Dias', previsto: String(projetado.dias), real: String(realizado.dias),
+      delta: realizado.dias - projetado.dias, texto: `${Math.abs(realizado.dias - projetado.dias)} dias`,
+      /* ⚠ MENOS DIAS E MELHOR: cada dia a mais e' uma diaria a mais no acerto. */
+      maiorEMelhor: false },
+    { rotulo: 'Peso de abate', previsto: formatKg(p.pf), real: formatKg(r.pf),
+      delta: r.pf - p.pf, texto: formatKg(Math.abs(r.pf - p.pf)), maiorEMelhor: true },
+  ];
+
+  return (
+    <section className="rounded-md border bg-card p-3 shadow-sm min-w-0 lg:col-span-2">
+      <div className="text-[13px] font-medium text-foreground leading-none border-b pb-1.5 mb-2.5">
+        Previsto × realizado
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3">
+        {linhas.map(l => {
+          const bom = l.delta === 0 ? null : (l.delta > 0) === l.maiorEMelhor;
+          return (
+            <div key={l.rotulo} className="min-w-0">
+              <div className="text-[10px] font-normal text-muted-foreground leading-none whitespace-nowrap">{l.rotulo}</div>
+              <div className="mt-1 text-[15px] font-medium leading-none tabular-nums whitespace-nowrap text-foreground">{l.real}</div>
+              <div className="mt-1 text-[9px] tabular-nums leading-snug text-[#854F0B] dark:text-amber-500">
+                previsto: {l.previsto}
+              </div>
+              <div className={`mt-0.5 text-[10px] font-medium tabular-nums leading-snug whitespace-nowrap ${
+                bom == null ? 'text-muted-foreground' : bom ? 'text-success' : 'text-destructive'}`}>
+                {l.delta === 0 ? 'igual ao previsto' : `${l.delta > 0 ? '+' : '−'}${l.texto}`}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {cmp && (
+        <p className={`mt-3 border-t pt-2 text-[11px] leading-[1.45] ${cmp.diferenca >= 0 ? 'text-success' : 'text-destructive'}`}>
+          Mandar para o boitel rendeu{' '}
+          <span className="font-medium tabular-nums">{formatMoeda(Math.abs(cmp.diferenca))}</span>
+          {' '}<span className="font-medium">{cmp.diferenca >= 0 ? 'a mais' : 'a menos'}</span>
+          {' '}(<span className="font-medium tabular-nums">{cmp.diferenca >= 0 ? '+' : '−'}{Math.abs(cmp.percentual).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%</span>)
+          {' '}do que vender esses animais vivos na época.
+        </p>
+      )}
+    </section>
+  );
+}
+
 /* ─── O RESULTADO INTEIRO ──────────────────────────────────────────────────────
    240px, dois grupos: Indicadores e Operação.
    ⚠ FORA DA TELA DESDE PR-BOITEL-ACORDEAO-01, e de propósito: a coluna da direita passou

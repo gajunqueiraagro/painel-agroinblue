@@ -82,6 +82,11 @@ interface Props {
   onEditar: (id: string, dados: Partial<Omit<Lancamento, 'id'>>) => Promise<boolean | void> | boolean | void;
   onRemover: (id: string) => void;
   onCountFinanceiros?: (id: string) => Promise<number>;
+  /* ⚠ INVALIDA O CACHE ZOOTECNICO depois que o realizado do abate revalora o lote —
+     PR-OC-VENDA-REALIZADO-02. Quem a passa e' o dono do `useLancamentos` (V2Index), que
+     e' quem sabe quais chaves existem. Esta tela recebe as escritas por prop e nao tem o
+     hook; decidir as chaves aqui seria a segunda copia dessa lista. */
+  onRealizadoAplicado?: () => void | Promise<void>;
   abaInicial?: Aba;
   onBackToConciliacao?: () => void;
   dataInicial?: string;
@@ -353,7 +358,7 @@ function matchFornecedor(options: FornecedorOption[], params: { id?: string | nu
   });
 }
 
-export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar, vendaParaEditar, compraParaEditar, transferenciaParaEditar, reclassParaEditar, morteParaEditar, consumoParaEditar, onReturnFromEdit, initialAnoFiltro, initialMesFiltro, initialReclassCenario, onNavegarChuvas, onFecharOperacaoOC, onNovaCompraOC, onNovaVendaOC, cenarioInicial, cenariosPermitidos }: Props) {
+export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar, vendaParaEditar, compraParaEditar, transferenciaParaEditar, reclassParaEditar, morteParaEditar, consumoParaEditar, onReturnFromEdit, initialAnoFiltro, initialMesFiltro, initialReclassCenario, onNavegarChuvas, onFecharOperacaoOC, onNovaCompraOC, onNovaVendaOC, cenarioInicial, cenariosPermitidos, onRealizadoAplicado }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const { clienteAtual } = useCliente();
   const nomeFazenda = fazendaAtual?.nome || '';
@@ -625,6 +630,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
      antigo, que continua ao lado para conferencia; se os dois compartilhassem o objeto,
      editar na OC mexeria no que o formulario antigo mostra. */
   const [ocBoitel, setOcBoitel] = useState<BoitelEdicao | null>(null);
+  /* PR-OC-VENDA-REALIZADO-02 — a linha `cenario='realizado'`, em memoria. `null` enquanto
+     o abate nao aconteceu, e e' esse null que mantem o cartao tracejado. Estado SEPARADO
+     do projetado de proposito: as duas linhas coexistem no banco (chave do upsert inclui
+     `cenario`) e a existencia das duas E' o comparativo. */
+  const [ocBoitelReal, setOcBoitelReal] = useState<BoitelEdicao | null>(null);
   /* PR-OC-VENDA-REABRIR-01E — A ASSINATURA DO QUE FOI GRAVADO NA ULTIMA VEZ.
      ⚠ O botao da venda ficava aceso para sempre: nao havia estado de sujo/pristino, entao
      "Salvar alteracoes" parecia prometer que havia algo a salvar mesmo logo depois de
@@ -822,6 +832,15 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
            Ver PR-OC-VENDA-TIPO-NA-OC-01, registrado. */
         if (bd) { setVendaTipoVenda('boitel'); setOcBoitel(bd); }
         else { setVendaTipoVenda(''); setOcBoitel(null); }
+
+        /* ⚠ A SEGUNDA LINHA, quando existir — PR-OC-VENDA-REALIZADO-02. Mesma leitura por
+           PostgREST do projetado; `maybeSingle` porque ela e' opcional por natureza. */
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: tabela fora de types.ts
+        const { data: linhaReal } = await (supabase as any)
+          .from('zoo_operacao_boitel').select('*')
+          .eq('operacao_id', op.id).eq('cenario', 'realizado').maybeSingle();
+        if (cancelado) return;
+        setOcBoitelReal(boitelDeLinha(linhaReal));
 
         setTipo('venda');
         setLancModalOpen(true);
@@ -2214,6 +2233,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setVendaFazendaId(''); setVendaPropriedadeDestino('');
     // O planejamento do boitel, inteiro, num setter so'.
     setOcBoitel(null);
+    setOcBoitelReal(null);
     // As flags da OC — mesmas quatro da compra.
     setOcAberturaExistente(false); setOcTemTitulo(false); setOcRascunho(false); setOcHidratacaoErro(null);
   }, []);
@@ -2401,6 +2421,80 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     boitel: ocBoitel ? payloadBoitel(ocBoitel) : null,
   });
   const ocVendaSemAlteracoes = ocVendaAssinaturaSalva !== null && ocVendaAssinaturaSalva === ocVendaAssinaturaAtual;
+
+  /* ═══ O REALIZADO DO ABATE ════════════════════════════════════════════════════
+     PR-OC-VENDA-REALIZADO-02.
+
+     ⚠ NASCE SABENDO DO GUARD. `oc_salvar_boitel` recusa operacao `fechada` DE PROPOSITO —
+     o fluxo oficial e' reabrir, lancar, concluir, e a reabertura e' o gesto que registra
+     que os numeros mudaram. Por isso a reabertura acontece ANTES de o dialogo abrir: quem
+     preenche sete campos e leva erro no fim perde o trabalho e a confianca.
+     ⚠ A LINHA REALIZADA NASCE COPIANDO A PROJECAO, e nao vazia: o operador veio conferir
+     o que mudou, nao redigitar dias, rendimentos e precos que continuam valendo. O que
+     ele nao tocar fica igual ao previsto — e o "previsto: X" sob cada campo mostra de
+     onde cada numero veio. */
+  const iniciarRealizadoBoitel = async (): Promise<boolean> => {
+    const clienteId = clienteAtual?.id;
+    if (!clienteId || !ocOperacaoId) { toast.error('Salve a venda antes de lançar o realizado.'); return false; }
+    if (ocStatusComercial === 'cancelada') { toast.error('Operação cancelada não aceita lançamento.'); return false; }
+    try {
+      if (ocStatusComercial === 'fechada') {
+        const env = await ocRpc.reabrir(ocOperacaoId, clienteId, ocVersao, 'reaberta para lançar o realizado do abate');
+        setOcVersao(env.versao);
+        if (env.status_comercial) setOcStatusComercial(env.status_comercial);
+        toast.info('Operação reaberta para o lançamento do realizado.');
+      }
+      if (!ocBoitelReal && boitelDaVenda) setOcBoitelReal({ ...boitelDaVenda });
+      return true;
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Não foi possível reabrir a operação.');
+      return false;
+    }
+  };
+
+  /* ⚠ DUAS ESCRITAS ENCADEADAS PELOS RETORNOS, e nunca pelo `ocVersao` do render: cada
+     RPC incrementa a versao, e reusar a do state faria a segunda falhar com 40001.
+     ⚠ A ORDEM IMPORTA: grava o boitel primeiro (e' ele que define o liquido real) e so'
+     entao revalora o lote com esse liquido. O inverso revaloraria pelo numero velho.
+     ⚠ `oc_revalorar_lote` CORRIGE O REBANHO JUNTO — foi a metade que a FASE 0 achou
+     faltando: `oc_salvar_lotes` revaloraria o lote e deixaria o lancamento zootecnico com
+     o valor da projecao.
+     ⚠ FALHA NO MEIO NAO FAZ ROLLBACK: cada RPC e' sua propria transacao. O boitel gravado
+     sem o lote revalorado e' estado VISIVEL (o cartao Realizado preenchido, o lote com o
+     valor antigo), e o operador refaz — desfazer em silencio apagaria o que ele digitou. */
+  const aplicarRealizadoBoitel = async (proximo: BoitelEdicao) => {
+    const clienteId = clienteAtual?.id;
+    if (!clienteId || !ocOperacaoId) return;
+    setOcBoitelReal(proximo);
+    try {
+      let v = ocVersao;
+      const envB = await ocRpc.salvarBoitel(ocOperacaoId, clienteId, v, 'realizado', payloadBoitel(proximo));
+      v = envB.versao;
+      setOcVersao(v);
+
+      const liquidoReal = liquidoDaVendaBoitel(proximo);
+      const loteId = lotesApi.lotes[0]?.id;
+      if (liquidoReal != null && liquidoReal > 0 && loteId) {
+        const envL = await ocRpc.revalorarLote(ocOperacaoId, clienteId, v, loteId, liquidoReal,
+          'realizado do abate');
+        v = envL.operacao_versao;
+        setOcVersao(v);
+        /* ⚠ O CACHE ZOOTECNICO PRECISA SABER. `oc_revalorar_lote` corrige
+           `lancamentos.valor_total` no BANCO, fora do `useLancamentos` — sem invalidar, a
+           tela seguiria com o retrato antigo, que e' pior que dado errado nos dois lados.
+           A prop vem do dono do hook; decidir as chaves aqui seria a segunda copia da
+           lista. Nao ha rebuild manual: o trigger do banco cuida da derivacao. */
+        await onRealizadoAplicado?.();
+        toast.success(envL.lancamentos_afetados > 0
+          ? `Realizado lançado. Lote revalorado e ${envL.lancamentos_afetados} lançamento${envL.lancamentos_afetados > 1 ? 's' : ''} do rebanho corrigido${envL.lancamentos_afetados > 1 ? 's' : ''}.`
+          : 'Realizado lançado. Lote revalorado.');
+      } else {
+        toast.success('Realizado do abate lançado.');
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Falha ao lançar o realizado.');
+    }
+  };
 
   const salvarOperacaoVendaOC = async (): Promise<{ operacaoId: string; versao: number } | null> => {
     const clienteId = clienteAtual?.id;
@@ -5113,6 +5207,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
              que editar. Cabecas e peso vem dos LOTES — ver `boitelDaVenda`. */
           boitelData={boitelDaVenda}
           onBoitelChange={setOcBoitel}
+          /* ⚠ O SEGUNDO MUNDO. `boitelReal` e' a linha 'realizado'; o Aplicar dela
+              encadeia salvar + revalorar (ver `aplicarRealizadoBoitel`), e o iniciar
+              resolve o guard de `fechada` ANTES de o dialogo abrir. */
+          boitelReal={ocBoitelReal}
+          onAplicarRealizado={aplicarRealizadoBoitel}
+          onIniciarRealizado={iniciarRealizadoBoitel}
           categoria={categoria}
           categoriasDisponiveis={categoriasDisponiveis}
           quantidadeNum={parseNumericValue(quantidade) || 0}
