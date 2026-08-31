@@ -75,6 +75,15 @@ interface Props {
     centro_custo?: string;
     plano_conta_id?: string;
   };
+  /**
+   * Esconde o bloco de Frequência/Modalidade/Parcelas.
+   *
+   * ⚠ NASCE DE UM FATO, NÃO DE ESTÉTICA: um lançamento criado a partir de um
+   * movimento do extrato é UM pagamento que JÁ ACONTECEU. Gerar parcelas futuras
+   * ou recorrência a partir dele criaria títulos que ninguém pagou e que nenhum
+   * movimento cobre. Sem a prop, o bloco aparece como sempre.
+   */
+  ocultarParcelamento?: boolean;
   lockedFields?: Array<
     | 'valor'
     | 'data_pagamento'
@@ -292,6 +301,7 @@ function generateRecorrencias(dataComp: string, dataPgto: string, valor: number)
 export function LancamentoV2Dialog({
   open, onClose, onSave, onDelete, lancamento, fazendas, contas, classificacoes,
   fornecedores, safras, defaultFazendaId, onCriarFornecedor, prefill, lockedFields,
+  ocultarParcelamento,
   referenciaOperacionalInfo, excelContext, permiteEditarFavorecidoOC, onAbrirOperacaoOC,
 }: Props) {
   const { clienteAtual } = useCliente();
@@ -1537,8 +1547,8 @@ export function LancamentoV2Dialog({
                 </div>
               </div>
 
-              {/* Frequency + Installment — only for new */}
-              {!isEdit && (
+              {/* Frequency + Installment — only for new, e nunca no modo extrato */}
+              {!isEdit && !ocultarParcelamento && (
                 <div className="space-y-1.5 pt-0.5">
                   <div className="grid grid-cols-3 gap-2">
                     <div>
