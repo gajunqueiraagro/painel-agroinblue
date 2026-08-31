@@ -34,19 +34,31 @@ import {
  * sugerida, criar o lançamento da linha e criar o par de transferência. Cada uma
  * é uma feature com ADR própria, e nenhuma é "listar candidatos e vincular".
  *
- * ⚠ A GUARDA DE SOBRE-APLICAÇÃO EXISTE DE UM LADO SÓ, e a leitura dos corpos no
- * banco (B-28b) refinou o que o B-28 tinha registrado. No original quem recusa é
- * um gatilho (`fn_tg_conciliacao_coerente`); aqui não há gatilho equivalente —
- * os quatro de `conciliacao_bancaria_itens` são auditoria, mês fechado, promoção
- * e snapshot. Mas as RPCs não são iguais entre si:
- *   `fn_vincular_grupo_conciliacao` EXIGE que a soma feche o valor cheio do
- *     movimento (`soma_diverge`, tolerância 0,005) — sobre-aplicar por ali é
- *     impossível, e sub-aplicar também;
- *   `fn_vincular_extrato_lancamento` NÃO checa valor nenhum: aceita o
- *     `p_valor_aplicado` que mandarem, inclusive maior que o movimento.
- * Então o freio de tela é a ÚNICA defesa no caminho unitário, e é paliativo: o
- * botão se recusa a oferecer o que estouraria, com o motivo escrito ao lado. A
- * guarda de verdade é migration (CONCIL-SOBRE-APLICACAO-01) e continua pendente.
+ * ⚠ A GUARDA DE SOBRE-APLICAÇÃO ESTÁ NO BANCO, NOS DOIS CAMINHOS — e este
+ * comentário já disse o contrário. Quando o B-28b o escreveu, a unitária não
+ * checava valor nenhum e o freio desta tela era a única defesa;
+ * CONCIL-SOBRE-APLICACAO-01 fechou isso por migration (`md5 b22fd273`), e a
+ * frase envelheceu no mesmo dia. Fica registrada porque foi verdade e porque a
+ * classe do defeito já custou uma caçada: era assim que a estação afirmava que
+ * `fn_candidatos_conciliacao` "ainda não existe neste banco" enquanto ela rodava.
+ *
+ * O que o banco recusa hoje, lido no corpo das funções:
+ *   `fn_vincular_extrato_lancamento` — duas faces, ambas com tolerância 0,005:
+ *     `sobre_aplicacao: valor (%) excede o aberto do movimento` (o valor contra
+ *     `|valor do extrato|` menos o que já está aplicado nele) e
+ *     `sobre_aplicacao: valor (%) excede o saldo livre do lancamento` (o mesmo
+ *     do outro lado). Parcial vale; sobre-aplicar, não.
+ *   `fn_vincular_grupo_conciliacao` — exige soma EXATA contra o valor CHEIO do
+ *     movimento (`soma_diverge`), e não contra o que falta.
+ *
+ * ⚠ E O GRUPO NÃO FECHA PARCIAL, o que este comentário não promete de propósito:
+ * como ele compara com o valor cheio ignorando o que já está aplicado, completar
+ * um movimento parcial com dois lançamentos continua impossível por construção.
+ * É dívida aberta do lado do banco (MIG do arquiteto), não limite desta tela.
+ *
+ * ⚠ O FREIO DAQUI FICA, e agora é o que sempre deveria ter sido: antecipação de
+ * UX. Ele não protege o invariante — o banco protege —; ele evita que o operador
+ * descubra a recusa depois do clique.
  */
 interface Props {
   movimento: MovimentoConciliacao;
@@ -91,15 +103,20 @@ export function EstacaoConciliar({ movimento, aoFechar, aoMudar, contaBancariaId
      Botão desabilitado sempre diz por quê, e o motivo tem uma fonte só — dois
      lugares divergiriam no primeiro ajuste.
      ⚠ CADA LINHA ANTECIPA UMA RECUSA QUE EXISTE NO CORPO DA RPC, lida no banco —
-     nenhuma é regra inventada aqui. A tela antecipa; quem recusa é o banco, e a
-     mensagem dele continua chegando inteira no toast quando algo escapar.
+     nenhuma é regra inventada aqui, e NENHUMA é a defesa do invariante. Quem
+     recusa é o banco, nos dois caminhos; a tela só evita que a recusa chegue
+     depois do clique. Quando algo escapar daqui, a mensagem do Postgres chega
+     inteira no toast, e ela é mais precisa que qualquer texto nosso.
        · 1 marcado + extrato com vínculo ativo → a unitária levanta
          'extrato ja possui vinculo ativo';
        · 2+ marcados que não somam o valor CHEIO do movimento → o grupo levanta
          'soma_diverge', porque compara com `abs(valor_do_extrato)` e não com o
          que falta;
-       · seleção que passa do aberto → nada no banco recusa no caminho unitário,
-         e este é o único freio (CONCIL-SOBRE-APLICACAO-01, ainda pendente). */
+       · seleção que passa do aberto → a unitária levanta
+         'sobre_aplicacao: valor (%) excede o aberto do movimento' desde a
+         migration `b22fd273`, e também barra o excesso do lado do LANÇAMENTO
+         ('excede o saldo livre do lancamento'). Este freio deixou de ser a
+         única defesa e virou o aviso antecipado dela. */
   const impedimento: string | null =
     marcados.size === 0 ? 'Marque ao menos um lançamento.'
     : restaDepois < -TOL

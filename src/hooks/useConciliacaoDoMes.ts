@@ -364,14 +364,21 @@ export function useCandidatosDoMovimento(clienteId: string | null, extratoId: st
  * ⚠ AS DUAS NÃO SÃO A MESMA REGRA COM TAMANHOS DIFERENTES, e é por isso que a
  * tela precisa saber qual vai chamar (corpos lidos no banco):
  *   unitária — recusa se o extrato JÁ tem vínculo ativo
- *              (`extrato ja possui vinculo ativo`), e NÃO exige que o valor
- *              feche: aceita deixar o movimento parcial;
+ *              (`extrato ja possui vinculo ativo`) e, desde a migration
+ *              `b22fd273` (CONCIL-SOBRE-APLICACAO-01), EXIGE que o valor caiba
+ *              nos DOIS lados, com tolerância 0,005:
+ *              `sobre_aplicacao: … excede o aberto do movimento` e
+ *              `… excede o saldo livre do lancamento`. Deixar PARCIAL continua
+ *              valendo — o que ela passou a recusar é o EXCESSO, não a
+ *              cobertura incompleta;
  *   grupo    — não olha vínculo existente do extrato, mas EXIGE
  *              `abs(total - abs(valor_do_extrato)) <= 0,005`
  *              (`soma_diverge`), contra o valor CHEIO do OFX e não contra o que
  *              falta. Aplicar em duas rodadas de grupo é impossível por
- *              construção.
- * `impedimento`, na estação, antecipa exatamente essas duas recusas.
+ *              construção, e fechar um parcial em grupo também — dívida aberta
+ *              do lado do banco, não limite da tela.
+ * `impedimento`, na estação, antecipa essas recusas para que o operador não as
+ * descubra depois do clique. Ele não é a defesa: a defesa é o banco.
  *
  * ⚠ NO CAMINHO DE GRUPO, OS ARRAYS ANDAM EM PAR e a ordem é o que os liga —
  * `p_valores[i]` é o valor de `p_lancamentos[i]`. Saem da MESMA iteração.
