@@ -23,7 +23,7 @@
  * altura de campo), A17 (par rótulo-valor), A18 (linha densa de duas alturas), A19
  * (dinheiro sempre formatado), A20 (DatePicker, nunca `input type=date`).
  */
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -32,10 +32,10 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { CampoMoeda } from '@/components/ui/campo-moeda';
 import type { CenarioBoitel } from '@/components/venda/BoitelNegociacaoDerivado';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Pencil, TrendingUp, Wallet, Tag, Banknote, BarChart3 } from 'lucide-react';
+import { Pencil, TrendingUp, Wallet, Tag, Banknote, BarChart3, ImageDown } from 'lucide-react';
 import { formatMoeda, formatKg, formatArroba } from '@/lib/calculos/formatters';
 import type { BoitelData } from '@/components/BoitelPlanningDialog';
-import { derivadosBoitel, cabecasQueSairam, liquidoDaVendaBoitel, bolsoDaVendaBoitel, unitariosDoLiquido, comparativoOportunidade, PilulaCenario, type BoitelEdicao } from '@/components/venda/BoitelNegociacaoDerivado';
+import { derivadosBoitel, cabecasQueSairam, liquidoDaVendaBoitel, bolsoDaVendaBoitel, unitariosDoLiquido, comparativoOportunidade, PilulaCenario, type BoitelEdicao, type UnitariosLiquido } from '@/components/venda/BoitelNegociacaoDerivado';
 
 const n2 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const n3 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
@@ -1614,6 +1614,47 @@ function CelulaAnalise({ valor, cor, forte }: { valor: string | null; cor?: stri
   );
 }
 
+/* ─── UM CENARIO EMPILHADO (abaixo de sm) ──────────────────────────────────────
+   ⚠ MESMOS DEGRAUS, MESMA ORDEM, MESMOS CENTAVOS da tabela — B-09 item 3. Nao e' um resumo
+   do celular: e' a MESMA informacao noutra geometria. Abreviar milhar ou cortar centavo
+   aqui faria o print do celular e o da tela discordarem sobre o mesmo abate.
+   ⚠ O `extra` CARREGA O DELTA e so' o realizado o recebe — os outros dois nao tem contra o
+   que comparar dentro do proprio bloco. */
+function BlocoAnalise({ titulo, cor, destaque, linhas, total, totalExtra, unitarios }: {
+  titulo: string; cor: string; destaque?: boolean;
+  linhas: { rotulo: string; valor: string | null; cor: string; extra?: React.ReactNode }[];
+  total: string | null; totalExtra?: React.ReactNode; unitarios: string;
+}) {
+  return (
+    <div className={`rounded-md border px-3 py-2 min-w-0 ${destaque ? 'border-2' : ''}`}>
+      <div className={`text-[10px] font-medium uppercase tracking-wide leading-none ${cor}`}>{titulo}</div>
+      <div className="mt-1.5 space-y-0.5">
+        {linhas.map(l => (
+          <div key={l.rotulo} className="flex items-baseline justify-between gap-3 leading-[1.45]">
+            <span className="text-[11px] font-normal text-secondary whitespace-nowrap">{l.rotulo}</span>
+            <span className="flex items-baseline gap-2 whitespace-nowrap">
+              <span className={`text-[11px] tabular-nums ${l.valor == null ? 'text-muted-foreground' : l.cor}`}>
+                {l.valor ?? '—'}
+              </span>
+              {l.extra && <span className="text-[10px] tabular-nums">{l.extra}</span>}
+            </span>
+          </div>
+        ))}
+      </div>
+      <div className="mt-1.5 border-t pt-1.5 flex items-baseline justify-between gap-3">
+        <span className="text-[11px] font-medium text-foreground whitespace-nowrap">= Líquido no bolso</span>
+        <span className="flex items-baseline gap-2 whitespace-nowrap">
+          <span className={`text-[13px] font-semibold tabular-nums ${total == null ? 'text-muted-foreground font-normal' : cor}`}>
+            {total ?? '—'}
+          </span>
+          {totalExtra && <span className="text-[10px] font-medium tabular-nums">{totalExtra}</span>}
+        </span>
+      </div>
+      <div className={`mt-0.5 text-right text-[10px] tabular-nums text-muted-foreground`}>{unitarios}</div>
+    </div>
+  );
+}
+
 /* ─── O MODAL ──────────────────────────────────────────────────────────────────
    ⚠ TRES COLUNAS NA MESMA REGUA — o PR 3, absorvido. "Vender vivo na epoca" e' o termo de
    comparacao (o custo de oportunidade), "Projecao" e' a promessa e "Realizado" e' o fato.
@@ -1669,71 +1710,170 @@ function BoitelAnaliseModal({ projetado, realizado, categoria, cabecas, onFechar
     { rotulo: 'R$/@', real: realizado && temReal ? formatMoeda(realizado.precoVendaArroba) : null, prev: projetado ? formatMoeda(projetado.precoVendaArroba) : null },
   ];
 
+  const cartaoRef = useRef<HTMLDivElement | null>(null);
+  const [salvandoPrint, setSalvandoPrint] = useState(false);
+  /* ⚠ IMPORT DINAMICO: `html2canvas` sao ~200kB e a analise e' aberta uma vez por abate.
+     Carrega-la no bundle da tela faria todo mundo pagar por um botao que poucos apertam —
+     e o `capturarAnalise` do PDF ja e' code-split pelo mesmo motivo. */
+  const salvarPrint = async () => {
+    const el = cartaoRef.current;
+    if (!el || salvandoPrint) return;
+    setSalvandoPrint(true);
+    try {
+      const { default: html2canvas } = await import('html2canvas');
+      const canvas = await html2canvas(el, { scale: 2.5, backgroundColor: '#ffffff', logging: false, useCORS: true });
+      const a = document.createElement('a');
+      a.href = canvas.toDataURL('image/png');
+      /* Nome que se acha depois: o que e', de quem, e de quando. */
+      a.download = `analise-envio${categoria ? `-${categoria.toLowerCase().replace(/\s+/g, '-')}` : ''}${realizado?.dataAbate ? `-${realizado.dataAbate}` : ''}.png`;
+      a.click();
+    } finally {
+      setSalvandoPrint(false);
+    }
+  };
+
   const difPrev = temReal && bolsoReal != null && bolsoProj != null ? bolsoReal - bolsoProj : null;
+  /* ⚠ OS UNITARIOS DO VIVO SAEM DA MESMA IRMA — B-09 item 2c. A coluna do mercado tinha
+     total e nao tinha por cabeca nem por quilo, e era a unica das tres sem eles: quem
+     compara "vale a pena?" compara justamente R$/cab e R$/kg. `unitariosDoLiquido` recebe
+     a base trocada, exatamente como ja faz para o bolso — nenhuma divisao escrita aqui. */
+  const uniVivo = useMemo(() => unitariosDoLiquido(temReal ? realizado ?? null : projetado, mercado), [temReal, realizado, projetado, mercado]);
   const grade = 'grid grid-cols-[1fr_repeat(4,minmax(0,7.5rem))] gap-x-3 items-baseline';
+  const uni = (u: UnitariosLiquido) => u.porCabeca == null ? '—'
+    : `${formatMoeda(u.porCabeca)}/cab · ${formatMoeda(u.porKg ?? 0)}/kg`;
+  /* ⚠ COR POR DIRECAO NA COLUNA DO REALIZADO — B-09 item 2b, a mesma regra que o acerto
+     itemizado ja usa: entrada em verde, saida em vermelho, TOTAIS neutros. O total nao e'
+     entrada nem saida — e' o resultado dos dois —, e pinta-lo escolheria um lado para um
+     numero que nao tem lado.
+     ⚠ SO' NO REALIZADO. A projecao e' ambar porque ambar quer dizer "ainda nao aconteceu",
+     e trocar isso por verde/vermelho perderia a marca que organiza a tela inteira. */
+  const corReal = (l: { negativo?: boolean }) => l.negativo ? 'text-destructive' : 'text-success';
+
+  const cabecalhos = ['Vender vivo na época', 'Projetado', 'Realizado', 'Dif. real vs proj.'];
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onFechar(); }}>
-      <DialogContent className="max-w-3xl p-0 gap-0 overflow-hidden flex flex-col">
+      {/* ⚠ `max-h-[85vh]` E O CORPO QUE ROLA — B-09 item 3, e a medicao mandou. Em sm+ a
+          analise fecha em ~385px contra os ~680px do teto: ZERO rolagem, como o A21 pede.
+          No celular, porem, os tres blocos empilhados somam ~695px contra ~544px (85vh de
+          640px), e nao ha como caber sem abreviar milhar ou cortar centavo — que e'
+          justamente o que o item 3 proibe. Entao rola, e rola SO' onde precisa
+          (`sm:overflow-visible`): a alternativa era o `overflow-hidden` do dialogo CORTAR o
+          terceiro bloco, que e' perder dado em silencio.
+          ⚠ O `overflow` MORA NO ENVOLTORIO, e nao no cartao: `html2canvas` captura a caixa
+          do elemento, e um cartao com rolagem propria sairia cortado no PNG. Envoltorio
+          rola, cartao inteiro e' capturado. */}
+      <DialogContent className="max-w-3xl max-h-[85vh] p-0 gap-0 overflow-hidden flex flex-col">
         <DialogHeader className="shrink-0 border-b bg-primary/10 px-5 py-3 space-y-0.5">
-          <DialogTitle className="text-[14px] font-medium text-primary leading-none">
-            Análise do envio{categoria ? ` · ${categoria}` : ''}{cabecas ? ` ${cabecas}` : ''}
-          </DialogTitle>
-          <p className="text-[11px] font-normal text-muted-foreground leading-snug">
-            {realizado?.dataAbate
-              ? `abate em ${realizado.dataAbate.split('-').reverse().join('/')}`
-              : 'o abate ainda não foi lançado — a coluna do realizado enche no acerto'}
-          </p>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <DialogTitle className="text-[14px] font-medium text-primary leading-none">
+                Análise do envio{categoria ? ` · ${categoria}` : ''}{cabecas ? ` ${cabecas}` : ''}
+              </DialogTitle>
+              <p className="mt-0.5 text-[11px] font-normal text-muted-foreground leading-snug">
+                {realizado?.dataAbate
+                  ? `abate em ${realizado.dataAbate.split('-').reverse().join('/')}`
+                  : 'o abate ainda não foi lançado — a coluna do realizado enche no acerto'}
+              </p>
+            </div>
+            {/* ⚠ SALVAR PRINT — B-09 item 3. `html2canvas` E A LIB DA CASA: ja e' dependencia
+                direta (1.4.1) e ja captura os componentes reais do PDF Executivo em
+                `src/lib/pdf/capturarAnalise.tsx`. Trazer `html-to-image` seria uma segunda
+                lib para o mesmo trabalho.
+                ⚠ MESMOS PARAMETROS DAQUELE MODULO — `scale: 2.5`, fundo branco, sem log:
+                dois lugares capturando com escalas diferentes dariam prints de nitidez
+                diferente para a mesma empresa.
+                ⚠ CAPTURA O CARTAO, NAO O DIALOGO: o `ref` esta' no corpo, entao o PNG sai
+                sem a moldura do modal e sem o proprio botao. */}
+            <Button type="button" variant="ghost" size="sm" disabled={salvandoPrint}
+              className="h-7 shrink-0 gap-1.5 text-[11px] text-primary"
+              title="Salva esta análise como imagem PNG"
+              onClick={salvarPrint}>
+              <ImageDown className="h-3.5 w-3.5" /> {salvandoPrint ? 'Gerando…' : 'Salvar print'}
+            </Button>
+          </div>
         </DialogHeader>
 
-        <div className="px-5 py-3 min-w-0">
-          {/* ⚠ CABECALHO DA TABELA: a cor ja diz o que cada coluna e'. */}
-          <div className={`${grade} border-b pb-1.5 text-[10px] font-medium uppercase tracking-wide`}>
-            <div className="text-muted-foreground">&nbsp;</div>
-            <div className="text-right text-muted-foreground">Vender vivo na época</div>
-            <div className={`text-right ${AMBAR}`}>Projeção</div>
-            <div className="text-right text-foreground">Realizado</div>
-            <div className="text-right text-muted-foreground">real × proj.</div>
-          </div>
+        <div className="min-h-0 flex-1 overflow-y-auto sm:overflow-visible">
+        <div ref={cartaoRef} className="px-5 py-3 min-w-0 bg-card">
+          {/* ─── A TABELA (sm+) ──────────────────────────────────────────────────────
+              ⚠ CABECALHOS POR EXTENSO — B-09 item 2a. "Projeção"/"Realizado" sozinhos nao
+              diziam de que lado do tempo estavam, e "real × proj." era abreviacao de
+              quem ja sabia. A cor continua dizendo, e agora a palavra confirma. */}
+          <div className="hidden sm:block">
+            <div className={`${grade} border-b pb-1.5 text-[10px] font-medium uppercase tracking-wide`}>
+              <div className="text-muted-foreground">&nbsp;</div>
+              <div className="text-right text-muted-foreground">{cabecalhos[0]}</div>
+              <div className={`text-right ${AMBAR}`}>{cabecalhos[1]}</div>
+              <div className="text-right text-foreground">{cabecalhos[2]}</div>
+              <div className="text-right text-muted-foreground">{cabecalhos[3]}</div>
+            </div>
 
-          {linhas.map(l => (
-            <div key={l.rotulo} className={`${grade} py-1 leading-[1.45]`}>
-              <div className="text-[12px] font-normal text-secondary whitespace-nowrap">{l.rotulo}</div>
-              <CelulaAnalise valor={fmt(l.mercado)} />
-              <CelulaAnalise valor={fmt(l.proj, l.negativo)} cor={AMBAR} />
-              <CelulaAnalise valor={fmt(l.real, l.negativo)} cor="text-foreground" />
-              <div className="text-right text-[11px] tabular-nums whitespace-nowrap">
-                {delta(l.real, l.proj, l.maiorEMelhor) ?? <span className="text-muted-foreground">—</span>}
+            {linhas.map(l => (
+              <div key={l.rotulo} className={`${grade} py-1 leading-[1.45]`}>
+                <div className="text-[12px] font-normal text-secondary whitespace-nowrap">{l.rotulo}</div>
+                <CelulaAnalise valor={fmt(l.mercado)} />
+                <CelulaAnalise valor={fmt(l.proj, l.negativo)} cor={AMBAR} />
+                <CelulaAnalise valor={fmt(l.real, l.negativo)} cor={corReal(l)} />
+                <div className="text-right text-[11px] tabular-nums whitespace-nowrap">
+                  {delta(l.real, l.proj, l.maiorEMelhor) ?? <span className="text-muted-foreground">—</span>}
+                </div>
+              </div>
+            ))}
+
+            {/* ⚠ O TOTAL EM PESO 600 — e' a resposta, e as quatro linhas acima sao o caminho.
+                Neutro nas tres colunas: total nao tem lado. */}
+            <div className={`${grade} border-t pt-1.5 mt-0.5`}>
+              <div className="text-[12px] font-medium text-foreground whitespace-nowrap">= Líquido no bolso</div>
+              <CelulaAnalise forte valor={mercado == null ? null : formatMoeda(mercado)} />
+              <CelulaAnalise forte valor={bolsoProj == null ? null : formatMoeda(bolsoProj)} cor={AMBAR} />
+              <CelulaAnalise forte valor={bolsoReal == null ? null : formatMoeda(bolsoReal)} cor="text-foreground" />
+              <div className="text-right text-[11px] font-medium tabular-nums whitespace-nowrap">
+                {delta(bolsoReal, bolsoProj, true) ?? <span className="text-muted-foreground">—</span>}
               </div>
             </div>
-          ))}
-
-          {/* ⚠ O TOTAL EM PESO 600 — e' a resposta, e as quatro linhas acima sao o caminho. */}
-          <div className={`${grade} border-t pt-1.5 mt-0.5`}>
-            <div className="text-[12px] font-medium text-foreground whitespace-nowrap">= Líquido no bolso</div>
-            <CelulaAnalise forte valor={mercado == null ? null : formatMoeda(mercado)} />
-            <CelulaAnalise forte valor={bolsoProj == null ? null : formatMoeda(bolsoProj)} cor={AMBAR} />
-            <CelulaAnalise forte valor={bolsoReal == null ? null : formatMoeda(bolsoReal)} cor="text-foreground" />
-            <div className="text-right text-[11px] font-medium tabular-nums whitespace-nowrap">
-              {delta(bolsoReal, bolsoProj, true) ?? <span className="text-muted-foreground">—</span>}
+            {/* ⚠ UNITARIOS SOB AS TRES COLUNAS — item 2c. O vivo tinha total e nao tinha
+                unitario, e era a coluna com que as outras duas se comparam. */}
+            <div className={`${grade} pt-0.5 text-[10px] tabular-nums text-muted-foreground`}>
+              <div>&nbsp;</div>
+              <div className="text-right">{uni(uniVivo)}</div>
+              <div className={`text-right ${AMBAR}`}>{uni(uniProj)}</div>
+              <div className="text-right text-foreground">{uni(uniReal)}</div>
+              <div>&nbsp;</div>
             </div>
           </div>
-          {/* ⚠ UNITARIOS EM 10px, da irma `unitariosDoLiquido` — as duas divisoes do bolso
-              que o produtor usa para comparar uma venda com outra. */}
-          <div className={`${grade} pt-0.5 text-[10px] tabular-nums text-muted-foreground`}>
-            <div>&nbsp;</div>
-            <div className="text-right">&nbsp;</div>
-            <div className={`text-right ${AMBAR}`}>
-              {uniProj.porCabeca == null ? '—' : `${formatMoeda(uniProj.porCabeca)}/cab · ${formatMoeda(uniProj.porKg ?? 0)}/kg`}
-            </div>
-            <div className="text-right text-foreground">
-              {uniReal.porCabeca == null ? '—' : `${formatMoeda(uniReal.porCabeca)}/cab · ${formatMoeda(uniReal.porKg ?? 0)}/kg`}
-            </div>
-            <div>&nbsp;</div>
+
+          {/* ─── EMPILHADO (abaixo de sm) ────────────────────────────────────────────
+              ⚠ POR COLUNA, E NAO POR LINHA — B-09 item 3. Cinco linhas x quatro colunas nao
+              cabem em 360px sem cortar centavo ou virar rolagem lateral, e abreviar milhar
+              esta' proibido. Empilhado, cada cenario vira um bloco COMPLETO: mesmos cinco
+              degraus, centavos inteiros, unitarios no fim.
+              ⚠ REALIZADO PRIMEIRO, e com os deltas: no celular o operador abre a analise
+              DEPOIS do abate, e a primeira tela tem de responder o que aconteceu. A
+              projecao vem em seguida, como referencia, e o vivo por ultimo.
+              ⚠ SEM REALIZADO O BLOCO DELE NAO APARECE — a mesma regra da faixa: nao ha
+              coluna vazia esperando, ha um bloco a menos. */}
+          <div className="sm:hidden space-y-3">
+            {temReal && (
+              <BlocoAnalise titulo={cabecalhos[2]} cor="text-foreground" destaque
+                linhas={linhas.map(l => ({ rotulo: l.rotulo, valor: fmt(l.real, l.negativo),
+                  cor: corReal(l), extra: delta(l.real, l.proj, l.maiorEMelhor) }))}
+                total={bolsoReal == null ? null : formatMoeda(bolsoReal)}
+                totalExtra={delta(bolsoReal, bolsoProj, true)} unitarios={uni(uniReal)} />
+            )}
+            <BlocoAnalise titulo={cabecalhos[1]} cor={AMBAR}
+              linhas={linhas.map(l => ({ rotulo: l.rotulo, valor: fmt(l.proj, l.negativo), cor: AMBAR }))}
+              total={bolsoProj == null ? null : formatMoeda(bolsoProj)} unitarios={uni(uniProj)} />
+            <BlocoAnalise titulo={cabecalhos[0]} cor="text-muted-foreground"
+              linhas={linhas.map(l => ({ rotulo: l.rotulo, valor: fmt(l.mercado), cor: 'text-muted-foreground' }))}
+              total={mercado == null ? null : formatMoeda(mercado)} unitarios={uni(uniVivo)} />
           </div>
 
-          {/* ⚠ AS DUAS VITORIAS NUMA FRASE, com os numeros vivos: contra o mercado (por que
-              mandar ao boitel) e contra a promessa (se o envio cumpriu o que prometia). */}
+          {/* ⚠ AS DUAS COMPARACOES NUMA FRASE, CADA METADE NA SUA COR — item 2d. Elas
+              respondem perguntas diferentes e podem ter vereditos OPOSTOS: render mais que
+              vender vivo (verde) e menos que o previsto (vermelho) e' o caso comum de um
+              envio que valeu a pena mas frustrou a promessa. Uma cor so' na frase inteira
+              apagaria metade da noticia. */}
           <div className="mt-3 border-t pt-2">
             {cmp == null ? (
               <p className="text-[11px] text-muted-foreground leading-snug">
@@ -1742,7 +1882,7 @@ function BoitelAnaliseModal({ projetado, realizado, categoria, cabecas, onFechar
                   : 'Informe o custo de oportunidade em Custos para comparar com a venda de hoje.'}
               </p>
             ) : (
-              <p className="text-[11px] leading-[1.45]">
+              <p className="text-[11px] leading-[1.45] text-muted-foreground">
                 <span className={classeVeredito(veredito(cmp.diferenca, true))}>
                   O boitel {temReal ? 'rendeu' : 'deve render'}{' '}
                   <span className="font-medium tabular-nums">{formatMoeda(Math.abs(cmp.diferenca))}</span>{' '}
@@ -1750,22 +1890,23 @@ function BoitelAnaliseModal({ projetado, realizado, categoria, cabecas, onFechar
                   (<span className="font-medium tabular-nums">{pct(cmp.diferenca, cmp.oportunidade)}</span>)
                   {' '}que vender vivo na época
                 </span>
-                {difPrev != null && bolsoProj != null && (
+                {difPrev != null && bolsoProj != null && (<>
+                  {' e '}
                   <span className={classeVeredito(veredito(difPrev, true))}>
-                    {' '}e{' '}
                     <span className="font-medium tabular-nums">{formatMoeda(Math.abs(difPrev))}</span>{' '}
                     <span className="font-medium">{difPrev >= 0 ? 'a mais' : 'a menos'}</span>{' '}
                     (<span className="font-medium tabular-nums">{pct(difPrev, bolsoProj)}</span>)
                     {' '}que o previsto
                   </span>
-                )}
-                <span className={classeVeredito(veredito(cmp.diferenca, true))}>.</span>
+                </>)}
+                .
               </p>
             )}
           </div>
 
           {/* ⚠ RODAPE ZOOTECNICO EM 9px — o que aconteceu com o ANIMAL, sob o que aconteceu
               com o dinheiro. Cada um com o `prev.` do lado, no ambar da projecao. */}
+
           <div className="mt-2 border-t pt-2 flex flex-wrap gap-x-6 gap-y-1.5">
             {zoot.map(z => (
               <div key={z.rotulo} className="min-w-0">
@@ -1777,6 +1918,7 @@ function BoitelAnaliseModal({ projetado, realizado, categoria, cabecas, onFechar
           </div>
         </div>
 
+        </div>
         <DialogFooter className="shrink-0 border-t bg-card px-5 py-3">
           <Button variant="outline" size="sm" onClick={onFechar}>Fechar</Button>
         </DialogFooter>

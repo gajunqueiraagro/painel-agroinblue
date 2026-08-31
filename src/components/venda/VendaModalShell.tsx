@@ -84,6 +84,27 @@ function abasDaVenda(temOperacao: boolean) {
   ];
 }
 
+/* ─── A REGRA DO BOTAO QUE EXPLICA — PR-OC-VENDA-ANALISE-02 (B-09 item 1c) ─────
+   ⚠ REGRA NOVA, E VALE PARA TODA A OPERACAO COMERCIAL: botao desabilitado SEMPRE diz por
+   que. Um botao cinza sem motivo transfere ao operador o trabalho de adivinhar qual das
+   cinco condicoes o travou — e quem adivinha erra, tenta de novo e desconfia da tela.
+   ⚠ O `title` NAO BASTA, e e' o defeito que esta peca conserta: ele exige passar o mouse e
+   esperar, some no toque e nao existe para leitor de tela quando o botao esta' `disabled`.
+   A dica fica ESCRITA ao lado, e o `title` continua para quem quiser o texto longo.
+   ⚠ 10px E O PISO do PADROES-UI, e aqui ele vale sem excecao: esta linha carrega
+   informacao que NAO existe em nenhum outro lugar da tela — nao e' apoio a um numero
+   visivel, como as ajudas de 9px do `CampoNum`.
+   ⚠ SO' APARECE COM MOTIVO. Botao habilitado nao ganha linha vazia, e botao desabilitado
+   sem motivo declarado e' defeito de quem o escreveu — nao de quem o le. */
+function DicaBotao({ texto }: { texto: string | null | undefined }) {
+  if (!texto) return null;
+  return (
+    <span className="text-[10px] font-normal text-white/80 leading-snug max-w-[15rem] text-right">
+      {texto}
+    </span>
+  );
+}
+
 /* Par rotulo-valor do resumo lateral — idioma do `Linha` de ResumoLateralOC (A17).
    ⚠ SEXTA COPIA deste par. Sai na mesma extracao que levar o resumo para lugar unico. */
 function LinhaResumo({ rotulo, valor }: { rotulo: string; valor: string | null }) {
@@ -418,11 +439,29 @@ export function VendaModalShell({
   /* ⚠ NAO E' O MESMO QUE "NAO PODE": o botao pode estar apto e nao ter o que gravar. Por
      isso o motivo tem precedencia — quem NAO PODE precisa saber o que falta; quem so' nao
      tem alteracao precisa saber que ja' esta' salvo. */
+  /* ⚠ O UNICO LUGAR QUE DECIDE SE O CONCLUIR TRAVA — e ele devolve o MOTIVO, nao um
+     booleano. Assim `disabled`, `title` e a dica escrita saem todos da mesma frase: quando
+     ha motivo o botao trava E diz; sem motivo, ele funciona. Nao da' para travar em
+     silencio por construcao. */
+  const concluirTravadoPor: string | null =
+    submitting ? 'salvando…'
+    : recebimentoApi?.saving ? 'aguarde a entrega terminar'
+    : null;
   const motivoNaoSalva = naNegociacao
     ? (!ocOperacaoId ? 'Salve a operação na aba Venda primeiro'
        : faltamBoitel.length > 0 ? `Planejamento do boitel incompleto. Falta ${faltamBoitel.join(', ')}.`
        : undefined)
     : (identificacaoPronta ? undefined : 'Informe comprador, data, fazenda e tipo de venda');
+  /* Mesma regra aplicada ao Salvar — B-09 item 1c. O motivo ja existia no `title` desde
+     sempre; o que faltava era ele estar ESCRITO ao lado.
+     ⚠ `submitting` FICA DE FORA: ali o proprio rotulo do botao vira "Salvando...", e uma
+     dica dizendo a mesma coisa seria ruido.
+     ⚠ "Nada alterado" TAMBEM E MOTIVO, e talvez o mais importante: e' o unico caso em que
+     o botao cinza significa "esta' tudo certo" — sem a frase, ele se le como falha. */
+  const salvarTravadoPor: string | null =
+    submitting ? null
+    : ocStatusComercial === 'cancelada' ? 'operação cancelada'
+    : motivoNaoSalva ?? (semAlteracoes ? 'nada alterado desde o último salvamento' : null);
 
   /* A MESMA ABA DA COMPRA, com quatro textos trocados por prop. O lote e' identico nos
      dois: categoria, quantidade, peso, criterio e valor. Nenhum rotulo de CAMPO muda — o
@@ -898,23 +937,41 @@ export function VendaModalShell({
             <RotateCcw className="h-4 w-4" /> Reabrir negociação
           </Button>
         )}
-        {naNegociacao && !!ocOperacaoId && ocStatusComercial === 'programada' && recebimentoApi && (
+        {naNegociacao && !!ocOperacaoId && ocStatusComercial === 'programada' && recebimentoApi && (<>
+          <DicaBotao texto={concluirTravadoPor} />
           <Button type="button" variant="secondary" className="gap-1.5"
-            /* ⚠ EXIGE UMA GRAVACAO NESTA SESSAO, e nao apenas "nada mudou". A assinatura
-               nasce nula ao reabrir: ali nao da' para distinguir tela limpa de tela suja, e
-               na duvida o custo dos dois erros e' assimetrico. Concluir por cima de edicao
-               nao gravada fecharia a negociacao numa versao que ninguem viu — e depois de
-               'fechada' o `oc_salvar_lotes` recusa, entao a edicao morreria com um erro
-               confuso. Pedir um Salvar a mais custa um clique. */
-            disabled={submitting || recebimentoApi.saving || !semAlteracoes}
-            title={semAlteracoes
+            /* ⚠ O CONCLUIR NAO ESTAVA QUEBRADO — ele ACORDAVA depois do Salvar. O defeito
+               era o SILENCIO: cinza, sem dizer o que faltava, e o operador concluia que o
+               botao nao funcionava. Correcao do Gabriel, B-09 item 1.
+               ⚠ ELE PASSOU A SALVAR POR DENTRO, e o custo foi MEDIDO: e' exatamente a
+               chamada que o operador ja fazia a mao no botao ao lado — `salvarNegociacaoVendaOC`,
+               que devolve `boolean`. Nao ha consulta nova, nao ha round-trip a mais; ha um
+               clique a menos. Por isso a trava por "nao salvou" saiu do `disabled`.
+               ⚠ A SEGURANCA CONTINUA INTEIRA, e e' o `=== false` que a sustenta: se a
+               gravacao falhar, NAO conclui. Concluir por cima de edicao nao gravada
+               fecharia a negociacao numa versao que ninguem viu, e depois de 'fechada' o
+               `oc_salvar_lotes` recusa — a edicao morreria com um erro confuso.
+               ⚠ SALVA SO' QUANDO HA O QUE SALVAR. Com `semAlteracoes` a gravacao seria uma
+               escrita a toa que ainda subiria a versao. Reaberta, a assinatura nasce nula e
+               `semAlteracoes` e' falso mesmo com a tela limpa: ali ele grava, e gravar o
+               que ja esta' gravado e' inofensivo — era essa duvida que antes virava trava.
+               ⚠ `exigencias()` NAO ENTRA AQUI, e a medicao explica: ela responde "o boitel
+               esta' completo?", nao "a tela esta' suja?". Sao perguntas diferentes, e quem
+               guarda a completude e' a propria RPC, que recusa com a frase certa desde
+               20260831123000. */
+            disabled={!!concluirTravadoPor}
+            title={concluirTravadoPor ?? (semAlteracoes
               ? 'Concluir a negociação congela os lotes e libera a Entrega'
-              : 'Salve a negociação antes de concluir'}
-            onClick={async () => { await onConcluirNegociacao?.(); }}>
+              : 'Salva a negociação e conclui — congela os lotes e libera a Entrega')}
+            onClick={async () => {
+              if (!semAlteracoes) { const ok = await onSalvarNegociacao(); if (ok === false) return; }
+              await onConcluirNegociacao?.();
+            }}>
             <Check className="h-4 w-4" /> Concluir negociação
           </Button>
-        )}
-        {rodapeTemSalvar && (
+        </>)}
+        {rodapeTemSalvar && (<>
+        <DicaBotao texto={salvarTravadoPor} />
         <Button type="button"
           onClick={async () => {
             if (naNegociacao) { await onSalvarNegociacao(); return; }
@@ -936,7 +993,7 @@ export function VendaModalShell({
             : ocOperacaoId ? 'Salvar alterações'
             : (<>Salvar e continuar para Negociação <ArrowRight className="h-4 w-4" /></>)}
         </Button>
-        )}
+        </>)}
       </div>
 
       {/* ⚠ MOTIVO OBRIGATORIO AQUI, e e' DIVERGENCIA DELIBERADA da compra — decisao do
