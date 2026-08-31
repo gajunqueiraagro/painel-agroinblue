@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { LayoutList, FileText } from 'lucide-react';
+import { LayoutList, FileText, Link2 } from 'lucide-react';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import {
   useConciliacaoDoMes, useSugestoesDoMes, contarBaldes, frameDoRodape,
@@ -167,9 +167,15 @@ export function PainelExtratoMes({ clienteId, contaId, ano, mes, contaNome, comP
         /* ⚠ SÓ AS LINHAS ROLAM, como no original: o bloco de saldo e o placar
            ficam parados e o `thead` é `sticky`. Rolar a página levaria o resumo
            embora junto — que é o que o cabeçalho fixo existe para impedir. */
-        <div className="max-h-[calc(100vh-26rem)] min-h-[9rem] overflow-auto">
+        /* ⚠ A ALTURA E' A DO ORIGINAL — `23.2rem`, e la' ela e' MEDIDA, nao
+           estimada: 319px acima da tabela mais 52px de respiro do shell. O
+           `min-h` impede que a area suma em tela curta. Aqui a pilha acima e'
+           outra (cabecalho da Conciliacao, cards, abas, previa inline, faixa e
+           campos do card), entao o numero herdado e' o de la — ver o relatorio
+           do B-27, onde a conta esta declarada. */
+        <div className="max-h-[calc(100vh-23.2rem)] min-h-[9rem] overflow-auto">
           <table className="w-full border-collapse text-[10px]">
-            <thead className="sticky top-0 z-10 bg-card">
+            <thead className="sticky top-0 z-10 bg-muted/60">
               <tr className="border-b border-border">
                 <Th className="text-left">Data</Th>
                 <Th className="text-left">Descrição</Th>
@@ -180,22 +186,33 @@ export function PainelExtratoMes({ clienteId, contaId, ano, mes, contaNome, comP
               </tr>
             </thead>
             <tbody>
+              {/* ⚠ `py-0` NAS CELULAS, como no original: a altura da linha passa a
+                  vir do conteudo, e quem a define e' o botao `h-[18px]` da ponta.
+                  Com `py-1` a linha custava ~29px; assim custa ~19px. Densidade e'
+                  quantas linhas cabem sem rolar. */}
               {lista.map(m => (
                 <tr key={m.id} className="border-b border-border/60 hover:bg-muted/40">
-                  <td className="whitespace-nowrap px-2 py-1 tabular-nums">{brData(m.data_movimento)}</td>
-                  <td className="max-w-0 truncate px-2 py-1" title={m.descricao ?? ''}>{m.descricao ?? '—'}</td>
-                  <td className="whitespace-nowrap px-2 py-1 font-mono text-muted-foreground">{m.documento || '—'}</td>
+                  <td className="whitespace-nowrap px-2 py-0 font-mono">{brData(m.data_movimento)}</td>
+                  <td className="w-full max-w-0 truncate px-2 py-0" title={m.descricao ?? ''}>{m.descricao ?? '—'}</td>
+                  <td className="whitespace-nowrap px-2 py-0 font-mono text-muted-foreground">{m.documento || '—'}</td>
                   {/* Cor por sinal, e o sinal já está escrito no número — a cor
                       acompanha, nunca é o único canal. */}
-                  <td className={`whitespace-nowrap px-2 py-1 text-right tabular-nums ${
+                  <td className={`whitespace-nowrap px-2 py-0 text-right font-medium tabular-nums ${
                     m.valor < 0 ? 'text-destructive' : 'text-success'}`}>
                     {formatMoeda(m.valor)}
                   </td>
-                  <td className="px-2 py-1 text-center"><SituacaoBadge situacao={m.situacao} /></td>
-                  <td className="px-2 py-1 text-right">
+                  <td className="px-2 py-0 text-center"><SituacaoBadge situacao={m.situacao} /></td>
+                  {/* ⚠ O BOTAO E' O DO ORIGINAL menos o tamanho: la' e' `text-[9px]`
+                      e o piso de leitura desta casa e' 10px (PADROES-UI, "nada que o
+                      operador precise ler desce abaixo disso"). Altura, folga, icone
+                      de elo e a ausencia de `text-primary` vieram verbatim — era o
+                      `text-primary` que fazia o "Revisar" sair mais escuro que o de
+                      la'. */}
+                  <td className="whitespace-nowrap px-2 py-0 text-right">
                     <Button type="button" variant="ghost" size="sm"
-                      className="h-5 px-1.5 text-[10px] text-primary"
+                      className="h-[18px] gap-1 px-1 text-[10px]"
                       onClick={() => setConciliando(m)}>
+                      <Link2 className="h-3 w-3" />
                       Revisar
                     </Button>
                   </td>
@@ -246,8 +263,19 @@ function SituacaoBadge({ situacao }: { situacao: SituacaoMovimento }) {
   return <span className="rounded bg-muted px-1 py-0 text-[9px] font-semibold uppercase text-muted-foreground">em aberto</span>;
 }
 
+/**
+ * ⚠ CAIXA ALTA PEQUENA, como no original — `uppercase tracking-wide` era o que
+ * faltava e o que fazia o cabecalho sair "normal e maior" no print do B-27.
+ * ⚠ O `text-[9px]` do original NAO veio: o piso de leitura desta casa e' 10px
+ * (docs/PADROES-UI.md). Sem tamanho proprio, o `th` herda o `text-[10px]` da
+ * tabela — no piso, e nao abaixo dele.
+ */
 function Th({ children, className }: { children?: React.ReactNode; className?: string }) {
-  return <th className={`px-2 py-1 font-semibold text-muted-foreground ${className ?? ''}`}>{children}</th>;
+  return (
+    <th className={`px-2 py-1 font-semibold uppercase tracking-wide text-muted-foreground ${className ?? ''}`}>
+      {children}
+    </th>
+  );
 }
 
 function Campo({ rotulo, children }: { rotulo: string; children: React.ReactNode }) {
