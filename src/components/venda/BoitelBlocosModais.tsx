@@ -384,18 +384,26 @@ function SeletorLado({ noBoitel, onChange, desabilitado }: {
   );
 }
 
-/* Linha do formulario para o que NAO e' `CampoNum` (Select, DatePicker, Input de texto).
-   ⚠ A COLUNA DE ROTULO E A MESMA `w-[132px]` alinhada a' direita: se cada controle
-   escolhesse a sua, a grade voltaria a desalinhar — que e' o defeito 2 do 01E. */
+/* Celula do formulario para o que NAO e' `CampoNum` (Select, DatePicker, Input de texto).
+   ⚠ ROTULO EM CIMA, IGUAL AO `CampoNum` — PR-OC-VENDA-REALIZADO-02C. Ela ficou para tras
+   quando o PR dos paineis migrou o `CampoNum` de rotulo-a-esquerda para rotulo-em-cima:
+   continuou reservando uma coluna FIXA de 132px para o rotulo MAIS o campo ao lado, e
+   dentro de uma celula de painel (~157px) os dois nao cabiam. O resultado foi o que a
+   homologacao viu — "Diarias no periodo" sobrepondo o proprio valor e a Modalidade
+   renderizando deslocada. Os TRES controles quebrados eram exatamente os tres que
+   passavam por aqui.
+   ⚠ A LICAO, escrita para nao repetir: quando o idioma de um campo muda, TODOS os que
+   compartilham a grade mudam junto — um que fique no formato antigo nao "fica feio", ele
+   estoura a celula do vizinho. */
 function LinhaCampo({ label, largura, children, span }: {
   label: string; largura: string; children: React.ReactNode; span?: boolean;
 }) {
   return (
-    <div className={`flex items-baseline gap-2 min-w-0 ${span ? 'sm:col-span-2' : ''}`}>
-      <Label className="w-[132px] shrink-0 text-right text-[11px] font-medium text-foreground/90 leading-8 whitespace-nowrap overflow-hidden text-ellipsis">
+    <div className={`min-w-0 ${span ? 'col-span-2' : ''}`}>
+      <Label className="block text-[10px] font-medium text-foreground/90 leading-none whitespace-nowrap overflow-hidden text-ellipsis">
         {label}
       </Label>
-      <div className={`min-w-0 ${largura}`}>{children}</div>
+      <div className={`mt-1 ${largura}`}>{children}</div>
     </div>
   );
 }
@@ -529,11 +537,25 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
               esperado e o peso final e' que deriva. Os dois modos leem e escrevem o MESMO
               campo — nunca dois. */}
           {modoRealizado ? (
-            <CampoNum desabilitado={somenteLeitura} label="Peso de abate" titulo="Peso de abate (kg) — o GMD deriva dele"
-              valor={der.pf} casas={2} sufixo="kg" obrigatorio
-              onChange={v => set('gmd', d.dias > 0 ? Math.round(((v - (d.pesoInicial || 0)) / d.dias) * 1000) / 1000 : 0)}
-              derivado={d.dias > 0 ? `GMD ${n3(d.gmd)} kg/dia · ganho ${n1(der.ganho)} kg/cab` : null}
-              previsto={prev((_, x) => `${n2(x.pf)} kg`)} />
+            /* ─── O QUE O PAPEL DIZ — PR-OC-VENDA-REALIZADO-02D ────────────────────
+               ⚠ A CONTA INVERTE DE DIRECAO NO REALIZADO. O papel do frigorifico traz
+               TOTAIS — peso vivo na balanca, arrobas, valor —, e nao os drivers unitarios
+               que a projecao usa. Digitar GMD no acerto seria pedir ao operador que
+               desfizesse a conta de cabeca antes de lancar.
+               ⚠ CADA TOTAL ESCREVE O CAMPO QUE JA EXISTE: vivo -> `gmd`, arrobas ->
+               `rendimento`. Os dois cenarios continuam lendo os MESMOS campos, cada um
+               pelo seu lado da formula — o idioma que o 02 plantou com o peso de abate.
+               ⚠ O DENOMINADOR E `sairam` (negociadas menos mortes), e nao as negociadas:
+               e' o rebanho que de fato foi para a balanca. */
+            <CampoNum desabilitado={somenteLeitura} label="Peso vivo total" titulo="Peso vivo total na balança (kg) — do papel do frigorífico"
+              valor={Math.round(der.pf * der.sairam * 100) / 100} casas={2} sufixo="kg" obrigatorio
+              onChange={v => {
+                const cab = der.sairam || 1;
+                const medio = v / cab;
+                set('gmd', d.dias > 0 ? Math.round(((medio - (d.pesoInicial || 0)) / d.dias) * 1000) / 1000 : 0);
+              }}
+              derivado={der.sairam > 0 ? `${n2(der.pf)} kg/cab em ${der.sairam} cab.` : null}
+              previsto={prev((_, x) => `${n2(x.pf * x.sairam)} kg`)} />
           ) : (
             /* ⚠ AS AJUDAS SAEM DO MOTOR, e nenhuma e' conta escrita aqui: `ganho`, `ple`,
                `aEF`, `aS` e `pf` ja sao exportados por `derivadosBoitel`. Conferidos contra
@@ -541,14 +563,67 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
             <CampoNum desabilitado={somenteLeitura} label="GMD" valor={d.gmd} onChange={v => set('gmd', v)} casas={3} sufixo="kg/dia" obrigatorio
               derivado={d.gmd > 0 && d.dias > 0 ? `ganho no período: ${n1(der.ganho)} kg/cab` : null} />
           )}
-          <CampoNum desabilitado={somenteLeitura} label="Quebra de viagem" valor={d.quebraViagem} onChange={v => set('quebraViagem', v)} sufixo="%"
-            derivado={d.pesoInicial > 0 ? `peso pós-viagem: ${n2(der.ple)} kg` : null} />
-          <CampoNum previsto={prev(p => `${n2(p.rendimentoEntrada)}%`)} desabilitado={somenteLeitura} label="Rend. entrada" titulo="Rendimento de entrada" valor={d.rendimentoEntrada} onChange={v => set('rendimentoEntrada', v)} sufixo="%"
-            derivado={d.rendimentoEntrada > 0 && d.pesoInicial > 0 ? `${n2(der.aEF)} @/cab na entrada` : null} />
-          <CampoNum previsto={prev(p => `${n2(p.rendimento)}%`)} desabilitado={somenteLeitura} label="Rend. saída" titulo="Rendimento de saída" valor={d.rendimento} onChange={v => set('rendimento', v)} sufixo="%" obrigatorio
-            derivado={d.rendimento > 0 && der.pf > 0 ? `${n2(der.aS)} @/cab na saída (${n2(der.pf)} kg × ${n2(d.rendimento)}% / 15)` : null} />
-        </div></>),
+          {/* ⚠ OS HERDADOS NAO SE EDITAM NO REALIZADO — PR-OC-VENDA-REALIZADO-02C, decisao
+              do Gabriel. Quebra de viagem, rendimento de ENTRADA, modalidade e custo de
+              oportunidade descrevem a ENTRADA no boitel e a premissa da decisao: nada no
+              papel do frigorifico os revisa. Eles valem os da projecao por baixo — a linha
+              realizada nasce como copia integral dela —, e some-los da tela declara isso
+              em vez de convidar a redigitar o que ninguem mediu de novo.
+              ⚠ MESMO CRITERIO DO PESO DE ENTRADA, que ja era herdado. */}
+          {!modoRealizado && (
+            <CampoNum desabilitado={somenteLeitura} label="Quebra de viagem" valor={d.quebraViagem} onChange={v => set('quebraViagem', v)} sufixo="%"
+              derivado={d.pesoInicial > 0 ? `peso pós-viagem: ${n2(der.ple)} kg` : null} />
+          )}
+          {!modoRealizado && (
+            <CampoNum desabilitado={somenteLeitura} label="Rend. entrada" titulo="Rendimento de entrada" valor={d.rendimentoEntrada} onChange={v => set('rendimentoEntrada', v)} sufixo="%"
+              derivado={d.rendimentoEntrada > 0 && d.pesoInicial > 0 ? `${n2(der.aEF)} @/cab na entrada` : null} />
+          )}
+          {modoRealizado ? (
+            /* ⚠ ARROBAS TOTAIS, e o RC deriva delas. `rc = carcacaKg / vivoKg`, com
+               `carcacaKg = arrobas x 15` — a conversao que o mockup pede na ajuda.
+               ⚠ E O RC FECHA DE FATO: ele deixa de ser premissa digitada e passa a ser
+               consequencia de dois numeros do papel. */
+            <CampoNum desabilitado={somenteLeitura} label="Arrobas totais" titulo="Arrobas totais do abate (@) — do papel do frigorífico"
+              valor={Math.round(der.aTS * 100) / 100} casas={2} sufixo="@" obrigatorio
+              onChange={v => {
+                const vivoTot = der.pf * (der.sairam || 1);
+                set('rendimento', vivoTot > 0 ? Math.round(((v * 15) / vivoTot) * 100 * 100) / 100 : 0);
+              }}
+              derivado={der.aTS > 0 ? `${n2(der.aTS * 15)} kg de carcaça · RC ${n2(d.rendimento)}%` : null}
+              previsto={prev((_, x) => `${n2(x.aTS)} @`)} />
+          ) : (
+            <CampoNum desabilitado={somenteLeitura} label="Rend. saída" titulo="Rendimento de saída" valor={d.rendimento} onChange={v => set('rendimento', v)} sufixo="%" obrigatorio
+              derivado={d.rendimento > 0 && der.pf > 0 ? `${n2(der.aS)} @/cab na saída (${n2(der.pf)} kg × ${n2(d.rendimento)}% / 15)` : null} />
+          )}
+          {/* ⚠ GMC — GANHO DE CARCACA POR DIA, e vem do motor: `gmc` e' exportado por
+              `derivadosBoitel` e ja aparece no painel longo com este nome. Nao ha funcao
+              irma nem conta na tela — seria um SEGUNDO GMC na mesma operacao.
+              ⚠ A BASE E O PESO DE SAIDA DA FAZENDA, por decisao de produto do Gabriel
+              (31/08): porteira -> carcaca, com a viagem DENTRO do ciclo. O motor foi
+              corrigido no mesmo PR; ver a nota em `derivadosBoitel`. */}
+          {!modoRealizado && (
+            <div className="min-w-0">
+              <Label className="block text-[10px] font-medium text-foreground/90 leading-none whitespace-nowrap">GMC</Label>
+              <div className="mt-1 h-8 px-2 flex items-center justify-end rounded-md border bg-muted/40 text-[12px] font-medium tabular-nums">
+                {der.gmc > 0 ? n3(der.gmc) : <span className="text-muted-foreground font-normal">—</span>}
+              </div>
+              <div className="mt-0.5 text-[9px] text-muted-foreground leading-snug">kg carc./dia</div>
+            </div>
+          )}
+        </div>
+        {!modoRealizado && (
+        <div className="mt-2.5 rounded-md border bg-muted/30 px-2.5 py-2 flex flex-wrap items-end gap-x-4 gap-y-1.5">
+          <CampoNum desabilitado={somenteLeitura} label="Custo oportunidade" moeda titulo="Custo de oportunidade (R$/kg de peso de saída)"
+            valor={d.custoOportunidade} onChange={v => set('custoOportunidade', v)} sufixo="/kg" />
+          <div className="text-[9px] text-muted-foreground tabular-nums leading-snug pb-1.5">
+            {der.coT > 0
+              ? `${formatMoeda(der.coT)} no lote · ${formatMoeda(der.coT / (qtd || 1))}/cab · ${formatMoeda(d.custoOportunidade)}/kg`
+              : 'termo de comparação — não entra no custo'}
+          </div>
+        </div>
+        )}</>),
     custos: (<><div className="grid grid-cols-2 gap-x-3 gap-y-2.5 items-start">
+          {!modoRealizado && (
           <LinhaCampo label="Modalidade *" largura="w-[140px]">
             <Select value="diaria" onValueChange={() => { /* só diária — ver os itens desabilitados */ }} disabled={somenteLeitura}>
               <SelectTrigger className="h-8 px-2.5 text-[13px]"><SelectValue /></SelectTrigger>
@@ -563,6 +638,7 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
               </SelectContent>
             </Select>
           </LinhaCampo>
+          )}
           <CampoNum previsto={prev(p => formatMoeda(p.custoDiaria))} desabilitado={somenteLeitura} label="Diária" moeda valor={d.custoDiaria} onChange={v => set('custoDiaria', v)} sufixo="/cab/dia" obrigatorio />
           {/* ⚠ ALINHADO NA MESMA GRADE — defeito 2 do 01E. Ele flutuava fora da linha
               porque montava o proprio rotulo em cima; agora usa a `LinhaCampo`, e o valor
@@ -573,7 +649,11 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
             </div>
             {/* ⚠ CABEÇAS QUE SAÍRAM, não as que entraram. O boitel não cobra diária de
                 animal morto — medido no acerto real: 109 × 104 × 18,93. */}
-            <div className="mt-0.5 text-[10px] text-muted-foreground tabular-nums leading-snug">
+            {/* ⚠ 9px COMO AS IRMAS — adendo 3. Ela era a unica ajuda em 10px, e dentro do
+                `LinhaCampo` antigo (rotulo a' esquerda, celula estourada) empilhava
+                verticalmente. Corrigido o container, falta a voz: todas as ajudas falam
+                no mesmo tom. */}
+            <div className="mt-0.5 text-[9px] text-muted-foreground tabular-nums leading-snug">
               {d.custoDiaria > 0 && d.dias > 0
                 ? `${sairam} cab. × ${d.dias} dias × ${formatMoeda(d.custoDiaria)}`
                 : '—'}
@@ -624,26 +704,34 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
             de dizer "nao entra no custo" justamente porque o lugar dizia o contrario.
             ⚠ FICA NO MESMO MODAL: quem digita a diaria e' quem julga se valeu, e separar
             os dois obrigaria a abrir dois dialogos para uma decisao so'. */}
-        <div className="mt-2.5 rounded-md border bg-muted/30 px-2.5 py-2 flex flex-wrap items-end gap-x-4 gap-y-1.5">
-          <CampoNum desabilitado={somenteLeitura} label="Custo oportunidade" moeda titulo="Custo de oportunidade (R$/kg de peso de saída)"
-            valor={d.custoOportunidade} onChange={v => set('custoOportunidade', v)} sufixo="/kg" />
-          <div className="text-[9px] text-muted-foreground tabular-nums leading-snug pb-1.5">
-            {der.coT > 0
-              ? `${formatMoeda(der.coT)} no lote · ${formatMoeda(der.coT / (qtd || 1))}/cab · ${formatMoeda(d.custoOportunidade)}/kg`
-              : 'termo de comparação — não entra no custo'}
-          </div>
-        </div>
+
         {/* ⚠ A LINHA "OUTROS CUSTOS" DO FINANCEIRO SOMA TRES COLUNAS — `outros_custos`,
             `custo_nutricao` e `custos_extras_parceria` (ver useBoitelOperacoes.ts). Das
             tres, so' `Outros` tem campo aqui: a nutrição saiu por ser a própria diária, e
             os extras de parceria são de uma modalidade que ainda não existe. As duas
             colunas ficam zeradas, então a linha do financeiro é o que se digita em Outros. */}
-        <p className="text-[10px] text-muted-foreground leading-snug"
-          title="A linha “Outros Custos” do financeiro soma outros_custos, custo_nutricao e custos_extras_parceria; das três, só “Outros” tem campo aqui.">
-          “Outros” vira “Outros Custos” no financeiro.
-        </p></>),
+        {/* ⚠ A NOTA DO "OUTROS" MORREU — decisao do Gabriel (adendo 2). Ela explicava um
+            mapeamento do financeiro dentro de um painel de custos zootecnicos; quem
+            precisa daquela informacao esta' na aba Financeiro, olhando a linha. */}
+        </>),
     comercializacao: (<><div className="grid grid-cols-2 gap-x-3 gap-y-2.5">
-          <CampoNum previsto={prev(p => `${formatMoeda(p.precoVendaArroba)}/@`)} desabilitado={somenteLeitura} label="Preço de venda" moeda valor={d.precoVendaArroba} onChange={v => set('precoVendaArroba', v)} sufixo="/@" obrigatorio />
+          {modoRealizado ? (
+            /* ⚠ O VALOR TOTAL E O FATO DO PAPEL; o preco da arroba e' que deriva dele.
+               ⚠ JA LIQUIDO do que o frigorifico somou e tirou — bonus, tributos e
+               descontos entram no numero do papel, e a ajuda diz isso para ninguem
+               procurar onde lancar cada um.
+               ⚠ DIVIDA DECLARADA: enquanto nao houver a coluna `valor_total_abate`, o
+               total e' RECONSTRUIDO (`aTS x precoVendaArroba`) na conferencia, e o
+               arredondamento da persistencia introduz centavos — medido: R$ 93,76 no
+               papel do mockup. Ver o relatorio; a decisao (a) do Gabriel resolve. */
+            <CampoNum desabilitado={somenteLeitura} label="Valor total do abate" titulo="Valor total do abate (R$) — já líquido de bônus, tributos e descontos do frigorífico"
+              moeda valor={Math.round(der.aTS * d.precoVendaArroba * 100) / 100}
+              onChange={v => set('precoVendaArroba', der.aTS > 0 ? Math.round((v / der.aTS) * 100) / 100 : 0)}
+              derivado={der.aTS > 0 ? `${formatMoeda(d.precoVendaArroba)}/@` : null}
+              previsto={prev((p, x) => formatMoeda(Math.round(x.aTS * p.precoVendaArroba * 100) / 100))} />
+          ) : (
+            <CampoNum desabilitado={somenteLeitura} label="Preço de venda" moeda valor={d.precoVendaArroba} onChange={v => set('precoVendaArroba', v)} sufixo="/@" obrigatorio />
+          )}
           {/* ⚠ TOTAL, não por cabeça. Medido no acerto real: DAEMS/GTA de R$ 4.514,57
               contra faturamento de R$ 813 mil. */}
           <CampoNum previsto={prev(p => formatMoeda(p.despesasAbate))} desabilitado={somenteLeitura} label="Desp. notas/docs. abate" moeda titulo="Despesas com notas e documentos no abate" valor={d.despesasAbate} onChange={v => set('despesasAbate', v)}
@@ -693,7 +781,7 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
             <CampoNum desabilitado={somenteLeitura} label="Total adiantado" moeda titulo="Valor total adiantado" valor={d.valorAdiantamentoDiarias} onChange={v => set('valorAdiantamentoDiarias', v)} />
             <CampoNum desabilitado={somenteLeitura} label="Sanitário adiant." moeda titulo="Sanitário adiantado" valor={d.valorAdiantamentoSanitario} onChange={v => set('valorAdiantamentoSanitario', v)} />
             <CampoNum desabilitado={somenteLeitura} label="Outros adiant." moeda titulo="Outros adiantados" valor={d.valorAdiantamentoOutros} onChange={v => set('valorAdiantamentoOutros', v)} />
-            <LinhaCampo label="Observação" largura="flex-1">
+            <LinhaCampo label="Observação" largura="w-full" span>
               <Input value={d.adiantamentoObservacao} onChange={e => set('adiantamentoObservacao', e.target.value)}
                 disabled={somenteLeitura} placeholder="Opcional" className="h-8 px-2.5 text-[13px]" />
             </LinhaCampo>

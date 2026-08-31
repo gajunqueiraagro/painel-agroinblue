@@ -124,7 +124,19 @@ export function derivadosBoitel(data: BoitelEdicao) {
   const sairam = cabecasQueSairam(data);
   const aP = aS * sairam - aEF * q;
   const aTS = aS * sairam;
-  const gmc = dias > 0 ? ((pf * rs / 100) - (ple * re / 100)) / dias : 0;
+  /* ⚠ GMC MEDE DA PORTEIRA AO GANCHO — DECISAO DE PRODUTO do Gabriel, 31/08, POR CIMA da
+     formula herdada do simulador antigo. A base da ponta de entrada e' o peso de SAIDA DA
+     FAZENDA (`pi`), e nao o pos-quebra (`ple`): a viagem esta' DENTRO do ciclo que o
+     indicador mede, e descontá-la da base faria o boitel parecer produzir carcaca que ele
+     nao produziu.
+     ⚠ O SIMULADOR LEGADO NAO ACOMPANHA SOZINHO: `BoitelPlanningDialog.tsx:96` tem a sua
+     PROPRIA copia desta linha, ainda com `ple`. Ele nao importa `derivadosBoitel` — e' o
+     mesmo caso do `custoNfAbate` e do `pctAdiantamentoDiarias`, ja registrados. Enquanto
+     ele viver, os dois caminhos mostram GMC diferente para o mesmo lote (1,010 aqui,
+     1,066 la'). Reportado; a convergencia e' decisao de quando aposentar o legado.
+     ⚠ `gmc` E FOLHA: medido, nenhum outro derivado o consome. Mudar esta linha muda os
+     DOIS consumidores (o painel longo e o campo do modal) e mais nada. */
+  const gmc = dias > 0 ? ((pf * rs / 100) - (pi * re / 100)) / dias : 0;
   /* ⚠ A INDENIZACAO SOMA AO FATURAMENTO. Estava so' no bloco de Comercializacao do 01B, e
      o painel mostrava o faturamento sem ela — dois numeros diferentes para a mesma coisa
      na mesma tela. Agora e' uma conta so'. */
