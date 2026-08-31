@@ -241,6 +241,22 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
         return;
       }
     }
+    /* ⚠ ESTE ERA O CAMINHO DO GABRIEL — B-17. O roteamento do B-16 vivia no
+       `onEditarVenda` do V2Index, e o clique dele nao passa por la': a lista abre o
+       LancamentoDetalhe, e o botao de editar DAQUI e' que abria o modal antigo. A primeira
+       camada existia numa porta e ele entrou por outra.
+       ⚠ A VENDA GANHA O QUE A COMPRA JA TINHA, e nao um mecanismo novo: o bloco acima faz
+       exatamente isto desde PR-OC-ENTRYPOINT-UNIFY-01, so' que so' para compra. Mesmo
+       campo (`operacaoId`, o vinculo OFICIAL da ponte), mesma navegacao, mesma recusa de
+       abrir o legado quando a OC nao e' localizavel.
+       ⚠ `oc_aba=negociacao` porque e' de la' que o numero da venda vem — na OC, o
+       lancamento e' o lote. */
+    if (lancamento.tipo === 'venda' && lancamento.operacaoId) {
+      /* ⚠ A ORIGEM VAI JUNTO — B-17 adendo; ver a nota da porta do dialogo, logo abaixo. */
+      const origem = (() => { try { return sessionStorage.getItem('v2:section') ?? ''; } catch { return ''; } })();
+      window.location.assign(`/v2?oc_venda=1&oc_id=${lancamento.operacaoId}&oc_aba=negociacao${origem ? `&oc_return=${origem}` : ''}`);
+      return;
+    }
     setZooModalOpen(true);
   };
 
@@ -1000,6 +1016,18 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
           open={zooModalOpen}
           onOpenChange={setZooModalOpen}
           lancamentoId={lancamento.id}
+          /* A porta do aviso — B-17 item 2. Ver a nota em `LancamentoZooModal`. */
+          onAbrirOperacao={(ocId, tipo) => {
+            setZooModalOpen(false);
+            /* ⚠ `oc_return` LEVA A ORIGEM — B-17 adendo. `window.location.assign` RECARREGA a
+               pagina, e a `section` do /v2 e' estado interno que NAO vive na URL: sem este
+               parametro o fechar da OC cairia na Central, largando o operador no resumo em
+               vez da lista de onde saiu. O V2Index espelha a section em
+               `sessionStorage['v2:section']` justamente para atravessar o reload. Vazio
+               (aba nova, storage bloqueado) = sem parametro = Central, como hoje. */
+            const origem = (() => { try { return sessionStorage.getItem('v2:section') ?? ''; } catch { return ''; } })();
+            window.location.assign(`/v2?${tipo === 'venda' ? 'oc_venda' : 'oc_compra'}=1&oc_id=${ocId}&oc_aba=negociacao${origem ? `&oc_return=${origem}` : ''}`);
+          }}
           onEditSuccess={() => {
             // Cache invalidado pelo useLancamentos.editarLancamento internamente.
             // Fechar modal soberano + propagar para o parent (que pode refetchar listas).

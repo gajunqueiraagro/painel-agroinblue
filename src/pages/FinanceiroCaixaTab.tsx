@@ -569,6 +569,21 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
           open
           onOpenChange={(o) => { if (!o) setZooModalIdFin(null); }}
           lancamentoId={zooModalIdFin}
+          /* A porta do aviso de operacao comercial — B-17 item 2. Os QUATRO mounts do
+             modal precisam dela: o B-16 ligou um so', e quem chegasse pelos outros via o
+             aviso sem saida. Botao ausente e' pior que aviso ausente — ele diz "va la'" e
+             nao diz por onde. */
+          onAbrirOperacao={(ocId, tipo) => {
+            setZooModalIdFin(null);
+            /* ⚠ `oc_return` LEVA A ORIGEM — B-17 adendo. `window.location.assign` RECARREGA a
+               pagina, e a `section` do /v2 e' estado interno que NAO vive na URL: sem este
+               parametro o fechar da OC cairia na Central, largando o operador no resumo em
+               vez da lista de onde saiu. O V2Index espelha a section em
+               `sessionStorage['v2:section']` justamente para atravessar o reload. Vazio
+               (aba nova, storage bloqueado) = sem parametro = Central, como hoje. */
+            const origem = (() => { try { return sessionStorage.getItem('v2:section') ?? ''; } catch { return ''; } })();
+            window.location.assign(`/v2?${tipo === 'venda' ? 'oc_venda' : 'oc_compra'}=1&oc_id=${ocId}&oc_aba=negociacao${origem ? `&oc_return=${origem}` : ''}`);
+          }}
           onEditSuccess={() => {
             setZooModalIdFin(null);
             reloadData();

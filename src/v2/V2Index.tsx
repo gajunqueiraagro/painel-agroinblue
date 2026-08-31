@@ -11,6 +11,7 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { V2Sidebar, type V2Section } from './components/V2Sidebar';
+import { SECTION_TO_GROUP } from './lib/navGrupos';
 import { getPeriodoTipo } from './lib/periodoConfig';
 import { V2FilterBar } from './components/V2FilterBar';
 import { V2MobileNav } from './components/V2MobileNav';
@@ -313,6 +314,20 @@ function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEd
   );
 }
 
+/* ⚠ VALIDA SEM CAST — B-17 adendo. O `oc_return` chega da URL como `string`, e o
+   `setSection` quer uma `V2Section`. `SECTION_TO_GROUP` e' o mapa VIVO das secoes do menu,
+   entao a pergunta "isto e' uma secao?" ja tem uma fonte — nao ha lista nova para
+   desalinhar com o tipo. O predicado (`v is V2Section`) e' a ferramenta do TS para
+   estreitar; nao e' `as`, e o zero-cast do projeto continua valendo.
+   ⚠ CONFERIDO no mapa: `lancamentos-zoot`, `financeiro-lanc` e `conferencia-lancamentos`
+   estao la' — sao as origens que precisavam ser honradas. `operacoes-comerciais` NAO esta'
+   (medido: aparece no tipo e no item de menu, nunca no mapa), entao a Central cai no
+   fallback — e o fallback E' a Central. Mesmo destino, como o comentario original ja
+   dizia; o `Partial` do mapa e' de proposito e ausencia nele nao quebra nada. */
+function ehSectionConhecida(v: string | null | undefined): v is V2Section {
+  return !!v && Object.prototype.hasOwnProperty.call(SECTION_TO_GROUP, v);
+}
+
 export default function V2Index() {
   // Restauração de section ao retornar de telas globais (ex: /caderno-importacao).
   // Mesmo padrão do flag 'fechamento:autoOpenMapaImport' já usado no projeto.
@@ -344,6 +359,20 @@ export default function V2Index() {
   // para preservar a section de ORIGEM do drill (Conferência, Visão Zoo etc.).
   const sectionRef = useRef(section);
   useEffect(() => { sectionRef.current = section; }, [section]);
+  /* ⚠ A SECTION ESPELHADA PARA FORA — B-17 adendo. Ela e' estado interno e NAO vive na URL
+     (conferido), entao quem navega para a OC por `window.location.assign` — o idioma que a
+     compra usa desde PR-OC-ENTRYPOINT-UNIFY-01 — recarrega a pagina e perde a origem: o
+     fechar cairia na Central, e o Gabriel voltaria para o resumo de OCs em vez da lista de
+     onde saiu.
+     ⚠ `sessionStorage` E O PRECEDENTE DA CASA para sobreviver a navegacao externa — e' o
+     mesmo mecanismo do `v2:autoSection` logo acima, so' que para a ORIGEM em vez do
+     destino. Chave propria para nao disputar com aquele.
+     ⚠ ESPELHO, NAO FONTE: quem manda continua sendo o estado. Se o `sessionStorage` faltar
+     (aba nova, modo restrito), o `oc_return` sai vazio e o fechar cai na Central — o
+     comportamento de hoje, nunca um destino errado. */
+  useEffect(() => {
+    try { sessionStorage.setItem('v2:section', section); } catch { /* indisponivel */ }
+  }, [section]);
   const mesAnterior = new Date().getMonth() === 0 ? 12 : new Date().getMonth();
   const anoMesAnterior = new Date().getMonth() === 0
     ? String(new Date().getFullYear() - 1)
@@ -507,18 +536,24 @@ export default function V2Index() {
     setSection('lancamentos-zoot');
   }, [setSearchParams]);
 
-  /* ⚠ UMA CONSULTA NO GESTO, e nao uma coluna na lista — PR-OC-EDICAO-I-01. O elo mora em
-     `zoo_operacao_movimentacoes` e o `select('*')` da lista nao o traz (medido: `lancamentos`
-     nao tem coluna de operacao). Carregar o elo de TODA linha para servir ao clique de uma
-     seria pagar em toda rolagem por uma pergunta que se faz uma vez.
-     ⚠ SEM ELO, NADA MUDA: cai no `setZooEditId` de sempre. E' o caminho do lancamento
-     avulso, que continua existindo e continua sendo editavel onde sempre foi.
+  /* ⚠ QUEM DECIDE E O CAMPO QUE JA VEIO — B-17, correcao do B-16. `useLancamentos` carrega
+     o elo EM LOTE (uma consulta por cliente, sem N+1) e entrega `operacaoId` em cada
+     `Lancamento`, com a inconsistencia ja tratada: movimentacao ligada a mais de uma OC
+     vira `null` com aviso, nunca uma escolha arbitraria. Consultar de novo no clique era
+     refazer trabalho feito — e, pior, punha um `null` de ERRO DE REDE no mesmo lugar de um
+     `null` de "nao tem elo".
+     ⚠ A CONSULTA SOBROU PARA UMA COISA SO: descobrir o TIPO da operacao, que o
+     `Lancamento` nao carrega e o `abrirOperacaoOC` precisa para escolher entre `oc_venda` e
+     `oc_compra`. Ela roda SO' quando ja se sabe que ha elo — entao um erro dela nao decide
+     mais nada, so' atrasa. Inferir o tipo de `l.tipo` seria adivinhar: hoje venda-de-venda
+     bate 1:1, mas o abate vai ter tipo proprio e a inferencia quebraria calada.
+     ⚠ SEM ELO, NADA MUDA: cai no `setZooEditId` de sempre — o caminho do lancamento avulso.
      ⚠ A ABA E 'negociacao' porque e' de la' que o numero vem: quem clicou no "i" de uma
      venda quer ver aquele lancamento, e na OC ele e' o lote. */
-  const abrirEdicaoZootOuOC = useCallback(async (lancamentoId: string) => {
-    const elo = await buscarOperacaoDoLancamento(lancamentoId);
-    if (!elo) { setZooEditId(lancamentoId); return; }
-    abrirOperacaoOC(elo.operacaoId, 'negociacao', elo.tipoOperacao);
+  const abrirEdicaoZootOuOC = useCallback(async (lanc: { id: string; operacaoId?: string | null }) => {
+    if (!lanc.operacaoId) { setZooEditId(lanc.id); return; }
+    const elo = await buscarOperacaoDoLancamento(lanc.id);
+    abrirOperacaoOC(lanc.operacaoId, 'negociacao', elo?.tipoOperacao ?? 'venda');
   }, [abrirOperacaoOC]);
   // Fecho do modal OC: limpa os parâmetros transitórios (sem resíduo) e retorna à seção de origem.
   //   PR-OC-FIN-RETORNO-01 — aberto pelo Financeiro V2 (oc_return='financeiro-lanc') → volta ao
@@ -535,13 +570,18 @@ export default function V2Index() {
     p.delete('oc_aba');
     p.delete('oc_return');
     setSearchParams(p, { replace: true });
-    // PR-OC-NAVEGACAO-RETORNO-02 — destino = seção de origem quando conhecida (Financeiro V2 ou Lançamentos);
-    //   fallback Central quando não há origem registrada.
-    setSection(
-      retorno === 'financeiro-lanc' || retorno === 'lancamentos-zoot'
-        ? retorno
-        : 'operacoes-comerciais',
-    );
+    /* PR-OC-NAVEGACAO-RETORNO-02 — destino = seção de origem quando conhecida; fallback
+       Central quando não há origem registrada.
+       ⚠ A LISTA BRANCA DE DUAS SECOES CAIU — B-17 adendo, e a medicao mostrou por que: o
+       "i" que o Gabriel usa mora em `conferencia-lancamentos`, que nao estava nela. Fechar
+       a OC o largava na Central — preso no resumo, longe da lista de onde saiu.
+       ⚠ A TROCA PRESERVA OS TRES CASOS QUE EXISTIAM: `financeiro-lanc` e `lancamentos-zoot`
+       voltavam a si e continuam voltando; a Central grava `operacoes-comerciais` e cai no
+       mesmo destino de antes, agora por identidade em vez de fallback. O que muda e' que
+       QUALQUER origem passa a ser honrada, em vez de duas.
+       ⚠ O VALOR SO' PODE SER UMA `V2Section`: quem escreve e' `sectionRef.current` (ou o
+       espelho dele). Sem valor — aba nova, sessionStorage indisponivel — segue a Central. */
+    setSection(ehSectionConhecida(retorno) ? retorno : 'operacoes-comerciais');
   }, [setSearchParams]);
   // PR-OC-ENTRYPOINT-COMPRA-01 — nova Compra: abre o CompraModalShell em MODO OC (?oc_compra=1, sem oc_id)
   //   direto na seção Lançamentos — mesma árvore da Central/deep-link; ausência de oc_id = criação nova.
@@ -911,8 +951,8 @@ export default function V2Index() {
                 elo (a frente de Abates ainda nao migrou). Deixar o caminho pronto lendo o
                 MESMO elo faz aquela frente herdar o roteamento sem tocar aqui — e evita que
                 alguem escreva um segundo criterio quando a hora chegar. */
-            onEditarAbate={(l) => abrirEdicaoZootOuOC(l.id)}
-            onEditarVenda={(l) => abrirEdicaoZootOuOC(l.id)}
+            onEditarAbate={(l) => abrirEdicaoZootOuOC(l)}
+            onEditarVenda={(l) => abrirEdicaoZootOuOC(l)}
             onVerOperacoes={() => setSection('operacoes-comerciais')}
           />
         )}
