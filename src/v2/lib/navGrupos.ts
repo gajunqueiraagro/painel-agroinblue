@@ -21,7 +21,7 @@ export type V2Section =
   // financeiro — lançamentos
   | 'financeiro-lanc' | 'contratos'
   // financeiro — conciliação
-  | 'conciliacao' | 'auditoria-bancaria' | 'extrato-gerencial' | 'visao-consolidada' | 'saldos-mensais'
+  | 'conciliacao' | 'conciliacao-extrato' | 'auditoria-bancaria' | 'extrato-gerencial' | 'visao-consolidada' | 'saldos-mensais'
   // financeiro — financiamentos
   | 'financiamentos' | 'painel-financiamentos'
   // financeiro — cadastros
@@ -152,6 +152,12 @@ export const NAV_GRUPOS: NavGrupo[] = [
           { id: 'financeiro-lanc',     label: 'Lançamentos Financeiros', status: 'ready' },
           { id: 'conciliacao',         label: 'Conciliação Bancária',    status: 'ready' },
           { id: 'auditoria-bancaria',  label: 'Auditoria Bancária',      status: 'ready' },
+          /* ⚠ A TELA NOVA ENTRA AO LADO DAS VELHAS, e nao no lugar delas —
+             FIN-CONCIL-PORTAR-01, rodada 1. Ela leva "(novo)" no rotulo porque
+             conviver sem dizer qual e' qual faria o operador escolher no escuro.
+             As velhas e este "Extrato Gerencial" saem na rodada 2, depois da
+             homologacao. */
+          { id: 'conciliacao-extrato', label: 'Conciliação (novo)',      status: 'ready' },
           { id: 'extrato-gerencial',   label: 'Extrato Gerencial',       status: 'ready' },
           { id: 'visao-consolidada',   label: 'Visão Consolidada',       status: 'ready' },
           // PR-CLEANUP-MESA-CLASSIFICACAO-01 — 'mesa-classificacao' saiu do menu. O fluxo
@@ -279,6 +285,7 @@ export const SECTION_TO_GROUP: Partial<Record<V2Section, string>> = {
   'financeiro-home': 'financeiro', 'financeiro-dashboard': 'financeiro',
   'fluxo-caixa': 'financeiro', 'rateio-adm': 'financeiro',
   'importacao-extratos': 'financeiro', 'importacao-custeio-txt': 'financeiro', 'financeiro-lanc': 'financeiro',
+  'conciliacao-extrato': 'financeiro',
   'importacao-lanc-excel': 'financeiro',
   'contratos': 'financeiro', 'conciliacao': 'financeiro', 'auditoria-bancaria': 'financeiro',
   'saldos-mensais': 'financeiro', 'financiamentos': 'financeiro',

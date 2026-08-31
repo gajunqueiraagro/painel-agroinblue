@@ -60,6 +60,7 @@ import FinanciamentosPainelTab from '@/pages/FinanciamentosPainelTab';
 import { ConciliacaoBancariaTab } from '@/pages/ConciliacaoBancariaTab';
 import { AuditoriaBancariaSoberana } from '@/components/financeiro-v2/AuditoriaBancariaSoberana';
 import { ExtratoGerencialTab } from '@/components/financeiro-v2/ExtratoGerencialTab';
+import V2ConciliacaoExtrato from '@/v2/pages/V2ConciliacaoExtrato';
 import { VisaoConsolidadaTab } from '@/components/financeiro-v2/VisaoConsolidadaTab';
 import CusteioTxtImportTab from './pages/CusteioTxtImportTab';
 import { V2ImportLancamentosExcel } from './pages/V2ImportLancamentosExcel';
@@ -818,6 +819,21 @@ export default function V2Index() {
           setMes(String(m));
           setSection('financeiro-lanc');
         }}
+      />
+    );
+    /* ⚠ ROTA PROPRIA, TELA NOVA — FIN-CONCIL-PORTAR-01. As tres telas antigas de
+       conciliacao seguem INTOCADAS ate a homologacao: derrubar o caminho velho
+       no mesmo PR que estreia o novo tira o retorno de quem homologa. Elas
+       morrem na rodada 2, junto com o item "Extrato Gerencial" do menu lateral —
+       que continua funcionando aqui embaixo enquanto isso.
+       ⚠ AS DUAS OUTRAS ABAS SAO AS TELAS QUE JA EXISTEM, montadas aqui e
+       passadas por prop: transferir, nao recriar. O gerencial recebe o mesmo
+       `initialAno`/`initialMes` que recebe hoje pela rota propria — mesma tela,
+       mesmo contexto, dois enderecos ate a rodada 2. */
+    if (section === 'conciliacao-extrato') return (
+      <V2ConciliacaoExtrato
+        abaImportar={<FinanceiroCaixaTab initialTab="importacao" hideInternalTabs filtroAnoInicial={ano} filtroMesInicial={mes === '0' ? undefined : Number(mes)} />}
+        abaGerencial={<ExtratoGerencialTab initialAno={Number(ano)} initialMes={mes !== '0' ? Number(mes) : undefined} />}
       />
     );
     if (section === 'extrato-gerencial') return (
