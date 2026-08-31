@@ -870,9 +870,16 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                 botao abre um `input file` ali mesmo, o arquivo e' lido no
                 navegador e a previa nasce NESTA aba. O modal antigo nao e' mais
                 chamado daqui; ele segue vivo nas telas velhas ate a rodada 2.
-                ⚠ SEM `variant` no botao, como no original: ele aparece verde la
-                porque o PRIMARY do tema do Financas e' verde. Cravar a cor aqui
-                seria inventar — a regra da casa e' cor da regua do tema. */}
+                ⚠ SEM `variant` no botao, como no original — e o botao daqui ja
+                e' byte a byte o de la: o bloco `cva` do `button.tsx` e' IDENTICO
+                nos dois repos, e o `variant` default resolve para `bg-cta`. A cor
+                sai do TOKEN --cta de cada casa, nao do --primary (o --primary do
+                Financas e' 205 88% 26%, azul escuro): la --cta e' verde-agua
+                168 72% 40%, aqui e' ambar 43 87% 63%. E a divergencia e'
+                deliberada dos dois lados — o proprio index.css do Financas
+                registra "cta -> verde-agua (AGRO usa ambar 43 87% 63%)". O ambar
+                nao e' desvio da portagem; e' a identidade desta casa, e cravar
+                cor num botao so' seria inventar. (Medido em B-26.) */}
             <ImportarBancoInline
               contas={contas.map(c => ({ id: c.id, label: getContaLabel(c) }))}
               contaId={selectedConta !== '__all__' ? selectedConta : ''}
