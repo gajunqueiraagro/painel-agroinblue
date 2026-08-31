@@ -174,20 +174,35 @@ export function derivadosBoitel(data: BoitelEdicao) {
      `pf`, `aS`, `aTS` ou `aP`: o faturamento (`fba`), o custo por arroba (`cPArr`), o GMC,
      o painel longo, o comparativo previsto x realizado e a cascata do bolso. Nenhum deles
      precisou saber que existe um fato — e' o que "num lugar so" quer dizer.
-     ⚠ SEM FATO AS CONTAS SAO AS DE ANTES, LINHA A LINHA: `pvTotal = pfDerivado x sairam`
-     e `aTS = aSDerivado x sairam` reproduzem exatamente o que estava escrito, e
-     `aP = aTS - aEF x q` e' a MESMA expressao de `aS x sairam - aEF x q`, so que apoiada
+     ⚠ SEM FATO AS CONTAS SAO AS DE ANTES, LINHA A LINHA: `pvTotal = pfDerivado x cabAbate`
+     e `aTS = aSDerivado x cabAbate` reproduzem exatamente o que estava escrito, e
+     `aP = aTS - aEF x q` e' a MESMA expressao de `aS x cabAbate - aEF x q`, so que apoiada
      no total. Nada muda nas 10 vendas existentes, onde os dois campos sao nulos.
-     ⚠ `sairam > 0` GUARDA A DIVISAO: com o lote inteiro morto nao ha por cabeca, e o
+     ⚠ `cabAbate > 0` GUARDA A DIVISAO: sem cabeca na balanca nao ha por cabeca, e o
      derivado volta a valer em vez de um `Infinity` silencioso. */
+  /* ⚠ AS METRICAS DO ABATE DIVIDEM PELAS ABATIDAS — 02H item L, regra do Gabriel, e e' o
+     ultimo canto do abate parcial. `sairam` sao as que deixaram o boitel; `cabAbate` sao
+     as que foram para a BALANCA. Com abate parcial os dois numeros diferem, e o peso e as
+     arrobas do papel sao das ABATIDAS: dividir por `sairam` diluia o papel entre animais
+     que nao passaram pela balanca.
+     Medido na b58bf556: 62.075,5 kg em 109 abatidas dao 569,50 kg/cab, que e' o que o
+     papel diz; por 110 davam 564,32, que nao esta escrito em lugar nenhum.
+     ⚠ NO PROJETADO NADA MUDA, e por construcao: `qtdAbatida` so' existe no realizado, e
+     sem ela `cabAbate` E' `sairam`. La' nao ha abate para ter uma terceira quantidade.
+     ⚠ A DIARIA CONTINUA EM `sairam` (ver `cDT` abaixo): ela nao e' metrica de abate — o
+     boitel cobra dos animais que ficaram com ele, abatidos ou nao. E' a mesma divisao de
+     aguas do 02E: quem passou pela balanca x quem passou pelo cocho.
+     ⚠ `aEF` TAMBEM FICA FORA: as arrobas de ENTRADA sao do lote que entrou, e o animal
+     que morreu entrou. Ver a nota do `aP` logo abaixo. */
+  const cabAbate = data.qtdAbatida ?? sairam;
   const pfDerivado = pi + ganho;
-  const pvFato = sairam > 0 ? data.pesoVivoTotalAbate : undefined;
-  const pvTotal = pvFato ?? pfDerivado * sairam;
-  const pf = pvFato != null ? pvFato / sairam : pfDerivado;
+  const pvFato = cabAbate > 0 ? data.pesoVivoTotalAbate : undefined;
+  const pvTotal = pvFato ?? pfDerivado * cabAbate;
+  const pf = pvFato != null ? pvFato / cabAbate : pfDerivado;
   const aSDerivado = (pf * rs / 100) / 15;
-  const aFato = sairam > 0 ? data.arrobasTotaisAbate : undefined;
-  const aTS = aFato ?? aSDerivado * sairam;
-  const aS = aFato != null ? aFato / sairam : aSDerivado;
+  const aFato = cabAbate > 0 ? data.arrobasTotaisAbate : undefined;
+  const aTS = aFato ?? aSDerivado * cabAbate;
+  const aS = aFato != null ? aFato / cabAbate : aSDerivado;
   const aPcab = aS - aEF;
   /* ⚠ TERCEIRA DIVERGENCIA DELIBERADA contra o simulador antigo (as duas primeiras: o
      `cAb` no 01A, a diaria no 01B). ANIMAL MORTO NAO VIRA CARCACA: as arrobas de saida
@@ -223,8 +238,24 @@ export function derivadosBoitel(data: BoitelEdicao) {
   const rcEfetivo = pvTotal > 0 ? (aTS * 15) / pvTotal * 100 : rs;
   /* ⚠ A INDENIZACAO SOMA AO FATURAMENTO. Estava so' no bloco de Comercializacao do 01B, e
      o painel mostrava o faturamento sem ela — dois numeros diferentes para a mesma coisa
-     na mesma tela. Agora e' uma conta so'. */
-  const fba = aTS * pva + (data.morteValorIndenizacao || 0);
+     na mesma tela. Agora e' uma conta so'.
+     ⚠ O FATO MANDA QUANDO EXISTE — 02H item M, o MESMO idioma do `cDT` e dos dois totais
+     da balanca, e agora no ultimo derivado que ainda reconstruia um numero escrito.
+     `valorTotalAbate` e' o que o frigorifico pagou; `aTS x pva` reconstroi esse valor a
+     partir de um preco que ELE PROPRIO e' derivado e arredondado a duas casas no
+     realizado. Medido na b58bf556: 2.251,67 @ x R$ 361,41 dao R$ 813.776,05 contra os
+     R$ 813.771,01 do papel — R$ 5,04 de fantasma. Noutro caso ja medido, R$ 93,76.
+     ⚠ ISSO SAIU DE UM CONSUMIDOR E VEIO PARA CA. A conferencia do acerto no modal ja
+     preferia o fato — sozinha, por conta propria (`local.valorTotalAbate ?? derLocal.fba`).
+     Enquanto a cascata do realizado nao existia, os dois numeros nunca se viam; com as
+     duas cascatas lado a lado (item J) eles ficariam a quatorze pixels um do outro,
+     discordando. A preferencia mora NUM LUGAR SO, e este e' o lugar.
+     ⚠ A INDENIZACAO CONTINUA SOMANDO POR FORA, com fato ou sem ele: ela nao e' do
+     frigorifico, e' do boitel pagando pelo animal que morreu. O papel do abate nao a
+     contem, e some-la aqui e' o que mantem uma conta so'.
+     ⚠ NO PROJETADO NADA MUDA: la' `valorTotalAbate` e' nulo e o derivado segue sendo a
+     resposta certa — o preco da @ e' o que se negocia, e o faturamento nasce dele. */
+  const fba = (data.valorTotalAbate ?? aTS * pva) + (data.morteValorIndenizacao || 0);
   /* ⚠ AQUI ESTA A UNIFICACAO de PR-OC-VENDA-BOITEL-01A. No simulador antigo esta linha
      é `const cAb = da + nf`, somando `despesasAbate` com `custoNfAbate`. Os dois eram o
      mesmo custo escrito duas vezes: `custo_nf_abate` NAO existe como coluna no banco —
@@ -360,7 +391,7 @@ export function derivadosBoitel(data: BoitelEdicao) {
     : 0;
   const saldoReceberBase = Math.round((fba - descontoDoAcerto + valorTotalAntecipadoCalc) * 100) / 100;
 
-  return { ple, ganho, pf, pvTotal, aEF, aS, aPcab, aP, aTS, sairam, gmc, gmdEfetivo, rcEfetivo, fba, cAb, fLiq, cDT, cOp, coT, cPArr,
+  return { ple, ganho, pf, pvTotal, aEF, aS, aPcab, aP, aTS, sairam, cabAbate, gmc, gmdEfetivo, rcEfetivo, fba, cAb, fLiq, cDT, cOp, coT, cPArr,
     pParte, rProd, rLiq, rLCab, custoTotalBoitel, margemVenda,
     descontoDoAcerto, custosDoProdutor, cne,
     dAcertoDiarias, dAcertoSanidade, dAcertoOutros, dAcertoFrete, dAcertoAbate, dAcertoNotas,
@@ -591,6 +622,21 @@ export function BoitelTopoNegociacao({ cabecas, pesoMedioKg, valorPorKg, valorTo
   slotLote?: ReactNode;
 }) {
   const traco = <span className="text-muted-foreground font-normal">—</span>;
+  /* ⚠ O TOPO SEGUE O MELHOR CONHECIMENTO — 02H item K, regra do Gabriel: "realizado
+     substitui o projetado". Enquanto o abate nao aconteceu, o melhor que se sabe do
+     negocio e' a PROMESSA, e ela vem marcada em ambar com a pilula. Depois do abate, o
+     melhor que se sabe e' o FATO — e continuar anunciando a promessa no cabecalho seria
+     mostrar a previsao do tempo com a janela aberta.
+     ⚠ A TROCA E VISUAL INTEIRA, e nao so' de numero: valores SOLIDOS, borda do grupo
+     NEUTRA (o ambar e' a marca da projecao, e mante-lo diria "projecao" sobre um fato) e
+     a pilula sai sozinha, porque `PilulaCenario` ja devolve `null` no realizado. Os
+     rotulos dizem qual dos dois esta' na tela — a cor informa, a palavra confirma.
+     ⚠ A PROJECAO NAO SE PERDE: ela segue integra na cascata da esquerda, ao lado da gemea
+     do realizado, que e' onde a comparacao mora. O cabecalho responde "quanto e' hoje", e
+     a cascata responde "o que mudou".
+     ⚠ QUEM DECIDE E O CHAMADOR, pelo `cenario` — este bloco nao pergunta ao banco nem
+     infere de nulo. E' o mesmo criterio que a `PilulaCenario` ja documenta. */
+  const real = cenario === 'realizado';
   return (
     <div className="sticky top-0 z-20 border-b bg-card pb-2">
       {/* ─── FATO A ESQUERDA, PROJECAO A DIREITA ──────────────────────────────────
@@ -620,15 +666,19 @@ export function BoitelTopoNegociacao({ cabecas, pesoMedioKg, valorPorKg, valorTo
           {slotLote}
         </div>
 
-        <div className="flex min-w-0 flex-wrap gap-x-7 gap-y-2 border-l-2 border-amber-500 bg-amber-50/40 dark:bg-amber-950/20 pl-3.5 pr-2 py-0.5 rounded-r-md">
+        <div className={`flex min-w-0 flex-wrap gap-x-7 gap-y-2 pl-3.5 pr-2 py-0.5 rounded-r-md border-l-2 ${
+          real ? 'border-border bg-muted/30' : 'border-amber-500 bg-amber-50/40 dark:bg-amber-950/20'}`}>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
-              <span className="text-[11px] font-normal text-muted-foreground leading-none whitespace-nowrap">R$/kg</span>
+              <span className="text-[11px] font-normal text-muted-foreground leading-none whitespace-nowrap">
+                R$/kg ({real ? 'real.' : 'proj.'})
+              </span>
               <PilulaCenario cenario={cenario} />
             </div>
             {/* ⚠ O AMBAR E' O DO 600 DA FAMILIA DA PILULA. `dark:` proprio porque o hex
                 fixo some no fundo escuro — a marca tem de sobreviver aos dois temas. */}
-            <div className="mt-1 text-[20px] font-medium leading-none tabular-nums whitespace-nowrap text-[#854F0B] dark:text-amber-500">
+            <div className={`mt-1 text-[20px] font-medium leading-none tabular-nums whitespace-nowrap ${
+              real ? 'text-foreground' : 'text-[#854F0B] dark:text-amber-500'}`}>
               {valorPorKg == null ? traco : formatMoeda(valorPorKg)}
             </div>
           </div>
@@ -641,8 +691,11 @@ export function BoitelTopoNegociacao({ cabecas, pesoMedioKg, valorPorKg, valorTo
               a promessa. Os dois convivem na mesma tela, e o card do lote, ao lado,
               mostra o oficial de proposito. */}
           <div className="min-w-0">
-            <div className="text-[11px] font-normal text-muted-foreground leading-none whitespace-nowrap">Liq. no bolso (proj.)</div>
-            <div className="mt-1 text-[20px] font-medium leading-none tabular-nums whitespace-nowrap text-[#854F0B] dark:text-amber-500">
+            <div className="text-[11px] font-normal text-muted-foreground leading-none whitespace-nowrap">
+              Liq. no bolso ({real ? 'real.' : 'proj.'})
+            </div>
+            <div className={`mt-1 text-[20px] font-medium leading-none tabular-nums whitespace-nowrap ${
+              real ? 'text-foreground' : 'text-[#854F0B] dark:text-amber-500'}`}>
               {valorTotal > 0 ? formatMoeda(valorTotal) : traco}
             </div>
           </div>
@@ -679,88 +732,70 @@ function TituloGrupo({ children }: { children: React.ReactNode }) {
    ⚠ RECALCULA A CADA TECLA, e é isso que faz o redesenho valer. Nada aqui é memoizado
    contra o valor digitado de propósito.
    ⚠ TRAVESSAO, NUNCA ZERO: sem dado que sustente a conta, o número não aparece. */
-export function BoitelResultadoCompacto({ boitelData, cenario }: {
+export function BoitelResultadoCompacto({ boitelData, realizado, cenario }: {
   boitelData: BoitelEdicao | null;
+  /* ⚠ A LINHA REALIZADA, para a cascata gemea — 02H item J. Nula ate' o abate: sem ela a
+     coluna da direita nem se desenha, e a faixa volta a ter a largura de uma cascata so'. */
+  realizado?: BoitelEdicao | null;
   cenario?: CenarioBoitel;
 }) {
   const cmp = useMemo(() => comparativoOportunidade(boitelData), [boitelData]);
-  const d = useMemo(() => boitelData ? derivadosBoitel(boitelData) : null, [boitelData]);
-  const faltas = useMemo(() => boitelData ? exigencias(boitelData, cenario).filter(e => !e.presente) : [], [boitelData, cenario]);
-  const pronto = !!d && faltas.length === 0;
-  /* ⚠ O BOLSO E `rLiq`, e nao um numero novo: acerto liquido menos os gastos diretos do
-     produtor. E' exatamente o que o veredito SEMPRE comparou com vender vivo hoje — a
-     cascata so' torna visivel o caminho que levava ate' ele. */
-  const bolso = pronto ? d.rLiq : null;
-  const uni = useMemo(() => unitariosDoLiquido(boitelData, bolso), [boitelData, bolso]);
+  const bolsoProj = useMemo(() => bolsoDaVendaBoitel(boitelData), [boitelData]);
+  const bolsoReal = useMemo(() => bolsoDaVendaBoitel(realizado ?? null), [realizado]);
   const ganhou = cmp != null && cmp.diferenca >= 0;
 
   return (
     <section className="rounded-md border bg-card px-3.5 py-3 shadow-sm min-w-0">
-      {/* ─── A CASCATA DO BOLSO ────────────────────────────────────────────────────
-          PR-OC-VENDA-CASCATA-BOLSO-01. O numero que decide e' o LIQUIDO NO BOLSO, e ele
-          estava invisivel: a tela mostrava o acerto (565.217) e o veredito comparava
-          outro numero (554.717), sem dizer que a diferenca era o gasto direto. Quem lia
-          via um salto sem explicacao — e a explicacao cabia em duas linhas de conta.
-          ⚠ A CASCATA SAI SEMPRE INTEIRA, mesmo com gasto direto zerado: uma linha que
-          some quando vale zero faz a conta parecer outra a cada operacao, e o leitor perde
-          a referencia de onde procurar cada degrau.
-          ⚠ "Acerto liquido" SEM DESTAQUE, de proposito: o destaque dele mora no cartao de
-          Projecao, acima. Aqui ele e' degrau, nao resposta. */}
-      <div className="flex flex-wrap items-start justify-between gap-x-8 gap-y-4">
+      {/* ─── AS DUAS CASCATAS, LADO A LADO ─────────────────────────────────────────
+          02H itens H e J. A cascata da projecao ocupava a LARGURA INTEIRA, com o veredito
+          ao lado; agora ela e' uma COLUNA sob o cartao de Projecao, e a gemea do realizado
+          nasce sob o cartao de Realizado. A analise 2 — previsto x realizado — passa a
+          nascer da GEOMETRIA: mesmos degraus, mesma ordem, mesma altura de linha, um ao
+          lado do outro. Nao ha terceira tabela dizendo o que comparar.
+          ⚠ A GRADE E A MESMA DOS CARTOES (`lg:grid-cols-2 gap-[14px]`), e e' isso que faz
+          cada cascata cair sob o cartao dela: mesmo container, mesma largura, mesmo vao.
+          ⚠ FONTES REDUZIDAS (item H): 11px nas linhas, 16px no total, 10px nos unitarios.
+          Duas cascatas onde antes cabia uma, e a faixa nao pode crescer em altura — o gate
+          de rolagem do modal do realizado vive com 19px de folga no pior caso.
+          ⚠ `items-start`: as duas colunas tem alturas diferentes enquanto o realizado esta'
+          incompleto, e esticar a mais curta abriria um vao mudo dentro dela. */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-[14px] items-start">
+        <CascataBolso boitelData={boitelData} cenario={cenario ?? 'projetado'} bolso={bolsoProj} />
+        {realizado && (
+          <CascataBolso boitelData={realizado} cenario="realizado" bolso={bolsoReal}
+            comparar={boitelData} bolsoComparar={bolsoProj} />
+        )}
+      </div>
 
-        <div className="min-w-0 w-fit max-w-[380px]">
-          <LinhaCascata rotulo="Faturamento projetado" valor={pronto ? formatMoeda(d.fba) : null} />
-          <LinhaCascata rotulo="− Descontos do boitel" valor={pronto ? `− ${formatMoeda(d.descontoDoAcerto)}` : null} />
-          <LinhaCascata rotulo="= Acerto líquido"      valor={pronto ? formatMoeda(d.fba - d.descontoDoAcerto) : null} />
-          <LinhaCascata rotulo="− Gastos diretos"      valor={pronto ? `− ${formatMoeda(d.custosDoProdutor)}` : null} />
-
-          <div className="mt-1.5 border-t pt-1.5">
-            <div className="flex items-center gap-2">
-              <span className="text-[12px] font-normal text-secondary leading-none whitespace-nowrap">= Líquido no bolso</span>
-              <PilulaCenario cenario={cenario} />
-            </div>
-            <div className={`mt-1 text-[20px] font-medium leading-none tabular-nums whitespace-nowrap ${
-              bolso == null ? 'text-muted-foreground font-normal' : 'text-[#854F0B] dark:text-amber-500'}`}>
-              {bolso == null ? '—' : formatMoeda(bolso)}
-            </div>
-            {/* Os unitarios do BOLSO — a mesma funcao irma, com a base trocada. */}
-            {(uni.porCabeca != null || uni.porKg != null) && (
-              <div className="mt-1.5 text-[13px] leading-none tabular-nums whitespace-nowrap text-[#854F0B] dark:text-amber-500">
-                {uni.porCabeca == null ? '—' : `${formatMoeda(uni.porCabeca)}/cab`}
-                {' · '}
-                {uni.porKg == null ? '—' : `${formatMoeda(uni.porKg)}/kg liq.`}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* O VEREDITO — a ANALISE 1 reduzida a uma frase.
-            ⚠ "apos frete" SAIU da conferencia: aquilo existia para explicar por que o
-            numero comparado nao era o liquido mostrado ao lado. A cascata acabou de
-            mostrar o caminho inteiro, entao a ressalva virou repeticao. */}
-        <div className="min-w-0 lg:max-w-[55%]">
-          {cmp == null ? (
-            <span className="text-[11px] text-muted-foreground leading-snug">
-              {boitelData && boitelData.custoOportunidade > 0
-                ? 'Faltam dados do planejamento para comparar com a venda de hoje.'
-                : 'Informe o custo de oportunidade em Custos para comparar com a venda de hoje.'}
-            </span>
-          ) : (
-            <>
-              <p className={`text-[11px] leading-[1.45] ${ganhou ? 'text-success' : 'text-destructive'}`}>
-                Mandar para o boitel deve render{' '}
-                <span className="font-medium tabular-nums">{formatMoeda(Math.abs(cmp.diferenca))}</span>
-                {' '}<span className="font-medium">{ganhou ? 'a mais' : 'a menos'}</span>
-                {' '}(<span className="font-medium tabular-nums">{ganhou ? '+' : '−'}{Math.abs(cmp.percentual).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%</span>)
-                {' '}do que vender esses animais vivos hoje.
-              </p>
-              <p className="mt-1 text-[10px] text-muted-foreground leading-snug tabular-nums">
-                comparando o líquido no bolso ({formatMoeda(cmp.resultado)}) com a venda a{' '}
-                {formatMoeda(boitelData?.custoOportunidade ?? 0)}/kg hoje ({formatMoeda(cmp.oportunidade)})
-              </p>
-            </>
-          )}
-        </div>
+      {/* ─── O VEREDITO — item I: enxuto, embaixo, largura inteira ─────────────────
+          Ele morava a' DIREITA da cascata unica, disputando a largura com ela. Com duas
+          cascatas nao ha mais lado — e o veredito nunca foi um terceiro degrau: e' a
+          conclusao das duas, e o lugar de uma conclusao e' embaixo.
+          ⚠ ENXUGADO, e nao resumido: os numeros continuam vivos e nenhum saiu. O que saiu
+          foi a repeticao — "esses animais", "hoje" duas vezes — e o tamanho.
+          ⚠ 11px NA FRASE e 9px NA CONFERENCIA, na mesma familia das ajudas: a frase decide,
+          a conferencia mostra de onde ela veio para quem quiser conferir. */}
+      <div className="mt-3 border-t pt-2 min-w-0">
+        {cmp == null ? (
+          <span className="text-[11px] text-muted-foreground leading-snug">
+            {boitelData && boitelData.custoOportunidade > 0
+              ? 'Faltam dados do planejamento para comparar com a venda de hoje.'
+              : 'Informe o custo de oportunidade em Custos para comparar com a venda de hoje.'}
+          </span>
+        ) : (
+          <>
+            <p className={`text-[11px] leading-[1.45] ${ganhou ? 'text-success' : 'text-destructive'}`}>
+              Boitel deve render{' '}
+              <span className="font-medium tabular-nums">{formatMoeda(Math.abs(cmp.diferenca))}</span>
+              {' '}<span className="font-medium">{ganhou ? 'a mais' : 'a menos'}</span>
+              {' '}(<span className="font-medium tabular-nums">{ganhou ? '+' : '−'}{Math.abs(cmp.percentual).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%</span>)
+              {' '}que vender vivo hoje.
+            </p>
+            <p className="mt-0.5 text-[9px] text-muted-foreground leading-snug tabular-nums">
+              bolso proj. {formatMoeda(cmp.resultado)} vs. venda hoje {formatMoeda(cmp.oportunidade)}
+            </p>
+          </>
+        )}
       </div>
 
       {!boitelData && (
@@ -772,15 +807,110 @@ export function BoitelResultadoCompacto({ boitelData, cenario }: {
   );
 }
 
-/* Um degrau da cascata — A18: rotulo 12px, valor 12px tabular, duas colunas `w-fit`.
-   ⚠ SEM `truncate` no valor; a tabela cresce, o numero nao encolhe. */
-function LinhaCascata({ rotulo, valor }: { rotulo: string; valor: string | null }) {
+/* ─── UMA CASCATA ──────────────────────────────────────────────────────────────
+   02H itens H e J. A MESMA tabela para os dois mundos — nao ha uma cascata do projetado e
+   outra do realizado, ha uma cascata que recebe uma linha. Escrever a gemea a parte seria
+   a segunda copia da conta, e as duas divergiriam no dia em que um degrau mudasse.
+   ⚠ OS DEGRAUS SAEM DO MOTOR, nenhum e' conta escrita aqui: `fba`, `descontoDoAcerto`,
+   `custosDoProdutor` e `rLiq` ja sao exportados, e o bolso vem pela irma
+   `bolsoDaVendaBoitel` — a mesma que alimenta o topo e os dois cartoes.
+   ⚠ TRAVESSAO, NUNCA ZERO: linha sem dado imprime "—". O realizado incompleto e' o caso
+   COMUM (o abate ainda nao acorreu), e um zero ali afirmaria que o faturamento foi zero.
+   ⚠ SOLIDO NO REALIZADO, AMBAR NA PROJECAO — a regra fundacional do 01D. */
+function CascataBolso({ boitelData, cenario, bolso, comparar, bolsoComparar }: {
+  boitelData: BoitelEdicao | null;
+  cenario: CenarioBoitel;
+  bolso: number | null;
+  /** A linha projetada, para os deltas da coluna do realizado. */
+  comparar?: BoitelEdicao | null;
+  bolsoComparar?: number | null;
+}) {
+  const real = cenario === 'realizado';
+  const d = useMemo(() => boitelData ? derivadosBoitel(boitelData) : null, [boitelData]);
+  const pronto = bolso != null;
+  const uni = useMemo(() => unitariosDoLiquido(boitelData, bolso), [boitelData, bolso]);
+  const p = useMemo(() => comparar ? derivadosBoitel(comparar) : null, [comparar]);
+  /* ⚠ SO' COMPARA COM PROJECAO COMPLETA: `bolsoComparar` e' a irma guardada por
+     `exigencias`, entao ele nao-nulo E a prova de que ha promessa inteira do outro lado. */
+  const comparavel = real && pronto && p != null && bolsoComparar != null;
+  const cor = real ? 'text-foreground' : 'text-[#854F0B] dark:text-amber-500';
+
+  /* ⚠ MESMA REGRA DE VEREDITO DO ITEM G: cada degrau declara o que e' bom PARA ELE.
+     Faturamento e acerto a mais sao bons; desconto e gasto direto a mais sao ruins. */
+  const delta = (atual: number, anterior: number | null, maiorEMelhor: boolean) => {
+    if (!comparavel || anterior == null) return null;
+    const dif = atual - anterior;
+    const bom = Math.abs(dif) < 0.005 ? null : (dif > 0) === maiorEMelhor;
+    return (
+      <span className={`ml-2 text-[9px] tabular-nums whitespace-nowrap ${
+        bom == null ? 'text-muted-foreground' : bom ? 'text-success' : 'text-destructive'}`}>
+        {dif > 0 ? '+' : dif < 0 ? '−' : ''}{formatMoeda(Math.abs(dif))}
+      </span>
+    );
+  };
+
   return (
-    <div className="flex items-baseline justify-between gap-6 leading-[1.6]">
-      <span className="text-[12px] font-normal text-secondary whitespace-nowrap">{rotulo}</span>
-      <span className={`text-[12px] tabular-nums whitespace-nowrap ${
-        valor ? 'text-[#854F0B] dark:text-amber-500' : 'text-muted-foreground'}`}>
-        {valor ?? '—'}
+    <div className="min-w-0 w-fit max-w-full">
+      <LinhaCascata cor={cor} rotulo={real ? 'Faturamento realizado' : 'Faturamento projetado'}
+        valor={pronto && d ? formatMoeda(d.fba) : null}
+        delta={d && p ? delta(d.fba, p.fba, true) : null} />
+      <LinhaCascata cor={cor} rotulo="− Descontos do boitel"
+        valor={pronto && d ? `− ${formatMoeda(d.descontoDoAcerto)}` : null}
+        delta={d && p ? delta(d.descontoDoAcerto, p.descontoDoAcerto, false) : null} />
+      <LinhaCascata cor={cor} rotulo="= Acerto líquido"
+        valor={pronto && d ? formatMoeda(d.fba - d.descontoDoAcerto) : null}
+        delta={d && p ? delta(d.fba - d.descontoDoAcerto, p.fba - p.descontoDoAcerto, true) : null} />
+      <LinhaCascata cor={cor} rotulo="− Gastos diretos"
+        valor={pronto && d ? `− ${formatMoeda(d.custosDoProdutor)}` : null}
+        delta={d && p ? delta(d.custosDoProdutor, p.custosDoProdutor, false) : null} />
+
+      <div className="mt-1.5 border-t pt-1.5">
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-normal text-secondary leading-none whitespace-nowrap">= Líquido no bolso</span>
+          <PilulaCenario cenario={cenario} />
+        </div>
+        <div className="flex items-baseline gap-2 flex-wrap">
+          <div className={`mt-1 text-[16px] font-medium leading-none tabular-nums whitespace-nowrap ${
+            bolso == null ? 'text-muted-foreground font-normal' : cor}`}>
+            {bolso == null ? '—' : formatMoeda(bolso)}
+          </div>
+          {/* ⚠ "no abate" enquanto incompleto — item J. O travessao diz que nao ha numero;
+              esta palavra diz QUANDO havera'. Sem ela o "—" do realizado se leria como
+              defeito, e nao como um acontecimento que ainda nao aconteceu. */}
+          {bolso == null && real && (
+            <span className="mt-1 text-[9px] text-muted-foreground leading-none">no abate</span>
+          )}
+          {bolso != null && bolsoComparar != null && real && delta(bolso, bolsoComparar, true)}
+        </div>
+        {(uni.porCabeca != null || uni.porKg != null) && (
+          <div className={`mt-1.5 text-[10px] leading-none tabular-nums whitespace-nowrap ${cor}`}>
+            {uni.porCabeca == null ? '—' : `${formatMoeda(uni.porCabeca)}/cab`}
+            {' · '}
+            {uni.porKg == null ? '—' : `${formatMoeda(uni.porKg)}/kg liq.`}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* Um degrau da cascata — A18: duas colunas `w-fit`.
+   ⚠ 11px E `leading-[1.45]` — item H. Eram 12px/1.6 quando havia UMA cascata na largura
+   inteira; com duas lado a lado, a altura e' o recurso escasso (o modal do realizado vive
+   com 19px de folga no pior caso do gate de rolagem).
+   ⚠ SEM `truncate` no valor; a tabela cresce, o numero nao encolhe. */
+function LinhaCascata({ rotulo, valor, cor, delta }: {
+  rotulo: string; valor: string | null; cor?: string; delta?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-baseline justify-between gap-6 leading-[1.45]">
+      <span className="text-[11px] font-normal text-secondary whitespace-nowrap">{rotulo}</span>
+      <span className="whitespace-nowrap">
+        <span className={`text-[11px] tabular-nums ${
+          valor ? (cor ?? 'text-[#854F0B] dark:text-amber-500') : 'text-muted-foreground'}`}>
+          {valor ?? '—'}
+        </span>
+        {valor && delta}
       </span>
     </div>
   );

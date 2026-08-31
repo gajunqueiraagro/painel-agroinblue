@@ -346,6 +346,14 @@ export function VendaModalShell({
      vezes seria abrir a porta para os dois numeros do cabecalho discordarem entre si, que
      e' a versao pequena do defeito que este PR conserta. Ver `bolsoDaVendaBoitel`. */
   const bolsoProjetado = ehBoitel ? bolsoDaVendaBoitel(boitelData) : null;
+  /* ⚠ O MELHOR CONHECIMENTO — 02H item K. `bolsoDaVendaBoitel` ja e' guardada por
+     `exigencias`: nao-nulo E' a definicao operacional de "realizado completo". Nulo — sem
+     linha realizada, ou com ela pela metade — e o cabecalho segue na projecao ambar.
+     ⚠ UMA CHAMADA, e ela alimenta os tres: o cenario do topo, os dois numeros do topo e a
+     cascata gemea. Derivar de novo abriria a porta para o cabecalho dizer "realizado" e o
+     numero ao lado ainda ser o projetado. */
+  const bolsoRealizado = ehBoitel ? bolsoDaVendaBoitel(boitelReal ?? null) : null;
+  const topoNoRealizado = bolsoRealizado != null;
   const faltamBoitel = ehBoitel ? faltamDosCinco(boitelData) : [];
   const naNegociacao = abaAtiva === 'negociacao';
   /* ⚠ SALVAR SO ONDE HA O QUE SALVAR — PR-OC-VENDA-ENTREGA-01C. Nas outras quatro abas o
@@ -599,9 +607,11 @@ export function VendaModalShell({
                 <BoitelTopoNegociacao
                   cabecas={lotesApi?.totais.animais ?? 0}
                   pesoMedioKg={lotesApi ? pesoMedioPorCabeca(lotesApi.totais) : null}
-                  valorPorKg={unitariosDoLiquido(boitelData, bolsoProjetado).porKg}
-                  valorTotal={bolsoProjetado ?? 0}
-                  cenario="projetado"
+                  valorPorKg={topoNoRealizado
+                    ? unitariosDoLiquido(boitelReal ?? null, bolsoRealizado).porKg
+                    : unitariosDoLiquido(boitelData, bolsoProjetado).porKg}
+                  valorTotal={(topoNoRealizado ? bolsoRealizado : bolsoProjetado) ?? 0}
+                  cenario={topoNoRealizado ? 'realizado' : 'projetado'}
                   /* ⚠ O LOTE ENTRA DENTRO DO TOPO — complemento C. Ele era uma linha
                       abaixo, repetindo cabecas e R$/cab; virou o terceiro FATO, ao lado de
                       Cabecas e Peso. `abaLotes` continua sendo o MESMO elemento de sempre,
@@ -653,7 +663,7 @@ export function VendaModalShell({
                     rende e se valeu a pena contra vender vivo hoje. Os quatro pares de
                     memoria de calculo vivem no `BoitelPainelResultado`; o campo do custo
                     de oportunidade voltou ao modal de Custos, que e' onde se digita. */}
-                <BoitelResultadoCompacto boitelData={boitelData} cenario="projetado" />
+                <BoitelResultadoCompacto boitelData={boitelData} realizado={boitelReal} cenario="projetado" />
               </div>
             ) : abaLotes
           ) : (

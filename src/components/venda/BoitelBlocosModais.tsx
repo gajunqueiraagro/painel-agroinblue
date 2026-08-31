@@ -588,7 +588,12 @@ type IdCard = 'A' | 'B';
 /** Um numero do cartao. `pendente` = falta o dado que o sustenta (ambar + traco). */
 interface Indicador { rotulo: string; valor: string; pendente?: boolean;
   /** O nome inteiro, quando o rotulo visivel foi encurtado — mesmo contrato do `CampoNum`. */
-  titulo?: string }
+  titulo?: string;
+  /* ⚠ A VARIACAO CONTRA A PROJECAO — 02H item G. So' existe no cartao Realizado e so'
+     quando ha projecao completa para comparar. `bom` e' VEREDITO, nunca sinal cru: cada
+     linha declara o que e' bom PARA ELA (GMD a mais e' bom, dia a mais e' ruim), a regra
+     que `BoitelComparacoes` ja tinha fixado. `null` = variou zero, e ai nao ha veredito. */
+  delta?: { texto: string; bom: boolean | null } }
 const TITULO_CARD: Record<IdCard, string> = {
   A: 'Desempenho e Custos',
   B: 'Comercialização e Adiantamento',
@@ -610,7 +615,7 @@ const TITULO_CARD: Record<IdCard, string> = {
    e `unitariosDoLiquido` fizeram.
    ⚠ TRACO, NUNCA ZERO: sem o dado que sustenta a conta, o indicador nao imprime numero —
    ele diz que falta, em ambar. */
-function indicadoresDoBoitel(d: BoitelEdicao, modoRealizado?: boolean): Record<IdCard, Indicador[]> {
+function indicadoresDoBoitel(d: BoitelEdicao, modoRealizado?: boolean, projetado?: BoitelEdicao | null): Record<IdCard, Indicador[]> {
   const der = derivadosBoitel(d);
   const qtd = d.qtdCabecas || 0;
   const temDesempenho = d.dias > 0 && d.gmd > 0 && d.rendimento > 0;
@@ -619,15 +624,49 @@ function indicadoresDoBoitel(d: BoitelEdicao, modoRealizado?: boolean): Record<I
   const custoCab = qtd > 0 && der.custoTotalBoitel > 0 ? der.custoTotalBoitel / qtd : null;
   const suf = modoRealizado ? 'real.' : 'proj.';
   const sufLongo = modoRealizado ? 'Realizado' : 'Projetado';
+  /* ⚠ O GMD E O RC DO REALIZADO SAO OS EFETIVOS — 02G/02H. No realizado o papel manda:
+     `gmd` e `rendimento` guardados sao a premissa herdada da projecao, e mostra-los aqui
+     poria dois numeros para a mesma coisa na mesma tela (o modal ja exibe o efetivo).
+     Na projecao os dois pares sao IDENTICOS por construcao — `pf = pi + gmd x dias` faz
+     `gmdEfetivo` voltar a ser `gmd` —, entao a distincao so' morde no realizado. */
+  const gmdMostrado = modoRealizado ? der.gmdEfetivo : d.gmd;
+  const rcMostrado  = modoRealizado ? der.rcEfetivo  : d.rendimento;
+
+  /* ⚠ A VARIACAO SO' EXISTE COM OS DOIS MUNDOS NA MAO — item G. Sem projecao completa nao
+     ha contra o que comparar, e inventar uma base seria pior que nao comparar.
+     ⚠ `maiorEMelhor` E' DECLARADO POR LINHA, e e' a regra ja registrada em
+     `BoitelComparacoes`: a cor traduz o que a variacao SIGNIFICA para aquele indicador,
+     nao o sinal dela. Dia a mais e' pior; GMD a mais e' melhor; custo a mais e' pior.
+     ⚠ ZERO NAO TEM VEREDITO (`bom: null`): "manteve" nao e' vitoria nem derrota, e pintar
+     empate de verde faria a cor mentir por arredondamento. */
+  const derP = modoRealizado && projetado ? derivadosBoitel(projetado) : null;
+  const delta = (atual: number, anterior: number | null, maiorEMelhor: boolean,
+                 fmt: (v: number) => string): Indicador['delta'] => {
+    if (derP == null || anterior == null || !(anterior > 0)) return undefined;
+    const dif = atual - anterior;
+    const sinal = dif > 0 ? '+' : dif < 0 ? '−' : '';
+    return {
+      texto: `prev. ${fmt(anterior)} · ${sinal}${fmt(Math.abs(dif))}`,
+      bom: Math.abs(dif) < 1e-9 ? null : (dif > 0) === maiorEMelhor,
+    };
+  };
+  const pCustoCab = derP && (projetado?.qtdCabecas ?? 0) > 0 && derP.custoTotalBoitel > 0
+    ? derP.custoTotalBoitel / (projetado?.qtdCabecas ?? 1) : null;
 
   return {
     A: [
-      { rotulo: 'GMD',           valor: temDesempenho ? `${n3(d.gmd)} kg` : '—', pendente: !temDesempenho },
-      { rotulo: 'Dias',          valor: temDesempenho ? String(d.dias) : '—',    pendente: !temDesempenho },
-      { rotulo: 'RC saída',      valor: temDesempenho ? `${n2(d.rendimento)}%` : '—', pendente: !temDesempenho },
-      { rotulo: 'Diária',        valor: temCusto ? formatMoeda(d.custoDiaria) : '—', pendente: !temCusto },
-      { rotulo: 'Custo/cab',     valor: custoCab == null ? '—' : formatMoeda(custoCab), pendente: !temCusto },
-      { rotulo: 'Custo @ prod.', valor: der.cPArr > 0 ? formatMoeda(der.cPArr) : '—', pendente: !temCusto },
+      { rotulo: 'GMD',           valor: temDesempenho ? `${n3(gmdMostrado)} kg` : '—', pendente: !temDesempenho,
+        delta: delta(gmdMostrado, projetado?.gmd ?? null, true, n3) },
+      { rotulo: 'Dias',          valor: temDesempenho ? String(d.dias) : '—',    pendente: !temDesempenho,
+        delta: delta(d.dias, projetado?.dias ?? null, false, v => String(Math.round(v))) },
+      { rotulo: 'RC saída',      valor: temDesempenho ? `${n2(rcMostrado)}%` : '—', pendente: !temDesempenho,
+        delta: delta(rcMostrado, projetado?.rendimento ?? null, true, n2) },
+      { rotulo: 'Diária',        valor: temCusto ? formatMoeda(d.custoDiaria) : '—', pendente: !temCusto,
+        delta: delta(d.custoDiaria, projetado?.custoDiaria ?? null, false, formatMoeda) },
+      { rotulo: 'Custo/cab',     valor: custoCab == null ? '—' : formatMoeda(custoCab), pendente: !temCusto,
+        delta: custoCab == null ? undefined : delta(custoCab, pCustoCab, false, formatMoeda) },
+      { rotulo: 'Custo @ prod.', valor: der.cPArr > 0 ? formatMoeda(der.cPArr) : '—', pendente: !temCusto,
+        delta: delta(der.cPArr, derP?.cPArr ?? null, false, formatMoeda) },
     ],
     /* ⚠ O ADIANTADO SAIU DAQUI — decisao do Gabriel. Ele continua no modal, onde se
        digita; o cartao guarda o que a Comercializacao PRODUZ. Com ele fora, o unico
@@ -644,9 +683,11 @@ function indicadoresDoBoitel(d: BoitelEdicao, modoRealizado?: boolean): Record<I
        vazar por cima do vizinho — o defeito que o 01E ja pagou uma vez. */
     B: [
       { rotulo: `Preço venda ${suf}`, titulo: `Preço de Venda ${sufLongo}`,
-        valor: temPreco ? `${formatMoeda(d.precoVendaArroba)}/@` : '—', pendente: !temPreco },
+        valor: temPreco ? `${formatMoeda(d.precoVendaArroba)}/@` : '—', pendente: !temPreco,
+        delta: delta(d.precoVendaArroba, projetado?.precoVendaArroba ?? null, true, formatMoeda) },
       { rotulo: `Faturamento abate ${suf}`, titulo: `Faturamento no Abate ${sufLongo}`,
-        valor: der.fba > 0 ? formatMoeda(der.fba) : '—', pendente: !temPreco },
+        valor: der.fba > 0 ? formatMoeda(der.fba) : '—', pendente: !temPreco,
+        delta: delta(der.fba, derP?.fba ?? null, true, formatMoeda) },
     ],
   };
 }
@@ -663,8 +704,9 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
   const der = derivadosBoitel(d);
   /* ⚠ AS ABATIDAS MANDAM NOS DERIVADOS POR CABECA — 02E. Com abate parcial, dividir pelo
      que SAIU do boitel daria peso medio e valor/cab de um rebanho que nao foi abatido.
-     Vazia (projetado, ou realizado sem parcial), vale `sairam`. */
-  const cabAbate = d.qtdAbatida ?? der.sairam;
+     Vazia (projetado, ou realizado sem parcial), vale `sairam`.
+     ⚠ VEM DO MOTOR desde o 02H item L — a conta era escrita aqui E la'. Uma so'. */
+  const cabAbate = der.cabAbate;
   /* Os dias entre a entrada do lote e o abate — `null` sem uma das pontas. Nunca lanca:
      data invalida devolve null, como `dataMaisDias` do shell ja faz do outro lado. */
   const diasDaData = (() => {
@@ -1048,10 +1090,20 @@ function LinhaConferencia({ rotulo, valor, direcao }: {
 /* Um grupo de indicadores DENTRO do card de projecao, com o seu proprio lapis.
    ⚠ DOIS LAPIS NUM CARTAO SO', e nao um: os dois modais continuam sendo dois, e um lapis
    unico teria de perguntar qual abrir — pergunta que o proprio grupo ja responde. */
-function GrupoIndicadores({ titulo, itens, onAbrir }: {
+function GrupoIndicadores({ titulo, itens, onAbrir, solido }: {
   titulo: string;
-  itens: { rotulo: string; valor: string; pendente?: boolean; fato?: boolean; titulo?: string }[];
+  itens: Indicador[];
   onAbrir: () => void;
+  /* ⚠ O CARTAO INTEIRO E FATO — 02H item G, a regra fundacional do 01D acordando. O
+     realizado nao e' projecao: os valores vao SOLIDOS (`text-foreground`) contra o ambar
+     do vizinho, e o comparativo nasce da cor, sem terceira coluna dizendo "previsto x
+     realizado".
+     ⚠ A MARCA E DO CARTAO, NAO DO ITEM. A `PilulaCenario` ja devolve `null` no realizado,
+     e e' a AUSENCIA dela — mais o preto — que diz "isto aconteceu". A marca "(fato)" por
+     item, que nascera' no 01D e nunca chegou a ser usada por indicador nenhum (medido:
+     zero atribuicoes de `fato` em toda a arvore), sairia repetida seis vezes no mesmo
+     cartao e viraria ruido de fundo. Removida com o campo que a alimentava. */
+  solido?: boolean;
 }) {
   return (
     <button type="button" onClick={onAbrir} title="Clique para editar"
@@ -1067,16 +1119,28 @@ function GrupoIndicadores({ titulo, itens, onAbrir }: {
             <div title={i.titulo ?? i.rotulo}
               className="text-[10px] font-normal text-muted-foreground leading-none whitespace-nowrap">
               {i.rotulo}
-              {i.fato && <span className="ml-1 text-[9px] font-normal">(fato)</span>}
             </div>
             {/* ⚠ `whitespace-nowrap`, nunca `truncate`: numero cortado nao e' numero.
                 ⚠ A PENDENCIA MANDA NA COR — ver a precedencia em `indicadoresDoBoitel`. */}
             <div className={`mt-1 text-[15px] font-medium leading-none tabular-nums whitespace-nowrap ${
               i.pendente ? 'text-amber-700 dark:text-amber-500'
-              : i.fato ? 'text-foreground'
+              : solido ? 'text-foreground'
               : 'text-[#854F0B] dark:text-amber-500'}`}>
               {i.valor}
             </div>
+            {/* ⚠ A VARIACAO, EM 9px — item G. Excecao consciente ao piso de 10px, na mesma
+                familia das ajudas do `CampoNum`: e' texto de APOIO sob um numero que ja
+                esta' ali, e nao carrega informacao que so' exista nela (o previsto tambem
+                esta' no cartao ao lado).
+                ⚠ COR DE VEREDITO, e o sinal continua escrito: quem nao distingue as cores
+                le o "+"/"−" do mesmo jeito. Empate fica neutro — ver a nota do `delta`. */}
+            {i.delta && (
+              <div className={`mt-0.5 text-[9px] leading-snug tabular-nums whitespace-nowrap ${
+                i.delta.bom == null ? 'text-muted-foreground'
+                : i.delta.bom ? 'text-success' : 'text-destructive'}`}>
+                {i.delta.texto}
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -1123,14 +1187,18 @@ function DialogoGrupo({ card, valor, somenteLeitura, onAplicar, onFechar, modoRe
   const ids = (Object.keys(GRUPOS) as IdGrupo[]).filter(id => GRUPOS[id].card === card);
   /* O veredito do painel de Custos, no proprio titulo — ver a nota em `Painel`. */
   const derLocal = derivadosBoitel(local);
-  /* ⚠ O FATURAMENTO DA CONFERENCIA VEM DO FATO no realizado — 02E. `derLocal.fba`
-     reconstroi (`aTS x preco/@`) e carrega o arredondamento da persistencia; medido, isso
-     dava R$ 93,76 de diferenca contra o numero que o operador acabou de digitar. No
-     projetado nao ha fato, e o derivado continua sendo a resposta certa.
+  /* ⚠ A PREFERENCIA SAIU DAQUI — 02H item M. Esta linha era
+     `local.valorTotalAbate ?? derLocal.fba`: a conferencia escolhia o fato POR CONTA
+     PROPRIA, enquanto o motor seguia derivando para todos os outros leitores. Era a
+     doutrina do 02G violada por um consumidor — e ela nao apareceu antes porque a cascata
+     do realizado nao existia para discordar. Agora `fba` ja nasce preferindo o fato, e
+     esta linha volta a ser o que sempre devia ter sido: uma leitura.
+     ⚠ E O NUMERO NAO MUDOU AQUI, de proposito: com fato, `derLocal.fba` E' o fato (mais a
+     indenizacao, que o papel do frigorifico nao contem e o boitel paga a parte).
      ⚠ O ACERTO E O QUE O BOITEL REPASSA — faturamento menos o que ele desconta, mais o
      adiantamento que volta. NAO e' o liquido da venda: aquele ja e' o resultado depois de
      tudo. Duas perguntas, dois numeros. */
-  const faturamentoConferencia = local.valorTotalAbate ?? derLocal.fba;
+  const faturamentoConferencia = derLocal.fba;
   const acertoCalculado = Math.round((faturamentoConferencia - derLocal.descontoDoAcerto + derLocal.valorTotalAntecipadoCalc) * 100) / 100;
   const qtdLocal = local.qtdCabecas || 0;
   const extraCustos = qtdLocal > 0 && derLocal.custoTotalBoitel > 0 ? (
@@ -1289,7 +1357,7 @@ export function BoitelBlocosModais({ valor, onChange, somenteLeitura, cenario, d
 }) {
   const [editando, setEditando] = useState<{ card: IdCard; modo: CenarioBoitel } | null>(null);
   const indicadores = useMemo(() => indicadoresDoBoitel(valor), [valor]);
-  const indReal = useMemo(() => realizado ? indicadoresDoBoitel(realizado, true) : null, [realizado]);
+  const indReal = useMemo(() => realizado ? indicadoresDoBoitel(realizado, true, valor) : null, [realizado, valor]);
   const temRealizado = !!realizado;
 
   const abrir = async (card: IdCard, modo: CenarioBoitel) => {
@@ -1353,8 +1421,8 @@ export function BoitelBlocosModais({ valor, onChange, somenteLeitura, cenario, d
 
         {temRealizado && indReal ? (
           <>
-            <GrupoIndicadores titulo={TITULO_CARD.A} itens={indReal.A} onAbrir={() => abrir('A', 'realizado')} />
-            <GrupoIndicadores titulo={TITULO_CARD.B} itens={indReal.B} onAbrir={() => abrir('B', 'realizado')} />
+            <GrupoIndicadores solido titulo={TITULO_CARD.A} itens={indReal.A} onAbrir={() => abrir('A', 'realizado')} />
+            <GrupoIndicadores solido titulo={TITULO_CARD.B} itens={indReal.B} onAbrir={() => abrir('B', 'realizado')} />
           </>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center gap-3 py-6">
