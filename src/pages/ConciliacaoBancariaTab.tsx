@@ -2,6 +2,9 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
+import { Upload } from 'lucide-react';
+import { PainelExtratoMes } from '@/components/conciliacao/PainelExtratoMes';
+import { ExtratoGerencialTab } from '@/components/financeiro-v2/ExtratoGerencialTab';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -354,7 +357,12 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   const [showImportExtrato, setShowImportExtrato] = useState(false);
   const [showPendencias, setShowPendencias] = useState(false);
   // PR-MOS-1 — 3 abas oficiais: Importar Banco · Enriquecer · Conciliação (só layout/roteamento).
-  const [vistaExtrato, setVistaExtrato] = useState<'importar' | 'enriquecer' | 'conciliacao'>('conciliacao');
+  /* ⚠ QUATRO ABAS — FIN-CONCIL-INTEGRAR-01. "Extrato Gerencial" entrou entre
+     Enriquecer e Conciliação, na ordem do original. Os filtros do CABEÇALHO
+     (ano, mês, conta) valem para todas e se mantêm ao trocar de aba: são estado
+     desta tela, não de cada aba — trocar de aba nunca perde onde o operador
+     estava. */
+  const [vistaExtrato, setVistaExtrato] = useState<'importar' | 'enriquecer' | 'gerencial' | 'conciliacao'>('conciliacao');
 
   /* Edit saldo */
   const [editingSaldo, setEditingSaldo] = useState<{anoMes:string;contaId:string;current:number}|null>(null);
@@ -819,6 +827,12 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
               Enriquecer
             </button>
             <button
+              onClick={() => setVistaExtrato('gerencial')}
+              className={`px-2.5 py-1 rounded text-[10px] font-bold transition-colors ${vistaExtrato === 'gerencial' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
+            >
+              Extrato Gerencial
+            </button>
+            <button
               onClick={() => setVistaExtrato('conciliacao')}
               className={`px-2.5 py-1 rounded text-[10px] font-bold transition-colors ${vistaExtrato === 'conciliacao' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
             >
@@ -835,18 +849,65 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
 
         {loading && <div className="text-center text-xs text-muted-foreground py-8">Carregando...</div>}
 
+        {/* ─── IMPORTAR BANCO — clone da aba "Importar Extrato" do Financas ────
+            ⚠ O CONTEUDO LEGADO SAIU: era um texto explicando o que a propria
+            tela mostra, mais um botao que repetia o do cabecalho. O que entra e'
+            a linha do original — seletor de conta, o botao do arquivo, a frase e
+            as acoes — e, ABAIXO dela, o card do mes com a LISTA COMPLETA
+            (Situacao e Revisar inclusive). Duplicada la, duplicada aqui:
+            fidelidade e' o criterio, e "otimizar" seria decidir pelo Gabriel.
+            ⚠ A FRASE E VERDADEIRA AQUI TAMBEM, e isso foi medido antes de
+            copia-la: o nosso importador e' o `ExtratoImportPreview` — o mesmo
+            componente que o Financas cita como gabarito da tela dele —, e ele
+            le' o arquivo no navegador e mostra a previa antes de gravar. */}
         {!loading && selectedCard && vistaExtrato === 'importar' && (
-          <div className="rounded-lg border bg-card p-4 space-y-2 md:flex-1 md:min-h-0 md:overflow-y-auto">
-            <div className="text-sm font-semibold">Importar Banco</div>
-            <p className="text-[11px] text-muted-foreground leading-snug">
-              Importe o extrato do banco (OFX/CSV/PDF/Excel/API) para criar os movimentos crus em
-              <span className="font-mono"> extrato_bancario_v2</span>. Use o botão <b>⬆ Importar Extrato</b> no topo.
-              Depois de importar, os movimentos ficam disponíveis na aba <b>Conciliação</b> para casar com o sistema.
-            </p>
-            <Button size="sm" variant="outline" className="h-7 text-[11px] gap-1"
-              onClick={() => setShowImportExtrato(true)}>
-              ⬆ Importar Extrato
-            </Button>
+          <div className="space-y-2.5 md:flex-1 md:min-h-0 md:overflow-y-auto">
+            <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5">
+              <div className="w-[190px]">
+                <Select value={selectedConta} onValueChange={setSelectedConta}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Conta" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__" className="text-xs">Todas as contas</SelectItem>
+                    {contas.map(c => (
+                      <SelectItem key={c.id} value={c.id} className="text-xs">{getContaLabel(c)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {/* ⚠ SEM `variant` — como no original. Ele aparece verde la porque
+                  o PRIMARY do tema do Financas e' verde; cravar a cor aqui seria
+                  inventar, e a regra da casa e' cor da regua do tema, nunca cor
+                  cravada. Se o verde for pedido de identidade e nao consequencia
+                  do tema, e' uma classe — e a pergunta esta no relatorio. */}
+              <Button type="button" size="sm" className="h-8 gap-1.5 text-xs"
+                disabled={selectedConta === '__all__'}
+                title={selectedConta === '__all__' ? 'Escolha a conta primeiro' : undefined}
+                onClick={() => setShowImportExtrato(true)}>
+                <Upload className="h-3.5 w-3.5" />
+                Escolher arquivo OFX
+              </Button>
+              <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground"
+                title="O arquivo é lido aqui no navegador e não sai dele — o que vai para o banco de dados são os movimentos. Antes de gravar, você confere linha a linha o que é novo e o que já foi importado.">
+                O arquivo é lido no navegador; você confere antes de gravar.
+              </span>
+            </div>
+
+            <PainelExtratoMes
+              clienteId={clienteAtual?.id ?? null}
+              contaId={selectedConta !== '__all__' ? selectedConta : null}
+              ano={Number(ano)} mes={Number(selectedMes)}
+              contaNome={contaAtual}
+            />
+          </div>
+        )}
+
+        {/* ─── EXTRATO GERENCIAL — a tela que ja existia, transferida ─────────
+            ⚠ TRANSFERIR, NAO RECRIAR: e' o mesmo componente do menu lateral,
+            montado aqui com o ano/mes do CABECALHO desta tela. O item do menu
+            continua vivo ate a homologacao — nada morre antes dela. */}
+        {!loading && selectedCard && vistaExtrato === 'gerencial' && (
+          <div className="md:flex-1 md:min-h-0 md:overflow-y-auto">
+            <ExtratoGerencialTab initialAno={Number(ano)} initialMes={Number(selectedMes)} />
           </div>
         )}
 
