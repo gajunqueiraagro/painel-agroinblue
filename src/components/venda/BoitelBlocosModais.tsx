@@ -136,6 +136,16 @@ const MAPA_BOITEL: CampoBoitel[] = [
   { col: 'valor_total_abate',            campo: 'valorTotalAbate',             tipo: 'num', zeroEValor: true },
   { col: 'acerto_papel',                 campo: 'acertoPapel',                 tipo: 'num', zeroEValor: true },
   { col: 'valor_total_diarias',          campo: 'valorTotalDiarias',           tipo: 'num', zeroEValor: true },
+  /* ─── OS DOIS TOTAIS DA BALANCA — PR-OC-VENDA-REALIZADO-02G (mapa 35 -> 37) ─────
+     ⚠ `zeroEValor` PELO MESMO MOTIVO DOS QUATRO ANTERIORES: as colunas sao nullable e sem
+     default, e `undefined` significa "o papel ainda nao chegou". Sem a marca, o
+     `v || null` do payload mandaria nulo tambem para o zero legitimo e a hidratacao o
+     devolveria como 0 — apagando a diferenca entre "pesou zero" e "ainda nao pesou".
+     ⚠ E ELAS ESTAO NA LISTA BRANCA DA RPC (migration 20260831102614, oraculo
+     f4ad99e4...): coluna e lista branca andam SEMPRE em par, e sem esse par o payload
+     seria descartado em silencio com a auditoria dizendo que gravou. */
+  { col: 'peso_vivo_total_abate',        campo: 'pesoVivoTotalAbate',          tipo: 'num', zeroEValor: true },
+  { col: 'arrobas_totais_abate',         campo: 'arrobasTotaisAbate',          tipo: 'num', zeroEValor: true },
 ];
 
 /** O payload de `oc_salvar_boitel` — a IDA, derivada do mapa. */
@@ -325,6 +335,113 @@ export function CampoNum({ label, valor, onChange, casas = 2, sufixo, obrigatori
         )}
         {extra}
       </div>
+  );
+}
+
+/* ─── CAMPO COM TOGGLE [total | /cab] ─────────────────────────────────────────
+   PR-OC-VENDA-REALIZADO-02G, itens 3-5 (mockup aprovado). O papel do frigorifico as vezes
+   traz o TOTAL e as vezes a MEDIA — depende do documento. Obrigar a converter de cabeca
+   antes de lancar e' o mesmo pedido que o 02D ja tinha recusado nos drivers.
+
+   ⚠ O QUE PERSISTE E SEMPRE O TOTAL, e a media e' PORTA DE ENTRADA. Guardar ora um ora
+   outro faria a fonte da verdade depender de como o operador digitou naquele dia; o total
+   e' o fato do papel, a media e' leitura dele.
+   ⚠ CINCO CASAS SO' NO MODO /cab, e nao e' capricho: com 109 cabecas, uma media de duas
+   casas erra o total em dezenas de quilos. Medido no papel vivo — 20,65749 @/cab x 109
+   reconstitui 2.251,67 @ exato; 20,66 daria 2.251,94. O A15 (duas casas) continua valendo
+   em todo o resto da tela: aqui a precisao E o requisito.
+   ⚠ O TOGGLE NAO PERSISTE: e' modo de leitura, e comeca sempre em `total` — o formato do
+   fato. Estado local, module-level, sem tocar o `BoitelEdicao`. */
+function CampoTotalOuMedia({ label, titulo, total, divisor, onChangeTotal, sufixoTotal, sufixoMedia,
+  casasMedia = 5, moeda, desabilitado, obrigatorio, previsto, contexto }: {
+  label: string; titulo?: string;
+  total: number;
+  /** Cabecas abatidas — ou cabecas x dias, no caso das diarias. */
+  divisor: number;
+  onChangeTotal: (v: number) => void;
+  sufixoTotal?: string; sufixoMedia?: string;
+  casasMedia?: number; moeda?: boolean; desabilitado?: boolean; obrigatorio?: boolean;
+  previsto?: string | null;
+  /** Texto extra da ajuda no modo total (ex.: "109 cab × 104 dias"). */
+  contexto?: string | null;
+}) {
+  const [modo, setModo] = useState<'total' | 'cab'>('total');
+  const media = divisor > 0 ? total / divisor : 0;
+  const nMedia = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: casasMedia, maximumFractionDigits: casasMedia });
+
+  return (
+    <div className="min-w-0">
+      <div className="flex items-center gap-1.5">
+        <Label title={titulo ?? label}
+          className="block text-[10px] font-medium text-foreground/90 leading-none whitespace-nowrap overflow-hidden text-ellipsis">
+          {label}{obrigatorio && <span className="text-destructive"> *</span>}
+        </Label>
+        {/* Pilula dupla colada ao rotulo — o idioma do `SeletorLado`, em escala menor. */}
+        <div className="inline-flex shrink-0 items-center overflow-hidden rounded-full border">
+          {(['total', 'cab'] as const).map(m => (
+            <button key={m} type="button" onClick={() => setModo(m)}
+              className={`px-1.5 py-px text-[9px] leading-4 transition-colors ${
+                modo === m ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}>
+              {m === 'total' ? 'total' : (sufixoMedia ?? '/cab')}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="mt-1">
+        {modo === 'total' ? (
+          <CampoNumBase valor={total} onChange={onChangeTotal} casas={2} moeda={moeda}
+            sufixo={sufixoTotal} desabilitado={desabilitado} />
+        ) : (
+          /* ⚠ A MEDIA ESCREVE O TOTAL, e nao um campo proprio: `media x divisor`, e o que
+             desce para o banco continua sendo o total. */
+          <CampoNumBase valor={media} onChange={v => onChangeTotal(Math.round(v * divisor * 100) / 100)}
+            casas={casasMedia} moeda={moeda} sufixo={sufixoMedia} desabilitado={desabilitado} />
+        )}
+      </div>
+      <div className="mt-0.5 text-[9px] text-muted-foreground tabular-nums leading-snug">
+        {divisor > 0
+          ? (modo === 'total'
+              ? `${nMedia(media)}${sufixoMedia ? ' ' + sufixoMedia : ''}${contexto ? ' · ' + contexto : ''}`
+              : `total ${moeda ? formatMoeda(total) : n2(total)}${contexto ? ' · ' + contexto : ''}`)
+          : '—'}
+      </div>
+      {previsto && (
+        <div className="mt-0.5 text-[9px] tabular-nums leading-snug text-[#854F0B] dark:text-amber-500">
+          previsto: {previsto}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* O input nu, sem rotulo nem ajuda — o miolo que `CampoNum` e `CampoTotalOuMedia`
+   compartilham. Extraido para o toggle nao reimplementar virgula-no-foco e blur-format. */
+function CampoNumBase({ valor, onChange, casas, sufixo, moeda, desabilitado }: {
+  valor: number; onChange: (v: number) => void; casas: number;
+  sufixo?: string; moeda?: boolean; desabilitado?: boolean;
+}) {
+  const fmt = (v: number) => v ? v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas }) : '';
+  const [rascunho, setRascunho] = useState<string | null>(null);
+  const parse = (t: string) => {
+    let limpo = t.replace(/%/g, '').trim();
+    if (limpo.includes(',')) limpo = limpo.replace(/\./g, '').replace(',', '.');
+    const n = parseFloat(limpo);
+    return isNaN(n) ? 0 : Math.round(n * Math.pow(10, casas)) / Math.pow(10, casas);
+  };
+  return (
+    <div className="flex items-center gap-1">
+      {moeda && casas === 2 ? (
+        <CampoMoeda valor={valor} onChange={n => onChange(n ?? 0)} disabled={desabilitado}
+          className="h-8 w-[120px] px-2 text-[12px] tabular-nums text-right bg-card" />
+      ) : (
+        <Input value={rascunho ?? fmt(valor)} disabled={desabilitado} inputMode="decimal"
+          onChange={e => { setRascunho(e.target.value); onChange(parse(e.target.value)); }}
+          onFocus={() => setRascunho(valor ? String(valor).replace('.', ',') : '')}
+          onBlur={() => { if (rascunho !== null) onChange(parse(rascunho)); setRascunho(null); }}
+          className={`h-8 ${casas > 2 ? 'w-[120px]' : 'w-[110px]'} px-2 text-[12px] tabular-nums text-right bg-card`} />
+      )}
+      {sufixo && <span className="text-[10px] text-muted-foreground shrink-0 whitespace-nowrap">{sufixo}</span>}
+    </div>
   );
 }
 
@@ -519,12 +636,21 @@ function indicadoresDoBoitel(d: BoitelEdicao): Record<IdCard, Indicador[]> {
    disfarcada de layout. */
 function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: K, v: BoitelEdicao[K]) => void,
   onChange: (proximo: BoitelEdicao) => void, somenteLeitura?: boolean,
-  modoRealizado?: boolean, projetado?: BoitelEdicao | null) {
+  modoRealizado?: boolean, projetado?: BoitelEdicao | null, dataEntrada?: string | null) {
   const der = derivadosBoitel(d);
   /* ⚠ AS ABATIDAS MANDAM NOS DERIVADOS POR CABECA — 02E. Com abate parcial, dividir pelo
      que SAIU do boitel daria peso medio e valor/cab de um rebanho que nao foi abatido.
      Vazia (projetado, ou realizado sem parcial), vale `sairam`. */
   const cabAbate = d.qtdAbatida ?? der.sairam;
+  /* Os dias entre a entrada do lote e o abate — `null` sem uma das pontas. Nunca lanca:
+     data invalida devolve null, como `dataMaisDias` do shell ja faz do outro lado. */
+  const diasDaData = (() => {
+    if (!dataEntrada || !d.dataAbate) return null;
+    const a = new Date(`${dataEntrada}T00:00:00`), b = new Date(`${d.dataAbate}T00:00:00`);
+    if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return null;
+    const n = Math.round((b.getTime() - a.getTime()) / 86400000);
+    return n > 0 ? n : null;
+  })();
   const derP = projetado ? derivadosBoitel(projetado) : null;
   /* O "previsto: X" so' existe quando ha projecao para comparar E o modo e' o realizado. */
   const prev = (fn: (p: BoitelEdicao, x: ReturnType<typeof derivadosBoitel>) => string | null): string | null =>
@@ -552,7 +678,17 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
                 disabled={somenteLeitura} className="h-8 px-2 text-[12px] bg-card" />
             </LinhaCampo>
           )}
-          <CampoNum previsto={prev(p => String(p.dias))} desabilitado={somenteLeitura} label="Dias confinamento" titulo="Dias de confinamento" valor={d.dias} onChange={v => set('dias', v)} casas={0} obrigatorio />
+          {/* ⚠ NO REALIZADO OS DIAS DERIVAM DA DATA — 02G item 2. A data de entrada e' a
+              `data_operacao` da OC (medido: `data_envio` do boitel esta' NULA em 3 de 3
+              registros; se um dia for preenchida, ela e' a mais precisa e a preferencia
+              muda AQUI, num lugar so'). No papel vivo: 13/05 -> 25/08 = 104 dias.
+              ⚠ MANUAL VENCE, e a ajuda diz que venceu: quem digitou por cima tinha razao
+              para isso — reentrada, contagem diferente do boitel — e sobrescrever a
+              escolha dele a cada render seria o campo brigando com o operador. */}
+          <CampoNum previsto={prev(p => String(p.dias))} desabilitado={somenteLeitura} label="Dias confinamento" titulo="Dias de confinamento" valor={d.dias} onChange={v => onChange({ ...d, dias: v, diasEditadoManual: true })} casas={0} obrigatorio
+            derivado={modoRealizado ? (diasDaData != null
+              ? (d.diasEditadoManual ? `editado · pela data seriam ${diasDaData}` : `${diasDaData} dias entre entrada e abate`)
+              : 'informe a data do abate para derivar') : undefined} />
           {/* ⚠ NO REALIZADO QUEM SE DIGITA E O PESO DE ABATE, e o GMD passa a ser
               DERIVADO — decisao do Gabriel. Ninguem mede GMD no frigorifico; mede-se o
               peso na balanca. A conta e' `(pesoAbate − pesoSaidaFaz) / dias`, e o que se
@@ -567,20 +703,20 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
                TOTAIS — peso vivo na balanca, arrobas, valor —, e nao os drivers unitarios
                que a projecao usa. Digitar GMD no acerto seria pedir ao operador que
                desfizesse a conta de cabeca antes de lancar.
-               ⚠ CADA TOTAL ESCREVE O CAMPO QUE JA EXISTE: vivo -> `gmd`, arrobas ->
-               `rendimento`. Os dois cenarios continuam lendo os MESMOS campos, cada um
-               pelo seu lado da formula — o idioma que o 02 plantou com o peso de abate.
+               ⚠ 02G: CADA TOTAL ESCREVE A SUA PROPRIA COLUNA. Ate' o 02F eles escreviam
+               por cima de `gmd` e `rendimento`, desfazendo a conta de cabeca para caber
+               em campos da PROJECAO — e o papel do Santa Clara mostrou o preco disso:
+               2.251,67 @ em 109 cabecas nao voltam de nenhum arredondamento do `gmd`.
+               Agora o fato e' guardado como fato, e `gmd`/`rendimento` viram EXIBICAO
+               PURA aqui — a ajuda diz o que o papel implica, e nada e' reescrito.
                ⚠ O DENOMINADOR E `sairam` (negociadas menos mortes), e nao as negociadas:
                e' o rebanho que de fato foi para a balanca. */
-            <CampoNum desabilitado={somenteLeitura} label="Peso vivo total" titulo="Peso vivo total na balança (kg) — do papel do frigorífico"
-              valor={Math.round(der.pf * cabAbate * 100) / 100} casas={2} sufixo="kg" obrigatorio
-              onChange={v => {
-                const cab = cabAbate || 1;
-                const medio = v / cab;
-                set('gmd', d.dias > 0 ? Math.round(((medio - (d.pesoInicial || 0)) / d.dias) * 1000) / 1000 : 0);
-              }}
-              derivado={cabAbate > 0 ? `${n2(der.pf)} kg/cab em ${cabAbate} cab.` : null}
-              previsto={prev((_, x) => `${n2(x.pf * x.sairam)} kg`)} />
+            <CampoTotalOuMedia label="Peso vivo" titulo="Peso vivo na balança — do papel do frigorífico"
+              total={der.pvTotal} divisor={cabAbate}
+              onChangeTotal={v => set('pesoVivoTotalAbate', v)}
+              sufixoTotal="kg" sufixoMedia="kg/cab" desabilitado={somenteLeitura} obrigatorio
+              contexto={cabAbate > 0 ? `${cabAbate} cab · GMD ${n3(der.gmdEfetivo)} kg/dia` : null}
+              previsto={prev((_, x) => `${n2(x.pvTotal)} kg`)} />
           ) : (
             /* ⚠ AS AJUDAS SAEM DO MOTOR, e nenhuma e' conta escrita aqui: `ganho`, `ple`,
                `aEF`, `aS` e `pf` ja sao exportados por `derivadosBoitel`. Conferidos contra
@@ -608,13 +744,11 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
                `carcacaKg = arrobas x 15` — a conversao que o mockup pede na ajuda.
                ⚠ E O RC FECHA DE FATO: ele deixa de ser premissa digitada e passa a ser
                consequencia de dois numeros do papel. */
-            <CampoNum desabilitado={somenteLeitura} label="Arrobas totais" titulo="Arrobas totais do abate (@) — do papel do frigorífico"
-              valor={Math.round(der.aTS * 100) / 100} casas={2} sufixo="@" obrigatorio
-              onChange={v => {
-                const vivoTot = der.pf * (cabAbate || 1);
-                set('rendimento', vivoTot > 0 ? Math.round(((v * 15) / vivoTot) * 100 * 100) / 100 : 0);
-              }}
-              derivado={der.aTS > 0 ? `${n2(der.aTS * 15)} kg de carcaça · RC ${n2(d.rendimento)}%` : null}
+            <CampoTotalOuMedia label="Arrobas" titulo="Arrobas do abate (@) — do papel do frigorífico"
+              total={der.aTS} divisor={cabAbate}
+              onChangeTotal={v => set('arrobasTotaisAbate', v)}
+              sufixoTotal="@" sufixoMedia="@/cab" desabilitado={somenteLeitura} obrigatorio
+              contexto={der.aTS > 0 ? `${n2(der.aTS * 15)} kg carcaça · RC ${n2(der.rcEfetivo)}%` : null}
               previsto={prev((_, x) => `${n2(x.aTS)} @`)} />
           ) : (
             <CampoNum desabilitado={somenteLeitura} label="Rend. saída" titulo="Rendimento de saída" valor={d.rendimento} onChange={v => set('rendimento', v)} sufixo="%" obrigatorio
@@ -680,15 +814,12 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
               projecao continua o contrario — la' a tarifa e' o que se negocia, e o total
               deriva dela. Mesmo campo, dois sentidos, como o peso de abate ja fazia. */}
           {modoRealizado ? (
-            <CampoNum desabilitado={somenteLeitura} label="Diárias no período" moeda obrigatorio
-              titulo="Valor total das diárias (R$) — do papel do acerto"
-              valor={d.valorTotalDiarias ?? der.cDT}
-              onChange={v => onChange({ ...d, valorTotalDiarias: v,
-                /* A tarifa acompanha para o projetado nao ficar com um numero morto. */
+            <CampoTotalOuMedia label="Diárias" titulo="Valor total das diárias (R$) — do papel do acerto"
+              total={d.valorTotalDiarias ?? der.cDT} divisor={cabAbate * d.dias} moeda
+              onChangeTotal={v => onChange({ ...d, valorTotalDiarias: v,
                 custoDiaria: (cabAbate * d.dias) > 0 ? Math.round((v / (cabAbate * d.dias)) * 100) / 100 : 0 })}
-              derivado={(cabAbate * d.dias) > 0
-                ? `${formatMoeda((d.valorTotalDiarias ?? der.cDT) / (cabAbate * d.dias))}/cab/dia · ${cabAbate} cab × ${d.dias} dias`
-                : null}
+              sufixoTotal="R$" sufixoMedia="/cab/dia" desabilitado={somenteLeitura} obrigatorio
+              contexto={(cabAbate * d.dias) > 0 ? `${cabAbate} cab × ${d.dias} dias` : null}
               previsto={prev((_, x) => formatMoeda(x.cDT))} />
           ) : (
             <CampoNum desabilitado={somenteLeitura} label="Diária" moeda valor={d.custoDiaria} onChange={v => set('custoDiaria', v)} sufixo="/cab/dia" obrigatorio />
@@ -935,7 +1066,7 @@ const ICONE_GRUPO: Record<IdGrupo, React.ReactNode> = {
   adiantamento: <Banknote className="h-3.5 w-3.5 shrink-0" />,
 };
 
-function DialogoGrupo({ card, valor, somenteLeitura, onAplicar, onFechar, modoRealizado, projetado }: {
+function DialogoGrupo({ card, valor, somenteLeitura, onAplicar, onFechar, modoRealizado, projetado, dataEntrada }: {
   card: IdCard;
   valor: BoitelEdicao;
   somenteLeitura?: boolean;
@@ -943,6 +1074,8 @@ function DialogoGrupo({ card, valor, somenteLeitura, onAplicar, onFechar, modoRe
   modoRealizado?: boolean;
   /** A linha `projetado`, para o "previsto: X". Sem ela, nada e' comparado. */
   projetado?: BoitelEdicao | null;
+  /** `data_operacao` da OC — a entrada do lote no boitel, para derivar os dias. */
+  dataEntrada?: string | null;
   onAplicar: (proximo: BoitelEdicao) => void;
   onFechar: () => void;
 }) {
@@ -952,7 +1085,7 @@ function DialogoGrupo({ card, valor, somenteLeitura, onAplicar, onFechar, modoRe
      divergencia que estava la', em vez de um campo vazio que apaga o que se sabia. */
   const [acertoPapel, setAcertoPapel] = useState(valor.acertoPapel ?? 0);
   const set = <K extends keyof BoitelEdicao>(k: K, v: BoitelEdicao[K]) => setLocal(a => ({ ...a, [k]: v }));
-  const corpos = corposDoBoitel(local, set, setLocal, somenteLeitura, modoRealizado, projetado);
+  const corpos = corposDoBoitel(local, set, setLocal, somenteLeitura, modoRealizado, projetado, dataEntrada);
   const ids = (Object.keys(GRUPOS) as IdGrupo[]).filter(id => GRUPOS[id].card === card);
   /* O veredito do painel de Custos, no proprio titulo — ver a nota em `Painel`. */
   const derLocal = derivadosBoitel(local);
@@ -1089,7 +1222,7 @@ function DialogoGrupo({ card, valor, somenteLeitura, onAplicar, onFechar, modoRe
 /* ═══ O COMPONENTE ═══════════════════════════════════════════════════════════════ */
 
 export function BoitelBlocosModais({ valor, onChange, somenteLeitura, cenario, detalheCenario, liquidoFormatado,
-  realizado = null, onChangeRealizado, onIniciarRealizado, comparacoes }: {
+  realizado = null, onChangeRealizado, onIniciarRealizado, comparacoes, dataEntrada }: {
   valor: BoitelEdicao; onChange: (proximo: BoitelEdicao) => void; somenteLeitura?: boolean;
   /** Marca de projecao — UMA por cartao, no titulo. Ver `GrupoIndicadores`. */
   cenario?: CenarioBoitel;
@@ -1109,6 +1242,8 @@ export function BoitelBlocosModais({ valor, onChange, somenteLeitura, cenario, d
   onIniciarRealizado?: () => void | Promise<boolean | void>;
   /** Linhas de comparacao previsto x realizado, montadas por quem tem os dois. */
   comparacoes?: React.ReactNode;
+  /** `data_operacao` da OC — a entrada do lote, para os dias derivarem da data. */
+  dataEntrada?: string | null;
 }) {
   const [editando, setEditando] = useState<{ card: IdCard; modo: CenarioBoitel } | null>(null);
   const indicadores = useMemo(() => indicadoresDoBoitel(valor), [valor]);
@@ -1204,6 +1339,7 @@ export function BoitelBlocosModais({ valor, onChange, somenteLeitura, cenario, d
           somenteLeitura={somenteLeitura}
           modoRealizado={editando.modo === 'realizado'}
           projetado={editando.modo === 'realizado' ? valor : null}
+          dataEntrada={dataEntrada}
           onAplicar={editando.modo === 'realizado' ? (onChangeRealizado ?? onChange) : onChange}
           onFechar={() => setEditando(null)}
         />

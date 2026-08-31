@@ -78,12 +78,31 @@ export interface BoitelEdicao extends BoitelData {
   valorTotalAbate?: number;
   /** O acerto que o boitel informou — para a conferencia deixar de ser do momento. */
   acertoPapel?: number;
+  /* ⚠ MARCA DE EDICAO MANUAL DOS DIAS — 02G item 2. Nao e' dado do negocio: e' memoria de
+     que o operador digitou por cima da derivacao pela data. Sem ela, a tela nao saberia se
+     o numero na frente dele veio da conta ou da mao — e a ajuda mentiria numa das duas.
+     ⚠ NAO PERSISTE (fora do `MAPA_BOITEL`), e e' deliberado: ao reabrir, a derivacao pela
+     data volta a valer, que e' o comportamento certo depois que as datas ja estao fixas. */
+  diasEditadoManual?: boolean;
   /* ⚠ O TOTAL DAS DIARIAS COMO FATO — 02F. Na projecao a fonte e' a TARIFA
      (`custoDiaria`, R$/cab/dia) e o total deriva dela; no acerto e' o contrario, e
      derivar a tarifa de volta fabrica fantasma de centavos na conferencia (o mesmo erro
      que `valorTotalAbate` corrigiu). Nulo = o acerto ainda nao chegou, e o motor cai na
      tarifa como sempre fez. */
   valorTotalDiarias?: number;
+  /* ─── OS DOIS TOTAIS DA BALANCA — 02G item 1 ─────────────────────────────────
+     ⚠ O ULTIMO LUGAR ONDE O REALIZADO FALAVA POR DERIVACAO. O papel do frigorifico traz
+     estes dois numeros escritos, e a tela os reconstruia a partir de `gmd` e
+     `rendimento` — duas contas encadeadas para reproduzir algo que ja estava medido.
+     Medido no papel do Santa Clara: 2.251,67 @ em 109 cabecas dao 20,657522935779816
+     @/cab, uma dizima que NENHUMA quantidade de casas no `gmd` reconstitui de volta.
+     ⚠ SAO TOTAIS, nunca medias — o nome diz. A tela oferece o atalho [total | /cab] para
+     digitar do jeito que o papel estiver escrito, mas o que atravessa e' sempre o total;
+     guardar a media perderia a soma exata, que e' o que se veio buscar.
+     ⚠ Nulo = "o papel ainda nao chegou", e o motor volta a derivar como sempre fez. Na
+     projecao ficam nulos: la' `gmd` e `rendimento` sao o que se negocia. */
+  pesoVivoTotalAbate?: number;
+  arrobasTotaisAbate?: number;
 }
 
 /** As cabeças que SAÍRAM do boitel — o lote menos as mortes. */
@@ -126,9 +145,34 @@ export function derivadosBoitel(data: BoitelEdicao) {
   const { qtdCabecas: q, pesoInicial: pi, quebraViagem: qv, dias, gmd, rendimentoEntrada: re, rendimento: rs, modalidadeCusto: mc, custoDiaria: cd, custoArroba: ca, percentualParceria: pp, custoFrete: cf, custoOportunidade: co, custoSanidade: cs, outrosCustos: oc, precoVendaArroba: pva, despesasAbate: da } = data;
   const ple = pi * (1 - qv / 100);
   const ganho = gmd * dias;
-  const pf = pi + ganho;
   const aEF = pi / 30;
-  const aS = (pf * rs / 100) / 15;
+  /* ⚠ `sairam` SUBIU PARA CA — 02G. Ele era calculado logo abaixo; agora o peso e as
+     arrobas dependem dele, porque os dois fatos do papel sao TOTAIS do lote abatido e
+     viram numero por cabeca dividindo por quem foi para a balanca. */
+  const sairam = cabecasQueSairam(data);
+  /* ⚠ O FATO MANDA QUANDO EXISTE — 02G, o MESMO idioma do `cDT` logo abaixo, e pelo mesmo
+     motivo. `pesoVivoTotalAbate` e `arrobasTotaisAbate` sao o que esta escrito no papel do
+     frigorifico; `gmd` e `rendimento` continuam sendo a fonte na projecao e enquanto o
+     papel nao chega. UMA fonte por vez, e a preferencia declarada AQUI — nao espalhada
+     pelos consumidores.
+     ⚠ ESTAS QUATRO LINHAS ALCANCAM A TELA INTEIRA. Tudo que le peso ou arroba passa por
+     `pf`, `aS`, `aTS` ou `aP`: o faturamento (`fba`), o custo por arroba (`cPArr`), o GMC,
+     o painel longo, o comparativo previsto x realizado e a cascata do bolso. Nenhum deles
+     precisou saber que existe um fato — e' o que "num lugar so" quer dizer.
+     ⚠ SEM FATO AS CONTAS SAO AS DE ANTES, LINHA A LINHA: `pvTotal = pfDerivado x sairam`
+     e `aTS = aSDerivado x sairam` reproduzem exatamente o que estava escrito, e
+     `aP = aTS - aEF x q` e' a MESMA expressao de `aS x sairam - aEF x q`, so que apoiada
+     no total. Nada muda nas 10 vendas existentes, onde os dois campos sao nulos.
+     ⚠ `sairam > 0` GUARDA A DIVISAO: com o lote inteiro morto nao ha por cabeca, e o
+     derivado volta a valer em vez de um `Infinity` silencioso. */
+  const pfDerivado = pi + ganho;
+  const pvFato = sairam > 0 ? data.pesoVivoTotalAbate : undefined;
+  const pvTotal = pvFato ?? pfDerivado * sairam;
+  const pf = pvFato != null ? pvFato / sairam : pfDerivado;
+  const aSDerivado = (pf * rs / 100) / 15;
+  const aFato = sairam > 0 ? data.arrobasTotaisAbate : undefined;
+  const aTS = aFato ?? aSDerivado * sairam;
+  const aS = aFato != null ? aFato / sairam : aSDerivado;
   const aPcab = aS - aEF;
   /* ⚠ TERCEIRA DIVERGENCIA DELIBERADA contra o simulador antigo (as duas primeiras: o
      `cAb` no 01A, a diaria no 01B). ANIMAL MORTO NAO VIRA CARCACA: as arrobas de saida
@@ -140,9 +184,7 @@ export function derivadosBoitel(data: BoitelEdicao) {
      indicador de misturar as duas sem dizer.
      ⚠ COM ZERO MORTES OS TRES SAO IDENTICOS AO DE ANTES: `aS*q - aEF*q = (aS-aEF)*q`. A
      conferencia lado a lado com o simulador antigo continua valendo. */
-  const sairam = cabecasQueSairam(data);
-  const aP = aS * sairam - aEF * q;
-  const aTS = aS * sairam;
+  const aP = aTS - aEF * q;
   /* ⚠ GMC MEDE DA PORTEIRA AO GANCHO — DECISAO DE PRODUTO do Gabriel, 31/08, POR CIMA da
      formula herdada do simulador antigo. A base da ponta de entrada e' o peso de SAIDA DA
      FAZENDA (`pi`), e nao o pos-quebra (`ple`): a viagem esta' DENTRO do ciclo que o
@@ -155,7 +197,15 @@ export function derivadosBoitel(data: BoitelEdicao) {
      1,066 la'). Reportado; a convergencia e' decisao de quando aposentar o legado.
      ⚠ `gmc` E FOLHA: medido, nenhum outro derivado o consome. Mudar esta linha muda os
      DOIS consumidores (o painel longo e o campo do modal) e mais nada. */
-  const gmc = dias > 0 ? ((pf * rs / 100) - (pi * re / 100)) / dias : 0;
+  const gmc = dias > 0 ? ((aS * 15) - (pi * re / 100)) / dias : 0;
+  /* ⚠ OS DOIS ESPELHOS — 02G. No realizado `gmd` e `rendimento` viram EXIBICAO PURA: os
+     campos do papel deixaram de escrever por cima deles, e mostrar o valor guardado
+     mostraria a premissa da PROJECAO ao lado de um fato que a contradiz. Estes dois
+     dizem o que o papel implica, e sao os unicos lugares que os reconstituem.
+     ⚠ SEM FATO ELES DEVOLVEM O QUE FOI DIGITADO: `pf = pi + gmd x dias` faz
+     `(pf - pi) / dias` voltar a ser `gmd`, e `aTS x 15 / pvTotal` volta a ser `rs`. */
+  const gmdEfetivo = dias > 0 ? (pf - pi) / dias : 0;
+  const rcEfetivo = pvTotal > 0 ? (aTS * 15) / pvTotal * 100 : rs;
   /* ⚠ A INDENIZACAO SOMA AO FATURAMENTO. Estava so' no bloco de Comercializacao do 01B, e
      o painel mostrava o faturamento sem ela — dois numeros diferentes para a mesma coisa
      na mesma tela. Agora e' uma conta so'. */
@@ -295,7 +345,7 @@ export function derivadosBoitel(data: BoitelEdicao) {
     : 0;
   const saldoReceberBase = Math.round((fba - descontoDoAcerto + valorTotalAntecipadoCalc) * 100) / 100;
 
-  return { ple, ganho, pf, aEF, aS, aPcab, aP, aTS, sairam, gmc, fba, cAb, fLiq, cDT, cOp, coT, cPArr,
+  return { ple, ganho, pf, pvTotal, aEF, aS, aPcab, aP, aTS, sairam, gmc, gmdEfetivo, rcEfetivo, fba, cAb, fLiq, cDT, cOp, coT, cPArr,
     pParte, rProd, rLiq, rLCab, custoTotalBoitel, margemVenda,
     descontoDoAcerto, custosDoProdutor, cne,
     dAcertoDiarias, dAcertoSanidade, dAcertoOutros, dAcertoFrete, dAcertoAbate, dAcertoNotas,

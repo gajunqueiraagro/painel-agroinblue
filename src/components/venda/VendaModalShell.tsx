@@ -622,6 +622,10 @@ export function VendaModalShell({
                       onChangeRealizado={onAplicarRealizado}
                       onIniciarRealizado={onIniciarRealizado}
                       comparacoes={<BoitelComparacoes projetado={boitelData} realizado={boitelReal} />}
+                      /* ⚠ A ENTRADA DO LOTE NO BOITEL — 02G item 2. E' a `data_operacao`
+                          da OC: medido, `data_envio` do boitel esta' nula em 3 de 3
+                          registros. No papel vivo, 13/05 -> 25/08 = 104 dias. */
+                      dataEntrada={data}
                     />
                   )}
                 </div>
