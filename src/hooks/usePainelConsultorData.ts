@@ -868,6 +868,7 @@ export interface PainelConsultorDataResult {
   dreAntesTributosSMIndicador:          IndicadorFinanceiroShape | null;
   dreLucroLiquidoSMIndicador:           IndicadorFinanceiroShape | null;
   dreLucroLiquidoHaIndicador:           IndicadorFinanceiroShape | null;
+  dreLucroLiquidoHaSMIndicador:         IndicadorFinanceiroShape | null;
 
   dreVbpIndicador:                      IndicadorFinanceiroShape | null;
   dreMargemIndicador:                   IndicadorFinanceiroShape | null;
@@ -4401,6 +4402,20 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
             'Lucro líquido do mês ÷ área produtiva pecuária do mês',
             'Lucro líquido Jan→mês ÷ área produtiva pecuária média do período',
             lucroM),
+          /* ⚠ O IRMÃO SEM VARIAÇÃO DE MERCADO — B-35 item 3. O de cima divide o
+             `lucro`, que inclui a variação por preço; este divide `lucroSM`, que
+             a retira. Sem ele, o rodapé do demonstrativo SEM mercado exibia o
+             lucro/ha COM mercado ao lado de markups sem — um híbrido que não
+             descrevia nenhum dos dois.
+             ⚠ NASCE AQUI E NÃO NA TELA porque `buildPorHa` divide a soma do
+             fluxo pela MÉDIA da área: razão de agregados, nunca média de razões.
+             Refazer essa divisão num componente de apresentação criaria o
+             segundo lugar onde as duas contas podem divergir. */
+          dreLucroLiquidoHaSM: buildPorHa(lucroSM ?? nada12, 'LUCRO LÍQUIDO POR HECTARE (SEM VAR. MERCADO)',
+            'Lucro Líquido por hectare, sem variação de mercado',
+            'Lucro líquido sem variação por preço do mês ÷ área produtiva pecuária do mês',
+            'Lucro líquido sem variação por preço Jan→mês ÷ área produtiva pecuária média do período',
+            lucroSMM),
           dreVbp: buildInd(vbp ?? nada12, 'VALOR BRUTO DA PRODUÇÃO', 'Valor Bruto da Produção',
             per('Receita líquida mais variação por produção, menos reposição de bovinos'), vbpM),
           dreMargem: buildInd(margem ?? nada12, 'MARGEM DE CONTRIBUIÇÃO', 'Margem de Contribuição',
@@ -5264,6 +5279,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     dreAntesTributosSMIndicador: _finSoberano.dreAntesTributosSM,
     dreLucroLiquidoSMIndicador: _finSoberano.dreLucroLiquidoSM,
     dreLucroLiquidoHaIndicador: _finSoberano.dreLucroLiquidoHa,
+    dreLucroLiquidoHaSMIndicador: _finSoberano.dreLucroLiquidoHaSM,
     dreMargemIndicador: _finSoberano.dreMargem,
     dreResOperIndicador: _finSoberano.dreResOper,
 
@@ -5391,6 +5407,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       dreAntesTributosSMIndicador: _finSoberano.dreAntesTributosSM,
       dreLucroLiquidoSMIndicador: _finSoberano.dreLucroLiquidoSM,
       dreLucroLiquidoHaIndicador: _finSoberano.dreLucroLiquidoHa,
+    dreLucroLiquidoHaSMIndicador: _finSoberano.dreLucroLiquidoHaSM,
       dreMargemIndicador: _finSoberano.dreMargem,
       dreResOperIndicador: _finSoberano.dreResOper,
       // Step 2.2: dominio rebanho preservado (composicao depende de getCategoriasDetalhe,

@@ -247,6 +247,21 @@ type LinhaResumo = {
   subtitulo?: string;
   /** `undefined` = a linha existe no desenho e o indicador ainda nao. */
   emConstrucao?: boolean;
+  /**
+   * A linha PERTENCE à grade mas não pertence a ESTE demonstrativo: as três
+   * colunas mostram `n/a`.
+   *
+   * ⚠ É UM QUARTO ESTADO, e nenhum dos três que já existiam servia. `—` diria
+   * "não sei", e a Variação por preço é conhecida — é a mesma nos dois filtros.
+   * `0` diria "medi e deu zero", e na Santa Rita são R$ 834,8K. O valor real
+   * diria "some isto na coluna", e o subtotal logo abaixo não o inclui. O que
+   * ela é: existe, é conhecida, e está excluída por definição do demonstrativo
+   * sem variação de mercado — e `n/a` é a palavra que diz exatamente isso.
+   * ⚠ POR QUE NÃO SUMIR (o que se fazia antes): a linha some, a grade encurta e
+   * as duas abas deixam de ser comparáveis lado a lado. A numeração já era
+   * preservada com um buraco no 5; agora nem o buraco existe.
+   */
+  naoSeAplica?: boolean;
 };
 
 const LINHAS_GERAL: LinhaResumo[] = [
@@ -436,6 +451,13 @@ const BLOCOS_OPERACIONAL: Array<{ titulo: string; destino?: Assunto; linhas: Lin
    linha que troca de numero ao trocar de aba destruiria a comparacao. O buraco
    e' auto-explicativo: a linha que falta e' exatamente a que o nome da aba diz
    que falta. */
+/* ⚠ A PALAVRA, E NÃO UM SÍMBOLO: "n/a" se lê sem legenda e não se confunde com
+   `—` (ausente) nem com `0` (medido e nulo). O `title` diz por extenso o que a
+   sigla abrevia, para quem parar o cursor. */
+const NAO_SE_APLICA = (
+  <span className="text-muted-foreground" title="Não se aplica a este demonstrativo.">n/a</span>
+);
+
 const montaLinhasDre = (comMercado: boolean): LinhaResumo[] => [
   { rotulo: '1. (+) Faturamento',          chave: 'dre_faturamento',   bag: 'dre', detalhe: true },
   { rotulo: '2. (−) Deduções de receita',  chave: 'dre_deducoes',      bag: 'dre', saida: true },
@@ -443,10 +465,18 @@ const montaLinhasDre = (comMercado: boolean): LinhaResumo[] => [
 
   { rotulo: '3. (+/−) Variação por produção', chave: 'dre_variacao_producao', bag: 'dre', detalhe: true },
   { rotulo: '4. (−) Reposição de bovinos',  chave: 'dre_reposicao',     bag: 'dre', saida: true },
-  ...(comMercado
-    ? [{ rotulo: '5. (+/−) Variação por preço', chave: 'dre_variacao_preco', bag: 'dre' } as LinhaResumo]
-    : []),
-  { rotulo: comMercado ? '= VALOR BRUTO DA PRODUÇÃO (a preço de mercado)' : '= VALOR BRUTO DA PRODUÇÃO',
+  /* ⚠ SEMPRE PRESENTE — item 1 da spec. No demonstrativo SEM variação de
+     mercado ela vira `n/a`: o filtro muda os VALORES, nunca o esqueleto. Duas
+     grades com alturas diferentes não se comparam lado a lado, que é para o que
+     as duas abas existem. */
+  { rotulo: '5. (+/−) Variação por preço', chave: 'dre_variacao_preco', bag: 'dre',
+    naoSeAplica: !comMercado },
+  /* ⚠ O RÓTULO NÃO REPETE O FILTRO — item 2 da spec. A pílula do cabeçalho já
+     diz qual demonstrativo está na tela; "(a preço de mercado)" no rótulo era a
+     mesma informação cobrando uma segunda linha de largura, na coluna que já é a
+     mais apertada da grade. A CHAVE continua trocando: o que muda é o que se
+     lê, não como se chama. */
+  { rotulo: '= VALOR BRUTO DA PRODUÇÃO',
     chave: comMercado ? 'dre_vbp_mer' : 'dre_vbp', bag: 'dre', subtotal: true, espacoDepois: true },
 
   { rotulo: '6. (−) Custo variável',        chave: 'dre_custo_var',     bag: 'dre', saida: true },
@@ -927,7 +957,7 @@ const corDeValor = (l: LinhaResumo, v: number | null): string =>
   : v > 0               ? 'text-emerald-600 dark:text-emerald-400'
                         : 'text-red-600 dark:text-red-400';
 
-const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, leitura, mesAtual, colunas, onIr, realizadoPrimeiro, compacta, rotuloEstreito, corPorSinal, basePercentual, onDetalhe }: {
+const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, leitura, mesAtual, colunas, onIr, realizadoPrimeiro, compacta, rotuloEstreito, corPorSinal, basePercentual, rotuloPercentual, onDetalhe }: {
   /* DUAS formas de entrada, um componente so:
        `linhas` + `colunas` -> divide por CONTAGEM, sem titulo. E o que as
                                tabelas dos ASSUNTOS usam.
@@ -970,6 +1000,16 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
       somar a variacao por preco numa aba que nao a mostra poria no denominador
       algo que o numerador nao tem. */
   basePercentual?: string[];
+  /**
+   * Texto sob o rótulo das linhas com `percentual`. Default '% sobre VBP'.
+   *
+   * ⚠ ELE TEM DE DESCREVER `basePercentual`, E ERA MENTIRA — item 4 da spec. O
+   * texto era fixo em "% sobre VBP + preço" enquanto a base já trocava com o
+   * filtro (`dre_vbp_mer` com mercado, `dre_vbp` sem). No demonstrativo sem
+   * variação por preço o número saía dividido por VBP puro e o rótulo prometia
+   * uma parcela que não estava no denominador.
+   */
+  rotuloPercentual?: string;
   /** Abre o detalhe da linha marcada com `detalhe`. Sem a prop nenhum icone e
       emitido, e as cinco outras abas nem marcam o campo. */
   onDetalhe?: (l: LinhaResumo) => void;
@@ -1233,8 +1273,9 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
                  e nao ha como divergirem. */
               const celMeta = (
                 <td className={`text-right ${padDe(l.subtotal)} px-1.5 text-meta whitespace-nowrap${tipo}${gap}`}>
-                  {ind && metaV != null ? fmtValor(metaV, ind.formatoValor, ind.unidade) : '—'}
-                  {l.percentual && microPct(pctM)}
+                  {l.naoSeAplica ? NAO_SE_APLICA
+                    : ind && metaV != null ? fmtValor(metaV, ind.formatoValor, ind.unidade) : '—'}
+                  {l.percentual && !l.naoSeAplica && microPct(pctM)}
                 </td>
               );
               /* TRES regras de cor, e elas nao se misturam:
@@ -1249,8 +1290,9 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
                   : l.saida ? 'text-destructive'
                   : (l.subtotal && real != null && real < 0) ? 'text-destructive'
                   : 'text-foreground'}${tipo}${gap}`}>
-                  {ind && real != null ? fmtValor(real, ind.formatoValor, ind.unidade) : '—'}
-                  {l.percentual && microPct(pctR)}
+                  {l.naoSeAplica ? NAO_SE_APLICA
+                    : ind && real != null ? fmtValor(real, ind.formatoValor, ind.unidade) : '—'}
+                  {l.percentual && !l.naoSeAplica && microPct(pctR)}
                 </td>
               );
               return (
@@ -1286,7 +1328,7 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
                     )}
                     {l.percentual && (
                       <span className={'block text-[8px] leading-[10px] font-normal text-muted-foreground tabular-nums'} style={{ paddingLeft: 10 }}>
-                        % sobre VBP + preço
+                        {rotuloPercentual ?? '% sobre VBP'}
                       </span>
                     )}
                   </td>
@@ -1303,10 +1345,11 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
                       ⚠ Esta e a coluna Dif. A cor do VALOR (vermelho por
                       natureza da saida, em `celReal`) nao e tocada aqui. */}
                   <td className={`text-right px-1.5 ${padDe(l.subtotal)} whitespace-nowrap ${
-                    dif == null ? 'text-muted-foreground'
+                    l.naoSeAplica || dif == null ? 'text-muted-foreground'
                     : (l.saida ? dif < 0 : dif >= 0) ? 'text-emerald-600 dark:text-emerald-400'
                     : 'text-red-600 dark:text-red-400'}${tipo}${gap}`}>
-                    {dif == null ? '—' : `${dif >= 0 ? '+' : ''}${dif.toFixed(1)}%`}
+                    {l.naoSeAplica ? NAO_SE_APLICA
+                      : dif == null ? '—' : `${dif >= 0 ? '+' : ''}${dif.toFixed(1)}%`}
                     {/* Espacador: sem ele a celula Dif. ficaria mais baixa que as
                         vizinhas e o texto dela flutuaria no meio da linha. */}
                     {l.percentual && <span className={'block text-[8px] leading-[10px] font-normal text-muted-foreground tabular-nums'}>&nbsp;</span>}
@@ -1355,10 +1398,18 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
    variacao soma o valor — uma anula a outra. Sem isso o estoque parado
    penalizaria o markup indevidamente.
    ⚠ Denominador zero ou ausente -> TRAVESSAO, nunca 0%. */
-const FaixaDerivadosDre = ({ dre, leitura, mesAtual }: {
+const FaixaDerivadosDre = ({ dre, leitura, mesAtual, comMercado }: {
   dre: IndicadorAtividade[];
   leitura: Leitura;
   mesAtual: number;
+  /**
+   * ⚠ "MUDA FILTRO, MUDA TODOS OS VALORES" — a regra, e a razão desta prop.
+   * Sem ela os três derivados eram um HÍBRIDO que não descrevia nenhum dos dois
+   * demonstrativos: os markups liam `dre_res_oper` (SEM mercado) cravado no
+   * código, enquanto o lucro/ha lia `dre_lucro_ha`, que o PC-100 constrói a
+   * partir do lucro COM mercado. Trocar de aba não mexia em nenhum dos três.
+   */
+  comMercado: boolean;
 }) => {
   const ler = (chave: string): number | null => {
     const i = dre.find(x => x.chave === chave);
@@ -1372,30 +1423,42 @@ const FaixaDerivadosDre = ({ dre, leitura, mesAtual }: {
   const razao = (num: number | null, den: number | null): string =>
     (num == null || den == null || den === 0) ? '—' : `${((num / den) * 100).toFixed(1)}%`;
 
-  const resOper = ler('dre_res_oper');
+  /* Cada chave acompanha o filtro. `dre_res_oper_mer` e `dre_lucro_ha_sm` já
+     existem no PC-100 — nenhuma conta nova acontece aqui. */
+  const resOper = ler(comMercado ? 'dre_res_oper_mer' : 'dre_res_oper');
   const custeio = soma('dre_custo_var', 'dre_custo_fixo');
   const desemb  = soma('dre_custo_var', 'dre_custo_fixo', 'dre_investimento', 'dre_reposicao');
   /* O lucro/ha vem PRONTO do `dreLucroLiquidoHa` (15cca72f), que e' construido
      por `buildPorHa`: soma do fluxo dividida pela MEDIA da area pecuaria. Nao se
      divide aqui — `buildInd` somaria razoes, e razao de mes com razao de mes
      nao da razao de periodo. */
-  const lucroHa = ler('dre_lucro_ha');
+  const lucroHa = ler(comMercado ? 'dre_lucro_ha' : 'dre_lucro_ha_sm');
 
-  /* EMPILHADOS, um por linha, e nao lado a lado: o rotulo do markup e longo e
-     os tres em fileira empurravam o ultimo para fora do olhar. Alinhados a
-     esquerda, o olho desce a coluna de valores. */
-  const item = (rot: string, val: string) => (
-    <div key={rot} className="flex items-baseline gap-2">
-      <span className="text-muted-foreground w-[112px] shrink-0">{rot}</span>
-      <span className="tabular-nums font-medium text-foreground">{val}</span>
-    </div>
+  /* ⚠ LINHAS DA GRADE, e não um bloco solto à esquerda — item 3 da spec. Eles
+     derivam das mesmas linhas da tabela e pertencem à mesma leitura; fora dela,
+     ficavam desalinhados das colunas e o olho tinha de reaprender onde procurar
+     o número. A tabela é a mesma: mesma largura de rótulo, mesmo alinhamento à
+     direita, mesmo `tabular-nums`.
+     ⚠ SÓ A COLUNA REALIZADO TEM VALOR. Meta e Dif. ficam em traço porque não há
+     meta destes três no PC-100 — e traço aqui é o certo: é ausência de verdade,
+     não regra de negócio. Inventar uma meta dividindo agregados de meta seria o
+     segundo lugar onde a razão pode divergir. */
+  const linha = (rot: string, val: string) => (
+    <tr key={rot} className="odd:bg-muted/30 even:bg-card">
+      <td className="px-1.5 py-0.5 text-muted-foreground">{rot}</td>
+      <td className="px-1.5 py-0.5 text-right font-medium tabular-nums text-foreground whitespace-nowrap">{val}</td>
+      <td className="px-1.5 py-0.5 text-right text-muted-foreground whitespace-nowrap">—</td>
+      <td className="px-1.5 py-0.5 text-right text-muted-foreground whitespace-nowrap">—</td>
+    </tr>
   );
   return (
-    <div className="flex flex-col px-1.5 pt-1 text-[9px] leading-[11px]">
-      {item('Lucro por hectare', lucroHa != null ? fmtR(lucroHa) : '—')}
-      {item('Markup - custeio', razao(resOper, custeio))}
-      {item('Markup - desembolso', razao(resOper, desemb))}
-    </div>
+    <table className="w-full border-collapse text-[9px] leading-[11px]">
+      <tbody>
+        {linha('Lucro por hectare', lucroHa != null ? fmtR(lucroHa) : '—')}
+        {linha('Markup - custeio', razao(resOper, custeio))}
+        {linha('Markup - desembolso', razao(resOper, desemb))}
+      </tbody>
+    </table>
   );
 };
 
@@ -1466,7 +1529,22 @@ const TabelaMensalDre = ({ linhas, dre, modo, mesAtual, onDetalhe }: {
                 </span>
               )}
             </td>
-            {MESES.map((rot, i) => {
+            {/* ⚠ NA MENSAL A LINHA QUE NÃO SE APLICA OCUPA AS DOZE DE UMA VEZ —
+                B-35 item 1. Doze `n/a` repetidos seriam o ruído que a doutrina
+                desta tabela evita (ver o comentário das colunas abaixo), e doze
+                vazios diriam "sem dado", que é justamente a leitura errada: o
+                dado existe, é o mesmo do outro filtro, e não pertence a este
+                demonstrativo. Uma célula só diz isso por extenso.
+                ⚠ E ELA NÃO PODE MOSTRAR O VALOR: `dre_variacao_preco` existe e
+                tem série, então sem este ramo a Mensal do SEM mercado imprimiria
+                os doze meses da variação por preço numa demonstração que a
+                exclui — e os subtotais abaixo não a somam. */}
+            {l.naoSeAplica ? (
+              <td colSpan={12} className={`px-1.5 py-0 text-right text-muted-foreground whitespace-nowrap ${tipo}${gap}`}
+                  title="Não se aplica a este demonstrativo.">
+                n/a — não se aplica a este demonstrativo
+              </td>
+            ) : MESES.map((rot, i) => {
               /* COLUNA FUTURA FICA VAZIA MESMO COM LANCAMENTO GRAVADO — o
                  recorte do filtro manda, nao a existencia do dado.
                  ⚠ NAO "corrigir" isto achando que esconde informacao. Nao e
@@ -2439,6 +2517,9 @@ export function ModalAtividade({
             <TabelaResumo
               linhas={assunto === 'dre' ? LINHAS_DRE : LINHAS_DRE_SM}
               basePercentual={assunto === 'dre' ? ['dre_vbp_mer'] : ['dre_vbp']}
+              /* O rótulo acompanha a base, sempre: `dre_vbp_mer` é VBP mais a
+                 variação por preço; `dre_vbp` é o VBP puro. */
+              rotuloPercentual={assunto === 'dre' ? '% sobre VBP + preço' : '% sobre VBP'}
               realizadoPrimeiro
               compacta
               rotuloEstreito
@@ -2457,7 +2538,8 @@ export function ModalAtividade({
                 razoes de um periodo unico embaixo de doze colunas convidaria o
                 leitor a casar com a coluna errada — a mesma razao pela qual o
                 percentual nao existe la. */}
-            <FaixaDerivadosDre dre={indicadoresDre ?? []} leitura="periodo" mesAtual={mesAtual} />
+            <FaixaDerivadosDre dre={indicadoresDre ?? []} leitura="periodo" mesAtual={mesAtual}
+              comMercado={assunto === 'dre'} />
             </>
             )
           ) : assunto === 'operacional' ? (
