@@ -2,8 +2,8 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
-import { Upload } from 'lucide-react';
 import { PainelExtratoMes } from '@/components/conciliacao/PainelExtratoMes';
+import { ImportarBancoInline } from '@/components/conciliacao/ImportarBancoInline';
 import { ExtratoGerencialTab } from '@/components/financeiro-v2/ExtratoGerencialTab';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Button } from '@/components/ui/button';
@@ -26,7 +26,6 @@ import {
 } from '@/lib/financeiro/conciliacaoCalc';
 import { detectarDuplicatasCrossOrigin, montarSituacaoFechamento, derivarPendenciasGerenciais, derivarDetalhePendencias } from '@/lib/financeiro/fechamentoPendencias';
 import { buildUnifiedSaldos, type ContaSaldoRef, type SaldoV2SourceRow, type SaldoLegacySourceRow } from '@/lib/financeiro/saldosBancarios';
-import { ExtratoImportPreview } from '@/components/financeiro-v2/ExtratoImportPreview';
 import { ExtratoListaTab } from '@/components/financeiro-v2/ExtratoListaTab';
 // PR-MOS-2 — LotesExcelTab (Referências Operacionais antigas) desacoplado da aba Enriquecer (legado).
 import { MesaEnriquecimentoTab } from '@/v2/components/mesa/enriquecimento/MesaEnriquecimentoTab';
@@ -354,7 +353,11 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   const [lancSort, setLancSort]               = useState<{col:'data'|'descricao'|'fornecedor'|'valor';dir:'asc'|'desc'}>({col:'data',dir:'asc'});
 
   /* Fase 1B: import OFX/CSV + visualização do extrato importado */
-  const [showImportExtrato, setShowImportExtrato] = useState(false);
+  /* ⚠ REMONTA O PAINEL APOS GRAVAR — B-24. `PainelExtratoMes` carrega o mes no
+     mount; sem um sinal, a lista continuaria mostrando o extrato de antes da
+     importacao que o operador acabou de confirmar. A `key` e' o gesto mais
+     simples que existe para isso e nao exige o painel expor um `recarregar`. */
+  const [refreshExtrato, setRefreshExtrato] = useState(0);
   const [showPendencias, setShowPendencias] = useState(false);
   // PR-MOS-1 — 3 abas oficiais: Importar Banco · Enriquecer · Conciliação (só layout/roteamento).
   /* ⚠ QUATRO ABAS — FIN-CONCIL-INTEGRAR-01. "Extrato Gerencial" entrou entre
@@ -795,13 +798,14 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
             </span>
             {meta.sub && <span className="text-[10px] text-muted-foreground">{meta.sub}</span>}
             <div className="flex-1" />
-            {/* Importar é responsabilidade da aba Importar Banco (a casa de OFX/CSV/PDF). */}
-            {vistaExtrato === 'importar' && (
-              <Button size="sm" variant="outline" className="h-6 text-[10px] gap-1 px-2.5"
-                onClick={() => setShowImportExtrato(true)}>
-                ⬆ Importar Extrato
-              </Button>
-            )}
+            {/* ⚠ O BOTAO "⬆ Importar Extrato" DO CABECALHO SAIU — B-24. Ele era a
+                outra porta para o modal antigo, e era por ela que o fluxo legado
+                voltava a aparecer depois do clone. O gesto de importar mora na
+                aba, inteiro: escolher a conta, escolher o arquivo, conferir a
+                previa ali e confirmar. Duas portas para o mesmo ato, uma delas
+                para o miolo velho, e' como o defeito reabriria sozinho.
+                ⚠ O MODAL SEGUE MONTADO no fim deste arquivo e vivo nas telas
+                velhas — nada morre antes da homologacao da rodada 2. */}
             {onNavigateToLancamentos && (
               <Button size="sm" variant="outline" className="h-6 text-[10px] gap-1 px-2.5"
                 onClick={() => onNavigateToLancamentos(ano, parseInt(selectedMes))}>
@@ -862,37 +866,22 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
             le' o arquivo no navegador e mostra a previa antes de gravar. */}
         {!loading && selectedCard && vistaExtrato === 'importar' && (
           <div className="space-y-2.5 md:flex-1 md:min-h-0 md:overflow-y-auto">
-            <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5">
-              <div className="w-[190px]">
-                <Select value={selectedConta} onValueChange={setSelectedConta}>
-                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Conta" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__all__" className="text-xs">Todas as contas</SelectItem>
-                    {contas.map(c => (
-                      <SelectItem key={c.id} value={c.id} className="text-xs">{getContaLabel(c)}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {/* ⚠ SEM `variant` — como no original. Ele aparece verde la porque
-                  o PRIMARY do tema do Financas e' verde; cravar a cor aqui seria
-                  inventar, e a regra da casa e' cor da regua do tema, nunca cor
-                  cravada. Se o verde for pedido de identidade e nao consequencia
-                  do tema, e' uma classe — e a pergunta esta no relatorio. */}
-              <Button type="button" size="sm" className="h-8 gap-1.5 text-xs"
-                disabled={selectedConta === '__all__'}
-                title={selectedConta === '__all__' ? 'Escolha a conta primeiro' : undefined}
-                onClick={() => setShowImportExtrato(true)}>
-                <Upload className="h-3.5 w-3.5" />
-                Escolher arquivo OFX
-              </Button>
-              <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground"
-                title="O arquivo é lido aqui no navegador e não sai dele — o que vai para o banco de dados são os movimentos. Antes de gravar, você confere linha a linha o que é novo e o que já foi importado.">
-                O arquivo é lido no navegador; você confere antes de gravar.
-              </span>
-            </div>
+            {/* ⚠ O FLUXO E O DO ORIGINAL, e nao so' a casca — correcao do B-24. O
+                botao abre um `input file` ali mesmo, o arquivo e' lido no
+                navegador e a previa nasce NESTA aba. O modal antigo nao e' mais
+                chamado daqui; ele segue vivo nas telas velhas ate a rodada 2.
+                ⚠ SEM `variant` no botao, como no original: ele aparece verde la
+                porque o PRIMARY do tema do Financas e' verde. Cravar a cor aqui
+                seria inventar — a regra da casa e' cor da regua do tema. */}
+            <ImportarBancoInline
+              contas={contas.map(c => ({ id: c.id, label: getContaLabel(c) }))}
+              contaId={selectedConta !== '__all__' ? selectedConta : ''}
+              onContaChange={(id) => setSelectedConta(id || '__all__')}
+              onImportado={() => { setRefreshExtrato(n => n + 1); queryClient.invalidateQueries({ queryKey: ['extrato-bancario-v2'] }); }}
+            />
 
             <PainelExtratoMes
+              key={refreshExtrato}
               clienteId={clienteAtual?.id ?? null}
               contaId={selectedConta !== '__all__' ? selectedConta : null}
               ano={Number(ano)} mes={Number(selectedMes)}
@@ -1410,12 +1399,13 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
         </DialogContent>
       </Dialog>
 
-      <ExtratoImportPreview
-        open={showImportExtrato}
-        onClose={() => setShowImportExtrato(false)}
-        contaBancariaIdInicial={selectedConta !== '__all__' ? selectedConta : undefined}
-        onImported={() => queryClient.invalidateQueries({ queryKey: ['extrato-bancario-v2'] })}
-      />
+      {/* ⚠ O `ExtratoImportPreview` SAIU DAQUI — B-24. Com a unica porta que o
+          abria removida do cabecalho, ele ficaria montado com `open` sempre
+          falso: codigo morto disfarcado de funcionalidade, que e' o que o
+          `BoitelPainelResultado` ja custou uma vez. O componente CONTINUA VIVO —
+          `AuditoriaBancariaSoberana` o monta e o usa —, e o MOTOR dele
+          (`useImportacaoExtrato`) e' exatamente o que a previa inline desta aba
+          passou a consumir. Nada foi perdido; mudou quem apresenta. */}
     </div>
   );
 }
