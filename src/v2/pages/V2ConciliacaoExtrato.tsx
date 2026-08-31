@@ -29,12 +29,11 @@ import { EstacaoConciliar } from '@/components/conciliacao/EstacaoConciliar';
  * caminho velho no mesmo PR que estreia o novo tira o retorno de quem
  * homologa.
  *
- * ⚠ O QUE AINDA NÃO ESTÁ AQUI, e por quê: os três baldes de SUGESTÃO (match
- * direto, provável, ambíguo) e o painel de candidatos da estação dependem do
- * trio do motor (`v_extrato_conciliacao` + `fn_candidatos_conciliacao` +
- * `fn_sugestoes_extrato`), que está com o arquiteto. Eles aparecem como
- * AUSENTES — não como zero: "0 prováveis" afirmaria que o motor olhou e não
- * achou, quando ele ainda não olhou.
+ * ⚠ O TRIO DO MOTOR ESTÁ APLICADO desde o B-21, e os três baldes de SUGESTÃO
+ * (match direto, provável, ambíguo) saem dele — sob demanda, porque custam ~91 ms
+ * por movimento. Enquanto o operador não pede, aparecem como AUSENTES e não como
+ * zero: "0 prováveis" afirmaria que o motor olhou e não achou, quando ele ainda
+ * não olhou.
  */
 export default function V2ConciliacaoExtrato({ abaImportar, abaGerencial }: {
   /* ⚠ AS DUAS OUTRAS ABAS VEM PRONTAS DE FORA — adendo do B-20. A regra e'
@@ -397,12 +396,12 @@ function Chip({ rotulo, n, cor, ativo, onClick }: {
 
 function SituacaoBadge({ situacao }: { situacao: SituacaoMovimento }) {
   if (situacao === 'conciliado') {
-    return <span className="rounded bg-success/15 px-1 py-0 text-[9px] font-semibold uppercase text-success">conciliado</span>;
+    return <span className="rounded bg-success/15 px-1 py-0 text-[10px] font-semibold uppercase text-success">conciliado</span>;
   }
   if (situacao === 'parcial') {
-    return <span className="rounded bg-primary/10 px-1 py-0 text-[9px] font-semibold uppercase text-primary">parcial</span>;
+    return <span className="rounded bg-primary/10 px-1 py-0 text-[10px] font-semibold uppercase text-primary">parcial</span>;
   }
-  return <span className="rounded bg-muted px-1 py-0 text-[9px] font-semibold uppercase text-muted-foreground">em aberto</span>;
+  return <span className="rounded bg-muted px-1 py-0 text-[10px] font-semibold uppercase text-muted-foreground">em aberto</span>;
 }
 
 function Th({ children, className }: { children?: React.ReactNode; className?: string }) {

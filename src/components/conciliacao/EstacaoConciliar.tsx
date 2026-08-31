@@ -1,11 +1,17 @@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Loader2, Unlink } from 'lucide-react';
-import { useState } from 'react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Loader2, Unlink, Link2 } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
+import { useCliente } from '@/contexts/ClienteContext';
 import { formatMoeda } from '@/lib/calculos/formatters';
-import { useVinculosDoMovimento, TOL, type MovimentoConciliacao } from '@/hooks/useConciliacaoDoMes';
+import {
+  useVinculosDoMovimento, useCandidatosDoMovimento, vincularGrupo, TOL,
+  type MovimentoConciliacao, type CandidatoConciliacao,
+} from '@/hooks/useConciliacaoDoMes';
 
 /**
  * EstacaoConciliar — a estação "Conciliar movimento do extrato", rodada 1.
@@ -16,16 +22,27 @@ import { useVinculosDoMovimento, TOL, type MovimentoConciliacao } from '@/hooks/
  * (Descrição · Favorecido · Data · Valor · Aplicado), a soma ao vivo contra o
  * valor do movimento, e o desfazer por vínculo.
  *
- * ⚠ O PAINEL DE CANDIDATOS NÃO NASCEU AINDA, e a razão é medida: ele depende de
- * `fn_candidatos_conciliacao` (Δ R$, Δ dias, score, pré-marca, ambiguidade),
- * que ainda não existe no Proto — o trio do motor está com o arquiteto.
- * Inventar um score no front seria exatamente o que a doutrina do original
- * proíbe: o contador e a lista têm de sair do MESMO campo, e escrever a régua
- * num segundo lugar é divergência por manutenção manual.
+ * ⚠ O PAINEL DE CANDIDATOS ENTROU — FIN-CONCIL-ESTACAO-CANDIDATOS-01. Δ R$, Δ
+ * dias, score, pré-marca e ambiguidade saem do motor do trio, que está aplicado
+ * no Proto desde o B-21; nada disso é calculado aqui. É a doutrina do original:
+ * o contador e a lista saem do MESMO campo, e escrever a régua num segundo
+ * lugar é divergência por manutenção manual.
  *
- * ⚠ A SOMA AO VIVO JÁ VALE PARA O QUE EXISTE: com os vínculos na tela, o
- * operador vê quanto do movimento está coberto e quanto falta — que é a metade
- * da pergunta que a estação responde. A outra metade chega com o motor.
+ * ⚠ O QUE NÃO VEIO DO ORIGINAL, e é escolha declarada: ajustar o previsto ao
+ * valor do banco (o `MoneyInput` da ADR-0036 D2 deles), forma de pagamento
+ * sugerida, criar o lançamento da linha e criar o par de transferência. Cada uma
+ * é uma feature com ADR própria, e nenhuma é "listar candidatos e vincular".
+ *
+ * ⚠ A GUARDA DE SOBRE-APLICAÇÃO É DAQUI, E É PALIATIVA. No original quem recusa
+ * aplicar mais do que o movimento comporta é o BANCO (`fn_tg_conciliacao_coerente`),
+ * e por isso o front de lá não checa nada. Medido no Proto: nem
+ * `fn_vincular_grupo_conciliacao` nem `fn_vincular_extrato_lancamento` mencionam
+ * sobre-aplicação, e os quatro gatilhos de `conciliacao_bancaria_itens` são
+ * auditoria, mês fechado, promoção e snapshot — nenhum equivalente. Portar o
+ * front verbatim daria uma estação que sobre-aplica em silêncio. Então o botão
+ * se recusa a oferecer o que estouraria, com o motivo escrito ao lado. É freio
+ * de tela, não invariante: a guarda de verdade é migration
+ * (CONCIL-SOBRE-APLICACAO-01) e continua pendente.
  */
 interface Props {
   movimento: MovimentoConciliacao;
@@ -34,8 +51,17 @@ interface Props {
 }
 
 export function EstacaoConciliar({ movimento, aoFechar, aoMudar }: Props) {
+  const { clienteAtual } = useCliente();
   const { vinculos, loading, recarregar } = useVinculosDoMovimento(movimento.id);
+  const { candidatos, carregando: carregandoCand, recarregar: recarregarCand } =
+    useCandidatosDoMovimento(clienteAtual?.id ?? null, movimento.id);
   const [desfazendo, setDesfazendo] = useState<string | null>(null);
+  const [vinculando, setVinculando] = useState(false);
+  /* ⚠ MARCADO É UM MAPA id → VALOR A APLICAR, não um conjunto de ids: dois
+     candidatos podem entrar no mesmo movimento com valores diferentes, e é o
+     valor que vai ao banco. O default de cada um é o SALDO do lançamento —
+     nunca o valor cheio, que já pode estar parcialmente conciliado noutro. */
+  const [marcados, setMarcados] = useState<Map<string, number>>(new Map());
 
   const somaAplicada = vinculos.reduce((s, v) => s + v.valorAplicado, 0);
   const alvo = Math.abs(movimento.valor);
@@ -43,6 +69,47 @@ export function EstacaoConciliar({ movimento, aoFechar, aoMudar }: Props) {
   /* ⚠ "fecha" / "passa" / "falta" — os três estados do original, e a tolerância
      é a mesma que o banco usa. A tela antecipa a recusa; quem recusa é o banco. */
   const estado = Math.abs(resta) <= TOL ? 'fecha' : resta < 0 ? 'passa' : 'falta';
+
+  const somaMarcada = useMemo(
+    () => Array.from(marcados.values()).reduce((s, v) => s + v, 0), [marcados],
+  );
+  /* ⚠ O QUE SOBRARIA DEPOIS DE GRAVAR — a conta que decide o botão. Negativo
+     significa aplicar mais do que o movimento comporta. */
+  const restaDepois = resta - somaMarcada;
+  /* ⚠ UMA FRASE, TRÊS USOS: `disabled`, `title` e a dica ao lado saem daqui.
+     Botão desabilitado sempre diz por quê, e o motivo tem uma fonte só — dois
+     lugares divergiriam no primeiro ajuste. */
+  const impedimento: string | null =
+    marcados.size === 0 ? 'Marque ao menos um lançamento.'
+    : restaDepois < -TOL
+      ? `A seleção passa ${formatMoeda(Math.abs(restaDepois))} do que falta neste movimento.`
+      : null;
+
+  const alternar = (c: CandidatoConciliacao) => {
+    setMarcados(prev => {
+      const proximo = new Map(prev);
+      if (proximo.has(c.id)) proximo.delete(c.id);
+      else proximo.set(c.id, c.saldo);
+      return proximo;
+    });
+  };
+
+  const vincular = async () => {
+    if (impedimento) return;
+    setVinculando(true);
+    try {
+      const pares = Array.from(marcados, ([lancamentoId, valor]) => ({ lancamentoId, valor }));
+      const { ok, erro } = await vincularGrupo(movimento.id, pares, 'vinculado_na_estacao');
+      if (!ok) { toast.error(erro ?? 'O banco recusou o vínculo.'); return; }
+      toast.success(`${pares.length} vínculo${pares.length === 1 ? '' : 's'} criado${pares.length === 1 ? '' : 's'}.`);
+      setMarcados(new Map());
+      await recarregar();
+      await recarregarCand();
+      await aoMudar();
+    } finally {
+      setVinculando(false);
+    }
+  };
 
   const desfazer = async (vinculoId: string) => {
     setDesfazendo(vinculoId);
@@ -159,19 +226,130 @@ export function EstacaoConciliar({ movimento, aoFechar, aoMudar }: Props) {
             </span>
           </div>
 
-          {/* ⚠ A AUSÊNCIA DECLARADA, e não uma área vazia: quem abre a estação
-              esperando escolher candidatos precisa saber por que não há lista —
-              senão conclui que a tela quebrou. */}
-          <div className="mt-3 rounded-md border border-dashed px-3 py-2 text-[10px] leading-snug text-muted-foreground">
-            <b className="text-foreground">Candidatos ainda não disponíveis.</b> A lista com Δ R$, Δ dias,
-            multi-seleção e “Vincular (n)” sai do motor de sugestões
-            (<span className="font-mono">fn_candidatos_conciliacao</span>), que ainda não existe neste banco.
-            Enquanto ele não entra, esta estação mostra e desfaz o que já está vinculado.
-          </div>
+          {/* ─── LANÇAMENTOS CANDIDATOS ──────────────────────────────────────
+              ⚠ SÓ APARECE ENQUANTO HÁ O QUE COBRIR. Com o movimento fechado não
+              há candidato a oferecer, e a estação volta a ser o que era: mostrar
+              e desfazer. Oferecer vínculo sobre um movimento coberto seria
+              oferecer o que o próprio saldo recusa. */}
+          {estado !== 'fecha' && (
+            <div className="mt-3">
+              <div className="mb-1 flex items-baseline justify-between">
+                <span className="text-[11px] font-medium text-foreground">Lançamentos candidatos</span>
+                <span className="text-[10px] text-muted-foreground">
+                  {candidatos == null ? '—' : `${candidatos.length} encontrado${candidatos.length === 1 ? '' : 's'}`}
+                </span>
+              </div>
+
+              {carregandoCand ? (
+                <p className="py-6 text-center text-[11px] text-muted-foreground">Consultando o motor…</p>
+              ) : candidatos == null ? (
+                /* ⚠ NULO É "NÃO CONSEGUI PERGUNTAR", e a tela diz isso em vez de
+                   mostrar lista vazia — que afirmaria que não há candidato. */
+                <p className="rounded-md border border-dashed py-6 text-center text-[11px] text-muted-foreground">
+                  O motor de candidatos não respondeu. A lista de vínculos acima continua válida.
+                </p>
+              ) : candidatos.length === 0 ? (
+                <p className="rounded-md border border-dashed py-6 text-center text-[11px] text-muted-foreground">
+                  Nenhum lançamento candidato — nada em aberto nesta conta com valor e data compatíveis.
+                </p>
+              ) : (
+                <table className="w-full border-collapse text-[11px]">
+                  <thead>
+                    <tr className="border-b text-[9px] uppercase tracking-wide text-muted-foreground">
+                      <th className="px-2 py-1"> </th>
+                      <th className="px-2 py-1 text-left font-semibold">Descrição</th>
+                      <th className="px-2 py-1 text-left font-semibold">Favorecido</th>
+                      <th className="px-2 py-1 text-left font-semibold">Data</th>
+                      <th className="px-2 py-1 text-right font-semibold">Valor</th>
+                      <th className="px-2 py-1 text-right font-semibold">Δ R$</th>
+                      <th className="px-2 py-1 text-right font-semibold">Δ dias</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {candidatos.map(c => {
+                      const marcado = marcados.has(c.id);
+                      return (
+                        <tr key={c.id} className={cn('border-b border-border/60',
+                          marcado && 'bg-primary/5',
+                          /* já coberto por inteiro: auditável, não acionável */
+                          c.indisponivel && 'opacity-50')}>
+                          <td className="px-2 py-1 align-middle">
+                            <Checkbox className="h-3 w-3" checked={marcado} disabled={c.indisponivel}
+                              onCheckedChange={() => alternar(c)}
+                              aria-label="Selecionar lançamento"
+                              /* ⚠ A RAZÃO DA MARCA, sempre — pré-marca e cinza
+                                 explicam-se, senão viram arbitrariedade. */
+                              title={c.indisponivel
+                                ? (c.motivoIndisponivel ?? 'Já conciliado por inteiro.')
+                                : c.preMarcado
+                                  ? `Pré-marcado pelo motor (score ${c.score ?? '—'}): valor e data compatíveis.`
+                                  : undefined} />
+                          </td>
+                          <td className="max-w-0 truncate px-2 py-1" title={c.descricao ?? ''}>
+                            {c.descricao ?? '—'}
+                            {c.ambiguo && (
+                              <span className="ml-1 rounded bg-amber-500/15 px-1 py-0 text-[9px] font-semibold uppercase text-amber-700 dark:text-amber-400"
+                                title="Há outro candidato tecnicamente igual a este — o motor não escolhe por você.">
+                                ambíguo
+                              </span>
+                            )}
+                          </td>
+                          <td className="max-w-0 truncate px-2 py-1 text-muted-foreground" title={c.favorecido ?? ''}>
+                            {c.favorecido ?? '—'}
+                          </td>
+                          <td className="whitespace-nowrap px-2 py-1 tabular-nums text-muted-foreground">
+                            {c.dataReferencia ? c.dataReferencia.split('-').reverse().join('/') : '—'}
+                          </td>
+                          <td className="whitespace-nowrap px-2 py-1 text-right tabular-nums">
+                            {formatMoeda(c.valor)}
+                            {/* ⚠ SALDO SÓ QUANDO DIFERE DO VALOR: é o que de fato
+                                entra no vínculo quando o lançamento já tem parte
+                                conciliada noutro movimento. */}
+                            {Math.abs(c.saldo - Math.abs(c.valor)) > TOL && (
+                              <span className="ml-1 text-[9px] text-muted-foreground"
+                                title="Saldo livre do lançamento — o que ainda pode ser aplicado.">
+                                livre {formatMoeda(c.saldo)}
+                              </span>
+                            )}
+                          </td>
+                          <td className="whitespace-nowrap px-2 py-1 text-right tabular-nums text-muted-foreground">
+                            {Math.abs(c.deltaValor) <= TOL ? 'exato' : formatMoeda(c.deltaValor)}
+                          </td>
+                          <td className="whitespace-nowrap px-2 py-1 text-right tabular-nums text-muted-foreground">
+                            {c.deltaDias == null ? '—' : c.deltaDias}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
         </div>
 
-        <DialogFooter className="shrink-0 border-t px-4 py-2.5">
-          <Button variant="outline" size="sm" onClick={aoFechar}>Fechar</Button>
+        {/* ⚠ O BOTÃO DIZ QUANTOS VAI GRAVAR E, QUANDO NÃO PODE, POR QUÊ — a regra
+            do botão que explica. `impedimento` é fonte única de `disabled`,
+            `title` e da frase ao lado; três lugares divergiriam. */}
+        <DialogFooter className="shrink-0 items-center gap-2 border-t px-4 py-2.5 sm:justify-between">
+          <span className="text-[10px] leading-snug text-muted-foreground">
+            {marcados.size > 0 && !impedimento
+              ? `Vai aplicar ${formatMoeda(somaMarcada)} — ${Math.abs(restaDepois) <= TOL
+                  ? 'fecha o movimento' : `restam ${formatMoeda(restaDepois)}`}.`
+              : (impedimento ?? '')}
+          </span>
+          <span className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={aoFechar}>Fechar</Button>
+            {estado !== 'fecha' && (
+              <Button type="button" size="sm" className="gap-1.5"
+                disabled={impedimento !== null || vinculando}
+                title={impedimento ?? undefined}
+                onClick={() => { void vincular(); }}>
+                {vinculando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Link2 className="h-3.5 w-3.5" />}
+                Vincular ({marcados.size})
+              </Button>
+            )}
+          </span>
         </DialogFooter>
       </DialogContent>
     </Dialog>

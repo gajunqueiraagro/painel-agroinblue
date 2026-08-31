@@ -36,6 +36,35 @@ export interface MovimentoConciliacao {
   situacao: SituacaoMovimento;
 }
 
+/**
+ * Um candidato a vínculo, como `fn_candidatos_conciliacao` devolve.
+ *
+ * ⚠ OS NÚMEROS CHEGAM COMO `text` DA RPC — assinatura conferida em `pg_proc`:
+ * `valor`, `ja_conciliado`, `saldo` e `delta_valor` são text, não numeric. A
+ * função os serializa assim de propósito, para não perder casas no caminho.
+ * Convertidos UMA vez, aqui na borda, e nunca reconvertidos adiante.
+ */
+export interface CandidatoConciliacao {
+  id: string;
+  descricao: string | null;
+  favorecido: string | null;
+  numeroDocumento: string | null;
+  dataReferencia: string | null;
+  valor: number;
+  status: string | null;
+  jaConciliado: number;
+  /** Quanto do LANÇAMENTO ainda está livre — o teto do que se pode aplicar. */
+  saldo: number;
+  deltaValor: number;
+  deltaDias: number | null;
+  score: number | null;
+  preMarcado: boolean;
+  ambiguo: boolean;
+  /** Já coberto por inteiro: aparece para auditoria, não é acionável. */
+  indisponivel: boolean;
+  motivoIndisponivel: string | null;
+}
+
 export interface VinculoDoMovimento {
   id: string;
   lancamentoId: string;
@@ -196,8 +225,8 @@ export interface SugestaoDoMes { extratoId: string; estado: string }
 /**
  * AS SUGESTÕES DO MÊS — `fn_sugestoes_extrato`, o motor portado.
  *
- * ⚠ SOB DEMANDA, E A MEDIÇÃO É QUE DECIDIU. A função chama
- * `fn_candidatos_conciliacao` por LATERAL uma vez POR MOVIMENTO, e cada chamada
+ * ⚠ SOB DEMANDA, E A MEDIÇÃO É QUE DECIDIU. A função chama o motor de
+ * candidatos por LATERAL uma vez POR MOVIMENTO, e cada chamada
  * custa ~91 ms medidos no Proto (EXPLAIN ANALYZE, agosto/2026): 31 movimentos já
  * dão ~2,8 s, 58 dão ~5,3 s no banco — e mais que isso pelo canal. Carregar
  * automático ao abrir o mês faria a tela parecer travada toda vez que alguém só
@@ -241,6 +270,92 @@ export function useSugestoesDoMes(
   }, [clienteId, contaId, ano, mes]);
 
   return { sugestoes, carregando, calcular };
+}
+
+/**
+ * OS CANDIDATOS DE UM MOVIMENTO — `fn_candidatos_conciliacao`, o motor do trio.
+ *
+ * ⚠ UM MOVIMENTO, UMA CHAMADA. É a mesma função que `fn_sugestoes_extrato`
+ * roda por LATERAL para o mês inteiro, e é dali que vêm os ~91 ms por
+ * movimento: para UM, o custo é o de abrir um diálogo; para 58, são os ~5,3 s
+ * que mantêm o placar sob demanda. Por isso a estação chama direto a função de
+ * um só e NUNCA a do mês — abrir um movimento não pode custar o extrato todo.
+ *
+ * ⚠ A FUNÇÃO RECEBE SÓ O ID, e é assim que o original a usa: conta, data e
+ * valor ela lê do próprio movimento. Reenviar daqui o que o banco já tem abriria
+ * espaço para a tela discordar dele.
+ */
+export function useCandidatosDoMovimento(clienteId: string | null, extratoId: string | null) {
+  const [candidatos, setCandidatos] = useState<CandidatoConciliacao[] | null>(null);
+  const [carregando, setCarregando] = useState(false);
+
+  const carregar = useCallback(async () => {
+    if (!clienteId || !extratoId) { setCandidatos(null); return; }
+    setCarregando(true);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+      const { data, error } = await (supabase as any).rpc('fn_candidatos_conciliacao', {
+        p_cliente_id: clienteId, p_extrato_id: extratoId, p_limite: 50,
+      });
+      /* ⚠ ERRO NÃO VIRA LISTA VAZIA: `null` diz "não consegui perguntar" e a
+         tela escreve isso; `[]` diria "perguntei e não há candidato", que é
+         outra resposta. */
+      if (error) { setCandidatos(null); return; }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- linhas da RPC, fora de types.ts
+      setCandidatos((data ?? []).map((r: any) => ({
+        id: r.id,
+        descricao: r.descricao ?? null,
+        favorecido: r.favorecido ?? null,
+        numeroDocumento: r.numero_documento ?? null,
+        dataReferencia: r.data_referencia ?? null,
+        valor: Number(r.valor ?? 0),
+        status: r.status ?? null,
+        jaConciliado: Number(r.ja_conciliado ?? 0),
+        saldo: Number(r.saldo ?? 0),
+        deltaValor: Number(r.delta_valor ?? 0),
+        deltaDias: r.delta_dias == null ? null : Number(r.delta_dias),
+        score: r.score == null ? null : Number(r.score),
+        preMarcado: r.pre_marcado === true,
+        ambiguo: r.ambiguo === true,
+        indisponivel: r.indisponivel === true,
+        motivoIndisponivel: r.motivo_indisponivel ?? null,
+      })));
+    } finally {
+      setCarregando(false);
+    }
+  }, [clienteId, extratoId]);
+
+  useEffect(() => { void carregar(); }, [carregar]);
+
+  return { candidatos, carregando, recarregar: carregar };
+}
+
+/**
+ * GRAVA O LOTE MARCADO — `fn_vincular_grupo_conciliacao`.
+ *
+ * ⚠ UMA CHAMADA, NÃO UM LAÇO. O original aplica um a um porque a RPC dele
+ * recebe um par por vez; a nossa recebe os arrays `p_lancamentos` e `p_valores`
+ * (assinatura conferida em `pg_proc`) e resolve o lote numa transação. Emular o
+ * laço aqui trocaria a atomicidade do banco por um meio-vínculo em caso de erro.
+ *
+ * ⚠ OS DOIS ARRAYS ANDAM EM PAR e a ordem é o que os liga — `p_valores[i]` é o
+ * valor de `p_lancamentos[i]`. Saem da MESMA iteração, nunca de duas.
+ */
+export async function vincularGrupo(
+  extratoId: string,
+  pares: readonly { lancamentoId: string; valor: number }[],
+  motivo: string,
+): Promise<{ ok: boolean; erro: string | null }> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+  const { error } = await (supabase as any).rpc('fn_vincular_grupo_conciliacao', {
+    p_extrato_id: extratoId,
+    p_lancamentos: pares.map(p => p.lancamentoId),
+    p_valores: pares.map(p => p.valor),
+    p_motivo: motivo,
+  });
+  /* A mensagem do Postgres nomeia o invariante violado; trocá-la por um texto
+     genérico tiraria do operador a única pista útil. */
+  return { ok: !error, erro: error?.message ?? null };
 }
 
 export function useVinculosDoMovimento(extratoId: string | null) {

@@ -167,13 +167,22 @@ export function PainelExtratoMes({ clienteId, contaId, ano, mes, contaNome, comP
         /* ⚠ SÓ AS LINHAS ROLAM, como no original: o bloco de saldo e o placar
            ficam parados e o `thead` é `sticky`. Rolar a página levaria o resumo
            embora junto — que é o que o cabeçalho fixo existe para impedir. */
-        /* ⚠ A ALTURA E' A DO ORIGINAL — `23.2rem`, e la' ela e' MEDIDA, nao
-           estimada: 319px acima da tabela mais 52px de respiro do shell. O
-           `min-h` impede que a area suma em tela curta. Aqui a pilha acima e'
-           outra (cabecalho da Conciliacao, cards, abas, previa inline, faixa e
-           campos do card), entao o numero herdado e' o de la — ver o relatorio
-           do B-27, onde a conta esta declarada. */
-        <div className="max-h-[calc(100vh-23.2rem)] min-h-[9rem] overflow-auto">
+        /* ⚠ A ALTURA AGORA E' NOSSA, e a conta esta escrita — B-28, item 6. O
+           `23.2rem` que veio do original era medido para a PILHA DELE (319px
+           acima da tabela + 52px de respiro do shell); a nossa tem um bloco a
+           mais que a de la', a regua de doze cards de mes, e por isso o numero
+           herdado sobrava.
+           A CONTA, em duas parcelas verificaveis:
+             a) a linha custa 19px — as celulas sao `py-0`, entao quem define a
+                altura e' o botao `h-[18px]` da ponta, mais 1px de `border-b`;
+             b) a homologacao do B-27 mediu na tela real que faltavam 5 linhas.
+                5 x 19px = 95px = 5.94rem.
+             23.2rem - 5.94rem = 17.26rem, arredondado para 17.3rem.
+           ⚠ A PARCELA (b) E' MEDIDA NO NAVEGADOR, NAO CALCULADA AQUI, e e' de
+           proposito: somar a pilha por CSS exigiria o shell do /v2, que este
+           ambiente nao renderiza. Estimar aquilo foi o que produziu o `26rem`
+           errado antes. O `min-h` segue impedindo que a area suma em tela curta. */
+        <div className="max-h-[calc(100vh-17.3rem)] min-h-[9rem] overflow-auto">
           <table className="w-full border-collapse text-[10px]">
             <thead className="sticky top-0 z-10 bg-muted/60">
               <tr className="border-b border-border">
@@ -255,12 +264,12 @@ function Chip({ rotulo, n, cor, ativo, onClick }: {
 
 function SituacaoBadge({ situacao }: { situacao: SituacaoMovimento }) {
   if (situacao === 'conciliado') {
-    return <span className="rounded bg-success/15 px-1 py-0 text-[9px] font-semibold uppercase text-success">conciliado</span>;
+    return <span className="rounded bg-success/15 px-1 py-0 text-[10px] font-semibold uppercase text-success">conciliado</span>;
   }
   if (situacao === 'parcial') {
-    return <span className="rounded bg-primary/10 px-1 py-0 text-[9px] font-semibold uppercase text-primary">parcial</span>;
+    return <span className="rounded bg-primary/10 px-1 py-0 text-[10px] font-semibold uppercase text-primary">parcial</span>;
   }
-  return <span className="rounded bg-muted px-1 py-0 text-[9px] font-semibold uppercase text-muted-foreground">em aberto</span>;
+  return <span className="rounded bg-muted px-1 py-0 text-[10px] font-semibold uppercase text-muted-foreground">em aberto</span>;
 }
 
 /**
