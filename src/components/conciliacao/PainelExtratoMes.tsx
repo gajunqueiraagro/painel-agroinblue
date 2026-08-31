@@ -251,6 +251,7 @@ export function PainelExtratoMes({ clienteId, contaId, ano, mes, contaNome, comP
       />
       {conciliando && (
         <EstacaoConciliar movimento={conciliando} aoFechar={() => setConciliando(null)}
+          contaBancariaId={contaId}
           aoMudar={async () => { await recarregar(); }} />
       )}
 

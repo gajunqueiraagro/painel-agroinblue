@@ -245,6 +245,7 @@ export function PalcoDoMes({ clienteId, contaId, contaNome, ano, mes, aoFechar, 
       {conciliando && (
         <EstacaoConciliar
           movimento={conciliando}
+          contaBancariaId={contaId}
           aoFechar={() => setConciliando(null)}
           aoMudar={async () => {
             await recarregar();

@@ -1,12 +1,13 @@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Loader2, Unlink, Link2 } from 'lucide-react';
+import { Loader2, Unlink, Link2, FilePlus2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
+import { CriarLancamentoDaLinha } from '@/components/conciliacao/CriarLancamentoDaLinha';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import {
   useVinculosDoMovimento, useCandidatosDoMovimento, vincularSelecao, TOL,
@@ -51,15 +52,22 @@ interface Props {
   movimento: MovimentoConciliacao;
   aoFechar: () => void;
   aoMudar: () => void | Promise<void>;
+  /**
+   * Conta do extrato — só para dar a fazenda por padrão ao criar-da-linha.
+   * Ausente, o formulário pede a fazenda em vez de adivinhá-la; nenhum outro
+   * comportamento depende dela, então quem monta sem a prop segue igual.
+   */
+  contaBancariaId?: string | null;
 }
 
-export function EstacaoConciliar({ movimento, aoFechar, aoMudar }: Props) {
+export function EstacaoConciliar({ movimento, aoFechar, aoMudar, contaBancariaId }: Props) {
   const { clienteAtual } = useCliente();
   const { vinculos, loading, recarregar } = useVinculosDoMovimento(movimento.id);
   const { candidatos, carregando: carregandoCand, recarregar: recarregarCand } =
     useCandidatosDoMovimento(clienteAtual?.id ?? null, movimento.id);
   const [desfazendo, setDesfazendo] = useState<string | null>(null);
   const [vinculando, setVinculando] = useState(false);
+  const [criando, setCriando] = useState(false);
   /* ⚠ MARCADO É UM MAPA id → VALOR A APLICAR, não um conjunto de ids: dois
      candidatos podem entrar no mesmo movimento com valores diferentes, e é o
      valor que vai ao banco. O default de cada um é o SALDO do lançamento —
@@ -369,6 +377,21 @@ export function EstacaoConciliar({ movimento, aoFechar, aoMudar }: Props) {
           </span>
           <span className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={aoFechar}>Fechar</Button>
+            {/* ⚠ CRIAR SÓ NO MOVIMENTO INTOCADO — e quem manda é a RPC, não uma
+                escolha de tela: `fn_criar_lancamento_de_extrato` levanta
+                `extrato ja possui vinculo ativo` quando há vínculo. Oferecer o
+                botão num movimento parcial seria oferecer o que o banco recusa.
+                ⚠ E ELE APARECE MESMO HAVENDO CANDIDATOS: o operador pode saber
+                que nenhum deles é este movimento. O caso que abriu esta frente é
+                o oposto — "Nenhum lançamento candidato" e nada a fazer. */}
+            {estado !== 'fecha' && vinculos.length === 0 && (
+              <Button type="button" variant="outline" size="sm" className="gap-1.5"
+                onClick={() => setCriando(true)}
+                title="Cria o lançamento que falta, já pago e já vinculado a este movimento.">
+                <FilePlus2 className="h-3.5 w-3.5" />
+                Criar lançamento
+              </Button>
+            )}
             {estado !== 'fecha' && (
               <Button type="button" size="sm" className="gap-1.5"
                 disabled={impedimento !== null || vinculando}
@@ -381,6 +404,22 @@ export function EstacaoConciliar({ movimento, aoFechar, aoMudar }: Props) {
           </span>
         </DialogFooter>
       </DialogContent>
+
+      {/* ⚠ O FORMULÁRIO ABRE POR CIMA E A ESTAÇÃO NÃO FECHA. Criado o
+          lançamento, a estação recarrega vínculos e candidatos da mesma fonte —
+          o movimento aparece conciliado sem ninguém sair da tela. */}
+      {criando && (
+        <CriarLancamentoDaLinha
+          movimento={movimento}
+          contaBancariaId={contaBancariaId ?? null}
+          aoFechar={() => setCriando(false)}
+          aoCriado={async () => {
+            await recarregar();
+            await recarregarCand();
+            await aoMudar();
+          }}
+        />
+      )}
     </Dialog>
   );
 }
