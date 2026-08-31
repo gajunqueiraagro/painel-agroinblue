@@ -41,6 +41,7 @@ import { AbaDocumentosOC } from '@/components/compra/AbaDocumentosOC';
 import { AbaAuditoriaOC } from '@/components/compra/AbaAuditoriaOC';
 import { AbaRecebimentoLotes } from '@/components/compra/AbaRecebimentoLotes';
 import { AbaFinanceiroOC } from '@/components/compra/AbaFinanceiroOC';
+import { useOcCompromissos } from '@/hooks/useOcCompromissos';
 import type { LinhaPrevisao, RotulosCompromissos } from '@/components/compra/AbaCompromissosOC';
 import { siglaCategoria } from '@/lib/financeiro/produtoOC';
 import { subcentroVendaPorCategoria, SUBCENTRO_DESPESA_VENDA, SUBCENTRO_ADIANTAMENTO_BOITEL } from '@/hooks/useOperacaoLiquidacao';
@@ -357,6 +358,42 @@ export function VendaModalShell({
   const bolsoRealizado = ehBoitel ? bolsoDaVendaBoitel(boitelReal ?? null) : null;
   /* O bloco Entrega do resumo lateral — MESMO helper da compra, nao uma segunda soma. */
   const entrega = consolidarRecebimento(recebimentoApi?.lotes ?? null);
+
+  /* ─── O FINANCEIRO DO RESUMO LATERAL — B-10 item 4 ───────────────────────────
+     ⚠ O HOOK SUBIU PARA CA, e desce por prop para a `AbaFinanceiroOC`. Ele vivia so'
+     dentro da aba; o resumo lateral precisa dos MESMOS totais, e montar uma segunda
+     instancia daria duas leituras das mesmas tres views para a mesma operacao. Subir, e
+     nao duplicar — a licao que os catalogos do `AbaCompromissosOC` ja tinham dado.
+     ⚠ AS TRES FORMULAS, e a razao de cada uma:
+        A receber = entrada_obrigacao − entrada_liquidado
+          O que ainda vem. Sai da OBRIGACAO, e nao do programado: obrigacao e' o que foi
+          acordado receber; programado e' so' a parte que ja ganhou data. Descontar o que
+          ja entrou e' o que transforma "quanto vou receber" em "quanto FALTA receber".
+        Recebido  = entrada_liquidado
+          Dinheiro que passou. Liquidado, nunca materializado: materializar e' emitir o
+          titulo, e titulo emitido nao e' dinheiro na conta.
+        Saldo     = liquido do NIVEL VIGENTE (entrada − saida), pela mesma precedencia da
+          Central (liquidado > lancado > programado > obrigacao). E' o que sobra da
+          operacao inteira, dos dois lados — numa venda boitel as saidas existem e sao
+          reais (adiantamento, frete, taxas), e ignora-las diria que a venda rende mais do
+          que rende.
+     ⚠ O SALDO NAO E "A receber − Recebido". Esse seria o saldo das ENTRADAS, e a linha
+     ficaria igual a primeira sempre que nada tivesse sido recebido — tres linhas para
+     duas informacoes. O saldo responde outra pergunta: quanto a operacao deixa. */
+  const ocCompromissosApi = useOcCompromissos({
+    operacaoId: ocOperacaoId ?? null,
+    clienteId: liquidacaoApi?.clienteId ?? null,
+    enabled: !!ocOperacaoId && !!liquidacaoApi?.clienteId,
+  });
+  const fin = ocCompromissosApi.resumoOperacao;
+  const temFin = !!fin && fin.temCompromissos;
+  const finAReceber = temFin ? fin.entradaObrigacao - fin.entradaLiquidado : null;
+  const finRecebido = temFin ? fin.entradaLiquidado : null;
+  const finSaldo = !temFin ? null
+    : fin.totalLiquidado > 0 ? fin.entradaLiquidado - fin.saidaLiquidado
+    : fin.totalMaterializado > 0 ? fin.entradaMaterializado - fin.saidaMaterializado
+    : fin.totalProgramado > 0 ? fin.entradaProgramado - fin.saidaProgramado
+    : fin.entradaObrigacao - fin.saidaObrigacao;
   const topoNoRealizado = bolsoRealizado != null;
   const faltamBoitel = ehBoitel ? faltamDosCinco(boitelData) : [];
   const naNegociacao = abaAtiva === 'negociacao';
@@ -554,6 +591,8 @@ export function VendaModalShell({
               financeiroNovoReadOnly={ocStatusComercial === 'cancelada'}
               operacaoId={ocOperacaoId}
               clienteId={liquidacaoApi.clienteId ?? null}
+              /* A instancia que o resumo lateral ja monta — uma leitura, dois consumidores. */
+              ocApiExterno={ocCompromissosApi}
               dataOperacao={data}
               linhasPrevisao={linhasPrevisao}
               rotulos={rotulosCompromissos}
@@ -820,10 +859,12 @@ export function VendaModalShell({
               <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 mb-0.5">
                 <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Financeiro</span>
               </div>
+              {/* ⚠ SEM COMPROMISSOS OS TRES SAO TRACO, e nao zero: operacao sem financeiro
+                  lancado nao "recebeu zero", ela ainda nao tem financeiro. */}
               <div className="px-3 space-y-0.5">
-                <LinhaResumo rotulo="A receber" valor={null} />
-                <LinhaResumo rotulo="Recebido" valor={null} />
-                <LinhaResumo rotulo="Saldo" valor={null} />
+                <LinhaResumo rotulo="A receber" valor={finAReceber == null ? null : formatMoeda(finAReceber)} />
+                <LinhaResumo rotulo="Recebido" valor={finRecebido == null ? null : formatMoeda(finRecebido)} />
+                <LinhaResumo rotulo="Saldo" valor={finSaldo == null ? null : formatMoeda(finSaldo)} />
               </div>
             </div>
           </aside>

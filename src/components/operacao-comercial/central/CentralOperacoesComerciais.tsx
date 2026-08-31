@@ -44,6 +44,14 @@ interface FinRow {
   operacao_id: string; modo: string; n_compromissos: number;
   obrigacao_total: number; total_programado: number; total_materializado: number; total_liquidado: number;
   tem_compromissos: boolean; tem_partes_legadas: boolean;
+  /* ⚠ OS QUATRO NIVEIS x DOIS SENTIDOS — PR-OC-VIEW-RESUMO-POR-SENTIDO-02. O sentido vem
+     do plano de contas do compromisso e e' calculado NA VIEW: a regra do topo deste
+     arquivo proibe somar estes eixos no React, e derivar o sentido aqui seria a mesma
+     coisa com outro nome. */
+  entrada_obrigacao: number; saida_obrigacao: number;
+  entrada_liquidado: number; saida_liquidado: number;
+  entrada_materializado: number; saida_materializado: number;
+  entrada_programado: number; saida_programado: number;
 }
 interface LiqRow { operacao_id: string; estado_liquidacao: string | null; }
 /* Fazenda na coluna e' o CODIGO (SM, ST, PUR...): o nome inteiro empurra a tabela
@@ -113,15 +121,36 @@ const LIQ_TOM: Record<string, string> = {
   sem_base: TOM_NEUTRO,
 };
 
-// Financeiro: figura soberana "mais avançada" da View 3 (nunca length de array). Sem modelo → null.
-function finResumo(f: FinRow | undefined): { valor: number; rotulo: string; modo: string } | null {
+/* Financeiro: figura soberana "mais avançada" da View 3 (nunca length de array). Sem modelo → null.
+   ⚠ DOIS NUMEROS, E CADA UM RESPONDE UMA PERGUNTA — B-10 item 2, decisao do Gabriel.
+     VALOR (linha de cima) = LIQUIDO DA OBRIGACAO: entrada menos saida do que foi ACORDADO.
+       E' quanto a operacao vale no caixa quando ela fechar. Estavel: nao muda conforme o
+       dinheiro anda, so' quando a negociacao muda.
+     SUBLINHA = o PROGRESSO: o nivel mais avancado e o liquido DAQUELE nivel.
+   ⚠ POR QUE NAO O LIQUIDO DO NIVEL VIGENTE NA LINHA DE CIMA. Medido na b58bf556: o nivel
+   vigente e' `liquidado`, e so' as SAIDAS foram liquidadas (adiantamento, frete, taxas) —
+   o liquido daquele nivel e' −107.150,94. Verdadeiro, mas como numero principal de uma
+   venda de 686 mil ele responde a pergunta errada: "quanto ja andou" no lugar de "quanto
+   vale". Os dois cabem, um em cima do outro.
+   ⚠ A CELULA SOMAVA OS DOIS SENTIDOS ate' aqui: 686.857,46 + 107.150,94 = 794.008,40, um
+   numero que nao e' nem o que entra, nem o que sai, nem o que sobra. Agora sao 579.706,52.
+   ⚠ O NIVEL E ESCOLHIDO PELO TOTAL DOS DOIS SENTIDOS, e nao pelo liquido: com entradas e
+   saidas parecidas o liquido pode ficar em zero enquanto ha dinheiro dos dois lados, e
+   escolher por ele faria a celula cair para o nivel de baixo e mentir sobre em que pe a
+   operacao esta'.
+   ⚠ NEGATIVO E RESPOSTA, nao defeito: numa compra as saidas mandam e o liquido e' negativo
+   de proposito — a operacao consome caixa. A celula imprime o sinal.
+   ⚠ NO NIVEL `obrigacao` A SUBLINHA NAO REPETE O NUMERO: progresso e valor seriam o mesmo,
+   e imprimir duas vezes faria parecer que sao coisas diferentes. Sai so' a palavra. */
+function finResumo(f: FinRow | undefined): { valor: number; rotulo: string; progresso: number | null; modo: string } | null {
   if (!f || (!f.tem_compromissos && !f.tem_partes_legadas)) return null;
-  if (f.total_liquidado > 0) return { valor: f.total_liquidado, rotulo: 'liquidado', modo: f.modo };
+  const valor = f.entrada_obrigacao - f.saida_obrigacao;
+  if (f.total_liquidado > 0) return { valor, rotulo: 'liquidado', progresso: f.entrada_liquidado - f.saida_liquidado, modo: f.modo };
   // "lancado" acompanha o vocabulario da tela; `total_materializado` segue sendo o nome da coluna.
-  if (f.total_materializado > 0) return { valor: f.total_materializado, rotulo: 'lançado', modo: f.modo };
-  if (f.total_programado > 0) return { valor: f.total_programado, rotulo: 'programado', modo: f.modo };
-  if (f.obrigacao_total > 0) return { valor: f.obrigacao_total, rotulo: 'obrigação', modo: f.modo };
-  return { valor: 0, rotulo: '', modo: f.modo };
+  if (f.total_materializado > 0) return { valor, rotulo: 'lançado', progresso: f.entrada_materializado - f.saida_materializado, modo: f.modo };
+  if (f.total_programado > 0) return { valor, rotulo: 'programado', progresso: f.entrada_programado - f.saida_programado, modo: f.modo };
+  if (f.obrigacao_total > 0) return { valor, rotulo: 'obrigação', progresso: null, modo: f.modo };
+  return { valor: 0, rotulo: '', progresso: null, modo: f.modo };
 }
 
 /* ⚠ `nao_liquidada` deixou de imprimir '—'. A view SABE que nao houve liquidacao:
@@ -329,7 +358,7 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
         fazendaIds.length ? sb.from('fazendas').select('id, nome, codigo').in('id', fazendaIds) : Promise.resolve({ data: [] }),
         contraparteIds.length ? sb.from('financeiro_fornecedores').select('id, nome').in('id', contraparteIds) : Promise.resolve({ data: [] }),
         sb.from('vw_oc_operacao_compromissos_resumo')
-          .select('operacao_id, modo, n_compromissos, obrigacao_total, total_programado, total_materializado, total_liquidado, tem_compromissos, tem_partes_legadas')
+          .select('operacao_id, modo, n_compromissos, obrigacao_total, total_programado, total_materializado, total_liquidado, tem_compromissos, tem_partes_legadas, entrada_obrigacao, saida_obrigacao, entrada_liquidado, saida_liquidado, entrada_materializado, saida_materializado, entrada_programado, saida_programado')
           .eq('cliente_id', clienteId).in('operacao_id', operacaoIds),
         sb.from('vw_oc_operacao_liquidacao').select('operacao_id, estado_liquidacao').eq('cliente_id', clienteId).in('operacao_id', operacaoIds),
         sb.from('vw_oc_lotes_recebimento').select('operacao_id, estado_recebimento').eq('cliente_id', clienteId).in('operacao_id', operacaoIds),
@@ -441,9 +470,13 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
         case 'valor': return r.valor_acordado ?? r.valor_total ?? null;
         case 'comercial': return posicao(ORD_COMERCIAL, r.status_comercial);
         case 'recebimento': return posicao(ORD_RECEBIMENTO, recStatus(recMap[r.id]));
-        // Mesmo criterio da celula: ela so imprime valor quando fin.valor > 0;
-        //   fora disso mostra '—', e '—' ordena como ausencia.
-        case 'financeiro': { const f = finResumo(finMap[r.id]); return f && f.valor > 0 ? f.valor : null; }
+        /* Mesmo criterio da celula: ela imprime quando HA NIVEL (`rotulo` preenchido);
+           fora disso mostra '—', e '—' ordena como ausencia.
+           ⚠ O TESTE DEIXOU DE SER `valor > 0` — B-10 item 5c. Com o liquido, zero e'
+           negativo sao RESPOSTAS (entradas e saidas se anulando; compra consumindo caixa),
+           e o antigo `> 0` as trataria como ausencia. Quem diz se ha figura financeira e'
+           o nivel, nao o sinal do numero. */
+        case 'financeiro': { const f = finResumo(finMap[r.id]); return f && f.rotulo ? f.valor : null; }
         case 'liquidacao': return posicao(ORD_LIQUIDACAO, liqMap[r.id]?.estado_liquidacao);
       }
     };
@@ -730,13 +763,18 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
                     </span>
                   </TableCell>
                   <TableCell className={`${TD} whitespace-nowrap`}>
-                    {fin && fin.valor > 0
+                    {fin && fin.rotulo
                       ? (
                         <div className="leading-tight">
                           <div className="tabular-nums font-medium">{brl(fin.valor)}</div>
                           {/* `modo` era diagnostico interno de migracao (novo_modelo / nova_vazia),
-                              sem valor para quem opera, e roubava a largura da coluna. */}
-                          <div className="text-[9px] text-muted-foreground">{fin.rotulo}</div>
+                              sem valor para quem opera, e roubava a largura da coluna.
+                              ⚠ O PROGRESSO ENTRA AQUI — B-10 item 2: o nivel mais avancado e
+                              quanto ja andou nele. No nivel `obrigacao` sai so' a palavra,
+                              porque o numero seria o de cima outra vez. */}
+                          <div className="text-[9px] text-muted-foreground tabular-nums">
+                            {fin.rotulo}{fin.progresso == null ? '' : ` ${brl(fin.progresso)}`}
+                          </div>
                         </div>
                       )
                       : <span className="text-muted-foreground">—</span>}

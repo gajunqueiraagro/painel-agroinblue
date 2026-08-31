@@ -53,6 +53,14 @@ export interface ResumoOperacaoCompromissos {
   temPartesLegadas: boolean;
   modo: ModoOperacao;
   temDivergencia: boolean;
+  /* ⚠ OS QUATRO NIVEIS x DOIS SENTIDOS — PR-OC-VIEW-RESUMO-POR-SENTIDO-02. O sentido sai
+     do plano de contas do compromisso e e' somado NA VIEW; o React nunca soma estes eixos.
+     Numa VENDA as entradas mandam (o que se recebe) e as saidas sao o que a venda custa
+     por fora — o adiantamento do boitel, o frete, as taxas. Numa COMPRA e' o contrario. */
+  entradaObrigacao: number; saidaObrigacao: number;
+  entradaLiquidado: number; saidaLiquidado: number;
+  entradaMaterializado: number; saidaMaterializado: number;
+  entradaProgramado: number; saidaProgramado: number;
 }
 
 export interface CompromissoResumo {
@@ -179,6 +187,10 @@ interface RowResumoOperacao {
   n_compromissos: Numerico; obrigacao_total: Numerico; total_programado: Numerico;
   total_materializado: Numerico; total_liquidado: Numerico; saldo_financeiro: Numerico;
   tem_compromissos: boolean | null; tem_partes_legadas: boolean | null; modo: string | null; tem_divergencia: boolean | null;
+  entrada_obrigacao: Numerico; saida_obrigacao: Numerico;
+  entrada_liquidado: Numerico; saida_liquidado: Numerico;
+  entrada_materializado: Numerico; saida_materializado: Numerico;
+  entrada_programado: Numerico; saida_programado: Numerico;
 }
 interface RowCompromisso {
   compromisso_id: string | null; operacao_id: string | null; cliente_id: string | null;
@@ -342,6 +354,14 @@ function mapResumoOperacao(r: RowResumoOperacao): ResumoOperacaoCompromissos {
     temPartesLegadas: paraBool(r.tem_partes_legadas),
     modo: toModo(r.modo),
     temDivergencia: paraBool(r.tem_divergencia),
+    entradaObrigacao: paraNumero(r.entrada_obrigacao),
+    saidaObrigacao: paraNumero(r.saida_obrigacao),
+    entradaLiquidado: paraNumero(r.entrada_liquidado),
+    saidaLiquidado: paraNumero(r.saida_liquidado),
+    entradaMaterializado: paraNumero(r.entrada_materializado),
+    saidaMaterializado: paraNumero(r.saida_materializado),
+    entradaProgramado: paraNumero(r.entrada_programado),
+    saidaProgramado: paraNumero(r.saida_programado),
   };
 }
 function mapCompromisso(r: RowCompromisso): CompromissoResumo {

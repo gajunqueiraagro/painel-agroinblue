@@ -1,6 +1,6 @@
 import { AbaLiquidacaoOC } from './AbaLiquidacaoOC';
 import { AbaCompromissosOC, type LinhaPrevisao, type RotulosCompromissos } from './AbaCompromissosOC';
-import { useOcCompromissos } from '@/hooks/useOcCompromissos';
+import { useOcCompromissos, type OcCompromissosApi } from '@/hooks/useOcCompromissos';
 import { AlertTriangle } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { LiquidacaoApi } from '@/hooks/useOperacaoLiquidacao';
@@ -29,15 +29,25 @@ interface Props {
   linhasPrevisao?: LinhaPrevisao[];
   seloProjecao?: ReactNode;
   rotulos?: RotulosCompromissos;
+  /* ⚠ A INSTANCIA VEM DE FORA QUANDO O SHELL JA A TEM — B-10 item 4. O resumo lateral da
+     venda precisa dos mesmos totais por sentido que esta aba consome, e montar o hook nos
+     DOIS lugares daria duas instancias lendo as MESMAS tres views para a mesma operacao.
+     E' a licao que os catalogos do `AbaCompromissosOC` ja tinham ensinado: subir, e nao
+     duplicar. A compra nao passa nada e segue montando a sua — comportamento identico. */
+  ocApiExterno?: OcCompromissosApi;
 }
 
 export function AbaFinanceiroOC(props: Props) {
   const { api, operacaoId, clienteId } = props;
-  const ocApi = useOcCompromissos({
+  /* ⚠ O HOOK E SEMPRE CHAMADO — regra dos hooks —, mas `enabled` o desliga quando a
+     instancia veio pronta de fora. Assim nao ha consulta duplicada e nao ha chamada
+     condicional. */
+  const ocApiProprio = useOcCompromissos({
     operacaoId: operacaoId ?? null,
     clienteId: clienteId ?? null,
-    enabled: !!operacaoId && !!clienteId,
+    enabled: !props.ocApiExterno && !!operacaoId && !!clienteId,
   });
+  const ocApi = props.ocApiExterno ?? ocApiProprio;
   const modo = ocApi.resumoOperacao?.modo;
 
   const legado = (

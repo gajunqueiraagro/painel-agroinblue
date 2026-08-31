@@ -1,0 +1,32 @@
+-- PR-OC-VIEW-RESUMO-SECURITY-INVOKER-01 — devolve a view ao isolamento por tenant.
+--
+-- ⚠ VERSIONAMENTO DE ALGO JA APLICADO. Registro 20260831131120.
+--
+-- A REGRESSAO, medida em B-10 antes de versionar a propria migration que a causou.
+-- `vw_oc_operacao_compromissos_resumo` nasceu em 20260803190000 com
+-- `WITH (security_invoker = true)`. Os dois `CREATE OR REPLACE` de 20260831125123 e
+-- 20260831125146 vieram SEM a clausula, e a opcao se perdeu: `pg_class.reloptions` ficou
+-- NULO. Sem `security_invoker` a view roda com os privilegios do DONO e NAO aplica o RLS de
+-- quem chama — e ela tem SELECT para `authenticated`.
+-- Alcance medido no Proto no momento do achado: 35 linhas de 4 clientes distintos visiveis
+-- por qualquer usuario autenticado.
+--
+-- ⚠ A PROVA DE QUE O VALOR CERTO E `true` NAO FOI DEDUZIDA: a view IRMA,
+-- `vw_oc_compromissos_resumo`, nasceu no MESMO arquivo com a MESMA clausula e continua com
+-- `security_invoker=true` ate' hoje. Uma perdeu, a outra nao — a diferenca esta' em quem
+-- fez o replace, nao no que a view deve ser.
+--
+-- ⚠ E A NONA DA FAMILIA SEC-VIEWS-TENANT-01B, que ja registrava oito views com
+-- `security_invoker=false` permitindo leitura cross-tenant autenticada. Esta nasceu e
+-- morreu no mesmo dia — as outras oito seguem abertas, e continuam sendo frente propria.
+--
+-- ⚠ LICAO PARA O PROXIMO REPLACE DE VIEW: `CREATE OR REPLACE VIEW` NAO preserva as
+-- reloptions quando a clausula `WITH` e' omitida. Toda view com `security_invoker` tem de
+-- reemitir a clausula em CADA replace — ou conferir `pg_class.reloptions` depois, que e'
+-- o que pegou esta.
+-- ⚠ `ALTER`, e nao um terceiro `CREATE OR REPLACE`: o corpo esta' certo (md5 do
+-- `pg_get_viewdef` inalterado, feeab99415ef2d4319c12bfd25eeac3d) e reescreve-lo para
+-- consertar uma OPCAO seria arriscar o corpo por nada. Conferido depois de aplicado:
+-- `reloptions = {security_invoker=true}`.
+
+ALTER VIEW public.vw_oc_operacao_compromissos_resumo SET (security_invoker = true);
