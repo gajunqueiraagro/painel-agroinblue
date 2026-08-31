@@ -244,9 +244,48 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
      fazer a seguir, que a mensagem do banco nao tem como saber. */
   const [avisoBaseCoberta, setAvisoBaseCoberta] = useState('');
 
+  /* PROXIMO VENCIMENTO EM ABERTO do compromisso. Um compromisso pode ter N parcelas
+     com N vencimentos; o que interessa na lista e' a proxima que ainda cobra algo.
+     'paga' e 'cancelada' saem; do resto, o MENOR vencimento. Sem parcela em aberto
+     (ou sem programacao) devolve null e a coluna imprime '—' — ausencia nunca vira
+     data. */
+  const proximoVencimento = (compromissoId: string | null): string | null => {
+    if (!compromissoId) return null;
+    const emAberto = parcelas
+      .filter(p => p.compromissoId === compromissoId && p.status !== 'paga' && p.status !== 'cancelada')
+      .map(p => p.vencimento)
+      .filter((v): v is string => !!v);
+    if (emAberto.length === 0) return null;
+    return emAberto.reduce((a, b) => (a <= b ? a : b));
+  };
+
+  /* ─── ORDEM CRONOLOGICA — FIN-ORDEM-CRONO (B-08 item 3) ──────────────────────
+     ⚠ A LISTA ORDENA PELA MESMA DATA QUE ELA MOSTRA. A ordem vinha do banco por
+     `natureza` e depois `componente` — alfabetica —, e quem abre o financeiro pergunta
+     "o que vence primeiro?", nao "o que comeca com A?".
+     ⚠ NAO HA DATA NO COMPROMISSO. Medido: `vw_oc_compromissos_resumo` nao tem UMA coluna
+     de data (zero colunas date/timestamp/venc/data). A data e' propriedade da PARCELA, e
+     a soberana para a linha e' a mesma que a coluna ja imprime — o proximo vencimento em
+     aberto. Ordenar por outra coisa faria a lista contradizer a propria coluna.
+     ⚠ SEM DATA VAI PARA O FIM, nunca para o topo: compromisso sem programacao nao e' "o
+     mais antigo", e' o que ainda nao tem quando. Tratar ausencia como data minima o poria
+     na frente de tudo — o oposto do que ele significa.
+     ⚠ EMPATE MANTEM A ORDEM DO BANCO (`sort` estavel no ES2019+): mesma data devolve a
+     sequencia natureza/componente que ja vinha, entao a lista nao embaralha a cada
+     refetch. */
   const compromissosVisiveis = useMemo(
-    () => compromissos.filter(c => mostrarCancelados || c.status !== 'cancelado'),
-    [compromissos, mostrarCancelados],
+    () => compromissos
+      .filter(c => mostrarCancelados || c.status !== 'cancelado')
+      .slice()
+      .sort((a, b) => {
+        const va = proximoVencimento(a.compromissoId), vb = proximoVencimento(b.compromissoId);
+        if (va === vb) return 0;
+        if (va == null) return 1;
+        if (vb == null) return -1;
+        return va < vb ? -1 : 1;
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `proximoVencimento` deriva de `parcelas`, ja listado
+    [compromissos, mostrarCancelados, parcelas],
   );
   const qtdCancelados = useMemo(() => compromissos.filter(c => c.status === 'cancelado').length, [compromissos]);
 
@@ -263,20 +302,6 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
 
   const selecionado = useMemo(() => compromissos.find(c => c.compromissoId === selectedId) ?? null, [compromissos, selectedId]);
 
-  /* PROXIMO VENCIMENTO EM ABERTO do compromisso. Um compromisso pode ter N parcelas
-     com N vencimentos; o que interessa na lista e' a proxima que ainda cobra algo.
-     'paga' e 'cancelada' saem; do resto, o MENOR vencimento. Sem parcela em aberto
-     (ou sem programacao) devolve null e a coluna imprime '—' — ausencia nunca vira
-     data. */
-  const proximoVencimento = (compromissoId: string | null): string | null => {
-    if (!compromissoId) return null;
-    const emAberto = parcelas
-      .filter(p => p.compromissoId === compromissoId && p.status !== 'paga' && p.status !== 'cancelada')
-      .map(p => p.vencimento)
-      .filter((v): v is string => !!v);
-    if (emAberto.length === 0) return null;
-    return emAberto.reduce((a, b) => (a <= b ? a : b));
-  };
   const parcelasDoComp = useMemo(
     () => parcelas
       .filter(p => p.compromissoId === selectedId && (mostrarCancelados || p.status !== 'cancelada'))

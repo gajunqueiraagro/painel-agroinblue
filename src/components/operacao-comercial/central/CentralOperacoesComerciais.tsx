@@ -642,7 +642,12 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
                 + cadeado (10) = 90 de conteudo, mais 12 de padding. Os 82 antigos
                 cortariam justamente a divergencia, que e' o que nao pode sumir.
                 Os 20px saem de Contraparte, a coluna da sobra, que cai de 108 para 88. */}
-            <col className="w-[102px]" />{/* Recebimento — pilula + cadeado */}
+            {/* ⚠ A LARGURA NAO MUDA COM O ROTULO NOVO — B-08 item 5b, medido: "RECEBIMENTO"
+                em 10px uppercase tracking-wide da ~92px e "RECEB./ENVIO" da ~90px; quem
+                manda nesta coluna e' o CONTEUDO (pilula "Com diferença" 76 + gap 4 +
+                cadeado 10 = 90, mais 12 de padding = 102). O cabecalho encolheu 2px e
+                continua abaixo do conteudo. */}
+            <col className="w-[102px]" />{/* Receb./Envio — pilula + cadeado */}
             <col className="w-[88px]" />{/* Financeiro — valor + rotulo */}
             <col className="w-[88px]" />{/* Liquidação — pilula */}
             <col className="w-[46px]" />{/* Ações */}
@@ -657,7 +662,11 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
               <ThOrd col="animais" rotulo="Animais" ord={ord} onOrdenar={alternarOrd} direita />
               <ThOrd col="valor" rotulo="Valor" ord={ord} onOrdenar={alternarOrd} direita />
               <ThOrd col="comercial" rotulo="Comercial" ord={ord} onOrdenar={alternarOrd} />
-              <ThOrd col="recebimento" rotulo="Recebimento" ord={ord} onOrdenar={alternarOrd} />
+              {/* ⚠ "RECEB./ENVIO" — decisao do Gabriel, B-08 item 5b. O eixo e' o mesmo
+                  para os dois sentidos do animal: na COMPRA os animais chegam (recebimento),
+                  na VENDA eles saem (envio). O rotulo dizia so' metade, e a Central lista
+                  os dois tipos na mesma coluna. */}
+              <ThOrd col="recebimento" rotulo="Receb./Envio" ord={ord} onOrdenar={alternarOrd} />
               <ThOrd col="financeiro" rotulo="Financeiro" ord={ord} onOrdenar={alternarOrd} />
               <ThOrd col="liquidacao" rotulo="Pagamento" ord={ord} onOrdenar={alternarOrd} />
               <TableHead className={`${TH} text-right`}>Ações</TableHead>

@@ -655,13 +655,22 @@ function indicadoresDoBoitel(d: BoitelEdicao, modoRealizado?: boolean, projetado
      ⚠ ZERO NAO TEM VEREDITO (`bom: null`): "manteve" nao e' vitoria nem derrota, e pintar
      empate de verde faria a cor mentir por arredondamento. */
   const derP = modoRealizado && projetado ? derivadosBoitel(projetado) : null;
+  /* ⚠ SO' A VARIACAO, SEM O "prev." — B-08 item 2, homologacao do Gabriel. A linha trazia
+     `prev. R$ 2.178,80 · −R$ 214,10` em 9px dentro de uma celula de ~117px: dois numeros
+     de dinheiro nao cabem lado a lado ali, e o par quebrava ou atropelava o vizinho.
+     ⚠ E O PREVISTO NAO SE PERDE — ele esta' no cartao de Projecao, a 14px de distancia,
+     na mesma linha e no mesmo rotulo. Repeti-lo aqui era a terceira copia do mesmo numero
+     na mesma tela; o que so' existe nesta linha e' a VARIACAO.
+     ⚠ O PERCENTUAL ENTRA JUNTO porque ele e' o que da escala: "−R$ 214,10" nao diz se e'
+     muito, "−9,8%" diz. Omitido quando a base nao sustenta divisao. */
   const delta = (atual: number, anterior: number | null, maiorEMelhor: boolean,
                  fmt: (v: number) => string): Indicador['delta'] => {
     if (derP == null || anterior == null || !(anterior > 0)) return undefined;
     const dif = atual - anterior;
     const sinal = dif > 0 ? '+' : dif < 0 ? '−' : '';
+    const p = Math.abs(dif) < 1e-9 ? '' : ` (${sinal}${(Math.abs(dif) / anterior * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%)`;
     return {
-      texto: `prev. ${fmt(anterior)} · ${sinal}${fmt(Math.abs(dif))}`,
+      texto: `${sinal}${fmt(Math.abs(dif))}${p}`,
       bom: Math.abs(dif) < 1e-9 ? null : (dif > 0) === maiorEMelhor,
     };
   };

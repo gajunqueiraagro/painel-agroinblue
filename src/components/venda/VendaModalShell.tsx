@@ -52,6 +52,8 @@ import type { LiquidacaoApi } from '@/hooks/useOperacaoLiquidacao';
 import { BoitelTopoNegociacao, liquidoDaVendaBoitel, bolsoDaVendaBoitel, unitariosDoLiquido, derivadosBoitel, PilulaCenario } from '@/components/venda/BoitelNegociacaoDerivado';
 import { BoitelBlocosModais, BoitelAnaliseFaixa, faltamDosCinco, type BoitelEdicao } from '@/components/venda/BoitelBlocosModais';
 import { pesoMedioPorCabeca } from '@/hooks/useCompraLotes';
+import { consolidarRecebimento } from '@/components/compra/ResumoLateralOC';
+import { formatMoeda } from '@/lib/calculos/formatters';
 
 /* ⚠ "RECEBIMENTO" CHAMA-SE ENTREGA NA VENDA — o gado SAI. A coluna do banco já é
    genérica (`entrega_encerrada`), então o vocabulário muda só na tela.
@@ -353,6 +355,8 @@ export function VendaModalShell({
      cascata gemea. Derivar de novo abriria a porta para o cabecalho dizer "realizado" e o
      numero ao lado ainda ser o projetado. */
   const bolsoRealizado = ehBoitel ? bolsoDaVendaBoitel(boitelReal ?? null) : null;
+  /* O bloco Entrega do resumo lateral — MESMO helper da compra, nao uma segunda soma. */
+  const entrega = consolidarRecebimento(recebimentoApi?.lotes ?? null);
   const topoNoRealizado = bolsoRealizado != null;
   const faltamBoitel = ehBoitel ? faltamDosCinco(boitelData) : [];
   const naNegociacao = abaAtiva === 'negociacao';
@@ -777,17 +781,38 @@ export function VendaModalShell({
               <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 mb-0.5">
                 <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Negociação</span>
               </div>
+              {/* ⚠ ESTES CAMPOS NUNCA ESTIVERAM LIGADOS — B-08 item 4. Nao eram fonte
+                  morta nem campo pre-frente: os rotulos foram desenhados e os valores
+                  ficaram `null` LITERAL no JSX. O "—" que aparecia era a sentinela certa
+                  para ausencia de DADO, mas aqui a ausencia era do FIO — o resumo dizia
+                  "nao sei" sobre numeros que a mesma tela ja tinha em maos.
+                  ⚠ A FONTE E A SOBERANA, e a mesma do rodape da aba e do card do lote:
+                  `lotesApi.totais`, de `useCompraLotes`. Nao ha segunda conta aqui.
+                  ⚠ "VALOR ACORDADO" E O SLOT OFICIAL (`valor_informado` somado), que e'
+                  REALIZADO-SOBERANO: depois do abate ele mostra o real, e esta' certo —
+                  ver a doutrina dos dois mundos em `bolsoDaVendaBoitel`. A promessa vive
+                  na faixa de analise, derivada da linha projetada. */}
               <div className="px-3 space-y-0.5">
-                <LinhaResumo rotulo="Lotes" valor={null} />
-                <LinhaResumo rotulo="Valor acordado" valor={null} />
+                <LinhaResumo rotulo="Lotes" valor={lotesApi && lotesApi.totais.lotes > 0
+                  ? `${lotesApi.totais.lotes} · ${lotesApi.totais.animais} cab` : null} />
+                <LinhaResumo rotulo="Valor acordado" valor={lotesApi && lotesApi.totais.lotes > 0
+                  ? formatMoeda(lotesApi.totais.valorNegociado) : null} />
               </div>
 
               <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 mb-0.5">
                 <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Entrega</span>
               </div>
+              {/* ⚠ MESMO CASO, MESMA CURA. A fonte e' `recebimentoApi.lotes`, consolidada
+                  pelo helper que a COMPRA ja usa (`consolidarRecebimento`) — reescrever a
+                  soma aqui seria a segunda definicao de "entregue" no mesmo sistema.
+                  ⚠ AUSENCIA CONTINUA SENDO TRACO: sem lotes de entrega o helper devolve
+                  `null` nos tres, e as duas linhas imprimem "—". O que mudou nao foi a
+                  sentinela — foi passar a existir dado por tras dela. */}
               <div className="px-3 space-y-0.5">
-                <LinhaResumo rotulo="Entregue" valor={null} />
-                <LinhaResumo rotulo="Saldo a entregar" valor={null} />
+                <LinhaResumo rotulo="Entregue" valor={entrega.recebido == null ? null
+                  : `${entrega.recebido} / ${entrega.negociado ?? '—'} cab`} />
+                <LinhaResumo rotulo="Saldo a entregar" valor={entrega.diferenca == null ? null
+                  : `${Math.max(0, -entrega.diferenca)} cab`} />
               </div>
 
               {/* ⚠ A RECEBER, e nao "Lancado". Numa venda o dinheiro ENTRA — o vocabulario
