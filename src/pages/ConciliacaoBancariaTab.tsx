@@ -900,10 +900,17 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
         {/* ─── EXTRATO GERENCIAL — a tela que ja existia, transferida ─────────
             ⚠ TRANSFERIR, NAO RECRIAR: e' o mesmo componente do menu lateral,
             montado aqui com o ano/mes do CABECALHO desta tela. O item do menu
-            continua vivo ate a homologacao — nada morre antes dela. */}
+            continua vivo ate a homologacao — nada morre antes dela.
+            ⚠ `periodo` CONTROLADO — correcao do B-25. Com `initialAno`/`initialMes`
+            a aba SEMEAVA estado proprio e depois ignorava o cabecalho: `useState`
+            le' o valor uma unica vez, no primeiro render. Somado aos selects de Mes
+            e Ano que ela tinha no corpo, o dado ganhava dois donos e o de dentro
+            vencia — regua marcando Mai e extrato mostrando Jun (print de 15:39).
+            Passando `periodo`, esta tela e' a dona: os selects nao sao renderizados
+            e trocar o mes na regua chega na aba no mesmo render. */}
         {!loading && selectedCard && vistaExtrato === 'gerencial' && (
           <div className="md:flex-1 md:min-h-0 md:overflow-y-auto">
-            <ExtratoGerencialTab initialAno={Number(ano)} initialMes={Number(selectedMes)} />
+            <ExtratoGerencialTab periodo={{ ano: Number(ano), mes: Number(selectedMes) }} />
           </div>
         )}
 

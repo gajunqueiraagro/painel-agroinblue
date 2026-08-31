@@ -53,15 +53,48 @@ const pad = (n: number) => String(n).padStart(2, '0');
 function fmtData(d: string | null): string { if (!d) return '—'; try { return format(parseISO(d), 'dd/MM/yy'); } catch { return d; } }
 function isOficial(s: string | null): boolean { return !!s && STATUS_OFICIAIS.includes(s.toLowerCase()); }
 
-export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: number; initialMes?: number }) {
+/**
+ * ⚠ QUEM MANDA NO PERIODO E' DECLARADO, e por isso os dois modos nao se misturam.
+ *
+ * `periodo` CONTROLADO: quem monta e' o dono do ano e do mes. Os selects de Mes
+ * e Ano NAO sao renderizados — nao existe segundo lugar onde o valor possa ser
+ * mudado, entao nao existe divergencia possivel. E' o modo da aba dentro da tela
+ * de Conciliacao, onde a regua de meses e o seletor de ano do CABECALHO ja
+ * governam a tela inteira: dois donos do mesmo dado davam regua em Mai e corpo
+ * em Jun (defeito do B-25).
+ *
+ * `initialAno`/`initialMes` NAO CONTROLADO: semente do estado interno, e os
+ * selects aparecem. E' o modo das duas rotas do V2Index — o item "Extrato
+ * Gerencial" do menu e a rota "Conciliacao (novo)" —, onde o cabecalho do /v2
+ * NAO oferece seletor de mes: `SECTION_PERIODO` nao lista `extrato-gerencial`
+ * nem `conciliacao-extrato`, entao `getPeriodoTipo` cai no default 'ano'
+ * (medido). Tirar os selects de la deixaria essas telas presas ao mes inicial.
+ * As duas morrem na rodada 2 e o modo nao controlado morre junto.
+ *
+ * ⚠ O PAR E' ATOMICO de proposito: `periodo` e' um objeto com os DOIS campos,
+ * nao duas props soltas. Nao ha como passar o ano controlado e o mes nao —
+ * seria meio dono, que e' o defeito outra vez, mais dificil de enxergar.
+ */
+interface PeriodoControlado { ano: number; mes: number; }
+
+export function ExtratoGerencialTab({ initialAno, initialMes, periodo }: {
+  initialAno?: number;
+  initialMes?: number;
+  periodo?: PeriodoControlado;
+}) {
   const { clienteAtual } = useCliente();
   const clienteId = clienteAtual?.id ?? null;
   const { fazendaAtual } = useFazenda();
   const fazScope = fazendaAtual?.id && fazendaAtual.id !== '__global__' ? fazendaAtual.id : null;
 
   const hoje = new Date();
-  const [ano, setAno] = useState<number>(initialAno ?? hoje.getFullYear());
-  const [mes, setMes] = useState<number>(initialMes ?? hoje.getMonth() + 1);
+  /* ⚠ O ESTADO LOCAL SO' VALE NO MODO NAO CONTROLADO. Com `periodo` presente ele
+     continua existindo mas nunca e' lido — e nao ha `useEffect` copiando a prop
+     para dentro dele: copiar criaria o segundo dono de volta, um render atras. */
+  const [anoLocal, setAnoLocal] = useState<number>(initialAno ?? hoje.getFullYear());
+  const [mesLocal, setMesLocal] = useState<number>(initialMes ?? hoje.getMonth() + 1);
+  const ano = periodo?.ano ?? anoLocal;
+  const mes = periodo?.mes ?? mesLocal;
   const [contaSel, setContaSel] = useState<string | null>(null);
   const [statusSel, setStatusSel] = useState<Set<string>>(new Set(STATUS_OFICIAIS));
   const [incluirLegados, setIncluirLegados] = useState(false);
@@ -290,20 +323,25 @@ export function ExtratoGerencialTab({ initialAno, initialMes }: { initialAno?: n
           <label className="text-[9px] font-semibold text-muted-foreground block mb-0.5">Conta</label>
           <ContaBancariaSelect value={contaId} onValueChange={setContaSel} contas={contas} showBankDetails="agencia" placeholder="Selecionar conta" />
         </div>
-        <div>
-          <label className="text-[9px] font-semibold text-muted-foreground block mb-0.5">Mês</label>
-          <Select value={String(mes)} onValueChange={(v) => setMes(Number(v))}>
-            <SelectTrigger className="h-6 text-[10px] w-[84px]"><SelectValue /></SelectTrigger>
-            <SelectContent>{MESES.map((m, i) => <SelectItem key={i} value={String(i + 1)} className="text-[10px]">{m}</SelectItem>)}</SelectContent>
-          </Select>
-        </div>
-        <div>
-          <label className="text-[9px] font-semibold text-muted-foreground block mb-0.5">Ano</label>
-          <Select value={String(ano)} onValueChange={(v) => setAno(Number(v))}>
-            <SelectTrigger className="h-6 text-[10px] w-[76px]"><SelectValue /></SelectTrigger>
-            <SelectContent>{anos.map((a) => <SelectItem key={a} value={String(a)} className="text-[10px]">{a}</SelectItem>)}</SelectContent>
-          </Select>
-        </div>
+        {/* ⚠ OS SELECTS SO' EXISTEM QUANDO ESTA TELA E' A DONA DO PERIODO. Sob um
+            cabecalho que ja governa ano e mes, eles seriam o segundo dono — e o
+            de dentro vencia, que e' exatamente o defeito do B-25. */}
+        {periodo === undefined && (<>
+          <div>
+            <label className="text-[9px] font-semibold text-muted-foreground block mb-0.5">Mês</label>
+            <Select value={String(mes)} onValueChange={(v) => setMesLocal(Number(v))}>
+              <SelectTrigger className="h-6 text-[10px] w-[84px]"><SelectValue /></SelectTrigger>
+              <SelectContent>{MESES.map((m, i) => <SelectItem key={i} value={String(i + 1)} className="text-[10px]">{m}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="text-[9px] font-semibold text-muted-foreground block mb-0.5">Ano</label>
+            <Select value={String(ano)} onValueChange={(v) => setAnoLocal(Number(v))}>
+              <SelectTrigger className="h-6 text-[10px] w-[76px]"><SelectValue /></SelectTrigger>
+              <SelectContent>{anos.map((a) => <SelectItem key={a} value={String(a)} className="text-[10px]">{a}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+        </>)}
         {/* Status chips (4 oficiais) + Incluir legados */}
         <div className="flex items-center gap-1 pb-0.5">
           {STATUS_OFICIAIS.map((s) => (
