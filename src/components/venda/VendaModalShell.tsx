@@ -42,6 +42,7 @@ import { AbaAuditoriaOC } from '@/components/compra/AbaAuditoriaOC';
 import { AbaRecebimentoLotes } from '@/components/compra/AbaRecebimentoLotes';
 import { AbaFinanceiroOC } from '@/components/compra/AbaFinanceiroOC';
 import { useOcCompromissos } from '@/hooks/useOcCompromissos';
+import type { ReactNode } from 'react';
 import type { LinhaPrevisao, RotulosCompromissos } from '@/components/compra/AbaCompromissosOC';
 import { siglaCategoria } from '@/lib/financeiro/produtoOC';
 import { subcentroVendaPorCategoria, SUBCENTRO_DESPESA_VENDA, SUBCENTRO_ADIANTAMENTO_BOITEL } from '@/hooks/useOperacaoLiquidacao';
@@ -107,11 +108,22 @@ function DicaBotao({ texto }: { texto: string | null | undefined }) {
 
 /* Par rotulo-valor do resumo lateral — idioma do `Linha` de ResumoLateralOC (A17).
    ⚠ SEXTA COPIA deste par. Sai na mesma extracao que levar o resumo para lugar unico. */
-function LinhaResumo({ rotulo, valor }: { rotulo: string; valor: string | null }) {
+function LinhaResumo({ rotulo, valor, cor, forte, selo }: {
+  rotulo: string; valor: string | null;
+  /* ⚠ A COR VEM DE FORA — B-11. O resumo passou a mostrar dois mundos (projecao ambar,
+     realizado solido) e a mesma linha serve aos dois; cravar a cor aqui obrigaria a um
+     segundo `LinhaResumo`, que e' como dois pares rotulo-valor comecam a divergir. */
+  cor?: string; forte?: boolean; selo?: ReactNode;
+}) {
   return (
     <div className="flex items-baseline justify-between gap-1.5 leading-tight">
       <span className="text-muted-foreground shrink-0">{rotulo}</span>
-      <span className="font-medium text-right truncate">{valor || '—'}</span>
+      <span className="flex items-baseline gap-1.5 min-w-0">
+        {selo}
+        <span className={`text-right truncate tabular-nums ${forte ? 'font-bold' : 'font-medium'} ${valor ? (cor ?? '') : ''}`}>
+          {valor || '—'}
+        </span>
+      </span>
     </div>
   );
 }
@@ -416,6 +428,48 @@ export function VendaModalShell({
     : fin.totalProgramado > 0 ? fin.entradaProgramado - fin.saidaProgramado
     : fin.entradaObrigacao - fin.saidaObrigacao;
   const topoNoRealizado = bolsoRealizado != null;
+
+  /* ─── O RESUMO SEGUE O MELHOR CONHECIMENTO — B-11 item 1 ─────────────────────
+     ⚠ MESMA REGRA DO TOPO (02H item K): com realizado completo, o valor mostrado e' o
+     REAL, solido e sem pilula; sem ele, e' a projecao, ambar e marcada. A regra e' uma so'
+     na tela inteira — cabecalho, faixa de analise e resumo respondem igual.
+     ⚠ E ELE DERIVA, EM VEZ DE LER O SLOT GRAVADO — e isso o torna IMUNE ao rebaixamento
+     medido nesta sessao (ver o relatorio do B-11): mesmo com o lote rebaixado pelo
+     re-save, o resumo mostra o valor que a linha realizada produz. Nao e' contorno da
+     regressao — e' a doutrina dos dois mundos aplicada: o valor oficial mora no lote, e a
+     projecao/realizado se DERIVAM das suas linhas.
+     ⚠ SO' NO BOITEL. Numa venda comum nao ha dois mundos: o acordado e' o acordado, e uma
+     pilula "projecao" ali marcaria como promessa um numero que e' fato. */
+  const derAcerto = ehBoitel ? derivadosBoitel(topoNoRealizado ? (boitelReal ?? boitelData!) : boitelData!) : null;
+  const valorAcordadoMostrado = !ehBoitel
+    ? (lotesApi && lotesApi.totais.lotes > 0 ? lotesApi.totais.valorNegociado : null)
+    : (topoNoRealizado ? liquidoDaVendaBoitel(boitelReal ?? null) : liquidoDaVendaBoitel(boitelData));
+  const corMundo = topoNoRealizado ? 'text-foreground' : 'text-[#854F0B] dark:text-amber-500';
+
+  /* ⚠ AS SETE LINHAS DO ACERTO SAEM DO MOTOR — B-11 item 2. `dAcerto*` sao as parcelas que
+     `derivadosBoitel` ja calcula com as flags aplicadas, e `valorTotalAntecipadoCalc` e o
+     reembolso. NENHUMA conta mora no resumo: ele lista e formata.
+     ⚠ "SO' ITENS COM FLAG [boitel]" E POR CONSTRUCAO, nao por filtro escrito: a parcela
+     `dAcerto*` de um custo que o contrato pos do lado do PRODUTOR ja vale zero. Frete e
+     notas do envio ficam de fora porque os defaults os poem la' — e se um contrato os
+     puser no boitel, eles APARECEM, porque a lista segue a flag e nao uma lista fixa.
+     ⚠ O SALDO E `fba - descontoDoAcerto`, o mesmo "Acerto liquido" da analise; e o total,
+     mais o reembolso, e' o `saldoReceberBase` do motor — o numero que o papel do boitel
+     traz. Nao ha uma segunda subtracao aqui. */
+  type LinhaAcerto = { rotulo: string; valor: number; sinal: '+' | '−' };
+  const acertoTodas: LinhaAcerto[] = derAcerto == null ? [] : [
+    { rotulo: '(+) Faturamento do abate', valor: derAcerto.fba, sinal: '+' },
+    { rotulo: '(−) Despesas do abate', valor: derAcerto.dAcertoAbate, sinal: '−' },
+    { rotulo: '(−) Diárias · nutrição', valor: derAcerto.dAcertoDiarias, sinal: '−' },
+    { rotulo: '(−) Sanidade', valor: derAcerto.dAcertoSanidade, sinal: '−' },
+    { rotulo: '(−) Outros', valor: derAcerto.dAcertoOutros, sinal: '−' },
+    { rotulo: '(−) Frete do envio', valor: derAcerto.dAcertoFrete, sinal: '−' },
+    { rotulo: '(−) Notas do envio', valor: derAcerto.dAcertoNotas, sinal: '−' },
+  ];
+  /* Zero nao entra: custo que o contrato pos do lado do produtor vale zero aqui, e uma
+     linha zerada afirmaria que o boitel cobrou nada — quando ele nao cobrou. */
+  const linhasAcerto = acertoTodas.filter(l => l.sinal === '+' || l.valor > 0);
+
   const faltamBoitel = ehBoitel ? faltamDosCinco(boitelData) : [];
   const naNegociacao = abaAtiva === 'negociacao';
   /* ⚠ SALVAR SO ONDE HA O QUE SALVAR — PR-OC-VENDA-ENTREGA-01C. Nas outras quatro abas o
@@ -873,8 +927,11 @@ export function VendaModalShell({
               <div className="px-3 space-y-0.5">
                 <LinhaResumo rotulo="Lotes" valor={lotesApi && lotesApi.totais.lotes > 0
                   ? `${lotesApi.totais.lotes} · ${lotesApi.totais.animais} cab` : null} />
-                <LinhaResumo rotulo="Valor acordado" valor={lotesApi && lotesApi.totais.lotes > 0
-                  ? formatMoeda(lotesApi.totais.valorNegociado) : null} />
+                <LinhaResumo rotulo="Valor acordado"
+                  valor={valorAcordadoMostrado == null ? null : formatMoeda(valorAcordadoMostrado)}
+                  cor={ehBoitel ? corMundo : undefined}
+                  /* A pilula so' existe onde ha dois mundos — ver a nota em `derAcerto`. */
+                  selo={ehBoitel && !topoNoRealizado ? <PilulaCenario cenario="projetado" /> : undefined} />
               </div>
 
               <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 mb-0.5">
@@ -898,6 +955,45 @@ export function VendaModalShell({
               <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 mb-0.5">
                 <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Financeiro</span>
               </div>
+              {/* ─── O ACERTO COM O BOITEL — B-11 item 2 ─────────────────────────────
+                  ⚠ E O EXTRATO QUE O BOITEL MANDA, linha a linha, e ate' aqui ele so'
+                  existia dentro do modal do realizado. Quem abre a operacao para conferir
+                  o acerto tinha de entrar no modal, editar, ler e sair sem salvar.
+                  ⚠ SEGUE O MELHOR CONHECIMENTO como o resto da tela: realizado solido,
+                  projecao ambar com pilula no titulo do bloco.
+                  ⚠ O SUBTITULO EM 9px E PARTE DA INFORMACAO, nao decoracao: sem ele, o
+                  operador procura o frete nesta lista e conclui que sumiu. Ele nao sumiu —
+                  ele nao e' deste acerto. */}
+              {ehBoitel && derAcerto && linhasAcerto.length > 0 && (<>
+                <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 mb-0.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Acerto com o boitel</span>
+                    {!topoNoRealizado && <PilulaCenario cenario="projetado" />}
+                  </div>
+                </div>
+                <div className="px-3 space-y-0.5">
+                  {linhasAcerto.map(l => (
+                    <LinhaResumo key={l.rotulo} rotulo={l.rotulo} cor={corMundo}
+                      valor={`${l.sinal === '−' ? '− ' : ''}${formatMoeda(l.valor)}`} />
+                  ))}
+                  <div className="border-t pt-0.5 mt-0.5">
+                    <LinhaResumo rotulo="(=) Saldo do acerto" cor={corMundo}
+                      valor={formatMoeda(derAcerto.fba - derAcerto.descontoDoAcerto)} />
+                  </div>
+                  {derAcerto.valorTotalAntecipadoCalc > 0 && (
+                    <LinhaResumo rotulo="(+) Adiantamento a reembolsar" cor={corMundo}
+                      valor={`+ ${formatMoeda(derAcerto.valorTotalAntecipadoCalc)}`} />
+                  )}
+                  <div className="border-t pt-0.5 mt-0.5">
+                    <LinhaResumo rotulo="(=) A RECEBER DO BOITEL" forte cor={corMundo}
+                      valor={formatMoeda(derAcerto.saldoReceberBase)} />
+                  </div>
+                  <div className="pt-0.5 text-[9px] text-muted-foreground leading-snug">
+                    gastos diretos do produtor (frete e notas do envio) não entram neste acerto — vivem no financeiro
+                  </div>
+                </div>
+              </>)}
+
               {/* ⚠ SEM COMPROMISSOS OS TRES SAO TRACO, e nao zero: operacao sem financeiro
                   lancado nao "recebeu zero", ela ainda nao tem financeiro. */}
               <div className="px-3 space-y-0.5">
