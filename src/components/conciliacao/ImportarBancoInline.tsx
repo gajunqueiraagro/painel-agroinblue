@@ -128,22 +128,36 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
             )}
           </div>
 
-          {/* ⚠ O QUE O BANCO DECLAROU — e os dois campos de saldo saem VAZIOS por
-              enquanto, com o motivo no `title`: o `parseOFX` daqui não lê a tag
-              `LEDGERBAL/BALAMT` (medido: zero ocorrências em todo o src/), então
-              o dado existe no arquivo e é descartado na leitura. Preenchê-los com
-              soma nossa seria inventar um "declarado pelo banco" que o banco não
-              declarou. Ver a pergunta no relatório do B-24. */}
+          {/* ⚠ O QUE O BANCO DECLAROU — e agora declara mesmo: FIN-OFX-LEDGERBAL-PARSER-01
+              fez o `parseOFX` ler `LEDGERBAL/BALAMT` + `DTASOF`, que ele descartava.
+              O número é do BANCO, atravessou o motor sem transformação e existe para
+              ser comparado com o que a casa apurou — é a única conferência da
+              prévia que confere com alguém de fora.
+              ⚠ O TRAÇO CONTINUA SENDO TRAÇO quando o arquivo não traz a tag. Somar os
+              movimentos aqui daria um número que bate consigo mesmo e não confere
+              nada — pior que o vazio, porque parece conferência. */}
           <div className="grid grid-cols-2 gap-x-4 gap-y-1 border-b border-border px-3 py-2 sm:grid-cols-4">
             <Campo rotulo="Período">
               {periodo(preview.movimentos)}
             </Campo>
             <Campo rotulo="Movimentos">{preview.movimentos.length}</Campo>
             <Campo rotulo="Saldo declarado pelo banco">
-              <span title="O arquivo traz a tag LEDGERBAL, mas o leitor de OFX desta casa ainda a descarta. Enquanto ele não a ler, este campo fica vazio — somar os movimentos aqui não seria o saldo que o banco declarou.">—</span>
+              {preview.saldoDeclarado == null ? (
+                <span title="Este arquivo não traz a tag LEDGERBAL — o banco não declarou saldo nele. O traço é ausência, não zero: somar os movimentos daria um número nosso, não o do banco.">—</span>
+              ) : (
+                <span title="Tag LEDGERBAL/BALAMT do arquivo — o saldo contábil que o próprio banco afirma. Não é a soma dos movimentos acima nem o saldo gerencial da casa.">
+                  {formatMoeda(preview.saldoDeclarado)}
+                </span>
+              )}
             </Campo>
             <Campo rotulo="Na data de">
-              <span title="Vem junto do saldo declarado (tag DTASOF), pelo mesmo leitor.">—</span>
+              {preview.saldoDeclaradoData == null ? (
+                <span title="Vem junto do saldo declarado (tag DTASOF). Sem LEDGERBAL no arquivo, não há data.">—</span>
+              ) : (
+                <span title="Tag LEDGERBAL/DTASOF — a data a que o saldo declarado se refere. Pode não ser o último dia do período acima.">
+                  {brData(preview.saldoDeclaradoData)}
+                </span>
+              )}
             </Campo>
           </div>
 

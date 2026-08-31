@@ -31,7 +31,7 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
-import { parseOFX, type MovimentoBruto } from '@/lib/financeiro/parser/parseOFX';
+import { parseOFX, lerSaldoDeclaradoOFX, type MovimentoBruto } from '@/lib/financeiro/parser/parseOFX';
 import { parseCSVComRelatorio } from '@/lib/financeiro/parser/parseCSV';
 import { extractPdfText } from '@/lib/financeiro/parser/extractPdfText';
 import { hashMovimento } from '@/lib/financeiro/extratoHash';
@@ -232,6 +232,20 @@ export interface PreviewResult {
    */
   linhasInformativas: number;
   formato: 'OFX' | 'CSV';
+  /**
+   * FIN-OFX-LEDGERBAL-PARSER-01 — o saldo que o BANCO declara no arquivo
+   * (`LEDGERBAL/BALAMT`), repassado do parser SEM transformação: o motor não
+   * soma, não arredonda, não compara e não grava. É fato do arquivo, e a única
+   * coisa que se faz com ele é mostrar.
+   *
+   * ⚠ `null` QUANDO O ARQUIVO NÃO DECLARA — e nunca zero. Ausência é ausência:
+   * um OFX sem `LEDGERBAL` não afirma que o saldo é R$ 0,00, afirma que não
+   * disse. E jamais o somatório dos movimentos no lugar: somatório bate consigo
+   * mesmo e não confere coisa nenhuma. Sempre null para CSV, que não tem a tag.
+   */
+  saldoDeclarado: number | null;
+  /** `LEDGERBAL/DTASOF` — a data a que o saldo declarado se refere. ISO. */
+  saldoDeclaradoData: string | null;
 }
 
 /**
@@ -606,8 +620,16 @@ export function useImportacaoExtrato() {
       // datadas SEM valor monetário (informativas), que são puladas — nunca gravadas 0.
       let movimentosBrutos: MovimentoBruto[];
       let linhasInformativas = 0;
+      // FIN-OFX-LEDGERBAL-PARSER-01 — leitura à parte, e à parte de propósito: o
+      // saldo declarado NÃO entra na lista de movimentos, não gera hash, não é
+      // comparado com nada e não muda uma linha do que se grava. Só atravessa.
+      let saldoDeclarado: number | null = null;
+      let saldoDeclaradoData: string | null = null;
       if (formato === 'OFX') {
         movimentosBrutos = parseOFX(conteudo);
+        const saldo = lerSaldoDeclaradoOFX(conteudo);
+        saldoDeclarado = saldo?.saldoDeclarado ?? null;
+        saldoDeclaradoData = saldo?.saldoData ?? null;
       } else {
         const rel = parseCSVComRelatorio(conteudo);
         movimentosBrutos = rel.movimentos;
@@ -1035,6 +1057,8 @@ export function useImportacaoExtrato() {
         ...recomputarAgregados(movimentos),
         linhasInformativas, // BUG-CSV-PARSE-VALOR-01 — datadas sem valor, puladas
         formato,
+        saldoDeclarado,
+        saldoDeclaradoData,
       };
       setPreview(result);
       return result;

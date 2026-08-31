@@ -9,6 +9,10 @@
  *   <FITID>           → documento (id da transação no banco)
  *   <CHECKNUM>        → fallback de documento
  *
+ * E lê, à parte dos movimentos, o SALDO DECLARADO pelo banco:
+ *   <LEDGERBAL><BALAMT>±valor.dec  → saldo contábil que o banco afirma
+ *              <DTASOF>YYYYMMDD    → a data a que esse saldo se refere
+ *
  * Aceita OFX 1.x SGML (tags sem fecho) e 2.x XML (com fecho).
  * Não depende de bibliotecas externas.
  */
@@ -44,6 +48,52 @@ function parseDataOFX(s: string | null): string | null {
   const dd = Number(dia);
   if (mm < 1 || mm > 12 || dd < 1 || dd > 31) return null;
   return `${ano}-${mes}-${dia}`;
+}
+
+/**
+ * O saldo que o BANCO declara no arquivo — não o nosso somatório.
+ *
+ * ⚠ "DECLARADO" E NÃO "FINAL", e o nome é deliberado: `saldo_final` já existe
+ * neste sistema em `financeiro_saldos_bancarios_v2` e é o saldo GERENCIAL da
+ * casa, com `origem_saldo` que na maioria das linhas é manual ou legado. Chamar
+ * os dois de "saldo final" convidaria a trocá-los — e a diferença entre o que o
+ * banco afirma e o que a casa apurou é exatamente o que a conciliação existe
+ * para medir.
+ */
+export interface SaldoDeclaradoOFX {
+  /** LEDGERBAL/BALAMT — o valor, com sinal. */
+  saldoDeclarado: number;
+  /** DTASOF — data ISO 'YYYY-MM-DD' a que o saldo se refere; null se ausente. */
+  saldoData: string | null;
+}
+
+/**
+ * Lê o saldo declarado. `null` quando o arquivo não traz `LEDGERBAL` — e null
+ * é a resposta certa: ausência vira traço na tela, nunca zero, e NUNCA a soma
+ * dos movimentos. Somatório bate consigo mesmo e não confere coisa nenhuma.
+ *
+ * ⚠ ISOLA O BLOCO ANTES DE LER A TAG, e essa ordem é a regra que este código
+ * existe para respeitar. `BALAMT` e `DTASOF` aparecem TAMBÉM dentro de
+ * `<AVAILBAL>` (saldo disponível, que inclui limite) — procurar a tag solta no
+ * documento inteiro pegaria o primeiro bloco que aparecesse, e o número
+ * mostrado como "declarado pelo banco" poderia ser outro saldo.
+ * ⚠ É O MESMO CUIDADO QUE MANTÉM O LEDGERBAL FORA DOS MOVIMENTOS: `parseOFX`
+ * só olha dentro de `<STMTTRN>...</STMTTRN>`, então nenhum valor de saldo pode
+ * virar transação. Ler tag solta no documento é como um saldo vira lançamento —
+ * capturar a tag aqui é justamente para ela nunca mais ser confundida com uma.
+ * ⚠ `(</LEDGERBAL>|$)` tolera o fecho ausente. No OFX 1.x SGML quem não fecha
+ * são as tags-folha (`<BALAMT>`, `<DTASOF>`); os agrupadores como `LEDGERBAL`
+ * fecham normalmente — medido. O `|$` é para o arquivo TRUNCADO, que acaba no
+ * meio do bloco: aí ainda se lê o saldo em vez de devolver nada.
+ */
+export function lerSaldoDeclaradoOFX(content: string): SaldoDeclaradoOFX | null {
+  const bloco = content.match(/<LEDGERBAL>([\s\S]*?)(<\/LEDGERBAL>|$)/i);
+  if (!bloco) return null;
+  const bruto = extrairTag(bloco[1], 'BALAMT');
+  if (bruto == null) return null;
+  const valor = Number(bruto.replace(',', '.'));
+  if (Number.isNaN(valor)) return null;
+  return { saldoDeclarado: valor, saldoData: parseDataOFX(extrairTag(bloco[1], 'DTASOF')) };
 }
 
 export function parseOFX(content: string): MovimentoBruto[] {
