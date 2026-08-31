@@ -78,6 +78,12 @@ export interface BoitelEdicao extends BoitelData {
   valorTotalAbate?: number;
   /** O acerto que o boitel informou — para a conferencia deixar de ser do momento. */
   acertoPapel?: number;
+  /* ⚠ O TOTAL DAS DIARIAS COMO FATO — 02F. Na projecao a fonte e' a TARIFA
+     (`custoDiaria`, R$/cab/dia) e o total deriva dela; no acerto e' o contrario, e
+     derivar a tarifa de volta fabrica fantasma de centavos na conferencia (o mesmo erro
+     que `valorTotalAbate` corrigiu). Nulo = o acerto ainda nao chegou, e o motor cai na
+     tarifa como sempre fez. */
+  valorTotalDiarias?: number;
 }
 
 /** As cabeças que SAÍRAM do boitel — o lote menos as mortes. */
@@ -167,7 +173,12 @@ export function derivadosBoitel(data: BoitelEdicao) {
   /* ⚠ CABECAS QUE SAIRAM, igual ao bloco de Custos do 01B. Ficou `q` aqui naquele PR, e o
      painel cobrava a diaria do animal morto enquanto o bloco nao cobrava. Medido no acerto
      real: 109 x 104 x 18,93. */
-  if (mc === 'diaria') cDT = cd * dias * sairam;
+  /* ⚠ O FATO MANDA QUANDO EXISTE — 02F. `valorTotalDiarias` e' o total do papel do
+     acerto; a tarifa x dias x cabecas continua valendo na projecao e enquanto o acerto
+     nao chega. Uma fonte por vez, e a preferencia declarada aqui — nao espalhada.
+     ⚠ ISTO ALCANCA TUDO QUE LE `cDT`: custo do boitel, custo operacional, desconto do
+     acerto e a exibicao "Diarias no periodo". E' o mesmo custo, com fonte melhor. */
+  if (mc === 'diaria') cDT = data.valorTotalDiarias ?? (cd * dias * sairam);
   else if (mc === 'arroba') cDT = ca * aP;
   /* ─── DE QUE LADO DO ACERTO MORA CADA DESPESA ────────────────────────────────
      PR-OC-VENDA-REALIZADO-01A. Ate' aqui a regra era CRAVADA: o frete SEMPRE fora do
@@ -219,11 +230,19 @@ export function derivadosBoitel(data: BoitelEdicao) {
      natureza de coisa; agora e' uma parcela CONDICIONADA como as outras duas. Uma
      composicao so' — e o dia em que uma quarta despesa aparecer, ela entra aqui e em
      nenhum outro lugar. */
-  const descontoDoAcerto = cDT + cs
-    + (outrosNoBoitel ? oc : 0)
-    + (freteNoBoitel ? cf : 0)
-    + (abateNoBoitel ? da : 0)
-    + (notasNoBoitel ? cne : 0);
+  /* ⚠ AS PARCELAS SAEM DO MOTOR, uma a uma — 02F (adendo B). A conferencia do acerto
+     precisa ITEMIZAR o desconto, e somar os itens na tela seria a segunda copia desta
+     composicao: no dia em que uma flag mudasse, o total e a lista discordariam. Aqui os
+     itens JA vem condicionados, e o total e' a soma deles por construcao.
+     ⚠ DIARIAS E SANIDADE NAO TEM FLAG: sao sempre do boitel. Ver a nota das flags. */
+  const dAcertoDiarias = cDT;
+  const dAcertoSanidade = cs;
+  const dAcertoOutros = outrosNoBoitel ? oc : 0;
+  const dAcertoFrete = freteNoBoitel ? cf : 0;
+  const dAcertoAbate = abateNoBoitel ? da : 0;
+  const dAcertoNotas = notasNoBoitel ? cne : 0;
+  const descontoDoAcerto = dAcertoDiarias + dAcertoSanidade + dAcertoOutros
+    + dAcertoFrete + dAcertoAbate + dAcertoNotas;
 
   /* O QUE SAI DO BOLSO DO PRODUTOR — o complemento exato do desconto. A aba Financeiro
      le' daqui para montar a linha de previsao de caixa: o que o operador marcar como
@@ -279,6 +298,7 @@ export function derivadosBoitel(data: BoitelEdicao) {
   return { ple, ganho, pf, aEF, aS, aPcab, aP, aTS, sairam, gmc, fba, cAb, fLiq, cDT, cOp, coT, cPArr,
     pParte, rProd, rLiq, rLCab, custoTotalBoitel, margemVenda,
     descontoDoAcerto, custosDoProdutor, cne,
+    dAcertoDiarias, dAcertoSanidade, dAcertoOutros, dAcertoFrete, dAcertoAbate, dAcertoNotas,
     valorTotalAntecipadoCalc, saldoReceberBase };
 }
 

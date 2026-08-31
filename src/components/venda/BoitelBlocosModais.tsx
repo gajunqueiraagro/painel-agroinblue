@@ -135,6 +135,7 @@ const MAPA_BOITEL: CampoBoitel[] = [
   { col: 'qtd_abatida',                  campo: 'qtdAbatida',                  tipo: 'int', zeroEValor: true },
   { col: 'valor_total_abate',            campo: 'valorTotalAbate',             tipo: 'num', zeroEValor: true },
   { col: 'acerto_papel',                 campo: 'acertoPapel',                 tipo: 'num', zeroEValor: true },
+  { col: 'valor_total_diarias',          campo: 'valorTotalDiarias',           tipo: 'num', zeroEValor: true },
 ];
 
 /** O payload de `oc_salvar_boitel` — a IDA, derivada do mapa. */
@@ -674,10 +675,28 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
             </Select>
           </LinhaCampo>
           )}
-          <CampoNum previsto={prev(p => formatMoeda(p.custoDiaria))} desabilitado={somenteLeitura} label="Diária" moeda valor={d.custoDiaria} onChange={v => set('custoDiaria', v)} sufixo="/cab/dia" obrigatorio />
+          {/* ⚠ NO REALIZADO A ORDEM INVERTE: o FATO na frente, a tarifa como ajuda. O
+              papel do acerto traz o total; a tarifa e' que se descobre dividindo. Na
+              projecao continua o contrario — la' a tarifa e' o que se negocia, e o total
+              deriva dela. Mesmo campo, dois sentidos, como o peso de abate ja fazia. */}
+          {modoRealizado ? (
+            <CampoNum desabilitado={somenteLeitura} label="Diárias no período" moeda obrigatorio
+              titulo="Valor total das diárias (R$) — do papel do acerto"
+              valor={d.valorTotalDiarias ?? der.cDT}
+              onChange={v => onChange({ ...d, valorTotalDiarias: v,
+                /* A tarifa acompanha para o projetado nao ficar com um numero morto. */
+                custoDiaria: (cabAbate * d.dias) > 0 ? Math.round((v / (cabAbate * d.dias)) * 100) / 100 : 0 })}
+              derivado={(cabAbate * d.dias) > 0
+                ? `${formatMoeda((d.valorTotalDiarias ?? der.cDT) / (cabAbate * d.dias))}/cab/dia · ${cabAbate} cab × ${d.dias} dias`
+                : null}
+              previsto={prev((_, x) => formatMoeda(x.cDT))} />
+          ) : (
+            <CampoNum desabilitado={somenteLeitura} label="Diária" moeda valor={d.custoDiaria} onChange={v => set('custoDiaria', v)} sufixo="/cab/dia" obrigatorio />
+          )}
           {/* ⚠ ALINHADO NA MESMA GRADE — defeito 2 do 01E. Ele flutuava fora da linha
               porque montava o proprio rotulo em cima; agora usa a `LinhaCampo`, e o valor
               derivado ocupa a coluna do campo como qualquer outro. */}
+          {!modoRealizado && (
           <LinhaCampo label="Diárias no período" largura="w-[150px]">
             <div className="h-8 px-2.5 flex items-center justify-end rounded-md border bg-muted/40 text-[13px] font-medium tabular-nums">
               {diarias > 0 ? formatMoeda(diarias) : <span className="text-muted-foreground font-normal">—</span>}
@@ -694,6 +713,7 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
                 : '—'}
             </div>
           </LinhaCampo>
+          )}
           {/* ⚠ NAO HA CAMPO DE NUTRICAO, e a ausencia e' a correcao — PR-OC-VENDA-NUTRICAO-DUPLICADA-01.
               A DIARIA JA E A NUTRICAO: e' o que o boitel cobra para alimentar o gado. Um
               campo "Nutrição (total)" ao lado das Diárias era o mesmo conceito pedido duas
@@ -711,10 +731,14 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
               Diziam "custo do produtor, fora do custo do boitel" como se fosse lei; agora
               e' escolha, e quem a responde e' o seletor logo abaixo. Um texto fixo ao lado
               de um seletor que o contradiz e' a nona instrucao sem destino. */}
-          <CampoNum previsto={prev(p => formatMoeda(p.custoFrete))} desabilitado={somenteLeitura} label="Frete (total)" moeda
-            titulo="Frete (total) — o seletor abaixo diz de que lado do acerto ele mora"
+          {/* ⚠ "ENVIO" NO ROTULO porque o MOMENTO importa — adendo do 02F. Frete e notas
+              sao lancados quando os animais EMBARCAM, muito antes do abate; quem abre o
+              acerto meses depois procurava por eles achando que faltavam, quando ja
+              estavam no financeiro desde o envio. O rotulo diz quando, a ajuda diz onde. */}
+          <CampoNum previsto={prev(p => formatMoeda(p.custoFrete))} desabilitado={somenteLeitura} label="Frete · Envio (total)" moeda
+            titulo="Frete do envio (total) — lançado quando os animais embarcam; o seletor diz de que lado do acerto ele mora"
             valor={d.custoFrete} onChange={v => set('custoFrete', v)}
-            derivado={`${formatMoeda(d.custoFrete / (qtd || 1))}/cab`}
+            derivado={`${formatMoeda(d.custoFrete / (qtd || 1))}/cab · lançado no envio`}
             extra={<SeletorLado noBoitel={d.custoFreteNoBoitel ?? false} desabilitado={somenteLeitura}
               onChange={v => set('custoFreteNoBoitel', v)} />} />
           <CampoNum previsto={prev(p => formatMoeda(p.outrosCustos))} desabilitado={somenteLeitura} label="Outros (total)" moeda valor={d.outrosCustos} onChange={v => set('outrosCustos', v)}
@@ -725,10 +749,10 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
               Iagro) nao tinham campo: iam somadas em "Outros" e perdiam a identidade, e
               sem identidade nao ha como dizer de que lado do acerto elas moram. Nasce
               zerada e do lado do PRODUTOR, que e' o caso comum. */}
-          <CampoNum desabilitado={somenteLeitura} label="Notas de envio" moeda
-            titulo="Notas de envio — guias tipo Fundersul e Iagro"
+          <CampoNum desabilitado={somenteLeitura} label="Notas · Envio (total)" moeda
+            titulo="Notas do envio (total) — guias tipo Fundersul e Iagro, lançadas quando os animais embarcam"
             valor={d.custoNotasEnvio ?? 0} onChange={v => set('custoNotasEnvio', v)}
-            derivado={`${formatMoeda((d.custoNotasEnvio ?? 0) / (qtd || 1))}/cab`}
+            derivado={`${formatMoeda((d.custoNotasEnvio ?? 0) / (qtd || 1))}/cab · lançado no envio`}
             extra={<SeletorLado noBoitel={d.notasEnvioNoBoitel ?? false} desabilitado={somenteLeitura}
               onChange={v => set('notasEnvioNoBoitel', v)} />} />
         </div>
@@ -833,7 +857,9 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
 /* Um degrau da conferencia do acerto — rotulo e valor, sem `truncate` no numero. */
 function LinhaConferencia({ rotulo, valor }: { rotulo: string; valor: string }) {
   return (
-    <div className="flex items-baseline justify-between gap-6 leading-[1.6]">
+    /* ⚠ `leading-[1.45]`, e nao 1.6: com ate' oito itens a diferenca sao 24px, e era o
+       que separava o pior caso do realizado do teto de rolagem. */
+    <div className="flex items-baseline justify-between gap-6 leading-[1.45]">
       <span className="text-[11px] font-normal text-muted-foreground whitespace-nowrap">{rotulo}</span>
       <span className="text-[11px] tabular-nums whitespace-nowrap">{valor}</span>
     </div>
@@ -989,24 +1015,43 @@ function DialogoGrupo({ card, valor, somenteLeitura, onAplicar, onFechar, modoRe
           ))}
           </div>
         </div>
-        {/* ─── CONFERENCIA DO ACERTO ────────────────────────────────────────────────
+        {/* ─── ACERTO COM O BOITEL ──────────────────────────────────────────────────
             So' no modal de Comercializacao do REALIZADO. O boitel manda um papel com o
-            valor do acerto; o sistema calcula o dele a partir do que foi digitado. Batendo,
-            o lancamento esta' conferido; divergindo, algum insumo esta' errado.
-            ⚠ O PAPEL E A VERDADE, e por isso a divergencia AVISA e nao IMPEDE: o operador
-            aplica assim mesmo se mandar. Travar aqui obrigaria a falsear um insumo para
-            fazer a conta fechar, que e' a pior saida possivel. */}
+            valor a repassar; o sistema monta o dele a partir do que foi digitado.
+            ⚠ E SO A RELACAO COM O BOITEL, e o subtitulo diz isso: os gastos DIRETOS do
+            produtor (frete e notas do envio, quando marcados "produtor") NAO entram aqui
+            — eles nunca passaram pela mao do boitel. Sem essa frase, quem confere procura
+            o frete na lista e conclui que faltou lancar.
+            ⚠ AS LINHAS SAEM DAS PARCELAS DO MOTOR (`dAcerto*`), ja condicionadas pelas
+            flags. Somar os itens aqui seria a segunda copia da composicao: no dia em que
+            uma flag mudasse, a lista e o total discordariam. So' entra o que vale > 0.
+            ⚠ O PAPEL E A VERDADE: a divergencia AVISA e nao IMPEDE. Travar obrigaria a
+            falsear um insumo para a conta fechar, que e' a pior saida possivel. */}
         {modoRealizado && card === 'B' && (
-          <div className="shrink-0 border-t bg-muted/20 px-5 py-2.5">
+          <div className="shrink-0 border-t bg-muted/20 px-5 py-2">
+            {/* ⚠ TITULO E SUBTITULO NA MESMA LINHA — o gate de rolagem cobrou. Empilhados,
+                o pior caso da conferencia (oito linhas itemizadas) passava 19px do teto de
+                85vh em viewport de 800px. Medido antes e depois; ver o relatorio. */}
+            <div className="mb-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+              <span className="text-[11px] font-medium text-foreground leading-none shrink-0">Acerto com o boitel</span>
+              <span className="text-[10px] text-muted-foreground leading-snug">
+                gastos diretos do produtor (frete e notas do envio) não entram neste acerto — vivem no financeiro
+              </span>
+            </div>
             <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
               <div className="min-w-0 w-fit">
-                <LinhaConferencia rotulo="Faturamento" valor={formatMoeda(faturamentoConferencia)} />
-                <LinhaConferencia rotulo="− Descontos do boitel" valor={`− ${formatMoeda(derLocal.descontoDoAcerto)}`} />
+                <LinhaConferencia rotulo="Faturamento do frigorífico" valor={formatMoeda(faturamentoConferencia)} />
+                {derLocal.dAcertoDiarias > 0 && <LinhaConferencia rotulo="− Diárias do período" valor={`− ${formatMoeda(derLocal.dAcertoDiarias)}`} />}
+                {derLocal.dAcertoSanidade > 0 && <LinhaConferencia rotulo="− Sanidade" valor={`− ${formatMoeda(derLocal.dAcertoSanidade)}`} />}
+                {derLocal.dAcertoOutros > 0 && <LinhaConferencia rotulo="− Outros" valor={`− ${formatMoeda(derLocal.dAcertoOutros)}`} />}
+                {derLocal.dAcertoFrete > 0 && <LinhaConferencia rotulo="− Frete do envio" valor={`− ${formatMoeda(derLocal.dAcertoFrete)}`} />}
+                {derLocal.dAcertoNotas > 0 && <LinhaConferencia rotulo="− Notas do envio" valor={`− ${formatMoeda(derLocal.dAcertoNotas)}`} />}
+                {derLocal.dAcertoAbate > 0 && <LinhaConferencia rotulo="− Notas/docs do abate" valor={`− ${formatMoeda(derLocal.dAcertoAbate)}`} />}
                 {derLocal.valorTotalAntecipadoCalc > 0 && (
                   <LinhaConferencia rotulo="+ Reembolso do adiantamento" valor={`+ ${formatMoeda(derLocal.valorTotalAntecipadoCalc)}`} />
                 )}
                 <div className="mt-1 border-t pt-1 flex items-baseline justify-between gap-6">
-                  <span className="text-[11px] font-medium text-foreground whitespace-nowrap">= Acerto calculado</span>
+                  <span className="text-[11px] font-medium text-foreground whitespace-nowrap">= A repassar pelo boitel</span>
                   <span className="text-[13px] font-medium tabular-nums whitespace-nowrap">{formatMoeda(acertoCalculado)}</span>
                 </div>
               </div>
