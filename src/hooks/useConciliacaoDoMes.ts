@@ -220,7 +220,23 @@ export function useConciliacaoDoMes(
 
 /** Os vínculos ATIVOS de um movimento — a tabela "Vínculos deste movimento". */
 export type EstadoSugestao = 'match_direto' | 'provavel' | 'ambiguo' | 'sem_match';
-export interface SugestaoDoMes { extratoId: string; estado: string }
+/**
+ * Uma linha de `fn_sugestoes_extrato` — o que o motor achou para um movimento.
+ *
+ * ⚠ O ESTADO E A SUGESTÃO SAEM DA MESMA LINHA, e é o que garante que o chip e a
+ * coluna "Lançamento sugerido" do palco nunca discordem: um só `select`, um só
+ * `map`. Ler o estado de um lugar e a sugestão de outro seria a divergência por
+ * manutenção manual que a doutrina do original proíbe.
+ * ⚠ `sugestaoValor` chega como `text` da RPC (conferido em `pg_proc`, B-28) —
+ * convertido uma vez, aqui na borda.
+ */
+export interface SugestaoDoMes {
+  extratoId: string;
+  estado: string;
+  sugestaoDescricao: string | null;
+  sugestaoFavorecido: string | null;
+  sugestaoValor: number | null;
+}
 
 /**
  * AS SUGESTÕES DO MÊS — `fn_sugestoes_extrato`, o motor portado.
@@ -263,7 +279,13 @@ export function useSugestoesDoMes(
       });
       if (error) { setSugestoes(null); return; }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- linhas da RPC, fora de types.ts
-      setSugestoes((data ?? []).map((r: any) => ({ extratoId: r.extrato_id, estado: r.estado })));
+      setSugestoes((data ?? []).map((r: any) => ({
+        extratoId: r.extrato_id,
+        estado: r.estado,
+        sugestaoDescricao: r.sugestao_descricao ?? null,
+        sugestaoFavorecido: r.sugestao_favorecido ?? null,
+        sugestaoValor: r.sugestao_valor == null ? null : Number(r.sugestao_valor),
+      })));
     } finally {
       setCarregando(false);
     }

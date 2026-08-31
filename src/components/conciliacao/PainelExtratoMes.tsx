@@ -10,6 +10,7 @@ import {
 import { useSaldoGerencialDoMes, useImportacoesDaConta } from '@/hooks/useExtratoDaConta';
 import { ImportacoesDialog } from '@/components/conciliacao/ImportacoesDialog';
 import { EstacaoConciliar } from '@/components/conciliacao/EstacaoConciliar';
+import { PalcoDoMes } from '@/components/conciliacao/PalcoDoMes';
 
 /**
  * PainelExtratoMes — o card "Extrato do mês" + o placar + a lista + a estação.
@@ -38,6 +39,7 @@ interface Props {
 
 export function PainelExtratoMes({ clienteId, contaId, ano, mes, contaNome, comPlacar }: Props) {
   const [verImportacoes, setVerImportacoes] = useState(false);
+  const [verPalco, setVerPalco] = useState(false);
   const [conciliando, setConciliando] = useState<MovimentoConciliacao | null>(null);
   const [balde, setBalde] = useState<'todos' | SituacaoMovimento | 'match_direto' | 'provavel' | 'ambiguo' | 'sem_match'>('todos');
 
@@ -86,10 +88,15 @@ export function PainelExtratoMes({ clienteId, contaId, ano, mes, contaNome, comP
           <FileText className="h-3 w-3" />
           Ver importações ({importacoes.importacoes.length})
         </Button>
+        {/* ⚠ O BOTÃO DEIXOU DE SER MORTO — FIN-CONCIL-PALCO-MES-01. Estava
+            desabilitado com o motivo escrito desde a portagem; o palco existe
+            agora e ele abre. Segue sumindo com o mês vazio: não há mês inteiro
+            para mostrar quando não há movimento. */}
         {movimentos.length > 0 && (
           <Button type="button" variant="outline" size="sm"
-            className="h-6 gap-1 px-2 text-[10px]" disabled
-            title="O palco amplo — o mês inteiro numa tela só — entra depois da homologação desta integração.">
+            className="h-6 gap-1 px-2 text-[10px]"
+            title="Ver o mês inteiro com as sugestões do motor, numa tela só."
+            onClick={() => setVerPalco(true)}>
             <LayoutList className="h-3 w-3" />
             Conciliar o mês
           </Button>
@@ -245,6 +252,19 @@ export function PainelExtratoMes({ clienteId, contaId, ano, mes, contaNome, comP
       {conciliando && (
         <EstacaoConciliar movimento={conciliando} aoFechar={() => setConciliando(null)}
           aoMudar={async () => { await recarregar(); }} />
+      )}
+
+      {/* ⚠ O PALCO RECEBE O MESMO ANO/MÊS/CONTA DESTE CARD — ele é a mesma
+          pergunta em outra escala, não uma tela com filtro próprio. E ao fechar,
+          o card recarrega: um vínculo feito lá dentro muda o "Conciliados N de M"
+          daqui. */}
+      {verPalco && (
+        <PalcoDoMes
+          clienteId={clienteId} contaId={contaId} contaNome={contaNome}
+          ano={ano} mes={mes}
+          aoFechar={() => setVerPalco(false)}
+          aoMudar={async () => { await recarregar(); }}
+        />
       )}
     </div>
   );
