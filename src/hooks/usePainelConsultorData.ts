@@ -137,6 +137,24 @@ interface Params {
   lancPecExterno?: Lancamento[];
   /** Lançamentos financeiros compartilhados — quando fornecido, o hook NÃO carrega via useFinanceiro. */
   lancFinExterno?: FinanceiroLancamento[];
+  /**
+   * PR-FIN-COMP-02 — o conjunto de COMPETÊNCIA, só para o DRE.
+   *
+   * ⚠ SEGUNDA CARGA, E NÃO UM FLIP DO CONJUNTO PRINCIPAL. `lancFinExterno`
+   * alimenta as três chamadas do PC-100 e o bloco Caixa inteiro; trocar o
+   * regime dele moveria Visão Geral, Executivo e fluxo de caixa junto. Esta
+   * prop entra ao lado, e SÓ as linhas de receita/dedução do DRE a leem.
+   *
+   * ⚠ UM NÃO CONTÉM O OUTRO — medido no Proto (Vera/2026): 18 lançamentos
+   * estão em caixa-2026 e fora de competência-2026 (pagos no ano, com fato em
+   * outro), e os boitel estão em competência-2026 e fora de caixa-2026 (fato no
+   * ano, ainda não pagos). Por isso não dá para peneirar um do outro em
+   * memória: nenhum é superset.
+   *
+   * Ausente, o DRE cai no `lancFinExterno`/interno de sempre — os callers que
+   * não passam nada seguem com o conjunto idêntico ao de antes deste PR.
+   */
+  lancFinCompExterno?: FinanceiroLancamento[];
   /** Grid de planejamento financeiro (META) compartilhado — quando fornecido, o hook calcula serieMeta dos 13 indicadores soberanos. Default: undefined (slot serieMeta fica undefined). */
   gridMetaExterno?: SubcentroGrid[];
   /** Quando false, hooks internos pesados (rebanho, lançamentos, financeiro) ficam com enabled:false; o hook segue retornando o shape esperado mas com indicadores null. useSnapshotAreaAnual segue rodando (não aceita enabled). Default: true. */
@@ -867,7 +885,7 @@ export interface PainelConsultorDataResult {
   loading: boolean;
 }
 
-export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMeta = false, incluirComparativos = false, enabled = true, lancPecExterno, lancFinExterno, gridMetaExterno, preservarMetaQuandoGlobalIncompleto = false, regime = 'caixa' }: Params): PainelConsultorDataResult {
+export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMeta = false, incluirComparativos = false, enabled = true, lancPecExterno, lancFinExterno, lancFinCompExterno, gridMetaExterno, preservarMetaQuandoGlobalIncompleto = false, regime = 'caixa' }: Params): PainelConsultorDataResult {
   const { fazendaAtual, isGlobal, fazendasComPecuaria } = useFazenda();
   const fazendaId = fazendaAtual?.id;
   const { clienteAtual } = useCliente();
@@ -1215,6 +1233,11 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
 
   const lancPec    = usarLancPecExterno ? lancPecExterno! : lancPecInterno;
   const lancFin    = usarLancFinExterno ? lancFinExterno! : lancFinInterno;
+  /* PR-FIN-COMP-02 — o conjunto do DRE. Sem a prop, é o mesmo `lancFin` de
+     sempre: nenhum caller que não a passe muda de número. */
+  const lancFinDre = Array.isArray(lancFinCompExterno) && lancFinCompExterno.length > 0
+    ? lancFinCompExterno
+    : lancFin;
   const loadingLanc = usarLancPecExterno ? false : loadingLancInterno;
   const loadingFin  = usarLancFinExterno ? false : loadingFinInterno;
 
@@ -3643,9 +3666,22 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
        realizado-por-pagamento contra o MESMO plano. Os dois divergem sobre a
        mesma meta e AMBOS estao certos. */
     const C: Regime = 'competencia';
-    const dreRec     = agregaReceitaPec(lancFin, ano, C);
-    const dreRecOut  = agregaOutrasReceitas(lancFin, ano, C);
-    const dreDed     = agregaDeducoesPec(lancFin, ano, C);
+    /* ⚠ `lancFinDre` NAS TRÊS LINHAS DE RECEITA E DEDUÇÃO — PR-FIN-COMP-02.
+       O regime `C` sempre esteve certo aqui: o adapter recorta por
+       `data_competencia`. O que estava errado era o CONJUNTO — ele chegava
+       peneirado por caixa (`status_transacao='realizado'` + janela de
+       `data_pagamento`, defaults de `useFinanceiro`), então um título com fato
+       no ano e pagamento futuro nunca chegava a ser agregado. Medido na Vera/2026:
+       R$ 1.097.196,26 de fato gerado e não pago simplesmente não existiam para
+       o DRE. Agregar em competência sobre conjunto de caixa não é um regime —
+       é o menor dos dois.
+       ⚠ AS DEMAIS LINHAS DESTE BLOCO SEGUEM COM `lancFin` — escopo do B-30 são
+       Faturamento e Deduções. Enquanto as duas metades não se encontrarem, o DRE
+       mistura receita por fato com custo por pagamento; está declarado no
+       relatório do PR, com o número, para virar decisão e não descuido. */
+    const dreRec     = agregaReceitaPec(lancFinDre, ano, C);
+    const dreRecOut  = agregaOutrasReceitas(lancFinDre, ano, C);
+    const dreDed     = agregaDeducoesPec(lancFinDre, ano, C);
     const dreCf      = agregaCustoFixoPec(lancFin, ano, C);
     const dreCv      = agregaCustoVariavelPec(lancFin, ano, C);
     const dreInvFaz  = agregaInvFazendaPec(lancFin, ano, C);

@@ -620,11 +620,27 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
   // Lançamentos compartilhados — carregados uma única vez, reutilizados pelas 3 chamadas de usePainelConsultorData abaixo.
   const { lancamentos: lancPecShared } = useLancamentos({ ano: anoNum });
   const { lancamentos: lancFinShared, rateioADM } = useFinanceiro({ ano: anoNum });
+  /* PR-FIN-COMP-02 — a SEGUNDA carga, por competência, só para as linhas de
+     receita e dedução do DRE.
+     ⚠ O `lancFinShared` ACIMA NÃO MUDA, e essa é a razão de existir uma segunda
+     chamada em vez de um parâmetro a mais na primeira: ele alimenta as três
+     instâncias do PC-100 e o bloco Caixa inteiro. Flipar o regime dele moveria
+     Visão Geral, Executivo e fluxo de caixa junto — os três que este PR tem de
+     deixar idênticos.
+     ⚠ NÃO DÁ PARA DERIVAR UM DO OUTRO EM MEMÓRIA: medido no Proto (Vera/2026),
+     18 lançamentos estão em caixa-2026 e fora de competência-2026, e os boitel
+     estão em competência-2026 e fora de caixa-2026. Nenhum dos conjuntos contém
+     o outro, então "carregar o maior e peneirar" não existe aqui.
+     O custo é uma query a mais na mesma tabela; o `queryKey` do `useFinanceiro`
+     já inclui `regime`, então os dois conjuntos têm cache próprio e não se
+     sobrescrevem. */
+  const { lancamentos: lancFinCompShared } = useFinanceiro({ ano: anoNum, regime: 'competencia' });
   // Não passar externo enquanto ainda está carregando (length = 0)
   // Undefined = hook interno roda; array com dados = hook interno desligado
   const sharedLanc = {
     lancPecExterno: lancPecShared.length > 0 ? lancPecShared : undefined,
     lancFinExterno: lancFinShared.length > 0 ? lancFinShared : undefined,
+    lancFinCompExterno: lancFinCompShared.length > 0 ? lancFinCompShared : undefined,
   };
 
   const {
