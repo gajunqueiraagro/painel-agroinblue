@@ -11,11 +11,11 @@ import { supabase } from '@/integrations/supabase/client';
  * ATIVOS cobrindo o valor do movimento, com a tolerância de R$ 0,005. A tela
  * nunca adivinha grupo, e nenhum balde de sugestão vira vínculo.
  *
- * ⚠ OS TRÊS BALDES DE SUGESTÃO NÃO NASCEM AQUI — match direto, provável e
- * ambíguo saem de `fn_sugestoes_extrato`, que ainda não existe no Proto (o trio
- * do motor está com o arquiteto). Enquanto não chegam, eles ficam AUSENTES na
- * tela, e ausente não é zero: dizer "0 prováveis" afirmaria que o motor olhou e
- * não achou, quando o motor ainda não olhou.
+ * ⚠ OS TRÊS BALDES DE SUGESTÃO VÊM DE OUTRO LUGAR — match direto, provável e
+ * ambíguo saem de `fn_sugestoes_extrato` (o motor portado, aplicado em 31/08), e
+ * são carregados SOB DEMANDA por `useSugestoesDoMes`. Enquanto o operador não
+ * pede, eles ficam AUSENTES na tela — e ausente não é zero: dizer "0 prováveis"
+ * afirmaria que o motor olhou e não achou, quando ele ainda não olhou.
  *
  * ⚠ VIVO É O QUE NÃO FOI CANCELADO NEM IGNORADO. O Proto separa os dois de
  * propósito — cancelado é o movimento que não existe, ignorado é o que existe e
@@ -54,14 +54,44 @@ export interface ContagemBaldes {
   conciliado: number;
   parcial: number;
   sem_vinculo: number;
+  /* ⚠ NULOS ENQUANTO O MOTOR NÃO RODOU, e não zero: `null` diz "não perguntei",
+     `0` diria "perguntei e não há". A tela imprime coisas diferentes para os
+     dois, porque são respostas diferentes. */
+  match_direto: number | null;
+  provavel: number | null;
+  ambiguo: number | null;
+  sem_match: number | null;
 }
 
-export function contarBaldes(movs: readonly MovimentoConciliacao[]): ContagemBaldes {
-  const c: ContagemBaldes = { todos: movs.length, conciliado: 0, parcial: 0, sem_vinculo: 0 };
+/**
+ * ⚠ O CONTADOR E A LISTA SAEM DO MESMO CAMPO — a regra que o original documenta
+ * e o motivo de `fn_sugestoes_extrato` existir. Os três baldes de sugestão
+ * contam o `estado` que a RPC devolveu; nada é recalculado aqui. Repetir o
+ * predicado no front seria concordância por manutenção manual.
+ * ⚠ E CONCILIADO/PARCIAL CONTINUAM SAINDO DO VÍNCULO, mesmo com o motor ligado:
+ * a situação é a verdade do banco, e o score nunca define pendência.
+ */
+export function contarBaldes(
+  movs: readonly MovimentoConciliacao[],
+  sugestoes?: readonly { extratoId: string; estado: string }[] | null,
+): ContagemBaldes {
+  const c: ContagemBaldes = {
+    todos: movs.length, conciliado: 0, parcial: 0, sem_vinculo: 0,
+    match_direto: null, provavel: null, ambiguo: null, sem_match: null,
+  };
   for (const m of movs) {
     if (m.situacao === 'conciliado') c.conciliado += 1;
     else if (m.situacao === 'parcial') c.parcial += 1;
     else c.sem_vinculo += 1;
+  }
+  if (sugestoes) {
+    c.match_direto = 0; c.provavel = 0; c.ambiguo = 0; c.sem_match = 0;
+    for (const s of sugestoes) {
+      if (s.estado === 'match_direto') c.match_direto += 1;
+      else if (s.estado === 'provavel') c.provavel += 1;
+      else if (s.estado === 'ambiguo') c.ambiguo += 1;
+      else if (s.estado === 'sem_match') c.sem_match += 1;
+    }
   }
   return c;
 }
@@ -160,6 +190,59 @@ export function useConciliacaoDoMes(
 }
 
 /** Os vínculos ATIVOS de um movimento — a tabela "Vínculos deste movimento". */
+export type EstadoSugestao = 'match_direto' | 'provavel' | 'ambiguo' | 'sem_match';
+export interface SugestaoDoMes { extratoId: string; estado: string }
+
+/**
+ * AS SUGESTÕES DO MÊS — `fn_sugestoes_extrato`, o motor portado.
+ *
+ * ⚠ SOB DEMANDA, E A MEDIÇÃO É QUE DECIDIU. A função chama
+ * `fn_candidatos_conciliacao` por LATERAL uma vez POR MOVIMENTO, e cada chamada
+ * custa ~91 ms medidos no Proto (EXPLAIN ANALYZE, agosto/2026): 31 movimentos já
+ * dão ~2,8 s, 58 dão ~5,3 s no banco — e mais que isso pelo canal. Carregar
+ * automático ao abrir o mês faria a tela parecer travada toda vez que alguém só
+ * queria ver a lista.
+ *
+ * ⚠ O GARGALO NÃO É O QUE PARECIA. Medido no plano: 92% do tempo está num
+ * `Bitmap Index Scan` sobre `idx_fin_lanc_v2_cliente` (30.460 linhas, 83,5 ms),
+ * que o planejador cruza por `BitmapAnd` com o índice de conta — este, sim,
+ * seletivo (1.378 linhas, 0,1 ms). Um índice COMPOSTO `(cliente_id,
+ * conta_bancaria_id)` dispensaria o cruzamento. Índice é migration; enquanto ele
+ * não vem, quem manda no custo é o operador.
+ *
+ * ⚠ ERRO NÃO VIRA TELA VAZIA: sem sugestões, os três baldes voltam a aparecer
+ * como ausentes — que é o estado honesto de "o motor não respondeu".
+ */
+export function useSugestoesDoMes(
+  clienteId: string | null, contaId: string | null, ano: number, mes: number,
+) {
+  const [sugestoes, setSugestoes] = useState<SugestaoDoMes[] | null>(null);
+  const [carregando, setCarregando] = useState(false);
+
+  /* Trocar de mês/conta ZERA o que estava calculado: manter o placar do mês
+     anterior sobre a lista do mês novo seria a pior mentira possível aqui. */
+  useEffect(() => { setSugestoes(null); }, [clienteId, contaId, ano, mes]);
+
+  const calcular = useCallback(async () => {
+    if (!clienteId || !contaId) return;
+    setCarregando(true);
+    try {
+      const { inicio, fim } = faixaDoMes(ano, mes);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+      const { data, error } = await (supabase as any).rpc('fn_sugestoes_extrato', {
+        p_cliente_id: clienteId, p_conta_bancaria_id: contaId, p_de: inicio, p_ate: fim,
+      });
+      if (error) { setSugestoes(null); return; }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- linhas da RPC, fora de types.ts
+      setSugestoes((data ?? []).map((r: any) => ({ extratoId: r.extrato_id, estado: r.estado })));
+    } finally {
+      setCarregando(false);
+    }
+  }, [clienteId, contaId, ano, mes]);
+
+  return { sugestoes, carregando, calcular };
+}
+
 export function useVinculosDoMovimento(extratoId: string | null) {
   const [vinculos, setVinculos] = useState<VinculoDoMovimento[]>([]);
   const [loading, setLoading] = useState(false);

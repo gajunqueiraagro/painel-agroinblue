@@ -7,7 +7,7 @@ import { formatMoeda } from '@/lib/calculos/formatters';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useContasBancariasLeves, rotuloContaLeve } from '@/hooks/useContasBancariasLeves';
 import {
-  useConciliacaoDoMes, contarBaldes, frameDoRodape,
+  useConciliacaoDoMes, useSugestoesDoMes, contarBaldes, frameDoRodape,
   type MovimentoConciliacao, type SituacaoMovimento,
 } from '@/hooks/useConciliacaoDoMes';
 import { useSaldoGerencialDoMes, useImportacoesDaConta } from '@/hooks/useExtratoDaConta';
@@ -93,7 +93,7 @@ function AbaConciliacao() {
   const [contaId, setContaId] = useState<string>('');
   const [verImportacoes, setVerImportacoes] = useState(false);
   const [conciliando, setConciliando] = useState<MovimentoConciliacao | null>(null);
-  const [balde, setBalde] = useState<'todos' | SituacaoMovimento>('todos');
+  const [balde, setBalde] = useState<'todos' | SituacaoMovimento | 'match_direto' | 'provavel' | 'ambiguo' | 'sem_match'>('todos');
 
   const contaEfetiva = contaId || contas[0]?.id || '';
   const conta = contas.find(c => c.id === contaEfetiva);
@@ -102,11 +102,23 @@ function AbaConciliacao() {
   const saldo = useSaldoGerencialDoMes(clienteId, contaEfetiva || null, ano, mes);
   const importacoes = useImportacoesDaConta(clienteId, contaEfetiva || null);
 
-  const contagem = useMemo(() => contarBaldes(movimentos), [movimentos]);
-  const lista = useMemo(
-    () => (balde === 'todos' ? movimentos : movimentos.filter(m => m.situacao === balde)),
-    [movimentos, balde],
-  );
+  const sug = useSugestoesDoMes(clienteId, contaEfetiva || null, ano, mes);
+  const contagem = useMemo(() => contarBaldes(movimentos, sug.sugestoes), [movimentos, sug.sugestoes]);
+  /* ⚠ O FILTRO LÊ O MESMO CAMPO QUE O CONTADOR — a regra do original. Os baldes
+     de fato filtram por `situacao` (o vínculo); os de sugestão, pelo `estado`
+     que a RPC devolveu. Nenhum dos dois recalcula nada aqui. */
+  const estadoPorMov = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const s of sug.sugestoes ?? []) m[s.extratoId] = s.estado;
+    return m;
+  }, [sug.sugestoes]);
+  const lista = useMemo(() => {
+    if (balde === 'todos') return movimentos;
+    if (balde === 'conciliado' || balde === 'parcial' || balde === 'nao_conciliado') {
+      return movimentos.filter(m => m.situacao === balde);
+    }
+    return movimentos.filter(m => estadoPorMov[m.id] === balde);
+  }, [movimentos, balde, estadoPorMov]);
 
   return (
     <div className="space-y-2 min-w-0">
@@ -238,10 +250,37 @@ function AbaConciliacao() {
             onClick={() => setBalde('parcial')} cor="bg-primary/10 text-primary" />
           <Chip rotulo="sem vínculo" n={contagem.sem_vinculo} ativo={balde === 'nao_conciliado'}
             onClick={() => setBalde('nao_conciliado')} cor="bg-destructive/10 text-destructive" />
-          <span className="ml-2 text-[9px] text-muted-foreground"
-            title="Match direto, provável e ambíguo são sugestão do motor de candidatos, que ainda não existe neste banco. Aparecem quando o motor entrar — zerá-los agora afirmaria que ele olhou e não achou.">
-            match direto · provável · ambíguo — aguardando o motor de sugestões
-          </span>
+
+          <span className="mx-1 h-4 w-px bg-border" />
+
+          {/* ─── OS TRÊS DE SUGESTÃO ─────────────────────────────────────────
+              ⚠ SOB DEMANDA, e a medição é que mandou: `fn_sugestoes_extrato`
+              chama o motor de candidatos uma vez POR MOVIMENTO, a ~91 ms cada
+              (EXPLAIN ANALYZE no Proto) — um mês de 58 linhas custa ~5,3 s no
+              banco. Calcular a cada abertura faria a tela parecer travada para
+              quem só queria ver a lista. Quem manda no custo é o operador.
+              ⚠ O BOTÃO DIZ POR QUE — regra do B-09. E enquanto ele não é
+              apertado, os três aparecem como AUSENTES, não zerados. */}
+          {contagem.match_direto == null ? (
+            <Button type="button" variant="outline" size="sm"
+              className="h-5 gap-1 px-2 text-[10px]"
+              disabled={sug.carregando || movimentos.length === 0}
+              title={movimentos.length === 0
+                ? 'Não há movimentos neste mês para sugerir.'
+                : 'Consulta o motor de candidatos, uma vez por movimento (~91 ms cada). Fica sob demanda até o índice composto entrar.'}
+              onClick={() => { void sug.calcular(); }}>
+              {sug.carregando ? 'Calculando…' : 'Calcular sugestões'}
+            </Button>
+          ) : (<>
+            <Chip rotulo="match direto" n={contagem.match_direto} ativo={balde === 'match_direto'}
+              onClick={() => setBalde('match_direto')} cor="bg-success/15 text-success" />
+            <Chip rotulo="provável" n={contagem.provavel ?? 0} ativo={balde === 'provavel'}
+              onClick={() => setBalde('provavel')} cor="bg-primary/10 text-primary" />
+            <Chip rotulo="ambíguo" n={contagem.ambiguo ?? 0} ativo={balde === 'ambiguo'}
+              onClick={() => setBalde('ambiguo')} cor="bg-amber-500/15 text-amber-700 dark:text-amber-400" />
+            <Chip rotulo="sem match" n={contagem.sem_match ?? 0} ativo={balde === 'sem_match'}
+              onClick={() => setBalde('sem_match')} cor="bg-destructive/10 text-destructive" />
+          </>)}
         </div>
 
         {/* ─── 4. A LISTA DO MÊS ──────────────────────────────────────────
