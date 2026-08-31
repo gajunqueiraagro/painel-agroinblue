@@ -31,8 +31,7 @@
  * somou nutrição. O que parecia omissão dele era a tela cobrando em dobro.
  */
 import { useMemo, type ReactNode } from 'react';
-import { AlertTriangle } from 'lucide-react';
-import { formatMoeda, formatKg, formatArroba } from '@/lib/calculos/formatters';
+import { formatMoeda, formatKg } from '@/lib/calculos/formatters';
 import type { BoitelData } from '@/components/BoitelPlanningDialog';
 
 /* ─── ENTRADAS OBRIGATORIAS ────────────────────────────────────────────────────
@@ -705,125 +704,18 @@ export function BoitelTopoNegociacao({ cabecas, pesoMedioKg, valorPorKg, valorTo
   );
 }
 
-/* Par rótulo-valor do painel — A17. Segue o idioma do `LinhaResumo` do VendaModalShell. */
-function LinhaPainel({ rotulo, valor, destaque }: { rotulo: string; valor: string | null; destaque?: boolean }) {
-  return (
-    <div className="flex items-baseline justify-between gap-1.5 leading-tight">
-      <span className="text-muted-foreground shrink-0">{rotulo}</span>
-      <span className={`text-right truncate tabular-nums ${destaque ? 'font-bold' : 'font-medium'} ${valor ? '' : 'text-muted-foreground font-normal'}`}>
-        {valor ?? '—'}
-      </span>
-    </div>
-  );
-}
-
-function TituloGrupo({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 first:mt-0 mb-0.5">
-      <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">{children}</span>
-    </div>
-  );
-}
-
-/* ─── A FAIXA E A ANALISE MIGRARAM ─────────────────────────────────────────────
-   PR-OC-VENDA-ANALISE-01. Tres componentes sairam DAQUI e o conteudo deles vive em
-   `BoitelAnaliseFaixa` (BoitelBlocosModais.tsx), que e' onde mora a superficie de tela:
-     `BoitelResultadoCompacto` — a faixa larga com a cascata e o veredito ao lado;
-     `CascataBolso` + `LinhaCascata` — os cinco degraus, que viraram as LINHAS da tabela
-       de tres colunas do modal, com a mesma ordem e a mesma regra de veredito;
-     `BoitelComparacoes` — o bloco "Previsto x realizado", cujos quatro indicadores
-       viraram o rodape zootecnico do modal.
-   ⚠ NADA FOI JOGADO FORA, e essa era a condicao: cada degrau, cada delta e cada regra de
-   "o que e' bom para esta linha" foi para o modal. O que morreu foi a LARGURA — dois
-   blocos grandes na aba para uma analise que se olha uma vez por abate.
-   ⚠ ESTE ARQUIVO SEGUE SENDO O MOTOR. As irmas que a analise consome — `derivadosBoitel`,
-   `bolsoDaVendaBoitel`, `liquidoDaVendaBoitel`, `unitariosDoLiquido` e
-   `comparativoOportunidade` — continuam aqui, e o modal nao faz UMA conta propria. */
-
-/* ─── O RESULTADO INTEIRO ──────────────────────────────────────────────────────
-   240px, dois grupos: Indicadores e Operação.
-   ⚠ FORA DA TELA DESDE PR-BOITEL-ACORDEAO-01, e de propósito: a coluna da direita passou
-   a mostrar os quatro números de decisão, e este é a memória de cálculo. Ele NAO é órfão
-   por acidente — é a peça que `PR-OC-VENDA-BOITEL-RESUMO-MODAL-01` vai abrir num modal,
-   para print e para mandar aos responsáveis. Se aquele PR morrer, este componente sai
-   junto. */
-export function BoitelPainelResultado({ boitelData, cenario }: { boitelData: BoitelEdicao | null; cenario?: CenarioBoitel }) {
-  const faltas = useMemo(() => boitelData ? exigencias(boitelData, cenario).filter(e => !e.presente) : [], [boitelData, cenario]);
-  const d = useMemo(() => boitelData ? derivadosBoitel(boitelData) : null, [boitelData]);
-
-  const faltaInd = faltas.some(f => f.grupo === 'ind');
-  const faltaOp = faltaInd || faltas.some(f => f.grupo === 'op');
-
-  /* `ind` e `op` devolvem null quando o dado que sustenta a conta não existe — é isso
-     que faz o "—" aparecer em vez de um zero que parece resultado. */
-  const ind = (fn: (x: NonNullable<typeof d>) => string) => (d && !faltaInd ? fn(d) : null);
-  const op  = (fn: (x: NonNullable<typeof d>) => string) => (d && !faltaOp ? fn(d) : null);
-
-  return (
-    <aside className="bg-card rounded-md border shadow-sm overflow-hidden self-start text-[10px] min-w-0">
-      {/* ⚠ JA NASCE MARCADO para quando `PR-OC-VENDA-BOITEL-RESUMO-MODAL-01` o abrir num
-          modal para print: um print que sai do sistema sem dizer que e' projecao e' o
-          mesmo risco da lista, so' que fora da tela e sem contexto. */}
-      <div className="h-8 shrink-0 border-b border-border bg-accent/40 flex items-center justify-between gap-2 px-3 text-[11px] font-bold uppercase tracking-wide text-primary">
-        <span>Resultado do boitel</span>
-        <PilulaCenario cenario={cenario} />
-      </div>
-      <div className="pb-1">
-        <TituloGrupo>Indicadores</TituloGrupo>
-        <div className="px-3 space-y-0.5">
-          <LinhaPainel rotulo="Peso entrada"   valor={ind(x => formatKg(x.ple))} />
-          <LinhaPainel rotulo="Ganho período"  valor={ind(x => formatKg(x.ganho))} />
-          <LinhaPainel rotulo="Peso final"     valor={ind(x => formatKg(x.pf))} />
-          <LinhaPainel rotulo="GMC"            valor={ind(x => `${x.gmc.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg`)} />
-          <LinhaPainel rotulo="@ prod./cab"    valor={ind(x => formatArroba(x.aPcab))} />
-          <LinhaPainel rotulo="@ produzidas"   valor={ind(x => formatArroba(x.aP))} />
-          <LinhaPainel rotulo="@ saída total"  valor={ind(x => formatArroba(x.aTS))} />
-        </div>
-
-        <TituloGrupo>Operação</TituloGrupo>
-        <div className="px-3 space-y-0.5">
-          <LinhaPainel rotulo="Faturamento bruto" valor={op(x => formatMoeda(x.fba))} />
-          <LinhaPainel rotulo="Despesas de abate" valor={op(x => formatMoeda(x.cAb))} />
-          <LinhaPainel rotulo="Fatur. líquido"    valor={op(x => formatMoeda(x.fLiq))} />
-          <LinhaPainel rotulo="Custo do boitel"   valor={op(x => formatMoeda(x.custoTotalBoitel))} />
-          {boitelData?.modalidadeCusto === 'parceria' && (
-            <LinhaPainel rotulo="(-) Parceiro" valor={op(x => formatMoeda(x.pParte))} />
-          )}
-          <LinhaPainel rotulo="Resultado líquido" valor={op(x => formatMoeda(x.rLiq))} destaque />
-          <LinhaPainel rotulo="Result./cab"       valor={op(x => formatMoeda(x.rLCab))} />
-          <LinhaPainel rotulo="Margem s/ venda"   valor={op(x => `${x.margemVenda.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`)} />
-          {/* ⚠ O ANTECIPADO SAI DOS TRES CAMPOS PERSISTIDOS (diárias + sanitário +
-              outros) — é o que o mockup chamou de "valor total adiant. em R$".
-              O comentário anterior dizia "sai do percentual das diárias", e essa era a
-              descrição do defeito, não do comportamento: o percentual não existe como
-              coluna nesta tabela e zerava a linha em operação reaberta. Ver a nota em
-              `derivadosBoitel`. */}
-          <LinhaPainel rotulo="Antecipado"        valor={op(x => formatMoeda(x.valorTotalAntecipadoCalc))} />
-          <LinhaPainel rotulo="Saldo a receber"   valor={op(x => formatMoeda(x.saldoReceberBase))} destaque />
-        </div>
-
-        {/* ⚠ O QUE FALTA, EM AMBAR. Nunca zero mudo: o painel diz o que impede. */}
-        {!boitelData ? (
-          <div className="mx-3 mt-1.5 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-amber-800">
-            <div className="flex items-start gap-1.5">
-              <AlertTriangle className="h-3 w-3 shrink-0 mt-[1px]" />
-              <span className="leading-snug">
-                Sem planejamento de boitel gravado nesta venda. Os números aparecem quando
-                o planejamento existir.
-              </span>
-            </div>
-          </div>
-        ) : faltas.length > 0 ? (
-          <div className="mx-3 mt-1.5 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-amber-800">
-            <div className="flex items-start gap-1.5">
-              <AlertTriangle className="h-3 w-3 shrink-0 mt-[1px]" />
-              <span className="leading-snug">
-                Falta {faltas.map(f => f.rotulo).join(', ')}.
-              </span>
-            </div>
-          </div>
-        ) : null}
-      </div>
-    </aside>
-  );
-}
+/* ─── O PAINEL DE RESULTADO FOI REMOVIDO — PR-OC-LIMPEZA-PAINEL-MORTO (B-15) ───
+   `BoitelPainelResultado` era ORFAO: declarado, exportado e NUNCA montado — medido no
+   repositorio inteiro, zero referencias fora da propria declaracao. Ele sobrevivia por
+   uma promessa escrita no proprio comentario ("e' a peca que
+   PR-OC-VENDA-BOITEL-RESUMO-MODAL-01 vai abrir num modal, para print e para mandar aos
+   responsaveis") — e essa promessa foi CUMPRIDA POR OUTRO: o modal da analise
+   (`BoitelAnaliseFaixa`, PR-OC-VENDA-ANALISE-01/02) mostra os numeros, compara os tres
+   cenarios e ja exporta PNG. O motivo de existir dele acabou junto.
+   ⚠ SAIRAM COM ELE `LinhaPainel` e `TituloGrupo`, que nao tinham outro consumidor, e os
+   imports `formatArroba` e `AlertTriangle`, que ficaram sem uso. `formatKg` FICOU: o topo
+   ainda o usa.
+   ⚠ NADA MIGROU, e essa e' a diferenca desta limpeza para a do ANALISE-01: la' os
+   componentes morreram porque o conteudo deles mudou de casa, e a nota dizia para onde.
+   Aqui nao ha para onde — o conteudo ja existia melhor noutro lugar, e o que se apaga e'
+   duplicata que nunca chegou a ser vista. */
