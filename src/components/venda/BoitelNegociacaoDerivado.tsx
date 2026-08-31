@@ -65,6 +65,19 @@ export interface BoitelEdicao extends BoitelData {
   custoNotasEnvio?: number;
   /** Data em que o abate aconteceu. Do cenario REALIZADO; vazia enquanto nao acontecer. */
   dataAbate?: string;
+  /* ─── OS TRES FATOS DO PAPEL — PR-OC-VENDA-REALIZADO-02E ─────────────────────
+     ⚠ `undefined` E RESPOSTA, e nao ausencia de dado: significa "o abate ainda nao
+     aconteceu". As colunas sao nullable e sem default justamente por isso — um zero ali
+     diria "abateu zero cabecas", que e' outra coisa.
+     ⚠ `qtdAbatida` E O TERCEIRO NUMERO do lote: negociadas (do lote) menos mortes nao
+     bastava, porque no ABATE PARCIAL animais doentes ficam no boitel e o acerto deles vem
+     depois. Sem coluna propria, o saldo teria de virar "morte" — e morte propaga ao
+     rebanho. */
+  qtdAbatida?: number;
+  /** O valor do papel, ja liquido de bonus, tributos e descontos do frigorifico. */
+  valorTotalAbate?: number;
+  /** O acerto que o boitel informou — para a conferencia deixar de ser do momento. */
+  acertoPapel?: number;
 }
 
 /** As cabeças que SAÍRAM do boitel — o lote menos as mortes. */

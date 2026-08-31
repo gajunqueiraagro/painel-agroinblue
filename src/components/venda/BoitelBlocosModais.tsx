@@ -127,6 +127,14 @@ const MAPA_BOITEL: CampoBoitel[] = [
   { col: 'custo_notas_envio',            campo: 'custoNotasEnvio',             tipo: 'num', zeroEValor: true },
   { col: 'data_abate',                   campo: 'dataAbate',                   tipo: 'texto' },
   { col: 'outros_no_boitel',             campo: 'outrosNoBoitel',              tipo: 'bool' },
+  /* ─── OS TRES FATOS DO PAPEL — PR-OC-VENDA-REALIZADO-02E (mapa 31 -> 34) ────────
+     ⚠ `zeroEValor` NOS TRES, e aqui a marca faz MAIS do que costuma: sem ela o
+     `v || null` do payload mandaria nulo para o valor 0, e a hidratacao devolveria 0 —
+     apagando a diferenca entre "abateu zero" e "ainda nao abateu". Com ela, `undefined`
+     sobrevive ao round-trip nos dois sentidos, que e' o que as colunas nullable pedem. */
+  { col: 'qtd_abatida',                  campo: 'qtdAbatida',                  tipo: 'int', zeroEValor: true },
+  { col: 'valor_total_abate',            campo: 'valorTotalAbate',             tipo: 'num', zeroEValor: true },
+  { col: 'acerto_papel',                 campo: 'acertoPapel',                 tipo: 'num', zeroEValor: true },
 ];
 
 /** O payload de `oc_salvar_boitel` — a IDA, derivada do mapa. */
@@ -512,6 +520,10 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
   onChange: (proximo: BoitelEdicao) => void, somenteLeitura?: boolean,
   modoRealizado?: boolean, projetado?: BoitelEdicao | null) {
   const der = derivadosBoitel(d);
+  /* ⚠ AS ABATIDAS MANDAM NOS DERIVADOS POR CABECA — 02E. Com abate parcial, dividir pelo
+     que SAIU do boitel daria peso medio e valor/cab de um rebanho que nao foi abatido.
+     Vazia (projetado, ou realizado sem parcial), vale `sairam`. */
+  const cabAbate = d.qtdAbatida ?? der.sairam;
   const derP = projetado ? derivadosBoitel(projetado) : null;
   /* O "previsto: X" so' existe quando ha projecao para comparar E o modo e' o realizado. */
   const prev = (fn: (p: BoitelEdicao, x: ReturnType<typeof derivadosBoitel>) => string | null): string | null =>
@@ -521,6 +533,18 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
   const diarias = der.cDT;
   const corpos: Record<string, React.ReactNode> = {
     desempenho: (<><div className="grid grid-cols-2 gap-x-3 gap-y-2.5">
+          {modoRealizado && (
+            /* ⚠ CABECAS ABATIDAS — o TERCEIRO numero (02E). Negociadas menos mortes nao
+               bastava: no ABATE PARCIAL animais doentes ficam no boitel e o acerto deles
+               vem depois. `qtd_abatida` e' coluna propria porque o saldo NAO pode virar
+               "morte" — morte propaga ao rebanho.
+               ⚠ ELA MANDA NOS DERIVADOS POR CABECA: e' o rebanho que de fato foi a'
+               balanca. Vazia, vale `sairam`, o comportamento de sempre. */
+            <CampoNum desabilitado={somenteLeitura} label="Cabeças abatidas" titulo="Cabeças efetivamente abatidas — do papel do frigorífico"
+              valor={d.qtdAbatida ?? der.sairam} casas={0} obrigatorio
+              onChange={v => set('qtdAbatida', v)}
+              derivado={`previsto: ${d.qtdCabecas || 0}${(d.morteQuantidade || 0) > 0 ? ` · ${d.morteQuantidade} mortes no período` : ''}`} />
+          )}
           {modoRealizado && (
             <LinhaCampo label="Data do abate" largura="w-[130px]">
               <DatePicker value={d.dataAbate ?? ''} onChange={v => set('dataAbate', v)}
@@ -548,13 +572,13 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
                ⚠ O DENOMINADOR E `sairam` (negociadas menos mortes), e nao as negociadas:
                e' o rebanho que de fato foi para a balanca. */
             <CampoNum desabilitado={somenteLeitura} label="Peso vivo total" titulo="Peso vivo total na balança (kg) — do papel do frigorífico"
-              valor={Math.round(der.pf * der.sairam * 100) / 100} casas={2} sufixo="kg" obrigatorio
+              valor={Math.round(der.pf * cabAbate * 100) / 100} casas={2} sufixo="kg" obrigatorio
               onChange={v => {
-                const cab = der.sairam || 1;
+                const cab = cabAbate || 1;
                 const medio = v / cab;
                 set('gmd', d.dias > 0 ? Math.round(((medio - (d.pesoInicial || 0)) / d.dias) * 1000) / 1000 : 0);
               }}
-              derivado={der.sairam > 0 ? `${n2(der.pf)} kg/cab em ${der.sairam} cab.` : null}
+              derivado={cabAbate > 0 ? `${n2(der.pf)} kg/cab em ${cabAbate} cab.` : null}
               previsto={prev((_, x) => `${n2(x.pf * x.sairam)} kg`)} />
           ) : (
             /* ⚠ AS AJUDAS SAEM DO MOTOR, e nenhuma e' conta escrita aqui: `ganho`, `ple`,
@@ -586,7 +610,7 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
             <CampoNum desabilitado={somenteLeitura} label="Arrobas totais" titulo="Arrobas totais do abate (@) — do papel do frigorífico"
               valor={Math.round(der.aTS * 100) / 100} casas={2} sufixo="@" obrigatorio
               onChange={v => {
-                const vivoTot = der.pf * (der.sairam || 1);
+                const vivoTot = der.pf * (cabAbate || 1);
                 set('rendimento', vivoTot > 0 ? Math.round(((v * 15) / vivoTot) * 100 * 100) / 100 : 0);
               }}
               derivado={der.aTS > 0 ? `${n2(der.aTS * 15)} kg de carcaça · RC ${n2(d.rendimento)}%` : null}
@@ -611,6 +635,17 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
             </div>
           )}
         </div>
+        {/* ⚠ ABATE PARCIAL — AVISA, NAO TRAVA (02E, v1). Animais doentes ficam no boitel e
+            o acerto deles vem depois; travar aqui obrigaria a mentir a quantidade para
+            conseguir lancar. O saldo fica dito na tela e vai no evento pelo payload.
+            ⚠ O SEGUNDO ACERTO NAO EXISTE AINDA: registrado como
+            OC-VENDA-ABATE-PARCIAL-02, e casa com a conta-corrente do boitel — o acerto
+            complementar e' um movimento dela, nao uma segunda venda. */}
+        {modoRealizado && d.qtdAbatida != null && d.qtdAbatida < der.sairam && (
+          <div className="mt-2.5 rounded-md border border-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2.5 py-1.5 text-[10px] leading-snug text-amber-800 dark:text-amber-200">
+            {der.sairam - d.qtdAbatida} cabeça{der.sairam - d.qtdAbatida > 1 ? 's seguem' : ' segue'} no boitel — acerto complementar em aberto.
+          </div>
+        )}
         {!modoRealizado && (
         <div className="mt-2.5 rounded-md border bg-muted/30 px-2.5 py-2 flex flex-wrap items-end gap-x-4 gap-y-1.5">
           <CampoNum desabilitado={somenteLeitura} label="Custo oportunidade" moeda titulo="Custo de oportunidade (R$/kg de peso de saída)"
@@ -720,13 +755,16 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
                ⚠ JA LIQUIDO do que o frigorifico somou e tirou — bonus, tributos e
                descontos entram no numero do papel, e a ajuda diz isso para ninguem
                procurar onde lancar cada um.
-               ⚠ DIVIDA DECLARADA: enquanto nao houver a coluna `valor_total_abate`, o
-               total e' RECONSTRUIDO (`aTS x precoVendaArroba`) na conferencia, e o
-               arredondamento da persistencia introduz centavos — medido: R$ 93,76 no
-               papel do mockup. Ver o relatorio; a decisao (a) do Gabriel resolve. */
+               ⚠ E FATO GRAVADO, e nao reconstruido — 02E, decisao (a) do Gabriel. O total
+               chegou a ser `aTS x preco/@`, e o arredondamento da persistencia introduzia
+               centavos: medido R$ 93,76 no papel do mockup, o que faria a conferencia
+               acusar divergencia contra o numero que o operador acabou de digitar. Agora
+               ele vai para `valor_total_abate`; o preco da arroba SEGUE derivando dele,
+               porque preco e' consequencia e total e' fato. */
             <CampoNum desabilitado={somenteLeitura} label="Valor total do abate" titulo="Valor total do abate (R$) — já líquido de bônus, tributos e descontos do frigorífico"
-              moeda valor={Math.round(der.aTS * d.precoVendaArroba * 100) / 100}
-              onChange={v => set('precoVendaArroba', der.aTS > 0 ? Math.round((v / der.aTS) * 100) / 100 : 0)}
+              moeda valor={d.valorTotalAbate ?? Math.round(der.aTS * d.precoVendaArroba * 100) / 100}
+              onChange={v => onChange({ ...d, valorTotalAbate: v,
+                precoVendaArroba: der.aTS > 0 ? Math.round((v / der.aTS) * 100) / 100 : 0 })}
               derivado={der.aTS > 0 ? `${formatMoeda(d.precoVendaArroba)}/@` : null}
               previsto={prev((p, x) => formatMoeda(Math.round(x.aTS * p.precoVendaArroba * 100) / 100))} />
           ) : (
@@ -883,11 +921,24 @@ function DialogoGrupo({ card, valor, somenteLeitura, onAplicar, onFechar, modoRe
   onFechar: () => void;
 }) {
   const [local, setLocal] = useState<BoitelEdicao>(valor);
+  /* ⚠ O PAPEL PERSISTE desde o 02E (`acerto_papel`, coluna e lista branca no par de
+     sempre). Nasce do valor gravado e volta a cada abertura: quem reabrir a operacao ve a
+     divergencia que estava la', em vez de um campo vazio que apaga o que se sabia. */
+  const [acertoPapel, setAcertoPapel] = useState(valor.acertoPapel ?? 0);
   const set = <K extends keyof BoitelEdicao>(k: K, v: BoitelEdicao[K]) => setLocal(a => ({ ...a, [k]: v }));
   const corpos = corposDoBoitel(local, set, setLocal, somenteLeitura, modoRealizado, projetado);
   const ids = (Object.keys(GRUPOS) as IdGrupo[]).filter(id => GRUPOS[id].card === card);
   /* O veredito do painel de Custos, no proprio titulo — ver a nota em `Painel`. */
   const derLocal = derivadosBoitel(local);
+  /* ⚠ O FATURAMENTO DA CONFERENCIA VEM DO FATO no realizado — 02E. `derLocal.fba`
+     reconstroi (`aTS x preco/@`) e carrega o arredondamento da persistencia; medido, isso
+     dava R$ 93,76 de diferenca contra o numero que o operador acabou de digitar. No
+     projetado nao ha fato, e o derivado continua sendo a resposta certa.
+     ⚠ O ACERTO E O QUE O BOITEL REPASSA — faturamento menos o que ele desconta, mais o
+     adiantamento que volta. NAO e' o liquido da venda: aquele ja e' o resultado depois de
+     tudo. Duas perguntas, dois numeros. */
+  const faturamentoConferencia = local.valorTotalAbate ?? derLocal.fba;
+  const acertoCalculado = Math.round((faturamentoConferencia - derLocal.descontoDoAcerto + derLocal.valorTotalAntecipadoCalc) * 100) / 100;
   const qtdLocal = local.qtdCabecas || 0;
   const extraCustos = qtdLocal > 0 && derLocal.custoTotalBoitel > 0 ? (
     <span className="shrink-0 text-[11px] tabular-nums text-[#854F0B] dark:text-amber-500">
@@ -938,6 +989,48 @@ function DialogoGrupo({ card, valor, somenteLeitura, onAplicar, onFechar, modoRe
           ))}
           </div>
         </div>
+        {/* ─── CONFERENCIA DO ACERTO ────────────────────────────────────────────────
+            So' no modal de Comercializacao do REALIZADO. O boitel manda um papel com o
+            valor do acerto; o sistema calcula o dele a partir do que foi digitado. Batendo,
+            o lancamento esta' conferido; divergindo, algum insumo esta' errado.
+            ⚠ O PAPEL E A VERDADE, e por isso a divergencia AVISA e nao IMPEDE: o operador
+            aplica assim mesmo se mandar. Travar aqui obrigaria a falsear um insumo para
+            fazer a conta fechar, que e' a pior saida possivel. */}
+        {modoRealizado && card === 'B' && (
+          <div className="shrink-0 border-t bg-muted/20 px-5 py-2.5">
+            <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
+              <div className="min-w-0 w-fit">
+                <LinhaConferencia rotulo="Faturamento" valor={formatMoeda(faturamentoConferencia)} />
+                <LinhaConferencia rotulo="− Descontos do boitel" valor={`− ${formatMoeda(derLocal.descontoDoAcerto)}`} />
+                {derLocal.valorTotalAntecipadoCalc > 0 && (
+                  <LinhaConferencia rotulo="+ Reembolso do adiantamento" valor={`+ ${formatMoeda(derLocal.valorTotalAntecipadoCalc)}`} />
+                )}
+                <div className="mt-1 border-t pt-1 flex items-baseline justify-between gap-6">
+                  <span className="text-[11px] font-medium text-foreground whitespace-nowrap">= Acerto calculado</span>
+                  <span className="text-[13px] font-medium tabular-nums whitespace-nowrap">{formatMoeda(acertoCalculado)}</span>
+                </div>
+              </div>
+              <div className="min-w-0">
+                <CampoNum label="Acerto do boitel (papel)" titulo="O valor que o boitel informou no acerto"
+                  moeda valor={acertoPapel} desabilitado={somenteLeitura}
+                  onChange={(v) => { setAcertoPapel(v); setLocal(a => ({ ...a, acertoPapel: v })); }} />
+              </div>
+              <div className="min-w-0 max-w-[18rem]">
+                {acertoPapel <= 0 ? (
+                  <span className="text-[10px] text-muted-foreground leading-snug">
+                    Informe o acerto do papel para conferir.
+                  </span>
+                ) : Math.abs(acertoPapel - acertoCalculado) <= 0.005 ? (
+                  <span className="text-[11px] font-medium text-success leading-snug">Confere com o papel.</span>
+                ) : (
+                  <span className="text-[11px] leading-snug text-amber-700 dark:text-amber-500">
+                    Difere em <b className="tabular-nums">{formatMoeda(Math.abs(acertoPapel - acertoCalculado))}</b> — confira preço, arrobas ou custos.
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
         <DialogFooter className="shrink-0 border-t bg-card px-5 py-3">
           <Button variant="outline" size="sm" onClick={onFechar}>Cancelar</Button>
           <Button size="sm" disabled={somenteLeitura}
