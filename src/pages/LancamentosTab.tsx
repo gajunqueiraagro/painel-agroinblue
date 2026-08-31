@@ -2520,6 +2520,18 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           'realizado do abate');
         v = envL.operacao_versao;
         setOcVersao(v);
+        /* ⚠ O ESTADO LOCAL DOS LOTES FICOU VELHO — B-12. `oc_revalorar_lote` gravou o valor
+           real DIRETO no banco, por fora do `useCompraLotes`; sem reler, o proximo "Salvar
+           negociacao" mandaria de volta o valor que a tela ainda tem em memoria — que e' o
+           projetado. Era metade da regressao que o produtor pegou em 31/08.
+           ⚠ A OUTRA METADE E A MURALHA, e ela nao depende deste await: `oc_salvar_lotes`
+           passou a RECUSAR o rebaixamento quando ha realizado completo (migration
+           20260831140238). Esta linha conserta o fluxo feliz — estado fresco na tela —, e a
+           RPC protege o caso da tela aberta ANTES do abate, que nenhuma releitura alcanca.
+           ⚠ ANTES do `onRealizadoAplicado`: aquele invalida o cache zootecnico e pode
+           disparar re-render; chegar la' com os lotes ja frescos evita a tela mostrar por um
+           instante o valor velho ao lado do novo. */
+        await lotesApi.recarregar();
         /* ⚠ O CACHE ZOOTECNICO PRECISA SABER. `oc_revalorar_lote` corrige
            `lancamentos.valor_total` no BANCO, fora do `useLancamentos` — sem invalidar, a
            tela seguiria com o retrato antigo, que e' pior que dado errado nos dois lados.

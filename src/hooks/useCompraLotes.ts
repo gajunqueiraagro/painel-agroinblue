@@ -38,6 +38,15 @@ export interface CompraLotesApi {
      ⚠ ADITIVO: sem o parametro, nada muda. A compra nao o passa em nenhum dos tres
      call sites (CompraModalShell 253, 789 e 852). */
   salvar: (opts?: { silent?: boolean; lotesSobrescritos?: LoteForm[] }) => Promise<number | null>;   // retorna a nova versão oficial | null em falha
+  /* ⚠ RELER O BANCO — B-12. Quem escreve nos lotes POR FORA deste hook (hoje
+     `oc_revalorar_lote`, no Aplicar do realizado) deixa o estado local velho, e o proximo
+     `salvar` despeja o velho por cima do que a RPC acabou de gravar. Era metade da
+     regressao do rebaixamento; a outra metade — a muralha — mora na propria
+     `oc_salvar_lotes`, que agora recusa rebaixar com realizado completo.
+     ⚠ ELE JA EXISTIA, so' nao SAIA: `carregar` e' interno ao hook desde sempre. Expo-lo e'
+     admitir que o hook nao e' o unico escritor daquela tabela — e enquanto nao fosse
+     admitido, quem escrevia por fora nao tinha como avisar. */
+  recarregar: () => Promise<void>;
   totais: { lotes: number; animais: number; pesoTotal: number; valorNegociado: number };
 }
 
@@ -169,7 +178,7 @@ export function useCompraLotes({ operacaoId, clienteId, versao, onVersaoChange, 
     return { lotes: lotes.length, animais, pesoTotal, valorNegociado };
   }, [lotes]);
 
-  return { lotes, loading, saving, adicionarLote, editarLote, removerLote, salvar, totais };
+  return { lotes, loading, saving, adicionarLote, editarLote, removerLote, salvar, recarregar: carregar, totais };
 }
 
 /* PR-OC-UX-LOTE-B-02 — MEDIAS DA NEGOCIACAO, um lugar so.
