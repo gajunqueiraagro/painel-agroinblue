@@ -45,6 +45,10 @@ export function ImportLancPrevia({ linhas, totais, aoReincluir }: ImportLancPrev
     [linhas, filtro],
   );
   const visiveis = filtradas.slice(0, LIMITE_LINHAS);
+  /* ⚠ DOIS BALDES, CONTADOS SOBRE A MESMA LISTA que a tela desenha — a regra do
+     contador e da lista saírem do mesmo campo. */
+  const nAtualiza = linhas.filter((l) => l.entra && l.modo === 'atualizar').length;
+  const nCria = linhas.filter((l) => l.entra && l.modo === 'criar').length;
 
   return (
     <div className="space-y-1.5">
@@ -56,6 +60,19 @@ export function ImportLancPrevia({ linhas, totais, aoReincluir }: ImportLancPrev
             <span className="text-[11px] tabular-nums font-mono">
               <strong>{totais.entram.qtd}</strong> linha{totais.entram.qtd !== 1 ? 's' : ''}
               {' · '}{formatMoeda(totais.entram.valor)}
+              {/* ⚠ A QUEBRA ENTRE ATUALIZAR E CRIAR SÓ APARECE QUANDO HÁ AS
+                  DUAS: no fluxo de sempre, todas criam, e uma linha dizendo
+                  "0 atualizações" seria ruído. Quando há mistura, é a coisa mais
+                  importante da tela — o operador precisa saber quantos
+                  lançamentos existentes vão mudar. */}
+              {nAtualiza > 0 && nCria > 0 && (
+                <span className="ml-1 text-muted-foreground">
+                  ({nAtualiza} atualiza{nAtualiza !== 1 ? 'm' : ''} · {nCria} cria{nCria !== 1 ? 'm' : ''})
+                </span>
+              )}
+              {nAtualiza > 0 && nCria === 0 && (
+                <span className="ml-1 text-sky-700">(todas atualizam)</span>
+              )}
             </span>
           </div>
           <div className="px-3 py-2 flex items-baseline justify-between">
@@ -175,8 +192,13 @@ export function ImportLancPrevia({ linhas, totais, aoReincluir }: ImportLancPrev
                 </td>
                 <td className="px-1 py-0.5 text-[10px]">
                   {l.entra ? (
-                    <span className="text-emerald-700">
-                      entra
+                    <span className={l.modo === 'atualizar' ? 'text-sky-700' : 'text-emerald-700'}>
+                      {/* ⚠ AS DUAS PALAVRAS SÃO DIFERENTES PORQUE OS ATOS SÃO:
+                          "atualiza" mexe num lançamento que já existe; "entra"
+                          cria um novo. Chamar os dois de "entra" esconderia do
+                          operador a única coisa que ele precisa conferir antes
+                          de confirmar. */}
+                      {l.modo === 'atualizar' ? 'atualiza' : 'entra'}
                       {/* ⚠ D2/D3 ENTRAM COM AVISO. Grau de semelhança não é
                           veredito: barrar por parecença faria a importação
                           perder em silêncio a segunda parcela de um pagamento

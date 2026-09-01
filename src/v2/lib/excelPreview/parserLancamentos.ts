@@ -47,6 +47,14 @@ export interface LancamentoExcelRow {
   observacao: string | null;
   status: StatusPlanilha | null;
   safra_texto: string | null;
+  /**
+   * Coluna técnica do modo Enriquecer: o id do lançamento a ATUALIZAR.
+   *
+   * ⚠ TEXTO CRU, sem validação aqui. O parser não conhece o cliente nem os
+   * lançamentos dele; quem confere se o id existe e é do cliente é a prévia, que
+   * tem esse contexto. Aqui ele só atravessa.
+   */
+  id_lancamento: string | null;
 }
 
 export interface LancamentosParseResult {
@@ -95,6 +103,15 @@ export const COL_FORMA_PAGAMENTO = ['Forma de pagamento', 'Forma_Pagamento', 'Fo
 export const COL_OBSERVACAO = ['Observação', 'Observacao', 'Obs', 'OBS', 'Observações', 'Observacoes'];
 export const COL_STATUS = ['Status', 'STATUS', 'Situação', 'Situacao'];
 export const COL_SAFRA = ['Safra', 'SAFRA'];
+/**
+ * FIN-ENRIQUECER-MODO-NJ-01 — a coluna TÉCNICA do modo atualização.
+ *
+ * ⚠ ELA NÃO É DO OPERADOR. Carrega o id do lançamento que já existe e está
+ * vinculado ao movimento; é o que permite ao Excel do Enriquecer ATUALIZAR em
+ * vez de criar. O cabeçalho avisa para não mexer, e linha sem id volta ao
+ * caminho de criação — apagar a célula não quebra nada, só muda o que acontece.
+ */
+export const COL_ID_LANCAMENTO = ['ID (não mexer)', 'ID (nao mexer)', 'ID'];
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
@@ -280,6 +297,7 @@ function parseRow(
       observacao: pickCol(raw, COL_OBSERVACAO),
       status: normalizarStatus(pickCol(raw, COL_STATUS)),
       safra_texto: pickCol(raw, COL_SAFRA),
+      id_lancamento: pickCol(raw, COL_ID_LANCAMENTO),
     },
     erro: null,
   };

@@ -308,6 +308,9 @@ export function V2ImportLancamentosExcel({
         <div className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 space-y-1">
           <div className="text-[12px] font-semibold text-emerald-900">
             {resultado.criados} lançamento(s) criado(s)
+            {/* B-22b — o modo atualização só aparece quando aconteceu; no fluxo
+                de sempre a frase fica idêntica à de antes. */}
+            {resultado.atualizados > 0 && ` · ${resultado.atualizados} atualizado(s)`}
             {resultado.falhas > 0 && ` · ${resultado.falhas} falha(s)`}
             {resultado.ignorados > 0 && ` · ${resultado.ignorados} fora da importação`}
           </div>

@@ -256,7 +256,11 @@ export type MotivoExclusao =
   | 'subcentro_nao_resolvido'
   | 'campo_obrigatorio_descartado'
   /** B-22a — equivalente a lançamento que já existe (nível D1). */
-  | 'ja_existe';
+  | 'ja_existe'
+  /** B-22b — a coluna ID traz um lançamento que não é deste cliente ou não existe. */
+  | 'id_desconhecido'
+  /** B-22b — lançamento de origem travada (OC/contrato): campos não se forçam. */
+  | 'origem_travada';
 
 export const MOTIVO_LABEL: Record<MotivoExclusao, string> = {
   transferencia: 'Transferência — não é criada por esta importação',
@@ -265,7 +269,29 @@ export const MOTIVO_LABEL: Record<MotivoExclusao, string> = {
   subcentro_nao_resolvido: 'Conta do plano ainda não mapeada',
   campo_obrigatorio_descartado: 'Fazenda ou conta do plano descartada — sem esses dois a linha não existe',
   ja_existe: 'Já existe lançamento equivalente — inclua manualmente se for outro',
+  id_desconhecido: 'A coluna ID aponta para um lançamento que não é deste cliente',
+  origem_travada: 'Lançamento da Operação Comercial — a classificação se ajusta lá, não aqui',
 };
+
+/**
+ * O que a linha vai FAZER — B-22b.
+ *
+ * ⚠ O MODO NASCE DA COLUNA ID, e não de uma escolha do operador: linha com id de
+ * lançamento vivo do cliente ATUALIZA aquele lançamento; linha sem id CRIA. É o
+ * fluxo real do NJ — importa o OFX, lança tudo cru e conciliado, e o Excel
+ * depois classifica o que já existe. Sem isso, o Excel duplicaria cada linha do
+ * mês que já virou lançamento.
+ */
+export type ModoLinha = 'criar' | 'atualizar';
+
+/** O que a prévia precisa saber sobre um lançamento que a planilha quer atualizar. */
+export interface AlvoAtualizacao {
+  id: string;
+  /** Origem travada (OC/contrato): a classificação não se força por aqui. */
+  travado: boolean;
+  subcentroAtual: string | null;
+  descricaoAtual: string | null;
+}
 
 /**
  * O veredito da régua de duplicidade do BANCO — `classificar_nivel_duplicidade`.
@@ -300,6 +326,8 @@ export interface LinhaPrevia {
   contaBancariaId: string | null;
   entra: boolean;
   motivo: MotivoExclusao | null;
+  /** `atualizar` quando a coluna ID traz um lançamento vivo deste cliente. */
+  modo: ModoLinha;
   /** Veredito da régua do banco; `null` = nada parecido encontrado. */
   duplicidade: NivelDuplicidade | null;
   /**
@@ -337,6 +365,7 @@ export function avaliarLinha(
   duplicidade: NivelDuplicidade | null,
   reincluida: boolean,
   indice: number,
+  alvos: ReadonlyMap<string, AlvoAtualizacao> | undefined,
 ): LinhaPrevia {
   const anoMes = anoMesDaCompetencia(row.data_competencia ?? '');
 
@@ -348,8 +377,17 @@ export function avaliarLinha(
   const itForn = valorDe(dp.fornecedor, row.fornecedor_texto);
   const itConta = valorDe(dp.conta, row.conta_bancaria_texto);
 
+  /* ⚠ O ID SÓ VALE SE O LANÇAMENTO EXISTE E É DESTE CLIENTE. `alvos` vem da
+     consulta que a prévia faz; id que não está lá é id errado — planilha de
+     outro cliente, id digitado à mão, lançamento cancelado depois de gerado o
+     arquivo. Nesses casos a linha NÃO vira criação silenciosa: para, com motivo,
+     porque criar seria duplicar o que o operador queria corrigir. */
+  const idPlanilha = (row.id_lancamento ?? '').trim();
+  const alvo = idPlanilha ? (alvos?.get(idPlanilha) ?? null) : null;
+  const modo: ModoLinha = idPlanilha ? 'atualizar' : 'criar';
+
   const base = {
-    indice, row, anoMes, fazendaId, fazendaNome, duplicidade, reincluida,
+    indice, row, anoMes, fazendaId, fazendaNome, duplicidade, reincluida, modo,
     subcentro: itSub?.valor ?? null,
     // Descartado em campo OPCIONAL vira simplesmente ausência: a linha entra sem
     // o dado. É o caso de uso que originou o descarte ("terceiros" na coluna de
@@ -357,6 +395,17 @@ export function avaliarLinha(
     favorecidoId: itForn?.valor ?? null,
     contaBancariaId: itConta?.valor ?? null,
   };
+
+  /* ⚠ OS MOTIVOS DO MODO ATUALIZAÇÃO VÊM PRIMEIRO, e a ordem é o argumento:
+     quando a linha aponta para um lançamento que não existe ou é travado, nada
+     do que vem abaixo importa — nem transferência, nem mês fechado, nem de-para.
+     A pergunta "o que fazer com esta linha" já está respondida. */
+  if (modo === 'atualizar' && !alvo) {
+    return { ...base, entra: false, motivo: 'id_desconhecido' };
+  }
+  if (alvo?.travado) {
+    return { ...base, entra: false, motivo: 'origem_travada' };
+  }
 
   // Precedência: o motivo mais estrutural primeiro, para o operador ver a causa
   // raiz e não um sintoma. Transferência não é resolvível por de-para nenhum.
@@ -441,10 +490,12 @@ export function montarPrevia(
   duplicidades?: ReadonlyMap<number, NivelDuplicidade>,
   /** Índices que o operador mandou entrar mesmo sendo D1. */
   reincluidas?: ReadonlySet<number>,
+  /** Lançamentos vivos do cliente referidos pela coluna ID, por id. */
+  alvos?: ReadonlyMap<string, AlvoAtualizacao>,
 ): { linhas: LinhaPrevia[]; totais: TotaisPrevia } {
   const linhas = rows.map((r, i) =>
     avaliarLinha(r, dp, fechados, fazendaCabecalhoId, fazendaCabecalhoNome,
-      duplicidades?.get(i) ?? null, reincluidas?.has(i) ?? false, i));
+      duplicidades?.get(i) ?? null, reincluidas?.has(i) ?? false, i, alvos));
 
   let qtdEntram = 0, valEntram = 0, qtdFora = 0, valFora = 0;
   const porMotivo = new Map<MotivoExclusao, { qtd: number; valor: number }>();

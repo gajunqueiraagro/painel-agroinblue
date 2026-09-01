@@ -11,6 +11,7 @@ import { useSaldoGerencialDoMes, useImportacoesDaConta } from '@/hooks/useExtrat
 import { ImportacoesDialog } from '@/components/conciliacao/ImportacoesDialog';
 import { EstacaoConciliar } from '@/components/conciliacao/EstacaoConciliar';
 import { PalcoDoMes } from '@/components/conciliacao/PalcoDoMes';
+import { LancarMesEmMassa } from '@/components/conciliacao/LancarMesEmMassa';
 
 /**
  * PainelExtratoMes — o card "Extrato do mês" + o placar + a lista + a estação.
@@ -92,6 +93,16 @@ export function PainelExtratoMes({ clienteId, contaId, ano, mes, contaNome, comP
             desabilitado com o motivo escrito desde a portagem; o palco existe
             agora e ele abre. Segue sumindo com o mês vazio: não há mês inteiro
             para mostrar quando não há movimento. */}
+        {/* ⚠ O PRIMEIRO PASSO DO FLUXO DO NJ mora aqui, ao lado das outras ações
+            do mês: importar o OFX, lançar tudo cru e conciliado, e só então
+            classificar pelo Excel. */}
+        {movimentos.length > 0 && (
+          <LancarMesEmMassa
+            movimentos={movimentos}
+            contaBancariaId={contaId}
+            aoConcluir={async () => { await recarregar(); }}
+          />
+        )}
         {movimentos.length > 0 && (
           <Button type="button" variant="outline" size="sm"
             className="h-6 gap-1 px-2 text-[10px]"

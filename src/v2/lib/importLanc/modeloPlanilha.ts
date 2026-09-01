@@ -17,7 +17,7 @@ import {
   COL_COMPETENCIA, COL_VALOR, COL_TIPO, COL_CONTA_PLANO, COL_FAZENDA,
   COL_FORNECEDOR, COL_CONTA_BANCARIA, COL_VENCIMENTO, COL_PAGAMENTO,
   COL_DESCRICAO, COL_DOCUMENTO, COL_TIPO_DOCUMENTO, COL_FORMA_PAGAMENTO,
-  COL_OBSERVACAO, COL_STATUS, COL_SAFRA,
+  COL_OBSERVACAO, COL_STATUS, COL_SAFRA, COL_ID_LANCAMENTO,
   TIPO_ENTRADAS, TIPO_SAIDAS,
 } from '@/v2/lib/excelPreview/parserLancamentos';
 
@@ -55,6 +55,11 @@ const COLUNAS: ColunaModelo[] = [
   col(COL_OBSERVACAO,     false, ['', 'Garantia 3 meses', ''], 26),
   col(COL_STATUS,         false, ['realizado', 'realizado', 'previsto'], 12),
   col(COL_SAFRA,          false, ['2026/2027', '', ''], 12),
+  /* ⚠ ÚLTIMA, E TÉCNICA. Fica no fim para não empurrar as colunas que o operador
+     preenche; o cabeçalho já diz "não mexer". No modelo em branco ela sai vazia,
+     porque não há lançamento a atualizar — quem baixa o modelo em branco está
+     criando do zero. */
+  col(COL_ID_LANCAMENTO,  false, ['', '', ''], 38),
 ];
 
 const VERMELHO = 'FFC00000';

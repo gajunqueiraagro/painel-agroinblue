@@ -34,6 +34,15 @@ export interface MovimentoConciliacao {
   valorConciliado: number;
   valorAberto: number;
   situacao: SituacaoMovimento;
+  /**
+   * O lançamento vinculado, quando há EXATAMENTE UM vínculo ativo.
+   *
+   * ⚠ `null` COM DOIS OU MAIS, e não "o primeiro": um movimento coberto por
+   * vários lançamentos não tem "o" lançamento dele, e escolher um seria
+   * arbitrário. A coluna ID do Excel do Enriquecer sai vazia nesse caso, e a
+   * linha volta pelo caminho de criação em vez de atualizar o lançamento errado.
+   */
+  lancamentoId: string | null;
 }
 
 /**
@@ -185,12 +194,16 @@ export function useConciliacaoDoMes(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado
       const { data: vinc } = await (supabase as any)
         .from('conciliacao_bancaria_itens')
-        .select('extrato_id, valor_aplicado')
+        .select('extrato_id, valor_aplicado, lancamento_id')
         .in('extrato_id', movs.map(m => m.id))
         .is('desfeito_em', null);
       const aplicadoPorMov: Record<string, number> = {};
-      for (const v of (vinc ?? []) as { extrato_id: string; valor_aplicado: number }[]) {
+      /* `undefined` = nenhum vínculo; string = exatamente um; `null` = dois ou
+         mais, e aí não há "o" lançamento do movimento. */
+      const lancPorMov: Record<string, string | null> = {};
+      for (const v of (vinc ?? []) as { extrato_id: string; valor_aplicado: number; lancamento_id: string }[]) {
         aplicadoPorMov[v.extrato_id] = (aplicadoPorMov[v.extrato_id] ?? 0) + Number(v.valor_aplicado ?? 0);
+        lancPorMov[v.extrato_id] = v.extrato_id in lancPorMov ? null : v.lancamento_id;
       }
 
       setMovimentos(movs.map(m => {
@@ -207,6 +220,7 @@ export function useConciliacaoDoMes(
           id: m.id, data_movimento: m.data_movimento, descricao: m.descricao,
           documento: m.documento, valor,
           valorConciliado: aplicado, valorAberto: Math.max(0, aberto), situacao,
+          lancamentoId: lancPorMov[m.id] ?? null,
         };
       }));
     } finally {

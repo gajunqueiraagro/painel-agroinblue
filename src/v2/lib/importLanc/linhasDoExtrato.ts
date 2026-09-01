@@ -1,6 +1,6 @@
 import {
   COL_COMPETENCIA, COL_VALOR, COL_TIPO, COL_CONTA_BANCARIA, COL_DESCRICAO, COL_DOCUMENTO,
-  TIPO_ENTRADAS, TIPO_SAIDAS,
+  COL_ID_LANCAMENTO, TIPO_ENTRADAS, TIPO_SAIDAS,
 } from '@/v2/lib/excelPreview/parserLancamentos';
 import type { LinhaPreenchida } from '@/v2/lib/importLanc/modeloPlanilha';
 
@@ -36,6 +36,8 @@ export interface MovimentoParaPlanilha {
   descricao: string | null;
   documento: string | null;
   valor: number;
+  /** O lançamento já vinculado, quando há exatamente um. Vazio = linha nova. */
+  lancamentoId?: string | null;
 }
 
 export function linhasDoExtrato(
@@ -55,5 +57,9 @@ export function linhasDoExtrato(
     [COL_CONTA_BANCARIA[0]]: contaNome,
     [COL_DESCRICAO[0]]: m.descricao ?? '',
     [COL_DOCUMENTO[0]]: m.documento ?? '',
+    /* ⚠ VAZIO QUANDO NÃO HÁ UM ÚNICO LANÇAMENTO: sem id, a linha volta ao
+       caminho de criação. É o que acontece com movimento ainda não lançado e com
+       movimento coberto por dois lançamentos, onde não existe "o" dele. */
+    [COL_ID_LANCAMENTO[0]]: m.lancamentoId ?? '',
   }));
 }

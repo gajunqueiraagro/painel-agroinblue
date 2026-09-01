@@ -24,7 +24,7 @@ import {
   montarDePara, montarPrevia, contarPendentes, chaveFechamento,
   normalizar as normalizarTexto,
   type CatalogosImport, type DeParaCompleto, type DeParaMap,
-  type SubcentroAliasRef, type ChaveFechamento, type NivelDuplicidade,
+  type SubcentroAliasRef, type ChaveFechamento, type NivelDuplicidade, type AlvoAtualizacao,
 } from '@/v2/lib/importLanc/importLancamentosView';
 
 /**
@@ -47,6 +47,8 @@ function normalizarAlias(bruto: unknown): Omit<SubcentroAliasRef, 'subcentro'> |
 /** Saldo da confirmação: o que entrou, o que falhou e quanta memória ficou. */
 export interface ResultadoImportacao {
   criados: number;
+  /** B-22b — linhas que atualizaram lançamento existente pela coluna ID. */
+  atualizados: number;
   falhas: number;
   ignorados: number;
   apelidos: ResultadoApelidos;
@@ -65,6 +67,7 @@ export function useImportLancamentosExcel() {
     classificacoes, fornecedores, contasBancarias,
     loadClassificacoes, loadFornecedores, loadContas, criarFornecedor,
     criarLancamentoComId,
+    editarLancamento,
   } = useFinanceiroV2();
 
   // ── Estado do fluxo ──
@@ -95,6 +98,15 @@ export function useImportLancamentosExcel() {
   const [duplicidades, setDuplicidades] = useState<ReadonlyMap<number, NivelDuplicidade>>(new Map());
   const [reincluidas, setReincluidas] = useState<ReadonlySet<number>>(new Set());
   const [checandoDup, setChecandoDup] = useState(false);
+  /**
+   * Os lançamentos que a coluna ID da planilha manda ATUALIZAR — B-22b.
+   *
+   * ⚠ CARREGADOS PELO ID, E CONFERIDOS CONTRA O CLIENTE: id que não volta desta
+   * consulta é id que não existe, foi cancelado, ou é de outro cliente — e a
+   * linha para, em vez de virar criação silenciosa. Criar seria duplicar
+   * justamente o lançamento que o operador queria corrigir.
+   */
+  const [alvos, setAlvos] = useState<ReadonlyMap<string, AlvoAtualizacao>>(new Map());
   /** Resultado da gravação (passo 4). null = ainda não confirmada. */
   const [gravando, setGravando] = useState(false);
   const [resultado, setResultado] = useState<ResultadoImportacao | null>(null);
@@ -347,8 +359,8 @@ export function useImportLancamentosExcel() {
   const previa = useMemo(() => {
     if (!parse || !dePara) return null;
     return montarPrevia(parse.rows, dePara, fechados, fazendaCabecalhoId, fazendaCabecalhoNome,
-      duplicidades, reincluidas);
-  }, [parse, dePara, fechados, fazendaCabecalhoId, fazendaCabecalhoNome, duplicidades, reincluidas]);
+      duplicidades, reincluidas, alvos);
+  }, [parse, dePara, fechados, fazendaCabecalhoId, fazendaCabecalhoNome, duplicidades, reincluidas, alvos]);
 
   /**
    * Uma linha D1 entra assim mesmo — decisão do operador, por LINHA.
@@ -442,6 +454,53 @@ export function useImportLancamentosExcel() {
     return () => { cancelado = true; };
   }, [clienteId, parse]);
 
+  /**
+   * ⚠ TRAVADO É O QUE A OPERAÇÃO COMERCIAL GOVERNA. `origem_lancamento='oc'` ou
+   * vínculo em `zoo_operacao_partes`: nesses, valor, classificação, tipo e
+   * competência compõem a obrigação da OC, e o `editarLancamento` os preserva
+   * gravando só o permitido. Aqui a linha CAI FORA com aviso em vez de gravar
+   * pela metade — importação silenciosamente parcial é pior que recusa visível.
+   */
+  useEffect(() => {
+    let cancelado = false;
+    const ids = [...new Set((parse?.rows ?? [])
+      .map((r) => (r.id_lancamento ?? '').trim())
+      .filter(Boolean))];
+    if (!clienteId || ids.length === 0) { setAlvos(new Map()); return; }
+
+    (async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado
+      const { data } = await (supabase as any)
+        .from('financeiro_lancamentos_v2')
+        .select('id, subcentro, descricao, origem_lancamento, origem_tipo')
+        .eq('cliente_id', clienteId)
+        .eq('cancelado', false)
+        .in('id', ids);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- linhas cruas, fora de types.ts
+      const rows: any[] = data ?? [];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado
+      const { data: partes } = await (supabase as any)
+        .from('zoo_operacao_partes')
+        .select('financeiro_lancamento_id')
+        .in('financeiro_lancamento_id', ids);
+      const comOC = new Set(((partes ?? []) as { financeiro_lancamento_id: string }[])
+        .map((p) => p.financeiro_lancamento_id));
+
+      if (cancelado) return;
+      const mapa = new Map<string, AlvoAtualizacao>();
+      for (const r of rows) {
+        mapa.set(r.id, {
+          id: r.id,
+          travado: r.origem_lancamento === 'oc' || r.origem_tipo === 'oc' || comOC.has(r.id),
+          subcentroAtual: r.subcentro ?? null,
+          descricaoAtual: r.descricao ?? null,
+        });
+      }
+      setAlvos(mapa);
+    })();
+    return () => { cancelado = true; };
+  }, [clienteId, parse]);
+
   const pendentes = useMemo(() => (dePara ? contarPendentes(dePara) : null), [dePara]);
 
   /** A planilha não trouxe coluna de fazenda em nenhuma linha → exigir no cabeçalho. */
@@ -464,6 +523,7 @@ export function useImportLancamentosExcel() {
     setGravando(true);
     const erros: string[] = [];
     let criados = 0;
+    let atualizados = 0;
     let falhas = 0;
 
     try {
@@ -499,6 +559,29 @@ export function useImportLancamentosExcel() {
           grupo_custo: cls?.grupo_custo,
           centro_custo: cls?.centro_custo,
         };
+        /* ⚠ O MODO DECIDE O GRAVADOR — B-22b. Linha com id de lançamento vivo
+           ATUALIZA aquele lançamento; linha sem id cria. É o fluxo real do NJ: o
+           mês inteiro já virou lançamento cru pela conciliação, e o Excel chega
+           para classificar o que existe. Sem este roteamento, cada linha do mês
+           viraria um segundo lançamento. */
+        if (l.modo === 'atualizar') {
+          const alvoId = (l.row.id_lancamento ?? '').trim();
+          /* ⚠ CÉLULA VAZIA NÃO APAGA O QUE JÁ EXISTE. O `form` acima nasce da
+             linha da planilha; aqui as ausências voltam ao valor atual do
+             lançamento, e só o que o operador escreveu sobrescreve. Mandar o
+             form cru apagaria descrição e classificação de quem deixou a célula
+             em branco — que é a maioria das colunas opcionais. */
+          const alvo = alvos.get(alvoId);
+          const formUpd = {
+            ...form,
+            descricao: form.descricao ?? alvo?.descricaoAtual ?? undefined,
+            subcentro: form.subcentro ?? alvo?.subcentroAtual ?? undefined,
+          };
+          const ok = await editarLancamento(alvoId, formUpd);
+          if (ok) atualizados++;
+          else { falhas++; erros.push(`Linha ${l.row.linha}: falha ao atualizar o lançamento.`); }
+          continue;
+        }
         const id = await criarLancamentoComId(form, { origem: 'excel', silent: true });
         if (id) criados++;
         else { falhas++; erros.push(`Linha ${l.row.linha}: falha ao criar o lançamento.`); }
@@ -517,7 +600,7 @@ export function useImportLancamentosExcel() {
       erros.push(...apelidos.erros);
 
       const r: ResultadoImportacao = {
-        criados, falhas,
+        criados, atualizados, falhas,
         ignorados: previa.totais.ficamDeFora.qtd,
         apelidos, erros,
       };
@@ -529,6 +612,8 @@ export function useImportLancamentosExcel() {
   }, [
     clienteId, previa, dePara, classificacoes, criarLancamentoComId,
     planoIdPorSubcentro, aliasIdPorTexto, aliasesFornecedor, aliasesConta,
+    /* B-22b — o gravador do modo atualização e o mapa que o alimenta. */
+    editarLancamento, alvos,
   ]);
 
   return {
