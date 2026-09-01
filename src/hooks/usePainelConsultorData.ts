@@ -1241,9 +1241,43 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
   const lancFin    = usarLancFinExterno ? lancFinExterno! : lancFinInterno;
   /* PR-FIN-COMP-02 — o conjunto do DRE. Sem a prop, é o mesmo `lancFin` de
      sempre: nenhum caller que não a passe muda de número. */
-  const lancFinDre = Array.isArray(lancFinCompExterno) && lancFinCompExterno.length > 0
+  const lancFinDreBruto = Array.isArray(lancFinCompExterno) && lancFinCompExterno.length > 0
     ? lancFinCompExterno
     : lancFin;
+  /**
+   * PR-DRE-COMPOE-01 — a bandeira `compoe_dre` passa a valer.
+   *
+   * O campo existe na tabela, o modal financeiro o mostra ("Compõe DRE") e o
+   * `useFinanceiro` o tipa e mapeia (`:98`, `:247`) — mas o PC-100 tinha ZERO
+   * ocorrências dele. A bandeira era decorativa no único caminho onde importa: o
+   * operador desmarcava e o número não se mexia.
+   *
+   * ⚠ `!== false`, E NÃO `=== true`: exclui apenas o FALSE EXPLÍCITO. Há 157
+   * lançamentos com `compoe_dre` nulo, todos sem macro nem subcentro, e não é
+   * este PR que decide o destino deles — nulo é "ninguém disse", não "não
+   * compõe".
+   *
+   * ⚠ AQUI, E SÓ AQUI. `lancFinDre` alimenta as dez linhas do bloco DRE e
+   * nenhum outro consumidor (conferido: `:3795-3811`). Caixa, extrato,
+   * conciliação e fluxo seguem com `lancFin` e continuam vendo tudo — a bandeira
+   * fala de RESULTADO, e o dinheiro do adiantamento é real em todo lugar.
+   *
+   * ⚠ `useMemo` PORQUE `.filter` CRIA ARRAY NOVO A CADA RENDER, e `lancFinDre`
+   * entra nas deps do `_finSoberano`: sem a memoização, o memo recalcularia
+   * sempre e o DRE inteiro perderia o cache.
+   *
+   * Medido no Proto (01/09): dentro dos nove grupos que o DRE lê, os únicos
+   * `compoe_dre = false` são os cinco da Vera — 3 adiantamentos de boitel
+   * (R$ 141.702,00, em Deduções) e 2 devoluções (R$ 137.659,50, em Outras
+   * Receitas). Os demais clientes têm dezenas de milhares de linhas marcadas
+   * `false`, mas todas em Entre Contas, Entradas de Capital, Amortizações e
+   * Dividendos — grupos que os predicados do DRE já não leem. O DRE deles não
+   * muda porque não havia o que excluir, e não porque a marca não exista.
+   */
+  const lancFinDre = useMemo(
+    () => lancFinDreBruto.filter((l) => l.compoe_dre !== false),
+    [lancFinDreBruto],
+  );
   const loadingLanc = usarLancPecExterno ? false : loadingLancInterno;
   const loadingFin  = usarLancFinExterno ? false : loadingFinInterno;
 
