@@ -68,12 +68,30 @@ function estilo(cor: string, negrito: boolean, italico = false) {
   return { font: { color: { rgb: cor }, bold: negrito, italic: italico } };
 }
 
-function montarAbaLancamentos(): XLSX.WorkSheet {
+/**
+ * Uma linha já preenchida, por CABEÇALHO de coluna.
+ *
+ * ⚠ A CHAVE É O CABEÇALHO CANÔNICO, e não a posição: quem preenche não precisa
+ * conhecer a ordem das dezesseis colunas, e reordená-las um dia não silencia o
+ * preenchimento — a coluna some do mapa e a célula fica vazia, em vez de o valor
+ * cair na coluna vizinha.
+ */
+export type LinhaPreenchida = Readonly<Record<string, string>>;
+
+/**
+ * ⚠ COM `linhas`, OS EXEMPLOS SAEM. Eles ensinam o formato para quem parte do
+ * zero; sobre uma planilha que já vem com os movimentos do mês, virariam três
+ * lançamentos falsos que o operador teria de lembrar de apagar — e a instrução
+ * "apague as três linhas de exemplo" é justamente o passo que se esquece.
+ */
+function montarAbaLancamentos(linhas?: readonly LinhaPreenchida[]): XLSX.WorkSheet {
   const linhaMarcador = COLUNAS.map((c) => (c.obrigatoria ? 'OBRIGATÓRIA' : 'opcional'));
   const linhaCabecalho = COLUNAS.map((c) => c.cabecalho);
-  const exemplos = [0, 1, 2].map((i) => COLUNAS.map((c) => c.exemplos[i]));
+  const corpo = linhas?.length
+    ? linhas.map((l) => COLUNAS.map((c) => l[c.cabecalho] ?? ''))
+    : [0, 1, 2].map((i) => COLUNAS.map((c) => c.exemplos[i]));
 
-  const ws = XLSX.utils.aoa_to_sheet([linhaMarcador, linhaCabecalho, ...exemplos]);
+  const ws = XLSX.utils.aoa_to_sheet([linhaMarcador, linhaCabecalho, ...corpo]);
 
   // Estilo por célula (best-effort — ver comentário em `estilo`).
   COLUNAS.forEach((c, i) => {
@@ -81,9 +99,13 @@ function montarAbaLancamentos(): XLSX.WorkSheet {
     const cabecalho = XLSX.utils.encode_cell({ r: 1, c: i });
     if (ws[marcador]) ws[marcador].s = estilo(c.obrigatoria ? VERMELHO : CINZA, c.obrigatoria);
     if (ws[cabecalho]) ws[cabecalho].s = estilo('FF000000', true);
-    for (let r = 2; r <= 4; r++) {
-      const cel = XLSX.utils.encode_cell({ r, c: i });
-      if (ws[cel]) ws[cel].s = estilo(AZUL, false, true);
+    /* O azul-itálico marca EXEMPLO. Sobre dado real ele mentiria: o operador
+       leria como "linha de demonstração, pode apagar". */
+    if (!linhas?.length) {
+      for (let r = 2; r <= 4; r++) {
+        const cel = XLSX.utils.encode_cell({ r, c: i });
+        if (ws[cel]) ws[cel].s = estilo(AZUL, false, true);
+      }
     }
   });
 
@@ -156,7 +178,8 @@ function blocosInstrucoes(): Bloco[] {
     ],
     ['O QUE ESTA IMPORTAÇÃO NÃO FAZ',
       'Não concilia com extrato bancário. Não altera lançamento que já existe.',
-      'Se a movimentação já entrou pelo OFX, a linha equivalente não vira lançamento duplicado.',
+      'A prévia detecta a linha equivalente a lançamento já existente — inclusive o que',
+      'nasceu do OFX — e a deixa de fora por padrão; você pode desmarcar para importar mesmo assim.',
     ],
   ];
 }
@@ -174,9 +197,19 @@ function montarAbaInstrucoes(): XLSX.WorkSheet {
 }
 
 /** Monta o workbook e dispara o download. Puro efeito de UI — não toca o banco. */
-export function baixarModeloPlanilha(): void {
+/**
+ * ⚠ UM GERADOR SÓ, DOIS PONTOS DE PARTIDA — B-22a. Sem argumento, é o modelo em
+ * branco de sempre e a Importação de Lançamentos não muda um byte. Com `linhas`,
+ * o MESMO layout sai pré-preenchido com os movimentos do extrato, que é a única
+ * diferença do fluxo Enriquecer. Duas funções divergiriam na primeira coluna
+ * nova — e o operador aprenderia dois formatos para a mesma planilha.
+ */
+export function baixarModeloPlanilha(opts?: {
+  linhas?: readonly LinhaPreenchida[];
+  nomeArquivo?: string;
+}): void {
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, montarAbaLancamentos(), 'Lancamentos');
+  XLSX.utils.book_append_sheet(wb, montarAbaLancamentos(opts?.linhas), 'Lancamentos');
   XLSX.utils.book_append_sheet(wb, montarAbaInstrucoes(), 'Instruções');
-  XLSX.writeFile(wb, 'modelo-importacao-lancamentos.xlsx');
+  XLSX.writeFile(wb, opts?.nomeArquivo ?? 'modelo-importacao-lancamentos.xlsx');
 }

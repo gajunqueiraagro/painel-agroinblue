@@ -254,7 +254,9 @@ export type MotivoExclusao =
   | 'fazenda_nao_resolvida'
   | 'mes_fechado'
   | 'subcentro_nao_resolvido'
-  | 'campo_obrigatorio_descartado';
+  | 'campo_obrigatorio_descartado'
+  /** B-22a — equivalente a lançamento que já existe (nível D1). */
+  | 'ja_existe';
 
 export const MOTIVO_LABEL: Record<MotivoExclusao, string> = {
   transferencia: 'Transferência — não é criada por esta importação',
@@ -262,9 +264,32 @@ export const MOTIVO_LABEL: Record<MotivoExclusao, string> = {
   mes_fechado: 'Mês fechado para esta fazenda',
   subcentro_nao_resolvido: 'Conta do plano ainda não mapeada',
   campo_obrigatorio_descartado: 'Fazenda ou conta do plano descartada — sem esses dois a linha não existe',
+  ja_existe: 'Já existe lançamento equivalente — inclua manualmente se for outro',
+};
+
+/**
+ * O veredito da régua de duplicidade do BANCO — `classificar_nivel_duplicidade`.
+ *
+ * ⚠ A RÉGUA É UMA SÓ E É DE LÁ. Ela pesa data de pagamento, valor (com faixa de
+ * 20% para divergência significativa), descrição, subcentro, nº de documento,
+ * tipo e conta. Reimplementá-la aqui criaria o segundo lugar onde a mesma
+ * pergunta é respondida — e os dois divergiriam na primeira mudança de peso.
+ * ⚠ D1 É DESCARTE, D2/D3 SÃO AVISO: só o idêntico sai por padrão. Grau de
+ * suspeita não decide sozinho — quem decide é quem conhece a operação.
+ */
+export type NivelDuplicidade = 'D1' | 'D2' | 'D3';
+
+export const DUPLICIDADE_LABEL: Record<NivelDuplicidade, string> = {
+  D1: 'Idêntico a um lançamento existente',
+  D2: 'Muito parecido com um lançamento existente',
+  D3: 'Parecido com um lançamento existente',
 };
 
 export interface LinhaPrevia {
+  /** Posição no array de `rows` — a chave do dedup e da reinclusão.
+      ⚠ NÃO É `row.linha`, que é o número da linha no Excel: o filtro da prévia
+      reordena e recorta a lista, e só o índice de origem sobrevive a isso. */
+  indice: number;
   row: LancamentoExcelRow;
   /** ano_mes derivado da COMPETÊNCIA — é o trigger do banco que manda. */
   anoMes: string;
@@ -275,6 +300,18 @@ export interface LinhaPrevia {
   contaBancariaId: string | null;
   entra: boolean;
   motivo: MotivoExclusao | null;
+  /** Veredito da régua do banco; `null` = nada parecido encontrado. */
+  duplicidade: NivelDuplicidade | null;
+  /**
+   * O operador mandou entrar mesmo sendo D1.
+   *
+   * ⚠ POR LINHA, E NÃO POR CAMPO — o `alternarDescarte` que já existia opera
+   * sobre um VALOR do de-para ("todo lançamento cujo texto de conta é X"), e
+   * duplicidade não é propriedade de um texto: é desta linha contra aquele
+   * lançamento. Duas parcelas iguais no mesmo dia são o caso real em que uma é
+   * duplicata e a outra não.
+   */
+  reincluida: boolean;
 }
 
 /**
@@ -297,6 +334,9 @@ export function avaliarLinha(
   fechados: ReadonlySet<ChaveFechamento>,
   fazendaCabecalhoId: string | null,
   fazendaCabecalhoNome: string | null,
+  duplicidade: NivelDuplicidade | null,
+  reincluida: boolean,
+  indice: number,
 ): LinhaPrevia {
   const anoMes = anoMesDaCompetencia(row.data_competencia ?? '');
 
@@ -309,7 +349,7 @@ export function avaliarLinha(
   const itConta = valorDe(dp.conta, row.conta_bancaria_texto);
 
   const base = {
-    row, anoMes, fazendaId, fazendaNome,
+    indice, row, anoMes, fazendaId, fazendaNome, duplicidade, reincluida,
     subcentro: itSub?.valor ?? null,
     // Descartado em campo OPCIONAL vira simplesmente ausência: a linha entra sem
     // o dado. É o caso de uso que originou o descarte ("terceiros" na coluna de
@@ -337,6 +377,16 @@ export function avaliarLinha(
   }
   if (!base.subcentro) {
     return { ...base, entra: false, motivo: 'subcentro_nao_resolvido' };
+  }
+  /* ⚠ O DEDUP É O ÚLTIMO DA FILA, e a ordem é o argumento: os motivos acima são
+     estruturais — sem fazenda ou com mês fechado a linha não pode existir, seja
+     ela duplicata ou não. Dizer "já existe" a uma linha que também está em mês
+     fechado esconderia a causa que o operador precisa resolver primeiro.
+     ⚠ E SÓ D1 BARRA. D2/D3 seguem entrando, com o aviso na tela: grau de
+     suspeita não é veredito, e barrar por semelhança faria a importação perder
+     silenciosamente a segunda parcela de um pagamento repetido. */
+  if (duplicidade === 'D1' && !reincluida) {
+    return { ...base, entra: false, motivo: 'ja_existe' };
   }
   return { ...base, entra: true, motivo: null };
 }
@@ -387,9 +437,14 @@ export function montarPrevia(
   fechados: ReadonlySet<ChaveFechamento>,
   fazendaCabecalhoId: string | null,
   fazendaCabecalhoNome: string | null,
+  /** Veredito por ÍNDICE da linha na planilha. Ausente = dedup não consultado. */
+  duplicidades?: ReadonlyMap<number, NivelDuplicidade>,
+  /** Índices que o operador mandou entrar mesmo sendo D1. */
+  reincluidas?: ReadonlySet<number>,
 ): { linhas: LinhaPrevia[]; totais: TotaisPrevia } {
-  const linhas = rows.map((r) =>
-    avaliarLinha(r, dp, fechados, fazendaCabecalhoId, fazendaCabecalhoNome));
+  const linhas = rows.map((r, i) =>
+    avaliarLinha(r, dp, fechados, fazendaCabecalhoId, fazendaCabecalhoNome,
+      duplicidades?.get(i) ?? null, reincluidas?.has(i) ?? false, i));
 
   let qtdEntram = 0, valEntram = 0, qtdFora = 0, valFora = 0;
   const porMotivo = new Map<MotivoExclusao, { qtd: number; valor: number }>();

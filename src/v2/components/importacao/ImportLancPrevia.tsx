@@ -12,7 +12,7 @@
 import { useMemo, useState } from 'react';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import {
-  MOTIVO_LABEL, FILTRO_LABEL, aplicarFiltroPrevia, resumirPorFiltro,
+  MOTIVO_LABEL, FILTRO_LABEL, DUPLICIDADE_LABEL, aplicarFiltroPrevia, resumirPorFiltro,
   type FiltroPrevia,
   type LinhaPrevia,
   type TotaisPrevia,
@@ -21,6 +21,8 @@ import {
 export interface ImportLancPreviaProps {
   linhas: LinhaPrevia[];
   totais: TotaisPrevia;
+  /** Manda entrar uma linha barrada por duplicidade. Ausente = sem reinclusão. */
+  aoReincluir?: (indice: number) => void;
 }
 
 const LIMITE_LINHAS = 300;
@@ -33,7 +35,7 @@ const FILTRO_CLS: Record<FiltroPrevia, { ativo: string; inativo: string }> = {
 
 const FILTROS: FiltroPrevia[] = ['entra', 'sai', 'fora'];
 
-export function ImportLancPrevia({ linhas, totais }: ImportLancPreviaProps) {
+export function ImportLancPrevia({ linhas, totais, aoReincluir }: ImportLancPreviaProps) {
   // null = sem recorte (mostra tudo). Só apresentação: não altera elegibilidade.
   const [filtro, setFiltro] = useState<FiltroPrevia | null>(null);
 
@@ -173,9 +175,39 @@ export function ImportLancPrevia({ linhas, totais }: ImportLancPreviaProps) {
                 </td>
                 <td className="px-1 py-0.5 text-[10px]">
                   {l.entra ? (
-                    <span className="text-emerald-700">entra</span>
+                    <span className="text-emerald-700">
+                      entra
+                      {/* ⚠ D2/D3 ENTRAM COM AVISO. Grau de semelhança não é
+                          veredito: barrar por parecença faria a importação
+                          perder em silêncio a segunda parcela de um pagamento
+                          repetido — e o operador é quem sabe qual é qual. */}
+                      {l.duplicidade && l.duplicidade !== 'D1' && (
+                        <span className="ml-1 text-amber-700" title={DUPLICIDADE_LABEL[l.duplicidade]}>
+                          · parecido com um já existente
+                        </span>
+                      )}
+                      {l.reincluida && (
+                        <span className="ml-1 text-amber-700" title="Idêntico a um lançamento existente; você mandou entrar assim mesmo.">
+                          · duplicata assumida
+                        </span>
+                      )}
+                    </span>
                   ) : (
-                    <span className="font-medium">⚠ {l.motivo ? MOTIVO_LABEL[l.motivo] : 'fora'}</span>
+                    <span className="font-medium">
+                      ⚠ {l.motivo ? MOTIVO_LABEL[l.motivo] : 'fora'}
+                      {/* ⚠ A SAÍDA DA EXCLUSÃO FICA NA PRÓPRIA LINHA: o motivo
+                          "já existe" é o único que o operador pode contradizer
+                          sabendo mais que o sistema — duas parcelas iguais no
+                          mesmo dia. Os demais são estruturais e não têm botão. */}
+                      {l.motivo === 'ja_existe' && aoReincluir && (
+                        <button type="button"
+                          onClick={() => aoReincluir(l.indice)}
+                          className="ml-1 underline underline-offset-2 hover:text-red-900"
+                          title="Importar assim mesmo — use quando souber que são dois lançamentos diferentes.">
+                          importar mesmo assim
+                        </button>
+                      )}
+                    </span>
                   )}
                 </td>
               </tr>

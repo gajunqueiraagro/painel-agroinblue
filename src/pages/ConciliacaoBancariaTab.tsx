@@ -5,6 +5,7 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { PainelExtratoMes } from '@/components/conciliacao/PainelExtratoMes';
 import { ImportarBancoInline } from '@/components/conciliacao/ImportarBancoInline';
 import { ExtratoGerencialTab } from '@/components/financeiro-v2/ExtratoGerencialTab';
+import { EnriquecerPorPlanilha } from '@/components/conciliacao/EnriquecerPorPlanilha';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -915,7 +916,18 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
         )}
 
         {!loading && selectedCard && vistaExtrato === 'enriquecer' && (
-          <div className="space-y-2 md:space-y-0 md:flex-1 md:min-h-0 md:flex md:flex-col md:gap-1 md:overflow-hidden">
+          <div className="space-y-2 md:flex-1 md:min-h-0 md:overflow-y-auto">
+            {/* ⚠ A PLANILHA ENTRA AO LADO DA MESA, e não no lugar dela — B-22a.
+                São dois caminhos para o mesmo fim, e cada um serve a um volume:
+                a Mesa resolve linha a linha, na tela; a planilha resolve o mês
+                inteiro fora, no Excel que o operador já domina. Trocar um pelo
+                outro seria decisão de produto que este PR não recebeu. */}
+            <EnriquecerPorPlanilha
+              clienteId={clienteAtual?.id ?? null}
+              contaId={selectedConta !== '__all__' ? selectedConta : null}
+              contaNome={contaAtual}
+              ano={Number(ano)} mes={Number(selectedMes)}
+            />
             <MesaEnriquecimentoTab />
             {/* PR-CLEANUP-MESA-CLASSIFICACAO-01 — o link para a Mesa de Classificação antiga
                 foi removido junto com o item de menu e a rota. A tela legada saiu de circulação;

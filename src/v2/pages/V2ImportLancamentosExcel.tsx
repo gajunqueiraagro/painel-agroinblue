@@ -24,17 +24,51 @@ import { ImportLancDeParaPanel } from '@/v2/components/importacao/ImportLancDePa
 import { ImportLancPrevia } from '@/v2/components/importacao/ImportLancPrevia';
 import { tipoPorContaPlano } from '@/v2/lib/importLanc/importLancamentosView';
 import { baixarModeloPlanilha } from '@/v2/lib/importLanc/modeloPlanilha';
+import { linhasDoExtrato, type MovimentoParaPlanilha } from '@/v2/lib/importLanc/linhasDoExtrato';
 import { Download } from 'lucide-react';
 
-export function V2ImportLancamentosExcel() {
+/**
+ * ⚠ O MODO ENRIQUECER É ESTA MESMA TELA, e é a razão das props serem opcionais.
+ * A aba Enriquecer da Conciliação não recria o fluxo: monta este componente
+ * passando os movimentos do mês/conta da régua. Tudo o mais — leitura, de-para,
+ * prévia, confirmação, memória de apelidos — é o motor que já existe, exercido
+ * pelo mesmo caminho. Duas telas divergiriam na primeira regra nova.
+ *
+ * ⚠ SEM AS PROPS, NADA MUDA: a rota `importacao-lanc-excel` do menu segue
+ * baixando o modelo em branco, com os três exemplos, como sempre.
+ */
+export interface V2ImportLancamentosExcelProps {
+  /** Movimentos que saem pré-preenchidos no modelo. Ausente = modelo em branco. */
+  movimentosDoExtrato?: readonly MovimentoParaPlanilha[];
+  /** Nome da conta, escrito na coluna "Conta bancária" de cada linha. */
+  contaNome?: string;
+  /** Sufixo do arquivo baixado, para o operador não confundir dois downloads. */
+  sufixoArquivo?: string;
+}
+
+export function V2ImportLancamentosExcel({
+  movimentosDoExtrato, contaNome, sufixoArquivo,
+}: V2ImportLancamentosExcelProps = {}) {
   const {
     classificacoes, fornecedores, fazendas, contasBancarias, criarFornecedor,
     arquivo, parse, dePara, previa, pendentes, lendo, erro,
     exigeFazendaCabecalho, fazendaCabecalhoId, setFazendaCabecalhoId,
-    lerArquivo, resolverManualmente, alternarDescarte, limpar,
+    lerArquivo, resolverManualmente, alternarDescarte, alternarReinclusao, checandoDup, limpar,
     confirmarImportacao, gravando, resultado,
   } = useImportLancamentosExcel();
   const [confirmando, setConfirmando] = useState(false);
+
+  /* ⚠ O PRÉ-PREENCHIDO SÓ EXISTE COM MOVIMENTO. Com a régua num mês sem extrato,
+     o botão continua entregando o modelo em branco — que é o arquivo certo para
+     quem vai digitar do zero, e não uma planilha de zero linhas. */
+  const temMovimentos = !!movimentosDoExtrato?.length;
+  const baixar = () => {
+    if (!temMovimentos) { baixarModeloPlanilha(); return; }
+    baixarModeloPlanilha({
+      linhas: linhasDoExtrato(movimentosDoExtrato!, contaNome ?? ''),
+      nomeArquivo: `enriquecer-lancamentos${sufixoArquivo ? `-${sufixoArquivo}` : ''}.xlsx`,
+    });
+  };
 
   const tipoPorTexto = useMemo(
     () => (parse ? tipoPorContaPlano(parse.rows) : {}),
@@ -84,10 +118,13 @@ export function V2ImportLancamentosExcel() {
           <Button
             variant="outline"
             className="h-8 text-[11px] gap-1"
-            onClick={baixarModeloPlanilha}
-            title="Baixa a planilha modelo, com os cabeçalhos que esta tela lê e uma aba de instruções."
+            onClick={baixar}
+            title={temMovimentos
+              ? `Baixa o MESMO modelo, já preenchido com os ${movimentosDoExtrato!.length} movimentos do mês: data, valor, tipo, conta, descrição e documento. Você completa a classificação no Excel e sobe aqui.`
+              : 'Baixa a planilha modelo, com os cabeçalhos que esta tela lê e uma aba de instruções.'}
           >
-            <Download className="h-3.5 w-3.5" /> Baixar modelo
+            <Download className="h-3.5 w-3.5" />
+            {temMovimentos ? `Baixar preenchido (${movimentosDoExtrato!.length})` : 'Baixar modelo'}
           </Button>
 
           {exigeFazendaCabecalho && (
@@ -112,6 +149,10 @@ export function V2ImportLancamentosExcel() {
         </div>
 
         {lendo && <div className="text-[10px] text-muted-foreground">Lendo a planilha…</div>}
+        {/* ⚠ O ESTADO DA CHECAGEM É DITO: enquanto o banco não responde, a prévia
+            ainda não sabe o que é duplicata, e uma lista que muda sozinha
+            depois se lê como defeito. */}
+        {checandoDup && <div className="text-[10px] text-muted-foreground">Procurando lançamentos equivalentes…</div>}
         {erro && <div className="text-[10px] text-destructive">{erro}</div>}
 
         {/* Coluna de plano ausente: avisar em vez de deixar o operador descobrir pela
@@ -243,7 +284,7 @@ export function V2ImportLancamentosExcel() {
       {previa && (
         <div className="space-y-1.5">
           <span className="text-[11px] font-semibold">Prévia</span>
-          <ImportLancPrevia linhas={previa.linhas} totais={previa.totais} />
+          <ImportLancPrevia linhas={previa.linhas} totais={previa.totais} aoReincluir={alternarReinclusao} />
 
           <div className="flex items-center justify-end gap-2 flex-wrap">
             {bloqueios.length > 0 && (
