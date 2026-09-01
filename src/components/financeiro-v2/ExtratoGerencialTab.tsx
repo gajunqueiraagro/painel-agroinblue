@@ -54,47 +54,31 @@ function fmtData(d: string | null): string { if (!d) return '—'; try { return 
 function isOficial(s: string | null): boolean { return !!s && STATUS_OFICIAIS.includes(s.toLowerCase()); }
 
 /**
- * ⚠ QUEM MANDA NO PERIODO E' DECLARADO, e por isso os dois modos nao se misturam.
+ * ⚠ O PERÍODO VEM DE QUEM MONTA, E NÃO HÁ SEGUNDO DONO — rodada 2.
  *
- * `periodo` CONTROLADO: quem monta e' o dono do ano e do mes. Os selects de Mes
- * e Ano NAO sao renderizados — nao existe segundo lugar onde o valor possa ser
- * mudado, entao nao existe divergencia possivel. E' o modo da aba dentro da tela
- * de Conciliacao, onde a regua de meses e o seletor de ano do CABECALHO ja
- * governam a tela inteira: dois donos do mesmo dado davam regua em Mai e corpo
- * em Jun (defeito do B-25).
+ * Até aqui existiam dois modos: `periodo` controlado (a aba da Conciliação) e
+ * `initialAno`/`initialMes` semeando estado próprio, com selects de Mês e Ano no
+ * corpo. O modo não controlado servia as duas rotas do V2Index — "Conciliação
+ * (novo)" e o item avulso "Extrato Gerencial" —, onde o cabeçalho do /v2 não
+ * oferecia seletor de mês (`SECTION_PERIODO` não as listava, e `getPeriodoTipo`
+ * caía em 'ano'). As duas morreram nesta rodada, e o modo morreu com elas.
  *
- * `initialAno`/`initialMes` NAO CONTROLADO: semente do estado interno, e os
- * selects aparecem. E' o modo das duas rotas do V2Index — o item "Extrato
- * Gerencial" do menu e a rota "Conciliacao (novo)" —, onde o cabecalho do /v2
- * NAO oferece seletor de mes: `SECTION_PERIODO` nao lista `extrato-gerencial`
- * nem `conciliacao-extrato`, entao `getPeriodoTipo` cai no default 'ano'
- * (medido). Tirar os selects de la deixaria essas telas presas ao mes inicial.
- * As duas morrem na rodada 2 e o modo nao controlado morre junto.
- *
- * ⚠ O PAR E' ATOMICO de proposito: `periodo` e' um objeto com os DOIS campos,
- * nao duas props soltas. Nao ha como passar o ano controlado e o mes nao —
- * seria meio dono, que e' o defeito outra vez, mais dificil de enxergar.
+ * ⚠ O DEFEITO QUE ISSO ENCERRA: `useState(initialMes)` lê o valor UMA vez, no
+ * primeiro render. Somado aos selects próprios, o dado ganhava dois donos e o de
+ * dentro vencia — régua marcando maio e extrato mostrando junho (B-25). Sem o
+ * modo, não há onde a divergência nascer.
  */
+/** O recorte que a tela recebe pronta. Sem default: quem monta declara. */
 interface PeriodoControlado { ano: number; mes: number; }
 
-export function ExtratoGerencialTab({ initialAno, initialMes, periodo }: {
-  initialAno?: number;
-  initialMes?: number;
-  periodo?: PeriodoControlado;
-}) {
+export function ExtratoGerencialTab({ periodo }: { periodo: PeriodoControlado }) {
   const { clienteAtual } = useCliente();
   const clienteId = clienteAtual?.id ?? null;
   const { fazendaAtual } = useFazenda();
   const fazScope = fazendaAtual?.id && fazendaAtual.id !== '__global__' ? fazendaAtual.id : null;
 
-  const hoje = new Date();
-  /* ⚠ O ESTADO LOCAL SO' VALE NO MODO NAO CONTROLADO. Com `periodo` presente ele
-     continua existindo mas nunca e' lido — e nao ha `useEffect` copiando a prop
-     para dentro dele: copiar criaria o segundo dono de volta, um render atras. */
-  const [anoLocal, setAnoLocal] = useState<number>(initialAno ?? hoje.getFullYear());
-  const [mesLocal, setMesLocal] = useState<number>(initialMes ?? hoje.getMonth() + 1);
-  const ano = periodo?.ano ?? anoLocal;
-  const mes = periodo?.mes ?? mesLocal;
+  const ano = periodo.ano;
+  const mes = periodo.mes;
   const [contaSel, setContaSel] = useState<string | null>(null);
   const [statusSel, setStatusSel] = useState<Set<string>>(new Set(STATUS_OFICIAIS));
   const [incluirLegados, setIncluirLegados] = useState(false);
@@ -261,7 +245,6 @@ export function ExtratoGerencialTab({ initialAno, initialMes, periodo }: {
     return { ent, sai };
   }, [linhas]);
 
-  const anos = useMemo(() => { const y = hoje.getFullYear(); return [y - 3, y - 2, y - 1, y, y + 1]; }, []);
   const contaNome = conta ? (conta.nome_exibicao || conta.nome_conta) : '—';
 
   // PDF Executivo (react-pdf V3) — deriva das mesmas linhas/dadosOrg/saldos (fonte única analiseAgregacoes).
@@ -323,25 +306,10 @@ export function ExtratoGerencialTab({ initialAno, initialMes, periodo }: {
           <label className="text-[9px] font-semibold text-muted-foreground block mb-0.5">Conta</label>
           <ContaBancariaSelect value={contaId} onValueChange={setContaSel} contas={contas} showBankDetails="agencia" placeholder="Selecionar conta" />
         </div>
-        {/* ⚠ OS SELECTS SO' EXISTEM QUANDO ESTA TELA E' A DONA DO PERIODO. Sob um
-            cabecalho que ja governa ano e mes, eles seriam o segundo dono — e o
-            de dentro vencia, que e' exatamente o defeito do B-25. */}
-        {periodo === undefined && (<>
-          <div>
-            <label className="text-[9px] font-semibold text-muted-foreground block mb-0.5">Mês</label>
-            <Select value={String(mes)} onValueChange={(v) => setMesLocal(Number(v))}>
-              <SelectTrigger className="h-6 text-[10px] w-[84px]"><SelectValue /></SelectTrigger>
-              <SelectContent>{MESES.map((m, i) => <SelectItem key={i} value={String(i + 1)} className="text-[10px]">{m}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-          <div>
-            <label className="text-[9px] font-semibold text-muted-foreground block mb-0.5">Ano</label>
-            <Select value={String(ano)} onValueChange={(v) => setAnoLocal(Number(v))}>
-              <SelectTrigger className="h-6 text-[10px] w-[76px]"><SelectValue /></SelectTrigger>
-              <SelectContent>{anos.map((a) => <SelectItem key={a} value={String(a)} className="text-[10px]">{a}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-        </>)}
+        {/* ⚠ SEM SELECTS DE MÊS E ANO — rodada 2. O período é de quem monta, e
+            um seletor aqui seria o segundo dono do mesmo dado: foi assim que a
+            régua marcava maio e o extrato mostrava junho (B-25). A CONTA fica,
+            porque dela esta tela é a dona. */}
         {/* Status chips (4 oficiais) + Incluir legados */}
         <div className="flex items-center gap-1 pb-0.5">
           {STATUS_OFICIAIS.map((s) => (

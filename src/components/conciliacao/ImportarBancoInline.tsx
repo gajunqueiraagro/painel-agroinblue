@@ -137,8 +137,17 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
               movimentos aqui daria um número que bate consigo mesmo e não confere
               nada — pior que o vazio, porque parece conferência. */}
           <div className="grid grid-cols-2 gap-x-4 gap-y-1 border-b border-border px-3 py-2 sm:grid-cols-4">
+            {/* ⚠ O PERÍODO DECLARADO GANHA DO DERIVADO — carona da rodada 2. O
+                arquivo diz de quando até quando ele cobre (`DTSTART`/`DTEND`);
+                o primeiro e o último movimento só coincidem com isso quando o
+                mês começa e termina com lançamento. Sem a tag, cai para os
+                movimentos, que é o que se sabe. */}
             <Campo rotulo="Período">
-              {periodo(preview.movimentos)}
+              <span title={preview.periodoDeclaradoInicio || preview.periodoDeclaradoFim
+                ? 'Período declarado pelo próprio arquivo (tags DTSTART e DTEND).'
+                : 'O arquivo não declara período — este vem do primeiro e do último movimento lidos.'}>
+                {periodoDoArquivo(preview)}
+              </span>
             </Campo>
             <Campo rotulo="Movimentos">{preview.movimentos.length}</Campo>
             <Campo rotulo="Saldo declarado pelo banco">
@@ -220,11 +229,23 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
   );
 }
 
-/** O período do arquivo — do primeiro ao último movimento lido. */
-function periodo(movs: readonly { data: string }[]): string {
-  if (movs.length === 0) return '—';
-  const datas = movs.map(m => m.data).sort();
-  return `${brData(datas[0])} – ${brData(datas[datas.length - 1])}`;
+/**
+ * O período do arquivo: o DECLARADO quando existe, o dos movimentos quando não.
+ *
+ * ⚠ AS DUAS PONTAS CAEM SEPARADO. Um OFX pode trazer `DTSTART` e não `DTEND`;
+ * completar a que falta com a data do movimento é melhor que descartar a que
+ * veio — e a que veio continua sendo a do arquivo.
+ */
+function periodoDoArquivo(p: {
+  movimentos: readonly { data: string }[];
+  periodoDeclaradoInicio: string | null;
+  periodoDeclaradoFim: string | null;
+}): string {
+  const datas = p.movimentos.map(m => m.data).sort();
+  const ini = p.periodoDeclaradoInicio ?? datas[0] ?? null;
+  const fim = p.periodoDeclaradoFim ?? datas[datas.length - 1] ?? null;
+  if (!ini && !fim) return '—';
+  return `${brData(ini ?? '')} – ${brData(fim ?? '')}`;
 }
 
 function Th({ children, className }: { children?: React.ReactNode; className?: string }) {

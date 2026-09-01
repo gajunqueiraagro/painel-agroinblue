@@ -60,7 +60,6 @@ import FinanciamentosPainelTab from '@/pages/FinanciamentosPainelTab';
 import { ConciliacaoBancariaTab } from '@/pages/ConciliacaoBancariaTab';
 import { AuditoriaBancariaSoberana } from '@/components/financeiro-v2/AuditoriaBancariaSoberana';
 import { ExtratoGerencialTab } from '@/components/financeiro-v2/ExtratoGerencialTab';
-import V2ConciliacaoExtrato from '@/v2/pages/V2ConciliacaoExtrato';
 import { VisaoConsolidadaTab } from '@/components/financeiro-v2/VisaoConsolidadaTab';
 import CusteioTxtImportTab from './pages/CusteioTxtImportTab';
 import { V2ImportLancamentosExcel } from './pages/V2ImportLancamentosExcel';
@@ -801,7 +800,12 @@ export default function V2Index() {
     if (section === 'conciliacao') return (
       <ConciliacaoBancariaTab
         initialAno={ano}
-        initialMes={mes !== '0' ? Number(mes) : undefined}
+        /* ⚠ `'08'`, NÃO `8` — dívida do B-26, paga aqui. A prop é `string` e o
+           `selectedMes` é comparado com `c.mes`, que nasce
+           `String(m).padStart(2,'0')` (`ConciliacaoBancariaTab:183`). Um
+           `Number(mes)` nunca casava: a tela abria no mês corrente em vez do mês
+           da régua, calada — e o TS acusava desde sempre, na baseline. */
+        initialMes={mes !== '0' ? String(mes).padStart(2, '0') : undefined}
         onNavigateToLancamentos={(a, m) => {
           setAno(String(a));
           setMes(String(m));
@@ -821,23 +825,32 @@ export default function V2Index() {
         }}
       />
     );
-    /* ⚠ ROTA PROPRIA, TELA NOVA — FIN-CONCIL-PORTAR-01. As tres telas antigas de
-       conciliacao seguem INTOCADAS ate a homologacao: derrubar o caminho velho
-       no mesmo PR que estreia o novo tira o retorno de quem homologa. Elas
-       morrem na rodada 2, junto com o item "Extrato Gerencial" do menu lateral —
-       que continua funcionando aqui embaixo enquanto isso.
-       ⚠ AS DUAS OUTRAS ABAS SAO AS TELAS QUE JA EXISTEM, montadas aqui e
-       passadas por prop: transferir, nao recriar. O gerencial recebe o mesmo
-       `initialAno`/`initialMes` que recebe hoje pela rota propria — mesma tela,
-       mesmo contexto, dois enderecos ate a rodada 2. */
-    if (section === 'conciliacao-extrato') return (
-      <V2ConciliacaoExtrato
-        abaImportar={<FinanceiroCaixaTab initialTab="importacao" hideInternalTabs filtroAnoInicial={ano} filtroMesInicial={mes === '0' ? undefined : Number(mes)} />}
-        abaGerencial={<ExtratoGerencialTab initialAno={Number(ano)} initialMes={mes !== '0' ? Number(mes) : undefined} />}
+    /* ⚠ RODADA 2 — AS ROTAS PARALELAS MORRERAM, E ESTE RAMO É A PONTE.
+       `conciliacao-extrato` (a "Conciliação (novo)"), `extrato-gerencial` e
+       `importacao-extratos` saíram do menu; os três caem na tela de Conciliação
+       Bancária, que hoje tem tudo o que eles tinham — e o que eles nunca
+       tiveram: palco do mês, vincular e lançar em massa, criar-da-linha atômico
+       e enriquecer por planilha.
+       ⚠ O RAMO FICA E O ITEM DE MENU É QUE SAIU: um valor residual em
+       `sessionStorage 'v2:autoSection'`, um favorito antigo ou um estado salvo
+       ainda chegam aqui, e sem a ponte cairiam no fallback genérico sem
+       renderizar tela nenhuma. É o mesmo cuidado que a `mesa-operacional`
+       registra logo abaixo.
+       ⚠ O ANO E O MÊS ATRAVESSAM: quem tinha a URL salva volta ao mesmo recorte,
+       não a uma tela em branco. */
+    if (section === 'conciliacao-extrato' || section === 'extrato-gerencial'
+        || section === 'importacao-extratos') return (
+      <ConciliacaoBancariaTab
+        initialAno={ano}
+        /* Mesmo formato da rota principal: `'08'`, com padding. */
+        initialMes={mes !== '0' ? String(mes).padStart(2, '0') : undefined}
+        onNavigateToLancamentos={(a, m) => {
+          setAno(String(a));
+          setMes(String(m));
+          setVoltarParaConciliacao(true);
+          setSection('financeiro-lanc');
+        }}
       />
-    );
-    if (section === 'extrato-gerencial') return (
-      <ExtratoGerencialTab initialAno={Number(ano)} initialMes={mes !== '0' ? Number(mes) : undefined} />
     );
     if (section === 'visao-consolidada') return (
       <VisaoConsolidadaTab clienteId={clienteAtual?.id ?? null} />
@@ -883,9 +896,6 @@ export default function V2Index() {
     );
     if (section === 'contratos') return (
       <ContratosTab />
-    );
-    if (section === 'importacao-extratos') return (
-      <FinanceiroCaixaTab initialTab="importacao" hideInternalTabs filtroAnoInicial={ano} filtroMesInicial={mes === '0' ? undefined : Number(mes)} />
     );
     if (section === 'importacao-custeio-txt') return <CusteioTxtImportTab />;
     // PR-IMPORT-EXCEL-LANC-01 — passos 1-3 (ler, mapear, conferir). A gravação

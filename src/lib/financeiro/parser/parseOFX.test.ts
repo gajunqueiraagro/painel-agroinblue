@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseOFX, lerSaldoDeclaradoOFX } from './parseOFX';
+import { parseOFX, lerSaldoDeclaradoOFX, lerPeriodoDeclaradoOFX } from './parseOFX';
 
 /**
  * parseOFX — o saldo declarado pelo banco e a fronteira que o separa dos
@@ -84,6 +84,24 @@ describe('parseOFX — movimentos', () => {
     expect(valores).not.toContain(999999.99);
     expect(valores).not.toContain(12345.67);
     expect(valores).not.toContain(-88.1);
+  });
+});
+
+describe('lerPeriodoDeclaradoOFX — o período é o que o arquivo declara', () => {
+  it('lê DTSTART e DTEND de dentro do BANKTRANLIST, nos dois formatos', () => {
+    /* ⚠ OS FIXTURES DECLARAM 01/08 a 31/08 e os movimentos vão de 03/08 a 15/08:
+       é exatamente o caso que motivou a carona. Derivar dos movimentos daria
+       "03/08 – 15/08" e encurtaria o mês em doze dias, fazendo parecer que o
+       arquivo cobre menos do que cobre. */
+    expect(lerPeriodoDeclaradoOFX(SGML)).toEqual({ inicio: '2026-08-01', fim: '2026-08-31' });
+    expect(lerPeriodoDeclaradoOFX(XML)).toEqual({ inicio: '2026-08-01', fim: '2026-08-31' });
+  });
+
+  it('sem BANKTRANLIST, ou sem nenhuma das duas datas → null', () => {
+    /* `null` é "o arquivo não declarou" — e quem mostra cai para as datas dos
+       movimentos. Não é zero, não é o mês corrente, não é palpite. */
+    expect(lerPeriodoDeclaradoOFX('<OFX><LEDGERBAL><BALAMT>10.00</LEDGERBAL></OFX>')).toBeNull();
+    expect(lerPeriodoDeclaradoOFX('<BANKTRANLIST><STMTTRN><TRNAMT>-1.00</STMTTRN></BANKTRANLIST>')).toBeNull();
   });
 });
 

@@ -43,7 +43,7 @@ no mesmo arquivo.
   sai com codigo 0 e passa sempre. Era um gate vazio. O comando oficial
   varre os 671 arquivos .ts/.tsx em src/ e sai com codigo 2 enquanto
   houver erro.
-- TSC baseline: 74 erros, medidos em ARVORE LIMPA — worktree em detached
+- TSC baseline: 73 erros, medidos em ARVORE LIMPA — worktree em detached
   HEAD sobre o commit, NUNCA no checkout principal. Mesmo numero e mesmo
   conjunto de diagnosticos em c0fdb21b, 487fe1cf e c28de22a.
   O 98 que constava aqui nao decorreu de reducao posterior: foi medido com
@@ -90,6 +90,19 @@ no mesmo arquivo.
   ⚠ A divergencia de assinatura CONTINUA existindo na prop `onEditar`; ela so'
   deixou de ser exercida. Se algum dia uma gaveta voltar a ser montada aqui, os
   cinco erros voltam com ela.
+  De 74 para 73 na RODADA-2, 2026-09-01, sobre 318224f2. Saiu 1, de
+  src/v2/V2Index.tsx:
+    1x TS2322 — 'number' nao atribuivel a 'string', no `initialMes` que a
+       montagem de `ConciliacaoBancariaTab` passava como `Number(mes)`.
+  A prop e' `string` e o `selectedMes` da tela e' comparado com `c.mes`, que
+  nasce `String(m).padStart(2,'0')` (ConciliacaoBancariaTab:183) — entao `8`
+  nunca casava com `'08'` e a tela abria no mes corrente em vez do mes da regua,
+  CALADA. O TS acusava desde sempre e o erro estava na baseline: era defeito de
+  runtime documentado por um diagnostico que ninguem lia. A queda veio de
+  CORRIGIR o defeito, nao de suprimir nem de apagar codigo.
+  ⚠ O MESMO PADRAO CONTINUA em V2Index (`mesInicial={Number(mes)}` para
+  IndicadoresTab, cuja prop tambem e' `string`): 1x TS2322 remanescente, fora do
+  escopo daquele PR. Quem for reduzir de novo comeca por ali.
   Como comparar antes (A) x depois (B), nesta ordem:
     1. CONTAGEM. B <= A, sempre. B > A reprova o PR.
     2. DIAGNOSTICOS. Comparar os conjuntos por
@@ -110,7 +123,7 @@ no mesmo arquivo.
 - Build verde obrigatorio antes de qualquer commit.
 
 ## RELATORIO DE EXECUCAO (formato obrigatorio, todo ciclo)
-1. TSC: N erros (baseline 74) — numero explicito, obtido com
+1. TSC: N erros (baseline 73) — numero explicito, obtido com
    `npx tsc -p tsconfig.app.json --noEmit`
 2. Build: OK/FALHOU + tempo
 3. git diff --stat completo

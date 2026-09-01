@@ -157,8 +157,6 @@ export const NAV_GRUPOS: NavGrupo[] = [
              conviver sem dizer qual e' qual faria o operador escolher no escuro.
              As velhas e este "Extrato Gerencial" saem na rodada 2, depois da
              homologacao. */
-          { id: 'conciliacao-extrato', label: 'Conciliação (novo)',      status: 'ready' },
-          { id: 'extrato-gerencial',   label: 'Extrato Gerencial',       status: 'ready' },
           { id: 'visao-consolidada',   label: 'Visão Consolidada',       status: 'ready' },
           // PR-CLEANUP-MESA-CLASSIFICACAO-01 — 'mesa-classificacao' saiu do menu. O fluxo
           // vigente e' Conciliação Bancária → Importar Banco / Enriquecer / Conciliação.
@@ -169,7 +167,6 @@ export const NAV_GRUPOS: NavGrupo[] = [
           // VITE_MESA_OPERACIONAL_V2=true nao reativa mais nada.
           { id: 'financiamentos',      label: 'Financiamentos',          status: 'needs-wrapper' },
           { id: 'contratos',           label: 'Contratos',               status: 'needs-wrapper' },
-          { id: 'importacao-extratos', label: 'Importação Extratos',     status: 'needs-wrapper' },
           { id: 'importacao-custeio-txt', label: 'Importação Custeio (TXT)', status: 'ready' },
           // PR-IMPORT-EXCEL-LANC-01 — planilha no vocabulário DO CLIENTE (de-para de plano
           // de contas). Distinta de 'Importação Extratos', que exige o formato AGROinBLUE.

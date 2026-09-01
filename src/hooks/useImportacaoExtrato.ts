@@ -31,7 +31,7 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
-import { parseOFX, lerSaldoDeclaradoOFX, type MovimentoBruto } from '@/lib/financeiro/parser/parseOFX';
+import { parseOFX, lerSaldoDeclaradoOFX, lerPeriodoDeclaradoOFX, type MovimentoBruto } from '@/lib/financeiro/parser/parseOFX';
 import { parseCSVComRelatorio } from '@/lib/financeiro/parser/parseCSV';
 import { extractPdfText } from '@/lib/financeiro/parser/extractPdfText';
 import { hashMovimento } from '@/lib/financeiro/extratoHash';
@@ -246,6 +246,16 @@ export interface PreviewResult {
   saldoDeclarado: number | null;
   /** `LEDGERBAL/DTASOF` — a data a que o saldo declarado se refere. ISO. */
   saldoDeclaradoData: string | null;
+  /**
+   * `BANKTRANLIST/DTSTART` e `DTEND` — o período que o ARQUIVO declara.
+   *
+   * ⚠ `null` QUANDO O ARQUIVO NÃO DIZ, e aí quem mostra cai para as datas dos
+   * movimentos. Não é o mesmo período: derivar do primeiro e do último
+   * lançamento encurta o mês que começa ou termina sem movimento, e quem
+   * confere a cobertura do arquivo conclui que faltou pedaço.
+   */
+  periodoDeclaradoInicio: string | null;
+  periodoDeclaradoFim: string | null;
 }
 
 /**
@@ -625,11 +635,18 @@ export function useImportacaoExtrato() {
       // comparado com nada e não muda uma linha do que se grava. Só atravessa.
       let saldoDeclarado: number | null = null;
       let saldoDeclaradoData: string | null = null;
+      let periodoDeclaradoInicio: string | null = null;
+      let periodoDeclaradoFim: string | null = null;
       if (formato === 'OFX') {
         movimentosBrutos = parseOFX(conteudo);
         const saldo = lerSaldoDeclaradoOFX(conteudo);
         saldoDeclarado = saldo?.saldoDeclarado ?? null;
         saldoDeclaradoData = saldo?.saldoData ?? null;
+        /* Também à parte dos movimentos, e pelo mesmo motivo: é fato do arquivo,
+           não linha de extrato. */
+        const periodo = lerPeriodoDeclaradoOFX(conteudo);
+        periodoDeclaradoInicio = periodo?.inicio ?? null;
+        periodoDeclaradoFim = periodo?.fim ?? null;
       } else {
         const rel = parseCSVComRelatorio(conteudo);
         movimentosBrutos = rel.movimentos;
@@ -1059,6 +1076,8 @@ export function useImportacaoExtrato() {
         formato,
         saldoDeclarado,
         saldoDeclaradoData,
+        periodoDeclaradoInicio,
+        periodoDeclaradoFim,
       };
       setPreview(result);
       return result;

@@ -96,6 +96,39 @@ export function lerSaldoDeclaradoOFX(content: string): SaldoDeclaradoOFX | null 
   return { saldoDeclarado: valor, saldoData: parseDataOFX(extrairTag(bloco[1], 'DTASOF')) };
 }
 
+/**
+ * O PERÍODO QUE O ARQUIVO DECLARA — `BANKTRANLIST/DTSTART` e `DTEND`.
+ *
+ * ⚠ É O PERÍODO DO EXTRATO, NÃO O DOS MOVIMENTOS. Derivar do primeiro e do
+ * último lançamento acerta quase sempre e erra exatamente quando importa: o mês
+ * que começa ou termina sem movimento aparece encurtado, e quem confere a
+ * cobertura do arquivo conclui que faltou pedaço ao banco.
+ *
+ * ⚠ ISOLA O BLOCO ANTES DE LER A TAG, pela mesma razão do `LEDGERBAL`:
+ * `<BANKTRANLIST>` é onde as datas do período moram, e ler tag solta no
+ * documento inteiro pegaria a primeira que aparecesse — em arquivos com mais de
+ * uma lista de transações, a do bloco errado.
+ * ⚠ `(</BANKTRANLIST>|$)` tolera o fecho ausente no arquivo truncado, como no
+ * saldo declarado.
+ */
+export interface PeriodoDeclaradoOFX {
+  /** `DTSTART` — data ISO 'YYYY-MM-DD'; null se ausente. */
+  inicio: string | null;
+  /** `DTEND` — idem. */
+  fim: string | null;
+}
+
+export function lerPeriodoDeclaradoOFX(content: string): PeriodoDeclaradoOFX | null {
+  const bloco = content.match(/<BANKTRANLIST>([\s\S]*?)(<\/BANKTRANLIST>|$)/i);
+  if (!bloco) return null;
+  const inicio = parseDataOFX(extrairTag(bloco[1], 'DTSTART'));
+  const fim = parseDataOFX(extrairTag(bloco[1], 'DTEND'));
+  /* Sem nenhuma das duas, o arquivo não declarou período — e null é a resposta
+     certa: quem chama cai para as datas dos movimentos, que é o que sabe. */
+  if (inicio == null && fim == null) return null;
+  return { inicio, fim };
+}
+
 export function parseOFX(content: string): MovimentoBruto[] {
   // Extrair blocos STMTTRN
   const blocos: string[] = [];
