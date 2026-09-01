@@ -262,6 +262,21 @@ type LinhaResumo = {
    * preservada com um buraco no 5; agora nem o buraco existe.
    */
   naoSeAplica?: boolean;
+  /**
+   * Valor já formatado para a coluna Realizado, quando a linha NÃO sai de um
+   * indicador — é uma razão entre linhas da própria tabela.
+   *
+   * ⚠ EXISTE PARA QUE OS DERIVADOS SEJAM `<tr>` DA MESMA GRADE. Eles moravam
+   * num bloco depois da tabela e o valor boiava fora da coluna Realizado: duas
+   * tabelas irmãs têm larguras independentes, então nenhum alinhamento entre
+   * elas sobrevive a uma mudança de conteúdo. Como `<tr>`, as células são
+   * literalmente as mesmas das linhas 10 e 11.
+   * ⚠ NÃO VIRA INDICADOR NO PC-100 de propósito: markup é razão entre duas
+   * linhas JÁ presentes na tela, e criar um indicador para ele poria a mesma
+   * conta num segundo lugar. O `dre_lucro_ha`, que É indicador, entra pela
+   * `chave` como qualquer outra linha — não usa este campo.
+   */
+  valorTexto?: string;
 };
 
 const LINHAS_GERAL: LinhaResumo[] = [
@@ -506,8 +521,11 @@ const montaLinhasDre = (comMercado: boolean): LinhaResumo[] => [
      demonstrativos diferentes. Medido na Santa Rita, Jan–Jul 2026: R$ 881,0K com
      mercado contra R$ 46,2K sem, e a diferenca sao os R$ 834,8K de variacao por
      preco. Quem vir os dois numeros lado a lado pode achar que um quebrou. */
+  /* `espacoDepois` aqui separa o demonstrativo dos TRES DERIVADOS que vêm
+     abaixo: eles não são linha do DRE, são razões lidas dele. Sem o respiro, o
+     Markup encostaria no Lucro Líquido como se fosse a linha 12. */
   { rotulo: '= LUCRO LÍQUIDO',              chave: comMercado ? 'dre_lucro_liquido' : 'dre_lucro_liquido_sm',
-    bag: 'dre', subtotal: true, percentual: true },
+    bag: 'dre', subtotal: true, percentual: true, espacoDepois: true },
 ];
 
 const LINHAS_DRE    = montaLinhasDre(true);
@@ -1291,6 +1309,7 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
                   : (l.subtotal && real != null && real < 0) ? 'text-destructive'
                   : 'text-foreground'}${tipo}${gap}`}>
                   {l.naoSeAplica ? NAO_SE_APLICA
+                    : l.valorTexto != null ? l.valorTexto
                     : ind && real != null ? fmtValor(real, ind.formatoValor, ind.unidade) : '—'}
                   {l.percentual && !l.naoSeAplica && microPct(pctR)}
                 </td>
@@ -1382,13 +1401,17 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
    ja era. Quem escolhe a leitura e o toggle Por mes/Acumulado.
    ⚠ ZERO calculo: `serieMes` e `seriePeriodo` ja chegam prontas de `monta()`.
    Serie ausente vira travessao, nunca zero. */
-/* FAIXA DE INDICADORES DERIVADOS — depois do LUCRO LIQUIDO, fora da tabela.
-   ⚠ SAO DOIS, e nao tres. "Lucro por hectare" NAO existe no PC-100: ha quatro
-   R$/ha (`faturamentoHa`, `custoHa`, `investimentoHa`, `desembolsoHa`), todos
-   de `buildPorHa`, e nenhum de lucro. NAO derivar aqui: `buildPorHa` faz
-   somaFluxo / MEDIA da area, e reimplementar essa media num componente de
-   apresentacao criaria um segundo lugar onde "razao de agregados, nunca media
-   de razoes" pode divergir. O terceiro entra quando o PR do PC-100 subir.
+/* OS TRES DERIVADOS DO DRE — LINHAS da grade, e nao um bloco depois dela.
+   ⚠ ERAM UM BLOCO E ISSO ERA O DEFEITO: duas tabelas irmas tem larguras
+   independentes, entao o valor boiava fora da coluna Realizado e o olho tinha de
+   reaprender onde procurar o numero a cada linha. Como `<tr>` da mesma
+   `TabelaResumo`, as celulas sao literalmente as mesmas de "10. Tributos
+   patrimoniais" e "11. Impostos sobre lucro".
+   ⚠ O LUCRO/HA ENTRA PELA `chave`, como qualquer linha: ele E indicador do
+   PC-100 (`dre_lucro_ha` / `dre_lucro_ha_sm`, este ultimo nascido no B-35), e
+   herda formatacao, unidade e a coluna Meta se um dia ela existir. So os dois
+   markups usam `valorTexto`, porque razao entre linhas da propria tela nao vira
+   indicador — seria a mesma conta num segundo lugar.
    ⚠ POR QUE DOIS MARKUPS: um mede quanto sobrou do custo de PRODUZIR, o outro
    de TUDO que saiu do caixa. A diferenca entre os dois e o peso do investimento
    e da reposicao no periodo.
@@ -1397,20 +1420,17 @@ const TabelaResumo = ({ linhas, blocos: blocosProp, zoo, mov, fin, oper, dre, le
    e ainda nao vendido. Quando entra gado, a Reposicao subtrai o desembolso e a
    variacao soma o valor — uma anula a outra. Sem isso o estoque parado
    penalizaria o markup indevidamente.
-   ⚠ Denominador zero ou ausente -> TRAVESSAO, nunca 0%. */
-const FaixaDerivadosDre = ({ dre, leitura, mesAtual, comMercado }: {
-  dre: IndicadorAtividade[];
-  leitura: Leitura;
-  mesAtual: number;
-  /**
-   * ⚠ "MUDA FILTRO, MUDA TODOS OS VALORES" — a regra, e a razão desta prop.
-   * Sem ela os três derivados eram um HÍBRIDO que não descrevia nenhum dos dois
-   * demonstrativos: os markups liam `dre_res_oper` (SEM mercado) cravado no
-   * código, enquanto o lucro/ha lia `dre_lucro_ha`, que o PC-100 constrói a
-   * partir do lucro COM mercado. Trocar de aba não mexia em nenhum dos três.
-   */
-  comMercado: boolean;
-}) => {
+   ⚠ "MUDA FILTRO, MUDA TODOS OS VALORES": cada chave acompanha `comMercado`.
+   Antes os markups liam `dre_res_oper` cravado (SEM mercado) enquanto o lucro/ha
+   vinha do lucro COM — um hibrido que nao descrevia nenhum dos dois.
+   ⚠ Denominador zero ou ausente -> TRAVESSAO, nunca 0%.
+   ⚠ META E DIF. EM TRACO, e por ausencia de verdade: nao existe indicador de
+   meta destes tres. Invents-la dividindo agregados de meta seria o segundo lugar
+   de calculo que este mesmo comentario proibe. As celulas caem em `—` sozinhas,
+   porque sem `chave` nao ha `ind` — nenhum ramo especial. */
+const montaLinhasDerivadasDre = (
+  dre: IndicadorAtividade[], leitura: Leitura, comMercado: boolean,
+): LinhaResumo[] => {
   const ler = (chave: string): number | null => {
     const i = dre.find(x => x.chave === chave);
     return i ? (leitura === 'periodo' ? i.valorPeriodo : i.valorMes) : null;
@@ -1423,43 +1443,18 @@ const FaixaDerivadosDre = ({ dre, leitura, mesAtual, comMercado }: {
   const razao = (num: number | null, den: number | null): string =>
     (num == null || den == null || den === 0) ? '—' : `${((num / den) * 100).toFixed(1)}%`;
 
-  /* Cada chave acompanha o filtro. `dre_res_oper_mer` e `dre_lucro_ha_sm` já
-     existem no PC-100 — nenhuma conta nova acontece aqui. */
   const resOper = ler(comMercado ? 'dre_res_oper_mer' : 'dre_res_oper');
   const custeio = soma('dre_custo_var', 'dre_custo_fixo');
   const desemb  = soma('dre_custo_var', 'dre_custo_fixo', 'dre_investimento', 'dre_reposicao');
-  /* O lucro/ha vem PRONTO do `dreLucroLiquidoHa` (15cca72f), que e' construido
-     por `buildPorHa`: soma do fluxo dividida pela MEDIA da area pecuaria. Nao se
-     divide aqui — `buildInd` somaria razoes, e razao de mes com razao de mes
-     nao da razao de periodo. */
-  const lucroHa = ler(comMercado ? 'dre_lucro_ha' : 'dre_lucro_ha_sm');
 
-  /* ⚠ LINHAS DA GRADE, e não um bloco solto à esquerda — item 3 da spec. Eles
-     derivam das mesmas linhas da tabela e pertencem à mesma leitura; fora dela,
-     ficavam desalinhados das colunas e o olho tinha de reaprender onde procurar
-     o número. A tabela é a mesma: mesma largura de rótulo, mesmo alinhamento à
-     direita, mesmo `tabular-nums`.
-     ⚠ SÓ A COLUNA REALIZADO TEM VALOR. Meta e Dif. ficam em traço porque não há
-     meta destes três no PC-100 — e traço aqui é o certo: é ausência de verdade,
-     não regra de negócio. Inventar uma meta dividindo agregados de meta seria o
-     segundo lugar onde a razão pode divergir. */
-  const linha = (rot: string, val: string) => (
-    <tr key={rot} className="odd:bg-muted/30 even:bg-card">
-      <td className="px-1.5 py-0.5 text-muted-foreground">{rot}</td>
-      <td className="px-1.5 py-0.5 text-right font-medium tabular-nums text-foreground whitespace-nowrap">{val}</td>
-      <td className="px-1.5 py-0.5 text-right text-muted-foreground whitespace-nowrap">—</td>
-      <td className="px-1.5 py-0.5 text-right text-muted-foreground whitespace-nowrap">—</td>
-    </tr>
-  );
-  return (
-    <table className="w-full border-collapse text-[9px] leading-[11px]">
-      <tbody>
-        {linha('Lucro por hectare', lucroHa != null ? fmtR(lucroHa) : '—')}
-        {linha('Markup - custeio', razao(resOper, custeio))}
-        {linha('Markup - desembolso', razao(resOper, desemb))}
-      </tbody>
-    </table>
-  );
+  return [
+    /* O lucro/ha vem PRONTO do PC-100, construido por `buildPorHa`: soma do
+       fluxo dividida pela MEDIA da area pecuaria. Nao se divide aqui — razao de
+       mes com razao de mes nao da razao de periodo. */
+    { rotulo: 'Lucro por hectare', chave: comMercado ? 'dre_lucro_ha' : 'dre_lucro_ha_sm', bag: 'dre' },
+    { rotulo: 'Markup - custeio',    chave: '__markup_custeio',    bag: 'dre', valorTexto: razao(resOper, custeio) },
+    { rotulo: 'Markup - desembolso', chave: '__markup_desembolso', bag: 'dre', valorTexto: razao(resOper, desemb) },
+  ];
 };
 
 const TabelaMensalDre = ({ linhas, dre, modo, mesAtual, onDetalhe }: {
@@ -2513,9 +2508,18 @@ export function ModalAtividade({
               onDetalhe={setDetalheLinha}
             />
             ) : (
-            <>
             <TabelaResumo
-              linhas={assunto === 'dre' ? LINHAS_DRE : LINHAS_DRE_SM}
+              /* ⚠ OS DERIVADOS ENTRAM NO MESMO ARRAY — correção da homologação do
+                 B-35. Eles moravam num bloco depois da tabela e o valor boiava
+                 fora da coluna Realizado; aqui são `<tr>` da mesma grade, com as
+                 mesmas células das linhas 10 e 11. A visão Mensal NÃO os recebe:
+                 lá cada coluna é um mês, e um par de razões de um período único
+                 embaixo de doze colunas convidaria a casar com a coluna errada —
+                 a mesma razão pela qual o percentual não existe lá. */
+              linhas={[
+                ...(assunto === 'dre' ? LINHAS_DRE : LINHAS_DRE_SM),
+                ...montaLinhasDerivadasDre(indicadoresDre ?? [], 'periodo', assunto === 'dre'),
+              ]}
               basePercentual={assunto === 'dre' ? ['dre_vbp_mer'] : ['dre_vbp']}
               /* O rótulo acompanha a base, sempre: `dre_vbp_mer` é VBP mais a
                  variação por preço; `dre_vbp` é o VBP puro. */
@@ -2534,13 +2538,6 @@ export function ModalAtividade({
               mesAtual={mesAtual}
               colunas={1}
             />
-            {/* So na visao normal: na Mensal cada coluna e um mes, e um par de
-                razoes de um periodo unico embaixo de doze colunas convidaria o
-                leitor a casar com a coluna errada — a mesma razao pela qual o
-                percentual nao existe la. */}
-            <FaixaDerivadosDre dre={indicadoresDre ?? []} leitura="periodo" mesAtual={mesAtual}
-              comMercado={assunto === 'dre'} />
-            </>
             )
           ) : assunto === 'operacional' ? (
             /* Os CRUZADOS: custo da arroba e' financeiro dividido por zootecnico,
