@@ -10,7 +10,7 @@
 //   - Conta, fornecedor e subcentro/plano NÃO são pré-preenchidos — usuário escolhe no modal.
 //     macro/grupo/centro/subcentro continuam derivados pelo fluxo oficial.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   parseCusteioTxtFile,
   type CusteioParseResult,
@@ -52,7 +52,13 @@ function ultimoDiaDoMes(anoMes: string | null | undefined): string | undefined {
   return `${m[1]}-${m[2]}-${String(last).padStart(2, '0')}`;
 }
 
-export default function CusteioTxtImportTab() {
+/**
+ * ⚠ `arquivoInicial` — o modo HUB (B-36). Quando o hub de importação já escolheu
+ * o arquivo, ele chega por prop e o seletor próprio não é renderizado: dois
+ * seletores na mesma tela fariam o operador escolher duas vezes, e o segundo
+ * poderia contradizer o primeiro. Sem a prop, a tela se comporta como sempre.
+ */
+export default function CusteioTxtImportTab({ arquivoInicial }: { arquivoInicial?: File } = {}) {
   const [fileName, setFileName] = useState<string | null>(null);
   const [parsing, setParsing] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -132,9 +138,8 @@ export default function CusteioTxtImportTab() {
     };
   }, [dialogRow, resultado?.fazenda_raw, resultado?.ano_mes]);
 
-  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  /** A leitura em si, sem depender de evento — o hub entra por aqui. */
+  const lerArquivo = useCallback(async (file: File) => {
     setParsing(true);
     setErro(null);
     setResultado(null);
@@ -147,6 +152,23 @@ export default function CusteioTxtImportTab() {
       setErro(err instanceof Error ? err.message : 'Falha ao ler o arquivo.');
     } finally {
       setParsing(false);
+    }
+  }, []);
+
+  /* No modo hub o arquivo já veio escolhido: ler assim que ele chega, e de novo
+     quando o operador trocar de arquivo lá em cima. */
+  useEffect(() => {
+    if (arquivoInicial) void lerArquivo(arquivoInicial);
+  }, [arquivoInicial, lerArquivo]);
+
+  /* O seletor próprio delega a MESMA leitura do modo hub — dois corpos lendo o
+     mesmo arquivo divergiriam na primeira mudança de qualquer um deles. */
+  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      await lerArquivo(file);
+    } finally {
       // permite reabrir o mesmo arquivo
       e.target.value = '';
     }
@@ -175,20 +197,23 @@ export default function CusteioTxtImportTab() {
             formulário oficial de lançamento — nada é gravado até você confirmar no modal.
           </p>
 
-          <label className="inline-flex">
-            <input
-              type="file"
-              accept=".txt"
-              className="hidden"
-              onChange={onFile}
-            />
-            <Button asChild variant="outline" disabled={parsing}>
-              <span className="cursor-pointer">
-                <Upload className="mr-2 h-4 w-4" />
-                {parsing ? 'Lendo...' : 'Selecionar arquivo .txt'}
-              </span>
-            </Button>
-          </label>
+          {/* No modo hub quem escolhe o arquivo é a aba de cima. */}
+          {!arquivoInicial && (
+            <label className="inline-flex">
+              <input
+                type="file"
+                accept=".txt"
+                className="hidden"
+                onChange={onFile}
+              />
+              <Button asChild variant="outline" disabled={parsing}>
+                <span className="cursor-pointer">
+                  <Upload className="mr-2 h-4 w-4" />
+                  {parsing ? 'Lendo...' : 'Selecionar arquivo .txt'}
+                </span>
+              </Button>
+            </label>
+          )}
 
           {fileName && (
             <span className="ml-3 text-sm text-muted-foreground">{fileName}</span>

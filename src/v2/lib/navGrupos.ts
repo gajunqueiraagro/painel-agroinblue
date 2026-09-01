@@ -167,11 +167,9 @@ export const NAV_GRUPOS: NavGrupo[] = [
           // VITE_MESA_OPERACIONAL_V2=true nao reativa mais nada.
           { id: 'financiamentos',      label: 'Financiamentos',          status: 'needs-wrapper' },
           { id: 'contratos',           label: 'Contratos',               status: 'needs-wrapper' },
-          { id: 'importacao-custeio-txt', label: 'Importação Custeio (TXT)', status: 'ready' },
           { id: 'recorrencias',        label: 'Recorrências',            status: 'ready' },
           // PR-IMPORT-EXCEL-LANC-01 — planilha no vocabulário DO CLIENTE (de-para de plano
           // de contas). Distinta de 'Importação Extratos', que exige o formato AGROinBLUE.
-          { id: 'importacao-lanc-excel', label: 'Importação Lançamentos (Excel)', status: 'ready' },
         ],
       },
       {

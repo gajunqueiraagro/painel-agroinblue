@@ -62,8 +62,6 @@ import V2Recorrencias from '@/v2/pages/V2Recorrencias';
 import { AuditoriaBancariaSoberana } from '@/components/financeiro-v2/AuditoriaBancariaSoberana';
 import { ExtratoGerencialTab } from '@/components/financeiro-v2/ExtratoGerencialTab';
 import { VisaoConsolidadaTab } from '@/components/financeiro-v2/VisaoConsolidadaTab';
-import CusteioTxtImportTab from './pages/CusteioTxtImportTab';
-import { V2ImportLancamentosExcel } from './pages/V2ImportLancamentosExcel';
 // PR-CLEANUP-REFERENCIAS-OPERACIONAIS-01 — import de V2MesaOperacional removido: a tela saiu
 // do menu e da rota. O arquivo continua no repo (quarentena), fora do bundle.
 // PR-CLEANUP-MESA-CLASSIFICACAO-01 — import de V2MesaClassificacao removido: a tela legada
@@ -840,7 +838,10 @@ export default function V2Index() {
        ⚠ O ANO E O MÊS ATRAVESSAM: quem tinha a URL salva volta ao mesmo recorte,
        não a uma tela em branco. */
     if (section === 'conciliacao-extrato' || section === 'extrato-gerencial'
-        || section === 'importacao-extratos') return (
+        || section === 'importacao-extratos'
+        /* B-36 — as duas importações avulsas viraram vizinhas do OFX na aba
+           Importar; os ids seguem chegando por favorito e estado salvo. */
+        || section === 'importacao-custeio-txt' || section === 'importacao-lanc-excel') return (
       <ConciliacaoBancariaTab
         initialAno={ano}
         /* Mesmo formato da rota principal: `'08'`, com padding. */
@@ -898,11 +899,11 @@ export default function V2Index() {
     if (section === 'contratos') return (
       <ContratosTab />
     );
-    if (section === 'importacao-custeio-txt') return <CusteioTxtImportTab />;
+
     if (section === 'recorrencias') return <V2Recorrencias />;
     // PR-IMPORT-EXCEL-LANC-01 — passos 1-3 (ler, mapear, conferir). A gravação
     // (passo 4) entra depois, no mesmo PR; o botão fica desabilitado até lá.
-    if (section === 'importacao-lanc-excel') return <V2ImportLancamentosExcel />;
+
     if (section === 'rateio-adm') return (
       <FinanceiroCaixaTab initialTab="rateio" hideInternalTabs filtroAnoInicial={ano} filtroMesInicial={mes === '0' ? undefined : Number(mes)} />
     );

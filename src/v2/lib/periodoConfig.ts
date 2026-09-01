@@ -29,7 +29,11 @@ export const SECTION_PERIODO: Partial<Record<V2Section, PeriodoTipo>> = {
   'fluxo-caixa':           'ano-mes',
   'rateio-adm':            'ano',
   'importacao-extratos':   'nenhum',
+  // B-36 — os dois ids antigos agora desaguam na mesma tela de `importacao-extratos`,
+  // e a ponte tem de render igual ao destino: sem esta linha, `importacao-custeio-txt`
+  // cai no fallback 'ano' e ganharia um seletor que a tela de destino não tem.
   'importacao-lanc-excel': 'nenhum',
+  'importacao-custeio-txt': 'nenhum',
   'financeiro-lanc':       'nenhum',
   'conciliacao':           'nenhum',
   // PR-CLEANUP-REFERENCIAS-OPERACIONAIS-01 — 'mesa-operacional' removida do mapa junto com o tipo.

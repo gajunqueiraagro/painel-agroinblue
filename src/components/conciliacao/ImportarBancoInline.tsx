@@ -7,6 +7,9 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { useImportacaoExtrato } from '@/hooks/useImportacaoExtrato';
+import { detectarTipoArquivo, type TipoArquivoImport } from '@/lib/financeiro/parser/detectarTipoArquivo';
+import { V2ImportLancamentosExcel } from '@/v2/pages/V2ImportLancamentosExcel';
+import CusteioTxtImportTab from '@/v2/pages/CusteioTxtImportTab';
 
 /**
  * ImportarBancoInline — a aba "Importar Extrato" do Financas, clonada INTEIRA:
@@ -41,20 +44,52 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
   const { preview, loading, gerarPreview, confirmarImportacao, reset } = useImportacaoExtrato();
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [gravando, setGravando] = useState(false);
+  /**
+   * O tipo do arquivo escolhido — B-36, o hub.
+   *
+   * ⚠ QUATRO FORMATOS, UM LUGAR. Antes o operador tinha de saber de antemão em
+   * qual tela cada arquivo entrava: extrato aqui, planilha num item de menu,
+   * custeio noutro. O arquivo é que diz o que é; a tela roteia.
+   * ⚠ CONCENTRAÇÃO, NÃO UNIFORMIDADE: cada formato desagua no fluxo que já tem —
+   * o extrato confirma em lote, o custeio abre o modal linha a linha. Uniformizar
+   * seria inventar comportamento que nenhum deles pediu.
+   */
+  const [tipo, setTipo] = useState<TipoArquivoImport | null>(null);
 
   const escolher = async (a: File) => {
+    /* ⚠ SÓ O COMEÇO DO ARQUIVO É LIDO PARA DETECTAR: as âncoras do custeio e a
+       tag do OFX vivem no topo, e ler um extrato inteiro em memória só para
+       decidir o tipo seria caro à toa. O parser do fluxo escolhido lê o resto. */
+    const cabeca = a.name.toLowerCase().endsWith('.xlsx') || a.name.toLowerCase().endsWith('.xls')
+      ? ''
+      : await a.slice(0, 64_000).text();
+    const { tipo: t, aviso } = detectarTipoArquivo(a.name, cabeca);
+    if (!t) {
+      /* ⚠ O AVISO NOMEIA O QUE PARECE SER. "Formato não reconhecido" manda o
+         operador adivinhar; "isto parece um relatório de custeio" diz o que
+         fazer a seguir. */
+      toast.error(aviso ?? 'Formato não reconhecido.');
+      return;
+    }
+    setTipo(t);
     setArquivo(a);
+    /* Excel e custeio têm fluxo próprio e não passam pelo motor do extrato. */
+    if (t !== 'ofx' && t !== 'csv-extrato') return;
     try { await gerarPreview({ arquivo: a, contaBancariaId: contaId }); }
-    catch (e) { toast.error(e instanceof Error ? e.message : 'Falha ao ler o arquivo.'); setArquivo(null); }
+    catch (e) { toast.error(e instanceof Error ? e.message : 'Falha ao ler o arquivo.'); setArquivo(null); setTipo(null); }
   };
 
-  const cancelar = () => { reset(); setArquivo(null); };
+  const cancelar = () => { reset(); setArquivo(null); setTipo(null); };
 
   const importar = async () => {
-    if (!arquivo) return;
+    if (!arquivo || !preview) return;
     setGravando(true);
     try {
-      await confirmarImportacao({ contaBancariaId: contaId, nomeArquivo: arquivo.name, formato: 'OFX' });
+      /* ⚠ O FORMATO GRAVADO É O QUE O PARSER USOU, não o que esta tela supôs.
+         Enquanto só havia OFX aqui, o literal era verdadeiro; com o CSV entrando
+         pelo mesmo botão, ele viraria mentira gravada em `tipo_arquivo`. O hook
+         já detecta e devolve — a resposta certa é ler dele, não redecidir. */
+      await confirmarImportacao({ contaBancariaId: contaId, nomeArquivo: arquivo.name, formato: preview.formato });
       toast.success('Extrato importado.');
       cancelar();
       onImportado?.();
@@ -78,7 +113,7 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
 
   return (
     <div className="space-y-2">
-      <input ref={input} type="file" accept=".ofx,.OFX" className="hidden"
+      <input ref={input} type="file" accept=".ofx,.OFX,.xlsx,.xls,.txt,.csv" className="hidden"
         onChange={e => {
           const a = e.target.files?.[0];
           if (a) void escolher(a);
@@ -90,7 +125,10 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
           já mostra, e ocupava o topo da tela inclusive nas dezenas de vezes em
           que o operador já sabe o que é um OFX. O resto do texto virou `title`:
           continua disponível, deixa de custar altura. */}
-      {!preview && (
+      {/* ⚠ A LINHA DO SELETOR SÓ SAI QUANDO ALGO TOMA O LUGAR DELA: a prévia do
+          extrato, ou o fluxo do Excel/custeio. Escondê-la por `tipo` sozinho
+          deixaria a tela vazia entre escolher o OFX e a prévia chegar. */}
+      {!preview && tipo !== 'excel' && tipo !== 'custeio-txt' && (
         <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5">
           {seletor}
           <Button type="button" size="sm" className="h-8 gap-1.5 text-xs"
@@ -98,13 +136,60 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
             title={contaId ? undefined : 'Escolha a conta primeiro'}
             onClick={() => input.current?.click()}>
             {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-            Escolher arquivo OFX
+            Escolher arquivo
           </Button>
-          <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground"
-            title="O arquivo é lido aqui no navegador e não sai dele — o que vai para o banco de dados são os movimentos. Antes de gravar, você confere linha a linha o que é novo e o que já foi importado.">
-            O arquivo é lido no navegador; você confere antes de gravar.
+          {/* ⚠ O QUE CADA FORMATO FAZ, ESCRITO — o operador não deve adivinhar
+              qual arquivo serve para quê. Era essa a informação que morava na
+              cabeça de quem sabia em qual item de menu clicar. */}
+          <span className="min-w-0 flex-1 text-[10px] leading-tight text-muted-foreground"
+            title="O arquivo é lido aqui no navegador e não sai dele. Antes de gravar, você confere o que é novo e o que já existe.">
+            <b>.ofx</b> extrato do banco · <b>.xlsx</b> planilha de lançamentos, com de-para e
+            atualização por ID · <b>.csv/.txt</b> extrato em texto · <b>.txt do custeio</b>: prévia e
+            lançamento um a um pelo modal — conta, fornecedor e subcentro são escolha sua por linha.
           </span>
           {acoes}
+        </div>
+      )}
+
+      {/* ⚠ CADA FORMATO NO SEU FLUXO, INLINE — o padrão da prévia do OFX. O
+          Excel monta a tela da Importação de Lançamentos (com de-para, dedup e
+          modo update por ID); o custeio monta a prévia dele, que grava linha a
+          linha pelo modal. Nenhum dos dois foi reescrito: são os motores que já
+          existiam, agora alcançáveis daqui. */}
+      {tipo === 'excel' && arquivo && (
+        <div className="rounded-lg border border-border bg-card p-2">
+          <div className="mb-1.5 flex items-center gap-2">
+            <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Planilha de lançamentos
+            </span>
+            <span className="truncate font-mono text-[10px]">{arquivo.name}</span>
+            <div className="flex-1" />
+            <Button type="button" variant="outline" size="sm" className="h-6 gap-1 px-2 text-[10px]"
+              onClick={cancelar}>
+              <X className="h-3 w-3" /> Trocar arquivo
+            </Button>
+          </div>
+          {/* ⚠ A TELA DA IMPORTAÇÃO INTEIRA, e o arquivo já escolhido aqui em
+              cima: ela tem seletor próprio, e o operador o usa para reenviar
+              depois de corrigir a planilha no Excel — que é o fluxo real. */}
+          <V2ImportLancamentosExcel />
+        </div>
+      )}
+
+      {tipo === 'custeio-txt' && arquivo && (
+        <div className="rounded-lg border border-border bg-card p-2">
+          <div className="mb-1.5 flex items-center gap-2">
+            <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Relatório de custeio
+            </span>
+            <span className="truncate font-mono text-[10px]">{arquivo.name}</span>
+            <div className="flex-1" />
+            <Button type="button" variant="outline" size="sm" className="h-6 gap-1 px-2 text-[10px]"
+              onClick={cancelar}>
+              <X className="h-3 w-3" /> Trocar arquivo
+            </Button>
+          </div>
+          <CusteioTxtImportTab arquivoInicial={arquivo} />
         </div>
       )}
 
