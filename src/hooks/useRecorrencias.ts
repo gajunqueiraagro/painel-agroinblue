@@ -61,6 +61,51 @@ const MES_EXT = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
 const MES_CURTO = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
 /**
+ * DE QUE MÊS É O QUE SE PAGA — a pergunta que substituiu a digitação da data.
+ *
+ * ⚠ SÃO DUAS RESPOSTAS, NÃO UM NÚMERO. A água consumida em agosto vence em
+ * setembro, e o fato econômico é agosto. O operador responde de quem é a conta,
+ * que é o que ele sabe; a mecânica — âncora, deslocamento, primeiro vencimento —
+ * não aparece em campo nenhum.
+ *
+ * ⚠ E O QUE ISSO CUSTA, dito às claras: com dois cartões, a tela só declara
+ * deslocamento 0 ou 1. Uma regra paga dois meses depois deixa de ser
+ * cadastrável por aqui. O banco continua aceitando qualquer distância — quem
+ * perdeu o alcance foi a tela, não a âncora. Medido antes de trocar: as duas
+ * recorrências existentes no Proto têm deslocamento 1, e nenhuma é reescrita
+ * por isto. Se o caso de dois meses aparecer, vira um terceiro cartão.
+ */
+export type MesDoFato = 'proprio' | 'anterior';
+
+export const DESLOCAMENTO: Record<MesDoFato, number> = { proprio: 0, anterior: 1 };
+
+/**
+ * O vencimento do primeiro lançamento, derivado no submit — nunca digitado e
+ * nunca gravado como deslocamento.
+ *
+ * ⚠ O APARO DE FIM DE MÊS é calendário, não régua da casa: dia 31 em fevereiro
+ * não existe, e o menor entre o dia pretendido e o último daquele mês é o
+ * Gregoriano, não uma segunda verdade sobre a recorrência.
+ */
+export function primeiroVencimentoDe(
+  dataInicioIso: string, diaVencimento: number, mesDoFato: MesDoFato,
+): string {
+  const [ano, mes] = dataInicioIso.slice(0, 7).split('-').map(Number);
+  const alvo = mes + DESLOCAMENTO[mesDoFato];
+  const anoAlvo = ano + Math.floor((alvo - 1) / 12);
+  const mesAlvo = ((alvo - 1) % 12) + 1;
+  /* Dia 0 do mês seguinte = último dia do mês alvo. */
+  const ultimoDia = new Date(Date.UTC(anoAlvo, mesAlvo, 0)).getUTCDate();
+  const dia = Math.min(Math.max(diaVencimento, 1), ultimoDia);
+  return `${anoAlvo}-${String(mesAlvo).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
+}
+
+/** O caminho de volta: qual cartão representa a regra já gravada. */
+export function mesDoFatoDe(dataInicioIso: string, primeiroVencimentoIso: string): MesDoFato {
+  return deslocamentoMeses(dataInicioIso, primeiroVencimentoIso) >= 1 ? 'anterior' : 'proprio';
+}
+
+/**
  * O RESUMO VIVO — a explicação do deslocamento em português.
  *
  * ⚠ ELE É A ÚNICA EXPLICAÇÃO QUE O OPERADOR RECEBE, e por isso existe: sem campo
@@ -69,20 +114,28 @@ const MES_CURTO = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set'
  * repete até fev/27" — e quem lê confere a intenção, não a mecânica.
  */
 export function resumoVivo(
-  dataInicio: string, primeiroVencimento: string, dataFim: string, diaVencimento: number,
+  /* ⚠ O DIA SAIU DA ASSINATURA: ele agora vem dentro de `primeiroVencimento`,
+     já aparado. Recebê-lo de novo abriria a chance de a frase mostrar um dia e
+     a gravação usar outro. */
+  dataInicio: string, primeiroVencimento: string, dataFim: string,
 ): string | null {
   if (!dataInicio || !primeiroVencimento || !dataFim) return null;
   const [, mi] = dataInicio.slice(0, 7).split('-').map(Number);
+  const [, mv, dv] = primeiroVencimento.slice(0, 10).split('-').map(Number);
   const desl = deslocamentoMeses(dataInicio, primeiroVencimento);
   const [af, mf] = dataFim.slice(0, 7).split('-').map(Number);
   const consumo = MES_EXT[mi - 1];
+  /* ⚠ O MÊS DO PAGAMENTO VAI NOMEADO, não "do mês seguinte". Enquanto a data
+     era digitada, o relativo bastava; agora que ela é DERIVADA do cartão, o
+     operador precisa ver o mês concreto para conferir se o cartão que escolheu
+     é o que ele queria. "Pago em 5 de outubro" se confere; "pago em 5 do mês
+     seguinte" repete o cartão em outras palavras.
+     ⚠ E O DIA VAI O DERIVADO, não o pretendido: em mês curto o aparo já
+     aconteceu, e mostrar 31 quando o lançamento nasce dia 28 seria a frase
+     desmentindo o que vai ser gravado. */
   const pago = desl === 0
-    ? `pago em ${diaVencimento} do mesmo mês`
-    : desl === 1
-      ? `pago em ${diaVencimento} do mês seguinte`
-      : desl > 1
-        ? `pago em ${diaVencimento}, ${desl} meses depois`
-        : `pago em ${diaVencimento}, ${Math.abs(desl)} ${Math.abs(desl) === 1 ? 'mês' : 'meses'} antes`;
+    ? `pago em ${dv} do mesmo mês (${MES_EXT[mv - 1]})`
+    : `pago em ${dv} de ${MES_EXT[mv - 1]}`;
   return `Consumo de ${consumo}, ${pago}; repete até ${MES_CURTO[mf - 1]}/${String(af).slice(2)}.`;
 }
 
