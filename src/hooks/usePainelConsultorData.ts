@@ -1,5 +1,8 @@
 import { useMemo, useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import {
+  agregaReceitaPecZootComp, agregaReposicaoBovinosZootComp,
+} from '@/lib/painelConsultor/agregadosZootCompetencia';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useSnapshotAreaAnual, DESTINOS_AREA, type DestinoArea, type SnapshotAreaFazendaMes } from '@/hooks/useFechamentoArea';
@@ -38,6 +41,8 @@ import {
   // predicate proprio em classificacao.ts. O PC-100 e que nao os importava: o lado das
   // SAIDAS foi construido e o das RECEITAS ficou como "gap futuro". Ligar, nao construir.
   agregaReceitaPec,
+  agregaReceitaPecDoFinanceiro,
+  agregaInvBovinosDoFinanceiro,
   // PR-PC100-SILVICULTURA-01 — silvicultura ganha os mesmos cinco atomicos que
   // pecuaria e agricultura ja tinham. Predicates literais por grupo_custo.
   agregaReceitaSilvicola,
@@ -1796,6 +1801,73 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       setValorRebanhoMetaMes(valor.map((v, i) => tem[i] ? v : NaN));
       setPesoMedioFinMetaSnap12(pTot.map((pt, i) => (tem[i] && cab[i] > 0) ? pt / cab[i] : NaN));
     });
+    return () => { cancelled = true; };
+  }, [enabled, ano, isGlobal, fazendaId, clienteAtual?.id]);
+
+  /**
+   * PR-DRE-PEC-FONTE-01 — O LADO ZOOTÉCNICO DO DRE.
+   *
+   * Abate e venda de gado já existem inteiros e validados em `lancamentos`. Os
+   * mesmos fatos também chegam a `financeiro_lancamentos_v2` por importação,
+   * operação comercial e movimentação de rebanho — somar os dois lados duplica
+   * o faturamento. Medido no Proto: NJ Pecuária 2025 tinha R$ 16,9 milhões de
+   * receita pecuária no financeiro contra R$ 17,5 milhões no zootécnico, o mesmo
+   * faturamento contado duas vezes.
+   *
+   * ⚠ `null` É "AINDA NÃO SEI", E NÃO ZERO — a trava deste PR. Os nove efeitos
+   * irmãos inicializam com `Array(12).fill(0)` e não distinguem ausência de
+   * medição (dívida `DEBT-PC100-FILL0`); um deles usa `Array(12).fill(NaN)`, que
+   * é pior, porque `NaN` atravessa as fórmulas derivadas e vira R$ 0,00 na tela
+   * (dívida `DEBT-PC100-NAN`). Aqui não se copia nem um nem outro: `null` quebra
+   * a soma de forma visível e obriga o consumidor a tratar a ausência.
+   *
+   * ⚠ FALHA TAMBÉM É `null`, e NUNCA queda para o financeiro: faturamento só com
+   * o lado financeiro seria número errado com cara de certo — o pior resultado
+   * possível neste PR, porque ninguém desconfiaria dele.
+   *
+   * ⚠ UM EFEITO, DUAS CHAMADAS. As duas funções leem a mesma tabela com o mesmo
+   * recorte; um ciclo de vida, uma lista de deps, um `cancelled`. São duas
+   * requisições porque cada função traz seu `select` e seu filtro de tipo —
+   * uma requisição só exigiria uma variante das existentes, que não se cria.
+   *
+   * ⚠ O CONDICIONAL DE FAZENDA É O DOS NOVE IRMÃOS: em Global filtra-se só por
+   * cliente; fora dele, pela fazenda selecionada. Sem isso, o zootécnico traria
+   * o cliente inteiro contra um financeiro de uma fazenda só.
+   */
+  const [zootRec12, setZootRec12] = useState<number[] | null>(null);
+  const [zootInvBov12, setZootInvBov12] = useState<number[] | null>(null);
+  useEffect(() => {
+    const cid = clienteAtual?.id;
+    if (!enabled || !cid) { setZootRec12(null); setZootInvBov12(null); return; }
+    if (!isGlobal && (!fazendaId || fazendaId === '__global__')) {
+      setZootRec12(null); setZootInvBov12(null); return;
+    }
+    let cancelled = false;
+    /* `cenario: 'realizado'` cravado, como as irmãs: meta e realizado são duas
+       cargas paralelas neste hook, não um seletor — e nunca somam. A coluna Meta
+       do DRE continua vindo do grid de planejamento. */
+    const params = {
+      clienteId: cid, ano, cenario: 'realizado' as const,
+      fazendaId: isGlobal ? undefined : fazendaId,
+    };
+    (async () => {
+      try {
+        const [rec, inv] = await Promise.all([
+          agregaReceitaPecZootComp(params, supabase),
+          agregaReposicaoBovinosZootComp(params, supabase),
+        ]);
+        if (cancelled) return;
+        /* `agregaReceitaPecZootComp` devolve `null` quando não há venda nem
+           abate no ano — GAP de cadastro, não zero medido. A distinção sobe
+           inteira até a tela. */
+        setZootRec12(rec ? rec.meses : null);
+        setZootInvBov12(inv ? inv.meses : null);
+      } catch {
+        /* Falha de rede ou de permissão NÃO vira zero e não cai para o
+           financeiro: a linha fica ausente e quem olha sabe que não sabe. */
+        if (!cancelled) { setZootRec12(null); setZootInvBov12(null); }
+      }
+    })();
     return () => { cancelled = true; };
   }, [enabled, ano, isGlobal, fazendaId, clienteAtual?.id]);
 
@@ -3685,7 +3757,42 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
        ⚠ NADA AQUI VAZA PARA O BLOCO CAIXA: `saidasTot` e os desembolsos abaixo
        seguem com `lancFin` e com o `regime` do caller — conferido consumidor a
        consumidor antes de trocar. */
-    const dreRec     = agregaReceitaPec(lancFinDre, ano, C);
+    /* ⚠ FONTE POR SUBCENTRO — PR-DRE-PEC-FONTE-01. Abate, desmama, adultos e
+       boitel vêm do ZOOTÉCNICO, onde o fato nasce inteiro e validado; o resto da
+       receita pecuária (arrendamento, tropa, madeira, nutrição, insumos, sêmen,
+       máquinas) vem do financeiro, que é a fonte deles. Os dois lados NÃO se
+       sobrepõem: o predicado exclui do financeiro exatamente os sete subcentros
+       que o zootécnico traz.
+       ⚠ AUSÊNCIA GANHA DA SOMA: sem o lado zootécnico a linha INTEIRA é ausente,
+       mesmo com o financeiro carregado. Meia soma seria um faturamento menor com
+       cara de completo — e ninguém desconfiaria dele. Nada de `?? 0` aqui. */
+    /* ⚠ `NaN` É A AUSÊNCIA DESTE CAMINHO, e a medição é que decidiu: `formatMoeda`
+       (`formatters.ts:20-23`) devolve traço para `NaN`, `som12`/`sub12` deste
+       bloco o propagam de propósito, e o próprio bloco já usa
+       `nada12 = Array(12).fill(NaN)` em `buildInd(vbp ?? nada12, …)`. Ele
+       atravessa a cadeia derivada inteira sem virar zero e chega à tela como
+       traço — que é o comportamento que a trava pede.
+       ⚠ NÃO É `null`: a cadeia (`fatur`, `recLiq`, `resBruto`, `vbp`, `margem`,
+       `lucro`) e o `buildInd` são todos `number[]`, e `som12(null, …)` quebraria
+       em `null.map` — em runtime, onde nenhum gate estático pega. Tipar a cadeia
+       para `number[] | null` é o desenho certo e é frente própria
+       (PR-PC100-AUSENCIA-TIPADA); tocá-la aqui seria mexer nas oito linhas que
+       este PR não muda.
+       ⚠ O `nada12` daqui é local porque o do memo nasce em :4446, depois deste
+       ponto — mover a declaração mexeria em código de outra frente. */
+    const ausenteZoot12 = Array(12).fill(NaN) as number[];
+    /* Soma posição a posição, e SEM `?? 0` em ponto nenhum: se um dos lados não
+       tiver a posição, o resultado é `NaN` — a ausência deste caminho — e não um
+       zero que se somaria calado. `agregaPorPredicadoGenerico` sempre devolve as
+       doze posições preenchidas; se um dia deixar de devolver, o traço aparece na
+       tela em vez de o número sair menor. */
+    const somaZootFin = (z: number[], f: number[]): number[] => z.map((v, i) => v + f[i]);
+    /* ⚠ A LINHA INTEIRA É AUSENTE, NUNCA A METADE. Sem o lado zootécnico o
+       resultado é `ausenteZoot12`, e não o financeiro sozinho: faturamento só com
+       os sete subcentros seria um número menor com cara de completo — e ninguém
+       desconfiaria dele. Vale igual para carga que falhou. */
+    const dreRec = zootRec12 === null ? ausenteZoot12
+      : somaZootFin(zootRec12, agregaReceitaPecDoFinanceiro(lancFinDre, ano, C));
     const dreRecOut  = agregaOutrasReceitas(lancFinDre, ano, C);
     const dreDed     = agregaDeducoesPec(lancFinDre, ano, C);
     const dreCf      = agregaCustoFixoPec(lancFinDre, ano, C);
@@ -3695,7 +3802,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
        do FINANCEIRO (`lancFin` por regime), não do rebanho. As linhas zootécnicas
        de verdade — variação por produção, por preço e VBP — vêm de `lancPec` e
        continuam intocadas. */
-    const dreInvBov  = agregaInvBovinos(lancFinDre, ano, C);
+    /* Mesma regra do outro lado: as duas compras de bovinos vêm do zootécnico;
+       o frete e a comissão da compra são fato financeiro e ficam. */
+    const dreInvBov = zootInvBov12 === null ? ausenteZoot12
+      : somaZootFin(zootInvBov12, agregaInvBovinosDoFinanceiro(lancFinDre, ano, C));
     const dreJuros   = agregaJurosPec(lancFinDre, ano, C);
     const dreTribPat = agregaTributoPatrimonial(lancFinDre, ano, C);
     const dreImpLuc  = agregaImpostoSobreLucro(lancFinDre, ano, C);
@@ -4474,7 +4584,11 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lancFin, ano, mes, viewMode, gridMetaConsolidado,
-      areaPecuariaRealPorMes, areaPecuariaMetaPorMes]);
+      areaPecuariaRealPorMes, areaPecuariaMetaPorMes,
+      /* PR-DRE-PEC-FONTE-01 — sem estes dois o memo não recalcularia quando a
+         carga zootécnica voltasse, e o DRE ficaria com a linha ausente para
+         sempre. */
+      zootRec12, zootInvBov12]);
 
   // ─── custeioPecIndicador legado memoizado (Opção D) ─────────────────
   // Estabiliza a referência do objeto retornado para evitar render loop em

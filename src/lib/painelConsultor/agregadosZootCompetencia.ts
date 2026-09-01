@@ -69,6 +69,22 @@ interface ParamsAgregadorZootComp {
   clienteId: string;
   ano: number;
   cenario: CenarioZoot;
+  /**
+   * Recorte por fazenda. Ausente = cliente inteiro, o comportamento de sempre.
+   *
+   * ⚠ ADITIVO E OPCIONAL — PR-DRE-PEC-FONTE-01. As catorze chamadas existentes
+   * (`V2PlanejamentoVisaoGeral:302-307`, `V2FechamentoPeriodo:475-488`) passam
+   * `{ clienteId, ano, cenario }` e nenhuma informa fazenda: elas continuam
+   * idênticas, em código e em resultado.
+   * ⚠ A DECISÃO DE PASSAR OU NÃO É DE QUEM CHAMA, e é o mesmo condicional dos
+   * nove efeitos de carga do `usePainelConsultorData`: em Global filtra-se só
+   * por cliente; fora dele, pela fazenda selecionada. A função não conhece
+   * `isGlobal` — ela recebe o resultado da decisão.
+   * ⚠ `agregaDeducoesZootComp` IGNORA ESTE CAMPO. Ela não entra no PR que criou
+   * a prop e não teve seu comportamento alterado; quem for usá-la com recorte
+   * de fazenda precisa aplicá-lo lá primeiro.
+   */
+  fazendaId?: string;
 }
 
 type TipoReceita = 'abate' | 'venda' | 'venda_pe';
@@ -121,7 +137,7 @@ export async function agregaReceitaPecZootComp(
 ): Promise<AgregadoZootCompResult | null> {
   const { clienteId, ano, cenario } = params;
 
-  const { data, error } = await supabase
+  let q = supabase
     .from('lancamentos')
     .select('tipo, valor_total, data')
     .eq('cliente_id', clienteId)
@@ -130,6 +146,10 @@ export async function agregaReceitaPecZootComp(
     .in('tipo', ['abate', 'venda', 'venda_pe'])
     .gte('data', inicioAno(ano))
     .lt('data', inicioAnoSeguinte(ano));
+  /* `'__global__'` é sentinela de contexto, NUNCA uma fazenda — a mesma guarda
+     dos nove efeitos irmãos do `usePainelConsultorData`. */
+  if (params.fazendaId && params.fazendaId !== '__global__') q = q.eq('fazenda_id', params.fazendaId);
+  const { data, error } = await q;
 
   if (error) throw new Error(error.message);
   const rows = (data ?? []) as RowReceita[];
@@ -236,7 +256,7 @@ export async function agregaReposicaoBovinosZootComp(
 ): Promise<AgregadoZootCompResult> {
   const { clienteId, ano, cenario } = params;
 
-  const { data, error } = await supabase
+  let q = supabase
     .from('lancamentos')
     .select('valor_total, data')
     .eq('cliente_id', clienteId)
@@ -245,6 +265,9 @@ export async function agregaReposicaoBovinosZootComp(
     .eq('tipo', 'compra')
     .gte('data', inicioAno(ano))
     .lt('data', inicioAnoSeguinte(ano));
+  /* Mesma guarda da receita: `'__global__'` é sentinela, nunca fazenda. */
+  if (params.fazendaId && params.fazendaId !== '__global__') q = q.eq('fazenda_id', params.fazendaId);
+  const { data, error } = await q;
 
   if (error) throw new Error(error.message);
   const rows = (data ?? []) as RowCompra[];

@@ -613,6 +613,53 @@ export const GRUPO_ENTRADAS_CAPITAL  = 'Entradas de Capital';
 export const isReceitaPecuaria = (l: LancamentoClassificavel): boolean =>
   l.grupo_custo === GRUPO_RECEITA_PECUARIA;
 
+/**
+ * PR-DRE-PEC-FONTE-01 — os subcentros de Receita Pecuária cujo FATO já existe,
+ * inteiro e validado, na tabela `lancamentos` (zootécnico).
+ *
+ * ⚠ ELES CHEGAM AOS DOIS LADOS, e é por isso que a lista existe: abate e venda
+ * de gado são cadastrados no zootécnico E aparecem no financeiro por importação,
+ * operação comercial e movimentação de rebanho. Somar os dois lados conta o
+ * mesmo faturamento duas vezes — medido no Proto: NJ Pecuária 2025 tinha
+ * R$ 16,9 milhões no financeiro contra R$ 17,5 milhões no zootécnico.
+ * ⚠ A LISTA É FECHADA E LITERAL, como todo o resto deste arquivo. Subcentro novo
+ * de venda de gado NÃO é excluído automaticamente: ele entra aqui à mão, com
+ * decisão de quem sabe se o fato está nos dois lugares. Heurística por palavra
+ * ("tudo que contém 'venda'") foi o que o PR-CLASSIF-ENTRADA-GRUPO-01 removeu.
+ */
+export const SUBCENTROS_RECEITA_PEC_DO_ZOOTECNICO: readonly string[] = [
+  'Abates de Machos',
+  'Abates de Fêmeas',
+  'Venda de Desmama Machos',
+  'Venda de Desmama Fêmeas',
+  'Venda de Machos Adultos',
+  'Venda de Fêmeas Adultas',
+  'Venda em Boitel',
+];
+
+/** Idem, do lado da compra: o fato mora em `lancamentos` com `tipo='compra'`. */
+export const SUBCENTROS_INV_BOVINOS_DO_ZOOTECNICO: readonly string[] = [
+  'Investimento Compra Bovinos Fêmeas',
+  'Investimento Compra Bovinos Machos',
+];
+
+/**
+ * Receita pecuária que o FINANCEIRO é fonte — o complemento da lista acima
+ * dentro do mesmo grupo.
+ *
+ * ⚠ ADITIVO: `isReceitaPecuaria` não foi tocado. Ele continua respondendo "esta
+ * linha é receita pecuária?", que é outra pergunta e tem outros consumidores.
+ * Este responde "…e o financeiro é a fonte dela?".
+ */
+export const isReceitaPecuariaDoFinanceiro = (l: LancamentoClassificavel): boolean =>
+  isReceitaPecuaria(l)
+  && !SUBCENTROS_RECEITA_PEC_DO_ZOOTECNICO.includes((l.subcentro ?? '').trim());
+
+/** Idem para a compra de bovinos: sobra o frete/comissão, que é fato financeiro. */
+export const isInvBovinosDoFinanceiro = (l: LancamentoClassificavel): boolean =>
+  isReposicaoBovinos(l)
+  && !SUBCENTROS_INV_BOVINOS_DO_ZOOTECNICO.includes((l.subcentro ?? '').trim());
+
 export const isReceitaAgricola = (l: LancamentoClassificavel): boolean =>
   l.grupo_custo === GRUPO_RECEITA_AGRICOLA;
 

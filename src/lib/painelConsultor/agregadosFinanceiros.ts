@@ -46,6 +46,8 @@ import {
   isTributoPatrimonial,
   isImpostoSobreLucro,
   isReceitaPecuaria,
+  isReceitaPecuariaDoFinanceiro,
+  isInvBovinosDoFinanceiro,
   isReceitaAgricola,
   isReceitaSilvicola,
   isOutrasReceitas,
@@ -341,6 +343,22 @@ export function agregaDividendos(lancFin: FinanceiroLancamento[], ano: number, r
 
 export function agregaReceitaPec(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
   return agregaPorPredicadoGenerico(makeRealizadoSourceEntrada(lancFin, ano, regime), isReceitaPecuaria);
+}
+
+/**
+ * PR-DRE-PEC-FONTE-01 — receita pecuária SÓ dos subcentros cuja fonte é o
+ * financeiro. Os sete de gado (abate, desmama, adultos, boitel) saem daqui
+ * porque o mesmo fato vem inteiro do zootécnico; somar os dois duplicaria.
+ * ⚠ ADITIVO: `agregaReceitaPec` continua existindo e intocado — ele tem outros
+ * consumidores, que respondem outra pergunta.
+ */
+export function agregaReceitaPecDoFinanceiro(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSourceEntrada(lancFin, ano, regime), isReceitaPecuariaDoFinanceiro);
+}
+
+/** Idem na compra de bovinos: sobra o frete/comissão. */
+export function agregaInvBovinosDoFinanceiro(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano, regime), isInvBovinosDoFinanceiro);
 }
 
 export function agregaReceitaAgri(lancFin: FinanceiroLancamento[], ano: number, regime: Regime = 'caixa'): number[] {
