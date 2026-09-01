@@ -58,6 +58,7 @@ import FinanciamentoDetalhe from '@/pages/FinanciamentoDetalhe';
 import FinanciamentoCadastro from '@/pages/FinanciamentoCadastro';
 import FinanciamentosPainelTab from '@/pages/FinanciamentosPainelTab';
 import { ConciliacaoBancariaTab } from '@/pages/ConciliacaoBancariaTab';
+import V2Recorrencias from '@/v2/pages/V2Recorrencias';
 import { AuditoriaBancariaSoberana } from '@/components/financeiro-v2/AuditoriaBancariaSoberana';
 import { ExtratoGerencialTab } from '@/components/financeiro-v2/ExtratoGerencialTab';
 import { VisaoConsolidadaTab } from '@/components/financeiro-v2/VisaoConsolidadaTab';
@@ -898,6 +899,7 @@ export default function V2Index() {
       <ContratosTab />
     );
     if (section === 'importacao-custeio-txt') return <CusteioTxtImportTab />;
+    if (section === 'recorrencias') return <V2Recorrencias />;
     // PR-IMPORT-EXCEL-LANC-01 — passos 1-3 (ler, mapear, conferir). A gravação
     // (passo 4) entra depois, no mesmo PR; o botão fica desabilitado até lá.
     if (section === 'importacao-lanc-excel') return <V2ImportLancamentosExcel />;

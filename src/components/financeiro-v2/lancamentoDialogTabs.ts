@@ -2,7 +2,7 @@
 //
 // Espelha EXATAMENTE as fórmulas de validação hoje inline no modal
 // (LancamentoV2Dialog: contaOrigemValid/contaDestinoValid/contaSimpleValid,
-//  parceladaValid, recorrenteValid, canSave). NÃO cria regra nova nem diverge
+//  parceladaValid, canSave). NÃO cria regra nova nem diverge
 // das oficiais — o modal passa a consumir `computeValidacaoModal(...).canSave`
 // no mesmo lugar, de modo que canSave e o mapeamento por aba tenham UMA origem.
 //
@@ -43,8 +43,6 @@ export interface ValidacaoModalInput {
   formaPagamentoParc: 'avista' | 'parcelada';
   numParcelas: number;
   parcelaRowsLength: number;
-  frequencia: 'pontual' | 'recorrente';
-  recorrenciaRowsLength: number;
 }
 
 export interface ValidacaoModalResult {
@@ -96,7 +94,6 @@ export function computeValidacaoModal(v: ValidacaoModalInput): ValidacaoModalRes
   const parceladaValid =
     v.formaPagamentoParc === 'avista' ||
     (v.numParcelas >= 2 && v.numParcelas <= 24 && v.parcelaRowsLength === v.numParcelas);
-  const recorrenteValid = v.frequencia === 'pontual' || v.recorrenciaRowsLength > 0;
 
   // PR-FIN-V2-STATUS-01-AJUSTE — data_pagamento é obrigatória APENAS quando status = 'realizado'.
   //   Previsto/agendado/programado salvam com data_pagamento vazia (null).
@@ -112,7 +109,11 @@ export function computeValidacaoModal(v: ValidacaoModalInput): ValidacaoModalRes
     contaOk;
 
   const classificacaoValida = !!v.subcentro;
-  const pagamentoValido = parceladaValid && recorrenteValid;
+  /* ⚠ SÓ O PARCELAMENTO RESTRINGE — FIN-RECORRENCIA-01. O `recorrenteValid`
+     morreu com o modo recorrente do modal: a recorrência virou regra própria,
+     com validação na tela dela. Uma condição que sempre passa não é guarda, é
+     ruído que o próximo leitor tenta entender. */
+  const pagamentoValido = parceladaValid;
   const documentosValida = true; // sem obrigatório real hoje
 
   // canSave IDÊNTICO ao inline atual (documentosValida é no-op).

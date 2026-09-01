@@ -22,8 +22,6 @@ function baseValida(over: Partial<ValidacaoModalInput> = {}): ValidacaoModalInpu
     formaPagamentoParc: 'avista',
     numParcelas: 2,
     parcelaRowsLength: 0,
-    frequencia: 'pontual',
-    recorrenciaRowsLength: 0,
     ...over,
   };
 }
@@ -74,7 +72,11 @@ describe('primeira aba inválida respeita a ordem canônica', () => {
     expect(r.primeiraAbaInvalida).toBe('geral');
   });
   it('classificação + pagamento (geral ok) → classificação primeiro', () => {
-    const r = computeValidacaoModal(baseValida({ subcentro: '', frequencia: 'recorrente', recorrenciaRowsLength: 0 }));
+    /* ⚠ O PAGAMENTO É INVALIDADO PELO PARCELAMENTO, e não mais pela recorrência:
+       o modo recorrente do modal morreu em FIN-RECORRENCIA-01 e a regra
+       `recorrenteValid` com ele. O caso continua sendo o mesmo — duas abas
+       inválidas, ordem canônica — pela guarda que sobreviveu. */
+    const r = computeValidacaoModal(baseValida({ subcentro: '', formaPagamentoParc: 'parcelada', numParcelas: 3, parcelaRowsLength: 1 }));
     expect(r.abasInvalidas).toEqual(['classificacao', 'pagamento']);
     expect(r.primeiraAbaInvalida).toBe('classificacao');
   });
@@ -118,8 +120,6 @@ describe('parcelamento e recorrência', () => {
     expect(computeValidacaoModal(baseValida({ formaPagamentoParc: 'parcelada', numParcelas: 25, parcelaRowsLength: 25 })).pagamentoValido).toBe(false);
   });
   it('recorrência válida exige linhas > 0', () => {
-    expect(computeValidacaoModal(baseValida({ frequencia: 'recorrente', recorrenciaRowsLength: 5 })).pagamentoValido).toBe(true);
-    expect(computeValidacaoModal(baseValida({ frequencia: 'recorrente', recorrenciaRowsLength: 0 })).pagamentoValido).toBe(false);
   });
   it('à vista + pontual nunca torna PAGAMENTO inválida', () => {
     expect(computeValidacaoModal(baseValida()).pagamentoValido).toBe(true);
