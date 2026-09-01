@@ -39,6 +39,8 @@ export interface ImportLancDeParaPanelProps {
   fazendas?: Fazenda[];
   fornecedores?: FornecedorV2[];
   contas?: ContaBancariaV2[];
+  /** B-22d — cadastro de safras, só o painel do quinto campo usa. */
+  safras?: { id: string; nome: string }[];
   onResolver: (campo: CampoDePara, texto: string, valor: string | null, rotulo: string | null) => void;
   onDescartar: (campo: CampoDePara, texto: string) => void;
   onCriarFornecedor?: (nome: string, fazendaId: string | null, cpfCnpj?: string) => Promise<FornecedorV2 | null>;
@@ -46,7 +48,7 @@ export interface ImportLancDeParaPanelProps {
 
 export function ImportLancDeParaPanel({
   titulo, campo, mapa, pendentes, tipoPorTexto,
-  classificacoes, fazendas, fornecedores, contas,
+  classificacoes, fazendas, fornecedores, contas, safras,
   onResolver, onDescartar, onCriarFornecedor,
 }: ImportLancDeParaPanelProps) {
   const [busca, setBusca] = useState<Record<string, string>>({});
@@ -166,6 +168,25 @@ export function ImportLancDeParaPanel({
                       novoButtonClassName="h-5 w-5"
                       disabled={it.descartado}
                     />
+                  )}
+
+                  {/* ⚠ SELECT SIMPLES, e não combobox: seis safras no maior
+                      cliente do Proto. A busca digitável existe onde a lista é
+                      longa; aqui ela seria cerimônia. */}
+                  {campo === 'safra' && safras && (
+                    <select
+                      className="h-5 w-full rounded border border-border bg-background px-1 text-[9px]"
+                      value={it.valor ?? ''}
+                      disabled={it.descartado}
+                      onChange={(e) => {
+                        const sf = safras.find((x) => x.id === e.target.value);
+                        onResolver(campo, it.texto, e.target.value || null, sf?.nome ?? null);
+                      }}>
+                      <option value="">Escolher safra</option>
+                      {safras.map((sf) => (
+                        <option key={sf.id} value={sf.id}>{sf.nome}</option>
+                      ))}
+                    </select>
                   )}
 
                   {campo === 'conta' && contas && (

@@ -56,7 +56,7 @@ export interface ResultadoImportacao {
 }
 
 /** Campos que passam pelo mesmo mecanismo de de-para. */
-export type CampoDePara = 'subcentro' | 'fazenda' | 'fornecedor' | 'conta';
+export type CampoDePara = 'subcentro' | 'fazenda' | 'fornecedor' | 'conta' | 'safra';
 
 export function useImportLancamentosExcel() {
   const { clienteAtual } = useCliente();
@@ -64,8 +64,8 @@ export function useImportLancamentosExcel() {
   const clienteId = clienteAtual?.id ?? null;
 
   const {
-    classificacoes, fornecedores, contasBancarias,
-    loadClassificacoes, loadFornecedores, loadContas, criarFornecedor,
+    classificacoes, fornecedores, contasBancarias, safras,
+    loadClassificacoes, loadFornecedores, loadContas, loadSafras, criarFornecedor,
     criarLancamentoComId,
     editarLancamento,
   } = useFinanceiroV2();
@@ -116,7 +116,9 @@ export function useImportLancamentosExcel() {
     loadClassificacoes();
     loadFornecedores();
     loadContas();
-  }, [clienteId, loadClassificacoes, loadFornecedores, loadContas]);
+    /* B-22d — o quinto campo precisa do cadastro de safras do cliente. */
+    loadSafras();
+  }, [clienteId, loadClassificacoes, loadFornecedores, loadContas, loadSafras]);
 
   // Aliases de subcentro. O subcentro vive em financeiro_plano_contas, mas o join
   // embutido do PostgREST estoura a inferência de tipos (TS2589) — duas queries e
@@ -245,8 +247,8 @@ export function useImportLancamentosExcel() {
   const catalogos = useMemo<CatalogosImport>(() => ({
     classificacoes, fazendas, fornecedores,
     contas: contasResolviveis,
-    aliasesSubcentro, aliasesFornecedor, fechados,
-  }), [classificacoes, fazendas, fornecedores, contasResolviveis, aliasesSubcentro, aliasesFornecedor, fechados]);
+    aliasesSubcentro, aliasesFornecedor, fechados, safras,
+  }), [classificacoes, fazendas, fornecedores, contasResolviveis, aliasesSubcentro, aliasesFornecedor, fechados, safras]);
 
   // ── Passo 1: ler o arquivo ──
   const lerArquivo = useCallback(async (file: File) => {
@@ -290,6 +292,7 @@ export function useImportLancamentosExcel() {
         fazenda: merge(atual.fazenda, base.fazenda),
         fornecedor: merge(atual.fornecedor, base.fornecedor),
         conta: merge(atual.conta, base.conta),
+        safra: merge(atual.safra, base.safra),
       };
     });
   }, [parse, catalogos]);
@@ -472,7 +475,7 @@ export function useImportLancamentosExcel() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado
       const { data } = await (supabase as any)
         .from('financeiro_lancamentos_v2')
-        .select('id, subcentro, descricao, origem_lancamento, origem_tipo')
+        .select('id, subcentro, descricao, safra_id, origem_lancamento, origem_tipo')
         .eq('cliente_id', clienteId)
         .eq('cancelado', false)
         .in('id', ids);
@@ -494,6 +497,7 @@ export function useImportLancamentosExcel() {
           travado: r.origem_lancamento === 'oc' || r.origem_tipo === 'oc' || comOC.has(r.id),
           subcentroAtual: r.subcentro ?? null,
           descricaoAtual: r.descricao ?? null,
+          safraAtual: r.safra_id ?? null,
         });
       }
       setAlvos(mapa);
@@ -558,6 +562,10 @@ export function useImportLancamentosExcel() {
           macro_custo: cls?.macro_custo,
           grupo_custo: cls?.grupo_custo,
           centro_custo: cls?.centro_custo,
+          /* B-22d — a safra passa a ser GRAVADA. A coluna existia no modelo, o
+             parser a lia desde sempre e o form nunca a levava: era o quarto caso
+             do padrão construído-mas-não-ligado desta rodada. */
+          safra_id: l.safraId,
         };
         /* ⚠ O MODO DECIDE O GRAVADOR — B-22b. Linha com id de lançamento vivo
            ATUALIZA aquele lançamento; linha sem id cria. É o fluxo real do NJ: o
@@ -576,6 +584,9 @@ export function useImportLancamentosExcel() {
             ...form,
             descricao: form.descricao ?? alvo?.descricaoAtual ?? undefined,
             subcentro: form.subcentro ?? alvo?.subcentroAtual ?? undefined,
+            /* Célula vazia não apaga, aqui também: sem safra na planilha, o
+               lançamento fica com a que já tinha. */
+            safra_id: l.safraId ?? alvo?.safraAtual ?? null,
           };
           const ok = await editarLancamento(alvoId, formUpd);
           if (ok) atualizados++;
@@ -618,7 +629,7 @@ export function useImportLancamentosExcel() {
 
   return {
     // catálogos p/ os seletores da tela
-    classificacoes, fornecedores, fazendas, contasBancarias, criarFornecedor,
+    classificacoes, fornecedores, fazendas, contasBancarias, safras, criarFornecedor,
     // estado
     arquivo, parse, dePara, previa, pendentes, lendo, erro,
     exigeFazendaCabecalho, fazendaCabecalhoId, setFazendaCabecalhoId,

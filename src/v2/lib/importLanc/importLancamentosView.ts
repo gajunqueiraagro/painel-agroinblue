@@ -84,6 +84,15 @@ export interface CatalogosImport {
   aliasesFornecedor: Readonly<Record<string, string[]>>;
   /** Chaves de (fazenda, ano_mes) fechados. */
   fechados: ReadonlySet<ChaveFechamento>;
+  /** B-22d — cadastro de safras do cliente, para o quinto campo do de-para. */
+  safras: SafraRef[];
+}
+
+/** O que o de-para precisa de uma safra do cadastro. */
+export interface SafraRef {
+  id: string;
+  nome: string;
+  codigo?: string | null;
 }
 
 // ─── Normalização (única tolerância permitida) ──────────────────────
@@ -204,6 +213,57 @@ export interface DeParaCompleto {
   fazenda: DeParaMap;
   fornecedor: DeParaMap;
   conta: DeParaMap;
+  /** B-22d — o quinto campo do mesmo motor. */
+  safra: DeParaMap;
+}
+
+/**
+ * O separador da CHAVE COMPOSTA conta+safra — B-22d.
+ *
+ * ⚠ O PLANO DO CLIENTE PODE SEPARAR O QUE O NOSSO JUNTA. No NJ, a coluna Conta
+ * diz "Manutenção de Máquinas" e a Safra diz se é pecuária ou agricultura — o
+ * mesmo texto de conta vira dois subcentros diferentes. Sem a chave composta, o
+ * operador contorna concatenando no Excel, e a planilha passa a carregar uma
+ * fórmula que ninguém mais entende seis meses depois.
+ * ⚠ `⟂` PORQUE ESTÁ LIVRE: medido no Proto, os 19 aliases existentes não o
+ * contêm, e ele não aparece em texto de plano de contas nenhum. Um separador que
+ * apareça no dado transformaria uma conta legítima em chave partida.
+ * ⚠ NÃO É COLUNA NOVA: `alias_text` é `text` sem limite e o índice único é sobre
+ * `lower(trim(alias_text))` — a chave composta é só outro texto, e convive com a
+ * simples sem colisão.
+ */
+export const SEP_CHAVE_COMPOSTA = ' ⟂ ';
+
+/** A chave do de-para de subcentro: composta quando a conta é ambígua. */
+export const chaveSubcentro = (contaTexto: string, safraTexto: string | null): string =>
+  safraTexto ? `${contaTexto}${SEP_CHAVE_COMPOSTA}${safraTexto}` : contaTexto;
+
+/**
+ * Textos de conta que aparecem no arquivo com MAIS DE UMA safra.
+ *
+ * ⚠ A CONDIÇÃO É OBSERVÁVEL, e é o que a torna possível: comparar o `escopo_negocio`
+ * do subcentro candidato seria circular — o candidato só existe depois do
+ * mapeamento que esta função serve para desdobrar. "Mesma conta, safras
+ * diferentes" se vê no arquivo, antes de resolver qualquer coisa.
+ * ⚠ O CUSTO ACEITO: desdobra também quando as duas safras iriam ao mesmo
+ * subcentro. Acontece só quando há duas safras de fato, o operador responde uma
+ * vez a mais, e a memória guarda os dois pares — na planilha seguinte, nenhuma
+ * pergunta. (`financeiro_safras` tem `escopo_negocio`, então a detecção precisa
+ * existe se um dia isto incomodar.)
+ */
+export function contasAmbiguas(rows: LancamentoExcelRow[]): ReadonlySet<string> {
+  const safrasPorConta = new Map<string, Set<string>>();
+  for (const r of rows) {
+    const conta = r.conta_plano_texto?.trim();
+    const safra = r.safra_texto?.trim();
+    if (!conta || !safra) continue;
+    const set = safrasPorConta.get(conta) ?? new Set<string>();
+    set.add(safra);
+    safrasPorConta.set(conta, set);
+  }
+  const out = new Set<string>();
+  for (const [conta, safras] of safrasPorConta) if (safras.size > 1) out.add(conta);
+  return out;
 }
 
 function montarMapa(
@@ -222,16 +282,50 @@ export function montarDePara(
   rows: LancamentoExcelRow[],
   cat: CatalogosImport,
 ): DeParaCompleto {
+  /* ⚠ A CHAVE DE SUBCENTRO É COMPOSTA SÓ ONDE PRECISA. Conta que aparece com uma
+     safra só (ou sem safra) segue com a chave simples de sempre — o desdobro é
+     exceção, e o fluxo sem ambiguidade não ganha uma pergunta sequer. */
+  const ambiguas = contasAmbiguas(rows);
   return {
-    subcentro: montarMapa(distintos(rows, (r) => r.conta_plano_texto), (t) =>
-      preResolverSubcentro(t, cat)),
+    subcentro: montarMapa(
+      distintos(rows, (r) => {
+        const conta = r.conta_plano_texto?.trim();
+        if (!conta) return null;
+        return ambiguas.has(conta) ? chaveSubcentro(conta, r.safra_texto?.trim() ?? null) : conta;
+      }),
+      (t) => preResolverSubcentro(t, cat)),
     fazenda: montarMapa(distintos(rows, (r) => r.fazenda_texto), (t) =>
       preResolverFazenda(t, cat.fazendas)),
     fornecedor: montarMapa(distintos(rows, (r) => r.fornecedor_texto), (t) =>
       preResolverFornecedor(t, cat.fornecedores, cat.aliasesFornecedor)),
     conta: montarMapa(distintos(rows, (r) => r.conta_bancaria_texto), (t) =>
       preResolverConta(t, cat.contas)),
+    safra: montarMapa(distintos(rows, (r) => r.safra_texto), (t) =>
+      preResolverSafra(t, cat.safras)),
   };
+}
+
+/**
+ * Safra por NOME ou CÓDIGO exato, normalizado — B-22d.
+ *
+ * ⚠ SEM MEMÓRIA DE APELIDO, e é decisão declarada: `financeiro_safras` não tem
+ * coluna `aliases` como `financeiro_fornecedores`, e o vocabulário é pequeno e
+ * controlado (seis safras no maior cliente do Proto, contra centenas de
+ * fornecedores). Sem casar, a linha fica pendente e o operador escolhe da lista
+ * — a escolha vale para o arquivo. Se um dia incomodar, a coluna `aliases` é
+ * migration aditiva e o quinto campo passa a memorizar como os outros quatro,
+ * sem tocar em mais nada: o motor já é o mesmo.
+ */
+export function preResolverSafra(
+  texto: string,
+  safras: SafraRef[],
+): Pick<DeParaItem, 'valor' | 'origem' | 'rotulo'> {
+  const alvo = normalizar(texto);
+  const achou = safras.find((sf) =>
+    normalizar(sf.nome) === alvo || (sf.codigo ? normalizar(sf.codigo) === alvo : false));
+  return achou
+    ? { valor: achou.id, origem: 'cadastro', rotulo: achou.nome }
+    : { valor: null, origem: 'pendente', rotulo: null };
 }
 
 /** Quantos ainda faltam resolver, por painel e no total. */
@@ -243,7 +337,9 @@ export function contarPendentes(dp: DeParaCompleto) {
   const fazenda = p(dp.fazenda);
   const fornecedor = p(dp.fornecedor);
   const conta = p(dp.conta);
-  return { subcentro, fazenda, fornecedor, conta, total: subcentro + fazenda + fornecedor + conta };
+  const safra = p(dp.safra);
+  return { subcentro, fazenda, fornecedor, conta, safra,
+    total: subcentro + fazenda + fornecedor + conta + safra };
 }
 
 // ─── Prévia ─────────────────────────────────────────────────────────
@@ -291,6 +387,8 @@ export interface AlvoAtualizacao {
   travado: boolean;
   subcentroAtual: string | null;
   descricaoAtual: string | null;
+  /** B-22d — a safra atual, para que célula vazia não a apague. */
+  safraAtual: string | null;
 }
 
 /**
@@ -324,6 +422,8 @@ export interface LinhaPrevia {
   subcentro: string | null;
   favorecidoId: string | null;
   contaBancariaId: string | null;
+  /** B-22d — safra resolvida do cadastro; `null` = sem safra na planilha. */
+  safraId: string | null;
   entra: boolean;
   motivo: MotivoExclusao | null;
   /** `atualizar` quando a coluna ID traz um lançamento vivo deste cliente. */
@@ -373,9 +473,14 @@ export function avaliarLinha(
   const fazendaId = itFaz?.valor ?? fazendaCabecalhoId;
   const fazendaNome = itFaz?.rotulo ?? fazendaCabecalhoNome;
 
-  const itSub = valorDe(dp.subcentro, row.conta_plano_texto);
+  /* ⚠ A LINHA LÊ PELA MESMA CHAVE QUE O MAPA FOI MONTADO. Tentar a composta e,
+     não achando, a simples: assim conta ambígua resolve pelo par e conta comum
+     segue pelo texto sozinho, sem dois caminhos de código. */
+  const chaveComposta = chaveSubcentro(row.conta_plano_texto ?? '', row.safra_texto?.trim() ?? null);
+  const itSub = valorDe(dp.subcentro, chaveComposta) ?? valorDe(dp.subcentro, row.conta_plano_texto);
   const itForn = valorDe(dp.fornecedor, row.fornecedor_texto);
   const itConta = valorDe(dp.conta, row.conta_bancaria_texto);
+  const itSafra = valorDe(dp.safra, row.safra_texto);
 
   /* ⚠ O ID SÓ VALE SE O LANÇAMENTO EXISTE E É DESTE CLIENTE. `alvos` vem da
      consulta que a prévia faz; id que não está lá é id errado — planilha de
@@ -394,6 +499,9 @@ export function avaliarLinha(
     // conta bancária) — não é conta, e a despesa existe do mesmo jeito.
     favorecidoId: itForn?.valor ?? null,
     contaBancariaId: itConta?.valor ?? null,
+    /* Safra é OPCIONAL: sem ela a linha entra, e o lançamento nasce sem safra —
+       o mesmo tratamento de fornecedor e conta bancária. */
+    safraId: itSafra?.valor ?? null,
   };
 
   /* ⚠ OS MOTIVOS DO MODO ATUALIZAÇÃO VÊM PRIMEIRO, e a ordem é o argumento:

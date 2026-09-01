@@ -50,7 +50,7 @@ export function V2ImportLancamentosExcel({
   movimentosDoExtrato, contaNome, sufixoArquivo,
 }: V2ImportLancamentosExcelProps = {}) {
   const {
-    classificacoes, fornecedores, fazendas, contasBancarias, criarFornecedor,
+    classificacoes, fornecedores, fazendas, contasBancarias, safras, criarFornecedor,
     arquivo, parse, dePara, previa, pendentes, lendo, erro,
     exigeFazendaCabecalho, fazendaCabecalhoId, setFazendaCabecalhoId,
     lerArquivo, resolverManualmente, alternarDescarte, alternarReinclusao, checandoDup, limpar,
@@ -276,6 +276,22 @@ export function V2ImportLancamentosExcel({
                 onDescartar={alternarDescarte}
               />
             </div>
+            {/* ⚠ O PAINEL DE SAFRA SÓ APARECE QUANDO A PLANILHA TRAZ SAFRA —
+                B-22d. Um painel vazio permanente ensinaria que falta preencher
+                algo que a maioria das planilhas não tem. */}
+            {Object.keys(dePara.safra).length > 0 && (
+              <div>
+                <ImportLancDeParaPanel
+                  titulo="Safra"
+                  campo="safra"
+                  mapa={dePara.safra}
+                  pendentes={pendentes.safra}
+                  safras={safras}
+                  onResolver={resolverManualmente}
+                  onDescartar={alternarDescarte}
+                />
+              </div>
+            )}
           </div>
         </div>
       )}
