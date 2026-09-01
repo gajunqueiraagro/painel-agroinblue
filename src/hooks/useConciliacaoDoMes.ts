@@ -247,6 +247,15 @@ export type EstadoSugestao = 'match_direto' | 'provavel' | 'ambiguo' | 'sem_matc
 export interface SugestaoDoMes {
   extratoId: string;
   estado: string;
+  /**
+   * O id do LANÇAMENTO sugerido — B-22c.
+   *
+   * ⚠ A RPC sempre o devolveu (`sugestao_id`, conferido em `pg_proc`) e o `map`
+   * o descartava: sem ele, a tela sabia QUE havia sugestão e não sabia QUAL, e
+   * vincular em massa era impossível — cada linha teria de reabrir o motor de
+   * candidatos para redescobrir o par que a RPC já tinha dito.
+   */
+  sugestaoId: string | null;
   sugestaoDescricao: string | null;
   sugestaoFavorecido: string | null;
   sugestaoValor: number | null;
@@ -296,6 +305,7 @@ export function useSugestoesDoMes(
       setSugestoes((data ?? []).map((r: any) => ({
         extratoId: r.extrato_id,
         estado: r.estado,
+        sugestaoId: r.sugestao_id ?? null,
         sugestaoDescricao: r.sugestao_descricao ?? null,
         sugestaoFavorecido: r.sugestao_favorecido ?? null,
         sugestaoValor: r.sugestao_valor == null ? null : Number(r.sugestao_valor),

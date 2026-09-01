@@ -9,6 +9,7 @@ import {
   type MovimentoConciliacao, type SituacaoMovimento,
 } from '@/hooks/useConciliacaoDoMes';
 import { EstacaoConciliar } from '@/components/conciliacao/EstacaoConciliar';
+import { VincularMatchDireto } from '@/components/conciliacao/VincularMatchDireto';
 
 /**
  * PalcoDoMes — o mês inteiro numa tela. FIN-CONCIL-PALCO-MES-01.
@@ -150,6 +151,20 @@ export function PalcoDoMes({ clienteId, contaId, contaNome, ano, mes, aoFechar, 
                 <Loader2 className="h-3 w-3 animate-spin" />
                 procurando sugestões…
               </span>
+            )}
+            {/* ⚠ AO LADO DOS CHIPS, e não no rodapé: o botão age sobre UM balde,
+                e fica onde o operador vê a contagem dele. Recarrega a lista e os
+                baldes ao terminar, sem fechar o palco. */}
+            {!sug.carregando && (
+              <VincularMatchDireto
+                movimentos={movimentos}
+                sugestoes={sug.sugestoes}
+                aoConcluir={async () => {
+                  await recarregar();
+                  if (sug.sugestoes != null) await sug.calcular();
+                  await aoMudar?.();
+                }}
+              />
             )}
           </div>
 
