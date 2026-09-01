@@ -28,11 +28,16 @@ import { VincularMatchDireto } from '@/components/conciliacao/VincularMatchDiret
  * contadores para a mesma pergunta.
  *
  * ⚠ AS SUGESTÕES SÃO SOB DEMANDA, e a medição é que decidiu: `fn_sugestoes_extrato`
- * chama o motor uma vez POR MOVIMENTO, a ~91 ms cada — um mês de 58 linhas custa
- * ~5,3 s. Aqui elas são pedidas ao ABRIR o palco, porque o palco existe para
- * mostrá-las; quem só quer ver a lista tem o card do mês, que não paga esse
- * preço. E `fn_candidatos_conciliacao` em lote está fora de questão: seriam ~6 s
- * por movimento.
+ * chama `fn_candidatos_conciliacao` uma vez POR MOVIMENTO. Aqui elas são pedidas
+ * ao ABRIR o palco, porque o palco existe para mostrá-las; quem só quer ver a
+ * lista tem o card do mês, que não paga esse preço.
+ *
+ * ⚠ OS "~91 ms POR MOVIMENTO" QUE ESTAVAM ESCRITOS AQUI ERAM ILUSÃO DE MÊS
+ * PEQUENO. A medição refeita deu ~6 s por movimento: 190 movimentos = timeout,
+ * não os ~5,3 s que este comentário prometia. A reescrita set-based do motor é o
+ * CONCIL-MOTOR-PERF-01, P0, fora desta tela. Fica registrado porque um número
+ * errado num comentário é pior que nenhum: ele foi citado como evidência de que
+ * o caminho escalava.
  *
  * ⚠ ESTADO AUSENTE ≠ SEM MATCH. Enquanto o motor não respondeu, a linha não
  * afirma estado nenhum — mostra a situação do VÍNCULO, que é fato do banco.
@@ -154,18 +159,24 @@ export function PalcoDoMes({ clienteId, contaId, contaNome, ano, mes, aoFechar, 
             )}
             {/* ⚠ AO LADO DOS CHIPS, e não no rodapé: o botão age sobre UM balde,
                 e fica onde o operador vê a contagem dele. Recarrega a lista e os
-                baldes ao terminar, sem fechar o palco. */}
-            {!sug.carregando && (
-              <VincularMatchDireto
-                movimentos={movimentos}
-                sugestoes={sug.sugestoes}
-                aoConcluir={async () => {
-                  await recarregar();
-                  if (sug.sugestoes != null) await sug.calcular();
-                  await aoMudar?.();
-                }}
-              />
-            )}
+                baldes ao terminar, sem fechar o palco.
+
+                ⚠ B-38 — SEM O GATE `!sug.carregando`. Enquanto o botão lia o
+                balde do motor, esperar fazia sentido; agora ele varre o mês pela
+                própria RPC e não depende de sugestão nenhuma. Manter o gate o
+                esconderia justamente no mês grande, onde o motor demora ou dá
+                timeout — o mês que mais precisa dele. */}
+            <VincularMatchDireto
+              clienteId={clienteId}
+              contaId={contaId}
+              ano={ano}
+              mes={mes}
+              aoConcluir={async () => {
+                await recarregar();
+                if (sug.sugestoes != null) await sug.calcular();
+                await aoMudar?.();
+              }}
+            />
           </div>
 
           <div className="min-h-0 flex-1 overflow-auto">

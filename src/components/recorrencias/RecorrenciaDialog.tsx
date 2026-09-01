@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -107,10 +108,14 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
         safra_id: safraId || null,
         forma_pagamento: formaPgto || null,
         observacao: observacao.trim() || null,
-        /* O sinal é do valor. `tipo_operacao` acompanha, para quem lê a regra
-           sem recalcular. */
+        /* ⚠ O SINAL É O ÚNICO CANAL, e `tipo_operacao` NÃO entra no payload: a
+           coluna é GENERATED ALWAYS no banco
+           (`CASE WHEN valor_base > 0 THEN '1-Entradas' ELSE '2-Saídas' END`), e
+           mandá-la — ainda que com o valor certo — faz o Postgres recusar o
+           insert inteiro: "cannot insert a non-DEFAULT value into column
+           tipo_operacao". O tooltip do campo já prometia que o sinal vem do
+           Tipo ao lado; era a gravação que não cumpria. */
         valor_base: ehSaida ? -Math.abs(valorNum) : Math.abs(valorNum),
-        tipo_operacao: ehSaida ? '2-Saídas' : '1-Entradas',
         dia_vencimento: Number(diaVencimento) || 1,
         data_inicio: dataInicio,
         primeiro_vencimento: primeiroVenc,
@@ -231,15 +236,15 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
             <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
               <div>
                 <Label className="text-[10px]">Competência do 1º *</Label>
-                <Input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)}
-                  className="h-8 text-xs"
-                  title="O mês do FATO do primeiro lançamento — o mês do consumo." />
+                <div title="O mês do FATO do primeiro lançamento — o mês do consumo.">
+                  <DatePicker value={dataInicio} onChange={setDataInicio} className="text-[11px]" />
+                </div>
               </div>
               <div>
                 <Label className="text-[10px]">Vencimento do 1º *</Label>
-                <Input type="date" value={primeiroVenc} onChange={e => setPrimeiroVenc(e.target.value)}
-                  className="h-8 text-xs"
-                  title="Quando esse primeiro é pago. A distância entre esta data e a competência é o que se repete todo mês — não há campo de deslocamento porque ele nasce daqui." />
+                <div title="Quando esse primeiro é pago. A distância entre esta data e a competência é o que se repete todo mês — não há campo de deslocamento porque ele nasce daqui.">
+                  <DatePicker value={primeiroVenc} onChange={setPrimeiroVenc} className="text-[11px]" />
+                </div>
               </div>
               <div>
                 <Label className="text-[10px]">Dia do vencimento *</Label>
@@ -249,9 +254,9 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
               </div>
               <div>
                 <Label className="text-[10px]">Última competência *</Label>
-                <Input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)}
-                  className="h-8 text-xs"
-                  title="Limita a COMPETÊNCIA, não o vencimento: com deslocamento, o último pagamento cai depois desta data — e está certo." />
+                <div title="Limita a COMPETÊNCIA, não o vencimento: com deslocamento, o último pagamento cai depois desta data — e está certo.">
+                  <DatePicker value={dataFim} onChange={setDataFim} className="text-[11px]" />
+                </div>
               </div>
             </div>
             {/* ⚠ O RESUMO VIVO — a frase que explica o deslocamento sem campo de
