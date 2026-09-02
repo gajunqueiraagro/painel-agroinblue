@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { PainelExtratoMes } from '@/components/conciliacao/PainelExtratoMes';
 import { SaldoRealDialog } from '@/components/conciliacao/SaldoRealDialog';
+import { movimentoNaConta, fimDoMes } from '@/hooks/useExtratoDaConta';
 import { ImportarBancoInline } from '@/components/conciliacao/ImportarBancoInline';
 import { ExtratoGerencialTab } from '@/components/financeiro-v2/ExtratoGerencialTab';
 import { EnriquecerPorPlanilha } from '@/components/conciliacao/EnriquecerPorPlanilha';
@@ -76,6 +77,13 @@ interface LancamentoResumo {
   origem_lancamento: string | null;
   macro_custo: string | null;
   centro_custo: string | null;
+  /* ⚠ OS TRÊS FILTROS DO SALDO — CONCIL-PARIDADE-VISUAL-01 §5. Eles não vinham
+     no `select`, e por isso a conta desta tela somava lançamento cancelado como
+     se fosse dinheiro: 38 deles, R$ 410.501,86, só em Vera/Itaú/agosto. O
+     filtro não estava errado — não existia. */
+  cancelado: boolean | null;
+  cenario: string | null;
+  sem_movimentacao_caixa: boolean | null;
 }
 
 interface FornecedorRef { id: string; nome: string; }
@@ -247,7 +255,26 @@ function buildMonthCards(
 
     // FLUXO COMPLETO: saldo agregado = saldo_inicial + entradas - saídas (inclui sem-conta).
     // O saldoCalculado por-conta (perAcct) continua usado em prevFinal para encadear meses.
-    const saldoCalculado = r2(saldoInicial + totalEntradasOficial - totalSaidasOficial);
+
+      /* ⚠ UMA RÉGUA SÓ PARA "SALDO NO SISTEMA" — CONCIL-PARIDADE-VISUAL-01 §5.
+         Aqui havia uma segunda conta: entradas menos saídas por `tipo_operacao`,
+         que ZERAVA transferências e NÃO olhava `cancelado`. Medido em
+         Vera/Itaú/agosto: 38 cancelados somando 410.501,86 entravam na conta, e
+         6 transferências de 55.092,64 sumiam dela. Aquele `case` é a régua do
+         RESULTADO — onde transferência de fato não é receita nem custo —, e
+         usá-la para SALDO era emprestar a régua do papel errado.
+         Agora os dois cards (este e o da aba Importar) leem `movimentoNaConta`:
+         sinal pela coluna, transferência pela perna, sem cancelados, caixa-only,
+         cenário realizado. Nenhum dos dois mantém conta própria. */
+      const movimentoDoMes = r2(mesLancs
+        .filter(l => !l.cancelado && l.cenario === 'realizado' && !l.sem_movimentacao_caixa)
+        .reduce((acc, l) => acc + movimentoNaConta({
+          valor: l.valor, sinal: l.sinal, tipo_operacao: l.tipo_operacao,
+          data_pagamento: l.data_pagamento,
+          conta_bancaria_id: l.conta_bancaria_id ?? null,
+          conta_destino_id: l.conta_destino_id ?? null,
+        }, isAll ? '' : targetContaId), 0));
+      const saldoCalculado = r2(saldoInicial + movimentoDoMes);
     const diferenca = saldoExtrato !== null ? r2(saldoExtrato - saldoCalculado) : 0;
 
     // Pendências: lançamentos sem conta vinculada
@@ -439,7 +466,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
     while (true) {
       const {data:lData} = await supabase
         .from('financeiro_lancamentos_v2')
-        .select('id,tipo_operacao,valor,sinal,data_competencia,data_pagamento,descricao,status_transacao,favorecido_id,numero_documento,conta_bancaria_id,conta_destino_id,ano_mes,subcentro,origem_lancamento,macro_custo,centro_custo')
+        .select('id,tipo_operacao,valor,sinal,data_competencia,data_pagamento,descricao,status_transacao,favorecido_id,numero_documento,conta_bancaria_id,conta_destino_id,ano_mes,subcentro,origem_lancamento,macro_custo,centro_custo,cancelado,cenario,sem_movimentacao_caixa')
         .eq('cliente_id',clienteId).eq('cancelado',false)
         .eq('sem_movimentacao_caixa', false)
         .eq('status_transacao', 'realizado')
@@ -615,6 +642,32 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
     : getContaLabel(contas.find(c=>c.id===selectedConta) || {id:'',nome_conta:selectedConta,nome_exibicao:null,tipo_conta:null,codigo_conta:null});
 
   const anoMesSel = `${ano}-${selectedMes}`;
+
+  /**
+   * A POSIÇÃO DO CARD — CONCIL-PARIDADE-VISUAL-01 §3.
+   *
+   * ⚠ MESMA FONTE DA ABA IMPORTAR, nada recalculado: `saldo_data` da linha do
+   * mês, e o fim do mês quando ela é nula — o mesmo `coalesce` de leitura que o
+   * `useSaldoGerencialDoMes` faz. Uma segunda régua aqui faria as duas telas
+   * discordarem sobre qual data a diferença usou, que é exatamente o defeito
+   * que o §5 acabou de matar no saldo.
+   */
+  const saldoDataDoCard = selectedConta !== '__all__'
+    ? (saldos.find(x => x.ano_mes === anoMesSel && x.conta_bancaria_id === selectedConta)?.saldo_data ?? null)
+    : null;
+  const posicaoEmDoCard = saldoDataDoCard
+    ?? fimDoMes(Number(anoMesSel.slice(0, 4)), Number(anoMesSel.slice(5, 7)));
+  const posicaoDeclaradaDoCard = saldoDataDoCard !== null;
+  const posicaoDoCard = posicaoEmDoCard.slice(0, 10).split('-').reverse().slice(0, 2).join('/');
+
+  /* Quantos realizados vêm DEPOIS da posição — o que o aviso cobra. Conta sobre
+     os mesmos lançamentos que a régua do saldo usa; um recorte diferente faria
+     o aviso falar de linhas que a conta não viu. */
+  const avisoAposPosicao = selectedConta === '__all__' ? 0 : lancamentos.filter(l =>
+    (l.data_pagamento || '').slice(0, 7) === anoMesSel
+    && belongsToConta(l, selectedConta)
+    && !l.cancelado && l.cenario === 'realizado' && !l.sem_movimentacao_caixa
+    && (l.data_pagamento || '').slice(0, 10) > posicaoEmDoCard).length;
   const contasCC    = perContaSaldos.filter(c=>(c.conta.tipo_conta||'').toLowerCase()==='cc');
   const contasINV   = perContaSaldos.filter(c=>(c.conta.tipo_conta||'').toLowerCase()==='inv');
   const contasCartao= perContaSaldos.filter(c=>(c.conta.tipo_conta||'').toLowerCase()==='cartao');
@@ -694,6 +747,17 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   return (
     <div className="animate-fade-in pb-20 md:pb-0 md:flex-1 md:min-h-0 md:flex md:flex-col md:overflow-hidden">
       <div className="p-3 space-y-2 sticky top-0 z-20 bg-background md:static md:z-auto md:shrink-0">
+
+        {/* ⚠ O CABEÇALHO DA PÁGINA — CONCIL-PARIDADE-VISUAL-01 §1. A tela abria
+            direto no seletor de ano, sem dizer o que ela é: quem chegava por um
+            atalho via doze cards de mês e nenhum nome. O subtítulo é o da
+            referência, e diz a pergunta que a tela responde. */}
+        <div className="min-w-0">
+          <h2 className="text-[15px] font-semibold leading-none">Conciliação</h2>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Extrato, saldo corrente e o mês fechando — conta a conta
+          </p>
+        </div>
 
         {/* ════ HEADER: year dropdown + 12 month cards ════ */}
         <div className="flex items-center gap-2">
@@ -917,7 +981,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                 <div className="mx-3 my-1 h-px bg-border" />
                 <div className="px-3 flex justify-between">
                   <span className="text-[10px] text-muted-foreground">Entradas</span>
-                  <span className="text-[11px] font-semibold text-green-700 tabular-nums">{formatMoeda(selectedCard.totalEntradas)}</span>
+                  <span className="text-[11px] font-semibold text-success tabular-nums">{formatMoeda(selectedCard.totalEntradas)}</span>
                 </div>
                 {selectedConta !== '__all__' && (
                   <div className="px-5 space-y-0.5 pb-0.5">
@@ -931,7 +995,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                 )}
                 <div className="px-3 flex justify-between">
                   <span className="text-[10px] text-muted-foreground">Saídas</span>
-                  <span className="text-[11px] font-semibold text-red-700 tabular-nums">{formatMoeda(selectedCard.totalSaidas)}</span>
+                  <span className="text-[11px] font-semibold text-destructive tabular-nums">{formatMoeda(selectedCard.totalSaidas)}</span>
                 </div>
                 {selectedConta !== '__all__' && (
                   <div className="px-5 space-y-0.5 pb-0.5">
@@ -946,25 +1010,56 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                 <div className="mx-3 my-1 h-px bg-border" />
                 <div className="px-3 flex justify-between">
                   <span className="text-[10px] text-muted-foreground">Saldo no sistema</span>
-                  <span className={`text-[11px] font-bold tabular-nums ${(selectedConta==='__all__'?totalSaldos.sis:selectedCard.saldoCalculado)>=0?'text-green-700':'text-red-700'}`}>
+                  <span className={`text-[11px] font-bold tabular-nums ${(selectedConta==='__all__'?totalSaldos.sis:selectedCard.saldoCalculado)>=0?'text-success':'text-destructive'}`}>
                     {formatMoeda(selectedConta === '__all__' ? totalSaldos.sis : selectedCard.saldoCalculado)}
                   </span>
                 </div>
                 <div className="mx-3 my-1 h-px bg-border" />
-                {/* NEW: Saldo extrato */}
+                {/* ⚠ A POSIÇÃO ENTRA AQUI TAMBÉM — §3. Este resumo comparava
+                    contra o fim do mês enquanto a aba Importar já comparava
+                    posição contra posição; as duas telas diziam coisas
+                    diferentes sobre o mesmo mês. A data e o lápis são os mesmos,
+                    e o rótulo passa a nomear a data que a diferença usou. */}
                 <div className="px-3 py-1 bg-muted/20 flex justify-between">
-                  <span className="text-[10px] text-muted-foreground">Saldo extrato</span>
-                  <span className="text-[11px] font-medium tabular-nums">
+                  <span className="text-[10px] text-muted-foreground">
+                    Saldo extrato {posicaoDoCard && <span className="opacity-60">({posicaoDoCard})</span>}
+                  </span>
+                  <span className="flex items-baseline gap-1.5 text-[11px] font-medium tabular-nums">
                     {selectedCard.saldoExtrato !== null ? formatMoeda(selectedCard.saldoExtrato) : '—'}
+                    {selectedConta !== '__all__' && canEditSaldoFinal(anoMesSel) && (
+                      <button type="button" className="text-muted-foreground hover:text-foreground"
+                        title="Informar o saldo real do banco e a data da posição."
+                        onClick={() => handleEditSaldo(anoMesSel, selectedConta, selectedCard.saldoExtrato)}>
+                        <Pencil className="h-2.5 w-2.5" />
+                      </button>
+                    )}
                   </span>
                 </div>
                 {/* NEW: Diferença */}
                 <div className="px-3 py-1 bg-muted/20 flex justify-between mb-1">
                   <span className="text-[10px] text-muted-foreground">Diferença de saldo <span className="opacity-60">(o mês fecha?)</span></span>
-                  <span className={`text-[11px] font-bold tabular-nums ${Math.round((selectedConta==='__all__'?(totalSaldos.ext??0)-totalSaldos.sis:selectedCard.diferenca)*100)===0?'text-green-600':'text-red-600'}`}>
+                  <span className={`text-[11px] font-bold tabular-nums ${Math.round((selectedConta==='__all__'?(totalSaldos.ext??0)-totalSaldos.sis:selectedCard.diferenca)*100)===0?'text-success':'text-destructive'}`}>
                     {formatMoeda(selectedConta === '__all__' ? (totalSaldos.ext !== null ? r2((totalSaldos.ext??0) - totalSaldos.sis) : 0) : selectedCard.diferenca)}
                   </span>
                 </div>
+                  {/* ⚠ O AVISO COBRA A ATUALIZAÇÃO — a posição no meio do mês é
+                      declaração TEMPORÁRIA, e sem esta linha o operador fecharia
+                      o mês achando que conferiu agosto inteiro. */}
+                  {avisoAposPosicao > 0 && (
+                    <div className="mx-3 mb-1 rounded bg-destructive/5 px-2 py-1 text-[9px] leading-snug text-destructive">
+                      {avisoAposPosicao} realizado{avisoAposPosicao === 1 ? '' : 's'} após {posicaoDoCard} não
+                      conferido{avisoAposPosicao === 1 ? '' : 's'} — informe o saldo de uma data mais recente
+                      para o mês fechar.
+                    </div>
+                  )}
+                  {/* A frase de rodapé: qual data a diferença usou. */}
+                  {selectedCard.saldoExtrato !== null && (
+                    <div className="px-3 pb-1 text-[9px] leading-snug text-muted-foreground">
+                      {posicaoDeclaradaDoCard
+                        ? `A diferença compara a posição de ${posicaoDoCard}, que é a data declarada pelo banco — e não o fim do mês.`
+                        : `Sem posição declarada: a diferença compara o fim do mês (${posicaoDoCard}). Informe a data no lápis para conferir posição contra posição.`}
+                    </div>
+                  )}
               {/* Transação — footer do card como badges */}
               <div className="px-2 pt-2 pb-2 border-t mt-1 flex items-center gap-1 flex-wrap">
                 <button onClick={()=>{setFiltroModal('todos');setShowLancModal(true);}}
@@ -972,11 +1067,11 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                   Todos ({selectedCard.lancamentos.length})
                 </button>
                 <button onClick={()=>{setFiltroModal('entradas');setShowLancModal(true);}}
-                  className="px-2 py-0.5 rounded text-[9px] font-bold bg-green-100 text-green-800 hover:bg-green-200 cursor-pointer">
+                  className="px-2 py-0.5 rounded text-[9px] font-bold bg-success/15 text-success hover:bg-success/25 cursor-pointer">
                   Entradas ({entradas.length})
                 </button>
                 <button onClick={()=>{setFiltroModal('saidas');setShowLancModal(true);}}
-                  className="px-2 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-800 hover:bg-red-200 cursor-pointer">
+                  className="px-2 py-0.5 rounded text-[9px] font-bold bg-destructive/15 text-destructive hover:bg-destructive/25 cursor-pointer">
                   Saídas ({saidas.length})
                 </button>
                 {transfEntrada.length > 0 && (
@@ -1008,17 +1103,17 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                     <div className="text-[9px] leading-tight" style={{color:cor.txt, maxWidth:'90px'}}>{meta.sub}</div>
                   )}
                   {((selectedCard?.semContaSaidas ?? 0) + (selectedCard?.semContaEntradas ?? 0)) > 0 && (
-                    <div className="text-[9px] leading-tight font-medium text-amber-700">
+                    <div className="text-[9px] leading-tight font-medium text-warning">
                       ⚠ {formatMoeda((selectedCard?.semContaSaidas ?? 0) + (selectedCard?.semContaEntradas ?? 0))} em lançamentos sem conta bancária
                     </div>
                   )}
                   {diagPendencias.semClassificacao.length > 0 && (
-                    <div className="text-[9px] leading-tight font-medium text-red-700">
+                    <div className="text-[9px] leading-tight font-medium text-destructive">
                       🔴 {diagPendencias.semClassificacao.length} sem classificação
                     </div>
                   )}
                   {diagPendencias.duplicadosCount > 0 && (
-                    <div className="text-[9px] leading-tight font-medium text-red-700">
+                    <div className="text-[9px] leading-tight font-medium text-destructive">
                       🔴 {diagPendencias.duplicadosCount} duplicados
                     </div>
                   )}
@@ -1075,8 +1170,15 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                 </div>
 
                 {/* F1 — orientação: o saldo final REAL é informado pelo lápis da conta. */}
-                <div className="px-3 py-1 text-[9px] text-amber-800 bg-amber-50/70 border-b">
-                  Informe o saldo final REAL do banco clicando no lápis (✏) da conta →
+                <div className="px-3 py-1 text-[9px] text-warning bg-warning/10 border-b">
+                  {/* Ícone real, não o caractere: o lápis da faixa tem de ser o
+                      MESMO que está na linha — dois desenhos diferentes fazem o
+                      operador procurar dois botões. */}
+                  <span className="inline-flex items-center gap-1">
+                    Informe o saldo final <b>REAL</b> do banco clicando no lápis
+                    <Pencil className="inline h-2.5 w-2.5" aria-hidden />
+                    da conta →
+                  </span>
                 </div>
 
                 {/* Tabela única — garante alinhamento perfeito entre todos os grupos */}
@@ -1106,9 +1208,9 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                       onClick={() => setSelectedConta('__all__')}
                     >
                       <td className="py-2 px-2 font-bold text-[9px] text-blue-900">Total — todas as contas</td>
-                      <td className={`py-2 px-1 text-right font-semibold text-[9px] tabular-nums whitespace-nowrap text-blue-900 ${totalSaldos.sis<0?'text-red-700':''}`}>{formatMoeda(totalSaldos.sis)}</td>
+                      <td className={`py-2 px-1 text-right font-semibold text-[9px] tabular-nums whitespace-nowrap text-blue-900 ${totalSaldos.sis<0?'text-destructive':''}`}>{formatMoeda(totalSaldos.sis)}</td>
                       <td className="py-2 px-1 text-right font-semibold text-[9px] tabular-nums whitespace-nowrap text-blue-900">{totalSaldos.ext===null?'—':formatMoeda(totalSaldos.ext)}</td>
-                      <td className={`py-2 px-1 text-right font-semibold text-[9px] tabular-nums whitespace-nowrap text-blue-900 ${totalSaldos.dif<0?'text-red-700':totalSaldos.dif===0?'text-green-700':''}`}>
+                      <td className={`py-2 px-1 text-right font-semibold text-[9px] tabular-nums whitespace-nowrap text-blue-900 ${totalSaldos.dif<0?'text-destructive':totalSaldos.dif===0?'text-success':''}`}>
                         {formatMoeda(totalSaldos.dif)}
                       </td>
                       <td className="py-2" />
@@ -1186,8 +1288,8 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
               Lançamentos — {selectedCard?.label}/{ano} — {contaAtual}
             </span>
             <div className="flex gap-1 flex-shrink-0 flex-wrap">
-              {sumModal.ent > 0 && <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full tabular-nums">+ {formatMoeda(sumModal.ent)}</span>}
-              {sumModal.sai > 0 && <span className="text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded-full tabular-nums">- {formatMoeda(sumModal.sai)}</span>}
+              {sumModal.ent > 0 && <span className="text-[10px] bg-success/15 text-success px-2 py-0.5 rounded-full tabular-nums">+ {formatMoeda(sumModal.ent)}</span>}
+              {sumModal.sai > 0 && <span className="text-[10px] bg-destructive/15 text-destructive px-2 py-0.5 rounded-full tabular-nums">- {formatMoeda(sumModal.sai)}</span>}
               {sumModal.trE > 0 && <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full tabular-nums">↔ {formatMoeda(sumModal.trE)}</span>}
               {sumModal.trS > 0 && <span className="text-[10px] bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full tabular-nums">↔ {formatMoeda(sumModal.trS)}</span>}
             </div>
@@ -1196,8 +1298,8 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
           <div className="px-4 py-1.5 border-b flex gap-1.5 flex-shrink-0 flex-wrap">
             {([
               {key:'todos'         as const, label:`Todos (${selectedCard?.lancamentos.length||0})`, base:'bg-blue-100 text-blue-800',     active:'bg-blue-600 text-white'},
-              {key:'entradas'      as const, label:`Entradas (${entradas.length})`,                  base:'bg-green-100 text-green-800',   active:'bg-green-600 text-white'},
-              {key:'saidas'        as const, label:`Saídas (${saidas.length})`,                      base:'bg-red-100 text-red-800',       active:'bg-red-600 text-white'},
+              {key:'entradas'      as const, label:`Entradas (${entradas.length})`,                  base:'bg-success/15 text-success',   active:'bg-success text-white'},
+              {key:'saidas'        as const, label:`Saídas (${saidas.length})`,                      base:'bg-destructive/15 text-destructive',       active:'bg-destructive text-white'},
               {key:'transf_entrada'as const, label:`Transf. Ent. (${transfEntrada.length})`,         base:'bg-blue-50 text-blue-700 border border-blue-200', active:'bg-blue-500 text-white'},
               {key:'transf_saida'  as const, label:`Transf. Saída (${transfSaida.length})`,          base:'bg-orange-50 text-orange-700 border border-orange-200', active:'bg-orange-500 text-white'},
             ]).map(({key,label,base,active})=>(
@@ -1266,7 +1368,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                           ) && (
                             <span
                               title="Lançamento sem conta bancária vinculada"
-                              className="inline-flex items-center px-1 py-0 rounded text-[8px] font-semibold border border-amber-300 bg-amber-50 text-amber-800"
+                              className="inline-flex items-center px-1 py-0 rounded text-[8px] font-semibold border border-amber-300 bg-warning/10 text-warning"
                             >
                               Sem conta
                             </span>
@@ -1275,7 +1377,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                       </TableCell>
                       <TableCell className="text-[9px] py-0.5 truncate max-w-[180px]">{l.descricao||'-'}</TableCell>
                       <TableCell className="text-[9px] py-0.5 text-muted-foreground truncate max-w-[90px]">{l.subcentro||'-'}</TableCell>
-                      <TableCell className={`text-[9px] py-0.5 text-right font-medium tabular-nums ${isEntr?'text-green-700':'text-red-700'}`}>
+                      <TableCell className={`text-[9px] py-0.5 text-right font-medium tabular-nums ${isEntr?'text-success':'text-destructive'}`}>
                         {formatMoeda(isEntr ? Math.abs(l.valor) : -Math.abs(l.valor))}
                       </TableCell>
                       <TableCell className="py-0.5 text-center">
@@ -1343,7 +1445,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                       </div>
                       <div className="flex items-center gap-1 mt-1">
                         <span className="text-[10px] text-muted-foreground">Faltando:</span>
-                        {l.pendencias.map(p => <span key={p} className="text-[10px] px-1.5 py-0.5 rounded bg-red-50 text-red-700 border border-red-200">{p}</span>)}
+                        {l.pendencias.map(p => <span key={p} className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/10 text-destructive border border-red-200">{p}</span>)}
                       </div>
                     </div>
                   ))}
@@ -1404,12 +1506,12 @@ function SaldoContaRow({data, isActive, isDimmed, onClick, onEdit, canEdit, show
         <span style={{width:7,height:7,borderRadius:'50%',background:dotColor,display:'inline-block',marginRight:4,verticalAlign:'middle',flexShrink:0}} />
         <span className="text-[10px]" style={{verticalAlign:'middle'}}>{getContaLabel(conta)}</span>
         {showSaldoAlert && (
-          <span className="ml-1 text-[8px] font-semibold text-amber-700 border border-amber-300 bg-amber-50 rounded px-0.5" title="Saldo inicial não definido">⚠</span>
+          <span className="ml-1 text-[8px] font-semibold text-warning border border-amber-300 bg-warning/10 rounded px-0.5" title="Saldo inicial não definido">⚠</span>
         )}
       </td>
-      <td className={`py-0.5 px-1 text-right text-[9px] tabular-nums whitespace-nowrap ${sis<0?'text-red-700':''}`}>{formatMoeda(sis)}</td>
+      <td className={`py-0.5 px-1 text-right text-[9px] tabular-nums whitespace-nowrap ${sis<0?'text-destructive':''}`}>{formatMoeda(sis)}</td>
       <td className="py-0.5 px-1 text-right text-[9px] tabular-nums whitespace-nowrap">{ext===null?'—':formatMoeda(ext)}</td>
-      <td className={`py-0.5 px-1 text-right text-[9px] font-medium tabular-nums whitespace-nowrap ${dif<0?'text-red-700':dif===0?'text-green-700':''}`}>
+      <td className={`py-0.5 px-1 text-right text-[9px] font-medium tabular-nums whitespace-nowrap ${dif<0?'text-destructive':dif===0?'text-success':''}`}>
         {formatMoeda(dif)}
       </td>
       <td className="py-0.5 px-1 text-center">

@@ -290,9 +290,46 @@ export function useImportacoesDaConta(clienteId: string | null, contaId: string 
 /** Uma linha de lançamento, no mínimo que a soma da posição olha. */
 export interface LinhaDaPosicao {
   valor: number | string | null;
+  /**
+   * ⚠ O SINAL É COLUNA PRÓPRIA, e `valor` é SEMPRE POSITIVO no banco.
+   *
+   * Medido em Vera/Itaú/agosto: as 31 saídas do mês vão de 11,70 a 65.000,00,
+   * todas positivas, com `sinal = -1`. Somar `valor` cru trata saída como
+   * entrada — foi assim que o card do Importar mostrou +177.636,25 de movimento
+   * num mês em que o banco tirou 177.617,55. O módulo quase batia; o sinal
+   * estava invertido, e o "quase" era a soma das entradas contada duas vezes.
+   */
+  sinal: number | string | null;
+  tipo_operacao: string | null;
   data_pagamento: string | null;
   conta_bancaria_id: string | null;
   conta_destino_id: string | null;
+}
+
+/**
+ * O MOVIMENTO DE UMA LINHA NESTA CONTA — a régua única do saldo.
+ *
+ * ⚠ TRANSFERÊNCIA CONTA PELA PERNA, e a régua do resultado NÃO serve aqui. O
+ * `case tipo_operacao` que zera transferências nasceu para DRE, onde ela não é
+ * receita nem custo — e está certo lá. Para SALDO ela move dinheiro de verdade:
+ * sair 100 mil para o Sicredi reduz o Itaú. Papel diferente, régua diferente.
+ *
+ * ⚠ E A PERNA DE DESTINO É SEMPRE ENTRADA, qualquer que seja o `sinal` da linha:
+ * a transferência sai da origem com sinal negativo e chega ao destino como
+ * dinheiro que entrou. Ler o sinal nos dois lados faria a conta de destino
+ * perder o que recebeu.
+ */
+export function movimentoNaConta(l: LinhaDaPosicao, contaId: string): number {
+  const v = Math.abs(Number(l.valor ?? 0));
+  if (!Number.isFinite(v)) return 0;
+  if (l.conta_destino_id === contaId && l.conta_bancaria_id !== contaId) return v;
+  const s = Number(l.sinal);
+  /* Sem `sinal` legível, o tipo responde — e ausência de ambos não movimenta:
+     inventar um sentido seria pior que não somar. */
+  if (s === 1 || s === -1) return v * s;
+  if (l.tipo_operacao === '1-Entradas') return v;
+  if (l.tipo_operacao === '2-Saídas' || l.tipo_operacao === '3-Transferências') return -v;
+  return 0;
 }
 
 /**
@@ -319,9 +356,7 @@ export function somarAtePosicao(
     /* A perna de destino entra positiva nesta conta; a de origem vai com o sinal
        que o lançamento já tem. Ignorar o destino faria toda transferência
        recebida parecer uma diferença. */
-    const v = l.conta_destino_id === contaId && l.conta_bancaria_id !== contaId
-      ? Math.abs(Number(l.valor ?? 0))
-      : Number(l.valor ?? 0);
+    const v = movimentoNaConta(l, contaId);
     if (d <= posicaoEm) ate += v; else depois += 1;
   }
   return { ate, depois };
@@ -347,7 +382,7 @@ export function useSaldoSistemaNaPosicao(
     (async () => {
       const { data } = await supabase
         .from('financeiro_lancamentos_v2')
-        .select('valor, data_pagamento, conta_bancaria_id, conta_destino_id')
+        .select('valor, sinal, tipo_operacao, data_pagamento, conta_bancaria_id, conta_destino_id')
         .eq('cliente_id', clienteId)
         .eq('cancelado', false)
         .eq('cenario', 'realizado')

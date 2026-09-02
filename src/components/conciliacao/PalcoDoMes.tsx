@@ -66,7 +66,7 @@ const CHIPS: readonly { filtro: FiltroDoPalco; rotulo: string; cor: string }[] =
   { filtro: 'todos',        rotulo: 'Todos',        cor: 'bg-muted text-muted-foreground' },
   { filtro: 'match_direto', rotulo: 'match direto', cor: 'bg-success/15 text-success' },
   { filtro: 'provavel',     rotulo: 'provável',     cor: 'bg-primary/10 text-primary' },
-  { filtro: 'ambiguo',      rotulo: 'ambíguo',      cor: 'bg-amber-500/15 text-amber-700 dark:text-amber-400' },
+  { filtro: 'ambiguo',      rotulo: 'ambíguo',      cor: 'bg-warning/15 text-warning' },
   { filtro: 'sem_match',    rotulo: 'sem match',    cor: 'bg-destructive/10 text-destructive' },
   { filtro: 'parcial',      rotulo: 'parcial',      cor: 'bg-primary/10 text-primary' },
   { filtro: 'conciliado',   rotulo: 'conciliados',  cor: 'bg-success/15 text-success' },
@@ -303,7 +303,7 @@ function EstadoBadge({ situacao, estado }: { situacao: SituacaoMovimento; estado
   switch (estado) {
     case 'match_direto': return <span className={cn(base, 'bg-success/15 text-success')}>match direto</span>;
     case 'provavel':     return <span className={cn(base, 'bg-primary/10 text-primary')}>provável</span>;
-    case 'ambiguo':      return <span className={cn(base, 'bg-amber-500/15 text-amber-700 dark:text-amber-400')}>ambíguo</span>;
+    case 'ambiguo':      return <span className={cn(base, 'bg-warning/15 text-warning')}>ambíguo</span>;
     case 'sem_match':    return <span className={cn(base, 'bg-destructive/10 text-destructive')}>sem match</span>;
     /* Sem resposta do motor, a linha diz o que sabe — e "em aberto" é o vínculo,
        não um palpite. */

@@ -360,7 +360,7 @@ export function EstacaoConciliar({ movimento, aoFechar, aoMudar, contaBancariaId
             <span className={
               estado === 'fecha' ? 'font-medium text-success'
               : estado === 'passa' ? 'font-medium text-destructive'
-              : 'font-medium text-amber-700 dark:text-amber-500'}>
+              : 'font-medium text-warning'}>
               {estado === 'fecha' ? 'fecha'
                 : estado === 'passa' ? `passa ${formatMoeda(Math.abs(resta))}`
                 : `falta ${formatMoeda(resta)}`}
@@ -447,7 +447,7 @@ export function EstacaoConciliar({ movimento, aoFechar, aoMudar, contaBancariaId
                           <td className="truncate px-2 py-1 text-[11px] font-medium" title={c.descricao ?? ''}>
                             {c.descricao ?? '—'}
                             {c.ambiguo && (
-                              <span className="ml-1 rounded bg-amber-500/15 px-1 py-0 text-[9px] font-semibold uppercase text-amber-700 dark:text-amber-400"
+                              <span className="ml-1 rounded bg-warning/15 px-1 py-0 text-[9px] font-semibold uppercase text-warning"
                                 title="Há outro candidato tecnicamente igual a este — o motor não escolhe por você.">
                                 ambíguo
                               </span>
@@ -515,7 +515,7 @@ export function EstacaoConciliar({ movimento, aoFechar, aoMudar, contaBancariaId
             {marcados.size > 0 && (
               <span className={`rounded px-1.5 py-px text-[11px] font-semibold tabular-nums ${
                 Math.abs(restaDepois) <= TOL ? 'bg-success/15 text-success'
-                : restaDepois > 0 ? 'bg-amber-500/15 text-amber-700 dark:text-amber-400'
+                : restaDepois > 0 ? 'bg-warning/15 text-warning'
                 : 'bg-destructive/10 text-destructive'}`}
                 title={`Movimento ${formatMoeda(alvo)} · já aplicado ${formatMoeda(somaAplicada)} · seleção ${formatMoeda(somaMarcada)}.`}>
                 {Math.abs(restaDepois) <= TOL ? 'fecha exato'

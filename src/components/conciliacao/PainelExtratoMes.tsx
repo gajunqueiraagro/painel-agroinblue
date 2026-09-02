@@ -231,7 +231,7 @@ export function PainelExtratoMes({ clienteId, contaId, ano, mes, contaNome, comP
             <Chip rotulo="provável" n={contagem.provavel ?? 0} ativo={balde === 'provavel'}
               onClick={() => setBalde('provavel')} cor="bg-primary/10 text-primary" />
             <Chip rotulo="ambíguo" n={contagem.ambiguo ?? 0} ativo={balde === 'ambiguo'}
-              onClick={() => setBalde('ambiguo')} cor="bg-amber-500/15 text-amber-700 dark:text-amber-400" />
+              onClick={() => setBalde('ambiguo')} cor="bg-warning/15 text-warning" />
             <Chip rotulo="sem match" n={contagem.sem_match ?? 0} ativo={balde === 'sem_match'}
               onClick={() => setBalde('sem_match')} cor="bg-destructive/10 text-destructive" />
           </>)}
