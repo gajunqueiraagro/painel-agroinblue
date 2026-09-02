@@ -43,7 +43,8 @@ no mesmo arquivo.
   sai com codigo 0 e passa sempre. Era um gate vazio. O comando oficial
   varre os 671 arquivos .ts/.tsx em src/ e sai com codigo 2 enquanto
   houver erro.
-- TSC baseline: 73 erros, medidos em ARVORE LIMPA — worktree em detached
+- TSC baseline: 155 erros (era 73 ate 2026-09-02 — ver a regeneracao do
+  types.ts abaixo), medidos em ARVORE LIMPA — worktree em detached
   HEAD sobre o commit, NUNCA no checkout principal. Mesmo numero e mesmo
   conjunto de diagnosticos em c0fdb21b, 487fe1cf e c28de22a.
   O 98 que constava aqui nao decorreu de reducao posterior: foi medido com
@@ -103,6 +104,29 @@ no mesmo arquivo.
   ⚠ O MESMO PADRAO CONTINUA em V2Index (`mesInicial={Number(mes)}` para
   IndicadoresTab, cuja prop tambem e' `string`): 1x TS2322 remanescente, fora do
   escopo daquele PR. Quem for reduzir de novo comeca por ali.
+  De 73 para 155 em 2026-09-02, sobre 3148d80f, por REGENERACAO de
+  src/integrations/supabase/types.ts (gen types rodado na maquina do Gabriel,
+  06:13). O arquivo foi de 5.676 para 13.098 linhas e de 105 para 287 relacoes.
+  ⚠ A SUBIDA NAO E' REGRESSAO, E ESTA E' A UNICA VEZ EM QUE SUBIR E' LEGITIMO.
+  Nenhum erro foi introduzido por codigo: o tipo velho ignorava 183 relacoes, e
+  tudo que as tocava resolvia para SelectQueryError — um ramo em que o TS
+  desiste de checar. Com o tipo fiel ao banco, os `select`/`eq`/`insert` daquelas
+  tabelas passaram a ser conferidos de verdade, e 82 erros que ja existiam no
+  codigo apareceram. O tipo velho nao os evitava; escondia.
+  Conferido no diff: 183 relacoes ENTRARAM e 1 saiu — `validar_conciliacao_rebanho`,
+  que nao existe mais no banco (verificado em pg_proc e pg_class) e nao e' citada
+  em arquivo nenhum de src/. A remocao e' fiel, nao perda.
+  Os 82 revelados NAO foram corrigidos e nao devem ser suprimidos: sao divida
+  pre-existente, agora visivel, registrada como frente [DEBT-TYPES-REVELADA] para
+  reducao POR CONSERTO, um a um, como o `initialMes` acima. Concentracao:
+    39x src/hooks/useBoitelOperacoes.ts        14x src/hooks/useMetaPrecoMercado.ts
+    13x src/hooks/useFinanciamentoCadastro.ts  10x src/pages/CadastrosTab.tsx
+     6x src/hooks/usePastoGeometrias.ts         6x src/hooks/useFechamentoExecutivo.ts
+     5x src/v2/pages/V2PainelConsultor.tsx      5x src/hooks/useSaldosPorConta.ts
+  e mais 35 arquivos com 1 a 4 cada.
+  ⚠ E O CAMINHO INVERSO TAMBEM SE ABRIU: os `as any` que existiam SO porque a
+  tabela faltava no tipo agora podem cair, e cada queda e' reducao real. Ver o
+  commit seguinte a este.
   Como comparar antes (A) x depois (B), nesta ordem:
     1. CONTAGEM. B <= A, sempre. B > A reprova o PR.
     2. DIAGNOSTICOS. Comparar os conjuntos por
