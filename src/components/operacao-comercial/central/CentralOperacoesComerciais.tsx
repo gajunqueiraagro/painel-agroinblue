@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/dialog';
 import { DatePicker } from '@/components/ui/date-picker';
 import { MoreVertical, Search, Eye, Filter, Ban, ArrowUp, ArrowDown, Lock, Trash2 } from 'lucide-react';
+import { normalizarErroRpc } from '@/hooks/useOcCompromissos';
 
 // Central de Operações Comerciais — PR-OC-CENTRAL-UX-01 (UX/operacional; sem backend novo).
 //   Lê em LOTE (ZERO N+1): operações + 3 views soberanas + nomes, filtradas por cliente, mapeadas por
@@ -537,7 +538,9 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
       /* ⚠ ERRO DO GUARD INTEGRAL, sem mascarar. A RPC diz O QUE impede e QUANTOS
          ("2 titulo(s) financeiro(s) ativo(s)"); resumir isso para "nao foi possivel"
          devolveria o operador ao escuro que este PR veio tirar. */
-      if (error) throw new Error(error.message);
+      /* Conflito de versão pelo mapa canônico da OC: a mensagem crua do
+         Postgres é verdadeira e inútil para quem não pode agir sobre ela. */
+      if (error) throw normalizarErroRpc(error);
       void data;
       toast.success('Operação excluída definitivamente.');
       setExcluirAlvo(null); setExcluirMotivo(''); setExcluirEtapa(1);

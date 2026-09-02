@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { BUCKET_OC_DOCUMENTOS, caminhoDocumentoOC, extensaoDoArquivo, motivoArquivoInvalido } from '@/lib/oc/caminhoDocumento';
+import { normalizarErroRpc } from '@/hooks/useOcCompromissos';
 
 // Documentos fiscais da Operação Comercial (PR-OC-DOC-UI-01). Consome EXCLUSIVAMENTE os contratos
 //   publicados no PR-OC-DOC-MODEL-01: view vw_oc_documentos + RPCs oc_documento_registrar/editar/
@@ -189,7 +190,9 @@ export function useOperacaoDocumentos({ operacaoId, clienteId, enabled }: Params
       const { data, error } = await (supabase as any).rpc('oc_documento_registrar', {
         p_operacao_id: operacaoId, p_cliente_id: clienteId, p_payload: payloadJson(p),
       });
-      if (error) throw new Error(error.message);
+      /* Conflito de versão pelo mapa canônico da OC: a mensagem crua do
+         Postgres é verdadeira e inútil para quem não pode agir sobre ela. */
+      if (error) throw normalizarErroRpc(error);
       const id = (data as { documento_id?: string } | null)?.documento_id ?? null;
       toast.success('Documento registrado.');
       await carregar();
@@ -221,7 +224,9 @@ export function useOperacaoDocumentos({ operacaoId, clienteId, enabled }: Params
         p_documento_id: documentoId, p_cliente_id: clienteId,
         p_versao_esperada: versaoEsperada, p_payload: { url: caminho },
       });
-      if (error) throw new Error(error.message);
+      /* Conflito de versão pelo mapa canônico da OC: a mensagem crua do
+         Postgres é verdadeira e inútil para quem não pode agir sobre ela. */
+      if (error) throw normalizarErroRpc(error);
       toast.success('Arquivo anexado.');
       await carregar();
       return true;
@@ -247,7 +252,9 @@ export function useOperacaoDocumentos({ operacaoId, clienteId, enabled }: Params
       const { error } = await (supabase as any).rpc('oc_documento_editar', {
         p_documento_id: documentoId, p_cliente_id: clienteId, p_versao_esperada: versaoEsperada, p_payload: payloadJson(p),
       });
-      if (error) throw new Error(error.message);
+      /* Conflito de versão pelo mapa canônico da OC: a mensagem crua do
+         Postgres é verdadeira e inútil para quem não pode agir sobre ela. */
+      if (error) throw normalizarErroRpc(error);
       toast.success('Documento atualizado.');
       await carregar();
       return true;
@@ -264,7 +271,9 @@ export function useOperacaoDocumentos({ operacaoId, clienteId, enabled }: Params
       const { error } = await (supabase as any).rpc('oc_documento_cancelar', {
         p_documento_id: documentoId, p_cliente_id: clienteId, p_motivo: motivo,
       });
-      if (error) throw new Error(error.message);
+      /* Conflito de versão pelo mapa canônico da OC: a mensagem crua do
+         Postgres é verdadeira e inútil para quem não pode agir sobre ela. */
+      if (error) throw normalizarErroRpc(error);
       toast.success('Documento cancelado.');
       await carregar();
       return true;

@@ -340,7 +340,10 @@ function mapAjustarValorResultado(data: unknown): AjustarValorResultado {
    VERBATIM, que e' justamente o que um guard precisa dizer ao usuario. */
 export function normalizarErroRpc(error: { code?: string | null; message: string }): OcCompromissoError {
   switch (error.code) {
-    case '40001': return new OcCompromissoError('versao_conflito', 'Operação atualizada em outra sessão. Recarregue e tente novamente.');
+    /* ⚠ UM TEXTO SÓ PARA O CONFLITO — OC-VERSAO-FONTE-UNICA-01. Havia dois,
+       este e o do `useOperacaoRecebimento`, dizendo a mesma coisa com palavras
+       diferentes conforme a aba. Vence o que fala do trabalho do operador. */
+    case '40001': return new OcCompromissoError('versao_conflito', 'A operação mudou enquanto você trabalhava. Recarregue e tente de novo.');
     case '42501': return new OcCompromissoError('sem_permissao', 'Sem permissão para esta operação.');
     case 'P0002': return new OcCompromissoError('operacao_inexistente', 'Operação não encontrada.');
     case 'P0001': return new OcCompromissoError('regra_negocio', error.message);   // mensagem soberana do banco (verbatim)

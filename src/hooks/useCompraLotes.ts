@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { parseNumericValue } from '@/lib/calculos/abate';
+import { normalizarErroRpc } from '@/hooks/useOcCompromissos';
 
 // Estado + operações dos LOTES comerciais de uma operação OC (COM-3). Fonte única = camada OC
 // (zoo_operacao_lotes via RLS; escrita por oc_salvar_lotes). Sem lancamentos, sem físico, sem
@@ -150,7 +151,10 @@ export function useCompraLotes({ operacaoId, clienteId, versao, onVersaoChange, 
       const { data, error } = await (supabase as any).rpc('oc_salvar_lotes', {
         p_operacao_id: operacaoId, p_cliente_id: clienteId, p_versao_esperada: versao, p_lotes: payload,
       });
-      if (error) throw new Error(error.message);
+      /* ⚠ O CONFLITO DE VERSÃO TEM TEXTO PRÓPRIO, pelo mapa canônico da OC.
+         Antes a mensagem crua do Postgres ("could not serialize access due to
+         concurrent update") chegava ao operador — verdadeira e inútil. */
+      if (error) throw normalizarErroRpc(error);
       const novaVersao: number = data?.versao != null ? data.versao : versao;
       if (data?.versao != null) onVersaoChange(data.versao);
       if (!opts?.silent) toast.success('Rascunho dos lotes salvo.');
