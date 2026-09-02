@@ -291,13 +291,23 @@ function buildMonthCards(
     );
 
     /* Extended status: realizado / parcial / nao_conciliado / pendente */
-    const accsWithSaldo = contas.filter(c => saldoRows.some(s => s.conta_bancaria_id === c.id));
+    /* ⚠ SÓ AS CONTAS QUE EXISTIAM NO MÊS ENTRAM NO VEREDITO — CONCIL-SELO-PENDENTE-01.
+       O selo percorria `contas`, a lista de HOJE, e uma conta aberta em 2026
+       retinha o mês de 2021 inteiro em "Pendente — informe o saldo do extrato",
+       pedindo a declaração de uma conta que não existia. Medido no NJ/set-2021:
+       17 contas, 16 declaradas, 2 com movimento — e a única sem declaração era
+       o "Cartão BB - Visa Infinite", com `mes_inicio` em 2026-01.
+       ⚠ A RÉGUA JÁ EXISTIA NESTE ARQUIVO, em `perContaSaldos` (`!mes_inicio ||
+       mes_inicio <= anoMes`): a tabela de saldos já mostrava só as contas do mês,
+       e só o selo não perguntava. Duas leituras da mesma pergunta, uma calada. */
+    const contasDoMes = contas.filter(c => !c.mes_inicio || c.mes_inicio <= anoMes);
+    const accsWithSaldo = contasDoMes.filter(c => saldoRows.some(s => s.conta_bancaria_id === c.id));
     let status: MesStatusExt;
     if (accsWithSaldo.length === 0) {
       status = 'pendente';
     } else {
       const globalOk = saldoExtrato !== null && Math.round(diferenca * 100) === 0;
-      const perStatuses = contas.map(c => calcConciliacaoMensal({
+      const perStatuses = contasDoMes.map(c => calcConciliacaoMensal({
         contaId: c.id, anoMes, saldoRows,
         lancamentos: lancamentos as ConciliacaoLancamentoBase[],
         fallbackSaldoInicial: prevFinal.get(c.id) || 0,
