@@ -25,6 +25,7 @@ import {
   normalizar as normalizarTexto,
   type CatalogosImport, type DeParaCompleto, type DeParaMap,
   type SubcentroAliasRef, type ChaveFechamento, type NivelDuplicidade, type AlvoAtualizacao,
+  casarLinhasSemId, dataDoCasamento, type CandidatoCasamento,
 } from '@/v2/lib/importLanc/importLancamentosView';
 
 /**
@@ -107,6 +108,8 @@ export function useImportLancamentosExcel() {
    * justamente o lançamento que o operador queria corrigir.
    */
   const [alvos, setAlvos] = useState<ReadonlyMap<string, AlvoAtualizacao>>(new Map());
+  /** B-41 — lançamentos vivos que as linhas SEM id podem estar querendo classificar. */
+  const [candidatos, setCandidatos] = useState<CandidatoCasamento[]>([]);
   /** Resultado da gravação (passo 4). null = ainda não confirmada. */
   const [gravando, setGravando] = useState(false);
   const [resultado, setResultado] = useState<ResultadoImportacao | null>(null);
@@ -359,11 +362,22 @@ export function useImportLancamentosExcel() {
     [fazendas, fazendaCabecalhoId],
   );
 
+  /* ⚠ O CASAMENTO DEPENDE DO DE-PARA DE CONTA, e por isso é derivado — não é
+     efeito. A conta bancária de cada linha só existe depois de o operador mapear
+     o texto da planilha; recalcular quando ele mapeia é o comportamento certo, e
+     um efeito com estado próprio ficaria um passo atrás do que a tela mostra. */
+  const casados = useMemo<ReadonlyMap<number, CandidatoCasamento | 'ambiguo'>>(
+    () => (parse && dePara
+      ? casarLinhasSemId(parse.rows, dePara, candidatos)
+      : new Map<number, CandidatoCasamento | 'ambiguo'>()),
+    [parse, dePara, candidatos],
+  );
+
   const previa = useMemo(() => {
     if (!parse || !dePara) return null;
     return montarPrevia(parse.rows, dePara, fechados, fazendaCabecalhoId, fazendaCabecalhoNome,
-      duplicidades, reincluidas, alvos);
-  }, [parse, dePara, fechados, fazendaCabecalhoId, fazendaCabecalhoNome, duplicidades, reincluidas, alvos]);
+      duplicidades, reincluidas, alvos, casados);
+  }, [parse, dePara, fechados, fazendaCabecalhoId, fazendaCabecalhoNome, duplicidades, reincluidas, alvos, casados]);
 
   /**
    * Uma linha D1 entra assim mesmo — decisão do operador, por LINHA.
@@ -505,6 +519,68 @@ export function useImportLancamentosExcel() {
     return () => { cancelado = true; };
   }, [clienteId, parse]);
 
+  /**
+   * B-41 — OS CANDIDATOS AO CASAMENTO.
+   *
+   * ⚠ A JANELA É A DO ARQUIVO, não o histórico inteiro. As datas mínima e máxima
+   * que as linhas SEM id oferecem delimitam a busca: o NJ tem 29 mil lançamentos
+   * vivos, e trazer todos para casar 400 linhas seria pagar o banco inteiro por
+   * um mês. Fora da janela não há par possível — a chave exige data igual.
+   *
+   * ⚠ SÓ REALIZADO E SÓ NÃO CANCELADO, como em `fn_vincular_exatos_mes`: previsto
+   * não é fato consumado, e cancelado não é lançamento.
+   *
+   * ⚠ E PAGINADO: o PostgREST corta em ~1000 linhas por request, e um mês do NJ
+   * passa disso. Sem paginar, o casamento simplesmente não veria metade dos
+   * candidatos e a linha viraria criação — duplicando em silêncio, que é
+   * exatamente o defeito que este passo existe para matar.
+   */
+  useEffect(() => {
+    let cancelado = false;
+    const semId = (parse?.rows ?? []).filter((r) => !(r.id_lancamento ?? '').trim());
+    const datas = semId.map(dataDoCasamento).filter((d): d is string => !!d).sort();
+    if (!clienteId || datas.length === 0) { setCandidatos([]); return; }
+    const de = datas[0].slice(0, 10);
+    const ate = datas[datas.length - 1].slice(0, 10);
+
+    (async () => {
+      const PAGE = 1000;
+      const acc: CandidatoCasamento[] = [];
+      for (let from = 0; ; from += PAGE) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado
+        const { data, error } = await (supabase as any)
+          .from('financeiro_lancamentos_v2')
+          .select('id, conta_bancaria_id, valor, data_pagamento, subcentro, descricao, safra_id, origem_lancamento, origem_tipo')
+          .eq('cliente_id', clienteId)
+          .eq('cancelado', false)
+          .eq('cenario', 'realizado')
+          .gte('data_pagamento', de)
+          .lte('data_pagamento', ate)
+          .order('id', { ascending: true })
+          .range(from, from + PAGE - 1);
+        if (error) { console.error('[useImportLancamentosExcel] candidatos', error); break; }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- linhas cruas, fora de types.ts
+        const batch: any[] = data ?? [];
+        for (const r of batch) {
+          acc.push({
+            id: r.id,
+            contaBancariaId: r.conta_bancaria_id ?? null,
+            valor: Number(r.valor ?? 0),
+            data: r.data_pagamento ?? null,
+            travado: r.origem_lancamento === 'oc' || r.origem_tipo === 'oc',
+            subcentroAtual: r.subcentro ?? null,
+            descricaoAtual: r.descricao ?? null,
+            safraAtual: r.safra_id ?? null,
+          });
+        }
+        if (batch.length < PAGE) break;
+        if (from > 200_000) break; // salvaguarda anti-loop
+      }
+      if (!cancelado) setCandidatos(acc);
+    })();
+    return () => { cancelado = true; };
+  }, [clienteId, parse]);
+
   const pendentes = useMemo(() => (dePara ? contarPendentes(dePara) : null), [dePara]);
 
   /** A planilha não trouxe coluna de fazenda em nenhuma linha → exigir no cabeçalho. */
@@ -573,13 +649,24 @@ export function useImportLancamentosExcel() {
            para classificar o que existe. Sem este roteamento, cada linha do mês
            viraria um segundo lançamento. */
         if (l.modo === 'atualizar') {
-          const alvoId = (l.row.id_lancamento ?? '').trim();
+          /* ⚠ O ALVO VEM DA LINHA DA PRÉVIA, não da coluna ID — B-41. Com o
+             casamento, a linha que atualiza pode não ter id escrito; reler a
+             planilha aqui criaria de novo o que a prévia prometeu atualizar. */
+          const alvoId = l.alvoId ?? '';
+          if (!alvoId) {
+            falhas++; erros.push(`Linha ${l.row.linha}: modo atualizar sem alvo resolvido.`);
+            continue;
+          }
           /* ⚠ CÉLULA VAZIA NÃO APAGA O QUE JÁ EXISTE. O `form` acima nasce da
              linha da planilha; aqui as ausências voltam ao valor atual do
              lançamento, e só o que o operador escreveu sobrescreve. Mandar o
              form cru apagaria descrição e classificação de quem deixou a célula
              em branco — que é a maioria das colunas opcionais. */
-          const alvo = alvos.get(alvoId);
+          /* Linha ambígua nunca chega aqui — ela não entra —, mas o tipo do mapa
+             admite o valor, e estreitá-lo é mais barato que confiar. */
+          const casadoDaLinha = casados.get(l.indice);
+          const alvo = alvos.get(alvoId)
+            ?? (casadoDaLinha && casadoDaLinha !== 'ambiguo' ? casadoDaLinha : undefined);
           const formUpd = {
             ...form,
             descricao: form.descricao ?? alvo?.descricaoAtual ?? undefined,
@@ -625,6 +712,10 @@ export function useImportLancamentosExcel() {
     planoIdPorSubcentro, aliasIdPorTexto, aliasesFornecedor, aliasesConta,
     /* B-22b — o gravador do modo atualização e o mapa que o alimenta. */
     editarLancamento, alvos,
+    /* ⚠ B-41 — `casados` É DEPENDÊNCIA DE VERDADE, não formalidade: ele muda
+       quando o operador mapeia a conta no de-para, e um gravador preso à versão
+       anterior atualizaria pelo casamento que a tela já não mostra. */
+    casados,
   ]);
 
   return {

@@ -356,7 +356,10 @@ export type MotivoExclusao =
   /** B-22b — a coluna ID traz um lançamento que não é deste cliente ou não existe. */
   | 'id_desconhecido'
   /** B-22b — lançamento de origem travada (OC/contrato): campos não se forçam. */
-  | 'origem_travada';
+  | 'origem_travada'
+  /** B-41 — a linha casou com mais de um lançamento, ou mais de uma linha disputa
+   *  o mesmo. Fica de fora PENDENTE: escolher por conta própria seria chutar. */
+  | 'casamento_ambiguo';
 
 export const MOTIVO_LABEL: Record<MotivoExclusao, string> = {
   transferencia: 'Transferência — não é criada por esta importação',
@@ -364,6 +367,7 @@ export const MOTIVO_LABEL: Record<MotivoExclusao, string> = {
   mes_fechado: 'Mês fechado para esta fazenda',
   subcentro_nao_resolvido: 'Conta do plano ainda não mapeada',
   campo_obrigatorio_descartado: 'Fazenda ou conta do plano descartada — sem esses dois a linha não existe',
+  casamento_ambiguo: 'Casou com mais de um lançamento existente — escolha qual, ou informe o ID',
   ja_existe: 'Já existe lançamento equivalente — inclua manualmente se for outro',
   id_desconhecido: 'A coluna ID aponta para um lançamento que não é deste cliente',
   origem_travada: 'Lançamento da Operação Comercial — a classificação se ajusta lá, não aqui',
@@ -389,6 +393,132 @@ export interface AlvoAtualizacao {
   descricaoAtual: string | null;
   /** B-22d — a safra atual, para que célula vazia não a apague. */
   safraAtual: string | null;
+}
+
+/**
+ * Por onde a linha chegou ao modo ATUALIZAR — governa só o resumo da prévia.
+ * `id`: a coluna técnica trouxe o lançamento. `casamento`: a linha não tinha id
+ * e casou com um lançamento existente pela régua abaixo.
+ */
+export type OrigemModo = 'id' | 'casamento';
+
+/** Um lançamento vivo que uma linha sem id pode estar querendo classificar. */
+export interface CandidatoCasamento extends AlvoAtualizacao {
+  contaBancariaId: string | null;
+  valor: number;
+  /** data_pagamento do lançamento; null nunca casa. */
+  data: string | null;
+}
+
+/**
+ * A CHAVE DO CASAMENTO — conta bancária, valor absoluto com 2 casas, e data.
+ *
+ * ⚠ É A MESMA RÉGUA DE `fn_vincular_exatos_mes`, e a semelhança é deliberada:
+ * mesma conta, mesmo valor, mesma data, único dos DOIS lados. Lá ela casa
+ * movimento de extrato com lançamento; aqui casa linha de planilha com
+ * lançamento. A pergunta é a mesma — "estas duas coisas são o mesmo fato?".
+ *
+ * ⚠ E É O SEGUNDO LUGAR ONDE ELA MORA, o que esta casa normalmente proíbe. Sem
+ * migration não há como perguntar ao banco, e o briefing pediu esta régua pelo
+ * nome. Fica declarado: mudar a tolerância de um lado sem o outro faz a prévia
+ * prometer um casamento que o vínculo não reconhece. O lugar certo é uma função
+ * no banco, quando houver migration.
+ *
+ * Retorna null quando falta peça — e faltar peça é NÃO CASAR, nunca casar por
+ * aproximação.
+ */
+export function chaveCasamento(
+  contaBancariaId: string | null | undefined,
+  valor: number | null | undefined,
+  data: string | null | undefined,
+): string | null {
+  if (!contaBancariaId || !data) return null;
+  const v = Number(valor);
+  if (!Number.isFinite(v) || v === 0) return null;
+  /* ⚠ O MÓDULO VEM ANTES DO ARREDONDAMENTO. `r2` arredonda meio centavo para
+     cima em direção a +∞, então -100,005 viraria 100,00 e +100,005 viraria
+     100,01: a mesma quantia geraria chaves diferentes só por causa do sinal, e o
+     par deixaria de casar. Tomar o módulo primeiro faz o sinal não influir. */
+  return `${contaBancariaId}|${r2(Math.abs(v)).toFixed(2)}|${data.slice(0, 10)}`;
+}
+
+/**
+ * A DATA QUE A LINHA OFERECE AO CASAMENTO: pagamento, e vencimento como recurso.
+ *
+ * ⚠ A ORDEM É O ARGUMENTO. Do lado do sistema a chave usa `data_pagamento`, que
+ * é quando o dinheiro andou; a planilha do cliente nem sempre traz essa coluna,
+ * e nesses arquivos o vencimento é a única data de caixa disponível. Tentar o
+ * vencimento contra o pagamento do lançamento é aproximação assumida: casa
+ * quando as duas coincidem, e simplesmente não casa quando não coincidem —
+ * nunca inventa par.
+ */
+export function dataDoCasamento(row: LancamentoExcelRow): string | null {
+  return row.data_pagamento ?? row.data_vencimento ?? null;
+}
+
+/**
+ * O CASAMENTO DAS LINHAS SEM ID — o passo que faltava para o arquivo do cliente.
+ *
+ * ⚠ O FLUXO REAL É ESTE: todo mês o cliente manda o Excel do sistema DELE, com o
+ * plano dele e sem id nenhum nosso. O modo-ID (B-22b) só serve quando o próprio
+ * operador preenche o modelo que baixou daqui. Sem este passo, o arquivo do
+ * cliente duplicaria cada linha do mês que a conciliação já lançou.
+ *
+ * ⚠ ÚNICO DOS DOIS LADOS, e é isso que torna o casamento seguro: a chave precisa
+ * aparecer UMA vez entre os candidatos E UMA vez entre as linhas da planilha.
+ * Dois boletos iguais no mesmo dia — caso real — dariam dois candidatos para uma
+ * linha, e escolher qualquer um seria chutar em silêncio sobre dinheiro. Vira
+ * ambíguo, e o operador decide.
+ *
+ * ⚠ E SÓ LINHAS SEM ID entram aqui: id na planilha é declaração explícita do
+ * operador e vence qualquer casamento inferido.
+ */
+export function casarLinhasSemId(
+  rows: readonly LancamentoExcelRow[],
+  dp: DeParaCompleto,
+  candidatos: readonly CandidatoCasamento[],
+): Map<number, CandidatoCasamento | 'ambiguo'> {
+  /* ⚠ QUEM JÁ FOI RECLAMADO POR ID SAI DA MESA. Se alguma linha da planilha
+     aponta explicitamente para um lançamento, ele é daquela linha — deixá-lo
+     como candidato faria duas linhas do mesmo arquivo disputarem o mesmo
+     lançamento, e a segunda o atualizaria por cima da primeira. */
+  const reclamadosPorId = new Set(
+    rows.map((r) => (r.id_lancamento ?? '').trim()).filter(Boolean),
+  );
+
+  /* Candidatos por chave. Chave repetida = mais de um lançamento igual. */
+  const porChave = new Map<string, CandidatoCasamento[]>();
+  for (const c of candidatos) {
+    if (reclamadosPorId.has(c.id)) continue;
+    const k = chaveCasamento(c.contaBancariaId, c.valor, c.data);
+    if (!k) continue;
+    const l = porChave.get(k);
+    if (l) l.push(c); else porChave.set(k, [c]);
+  }
+
+  /* Linhas sem id, com a conta já resolvida pelo de-para — sem conta resolvida
+     não há chave, e a linha segue para o fluxo de criação. */
+  const chaveDaLinha = new Map<number, string>();
+  const usosDaChave = new Map<string, number>();
+  rows.forEach((r, i) => {
+    if ((r.id_lancamento ?? '').trim()) return;
+    const itConta = valorDe(dp.conta, r.conta_bancaria_texto);
+    const k = chaveCasamento(itConta?.valor ?? null, r.valor, dataDoCasamento(r));
+    if (!k) return;
+    chaveDaLinha.set(i, k);
+    usosDaChave.set(k, (usosDaChave.get(k) ?? 0) + 1);
+  });
+
+  const out = new Map<number, CandidatoCasamento | 'ambiguo'>();
+  for (const [i, k] of chaveDaLinha) {
+    const cands = porChave.get(k);
+    if (!cands || cands.length === 0) continue;            // sem par: vai criar
+    /* Ambíguo dos dois lados pela mesma razão: sobra escolha, e escolher por
+       conta própria seria decidir no lugar do operador sobre dinheiro. */
+    if (cands.length > 1 || (usosDaChave.get(k) ?? 0) > 1) { out.set(i, 'ambiguo'); continue; }
+    out.set(i, cands[0]);
+  }
+  return out;
 }
 
 /**
@@ -426,8 +556,18 @@ export interface LinhaPrevia {
   safraId: string | null;
   entra: boolean;
   motivo: MotivoExclusao | null;
-  /** `atualizar` quando a coluna ID traz um lançamento vivo deste cliente. */
+  /** `atualizar` quando a coluna ID traz um lançamento vivo deste cliente, ou
+   *  quando a linha sem id casou com um lançamento existente (B-41). */
   modo: ModoLinha;
+  /** Por onde chegou ao modo atualizar; `null` quando o modo é criar. */
+  origemModo: OrigemModo | null;
+  /**
+   * ⚠ QUEM ATUALIZAR, JÁ RESOLVIDO. O gravador lê daqui em vez de reler a coluna
+   * ID da planilha: com o casamento, nem toda linha que atualiza tem id escrito,
+   * e um gravador que só sabe ler a planilha criaria de novo o que a prévia
+   * prometeu atualizar.
+   */
+  alvoId: string | null;
   /** Veredito da régua do banco; `null` = nada parecido encontrado. */
   duplicidade: NivelDuplicidade | null;
   /**
@@ -466,6 +606,8 @@ export function avaliarLinha(
   reincluida: boolean,
   indice: number,
   alvos: ReadonlyMap<string, AlvoAtualizacao> | undefined,
+  /** B-41 — o que o casamento decidiu para esta linha, quando ela não tem id. */
+  casado?: CandidatoCasamento | 'ambiguo' | null,
 ): LinhaPrevia {
   const anoMes = anoMesDaCompetencia(row.data_competencia ?? '');
 
@@ -488,11 +630,20 @@ export function avaliarLinha(
      arquivo. Nesses casos a linha NÃO vira criação silenciosa: para, com motivo,
      porque criar seria duplicar o que o operador queria corrigir. */
   const idPlanilha = (row.id_lancamento ?? '').trim();
-  const alvo = idPlanilha ? (alvos?.get(idPlanilha) ?? null) : null;
-  const modo: ModoLinha = idPlanilha ? 'atualizar' : 'criar';
+  /* ⚠ O ID VENCE O CASAMENTO. Id na planilha é declaração explícita do operador;
+     o casamento é inferência nossa, e inferência não sobrepõe declaração. */
+  const alvoPorId = idPlanilha ? (alvos?.get(idPlanilha) ?? null) : null;
+  const alvoCasado = !idPlanilha && casado && casado !== 'ambiguo' ? casado : null;
+  const alvo = alvoPorId ?? alvoCasado;
+  const modo: ModoLinha = idPlanilha || alvoCasado ? 'atualizar' : 'criar';
+  const origemModo: OrigemModo | null = idPlanilha ? 'id' : alvoCasado ? 'casamento' : null;
 
   const base = {
     indice, row, anoMes, fazendaId, fazendaNome, duplicidade, reincluida, modo,
+    origemModo,
+    /* O alvo viaja RESOLVIDO na linha: o gravador não relê a planilha para
+       descobrir quem atualizar, e o casamento não precisa de um segundo mapa. */
+    alvoId: alvo?.id ?? null,
     subcentro: itSub?.valor ?? null,
     // Descartado em campo OPCIONAL vira simplesmente ausência: a linha entra sem
     // o dado. É o caso de uso que originou o descarte ("terceiros" na coluna de
@@ -513,6 +664,12 @@ export function avaliarLinha(
   }
   if (alvo?.travado) {
     return { ...base, entra: false, motivo: 'origem_travada' };
+  }
+  /* ⚠ AMBÍGUO É PENDÊNCIA, NÃO EXCLUSÃO DEFINITIVA: a linha existe e tem par,
+     só não se sabe qual. Fica de fora com motivo próprio para o operador poder
+     resolver — informando o ID — em vez de descobrir uma duplicata depois. */
+  if (casado === 'ambiguo') {
+    return { ...base, entra: false, motivo: 'casamento_ambiguo' };
   }
 
   // Precedência: o motivo mais estrutural primeiro, para o operador ver a causa
@@ -552,6 +709,21 @@ export interface TotaisPrevia {
   entram: { qtd: number; valor: number };
   ficamDeFora: { qtd: number; valor: number };
   porMotivo: Array<{ motivo: MotivoExclusao; qtd: number; valor: number }>;
+  /**
+   * B-41 — o resumo por BALDE, que responde a pergunta que o operador faz antes
+   * de confirmar: "o que este arquivo vai fazer com o meu mês?".
+   *
+   * ⚠ SÓ O TOTAL DE ENTRADAS NÃO RESPONDE ISSO. 409 linhas entrando podem ser
+   * 409 lançamentos novos — duplicando o mês — ou 409 classificações sobre o que
+   * já existe. São resultados opostos e o número era o mesmo.
+   */
+  porBalde: {
+    atualizamPorId: number;
+    atualizamPorCasamento: number;
+    ambiguos: number;
+    criam: number;
+    fora: number;
+  };
 }
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -600,16 +772,27 @@ export function montarPrevia(
   reincluidas?: ReadonlySet<number>,
   /** Lançamentos vivos do cliente referidos pela coluna ID, por id. */
   alvos?: ReadonlyMap<string, AlvoAtualizacao>,
+  /** B-41 — o casamento das linhas sem id, por índice. */
+  casados?: ReadonlyMap<number, CandidatoCasamento | 'ambiguo'>,
 ): { linhas: LinhaPrevia[]; totais: TotaisPrevia } {
   const linhas = rows.map((r, i) =>
     avaliarLinha(r, dp, fechados, fazendaCabecalhoId, fazendaCabecalhoNome,
-      duplicidades?.get(i) ?? null, reincluidas?.has(i) ?? false, i, alvos));
+      duplicidades?.get(i) ?? null, reincluidas?.has(i) ?? false, i, alvos,
+      casados?.get(i) ?? null));
 
   let qtdEntram = 0, valEntram = 0, qtdFora = 0, valFora = 0;
+  const balde = { atualizamPorId: 0, atualizamPorCasamento: 0, ambiguos: 0, criam: 0, fora: 0 };
   const porMotivo = new Map<MotivoExclusao, { qtd: number; valor: number }>();
 
   for (const l of linhas) {
     const v = Math.abs(Number(l.row.valor) || 0);
+    /* Os baldes contam a INTENÇÃO da linha, e por isso são exclusivos: ambíguo é
+       ambíguo mesmo estando fora, e uma linha que atualiza não "cria". */
+    if (l.motivo === 'casamento_ambiguo') balde.ambiguos++;
+    else if (!l.entra) balde.fora++;
+    else if (l.origemModo === 'id') balde.atualizamPorId++;
+    else if (l.origemModo === 'casamento') balde.atualizamPorCasamento++;
+    else balde.criam++;
     if (l.entra) { qtdEntram++; valEntram += v; continue; }
     qtdFora++; valFora += v;
     if (l.motivo) {
@@ -626,6 +809,7 @@ export function montarPrevia(
       porMotivo: [...porMotivo.entries()]
         .map(([motivo, v]) => ({ motivo, qtd: v.qtd, valor: r2(v.valor) }))
         .sort((a, b) => b.qtd - a.qtd),
+      porBalde: balde,
     },
   };
 }

@@ -27,6 +27,18 @@ import { baixarModeloPlanilha } from '@/v2/lib/importLanc/modeloPlanilha';
 import { linhasDoExtrato, type MovimentoParaPlanilha } from '@/v2/lib/importLanc/linhasDoExtrato';
 import { Download } from 'lucide-react';
 
+/** Um número do resumo por balde. Zero fica apagado, mas NÃO some: a ausência de
+ *  ambíguos é informação, e um balde que desaparece faz o operador se perguntar
+ *  se ele existia. */
+function Balde({ n, rotulo, cor, dica }: { n: number; rotulo: string; cor: string; dica: string }) {
+  return (
+    <span className={`inline-flex items-baseline gap-1 ${n === 0 ? 'opacity-45' : ''}`} title={dica}>
+      <b className={`tabular-nums ${cor}`}>{n}</b>
+      <span className="text-muted-foreground">{rotulo}</span>
+    </span>
+  );
+}
+
 /**
  * ⚠ O MODO ENRIQUECER É ESTA MESMA TELA, e é a razão das props serem opcionais.
  * A aba Enriquecer da Conciliação não recria o fluxo: monta este componente
@@ -300,6 +312,29 @@ export function V2ImportLancamentosExcel({
       {previa && (
         <div className="space-y-1.5">
           <span className="text-[11px] font-semibold">Prévia</span>
+
+          {/* ⚠ O QUE ESTE ARQUIVO VAI FAZER COM O MÊS, antes de confirmar — B-41.
+              O total de entradas não respondia isso: 409 linhas entrando podem
+              ser 409 lançamentos novos, duplicando o mês, ou 409 classificações
+              sobre o que já existe. Resultados opostos, o mesmo número. */}
+          <div className="flex flex-wrap items-center gap-1.5 rounded border bg-muted/30 px-2 py-1 text-[10px]">
+            <Balde n={previa.totais.porBalde.atualizamPorId} rotulo="atualizam por ID"
+              cor="text-primary"
+              dica="A planilha trouxe o ID do lançamento — declaração explícita de quem atualizar." />
+            <Balde n={previa.totais.porBalde.atualizamPorCasamento} rotulo="atualizam por casamento"
+              cor="text-primary"
+              dica="Sem ID, mas casaram com um lançamento existente por conta, valor e data — únicos dos dois lados." />
+            <Balde n={previa.totais.porBalde.ambiguos} rotulo="ambíguos"
+              cor="text-amber-700"
+              dica="Casaram com mais de um lançamento, ou mais de uma linha disputa o mesmo. Ficam de fora: escolher por conta própria seria chutar. Informe o ID para resolver." />
+            <Balde n={previa.totais.porBalde.criam} rotulo="criam"
+              cor="text-emerald-700"
+              dica="Não acharam par no sistema — entram como lançamento novo." />
+            <Balde n={previa.totais.porBalde.fora} rotulo="fora"
+              cor="text-muted-foreground"
+              dica="Excluídas por outro motivo — mês fechado, transferência, duplicata, de-para pendente. A lista abaixo diz qual." />
+          </div>
+
           <ImportLancPrevia linhas={previa.linhas} totais={previa.totais} aoReincluir={alternarReinclusao} />
 
           <div className="flex items-center justify-end gap-2 flex-wrap">
