@@ -9,6 +9,8 @@ import {
   type StatusFiltroFinanceiro,
 } from '@/lib/financeiro/statusFinanceiro';
 import { isTransferenciaTipo } from '@/lib/financeiro/v2Transferencia';
+import { useLancamentosConciliados } from '@/hooks/useConciliacaoDoMes';
+import { useCliente } from '@/contexts/ClienteContext';
 import { contaSimpleValid } from '@/components/financeiro-v2/lancamentoDialogTabs';
 import { validarLancamento } from '@/lib/financeiro/validacaoLancamento';
 import { formatDocumento } from '@/lib/financeiro/documentoHelper';
@@ -180,6 +182,12 @@ interface Props {
   onAbrirOperacaoOCFinanceiro?: (operacaoId: string) => void;
 }
 
+/** As duas perguntas sobre vínculo que a lista passa a responder. */
+const RECORTES_CONCIL: readonly { valor: 'conciliado' | 'sem_conciliar'; rotulo: string }[] = [
+  { valor: 'conciliado', rotulo: 'Conciliado' },
+  { valor: 'sem_conciliar', rotulo: 'Realizado (sem conciliar)' },
+];
+
 function getInitialPageSize() {
   if (typeof window === 'undefined') return 30;
   const width = window.innerWidth;
@@ -193,6 +201,13 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const [pageSize] = useState(getInitialPageSize);
   const [currentPage, setCurrentPage] = useState(0);
   const hook = useFinanceiroV2(pageSize);
+  /* LANC-STATUS-CONCILIADO-01 — o mapa dos vínculos ativos, uma consulta por
+     cliente. A lista carrega tudo em lote e pagina no cliente; um mapa completo
+     é o que casa com ela, e trocar de página não repergunta nada. */
+  const { clienteAtual } = useCliente();
+  const { conciliados } = useLancamentosConciliados(clienteAtual?.id ?? null);
+  /** Recorte por vínculo — `null` = sem recorte (a lista inteira). */
+  const [recorteConcil, setRecorteConcil] = useState<'conciliado' | 'sem_conciliar' | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const currentYear = new Date().getFullYear();
@@ -714,8 +729,22 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     if (grupoFiltro !== '__all__') {
       items = items.filter(l => (l as any).grupo_custo === grupoFiltro);
     }
+    /* ⚠ O RECORTE DE CONCILIAÇÃO É CLIENT-SIDE, e não por escolha de estilo:
+       "conciliado" não existe como status no banco — é derivado do vínculo —,
+       então não há o que mandar no `status_transacoes` da consulta. Aqui a lista
+       já está inteira em memória e o mapa também; o filtro é uma passada.
+       ⚠ E ELE É INDEPENDENTE do filtro de status persistido: pedir "Realizado
+       (sem conciliar)" é uma pergunta sobre o VÍNCULO, e cruzá-la com o status
+       gravado é o que responde "qual eu cancelo?". */
+    if (recorteConcil === 'conciliado') {
+      items = items.filter(l => conciliados.has(l.id));
+    } else if (recorteConcil === 'sem_conciliar') {
+      items = items.filter(l =>
+        (l.status_transacao || '').toLowerCase() === 'realizado' && !conciliados.has(l.id));
+    }
+
     return items;
-  }, [hook.lancamentos, contaOrigem, contaDestino, produtoFiltro, documentoFiltro, fornecedorFiltro, atividadeFiltro, grupoFiltro, centroToGrupo]);
+  }, [hook.lancamentos, contaOrigem, contaDestino, produtoFiltro, documentoFiltro, fornecedorFiltro, atividadeFiltro, grupoFiltro, centroToGrupo, recorteConcil, conciliados]);
 
   const compareDefaultOrder = useCallback((a: LancamentoV2, b: LancamentoV2) => {
     // PR-FIN-GRADE-DATAS-03 — a ordenação padrão acompanha a dimensão selecionada (Data por). Chave
@@ -1267,6 +1296,21 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                           </label>
                         ))}
                       </div>
+                        {/* ⚠ O RECORTE POR VÍNCULO MORA AQUI, e separado: ele não é
+                            um sexto status — é outra pergunta, sobre o vínculo, e
+                            se cruza com os status acima em vez de competir com
+                            eles. Foi a pergunta "qual desses eu cancelo?" que o
+                            operador não conseguia responder sozinho. */}
+                        <div className="mt-1 border-t pt-1">
+                          <p className="mb-0.5 text-[8px] uppercase tracking-wide text-muted-foreground">Conciliação</p>
+                          {RECORTES_CONCIL.map(r => (
+                            <label key={r.valor} className="flex items-center gap-0.5 text-[10px] cursor-pointer hover:bg-muted rounded px-0.5 py-0.5">
+                              <Checkbox checked={recorteConcil === r.valor} className="h-2.5 w-2.5"
+                                onCheckedChange={() => setRecorteConcil(v => v === r.valor ? null : r.valor)} />
+                              {r.rotulo}
+                            </label>
+                          ))}
+                        </div>
                     </PopoverContent>
                   </Popover>
                 </div>
@@ -1531,6 +1575,21 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                           </label>
                         ))}
                       </div>
+                        {/* ⚠ O RECORTE POR VÍNCULO MORA AQUI, e separado: ele não é
+                            um sexto status — é outra pergunta, sobre o vínculo, e
+                            se cruza com os status acima em vez de competir com
+                            eles. Foi a pergunta "qual desses eu cancelo?" que o
+                            operador não conseguia responder sozinho. */}
+                        <div className="mt-1 border-t pt-1">
+                          <p className="mb-0.5 text-[8px] uppercase tracking-wide text-muted-foreground">Conciliação</p>
+                          {RECORTES_CONCIL.map(r => (
+                            <label key={r.valor} className="flex items-center gap-0.5 text-[10px] cursor-pointer hover:bg-muted rounded px-0.5 py-0.5">
+                              <Checkbox checked={recorteConcil === r.valor} className="h-2.5 w-2.5"
+                                onCheckedChange={() => setRecorteConcil(v => v === r.valor ? null : r.valor)} />
+                              {r.rotulo}
+                            </label>
+                          ))}
+                        </div>
                     </PopoverContent>
                   </Popover>
                 </div>
@@ -1781,9 +1840,27 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                         && !l.descricao.includes('Parc.') && l.descricao.includes(' — '))
                       ? l.descricao.slice(0, l.descricao.indexOf(' — '))
                       : l.descricao;
-                    const stKey = (l.status_transacao || '').toLowerCase();
+                    /* ⚠ CONCILIADO É DERIVADO, e é por isso que a chave se
+                       calcula aqui em vez de vir do banco: existe vínculo ativo →
+                       conciliado; não existe → o status persistido, intocado. A
+                       coluna `status_transacao` continua guardando o que sempre
+                       guardou, e nenhum writer muda por causa disto.
+                       ⚠ SÓ REALIZADO VIRA CONCILIADO. Previsto com vínculo seria
+                       contradição — dinheiro que ainda não andou não se concilia
+                       —, e mascarar o previsto esconderia o defeito em vez de
+                       mostrá-lo. */
+                    const stCru = (l.status_transacao || '').toLowerCase();
+                    const vinculo = conciliados.get(l.id);
+                    const stKey = vinculo && stCru === 'realizado' ? 'conciliado' : stCru;
                     const stLabel = STATUS_FILTRO_LABEL[stKey] || l.status_transacao || '-';
                     const stColor = STATUS_FILTRO_COR[stKey] || 'text-muted-foreground';
+                    /* A EVIDÊNCIA, sem UUID: o operador confere pelo que
+                       reconhece — a data e o histórico do extrato. */
+                    const stTitle = vinculo
+                      ? `Vinculado a ${vinculo.dataMovimento ? vinculo.dataMovimento.slice(0, 10).split('-').reverse().join('/') : '—'}`
+                        + ` · ${vinculo.descricaoMovimento ?? 'movimento sem histórico'}`
+                        + ` · aplicado ${formatMoeda(vinculo.valorAplicado)}`
+                      : undefined;
                     const isHistoricoReadOnly = l.origem_lancamento === 'importacao_historica';
                     const isParcelaFinanciamento = l.origem_lancamento === 'parcela_financiamento' || (l as any).origem_tipo === 'financiamento_captacao' || (l.origem_lancamento === 'financiamento' && !!(l as any).financiamento_id);
                     const isImported = !!l.lote_importacao_id;
@@ -1830,7 +1907,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                           {fmtValor(l.valor, l.sinal)}
                         </td>
                         <td className="celula-doc font-mono text-muted-foreground text-center px-1 py-1 align-middle text-[10px] leading-tight truncate" title={formatDocCompleto(l)}>{formatNF(l)}</td>
-                        <td className={`text-center px-1 py-1 align-middle text-[11px] leading-tight ${stColor}`}>{stLabel}</td>
+                        <td className={`text-center px-1 py-1 align-middle text-[11px] leading-tight ${stColor}`}
+                          title={stTitle}>{stLabel}</td>
                         <td className="!py-0 px-0 w-[40px] align-middle">
                           <div className="flex items-center justify-center gap-0.5">
                             {isParcelaFinanciamento ? (

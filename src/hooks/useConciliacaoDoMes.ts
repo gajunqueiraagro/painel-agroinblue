@@ -526,3 +526,79 @@ export function useVinculosDoMovimento(extratoId: string | null) {
   useEffect(() => { carregar(); }, [carregar]);
   return { vinculos, loading, recarregar: carregar };
 }
+
+/** O vínculo ativo de um lançamento, como a lista precisa exibi-lo. */
+export interface ConciliadoDoLancamento {
+  /** Data do movimento bancário — a prova de que o dinheiro andou. */
+  dataMovimento: string | null;
+  descricaoMovimento: string | null;
+  valorAplicado: number;
+}
+
+/**
+ * OS LANÇAMENTOS CONCILIADOS DO CLIENTE — LANC-STATUS-CONCILIADO-01.
+ *
+ * ⚠ CONCILIADO É DERIVADO, NUNCA GRAVADO. Existe vínculo ativo em
+ * `conciliacao_bancaria_itens` (`desfeito_em IS NULL`) → conciliado; não existe →
+ * segue realizado. Não há campo digitável, e `conciliado_em` do legado NÃO é
+ * fonte: está nulo em lançamentos comprovadamente vinculados.
+ *
+ * ⚠ A CONSULTA VAI PELO LADO PEQUENO, e a medição é que mandou: o NJ tem 30.542
+ * lançamentos e 2.241 vínculos ativos; Santa Rita, 18.356 contra 558. Trazer os
+ * VÍNCULOS e montar um `Set` custa uma consulta de poucos milhares de linhas;
+ * mandar `IN (ids)` com trinta mil ids seria a mesma resposta por um caminho
+ * absurdo — e uma consulta por linha seria o N+1 que [PERF-DB-01] já proibiu.
+ *
+ * ⚠ E É UMA CONSULTA SÓ POR CLIENTE, não por página: a lista carrega tudo em
+ * lote e pagina no cliente, então um mapa completo é o que casa com ela. Trocar
+ * de página não repergunta nada.
+ */
+export function useLancamentosConciliados(clienteId: string | null) {
+  const [mapa, setMapa] = useState<ReadonlyMap<string, ConciliadoDoLancamento>>(new Map());
+  const [carregando, setCarregando] = useState(false);
+
+  useEffect(() => {
+    let cancelado = false;
+    if (!clienteId) { setMapa(new Map()); return; }
+    setCarregando(true);
+    (async () => {
+      const PAGE = 1000;
+      const m = new Map<string, ConciliadoDoLancamento>();
+      for (let from = 0; ; from += PAGE) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado
+        const { data, error } = await (supabase as any)
+          .from('conciliacao_bancaria_itens')
+          .select('lancamento_id, valor_aplicado, extrato_bancario_v2!inner(data_movimento, descricao, cliente_id)')
+          .is('desfeito_em', null)
+          .eq('extrato_bancario_v2.cliente_id', clienteId)
+          .order('lancamento_id', { ascending: true })
+          .range(from, from + PAGE - 1);
+        if (error) { console.error('[useLancamentosConciliados]', error); break; }
+        const rows = (data ?? []) as Array<{
+          lancamento_id: string; valor_aplicado: number | string | null;
+          extrato_bancario_v2: { data_movimento: string | null; descricao: string | null } | null;
+        }>;
+        for (const r of rows) {
+          if (!r.lancamento_id) continue;
+          const e = r.extrato_bancario_v2;
+          /* ⚠ UM LANÇAMENTO PODE TER MAIS DE UM VÍNCULO (parciais em movimentos
+             diferentes). O mapa guarda o PRIMEIRO e soma os aplicados: o rótulo
+             precisa de um movimento para nomear, e o valor precisa ser o total —
+             mostrar só uma parte faria a evidência contradizer o lançamento. */
+          const atual = m.get(r.lancamento_id);
+          m.set(r.lancamento_id, {
+            dataMovimento: atual?.dataMovimento ?? e?.data_movimento ?? null,
+            descricaoMovimento: atual?.descricaoMovimento ?? e?.descricao ?? null,
+            valorAplicado: (atual?.valorAplicado ?? 0) + Number(r.valor_aplicado ?? 0),
+          });
+        }
+        if (rows.length < PAGE) break;
+        if (from > 200_000) break; // salvaguarda anti-loop
+      }
+      if (!cancelado) { setMapa(m); setCarregando(false); }
+    })();
+    return () => { cancelado = true; };
+  }, [clienteId]);
+
+  return { conciliados: mapa, carregando };
+}
