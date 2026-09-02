@@ -20,6 +20,11 @@ import {
  * meses têm, e a virada de ano, onde somar um mês muda o ano.
  */
 
+/* ⚠ SEM FIXTURE DE TABELA — conferido em FIXTURES-VS-BANCO-01. Este arquivo
+   exercita funções puras de calendário: entram e saem strings 'yyyy-MM-dd'. Não
+   há suposição sobre forma de coluna a errar, e por isso nada aqui mudou na
+   conferência. */
+
 describe('primeiroVencimentoDe — a derivação que substituiu o campo', () => {
   it('"do mês anterior" empurra o vencimento um mês à frente', () => {
     expect(primeiroVencimentoDe('2026-09-01', 5, 'anterior')).toBe('2026-10-05');

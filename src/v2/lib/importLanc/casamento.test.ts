@@ -32,6 +32,20 @@ const linha = (over: Partial<LancamentoExcelRow>): LancamentoExcelRow => ({
   ...over,
 } as LancamentoExcelRow);
 
+/**
+ * ⚠ `valor` SEMPRE POSITIVO — conferido contra o banco (FIXTURES-VS-BANCO-01).
+ * `financeiro_lancamentos_v2.valor` é `number` não-nulo e guarda o MÓDULO; o
+ * sentido vive em `sinal` (`string | null` no tipo gerado: '1' / '-1'). Foi
+ * supor o contrário — `valor` negativo para saída — que fez a soma do saldo
+ * tratar 31 saídas como entradas por uma sessão inteira.
+ *
+ * ⚠ E `CandidatoCasamento` NÃO CARREGA O SINAL, de propósito: `chaveCasamento`
+ * compara pelo módulo, então o sentido não entra na chave. Isso é seguro
+ * enquanto a planilha e o lançamento forem do mesmo sentido — medido: em 2026
+ * não há um único par (conta, valor, data) com sentidos opostos no Proto. Se
+ * aparecer, uma saída poderá casar com uma entrada, e a chave precisará do
+ * sinal. Fica registrado aqui porque é onde alguém vai olhar.
+ */
 const cand = (over: Partial<CandidatoCasamento>): CandidatoCasamento => ({
   id: 'l1', contaBancariaId: CONTA_A, valor: 100, data: '2026-08-10',
   travado: false, subcentroAtual: null, descricaoAtual: null, safraAtual: null,
@@ -133,7 +147,18 @@ describe('casarLinhasSemId', () => {
     expect(r.has(0)).toBe(false);
   });
 
-  it('o sinal do lançamento não impede o casamento — a chave usa o módulo', () => {
+  /* ⚠ ESTE CASO FOI CORRIGIDO na conferência contra o banco: ele usava
+     `valor: -100` no candidato, uma forma que a tabela NUNCA produz. Passava por
+     causa do `Math.abs` — provava o engano, não o comportamento. Agora testa o
+     que de fato acontece: o valor chega positivo dos dois lados. */
+  it('valor positivo dos dois lados casa — é a forma real da tabela', () => {
+    const r = casarLinhasSemId([linha({ valor: 100 })], dp(), [cand({ valor: 100 })]);
+    expect(r.get(0)).toMatchObject({ id: 'l1' });
+  });
+
+  /* A defesa do `Math.abs` continua testada, mas nomeada pelo que é: tolerância
+     a um dado fora da forma esperada, não o caminho normal. */
+  it('valor negativo no candidato ainda casa — a chave normaliza pelo módulo', () => {
     const r = casarLinhasSemId([linha({ valor: 100 })], dp(), [cand({ valor: -100 })]);
     expect(r.get(0)).toMatchObject({ id: 'l1' });
   });

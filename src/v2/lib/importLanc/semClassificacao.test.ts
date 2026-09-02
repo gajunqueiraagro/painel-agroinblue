@@ -14,6 +14,13 @@ import type { LancamentoExcelRow } from '@/v2/lib/excelPreview/parserLancamentos
 
 const FAZ = 'faz-1';
 
+/**
+ * ⚠ `valor` POSITIVO É A FORMA CERTA AQUI, e por um motivo diferente do banco:
+ * esta não é a linha da TABELA, é a linha da PLANILHA. `LancamentoExcelRow.valor`
+ * é documentado como "sempre absoluto (positivo)" no parser, que normaliza na
+ * leitura; o sentido vem de `tipo_operacao`. Conferido em FIXTURES-VS-BANCO-01:
+ * o fixture casa com o contrato do parser, e não precisou mudar.
+ */
 const linha = (over: Partial<LancamentoExcelRow>): LancamentoExcelRow => ({
   linha: 2, data_competencia: '2026-08-01', valor: 100, tipo_operacao: '2-Saídas',
   conta_plano_texto: 'COMBUSTIVEL', fazenda_texto: 'SR', fornecedor_texto: 'POSTO',
