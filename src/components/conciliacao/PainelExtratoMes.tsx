@@ -1,13 +1,14 @@
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { LayoutList, FileText, Link2 } from 'lucide-react';
+import { LayoutList, FileText, Link2, Pencil } from 'lucide-react';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import {
   useConciliacaoDoMes, useSugestoesDoMes, contarBaldes, frameDoRodape,
   type MovimentoConciliacao, type SituacaoMovimento,
 } from '@/hooks/useConciliacaoDoMes';
-import { useSaldoGerencialDoMes, useImportacoesDaConta } from '@/hooks/useExtratoDaConta';
+import { useSaldoGerencialDoMes, useSaldoSistemaNaPosicao, useImportacoesDaConta } from '@/hooks/useExtratoDaConta';
+import { SaldoRealDialog } from '@/components/conciliacao/SaldoRealDialog';
 import { ImportacoesDialog } from '@/components/conciliacao/ImportacoesDialog';
 import { EstacaoConciliar } from '@/components/conciliacao/EstacaoConciliar';
 import { PalcoDoMes } from '@/components/conciliacao/PalcoDoMes';
@@ -46,6 +47,9 @@ export function PainelExtratoMes({ clienteId, contaId, ano, mes, contaNome, comP
 
   const { movimentos, loading, recarregar } = useConciliacaoDoMes(clienteId, contaId, ano, mes);
   const saldo = useSaldoGerencialDoMes(clienteId, contaId, ano, mes);
+  const sistema = useSaldoSistemaNaPosicao(
+    clienteId, contaId, saldo.anoMes, saldo.saldoInicial, saldo.posicaoEm);
+  const [editandoSaldo, setEditandoSaldo] = useState(false);
   const importacoes = useImportacoesDaConta(clienteId, contaId);
   const sug = useSugestoesDoMes(clienteId, contaId, ano, mes);
 
@@ -121,8 +125,16 @@ export function PainelExtratoMes({ clienteId, contaId, ano, mes, contaNome, comP
           `financeiro_saldos_bancarios_v2`, que é gerencial — e a pílula de origem
           ao lado impede que um saldo digitado à mão passe por extrato de banco.
           O rótulo do Financas volta quando a fonte for de banco. */}
-      <div className="grid grid-cols-2 gap-x-4 border-b border-border px-3 py-1 sm:grid-cols-3">
-        <Campo rotulo="Saldo do mês (gerencial)">
+      <div className="grid grid-cols-2 gap-x-4 border-b border-border px-3 py-1 sm:grid-cols-4">
+        {/* ⚠ POSIÇÃO CONTRA POSIÇÃO — FIN-SALDO-POSICAO-01. O sistema é somado
+            ATÉ a data declarada, e não até o fim do mês: um extrato consultado em
+            13/08 declara a posição daquele dia, e compará-la com o fechamento
+            acusaria uma diferença que é só o resto do mês. */}
+        <Campo rotulo={`Saldo no sistema (até ${diaMesBr(saldo.posicaoEm)})`}>
+          {sistema.saldoSistema == null ? '—' : formatMoeda(sistema.saldoSistema)}
+        </Campo>
+
+        <Campo rotulo={`Saldo extrato (${diaMesBr(saldo.posicaoEm)})`}>
           <span className="flex items-baseline gap-1.5">
             {saldo.saldo == null ? '—' : formatMoeda(saldo.saldo)}
             {saldo.origem && (
@@ -130,11 +142,64 @@ export function PainelExtratoMes({ clienteId, contaId, ano, mes, contaNome, comP
                 {saldo.origem}
               </span>
             )}
+            {/* O lápis: a porta para declarar o saldo e a posição. */}
+            {clienteId && contaId && (
+              <button type="button" onClick={() => setEditandoSaldo(true)}
+                className="text-muted-foreground hover:text-foreground"
+                title="Informar o saldo real do banco e a data da posição.">
+                <Pencil className="h-3 w-3" />
+              </button>
+            )}
           </span>
         </Campo>
-        <Campo rotulo="Na data de">{saldo.anoMes ? `fim de ${saldo.anoMes}` : '—'}</Campo>
+
+        {/* ⚠ "—" QUANDO NÃO SE PERGUNTOU. Sem saldo declarado não há diferença a
+            calcular; mostrar zero afirmaria que o mês fecha. */}
+        <Campo rotulo="Diferença de saldo (o mês fecha?)">
+          {saldo.saldo == null || sistema.saldoSistema == null ? '—' : (
+            <span className={Math.abs(saldo.saldo - sistema.saldoSistema) < 0.01
+              ? 'text-success' : 'text-destructive'}>
+              {Math.abs(saldo.saldo - sistema.saldoSistema) < 0.01
+                ? 'confere'
+                : formatMoeda(saldo.saldo - sistema.saldoSistema)}
+            </span>
+          )}
+        </Campo>
+
         <Campo rotulo="Conciliados">{contagem.conciliado} de {contagem.todos}</Campo>
       </div>
+
+      {/* ⚠ O AVISO COBRA A ATUALIZAÇÃO, e existe porque a posição no meio do mês é
+          declaração TEMPORÁRIA: a cadeia mensal segue lendo `saldo_final` como
+          fim de mês. Sem esta linha, o operador informaria a posição de 13/08 e
+          fecharia o mês achando que conferiu agosto inteiro. */}
+      {saldo.saldo != null && sistema.aposPosicao > 0 && (
+        <div className="border-b border-border bg-destructive/5 px-3 py-1 text-[10px] leading-snug text-destructive">
+          {sistema.aposPosicao} realizado{sistema.aposPosicao === 1 ? '' : 's'} após{' '}
+          {diaMesBr(saldo.posicaoEm)} não conferido{sistema.aposPosicao === 1 ? '' : 's'} — informe o
+          saldo de uma data mais recente para o mês fechar.
+        </div>
+      )}
+
+      {/* A frase de rodapé: qual data a diferença usou, dita sem o operador
+          precisar abrir o modal para descobrir. */}
+      {saldo.saldo != null && (
+        <div className="border-b border-border px-3 py-0.5 text-[9px] leading-snug text-muted-foreground">
+          {saldo.posicaoDeclarada
+            ? `A diferença compara a posição de ${diaMesBr(saldo.posicaoEm)}, que é a data declarada pelo banco — e não o fim do mês.`
+            : `Sem posição declarada: a diferença compara o fim do mês (${diaMesBr(saldo.posicaoEm)}). Informe a data no lápis para conferir posição contra posição.`}
+        </div>
+      )}
+
+      {editandoSaldo && clienteId && contaId && (
+        <SaldoRealDialog
+          clienteId={clienteId} contaId={contaId} contaNome={contaNome}
+          ano={ano} mes={mes}
+          saldoAtual={saldo.saldo} saldoDataAtual={saldo.saldoData}
+          aoFechar={() => setEditandoSaldo(false)}
+          aoSalvar={() => { saldo.recarregarSaldo(); }}
+        />
+      )}
 
       {comPlacar && (
         <div className="flex flex-wrap items-center gap-1.5 border-b border-border px-3 py-1.5">
@@ -329,3 +394,9 @@ function Campo({ rotulo, children }: { rotulo: string; children: React.ReactNode
 }
 
 const brData = (iso: string) => (iso ? iso.slice(0, 10).split('-').reverse().join('/') : '—');
+
+/** 'YYYY-MM-DD' → 'DD/MM'. Data civil, sem `Date` — fuso não muda o dia aqui. */
+const diaMesBr = (iso: string): string => {
+  const p = iso.slice(0, 10).split('-');
+  return p.length === 3 ? `${p[2]}/${p[1]}` : '—';
+};
