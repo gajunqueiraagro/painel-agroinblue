@@ -38,8 +38,9 @@ interface Props {
   contaNome: string;
   ano: number;
   mes: number;
-  /** Valores atuais; `null` = nunca informado. */
+  /** Valor atual; `null` = nunca informado. */
   saldoAtual: number | null;
+  /** Posição atual declarada; `null` = nunca informada (o modal propõe o fim do mês). */
   saldoDataAtual: string | null;
   aoFechar: () => void;
   aoSalvar: () => void | Promise<void>;
@@ -56,6 +57,11 @@ export function SaldoRealDialog({
   );
   const [data, setData] = useState(saldoDataAtual ?? fimDoMes(ano, mes));
   const [ocupado, setOcupado] = useState(false);
+
+  /* ⚠ A DATA VEM DA TELA, e desde a regeneração do types.ts (02/09) ela pode vir:
+     `saldo_data` entrou no tipo gerado, então o `select` de quem monta o modal a
+     carrega sem cast. A versão anterior deste arquivo a buscava sozinho — um
+     round-trip a mais e um `as any` — só porque o tipo não a conhecia. */
 
   /* ⚠ O SINAL SOBREVIVE: conta no vermelho é o caso que motivou o campo, e
      `Math.abs` em qualquer ponto do caminho apagaria justamente o dado que se

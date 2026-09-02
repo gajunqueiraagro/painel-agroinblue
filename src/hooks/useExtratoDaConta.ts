@@ -52,8 +52,7 @@ export function useSaldoGerencialDoMes(
       setSaldo(null); setOrigem(null); setSaldoData(null); setSaldoInicial(null); return;
     }
     (async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- `saldo_data` é nova; types.ts defasado
-      const { data } = await (supabase as any)
+      const { data } = await supabase
         .from('financeiro_saldos_bancarios_v2')
         .select('saldo_final, saldo_inicial, origem_saldo, saldo_data')
         .eq('cliente_id', clienteId)
@@ -61,10 +60,7 @@ export function useSaldoGerencialDoMes(
         .eq('ano_mes', anoMes)
         .maybeSingle();
       if (cancelado) return;
-      const r = data as {
-        saldo_final?: unknown; saldo_inicial?: unknown;
-        origem_saldo?: unknown; saldo_data?: unknown;
-      } | null;
+      const r = data;
       setSaldo(r?.saldo_final == null ? null : Number(r.saldo_final));
       setSaldoInicial(r?.saldo_inicial == null ? null : Number(r.saldo_inicial));
       /* Origem nula é o caso mais comum (3.932 de 4.695) e NÃO vira "manual"
@@ -114,8 +110,7 @@ export async function gravarSaldoReal(params: {
     origem_saldo: 'manual',
     updated_at: new Date().toISOString(),
   };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- `saldo_data` é nova; types.ts defasado
-  const q = (supabase as any).from('financeiro_saldos_bancarios_v2');
+  const q = supabase.from('financeiro_saldos_bancarios_v2');
   const { data: existente, error: erroBusca } = await q
     .select('id')
     .eq('cliente_id', params.clienteId)
@@ -124,17 +119,37 @@ export async function gravarSaldoReal(params: {
     .maybeSingle();
   if (erroBusca) return { ok: false, erro: erroBusca.message };
 
-  const alvo = (existente as { id?: string } | null)?.id;
-  const { error } = alvo
-    ? await q.update(patch).eq('id', alvo)
-    /* Linha nova: `saldo_inicial` fica de fora de propósito — quem o define é a
-       cadeia mensal, não o lápis. */
-    : await q.insert({
-        cliente_id: params.clienteId,
-        conta_bancaria_id: params.contaId,
-        ano_mes: params.anoMes,
-        ...patch,
-      });
+  const alvo = existente?.id;
+  if (alvo) {
+    const { error } = await q.update(patch).eq('id', alvo);
+    return { ok: !error, erro: error?.message ?? null };
+  }
+
+  /* ⚠ LINHA NOVA PRECISA DA FAZENDA E DO SALDO INICIAL — SALDO-POSICAO-01c.
+     Este gravador substituiu o modal antigo da Conciliação, e aquele, ao criar,
+     preenchia `fazenda_id` (da conta) e `saldo_inicial` (do
+     `saldo_inicial_oficial` do cadastro). Sem os dois, a linha nasce órfã de
+     fazenda — que o `FinV2SaldosTab` usa como chave — e com o início da cadeia
+     mensal em branco. Substituir uma tela não pode subtrair o que ela fazia. */
+  const { data: conta } = await supabase
+    .from('financeiro_contas_bancarias')
+    .select('fazenda_id, saldo_inicial_oficial')
+    .eq('id', params.contaId)
+    .maybeSingle();
+  const c = conta;
+  if (!c?.fazenda_id) {
+    return { ok: false, erro: 'A conta bancária não tem fazenda no cadastro — sem ela o saldo não pode ser criado.' };
+  }
+  const { error } = await q.insert({
+    cliente_id: params.clienteId,
+    fazenda_id: c.fazenda_id,
+    conta_bancaria_id: params.contaId,
+    ano_mes: params.anoMes,
+    saldo_inicial: c.saldo_inicial_oficial ?? 0,
+    origem_saldo_inicial: 'manual',
+    status_mes: 'aberto',
+    ...patch,
+  });
   return { ok: !error, erro: error?.message ?? null };
 }
 
@@ -142,8 +157,7 @@ export async function gravarSaldoReal(params: {
 export async function removerSaldoReal(params: {
   clienteId: string; contaId: string; anoMes: string;
 }): Promise<{ ok: boolean; erro: string | null }> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- `saldo_data` é nova; types.ts defasado
-  const { error } = await (supabase as any)
+  const { error } = await supabase
     .from('financeiro_saldos_bancarios_v2')
     .update({ saldo_final: null, saldo_data: null, origem_saldo: null, updated_at: new Date().toISOString() })
     .eq('cliente_id', params.clienteId)
@@ -181,8 +195,7 @@ export function useImportacoesDaConta(clienteId: string | null, contaId: string 
     if (!clienteId || !contaId) { setImportacoes([]); return; }
     setLoading(true);
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: tabela fora de types.ts
-      const { data: movs } = await (supabase as any)
+      const { data: movs } = await supabase
         .from('extrato_bancario_v2')
         .select('id, importacao_id')
         .eq('cliente_id', clienteId)
@@ -193,11 +206,9 @@ export function useImportacoesDaConta(clienteId: string | null, contaId: string 
 
       const ids = Array.from(new Set(linhas.map(l => l.importacao_id)));
       const [{ data: imps }, { data: vinc }] = await Promise.all([
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado
-        (supabase as any).from('financeiro_importacoes_v2')
+        supabase.from('financeiro_importacoes_v2')
           .select('id, nome_arquivo, created_at').in('id', ids),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado
-        (supabase as any).from('conciliacao_bancaria_itens')
+        supabase.from('conciliacao_bancaria_itens')
           .select('extrato_id').in('extrato_id', linhas.map(l => l.id)).is('desfeito_em', null),
       ]);
       const comVinculo = new Set((vinc ?? []).map((v: { extrato_id: string }) => v.extrato_id));
@@ -208,8 +219,7 @@ export function useImportacoesDaConta(clienteId: string | null, contaId: string 
         if (comVinculo.has(l.id)) acc.v += 1;
         porImp[l.importacao_id] = acc;
       }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- linhas fora de types.ts
-      setImportacoes(((imps ?? []) as any[]).map(i => ({
+      setImportacoes((imps ?? []).map(i => ({
         id: i.id,
         nomeArquivo: i.nome_arquivo ?? '(sem nome)',
         data: (i.created_at ?? '').slice(0, 10),
@@ -237,8 +247,7 @@ export function useImportacoesDaConta(clienteId: string | null, contaId: string 
     }
     setDesfazendo(true);
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado
-      const { error } = await (supabase as any)
+      const { error } = await supabase
         .from('extrato_bancario_v2')
         .update({ cancelado_em: new Date().toISOString(), cancelado_motivo: 'importacao_desfeita' })
         .eq('importacao_id', importacaoId)
@@ -336,8 +345,7 @@ export function useSaldoSistemaNaPosicao(
     const ultimoDia = fimDoMes(Number(anoMes.slice(0, 4)), Number(anoMes.slice(5, 7)));
     setCarregando(true);
     (async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado
-      const { data } = await (supabase as any)
+      const { data } = await supabase
         .from('financeiro_lancamentos_v2')
         .select('valor, data_pagamento, conta_bancaria_id, conta_destino_id')
         .eq('cliente_id', clienteId)
@@ -347,7 +355,7 @@ export function useSaldoSistemaNaPosicao(
         .gte('data_pagamento', primeiroDia)
         .lte('data_pagamento', ultimoDia);
       if (cancelado) return;
-      const linhas = (data ?? []) as LinhaDaPosicao[];
+      const linhas: LinhaDaPosicao[] = data ?? [];
       const { ate, depois } = somarAtePosicao(linhas, contaId, posicaoEm);
       setSaldoSistema(Math.round((saldoInicial + ate) * 100) / 100);
       setAposPosicao(depois);

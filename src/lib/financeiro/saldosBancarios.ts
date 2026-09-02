@@ -18,6 +18,8 @@ export interface SaldoV2SourceRow {
   origem_saldo: string | null;
   origem_saldo_inicial: string;
   observacao: string | null;
+  /** SALDO-POSICAO-01c — data da posição declarada do `saldo_final`; null = fim do mês. */
+  saldo_data?: string | null;
 }
 
 export interface SaldoLegacySourceRow {

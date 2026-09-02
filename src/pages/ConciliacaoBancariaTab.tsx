@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { PainelExtratoMes } from '@/components/conciliacao/PainelExtratoMes';
+import { SaldoRealDialog } from '@/components/conciliacao/SaldoRealDialog';
 import { ImportarBancoInline } from '@/components/conciliacao/ImportarBancoInline';
 import { ExtratoGerencialTab } from '@/components/financeiro-v2/ExtratoGerencialTab';
 import { EnriquecerPorPlanilha } from '@/components/conciliacao/EnriquecerPorPlanilha';
@@ -53,6 +54,8 @@ interface SaldoRow {
   saldo_final: number;
   status_mes: string;
   origem_saldo_inicial: string;
+  /** SALDO-POSICAO-01c — a data da posição declarada; `null` = fim do mês. */
+  saldo_data: string | null;
 }
 
 interface LancamentoResumo {
@@ -344,7 +347,6 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   const [saldos, setSaldos] = useState<SaldoRow[]>([]);
   const [lancamentos, setLancamentos] = useState<LancamentoResumo[]>([]);
   const [loading, setLoading] = useState(false);
-  const [savingSaldo, setSavingSaldo] = useState(false);
   const [fechandoSemMovimento, setFechandoSemMovimento] = useState(false);
   const [selectedMes, setSelectedMes] = useState<string>(initialMes || String(currentMonth).padStart(2,'0'));
 
@@ -369,19 +371,10 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   const [vistaExtrato, setVistaExtrato] = useState<'importar' | 'enriquecer' | 'gerencial' | 'conciliacao'>('conciliacao');
 
   /* Edit saldo */
-  const [editingSaldo, setEditingSaldo] = useState<{anoMes:string;contaId:string;current:number}|null>(null);
-  const [editValue, setEditValue]       = useState('');
-  const [editValueSaldoInicial, setEditValueSaldoInicial] = useState('');
-
-  const isInsertMode = useMemo(() => {
-    if (!editingSaldo) return false;
-    const existing = saldos.find(
-      s =>
-        s.ano_mes === editingSaldo.anoMes &&
-        s.conta_bancaria_id === editingSaldo.contaId
-    );
-    return !existing || String(existing.id).startsWith('legacy:');
-  }, [editingSaldo, saldos]);
+  /* SALDO-POSICAO-01c — o lápis abre o modal ÚNICO. `saldoData` viaja junto para
+     o modal abrir na posição já declarada, em vez de propor o fim do mês por
+     cima de uma data que o operador informou. */
+  const [editingSaldo, setEditingSaldo] = useState<{anoMes:string;contaId:string;current:number|null;saldoData:string|null}|null>(null);
 
   useEffect(() => {
     if (!clienteId) return;
@@ -404,7 +397,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
 
     const [{data:sData},{data:legData}] = await Promise.all([
       supabase.from('financeiro_saldos_bancarios_v2')
-        .select('id,ano_mes,conta_bancaria_id,fazenda_id,saldo_inicial,saldo_final,fechado,status_mes,origem_saldo,origem_saldo_inicial,observacao')
+        .select('id,ano_mes,conta_bancaria_id,fazenda_id,saldo_inicial,saldo_final,fechado,status_mes,origem_saldo,origem_saldo_inicial,observacao,saldo_data')
         .eq('cliente_id',clienteId).gte('ano_mes',prevDec).lte('ano_mes',anoMesMax),
       supabase.from('financeiro_saldos_bancarios')
         .select('id,ano_mes,conta_banco,fazenda_id,saldo_final')
@@ -423,6 +416,13 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
     // Conciliação bancária só pode confiar em saldos v2 reais. Linhas legacy mapeadas via
     // fuzzy match (tipo+codigo / nome) podem atribuir o extrato à conta errada
     // (ex: BTG legacy aparecendo na linha "Dinheiro"). Fonte 'v2' apenas.
+    /* ⚠ `saldo_data` VEM DA FONTE V2, não do unificado — SALDO-POSICAO-01c. O
+       `buildUnifiedSaldos` junta v2 e legacy, e a posição só existe do lado v2;
+       alargar o tipo compartilhado para carregar um campo que metade das fontes
+       nunca terá poria um `null` permanente no legacy fingindo ser resposta.
+       Aqui a linha v2 original é reencontrada por id. */
+    const posicaoPorId = new Map<string, string | null>(
+      ((sData as SaldoV2SourceRow[]) || []).map(r => [r.id, r.saldo_data ?? null]));
     setSaldos(unified
       .filter(u => u.fonte === 'v2')
       .map(u => ({
@@ -430,6 +430,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
         conta_bancaria_id: u.conta_bancaria_id_v2 || u.conta_bancaria_id,
         saldo_inicial:u.saldo_inicial, saldo_final:u.saldo_final,
         status_mes:u.status_mes, origem_saldo_inicial:u.origem_saldo_inicial,
+        saldo_data: posicaoPorId.get(u.id) ?? null,
       })));
 
     const allLanc: LancamentoResumo[] = [];
@@ -589,55 +590,13 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   const totalSaidasModal   = sumModal.sai;
 
   /* ── Handlers ── */
-  const handleEditSaldo = (anoMes: string, cId: string, current: number) => {
-    setEditingSaldo({anoMes, contaId:cId, current});
-    setEditValue(current.toFixed(2).replace('.',','));
-    setEditValueSaldoInicial('0,00');
+  /* A posição sai da linha já carregada — `saldo_data` entrou no `select` acima
+     desde que o types.ts foi regenerado, e o modal a recebe pronta. */
+  const handleEditSaldo = (anoMes: string, cId: string, current: number | null) => {
+    const linha = saldos.find(x => x.ano_mes === anoMes && x.conta_bancaria_id === cId);
+    setEditingSaldo({anoMes, contaId:cId, current, saldoData: linha?.saldo_data ?? null});
   };
 
-  const handleSaveSaldo = async () => {
-    if (savingSaldo) return;
-    if (!editingSaldo || !clienteId) return;
-    const parseMoedaBR = (value: string): number | null => {
-      const normalized = value.replace(/\./g, '').replace(',', '.').trim();
-      const parsed = Number(normalized);
-      return Number.isFinite(parsed) ? parsed : null;
-    };
-    // PR-FIX-SALDO-CHAIN — arredondamento na fonte (defesa): cobre update (saldo_final)
-    // e insert (saldo_final). r2 já existe neste arquivo. Banco também normaliza via trigger.
-    const val = r2(parseFloat(editValue.replace(/\./g,'').replace(',','.')));
-    if (isNaN(val)) { toast.error('Valor inválido'); return; }
-    setSavingSaldo(true);
-    try {
-      const existing = saldos.find(s => s.ano_mes===editingSaldo.anoMes && s.conta_bancaria_id===editingSaldo.contaId);
-      // Defesa: se o id começa com 'legacy:', não é uma row real do v2 — fazer INSERT.
-      const isV2Real = !!existing && !String(existing.id).startsWith('legacy:');
-      if (isV2Real) {
-        const {error} = await supabase.from('financeiro_saldos_bancarios_v2')
-          .update({saldo_final:val, updated_at:new Date().toISOString()}).eq('id',existing!.id);
-        if (error) { toast.error('Erro ao salvar'); return; }
-      } else {
-        // Saldo inicial vem de saldo_inicial_oficial do cadastro da conta — não editável aqui
-        const contaRef = contas.find(c => c.id === editingSaldo.contaId);
-        const saldoInicialOficial = contaRef?.saldo_inicial_oficial ?? 0;
-        const {data:cd} = await supabase.from('financeiro_contas_bancarias')
-          .select('fazenda_id').eq('id',editingSaldo.contaId).single();
-        if (!cd) { toast.error('Erro ao buscar fazenda'); return; }
-        const {error} = await supabase.from('financeiro_saldos_bancarios_v2').insert({
-          cliente_id:clienteId, fazenda_id:cd.fazenda_id,
-          conta_bancaria_id:editingSaldo.contaId, ano_mes:editingSaldo.anoMes,
-          saldo_inicial:saldoInicialOficial, saldo_final:val,
-          origem_saldo_inicial:'manual', status_mes:'aberto',
-        });
-        if (error) { toast.error('Erro ao criar saldo'); return; }
-      }
-      toast.success('Saldo do extrato atualizado');
-      setEditingSaldo(null);
-      loadData();
-    } finally {
-      setSavingSaldo(false);
-    }
-  };
 
   const canEditSaldoFinal = (anoMes: string): boolean => {
     if (isAdmin) return true;
@@ -1162,7 +1121,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                           isActive={selectedConta===s.conta.id}
                           isDimmed={selectedConta!=='__all__'&&selectedConta!==s.conta.id}
                           onClick={()=>setSelectedConta(s.conta.id)}
-                          onEdit={()=>handleEditSaldo(anoMesSel,s.conta.id,s.ext??0)}
+                          onEdit={()=>handleEditSaldo(anoMesSel,s.conta.id,s.ext)}
                           canEdit={canEditSaldoFinal(anoMesSel)}
                           showSaldoAlert={anoMesSel === s.conta.mes_inicio && s.conta.saldo_inicial_oficial === null} />
                       ))}
@@ -1176,7 +1135,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                           isActive={selectedConta===s.conta.id}
                           isDimmed={selectedConta!=='__all__'&&selectedConta!==s.conta.id}
                           onClick={()=>setSelectedConta(s.conta.id)}
-                          onEdit={()=>handleEditSaldo(anoMesSel,s.conta.id,s.ext??0)}
+                          onEdit={()=>handleEditSaldo(anoMesSel,s.conta.id,s.ext)}
                           canEdit={canEditSaldoFinal(anoMesSel)}
                           showSaldoAlert={anoMesSel === s.conta.mes_inicio && s.conta.saldo_inicial_oficial === null} />
                       ))}
@@ -1190,7 +1149,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                           isActive={selectedConta===s.conta.id}
                           isDimmed={selectedConta!=='__all__'&&selectedConta!==s.conta.id}
                           onClick={()=>setSelectedConta(s.conta.id)}
-                          onEdit={()=>handleEditSaldo(anoMesSel,s.conta.id,s.ext??0)}
+                          onEdit={()=>handleEditSaldo(anoMesSel,s.conta.id,s.ext)}
                           canEdit={canEditSaldoFinal(anoMesSel)}
                           showSaldoAlert={anoMesSel === s.conta.mes_inicio && s.conta.saldo_inicial_oficial === null} />
                       ))}
@@ -1344,40 +1303,25 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
         </DialogContent>
       </Dialog>
 
-      {/* ════ EDIT SALDO DIALOG ════ */}
-      <Dialog open={!!editingSaldo} onOpenChange={open=>!open&&setEditingSaldo(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="text-sm">Saldo Real no Extrato</DialogTitle>
-            <DialogDescription className="text-xs">
-              {editingSaldo?.anoMes} —{' '}
-              {editingSaldo?.contaId
-                ? getContaLabel(contas.find(c=>c.id===editingSaldo.contaId)||{id:'',nome_conta:editingSaldo.contaId,nome_exibicao:null,tipo_conta:null,codigo_conta:null})
-                : ''}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2">
-            {isInsertMode && (
-              <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2">
-                <p className="text-[11px] text-amber-700 font-medium">
-                  ⚠ Saldo inicial deve ser definido no Cadastro da Conta.
-                </p>
-                <p className="text-[11px] text-muted-foreground mt-1">
-                  Informe o saldo inicial oficial da conta neste primeiro registro.
-                </p>
-              </div>
-            )}
-            <label className="text-xs font-medium">Valor (R$)</label>
-            <Input value={editValue} onChange={e=>setEditValue(e.target.value)}
-              className="h-8 text-sm" placeholder="0,00" autoFocus
-              onKeyDown={e=>e.key==='Enter'&&handleSaveSaldo()} />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" size="sm" onClick={()=>setEditingSaldo(null)}>Cancelar</Button>
-            <Button size="sm" onClick={handleSaveSaldo} disabled={savingSaldo}>{savingSaldo ? 'Salvando...' : 'Salvar'}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* ⚠ UM MODAL SÓ — SALDO-POSICAO-01c. Aqui vivia um segundo diálogo de
+          saldo real, sem campo de data: dois lápis escreviam pedaços diferentes
+          da MESMA linha, e juntos montavam um saldo de 31/08 carimbado com a
+          posição de 13/08. Não era divergência de layout — era um dado composto
+          por duas telas que não se conheciam. O antigo morreu por substituição;
+          a história dele está no git. */}
+      {editingSaldo && clienteId && (
+        <SaldoRealDialog
+          clienteId={clienteId}
+          contaId={editingSaldo.contaId}
+          contaNome={getContaLabel(contas.find(c=>c.id===editingSaldo.contaId) || {id:'',nome_conta:editingSaldo.contaId,nome_exibicao:null,tipo_conta:null,codigo_conta:null})}
+          ano={Number(editingSaldo.anoMes.slice(0,4))}
+          mes={Number(editingSaldo.anoMes.slice(5,7))}
+          saldoAtual={editingSaldo.current}
+          saldoDataAtual={editingSaldo.saldoData}
+          aoFechar={()=>setEditingSaldo(null)}
+          aoSalvar={()=>{ loadData(); }}
+        />
+      )}
 
       <Dialog open={showPendencias} onOpenChange={setShowPendencias}>
         <DialogContent className="max-w-2xl">
