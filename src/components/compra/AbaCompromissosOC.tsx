@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { useOperacaoEstornoFinanceiro } from '@/hooks/useOperacaoEstornoFinanceiro';
 import type { OcCompromissosApi, CompromissoResumo, ParcelaMaterializacao, CriarCompromissoPayload, ProgramarParcelaInput } from '@/hooks/useOcCompromissos';
-import { classificarLotesCompra, SUBCENTRO_OBRIGACAO_COMPRA, CENTRO_CUSTO_COMPRA_BOVINOS, type LoteOC } from '@/hooks/useOperacaoLiquidacao';
+import { classificarLotesCompra, subcentroVendaPorCategoria, SUBCENTRO_OBRIGACAO_COMPRA, SUBCENTRO_DESPESA_VENDA, CENTRO_CUSTO_COMPRA_BOVINOS, type LoteOC } from '@/hooks/useOperacaoLiquidacao';
 import { usePlanoContasOC } from '@/hooks/usePlanoContasOC';
 import { useComponentesFinanceiros } from '@/hooks/useComponentesFinanceiros';
 import { useContasBancariasLeves } from '@/hooks/useContasBancariasLeves';
@@ -553,12 +553,37 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
   const rotuloCompromisso = (c: CompromissoResumo): string =>
     previsaoDe(c)?.rotulo ?? identidadeCompromisso(c) ?? componenteAdicional(c) ?? (c.natureza ?? '—');
 
+  /**
+   * O SUBCENTRO SUGERIDO — e ele depende do LADO da operação.
+   *
+   * ⚠ A VENDA VINHA RECEBENDO SUBCENTRO DE COMPRA. `classificarLotesCompra` era
+   * chamada sempre, sem olhar `tipoOperacao`: numa OC de venda o modal oferecia
+   * "Investimento em Bovinos" — saída, compra —, e o `oc_criar_compromisso`
+   * recusava, corretamente e sem saída para o operador. Medido no caso real
+   * (Agnaldo, venda de 55 adultos): zero linhas gravadas.
+   *
+   * ⚠ O MAPA DA VENDA JÁ EXISTIA, exportado e completo: `subcentroVendaPorCategoria`,
+   * com os dois eixos (sexo e faixa etária) que a compra não tem. Nasceu no
+   * PR-OC-VENDA-FIN-PREVISAO-01 e só a previsão do boitel o usava. O conserto é
+   * ligá-lo, não escrever um segundo mapa.
+   *
+   * ⚠ CATEGORIAS DIVERGENTES NÃO SUGEREM NADA, nos dois lados: um lote de machos e
+   * outro de fêmeas dão subcentros distintos, e escolher um classificaria metade
+   * da operação errado. Em branco o operador escolhe; sugerido errado ele não
+   * percebe.
+   */
   const sugestaoSubcentro = useMemo(() => {
+    if (tipoOperacao === 'venda') {
+      const subs = new Set(
+        lotes.map(l => subcentroVendaPorCategoria(l.categoria ?? ''))
+          .filter((x): x is string => !!x));
+      return subs.size === 1 ? Array.from(subs)[0] : '';
+    }
     const c = classificarLotesCompra(lotes);
     if (c.status !== 'ok') return '';
     const subs = new Set(c.itens.map(i => i.subcentro));
     return subs.size === 1 ? Array.from(subs)[0] : '';
-  }, [lotes]);
+  }, [lotes, tipoOperacao]);
 
   // Lotes prontos = há quantidade negociada carregada. Guarda contra criar compromisso PRINCIPAL
   // com o fallback "Compra principal" (lotes stale/vazios). Ver descricaoDefault + NovoCompromissoDialog.
@@ -1403,7 +1428,11 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
     if (natureza === 'principal') { setValor(valorAcordado); setSubcentro(sugestaoSubcentro); setFavorecidoId(contraparteId ?? ''); }
     /* Obrigacao da compra (frete, comissao, taxa de aquisicao) tem subcentro proprio
        e unico — sugerir e' melhor do que deixar em branco. Segue editavel. */
-    else { setValor(null); setSubcentro(tipoOperacao === 'compra' ? SUBCENTRO_OBRIGACAO_COMPRA : ''); setFavorecidoId(''); }
+    /* ⚠ OBRIGAÇÃO SEGUE SAÍDA NOS DOIS LADOS, e cada lado tem a sua linha: frete
+       e comissão de COMPRA têm subcentro próprio; na VENDA a única linha
+       cadastrada é a de impostos e despesas — não existe frete de venda no
+       plano, e usar o de compra classificaria despesa como investimento. */
+    else { setValor(null); setSubcentro(tipoOperacao === 'compra' ? SUBCENTRO_OBRIGACAO_COMPRA : tipoOperacao === 'venda' ? SUBCENTRO_DESPESA_VENDA : ''); setFavorecidoId(''); }
   }, [natureza, valorAcordado, sugestaoSubcentro, contraparteId, tipoOperacao]);
 
   /* ⚠ ITEM 3 — A GUARDA LIA O REF DEPOIS DE ELE JA TER MUDADO. O padrao antigo era
