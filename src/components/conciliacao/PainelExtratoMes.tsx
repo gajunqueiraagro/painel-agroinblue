@@ -212,10 +212,10 @@ export function PainelExtratoMes({ clienteId, contaId, ano, mes, contaNome, comP
           <Chip rotulo="sem vínculo" n={contagem.sem_vinculo} ativo={balde === 'nao_conciliado'}
             onClick={() => setBalde('nao_conciliado')} cor="bg-destructive/10 text-destructive" />
           <span className="mx-1 h-4 w-px bg-border" />
-          {/* ⚠ SOB DEMANDA — a medição mandou: o motor roda uma vez por movimento
-              (~91 ms cada, EXPLAIN ANALYZE), e calcular a cada abertura faria a
-              tela parecer travada para quem só queria ver a lista. O botão diz
-              por quê; até ser apertado, os três ficam AUSENTES, não zerados. */}
+          {/* ⚠ SOB DEMANDA — a medição mandou: o motor roda uma vez por movimento,
+              e calcular a cada abertura faria a tela parecer travada para quem só
+              queria ver a lista. O botão diz por quê; até ser apertado, os três
+              ficam AUSENTES, não zerados. */}
           {contagem.match_direto == null ? (
             <Button type="button" variant="outline" size="sm" className="h-5 gap-1 px-2 text-[10px]"
               disabled={sug.carregando || movimentos.length === 0}

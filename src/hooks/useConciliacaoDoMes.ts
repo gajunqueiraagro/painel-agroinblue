@@ -264,12 +264,22 @@ export interface SugestaoDoMes {
 /**
  * AS SUGESTÕES DO MÊS — `fn_sugestoes_extrato`, o motor portado.
  *
- * ⚠ SOB DEMANDA, E A MEDIÇÃO É QUE DECIDIU. A função chama o motor de
- * candidatos por LATERAL uma vez POR MOVIMENTO, e cada chamada
- * custa ~91 ms medidos no Proto (EXPLAIN ANALYZE, agosto/2026): 31 movimentos já
- * dão ~2,8 s, 58 dão ~5,3 s no banco — e mais que isso pelo canal. Carregar
- * automático ao abrir o mês faria a tela parecer travada toda vez que alguém só
- * queria ver a lista.
+ * ⚠ SOB DEMANDA, E A MEDIÇÃO É QUE DECIDIU. A função chama o motor de candidatos
+ * por LATERAL uma vez POR MOVIMENTO, e o custo cresce com o tamanho do mês.
+ * Carregar automático ao abrir faria a tela parecer travada toda vez que alguém
+ * só queria ver a lista.
+ *
+ * ⚠ O NÚMERO QUE ESTAVA ESCRITO AQUI ERA FALSO — "~91 ms por movimento, EXPLAIN
+ * ANALYZE", com a autoridade do plano ao lado. Ele foi medido num mês pequeno e
+ * citado depois como evidência de que o caminho escalava. A remedição de 01/09
+ * deu ~6-8 s por movimento, e um mês de 190 movimentos simplesmente estourava em
+ * timeout. Fica registrado porque a lição não é o número: é que um número errado
+ * num comentário é pior que nenhum, porque vira argumento.
+ *
+ * ⚠ CORRIGIDO em 01/09, e não pela tela: índice em `transferencia_grupo_id`
+ * (`idx_lanc_transf_grupo`, parcial) mais a janela de ±60 dias no WHERE de
+ * `fn_candidatos_conciliacao` — os 190 movimentos passaram a responder em ~3,7 s.
+ * O "sob demanda" continua por decisão de UX, não mais por impossibilidade.
  *
  * ⚠ O GARGALO NÃO É O QUE PARECIA. Medido no plano: 92% do tempo está num
  * `Bitmap Index Scan` sobre `idx_fin_lanc_v2_cliente` (30.460 linhas, 83,5 ms),
@@ -321,11 +331,12 @@ export function useSugestoesDoMes(
 /**
  * OS CANDIDATOS DE UM MOVIMENTO — `fn_candidatos_conciliacao`, o motor do trio.
  *
- * ⚠ UM MOVIMENTO, UMA CHAMADA. É a mesma função que `fn_sugestoes_extrato`
- * roda por LATERAL para o mês inteiro, e é dali que vêm os ~91 ms por
- * movimento: para UM, o custo é o de abrir um diálogo; para 58, são os ~5,3 s
- * que mantêm o placar sob demanda. Por isso a estação chama direto a função de
- * um só e NUNCA a do mês — abrir um movimento não pode custar o extrato todo.
+ * ⚠ UM MOVIMENTO, UMA CHAMADA. É a mesma função que `fn_sugestoes_extrato` roda
+ * por LATERAL para o mês inteiro: para UM, o custo é o de abrir um diálogo; para
+ * o mês, é a soma de todos. Por isso a estação chama direto a função de um só e
+ * NUNCA a do mês — abrir um movimento não pode custar o extrato todo. (O custo
+ * por movimento caiu para ~3,7 s no mês de 190 após a correção de 01/09; o
+ * número de ~91 ms que constava aqui era ilusão de mês pequeno.)
  *
  * ⚠ A FUNÇÃO RECEBE SÓ O ID, e é assim que o original a usa: conta, data e
  * valor ela lê do próprio movimento. Reenviar daqui o que o banco já tem abriria

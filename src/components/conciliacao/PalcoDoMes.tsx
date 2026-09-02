@@ -33,11 +33,14 @@ import { VincularMatchDireto } from '@/components/conciliacao/VincularMatchDiret
  * lista tem o card do mês, que não paga esse preço.
  *
  * ⚠ OS "~91 ms POR MOVIMENTO" QUE ESTAVAM ESCRITOS AQUI ERAM ILUSÃO DE MÊS
- * PEQUENO. A medição refeita deu ~6 s por movimento: 190 movimentos = timeout,
- * não os ~5,3 s que este comentário prometia. A reescrita set-based do motor é o
- * CONCIL-MOTOR-PERF-01, P0, fora desta tela. Fica registrado porque um número
- * errado num comentário é pior que nenhum: ele foi citado como evidência de que
- * o caminho escalava.
+ * PEQUENO — a remedição deu ~6-8 s por movimento, e 190 movimentos estouravam em
+ * timeout. Fica registrado porque um número errado num comentário é pior que
+ * nenhum: este foi citado como evidência de que o caminho escalava.
+ *
+ * ⚠ E JÁ FOI CORRIGIDO, em 01/09 — não pela reescrita set-based que se supunha
+ * necessária, mas por índice em `transferencia_grupo_id` mais a janela de ±60
+ * dias no WHERE de `fn_candidatos_conciliacao`: o mês de 190 responde em ~3,7 s.
+ * O diagnóstico "precisa ser set-based" também era do número errado.
  *
  * ⚠ ESTADO AUSENTE ≠ SEM MATCH. Enquanto o motor não respondeu, a linha não
  * afirma estado nenhum — mostra a situação do VÍNCULO, que é fato do banco.
