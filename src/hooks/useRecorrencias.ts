@@ -158,8 +158,7 @@ export function useRecorrencias() {
     if (!clienteId) { setRecorrencias([]); return; }
     setLoading(true);
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado
-      const { data } = await (supabase as any)
+      const { data } = await supabase
         .from('financeiro_recorrencias')
         .select('*, financeiro_fornecedores(nome)')
         .eq('cliente_id', clienteId)
@@ -170,8 +169,7 @@ export function useRecorrencias() {
 
       /* ⚠ UMA CONSULTA PARA O CONJUNTO, nunca uma por regra: a contagem do que
          cada uma gerou vem em lote pelos ids já carregados. */
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado
-      const { data: gerados } = await (supabase as any)
+      const { data: gerados } = await supabase
         .from('financeiro_lancamentos_v2')
         .select('recorrencia_id')
         .in('recorrencia_id', rows.map(r => r.id))

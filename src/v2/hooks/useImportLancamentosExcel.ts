@@ -148,11 +148,10 @@ export function useImportLancamentosExcel() {
     if (!clienteId) return;
     let cancelado = false;
     void Promise.all([
-      // financeiro_subcentro_aliases NÃO está nos types gerados (types.ts defasado).
-      // Idioma do repositório para relação sem tipo — o mesmo do FinV2SubcentroAliasesTab,
-      // dono desta tabela, e de outros 80 pontos. Cast confinado a esta linha.
-      // ⚠ Ver relatório: a exceção zero-cast do CLAUDE.md cita `.rpc`, não `.from`.
-      (supabase as any)
+      /* ⚠ SEM CAST desde a regeneração do types.ts (02/09): a tabela entrou no
+         tipo gerado, e o `as any` que existia só para contorná-la morreu com o
+         motivo. */
+      supabase
         .from('financeiro_subcentro_aliases')
         .select('id, cliente_id, alias_text, plano_conta_id')
         .eq('ativo', true),

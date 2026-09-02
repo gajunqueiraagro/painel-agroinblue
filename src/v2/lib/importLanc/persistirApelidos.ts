@@ -76,13 +76,13 @@ async function persistirSubcentro(
     try {
       if (existenteId) {
         // Conflito: o texto já era apelido de outro subcentro. Repontar, não duplicar.
-        const { error } = await (supabase as any)
+        const { error } = await supabase
           .from('financeiro_subcentro_aliases')
           .update({ plano_conta_id: planoContaId, ativo: true, updated_at: new Date().toISOString() })
           .eq('id', existenteId);
         if (error) throw error;
       } else {
-        const { data, error } = await (supabase as any)
+        const { data, error } = await supabase
           .from('financeiro_subcentro_aliases')
           .insert({
             cliente_id: clienteId,
@@ -143,7 +143,7 @@ async function persistirJsonb(
 
     for (const id of gravar) {
       try {
-        const { error } = await (supabase as any)
+        const { error } = await supabase
           .from(tabela)
           .update({ aliases: estado[id] })
           .eq('id', id);
