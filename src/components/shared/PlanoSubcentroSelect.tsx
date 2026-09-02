@@ -4,7 +4,7 @@
 // a partir do plano) sai via `onSelected(subcentro, cls)`. A BUSCA é CONTROLADA porque
 // o caller (LancamentoV2Dialog) reseta a busca ao trocar tipo_operacao. `value`/`onChange`
 // = o campo subcentro. Consumido pelo LancamentoV2Dialog e (PR-U2c-2) pela Mesa.
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -45,20 +45,53 @@ export function PlanoSubcentroSelect({
     return m;
   }, [classificacoes]);
 
+  /**
+   * B-40 item 2 — MOSTRAR TODOS, quando o operador pede.
+   *
+   * ⚠ O FILTRO POR TIPO É CERTO E SILENCIOSO, e essa é a combinação ruim.
+   * Buscar "bene" numa linha de Saída acha Benefícios; na mesma busca numa
+   * linha de Entrada, o resultado é "Nenhum subcentro encontrado" — que é
+   * FALSO: o subcentro existe, está do outro lado da árvore. O operador
+   * concluía que o cadastro não tinha o item e ia procurá-lo em outro lugar.
+   *
+   * Estado de UI, por abertura: some ao fechar, e escolher um item do outro
+   * lado avisa da divergência antes de gravar.
+   */
+  const [mostrarTodos, setMostrarTodos] = useState(false);
+  useEffect(() => { if (!open) setMostrarTodos(false); }, [open]);
+
+  const combinaTipo = (c: ClassificacaoItem) => {
+    if (!tipoOperacao) return true;
+    // Flexible match: DB may store "3-Transferências" while UI uses "3-Transferência"
+    if (tipoOperacao.startsWith('3-')) return c.tipo_operacao.startsWith('3-');
+    return c.tipo_operacao === tipoOperacao;
+  };
+
   /** Subcentros filtered by tipo_operacao then by search text.
    *  Uses the selected tipoOperacao directly – each type has its own subtree. */
   const filtered = useMemo(() => {
     const unique = Array.from(classMap.values());
-    const byTipo = unique.filter(c => {
-      if (!tipoOperacao) return true;
-      // Flexible match: DB may store "3-Transferências" while UI uses "3-Transferência"
-      if (tipoOperacao.startsWith('3-')) return c.tipo_operacao.startsWith('3-');
-      return c.tipo_operacao === tipoOperacao;
-    });
+    const byTipo = mostrarTodos ? unique : unique.filter(combinaTipo);
     if (!search.trim()) return byTipo;
     const term = search.toLowerCase();
     return byTipo.filter(c => c.subcentro.toLowerCase().includes(term));
-  }, [classMap, search, tipoOperacao]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [classMap, search, tipoOperacao, mostrarTodos]);
+
+  /**
+   * Quantos a busca ACHOU do outro lado da árvore, e que o filtro escondeu.
+   *
+   * ⚠ CONTA SOBRE A BUSCA, não sobre o cadastro inteiro: "312 ocultos" seria
+   * ruído permanente; "2 ocultos" depois de digitar "bene" é a resposta à
+   * pergunta que o operador acabou de fazer.
+   */
+  const ocultosPorTipo = useMemo(() => {
+    if (mostrarTodos || !tipoOperacao) return 0;
+    const term = search.trim().toLowerCase();
+    return Array.from(classMap.values()).filter(c =>
+      !combinaTipo(c) && (!term || c.subcentro.toLowerCase().includes(term))).length;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [classMap, search, tipoOperacao, mostrarTodos]);
 
   const handleSelect = (sub: string) => {
     onChange(sub);
@@ -120,7 +153,32 @@ export function PlanoSubcentroSelect({
             />
           </div>
           <div className="max-h-48 overflow-y-auto p-1">
-            {filtered.length === 0 && <p className="p-2 text-center text-sm text-zinc-400">Nenhum subcentro encontrado</p>}
+            {/* ⚠ "NENHUM ENCONTRADO" SÓ QUANDO NÃO HÁ MESMO. Havendo do outro
+                lado, a mensagem diz quantos e oferece a porta — dizer "nenhum"
+                com dois escondidos é a tela mentindo sobre o próprio cadastro. */}
+            {filtered.length === 0 && ocultosPorTipo === 0 && (
+              <p className="p-2 text-center text-sm text-zinc-400">Nenhum subcentro encontrado</p>
+            )}
+            {ocultosPorTipo > 0 && (
+              <p className="px-2 py-1.5 text-center text-[11px] leading-snug text-zinc-400">
+                {filtered.length === 0 ? 'Nada aqui — ' : ''}
+                {ocultosPorTipo} do outro lado {ocultosPorTipo === 1 ? 'oculto' : 'ocultos'}
+                {' '}(a lista mostra só o tipo desta linha).{' '}
+                <button type="button" className="underline hover:text-zinc-100"
+                  onClick={() => setMostrarTodos(true)}>
+                  mostrar todos
+                </button>
+              </p>
+            )}
+            {mostrarTodos && (
+              /* ⚠ O AVISO DA DIVERGÊNCIA VEM ANTES DA ESCOLHA. Escolher um
+                  subcentro de outro tipo é legítimo — o cadastro pode estar do
+                  lado errado —, mas precisa ser decisão, não descuido. */
+              <p className="px-2 py-1 text-center text-[10px] leading-snug text-amber-500">
+                Mostrando todos os tipos. Escolher um de tipo diferente do da linha classifica
+                fora da árvore esperada.
+              </p>
+            )}
             {filtered.map((sc, idx) => (
               <button
                 key={sc.subcentro || idx}

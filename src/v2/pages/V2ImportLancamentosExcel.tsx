@@ -66,6 +66,7 @@ export function V2ImportLancamentosExcel({
     arquivo, parse, dePara, previa, pendentes, lendo, erro,
     exigeFazendaCabecalho, fazendaCabecalhoId, setFazendaCabecalhoId,
     lerArquivo, resolverManualmente, alternarDescarte, alternarReinclusao, checandoDup, limpar,
+    alternarSemClassificacao, limparSelecao, esquecerApelido, aliasIdPorTexto,
     confirmarImportacao, gravando, resultado,
   } = useImportLancamentosExcel();
   const [confirmando, setConfirmando] = useState(false);
@@ -91,10 +92,23 @@ export function V2ImportLancamentosExcel({
   // '__global__' é sentinela de contexto, NUNCA uma fazenda — não entra na lista.
   const faltaFazendaCabecalho = exigeFazendaCabecalho && !fazendaCabecalhoId;
 
+  /* ⚠ B-40 item 1b — PENDÊNCIA DE DE-PARA DEIXOU DE SER BLOQUEIO. Ela era, e o
+     custo foi medido: nove valores sem mapeamento seguravam 409 linhas prontas.
+     Uma pendência não impede as OUTRAS linhas de existirem — ela só decide o que
+     acontece com as linhas daquele valor, e a prévia já as mostra fora. O botão
+     agora confirma o que está resolvido e DIZ quantas ficam para trás. */
   const bloqueios: string[] = [];
-  if (pendentes && pendentes.total > 0) bloqueios.push(`${pendentes.total} valor(es) do de-para ainda sem resolução`);
   if (faltaFazendaCabecalho) bloqueios.push('a planilha não traz Fazenda — escolha uma no cabeçalho');
   if (previa && previa.totais.entram.qtd === 0) bloqueios.push('nenhuma linha elegível para importar');
+
+  /* Linhas que ficam de fora POR CAUSA de de-para pendente — o número que o
+     botão promete deixar para trás. Os outros motivos (mês fechado, duplicata)
+     não são resolvíveis mapeando, e por isso não entram nesta conta. */
+  const linhasPendentes = previa
+    ? previa.totais.porMotivo
+        .filter((m) => m.motivo === 'subcentro_nao_resolvido' || m.motivo === 'fazenda_nao_resolvida')
+        .reduce((acc, m) => acc + m.qtd, 0)
+    : 0;
 
   return (
     // PR-IMPORT-EXCEL-LANC-06 — conteúdo limitado (~70% num monitor grande) e ALINHADO
@@ -229,12 +243,26 @@ export function V2ImportLancamentosExcel({
         <div className="space-y-1.5">
           <div className="flex items-baseline justify-between">
             <span className="text-[11px] font-semibold">De-para</span>
-            <span className={`text-[10px] font-semibold ${pendentes.total > 0 ? 'text-red-700' : 'text-emerald-700'}`}>
+            {/* ⚠ AVISO, NÃO TRAVA — B-40 item 1b. O contador segue à vista porque
+                a informação importa; o que mudou é que ele não segura mais o
+                botão. Âmbar e não vermelho: vermelho promete impedimento. */}
+            <span className={`text-[10px] font-semibold ${pendentes.total > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>
               {pendentes.total > 0
-                ? `${pendentes.total} valor(es) a resolver`
+                ? `${pendentes.total} valor(es) a resolver — as demais linhas entram assim mesmo`
                 : 'todos os valores resolvidos'}
             </span>
           </div>
+
+          {/* ⚠ A ORIENTAÇÃO NO TOPO — B-40 item 6. O de-para parece um formulário
+              a preencher inteiro; ele é uma pergunta que se responde UMA vez por
+              valor e fica memorizada. Sem isto escrito, o operador não sabe nem
+              que a memória existe, nem que a célula vazia é uma resposta
+              legítima — e trata cada linha como obrigação. */}
+          <p className="rounded border border-border bg-muted/30 px-2 py-1 text-[10px] leading-snug text-muted-foreground">
+            O de-para pergunta uma vez por <b>conta do plano</b> do arquivo e memoriza para os
+            próximos. Linha sem conta: deixe a célula vazia — entra sem classificação e você resolve
+            na tela.
+          </p>
 
           {/* PR-IMPORT-EXCEL-LANC-05 — blocos EMPILHADOS, cada um em largura total.
               Na grade 2x2 anterior cada bloco recebia metade da tela e todo texto
@@ -250,6 +278,10 @@ export function V2ImportLancamentosExcel({
                 pendentes={pendentes.subcentro}
                 tipoPorTexto={tipoPorTexto}
                 classificacoes={classificacoes}
+                onSemClassificacao={alternarSemClassificacao}
+                onLimparSelecao={limparSelecao}
+                onEsquecerApelido={esquecerApelido}
+                temApelido={aliasIdPorTexto}
                 onResolver={resolverManualmente}
                 onDescartar={alternarDescarte}
               />
@@ -346,9 +378,19 @@ export function V2ImportLancamentosExcel({
             <Button
               size="sm"
               disabled={bloqueios.length > 0 || gravando || resultado !== null}
+              title={bloqueios[0] ?? (linhasPendentes > 0
+                ? `Importa as ${previa.totais.entram.qtd} linhas resolvidas. As ${linhasPendentes} pendentes continuam aqui — mapeie o valor, ou use "sem classificação" para elas entrarem cruas.`
+                : undefined)}
               onClick={() => setConfirmando(true)}
             >
-              {gravando ? 'Gravando…' : `Confirmar importação (${previa.totais.entram.qtd})`}
+              {gravando
+                ? 'Gravando…'
+                : linhasPendentes > 0
+                  /* O botão diz o que faz E o que deixa para trás, no próprio
+                     rótulo: confirmar sem saber quantas ficam de fora é o que
+                     fazia o operador descobrir a perda depois. */
+                  ? `Confirmar (${previa.totais.entram.qtd}) — ${linhasPendentes} linhas pendentes ficam de fora`
+                  : `Confirmar importação (${previa.totais.entram.qtd})`}
             </Button>
           </div>
         </div>

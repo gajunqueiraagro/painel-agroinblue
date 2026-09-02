@@ -17,6 +17,7 @@ import type { ClassificacaoItem, FornecedorV2, ContaBancariaV2 } from '@/hooks/u
 import type { Fazenda } from '@/contexts/FazendaContext';
 import type { DeParaItem, DeParaMap } from '@/v2/lib/importLanc/importLancamentosView';
 import type { CampoDePara } from '@/v2/hooks/useImportLancamentosExcel';
+import { normalizar as normalizarChave } from '@/v2/lib/importLanc/importLancamentosView';
 
 const SELO: Record<DeParaItem['origem'], { label: string; cls: string }> = {
   alias:    { label: 'apelido',  cls: 'bg-emerald-100 text-emerald-700' },
@@ -27,6 +28,8 @@ const SELO: Record<DeParaItem['origem'], { label: string; cls: string }> = {
 
 /** Terceira saída: o texto existe na planilha e não corresponde a nada no sistema. */
 const SELO_DESCARTADO = { label: 'descartado', cls: 'bg-slate-200 text-slate-600' };
+/** Quarta saída (B-40): as linhas entram CRUAS, para classificar na tela. */
+const SELO_SEM_CLASS = { label: 'sem classif.', cls: 'bg-indigo-100 text-indigo-700' };
 
 export interface ImportLancDeParaPanelProps {
   titulo: string;
@@ -43,6 +46,14 @@ export interface ImportLancDeParaPanelProps {
   safras?: { id: string; nome: string }[];
   onResolver: (campo: CampoDePara, texto: string, valor: string | null, rotulo: string | null) => void;
   onDescartar: (campo: CampoDePara, texto: string) => void;
+  /** B-40 item 1a — só o painel de subcentro oferece. */
+  onSemClassificacao?: (campo: CampoDePara, texto: string) => void;
+  /** B-40 item 3 — desfazer a escolha, sem descartar o valor. */
+  onLimparSelecao?: (campo: CampoDePara, texto: string) => void;
+  /** B-40 item 3 — apagar o apelido memorizado deste texto. */
+  onEsquecerApelido?: (texto: string) => void | Promise<unknown>;
+  /** Textos que JÁ têm apelido gravado — só neles "esquecer" faz sentido. */
+  temApelido?: Readonly<Record<string, string>>;
   onCriarFornecedor?: (nome: string, fazendaId: string | null, cpfCnpj?: string) => Promise<FornecedorV2 | null>;
 }
 
@@ -50,6 +61,7 @@ export function ImportLancDeParaPanel({
   titulo, campo, mapa, pendentes, tipoPorTexto,
   classificacoes, fazendas, fornecedores, contas, safras,
   onResolver, onDescartar, onCriarFornecedor,
+  onSemClassificacao, onLimparSelecao, onEsquecerApelido, temApelido,
 }: ImportLancDeParaPanelProps) {
   const [busca, setBusca] = useState<Record<string, string>>({});
   const [novoFornecedorPara, setNovoFornecedorPara] = useState<string | null>(null);
@@ -102,14 +114,17 @@ export function ImportLancDeParaPanel({
            contexto do arquivo. */
         <div className="divide-y divide-border/40">
           {itens.map((it) => {
-            const selo = it.descartado ? SELO_DESCARTADO : SELO[it.origem];
+            const selo = it.descartado ? SELO_DESCARTADO
+              : it.semClassificacao ? SELO_SEM_CLASS
+              : SELO[it.origem];
+            const inerte = !!it.descartado || !!it.semClassificacao;
             return (
               // Colunas com TETO em vez de fração pura: valor e seletor ficam lado a
               // lado e param de esticar. A 6ª trilha não tem filho — existe só para
               // absorver a folga, que assim sobra à DIREITA e nunca no meio da linha,
               // separando o valor do seu próprio estado.
-              <div key={it.texto} className={`px-2 py-0.5 grid gap-2 items-center ${it.descartado ? 'opacity-55' : ''}`}
-                   style={{ gridTemplateColumns: 'minmax(0,26rem) minmax(0,17rem) 40px 20px 92px 1fr' }}>
+              <div key={it.texto} className={`px-2 py-0.5 grid gap-2 items-center ${inerte ? 'opacity-55' : ''}`}
+                   style={{ gridTemplateColumns: 'minmax(0,26rem) minmax(0,17rem) 40px 68px 92px 1fr' }}>
                 {/* Valor de origem: QUEBRA em vez de truncar. Com a largura toda, o
                     texto do cliente cabe — e é ele que o operador precisa ler para
                     decidir o mapeamento. */}
@@ -129,14 +144,14 @@ export function ImportLancDeParaPanel({
                       triggerClassName="h-5 text-[9px] px-1.5"
                       contentClassName="w-[22rem]"
                       itemClassName="text-[10px] py-0.5"
-                      disabled={it.descartado}
+                      disabled={inerte}
                     />
                   )}
 
                   {campo === 'fazenda' && fazendas && (
                     <Select
                       value={it.valor ?? ''}
-                      disabled={it.descartado}
+                      disabled={inerte}
                       onValueChange={(id) => {
                         const f = fazendas.find((x) => x.id === id);
                         onResolver(campo, it.texto, id || null, f?.nome ?? null);
@@ -166,7 +181,7 @@ export function ImportLancDeParaPanel({
                       onCriarNovo={() => setNovoFornecedorPara(it.texto)}
                       triggerClassName="h-5 text-[9px] px-1.5"
                       novoButtonClassName="h-5 w-5"
-                      disabled={it.descartado}
+                      disabled={inerte}
                     />
                   )}
 
@@ -177,7 +192,7 @@ export function ImportLancDeParaPanel({
                     <select
                       className="h-5 w-full rounded border border-border bg-background px-1 text-[9px]"
                       value={it.valor ?? ''}
-                      disabled={it.descartado}
+                      disabled={inerte}
                       onChange={(e) => {
                         const sf = safras.find((x) => x.id === e.target.value);
                         onResolver(campo, it.texto, e.target.value || null, sf?.nome ?? null);
@@ -199,23 +214,70 @@ export function ImportLancDeParaPanel({
                       contas={contas}
                       placeholder="Escolher conta"
                       className="h-5 text-[9px]"
-                      disabled={it.descartado}
+                      disabled={inerte}
                     />
                   )}
                 </div>
 
                 <span className="text-[9px] text-muted-foreground tabular-nums text-right">{it.qtd}×</span>
 
-                <button
-                  type="button"
-                  onClick={() => onDescartar(campo, it.texto)}
-                  className="text-[11px] leading-none text-muted-foreground hover:text-foreground"
-                  title={it.descartado
-                    ? 'Restaurar: volta a exigir mapeamento.'
-                    : 'Descartar: este texto não corresponde a nada no sistema. Sai das pendências e não vira apelido.'}
-                >
-                  {it.descartado ? '↺' : '⊘'}
-                </button>
+                {/* ⚠ AS SAÍDAS POR VALOR, e cada botão diz o que faz com as
+                    LINHAS daquele valor — que é a pergunta do operador. As três
+                    são distintas de propósito: descartar joga as linhas fora,
+                    "sem classificação" as faz entrar cruas, e limpar só desfaz a
+                    escolha. Antes só existia a primeira, e ela levava junto tudo
+                    o que dependia daquele valor. */}
+                <div className="flex items-center justify-end gap-0.5">
+                  {campo === 'subcentro' && onSemClassificacao && (
+                    <button
+                      type="button"
+                      onClick={() => onSemClassificacao(campo, it.texto)}
+                      className={`text-[11px] leading-none ${it.semClassificacao ? 'text-indigo-700' : 'text-muted-foreground hover:text-foreground'}`}
+                      title={it.semClassificacao
+                        ? 'Voltar a exigir mapeamento para este valor.'
+                        : `Importar sem classificação: as ${it.qtd} linha(s) deste valor entram cruas, sem subcentro, para você classificar na tela. Não vira apelido.`}
+                    >
+                      {it.semClassificacao ? '↺' : '⊙'}
+                    </button>
+                  )}
+
+                  {/* Limpar só aparece quando há o que desfazer. */}
+                  {onLimparSelecao && it.valor !== null && (
+                    <button
+                      type="button"
+                      onClick={() => onLimparSelecao(campo, it.texto)}
+                      className="text-[11px] leading-none text-muted-foreground hover:text-foreground"
+                      title="Limpar a escolha: volta a &quot;Selecione…&quot;, sem descartar o valor."
+                    >
+                      ✕
+                    </button>
+                  )}
+
+                  {/* ⚠ ESQUECER É OUTRA COISA, e só existe onde há apelido
+                      gravado: limpar a escolha não impede o texto de voltar
+                      pré-resolvido no mês que vem. */}
+                  {campo === 'subcentro' && onEsquecerApelido && temApelido?.[normalizarChave(it.texto)] && (
+                    <button
+                      type="button"
+                      onClick={() => { void onEsquecerApelido(it.texto); }}
+                      className="text-[11px] leading-none text-muted-foreground hover:text-destructive"
+                      title="Esquecer o apelido memorizado deste texto. Ele deixa de vir preenchido nas próximas importações. Nada já lançado é reclassificado."
+                    >
+                      ⌫
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => onDescartar(campo, it.texto)}
+                    className="text-[11px] leading-none text-muted-foreground hover:text-foreground"
+                    title={it.descartado
+                      ? 'Restaurar: volta a exigir mapeamento.'
+                      : 'Descartar: este texto não corresponde a nada no sistema. As linhas dele ficam FORA da importação. Não vira apelido.'}
+                  >
+                    {it.descartado ? '↺' : '⊘'}
+                  </button>
+                </div>
 
                 <div className="flex flex-col items-end gap-px">
                   <span className={`text-[8px] px-1 rounded font-semibold ${selo.cls}`}>

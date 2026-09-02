@@ -42,7 +42,12 @@ const COLUNAS: ColunaModelo[] = [
   col(COL_COMPETENCIA,    true,  ['01/07/2026', '05/07/2026', '12/07/2026'], 18),
   col(COL_VALOR,          true,  ['1.250,00', '380,90', '2.100,00'], 12),
   col(COL_TIPO,           true,  [TIPO_SAIDAS, TIPO_SAIDAS, TIPO_ENTRADAS], 18),
-  col(COL_CONTA_PLANO,    true,  ['COMBUSTIVEL', 'MANUTENCAO DE MAQUINAS', 'VENDA DE BOI GORDO'], 28),
+  /* ⚠ OPCIONAL DESDE O B-40, e o contrato mudou junto com o comportamento: a
+     célula em branco passou a ser uma resposta legítima — a linha entra sem
+     classificação, para o operador resolver na tela. Enquanto ela era
+     obrigatória aqui, o modelo prometia uma trava que a tela agora não tem, e
+     um modelo que promete o contrário do sistema é pior que a trava. */
+  col(COL_CONTA_PLANO,    false, ['COMBUSTIVEL', 'MANUTENCAO DE MAQUINAS', ''], 28),
   col(COL_FAZENDA,        true,  ['SR', 'SR', 'BR'], 12),
   col(COL_FORNECEDOR,     true,  ['POSTO IPIRANGA', 'OFICINA DO ZE', 'FRIGORIFICO XYZ'], 24),
   col(COL_CONTA_BANCARIA, true,  ['Cartão Itaú', 'Cartão Itaú', 'Banco do Brasil'], 20),
@@ -145,7 +150,9 @@ function blocosInstrucoes(): Bloco[] {
       'Exemplos corretos: COMBUSTIVEL · MANUTENCAO DE MAQUINAS · VENDA DE BOI GORDO.',
       'Exemplos ERRADOS (isto é conta bancária, vai na coluna "Conta bancária"): cc-001 | bradesco · Itaú Ag. 8541.',
       'Cada valor distinto desta coluna você mapeia uma vez para um subcentro AGROinBLUE.',
-      'O apelido fica memorizado: na próxima importação já vem preenchido.',
+      'O apelido fica memorizado NA HORA em que você mapeia: na próxima importação já vem preenchido.',
+      'NÃO SABE A CONTA? Deixe a célula VAZIA. A linha entra sem classificação e você resolve na tela.',
+      'Na tela você também pode marcar um valor inteiro como "importar sem classificação".',
     ],
     [`${nome(COLUNAS[0])} — DECIDE O MÊS`,
       'A competência define em que mês o lançamento entra, e é ela que é testada contra mês fechado.',
@@ -178,7 +185,7 @@ function blocosInstrucoes(): Bloco[] {
       '1. Transferência — não é criada por esta importação.',
       '2. Fazenda não resolvida — o valor da coluna Fazenda não foi mapeado.',
       '3. Mês fechado — a competência cai em mês já fechado PARA AQUELA FAZENDA.',
-      '4. Conta do plano não mapeada — falta escolher o subcentro daquele valor.',
+      '4. Conta em branco ou não mapeada — entra SEM classificação, para classificar na tela.',
       'A linha problemática fica de fora; as demais entram normalmente. A prévia mostra tudo antes.',
     ],
     ['O QUE ESTA IMPORTAÇÃO NÃO FAZ',

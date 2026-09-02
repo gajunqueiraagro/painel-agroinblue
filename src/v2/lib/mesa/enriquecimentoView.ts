@@ -258,11 +258,15 @@ export function filtrarPorModo(rows: EnriqRowVM[], modo: 'pendentes' | 'todas', 
 
 export function escolherMelhorSessaoId(sessoes: SessaoClassificacaoResumo[] | undefined | null): string | null {
   if (!sessoes || sessoes.length === 0) return null;
-  const ordenadas = [...sessoes].sort((a, b) => {
-    const ua = a.exatos + a.ambiguos, ub = b.exatos + b.ambiguos;
-    if (ub !== ua) return ub - ua;
-    return b.criada_em.localeCompare(a.criada_em);
-  });
-  const melhor = ordenadas[0];
-  return melhor && (melhor.exatos + melhor.ambiguos) > 0 ? melhor.sessao_id : null;
+  /* ⚠ RECÊNCIA, NUNCA VOLUME — B-40 item 5, e a troca foi medida.
+     A regra anterior ordenava por `exatos + ambiguos`, isto é, por quantidade de
+     trabalho pendente, e só desempatava por data. No NJ isso abria a sessão de
+     Mai/2026 (340 pendentes, de 17/06) em vez da de Jul/2026 (82, de 18/08): a
+     tela do dia começava num arquivo de três meses atrás, e o operador nem sabia
+     por quê. São 166 sessões acumuladas — a chance de a mais volumosa ser a
+     atual só diminui com o tempo.
+     ⚠ E O TRABALHO PENDENTE NÃO SUMIU: as antigas seguem no seletor, acessíveis.
+     O que mudou é que nenhuma delas se impõe sozinha na abertura. */
+  const ordenadas = [...sessoes].sort((a, b) => b.criada_em.localeCompare(a.criada_em));
+  return ordenadas[0]?.sessao_id ?? null;
 }

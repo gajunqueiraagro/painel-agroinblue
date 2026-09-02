@@ -70,6 +70,21 @@ export interface DeParaItem<TValor = string> {
    * subcentro, é impossível: plano_conta_id é NOT NULL.
    */
   descartado?: boolean;
+  /**
+   * B-40 — QUARTA SAÍDA, e só faz sentido no subcentro: as linhas deste valor
+   * entram SEM classificação, para o operador resolver na tela depois.
+   *
+   * ⚠ NÃO É DESCARTE, E A DIFERENÇA É O DESTINO DA LINHA. Descartar em campo
+   * obrigatório joga a linha FORA; isto a faz ENTRAR, crua. O caso que a criou é
+   * real e caro: nove valores sem mapeamento seguravam 409 linhas prontas, e a
+   * única saída era descartá-las — perdendo as 409 junto.
+   *
+   * ⚠ TAMBÉM NÃO VIRA APELIDO. "Este texto não tem classificação" não é uma
+   * tradução do texto para um subcentro; gravá-lo em `financeiro_subcentro_aliases`,
+   * cujo contrato é "este texto significa X", distorceria a tabela — e é
+   * impossível de qualquer forma, porque `plano_conta_id` é NOT NULL.
+   */
+  semClassificacao?: boolean;
 }
 
 export type DeParaMap = Record<string, DeParaItem>;
@@ -330,9 +345,9 @@ export function preResolverSafra(
 
 /** Quantos ainda faltam resolver, por painel e no total. */
 export function contarPendentes(dp: DeParaCompleto) {
-  // Descartado NÃO é pendência: é decisão tomada.
+  // Descartado e "sem classificação" NÃO são pendência: são decisão tomada.
   const p = (m: DeParaMap) =>
-    Object.values(m).filter((i) => i.valor === null && !i.descartado).length;
+    Object.values(m).filter((i) => i.valor === null && !i.descartado && !i.semClassificacao).length;
   const subcentro = p(dp.subcentro);
   const fazenda = p(dp.fazenda);
   const fornecedor = p(dp.fornecedor);
@@ -689,7 +704,23 @@ export function avaliarLinha(
   if (fechados.has(chaveFechamento(fazendaId, anoMes))) {
     return { ...base, entra: false, motivo: 'mes_fechado' };
   }
-  if (!base.subcentro) {
+  /* ⚠ SEM CLASSIFICAÇÃO É ENTRADA, NÃO EXCLUSÃO — B-40. A coluna `subcentro` é
+     nullable no banco, e a linha crua é exatamente o que a conciliação já produz
+     todo mês: lançamento existe, classificação vem depois. Barrar aqui era a
+     tela sendo mais dura que o banco, e o preço era o lote inteiro.
+
+     ⚠ SÃO DOIS CAMINHOS PARA A LINHA CRUA, e a diferença importa:
+       · CÉLULA VAZIA — o cliente não informou conta. O de-para nem cria item
+         para texto vazio (`construirDePara` pula `!t`), então não há o que
+         mapear e não há pendência: a linha entra crua, como o modelo promete.
+       · TEXTO PRESENTE E NÃO MAPEADO — há o que perguntar, e a pergunta fica
+         pendente. Só entra cru se o operador disser explicitamente
+         "importar sem classificação" para aquele valor.
+     Tratar os dois igual faria a célula vazia virar pendência — contrariando a
+     instrução do modelo — ou faria todo texto não mapeado entrar cru em
+     silêncio, que é o oposto do que o de-para existe para evitar. */
+  const contaPlanoVazia = !(row.conta_plano_texto ?? '').trim();
+  if (!base.subcentro && !contaPlanoVazia && !itSub?.semClassificacao) {
     return { ...base, entra: false, motivo: 'subcentro_nao_resolvido' };
   }
   /* ⚠ O DEDUP É O ÚLTIMO DA FILA, e a ordem é o argumento: os motivos acima são

@@ -8,6 +8,7 @@
 // depois, no mesmo PR. Até o operador confirmar, tudo vive em memória.
 // ============================================================================
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
@@ -23,7 +24,7 @@ import { persistirApelidos, type ResultadoApelidos } from '@/v2/lib/importLanc/p
 import {
   montarDePara, montarPrevia, contarPendentes, chaveFechamento,
   normalizar as normalizarTexto,
-  type CatalogosImport, type DeParaCompleto, type DeParaMap,
+  type CatalogosImport, type DeParaCompleto, type DeParaMap, type DeParaItem,
   type SubcentroAliasRef, type ChaveFechamento, type NivelDuplicidade, type AlvoAtualizacao,
   casarLinhasSemId, dataDoCasamento, type CandidatoCasamento,
 } from '@/v2/lib/importLanc/importLancamentosView';
@@ -300,6 +301,49 @@ export function useImportLancamentosExcel() {
     });
   }, [parse, catalogos]);
 
+  /**
+   * B-40 item 7 — O APELIDO GRAVA NO ATO DO MAPEAMENTO, não só no confirmar.
+   *
+   * ⚠ MEDIDO: depois de meia hora de de-para, ZERO aliases gravados. O trabalho
+   * inteiro morava no estado do navegador e morria num reload, num erro de
+   * gravação ou numa desistência do lote. Perder a importação não pode mais
+   * significar perder o mapeamento — são duas coisas, e só uma é reversível.
+   *
+   * ⚠ A ESCRITA É A MESMA DO CONFIRMAR, com um mapa de UM item: `persistirApelidos`
+   * já sabe repontar em conflito e já trata os três campos. Um segundo gravador
+   * aqui divergiria dela no primeiro ajuste — e o conflito de apelido é
+   * exatamente o lugar onde divergir custa caro.
+   *
+   * ⚠ NÃO BLOQUEIA A TELA e não derruba nada: o mapeamento vale em memória
+   * imediatamente, e a gravação é um efeito posterior. Falhando, avisa uma vez —
+   * o confirmar tentará de novo, sobre o mesmo mapa.
+   */
+  const gravarApelidoNoAto = useCallback(async (
+    campo: CampoDePara, texto: string, valor: string, rotulo: string | null,
+  ) => {
+    if (!clienteId) return;
+    if (campo !== 'subcentro' && campo !== 'fornecedor' && campo !== 'conta') return;
+    const item: DeParaItem = { texto, qtd: 1, valor, origem: 'manual', rotulo };
+    const vazio: DeParaMap = {};
+    try {
+      const r = await persistirApelidos({
+        clienteId,
+        subcentro: campo === 'subcentro' ? { [texto]: item } : vazio,
+        fornecedor: campo === 'fornecedor' ? { [texto]: item } : vazio,
+        conta: campo === 'conta' ? { [texto]: item } : vazio,
+        planoIdPorSubcentro, aliasIdPorTexto, aliasesFornecedor, aliasesConta,
+      });
+      /* O id recém-criado entra no mapa: o próximo remapeamento do mesmo texto
+         vira UPDATE em vez de esbarrar no UNIQUE. */
+      if (Object.keys(r.idsSubcentroPorTexto).length > 0) {
+        setAliasIdPorTexto((p) => ({ ...p, ...r.idsSubcentroPorTexto }));
+      }
+      if (r.erros.length > 0) toast.warning(`Apelido não memorizado: ${r.erros[0]}`);
+    } catch (e) {
+      toast.warning(`Apelido não memorizado: ${e instanceof Error ? e.message : 'falha ao gravar.'}`);
+    }
+  }, [clienteId, planoIdPorSubcentro, aliasIdPorTexto, aliasesFornecedor, aliasesConta]);
+
   // ── Passo 2: resolução manual de um item do de-para ──
   const resolverManualmente = useCallback((
     campo: CampoDePara,
@@ -316,12 +360,101 @@ export function useImportLancamentosExcel() {
         ...atual,
         [campo]: {
           ...mapa,
-          // Resolver reverte o descarte: escolher um destino é o oposto de descartar.
-          [texto]: { ...item, valor, rotulo, origem: valor === null ? 'pendente' : 'manual', descartado: false },
+          /* Resolver reverte o descarte E o "sem classificação": escolher um
+             destino é o oposto de qualquer uma das duas saídas. */
+          [texto]: {
+            ...item, valor, rotulo,
+            origem: valor === null ? 'pendente' : 'manual',
+            descartado: false, semClassificacao: false,
+          },
+        },
+      };
+    });
+    /* Fora do setState: efeito não pertence a um reducer. */
+    if (valor !== null) void gravarApelidoNoAto(campo, texto, valor, rotulo);
+  }, [gravarApelidoNoAto]);
+
+  /**
+   * B-40 item 1a — IMPORTAR SEM CLASSIFICAÇÃO, por valor.
+   *
+   * ⚠ É A SAÍDA QUE FALTAVA, e o caso que a pediu custou caro: nove valores sem
+   * mapeamento seguravam 409 linhas prontas, e a única porta era descartá-los —
+   * o que levaria as 409 junto. Aqui as linhas ENTRAM cruas, e a classificação
+   * vira trabalho de tela, que é onde ela já acontece todo mês.
+   */
+  const alternarSemClassificacao = useCallback((campo: CampoDePara, texto: string) => {
+    setDePara((atual) => {
+      if (!atual) return atual;
+      const mapa = atual[campo];
+      const item = mapa[texto];
+      if (!item) return atual;
+      const marcar = !item.semClassificacao;
+      return {
+        ...atual,
+        [campo]: {
+          ...mapa,
+          [texto]: marcar
+            /* Limpa a resolução: "entra sem classificação" e "vai para X" são
+               respostas diferentes à mesma pergunta. */
+            ? { ...item, semClassificacao: true, descartado: false, valor: null, rotulo: null, origem: 'pendente' as const }
+            : { ...item, semClassificacao: false },
         },
       };
     });
   }, []);
+
+  /**
+   * B-40 item 3 — LIMPAR A SELEÇÃO, distinta do descarte.
+   *
+   * ⚠ DESFAZER UMA ESCOLHA ERRADA NÃO É DESCARTAR O VALOR. Sem isto, quem
+   * escolhesse o subcentro errado não tinha como voltar a "Selecione…": só
+   * trocar por outro palpite, ou descartar e perder as linhas. Volta a pendente,
+   * e pendente é um estado honesto.
+   */
+  const limparSelecao = useCallback((campo: CampoDePara, texto: string) => {
+    setDePara((atual) => {
+      if (!atual) return atual;
+      const mapa = atual[campo];
+      const item = mapa[texto];
+      if (!item) return atual;
+      return {
+        ...atual,
+        [campo]: {
+          ...mapa,
+          [texto]: { ...item, valor: null, rotulo: null, origem: 'pendente' as const,
+            descartado: false, semClassificacao: false },
+        },
+      };
+    });
+  }, []);
+
+  /**
+   * B-40 item 3 — ESQUECER O APELIDO memorizado deste texto.
+   *
+   * ⚠ LIMPAR A SELEÇÃO NÃO BASTA quando o texto JÁ virou apelido: na próxima
+   * importação ele voltaria pré-resolvido para o destino errado, e o operador
+   * repetiria a correção todo mês sem entender por quê. Esquecer apaga a linha
+   * do cliente — e só a dele.
+   *
+   * ⚠ NADA JÁ LANÇADO É RECLASSIFICADO. O apelido governa importações futuras;
+   * apagá-lo não toca em lançamento nenhum.
+   */
+  const esquecerApelido = useCallback(async (texto: string): Promise<boolean> => {
+    if (!clienteId) return false;
+    const id = aliasIdPorTexto[normalizarTexto(texto)];
+    if (!id) return false;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado
+    const { error } = await (supabase as any)
+      .from('financeiro_subcentro_aliases')
+      .delete()
+      .eq('id', id)
+      .eq('cliente_id', clienteId);
+    if (error) { toast.error(`Não foi possível esquecer o apelido: ${error.message}`); return false; }
+    setAliasIdPorTexto((p) => { const n = { ...p }; delete n[normalizarTexto(texto)]; return n; });
+    limparSelecao('subcentro', texto);
+    toast.success('Apelido esquecido. Nada já lançado foi reclassificado.');
+    return true;
+  }, [clienteId, aliasIdPorTexto, limparSelecao]);
 
   /**
    * PR-IMPORT-EXCEL-LANC-04 — descarte/reversão. Estado da SESSÃO: não vira apelido,
@@ -726,6 +859,10 @@ export function useImportLancamentosExcel() {
     exigeFazendaCabecalho, fazendaCabecalhoId, setFazendaCabecalhoId,
     // ações
     lerArquivo, resolverManualmente, alternarDescarte, alternarReinclusao, checandoDup, limpar,
+    /* B-40 — as três saídas novas do de-para. */
+    alternarSemClassificacao, limparSelecao, esquecerApelido,
+    /** Texto normalizado → id do alias gravado; a tela usa para oferecer "esquecer". */
+    aliasIdPorTexto,
     // passo 4 — a ÚNICA que grava, e só por confirmação explícita
     confirmarImportacao, gravando, resultado,
   };

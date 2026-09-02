@@ -32,6 +32,8 @@ export interface ResultadoApelidos {
   fornecedor: number;
   conta: number;
   erros: string[];
+  /** Texto normalizado → id da linha de alias CRIADA agora (B-40 item 7). */
+  idsSubcentroPorTexto: Record<string, string>;
 }
 
 /** Só o que o operador resolveu à mão vira memória. O resto já resolve sozinho. */
@@ -54,8 +56,14 @@ async function persistirSubcentro(
   mapa: DeParaMap,
   planoIdPorSubcentro: Readonly<Record<string, string>>,
   aliasIdPorTexto: Readonly<Record<string, string>>,
-): Promise<{ n: number; erros: string[] }> {
+): Promise<{ n: number; erros: string[]; idsPorTexto: Record<string, string> }> {
   const erros: string[] = [];
+  /* ⚠ O ID DA LINHA CRIADA VOLTA — B-40 item 7. Com a gravação acontecendo NO ATO
+     do mapeamento, o mesmo texto pode ser remapeado minutos depois; sem conhecer
+     o id recém-criado, a segunda gravação tentaria INSERT e bateria no UNIQUE
+     (cliente_id, lower(trim(alias_text))). Devolver o id faz a segunda virar
+     UPDATE, que é o comportamento correto: repontar, não duplicar. */
+  const idsPorTexto: Record<string, string> = {};
   let n = 0;
 
   for (const { texto, valor } of novosDoOperador(mapa)) {
@@ -74,22 +82,26 @@ async function persistirSubcentro(
           .eq('id', existenteId);
         if (error) throw error;
       } else {
-        const { error } = await (supabase as any)
+        const { data, error } = await (supabase as any)
           .from('financeiro_subcentro_aliases')
           .insert({
             cliente_id: clienteId,
             alias_text: texto,
             plano_conta_id: planoContaId,
             origem: 'importacao',
-          });
+          })
+          .select('id')
+          .single();
         if (error) throw error;
+        const novoId = (data as { id?: unknown } | null)?.id;
+        if (typeof novoId === 'string') idsPorTexto[normalizar(texto)] = novoId;
       }
       n++;
     } catch (e: unknown) {
       erros.push(`Apelido "${texto}": ${e instanceof Error ? e.message : String(e)}`);
     }
   }
-  return { n, erros };
+  return { n, erros, idsPorTexto };
 }
 
 /**
@@ -167,5 +179,6 @@ export async function persistirApelidos(params: {
     fornecedor: forn.n,
     conta: cta.n,
     erros: [...sub.erros, ...forn.erros, ...cta.erros],
+    idsSubcentroPorTexto: sub.idsPorTexto,
   };
 }
