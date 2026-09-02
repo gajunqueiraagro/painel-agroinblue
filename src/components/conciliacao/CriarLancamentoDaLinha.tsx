@@ -41,15 +41,41 @@ interface Props {
   movimento: MovimentoConciliacao;
   /** Conta do extrato — dá a fazenda por padrão, sem perguntar. */
   contaBancariaId: string | null;
+  /**
+   * O que ainda falta para fechar o movimento, quando a estação já tem seleção.
+   *
+   * ⚠ O VALOR CHEIO SÓ ESTÁ CERTO QUANDO NÃO HÁ NADA MARCADO. Num PIX de
+   * 2.581,67 com oito lançamentos já selecionados somando 2.549,14, quem clica
+   * "Criar" quer o que sobra — 32,53 —, e o modal abria com o valor cheio,
+   * obrigando o operador a apagar e digitar a subtração que ele fez de cabeça.
+   * Ausente ou não-positivo: o cheio, que é o comportamento de sempre.
+   */
+  valorSugerido?: number;
+  /**
+   * B-CRIAR-DIFERENCA — criar SEM vincular, para o novo entrar no grupo.
+   *
+   * ⚠ A FUNÇÃO ATÔMICA NASCEU PARA O MOVIMENTO SEM SELEÇÃO, onde o lançamento
+   * novo fecha tudo sozinho — e ali ela continua soberana. No meio de uma
+   * seleção ela não serve: cria o vínculo avulso, e o grupo dos demais passa a
+   * divergir do valor cheio (`soma_diverge`), travando exatamente o fluxo que o
+   * operador estava fazendo.
+   *
+   * ⚠ E ISTO NÃO É O PAR PROIBIDO. O que o B-32b vetou foi criar-e-vincular em
+   * duas chamadas; aqui só se CRIA. O vínculo de todos nasce depois, numa
+   * gravação só, pelo grupo que soma o cheio.
+   */
+  semVinculo?: boolean;
   aoFechar: () => void;
-  aoCriado: () => void | Promise<void>;
+  /** Recebe o id quando a criação foi sem vínculo, para a estação marcá-lo. */
+  aoCriado: (idCriado?: string) => void | Promise<void>;
 }
 
-export function CriarLancamentoDaLinha({ movimento, contaBancariaId, aoFechar, aoCriado }: Props) {
+export function CriarLancamentoDaLinha({ movimento, contaBancariaId, valorSugerido, semVinculo, aoFechar, aoCriado }: Props) {
   const { fazendas } = useFazenda();
   const {
     contasBancarias, fornecedores, classificacoes, safras,
     loadContas, loadFornecedores, loadClassificacoes, loadSafras, criarFornecedor,
+    criarLancamentoComId,
   } = useFinanceiroV2();
 
   /* As mesmas cargas que o `ConciliarExtratoDialog` faz antes de montar o modal:
@@ -84,12 +110,14 @@ export function CriarLancamentoDaLinha({ movimento, contaBancariaId, aoFechar, a
     conta_destino_id: ehEntrada ? (contaBancariaId ?? undefined) : undefined,
     data_pagamento: dataMov,
     data_competencia: dataMov,
-    valor: Math.abs(movimento.valor),
+    valor: valorSugerido != null && valorSugerido > 0
+      ? Math.round(valorSugerido * 100) / 100
+      : Math.abs(movimento.valor),
     tipo_operacao: ehEntrada ? '1-Entradas' : '2-Saídas',
     status_transacao: 'realizado',
     descricao: movimento.descricao ?? undefined,
     numero_documento: movimento.documento ?? undefined,
-  }), [contaQ.data, contaBancariaId, ehEntrada, dataMov, movimento]);
+  }), [contaQ.data, contaBancariaId, ehEntrada, dataMov, movimento, valorSugerido]);
 
   /**
    * ⚠ O QUE VAI AO BANCO É UM SUBCONJUNTO DELIBERADO DO FORMULÁRIO. Valor, contas,
@@ -100,6 +128,19 @@ export function CriarLancamentoDaLinha({ movimento, contaBancariaId, aoFechar, a
    * `trg_resolve_classificacao_plano` os resolve a partir do subcentro.
    */
   const salvar = async (form: LancamentoV2Form): Promise<boolean> => {
+    if (semVinculo) {
+      /* ⚠ AQUI O FORM VAI INTEIRO, e a diferença com o caminho de baixo é o
+         motivo: a RPC lê valor, contas, data e tipo do próprio movimento, então
+         não precisa recebê-los; o writer comum não conhece movimento nenhum, e
+         sem eles criaria um lançamento sem valor nem conta. Os campos são os
+         mesmos que a tela mostra travados — vêm do `prefill`. */
+      const id = await criarLancamentoComId(form, { origem: 'conciliacao', silent: true });
+      if (!id) { toast.error('Não foi possível criar o lançamento.'); return false; }
+      toast.success('Lançamento criado e marcado na seleção — o vínculo vem ao confirmar o grupo.');
+      await aoCriado(id);
+      aoFechar();
+      return true;
+    }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
     const { error } = await (supabase as any).rpc('fn_criar_lancamento_de_extrato', {
       p_extrato_id: movimento.id,

@@ -503,11 +503,31 @@ export function EstacaoConciliar({ movimento, aoFechar, aoMudar, contaBancariaId
             do botão que explica. `impedimento` é fonte única de `disabled`,
             `title` e da frase ao lado; três lugares divergiriam. */}
         <DialogFooter className="shrink-0 items-center gap-2 border-t px-4 py-2.5 sm:justify-between">
-          <span className="text-[10px] leading-snug text-muted-foreground">
-            {marcados.size > 0 && !impedimento
-              ? `Vai aplicar ${formatMoeda(somaMarcada)} — ${Math.abs(restaDepois) <= TOL
-                  ? 'fecha o movimento' : `restam ${formatMoeda(restaDepois)}`}.`
-              : (impedimento ?? '')}
+          <span className="flex flex-wrap items-baseline gap-2 text-[10px] leading-snug text-muted-foreground">
+            {/* ⚠ O NÚMERO QUE DECIDE FICA NA CARA, NÃO NA CABEÇA — B-42/CRIAR-DIFERENCA.
+                O rodapé mostrava só a soma da seleção, e o operador subtraía de
+                cabeça para saber quanto ainda faltava. Num PIX de 2.581,67 com
+                oito lançamentos marcados, a conta é 2.581,67 − 2.549,14 = 32,53
+                — feita à mão, a cada clique, sobre dinheiro.
+                ⚠ E ELE APARECE COM QUALQUER SELEÇÃO, inclusive a que passa: o
+                impedimento explica por que o botão não pode, mas não diz o
+                tamanho da sobra. São duas informações. */}
+            {marcados.size > 0 && (
+              <span className={`rounded px-1.5 py-px text-[11px] font-semibold tabular-nums ${
+                Math.abs(restaDepois) <= TOL ? 'bg-success/15 text-success'
+                : restaDepois > 0 ? 'bg-amber-500/15 text-amber-700 dark:text-amber-400'
+                : 'bg-destructive/10 text-destructive'}`}
+                title={`Movimento ${formatMoeda(alvo)} · já aplicado ${formatMoeda(somaAplicada)} · seleção ${formatMoeda(somaMarcada)}.`}>
+                {Math.abs(restaDepois) <= TOL ? 'fecha exato'
+                  : restaDepois > 0 ? `faltam ${formatMoeda(restaDepois)}`
+                  : `passa ${formatMoeda(Math.abs(restaDepois))}`}
+              </span>
+            )}
+            <span>
+              {marcados.size > 0 && !impedimento
+                ? `Vai aplicar ${formatMoeda(somaMarcada)}.`
+                : (impedimento ?? '')}
+            </span>
           </span>
           <span className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={aoFechar}>Fechar</Button>
@@ -518,7 +538,12 @@ export function EstacaoConciliar({ movimento, aoFechar, aoMudar, contaBancariaId
                 ⚠ E ELE APARECE MESMO HAVENDO CANDIDATOS: o operador pode saber
                 que nenhum deles é este movimento. O caso que abriu esta frente é
                 o oposto — "Nenhum lançamento candidato" e nada a fazer. */}
-            {estado !== 'fecha' && vinculos.length === 0 && (
+            {/* ⚠ O BOTÃO PASSOU A APARECER COM SELEÇÃO EM CURSO. Antes ele exigia
+                `vinculos.length === 0` porque a função atômica recusa movimento
+                já vinculado; com o modo sem-vínculo, criar no meio de um grupo
+                virou o caso principal — é exatamente quando falta um pedaço. A
+                condição de vínculo continua valendo para o caminho atômico. */}
+            {estado !== 'fecha' && (vinculos.length === 0 || marcados.size > 0) && (
               <Button type="button" variant="outline" size="sm" className="gap-1.5"
                 onClick={() => setCriando(true)}
                 title="Cria o lançamento que falta, já pago e já vinculado a este movimento.">
@@ -546,10 +571,30 @@ export function EstacaoConciliar({ movimento, aoFechar, aoMudar, contaBancariaId
         <CriarLancamentoDaLinha
           movimento={movimento}
           contaBancariaId={contaBancariaId ?? null}
+          /* O que falta DEPOIS do que já está aplicado e do que está marcado —
+             a mesma conta que o rodapé mostra, para os dois nunca discordarem. */
+          valorSugerido={restaDepois > TOL ? restaDepois : undefined}
+          /* Com seleção em curso, criar NÃO vincula — o vínculo de todos vem do
+             grupo, somando o cheio. Sem seleção, a função atômica segue soberana. */
+          semVinculo={marcados.size > 0}
           aoFechar={() => setCriando(false)}
-          aoCriado={async () => {
+          aoCriado={async (idCriado) => {
+            /* ⚠ O NOVO ENTRA MARCADO. Sem isto o operador teria de caçá-lo na
+               lista de candidatos que acabou de recarregar — e é o lançamento
+               que ele mesmo escreveu há dois segundos, justamente para fechar
+               esta conta. O valor marcado é o do lançamento, como em qualquer
+               outro candidato. */
+            const aMarcar = idCriado && restaDepois > TOL
+              ? Math.round(restaDepois * 100) / 100 : null;
             await recarregar();
             await recarregarCand();
+            /* A marca vem DEPOIS do recarregamento: assim a linha já existe na
+               lista quando o checkbox liga. Marcar antes deixaria a marca sem
+               linha por um instante — e, se o motor não trouxer o lançamento
+               novo, para sempre. */
+            if (idCriado && aMarcar != null) {
+              setMarcados(m => { const n = new Map(m); n.set(idCriado, aMarcar); return n; });
+            }
             await aoMudar();
           }}
         />
