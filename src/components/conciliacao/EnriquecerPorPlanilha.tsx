@@ -56,7 +56,18 @@ export function EnriquecerPorPlanilha({ clienteId, contaId, contaNome, ano, mes 
         </p>
       ) : null}
 
+      {/* ⚠ MODO VESTE — ENRIQUECER-SO-VESTE-01. Esta aba ATUALIZA lançamentos que
+          já nasceram do OFX soberano; ela não cria. Linha sem par vira "sem par no
+          extrato": contada, com motivo, e sem botão. Criar por planilha aqui seria
+          inventar movimento bancário do lado errado da soberania — é intenção de
+          outra tela, onde é explícita.
+      
+          ⚠ E NADA AQUI TOCA O EXTRATO. Nenhum movimento é excluído, mascarado ou
+          reescrito por esta aba, hoje ou depois desta mudança; o extrato é fato do
+          banco e só o importador o escreve. Fica dito porque a ausência de uma
+          regra não é a mesma coisa que a regra escrita. */}
       <V2ImportLancamentosExcel
+        somenteAtualizar
         movimentosDoExtrato={movimentos}
         contaNome={contaNome}
         /* `2026-08` no nome do arquivo: o operador acaba com vários downloads na

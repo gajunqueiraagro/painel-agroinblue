@@ -66,10 +66,19 @@ export interface V2ImportLancamentosExcelProps {
   contaNome?: string;
   /** Sufixo do arquivo baixado, para o operador não confundir dois downloads. */
   sufixoArquivo?: string;
+  /**
+   * ENRIQUECER-SO-VESTE-01 — o modo VESTE.
+   *
+   * ⚠ A ABA ENRIQUECER NÃO CRIA, e isso é decisão de produto, não limitação: ela
+   * veste lançamentos que já nasceram do OFX soberano. Linha sem par vira "sem
+   * par no extrato" — contada, com motivo, e sem botão. Criar é intenção de
+   * outra tela, onde é explícita.
+   */
+  somenteAtualizar?: boolean;
 }
 
 export function V2ImportLancamentosExcel({
-  movimentosDoExtrato, contaNome, sufixoArquivo,
+  movimentosDoExtrato, contaNome, sufixoArquivo, somenteAtualizar = false,
 }: V2ImportLancamentosExcelProps = {}) {
   const {
     classificacoes, fornecedores, fazendas, contasBancarias, safras, criarFornecedor,
@@ -79,7 +88,7 @@ export function V2ImportLancamentosExcel({
     alternarSemClassificacao, limparSelecao, esquecerApelido, aliasIdPorTexto,
     criacoesAprovadas, alternarCriacao, marcarTodasCriacoes, contasComExtrato,
     confirmarImportacao, gravando, resultado,
-  } = useImportLancamentosExcel();
+  } = useImportLancamentosExcel(somenteAtualizar);
   const [confirmando, setConfirmando] = useState(false);
 
   /* ⚠ O PRÉ-PREENCHIDO SÓ EXISTE COM MOVIMENTO. Com a régua num mês sem extrato,
@@ -144,7 +153,7 @@ export function V2ImportLancamentosExcel({
   /* ⚠ NADA A GRAVAR É BLOQUEIO, e é diferente de "nenhuma linha elegível": com
      todas as criações desmarcadas há linhas elegíveis e mesmo assim o confirmar
      não faria nada. O motivo diz qual dos dois é. */
-  if (previa && previa.totais.entram.qtd > 0 && nVaiGravar === 0) {
+  if (!somenteAtualizar && previa && previa.totais.entram.qtd > 0 && nVaiGravar === 0) {
     bloqueios.push('nenhuma criação aprovada — marque ao menos uma, ou não há o que gravar');
   }
 
@@ -434,18 +443,30 @@ export function V2ImportLancamentosExcel({
             <Balde n={previa.totais.porBalde.ambiguos} rotulo="ambíguos"
               cor="text-amber-700"
               dica="Casaram com mais de um lançamento, ou mais de uma linha disputa o mesmo. Ficam de fora: escolher por conta própria seria chutar. Informe o ID para resolver." />
-            <Balde n={previa.totais.porBalde.criam} rotulo="criam"
-              cor="text-emerald-700"
-              dica="Não acharam par no sistema — entram como lançamento novo." />
+            {/* ⚠ O BALDE MUDA COM A INTENÇÃO DA TELA. No Enriquecer não existe
+                "criam": a linha sem par é um fato que o extrato não conhece, e
+                chamá-la de criação convidaria a inventar movimento bancário a
+                partir de planilha. Mesmo número, significados opostos. */}
+            {somenteAtualizar ? (
+              <Balde n={previa.totais.porBalde.criam} rotulo="sem par no extrato"
+                cor="text-muted-foreground"
+                dica="Não acharam lançamento correspondente neste mês. O Enriquecer só veste o que já existe — para criar, use a Importação de Lançamentos." />
+            ) : (
+              <Balde n={previa.totais.porBalde.criam} rotulo="criam"
+                cor="text-emerald-700"
+                dica="Não acharam par no sistema — entram como lançamento novo." />
+            )}
             <Balde n={previa.totais.porBalde.fora} rotulo="fora"
               cor="text-muted-foreground"
               dica="Excluídas por outro motivo — mês fechado, transferência, duplicata, de-para pendente. A lista abaixo diz qual." />
           </div>
 
           <ImportLancPrevia linhas={previa.linhas} totais={previa.totais} aoReincluir={alternarReinclusao}
-            criacoesAprovadas={criacoesAprovadas}
-            aoAlternarCriacao={alternarCriacao}
-            aoMarcarTodasCriacoes={marcarTodasCriacoes}
+            /* ⚠ SEM GATE DE CRIAÇÃO NO MODO VESTE: não há criação a aprovar, e
+               oferecer a faixa faria a tela prometer um ato que ela não pratica. */
+            criacoesAprovadas={somenteAtualizar ? undefined : criacoesAprovadas}
+            aoAlternarCriacao={somenteAtualizar ? undefined : alternarCriacao}
+            aoMarcarTodasCriacoes={somenteAtualizar ? undefined : marcarTodasCriacoes}
             contasComExtrato={contasComExtrato} />
 
           <div className="flex items-center justify-end gap-2 flex-wrap">
@@ -467,7 +488,10 @@ export function V2ImportLancamentosExcel({
                 /* O botão diz o que faz E o que deixa para trás, no próprio
                    rótulo: confirmar sem saber o que acontece é o que fazia o
                    operador descobrir a perda — ou a duplicata — depois. */
-                : `Confirmar: ${nAtualizam} atualizam · ${nCriamAprovadas} criam (aprovadas)`
+                /* No modo veste o botão não fala de criação: não há o que aprovar. */
+                : (somenteAtualizar
+                    ? `Confirmar: ${nAtualizam} atualizam`
+                    : `Confirmar: ${nAtualizam} atualizam · ${nCriamAprovadas} criam (aprovadas)`)
                   + (linhasPendentes > 0 ? ` — ${linhasPendentes} pendentes ficam de fora` : '')}
             </Button>
           </div>

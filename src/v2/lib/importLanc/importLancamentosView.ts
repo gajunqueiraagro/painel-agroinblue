@@ -374,7 +374,18 @@ export type MotivoExclusao =
   | 'origem_travada'
   /** B-41 — a linha casou com mais de um lançamento, ou mais de uma linha disputa
    *  o mesmo. Fica de fora PENDENTE: escolher por conta própria seria chutar. */
-  | 'casamento_ambiguo';
+  | 'casamento_ambiguo'
+  /**
+   * ENRIQUECER-SO-VESTE-01 — a linha não achou par, e nesta tela isso encerra o
+   * assunto.
+   *
+   * ⚠ NO ENRIQUECER NÃO SE CRIA, e a razão é de produto: aquela aba VESTE
+   * lançamentos que já nasceram do OFX soberano. Uma linha sem par ali é um fato
+   * que o extrato não conhece — criar por ela seria inventar movimento bancário
+   * a partir de uma planilha, do lado errado da soberania. Criar é intenção de
+   * outra tela, e lá é explícita.
+   */
+  | 'sem_par_no_extrato';
 
 export const MOTIVO_LABEL: Record<MotivoExclusao, string> = {
   transferencia: 'Transferência — não é criada por esta importação',
@@ -383,6 +394,7 @@ export const MOTIVO_LABEL: Record<MotivoExclusao, string> = {
   subcentro_nao_resolvido: 'Conta do plano ainda não mapeada',
   campo_obrigatorio_descartado: 'Fazenda ou conta do plano descartada — sem esses dois a linha não existe',
   casamento_ambiguo: 'Casou com mais de um lançamento existente — escolha qual, ou informe o ID',
+  sem_par_no_extrato: 'Sem par no extrato — o Enriquecer só atualiza o que já existe; para criar, use a Importação',
   ja_existe: 'Já existe lançamento equivalente — inclua manualmente se for outro',
   id_desconhecido: 'A coluna ID aponta para um lançamento que não é deste cliente',
   origem_travada: 'Lançamento da Operação Comercial — a classificação se ajusta lá, não aqui',
@@ -623,6 +635,8 @@ export function avaliarLinha(
   alvos: ReadonlyMap<string, AlvoAtualizacao> | undefined,
   /** B-41 — o que o casamento decidiu para esta linha, quando ela não tem id. */
   casado?: CandidatoCasamento | 'ambiguo' | null,
+  /** ENRIQUECER-SO-VESTE-01 — a tela só atualiza; linha sem par não vira criação. */
+  somenteAtualizar?: boolean,
 ): LinhaPrevia {
   const anoMes = anoMesDaCompetencia(row.data_competencia ?? '');
 
@@ -685,6 +699,14 @@ export function avaliarLinha(
      resolver — informando o ID — em vez de descobrir uma duplicata depois. */
   if (casado === 'ambiguo') {
     return { ...base, entra: false, motivo: 'casamento_ambiguo' };
+  }
+  /* ⚠ SEM PAR ENCERRA A LINHA no modo veste, e ANTES dos motivos estruturais: no
+     Enriquecer não interessa ao operador saber que a linha também cairia por mês
+     fechado ou por fazenda não resolvida — ela não tem o que vestir, e esse é o
+     fato que ele precisa ver. Dizer outra coisa mandaria resolver um de-para que
+     não mudaria o destino. */
+  if (somenteAtualizar && modo !== 'atualizar') {
+    return { ...base, entra: false, motivo: 'sem_par_no_extrato' };
   }
 
   // Precedência: o motivo mais estrutural primeiro, para o operador ver a causa
@@ -805,11 +827,13 @@ export function montarPrevia(
   alvos?: ReadonlyMap<string, AlvoAtualizacao>,
   /** B-41 — o casamento das linhas sem id, por índice. */
   casados?: ReadonlyMap<number, CandidatoCasamento | 'ambiguo'>,
+  /** ENRIQUECER-SO-VESTE-01 — modo veste: atualiza o que existe, nunca cria. */
+  somenteAtualizar?: boolean,
 ): { linhas: LinhaPrevia[]; totais: TotaisPrevia } {
   const linhas = rows.map((r, i) =>
     avaliarLinha(r, dp, fechados, fazendaCabecalhoId, fazendaCabecalhoNome,
       duplicidades?.get(i) ?? null, reincluidas?.has(i) ?? false, i, alvos,
-      casados?.get(i) ?? null));
+      casados?.get(i) ?? null, somenteAtualizar));
 
   let qtdEntram = 0, valEntram = 0, qtdFora = 0, valFora = 0;
   const balde = { atualizamPorId: 0, atualizamPorCasamento: 0, ambiguos: 0, criam: 0, fora: 0 };

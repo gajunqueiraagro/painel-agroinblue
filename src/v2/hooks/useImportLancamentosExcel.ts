@@ -60,7 +60,14 @@ export interface ResultadoImportacao {
 /** Campos que passam pelo mesmo mecanismo de de-para. */
 export type CampoDePara = 'subcentro' | 'fazenda' | 'fornecedor' | 'conta' | 'safra';
 
-export function useImportLancamentosExcel() {
+/**
+ * @param somenteAtualizar ENRIQUECER-SO-VESTE-01 — o modo VESTE. A aba Enriquecer
+ * atualiza lançamentos que já nasceram do OFX soberano; linha sem par vira "sem
+ * par no extrato", nunca criação. É uma FLAG, não um fork: o motor, o de-para, o
+ * casamento e o dedup são os mesmos — o que muda é o destino da linha sem par e
+ * o vocabulário que a tela usa para narrá-lo.
+ */
+export function useImportLancamentosExcel(somenteAtualizar = false) {
   const { clienteAtual } = useCliente();
   const { fazendas } = useFazenda();
   const clienteId = clienteAtual?.id ?? null;
@@ -525,8 +532,8 @@ export function useImportLancamentosExcel() {
   const previa = useMemo(() => {
     if (!parse || !dePara) return null;
     return montarPrevia(parse.rows, dePara, fechados, fazendaCabecalhoId, fazendaCabecalhoNome,
-      duplicidades, reincluidas, alvos, casados);
-  }, [parse, dePara, fechados, fazendaCabecalhoId, fazendaCabecalhoNome, duplicidades, reincluidas, alvos, casados]);
+      duplicidades, reincluidas, alvos, casados, somenteAtualizar);
+  }, [parse, dePara, fechados, fazendaCabecalhoId, fazendaCabecalhoNome, duplicidades, reincluidas, alvos, casados, somenteAtualizar]);
 
   /**
    * Uma linha D1 entra assim mesmo — decisão do operador, por LINHA.
@@ -942,6 +949,8 @@ export function useImportLancamentosExcel() {
     lerArquivo, resolverManualmente, alternarDescarte, alternarReinclusao, checandoDup, limpar,
     /* B-40 — as três saídas novas do de-para. */
     alternarSemClassificacao, limparSelecao, esquecerApelido,
+    /** A tela precisa saber em que modo está para escolher o vocabulário. */
+    somenteAtualizar,
     /* B-42 — o gate de aprovação das criações. */
     criacoesAprovadas, alternarCriacao, marcarTodasCriacoes, contasComExtrato,
     /** Texto normalizado → id do alias gravado; a tela usa para oferecer "esquecer". */

@@ -96,6 +96,55 @@ describe('a linha crua entra — B-40 item 1a', () => {
   });
 });
 
+/**
+ * ENRIQUECER-SO-VESTE-01 — a aba que veste não cria.
+ *
+ * ⚠ O MESMO MOTOR, DOIS DESTINOS PARA A MESMA LINHA. Sem par: na Importação vira
+ * lançamento novo; no Enriquecer vira "sem par no extrato". É uma flag, não um
+ * fork — e é justamente por ser a mesma função que estes casos existem: quem
+ * mexer no motor tem de ver os dois lados de uma vez.
+ */
+describe('modo veste — sem par não vira criação', () => {
+  const sub = mapa({
+    COMBUSTIVEL: { texto: 'COMBUSTIVEL', qtd: 1, valor: 'Diesel', origem: 'manual', rotulo: 'Diesel' },
+  });
+  const semPar = (somenteAtualizar: boolean) =>
+    avaliarLinha(linha({}), dp(sub), new Set(), null, null, null, false, 0,
+      undefined, null, somenteAtualizar);
+
+  it('na importação, linha sem par ENTRA como criação', () => {
+    const r = semPar(false);
+    expect(r.entra).toBe(true);
+    expect(r.modo).toBe('criar');
+  });
+
+  it('no enriquecer, a MESMA linha fica de fora com motivo próprio', () => {
+    const r = semPar(true);
+    expect(r.entra).toBe(false);
+    expect(r.motivo).toBe('sem_par_no_extrato');
+  });
+
+  /* ⚠ O MOTIVO VEM ANTES DOS ESTRUTURAIS: no Enriquecer não interessa saber que
+     a linha também cairia por fazenda não resolvida — ela não tem o que vestir,
+     e mandar resolver um de-para que não muda o destino é desperdiçar o
+     trabalho do operador. */
+  it('sem par vence fazenda não resolvida no modo veste', () => {
+    const r = avaliarLinha(linha({ fazenda_texto: 'XX' }), dp(sub), new Set(),
+      null, null, null, false, 0, undefined, null, true);
+    expect(r.motivo).toBe('sem_par_no_extrato');
+  });
+
+  /* Linha COM par segue atualizando nos dois modos — o veste não estorva o que
+     ele existe para fazer. */
+  it('linha com par atualiza no modo veste', () => {
+    const alvo = { id: 'l9', travado: false, subcentroAtual: null, descricaoAtual: null, safraAtual: null };
+    const r = avaliarLinha(linha({ id_lancamento: 'l9' }), dp(sub), new Set(),
+      null, null, null, false, 0, new Map([['l9', alvo]]), null, true);
+    expect(r.entra).toBe(true);
+    expect(r.modo).toBe('atualizar');
+  });
+});
+
 describe('contarPendentes — decisão tomada não é pendência', () => {
   const comp = (sub: DeParaMap): DeParaCompleto => dp(sub);
 
