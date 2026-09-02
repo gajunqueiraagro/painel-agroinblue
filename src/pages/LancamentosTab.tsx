@@ -5241,6 +5241,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
            Primeira de seis. Este ramo ADICIONA a OC; o formulario antigo da venda
            continua no `else`, byte a byte, ate o Gabriel decidir a troca. */
         <VendaModalShell
+            /* ⚠ A FONTE ÚNICA DA VERSÃO — OC-VERSAO-FONTE-UNICA-01. `lotesApi` e
+               `recebimentoApi` já saíam daqui ligados a `ocVersao`; o hook de
+               compromissos, montado lá dentro, guardava a própria e deixava esta
+               para trás. Agora os três escrevem no mesmo estado. */
+            ocVersao={ocVersao} onOcVersaoChange={setOcVersao}
           data={data} setData={setData}
           compradorId={vendaDestinoFornecedorId} setCompradorId={setVendaDestinoFornecedorId}
           contrapartes={abateFornecedores}

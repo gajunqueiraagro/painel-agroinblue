@@ -148,6 +148,9 @@ export interface VendaModalShellProps {
   observacao: string;
   setObservacao: (v: string) => void;
   ocOperacaoId: string | null;
+  /** A versão da operação e seu setter — o pai é dono único (OC-VERSAO-FONTE-UNICA-01). */
+  ocVersao?: number | null;
+  onOcVersaoChange?: (v: number) => void;
   ocStatusComercial: string | null;
   /** Lotes da negociação — o mesmo hook da compra, que opera sobre `zoo_operacao_lotes`. */
   lotesApi?: CompraLotesApi;
@@ -207,7 +210,7 @@ export function VendaModalShell({
   vendaFazendaId, setVendaFazendaId, fazendasOC,
   propriedadeDestino, setPropriedadeDestino,
   vendaTipoVenda, setVendaTipoVenda, observacao, setObservacao,
-  ocOperacaoId, ocStatusComercial, lotesApi, boitelData = null, onBoitelChange,
+  ocOperacaoId, ocVersao, onOcVersaoChange, ocStatusComercial, lotesApi, boitelData = null, onBoitelChange,
   boitelReal = null, onAplicarRealizado, onIniciarRealizado,
   documentosApi, eventosApi, liquidacaoApi, recebimentoApi, ocEntregaEncerrada = false,
   categoria, categoriasDisponiveis,
@@ -413,10 +416,18 @@ export function VendaModalShell({
      ⚠ O SALDO NAO E "A receber − Recebido". Esse seria o saldo das ENTRADAS, e a linha
      ficaria igual a primeira sempre que nada tivesse sido recebido — tres linhas para
      duas informacoes. O saldo responde outra pergunta: quanto a operacao deixa. */
+  /* ⚠ A VERSÃO VEM DO PAI — OC-VERSAO-FONTE-UNICA-01, e este era o componente
+     onde as duas fontes coexistiam: `CompraLotesApi` e `RecebimentoApi` chegam
+     por prop, já ligados ao `ocVersao` do pai, enquanto o hook de compromissos
+     guardava a própria. Mexer na aba Compromissos incrementava a versão da
+     operação e deixava a do pai para trás — o save seguinte batia em 40001, e só
+     o F5 resolvia. Agora as três leem e escrevem o mesmo estado. */
   const ocCompromissosApi = useOcCompromissos({
     operacaoId: ocOperacaoId ?? null,
     clienteId: liquidacaoApi?.clienteId ?? null,
     enabled: !!ocOperacaoId && !!liquidacaoApi?.clienteId,
+    versao: ocVersao ?? null,
+    onVersaoChange: onOcVersaoChange ?? (() => {}),
   });
   const fin = ocCompromissosApi.resumoOperacao;
   const temFin = !!fin && fin.temCompromissos;

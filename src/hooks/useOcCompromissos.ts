@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -178,6 +178,23 @@ interface Params {
   operacaoId: string | null;
   clienteId: string | null;
   enabled: boolean;
+  /**
+   * A VERSÃO DA OPERAÇÃO, DE FORA — OC-VERSAO-FONTE-UNICA-01.
+   *
+   * ⚠ NENHUM HOOK DE OC MANTÉM VERSÃO PRIVADA, e esta regra fica escrita aqui
+   * porque foi aqui que ela nasceu quebrada. Este hook guardava a própria
+   * `versao` em `useState`, rehidratando só a si mesmo; `useCompraLotes` e
+   * `useOperacaoRecebimento` já compartilhavam a do pai. Resultado: mexer na aba
+   * Compromissos incrementava a versão da operação e deixava o estado do pai
+   * para trás — o save seguinte, em outra aba, batia em `40001` e só um F5
+   * resolvia. Duas fontes para a mesma verdade divergem sempre; o dono é o pai.
+   *
+   * ⚠ A MONOTONICIDADE SOBREVIVEU à mudança: o hook só avisa o pai quando a
+   * versão devolvida é MAIOR que a corrente. Uma resposta fora de ordem (duas
+   * escritas em voo) não pode fazer a versão andar para trás.
+   */
+  versao: number | null;
+  onVersaoChange: (v: number) => void;
 }
 
 // ── Tipos BRUTOS das views (nulabilidade do PostgREST; numeric/bigint chegam como string) ────────
@@ -393,17 +410,28 @@ function mapParcela(r: RowParcela): ParcelaMaterializacao {
   };
 }
 
-export function useOcCompromissos({ operacaoId, clienteId, enabled }: Params): OcCompromissosApi {
+export function useOcCompromissos(
+  { operacaoId, clienteId, enabled, versao, onVersaoChange }: Params,
+): OcCompromissosApi {
   const [resumoOperacao, setResumoOperacao] = useState<ResumoOperacaoCompromissos | null>(null);
   const [compromissos, setCompromissos] = useState<CompromissoResumo[]>([]);
   const [parcelas, setParcelas] = useState<ParcelaMaterializacao[]>([]);
-  const [versao, setVersao] = useState<number | null>(null);
+
+  /* O avisador monotônico: substitui os cinco `setVersao(Math.max(...))` que
+     viviam aqui. A regra é a mesma; o dono do estado é que mudou. */
+  const versaoRef = useRef(versao);
+  versaoRef.current = versao;
+  const avisarVersao = useCallback((nova: number | null | undefined) => {
+    if (nova == null || !Number.isFinite(Number(nova))) return;
+    const n = Number(nova);
+    if (n > (versaoRef.current ?? -Infinity)) onVersaoChange(n);
+  }, [onVersaoChange]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const carregar = useCallback(async (): Promise<void> => {
     if (!enabled || !operacaoId || !clienteId) {
-      setResumoOperacao(null); setCompromissos([]); setParcelas([]); setVersao(null);
+      setResumoOperacao(null); setCompromissos([]); setParcelas([]);
       return;
     }
     setLoading(true);
@@ -434,7 +462,10 @@ export function useOcCompromissos({ operacaoId, clienteId, enabled }: Params): O
 
       // Versão SEMPRE monotônica: nenhuma leitura reduz a maior versão já conhecida.
       const versaoLida = opMetaRow?.versao;
-      if (versaoLida != null) setVersao((atual) => Math.max(atual ?? 0, Number(versaoLida)));
+      /* A leitura do banco também sobe pelo mesmo canal: recarregar é o caminho
+         que corrige uma versão atrasada, e ele não pode escrever num estado que
+         já não existe aqui. */
+      if (versaoLida != null) avisarVersao(Number(versaoLida));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Falha ao carregar os compromissos.');
     } finally {
@@ -458,7 +489,7 @@ export function useOcCompromissos({ operacaoId, clienteId, enabled }: Params): O
       });
       if (error) throw normalizarErroRpc(error);
       const resultado = mapCriarCompromissoResultado(data);              // valida o shape ANTES do sucesso
-      setVersao((atual) => Math.max(atual ?? 0, resultado.operacaoVersao));   // monotônica
+      avisarVersao(resultado.operacaoVersao);   // monotônica
       toast.success('Compromisso criado.');
       await carregar();
       return resultado;
@@ -484,7 +515,7 @@ export function useOcCompromissos({ operacaoId, clienteId, enabled }: Params): O
       });
       if (error) throw normalizarErroRpc(error);
       const resultado = mapProgramarCompromissoResultado(data);
-      setVersao((atual) => Math.max(atual ?? 0, resultado.operacaoVersao));
+      avisarVersao(resultado.operacaoVersao);
       toast.success('Programação criada.');
       await carregar();
       return resultado;
@@ -513,7 +544,7 @@ export function useOcCompromissos({ operacaoId, clienteId, enabled }: Params): O
       });
       if (error) throw normalizarErroRpc(error);
       const resultado = mapAcrescentarParcelasResultado(data);
-      setVersao((atual) => Math.max(atual ?? 0, resultado.operacaoVersao));
+      avisarVersao(resultado.operacaoVersao);
       toast.success('Parcelas acrescentadas.');
       await carregar();
       return resultado;
@@ -539,7 +570,7 @@ export function useOcCompromissos({ operacaoId, clienteId, enabled }: Params): O
       });
       if (error) throw normalizarErroRpc(error);
       const resultado = mapMaterializarResultado(data);
-      setVersao((atual) => Math.max(atual ?? 0, resultado.operacaoVersao));
+      avisarVersao(resultado.operacaoVersao);
       toast.success('Parcela lançada.');
       await carregar();
       return resultado;
@@ -574,7 +605,7 @@ export function useOcCompromissos({ operacaoId, clienteId, enabled }: Params): O
       });
       if (error) throw normalizarErroRpc(error);
       const resultado = mapAjustarValorResultado(data);
-      setVersao((atual) => Math.max(atual ?? 0, resultado.operacaoVersao));
+      avisarVersao(resultado.operacaoVersao);
       if (resultado.valorAnterior != null) toast.success('Valor do compromisso ajustado ao realizado.');
       await carregar();
       return resultado;

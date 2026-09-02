@@ -165,10 +165,17 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
   /* Reusa o leitor das views (`vw_oc_compromissos_resumo` e
      `vw_oc_parcelas_materializacao`) em vez de escrever uma segunda consulta para os
      mesmos dados. `enabled` desliga tudo quando o lancamento nao vem de OC. */
+  /* ⚠ O DONO DA VERSÃO É ESTE COMPONENTE — OC-VERSAO-FONTE-UNICA-01. Aqui o
+     estado local É o nível certo: esta tela monta UM hook de OC e nenhum outro,
+     então não há segunda fonte com que divergir. A regra que a frente estabelece
+     é "nenhum HOOK guarda versão privada"; o dono passa a ser sempre quem monta. */
+  const [ocVersao, setOcVersao] = useState<number | null>(null);
   const ocApi = useOcCompromissos({
     operacaoId: ocOperacaoId,
     clienteId: clienteAtual?.id ?? null,
     enabled: !!ocOperacaoId && !!clienteAtual?.id,
+    versao: ocVersao,
+    onVersaoChange: setOcVersao,
   });
   const ocPrincipal = ocApi.compromissos.filter(c => c.natureza === 'principal' && c.status !== 'cancelado');
   const ocObrigacoes = ocApi.compromissos.filter(c => c.natureza === 'obrigacao' && c.status !== 'cancelado');

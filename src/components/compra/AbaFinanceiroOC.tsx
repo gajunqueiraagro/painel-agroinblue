@@ -2,7 +2,7 @@ import { AbaLiquidacaoOC } from './AbaLiquidacaoOC';
 import { AbaCompromissosOC, type LinhaPrevisao, type RotulosCompromissos } from './AbaCompromissosOC';
 import { useOcCompromissos, type OcCompromissosApi } from '@/hooks/useOcCompromissos';
 import { AlertTriangle } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { LiquidacaoApi } from '@/hooks/useOperacaoLiquidacao';
 
 // Aba Financeiro (PR-OC-UI-FIN-VIEW) — ROTEADOR por modo (soberano da view, nunca inferido):
@@ -12,6 +12,9 @@ import type { LiquidacaoApi } from '@/hooks/useOperacaoLiquidacao';
 //   carregando → placeholder. PR-OC-CONSOLIDACAO-A1: os gates de escrita (legado e novo) chegam PRONTOS
 //   por prop do CompraModalShell (fonte única por eixo); esta aba NÃO reconstrói permissão.
 interface Props {
+  /** Versão da operação e setter, quando quem monta é dono dela. */
+  ocVersao?: number | null;
+  onOcVersaoChange?: (v: number) => void;
   api: LiquidacaoApi;
   operacaoPronta: boolean;
   darkSelectClass: string;
@@ -42,10 +45,17 @@ export function AbaFinanceiroOC(props: Props) {
   /* ⚠ O HOOK E SEMPRE CHAMADO — regra dos hooks —, mas `enabled` o desliga quando a
      instancia veio pronta de fora. Assim nao ha consulta duplicada e nao ha chamada
      condicional. */
+  /* ⚠ A VERSÃO VEM DE FORA quando este componente monta o hook — só acontece sem
+     `ocApiExterno`, e nesse caso quem o monta é dono da operação inteira. Sem as
+     props, o fallback local mantém o comportamento anterior para montagens que
+     ainda não as forneçam; com elas, a fonte é única. */
+  const [versaoLocal, setVersaoLocal] = useState<number | null>(null);
   const ocApiProprio = useOcCompromissos({
     operacaoId: operacaoId ?? null,
     clienteId: clienteId ?? null,
     enabled: !props.ocApiExterno && !!operacaoId && !!clienteId,
+    versao: props.ocVersao ?? versaoLocal,
+    onVersaoChange: props.onOcVersaoChange ?? setVersaoLocal,
   });
   const ocApi = props.ocApiExterno ?? ocApiProprio;
   const modo = ocApi.resumoOperacao?.modo;
