@@ -1,7 +1,7 @@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Loader2, Unlink, Link2, FilePlus2 } from 'lucide-react';
+import { Loader2, Unlink, Link2, FilePlus2, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -78,6 +78,19 @@ export function EstacaoConciliar({ movimento, aoFechar, aoMudar, contaBancariaId
   const { candidatos, carregando: carregandoCand, recarregar: recarregarCand } =
     useCandidatosDoMovimento(clienteAtual?.id ?? null, movimento.id);
   const [desfazendo, setDesfazendo] = useState<string | null>(null);
+  /**
+   * B-42 — ORDENAÇÃO CLIENT-SIDE dos candidatos.
+   *
+   * ⚠ `null` É "A ORDEM DO MOTOR", e é um estado de primeira classe, não a
+   * ausência de ordenação: o motor devolve por score, que é a opinião dele sobre
+   * qual é o par — e essa opinião é informação. Um terceiro clique volta a ela em
+   * vez de deixar o operador preso na última coluna que tocou.
+   *
+   * ⚠ E A SELEÇÃO SOBREVIVE porque é por ID (`marcados` é um Set de ids), não por
+   * posição. Reordenar com marcação por índice trocaria as linhas marcadas sem
+   * nenhum aviso — sobre dinheiro.
+   */
+  const [ordem, setOrdem] = useState<{ campo: CampoCand; direcao: 'asc' | 'desc' } | null>(null);
   const [vinculando, setVinculando] = useState(false);
   const [criando, setCriando] = useState(false);
   /* ⚠ MARCADO É UM MAPA id → VALOR A APLICAR, não um conjunto de ids: dois
@@ -169,6 +182,38 @@ export function EstacaoConciliar({ movimento, aoFechar, aoMudar, contaBancariaId
       setDesfazendo(null);
     }
   };
+
+  const alternarOrdem = (campo: CampoCand) => setOrdem(o =>
+    o?.campo !== campo ? { campo, direcao: 'asc' }
+    : o.direcao === 'asc' ? { campo, direcao: 'desc' }
+    : null);   // terceiro clique: volta à ordem do motor
+
+  const candidatosOrdenados = useMemo(() => {
+    const lista = candidatos ?? [];
+    if (!ordem) return lista;
+    const chave = (c: typeof lista[number]): string | number | null => {
+      switch (ordem.campo) {
+        case 'descricao': return c.descricao ?? null;
+        case 'favorecido': return c.favorecido ?? null;
+        case 'data': return c.dataReferencia ?? null;
+        case 'valor': return Math.abs(c.valor);
+        case 'deltaValor': return Math.abs(c.deltaValor);
+        case 'deltaDias': return c.deltaDias ?? null;
+      }
+    };
+    return [...lista].sort((a, b) => {
+      const ka = chave(a), kb = chave(b);
+      /* Ausente vai para o fim em qualquer direção: uma coluna sem valor não é
+         "menor", é desconhecida — e o operador procura o que existe. */
+      if (ka === null && kb === null) return 0;
+      if (ka === null) return 1;
+      if (kb === null) return -1;
+      const base = typeof ka === 'string' && typeof kb === 'string'
+        ? ka.localeCompare(kb, 'pt-BR', { sensitivity: 'base', numeric: true })
+        : Number(ka) - Number(kb);
+      return ordem.direcao === 'asc' ? base : -base;
+    });
+  }, [candidatos, ordem]);
 
   return (
     <Dialog open onOpenChange={o => !o && aoFechar()}>
@@ -295,20 +340,38 @@ export function EstacaoConciliar({ movimento, aoFechar, aoMudar, contaBancariaId
                   Nenhum lançamento candidato — nada em aberto nesta conta com valor e data compatíveis.
                 </p>
               ) : (
-                <table className="w-full border-collapse text-[11px]">
+                /* ⚠ TEXTO GANHA, NÚMERO DEVOLVE — B-42. A Descrição é o CRITÉRIO
+                   de validação do operador: é lendo "PIX 790 FORNECEDOR X" que
+                   ele decide se aquele lançamento é o movimento. "PAGAMEN…" não
+                   valida nada, e era o que a divisão igual entre sete colunas
+                   produzia. Os números têm largura previsível — `tabular-nums` e
+                   um teto —, então devolvem o espaço que não usam.
+                   `table-fixed` + colgroup é o que faz o truncate acontecer no
+                   lugar certo em vez de a coluna esticar. */
+                <table className="w-full table-fixed border-collapse text-[10px]">
+                  <colgroup>
+                    <col className="w-[28px]" />
+                    <col />
+                    <col className="w-[140px]" />
+                    <col className="w-[80px]" />
+                    <col className="w-[100px]" />
+                    <col className="w-[84px]" />
+                    <col className="w-[56px]" />
+                  </colgroup>
                   <thead>
-                    <tr className="border-b text-[9px] uppercase tracking-wide text-muted-foreground">
+                    {/* Cabeçalho no padrão da casa: fundo primário, texto claro. */}
+                    <tr className="bg-primary text-[9px] uppercase tracking-wide text-primary-foreground">
                       <th className="px-2 py-1"> </th>
-                      <th className="px-2 py-1 text-left font-semibold">Descrição</th>
-                      <th className="px-2 py-1 text-left font-semibold">Favorecido</th>
-                      <th className="px-2 py-1 text-left font-semibold">Data</th>
-                      <th className="px-2 py-1 text-right font-semibold">Valor</th>
-                      <th className="px-2 py-1 text-right font-semibold">Δ R$</th>
-                      <th className="px-2 py-1 text-right font-semibold">Δ dias</th>
+                      <Cab campo="descricao" rotulo="Descrição" ordem={ordem} aoOrdenar={alternarOrdem} />
+                      <Cab campo="favorecido" rotulo="Favorecido" ordem={ordem} aoOrdenar={alternarOrdem} />
+                      <Cab campo="data" rotulo="Data" ordem={ordem} aoOrdenar={alternarOrdem} />
+                      <Cab campo="valor" rotulo="Valor" ordem={ordem} aoOrdenar={alternarOrdem} alinhaDireita />
+                      <Cab campo="deltaValor" rotulo="Δ R$" ordem={ordem} aoOrdenar={alternarOrdem} alinhaDireita />
+                      <Cab campo="deltaDias" rotulo="Δ dias" ordem={ordem} aoOrdenar={alternarOrdem} alinhaDireita />
                     </tr>
                   </thead>
                   <tbody>
-                    {candidatos.map(c => {
+                    {candidatosOrdenados.map(c => {
                       const marcado = marcados.has(c.id);
                       return (
                         <tr key={c.id} className={cn('border-b border-border/60',
@@ -327,7 +390,7 @@ export function EstacaoConciliar({ movimento, aoFechar, aoMudar, contaBancariaId
                                   ? `Pré-marcado pelo motor (score ${c.score ?? '—'}): valor e data compatíveis.`
                                   : undefined} />
                           </td>
-                          <td className="max-w-0 truncate px-2 py-1" title={c.descricao ?? ''}>
+                          <td className="truncate px-2 py-1 text-[11px] font-medium" title={c.descricao ?? ''}>
                             {c.descricao ?? '—'}
                             {c.ambiguo && (
                               <span className="ml-1 rounded bg-amber-500/15 px-1 py-0 text-[9px] font-semibold uppercase text-amber-700 dark:text-amber-400"
@@ -336,7 +399,7 @@ export function EstacaoConciliar({ movimento, aoFechar, aoMudar, contaBancariaId
                               </span>
                             )}
                           </td>
-                          <td className="max-w-0 truncate px-2 py-1 text-muted-foreground" title={c.favorecido ?? ''}>
+                          <td className="truncate px-2 py-1 text-muted-foreground" title={c.favorecido ?? ''}>
                             {c.favorecido ?? '—'}
                           </td>
                           <td className="whitespace-nowrap px-2 py-1 tabular-nums text-muted-foreground">
@@ -438,5 +501,38 @@ export function EstacaoConciliar({ movimento, aoFechar, aoMudar, contaBancariaId
         />
       )}
     </Dialog>
+  );
+}
+
+type CampoCand = 'descricao' | 'favorecido' | 'data' | 'valor' | 'deltaValor' | 'deltaDias';
+
+/**
+ * Um cabeçalho clicável da tabela de candidatos.
+ *
+ * ⚠ A SETA É SEMPRE VISÍVEL, apagada quando a coluna não é a ativa: mostrá-la só
+ * no hover esconde quais colunas ordenam — justamente o que o operador precisa
+ * saber antes de tentar.
+ */
+function Cab({ campo, rotulo, ordem, aoOrdenar, alinhaDireita }: {
+  campo: CampoCand; rotulo: string;
+  ordem: { campo: CampoCand; direcao: 'asc' | 'desc' } | null;
+  aoOrdenar: (c: CampoCand) => void;
+  alinhaDireita?: boolean;
+}) {
+  const ativo = ordem?.campo === campo;
+  const Seta = !ativo ? ChevronsUpDown : ordem.direcao === 'asc' ? ChevronUp : ChevronDown;
+  return (
+    <th
+      className={cn('cursor-pointer select-none px-2 py-1 font-semibold hover:bg-primary/80',
+        alinhaDireita ? 'text-right' : 'text-left')}
+      onClick={() => aoOrdenar(campo)}
+      aria-sort={ativo ? (ordem.direcao === 'asc' ? 'ascending' : 'descending') : 'none'}
+      title="Clique para ordenar; um terceiro clique volta à ordem do motor."
+    >
+      <span className={cn('inline-flex items-center gap-0.5', alinhaDireita && 'flex-row-reverse')}>
+        {rotulo}
+        <Seta className={cn('h-2.5 w-2.5 shrink-0', !ativo && 'opacity-40')} aria-hidden />
+      </span>
+    </th>
   );
 }

@@ -26,6 +26,16 @@ import { tipoPorContaPlano } from '@/v2/lib/importLanc/importLancamentosView';
 import { baixarModeloPlanilha } from '@/v2/lib/importLanc/modeloPlanilha';
 import { linhasDoExtrato, type MovimentoParaPlanilha } from '@/v2/lib/importLanc/linhasDoExtrato';
 import { Download } from 'lucide-react';
+import type { CampoDePara } from '@/v2/hooks/useImportLancamentosExcel';
+
+/** Os cinco grupos do de-para, na ordem em que o trabalho acontece. */
+const GRUPOS_DEPARA: readonly { campo: CampoDePara; rotulo: string }[] = [
+  { campo: 'subcentro',  rotulo: 'Conta do plano' },
+  { campo: 'fazenda',    rotulo: 'Fazenda' },
+  { campo: 'fornecedor', rotulo: 'Fornecedor' },
+  { campo: 'conta',      rotulo: 'Conta bancária' },
+  { campo: 'safra',      rotulo: 'Safra' },
+];
 
 /** Um número do resumo por balde. Zero fica apagado, mas NÃO some: a ausência de
  *  ambíguos é informação, e um balde que desaparece faz o operador se perguntar
@@ -67,6 +77,7 @@ export function V2ImportLancamentosExcel({
     exigeFazendaCabecalho, fazendaCabecalhoId, setFazendaCabecalhoId,
     lerArquivo, resolverManualmente, alternarDescarte, alternarReinclusao, checandoDup, limpar,
     alternarSemClassificacao, limparSelecao, esquecerApelido, aliasIdPorTexto,
+    criacoesAprovadas, alternarCriacao, marcarTodasCriacoes, contasComExtrato,
     confirmarImportacao, gravando, resultado,
   } = useImportLancamentosExcel();
   const [confirmando, setConfirmando] = useState(false);
@@ -82,6 +93,16 @@ export function V2ImportLancamentosExcel({
       nomeArquivo: `enriquecer-lancamentos${sufixoArquivo ? `-${sufixoArquivo}` : ''}.xlsx`,
     });
   };
+
+  /* ⚠ O GRUPO ABERTO É ESTADO DE UI e nasce no primeiro: sem escolha do
+     operador, abrir onde o trabalho começa é melhor que abrir vazio. */
+  const [grupoDePara, setGrupoDePara] = useState<CampoDePara>('subcentro');
+
+  const totalValoresDePara = useMemo(() => (dePara
+    ? Object.keys(dePara.subcentro).length + Object.keys(dePara.fazenda).length
+      + Object.keys(dePara.fornecedor).length + Object.keys(dePara.conta).length
+      + Object.keys(dePara.safra).length
+    : 0), [dePara]);
 
   const tipoPorTexto = useMemo(
     () => (parse ? tipoPorContaPlano(parse.rows) : {}),
@@ -100,6 +121,8 @@ export function V2ImportLancamentosExcel({
   const bloqueios: string[] = [];
   if (faltaFazendaCabecalho) bloqueios.push('a planilha não traz Fazenda — escolha uma no cabeçalho');
   if (previa && previa.totais.entram.qtd === 0) bloqueios.push('nenhuma linha elegível para importar');
+  /* Placeholder — o bloqueio real por aprovação é montado abaixo, depois de
+     `nVaiGravar` existir. */
 
   /* Linhas que ficam de fora POR CAUSA de de-para pendente — o número que o
      botão promete deixar para trás. Os outros motivos (mês fechado, duplicata)
@@ -109,6 +132,21 @@ export function V2ImportLancamentosExcel({
         .filter((m) => m.motivo === 'subcentro_nao_resolvido' || m.motivo === 'fazenda_nao_resolvida')
         .reduce((acc, m) => acc + m.qtd, 0)
     : 0;
+
+  /* ⚠ B-42 — O BOTÃO CONTA O QUE VAI ACONTECER, não o que é elegível. Criação
+     sem aprovação não grava; somá-la ao número do botão prometeria um resultado
+     que o gravador não entrega. */
+  const nAtualizam = previa
+    ? previa.linhas.filter((l) => l.entra && l.modo === 'atualizar').length : 0;
+  const nCriamAprovadas = previa
+    ? previa.linhas.filter((l) => l.entra && l.modo === 'criar' && criacoesAprovadas.has(l.indice)).length : 0;
+  const nVaiGravar = nAtualizam + nCriamAprovadas;
+  /* ⚠ NADA A GRAVAR É BLOQUEIO, e é diferente de "nenhuma linha elegível": com
+     todas as criações desmarcadas há linhas elegíveis e mesmo assim o confirmar
+     não faria nada. O motivo diz qual dos dois é. */
+  if (previa && previa.totais.entram.qtd > 0 && nVaiGravar === 0) {
+    bloqueios.push('nenhuma criação aprovada — marque ao menos uma, ou não há o que gravar');
+  }
 
   return (
     // PR-IMPORT-EXCEL-LANC-06 — conteúdo limitado (~70% num monitor grande) e ALINHADO
@@ -240,37 +278,76 @@ export function V2ImportLancamentosExcel({
 
       {/* ── Passo 2 — de-para ── */}
       {dePara && pendentes && (
-        <div className="space-y-1.5">
-          <div className="flex items-baseline justify-between">
-            <span className="text-[11px] font-semibold">De-para</span>
-            {/* ⚠ AVISO, NÃO TRAVA — B-40 item 1b. O contador segue à vista porque
-                a informação importa; o que mudou é que ele não segura mais o
-                botão. Âmbar e não vermelho: vermelho promete impedimento. */}
-            <span className={`text-[10px] font-semibold ${pendentes.total > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>
-              {pendentes.total > 0
-                ? `${pendentes.total} valor(es) a resolver — as demais linhas entram assim mesmo`
-                : 'todos os valores resolvidos'}
-            </span>
+        /* ⚠ B-42 — GRUPOS NAVEGÁVEIS, NÃO CINCO BLOCOS EMPILHADOS. Os cinco
+           abertos faziam a tela ter metros de altura, e o contador de pendências
+           — a única informação que diz se falta trabalho — saía do campo de
+           visão assim que o operador começava a rolar. Agora um grupo por vez, e
+           o cabeçalho com os contadores fica CONGELADO no topo.
+
+           ⚠ E A LARGURA TOTAL DE CADA PAINEL FOI PRESERVADA: mapear é comparar
+           dois textos, e a grade 2x2 de outrora truncava os dois. O que mudou é
+           quantos aparecem ao mesmo tempo, nunca a largura de cada um. */
+        <div className="rounded-lg border bg-card">
+          <div className="sticky top-0 z-20 rounded-t-lg border-b bg-card px-2 py-1.5">
+            <div className="flex flex-wrap items-baseline gap-2">
+              <span className="text-[11px] font-semibold">De-para</span>
+              <span className="text-[10px] text-muted-foreground">
+                <b className="tabular-nums">{totalValoresDePara}</b> valores ·{' '}
+                <b className={`tabular-nums ${pendentes.total > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>
+                  {pendentes.total}
+                </b> a resolver
+              </span>
+              <div className="flex-1" />
+              {/* ⚠ AVISO, NÃO TRAVA — B-40 item 1b. Âmbar e não vermelho:
+                  vermelho promete impedimento, e a pendência já não impede. */}
+              <span className={`text-[10px] font-semibold ${pendentes.total > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>
+                {pendentes.total > 0
+                  ? 'as demais linhas entram assim mesmo'
+                  : 'todos os valores resolvidos'}
+              </span>
+            </div>
+
+            {/* As abas: cada uma carrega o "a resolver" do próprio grupo, para o
+                operador saber ONDE está o trabalho sem abrir os cinco. */}
+            <div className="mt-1 flex flex-wrap gap-1">
+              {GRUPOS_DEPARA.filter(g => g.campo !== 'safra' || Object.keys(dePara.safra).length > 0)
+                .map((g) => {
+                  const nPend = pendentes[g.campo];
+                  const ativo = grupoDePara === g.campo;
+                  return (
+                    <button key={g.campo} type="button"
+                      onClick={() => setGrupoDePara(g.campo)}
+                      className={`rounded px-2 py-0.5 text-[10px] font-medium transition-colors ${
+                        ativo ? 'bg-primary text-primary-foreground'
+                          : 'bg-muted text-muted-foreground hover:bg-muted/70'}`}>
+                      {g.rotulo}
+                      {/* Zero fica apagado mas NÃO some: um grupo que desaparece
+                          faz o operador se perguntar se ele existia. */}
+                      <span className={`ml-1 tabular-nums ${
+                        nPend > 0 ? (ativo ? '' : 'text-amber-700 font-semibold') : 'opacity-50'}`}>
+                        {nPend}
+                      </span>
+                    </button>
+                  );
+                })}
+            </div>
+
+            {/* ⚠ A ORIENTAÇÃO — B-40 item 6. O de-para parece um formulário a
+                preencher inteiro; ele é uma pergunta que se responde UMA vez por
+                valor e fica memorizada. Sem isto escrito, o operador não sabe nem
+                que a memória existe, nem que a célula vazia é resposta legítima. */}
+            <p className="mt-1 text-[9px] leading-snug text-muted-foreground">
+              O de-para pergunta uma vez por <b>conta do plano</b> do arquivo e memoriza para os
+              próximos. Linha sem conta: deixe a célula vazia — entra sem classificação e você
+              resolve na tela.
+            </p>
           </div>
 
-          {/* ⚠ A ORIENTAÇÃO NO TOPO — B-40 item 6. O de-para parece um formulário
-              a preencher inteiro; ele é uma pergunta que se responde UMA vez por
-              valor e fica memorizada. Sem isto escrito, o operador não sabe nem
-              que a memória existe, nem que a célula vazia é uma resposta
-              legítima — e trata cada linha como obrigação. */}
-          <p className="rounded border border-border bg-muted/30 px-2 py-1 text-[10px] leading-snug text-muted-foreground">
-            O de-para pergunta uma vez por <b>conta do plano</b> do arquivo e memoriza para os
-            próximos. Linha sem conta: deixe a célula vazia — entra sem classificação e você resolve
-            na tela.
-          </p>
-
-          {/* PR-IMPORT-EXCEL-LANC-05 — blocos EMPILHADOS, cada um em largura total.
-              Na grade 2x2 anterior cada bloco recebia metade da tela e todo texto
-              truncava ("Pec/Mão de Obra/Sala…", "cc-001 | brades…"): o operador tinha
-              de passar o mouse para ler o que estava mapeando. Mapear é comparar dois
-              textos — se um deles está cortado, a tela não cumpre a função. */}
-          <div className="space-y-1.5">
-            <div>
+          {/* ⚠ SÓ O GRUPO ATIVO ROLA, e dentro de um teto: com 300 valores
+              distintos, a página inteira crescia atrás do cabeçalho congelado —
+              que então congelava fora da tela. */}
+          <div className="max-h-[46vh] overflow-y-auto p-1.5">
+            {grupoDePara === 'subcentro' && (
               <ImportLancDeParaPanel
                 titulo="Conta do plano do cliente → Subcentro"
                 campo="subcentro"
@@ -285,8 +362,8 @@ export function V2ImportLancamentosExcel({
                 onResolver={resolverManualmente}
                 onDescartar={alternarDescarte}
               />
-            </div>
-            <div>
+            )}
+            {grupoDePara === 'fazenda' && (
               <ImportLancDeParaPanel
                 titulo="Fazenda"
                 campo="fazenda"
@@ -296,8 +373,8 @@ export function V2ImportLancamentosExcel({
                 onResolver={resolverManualmente}
                 onDescartar={alternarDescarte}
               />
-            </div>
-            <div>
+            )}
+            {grupoDePara === 'fornecedor' && (
               <ImportLancDeParaPanel
                 titulo="Fornecedor"
                 campo="fornecedor"
@@ -308,8 +385,8 @@ export function V2ImportLancamentosExcel({
                 onDescartar={alternarDescarte}
                 onCriarFornecedor={criarFornecedor}
               />
-            </div>
-            <div>
+            )}
+            {grupoDePara === 'conta' && (
               <ImportLancDeParaPanel
                 titulo="Conta bancária / cartão"
                 campo="conta"
@@ -319,22 +396,20 @@ export function V2ImportLancamentosExcel({
                 onResolver={resolverManualmente}
                 onDescartar={alternarDescarte}
               />
-            </div>
-            {/* ⚠ O PAINEL DE SAFRA SÓ APARECE QUANDO A PLANILHA TRAZ SAFRA —
-                B-22d. Um painel vazio permanente ensinaria que falta preencher
-                algo que a maioria das planilhas não tem. */}
-            {Object.keys(dePara.safra).length > 0 && (
-              <div>
-                <ImportLancDeParaPanel
-                  titulo="Safra"
-                  campo="safra"
-                  mapa={dePara.safra}
-                  pendentes={pendentes.safra}
-                  safras={safras}
-                  onResolver={resolverManualmente}
-                  onDescartar={alternarDescarte}
-                />
-              </div>
+            )}
+            {/* ⚠ O GRUPO DE SAFRA SÓ EXISTE QUANDO A PLANILHA TRAZ SAFRA — B-22d.
+                Uma aba vazia permanente ensinaria que falta preencher algo que a
+                maioria das planilhas não tem. */}
+            {grupoDePara === 'safra' && Object.keys(dePara.safra).length > 0 && (
+              <ImportLancDeParaPanel
+                titulo="Safra"
+                campo="safra"
+                mapa={dePara.safra}
+                pendentes={pendentes.safra}
+                safras={safras}
+                onResolver={resolverManualmente}
+                onDescartar={alternarDescarte}
+              />
             )}
           </div>
         </div>
@@ -367,7 +442,11 @@ export function V2ImportLancamentosExcel({
               dica="Excluídas por outro motivo — mês fechado, transferência, duplicata, de-para pendente. A lista abaixo diz qual." />
           </div>
 
-          <ImportLancPrevia linhas={previa.linhas} totais={previa.totais} aoReincluir={alternarReinclusao} />
+          <ImportLancPrevia linhas={previa.linhas} totais={previa.totais} aoReincluir={alternarReinclusao}
+            criacoesAprovadas={criacoesAprovadas}
+            aoAlternarCriacao={alternarCriacao}
+            aoMarcarTodasCriacoes={marcarTodasCriacoes}
+            contasComExtrato={contasComExtrato} />
 
           <div className="flex items-center justify-end gap-2 flex-wrap">
             {bloqueios.length > 0 && (
@@ -385,12 +464,11 @@ export function V2ImportLancamentosExcel({
             >
               {gravando
                 ? 'Gravando…'
-                : linhasPendentes > 0
-                  /* O botão diz o que faz E o que deixa para trás, no próprio
-                     rótulo: confirmar sem saber quantas ficam de fora é o que
-                     fazia o operador descobrir a perda depois. */
-                  ? `Confirmar (${previa.totais.entram.qtd}) — ${linhasPendentes} linhas pendentes ficam de fora`
-                  : `Confirmar importação (${previa.totais.entram.qtd})`}
+                /* O botão diz o que faz E o que deixa para trás, no próprio
+                   rótulo: confirmar sem saber o que acontece é o que fazia o
+                   operador descobrir a perda — ou a duplicata — depois. */
+                : `Confirmar: ${nAtualizam} atualizam · ${nCriamAprovadas} criam (aprovadas)`
+                  + (linhasPendentes > 0 ? ` — ${linhasPendentes} pendentes ficam de fora` : '')}
             </Button>
           </div>
         </div>

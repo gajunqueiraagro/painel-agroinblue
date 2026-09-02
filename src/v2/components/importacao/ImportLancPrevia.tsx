@@ -23,6 +23,19 @@ export interface ImportLancPreviaProps {
   totais: TotaisPrevia;
   /** Manda entrar uma linha barrada por duplicidade. Ausente = sem reinclusão. */
   aoReincluir?: (indice: number) => void;
+  /**
+   * B-42 — o gate das criações. Ausentes = comportamento antigo (tudo entra).
+   *
+   * ⚠ CRIAR NÃO TEM O RISCO DE ATUALIZAR. Atualizar mexe no que já existe e se
+   * conserta na tela; criar acrescenta dinheiro ao mês, e a criação indevida só
+   * aparece no fechamento, já virada duplicata. Por isso nasce DESMARCADA — o
+   * mesmo padrão do dedup D1.
+   */
+  criacoesAprovadas?: ReadonlySet<number>;
+  aoAlternarCriacao?: (indice: number) => void;
+  aoMarcarTodasCriacoes?: (indices: readonly number[], marcar: boolean) => void;
+  /** Contas com extrato importado — dispara o aviso de ordem na linha. */
+  contasComExtrato?: ReadonlySet<string>;
 }
 
 const LIMITE_LINHAS = 300;
@@ -35,7 +48,10 @@ const FILTRO_CLS: Record<FiltroPrevia, { ativo: string; inativo: string }> = {
 
 const FILTROS: FiltroPrevia[] = ['entra', 'sai', 'fora'];
 
-export function ImportLancPrevia({ linhas, totais, aoReincluir }: ImportLancPreviaProps) {
+export function ImportLancPrevia({
+  linhas, totais, aoReincluir,
+  criacoesAprovadas, aoAlternarCriacao, aoMarcarTodasCriacoes, contasComExtrato,
+}: ImportLancPreviaProps) {
   // null = sem recorte (mostra tudo). Só apresentação: não altera elegibilidade.
   const [filtro, setFiltro] = useState<FiltroPrevia | null>(null);
 
@@ -48,7 +64,22 @@ export function ImportLancPrevia({ linhas, totais, aoReincluir }: ImportLancPrev
   /* ⚠ DOIS BALDES, CONTADOS SOBRE A MESMA LISTA que a tela desenha — a regra do
      contador e da lista saírem do mesmo campo. */
   const nAtualiza = linhas.filter((l) => l.entra && l.modo === 'atualizar').length;
-  const nCria = linhas.filter((l) => l.entra && l.modo === 'criar').length;
+  const linhasCriam = useMemo(
+    () => linhas.filter((l) => l.entra && l.modo === 'criar'), [linhas]);
+  const nCria = linhasCriam.length;
+
+  /* B-42 — o gate só existe quando quem monta a prévia o fornece. */
+  const comGate = !!criacoesAprovadas && !!aoAlternarCriacao;
+  const indicesCriam = useMemo(() => linhasCriam.map((l) => l.indice), [linhasCriam]);
+  const nAprovadas = comGate ? indicesCriam.filter((i) => criacoesAprovadas.has(i)).length : nCria;
+  const todasMarcadas = nCria > 0 && nAprovadas === nCria;
+  /* ⚠ O TOTAL EM R$ É DAS APROVADAS, não das criáveis: é o dinheiro que vai
+     entrar no mês se ele confirmar agora. */
+  const valorAprovado = comGate
+    ? linhasCriam
+        .filter((l) => criacoesAprovadas.has(l.indice))
+        .reduce((acc, l) => acc + Math.abs(Number(l.row.valor) || 0), 0)
+    : 0;
 
   return (
     <div className="space-y-1.5">
@@ -139,6 +170,36 @@ export function ImportLancPrevia({ linhas, totais, aoReincluir }: ImportLancPrev
       </div>
 
       {/* ── Linhas ── */}
+      {/* ⚠ A FAIXA DE APROVAÇÃO DAS CRIAÇÕES — B-42. Fica ACIMA da lista porque é
+          um gate, não um detalhe de linha: o operador precisa ver quantas criações
+          existem e quanto valem antes de decidir, não descobrir isso rolando. */}
+      {comGate && nCria > 0 && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5">
+          <div className="flex flex-wrap items-center gap-2 text-[10px] leading-snug text-amber-900">
+            <label className="flex cursor-pointer items-center gap-1.5 font-semibold">
+              <input type="checkbox" className="h-3 w-3 accent-amber-700"
+                checked={todasMarcadas}
+                ref={(el) => { if (el) el.indeterminate = nAprovadas > 0 && !todasMarcadas; }}
+                onChange={() => aoMarcarTodasCriacoes?.(indicesCriam, !todasMarcadas)} />
+              Marcar todas
+            </label>
+            <span>
+              <b className="tabular-nums">{nAprovadas}</b> de <b className="tabular-nums">{nCria}</b>{' '}
+              criaç{nCria === 1 ? 'ão aprovada' : 'ões aprovadas'} ·{' '}
+              <b className="tabular-nums">{formatMoeda(valorAprovado)}</b> entram como lançamento novo
+            </span>
+          </div>
+          {/* ⚠ CRIAR EXIGE APROVAÇÃO E ATUALIZAR NÃO — dito, para não parecer
+              arbitrário: atualizar mexe no que existe e se conserta na tela;
+              criar acrescenta dinheiro, e a criação indevida só aparece no
+              fechamento, já virada duplicata a caçar. */}
+          <p className="mt-0.5 text-[9px] leading-snug text-amber-800">
+            Criações nascem desmarcadas: elas acrescentam lançamentos ao mês. As atualizações entram
+            por padrão — elas mexem no que já existe.
+          </p>
+        </div>
+      )}
+
       <div className="border rounded-md overflow-auto max-h-[46vh]">
         <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>
           <colgroup>
@@ -193,6 +254,13 @@ export function ImportLancPrevia({ linhas, totais, aoReincluir }: ImportLancPrev
                 <td className="px-1 py-0.5 text-[10px]">
                   {l.entra ? (
                     <span className={l.modo === 'atualizar' ? 'text-sky-700' : 'text-emerald-700'}>
+                      {/* A marca por linha: o mesmo gate da faixa, no detalhe. */}
+                      {comGate && l.modo === 'criar' && (
+                        <input type="checkbox" className="mr-1 h-3 w-3 align-middle accent-emerald-700"
+                          checked={criacoesAprovadas.has(l.indice)}
+                          onChange={() => aoAlternarCriacao?.(l.indice)}
+                          title="Aprovar a criação desta linha. Sem a marca, ela não é gravada." />
+                      )}
                       {/* ⚠ AS DUAS PALAVRAS SÃO DIFERENTES PORQUE OS ATOS SÃO:
                           "atualiza" mexe num lançamento que já existe; "entra"
                           cria um novo. Chamar os dois de "entra" esconderia do
@@ -211,6 +279,16 @@ export function ImportLancPrevia({ linhas, totais, aoReincluir }: ImportLancPrev
                       {l.reincluida && (
                         <span className="ml-1 text-amber-700" title="Idêntico a um lançamento existente; você mandou entrar assim mesmo.">
                           · duplicata assumida
+                        </span>
+                      )}
+                      {/* ⚠ O AVISO DA ORDEM, na linha que corre o risco. Numa conta
+                          que já recebeu OFX o mês virou lançamento cru; criar por
+                          planilha antes de vincular produz o segundo lançamento do
+                          mesmo fato — e a duplicata só aparece no fechamento. */}
+                      {l.modo === 'criar' && l.contaBancariaId && contasComExtrato?.has(l.contaBancariaId) && (
+                        <span className="ml-1 text-amber-700"
+                          title="Esta conta tem extrato importado — rode Vincular/Lançar em massa antes, ou criações daqui podem duplicar depois.">
+                          · conta tem extrato
                         </span>
                       )}
                     </span>

@@ -109,6 +109,23 @@ export function useImportLancamentosExcel() {
    * justamente o lançamento que o operador queria corrigir.
    */
   const [alvos, setAlvos] = useState<ReadonlyMap<string, AlvoAtualizacao>>(new Map());
+  /**
+   * B-42 — CRIAÇÃO EXIGE APROVAÇÃO EXPLÍCITA, por linha.
+   *
+   * ⚠ CRIAR E ATUALIZAR NÃO TÊM O MESMO RISCO, e por isso não têm o mesmo
+   * padrão. Atualizar mexe num lançamento que já existe e é reversível na tela;
+   * criar acrescenta dinheiro ao mês, e uma criação indevida só aparece no
+   * fechamento — quando já virou duplicata a caçar. É o mesmo raciocínio do
+   * dedup D1, que já nasce fora.
+   *
+   * ⚠ POR ÍNDICE DA LINHA, como a reinclusão: `row.linha` é o número no Excel e
+   * o filtro da prévia reordena e recorta a lista — só o índice de origem
+   * sobrevive a isso.
+   */
+  const [criacoesAprovadas, setCriacoesAprovadas] = useState<ReadonlySet<number>>(new Set());
+  /** Contas (do sistema) que já têm extrato importado — o aviso de duplicação. */
+  const [contasComExtrato, setContasComExtrato] = useState<ReadonlySet<string>>(new Set());
+
   /** B-41 — lançamentos vivos que as linhas SEM id podem estar querendo classificar. */
   const [candidatos, setCandidatos] = useState<CandidatoCasamento[]>([]);
   /** Resultado da gravação (passo 4). null = ainda não confirmada. */
@@ -714,6 +731,63 @@ export function useImportLancamentosExcel() {
     return () => { cancelado = true; };
   }, [clienteId, parse]);
 
+  /* As contas que as linhas de CRIAÇÃO usam — só elas correm o risco de
+     duplicar contra o extrato; linha que atualiza não cria nada. */
+  const previaContasIds = useMemo(
+    () => (previa?.linhas ?? [])
+      .filter((l) => l.entra && l.modo === 'criar' && l.contaBancariaId)
+      .map((l) => l.contaBancariaId as string),
+    [previa],
+  );
+  const previaContasIdsKey = useMemo(
+    () => [...new Set(previaContasIds)].sort().join(','), [previaContasIds]);
+
+  const alternarCriacao = useCallback((indice: number) => {
+    setCriacoesAprovadas((p) => {
+      const n = new Set(p);
+      if (n.has(indice)) n.delete(indice); else n.add(indice);
+      return n;
+    });
+  }, []);
+
+  /** Marcar/desmarcar todas as criações de uma vez — o acelerador, nunca o padrão. */
+  const marcarTodasCriacoes = useCallback((indices: readonly number[], marcar: boolean) => {
+    setCriacoesAprovadas((p) => {
+      const n = new Set(p);
+      for (const i of indices) { if (marcar) n.add(i); else n.delete(i); }
+      return n;
+    });
+  }, []);
+
+  /**
+   * B-42 — QUAIS CONTAS JÁ TÊM EXTRATO IMPORTADO.
+   *
+   * ⚠ O AVISO EXISTE PORQUE A ORDEM IMPORTA. Numa conta que já recebeu OFX, o
+   * mês virou lançamento cru; criar por planilha antes de vincular produz o
+   * segundo lançamento do mesmo fato, e a duplicata só aparece no fechamento. O
+   * caminho certo é Vincular/Lançar em massa primeiro — e a tela diz isso na
+   * hora, não depois.
+   */
+  useEffect(() => {
+    let cancelado = false;
+    const contas = [...new Set((previaContasIds ?? []))];
+    if (!clienteId || contas.length === 0) { setContasComExtrato(new Set()); return; }
+    (async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado
+      const { data } = await (supabase as any)
+        .from('extrato_bancario_v2')
+        .select('conta_bancaria_id')
+        .in('conta_bancaria_id', contas)
+        .is('cancelado_em', null)
+        .limit(2000);
+      if (cancelado) return;
+      const rows = (data ?? []) as { conta_bancaria_id: string }[];
+      setContasComExtrato(new Set(rows.map((r) => r.conta_bancaria_id)));
+    })();
+    return () => { cancelado = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clienteId, previaContasIdsKey]);
+
   const pendentes = useMemo(() => (dePara ? contarPendentes(dePara) : null), [dePara]);
 
   /** A planilha não trouxe coluna de fazenda em nenhuma linha → exigir no cabeçalho. */
@@ -813,6 +887,11 @@ export function useImportLancamentosExcel() {
           else { falhas++; erros.push(`Linha ${l.row.linha}: falha ao atualizar o lançamento.`); }
           continue;
         }
+        /* ⚠ CRIAÇÃO SEM APROVAÇÃO NÃO GRAVA — B-42. A prévia mostra a linha
+           marcável; sem a marca, ela fica para a próxima. Silenciosa aqui é o
+           certo: a tela já disse quantas seriam criadas e o operador escolheu
+           não aprovar estas. */
+        if (!criacoesAprovadas.has(l.indice)) continue;
         const id = await criarLancamentoComId(form, { origem: 'excel', silent: true });
         if (id) criados++;
         else { falhas++; erros.push(`Linha ${l.row.linha}: falha ao criar o lançamento.`); }
@@ -849,6 +928,9 @@ export function useImportLancamentosExcel() {
        quando o operador mapeia a conta no de-para, e um gravador preso à versão
        anterior atualizaria pelo casamento que a tela já não mostra. */
     casados,
+    /* B-42 — idem: o gravador precisa da aprovação vigente, não da de um render
+       anterior; presa à antiga, ele criaria o que o operador acabou de desmarcar. */
+    criacoesAprovadas,
   ]);
 
   return {
@@ -861,6 +943,8 @@ export function useImportLancamentosExcel() {
     lerArquivo, resolverManualmente, alternarDescarte, alternarReinclusao, checandoDup, limpar,
     /* B-40 — as três saídas novas do de-para. */
     alternarSemClassificacao, limparSelecao, esquecerApelido,
+    /* B-42 — o gate de aprovação das criações. */
+    criacoesAprovadas, alternarCriacao, marcarTodasCriacoes, contasComExtrato,
     /** Texto normalizado → id do alias gravado; a tela usa para oferecer "esquecer". */
     aliasIdPorTexto,
     // passo 4 — a ÚNICA que grava, e só por confirmação explícita
