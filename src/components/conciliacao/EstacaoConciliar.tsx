@@ -1,6 +1,10 @@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Loader2, Unlink, Link2, FilePlus2, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
@@ -10,7 +14,7 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { CriarLancamentoDaLinha } from '@/components/conciliacao/CriarLancamentoDaLinha';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import {
-  useVinculosDoMovimento, useCandidatosDoMovimento, vincularSelecao, TOL,
+  useVinculosDoMovimento, useCandidatosDoMovimento, vincularSelecao, desfazerGrupo, TOL,
   type MovimentoConciliacao, type CandidatoConciliacao,
 } from '@/hooks/useConciliacaoDoMes';
 
@@ -91,6 +95,8 @@ export function EstacaoConciliar({ movimento, aoFechar, aoMudar, contaBancariaId
    * nenhum aviso — sobre dinheiro.
    */
   const [ordem, setOrdem] = useState<{ campo: CampoCand; direcao: 'asc' | 'desc' } | null>(null);
+  /** Grupo cuja desfeita está em confirmação; `null` = nenhuma. */
+  const [confirmandoGrupo, setConfirmandoGrupo] = useState<string | null>(null);
   const [vinculando, setVinculando] = useState(false);
   const [criando, setCriando] = useState(false);
   /* ⚠ MARCADO É UM MAPA id → VALOR A APLICAR, não um conjunto de ids: dois
@@ -100,6 +106,32 @@ export function EstacaoConciliar({ movimento, aoFechar, aoMudar, contaBancariaId
   const [marcados, setMarcados] = useState<Map<string, number>>(new Map());
 
   const somaAplicada = vinculos.reduce((s, v) => s + v.valorAplicado, 0);
+
+  /* ⚠ SÓ OFERECE O BOTÃO QUANDO HÁ UM GRUPO SÓ. Um movimento pode, em tese,
+     ter vínculos de mais de um grupo; nesse caso um botão único no cabeçalho
+     não saberia qual desfazer, e escolher por conta própria seria decidir sobre
+     dinheiro. Aí só o botão da própria linha aparece, que sabe o seu. */
+  const gruposAtivos = [...new Set(vinculos.map(v => v.grupoId).filter((g): g is string => !!g))];
+  const grupoUnico = gruposAtivos.length === 1 ? gruposAtivos[0] : null;
+  const vinculosDoGrupo = grupoUnico ? vinculos.filter(v => v.grupoId === grupoUnico).length : 0;
+
+  const confirmarDesfazerGrupo = async () => {
+    if (!confirmandoGrupo) return;
+    setDesfazendo(confirmandoGrupo);
+    try {
+      const r = await desfazerGrupo(confirmandoGrupo);
+      /* A recusa do banco vai SEM TRADUÇÃO: ela nomeia o invariante violado, e
+         reescrevê-la aqui trocaria o motivo real por um genérico nosso. */
+      if (!r.ok || r.erro) { toast.error(r.erro ?? 'O banco recusou desfazer o grupo.'); return; }
+      toast.success(`${r.itensDesfeitos} vínculo${r.itensDesfeitos === 1 ? '' : 's'} desfeito${r.itensDesfeitos === 1 ? '' : 's'}. Os lançamentos continuam onde estão.`);
+      setConfirmandoGrupo(null);
+      await recarregar();
+      await recarregarCand();
+      await aoMudar();
+    } finally {
+      setDesfazendo(null);
+    }
+  };
   const alvo = Math.abs(movimento.valor);
   const resta = alvo - somaAplicada;
   /* ⚠ "fecha" / "passa" / "falta" — os três estados do original, e a tolerância
@@ -240,6 +272,19 @@ export function EstacaoConciliar({ movimento, aoFechar, aoMudar, contaBancariaId
             <span className="text-[11px] font-medium text-foreground">Vínculos deste movimento</span>
             <span className="text-[10px] text-muted-foreground">
               {vinculos.length} vínculo{vinculos.length === 1 ? '' : 's'} ativo{vinculos.length === 1 ? '' : 's'}
+              {/* O botão do grupo vive no cabeçalho da lista, e não numa linha:
+                  a ação é sobre o conjunto, e pendurá-la numa linha sugeriria que
+                  desfaz só aquela. */}
+              {grupoUnico && (
+                <Button type="button" variant="outline" size="sm"
+                  className="ml-2 h-5 gap-1 px-2 text-[10px]"
+                  disabled={desfazendo != null}
+                  title="Desfaz de uma vez os vínculos deste grupo. Os lançamentos continuam onde estão."
+                  onClick={() => setConfirmandoGrupo(grupoUnico)}>
+                  <Unlink className="h-3 w-3" />
+                  Desfazer grupo ({vinculosDoGrupo})
+                </Button>
+              )}
             </span>
           </div>
 
@@ -280,14 +325,23 @@ export function EstacaoConciliar({ movimento, aoFechar, aoMudar, contaBancariaId
                       {formatMoeda(v.valorAplicado)}
                     </td>
                     <td className="px-2 py-1 text-right">
+                      {/* ⚠ MEMBRO DE GRUPO NÃO SE DESFAZ SOZINHO — PR-DESFAZER-GRUPO.
+                          Os N vínculos nasceram juntos porque N lançamentos
+                          explicam UM movimento; tirar um deixaria o extrato
+                          explicado por uma soma que ninguém escolheu. A RPC
+                          unitária já recusava — o que faltava era a tela DIZER
+                          isso e oferecer a saída, em vez de um botão que falha. */}
                       <Button type="button" variant="ghost" size="sm"
                         className="h-5 gap-1 px-1.5 text-[10px] text-muted-foreground"
                         disabled={desfazendo != null}
-                        onClick={() => desfazer(v.id)}>
+                        title={v.grupoId
+                          ? 'Este vínculo faz parte de um grupo — use "Desfazer grupo" acima.'
+                          : undefined}
+                        onClick={() => (v.grupoId ? setConfirmandoGrupo(v.grupoId) : desfazer(v.id))}>
                         {desfazendo === v.id
                           ? <Loader2 className="h-3 w-3 animate-spin" />
                           : <Unlink className="h-3 w-3" />}
-                        Desfazer
+                        {v.grupoId ? 'Desfazer grupo' : 'Desfazer'}
                       </Button>
                     </td>
                   </tr>
@@ -500,6 +554,30 @@ export function EstacaoConciliar({ movimento, aoFechar, aoMudar, contaBancariaId
           }}
         />
       )}
+
+      {/* ⚠ A CONFIRMAÇÃO DIZ O QUE NÃO ACONTECE. "Desfazer" sobre dinheiro
+          assusta, e a dúvida do clique é sempre a mesma: os lançamentos somem?
+          Não somem — e dizê-lo aqui é o que separa a hesitação da decisão. */}
+      <AlertDialog open={confirmandoGrupo !== null}
+        onOpenChange={o => !o && setConfirmandoGrupo(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desfazer o grupo?</AlertDialogTitle>
+            <AlertDialogDescription className="text-[11px] leading-snug">
+              Desfaz os <b>{vinculosDoGrupo || vinculos.filter(v => v.grupoId === confirmandoGrupo).length} vínculos</b> deste
+              grupo de uma vez. <b>Os lançamentos ficam</b> — eles voltam a ficar disponíveis para
+              conciliar, e nenhum é apagado ou alterado. O movimento volta a “sem vínculo”, e você
+              pode refazer a conciliação do jeito certo.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={desfazendo != null}>Voltar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { void confirmarDesfazerGrupo(); }}>
+              Desfazer grupo
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }

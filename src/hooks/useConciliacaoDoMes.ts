@@ -82,10 +82,46 @@ export interface VinculoDoMovimento {
   lancamentoData: string | null;
   lancamentoValor: number | null;
   favorecido: string | null;
+  /**
+   * PR-DESFAZER-GRUPO — o grupo a que este vínculo pertence; `null` = avulso.
+   *
+   * ⚠ SEM ELE A TELA NÃO SABIA O QUE ESTAVA OLHANDO. O desfazer unitário recusa
+   * membro de grupo — e recusava sem que a tela pudesse dizer por quê, nem
+   * oferecer a saída. O campo já existia na tabela; faltava vir no `select`.
+   */
+  grupoId: string | null;
 }
 
 /** A tolerância do dinheiro nesta tela — a mesma do briefing e do banco. */
 export const TOL = 0.005;
+
+/**
+ * DESFAZER O GRUPO INTEIRO — `fn_desfazer_grupo_conciliacao`.
+ *
+ * ⚠ A RPC EXISTIA E NUNCA TEVE CALLER. Estava no banco e no `types.ts`,
+ * `SECURITY DEFINER`, desfazendo todos os itens do grupo e recalculando o status
+ * de cada extrato afetado — e nenhuma tela a chamava. O desfazer unitário
+ * (`fn_desfazer_vinculo_extrato`) recusa membro de grupo, então o operador via
+ * "desfazer bloqueado" sem nenhuma saída: cinco vínculos presos, e o único
+ * caminho era o banco.
+ *
+ * ⚠ O GRUPO É A UNIDADE, e é por isso que não há "desfazer um do grupo": os N
+ * vínculos foram criados juntos porque N lançamentos explicam UM movimento.
+ * Tirar um deixaria o extrato parcialmente explicado por uma soma que ninguém
+ * escolheu — e o status recalculado mentiria sobre uma decisão que não houve.
+ */
+export async function desfazerGrupo(
+  grupoId: string, motivo = 'grupo_desfeito_na_estacao',
+): Promise<{ ok: boolean; itensDesfeitos: number; erro: string | null }> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+  const { data, error } = await (supabase as any).rpc('fn_desfazer_grupo_conciliacao', {
+    p_grupo_id: grupoId,
+    p_motivo: motivo,
+  });
+  if (error) return { ok: false, itensDesfeitos: 0, erro: error.message };
+  const r = (data ?? {}) as { ok?: boolean; itens_desfeitos?: number };
+  return { ok: r.ok !== false, itensDesfeitos: Number(r.itens_desfeitos ?? 0), erro: null };
+}
 
 export interface ContagemBaldes {
   todos: number;
@@ -461,7 +497,7 @@ export function useVinculosDoMovimento(extratoId: string | null) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado
       const { data } = await (supabase as any)
         .from('conciliacao_bancaria_itens')
-        .select('id, lancamento_id, valor_aplicado, financeiro_lancamentos_v2(descricao, data_pagamento, data_vencimento, data_competencia, valor, financeiro_fornecedores(nome))')
+        .select('id, lancamento_id, valor_aplicado, grupo_id, financeiro_lancamentos_v2(descricao, data_pagamento, data_vencimento, data_competencia, valor, financeiro_fornecedores(nome))')
         .eq('extrato_id', extratoId)
         .is('desfeito_em', null);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- linhas da view, fora de types.ts
@@ -479,6 +515,7 @@ export function useVinculosDoMovimento(extratoId: string | null) {
           lancamentoData: l?.data_pagamento ?? l?.data_vencimento ?? l?.data_competencia ?? null,
           lancamentoValor: l?.valor == null ? null : Number(l.valor),
           favorecido: l?.financeiro_fornecedores?.nome ?? null,
+          grupoId: r.grupo_id ?? null,
         };
       }));
     } finally {
