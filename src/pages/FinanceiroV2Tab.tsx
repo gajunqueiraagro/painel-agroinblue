@@ -739,6 +739,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     if (recorteConcil === 'conciliado') {
       items = items.filter(l => conciliados.has(l.id));
     } else if (recorteConcil === 'sem_conciliar') {
+      /* ⚠ O LEGADO NÃO ENTRA EM NENHUM DOS DOIS RECORTES, e é o certo: as 574
+         linhas com `status_transacao = 'conciliado'` sem vínculo não são
+         conciliadas (não há vínculo) nem "realizado sem conciliar" (o status não
+         é realizado). São um terceiro caso, e forçá-las num dos dois faria o
+         filtro afirmar sobre elas algo que ninguém verificou. Aparecem em
+         "Todos", rotuladas como legado. */
       items = items.filter(l =>
         (l.status_transacao || '').toLowerCase() === 'realizado' && !conciliados.has(l.id));
     }
@@ -1851,7 +1857,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                        mostrá-lo. */
                     const stCru = (l.status_transacao || '').toLowerCase();
                     const vinculo = conciliados.get(l.id);
-                    const stKey = vinculo && stCru === 'realizado' ? 'conciliado' : stCru;
+                    /* ⚠ A PÍLULA AZUL VEM DO VÍNCULO, e o `stCru === 'conciliado'`
+                       NÃO a herda: 574 linhas têm esse status gravado sem vínculo
+                       nenhum — legado de 10/04/2026. Elas caem no rótulo
+                       "Conciliado (legado)", muted, distinguível do fato. */
+                    const stKey = vinculo && stCru === 'realizado' ? 'conciliado_real' : stCru;
                     const stLabel = STATUS_FILTRO_LABEL[stKey] || l.status_transacao || '-';
                     const stColor = STATUS_FILTRO_COR[stKey] || 'text-muted-foreground';
                     /* A EVIDÊNCIA, sem UUID: o operador confere pelo que

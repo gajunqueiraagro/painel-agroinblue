@@ -64,10 +64,20 @@ export const STATUS_FINANCEIRO_OPCOES_MODAL: { value: StatusFinanceiro; label: s
 export type StatusFiltroFinanceiro = StatusFinanceiro | 'meta' | 'conciliado';
 
 /** Opções do FILTRO (multisseleção): ordem oficial + Conciliado (derivado) ao fim. */
-export const STATUS_FINANCEIRO_OPCOES_FILTRO: { value: StatusFiltroFinanceiro; label: string }[] = [
-  ...STATUS_FINANCEIRO_ORDEM.map((v): { value: StatusFiltroFinanceiro; label: string } => ({ value: v, label: STATUS_FINANCEIRO_LABEL[v] })),
-  { value: 'conciliado', label: 'Conciliado' },
-];
+/**
+ * ⚠ "CONCILIADO" SAIU DA LISTA DE STATUS — ele não é um sexto estado gravável, e
+ * sim derivação do vínculo; a pergunta "está conciliado?" tem seção própria no
+ * filtro da lista. Manter aqui produzia duas opções "Conciliado" no mesmo
+ * popover, respondendo coisas diferentes.
+ *
+ * ⚠ MAS O VALOR EXISTE NO BANCO, e por isso NÃO foi apagado do vocabulário: 574
+ * lançamentos têm `status_transacao = 'conciliado'` — todos de um cliente, todos
+ * gravados em 10/04/2026, e TODOS SEM VÍNCULO ATIVO. É rótulo legado sem lastro,
+ * não conciliação. Some da lista de escolha, continua tendo label e cor para
+ * quando aparecer numa linha — ver `STATUS_FILTRO_LABEL`.
+ */
+export const STATUS_FINANCEIRO_OPCOES_FILTRO: { value: StatusFiltroFinanceiro; label: string }[] =
+  STATUS_FINANCEIRO_ORDEM.map((v): { value: StatusFiltroFinanceiro; label: string } => ({ value: v, label: STATUS_FINANCEIRO_LABEL[v] }));
 
 const STATUS_FILTRO_SET = new Set<string>([...STATUS_FINANCEIRO_ORDEM, 'meta', 'conciliado']);
 
@@ -81,14 +91,24 @@ export function isStatusFiltroFinanceiro(v: unknown): v is StatusFiltroFinanceir
 export const STATUS_FILTRO_LABEL: Record<string, string> = {
   ...STATUS_FINANCEIRO_LABEL,
   meta: 'Meta (legado)',
-  conciliado: 'Conciliado',
+  /* ⚠ "(legado)" COMO NO `meta`, e pelo mesmo motivo: o valor está gravado em 574
+     linhas que não têm vínculo nenhum. Rotulá-lo "Conciliado" puro faria a lista
+     afirmar uma conciliação que não existe — e agora que a pílula azul nasce do
+     vínculo, as duas coisas ficariam indistinguíveis na tela. */
+  conciliado: 'Conciliado (legado)',
+  /* O conciliado DE VERDADE — derivado do vínculo, nunca gravado. Chave própria
+     para não colidir com o valor legado que mora na coluna. */
+  conciliado_real: 'Conciliado',
 };
 
 /** Cores da grade/filtro — Meta (legado) muted; Conciliado em azul. */
 export const STATUS_FILTRO_COR: Record<string, string> = {
   ...STATUS_FINANCEIRO_COR,
   meta: 'text-muted-foreground',
-  conciliado: 'text-blue-600 dark:text-blue-400',
+  /* Muted como o `meta`: o azul fica reservado ao conciliado DE VERDADE, o que
+     tem vínculo. Duas coisas diferentes não podem ter a mesma cor. */
+  conciliado: 'text-muted-foreground',
+  conciliado_real: 'text-blue-600 dark:text-blue-400',
 };
 
 // ── Writers ──
