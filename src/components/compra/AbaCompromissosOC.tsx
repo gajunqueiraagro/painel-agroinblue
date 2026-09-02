@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { useOperacaoEstornoFinanceiro } from '@/hooks/useOperacaoEstornoFinanceiro';
 import type { OcCompromissosApi, CompromissoResumo, ParcelaMaterializacao, CriarCompromissoPayload, ProgramarParcelaInput } from '@/hooks/useOcCompromissos';
-import { classificarLotesCompra, subcentroVendaPorCategoria, SUBCENTRO_OBRIGACAO_COMPRA, SUBCENTRO_DESPESA_VENDA, CENTRO_CUSTO_COMPRA_BOVINOS, type LoteOC } from '@/hooks/useOperacaoLiquidacao';
+import { classificarLotesPorLado, SUBCENTRO_OBRIGACAO_COMPRA, SUBCENTRO_DESPESA_VENDA, CENTRO_CUSTO_COMPRA_BOVINOS, type LoteOC } from '@/hooks/useOperacaoLiquidacao';
 import { usePlanoContasOC } from '@/hooks/usePlanoContasOC';
 import { useComponentesFinanceiros } from '@/hooks/useComponentesFinanceiros';
 import { useContasBancariasLeves } from '@/hooks/useContasBancariasLeves';
@@ -573,15 +573,13 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
    * percebe.
    */
   const sugestaoSubcentro = useMemo(() => {
-    if (tipoOperacao === 'venda') {
-      const subs = new Set(
-        lotes.map(l => subcentroVendaPorCategoria(l.categoria ?? ''))
-          .filter((x): x is string => !!x));
-      return subs.size === 1 ? Array.from(subs)[0] : '';
-    }
-    const c = classificarLotesCompra(lotes);
+    const c = classificarLotesPorLado(lotes, tipoOperacao);
     if (c.status !== 'ok') return '';
-    const subs = new Set(c.itens.map(i => i.subcentro));
+    const subs = new Set(c.itens.map(i => i.subcentro).filter(Boolean));
+    /* ⚠ SUBCENTROS DIVERGENTES NÃO SUGEREM NADA, nos dois lados: um lote de
+       machos e outro de fêmeas dão destinos distintos, e escolher um
+       classificaria metade da operação errado. Em branco o operador escolhe;
+       sugerido errado ele não percebe. */
     return subs.size === 1 ? Array.from(subs)[0] : '';
   }, [lotes, tipoOperacao]);
 
@@ -1410,10 +1408,30 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
   const [loteId, setLoteId] = useState('');
   const [varios, setVarios] = useState(false);   // DESMARCADO por padrao: separado e' o normal
 
+  /**
+   * OS LOTES CLASSIFICADOS — e a classificação depende do LADO, aqui também.
+   *
+   * ⚠ ESTE ERA O SEGUNDO CHAMADOR, e ele escapou do conserto anterior: o
+   * `sugestaoSubcentro` passou a olhar `tipoOperacao`, mas `itensLote` continuou
+   * chamando `classificarLotesCompra` sempre — e é dele que sai o
+   * `itemSel.subcentro` que o efeito de escolha de lote grava. O compromisso
+   * NASCIA com "Venda de…" e voltava para "Investimento em Bovinos" no instante
+   * em que o operador escolhia o lote.
+   *
+   * ⚠ A LIÇÃO É DO LADO DO CHAMADOR. A série toda vinha perguntando "quem
+   * consome isto?"; faltou a pergunta espelhada — "quem MAIS chama aquilo?".
+   * Consertar o ponto que o defeito mostrou e não varrer os irmãos deixa o
+   * mesmo defeito vivo no caminho vizinho.
+   *
+   * ⚠ CORRIGIDO NA FONTE, não no consumidor: os dois usos de `itensLote` (as
+   * opções do seletor e o subcentro do lote escolhido) passam a herdar o lado
+   * certo. Corrigir só o efeito de baixo deixaria a lista de opções coerente e o
+   * campo divergente — duas verdades sobre o mesmo lote.
+   */
   const itensLote = useMemo(() => {
-    const c = classificarLotesCompra(lotes);
+    const c = classificarLotesPorLado(lotes, tipoOperacao);
     return c.status === 'ok' ? c.itens : [];
-  }, [lotes]);
+  }, [lotes, tipoOperacao]);
   const loteOptions = useMemo(() => itensLote.map(i => ({
     value: i.lote.id,
     label: `${CATEGORIAS.find(c => c.value === i.lote.categoria)?.label ?? i.lote.categoria} · ${i.lote.qtd ?? 0} cab · ${brl(i.valorBruto)}`,

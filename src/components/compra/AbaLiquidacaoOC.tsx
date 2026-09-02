@@ -23,7 +23,7 @@ import {
 import { RefreshCw, Plus, Undo2, Ban } from 'lucide-react';
 import { parseNumericValue } from '@/lib/calculos/abate';
 import { usePlanoContasOC, planoTipoOperacao } from '@/hooks/usePlanoContasOC';
-import { classificarLotesCompra } from '@/hooks/useOperacaoLiquidacao';
+import { classificarLotesPorLado } from '@/hooks/useOperacaoLiquidacao';
 import { produtoOCPrincipal, siglaCategoria } from '@/lib/financeiro/produtoOC';
 import type {
   LiquidacaoApi, ObrigacaoLinha, FormaLiquidacao, GerarObrigacaoInput, RegistrarLiquidacaoInput,
@@ -434,7 +434,19 @@ function GerarObrigacaoDialog({ api, onClose }: { api: LiquidacaoApi; onClose: (
   // (tipo_operacao '2-Saídas' + subcentro). A soma dos grupos é ancorada em valor_acordado.
   const baseValida = base != null && base > 0;
   const acordado = api.valorAcordado;
-  const classificacao = useMemo(() => classificarLotesCompra(api.lotes), [api.lotes]);
+  /**
+   * ⚠ TERCEIRA INSTÂNCIA DO MESMO DEFEITO — OC-VENDA-FIN-LADO-01b. Este diálogo
+   * resolve o `planoTipo` corretamente pelo tipo da OC (venda → '1-Entradas'),
+   * mas classificava o SUBCENTRO sempre pela régua da compra. Numa venda a busca
+   * `tipo_operacao = '1-Entradas' AND subcentro = 'Investimento em Bovinos'` não
+   * acha nada, e o diálogo parava em "sem plano" — bloqueava em vez de gravar
+   * errado, o que é melhor, mas bloqueava.
+   *
+   * ⚠ VALOR E IDENTIDADE CONTINUAM DO CLASSIFICADOR; só o subcentro muda de
+   * régua, porque só ele é classificação gerencial por lado.
+   */
+  const classificacao = useMemo(
+    () => classificarLotesPorLado(api.lotes, tipoOC), [api.lotes, tipoOC]);
   const preparo = useMemo(() => {
     if (classificacao.status !== 'ok') return { status: 'classif' as const };
     if (!planoTipo) return { status: 'sem_tipo' as const };

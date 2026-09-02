@@ -125,6 +125,39 @@ export function classificarLotesCompra(lotes: LoteOC[]): ClassificacaoLotes {
   return { status: 'ok', itens };
 }
 
+/**
+ * A CLASSIFICAÇÃO PELO LADO DA OPERAÇÃO — a bifurcação num lugar só.
+ * OC-VENDA-FIN-LADO-01b.
+ *
+ * ⚠ ELA NASCEU DUPLICADA E ISSO É O PRÓPRIO DEFEITO SE REPETINDO. O conserto do
+ * PR anterior escreveu a bifurcação dentro do `sugestaoSubcentro`; o segundo
+ * chamador (`itensLote`) precisou dela de novo, e um terceiro
+ * (`GerarObrigacaoDialog`) também. Três cópias da mesma regra divergem na
+ * primeira mudança — que é exatamente como a venda passou meses vestindo
+ * subcentro de compra.
+ *
+ * ⚠ SÓ O SUBCENTRO MUDA DE RÉGUA. Valor, identidade do lote e sexo continuam do
+ * classificador da compra: eles são fato do lote, não classificação por lado. O
+ * subcentro é a única coisa gerencial aqui.
+ *
+ * ⚠ CATEGORIA FORA DO MAPA VIRA STRING VAZIA, nunca um palpite: o campo fica em
+ * branco e o operador escolhe. `oc_criar_compromisso` recusa subcentro que não
+ * exista no plano, e inventar um só trocaria o erro de lugar.
+ */
+export function classificarLotesPorLado(
+  lotes: LoteOC[], tipoOperacao: string | null | undefined,
+): ClassificacaoLotes {
+  const c = classificarLotesCompra(lotes);
+  if (c.status !== 'ok' || tipoOperacao !== 'venda') return c;
+  return {
+    status: 'ok',
+    itens: c.itens.map((i) => ({
+      ...i,
+      subcentro: subcentroVendaPorCategoria(i.lote.categoria ?? '') ?? '',
+    })),
+  };
+}
+
 export interface ResumoLiquidacao {
   valorTotal: number;
   base: number | null;
