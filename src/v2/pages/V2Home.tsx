@@ -1083,8 +1083,70 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
 
   const resumido = modoCaixa === 'resumido';
 
-  const totalEntradas = somaLinhas((resumido ? entradasResumo : entradasVisiveis).map(l => l.valor));
-  const totalSaidas   = somaLinhas((resumido ? saidasResumo : saidasCaixa).map(l => l.valor));
+  /**
+   * O CAIXA REAL DO PERÍODO, pela régua dos lançamentos — VISAO-GERAL-CAIXA-REGUA-01.
+   *
+   * ⚠ O CARD NÃO EXCLUÍA NADA: ele somava uma LISTA CURADA de indicadores
+   * nomeados (Custeio, Dividendos, Deduções…), e o que não tivesse linha
+   * simplesmente sumia. O Adiantamento de Boitel — `Saída Financeira` /
+   * `Movimentações Financeiras`, R$ 141.702,00 em 2026 na Vera — é pagamento a
+   * TERCEIRO, dinheiro real saindo, e não tinha indicador. Virava "diferença".
+   *
+   * ⚠ TRANSFERÊNCIA INTRA-UNIVERSO FICA FORA, a mesma lição do `movimentoNaConta`:
+   * com as duas pontas em contas do universo o dinheiro não saiu do caixa. Com
+   * uma ponta só, saiu de verdade e entra.
+   */
+  const caixaReal = useMemo(() => {
+    let ent = 0, sai = 0;
+    const porCategoria = new Map<string, number>();
+    for (const l of lancFinShared) {
+      const d = (l.data_pagamento ?? '').slice(0, 10);
+      if (!d || Number(d.slice(0, 4)) !== anoNum) continue;
+      const m = Number(d.slice(5, 7));
+      if (isPeriodo ? m > mesNum : m !== mesNum) continue;
+      if ((l.status_transacao ?? '').toLowerCase() === 'previsto') continue;
+      if (l.tipo_operacao === '3-Transferências' && l.conta_origem && l.conta_destino) continue;
+      const v = Math.abs(Number(l.valor) || 0);
+      if (v === 0) continue;
+      if (l.tipo_operacao === '1-Entradas') ent += v; else sai += v;
+      const chave = l.centro_custo || l.macro_custo || 'Sem classificação';
+      porCategoria.set(chave, (porCategoria.get(chave) ?? 0) + v);
+    }
+    return { entradas: ent, saidas: sai, porCategoria };
+  }, [lancFinShared, anoNum, mesNum, isPeriodo]);
+
+  const totalEntradasExibidas = somaLinhas((resumido ? entradasResumo : entradasVisiveis).map(l => l.valor));
+  const totalSaidasExibidas   = somaLinhas((resumido ? saidasResumo : saidasCaixa).map(l => l.valor));
+
+  /* ⚠ A LINHA DE FECHAMENTO É DIFERENÇA CONTRA OS LANÇAMENTOS, nunca contra o
+     SALDO declarado. Preenchê-la com a diferença do saldo faria o card fechar
+     sempre — inclusive havendo defeito — e o rodapé vermelho, que deve virar
+     alarme raro e grave, nunca mais dispararia. "Outras" explica o que os
+     indicadores não cobrem; o rodapé segue conferindo lançamentos contra o
+     extrato, que é outra pergunta. */
+  const outrasSaidas   = Math.round((caixaReal.saidas   - totalSaidasExibidas) * 100) / 100;
+  const outrasEntradas = Math.round((caixaReal.entradas - totalEntradasExibidas) * 100) / 100;
+
+  /**
+   * O QUE COMPÕE "OUTRAS", no hover — a linha tem de se explicar, senão troca um
+   * rodapé vermelho por um número mudo.
+   *
+   * ⚠ É PISTA, NÃO DECOMPOSIÇÃO EXATA: mostra as maiores categorias do período,
+   * e nem todas estão inteiramente fora dos indicadores. O número de "Outras" é
+   * exato; a atribuição por categoria é indicativa, e dizer o contrário
+   * prometeria uma precisão que esta conta não tem.
+   */
+  const detalheOutras = useMemo(() => {
+    const top = [...caixaReal.porCategoria.entries()]
+      .sort((a, b) => b[1] - a[1]).slice(0, 6)
+      .map(([c, v]) => `${c}: ${fmtR(v)}`);
+    return top.length
+      ? `O que os indicadores nomeados não cobrem. Maiores categorias do período — ${top.join(' · ')}`
+      : 'O que os indicadores nomeados não cobrem neste período.';
+  }, [caixaReal]);
+
+  const totalEntradas = totalEntradasExibidas + Math.max(0, outrasEntradas);
+  const totalSaidas   = totalSaidasExibidas   + Math.max(0, outrasSaidas);
 
   /* MOSTRAR, NAO FORCAR. Se a conta nao fecha, a diferenca aparece — maquiar seria
      inventar. Tolerancia de R$ 1,00 para nao exibir centavo de arredondamento. */
@@ -2872,6 +2934,14 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
                 : entradasVisiveis.map(l => (
                     <LinhaCaixa key={l.label} label={l.label} valor={l.valor} />
                   ))}
+              {/* Linha de FECHAMENTO — o resto que os indicadores não cobrem.
+                  A classe não tem lado: ninguém via o furo das entradas porque a
+                  diferença é líquida. */}
+              {outrasEntradas > 1 && (
+                <div title={detalheOutras}>
+                  <LinhaCaixa label="Outras entradas" valor={outrasEntradas} />
+                </div>
+              )}
               {(() => {
                 /* SEIS parcelas, nao quatro: `classificacao.ts:653` documenta que
                    `isEntradaFinanceira` e' particionada por pec + agri + silvi +
@@ -2913,6 +2983,15 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
                       ))}
                     </div>
                   ))}
+                {/* ⚠ LINHA DE FECHAMENTO, não indicador de domínio. Fica FORA dos
+                  grupos, no fim e apagada: não é família de custo — é o resto que
+                  os indicadores nomeados não cobrem. O hover a explica; sem ele,
+                  "Outras" trocaria um rodapé vermelho por um número mudo. */}
+                {outrasSaidas > 1 && (
+                <div title={detalheOutras}>
+                  <LinhaCaixa label="Outras saídas" valor={outrasSaidas} />
+                </div>
+                )}
             </div>
 
             <div className="pt-1 border-t border-border/40">
