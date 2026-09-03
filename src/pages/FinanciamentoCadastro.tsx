@@ -48,6 +48,21 @@ export default function FinanciamentoCadastro({ onVoltar, onSalvo }: Financiamen
     }
   }, [form.valor_total, form.valor_entrada, form.total_parcelas, form.taxa_juros_anual, form.data_primeira_parcela, form.frequencia_parcela]);
 
+  /**
+   * O QUE FALTA PARA CADASTRAR — a "pendência" da referência.
+   *
+   * ⚠ NENHUMA REGRA NOVA: são os mesmos campos que o gravador já exige, ditos
+   * ANTES do clique em vez de depois da recusa. A ordem é a do formulário,
+   * para o operador achar o campo pelo caminho que já está percorrendo.
+   */
+  const pendencia: string | null =
+    !form.descricao?.trim() ? 'Informe a descrição do contrato.'
+    : !Number(form.valor_total) ? 'Informe o valor total.'
+    : !form.data_contrato ? 'Informe a data do contrato.'
+    : !form.data_primeira_parcela ? 'Informe a data da 1ª parcela.'
+    : !Number(form.total_parcelas) ? 'Informe o número de parcelas.'
+    : null;
+  
   const handleSalvar = async () => {
     const ok = await salvar(destinacoes);
     if (ok) onSalvo?.();
@@ -63,7 +78,16 @@ export default function FinanciamentoCadastro({ onVoltar, onSalvo }: Financiamen
         <Button variant="ghost" size="icon" onClick={onVoltar}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        <h1 className="text-lg font-bold text-foreground">Novo Financiamento</h1>
+        <div className="min-w-0">
+          <h1 className="text-lg font-bold leading-none text-foreground">Novo Financiamento</h1>
+          {/* ⚠ A FRASE DE DOUTRINA DA REFERÊNCIA, verbatim: ela ensina a cadeia
+              inteira numa linha, e é o que separa "cadastrar uma dívida" de
+              "contratar um compromisso que gera lançamentos por anos". Quem lê
+              não estranha as parcelas aparecendo no caixa depois. */}
+          <p className="mt-1 text-xs text-muted-foreground">
+            Um compromisso contratado. Ele gera as parcelas, e as parcelas geram os lançamentos.
+          </p>
+        </div>
         <span className="text-[10px] text-muted-foreground ml-auto">Vinculado automaticamente à fazenda Administrativo</span>
       </div>
 
@@ -125,6 +149,13 @@ export default function FinanciamentoCadastro({ onVoltar, onSalvo }: Financiamen
             />
           </div>
 
+          {/* ⚠ CRONOGRAMA COMO BLOCO NOMEADO — a referência agrupa valor, parcelas e
+              vencimento sob um título de 10px em versalete, e o motivo é que os três
+              juntos SÃO uma decisão só: mudar um recalcula os outros. Soltos entre
+              outros campos, pareciam independentes. */}
+          <p className="mb-1.5 mt-1 text-[10px] font-bold uppercase tracking-[0.08em] text-primary">
+            Cronograma
+          </p>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label className="text-xs">Valor total *</Label>
@@ -206,6 +237,14 @@ export default function FinanciamentoCadastro({ onVoltar, onSalvo }: Financiamen
               </p>
             </div>
           </div>
+            {/* ⚠ A FRASE DO ARREDONDAMENTO, verbatim da referência: sem ela o
+                operador soma as parcelas na mão, acha centavos de diferença e
+                duvida do sistema. Dizer QUEM calcula e ONDE a sobra cai encerra a
+                dúvida antes dela nascer. */}
+            <p className="mt-1.5 text-[10px] text-muted-foreground">
+              O valor de cada parcela é calculado pelo sistema e aparece na prévia abaixo. A última
+              absorve o arredondamento.
+            </p>
 
           <div>
             <Label className="text-xs">Observação</Label>
@@ -237,6 +276,12 @@ export default function FinanciamentoCadastro({ onVoltar, onSalvo }: Financiamen
                 ))}
               </SelectContent>
             </Select>
+            {/* ⚠ A LEGENDA DA CADEIA, como na referência: o gatilho mostra só a
+                folha, e sem ela "Juros" não diz de qual ramo veio. Aqui o campo
+                grava o ID do plano — por isso o seletor continua sendo o de IDs, e
+                não o `PlanoSubcentroSelect`, que grava subcentro por TEXTO: trocá-lo
+                mudaria o dado gravado, e este PR é roupa. */}
+            <p className="mt-0.5 text-[10px] text-muted-foreground">Macro › Grupo › Centro</p>
           </div>
           <div>
             <Label className="text-xs">Conta de amortização</Label>
@@ -250,6 +295,12 @@ export default function FinanciamentoCadastro({ onVoltar, onSalvo }: Financiamen
                 ))}
               </SelectContent>
             </Select>
+            {/* ⚠ A LEGENDA DA CADEIA, como na referência: o gatilho mostra só a
+                folha, e sem ela "Juros" não diz de qual ramo veio. Aqui o campo
+                grava o ID do plano — por isso o seletor continua sendo o de IDs, e
+                não o `PlanoSubcentroSelect`, que grava subcentro por TEXTO: trocá-lo
+                mudaria o dado gravado, e este PR é roupa. */}
+            <p className="mt-0.5 text-[10px] text-muted-foreground">Macro › Grupo › Centro</p>
           </div>
         </CardContent>
       </Card>
@@ -382,8 +433,18 @@ export default function FinanciamentoCadastro({ onVoltar, onSalvo }: Financiamen
       </Card>
 
       {/* Botão salvar */}
-      <div className="flex justify-end pb-8">
-        <Button onClick={handleSalvar} disabled={saving} className="gap-1">
+      {/* ⚠ A PENDÊNCIA VIVA ao lado do botão — a regra da referência, e o motivo
+          é o mesmo desta casa: botão desabilitado sem motivo transfere ao
+          operador o trabalho de adivinhar. Aqui ele nem desabilitava — salvava e
+          o banco recusava depois. Uma frase, três usos: disabled, title e dica. */}
+      <div className="flex items-center justify-end gap-3 pb-8">
+        {pendencia && (
+          <p className="text-[11px] text-muted-foreground">
+            <span className="font-medium text-warning">Pendência:</span> {pendencia}
+          </p>
+        )}
+        <Button onClick={handleSalvar} disabled={saving || pendencia !== null}
+          title={pendencia ?? undefined} className="gap-1">
           <Plus className="h-4 w-4" />
           {saving ? 'Salvando...' : 'Cadastrar Financiamento'}
         </Button>
