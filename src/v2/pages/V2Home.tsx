@@ -1097,6 +1097,12 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
    * uma ponta só, saiu de verdade e entra.
    */
   const caixaReal = useMemo(() => {
+    /* O ROL DE CONTAS SOMADO — o universo contra o qual "interna" se define.
+       Sem ele, "as duas pontas" seria só "as duas preenchidas", e uma
+       transferência para conta de outro cliente passaria por interna. */
+    const contasDoUniverso = new Set(
+      lancFinShared.flatMap(l => [l.conta_bancaria_id, l.conta_destino_id])
+        .filter((x): x is string => !!x));
     let ent = 0, sai = 0;
     const porCategoria = new Map<string, number>();
     for (const l of lancFinShared) {
@@ -1105,7 +1111,19 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
       const m = Number(d.slice(5, 7));
       if (isPeriodo ? m > mesNum : m !== mesNum) continue;
       if ((l.status_transacao ?? '').toLowerCase() === 'previsto') continue;
-      if (l.tipo_operacao === '3-Transferências' && l.conta_origem && l.conta_destino) continue;
+      /* ⚠ AS DUAS PONTAS, POR ID, CONTRA O ROL SOMADO — VISAO-GERAL-CAIXA-REGUA-02.
+         O filtro anterior lia `conta_origem`/`conta_destino`, que são os campos
+         de TEXTO do adapter e valem SEMPRE `null` no V2 (`useFinanceiro:225`):
+         a condição nunca era verdadeira, e toda transferência interna entrava
+         como saída real. Medido em Vera/jan-26: 7 transferências com as duas
+         pontas preenchidas somando R$ 235.457,49 — o valor exato que aparecia
+         em "Outras saídas" e no rodapé vermelho.
+         ⚠ E A EXCLUSÃO SÓ VALE COM AS DUAS PONTAS DENTRO do universo somado —
+         terceira vez que esta lição aparece nesta série. Uma perna só é dinheiro
+         que saiu de verdade: transferir para conta de terceiro reduz o caixa. */
+      const origemDentro = !!l.conta_bancaria_id && contasDoUniverso.has(l.conta_bancaria_id);
+      const destinoDentro = !!l.conta_destino_id && contasDoUniverso.has(l.conta_destino_id);
+      if (origemDentro && destinoDentro) continue;
       const v = Math.abs(Number(l.valor) || 0);
       if (v === 0) continue;
       if (l.tipo_operacao === '1-Entradas') ent += v; else sai += v;

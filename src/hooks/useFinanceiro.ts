@@ -87,6 +87,14 @@ export interface FinanceiroLancamento {
   sinal?: number;
   favorecido_id?: string | null;
   conta_bancaria_id?: string | null;
+  /**
+   * ⚠ A PERNA DE DESTINO — VISAO-GERAL-CAIXA-REGUA-02. Existia na linha do
+   * banco e era descartada no mapa; sem ela não há como saber se uma
+   * transferência é INTERNA (as duas pontas no universo somado) ou dinheiro
+   * que saiu de verdade. O card do caixa contou 235 mil de transferências
+   * internas como saída real por não ter este campo em mãos.
+   */
+  conta_destino_id?: string | null;
   descricao?: string | null;
   observacao?: string | null;
   origem_lancamento?: string;
@@ -224,6 +232,10 @@ export function mapV2ToLancamento(r: any): FinanceiroLancamento {
     tipo_operacao: r.tipo_operacao,
     conta_origem: null, // V2 uses conta_bancaria_id
     conta_destino: null,
+    /* Os campos de TEXTO acima são nulos por design no V2 — quem manda são os
+       IDs. Mapear só o de origem deixava o destino invisível a quem precisa
+       distinguir transferência interna de saída real. */
+    conta_destino_id: r.conta_destino_id ?? null,
     macro_custo: r.macro_custo,
     grupo_custo: r.grupo_custo || null,
     centro_custo: r.centro_custo,
