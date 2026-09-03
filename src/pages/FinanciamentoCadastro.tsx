@@ -260,15 +260,30 @@ export default function FinanciamentoCadastro({ onVoltar, onSalvo }: Financiamen
           <CardTitle className="text-sm">Captação</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id="captacao"
-              checked={form.gerar_lancamento_captacao}
-              onCheckedChange={v => set('gerar_lancamento_captacao', !!v)}
-            />
-            <Label htmlFor="captacao" className="text-xs cursor-pointer">
-              Registrar entrada da captação no fluxo de caixa
-            </Label>
+          {/* ⚠ ESTE CHECKBOX DECIDE SE O DINHEIRO ENTRA NO CAIXA, e passar
+              despercebido custa caro: o caso N33 desta semana nasceu dele desmarcado
+              — o contrato existia, as parcelas existiam, e a entrada da captação
+              nunca apareceu no fluxo. Era uma linha cinza entre outras; agora tem
+              moldura, e a consequência de CADA estado está escrita ao lado. */}
+          <div className={`rounded-md border px-2.5 py-2 transition-colors ${
+            form.gerar_lancamento_captacao
+              ? 'border-success/40 bg-success/5'
+              : 'border-warning/40 bg-warning/10'}`}>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="captacao"
+                checked={form.gerar_lancamento_captacao}
+                onCheckedChange={v => set('gerar_lancamento_captacao', !!v)}
+              />
+              <Label htmlFor="captacao" className="cursor-pointer text-xs font-medium">
+                Registrar entrada da captação no fluxo de caixa
+              </Label>
+            </div>
+            <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
+              {form.gerar_lancamento_captacao
+                ? 'O valor contratado entra como recebimento na data do contrato — o caixa mostra o dinheiro que chegou.'
+                : 'Sem marcar, o contrato e as parcelas nascem, mas a entrada NÃO aparece no caixa. Marque se o dinheiro caiu na conta.'}
+            </p>
           </div>
         </CardContent>
       </Card>
