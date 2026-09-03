@@ -61,14 +61,14 @@ export const STATUS_FINANCEIRO_OPCOES_MODAL: { value: StatusFinanceiro; label: s
 // PR-FIN-V2-STATUS-01 — filtro perde 'Meta (legado)' e ganha 'Conciliado' (DERIVADO de conciliado_em != null;
 //   NÃO é status_transacao — a query aplica o filtro por conciliado_em). 'meta' segue no tipo/label só para
 //   EXIBIR registros legados na grade, mas não é mais opção de filtro.
-export type StatusFiltroFinanceiro = StatusFinanceiro | 'meta' | 'conciliado';
+export type StatusFiltroFinanceiro = StatusFinanceiro | 'meta' | 'conciliado' | 'conciliado_real';
 
 /** Opções do FILTRO (multisseleção): ordem oficial + Conciliado (derivado) ao fim. */
 /**
- * ⚠ "CONCILIADO" SAIU DA LISTA DE STATUS — ele não é um sexto estado gravável, e
- * sim derivação do vínculo; a pergunta "está conciliado?" tem seção própria no
- * filtro da lista. Manter aqui produzia duas opções "Conciliado" no mesmo
- * popover, respondendo coisas diferentes.
+ * ⚠ O 'conciliado' PERSISTIDO NÃO É OPÇÃO DE FILTRO, e continua não sendo: ele
+ * é o rótulo legado dos 574. Quem entra na lista é `conciliado_real`, DERIVADO
+ * do vínculo — as duas chaves existem justamente porque são coisas diferentes, e
+ * tiveram a mesma cor por um tempo.
  *
  * ⚠ MAS O VALOR EXISTE NO BANCO, e por isso NÃO foi apagado do vocabulário: 574
  * lançamentos têm `status_transacao = 'conciliado'` — todos de um cliente, todos
@@ -76,10 +76,23 @@ export type StatusFiltroFinanceiro = StatusFinanceiro | 'meta' | 'conciliado';
  * não conciliação. Some da lista de escolha, continua tendo label e cor para
  * quando aparecer numa linha — ver `STATUS_FILTRO_LABEL`.
  */
-export const STATUS_FINANCEIRO_OPCOES_FILTRO: { value: StatusFiltroFinanceiro; label: string }[] =
-  STATUS_FINANCEIRO_ORDEM.map((v): { value: StatusFiltroFinanceiro; label: string } => ({ value: v, label: STATUS_FINANCEIRO_LABEL[v] }));
+export const STATUS_FINANCEIRO_OPCOES_FILTRO: { value: StatusFiltroFinanceiro; label: string }[] = [
+  ...STATUS_FINANCEIRO_ORDEM.map((v): { value: StatusFiltroFinanceiro; label: string } => ({ value: v, label: STATUS_FINANCEIRO_LABEL[v] })),
+  /* ⚠ UMA LISTA SÓ, e a derivação por baixo — LANC-STATUS-LISTA-UNICA-01.
+     "Conciliado" fica ao lado dos status persistidos porque, para quem opera, é
+     um estágio do mesmo ciclo: previsto → … → realizado → conciliado. A seção
+     separada tratava-o como outra pergunta e obrigava o operador a cruzar dois
+     controles para saber o que já bateu com o banco.
+     ⚠ E ELE CONTINUA SENDO DERIVADO — nunca gravado, nunca enviado ao banco. O
+     recorte acontece depois da consulta, sobre o mapa de vínculos ativos: quem
+     traduz é a tela, e a coluna `status_transacao` segue intocada.
+     ⚠ REALIZADO PASSA A EXCLUIR OS CONCILIADOS. Os dois são partições do mesmo
+     conjunto, e é isso que faz a soma fechar — marcar os dois lista todos os
+     realizados, nem mais nem menos. */
+  { value: 'conciliado_real', label: 'Conciliado' },
+];
 
-const STATUS_FILTRO_SET = new Set<string>([...STATUS_FINANCEIRO_ORDEM, 'meta', 'conciliado']);
+const STATUS_FILTRO_SET = new Set<string>([...STATUS_FINANCEIRO_ORDEM, 'meta', 'conciliado', 'conciliado_real']);
 
 /** Guard: a string é uma chave válida do filtro de status? (sem cast, para drill-down externo) */
 export function isStatusFiltroFinanceiro(v: unknown): v is StatusFiltroFinanceiro {

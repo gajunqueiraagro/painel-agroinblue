@@ -182,11 +182,6 @@ interface Props {
   onAbrirOperacaoOCFinanceiro?: (operacaoId: string) => void;
 }
 
-/** As duas perguntas sobre vínculo que a lista passa a responder. */
-const RECORTES_CONCIL: readonly { valor: 'conciliado' | 'sem_conciliar'; rotulo: string }[] = [
-  { valor: 'conciliado', rotulo: 'Conciliado' },
-  { valor: 'sem_conciliar', rotulo: 'Realizado (sem conciliar)' },
-];
 
 function getInitialPageSize() {
   if (typeof window === 'undefined') return 30;
@@ -206,8 +201,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
      é o que casa com ela, e trocar de página não repergunta nada. */
   const { clienteAtual } = useCliente();
   const { conciliados } = useLancamentosConciliados(clienteAtual?.id ?? null);
-  /** Recorte por vínculo — `null` = sem recorte (a lista inteira). */
-  const [recorteConcil, setRecorteConcil] = useState<'conciliado' | 'sem_conciliar' | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const currentYear = new Date().getFullYear();
@@ -531,6 +524,14 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     }
   }, [fazendaAtual]);
 
+  /* A tradução para o banco: `conciliado_real` vira 'realizado', e o recorte
+     fino fica para o cliente. `Set` porque marcar "Realizado" e "Conciliado"
+     juntos não pode pedir 'realizado' duas vezes. */
+  const statusParaBanco = useMemo(
+    () => [...new Set(statusSelecionados.map(s => s === 'conciliado_real' ? 'realizado' : s))],
+    [statusSelecionados],
+  );
+  
   const filtros: FiltrosV2 = useMemo(() => ({
     fazenda_id: fazendaId !== '__all__' ? fazendaId : undefined,
     ano: ano,
@@ -539,13 +540,17 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     conta_bancaria_id: contaOrigem !== '__all__' ? contaOrigem : undefined,
     conta_destino_id: contaDestino !== '__all__' ? contaDestino : undefined,
     tipo_operacao: tipoOperacao !== '__all__' ? tipoOperacao : undefined,
-    status_transacoes: statusSelecionados.length > 0 ? statusSelecionados : undefined,   // PR-FIN-STATUS-UX-03A-1
+    /* ⚠ `conciliado_real` NÃO EXISTE NO BANCO — LANC-STATUS-LISTA-UNICA-01.
+       Ele é derivado do vínculo, então a consulta pede 'realizado' e o
+       recorte acontece depois, sobre o mapa. Mandá-lo cru devolveria zero
+       linhas: o filtro pareceria funcionar e a lista viria vazia. */
+    status_transacoes: statusParaBanco.length > 0 ? statusParaBanco : undefined,
     macro_custo: macroFiltro !== '__all__' ? macroFiltro : undefined,
     grupo_custo: grupoFiltro !== '__all__' ? grupoFiltro : undefined,
     centro_custo: centroFiltro !== '__all__' ? centroFiltro : undefined,
     subcentro: subcentroFiltro !== '__all__' ? subcentroFiltro : undefined,
     dimensao: dataPor,   // PR-FIN-GRADE-DATAS-03 — dimensão temporal soberana (default 'financeira')
-  }), [fazendaId, ano, mesesSelecionados, contaOrigem, contaDestino, tipoOperacao, statusSelecionados, macroFiltro, grupoFiltro, centroFiltro, subcentroFiltro, dataPor]);
+  }), [fazendaId, ano, mesesSelecionados, contaOrigem, contaDestino, tipoOperacao, statusParaBanco, macroFiltro, grupoFiltro, centroFiltro, subcentroFiltro, dataPor]);
 
   useEffect(() => {
     hook.loadLancamentos(filtros, 0);
@@ -729,28 +734,31 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     if (grupoFiltro !== '__all__') {
       items = items.filter(l => (l as any).grupo_custo === grupoFiltro);
     }
-    /* ⚠ O RECORTE DE CONCILIAÇÃO É CLIENT-SIDE, e não por escolha de estilo:
-       "conciliado" não existe como status no banco — é derivado do vínculo —,
-       então não há o que mandar no `status_transacoes` da consulta. Aqui a lista
-       já está inteira em memória e o mapa também; o filtro é uma passada.
-       ⚠ E ELE É INDEPENDENTE do filtro de status persistido: pedir "Realizado
-       (sem conciliar)" é uma pergunta sobre o VÍNCULO, e cruzá-la com o status
-       gravado é o que responde "qual eu cancelo?". */
-    if (recorteConcil === 'conciliado') {
-      items = items.filter(l => conciliados.has(l.id));
-    } else if (recorteConcil === 'sem_conciliar') {
-      /* ⚠ O LEGADO NÃO ENTRA EM NENHUM DOS DOIS RECORTES, e é o certo: as 574
-         linhas com `status_transacao = 'conciliado'` sem vínculo não são
-         conciliadas (não há vínculo) nem "realizado sem conciliar" (o status não
-         é realizado). São um terceiro caso, e forçá-las num dos dois faria o
-         filtro afirmar sobre elas algo que ninguém verificou. Aparecem em
-         "Todos", rotuladas como legado. */
-      items = items.filter(l =>
-        (l.status_transacao || '').toLowerCase() === 'realizado' && !conciliados.has(l.id));
+
+    /* ⚠ REALIZADO E CONCILIADO SÃO PARTIÇÕES DO MESMO CONJUNTO —
+       LANC-STATUS-LISTA-UNICA-01. O banco devolveu todos os 'realizado'; aqui
+       eles se dividem pelo vínculo: sem vínculo fica em "Realizado", com
+       vínculo em "Conciliado". Marcar os dois lista todos — e é isso que faz
+       a soma fechar.
+       ⚠ SÓ RECORTA QUANDO A ESCOLHA DISCRIMINA: marcados os dois (ou nenhum),
+       não há o que separar, e filtrar seria trabalho para chegar ao mesmo
+       lugar.
+       ⚠ O LEGADO NÃO ENTRA EM NENHUM DOS DOIS: as 574 linhas com status
+       'conciliado' sem vínculo não são conciliadas (não há vínculo) nem
+       realizadas (o status não é 'realizado'). São um terceiro caso, e
+       forçá-las num deles faria o filtro afirmar algo que ninguém verificou.
+       Aparecem em "Todos", rotuladas como legado. */
+    const querRealizado = statusSelecionados.includes('realizado');
+    const querConciliado = statusSelecionados.includes('conciliado_real');
+    if (querRealizado !== querConciliado) {
+      items = items.filter(l => {
+        if ((l.status_transacao || '').toLowerCase() !== 'realizado') return true;
+        return querConciliado ? conciliados.has(l.id) : !conciliados.has(l.id);
+      });
     }
 
     return items;
-  }, [hook.lancamentos, contaOrigem, contaDestino, produtoFiltro, documentoFiltro, fornecedorFiltro, atividadeFiltro, grupoFiltro, centroToGrupo, recorteConcil, conciliados]);
+  }, [hook.lancamentos, contaOrigem, contaDestino, produtoFiltro, documentoFiltro, fornecedorFiltro, atividadeFiltro, grupoFiltro, centroToGrupo, statusSelecionados, conciliados]);
 
   const compareDefaultOrder = useCallback((a: LancamentoV2, b: LancamentoV2) => {
     // PR-FIN-GRADE-DATAS-03 — a ordenação padrão acompanha a dimensão selecionada (Data por). Chave
@@ -1302,21 +1310,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                           </label>
                         ))}
                       </div>
-                        {/* ⚠ O RECORTE POR VÍNCULO MORA AQUI, e separado: ele não é
-                            um sexto status — é outra pergunta, sobre o vínculo, e
-                            se cruza com os status acima em vez de competir com
-                            eles. Foi a pergunta "qual desses eu cancelo?" que o
-                            operador não conseguia responder sozinho. */}
-                        <div className="mt-1 border-t pt-1">
-                          <p className="mb-0.5 text-[8px] uppercase tracking-wide text-muted-foreground">Conciliação</p>
-                          {RECORTES_CONCIL.map(r => (
-                            <label key={r.valor} className="flex items-center gap-0.5 text-[10px] cursor-pointer hover:bg-muted rounded px-0.5 py-0.5">
-                              <Checkbox checked={recorteConcil === r.valor} className="h-2.5 w-2.5"
-                                onCheckedChange={() => setRecorteConcil(v => v === r.valor ? null : r.valor)} />
-                              {r.rotulo}
-                            </label>
-                          ))}
-                        </div>
                     </PopoverContent>
                   </Popover>
                 </div>
@@ -1581,21 +1574,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                           </label>
                         ))}
                       </div>
-                        {/* ⚠ O RECORTE POR VÍNCULO MORA AQUI, e separado: ele não é
-                            um sexto status — é outra pergunta, sobre o vínculo, e
-                            se cruza com os status acima em vez de competir com
-                            eles. Foi a pergunta "qual desses eu cancelo?" que o
-                            operador não conseguia responder sozinho. */}
-                        <div className="mt-1 border-t pt-1">
-                          <p className="mb-0.5 text-[8px] uppercase tracking-wide text-muted-foreground">Conciliação</p>
-                          {RECORTES_CONCIL.map(r => (
-                            <label key={r.valor} className="flex items-center gap-0.5 text-[10px] cursor-pointer hover:bg-muted rounded px-0.5 py-0.5">
-                              <Checkbox checked={recorteConcil === r.valor} className="h-2.5 w-2.5"
-                                onCheckedChange={() => setRecorteConcil(v => v === r.valor ? null : r.valor)} />
-                              {r.rotulo}
-                            </label>
-                          ))}
-                        </div>
                     </PopoverContent>
                   </Popover>
                 </div>
