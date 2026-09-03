@@ -43,7 +43,7 @@ no mesmo arquivo.
   sai com codigo 0 e passa sempre. Era um gate vazio. O comando oficial
   varre os 671 arquivos .ts/.tsx em src/ e sai com codigo 2 enquanto
   houver erro.
-- TSC baseline: 155 erros (era 73 ate 2026-09-02 — ver a regeneracao do
+- TSC baseline: 153 erros (era 73 ate 2026-09-02 e 155 ate 09-03 — ver a regeneracao do
   types.ts abaixo), medidos em ARVORE LIMPA — worktree em detached
   HEAD sobre o commit, NUNCA no checkout principal. Mesmo numero e mesmo
   conjunto de diagnosticos em c0fdb21b, 487fe1cf e c28de22a.
@@ -127,6 +127,20 @@ no mesmo arquivo.
   ⚠ E O CAMINHO INVERSO TAMBEM SE ABRIU: os `as any` que existiam SO porque a
   tabela faltava no tipo agora podem cair, e cada queda e' reducao real. Ver o
   commit seguinte a este.
+  De 155 para 153 em 2026-09-03, sobre 0f7b88cf, no PERF-ZOOT-SAVE-01. Sairam 2,
+  ambos de src/pages/LancamentosTab.tsx e IDENTICOS:
+    2x TS2551 — Property 'catch' does not exist on type
+       'PostgrestFilterBuilder<...>'. Did you mean 'match'?
+  Eram as duas chamadas de `supabase.rpc('refresh_zoot_cache'...).catch(() => {})`
+  dentro de `triggerZootCacheRefresh`. O `PostgrestBuilder` NAO implementa
+  `.catch`: a chamada lancava TypeError SINCRONO, engolido pelo try de fora, e o
+  builder e' lazy — sem `.then`, a requisicao NUNCA saia. As treze chamadas da
+  funcao, espalhadas pelo arquivo, nao despachavam nada. A queda veio de APAGAR
+  codigo morto que o compilador denunciava — nao de suprimir nem de corrigir tipo.
+  ⚠ PRIMEIRA REDUCAO DA ERA TYPES-NOVO, e a licao importa mais que o numero: o
+  diagnostico gritava TS2551 em TODO relatorio desde que existe, dentro da
+  baseline, e ninguem o leu — exatamente como os "~91 ms" de comentario. O que
+  achou o defeito foi a FASE 0 de uma frente de performance, nao o gate.
   Como comparar antes (A) x depois (B), nesta ordem:
     1. CONTAGEM. B <= A, sempre. B > A reprova o PR.
     2. DIAGNOSTICOS. Comparar os conjuntos por
@@ -137,6 +151,11 @@ no mesmo arquivo.
        o mesmo codigo TS com a mesma mensagem, ainda que em outra linha,
        e' o MESMO erro. Registrar o remapeamento no relatorio
        (ex.: "V2Index 606 -> 607, TS2322 inalterado").
+       ⚠ E LER O ERRO, nao so' conferir que ele continua la'. Erro de baseline
+       em arquivo TOCADO se le sempre: os dois TS2551 de `.catch` no
+       PostgrestBuilder passaram meses na lista dizendo que treze chamadas de
+       refresh de cache nunca eram despachadas, e ninguem leu porque "estava na
+       baseline". Baseline e' divida conhecida, nao ruido a ignorar.
     4. ERRO NOVO. Qualquer par (arquivo, codigo, mensagem) que nao existia
        em A reprova o PR, mesmo que o total tenha caido.
     5. REDUZIR e' permitido e desejavel. Ao reduzir, atualizar este numero

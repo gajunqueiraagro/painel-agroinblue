@@ -198,13 +198,25 @@ export function ConciliacaoTab({ filtroAnoInicial, filtroMesInicial }: Props = {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => {
-            (supabase.rpc as any)('refresh_zoot_cache', {
-              p_fazenda_id: fazendaAtual?.id,
-              p_ano: Number(anoMes?.split('-')[0]),
-              p_mes: Number(anoMes?.split('-')[1]),
-            }).catch(() => {});
-            toast.info('Atualizando rebanho... aguarde ~15s e recarregue a tela.');
+          /* ⚠ O BOTÃO PROMETIA E NÃO FAZIA — PERF-ZOOT-SAVE-01. Era
+             `(supabase.rpc as any)(...).catch(() => {})`: o `PostgrestBuilder`
+             não implementa `.catch`, então a chamada lançava TypeError no
+             clique — e o `as any` escondia isso do TSC, que acusava o mesmo
+             defeito no gêmeo da LancamentosTab. O toast dizia "aguarde ~15s"
+             sobre um trabalho que nunca começou.
+             Agora despacha de verdade, com `await`, e o texto conta o que está
+             acontecendo em vez de mandar recarregar no escuro. */
+          onClick={async () => {
+            const p_ano = Number(anoMes?.split('-')[0]);
+            const p_mes = Number(anoMes?.split('-')[1]);
+            if (!fazendaAtual?.id || !p_ano) return;
+            toast.info('Recalculando indicadores desta fazenda…');
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+            const { error } = await (supabase as any).rpc('refresh_zoot_cache', {
+              p_fazenda_id: fazendaAtual.id, p_ano, p_mes,
+            });
+            if (error) { toast.error(error.message ?? 'Falha ao recalcular.'); return; }
+            toast.success('Indicadores recalculados.');
           }}
         >
           🔄 Atualizar Rebanho

@@ -2988,29 +2988,16 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setConfirmDialogOpen(true);
   };
 
-  const triggerZootCacheRefresh = (dateStr: string, includeReclassificacao = false, mes?: number) => {
-    const fazendaId = editingFazendaId ?? fazendaAtual?.id;
-    if (!fazendaId || !dateStr) return;
-    const p_ano = Number(dateStr.slice(0, 4));
-    const args = mes ? { p_fazenda_id: fazendaId, p_ano, p_mes: mes } : { p_fazenda_id: fazendaId, p_ano };
-    // CONTENÇÃO TEMPORÁRIA (follow-up aberto: FUP-CACHE-RPC-REFRESH decide o
-    // destino deste refresh). O PostgrestBuilder é thenable mas NÃO implementa
-    // .catch — a chamada abaixo lança TypeError síncrono, que antes abortava o
-    // restante do bloco pós-save dos chamadores (modal ficava aberto/resetado,
-    // contexto de origem não era restaurado). O try/catch preserva o
-    // comportamento de rede atual (o builder é lazy: sem .then, o RPC nunca é
-    // despachado). NÃO converter .catch em .then/await sem homologar a
-    // ativação do RPC refresh_zoot_cache — isso mudaria o mecanismo de
-    // sustentação do cache sem investigação.
-    try {
-      supabase.rpc('refresh_zoot_cache' as any, args).catch(() => {});
-    } catch (e) { console.warn('[LancamentosTab] refresh_zoot_cache não despachado — contenção temporária FUP-CACHE-RPC-REFRESH:', e); }
-    if (includeReclassificacao) {
-      try {
-        supabase.rpc('refresh_zoot_cache_reclassificacao' as any, { p_fazenda_id: fazendaId, p_ano }).catch(() => {});
-      } catch (e) { console.warn('[LancamentosTab] refresh_zoot_cache_reclassificacao não despachado — contenção temporária FUP-CACHE-RPC-REFRESH:', e); }
-    }
-  };
+  /* ⚠ `triggerZootCacheRefresh` REMOVIDA — PERF-ZOOT-SAVE-01. Ela chamava
+     `supabase.rpc(...).catch(() => {})`, e o `PostgrestBuilder` não implementa
+     `.catch`: a chamada lançava TypeError SÍNCRONO, engolido pelo try de fora, e
+     o builder é lazy — sem `.then`, a requisição NUNCA saía. Treze chamadas
+     espalhadas pelo arquivo não despachavam nada, e o TSC dizia isso em todo
+     relatório (2x TS2551), na baseline, sem ser lido.
+     Quem sustenta o cache é o par que já funciona: `trg_invalidate_zoot_cache`
+     apaga a fazenda/ano tocada no save, e o ensure de `useZootCategoriaMensal`
+     reconstrói na leitura seguinte. Ligar o refresh aqui pagaria os segundos no
+     save — o lugar errado. */
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -3444,7 +3431,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setObservacao(''); setStatusOp(defaultCenario);
           resetFinancialFields();
           toast.success('Abate atualizado com financeiro!');
-          triggerZootCacheRefresh(data);
           setLancModalOpen(false);
           restoreEditOrigin();
         } else if (isVenda && (calc.valorLiquido > 0 || vendaTipoVenda === 'boitel')) {
@@ -3467,7 +3453,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setObservacao(''); setStatusOp(defaultCenario);
           resetFinancialFields();
           toast.success('Venda salva com sucesso.');
-          triggerZootCacheRefresh(data);
           setLancModalOpen(false);
           restoreEditOrigin();
         } else if (isCompra && compraDetalhes && fazendaAtual && clienteAtual) {
@@ -3494,7 +3479,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           resetFinancialFields();
           setCompraDetalhes(null);
           toast.success('Compra atualizada com financeiro!');
-          triggerZootCacheRefresh(data);
           setLancModalOpen(false);
           restoreEditOrigin();
         } else {
@@ -3506,7 +3490,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setObservacao(''); setStatusOp(defaultCenario);
           resetFinancialFields();
           toast.success('Registro atualizado com sucesso!');
-          triggerZootCacheRefresh(data, tipo === 'reclassificacao');
           setLancModalOpen(false);
           restoreEditOrigin();
         }
@@ -3542,7 +3525,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setObservacao(''); setStatusOp(defaultCenario);
           resetFinancialFields();
           toast.success('Compra registrada com sucesso!');
-          triggerZootCacheRefresh(data);
           setLancModalOpen(false);
           restaurarContextoDoModal();
         } else if (isAbate && returnedId) {
@@ -3565,7 +3547,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setObservacao(''); setStatusOp(isMeta ? 'meta' : 'realizado');
           resetFinancialFields();
           toast.success('Abate registrado com financeiro!');
-          triggerZootCacheRefresh(data);
           setLancModalOpen(false);
           restaurarContextoDoModal();
         } else if (isVenda && returnedId) {
@@ -3585,7 +3566,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setObservacao(''); setStatusOp(defaultCenario);
           resetFinancialFields();
           toast.success('Venda registrada com sucesso!');
-          triggerZootCacheRefresh(data);
           setLancModalOpen(false);
           restaurarContextoDoModal();
         } else if (isConsumo && returnedId) {
@@ -3597,7 +3577,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setObservacao(''); setStatusOp(defaultCenario);
           resetFinancialFields();
           toast.success('Consumo registrado com sucesso!');
-          triggerZootCacheRefresh(data);
           setLancModalOpen(false);
           restaurarContextoDoModal();
         } else if (returnedId) {
@@ -3609,7 +3588,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setObservacao(''); setStatusOp(defaultCenario);
           resetFinancialFields();
           toast.success('Lançamento registrado!');
-          triggerZootCacheRefresh(data, tipo === 'reclassificacao');
           setLancModalOpen(false);
           restaurarContextoDoModal();
         } else if (!returnedId) {
@@ -5355,7 +5333,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   };
                   await onEditar(editingReclassId, payload);
                   toast.success('Reclassificação atualizada com sucesso.');
-                  triggerZootCacheRefresh(reclassState.data, true, new Date(reclassState.data).getMonth() + 1);
                   setEditingReclassId(null);
                   reclassState.setQuantidade('');
                   reclassState.setPesoKg('');
@@ -5370,7 +5347,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                 setSubmitting(true);
                 try {
                   await reclassState.handleSubmit();
-                  triggerZootCacheRefresh(reclassState.data, true, new Date(reclassState.data).getMonth() + 1);
                 } finally {
                   setSubmitting(false);
                 }
@@ -5394,7 +5370,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                 reclassState.setPesoKg('');
                 reclassState.setPesoAutoFilled(false);
                 toast.success('Reclassificação removida.');
-                triggerZootCacheRefresh(reclassState.data, true, new Date(reclassState.data).getMonth() + 1);
                 if (onReturnFromEdit) await onReturnFromEdit();
               } : undefined}
             />
@@ -5403,7 +5378,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               size="sm"
               className="w-full"
               onClick={() => {
-                triggerZootCacheRefresh(reclassState.data, true, new Date(reclassState.data).getMonth() + 1);
                 toast.info('Atualizando rebanho... aguarde ~15s e recarregue a tela.');
               }}
             >

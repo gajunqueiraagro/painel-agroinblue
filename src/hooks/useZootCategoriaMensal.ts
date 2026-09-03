@@ -12,6 +12,7 @@
  */
 
 import { useQuery } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -223,15 +224,46 @@ export function useZootCategoriaMensal({ ano, cenario, global = false, enabled =
           });
         }
         const tRebuild = Date.now();
-        const { error: rebuildError } = await supabase.rpc('fn_zoot_cache_rebuild' as any, {
-          p_cliente_id: clienteId,
-          p_ano: ano,
-        });
-        if (rebuildError) {
-          console.warn('[zoot-cache] fn_zoot_cache_rebuild failed:', rebuildError);
-          return [];
+        /* ⚠ A TELA NUNCA MAIS CONGELA MUDA — o ensure levava 8-19s sem dizer o
+           que estava fazendo, e o operador via a lista parada achando que a
+           aplicação travou. O aviso é o mesmo canal que o resto da casa usa em
+           hooks, com id fixo para não empilhar num fetch que repagina. */
+        toast.loading('Recalculando indicadores…', { id: 'zoot-cache-ensure' });
+        /**
+         * ⚠ ESCOPO MÍNIMO — PERF-ZOOT-SAVE-01, CONTENÇÃO DECLARADA.
+         *
+         * `fn_zoot_cache_rebuild(cliente, ano)` percorre TODAS as fazendas do
+         * cliente e refaz o ano inteiro de cada uma — 8,8s medidos —, mesmo
+         * quando falta UMA fazenda/ano. O `trg_invalidate_zoot_cache` apaga uma
+         * fazenda/ano por vez; o conserto era N vezes maior que o estrago.
+         *
+         * Aqui já sabemos exatamente o que faltou (`ausentes`), então chamamos
+         * `refresh_zoot_cache(fazenda, ano)` só para elas.
+         *
+         * ⚠ A REGRA DE ESCOPO MORA NA TELA, e isso é dívida assumida, não
+         * desenho: o certo é `fn_zoot_cache_rebuild` reconstruir só o que falta,
+         * e isso é migration — registrada para a leva do arquiteto junto com as
+         * outras réguas. Enquanto ela não desce, esta é a contenção, e ela é
+         * segura: `refresh_zoot_cache` é a mesma função que a RPC do banco
+         * chamaria no laço, com o mesmo par de argumentos.
+         */
+        const alvos = ausentes.length > 0 ? ausentes : fazendaIdsReais;
+        for (const fid of alvos) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+          const { error: e1 } = await (supabase as any).rpc('refresh_zoot_cache', {
+            p_fazenda_id: fid, p_ano: ano,
+          });
+          if (e1) {
+            /* Falha tem de encerrar o aviso: um "recalculando…" eterno mentiria
+               sobre um trabalho que parou. */
+            toast.error('Não foi possível recalcular os indicadores.', { id: 'zoot-cache-ensure' });
+            console.warn('[zoot-cache] refresh_zoot_cache falhou para', fid, e1);
+            return [];
+          }
         }
-        console.info('[zoot-cache] rebuild ok in', Date.now() - tRebuild, 'ms');
+        toast.success('Indicadores atualizados.', { id: 'zoot-cache-ensure' });
+        console.info('[zoot-cache] rebuild ok in', Date.now() - tRebuild, 'ms',
+          `(${alvos.length} fazenda(s), escopo mínimo)`);
         attempt++;
       }
       return [] as unknown as ZootCategoriaMensal[];
