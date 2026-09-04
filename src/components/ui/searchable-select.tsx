@@ -3,10 +3,43 @@ import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { ChevronsUpDown, X } from 'lucide-react';
 
+export interface OpcaoSearchable {
+  value: string;
+  label: string;
+  /** Texto curto à direita do nome, em tom apagado — ex.: a contagem de uso.
+   *  ⚠ NÃO ENTRA NA BUSCA: quem digita procura pelo nome. Se a contagem casasse,
+   *  digitar "41" traria todo fornecedor com 41 lançamentos. */
+  hint?: string;
+}
+
+const PREFIXO = 'ss-busca:';
+
+/**
+ * Apaga as buscas lembradas. Só o X do próprio campo e o "Limpar" geral da tela
+ * esquecem — fechar, escolher ou apertar Esc, não.
+ *
+ * @param prefixo quando informado, só as chaves que começam com ele.
+ */
+export function limparBuscasLembradas(prefixo?: string): void {
+  try {
+    const alvo = PREFIXO + (prefixo ?? '');
+    /* Recolhe ANTES de remover: `key(i)` reindexa a cada remoção, e apagar
+       durante a varredura pula uma chave a cada duas. */
+    const chaves: string[] = [];
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const k = sessionStorage.key(i);
+      if (k && k.startsWith(alvo)) chaves.push(k);
+    }
+    chaves.forEach(k => sessionStorage.removeItem(k));
+  } catch {
+    /* navegação privada / storage bloqueado — a memória é conforto, não contrato */
+  }
+}
+
 interface SearchableSelectProps {
   value: string;
   onValueChange: (val: string) => void;
-  options: { value: string; label: string }[];
+  options: OpcaoSearchable[];
   placeholder?: string;
   allLabel?: string;
   allValue?: string;
@@ -21,6 +54,19 @@ interface SearchableSelectProps {
    *  seletores descendentes (`[&_input]`, `[&_button]`), porque os itens desta lista
    *  são <button> e não `[role=option]`. */
   contentClassName?: string;
+  /**
+   * Liga a MEMÓRIA DA BUSCA desta instância, gravada em `sessionStorage` sob esta
+   * chave. Sem ela o componente se comporta exatamente como antes — as outras 24
+   * montagens do app (26 no total, em 11 arquivos) não mudam em nada.
+   *
+   * ⚠ COM MEMÓRIA, FECHAR NÃO ESQUECE. Clicar fora, apertar Esc, escolher um item
+   * ou sair com Tab preservam o texto digitado e a lista filtrada. Quem esquece é
+   * o X do campo e o "Limpar" da tela — e só eles.
+   *
+   * Nasceu de uma lista de 3.361 fornecedores: achar "Wilson" entre seis homônimos
+   * custava seis reaberturas, e cada reabertura fazia o operador digitar de novo.
+   */
+  persistKey?: string;
 }
 
 export function SearchableSelect({
@@ -34,9 +80,30 @@ export function SearchableSelect({
   className,
   dense = false,
   contentClassName,
+  persistKey,
 }: SearchableSelectProps) {
   const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState('');
+  const chave = persistKey ? PREFIXO + persistKey : null;
+  const [search, setSearch] = useState(() => {
+    if (!chave) return '';
+    try { return sessionStorage.getItem(chave) ?? ''; } catch { return ''; }
+  });
+
+  /* Escrever a busca e lembrá-la são o MESMO ato: separá-los criaria o estado em
+     que a tela mostra um texto e a sessão guarda outro. */
+  const alterarBusca = useCallback((txt: string) => {
+    setSearch(txt);
+    if (!chave) return;
+    try {
+      if (txt) sessionStorage.setItem(chave, txt);
+      else sessionStorage.removeItem(chave);
+    } catch { /* storage bloqueado — segue sem memória */ }
+  }, [chave]);
+
+  /* Fechar só esquece quando NÃO há memória. Com `persistKey`, fechar é fechar. */
+  const esquecerAoFechar = useCallback(() => {
+    if (!chave) setSearch('');
+  }, [chave]);
   const [highlightIdx, setHighlightIdx] = useState(0);
   const [openUp, setOpenUp] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -83,18 +150,18 @@ export function SearchableSelect({
     const handler = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setOpen(false);
-        setSearch('');
+        esquecerAoFechar();
       }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, []);
+  }, [esquecerAoFechar]);
 
   const handleSelect = useCallback((val: string) => {
     onValueChange(val);
     setOpen(false);
-    setSearch('');
-  }, [onValueChange]);
+    esquecerAoFechar();
+  }, [onValueChange, esquecerAoFechar]);
 
   const handleTriggerClick = () => {
     if (disabled) return;
@@ -111,13 +178,14 @@ export function SearchableSelect({
   const handleClear = (e: React.MouseEvent) => {
     e.stopPropagation();
     onValueChange(allValue);
-    setSearch('');
+    /* ⚠ O X ESQUECE SEMPRE, com memória ou sem: é o gesto de "recomeçar". */
+    alterarBusca('');
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
       setOpen(false);
-      setSearch('');
+      esquecerAoFechar();
       return;
     }
     if (e.key === 'ArrowDown') {
@@ -143,7 +211,7 @@ export function SearchableSelect({
         handleSelect(selectableItems[highlightIdx].value);
       } else {
         setOpen(false);
-        setSearch('');
+        esquecerAoFechar();
       }
       setTimeout(() => {
         const trigger = containerRef.current?.querySelector('button') as HTMLButtonElement | null;
@@ -170,7 +238,7 @@ export function SearchableSelect({
           // Printable key → open dropdown and seed search with that char
           if (!open && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
             e.preventDefault();
-            setSearch(e.key);
+            alterarBusca(e.key);
             handleTriggerClick();
           }
         }}
@@ -200,7 +268,7 @@ export function SearchableSelect({
             <input
               ref={inputRef}
               value={search}
-              onChange={e => setSearch(e.target.value)}
+              onChange={e => alterarBusca(e.target.value)}
               placeholder={placeholder}
               className={cn(
                 'w-full rounded border border-input bg-background outline-none focus:ring-1 focus:ring-ring',
@@ -221,14 +289,20 @@ export function SearchableSelect({
                 onClick={() => handleSelect(o.value)}
                 onMouseEnter={() => setHighlightIdx(idx)}
                 className={cn(
-                  'w-full text-left leading-tight rounded-sm cursor-pointer truncate',
+                  'w-full text-left leading-tight rounded-sm cursor-pointer',
                   dense ? 'px-2 py-1 text-[12px]' : 'px-1 py-[1.5px] text-[9px]',
                   idx === highlightIdx && 'bg-accent text-accent-foreground',
                   idx !== highlightIdx && 'hover:bg-accent/50',
                   value === o.value && 'font-semibold',
                 )}
               >
-                {o.label}
+                {/* ⚠ O NOME ENCOLHE, A CONTAGEM NAO: com `truncate` no conjunto, o
+                    numero seria a primeira coisa a sumir — e ele e' o motivo do
+                    operador estar olhando. */}
+                <span className="flex items-center gap-1 min-w-0">
+                  <span className="truncate">{o.label}</span>
+                  {o.hint ? <span className="shrink-0 opacity-60">· {o.hint}</span> : null}
+                </span>
               </button>
             ))}
             {filtered.length === 0 && (

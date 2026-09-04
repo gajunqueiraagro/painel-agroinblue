@@ -16,7 +16,7 @@ import { validarLancamento } from '@/lib/financeiro/validacaoLancamento';
 import { formatDocumento } from '@/lib/financeiro/documentoHelper';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { SearchableSelect } from '@/components/ui/searchable-select';
+import { SearchableSelect, limparBuscasLembradas } from '@/components/ui/searchable-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -47,6 +47,13 @@ import {
   reduzirLista, ESTADO_INICIAL, temPendencias, calcularPaginacao,
   type EstadoLista, type FiltrosEditaveis,
 } from '@/lib/financeiro/estadoFiltrosLista';
+
+/**
+ * A memória da busca de Fornecedor. UMA chave para as DUAS montagens do campo
+ * (a barra larga e a compacta): elas já compartilham `fornecedorFiltro`, e duas
+ * memórias para um filtro só fariam a busca mudar conforme a largura da janela.
+ */
+const CHAVE_BUSCA_FORNECEDOR = 'fin-v2-fornecedor';
 
 // ── Sorting helpers ──
 
@@ -1120,6 +1127,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     setSortField('default');
     setSortDir('asc');
     setCurrentPage(0);
+    /* ⚠ "Limpar" LIMPA A BUSCA TAMBEM. Zerar o fornecedor selecionado e deixar
+       "wilson" digitado no combobox deixaria a tela dizendo "Todos" com uma lista
+       de seis nomes — o filtro limpo e a busca suja. */
+    limparBuscasLembradas(CHAVE_BUSCA_FORNECEDOR);
   };
 
   // Determine which fazenda_id to pass to loadLancamentos
@@ -1375,6 +1386,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     onValueChange={setFornecedorFiltro}
                     options={hook.fornecedores.map(f => ({ value: f.id, label: f.nome }))}
                     placeholder="Todos"
+                    persistKey={CHAVE_BUSCA_FORNECEDOR}
                   />
                 </div>
                 <div>
@@ -1701,6 +1713,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       onValueChange={setFornecedorFiltro}
                       options={hook.fornecedores.map(f => ({ value: f.id, label: f.nome }))}
                       placeholder="Buscar fornecedor..."
+                      persistKey={CHAVE_BUSCA_FORNECEDOR}
                     />
                   </div>
                   <div>
