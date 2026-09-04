@@ -1001,8 +1001,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [abateFazendaId, setAbateFazendaId] = useState<string>('');
   /* A unidade/planta do frigorifico — texto livre, quando se sabe. */
   const [abateUnidade, setAbateUnidade] = useState<string>('');
-  /* O tipo do abate. Espelha `vendaTipoVenda` na forma; o vocabulario e' do abate. */
-  const [tipoAbate, setTipoAbate] = useState<string>('');
   /* ⚠ SEMEIA A FAZENDA SO' NUMA VENDA NOVA — PR-OC-VENDA-REABRIR-01E. Ele existe para
      poupar um clique: com uma fazenda no filtro, a venda ja' nasce com ela.
      Numa REABERTURA ele apagava o que o banco tinha: a hidratacao faz
@@ -2653,15 +2651,50 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
        versao no servidor; `ocVersao` so' muda no proximo render. Mandar a do estado aqui
        daria 40001 sem pista de onde veio. A venda resolve assim com o boitel, e este e' o
        mesmo encadeamento. */
-    const editadas = [...abateLinhas.values()];
-    if (editadas.length > 0) {
-      const v = await abateApi.salvar(editadas, versaoNova);
+    const editadas = [...abateLinhas.entries()];
+    if (editadas.length === 0) return true;
+
+    /* ⚠ O RASCUNHO E' CHAVEADO POR `idLocal` E O BANCO NAO CONHECE ESSA CHAVE. A traducao
+       acontece aqui, uma vez so'. Nao da' para ler `lotesApi.lotes` procurando `id`: o
+       `salvar` acima recarregou, mas o state so' chega no proximo render — dentro deste
+       gesto a closure ainda ve' os lotes de antes. Por isso a leitura e' FRESCA, do banco,
+       e o casamento e' por `ordem`, que e' exatamente a chave com que `oc_salvar_lotes`
+       grava (upsert por (operacao_id, cliente_id, ordem), migration 20260904204724). */
+    const ordemPorIdLocal = new Map(lotesApi.lotes.map(l => [l.idLocal, l.ordem]));
+    try {
+      const { data, error } = await supabase
+        .from('zoo_operacao_lotes')
+        .select('id, ordem')
+        .eq('operacao_id', ocOperacaoId)
+        .eq('cliente_id', clienteId);
+      if (error) throw error;
+      const idPorOrdem = new Map((data ?? []).map(r => [r.ordem, r.id]));
+
+      /* ⚠ RECUSA ANTES DO SERVIDOR, NOMEANDO. Sem o id, a RPC responderia "Lote <NULL>
+         nao pertence a operacao" — verdadeira e inutil para quem esta' na tela. */
+      const semId = editadas.filter(([idLocal]) => !idPorOrdem.get(ordemPorIdLocal.get(idLocal)!));
+      if (semId.length > 0) {
+        toast.error(`${semId.length} lote(s) do abate não foram encontrados no banco. Salve os lotes e tente de novo.`);
+        return false;
+      }
+      const comId = editadas.map(([idLocal, linha]) => ({
+        ...linha,
+        operacaoLoteId: idPorOrdem.get(ordemPorIdLocal.get(idLocal)!)!,
+      }));
+      const v = await abateApi.salvar(comId, versaoNova);
       if (v === null) return false;
       /* Gravou: o que estava em memoria virou banco, e o hook ja recarregou. Manter o
          rascunho faria a proxima gravacao reenviar o que ja esta la'. */
       setAbateLinhas(new Map());
+      return true;
+    } catch (e) {
+      /* ⚠ ERRO DE RPC NUNCA E' MUDO — era esta a metade que faltava. `abateApi.salvar`
+         LANCA (`OcRpcError`), e sem este catch a promessa rejeitava dentro do `onClick`
+         do rodape: a tela nao mudava, nenhum toast aparecia, e o `concluir` — que roda
+         depois deste passo — nunca chegava a ser chamado. A venda ja fazia assim. */
+      toast.error(e instanceof Error ? e.message : 'Falha ao salvar a negociação do abate.');
+      return false;
     }
-    return true;
   };
 
   const salvarOperacaoVendaOC = async (): Promise<{ operacaoId: string; versao: number } | null> => {
@@ -5358,7 +5391,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           abateFazendaId={abateFazendaId} setAbateFazendaId={setAbateFazendaId}
           fazendasOC={fazendasOC}
           unidadeFrigorifico={abateUnidade} setUnidadeFrigorifico={setAbateUnidade}
-          tipoAbate={tipoAbate} setTipoAbate={setTipoAbate}
           observacao={observacao} setObservacao={setObservacao}
           ocOperacaoId={ocOperacaoId}
           ocStatusComercial={ocStatusComercial}

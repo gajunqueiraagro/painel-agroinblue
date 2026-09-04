@@ -13,7 +13,7 @@
  * depois — e o erro é de cadastro, que se mostra na hora.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { AbaNegociacaoAbate, type LoteAbate } from '@/components/abate/AbaNegociacaoAbate';
 import type { LinhaAbate } from '@/hooks/useOperacaoAbate';
 
@@ -103,5 +103,80 @@ describe('Negociação do abate — a unidade vem da conta', () => {
   it('sem lotes, diz o que fazer em vez de mostrar cascata vazia', () => {
     montar([], new Map());
     expect(screen.getByText(/Nenhum lote na negociação/i)).toBeInTheDocument();
+  });
+});
+
+describe('Rendimento — derivado, nunca digitado', () => {
+  /* ⚠ ELE JA' ERA DERIVADO NA CONTA E MESMO ASSIM ERA DIGITAVEL. `abate.ts:117` faz
+     `pesoCarcaca / pesoVivo` sempre que ha carcaca, ignorando o numero informado — o
+     banco guardava um rendimento que a tela nao usava para nada. Agora ha um so'. */
+  it('nao ha campo de digitar rendimento — o valor aparece travado', () => {
+    /* 250 kg de carcaca sobre 500 kg de peso vivo = 50,00%. */
+    const l = linha('l1', { pesoCarcacaKg: 250, rendimentoCarcacaPct: null });
+    const { container } = montar([M], new Map([['l1', l]]));
+    expect(screen.getByText('50.00%')).toBeInTheDocument();
+    /* ⚠ E NENHUM CAMPO CARREGA O 50. Enquanto o rendimento era digitavel, ele vinha num
+       `input` com esse valor; agora o unico numero editavel do bloco e' a carcaca (250).
+       Contar inputs nao serviria: o Funrural tambem e' `type=number`. */
+    const valores = [...container.querySelectorAll('input[type="number"]')].map(i => (i as HTMLInputElement).value);
+    expect(valores).toContain('250');
+    expect(valores).not.toContain('50');
+  });
+
+  it('sem carcaça o rendimento é "—", não zero', () => {
+    /* ⚠ Ausente nao e' zero: 0,00% afirmaria que o animal nao rende nada. */
+    montar([M], new Map([['l1', linha('l1', { pesoCarcacaKg: null, rendimentoCarcacaPct: null })]]));
+    expect(screen.getAllByText('—').length).toBeGreaterThan(0);
+  });
+
+  it('o rendimento derivado SOBE junto de toda mudança', () => {
+    /* Ele e' persistido como o `valorLiquido`, e pelo mesmo motivo: a RPC pondera o
+       rendimento no cabecalho e nao pode refazer a lib em SQL. */
+    const onLinhaChange = vi.fn();
+    render(
+      <AbaNegociacaoAbate
+        lotes={[M]} linhas={new Map([['l1', linha('l1', { rendimentoCarcacaPct: null })]])}
+        cenariosExistentes={['projetado']} cenario="projetado" onLinhaChange={onLinhaChange}
+      />,
+    );
+    const cartao = screen.getByText('1. Bois', { exact: false }).closest('div.rounded-lg')!;
+    const campoCarcaca = cartao.querySelector('input[type="number"]') as HTMLInputElement;
+    fireEvent.change(campoCarcaca, { target: { value: '250' } });
+    expect(onLinhaChange).toHaveBeenCalledTimes(1);
+    const [loteId, proxima] = onLinhaChange.mock.calls[0];
+    expect(loteId).toBe('l1');
+    expect(proxima.rendimentoCarcacaPct).toBe(50);
+    expect(proxima.valorLiquido).toBeGreaterThan(0);
+  });
+});
+
+describe('A chave do lote — o defeito que impediu o abate de existir', () => {
+  /* ⚠ ERA `lote.id`, O ID DO BANCO, QUE UM LOTE NOVO NAO TEM. `LoteForm.id` e' opcional;
+     o rascunho nascia na chave `undefined`, dois lotes novos colidiam nela e o payload
+     subia sem `operacao_lote_id`. A RPC recusava com "Lote <NULL> nao pertence a
+     operacao" e o erro morria sem toast. Agora a chave e' o `idLocal`, que existe desde
+     o nascimento do lote. ⚠ E O COMPILADOR NAO VE': `strict: false` no tsconfig.app.json
+     deixa `string | undefined` entrar em campo `string` sem uma palavra. */
+  it('dois lotes distintos devolvem chaves distintas — nunca a mesma', () => {
+    const onLinhaChange = vi.fn();
+    render(
+      <AbaNegociacaoAbate
+        lotes={[M, F]}
+        linhas={new Map([['l1', linha('l1')], ['l2', linha('l2')]])}
+        cenariosExistentes={['projetado']} cenario="projetado" onLinhaChange={onLinhaChange}
+      />,
+    );
+    /* Por CARTAO, nunca por indice global: cada lote tem mais de um `input[type=number]`
+       (a carcaca e o Funrural), e um indice global casaria dois campos do mesmo lote. */
+    const carcacaDo = (titulo: string) => {
+      const cartao = screen.getByText(titulo, { exact: false }).closest('div.rounded-lg')!;
+      return cartao.querySelector('input[type="number"]') as HTMLInputElement;
+    };
+    fireEvent.change(carcacaDo('1. Bois'), { target: { value: '250' } });
+    fireEvent.change(carcacaDo('2. Vacas'), { target: { value: '240' } });
+    const chaves = onLinhaChange.mock.calls.map(c => c[0]);
+    expect(chaves).toEqual(['l1', 'l2']);
+    expect(new Set(chaves).size).toBe(2);
+    expect(chaves).not.toContain(undefined);
   });
 });

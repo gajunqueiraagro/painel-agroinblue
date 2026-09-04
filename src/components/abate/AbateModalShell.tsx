@@ -143,8 +143,6 @@ export interface AbateModalShellProps {
   /** Texto livre — a propriedade de quem compra, quando se sabe. */
   unidadeFrigorifico: string;
   setUnidadeFrigorifico: (v: string) => void;
-  tipoAbate: string;
-  setTipoAbate: (v: string) => void;
   observacao: string;
   setObservacao: (v: string) => void;
   ocOperacaoId: string | null;
@@ -209,7 +207,7 @@ export function AbateModalShell({
   data, setData, frigorificoId, setFrigorificoId, contrapartes, onNovoFrigorifico,
   abateFazendaId, setAbateFazendaId, fazendasOC,
   unidadeFrigorifico, setUnidadeFrigorifico,
-  tipoAbate, setTipoAbate, observacao, setObservacao,
+  observacao, setObservacao,
   ocOperacaoId, ocVersao, onOcVersaoChange, ocStatusComercial, lotesApi,
   abateApi, abateLinhas, onAbateLinhaChange,
   cenarioAbate = 'projetado', onCenarioAbateChange, onIniciarRealizado,
@@ -231,7 +229,11 @@ export function AbateModalShell({
      guardado — muda apenas ONDE vai aparecer, e sera' dentro da Negociacao. */
 
   const fazendaFalta = !abateFazendaId;
-  const identificacaoPronta = !!frigorificoId && !!abateFazendaId && !!data && !!tipoAbate;
+  /* ⚠ `tipoAbate` SAIU DAQUI JUNTO COM O CAMPO. Ele era exigido para liberar o salvar, e
+     era a UNICA coisa que o campo governava — nao ia a payload nenhum. Deixa-lo na
+     expressao depois de remover o `Select` travaria a tela para sempre, com a dica
+     pedindo um campo que nao existe mais. */
+  const identificacaoPronta = !!frigorificoId && !!abateFazendaId && !!data;
 
   /* ⚠ A BIFURCACAO DA NEGOCIACAO, de PR-OC-VENDA-BOITEL-01A. O boitel NAO tem aba
      propria: ele e' a Negociacao com mais coisa. Venda comum mostra os lotes como
@@ -439,7 +441,7 @@ export function AbateModalShell({
     : null;
   const motivoNaoSalva = naNegociacao
     ? (!ocOperacaoId ? 'Salve a operação na aba Abate primeiro' : undefined)
-    : (identificacaoPronta ? undefined : 'Informe frigorífico, data, fazenda e tipo de abate');
+    : (identificacaoPronta ? undefined : 'Informe frigorífico, data e fazenda');
   /* Mesma regra aplicada ao Salvar — B-09 item 1c. O motivo ja existia no `title` desde
      sempre; o que faltava era ele estar ESCRITO ao lado.
      ⚠ `submitting` FICA DE FORA: ali o proprio rotulo do botao vira "Salvando...", e uma
@@ -459,17 +461,30 @@ export function AbateModalShell({
      `abateLinhas` e' o que o operador digitou e ainda nao salvou. Mostrar so' o primeiro
      apagaria a digitacao na tela; so' o segundo esconderia o que ja esta gravado nos
      lotes que ele nao tocou. */
+  /* ⚠ TUDO AQUI E' CHAVEADO POR `idLocal`, NUNCA PELO ID DO BANCO. O id do banco nao
+     existe enquanto o lote nao foi gravado (`LoteForm.id` e' opcional), entao a chave
+     do rascunho nascia `undefined`: dois lotes novos colidiam na MESMA chave, e o
+     payload subia sem `operacao_lote_id` — a RPC recusava com "Lote <NULL> nao pertence
+     a operacao" e o erro morria sem toast. `idLocal` existe desde o nascimento do lote
+     e nao muda; a traducao para o id do banco acontece uma vez so', na gravacao.
+     ⚠ E O COMPILADOR NAO VIA: `tsconfig.app.json` tem `strict: false`, entao `string |
+     undefined` entrando em campo `string` nao e' erro. O gate de 153 e' cego para esta
+     classe inteira de defeito. */
   const linhasDoAbate = useMemo(() => {
-    const m = new Map(abateApi?.linhas ?? []);
+    const m = new Map<string, LinhaAbate>();
+    (lotesApi?.lotes ?? []).forEach(l => {
+      const doBanco = l.id ? abateApi?.linhas.get(l.id) : undefined;
+      if (doBanco) m.set(l.idLocal, doBanco);
+    });
     (abateLinhas ?? new Map()).forEach((v, k) => m.set(k, v));
     return m;
-  }, [abateApi?.linhas, abateLinhas]);
+  }, [abateApi?.linhas, abateLinhas, lotesApi?.lotes]);
 
   /* Os lotes como a aba do abate os conhece — so' o que o calculo precisa. */
   const lotesDoAbate = useMemo<LoteAbate[]>(
-    () => (lotesApi?.lotes ?? []).map((l, idx) => ({
-      id: l.id,
-      ordem: idx + 1,
+    () => (lotesApi?.lotes ?? []).map(l => ({
+      id: l.idLocal,
+      ordem: l.ordem,
       categoria: l.categoria ?? null,
       categoriaLabel: categoriasDisponiveis.find(c => c.value === l.categoria)?.label ?? (l.categoria ?? '—'),
       quantidade: Number(l.quantidade) || 0,
@@ -753,17 +768,6 @@ export function AbateModalShell({
                 <Input value={unidadeFrigorifico} onChange={e => setUnidadeFrigorifico(e.target.value)} placeholder="Opcional"
                   className="mt-[3px] h-8 px-2.5 text-[12px]" />
               </div>
-              <div className="min-w-0">
-                <Label className="text-[10px] text-muted-foreground">Tipo de abate <span className="text-destructive">*</span></Label>
-                <Select value={tipoAbate} onValueChange={setTipoAbate}>
-                  <SelectTrigger className="mt-[3px] h-8 px-2.5 text-[12px]"><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="gado_adulto" className="text-[12px]">Gado adulto</SelectItem>
-                    <SelectItem value="desmama" className="text-[12px]">Desmama</SelectItem>
-                    <SelectItem value="boitel" className="text-[12px]">Boitel</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
               <div className="min-w-0 lg:col-span-2">
                 <Label className="text-[10px] text-muted-foreground">Observações / Lote</Label>
                 <Input value={observacao} onChange={e => setObservacao(e.target.value)} placeholder="Opcional"
@@ -789,7 +793,6 @@ export function AbateModalShell({
                 <LinhaResumo rotulo="Comprador" valor={frigorificoNome} />
                 <LinhaResumo rotulo="Data" valor={data ? data.split('-').reverse().join('/') : null} />
                 <LinhaResumo rotulo="Fazenda" valor={fazendaNome} />
-                <LinhaResumo rotulo="Tipo" valor={tipoAbate === 'gado_adulto' ? 'Gado adulto' : tipoAbate === 'desmama' ? 'Desmama' : tipoAbate === 'boitel' ? 'Boitel' : null} />
               </div>
 
               <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 mb-0.5">

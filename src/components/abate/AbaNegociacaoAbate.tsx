@@ -267,9 +267,21 @@ export function AbaNegociacaoAbate({
            certo no lote e errado na Central — o defeito que `oc_revalorar_lote` já tem. */
         const trocar = (patch: Partial<LinhaAbate>) => {
           const proxima = { ...linha, ...patch };
+          const calc = buildAbateCalculation(paraCalculo(proxima, lote));
           onLinhaChange(lote.id, {
             ...proxima,
-            valorLiquido: buildAbateCalculation(paraCalculo(proxima, lote)).valorLiquido,
+            /* ⚠ O RENDIMENTO E' DERIVADO E MESMO ASSIM PERSISTIDO — a mesma regra do
+               `valorLiquido`, e pelo mesmo motivo: a RPC soma o rendimento ponderado no
+               cabecalho da operacao e nao pode recalcula-lo sem reimplementar a lib em
+               SQL. A conta e' `peso de carcaca / peso vivo`, e a lib ja a fazia (abate.ts
+               linha 117): quando havia carcaca, o rendimento DIGITADO era ignorado no
+               calculo e gravado assim mesmo — o banco guardava um numero que a tela nao
+               usava. Agora so' existe um rendimento, o da lib.
+               ⚠ `0` VIRA `null`, nao zero. Sem carcaca nao ha rendimento nenhum, e gravar
+               zero satisfaria a guarda da RPC ("preco e carcaca OU rendimento") com um
+               dado que ninguem informou. */
+            rendimentoCarcacaPct: calc.rendCalc > 0 ? calc.rendCalc : null,
+            valorLiquido: calc.valorLiquido,
           });
         };
         const subcentro = subcentroAbatePorCategoria(lote.categoria ?? '');
@@ -299,12 +311,12 @@ export function AbaNegociacaoAbate({
               </div>
               <div>
                 <Label className={LBL}>Rendimento (%)</Label>
-                <Input
-                  type="number" step="0.01" inputMode="decimal" className={`${H} text-right`}
-                  disabled={somenteLeitura}
-                  value={linha.rendimentoCarcacaPct ?? ''}
-                  onChange={e => trocar({ rendimentoCarcacaPct: e.target.value === '' ? null : Number(e.target.value) })}
-                />
+                {/* Travado no mesmo desenho dos derivados do par valor+fonte: borda
+                    tracejada e texto apagado dizem, sem legenda, que aqui nao se digita. */}
+                <div className={`${H} flex items-center justify-end rounded-md border border-dashed px-2 text-muted-foreground tabular-nums`}
+                     title="Derivado da carcaça sobre o peso vivo — não é digitável.">
+                  {c.rendCalc > 0 ? `${c.rendCalc.toFixed(2)}%` : '—'}
+                </div>
               </div>
               <div>
                 <Label className={LBL}>Preço da @</Label>
@@ -315,12 +327,11 @@ export function AbaNegociacaoAbate({
               </div>
             </div>
 
-            {/* ⚠ OS TRÊS DERIVADOS FICAM À VISTA. A carcaça sai do peso × rendimento OU do
-                peso informado — quem preenche um vê o outro se ajustar, e é assim que se
-                percebe um rendimento digitado errado antes de salvar. */}
+            {/* ⚠ O RENDIMENTO SAIU DAQUI porque virou campo — mostrar o mesmo numero duas
+                vezes na mesma altura da tela e' ruido, e o campo travado ja' o exibe. O que
+                fica sao as tres grandezas que ninguem digita em lugar nenhum. */}
             <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[10px] text-muted-foreground">
               <span>carcaça calculada: <b className="tabular-nums text-foreground">{kg2(c.carcacaCalc)}</b></span>
-              <span>rendimento: <b className="tabular-nums text-foreground">{c.rendCalc.toFixed(2)}%</b></span>
               <span>@ por cabeça: <b className="tabular-nums text-foreground">{c.pesoArrobaCab.toFixed(2)}</b></span>
               <span>@ do lote: <b className="tabular-nums text-foreground">{c.totalArrobas.toFixed(2)}</b></span>
             </div>
