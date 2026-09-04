@@ -156,8 +156,9 @@ interface V2LancamentosWrapperProps {
   /** PR-OC-ENTRYPOINT-COMPRA-01 — card "Compra" abre o CompraModalShell em modo OC (nova Compra). */
   onNovaCompraOC?: () => void;
   onNovaVendaOC?: () => void;
+  onNovoAbateOC?: () => void;
 }
-function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEdit, onNavegarChuvas, onNavegarMapaRebanho, cenarioInicial, cenariosPermitidos, onFecharOperacaoOC, onNovaCompraOC, onNovaVendaOC }: V2LancamentosWrapperProps = {}) {
+function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEdit, onNavegarChuvas, onNavegarMapaRebanho, cenarioInicial, cenariosPermitidos, onFecharOperacaoOC, onNovaCompraOC, onNovaVendaOC, onNovoAbateOC }: V2LancamentosWrapperProps = {}) {
   const navigate = useNavigate();
   const { isGlobal } = useFazenda();
   const { canEdit, canEditMeta } = usePermissions();
@@ -320,6 +321,7 @@ function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEd
         onFecharOperacaoOC={onFecharOperacaoOC}
         onNovaCompraOC={onNovaCompraOC}
         onNovaVendaOC={onNovaVendaOC}
+        onNovoAbateOC={onNovoAbateOC}
       />
     </div>
   );
@@ -577,6 +579,9 @@ export default function V2Index() {
     const retorno = p.get('oc_return');
     p.delete('oc_compra');
     p.delete('oc_venda');
+    /* ⚠ O TERCEIRO IRMAO — OC-ABATE-01. Fechar a OC tem de limpar os TRES, senao um
+       parametro sobrevivente reabre o modal errado no proximo render. */
+    p.delete('oc_abate');
     p.delete('oc_id');
     p.delete('oc_aba');
     p.delete('oc_return');
@@ -605,6 +610,7 @@ export default function V2Index() {
     /* ⚠ APAGA O IRMAO. Os dois booleanos nao podem coexistir, e a impossibilidade e'
        garantida por quem ABRE — nao por convencao. Ver PR-OC-VENDA-ABA-01. */
     p.delete('oc_venda');
+    p.delete('oc_abate');
     p.delete('oc_id');
     if (origem === 'financeiro-lanc' || origem === 'lancamentos-zoot') p.set('oc_return', origem);
     else p.delete('oc_return');
@@ -621,6 +627,27 @@ export default function V2Index() {
     const p = new URLSearchParams(window.location.search);
     p.set('oc_venda', '1');
     p.delete('oc_compra');
+    p.delete('oc_abate');
+    p.delete('oc_id');
+    if (origem === 'financeiro-lanc' || origem === 'lancamentos-zoot') p.set('oc_return', origem);
+    else p.delete('oc_return');
+    setSearchParams(p, { replace: true });
+    setSection('lancamentos-zoot');
+  }, [setSearchParams]);
+
+  /* OC-ABATE-01 T1 — espelho de `abrirNovaVendaOC`, terceiro booleano.
+     ⚠ OS TRES SE APAGAM ENTRE SI, e a impossibilidade de coexistirem e' garantida aqui,
+     por quem ABRE — nao por quem le. O `LancamentosTab` tem 21 leitores de `modoOCCompra`
+     e o caminho da compra segue intocado; a divida registrada em PR-OC-PARAM-TIPO-01
+     (trocar os booleanos por `oc_tipo=compra|venda|abate`) agora tem um motivo a mais.
+     ⚠ QUEM NAO PASSA POR AQUI CAI NO DIALOGO LEGADO, e e' assim que os 829 abates
+     historicos seguem editaveis sem migracao — a substituicao e' o T3. */
+  const abrirNovoAbateOC = useCallback(() => {
+    const origem = sectionRef.current;
+    const p = new URLSearchParams(window.location.search);
+    p.set('oc_abate', '1');
+    p.delete('oc_compra');
+    p.delete('oc_venda');
     p.delete('oc_id');
     if (origem === 'financeiro-lanc' || origem === 'lancamentos-zoot') p.set('oc_return', origem);
     else p.delete('oc_return');
@@ -1063,6 +1090,7 @@ export default function V2Index() {
         onFecharOperacaoOC={fecharOperacaoOC}
         onNovaCompraOC={abrirNovaCompraOC}
         onNovaVendaOC={abrirNovaVendaOC}
+        onNovoAbateOC={abrirNovoAbateOC}
         onReturnFromEdit={() => {
           limparEdicaoAvancada();
           setSection('conferencia-lancamentos');

@@ -37,6 +37,7 @@ import { MorteModalShell } from '@/components/morte/MorteModalShell';
 import { CompraMetaModalShell } from '@/components/compra/CompraMetaModalShell';
 import { VendaMetaModalShell } from '@/components/venda/VendaMetaModalShell';
 import { VendaModalShell } from '@/components/venda/VendaModalShell';
+import { AbateModalShell } from '@/components/abate/AbateModalShell';
 import { boitelVazio, payloadBoitel, boitelDeLinha, type BoitelEdicao } from '@/components/venda/BoitelBlocosModais';
 import { liquidoDaVendaBoitel } from '@/components/venda/BoitelNegociacaoDerivado';
 import { ReclassificacaoFormFields, useReclassificacaoState } from '@/components/ReclassificacaoForm';
@@ -49,6 +50,7 @@ import { OcRpcError, useOperacaoComercial } from '@/hooks/useOperacaoComercial';
 import { useCompraLotes, pesoMedioPorCabeca } from '@/hooks/useCompraLotes';
 import { useOperacaoRecebimento } from '@/hooks/useOperacaoRecebimento';
 import { useOperacaoDocumentos } from '@/hooks/useOperacaoDocumentos';
+import { useOperacaoAbate } from '@/hooks/useOperacaoAbate';
 import { useOperacaoEventos } from '@/hooks/useOperacaoEventos';
 import { useOperacaoLiquidacao } from '@/hooks/useOperacaoLiquidacao';
 import { AbateDetalhesDialog, AbateDetalhes, EMPTY_ABATE_DETALHES } from '@/components/abate/AbateDetalhesDialog';
@@ -129,6 +131,7 @@ interface Props {
    */
   onNovaCompraOC?: () => void;
   onNovaVendaOC?: () => void;
+  onNovoAbateOC?: () => void;
   /**
    * Cenário inicial padrão da tela: 'realizado' (default) ou 'meta'.
    * Usado APENAS como valor inicial do `statusOp`. O usuário pode trocar
@@ -358,7 +361,7 @@ function matchFornecedor(options: FornecedorOption[], params: { id?: string | nu
   });
 }
 
-export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar, vendaParaEditar, compraParaEditar, transferenciaParaEditar, reclassParaEditar, morteParaEditar, consumoParaEditar, onReturnFromEdit, initialAnoFiltro, initialMesFiltro, initialReclassCenario, onNavegarChuvas, onFecharOperacaoOC, onNovaCompraOC, onNovaVendaOC, cenarioInicial, cenariosPermitidos, onRealizadoAplicado }: Props) {
+export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar, vendaParaEditar, compraParaEditar, transferenciaParaEditar, reclassParaEditar, morteParaEditar, consumoParaEditar, onReturnFromEdit, initialAnoFiltro, initialMesFiltro, initialReclassCenario, onNavegarChuvas, onFecharOperacaoOC, onNovaCompraOC, onNovaVendaOC, onNovoAbateOC, cenarioInicial, cenariosPermitidos, onRealizadoAplicado }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const { clienteAtual } = useCliente();
   const nomeFazenda = fazendaAtual?.nome || '';
@@ -403,6 +406,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
      antes disso. Um lugar so' le a URL; o refinamento de cenario fica onde esta'
      documentado. */
   const ocVendaParam = ocSearchParams.get('oc_venda') === '1';
+  /* ⚠ A PORTA DO ABATE — OC-ABATE-01 T1. Mesmo desenho da venda: um parametro de URL
+     abre o shell da OC no lugar do formulario antigo. O diagolo legado continua sendo o
+     caminho de quem NAO tem o parametro — e' assim que os 829 abates historicos seguem
+     editaveis sem migracao (decisao do ENVELOPE 66). */
+  const ocAbateParam = ocSearchParams.get('oc_abate') === '1';
   /* PR-OC-VENDA-ABA-01 — espelho de `modoOCCompra`. Os dois nunca coexistem: quem abre
      um apaga o outro, nos dois sentidos (ver `abrirNovaVendaOC` / `abrirNovaCompraOC`). */
   const [ocOperacaoId, setOcOperacaoId] = useState<string | null>(null);
@@ -449,7 +457,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     clienteId: clienteAtual?.id ?? null,
     versao: ocVersao,
     onVersaoChange: setOcVersao,
-    enabled: modoOCCompra || ocVendaParam,
+    enabled: modoOCCompra || ocVendaParam || ocAbateParam,
   });
   const recebimentoApi = useOperacaoRecebimento({
     operacaoId: ocOperacaoId,
@@ -463,28 +471,39 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
        e JA tratam venda: `oc_registrar_movimentacao` mapeia `venda -> venda` e grava o
        valor vindo do lote. O que faltava era ligar — os callbacks sao os mesmos porque o
        estado da OC e' o mesmo. */
-    enabled: modoOCCompra || ocVendaParam,
+    enabled: modoOCCompra || ocVendaParam || ocAbateParam,
   });
   /* ⚠ OS TRES SERVEM OS DOIS MODOS — PR-OC-VENDA-ABAS-01. Sao chaveados por
      `ocOperacaoId`, que a hidratacao da venda ja seta: o que faltava era ligar. Sem
      `!isCenarioMeta` pelo mesmo motivo do `lotesApi` — em meta o shell da OC nao e'
      montado, entao os hooks nao tem consumidor. */
+  /* ⚠ O CENARIO VIVE AQUI, e nao dentro do hook: os dois mundos do abate (projetado e
+     realizado) sao a MESMA operacao vista de dois jeitos, e quem alterna e' a tela. */
+  const [cenarioAbate, setCenarioAbate] = useState<'projetado' | 'realizado'>('projetado');
+  const abateApi = useOperacaoAbate({
+    operacaoId: ocOperacaoId,
+    clienteId: clienteAtual?.id ?? null,
+    cenario: cenarioAbate,
+    versao: ocVersao,
+    onVersaoChange: setOcVersao,
+    enabled: ocAbateParam,
+  });
   const documentosApi = useOperacaoDocumentos({
     operacaoId: ocOperacaoId,
     clienteId: clienteAtual?.id ?? null,
-    enabled: modoOCCompra || ocVendaParam,
+    enabled: modoOCCompra || ocVendaParam || ocAbateParam,
   });
   const liquidacaoApi = useOperacaoLiquidacao({
     operacaoId: ocOperacaoId,
     clienteId: clienteAtual?.id ?? null,
-    enabled: modoOCCompra || ocVendaParam,
+    enabled: modoOCCompra || ocVendaParam || ocAbateParam,
   });
   /* Trilha de auditoria — mesma vizinhanca dos demais eixos da OC, uma api por aba.
      Nao recebe `clienteId`: a RLS de `zoo_operacao_eventos` ja recorta por tenant, e
      repassar o cliente aqui sugeriria um filtro que o hook nao faz. */
   const eventosApi = useOperacaoEventos({
     operacaoId: ocOperacaoId,
-    enabled: modoOCCompra || ocVendaParam,
+    enabled: modoOCCompra || ocVendaParam || ocAbateParam,
   });
 
   const outrasFazendas = useMemo(() => {
@@ -770,6 +789,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
      `isCompra && isCenarioMeta` ANTES de `isCompra`, entao a ordem a protegia. A venda
      entrou como primeiro ramo da cadeia e passou na frente do teste de cenario. */
   const modoOCVenda = ocVendaParam && !isCenarioMeta;
+  /* ⚠ SO' EM REALIZADO, como a venda: uma projecao de abate nao tem frigorifico real,
+     documento nem entrega — e a OC de abate exige contraparte. */
+  const modoOCAbate = ocAbateParam && !isCenarioMeta;
 
   /* Hidratacao de operacao de VENDA existente a partir de ?oc_id — PR-OC-VENDA-REABRIR-01.
      ESPELHO do effect da compra logo acima: mesma guarda, mesmo ref-guard de uma execucao,
@@ -962,6 +984,21 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [vendaFazendaId, setVendaFazendaId] = useState<string>('');
   /* Propriedade de destino da venda na OC — texto livre, a propriedade de quem compra. */
   const [vendaPropriedadeDestino, setVendaPropriedadeDestino] = useState<string>('');
+
+  /* ─── A IDENTIFICACAO DO ABATE NA OC — OC-ABATE-01 T1 ────────────────────────
+     Quatro estados proprios, e nao reuso dos da venda: um abate e uma venda podem
+     estar abertos em momentos diferentes, e compartilhar o campo faria o valor de
+     um aparecer no formulario do outro.
+     ⚠ O FRIGORIFICO E OBRIGATORIO (decisao do ENVELOPE 66). Nao e' capricho de
+     formulario: medido em 04/09/2026, 84% dos 829 abates legados nao tem contraparte
+     nenhuma e os 16% restantes a tem como texto livre. A OC exige o vinculo real. */
+  const [abateFrigorificoId, setAbateFrigorificoId] = useState<string>('');
+  /* ⚠ ORIGEM, como na venda: o gado SAI da fazenda para o frigorifico. */
+  const [abateFazendaId, setAbateFazendaId] = useState<string>('');
+  /* A unidade/planta do frigorifico — texto livre, quando se sabe. */
+  const [abateUnidade, setAbateUnidade] = useState<string>('');
+  /* O tipo do abate. Espelha `vendaTipoVenda` na forma; o vocabulario e' do abate. */
+  const [tipoAbate, setTipoAbate] = useState<string>('');
   /* ⚠ SEMEIA A FAZENDA SO' NUMA VENDA NOVA — PR-OC-VENDA-REABRIR-01E. Ele existe para
      poupar um clique: com uma fazenda no filtro, a venda ja' nasce com ela.
      Numa REABERTURA ele apagava o que o banco tinha: a hidratacao faz
@@ -2549,6 +2586,66 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     }
   };
 
+  /* ─── A OPERACAO DE ABATE — OC-ABATE-01 T1 ───────────────────────────────────
+     Clone do `salvarOperacaoVendaOC` com tres diferencas, e so' tres:
+       · `tipo_operacao: 'abate'` — o CHECK da tabela ja o aceita (conferido no banco);
+       · o frigorifico e' OBRIGATORIO, e a recusa acontece AQUI, antes de ir ao servidor:
+         a OC exige `contraparte_id` e uma ida para receber "nao" e' ida perdida;
+       · o vocabulario das mensagens e' o do abate.
+     ⚠ NAO REUSA O DA VENDA. Poderia parametrizar o tipo, mas os dois leem estados
+     diferentes (`abateFrigorificoId` x `vendaDestinoFornecedorId`) e um abate e uma venda
+     podem estar abertos em momentos diferentes — parametrizar faria um ler o campo do
+     outro. A duplicacao aqui e' de vinte linhas; o vazamento seria de dado. */
+  const salvarOperacaoAbateOC = async (): Promise<{ operacaoId: string; versao: number } | null> => {
+    const clienteId = clienteAtual?.id;
+    if (!clienteId) { toast.error('Cliente não selecionado.'); return null; }
+    if (!abateFazendaId) { toast.error('Selecione a fazenda de origem.'); return null; }
+    if (!abateFrigorificoId) { toast.error('Selecione o frigorífico — a operação de abate exige a contraparte.'); return null; }
+    const criando = !ocOperacaoId;
+    setSubmitting(true);
+    try {
+      const env = await ocRpc.salvarRascunho(ocOperacaoId, clienteId, ocVersao, {
+        tipo_operacao: 'abate',
+        data_operacao: data,
+        cenario: isCenarioMeta ? 'meta' : 'realizado',
+        fazenda_id: abateFazendaId,
+        contraparte_id: abateFrigorificoId,
+        numero_documento: notaFiscal || null,
+        observacoes: observacao || null,
+        movimentacoes: [],
+        partes: [],
+      });
+      setOcOperacaoId(env.operacao_id);
+      setOcVersao(env.versao);
+      if (env.status_comercial) setOcStatusComercial(env.status_comercial);
+      if (criando) toast.success('Operação de abate criada. Agora informe os lotes abatidos.');
+      return { operacaoId: env.operacao_id, versao: env.versao };
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Falha ao salvar a operação de abate.');
+      return null;
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  /* A negociacao do abate grava LOTES, como a da compra. O detalhe por lote
+     (carcaca, rendimento, preco da @) entra no commit seguinte, pela `oc_salvar_abate`.
+     ⚠ A RECUSA DE "FECHADA" ACONTECE NA TELA, sem ida ao servidor — mesmo desenho da
+     venda: o estado ja esta' aqui e a mensagem aponta o botao que resolve. */
+  const salvarNegociacaoAbateOC = async (): Promise<boolean> => {
+    const clienteId = clienteAtual?.id;
+    if (!ocOperacaoId || !clienteId) { toast.error('Salve a operação na aba Abate primeiro.'); return false; }
+    if (ocStatusComercial === 'fechada') {
+      toast.error('Operação fechada. Reabra a negociação para editar — o botão está aqui no rodapé.');
+      return false;
+    }
+    /* ⚠ `salvar` DEVOLVE A VERSAO NOVA, nao um booleano — `Promise<number | null>`.
+       `null` e' a falha, e e' ela que vira `false` aqui. Devolver o numero cru faria
+       o rodape tratar "versao 0" como falha no dia em que ela existisse. */
+    const versaoNova = await lotesApi.salvar();
+    return versaoNova !== null;
+  };
+
   const salvarOperacaoVendaOC = async (): Promise<{ operacaoId: string; versao: number } | null> => {
     const clienteId = clienteAtual?.id;
     if (!clienteId) { toast.error('Cliente não selecionado.'); return null; }
@@ -3775,6 +3872,17 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         onNovaVendaOC();
         resetContextoOC();
         setTipo('venda');
+        setLancModalOpen(true);
+        return;
+      }
+      /* OC-ABATE-01 T1 — espelho do card de Venda, com a MESMA guarda: enquanto
+         `onNovoAbateOC` nao for passado, o Abate cai no dialogo de sempre. E' o que
+         mantem os 829 abates historicos funcionando sem migracao — quem nao recebe a
+         prop nao ve diferenca nenhuma. */
+      if (it.value === 'abate' && onNovoAbateOC) {
+        onNovoAbateOC();
+        resetContextoOC();
+        setTipo('abate');
         setLancModalOpen(true);
         return;
       }
@@ -5214,7 +5322,52 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           ? `${vendaOCNoEnvelope ? 'max-w-6xl' : 'max-w-5xl'} p-0 gap-0 overflow-hidden [&>button.absolute]:hidden`
           : 'max-w-full sm:max-w-5xl w-full h-screen sm:h-auto sm:max-h-[92vh] overflow-y-auto p-4 sm:p-5'}
       >
-      {isVenda && modoOCVenda ? (
+      {isAbate && modoOCAbate ? (
+        /* ══ ABATE COMO OPERACAO COMERCIAL — OC-ABATE-01 T1 ═══════════════════════
+           ⚠ ADICIONA, NAO SUBSTITUI. O `AbateDetalhesDialog` legado segue no `else`,
+           byte a byte, e continua sendo o caminho dos 829 abates historicos — quem
+           chega sem `?oc_abate=1` nao ve diferenca nenhuma. A troca e' o T3.
+           ⚠ AS CINCO APIS SAO AS MESMAS DA VENDA, reusadas: `lotesApi`, `documentosApi`,
+           `eventosApi`, `liquidacaoApi` e `recebimentoApi` ja estao montadas acima e agora
+           tambem servem o abate (`|| ocAbateParam` no `enabled`). Construir outras cinco
+           criaria a segunda fonte para o mesmo dado. */
+        <AbateModalShell
+          ocVersao={ocVersao} onOcVersaoChange={setOcVersao}
+          data={data} setData={setData}
+          frigorificoId={abateFrigorificoId} setFrigorificoId={setAbateFrigorificoId}
+          contrapartes={abateFornecedores}
+          onNovoFrigorifico={() => setNovoFornecedorCompraOpen(true)}
+          abateFazendaId={abateFazendaId} setAbateFazendaId={setAbateFazendaId}
+          fazendasOC={fazendasOC}
+          unidadeFrigorifico={abateUnidade} setUnidadeFrigorifico={setAbateUnidade}
+          tipoAbate={tipoAbate} setTipoAbate={setTipoAbate}
+          observacao={observacao} setObservacao={setObservacao}
+          ocOperacaoId={ocOperacaoId}
+          ocStatusComercial={ocStatusComercial}
+          lotesApi={lotesApi}
+          /* ⚠ O DETALHE POR LOTE CHEGA AQUI E AINDA NAO TEM TELA. `abateApi` ja le e grava
+             `zoo_operacao_abate`; quem o edita e' o `AbaNegociacaoAbate`, no commit
+             seguinte. Passa-lo agora e' o que faz aquele commit ser so' a tela. */
+          abateApi={abateApi}
+          cenarioAbate={cenarioAbate}
+          onCenarioAbateChange={setCenarioAbate}
+          categoria={categoria}
+          categoriasDisponiveis={categoriasDisponiveis}
+          quantidadeNum={parseNumericValue(quantidade) || 0}
+          pesoKgNum={parseNumericValue(pesoKg) || 0}
+          submitting={submitting}
+          onSalvarOperacao={() => salvarOperacaoAbateOC()}
+          onSalvarNegociacao={() => salvarNegociacaoAbateOC()}
+          documentosApi={documentosApi}
+          eventosApi={eventosApi}
+          liquidacaoApi={liquidacaoApi}
+          recebimentoApi={recebimentoApi}
+          ocEntregaEncerrada={ocEntregaEncerrada}
+          onConcluirNegociacao={() => recebimentoApi.concluirNegociacao()}
+          onReabrirNegociacao={(motivo) => reabrirNegociacaoVendaOC(motivo)}
+          onFechar={fecharModalOCComAutosave}
+        />
+      ) : isVenda && modoOCVenda ? (
         /* ══ VENDA COMO OPERACAO COMERCIAL — aba de identificacao ═══════════════════
            Primeira de seis. Este ramo ADICIONA a OC; o formulario antigo da venda
            continua no `else`, byte a byte, ate o Gabriel decidir a troca. */
