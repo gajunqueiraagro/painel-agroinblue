@@ -28,12 +28,26 @@ import { OcRpcError } from '@/hooks/useOperacaoComercial';
 import type { Json } from '@/integrations/supabase/types';
 
 export type CenarioAbate = 'projetado' | 'realizado';
-/** A unidade em que o operador digitou o número. É ela que manda na leitura. */
-export type FonteBonus = 'pct' | 'reais';
-/** `outros_descontos` é o único que aceita @ no lugar de %. */
+
+/**
+ * A unidade em que o operador digitou o número. É ela que manda na leitura — o outro
+ * lado nunca é gravado, sai derivado de `buildAbateCalculation`.
+ *
+ * ⚠ A UNIDADE VEM DA ARITMÉTICA DA LIB, NUNCA DO NOME DO CAMPO. Esta regra custou uma
+ * migration: os campos do diálogo legado se chamam `bonusPrecoce` × `bonusPrecoceReais`,
+ * e o nome sugere "percentual × reais". A conta diz outra coisa —
+ * `bonusPrecoce * totalArrobas` — ou seja, o primeiro lado é **R$ por arroba**. Os quatro
+ * bônus/descontos nasceram no banco com CHECK `('pct','reais')` por causa dessa leitura
+ * errada, e a migration `abate_fontes_bonus_arroba` os corrigiu. Só o Funrural é
+ * percentual de verdade: `valorBase * funruralPct / 100`.
+ */
+export type FonteArroba = 'arroba' | 'reais';
+/** Só o Funrural: percentual do valor base, ou o total em reais. */
+export type FontePct = 'pct' | 'reais';
+/** `outros_descontos` é o inverso dos bônus: o primeiro lado é o total. */
 export type FonteOutros = 'reais' | 'arroba';
 
-export interface ValorComFonte<F extends string = FonteBonus> {
+export interface ValorComFonte<F extends string = FonteArroba> {
   valor: number | null;
   fonte: F | null;
 }
@@ -50,7 +64,7 @@ export interface LinhaAbate {
   bonusListaTrace: ValorComFonte;
   descontoQualidade: ValorComFonte;
   outrosDescontos: ValorComFonte<FonteOutros>;
-  funrural: ValorComFonte;
+  funrural: ValorComFonte<FontePct>;
   valorBaseOverride: number | null;
 }
 
@@ -62,8 +76,16 @@ export interface AbateApi {
   loading: boolean;
   saving: boolean;
   recarregar: () => Promise<void>;
-  /** Grava N lotes numa transação. Devolve a versão nova, ou null se falhou. */
-  salvar: (linhas: LinhaAbate[]) => Promise<number | null>;
+  /**
+   * Grava N lotes numa transação. Devolve a versão nova, ou null se falhou.
+   *
+   * ⚠ `versaoExplicita` EXISTE PARA O ENCADEAMENTO, e o motivo é medido: salvar os lotes
+   * (`oc_salvar_lotes`) incrementa a versão no servidor, mas o `ocVersao` do state só
+   * muda no próximo render. Chamar esta em seguida com a versão do state mandaria a
+   * ANTIGA — 40001 na cara do operador, sem pista de onde veio. A venda já resolve assim
+   * com o boitel: usa o número DEVOLVIDO pelo salvar anterior, nunca o do estado.
+   */
+  salvar: (linhas: LinhaAbate[], versaoExplicita?: number) => Promise<number | null>;
 }
 
 interface Params {
@@ -100,7 +122,13 @@ const COLUNAS =
   + ' desconto_qualidade_valor, desconto_qualidade_fonte, outros_descontos_valor,'
   + ' outros_descontos_fonte, funrural_valor, funrural_fonte, valor_base_override';
 
-const comFonte = (v: number | null, f: string | null): ValorComFonte => ({
+const comFonteArroba = (v: number | null, f: string | null): ValorComFonte<FonteArroba> => ({
+  valor: v,
+  /* ⚠ Fonte fora do vocabulário vira `null` — não se inventa unidade. Um `'pct'` legado
+     aqui seria lido como "por arroba" e erraria por um fator de cem. */
+  fonte: f === 'arroba' || f === 'reais' ? f : null,
+});
+const comFontePct = (v: number | null, f: string | null): ValorComFonte<FontePct> => ({
   valor: v,
   fonte: f === 'pct' || f === 'reais' ? f : null,
 });
@@ -116,12 +144,12 @@ export function daLinha(r: AbateRow): LinhaAbate {
     rendimentoCarcacaPct: r.rendimento_carcaca_pct,
     pesoTotalKgNf: r.peso_total_kg_nf,
     precoArroba: r.preco_arroba,
-    bonusPrecoce: comFonte(r.bonus_precoce_valor, r.bonus_precoce_fonte),
-    bonusQualidade: comFonte(r.bonus_qualidade_valor, r.bonus_qualidade_fonte),
-    bonusListaTrace: comFonte(r.bonus_lista_trace_valor, r.bonus_lista_trace_fonte),
-    descontoQualidade: comFonte(r.desconto_qualidade_valor, r.desconto_qualidade_fonte),
+    bonusPrecoce: comFonteArroba(r.bonus_precoce_valor, r.bonus_precoce_fonte),
+    bonusQualidade: comFonteArroba(r.bonus_qualidade_valor, r.bonus_qualidade_fonte),
+    bonusListaTrace: comFonteArroba(r.bonus_lista_trace_valor, r.bonus_lista_trace_fonte),
+    descontoQualidade: comFonteArroba(r.desconto_qualidade_valor, r.desconto_qualidade_fonte),
     outrosDescontos: comFonteOutros(r.outros_descontos_valor, r.outros_descontos_fonte),
-    funrural: comFonte(r.funrural_valor, r.funrural_fonte),
+    funrural: comFontePct(r.funrural_valor, r.funrural_fonte),
     valorBaseOverride: r.valor_base_override,
   };
 }
@@ -210,8 +238,9 @@ export function useOperacaoAbate({
 
   useEffect(() => { void recarregar(); }, [recarregar]);
 
-  const salvar = useCallback(async (novas: LinhaAbate[]): Promise<number | null> => {
-    if (!operacaoId || !clienteId || versao === null) return null;
+  const salvar = useCallback(async (novas: LinhaAbate[], versaoExplicita?: number): Promise<number | null> => {
+    const versaoAlvo = versaoExplicita ?? versao;
+    if (!operacaoId || !clienteId || versaoAlvo === null) return null;
     /* ⚠ ARRAY VAZIO NÃO VAI AO BANCO. A RPC o recusa — salvar nada não é salvar —,
        e gastar uma ida para receber a recusa seria pedir o erro de propósito. */
     if (novas.length === 0) return null;
@@ -220,7 +249,7 @@ export function useOperacaoAbate({
       const { data, error } = await supabase.rpc('oc_salvar_abate', {
         p_operacao_id: operacaoId,
         p_cliente_id: clienteId,
-        p_versao_esperada: versao,
+        p_versao_esperada: versaoAlvo,
         p_cenario: cenario,
         p_lotes: novas.map(paraPayload),
       });

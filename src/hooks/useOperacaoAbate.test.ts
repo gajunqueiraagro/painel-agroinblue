@@ -11,6 +11,12 @@
  * ⚠ O LADO DERIVADO NÃO É GRAVADO. Só `{valor, fonte}` sobem; o outro lado sai de
  * `buildAbateCalculation` na leitura. Se um dia os dois forem gravados, este teste
  * não pega — mas o comentário aqui diz por que não devem ser.
+ *
+ * ⚠ DOIS VOCABULÁRIOS, E A DISTINÇÃO CUSTOU UMA MIGRATION. Os quatro bônus/descontos são
+ * **R$ por arroba** ou R$ total (`bonusPrecoce * totalArrobas` na lib); só o Funrural é
+ * percentual (`valorBase * pct / 100`). Eles nasceram com CHECK `('pct','reais')` porque a
+ * FASE 0 leu o NOME do campo em vez da ARITMÉTICA — `abate_fontes_bonus_arroba` corrigiu.
+ * A regra que fica: a unidade vem da conta, nunca do nome.
  */
 import { describe, it, expect } from 'vitest';
 import { paraPayload, daLinha, type LinhaAbate, type AbateRow } from '@/hooks/useOperacaoAbate';
@@ -47,6 +53,20 @@ describe('paraPayload — o que sobe para oc_salvar_abate', () => {
     expect(p.funrural_fonte).toBe('pct');
   });
 
+  it('os quatro bônus/descontos vão em R$ por arroba, não em percentual', () => {
+    /* ⚠ `'arroba'` E NÃO `'pct'`: a lib multiplica por `totalArrobas`. Escrever 'pct'
+       aqui faria a leitura tratar 3 como três por cento — erro de fator cem. */
+    const l = { ...vazia('lote-1'), bonusPrecoce: { valor: 3, fonte: 'arroba' as const } };
+    const p = paraPayload(l);
+    expect(p.bonus_precoce_valor).toBe(3);
+    expect(p.bonus_precoce_fonte).toBe('arroba');
+  });
+
+  it('o Funrural é o único percentual — vocabulário próprio', () => {
+    const l = { ...vazia('lote-1'), funrural: { valor: 1.5, fonte: 'pct' as const } };
+    expect(paraPayload(l).funrural_fonte).toBe('pct');
+  });
+
   it('outros_descontos aceita @ — fonte própria, não a dos bônus', () => {
     const l = { ...vazia('lote-1'), outrosDescontos: { valor: 2, fonte: 'arroba' as const } };
     expect(paraPayload(l).outros_descontos_fonte).toBe('arroba');
@@ -65,7 +85,7 @@ describe('daLinha — o que volta do banco', () => {
     operacao_lote_id: 'lote-9', cenario: 'realizado',
     peso_carcaca_kg: 280, rendimento_carcaca_pct: 52.5, peso_total_kg_nf: null,
     preco_arroba: 320, valor_base_override: null,
-    bonus_precoce_valor: 3, bonus_precoce_fonte: 'pct',
+    bonus_precoce_valor: 3, bonus_precoce_fonte: 'arroba',
     bonus_qualidade_valor: null, bonus_qualidade_fonte: null,
     bonus_lista_trace_valor: null, bonus_lista_trace_fonte: null,
     desconto_qualidade_valor: null, desconto_qualidade_fonte: null,
@@ -76,7 +96,7 @@ describe('daLinha — o que volta do banco', () => {
   it('traduz par a par, mantendo a fonte', () => {
     const l = daLinha(cru);
     expect(l.pesoCarcacaKg).toBe(280);
-    expect(l.bonusPrecoce).toEqual({ valor: 3, fonte: 'pct' });
+    expect(l.bonusPrecoce).toEqual({ valor: 3, fonte: 'arroba' });
     expect(l.outrosDescontos).toEqual({ valor: 10, fonte: 'arroba' });
     expect(l.bonusQualidade).toEqual({ valor: null, fonte: null });
   });
@@ -87,10 +107,18 @@ describe('daLinha — o que volta do banco', () => {
     expect(l.funrural.fonte).toBeNull();
   });
 
+  it('um `pct` legado num bônus vira null — não é lido como "por arroba"', () => {
+    /* ⚠ O CASO QUE A MIGRATION APAGOU. Se uma linha antiga tivesse `'pct'` num bônus, a
+       leitura NÃO pode assumir arroba: o valor viraria cem vezes maior em silêncio. */
+    const l = daLinha({ ...cru, bonus_precoce_fonte: 'pct' });
+    expect(l.bonusPrecoce.valor).toBe(3);
+    expect(l.bonusPrecoce.fonte).toBeNull();
+  });
+
   it('ida e volta preserva o que tinha valor', () => {
     const p = paraPayload(daLinha(cru));
     expect(p.bonus_precoce_valor).toBe(3);
-    expect(p.bonus_precoce_fonte).toBe('pct');
+    expect(p.bonus_precoce_fonte).toBe('arroba');
     expect('bonus_qualidade_valor' in p).toBe(false);
   });
 });

@@ -66,6 +66,29 @@ export function subcentroVendaPorCategoria(categoria: string): string | null {
    frete). Decisao do Gabriel: usa a linha que ja existe no plano — nao ha frete de
    venda, e a unica linha de frete cadastrada e' de COMPRA
    ('Investimento Frete/Comissão Compra Bovinos'), que seria classificacao errada. */
+/**
+ * O subcentro de RECEITA de um abate, por categoria. Duas contas, nao quatro: o plano
+ * tem `Abates de Machos` e `Abates de Femeas` e mais nada — conferido no banco, as duas
+ * globais e ativas.
+ *
+ * ⚠ DEVOLVE `null` E QUEM CHAMA RECUSA — nunca string vazia. O irmao da venda
+ * (`subcentroVendaPorCategoria`) tambem devolve null, mas o chamador faz `?? ''`, e um
+ * subcentro vazio gera lancamento SEM CLASSIFICACAO — exatamente o que a Mesa de Revisao
+ * existe para consertar depois. Categoria fora do mapa e' erro de cadastro, e erro de
+ * cadastro se mostra na hora.
+ */
+const SEXO_POR_CATEGORIA: Record<string, 'macho' | 'femea'> = {
+  mamotes_m: 'macho', desmama_m: 'macho', garrotes: 'macho', bois: 'macho', touros: 'macho',
+  mamotes_f: 'femea', desmama_f: 'femea', novilhas: 'femea', vacas: 'femea',
+};
+export const SUBCENTRO_ABATE_MACHOS = 'Abates de Machos';
+export const SUBCENTRO_ABATE_FEMEAS = 'Abates de Fêmeas';
+export function subcentroAbatePorCategoria(categoria: string): string | null {
+  const sexo = SEXO_POR_CATEGORIA[categoria];
+  if (!sexo) return null;
+  return sexo === 'macho' ? SUBCENTRO_ABATE_MACHOS : SUBCENTRO_ABATE_FEMEAS;
+}
+
 export const SUBCENTRO_DESPESA_VENDA = 'Impostos e Despesas de Abates e Vendas';
 /* O adiantamento que o produtor paga ao boitel. `2-Saídas` / centro `Ajustes`. */
 export const SUBCENTRO_ADIANTAMENTO_BOITEL = 'Adiantamento de Boitel';

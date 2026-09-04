@@ -36,7 +36,8 @@ import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Calendar, Building2, X, Plus, ArrowRight, Check, RotateCcw } from 'lucide-react';
 import type { Categoria } from '@/types/cattle';
 import type { CompraLotesApi } from '@/hooks/useCompraLotes';
-import type { AbateApi, CenarioAbate } from '@/hooks/useOperacaoAbate';
+import type { AbateApi, CenarioAbate, LinhaAbate } from '@/hooks/useOperacaoAbate';
+import { AbaNegociacaoAbate, type LoteAbate } from '@/components/abate/AbaNegociacaoAbate';
 import { AbaNegociacaoLotes } from '@/components/compra/AbaNegociacaoLotes';
 import { AbaDocumentosOC } from '@/components/compra/AbaDocumentosOC';
 import { AbaAuditoriaOC } from '@/components/compra/AbaAuditoriaOC';
@@ -158,6 +159,9 @@ export interface AbateModalShellProps {
      pela `oc_salvar_abate`. `onIniciarRealizado` reabre a OC quando preciso e diz
      se pode seguir — o guard de `fechada` e' resolvido ANTES de o dialogo abrir. */
   abateApi?: AbateApi;
+  /** O que o operador digitou e ainda nao salvou — vive no pai, como o `boitelDaVenda`. */
+  abateLinhas?: Map<string, LinhaAbate>;
+  onAbateLinhaChange?: (loteId: string, proxima: LinhaAbate) => void;
   cenarioAbate?: CenarioAbate;
   onCenarioAbateChange?: (c: CenarioAbate) => void;
   onIniciarRealizado?: () => Promise<boolean>;
@@ -207,7 +211,8 @@ export function AbateModalShell({
   unidadeFrigorifico, setUnidadeFrigorifico,
   tipoAbate, setTipoAbate, observacao, setObservacao,
   ocOperacaoId, ocVersao, onOcVersaoChange, ocStatusComercial, lotesApi,
-  abateApi, cenarioAbate = 'projetado', onCenarioAbateChange, onIniciarRealizado,
+  abateApi, abateLinhas, onAbateLinhaChange,
+  cenarioAbate = 'projetado', onCenarioAbateChange, onIniciarRealizado,
   documentosApi, eventosApi, liquidacaoApi, recebimentoApi, ocEntregaEncerrada = false,
   categoria, categoriasDisponiveis,
   quantidadeNum, pesoKgNum, submitting, onSalvarOperacao, onSalvarNegociacao, semAlteracoes = false,
@@ -450,6 +455,30 @@ export function AbateModalShell({
      dois: categoria, quantidade, peso, criterio e valor. Nenhum rotulo de CAMPO muda — o
      lote nao e' comprado nem vendido na tela, ele e' descrito. Vale igual para o boitel:
      o que ele acrescenta fica FORA deste elemento, nao dentro dele. */
+  /* ⚠ O QUE A ABA VE E' O BANCO MESCLADO COM O RASCUNHO. `abateApi.linhas` e' o gravado;
+     `abateLinhas` e' o que o operador digitou e ainda nao salvou. Mostrar so' o primeiro
+     apagaria a digitacao na tela; so' o segundo esconderia o que ja esta gravado nos
+     lotes que ele nao tocou. */
+  const linhasDoAbate = useMemo(() => {
+    const m = new Map(abateApi?.linhas ?? []);
+    (abateLinhas ?? new Map()).forEach((v, k) => m.set(k, v));
+    return m;
+  }, [abateApi?.linhas, abateLinhas]);
+
+  /* Os lotes como a aba do abate os conhece — so' o que o calculo precisa. */
+  const lotesDoAbate = useMemo<LoteAbate[]>(
+    () => (lotesApi?.lotes ?? []).map((l, idx) => ({
+      id: l.id,
+      ordem: idx + 1,
+      categoria: l.categoria ?? null,
+      categoriaLabel: categoriasDisponiveis.find(c => c.value === l.categoria)?.label ?? (l.categoria ?? '—'),
+      quantidade: Number(l.quantidade) || 0,
+      pesoMedioKg: Number(l.pesoMedioKg) || 0,
+    })),
+    [lotesApi?.lotes, categoriasDisponiveis],
+  );
+
+
   const abaLotes = (
     <AbaNegociacaoLotes
       categoria={categoria}
@@ -643,7 +672,23 @@ export function AbateModalShell({
                (carcaca/rendimento/@/bonus/descontos/Funrural), e ele entra no commit
                seguinte como `AbaNegociacaoAbate`, ao lado desta grade: os lotes continuam
                sendo lotes, e o detalhe do abate e' POR lote. */
-            abaLotes
+            <div className="space-y-3">
+              {abaLotes}
+              {/* ⚠ ABAIXO DA GRADE, NAO AO LADO. A cascata do abate so' se le de cima para
+                  baixo, e um split de duas colunas dentro da aba ja' foi revertido uma vez
+                  (b846fa8). O operador informa os lotes e desce para o detalhe deles. */}
+              {abateApi && onAbateLinhaChange && (
+                <AbaNegociacaoAbate
+                  lotes={lotesDoAbate}
+                  linhas={linhasDoAbate}
+                  cenariosExistentes={abateApi.cenarios}
+                  cenario={cenarioAbate}
+                  onCenarioChange={onCenarioAbateChange}
+                  onLinhaChange={onAbateLinhaChange}
+                  somenteLeitura={ocStatusComercial === 'fechada'}
+                />
+              )}
+            </div>
           ) : (
           <div className="rounded-md border bg-card p-2 shadow-sm space-y-2 min-w-0">
             <div className="text-[15px] font-medium text-foreground">Identificação do abate</div>

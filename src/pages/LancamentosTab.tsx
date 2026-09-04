@@ -50,7 +50,7 @@ import { OcRpcError, useOperacaoComercial } from '@/hooks/useOperacaoComercial';
 import { useCompraLotes, pesoMedioPorCabeca } from '@/hooks/useCompraLotes';
 import { useOperacaoRecebimento } from '@/hooks/useOperacaoRecebimento';
 import { useOperacaoDocumentos } from '@/hooks/useOperacaoDocumentos';
-import { useOperacaoAbate } from '@/hooks/useOperacaoAbate';
+import { useOperacaoAbate, type LinhaAbate } from '@/hooks/useOperacaoAbate';
 import { useOperacaoEventos } from '@/hooks/useOperacaoEventos';
 import { useOperacaoLiquidacao } from '@/hooks/useOperacaoLiquidacao';
 import { AbateDetalhesDialog, AbateDetalhes, EMPTY_ABATE_DETALHES } from '@/components/abate/AbateDetalhesDialog';
@@ -480,6 +480,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   /* ⚠ O CENARIO VIVE AQUI, e nao dentro do hook: os dois mundos do abate (projetado e
      realizado) sao a MESMA operacao vista de dois jeitos, e quem alterna e' a tela. */
   const [cenarioAbate, setCenarioAbate] = useState<'projetado' | 'realizado'>('projetado');
+  /* ⚠ AS EDICOES DO ABATE VIVEM AQUI, EM MEMORIA — mesmo desenho do `boitelDaVenda`. A
+     aba edita, o rodape persiste, e quem grava e' uma chamada so'. Guardar no hook faria
+     o `recarregar` de qualquer motivo apagar o que o operador digitou e nao salvou. */
+  const [abateLinhas, setAbateLinhas] = useState<Map<string, LinhaAbate>>(new Map());
   const abateApi = useOperacaoAbate({
     operacaoId: ocOperacaoId,
     clienteId: clienteAtual?.id ?? null,
@@ -2643,7 +2647,21 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
        `null` e' a falha, e e' ela que vira `false` aqui. Devolver o numero cru faria
        o rodape tratar "versao 0" como falha no dia em que ela existisse. */
     const versaoNova = await lotesApi.salvar();
-    return versaoNova !== null;
+    if (versaoNova === null) return false;
+
+    /* ⚠ A VERSAO DEVOLVIDA, NUNCA A DO STATE. `oc_salvar_lotes` acabou de incrementar a
+       versao no servidor; `ocVersao` so' muda no proximo render. Mandar a do estado aqui
+       daria 40001 sem pista de onde veio. A venda resolve assim com o boitel, e este e' o
+       mesmo encadeamento. */
+    const editadas = [...abateLinhas.values()];
+    if (editadas.length > 0) {
+      const v = await abateApi.salvar(editadas, versaoNova);
+      if (v === null) return false;
+      /* Gravou: o que estava em memoria virou banco, e o hook ja recarregou. Manter o
+         rascunho faria a proxima gravacao reenviar o que ja esta la'. */
+      setAbateLinhas(new Map());
+    }
+    return true;
   };
 
   const salvarOperacaoVendaOC = async (): Promise<{ operacaoId: string; versao: number } | null> => {
@@ -5349,6 +5367,14 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
              `zoo_operacao_abate`; quem o edita e' o `AbaNegociacaoAbate`, no commit
              seguinte. Passa-lo agora e' o que faz aquele commit ser so' a tela. */
           abateApi={abateApi}
+          /* ⚠ O RASCUNHO E' DO PAI. A aba edita e devolve; quem persiste e' o rodape, numa
+             chamada so' — mesmo desenho do `boitelDaVenda`/`onBoitelChange`. */
+          abateLinhas={abateLinhas}
+          onAbateLinhaChange={(loteId, proxima) => setAbateLinhas(prev => {
+            const m = new Map(prev);
+            m.set(loteId, proxima);
+            return m;
+          })}
           cenarioAbate={cenarioAbate}
           onCenarioAbateChange={setCenarioAbate}
           categoria={categoria}
