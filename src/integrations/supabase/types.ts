@@ -5258,6 +5258,10 @@ export type Database = {
           email: string | null
           escopo: string | null
           fazenda_id: string | null
+          fundido_em: string | null
+          fundido_em_id: string | null
+          fundido_motivo: string | null
+          fundido_por: string | null
           id: string
           nome: string
           nome_favorecido: string | null
@@ -5286,6 +5290,10 @@ export type Database = {
           email?: string | null
           escopo?: string | null
           fazenda_id?: string | null
+          fundido_em?: string | null
+          fundido_em_id?: string | null
+          fundido_motivo?: string | null
+          fundido_por?: string | null
           id?: string
           nome: string
           nome_favorecido?: string | null
@@ -5314,6 +5322,10 @@ export type Database = {
           email?: string | null
           escopo?: string | null
           fazenda_id?: string | null
+          fundido_em?: string | null
+          fundido_em_id?: string | null
+          fundido_motivo?: string | null
+          fundido_por?: string | null
           id?: string
           nome?: string
           nome_favorecido?: string | null
@@ -5334,6 +5346,13 @@ export type Database = {
             columns: ["fazenda_id"]
             isOneToOne: false
             referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financeiro_fornecedores_fundido_em_id_fkey"
+            columns: ["fundido_em_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_fornecedores"
             referencedColumns: ["id"]
           },
         ]
@@ -12013,6 +12032,33 @@ export type Database = {
           uso_operacional_origem: string
         }[]
       }
+      fn_conciliacao_cartoes: {
+        Args: { p_ano: number; p_cliente_id: string }
+        Returns: {
+          ano_mes: string
+          conta_id: string
+          diferenca: number
+          diferenca_posicao: number
+          entradas_terceiros: number
+          estado: string
+          estado_posicao: string
+          qtd_lancamentos: number
+          saidas_terceiros: number
+          saldo_calculado: number
+          saldo_data: string
+          saldo_extrato: number
+          saldo_inicial: number
+          saldo_sistema_ate: number
+          sem_conta_entradas: number
+          sem_conta_qtd: number
+          sem_conta_saidas: number
+          sem_conta_valor: number
+          total_entradas: number
+          total_saidas: number
+          transferencias_enviadas: number
+          transferencias_recebidas: number
+        }[]
+      }
       fn_conciliacao_soberana: {
         Args: { p_cliente: string; p_conta: string; p_mes: string }
         Returns: Json
@@ -12113,6 +12159,18 @@ export type Database = {
       fn_extratos_espelhados: {
         Args: { p_cliente: string; p_conta: string; p_mes: string }
         Returns: Json
+      }
+      fn_fornecedores_com_uso: {
+        Args: { p_cliente_id: string }
+        Returns: {
+          ativo: boolean
+          fundido_em_id: string
+          id: string
+          nome: string
+          nome_normalizado: string
+          ultimo_uso: string
+          usos: number
+        }[]
       }
       fn_gerar_area_de_snapshot: {
         Args: { p_fechamento_p1_snapshot_id: string }
