@@ -190,7 +190,11 @@ export function useLancamentos(arg: UseLancamentosArg = 'realizado') {
      componente ja' desmontado — a guarda evita o `setState` orfao. */
   const montado = useRef(true);
   useEffect(() => () => { montado.current = false; }, []);
-  const [revalidando, setRevalidando] = useState(false);
+  /* ⚠ CONTADOR, NAO BOOLEANO. Com um booleano, dois saves seguidos se atropelam:
+     o `finally` da PRIMEIRA rajada apaga o aviso enquanto a SEGUNDA ainda esta em
+     voo, e o rotulo passa a dizer "atualizado" sobre numeros que ainda vao mudar.
+     Contando as rajadas em voo, o aviso so' apaga quando a ultima termina. */
+  const [emVoo, setEmVoo] = useState(0);
 
   const invalidateZootQueries = useCallback(async () => {
     await Promise.all([
@@ -550,11 +554,11 @@ export function useLancamentos(arg: UseLancamentosArg = 'realizado') {
          deixar os indicadores desatualizados em silencio trocaria uma espera
          visivel por uma mentira invisivel — o operador precisa saber que o
          numero da tela ainda vai mudar. */
-      setRevalidando(true);
+      setEmVoo(n => n + 1);
       void Promise.all([
         queryClient.invalidateQueries({ queryKey: ['lancamentos-zoo'] }),
         invalidateZootQueries(),
-      ]).finally(() => { if (montado.current) setRevalidando(false); });
+      ]).finally(() => { if (montado.current) setEmVoo(n => n - 1); });
       return data.id;
     }
     return undefined;
@@ -861,8 +865,8 @@ export function useLancamentos(arg: UseLancamentosArg = 'realizado') {
        e' pior que dado errado nos dois. Nao ha rebuild manual: o trigger do banco cuida
        da derivacao; o que falta e' o front parar de reusar o cache. */
     invalidarZoot: invalidateZootQueries,
-    /** true enquanto a releitura pos-gravacao ainda esta' em voo. */
-    revalidando,
+    /** true enquanto QUALQUER releitura pos-gravacao ainda esta' em voo. */
+    revalidando: emVoo > 0,
     loading,
     isGlobal,
   };
