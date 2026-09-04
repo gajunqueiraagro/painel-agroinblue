@@ -9136,6 +9136,7 @@ export type Database = {
           updated_at: string
           updated_by: string | null
           valor_base_override: number | null
+          valor_liquido: number | null
         }
         Insert: {
           bonus_lista_trace_fonte?: string | null
@@ -9164,6 +9165,7 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
           valor_base_override?: number | null
+          valor_liquido?: number | null
         }
         Update: {
           bonus_lista_trace_fonte?: string | null
@@ -9192,6 +9194,7 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
           valor_base_override?: number | null
+          valor_liquido?: number | null
         }
         Relationships: [
           {

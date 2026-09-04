@@ -25,7 +25,7 @@ const lote = (id: string, ordem: number, categoria: string, label: string): Lote
 const linha = (id: string, extra: Partial<LinhaAbate> = {}): LinhaAbate => ({
   operacaoLoteId: id,
   pesoCarcacaKg: null, rendimentoCarcacaPct: 50, pesoTotalKgNf: null,
-  precoArroba: 300, valorBaseOverride: null,
+  precoArroba: 300, valorBaseOverride: null, valorLiquido: null,
   bonusPrecoce: { valor: null, fonte: null },
   bonusQualidade: { valor: null, fonte: null },
   bonusListaTrace: { valor: null, fonte: null },

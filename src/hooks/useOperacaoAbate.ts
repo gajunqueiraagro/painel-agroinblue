@@ -66,6 +66,19 @@ export interface LinhaAbate {
   outrosDescontos: ValorComFonte<FonteOutros>;
   funrural: ValorComFonte<FontePct>;
   valorBaseOverride: number | null;
+  /**
+   * O LÍQUIDO do lote — derivado E persistido, e a exceção é deliberada.
+   *
+   * ⚠ TUDO O MAIS QUE É DERIVADO FICA DE FORA DO BANCO. Este não pode: o líquido sai de
+   * `buildAbateCalculation` (TypeScript), e o banco precisa dele para somar em
+   * `zoo_operacoes_comerciais.valor_acordado`. A alternativa seria a RPC reimplementar o
+   * cálculo em SQL — bônus por arroba, descontos, Funrural, a ordem inteira —, e a
+   * primeira vez que as duas discordassem ninguém saberia qual manda.
+   *
+   * ⚠ NUNCA SE DIGITA. Quem o escreve é sempre a lib, na aba, a cada mudança. Um campo de
+   * entrada para ele criaria a segunda verdade que esta nota existe para impedir.
+   */
+  valorLiquido: number | null;
 }
 
 export interface AbateApi {
@@ -113,6 +126,7 @@ export interface AbateRow {
   outros_descontos_valor: number | null;   outros_descontos_fonte: string | null;
   funrural_valor: number | null;           funrural_fonte: string | null;
   valor_base_override: number | null;
+  valor_liquido: number | null;
 }
 
 const COLUNAS =
@@ -120,7 +134,7 @@ const COLUNAS =
   + ' preco_arroba, bonus_precoce_valor, bonus_precoce_fonte, bonus_qualidade_valor,'
   + ' bonus_qualidade_fonte, bonus_lista_trace_valor, bonus_lista_trace_fonte,'
   + ' desconto_qualidade_valor, desconto_qualidade_fonte, outros_descontos_valor,'
-  + ' outros_descontos_fonte, funrural_valor, funrural_fonte, valor_base_override';
+  + ' outros_descontos_fonte, funrural_valor, funrural_fonte, valor_base_override, valor_liquido';
 
 const comFonteArroba = (v: number | null, f: string | null): ValorComFonte<FonteArroba> => ({
   valor: v,
@@ -151,6 +165,7 @@ export function daLinha(r: AbateRow): LinhaAbate {
     outrosDescontos: comFonteOutros(r.outros_descontos_valor, r.outros_descontos_fonte),
     funrural: comFontePct(r.funrural_valor, r.funrural_fonte),
     valorBaseOverride: r.valor_base_override,
+    valorLiquido: r.valor_liquido,
   };
 }
 
@@ -177,6 +192,10 @@ export function paraPayload(l: LinhaAbate): Record<string, Json | undefined> {
   num('peso_total_kg_nf', l.pesoTotalKgNf);
   num('preco_arroba', l.precoArroba);
   num('valor_base_override', l.valorBaseOverride);
+  /* ⚠ SOBE SEMPRE QUE EXISTE, e é o que faz `valor_acordado` do cabeçalho fechar com a
+     cascata da tela: a RPC soma esta coluna no cenário realizado. Omiti-lo deixaria o
+     cabeçalho com o valor anterior — certo no lote, velho na Central. */
+  num('valor_liquido', l.valorLiquido);
   par('bonus_precoce', l.bonusPrecoce);
   par('bonus_qualidade', l.bonusQualidade);
   par('bonus_lista_trace', l.bonusListaTrace);

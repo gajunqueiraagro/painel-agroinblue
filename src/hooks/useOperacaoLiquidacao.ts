@@ -103,6 +103,15 @@ export interface LoteOC {
   pesoMedioKg: number | null;
   criterio: string | null;   // 'kg' | 'cabeca' | 'total'
   valorInformado: number | null;
+  /**
+   * O LÍQUIDO do abate deste lote (cenário realizado) — `null` fora do abate.
+   *
+   * ⚠ VIAJA COM O LOTE, e não como parâmetro. Os três chamadores de
+   * `classificarLotesPorLado` vivem em componentes que não têm — e não deveriam ter — a
+   * aba do abate em mãos. Passar um mapa por prop seria prop drilling de um dado que já
+   * pertence ao lote: num abate, o líquido É o valor daquele lote.
+   */
+  valorLiquidoAbate?: number | null;
 }
 
 // VALOR OFICIAL do lote — fórmula idêntica a oc_salvar_lotes (backend) e useCompraLotes (front):
@@ -129,7 +138,13 @@ export type ClassificacaoLotes =
   | { status: 'ok'; itens: LoteClassificado[] }          // um item por LOTE (sem agrupar por sexo)
   | { status: 'sem_categoria' }
   | { status: 'categoria_invalida'; categorias: string[] }
-  | { status: 'valor_nao_derivavel'; categorias: string[] };
+  | { status: 'valor_nao_derivavel'; categorias: string[] }
+  /* ⚠ SO' O ABATE PRODUZ ESTE. Na venda, categoria fora do mapa cai em subcentro VAZIO
+     (`?? ''` logo abaixo) e vira lancamento sem classificacao — o defeito que a Mesa de
+     Revisao existe para consertar depois. O abate recusa, e nomeia o lote. A venda segue
+     como esta' por ora: mudar o lado dela sem medida seria trocar um defeito conhecido
+     por um comportamento novo em producao. Divida registrada. */
+  | { status: 'sem_subcentro'; lotes: string[] };
 
 // Classifica CADA lote individualmente: deriva sexo→subcentro (classificação gerencial) e o valor
 // OFICIAL do lote, sem somar/agrupar. DM e G (ambos machos) permanecem itens distintos. Bloqueia
@@ -171,14 +186,49 @@ export function classificarLotesPorLado(
   lotes: LoteOC[], tipoOperacao: string | null | undefined,
 ): ClassificacaoLotes {
   const c = classificarLotesCompra(lotes);
-  if (c.status !== 'ok' || tipoOperacao !== 'venda') return c;
-  return {
-    status: 'ok',
-    itens: c.itens.map((i) => ({
-      ...i,
-      subcentro: subcentroVendaPorCategoria(i.lote.categoria ?? '') ?? '',
-    })),
-  };
+  if (c.status !== 'ok') return c;
+
+  if (tipoOperacao === 'venda') {
+    return {
+      status: 'ok',
+      itens: c.itens.map((i) => ({
+        ...i,
+        subcentro: subcentroVendaPorCategoria(i.lote.categoria ?? '') ?? '',
+      })),
+    };
+  }
+
+  if (tipoOperacao === 'abate') {
+    /* ⚠ RECUSA NOMEANDO O LOTE, nunca subcentro vazio: o plano do abate tem duas contas
+       (machos e femeas) e categoria fora do mapa e' erro de cadastro, que se mostra na
+       hora — nao um lancamento sem classificacao para alguem achar depois. */
+    const semSub = c.itens.filter((i) => !subcentroAbatePorCategoria(i.lote.categoria ?? ''));
+    if (semSub.length > 0) return { status: 'sem_subcentro', lotes: semSub.map((i) => i.lote.id) };
+
+    /* Sem liquido nao ha compromisso: um principal de valor zero afirmaria que o
+       frigorifico nao paga nada, quando o que falta e' o operador informar a carcaca. */
+    /* ⚠ O LIQUIDO VEM DO LOTE, e nunca se recalcula aqui. Na compra e na venda o valor do
+       compromisso e' o do lote; no abate e' o LIQUIDO, que sai de `buildAbateCalculation`
+       sobre carcaca, preco da @, bonus, descontos e Funrural — e que o hook ja carregou
+       junto com os lotes. Recalcular aqui criaria a segunda conta para a mesma pergunta. */
+    const semLiquido = c.itens.filter((i) => i.lote.valorLiquidoAbate == null);
+    if (semLiquido.length > 0) {
+      return { status: 'valor_nao_derivavel', categorias: Array.from(new Set(semLiquido.map((i) => i.lote.categoria))) };
+    }
+
+    return {
+      status: 'ok',
+      itens: c.itens.map((i) => {
+        const sub = subcentroAbatePorCategoria(i.lote.categoria ?? '');
+        const liq = i.lote.valorLiquidoAbate;
+        /* Os dois ja' foram garantidos acima; o fallback existe para o tipo, nao para o
+           caso — e se um dia ele for exercido, e' porque uma das guardas caiu. */
+        return { ...i, subcentro: sub ?? '', valorBruto: liq ?? 0 };
+      }),
+    };
+  }
+
+  return c;
 }
 
 export interface ResumoLiquidacao {
@@ -369,7 +419,7 @@ export function useOperacaoLiquidacao({ operacaoId, clienteId, enabled }: Params
     }
     setLoading(true);
     try {
-      const [res, obr, liq, partes, docs, comps, opMeta, lotesRes] = await Promise.all([
+      const [res, obr, liq, partes, docs, comps, opMeta, lotesRes, abateRes] = await Promise.all([
         (supabase as any).from('vw_oc_operacao_liquidacao').select('*').eq('operacao_id', operacaoId).maybeSingle(),
         (supabase as any).from('vw_oc_obrigacoes').select('*').eq('operacao_id', operacaoId).order('sequencia_parcela'),
         (supabase as any).from('zoo_operacao_liquidacoes').select('id, data, natureza, forma, valor, descricao, financeiro_lancamento_id, estornado, estorno_motivo, permuta_tipo_bem, permuta_valor_atribuido').eq('operacao_id', operacaoId).order('data'),
@@ -378,8 +428,13 @@ export function useOperacaoLiquidacao({ operacaoId, clienteId, enabled }: Params
         (supabase as any).from('zoo_componentes_financeiros').select('natureza, codigo, nome, categoria').eq('ativo', true).order('natureza').order('ordem_exibicao'),
         (supabase as any).from('zoo_operacoes_comerciais').select('tipo_operacao, versao, contraparte_id, valor_acordado').eq('id', operacaoId).maybeSingle(),
         (supabase as any).from('zoo_operacao_lotes').select('id, categoria_negociada, qtd_negociada, peso_medio_negociado_kg, criterio_valor, valor_informado').eq('operacao_id', operacaoId),
+        /* ⚠ O LIQUIDO DO ABATE, no MESMO `Promise.all` — nona consulta PARALELA, nao uma
+           ida a mais em sequencia. Vazia fora do abate: a tabela so' tem linha quando ha
+           abate, entao em compra e venda o custo e' uma consulta que devolve zero linhas.
+           So' o cenario REALIZADO: e' ele que a RPC soma em `valor_acordado`. */
+        (supabase as any).from('zoo_operacao_abate').select('operacao_lote_id, valor_liquido').eq('operacao_id', operacaoId).eq('cenario', 'realizado'),
       ]);
-      for (const r of [res, obr, liq, partes, docs, comps, opMeta, lotesRes]) {
+      for (const r of [res, obr, liq, partes, docs, comps, opMeta, lotesRes, abateRes]) {
         if (r.error) throw new Error(r.error.message);
       }
 
@@ -489,6 +544,11 @@ export function useOperacaoLiquidacao({ operacaoId, clienteId, enabled }: Params
       setTipoOperacao(opMetaRow?.tipo_operacao ?? null);
       setContraparteId(opMetaRow?.contraparte_id ?? null);
       setValorAcordado(opMetaRow?.valor_acordado == null ? null : Number(opMetaRow.valor_acordado));
+      const liquidoAbate = new Map<string, number>(
+        ((abateRes.data ?? []) as { operacao_lote_id: string; valor_liquido: number | null }[])
+          .filter(a => a.valor_liquido != null)
+          .map(a => [a.operacao_lote_id, Number(a.valor_liquido)]),
+      );
       setLotes(((lotesRes.data ?? []) as LoteRow[]).map(l => ({
         id: l.id,
         categoria: l.categoria_negociada ?? '',
@@ -496,6 +556,7 @@ export function useOperacaoLiquidacao({ operacaoId, clienteId, enabled }: Params
         pesoMedioKg: l.peso_medio_negociado_kg == null ? null : Number(l.peso_medio_negociado_kg),
         criterio: l.criterio_valor,
         valorInformado: l.valor_informado == null ? null : Number(l.valor_informado),
+        valorLiquidoAbate: liquidoAbate.get(l.id) ?? null,
       })));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Falha ao carregar a liquidação.');

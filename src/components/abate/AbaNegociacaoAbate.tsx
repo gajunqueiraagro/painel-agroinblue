@@ -68,7 +68,7 @@ const LBL = 'text-[10px] text-muted-foreground';
 const vazia = (loteId: string): LinhaAbate => ({
   operacaoLoteId: loteId,
   pesoCarcacaKg: null, rendimentoCarcacaPct: null, pesoTotalKgNf: null,
-  precoArroba: null, valorBaseOverride: null,
+  precoArroba: null, valorBaseOverride: null, valorLiquido: null,
   bonusPrecoce: { valor: null, fonte: null },
   bonusQualidade: { valor: null, fonte: null },
   bonusListaTrace: { valor: null, fonte: null },
@@ -259,7 +259,19 @@ export function AbaNegociacaoAbate({
       {lotes.map(lote => {
         const linha = linhas.get(lote.id) ?? vazia(lote.id);
         const c = calculos.get(lote.id)!;
-        const trocar = (patch: Partial<LinhaAbate>) => onLinhaChange(lote.id, { ...linha, ...patch });
+        /* ⚠ O LÍQUIDO VIAJA JUNTO DE TODA MUDANÇA, e é sempre a lib quem o escreve. Ele é
+           o único derivado que se persiste — o banco precisa dele para somar em
+           `valor_acordado`, e a RPC não pode recalculá-lo sem reimplementar a lib em SQL.
+           Recalcular aqui a cada `trocar` é barato e garante que o gravado nunca fica
+           atrás do que a cascata mostra: um líquido velho no banco daria um cabeçalho
+           certo no lote e errado na Central — o defeito que `oc_revalorar_lote` já tem. */
+        const trocar = (patch: Partial<LinhaAbate>) => {
+          const proxima = { ...linha, ...patch };
+          onLinhaChange(lote.id, {
+            ...proxima,
+            valorLiquido: buildAbateCalculation(paraCalculo(proxima, lote)).valorLiquido,
+          });
+        };
         const subcentro = subcentroAbatePorCategoria(lote.categoria ?? '');
 
         return (

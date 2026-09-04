@@ -1450,7 +1450,11 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
        e comissão de COMPRA têm subcentro próprio; na VENDA a única linha
        cadastrada é a de impostos e despesas — não existe frete de venda no
        plano, e usar o de compra classificaria despesa como investimento. */
-    else { setValor(null); setSubcentro(tipoOperacao === 'compra' ? SUBCENTRO_OBRIGACAO_COMPRA : tipoOperacao === 'venda' ? SUBCENTRO_DESPESA_VENDA : ''); setFavorecidoId(''); }
+    /* ⚠ O ABATE USA A LINHA DA VENDA, e nao uma string nova: `Impostos e Despesas de
+       Abates e Vendas` e' literalmente a conta dos dois — o nome dela ja diz. O Funrural
+       e os impostos na origem do abate caem exatamente ali. Criar um subcentro proprio
+       seria inventar uma conta que o plano ja tem. */
+    else { setValor(null); setSubcentro(tipoOperacao === 'compra' ? SUBCENTRO_OBRIGACAO_COMPRA : (tipoOperacao === 'venda' || tipoOperacao === 'abate') ? SUBCENTRO_DESPESA_VENDA : ''); setFavorecidoId(''); }
   }, [natureza, valorAcordado, sugestaoSubcentro, contraparteId, tipoOperacao]);
 
   /* ⚠ ITEM 3 — A GUARDA LIA O REF DEPOIS DE ELE JA TER MUDADO. O padrao antigo era
