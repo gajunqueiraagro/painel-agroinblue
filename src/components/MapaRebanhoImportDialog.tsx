@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Upload, X, Loader2, AlertTriangle, Image as ImageIcon, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { pastosAtivosNoMes } from '@/hooks/usePastos';
 import type { Pasto, CategoriaRebanho } from '@/hooks/usePastos';
 
 export interface MapaItemCategoria {
@@ -89,9 +90,14 @@ export function MapaRebanhoImportDialog({ open, onOpenChange, pastos, categorias
     return out;
   }, []);
 
+  /* O mes que importa e' o ALVO escolhido aqui, nao o da tela: o dialogo permite
+     importar para qualquer mes. Oferecer um pasto encerrado antes do alvo era criar
+     card para um pasto que nao existia naquele mes — e a tela de Fechamento, que so'
+     lista pasto vigente, nunca mais mostrava esse card para alguem fechar ou apagar. */
+  const anoMesAlvo = `${anoSel}-${mesSel}`;
   const pastosOpts = useMemo(
-    () => [...pastos].filter(p => p.ativo).sort((a, b) => a.nome.localeCompare(b.nome)),
-    [pastos],
+    () => pastosAtivosNoMes(pastos, anoMesAlvo).sort((a, b) => a.nome.localeCompare(b.nome)),
+    [pastos, anoMesAlvo],
   );
 
   const categoriaPorNome = useMemo(() => {
@@ -244,7 +250,7 @@ export function MapaRebanhoImportDialog({ open, onOpenChange, pastos, categorias
 
     setImporting(true);
     try {
-      await onImportar(dados, `${anoSel}-${mesSel}`);
+      await onImportar(dados, anoMesAlvo);
       onOpenChange(false);
     } finally {
       setImporting(false);

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { ArrowLeft, CheckCircle, AlertTriangle, Lock, Unlock, Pencil, BarChart3, Lightbulb, Activity, Map as MapIcon, RefreshCw } from 'lucide-react';
 import { ResumoAtividadesView } from '@/components/ResumoAtividadesView';
-import { usePastos, isPastoAtivoNoMes, type Pasto } from '@/hooks/usePastos';
+import { usePastos, isPastoAtivoNoMes, pastosAtivosNoMes, type Pasto } from '@/hooks/usePastos';
 import { useFechamento, type FechamentoPasto, type FechamentoItem } from '@/hooks/useFechamento';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -103,6 +103,56 @@ interface Props {
 
 const FECHAMENTO_GLOBAL_MARKER = 'fechamento_global_administrativo';
 
+/** Uma linha de card como o selo do ano a le: o card e o pasto dono dele. */
+export type LinhaSeloMes = {
+  ano_mes: string;
+  status: string;
+  pastos: {
+    ativo: boolean;
+    tipo_uso: string | null;
+    data_inicio: string | null;
+    data_fim: string | null;
+  } | null;
+};
+
+/**
+ * O selo de cada mes da regua do ano, a partir dos cards do ano.
+ *
+ * ⚠ O SELO E O GRAVADOR PRECISAM DA MESMA REGUA. O selo contava TODO card do mes; o
+ * gravador so cria card para pasto ativo no mes. Um card orfao — de pasto encerrado
+ * antes daquele mes — entrava na conta e, se estivesse em rascunho, pintava de
+ * 'rascunho' um mes cujos pastos estavam todos fechados. Foi o que apareceu em
+ * 04/09/2026: 19 cards em rascunho para pastos fora do periodo, e nenhum deles
+ * fechavel pela tela, porque a tela nem lista o pasto. O mes ficava impossivel de
+ * fechar por causa de um card que ninguem via.
+ *
+ * Card de pasto que nao existia no mes nao conta — nem no total, nem nos fechados.
+ */
+export function resumirStatusPorMes(
+  linhas: LinhaSeloMes[],
+): Record<number, 'fechado' | 'rascunho' | 'vazio'> {
+  const grouped: Record<number, { total: number; fechados: number }> = {};
+  linhas.forEach(r => {
+    const m = parseInt(String(r.ano_mes).substring(5, 7));
+    if (isNaN(m)) return;
+    const p = r.pastos;
+    if (!p) return;
+    if (isPastoDivergencia(p.tipo_uso)) return;
+    if (pastosAtivosNoMes([p], r.ano_mes).length === 0) return;
+    if (!grouped[m]) grouped[m] = { total: 0, fechados: 0 };
+    grouped[m].total++;
+    if (r.status === 'fechado') grouped[m].fechados++;
+  });
+  const result: Record<number, 'fechado' | 'rascunho' | 'vazio'> = {};
+  for (let m = 1; m <= 12; m++) {
+    const g = grouped[m];
+    if (!g || g.total === 0) result[m] = 'vazio';
+    else if (g.fechados === g.total) result[m] = 'fechado';
+    else result[m] = 'rascunho';
+  }
+  return result;
+}
+
 const normalizeTipoUso = (tipoUso?: string) => {
   if (!tipoUso) return '';
   return tipoUso.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
@@ -191,29 +241,14 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     }
     supabase
       .from('fechamento_pastos')
-      .select('ano_mes, status, pastos!inner(ativo, tipo_uso)')
+      .select('ano_mes, status, pastos!inner(ativo, tipo_uso, data_inicio, data_fim)')
       .eq('fazenda_id', fazendaAtual.id)
       .eq('pastos.ativo', true)
       .neq('pastos.tipo_uso', 'divergencia')
       .like('ano_mes', `${anoFiltro}-%`)
       .then(({ data }) => {
         if (!data) return;
-        const grouped: Record<number, { total: number; fechados: number }> = {};
-        (data as any[]).forEach((r: any) => {
-          const m = parseInt(String(r.ano_mes).substring(5, 7));
-          if (isNaN(m)) return;
-          if (!grouped[m]) grouped[m] = { total: 0, fechados: 0 };
-          grouped[m].total++;
-          if (r.status === 'fechado') grouped[m].fechados++;
-        });
-        const result: Record<number, 'fechado' | 'rascunho' | 'vazio'> = {};
-        for (let m = 1; m <= 12; m++) {
-          const g = grouped[m];
-          if (!g || g.total === 0) result[m] = 'vazio';
-          else if (g.fechados === g.total) result[m] = 'fechado';
-          else result[m] = 'rascunho';
-        }
-        setStatusPorMes(result);
+        setStatusPorMes(resumirStatusPorMes(data as unknown as LinhaSeloMes[]));
       });
   }, [fazendaAtual?.id, anoFiltro, fechamentos]);
 
@@ -240,7 +275,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
       // PRIMEIRO dia do mês e ignorava data_fim, então pasto encerrado em 2024 ainda
       // gerava card em 2026. O dono da regra agora é isPastoAtivoNoMes, espelho de
       // fn_pastos_aplicaveis_mes. entra_conciliacao saiu: foi aposentado.
-      const filtrados = pastos.filter(p => p.ativo && isPastoAtivoNoMes(p, anoMes));
+      const filtrados = pastosAtivosNoMes(pastos, anoMes);
       // Pastos de divergência sempre no FINAL da lista
       const normais = filtrados.filter(p => !isPastoDivergencia(p.tipo_uso));
       const divergencia = filtrados.filter(p => isPastoDivergencia(p.tipo_uso));
@@ -702,7 +737,23 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
       await loadFechamentos(anoMesAlvo);
     }
     let pastosImportados = 0;
+    /* ⚠ O MES ALVO E ESCOLHIDO DENTRO DO DIALOGO e pode ser qualquer um — inclusive um
+       em que o pasto ja nao existia. O dialogo ja oferece so' pasto vigente no alvo,
+       mas quem CRIA o card e' este handler, e a regua tem de estar aqui: uma extracao
+       antiga, um pasto encerrado depois da extracao, e o card orfao nasce de novo. Os
+       recusados sao nomeados — silencio aqui foi o que deixou 83 cards orfaos passarem
+       despercebidos. */
+    const vigentesNoAlvo = new Set(pastosAtivosNoMes(pastos, anoMesAlvo).map(p => p.id));
+    const recusados = dados
+      .filter(item => !vigentesNoAlvo.has(item.pasto_id))
+      .map(item => pastos.find(p => p.id === item.pasto_id)?.nome ?? item.pasto_id);
+    if (recusados.length > 0) {
+      toast.warning(
+        `${recusados.length} pasto(s) fora do periodo em ${anoMesAlvo}, nao importado(s): ${recusados.join(' · ')}`,
+      );
+    }
     for (const item of dados) {
+      if (!vigentesNoAlvo.has(item.pasto_id)) continue;
       // Recarregar fechamento pelo pasto_id no contexto do anoMesAlvo. Como `fechamentos`
       // pode ainda estar com o mês antigo neste tick, criamos sempre que necessário.
       const existente = fechamentos.find(f => f.pasto_id === item.pasto_id && f.ano_mes === anoMesAlvo);

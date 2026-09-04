@@ -59,6 +59,23 @@ export function isPastoAtivoNoMes(
   return true;
 }
 
+/**
+ * A regua COMPLETA da aplicabilidade mensal: ativo no cadastro E vigente no mes.
+ *
+ * Existe porque a mesma condicao estava escrita em lugares diferentes e nem todos a
+ * escreviam inteira — o gravador do mapa de rebanho oferecia qualquer pasto `ativo`,
+ * sem olhar vigencia, e criava card em mes em que o pasto ja nao existia. Medido em
+ * 04/09/2026: 83 cards de fechamento para pasto fora do periodo. Leitor e gravador
+ * agora chamam esta funcao, nao uma copia dela.
+ */
+export function pastosAtivosNoMes<T extends {
+  ativo: boolean;
+  data_inicio?: string | null;
+  data_fim?: string | null;
+}>(lista: T[], anoMes: string): T[] {
+  return lista.filter(p => p.ativo && isPastoAtivoNoMes(p, anoMes));
+}
+
 // Re-export da fonte única — NÃO definir lista local.
 // Fonte oficial: src/lib/pastos/tiposUso.ts
 export { TIPOS_USO_OPTIONS_FLAT as TIPOS_USO } from '@/lib/pastos/tiposUso';
