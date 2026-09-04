@@ -8,7 +8,9 @@ import { toast } from 'sonner';
 import { serieEvolucaoRP, etapasPagamento, etapaDoDia, distribuicaoEconomica, maioresCompromissos, creditosPorOrigem, type EtapaId } from '@/lib/analise/analiseAgregacoes';
 import { carregarLogoBase64 } from '@/lib/pdf/pdfChassi';
 import { formatMoeda } from '@/lib/calculos/formatters';
-import { COR } from '@/lib/pdf/analise/estilos';
+/* ⚠ DE `cores`, NUNCA DE `estilos`: `estilos` importa o motor, e um import
+   estático daqui anularia o `import()` dinâmico lá embaixo. */
+import { COR } from '@/lib/pdf/analise/cores';
 import type { DiaCalendario, CardEtapa } from '@/lib/pdf/analise/PdfOrganizacaoPagamentos';
 import type { LinhaRanking } from '@/lib/pdf/analise/PdfBlocoDonut';
 

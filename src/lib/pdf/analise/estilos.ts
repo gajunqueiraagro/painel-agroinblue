@@ -4,19 +4,12 @@
  * registrado (registrarFontes), com fallback Helvetica (default do react-pdf).
  */
 import { StyleSheet, Font } from '@react-pdf/renderer';
+import { COR } from '@/lib/pdf/analise/cores';
 
-export const COR = {
-  azul: '#1e3a5f',
-  azulClaro: '#eef6ff',
-  cinza: '#505050',
-  cinzaMedio: '#787878',
-  separador: '#d9e2ec',
-  zebra: '#f7fafc',
-  verde: '#22784a',
-  vermelho: '#b91c1c',
-  ambar: '#d77706',
-  branco: '#ffffff',
-};
+/* A paleta mora em `cores.ts`, que não importa o motor — ver o porquê lá.
+   Reexportada aqui para que os componentes de desenho sigam pedindo cor ao
+   mesmo lugar de sempre. */
+export { COR };
 
 // FONTE = 'Inter' quando registrado; senão o react-pdf usa Helvetica (fallback aprovado).
 export let FONTE = 'Helvetica';
