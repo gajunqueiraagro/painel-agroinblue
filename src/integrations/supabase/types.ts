@@ -9108,6 +9108,129 @@ export type Database = {
         }
         Relationships: []
       }
+      zoo_operacao_abate: {
+        Row: {
+          bonus_lista_trace_fonte: string | null
+          bonus_lista_trace_valor: number | null
+          bonus_precoce_fonte: string | null
+          bonus_precoce_valor: number | null
+          bonus_qualidade_fonte: string | null
+          bonus_qualidade_valor: number | null
+          cenario: string
+          cliente_id: string
+          created_at: string
+          created_by: string | null
+          desconto_qualidade_fonte: string | null
+          desconto_qualidade_valor: number | null
+          funrural_fonte: string | null
+          funrural_valor: number | null
+          id: string
+          operacao_id: string
+          operacao_lote_id: string
+          outros_descontos_fonte: string | null
+          outros_descontos_valor: number | null
+          peso_carcaca_kg: number | null
+          peso_total_kg_nf: number | null
+          preco_arroba: number | null
+          rendimento_carcaca_pct: number | null
+          updated_at: string
+          updated_by: string | null
+          valor_base_override: number | null
+        }
+        Insert: {
+          bonus_lista_trace_fonte?: string | null
+          bonus_lista_trace_valor?: number | null
+          bonus_precoce_fonte?: string | null
+          bonus_precoce_valor?: number | null
+          bonus_qualidade_fonte?: string | null
+          bonus_qualidade_valor?: number | null
+          cenario: string
+          cliente_id: string
+          created_at?: string
+          created_by?: string | null
+          desconto_qualidade_fonte?: string | null
+          desconto_qualidade_valor?: number | null
+          funrural_fonte?: string | null
+          funrural_valor?: number | null
+          id?: string
+          operacao_id: string
+          operacao_lote_id: string
+          outros_descontos_fonte?: string | null
+          outros_descontos_valor?: number | null
+          peso_carcaca_kg?: number | null
+          peso_total_kg_nf?: number | null
+          preco_arroba?: number | null
+          rendimento_carcaca_pct?: number | null
+          updated_at?: string
+          updated_by?: string | null
+          valor_base_override?: number | null
+        }
+        Update: {
+          bonus_lista_trace_fonte?: string | null
+          bonus_lista_trace_valor?: number | null
+          bonus_precoce_fonte?: string | null
+          bonus_precoce_valor?: number | null
+          bonus_qualidade_fonte?: string | null
+          bonus_qualidade_valor?: number | null
+          cenario?: string
+          cliente_id?: string
+          created_at?: string
+          created_by?: string | null
+          desconto_qualidade_fonte?: string | null
+          desconto_qualidade_valor?: number | null
+          funrural_fonte?: string | null
+          funrural_valor?: number | null
+          id?: string
+          operacao_id?: string
+          operacao_lote_id?: string
+          outros_descontos_fonte?: string | null
+          outros_descontos_valor?: number | null
+          peso_carcaca_kg?: number | null
+          peso_total_kg_nf?: number | null
+          preco_arroba?: number | null
+          rendimento_carcaca_pct?: number | null
+          updated_at?: string
+          updated_by?: string | null
+          valor_base_override?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "zoo_operacao_abate_operacao_id_fkey"
+            columns: ["operacao_id"]
+            isOneToOne: false
+            referencedRelation: "vw_oc_operacao_compromissos_resumo"
+            referencedColumns: ["operacao_id"]
+          },
+          {
+            foreignKeyName: "zoo_operacao_abate_operacao_id_fkey"
+            columns: ["operacao_id"]
+            isOneToOne: false
+            referencedRelation: "vw_oc_operacao_liquidacao"
+            referencedColumns: ["operacao_id"]
+          },
+          {
+            foreignKeyName: "zoo_operacao_abate_operacao_id_fkey"
+            columns: ["operacao_id"]
+            isOneToOne: false
+            referencedRelation: "zoo_operacoes_comerciais"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "zoo_operacao_abate_operacao_lote_id_fkey"
+            columns: ["operacao_lote_id"]
+            isOneToOne: false
+            referencedRelation: "vw_oc_lotes_recebimento"
+            referencedColumns: ["lote_id"]
+          },
+          {
+            foreignKeyName: "zoo_operacao_abate_operacao_lote_id_fkey"
+            columns: ["operacao_lote_id"]
+            isOneToOne: false
+            referencedRelation: "zoo_operacao_lotes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       zoo_operacao_boitel: {
         Row: {
           acerto_papel: number | null
@@ -12900,6 +13023,16 @@ export type Database = {
           p_lote_id: string
           p_motivo: string
           p_novo_valor: number
+          p_operacao_id: string
+          p_versao_esperada: number
+        }
+        Returns: Json
+      }
+      oc_salvar_abate: {
+        Args: {
+          p_cenario: string
+          p_cliente_id: string
+          p_lotes: Json
           p_operacao_id: string
           p_versao_esperada: number
         }
