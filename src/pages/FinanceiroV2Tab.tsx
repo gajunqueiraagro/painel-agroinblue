@@ -10,6 +10,7 @@ import {
 } from '@/lib/financeiro/statusFinanceiro';
 import { isTransferenciaTipo } from '@/lib/financeiro/v2Transferencia';
 import { useLancamentosConciliados } from '@/hooks/useConciliacaoDoMes';
+import { useQuery } from '@tanstack/react-query';
 import { useCliente } from '@/contexts/ClienteContext';
 import { contaSimpleValid } from '@/components/financeiro-v2/lancamentoDialogTabs';
 import { validarLancamento } from '@/lib/financeiro/validacaoLancamento';
@@ -49,11 +50,23 @@ import {
 } from '@/lib/financeiro/estadoFiltrosLista';
 
 /**
- * A memória da busca de Fornecedor. UMA chave para as DUAS montagens do campo
- * (a barra larga e a compacta): elas já compartilham `fornecedorFiltro`, e duas
- * memórias para um filtro só fariam a busca mudar conforme a largura da janela.
+ * A memória da busca dos comboboxes desta tela.
+ *
+ * ⚠ UMA CHAVE POR FILTRO, NAO POR MONTAGEM. Cada um destes campos aparece DUAS
+ * vezes no arquivo (a barra larga e a compacta) e as duas já compartilham o mesmo
+ * estado de filtro; duas memórias para um filtro só fariam a busca mudar conforme
+ * a largura da janela.
+ *
+ * ⚠ O PREFIXO COMUM É O QUE FAZ O "LIMPAR" FUNCIONAR: `limparBuscasLembradas`
+ * apaga por prefixo, então uma chamada esquece as cinco. Uma chave fora do padrão
+ * sobreviveria ao Limpar em silêncio.
  */
-const CHAVE_BUSCA_FORNECEDOR = 'fin-v2-fornecedor';
+const PREFIXO_BUSCA = 'fin-v2-';
+const CHAVE_BUSCA_FORNECEDOR = `${PREFIXO_BUSCA}fornecedor`;
+const CHAVE_BUSCA_MACRO      = `${PREFIXO_BUSCA}macro`;
+const CHAVE_BUSCA_GRUPO      = `${PREFIXO_BUSCA}grupo`;
+const CHAVE_BUSCA_CENTRO     = `${PREFIXO_BUSCA}centro`;
+const CHAVE_BUSCA_SUBCENTRO  = `${PREFIXO_BUSCA}subcentro`;
 
 // ── Sorting helpers ──
 
@@ -208,6 +221,49 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
      é o que casa com ela, e trocar de página não repergunta nada. */
   const { clienteAtual } = useCliente();
   const { conciliados } = useLancamentosConciliados(clienteAtual?.id ?? null);
+
+  /**
+   * Quantos lançamentos cada fornecedor tem — o número ao lado do nome no combobox.
+   *
+   * ⚠ O OPERADOR ACHA O CERTO PELO USO, NAO PELA SORTE. São 3.361 fornecedores no
+   * NJ, seis deles chamados "Wilson", e 1.513 (45%) nunca tiveram um lançamento —
+   * medido em 04/09/2026. Sem a contagem, escolher entre homônimos é adivinhação.
+   *
+   * ⚠ ZERO É RESPOSTA, e por isso aparece: `· 0` diz "existe e nunca foi usado",
+   * que é justamente o sinal de que aquele não é o fornecedor procurado. Omitir o
+   * hint diria "não perguntei", que é outra coisa.
+   *
+   * ⚠ UMA CHAMADA POR CLIENTE, e ela não é barata: o agregado equivalente custou
+   * 395 ms medidos. `staleTime: Infinity` porque a contagem muda devagar e a lista
+   * de fornecedores da tela já vem do mesmo lugar — não vale recarregar a cada
+   * troca de filtro.
+   */
+  const { data: usosPorFornecedor } = useQuery({
+    queryKey: ['fin-fornecedor-usos', clienteAtual?.id],
+    enabled: !!clienteAtual?.id,
+    staleTime: Infinity,
+    gcTime: 30 * 60 * 1000,
+    queryFn: async (): Promise<Map<string, number>> => {
+      const { data, error } = await supabase.rpc('fn_fornecedores_com_uso', {
+        p_cliente_id: clienteAtual!.id,
+      });
+      if (error) throw error;
+      const m = new Map<string, number>();
+      (data ?? []).forEach((r) => m.set(r.id, r.usos));
+      return m;
+    },
+  });
+
+  /* O hint só existe quando a contagem chegou: enquanto ela viaja, o combobox
+     mostra os nomes sem número, em vez de piscar `· 0` para todo mundo. */
+  const opcoesFornecedor = useMemo(
+    () => hook.fornecedores.map((f) => ({
+      value: f.id,
+      label: f.nome,
+      hint: usosPorFornecedor ? String(usosPorFornecedor.get(f.id) ?? 0) : undefined,
+    })),
+    [hook.fornecedores, usosPorFornecedor],
+  );
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const currentYear = new Date().getFullYear();
@@ -1130,7 +1186,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     /* ⚠ "Limpar" LIMPA A BUSCA TAMBEM. Zerar o fornecedor selecionado e deixar
        "wilson" digitado no combobox deixaria a tela dizendo "Todos" com uma lista
        de seis nomes — o filtro limpo e a busca suja. */
-    limparBuscasLembradas(CHAVE_BUSCA_FORNECEDOR);
+    limparBuscasLembradas(PREFIXO_BUSCA);
   };
 
   // Determine which fazenda_id to pass to loadLancamentos
@@ -1359,6 +1415,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                   <label className={lblCls}>Macro</label>
                   <SearchableSelect
                     value={macroFiltro}
+                    persistKey={CHAVE_BUSCA_MACRO}
                     onValueChange={v => { setMacroFiltro(v); setGrupoFiltro('__all__'); setCentroFiltro('__all__'); setSubcentroFiltro('__all__'); setMacroLocked(false); }}
                     options={macrosUnicos.map(m => ({ value: m, label: m }))}
                     disabled={macroLocked}
@@ -1384,7 +1441,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                   <SearchableSelect
                     value={fornecedorFiltro}
                     onValueChange={setFornecedorFiltro}
-                    options={hook.fornecedores.map(f => ({ value: f.id, label: f.nome }))}
+                    options={opcoesFornecedor}
                     placeholder="Todos"
                     persistKey={CHAVE_BUSCA_FORNECEDOR}
                   />
@@ -1418,6 +1475,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       <label className={lblCls}>Grupo</label>
                       <SearchableSelect
                         value={grupoFiltro}
+                        persistKey={CHAVE_BUSCA_GRUPO}
                         onValueChange={v => { setGrupoFiltro(v); setCentroFiltro('__all__'); setSubcentroFiltro('__all__'); setMacroLocked(false); }}
                         options={gruposUnicos.map(g => ({ value: g, label: g }))}
                         disabled={macroLocked}
@@ -1428,6 +1486,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       <label className={lblCls}>Centro</label>
                       <SearchableSelect
                         value={centroFiltro}
+                        persistKey={CHAVE_BUSCA_CENTRO}
                         onValueChange={v => { setCentroFiltro(v); setSubcentroFiltro('__all__'); setMacroLocked(false); }}
                         options={centrosUnicos.map(c => ({ value: c, label: c }))}
                         disabled={macroLocked}
@@ -1438,6 +1497,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       <label className={lblCls}>Subcentro</label>
                       <SearchableSelect
                         value={subcentroFiltro}
+                        persistKey={CHAVE_BUSCA_SUBCENTRO}
                         onValueChange={handleSubcentroChange}
                         options={subcentrosUnicos.map(s => ({ value: s, label: s }))}
                         placeholder="Todos"
@@ -1655,6 +1715,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     <label className={lblCls}>Macro</label>
                     <SearchableSelect
                       value={macroFiltro}
+                      persistKey={CHAVE_BUSCA_MACRO}
                       onValueChange={v => { setMacroFiltro(v); setGrupoFiltro('__all__'); setCentroFiltro('__all__'); setSubcentroFiltro('__all__'); setMacroLocked(false); }}
                       options={macrosUnicos.map(m => ({ value: m, label: m }))}
                       disabled={macroLocked}
@@ -1665,6 +1726,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     <label className={lblCls}>Grupo</label>
                     <SearchableSelect
                       value={grupoFiltro}
+                      persistKey={CHAVE_BUSCA_GRUPO}
                       onValueChange={v => { setGrupoFiltro(v); setCentroFiltro('__all__'); setSubcentroFiltro('__all__'); setMacroLocked(false); }}
                       options={gruposUnicos.map(g => ({ value: g, label: g }))}
                       disabled={macroLocked}
@@ -1675,6 +1737,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     <label className={lblCls}>Centro</label>
                     <SearchableSelect
                       value={centroFiltro}
+                      persistKey={CHAVE_BUSCA_CENTRO}
                       onValueChange={v => { setCentroFiltro(v); setSubcentroFiltro('__all__'); setMacroLocked(false); }}
                       options={centrosUnicos.map(c => ({ value: c, label: c }))}
                       disabled={macroLocked}
@@ -1685,6 +1748,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     <label className={lblCls}>Subcentro</label>
                     <SearchableSelect
                       value={subcentroFiltro}
+                      persistKey={CHAVE_BUSCA_SUBCENTRO}
                       onValueChange={handleSubcentroChange}
                       options={subcentrosUnicos.map(s => ({ value: s, label: s }))}
                       placeholder="Buscar subcentro..."
@@ -1711,7 +1775,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     <SearchableSelect
                       value={fornecedorFiltro}
                       onValueChange={setFornecedorFiltro}
-                      options={hook.fornecedores.map(f => ({ value: f.id, label: f.nome }))}
+                      options={opcoesFornecedor}
                       placeholder="Buscar fornecedor..."
                       persistKey={CHAVE_BUSCA_FORNECEDOR}
                     />
