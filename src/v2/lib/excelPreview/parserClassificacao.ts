@@ -280,14 +280,15 @@ function parseRow(
   if (!tipo) {
     return { row: null, erro: 'Tipo vazio' };
   }
-  if (!subcentro) {
-    /* ⚠ CONTINUA OBRIGATORIO, e a mensagem passou a nomear os dois formatos: no
-       modelo novo esta coluna e' OPCIONAL (uma celula em branco significa "entra
-       sem classificacao"), e aqui nao — a sessao existe para conferir uma
-       classificacao que precisa ter chegado. Relaxar isso seria mudar a logica
-       do legado, que este PR nao faz. */
-    return { row: null, erro: 'Subcentro (ou "Conta (plano do cliente)") vazio' };
-  }
+  /* ⚠ SEM PLANO A LINHA ENTRA, e nao e' descuido: recusar aqui apagava do
+     operador justamente a linha que ele precisa ver para classificar. A celula em
+     branco e' uma RESPOSTA — "ainda nao sei" —, o mesmo contrato que o modelo
+     novo adotou no B-40, e a sessao existe para resolver isso na tela.
+     ⚠ O QUE NAO MUDOU: aplicar continua sem poder classificar do nada. A proposta
+     sobe sem `subcentro` e o gravador faz `COALESCE(proposto, atual)` — verificado
+     em `fn_classificacao_apply_row` —, entao a linha sem plano nunca sobrescreve
+     nem apaga a classificacao de um lancamento. Ela fica pendente, que e' o
+     estado honesto. */
 
   const anoMesRaw = pickCol(raw, ANOMES_COLS);
 

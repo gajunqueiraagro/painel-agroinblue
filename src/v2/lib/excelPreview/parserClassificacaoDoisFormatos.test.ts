@@ -107,14 +107,33 @@ describe('parserClassificacao — os dois formatos entram', () => {
     expect(r.erros[0].motivo).toContain('Nenhuma linha de cabeçalho reconhecida');
   });
 
-  it('sem plano/subcentro a linha é recusada — nos dois formatos', async () => {
+  it('sem plano a linha ENTRA como pendente — nunca é recusada', async () => {
     const semPlano = arquivo('Lançamentos', [
       ['OBRIGATÓRIA', 'OBRIGATÓRIA', 'OBRIGATÓRIA', 'opcional', 'OBRIGATÓRIA'],
       ['Data de competência', 'Valor', 'Tipo de operação', 'Conta (plano do cliente)', 'Fazenda'],
       ['01/07/2026', 1250, '2-Saídas', '', 'SR'],
     ]);
     const r = await parseExcelClassificacao(semPlano);
+    /* ⚠ A CÉLULA EM BRANCO É UMA RESPOSTA: recusar a linha esconderia do operador
+       exatamente aquela que ele abriu a sessão para classificar. */
+    expect(r.linhasValidas).toBe(1);
+    expect(r.erros).toEqual([]);
+    expect(r.rows[0].subcentro).toBeNull();
+    /* O resto da linha chega inteiro — é o que permite achar o lançamento. */
+    expect(r.rows[0].valor).toBe(1250);
+    expect(r.rows[0].data).toBe('2026-07-01');
+    expect(r.rows[0].fazenda_codigo).toBe('SR');
+  });
+
+  it('o que continua recusado: sem data, sem valor, sem tipo', async () => {
+    const quebrada = arquivo('Lançamentos', [
+      ['Data de competência', 'Valor', 'Tipo de operação', 'Conta (plano do cliente)', 'Fazenda'],
+      ['', 1250, '2-Saídas', 'COMBUSTIVEL', 'SR'],
+      ['01/07/2026', '', '2-Saídas', 'COMBUSTIVEL', 'SR'],
+      ['01/07/2026', 1250, '', 'COMBUSTIVEL', 'SR'],
+    ]);
+    const r = await parseExcelClassificacao(quebrada);
     expect(r.linhasValidas).toBe(0);
-    expect(r.erros[0].motivo).toContain('Conta (plano do cliente)');
+    expect(r.linhasComErro).toBe(3);
   });
 });
