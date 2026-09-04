@@ -20,6 +20,9 @@ const TIPO_USO_STYLES: Record<string, { border: string; text: string; bg: string
   'benfeitorias':     { border: 'border-l-gray-900 dark:border-l-gray-100', text: 'text-gray-900 dark:text-gray-100', bg: 'bg-gray-900/10 dark:bg-gray-100/10' },
 };
 
+/** O balde dos pastos que o mes nao fechou. Nao e' atividade — e' ausencia de dado. */
+const SEM_FECHAMENTO = 'sem fechamento';
+
 const normalizeTipoUso = (t?: string) => {
   if (!t) return '';
   return t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
@@ -53,13 +56,31 @@ interface Props {
 
 export function ResumoAtividadesView({ pastos, fechamentos, itensMap, categorias, anoMes, onBack, onVerPastos }: Props) {
   const resumos = useMemo(() => {
-    const pastosAtivos = pastos.filter(p => p.ativo && p.entra_conciliacao && isPastoAtivoNoMes(p, anoMes));
+    /* ⚠ `entra_conciliacao` SAIU DO FILTRO — VIGENCIA-03. A coluna foi aposentada em
+       PR-PASTO-VIGENCIA-02: a regra unica passou a ser vigencia + ativo, e
+       `isPastoAtivoNoMes` ja' e' o espelho do SQL. Hoje ela e' `true` nos 318 pastos e
+       nao descartava nada — era armadilha esperando alguem gravar `false`. */
+    const pastosAtivos = pastos.filter(p => p.ativo && isPastoAtivoNoMes(p, anoMes));
     const fechMap = new Map(fechamentos.map(f => [f.pasto_id, f]));
 
-    // Group by tipo_uso
+    /* ⚠ O TIPO DE USO E' O DO MES, e nao o do cadastro. Medido em 04/09/2026: 14.790 dos
+       21.870 fechamentos (68%), em 80 meses, tem `tipo_uso_mes` diferente do `tipo_uso`
+       de hoje — `cria` que virou `recria`, `engorda` que estava `vedado`. Ler o cadastro
+       fazia a tela contar o passado pela lente do presente, e era isso que os cartoes
+       mostravam de errado. `vedado` nem existe no cadastro: e' estado so' do mes, e
+       sumia inteiro da tela.
+       ⚠ SEM FECHAMENTO E' UM BALDE PROPRIO, e nao um pasto sem tipo. A area dele nao
+       pode entrar no denominador de atividade nenhuma: em ago/2026, 156 dos 311 pastos
+       ativos nao tinham fechamento, e a area deles — 7.626,94 ha de 17.007,80, 44,8% —
+       dividia um rebanho que ela nao abrigava. UA/ha saia cerca de 45% menor. */
     const groups = new Map<string, Pasto[]>();
     pastosAtivos.forEach(p => {
-      const key = normalizeTipoUso(p.tipo_uso) || 'sem tipo';
+      const fech = fechMap.get(p.id);
+      /* Sem `tipo_uso_mes` (14 fechamentos antigos), o cadastro e' o melhor conhecimento
+         disponivel — e' fallback, nao preferencia. */
+      const key = fech
+        ? (normalizeTipoUso(fech.tipo_uso_mes ?? undefined) || normalizeTipoUso(p.tipo_uso) || 'sem tipo')
+        : SEM_FECHAMENTO;
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key)!.push(p);
     });
@@ -94,9 +115,18 @@ export function ResumoAtividadesView({ pastos, fechamentos, itensMap, categorias
       const uaHa = areaTotal > 0 && uaTotal > 0 ? uaTotal / areaTotal : null;
       const kgHa = areaTotal > 0 && pesoTotal > 0 ? pesoTotal / areaTotal : null;
       const cabHa = areaTotal > 0 && cabecasTotal > 0 ? cabecasTotal / areaTotal : null;
-      const arrobasTotal = pesoTotal > 0 ? pesoTotal / 15 : null;
+        /* ⚠ 30, NAO 15 — e o rotulo mudou junto. A @ de 15 kg e' de CARCACA; aqui o
+           peso e' VIVO, e chamar de "@" o peso vivo dividido por 15 dobrava o numero
+           contra a doutrina da casa (`@ abate = carcaca/15`). Duas quantidades com o
+           mesmo nome sao duas verdades esperando discordar. */
+        const arrobasTotal = pesoTotal > 0 ? pesoTotal / 30 : null;
 
-      const tipoUsoLabel = TIPOS_USO.find(t => normalizeTipoUso(t.label) === key)?.label || key;
+      /* ⚠ O BALDE DOS SEM FECHAMENTO SE NOMEIA. Cair no `|| key` mostraria "sem
+         fechamento" em minusculas no meio de "Cria" e "Engorda", parecendo mais um tipo
+         de uso — e ele nao e' atividade, e' ausencia de dado. O rotulo diz o que e'. */
+      const tipoUsoLabel = key === SEM_FECHAMENTO
+        ? 'Sem fechamento no mês'
+        : (TIPOS_USO.find(t => normalizeTipoUso(t.label) === key)?.label || key);
 
       result.push({
         tipoUso: key,
@@ -118,7 +148,11 @@ export function ResumoAtividadesView({ pastos, fechamentos, itensMap, categorias
     // Sort by cabecasTotal desc
     result.sort((a, b) => b.cabecasTotal - a.cabecasTotal);
     return result;
-  }, [pastos, fechamentos, itensMap, categorias]);
+    /* ⚠ `anoMes` ENTROU NAS DEPENDENCIAS. Ele e' lido dentro (`isPastoAtivoNoMes`) e
+       faltava aqui; hoje o defeito nao aparece porque `fechamentos` troca junto com o
+       mes e forca o recalculo — mas a corretude estava apoiada em coincidencia, nao em
+       declaracao. */
+  }, [pastos, fechamentos, itensMap, categorias, anoMes]);
 
   const totalGeral = resumos.reduce((s, r) => s + r.cabecasTotal, 0);
   const areaGeral = resumos.reduce((s, r) => s + r.areaTotal, 0);
@@ -206,7 +240,7 @@ export function ResumoAtividadesView({ pastos, fechamentos, itensMap, categorias
                     </p>
                   </div>
                   <div>
-                    <span className="text-muted-foreground">Arrobas</span>
+                    <span className="text-muted-foreground">@ vivas</span>
                     <p className="font-semibold text-foreground tabular-nums">
                       {r.arrobasTotal ? formatNum(r.arrobasTotal, 1) : '—'}
                     </p>
