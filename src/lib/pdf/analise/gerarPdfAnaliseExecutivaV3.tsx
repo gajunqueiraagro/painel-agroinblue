@@ -48,7 +48,7 @@ const ETAPA_LABEL: Record<string, { nome: string; faixa: string }> = {
 const COR_STATUS: Record<string, string> = { realizado: '#22784a', programado: '#2563eb', previsto: '#d77706', agendado: '#7c3aad' };
 const corStatus = (s: string): string => COR_STATUS[s.toLowerCase()] ?? '#787878';
 
-export async function gerarPdfAnaliseExecutivaV3(params: {
+export interface ParamsPdfExecutiva {
   clienteNome: string;
   fazenda?: string;
   contaNome: string;
@@ -62,7 +62,45 @@ export async function gerarPdfAnaliseExecutivaV3(params: {
   dadosOrg: ItemOrg[];
   transferencias: TransfPdf[];
   extrato: ExtratoPdf[];
-}): Promise<void> {
+}
+
+/**
+ * ⚠ O TOAST DIZ A CAUSA — "Falha ao gerar PDF" e ponto é o que fez esta investigação
+ * começar do zero: o botão falhava, o operador não sabia por quê e quem conserta não
+ * tinha nem a exceção. A mensagem técnica vai JUNTO, no fim da frase, por isso.
+ *
+ * ⚠ O `try` ENVOLVE A FUNÇÃO INTEIRA, e não só o motor. Antes, tudo o que acontecia
+ * antes do `pdf()` — as derivações, o logo — estourava FORA do catch: o botão não
+ * gerava nada e não dizia nada, que é pior que a mensagem muda. Já houve um PR só
+ * para isso (b5ca2b39, "botão sem ação — export silencioso"); o buraco tinha voltado
+ * por outro caminho.
+ */
+export async function gerarPdfAnaliseExecutivaV3(params: ParamsPdfExecutiva): Promise<void> {
+  try {
+    await montarEBaixar(params);
+  } catch (e) {
+    console.error('[PDF Executivo] falha ao gerar:', e);
+    toast.error(motivoDaFalha(e));
+  }
+}
+
+/** Traduz a exceção para uma frase que diz o que houve E o que fazer a seguir. */
+function motivoDaFalha(e: unknown): string {
+  const msg = e instanceof Error ? e.message : String(e);
+  /* Chunk que não existe mais: o app foi publicado de novo com esta aba aberta.
+     É falha de versão, não de dado — e o conserto é do operador, num clique. */
+  if (/dynamically imported module|Importing a module script failed|error loading dynamically/i.test(msg)) {
+    return 'O aplicativo foi atualizado depois que esta página abriu. Recarregue a página (Ctrl+R) e gere o PDF de novo.';
+  }
+  /* pdfkit recusa NaN/Infinity em QUALQUER coordenada e derruba o documento inteiro —
+     um único lançamento ou saldo inválido apaga o PDF de 4 páginas. */
+  if (/unsupported number/i.test(msg)) {
+    return `Um valor inválido entre os lançamentos ou nos saldos deste período impediu o desenho do gráfico. Confira a conta e o mês. (${msg})`;
+  }
+  return `Falha ao gerar PDF: ${msg}`;
+}
+
+async function montarEBaixar(params: ParamsPdfExecutiva): Promise<void> {
   // ── Derivações via fonte única ──
   const { pontos: serie, corteIdx, temProjetado } = serieEvolucaoRP(params.serieLinhas, params.saldoIni, params.ano, params.mes);
   const menor = serie.length ? serie.reduce((m, p) => (p.saldo < m.saldo ? p : m), serie[0]) : null;
@@ -149,27 +187,22 @@ export async function gerarPdfAnaliseExecutivaV3(params: {
   try { logoData = await carregarLogoBase64(); } catch { logoData = undefined; }
 
   // Motor react-pdf sob demanda.
-  try {
-    const [{ pdf }, { DocumentoAnaliseExecutiva }] = await Promise.all([
-      import('@react-pdf/renderer'),
-      import('@/lib/pdf/analise/DocumentoAnaliseExecutiva'),
-    ]);
-    // Elemento React (padrão do react-pdf) — NÃO invocar como função.
-    const blob = await pdf(
-      <DocumentoAnaliseExecutiva
-        clienteNome={params.clienteNome} fazenda={params.fazenda} contaNome={params.contaNome} periodoLabel={params.periodoLabel} logoData={logoData}
-        kpis={kpis} serie={serie} fmt={fmtCompacto} projetado={temProjetado} calendario={calendario} cards={cards} notaProjetado={notaProjetado}
-        credito={credito} natureza={natureza} negocio={negocio} compromissos={compromissos} tesouraria={tesouraria} extrato={extrato}
-      />,
-    ).toBlob();
+  const [{ pdf }, { DocumentoAnaliseExecutiva }] = await Promise.all([
+    import('@react-pdf/renderer'),
+    import('@/lib/pdf/analise/DocumentoAnaliseExecutiva'),
+  ]);
+  // Elemento React (padrão do react-pdf) — NÃO invocar como função.
+  const blob = await pdf(
+    <DocumentoAnaliseExecutiva
+      clienteNome={params.clienteNome} fazenda={params.fazenda} contaNome={params.contaNome} periodoLabel={params.periodoLabel} logoData={logoData}
+      kpis={kpis} serie={serie} fmt={fmtCompacto} projetado={temProjetado} calendario={calendario} cards={cards} notaProjetado={notaProjetado}
+      credito={credito} natureza={natureza} negocio={negocio} compromissos={compromissos} tesouraria={tesouraria} extrato={extrato}
+    />,
+  ).toBlob();
 
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `analise_financeira_executiva_${slug(params.clienteNome)}_${slug(params.periodoLabel)}.pdf`;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 4000);
-  } catch (e) {
-    console.error('[PDF Executivo] falha ao gerar:', e);
-    toast.error('Falha ao gerar PDF');
-  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `analise_financeira_executiva_${slug(params.clienteNome)}_${slug(params.periodoLabel)}.pdf`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
