@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { PainelExtratoMes } from '@/components/conciliacao/PainelExtratoMes';
 import { SaldoRealDialog } from '@/components/conciliacao/SaldoRealDialog';
-import { movimentoNaConta, fimDoMes } from '@/hooks/useExtratoDaConta';
+import { fimDoMes } from '@/hooks/useExtratoDaConta';
 import { ImportarBancoInline } from '@/components/conciliacao/ImportarBancoInline';
 import { ExtratoGerencialTab } from '@/components/financeiro-v2/ExtratoGerencialTab';
 import { EnriquecerPorPlanilha } from '@/components/conciliacao/EnriquecerPorPlanilha';
@@ -37,7 +37,7 @@ import { MesaEnriquecimentoTab } from '@/v2/components/mesa/enriquecimento/MesaE
 type MesStatusExt = ConciliacaoStatus | 'parcial';
 
 /* ── Types ── */
-interface ContaRef {
+export interface ContaRef {
   id: string;
   nome_conta: string;
   nome_exibicao: string | null;
@@ -47,7 +47,7 @@ interface ContaRef {
   saldo_inicial_oficial: number | null;
 }
 
-interface SaldoRow {
+export interface SaldoRow {
   id: string;
   ano_mes: string;
   conta_bancaria_id: string;
@@ -59,7 +59,7 @@ interface SaldoRow {
   saldo_data: string | null;
 }
 
-interface LancamentoResumo {
+export interface LancamentoResumo {
   id: string;
   tipo_operacao: string;
   valor: number;
@@ -88,7 +88,7 @@ interface LancamentoResumo {
 
 interface FornecedorRef { id: string; nome: string; }
 
-interface MesCard {
+export interface MesCard {
   mes: string;
   label: string;
   anoMes: string;
@@ -176,7 +176,14 @@ function classifyLanc(l: LancamentoResumo, contaId: string): 'entrada'|'saida'|'
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
 /* ── Pure function to build month cards for any contaId ── */
-function buildMonthCards(
+/**
+ * ⚠ EXPORTADA PARA TESTE, e o motivo importa: o agregado deste arquivo ficou dois
+ * dias contando transferência interna como saída (`e6360649`), e nada podia
+ * acusá-lo porque a função era privada. Testar a regra num arquivo à parte não
+ * bastava — o defeito não estava na regra, estava em COMO ela era chamada.
+ * Nenhum componente a importa; é ponto de teste, não de reuso.
+ */
+export function buildMonthCards(
   ano: string,
   targetContaId: string,
   saldos: SaldoRow[],
@@ -230,6 +237,10 @@ function buildMonthCards(
       ? r2(saldoRows.reduce((s,r) => s + (r.saldo_inicial||0), 0))
       : r2(Array.from(prevFinal.values()).reduce((s,v) => s+v, 0));
 
+    /* ⚠ `contas` VEM FILTRADA POR `ativa = true`. Hoje nenhuma conta inativa tem
+       lançamento em cliente nenhum (medido em 04/09/2026), então a soma fecha; no
+       dia em que tiver, a perna que aponta para a inativa deixa de ser creditada e
+       uma transferência interna volta a parecer saída. */
     const perAcct = contas.map(c => calcConciliacaoMensal({
       contaId: c.id, anoMes, saldoRows,
       lancamentos: lancamentos as ConciliacaoLancamentoBase[],
@@ -253,31 +264,9 @@ function buildMonthCards(
         .reduce((s, l) => s + Math.abs(Number(l.valor) || 0), 0)
     );
 
-    // FLUXO COMPLETO: saldo agregado = saldo_inicial + entradas - saídas (inclui sem-conta).
-    // O saldoCalculado por-conta (perAcct) continua usado em prevFinal para encadear meses.
-
-      /* ⚠ UMA RÉGUA SÓ PARA "SALDO NO SISTEMA" — CONCIL-PARIDADE-VISUAL-01 §5.
-         Aqui havia uma segunda conta: entradas menos saídas por `tipo_operacao`,
-         que ZERAVA transferências e NÃO olhava `cancelado`. Medido em
-         Vera/Itaú/agosto: 38 cancelados somando 410.501,86 entravam na conta, e
-         6 transferências de 55.092,64 sumiam dela. Aquele `case` é a régua do
-         RESULTADO — onde transferência de fato não é receita nem custo —, e
-         usá-la para SALDO era emprestar a régua do papel errado.
-         Agora os dois cards (este e o da aba Importar) leem `movimentoNaConta`:
-         sinal pela coluna, transferência pela perna, sem cancelados, caixa-only,
-         cenário realizado. Nenhum dos dois mantém conta própria. */
-      const movimentoDoMes = r2(mesLancs
-        .filter(l => !l.cancelado && l.cenario === 'realizado' && !l.sem_movimentacao_caixa)
-        .reduce((acc, l) => acc + movimentoNaConta({
-          valor: l.valor, sinal: l.sinal, tipo_operacao: l.tipo_operacao,
-          data_pagamento: l.data_pagamento,
-          conta_bancaria_id: l.conta_bancaria_id ?? null,
-          conta_destino_id: l.conta_destino_id ?? null,
-        }, isAll ? '' : targetContaId), 0));
-      const saldoCalculado = r2(saldoInicial + movimentoDoMes);
-    const diferenca = saldoExtrato !== null ? r2(saldoExtrato - saldoCalculado) : 0;
-
-    // Pendências: lançamentos sem conta vinculada
+    // Pendências: lançamentos sem conta vinculada.
+    /* Sobem antes do movimento porque ELE OS SOMA: dinheiro sem conta é dinheiro
+       que entrou ou saiu do conjunto, e some do agregado se ficar de fora. */
     const semConta = mesLancs.filter(l => !l.conta_bancaria_id && !l.conta_destino_id);
     const semContaSaidas = r2(
       semConta
@@ -289,6 +278,30 @@ function buildMonthCards(
         .filter(l => (l.tipo_operacao || '') === '1-Entradas')
         .reduce((s, l) => s + Math.abs(Number(l.valor) || 0), 0)
     );
+
+    /* ⚠ O AGREGADO É A SOMA DOS CARTÕES POR CONTA, e não uma conta própria sobre
+       as linhas. Cada `perAcct` já leu sua perna; somá-los ZERA POR CONSTRUÇÃO a
+       transferência interna (as duas pernas dentro do universo) e MANTÉM a de uma
+       perna só, que é dinheiro que saiu de verdade. A fórmula certa é a que não
+       precisa saber qual é qual.
+
+       ⚠ AQUI HAVIA `movimentoNaConta(l, isAll ? '' : targetContaId)` — e com conta
+       VAZIA não existe perna: o destino nunca era creditado, então toda
+       transferência interna virava saída pura. Medido no NJ/2026: janeiro errava
+       por 1.310.270,36, abril por 2.825.906,98 — ao centavo, o total transferido
+       no mês. Entrou em e6360649 (CONCIL-PARIDADE-VISUAL-01 §5), que corrigiu o
+       cartão DE UMA CONTA e quebrou o agregado no mesmo gesto: a régua da perna
+       vale para quem tem perna. O ternário era código morto — o ramo por conta
+       sai com `continue` bem antes daqui.
+
+       ⚠ AGOSTO NÃO PROVA NADA: é o único mês de 2026 sem transferência nenhuma,
+       e nele os dois cálculos empatam. Conferir jan/abr/jul. */
+    const movimentoDoMes = r2(
+      perAcct.reduce((s, r) => s + r.totalEntradas - r.totalSaidas, 0)
+      + semContaEntradas - semContaSaidas
+    );
+    const saldoCalculado = r2(saldoInicial + movimentoDoMes);
+    const diferenca = saldoExtrato !== null ? r2(saldoExtrato - saldoCalculado) : 0;
 
     /* Extended status: realizado / parcial / nao_conciliado / pendente */
     /* ⚠ SÓ AS CONTAS QUE EXISTIAM NO MÊS ENTRAM NO VEREDITO — CONCIL-SELO-PENDENTE-01.
