@@ -24,6 +24,17 @@ export function PdfFluxoCaixa({ serie, fmt, projetado }: { serie: Ponto[]; fmt: 
   if (serie.length < 2) {
     return <Text style={{ fontSize: 9, color: COR.cinzaMedio, marginTop: 6 }}>Saldo inicial não informado — evolução indisponível.</Text>;
   }
+  /* ⚠ UM ÚNICO NaN/Infinity DERRUBA O DOCUMENTO INTEIRO. O pdfkit recusa a coordenada
+     ("unsupported number: NaN") e as quatro páginas se perdem junto com o gráfico.
+     Aqui a curva se ausenta e DIZ POR QUÊ; o resto do relatório sobrevive.
+     ⚠ NUNCA trocar o inválido por zero: zero é valor real e mentiria sobre o saldo. */
+  if (serie.some((p) => !Number.isFinite(p.saldo) || !Number.isFinite(p.mov))) {
+    return (
+      <Text style={{ fontSize: 9, color: COR.ambar, marginTop: 6 }}>
+        Gráfico indisponível — há valor inválido entre os lançamentos deste período. As demais páginas seguem íntegras.
+      </Text>
+    );
+  }
   const W = 540, H = 246, padL = 46, padR = 14, padT = 16, padB = 20;
   const x0 = padL, x1 = W - padR, y0 = padT, y1 = H - padB;
 

@@ -86,6 +86,23 @@ export async function gerarPdfAnaliseExecutivaV3(params: ParamsPdfExecutiva): Pr
   }
 }
 
+/**
+ * Nomeia o primeiro dado que o gráfico não consegue desenhar — ou null se está tudo bem.
+ *
+ * ⚠ NOMEAR, E NÃO SÓ AVISAR: "há um valor inválido" manda o operador procurar entre 86
+ * lançamentos. A data e a descrição levam direto ao conserto, na origem.
+ * A ordem é a da culpa: um saldo inválido contamina a série inteira, então vem antes.
+ */
+function primeiroValorInvalido(p: ParamsPdfExecutiva): string | null {
+  if (p.saldoIni !== null && !Number.isFinite(p.saldoIni)) return 'o saldo inicial do período';
+  if (p.saldoFin !== null && !Number.isFinite(p.saldoFin)) return 'o saldo final do período';
+  const l = p.extrato.find((r) => !Number.isFinite(r.valor));
+  if (l) return `o lançamento de ${diaBR(l.data)} "${l.produto || 'sem descrição'}"`;
+  const s = p.serieLinhas.find((r) => !Number.isFinite(r.mov));
+  if (s) return `um lançamento de ${diaBR(s.data)}`;
+  return null;
+}
+
 /** Traduz a exceção para uma frase que diz o que houve E o que fazer a seguir. */
 function motivoDaFalha(e: unknown): string {
   const msg = e instanceof Error ? e.message : String(e);
@@ -207,4 +224,11 @@ async function montarEBaixar(params: ParamsPdfExecutiva): Promise<void> {
   a.href = url; a.download = `analise_financeira_executiva_${slug(params.clienteNome)}_${slug(params.periodoLabel)}.pdf`;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 4000);
+
+  /* ⚠ O AVISO VEM DEPOIS DO DOWNLOAD, e é aviso — não erro: o relatório foi entregue,
+     só o gráfico ficou de fora. Avisar antes faria parecer que nada saiu. */
+  const invalido = primeiroValorInvalido(params);
+  if (invalido) {
+    toast.warning(`PDF gerado, mas o gráfico ficou de fora: ${invalido} está com valor inválido.`);
+  }
 }

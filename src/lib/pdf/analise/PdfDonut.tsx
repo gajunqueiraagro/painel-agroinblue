@@ -14,7 +14,10 @@ function arco(cx: number, cy: number, r: number, a0: number, a1: number): string
 }
 
 export function PdfDonut({ segmentos, size = 86, inner = 0.56 }: { segmentos: SegmentoDonut[]; size?: number; inner?: number }) {
-  const positivos = segmentos.filter((s) => s.valor > 0);
+  /* ⚠ `Number.isFinite` ANTES do sinal: `Infinity > 0` é true, entra no rateio e faz
+     `seg.valor / total` virar NaN no arco — que o pdfkit recusa, levando o PDF inteiro
+     junto. NaN já cairia no `> 0`; Infinity, não. */
+  const positivos = segmentos.filter((s) => Number.isFinite(s.valor) && s.valor > 0);
   const total = positivos.reduce((s, x) => s + x.valor, 0);
   if (total <= 0) return <Svg width={size} height={size} />;
   const cx = size / 2, cy = size / 2, r = size / 2 - 1, ri = r * inner;
