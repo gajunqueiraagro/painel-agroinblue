@@ -20,6 +20,18 @@
  * (PR-M). Sem adapter intermediário.
  */
 import * as XLSX from 'xlsx';
+/* ⚠ O VOCABULARIO VEM DO PARSER NOVO, e nao e' copiado: `COL_*` sao os
+   cabecalhos que o modelo novo aceita, ja exportados por
+   `colunasLancamento` — modulo SEM IMPORTS, de proposito. Duplicar a lista
+   aqui criaria o segundo lugar onde o
+   formato e' descrito, e o dia em que o modelo ganhasse um alias os dois
+   discordariam — exatamente o que `detectarTipoArquivo` evita importando
+   `CUSTEIO_FORMAT`. O MECANISMO (localizar cabecalho) fica local de proposito:
+   o briefing manda nao tocar no bloco de cima. */
+import {
+  COL_COMPETENCIA, COL_VALOR, COL_TIPO, COL_CONTA_PLANO, COL_FAZENDA,
+  COL_FORNECEDOR, COL_CONTA_BANCARIA, COL_DESCRICAO, COL_DOCUMENTO, COL_OBSERVACAO,
+} from '@/v2/lib/excelPreview/colunasLancamento';
 
 export interface ClassificacaoExcelRow {
   /** indiceLinha (0-based) + 2 — header é linha 1, dados começam em 2. */
@@ -66,8 +78,87 @@ function pickCol(raw: Record<string, unknown>, names: string[]): string | null {
   }
   return null;
 }
-const OBS_COLS = ['Obs', 'OBS', 'Observação', 'Observacao', 'Observações', 'Observacoes'];
-const DOC_COLS = ['Documento', 'Documento_Numero', 'Nº Documento', 'Numero Documento', 'Número Documento'];
+/**
+ * OS DOIS FORMATOS, POR CAMPO — o legado primeiro, o modelo novo em seguida.
+ *
+ * ⚠ A ORDEM E' PRECEDENCIA: `pickCol` devolve o primeiro alias nao-vazio, entao
+ * uma planilha que por acaso tenha as duas colunas responde pela do legado.
+ *
+ * ⚠ "CONTA" NAO QUER DIZER A MESMA COISA NOS DOIS. No legado, `Conta` e' a conta
+ * BANCARIA (vira `conta_origem`); no modelo novo, `Conta (plano do cliente)` e' o
+ * PLANO (vira `subcentro`) e o banco se chama `Conta bancaria`. Mapear por
+ * semelhanca de nome jogaria o plano do cliente na conta de origem. Nenhum dos
+ * dois arrays do modelo novo contem `Conta` puro — conferido —, entao a
+ * separacao se sustenta.
+ */
+/** Como `pickCol`, mas devolve a celula CRUA — data e valor precisam do serial
+ *  do Excel e do numero, nao do texto. */
+function pickBruto(raw: Record<string, unknown>, names: readonly string[]): unknown {
+  for (const n of names) {
+    const v = raw[n];
+    if (v !== null && v !== undefined && String(v).trim() !== '') return v;
+  }
+  return null;
+}
+
+const DATA_COLS = ['Data_Ref', ...COL_COMPETENCIA];
+const VALOR_COLS = ['Valor', ...COL_VALOR];
+const TIPO_COLS = ['Tipo', ...COL_TIPO];
+const SUBCENTRO_COLS = ['Subcentro', ...COL_CONTA_PLANO];
+const FORNECEDOR_COLS = ['Fornecedor', ...COL_FORNECEDOR];
+const PRODUTO_COLS = ['Produto', ...COL_DESCRICAO];
+const CONTA_ORIGEM_COLS = ['Conta', ...COL_CONTA_BANCARIA];
+const CONTA_DESTINO_COLS = ['Conta_Destino', 'Conta destino', 'Conta Destino'];
+const FAZENDA_COLS = ['Fazenda', ...COL_FAZENDA];
+const ANOMES_COLS = ['AnoMes', 'Ano_Mes', 'Ano/Mes'];
+const OBS_COLS = ['Obs', 'OBS', 'Observação', 'Observacao', 'Observações', 'Observacoes', ...COL_OBSERVACAO];
+const DOC_COLS = ['Documento', 'Documento_Numero', 'Nº Documento', 'Numero Documento', 'Número Documento', ...COL_DOCUMENTO];
+
+/** Todo cabecalho que qualquer um dos dois formatos reconhece. */
+const ALIASES_CONHECIDOS = new Set<string>([
+  ...DATA_COLS, ...VALOR_COLS, ...TIPO_COLS, ...SUBCENTRO_COLS, ...FORNECEDOR_COLS,
+  ...PRODUTO_COLS, ...CONTA_ORIGEM_COLS, ...CONTA_DESTINO_COLS, ...FAZENDA_COLS,
+  ...ANOMES_COLS, ...OBS_COLS, ...DOC_COLS,
+]);
+
+/** Quantas linhas do topo podem ser cabecalho. O modelo novo poe um marcador
+ *  ("OBRIGATORIA"/"opcional") na linha 1 e os cabecalhos na 2. */
+const LINHAS_TESTADAS_CABECALHO = 5;
+/** Abaixo disto nao e' cabecalho — e' dado que por acaso bateu uma palavra. */
+const MINIMO_ALIASES_CABECALHO = 3;
+
+const textoCelula = (v: unknown): string => (v === null || v === undefined ? '' : String(v).trim());
+
+/**
+ * Acha a linha de cabecalho entre as primeiras. Empate resolve pela PRIMEIRA:
+ * se duas linhas reconhecem o mesmo tanto, a de cima e' o cabecalho.
+ */
+function localizarCabecalho(matriz: readonly (readonly unknown[])[]): number | null {
+  let melhor: { indice: number; acertos: number } | null = null;
+  const limite = Math.min(LINHAS_TESTADAS_CABECALHO, matriz.length);
+  for (let i = 0; i < limite; i++) {
+    const vistos = new Set<string>();
+    let acertos = 0;
+    for (const c of matriz[i] ?? []) {
+      const t = textoCelula(c);
+      if (!t || vistos.has(t)) continue;
+      vistos.add(t);
+      if (ALIASES_CONHECIDOS.has(t)) acertos++;
+    }
+    if (acertos > (melhor?.acertos ?? 0)) melhor = { indice: i, acertos };
+  }
+  return melhor && melhor.acertos >= MINIMO_ALIASES_CABECALHO ? melhor.indice : null;
+}
+
+/** Objeto da linha pelos cabecalhos localizados. Cabecalho repetido: a PRIMEIRA vence. */
+function linhaParaObjeto(cabecalhos: readonly string[], linha: readonly unknown[]): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  cabecalhos.forEach((cab, i) => {
+    if (!cab || cab in out) return;
+    out[cab] = linha[i] ?? null;
+  });
+  return out;
+}
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const BR_DATE_RE = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
@@ -172,15 +263,15 @@ function parseRow(
   raw: Record<string, unknown>,
   linha: number,
 ): ParseRowOutput {
-  const dataRef = raw['Data_Ref'];
-  const valor = raw['Valor'];
-  const tipo = trimOrNull(raw['Tipo']);
-  const subcentro = trimOrNull(raw['Subcentro']);
+  const dataRef = pickBruto(raw, DATA_COLS);
+  const valor = pickBruto(raw, VALOR_COLS);
+  const tipo = pickCol(raw, TIPO_COLS);
+  const subcentro = pickCol(raw, SUBCENTRO_COLS);
 
   // Validação mínima
   const dataIso = parseDataRef(dataRef);
   if (!dataIso) {
-    return { row: null, erro: 'Data_Ref ausente ou em formato não suportado' };
+    return { row: null, erro: 'Data de competência ausente ou em formato não suportado' };
   }
   const valorAbs = parseValorBR(valor);
   if (valorAbs === null) {
@@ -190,23 +281,28 @@ function parseRow(
     return { row: null, erro: 'Tipo vazio' };
   }
   if (!subcentro) {
-    return { row: null, erro: 'Subcentro vazio' };
+    /* ⚠ CONTINUA OBRIGATORIO, e a mensagem passou a nomear os dois formatos: no
+       modelo novo esta coluna e' OPCIONAL (uma celula em branco significa "entra
+       sem classificacao"), e aqui nao — a sessao existe para conferir uma
+       classificacao que precisa ter chegado. Relaxar isso seria mudar a logica
+       do legado, que este PR nao faz. */
+    return { row: null, erro: 'Subcentro (ou "Conta (plano do cliente)") vazio' };
   }
 
-  const anoMesRaw = trimOrNull(raw['AnoMes']);
+  const anoMesRaw = pickCol(raw, ANOMES_COLS);
 
   const row: ClassificacaoExcelRow = {
     linha,
     subcentro,
-    fornecedor: trimOrNull(raw['Fornecedor']),
-    produto: trimOrNull(raw['Produto']),
-    conta_origem: trimOrNull(raw['Conta']),
-    conta_destino: trimOrNull(raw['Conta_Destino']),
+    fornecedor: pickCol(raw, FORNECEDOR_COLS),
+    produto: pickCol(raw, PRODUTO_COLS),
+    conta_origem: pickCol(raw, CONTA_ORIGEM_COLS),
+    conta_destino: pickCol(raw, CONTA_DESTINO_COLS),
     ano_mes: anoMesRaw ?? dataIso.slice(0, 7),
     data: dataIso,
     valor: valorAbs,
     tipo_operacao: normalizeTipo(tipo),
-    fazenda_codigo: trimOrNull(raw['Fazenda']),
+    fazenda_codigo: pickCol(raw, FAZENDA_COLS),
     observacao: pickCol(raw, OBS_COLS),
     documento: pickCol(raw, DOC_COLS),
   };
@@ -232,9 +328,12 @@ export async function parseExcelClassificacao(
     };
   }
 
-  const sheetName = wb.SheetNames.includes('EXPORT_APP_UNICO')
-    ? 'EXPORT_APP_UNICO'
-    : wb.SheetNames[0];
+  /* ⚠ TRES PREFERENCIAS, NESTA ORDEM: a aba do formato legado, a do modelo novo,
+     e a primeira do arquivo. Cair direto na primeira faria um arquivo do modelo
+     novo com aba de instrucoes na frente ser lido pela aba errada. */
+  const sheetName = wb.SheetNames.find((n) => n === 'EXPORT_APP_UNICO')
+    ?? wb.SheetNames.find((n) => n === 'Lançamentos' || n === 'Lancamentos')
+    ?? wb.SheetNames[0];
   const ws = wb.Sheets[sheetName];
 
   if (!ws) {
@@ -247,30 +346,50 @@ export async function parseExcelClassificacao(
     };
   }
 
-  // raw: true preserva números (incl. serial date) e strings sem
-  // coerção. defval: null deixa células vazias como null em vez de
-  // omitir a chave.
-  const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, {
+  /* ⚠ MATRIZ CRUA, e nao `sheet_to_json` com chaves: aquele modo ASSUME que o
+     cabecalho e' a linha 1, e o modelo novo o poe na 2 (a 1 traz o marcador
+     "OBRIGATORIA"/"opcional"). Lido como antes, o arquivo novo daria uma
+     planilha inteira de colunas chamadas "OBRIGATORIA" — e zero linha valida,
+     com a mensagem errada.
+     raw: true preserva numeros (incl. serial de data); defval: null mantem a
+     POSICAO das celulas vazias, o que e' o que faz o indice bater com o
+     cabecalho. */
+  const matriz = XLSX.utils.sheet_to_json<unknown[]>(ws, {
+    header: 1,
     raw: true,
     defval: null,
   });
 
+  const indiceCabecalho = localizarCabecalho(matriz);
+  if (indiceCabecalho === null) {
+    return {
+      rows: [], totalLinhas: 0, linhasValidas: 0, linhasComErro: 0,
+      erros: [{
+        linha: 0,
+        motivo: `Nenhuma linha de cabeçalho reconhecida nas ${Math.min(LINHAS_TESTADAS_CABECALHO, matriz.length)}`
+          + ` primeiras linhas da aba "${sheetName}". São esperadas ao menos`
+          + ` ${MINIMO_ALIASES_CABECALHO} colunas conhecidas de um dos dois formatos.`,
+      }],
+    };
+  }
+
+  const cabecalhos = (matriz[indiceCabecalho] ?? []).map(textoCelula);
+
   const rows: ClassificacaoExcelRow[] = [];
   const erros: Array<{ linha: number; motivo: string }> = [];
 
-  rawRows.forEach((raw, idx) => {
-    const linha = idx + 2; // header é linha 1, dados começam em 2
-    const { row, erro } = parseRow(raw, linha);
-    if (row) {
-      rows.push(row);
-    } else if (erro) {
-      erros.push({ linha, motivo: erro });
-    }
-  });
+  for (let k = indiceCabecalho + 1; k < matriz.length; k++) {
+    const linha = k + 1; // Excel é 1-based; a matriz é 0-based.
+    /* ⚠ COLUNA DESCONHECIDA NAO E' ERRO: `ID (nao mexer)`, `Safra` e o que mais
+       o modelo novo trouxer entram no objeto e simplesmente nao sao lidos. */
+    const { row, erro } = parseRow(linhaParaObjeto(cabecalhos, matriz[k] ?? []), linha);
+    if (row) rows.push(row);
+    else if (erro) erros.push({ linha, motivo: erro });
+  }
 
   return {
     rows,
-    totalLinhas: rawRows.length,
+    totalLinhas: rows.length + erros.length,
     linhasValidas: rows.length,
     linhasComErro: erros.length,
     erros,

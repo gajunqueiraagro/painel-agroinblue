@@ -82,27 +82,27 @@ export interface LancamentosParseResult {
 // alias de cada lista como cabeçalho canônico. Assim o modelo que o operador baixa
 // nunca diverge do que a tela sabe ler — a string existe em um lugar só.
 
-export const COL_COMPETENCIA = ['Data de competência', 'Data de competencia', 'Competência', 'Competencia', 'Data_Competencia', 'Data'];
-export const COL_VENCIMENTO = ['Data de vencimento', 'Vencimento', 'Data_Vencimento'];
-export const COL_PAGAMENTO = ['Data de pagamento', 'Pagamento', 'Data_Pagamento'];
-export const COL_VALOR = ['Valor', 'VALOR', 'Vl', 'Valor R$'];
-export const COL_TIPO = ['Tipo de operação', 'Tipo de operacao', 'Tipo', 'Tipo_Operacao'];
+/* ⚠ O VOCABULARIO MUDOU DE CASA, e os nomes ficam: as constantes foram para
+   `colunasLancamento` (modulo SEM imports) porque o parser legado passou a
+   precisar delas, e o import de volta fechava um ciclo — `parserLancamentos` ja
+   importa `parseDataRef`/`parseValorBR` de `parserClassificacao`. A reexportacao
+   mantem o contrato: `modeloPlanilha`, os testes e o dialogo seguem importando
+   `COL_*` daqui, sem uma linha alterada. */
+import {
+  COL_COMPETENCIA, COL_VENCIMENTO, COL_PAGAMENTO, COL_VALOR, COL_TIPO, COL_CONTA_PLANO,
+  COL_FAZENDA, COL_FORNECEDOR, COL_CONTA_BANCARIA, COL_DESCRICAO, COL_DOCUMENTO, COL_TIPO_DOCUMENTO,
+  COL_FORMA_PAGAMENTO, COL_OBSERVACAO, COL_STATUS, COL_SAFRA, COL_ID_LANCAMENTO,
+} from './colunasLancamento';
+export {
+  COL_COMPETENCIA, COL_VENCIMENTO, COL_PAGAMENTO, COL_VALOR, COL_TIPO, COL_CONTA_PLANO,
+  COL_FAZENDA, COL_FORNECEDOR, COL_CONTA_BANCARIA, COL_DESCRICAO, COL_DOCUMENTO, COL_TIPO_DOCUMENTO,
+  COL_FORMA_PAGAMENTO, COL_OBSERVACAO, COL_STATUS, COL_SAFRA, COL_ID_LANCAMENTO,
+};
 // PR-IMPORT-EXCEL-LANC-02 — 'Conta' SAIU desta lista. Planilha em formato antigo traz
 // coluna "Conta" com a conta BANCÁRIA ("cc-001 | bradesco"); ela era capturada aqui como
 // se fosse plano de contas, o de-para bancário ficava vazio e 100% das linhas caíam com
 // "conta do plano ainda não mapeada". Foi o que ocorreu na homologação. Nunca reintroduzir
 // 'Conta' aqui: o termo é ambíguo entre os dois domínios.
-export const COL_CONTA_PLANO = ['Conta (plano do cliente)', 'Plano de contas', 'Categoria', 'Classificação', 'Classificacao'];
-export const COL_FAZENDA = ['Fazenda', 'FAZENDA', 'Unidade'];
-export const COL_FORNECEDOR = ['Fornecedor', 'Favorecido', 'Beneficiário', 'Beneficiario'];
-export const COL_CONTA_BANCARIA = ['Conta bancária', 'Conta bancaria', 'Banco', 'Cartão', 'Cartao', 'Conta_Bancaria'];
-export const COL_DESCRICAO = ['Descrição', 'Descricao', 'Histórico', 'Historico', 'Produto'];
-export const COL_DOCUMENTO = ['Documento', 'Nº Documento', 'Numero Documento', 'Número Documento', 'NF'];
-export const COL_TIPO_DOCUMENTO = ['Tipo de documento', 'Tipo_Documento', 'Tipo Doc'];
-export const COL_FORMA_PAGAMENTO = ['Forma de pagamento', 'Forma_Pagamento', 'Forma'];
-export const COL_OBSERVACAO = ['Observação', 'Observacao', 'Obs', 'OBS', 'Observações', 'Observacoes'];
-export const COL_STATUS = ['Status', 'STATUS', 'Situação', 'Situacao'];
-export const COL_SAFRA = ['Safra', 'SAFRA'];
 /**
  * FIN-ENRIQUECER-MODO-NJ-01 — a coluna TÉCNICA do modo atualização.
  *
@@ -111,7 +111,6 @@ export const COL_SAFRA = ['Safra', 'SAFRA'];
  * vez de criar. O cabeçalho avisa para não mexer, e linha sem id volta ao
  * caminho de criação — apagar a célula não quebra nada, só muda o que acontece.
  */
-export const COL_ID_LANCAMENTO = ['ID (não mexer)', 'ID (nao mexer)', 'ID'];
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
