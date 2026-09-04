@@ -76,7 +76,7 @@ import { buscarOperacaoDoLancamento } from '@/hooks/useOperacaoDoLancamento';
 /* `Sparkles` saiu com o selo "Lançar com IA" (PR-UI-LANCAR-CARDS-01): o icone de
    camera ja diz que a entrada e' por foto, e o brilho ao lado do rotulo era enfase
    sobre enfase. */
-import { Camera } from 'lucide-react';
+import { Camera, Loader2 } from 'lucide-react';
 
 /**
  * V2 → Financeiro → Financiamentos.
@@ -169,6 +169,7 @@ function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEd
     countFinanceirosVinculados,
     loadData,
     invalidarZoot,
+    revalidando,
   } = useLancamentos();
   const { loadData: metaLoadData } = useLancamentos('meta');
 
@@ -238,6 +239,17 @@ function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEd
           {cenarioInicial === 'meta' && (
             <span className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${META_VISUAL.badgeCls}`}>
               Planejamento
+            </span>
+          )}
+          {/* ⚠ A ESPERA MUDOU DE LUGAR, NAO SUMIU. O modal fecha assim que o banco
+              responde (~85 ms), mas a lista e os indicadores ainda estao chegando —
+              `vw_zoot_fazenda_mensal` sozinha custa quase 12 s no NJ. Sem este aviso,
+              o operador veria numeros velhos sem saber que vao mudar, e a espera
+              visivel de antes teria virado uma mentira invisivel. */}
+          {revalidando && (
+            <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              atualizando lista e indicadores…
             </span>
           )}
         </div>

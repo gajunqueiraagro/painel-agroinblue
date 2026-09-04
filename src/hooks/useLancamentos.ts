@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
@@ -185,6 +185,12 @@ export function useLancamentos(arg: UseLancamentosArg = 'realizado') {
     () => ['lancamentos-zoo', clienteId, cenario, anoFiltro ?? 'all', isGlobal ? `global-${fazendasHash}` : fazendaId] as const,
     [clienteId, cenario, anoFiltro, isGlobal, fazendaId, fazendasHash],
   );
+
+  /* ⚠ A releitura roda DEPOIS de o modal fechar, entao ela pode terminar com o
+     componente ja' desmontado — a guarda evita o `setState` orfao. */
+  const montado = useRef(true);
+  useEffect(() => () => { montado.current = false; }, []);
+  const [revalidando, setRevalidando] = useState(false);
 
   const invalidateZootQueries = useCallback(async () => {
     await Promise.all([
@@ -526,9 +532,29 @@ export function useLancamentos(arg: UseLancamentosArg = 'realizado') {
           return { ...old, lancamentos: [newItem, ...old.lancamentos] };
         });
       }
-      // Invalida cache de lançamentos (refetch garante consistência) + zoot deps.
-      await queryClient.invalidateQueries({ queryKey: ['lancamentos-zoo'] });
-      await invalidateZootQueries();
+      /* ⚠ A RELEITURA NAO E' ESPERADA, e essa e' a correcao inteira. O INSERT leva
+         85 ms medios (387 chamadas, com os 11 gatilhos); o operador esperava ~10 s
+         com o botao girando porque estes dois `await` seguravam o retorno ate os
+         refetches terminarem. Medido em 04/09/2026 no NJ:
+         `vw_zoot_fazenda_mensal`, que a query `zoot-mensal` le, custa 11.987 ms
+         SOZINHA — uma CTE recursiva que varre `fechamento_pasto_itens` 359.561
+         vezes e descarta 3,8 milhoes de linhas num join filter. Nenhum ajuste de
+         front conserta isso; a materializacao e' frente propria [PERF-VW-ZOOT].
+         O que o front pode fazer e' parar de fazer o operador esperar por ela.
+
+         ⚠ A LISTA NAO PISCA VAZIA no intervalo: o `setQueryData` logo acima ja
+         inseriu a linha nova no cache, entao a tela mostra o lancamento antes de
+         qualquer refetch. O que chega depois e' a confirmacao, nao o dado.
+
+         ⚠ `revalidando` EXISTE PARA A ESPERA NAO FICAR MUDA. Fechar o modal e
+         deixar os indicadores desatualizados em silencio trocaria uma espera
+         visivel por uma mentira invisivel — o operador precisa saber que o
+         numero da tela ainda vai mudar. */
+      setRevalidando(true);
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['lancamentos-zoo'] }),
+        invalidateZootQueries(),
+      ]).finally(() => { if (montado.current) setRevalidando(false); });
       return data.id;
     }
     return undefined;
@@ -835,6 +861,8 @@ export function useLancamentos(arg: UseLancamentosArg = 'realizado') {
        e' pior que dado errado nos dois. Nao ha rebuild manual: o trigger do banco cuida
        da derivacao; o que falta e' o front parar de reusar o cache. */
     invalidarZoot: invalidateZootQueries,
+    /** true enquanto a releitura pos-gravacao ainda esta' em voo. */
+    revalidando,
     loading,
     isGlobal,
   };
