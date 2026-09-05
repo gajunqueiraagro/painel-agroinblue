@@ -670,3 +670,23 @@ componente.**
   **PR-UI-MODAL-RETROFIT-01**.
 - **A9 em `popover.tsx` e `dropdown-menu.tsx`** — hoje sem `max-h` nenhum: crescem com o
   conteúdo e vazam do mesmo jeito, por caminho diferente. Auditar quando houver caso real.
+
+---
+
+## A22 — Número nunca quebra linha
+
+Valor monetário ou numérico **nunca** se parte em duas linhas dentro de um campo, célula
+ou rótulo. `R$ 306.520,00` quebrado depois do `R$` deixa de ser um número e vira duas
+coisas que o olho tem de remontar — e, num formulário de conferência, remontar é onde o
+erro entra.
+
+- **`whitespace-nowrap` + `overflow-hidden` + `min-w-0`** em todo campo e célula que
+  mostra número. O `min-w-0` é o que permite ao container encolher: sem ele, o flex se
+  recusa a apertar e o número transborda.
+- Se não couber: **o campo alarga** ou **a fonte cai até 10px** — nunca duas linhas.
+  Abaixo de 10px não se desce (A21), e aí o certo é reportar que não coube.
+- Vale para o sistema inteiro, não só para a tela que motivou a regra.
+
+**Onde nasceu:** o modal de negociar lote do abate (ABATE-UX-01g). Com um campo estreito
+ao lado do toggle de unidade, `R$ 306.520,00` quebrava em duas linhas e o campo crescia
+para 46px de altura, empurrando o resto.

@@ -43,6 +43,10 @@ function montar(l: LinhaAbate | undefined, onAplicar = vi.fn()) {
 /* ⚠ PELO <label>, não pelo texto solto: desde ABATE-UX-01e o modal tem títulos de seção,
    e "Carcaça" aparece duas vezes — o título e o rótulo do campo. Buscar o texto pegaria o
    primeiro dos dois, que é o título e não tem input dentro. */
+/** As três abas do modal — o campo só existe na sua. */
+const irPara = (aba: 'Desempenho' | 'Preço' | 'Bônus, descontos e impostos') =>
+  fireEvent.click(screen.getByText(aba));
+
 const campoPorRotulo = (rotulo: string) => {
   const label = screen.getAllByText(rotulo).find(el => el.tagName === 'LABEL');
   return label!.parentElement!.querySelector('input') as HTMLInputElement;
@@ -113,12 +117,15 @@ describe('Carcaça e preço — dois lados, um canônico', () => {
     expect(onAplicar.mock.calls[0][0].pesoCarcacaKg).toBe(3333.3);
   });
 
-  it('sem carcaça, o total do lote fica travado e DIZ por quê', () => {
-    /* ⚠ Sem arrobas a conversão seria divisão por zero. */
-    montar(linha({ pesoCarcacaKg: null, pesoCarcacaFonte: null, rendimentoCarcacaPct: null }));
-    const travado = document.querySelector('[title^="Informe a carcaça primeiro"]');
-    expect(travado).not.toBeNull();
-    expect(travado!.textContent).toBe('—');
+  it('sem carcaça, o R$/@ derivado é "—" — mas a base digitada continua valendo', () => {
+    /* ⚠ MUDANÇA DE DESENHO EM ABATE-UX-01g, e ela está certa: o total do lote É a base,
+       com ou sem carcaça. Quem depende da carcaça é o R$/@ (não há arrobas para dividir),
+       e é ele que vira traço. Salvar continua barrado pela RPC, que exige os dois. */
+    montar(linha({ pesoCarcacaKg: null, pesoCarcacaFonte: null, rendimentoCarcacaPct: null,
+      precoArroba: null, precoFonte: 'total', valorBaseOverride: 306520 }));
+    irPara('Preço');
+    expect(screen.getAllByText('—').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('R$ 306.520,00').length).toBeGreaterThan(0);
   });
 
   it('Aplicar devolve a linha ao pai; Cancelar não devolve nada', () => {
@@ -131,5 +138,66 @@ describe('Carcaça e preço — dois lados, um canônico', () => {
     fireEvent.click(screen.getByText('Cancelar'));
     expect(onAplicar).not.toHaveBeenCalled();
     expect(onFechar).toHaveBeenCalled();
+  });
+});
+
+describe('Preço pelo total — o centavo que a conversão inventava', () => {
+  /* ⚠ DEFEITO MEDIDO NA HOMOLOGAÇÃO (05/09): digitava-se 306.520,00 pelo total e a tela
+     devolvia 306.520,01. A tela convertia para R$/@ (375,00), arredondava a DUAS casas e
+     recalculava o total a partir dali — o centavo nascia no arredondamento do meio, não
+     nos dados. Agora o total digitado é a BASE e vai inteiro para `valor_base_override`,
+     coluna que a lib já consumia (`abate.ts:123`) e que a RPC já gravava. */
+  const L41: LoteAbate = {
+    id: 'l1', ordem: 1, categoria: 'bois', categoriaLabel: 'Bois',
+    quantidade: 41, pesoMedioKg: 553.78,
+  };
+  /* 12.260,80 kg de carcaça no lote → 817,3867 @. */
+  const comCarcaca = (extra: Partial<LinhaAbate> = {}): LinhaAbate => ({
+    ...linhaVazia('l1'), pesoCarcacaKg: 12260.8, pesoCarcacaFonte: 'total', ...extra,
+  });
+
+  it('306.520,00 pelo total volta 306.520,00 na base — sem o centavo', () => {
+    const onAplicar = vi.fn();
+    render(<ModalNegociarLote lote={L41}
+      linha={comCarcaca({ precoFonte: 'total', valorBaseOverride: 306520 })}
+      cenario="realizado" onAplicar={onAplicar} onFechar={vi.fn()} />);
+    /* Na tabela do resultado, "Preço base" tem de ser exatamente o digitado. */
+    expect(screen.getAllByText('R$ 306.520,00').length).toBeGreaterThan(0);
+    expect(screen.queryByText('R$ 306.520,01')).not.toBeInTheDocument();
+    /* E o R$/@ derivado fecha em 375,00. */
+    expect(screen.getAllByText('R$ 375,00').length).toBeGreaterThan(0);
+  });
+
+  it('o lote 10 do Minerva: base 113.666,31 e R$ 361,46/@', () => {
+    /* 20 cab, 4.717,00 kg de carcaça no lote → 314,4667 @. O R$/@ não é redondo, e é
+       exatamente por isso que arredondá-lo a duas casas para refazer o total quebrava. */
+    const L20: LoteAbate = {
+      id: 'l10', ordem: 10, categoria: 'novilhas', categoriaLabel: 'Novilhas',
+      quantidade: 20, pesoMedioKg: 453.56,
+    };
+    render(<ModalNegociarLote lote={L20}
+      linha={{ ...linhaVazia('l10'), pesoCarcacaKg: 4717, pesoCarcacaFonte: 'total',
+        precoFonte: 'total', valorBaseOverride: 113666.31 }}
+      cenario="realizado" onAplicar={vi.fn()} onFechar={vi.fn()} />);
+    expect(screen.getAllByText('R$ 113.666,31').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('R$ 361,46').length).toBeGreaterThan(0);
+  });
+
+  it('mudar a carcaça recalcula o R$/@ sem mexer na base', () => {
+    /* ⚠ O R$/@ DERIVADO DEPENDE DA CARCAÇA, não só do preço: mais arrobas pelo mesmo
+       total significam outro R$/@. Se ele só fosse recalculado ao mexer no preço, ficaria
+       velho e a tabela mostraria uma divisão que não fecha. */
+    const onAplicar = vi.fn();
+    render(<ModalNegociarLote lote={L41}
+      linha={comCarcaca({ precoFonte: 'total', valorBaseOverride: 306520 })}
+      cenario="realizado" onAplicar={onAplicar} onFechar={vi.fn()} />);
+    const carcaca = screen.getAllByText('Carcaça').find(el => el.tagName === 'LABEL')!
+      .parentElement!.querySelector('input') as HTMLInputElement;
+    fireEvent.change(carcaca, { target: { value: '24521.60' } });
+    fireEvent.click(screen.getByText('Aplicar'));
+    const p = onAplicar.mock.calls[0][0];
+    /* Dobrou a carcaça: a base não muda e o R$/@ cai pela metade. */
+    expect(p.valorBaseOverride).toBe(306520);
+    expect(p.precoArroba).toBeCloseTo(187.5, 2);
   });
 });
