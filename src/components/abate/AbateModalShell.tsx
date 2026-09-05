@@ -123,7 +123,10 @@ function LinhaResumo({ rotulo, valor, cor, forte, selo }: {
   cor?: string; forte?: boolean; selo?: ReactNode;
 }) {
   return (
-    <div className="flex items-baseline justify-between gap-1.5 leading-tight">
+    /* ⚠ O PADDING MORA NA LINHA, nao no container — A17. Cada item e' uma linha so', com
+       o valor a direita e sem quebra; `py-[3px]` da' ~21px por linha, e e' o que faz as
+       quatro secoes caberem sem rolar. */
+    <div className="flex items-baseline justify-between gap-1.5 px-3 py-[3px] leading-tight">
       <span className="text-muted-foreground shrink-0">{rotulo}</span>
       <span className="flex items-baseline gap-1.5 min-w-0">
         {selo}
@@ -607,7 +610,7 @@ export function AbateModalShell({
         })}
       </div>
 
-      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[1fr_280px] lg:grid-rows-[minmax(0,1fr)] gap-3 p-4 overflow-y-auto lg:overflow-hidden bg-muted/30">
+      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[1fr_300px] lg:grid-rows-[minmax(0,1fr)] gap-3 p-4 overflow-y-auto lg:overflow-hidden bg-muted/30">
         <div className="space-y-2 min-w-0 lg:min-h-0 lg:overflow-y-auto">
           {/* ── ENTREGA ────────────────────────────────────────────────────────────
               ⚠ A MESMA GRADE DA COMPRA, com o vocabulario trocado por dicionario. O gesto
@@ -833,26 +836,30 @@ export function AbateModalShell({
         </div>
 
         {/* RESUMO LATERAL — idioma do ResumoLateralOC. */}
-        <div className="lg:min-h-0 lg:overflow-y-auto">
-          {/* ⚠ STICKY: a coluna rola sozinha (`lg:overflow-y-auto`), e sem isto o cartao
-              some para cima quando o resumo e' mais alto que a area. Fundo opaco porque
-              sticky sobrepoe o que rola atras. */}
-          <aside className="sticky top-0 bg-card rounded-md border shadow-sm overflow-hidden self-start text-[10px]">
+        <div className="lg:min-h-0">
+          {/* ⚠ O CARD OCUPA A COLUNA INTEIRA, e quem rola e' a LISTA dentro dele.
+              Antes o `aside` era `sticky self-start`: ele tinha a altura do CONTEUDO e a
+              COLUNA e' que rolava — entao o cartao cortava no Financeiro e sobrava corpo
+              em branco embaixo. O cartao acabava antes da area, em vez de a area acabar
+              antes do cartao. Com `h-full` + `flex-col` o cabecalho fica preso no topo, a
+              lista ganha o resto e so' ela rola; `min-h-0` no meio e' o que permite a
+              lista encolher em vez de esticar o card para fora da coluna. */}
+          <aside className="flex h-full flex-col bg-card rounded-md border shadow-sm overflow-hidden text-[11px]">
             <div className="h-8 shrink-0 border-b border-border bg-accent/40 flex items-center px-3 text-[11px] font-bold uppercase tracking-wide text-primary">
               Resumo da operação
             </div>
-            <div className="pb-1">
-              <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 first:mt-0 mb-0.5">
+            <div className="flex-1 min-h-0 overflow-y-auto pb-1">
+              <div className="bg-primary/10 border-y border-primary/15 px-3 py-1 mt-0.5 first:mt-0 mb-0.5">
                 <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Identificação</span>
               </div>
-              <div className="px-3 space-y-0.5">
+              <div className="">
                 <LinhaResumo rotulo="Comprador" valor={frigorificoNome} />
                 <LinhaResumo rotulo="CNPJ" valor={frigorificoDoc} />
                 <LinhaResumo rotulo="Data" valor={data ? data.split('-').reverse().join('/') : null} />
                 <LinhaResumo rotulo="Fazenda" valor={fazendaNome} />
               </div>
 
-              <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 mb-0.5">
+              <div className="bg-primary/10 border-y border-primary/15 px-3 py-1 mt-0.5 mb-0.5">
                 <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Negociação</span>
               </div>
               {/* ⚠ ESTES CAMPOS NUNCA ESTIVERAM LIGADOS — B-08 item 4. Nao eram fonte
@@ -869,7 +876,7 @@ export function AbateModalShell({
               {/* ⚠ AS GRANDEZAS DO ABATE VEM DE `totaisAbate`, a MESMA funcao que alimenta o
                   bloco de topo da grade — nao ha segunda soma aqui. Sem lote, tudo e' traco:
                   operacao sem lote nao pesa zero, ela ainda nao tem lote. */}
-              <div className="px-3 space-y-0.5">
+              <div className="">
                 <LinhaResumo rotulo="Lotes" valor={lotesApi && lotesApi.totais.lotes > 0
                   ? `${lotesApi.totais.lotes} · ${lotesApi.totais.animais} cab` : null} />
                 <LinhaResumo rotulo="Peso vivo" valor={totaisAbate.cabecas > 0
@@ -880,6 +887,10 @@ export function AbateModalShell({
                   ? `${num2(totaisAbate.arrobaCab)} @/cab · ${num2(totaisAbate.rc)}%` : null} />
                 <LinhaResumo rotulo="Valor bruto" valor={totaisAbate.bruto > 0
                   ? formatMoeda(totaisAbate.bruto) : null} />
+                {/* ⚠ VERMELHO E COM SINAL: e' o que sai do bruto antes de virar NF, e
+                    negativo em vermelho vale em toda a tela. */}
+                <LinhaResumo rotulo="Funrural" cor="text-destructive"
+                  valor={totaisAbate.funrural > 0 ? `− ${formatMoeda(totaisAbate.funrural)}` : null} />
                 <LinhaResumo rotulo="Acordado (NF)" forte
                   valor={valorAcordadoMostrado == null ? null : formatMoeda(valorAcordadoMostrado)}
                   cor={undefined}
@@ -891,7 +902,7 @@ export function AbateModalShell({
                 )}
               </div>
 
-              <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 mb-0.5">
+              <div className="bg-primary/10 border-y border-primary/15 px-3 py-1 mt-0.5 mb-0.5">
                 <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Entrega</span>
               </div>
               {/* ⚠ MESMO CASO, MESMA CURA. A fonte e' `recebimentoApi.lotes`, consolidada
@@ -900,7 +911,7 @@ export function AbateModalShell({
                   ⚠ AUSENCIA CONTINUA SENDO TRACO: sem lotes de entrega o helper devolve
                   `null` nos tres, e as duas linhas imprimem "—". O que mudou nao foi a
                   sentinela — foi passar a existir dado por tras dela. */}
-              <div className="px-3 space-y-0.5">
+              <div className="">
                 <LinhaResumo rotulo="Entregue" valor={entrega.recebido == null ? null
                   : `${entrega.recebido} / ${entrega.negociado ?? '—'} cab`} />
                 <LinhaResumo rotulo="Saldo a entregar" valor={entrega.diferenca == null ? null
@@ -909,7 +920,7 @@ export function AbateModalShell({
 
               {/* ⚠ A RECEBER, e nao "Lancado". Numa venda o dinheiro ENTRA — o vocabulario
                   do financeiro inverte junto com o sentido da operacao. */}
-              <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 mb-0.5">
+              <div className="bg-primary/10 border-y border-primary/15 px-3 py-1 mt-0.5 mb-0.5">
                 <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Financeiro</span>
               </div>
               {/* ⚠ O ACERTO DO BOITEL NAO EXISTE NO ABATE. Aqui a venda lista as sete
@@ -927,7 +938,7 @@ export function AbateModalShell({
                   da mesma regra. Por isso as despesas aparecem pelo TOTAL: quebra-las por
                   nome (frete, Fundersul, Iagro) exige o plano de contas linha a linha, que
                   hoje so' a aba Financeiro carrega. */}
-              <div className="px-3 space-y-0.5">
+              <div className="">
                 <LinhaResumo rotulo="A receber da indústria" valor={finAReceber == null ? null : formatMoeda(finAReceber)} />
                 {proximoVencimento && (
                   <LinhaResumo rotulo={`Agendado ${proximoVencimento.split('-').reverse().join('/')}`} valor={null} />

@@ -89,6 +89,7 @@ export function totaisDoAbate(lotes: LoteAbate[], calculos: Map<string, AbateCal
       cabecas, pesoVivo, carcaca, arrobas,
       bruto: soma(c => c.valorBruto),
       liquido: soma(c => c.valorLiquido),
+      funrural: soma(c => c.funruralTotal),
       /* Divisões protegidas: sem cabeça ou sem arroba o certo é `—`, não infinito. */
       pesoMedio: cabecas > 0 ? pesoVivo / cabecas : 0,
       carcacaCab: cabecas > 0 ? carcaca / cabecas : 0,
