@@ -512,7 +512,12 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
      estava escrita em dois lugares (o clique da linha e o item do menu) e o 01 corrigiu
      so' um: a tubulacao passou a aceitar venda e a porta do menu continuou trancada.
      Duas copias da mesma condicao e' como um lado fica para tras sem ninguem notar. */
-  const abrePorTipo = (tipo: string) => tipo === 'compra' || tipo === 'venda';
+  /* ⚠ O ABATE ENTROU EM ABATE-T3a. Ate' aqui a Central LISTAVA a operacao de abate e
+     recusava abri-la — quem saisse da tela perdia o caminho de volta ao proprio trabalho.
+     ⚠ SO' OC: os 829 abates legados (`lancamentos.tipo='abate'` sem operacao comercial)
+     continuam no `AbateDetalhesDialog`; esta lista so' mostra OC, entao nao ha como um
+     legado cair aqui. O roteamento do legado e' o T3b. */
+  const abrePorTipo = (tipo: string) => tipo === 'compra' || tipo === 'venda' || tipo === 'abate';
 
   const abrirOperacaoPorTipo = (r: OpRow) => {
     if (abrePorTipo(r.tipo_operacao)) onAbrirOperacao?.(r.id, r.tipo_operacao);

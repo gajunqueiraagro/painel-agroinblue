@@ -395,7 +395,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
      laco — sem os parametros, os dois effects saem na primeira linha. */
   const limparParamsOC = useCallback(() => {
     const p = new URLSearchParams(window.location.search);
-    p.delete('oc_compra'); p.delete('oc_venda'); p.delete('oc_id');
+    /* ⚠ `oc_abate` ENTROU AQUI JUNTO COM A REABERTURA (ABATE-T3a): sem ele, uma recusa de
+       hidratacao deixaria o parametro presa na URL e a proxima linha da Central
+       dispararia a mesma recusa — o "nao abre mais" que este bloco existe para impedir. */
+    p.delete('oc_compra'); p.delete('oc_venda'); p.delete('oc_abate'); p.delete('oc_id');
     p.delete('oc_aba'); p.delete('oc_return');
     setOcSearchParams(p, { replace: true });
     ocHidratadoRef.current = false;
@@ -889,6 +892,69 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     return () => { cancelado = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modoOCVenda, ocIdParam, clienteAtual?.id]);
+
+  /* Hidratacao de operacao de ABATE existente a partir de ?oc_id — ABATE-T3a.
+     ESPELHO do effect da venda logo acima: mesma guarda, mesmo ref-guard, mesmo reset
+     preventivo, mesma validacao de pertencimento e de tipo, e o modal so' abre no fim.
+     ⚠ ATE AQUI A OC DE ABATE SO' NASCIA, NUNCA REABRIA: a Central listava a operacao e o
+     "Abrir" dizia "indisponivel para este tipo", porque nao havia por onde entrar. Quem
+     saisse da tela perdia o caminho de volta ao proprio trabalho.
+     ⚠ SEM BOITEL: a venda le `zoo_operacao_boitel` para descobrir o subtipo; o abate nao
+     tem subtipo. Os lotes e o detalhe do abate chegam pelos hooks, que ja' escutam
+     `ocOperacaoId`.
+     ⚠ O REF-GUARD E' O MESMO (`ocHidratadoRef`), como entre compra e venda: os tres
+     booleanos nunca coexistem, entao no maximo um dos effects roda por abertura. */
+  useEffect(() => {
+    if (!modoOCAbate || !ocIdParam || !clienteAtual?.id) return;
+    if (ocHidratadoRef.current) return;
+    ocHidratadoRef.current = true;
+    let cancelado = false;
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    (async () => {
+      resetContextoAbateOC();
+      if (!UUID_RE.test(ocIdParam)) {
+        setOcHidratacaoErro('Identificador de operação malformado.');
+        toast.error('Identificador de operação malformado.');
+        limparParamsOC();
+        return;
+      }
+      setOcHidratando(true);
+      try {
+        const estado = await ocRpc.carregarOperacao(ocIdParam, clienteAtual.id);
+        if (cancelado) return;
+        if (!estado) throw new Error('Operação não encontrada ou inacessível a este cliente.');
+        const op = estado.operacao;
+        if (op.tipo_operacao !== 'abate') throw new Error('Esta operação não é um Abate e não pode ser aberta aqui.');
+
+        setData(op.data_operacao ?? format(new Date(), 'yyyy-MM-dd'));
+        setAbateFrigorificoId(op.contraparte_id ?? '');
+        setAbateFazendaId(op.fazenda_id ?? '');
+        setObservacao(op.observacoes ?? '');
+        setNotaFiscal(op.numero_documento ?? '');
+        setStatusOp(op.cenario === 'meta' ? 'meta' : 'realizado');
+        setOcOperacaoId(op.id);
+        setOcVersao(op.versao);
+        setOcStatusComercial(op.status_comercial);
+        setOcEntregaEncerrada(!!op.entrega_encerrada);
+        setOcRascunho(op.rascunho);
+        setOcAberturaExistente(true);
+
+        setTipo('abate');
+        setLancModalOpen(true);
+      } catch (e) {
+        if (cancelado) return;
+        resetContextoAbateOC();
+        const msg = e instanceof Error ? e.message : 'Falha ao abrir a operação.';
+        setOcHidratacaoErro(msg);
+        toast.error(msg);
+        limparParamsOC();
+      } finally {
+        if (!cancelado) setOcHidratando(false);
+      }
+    })();
+    return () => { cancelado = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modoOCAbate, ocIdParam, clienteAtual?.id]);
 
   /* ⚠ CENARIO, NAO TIPO. Realizado e programado registram um fato economico e exigem o
      detalhe financeiro; meta e' projecao e nao exige. Nomeada porque a mesma pergunta
@@ -2288,6 +2354,19 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setOcAberturaExistente(false); setOcTemTitulo(false); setOcRascunho(false); setOcHidratacaoErro(null);
   }, []);
 
+  /* ⚠ ESPELHO DO `resetContextoVendaOC`, com os campos que sao do abate. Sem ele, abrir a
+     operacao B depois da A deixaria o frigorifico e a fazenda da A na tela — o vazamento
+     de estado entre operacoes que o reset da venda existe para impedir. */
+  const resetContextoAbateOC = useCallback(() => {
+    setOcOperacaoId(null); setOcVersao(null); setOcStatusComercial(null); setOcEntregaEncerrada(false);
+    setData(format(new Date(), 'yyyy-MM-dd')); setObservacao(''); setNotaFiscal('');
+    setStatusOp('realizado');
+    setAbateFrigorificoId(''); setAbateFazendaId('');
+    setAbateLinhas(new Map()); setCenarioAbate('realizado');
+    setOcAbateAssinaturaSalva(null);
+    setOcAberturaExistente(false); setOcTemTitulo(false); setOcRascunho(false); setOcHidratacaoErro(null);
+  }, []);
+
   // Validate form and open confirmation dialog
   // Reset da ponte OC ao fechar o modal (higiene de estado).
   useEffect(() => {
@@ -2295,9 +2374,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       // Modo OC: reset completo (evita vazamento de estado entre operações A→B). Legado: só a ponte OC.
       if (modoOCCompra) resetContextoOC();
       else if (modoOCVenda) resetContextoVendaOC();
+      else if (modoOCAbate) resetContextoAbateOC();
       else { setOcOperacaoId(null); setOcVersao(null); }
     }
-  }, [lancModalOpen, modoOCCompra, modoOCVenda, resetContextoOC, resetContextoVendaOC]);
+  }, [lancModalOpen, modoOCCompra, modoOCVenda, modoOCAbate, resetContextoOC, resetContextoVendaOC, resetContextoAbateOC]);
 
   // PR-NAV-CONTEXTO-FAZENDA-01A — fazenda REAL da OC (nunca '__global__'/'__atual__'). Null => a fazenda
   //   precisa ser escolhida no modal antes de persistir (em Global não há fazenda implícita válida).
@@ -2323,10 +2403,13 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
      Sem ele, fechar a venda largava o usuario em Lancamentos com `oc_venda=1&oc_id=...`
      presos — e a Central seguinte abria ja' com o modal por cima da lista, porque os
      parametros continuavam mandando abrir. Um fecho, nao dois. */
+  /* ⚠ O ABATE ENTROU AQUI EM ABATE-T3a, pelo mesmo motivo da venda: sem esta chamada,
+     fechar largava o usuario em Lancamentos com `oc_abate=1&oc_id=...` presos na URL, e a
+     Central seguinte abriria ja' com o modal por cima da lista. Um fecho, nao tres. */
   const fecharModalOC = useCallback(() => {
     setLancModalOpen(false);
-    if (modoOCCompra || modoOCVenda) onFecharOperacaoOC?.();
-  }, [modoOCCompra, modoOCVenda, onFecharOperacaoOC]);
+    if (modoOCCompra || modoOCVenda || modoOCAbate) onFecharOperacaoOC?.();
+  }, [modoOCCompra, modoOCVenda, modoOCAbate, onFecharOperacaoOC]);
 
 
   // Modo OC: cria/atualiza a operação comercial (só identificação) e guarda operacao_id/versao.

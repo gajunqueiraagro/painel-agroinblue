@@ -519,8 +519,12 @@ export default function V2Index() {
 
   const abrirOperacaoOC = useCallback((ocId: string, aba?: string, tipo: string = 'compra') => {
     const p = new URLSearchParams(window.location.search);
-    if (tipo === 'venda') { p.set('oc_venda', '1'); p.delete('oc_compra'); }
-    else { p.set('oc_compra', '1'); p.delete('oc_venda'); }
+    /* ⚠ TRES TIPOS, TRES PARAMETROS MUTUAMENTE EXCLUSIVOS. Apagar os outros dois nao e'
+       higiene: `modoOCVenda`/`modoOCAbate` sao lidos do MESMO query string, e dois
+       parametros ligados ao mesmo tempo abririam dois shells no mesmo render. */
+    if (tipo === 'venda') { p.set('oc_venda', '1'); p.delete('oc_compra'); p.delete('oc_abate'); }
+    else if (tipo === 'abate') { p.set('oc_abate', '1'); p.delete('oc_compra'); p.delete('oc_venda'); }
+    else { p.set('oc_compra', '1'); p.delete('oc_venda'); p.delete('oc_abate'); }
     p.set('oc_id', ocId);
     // PR-OC-FIN-EDIT-FIX-02 — aba inicial opcional (ex.: 'financeiro' quando aberto pelo Financeiro V2).
     if (aba) p.set('oc_aba', aba); else p.delete('oc_aba');
