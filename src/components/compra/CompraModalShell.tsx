@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, type ChangeEvent } from 'react';
 import { useStatusPilares } from '@/hooks/useStatusPilares';
+import { ReabrirP1Dialog } from '@/components/ReabrirP1Dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -158,6 +159,7 @@ const MESES_EXTENSO = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho
 export function CompraModalShell(api: CompraModalShellProps) {
   // Aba inicial: 'compra' por padrão; quando aberto pelo Financeiro V2 (?oc_aba=financeiro em modo OC),
   //   abre já na aba Financeiro. Só aceita abas que existem no modo OC.
+  const [reabrirP1Aberto, setReabrirP1Aberto] = useState(false);
   const [abaAtiva, setAbaAtiva] = useState<string>(
     api.modoOC && api.abaInicial && ['negociacao', 'recebimento', 'documentos', 'financeiro'].includes(api.abaInicial)
       ? api.abaInicial
@@ -560,6 +562,16 @@ export function CompraModalShell(api: CompraModalShellProps) {
                   <DatePicker value={api.data} onChange={api.setData}
                     className={`px-2.5 ${permissoes.dadosOperacaoReadOnly ? CAMPO_TRAVADO : ''}`} />
                 </div>
+                {/* ⚠ AMBAR E LOGO ABAIXO DA DATA: e' estado do periodo, nao erro do
+                    operador, e aparece no instante em que a data cai no mes fechado — nao
+                    na gravacao, quando a compra inteira ja' esta' preenchida. */}
+                {mesFechadoMotivo && (
+                  <div className="mt-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-[10px] leading-snug text-amber-800">
+                    <b className="font-semibold">{mesFechadoMotivo}.</b>{' '}
+                    <button type="button" className="underline underline-offset-2"
+                      onClick={() => setReabrirP1Aberto(true)}>Reabrir mês…</button>
+                  </div>
+                )}
               </div>
 
               <div className="min-w-0">
@@ -1034,6 +1046,12 @@ export function CompraModalShell(api: CompraModalShellProps) {
         pesoKg={api.pesoKgNum}
         dataCompra={api.data}
       />
+
+      {api.fazendaDestinoId && anoMesDaData && (
+        <ReabrirP1Dialog open={reabrirP1Aberto} onOpenChange={setReabrirP1Aberto}
+          fazendaId={api.fazendaDestinoId} anoMes={anoMesDaData}
+          onReaberto={() => { void pilaresMes.refetch(); }} />
+      )}
     </div>
   );
 }

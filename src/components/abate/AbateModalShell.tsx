@@ -27,6 +27,7 @@
 import { useState, useMemo } from 'react';
 import { produtoOCCompromisso } from '@/lib/financeiro/produtoOC';
 import { useStatusPilares } from '@/hooks/useStatusPilares';
+import { ReabrirP1Dialog } from '@/components/ReabrirP1Dialog';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -284,6 +285,7 @@ export function AbateModalShell({
   /* PR-OC-VENDA-REABRIR-NEG-01 — o dialogo de reabertura. Estado local: e' um gesto da
      tela, nao da operacao. */
   const [reabrirAberto, setReabrirAberto] = useState(false);
+  const [reabrirP1Aberto, setReabrirP1Aberto] = useState(false);
   const [motivoReabrir, setMotivoReabrir] = useState('');
   /* ⚠ O SENTINELA DO PLANEJAMENTO FICA DE FORA — ele e' fornecedor de projecao, nao
      frigorifico, e nao deve poder ser escolhido como comprador de um abate real.
@@ -1057,9 +1059,18 @@ export function AbateModalShell({
                     cadeia dos meses seguintes, com motivo auditado — e' ato do Fechamento,
                     nao botao de passagem dentro de um modal de abate. */}
                 {mesFechadoMotivo && (
-                  <div className="min-w-0 lg:col-span-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
-                    <b className="font-semibold">{mesFechadoMotivo}.</b>{' '}
-                    Lançamentos nesse mês só depois de reabrir o período em Rebanho › Fechamento › Mapa de Pastos.
+                  <div className="min-w-0 lg:col-span-3 flex items-center justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+                    <span>
+                      <b className="font-semibold">{mesFechadoMotivo}.</b>{' '}
+                      Lançamentos nesse mês só depois de reabrir o período.
+                    </span>
+                    {/* ⚠ O MESMO DIALOGO DO ZOOT, nao um botao solto: ele pede motivo, diz o
+                        que a reabertura faz e mostra o que foi reaberto. Uma peca para as
+                        quatro superficies. */}
+                    <Button type="button" variant="outline" size="sm"
+                      className="h-6 shrink-0 text-[10px]" onClick={() => setReabrirP1Aberto(true)}>
+                      Reabrir mês…
+                    </Button>
                   </div>
                 )}
                 <div className="min-w-0 lg:col-span-3">
@@ -1343,6 +1354,12 @@ export function AbateModalShell({
           so' vai para `detalhes` do evento), e o dialogo da compra o pede como "opcional".
           Reabrir desfaz um congelamento e e' o que a Auditoria vai mostrar daqui a um ano;
           "reaberta sem motivo" e' um registro que nao explica nada. */}
+      {abateFazendaId && anoMesDaData && (
+        <ReabrirP1Dialog open={reabrirP1Aberto} onOpenChange={setReabrirP1Aberto}
+          fazendaId={abateFazendaId} anoMes={anoMesDaData}
+          onReaberto={() => { void pilares.refetch(); }} />
+      )}
+
       <Dialog open={reabrirAberto} onOpenChange={setReabrirAberto}>
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle className="text-[13px]">Reabrir negociação</DialogTitle></DialogHeader>

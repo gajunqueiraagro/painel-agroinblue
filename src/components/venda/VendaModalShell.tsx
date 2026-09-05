@@ -26,6 +26,7 @@
  */
 import { useState, useMemo } from 'react';
 import { useStatusPilares } from '@/hooks/useStatusPilares';
+import { ReabrirP1Dialog } from '@/components/ReabrirP1Dialog';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -226,6 +227,7 @@ export function VendaModalShell({
   /* PR-OC-VENDA-REABRIR-NEG-01 — o dialogo de reabertura. Estado local: e' um gesto da
      tela, nao da operacao. */
   const [reabrirAberto, setReabrirAberto] = useState(false);
+  const [reabrirP1Aberto, setReabrirP1Aberto] = useState(false);
   const [motivoReabrir, setMotivoReabrir] = useState('');
   const compradorNome = contrapartes.find(f => f.id === compradorId)?.nome ?? null;
   const fazendaNome = fazendasOC.find(f => f.id === vendaFazendaId)?.nome ?? null;
@@ -887,7 +889,8 @@ export function VendaModalShell({
                 {mesFechadoMotivo && (
                   <div className="mt-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-[10px] leading-snug text-amber-800">
                     <b className="font-semibold">{mesFechadoMotivo}.</b>{' '}
-                    Reabra o período em Rebanho › Fechamento › Mapa de Pastos.
+                    <button type="button" className="underline underline-offset-2"
+                      onClick={() => setReabrirP1Aberto(true)}>Reabrir mês…</button>
                   </div>
                 )}
               </div>
@@ -1163,6 +1166,12 @@ export function VendaModalShell({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {vendaFazendaId && anoMesDaData && (
+        <ReabrirP1Dialog open={reabrirP1Aberto} onOpenChange={setReabrirP1Aberto}
+          fazendaId={vendaFazendaId} anoMes={anoMesDaData}
+          onReaberto={() => { void pilaresMes.refetch(); }} />
+      )}
     </div>
   );
 }

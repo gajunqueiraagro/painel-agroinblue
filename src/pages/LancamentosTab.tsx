@@ -5430,13 +5430,15 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       {/* Master lock banner — derivado da data atual do form */}
       {data && <MasterLockBanner anoMes={data.slice(0, 7)} className="mb-2" />}
 
-      {/* ── P1 governance banner ── */}
+      {/* ── P1 governance banner ──
+          ⚠ AMBAR, NAO VERMELHO — uniformizado com as tres OCs. Mes fechado nao e' erro do
+          operador nem falha do sistema: e' estado do periodo, com caminho para resolver.
+          Vermelho aqui e ambar ao lado ensinava que sao dois estados diferentes. */}
       {p1Oficial && !isCenarioMeta && (
-        <div className="bg-destructive/10 border border-destructive/30 rounded-md px-3 py-2 mb-2 flex items-center justify-between">
+        <div className="bg-amber-50 border border-amber-300 rounded-md px-3 py-2 mb-2 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
             <div className="text-[11px]">
-              <span className="font-bold text-destructive">Mês fechado (P1 oficial).</span>{' '}
+              <span className="font-bold text-amber-800">Mês fechado (P1).</span>{' '}
               <span className="text-muted-foreground">
                 {editingAbateId
                   ? 'Campos zootécnicos estruturais estão bloqueados. Campos financeiros/comerciais podem ser editados.'
