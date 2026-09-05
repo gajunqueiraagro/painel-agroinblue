@@ -98,28 +98,32 @@ describe('a grade — o que o operador vê antes de negociar', () => {
       onLinhaChange={() => {}} />,
   );
 
-  it('lote sem preço aparece como "A negociar", com o resumo em traço', () => {
+  it('lote sem preço aparece como "A negociar", e o líquido é traço', () => {
     /* ⚠ ESPELHA A GUARDA DO BANCO: `oc_salvar_abate` recusa lote sem preço e sem carcaça.
-       Mostrar uma cascata de zeros ali faria o lote parecer negociado por R$ 0,00. */
+       Mostrar R$ 0,00 ali faria o lote parecer negociado por nada. */
     montar(new Map());
     /* Duas vezes, e as duas contam: a pílula do topo (nenhum lote negociado ainda) e a do
        cartão. Se o topo deixasse de refletir o estado dos lotes, sobraria uma só. */
     expect(screen.getAllByText('A negociar')).toHaveLength(2);
-    expect(screen.getByText(/Sem negociação neste cenário/)).toBeInTheDocument();
-    expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(6);
+    expect(screen.getByText('Líquido do lote')).toBeInTheDocument();
+    expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('lote com preço e carcaça mostra a cascata e o líquido por arroba', () => {
+  it('lote negociado mostra o líquido do lote e o por-arroba', () => {
+    /* ⚠ O CARTÃO PERDEU A CASCATA em ABATE-UX-01i: as seis linhas vivem só no modal. O
+       que o cartão responde é "quanto rendeu este lote", que é o que se compara entre os
+       quatro lado a lado. */
     montar(new Map([['l1', negociada('l1')]]));
-    expect(screen.getAllByText('Realizado').length).toBeGreaterThanOrEqual(2);
-    expect(screen.queryByText(/Sem negociação neste cenário/)).not.toBeInTheDocument();
-    /* 166,6667 @ × R$ 300 = R$ 50.000 de base, sem bônus nem desconto. */
+    expect(screen.getAllByText('Negociado').length).toBeGreaterThanOrEqual(2);
+    /* 166,6667 @ × R$ 300 = R$ 50.000, sem bônus nem desconto. */
     expect(screen.getAllByText('R$ 50.000,00').length).toBeGreaterThan(0);
+    /* Duas vezes: o líquido/@ do cartão e o do bloco de topo — e é a mesma conta. */
+    expect(screen.getAllByText('R$ 300,00/@').length).toBeGreaterThan(0);
   });
 
   it('o cabeçalho conta os lotes e as cabeças', () => {
     montar(new Map());
-    expect(screen.getByText('1 lote · 10 cab')).toBeInTheDocument();
+    expect(screen.getByText('1 · 10 cab')).toBeInTheDocument();
   });
 
   it('a observação do lote vira a linha de contexto do cartão', () => {

@@ -532,6 +532,9 @@ export function AbateModalShell({
   /* ⚠ A MESMA CONTA DA GRADE, pela mesma funcao. O resumo lateral e o bloco de topo
      mostram os mesmos numeros lado a lado; duas somas independentes divergiriam no
      primeiro arredondamento e o operador nao teria como saber qual vale. */
+  /* Há edição do abate ainda não gravada? O rodapé zera este mapa ao salvar. */
+  const temRascunhoAbate = (abateLinhas?.size ?? 0) > 0;
+
   const totaisAbate = useMemo(() => {
     const calc = new Map<string, AbateCalculation>();
     lotesDoAbate.forEach(l => calc.set(l.id, buildAbateCalculation(
@@ -868,8 +871,10 @@ export function AbateModalShell({
               <div className="">
                 <LinhaResumo rotulo="Comprador" valor={frigorificoNome} />
                 <LinhaResumo rotulo="CNPJ" valor={frigorificoDoc} />
-                <LinhaResumo rotulo="Data" valor={data ? data.split('-').reverse().join('/') : null} />
-                <LinhaResumo rotulo="Fazenda" valor={fazendaNome} />
+                {/* Duas respostas curtas numa linha só: juntas ocupam menos que o
+                    rótulo de cada uma separada, e são lidas juntas de qualquer forma. */}
+                <LinhaResumo rotulo="Data · Fazenda"
+                  valor={[data ? data.split('-').reverse().join('/') : null, fazendaNome].filter(Boolean).join(' · ') || null} />
               </div>
 
               <div className="bg-primary/10 border-y border-primary/15 px-3 py-1 mt-0.5 mb-0.5">
@@ -904,11 +909,21 @@ export function AbateModalShell({
                     negativo em vermelho vale em toda a tela. */}
                 <LinhaResumo rotulo="Funrural" cor="text-destructive"
                   valor={totaisAbate.funrural > 0 ? `− ${formatMoeda(totaisAbate.funrural)}` : null} />
-                <LinhaResumo rotulo="Acordado (NF)" forte
-                  valor={valorAcordadoMostrado == null ? null : formatMoeda(valorAcordadoMostrado)}
-                  cor={undefined}
-                  /* A pilula so' existe onde ha dois mundos — ver a nota em `derAcerto`. */
-                  selo={undefined} />
+                {/* ⚠ DOIS RÓTULOS PARA DUAS COISAS DIFERENTES. Com rascunho na tela, o
+                    número é o que a conta diz e ainda não existe no banco — chamá-lo de
+                    "Acordado (NF)" afirmaria um acordo que ninguém gravou. Depois de
+                    salvar, o valor passa a ser o `valor_acordado` que a RPC somou.
+                    ⚠ E NUNCA R$ 0,00 ANTES DE SALVAR: ausência é traço. */}
+                {temRascunhoAbate ? (
+                  <LinhaResumo rotulo="Líquido (a salvar)" forte
+                    valor={totaisAbate.liquido > 0 ? formatMoeda(totaisAbate.liquido) : null} />
+                ) : (
+                  <LinhaResumo rotulo="Acordado (NF)" forte
+                    valor={valorAcordadoMostrado == null ? null : formatMoeda(valorAcordadoMostrado)}
+                    cor={undefined}
+                    /* A pilula so' existe onde ha dois mundos — ver a nota em `derAcerto`. */
+                    selo={undefined} />
+                )}
                 {totaisAbate.liquido > 0 && (
                   <LinhaResumo rotulo="por cabeça · por @" forte
                     valor={`${formatMoeda(totaisAbate.cabecas > 0 ? totaisAbate.liquido / totaisAbate.cabecas : 0)} · ${formatMoeda(totaisAbate.arrobas > 0 ? totaisAbate.liquido / totaisAbate.arrobas : 0)}`} />
@@ -953,6 +968,11 @@ export function AbateModalShell({
                   hoje so' a aba Financeiro carrega. */}
               <div className="">
                 <LinhaResumo rotulo="A receber da indústria" valor={finAReceber == null ? null : formatMoeda(finAReceber)} />
+                {/* ⚠ O TRAÇO AQUI TEM CAUSA CONHECIDA, e dizê-la evita a leitura "o
+                    sistema não sabe": o compromisso nasce quando a negociação é concluída. */}
+                {finAReceber == null && (
+                  <div className="px-3 text-[10px] text-muted-foreground">grava ao concluir</div>
+                )}
                 {proximoVencimento && (
                   <LinhaResumo rotulo={`Agendado ${proximoVencimento.split('-').reverse().join('/')}`} valor={null} />
                 )}

@@ -20,7 +20,7 @@
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Pencil, Ban, Plus, ChevronRight, AlertTriangle } from 'lucide-react';
-import { formatMoeda } from '@/lib/calculos/formatters';
+import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { buildAbateCalculation, type AbateCalculation } from '@/lib/calculos/abate';
 import { LoteDialog } from '@/components/compra/AbaNegociacaoLotes';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -80,14 +80,17 @@ export function BlocoResumoLote({ c, vazio }: { c: AbateCalculation; vazio?: boo
   );
 }
 
-/** A pílula do estado do lote naquele cenário. */
-function Pilula({ cenario, negociado }: { cenario: CenarioAbate; negociado: boolean }) {
-  if (!negociado) {
-    return <span className="rounded-full bg-amber-100 px-1.5 py-px text-[10px] text-amber-700">A negociar</span>;
-  }
-  return cenario === 'realizado'
-    ? <span className="rounded-full bg-emerald-100 px-1.5 py-px text-[10px] text-emerald-700">Realizado</span>
-    : <span className="rounded-full bg-blue-100 px-1.5 py-px text-[10px] text-blue-700">Projetado</span>;
+/**
+ * A pílula do lote: negociado ou a negociar.
+ *
+ * ⚠ ELA NÃO DIZ MAIS O CENÁRIO. Dizer "Realizado" no cartão sugeria que aquele lote
+ * estava num cenário próprio; o cenário é da LEITURA e vive no cabeçalho do card, uma vez
+ * só. O que o cartão precisa responder é outra coisa: já tem preço e carcaça, ou não.
+ */
+function Pilula({ negociado }: { negociado: boolean }) {
+  return negociado
+    ? <span className="whitespace-nowrap rounded-full bg-emerald-100 px-1.5 py-px text-[10px] text-emerald-700">Negociado</span>
+    : <span className="whitespace-nowrap rounded-full bg-amber-100 px-1.5 py-px text-[10px] text-amber-700">A negociar</span>;
 }
 
 /** Uma coluna do bloco de topo: rótulo, valor grande, sub-linhas e o "evidente". */
@@ -161,30 +164,29 @@ export function AbaLotesAbate({
 
   return (
     <div className="rounded-md border bg-card shadow-sm min-w-0">
-      <div className="flex items-baseline gap-2.5 border-b px-3.5 py-[11px]">
+      <div className="flex h-[38px] items-center gap-2.5 border-b px-3">
         <span className="text-[15px] font-medium text-foreground">Lotes</span>
-        <span className="text-[11px] text-muted-foreground">
-          {lotes.length} {lotes.length === 1 ? 'lote' : 'lotes'} · {t.cabecas} cab
+        <span className="whitespace-nowrap text-[11px] text-muted-foreground">
+          {lotes.length} · {t.cabecas} cab
         </span>
-        <div className="ml-auto">
-          <Button type="button" size="sm" className="h-7 gap-1 px-2.5 text-[11px]"
-            disabled={somenteLeitura} onClick={abrirNovo}>
-            <Plus className="h-3.5 w-3.5" /> Adicionar lote
-          </Button>
+        {/* ⚠ UM SELETOR SÓ, E ELE MANDA NA ABA INTEIRA. O chip por cartão dizia que cada
+            lote tinha o seu cenário, o que nunca foi verdade: o cenário é da leitura, não
+            do lote — trocar aqui troca os quatro cartões, o topo e o resumo lateral. */}
+        <div className="ml-auto flex gap-0.5 rounded-full border p-0.5">
+          {(['projetado', 'realizado'] as CenarioAbate[]).map(c2 => (
+            <button key={c2} type="button" onClick={() => onCenarioChange(c2)}
+              title={cenariosExistentes.includes(c2) ? undefined : 'Ainda não há dados neste cenário'}
+              className={`rounded-full px-2.5 py-0.5 text-[11px] ${c2 === cenario
+                ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted/50'}`}>
+              {c2 === 'projetado' ? 'Projetado' : 'Realizado'}
+            </button>
+          ))}
         </div>
+        <Button type="button" size="sm" className="h-7 shrink-0 gap-1 px-2.5 text-[11px]"
+          disabled={somenteLeitura} onClick={abrirNovo}>
+          <Plus className="h-3.5 w-3.5" /> Adicionar lote
+        </Button>
       </div>
-
-      {semSubcentro.length > 0 && (
-        <div className="flex items-start gap-1.5 rounded border border-destructive/40 bg-destructive/5 px-2 py-1.5 text-[10px] leading-snug text-destructive">
-          <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
-          <span>
-            {semSubcentro.length === 1 ? 'O lote' : 'Os lotes'}{' '}
-            {semSubcentro.map(l => `${l.ordem}. ${l.categoriaLabel || 'sem categoria'}`).join(', ')}{' '}
-            {semSubcentro.length === 1 ? 'não tem' : 'não têm'} categoria que o plano saiba classificar como
-            macho ou fêmea. Corrija a categoria do lote — sem ela o financeiro não sabe em qual receita lançar.
-          </span>
-        </div>
-      )}
 
       {/* ── BLOCO DE TOPO ─────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-3.5 border-b px-3.5 py-[11px] lg:grid-cols-4">
@@ -202,95 +204,84 @@ export function AbaLotesAbate({
           subs={[`${porCab(t.liquido)}/cab`]} evidente={`${porArroba(t.liquido)}/@`}
           extra={
             <div className="mt-1">
-              <Pilula cenario={cenario} negociado={algumNegociado} />
+              <Pilula negociado={algumNegociado} />
             </div>
           } />
       </div>
 
-      {/* ── OS LOTES, EM DUAS COLUNAS ─────────────────────────────────────────── */}
+      {/* ── OS LOTES, QUATRO POR FILEIRA ──────────────────────────────────────
+          ⚠ A grade é a única coisa que rola. Com mais de quatro lotes ela quebra em
+          fileiras de quatro; `minmax(0,1fr)` é o que permite às colunas encolherem — sem
+          ele o `nowrap` das linhas do cartão (A22) estoura a grade para fora do card. */}
       {lotes.length === 0 ? (
         <p className="px-3.5 py-6 text-center text-[12px] text-muted-foreground">
           Nenhum lote nesta operação. Use “Adicionar lote” para informar os animais abatidos.
         </p>
       ) : (
-        <div className="grid grid-cols-1 gap-2.5 p-3.5 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-2 overflow-auto p-3 sm:grid-cols-2 lg:grid-cols-[repeat(4,minmax(0,1fr))]">
           {lotes.map(lote => {
             const linha = linhas.get(lote.id);
             const c = calculos.get(lote.id)!;
             const negociado = temNegociacao(linha);
-            const observacaoDoLote = lotesApi.lotes.find(l => l.idLocal === lote.id)?.observacao?.trim() || null;
+            const form = lotesApi.lotes.find(l => l.idLocal === lote.id);
+            const observacaoDoLote = form?.observacao?.trim() || null;
+            /* "pelo total" avisa que o preço veio como base do lote, não por arroba —
+               é o que explica um R$/@ quebrado como 361,46. */
+            const peloTotal = linha?.precoFonte === 'total';
             return (
-              <div key={lote.id} className="rounded-lg border border-border/60 bg-card px-2.5 py-2">
-                <div className="flex items-start gap-2.5">
-                  <div className="min-w-0 flex-1">
-                    {/* ⚠ A22 + A18: a identidade e' UMA linha e nao quebra. Com a pilula do
-                        cenario aqui, "Garrotes · 41 cab · 12.260,80 kg carcaca" + pilula +
-                        dois icones nao cabiam em meia largura de modal, e o texto cortava
-                        no meio do numero. A pilula desceu para a linha 2, a direita. */}
-                    <div className="truncate whitespace-nowrap text-[12px] font-medium text-foreground">
-                      {lote.categoriaLabel} · {lote.quantidade} cab · {n2(c.carcacaCalc * c.quantidade)} kg carcaça
-                    </div>
-                    {/* ⚠ OMITIDA QUANDO VAZIA, nunca "OC —": a observação é opcional, e um
-                        traço ali afirmaria que falta um dado que ninguém pediu. */}
-                    <div className="flex items-center gap-2">
-                      {observacaoDoLote && (
-                        <span className="truncate text-[10px] text-muted-foreground">{observacaoDoLote}</span>
-                      )}
-                      <span className="ml-auto shrink-0"><Pilula cenario={cenario} negociado={negociado} /></span>
-                    </div>
-                    <div className="text-[10px] text-muted-foreground tabular-nums">
-                      Peso vivo {n2(lote.pesoMedioKg)} kg/cab · <b className="text-[11px] font-semibold text-foreground">RC {n2(c.rendCalc)}%</b>
-                    </div>
-                    <div className="text-[10px] text-muted-foreground tabular-nums">
-                      {n2(c.pesoArrobaCab)} @/cab · {negociado
-                        ? <b className="text-[11px] font-semibold text-foreground">Liq. {formatMoeda(c.liqArroba)}/@</b>
-                        : <b className="text-[11px] font-semibold text-amber-700">Liq. —</b>}
-                    </div>
-                    {!negociado && (
-                      <div className="text-[10px] text-amber-700">
-                        Sem negociação neste cenário — preço e carcaça ainda não informados
-                      </div>
-                    )}
+              <div key={lote.id} className="flex min-w-0 flex-col gap-0.5 rounded-lg border border-border/60 bg-card px-2.5 py-2">
+                <div className="truncate whitespace-nowrap text-[12px] font-medium text-foreground">
+                  {lote.categoriaLabel} · {lote.quantidade} cab
+                </div>
+                <div><Pilula negociado={negociado} /></div>
+                {observacaoDoLote && (
+                  <div className="truncate whitespace-nowrap text-[11px] text-muted-foreground">
+                    {/* ⚠ SEM PREFIXO "OC": o campo é livre e o operador já escreve
+                        "OC 7914" nele — prefixar aqui produziria "OC OC 7914". Uma string
+                        só, porque interpolar no JSX cria nós separados e o texto deixa de
+                        ser encontrável como frase, inclusive por leitor de tela. */}
+                    {`${observacaoDoLote}${peloTotal ? ' · pelo total' : ''}`}
                   </div>
-                  {/* ⚠ ICONE SOZINHO NAO FOI ENCONTRADO na homologacao — e eles estavam
-                      ligados desde sempre. O que faltava era dizer o que sao: agora vem o
-                      rotulo ao lado, em 10px, e o alvo de clique cobre os dois. Icone mudo
-                      so' funciona para quem ja' sabe que ele existe. */}
-                  <div className="flex shrink-0 items-center gap-3 text-muted-foreground">
-                    <button type="button" title="Editar lote" aria-label="Editar lote"
-                      disabled={somenteLeitura} onClick={() => setEditandoId(lote.id)}
-                      className="flex items-center gap-1 text-[10px] hover:text-foreground disabled:opacity-40">
-                      <Pencil className="h-3.5 w-3.5" /> Editar
-                    </button>
-                    <button type="button" title="Excluir lote" aria-label="Excluir lote"
-                      disabled={somenteLeitura} onClick={() => setRemovendoId(lote.id)}
-                      className="flex items-center gap-1 text-[10px] hover:text-destructive disabled:opacity-40">
-                      <Ban className="h-3.5 w-3.5" /> Excluir
-                    </button>
-                  </div>
+                )}
+                <div className="whitespace-nowrap text-[11px] text-muted-foreground">
+                  {n2(c.carcacaCalc * c.quantidade)} kg
+                </div>
+                <div className="whitespace-nowrap text-[11px] text-muted-foreground">{n2(c.totalArrobas)} @</div>
+                <div className="whitespace-nowrap text-[11px] font-semibold text-foreground">
+                  {/* Sem peso vivo não há rendimento — e o traço diz isso, em vez de 0,0%. */}
+                  {lote.pesoMedioKg > 0 && c.rendCalc > 0 ? `RC ${formatNum(c.rendCalc, 1)}%` : 'RC —'}
                 </div>
 
-                {/* Chips do cenário — o ativo em bg-primary. */}
-                <div className="my-1.5 flex gap-1">
-                  {(['projetado', 'realizado'] as CenarioAbate[]).map(c2 => (
-                    <button key={c2} type="button" onClick={() => onCenarioChange(c2)}
-                      title={cenariosExistentes.includes(c2) ? undefined : 'Ainda não há dados neste cenário'}
-                      className={`rounded-full border px-2.5 py-0.5 text-[11px] ${
-                        c2 === cenario ? 'border-primary bg-primary text-primary-foreground'
-                        : 'border-border text-muted-foreground hover:bg-muted/50'}`}>
-                      {c2 === 'projetado' ? 'Projetado' : 'Realizado'}
-                    </button>
-                  ))}
-                </div>
+                <div className="mt-1 whitespace-nowrap text-[10px] text-muted-foreground">Líquido do lote</div>
+                {negociado ? (<>
+                  <div className="whitespace-nowrap text-[15px] font-semibold tabular-nums">{formatMoeda(c.valorLiquido)}</div>
+                  <div className="whitespace-nowrap text-[11px] font-semibold tabular-nums">{formatMoeda(c.liqArroba)}/@</div>
+                  <div className="whitespace-nowrap text-[11px] text-muted-foreground tabular-nums">
+                    {lote.quantidade > 0 ? `${formatMoeda(c.valorLiquido / lote.quantidade)}/cab` : '—'}
+                  </div>
+                </>) : (
+                  <div className="whitespace-nowrap text-[12px] font-semibold text-amber-700">—</div>
+                )}
 
-                <div className="flex flex-col gap-2">
-                  <BlocoResumoLote c={c} vazio={!negociado} />
-                  {/* Abre a negociação daquele lote, naquele cenário. */}
-                  <Button type="button" size="sm" variant={negociado ? 'outline' : 'default'}
-                    className="h-7 self-end gap-1 px-2.5 text-[11px]"
+                {/* ⚠ `mt-auto` GRUDA AS AÇÕES NO FUNDO: sem ele, cartões de alturas
+                    diferentes (um com observação, outro sem) deixam os botões em alturas
+                    diferentes na mesma fileira, e o olho tem de procurar cada um. */}
+                <div className="mt-auto flex items-center gap-1.5 pt-1.5">
+                  <Button type="button" size="sm" variant={negociado ? 'secondary' : 'default'}
+                    className="h-6 min-w-0 flex-1 px-2 text-[11px]"
                     onClick={() => setNegociandoId(lote.id)}>
-                    Negociar lote <ChevronRight className="h-3.5 w-3.5" />
+                    Negociar ›
                   </Button>
+                  <button type="button" title="Editar lote" aria-label="Editar lote"
+                    disabled={somenteLeitura} onClick={() => setEditandoId(lote.id)}
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded border text-muted-foreground hover:text-foreground disabled:opacity-40">
+                    <Pencil className="h-3 w-3" />
+                  </button>
+                  <button type="button" title="Excluir lote" aria-label="Excluir lote"
+                    disabled={somenteLeitura} onClick={() => setRemovendoId(lote.id)}
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded border text-muted-foreground hover:text-destructive disabled:opacity-40">
+                    <Ban className="h-3 w-3" />
+                  </button>
                 </div>
               </div>
             );
