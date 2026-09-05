@@ -190,6 +190,7 @@ export interface AbateModalShellProps {
      Negociacao grava os lotes (e o planejamento do boitel, quando houver). Um botao so',
      duas acoes, porque e' sempre "salvar o que esta' na tela" — e e' o mesmo desenho do
      CompraModalShell, cujo rodape de Negociacao chama `lotesApi.salvar()`. */
+  /** Devolve a VERSÃO vigente depois de gravar, ou `false` se falhou. */
   onSalvarNegociacao: () => void | Promise<unknown>;
   /* As tres apis da OC, as MESMAS que a compra usa. A venda as monta; nao as edita. */
   documentosApi?: DocumentosApi;
@@ -200,7 +201,8 @@ export interface AbateModalShellProps {
   /** Nada mudou desde a ultima gravacao bem-sucedida — o botao apaga. */
   semAlteracoes?: boolean;
   /** `oc_confirmar` pelo `useOperacaoRecebimento`. Devolve se concluiu. */
-  onConcluirNegociacao?: () => void | Promise<unknown>;
+  /** Recebe a versão fresca do salvar — `oc_confirmar` tem lock otimista. */
+  onConcluirNegociacao?: (versaoOverride?: number) => void | Promise<unknown>;
   /** `oc_reabrir` — devolve a operacao a 'programada'. O motivo vai para a auditoria. */
   onReabrirNegociacao?: (motivo: string) => void | Promise<unknown>;
   onFechar: () => void;
@@ -1106,8 +1108,14 @@ export function AbateModalShell({
               ? 'Concluir a negociação congela os lotes e libera a Entrega'
               : 'Salva a negociação e conclui — congela os lotes e libera a Entrega')}
             onClick={async () => {
-              if (!semAlteracoes) { const ok = await onSalvarNegociacao(); if (ok === false) return; }
-              await onConcluirNegociacao?.();
+              /* ⚠ A VERSÃO SAI DO SALVAR E ENTRA NO CONCLUIR, no mesmo gesto. `ocVersao`
+                 só muda no próximo render: usar o state aqui manda a versão de ANTES do
+                 `oc_salvar_lotes` que acabou de rodar, e `oc_confirmar` responde 40001.
+                 Foi assim que seis cliques em Concluir viraram seis gravações de lote e
+                 nenhuma conclusão. A compra já encadeava assim. */
+              const r = await onSalvarNegociacao();
+              if (r === false) return;
+              await onConcluirNegociacao?.(typeof r === 'number' ? r : undefined);
             }}>
             <Check className="h-4 w-4" /> Concluir negociação
           </Button>

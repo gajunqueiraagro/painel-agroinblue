@@ -2742,7 +2742,17 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
      (carcaca, rendimento, preco da @) entra no commit seguinte, pela `oc_salvar_abate`.
      ⚠ A RECUSA DE "FECHADA" ACONTECE NA TELA, sem ida ao servidor — mesmo desenho da
      venda: o estado ja esta' aqui e a mensagem aponta o botao que resolve. */
-  const salvarNegociacaoAbateOC = async (): Promise<boolean> => {
+  /**
+   * Salva a negociação do abate e devolve a VERSÃO vigente depois de gravar.
+   *
+   * ⚠ O NÚMERO É O PONTO, não o booleano. `oc_confirmar` tem lock otimista: chamá-lo com
+   * a versão de antes do `oc_salvar_lotes` devolve 40001. E o state (`ocVersao`) só muda
+   * no próximo render — dentro do mesmo gesto, quem clica em Concluir ainda enxerga a
+   * versão velha. Medido: seis cliques em Concluir geraram seis `salvar_lotes` e ZERO
+   * `confirmar`. A compra já resolvia assim (`CompraModalShell:253`); o abate não.
+   * ⚠ `false` CONTINUA SENDO FALHA — é o que o rodapé testa para não concluir por cima.
+   */
+  const salvarNegociacaoAbateOC = async (): Promise<number | false> => {
     const clienteId = clienteAtual?.id;
     if (!ocOperacaoId || !clienteId) { toast.error('Salve a operação na aba Abate primeiro.'); return false; }
     if (ocStatusComercial === 'fechada') {
@@ -2754,7 +2764,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
        o rodape tratar "versao 0" como falha no dia em que ela existisse. */
     /* ⚠ NADA A SALVAR NÃO É SALVAR. O Concluir passa por aqui antes de confirmar; sem
        esta saída, ele regravava lotes idênticos e subia a versão da operação à toa. */
-    if (ocAbateSemAlteracoes) return true;
+    /* ⚠ NADA A SALVAR NÃO É SALVAR — mas a versão precisa sair daqui de qualquer forma,
+       senão o Concluir cai no state velho justamente no caminho mais comum (abrir uma OC
+       já negociada e só concluir). */
+    if (ocAbateSemAlteracoes) return ocVersao ?? false;
     const versaoNova = await lotesApi.salvar();
     if (versaoNova === null) return false;
 
@@ -2763,7 +2776,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
        daria 40001 sem pista de onde veio. A venda resolve assim com o boitel, e este e' o
        mesmo encadeamento. */
     const editadas = [...abateLinhas.entries()];
-    if (editadas.length === 0) return true;
+    if (editadas.length === 0) return versaoNova;
 
     /* ⚠ O RASCUNHO E' CHAVEADO POR `idLocal` E O BANCO NAO CONHECE ESSA CHAVE. A traducao
        acontece aqui, uma vez so'. Nao da' para ler `lotesApi.lotes` procurando `id`: o
@@ -2799,7 +2812,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       setAbateLinhas(new Map());
       /* A tela acabou de virar banco: a partir daqui, "sem alterações" é verdade. */
       setOcAbateAssinaturaSalva(ocAbateAssinaturaAtual);
-      return true;
+      /* `oc_salvar_abate` também incrementa a versão — vale a que ELA devolveu. */
+      return v;
     } catch (e) {
       /* ⚠ ERRO DE RPC NUNCA E' MUDO — era esta a metade que faltava. `abateApi.salvar`
          LANCA (`OcRpcError`), e sem este catch a promessa rejeitava dentro do `onClick`
@@ -5539,7 +5553,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           liquidacaoApi={liquidacaoApi}
           recebimentoApi={recebimentoApi}
           ocEntregaEncerrada={ocEntregaEncerrada}
-          onConcluirNegociacao={() => recebimentoApi.concluirNegociacao()}
+          onConcluirNegociacao={(v) => recebimentoApi.concluirNegociacao(v == null ? undefined : { versaoOverride: v })}
           onReabrirNegociacao={(motivo) => reabrirNegociacaoVendaOC(motivo)}
           onFechar={fecharModalOCComAutosave}
         />
