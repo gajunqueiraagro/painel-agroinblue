@@ -89,7 +89,8 @@ describe('a grade — o que o operador vê antes de negociar', () => {
   const montar = (linhas: Map<string, LinhaAbate>) => render(
     <AbaLotesAbate lotes={[A]} linhas={linhas} cenario="realizado"
       cenariosExistentes={['realizado']} onCenarioChange={() => {}}
-      lotesApi={lotesApiFalso()} categoriasDisponiveis={[{ value: 'bois', label: 'Bois' }]} />,
+      lotesApi={lotesApiFalso()} categoriasDisponiveis={[{ value: 'bois', label: 'Bois' }]}
+      onLinhaChange={() => {}} />,
   );
 
   it('lote sem preço aparece como "A negociar", com o resumo em traço', () => {

@@ -19,13 +19,15 @@
  */
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Pencil, Ban, Plus, ChevronRight } from 'lucide-react';
+import { Pencil, Ban, Plus, ChevronRight, AlertTriangle } from 'lucide-react';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { buildAbateCalculation, type AbateCalculation } from '@/lib/calculos/abate';
 import { LoteDialog } from '@/components/compra/AbaNegociacaoLotes';
 import { paraCalculo, linhaVazia, totaisDoAbate, type LoteAbate } from '@/components/abate/calculoDoLote';
+import { ModalNegociarLote } from '@/components/abate/ModalNegociarLote';
 import type { LinhaAbate, CenarioAbate } from '@/hooks/useOperacaoAbate';
 import type { CompraLotesApi } from '@/hooks/useCompraLotes';
+import { subcentroAbatePorCategoria } from '@/hooks/useOperacaoLiquidacao';
 
 const n2 = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const kg2 = (n: number) => `${n2(n)} kg`;
@@ -110,7 +112,7 @@ function ColunaTopo({ rotulo, valor, unidade, linhaAt, subs, evidente, extra }: 
 
 export function AbaLotesAbate({
   lotes, linhas, cenario, cenariosExistentes, onCenarioChange,
-  lotesApi, categoriasDisponiveis, somenteLeitura,
+  lotesApi, categoriasDisponiveis, somenteLeitura, onLinhaChange,
 }: {
   lotes: LoteAbate[];
   linhas: Map<string, LinhaAbate>;
@@ -120,9 +122,13 @@ export function AbaLotesAbate({
   lotesApi: CompraLotesApi;
   categoriasDisponiveis: { value: string; label: string }[];
   somenteLeitura?: boolean;
+  /** O rascunho do pai — quem persiste é o rodapé do shell. */
+  onLinhaChange: (loteId: string, proxima: LinhaAbate) => void;
 }) {
   /* Qual lote está aberto no cadastro. `null` = nenhum. */
   const [editandoId, setEditandoId] = useState<string | null>(null);
+  /* Qual lote está aberto na negociação. `null` = nenhum. */
+  const [negociandoId, setNegociandoId] = useState<string | null>(null);
 
   const calculos = useMemo(() => {
     const m = new Map<string, AbateCalculation>();
@@ -139,8 +145,15 @@ export function AbaLotesAbate({
   /* ABERTURA DIRETA, como na grade compartilhada: adicionar CRIA e ABRE no mesmo gesto.
      `adicionarLote` sozinho deixaria um lote sem categoria e sem peso, que a própria
      `oc_salvar_lotes` recusa — um lote fantasma que o operador não teria como preencher. */
+  /* ⚠ HERDADO DO FORMULARIO QUE MORREU — o aviso veio junto, verbatim. Categoria fora do
+     mapa de sexo nao gera lancamento classificado, e a venda, no mesmo ponto, cai em
+     subcentro vazio: e' o defeito que a Mesa de Revisao existe para consertar depois.
+     Perder este aviso ao trocar de tela seria trocar uma protecao por um layout. */
+  const semSubcentro = lotes.filter(l => !subcentroAbatePorCategoria(l.categoria ?? ''));
+
   const abrirNovo = () => setEditandoId(lotesApi.adicionarLote());
   const emEdicao = editandoId ? lotesApi.lotes.find(l => l.idLocal === editandoId) ?? null : null;
+  const negociando = negociandoId ? lotes.find(l => l.id === negociandoId) ?? null : null;
 
   return (
     <div className="rounded-md border bg-card shadow-sm min-w-0">
@@ -156,6 +169,18 @@ export function AbaLotesAbate({
           </Button>
         </div>
       </div>
+
+      {semSubcentro.length > 0 && (
+        <div className="flex items-start gap-1.5 rounded border border-destructive/40 bg-destructive/5 px-2 py-1.5 text-[10px] leading-snug text-destructive">
+          <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+          <span>
+            {semSubcentro.length === 1 ? 'O lote' : 'Os lotes'}{' '}
+            {semSubcentro.map(l => `${l.ordem}. ${l.categoriaLabel || 'sem categoria'}`).join(', ')}{' '}
+            {semSubcentro.length === 1 ? 'não tem' : 'não têm'} categoria que o plano saiba classificar como
+            macho ou fêmea. Corrija a categoria do lote — sem ela o financeiro não sabe em qual receita lançar.
+          </span>
+        </div>
+      )}
 
       {/* ── BLOCO DE TOPO ─────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-3.5 border-b px-3.5 py-[11px] lg:grid-cols-4">
@@ -241,14 +266,10 @@ export function AbaLotesAbate({
 
                 <div className="flex flex-col gap-2">
                   <BlocoResumoLote c={c} vazio={!negociado} />
-                  {/* ⚠ LEVA AO LUGAR ONDE SE NEGOCIA HOJE — o formulário logo abaixo, na
-                      mesma aba. Um botão desabilitado dizendo "no próximo passo" seria
-                      promessa vazia, e promessa vazia ensina a desconfiar do botão. No 96c
-                      ele passa a abrir o modal do lote. */}
+                  {/* Abre a negociação daquele lote, naquele cenário. */}
                   <Button type="button" size="sm" variant={negociado ? 'outline' : 'default'}
                     className="h-7 self-end gap-1 px-2.5 text-[11px]"
-                    onClick={() => document.getElementById(`abate-lote-${lote.id}`)
-                      ?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
+                    onClick={() => setNegociandoId(lote.id)}>
                     Negociar lote <ChevronRight className="h-3.5 w-3.5" />
                   </Button>
                 </div>
@@ -256,6 +277,17 @@ export function AbaLotesAbate({
             );
           })}
         </div>
+      )}
+
+      {negociando && (
+        <ModalNegociarLote
+          lote={negociando}
+          linha={linhas.get(negociando.id)}
+          cenario={cenario}
+          somenteLeitura={somenteLeitura}
+          onAplicar={(proxima) => onLinhaChange(negociando.id, proxima)}
+          onFechar={() => setNegociandoId(null)}
+        />
       )}
 
       {emEdicao && (
@@ -267,6 +299,11 @@ export function AbaLotesAbate({
           rotuloCategoria={(slug: string) =>
             categoriasDisponiveis.find(c => c.value === slug)?.label || slug || 'Sem categoria'}
           fisicoRO={false}
+          /* ⚠ SEM CRITÉRIO E SEM VALOR no abate: o valor do lote nasce da carcaça, do
+             preço da @ e dos bônus, na negociação — `oc_salvar_abate` soma os líquidos em
+             `valor_acordado`. Pedir um valor aqui seria um segundo número para a mesma
+             pergunta, e o operador não teria como saber qual vale. */
+          semValor
           somenteLeitura={!!somenteLeitura}
           onAplicar={(patch) => { lotesApi.editarLote(emEdicao.idLocal, patch); setEditandoId(null); }}
           onAplicarEAdicionar={(patch) => { lotesApi.editarLote(emEdicao.idLocal, patch); abrirNovo(); }}

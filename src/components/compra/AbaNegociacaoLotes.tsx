@@ -455,7 +455,7 @@ function ParLote({ rotulo, valor }: { rotulo: string; valor: string }) {
 export function LoteDialog({
   rotulos,
   lote, categoriasDisponiveis, darkSelectClass, fisicoRO, somenteLeitura, rotuloCategoria,
-  onAplicar, onAplicarEAdicionar, onFechar, valorProjetado = null,
+  onAplicar, onAplicarEAdicionar, onFechar, valorProjetado = null, semValor = false,
 }: {
   rotulos?: AbaNegociacaoLotesRotulos;
   lote: NonNullable<Props['lotesApi']>['lotes'][number];
@@ -468,6 +468,15 @@ export function LoteDialog({
   onAplicarEAdicionar: (patch: Partial<NonNullable<Props['lotesApi']>['lotes'][number]>) => void;
   onFechar: () => void;
   valorProjetado?: { valor: number | null; explicacao: string } | null;
+  /**
+   * Esconde Critério e Valor — o cadastro do lote no ABATE.
+   *
+   * ⚠ ADITIVA E COM DEFAULT `false`: sem passar nada, Compra e Venda renderizam
+   * exatamente o que renderizavam. O abate não informa valor no lote porque o dele nasce
+   * da carcaça, do preço da @ e dos bônus, na aba Negociação — `oc_salvar_abate` soma os
+   * líquidos em `valor_acordado` e sobrepõe o que `_oc_valor_do_lote` diria.
+   */
+  semValor?: boolean;
 }) {
   const [categoria, setCategoria] = useState(lote.categoria);
   const [quantidade, setQuantidade] = useState(lote.quantidade);
@@ -535,6 +544,7 @@ export function LoteDialog({
                 placeholder="0,00" disabled={fisicoRO} title={motivoBloqueio}
                 className={`h-8 text-[12px] mt-0.5 text-right tabular-nums ${semPeso ? 'border-destructive focus-visible:ring-destructive' : ''}`} />
             </div>
+            {!semValor && (<>
             <div>
               <Label className="text-[10px]">Critério</Label>
               {/* ⚠ COM PROJECAO, O CRITERIO E' "TOTAL" E NAO SE ESCOLHE: o liquido do
@@ -573,6 +583,7 @@ export function LoteDialog({
                 <p className="mt-1 text-[10px] text-muted-foreground leading-snug">{valorProjetado.explicacao}</p>
               )}
             </div>
+            </>)}
           </div>
 
           {/* Derivados AO VIVO, em PARES ALINHADOS (regra `c` do topo). Antes era uma
@@ -582,12 +593,14 @@ export function LoteDialog({
             <ParLote rotulo="Quantidade" valor={qtdNum > 0 ? `${qtdNum} cab` : '—'} />
             <ParLote rotulo="Peso médio" valor={fmtKg(pm)} />
             <ParLote rotulo="Peso total" valor={fmtKg(pesoTotal)} />
+            {!semValor && (<>
             <ParLote rotulo="R$/cab" valor={qtdNum > 0 ? brl(total / qtdNum) : '—'} />
             <ParLote rotulo="R$/kg" valor={pesoTotal > 0 ? brl(total / pesoTotal) : '—'} />
             <div className="flex items-baseline justify-between gap-2 border-t pt-1 mt-1">
               <span className="text-[10px] text-muted-foreground">Total do lote</span>
               <span className="text-[13px] font-bold text-primary tabular-nums">{brl(total)}</span>
             </div>
+            </>)}
           </div>
 
           {semPeso && <div className="text-[10px] text-destructive leading-tight">{motivoBloqueio}</div>}

@@ -37,7 +37,7 @@ import { Calendar, Building2, X, Plus, ArrowRight, Check, RotateCcw } from 'luci
 import type { Categoria } from '@/types/cattle';
 import type { CompraLotesApi } from '@/hooks/useCompraLotes';
 import type { AbateApi, CenarioAbate, LinhaAbate } from '@/hooks/useOperacaoAbate';
-import { AbaNegociacaoAbate, type LoteAbate } from '@/components/abate/AbaNegociacaoAbate';
+import type { LoteAbate } from '@/components/abate/calculoDoLote';
 import { AbaLotesAbate } from '@/components/abate/AbaLotesAbate';
 import { totaisDoAbate } from '@/components/abate/calculoDoLote';
 import { buildAbateCalculation, type AbateCalculation } from '@/lib/calculos/abate';
@@ -747,20 +747,7 @@ export function AbateModalShell({
                   lotesApi={lotesApi}
                   categoriasDisponiveis={categoriasDisponiveis}
                   somenteLeitura={ocStatusComercial === 'fechada' || ocStatusComercial === 'cancelada'}
-                />
-              )}
-              {/* ⚠ ABAIXO DA GRADE, NAO AO LADO. A cascata do abate so' se le de cima para
-                  baixo, e um split de duas colunas dentro da aba ja' foi revertido uma vez
-                  (b846fa8). O operador informa os lotes e desce para o detalhe deles. */}
-              {abateApi && onAbateLinhaChange && (
-                <AbaNegociacaoAbate
-                  lotes={lotesDoAbate}
-                  linhas={linhasDoAbate}
-                  cenariosExistentes={abateApi.cenarios}
-                  cenario={cenarioAbate}
-                  onCenarioChange={onCenarioAbateChange}
-                  onLinhaChange={onAbateLinhaChange}
-                  somenteLeitura={ocStatusComercial === 'fechada'}
+                  onLinhaChange={onAbateLinhaChange ?? (() => {})}
                 />
               )}
             </div>
