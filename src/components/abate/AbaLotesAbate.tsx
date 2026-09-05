@@ -194,9 +194,11 @@ export function AbaLotesAbate({
           unidade={`cab · ${lotes.length} ${lotes.length === 1 ? 'lote' : 'lotes'}`}
           subs={[`peso vivo ${kg2(t.pesoVivo)} total`]}
           evidente={`${n2(t.pesoMedio)} kg média`} />
+        {/* ⚠ SEM O "@/cab" NA SUB-LINHA: com três medidas a linha estourava a coluna e
+            cortava no meio de um número. As arrobas por cabeça continuam no cartão e no
+            modal, onde há largura; aqui ficam as duas que se comparam entre lotes. */}
         <ColunaTopo rotulo="Carcaça total" valor={n2(t.carcaca)} unidade="kg"
-          linhaAt={`${n2(t.arrobas)} @`}
-          subs={[`${n2(t.carcacaCab)} kg/cab · ${n2(t.arrobaCab)} @/cab`]}
+          linhaAt={`${n2(t.arrobas)} @ · ${n2(t.carcacaCab)} kg/cab`}
           evidente={`RC ${n2(t.rc)}%`} />
         <ColunaTopo rotulo="Valor bruto (R$)" valor={n2(t.bruto)}
           subs={[`${porCab(t.bruto)}/cab`]} evidente={`${porArroba(t.bruto)}/@`} />

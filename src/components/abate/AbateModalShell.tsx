@@ -149,6 +149,8 @@ export interface AbateModalShellProps {
      dentro do modal entra pelo caminho curto (`select('id, nome')`) e fica sem documento
      ate' a proxima carga. Precedente do campo: PR-OC-UX-LOTE-C1-01, na aba Compra. */
   contrapartes: { id: string; nome: string; cpfCnpj?: string | null }[];
+  /** O numero da nota/OC — e' por ele que o operador reconhece a operacao, nao pelo id. */
+  numeroDocumento?: string | null;
   onNovoFrigorifico: () => void;
   /** ⚠ A fazenda de ORIGEM: o gado sai dela. */
   abateFazendaId: string;
@@ -218,7 +220,7 @@ function dataMaisDias(iso: string | null | undefined, dias: number): string | nu
 export function AbateModalShell({
   data, setData, frigorificoId, setFrigorificoId, contrapartes, onNovoFrigorifico,
   abateFazendaId, setAbateFazendaId, fazendasOC,
-  observacao, setObservacao,
+  observacao, setObservacao, numeroDocumento,
   ocOperacaoId, ocVersao, onOcVersaoChange, ocStatusComercial, lotesApi,
   abateApi, abateLinhas, onAbateLinhaChange,
   cenarioAbate = 'projetado', onCenarioAbateChange, onIniciarRealizado,
@@ -578,280 +580,284 @@ export function AbateModalShell({
        no CORPO (`h-[69vh]`) e o modal nao tinha altura nenhuma — com o envelope errado no
        pai, a pagina inteira virava a area de rolagem e o rodape descia com o conteudo.
        `min-h-0` e' o que permite ao corpo encolher dentro do flex; sem ele o filho cresce e
-       empurra o rodape para fora da tela. */
-    <div className="flex flex-col h-[85vh]">
-      {/* CABECALHO — medidas do CompraModalShell: `px-6 py-2.5`. */}
-      <div className="shrink-0 bg-primary text-primary-foreground px-6 py-2.5 flex items-start justify-between">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <h2 className="text-lg font-bold leading-tight">Abate de animais</h2>
-            {/* ⚠ MESMO TERNARIO DA COMPRA (CompraModalShell:300), palavra por palavra. Ele
-                dizia "(novo)" para sempre — inclusive depois de salva, o que era mentira do
-                rotulo: a operacao ja existia e o cabecalho negava. */}
-            <span className="rounded-md border border-white/40 px-2 py-0.5 text-xs">
-              OC{ocOperacaoId ? ` #${ocOperacaoId.slice(0, 8)}` : ' (novo)'}
-            </span>
-          </div>
-          <div className="mt-1 flex items-center gap-3 text-xs text-white/80">
-            <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> {data ? data.split('-').reverse().join('/') : '—'}</span>
-            <span className="flex items-center gap-1"><Building2 className="h-3.5 w-3.5" /> {fazendaNome ?? '—'}</span>
-          </div>
-        </div>
-        <button type="button" onClick={onFechar} className="text-white/80 hover:text-white shrink-0"
-          title="Fechar" aria-label="Fechar"><X className="h-5 w-5" /></button>
+       empurra o rodape para fora da tela.
+       ⚠ ALTURA PELA JANELA, nao 85vh: numa tela de 900px o modal ficava com 765px e a aba
+       Negociacao rolava. `calc(100vh-32px)` deixa 16px de folga em cima e em baixo. */
+    <div className="flex flex-col h-[calc(100vh-32px)]">
+      {/* ⚠ UMA LINHA (h-11). Em duas, o cabecalho comia ~110px de altura util e a aba
+          Negociacao passava a rolar. Data e fazenda cabem ao lado do titulo.
+          ⚠ NUNCA UUID NA TELA, nem abreviado: "OC #a1b2c3d4" nao identifica nada para o
+          operador — ele conhece a operacao pelo numero do documento. Sem documento, so'
+          "OC", que ja' diz o que e'. */}
+      <div className="h-11 shrink-0 bg-primary text-primary-foreground px-4 flex items-center gap-3">
+        <h2 className="shrink-0 text-[16px] font-semibold leading-none">Abate de animais</h2>
+        <span className="shrink-0 rounded-md border border-white/40 px-2 py-0.5 text-[11px] leading-none">
+          {numeroDocumento ? `OC ${numeroDocumento}` : 'OC'}
+        </span>
+        <span className="flex min-w-0 items-center gap-1 whitespace-nowrap text-[12px] text-white/85">
+          <Calendar className="h-3.5 w-3.5 shrink-0" /> {data ? data.split('-').reverse().join('/') : '—'}
+        </span>
+        <span className="flex min-w-0 items-center gap-1 truncate whitespace-nowrap text-[12px] text-white/85">
+          <Building2 className="h-3.5 w-3.5 shrink-0" /> {fazendaNome ?? '—'}
+        </span>
+        <span className="ml-auto shrink-0 text-[11px] capitalize text-white/85">{ocStatusComercial ?? 'rascunho'}</span>
+        <button type="button" onClick={onFechar} className="shrink-0 text-white/80 hover:text-white"
+          title="Fechar" aria-label="Fechar"><X className="h-4 w-4" /></button>
       </div>
 
-      {/* BARRA DE ABAS — template do CompraModalShell (bg-card, border-b, px-6 py-3). */}
-      <div className="shrink-0 bg-card border-b px-6 py-3 flex items-center gap-1">
-        {abasDoAbate(!!ocOperacaoId).map(a => {
-          const active = a.key === abaAtiva && a.enabled;
-          return (
-            <button key={a.key} type="button" disabled={!a.enabled}
-              onClick={() => a.enabled && setAbaAtiva(a.key)}
-              title={a.motivo}
-              className={`h-8 px-3 rounded-md text-[12px] font-medium transition-colors ${
-                active ? 'bg-primary/10 text-primary'
-                : a.enabled ? 'text-muted-foreground hover:bg-muted/50'
-                : 'text-muted-foreground/40 cursor-not-allowed'}`}>
-              {a.label}
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[1fr_300px] lg:grid-rows-[minmax(0,1fr)] gap-3 p-4 overflow-y-auto lg:overflow-hidden bg-muted/30">
-        <div className="space-y-2 min-w-0 lg:min-h-0 lg:overflow-y-auto">
-          {/* ── ENTREGA ────────────────────────────────────────────────────────────
-              ⚠ A MESMA GRADE DA COMPRA, com o vocabulario trocado por dicionario. O gesto
-              e' o mesmo — dizer quantos animais de cada lote se moveram, em que dia —, e o
-              que inverte e' o SENTIDO: na compra o gado entra, aqui ele sai do saldo.
-              ⚠ `isCompra={false}` NAO E NOVIDADE: o componente ja' distinguia os dois para
-              o campo de peso, que so' a compra pede. Ele foi escrito prevendo este dia.
-              ⚠ SO O VERBO MUDA. Quantidade, data e categoria descrevem o mesmo fato nos
-              dois lados, e por isso nenhum rotulo de CAMPO entra no dicionario. */}
-          {abaAtiva === 'entrega' && recebimentoApi ? (
-            <AbaRecebimentoLotes
-              api={recebimentoApi}
-              operacaoPronta={!!ocOperacaoId}
-              concluida={ocStatusComercial === 'fechada'}
-              encerrada={ocEntregaEncerrada}
-              isCompra={false}
-              categoriasDisponiveis={categoriasDisponiveis}
-              documentosApi={documentosApi}
-              /* ⚠ A DATA DA OPERACAO, e nao a de hoje: a saida pertence a' operacao. */
-              dataOperacao={data}
-              somenteLeitura={ocStatusComercial === 'cancelada'}
-              onVoltarNegociacao={() => setAbaAtiva('negociacao')}
-              rotulos={{
-                /* ⚠ EIXO "SAIDA/ENVIAR", e nao "entrega/entregar" — decisao do Gabriel.
-                   A ABA continua se chamando Entrega, e os motivos gravados no banco
-                   continuam dizendo "aba Entrega": o nome do lugar nao muda, o verbo do
-                   ato sim. Quem le a auditoria daqui a um ano precisa achar a aba. */
-                tituloSecao: 'Saída dos animais da fazenda',
-                tituloDialogo: (r) => `Enviar · ${r}`,
-                jaMovimentado: 'já entregue',
-                informeQuantidade: 'Informe a quantidade entregue',
-                indisponivelTitulo: 'Entrega indisponível — negociação ainda não concluída',
-                indisponivelDetalhe: 'Conclua a negociação (botão “Concluir negociação”) para registrar a entrega física.',
-                movimentarTodos: 'Enviar todos conforme negociado',
-                movimentarTodosTexto: 'Enviar todos conforme negociado',
-                acaoLote: 'Enviar',
-                acaoLoteAria: (cat) => `Enviar lote ${cat}`,
-                rotuloTotalTopo: 'Saídas',
-                avisoEncerrado: 'Saída encerrada. Use Reabrir entrega para registrar mais movimentações.',
-                registrarDoLote: 'Registrar a saída deste lote',
-                colunaData: 'Entrega',
-                /* ⚠ TAMBEM "Saídas" no dialogo de encerrar, por coerencia com o topo — e'
-                   o mesmo contador. Inferido do eixo aprovado, e nao pedido item a item. */
-                rotuloTotal: 'Saídas',
-                tituloEncerrar: 'Encerrar entrega',
-                nenhumMovimentado: 'Nenhum animal foi entregue. Deseja encerrar esta entrega mesmo assim?',
-                placeholderJustificativa: 'Justifique a diferença / ausência de entrega',
-                tituloReabrir: 'Reabrir entrega',
-                avisoReabrir: (<>Esta ação é <b>auditada</b>: reabre a entrega para novas saídas e fica registrada com o motivo informado. <b>Não</b> altera a negociação — se a operação estiver programada, a entrega seguirá indisponível até a negociação ser concluída.</>),
-                motivoEncerrarPadrao: 'encerramento pela aba Entrega',
-                motivoEstornoPadrao: 'estorno pela aba Entrega',
-              }}
-            />
-          ) : (<>
-          {/* ── DOCUMENTOS ─────────────────────────────────────────────────────────
-              ⚠ A MESMA ABA DA COMPRA, com as MESMAS props. Ela e' generica de operacao —
-              documento fiscal nao muda de natureza porque o gado entra ou sai.
-              ⚠ FORNECEDORES DA `liquidacaoApi`, como na compra: fonte unica, sem segunda
-              lista nem segundo cadastro. */}
-          {abaAtiva === 'documentos' && documentosApi ? (
-            <AbaDocumentosOC api={documentosApi} operacaoPronta={!!ocOperacaoId}
-              somenteLeitura={ocStatusComercial === 'cancelada'}
-              fornecedores={liquidacaoApi?.fornecedores}
-              contraparteId={frigorificoId || null}
-              clienteId={liquidacaoApi?.clienteId ?? null}
-              /* Negociado = `valor_acordado` da operacao, a mesma ancora da compra. Nao e'
-                 recalculado dos lotes: derivar de novo criaria uma segunda verdade. */
-              valorNegociado={liquidacaoApi?.valorAcordado ?? null}
-              recarregarFornecedores={liquidacaoApi?.recarregar} />
-          ) : abaAtiva === 'auditoria' && eventosApi ? (
-            /* ⚠ SO LEITURA e sem `somenteLeitura`: a aba nao escreve nada. */
-            <AbaAuditoriaOC api={eventosApi} operacaoPronta={!!ocOperacaoId}
-              fornecedores={liquidacaoApi?.fornecedores}
-              lotes={documentosApi?.lotes} />
-          ) : abaAtiva === 'financeiro' && liquidacaoApi ? (
-            /* ⚠ A MESMA ABA DA COMPRA. Medido na FASE 0: ela e' tipo-agnostica por desenho
-                — `planoTipo` vira '1-Entradas' numa venda, a descricao ja sai "Venda 110 G"
-                pelo `verboOC`, e o filtro de centro de custo da compra se desliga sozinho.
-                O vazio honesto sai: agora ha o que mostrar. */
-            <AbaFinanceiroOC
-              api={liquidacaoApi}
-              operacaoPronta={!!ocOperacaoId}
-              darkSelectClass=""
-              financeiroLegadoReadOnly={ocStatusComercial === 'cancelada'}
-              financeiroNovoReadOnly={ocStatusComercial === 'cancelada'}
-              operacaoId={ocOperacaoId}
-              clienteId={liquidacaoApi.clienteId ?? null}
-              /* A instancia que o resumo lateral ja monta — uma leitura, dois consumidores. */
-              ocApiExterno={ocCompromissosApi}
-              dataOperacao={data}
-              linhasPrevisao={linhasPrevisao}
-              rotulos={rotulosCompromissos}
-              seloProjecao={undefined}
-              onIrParaDocumentos={() => setAbaAtiva('documentos')}
-            />
-          ) : abaAtiva === 'financeiro' ? (
-            /* ── FINANCEIRO — VAZIO HONESTO ──────────────────────────────────────
-               ⚠ NAO MONTA A `AbaFinanceiroOC`. A da compra opera sobre compromissos e
-               obrigacoes que a venda ainda nao gera: montar aquela tela aqui mostraria
-               controles que nao levam a lugar nenhum, que e' pior que nao ter aba.
-               ⚠ NENHUM NUMERO. O valor projetado existe e esta no lote — repeti-lo aqui
-               como se fosse compromisso financeiro seria dizer que ha titulo quando nao
-               ha. A aba diz o que existe, o que falta e de onde vira. */
-            <div className="rounded-md border bg-card p-4 shadow-sm space-y-2 min-w-0">
-              <div className="text-[15px] font-medium text-foreground">Financeiro do abate</div>
-              <p className="text-[12px] text-muted-foreground leading-relaxed max-w-prose">
-                Este abate ainda não gera compromissos financeiros. O valor projetado já está
-                no lote da Negociação e entra no resultado por ali; o que ainda não existe é a
-                previsão de recebimento — as parcelas, os vencimentos e a conciliação com o
-                que for recebido.
-              </p>
-              <p className="text-[12px] text-muted-foreground leading-relaxed max-w-prose">
-                Enquanto isso, o financeiro do abate continua sendo lançado por fora, como
-                sempre foi. Nada aqui está pendente de você.
-              </p>
-            </div>
-          ) : abaAtiva === 'negociacao' ? (
-            /* ⚠ A NEGOCIACAO DO ABATE E' A GRADE DE LOTES, e nada mais neste commit.
-               Aqui, na venda, havia o painel de leitura do boitel — topo derivado, blocos
-               de entrada e faixa de analise. O abate tem o seu equivalente
-               (carcaca/rendimento/@/bonus/descontos/Funrural), e ele entra no commit
-               seguinte como `AbaNegociacaoAbate`, ao lado desta grade: os lotes continuam
-               sendo lotes, e o detalhe do abate e' POR lote. */
-            <div className="space-y-3">
-              {/* ⚠ GRADE PROPRIA DO ABATE — ABATE-UX-01b. A compartilhada
-                  (`AbaNegociacaoLotes`) continua servindo compra, venda, boitel e
-                  recebimento, intocada: o cartao daqui mostra carcaca, rendimento e
-                  liquido por arroba, que so' existem depois do frigorifico pesar. O
-                  CADASTRO do lote continua sendo o mesmo dialogo compartilhado. */}
-              {lotesApi && (
-                <AbaLotesAbate
-                  lotes={lotesDoAbate}
-                  linhas={linhasDoAbate}
-                  cenario={cenarioAbate}
-                  cenariosExistentes={abateApi?.cenarios ?? []}
-                  onCenarioChange={onCenarioAbateChange}
-                  lotesApi={lotesApi}
-                  categoriasDisponiveis={categoriasDisponiveis}
-                  somenteLeitura={ocStatusComercial === 'fechada' || ocStatusComercial === 'cancelada'}
-                  onLinhaChange={onAbateLinhaChange ?? (() => {})}
-                />
-              )}
-            </div>
-          ) : (
-          <div className="rounded-md border bg-card p-2 shadow-sm space-y-2 min-w-0">
-            <div className="text-[15px] font-medium text-foreground">Identificação do abate</div>
-
-            {/* FAIXA DE TOPO — rotulo 11px/400, valor 20px/500. */}
-            {/* ⚠ O COMPRADOR OCUPA O QUE SOBRA (A22): em tres colunas iguais, "Fortunceres
-                S.A. - Minerva" cortava enquanto Data sobrava espaco. Data e Fazenda tem
-                largura fixa porque o conteudo delas e' previsivel; o nome, nao. */}
-            <div className="grid grid-cols-[1fr_200px_220px] gap-2 rounded-md border bg-muted/20 px-3.5 py-[11px]">
-              <div className="min-w-0">
-                <div className="text-[11px] font-normal text-muted-foreground leading-none">Comprador</div>
-                <div className="mt-1 truncate whitespace-nowrap text-[clamp(16px,1.6vw,20px)] font-medium leading-none">{frigorificoNome ?? '—'}</div>
-                {/* ⚠ SO' APARECE QUANDO EXISTE: uma linha "CNPJ —" fixa diria que o
-                    documento falta no cadastro, quando o que falta e' a carga que o traz. */}
-                {frigorificoDoc && (
-                  <div className="mt-0.5 text-[11px] text-muted-foreground leading-none truncate">
-                    CNPJ {frigorificoDoc}
-                  </div>
-                )}
-              </div>
-              <div className="min-w-0">
-                <div className="text-[11px] font-normal text-muted-foreground leading-none">Data do abate</div>
-                <div className="mt-1 text-[20px] font-medium tabular-nums leading-none">
-                  {data ? data.split('-').reverse().join('/') : <span className="text-muted-foreground">—</span>}
-                </div>
-              </div>
-              <div className="min-w-0">
-                <div className="text-[11px] font-normal text-muted-foreground leading-none">Fazenda de origem</div>
-                <div className="mt-1 text-[20px] font-medium leading-none truncate">{fazendaNome ?? '—'}</div>
-              </div>
-            </div>
-            <Separator />
-
-            {/* ⚠ UMA LINHA A MENOS: em duas colunas, "Observacoes / Lote" caia abaixo da
-                dobra e o formulario rolava — com o rodape fixo, rolar aqui e' o operador
-                perder de vista o que acabou de preencher. Os tres obrigatorios cabem numa
-                linha; a observacao, sozinha, na seguinte. */}
-            <div className="grid grid-cols-1 lg:grid-cols-[1fr_170px_260px] gap-x-3 gap-y-3">
-              <div className="min-w-0">
-                <Label className="text-[10px] text-muted-foreground">Comprador <span className="text-destructive">*</span></Label>
-                <div className="mt-[3px] flex items-center gap-1">
-                  <div className="min-w-0 flex-1">
-                    <SearchableSelect
-                      value={frigorificoId || '__all__'}
-                      onValueChange={(v) => setFrigorificoId(v === '__all__' ? '' : v)}
-                      options={contrapartes.map(f => ({ value: f.id, label: f.nome }))}
-                      placeholder="Selecione ou cadastre o comprador"
-                      allLabel="Nenhum selecionado"
-                      allValue="__all__"
-                      className="[&_button]:h-8 [&_button]:text-[12px] [&_button]:px-2.5"
-                    />
-                  </div>
-                  <Button type="button" variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={onNovoFrigorifico}>
-                    <Plus className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              </div>
-              <div className="min-w-0">
-                <Label className="text-[10px] text-muted-foreground">Data do abate <span className="text-destructive">*</span></Label>
-                {/* A20 — DatePicker do sistema, nunca `<input type="date">`. */}
-                <DatePicker value={data} onChange={setData} className="mt-[3px] h-8 px-2.5 text-[12px]" />
-              </div>
-              <div className="min-w-0">
-                {/* ⚠ ORIGEM, e nao destino: numa venda o gado SAI da fazenda. */}
-                <Label className="text-[10px] text-muted-foreground">Fazenda de origem <span className="text-destructive">*</span></Label>
-                <Select value={abateFazendaId} onValueChange={setAbateFazendaId}>
-                  <SelectTrigger className={`mt-[3px] h-8 px-2.5 text-[12px] ${fazendaFalta ? 'border-destructive' : ''}`}>
-                    <SelectValue placeholder="Selecione a fazenda" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {fazendasOC.map(f => <SelectItem key={f.id} value={f.id} className="text-[12px]">{f.nome}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                {fazendaFalta && (
-                  <p className="mt-[3px] text-[10px] text-destructive">Selecione a fazenda de origem.</p>
-                )}
-              </div>
-              <div className="min-w-0 lg:col-span-3">
-                <Label className="text-[10px] text-muted-foreground">Observações / Lote</Label>
-                <Input value={observacao} onChange={e => setObservacao(e.target.value)} placeholder="Opcional"
-                  className="mt-[3px] h-8 px-2.5 text-[12px]" />
-              </div>
-            </div>
-          </div>
-          )}
-          </>)}
+      {/* ⚠ O RESUMO COMECA NO CABECALHO E VAI ATE O RODAPE: as abas ficam DENTRO da
+          coluna da esquerda. Com as abas por cima das duas colunas, o resumo perdia os
+          44px delas e cortava no fim — e a barra de abas nao diz nada sobre o resumo. */}
+      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[1fr_300px]">
+        <div className="flex min-h-0 flex-col">
+        {/* BARRA DE ABAS — template do CompraModalShell (bg-card, border-b, px-6 py-3). */}
+        <div className="shrink-0 bg-card border-b px-6 py-3 flex items-center gap-1">
+          {abasDoAbate(!!ocOperacaoId).map(a => {
+            const active = a.key === abaAtiva && a.enabled;
+            return (
+              <button key={a.key} type="button" disabled={!a.enabled}
+                onClick={() => a.enabled && setAbaAtiva(a.key)}
+                title={a.motivo}
+                className={`h-8 px-3 rounded-md text-[12px] font-medium transition-colors ${
+                  active ? 'bg-primary/10 text-primary'
+                  : a.enabled ? 'text-muted-foreground hover:bg-muted/50'
+                  : 'text-muted-foreground/40 cursor-not-allowed'}`}>
+                {a.label}
+              </button>
+            );
+          })}
         </div>
+          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto bg-muted/30 p-4">
+            {/* ── ENTREGA ────────────────────────────────────────────────────────────
+                ⚠ A MESMA GRADE DA COMPRA, com o vocabulario trocado por dicionario. O gesto
+                e' o mesmo — dizer quantos animais de cada lote se moveram, em que dia —, e o
+                que inverte e' o SENTIDO: na compra o gado entra, aqui ele sai do saldo.
+                ⚠ `isCompra={false}` NAO E NOVIDADE: o componente ja' distinguia os dois para
+                o campo de peso, que so' a compra pede. Ele foi escrito prevendo este dia.
+                ⚠ SO O VERBO MUDA. Quantidade, data e categoria descrevem o mesmo fato nos
+                dois lados, e por isso nenhum rotulo de CAMPO entra no dicionario. */}
+            {abaAtiva === 'entrega' && recebimentoApi ? (
+              <AbaRecebimentoLotes
+                api={recebimentoApi}
+                operacaoPronta={!!ocOperacaoId}
+                concluida={ocStatusComercial === 'fechada'}
+                encerrada={ocEntregaEncerrada}
+                isCompra={false}
+                categoriasDisponiveis={categoriasDisponiveis}
+                documentosApi={documentosApi}
+                /* ⚠ A DATA DA OPERACAO, e nao a de hoje: a saida pertence a' operacao. */
+                dataOperacao={data}
+                somenteLeitura={ocStatusComercial === 'cancelada'}
+                onVoltarNegociacao={() => setAbaAtiva('negociacao')}
+                rotulos={{
+                  /* ⚠ EIXO "SAIDA/ENVIAR", e nao "entrega/entregar" — decisao do Gabriel.
+                     A ABA continua se chamando Entrega, e os motivos gravados no banco
+                     continuam dizendo "aba Entrega": o nome do lugar nao muda, o verbo do
+                     ato sim. Quem le a auditoria daqui a um ano precisa achar a aba. */
+                  tituloSecao: 'Saída dos animais da fazenda',
+                  tituloDialogo: (r) => `Enviar · ${r}`,
+                  jaMovimentado: 'já entregue',
+                  informeQuantidade: 'Informe a quantidade entregue',
+                  indisponivelTitulo: 'Entrega indisponível — negociação ainda não concluída',
+                  indisponivelDetalhe: 'Conclua a negociação (botão “Concluir negociação”) para registrar a entrega física.',
+                  movimentarTodos: 'Enviar todos conforme negociado',
+                  movimentarTodosTexto: 'Enviar todos conforme negociado',
+                  acaoLote: 'Enviar',
+                  acaoLoteAria: (cat) => `Enviar lote ${cat}`,
+                  rotuloTotalTopo: 'Saídas',
+                  avisoEncerrado: 'Saída encerrada. Use Reabrir entrega para registrar mais movimentações.',
+                  registrarDoLote: 'Registrar a saída deste lote',
+                  colunaData: 'Entrega',
+                  /* ⚠ TAMBEM "Saídas" no dialogo de encerrar, por coerencia com o topo — e'
+                     o mesmo contador. Inferido do eixo aprovado, e nao pedido item a item. */
+                  rotuloTotal: 'Saídas',
+                  tituloEncerrar: 'Encerrar entrega',
+                  nenhumMovimentado: 'Nenhum animal foi entregue. Deseja encerrar esta entrega mesmo assim?',
+                  placeholderJustificativa: 'Justifique a diferença / ausência de entrega',
+                  tituloReabrir: 'Reabrir entrega',
+                  avisoReabrir: (<>Esta ação é <b>auditada</b>: reabre a entrega para novas saídas e fica registrada com o motivo informado. <b>Não</b> altera a negociação — se a operação estiver programada, a entrega seguirá indisponível até a negociação ser concluída.</>),
+                  motivoEncerrarPadrao: 'encerramento pela aba Entrega',
+                  motivoEstornoPadrao: 'estorno pela aba Entrega',
+                }}
+              />
+            ) : (<>
+            {/* ── DOCUMENTOS ─────────────────────────────────────────────────────────
+                ⚠ A MESMA ABA DA COMPRA, com as MESMAS props. Ela e' generica de operacao —
+                documento fiscal nao muda de natureza porque o gado entra ou sai.
+                ⚠ FORNECEDORES DA `liquidacaoApi`, como na compra: fonte unica, sem segunda
+                lista nem segundo cadastro. */}
+            {abaAtiva === 'documentos' && documentosApi ? (
+              <AbaDocumentosOC api={documentosApi} operacaoPronta={!!ocOperacaoId}
+                somenteLeitura={ocStatusComercial === 'cancelada'}
+                fornecedores={liquidacaoApi?.fornecedores}
+                contraparteId={frigorificoId || null}
+                clienteId={liquidacaoApi?.clienteId ?? null}
+                /* Negociado = `valor_acordado` da operacao, a mesma ancora da compra. Nao e'
+                   recalculado dos lotes: derivar de novo criaria uma segunda verdade. */
+                valorNegociado={liquidacaoApi?.valorAcordado ?? null}
+                recarregarFornecedores={liquidacaoApi?.recarregar} />
+            ) : abaAtiva === 'auditoria' && eventosApi ? (
+              /* ⚠ SO LEITURA e sem `somenteLeitura`: a aba nao escreve nada. */
+              <AbaAuditoriaOC api={eventosApi} operacaoPronta={!!ocOperacaoId}
+                fornecedores={liquidacaoApi?.fornecedores}
+                lotes={documentosApi?.lotes} />
+            ) : abaAtiva === 'financeiro' && liquidacaoApi ? (
+              /* ⚠ A MESMA ABA DA COMPRA. Medido na FASE 0: ela e' tipo-agnostica por desenho
+                  — `planoTipo` vira '1-Entradas' numa venda, a descricao ja sai "Venda 110 G"
+                  pelo `verboOC`, e o filtro de centro de custo da compra se desliga sozinho.
+                  O vazio honesto sai: agora ha o que mostrar. */
+              <AbaFinanceiroOC
+                api={liquidacaoApi}
+                operacaoPronta={!!ocOperacaoId}
+                darkSelectClass=""
+                financeiroLegadoReadOnly={ocStatusComercial === 'cancelada'}
+                financeiroNovoReadOnly={ocStatusComercial === 'cancelada'}
+                operacaoId={ocOperacaoId}
+                clienteId={liquidacaoApi.clienteId ?? null}
+                /* A instancia que o resumo lateral ja monta — uma leitura, dois consumidores. */
+                ocApiExterno={ocCompromissosApi}
+                dataOperacao={data}
+                linhasPrevisao={linhasPrevisao}
+                rotulos={rotulosCompromissos}
+                seloProjecao={undefined}
+                onIrParaDocumentos={() => setAbaAtiva('documentos')}
+              />
+            ) : abaAtiva === 'financeiro' ? (
+              /* ── FINANCEIRO — VAZIO HONESTO ──────────────────────────────────────
+                 ⚠ NAO MONTA A `AbaFinanceiroOC`. A da compra opera sobre compromissos e
+                 obrigacoes que a venda ainda nao gera: montar aquela tela aqui mostraria
+                 controles que nao levam a lugar nenhum, que e' pior que nao ter aba.
+                 ⚠ NENHUM NUMERO. O valor projetado existe e esta no lote — repeti-lo aqui
+                 como se fosse compromisso financeiro seria dizer que ha titulo quando nao
+                 ha. A aba diz o que existe, o que falta e de onde vira. */
+              <div className="rounded-md border bg-card p-4 shadow-sm space-y-2 min-w-0">
+                <div className="text-[15px] font-medium text-foreground">Financeiro do abate</div>
+                <p className="text-[12px] text-muted-foreground leading-relaxed max-w-prose">
+                  Este abate ainda não gera compromissos financeiros. O valor projetado já está
+                  no lote da Negociação e entra no resultado por ali; o que ainda não existe é a
+                  previsão de recebimento — as parcelas, os vencimentos e a conciliação com o
+                  que for recebido.
+                </p>
+                <p className="text-[12px] text-muted-foreground leading-relaxed max-w-prose">
+                  Enquanto isso, o financeiro do abate continua sendo lançado por fora, como
+                  sempre foi. Nada aqui está pendente de você.
+                </p>
+              </div>
+            ) : abaAtiva === 'negociacao' ? (
+              /* ⚠ A NEGOCIACAO DO ABATE E' A GRADE DE LOTES, e nada mais neste commit.
+                 Aqui, na venda, havia o painel de leitura do boitel — topo derivado, blocos
+                 de entrada e faixa de analise. O abate tem o seu equivalente
+                 (carcaca/rendimento/@/bonus/descontos/Funrural), e ele entra no commit
+                 seguinte como `AbaNegociacaoAbate`, ao lado desta grade: os lotes continuam
+                 sendo lotes, e o detalhe do abate e' POR lote. */
+              <div className="space-y-3">
+                {/* ⚠ GRADE PROPRIA DO ABATE — ABATE-UX-01b. A compartilhada
+                    (`AbaNegociacaoLotes`) continua servindo compra, venda, boitel e
+                    recebimento, intocada: o cartao daqui mostra carcaca, rendimento e
+                    liquido por arroba, que so' existem depois do frigorifico pesar. O
+                    CADASTRO do lote continua sendo o mesmo dialogo compartilhado. */}
+                {lotesApi && (
+                  <AbaLotesAbate
+                    lotes={lotesDoAbate}
+                    linhas={linhasDoAbate}
+                    cenario={cenarioAbate}
+                    cenariosExistentes={abateApi?.cenarios ?? []}
+                    onCenarioChange={onCenarioAbateChange}
+                    lotesApi={lotesApi}
+                    categoriasDisponiveis={categoriasDisponiveis}
+                    somenteLeitura={ocStatusComercial === 'fechada' || ocStatusComercial === 'cancelada'}
+                    onLinhaChange={onAbateLinhaChange ?? (() => {})}
+                  />
+                )}
+              </div>
+            ) : (
+            <div className="rounded-md border bg-card p-2 shadow-sm space-y-2 min-w-0">
+              <div className="text-[15px] font-medium text-foreground">Identificação do abate</div>
 
-        {/* RESUMO LATERAL — idioma do ResumoLateralOC. */}
+              {/* FAIXA DE TOPO — rotulo 11px/400, valor 20px/500. */}
+              {/* ⚠ O COMPRADOR OCUPA O QUE SOBRA (A22): em tres colunas iguais, "Fortunceres
+                  S.A. - Minerva" cortava enquanto Data sobrava espaco. Data e Fazenda tem
+                  largura fixa porque o conteudo delas e' previsivel; o nome, nao. */}
+              <div className="grid grid-cols-[1fr_200px_220px] gap-2 rounded-md border bg-muted/20 px-3.5 py-[11px]">
+                <div className="min-w-0">
+                  <div className="text-[11px] font-normal text-muted-foreground leading-none">Comprador</div>
+                  <div className="mt-1 truncate whitespace-nowrap text-[clamp(16px,1.6vw,20px)] font-medium leading-none">{frigorificoNome ?? '—'}</div>
+                  {/* ⚠ SO' APARECE QUANDO EXISTE: uma linha "CNPJ —" fixa diria que o
+                      documento falta no cadastro, quando o que falta e' a carga que o traz. */}
+                  {frigorificoDoc && (
+                    <div className="mt-0.5 text-[11px] text-muted-foreground leading-none truncate">
+                      CNPJ {frigorificoDoc}
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[11px] font-normal text-muted-foreground leading-none">Data do abate</div>
+                  <div className="mt-1 text-[20px] font-medium tabular-nums leading-none">
+                    {data ? data.split('-').reverse().join('/') : <span className="text-muted-foreground">—</span>}
+                  </div>
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[11px] font-normal text-muted-foreground leading-none">Fazenda de origem</div>
+                  <div className="mt-1 text-[20px] font-medium leading-none truncate">{fazendaNome ?? '—'}</div>
+                </div>
+              </div>
+              <Separator />
+
+              {/* ⚠ UMA LINHA A MENOS: em duas colunas, "Observacoes / Lote" caia abaixo da
+                  dobra e o formulario rolava — com o rodape fixo, rolar aqui e' o operador
+                  perder de vista o que acabou de preencher. Os tres obrigatorios cabem numa
+                  linha; a observacao, sozinha, na seguinte. */}
+              <div className="grid grid-cols-1 lg:grid-cols-[1fr_170px_260px] gap-x-3 gap-y-3">
+                <div className="min-w-0">
+                  <Label className="text-[10px] text-muted-foreground">Comprador <span className="text-destructive">*</span></Label>
+                  <div className="mt-[3px] flex items-center gap-1">
+                    <div className="min-w-0 flex-1">
+                      <SearchableSelect
+                        value={frigorificoId || '__all__'}
+                        onValueChange={(v) => setFrigorificoId(v === '__all__' ? '' : v)}
+                        options={contrapartes.map(f => ({ value: f.id, label: f.nome }))}
+                        placeholder="Selecione ou cadastre o comprador"
+                        allLabel="Nenhum selecionado"
+                        allValue="__all__"
+                        className="[&_button]:h-8 [&_button]:text-[12px] [&_button]:px-2.5"
+                      />
+                    </div>
+                    <Button type="button" variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={onNovoFrigorifico}>
+                      <Plus className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+                <div className="min-w-0">
+                  <Label className="text-[10px] text-muted-foreground">Data do abate <span className="text-destructive">*</span></Label>
+                  {/* A20 — DatePicker do sistema, nunca `<input type="date">`. */}
+                  <DatePicker value={data} onChange={setData} className="mt-[3px] h-8 px-2.5 text-[12px]" />
+                </div>
+                <div className="min-w-0">
+                  {/* ⚠ ORIGEM, e nao destino: numa venda o gado SAI da fazenda. */}
+                  <Label className="text-[10px] text-muted-foreground">Fazenda de origem <span className="text-destructive">*</span></Label>
+                  <Select value={abateFazendaId} onValueChange={setAbateFazendaId}>
+                    <SelectTrigger className={`mt-[3px] h-8 px-2.5 text-[12px] ${fazendaFalta ? 'border-destructive' : ''}`}>
+                      <SelectValue placeholder="Selecione a fazenda" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {fazendasOC.map(f => <SelectItem key={f.id} value={f.id} className="text-[12px]">{f.nome}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  {fazendaFalta && (
+                    <p className="mt-[3px] text-[10px] text-destructive">Selecione a fazenda de origem.</p>
+                  )}
+                </div>
+                <div className="min-w-0 lg:col-span-3">
+                  <Label className="text-[10px] text-muted-foreground">Observações / Lote</Label>
+                  <Input value={observacao} onChange={e => setObservacao(e.target.value)} placeholder="Opcional"
+                    className="mt-[3px] h-8 px-2.5 text-[12px]" />
+                </div>
+              </div>
+            </div>
+            )}
+            </>)}
+          </div>
+        </div>
         <div className="lg:min-h-0">
           {/* ⚠ O CARD OCUPA A COLUNA INTEIRA, e quem rola e' a LISTA dentro dele.
               Antes o `aside` era `sticky self-start`: ele tinha a altura do CONTEUDO e a
@@ -967,12 +973,16 @@ export function AbateModalShell({
                   nome (frete, Fundersul, Iagro) exige o plano de contas linha a linha, que
                   hoje so' a aba Financeiro carrega. */}
               <div className="">
-                <LinhaResumo rotulo="A receber da indústria" valor={finAReceber == null ? null : formatMoeda(finAReceber)} />
+                {/* ⚠ A CAUSA VEM NA MESMA LINHA, à esquerda do traço: embaixo ela virava
+                    uma linha inteira de altura para dizer meia frase. */}
+                <LinhaResumo rotulo="A receber da indústria"
+                  valor={finAReceber == null ? null : formatMoeda(finAReceber)}
+                  selo={finAReceber == null
+                    ? <span className="text-[10px] text-muted-foreground">grava ao concluir</span>
+                    : undefined} />
                 {/* ⚠ O TRAÇO AQUI TEM CAUSA CONHECIDA, e dizê-la evita a leitura "o
                     sistema não sabe": o compromisso nasce quando a negociação é concluída. */}
-                {finAReceber == null && (
-                  <div className="px-3 text-[10px] text-muted-foreground">grava ao concluir</div>
-                )}
+
                 {proximoVencimento && (
                   <LinhaResumo rotulo={`Agendado ${proximoVencimento.split('-').reverse().join('/')}`} valor={null} />
                 )}
