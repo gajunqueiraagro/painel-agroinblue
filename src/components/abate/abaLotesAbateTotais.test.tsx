@@ -139,3 +139,30 @@ describe('a grade — o que o operador vê antes de negociar', () => {
     expect(container.textContent).not.toContain('OC ');
   });
 });
+
+describe('Resumo dos lotes — a tabela soma o que a lib já somou', () => {
+  /* ⚠ A LINHA "SOMA" E O BLOCO DE TOPO SÃO A MESMA CONTA, `totaisDoAbate`. Se um dia
+     divergirem, é porque alguém somou colunas na tela — e aí há duas respostas para
+     "quanto rendeu esta operação" dentro da mesma aba. */
+  it('a soma das parcelas fecha com a soma do bruto e do líquido', () => {
+    const A = lote('l1', 1, 10, 500);
+    const B = lote('l2', 2, 10, 500);
+    const linhas = new Map([['l1', negociada('l1')], ['l2', negociada('l2')]]);
+    const t = calcular([A, B], linhas);
+    /* base + bônus − descontos = bruto; bruto − funrural = líquido. As mesmas duas
+       igualdades que a cascata do modal mostra por lote, agora no total. */
+    expect(t.base + t.bonus - t.descontos).toBeCloseTo(t.bruto, 2);
+    expect(t.bruto - t.funrural).toBeCloseTo(t.liquido, 2);
+  });
+
+  it('lote sem negociação não soma nada, mas continua contado em cabeças', () => {
+    const A = lote('l1', 1, 10, 500);
+    const B = lote('l2', 2, 10, 500);
+    const t = calcular([A, B], new Map([['l1', negociada('l1')]]));
+    expect(t.cabecas).toBe(20);
+    /* Só um lote negociado: base do total = base daquele lote. */
+    const so = calcular([A], new Map([['l1', negociada('l1')]]));
+    expect(t.base).toBeCloseTo(so.base, 2);
+    expect(t.liquido).toBeCloseTo(so.liquido, 2);
+  });
+});

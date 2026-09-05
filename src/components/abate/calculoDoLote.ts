@@ -87,6 +87,13 @@ export function totaisDoAbate(lotes: LoteAbate[], calculos: Map<string, AbateCal
     const arrobas = soma(c => c.totalArrobas);
     return {
       cabecas, pesoVivo, carcaca, arrobas,
+      /* ⚠ AS PARCELAS DO MEIO ENTRARAM PARA A LINHA "SOMA" DA TABELA (ABATE-RESUMO-
+         LOTES-01). Elas já eram somadas — a cascata do modal fazia isso por lote —, mas
+         somá-las de novo na tela criaria a segunda resposta para "quanto de bônus tem
+         esta operação". A conta é uma só, aqui. */
+      base: soma(c => c.valorBase),
+      bonus: soma(c => c.totalBonus),
+      descontos: soma(c => c.totalDescontos),
       bruto: soma(c => c.valorBruto),
       liquido: soma(c => c.valorLiquido),
       funrural: soma(c => c.funruralTotal),

@@ -26,6 +26,7 @@ import { LoteDialog } from '@/components/compra/AbaNegociacaoLotes';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { paraCalculo, linhaVazia, totaisDoAbate, type LoteAbate } from '@/components/abate/calculoDoLote';
 import { ModalNegociarLote } from '@/components/abate/ModalNegociarLote';
+import { ModalResumoLotes } from '@/components/abate/ModalResumoLotes';
 import type { LinhaAbate, CenarioAbate } from '@/hooks/useOperacaoAbate';
 import type { CompraLotesApi } from '@/hooks/useCompraLotes';
 import { subcentroAbatePorCategoria } from '@/hooks/useOperacaoLiquidacao';
@@ -135,6 +136,7 @@ export function AbaLotesAbate({
   const [negociandoId, setNegociandoId] = useState<string | null>(null);
   /* Qual lote está para ser excluído. `null` = nenhum. */
   const [removendoId, setRemovendoId] = useState<string | null>(null);
+  const [resumoAberto, setResumoAberto] = useState(false);
 
   const calculos = useMemo(() => {
     const m = new Map<string, AbateCalculation>();
@@ -182,6 +184,15 @@ export function AbaLotesAbate({
             </button>
           ))}
         </div>
+        {/* ⚠ SECUNDARIO AO LADO DO PRINCIPAL: adicionar lote e' o ato da aba; o resumo e'
+            leitura. Dois botoes com o mesmo peso fariam o operador escolher entre eles. */}
+        {lotes.length > 0 && (
+          <Button type="button" size="sm" variant="outline"
+            className="h-7 shrink-0 gap-1 px-2.5 text-[11px]"
+            onClick={() => setResumoAberto(true)}>
+            Resumo dos lotes <ChevronRight className="h-3.5 w-3.5" />
+          </Button>
+        )}
         <Button type="button" size="sm" className="h-7 shrink-0 gap-1 px-2.5 text-[11px]"
           disabled={somenteLeitura} onClick={abrirNovo}>
           <Plus className="h-3.5 w-3.5" /> Adicionar lote
@@ -292,6 +303,11 @@ export function AbaLotesAbate({
             );
           })}
         </div>
+      )}
+
+      {resumoAberto && (
+        <ModalResumoLotes lotes={lotes} linhas={linhas} cenario={cenario}
+          lotesApi={lotesApi} onFechar={() => setResumoAberto(false)} />
       )}
 
       {removendo && (
