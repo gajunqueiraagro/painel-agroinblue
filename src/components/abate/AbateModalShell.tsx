@@ -38,7 +38,7 @@ import type { Categoria } from '@/types/cattle';
 import type { CompraLotesApi } from '@/hooks/useCompraLotes';
 import type { AbateApi, CenarioAbate, LinhaAbate } from '@/hooks/useOperacaoAbate';
 import type { LoteAbate } from '@/components/abate/calculoDoLote';
-import { AbaLotesAbate } from '@/components/abate/AbaLotesAbate';
+import { AbaLotesAbate, temNegociacao } from '@/components/abate/AbaLotesAbate';
 import { totaisDoAbate } from '@/components/abate/calculoDoLote';
 import { buildAbateCalculation, parseNumericValue, type AbateCalculation } from '@/lib/calculos/abate';
 import { paraCalculo, linhaVazia } from '@/components/abate/calculoDoLote';
@@ -429,7 +429,14 @@ export function AbateModalShell({
      liquido derivado do boitel) porque ali ha dois mundos; no abate o acordado e' o
      que os lotes dizem — o resultado do abate vive em `zoo_operacao_abate` e entra
      no financeiro, nao no topo. */
-  const valorAcordadoMostrado = lotesApi && lotesApi.totais.lotes > 0 ? lotesApi.totais.valorNegociado : null;
+  /* ⚠ VEM DO BANCO, NÃO DA SOMA LOCAL. `lotesApi.totais.valorNegociado` soma
+     `valor_informado` dos lotes — campo que o abate DEIXOU DE TER quando o cadastro
+     passou a ser `semValor` (ABATE-UX-01c). Com lotes na tela, aquela soma dava zero, e a
+     tela dizia "R$ 0,00 acordado" numa operação de setecentos mil. O valor certo é o
+     `valor_acordado` da operação, que `_oc_valor_do_lote` passou a derivar de
+     `zoo_operacao_abate.valor_liquido` (migration 20260905153529).
+     ⚠ AUSENTE É TRAÇO: sem operação carregada, `null` — nunca R$ 0,00. */
+  const valorAcordadoMostrado = liquidacaoApi?.valorAcordado ?? null;
 
   /* ⚠ AS SETE LINHAS DO ACERTO SAEM DO MOTOR — B-11 item 2. `dAcerto*` sao as parcelas que
      `derivadosBoitel` ja calcula com as flags aplicadas, e `valorTotalAntecipadoCalc` e o
@@ -467,10 +474,6 @@ export function AbateModalShell({
      booleano. Assim `disabled`, `title` e a dica escrita saem todos da mesma frase: quando
      ha motivo o botao trava E diz; sem motivo, ele funciona. Nao da' para travar em
      silencio por construcao. */
-  const concluirTravadoPor: string | null =
-    submitting ? 'salvando…'
-    : recebimentoApi?.saving ? 'aguarde a entrega terminar'
-    : null;
   const motivoNaoSalva = naNegociacao
     ? (!ocOperacaoId ? 'Salve a operação na aba Abate primeiro' : undefined)
     : (identificacaoPronta ? undefined : 'Informe frigorífico, data e fazenda');
@@ -534,6 +537,24 @@ export function AbateModalShell({
   /* ⚠ A MESMA CONTA DA GRADE, pela mesma funcao. O resumo lateral e o bloco de topo
      mostram os mesmos numeros lado a lado; duas somas independentes divergiriam no
      primeiro arredondamento e o operador nao teria como saber qual vale. */
+  /* Quais lotes ainda não têm negociação no cenário aberto — a mesma régua da grade e da
+     RPC: sem preço e sem carcaça não há o que concluir. */
+  const lotesSemNegociacao = lotesDoAbate.filter(l => !temNegociacao(linhasDoAbate.get(l.id)));
+  /**
+   * O que trava o Concluir — e é SÓ isto.
+   *
+   * ⚠ SAIU "aguarde a entrega terminar", que era resíduo do `VendaModalShell`: lá a
+   * Entrega acontece dentro da negociação, aqui ela vem DEPOIS de concluir. O resultado
+   * era um impasse — o Concluir mandava esperar a Entrega e a Entrega mandava concluir —,
+   * e nenhum dos dois lados dizia a verdade.
+   * ⚠ A ORDEM DO ABATE É: Salvar (lotes → abate) → Concluir (`oc_confirmar`) → Entrega.
+   */
+  const concluirTravadoPor: string | null =
+    submitting ? 'salvando…'
+    : lotesSemNegociacao.length > 0
+      ? `falta negociar ${lotesSemNegociacao.length} ${lotesSemNegociacao.length === 1 ? 'lote' : 'lotes'}`
+    : null;
+
   /* Há edição do abate ainda não gravada? O rodapé zera este mapa ao salvar. */
   const temRascunhoAbate = (abateLinhas?.size ?? 0) > 0;
 

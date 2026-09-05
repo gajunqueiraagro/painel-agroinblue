@@ -673,6 +673,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
      apos reabrir. E' o estado de hoje, e nao e' mentira: o operador ainda nao gravou nada
      nesta sessao. So' a gravacao bem-sucedida apaga o botao. */
   const [ocVendaAssinaturaSalva, setOcVendaAssinaturaSalva] = useState<string | null>(null);
+  const [ocAbateAssinaturaSalva, setOcAbateAssinaturaSalva] = useState<string | null>(null);
   const [rendCarcaca, setRendCarcaca] = useState('');
   const [funruralPct, setFunruralPct] = useState('');
   const [funruralReais, setFunruralReais] = useState('');
@@ -2497,6 +2498,20 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   });
   const ocVendaSemAlteracoes = ocVendaAssinaturaSalva !== null && ocVendaAssinaturaSalva === ocVendaAssinaturaAtual;
 
+  /* ⚠ MESMO DESENHO DA VENDA, e existe para o CONCLUIR não regravar o que já está gravado.
+     Medido no banco (OC 9b2b5e6b): `salvar_abate` às 12:28 e `salvar_lotes` de novo às
+     12:29 — o segundo veio do Concluir, que salva por dentro antes de confirmar. Sem
+     alteração nenhuma, aquela ida só incrementava a versão da operação.
+     ⚠ O RASCUNHO DO ABATE ENTRA NA ASSINATURA: editar carcaça ou preço sem tocar no lote
+     também é alteração, e sem isto o Concluir pularia a gravação do que o operador acabou
+     de digitar no modal. */
+  const ocAbateAssinaturaAtual = JSON.stringify({
+    frigorifico: abateFrigorificoId, data, fazenda: abateFazendaId, observacao, notaFiscal,
+    lotes: lotesApi.lotes.map(l => [l.ordem, l.categoria, l.quantidade, l.pesoMedioKg, l.observacao]),
+    abate: [...abateLinhas.entries()],
+  });
+  const ocAbateSemAlteracoes = ocAbateAssinaturaSalva !== null && ocAbateAssinaturaSalva === ocAbateAssinaturaAtual;
+
   /* ═══ O REALIZADO DO ABATE ════════════════════════════════════════════════════
      PR-OC-VENDA-REALIZADO-02.
 
@@ -2654,6 +2669,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     /* ⚠ `salvar` DEVOLVE A VERSAO NOVA, nao um booleano — `Promise<number | null>`.
        `null` e' a falha, e e' ela que vira `false` aqui. Devolver o numero cru faria
        o rodape tratar "versao 0" como falha no dia em que ela existisse. */
+    /* ⚠ NADA A SALVAR NÃO É SALVAR. O Concluir passa por aqui antes de confirmar; sem
+       esta saída, ele regravava lotes idênticos e subia a versão da operação à toa. */
+    if (ocAbateSemAlteracoes) return true;
     const versaoNova = await lotesApi.salvar();
     if (versaoNova === null) return false;
 
@@ -2696,6 +2714,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       /* Gravou: o que estava em memoria virou banco, e o hook ja recarregou. Manter o
          rascunho faria a proxima gravacao reenviar o que ja esta la'. */
       setAbateLinhas(new Map());
+      /* A tela acabou de virar banco: a partir daqui, "sem alterações" é verdade. */
+      setOcAbateAssinaturaSalva(ocAbateAssinaturaAtual);
       return true;
     } catch (e) {
       /* ⚠ ERRO DE RPC NUNCA E' MUDO — era esta a metade que faltava. `abateApi.salvar`
@@ -5402,6 +5422,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           frigorificoId={abateFrigorificoId} setFrigorificoId={setAbateFrigorificoId}
           contrapartes={abateFornecedores}
           numeroDocumento={notaFiscal || null}
+          semAlteracoes={ocAbateSemAlteracoes}
           onNovoFrigorifico={() => setNovoFornecedorCompraOpen(true)}
           abateFazendaId={abateFazendaId} setAbateFazendaId={setAbateFazendaId}
           fazendasOC={fazendasOC}

@@ -43,7 +43,7 @@ const CLS_NEG = 'text-destructive';
  * a mesma coisa aqui faz a tela dizer "a negociar" exatamente nos lotes que a RPC
  * recusaria — em vez de mostrar uma cascata de zeros que parece negociada.
  */
-function temNegociacao(l: LinhaAbate | undefined): boolean {
+export function temNegociacao(l: LinhaAbate | undefined): boolean {
   if (!l) return false;
   return l.precoArroba != null && (l.pesoCarcacaKg != null || l.rendimentoCarcacaPct != null);
 }
