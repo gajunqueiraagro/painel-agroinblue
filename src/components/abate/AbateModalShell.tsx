@@ -112,6 +112,19 @@ function DicaBotao({ texto }: { texto: string | null | undefined }) {
 
 /* Par rotulo-valor do resumo lateral — idioma do `Linha` de ResumoLateralOC (A17).
    ⚠ SEXTA COPIA deste par. Sai na mesma extracao que levar o resumo para lugar unico. */
+/* ⚠ OS QUATRO ESTADOS DA OC, com o tom que cada um pede: rascunho e' neutro (ainda nao
+   e' compromisso), programada e' informacao, fechada e' conclusao, cancelada e' o unico
+   vermelho — o unico que exige olhar. */
+const TOM_STATUS: Record<string, string> = {
+  rascunho: 'bg-muted text-muted-foreground',
+  programada: 'bg-blue-100 text-blue-700',
+  fechada: 'bg-emerald-100 text-emerald-700',
+  cancelada: 'bg-destructive/10 text-destructive',
+};
+const ROTULO_STATUS: Record<string, string> = {
+  rascunho: 'Rascunho', programada: 'Programada', fechada: 'Fechada', cancelada: 'Cancelada',
+};
+
 /** Duas casas, como em toda a tela do abate. */
 const num2 = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -240,6 +253,23 @@ export function AbateModalShell({
      tela, nao da operacao. */
   const [reabrirAberto, setReabrirAberto] = useState(false);
   const [motivoReabrir, setMotivoReabrir] = useState('');
+  /* ⚠ O SENTINELA DO PLANEJAMENTO FICA DE FORA — ele e' fornecedor de projecao, nao
+     frigorifico, e nao deve poder ser escolhido como comprador de um abate real.
+     ⚠ FILTRADO POR NOME, e nao por `tipo`: a coluna existe em `financeiro_fornecedores` e
+     nao discrimina nada — vale 'frigorifico' em 6.885 de 6.885 linhas, inclusive nos nove
+     sentinelas. Dar-lhe vocabulario e' a frente [FORNECEDOR-TIPO]. */
+  const compradoresDoAbate = useMemo(
+    () => contrapartes
+      .filter(f => !f.nome.includes('[META]'))
+      .map(f => ({
+        value: f.id,
+        label: f.nome,
+        sub: f.cpfCnpj ? `CNPJ ${f.cpfCnpj}` : 'sem CNPJ cadastrado',
+        subAlerta: !f.cpfCnpj,
+      })),
+    [contrapartes],
+  );
+
   const contraparteAtual = contrapartes.find(f => f.id === frigorificoId) ?? null;
   const frigorificoNome = contraparteAtual?.nome ?? null;
   const frigorificoDoc = contraparteAtual?.cpfCnpj || null;
@@ -395,7 +425,13 @@ export function AbateModalShell({
   });
   const fin = ocCompromissosApi.resumoOperacao;
   const temFin = !!fin && fin.temCompromissos;
-  const finAReceber = temFin ? fin.entradaObrigacao - fin.entradaLiquidado : null;
+  /* ⚠ AS TRES LINHAS PRECISAM FECHAR ENTRE SI. "A receber" mostrava `obrigacao −
+     liquidado`, ou seja, JA' descontava o recebido — e logo abaixo vinha "Recebido" e um
+     "Saldo" de outra conta. Nenhuma das tres somava com as outras, e o operador que
+     conferisse na mao encontrava contas diferentes. Agora: A receber = o contratado,
+     Recebido = o que entrou, Falta receber = a diferenca. */
+  const finAReceber = temFin ? fin.entradaObrigacao : null;
+  const finFaltaReceber = temFin ? fin.entradaObrigacao - fin.entradaLiquidado : null;
   const finRecebido = temFin ? fin.entradaLiquidado : null;
   /* ⚠ O QUE O PRODUTOR PAGA POR FORA — frete, Fundersul, Iagro/GTA. Vem somado pela view,
      que resolve o sentido pelo plano de contas; a tela nao decide de que lado cada
@@ -410,6 +446,9 @@ export function AbateModalShell({
       .sort();
     return datas[0] ?? null;
   }, [liquidacaoApi?.obrigacoes]);
+  /* ⚠ SEM CONSUMIDOR DESDE ABATE-UX-01k: era o que alimentava o rotulo "Saldo". Fica
+     porque a cascata e' a leitura correta de "em que pe esta o financeiro desta operacao"
+     e havera' lugar para ela; se continuar orfa na proxima passada, apagar. */
   const finSaldo = !temFin ? null
     : fin.totalLiquidado > 0 ? fin.entradaLiquidado - fin.saidaLiquidado
     : fin.totalMaterializado > 0 ? fin.entradaMaterializado - fin.saidaMaterializado
@@ -801,7 +840,7 @@ export function AbateModalShell({
               {/* ⚠ O COMPRADOR OCUPA O QUE SOBRA (A22): em tres colunas iguais, "Fortunceres
                   S.A. - Minerva" cortava enquanto Data sobrava espaco. Data e Fazenda tem
                   largura fixa porque o conteudo delas e' previsivel; o nome, nao. */}
-              <div className="grid grid-cols-[1fr_200px_220px] gap-2 rounded-md border bg-muted/20 px-3.5 py-[11px]">
+              <div className="grid grid-cols-[1fr_150px_220px] gap-3 rounded-md border bg-muted/20 px-3.5 py-[11px]">
                 <div className="min-w-0">
                   <div className="text-[11px] font-normal text-muted-foreground leading-none">Comprador</div>
                   <div className="mt-1 truncate whitespace-nowrap text-[clamp(16px,1.6vw,20px)] font-medium leading-none">{frigorificoNome ?? '—'}</div>
@@ -830,24 +869,27 @@ export function AbateModalShell({
                   dobra e o formulario rolava — com o rodape fixo, rolar aqui e' o operador
                   perder de vista o que acabou de preencher. Os tres obrigatorios cabem numa
                   linha; a observacao, sozinha, na seguinte. */}
-              <div className="grid grid-cols-1 lg:grid-cols-[1fr_170px_260px] gap-x-3 gap-y-3">
+              <div className="grid grid-cols-1 lg:grid-cols-[1fr_150px_220px] gap-x-3 gap-y-3">
                 <div className="min-w-0">
                   <Label className="text-[10px] text-muted-foreground">Comprador <span className="text-destructive">*</span></Label>
-                  <div className="mt-[3px] flex items-center gap-1">
-                    <div className="min-w-0 flex-1">
-                      <SearchableSelect
-                        value={frigorificoId || '__all__'}
-                        onValueChange={(v) => setFrigorificoId(v === '__all__' ? '' : v)}
-                        options={contrapartes.map(f => ({ value: f.id, label: f.nome }))}
-                        placeholder="Selecione ou cadastre o comprador"
-                        allLabel="Nenhum selecionado"
-                        allValue="__all__"
-                        className="[&_button]:h-8 [&_button]:text-[12px] [&_button]:px-2.5"
-                      />
-                    </div>
-                    <Button type="button" variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={onNovoFrigorifico}>
-                      <Plus className="h-3.5 w-3.5" />
-                    </Button>
+                  {/* ⚠ O CNPJ NA SEGUNDA LINHA, e ele entra na busca: dois frigorificos com
+                      nome parecido so' se distinguem pelo documento, e o operador tem a nota
+                      na mao — procurar pelo CNPJ e' o gesto natural.
+                      ⚠ SEM CNPJ E' AVISO, NAO DADO: ambar, porque e' cadastro a completar.
+                      ⚠ O "+" SAIU DE FORA E ENTROU NA LISTA: quem procurou e nao achou esta'
+                      olhando a lista, nao o campo ao lado. */}
+                  <div className="mt-[3px] min-w-0">
+                    <SearchableSelect
+                      value={frigorificoId || '__all__'}
+                      onValueChange={(v) => setFrigorificoId(v === '__all__' ? '' : v)}
+                      options={compradoresDoAbate}
+                      placeholder="Buscar por nome ou CNPJ…"
+                      allLabel="Nenhum selecionado"
+                      allValue="__all__"
+                      dense
+                      acaoFinal={{ label: '+ Cadastrar comprador', onSelect: onNovoFrigorifico }}
+                      className="[&_button]:h-8 [&_button]:text-[12px] [&_button]:px-2.5"
+                    />
                   </div>
                 </div>
                 <div className="min-w-0">
@@ -890,20 +932,28 @@ export function AbateModalShell({
               lista ganha o resto e so' ela rola; `min-h-0` no meio e' o que permite a
               lista encolher em vez de esticar o card para fora da coluna. */}
           <aside className="flex h-full flex-col bg-card rounded-md border shadow-sm overflow-hidden text-[11px]">
-            <div className="h-8 shrink-0 border-b border-border bg-accent/40 flex items-center px-3 text-[11px] font-bold uppercase tracking-wide text-primary">
+            {/* ⚠ O STATUS MORA NO CABECALHO DO RESUMO, nao numa linha da lista: e' a
+                primeira pergunta ("em que pe esta esta operacao?") e ela nao deve disputar
+                espaco com numeros. */}
+            <div className="h-8 shrink-0 border-b border-border bg-accent/40 flex items-center gap-2 px-3 text-[11px] font-medium uppercase tracking-wide text-primary">
               Resumo da operação
+              <span className={`ml-auto rounded-full px-1.5 py-px text-[10px] font-normal normal-case ${TOM_STATUS[ocStatusComercial ?? 'rascunho'] ?? TOM_STATUS.rascunho}`}>
+                {ROTULO_STATUS[ocStatusComercial ?? 'rascunho'] ?? 'Rascunho'}
+              </span>
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto pb-1">
               <div className="bg-primary/10 border-y border-primary/15 px-3 py-1 mt-0.5 first:mt-0 mb-0.5">
                 <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">Identificação</span>
               </div>
-              <div className="">
-                <LinhaResumo rotulo="Comprador" valor={frigorificoNome} />
-                <LinhaResumo rotulo="CNPJ" valor={frigorificoDoc} />
-                {/* Duas respostas curtas numa linha só: juntas ocupam menos que o
-                    rótulo de cada uma separada, e são lidas juntas de qualquer forma. */}
-                <LinhaResumo rotulo="Data · Fazenda"
-                  valor={[data ? data.split('-').reverse().join('/') : null, fazendaNome].filter(Boolean).join(' · ') || null} />
+              {/* ⚠ SEM ROTULOS AQUI. "Comprador: Fortunceres" gasta metade da largura
+                  para dizer o que o nome ja' diz — e nesta secao o dado É a identidade. Os
+                  rotulos continuam nas outras, onde o numero sozinho nao se explica. */}
+              <div className="px-3 py-1.5 leading-tight">
+                <div className="truncate text-[13px] font-semibold text-foreground">{frigorificoNome ?? '—'}</div>
+                {frigorificoDoc && <div className="truncate text-[11px] text-muted-foreground">CNPJ {frigorificoDoc}</div>}
+                <div className="truncate text-[11px] text-muted-foreground">
+                  {[data ? data.split('-').reverse().join('/') : null, fazendaNome].filter(Boolean).join(' · ') || '—'}
+                </div>
               </div>
 
               <div className="bg-primary/10 border-y border-primary/15 px-3 py-1 mt-0.5 mb-0.5">
@@ -928,10 +978,13 @@ export function AbateModalShell({
                   ? `${lotesApi.totais.lotes} · ${lotesApi.totais.animais} cab` : null} />
                 <LinhaResumo rotulo="Peso vivo" valor={totaisAbate.cabecas > 0
                   ? `${num2(totaisAbate.pesoMedio)} kg/cab` : null} />
-                <LinhaResumo rotulo="Carcaça" valor={totaisAbate.carcaca > 0
-                  ? `${num2(totaisAbate.carcacaCab)} kg/cab` : null} />
-                <LinhaResumo rotulo="Arrobas · RC" valor={totaisAbate.arrobas > 0
-                  ? `${num2(totaisAbate.arrobaCab)} @/cab · ${num2(totaisAbate.rc)}%` : null} />
+                {/* ⚠ CADA LINHA RESPONDE UMA PERGUNTA INTEIRA. "Carcaça · RC" junta o peso
+                    com o rendimento que o explica; "Arrobas" junta o total do lote com a
+                    média, que é o que se compara com o preço. */}
+                <LinhaResumo rotulo="Carcaça · RC" valor={totaisAbate.carcaca > 0
+                  ? `${num2(totaisAbate.carcacaCab)} kg/cab · ${num2(totaisAbate.rc)}%` : null} />
+                <LinhaResumo rotulo="Arrobas" valor={totaisAbate.arrobas > 0
+                  ? `${num2(totaisAbate.arrobas)} @ · ${num2(totaisAbate.arrobaCab)} @/cab` : null} />
                 <LinhaResumo rotulo="Valor bruto" valor={totaisAbate.bruto > 0
                   ? formatMoeda(totaisAbate.bruto) : null} />
                 {/* ⚠ VERMELHO E COM SINAL: e' o que sai do bruto antes de virar NF, e
@@ -953,9 +1006,10 @@ export function AbateModalShell({
                     /* A pilula so' existe onde ha dois mundos — ver a nota em `derAcerto`. */
                     selo={undefined} />
                 )}
+                {/* Por @ antes de por cabeça: é a unidade em que o preço foi negociado. */}
                 {totaisAbate.liquido > 0 && (
-                  <LinhaResumo rotulo="por cabeça · por @" forte
-                    valor={`${formatMoeda(totaisAbate.cabecas > 0 ? totaisAbate.liquido / totaisAbate.cabecas : 0)} · ${formatMoeda(totaisAbate.arrobas > 0 ? totaisAbate.liquido / totaisAbate.arrobas : 0)}`} />
+                  <LinhaResumo rotulo="por @ · por cabeça"
+                    valor={`${formatMoeda(totaisAbate.arrobas > 0 ? totaisAbate.liquido / totaisAbate.arrobas : 0)} · ${formatMoeda(totaisAbate.cabecas > 0 ? totaisAbate.liquido / totaisAbate.cabecas : 0)}`} />
                 )}
               </div>
 
@@ -998,23 +1052,34 @@ export function AbateModalShell({
               <div className="">
                 {/* ⚠ A CAUSA VEM NA MESMA LINHA, à esquerda do traço: embaixo ela virava
                     uma linha inteira de altura para dizer meia frase. */}
+                {/* ⚠ A DATA VIRA PILULA AO LADO DO VALOR, não linha própria: ela qualifica
+                    o número ("R$ x, agendado para dd/mm"), e uma linha só para ela custava
+                    a mesma altura de um dado inteiro. Âmbar enquanto é promessa; sem
+                    compromisso, o traço vem com a causa escrita. */}
                 <LinhaResumo rotulo="A receber da indústria"
                   valor={finAReceber == null ? null : formatMoeda(finAReceber)}
                   selo={finAReceber == null
                     ? <span className="text-[10px] text-muted-foreground">grava ao concluir</span>
-                    : undefined} />
-                {/* ⚠ O TRAÇO AQUI TEM CAUSA CONHECIDA, e dizê-la evita a leitura "o
-                    sistema não sabe": o compromisso nasce quando a negociação é concluída. */}
+                    : proximoVencimento
+                      ? <span className="rounded-full bg-amber-100 px-1.5 py-px text-[10px] text-amber-700">
+                          agendado {proximoVencimento.split('-').reverse().join('/')}
+                        </span>
+                      : undefined} />
 
-                {proximoVencimento && (
-                  <LinhaResumo rotulo={`Agendado ${proximoVencimento.split('-').reverse().join('/')}`} valor={null} />
-                )}
                 <LinhaResumo rotulo="Recebido" valor={finRecebido == null ? null : formatMoeda(finRecebido)} />
                 <LinhaResumo rotulo="Despesas do produtor" cor="text-destructive"
                   valor={finDespesas == null ? null : `− ${formatMoeda(finDespesas)}`} />
                 <LinhaResumo rotulo="Líquido do produtor" forte
                   valor={finLiquidoProdutor == null ? null : formatMoeda(finLiquidoProdutor)} />
-                <LinhaResumo rotulo="Saldo" valor={finSaldo == null ? null : formatMoeda(finSaldo)} />
+                {/* ⚠ "SALDO" NAO DIZIA DE QUE LADO — a favor? a pagar? do produtor ou da
+                    industria? E o numero que estava ali era outro: uma cascata de saldos
+                    (liquidado, materializado, programado) que mistura entradas e saidas, e
+                    nao a diferenca das duas linhas de cima. */}
+                <LinhaResumo rotulo="Falta receber" valor={finFaltaReceber == null ? null : formatMoeda(finFaltaReceber)} />
+                {finLiquidoProdutor != null && totaisAbate.arrobas > 0 && (
+                  <LinhaResumo rotulo="por @ · por cabeça"
+                    valor={`${formatMoeda(finLiquidoProdutor / totaisAbate.arrobas)} · ${formatMoeda(totaisAbate.cabecas > 0 ? finLiquidoProdutor / totaisAbate.cabecas : 0)}`} />
+                )}
               </div>
             </div>
           </aside>

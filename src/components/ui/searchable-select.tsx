@@ -10,6 +10,18 @@ export interface OpcaoSearchable {
    *  ⚠ NÃO ENTRA NA BUSCA: quem digita procura pelo nome. Se a contagem casasse,
    *  digitar "41" traria todo fornecedor com 41 lançamentos. */
   hint?: string;
+  /**
+   * Segunda linha da opção, abaixo do nome — ex.: o CNPJ do fornecedor.
+   *
+   * ⚠ ADITIVA: sem ela a opção continua sendo uma linha só, como sempre foi. Só a
+   * montagem que a passa muda de aparência.
+   * ⚠ ENTRA NA BUSCA, ao contrário do `hint`, e a diferença é de propósito: `hint` é
+   * contagem (digitar "41" traria todo fornecedor com 41 lançamentos), `sub` é
+   * identidade — quem procura um frigorífico pelo CNPJ está procurando por ele.
+   */
+  sub?: string;
+  /** Marca a segunda linha como ausência a resolver (âmbar), não como dado. */
+  subAlerta?: boolean;
 }
 
 const PREFIXO = 'ss-busca:';
@@ -40,6 +52,8 @@ interface SearchableSelectProps {
   value: string;
   onValueChange: (val: string) => void;
   options: OpcaoSearchable[];
+  /** Ação no rodapé da lista — ex.: "+ Cadastrar comprador". Ausente = nada muda. */
+  acaoFinal?: { label: string; onSelect: () => void };
   placeholder?: string;
   allLabel?: string;
   allValue?: string;
@@ -73,6 +87,7 @@ export function SearchableSelect({
   value,
   onValueChange,
   options,
+  acaoFinal,
   placeholder = 'Buscar...',
   allLabel = 'Todos',
   allValue = '__all__',
@@ -118,7 +133,8 @@ export function SearchableSelect({
   const filtered = useMemo(() => {
     if (!search.trim()) return options;
     const q = search.toLowerCase();
-    return options.filter(o => o.label.toLowerCase().includes(q));
+    return options.filter(o =>
+      o.label.toLowerCase().includes(q) || (o.sub ?? '').toLowerCase().includes(q));
   }, [options, search]);
 
   // Cap de render: sem virtualização, listas grandes (milhares de contrapartes)
@@ -303,6 +319,12 @@ export function SearchableSelect({
                   <span className="truncate">{o.label}</span>
                   {o.hint ? <span className="shrink-0 opacity-60">· {o.hint}</span> : null}
                 </span>
+                {o.sub ? (
+                  <span className={cn('block truncate text-[10px]',
+                    o.subAlerta ? 'text-amber-700' : 'text-muted-foreground')}>
+                    {o.sub}
+                  </span>
+                ) : null}
               </button>
             ))}
             {filtered.length === 0 && (
@@ -312,6 +334,18 @@ export function SearchableSelect({
               <div className="text-[9px] text-muted-foreground px-1 py-0.5 border-t border-border/50">
                 +{excedente} resultado{excedente === 1 ? '' : 's'} — refine a busca
               </div>
+            )}
+            {/* ⚠ A AÇÃO MORA NO FIM DA LISTA, não num botão ao lado do campo: quem procurou
+                e não achou está OLHANDO A LISTA — é ali que "não está aqui, cadastre" tem
+                de aparecer. Fica sempre visível, mesmo com a busca vazia, porque o operador
+                muitas vezes já sabe que o comprador é novo. */}
+            {acaoFinal && (
+              <button type="button" onMouseDown={e => e.preventDefault()}
+                onClick={() => { setOpen(false); acaoFinal.onSelect(); }}
+                className={cn('w-full text-left rounded-sm text-primary hover:bg-accent/50 border-t border-border/50',
+                  dense ? 'px-2 py-1 text-[12px]' : 'px-1 py-[1.5px] text-[9px]')}>
+                {acaoFinal.label}
+              </button>
             )}
           </div>
         </div>
