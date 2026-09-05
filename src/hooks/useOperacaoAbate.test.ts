@@ -23,8 +23,8 @@ import { paraPayload, daLinha, type LinhaAbate, type AbateRow } from '@/hooks/us
 
 const vazia = (loteId: string): LinhaAbate => ({
   operacaoLoteId: loteId,
-  pesoCarcacaKg: null, rendimentoCarcacaPct: null, pesoTotalKgNf: null,
-  precoArroba: null, valorBaseOverride: null, valorLiquido: null,
+  pesoCarcacaKg: null, pesoCarcacaFonte: null, rendimentoCarcacaPct: null, pesoTotalKgNf: null,
+  precoArroba: null, precoFonte: null, valorBaseOverride: null, valorLiquido: null,
   bonusPrecoce: { valor: null, fonte: null },
   bonusQualidade: { valor: null, fonte: null },
   bonusListaTrace: { valor: null, fonte: null },
@@ -83,8 +83,8 @@ describe('paraPayload — o que sobe para oc_salvar_abate', () => {
 describe('daLinha — o que volta do banco', () => {
   const cru: AbateRow = {
     operacao_lote_id: 'lote-9', cenario: 'realizado',
-    peso_carcaca_kg: 280, rendimento_carcaca_pct: 52.5, peso_total_kg_nf: null,
-    preco_arroba: 320, valor_base_override: null, valor_liquido: 47500,
+    peso_carcaca_kg: 280, peso_carcaca_fonte: 'total', rendimento_carcaca_pct: 52.5, peso_total_kg_nf: null,
+    preco_arroba: 320, preco_fonte: 'arroba', valor_base_override: null, valor_liquido: 47500,
     bonus_precoce_valor: 3, bonus_precoce_fonte: 'arroba',
     bonus_qualidade_valor: null, bonus_qualidade_fonte: null,
     bonus_lista_trace_valor: null, bonus_lista_trace_fonte: null,

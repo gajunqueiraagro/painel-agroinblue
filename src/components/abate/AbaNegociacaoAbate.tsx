@@ -62,13 +62,17 @@ interface Props {
 
 /* ── Altura única dos campos — A16. Um formulário com alturas diferentes se lê como
       dois formulários, e o olho procura a divisão que não existe. ── */
+/* Duas casas em TODA conversão: é o que faz a ida e volta cabeça↔total fechar. Sem
+   isso, 4500 / 18 = 250,00000000000003 volta ao campo e o operador vê o número mudar. */
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
 const H = 'h-8 text-xs';
 const LBL = 'text-[10px] text-muted-foreground';
 
 const vazia = (loteId: string): LinhaAbate => ({
   operacaoLoteId: loteId,
-  pesoCarcacaKg: null, rendimentoCarcacaPct: null, pesoTotalKgNf: null,
-  precoArroba: null, valorBaseOverride: null, valorLiquido: null,
+  pesoCarcacaKg: null, pesoCarcacaFonte: null, rendimentoCarcacaPct: null, pesoTotalKgNf: null,
+  precoArroba: null, precoFonte: null, valorBaseOverride: null, valorLiquido: null,
   bonusPrecoce: { valor: null, fonte: null },
   bonusQualidade: { valor: null, fonte: null },
   bonusListaTrace: { valor: null, fonte: null },
@@ -90,7 +94,16 @@ function paraCalculo(l: LinhaAbate, lote: LoteAbate) {
   return {
     quantidade: lote.quantidade,
     pesoKg: lote.pesoMedioKg,
-    pesoCarcacaKg: l.pesoCarcacaKg,
+    /* ⚠ A LIB TRABALHA POR CABEÇA E O BANCO GUARDA O TOTAL — a conversão mora aqui, e
+       errá-la erra tudo por um fator de `quantidade`. A aritmética é que prova a unidade
+       da lib, não o nome do campo: `abate.ts` faz `carcaça / 15` e chama o resultado de
+       `pesoArrobaCab`, e só DEPOIS multiplica por `quantidade`. Do outro lado, a RPC faz
+       `sum(peso_carcaca_kg)` entre os lotes para o `peso_carcaca_kg_total` do cabeçalho —
+       ali é total. `pesoKg` é o peso médio, então o rendimento (carcaça ÷ vivo) compara
+       por cabeça dos dois lados. */
+    pesoCarcacaKg: l.pesoCarcacaKg != null && lote.quantidade > 0
+      ? l.pesoCarcacaKg / lote.quantidade
+      : null,
     rendCarcaca: l.rendimentoCarcacaPct,
     precoArroba: l.precoArroba,
     valorBaseOverride: l.valorBaseOverride ?? undefined,
@@ -170,6 +183,70 @@ function ParDeUnidade({
     </div>
   );
 }
+
+/**
+ * O par CONVERTIDO — carcaça e preço.
+ *
+ * ⚠ IRMÃO DE `ParDeUnidade`, NÃO O MESMO, e a diferença é o que se grava. Nos bônus o
+ * banco guarda o número digitado e a fonte diz em que unidade ele está. Aqui o banco
+ * guarda SEMPRE o canônico — `peso_carcaca_kg` é o total do lote, `preco_arroba` é R$/@ —
+ * e a fonte só lembra por onde o operador entrou. Por isso os dois lados são calculados
+ * a partir do canônico, e digitar em qualquer um deles reescreve o canônico.
+ *
+ * ⚠ O DESENHO É O MESMO DE PROPÓSITO: mesma grade, mesmas larguras, mesma borda tracejada
+ * no lado derivado. Dois padrões visuais para a mesma ideia ensinariam o operador a
+ * desconfiar de qual deles vale.
+ */
+function ParConvertido({ rotulo, ladoA, ladoB, fonte, onDigitar, somenteLeitura }: {
+  rotulo: string;
+  ladoA: LadoConvertido;
+  ladoB: LadoConvertido;
+  fonte: string | null;
+  onDigitar: (unidade: string, n: number | null) => void;
+  somenteLeitura?: boolean;
+}) {
+  /* Sem fonte gravada, o lado A é o de entrada: linha antiga não sabe por onde foi
+     digitada, e supor o outro lado trocaria o número na cara de quem abre a tela. */
+  const ativo = fonte === ladoB.unidade ? ladoB.unidade : ladoA.unidade;
+  const campo = (lado: LadoConvertido, largura: string) => {
+    const ehAtivo = ativo === lado.unidade;
+    return (
+      <div className={largura}>
+        <Label className={LBL}>{lado.rotulo}</Label>
+        {!ehAtivo || lado.bloqueio ? (
+          <div className={`${H} flex items-center justify-end rounded-md border border-dashed px-2 text-muted-foreground tabular-nums`}
+               title={lado.bloqueio ?? 'Derivado do outro lado — não é digitável nem gravado.'}>
+            {lado.bloqueio ? '—' : lado.moeda ? formatMoeda(lado.valor ?? 0) : kg2(lado.valor)}
+          </div>
+        ) : lado.moeda ? (
+          <CampoMoeda valor={lado.valor} className={`${H} text-right`} disabled={somenteLeitura}
+            onChange={n => onDigitar(lado.unidade, n)} />
+        ) : (
+          <Input type="number" step="0.01" inputMode="decimal" className={`${H} text-right`}
+            disabled={somenteLeitura}
+            value={lado.valor ?? ''}
+            onChange={e => onDigitar(lado.unidade, e.target.value === '' ? null : Number(e.target.value))} />
+        )}
+      </div>
+    );
+  };
+  return (
+    <div className="grid grid-cols-[1fr_auto_auto] items-end gap-2">
+      <Label className={LBL}>{rotulo}</Label>
+      {campo(ladoA, 'w-[120px]')}
+      {campo(ladoB, 'w-[130px]')}
+    </div>
+  );
+}
+
+type LadoConvertido = {
+  unidade: string;
+  rotulo: string;
+  valor: number | null;
+  moeda?: boolean;
+  /** Motivo pelo qual este lado não pode receber número — vira `—` e vai no `title`. */
+  bloqueio?: string | null;
+};
 
 /** Uma linha da cascata. `forte` marca os três marcos: Base, Bruto e Líquido. */
 function LinhaCascata({ rotulo, valor, sinal, forte }: {
@@ -298,32 +375,51 @@ export function AbaNegociacaoAbate({
               <span className="text-[10px] text-muted-foreground">{subcentro ?? '—'}</span>
             </div>
 
-            {/* ── Carcaça e preço ── */}
-            <div className="grid grid-cols-3 gap-2">
-              <div>
-                <Label className={LBL}>Carcaça por cabeça</Label>
-                <Input
-                  type="number" step="0.01" inputMode="decimal" className={`${H} text-right`}
-                  disabled={somenteLeitura}
-                  value={linha.pesoCarcacaKg ?? ''}
-                  onChange={e => trocar({ pesoCarcacaKg: e.target.value === '' ? null : Number(e.target.value) })}
-                />
-              </div>
-              <div>
+            {/* ── Carcaça e preço: dois lados, um canônico ── */}
+            <div className="space-y-1.5">
+              <ParConvertido
+                rotulo="Carcaça" fonte={linha.pesoCarcacaFonte}
+                somenteLeitura={somenteLeitura}
+                ladoA={{ unidade: 'cabeca', rotulo: 'kg/cab',
+                  valor: linha.pesoCarcacaKg != null && lote.quantidade > 0
+                    ? round2(linha.pesoCarcacaKg / lote.quantidade) : null }}
+                ladoB={{ unidade: 'total', rotulo: 'kg do lote', valor: linha.pesoCarcacaKg }}
+                onDigitar={(unidade, n) => trocar(n == null
+                  ? { pesoCarcacaKg: null, pesoCarcacaFonte: null }
+                  : {
+                    /* Digitou por cabeça: o total é o que se grava. */
+                    pesoCarcacaKg: unidade === 'cabeca' ? round2(n * lote.quantidade) : round2(n),
+                    pesoCarcacaFonte: unidade === 'cabeca' ? 'cabeca' : 'total',
+                  })}
+              />
+              <ParConvertido
+                rotulo="Preço" fonte={linha.precoFonte}
+                somenteLeitura={somenteLeitura}
+                ladoA={{ unidade: 'arroba', rotulo: 'R$/@', valor: linha.precoArroba, moeda: true }}
+                ladoB={{ unidade: 'total', rotulo: 'R$ do lote', moeda: true,
+                  valor: linha.precoArroba != null ? round2(linha.precoArroba * c.totalArrobas) : null,
+                  /* ⚠ SEM CARCAÇA NÃO HÁ ARROBAS, e sem arrobas o total não vira R$/@ — a
+                     divisão seria por zero. O campo diz por que está travado em vez de
+                     aceitar um número que viraria lixo. */
+                  bloqueio: c.totalArrobas > 0 ? null : 'Informe a carcaça primeiro — sem ela não há arrobas para converter.' }}
+                onDigitar={(unidade, n) => trocar(n == null
+                  ? { precoArroba: null, precoFonte: null }
+                  : {
+                    precoArroba: unidade === 'total'
+                      ? (c.totalArrobas > 0 ? round2(n / c.totalArrobas) : null)
+                      : round2(n),
+                    precoFonte: unidade === 'total' ? 'total' : 'arroba',
+                  })}
+              />
+              <div className="grid grid-cols-[1fr_auto_auto] items-end gap-2">
                 <Label className={LBL}>Rendimento (%)</Label>
-                {/* Travado no mesmo desenho dos derivados do par valor+fonte: borda
-                    tracejada e texto apagado dizem, sem legenda, que aqui nao se digita. */}
-                <div className={`${H} flex items-center justify-end rounded-md border border-dashed px-2 text-muted-foreground tabular-nums`}
+                {/* Travado no mesmo desenho dos derivados: borda tracejada e texto apagado
+                    dizem, sem legenda, que aqui nao se digita. */}
+                <div className={`${H} w-[120px] flex items-center justify-end rounded-md border border-dashed px-2 text-muted-foreground tabular-nums`}
                      title="Derivado da carcaça sobre o peso vivo — não é digitável.">
                   {c.rendCalc > 0 ? `${c.rendCalc.toFixed(2)}%` : '—'}
                 </div>
-              </div>
-              <div>
-                <Label className={LBL}>Preço da @</Label>
-                <CampoMoeda
-                  valor={linha.precoArroba} className={`${H} text-right`} disabled={somenteLeitura}
-                  onChange={n => trocar({ precoArroba: n })}
-                />
+                <div className="w-[130px]" />
               </div>
             </div>
 

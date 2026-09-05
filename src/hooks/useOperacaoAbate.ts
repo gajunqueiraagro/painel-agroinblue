@@ -47,6 +47,18 @@ export type FontePct = 'pct' | 'reais';
 /** `outros_descontos` é o inverso dos bônus: o primeiro lado é o total. */
 export type FonteOutros = 'reais' | 'arroba';
 
+/**
+ * Carcaça e preço: o lado que o operador DIGITOU.
+ *
+ * ⚠ AQUI A FONTE NÃO ESCOLHE A UNIDADE DO QUE SE GRAVA — ela só lembra por onde se
+ * entrou. Diferente dos bônus, cujo `_valor` é o número digitado no lado da fonte, o
+ * banco guarda estes dois SEMPRE no canônico: `peso_carcaca_kg` é o TOTAL do lote em kg
+ * (o cabeçalho da operação faz `sum()` entre os lotes) e `preco_arroba` é R$/@. A
+ * conversão acontece na tela, que é quem conhece a quantidade e as arrobas do lote.
+ */
+export type FonteCarcaca = 'cabeca' | 'total';
+export type FontePreco = 'arroba' | 'total';
+
 export interface ValorComFonte<F extends string = FonteArroba> {
   valor: number | null;
   fonte: F | null;
@@ -55,10 +67,14 @@ export interface ValorComFonte<F extends string = FonteArroba> {
 /** Uma linha de `zoo_operacao_abate` — o detalhe de UM lote num cenário. */
 export interface LinhaAbate {
   operacaoLoteId: string;
+  /** ⚠ TOTAL DO LOTE em kg — não por cabeça. Ver `FonteCarcaca`. */
   pesoCarcacaKg: number | null;
+  pesoCarcacaFonte: FonteCarcaca | null;
   rendimentoCarcacaPct: number | null;
   pesoTotalKgNf: number | null;
+  /** ⚠ Sempre R$ por arroba, qualquer que tenha sido o lado digitado. */
   precoArroba: number | null;
+  precoFonte: FontePreco | null;
   bonusPrecoce: ValorComFonte;
   bonusQualidade: ValorComFonte;
   bonusListaTrace: ValorComFonte;
@@ -115,10 +131,10 @@ interface Params {
 export interface AbateRow {
   operacao_lote_id: string;
   cenario: string;
-  peso_carcaca_kg: number | null;
+  peso_carcaca_kg: number | null;          peso_carcaca_fonte: string | null;
   rendimento_carcaca_pct: number | null;
   peso_total_kg_nf: number | null;
-  preco_arroba: number | null;
+  preco_arroba: number | null;             preco_fonte: string | null;
   bonus_precoce_valor: number | null;      bonus_precoce_fonte: string | null;
   bonus_qualidade_valor: number | null;    bonus_qualidade_fonte: string | null;
   bonus_lista_trace_valor: number | null;  bonus_lista_trace_fonte: string | null;
@@ -134,7 +150,8 @@ const COLUNAS =
   + ' preco_arroba, bonus_precoce_valor, bonus_precoce_fonte, bonus_qualidade_valor,'
   + ' bonus_qualidade_fonte, bonus_lista_trace_valor, bonus_lista_trace_fonte,'
   + ' desconto_qualidade_valor, desconto_qualidade_fonte, outros_descontos_valor,'
-  + ' outros_descontos_fonte, funrural_valor, funrural_fonte, valor_base_override, valor_liquido';
+  + ' outros_descontos_fonte, funrural_valor, funrural_fonte, valor_base_override, valor_liquido,'
+  + ' peso_carcaca_fonte, preco_fonte';
 
 const comFonteArroba = (v: number | null, f: string | null): ValorComFonte<FonteArroba> => ({
   valor: v,
@@ -155,9 +172,14 @@ export function daLinha(r: AbateRow): LinhaAbate {
   return {
     operacaoLoteId: r.operacao_lote_id,
     pesoCarcacaKg: r.peso_carcaca_kg,
+    /* ⚠ SEM FONTE NO BANCO ABRE NO PRIMEIRO LADO, sem inventar: linha antiga não sabe
+       por onde foi digitada, e supor "total" mudaria o número na cara do operador. */
+    pesoCarcacaFonte: r.peso_carcaca_fonte === 'cabeca' || r.peso_carcaca_fonte === 'total'
+      ? r.peso_carcaca_fonte : null,
     rendimentoCarcacaPct: r.rendimento_carcaca_pct,
     pesoTotalKgNf: r.peso_total_kg_nf,
     precoArroba: r.preco_arroba,
+    precoFonte: r.preco_fonte === 'arroba' || r.preco_fonte === 'total' ? r.preco_fonte : null,
     bonusPrecoce: comFonteArroba(r.bonus_precoce_valor, r.bonus_precoce_fonte),
     bonusQualidade: comFonteArroba(r.bonus_qualidade_valor, r.bonus_qualidade_fonte),
     bonusListaTrace: comFonteArroba(r.bonus_lista_trace_valor, r.bonus_lista_trace_fonte),
@@ -187,10 +209,19 @@ export function paraPayload(l: LinhaAbate): Record<string, Json | undefined> {
        certo: sem a unidade, a leitura não sabe se 3 é três por cento ou três reais. */
     p[`${prefixo}_fonte`] = v.fonte;
   };
-  num('peso_carcaca_kg', l.pesoCarcacaKg);
+  /* ⚠ A FONTE SOBE COLADA NO VALOR, como nos bônus: `NOVA 7` da RPC recusa
+     `peso_carcaca_kg` sem `peso_carcaca_fonte` e `preco_arroba` sem `preco_fonte`. E
+     recusa certo — sem ela a tela reabriria no lado errado e o operador veria outro
+     número no lugar do que digitou. */
+  const comFonte = (chave: string, v: number | null, fonte: string | null) => {
+    if (v === null) return;
+    p[chave] = v;
+    p[`${chave === 'peso_carcaca_kg' ? 'peso_carcaca' : 'preco'}_fonte`] = fonte;
+  };
+  comFonte('peso_carcaca_kg', l.pesoCarcacaKg, l.pesoCarcacaFonte);
   num('rendimento_carcaca_pct', l.rendimentoCarcacaPct);
   num('peso_total_kg_nf', l.pesoTotalKgNf);
-  num('preco_arroba', l.precoArroba);
+  comFonte('preco_arroba', l.precoArroba, l.precoFonte);
   num('valor_base_override', l.valorBaseOverride);
   /* ⚠ SOBE SEMPRE QUE EXISTE, e é o que faz `valor_acordado` do cabeçalho fechar com a
      cascata da tela: a RPC soma esta coluna no cenário realizado. Omiti-lo deixaria o

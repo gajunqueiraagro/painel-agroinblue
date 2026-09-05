@@ -24,8 +24,8 @@ const lote = (id: string, ordem: number, categoria: string, label: string): Lote
 /* 10 cabeças × 500 kg, rendimento 50% → 250 kg de carcaça → 16,6667 @/cab → 166,6667 @. */
 const linha = (id: string, extra: Partial<LinhaAbate> = {}): LinhaAbate => ({
   operacaoLoteId: id,
-  pesoCarcacaKg: null, rendimentoCarcacaPct: 50, pesoTotalKgNf: null,
-  precoArroba: 300, valorBaseOverride: null, valorLiquido: null,
+  pesoCarcacaKg: null, pesoCarcacaFonte: null, rendimentoCarcacaPct: 50, pesoTotalKgNf: null,
+  precoArroba: 300, precoFonte: 'arroba', valorBaseOverride: null, valorLiquido: null,
   bonusPrecoce: { valor: null, fonte: null },
   bonusQualidade: { valor: null, fonte: null },
   bonusListaTrace: { valor: null, fonte: null },
@@ -112,7 +112,9 @@ describe('Rendimento — derivado, nunca digitado', () => {
      banco guardava um rendimento que a tela nao usava para nada. Agora ha um so'. */
   it('nao ha campo de digitar rendimento — o valor aparece travado', () => {
     /* 250 kg de carcaca sobre 500 kg de peso vivo = 50,00%. */
-    const l = linha('l1', { pesoCarcacaKg: 250, rendimentoCarcacaPct: null });
+    /* ⚠ 2.500 kg é o TOTAL do lote — 10 cabeças × 250 kg de carcaça sobre 500 kg de peso
+       vivo = 50,00%. O canônico gravado é o total; o campo `kg/cab` mostra 250. */
+    const l = linha('l1', { pesoCarcacaKg: 2500, rendimentoCarcacaPct: null });
     const { container } = montar([M], new Map([['l1', l]]));
     expect(screen.getByText('50.00%')).toBeInTheDocument();
     /* ⚠ E NENHUM CAMPO CARREGA O 50. Enquanto o rendimento era digitavel, ele vinha num
@@ -146,6 +148,9 @@ describe('Rendimento — derivado, nunca digitado', () => {
     const [loteId, proxima] = onLinhaChange.mock.calls[0];
     expect(loteId).toBe('l1');
     expect(proxima.rendimentoCarcacaPct).toBe(50);
+    /* Digitou 250 no lado `kg/cab`; o que se grava é o total das 10 cabeças. */
+    expect(proxima.pesoCarcacaKg).toBe(2500);
+    expect(proxima.pesoCarcacaFonte).toBe('cabeca');
     expect(proxima.valorLiquido).toBeGreaterThan(0);
   });
 });
@@ -178,5 +183,79 @@ describe('A chave do lote — o defeito que impediu o abate de existir', () => {
     expect(chaves).toEqual(['l1', 'l2']);
     expect(new Set(chaves).size).toBe(2);
     expect(chaves).not.toContain(undefined);
+  });
+});
+
+describe('Carcaça e preço — dois lados, um canônico', () => {
+  /* ⚠ O CANÔNICO NÃO É O QUE SE DIGITA. O banco guarda `peso_carcaca_kg` como TOTAL do
+     lote (a RPC faz `sum()` entre lotes para o cabeçalho) e `preco_arroba` como R$/@; a
+     fonte só lembra por onde o operador entrou. A lib, do outro lado, trabalha POR
+     CABEÇA — `abate.ts` faz `carcaça / 15` e chama de `pesoArrobaCab` antes de
+     multiplicar pela quantidade. A conversão vive na tela, e é ela que estes testes
+     travam: errá-la erra tudo por um fator de `quantidade`, calado. */
+  const carcacaDo = (titulo: string) => {
+    const cartao = screen.getByText(titulo, { exact: false }).closest('div.rounded-lg')!;
+    return cartao.querySelector('input[type="number"]') as HTMLInputElement;
+  };
+
+  it('ida e volta cabeça ↔ total fecha a 2 casas', () => {
+    const onLinhaChange = vi.fn();
+    const { rerender } = render(
+      <AbaNegociacaoAbate lotes={[M]} linhas={new Map([['l1', linha('l1')]])}
+        cenariosExistentes={['projetado']} cenario="projetado" onLinhaChange={onLinhaChange} />,
+    );
+    /* 10 cabeças × 333,33 kg = 3.333,30 no total. */
+    fireEvent.change(carcacaDo('1. Bois'), { target: { value: '333.33' } });
+    const gravada = onLinhaChange.mock.calls[0][1];
+    expect(gravada.pesoCarcacaKg).toBe(3333.3);
+
+    /* Reabrir com o que foi gravado devolve exatamente o que foi digitado. */
+    rerender(
+      <AbaNegociacaoAbate lotes={[M]} linhas={new Map([['l1', gravada]])}
+        cenariosExistentes={['projetado']} cenario="projetado" onLinhaChange={onLinhaChange} />,
+    );
+    expect(carcacaDo('1. Bois').value).toBe('333.33');
+  });
+
+  it('digitar o total grava o total e a fonte "total"', () => {
+    const onLinhaChange = vi.fn();
+    render(
+      <AbaNegociacaoAbate lotes={[M]}
+        linhas={new Map([['l1', linha('l1', { pesoCarcacaKg: 2500, pesoCarcacaFonte: 'total' })]])}
+        cenariosExistentes={['projetado']} cenario="projetado" onLinhaChange={onLinhaChange} />,
+    );
+    /* Com fonte `total`, o campo editável é o do lote — o de kg/cab vira derivado. */
+    const campo = carcacaDo('1. Bois');
+    expect(campo.value).toBe('2500');
+    fireEvent.change(campo, { target: { value: '4500' } });
+    const gravada = onLinhaChange.mock.calls[0][1];
+    expect(gravada.pesoCarcacaKg).toBe(4500);
+    expect(gravada.pesoCarcacaFonte).toBe('total');
+  });
+
+  it('preço: R$ do lote vira R$/@ pelas arrobas da carcaça', () => {
+    /* Carcaça 2.500 kg no lote → 166,6667 @. R$ 50.000 no lote → R$ 300,00/@. */
+    const onLinhaChange = vi.fn();
+    render(
+      <AbaNegociacaoAbate lotes={[M]}
+        linhas={new Map([['l1', linha('l1', { pesoCarcacaKg: 2500, pesoCarcacaFonte: 'total', precoArroba: null, precoFonte: 'total' })]])}
+        cenariosExistentes={['projetado']} cenario="projetado" onLinhaChange={onLinhaChange} />,
+    );
+    /* Pelo rótulo do lado, nunca por posição: o cartão tem quatro campos e a ordem
+       deles é decisão de layout, que muda sem avisar. */
+    const precoTotal = screen.getByText('R$ do lote').parentElement!.querySelector('input')!;
+    fireEvent.change(precoTotal, { target: { value: '50000' } });
+    const chamada = onLinhaChange.mock.calls.at(-1)![1];
+    expect(chamada.precoArroba).toBe(300);
+    expect(chamada.precoFonte).toBe('total');
+  });
+
+  it('sem carcaça, o R$ do lote fica travado e DIZ por quê', () => {
+    /* ⚠ Sem arrobas a conversão seria divisão por zero. O campo não aceita número e o
+       motivo fica no title — a regra do botão que diz por que está desabilitado. */
+    montar([M], new Map([['l1', linha('l1', { pesoCarcacaKg: null, rendimentoCarcacaPct: null })]]));
+    const travado = document.querySelector('[title^="Informe a carcaça primeiro"]');
+    expect(travado).not.toBeNull();
+    expect(travado!.textContent).toBe('—');
   });
 });
