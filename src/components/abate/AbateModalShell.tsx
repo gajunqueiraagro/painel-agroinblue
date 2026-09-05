@@ -25,6 +25,7 @@
  * — nenhum deles tem consumidor nesta aba. Entram quando a aba que precisar deles chegar.
  */
 import { useState, useMemo } from 'react';
+import { useStatusPilares } from '@/hooks/useStatusPilares';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -151,6 +152,9 @@ function BlocoTopoAba({ itens }: { itens: { rotulo: string; valor: string | null
     </div>
   );
 }
+
+const MESES_EXTENSO = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
 /** Duas casas, como em toda a tela do abate. */
 const num2 = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -300,6 +304,8 @@ export function AbateModalShell({
   const contraparteAtual = contrapartes.find(f => f.id === frigorificoId) ?? null;
   const frigorificoNome = contraparteAtual?.nome ?? null;
   const frigorificoDoc = contraparteAtual?.cpfCnpj || null;
+
+
   const fazendaNome = fazendasOC.find(f => f.id === abateFazendaId)?.nome ?? null;
 
   /* ⚠ O DADO PERSISTE NA TROCA DE TIPO, e isso nao mudou com a saida da aba: nenhum
@@ -414,6 +420,25 @@ export function AbateModalShell({
      cascata gemea. Derivar de novo abriria a porta para o cabecalho dizer "realizado" e o
      numero ao lado ainda ser o projetado. */
   /* O bloco Entrega do resumo lateral — MESMO helper da compra, nao uma segunda soma. */
+  /**
+   * O mês da data escolhida está fechado (P1 oficial) para esta fazenda?
+   *
+   * ⚠ A FONTE É A MESMA DO GUARD DO BANCO: `get_status_pilares_fechamento` →
+   * `p1_mapa_pastos.status = 'oficial'`, exatamente o que
+   * `trg_guard_lancamento_mes_fechado_p1` testa antes de recusar o INSERT. Reimplementar
+   * a regra aqui criaria a segunda definição de "mês fechado", e a primeira divergência
+   * seria uma tela que deixa preencher o que o banco vai recusar — que é o defeito que
+   * este PR veio consertar.
+   * ⚠ SÓ O REALIZADO É BARRADO: o guard libera `cenario = 'meta'`, e o abate como OC só
+   * existe em realizado — então aqui a pergunta é sempre pertinente.
+   */
+  const anoMesDaData = data ? data.slice(0, 7) : undefined;
+  const pilares = useStatusPilares(abateFazendaId || undefined, anoMesDaData, !!abateFazendaId && !!anoMesDaData);
+  const mesFechado = pilares.status.p1_mapa_pastos.status === 'oficial';
+  const mesFechadoMotivo = mesFechado && anoMesDaData
+    ? `${MESES_EXTENSO[Number(anoMesDaData.slice(5, 7)) - 1]}/${anoMesDaData.slice(0, 4)} está fechado (P1) para ${fazendaNome ?? 'esta fazenda'}`
+    : null;
+
   const entrega = consolidarRecebimento(recebimentoApi?.lotes ?? null);
 
   /* ─── O FINANCEIRO DO RESUMO LATERAL — B-10 item 4 ───────────────────────────
@@ -542,9 +567,13 @@ export function AbateModalShell({
      booleano. Assim `disabled`, `title` e a dica escrita saem todos da mesma frase: quando
      ha motivo o botao trava E diz; sem motivo, ele funciona. Nao da' para travar em
      silencio por construcao. */
-  const motivoNaoSalva = naNegociacao
-    ? (!ocOperacaoId ? 'Salve a operação na aba Abate primeiro' : undefined)
-    : (identificacaoPronta ? undefined : 'Informe frigorífico, data e fazenda');
+  /* ⚠ O MES FECHADO TRAVA OS DOIS BOTOES, e vem ANTES dos outros motivos: nao adianta
+     dizer "informe a fazenda" se, informada a fazenda, o mes recusa. */
+  const motivoNaoSalva = mesFechadoMotivo
+    ? `${mesFechadoMotivo} — reabra o período para lançar`
+    : naNegociacao
+      ? (!ocOperacaoId ? 'Salve a operação na aba Abate primeiro' : undefined)
+      : (identificacaoPronta ? undefined : 'Informe frigorífico, data e fazenda');
   /* Mesma regra aplicada ao Salvar — B-09 item 1c. O motivo ja existia no `title` desde
      sempre; o que faltava era ele estar ESCRITO ao lado.
      ⚠ `submitting` FICA DE FORA: ali o proprio rotulo do botao vira "Salvando...", e uma
@@ -618,10 +647,12 @@ export function AbateModalShell({
    * ⚠ A ORDEM DO ABATE É: Salvar (lotes → abate) → Concluir (`oc_confirmar`) → Entrega.
    */
   const concluirTravadoPor: string | null =
-    submitting ? 'salvando…'
+    mesFechadoMotivo ? `${mesFechadoMotivo} — reabra o período`
+    : submitting ? 'salvando…'
     : lotesSemNegociacao.length > 0
       ? `falta negociar ${lotesSemNegociacao.length} ${lotesSemNegociacao.length === 1 ? 'lote' : 'lotes'}`
     : null;
+
 
   /* ⚠ OS NUMEROS DE CADA ABA, DA MESMA FONTE QUE A ABA USA — nada recalculado aqui.
      Ausencia continua sendo `null`, que o bloco imprime como traco. */
@@ -991,6 +1022,20 @@ export function AbateModalShell({
                     <p className="mt-[3px] text-[10px] text-destructive">Selecione a fazenda de origem.</p>
                   )}
                 </div>
+                {/* ⚠ O AVISO APARECE QUANDO A DATA E' ESCOLHIDA, nao na gravacao. O banco
+                    recusa por trigger (`trg_guard_lancamento_mes_fechado_p1`) e a recusa
+                    chegava no fim, depois de preencher comprador, lotes e negociacao —
+                    trabalho inteiro perdido por uma informacao que a tela ja podia ter dado.
+                    ⚠ AMBAR, NAO VERMELHO: nao e' erro do operador, e' estado do periodo.
+                    ⚠ E DIZ ONDE SE RESOLVE: reabrir o P1 invalida o realizado do mes E a
+                    cadeia dos meses seguintes, com motivo auditado — e' ato do Fechamento,
+                    nao botao de passagem dentro de um modal de abate. */}
+                {mesFechadoMotivo && (
+                  <div className="min-w-0 lg:col-span-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+                    <b className="font-semibold">{mesFechadoMotivo}.</b>{' '}
+                    Lançamentos nesse mês só depois de reabrir o período em Rebanho › Fechamento › Mapa de Pastos.
+                  </div>
+                )}
                 <div className="min-w-0 lg:col-span-3">
                   <Label className="text-[10px] text-muted-foreground">Observações / Lote</Label>
                   <Input value={observacao} onChange={e => setObservacao(e.target.value)} placeholder="Opcional"
