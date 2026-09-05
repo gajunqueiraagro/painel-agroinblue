@@ -33,6 +33,8 @@ interface Props {
   linhasPrevisao?: LinhaPrevisao[];
   /** Obrigações que só o tipo sabe montar — repassadas à aba de compromissos. */
   propostasExtras?: PropostaCompromisso[];
+  /** Vindo do rodapé: acabou de concluir, ofereça a geração. */
+  abrirGerarAoMontar?: boolean;
   seloProjecao?: ReactNode;
   rotulos?: RotulosCompromissos;
   /* ⚠ A INSTANCIA VEM DE FORA QUANDO O SHELL JA A TEM — B-10 item 4. O resumo lateral da
@@ -87,7 +89,8 @@ export function AbaFinanceiroOC(props: Props) {
         <AbaCompromissosOC ocApi={ocApi} bloqueado clienteId={clienteId} tipoOperacao={api.tipoOperacao} fornecedores={api.fornecedores}
           valorAcordado={api.valorAcordado} lotes={api.lotes} contraparteId={api.contraparteId} dataOperacao={props.dataOperacao ?? null} dataChegada={props.dataChegada ?? null}
           darkSelectClass={props.darkSelectClass} recarregarDados={api.recarregar}
-          seloProjecao={props.seloProjecao} propostasExtras={props.propostasExtras} rotulos={props.rotulos} />
+          seloProjecao={props.seloProjecao} propostasExtras={props.propostasExtras}
+          abrirGerarAoMontar={props.abrirGerarAoMontar} rotulos={props.rotulos} />
       </div>
     );
   }
@@ -97,6 +100,7 @@ export function AbaFinanceiroOC(props: Props) {
       valorAcordado={api.valorAcordado} lotes={api.lotes} contraparteId={api.contraparteId} dataOperacao={props.dataOperacao ?? null} dataChegada={props.dataChegada ?? null}
       darkSelectClass={props.darkSelectClass} recarregarDados={api.recarregar}
       linhasPrevisao={props.linhasPrevisao} seloProjecao={props.seloProjecao}
-      propostasExtras={props.propostasExtras} rotulos={props.rotulos} />
+      propostasExtras={props.propostasExtras} abrirGerarAoMontar={props.abrirGerarAoMontar}
+      rotulos={props.rotulos} />
   );
 }

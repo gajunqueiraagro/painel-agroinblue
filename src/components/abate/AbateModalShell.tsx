@@ -25,7 +25,7 @@
  * — nenhum deles tem consumidor nesta aba. Entram quando a aba que precisar deles chegar.
  */
 import { useState, useMemo } from 'react';
-import { produtoOCCompromisso } from '@/lib/financeiro/produtoOC';
+import { produtoOCCompromissoLote } from '@/lib/financeiro/produtoOC';
 import { useStatusPilares } from '@/hooks/useStatusPilares';
 import { ReabrirP1Dialog } from '@/components/ReabrirP1Dialog';
 import { Button } from '@/components/ui/button';
@@ -286,6 +286,7 @@ export function AbateModalShell({
      tela, nao da operacao. */
   const [reabrirAberto, setReabrirAberto] = useState(false);
   const [reabrirP1Aberto, setReabrirP1Aberto] = useState(false);
+  const [ofereceGerarCompromissos, setOfereceGerarCompromissos] = useState(false);
   const [motivoReabrir, setMotivoReabrir] = useState('');
   /* ⚠ O SENTINELA DO PLANEJAMENTO FICA DE FORA — ele e' fornecedor de projecao, nao
      frigorifico, e nao deve poder ser escolhido como comprador de um abate real.
@@ -691,7 +692,7 @@ export function AbateModalShell({
     return [{
       chave: `funrural:${l.id}`,
       natureza: 'obrigacao' as const,
-      descricao: `${produtoOCCompromisso('abate', l.quantidade, l.categoriaLabel)} — Funrural e impostos`,
+      descricao: `${produtoOCCompromissoLote('abate', l.quantidade, l.categoria ?? '')} — Funrural e impostos`,
       caminho: SUBCENTRO_DESPESA_VENDA,
       subcentro: SUBCENTRO_DESPESA_VENDA,
       valor: c.funruralTotal,
@@ -906,6 +907,7 @@ export function AbateModalShell({
                   O vazio honesto sai: agora ha o que mostrar. */}
               <AbaFinanceiroOC
                 propostasExtras={propostasFunrural}
+                abrirGerarAoMontar={ofereceGerarCompromissos}
                 api={liquidacaoApi}
                 operacaoPronta={!!ocOperacaoId}
                 darkSelectClass=""
@@ -1342,6 +1344,11 @@ export function AbateModalShell({
               const r = await onSalvarNegociacao();
               if (r === false) return;
               await onConcluirNegociacao?.(typeof r === 'number' ? r : undefined);
+              /* ⚠ CONCLUIU: o financeiro é o próximo passo, e ele estava ficando para
+                 depois — a OC 9b2b5e6b fechou com entrega encerrada e ZERO compromissos.
+                 A aba decide se há o que propor; o rodapé só avisa que a hora chegou. */
+              setOfereceGerarCompromissos(true);
+              setAbaAtiva('financeiro');
             }}>
             <Check className="h-4 w-4" /> Concluir negociação
           </Button>

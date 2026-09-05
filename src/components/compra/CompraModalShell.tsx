@@ -455,7 +455,13 @@ export function CompraModalShell(api: CompraModalShellProps) {
               fornecedores={api.liquidacaoApi?.fornecedores}
               lotes={api.documentosApi?.lotes} />
           ) : abaAtiva === 'financeiro' && api.liquidacaoApi ? (
+            /* ⚠ NA COMPRA O DIALOGO NAO E' EMPURRADO PELO CONCLUIR: o passo seguinte dela
+               e' o RECEBIMENTO, e o proprio fluxo diz isso ("Continue com o recebimento").
+               Aqui a oferta acontece quando o operador CHEGA ao Financeiro de uma operacao
+               ja' fechada — e a aba so' abre o dialogo se houver o que propor. Nos outros
+               dois, o concluir leva direto, porque la' o financeiro e' o proximo passo. */
             <AbaFinanceiroOC
+              abrirGerarAoMontar={api.ocStatusComercial === 'fechada'}
               api={api.liquidacaoApi}
               operacaoPronta={!!api.ocOperacaoId}
               darkSelectClass={DARK_SELECT_CONTENT}

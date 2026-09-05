@@ -71,6 +71,15 @@ interface Props {
    * passam nada — "não inventar" era a regra.
    */
   propostasExtras?: PropostaCompromisso[];
+  /**
+   * Abre o diálogo "Gerar compromissos" assim que a aba montar.
+   *
+   * ⚠ É O ACOPLAMENTO RODAPÉ → ABA, e ele é de mão única de propósito: o shell diz
+   * "acabei de concluir", a aba decide se há o que propor. Se a operação já tiver
+   * compromisso, ou se não houver linha a propor, nada abre — quem sabe disso é a aba,
+   * não o rodapé.
+   */
+  abrirGerarAoMontar?: boolean;
 }
 
 /* Tema escuro para o painel do `SearchableSelect` (Lote, Subcentro, Favorecido).
@@ -121,12 +130,17 @@ const TOL_CENTAVO = 0.005;
    -> liquidado em sete colunas; com a operacao paga, o MESMO numero aparecia seis
    vezes na linha. Aqui so sai o que FALTA, e so quando falta. Cadeia inteira igual
    ao valor => null, e a linha fica limpa: o Status ja diz tudo. */
-function desvioCompromisso(c: CompromissoResumo): string | null {
+function desvioCompromisso(c: CompromissoResumo, entrada: boolean): string | null {
   if (c.status === 'cancelado') return null;
   if (c.saldoAProgramar > TOL_CENTAVO) return `falta programar ${brl(c.saldoAProgramar)}`;
   const aLancar = c.totalProgramado - c.totalMaterializado;
   if (aLancar > TOL_CENTAVO) return `falta lançar ${brl(aLancar)}`;
-  if (c.saldoFinanceiro > TOL_CENTAVO) return `falta pagar ${brl(c.saldoFinanceiro)}`;
+  /* ⚠ QUEM PAGA E QUEM RECEBE NÃO É A MESMA FRASE. "falta pagar R$ 107.174,97" numa
+     entrada dizia ao produtor que ELE devia ao frigorífico o que o frigorífico deve a ele.
+     O sentido vem do plano de contas, a mesma regra de `oc_materializar_programacao`. */
+  if (c.saldoFinanceiro > TOL_CENTAVO) {
+    return `${entrada ? 'falta receber' : 'falta pagar'} ${brl(c.saldoFinanceiro)}`;
+  }
   return null;
 }
 
@@ -136,10 +150,12 @@ function desvioCompromisso(c: CompromissoResumo): string | null {
    entrega, lidos na ordem em que a cadeia acontece.
    ⚠ O `status` CRU (aberto/programado/cancelado) nao some — vai no `title`, porque
    e' ele que os gates do banco usam e quem depura precisa dele. */
-function estadoCompromisso(c: CompromissoResumo): { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' } {
+function estadoCompromisso(c: CompromissoResumo, entrada: boolean): { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' } {
   if (c.status === 'cancelado') return { label: 'Cancelado', variant: 'destructive' };
   if (c.valorCompromisso <= 0) return { label: '—', variant: 'outline' };
-  if (c.totalLiquidado >= c.valorCompromisso - TOL_CENTAVO) return { label: 'Pago', variant: 'default' };
+  if (c.totalLiquidado >= c.valorCompromisso - TOL_CENTAVO) {
+    return { label: entrada ? 'Recebido' : 'Pago', variant: 'default' };
+  }
   if (c.totalLiquidado > TOL_CENTAVO) return { label: 'Parcial', variant: 'secondary' };
   if (c.totalMaterializado > TOL_CENTAVO) return { label: 'Lançado', variant: 'secondary' };
   if (c.totalProgramado > TOL_CENTAVO) return { label: 'Programado', variant: 'secondary' };
@@ -204,7 +220,7 @@ const ROTULOS_PADRAO: RotulosCompromissos = {
   mostrarBaseDaOperacao: true, mostrarSentidoDoDinheiro: false,
 };
 
-export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, fornecedores, valorAcordado, lotes, contraparteId, dataOperacao, dataChegada, darkSelectClass, recarregarDados, linhasPrevisao, seloProjecao, propostasExtras, rotulos = ROTULOS_PADRAO }: Props) {
+export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, fornecedores, valorAcordado, lotes, contraparteId, dataOperacao, dataChegada, darkSelectClass, recarregarDados, linhasPrevisao, seloProjecao, propostasExtras, abrirGerarAoMontar, rotulos = ROTULOS_PADRAO }: Props) {
   const { resumoOperacao, compromissos, parcelas, versao, saving } = ocApi;
   const [searchParams, setSearchParams] = useSearchParams();
   /* ⚠ OS DOIS CATALOGOS SUBIRAM PARA CA — PR-OC-VENDA-FIN-PREVISAO-01D (adendo 2). Eles
@@ -503,8 +519,8 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
       .map(i => ({
         chave: `principal:${i.lote.id}`,
         natureza: 'principal' as const,
-        descricao: produtoOCCompromisso(tipoOperacao ?? 'compra', i.lote.qtd ?? 0,
-          CATEGORIAS.find(k => k.value === i.lote.categoria)?.label ?? i.lote.categoria ?? ''),
+        /* A MESMA funcao que o dialogo manual grava e que a lista exibe — "Abate 018 V". */
+        descricao: produtoOCCompromissoLote(tipoOperacao ?? 'compra', i.lote.qtd ?? 0, i.lote.categoria ?? ''),
         caminho: i.subcentro,
         subcentro: i.subcentro,
         valor: i.valorBruto,
@@ -516,8 +532,23 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
     return [...principais, ...extras];
   }, [compromissos, lotes, tipoOperacao, propostasExtras]);
 
+  /* ⚠ PELO PLANO, NAO PELO TIPO: uma operacao "de entrada" e' aquela que TEM alguma linha
+     de entrada. Perguntar `tipoOperacao !== 'compra'` daria o topo de quatro colunas a uma
+     venda que so' tenha despesas — e a coluna "A receber" ficaria em traco eterno. */
+  const temEntradas = compromissos.some(c => c.status !== 'cancelado' && entradaDoCompromisso(c));
+
   const semCompromisso = compromissos.length === 0;
   const mostrarAProgramar = !semCompromisso && totalAProgramar > TOL_CENTAVO;
+
+  /* Uma vez só: reabrir a aba depois de fechar o diálogo não o traz de volta. */
+  const jaAbriuGerar = useRef(false);
+  useEffect(() => {
+    if (!abrirGerarAoMontar || jaAbriuGerar.current) return;
+    if (!semCompromisso || propostas.length === 0) return;
+    jaAbriuGerar.current = true;
+    setGerarAberto(true);
+  }, [abrirGerarAoMontar, semCompromisso, propostas.length]);
+
   const confere = !semCompromisso && !!resumoOperacao
     && resumoOperacao.obrigacaoTotal > TOL_CENTAVO
     && Math.abs(resumoOperacao.obrigacaoTotal - resumoOperacao.totalLiquidado) <= TOL_CENTAVO;
@@ -531,8 +562,12 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
     if (!c.loteId) return null;
     const lote = lotes.find(l => l.id === c.loteId);
     if (!lote) return null;
-    const cat = CATEGORIAS.find(x => x.value === lote.categoria)?.label ?? lote.categoria;
-    return `${cat}${lote.qtd ? ` · ${lote.qtd} cab` : ''}`;
+    /* ⚠ A DESCRICAO PADRAO DA OC, a mesma que o dialogo grava e que os PADROES fixam:
+       "{Verbo} {qtd 3 digitos} {SIGLA}" — "Abate 018 V". Antes era "Vacas · 18 cab", que
+       diz o lote mas nao a operacao, e a linha aparecia como "principal" quando nao havia
+       lote resolvido. A view nao devolve a `descricao` gravada, entao ela e' remontada
+       aqui pela MESMA funcao que a gravou — nao ha segunda forma de nomear. */
+    return produtoOCCompromissoLote(tipoOperacao ?? 'compra', lote.qtd ?? 0, lote.categoria ?? '');
   };
 
   /* O COMPONENTE SO ACRESCENTA quando diz algo alem da natureza. `principal/principal`
@@ -1013,17 +1048,31 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
                   ⚠ AUSENCIA NAO E' ZERO. Operacao sem compromisso nenhum nao tem
                   obrigacao de R$ 0,00 — nao tem obrigacao. Cinco caixas de "R$ 0,00"
                   eram cinco afirmacoes falsas sobre uma operacao que nao comecou. */}
-              <div className={`grid gap-2 rounded-md border bg-muted/20 px-3.5 py-[11px] ${mostrarAProgramar ? 'grid-cols-3' : 'grid-cols-2'}`}>
+              {/* ⚠ ENTRADA E SAIDA NAO SE SOMAM. `obrigacaoTotal` e `totalLiquidado` juntam
+                  os dois eixos: numa operacao que RECEBE, o topo dizia "Obrigacao
+                  R$ 107.863,91" — os R$ 107.174,97 a receber do frigorifico MAIS os
+                  R$ 688,94 que o produtor pagou de taxa. Dois sentidos num numero so'.
+                  A view ja entrega os quatro eixos separados; e' so' le-los.
+                  ⚠ A COMPRA CONTINUA COM DOIS: la' tudo e' saida, e "A receber" seria uma
+                  coluna de traco permanente. */}
+              <div className={`grid gap-2 rounded-md border bg-muted/20 px-3.5 py-[11px] ${
+                temEntradas ? 'grid-cols-4' : mostrarAProgramar ? 'grid-cols-3' : 'grid-cols-2'}`}>
                 <div className="min-w-0">
-                  <div className="text-[11px] font-normal text-muted-foreground leading-none">Obrigação</div>
+                  <div className="text-[11px] font-normal text-muted-foreground leading-none">
+                    {temEntradas ? 'A receber' : 'Obrigação'}
+                  </div>
                   <div className="mt-1 text-[20px] font-medium tabular-nums leading-none">
-                    {semCompromisso ? '—' : brl(resumoOperacao.obrigacaoTotal)}
+                    {semCompromisso ? '—'
+                      : brl(temEntradas ? resumoOperacao.entradaObrigacao : resumoOperacao.obrigacaoTotal)}
                   </div>
                 </div>
                 <div className="min-w-0">
-                  <div className="text-[11px] font-normal text-muted-foreground leading-none">Pago</div>
+                  <div className="text-[11px] font-normal text-muted-foreground leading-none">
+                    {temEntradas ? 'Recebido' : 'Pago'}
+                  </div>
                   <div className="mt-1 text-[20px] font-medium tabular-nums leading-none">
-                    {semCompromisso ? '—' : brl(resumoOperacao.totalLiquidado)}
+                    {semCompromisso ? '—'
+                      : brl(temEntradas ? resumoOperacao.entradaLiquidado : resumoOperacao.totalLiquidado)}
                   </div>
                   {/* Tolerancia de um centavo, a mesma `TOL_CENTAVO` que `estadoCompromisso`
                       usa por compromisso — nao ha segundo limiar nesta tela. */}
@@ -1031,7 +1080,21 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
                     <div className="mt-1 text-[11px] font-normal leading-none text-emerald-700 dark:text-emerald-500">confere</div>
                   )}
                 </div>
-                {mostrarAProgramar && (
+                {temEntradas && (<>
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-normal text-muted-foreground leading-none">Despesas</div>
+                    <div className="mt-1 text-[20px] font-medium tabular-nums leading-none text-destructive">
+                      {resumoOperacao.saidaObrigacao > TOL_CENTAVO ? brl(resumoOperacao.saidaObrigacao) : '—'}
+                    </div>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-normal text-muted-foreground leading-none">Pagas</div>
+                    <div className="mt-1 text-[20px] font-medium tabular-nums leading-none text-destructive">
+                      {resumoOperacao.saidaLiquidado > TOL_CENTAVO ? brl(resumoOperacao.saidaLiquidado) : '—'}
+                    </div>
+                  </div>
+                </>)}
+                {!temEntradas && mostrarAProgramar && (
                   <div className="min-w-0">
                     <div className="text-[11px] font-normal text-muted-foreground leading-none">A programar</div>
                     <div className="mt-1 text-[20px] font-medium tabular-nums leading-none text-amber-700 dark:text-amber-500">
@@ -1078,8 +1141,11 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
           <div className="rounded-md border divide-y divide-border/60">
             {compromissosVisiveis.map(c => {
               const favNome = fornecedores.find(f => f.id === c.favorecidoId)?.nome ?? (c.favorecidoId ? '—' : '');
-              const desvio = desvioCompromisso(c);
-              const estado = estadoCompromisso(c);
+              /* O sentido de CADA linha, pelo plano — não pelo tipo da operação: uma
+                 venda tem entradas (o que se recebe) e saídas (o que ela custa por fora). */
+              const ehEntrada = entradaDoCompromisso(c);
+              const desvio = desvioCompromisso(c, ehEntrada);
+              const estado = estadoCompromisso(c, ehEntrada);
               const extra = componenteAdicional(c);
               /* Contexto normal: quem recebe e quando. Havendo desvio, ele TOMA a linha
                  — entre "vence em 28/02" e "falta pagar R$ 1.500", quem opera precisa do

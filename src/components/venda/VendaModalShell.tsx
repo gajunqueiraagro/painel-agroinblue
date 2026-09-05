@@ -228,6 +228,7 @@ export function VendaModalShell({
      tela, nao da operacao. */
   const [reabrirAberto, setReabrirAberto] = useState(false);
   const [reabrirP1Aberto, setReabrirP1Aberto] = useState(false);
+  const [ofereceGerarCompromissos, setOfereceGerarCompromissos] = useState(false);
   const [motivoReabrir, setMotivoReabrir] = useState('');
   const compradorNome = contrapartes.find(f => f.id === compradorId)?.nome ?? null;
   const fazendaNome = fazendasOC.find(f => f.id === vendaFazendaId)?.nome ?? null;
@@ -712,6 +713,7 @@ export function VendaModalShell({
                 pelo `verboOC`, e o filtro de centro de custo da compra se desliga sozinho.
                 O vazio honesto sai: agora ha o que mostrar. */
             <AbaFinanceiroOC
+              abrirGerarAoMontar={ofereceGerarCompromissos}
               api={liquidacaoApi}
               operacaoPronta={!!ocOperacaoId}
               darkSelectClass=""
@@ -1111,6 +1113,9 @@ export function VendaModalShell({
               const r = await onSalvarNegociacao();
               if (r === false) return;
               await onConcluirNegociacao?.(typeof r === 'number' ? r : undefined);
+              /* Concluiu: o financeiro é o próximo passo. A aba decide se há o que propor. */
+              setOfereceGerarCompromissos(true);
+              setAbaAtiva('financeiro');
             }}>
             <Check className="h-4 w-4" /> Concluir negociação
           </Button>
