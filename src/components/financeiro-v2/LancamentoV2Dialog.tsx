@@ -12,6 +12,8 @@ import {
 } from '@/lib/financeiro/statusFinanceiro';
 import { TIPOS_DOCUMENTO, formatNFNumber, extractNFDigits, type TipoDocumento } from '@/lib/financeiro/documentoHelper';
 import { useCliente } from '@/contexts/ClienteContext';
+import { useLancamentoDocumentos } from '@/hooks/useLancamentoDocumentos';
+import { AbaDocumentosLancamento } from '@/components/financeiro-v2/AbaDocumentosLancamento';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -277,6 +279,11 @@ export function LancamentoV2Dialog({
   referenciaOperacionalInfo, excelContext, permiteEditarFavorecidoOC, onAbrirOperacaoOC,
 }: Props) {
   const { clienteAtual } = useCliente();
+  /* ⚠ OS DOCUMENTOS SÓ EXISTEM DEPOIS QUE O LANÇAMENTO EXISTE: as RPCs recebem
+     `p_lancamento_id`, e num lançamento novo não há id para anexar nada. Por isso o hook
+     nasce desligado (`null`) e a aba diz o que fazer, em vez de oferecer um botão que
+     recusaria no servidor. */
+  const documentosApi = useLancamentoDocumentos(lancamento?.id ?? null, clienteAtual?.id ?? null);
   const navigate = useNavigate();
   const isEdit = !!lancamento;
   // PR-SAFE-0 — título originado da Operação Comercial: valor/favorecido/classificação/tipo
@@ -1512,6 +1519,21 @@ export function LancamentoV2Dialog({
 
             {/* ═══ ABA DOCUMENTOS ═══ */}
             <TabsContent value="documentos" className="mt-0 space-y-2 focus-visible:outline-none">
+            {/* ⚠ OS ANEXOS VÊM ANTES DOS CAMPOS ANTIGOS, e os dois convivem por decisão
+                (97b item 4). `Tipo Documento` e `Nº Documento` são COLUNAS DO LANÇAMENTO,
+                lidas por Enriquecer, importações e legados; derivá-las do documento
+                anexado agora alargaria o escopo para telas congeladas. Registrado como
+                [FIN-DOC-CAMPOS-LEGADOS]. ⚠ QUANDO OS DOIS DIVERGIREM, VALE O DOCUMENTO —
+                é o confronto que responde, não o campo digitado. */}
+            {lancamento?.id ? (
+              <AbaDocumentosLancamento api={documentosApi}
+                fornecedores={fornecedores.map(f => ({ id: f.id, nome: f.nome }))} />
+            ) : (
+              <p className="rounded-md border bg-muted/20 px-3.5 py-3 text-[11px] text-muted-foreground">
+                Salve o lançamento para anexar documentos.
+              </p>
+            )}
+
             {/* ── BLOCO 4 — Documentos ── */}
             <section className={sectionClass}>
               <p className={sectionTitleClass}><FileText className="h-3.5 w-3.5" /> Documentos</p>
