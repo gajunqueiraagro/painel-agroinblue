@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, type ChangeEvent } from 'react';
+import { useStatusPilares } from '@/hooks/useStatusPilares';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -151,6 +152,9 @@ export interface CompraPermissoesPorEixo {
   financeiroNovoReadOnly: boolean;
 }
 
+const MESES_EXTENSO = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+
 export function CompraModalShell(api: CompraModalShellProps) {
   // Aba inicial: 'compra' por padrão; quando aberto pelo Financeiro V2 (?oc_aba=financeiro em modo OC),
   //   abre já na aba Financeiro. Só aceita abas que existem no modo OC.
@@ -274,6 +278,22 @@ export function CompraModalShell(api: CompraModalShellProps) {
   const cenarioAtual = CENARIO_UI[api.statusOp] ?? CENARIO_UI.realizado;
   const fornecedorNome = api.fornecedores.find(f => f.id === api.compraFornecedorId)?.nome || '';
   const fornecedorDocumento = api.fornecedores.find(f => f.id === api.compraFornecedorId)?.cpfCnpj || '';
+  /**
+   * O mês da data escolhida está fechado (P1 oficial) para a fazenda de destino?
+   *
+   * ⚠ MESMA FONTE DA TRIGGER: `get_status_pilares_fechamento` →
+   * `p1_mapa_pastos.status = 'oficial'`, o que `trg_guard_lancamento_mes_fechado_p1` testa
+   * antes de recusar o INSERT em `lancamentos`. A recusa chegava só na gravação, depois de
+   * a compra inteira estar preenchida — ver ABATE-UX (`2d60bde2`), onde isto foi medido.
+   * ⚠ FAIXA INFORMATIVA E GUARDA, e nada mais: a compra segue congelada em comportamento.
+   */
+  const anoMesDaData = api.data ? api.data.slice(0, 7) : undefined;
+  const pilaresMes = useStatusPilares(api.fazendaDestinoId || undefined, anoMesDaData,
+    !!api.fazendaDestinoId && !!anoMesDaData);
+  const mesFechadoMotivo = pilaresMes.status.p1_mapa_pastos.status === 'oficial' && anoMesDaData
+    ? `${MESES_EXTENSO[Number(anoMesDaData.slice(5, 7)) - 1]}/${anoMesDaData.slice(0, 4)} está fechado (P1) para ${api.fazendas.find(f => f.id === api.fazendaDestinoId)?.nome ?? 'esta fazenda'}`
+    : null;
+
   const canOpenModal = !!(api.data && api.quantidadeNum > 0 && api.pesoKgNum > 0 && api.categoria);
   // Peso Total = derivado de exibição (Peso Médio × Quantidade). O estado legado `pesoKg`
   // JÁ é o peso médio (vira pesoMedioKg no payload); portanto nada é escrito de volta.
@@ -797,7 +817,9 @@ export function CompraModalShell(api: CompraModalShellProps) {
                       {api.lotesApi?.saving ? 'Salvando...' : 'Salvar rascunho'}
                     </Button>
                   ) : (abaAtiva === 'recebimento' || abaAtiva === 'documentos' || abaAtiva === 'financeiro') ? null : (
-                    <Button onClick={api.handleRequestRegister} disabled={api.submitting || !!api.acaoOcLoading || !api.ocFazendaValida}
+                    <Button onClick={api.handleRequestRegister}
+                      disabled={api.submitting || !!api.acaoOcLoading || !api.ocFazendaValida || !!mesFechadoMotivo}
+                      title={mesFechadoMotivo ? `${mesFechadoMotivo} — reabra o período para lançar` : undefined}
                       className="bg-white text-primary hover:bg-white/90 font-bold gap-1.5 disabled:opacity-60">
                       <ShoppingCart className="h-4 w-4" /> {api.submitting ? 'Salvando...' : 'Salvar'}
                     </Button>

@@ -25,6 +25,7 @@
  * — nenhum deles tem consumidor nesta aba. Entram quando a aba que precisar deles chegar.
  */
 import { useState, useMemo } from 'react';
+import { useStatusPilares } from '@/hooks/useStatusPilares';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -205,6 +206,9 @@ function dataMaisDias(iso: string | null | undefined, dias: number): string | nu
   if (Number.isNaN(base.getTime())) return null;
   return format(addDays(base, dias), 'yyyy-MM-dd');
 }
+
+const MESES_EXTENSO = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
 export function VendaModalShell({
   data, setData, compradorId, setCompradorId, contrapartes, onNovoComprador,
@@ -509,11 +513,28 @@ export function VendaModalShell({
      booleano. Assim `disabled`, `title` e a dica escrita saem todos da mesma frase: quando
      ha motivo o botao trava E diz; sem motivo, ele funciona. Nao da' para travar em
      silencio por construcao. */
+  /**
+   * O mês da data escolhida está fechado (P1 oficial) para a fazenda de origem?
+   *
+   * ⚠ MESMA FONTE DA TRIGGER (`get_status_pilares_fechamento` → `p1_mapa_pastos`), a que
+   * `trg_guard_lancamento_mes_fechado_p1` consulta antes de recusar. Medido no abate
+   * (`2d60bde2`): a recusa chegava só na gravação, com a operação inteira preenchida.
+   */
+  const anoMesDaData = data ? data.slice(0, 7) : undefined;
+  const pilaresMes = useStatusPilares(vendaFazendaId || undefined, anoMesDaData,
+    !!vendaFazendaId && !!anoMesDaData);
+  const mesFechadoMotivo = pilaresMes.status.p1_mapa_pastos.status === 'oficial' && anoMesDaData
+    ? `${MESES_EXTENSO[Number(anoMesDaData.slice(5, 7)) - 1]}/${anoMesDaData.slice(0, 4)} está fechado (P1) para ${fazendaNome ?? 'esta fazenda'}`
+    : null;
+
   const concluirTravadoPor: string | null =
-    submitting ? 'salvando…'
+    mesFechadoMotivo ? `${mesFechadoMotivo} — reabra o período`
+    : submitting ? 'salvando…'
     : recebimentoApi?.saving ? 'aguarde a entrega terminar'
     : null;
-  const motivoNaoSalva = naNegociacao
+  const motivoNaoSalva = mesFechadoMotivo
+    ? `${mesFechadoMotivo} — reabra o período para lançar`
+    : naNegociacao
     ? (!ocOperacaoId ? 'Salve a operação na aba Venda primeiro'
        : faltamBoitel.length > 0 ? `Planejamento do boitel incompleto. Falta ${faltamBoitel.join(', ')}.`
        : undefined)
@@ -862,6 +883,13 @@ export function VendaModalShell({
                 <Label className="text-[10px] text-muted-foreground">Data da venda <span className="text-destructive">*</span></Label>
                 {/* A20 — DatePicker do sistema, nunca `<input type="date">`. */}
                 <DatePicker value={data} onChange={setData} className="mt-[3px] h-8 px-2.5 text-[12px]" />
+                {/* Âmbar: estado do período, não erro do operador — e no instante da data. */}
+                {mesFechadoMotivo && (
+                  <div className="mt-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-[10px] leading-snug text-amber-800">
+                    <b className="font-semibold">{mesFechadoMotivo}.</b>{' '}
+                    Reabra o período em Rebanho › Fechamento › Mapa de Pastos.
+                  </div>
+                )}
               </div>
               <div className="min-w-0">
                 {/* ⚠ ORIGEM, e nao destino: numa venda o gado SAI da fazenda. */}
