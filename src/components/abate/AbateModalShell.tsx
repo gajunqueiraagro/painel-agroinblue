@@ -40,7 +40,7 @@ import type { AbateApi, CenarioAbate, LinhaAbate } from '@/hooks/useOperacaoAbat
 import type { LoteAbate } from '@/components/abate/calculoDoLote';
 import { AbaLotesAbate } from '@/components/abate/AbaLotesAbate';
 import { totaisDoAbate } from '@/components/abate/calculoDoLote';
-import { buildAbateCalculation, type AbateCalculation } from '@/lib/calculos/abate';
+import { buildAbateCalculation, parseNumericValue, type AbateCalculation } from '@/lib/calculos/abate';
 import { paraCalculo, linhaVazia } from '@/components/abate/calculoDoLote';
 import { AbaNegociacaoLotes } from '@/components/compra/AbaNegociacaoLotes';
 import { AbaDocumentosOC } from '@/components/compra/AbaDocumentosOC';
@@ -517,8 +517,14 @@ export function AbateModalShell({
       ordem: l.ordem,
       categoria: l.categoria ?? null,
       categoriaLabel: categoriasDisponiveis.find(c => c.value === l.categoria)?.label ?? (l.categoria ?? '—'),
-      quantidade: Number(l.quantidade) || 0,
-      pesoMedioKg: Number(l.pesoMedioKg) || 0,
+      /* ⚠ `parseNumericValue`, NUNCA `Number`. Estes dois campos são STRING MASCARADA em
+         pt-BR (`LoteForm`: "mascarado"), e `Number('553,78')` é `NaN` — que o `|| 0`
+         transformava em zero silencioso: o peso vivo sumia do topo, do cartão e do modal,
+         e o rendimento virava "—" com a carcaça preenchida. Na quantidade era pior que
+         zero: `Number('1.234')` devolve `1.234`, ou seja, mil e duzentas cabeças viravam
+         uma cabeça e um quarto sem nenhum aviso. */
+      quantidade: parseNumericValue(l.quantidade),
+      pesoMedioKg: parseNumericValue(l.pesoMedioKg),
     })),
     [lotesApi?.lotes, categoriasDisponiveis],
   );
@@ -759,10 +765,13 @@ export function AbateModalShell({
             <div className="text-[15px] font-medium text-foreground">Identificação do abate</div>
 
             {/* FAIXA DE TOPO — rotulo 11px/400, valor 20px/500. */}
-            <div className="grid grid-cols-3 gap-2 rounded-md border bg-muted/20 px-3.5 py-[11px]">
+            {/* ⚠ O COMPRADOR OCUPA O QUE SOBRA (A22): em tres colunas iguais, "Fortunceres
+                S.A. - Minerva" cortava enquanto Data sobrava espaco. Data e Fazenda tem
+                largura fixa porque o conteudo delas e' previsivel; o nome, nao. */}
+            <div className="grid grid-cols-[1fr_200px_220px] gap-2 rounded-md border bg-muted/20 px-3.5 py-[11px]">
               <div className="min-w-0">
                 <div className="text-[11px] font-normal text-muted-foreground leading-none">Comprador</div>
-                <div className="mt-1 text-[20px] font-medium leading-none truncate">{frigorificoNome ?? '—'}</div>
+                <div className="mt-1 truncate whitespace-nowrap text-[clamp(16px,1.6vw,20px)] font-medium leading-none">{frigorificoNome ?? '—'}</div>
                 {/* ⚠ SO' APARECE QUANDO EXISTE: uma linha "CNPJ —" fixa diria que o
                     documento falta no cadastro, quando o que falta e' a carga que o traz. */}
                 {frigorificoDoc && (
@@ -784,7 +793,11 @@ export function AbateModalShell({
             </div>
             <Separator />
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-3">
+            {/* ⚠ UMA LINHA A MENOS: em duas colunas, "Observacoes / Lote" caia abaixo da
+                dobra e o formulario rolava — com o rodape fixo, rolar aqui e' o operador
+                perder de vista o que acabou de preencher. Os tres obrigatorios cabem numa
+                linha; a observacao, sozinha, na seguinte. */}
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_170px_260px] gap-x-3 gap-y-3">
               <div className="min-w-0">
                 <Label className="text-[10px] text-muted-foreground">Comprador <span className="text-destructive">*</span></Label>
                 <div className="mt-[3px] flex items-center gap-1">
@@ -824,7 +837,7 @@ export function AbateModalShell({
                   <p className="mt-[3px] text-[10px] text-destructive">Selecione a fazenda de origem.</p>
                 )}
               </div>
-              <div className="min-w-0 lg:col-span-2">
+              <div className="min-w-0 lg:col-span-3">
                 <Label className="text-[10px] text-muted-foreground">Observações / Lote</Label>
                 <Input value={observacao} onChange={e => setObservacao(e.target.value)} placeholder="Opcional"
                   className="mt-[3px] h-8 px-2.5 text-[12px]" />
@@ -987,9 +1000,37 @@ export function AbateModalShell({
             <RotateCcw className="h-4 w-4" /> Reabrir negociação
           </Button>
         )}
+        {/* ⚠ ORDEM E DESTAQUE: Salvar antes, Concluir depois e em `bg-cta`. O ato
+            principal do rodape e' concluir — e' ele que congela os lotes e libera a
+            Entrega; salvar e' o passo intermediario. Invertido, o olho encontrava o
+            branco (Salvar) e procurava o proximo passo onde ele nao estava. */}
+        {rodapeTemSalvar && (<>
+        <DicaBotao texto={salvarTravadoPor} />
+        <Button type="button"
+          onClick={async () => {
+            if (naNegociacao) { await onSalvarNegociacao(); return; }
+            /* ⚠ SO NA CRIACAO. Editando, o botao diz "Salvar alteracoes" e nao promete ir
+               a lugar nenhum — mudar de aba ali seria tirar o operador de onde ele estava. */
+            const criando = !ocOperacaoId;
+            const gravou = await onSalvarOperacao();
+            if (criando && gravou) setAbaAtiva('negociacao');
+          }}
+          disabled={submitting || !podeSalvar || semAlteracoes || ocStatusComercial === 'cancelada'}
+          variant="secondary" className="gap-1.5 disabled:opacity-60"
+          title={motivoNaoSalva ?? (semAlteracoes ? 'Nada alterado desde o último salvamento' : undefined)}>
+          {/* O TEXTO VOLTOU AO DO MOCKUP em PR-OC-VENDA-ABA-NEGOCIACAO-01, porque agora
+              ha para onde ir. Ele ficou em "Salvar operação" enquanto a Negociacao nao
+              existia: promessa nao cumprida ensina a desconfiar do botao, do mesmo modo
+              que alarme falso ensina a ignorar o alarme. */}
+          {submitting ? 'Salvando...'
+            : naNegociacao ? 'Salvar negociação'
+            : ocOperacaoId ? 'Salvar abate'
+            : (<>Salvar e continuar para Negociação <ArrowRight className="h-4 w-4" /></>)}
+        </Button>
+        </>)}
         {naNegociacao && !!ocOperacaoId && ocStatusComercial === 'programada' && recebimentoApi && (<>
           <DicaBotao texto={concluirTravadoPor} />
-          <Button type="button" variant="secondary" className="gap-1.5"
+          <Button type="button" className="gap-1.5"
             /* ⚠ O CONCLUIR NAO ESTAVA QUEBRADO — ele ACORDAVA depois do Salvar. O defeito
                era o SILENCIO: cinza, sem dizer o que faltava, e o operador concluia que o
                botao nao funcionava. Correcao do Gabriel, B-09 item 1.
@@ -1019,30 +1060,6 @@ export function AbateModalShell({
             }}>
             <Check className="h-4 w-4" /> Concluir negociação
           </Button>
-        </>)}
-        {rodapeTemSalvar && (<>
-        <DicaBotao texto={salvarTravadoPor} />
-        <Button type="button"
-          onClick={async () => {
-            if (naNegociacao) { await onSalvarNegociacao(); return; }
-            /* ⚠ SO NA CRIACAO. Editando, o botao diz "Salvar alteracoes" e nao promete ir
-               a lugar nenhum — mudar de aba ali seria tirar o operador de onde ele estava. */
-            const criando = !ocOperacaoId;
-            const gravou = await onSalvarOperacao();
-            if (criando && gravou) setAbaAtiva('negociacao');
-          }}
-          disabled={submitting || !podeSalvar || semAlteracoes || ocStatusComercial === 'cancelada'}
-          className="bg-white text-primary hover:bg-white/90 font-bold gap-1.5 disabled:opacity-60"
-          title={motivoNaoSalva ?? (semAlteracoes ? 'Nada alterado desde o último salvamento' : undefined)}>
-          {/* O TEXTO VOLTOU AO DO MOCKUP em PR-OC-VENDA-ABA-NEGOCIACAO-01, porque agora
-              ha para onde ir. Ele ficou em "Salvar operação" enquanto a Negociacao nao
-              existia: promessa nao cumprida ensina a desconfiar do botao, do mesmo modo
-              que alarme falso ensina a ignorar o alarme. */}
-          {submitting ? 'Salvando...'
-            : naNegociacao ? 'Salvar negociação'
-            : ocOperacaoId ? 'Salvar abate'
-            : (<>Salvar e continuar para Negociação <ArrowRight className="h-4 w-4" /></>)}
-        </Button>
         </>)}
         </div>
       </div>

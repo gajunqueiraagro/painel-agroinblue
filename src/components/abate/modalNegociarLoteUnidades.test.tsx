@@ -93,7 +93,10 @@ describe('Rendimento e arrobas — derivados, nunca digitados', () => {
 
   it('o rendimento derivado sobe junto do que se aplica', () => {
     const onAplicar = montar(linha({ pesoCarcacaKg: null, pesoCarcacaFonte: null }));
+    /* ⚠ O CAMPO GRAVA NO BLUR desde ABATE-UX-01h: ele guarda texto enquanto se digita
+       (para aceitar "12.260,80" com vírgula sem o cursor saltar) e traduz ao sair. */
     fireEvent.change(campoPorRotulo('Carcaça'), { target: { value: '250' } });
+    fireEvent.blur(campoPorRotulo('Carcaça'));
     fireEvent.click(screen.getByText('Aplicar'));
     const proxima = onAplicar.mock.calls[0][0];
     expect(proxima.rendimentoCarcacaPct).toBe(50);
@@ -106,13 +109,15 @@ describe('Rendimento e arrobas — derivados, nunca digitados', () => {
 describe('Carcaça e preço — dois lados, um canônico', () => {
   it('com fonte "total", o campo mostra o total do lote', () => {
     montar(linha());
-    expect(campoPorRotulo('Carcaça').value).toBe('2500');
+    /* Formatado em pt-BR (A15): duas casas e separador de milhar. */
+    expect(campoPorRotulo('Carcaça').value).toBe('2.500,00');
   });
 
   it('ida e volta cabeça ↔ total fecha a 2 casas', () => {
     const onAplicar = montar(linha({ pesoCarcacaKg: null, pesoCarcacaFonte: null }));
     /* 10 cabeças × 333,33 kg = 3.333,30 no total. */
-    fireEvent.change(campoPorRotulo('Carcaça'), { target: { value: '333.33' } });
+    fireEvent.change(campoPorRotulo('Carcaça'), { target: { value: '333,33' } });
+    fireEvent.blur(campoPorRotulo('Carcaça'));
     fireEvent.click(screen.getByText('Aplicar'));
     expect(onAplicar.mock.calls[0][0].pesoCarcacaKg).toBe(3333.3);
   });
@@ -193,7 +198,8 @@ describe('Preço pelo total — o centavo que a conversão inventava', () => {
       cenario="realizado" onAplicar={onAplicar} onFechar={vi.fn()} />);
     const carcaca = screen.getAllByText('Carcaça').find(el => el.tagName === 'LABEL')!
       .parentElement!.querySelector('input') as HTMLInputElement;
-    fireEvent.change(carcaca, { target: { value: '24521.60' } });
+    fireEvent.change(carcaca, { target: { value: '24.521,60' } });
+    fireEvent.blur(carcaca);
     fireEvent.click(screen.getByText('Aplicar'));
     const p = onAplicar.mock.calls[0][0];
     /* Dobrou a carcaça: a base não muda e o R$/@ cai pela metade. */

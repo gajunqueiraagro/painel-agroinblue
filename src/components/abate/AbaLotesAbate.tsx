@@ -23,6 +23,7 @@ import { Pencil, Ban, Plus, ChevronRight, AlertTriangle } from 'lucide-react';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { buildAbateCalculation, type AbateCalculation } from '@/lib/calculos/abate';
 import { LoteDialog } from '@/components/compra/AbaNegociacaoLotes';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { paraCalculo, linhaVazia, totaisDoAbate, type LoteAbate } from '@/components/abate/calculoDoLote';
 import { ModalNegociarLote } from '@/components/abate/ModalNegociarLote';
 import type { LinhaAbate, CenarioAbate } from '@/hooks/useOperacaoAbate';
@@ -129,6 +130,8 @@ export function AbaLotesAbate({
   const [editandoId, setEditandoId] = useState<string | null>(null);
   /* Qual lote está aberto na negociação. `null` = nenhum. */
   const [negociandoId, setNegociandoId] = useState<string | null>(null);
+  /* Qual lote está para ser excluído. `null` = nenhum. */
+  const [removendoId, setRemovendoId] = useState<string | null>(null);
 
   const calculos = useMemo(() => {
     const m = new Map<string, AbateCalculation>();
@@ -154,6 +157,7 @@ export function AbaLotesAbate({
   const abrirNovo = () => setEditandoId(lotesApi.adicionarLote());
   const emEdicao = editandoId ? lotesApi.lotes.find(l => l.idLocal === editandoId) ?? null : null;
   const negociando = negociandoId ? lotes.find(l => l.id === negociandoId) ?? null : null;
+  const removendo = removendoId ? lotes.find(l => l.id === removendoId) ?? null : null;
 
   return (
     <div className="rounded-md border bg-card shadow-sm min-w-0">
@@ -219,14 +223,21 @@ export function AbaLotesAbate({
               <div key={lote.id} className="rounded-lg border border-border/60 bg-card px-2.5 py-2">
                 <div className="flex items-start gap-2.5">
                   <div className="min-w-0 flex-1">
-                    <div className="whitespace-nowrap text-[12px] font-medium text-foreground">
+                    {/* ⚠ A22 + A18: a identidade e' UMA linha e nao quebra. Com a pilula do
+                        cenario aqui, "Garrotes · 41 cab · 12.260,80 kg carcaca" + pilula +
+                        dois icones nao cabiam em meia largura de modal, e o texto cortava
+                        no meio do numero. A pilula desceu para a linha 2, a direita. */}
+                    <div className="truncate whitespace-nowrap text-[12px] font-medium text-foreground">
                       {lote.categoriaLabel} · {lote.quantidade} cab · {n2(c.carcacaCalc * c.quantidade)} kg carcaça
                     </div>
                     {/* ⚠ OMITIDA QUANDO VAZIA, nunca "OC —": a observação é opcional, e um
                         traço ali afirmaria que falta um dado que ninguém pediu. */}
-                    {observacaoDoLote && (
-                      <div className="truncate text-[10px] text-muted-foreground">{observacaoDoLote}</div>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {observacaoDoLote && (
+                        <span className="truncate text-[10px] text-muted-foreground">{observacaoDoLote}</span>
+                      )}
+                      <span className="ml-auto shrink-0"><Pilula cenario={cenario} negociado={negociado} /></span>
+                    </div>
                     <div className="text-[10px] text-muted-foreground tabular-nums">
                       Peso vivo {n2(lote.pesoMedioKg)} kg/cab · <b className="text-[11px] font-semibold text-foreground">RC {n2(c.rendCalc)}%</b>
                     </div>
@@ -241,17 +252,20 @@ export function AbaLotesAbate({
                       </div>
                     )}
                   </div>
-                  <Pilula cenario={cenario} negociado={negociado} />
-                  <div className="flex shrink-0 items-center gap-2.5 text-muted-foreground">
+                  {/* ⚠ ICONE SOZINHO NAO FOI ENCONTRADO na homologacao — e eles estavam
+                      ligados desde sempre. O que faltava era dizer o que sao: agora vem o
+                      rotulo ao lado, em 10px, e o alvo de clique cobre os dois. Icone mudo
+                      so' funciona para quem ja' sabe que ele existe. */}
+                  <div className="flex shrink-0 items-center gap-3 text-muted-foreground">
                     <button type="button" title="Editar lote" aria-label="Editar lote"
                       disabled={somenteLeitura} onClick={() => setEditandoId(lote.id)}
-                      className="hover:text-foreground disabled:opacity-40">
-                      <Pencil className="h-3.5 w-3.5" />
+                      className="flex items-center gap-1 text-[10px] hover:text-foreground disabled:opacity-40">
+                      <Pencil className="h-3.5 w-3.5" /> Editar
                     </button>
-                    <button type="button" title="Remover lote" aria-label="Remover lote"
-                      disabled={somenteLeitura} onClick={() => lotesApi.removerLote(lote.id)}
-                      className="hover:text-destructive disabled:opacity-40">
-                      <Ban className="h-3.5 w-3.5" />
+                    <button type="button" title="Excluir lote" aria-label="Excluir lote"
+                      disabled={somenteLeitura} onClick={() => setRemovendoId(lote.id)}
+                      className="flex items-center gap-1 text-[10px] hover:text-destructive disabled:opacity-40">
+                      <Ban className="h-3.5 w-3.5" /> Excluir
                     </button>
                   </div>
                 </div>
@@ -282,6 +296,27 @@ export function AbaLotesAbate({
             );
           })}
         </div>
+      )}
+
+      {removendo && (
+        <Dialog open onOpenChange={(o) => { if (!o) setRemovendoId(null); }}>
+          <DialogContent className="max-w-sm">
+            {/* ⚠ CONFIRMA NOMEANDO O LOTE. Excluir sem perguntar apaga a negociação junto
+                (o abate do lote cai por CASCATA), e "removi o lote errado" não tem desfazer
+                nesta tela. O nome é o que permite ao operador ver que é o lote certo. */}
+            <DialogTitle className="text-[14px]">Excluir lote</DialogTitle>
+            <DialogDescription className="text-[11px]">
+              {removendo.categoriaLabel} · {removendo.quantidade} cab — a negociação deste lote
+              também é perdida. A exclusão só vale depois de salvar a negociação.
+            </DialogDescription>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="ghost" onClick={() => setRemovendoId(null)}>Voltar</Button>
+              <Button type="button" onClick={() => { lotesApi.removerLote(removendo.id); setRemovendoId(null); }}>
+                Excluir lote
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
 
       {negociando && (

@@ -33,15 +33,15 @@
  * `Aplicar` devolve a linha ao rascunho do pai — quem persiste é o rodapé do shell, na
  * ordem lotes → abate → confirmar.
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { CampoMoeda } from '@/components/ui/campo-moeda';
 import { X } from 'lucide-react';
-import { formatMoeda } from '@/lib/calculos/formatters';
-import { buildAbateCalculation } from '@/lib/calculos/abate';
+import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
+import { buildAbateCalculation, parseNumericValue } from '@/lib/calculos/abate';
 import { paraCalculo, linhaVazia, type LoteAbate } from '@/components/abate/calculoDoLote';
 import { BlocoResumoLote } from '@/components/abate/AbaLotesAbate';
 import type { LinhaAbate, CenarioAbate } from '@/hooks/useOperacaoAbate';
@@ -159,6 +159,10 @@ export function ModalNegociarLote({ lote, linha, cenario, onAplicar, onFechar, s
   somenteLeitura?: boolean;
 }) {
   const [aba, setAba] = useState<AbaModal>('desempenho');
+  /* ⚠ O CAMPO GUARDA TEXTO, o modelo guarda número. É o que permite digitar "12.260,80"
+     com vírgula e ver o valor formatado ao sair do campo, sem que cada tecla reformate o
+     que está sendo escrito (o cursor saltaria). O blur é quem traduz e grava. */
+  const [carcacaTexto, setCarcacaTexto] = useState('');
   /* ⚠ RASCUNHO LOCAL: o modal edita uma cópia e só devolve no Aplicar. Fechar pelo X ou
      pelo Esc descarta, que é o que "Cancelar" significa — mesmo contrato do LoteDialog. */
   const [atual, setAtual] = useState<LinhaAbate>(linha ?? linhaVazia(lote.id));
@@ -190,10 +194,22 @@ export function ModalNegociarLote({ lote, linha, cenario, onAplicar, onFechar, s
 
   const carcacaPorCab = atual.pesoCarcacaKg != null && lote.quantidade > 0
     ? round2(atual.pesoCarcacaKg / lote.quantidade) : null;
+  /* O texto do campo segue o modelo: muda ao abrir, ao trocar de unidade e depois de
+     gravar. Não interfere na digitação porque o modelo só muda no blur. */
+  useEffect(() => {
+    const v = (atual.pesoCarcacaFonte ?? 'cabeca') === 'cabeca'
+      ? (atual.pesoCarcacaKg != null && lote.quantidade > 0 ? atual.pesoCarcacaKg / lote.quantidade : null)
+      : atual.pesoCarcacaKg;
+    setCarcacaTexto(v == null ? '' : formatNum(round2(v), 2));
+  }, [atual.pesoCarcacaKg, atual.pesoCarcacaFonte, lote.quantidade]);
   const fonteCarcaca = atual.pesoCarcacaFonte ?? 'cabeca';
   const fontePreco = atual.precoFonte ?? 'arroba';
 
-  const num = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  /* ⚠ TODO NÚMERO PELO FORMATADOR DA CASA (pt-BR). `toFixed` devolve ponto decimal —
+     "817.3867 @" — e o operador lê ponto como milhar: oitocentas mil arrobas em vez de
+     oitocentas. Não é estética, é leitura errada. */
+  const num = (n: number) => formatNum(n, 2);
+  const num4 = (n: number) => formatNum(n, 4);
   const porArroba = (v: number) => (c.totalArrobas > 0 ? formatMoeda(v / c.totalArrobas) : '—');
   const neg = (v: number) => (v === 0 ? `− ${formatMoeda(0)}` : `− ${formatMoeda(Math.abs(v))}`);
   const negAt = (v: number) => (c.totalArrobas > 0 ? `− ${formatMoeda(Math.abs(v) / c.totalArrobas)}` : '—');
@@ -238,18 +254,31 @@ export function ModalNegociarLote({ lote, linha, cenario, onAplicar, onFechar, s
                 <div className="grid grid-cols-[130px_96px] items-end gap-2">
                   <div className="flex flex-col gap-[3px]">
                     <Label className={LBL}>Carcaça</Label>
-                    <Input type="number" step="0.01" inputMode="decimal" disabled={somenteLeitura}
-                      className={CAMPO}
-                      value={(fonteCarcaca === 'cabeca' ? carcacaPorCab : atual.pesoCarcacaKg) ?? ''}
-                      onChange={e => {
-                        const n = e.target.value === '' ? null : Number(e.target.value);
-                        trocar(n == null
-                          ? { pesoCarcacaKg: null, pesoCarcacaFonte: null }
-                          : {
+                    {/* ⚠ A15 + A22: duas casas, sufixo "kg" DENTRO do campo e nada quebra.
+                        O `type="number"` foi embora junto com o ponto decimal que ele
+                        obriga — quem digita "12.260,80" no teclado brasileiro via o campo
+                        recusar a virgula. O texto e' livre e `parseNumericValue` traduz. */}
+                    <div className="relative">
+                      <Input inputMode="decimal" disabled={somenteLeitura}
+                        className={`${CAMPO} pr-7`}
+                        placeholder={fonteCarcaca === 'cabeca' ? 'kg por cabeça' : 'kg total'}
+                        value={carcacaTexto}
+                        onChange={e => setCarcacaTexto(e.target.value)}
+                        onBlur={() => {
+                          const n = parseNumericValue(carcacaTexto);
+                          if (!carcacaTexto.trim() || n <= 0) {
+                            setCarcacaTexto('');
+                            trocar({ pesoCarcacaKg: null, pesoCarcacaFonte: null });
+                            return;
+                          }
+                          setCarcacaTexto(formatNum(n, 2));
+                          trocar({
                             pesoCarcacaKg: fonteCarcaca === 'cabeca' ? round2(n * lote.quantidade) : round2(n),
                             pesoCarcacaFonte: fonteCarcaca === 'cabeca' ? 'cabeca' : 'total',
                           });
-                      }} />
+                        }} />
+                      <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">kg</span>
+                    </div>
                   </div>
                   <div className="flex flex-col gap-[3px]">
                     <Label className={LBL}>&nbsp;</Label>
@@ -261,7 +290,7 @@ export function ModalNegociarLote({ lote, linha, cenario, onAplicar, onFechar, s
                 <div className="grid grid-cols-[auto_1fr] items-baseline gap-x-2.5 gap-y-[3px]">
                   <Derivado rotulo="Por cabeça" valor={carcacaPorCab == null ? '—' : kg2(carcacaPorCab)} />
                   <Derivado rotulo="@ por cabeça" valor={c.pesoArrobaCab > 0 ? `${num(c.pesoArrobaCab)} @` : '—'} />
-                  <Derivado rotulo="Arrobas totais" valor={c.totalArrobas > 0 ? `${c.totalArrobas.toFixed(4)} @` : '—'} />
+                  <Derivado rotulo="Arrobas totais" valor={c.totalArrobas > 0 ? `${num4(c.totalArrobas)} @` : '—'} />
                   {/* Vem do cadastro do lote; sem ele não há rendimento, e o traço diz isso. */}
                   <Derivado rotulo="Peso vivo" valor={lote.pesoMedioKg > 0 ? `${num(lote.pesoMedioKg)} kg/cab` : '—'} />
                   <Derivado rotulo="Rendimento" valor={c.rendCalc > 0 ? `${num(c.rendCalc)}%` : '—'} />

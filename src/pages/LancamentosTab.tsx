@@ -479,7 +479,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
      montado, entao os hooks nao tem consumidor. */
   /* ⚠ O CENARIO VIVE AQUI, e nao dentro do hook: os dois mundos do abate (projetado e
      realizado) sao a MESMA operacao vista de dois jeitos, e quem alterna e' a tela. */
-  const [cenarioAbate, setCenarioAbate] = useState<'projetado' | 'realizado'>('projetado');
+  /* ⚠ NASCE EM 'realizado', o cenario DA OPERACAO — e nao ha o que derivar: `modoOCAbate`
+     exige `!isCenarioMeta`, entao a OC de abate so' existe em realizado. Comecar em
+     'projetado' abria o modal num cenario vazio e o operador via "a negociar" num lote
+     que ele acabara de negociar. Ele continua podendo trocar pelo chip. */
+  const [cenarioAbate, setCenarioAbate] = useState<'projetado' | 'realizado'>('realizado');
   /* ⚠ AS EDICOES DO ABATE VIVEM AQUI, EM MEMORIA — mesmo desenho do `boitelDaVenda`. A
      aba edita, o rodape persiste, e quem grava e' uma chamada so'. Guardar no hook faria
      o `recarregar` de qualquer motivo apagar o que o operador digitou e nao salvou. */
