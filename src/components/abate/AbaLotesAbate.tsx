@@ -189,7 +189,10 @@ export function AbaLotesAbate({
       </div>
 
       {/* ── BLOCO DE TOPO ─────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-3.5 border-b px-3.5 py-[11px] lg:grid-cols-4">
+      {/* ⚠ O MESMO CONTAINER CINZA DAS OUTRAS ABAS (ABATE-UX-01c): `bg-muted/20`, borda,
+          `px-3.5 py-[11px]`. Antes era uma faixa branca com borda embaixo — parecia parte
+          da lista, e o operador não achava os totais. */}
+      <div className="m-3 mb-0 grid grid-cols-2 gap-3.5 rounded-md border bg-muted/20 px-3.5 py-[11px] lg:grid-cols-4">
         <ColunaTopo rotulo="Animais" valor={String(t.cabecas)}
           unidade={`cab · ${lotes.length} ${lotes.length === 1 ? 'lote' : 'lotes'}`}
           subs={[`peso vivo ${kg2(t.pesoVivo)} total`]}

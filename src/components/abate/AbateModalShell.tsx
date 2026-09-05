@@ -125,6 +125,33 @@ const ROTULO_STATUS: Record<string, string> = {
   rascunho: 'Rascunho', programada: 'Programada', fechada: 'Fechada', cancelada: 'Cancelada',
 };
 
+/**
+ * O bloco de topo de uma aba — o mesmo container do "Identificação do abate".
+ *
+ * ⚠ UM SÓ PARA AS CINCO ABAS, e é isso que o torna útil: o operador aprende a olhar
+ * para o mesmo lugar e encontra sempre a resposta da aba em que está. Cinco variações do
+ * mesmo bloco ensinariam a procurar.
+ * ⚠ FONTE AUSENTE É TRAÇO, nunca zero — zero afirma que se perguntou e não há.
+ */
+function BlocoTopoAba({ itens }: { itens: { rotulo: string; valor: string | null; contexto?: string | null }[] }) {
+  return (
+    <div className={`grid gap-3 rounded-md border bg-muted/20 px-3.5 py-[11px] grid-cols-${itens.length}`}
+         style={{ gridTemplateColumns: `repeat(${itens.length}, minmax(0, 1fr))` }}>
+      {itens.map(i => (
+        <div key={i.rotulo} className="min-w-0">
+          <div className="text-[11px] font-normal text-muted-foreground leading-none">{i.rotulo}</div>
+          <div className="mt-1 truncate whitespace-nowrap text-[20px] font-medium leading-none tabular-nums">
+            {i.valor ?? '—'}
+          </div>
+          {i.contexto && (
+            <div className="mt-1 truncate whitespace-nowrap text-[11px] text-muted-foreground">{i.contexto}</div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** Duas casas, como em toda a tela do abate. */
 const num2 = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -596,6 +623,25 @@ export function AbateModalShell({
       ? `falta negociar ${lotesSemNegociacao.length} ${lotesSemNegociacao.length === 1 ? 'lote' : 'lotes'}`
     : null;
 
+  /* ⚠ OS NUMEROS DE CADA ABA, DA MESMA FONTE QUE A ABA USA — nada recalculado aqui.
+     Ausencia continua sendo `null`, que o bloco imprime como traco. */
+  /* A data da ULTIMA saida registrada: e' a que responde "quando entregou". */
+  const dataEntrega = useMemo(() => {
+    const datas = (recebimentoApi?.movimentacoes ?? [])
+      .filter(m => !m.cancelado && m.data)
+      .map(m => m.data)
+      .sort();
+    return datas.length > 0 ? datas[datas.length - 1] : null;
+  }, [recebimentoApi?.movimentacoes]);
+
+  /* ⚠ "M PESSOAS" CONTA `usuarioId` DISTINTO, e o `null` (acao do proprio banco, por
+     trigger ou RPC de sistema) NAO entra: ele nao e' uma pessoa. */
+  const auditoria = useMemo(() => {
+    const evs = eventosApi?.eventos ?? [];
+    const pessoas = new Set(evs.map(e => e.usuarioId).filter((u): u is string => !!u));
+    return { eventos: evs.length, pessoas: pessoas.size };
+  }, [eventosApi?.eventos]);
+
   /* Há edição do abate ainda não gravada? O rodapé zera este mapa ao salvar. */
   const temRascunhoAbate = (abateLinhas?.size ?? 0) > 0;
 
@@ -699,6 +745,15 @@ export function AbateModalShell({
                 ⚠ SO O VERBO MUDA. Quantidade, data e categoria descrevem o mesmo fato nos
                 dois lados, e por isso nenhum rotulo de CAMPO entra no dicionario. */}
             {abaAtiva === 'entrega' && recebimentoApi ? (
+              <div className="space-y-2">
+              <BlocoTopoAba itens={[
+                { rotulo: 'Entregue', valor: entrega.recebido == null ? null
+                    : `${entrega.recebido} / ${entrega.negociado ?? '—'} cab` },
+                { rotulo: 'Saldo a entregar', valor: entrega.diferenca == null ? null
+                    : `${Math.max(0, -entrega.diferenca)} cab` },
+                { rotulo: 'Data da entrega', valor: dataEntrega ? dataEntrega.split('-').reverse().join('/') : null,
+                  contexto: dataEntrega ? 'última saída registrada' : null },
+              ]} />
               <AbaRecebimentoLotes
                 api={recebimentoApi}
                 operacaoPronta={!!ocOperacaoId}
@@ -742,12 +797,18 @@ export function AbateModalShell({
                   motivoEstornoPadrao: 'estorno pela aba Entrega',
                 }}
               />
+              </div>
             ) : (<>
             {/* ── DOCUMENTOS ─────────────────────────────────────────────────────────
                 ⚠ A MESMA ABA DA COMPRA, com as MESMAS props. Ela e' generica de operacao —
                 documento fiscal nao muda de natureza porque o gado entra ou sai.
                 ⚠ FORNECEDORES DA `liquidacaoApi`, como na compra: fonte unica, sem segunda
                 lista nem segundo cadastro. */}
+            {/* ⚠ SEM BLOCO DE TOPO NESTA ABA, e de propósito: `AbaDocumentosOC` JA' TEM o
+                dela — "Total documentado" e "Negociado" com o confronto ao lado, nos mesmos
+                tokens (20px/500, rótulo 11px muted, `bg-muted/20`). Acrescentar outro seria
+                mostrar a mesma conta duas vezes na mesma tela, e a primeira vez que
+                divergissem por arredondamento ninguém saberia qual vale. */}
             {abaAtiva === 'documentos' && documentosApi ? (
               <AbaDocumentosOC api={documentosApi} operacaoPronta={!!ocOperacaoId}
                 somenteLeitura={ocStatusComercial === 'cancelada'}
@@ -759,15 +820,32 @@ export function AbateModalShell({
                 valorNegociado={liquidacaoApi?.valorAcordado ?? null}
                 recarregarFornecedores={liquidacaoApi?.recarregar} />
             ) : abaAtiva === 'auditoria' && eventosApi ? (
-              /* ⚠ SO LEITURA e sem `somenteLeitura`: a aba nao escreve nada. */
+              <div className="space-y-2">
+              <BlocoTopoAba itens={[
+                { rotulo: 'Eventos', valor: auditoria.eventos > 0 ? String(auditoria.eventos) : null,
+                  contexto: eventosApi.temMais ? 'há mais além dos carregados' : null },
+                { rotulo: 'Pessoas', valor: auditoria.eventos > 0 ? String(auditoria.pessoas) : null,
+                  contexto: auditoria.eventos > 0 && auditoria.pessoas === 0 ? 'só ações do sistema' : null },
+              ]} />
+              {/* ⚠ SO LEITURA e sem `somenteLeitura`: a aba nao escreve nada. */}
               <AbaAuditoriaOC api={eventosApi} operacaoPronta={!!ocOperacaoId}
                 fornecedores={liquidacaoApi?.fornecedores}
                 lotes={documentosApi?.lotes} />
+              </div>
             ) : abaAtiva === 'financeiro' && liquidacaoApi ? (
-              /* ⚠ A MESMA ABA DA COMPRA. Medido na FASE 0: ela e' tipo-agnostica por desenho
+              <div className="space-y-2">
+              {/* As mesmas três linhas do resumo lateral, e pela mesma fonte — a view, que
+                  resolve o sentido pelo plano de contas. */}
+              <BlocoTopoAba itens={[
+                { rotulo: 'A receber', valor: finAReceber == null ? null : formatMoeda(finAReceber) },
+                { rotulo: 'Recebido', valor: finRecebido == null ? null : formatMoeda(finRecebido) },
+                { rotulo: 'Falta receber', valor: finFaltaReceber == null ? null : formatMoeda(finFaltaReceber),
+                  contexto: finAReceber == null ? 'grava ao concluir a negociação' : null },
+              ]} />
+              {/* ⚠ A MESMA ABA DA COMPRA. Medido na FASE 0: ela e' tipo-agnostica por desenho
                   — `planoTipo` vira '1-Entradas' numa venda, a descricao ja sai "Venda 110 G"
                   pelo `verboOC`, e o filtro de centro de custo da compra se desliga sozinho.
-                  O vazio honesto sai: agora ha o que mostrar. */
+                  O vazio honesto sai: agora ha o que mostrar. */}
               <AbaFinanceiroOC
                 api={liquidacaoApi}
                 operacaoPronta={!!ocOperacaoId}
@@ -784,6 +862,7 @@ export function AbateModalShell({
                 seloProjecao={undefined}
                 onIrParaDocumentos={() => setAbaAtiva('documentos')}
               />
+              </div>
             ) : abaAtiva === 'financeiro' ? (
               /* ── FINANCEIRO — VAZIO HONESTO ──────────────────────────────────────
                  ⚠ NAO MONTA A `AbaFinanceiroOC`. A da compra opera sobre compromissos e
