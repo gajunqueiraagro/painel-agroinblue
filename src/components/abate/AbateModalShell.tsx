@@ -134,15 +134,17 @@ export interface AbateModalShellProps {
   /** O COMPRADOR. Contraparte da operação — `contraparte_id` na OC. */
   frigorificoId: string;
   setFrigorificoId: (v: string) => void;
-  contrapartes: { id: string; nome: string }[];
+  /* ⚠ `cpfCnpj` OPCIONAL porque a carga que o traz e' a lista completa do cliente
+     (`select('id, nome, nome_normalizado, aliases, cpf_cnpj')`); um fornecedor criado
+     dentro do modal entra pelo caminho curto (`select('id, nome')`) e fica sem documento
+     ate' a proxima carga. Precedente do campo: PR-OC-UX-LOTE-C1-01, na aba Compra. */
+  contrapartes: { id: string; nome: string; cpfCnpj?: string | null }[];
   onNovoFrigorifico: () => void;
   /** ⚠ A fazenda de ORIGEM: o gado sai dela. */
   abateFazendaId: string;
   setAbateFazendaId: (v: string) => void;
   fazendasOC: { id: string; nome: string }[];
   /** Texto livre — a propriedade de quem compra, quando se sabe. */
-  unidadeFrigorifico: string;
-  setUnidadeFrigorifico: (v: string) => void;
   observacao: string;
   setObservacao: (v: string) => void;
   ocOperacaoId: string | null;
@@ -206,7 +208,6 @@ function dataMaisDias(iso: string | null | undefined, dias: number): string | nu
 export function AbateModalShell({
   data, setData, frigorificoId, setFrigorificoId, contrapartes, onNovoFrigorifico,
   abateFazendaId, setAbateFazendaId, fazendasOC,
-  unidadeFrigorifico, setUnidadeFrigorifico,
   observacao, setObservacao,
   ocOperacaoId, ocVersao, onOcVersaoChange, ocStatusComercial, lotesApi,
   abateApi, abateLinhas, onAbateLinhaChange,
@@ -216,12 +217,18 @@ export function AbateModalShell({
   quantidadeNum, pesoKgNum, submitting, onSalvarOperacao, onSalvarNegociacao, semAlteracoes = false,
   onConcluirNegociacao, onReabrirNegociacao, onFechar,
 }: AbateModalShellProps) {
-  const [abaAtiva, setAbaAtiva] = useState<string>('venda');
+  /* ⚠ 'abate', NAO 'venda'. O clone do VendaModalShell trouxe a aba inicial da venda, e
+     como `rodapeTemSalvar` pergunta `abaAtiva === 'abate'`, o rodape nascia SEM o Salvar —
+     ele so' aparecia depois de trocar de aba e voltar. Nenhuma aba deste shell se chama
+     'venda': o valor nao casava com nada. */
+  const [abaAtiva, setAbaAtiva] = useState<string>('abate');
   /* PR-OC-VENDA-REABRIR-NEG-01 — o dialogo de reabertura. Estado local: e' um gesto da
      tela, nao da operacao. */
   const [reabrirAberto, setReabrirAberto] = useState(false);
   const [motivoReabrir, setMotivoReabrir] = useState('');
-  const frigorificoNome = contrapartes.find(f => f.id === frigorificoId)?.nome ?? null;
+  const contraparteAtual = contrapartes.find(f => f.id === frigorificoId) ?? null;
+  const frigorificoNome = contraparteAtual?.nome ?? null;
+  const frigorificoDoc = contraparteAtual?.cpfCnpj || null;
   const fazendaNome = fazendasOC.find(f => f.id === abateFazendaId)?.nome ?? null;
 
   /* ⚠ O DADO PERSISTE NA TROCA DE TIPO, e isso nao mudou com a saida da aba: nenhum
@@ -523,9 +530,15 @@ export function AbateModalShell({
   );
 
   return (
-    <div className="flex flex-col">
+    /* ⚠ A21 — CABECALHO, ABAS E RODAPE NUNCA ROLAM. A altura mora aqui, uma vez so', e as
+       tres faixas fixas sao `shrink-0`; o corpo e' o unico que rola. Antes a altura estava
+       no CORPO (`h-[69vh]`) e o modal nao tinha altura nenhuma — com o envelope errado no
+       pai, a pagina inteira virava a area de rolagem e o rodape descia com o conteudo.
+       `min-h-0` e' o que permite ao corpo encolher dentro do flex; sem ele o filho cresce e
+       empurra o rodape para fora da tela. */
+    <div className="flex flex-col h-[85vh]">
       {/* CABECALHO — medidas do CompraModalShell: `px-6 py-2.5`. */}
-      <div className="bg-primary text-primary-foreground px-6 py-2.5 flex items-start justify-between">
+      <div className="shrink-0 bg-primary text-primary-foreground px-6 py-2.5 flex items-start justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <h2 className="text-lg font-bold leading-tight">Abate de animais</h2>
@@ -546,7 +559,7 @@ export function AbateModalShell({
       </div>
 
       {/* BARRA DE ABAS — template do CompraModalShell (bg-card, border-b, px-6 py-3). */}
-      <div className="bg-card border-b px-6 py-3 flex items-center gap-1">
+      <div className="shrink-0 bg-card border-b px-6 py-3 flex items-center gap-1">
         {abasDoAbate(!!ocOperacaoId).map(a => {
           const active = a.key === abaAtiva && a.enabled;
           return (
@@ -563,7 +576,7 @@ export function AbateModalShell({
         })}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] lg:grid-rows-[minmax(0,1fr)] gap-3 p-4 h-[69vh] overflow-y-auto lg:overflow-hidden bg-muted/30">
+      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[1fr_280px] lg:grid-rows-[minmax(0,1fr)] gap-3 p-4 overflow-y-auto lg:overflow-hidden bg-muted/30">
         <div className="space-y-2 min-w-0 lg:min-h-0 lg:overflow-y-auto">
           {/* ── ENTREGA ────────────────────────────────────────────────────────────
               ⚠ A MESMA GRADE DA COMPRA, com o vocabulario trocado por dicionario. O gesto
@@ -709,16 +722,27 @@ export function AbateModalShell({
             <div className="text-[15px] font-medium text-foreground">Identificação do abate</div>
 
             {/* FAIXA DE TOPO — rotulo 11px/400, valor 20px/500. */}
-            <div className="grid grid-cols-2 gap-2 rounded-md border bg-muted/20 px-3.5 py-[11px]">
+            <div className="grid grid-cols-3 gap-2 rounded-md border bg-muted/20 px-3.5 py-[11px]">
               <div className="min-w-0">
                 <div className="text-[11px] font-normal text-muted-foreground leading-none">Comprador</div>
                 <div className="mt-1 text-[20px] font-medium leading-none truncate">{frigorificoNome ?? '—'}</div>
+                {/* ⚠ SO' APARECE QUANDO EXISTE: uma linha "CNPJ —" fixa diria que o
+                    documento falta no cadastro, quando o que falta e' a carga que o traz. */}
+                {frigorificoDoc && (
+                  <div className="mt-0.5 text-[11px] text-muted-foreground leading-none truncate">
+                    CNPJ {frigorificoDoc}
+                  </div>
+                )}
               </div>
               <div className="min-w-0">
                 <div className="text-[11px] font-normal text-muted-foreground leading-none">Data do abate</div>
                 <div className="mt-1 text-[20px] font-medium tabular-nums leading-none">
                   {data ? data.split('-').reverse().join('/') : <span className="text-muted-foreground">—</span>}
                 </div>
+              </div>
+              <div className="min-w-0">
+                <div className="text-[11px] font-normal text-muted-foreground leading-none">Fazenda de origem</div>
+                <div className="mt-1 text-[20px] font-medium leading-none truncate">{fazendaNome ?? '—'}</div>
               </div>
             </div>
             <Separator />
@@ -763,11 +787,6 @@ export function AbateModalShell({
                   <p className="mt-[3px] text-[10px] text-destructive">Selecione a fazenda de origem.</p>
                 )}
               </div>
-              <div className="min-w-0">
-                <Label className="text-[10px] text-muted-foreground">Propriedade de destino</Label>
-                <Input value={unidadeFrigorifico} onChange={e => setUnidadeFrigorifico(e.target.value)} placeholder="Opcional"
-                  className="mt-[3px] h-8 px-2.5 text-[12px]" />
-              </div>
               <div className="min-w-0 lg:col-span-2">
                 <Label className="text-[10px] text-muted-foreground">Observações / Lote</Label>
                 <Input value={observacao} onChange={e => setObservacao(e.target.value)} placeholder="Opcional"
@@ -781,7 +800,10 @@ export function AbateModalShell({
 
         {/* RESUMO LATERAL — idioma do ResumoLateralOC. */}
         <div className="lg:min-h-0 lg:overflow-y-auto">
-          <aside className="bg-card rounded-md border shadow-sm overflow-hidden self-start text-[10px]">
+          {/* ⚠ STICKY: a coluna rola sozinha (`lg:overflow-y-auto`), e sem isto o cartao
+              some para cima quando o resumo e' mais alto que a area. Fundo opaco porque
+              sticky sobrepoe o que rola atras. */}
+          <aside className="sticky top-0 bg-card rounded-md border shadow-sm overflow-hidden self-start text-[10px]">
             <div className="h-8 shrink-0 border-b border-border bg-accent/40 flex items-center px-3 text-[11px] font-bold uppercase tracking-wide text-primary">
               Resumo da operação
             </div>
@@ -791,6 +813,7 @@ export function AbateModalShell({
               </div>
               <div className="px-3 space-y-0.5">
                 <LinhaResumo rotulo="Comprador" valor={frigorificoNome} />
+                <LinhaResumo rotulo="CNPJ" valor={frigorificoDoc} />
                 <LinhaResumo rotulo="Data" valor={data ? data.split('-').reverse().join('/') : null} />
                 <LinhaResumo rotulo="Fazenda" valor={fazendaNome} />
               </div>
@@ -858,11 +881,16 @@ export function AbateModalShell({
         </div>
       </div>
 
-      <div className="bg-primary px-6 py-2 flex items-center justify-end gap-3">
+      {/* ⚠ RODAPE FIXO E PRESENTE EM TODA ABA. `justify-between` poe o Fechar a esquerda e
+          os botoes da aba a direita; antes era `justify-end` e o Fechar viajava junto dos
+          outros, mudando de lugar conforme a aba tivesse ou nao Salvar. */}
+      <div className="shrink-0 bg-primary px-6 py-2 flex items-center justify-between gap-3">
         <Button type="button" variant="ghost" onClick={onFechar}
           className="text-white/90 hover:bg-white/10 hover:text-white" title="Fechar sem salvar" aria-label="Fechar">
           Fechar
         </Button>
+        {/* Os botoes da aba vivem juntos a direita; o Fechar fica sozinho a esquerda. */}
+        <div className="flex items-center gap-3">
         {/* ⚠ A VENDA NAO TINHA COMO CONCLUIR — PR-OC-VENDA-ENTREGA-01B. A aba Entrega
             exige `status='fechada'` e dizia "conclua a negociação", mas o gatilho nao
             existia em lugar nenhum do shell: o operador salvava achando que concluia.
@@ -942,6 +970,7 @@ export function AbateModalShell({
             : (<>Salvar e continuar para Negociação <ArrowRight className="h-4 w-4" /></>)}
         </Button>
         </>)}
+        </div>
       </div>
 
       {/* ⚠ MOTIVO OBRIGATORIO AQUI, e e' DIVERGENCIA DELIBERADA da compra — decisao do

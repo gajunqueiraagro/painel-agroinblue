@@ -963,7 +963,15 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
      QUE LARGURA. Compartilhar um so' faria a compra herdar a largura da venda no primeiro
      ajuste de qualquer um dos dois. */
   const vendaOCNoEnvelope = isVenda && modoOCVenda;
-  const usaEnvelopeProprio = TIPOS_NO_ENVELOPE_PROPRIO.includes(tipo) || vendaMetaNoEnvelope || vendaOCNoEnvelope;
+  /* ⚠ O ABATE ESTAVA NO ENVELOPE ERRADO, e era a causa do rodape que rolava. Ele nao esta'
+     em `TIPOS_NO_ENVELOPE_PROPRIO` (compra, nascimento, morte), entao caia no ramo de baixo
+     — `overflow-y-auto p-4` —, e o proprio comentario daquele ramo ja' avisava: com ele o
+     modal inteiro vira uma area de rolagem so' e o rodape desce junto com o conteudo.
+     ⚠ PREDICADO, como o da venda, e nao uma quarta entrada na lista: `tipo === 'abate'`
+     sozinho arrastaria o `AbateDetalhesDialog` legado — os 829 abates historicos — para um
+     envelope sem padding e sem botao de fechar, e ele nao tem cabecalho proprio. */
+  const abateOCNoEnvelope = isAbate && modoOCAbate;
+  const usaEnvelopeProprio = TIPOS_NO_ENVELOPE_PROPRIO.includes(tipo) || vendaMetaNoEnvelope || vendaOCNoEnvelope || abateOCNoEnvelope;
   /** Quem escolhe a propria fazenda — governa os cinco pontos: a guarda de Global, os
    *  dois escritores de texto, o `fazendaId` do payload e a confirmacao. */
   const escolheFazenda = TIPOS_COM_SELETOR_DE_FAZENDA.includes(tipo) || vendaMetaNoEnvelope;
@@ -999,8 +1007,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [abateFrigorificoId, setAbateFrigorificoId] = useState<string>('');
   /* ⚠ ORIGEM, como na venda: o gado SAI da fazenda para o frigorifico. */
   const [abateFazendaId, setAbateFazendaId] = useState<string>('');
-  /* A unidade/planta do frigorifico — texto livre, quando se sabe. */
-  const [abateUnidade, setAbateUnidade] = useState<string>('');
   /* ⚠ SEMEIA A FAZENDA SO' NUMA VENDA NOVA — PR-OC-VENDA-REABRIR-01E. Ele existe para
      poupar um clique: com uma fazenda no filtro, a venda ja' nasce com ela.
      Numa REABERTURA ele apagava o que o banco tinha: a hidratacao faz
@@ -5390,7 +5396,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           onNovoFrigorifico={() => setNovoFornecedorCompraOpen(true)}
           abateFazendaId={abateFazendaId} setAbateFazendaId={setAbateFazendaId}
           fazendasOC={fazendasOC}
-          unidadeFrigorifico={abateUnidade} setUnidadeFrigorifico={setAbateUnidade}
           observacao={observacao} setObservacao={setObservacao}
           ocOperacaoId={ocOperacaoId}
           ocStatusComercial={ocStatusComercial}
