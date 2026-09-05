@@ -23,6 +23,10 @@ export interface LoteForm {
   pesoMedioKg: string;           // mascarado (peso médio)
   criterioValor: CriterioValor;
   valorInformado: string;        // mascarado (R$)
+  /* ⚠ TEXTO LIVRE DO OPERADOR — no abate e' o numero da OC do frigorifico, que e' como o
+     produtor identifica o lote no papel que recebe. Nasce vazio e nao entra em conta
+     nenhuma: quem some ou classifica sao as outras cinco colunas. */
+  observacao: string;
 }
 
 export interface CompraLotesApi {
@@ -82,6 +86,7 @@ export function useCompraLotes({ operacaoId, clienteId, versao, onVersaoChange, 
         quantidade: r.qtd_negociada != null ? String(r.qtd_negociada) : '',
         pesoMedioKg: r.peso_medio_negociado_kg != null ? String(r.peso_medio_negociado_kg) : '',
         criterioValor: (r.criterio_valor ?? 'kg') as CriterioValor,
+        observacao: r.observacao ?? '',
         valorInformado: r.valor_informado != null ? String(r.valor_informado) : '',
       })));
     } catch (e) {
@@ -102,7 +107,7 @@ export function useCompraLotes({ operacaoId, clienteId, versao, onVersaoChange, 
     setLotes(prev => [...prev, {
       idLocal,
       ordem: prev.reduce((m, l) => Math.max(m, l.ordem), 0) + 1,
-      categoria: '', quantidade: '', pesoMedioKg: '', criterioValor: 'kg', valorInformado: '',
+      categoria: '', quantidade: '', pesoMedioKg: '', criterioValor: 'kg', valorInformado: '', observacao: '',
     }]);
     return idLocal;
   }, []);
@@ -146,6 +151,9 @@ export function useCompraLotes({ operacaoId, clienteId, versao, onVersaoChange, 
           peso_medio_negociado_kg: parseNumericValue(l.pesoMedioKg) || null,
           criterio_valor: l.criterioValor,
           valor_informado: parseNumericValue(l.valorInformado) || null,
+          /* Vazio vira `null`: string vazia no banco seria "o operador escreveu nada",
+             que e' diferente de nao ter escrito. */
+          observacao: l.observacao.trim() || null,
         };
       });
       const { data, error } = await (supabase as any).rpc('oc_salvar_lotes', {

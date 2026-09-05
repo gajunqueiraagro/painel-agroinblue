@@ -214,6 +214,7 @@ export function AbaLotesAbate({
             const linha = linhas.get(lote.id);
             const c = calculos.get(lote.id)!;
             const negociado = temNegociacao(linha);
+            const observacaoDoLote = lotesApi.lotes.find(l => l.idLocal === lote.id)?.observacao?.trim() || null;
             return (
               <div key={lote.id} className="rounded-lg border border-border/60 bg-card px-2.5 py-2">
                 <div className="flex items-start gap-2.5">
@@ -221,7 +222,11 @@ export function AbaLotesAbate({
                     <div className="whitespace-nowrap text-[12px] font-medium text-foreground">
                       {lote.categoriaLabel} · {lote.quantidade} cab · {n2(c.carcacaCalc * c.quantidade)} kg carcaça
                     </div>
-                    {/* A linha "OC {numero}" entra no 96c, com o campo de observação do lote. */}
+                    {/* ⚠ OMITIDA QUANDO VAZIA, nunca "OC —": a observação é opcional, e um
+                        traço ali afirmaria que falta um dado que ninguém pediu. */}
+                    {observacaoDoLote && (
+                      <div className="truncate text-[10px] text-muted-foreground">{observacaoDoLote}</div>
+                    )}
                     <div className="text-[10px] text-muted-foreground tabular-nums">
                       Peso vivo {n2(lote.pesoMedioKg)} kg/cab · <b className="text-[11px] font-semibold text-foreground">RC {n2(c.rendCalc)}%</b>
                     </div>
@@ -304,6 +309,7 @@ export function AbaLotesAbate({
              `valor_acordado`. Pedir um valor aqui seria um segundo número para a mesma
              pergunta, e o operador não teria como saber qual vale. */
           semValor
+          comObservacao
           somenteLeitura={!!somenteLeitura}
           onAplicar={(patch) => { lotesApi.editarLote(emEdicao.idLocal, patch); setEditandoId(null); }}
           onAplicarEAdicionar={(patch) => { lotesApi.editarLote(emEdicao.idLocal, patch); abrirNovo(); }}

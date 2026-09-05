@@ -456,6 +456,7 @@ export function LoteDialog({
   rotulos,
   lote, categoriasDisponiveis, darkSelectClass, fisicoRO, somenteLeitura, rotuloCategoria,
   onAplicar, onAplicarEAdicionar, onFechar, valorProjetado = null, semValor = false,
+  comObservacao = false,
 }: {
   rotulos?: AbaNegociacaoLotesRotulos;
   lote: NonNullable<Props['lotesApi']>['lotes'][number];
@@ -477,12 +478,21 @@ export function LoteDialog({
    * líquidos em `valor_acordado` e sobrepõe o que `_oc_valor_do_lote` diria.
    */
   semValor?: boolean;
+  /**
+   * Mostra o campo livre de observação do lote — hoje só o ABATE.
+   *
+   * ⚠ ADITIVA E COM DEFAULT `false`, como `semValor`: sem passar nada, Compra e Venda
+   * ficam idênticas. No abate ele guarda o número da OC do frigorífico, que é como o
+   * produtor reconhece o lote no papel que recebe — e é o que a linha 2 do cartão mostra.
+   */
+  comObservacao?: boolean;
 }) {
   const [categoria, setCategoria] = useState(lote.categoria);
   const [quantidade, setQuantidade] = useState(lote.quantidade);
   const [pesoMedioKg, setPesoMedioKg] = useState(lote.pesoMedioKg);
   const [criterioValor, setCriterioValor] = useState<CriterioValor>(lote.criterioValor);
   const [valorInformado, setValorInformado] = useState(lote.valorInformado);
+  const [observacao, setObservacao] = useState(lote.observacao);
 
   const pm = parseNumericValue(pesoMedioKg) || 0;
   const qtdNum = parseNumericValue(quantidade) || 0;
@@ -490,7 +500,7 @@ export function LoteDialog({
   const semPeso = pm <= 0;
   const unidade = CRITERIOS.find(c => c.value === criterioValor)?.unidade || 'Valor';
   const total = loteTotal(criterioValor, quantidade, pesoMedioKg, valorInformado);
-  const patch = { categoria, quantidade, pesoMedioKg, criterioValor, valorInformado };
+  const patch = { categoria, quantidade, pesoMedioKg, criterioValor, valorInformado, observacao };
 
   /* PESO OBRIGATORIO na porta do modal, e nao so no salvar: `oc_salvar_lotes` recusa a
      OPERACAO INTEIRA por um lote sem peso (PR-OC-PESO-OBRIGATORIO-01), entao deixar o
@@ -585,6 +595,16 @@ export function LoteDialog({
             </div>
             </>)}
           </div>
+
+          {comObservacao && (
+            <div>
+              <Label className="text-[10px]">Observação</Label>
+              <Input value={observacao} onChange={e => setObservacao(e.target.value)}
+                placeholder="Ex.: OC 7914 — como o frigorífico identifica o lote"
+                disabled={somenteLeitura}
+                className="h-8 text-[12px] mt-0.5" />
+            </div>
+          )}
 
           {/* Derivados AO VIVO, em PARES ALINHADOS (regra `c` do topo). Antes era uma
               frase corrida com pontos separando: para comparar dois lotes era preciso

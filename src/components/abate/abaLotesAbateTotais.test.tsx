@@ -78,18 +78,23 @@ describe('totaisDoAbate — uma conta só para o topo e o resumo', () => {
   });
 });
 
-const lotesApiFalso = (): CompraLotesApi => ({
-  lotes: [], loading: false, saving: false,
+const loteForm = (idLocal: string, observacao: string) => ({
+  idLocal, ordem: 1, categoria: 'bois', quantidade: '10', pesoMedioKg: '500',
+  criterioValor: 'kg' as const, valorInformado: '', observacao,
+});
+
+const lotesApiFalso = (lotes: ReturnType<typeof loteForm>[] = []): CompraLotesApi => ({
+  lotes, loading: false, saving: false,
   adicionarLote: () => 'x', editarLote: () => {}, removerLote: () => {},
   salvar: async () => 1, recarregar: async () => {},
   totais: { lotes: 0, animais: 0, pesoTotal: 0, valorNegociado: 0 },
 });
 
 describe('a grade — o que o operador vê antes de negociar', () => {
-  const montar = (linhas: Map<string, LinhaAbate>) => render(
+  const montar = (linhas: Map<string, LinhaAbate>, formLotes: ReturnType<typeof loteForm>[] = []) => render(
     <AbaLotesAbate lotes={[A]} linhas={linhas} cenario="realizado"
       cenariosExistentes={['realizado']} onCenarioChange={() => {}}
-      lotesApi={lotesApiFalso()} categoriasDisponiveis={[{ value: 'bois', label: 'Bois' }]}
+      lotesApi={lotesApiFalso(formLotes)} categoriasDisponiveis={[{ value: 'bois', label: 'Bois' }]}
       onLinhaChange={() => {}} />,
   );
 
@@ -115,5 +120,18 @@ describe('a grade — o que o operador vê antes de negociar', () => {
   it('o cabeçalho conta os lotes e as cabeças', () => {
     montar(new Map());
     expect(screen.getByText('1 lote · 10 cab')).toBeInTheDocument();
+  });
+
+  it('a observação do lote vira a linha de contexto do cartão', () => {
+    /* ⚠ É O NÚMERO DA OC DO FRIGORÍFICO — como o produtor reconhece o lote no papel que
+       recebe. Sem ele, quatro lotes de "Bois · 10 cab" ficam indistinguíveis na grade. */
+    montar(new Map(), [loteForm('l1', 'OC 7914')]);
+    expect(screen.getByText('OC 7914')).toBeInTheDocument();
+  });
+
+  it('sem observação a linha some — nunca vira "—"', () => {
+    /* Traço afirmaria que falta um dado que ninguém pediu: a observação é opcional. */
+    const { container } = montar(new Map(), [loteForm('l1', '   ')]);
+    expect(container.textContent).not.toContain('OC ');
   });
 });

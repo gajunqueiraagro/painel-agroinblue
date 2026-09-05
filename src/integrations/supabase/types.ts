@@ -5487,6 +5487,115 @@ export type Database = {
           },
         ]
       }
+      financeiro_lancamento_documentos: {
+        Row: {
+          cancelado: boolean
+          cancelado_em: string | null
+          cancelado_motivo: string | null
+          cancelado_por: string | null
+          chave_acesso: string | null
+          cliente_id: string
+          data_emissao: string | null
+          emitente_documento: string | null
+          emitente_id: string | null
+          emitente_nome: string | null
+          especie: string
+          id: string
+          lancamento_id: string
+          nome: string
+          numero: string | null
+          observacao: string | null
+          serie: string | null
+          tamanho_bytes: number | null
+          tipo: string | null
+          updated_at: string | null
+          updated_by: string | null
+          uploaded_em: string
+          uploaded_por: string | null
+          url: string | null
+          valor_documento: number | null
+          versao: number
+        }
+        Insert: {
+          cancelado?: boolean
+          cancelado_em?: string | null
+          cancelado_motivo?: string | null
+          cancelado_por?: string | null
+          chave_acesso?: string | null
+          cliente_id: string
+          data_emissao?: string | null
+          emitente_documento?: string | null
+          emitente_id?: string | null
+          emitente_nome?: string | null
+          especie: string
+          id?: string
+          lancamento_id: string
+          nome: string
+          numero?: string | null
+          observacao?: string | null
+          serie?: string | null
+          tamanho_bytes?: number | null
+          tipo?: string | null
+          updated_at?: string | null
+          updated_by?: string | null
+          uploaded_em?: string
+          uploaded_por?: string | null
+          url?: string | null
+          valor_documento?: number | null
+          versao?: number
+        }
+        Update: {
+          cancelado?: boolean
+          cancelado_em?: string | null
+          cancelado_motivo?: string | null
+          cancelado_por?: string | null
+          chave_acesso?: string | null
+          cliente_id?: string
+          data_emissao?: string | null
+          emitente_documento?: string | null
+          emitente_id?: string | null
+          emitente_nome?: string | null
+          especie?: string
+          id?: string
+          lancamento_id?: string
+          nome?: string
+          numero?: string | null
+          observacao?: string | null
+          serie?: string | null
+          tamanho_bytes?: number | null
+          tipo?: string | null
+          updated_at?: string | null
+          updated_by?: string | null
+          uploaded_em?: string
+          uploaded_por?: string | null
+          url?: string | null
+          valor_documento?: number | null
+          versao?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fin_lanc_doc_lanc_fk"
+            columns: ["lancamento_id", "cliente_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_lancamentos_v2"
+            referencedColumns: ["id", "cliente_id"]
+          },
+          {
+            foreignKeyName: "fin_lanc_doc_lanc_fk"
+            columns: ["lancamento_id", "cliente_id"]
+            isOneToOne: false
+            referencedRelation: "vw_financeiro_lancamentos_v2_doc"
+            referencedColumns: ["id", "cliente_id"]
+          },
+          {
+            foreignKeyName: "financeiro_lancamento_documentos_emitente_id_fkey"
+            columns: ["emitente_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_fornecedores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       financeiro_lancamentos: {
         Row: {
           ano_mes: string
@@ -9129,9 +9238,11 @@ export type Database = {
           operacao_lote_id: string
           outros_descontos_fonte: string | null
           outros_descontos_valor: number | null
+          peso_carcaca_fonte: string | null
           peso_carcaca_kg: number | null
           peso_total_kg_nf: number | null
           preco_arroba: number | null
+          preco_fonte: string | null
           rendimento_carcaca_pct: number | null
           updated_at: string
           updated_by: string | null
@@ -9158,9 +9269,11 @@ export type Database = {
           operacao_lote_id: string
           outros_descontos_fonte?: string | null
           outros_descontos_valor?: number | null
+          peso_carcaca_fonte?: string | null
           peso_carcaca_kg?: number | null
           peso_total_kg_nf?: number | null
           preco_arroba?: number | null
+          preco_fonte?: string | null
           rendimento_carcaca_pct?: number | null
           updated_at?: string
           updated_by?: string | null
@@ -9187,9 +9300,11 @@ export type Database = {
           operacao_lote_id?: string
           outros_descontos_fonte?: string | null
           outros_descontos_valor?: number | null
+          peso_carcaca_fonte?: string | null
           peso_carcaca_kg?: number | null
           peso_total_kg_nf?: number | null
           preco_arroba?: number | null
+          preco_fonte?: string | null
           rendimento_carcaca_pct?: number | null
           updated_at?: string
           updated_by?: string | null
@@ -9980,6 +10095,7 @@ export type Database = {
           created_by: string | null
           criterio_valor: string | null
           id: string
+          observacao: string | null
           operacao_id: string
           ordem: number
           peso_medio_negociado_kg: number | null
@@ -9995,6 +10111,7 @@ export type Database = {
           created_by?: string | null
           criterio_valor?: string | null
           id?: string
+          observacao?: string | null
           operacao_id: string
           ordem: number
           peso_medio_negociado_kg?: number | null
@@ -10010,6 +10127,7 @@ export type Database = {
           created_by?: string | null
           criterio_valor?: string | null
           id?: string
+          observacao?: string | null
           operacao_id?: string
           ordem?: number
           peso_medio_negociado_kg?: number | null
@@ -11861,6 +11979,27 @@ export type Database = {
       }
       exec_query: { Args: { sql: string }; Returns: Json }
       exec_sql: { Args: { sql: string }; Returns: Json }
+      fin_documento_cancelar: {
+        Args: { p_cliente_id: string; p_documento_id: string; p_motivo: string }
+        Returns: Json
+      }
+      fin_documento_confronto: {
+        Args: { p_cliente_id: string; p_lancamento_id: string }
+        Returns: Json
+      }
+      fin_documento_editar: {
+        Args: {
+          p_cliente_id: string
+          p_documento_id: string
+          p_payload: Json
+          p_versao_esperada: number
+        }
+        Returns: Json
+      }
+      fin_documento_registrar: {
+        Args: { p_cliente_id: string; p_lancamento_id: string; p_payload: Json }
+        Returns: Json
+      }
       fn_ajustes_sugeridos_mes: {
         Args: { p_ano_mes: string; p_fazenda_id: string }
         Returns: {
@@ -12183,6 +12322,7 @@ export type Database = {
           total_saidas: number
           transferencias_enviadas: number
           transferencias_recebidas: number
+          visivel_no_mes: boolean
         }[]
       }
       fn_conciliacao_soberana: {
