@@ -85,13 +85,21 @@ export function aplicarEnriquecimentoOC(
     /* ⚠ O ABATE VEM POR INTEIRO OU NÃO VEM. Preencher só a carcaça deixaria a tela
        calcular um rendimento com preço ausente — meio dado é pior que nenhum aqui,
        porque a lista não sabe distinguir "não informado" de "não carregado".
-       ⚠ A CARCAÇA É O TOTAL DO LOTE e o lançamento é por movimento; quando o movimento
-       leva parte do lote, prorrateia pela quantidade, como o valor já faz. */
+       ⚠ A CARCAÇA É O TOTAL DO LOTE e `Lancamento.pesoCarcacaKg` é POR CABEÇA — ZOOT-LISTA-01.
+       Toda a base lê esse campo por cabeça: `economicos.ts` faz `(pesoCarcacaKg/15) × qtd`
+       para as arrobas e `pesoCarcacaKg / pesoMedioKg` para o rendimento; LancamentosTab,
+       LancamentoDetalhe e PainelConsultor repetem as duas contas. Gravar o TOTAL aqui punha
+       12.260,8 kg num campo que vale 299,04 — a lista mostrava 817 @/cab e rendimento de
+       2.269%, e a guarda `0 < r < 100` de FinanceiroTab escondia o segundo apagando a coluna.
+       Dividir pela quantidade DO LOTE devolve a unidade certa e dispensa prorratear: o valor
+       por cabeça é o mesmo no lote inteiro e em qualquer parte dele. */
     const ab = e.abate ?? null;
+    /* Já o que é VALOR em reais continua sendo do lote inteiro e prorrateia. */
     const proporcao = ab && ab.qtdLote && ab.qtdLote > 0 && (l.quantidade ?? 0) > 0
       ? (l.quantidade as number) / ab.qtdLote : 1;
     const campoAbate = ab ? {
-      pesoCarcacaKg: ab.pesoCarcacaKg != null ? ab.pesoCarcacaKg * proporcao : l.pesoCarcacaKg,
+      pesoCarcacaKg: ab.pesoCarcacaKg != null && ab.qtdLote != null && ab.qtdLote > 0
+        ? ab.pesoCarcacaKg / ab.qtdLote : l.pesoCarcacaKg,
       precoArroba: ab.precoArroba ?? precoArroba,
       bonusPrecoce: ab.bonusPrecoce ?? l.bonusPrecoce,
       bonusQualidade: ab.bonusQualidade ?? l.bonusQualidade,
@@ -99,6 +107,11 @@ export function aplicarEnriquecimentoOC(
       descontoQualidade: ab.descontoQualidade ?? l.descontoQualidade,
       descontoFunrural: ab.funrural != null && ab.funruralFonte === 'reais'
         ? ab.funrural * proporcao : l.descontoFunrural,
+      /* O RECEBIDO NF do abate vindo de OC — ZOOT-LISTA-01. `valor_total` do lançamento é
+         cópia velha: em 3 dos 12 abates de OC do proto ele ficou para trás de uma
+         revaloração (−9.009,85, −4.774,56, −3.555,71), porque `oc_salvar_abate` não
+         propaga o líquido. Só de LEITURA e só para a coluna; nada grava por aqui. */
+      valorLiquidoAbate: ab.valorLiquido != null ? ab.valorLiquido * proporcao : undefined,
     } : {};
 
     if (soAbate) return { ...l, ...campoAbate };

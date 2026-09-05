@@ -12,7 +12,7 @@ import { ChuvasTab } from './ChuvasTab';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { fmtValor, formatMoeda, formatKg, formatArroba, formatPercent, formatCabecas } from '@/lib/calculos/formatters';
 import { MESES_OPTIONS } from '@/lib/calculos/labels';
-import { calcIndicadoresLancamento } from '@/lib/calculos/economicos';
+import { calcIndicadoresLancamento, calcValorTotal } from '@/lib/calculos/economicos';
 import { useAnosDisponiveis } from '@/hooks/useAnosDisponiveis';
 import { useOperacoesComerciaisEmAndamento } from '@/hooks/useOperacoesComerciaisEmAndamento';
 import { useValorEmProjecao } from '@/hooks/useValorEmProjecao';
@@ -66,6 +66,44 @@ const SUB_ABA_LABELS: Record<SubAba, { label: string; icon: string }> = {
 const TABLE_HEAD_CELL = 'px-[3px] py-1 text-[8px] font-bold uppercase tracking-[0.02em] whitespace-nowrap select-none';
 const TABLE_BODY_CELL = 'px-[3px] py-[3px] align-middle whitespace-nowrap overflow-hidden text-ellipsis';
 const TABLE_FOOT_CELL = 'px-[3px] py-1.5 whitespace-nowrap text-[10px] font-bold';
+
+/**
+ * O que o produtor RECEBEU na nota — ZOOT-LISTA-01.
+ *
+ * ⚠ A COLUNA TINHA DUAS RÉGUAS. O abate vindo de OC mostrava o líquido e o legado mostrava
+ * o bruto, lado a lado, sem nada dizendo qual era qual: 41 garrotes de 15/04 aparecem duas
+ * vezes no proto, R$ 315.529,85 no lançamento legado e R$ 305.905,76 no da OC — o mesmo
+ * gado, dois números, uma coluna só.
+ *
+ * ⚠ E O LEGADO NÃO SE UNIFORMIZA POR FÓRMULA (decisão do 112-GO, item 1). Dos 109 abates
+ * legados com Funrural gravado, medidos contra o bruto: em 41 ele está FORA do `valor_total`
+ * (subtrair acertaria), em 21 já está DENTRO (subtrair descontaria R$ 124.558,12 duas vezes)
+ * e em 47 a base não fecha com fórmula nenhuma. `valor_total − funrural` seria uma régua
+ * errada e invisível no lugar de duas visíveis. O legado fica como está, com o `title`
+ * dizendo de que época é. A curadoria é a frente [ABATE-LEGADO-CONVENCAO].
+ */
+function recebidoNF(l: Lancamento): number {
+  if (l.valorLiquidoAbate != null && l.valorLiquidoAbate > 0) return l.valorLiquidoAbate;
+  return calcValorTotal(l);
+}
+
+/**
+ * R$/@, R$/Kg e /Cab derivam do RECEBIDO NF — 112-GO, item 4. `calcIndicadoresLancamento`
+ * as deriva de `valorFinal`, que é o `valor_total` cru; aqui a base é a mesma que a coluna
+ * mostra, para que as quatro colunas contem a mesma história. Sem peso não há divisão: zero
+ * volta como zero e `fmtValor` já o imprime como "-", nunca R$ 0,00.
+ */
+function derivadasDoRecebido(c: ReturnType<typeof calcIndicadoresLancamento>, qtd: number, nf: number) {
+  return {
+    liqArroba: c.pesoTotalArrobas > 0 ? nf / c.pesoTotalArrobas : 0,
+    liqKg: c.pesoTotalKg > 0 ? nf / c.pesoTotalKg : 0,
+    liqCabeca: qtd > 0 ? nf / qtd : 0,
+  };
+}
+
+/** Só o abate de OC tem líquido próprio; o resto é o valor da época, e o `title` avisa. */
+const TITLE_LEGADO = 'Valor (legado): convenção da época';
+const ehLegado = (l: Lancamento): boolean => l.valorLiquidoAbate == null || l.valorLiquidoAbate <= 0;
 
 function normalizeStatusFiltro(value?: string): StatusFiltro {
   if (value === 'previsto') return 'meta';
@@ -165,7 +203,12 @@ function useSortableTable() {
     }
   }, [sortKey, sortDir]);
 
-  const sortRows = useCallback((rows: { l: Lancamento; c: ReturnType<typeof calcIndicadoresLancamento> }[]) => {
+  const sortRows = useCallback(<R extends {
+    l: Lancamento;
+    c: ReturnType<typeof calcIndicadoresLancamento>;
+    nf: number;
+    d: ReturnType<typeof derivadasDoRecebido>;
+  }>(rows: R[]): R[] => {
     if (!sortKey || !sortDir) return rows;
     const sorted = [...rows].sort((a, b) => {
       let va: number | string = 0;
@@ -178,10 +221,12 @@ function useSortableTable() {
         case 'pesoVivo': va = a.l.pesoMedioKg ?? 0; vb = b.l.pesoMedioKg ?? 0; break;
         case 'rend': va = a.c.rendimento; vb = b.c.rendimento; break;
         case 'pesoArroba': va = a.c.pesoArroba; vb = b.c.pesoArroba; break;
-        case 'total': va = a.c.valorFinal; vb = b.c.valorFinal; break;
-        case 'liqArroba': va = a.c.liqArroba; vb = b.c.liqArroba; break;
-        case 'liqKg': va = a.c.liqKg; vb = b.c.liqKg; break;
-        case 'liqCab': va = a.c.liqCabeca; vb = b.c.liqCabeca; break;
+        /* Ordena pelo que a coluna MOSTRA (RECEBIDO NF e suas derivadas), não pelo
+           `valor_total` cru — senão clicar no cabeçalho reordena por outro número. */
+        case 'total': va = a.nf; vb = b.nf; break;
+        case 'liqArroba': va = a.d.liqArroba; vb = b.d.liqArroba; break;
+        case 'liqKg': va = a.d.liqKg; vb = b.d.liqKg; break;
+        case 'liqCab': va = a.d.liqCabeca; vb = b.d.liqCabeca; break;
         case 'status': va = getStatusOrdenacao(a.l); vb = getStatusOrdenacao(b.l); break;
       }
       if (typeof va === 'string') return sortDir === 'asc' ? va.localeCompare(vb as string) : (vb as string).localeCompare(va);
@@ -194,6 +239,42 @@ function useSortableTable() {
 }
 
 /* ── Tables ── */
+
+/**
+ * A linha TOTAL da lista — ZOOT-LISTA-01, item 2. Função pura e exportada porque a regra da
+ * REND é fácil de escrever errado e o teste precisa alcançá-la.
+ */
+export function totaisDaLista(lancamentos: Lancamento[]) {
+  const totals = lancamentos.reduce((acc, l) => {
+    const c = calcIndicadoresLancamento(l);
+    const pesoVivoLinha = (l.pesoMedioKg ?? 0) * l.quantidade;
+    acc.qtd += l.quantidade;
+    acc.pesoVivoTotal += pesoVivoLinha;
+    acc.arrobasTotal += c.pesoTotalArrobas;
+    acc.valorTotal += recebidoNF(l);
+    /* REND do TOTAL é média PONDERADA PELA CARCAÇA — 112-GO, item 4: quilos de
+       carcaça sobre quilos de peso vivo, não a média dos percentuais. Um lote de 200
+       cabeças e um de 18 pesam igual numa média simples, e não é isso que o
+       frigorífico paga.
+       ⚠ SÓ ENTRA QUEM TEM AS DUAS PONTAS. Linha sem carcaça sai do numerador E do
+       denominador; ficar só no denominador afundaria a média com peso vivo que
+       ninguém abateu — e há 12 abates de OC no proto cuja carcaça mora em
+       `zoo_operacao_abate` e chega por enriquecimento. */
+    if ((l.pesoCarcacaKg ?? 0) > 0 && pesoVivoLinha > 0) {
+      acc.carcacaComPar += (l.pesoCarcacaKg as number) * l.quantidade;
+      acc.pesoVivoComPar += pesoVivoLinha;
+    }
+    return acc;
+  }, { qtd: 0, pesoVivoTotal: 0, arrobasTotal: 0, valorTotal: 0, carcacaComPar: 0, pesoVivoComPar: 0 });
+  const pesoVivoMedio = totals.qtd > 0 ? totals.pesoVivoTotal / totals.qtd : 0;
+  const arrobaMedio = totals.qtd > 0 ? totals.arrobasTotal / totals.qtd : 0;
+  const rendPonderado = totals.pesoVivoComPar > 0
+    ? (totals.carcacaComPar / totals.pesoVivoComPar) * 100 : 0;
+  const liqArroba = totals.arrobasTotal > 0 ? totals.valorTotal / totals.arrobasTotal : 0;
+  const liqCabeca = totals.qtd > 0 ? totals.valorTotal / totals.qtd : 0;
+  const liqKgTotal = totals.pesoVivoTotal > 0 ? totals.valorTotal / totals.pesoVivoTotal : 0;
+  return { totals, pesoVivoMedio, arrobaMedio, rendPonderado, liqArroba, liqCabeca, liqKgTotal };
+}
 
 function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazendaMap }: { lancamentos: Lancamento[]; onEdit: (l: Lancamento) => void; showTipo?: boolean; subTipo?: string; isGlobal?: boolean; fazendaMap?: Map<string, string> }) {
   /* ⚠ O VALOR DA VENDA BOITEL E PROJECAO ATE O ABATE — PR-OC-VENDA-VALOR-A-VALIDAR-01.
@@ -209,13 +290,18 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
   const showOrigemDestinoCol = ['transferencia_entrada', 'transferencia_saida'].includes(subTipo || '');
   const showLiqKg = showTipo || ['abate', 'venda', 'compra', 'transferencia_entrada', 'transferencia_saida', 'consumo', 'morte'].includes(subTipo || '');
   const showRendimento = subTipo === 'abate' || (showTipo && false); // só para abates
+  const isAbate = subTipo === 'abate';
   const fMap = fazendaMap || new Map<string, string>();
   const globalColHeader = isGlobal ? (subTipo ? getFazendaColumnHeader(subTipo) : 'Fazenda') : '';
 
   const { sortKey, sortDir, toggleSort, sortRows } = useSortableTable();
 
   const rows = useMemo(() => {
-    const base = lancamentos.map(l => ({ l, c: calcIndicadoresLancamento(l) }));
+    const base = lancamentos.map(l => {
+      const c = calcIndicadoresLancamento(l);
+      const nf = recebidoNF(l);
+      return { l, c, nf, d: derivadasDoRecebido(c, l.quantidade, nf) };
+    });
     return sortRows(base);
   }, [lancamentos, sortRows]);
 
@@ -275,7 +361,9 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
           <SortableHeader label="P.Vivo" align="text-right" sortKey="pesoVivo" {...hp} />
           {showRendimento && <SortableHeader label="Rend." align="text-right" sortKey="rendimento" {...hp} />}
           <SortableHeader label="P.@" align="text-right" sortKey="pesoArroba" {...hp} />
-          <SortableHeader label="Total" align="text-right" sortKey="total" {...hp} />
+          {/* RECEBIDO NF só no abate: é lá que as duas réguas se encontram. Nos outros
+              tipos a coluna continua sendo o total da operação. */}
+          <SortableHeader label={isAbate ? 'Recebido NF' : 'Total'} align="text-right" sortKey="total" {...hp} />
           <SortableHeader label="R$/líq @" align="text-right" sortKey="liqArroba" {...hp} />
           {showLiqKg && <SortableHeader label="R$/Kg Líq" align="text-right" sortKey="liqKg" {...hp} />}
           <SortableHeader label="Líq/Cab" align="text-right" sortKey="liqCab" {...hp} />
@@ -284,7 +372,7 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
         </tr>
       </thead>
       <tbody className="bg-card">
-        {rows.map(({ l, c }) => {
+        {rows.map(({ l, c, nf, d }) => {
           const cat = CATEGORIAS.find(ca => ca.value === l.categoria)?.label ?? l.categoria;
           const tipoInfo = SUB_ABA_LABELS[l.tipo as SubAba];
           const rendimentoExibido = getRendimentoExibido(l);
@@ -314,11 +402,11 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
                     projeção
                   </span>
                 )}
-                {fmtValor(c.valorFinal)}
+                <span title={isAbate && ehLegado(l) ? TITLE_LEGADO : undefined}>{fmtValor(nf)}</span>
               </td>
-              <td className={`${TABLE_BODY_CELL} text-right text-[9px]`}>{fmtValor(c.liqArroba)}</td>
-              {showLiqKg && <td className={`${TABLE_BODY_CELL} text-right text-[9px]`}>{fmtValor(c.liqKg)}</td>}
-              <td className={`${TABLE_BODY_CELL} text-right text-[9px]`}>{fmtValor(c.liqCabeca)}</td>
+              <td className={`${TABLE_BODY_CELL} text-right text-[9px]`}>{fmtValor(d.liqArroba)}</td>
+              {showLiqKg && <td className={`${TABLE_BODY_CELL} text-right text-[9px]`}>{fmtValor(d.liqKg)}</td>}
+              <td className={`${TABLE_BODY_CELL} text-right text-[9px]`}>{fmtValor(d.liqCabeca)}</td>
               <td className={`${TABLE_BODY_CELL} text-center`}>
                 {(() => {
                   const cfg = getStatusBadge(l);
@@ -335,25 +423,14 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
         })}
       </tbody>
       {lancamentos.length > 1 && (() => {
-         const totals = lancamentos.reduce((acc, l) => {
-          const c = calcIndicadoresLancamento(l);
-          acc.qtd += l.quantidade;
-          acc.pesoVivoTotal += (l.pesoMedioKg ?? 0) * l.quantidade;
-          acc.arrobasTotal += c.pesoTotalArrobas;
-          acc.valorTotal += c.valorFinal;
-          return acc;
-        }, { qtd: 0, pesoVivoTotal: 0, arrobasTotal: 0, valorTotal: 0 });
-        const pesoVivoMedio = totals.qtd > 0 ? totals.pesoVivoTotal / totals.qtd : 0;
-        const arrobaMedio = totals.qtd > 0 ? totals.arrobasTotal / totals.qtd : 0;
-        const liqArroba = totals.arrobasTotal > 0 ? totals.valorTotal / totals.arrobasTotal : 0;
-        const liqCabeca = totals.qtd > 0 ? totals.valorTotal / totals.qtd : 0;
-        const liqKgTotal = totals.pesoVivoTotal > 0 ? totals.valorTotal / totals.pesoVivoTotal : 0;
+        const { totals, pesoVivoMedio, arrobaMedio, rendPonderado, liqArroba, liqCabeca, liqKgTotal }
+          = totaisDaLista(lancamentos);
         return (
            <tfoot>
             <tr className="bg-primary text-primary-foreground">
               <td className={`${TABLE_FOOT_CELL} sticky left-0 z-20 bg-primary border-r border-primary-foreground/15 md:static md:border-r-0`}>TOTAL</td>
               {showTipo && <td className={TABLE_FOOT_CELL}></td>}
-              <td className={`${TABLE_FOOT_CELL} text-right`}>{totals.qtd}</td>
+              <td className={`${TABLE_FOOT_CELL} text-right`}>{totals.qtd.toLocaleString('pt-BR')}</td>
               <td className={TABLE_FOOT_CELL}></td>
               {isCompra && <td className={TABLE_FOOT_CELL}></td>}
               {showFornecedorCol && <td className={TABLE_FOOT_CELL}></td>}
@@ -362,7 +439,12 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
               {showOrigemDestinoCol && <td className={TABLE_FOOT_CELL}></td>}
               {isGlobal && <td className={TABLE_FOOT_CELL}></td>}
               <td className={`${TABLE_FOOT_CELL} text-right`}>{fmtValor(pesoVivoMedio)}</td>
-              {showRendimento && <td className={TABLE_FOOT_CELL}></td>}
+              {showRendimento && (
+                <td className={`${TABLE_FOOT_CELL} text-right opacity-80`}
+                    title="Rendimento efetivo: soma das carcaças ÷ soma do peso vivo, só das linhas que têm as duas.">
+                  {rendPonderado ? `${rendPonderado.toFixed(1)}%` : '—'}
+                </td>
+              )}
               <td className={`${TABLE_FOOT_CELL} text-right opacity-80`}>{fmtValor(arrobaMedio)}</td>
               <td className={`${TABLE_FOOT_CELL} text-right`}>{fmtValor(totals.valorTotal)}</td>
               <td className={`${TABLE_FOOT_CELL} text-right`}>{fmtValor(liqArroba)}</td>
@@ -382,8 +464,17 @@ function AbateTable({ lancamentos, onEdit, isGlobal, fazendaMap }: { lancamentos
   const fMap = fazendaMap || new Map<string, string>();
   const { sortKey, sortDir, toggleSort, sortRows } = useSortableTable();
 
+  /* ⚠ ESTA TABELA NÃO É MONTADA POR NINGUÉM — a tela de Abates usa `UnifiedTable` com
+     `subTipo="abate"` (busca por `<AbateTable` no src inteiro: zero resultados). Fica aqui
+     por decisão do 112-GO (item 5): apagá-la é a frente [FIN-TAB-CODIGO-MORTO], varredura
+     própria. Recebe a mesma régua da UnifiedTable só para compilar sob o mesmo `sortRows`;
+     se um dia voltar a ser montada, já nasce contando a mesma história. */
   const rows = useMemo(() => {
-    const base = lancamentos.map(l => ({ l, c: calcIndicadoresLancamento(l) }));
+    const base = lancamentos.map(l => {
+      const c = calcIndicadoresLancamento(l);
+      const nf = recebidoNF(l);
+      return { l, c, nf, d: derivadasDoRecebido(c, l.quantidade, nf) };
+    });
     return sortRows(base);
   }, [lancamentos, sortRows]);
 
@@ -961,7 +1052,18 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
 
       {/* ── Content area: tabela em largura total ── */}
       <div className="px-2 pt-1.5 pb-4">
-        <div className="min-w-0 rounded-md border border-border/70 bg-card shadow-sm overflow-x-auto">
+        {/* ⚠ O CABEÇALHO JÁ ERA `sticky` E NUNCA GRUDAVA — ZOOT-LISTA-01, item 1.
+            `.financeiro-table-head` (index.css) tem `position: sticky; top: 0; z-index: 30`
+            desde sempre, e os `th` já pintam `bg-primary`. O que faltava era o SCROLLPORT:
+            `overflow-x-auto` faz este div virar container de rolagem nos DOIS eixos, mas sem
+            altura ele nunca rola na vertical — quem rolava era a página, e o `thead` grudava
+            no topo de um div que subia junto. É o mesmo defeito que o V2Index descreve no
+            comentário do `appShell`: "o sticky do cabeçalho gruda no topo de uma tabela que
+            está saindo de cena junto".
+            Dar altura ao container põe a rolagem no nível certo e o cabeçalho passa a se
+            ancorar nele. N=170px é a soma do que fica acima (a conta está no relatório);
+            errar N muda quanto da tela a tabela ocupa, não se o cabeçalho gruda. */}
+        <div className="min-w-0 rounded-md border border-border/70 bg-card shadow-sm overflow-x-auto overflow-y-auto max-h-[calc(100vh-170px)]">
           {topTab === 'todas' ? (
             <UnifiedTable lancamentos={filtrados} onEdit={(l) => setDetalheId(l.id)} showTipo isGlobal={isGlobal} fazendaMap={fazendaMap} />
           ) : subAba === 'abate' ? (

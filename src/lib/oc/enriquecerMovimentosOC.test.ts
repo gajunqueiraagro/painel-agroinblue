@@ -95,22 +95,55 @@ describe('o detalhe do abate — a porta que faltava', () => {
       criterio: null, abate: abate(),
     }]]);
     const out = aplicarEnriquecimentoOC([l], mapa);
-    expect(out[0].pesoCarcacaKg).toBeCloseTo(12260.8, 2);
+    /* ⚠ POR CABEÇA, NÃO O TOTAL DO LOTE — ZOOT-LISTA-01. `zoo_operacao_abate` guarda
+       12.260,8 kg de carcaça para as 41 cabeças; `Lancamento.pesoCarcacaKg` vale por
+       cabeça em toda a base (`economicos.ts` faz `/15 × qtd` e `carcaça/pesoVivo`). Com o
+       total aqui, a lista mostrava 817 @/cab e rendimento de 2.269%. E 299,04 é exatamente
+       a carcaça do lançamento legado gêmeo do mesmo abate — a conversão fecha com o dado
+       que já existia. */
+    expect(out[0].pesoCarcacaKg).toBeCloseTo(12260.8 / 41, 2);   // 299,04 kg/cab
     expect(out[0].precoArroba).toBe(375);
     /* ⚠ E O COMERCIAL NÃO É TOCADO: o valor que já estava lá continua. */
     expect(out[0].valorTotal).toBe(314915.61);
     expect(out[0].fornecedorId).toBe('frigorifico');
   });
 
-  it('movimento parcial do lote prorrateia a carcaça pela quantidade', () => {
-    /* A carcaça gravada é o TOTAL do lote (41 cab); o movimento levou 20. */
+  it('movimento parcial do lote: a carcaça por cabeça é a MESMA, não se prorrateia', () => {
+    /* O que se prorrateia é valor, não peso unitário: meia boiada não tem meia carcaça por
+       cabeça. Antes esta expectativa era `12260.8 × 20/41` porque o campo carregava o total
+       do movimento; agora carrega o kg/cab, que é igual no lote inteiro e em qualquer parte. */
     const l = mk({ id: 'ab2', tipo: 'abate' as Lancamento['tipo'], quantidade: 20, valorTotal: 1 });
     const mapa = new Map<string, EnriquecimentoOC>([['ab2', {
       fornecedorId: null, fornecedorNome: null, valorLote: null, qtdLote: 41,
       criterio: null, abate: abate(),
     }]]);
     const out = aplicarEnriquecimentoOC([l], mapa);
-    expect(out[0].pesoCarcacaKg).toBeCloseTo(12260.8 * 20 / 41, 2);
+    expect(out[0].pesoCarcacaKg).toBeCloseTo(12260.8 / 41, 2);
+  });
+
+  it('o líquido do abate viaja para a lista, prorrateado pela quantidade do movimento', () => {
+    /* RECEBIDO NF — ZOOT-LISTA-01. A coluna precisa do líquido CORRENTE do abate porque o
+       `valor_total` do lançamento é cópia que envelhece (3 dos 12 abates de OC do proto
+       ficaram para trás de uma revaloração). Só de leitura: `valorTotal` não é tocado. */
+    const l = mk({ id: 'ab4', tipo: 'abate' as Lancamento['tipo'], quantidade: 41,
+      valorTotal: 305905.76, fornecedorId: 'frigorifico' });
+    const mapa = new Map<string, EnriquecimentoOC>([['ab4', {
+      fornecedorId: 'frigorifico', fornecedorNome: 'Minerva', valorLote: null, qtdLote: 41,
+      criterio: null, abate: abate(),
+    }]]);
+    const out = aplicarEnriquecimentoOC([l], mapa);
+    expect(out[0].valorLiquidoAbate).toBeCloseTo(314915.61, 2);
+    expect(out[0].valorTotal).toBe(305905.76);   // a cópia velha continua onde estava
+  });
+
+  it('metade do lote leva metade do líquido', () => {
+    const l = mk({ id: 'ab5', tipo: 'abate' as Lancamento['tipo'], quantidade: 20, valorTotal: 1 });
+    const mapa = new Map<string, EnriquecimentoOC>([['ab5', {
+      fornecedorId: null, fornecedorNome: null, valorLote: null, qtdLote: 41,
+      criterio: null, abate: abate(),
+    }]]);
+    const out = aplicarEnriquecimentoOC([l], mapa);
+    expect(out[0].valorLiquidoAbate).toBeCloseTo(314915.61 * 20 / 41, 2);
   });
 
   it('sem detalhe de abate no mapa, o lançamento passa intacto', () => {

@@ -145,6 +145,14 @@ export interface Lancamento {
   origemRegistro?: string;
   loteImportacaoId?: string;
   operacaoId?: string | null;   // vínculo oficial à OC (ponte zoo_operacao_movimentacoes); null = sem OC
+  /**
+   * Líquido do abate da OC, do cenário realizado — ZOOT-LISTA-01. SÓ DE LEITURA: quem
+   * preenche é `aplicarEnriquecimentoOC`, a partir de `zoo_operacao_abate.valor_liquido`,
+   * e nenhum gravador o persiste. Existe porque `valorTotal` do lançamento vindo de OC é
+   * cópia que envelhece — a coluna RECEBIDO NF precisa do líquido corrente, não da cópia.
+   * Ausente em todo lançamento legado, e é assim que a lista distingue as duas réguas.
+   */
+  valorLiquidoAbate?: number;
 }
 
 export interface SaldoInicial {
