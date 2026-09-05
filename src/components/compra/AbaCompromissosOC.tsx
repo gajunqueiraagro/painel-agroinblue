@@ -437,13 +437,20 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
     // Sem id nao ha para onde voltar: melhor nao prometer retorno do que prometer errado.
     if (ocId) {
       next.set('returnOcId', ocId);
-      next.set('returnOcTipo', tipoOperacao === 'venda' ? 'venda' : 'compra');
+      /* ⚠ TRES TIPOS. O abate voltava marcado como compra e a hidratacao o recusava —
+         mesmo defeito que a venda pagou em PR-OC-VENDA-FIN-PREVISAO-01D. */
+      next.set('returnOcTipo',
+        tipoOperacao === 'venda' ? 'venda' : tipoOperacao === 'abate' ? 'abate' : 'compra');
     } else {
       next.delete('returnOcId');
       next.delete('returnOcTipo');
     }
+    /* ⚠ OS TRES PARAMETROS MORREM AQUI. `oc_abate` entrou junto: um parametro esquecido
+       reabre a operacao sozinho quando a secao volta a ser Lancamentos por outro caminho —
+       a armadilha que PR-OC-VENDA-REABRIR-01D ja pagou uma vez. */
     next.delete('oc_compra');
     next.delete('oc_venda');
+    next.delete('oc_abate');
     next.delete('oc_id');
     setSearchParams(next, { replace: true });
   };

@@ -1047,7 +1047,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                vez da lista de onde saiu. O V2Index espelha a section em
                `sessionStorage['v2:section']` justamente para atravessar o reload. Vazio
                (aba nova, storage bloqueado) = sem parametro = Central, como hoje. */
-            window.location.assign(`/v2?${tipo === 'venda' ? 'oc_venda' : 'oc_compra'}=1&oc_id=${ocId}&oc_aba=negociacao${sufixoRetorno()}`);
+            window.location.assign(`/v2?${tipo === 'venda' ? 'oc_venda' : tipo === 'abate' ? 'oc_abate' : 'oc_compra'}=1&oc_id=${ocId}&oc_aba=negociacao${sufixoRetorno()}`);
           }}
           onEditSuccess={() => {
             // Cache invalidado pelo useLancamentos.editarLancamento internamente.

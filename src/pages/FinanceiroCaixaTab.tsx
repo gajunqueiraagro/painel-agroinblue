@@ -582,7 +582,7 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
                `sessionStorage['v2:section']` justamente para atravessar o reload. Vazio
                (aba nova, storage bloqueado) = sem parametro = Central, como hoje. */
             const origem = (() => { try { return sessionStorage.getItem('v2:section') ?? ''; } catch { return ''; } })();
-            window.location.assign(`/v2?${tipo === 'venda' ? 'oc_venda' : 'oc_compra'}=1&oc_id=${ocId}&oc_aba=negociacao${origem ? `&oc_return=${origem}` : ''}`);
+            window.location.assign(`/v2?${tipo === 'venda' ? 'oc_venda' : tipo === 'abate' ? 'oc_abate' : 'oc_compra'}=1&oc_id=${ocId}&oc_aba=negociacao${origem ? `&oc_return=${origem}` : ''}`);
           }}
           onEditSuccess={() => {
             setZooModalIdFin(null);

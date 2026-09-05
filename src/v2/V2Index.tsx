@@ -492,7 +492,7 @@ export default function V2Index() {
        operacao como compra: a venda voltava com `oc_compra=1`, a hidratacao a recusava
        e o usuario caia em Lancamentos sem modal. Guardar o id sem o tipo era guardar
        meio endereco. */
-    | { destino: 'oc'; id: string; tab: 'financeiro'; tipo: 'compra' | 'venda' };
+    | { destino: 'oc'; id: string; tab: 'financeiro'; tipo: 'compra' | 'venda' | 'abate' };
 
   const retornarDoDrill = (ret: DrillReturn) => {
     if (ret.destino === 'zoo') {
@@ -733,7 +733,13 @@ export default function V2Index() {
       const rocId = searchParams.get('returnOcId');
       /* Guard explicito, como o `rawTab` acima: estreita para a union sem `as`, e
          qualquer valor inesperado cai em 'compra' — o default historico. */
-      const rocTipo = searchParams.get('returnOcTipo') === 'venda' ? 'venda' : 'compra';
+      /* ⚠ O ABATE ENTROU NO GUARD (ABATE-UX-01k). Sem ele, voltar do editor financeiro de
+         uma OC de abate caia em 'compra' — o default historico —, e a hidratacao recusava
+         com "Esta operacao nao e uma Compra", limpava os parametros e largava o operador
+         em Lancamentos. E' o MESMO defeito que a venda ja pagou, e o comentario de
+         `editarTitulo` ja o descrevia: um id sem tipo e' meio endereco. */
+      const rocTipoBruto = searchParams.get('returnOcTipo');
+      const rocTipo = rocTipoBruto === 'venda' ? 'venda' : rocTipoBruto === 'abate' ? 'abate' : 'compra';
       if (rzId) {
         setDrillReturn({ destino: 'zoo', id: rzId, tab: rzTab, section: origemSection });
       } else if (rocId) {
