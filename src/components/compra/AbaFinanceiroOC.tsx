@@ -1,4 +1,5 @@
 import { AbaLiquidacaoOC } from './AbaLiquidacaoOC';
+import type { PropostaCompromisso } from '@/components/compra/DialogoGerarCompromissos';
 import { AbaCompromissosOC, type LinhaPrevisao, type RotulosCompromissos } from './AbaCompromissosOC';
 import { useOcCompromissos, type OcCompromissosApi } from '@/hooks/useOcCompromissos';
 import { AlertTriangle } from 'lucide-react';
@@ -30,6 +31,8 @@ interface Props {
      identica: nao ha botao de gerar, nem selo, nem dicionario. Este roteador apenas
      repassa; quem sabe da previsao e' o shell da venda. */
   linhasPrevisao?: LinhaPrevisao[];
+  /** Obrigações que só o tipo sabe montar — repassadas à aba de compromissos. */
+  propostasExtras?: PropostaCompromisso[];
   seloProjecao?: ReactNode;
   rotulos?: RotulosCompromissos;
   /* ⚠ A INSTANCIA VEM DE FORA QUANDO O SHELL JA A TEM — B-10 item 4. O resumo lateral da
@@ -84,7 +87,7 @@ export function AbaFinanceiroOC(props: Props) {
         <AbaCompromissosOC ocApi={ocApi} bloqueado clienteId={clienteId} tipoOperacao={api.tipoOperacao} fornecedores={api.fornecedores}
           valorAcordado={api.valorAcordado} lotes={api.lotes} contraparteId={api.contraparteId} dataOperacao={props.dataOperacao ?? null} dataChegada={props.dataChegada ?? null}
           darkSelectClass={props.darkSelectClass} recarregarDados={api.recarregar}
-          seloProjecao={props.seloProjecao} rotulos={props.rotulos} />
+          seloProjecao={props.seloProjecao} propostasExtras={props.propostasExtras} rotulos={props.rotulos} />
       </div>
     );
   }
@@ -93,6 +96,7 @@ export function AbaFinanceiroOC(props: Props) {
     <AbaCompromissosOC ocApi={ocApi} bloqueado={props.financeiroNovoReadOnly} clienteId={clienteId} tipoOperacao={api.tipoOperacao} fornecedores={api.fornecedores}
       valorAcordado={api.valorAcordado} lotes={api.lotes} contraparteId={api.contraparteId} dataOperacao={props.dataOperacao ?? null} dataChegada={props.dataChegada ?? null}
       darkSelectClass={props.darkSelectClass} recarregarDados={api.recarregar}
-      linhasPrevisao={props.linhasPrevisao} seloProjecao={props.seloProjecao} rotulos={props.rotulos} />
+      linhasPrevisao={props.linhasPrevisao} seloProjecao={props.seloProjecao}
+      propostasExtras={props.propostasExtras} rotulos={props.rotulos} />
   );
 }

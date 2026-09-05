@@ -25,6 +25,7 @@
  * — nenhum deles tem consumidor nesta aba. Entram quando a aba que precisar deles chegar.
  */
 import { useState, useMemo } from 'react';
+import { produtoOCCompromisso } from '@/lib/financeiro/produtoOC';
 import { useStatusPilares } from '@/hooks/useStatusPilares';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -673,6 +674,30 @@ export function AbateModalShell({
     return { eventos: evs.length, pessoas: pessoas.size };
   }, [eventosApi?.eventos]);
 
+  /**
+   * O Funrural de cada lote, como proposta de obrigação — só o abate sabe montá-la.
+   *
+   * ⚠ O VALOR SAI DA LIB, não de uma coluna: `funrural_valor` é o que o operador digitou
+   * (percentual OU reais), e o total em dinheiro é `buildAbateCalculation` quem resolve.
+   * Ler a coluna crua daria 1,5 no lugar de R$ 614,24 quando a fonte for percentual.
+   * ⚠ SÓ QUANDO HÁ: lote sem Funrural não vira linha de zero — obrigação de R$ 0,00
+   * afirmaria um imposto que não existe.
+   */
+  const propostasFunrural = useMemo(() => lotesDoAbate.flatMap(l => {
+    const c = buildAbateCalculation(paraCalculo(linhasDoAbate.get(l.id) ?? linhaVazia(l.id), l));
+    if (!(c.funruralTotal > 0)) return [];
+    return [{
+      chave: `funrural:${l.id}`,
+      natureza: 'obrigacao' as const,
+      descricao: `${produtoOCCompromisso('abate', l.quantidade, l.categoriaLabel)} — Funrural e impostos`,
+      caminho: SUBCENTRO_DESPESA_VENDA,
+      subcentro: SUBCENTRO_DESPESA_VENDA,
+      valor: c.funruralTotal,
+      loteId: l.id,
+      componente: 'funrural',
+    }];
+  }), [lotesDoAbate, linhasDoAbate]);
+
   /* Há edição do abate ainda não gravada? O rodapé zera este mapa ao salvar. */
   const temRascunhoAbate = (abateLinhas?.size ?? 0) > 0;
 
@@ -878,6 +903,7 @@ export function AbateModalShell({
                   pelo `verboOC`, e o filtro de centro de custo da compra se desliga sozinho.
                   O vazio honesto sai: agora ha o que mostrar. */}
               <AbaFinanceiroOC
+                propostasExtras={propostasFunrural}
                 api={liquidacaoApi}
                 operacaoPronta={!!ocOperacaoId}
                 darkSelectClass=""

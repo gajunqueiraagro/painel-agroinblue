@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { useOperacaoEstornoFinanceiro } from '@/hooks/useOperacaoEstornoFinanceiro';
 import type { OcCompromissosApi, CompromissoResumo, ParcelaMaterializacao, CriarCompromissoPayload, ProgramarParcelaInput } from '@/hooks/useOcCompromissos';
+import { DialogoGerarCompromissos, type PropostaCompromisso } from '@/components/compra/DialogoGerarCompromissos';
 import { classificarLotesPorLado, SUBCENTRO_OBRIGACAO_COMPRA, SUBCENTRO_DESPESA_VENDA, CENTRO_CUSTO_COMPRA_BOVINOS, type LoteOC } from '@/hooks/useOperacaoLiquidacao';
 import { usePlanoContasOC } from '@/hooks/usePlanoContasOC';
 import { useComponentesFinanceiros } from '@/hooks/useComponentesFinanceiros';
@@ -61,6 +62,15 @@ interface Props {
   dataChegada: string | null;         // contexto: data de chegada (recebimento)
   darkSelectClass: string;
   recarregarDados?: () => void | Promise<void>;   // refresh da API de negociação antes de abrir "Novo compromisso"
+  /**
+   * Obrigações que só o tipo de operação sabe montar — hoje o Funrural do abate.
+   *
+   * ⚠ ELAS NÃO PODEM SER DERIVADAS AQUI: o Funrural por lote sai de
+   * `buildAbateCalculation` sobre a linha de `zoo_operacao_abate`, que esta aba não
+   * carrega. Quem tem o dado é o shell do abate, e é ele que propõe. Compra e venda não
+   * passam nada — "não inventar" era a regra.
+   */
+  propostasExtras?: PropostaCompromisso[];
 }
 
 /* Tema escuro para o painel do `SearchableSelect` (Lote, Subcentro, Favorecido).
@@ -194,7 +204,7 @@ const ROTULOS_PADRAO: RotulosCompromissos = {
   mostrarBaseDaOperacao: true, mostrarSentidoDoDinheiro: false,
 };
 
-export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, fornecedores, valorAcordado, lotes, contraparteId, dataOperacao, dataChegada, darkSelectClass, recarregarDados, linhasPrevisao, seloProjecao, rotulos = ROTULOS_PADRAO }: Props) {
+export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, fornecedores, valorAcordado, lotes, contraparteId, dataOperacao, dataChegada, darkSelectClass, recarregarDados, linhasPrevisao, seloProjecao, propostasExtras, rotulos = ROTULOS_PADRAO }: Props) {
   const { resumoOperacao, compromissos, parcelas, versao, saving } = ocApi;
   const [searchParams, setSearchParams] = useSearchParams();
   /* ⚠ OS DOIS CATALOGOS SUBIRAM PARA CA — PR-OC-VENDA-FIN-PREVISAO-01D (adendo 2). Eles
@@ -472,6 +482,40 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
      nada, e uma caixa que so sabe dizer zero treina o olho a pular a fileira.
      ⚠ `TOL_CENTAVO` e' a MESMA constante que `estadoCompromisso` ja usa por
      compromisso — nao ha segundo limiar nesta tela. */
+  const [gerarAberto, setGerarAberto] = useState(false);
+
+  /**
+   * As linhas propostas — principal por lote, mais o que o tipo acrescentar.
+   *
+   * ⚠ IDEMPOTENTE POR CONSTRUÇÃO: lote que já tem compromisso `principal` ativo não é
+   * proposto. Gerar duas vezes não duplica porque a segunda não tem o que propor.
+   * ⚠ O VALOR E O SUBCENTRO SAEM DE `classificarLotesPorLado`, o mesmo mapa que o diálogo
+   * manual usa para sugerir — não há segunda regra de "onde este lote cai".
+   */
+  const propostas = useMemo<PropostaCompromisso[]>(() => {
+    const jaTemPrincipal = new Set(
+      compromissos.filter(c => c.natureza === 'principal' && c.status !== 'cancelado' && c.loteId)
+        .map(c => c.loteId as string),
+    );
+    const c = classificarLotesPorLado(lotes, tipoOperacao);
+    const principais: PropostaCompromisso[] = c.status !== 'ok' ? [] : c.itens
+      .filter(i => !jaTemPrincipal.has(i.lote.id) && i.valorBruto > 0)
+      .map(i => ({
+        chave: `principal:${i.lote.id}`,
+        natureza: 'principal' as const,
+        descricao: produtoOCCompromisso(tipoOperacao ?? 'compra', i.lote.qtd ?? 0,
+          CATEGORIAS.find(k => k.value === i.lote.categoria)?.label ?? i.lote.categoria ?? ''),
+        caminho: i.subcentro,
+        subcentro: i.subcentro,
+        valor: i.valorBruto,
+        loteId: i.lote.id,
+        componente: 'principal',
+      }));
+    /* As extras já vêm prontas de quem as conhece; filtradas pelo mesmo critério. */
+    const extras = (propostasExtras ?? []).filter(p => !p.loteId || !jaTemPrincipal.has(p.loteId));
+    return [...principais, ...extras];
+  }, [compromissos, lotes, tipoOperacao, propostasExtras]);
+
   const semCompromisso = compromissos.length === 0;
   const mostrarAProgramar = !semCompromisso && totalAProgramar > TOL_CENTAVO;
   const confere = !semCompromisso && !!resumoOperacao
@@ -642,6 +686,50 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
      Falha no meio: os ja criados PERMANECEM (cada RPC e' sua propria transacao)
      e o dialogo fica aberto com o toast do hook. Nao ha rollback a fazer pela
      tela; o usuario ve na tabela o que entrou e refaz o que falta. */
+  /**
+   * Grava as linhas conferidas: uma criação e uma programação por linha.
+   *
+   * ⚠ O PARCIAL FICA. Se a terceira falhar, as duas primeiras já existem e o operador vê
+   * quantas entraram — desfazê-las exigiria uma transação que a RPC não oferece, e o
+   * resultado seria perder também o que deu certo.
+   * ⚠ A VERSÃO ENCADEIA: cada RPC devolve a nova, e é ela que vai na seguinte. Usar
+   * `versao` do state a partir da segunda chamada daria 40001 — a mesma armadilha do
+   * Concluir (`c21572c8`).
+   */
+  async function gerarPropostas(linhas: PropostaCompromisso[], vencimento: string, forma: string) {
+    if (versao == null || linhas.length === 0) return;
+    let v = versao;
+    let feitas = 0;
+    try {
+      for (const linha of linhas) {
+        const r = await ocApi.criarCompromisso(v, {
+          natureza: linha.natureza,
+          componente: linha.componente,
+          valor_total: linha.valor,
+          subcentro: linha.subcentro,
+          favorecido_id: contraparteId ?? null,
+          lote_id: linha.loteId,
+          descricao: linha.descricao,
+        });
+        v = r.operacaoVersao;
+        const prog = await ocApi.programarCompromisso(v, r.compromissoId, {
+          parcelas: [{ sequencia: 1, valor: linha.valor, vencimento, forma }],
+        });
+        v = prog.operacaoVersao;
+        feitas++;
+      }
+      setGerarAberto(false);
+      toast.success(`${feitas} ${feitas === 1 ? 'compromisso gerado' : 'compromissos gerados'}.`);
+    } catch {
+      /* O hook já mostrou o texto do banco pelo mapa canônico; aqui só se diz o que
+         sobrou de pé, que é o que o operador precisa para decidir o próximo passo. */
+      if (feitas > 0) {
+        toast.warning(`${feitas} de ${linhas.length} criados. Reabra "Gerar compromissos" para os que faltam.`);
+        setGerarAberto(false);
+      }
+    }
+  }
+
   async function criar(payloads: CriarCompromissoPayload[]) {
     if (versao == null || payloads.length === 0) return;
     let v = versao;
@@ -894,6 +982,17 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
                   aria-label="Gerar previsão"
                   className="text-[11px] font-normal text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline">
                   {gerando ? 'Gerando…' : 'Gerar previsão'}
+                </button>
+              )}
+              {/* ⚠ SO' ENQUANTO NAO HA COMPROMISSO. Ele existe para a operacao que fechou
+                  sem financeiro — as antigas e as que passaram pelo Concluir antes desta
+                  frente. Havendo um, o caminho e' "Novo compromisso", que trata o avulso. */}
+              {semCompromisso && propostas.length > 0 && (
+                <button type="button" disabled={!podeEscrever} onClick={() => setGerarAberto(true)}
+                  title="Propor os compromissos a partir dos lotes desta operação"
+                  aria-label="Gerar compromissos"
+                  className="text-[11px] font-medium text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground">
+                  Gerar compromissos
                 </button>
               )}
               <button type="button" disabled={!podeEscrever} onClick={abrirNovo}
@@ -1240,6 +1339,19 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
           cancelar o anterior no mesmo gesto" e a caixa NUNCA foi renderizada —
           `setSubstituirAnterior` nao tinha um so' chamador em f1e0389f. O texto apontava
           para um controle inexistente. */}
+      {gerarAberto && (
+        <DialogoGerarCompromissos
+          tipoOperacao={tipoOperacao ?? 'compra'}
+          propostas={propostas}
+          valorAcordado={valorAcordado ?? null}
+          contraparteNome={(fornecedores ?? []).find(f => f.id === contraparteId)?.nome ?? null}
+          dataOperacao={dataOperacao ?? null}
+          saving={saving}
+          onGerar={gerarPropostas}
+          onFechar={() => setGerarAberto(false)}
+        />
+      )}
+
       {novoAberto && (
         <NovoCompromissoDialog
           onClose={() => { setNovoAberto(false); setAvisoBaseCoberta(''); }} onSubmit={criar} saving={saving}
