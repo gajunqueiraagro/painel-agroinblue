@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { normalizarErroRpc } from '@/hooks/useOcCompromissos';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -90,8 +91,10 @@ export function useOperacaoRecebimento({ operacaoId, clienteId, versao, onVersao
           .select('id, operacao_lote_id, lancamentos(data, categoria, quantidade, peso_medio_kg, cancelado)')
           .eq('operacao_id', operacaoId),
       ]);
-      if (rec.error) throw new Error(rec.error.message);
-      if (mov.error) throw new Error(mov.error.message);
+      /* Leitura por PostgREST, não RPC — mas o mapa também serve: ele preserva a
+         mensagem quando não reconhece o código, e traduz 42501 e 40001 quando são eles. */
+      if (rec.error) throw normalizarErroRpc(rec.error);
+      if (mov.error) throw normalizarErroRpc(mov.error);
       setLotes(((rec.data ?? []) as LoteRecRow[]).map(r => ({
         loteId: r.lote_id, ordem: r.ordem, categoria: r.categoria_negociada,
         qtdNegociada: r.qtd_negociada, qtdRecebida: r.qtd_recebida, diferenca: r.diferenca, estado: r.estado_recebimento,
@@ -122,14 +125,19 @@ export function useOperacaoRecebimento({ operacaoId, clienteId, versao, onVersao
   // Retorna true/false (permite encadear após salvar). `versaoOverride`: usa a versão fresca vinda
   //   do salvar (evita conflito de lock otimista); ausente → versão atual. `silent`: só controla toast.
   //   RPC/payload inalterados além da versão oficial enviada.
-  const concluirNegociacao = useCallback(async (opts?: { versaoOverride?: number; silent?: boolean }): Promise<boolean> => {
+  /* ⚠ TODO ERRO DE RPC PASSA PELO MAPA CANONICO DA OC (`normalizarErroRpc`). Antes cada
+   `catch` mostrava `error.message` cru: no conflito de versao isso virava "could not
+   serialize access due to concurrent update" na tela — verdadeiro e inutil para quem nao
+   pode agir sobre ele. O mapa ja tinha o texto certo, e o proprio comentario dele registra
+   que houve DOIS textos para o 40001, um aqui e um la'; agora ha um so'. */
+const concluirNegociacao = useCallback(async (opts?: { versaoOverride?: number; silent?: boolean }): Promise<boolean> => {
     if (!guardOp()) return false;
     setSaving(true);
     try {
       const { data, error } = await (supabase as any).rpc('oc_confirmar', {
         p_operacao_id: operacaoId, p_cliente_id: clienteId, p_versao_esperada: opts?.versaoOverride ?? versao,
       });
-      if (error) throw new Error(error.message);
+      if (error) throw normalizarErroRpc(error);
       if (data?.versao != null) onVersaoChange(data.versao);
       if (data?.status_comercial && onStatusChange) onStatusChange(data.status_comercial);
       if (!opts?.silent) toast.success('Negociação concluída (fechada).');
@@ -154,7 +162,7 @@ export function useOperacaoRecebimento({ operacaoId, clienteId, versao, onVersao
       const { data, error } = await (supabase as any).rpc('oc_receber_lotes', {
         p_operacao_id: operacaoId, p_cliente_id: clienteId, p_versao_esperada: versao, p_recebimentos: itens,
       });
-      if (error) throw new Error(error.message);
+      if (error) throw normalizarErroRpc(error);
       if (data?.versao != null) onVersaoChange(data.versao);
       toast.success(`Recebido conforme negociado — ${data?.recebidos ?? itens.length} lote(s).`);
       await carregar();
@@ -172,7 +180,7 @@ export function useOperacaoRecebimento({ operacaoId, clienteId, versao, onVersao
         p_data: dados.data, p_categoria: dados.categoria, p_quantidade: dados.quantidade,
         p_peso_medio_kg: dados.pesoMedio, p_peso_total_kg: null, p_observacao: dados.observacao || null,
       });
-      if (error) throw new Error(error.message);
+      if (error) throw normalizarErroRpc(error);
       toast.success('Recebimento registrado.');
       await carregar();
     } catch (e) {
@@ -187,7 +195,7 @@ export function useOperacaoRecebimento({ operacaoId, clienteId, versao, onVersao
       const { error } = await (supabase as any).rpc('oc_estornar_movimentacao', {
         p_movimentacao_id: movimentacaoId, p_cliente_id: clienteId, p_motivo: motivo || null,
       });
-      if (error) throw new Error(error.message);
+      if (error) throw normalizarErroRpc(error);
       toast.success('Movimentação estornada.');
       await carregar();
     } catch (e) {
@@ -202,7 +210,7 @@ export function useOperacaoRecebimento({ operacaoId, clienteId, versao, onVersao
       const { data, error } = await (supabase as any).rpc('oc_encerrar_entrega', {
         p_operacao_id: operacaoId, p_cliente_id: clienteId, p_versao_esperada: versao, p_motivo: motivo || null,
       });
-      if (error) throw new Error(error.message);
+      if (error) throw normalizarErroRpc(error);
       if (data?.versao != null) onVersaoChange(data.versao);
       if (onEntregaChange) onEntregaChange(true);
       toast.success('Recebimento encerrado.');
@@ -228,7 +236,7 @@ export function useOperacaoRecebimento({ operacaoId, clienteId, versao, onVersao
       });
       if (error) {
         if (error.code === '40001') await carregar();   // conflito de versão: sincroniza antes de sair
-        throw new Error(error.message);
+        throw normalizarErroRpc(error);
       }
       if (data?.operacao_versao != null) onVersaoChange(data.operacao_versao);
       if (onEntregaChange) onEntregaChange(false);

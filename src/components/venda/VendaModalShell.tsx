@@ -188,7 +188,8 @@ export interface VendaModalShellProps {
   /** Nada mudou desde a ultima gravacao bem-sucedida — o botao apaga. */
   semAlteracoes?: boolean;
   /** `oc_confirmar` pelo `useOperacaoRecebimento`. Devolve se concluiu. */
-  onConcluirNegociacao?: () => void | Promise<unknown>;
+  /** Recebe a versão fresca do salvar — `oc_confirmar` tem lock otimista. */
+  onConcluirNegociacao?: (versaoOverride?: number) => void | Promise<unknown>;
   /** `oc_reabrir` — devolve a operacao a 'programada'. O motivo vai para a auditoria. */
   onReabrirNegociacao?: (motivo: string) => void | Promise<unknown>;
   onFechar: () => void;
@@ -1071,8 +1072,14 @@ export function VendaModalShell({
               ? 'Concluir a negociação congela os lotes e libera a Entrega'
               : 'Salva a negociação e conclui — congela os lotes e libera a Entrega')}
             onClick={async () => {
-              if (!semAlteracoes) { const ok = await onSalvarNegociacao(); if (ok === false) return; }
-              await onConcluirNegociacao?.();
+              /* ⚠ A VERSÃO SAI DO SALVAR E ENTRA NO CONCLUIR, no mesmo gesto — mesma
+                 correção do abate (`c21572c8`). Usar `ocVersao` aqui manda a versão de
+                 ANTES do `oc_salvar_lotes` que acabou de rodar, e `oc_confirmar` responde
+                 40001: a transação aborta sem deixar evento, e a tela parece não fazer
+                 nada. Sem alteração, a versão do state é a correta por construção. */
+              const r = await onSalvarNegociacao();
+              if (r === false) return;
+              await onConcluirNegociacao?.(typeof r === 'number' ? r : undefined);
             }}>
             <Check className="h-4 w-4" /> Concluir negociação
           </Button>

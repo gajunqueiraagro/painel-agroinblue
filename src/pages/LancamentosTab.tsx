@@ -2906,7 +2906,16 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     }
   };
 
-  const salvarNegociacaoVendaOC = async (): Promise<boolean> => {
+  /**
+   * Salva a negociação da venda e devolve a VERSÃO vigente depois de gravar.
+   *
+   * ⚠ MESMA CORREÇÃO DO ABATE (`c21572c8`) e da compra: `oc_confirmar` tem lock otimista,
+   * e o state (`ocVersao`) só muda no próximo render — concluir no mesmo gesto com a
+   * versão de antes do salvar devolve 40001, aborta a transação e não deixa evento.
+   * ⚠ QUANDO HÁ BOITEL, VALE A VERSÃO DELE: `salvarBoitel` grava depois dos lotes e
+   * incrementa de novo. Devolver a dos lotes ali seria repetir o defeito um passo à frente.
+   */
+  const salvarNegociacaoVendaOC = async (): Promise<number | false> => {
     const clienteId = clienteAtual?.id;
     if (!ocOperacaoId || !clienteId) { toast.error('Salve a operação na aba Venda primeiro.'); return false; }
 
@@ -2955,19 +2964,21 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
          o planejamento, e dois toasts seguidos para um clique so' e' ruido. */
       const novaVersao = await lotesApi.salvar({ silent: true, lotesSobrescritos: sobrescritos });
       if (novaVersao == null) return false;   // o hook ja avisou o que impediu
+      let versaoFinal = novaVersao;
       if (boitelDaVenda) {
         /* ⚠ GRAVA O DERIVADO, e nao o `ocBoitel` cru: e' nele que o peso de saida da fazenda
            ja vem dos lotes. O cru tem zero ali, sempre. */
         /* ⚠ 'projetado' SEMPRE: o realizado nasce no abate, por reabertura da OC. */
         const envB = await ocRpc.salvarBoitel(ocOperacaoId, clienteId, novaVersao, 'projetado', payloadBoitel(boitelDaVenda));
         setOcVersao((envB as { versao: number }).versao);
+        versaoFinal = (envB as { versao: number }).versao;
       }
       toast.success('Negociação salva.');
       /* ⚠ A ASSINATURA DO MOMENTO DA CHAMADA, e nao a do fim: `lotesApi.salvar` recarregou
          os lotes, mas o estado so' chega no proximo render. Assinar o que foi ENVIADO e' o
          que corresponde ao que o banco passou a ter. */
       setOcVendaAssinaturaSalva(ocVendaAssinaturaAtual);
-      return true;
+      return versaoFinal;
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Falha ao salvar a negociação.');
       return false;
@@ -5609,7 +5620,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           /* ⚠ O HOOK JA CUIDA DA VERSAO e dos callbacks de status: `onStatusChange` e
              `onVersaoChange` sao os mesmos setters da venda, ligados na instanciacao. Nao
              ha nada a atualizar aqui depois — atualizar de novo seria a segunda copia. */
-          onConcluirNegociacao={() => recebimentoApi.concluirNegociacao()}
+          onConcluirNegociacao={(v) => recebimentoApi.concluirNegociacao(v == null ? undefined : { versaoOverride: v })}
           onReabrirNegociacao={(motivo) => reabrirNegociacaoVendaOC(motivo)}
           onFechar={fecharModalOCComAutosave}
         />
