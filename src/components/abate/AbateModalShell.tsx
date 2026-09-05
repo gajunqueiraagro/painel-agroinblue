@@ -38,6 +38,10 @@ import type { Categoria } from '@/types/cattle';
 import type { CompraLotesApi } from '@/hooks/useCompraLotes';
 import type { AbateApi, CenarioAbate, LinhaAbate } from '@/hooks/useOperacaoAbate';
 import { AbaNegociacaoAbate, type LoteAbate } from '@/components/abate/AbaNegociacaoAbate';
+import { AbaLotesAbate } from '@/components/abate/AbaLotesAbate';
+import { totaisDoAbate } from '@/components/abate/calculoDoLote';
+import { buildAbateCalculation, type AbateCalculation } from '@/lib/calculos/abate';
+import { paraCalculo, linhaVazia } from '@/components/abate/calculoDoLote';
 import { AbaNegociacaoLotes } from '@/components/compra/AbaNegociacaoLotes';
 import { AbaDocumentosOC } from '@/components/compra/AbaDocumentosOC';
 import { AbaAuditoriaOC } from '@/components/compra/AbaAuditoriaOC';
@@ -108,6 +112,9 @@ function DicaBotao({ texto }: { texto: string | null | undefined }) {
 
 /* Par rotulo-valor do resumo lateral — idioma do `Linha` de ResumoLateralOC (A17).
    ⚠ SEXTA COPIA deste par. Sai na mesma extracao que levar o resumo para lugar unico. */
+/** Duas casas, como em toda a tela do abate. */
+const num2 = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 function LinhaResumo({ rotulo, valor, cor, forte, selo }: {
   rotulo: string; valor: string | null;
   /* ⚠ A COR VEM DE FORA — B-11. O resumo passou a mostrar dois mundos (projecao ambar,
@@ -383,6 +390,19 @@ export function AbateModalShell({
   const temFin = !!fin && fin.temCompromissos;
   const finAReceber = temFin ? fin.entradaObrigacao - fin.entradaLiquidado : null;
   const finRecebido = temFin ? fin.entradaLiquidado : null;
+  /* ⚠ O QUE O PRODUTOR PAGA POR FORA — frete, Fundersul, Iagro/GTA. Vem somado pela view,
+     que resolve o sentido pelo plano de contas; a tela nao decide de que lado cada
+     compromisso esta'. Sem compromisso e' traco, nao zero. */
+  const finDespesas = temFin && fin.saidaObrigacao > 0 ? fin.saidaObrigacao : null;
+  const finLiquidoProdutor = temFin ? fin.entradaObrigacao - fin.saidaObrigacao : null;
+  /* A data que a tela mostra e' o MENOR vencimento ainda em aberto — a proxima a chegar. */
+  const proximoVencimento = useMemo(() => {
+    const datas = (liquidacaoApi?.obrigacoes ?? [])
+      .filter(o => !o.cancelada && o.saldoAberto > 0 && o.dataVencimento)
+      .map(o => o.dataVencimento!)
+      .sort();
+    return datas[0] ?? null;
+  }, [liquidacaoApi?.obrigacoes]);
   const finSaldo = !temFin ? null
     : fin.totalLiquidado > 0 ? fin.entradaLiquidado - fin.saidaLiquidado
     : fin.totalMaterializado > 0 ? fin.entradaMaterializado - fin.saidaMaterializado
@@ -499,6 +519,17 @@ export function AbateModalShell({
     })),
     [lotesApi?.lotes, categoriasDisponiveis],
   );
+
+  /* ⚠ A MESMA CONTA DA GRADE, pela mesma funcao. O resumo lateral e o bloco de topo
+     mostram os mesmos numeros lado a lado; duas somas independentes divergiriam no
+     primeiro arredondamento e o operador nao teria como saber qual vale. */
+  const totaisAbate = useMemo(() => {
+    const calc = new Map<string, AbateCalculation>();
+    lotesDoAbate.forEach(l => calc.set(l.id, buildAbateCalculation(
+      paraCalculo(linhasDoAbate.get(l.id) ?? linhaVazia(l.id), l))));
+    return totaisDoAbate(lotesDoAbate, calc);
+  }, [lotesDoAbate, linhasDoAbate]);
+
 
 
   const abaLotes = (
@@ -701,7 +732,23 @@ export function AbateModalShell({
                seguinte como `AbaNegociacaoAbate`, ao lado desta grade: os lotes continuam
                sendo lotes, e o detalhe do abate e' POR lote. */
             <div className="space-y-3">
-              {abaLotes}
+              {/* ⚠ GRADE PROPRIA DO ABATE — ABATE-UX-01b. A compartilhada
+                  (`AbaNegociacaoLotes`) continua servindo compra, venda, boitel e
+                  recebimento, intocada: o cartao daqui mostra carcaca, rendimento e
+                  liquido por arroba, que so' existem depois do frigorifico pesar. O
+                  CADASTRO do lote continua sendo o mesmo dialogo compartilhado. */}
+              {lotesApi && (
+                <AbaLotesAbate
+                  lotes={lotesDoAbate}
+                  linhas={linhasDoAbate}
+                  cenario={cenarioAbate}
+                  cenariosExistentes={abateApi?.cenarios ?? []}
+                  onCenarioChange={onCenarioAbateChange}
+                  lotesApi={lotesApi}
+                  categoriasDisponiveis={categoriasDisponiveis}
+                  somenteLeitura={ocStatusComercial === 'fechada' || ocStatusComercial === 'cancelada'}
+                />
+              )}
               {/* ⚠ ABAIXO DA GRADE, NAO AO LADO. A cascata do abate so' se le de cima para
                   baixo, e um split de duas colunas dentro da aba ja' foi revertido uma vez
                   (b846fa8). O operador informa os lotes e desce para o detalhe deles. */}
@@ -832,14 +879,29 @@ export function AbateModalShell({
                   REALIZADO-SOBERANO: depois do abate ele mostra o real, e esta' certo —
                   ver a doutrina dos dois mundos em `bolsoDaVendaBoitel`. A promessa vive
                   na faixa de analise, derivada da linha projetada. */}
+              {/* ⚠ AS GRANDEZAS DO ABATE VEM DE `totaisAbate`, a MESMA funcao que alimenta o
+                  bloco de topo da grade — nao ha segunda soma aqui. Sem lote, tudo e' traco:
+                  operacao sem lote nao pesa zero, ela ainda nao tem lote. */}
               <div className="px-3 space-y-0.5">
                 <LinhaResumo rotulo="Lotes" valor={lotesApi && lotesApi.totais.lotes > 0
                   ? `${lotesApi.totais.lotes} · ${lotesApi.totais.animais} cab` : null} />
-                <LinhaResumo rotulo="Valor acordado"
+                <LinhaResumo rotulo="Peso vivo" valor={totaisAbate.cabecas > 0
+                  ? `${num2(totaisAbate.pesoMedio)} kg/cab` : null} />
+                <LinhaResumo rotulo="Carcaça" valor={totaisAbate.carcaca > 0
+                  ? `${num2(totaisAbate.carcacaCab)} kg/cab` : null} />
+                <LinhaResumo rotulo="Arrobas · RC" valor={totaisAbate.arrobas > 0
+                  ? `${num2(totaisAbate.arrobaCab)} @/cab · ${num2(totaisAbate.rc)}%` : null} />
+                <LinhaResumo rotulo="Valor bruto" valor={totaisAbate.bruto > 0
+                  ? formatMoeda(totaisAbate.bruto) : null} />
+                <LinhaResumo rotulo="Acordado (NF)" forte
                   valor={valorAcordadoMostrado == null ? null : formatMoeda(valorAcordadoMostrado)}
                   cor={undefined}
                   /* A pilula so' existe onde ha dois mundos — ver a nota em `derAcerto`. */
                   selo={undefined} />
+                {totaisAbate.liquido > 0 && (
+                  <LinhaResumo rotulo="por cabeça · por @" forte
+                    valor={`${formatMoeda(totaisAbate.cabecas > 0 ? totaisAbate.liquido / totaisAbate.cabecas : 0)} · ${formatMoeda(totaisAbate.arrobas > 0 ? totaisAbate.liquido / totaisAbate.arrobas : 0)}`} />
+                )}
               </div>
 
               <div className="bg-primary/10 border-y border-primary/15 px-3 py-0.5 mt-0.5 mb-0.5">
@@ -871,9 +933,23 @@ export function AbateModalShell({
 
               {/* ⚠ SEM COMPROMISSOS OS TRES SAO TRACO, e nao zero: operacao sem financeiro
                   lancado nao "recebeu zero", ela ainda nao tem financeiro. */}
+              {/* ⚠ OS TOTAIS VEM DA VIEW, ja' separados por sentido — `entradaObrigacao` e
+                  `saidaObrigacao` de `resumoOperacao`. O sentido de CADA compromisso sai do
+                  plano de contas (`1-Entradas` / `2-Saidas`), regra soberana de
+                  `oc_materializar_programacao`; somar isso aqui seria a segunda derivacao
+                  da mesma regra. Por isso as despesas aparecem pelo TOTAL: quebra-las por
+                  nome (frete, Fundersul, Iagro) exige o plano de contas linha a linha, que
+                  hoje so' a aba Financeiro carrega. */}
               <div className="px-3 space-y-0.5">
-                <LinhaResumo rotulo="A receber" valor={finAReceber == null ? null : formatMoeda(finAReceber)} />
+                <LinhaResumo rotulo="A receber da indústria" valor={finAReceber == null ? null : formatMoeda(finAReceber)} />
+                {proximoVencimento && (
+                  <LinhaResumo rotulo={`Agendado ${proximoVencimento.split('-').reverse().join('/')}`} valor={null} />
+                )}
                 <LinhaResumo rotulo="Recebido" valor={finRecebido == null ? null : formatMoeda(finRecebido)} />
+                <LinhaResumo rotulo="Despesas do produtor" cor="text-destructive"
+                  valor={finDespesas == null ? null : `− ${formatMoeda(finDespesas)}`} />
+                <LinhaResumo rotulo="Líquido do produtor" forte
+                  valor={finLiquidoProdutor == null ? null : formatMoeda(finLiquidoProdutor)} />
                 <LinhaResumo rotulo="Saldo" valor={finSaldo == null ? null : formatMoeda(finSaldo)} />
               </div>
             </div>
@@ -966,7 +1042,7 @@ export function AbateModalShell({
               que alarme falso ensina a ignorar o alarme. */}
           {submitting ? 'Salvando...'
             : naNegociacao ? 'Salvar negociação'
-            : ocOperacaoId ? 'Salvar alterações'
+            : ocOperacaoId ? 'Salvar abate'
             : (<>Salvar e continuar para Negociação <ArrowRight className="h-4 w-4" /></>)}
         </Button>
         </>)}

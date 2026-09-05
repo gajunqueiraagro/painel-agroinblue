@@ -29,16 +29,12 @@ import { formatMoeda } from '@/lib/calculos/formatters';
 import { buildAbateCalculation, type AbateCalculation } from '@/lib/calculos/abate';
 import { subcentroAbatePorCategoria } from '@/hooks/useOperacaoLiquidacao';
 import type { LinhaAbate, CenarioAbate } from '@/hooks/useOperacaoAbate';
+import { paraCalculo, linhaVazia as vazia, type LoteAbate } from '@/components/abate/calculoDoLote';
+
+/* Reexportado: o tipo nasceu aqui e ha' quem o importe deste caminho. */
+export type { LoteAbate };
 
 /** O lote como a negociação o conhece — só o que o cálculo precisa. */
-export interface LoteAbate {
-  id: string;
-  ordem: number;
-  categoria: string | null;
-  categoriaLabel: string;
-  quantidade: number;
-  pesoMedioKg: number;
-}
 
 interface Props {
   lotes: LoteAbate[];
@@ -69,17 +65,6 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 const H = 'h-8 text-xs';
 const LBL = 'text-[10px] text-muted-foreground';
 
-const vazia = (loteId: string): LinhaAbate => ({
-  operacaoLoteId: loteId,
-  pesoCarcacaKg: null, pesoCarcacaFonte: null, rendimentoCarcacaPct: null, pesoTotalKgNf: null,
-  precoArroba: null, precoFonte: null, valorBaseOverride: null, valorLiquido: null,
-  bonusPrecoce: { valor: null, fonte: null },
-  bonusQualidade: { valor: null, fonte: null },
-  bonusListaTrace: { valor: null, fonte: null },
-  descontoQualidade: { valor: null, fonte: null },
-  outrosDescontos: { valor: null, fonte: null },
-  funrural: { valor: null, fonte: null },
-});
 
 /**
  * Traduz a linha gravada para a entrada da lib.
@@ -88,39 +73,6 @@ const vazia = (loteId: string): LinhaAbate => ({
  * alimenta o campo por-arroba da lib; `'reais'`, o campo de total. Mandar o mesmo número
  * nos dois faria a lib somar duas vezes — ela usa o primeiro que for maior que zero.
  */
-function paraCalculo(l: LinhaAbate, lote: LoteAbate) {
-  const porFonte = (v: { valor: number | null; fonte: string | null }, unidade: string) =>
-    v.valor != null && v.fonte === unidade ? v.valor : null;
-  return {
-    quantidade: lote.quantidade,
-    pesoKg: lote.pesoMedioKg,
-    /* ⚠ A LIB TRABALHA POR CABEÇA E O BANCO GUARDA O TOTAL — a conversão mora aqui, e
-       errá-la erra tudo por um fator de `quantidade`. A aritmética é que prova a unidade
-       da lib, não o nome do campo: `abate.ts` faz `carcaça / 15` e chama o resultado de
-       `pesoArrobaCab`, e só DEPOIS multiplica por `quantidade`. Do outro lado, a RPC faz
-       `sum(peso_carcaca_kg)` entre os lotes para o `peso_carcaca_kg_total` do cabeçalho —
-       ali é total. `pesoKg` é o peso médio, então o rendimento (carcaça ÷ vivo) compara
-       por cabeça dos dois lados. */
-    pesoCarcacaKg: l.pesoCarcacaKg != null && lote.quantidade > 0
-      ? l.pesoCarcacaKg / lote.quantidade
-      : null,
-    rendCarcaca: l.rendimentoCarcacaPct,
-    precoArroba: l.precoArroba,
-    valorBaseOverride: l.valorBaseOverride ?? undefined,
-    bonusPrecoce: porFonte(l.bonusPrecoce, 'arroba'),
-    bonusPrecoceReais: porFonte(l.bonusPrecoce, 'reais'),
-    bonusQualidade: porFonte(l.bonusQualidade, 'arroba'),
-    bonusQualidadeReais: porFonte(l.bonusQualidade, 'reais'),
-    bonusListaTrace: porFonte(l.bonusListaTrace, 'arroba'),
-    bonusListaTraceReais: porFonte(l.bonusListaTrace, 'reais'),
-    descontoQualidade: porFonte(l.descontoQualidade, 'arroba'),
-    descontoQualidadeReais: porFonte(l.descontoQualidade, 'reais'),
-    outrosDescontos: porFonte(l.outrosDescontos, 'reais'),
-    outrosDescontosArroba: porFonte(l.outrosDescontos, 'arroba'),
-    funruralPct: porFonte(l.funrural, 'pct'),
-    funruralReais: porFonte(l.funrural, 'reais'),
-  };
-}
 
 /** Peso sempre com duas casas — A15. */
 const kg2 = (n: number | null | undefined) =>
@@ -364,7 +316,10 @@ export function AbaNegociacaoAbate({
         const subcentro = subcentroAbatePorCategoria(lote.categoria ?? '');
 
         return (
-          <div key={lote.id} className="rounded-lg border bg-card p-3 space-y-2.5">
+          /* ⚠ ANCORA do "Negociar lote" da grade: o botao rola ate' aqui. Ele existe
+             porque a alternativa era um botao desabilitado dizendo "no proximo passo" —
+             promessa vazia ensina a desconfiar do botao. No 96c ele abre o modal. */
+          <div key={lote.id} id={`abate-lote-${lote.id}`} className="rounded-lg border bg-card p-3 space-y-2.5">
             <div className="flex items-baseline justify-between">
               <div className="text-[13px] font-medium text-foreground">
                 {lote.ordem}. {lote.categoriaLabel}

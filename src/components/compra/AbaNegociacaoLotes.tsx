@@ -447,7 +447,12 @@ function ParLote({ rotulo, valor }: { rotulo: string; valor: string }) {
    do Financeiro): rotulo `text-[10px]` sem negrito, campo `h-8`.
    Edita um RASCUNHO local e so devolve o patch ao aplicar — fechar pelo X ou pelo Esc
    descarta, que e' o que "Cancelar" significa. */
-function LoteDialog({
+/* ⚠ EXPORTADO PARA O ABATE — ABATE-UX-01b, e esta e' a UNICA linha tocada neste arquivo.
+   A grade do abate e' propria, mas o cadastro do lote e' o mesmo gesto das outras
+   operacoes, e uma segunda copia deste dialogo seria a segunda regra de "o que e' um
+   lote". Nada de comportamento nem de aparencia muda para Compra e Venda: o corpo
+   continua igual, e quem ja' o usava continua a usa-lo pelo mesmo caminho. */
+export function LoteDialog({
   rotulos,
   lote, categoriasDisponiveis, darkSelectClass, fisicoRO, somenteLeitura, rotuloCategoria,
   onAplicar, onAplicarEAdicionar, onFechar, valorProjetado = null,

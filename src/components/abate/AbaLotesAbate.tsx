@@ -1,0 +1,278 @@
+/**
+ * A grade de lotes do abate — PRÓPRIA, e o motivo importa.
+ *
+ * ⚠ NÃO É `AbaNegociacaoLotes`, e não deve virar uma variante dela. Aquela grade serve
+ * compra, venda, boitel e recebimento, e mostra o que essas quatro têm: categoria,
+ * quantidade, peso, critério e valor. O cartão do abate mostra carcaça, rendimento e
+ * líquido por arroba — grandezas que só existem depois do frigorífico pesar. Uma variante
+ * por modo dentro do componente compartilhado colocaria as telas em homologação a um
+ * `if` de distância de qualquer mexida no abate.
+ *
+ * ⚠ O CADASTRO DO LOTE, ESSE, É COMPARTILHADO: `LoteDialog` vem de `AbaNegociacaoLotes`.
+ * O que é um lote (categoria, quantidade, peso) é a mesma pergunta nas quatro operações;
+ * o que se faz com ele é que muda.
+ *
+ * ⚠ NENHUM NÚMERO É SOMADO AQUI A PARTIR DE CAMPO CRU. Cada lote passa por
+ * `buildAbateCalculation` e o topo soma as PARCELAS que a lib devolveu. Recalcular a
+ * cascata na tela criaria a segunda conta para a mesma pergunta — e a primeira vez que
+ * discordasse da do cartão, ninguém saberia qual manda.
+ */
+import { useMemo, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Pencil, Ban, Plus, ChevronRight } from 'lucide-react';
+import { formatMoeda } from '@/lib/calculos/formatters';
+import { buildAbateCalculation, type AbateCalculation } from '@/lib/calculos/abate';
+import { LoteDialog } from '@/components/compra/AbaNegociacaoLotes';
+import { paraCalculo, linhaVazia, totaisDoAbate, type LoteAbate } from '@/components/abate/calculoDoLote';
+import type { LinhaAbate, CenarioAbate } from '@/hooks/useOperacaoAbate';
+import type { CompraLotesApi } from '@/hooks/useCompraLotes';
+
+const n2 = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const kg2 = (n: number) => `${n2(n)} kg`;
+/** Valor negativo é SEMPRE vermelho, em toda a tela — regra do envelope. */
+const CLS_NEG = 'text-destructive';
+
+/**
+ * Há negociação deste lote neste cenário?
+ *
+ * ⚠ ESPELHA A GUARDA DO BANCO, de propósito: `oc_salvar_abate` (NOVA 5) recusa lote sem
+ * preço e sem carcaça (peso OU rendimento), porque sem os dois não há cálculo. Perguntar
+ * a mesma coisa aqui faz a tela dizer "a negociar" exatamente nos lotes que a RPC
+ * recusaria — em vez de mostrar uma cascata de zeros que parece negociada.
+ */
+function temNegociacao(l: LinhaAbate | undefined): boolean {
+  if (!l) return false;
+  return l.precoArroba != null && (l.pesoCarcacaKg != null || l.rendimentoCarcacaPct != null);
+}
+
+/** Uma linha do bloco-resumo. `forte` marca Bruto e Líquido. */
+function LinhaSum({ rotulo, valor, cor, forte, vazio }: {
+  rotulo: string; valor: number; cor?: string; forte?: boolean; vazio?: boolean;
+}) {
+  return (
+    <>
+      <div className={`${forte ? 'text-[13px] font-semibold text-foreground border-t pt-1 mt-0.5' : `text-[11px] ${cor ?? 'text-muted-foreground'}`}`}>
+        {rotulo}
+      </div>
+      <div className={`text-right tabular-nums ${forte ? 'text-[13px] font-semibold text-foreground border-t pt-1 mt-0.5' : `text-[11px] ${cor ?? 'text-foreground'}`}`}>
+        {vazio ? '—' : formatMoeda(valor)}
+      </div>
+    </>
+  );
+}
+
+/** O bloco-resumo de seis linhas — o mesmo no cartão e (no 96c) no rodapé do modal. */
+export function BlocoResumoLote({ c, vazio }: { c: AbateCalculation; vazio?: boolean }) {
+  return (
+    <div className="grid grid-cols-[1fr_auto] gap-x-2 rounded-md bg-muted/40 px-2 py-1.5 leading-[1.3]">
+      <LinhaSum vazio={vazio}
+        rotulo={vazio ? 'Base' : `Base (${n2(c.totalArrobas)} @ × ${formatMoeda(c.precoArroba)})`}
+        valor={c.valorBase} />
+      <LinhaSum vazio={vazio} rotulo="(+) Bônus" valor={c.totalBonus} cor={vazio ? undefined : 'text-emerald-600'} />
+      <LinhaSum vazio={vazio} rotulo="(−) Descontos" valor={-c.totalDescontos} cor={vazio ? undefined : CLS_NEG} />
+      <LinhaSum vazio={vazio} rotulo="Bruto" valor={c.valorBruto} forte />
+      <LinhaSum vazio={vazio} rotulo="(−) Funrural e impostos" valor={-c.funruralTotal} cor={vazio ? undefined : CLS_NEG} />
+      <LinhaSum vazio={vazio} rotulo="Líquido do lote" valor={c.valorLiquido} forte />
+    </div>
+  );
+}
+
+/** A pílula do estado do lote naquele cenário. */
+function Pilula({ cenario, negociado }: { cenario: CenarioAbate; negociado: boolean }) {
+  if (!negociado) {
+    return <span className="rounded-full bg-amber-100 px-1.5 py-px text-[10px] text-amber-700">A negociar</span>;
+  }
+  return cenario === 'realizado'
+    ? <span className="rounded-full bg-emerald-100 px-1.5 py-px text-[10px] text-emerald-700">Realizado</span>
+    : <span className="rounded-full bg-blue-100 px-1.5 py-px text-[10px] text-blue-700">Projetado</span>;
+}
+
+/** Uma coluna do bloco de topo: rótulo, valor grande, sub-linhas e o "evidente". */
+function ColunaTopo({ rotulo, valor, unidade, linhaAt, subs, evidente, extra }: {
+  rotulo: string; valor: string; unidade?: string; linhaAt?: string;
+  subs?: string[]; evidente?: string; extra?: React.ReactNode;
+}) {
+  return (
+    <div className="min-w-0">
+      <div className="text-[11px] text-muted-foreground leading-none">{rotulo}</div>
+      <div className="mt-1 text-[20px] font-medium leading-tight tabular-nums truncate">
+        {valor}{unidade && <span className="ml-1.5 text-[11px] font-normal text-muted-foreground">{unidade}</span>}
+      </div>
+      {/* ⚠ ALINHADO À ESQUERDA, na mesma margem do valor: a arroba é outra leitura do
+          MESMO número de cima, não um segundo dado. */}
+      {linhaAt && <div className="text-[12px] font-medium text-foreground tabular-nums">{linhaAt}</div>}
+      {subs?.map(s => <div key={s} className="text-[11px] text-muted-foreground tabular-nums truncate">{s}</div>)}
+      {evidente && <div className="mt-0.5 text-[14px] font-semibold text-foreground tabular-nums">{evidente}</div>}
+      {extra}
+    </div>
+  );
+}
+
+export function AbaLotesAbate({
+  lotes, linhas, cenario, cenariosExistentes, onCenarioChange,
+  lotesApi, categoriasDisponiveis, somenteLeitura,
+}: {
+  lotes: LoteAbate[];
+  linhas: Map<string, LinhaAbate>;
+  cenario: CenarioAbate;
+  cenariosExistentes: CenarioAbate[];
+  onCenarioChange: (c: CenarioAbate) => void;
+  lotesApi: CompraLotesApi;
+  categoriasDisponiveis: { value: string; label: string }[];
+  somenteLeitura?: boolean;
+}) {
+  /* Qual lote está aberto no cadastro. `null` = nenhum. */
+  const [editandoId, setEditandoId] = useState<string | null>(null);
+
+  const calculos = useMemo(() => {
+    const m = new Map<string, AbateCalculation>();
+    lotes.forEach(l => m.set(l.id, buildAbateCalculation(paraCalculo(linhas.get(l.id) ?? linhaVazia(l.id), l))));
+    return m;
+  }, [lotes, linhas]);
+
+  const t = useMemo(() => totaisDoAbate(lotes, calculos), [lotes, calculos]);
+
+  const porCab = (v: number) => (t.cabecas > 0 ? formatMoeda(v / t.cabecas) : '—');
+  const porArroba = (v: number) => (t.arrobas > 0 ? formatMoeda(v / t.arrobas) : '—');
+  const algumNegociado = lotes.some(l => temNegociacao(linhas.get(l.id)));
+
+  /* ABERTURA DIRETA, como na grade compartilhada: adicionar CRIA e ABRE no mesmo gesto.
+     `adicionarLote` sozinho deixaria um lote sem categoria e sem peso, que a própria
+     `oc_salvar_lotes` recusa — um lote fantasma que o operador não teria como preencher. */
+  const abrirNovo = () => setEditandoId(lotesApi.adicionarLote());
+  const emEdicao = editandoId ? lotesApi.lotes.find(l => l.idLocal === editandoId) ?? null : null;
+
+  return (
+    <div className="rounded-md border bg-card shadow-sm min-w-0">
+      <div className="flex items-baseline gap-2.5 border-b px-3.5 py-[11px]">
+        <span className="text-[15px] font-medium text-foreground">Lotes</span>
+        <span className="text-[11px] text-muted-foreground">
+          {lotes.length} {lotes.length === 1 ? 'lote' : 'lotes'} · {t.cabecas} cab
+        </span>
+        <div className="ml-auto">
+          <Button type="button" size="sm" className="h-7 gap-1 px-2.5 text-[11px]"
+            disabled={somenteLeitura} onClick={abrirNovo}>
+            <Plus className="h-3.5 w-3.5" /> Adicionar lote
+          </Button>
+        </div>
+      </div>
+
+      {/* ── BLOCO DE TOPO ─────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 gap-3.5 border-b px-3.5 py-[11px] lg:grid-cols-4">
+        <ColunaTopo rotulo="Animais" valor={String(t.cabecas)}
+          unidade={`cab · ${lotes.length} ${lotes.length === 1 ? 'lote' : 'lotes'}`}
+          subs={[`peso vivo ${kg2(t.pesoVivo)} total`]}
+          evidente={`${n2(t.pesoMedio)} kg média`} />
+        <ColunaTopo rotulo="Carcaça total" valor={n2(t.carcaca)} unidade="kg"
+          linhaAt={`${n2(t.arrobas)} @`}
+          subs={[`${n2(t.carcacaCab)} kg/cab · ${n2(t.arrobaCab)} @/cab`]}
+          evidente={`RC ${n2(t.rc)}%`} />
+        <ColunaTopo rotulo="Valor bruto (R$)" valor={n2(t.bruto)}
+          subs={[`${porCab(t.bruto)}/cab`]} evidente={`${porArroba(t.bruto)}/@`} />
+        <ColunaTopo rotulo="Valor líquido NF (R$)" valor={n2(t.liquido)}
+          subs={[`${porCab(t.liquido)}/cab`]} evidente={`${porArroba(t.liquido)}/@`}
+          extra={
+            <div className="mt-1">
+              <Pilula cenario={cenario} negociado={algumNegociado} />
+            </div>
+          } />
+      </div>
+
+      {/* ── OS LOTES, EM DUAS COLUNAS ─────────────────────────────────────────── */}
+      {lotes.length === 0 ? (
+        <p className="px-3.5 py-6 text-center text-[12px] text-muted-foreground">
+          Nenhum lote nesta operação. Use “Adicionar lote” para informar os animais abatidos.
+        </p>
+      ) : (
+        <div className="grid grid-cols-1 gap-2.5 p-3.5 lg:grid-cols-2">
+          {lotes.map(lote => {
+            const linha = linhas.get(lote.id);
+            const c = calculos.get(lote.id)!;
+            const negociado = temNegociacao(linha);
+            return (
+              <div key={lote.id} className="rounded-lg border border-border/60 bg-card px-2.5 py-2">
+                <div className="flex items-start gap-2.5">
+                  <div className="min-w-0 flex-1">
+                    <div className="whitespace-nowrap text-[12px] font-medium text-foreground">
+                      {lote.categoriaLabel} · {lote.quantidade} cab · {n2(c.carcacaCalc * c.quantidade)} kg carcaça
+                    </div>
+                    {/* A linha "OC {numero}" entra no 96c, com o campo de observação do lote. */}
+                    <div className="text-[10px] text-muted-foreground tabular-nums">
+                      Peso vivo {n2(lote.pesoMedioKg)} kg/cab · <b className="text-[11px] font-semibold text-foreground">RC {n2(c.rendCalc)}%</b>
+                    </div>
+                    <div className="text-[10px] text-muted-foreground tabular-nums">
+                      {n2(c.pesoArrobaCab)} @/cab · {negociado
+                        ? <b className="text-[11px] font-semibold text-foreground">Liq. {formatMoeda(c.liqArroba)}/@</b>
+                        : <b className="text-[11px] font-semibold text-amber-700">Liq. —</b>}
+                    </div>
+                    {!negociado && (
+                      <div className="text-[10px] text-amber-700">
+                        Sem negociação neste cenário — preço e carcaça ainda não informados
+                      </div>
+                    )}
+                  </div>
+                  <Pilula cenario={cenario} negociado={negociado} />
+                  <div className="flex shrink-0 items-center gap-2.5 text-muted-foreground">
+                    <button type="button" title="Editar lote" aria-label="Editar lote"
+                      disabled={somenteLeitura} onClick={() => setEditandoId(lote.id)}
+                      className="hover:text-foreground disabled:opacity-40">
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button type="button" title="Remover lote" aria-label="Remover lote"
+                      disabled={somenteLeitura} onClick={() => lotesApi.removerLote(lote.id)}
+                      className="hover:text-destructive disabled:opacity-40">
+                      <Ban className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Chips do cenário — o ativo em bg-primary. */}
+                <div className="my-1.5 flex gap-1">
+                  {(['projetado', 'realizado'] as CenarioAbate[]).map(c2 => (
+                    <button key={c2} type="button" onClick={() => onCenarioChange(c2)}
+                      title={cenariosExistentes.includes(c2) ? undefined : 'Ainda não há dados neste cenário'}
+                      className={`rounded-full border px-2.5 py-0.5 text-[11px] ${
+                        c2 === cenario ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-border text-muted-foreground hover:bg-muted/50'}`}>
+                      {c2 === 'projetado' ? 'Projetado' : 'Realizado'}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <BlocoResumoLote c={c} vazio={!negociado} />
+                  {/* ⚠ LEVA AO LUGAR ONDE SE NEGOCIA HOJE — o formulário logo abaixo, na
+                      mesma aba. Um botão desabilitado dizendo "no próximo passo" seria
+                      promessa vazia, e promessa vazia ensina a desconfiar do botão. No 96c
+                      ele passa a abrir o modal do lote. */}
+                  <Button type="button" size="sm" variant={negociado ? 'outline' : 'default'}
+                    className="h-7 self-end gap-1 px-2.5 text-[11px]"
+                    onClick={() => document.getElementById(`abate-lote-${lote.id}`)
+                      ?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
+                    Negociar lote <ChevronRight className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {emEdicao && (
+        <LoteDialog
+          lote={emEdicao}
+          categoriasDisponiveis={categoriasDisponiveis}
+          /* Mesma resolução da grade compartilhada (AbaNegociacaoLotes:220): o slug vira
+             rótulo pelo catálogo, e sem catálogo mostra o slug em vez de vazio. */
+          rotuloCategoria={(slug: string) =>
+            categoriasDisponiveis.find(c => c.value === slug)?.label || slug || 'Sem categoria'}
+          fisicoRO={false}
+          somenteLeitura={!!somenteLeitura}
+          onAplicar={(patch) => { lotesApi.editarLote(emEdicao.idLocal, patch); setEditandoId(null); }}
+          onAplicarEAdicionar={(patch) => { lotesApi.editarLote(emEdicao.idLocal, patch); abrirNovo(); }}
+          onFechar={() => setEditandoId(null)}
+        />
+      )}
+    </div>
+  );
+}
