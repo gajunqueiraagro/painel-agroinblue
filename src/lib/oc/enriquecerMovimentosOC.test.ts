@@ -68,3 +68,58 @@ describe('aplicarEnriquecimentoOC — enriquecimento de leitura de movimentos OC
     expect(r.fornecedorId).toBe('c');   // fornecedor ainda enriquecido
   });
 });
+
+describe('o detalhe do abate — a porta que faltava', () => {
+  /* ⚠ O ABATE DA OC NÃO ERA CANDIDATO. O critério do enriquecimento comercial é "sem valor
+     e sem fornecedor"; o abate vindo de OC já tem os dois — o líquido é gravado no
+     lançamento. O que faltava era o DETALHE (carcaça, preço da @, bônus), que mora em
+     `zoo_operacao_abate`. Sem ele, a lista mostrava "—" em REND e P.@ e o modal abria com
+     "Valor base R$ 0,00" numa operação de setecentos mil. */
+  const abate = (over: Partial<NonNullable<EnriquecimentoOC['abate']>> = {}) => ({
+    pesoCarcacaKg: 12260.8, precoArroba: 375,
+    bonusPrecoce: 8409.85, bonusPrecoceFonte: 'reais',
+    bonusQualidade: null, bonusQualidadeFonte: null,
+    bonusListaTrace: null, bonusListaTraceFonte: null,
+    descontoQualidade: null, descontoQualidadeFonte: null,
+    outrosDescontos: null, outrosDescontosFonte: null,
+    funrural: 614.24, funruralFonte: 'reais',
+    valorLiquido: 314915.61, qtdLote: 41,
+    ...over,
+  });
+
+  it('abate com valor e fornecedor JÁ preenchidos recebe o detalhe mesmo assim', () => {
+    const l = mk({ id: 'ab1', tipo: 'abate' as Lancamento['tipo'], quantidade: 41,
+      valorTotal: 314915.61, fornecedorId: 'frigorifico' });
+    const mapa = new Map<string, EnriquecimentoOC>([['ab1', {
+      fornecedorId: 'frigorifico', fornecedorNome: 'Minerva', valorLote: null, qtdLote: 41,
+      criterio: null, abate: abate(),
+    }]]);
+    const out = aplicarEnriquecimentoOC([l], mapa);
+    expect(out[0].pesoCarcacaKg).toBeCloseTo(12260.8, 2);
+    expect(out[0].precoArroba).toBe(375);
+    /* ⚠ E O COMERCIAL NÃO É TOCADO: o valor que já estava lá continua. */
+    expect(out[0].valorTotal).toBe(314915.61);
+    expect(out[0].fornecedorId).toBe('frigorifico');
+  });
+
+  it('movimento parcial do lote prorrateia a carcaça pela quantidade', () => {
+    /* A carcaça gravada é o TOTAL do lote (41 cab); o movimento levou 20. */
+    const l = mk({ id: 'ab2', tipo: 'abate' as Lancamento['tipo'], quantidade: 20, valorTotal: 1 });
+    const mapa = new Map<string, EnriquecimentoOC>([['ab2', {
+      fornecedorId: null, fornecedorNome: null, valorLote: null, qtdLote: 41,
+      criterio: null, abate: abate(),
+    }]]);
+    const out = aplicarEnriquecimentoOC([l], mapa);
+    expect(out[0].pesoCarcacaKg).toBeCloseTo(12260.8 * 20 / 41, 2);
+  });
+
+  it('sem detalhe de abate no mapa, o lançamento passa intacto', () => {
+    const l = mk({ id: 'ab3', tipo: 'abate' as Lancamento['tipo'], quantidade: 41,
+      valorTotal: 999, fornecedorId: 'f' });
+    const mapa = new Map<string, EnriquecimentoOC>([['ab3', {
+      fornecedorId: 'f', fornecedorNome: null, valorLote: null, qtdLote: null,
+      criterio: null, abate: null,
+    }]]);
+    expect(aplicarEnriquecimentoOC([l], mapa)[0]).toBe(l);
+  });
+});
