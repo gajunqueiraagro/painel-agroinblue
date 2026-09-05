@@ -10,6 +10,12 @@
  * diferença. A unidade vem da ARITMÉTICA da lib, nunca do nome do campo — foi um nome
  * lido como unidade que já custou uma migration.
  *
+ * ⚠ O PAR VALOR+FONTE VIROU UM CAMPO E UM TOGGLE — ABATE-UX-01e, e só o DESENHO mudou.
+ * Dois campos por bônus davam ~160px de altura cada e empurravam o rodapé para fora da
+ * tela; o que se persiste continua sendo `{valor, fonte}`, idêntico. Trocar o toggle com
+ * o campo preenchido NÃO converte o número: ele passa a significar a outra unidade, que é
+ * o que o par sempre quis dizer — o valor é o que foi digitado NAQUELA unidade.
+ *
  * ⚠ O QUE SE GRAVA CONTINUA CANÔNICO: `pesoCarcacaKg` é o TOTAL do lote e `precoArroba`
  * é R$/@, qualquer que tenha sido o lado digitado; a fonte só lembra por onde se entrou.
  * `Aplicar` devolve a linha ao rascunho do pai — quem persiste é o rodapé do shell, na
@@ -48,154 +54,17 @@ const LBL = 'text-[10px] text-muted-foreground';
 const kg2 = (n: number | null | undefined) =>
   n == null ? '—' : `${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg`;
 
-/**
- * O par bidirecional: uma entrada por unidade, e só a preenchida é gravada.
- *
- * ⚠ O LADO NÃO PREENCHIDO MOSTRA O DERIVADO EM CINZA, e não um campo vazio. Campo vazio
- * ao lado de um preenchido convida a preencher os dois — e aí não há mais fonte única.
- */
-function ParDeUnidade({
-  rotulo, unidadeA, unidadeB, rotuloA, rotuloB, valor, derivadoA, derivadoB, onChange, somenteLeitura,
-}: {
-  rotulo: string;
-  unidadeA: string; unidadeB: string;
-  rotuloA: string; rotuloB: string;
-  valor: { valor: number | null; fonte: string | null };
-  derivadoA: number; derivadoB: number;
-  onChange: (v: { valor: number | null; fonte: string | null }) => void;
-  somenteLeitura?: boolean;
-}) {
-  const ehA = valor.fonte === unidadeA;
-  const ehB = valor.fonte === unidadeB;
-  return (
-    <div className="grid grid-cols-[1fr_auto_auto] items-end gap-2">
-      <Label className={LBL}>{rotulo}</Label>
-      <div className="w-[120px]">
-        <Label className={LBL}>{rotuloA}</Label>
-        {ehB ? (
-          <div className={`${H} flex items-center justify-end rounded-md border border-dashed px-2 text-muted-foreground tabular-nums`}
-               title="Derivado do outro lado — não é digitável nem gravado.">
-            {formatMoeda(derivadoA)}
-          </div>
-        ) : (
-          <CampoMoeda
-            valor={ehA ? valor.valor : null}
-            onChange={(n) => onChange(n == null ? { valor: null, fonte: null } : { valor: n, fonte: unidadeA })}
-            className={`${H} text-right`}
-            disabled={somenteLeitura}
-          />
-        )}
-      </div>
-      <div className="w-[130px]">
-        <Label className={LBL}>{rotuloB}</Label>
-        {ehA ? (
-          <div className={`${H} flex items-center justify-end rounded-md border border-dashed px-2 text-muted-foreground tabular-nums`}
-               title="Derivado do outro lado — não é digitável nem gravado.">
-            {formatMoeda(derivadoB)}
-          </div>
-        ) : (
-          <CampoMoeda
-            valor={ehB ? valor.valor : null}
-            onChange={(n) => onChange(n == null ? { valor: null, fonte: null } : { valor: n, fonte: unidadeB })}
-            className={`${H} text-right`}
-            disabled={somenteLeitura}
-          />
-        )}
-      </div>
-    </div>
-  );
-}
 
-/**
- * O par CONVERTIDO — carcaça e preço.
- *
- * ⚠ IRMÃO DE `ParDeUnidade`, NÃO O MESMO, e a diferença é o que se grava. Nos bônus o
- * banco guarda o número digitado e a fonte diz em que unidade ele está. Aqui o banco
- * guarda SEMPRE o canônico — `peso_carcaca_kg` é o total do lote, `preco_arroba` é R$/@ —
- * e a fonte só lembra por onde o operador entrou. Por isso os dois lados são calculados
- * a partir do canônico, e digitar em qualquer um deles reescreve o canônico.
- *
- * ⚠ O DESENHO É O MESMO DE PROPÓSITO: mesma grade, mesmas larguras, mesma borda tracejada
- * no lado derivado. Dois padrões visuais para a mesma ideia ensinariam o operador a
- * desconfiar de qual deles vale.
- */
-function ParConvertido({ rotulo, ladoA, ladoB, fonte, onDigitar, somenteLeitura }: {
-  rotulo: string;
-  ladoA: LadoConvertido;
-  ladoB: LadoConvertido;
-  fonte: string | null;
-  onDigitar: (unidade: string, n: number | null) => void;
-  somenteLeitura?: boolean;
-}) {
-  /* Sem fonte gravada, o lado A é o de entrada: linha antiga não sabe por onde foi
-     digitada, e supor o outro lado trocaria o número na cara de quem abre a tela. */
-  const ativo = fonte === ladoB.unidade ? ladoB.unidade : ladoA.unidade;
-  const campo = (lado: LadoConvertido, largura: string) => {
-    const ehAtivo = ativo === lado.unidade;
-    return (
-      <div className={largura}>
-        <Label className={LBL}>{lado.rotulo}</Label>
-        {!ehAtivo || lado.bloqueio ? (
-          <div className={`${H} flex items-center justify-end rounded-md border border-dashed px-2 text-muted-foreground tabular-nums`}
-               title={lado.bloqueio ?? 'Derivado do outro lado — não é digitável nem gravado.'}>
-            {lado.bloqueio ? '—' : lado.moeda ? formatMoeda(lado.valor ?? 0) : kg2(lado.valor)}
-          </div>
-        ) : lado.moeda ? (
-          <CampoMoeda valor={lado.valor} className={`${H} text-right`} disabled={somenteLeitura}
-            onChange={n => onDigitar(lado.unidade, n)} />
-        ) : (
-          <Input type="number" step="0.01" inputMode="decimal" className={`${H} text-right`}
-            disabled={somenteLeitura}
-            value={lado.valor ?? ''}
-            onChange={e => onDigitar(lado.unidade, e.target.value === '' ? null : Number(e.target.value))} />
-        )}
-      </div>
-    );
-  };
-  return (
-    <div className="grid grid-cols-[1fr_auto_auto] items-end gap-2">
-      <Label className={LBL}>{rotulo}</Label>
-      {campo(ladoA, 'w-[120px]')}
-      {campo(ladoB, 'w-[130px]')}
-    </div>
-  );
-}
-
-type LadoConvertido = {
-  unidade: string;
-  rotulo: string;
-  valor: number | null;
-  moeda?: boolean;
-  /** Motivo pelo qual este lado não pode receber número — vira `—` e vai no `title`. */
-  bloqueio?: string | null;
-};
-
-
-/** Um derivado travado ao lado do campo — mesmo desenho do lado não preenchido do par. */
-function Travado({ rotulo, valor, largura, dica }: {
-  rotulo: string; valor: string; largura: string; dica?: string;
-}) {
-  return (
-    <div className={largura}>
-      <Label className={LBL}>{rotulo}</Label>
-      <div className={`${H} flex items-center justify-end rounded-md border border-dashed px-2 text-muted-foreground tabular-nums`}
-           title={dica ?? 'Derivado — não é digitável nem gravado.'}>
-        {valor}
-      </div>
-    </div>
-  );
-}
-
-/** O seletor de unidade: dois lados, o ativo em bg-primary. */
-function Toggle({ valor, opcoes, onChange, somenteLeitura }: {
+/** O segmentado de unidade. `largura` muda entre a linha grande (92px) e o par (64px). */
+function Toggle({ valor, opcoes, onChange, somenteLeitura, largura = 'w-[92px]' }: {
   valor: string; opcoes: { v: string; label: string }[];
-  onChange: (v: string) => void; somenteLeitura?: boolean;
+  onChange: (v: string) => void; somenteLeitura?: boolean; largura?: string;
 }) {
   return (
-    <div className={`${H} w-[92px] flex overflow-hidden rounded-md border`}>
+    <div className={`${H} ${largura} flex shrink-0 overflow-hidden rounded-md border`}>
       {opcoes.map(o => (
         <button key={o.v} type="button" disabled={somenteLeitura} onClick={() => onChange(o.v)}
-          className={`flex-1 text-[11px] ${o.v === valor
+          className={`flex-1 text-[11px] leading-none ${o.v === valor
             ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted/50'}`}>
           {o.label}
         </button>
@@ -204,27 +73,53 @@ function Toggle({ valor, opcoes, onChange, somenteLeitura }: {
   );
 }
 
-/** O par de um bônus/desconto, com o derivado por @ e por cabeça sob o campo. */
-function LinhaBonus({ rotulo, valor, totalDoBonus, arrobas, cabecas, onChange, unidadeA, rotuloA, somenteLeitura }: {
-  rotulo: string; valor: { valor: number | null; fonte: string | null };
-  totalDoBonus: number; arrobas: number; cabecas: number;
-  onChange: (v: { valor: number | null; fonte: string | null }) => void;
-  unidadeA: string; rotuloA: string; somenteLeitura?: boolean;
-}) {
+/** Campo derivado: o idioma canônico de travado — fundo muted e borda tracejada. */
+function Travado({ rotulo, valor, dica }: { rotulo: string; valor: string; dica?: string }) {
   return (
     <div>
-      <ParDeUnidade
-        rotulo={rotulo} unidadeA={unidadeA} unidadeB="reais" rotuloA={rotuloA} rotuloB="R$ total"
-        valor={valor}
-        derivadoA={arrobas > 0 ? totalDoBonus / arrobas : 0}
-        derivadoB={totalDoBonus}
-        onChange={onChange} somenteLeitura={somenteLeitura}
-      />
-      {/* ⚠ AS DUAS LEITURAS QUE O PRODUTOR USA. O mesmo bônus vira R$/@ para comparar com
-          o preço e R$/cab para comparar com o boleto — traço quando não há valor, porque
-          zero afirmaria um bônus que ninguém informou. */}
-      <div className="mt-0.5 text-right text-[10px] text-muted-foreground tabular-nums">
-        {valor.valor == null ? '—' : `${formatMoeda(arrobas > 0 ? totalDoBonus / arrobas : 0)}/@ · ${formatMoeda(cabecas > 0 ? totalDoBonus / cabecas : 0)}/cab`}
+      <Label className={LBL}>{rotulo}</Label>
+      <div className={`${H} mt-0.5 flex items-center justify-end rounded-md border border-dashed border-border/60 bg-muted px-2 text-[12px] text-muted-foreground tabular-nums`}
+           title={dica ?? 'Derivado — não é digitável nem gravado.'}>
+        {valor}
+      </div>
+    </div>
+  );
+}
+
+/** Título de seção — 11px/500 uppercase, o separador que substitui os cards. */
+function Secao({ children }: { children: React.ReactNode }) {
+  return <div className="mt-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{children}</div>;
+}
+
+/**
+ * Um bônus, desconto ou imposto: UM campo, UM toggle e a leitura derivada embaixo.
+ *
+ * ⚠ AS DUAS LEITURAS SÃO O PONTO. O mesmo valor vira R$/@ para comparar com o preço e
+ * R$/cab para comparar com o boleto — traço quando não há valor, porque zero afirmaria
+ * um bônus que ninguém informou.
+ */
+function CampoComUnidade({ rotulo, valor, fonteA, rotuloA, total, arrobas, cabecas, onChange, somenteLeitura }: {
+  rotulo: string;
+  valor: { valor: number | null; fonte: string | null };
+  fonteA: string; rotuloA: string;
+  total: number; arrobas: number; cabecas: number;
+  onChange: (v: { valor: number | null; fonte: string | null }) => void;
+  somenteLeitura?: boolean;
+}) {
+  const fonte = valor.fonte ?? 'reais';
+  return (
+    <div className="min-w-0">
+      <Label className={LBL}>{rotulo}</Label>
+      <div className="mt-0.5 flex gap-1">
+        <CampoMoeda valor={valor.valor} className={`${H} min-w-0 flex-1 text-right`} disabled={somenteLeitura}
+          onChange={n => onChange(n == null ? { valor: null, fonte: null } : { valor: n, fonte })} />
+        <Toggle largura="w-[64px]" valor={fonte} somenteLeitura={somenteLeitura}
+          opcoes={[{ v: fonteA, label: rotuloA }, { v: 'reais', label: 'R$' }]}
+          onChange={f => onChange({ valor: valor.valor, fonte: valor.valor == null ? null : f })} />
+      </div>
+      <div className="mt-0.5 truncate text-[10px] text-muted-foreground tabular-nums">
+        {valor.valor == null ? '—'
+          : `${formatMoeda(arrobas > 0 ? total / arrobas : 0)}/@ · ${formatMoeda(cabecas > 0 ? total / cabecas : 0)}/cab`}
       </div>
     </div>
   );
@@ -259,34 +154,35 @@ export function ModalNegociarLote({ lote, linha, cenario, onAplicar, onFechar, s
   const fonteCarcaca = atual.pesoCarcacaFonte ?? 'cabeca';
   const fontePreco = atual.precoFonte ?? 'arroba';
   const totalDoLote = atual.precoArroba != null ? round2(atual.precoArroba * c.totalArrobas) : null;
+  const num = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onFechar(); }}>
-      <DialogContent className="max-w-[640px] p-0 gap-0 overflow-hidden">
-        <div className="bg-primary px-4 py-2.5 text-primary-foreground flex items-center justify-between">
-          {/* ⚠ `DialogTitle` DE VERDADE, não um `div` com cara de título: o Radix o usa
-              como nome acessível do diálogo e avisa no console quando falta. A descrição
-              fica oculta — ela existe para o leitor de tela, não para a tela. */}
+      {/* ⚠ A21 NO MODAL: altura no container, cabeçalho e rodapé `shrink-0`, só o corpo
+          rola. Sem isto o modal cresce com o conteúdo e o rodapé — onde vive o Aplicar —
+          sai da tela, que foi exatamente o que a homologação encontrou. */}
+      <DialogContent className="flex max-h-[85vh] max-w-[640px] flex-col p-0 gap-0 overflow-hidden">
+        <div className="shrink-0 bg-primary px-4 py-2.5 text-primary-foreground flex items-center justify-between">
           <DialogTitle className="text-[14px] font-semibold">
             Negociar lote · {lote.categoriaLabel} · {lote.quantidade} cab
           </DialogTitle>
-          <DialogDescription className="sr-only">
-            Informe carcaça, preço, bônus e descontos deste lote no cenário {cenario}.
-          </DialogDescription>
           <div className="flex items-center gap-2">
-            <span className="rounded-full bg-white/15 px-2 py-0.5 text-[10px] capitalize">{cenario}</span>
+            <span className="text-[11px] text-white/80">Cenário <b className="capitalize">{cenario}</b></span>
             <button type="button" onClick={onFechar} title="Fechar" aria-label="Fechar"
               className="text-white/80 hover:text-white"><X className="h-4 w-4" /></button>
           </div>
         </div>
+        <DialogDescription className="sr-only">
+          Informe carcaça, preço, bônus e descontos deste lote no cenário {cenario}.
+        </DialogDescription>
 
-        <div className="flex flex-col gap-3 px-4 py-3">
-          {/* ── CARCAÇA: campo + unidade + os dois derivados, na mesma linha ── */}
-          <div className="flex items-end gap-1.5">
-            <div className="w-[120px]">
+        <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-2 px-4 py-3">
+          <Secao>Carcaça</Secao>
+          <div className="grid grid-cols-[120px_92px_110px_110px] items-end gap-2">
+            <div>
               <Label className={LBL}>Carcaça</Label>
               <Input type="number" step="0.01" inputMode="decimal" disabled={somenteLeitura}
-                className={`${H} text-right`}
+                className={`${H} mt-0.5 text-right`}
                 value={(fonteCarcaca === 'cabeca' ? carcacaPorCab : atual.pesoCarcacaKg) ?? ''}
                 onChange={e => {
                   const n = e.target.value === '' ? null : Number(e.target.value);
@@ -298,39 +194,32 @@ export function ModalNegociarLote({ lote, linha, cenario, onAplicar, onFechar, s
                     });
                 }} />
             </div>
-            <Toggle valor={fonteCarcaca} somenteLeitura={somenteLeitura}
-              opcoes={[{ v: 'cabeca', label: 'cab' }, { v: 'total', label: 'total' }]}
-              onChange={(v) => {
-                /* ⚠ TROCAR DE LADO NÃO MUDA O NÚMERO GRAVADO: o canônico continua o total;
-                   só muda por qual porta se digita. Converter aqui seria mexer no dado
-                   por causa de um clique de leitura. */
-                if (atual.pesoCarcacaKg == null) { trocar({ pesoCarcacaFonte: v as 'cabeca' | 'total' }); return; }
-                trocar({ pesoCarcacaFonte: v as 'cabeca' | 'total' });
-              }} />
-            <Travado rotulo="Por cabeça" largura="w-[110px]"
-              valor={carcacaPorCab == null ? '—' : `${carcacaPorCab.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg`} />
-            <Travado rotulo="@ por cabeça" largura="w-[110px]"
-              valor={c.pesoArrobaCab > 0 ? c.pesoArrobaCab.toFixed(2) : '—'} />
+            <div>
+              <Label className={LBL}>&nbsp;</Label>
+              <div className="mt-0.5">
+                <Toggle valor={fonteCarcaca} somenteLeitura={somenteLeitura}
+                  opcoes={[{ v: 'cabeca', label: 'cabeça' }, { v: 'total', label: 'total' }]}
+                  onChange={v => trocar({ pesoCarcacaFonte: v === 'total' ? 'total' : 'cabeca' })} />
+              </div>
+            </div>
+            <Travado rotulo="Por cabeça" valor={carcacaPorCab == null ? '—' : kg2(carcacaPorCab)} />
+            <Travado rotulo="@ por cabeça" valor={c.pesoArrobaCab > 0 ? `${num(c.pesoArrobaCab)} @` : '—'} />
           </div>
 
-          {/* ⚠ FORA DE CARD e em corpo maior: são os dois números que o produtor confere
-              contra o papel do frigorífico antes de aceitar o preço. */}
-          <div className="flex flex-wrap gap-x-6 gap-y-1">
-            <div className="text-[15px] font-semibold tabular-nums">
-              <span className="mr-1.5 text-[10px] font-normal uppercase text-muted-foreground">Rendimento</span>
-              {c.rendCalc > 0 ? `${c.rendCalc.toFixed(2)}%` : '—'}
-            </div>
-            <div className="text-[15px] font-semibold tabular-nums">
-              <span className="mr-1.5 text-[10px] font-normal uppercase text-muted-foreground">Arrobas totais</span>
-              {c.totalArrobas > 0 ? `${c.totalArrobas.toFixed(4)} @` : '—'}
-            </div>
+          {/* ⚠ FORA DE CARD: são os dois números que o produtor confere contra o papel do
+              frigorífico antes de aceitar o preço. */}
+          <div className="flex gap-7 px-0.5">
+            <span><span className="text-[10px] text-muted-foreground">Rendimento </span>
+              <b className="text-[15px] font-semibold tabular-nums">{c.rendCalc > 0 ? `${num(c.rendCalc)}%` : '—'}</b></span>
+            <span><span className="text-[10px] text-muted-foreground">Arrobas totais </span>
+              <b className="text-[15px] font-semibold tabular-nums">{c.totalArrobas > 0 ? `${c.totalArrobas.toFixed(4)} @` : '—'}</b></span>
           </div>
 
-          {/* ── PREÇO ── */}
-          <div className="flex items-end gap-1.5">
-            <div className="w-[120px]">
+          <Secao>Preço</Secao>
+          <div className="grid grid-cols-[120px_92px_140px] items-end gap-2">
+            <div>
               <Label className={LBL}>Preço</Label>
-              <CampoMoeda className={`${H} text-right`} disabled={somenteLeitura}
+              <CampoMoeda className={`${H} mt-0.5 text-right`} disabled={somenteLeitura}
                 valor={fontePreco === 'arroba' ? atual.precoArroba : totalDoLote}
                 onChange={n => trocar(n == null
                   ? { precoArroba: null, precoFonte: null }
@@ -341,51 +230,53 @@ export function ModalNegociarLote({ lote, linha, cenario, onAplicar, onFechar, s
                     precoFonte: fontePreco === 'total' ? 'total' : 'arroba',
                   })} />
             </div>
-            <Toggle valor={fontePreco} somenteLeitura={somenteLeitura}
-              opcoes={[{ v: 'arroba', label: 'R$/@' }, { v: 'total', label: 'total' }]}
-              onChange={(v) => trocar({ precoFonte: v as 'arroba' | 'total' })} />
-            <Travado rotulo="Total do lote" largura="w-[140px]"
-              dica={c.totalArrobas > 0 ? undefined : 'Informe a carcaça primeiro — sem ela não há arrobas para converter.'}
+            <div>
+              <Label className={LBL}>&nbsp;</Label>
+              <div className="mt-0.5">
+                <Toggle valor={fontePreco} somenteLeitura={somenteLeitura}
+                  opcoes={[{ v: 'arroba', label: 'R$/@' }, { v: 'total', label: 'total' }]}
+                  onChange={v => trocar({ precoFonte: v === 'total' ? 'total' : 'arroba' })} />
+              </div>
+            </div>
+            <Travado rotulo="Total do lote"
+              dica={c.totalArrobas > 0 ? undefined : 'Informe a carcaça primeiro'}
               valor={c.totalArrobas > 0 && totalDoLote != null ? formatMoeda(totalDoLote) : '—'} />
           </div>
 
-          {/* ── BÔNUS, DESCONTOS E IMPOSTOS ── */}
-          <div className="space-y-2 border-t pt-2">
-            <LinhaBonus rotulo="Bônus precoce" unidadeA="arroba" rotuloA="R$/@"
-              valor={atual.bonusPrecoce} totalDoBonus={c.bonusPrecoceTotal}
-              arrobas={c.totalArrobas} cabecas={lote.quantidade} somenteLeitura={somenteLeitura}
+          <Secao>Bônus (valores totais do lote)</Secao>
+          <div className="grid grid-cols-3 gap-3">
+            <CampoComUnidade rotulo="Precoce" fonteA="arroba" rotuloA="@" somenteLeitura={somenteLeitura}
+              valor={atual.bonusPrecoce} total={c.bonusPrecoceTotal} arrobas={c.totalArrobas} cabecas={lote.quantidade}
               onChange={v => trocar({ bonusPrecoce: { valor: v.valor, fonte: v.fonte === 'arroba' || v.fonte === 'reais' ? v.fonte : null } })} />
-            <LinhaBonus rotulo="Bônus qualidade" unidadeA="arroba" rotuloA="R$/@"
-              valor={atual.bonusQualidade} totalDoBonus={c.bonusQualidadeTotal}
-              arrobas={c.totalArrobas} cabecas={lote.quantidade} somenteLeitura={somenteLeitura}
+            <CampoComUnidade rotulo="Qualidade" fonteA="arroba" rotuloA="@" somenteLeitura={somenteLeitura}
+              valor={atual.bonusQualidade} total={c.bonusQualidadeTotal} arrobas={c.totalArrobas} cabecas={lote.quantidade}
               onChange={v => trocar({ bonusQualidade: { valor: v.valor, fonte: v.fonte === 'arroba' || v.fonte === 'reais' ? v.fonte : null } })} />
-            <LinhaBonus rotulo="Bônus lista/trace" unidadeA="arroba" rotuloA="R$/@"
-              valor={atual.bonusListaTrace} totalDoBonus={c.bonusListaTraceTotal}
-              arrobas={c.totalArrobas} cabecas={lote.quantidade} somenteLeitura={somenteLeitura}
+            <CampoComUnidade rotulo="Lista / trace" fonteA="arroba" rotuloA="@" somenteLeitura={somenteLeitura}
+              valor={atual.bonusListaTrace} total={c.bonusListaTraceTotal} arrobas={c.totalArrobas} cabecas={lote.quantidade}
               onChange={v => trocar({ bonusListaTrace: { valor: v.valor, fonte: v.fonte === 'arroba' || v.fonte === 'reais' ? v.fonte : null } })} />
-            <LinhaBonus rotulo="Desconto qualidade" unidadeA="arroba" rotuloA="R$/@"
-              valor={atual.descontoQualidade} totalDoBonus={c.descQualidadeTotal}
-              arrobas={c.totalArrobas} cabecas={lote.quantidade} somenteLeitura={somenteLeitura}
+          </div>
+
+          <Secao>Descontos e impostos</Secao>
+          <div className="grid grid-cols-3 gap-3">
+            <CampoComUnidade rotulo="Desconto qualidade" fonteA="arroba" rotuloA="@" somenteLeitura={somenteLeitura}
+              valor={atual.descontoQualidade} total={c.descQualidadeTotal} arrobas={c.totalArrobas} cabecas={lote.quantidade}
               onChange={v => trocar({ descontoQualidade: { valor: v.valor, fonte: v.fonte === 'arroba' || v.fonte === 'reais' ? v.fonte : null } })} />
-            <LinhaBonus rotulo="Outros descontos" unidadeA="reais" rotuloA="R$ total"
-              valor={atual.outrosDescontos} totalDoBonus={c.descOutrosTotal}
-              arrobas={c.totalArrobas} cabecas={lote.quantidade} somenteLeitura={somenteLeitura}
+            <CampoComUnidade rotulo="Outros descontos" fonteA="arroba" rotuloA="@" somenteLeitura={somenteLeitura}
+              valor={atual.outrosDescontos} total={c.descOutrosTotal} arrobas={c.totalArrobas} cabecas={lote.quantidade}
               onChange={v => trocar({ outrosDescontos: { valor: v.valor, fonte: v.fonte === 'reais' || v.fonte === 'arroba' ? v.fonte : null } })} />
             {/* ⚠ O FUNRURAL É PERCENTUAL, não R$/@ — vocabulário próprio, e foi ler o nome
                 em vez da conta que já custou uma migration. */}
-            <ParDeUnidade
-              rotulo="Funrural e impostos" unidadeA="pct" unidadeB="reais"
-              rotuloA="%" rotuloB="R$ total" valor={atual.funrural}
-              derivadoA={c.valorBruto > 0 ? (c.funruralTotal / c.valorBruto) * 100 : 0}
-              derivadoB={c.funruralTotal} somenteLeitura={somenteLeitura}
+            <CampoComUnidade rotulo="Funrural + SENAR" fonteA="pct" rotuloA="%" somenteLeitura={somenteLeitura}
+              valor={atual.funrural} total={c.funruralTotal} arrobas={c.totalArrobas} cabecas={lote.quantidade}
               onChange={v => trocar({ funrural: { valor: v.valor, fonte: v.fonte === 'pct' || v.fonte === 'reais' ? v.fonte : null } })} />
           </div>
+
+          <BlocoResumoLote c={c} />
         </div>
 
-        {/* ── RODAPÉ: o MESMO bloco-resumo do cartão ── */}
-        <div className="border-t bg-card px-4 py-2.5">
-          <BlocoResumoLote c={c} />
-          <div className="mt-2.5 flex items-center justify-end gap-2">
+        <div className="shrink-0 flex items-center justify-between gap-2 border-t bg-card px-4 py-2.5">
+          <span className="text-[11px] text-muted-foreground">Líquido é derivado e gravado, nunca digitado.</span>
+          <div className="flex items-center gap-2">
             <Button type="button" variant="ghost" onClick={onFechar}>Cancelar</Button>
             <Button type="button" disabled={somenteLeitura}
               onClick={() => { onAplicar(atual); onFechar(); }}>Aplicar</Button>

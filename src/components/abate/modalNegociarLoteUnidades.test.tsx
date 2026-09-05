@@ -40,8 +40,13 @@ function montar(l: LinhaAbate | undefined, onAplicar = vi.fn()) {
   return onAplicar;
 }
 
-const campoPorRotulo = (rotulo: string) =>
-  screen.getByText(rotulo).parentElement!.querySelector('input') as HTMLInputElement;
+/* ⚠ PELO <label>, não pelo texto solto: desde ABATE-UX-01e o modal tem títulos de seção,
+   e "Carcaça" aparece duas vezes — o título e o rótulo do campo. Buscar o texto pegaria o
+   primeiro dos dois, que é o título e não tem input dentro. */
+const campoPorRotulo = (rotulo: string) => {
+  const label = screen.getAllByText(rotulo).find(el => el.tagName === 'LABEL');
+  return label!.parentElement!.querySelector('input') as HTMLInputElement;
+};
 
 describe('Modal do lote — a unidade vem da conta', () => {
   it('bônus em R$/@ multiplica pelas arrobas: 2 × 166,67 = R$ 333,33', () => {
