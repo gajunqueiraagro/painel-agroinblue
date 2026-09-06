@@ -170,6 +170,7 @@ function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEd
     countFinanceirosVinculados,
     loadData,
     invalidarZoot,
+    revalidarListaEIndicadores,
     revalidando,
   } = useLancamentos();
   const { loadData: metaLoadData } = useLancamentos('meta');
@@ -311,6 +312,10 @@ function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEd
            `invalidateQueries` solto la' dentro seria um SEGUNDO lugar decidindo quais
            chaves do zootecnico existem. A prop e' o caminho oficial. */
         onRealizadoAplicado={invalidarZoot}
+        /* Fechar a OC relê a lista E os indicadores, com o aviso de "atualizando" —
+           `invalidarZoot` sozinha não cobre `['lancamentos-zoo']`, que é justamente a
+           query da lista de Lançamentos. */
+        onOperacaoFechada={revalidarListaEIndicadores}
         abateParaEditar={abateParaEditar}
         vendaParaEditar={vendaParaEditar}
         onReturnFromEdit={onReturnFromEdit}

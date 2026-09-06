@@ -89,6 +89,12 @@ interface Props {
      e' quem sabe quais chaves existem. Esta tela recebe as escritas por prop e nao tem o
      hook; decidir as chaves aqui seria a segunda copia dessa lista. */
   onRealizadoAplicado?: () => void | Promise<void>;
+  /* ⚠ RELÊ A LISTA QUANDO A OC FECHA — PR-OC-REFETCH-01. Pelo mesmo motivo da de cima:
+     as chaves de cache moram com quem tem o `useLancamentos` (V2Index), não aqui.
+     A OC grava por RPC, FORA das escritas desta tela — categoria corrigida no lote,
+     líquido revalorado, status concluído —, então nada aqui invalida nada, e a lista
+     seguia mostrando o retrato de antes até um F5. */
+  onOperacaoFechada?: () => void;
   abaInicial?: Aba;
   onBackToConciliacao?: () => void;
   dataInicial?: string;
@@ -361,7 +367,7 @@ function matchFornecedor(options: FornecedorOption[], params: { id?: string | nu
   });
 }
 
-export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar, vendaParaEditar, compraParaEditar, transferenciaParaEditar, reclassParaEditar, morteParaEditar, consumoParaEditar, onReturnFromEdit, initialAnoFiltro, initialMesFiltro, initialReclassCenario, onNavegarChuvas, onFecharOperacaoOC, onNovaCompraOC, onNovaVendaOC, onNovoAbateOC, cenarioInicial, cenariosPermitidos, onRealizadoAplicado }: Props) {
+export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar, vendaParaEditar, compraParaEditar, transferenciaParaEditar, reclassParaEditar, morteParaEditar, consumoParaEditar, onReturnFromEdit, initialAnoFiltro, initialMesFiltro, initialReclassCenario, onNavegarChuvas, onFecharOperacaoOC, onNovaCompraOC, onNovaVendaOC, onNovoAbateOC, cenarioInicial, cenariosPermitidos, onRealizadoAplicado, onOperacaoFechada }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const { clienteAtual } = useCliente();
   const nomeFazenda = fazendaAtual?.nome || '';
@@ -2408,8 +2414,16 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
      Central seguinte abriria ja' com o modal por cima da lista. Um fecho, nao tres. */
   const fecharModalOC = useCallback(() => {
     setLancModalOpen(false);
-    if (modoOCCompra || modoOCVenda || modoOCAbate) onFecharOperacaoOC?.();
-  }, [modoOCCompra, modoOCVenda, modoOCAbate, onFecharOperacaoOC]);
+    if (modoOCCompra || modoOCVenda || modoOCAbate) {
+      onFecharOperacaoOC?.();
+      /* ⚠ AQUI, E NÃO NO SALVAR: a OC muda o rebanho por vários gestos (salvar lotes,
+         revalorar, concluir, gerar compromissos) e alguns são do banco, por trigger.
+         Pendurar a releitura em cada um seria uma lista para esquecer; o fechamento é o
+         único ponto por onde todos passam. Custa uma releitura a mais quando nada mudou,
+         e essa é a troca certa contra uma lista que mente. */
+      onOperacaoFechada?.();
+    }
+  }, [modoOCCompra, modoOCVenda, modoOCAbate, onFecharOperacaoOC, onOperacaoFechada]);
 
 
   // Modo OC: cria/atualiza a operação comercial (só identificação) e guarda operacao_id/versao.

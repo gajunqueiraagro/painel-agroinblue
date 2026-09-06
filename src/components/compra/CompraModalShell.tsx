@@ -1002,7 +1002,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
             <DialogDescription>
               {acaoConfirm === 'confirmar' ? 'A operação será fechada. Após confirmar, a negociação passa a somente leitura.'
                 : acaoConfirm === 'cancelar' ? 'O cancelamento afeta a operação comercial e não é desfeito por edição. Informe o motivo.'
-                : 'A operação fechada volta para programada e poderá ser editada novamente pelas regras vigentes.'}
+                : 'A operação fechada volta para programada e poderá ser editada novamente pelas regras vigentes. Esta ação é auditada: o motivo abaixo fica registrado.'}
             </DialogDescription>
           </DialogHeader>
           {(acaoConfirm === 'cancelar' || acaoConfirm === 'reabrir') && (
@@ -1010,14 +1010,22 @@ export function CompraModalShell(api: CompraModalShellProps) {
               value={motivoAcao}
               onChange={(e) => setMotivoAcao(e.target.value)}
               rows={3}
-              placeholder={acaoConfirm === 'cancelar' ? 'Motivo do cancelamento (obrigatório)' : 'Motivo (opcional)'}
+              placeholder={acaoConfirm === 'cancelar' ? 'Motivo do cancelamento (obrigatório)' : 'Motivo da reabertura (obrigatório)'}
               className="w-full rounded-md border bg-background px-3 py-2 text-sm"
             />
           )}
           <DialogFooter>
             <Button variant="ghost" onClick={() => setAcaoConfirm(null)}>Voltar</Button>
             <Button
-              disabled={acaoConfirm === 'cancelar' && motivoAcao.trim() === ''}
+              /* ⚠ REABRIR TAMBÉM EXIGE MOTIVO — 111c. A compra era a única das três que o
+                 pedia como opcional; abate e venda já exigiam. `oc_reabrir` não obriga no
+                 banco, mas GRAVA o que recebe em `zoo_operacao_eventos.detalhes.motivo`,
+                 e um campo opcional que ninguém preenche deixa o log da reabertura mudo
+                 justamente onde a auditoria vai perguntar por quê. Três telas para a mesma
+                 ação pediam três coisas diferentes. */
+              disabled={(acaoConfirm === 'cancelar' || acaoConfirm === 'reabrir') && motivoAcao.trim() === ''}
+              title={(acaoConfirm === 'cancelar' || acaoConfirm === 'reabrir') && motivoAcao.trim() === ''
+                ? 'Informe o motivo — ele fica registrado na auditoria da operação.' : undefined}
               onClick={async () => {
                 const a = acaoConfirm;
                 setAcaoConfirm(null);

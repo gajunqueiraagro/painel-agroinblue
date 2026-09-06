@@ -196,6 +196,34 @@ export function useLancamentos(arg: UseLancamentosArg = 'realizado') {
      Contando as rajadas em voo, o aviso so' apaga quando a ultima termina. */
   const [emVoo, setEmVoo] = useState(0);
 
+  /**
+   * A lista E os indicadores, com o aviso de "atualizando" ligado — PR-OC-REFETCH-01.
+   *
+   * ⚠ `invalidarZoot` SOZINHA NÃO ATUALIZA A LISTA, e essa é a metade que faltava. Ela
+   * invalida as quatro agregadas e NÃO `['lancamentos-zoo']`; funciona lá dentro porque
+   * os quatro callers internos invalidam a lista na linha de cima, sempre. Quem a chama
+   * de fora não sabe disso: `onRealizadoAplicado` a usa desde a PR-OC-VENDA-REALIZADO-02
+   * para o caso em que `oc_revalorar_lote` muda `lancamentos.valor_total` pelo banco — e
+   * é justamente a lista que ficava com o retrato antigo.
+   * ⚠ E CONTA A RAJADA. Sem `emVoo`, o modal fecha e a lista fica alguns segundos com o
+   * número velho sem dizer nada; com ele, o "atualizando lista e indicadores…" aparece.
+   * Trocar espera visível por mentira invisível é o defeito que aquele aviso já resolveu
+   * uma vez.
+   * ⚠ NADA DE REBUILD DE CACHE ZOOTÉCNICO aqui: `trg_invalidate_zoot_cache` apaga e o
+   * ensure de `useZootCategoriaMensal` reconstrói na leitura seguinte. Ligar o refresh no
+   * fechamento pagaria os segundos no lugar errado — foi o que o PERF-ZOOT-SAVE-01 tirou.
+   */
+  const revalidarListaEIndicadores = useCallback(() => {
+    setEmVoo(n => n + 1);
+    void Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['lancamentos-zoo'] }),
+      queryClient.invalidateQueries({ queryKey: ['zoot-categoria-mensal'] }),
+      queryClient.invalidateQueries({ queryKey: ['zoot-mensal'] }),
+      queryClient.invalidateQueries({ queryKey: ['movimentacoes-mensais'] }),
+      queryClient.invalidateQueries({ queryKey: ['anos-disponiveis'] }),
+    ]).finally(() => { if (montado.current) setEmVoo(n => n - 1); });
+  }, [queryClient]);
+
   const invalidateZootQueries = useCallback(async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['zoot-categoria-mensal'] }),
@@ -865,6 +893,8 @@ export function useLancamentos(arg: UseLancamentosArg = 'realizado') {
        e' pior que dado errado nos dois. Nao ha rebuild manual: o trigger do banco cuida
        da derivacao; o que falta e' o front parar de reusar o cache. */
     invalidarZoot: invalidateZootQueries,
+    /** Lista + indicadores, com o aviso de "atualizando" — usar ao fechar uma OC. */
+    revalidarListaEIndicadores,
     /** true enquanto QUALQUER releitura pos-gravacao ainda esta' em voo. */
     revalidando: emVoo > 0,
     loading,
