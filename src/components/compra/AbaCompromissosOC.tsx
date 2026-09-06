@@ -1636,6 +1636,17 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
   })), [itensLote]);
   const itemSel = useMemo(() => itensLote.find(i => i.lote.id === loteId) ?? null, [itensLote, loteId]);
 
+  /* ⚠ UM LOTE SÓ NÃO É ESCOLHA — OC-NOVO-COMPROMISSO-LOTE, item (b). A maioria das OCs de
+     abate tem um lote; obrigar a abrir um seletor de uma opção é atrito pedindo confirmação
+     do óbvio, e foi assim que o Agnaldo ficou preso. Com dois ou mais, a escolha é real e
+     continua sendo dele.
+     ⚠ SÓ PRÉ-SELECIONA O QUE ESTÁ VAZIO: se ele já escolheu, ou trocou de natureza, quem
+     manda é o estado — este efeito não desfaz gesto nenhum. */
+  useEffect(() => {
+    if (natureza !== 'principal' || varios || loteId) return;
+    if (loteOptions.length === 1) setLoteId(loteOptions[0].value);
+  }, [natureza, varios, loteId, loteOptions]);
+
   // Defaults por natureza: principal pré-carrega valor acordado, subcentro sugerido e favorecido = contraparte
   // da OC; obrigacao zera. Campos seguem editáveis (mesma semântica de valor/subcentro).
   useEffect(() => {
@@ -1766,7 +1777,11 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
      linha, entao a exigencia so' cabe no modo separado.
      ⚠ SO' O PRINCIPAL: obrigacao (frete, comissao, funrural) e' da operacao, nao do lote —
      ali o lote continua opcional, e e' por isso que a regra le a natureza. */
-  const principalSemLoteEscolhido = natureza === 'principal' && !varios && !loteId;
+  /* ⚠ SÓ TRAVA QUANDO HÁ O QUE ESCOLHER. Sem lote elegível a tela mostra o motivo real
+     acima e o botão segue desabilitado por `principalSemLotes`/`podeSubmeter` — pedir uma
+     escolha que a tela não oferece é o defeito que este PR conserta. */
+  const principalSemLoteEscolhido = natureza === 'principal' && !varios
+    && loteOptions.length > 0 && !loteId;
   /* No modo JUNTO valor/subcentro/descricao saem de cada lote, entao os campos da
      tela deixam de ser requisito — o que precisa existir e' a lista de lotes. */
   const podeSubmeter = !!componente && !!(varios ? itensLote.length > 0 : (valor != null && valor > 0 && subcentro))
@@ -1827,9 +1842,22 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
               </Select>
             </div>
           </div>
+          {/* ⚠ O CAMPO APARECE SEMPRE NO PRINCIPAL — OC-NOVO-COMPROMISSO-LOTE. Ele era
+              condicionado a `loteOptions.length > 0`, e quando a lista vinha vazia o
+              113c pedia "Escolha o lote" ao lado de um formulário SEM campo de lote:
+              uma exigência impossível de cumprir. Sem lote elegível o campo continua na
+              tela e diz o motivo, que é outra conversa — falta lote negociado, não falta
+              escolha. */}
+          {natureza === 'principal' && loteOptions.length === 0 && (
+            <div className="rounded-md border border-amber-400 bg-amber-50 px-2 py-1.5 text-[11px] leading-snug text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+              Esta operação não tem lote negociado que sirva de base para o compromisso
+              principal. Cadastre o lote na aba de negociação — ou lance como
+              <b> obrigação</b>, que é da operação e não de um lote.
+            </div>
+          )}
           {natureza === 'principal' && loteOptions.length > 0 && (
             <div>
-              <Label className="text-[11px]">Lote · categoria {loteId ? '· valor, classificação e descrição preenchidos (editáveis)' : '· opcional'}</Label>
+              <Label className="text-[11px]">Lote · categoria {loteId ? '· valor, classificação e descrição preenchidos (editáveis)' : '· obrigatório'}</Label>
               <SearchableSelect
                 value={loteId || '__none__'} onValueChange={(v) => setLoteId(v === '__none__' ? '' : v)}
                 options={loteOptions} placeholder="Selecione o lote"

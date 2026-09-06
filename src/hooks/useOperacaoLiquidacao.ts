@@ -149,13 +149,19 @@ export type ClassificacaoLotes =
 // Classifica CADA lote individualmente: deriva sexo→subcentro (classificação gerencial) e o valor
 // OFICIAL do lote, sem somar/agrupar. DM e G (ambos machos) permanecem itens distintos. Bloqueia
 // (sem fallback) quando falta categoria, categoria fora do enum, ou valor de lote não derivável.
-export function classificarLotesCompra(lotes: LoteOC[]): ClassificacaoLotes {
+export function classificarLotesCompra(
+  lotes: LoteOC[],
+  /** O valor do lote vem de outra fonte (o líquido do abate) — não exigir `valorInformado`. */
+  valorVemDeFora = false,
+): ClassificacaoLotes {
   const validos = lotes.filter(l => (l.categoria ?? '').trim().length > 0);
   if (validos.length === 0) return { status: 'sem_categoria' };
   const invalidas = Array.from(new Set(validos.map(l => l.categoria).filter(c => !CATEGORIAS_VALIDAS.has(c))));
   if (invalidas.length > 0) return { status: 'categoria_invalida', categorias: invalidas };
-  const naoDeriv = Array.from(new Set(validos.filter(l => valorLoteOC(l) == null).map(l => l.categoria)));
-  if (naoDeriv.length > 0) return { status: 'valor_nao_derivavel', categorias: naoDeriv };
+  if (!valorVemDeFora) {
+    const naoDeriv = Array.from(new Set(validos.filter(l => valorLoteOC(l) == null).map(l => l.categoria)));
+    if (naoDeriv.length > 0) return { status: 'valor_nao_derivavel', categorias: naoDeriv };
+  }
   const itens: LoteClassificado[] = validos.map(l => {
     const sexo = sexoDaCategoria(l.categoria);
     return { lote: l, sexo, subcentro: subcentroDoSexo(sexo), valorBruto: valorLoteOC(l) ?? 0 };
@@ -185,7 +191,18 @@ export function classificarLotesCompra(lotes: LoteOC[]): ClassificacaoLotes {
 export function classificarLotesPorLado(
   lotes: LoteOC[], tipoOperacao: string | null | undefined,
 ): ClassificacaoLotes {
-  const c = classificarLotesCompra(lotes);
+  /* ⚠ NO ABATE, "VALOR NÃO DERIVÁVEL" NÃO SE APLICA — OC-NOVO-COMPROMISSO-LOTE.
+     `classificarLotesCompra` exige `valorLoteOC(l) != null`, e esse valor sai de
+     `valorInformado × critério`. No abate o lote NÃO tem valor informado: o valor é o
+     LÍQUIDO, que vem de `zoo_operacao_abate` e é conferido logo abaixo, no ramo próprio.
+     Rodar a exigência da compra antes do ramo do abate recusava a operação inteira por
+     falta de um campo que o abate não usa — e a recusa chegava mudada de nome: a lista de
+     lotes voltava vazia, o seletor não era renderizado, e o operador via "Escolha o lote"
+     ao lado de um formulário sem campo de lote (OC do Agnaldo, 155 bois, líquido de
+     R$ 961.008,30 gravado).
+     ⚠ O TESTE NÃO PEGAVA porque todo lote do fixture nascia com `valorInformado: 1000` —
+     um valor que o abate real nunca tem. */
+  const c = classificarLotesCompra(lotes, tipoOperacao === 'abate');
   if (c.status !== 'ok') return c;
 
   if (tipoOperacao === 'venda') {

@@ -75,6 +75,36 @@ describe('classificarLotesPorLado — o lado abate', () => {
     expect(c.itens[1].subcentro).toBe('Venda de Fêmeas Adultas');
   });
 
+  it('⚠ ABATE SEM `valorInformado` CLASSIFICA — o caso do Agnaldo, 155 bois', () => {
+    /* O lote de um abate NÃO tem valor informado: `valor_informado` é null e o critério é
+       'kg'. A conta do compromisso é o LÍQUIDO, que vem de `zoo_operacao_abate`.
+       Antes, `classificarLotesCompra` recusava com `valor_nao_derivavel` ANTES do ramo do
+       abate: a lista de lotes voltava vazia, o seletor de lote não era renderizado — e o
+       operador via "Escolha o lote" ao lado de um formulário sem campo de lote.
+       ⚠ O FIXTURE DESTE ARQUIVO ESCONDIA ISSO: todo lote nasce com `valorInformado: 1000`,
+       que o abate real nunca tem. Por isso o teste passava e a tela não. */
+    const semValorInformado: LoteOC = {
+      id: 'agnaldo', categoria: 'bois', qtd: 155, pesoMedioKg: 520,
+      criterio: 'kg', valorInformado: null, valorLiquidoAbate: 961008.30,
+    };
+    const c = classificarLotesPorLado([semValorInformado], 'abate');
+    expect(c.status).toBe('ok');
+    if (c.status !== 'ok') return;
+    expect(c.itens).toHaveLength(1);
+    expect(c.itens[0].valorBruto).toBe(961008.30);
+    expect(c.itens[0].subcentro).toBe(SUBCENTRO_ABATE_MACHOS);
+  });
+
+  it('⚠ mas a COMPRA continua exigindo o valor: lá ele é a única fonte', () => {
+    /* A dispensa vale só para o abate. Numa compra sem `valorInformado` não há de onde
+       tirar o valor, e deixar passar criaria o principal de zero que o outro teste barra. */
+    const semValor: LoteOC = {
+      id: 'c1', categoria: 'bois', qtd: 10, pesoMedioKg: 400,
+      criterio: 'kg', valorInformado: null, valorLiquidoAbate: null,
+    };
+    expect(classificarLotesPorLado([semValor], 'compra').status).toBe('valor_nao_derivavel');
+  });
+
   it('a compra continua como está — o líquido a ignora', () => {
     const c = classificarLotesPorLado([lote('l1', 'bois', 99999)], 'compra');
     expect(c.status).toBe('ok');
