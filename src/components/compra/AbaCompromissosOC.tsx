@@ -256,6 +256,8 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
      qual deles age. */
   const [saldoAlvo, setSaldoAlvo] = useState<CompromissoResumo | null>(null);
   const [confirmarParcela, setConfirmarParcela] = useState<ParcelaMaterializacao | null>(null);
+  /* A conta escolhida na hora de lançar, quando a parcela nasceu sem uma. */
+  const [contaParaMaterializar, setContaParaMaterializar] = useState('');
   /* PR-OC-UX-LOTE-B-01 — o detalhe virou MODAL. `selectedId` continua existindo e
      seguindo a regra de estabilidade apos refetch (ver acima): e' o que mantem o
      modal aberto e no mesmo compromisso quando uma acao interna recarrega os dados.
@@ -576,6 +578,18 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
   const mostrarAProgramar = !semCompromisso && totalAProgramar > TOL_CENTAVO;
 
   /* Uma vez só: reabrir a aba depois de fechar o diálogo não o traz de volta. */
+  /* As contas do cliente para o cabeçalho do "Gerar compromissos" — mesmo hook que o
+     diálogo de novo compromisso já usa mais abaixo, para não haver duas listas. */
+  const { contas: contasDoCliente } = useContasBancariasLeves(clienteId);
+  /* O nome para a linha travada, onde o seletor nao e' oferecido. Conta que sumiu da lista
+     (inativa, de outra fazenda) ainda tem id na parcela: devolver o `—` de ausencia ali
+     mentiria — a parcela TEM conta. Por isso o fallback e' o id curto, nao o travessao. */
+  function nomeConta(id: string | null): string {
+    if (!id) return '—';
+    const c = contasDoCliente.find(x => x.id === id);
+    return c ? (c.nome_exibicao || c.nome_conta) : `#${id.slice(0, 8)}`;
+  }
+
   const jaAbriuGerar = useRef(false);
   useEffect(() => {
     if (!abrirGerarAoMontar || jaAbriuGerar.current) return;
@@ -745,7 +759,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
    * `versao` do state a partir da segunda chamada daria 40001 — a mesma armadilha do
    * Concluir (`c21572c8`).
    */
-  async function gerarPropostas(linhas: PropostaCompromisso[], vencimento: string, forma: string) {
+  async function gerarPropostas(linhas: PropostaCompromisso[], vencimento: string, forma: string, contaBancariaId: string | null) {
     if (versao == null || linhas.length === 0) return;
     let v = versao;
     let feitas = 0;
@@ -762,7 +776,9 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
         });
         v = r.operacaoVersao;
         const prog = await ocApi.programarCompromisso(v, r.compromissoId, {
-          parcelas: [{ sequencia: 1, valor: linha.valor, vencimento, forma }],
+          /* A conta vem do cabeçalho do diálogo e vale para todas as parcelas — sem ela a
+             parcela nascia com `conta_bancaria_id` nulo e o título saía sem conta. */
+          parcelas: [{ sequencia: 1, valor: linha.valor, vencimento, forma, conta_bancaria_id: contaBancariaId }],
         });
         v = prog.operacaoVersao;
         feitas++;
@@ -991,9 +1007,20 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
   }
   async function materializar(p: ParcelaMaterializacao) {
     if (versao == null || !p.programacaoId || !p.parcelaId) return;
+    /* ⚠ A CONTA ANTES DO TITULO — 125d item 2c. `oc_materializar_programacao` nao recebe
+       conta: ela copia a da parcela. Entao a escolha feita aqui e' GRAVADA na parcela
+       primeiro, com `oc_alterar_parcela_programacao`, e so' depois o titulo nasce — do
+       contrario o lancamento sairia sem conta e a escolha do operador morreria na tela.
+       ⚠ A VERSAO DO SEGUNDO GESTO E' A QUE O PRIMEIRO DEVOLVEU, nunca a do state: os dois
+       writers avancam `zoo_operacoes_comerciais.versao`, e reusar a velha volta 40001. */
+    const conta = !p.contaBancariaId ? contaParaMaterializar : '';
+    if (!p.contaBancariaId && !conta) return;        // o botão já barra; aqui é a rede
     setConfirmarParcela(null);                       // fecha JÁ (nunca congela)
     try {
-      await ocApi.materializarParcela(versao, p.programacaoId, p.parcelaId);
+      const versaoAtual = conta
+        ? await ocApi.alterarParcela(versao, p.parcelaId, { contaBancariaId: conta })
+        : versao;
+      await ocApi.materializarParcela(versaoAtual, p.programacaoId, p.parcelaId);
       setRecemMaterializada(p.parcelaId);            // destaque da recém-materializada
     } catch { /* toast pelo hook */ }
   }
@@ -1350,6 +1377,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
                   <th className="py-0.5 pr-2">Vencimento</th>
                   <th className="py-0.5 pr-2 text-right">Valor</th>
                   <th className="py-0.5 pr-2">Forma</th>
+                  <th className="py-0.5 pr-2">Conta</th>
                   <th className="py-0.5 pr-2">Status</th>
                   <th className="py-0.5 pr-2">Título</th>
                   <th className="py-0.5 pr-1"></th>
@@ -1433,6 +1461,33 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
                           </span>
                         )}
                       </td>
+                      <td className="py-0.5 pr-2">
+                        {/* ⚠ CONTA EDITAVEL COMO A FORMA — 125d item 2b. Mesmo gate
+                            (`parcelaEditavel`), mesma RPC (`oc_alterar_parcela_programacao`,
+                            que ganhou `p_conta_bancaria_id` em 20260906170516) e mesma
+                            guarda de "so' escreve se mudou". A RPC propaga a troca para o
+                            `financeiro_lancamentos_v2` da parcela ja materializada, entao a
+                            conta do titulo acompanha a da parcela sem segundo gesto.
+                            ⚠ O `—` AQUI E' AUSENCIA DE VERDADE: parcela criada antes de o
+                            "Gerar compromissos" pedir conta nasceu sem nenhuma, e e' esse
+                            estado que o dialogo de Lancar cobra. */}
+                        {parcelaEditavel ? (
+                          <ContaBancariaSelect
+                            value={p.contaBancariaId}
+                            onValueChange={(nova) => {
+                              if (nova === (p.contaBancariaId ?? null) || !p.parcelaId || versao == null) return;
+                              void ocApi.alterarParcela(versao, p.parcelaId, { contaBancariaId: nova });
+                            }}
+                            contas={contasDoCliente}
+                            disabled={ocApi.saving}
+                            placeholder="—"
+                            className="[&>button]:h-6 [&>button]:w-[132px] [&>button]:px-1.5 [&>button]:text-[10px]" />
+                        ) : (
+                          <span title={motivoTravado} className="cursor-default text-[10px] text-muted-foreground">
+                            {nomeConta(p.contaBancariaId)}
+                          </span>
+                        )}
+                      </td>
                       <td className="py-0.5 pr-2">{(() => { const s = statusFinanceiroParcela(p); return (
                         <Badge variant={s.alerta ? 'destructive' : badgeStatusParcela(p.status)} className="text-[9px] px-1"
                           title={`${s.title} (estado interno: ${p.status})`}>{s.icon ? `${s.icon} ` : ''}{s.label}</Badge>
@@ -1467,7 +1522,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
                                   </Button>
                                 </span>
                               : <span className="text-[10px] text-green-600">ok</span>)
-                          : <Button size="sm" variant="outline" className="h-5 text-[10px] px-1.5" disabled={!podeMaterializar} onClick={() => setConfirmarParcela(p)}>Lançar</Button>}
+                          : <Button size="sm" variant="outline" className="h-5 text-[10px] px-1.5" disabled={!podeMaterializar} onClick={() => { setContaParaMaterializar(''); setConfirmarParcela(p); }}>Lançar</Button>}
                       </td>
                     </tr>
                   );
@@ -1499,6 +1554,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
           dataOperacao={dataOperacao ?? null}
           saving={saving}
           onGerar={gerarPropostas}
+          contas={contasDoCliente}
           onFechar={() => setGerarAberto(false)}
         />
       )}
@@ -1580,9 +1636,32 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
                 um tamanho errado. */}
             <DialogHeader><DialogTitle className="text-[13px]">Lançar parcela</DialogTitle></DialogHeader>
             <div className="text-[13px]">Gerar título de <b>{brl(confirmarParcela.valor)}</b> com vencimento <b>{fmtData(confirmarParcela.vencimento)}</b>?</div>
-            <DialogFooter>
+            {/* ⚠ SEM CONTA NÃO SE MATERIALIZA — OC-PARCELA-CONTA (125d). O título nasce
+                ligado a uma conta bancária; parcela sem conta gerava lançamento sem conta,
+                e a tela não oferecia onde arrumar. As parcelas criadas antes do cabeçalho
+                do "Gerar compromissos" pedir conta estão todas nesse estado, então a
+                pergunta é feita aqui, na hora, em vez de barrar o operador sem saída. */}
+            {!confirmarParcela.contaBancariaId && (
+              <div className="space-y-1">
+                <Label className="text-[10px] text-muted-foreground">Conta bancária <span className="text-destructive">*</span></Label>
+                <ContaBancariaSelect
+                  value={contaParaMaterializar}
+                  onValueChange={setContaParaMaterializar}
+                  contas={contasDoCliente}
+                  className="[&>button]:h-8 [&>button]:text-[12px]" />
+                <p className="text-[10px] text-muted-foreground">
+                  Esta parcela foi criada sem conta. Escolha a conta do título.
+                </p>
+              </div>
+            )}
+            <DialogFooter className="items-center gap-2">
+              {!confirmarParcela.contaBancariaId && !contaParaMaterializar && (
+                <span className="mr-auto text-[10px] leading-tight text-muted-foreground">Escolha a conta.</span>
+              )}
               <Button variant="outline" size="sm" onClick={() => setConfirmarParcela(null)}>Cancelar</Button>
-              <Button size="sm" disabled={saving} onClick={() => materializar(confirmarParcela)}>Lançar</Button>
+              <Button size="sm"
+                disabled={saving || (!confirmarParcela.contaBancariaId && !contaParaMaterializar)}
+                onClick={() => materializar(confirmarParcela)}>Lançar</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

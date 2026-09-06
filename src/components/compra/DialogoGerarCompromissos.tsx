@@ -15,6 +15,7 @@
  * diálogo manual faz hoje (por isso os eventos vêm aos pares no banco).
  */
 import { useMemo, useState } from 'react';
+import { ContaBancariaSelect, type ContaSelecionavel } from '@/components/shared/ContaBancariaSelect';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -50,7 +51,7 @@ export function vencimentoPadrao(dataOperacao: string | null): string {
 }
 
 export function DialogoGerarCompromissos({
-  tipoOperacao, propostas, valorAcordado, contraparteNome, dataOperacao, saving, onGerar, onFechar,
+  tipoOperacao, propostas, valorAcordado, contraparteNome, dataOperacao, saving, contas, onGerar, onFechar,
 }: {
   tipoOperacao: 'compra' | 'venda' | 'abate' | string;
   propostas: PropostaCompromisso[];
@@ -58,12 +59,22 @@ export function DialogoGerarCompromissos({
   contraparteNome: string | null;
   dataOperacao: string | null;
   saving?: boolean;
-  onGerar: (linhas: PropostaCompromisso[], vencimento: string, forma: string) => Promise<void>;
+  onGerar: (linhas: PropostaCompromisso[], vencimento: string, forma: string, contaBancariaId: string | null) => Promise<void>;
+  /** As contas do cliente, para o cabeçalho — a MESMA lista e o MESMO tipo do resto da aba. */
+  contas: ContaSelecionavel[];
   onFechar: () => void;
 }) {
   const [marcadas, setMarcadas] = useState<Set<string>>(() => new Set(propostas.map(p => p.chave)));
   const [vencimento, setVencimento] = useState(() => vencimentoPadrao(dataOperacao));
   const [forma, setForma] = useState(FORMAS[0]);
+  /* ⚠ A CONTA FALTAVA E A PARCELA NASCIA SEM ELA — OC-PARCELA-CONTA (125d).
+     `zoo_operacao_parcelas_programacao.conta_bancaria_id` já existia e o payload de
+     `oc_programar_compromisso` já a aceitava; o diálogo é que nunca perguntou. Resultado:
+     na hora de Lançar, o título nascia sem conta e a tela não oferecia onde escolher.
+     ⚠ DEFAULT NA PRIMEIRA ATIVA, e não na "última usada": a última exigiria uma consulta
+     nova só para adivinhar, e adivinhar conta bancária errada é pior que perguntar — o
+     campo fica visível no cabeçalho e vale para todas as parcelas. */
+  const [contaBancariaId, setContaBancariaId] = useState<string>(() => contas[0]?.id ?? '');
 
   const selecionadas = useMemo(() => propostas.filter(p => marcadas.has(p.chave)), [propostas, marcadas]);
   /* ⚠ SÓ O PRINCIPAL ENTRA NO CONFRONTO. As obrigações (Funrural, frete) são o que se paga
@@ -88,10 +99,18 @@ export function DialogoGerarCompromissos({
         </DialogDescription>
 
         <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-3">
-          <div className="grid grid-cols-[170px_200px_1fr] items-end gap-3">
+          <div className="grid grid-cols-[150px_180px_170px_1fr] items-end gap-3">
             <div>
               <Label className="text-[10px] text-muted-foreground">Vencimento</Label>
               <DatePicker value={vencimento} onChange={setVencimento} className="mt-[3px] h-8 px-2.5 text-[12px]" />
+            </div>
+            <div>
+              <Label className="text-[10px] text-muted-foreground">Conta bancária</Label>
+              <ContaBancariaSelect
+                value={contaBancariaId}
+                onValueChange={setContaBancariaId}
+                contas={contas}
+                className="mt-[3px] [&>button]:h-8 [&>button]:text-[12px]" />
             </div>
             <div>
               <Label className="text-[10px] text-muted-foreground">Forma de pagamento</Label>
@@ -169,7 +188,7 @@ export function DialogoGerarCompromissos({
             title={selecionadas.length === 0 ? 'Marque ao menos uma linha' : undefined}
             onClick={async () => {
               if (!vencimento) { toast.error('Informe o vencimento.'); return; }
-              await onGerar(selecionadas, vencimento, forma);
+              await onGerar(selecionadas, vencimento, forma, contaBancariaId || null);
             }}>
             Gerar {selecionadas.length} {selecionadas.length === 1 ? 'compromisso' : 'compromissos'}
           </Button>

@@ -178,7 +178,7 @@ export interface OcCompromissosApi {
   programarCompromisso: (versaoEsperada: number, compromissoId: string, payload: ProgramarCompromissoPayload) => Promise<ProgramarCompromissoResultado>;
   acrescentarParcelas: (versaoEsperada: number, compromissoId: string, payload: AcrescentarParcelasPayload) => Promise<AcrescentarParcelasResultado>;
   /** Vencimento e/ou forma de uma parcela; `null` não mexe no campo. Devolve a versão nova. */
-  alterarParcela: (versaoEsperada: number, parcelaId: string, mudanca: { vencimento?: string | null; forma?: string | null }) => Promise<number>;
+  alterarParcela: (versaoEsperada: number, parcelaId: string, mudanca: { vencimento?: string | null; forma?: string | null; contaBancariaId?: string | null }) => Promise<number>;
   materializarParcela: (versaoEsperada: number, programacaoId: string, parcelaId: string) => Promise<MaterializarResultado>;
   /* PR-OC-VENDA-FIN-PREVISAO-01D — ajusta o valor do compromisso ao REALIZADO, nos dois
      sentidos. `motivo` e' exigido pelo banco (guard P0001), como em todo estorno. */
@@ -590,7 +590,7 @@ export function useOcCompromissos(
    */
   const alterarParcela = useCallback(async (
     versaoEsperada: number, parcelaId: string,
-    mudanca: { vencimento?: string | null; forma?: string | null },
+    mudanca: { vencimento?: string | null; forma?: string | null; contaBancariaId?: string | null },
   ): Promise<number> => {
     if (!operacaoId || !clienteId) {
       const err = new OcCompromissoError('operacao_inexistente', 'Operação não iniciada.');
@@ -605,6 +605,13 @@ export function useOcCompromissos(
         p_parcela_id: parcelaId,
         p_vencimento: mudanca.vencimento ?? null,
         p_forma: mudanca.forma ?? null,
+        /* ⚠ TRES CAMPOS, UM POR VEZ OU JUNTOS — a RPC recusa com P0001 'Nada a alterar'
+           quando os tres chegam nulos, e faz COALESCE em cada um, entao mandar null e'
+           "nao mexer". O `p_conta_bancaria_id` entrou em 20260906170516, depois dos
+           outros dois: quem so' mandava vencimento/forma continuava valido, e por isso a
+           adicao nao quebrou nenhum chamador. Ela tambem propaga a conta para o
+           `financeiro_lancamentos_v2` da parcela ja materializada. */
+        p_conta_bancaria_id: mudanca.contaBancariaId ?? null,
       });
       if (error) throw normalizarErroRpc(error);
       const versaoNova = Number((data as { operacao_versao?: number })?.operacao_versao);

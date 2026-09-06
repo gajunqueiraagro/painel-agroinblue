@@ -1315,9 +1315,15 @@ export function AbateModalShell({
               const r = await onSalvarNegociacao();
               if (r === false) return;
               await onConcluirNegociacao?.(typeof r === 'number' ? r : undefined);
-              /* ⚠ CONCLUIU: o financeiro é o próximo passo, e ele estava ficando para
-                 depois — a OC 9b2b5e6b fechou com entrega encerrada e ZERO compromissos.
-                 A aba decide se há o que propor; o rodapé só avisa que a hora chegou. */
+              /* ⚠ RELÊ ANTES DE OFERECER — OC-CONCLUIR-RELEITURA (125d). O diálogo só abre
+                 quando há proposta, e a proposta do principal depende do LÍQUIDO do abate,
+                 que acabou de ser gravado no mesmo gesto. Sem esta releitura a aba abria
+                 com `lotes` do estado anterior, `valorLiquidoAbate` nulo, zero propostas —
+                 e nada acontecia até fechar e reabrir a OC, que é quando o hook remonta.
+                 ⚠ NÃO PRECISA DE `await` PARA ABRIR: o efeito que decide olha
+                 `propostas.length` e reavalia quando o dado chega; o guard de "uma vez só"
+                 só fecha depois que ele de fato abriu. Aguardar aqui só adia o clique. */
+              void liquidacaoApi?.recarregar();
               setOfereceGerarCompromissos(true);
               setAbaAtiva('financeiro');
             }}>
