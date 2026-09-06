@@ -212,6 +212,15 @@ no mesmo arquivo.
 4. git status -s (contagem de arquivos — deve bater com o escopo
    declarado no briefing; arquivo fora do escopo = PARAR e reportar)
 5. Checks do briefing (se houver secao CHECKS): resultado de cada um
+6. ESCOPO — os CAMINHOS COMPLETOS de todo arquivo tocado ou criado, UM
+   POR LINHA, prontos para o `git add`. Nao "o teste do classificador",
+   nao "o hook do abate": `src/hooks/classificarLotesAbate.test.ts`.
+   ⚠ NASCE DE ERRO REPETIDO, nao de burocracia: em 06/09/2026 dois blocos
+   git seguidos vieram com o caminho errado de um arquivo NOVO (`src/lib/oc/`
+   e `src/components/abate/` no lugar de `src/hooks/`). `git add` com
+   pathspec que nao casa FALHA, e o commit sai sem o teste — justamente a
+   parte que impede a regressao de voltar. O arquiteto copia esta lista;
+   se ela nao existe, ele adivinha.
 Commit NUNCA e feito neste passo.
 
 ## COMMIT
