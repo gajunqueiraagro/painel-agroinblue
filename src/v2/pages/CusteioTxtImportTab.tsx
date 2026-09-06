@@ -207,9 +207,11 @@ export default function CusteioTxtImportTab({ arquivoInicial }: { arquivoInicial
             </label>
           )}
 
-          {fileName && (
-            <span className="ml-3 text-sm text-muted-foreground">{fileName}</span>
-          )}
+          {/* ⚠ O NOME DO ARQUIVO NÃO SE REPETE — CUSTEIO-TXT-02b. A faixa da seção acima já
+              o mostra ("Relatório de custeio · 082026.txt", 10px mono); aqui ele saía de
+              novo em `text-sm`, 14px — o maior texto da tela, para dizer o que já estava
+              dito dois centímetros acima. `fileName` continua no state porque o modo sem
+              hub (seleção pelo próprio card) ainda o usa no fluxo de leitura. */}
 
           {erro && (
             <Alert variant="destructive">
@@ -223,7 +225,14 @@ export default function CusteioTxtImportTab({ arquivoInicial }: { arquivoInicial
 
       {resultado && (
         <>
-          {/* Cabeçalho do relatório + totais */}
+          {/* ⚠ O QUE SE CONFERE NÃO ROLA — A21, e agora é regra da casa. O bloco de números
+              e a faixa de reconciliação são a resposta da tela: rolar 43 itens e perder de
+              vista o total e o aviso de divergência é perder justamente o que se estava
+              conferindo. Fundo opaco e `z` acima das linhas, senão os itens passam por
+              baixo — transparente é pior que não fixar.
+              A altura vem do app-shell: a seção `conciliacao` já está em
+              `SECOES_APP_SHELL` (V2Index) desde antes do 117. */}
+          <div className="sticky top-[30px] z-20 space-y-3 bg-card pb-2">
           {/* O mesmo bloco cinza das abas da OC: o operador aprende a olhar um lugar só. */}
           <BlocoTopoAba itens={[
             { rotulo: 'Fazenda', valor: resultado.fazenda_raw ?? null },
@@ -303,6 +312,8 @@ export default function CusteioTxtImportTab({ arquivoInicial }: { arquivoInicial
             </Alert>
           )}
 
+          </div>{/* fim do topo fixo */}
+
           {/* ⚠ SEM CABEÇALHO PRÓPRIO: "Itens (43)" já está no bloco cinza acima, e repetir
               gastava uma faixa inteira para dizer o mesmo número duas vezes. */}
           <Card>
@@ -320,7 +331,13 @@ export default function CusteioTxtImportTab({ arquivoInicial }: { arquivoInicial
                   linha 2 diz de onde veio — o mesmo par que o cartão da OC usa.
                   ⚠ SÓ A LISTA ROLA (A21): o bloco de números e a reconciliação ficam
                   fixos acima, senão some justamente o que o operador confere. */}
-              <div className="max-h-[60vh] overflow-y-auto [scrollbar-gutter:stable]">
+              {/* ⚠ SEM SCROLLER PRÓPRIO — A21. O `max-h-[60vh] overflow-y-auto` que estava
+                  aqui criava um SEGUNDO scrollport dentro do da aba: duas barras, e rolar
+                  a de dentro não move o topo fixo, então o operador via a lista andar sem
+                  entender por que o resto ficava. A rolagem já mora no nível certo — o
+                  `md:flex-1 md:min-h-0 md:overflow-y-auto` da ConciliacaoBancariaTab, que
+                  tem altura porque a seção está no app-shell. Aqui a lista só cresce. */}
+              <div>
                 <div className="divide-y divide-border/70">
                   {resultado.itens.map((it) => {
                     const lancada = linhasLancadas.has(it.linha_num);

@@ -261,3 +261,24 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   "confere", "mantem" ou equivalente significa que existem dados
   validos e coincidentes; zero e valor real e nunca substitui dado
   ausente; dado conciliado nunca deve aparentar ausencia.
+
+## UI — CABECALHO FIXO E TAMANHOS (regra permanente, ao lado do A21)
+Toda lista com rolagem nasce com cabecalho e totais FIXOS e so' o corpo
+rolando; toda tela nova usa os tamanhos do A18 — identidade 12px/500,
+contexto 10px/400 muted, numero de topo 20px/500 — sem excecao.
+NAO E' ITEM DE BRIEFING, E' GATE VISUAL: antes de reportar, conferir no
+preview que o cabecalho nao sai da tela ao rolar.
+- Detalhes do A18/A21/A22 em docs/PADROES-UI.md; aqui fica o que nao se
+  negocia por PR.
+- ⚠ FIXAR O CABECALHO E' PO'R A ROLAGEM NO NIVEL CERTO, nao acrescentar
+  `sticky`. Ja aconteceu duas vezes de o `sticky` existir e nao grudar:
+  a lista de movimentacoes (ZOOT-LISTA-01/02) e a previa do custeio. O
+  `sticky` ancora no scrollport MAIS PROXIMO; se esse scrollport nao tem
+  altura, ele sobe junto com a pagina. Antes de escrever `sticky`, achar
+  quem rola.
+- ⚠ UM SCROLLPORT SO' POR TELA. Um `max-h` interno dentro de uma area que
+  ja rola cria duas barras, e rolar a de dentro nao move o cabecalho
+  fixo — o operador ve' a lista andar sem entender por que o topo fica.
+- ⚠ FUNDO OPACO E `z` ACIMA das linhas no bloco fixo. Transparente e'
+  pior que nao fixar: o conteudo passa por baixo do numero que se esta'
+  conferindo.

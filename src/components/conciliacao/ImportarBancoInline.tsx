@@ -185,7 +185,12 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
 
       {tipo === 'custeio-txt' && arquivo && (
         <div className="rounded-lg border border-border bg-card p-2">
-          <div className="mb-1.5 flex items-center gap-2">
+          {/* ⚠ O CABEÇALHO DA SEÇÃO TAMBÉM NÃO ROLA — CUSTEIO-TXT-02b. Ele diz de qual
+              arquivo é a prévia; rolar 43 itens sem ele é conferir números sem saber de
+              onde vieram. `z-30` acima do bloco de números (z-20), que gruda logo abaixo
+              em `top-[30px]` — 24px de altura + os 6px do `pb-1.5` que substituiu o `mb`,
+              para o próprio espaçamento ficar coberto e as linhas não aparecerem na fresta. */}
+          <div className="sticky top-0 z-30 flex items-center gap-2 bg-card pb-1.5">
             <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
               Relatório de custeio
             </span>
