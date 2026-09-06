@@ -532,6 +532,40 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
     return [...principais, ...extras];
   }, [compromissos, lotes, tipoOperacao, propostasExtras]);
 
+  /* ─── O SENTIDO DO DINHEIRO, POR LINHA ────────────────────────────────────────
+     PR-OC-VENDA-FIN-PREVISAO-01D (adendo 2). Numa venda boitel convivem quatro linhas —
+     duas que entram e duas que saem — e a lista mostrava os quatro valores iguais, sem
+     dizer de que lado cada um esta'.
+
+     ⚠ ESPELHO LITERAL DA REGRA SOBERANA, e nao uma segunda derivacao. A materializacao
+     decide o sinal do lancamento assim (PR-OC-SENTIDO-POR-PLANO-01, `oc_materializar_
+     programacao`):
+
+         v_fluxo := CASE (SELECT pc.tipo_operacao FROM financeiro_plano_contas pc
+                           WHERE pc.id = v_comp.plano_conta_id)
+                      WHEN '1-Entradas' THEN 'receber'
+                      WHEN '2-Saídas'   THEN 'pagar'
+                      ELSE CASE v_op.tipo_operacao WHEN 'compra' THEN 'pagar' ELSE 'receber' END
+                    END;
+
+     ⚠ O FALLBACK VEM JUNTO, e nao e' detalhe: sem ele a tela ficaria muda exatamente
+     onde o banco ainda decide algo, e um compromisso sem plano resolvido apareceria sem
+     sinal e MESMO ASSIM nasceria como saida no caixa. Espelhar a regra inteira e' o que
+     impede a tela e o banco de discordarem.
+     ⚠ COR NUNCA E' O UNICO CANAL: quem informa e' o SINAL (+/−); a cor so' reforca. */
+  const entradaDoCompromisso = (c: CompromissoResumo): boolean => {
+    const tipo = plano.rows.find(r => r.id === c.planoContaId)?.tipo_operacao;
+    if (tipo === '1-Entradas') return true;
+    if (tipo === '2-Saídas') return false;
+    return tipoOperacao !== 'compra';
+  };
+  /* ⚠ DECLARADA ANTES DE `temEntradas`, E ISSO NAO E' ESTILO — ABATE-FIN-TELA-BRANCA.
+     Ela morava 91 linhas ABAIXO do `.some()` que a chama, e `.some()` executa no corpo do
+     componente, durante o render: o callback lia uma `const` ainda em TDZ e a aba Financeiro
+     caia inteira com "Cannot access 'xt' before initialization". TSC e build nao veem —
+     a chamada esta dentro de uma arrow, que o compilador trata como uso diferido, e so' o
+     `.some()` revela que nao e'. Manter a declaracao acima do primeiro uso EXECUTADO no
+     render e' o que impede a volta. */
   /* ⚠ PELO PLANO, NAO PELO TIPO: uma operacao "de entrada" e' aquela que TEM alguma linha
      de entrada. Perguntar `tipoOperacao !== 'compra'` daria o topo de quatro colunas a uma
      venda que so' tenha despesas — e a coluna "A receber" ficaria em traco eterno. */
@@ -605,34 +639,6 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
      deixaram o cabecalho preso em "principal/principal" depois que a coluna ja tinha
      sido corrigida. Com cinco compromissos na tabela, um cabecalho que nao identifica
      nao diz de qual deles e' a programacao aberta logo abaixo. */
-  /* ─── O SENTIDO DO DINHEIRO, POR LINHA ────────────────────────────────────────
-     PR-OC-VENDA-FIN-PREVISAO-01D (adendo 2). Numa venda boitel convivem quatro linhas —
-     duas que entram e duas que saem — e a lista mostrava os quatro valores iguais, sem
-     dizer de que lado cada um esta'.
-
-     ⚠ ESPELHO LITERAL DA REGRA SOBERANA, e nao uma segunda derivacao. A materializacao
-     decide o sinal do lancamento assim (PR-OC-SENTIDO-POR-PLANO-01, `oc_materializar_
-     programacao`):
-
-         v_fluxo := CASE (SELECT pc.tipo_operacao FROM financeiro_plano_contas pc
-                           WHERE pc.id = v_comp.plano_conta_id)
-                      WHEN '1-Entradas' THEN 'receber'
-                      WHEN '2-Saídas'   THEN 'pagar'
-                      ELSE CASE v_op.tipo_operacao WHEN 'compra' THEN 'pagar' ELSE 'receber' END
-                    END;
-
-     ⚠ O FALLBACK VEM JUNTO, e nao e' detalhe: sem ele a tela ficaria muda exatamente
-     onde o banco ainda decide algo, e um compromisso sem plano resolvido apareceria sem
-     sinal e MESMO ASSIM nasceria como saida no caixa. Espelhar a regra inteira e' o que
-     impede a tela e o banco de discordarem.
-     ⚠ COR NUNCA E' O UNICO CANAL: quem informa e' o SINAL (+/−); a cor so' reforca. */
-  const entradaDoCompromisso = (c: CompromissoResumo): boolean => {
-    const tipo = plano.rows.find(r => r.id === c.planoContaId)?.tipo_operacao;
-    if (tipo === '1-Entradas') return true;
-    if (tipo === '2-Saídas') return false;
-    return tipoOperacao !== 'compra';
-  };
-
   /* ⚠ E A PREVISAO VEM ANTES DE TUDO. Sem ela a linha mostraria o CODIGO do componente
      ('adiantamento_devolvido'), que nao e' vocabulario de operador; a previsao ja sabe
      como a linha se chama na tela. */

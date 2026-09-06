@@ -163,7 +163,31 @@ no mesmo arquivo.
   Rodar e REPORTAR o numero em TODO ciclo, sem excecao.
 - Zero-cast: proibido `as` / `as any` em codigo novo. Unica excecao:
   o idioma existente `(supabase as any).rpc`.
-- Build verde obrigatorio antes de qualquer commit.
+- Build verde obrigatorio antes de qualquer commit, e o comando e
+      npm run build:proto
+  NAO `npx vite build`: o guard de alvo do vite.config so' roda em
+  `command === "serve"`, entao o build cru compila com env de PRODUCAO
+  (duttifnbxqtyyybjmouv) sem avisar. O mesmo vale para servir a tela:
+  `npm run preview` e' barrado pelo guard; use `npm run preview:proto`.
+- CICLOS DE IMPORT — comando OFICIAL:
+      npx madge --circular --extensions ts,tsx --ts-config tsconfig.app.json src/
+  O `--ts-config` NAO e' opcional: sem ele o madge nao resolve o alias
+  `@/`, pula 521 imports e devolve uma lista quase vazia — falso "esta
+  limpo". Com ele: 1 warning (pdf.worker) e 21 ciclos conhecidos em
+  2026-09-06. Dois deles sao frente aberta [ABATE-CICLOS-MODAIS]:
+  AbaLotesAbate <-> ModalNegociarLote (fecha em `BlocoResumoLote`) e
+  AbaLotesAbate <-> ModalResumoLotes (fecha em `temNegociacao`). Ambos
+  fecham em `export function` (hoisted), entao NAO produzem TDZ hoje —
+  sao divida, nao P0.
+  ⚠ E ESTE GATE NAO PEGA O DEFEITO QUE O MOTIVOU. A tela branca da aba
+  Financeiro (ABATE-FIN-TELA-BRANCA, 2026-09-06) nao era ciclo nenhum:
+  era `compromissos.some(c => ... entradaDoCompromisso(c))` no CORPO do
+  componente chamando uma `const` declarada 91 linhas ABAIXO. `.some()`
+  executa durante o render e a `const` ainda esta em TDZ; a aba inteira
+  caia com "Cannot access 'xt' before initialization". TSC e build ficam
+  MUDOS porque a chamada mora dentro de uma arrow, que o compilador trata
+  como uso diferido. Regra que fica: funcao usada por `.some/.map/.filter/
+  .find` executados no corpo do componente declara-se ACIMA do uso.
 
 ## RELATORIO DE EXECUCAO (formato obrigatorio, todo ciclo)
 1. TSC: N erros (baseline 73) — numero explicito, obtido com
