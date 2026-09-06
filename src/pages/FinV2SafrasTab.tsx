@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { CULTURAS, codigoDaSafra, nomeDaSafra, temporadaDeReferencia, temporadasDisponiveis } from '@/lib/agri/culturas';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { Card, CardContent } from '@/components/ui/card';
@@ -54,6 +55,14 @@ export function FinV2SafrasTab() {
   const [descricao, setDescricao] = useState('');
   const [observacoes, setObservacoes] = useState('');
   const [ativa, setAtiva] = useState(true);
+  /* ⚠ CULTURA E TEMPORADA NÃO SÃO COLUNAS — SAFRA-CADASTRO-01. Hoje elas vivem no CÓDIGO
+     (`25/26-AMD`), que é como as safras do banco já se chamam; a coluna `cultura` é a
+     migration AGRI-01 da spec, ainda não aplicada. Enquanto isso, os dois campos existem
+     na TELA para gerar código e nome sem digitação livre — e o dia em que a coluna vier,
+     o backfill lê o mesmo mapa de siglas (lib/agri/culturas) que estes campos usam. */
+  const [cultura, setCultura] = useState('');
+  const [temporada, setTemporada] = useState(() => temporadaDeReferencia(new Date()));
+  const [maisAberto, setMaisAberto] = useState(false);
 
   const load = useCallback(async () => {
     if (!clienteAtual?.id) return;
@@ -106,11 +115,37 @@ export function FinV2SafrasTab() {
 
   const totalInativas = useMemo(() => safras.filter(s => !s.ativa).length, [safras]);
 
+  /* O código e o nome são DERIVADOS enquanto ninguém os edita à mão.
+     ⚠ O CÓDIGO É TRAVADO E O NOME NÃO. O código é chave (`cliente_id, codigo` é UNIQUE) e
+     alimenta o backfill futuro da coluna `cultura`: deixá-lo livre é convidar `25/26 AMD`,
+     `2025/26-Amd` e três formatos para a mesma safra. O nome é rótulo humano e às vezes
+     precisa de um apelido ("Safra 25/26 Amendoim — Pureza"), então só se sugere.
+     ⚠ NA EDIÇÃO NÃO SE REESCREVE O NOME: quem já batizou a safra não perde o nome porque
+     abriu o modal para mudar a ordem de exibição. */
+  const codigoGerado = codigoDaSafra(temporada, escopo, cultura);
+  const nomeGerado = nomeDaSafra(temporada, escopo, cultura);
+  useEffect(() => {
+    if (editing) return;
+    setCodigo(codigoGerado);
+    setNome(nomeGerado);
+  }, [editing, codigoGerado, nomeGerado]);
+
+  /* ⚠ A SAFRA JÁ EXISTENTE NÃO É ERRO A DESCOBRIR NO SALVAR. `cliente_id + codigo` é
+     UNIQUE; sem este aviso, o operador preenche tudo e leva um erro de banco no fim.
+     ⚠ E TAMBÉM SE ESTIVER INATIVA — é o caso mais comum: a safra do ano passado foi
+     inativada e agora se quer a nova. Reativar é diferente de criar duplicada. */
+  const safraExistente = !editing && codigoGerado
+    ? safras.find(x => (x.codigo ?? '') === codigoGerado) ?? null
+    : null;
+
   const openNew = () => {
     setEditing(null);
     setNome('');
     setCodigo('');
     setEscopo('');
+    setCultura('');
+    setTemporada(temporadaDeReferencia(new Date()));
+    setMaisAberto(false);
     setOrdemRaw('');
     setDescricao('');
     setObservacoes('');
@@ -124,6 +159,13 @@ export function FinV2SafrasTab() {
     setCodigo(s.codigo ?? '');
     // Escopo legado NULL inicia sem seleção; salvamento exige escolha.
     setEscopo(s.escopo_negocio ?? '');
+    /* ⚠ NA EDIÇÃO, TEMPORADA E CULTURA SAEM DO CÓDIGO GRAVADO, que é onde elas moram.
+       Sem isto o modal abriria com a temporada de hoje sobre uma safra de 2021, e o código
+       — que continua travado — passaria a discordar dos campos que o geraram. */
+    const m = /^(\d{2}\/\d{2})-(.+)$/.exec(s.codigo ?? '');
+    setTemporada(m ? m[1] : temporadaDeReferencia(new Date()));
+    setCultura(m ? (CULTURAS.find(c => c.sigla === m[2])?.valor ?? '') : '');
+    setMaisAberto(false);
     setOrdemRaw(String(s.ordem_exibicao)); // integer real (distingue 0 explícito)
     setDescricao(s.descricao ?? '');
     setObservacoes(s.observacoes ?? '');
@@ -296,61 +338,134 @@ export function FinV2SafrasTab() {
 
       {/* ─── Dialog Criar/Editar ─── */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="flex flex-col gap-0 p-0 w-[calc(100vw-2rem)] max-w-2xl max-h-[calc(100dvh-2rem)] overflow-hidden">
-          <DialogHeader className="flex-shrink-0 px-6 pt-6 pb-3">
-            <DialogTitle>{editing ? 'Editar Safra' : 'Nova Safra'}</DialogTitle>
+        {/* ⚠ SEM ROLAGEM, e é por isso que o "Mais…" existe: com os seis campos abertos o
+            modal passava da tela e o botão Criar caía abaixo da dobra. Cinco campos é o
+            que o cadastro pede de verdade; ordem, descrição e observações são de quem já
+            sabe o que quer. Medidas do A18: rótulo 10px, campo h-8, cabeçalho azul. */}
+        <DialogContent className="max-w-md gap-0 overflow-hidden p-0">
+          <DialogHeader className="bg-primary px-4 py-2.5">
+            <DialogTitle className="text-[13px] text-primary-foreground">
+              {editing ? 'Editar safra' : 'Nova safra'}
+            </DialogTitle>
           </DialogHeader>
-          {/* Corpo rolável: só esta área rola; cabeçalho e rodapé permanecem fixos. */}
-          <div className="flex-1 min-h-0 overflow-y-auto px-6 py-1 space-y-3">
+
+          <div className="space-y-2.5 px-4 py-3">
+            {/* 1. ESCOPO — pílulas, porque são dois e a escolha muda o resto do formulário. */}
             <div>
-              <Label>Nome *</Label>
-              <Input value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Safra 25/26 Soja" />
+              <Label className="text-[10px]">Escopo <span className="text-destructive">*</span></Label>
+              <div className="mt-0.5 flex gap-1">
+                {(['pecuaria', 'agricultura'] as const).map(v => (
+                  <button key={v} type="button"
+                    onClick={() => { setEscopo(v); if (v === 'pecuaria') setCultura(''); }}
+                    className={`h-8 flex-1 rounded-md border text-[12px] transition-colors ${
+                      escopo === v ? 'border-primary bg-primary text-primary-foreground'
+                                   : 'bg-card hover:bg-muted/50'}`}>
+                    {v === 'pecuaria' ? 'Pecuária' : 'Agricultura'}
+                  </button>
+                ))}
+              </div>
+              {escopo && <p className="mt-1 text-[10px] text-muted-foreground">{ESCOPO_AJUDA[escopo]}</p>}
             </div>
+
+            {/* 2. CULTURA — só na agricultura; na pecuária a pergunta não existe. */}
+            {escopo === 'agricultura' && (
+              <div>
+                <Label className="text-[10px]">Cultura <span className="text-destructive">*</span></Label>
+                <Select value={cultura} onValueChange={setCultura}>
+                  <SelectTrigger className="mt-0.5 h-8 text-[12px]"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectContent>
+                    {CULTURAS.map(c => (
+                      <SelectItem key={c.valor} value={c.valor} className="text-[12px]">
+                        {c.label} <span className="text-muted-foreground">({c.sigla})</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* 3. TEMPORADA — julho a junho; a lista sai da mesma lib do código. */}
             <div>
-              <Label>Código *</Label>
-              <Input value={codigo} onChange={e => setCodigo(e.target.value)} placeholder="Ex: 25/26-SOJ" className="font-mono" />
-            </div>
-            <div>
-              <Label>Escopo do negócio *</Label>
-              <Select value={escopo} onValueChange={(v) => setEscopo(v as EscopoNegocio)}>
-                <SelectTrigger><SelectValue placeholder="Selecione o escopo" /></SelectTrigger>
+              <Label className="text-[10px]">Temporada <span className="text-destructive">*</span></Label>
+              <Select value={temporada} onValueChange={setTemporada}>
+                <SelectTrigger className="mt-0.5 h-8 text-[12px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="pecuaria">Pecuária</SelectItem>
-                  <SelectItem value="agricultura">Agricultura</SelectItem>
-                  <SelectItem value="administrativo">Administrativo</SelectItem>
+                  {temporadasDisponiveis(new Date()).map(t => (
+                    <SelectItem key={t} value={t} className="text-[12px]">{t}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
-              {escopo && (
-                <p className="text-[11px] text-muted-foreground mt-1">{ESCOPO_AJUDA[escopo]}</p>
-              )}
             </div>
-            <div>
-              <Label>Ordem de exibição (opcional)</Label>
-              <Input
-                value={ordemRaw}
-                onChange={e => setOrdemRaw(e.target.value)}
-                inputMode="numeric"
-                placeholder="0"
-                className="font-mono"
-              />
-              <p className="text-[11px] text-muted-foreground mt-1">0 = ordem padrão · 1, 2, 3… = prioridade manual</p>
+
+            {/* 4. CÓDIGO travado + NOME sugerido. */}
+            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)] gap-2">
+              <div>
+                <Label className="text-[10px]">Código</Label>
+                <Input value={codigo} readOnly tabIndex={-1}
+                  title="Gerado pela temporada e pelo escopo — é a chave da safra e não se digita."
+                  className="mt-0.5 h-8 cursor-default bg-muted font-mono text-[12px]" />
+              </div>
+              <div>
+                <Label className="text-[10px]">Nome <span className="text-destructive">*</span></Label>
+                <Input value={nome} onChange={e => setNome(e.target.value)}
+                  className="mt-0.5 h-8 text-[12px]" />
+              </div>
             </div>
-            <div>
-              <Label>Descrição</Label>
-              <Textarea value={descricao} onChange={e => setDescricao(e.target.value)} rows={3} className="resize-none min-h-0" />
-            </div>
-            <div>
-              <Label>Observações</Label>
-              <Textarea value={observacoes} onChange={e => setObservacoes(e.target.value)} rows={3} className="resize-none min-h-0" />
-            </div>
-            <div className="flex items-center gap-2">
+
+            {/* ⚠ AVISA ANTES, NÃO DEPOIS: a unicidade é do banco e sem isto o erro só
+                apareceria no Criar, com o formulário todo preenchido. */}
+            {safraExistente && (
+              <div className="rounded-md border border-amber-400 bg-amber-50 px-2 py-1.5 text-[11px] leading-snug text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+                <b>{codigoGerado}</b> já existe{safraExistente.ativa ? '' : ' (inativa)'}.{' '}
+                <button type="button" className="underline underline-offset-2"
+                  onClick={() => { setDialogOpen(false); openEdit(safraExistente); }}>
+                  {safraExistente.ativa ? 'Abrir' : 'Abrir para reativar'}
+                </button>{' '}em vez de criar outra.
+              </div>
+            )}
+
+            {/* 5. MAIS — o que quase ninguém mexe fica fora do caminho. */}
+            <button type="button" onClick={() => setMaisAberto(v => !v)}
+              className="text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground">
+              {maisAberto ? 'Menos' : 'Mais…'}
+            </button>
+            {maisAberto && (
+              <div className="space-y-2.5 border-t pt-2.5">
+                <div>
+                  <Label className="text-[10px]">Ordem de exibição</Label>
+                  <Input value={ordemRaw} onChange={e => setOrdemRaw(e.target.value)} inputMode="numeric"
+                    placeholder="0" className="mt-0.5 h-8 font-mono text-[12px]" />
+                  <p className="mt-1 text-[10px] text-muted-foreground">0 = ordem padrão · 1, 2, 3… = prioridade manual</p>
+                </div>
+                <div>
+                  <Label className="text-[10px]">Descrição</Label>
+                  <Textarea value={descricao} onChange={e => setDescricao(e.target.value)} rows={2}
+                    className="mt-0.5 min-h-0 resize-none text-[12px]" />
+                </div>
+                <div>
+                  <Label className="text-[10px]">Observações</Label>
+                  <Textarea value={observacoes} onChange={e => setObservacoes(e.target.value)} rows={2}
+                    className="mt-0.5 min-h-0 resize-none text-[12px]" />
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2 pt-0.5">
               <Switch checked={ativa} onCheckedChange={setAtiva} />
-              <Label>Safra ativa</Label>
+              <Label className="text-[11px]">Safra ativa</Label>
             </div>
           </div>
-          <DialogFooter className="flex-shrink-0 px-6 py-4 border-t">
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={save} disabled={isSaving}>{isSaving ? 'Salvando...' : (editing ? 'Salvar' : 'Criar')}</Button>
+          <DialogFooter className="items-center gap-2 border-t px-4 py-2.5">
+            {/* O botão desabilitado diz por quê, ao lado — regra da casa. */}
+            {!editing && !codigo && (
+              <span className="mr-auto text-[10px] leading-tight text-muted-foreground">
+                {escopo === 'agricultura' ? 'Escolha a cultura.' : 'Escolha o escopo.'}
+              </span>
+            )}
+            <Button variant="outline" size="sm" onClick={() => setDialogOpen(false)}>Cancelar</Button>
+            <Button size="sm" onClick={save} disabled={isSaving || (!editing && !codigo)}>
+              {isSaving ? 'Salvando...' : (editing ? 'Salvar' : 'Criar')}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
