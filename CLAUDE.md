@@ -188,6 +188,21 @@ no mesmo arquivo.
   MUDOS porque a chamada mora dentro de uma arrow, que o compilador trata
   como uso diferido. Regra que fica: funcao usada por `.some/.map/.filter/
   .find` executados no corpo do componente declara-se ACIMA do uso.
+- TDZ NO RENDER — comando OFICIAL:
+      npm run check:tdz
+  E' o gate que nasceu do defeito acima (script em scripts/check-tdz-render.mjs).
+  Acusa funcao chamada ANTES de declarada NO MESMO ESCOPO — o unico caso que
+  derruba a tela; uso dentro de handler/effect e declaracao de modulo passam.
+  Sai 1 e nomeia arquivo:linha quando acha. Conserto e' mover a declaracao para
+  cima do primeiro uso: so' ordem, nunca logica.
+  ⚠ O SCRIPT SE AUTO-TESTA ANTES DE VARRER, com um fixture do proprio
+  `entradaDoCompromisso`; se o detector parar de achar o caso conhecido ele sai
+  com codigo 2 em vez de dizer "nenhum". "Zero achados" so' vale quando a busca
+  provou que sabe achar.
+  ⚠ HEURISTICA DE INDENTACAO, por medicao: a pilha de chaves errou 3 dos 20 casos
+  reais do repo (arrow que devolve objeto, homonimo de `for-of`, assinatura
+  multilinha) e a indentacao acertou os 20. Falso negativo e' o lado certo para
+  errar — o gate existe para o que quebra, nao para o que e' feio.
 
 ## RELATORIO DE EXECUCAO (formato obrigatorio, todo ciclo)
 1. TSC: N erros (baseline 73) — numero explicito, obtido com
