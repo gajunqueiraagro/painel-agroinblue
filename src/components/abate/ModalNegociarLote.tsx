@@ -169,6 +169,31 @@ export function ModalNegociarLote({ lote, linha, cenario, onAplicar, onFechar, s
   const c = useMemo(() => buildAbateCalculation(paraCalculo(atual, lote)), [atual, lote]);
 
   /**
+   * O líquido GRAVADO confere com os campos gravados? — ABATE-DECOMPOSICAO-100.
+   *
+   * ⚠ DIVERGÊNCIA É INFORMAÇÃO, NUNCA ALGO A ACOMODAR. Na OC 9b2b5e6b os quatro lotes
+   * foram gravados certos (375, 375, 362 e preço pelo total) e reescritos com 362 em três
+   * deles; o líquido caiu junto, e foi restaurado À MÃO pondo R$ 13,00/@ em "lista/trace" —
+   * um bônus que a NF não tem. O total voltou a fechar e a decomposição passou a mentir:
+   * some no R$/@ da lista e em qualquer comparação entre frigoríficos. Nenhum código fazia
+   * isso; a tela é que não dizia que o número tinha deixado de bater.
+   * ⚠ SÓ NA ABERTURA. `trocar()` recalcula o líquido a cada tecla, então em memória ele
+   * fecha sempre — a única divergência possível é entre o que o BANCO guarda e o que os
+   * campos do banco produzem. Por isso a comparação é contra `linha`, a prop, e fica presa
+   * ao primeiro render: comparar contra `atual` acusaria a própria digitação.
+   */
+  const divergenciaGravada = useMemo(() => {
+    if (!linha || linha.valorLiquido == null) return null;
+    const doCalculo = buildAbateCalculation(paraCalculo(linha, lote)).valorLiquido;
+    const dif = linha.valorLiquido - doCalculo;
+    /* ⚠ 0,015 E NÃO 0,01: `314915.62 - 314915.61` dá 0.010000000009 em ponto flutuante, e
+       comparar com 0,01 acusaria o próprio arredondamento. A folga fica entre um centavo
+       (ruído) e dois (diferença de verdade). */
+    return Math.abs(dif) > 0.015 ? dif : null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- de propósito: é a foto da abertura
+  }, []);
+
+  /**
    * Aplica a mudança e reescreve os TRÊS derivados persistidos.
    *
    * ⚠ `precoArroba` ENTROU NESSA LISTA. Com a fonte `total`, ele deixa de ser digitado e
@@ -234,6 +259,23 @@ export function ModalNegociarLote({ lote, linha, cenario, onAplicar, onFechar, s
         <DialogDescription className="sr-only">
           Informe carcaça, preço, bônus e descontos deste lote no cenário {cenario}.
         </DialogDescription>
+
+        {/* ⚠ A FAIXA NÃO CONSERTA NADA, E É ESSE O PONTO: ela diz o tamanho da diferença e
+            deixa a decisão com quem conhece a nota. Não há botão de "aceitar", que viraria
+            outro jeito de acomodar.
+            ⚠ E ELA NÃO SOME AO CORRIGIR, de propósito: o diagnóstico é sobre o que está
+            GRAVADO, e some na próxima abertura, quando o banco já tiver o valor certo.
+            Fazê-la reagir à digitação exigiria comparar contra `atual` — e aí ela acusaria
+            cada tecla, já que `trocar()` reescreve o líquido a cada mudança. */}
+        {divergenciaGravada != null && (
+          <div className="shrink-0 border-b border-amber-300 bg-amber-50 px-4 py-1.5 text-[11px] leading-snug text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+            <b className="font-semibold">O líquido gravado não confere com os campos.</b>{' '}
+            Gravado {formatMoeda(linha?.valorLiquido ?? 0)}; os campos deste lote dão{' '}
+            {formatMoeda((linha?.valorLiquido ?? 0) - divergenciaGravada)} — diferença de{' '}
+            {formatMoeda(Math.abs(divergenciaGravada))}. Corrija o campo que está errado
+            (preço, carcaça ou bônus); não use bônus para fechar a diferença.
+          </div>
+        )}
 
         <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[1fr_330px]">
           {/* ── ESQUERDA: as três abas ─────────────────────────────────────── */}
