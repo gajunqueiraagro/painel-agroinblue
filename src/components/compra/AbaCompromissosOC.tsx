@@ -1376,19 +1376,24 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
                       <td className="py-0.5 pr-2">{p.sequencia}</td>
                       <td className="py-0.5 pr-2">
                         {parcelaEditavel ? (
-                          <input type="date" defaultValue={p.vencimento ?? ''}
+                          /* ⚠ O DATEPICKER DA CASA, nunca `<input type="date">` — A20. O
+                             nativo abre o calendário do NAVEGADOR: outro idioma visual, outro
+                             formato por locale e nenhum controle sobre o que ele aceita. Já
+                             foi corrigido uma vez (PR-OC-DATA-PADRAO-01) e voltou aqui.
+                             ⚠ SALVA NA MUDANÇA, e só quando MUDOU de verdade: o DatePicker
+                             emite ao escolher a data (não há blur de teclado nativo), e
+                             reabrir sem alterar não pode custar uma escrita e um avanço de
+                             versão. */
+                          <DatePicker
+                            value={p.vencimento ?? ''}
+                            size="compact"
                             disabled={ocApi.saving}
-                            title="Vencimento — salva ao sair do campo."
-                            /* ⚠ SALVA NO BLUR, e só quando MUDOU: um `onChange` gravaria a
-                               cada tecla do teclado de data, e reabrir o campo sem alterar
-                               nada não pode custar uma escrita e um bump de versão. */
-                            onBlur={(e) => {
-                              const novo = e.target.value || null;
-                              if (novo === (p.vencimento ?? null) || !p.parcelaId) return;
-                              if (versao == null) return;
-                              void ocApi.alterarParcela(versao, p.parcelaId, { vencimento: novo });
-                            }}
-                            className="h-6 w-[112px] rounded border bg-card px-1 text-[10px] tabular-nums" />
+                            className="w-[112px]"
+                            onChange={(novo) => {
+                              const v = novo || null;
+                              if (v === (p.vencimento ?? null) || !p.parcelaId || versao == null) return;
+                              void ocApi.alterarParcela(versao, p.parcelaId, { vencimento: v });
+                            }} />
                         ) : (
                           <span title={motivoTravado} className="cursor-default">{fmtData(p.vencimento)}</span>
                         )}
@@ -1396,25 +1401,32 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
                       <td className="py-0.5 pr-2 text-right whitespace-nowrap">{brl(p.valor)}</td>
                       <td className="py-0.5 pr-2">
                         {parcelaEditavel ? (
-                          /* ⚠ `select` NATIVO, e não o do design system: a linha tem 10px e
-                             altura de 20; o Select do shadcn traz altura e padding próprios
-                             que quebrariam a densidade da tabela inteira por uma célula. */
-                          <select defaultValue={p.forma ?? ''} disabled={ocApi.saving}
-                            title="Forma de pagamento — salva ao sair do campo."
-                            onBlur={(e) => {
-                              const nova = e.target.value || null;
-                              if (nova === (p.forma ?? null) || !p.parcelaId || versao == null) return;
-                              void ocApi.alterarParcela(versao, p.parcelaId, { forma: nova });
-                            }}
-                            className="h-6 w-[104px] rounded border bg-card px-1 text-[10px]">
-                            <option value="">—</option>
-                            {/* ⚠ A FORMA GRAVADA ENTRA NA LISTA mesmo fora do vocabulário:
-                                a coluna é `text` sem CHECK, e uma parcela antiga com forma
-                                que não está no catálogo não pode perdê-la só por ser aberta. */}
-                            {(p.forma && !FORMAS_PAGAMENTO.includes(p.forma)
-                              ? [p.forma, ...FORMAS_PAGAMENTO] : FORMAS_PAGAMENTO)
-                              .map(f => <option key={f} value={f}>{f}</option>)}
-                          </select>
+                          /* ⚠ O SELECT DA CASA, não o nativo. A primeira versão usou
+                             `<select>` cru alegando densidade — e "não cabe em 10px" é
+                             argumento para ajustar o componente, não para sair do padrão:
+                             um select nativo abre o menu do sistema operacional, com outra
+                             fonte e outro comportamento em cada máquina. */
+                          <Select
+                            value={p.forma ?? '__sem__'}
+                            disabled={ocApi.saving}
+                            onValueChange={(nova) => {
+                              const v = nova === '__sem__' ? null : nova;
+                              if (v === (p.forma ?? null) || !p.parcelaId || versao == null) return;
+                              void ocApi.alterarParcela(versao, p.parcelaId, { forma: v });
+                            }}>
+                            <SelectTrigger className="h-6 w-[104px] px-1.5 text-[10px]">
+                              <SelectValue placeholder="—" />
+                            </SelectTrigger>
+                            <SelectContent className={darkSelectClass}>
+                              <SelectItem value="__sem__" className="text-[11px]">—</SelectItem>
+                              {/* ⚠ A FORMA GRAVADA ENTRA NA LISTA mesmo fora do vocabulário:
+                                  a coluna é `text` sem CHECK, e uma parcela antiga com forma
+                                  fora do catálogo não pode perdê-la só por ser aberta. */}
+                              {(p.forma && !FORMAS_PAGAMENTO.includes(p.forma)
+                                ? [p.forma, ...FORMAS_PAGAMENTO] : FORMAS_PAGAMENTO)
+                                .map(f => <SelectItem key={f} value={f} className="text-[11px]">{f}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
                         ) : (
                           <span title={motivoTravado} className="cursor-default text-[10px] text-muted-foreground">
                             {p.forma ?? '—'}
@@ -1561,7 +1573,12 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
       {confirmarParcela && (
         <Dialog open onOpenChange={(o) => { if (!o) setConfirmarParcela(null); }}>
           <DialogContent className="max-w-sm">
-            <DialogHeader><DialogTitle>Lançar parcela</DialogTitle></DialogHeader>
+            {/* ⚠ A MEDIDA VEM SEMPRE EXPLÍCITA — A18. O `DialogTitle` do design system nasce
+                `text-lg` (18px) e o `Description`, `text-sm` (14px): quem não passa a classe
+                herda a escala de um modal de página inteira dentro de uma tela de 10-12px, e
+                foi assim que estes três diálogos ficaram fora do padrão sem ninguém escrever
+                um tamanho errado. */}
+            <DialogHeader><DialogTitle className="text-[13px]">Lançar parcela</DialogTitle></DialogHeader>
             <div className="text-[13px]">Gerar título de <b>{brl(confirmarParcela.valor)}</b> com vencimento <b>{fmtData(confirmarParcela.vencimento)}</b>?</div>
             <DialogFooter>
               <Button variant="outline" size="sm" onClick={() => setConfirmarParcela(null)}>Cancelar</Button>
@@ -1580,12 +1597,12 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
             onInteractOutside={(e) => { if (estRodando) e.preventDefault(); }}
             onEscapeKeyDown={(e) => { if (estRodando) e.preventDefault(); }}>
             <DialogHeader>
-              <DialogTitle>
+              <DialogTitle className="text-[13px]">
                 {estAlvo.nivel === 'materializacao' ? 'Estornar lançamento'
                 : estAlvo.nivel === 'programacao' ? 'Cancelar programação'
                 : 'Cancelar compromisso'}
               </DialogTitle>
-              <DialogDescription>
+              <DialogDescription className="text-[11px]">
                 {estEtapa === 1
                   ? 'Confira o que será desfeito antes de continuar.'
                   : 'Informe o motivo. Ele fica registrado na auditoria da operação.'}
@@ -2241,7 +2258,7 @@ function ProgramarDialog({ onClose, onSubmit, saving, clienteId, valorCompromiss
       {confirmarParcial && (
         <Dialog open onOpenChange={(o) => { if (!o) setConfirmarParcial(false); }}>
           <DialogContent className="max-w-sm">
-            <DialogHeader><DialogTitle>Programação parcial</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle className="text-[13px]">Programação parcial</DialogTitle></DialogHeader>
             <div className="text-[13px]">
               As parcelas somam <b>{brl(soma)}</b> de <b>{brl(tetoCompromisso)}</b>. Restarão <b>{brl(restanteCompromisso)}</b> a programar. Confirmar programação parcial?
             </div>

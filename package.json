@@ -10,6 +10,7 @@
     "build:proto": "node scripts/run-vite-safe.mjs build proto",
     "lint": "eslint .",
     "check:tdz": "node scripts/check-tdz-render.mjs",
+    "check:ui-nativo": "node scripts/check-ui-nativo.mjs",
     "preview:proto": "node scripts/run-vite-safe.mjs preview proto",
     "test": "vitest run",
     "test:watch": "vitest",

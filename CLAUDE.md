@@ -291,3 +291,19 @@ preview que o cabecalho nao sai da tela ao rolar.
 - ⚠ FUNDO OPACO E `z` ACIMA das linhas no bloco fixo. Transparente e'
   pior que nao fixar: o conteudo passa por baixo do numero que se esta'
   conferindo.
+- ⚠ CONTROLE NATIVO NUNCA — comando OFICIAL:
+      npm run check:ui-nativo
+  `<input type="date">` e `<select>` crus abrem o calendario e o menu do
+  SISTEMA OPERACIONAL: outro idioma visual, outro formato de data por
+  locale, outra fonte em cada maquina. Use `DatePicker` (com
+  `size="compact"` quando a linha for densa) e `Select` de
+  `@/components/ui`.
+  ⚠ "NAO CABE EM 10px" NAO E' EXCECAO: ajusta-se o componente, nunca se
+  volta ao nativo. Ja foi corrigido uma vez (PR-OC-DATA-PADRAO-01) e
+  voltou na linha da parcela em 06/09 — por isso virou gate.
+  ⚠ O GATE TEM BASELINE, como o TSC: 42 arquivos herdados (46 `type=date`,
+  25 `<select>`). Falhar por eles pararia todo PR e o gate seria desligado
+  na primeira semana — que e' como um gate morre. Ele acusa ocorrencia
+  NOVA: arquivo fora da lista, ou arquivo da lista com MAIS do que a
+  baseline. Reduzir e' sempre aceito; atualize a baseline no mesmo PR com
+  `node scripts/check-ui-nativo.mjs --baseline`.
