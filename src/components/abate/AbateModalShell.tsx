@@ -25,7 +25,6 @@
  * — nenhum deles tem consumidor nesta aba. Entram quando a aba que precisar deles chegar.
  */
 import { useState, useMemo } from 'react';
-import { produtoOCCompromissoLote } from '@/lib/financeiro/produtoOC';
 import { useStatusPilares } from '@/hooks/useStatusPilares';
 import { BlocoTopoAba } from '@/components/ui/bloco-topo-aba';
 import { ReabrirP1Dialog } from '@/components/ReabrirP1Dialog';
@@ -55,7 +54,7 @@ import { useOcCompromissos } from '@/hooks/useOcCompromissos';
 import type { ReactNode } from 'react';
 import type { LinhaPrevisao, RotulosCompromissos } from '@/components/compra/AbaCompromissosOC';
 import { siglaCategoria } from '@/lib/financeiro/produtoOC';
-import { subcentroVendaPorCategoria, SUBCENTRO_DESPESA_VENDA, SUBCENTRO_ADIANTAMENTO_BOITEL } from '@/hooks/useOperacaoLiquidacao';
+import { subcentroVendaPorCategoria, SUBCENTRO_ADIANTAMENTO_BOITEL } from '@/hooks/useOperacaoLiquidacao';
 import { addDays, format, parseISO } from 'date-fns';
 import type { RecebimentoApi } from '@/hooks/useOperacaoRecebimento';
 import type { DocumentosApi } from '@/hooks/useOperacaoDocumentos';
@@ -658,28 +657,20 @@ export function AbateModalShell({
   }, [eventosApi?.eventos]);
 
   /**
-   * O Funrural de cada lote, como proposta de obrigação — só o abate sabe montá-la.
+   * ⚠ O FUNRURAL NÃO VIRA COMPROMISSO — OC-FUNRURAL-RETIDO (06/09).
    *
-   * ⚠ O VALOR SAI DA LIB, não de uma coluna: `funrural_valor` é o que o operador digitou
-   * (percentual OU reais), e o total em dinheiro é `buildAbateCalculation` quem resolve.
-   * Ler a coluna crua daria 1,5 no lugar de R$ 614,24 quando a fonte for percentual.
-   * ⚠ SÓ QUANDO HÁ: lote sem Funrural não vira linha de zero — obrigação de R$ 0,00
-   * afirmaria um imposto que não existe.
+   * Ele era proposto como obrigação de R$ 1.925,87 ao lado do principal, e isso cobrava
+   * duas vezes o mesmo imposto: no abate o frigorífico RETÉM o Funrural/SENAR na fonte, e
+   * `valor_liquido` já é líquido dele — conferido na NF 6713, em que base + bônus −
+   * funrural = líquido nos quatro lotes. Propondo a obrigação, o produtor receberia o
+   * líquido E ficaria devendo o imposto por fora, e o Total proposto nunca fechava com o
+   * Acordado (961.008,30 contra 959.082,43 na OC do Agnaldo).
+   * ⚠ O FUNRURAL NÃO SUMIU DO SISTEMA, mudou de leitor: continua gravado em
+   * `zoo_operacao_abate.funrural_valor` e vai à DRE como dedução de receita (5030), sem
+   * caixa. Quem o lê é o resultado, não o financeiro — que é onde ele sempre esteve.
+   * ⚠ TAXA PAGA POR FORA continua existindo e continua sendo "Novo compromisso" manual,
+   * natureza obrigação: aquela tem caixa de verdade e ninguém a retém na fonte.
    */
-  const propostasFunrural = useMemo(() => lotesDoAbate.flatMap(l => {
-    const c = buildAbateCalculation(paraCalculo(linhasDoAbate.get(l.id) ?? linhaVazia(l.id), l));
-    if (!(c.funruralTotal > 0)) return [];
-    return [{
-      chave: `funrural:${l.id}`,
-      natureza: 'obrigacao' as const,
-      descricao: `${produtoOCCompromissoLote('abate', l.quantidade, l.categoria ?? '')} — Funrural e impostos`,
-      caminho: SUBCENTRO_DESPESA_VENDA,
-      subcentro: SUBCENTRO_DESPESA_VENDA,
-      valor: c.funruralTotal,
-      loteId: l.id,
-      componente: 'funrural',
-    }];
-  }), [lotesDoAbate, linhasDoAbate]);
 
   /* Há edição do abate ainda não gravada? O rodapé zera este mapa ao salvar. */
   const temRascunhoAbate = (abateLinhas?.size ?? 0) > 0;
@@ -886,7 +877,6 @@ export function AbateModalShell({
                   pelo `verboOC`, e o filtro de centro de custo da compra se desliga sozinho.
                   O vazio honesto sai: agora ha o que mostrar. */}
               <AbaFinanceiroOC
-                propostasExtras={propostasFunrural}
                 abrirGerarAoMontar={ofereceGerarCompromissos}
                 api={liquidacaoApi}
                 operacaoPronta={!!ocOperacaoId}
