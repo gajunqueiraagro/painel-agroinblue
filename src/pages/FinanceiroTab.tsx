@@ -42,6 +42,17 @@ interface Props {
   onEditarConsumo?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; anoFiltro: string; mesFiltro: string }) => void;
   /** Alerta contextual → navega para a Central de Operações Comerciais. */
   onVerOperacoes?: () => void;
+  /**
+   * O host garante altura e NÃO rola — ZOOT-LISTA-02.
+   *
+   * ⚠ É PROP, E NÃO CLASSE SEMPRE LIGADA, porque esta tela tem TRÊS hosts: `V2Index`
+   * (seção `conferencia-lancamentos`, que entrou no app-shell), `Index` v1 e o
+   * `EvolucaoRebanhoHubTab`. Só o primeiro dá altura ao filho. Ligar `overflow-hidden`
+   * nos outros dois não faria a tabela rolar — faria o conteúdo ser CORTADO, que é a
+   * falha silenciosa descrita no A21 e a pior das duas. Sem a prop, tudo segue como hoje:
+   * a página rola e a tabela cresce.
+   */
+  emAppShell?: boolean;
 }
 
 export type SubAba = 'nascimento' | 'compra' | 'transferencia_entrada' | 'abate' | 'venda' | 'transferencia_saida' | 'consumo' | 'morte' | 'historico';
@@ -425,8 +436,12 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
       {lancamentos.length > 1 && (() => {
         const { totals, pesoVivoMedio, arrobaMedio, rendPonderado, liqArroba, liqCabeca, liqKgTotal }
           = totaisDaLista(lancamentos);
+        /* ⚠ `financeiro-table-foot` EXISTIA NO CSS E NENHUM `tfoot` A USAVA — sticky
+           bottom-0 pronto desde sempre, ligado agora (ZOOT-LISTA-02). A linha TOTAL é a
+           resposta da tela: escondida abaixo da dobra, obriga a rolar até o fim para saber
+           quanto deu — e com "Todos os meses" isso são centenas de linhas. */
         return (
-           <tfoot>
+          <tfoot className="financeiro-table-foot print:static">
             <tr className="bg-primary text-primary-foreground">
               <td className={`${TABLE_FOOT_CELL} sticky left-0 z-20 bg-primary border-r border-primary-foreground/15 md:static md:border-r-0`}>TOTAL</td>
               {showTipo && <td className={TABLE_FOOT_CELL}></td>}
@@ -581,7 +596,7 @@ function getTopTabFromSubAba(subAba?: SubAba): TopTab {
   return 'entradas';
 }
 
-export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial, modoMovimentacao, filtroAnoInicial, filtroMesInicial, filtroStatusInicial, filtroCategoriaInicial, onBack, drillDownLabel, onEditarAbate, onEditarVenda, onEditarCompra, onEditarTransferencia, onEditarReclass, onEditarMorte, onEditarConsumo, onVerOperacoes }: Props) {
+export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial, modoMovimentacao, filtroAnoInicial, filtroMesInicial, filtroStatusInicial, filtroCategoriaInicial, onBack, drillDownLabel, onEditarAbate, onEditarVenda, onEditarCompra, onEditarTransferencia, onEditarReclass, onEditarMorte, onEditarConsumo, onVerOperacoes, emAppShell }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const { count: opsEmAndamento } = useOperacoesComerciaisEmAndamento();
   const fazendaMap = useMemo(() => {
@@ -603,6 +618,17 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
       setSubAba(subAbaInicial);
     }
   }, [subAbaInicial]);
+
+  /* Saídas abre em Abates — ZOOT-LISTA-02, item 3.
+     ⚠ OS TRÊS BOTÕES JÁ FAZIAM ISSO (`if (t.id === 'saidas') setSubAba('abate')`); o que
+     faltava era o caminho em que ninguém clica: montar já em Saídas, ou voltar a ela com
+     uma sub-aba de ENTRADA no estado. Aí `subTypes` vira EXIT_TYPES e o `subAba` guardado
+     não está na lista — a tela abre sem sub-filtro correspondente.
+     ⚠ E RESPEITA O DRILL: só corrige quando a sub-aba atual NÃO é de saída. Quem chegou
+     por "ver os consumos deste mês" continua no consumo. */
+  useEffect(() => {
+    if (topTab === 'saidas' && !EXIT_TYPES.includes(subAba)) setSubAba('abate');
+  }, [topTab, subAba]);
 
   const { data: anosDisponiveis = [String(new Date().getFullYear())] } = useAnosDisponiveis();
 
@@ -900,9 +926,12 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
   }
 
   return (
-    <div className="w-full max-w-full animate-fade-in pb-20">
+    <div className={`w-full max-w-full animate-fade-in ${
+      /* No app-shell a altura vem do flex do host e o `pb-20` sairia empurrando a tabela
+         para fora da tela; fora dele, nada muda. */
+      emAppShell ? 'flex min-h-0 flex-col md:flex-1' : 'pb-20'}`}>
       {/* ── Top panel ── */}
-      <div className="bg-primary text-primary-foreground px-3 py-2 space-y-1.5">
+      <div className="bg-primary text-primary-foreground px-3 py-2 space-y-1.5 shrink-0">
         {(onBack || drillDownLabel) && (
           <div className="space-y-1.5 border-b border-primary-foreground/10 pb-2">
             {onBack && (
@@ -1051,19 +1080,30 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
       </div>
 
       {/* ── Content area: tabela em largura total ── */}
-      <div className="px-2 pt-1.5 pb-4">
-        {/* ⚠ O CABEÇALHO JÁ ERA `sticky` E NUNCA GRUDAVA — ZOOT-LISTA-01, item 1.
-            `.financeiro-table-head` (index.css) tem `position: sticky; top: 0; z-index: 30`
-            desde sempre, e os `th` já pintam `bg-primary`. O que faltava era o SCROLLPORT:
-            `overflow-x-auto` faz este div virar container de rolagem nos DOIS eixos, mas sem
-            altura ele nunca rola na vertical — quem rolava era a página, e o `thead` grudava
-            no topo de um div que subia junto. É o mesmo defeito que o V2Index descreve no
-            comentário do `appShell`: "o sticky do cabeçalho gruda no topo de uma tabela que
-            está saindo de cena junto".
-            Dar altura ao container põe a rolagem no nível certo e o cabeçalho passa a se
-            ancorar nele. N=170px é a soma do que fica acima (a conta está no relatório);
-            errar N muda quanto da tela a tabela ocupa, não se o cabeçalho gruda. */}
-        <div className="min-w-0 rounded-md border border-border/70 bg-card shadow-sm overflow-x-auto overflow-y-auto max-h-[calc(100vh-170px)]">
+      <div className={`px-2 pt-1.5 ${emAppShell ? 'min-h-0 flex-1 pb-2' : 'pb-4'}`}>
+        {/* ⚠ A ALTURA VEM DO FLEX, NÃO DE UM `calc(100vh - N)` — ZOOT-LISTA-02.
+            O 112 pôs `max-h-[calc(100vh-170px)]` aqui e funcionou até a homologação com
+            "Todos os meses": N é a soma do chrome de UM host, e esta tela tem três. Quem
+            sabe a altura disponível é o layout, não uma constante — por isso a seção entrou
+            no app-shell do V2Index e a medida agora desce por `flex-1 min-h-0`.
+            ⚠ O CABEÇALHO JÁ ERA `sticky` DESDE SEMPRE (`.financeiro-table-head`, index.css:
+            `position: sticky; top: 0; z-index: 30`). Nunca faltou o sticky: faltava o
+            SCROLLPORT. `overflow-x-auto` já fazia este div rolar nos dois eixos, mas sem
+            altura ele nunca rolava na vertical — quem rolava era a página, e o `thead`
+            grudava no topo de um div que subia junto.
+            ⚠ `scrollbar-gutter: stable` RESERVA A CALHA SEMPRE. Sem ela, a barra aparece
+            quando as linhas passam da altura e some quando não passam, e a largura útil
+            muda junto: as colunas dançam ao trocar de mês. A calha reservada é o que
+            cumpre "mesmo tamanho sempre" também na horizontal.
+            Fora do app-shell nada disto liga, e a tabela cresce como antes. */}
+        <div className={`min-w-0 rounded-md border border-border/70 bg-card shadow-sm overflow-x-auto overflow-y-auto ${
+          emAppShell
+            ? 'h-full [scrollbar-gutter:stable]'
+            /* Hosts sem app-shell (Index v1 e o hub) seguem com o `max-h` do 112: é o N de
+               UM host e por isso impreciso nos outros dois, mas tirá-lo devolveria a tabela
+               ao estado anterior, em que o cabeçalho não grudava em lugar nenhum. Fica até
+               esses hosts ganharem altura de verdade. */
+            : 'max-h-[calc(100vh-170px)]'}`}>
           {topTab === 'todas' ? (
             <UnifiedTable lancamentos={filtrados} onEdit={(l) => setDetalheId(l.id)} showTipo isGlobal={isGlobal} fazendaMap={fazendaMap} />
           ) : subAba === 'abate' ? (

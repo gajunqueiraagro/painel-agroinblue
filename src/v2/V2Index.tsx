@@ -1002,6 +1002,7 @@ export default function V2Index() {
       <V2ZootWrapper>
         {({ lancamentosTodosCenarios, removerLancamento, editarLancamento }) => (
           <FinanceiroTab
+            emAppShell
             lancamentos={lancamentosTodosCenarios}
             // drillFiltro presente → filtros vêm do drill da Conferência Categoria.
             // Caso contrário, comportamento legado (ano global, status realizado).
@@ -1345,9 +1346,14 @@ export default function V2Index() {
     mapaPastosOriginRef.current = false;
   }
 
-  // Seções em app-shell: a <section> não rola, o scroll vive dentro da aba.
-  // Ver o comentário no JSX da <section> para o porquê e para a regra da terceira.
-  const appShell = section === 'conciliacao' || section === 'mapa-pastos';
+  /* Seções em app-shell: a <section> não rola, o scroll vive dentro da aba.
+     Ver o comentário no JSX da <section> para o porquê.
+     ⚠ VIROU LISTA NA TERCEIRA, como o próprio comentário mandava — ZOOT-LISTA-02. Um
+     terceiro `||` já seria a forma de nunca mais alguém notar o padrão. Entrar aqui é a
+     única coisa que uma seção nova precisa fazer para que a altura pare de vir de
+     `calc(100vh - N)` chutado e passe a vir do flex. */
+  const SECOES_APP_SHELL = new Set(['conciliacao', 'mapa-pastos', 'conferencia-lancamentos']);
+  const appShell = SECOES_APP_SHELL.has(section);
 
   return (
     <div className="h-screen bg-background overflow-hidden flex">
