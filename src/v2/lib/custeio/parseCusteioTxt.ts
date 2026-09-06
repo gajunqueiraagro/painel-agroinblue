@@ -104,6 +104,26 @@ export function decodeTxt(buffer: ArrayBuffer): string {
   return new TextDecoder('windows-1252').decode(buffer);
 }
 
+/**
+ * A mesma decisão, para um PEDAÇO do arquivo — IMPORT-TXT-01.
+ *
+ * ⚠ A DETECÇÃO LIA O COMEÇO COM `.text()`, QUE É SEMPRE UTF-8. O relatório do Sistema de
+ * Compras vem em ISO-8859/cp1252 (`file` diz "ISO-8859 text"), então "Família:" chegava
+ * como "Fam\uFFFDlia:" e a âncora `/^fam[íi]lia\s*:/i` não casava — `[íi]` não é U+FFFD.
+ * Sem ela, `pareceCusteio` dizia não, o `.txt` caía no caminho do extrato e o operador via
+ * "O CSV não está num layout reconhecido". O parser já decodificava certo; quem não
+ * decodificava era quem decide para onde o arquivo vai.
+ * ⚠ `stream: true` NÃO É DETALHE. O corte em 64 KB pode partir um caractere multibyte no
+ * fim, e no modo normal isso vira um U+FFFD que faria um arquivo UTF-8 legítimo ser lido
+ * como cp1252 — trocar um defeito por outro, mais raro e mais difícil de ver. Em modo
+ * stream a sequência incompleta do fim fica pendente em vez de virar substituto.
+ */
+export function decodeTxtParcial(buffer: ArrayBuffer): string {
+  const utf8 = new TextDecoder('utf-8', { fatal: false }).decode(buffer, { stream: true });
+  if (!utf8.includes('\uFFFD')) return utf8;
+  return new TextDecoder('windows-1252').decode(buffer, { stream: true });
+}
+
 // ----------------------------------------------------------------------------
 // Número BR
 // ----------------------------------------------------------------------------

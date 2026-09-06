@@ -10,6 +10,7 @@ import { useImportacaoExtrato } from '@/hooks/useImportacaoExtrato';
 import { detectarTipoArquivo, type TipoArquivoImport } from '@/lib/financeiro/parser/detectarTipoArquivo';
 import { V2ImportLancamentosExcel } from '@/v2/pages/V2ImportLancamentosExcel';
 import CusteioTxtImportTab from '@/v2/pages/CusteioTxtImportTab';
+import { decodeTxtParcial } from '@/v2/lib/custeio/parseCusteioTxt';
 
 /**
  * ImportarBancoInline — a aba "Importar Extrato" do Financas, clonada INTEIRA:
@@ -60,9 +61,15 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
     /* ⚠ SÓ O COMEÇO DO ARQUIVO É LIDO PARA DETECTAR: as âncoras do custeio e a
        tag do OFX vivem no topo, e ler um extrato inteiro em memória só para
        decidir o tipo seria caro à toa. O parser do fluxo escolhido lê o resto. */
+    /* ⚠ `.text()` DECODIFICA SEMPRE COMO UTF-8, e o relatório de custeio vem em
+       cp1252: os acentos viravam U+FFFD, "Família:" não casava com a âncora e o
+       arquivo era mandado para o motor do extrato, que respondia "não está num
+       layout reconhecido". `decodeTxtParcial` é a mesma decisão que o parser do
+       custeio já tomava para o arquivo inteiro — faltava tomá-la aqui, onde se
+       escolhe o caminho. */
     const cabeca = a.name.toLowerCase().endsWith('.xlsx') || a.name.toLowerCase().endsWith('.xls')
       ? ''
-      : await a.slice(0, 64_000).text();
+      : decodeTxtParcial(await a.slice(0, 64_000).arrayBuffer());
     const { tipo: t, aviso } = detectarTipoArquivo(a.name, cabeca);
     if (!t) {
       /* ⚠ O AVISO NOMEIA O QUE PARECE SER. "Formato não reconhecido" manda o
