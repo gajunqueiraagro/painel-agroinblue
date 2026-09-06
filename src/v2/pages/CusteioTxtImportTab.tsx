@@ -32,11 +32,15 @@ import {
 
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertTriangle, CheckCircle2, Upload } from 'lucide-react';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
-import { useFinanceiroV2 } from '@/hooks/useFinanceiroV2';
+import { useFinanceiroV2, type LancamentoV2Form } from '@/hooks/useFinanceiroV2';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
 
 const brl = (n: number) =>
@@ -107,6 +111,14 @@ export default function CusteioTxtImportTab(
   /* Reler a memória depois de aprender: sem isto, lançar dois itens da mesma sub-família
      em sequência tentaria INSERIR o alias duas vezes e a segunda bateria no UNIQUE. */
   const [recarregarMemoria, setRecarregarMemoria] = useState(0);
+
+  /* ⚠ SELEÇÃO EXPLÍCITA, NÃO DERIVADA — 121 item 3. O padrão marca as linhas com sugestão
+     completa, mas o operador desmarca e marca à vontade; guardar só o "padrão" e recalcular
+     faria a marcação dele voltar sozinha a cada render da lista. `null` = ainda não houve
+     gesto nenhum, e aí vale o padrão. */
+  const [selecao, setSelecao] = useState<ReadonlySet<number> | null>(null);
+  const [previaLoteAberta, setPreviaLoteAberta] = useState(false);
+  const [salvandoLote, setSalvandoLote] = useState(false);
 
   const { clienteAtual } = useCliente();
   const { fazendas } = useFazenda();
@@ -384,6 +396,38 @@ export default function CusteioTxtImportTab(
     }
   }
 
+  /* Elegível ao lote: tem para onde ir sozinho. Sem subcentro sugerido, sem conta da régua
+     ou sem competência, a linha fica para o modal um a um — é lá que se escolhe o que
+     falta, e adivinhar aqui gravaria classificação que ninguém conferiu. */
+  const elegivelAoLote = useCallback((linhaNum: number) => {
+    if (!competencia || !contaBancariaId) return false;
+    const hash = hashPorLinha.get(linhaNum);
+    if (hash && lancadoPorHash.has(hash)) return false;      // já lançado não se propõe
+    return !!sugestaoPorLinha.get(linhaNum)?.subcentro;
+  }, [competencia, contaBancariaId, hashPorLinha, lancadoPorHash, sugestaoPorLinha]);
+
+  const marcadaPorPadrao = useCallback((linhaNum: number) => elegivelAoLote(linhaNum), [elegivelAoLote]);
+
+  const estaSelecionada = useCallback((linhaNum: number) => (
+    selecao === null ? marcadaPorPadrao(linhaNum) : selecao.has(linhaNum)
+  ), [selecao, marcadaPorPadrao]);
+
+  const alternarSelecao = useCallback((linhaNum: number) => {
+    setSelecao(prev => {
+      const base = prev ?? new Set((itens ?? []).filter(i => marcadaPorPadrao(i.linha_num)).map(i => i.linha_num));
+      const next = new Set(base);
+      if (next.has(linhaNum)) next.delete(linhaNum); else next.add(linhaNum);
+      return next;
+    });
+  }, [itens, marcadaPorPadrao]);
+
+  /* As linhas do lote, na ordem do arquivo — a mesma que o operador está lendo. */
+  const itensDoLote = useMemo(
+    () => (itens ?? []).filter(i => estaSelecionada(i.linha_num) && elegivelAoLote(i.linha_num)),
+    [itens, estaSelecionada, elegivelAoLote],
+  );
+  const totalDoLote = useMemo(() => itensDoLote.reduce((acc, i) => acc + i.valor, 0), [itensDoLote]);
+
   /**
    * O que o operador confirmou no modal vira memória para o mês que vem — 121 item 2.
    *
@@ -445,6 +489,74 @@ export default function CusteioTxtImportTab(
       console.error('[custeio] falha ao gravar a memória de apelidos', err);
     }
   }, [clienteId, planoPorSubcentro, aliasesSubcentro, fornecedoresComAliases]);
+
+  /**
+   * Grava as linhas selecionadas — 121 item 3.
+   *
+   * ⚠ O MESMO INSERT DO MODAL, um por lançamento: `criarLancamentosEmLote` monta as linhas
+   * pela mesma `buildInsertRow` do caminho um a um, num único statement atômico — ou
+   * entram todas, ou nenhuma. Sem writer paralelo, sem RPC nova.
+   * ⚠ E O MESMO PREFILL: fazenda, datas, conta da régua, safra sugerida e a classificação
+   * da memória. Se este bloco divergir do `prefill`, o lote passa a gravar diferente do
+   * modal para o mesmo item — que é como duas fontes nascem.
+   * ⚠ FORNECEDOR PODE FICAR VAZIO: o custeio não nomeia fornecedor, e exigir um aqui
+   * pararia o lote inteiro por um dado que o relatório não traz.
+   */
+  async function lancarLote() {
+    if (!clienteId || !dataMes || itensDoLote.length === 0) return;
+    setSalvandoLote(true);
+    try {
+      const forms: LancamentoV2Form[] = itensDoLote.map((it) => {
+        const sug = sugestaoPorLinha.get(it.linha_num);
+        const clsDoItem = sug?.subcentro
+          ? hookFin.classificacoes.find(c => c.subcentro === sug.subcentro)
+          : undefined;
+        return {
+          fazenda_id: fazendaResolvidaId ?? '',
+          conta_bancaria_id: contaBancariaId ?? null,
+          data_competencia: dataMes,
+          data_vencimento: dataMes,
+          data_pagamento: dataMes,
+          valor: it.valor,
+          tipo_operacao: '2-Saídas',
+          status_transacao: 'realizado',
+          descricao: it.produto_raw,
+          subcentro: sug?.subcentro,
+          macro_custo: clsDoItem?.macro_custo,
+          grupo_custo: clsDoItem?.grupo_custo,
+          centro_custo: clsDoItem?.centro_custo,
+          favorecido_id: sug?.fornecedorId ?? null,
+          safra_id: safraSugerida(dataMes, 'pecuaria', hookFin.safras),
+        };
+      });
+      const hashes = itensDoLote.map(it => hashPorLinha.get(it.linha_num));
+      const ok = await hookFin.criarLancamentosEmLote(forms, hashes);
+      if (!ok) return;
+      setPreviaLoteAberta(false);
+      /* O que o lote gravou também é resposta do operador: as sugestões que ele deixou
+         passar viram memória, uma a uma, como se cada uma tivesse sido confirmada. */
+      for (const it of itensDoLote) {
+        const sug = sugestaoPorLinha.get(it.linha_num);
+        await aprenderComOperador(it, sug?.subcentro, sug?.fornecedorId ?? null);
+      }
+      await conferirLancados();
+      setSelecao(new Set());
+    } finally {
+      setSalvandoLote(false);
+    }
+  }
+
+  /* Fonte única do `disabled`, do `title` e da dica ao lado — nunca três textos que podem
+     discordar entre si. */
+  const motivoLoteBloqueado = !auxLoaded
+    ? 'Carregando contas e classificações…'
+    : !contaBancariaId
+      ? 'Sem conta bancária na régua: escolha a conta acima ou lance item a item.'
+      : !competencia
+        ? 'O arquivo não trouxe competência.'
+        : itensDoLote.length === 0
+          ? 'Nenhuma linha com sugestão completa selecionada.'
+          : null;
 
   const recOk = resultado?.reconciliacao.ok ?? false;
   /* Toda divergência cabe em cinco centavos? Então é o arredondamento do impresso, não
@@ -520,6 +632,29 @@ export default function CusteioTxtImportTab(
             { rotulo: 'Itens', valor: String(resultado.total_itens) },
             { rotulo: 'Soma dos itens', valor: brl(resultado.soma_valores) },
           ]} />
+
+          {/* ⚠ A AÇÃO DO LOTE MORA NO BLOCO FIXO, junto dos números que ela vai mexer —
+              A21. No fim da lista, ela sairia da tela justamente enquanto o operador
+              marca as linhas.
+              ⚠ O BOTÃO DESABILITADO DIZ POR QUÊ, em 10px ao lado: "nada selecionado" e
+              "sem conta bancária na régua" são coisas diferentes, e um botão cinza sem
+              motivo faz o operador procurar defeito onde não há. */}
+          <div className="flex items-center gap-2">
+            <Button size="sm" className="h-7 text-[11px]"
+              disabled={itensDoLote.length === 0 || !auxLoaded || salvandoLote}
+              title={motivoLoteBloqueado ?? 'Conferir e lançar as linhas selecionadas'}
+              onClick={() => setPreviaLoteAberta(true)}>
+              Lançar {itensDoLote.length} selecionado{itensDoLote.length === 1 ? '' : 's'}
+            </Button>
+            {motivoLoteBloqueado && (
+              <span className="text-[10px] leading-tight text-muted-foreground">{motivoLoteBloqueado}</span>
+            )}
+            {itensDoLote.length > 0 && (
+              <span className="ml-auto text-[10px] text-muted-foreground tabular-nums">
+                Soma do lote <b className="text-foreground">{brl(totalDoLote)}</b>
+              </span>
+            )}
+          </div>
 
           {/* Reconciliação */}
           {recConferido ? (
@@ -636,6 +771,18 @@ export default function CusteioTxtImportTab(
                       <div key={it.linha_num}
                            className={`px-3 py-[7px] leading-[1.35] ${lancada ? 'bg-emerald-50/40 dark:bg-emerald-950/20' : ''}`}>
                         <div className="flex items-baseline gap-2">
+                          {/* ⚠ O CHECKBOX SÓ APARECE NA LINHA QUE O LOTE CONSEGUE LANÇAR.
+                              Um checkbox marcável numa linha sem sugestão prometeria um
+                              lançamento que a conferência recusaria depois — e o operador
+                              descobriria só no fim. Quem não é elegível segue no modal. */}
+                          {elegivelAoLote(it.linha_num) ? (
+                            <Checkbox className="h-3.5 w-3.5 shrink-0"
+                              checked={estaSelecionada(it.linha_num)}
+                              onCheckedChange={() => alternarSelecao(it.linha_num)}
+                              aria-label={`Selecionar ${it.produto_raw}`} />
+                          ) : (
+                            <span className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                          )}
                           <span className="min-w-0 flex-1 truncate text-[12px] font-medium">{it.produto_raw}</span>
                           <span className="shrink-0 text-[12px] font-medium tabular-nums">{brl(it.valor)}</span>
                           {lancada ? (
@@ -700,6 +847,60 @@ export default function CusteioTxtImportTab(
           </p>
         </>
       )}
+
+      {/* ⚠ A PRÉVIA É A CONFERÊNCIA — 121 item 3: "sugestão sempre, gravação nunca sem
+          conferência". Ela mostra exatamente o que vai ser gravado, linha a linha, com o
+          total embaixo; o botão do topo só a abre, nunca grava.
+          ⚠ MEDIDAS DO A18, explícitas: o `DialogTitle` nasce 18px e aqui a tela inteira
+          é de 10-12px. */}
+      <Dialog open={previaLoteAberta} onOpenChange={(o) => { if (!o) setPreviaLoteAberta(false); }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-[13px]">
+              Conferir {itensDoLote.length} lançamento{itensDoLote.length === 1 ? '' : 's'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="max-h-[50vh] overflow-y-auto rounded-md border">
+            <table className="w-full text-[10px] tabular-nums">
+              <thead className="sticky top-0 z-10 bg-card text-left text-[9px] text-muted-foreground">
+                <tr className="border-b">
+                  <th className="px-2 py-1">Descrição</th>
+                  <th className="px-2 py-1">Conta contábil</th>
+                  <th className="px-2 py-1">Fornecedor</th>
+                  <th className="px-2 py-1 text-right">Valor</th>
+                </tr>
+              </thead>
+              <tbody>
+                {itensDoLote.map((it) => {
+                  const sug = sugestaoPorLinha.get(it.linha_num);
+                  return (
+                    <tr key={it.linha_num} className="border-b last:border-0">
+                      <td className="max-w-[240px] truncate px-2 py-1">{it.produto_raw}</td>
+                      <td className="px-2 py-1">{sug?.subcentro || '—'}</td>
+                      <td className="px-2 py-1 text-muted-foreground">{sug?.fornecedorNome ?? '—'}</td>
+                      <td className="px-2 py-1 text-right">{brl(it.valor)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-[10px] leading-tight text-muted-foreground">
+            Competência {competencia ?? '—'} · conta da régua · status Realizado, como no
+            lançamento item a item. Fornecedor vazio é aceito — o relatório de custeio não o traz.
+          </p>
+          <DialogFooter className="items-center gap-2">
+            <span className="mr-auto text-[11px] tabular-nums">
+              Total <b>{brl(totalDoLote)}</b>
+            </span>
+            <Button variant="outline" size="sm" onClick={() => setPreviaLoteAberta(false)}>Cancelar</Button>
+            <Button size="sm" disabled={salvandoLote || itensDoLote.length === 0}
+              onClick={() => { void lancarLote(); }}>
+              {salvandoLote ? 'Lançando…' : `Lançar ${itensDoLote.length}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Modal oficial de lançamento financeiro — reaproveitado, não alterado.
           Conta e subcentro vêm vazios; usuário preenche e salva via fluxo oficial. */}

@@ -1107,10 +1107,18 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     return true;
   }, [clienteId, user]);
 
-  const criarLancamentosEmLote = useCallback(async (forms: LancamentoV2Form[]) => {
+  /**
+   * ⚠ `hashes` É POSICIONAL: `hashes[i]` pertence a `forms[i]`. Um objeto por linha seria
+   * mais explícito, mas mudaria a assinatura que `FinanceiroV2Tab` já usa em `onSaveBatch`
+   * — e este parâmetro é opcional justamente para que aquele chamador siga idêntico.
+   * Índice sem hash grava `null`, como sempre foi.
+   */
+  const criarLancamentosEmLote = useCallback(async (
+    forms: LancamentoV2Form[], hashes?: Array<string | null | undefined>,
+  ) => {
     if (!clienteId || !user || forms.length === 0) return false;
 
-    const rows = forms.map(form => buildInsertRow(form, user.id));
+    const rows = forms.map((form, i) => buildInsertRow(form, user.id, 'manual', hashes?.[i]));
 
     // CONTRATO (não alterar sem revisar o toast de sucesso abaixo): um único
     // statement INSERT com N linhas é ATÔMICO — ou todas entram, ou nenhuma
