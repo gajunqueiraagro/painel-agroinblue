@@ -91,6 +91,9 @@ export interface CompraModalShellProps {
   /* ⚠ ADITIVO — [OC-EXCLUIR-LOTE] (128). Montado no `LancamentosTab`, que é quem sabe reler
      a OC inteira depois; o shell só repassa. Sem ele, o ⊘ segue sendo remoção local. */
   exclusaoLoteOC?: ExclusaoLoteOC | null;
+  /* ⚠ ADITIVO — [OC-EDITAR-LOTE-FECHADA] (128b). O modal do lote de uma OC fechada oferece
+     "Reabrir e editar"; quem sabe reabrir é o `LancamentosTab`. */
+  onReabrirLoteParaEditar?: ((motivo: string) => Promise<boolean>) | null;
   recebimentoApi?: RecebimentoApi;      // RECEB-01: recebimento por lote (só em modo OC)
   documentosApi?: DocumentosApi;        // DOC-UI-01: documentos fiscais (só em modo OC)
   eventosApi?: EventosApi;              // AUDITORIA-01: trilha da operação (só leitura)
@@ -407,6 +410,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
           {abaAtiva === 'negociacao' ? (
             <AbaNegociacaoLotes
               exclusaoOC={api.exclusaoLoteOC}
+              onReabrirParaEditar={api.onReabrirLoteParaEditar}
               categoria={api.categoria}
               categoriasDisponiveis={api.categoriasDisponiveis}
               quantidadeNum={api.quantidadeNum}

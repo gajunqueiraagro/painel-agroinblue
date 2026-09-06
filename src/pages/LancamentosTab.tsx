@@ -3192,16 +3192,21 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       setAcaoOcLoading(null);
     }
   };
-  const reabrirOperacaoOC = async (motivo: string) => {
+  /* ⚠ DEVOLVE SE DEU CERTO — [OC-EDITAR-LOTE-FECHADA] (128b). O rodapé, que era o único
+     chamador, ignora o retorno e segue idêntico; o modal do lote precisa saber, porque é
+     ele quem some com a faixa de "reabrir" quando a operação volta a ser editável. */
+  const reabrirOperacaoOC = async (motivo: string): Promise<boolean> => {
     const clienteId = clienteAtual?.id;
-    if (!ocOperacaoId || !clienteId || ocVersao == null || acaoOcLoading) return;
+    if (!ocOperacaoId || !clienteId || ocVersao == null || acaoOcLoading) return false;
     setAcaoOcLoading('reabrir');
     try {
       await ocRpc.reabrir(ocOperacaoId, clienteId, ocVersao, motivo);
       await recarregarOperacaoOC();
       toast.success('Operação reaberta — voltou para programada.');
+      return true;
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Falha ao reabrir a operação.');
+      return false;
     } finally {
       setAcaoOcLoading(null);
     }
@@ -5328,6 +5333,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     ocOperacaoId,
     lotesApi,
     exclusaoLoteOC,
+    /* ⚠ O MESMO `reabrirOperacaoOC` DO RODAPÉ — 128b. A compra tem o seu porque ele
+       rehidrata campos da compra; reusar o da venda espalharia estado de um tipo no
+       outro (ver o comentário de `reabrirNegociacaoVendaOC`). */
+    onReabrirLoteParaEditar: reabrirOperacaoOC,
     recebimentoApi,
     documentosApi,
     eventosApi,
@@ -5619,6 +5628,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           ocEntregaEncerrada={ocEntregaEncerrada}
           onConcluirNegociacao={(v) => recebimentoApi.concluirNegociacao(v == null ? undefined : { versaoOverride: v })}
           onReabrirNegociacao={(motivo) => reabrirNegociacaoVendaOC(motivo)}
+          onReabrirLoteParaEditar={(motivo) => reabrirNegociacaoVendaOC(motivo)}
           onFechar={fecharModalOCComAutosave}
         />
       ) : isVenda && modoOCVenda ? (
@@ -5676,6 +5686,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
              ha nada a atualizar aqui depois — atualizar de novo seria a segunda copia. */
           onConcluirNegociacao={(v) => recebimentoApi.concluirNegociacao(v == null ? undefined : { versaoOverride: v })}
           onReabrirNegociacao={(motivo) => reabrirNegociacaoVendaOC(motivo)}
+          /* ⚠ O MESMO CALLBACK DA VENDA, e não é reuso preguiçoso: ele só toca
+             `ocVersao` e `ocStatusComercial`, que são da OPERAÇÃO e valem para os três
+             tipos — nada de compra nem de venda passa por ele. */
+          onReabrirLoteParaEditar={(motivo) => reabrirNegociacaoVendaOC(motivo)}
           onFechar={fecharModalOCComAutosave}
         />
       ) : isCompra && isCenarioMeta ? (

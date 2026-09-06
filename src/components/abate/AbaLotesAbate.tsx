@@ -120,6 +120,7 @@ function ColunaTopo({ rotulo, valor, unidade, linhaAt, subs, evidente, extra }: 
 export function AbaLotesAbate({
   lotes, linhas, cenario, cenariosExistentes, onCenarioChange,
   lotesApi, categoriasDisponiveis, somenteLeitura, fisicoBloqueado, onLinhaChange, exclusaoOC = null,
+  onReabrirParaEditar = null,
 }: {
   lotes: LoteAbate[];
   linhas: Map<string, LinhaAbate>;
@@ -143,6 +144,9 @@ export function AbaLotesAbate({
     versao: number | null;
     onExcluido: (versaoNova: number) => void;
   } | null;
+  /* ⚠ ADITIVO — [OC-EDITAR-LOTE-FECHADA] (128b). O `LoteDialog` é o mesmo dos três tipos,
+     então a saída do beco chega ao abate pelo mesmo caminho. */
+  onReabrirParaEditar?: ((motivo: string) => Promise<boolean>) | null;
 }) {
   /* Qual lote está aberto no cadastro. `null` = nenhum. */
   const [editandoId, setEditandoId] = useState<string | null>(null);
@@ -408,6 +412,7 @@ export function AbaLotesAbate({
           semValor
           comObservacao
           somenteLeitura={!!somenteLeitura}
+          onReabrirParaEditar={onReabrirParaEditar}
           onAplicar={(patch) => { lotesApi.editarLote(emEdicao.idLocal, patch); setEditandoId(null); }}
           onAplicarEAdicionar={(patch) => { lotesApi.editarLote(emEdicao.idLocal, patch); abrirNovo(); }}
           onFechar={() => setEditandoId(null)}

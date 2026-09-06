@@ -154,6 +154,9 @@ export interface VendaModalShellProps {
   ocVersao?: number | null;
   /* ⚠ ADITIVO — [OC-EXCLUIR-LOTE] (128). Montado no `LancamentosTab`; o shell só repassa. */
   exclusaoLoteOC?: ExclusaoLoteOC | null;
+  /* ⚠ ADITIVO — [OC-EDITAR-LOTE-FECHADA] (128b). O modal do lote de uma OC fechada oferece
+     "Reabrir e editar"; quem sabe reabrir é o `LancamentosTab`. */
+  onReabrirLoteParaEditar?: ((motivo: string) => Promise<boolean>) | null;
   onOcVersaoChange?: (v: number) => void;
   ocStatusComercial: string | null;
   /** Lotes da negociação — o mesmo hook da compra, que opera sobre `zoo_operacao_lotes`. */
@@ -218,7 +221,8 @@ export function VendaModalShell({
   vendaFazendaId, setVendaFazendaId, fazendasOC,
   propriedadeDestino, setPropriedadeDestino,
   vendaTipoVenda, setVendaTipoVenda, observacao, setObservacao,
-  ocOperacaoId, ocVersao, onOcVersaoChange, ocStatusComercial, lotesApi, exclusaoLoteOC = null, boitelData = null, onBoitelChange,
+  ocOperacaoId, ocVersao, onOcVersaoChange, ocStatusComercial, lotesApi, exclusaoLoteOC = null,
+  onReabrirLoteParaEditar = null, boitelData = null, onBoitelChange,
   boitelReal = null, onAplicarRealizado, onIniciarRealizado,
   documentosApi, eventosApi, liquidacaoApi, recebimentoApi, ocEntregaEncerrada = false,
   categoria, categoriasDisponiveis,
@@ -562,6 +566,7 @@ export function VendaModalShell({
   const abaLotes = (
     <AbaNegociacaoLotes
       exclusaoOC={exclusaoLoteOC}
+      onReabrirParaEditar={onReabrirLoteParaEditar}
       categoria={categoria}
       categoriasDisponiveis={categoriasDisponiveis}
       quantidadeNum={quantidadeNum}

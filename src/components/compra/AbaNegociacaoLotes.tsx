@@ -94,6 +94,9 @@ interface Props {
      recebimento" era a porta trancada que a decisão do Gabriel (06/09) abriu — o sistema
      desfaz o que o lote arrasta em vez de mandar o operador caçar cada peça. */
   exclusaoOC?: ExclusaoLoteOC | null;
+  /* ⚠ ADITIVO — [OC-EDITAR-LOTE-FECHADA] (128b). Com ele, o modal do lote de uma OC fechada
+     oferece "Reabrir e editar" em vez de dizer que nada é editável. */
+  onReabrirParaEditar?: ((motivo: string) => Promise<boolean>) | null;
   rotulos?: {
     salveIdentificacao?: string;
     voltarParaIdentificacao?: string;
@@ -165,7 +168,7 @@ function ValorInput({ value, onChange, disabled, placeholder, className }: {
 export function AbaNegociacaoLotes({
   categoria, categoriasDisponiveis, quantidadeNum, pesoKgNum, darkSelectClass,
   modoOC, operacaoPronta, lotesApi, somenteLeitura, fisicoBloqueado, onVoltarCompra, rotulos, valorProjetado = null, loteUnico = null,
-  linhaMagra = false, exclusaoOC = null,
+  linhaMagra = false, exclusaoOC = null, onReabrirParaEditar = null,
 }: Props) {
   /* ── MODO OC — delegado a um componente PROPRIO (PR-OC-UX-LOTE-C2-01) ──────
      O modal de lote precisa de estado (qual lote esta aberto), e hook nao pode
@@ -446,6 +449,7 @@ function NegociacaoOC({
           darkSelectClass={darkSelectClass}
           fisicoRO={fisicoRO}
           somenteLeitura={somenteLeitura}
+          onReabrirParaEditar={onReabrirParaEditar}
           rotuloCategoria={rotuloCategoria}
           onAplicar={(patch) => { editarLote(emEdicao.idLocal, patch); setEditandoId(null); }}
           onAplicarEAdicionar={(patch) => { editarLote(emEdicao.idLocal, patch); abrirNovo(); }}
@@ -498,7 +502,7 @@ export function LoteDialog({
   rotulos,
   lote, categoriasDisponiveis, darkSelectClass, fisicoRO, somenteLeitura, rotuloCategoria,
   onAplicar, onAplicarEAdicionar, onFechar, valorProjetado = null, semValor = false,
-  comObservacao = false,
+  comObservacao = false, onReabrirParaEditar = null,
 }: {
   rotulos?: AbaNegociacaoLotesRotulos;
   lote: NonNullable<Props['lotesApi']>['lotes'][number];
@@ -511,6 +515,21 @@ export function LoteDialog({
   onAplicarEAdicionar: (patch: Partial<NonNullable<Props['lotesApi']>['lotes'][number]>) => void;
   onFechar: () => void;
   valorProjetado?: { valor: number | null; explicacao: string } | null;
+  /**
+   * Reabrir a operação sem sair do modal — [OC-EDITAR-LOTE-FECHADA] (128b).
+   *
+   * ⚠ NASCE DE UM BECO SEM SAÍDA MEDIDO (Raul, 06/09 15:48): com a OC fechada o modal
+   * dizia "nada aqui é editável" e não oferecia caminho nenhum — o Reabrir morava no
+   * rodapé de OUTRA aba, e quem estava no lote não tinha como saber. Valor, preço,
+   * critério, categoria e observação são SEMPRE editáveis; fechada não é impedimento, é um
+   * estado que se reabre no gesto.
+   * ⚠ QUEM VOLTA A EDITAR É O PAI, NÃO UM ESTADO DAQUI. Reabrir muda `status_comercial` no
+   * `LancamentosTab`, e `somenteLeitura` desce de lá: um "reaberto" local seria a segunda
+   * fonte, e ficaria mentindo se a RPC recusasse.
+   * ⚠ AUSENTE = COMPORTAMENTO DE ANTES, byte a byte: sem a prop, a frase de leitura
+   * continua a mesma e não há botão.
+   */
+  onReabrirParaEditar?: ((motivo: string) => Promise<boolean>) | null;
   /**
    * Esconde Critério e Valor — o cadastro do lote no ABATE.
    *
@@ -549,6 +568,10 @@ export function LoteDialog({
      lote sair daqui invalido so adia a recusa para o rodape, longe de onde se corrige.
      A mensagem nomeia o lote pela categoria, como a do banco. */
   const podeAplicar = !semPeso;
+  /* O motivo da reabertura, pedido na própria faixa — 128b. Vive aqui porque só esta tela
+     o usa; o `reabrindo` evita o duplo clique enquanto a RPC não volta. */
+  const [motivoReabrir, setMotivoReabrir] = useState('');
+  const [reabrindo, setReabrindo] = useState(false);
   const motivoBloqueio = semPeso
     ? `Informe o peso médio do lote ${rotuloCategoria(categoria)}. Lote sem peso não pode ser salvo.`
     : undefined;
@@ -575,12 +598,46 @@ export function LoteDialog({
           <DialogTitle className="text-[13px] text-primary-foreground">{rotuloCategoria(categoria)}</DialogTitle>
           <DialogDescription className="text-[11px] text-primary-foreground/80">
             {somenteLeitura
-              ? 'Operação aberta em leitura: nada aqui é editável.'
+              ? (onReabrirParaEditar
+                  ? 'Operação fechada. Editar reabre a negociação.'
+                  : 'Operação aberta em leitura: nada aqui é editável.')
               : bloqueadoPorRecebimento
                 ? (rotulos?.fisicoBloqueado ?? 'Recebimento registrado: quantidade e peso não mudam. Categoria, observação, critério e valor seguem editáveis.')
                 : 'Os campos do lote negociado.'}
           </DialogDescription>
         </DialogHeader>
+
+        {/* ⚠ A SAÍDA FICA ONDE O BECO ESTÁ — 128b. O Reabrir existia no rodapé de outra
+            aba; quem abriu o lote e o encontrou travado não tinha como saber disso. A
+            faixa não some depois de reabrir: quem some é o `somenteLeitura`, que desce do
+            pai quando a RPC confirma. */}
+        {somenteLeitura && onReabrirParaEditar && (
+          <div className="space-y-1.5 border-b border-amber-400 bg-amber-50 px-4 py-2 dark:bg-amber-950/30">
+            <p className="text-[11px] leading-tight text-amber-800 dark:text-amber-200">
+              Operação fechada. Editar reabre a negociação — e o que já foi lançado continua
+              como está até você atualizar o compromisso.
+            </p>
+            <div className="flex items-center gap-2">
+              <Input value={motivoReabrir} onChange={e => setMotivoReabrir(e.target.value)}
+                placeholder="Motivo da reabertura" className="h-7 flex-1 text-[11px]" />
+              <Button type="button" size="sm" className="h-7 shrink-0 text-[11px]"
+                disabled={!motivoReabrir.trim() || reabrindo}
+                title={motivoReabrir.trim() ? 'Reabrir a negociação e editar' : 'Informe o motivo da reabertura.'}
+                onClick={async () => {
+                  setReabrindo(true);
+                  try { await onReabrirParaEditar(motivoReabrir.trim()); }
+                  finally { setReabrindo(false); }
+                }}>
+                {reabrindo ? 'Reabrindo…' : 'Reabrir e editar'}
+              </Button>
+            </div>
+            {!motivoReabrir.trim() && (
+              <p className="text-[10px] leading-tight text-amber-700 dark:text-amber-300">
+                Informe o motivo — ele vai para a auditoria da operação.
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="space-y-2 px-4 pt-3">
           {/* Categoria nao precisa da largura inteira; e Qtde/Peso guardam 3 digitos,

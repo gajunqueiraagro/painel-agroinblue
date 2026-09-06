@@ -184,6 +184,9 @@ export interface AbateModalShellProps {
   ocVersao?: number | null;
   /* ⚠ ADITIVO — [OC-EXCLUIR-LOTE] (128). Montado no `LancamentosTab`; o shell só repassa. */
   exclusaoLoteOC?: ExclusaoLoteOC | null;
+  /* ⚠ ADITIVO — [OC-EDITAR-LOTE-FECHADA] (128b). O modal do lote de uma OC fechada oferece
+     "Reabrir e editar"; quem sabe reabrir é o `LancamentosTab`. */
+  onReabrirLoteParaEditar?: ((motivo: string) => Promise<boolean>) | null;
   onOcVersaoChange?: (v: number) => void;
   ocStatusComercial: string | null;
   /** Lotes da negociação — o mesmo hook da compra, que opera sobre `zoo_operacao_lotes`. */
@@ -246,6 +249,7 @@ export function AbateModalShell({
   abateFazendaId, setAbateFazendaId, fazendasOC,
   observacao, setObservacao, numeroDocumento,
   ocOperacaoId, ocVersao, onOcVersaoChange, ocStatusComercial, lotesApi, exclusaoLoteOC = null,
+  onReabrirLoteParaEditar = null,
   abateApi, abateLinhas, onAbateLinhaChange,
   cenarioAbate = 'projetado', onCenarioAbateChange, onIniciarRealizado,
   documentosApi, eventosApi, liquidacaoApi, recebimentoApi, ocEntregaEncerrada = false,
@@ -934,6 +938,7 @@ export function AbateModalShell({
                 {lotesApi && (
                   <AbaLotesAbate
                     exclusaoOC={exclusaoLoteOC}
+                    onReabrirParaEditar={onReabrirLoteParaEditar}
                     lotes={lotesDoAbate}
                     linhas={linhasDoAbate}
                     cenario={cenarioAbate}
