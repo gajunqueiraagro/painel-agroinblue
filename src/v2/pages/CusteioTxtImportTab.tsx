@@ -14,6 +14,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { safraSugerida } from '@/lib/agri/safraSugerida';
 import { hashItemCusteio } from '@/v2/lib/custeio/hashItemCusteio';
+import {
+  sugerirAliasDoItem,
+  sugerirFornecedor,
+  aliasDoCusteio,
+  ORIGEM_CUSTEIO,
+  type AliasSubcentro,
+  type FornecedorComAliases,
+} from '@/v2/lib/custeio/memoriaCusteio';
 import { supabase } from '@/integrations/supabase/client';
 import { BlocoTopoAba } from '@/components/ui/bloco-topo-aba';
 import {
@@ -84,6 +92,21 @@ export default function CusteioTxtImportTab(
      falhasse pintaria os 43 itens como novos e o operador lançaria tudo em dobro — o
      silêncio mais caro que esta tela pode produzir. */
   const [erroConferencia, setErroConferencia] = useState(false);
+
+  /* ⚠ A MEMÓRIA É A DO IMPORTADOR DE EXCEL — 121 item 2. Nada de tabela nova: o custeio lê
+     `financeiro_subcentro_aliases` inteira (o que o Excel aprendeu vale aqui) e grava só
+     no seu espaço, `origem = 'custeio'`, que a unicidade por origem abriu no 121b.
+     O plano de contas entra junto porque o alias aponta para o PLANO, não para o texto do
+     subcentro: sem o mapa, a sugestão não sabe o nome do que sugeriu. */
+  const [aliasesSubcentro, setAliasesSubcentro] = useState<AliasSubcentro[]>([]);
+  const [subcentroPorPlano, setSubcentroPorPlano] = useState<Map<string, string>>(new Map());
+  const [planoPorSubcentro, setPlanoPorSubcentro] = useState<Map<string, string>>(new Map());
+  /* `aliases` não vem do `loadFornecedores` oficial (a coluna não está no select dele), e
+     acrescentá-la lá mudaria o payload de todas as telas do Financeiro. */
+  const [fornecedoresComAliases, setFornecedoresComAliases] = useState<FornecedorComAliases[]>([]);
+  /* Reler a memória depois de aprender: sem isto, lançar dois itens da mesma sub-família
+     em sequência tentaria INSERIR o alias duas vezes e a segunda bateria no UNIQUE. */
+  const [recarregarMemoria, setRecarregarMemoria] = useState(0);
 
   const { clienteAtual } = useCliente();
   const { fazendas } = useFazenda();
@@ -184,6 +207,97 @@ export default function CusteioTxtImportTab(
 
   useEffect(() => { void conferirLancados(); }, [conferirLancados]);
 
+  /* Carrega a memória uma vez por cliente. Três consultas independentes: os apelidos, o
+     plano (para dar nome ao que o apelido aponta) e os apelidos de fornecedor. */
+  useEffect(() => {
+    if (!clienteId) {
+      setAliasesSubcentro([]); setSubcentroPorPlano(new Map());
+      setPlanoPorSubcentro(new Map()); setFornecedoresComAliases([]);
+      return;
+    }
+    let cancelado = false;
+    void (async () => {
+      try {
+        const [aliasRes, planoRes, fornRes] = await Promise.all([
+          supabase.from('financeiro_subcentro_aliases')
+            .select('id, cliente_id, alias_text, plano_conta_id, origem')
+            .eq('ativo', true),
+          supabase.from('financeiro_plano_contas').select('id, subcentro').eq('ativo', true),
+          supabase.from('financeiro_fornecedores').select('id, nome, aliases').eq('cliente_id', clienteId),
+        ]);
+        if (cancelado) return;
+        if (aliasRes.error) throw aliasRes.error;
+        if (planoRes.error) throw planoRes.error;
+        if (fornRes.error) throw fornRes.error;
+
+        /* O RLS já limita o que volta; o filtro por cliente aqui deixa passar o alias
+           GLOBAL (cliente_id null), que é memória de fábrica e vale para todos. */
+        setAliasesSubcentro((aliasRes.data ?? [])
+          .filter(a => a.cliente_id === null || a.cliente_id === clienteId));
+
+        const porPlano = new Map<string, string>();
+        const porSubcentro = new Map<string, string>();
+        for (const linha of planoRes.data ?? []) {
+          if (!linha.subcentro) continue;
+          porPlano.set(linha.id, linha.subcentro);
+          // Primeiro vence: o mesmo subcentro pode aparecer em mais de uma linha do plano.
+          if (!porSubcentro.has(linha.subcentro)) porSubcentro.set(linha.subcentro, linha.id);
+        }
+        setSubcentroPorPlano(porPlano);
+        setPlanoPorSubcentro(porSubcentro);
+
+        /* `aliases` é `Json` no tipo gerado: conferir a forma em runtime, sem cast. */
+        setFornecedoresComAliases((fornRes.data ?? []).map(f => ({
+          id: f.id,
+          nome: f.nome,
+          aliases: Array.isArray(f.aliases)
+            ? f.aliases.filter((v): v is string => typeof v === 'string') : [],
+        })));
+      } catch (err) {
+        if (!cancelado) console.error('[custeio] falha ao carregar a memória de apelidos', err);
+      }
+    })();
+    return () => { cancelado = true; };
+  }, [clienteId, recarregarMemoria]);
+
+  /* A sugestão de cada item, já resolvida em nome de subcentro e de fornecedor.
+     ⚠ SUGESTÃO NUNCA É GRAVAÇÃO: ela preenche o modal e o operador confirma. O que vira
+     memória é o que ele confirmou, não o que a tela propôs. */
+  const sugestaoPorLinha = useMemo(() => {
+    const mapa = new Map<number, {
+      subcentro: string; planoContaId: string; por: 'descricao' | 'subfamilia';
+      fornecedorId?: string; fornecedorNome?: string;
+    }>();
+    for (const it of itens ?? []) {
+      const achado = sugerirAliasDoItem(aliasesSubcentro, it);
+      const forn = sugerirFornecedor(fornecedoresComAliases, it.produto_raw);
+      if (!achado && !forn) continue;
+      const subcentro = achado ? subcentroPorPlano.get(achado.alias.plano_conta_id) : undefined;
+      /* Alias apontando para plano que não está mais ativo é memória velha: não sugere. */
+      if (!achado || !subcentro) {
+        if (forn) mapa.set(it.linha_num, {
+          subcentro: '', planoContaId: '', por: 'descricao',
+          fornecedorId: forn.id, fornecedorNome: forn.nome,
+        });
+        continue;
+      }
+      mapa.set(it.linha_num, {
+        subcentro,
+        planoContaId: achado.alias.plano_conta_id,
+        por: achado.por,
+        fornecedorId: forn?.id,
+        fornecedorNome: forn?.nome,
+      });
+    }
+    return mapa;
+  }, [itens, aliasesSubcentro, fornecedoresComAliases, subcentroPorPlano]);
+
+  /* A sugestão da linha que está no modal, e a hierarquia do plano para ela. */
+  const sugestaoDoModal = dialogRow ? sugestaoPorLinha.get(dialogRow.linha_num) : undefined;
+  const cls = sugestaoDoModal?.subcentro
+    ? hookFin.classificacoes.find(c => c.subcentro === sugestaoDoModal.subcentro)
+    : undefined;
+
   // Prefill ESTÁVEL por linha (memo) — evita re-init do form do modal a cada render do pai.
   const prefill = useMemo(() => {
     if (!dialogRow) return undefined;
@@ -205,11 +319,20 @@ export default function CusteioTxtImportTab(
       /* Sugestão pela mesma função que o cadastro de safra usa; `null` quando não há
          resposta única, e aí o campo abre vazio de propósito. */
       safra_id: safraSugerida(dataMes ?? null, 'pecuaria', hookFin.safras) ?? undefined,
-      // favorecido_id: vazio de propósito — o custeio não nomeia fornecedor.
-      // subcentro / plano_conta_id: dependem da memória de apelidos por Sub-Fam
-      // (item 2 do 121, ainda não implementado) — ver o relatório.
+      /* ⚠ A CLASSIFICAÇÃO VEM DA MEMÓRIA, E A HIERARQUIA VEM DO PLANO — 121 item 2. O
+         subcentro sozinho abriria o modal com macro/grupo/centro vazios e o operador
+         teria de repetir três escolhas que o plano já sabe. Sem sugestão, os quatro
+         continuam vazios, exatamente como antes.
+         ⚠ FORNECEDOR SÓ QUANDO UM ÚNICO DONO REIVINDICA O APELIDO: ambiguidade abre o
+         campo vazio em vez de gravar o fornecedor errado num lançamento que ninguém
+         revisa. */
+      subcentro: sugestaoDoModal?.subcentro || undefined,
+      macro_custo: cls?.macro_custo,
+      grupo_custo: cls?.grupo_custo,
+      centro_custo: cls?.centro_custo,
+      favorecido_id: sugestaoDoModal?.fornecedorId,
     };
-  }, [dialogRow, fazendaResolvidaId, dataMes, contaBancariaId, hookFin.safras]);
+  }, [dialogRow, fazendaResolvidaId, dataMes, contaBancariaId, hookFin.safras, sugestaoDoModal, cls]);
 
   // Contexto operacional read-only (NÃO vira classificação).
   const referencia = useMemo(() => {
@@ -260,6 +383,68 @@ export default function CusteioTxtImportTab(
       e.target.value = '';
     }
   }
+
+  /**
+   * O que o operador confirmou no modal vira memória para o mês que vem — 121 item 2.
+   *
+   * ⚠ GRAVA NO ESPAÇO DO CUSTEIO E SÓ NELE. Se o mesmo texto já é apelido do importador
+   * de Excel, o custeio INSERE a sua própria linha (a unicidade por origem permite) em vez
+   * de repontar a do outro: repontar reescreveria a memória de uma via que não fica
+   * sabendo. Só a linha de `origem = 'custeio'` é atualizada.
+   * ⚠ A CHAVE DO SUBCENTRO É A SUB-FAMÍLIA, não a descrição: é ela que se repete todo mês
+   * e responde pelo grupo. A descrição vira apelido do FORNECEDOR, que é o par do outro
+   * lado do de-para.
+   * ⚠ FALHAR AQUI NÃO DESFAZ O LANÇAMENTO: o lançamento já está gravado e correto; o que
+   * se perde é a conveniência do próximo mês. Por isso o erro vai para o console e não
+   * vira toast de erro sobre uma operação que deu certo.
+   */
+  const aprenderComOperador = useCallback(async (
+    /* ⚠ `| null` EXPLÍCITO: `LancamentoV2Form.favorecido_id` é `string | null | undefined`,
+       e o gate de TSC deste projeto roda com `strict: false` — sem escrever o `null` aqui,
+       o compilador aceitaria calado uma incompatibilidade real. */
+    item: CusteioItem, subcentro: string | null | undefined, favorecidoId: string | null | undefined,
+  ) => {
+    if (!clienteId) return;
+    try {
+      const planoContaId = subcentro ? planoPorSubcentro.get(subcentro) : undefined;
+      if (planoContaId && item.subfamilia_raw) {
+        const meu = aliasDoCusteio(aliasesSubcentro, item.subfamilia_raw);
+        if (meu) {
+          if (meu.plano_conta_id !== planoContaId) {
+            const { error } = await supabase.from('financeiro_subcentro_aliases')
+              .update({ plano_conta_id: planoContaId, ativo: true }).eq('id', meu.id);
+            if (error) throw error;
+          }
+        } else {
+          const { error } = await supabase.from('financeiro_subcentro_aliases').insert({
+            cliente_id: clienteId,
+            alias_text: item.subfamilia_raw,
+            plano_conta_id: planoContaId,
+            origem: ORIGEM_CUSTEIO,
+          });
+          if (error) throw error;
+        }
+      }
+
+      /* Fornecedor: a coluna `aliases` é um array sem origem, então não há espaço próprio
+         para o custeio — e por isso ele só ACRESCENTA quando ninguém reivindica o texto.
+         Tirar o apelido de outro fornecedor é o que o importador de Excel faz com a tela
+         de conflito na frente; aqui, sem essa tela, silêncio seria trocar a memória de
+         alguém pelas costas. */
+      const jaTemDono = fornecedoresComAliases.some(f =>
+        (f.aliases ?? []).some(al => al.trim().toLowerCase() === item.produto_raw.trim().toLowerCase()));
+      if (favorecidoId && !jaTemDono) {
+        const alvo = fornecedoresComAliases.find(f => f.id === favorecidoId);
+        const { error } = await supabase.from('financeiro_fornecedores')
+          .update({ aliases: [...(alvo?.aliases ?? []), item.produto_raw] })
+          .eq('id', favorecidoId);
+        if (error) throw error;
+      }
+      setRecarregarMemoria(n => n + 1);
+    } catch (err) {
+      console.error('[custeio] falha ao gravar a memória de apelidos', err);
+    }
+  }, [clienteId, planoPorSubcentro, aliasesSubcentro, fornecedoresComAliases]);
 
   const recOk = resultado?.reconciliacao.ok ?? false;
   /* Toda divergência cabe em cinco centavos? Então é o arredondamento do impresso, não
@@ -444,6 +629,7 @@ export default function CusteioTxtImportTab(
                 <div className="divide-y divide-border/70">
                   {resultado.itens.map((it) => {
                     const hash = hashPorLinha.get(it.linha_num);
+                    const sugestao = sugestaoPorLinha.get(it.linha_num);
                     const lancamentoId = hash ? lancadoPorHash.get(hash) : undefined;
                     const lancada = !!lancamentoId;
                     return (
@@ -475,8 +661,25 @@ export default function CusteioTxtImportTab(
                         {/* ⚠ A HIERARQUIA É CONTEXTO, NÃO IDENTIDADE: 10px, cinza, na segunda
                             linha. Ela responde "de onde veio" depois de a linha 1 já ter dito
                             o que é — e é onde a sugestão do de-para vai aparecer. */}
-                        <div className="truncate text-[10px] text-muted-foreground">
-                          {it.familia_raw} › {it.subfamilia_raw}
+                        {/* ⚠ A HIERARQUIA É CONTEXTO E A SUGESTÃO É PROPOSTA: as duas na
+                            segunda linha, em 10px, e a sugestão em azul para não se
+                            confundir com o que o arquivo disse. Sem memória, traço —
+                            "não sei" escrito, e não um campo que some. */}
+                        <div className="flex min-w-0 items-baseline gap-1.5 text-[10px]">
+                          <span className="truncate text-muted-foreground">
+                            {it.familia_raw} › {it.subfamilia_raw}
+                          </span>
+                          {sugestao ? (
+                            <span className="shrink-0 truncate text-blue-600 dark:text-blue-400"
+                              title={sugestao.subcentro
+                                ? `Sugerido pela memória de apelidos (${sugestao.por === 'descricao' ? 'pela descrição' : 'pela sub-família'})`
+                                : 'Fornecedor sugerido pela memória de apelidos'}>
+                              {sugestao.subcentro || '—'}
+                              {sugestao.fornecedorNome ? ` · ${sugestao.fornecedorNome}` : ''}
+                            </span>
+                          ) : (
+                            <span className="shrink-0 text-muted-foreground/70" title="Sem memória para este item ainda">—</span>
+                          )}
                         </div>
                       </div>
                     );
@@ -515,6 +718,7 @@ export default function CusteioTxtImportTab(
                resposta traz o id que o link precisa. O toast de sucesso é o do próprio
                `criarLancamento` — não duplicar. */
             await conferirLancados();
+            if (row) await aprenderComOperador(row, form.subcentro, form.favorecido_id);
             setDialogRow(null);
           }
           return ok;
