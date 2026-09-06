@@ -11,25 +11,17 @@
 //     macro/grupo/centro/subcentro continuam derivados pelo fluxo oficial.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { BlocoTopoAba } from '@/components/ui/bloco-topo-aba';
 import {
   parseCusteioTxtFile,
   type CusteioParseResult,
   type CusteioItem,
 } from '@/v2/lib/custeio/parseCusteioTxt';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
-import { AlertTriangle, CheckCircle2, Circle, FilePlus2, FileText, Upload } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Upload } from 'lucide-react';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useFinanceiroV2 } from '@/hooks/useFinanceiroV2';
@@ -175,6 +167,12 @@ export default function CusteioTxtImportTab({ arquivoInicial }: { arquivoInicial
   }
 
   const recOk = resultado?.reconciliacao.ok ?? false;
+  /* Toda divergência cabe em cinco centavos? Então é o arredondamento do impresso, não
+     leitura errada. `every` sobre lista vazia é `true`, e por isso a guarda do tamanho. */
+  const TOL_ARREDONDAMENTO = 0.05;
+  const divergencias = resultado?.reconciliacao.divergencias ?? [];
+  const soArredondamento = divergencias.length > 0
+    && divergencias.every(d => Math.abs(d.diferenca) <= TOL_ARREDONDAMENTO);
   const recConferido = resultado?.reconciliacao.conferido ?? false;
 
   const subtotalGeral = useMemo(
@@ -184,18 +182,12 @@ export default function CusteioTxtImportTab({ arquivoInicial }: { arquivoInicial
 
   return (
     <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <FileText className="h-4 w-4" />
-            Importador de Custeio (TXT) — Preview
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">
-            Relatório de custeio/compras. O preview apenas lê o arquivo. Cada item pode abrir o
-            formulário oficial de lançamento — nada é gravado até você confirmar no modal.
-          </p>
+      {/* ⚠ SEM TÍTULO E SEM O PARÁGRAFO — CUSTEIO-TXT-02. A aba de cima já diz que isto é
+          uma importação e qual é o arquivo; repetir "Importador de Custeio (TXT) — Preview"
+          gastava a primeira linha da tela para não dizer nada de novo. O contrato ("nada
+          grava sem você confirmar") continua, em 10px, onde ele importa: junto do botão. */}
+      <Card className={arquivoInicial ? 'border-0 shadow-none' : undefined}>
+        <CardContent className={`space-y-3 ${arquivoInicial ? 'p-0' : 'pt-6'}`}>
 
           {/* No modo hub quem escolhe o arquivo é a aba de cima. */}
           {!arquivoInicial && (
@@ -232,21 +224,13 @@ export default function CusteioTxtImportTab({ arquivoInicial }: { arquivoInicial
       {resultado && (
         <>
           {/* Cabeçalho do relatório + totais */}
-          <Card>
-            <CardContent className="grid grid-cols-2 gap-4 pt-6 sm:grid-cols-4">
-              <Info label="Fazenda" value={resultado.fazenda_raw ?? '—'} />
-              <Info
-                label="Competência"
-                value={
-                  resultado.ano_mes ??
-                  resultado.periodo_raw ??
-                  '—'
-                }
-              />
-              <Info label="Itens" value={String(resultado.total_itens)} />
-              <Info label="Soma dos itens" value={brl(resultado.soma_valores)} emphasis />
-            </CardContent>
-          </Card>
+          {/* O mesmo bloco cinza das abas da OC: o operador aprende a olhar um lugar só. */}
+          <BlocoTopoAba itens={[
+            { rotulo: 'Fazenda', valor: resultado.fazenda_raw ?? null },
+            { rotulo: 'Competência', valor: resultado.ano_mes ?? resultado.periodo_raw ?? null },
+            { rotulo: 'Itens', valor: String(resultado.total_itens) },
+            { rotulo: 'Soma dos itens', valor: brl(resultado.soma_valores) },
+          ]} />
 
           {/* Reconciliação */}
           {recConferido ? (
@@ -262,13 +246,25 @@ export default function CusteioTxtImportTab({ arquivoInicial }: { arquivoInicial
                 </AlertDescription>
               </Alert>
             ) : (
-              <Alert variant="destructive">
+              /* ⚠ CENTAVO DE RELATÓRIO NÃO É ERRO DE LEITURA — CUSTEIO-TXT-02. Em ago/2026 a
+                 família INVESTIMENTOS divergiu R$ 0,01: os itens somam 54.962,05 e o impresso
+                 traz 54.962,04, porque o relatório arredonda o subtotal. Em vermelho, isso diz
+                 ao operador que o parser errou e que o arquivo não presta — e ele para de
+                 confiar nos alarmes que importam. Âmbar até 5 centavos nomeia o que é:
+                 arredondamento do relatório. Acima disso continua vermelho, porque aí a
+                 hipótese de dupla contagem ou linha perdida volta a valer.
+                 ⚠ A FAIXA NÃO SOME EM NENHUM DOS DOIS CASOS: divergência é informação. */
+              <Alert variant={soArredondamento ? 'default' : 'destructive'}
+                     className={soArredondamento ? 'border-amber-400 bg-amber-50 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200' : undefined}>
                 <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>Divergência de reconciliação</AlertTitle>
+                <AlertTitle>
+                  {soArredondamento ? 'Diferença de arredondamento do relatório' : 'Divergência de reconciliação'}
+                </AlertTitle>
                 <AlertDescription className="space-y-1">
                   <p>
-                    A soma dos itens não bate com algum subtotal impresso. Verifique se um
-                    subtotal foi lido como item (dupla contagem) ou se o parser perdeu linhas.
+                    {soArredondamento
+                      ? 'A soma dos itens difere do subtotal impresso por centavos — o relatório arredonda o subtotal. Os itens são a fonte.'
+                      : 'A soma dos itens não bate com algum subtotal impresso. Verifique se um subtotal foi lido como item (dupla contagem) ou se o parser perdeu linhas.'}
                   </p>
                   <ul className="ml-4 list-disc text-sm">
                     {resultado.reconciliacao.divergencias.map((d, idx) => (
@@ -307,11 +303,9 @@ export default function CusteioTxtImportTab({ arquivoInicial }: { arquivoInicial
             </Alert>
           )}
 
-          {/* Tabela de itens-folha */}
+          {/* ⚠ SEM CABEÇALHO PRÓPRIO: "Itens (43)" já está no bloco cinza acima, e repetir
+              gastava uma faixa inteira para dizer o mesmo número duas vezes. */}
           <Card>
-            <CardHeader>
-              <CardTitle className="text-sm">Itens ({resultado.total_itens})</CardTitle>
-            </CardHeader>
             <CardContent className="p-0">
               {!auxLoaded && (
                 <p className="px-4 pb-2 text-xs text-muted-foreground">
@@ -319,78 +313,59 @@ export default function CusteioTxtImportTab({ arquivoInicial }: { arquivoInicial
                   habilita quando terminar.
                 </p>
               )}
-              <div className="max-h-[60vh] overflow-auto">
-                <Table>
-                  <TableHeader className="sticky top-0 bg-card">
-                    <TableRow>
-                      <TableHead className="w-16">Linha</TableHead>
-                      <TableHead>Família</TableHead>
-                      <TableHead>Subfamília</TableHead>
-                      <TableHead>Produto / Descrição</TableHead>
-                      <TableHead className="text-right">Valor</TableHead>
-                      <TableHead className="w-28">Status</TableHead>
-                      <TableHead className="w-44 text-right">Ação</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {resultado.itens.map((it) => {
-                      const lancada = linhasLancadas.has(it.linha_num);
-                      return (
-                      <TableRow key={`${it.linha_num}`} className={lancada ? 'bg-emerald-50/40' : undefined}>
-                        <TableCell className="text-muted-foreground">{it.linha_num}</TableCell>
-                        <TableCell>{it.familia_raw}</TableCell>
-                        <TableCell>{it.subfamilia_raw}</TableCell>
-                        <TableCell>{it.produto_raw}</TableCell>
-                        <TableCell className="text-right tabular-nums">{brl(it.valor)}</TableCell>
-                        <TableCell>
+              {/* ⚠ LISTA DE DUAS ALTURAS, NÃO TABELA — CUSTEIO-TXT-02 (A18). Sete colunas
+                  para quatro dados obrigavam a ler na horizontal item por item; o número
+                  da linha do TXT e as duas colunas da hierarquia gastavam largura que a
+                  descrição precisava. Agora a linha 1 responde "o que é e quanto" e a
+                  linha 2 diz de onde veio — o mesmo par que o cartão da OC usa.
+                  ⚠ SÓ A LISTA ROLA (A21): o bloco de números e a reconciliação ficam
+                  fixos acima, senão some justamente o que o operador confere. */}
+              <div className="max-h-[60vh] overflow-y-auto [scrollbar-gutter:stable]">
+                <div className="divide-y divide-border/70">
+                  {resultado.itens.map((it) => {
+                    const lancada = linhasLancadas.has(it.linha_num);
+                    return (
+                      <div key={it.linha_num}
+                           className={`px-3 py-[7px] leading-[1.35] ${lancada ? 'bg-emerald-50/40 dark:bg-emerald-950/20' : ''}`}>
+                        <div className="flex items-baseline gap-2">
+                          <span className="min-w-0 flex-1 truncate text-[12px] font-medium">{it.produto_raw}</span>
+                          <span className="shrink-0 text-[12px] font-medium tabular-nums">{brl(it.valor)}</span>
                           {lancada ? (
-                            <Badge variant="outline" className="border-emerald-300 text-emerald-700">
-                              <CheckCircle2 className="mr-1 h-3 w-3" /> Lançado
-                            </Badge>
+                            <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-px text-[10px] text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                              lançado
+                            </span>
                           ) : (
-                            <Badge variant="outline" className="text-muted-foreground">
-                              <Circle className="mr-1 h-3 w-3" /> Pendente
-                            </Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {lancada ? (
-                            <span className="text-xs text-muted-foreground">—</span>
-                          ) : (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              disabled={!auxLoaded}
-                              title={auxLoaded ? 'Criar lançamento financeiro' : 'Carregando contas/classificações…'}
+                            <button type="button" disabled={!auxLoaded}
+                              title={auxLoaded ? 'Abrir o formulário oficial de lançamento' : 'Carregando contas e classificações…'}
                               onClick={() => setDialogRow(it)}
-                            >
-                              <FilePlus2 className="mr-1 h-3.5 w-3.5" />
-                              Criar lançamento
-                            </Button>
+                              className="shrink-0 rounded-full border px-2 py-px text-[10px] text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50">
+                              lançar
+                            </button>
                           )}
-                        </TableCell>
-                      </TableRow>
-                      );
-                    })}
-                    {resultado.itens.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
-                          Nenhum item-folha reconhecido. Ajuste CUSTEIO_FORMAT no parser.
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
+                        </div>
+                        {/* ⚠ A HIERARQUIA É CONTEXTO, NÃO IDENTIDADE: 10px, cinza, na segunda
+                            linha. Ela responde "de onde veio" depois de a linha 1 já ter dito
+                            o que é — e é onde a sugestão do de-para vai aparecer. */}
+                        <div className="truncate text-[10px] text-muted-foreground">
+                          {it.familia_raw} › {it.subfamilia_raw}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {resultado.itens.length === 0 && (
+                  <p className="py-8 text-center text-[11px] text-muted-foreground">
+                    Nenhum item reconhecido no arquivo.
+                  </p>
+                )}
               </div>
             </CardContent>
           </Card>
 
-          <div className="flex items-center gap-2">
-            <Badge variant="outline">PR-RAUL-02A · cria via modal oficial · grava só ao Salvar</Badge>
-            <span className="text-xs text-muted-foreground">
-              De-para automático e importação em lote ficam para PR-RAUL-02/03.
-            </span>
-          </div>
+          {/* O contrato da tela, numa linha e onde ele importa: ao lado da lista. */}
+          <p className="text-[10px] text-muted-foreground">
+            Cada item abre o formulário oficial; nada é gravado sem a sua confirmação.
+          </p>
         </>
       )}
 
@@ -425,23 +400,6 @@ export default function CusteioTxtImportTab({ arquivoInicial }: { arquivoInicial
         prefill={prefill}
         referenciaOperacionalInfo={referencia}
       />
-    </div>
-  );
-}
-
-function Info({
-  label,
-  value,
-  emphasis,
-}: {
-  label: string;
-  value: string;
-  emphasis?: boolean;
-}) {
-  return (
-    <div>
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className={emphasis ? 'text-lg font-semibold tabular-nums' : 'text-sm'}>{value}</div>
     </div>
   );
 }

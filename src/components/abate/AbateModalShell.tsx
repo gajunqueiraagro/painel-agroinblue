@@ -27,6 +27,7 @@
 import { useState, useMemo } from 'react';
 import { produtoOCCompromissoLote } from '@/lib/financeiro/produtoOC';
 import { useStatusPilares } from '@/hooks/useStatusPilares';
+import { BlocoTopoAba } from '@/components/ui/bloco-topo-aba';
 import { ReabrirP1Dialog } from '@/components/ReabrirP1Dialog';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -127,33 +128,6 @@ const TOM_STATUS: Record<string, string> = {
 const ROTULO_STATUS: Record<string, string> = {
   rascunho: 'Rascunho', programada: 'Programada', fechada: 'Fechada', cancelada: 'Cancelada',
 };
-
-/**
- * O bloco de topo de uma aba — o mesmo container do "Identificação do abate".
- *
- * ⚠ UM SÓ PARA AS CINCO ABAS, e é isso que o torna útil: o operador aprende a olhar
- * para o mesmo lugar e encontra sempre a resposta da aba em que está. Cinco variações do
- * mesmo bloco ensinariam a procurar.
- * ⚠ FONTE AUSENTE É TRAÇO, nunca zero — zero afirma que se perguntou e não há.
- */
-function BlocoTopoAba({ itens }: { itens: { rotulo: string; valor: string | null; contexto?: string | null }[] }) {
-  return (
-    <div className={`grid gap-3 rounded-md border bg-muted/20 px-3.5 py-[11px] grid-cols-${itens.length}`}
-         style={{ gridTemplateColumns: `repeat(${itens.length}, minmax(0, 1fr))` }}>
-      {itens.map(i => (
-        <div key={i.rotulo} className="min-w-0">
-          <div className="text-[11px] font-normal text-muted-foreground leading-none">{i.rotulo}</div>
-          <div className="mt-1 truncate whitespace-nowrap text-[20px] font-medium leading-none tabular-nums">
-            {i.valor ?? '—'}
-          </div>
-          {i.contexto && (
-            <div className="mt-1 truncate whitespace-nowrap text-[11px] text-muted-foreground">{i.contexto}</div>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
 
 const MESES_EXTENSO = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
