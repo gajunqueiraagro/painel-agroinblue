@@ -201,7 +201,9 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
               <X className="h-3 w-3" /> Trocar arquivo
             </Button>
           </div>
-          <CusteioTxtImportTab arquivoInicial={arquivo} />
+          {/* A conta da régua desce para o modal: é a mesma que o operador escolheu
+              acima para conciliar, e pedir de novo seria perguntar o que já foi dito. */}
+          <CusteioTxtImportTab arquivoInicial={arquivo} contaBancariaId={contaId} />
         </div>
       )}
 

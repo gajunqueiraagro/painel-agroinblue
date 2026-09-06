@@ -94,6 +94,17 @@ export interface Safra {
   nome: string;
   descricao?: string | null;
   ativa: boolean;
+  /**
+   * Código e escopo — CUSTEIO-TXT (121e).
+   *
+   * ⚠ SEM ELES NÃO DÁ PARA SUGERIR SAFRA. A regra é temporada + escopo, e a temporada vive
+   * no CÓDIGO (`26/27-Pec`) enquanto a coluna `cultura` não existe (AGRI-01). O select
+   * trazia só `id, nome, descricao, ativa`, então quem quisesse sugerir teria de fazer uma
+   * segunda consulta — uma segunda fonte para a mesma pergunta.
+   * ⚠ ADITIVO: quem só usa `nome` (o select do modal) não muda em nada.
+   */
+  codigo?: string | null;
+  escopo_negocio?: string | null;
 }
 
 export interface LancamentoV2Form {
@@ -311,7 +322,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     // UM cast local no queryBuilder, mesmo padrão dos `insert(row as any)`
     // já presentes neste hook para financeiro_lancamentos_v2.
     const { data } = await (supabase as any).from('financeiro_safras')
-      .select('id, nome, descricao, ativa')
+      .select('id, nome, descricao, ativa, codigo, escopo_negocio')
       .eq('cliente_id', clienteId)
       .eq('ativa', true)
       .order('ordem_exibicao', { ascending: true })

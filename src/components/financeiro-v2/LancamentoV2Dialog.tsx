@@ -76,6 +76,17 @@ interface Props {
     grupo_custo?: string;
     centro_custo?: string;
     plano_conta_id?: string;
+    /**
+     * Safra e vencimento sugeridos — CUSTEIO-TXT (121e).
+     *
+     * ⚠ O VENCIMENTO VAZIO CONTINUA SENDO O PADRÃO. O PR-FIN-MODAL-VENCIMENTO-02B decidiu
+     * que o prefill NÃO auto-preenche vencimento, e essa decisão vale para todos os
+     * chamadores que não pedem: sem a chave, o campo abre vazio como antes. Quem passa o
+     * valor é quem SABE a regra do seu fluxo — no custeio, competência para Realizado e
+     * competência + 30 para Previsto. Trocar o default machucaria o extrato e a mesa.
+     */
+    safra_id?: string;
+    data_vencimento?: string;
   };
   /**
    * Esconde o bloco de Frequência/Modalidade/Parcelas.
@@ -433,9 +444,11 @@ export function LancamentoV2Dialog({
       // Entradas → destino; demais → origem.
       const today = new Date().toISOString().slice(0, 10);
       setFazendaId(prefill.fazenda_id ?? defaultFazendaId ?? '');
-      setSafraId('');
+      setSafraId(prefill.safra_id ?? '');
       setDataCompetencia(prefill.data_competencia ?? prefill.data_pagamento ?? today);
-      setDataVencimento('');   // PR-FIN-MODAL-VENCIMENTO-02B — prefill não traz vencimento; abre vazio (sem auto-preencher)
+      /* PR-FIN-MODAL-VENCIMENTO-02B — o default segue vazio; só preenche quem passou a
+         chave, porque só esse chamador conhece a regra de vencimento do seu fluxo. */
+      setDataVencimento(prefill.data_vencimento ?? '');
       setDataPagamento(prefill.data_pagamento ?? '');   // PR-FIN-V2-STATUS-01 — sem fallback para hoje
       setStatusTransacao(prefill.status_transacao ?? 'realizado');
       setTipoOperacao(prefill.tipo_operacao ?? '2-Saídas');

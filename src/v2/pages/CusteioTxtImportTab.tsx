@@ -11,6 +11,7 @@
 //     macro/grupo/centro/subcentro continuam derivados pelo fluxo oficial.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { safraSugerida } from '@/lib/agri/safraSugerida';
 import { BlocoTopoAba } from '@/components/ui/bloco-topo-aba';
 import {
   parseCusteioTxtFile,
@@ -36,6 +37,11 @@ function normNome(s: string): string {
 }
 
 /** Último dia do mês de um 'YYYY-MM' → 'YYYY-MM-DD'. Ex.: '2026-04' → '2026-04-30'. */
+/** "FAZENDA MONTERREY", "Faz. Monterrey" e "Monterrey" viram a mesma coisa. */
+function semPalavraFazenda(s: string): string {
+  return normNome(s).replace(/^(FAZENDA|FAZ\.?|SITIO|S[IÍ]TIO)\s+/i, '').trim();
+}
+
 function ultimoDiaDoMes(anoMes: string | null | undefined): string | undefined {
   if (!anoMes) return undefined;
   const m = anoMes.match(/^(\d{4})-(\d{2})$/);
@@ -50,7 +56,9 @@ function ultimoDiaDoMes(anoMes: string | null | undefined): string | undefined {
  * seletores na mesma tela fariam o operador escolher duas vezes, e o segundo
  * poderia contradizer o primeiro. Sem a prop, a tela se comporta como sempre.
  */
-export default function CusteioTxtImportTab({ arquivoInicial }: { arquivoInicial?: File } = {}) {
+export default function CusteioTxtImportTab(
+  { arquivoInicial, contaBancariaId }: { arquivoInicial?: File; contaBancariaId?: string } = {},
+) {
   const [fileName, setFileName] = useState<string | null>(null);
   const [parsing, setParsing] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -74,11 +82,17 @@ export default function CusteioTxtImportTab({ arquivoInicial }: { arquivoInicial
     hookFin.loadContas();
     hookFin.loadFornecedores();
     hookFin.loadClassificacoes();
+    /* ⚠ FALTAVA, E O SELECT DE SAFRA ABRIA COM "Sem safra" SOZINHO — 121e. Os outros três
+       auxiliares eram carregados e este não; o modal recebia uma lista vazia e não havia o
+       que escolher, nem o que sugerir. Medido na tela: o NJ tem seis safras ativas e
+       nenhuma aparecia. */
+    hookFin.loadSafras();
   }, [
     clienteAtual?.id,
     hookFin.loadContas,
     hookFin.loadFornecedores,
     hookFin.loadClassificacoes,
+    hookFin.loadSafras,
   ]);
 
   const fazendasReais = useMemo(
@@ -91,10 +105,19 @@ export default function CusteioTxtImportTab({ arquivoInicial }: { arquivoInicial
 
   // Resolve FAZENDA MONTERREY por match exato de nome; se não achar, undefined
   // (usuário escolhe no modal — não inventamos fazenda).
+  /* ⚠ "FAZENDA MONTERREY" x "Monterrey" — CUSTEIO-TXT (121e). O match exato só acertava
+     quando o cadastro repetia a palavra "Fazenda", e o relatório SEMPRE a traz. Sem isto,
+     o campo abria vazio num caso em que a resposta é óbvia.
+     ⚠ AMBIGUIDADE NÃO SE RESOLVE POR SORTEIO: com zero ou mais de uma candidata o campo
+     fica vazio, para o operador escolher. Duas fazendas "Santa Maria" existem de verdade
+     no cadastro do NJ. */
   const fazendaResolvidaId = useMemo(() => {
     if (!resultado?.fazenda_raw) return undefined;
     const alvo = normNome(resultado.fazenda_raw);
-    return fazendasReais.find((f) => normNome(f.nome) === alvo)?.id;
+    const exatas = fazendasReais.filter((f) => normNome(f.nome) === alvo);
+    if (exatas.length === 1) return exatas[0].id;
+    const semPrefixo = fazendasReais.filter((f) => semPalavraFazenda(f.nome) === semPalavraFazenda(alvo));
+    return semPrefixo.length === 1 ? semPrefixo[0].id : undefined;
   }, [resultado?.fazenda_raw, fazendasReais]);
 
   const dataMes = ultimoDiaDoMes(resultado?.ano_mes);
@@ -110,10 +133,21 @@ export default function CusteioTxtImportTab({ arquivoInicial }: { arquivoInicial
       tipo_operacao: '2-Saídas',
       status_transacao: 'realizado',
       descricao: dialogRow.produto_raw,
-      // conta_bancaria_id / favorecido_id / subcentro / plano_conta_id:
-      // NÃO pré-preenchidos — usuário escolhe no modal oficial.
+      /* A conta que o operador já escolheu na régua da Conciliação — perguntar de novo
+         seria pedir que ele repetisse o que acabou de dizer. */
+      conta_bancaria_id: contaBancariaId,
+      /* ⚠ VENCIMENTO = COMPETÊNCIA no Realizado. O custeio nasce como despesa do mês que
+         já correu; para o Previsto a regra é competência + 30, mas este fluxo grava
+         Realizado, então a data é a mesma. Editável no modal, como tudo aqui. */
+      data_vencimento: dataMes,
+      /* Sugestão pela mesma função que o cadastro de safra usa; `null` quando não há
+         resposta única, e aí o campo abre vazio de propósito. */
+      safra_id: safraSugerida(dataMes ?? null, 'pecuaria', hookFin.safras) ?? undefined,
+      // favorecido_id: vazio de propósito — o custeio não nomeia fornecedor.
+      // subcentro / plano_conta_id: dependem da memória de apelidos por Sub-Fam
+      // (item 2 do 121, ainda não implementado) — ver o relatório.
     };
-  }, [dialogRow, fazendaResolvidaId, dataMes]);
+  }, [dialogRow, fazendaResolvidaId, dataMes, contaBancariaId, hookFin.safras]);
 
   // Contexto operacional read-only (NÃO vira classificação).
   const referencia = useMemo(() => {
@@ -412,6 +446,9 @@ export default function CusteioTxtImportTab({ arquivoInicial }: { arquivoInicial
         contas={hookFin.contasBancarias}
         classificacoes={hookFin.classificacoes}
         fornecedores={hookFin.fornecedores}
+        /* Sem esta prop o select nasce vazio, e não adianta sugerir uma safra que a lista
+           do modal não conhece — a sugestão viraria um id sem opção correspondente. */
+        safras={hookFin.safras}
         onCriarFornecedor={hookFin.criarFornecedor}
         defaultFazendaId={fazendaResolvidaId}
         prefill={prefill}
