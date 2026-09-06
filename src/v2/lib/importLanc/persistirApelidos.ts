@@ -43,13 +43,43 @@ function novosDoOperador(mapa: DeParaMap): Array<{ texto: string; valor: string 
     .map((i) => ({ texto: i.texto, valor: i.valor as string }));
 }
 
+/** A origem em que ESTE importador grava. É a única que ele tem permissão de alterar. */
+export const ORIGEM_IMPORTACAO = 'importacao';
+
 /**
- * Subcentro. A tabela tem UNIQUE (cliente_id, lower(trim(alias_text))), então o
- * conflito se resolve por UPDATE da MESMA linha — que é literalmente "remover do
- * antigo e gravar no novo" quando a chave é o texto.
+ * O mapa "texto normalizado → id da linha que este importador pode repontar".
  *
- * `financeiro_subcentro_aliases` está fora dos types gerados; mesmo idioma do
- * FinV2SubcentroAliasesTab, dono da tabela. Ver pendência de regeneração.
+ * ⚠ SÓ AS LINHAS DA PRÓPRIA ORIGEM ENTRAM — 121i. A unicidade mudou em 20260906130318:
+ * de `(cliente_id, alias_text)` para `(cliente_id, origem, lower(trim(alias_text)))`, e a
+ * global para `(origem, alias)`. A partir dali o MESMO texto existe em mais de uma origem,
+ * e um mapa cego repontaria a linha do custeio — reescrevendo a memória de uma via que não
+ * fica sabendo. Repontar é para o que é meu; o resto é leitura.
+ * ⚠ O QUE ACONTECE COM O TEXTO DE OUTRA ORIGEM: cai no `else` do chamador e vira um INSERT
+ * em `importacao`. Não é duplicata — são dois espaços, e a unicidade nova os permite. O
+ * `seed` global continua existindo como fallback de quem não tem apelido próprio.
+ */
+export function mapaDeRepontamento(
+  linhas: ReadonlyArray<{ id: string; cliente_id: string | null; alias_text: string; origem: string }>,
+  clienteId: string,
+): Record<string, string> {
+  const mapa: Record<string, string> = {};
+  for (const l of linhas) {
+    if (l.origem !== ORIGEM_IMPORTACAO) continue;
+    if (l.cliente_id !== null && l.cliente_id !== clienteId) continue;
+    mapa[normalizar(l.alias_text)] = l.id;
+  }
+  return mapa;
+}
+
+/**
+ * Subcentro. A unicidade é `(cliente_id, origem, lower(trim(alias_text)))` desde
+ * 20260906130318 — antes era `(cliente_id, alias_text)`. O conflito DENTRO da origem
+ * `importacao` se resolve por UPDATE da mesma linha, que é "remover do antigo e gravar no
+ * novo" quando a chave é o texto; o mesmo texto em OUTRA origem não é conflito e não se
+ * toca (ver `mapaDeRepontamento`).
+ *
+ * `financeiro_subcentro_aliases` entrou nos types gerados na regeneração de 02/09; o
+ * idioma aqui é o mesmo do FinV2SubcentroAliasesTab, dono da tabela.
  */
 async function persistirSubcentro(
   clienteId: string,
@@ -88,7 +118,7 @@ async function persistirSubcentro(
             cliente_id: clienteId,
             alias_text: texto,
             plano_conta_id: planoContaId,
-            origem: 'importacao',
+            origem: ORIGEM_IMPORTACAO,
           })
           .select('id')
           .single();

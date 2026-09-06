@@ -20,7 +20,7 @@ import {
 import type { ContaResolvivel } from '@/v2/lib/mesa/resolverConta';
 import type { LancamentoV2Form } from '@/hooks/useFinanceiroV2';
 import { montarPayloadConta, type TipoOperacaoFinanceira } from '@/lib/financeiro/contaPayload';
-import { persistirApelidos, type ResultadoApelidos } from '@/v2/lib/importLanc/persistirApelidos';
+import { persistirApelidos, mapaDeRepontamento, type ResultadoApelidos } from '@/v2/lib/importLanc/persistirApelidos';
 import {
   montarDePara, montarPrevia, contarPendentes, chaveFechamento,
   normalizar as normalizarTexto,
@@ -33,7 +33,7 @@ import {
  * Valida em runtime a linha de financeiro_subcentro_aliases (tabela sem tipo gerado).
  * Devolve null quando a forma não bate — nenhuma suposição sobre o payload.
  */
-function normalizarAlias(bruto: unknown): Omit<SubcentroAliasRef, 'subcentro'> | null {
+function normalizarAlias(bruto: unknown): (Omit<SubcentroAliasRef, 'subcentro'> & { origem: string }) | null {
   if (typeof bruto !== 'object' || bruto === null) return null;
   const r: Record<string, unknown> = Object.fromEntries(Object.entries(bruto));
   const id = r.id, aliasText = r.alias_text, planoId = r.plano_conta_id, cli = r.cliente_id;
@@ -43,6 +43,10 @@ function normalizarAlias(bruto: unknown): Omit<SubcentroAliasRef, 'subcentro'> |
     cliente_id: typeof cli === 'string' ? cli : null,
     alias_text: aliasText,
     plano_conta_id: planoId,
+    /* ⚠ A ORIGEM ENTRA NA VALIDAÇÃO — 121i. Sem ela, o mapa de repontamento não tem como
+       distinguir o alias deste importador do que o custeio gravou. O default `'manual'` é
+       o da coluna no banco: linha sem origem legível não é minha, e não se reponta. */
+    origem: typeof r.origem === 'string' ? r.origem : 'manual',
   };
 }
 
@@ -160,7 +164,7 @@ export function useImportLancamentosExcel(somenteAtualizar = false) {
          motivo. */
       supabase
         .from('financeiro_subcentro_aliases')
-        .select('id, cliente_id, alias_text, plano_conta_id')
+        .select('id, cliente_id, alias_text, plano_conta_id, origem')
         .eq('ativo', true),
       supabase
         .from('financeiro_plano_contas')
@@ -184,14 +188,11 @@ export function useImportLancamentosExcel(somenteAtualizar = false) {
       // A resposta vem sem tipo (tabela ausente dos types): validar a forma em runtime
       // antes de usar, em vez de propagar `any`.
       const brutos: unknown[] = Array.isArray(aliasRes.data) ? aliasRes.data : [];
-      const idsPorTexto: Record<string, string> = {};
-      for (const bruto of brutos) {
-        const r = normalizarAlias(bruto);
-        if (r && (r.cliente_id === null || r.cliente_id === clienteId)) {
-          idsPorTexto[normalizarTexto(r.alias_text)] = r.id;
-        }
-      }
-      setAliasIdPorTexto(idsPorTexto);
+      /* ⚠ LER TUDO, REPONTAR SÓ O QUE É MEU — 121i. `aliasesSubcentro` (a SUGESTÃO) segue
+         com todas as origens: a memória é uma só para ler. O mapa de repontamento é que
+         se restringe a `origem = 'importacao'`, porque escrever é que tem dono. */
+      const linhas = brutos.flatMap(b => { const r = normalizarAlias(b); return r ? [r] : []; });
+      setAliasIdPorTexto(mapaDeRepontamento(linhas, clienteId));
       setAliasesSubcentro(brutos.flatMap((bruto) => {
         const r = normalizarAlias(bruto);
         if (!r) return [];
