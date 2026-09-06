@@ -9,6 +9,7 @@
  * são intencionais e padrão do projeto para RPCs/tabelas novas.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ErroUsuarioSeguro, normalizarErro } from '@/lib/erroOperacional';
 import { supabase } from '@/integrations/supabase/client';
 import type { ClassificacaoRow } from '@/v2/lib/excelPreview/loteToClassificacao';
 
@@ -202,19 +203,63 @@ export function useClassificacaoStaging(
     mutationFn: async (params: {
       sessao_id: string;
       rows: ClassificacaoRow[];
+      /** Progresso por lote, para a tela não ficar muda em arquivos grandes. */
+      onProgresso?: (feitas: number, total: number) => void;
     }): Promise<PopulateResult> => {
       if (!clienteId) throw new Error('Cliente atual não definido');
-      // PR-M2: cast `any` enquanto types não regenerarem.
-      const { data, error } = await (supabase as any).rpc(
-        'fn_classificacao_populate_staging',
-        {
-          p_sessao_id: params.sessao_id,
-          p_cliente_id: clienteId,
-          p_rows: params.rows,
-        },
-      );
-      if (error) throw error;
-      return data as PopulateResult;
+
+      /**
+       * ⚠ EM LOTES, PORQUE A CHAMADA INTEIRA MORRIA CALADA — ENR-EXCEL-POPULAR.
+       *
+       * 492 linhas do NJ voltavam "Não foi possível concluir…" e o staging ficava com
+       * ZERO: a transação inteira caía e nada era gravado. `authenticated` tem
+       * `statement_timeout = 8s`, e a RPC faz, POR LINHA, uma busca de fazenda, duas
+       * resoluções de conta e uma de contexto — o custo cresce com o arquivo, então o
+       * limite não é uma linha ruim: é o tamanho.
+       * ⚠ LOTE É SEGURO AQUI PORQUE A RPC NÃO APAGA NADA. Conferido no corpo dela: zero
+       * DELETE, zero TRUNCATE, e o laço é `FOR v_row IN jsonb_array_elements(p_rows)`.
+       * Chamar N vezes com a MESMA `sessao_id` acumula — não precisou de `p_append`.
+       * ⚠ E O QUE JÁ ENTROU, FICA. Se o lote 4 falhar, os três primeiros continuam no
+       * staging e a mensagem diz onde parou: reimportar 492 para recuperar 300 é o
+       * desperdício que o "tudo ou nada" cobrava.
+       */
+      const TAMANHO_LOTE = 100;
+      const total = params.rows.length;
+      const acumulado: PopulateResult = {
+        sessao_id: params.sessao_id, total_linhas: 0, inseridas: 0, counts_por_status: {},
+      };
+
+      for (let i = 0; i < total; i += TAMANHO_LOTE) {
+        const fatia = params.rows.slice(i, i + TAMANHO_LOTE);
+        // PR-M2: cast `any` enquanto types não regenerarem.
+        const { data, error } = await (supabase as any).rpc(
+          'fn_classificacao_populate_staging',
+          { p_sessao_id: params.sessao_id, p_cliente_id: clienteId, p_rows: fatia },
+        );
+        if (error) {
+          /* ⚠ DIZ ONDE PAROU E O QUE JÁ ENTROU — sem vazar o erro do banco. `normalizarErro`
+             descarta `message`, `details` e `hint` do PostgREST de propósito (só o SQLSTATE
+             conhecido atravessa), e furar isso aqui seria trocar um defeito por outro. O que
+             falta ao operador não é o texto do Postgres: é saber quantas linhas se salvaram
+             e de onde recomeçar. Isso é do nosso domínio e pode ser dito inteiro.
+             ⚠ O SQLSTATE SEGUE PELO CAMINHO NORMAL: 57014 agora tem categoria própria
+             ('tempo') e vira "tente com menos linhas", em vez de "procure o suporte". */
+          const causa = normalizarErro(error, 'popularStagingClassificacao');
+          throw new ErroUsuarioSeguro(
+            `${causa.mensagem} Parou no lote que começa na linha ${i + 1} de ${total}; ` +
+            `${acumulado.inseridas} linha(s) já estão no staging e não se perdem.`,
+          );
+        }
+        const parcial = data as PopulateResult;
+        acumulado.total_linhas += parcial?.total_linhas ?? fatia.length;
+        acumulado.inseridas += parcial?.inseridas ?? 0;
+        for (const [k, v] of Object.entries(parcial?.counts_por_status ?? {})) {
+          const chave = k as MatchStatus;
+          acumulado.counts_por_status[chave] = (acumulado.counts_por_status[chave] ?? 0) + (v ?? 0);
+        }
+        params.onProgresso?.(Math.min(i + TAMANHO_LOTE, total), total);
+      }
+      return acumulado;
     },
     onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: queryKeyStaging(variables.sessao_id) });

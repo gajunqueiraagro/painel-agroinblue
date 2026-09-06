@@ -145,7 +145,9 @@ export function EnriquecimentoImportarDialog({ open, onClose, clienteId, onImpor
           <div className="flex items-center justify-end gap-2 pt-1">
             <Button variant="outline" size="sm" className="h-7 text-[11px]" onClick={onClose}>Cancelar</Button>
             <Button size="sm" className="h-7 text-[11px]" disabled={!podePopular} onClick={handlePopular}>
-              {imp.isPopulating ? 'Populando…' : 'Popular staging'}
+              {imp.isPopulating
+                ? (imp.progresso ? `Populando… ${imp.progresso.feitas}/${imp.progresso.total}` : 'Populando…')
+                : 'Popular staging'}
             </Button>
           </div>
         </div>

@@ -34,6 +34,7 @@ export function useImportarClassificacao(clienteId: string | null | undefined) {
   const qc = useQueryClient();
   // sessaoId=null → a query de staging fica desabilitada; só usamos populate.
   const { populate, isPopulating } = useClassificacaoStaging(null, clienteId);
+  const [progresso, setProgresso] = useState<{ feitas: number; total: number } | null>(null);
 
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [lote, setLote] = useState<ClassificacaoParseResult | null>(null);
@@ -116,7 +117,14 @@ export function useImportarClassificacao(clienteId: string | null | undefined) {
         conta_destino_id: id && !id.ignorar ? id.contaId : null,
       };
     });
-    const res = await populate({ sessao_id: novaSessao, rows });
+    const res = await populate({
+      sessao_id: novaSessao, rows,
+      /* O botão fica em "Populando…" por vários segundos num arquivo de 500 linhas; sem
+         contagem, o operador não distingue "trabalhando" de "travado" — e foi assim que a
+         falha silenciosa passou por homologação como "o botão não faz nada". */
+      onProgresso: (feitas, total) => setProgresso({ feitas, total }),
+    });
+    setProgresso(null);
     // A nova sessão precisa aparecer no seletor da Mesa (a staging já é invalidada
     // pelo onSuccess de populate; aqui invalidamos a LISTA de sessões).
     qc.invalidateQueries({ queryKey: ['classificacao-sessoes', clienteId] });
@@ -126,6 +134,6 @@ export function useImportarClassificacao(clienteId: string | null | undefined) {
   return {
     arquivo, lote, errosParser, parsing,
     contasDistintas, todasResolvidasOuIgnoradas, contaMap,
-    selecionarArquivo, resolverConta, popular, isPopulating, reset,
+    selecionarArquivo, resolverConta, popular, isPopulating, progresso, reset,
   };
 }

@@ -39,6 +39,8 @@ export type CategoriaErro =
   | 'vinculo'
   | 'formato'
   | 'rede'
+  /** A consulta passou do `statement_timeout` do papel e o banco a interrompeu. */
+  | 'tempo'
   | 'validacao'
   | 'desconhecido';
 
@@ -66,6 +68,11 @@ const MSG: Readonly<Record<CategoriaErro, string>> = {
   vinculo:      'Vínculo inválido: verifique fazenda, conta ou fornecedor.',
   formato:      'Um dos campos está em formato inválido.',
   rede:         'Falha de comunicação. Verifique a conexão e tente novamente.',
+  /* ⚠ TEMPO NÃO É "ERRO DESCONHECIDO" — ENR-EXCEL-POPULAR. 57014 caía em 'desconhecido' e
+     virava "Tente novamente; se persistir, procure o suporte" — um conselho errado: tentar
+     de novo com o mesmo volume dá o mesmo resultado, e o suporte não tem o que consertar.
+     O que resolve é menos linhas por chamada, e é isso que a mensagem passa a dizer. */
+  tempo:        'A operação demorou mais que o limite e foi interrompida pelo banco. Tente com menos linhas de cada vez.',
   validacao:    'Não foi possível concluir. Tente novamente; se persistir, procure o suporte.',
   desconhecido: 'Não foi possível concluir. Tente novamente; se persistir, procure o suporte.',
 };
@@ -76,6 +83,7 @@ const POR_SQLSTATE: Readonly<Record<string, CategoriaErro>> = {
   '23505': 'conflito',
   '23503': 'vinculo',
   '22P02': 'formato',
+  '57014': 'tempo',      // statement_timeout — `authenticated` tem 8s
 };
 
 /**
