@@ -19,8 +19,12 @@ import type { Json, Database } from '@/integrations/supabase/types';
 
 /* ⚠ O TIPO VEM DO BANCO, não de um `as`. A tabela entrou no `types.ts` em `eb478369`;
    antes disto o único caminho seria um cast, e ele deixaria de acusar no dia em que uma
-   coluna mudasse de nome. */
-type DocRow = Database['public']['Tables']['financeiro_lancamento_documentos']['Row'];
+   coluna mudasse de nome.
+   ⚠ A LISTA AGORA VEM DA VIEW — DOC-UMA-FONTE-01. `vw_lancamento_documentos` une os
+   documentos próprios do lançamento aos da OC que o gerou (por `zoo_operacao_partes`), no
+   mesmo formato. Toda coluna dela é nullable, porque é o que o Postgres declara para um
+   UNION — por isso o mapeamento continua perguntando antes de ler. */
+type DocRow = Database['public']['Views']['vw_lancamento_documentos']['Row'];
 
 export type EspecieLancDoc = 'nf' | 'boleto' | 'recibo' | 'comprovante' | 'outro';
 
@@ -33,8 +37,19 @@ export const ESPECIES_LANC_DOC: { value: EspecieLancDoc; label: string }[] = [
   { value: 'outro', label: 'Outro' },
 ];
 
+/** De onde o documento vem — e, com ele, qual writer o governa. */
+export type OrigemLancDoc = 'lancamento' | 'operacao';
+
 export interface LancDocumento {
   id: string;
+  /**
+   * ⚠ A ORIGEM DECIDE O WRITER, não a aparência. `'operacao'` significa que o documento é
+   * da OC: quem o edita, cancela e guarda o arquivo é a família `oc_documento_*`, no bucket
+   * `oc-documentos`. Tratar os dois iguais criaria duas cópias do mesmo papel.
+   */
+  origem: OrigemLancDoc;
+  /** A operação dona, quando `origem === 'operacao'`. É o endereço do drill para a OC. */
+  operacaoId: string | null;
   especie: EspecieLancDoc;
   nome: string;
   numero: string | null;
@@ -86,15 +101,41 @@ export interface LancamentoDocumentosApi {
   confronto: Confronto | null;
   loading: boolean;
   saving: boolean;
+  /**
+   * A operação que gerou este lançamento, quando existe parte viva — DOC-UMA-FONTE-01.
+   *
+   * ⚠ É O QUE DECIDE ONDE O PRÓXIMO DOCUMENTO NASCE. Com operação, "Adicionar" grava na
+   * OC (`oc_documento_registrar`, bucket `oc-documentos`); sem ela, no próprio lançamento.
+   * Nunca as duas: uma NF em duas tabelas são dois papéis que divergem no primeiro
+   * cancelamento.
+   */
+  operacaoId: string | null;
+  /** 'compra' | 'venda' | 'abate' — o parâmetro certo para reabrir a OC. */
+  operacaoTipo: string | null;
   registrar: (p: LancDocPayload) => Promise<string | null>;
   editar: (documentoId: string, versaoEsperada: number, p: LancDocPayload) => Promise<boolean>;
   cancelar: (documentoId: string, motivo: string) => Promise<boolean>;
   anexar: (documentoId: string, versaoEsperada: number, file: File) => Promise<boolean>;
-  urlAssinada: (caminho: string) => Promise<string | null>;
+  urlAssinada: (caminho: string, origem?: OrigemLancDoc) => Promise<string | null>;
   recarregar: () => Promise<void>;
 }
 
 const BUCKET = 'fin-documentos';
+const BUCKET_OC = 'oc-documentos';
+
+/**
+ * Espécie do lançamento → espécie da OC.
+ *
+ * ⚠ OS DOIS VOCABULÁRIOS NÃO SE CORRESPONDEM UM A UM, e o CHECK da RPC da OC só aceita
+ * `nf_principal | nf_complementar | recibo | outro`. Boleto e comprovante não existem lá:
+ * viram `outro`, e a espécie escolhida some. Por isso o formulário avisa, em vez de
+ * deixar o operador descobrir depois abrindo a OC.
+ * ⚠ `nf_complementar` NUNCA é escolhida daqui: ela exige `documento_origem_id`, que é uma
+ * decisão sobre qual NF ela complementa — pergunta que só a aba da OC sabe fazer.
+ */
+export function especieParaOC(e: EspecieLancDoc): string {
+  return e === 'nf' ? 'nf_principal' : e === 'recibo' ? 'recibo' : 'outro';
+}
 /** 10 MB — o limite é do produto; o bucket tem o seu, e a recusa aqui é a que explica. */
 export const TAMANHO_MAXIMO = 10 * 1024 * 1024;
 export const TIPOS_ACEITOS = ['application/pdf', 'image/jpeg', 'image/png'];
@@ -133,11 +174,17 @@ function paraJson(p: LancDocPayload): Record<string, Json> {
 export const especieValida = (e: unknown): EspecieLancDoc =>
   e === 'nf' || e === 'boleto' || e === 'recibo' || e === 'comprovante' ? e : 'outro';
 
+/** Texto do banco → origem do vocabulário, sem cast. Desconhecido vira `'lancamento'`,
+ *  que é o caminho conservador: o writer do próprio lançamento recusa o que não é dele. */
+const origemValida = (o: unknown): OrigemLancDoc => (o === 'operacao' ? 'operacao' : 'lancamento');
+
 function daLinha(r: DocRow): LancDocumento {
   const n = (v: unknown) => (v == null ? null : Number(v));
   const s = (v: unknown) => (v == null ? null : String(v));
   return {
-    id: String(r.id),
+    id: String(r.documento_id),
+    origem: origemValida(r.origem),
+    operacaoId: s(r.operacao_id),
     especie: especieValida(r.especie),
     nome: String(r.nome ?? ''),
     numero: s(r.numero), serie: s(r.serie), chaveAcesso: s(r.chave_acesso),
@@ -167,6 +214,41 @@ export function daConfronto(c: Json | null | undefined): Confronto | null {
   };
 }
 
+/**
+ * O confronto contando as DUAS origens — DOC-UMA-FONTE-01.
+ *
+ * ⚠ ESTA SOMA CONTRARIA O QUE ESTE ARQUIVO DIZIA, e é deliberado. `fin_documento_confronto`
+ * lê `financeiro_lancamento_documentos` e só ela: a NF que mora na OC ficava fora, e o
+ * lançamento aparecia como "nada documentado" tendo a nota anexada um clique adiante. A
+ * pergunta mudou — "quanto deste lançamento está documentado, venha o papel de onde vier" —
+ * e a resposta antiga não a respondia.
+ * ⚠ A ARITMÉTICA É A DA RPC, copiada da definição dela, não redigitada de cabeça:
+ * `confere` exige ao menos um documento COM valor e diferença de até R$ 0,01; a diferença é
+ * documentado − lançamento, arredondada a 2 casas. Se as duas contas divergirem um dia, é
+ * porque alguém mudou uma sem a outra.
+ * ⚠ A CORREÇÃO DE RAIZ É NO BANCO: `fin_documento_confronto` passar a ler
+ * `vw_lancamento_documentos`. Aí esta função morre e o topo volta a só formatar o que leu.
+ * Enquanto ela existe, `valor_lancamento` continua vindo do banco — o front não inventa
+ * nem o valor do lançamento nem a tolerância.
+ */
+export function confrontoDasDuasOrigens(
+  doBanco: Confronto | null, docs: readonly LancDocumento[],
+): Confronto | null {
+  if (!doBanco) return null;
+  const ativos = docs.filter(d => !d.cancelado);
+  const comValor = ativos.filter(d => d.valorDocumento != null);
+  const total = comValor.reduce((acc, d) => acc + (d.valorDocumento ?? 0), 0);
+  const diferenca = Math.round((total - doBanco.valorLancamento) * 100) / 100;
+  return {
+    valorLancamento: doBanco.valorLancamento,
+    valorDocumentado: total,
+    docsAtivos: ativos.length,
+    docsComValor: comValor.length,
+    diferenca,
+    confere: comValor.length > 0 && Math.abs(diferenca) <= 0.01,
+  };
+}
+
 export function useLancamentoDocumentos(
   lancamentoId: string | null,
   clienteId: string | null,
@@ -175,6 +257,8 @@ export function useLancamentoDocumentos(
   const [confronto, setConfronto] = useState<Confronto | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [operacaoId, setOperacaoId] = useState<string | null>(null);
+  const [operacaoTipo, setOperacaoTipo] = useState<string | null>(null);
   const montado = useRef(true);
   useEffect(() => () => { montado.current = false; }, []);
 
@@ -184,10 +268,10 @@ export function useLancamentoDocumentos(
     if (!habilitado) { setDocumentos([]); setConfronto(null); return; }
     setLoading(true);
     try {
-      /* A lista vem da tabela e o confronto da RPC — duas perguntas, duas fontes, e a
-         segunda é a que manda no topo. */
+      /* A lista vem da VIEW (as duas origens) e o valor do lançamento continua vindo da
+         RPC — quem sabe quanto vale o lançamento é o banco. */
       const [lista, conf] = await Promise.all([
-        supabase.from('financeiro_lancamento_documentos')
+        supabase.from('vw_lancamento_documentos')
           .select('*').eq('lancamento_id', lancamentoId!).eq('cliente_id', clienteId!)
           .order('uploaded_em', { ascending: false }),
         supabase.rpc('fin_documento_confronto', {
@@ -197,8 +281,28 @@ export function useLancamentoDocumentos(
       if (!montado.current) return;
       if (lista.error) throw lista.error;
       if (conf.error) throw conf.error;
-      setDocumentos((lista.data ?? []).map(daLinha));
-      setConfronto(daConfronto(conf.data));
+      const docs = (lista.data ?? []).map(daLinha);
+      setDocumentos(docs);
+      setConfronto(confrontoDasDuasOrigens(daConfronto(conf.data), docs));
+
+      /* ⚠ A PERGUNTA É FEITA MESMO SEM DOCUMENTO NENHUM. Deduzir a operação das linhas da
+         view só funcionaria depois do primeiro documento — e é justamente o primeiro que
+         precisa saber onde nascer. */
+      const parte = await supabase
+        .from('zoo_operacao_partes')
+        .select('operacao_id, zoo_operacoes_comerciais(tipo_operacao)')
+        .eq('financeiro_lancamento_id', lancamentoId!)
+        .neq('cancelada', true)
+        .limit(1)
+        .maybeSingle();
+      if (!montado.current) return;
+      setOperacaoId(parte.data?.operacao_id ?? null);
+      /* ⚠ O TIPO É METADE DO ENDEREÇO — a lição do PR-OC-VENDA-FIN-PREVISAO-01D. `oc_compra`,
+         `oc_venda` e `oc_abate` são parâmetros diferentes, e abrir uma venda como compra faz
+         a hidratação recusar e largar o usuário sem modal. Vem no mesmo embed para não
+         custar uma segunda ida. */
+      const op = parte.data?.zoo_operacoes_comerciais;
+      setOperacaoTipo(op && typeof op.tipo_operacao === 'string' ? op.tipo_operacao : null);
     } finally {
       if (montado.current) setLoading(false);
     }
@@ -219,9 +323,19 @@ export function useLancamentoDocumentos(
     if (!habilitado) return null;
     setSaving(true);
     try {
-      const { data, error } = await supabase.rpc('fin_documento_registrar', {
-        p_lancamento_id: lancamentoId!, p_cliente_id: clienteId!, p_payload: paraJson(p),
-      });
+      /* ⚠ COM OPERAÇÃO, O DOCUMENTO NASCE NA OC — nunca uma cópia de cada lado.
+         ⚠ E NASCE SEM VALOR: no modelo da OC o valor de um documento vem dos COMPONENTES
+         (acréscimo, desconto comercial, retenção), que mexem na liquidação da operação.
+         Escolher uma natureza aqui seria decidir dinheiro por conta própria; por isso o
+         formulário esconde o campo de valor quando o destino é a OC e diz onde ele mora. */
+      const { data, error } = operacaoId
+        ? await supabase.rpc('oc_documento_registrar', {
+            p_operacao_id: operacaoId, p_cliente_id: clienteId!,
+            p_payload: { ...paraJson(p), especie: especieParaOC(p.especie), valor_documento: undefined },
+          })
+        : await supabase.rpc('fin_documento_registrar', {
+            p_lancamento_id: lancamentoId!, p_cliente_id: clienteId!, p_payload: paraJson(p),
+          });
       if (error) throw error;
       const env = aplicarEnvelope(data);
       await recarregar();
@@ -232,14 +346,29 @@ export function useLancamentoDocumentos(
     }
   }, [lancamentoId, clienteId, habilitado, recarregar]);
 
+  /* Quem governa o documento é a origem DELE, não a do lançamento: um lançamento de OC
+     pode ter, no futuro, documento próprio; e o writer errado recusaria — ou pior,
+     aceitaria e a outra tabela não ficaria sabendo. */
+  const origemDoDocumento = useCallback(
+    (documentoId: string): OrigemLancDoc =>
+      documentos.find(d => d.id === documentoId)?.origem ?? 'lancamento',
+    [documentos]);
+
   const editar = useCallback(async (documentoId: string, versaoEsperada: number, p: LancDocPayload) => {
     if (!clienteId) return false;
     setSaving(true);
     try {
-      const { data, error } = await supabase.rpc('fin_documento_editar', {
-        p_documento_id: documentoId, p_cliente_id: clienteId,
-        p_versao_esperada: versaoEsperada, p_payload: paraJson(p),
-      });
+      const daOC = origemDoDocumento(documentoId) === 'operacao';
+      const { data, error } = daOC
+        ? await supabase.rpc('oc_documento_editar', {
+            p_documento_id: documentoId, p_cliente_id: clienteId,
+            p_versao_esperada: versaoEsperada,
+            p_payload: { ...paraJson(p), especie: especieParaOC(p.especie), valor_documento: undefined },
+          })
+        : await supabase.rpc('fin_documento_editar', {
+            p_documento_id: documentoId, p_cliente_id: clienteId,
+            p_versao_esperada: versaoEsperada, p_payload: paraJson(p),
+          });
       if (error) throw error;
       aplicarEnvelope(data);
       await recarregar();
@@ -253,9 +382,13 @@ export function useLancamentoDocumentos(
     if (!clienteId) return false;
     setSaving(true);
     try {
-      const { data, error } = await supabase.rpc('fin_documento_cancelar', {
-        p_documento_id: documentoId, p_cliente_id: clienteId, p_motivo: motivo,
-      });
+      const { data, error } = origemDoDocumento(documentoId) === 'operacao'
+        ? await supabase.rpc('oc_documento_cancelar', {
+            p_documento_id: documentoId, p_cliente_id: clienteId, p_motivo: motivo,
+          })
+        : await supabase.rpc('fin_documento_cancelar', {
+            p_documento_id: documentoId, p_cliente_id: clienteId, p_motivo: motivo,
+          });
       if (error) throw error;
       aplicarEnvelope(data);
       await recarregar();
@@ -279,11 +412,20 @@ export function useLancamentoDocumentos(
     if (file.size > TAMANHO_MAXIMO) throw new Error('Arquivo acima de 10 MB.');
     setSaving(true);
     try {
-      const caminho = `${clienteId}/${lancamentoId}/${Date.now()}-${file.name}`;
-      const up = await supabase.storage.from(BUCKET).upload(caminho, file, { upsert: false });
+      const doc = documentos.find(d => d.id === documentoId);
+      const daOC = doc?.origem === 'operacao';
+      /* ⚠ CADA BUCKET COM O SEU CAMINHO. O da OC é `{cliente}/{operacao}/{documento}.ext` —
+         a convenção de `caminhoDocumentoOC`, e é dela que a policy por cliente depende
+         (`foldername[1]`). Subir o arquivo da OC no caminho do lançamento passaria na
+         policy e deixaria o arquivo onde a aba da OC não o procura. */
+      const caminho = daOC && doc?.operacaoId
+        ? `${clienteId}/${doc.operacaoId}/${documentoId}.${file.name.split('.').pop() ?? 'bin'}`
+        : `${clienteId}/${lancamentoId}/${Date.now()}-${file.name}`;
+      const up = await supabase.storage.from(daOC ? BUCKET_OC : BUCKET)
+        .upload(caminho, file, { upsert: false });
       if (up.error) throw up.error;
       return await editar(documentoId, versaoEsperada, {
-        especie: documentos.find(d => d.id === documentoId)?.especie ?? 'outro',
+        especie: doc?.especie ?? 'outro',
         url: caminho, tipo: file.type, tamanhoBytes: file.size,
       });
     } finally {
@@ -291,11 +433,17 @@ export function useLancamentoDocumentos(
     }
   }, [habilitado, clienteId, lancamentoId, documentos, editar]);
 
-  const urlAssinada = useCallback(async (caminho: string) => {
-    const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(caminho, 60);
+  /* ⚠ O ARQUIVO MORA NO BUCKET DA ORIGEM. Assinar no bucket errado devolve 404 e a tela
+     diria "não foi possível abrir" sobre um arquivo que existe. A policy de leitura do
+     `oc-documentos` é por CLIENTE (`foldername[1] IN get_user_cliente_ids`), não por
+     operação — então quem abre o lançamento baixa a NF da OC sem permissão nova. */
+  const urlAssinada = useCallback(async (caminho: string, origem: OrigemLancDoc = 'lancamento') => {
+    const bucket = origem === 'operacao' ? BUCKET_OC : BUCKET;
+    const { data, error } = await supabase.storage.from(bucket).createSignedUrl(caminho, 60);
     if (error) return null;
     return data?.signedUrl ?? null;
   }, []);
 
-  return { documentos, confronto, loading, saving, registrar, editar, cancelar, anexar, urlAssinada, recarregar };
+  return { documentos, confronto, loading, saving, operacaoId, operacaoTipo,
+    registrar, editar, cancelar, anexar, urlAssinada, recarregar };
 }

@@ -17,6 +17,7 @@
  * uma frase, não vermelho e um bloqueio.
  */
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -50,6 +51,7 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, fornecedores }: {
   somenteLeitura?: boolean;
   fornecedores: { id: string; nome: string }[];
 }) {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [formAberto, setFormAberto] = useState(false);
   const [editando, setEditando] = useState<LancDocumento | null>(null);
   const [cancelando, setCancelando] = useState<LancDocumento | null>(null);
@@ -58,9 +60,29 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, fornecedores }: {
   const c = api.confronto;
   const ativos = api.documentos.filter(d => !d.cancelado);
 
+  /**
+   * Abre a OC na aba Documentos — DOC-UMA-FONTE-01.
+   *
+   * ⚠ MESMA CONVENÇÃO DE `abrirOperacaoOC`, copiada dela: três parâmetros mutuamente
+   * exclusivos (`oc_compra`/`oc_venda`/`oc_abate`), e apagar os outros dois não é higiene —
+   * dois ligados ao mesmo tempo abrem dois shells no mesmo render. O tipo vem do banco
+   * porque um id sem tipo é meio endereço.
+   */
+  const abrirOperacao = (d: LancDocumento) => {
+    if (!d.operacaoId) return;
+    const p = new URLSearchParams(searchParams);
+    const tipo = api.operacaoTipo;
+    if (tipo === 'venda') { p.set('oc_venda', '1'); p.delete('oc_compra'); p.delete('oc_abate'); }
+    else if (tipo === 'abate') { p.set('oc_abate', '1'); p.delete('oc_compra'); p.delete('oc_venda'); }
+    else { p.set('oc_compra', '1'); p.delete('oc_venda'); p.delete('oc_abate'); }
+    p.set('oc_id', d.operacaoId);
+    p.set('oc_aba', 'documentos');
+    setSearchParams(p);
+  };
+
   const abrirArquivo = async (d: LancDocumento) => {
     if (!d.url) return;
-    const url = await api.urlAssinada(d.url);
+    const url = await api.urlAssinada(d.url, d.origem);
     if (!url) { toast.error('Não foi possível abrir o arquivo.'); return; }
     window.open(url, '_blank', 'noopener');
   };
@@ -108,6 +130,8 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, fornecedores }: {
         <span className="text-[11px] text-muted-foreground">
           {ativos.length === 0 ? 'Nenhum documento anexado'
             : `${ativos.length} ${ativos.length === 1 ? 'documento' : 'documentos'}`}
+          {/* O destino do PRÓXIMO documento, dito antes do clique — nunca depois. */}
+          {api.operacaoId && ' · o próximo documento nasce na operação comercial'}
         </span>
         <Button type="button" size="sm" className="h-7 gap-1 px-2.5 text-[11px]"
           disabled={somenteLeitura} onClick={() => { setEditando(null); setFormAberto(true); }}>
@@ -121,7 +145,21 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, fornecedores }: {
           {api.documentos.map(d => (
             <div key={d.id} className="flex items-center gap-2 px-3.5 py-[7px] leading-[1.35]">
               <div className="min-w-0 flex-1">
-                <div className="truncate text-[12px] font-medium text-foreground">{identidade(d)}</div>
+                <div className="flex min-w-0 items-baseline gap-1.5">
+                  <span className="truncate text-[12px] font-medium text-foreground">{identidade(d)}</span>
+                  {/* ⚠ A PÍLULA DIZ DE QUEM É O PAPEL, e o clique leva até ele. Sem ela, a
+                      NF da operação pareceria um documento do lançamento — e o operador
+                      anexaria a segunda cópia da mesma nota, que é justamente o que esta
+                      frente existe para impedir. */}
+                  {d.origem === 'operacao' && (
+                    <button type="button"
+                      title="Este documento é da operação comercial — abrir a OC na aba Documentos"
+                      onClick={() => abrirOperacao(d)}
+                      className="shrink-0 rounded-full bg-blue-100 px-1.5 py-px text-[10px] text-blue-700 underline-offset-2 hover:underline dark:bg-blue-900/40 dark:text-blue-300">
+                      da operação
+                    </button>
+                  )}
+                </div>
                 <div className="truncate text-[10px] text-muted-foreground">
                   {/* ⚠ SEM ARQUIVO É AVISO, NÃO ERRO: registrar primeiro e anexar depois é
                       um caminho legítimo, e a linha diz o que falta em vez de esconder. */}
@@ -213,6 +251,9 @@ function FormDocumento({ api, documento, fornecedores, onFechar }: {
 
   const OUTRO = '__outro__';
   const emitenteEhOutro = emitenteId === OUTRO;
+  /* O documento que está sendo criado/editado pertence à OC? Documento novo segue o
+     lançamento (`api.operacaoId`); documento existente segue a própria origem. */
+  const destinoOC = documento ? documento.origem === 'operacao' : !!api.operacaoId;
 
   const payload = (): LancDocPayload => ({
     especie,
@@ -221,7 +262,9 @@ function FormDocumento({ api, documento, fornecedores, onFechar }: {
     /* A chave só existe em nota fiscal — guardá-la noutra espécie seria dado sem dono. */
     chaveAcesso: especie === 'nf' ? (chave.trim() || null) : null,
     dataEmissao: dataEmissao || null,
-    valorDocumento: valor,
+    /* `undefined` não sobe (ver `paraJson`): na OC o valor não é campo, e mandar `null`
+       apagaria o que os componentes dizem. */
+    valorDocumento: destinoOC ? undefined : valor,
     observacao: observacao.trim() || null,
     emitenteId: emitenteEhOutro ? null : (emitenteId || null),
     emitenteNome: emitenteEhOutro ? (emitenteNome.trim() || null)
@@ -280,6 +323,15 @@ function FormDocumento({ api, documento, fornecedores, onFechar }: {
                 ))}
               </SelectContent>
             </Select>
+            {/* ⚠ O VOCABULÁRIO DA OC É MENOR, e o operador precisa saber ANTES de salvar.
+                Lá só existem `nf_principal`, `nf_complementar`, `recibo` e `outro`: boleto e
+                comprovante viram "Outro", e a espécie escolhida se perde. Avisar aqui é
+                mais barato que descobrir abrindo a operação. */}
+            {destinoOC && (especie === 'boleto' || especie === 'comprovante') && (
+              <p className="mt-0.5 text-[10px] leading-tight text-amber-700 dark:text-amber-300">
+                Na operação comercial esta espécie é registrada como "Outro".
+              </p>
+            )}
           </div>
           <div>
             <Label className="text-[10px]">Número</Label>
@@ -295,10 +347,25 @@ function FormDocumento({ api, documento, fornecedores, onFechar }: {
             <Label className="text-[10px]">Data de emissão</Label>
             <DatePicker value={dataEmissao} onChange={setDataEmissao} className="h-8 text-[12px] mt-0.5" />
           </div>
-          <div>
-            <Label className="text-[10px]">Valor do documento</Label>
-            <CampoMoeda valor={valor} onChange={setValor} className="h-8 text-[12px] mt-0.5 text-right" />
-          </div>
+          {/* ⚠ NA OC, O VALOR DO DOCUMENTO NÃO É UM CAMPO — DOC-UMA-FONTE-01. Lá ele é a
+              soma dos COMPONENTES (acréscimo, desconto comercial, retenção), que mexem na
+              liquidação da operação. Um campo aqui aceitaria um número que a RPC descarta,
+              e o documento apareceria valendo zero sem ninguém entender por quê. Dizer
+              onde ele mora é a resposta honesta; escolher uma natureza de componente por
+              conta própria seria decidir dinheiro. */}
+          {destinoOC ? (
+            <div>
+              <Label className="text-[10px] text-muted-foreground">Valor do documento</Label>
+              <p className="mt-0.5 h-8 text-[10px] leading-tight text-muted-foreground">
+                Vem dos componentes, na aba Documentos da operação.
+              </p>
+            </div>
+          ) : (
+            <div>
+              <Label className="text-[10px]">Valor do documento</Label>
+              <CampoMoeda valor={valor} onChange={setValor} className="h-8 text-[12px] mt-0.5 text-right" />
+            </div>
+          )}
           <div>
             <Label className="text-[10px]">Emitente</Label>
             <Select value={emitenteId || undefined} onValueChange={setEmitenteId}>

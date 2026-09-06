@@ -11369,6 +11369,36 @@ export type Database = {
           },
         ]
       }
+      vw_lancamento_documentos: {
+        Row: {
+          cancelado: boolean | null
+          cancelado_em: string | null
+          cancelado_motivo: string | null
+          chave_acesso: string | null
+          cliente_id: string | null
+          data_emissao: string | null
+          documento_id: string | null
+          emitente_documento: string | null
+          emitente_id: string | null
+          emitente_nome: string | null
+          especie: string | null
+          lancamento_id: string | null
+          nome: string | null
+          numero: string | null
+          observacao: string | null
+          operacao_id: string | null
+          origem: string | null
+          serie: string | null
+          tamanho_bytes: number | null
+          tipo: string | null
+          uploaded_em: string | null
+          uploaded_por: string | null
+          url: string | null
+          valor_documento: number | null
+          versao: number | null
+        }
+        Relationships: []
+      }
       vw_oc_compromissos_resumo: {
         Row: {
           cliente_id: string | null
@@ -12671,6 +12701,10 @@ export type Database = {
         Args: { p_extrato_id: string }
         Returns: string
       }
+      fn_safra_sugerida: {
+        Args: { p_cliente_id: string; p_competencia: string; p_escopo: string }
+        Returns: string
+      }
       fn_saldo_inicial_pasto: {
         Args: {
           p_ano: number
@@ -12916,6 +12950,7 @@ export type Database = {
       oc_alterar_parcela_programacao: {
         Args: {
           p_cliente_id: string
+          p_conta_bancaria_id?: string
           p_forma?: string
           p_operacao_id: string
           p_parcela_id: string
