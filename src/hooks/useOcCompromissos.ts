@@ -492,6 +492,24 @@ export function useOcCompromissos(
 
   useEffect(() => { carregar(); }, [carregar]);
 
+  /**
+   * E relê quando a VERSÃO da operação muda — 128c.
+   *
+   * ⚠ `carregar` DEPENDE SÓ DE `enabled/operacaoId/clienteId`: mexer no lote pela aba
+   * Negociação avança a versão e não tocava nada aqui, então o resumo da obrigação e os
+   * compromissos seguiam com o retrato de quando o modal abriu.
+   * ⚠ `avisarVersao` SÓ SOBE (`n > versaoRef.current`), então recarregar não realimenta o
+   * efeito: a versão lida é igual à que o pai já tem, e `onVersaoChange` não é chamado.
+   * ⚠ ABERTURA NÃO CONTA: `null → n` é a operação chegando, e o efeito acima já carregou.
+   */
+  const versaoCarregadaRef = useRef<number | null>(null);
+  useEffect(() => {
+    const anterior = versaoCarregadaRef.current;
+    versaoCarregadaRef.current = versao ?? null;
+    if (anterior == null || versao == null || anterior === versao) return;
+    void carregar();
+  }, [versao, carregar]);
+
   const criarCompromisso = useCallback(async (versaoEsperada: number, payload: CriarCompromissoPayload): Promise<CriarCompromissoResultado> => {
     if (!operacaoId || !clienteId) {
       const err = new OcCompromissoError('operacao_inexistente', 'Operação não iniciada.');

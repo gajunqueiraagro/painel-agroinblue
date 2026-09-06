@@ -550,6 +550,33 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
      escrita ali só para este gesto custaria mais do que o evento aparecer um instante
      depois — ele já está gravado no banco. */
 
+  /**
+   * O Financeiro da OC relê quando a VERSÃO da operação muda — 128c.
+   *
+   * ⚠ A CAUSA NÃO ERA A FONTE DOS LOTES, E ISSO MUDOU O CONSERTO. `useOperacaoLiquidacao`
+   * já lê `zoo_operacao_lotes` direto do banco, no mesmo `Promise.all` das outras oito
+   * consultas — a fonte sempre foi uma. O que faltava era CHAMÁ-LA: medido nos três
+   * shells, `liquidacaoApi.recarregar` só aparecia como `recarregarFornecedores` (compra
+   * 449, venda 704) e na releitura do Concluir do abate (1326, do 125d). Salvar, Reabrir e
+   * revalorar não a chamavam em lugar nenhum, e por isso "Novo compromisso" e "Gerar"
+   * propunham com o valor de quando o modal abriu.
+   * ⚠ POR QUE A VERSÃO, E NÃO CADA GESTO: os cinco caminhos que mudam o lote — salvar,
+   * concluir, reabrir, revalorar, excluir — avançam `zoo_operacoes_comerciais.versao`,
+   * porque é assim que o modelo detecta edição concorrente. Ela é o sinal que TODOS já
+   * emitem. Caçar call site por call site nos três shells deixaria de fora o próximo gesto
+   * que alguém acrescentasse — e foi exatamente assim que este defeito nasceu.
+   * ⚠ NÃO RECARREGA NA ABERTURA: `null → n` é a operação chegando, e aí o próprio hook já
+   * carregou por `operacaoId`. Só a troca de um número por outro é gesto.
+   * ⚠ NÃO HÁ LOOP: `recarregar` não mexe na versão.
+   */
+  const versaoLidaNoFinanceiroRef = useRef<number | null>(null);
+  useEffect(() => {
+    const anterior = versaoLidaNoFinanceiroRef.current;
+    versaoLidaNoFinanceiroRef.current = ocVersao;
+    if (anterior == null || ocVersao == null || anterior === ocVersao) return;
+    void liquidacaoApi.recarregar();
+  }, [ocVersao, liquidacaoApi]);
+
   /* Trilha de auditoria — mesma vizinhanca dos demais eixos da OC, uma api por aba.
      Nao recebe `clienteId`: a RLS de `zoo_operacao_eventos` ja recorta por tenant, e
      repassar o cliente aqui sugeriria um filtro que o hook nao faz. */
