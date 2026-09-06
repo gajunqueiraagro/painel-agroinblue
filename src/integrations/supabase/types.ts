@@ -11374,6 +11374,7 @@ export type Database = {
           cliente_id: string | null
           componente: string | null
           compromisso_id: string | null
+          descricao: string | null
           favorecido_id: string | null
           lote_id: string | null
           natureza: string | null

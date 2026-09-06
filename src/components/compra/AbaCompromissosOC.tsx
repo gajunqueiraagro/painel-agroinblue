@@ -641,9 +641,16 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
      nao diz de qual deles e' a programacao aberta logo abaixo. */
   /* ⚠ E A PREVISAO VEM ANTES DE TUDO. Sem ela a linha mostraria o CODIGO do componente
      ('adiantamento_devolvido'), que nao e' vocabulario de operador; a previsao ja sabe
-     como a linha se chama na tela. */
+     como a linha se chama na tela.
+     ⚠ DEPOIS DELA VEM A `descricao` GRAVADA, e antes da derivada do lote: o que o operador
+     escreveu (ou o que o gerador gravou) e' fato, e `identidadeCompromisso` e' calculo em
+     cima do lote. Quando os dois existem eles coincidem — "Abate 041 G" nos dois casos —,
+     mas se alguem editar a descricao, e' a editada que deve aparecer.
+     ⚠ `natureza` E' O ULTIMO RECURSO E NAO IDENTIFICA NADA: e' "principal" em toda linha
+     principal. Quando a view nao projetava `descricao` e o compromisso nascia sem lote (o
+     manual permitia), a cadeia ia ate' o fim e quatro linhas diferentes liam "principal". */
   const rotuloCompromisso = (c: CompromissoResumo): string =>
-    previsaoDe(c)?.rotulo ?? identidadeCompromisso(c) ?? componenteAdicional(c) ?? (c.natureza ?? '—');
+    previsaoDe(c)?.rotulo ?? c.descricao ?? identidadeCompromisso(c) ?? componenteAdicional(c) ?? (c.natureza ?? '—');
 
   /**
    * O SUBCENTRO SUGERIDO — e ele depende do LADO da operação.
@@ -1750,10 +1757,20 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
   // GUARD "Compra principal": um compromisso PRINCIPAL não pode ser criado sem os lotes carregados,
   //   pois o Produto seria o fallback "Compra principal" (dados de negociação obsoletos/ausentes).
   const principalSemLotes = natureza === 'principal' && !lotesProntos;
+  /* ⚠ PRINCIPAL SEM LOTE NAO EXISTE — 113c. O principal E' o lote: e' dele que saem valor,
+     subcentro e descricao. Sem o vinculo, a idempotencia do "Gerar compromissos" fica CEGA
+     (ela pergunta quais lotes ja tem principal ativo lendo `lote_id`), e gerar de novo
+     duplica; e a identidade da linha perde a ancora. Os quatro principais da 9b2b5e6b
+     nasceram assim, por aqui, com o campo em branco — o gerador nem existia ainda, e a
+     tela nao dizia que faltava nada. No modo JUNTO cada payload ja leva o lote da sua
+     linha, entao a exigencia so' cabe no modo separado.
+     ⚠ SO' O PRINCIPAL: obrigacao (frete, comissao, funrural) e' da operacao, nao do lote —
+     ali o lote continua opcional, e e' por isso que a regra le a natureza. */
+  const principalSemLoteEscolhido = natureza === 'principal' && !varios && !loteId;
   /* No modo JUNTO valor/subcentro/descricao saem de cada lote, entao os campos da
      tela deixam de ser requisito — o que precisa existir e' a lista de lotes. */
   const podeSubmeter = !!componente && !!(varios ? itensLote.length > 0 : (valor != null && valor > 0 && subcentro))
-    && !saving && !principalSemLotes;
+    && !saving && !principalSemLotes && !principalSemLoteEscolhido;
 
   /* UM payload por lote no modo junto; um so no modo separado. Favorecido e
      componente sao os comuns e se repetem — foi a decisao: separado e' o normal
@@ -1896,9 +1913,16 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
             Aguardando os dados da negociação (lotes) para compor o Produto. Feche e reabra o compromisso em instantes — o compromisso principal não pode ser criado sem os lotes carregados.
           </div>
         )}
-        <DialogFooter>
+        <DialogFooter className="items-center gap-2">
+          {/* O botao desabilitado diz POR QUE, ao lado e na mesma leitura — regra da OC. */}
+          {principalSemLoteEscolhido && (
+            <span className="mr-auto text-[10px] leading-tight text-muted-foreground">
+              Escolha o lote: o compromisso principal é de um lote.
+            </span>
+          )}
           <Button variant="outline" size="sm" onClick={onClose}>Cancelar</Button>
           <Button size="sm" disabled={!podeSubmeter}
+            title={principalSemLoteEscolhido ? 'Escolha o lote: o compromisso principal é de um lote.' : undefined}
             onClick={() => { if (podeSubmeter) { const ps = montarPayloads(); if (ps.length > 0) onSubmit(ps); } }}>
             {varios ? `Criar ${itensLote.length}` : 'Criar'}
           </Button>

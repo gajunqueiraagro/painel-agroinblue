@@ -72,6 +72,16 @@ export interface CompromissoResumo {
   favorecidoId: string | null;
   planoContaId: string | null;
   loteId: string | null;
+  /**
+   * O que o compromisso É, em vocabulário de operador — "Abate 041 G".
+   *
+   * ⚠ A TELA GRAVAVA E NUNCA LIA DE VOLTA. `oc_criar_compromisso` persiste `descricao`
+   * desde sempre, mas `vw_oc_compromissos_resumo` não a projetava; sem ela a identidade da
+   * linha caía até o último elo da cadeia e a lista mostrava "principal" — a natureza, que
+   * é a mesma em todas as linhas e por isso não identifica nenhuma. A view passou a
+   * projetá-la em 20260906103021.
+   */
+  descricao: string | null;
   status: CompromissoStatus;
   valorCompromisso: number;
   totalProgramado: number;
@@ -212,6 +222,7 @@ interface RowResumoOperacao {
 interface RowCompromisso {
   compromisso_id: string | null; operacao_id: string | null; cliente_id: string | null;
   natureza: string | null; componente: string | null; favorecido_id: string | null; plano_conta_id: string | null; lote_id: string | null;
+  descricao: string | null;
   status: string | null; valor_compromisso: Numerico; total_programado: Numerico; saldo_a_programar: Numerico;
   total_materializado: Numerico; saldo_a_materializar: Numerico; total_liquidado_monetario: Numerico;
   total_liquidado_nao_monetario: Numerico; total_liquidado: Numerico; saldo_financeiro: Numerico;
@@ -388,7 +399,8 @@ function mapCompromisso(r: RowCompromisso): CompromissoResumo {
   return {
     compromissoId: r.compromisso_id, operacaoId: r.operacao_id, clienteId: r.cliente_id,
     natureza: r.natureza, componente: r.componente, favorecidoId: r.favorecido_id,
-    planoContaId: r.plano_conta_id, loteId: r.lote_id, status: toCompromissoStatus(r.status),
+    planoContaId: r.plano_conta_id, loteId: r.lote_id, descricao: r.descricao ?? null,
+    status: toCompromissoStatus(r.status),
     valorCompromisso: paraNumero(r.valor_compromisso), totalProgramado: paraNumero(r.total_programado),
     saldoAProgramar: paraNumero(r.saldo_a_programar), totalMaterializado: paraNumero(r.total_materializado),
     saldoAMaterializar: paraNumero(r.saldo_a_materializar),
