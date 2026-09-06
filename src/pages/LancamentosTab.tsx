@@ -53,6 +53,7 @@ import { useOperacaoDocumentos } from '@/hooks/useOperacaoDocumentos';
 import { useOperacaoAbate, type LinhaAbate } from '@/hooks/useOperacaoAbate';
 import { useOperacaoEventos } from '@/hooks/useOperacaoEventos';
 import { useOperacaoLiquidacao } from '@/hooks/useOperacaoLiquidacao';
+import { useExcluirLoteOC } from '@/hooks/useExcluirLoteOC';
 import { AbateDetalhesDialog, AbateDetalhes, EMPTY_ABATE_DETALHES } from '@/components/abate/AbateDetalhesDialog';
 import { AbateResumoPanel } from '@/components/abate/AbateResumoPanel';
 import { TransferenciaDetalhesDialog, TransferenciaDetalhes, EMPTY_TRANSFERENCIA_DETALHES } from '@/components/transferencia/TransferenciaDetalhesDialog';
@@ -515,6 +516,40 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     clienteId: clienteAtual?.id ?? null,
     enabled: modoOCCompra || ocVendaParam || ocAbateParam,
   });
+  /* ⚠ EXCLUIR LOTE MORA AQUI, E NÃO EM CADA SHELL — [OC-EXCLUIR-LOTE] (128). Quem sabe
+     reler a OC INTEIRA depois é este arquivo: ele é dono de `ocVersao`, dos cinco hooks da
+     operação e do `onRealizadoAplicado`, que invalida o cache zootécnico. Montar o hook
+     dentro de cada shell daria três releituras diferentes para o mesmo gesto — e a do
+     abate esqueceria os compromissos, a da compra esqueceria o abate.
+     ⚠ A MESMA PEÇA SERVE OS TRÊS: compra e venda usam `AbaNegociacaoLotes`, o abate usa
+     `AbaLotesAbate`, e as duas abas recebem este mesmo objeto. */
+  const excluirLoteApi = useExcluirLoteOC(ocOperacaoId, clienteAtual?.id ?? null);
+  const exclusaoLoteOC = useMemo(() => ({
+    api: excluirLoteApi,
+    versao: ocVersao,
+    onExcluido: async (versaoNova: number) => {
+      /* ⚠ A VERSÃO DEVOLVIDA VEM PRIMEIRO. `oc_excluir_lote` avança a versão da operação;
+         sem gravá-la, o próximo Salvar bate em 40001 sem explicar por quê. */
+      setOcVersao(versaoNova);
+      /* A OC inteira: os lotes (um saiu), o recebimento (a movimentação foi cancelada), o
+         financeiro (compromisso e parcelas cancelados) e a auditoria (o evento novo). */
+      await Promise.all([
+        lotesApi.recarregar(),
+        recebimentoApi.recarregar(),
+        liquidacaoApi.recarregar(),
+        abateApi.recarregar(),
+      ]);
+      /* ⚠ E A LISTA DE LANÇAMENTOS PRECISA SABER: a RPC marca `lancamentos.cancelado`
+         direto no banco, fora do `useLancamentos`. Sem isto a tela seguiria mostrando a
+         movimentação que já não existe — o mesmo motivo do `oc_revalorar_lote`. */
+      await onRealizadoAplicado?.();
+    },
+  }), [excluirLoteApi, ocVersao, lotesApi, recebimentoApi, liquidacaoApi, abateApi, onRealizadoAplicado]);
+  /* ⚠ A AUDITORIA FICA DE FORA da releitura, e é decisão, não esquecimento: `EventosApi`
+     não expõe releitura, e a aba dela recarrega ao ser aberta. Acrescentar um caminho de
+     escrita ali só para este gesto custaria mais do que o evento aparecer um instante
+     depois — ele já está gravado no banco. */
+
   /* Trilha de auditoria — mesma vizinhanca dos demais eixos da OC, uma api por aba.
      Nao recebe `clienteId`: a RLS de `zoo_operacao_eventos` ja recorta por tenant, e
      repassar o cliente aqui sugeriria um filtro que o hook nao faz. */
@@ -5292,6 +5327,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     modoOC: modoOCCompra,
     ocOperacaoId,
     lotesApi,
+    exclusaoLoteOC,
     recebimentoApi,
     documentosApi,
     eventosApi,
@@ -5554,6 +5590,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           ocOperacaoId={ocOperacaoId}
           ocStatusComercial={ocStatusComercial}
           lotesApi={lotesApi}
+          exclusaoLoteOC={exclusaoLoteOC}
           /* ⚠ O DETALHE POR LOTE CHEGA AQUI E AINDA NAO TEM TELA. `abateApi` ja le e grava
              `zoo_operacao_abate`; quem o edita e' o `AbaNegociacaoAbate`, no commit
              seguinte. Passa-lo agora e' o que faz aquele commit ser so' a tela. */
@@ -5606,6 +5643,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           ocOperacaoId={ocOperacaoId}
           ocStatusComercial={ocStatusComercial}
           lotesApi={lotesApi}
+          exclusaoLoteOC={exclusaoLoteOC}
           /* ⚠ O MESMO ESTADO QUE O RESUMO ANTIGO JA LIA — nao ha fonte nova. Ele e'
              preenchido a partir de `detalhesSnapshot.boitelSnapshot` quando uma venda
              boitel e' aberta para edicao. */

@@ -38,7 +38,7 @@ import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Calendar, Building2, X, Plus, ArrowRight, Check, RotateCcw } from 'lucide-react';
 import type { Categoria } from '@/types/cattle';
 import type { CompraLotesApi } from '@/hooks/useCompraLotes';
-import { AbaNegociacaoLotes } from '@/components/compra/AbaNegociacaoLotes';
+import { AbaNegociacaoLotes, type ExclusaoLoteOC } from '@/components/compra/AbaNegociacaoLotes';
 import { AbaDocumentosOC } from '@/components/compra/AbaDocumentosOC';
 import { AbaAuditoriaOC } from '@/components/compra/AbaAuditoriaOC';
 import { AbaRecebimentoLotes } from '@/components/compra/AbaRecebimentoLotes';
@@ -152,6 +152,8 @@ export interface VendaModalShellProps {
   ocOperacaoId: string | null;
   /** A versão da operação e seu setter — o pai é dono único (OC-VERSAO-FONTE-UNICA-01). */
   ocVersao?: number | null;
+  /* ⚠ ADITIVO — [OC-EXCLUIR-LOTE] (128). Montado no `LancamentosTab`; o shell só repassa. */
+  exclusaoLoteOC?: ExclusaoLoteOC | null;
   onOcVersaoChange?: (v: number) => void;
   ocStatusComercial: string | null;
   /** Lotes da negociação — o mesmo hook da compra, que opera sobre `zoo_operacao_lotes`. */
@@ -216,7 +218,7 @@ export function VendaModalShell({
   vendaFazendaId, setVendaFazendaId, fazendasOC,
   propriedadeDestino, setPropriedadeDestino,
   vendaTipoVenda, setVendaTipoVenda, observacao, setObservacao,
-  ocOperacaoId, ocVersao, onOcVersaoChange, ocStatusComercial, lotesApi, boitelData = null, onBoitelChange,
+  ocOperacaoId, ocVersao, onOcVersaoChange, ocStatusComercial, lotesApi, exclusaoLoteOC = null, boitelData = null, onBoitelChange,
   boitelReal = null, onAplicarRealizado, onIniciarRealizado,
   documentosApi, eventosApi, liquidacaoApi, recebimentoApi, ocEntregaEncerrada = false,
   categoria, categoriasDisponiveis,
@@ -559,6 +561,7 @@ export function VendaModalShell({
      o que ele acrescenta fica FORA deste elemento, nao dentro dele. */
   const abaLotes = (
     <AbaNegociacaoLotes
+      exclusaoOC={exclusaoLoteOC}
       categoria={categoria}
       categoriasDisponiveis={categoriasDisponiveis}
       quantidadeNum={quantidadeNum}

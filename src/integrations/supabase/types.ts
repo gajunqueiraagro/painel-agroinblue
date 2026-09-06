@@ -13113,6 +13113,17 @@ export type Database = {
         Args: { p_cliente_id: string; p_motivo: string; p_operacao_id: string }
         Returns: Json
       }
+      oc_excluir_lote: {
+        Args: {
+          p_cliente_id: string
+          p_lote_id: string
+          p_motivo: string
+          p_operacao_id: string
+          p_simular?: boolean
+          p_versao_esperada: number
+        }
+        Returns: Json
+      }
       oc_gerar_obrigacoes: {
         Args: {
           p_cliente_id: string

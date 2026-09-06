@@ -12,13 +12,24 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Plus, Trash2, Pencil } from 'lucide-react';
 import { parseNumericValue } from '@/lib/calculos/abate';
 import { pesoMedioPorCabeca, valorPorKgNegociado } from '@/hooks/useCompraLotes';
-import type { CompraLotesApi, CriterioValor } from '@/hooks/useCompraLotes';
+import type { CompraLotesApi, CriterioValor, LoteForm } from '@/hooks/useCompraLotes';
+import type { ExcluirLoteApi } from '@/hooks/useExcluirLoteOC';
+import { DialogoExcluirLoteOC } from '@/components/compra/DialogoExcluirLoteOC';
 import { formatMoeda } from '@/lib/calculos/formatters';
 
 // Aba Negociação.
 //   • Modo OC (lotesApi): grade EDITÁVEL de múltiplos lotes — fonte única = camada OC
 //     (zoo_operacao_lotes via oc_salvar_lotes). Totais derivados só no frontend. Sem lancamentos.
 //   • Modo legado (sem lotesApi): mantém a linha read-only atual (Compra é dona dos dados).
+/** O contrato de excluir lote, compartilhado pelas três abas e montado no LancamentosTab. */
+export interface ExclusaoLoteOC {
+  api: ExcluirLoteApi;
+  /** Versão corrente da operação; a RPC recusa com 40001 se estiver velha. */
+  versao: number | null;
+  /** Chamado com a versão nova: quem monta relê a OC e notifica a lista. */
+  onExcluido: (versaoNova: number) => void;
+}
+
 interface Props {
   // legado (read-only)
   categoria: string;
@@ -76,6 +87,13 @@ interface Props {
      inexistente. Criado o lote, a acao some da tela, como pede a spec.
      ⚠ Omitido (compra e venda comum), tudo fica como era — byte a byte. */
   linhaMagra?: boolean;
+  /* ⚠ ADITIVO — [OC-EXCLUIR-LOTE] (128). Sem ele, o ⊘ continua sendo a remoção LOCAL de
+     sempre, que só vale depois de Salvar; com ele, o lote que já existe no banco passa
+     pelo diálogo que pergunta à RPC o que será desfeito e desfaz de verdade.
+     ⚠ E O BOTÃO DEIXA DE SUMIR APÓS O RECEBIMENTO: "não se remove lote depois do
+     recebimento" era a porta trancada que a decisão do Gabriel (06/09) abriu — o sistema
+     desfaz o que o lote arrasta em vez de mandar o operador caçar cada peça. */
+  exclusaoOC?: ExclusaoLoteOC | null;
   rotulos?: {
     salveIdentificacao?: string;
     voltarParaIdentificacao?: string;
@@ -147,7 +165,7 @@ function ValorInput({ value, onChange, disabled, placeholder, className }: {
 export function AbaNegociacaoLotes({
   categoria, categoriasDisponiveis, quantidadeNum, pesoKgNum, darkSelectClass,
   modoOC, operacaoPronta, lotesApi, somenteLeitura, fisicoBloqueado, onVoltarCompra, rotulos, valorProjetado = null, loteUnico = null,
-  linhaMagra = false,
+  linhaMagra = false, exclusaoOC = null,
 }: Props) {
   /* ── MODO OC — delegado a um componente PROPRIO (PR-OC-UX-LOTE-C2-01) ──────
      O modal de lote precisa de estado (qual lote esta aberto), e hook nao pode
@@ -201,6 +219,10 @@ function NegociacaoOC({
      passa-los no call site, sem destructuring, criaria duas fontes com o corpo lendo so'
      uma — a prop seria ignorada em silencio no dia em que divergissem. */
   const { lotes, adicionarLote, editarLote, removerLote, totais, loading } = lotesApi;
+  /* O lote que o diálogo de exclusão está examinando. Guarda o objeto, não o id: o rótulo
+     do diálogo precisa da categoria e da quantidade, e o lote some da lista ao ser
+     excluído — buscar por id depois devolveria `undefined` no meio do render. */
+  const [excluindoLote, setExcluindoLote] = useState<LoteForm | null>(null);
   /* Um so lugar decide o congelamento do fisico, para as tres colunas nao divergirem
      entre si numa edicao futura. Mantido do desenho anterior — e' regra de negocio
      (PR-OC-LOTE-VALOR-01), nao detalhe visual, e vale igual dentro do modal. */
@@ -390,10 +412,17 @@ function NegociacaoOC({
                   )}
                 </button>
                 {/* Fora do botao de editar: botao dentro de botao e' HTML invalido, e
-                    era o que a linha clicavel produziria se o remover ficasse dentro. */}
-                {!fisicoRO && !linhaMagra && (
-                  <button type="button" aria-label={`Remover lote ${rotuloCategoria(l.categoria)}`} title="Remover lote"
-                    onClick={() => removerLote(l.idLocal)}
+                    era o que a linha clicavel produziria se o remover ficasse dentro.
+                    ⚠ COM `exclusaoOC` O BOTÃO SOBREVIVE AO RECEBIMENTO (128): o lote que já
+                    existe no banco abre o diálogo que desfaz; sem ela, segue a remoção
+                    local de sempre, que continua indisponível depois do físico. */}
+                {!linhaMagra && (!fisicoRO || (!!exclusaoOC && !!l.id)) && (
+                  <button type="button" aria-label={`Remover lote ${rotuloCategoria(l.categoria)}`}
+                    title={exclusaoOC && l.id ? 'Excluir lote (desfaz o que ele arrasta)' : 'Remover lote'}
+                    onClick={() => {
+                      if (exclusaoOC && l.id) setExcluindoLote(l);
+                      else removerLote(l.idLocal);
+                    }}
                     className="mr-3.5 shrink-0 text-muted-foreground/60 hover:text-destructive">
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
@@ -422,6 +451,19 @@ function NegociacaoOC({
           onAplicarEAdicionar={(patch) => { editarLote(emEdicao.idLocal, patch); abrirNovo(); }}
           valorProjetado={valorProjetado}
           onFechar={() => setEditandoId(null)}
+        />
+      )}
+
+      {/* ⚠ SÓ COM ID DO BANCO. Lote ainda não salvo não existe para a RPC; ele sai do
+          estado local pelo `removerLote`, que é o caminho de sempre. */}
+      {excluindoLote?.id && exclusaoOC && (
+        <DialogoExcluirLoteOC
+          api={exclusaoOC.api}
+          loteId={excluindoLote.id}
+          rotulo={`${rotuloCategoria(excluindoLote.categoria)} · ${excluindoLote.quantidade || '—'} cab`}
+          versao={exclusaoOC.versao}
+          onFechar={() => setExcluindoLote(null)}
+          onExcluido={(versaoNova) => { setExcluindoLote(null); exclusaoOC.onExcluido(versaoNova); }}
         />
       )}
     </div>

@@ -29,6 +29,8 @@ import { ModalNegociarLote } from '@/components/abate/ModalNegociarLote';
 import { ModalResumoLotes } from '@/components/abate/ModalResumoLotes';
 import type { LinhaAbate, CenarioAbate } from '@/hooks/useOperacaoAbate';
 import type { CompraLotesApi } from '@/hooks/useCompraLotes';
+import type { ExcluirLoteApi } from '@/hooks/useExcluirLoteOC';
+import { DialogoExcluirLoteOC } from '@/components/compra/DialogoExcluirLoteOC';
 import { subcentroAbatePorCategoria } from '@/hooks/useOperacaoLiquidacao';
 
 const n2 = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -117,7 +119,7 @@ function ColunaTopo({ rotulo, valor, unidade, linhaAt, subs, evidente, extra }: 
 
 export function AbaLotesAbate({
   lotes, linhas, cenario, cenariosExistentes, onCenarioChange,
-  lotesApi, categoriasDisponiveis, somenteLeitura, fisicoBloqueado, onLinhaChange,
+  lotesApi, categoriasDisponiveis, somenteLeitura, fisicoBloqueado, onLinhaChange, exclusaoOC = null,
 }: {
   lotes: LoteAbate[];
   linhas: Map<string, LinhaAbate>;
@@ -131,6 +133,16 @@ export function AbaLotesAbate({
   fisicoBloqueado?: boolean;
   /** O rascunho do pai — quem persiste é o rodapé do shell. */
   onLinhaChange: (loteId: string, proxima: LinhaAbate) => void;
+  /* ⚠ ADITIVO — [OC-EXCLUIR-LOTE] (128). Com ele, o ⊘ do lote JÁ GRAVADO abre o diálogo que
+     pergunta à RPC o que será desfeito e desfaz; sem ele, segue a remoção local, que só
+     vale depois de salvar a negociação.
+     ⚠ E O ⊘ DEIXA DE SER BLOQUEADO PELO FÍSICO: "não se remove lote depois do recebimento"
+     era a porta trancada que a decisão do Gabriel (06/09) abriu. */
+  exclusaoOC?: {
+    api: ExcluirLoteApi;
+    versao: number | null;
+    onExcluido: (versaoNova: number) => void;
+  } | null;
 }) {
   /* Qual lote está aberto no cadastro. `null` = nenhum. */
   const [editandoId, setEditandoId] = useState<string | null>(null);
@@ -165,6 +177,9 @@ export function AbaLotesAbate({
   const emEdicao = editandoId ? lotesApi.lotes.find(l => l.idLocal === editandoId) ?? null : null;
   const negociando = negociandoId ? lotes.find(l => l.id === negociandoId) ?? null : null;
   const removendo = removendoId ? lotes.find(l => l.id === removendoId) ?? null : null;
+  /** `idLocal` → id do banco. `null` quando o lote ainda não foi gravado. */
+  const idNoBanco = (idLocal: string): string | null =>
+    lotesApi.lotes.find(l => l.idLocal === idLocal)?.id ?? null;
 
   return (
     <div className="rounded-md border bg-card shadow-sm min-w-0">
@@ -301,11 +316,16 @@ export function AbaLotesAbate({
                     className="flex h-6 w-6 shrink-0 items-center justify-center rounded border text-muted-foreground hover:text-foreground disabled:opacity-40">
                     <Pencil className="h-3 w-3" />
                   </button>
+                  {/* ⚠ SEMPRE HABILITADO QUANDO HÁ `exclusaoOC` — 128. O `fisicoBloqueado`
+                      continua barrando a remoção LOCAL (que só apagaria o lote da tela e
+                      deixaria a movimentação de pé), mas não a exclusão que desfaz. */}
                   <button type="button" aria-label="Excluir lote"
-                    title={fisicoBloqueado && !somenteLeitura
-                      ? 'não se remove lote depois do recebimento; estorne o recebimento para alterar'
-                      : 'Excluir lote'}
-                    disabled={somenteLeitura || !!fisicoBloqueado} onClick={() => setRemovendoId(lote.id)}
+                    title={exclusaoOC ? 'Excluir lote (desfaz o que ele arrasta)'
+                      : fisicoBloqueado && !somenteLeitura
+                        ? 'não se remove lote depois do recebimento; estorne o recebimento para alterar'
+                        : 'Excluir lote'}
+                    disabled={somenteLeitura || (!exclusaoOC && !!fisicoBloqueado)}
+                    onClick={() => setRemovendoId(lote.id)}
                     className="flex h-6 w-6 shrink-0 items-center justify-center rounded border text-muted-foreground hover:text-destructive disabled:opacity-40">
                     <Ban className="h-3 w-3" />
                   </button>
@@ -321,7 +341,21 @@ export function AbaLotesAbate({
           lotesApi={lotesApi} onFechar={() => setResumoAberto(false)} />
       )}
 
-      {removendo && (
+      {/* ⚠ O ID DO BANCO NÃO É O `lote.id` DESTA TELA: aqui `id` é o `idLocal` (ver
+          `lotesDoAbate` no shell). A tradução acontece aqui, uma vez, e um lote ainda não
+          gravado simplesmente não tem par — cai no diálogo local, que é o certo para ele. */}
+      {removendo && exclusaoOC && idNoBanco(removendo.id) && (
+        <DialogoExcluirLoteOC
+          api={exclusaoOC.api}
+          loteId={idNoBanco(removendo.id) ?? ''}
+          rotulo={`${removendo.categoriaLabel} · ${removendo.quantidade} cab`}
+          versao={exclusaoOC.versao}
+          onFechar={() => setRemovendoId(null)}
+          onExcluido={(versaoNova) => { setRemovendoId(null); exclusaoOC.onExcluido(versaoNova); }}
+        />
+      )}
+
+      {removendo && !(exclusaoOC && idNoBanco(removendo.id)) && (
         <Dialog open onOpenChange={(o) => { if (!o) setRemovendoId(null); }}>
           <DialogContent className="max-w-sm">
             {/* ⚠ CONFIRMA NOMEANDO O LOTE. Excluir sem perguntar apaga a negociação junto

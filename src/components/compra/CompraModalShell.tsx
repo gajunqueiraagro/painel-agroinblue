@@ -18,6 +18,7 @@ import { AbaRecebimentoLotes } from './AbaRecebimentoLotes';
 import { AbaDocumentosOC } from './AbaDocumentosOC';
 import { AbaFinanceiroOC } from './AbaFinanceiroOC';
 import type { CompraLotesApi } from '@/hooks/useCompraLotes';
+import type { ExclusaoLoteOC } from '@/components/compra/AbaNegociacaoLotes';
 import type { RecebimentoApi } from '@/hooks/useOperacaoRecebimento';
 import type { DocumentosApi } from '@/hooks/useOperacaoDocumentos';
 import type { EventosApi } from '@/hooks/useOperacaoEventos';
@@ -87,6 +88,9 @@ export interface CompraModalShellProps {
   abaInicial?: string;                   // PR-OC-FIN-EDIT-FIX-02 — aba inicial (ex.: 'financeiro' via ?oc_aba); default 'compra'
   ocOperacaoId?: string | null;
   lotesApi?: CompraLotesApi;   // COM-3: estado/handlers dos lotes (só em modo OC)
+  /* ⚠ ADITIVO — [OC-EXCLUIR-LOTE] (128). Montado no `LancamentosTab`, que é quem sabe reler
+     a OC inteira depois; o shell só repassa. Sem ele, o ⊘ segue sendo remoção local. */
+  exclusaoLoteOC?: ExclusaoLoteOC | null;
   recebimentoApi?: RecebimentoApi;      // RECEB-01: recebimento por lote (só em modo OC)
   documentosApi?: DocumentosApi;        // DOC-UI-01: documentos fiscais (só em modo OC)
   eventosApi?: EventosApi;              // AUDITORIA-01: trilha da operação (só leitura)
@@ -402,6 +406,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
         <div className="space-y-2 min-w-0 lg:min-h-0 lg:overflow-y-auto">
           {abaAtiva === 'negociacao' ? (
             <AbaNegociacaoLotes
+              exclusaoOC={api.exclusaoLoteOC}
               categoria={api.categoria}
               categoriasDisponiveis={api.categoriasDisponiveis}
               quantidadeNum={api.quantidadeNum}

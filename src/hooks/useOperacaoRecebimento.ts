@@ -53,6 +53,12 @@ export interface RecebimentoApi {
   /** Estorna TODO o recebimento da operacao e reconstroi o cache zootecnico dos
       anos afetados. `true` = estornado; `false` = falhou (mensagem ja exibida). */
   estornarTudo: (motivo: string) => Promise<boolean>;
+  /* ⚠ RELER O BANCO — [OC-EXCLUIR-LOTE] (128), mesmo motivo que expôs o `recarregar` do
+     `useCompraLotes`: `oc_excluir_lote` cancela a movimentação do lote POR FORA deste hook,
+     e sem reler a aba seguiria mostrando um recebimento que já não existe. Ele já existia
+     como `carregar`, interno — expô-lo é admitir que este hook não é o único escritor
+     daquela tabela. */
+  recarregar: () => Promise<void>;
 }
 
 interface Params {
@@ -322,5 +328,6 @@ const concluirNegociacao = useCallback(async (opts?: { versaoOverride?: number; 
   return useMemo(() => ({
     lotes, movimentacoes, loading, saving,
     concluirNegociacao, receberTodos, registrar, estornar, encerrar, reabrir, estornarTudo,
-  }), [lotes, movimentacoes, loading, saving, concluirNegociacao, receberTodos, registrar, estornar, encerrar, reabrir, estornarTudo]);
+    recarregar: carregar,
+  }), [lotes, movimentacoes, loading, saving, concluirNegociacao, receberTodos, registrar, estornar, encerrar, reabrir, estornarTudo, carregar]);
 }

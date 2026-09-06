@@ -39,6 +39,7 @@ import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Calendar, Building2, X, Plus, ArrowRight, Check, RotateCcw } from 'lucide-react';
 import type { Categoria } from '@/types/cattle';
 import type { CompraLotesApi } from '@/hooks/useCompraLotes';
+import type { ExclusaoLoteOC } from '@/components/compra/AbaNegociacaoLotes';
 import type { AbateApi, CenarioAbate, LinhaAbate } from '@/hooks/useOperacaoAbate';
 import type { LoteAbate } from '@/components/abate/calculoDoLote';
 import { AbaLotesAbate, temNegociacao } from '@/components/abate/AbaLotesAbate';
@@ -181,6 +182,8 @@ export interface AbateModalShellProps {
   ocOperacaoId: string | null;
   /** A versão da operação e seu setter — o pai é dono único (OC-VERSAO-FONTE-UNICA-01). */
   ocVersao?: number | null;
+  /* ⚠ ADITIVO — [OC-EXCLUIR-LOTE] (128). Montado no `LancamentosTab`; o shell só repassa. */
+  exclusaoLoteOC?: ExclusaoLoteOC | null;
   onOcVersaoChange?: (v: number) => void;
   ocStatusComercial: string | null;
   /** Lotes da negociação — o mesmo hook da compra, que opera sobre `zoo_operacao_lotes`. */
@@ -242,7 +245,7 @@ export function AbateModalShell({
   data, setData, frigorificoId, setFrigorificoId, contrapartes, onNovoFrigorifico,
   abateFazendaId, setAbateFazendaId, fazendasOC,
   observacao, setObservacao, numeroDocumento,
-  ocOperacaoId, ocVersao, onOcVersaoChange, ocStatusComercial, lotesApi,
+  ocOperacaoId, ocVersao, onOcVersaoChange, ocStatusComercial, lotesApi, exclusaoLoteOC = null,
   abateApi, abateLinhas, onAbateLinhaChange,
   cenarioAbate = 'projetado', onCenarioAbateChange, onIniciarRealizado,
   documentosApi, eventosApi, liquidacaoApi, recebimentoApi, ocEntregaEncerrada = false,
@@ -930,6 +933,7 @@ export function AbateModalShell({
                     CADASTRO do lote continua sendo o mesmo dialogo compartilhado. */}
                 {lotesApi && (
                   <AbaLotesAbate
+                    exclusaoOC={exclusaoLoteOC}
                     lotes={lotesDoAbate}
                     linhas={linhasDoAbate}
                     cenario={cenarioAbate}
