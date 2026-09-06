@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, type ReactNode } from 'react';
+import { FORMAS_PAGAMENTO } from '@/lib/financeiro/formasPagamento';
 import { useOperacaoEstornoFinanceiro } from '@/hooks/useOperacaoEstornoFinanceiro';
 import type { OcCompromissosApi, CompromissoResumo, ParcelaMaterializacao, CriarCompromissoPayload, ProgramarParcelaInput } from '@/hooks/useOcCompromissos';
 import { DialogoGerarCompromissos, type PropostaCompromisso } from '@/components/compra/DialogoGerarCompromissos';
@@ -1348,6 +1349,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
                   <th className="py-0.5 pr-2">Seq</th>
                   <th className="py-0.5 pr-2">Vencimento</th>
                   <th className="py-0.5 pr-2 text-right">Valor</th>
+                  <th className="py-0.5 pr-2">Forma</th>
                   <th className="py-0.5 pr-2">Status</th>
                   <th className="py-0.5 pr-2">Título</th>
                   <th className="py-0.5 pr-1"></th>
@@ -1356,11 +1358,69 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
               <tbody>
                 {parcelasDoComp.map(p => {
                   const podeMaterializar = podeEscrever && p.status === 'prevista' && selecionado.status === 'programado';
+                  /* ⚠ A ELEGIBILIDADE SAI DO ESTADO QUE A TELA JÁ CALCULA — 125. Nada de
+                     regra nova: `statusFinanceiroParcela` distingue Previsto (sem título)
+                     de Programado (título sem pagamento) de Parcial/Pago, e é exatamente
+                     nesses dois primeiros que o banco aceita alterar. O `title` mostrado é
+                     o mesmo texto que já explicava o estado, agora dizendo por que não se
+                     edita — em vez de um campo travado sem motivo.
+                     ⚠ QUEM RECUSA DE VERDADE É O BANCO: se a tela liberar por engano, a
+                     RPC devolve o motivo em português e nada é gravado. Aqui só evitamos
+                     oferecer o que seria negado. */
+                  const est = statusFinanceiroParcela(p);
+                  const parcelaEditavel = podeEscrever && !est.alerta
+                    && (est.label === 'Previsto' || est.label === 'Programado');
+                  const motivoTravado = parcelaEditavel ? undefined : est.title;
                   return (
                     <tr key={p.parcelaId ?? ''} className={`border-b ${recemMaterializada === p.parcelaId ? 'bg-green-50 dark:bg-green-950/30' : ''}`}>
                       <td className="py-0.5 pr-2">{p.sequencia}</td>
-                      <td className="py-0.5 pr-2">{fmtData(p.vencimento)}</td>
+                      <td className="py-0.5 pr-2">
+                        {parcelaEditavel ? (
+                          <input type="date" defaultValue={p.vencimento ?? ''}
+                            disabled={ocApi.saving}
+                            title="Vencimento — salva ao sair do campo."
+                            /* ⚠ SALVA NO BLUR, e só quando MUDOU: um `onChange` gravaria a
+                               cada tecla do teclado de data, e reabrir o campo sem alterar
+                               nada não pode custar uma escrita e um bump de versão. */
+                            onBlur={(e) => {
+                              const novo = e.target.value || null;
+                              if (novo === (p.vencimento ?? null) || !p.parcelaId) return;
+                              if (versao == null) return;
+                              void ocApi.alterarParcela(versao, p.parcelaId, { vencimento: novo });
+                            }}
+                            className="h-6 w-[112px] rounded border bg-card px-1 text-[10px] tabular-nums" />
+                        ) : (
+                          <span title={motivoTravado} className="cursor-default">{fmtData(p.vencimento)}</span>
+                        )}
+                      </td>
                       <td className="py-0.5 pr-2 text-right whitespace-nowrap">{brl(p.valor)}</td>
+                      <td className="py-0.5 pr-2">
+                        {parcelaEditavel ? (
+                          /* ⚠ `select` NATIVO, e não o do design system: a linha tem 10px e
+                             altura de 20; o Select do shadcn traz altura e padding próprios
+                             que quebrariam a densidade da tabela inteira por uma célula. */
+                          <select defaultValue={p.forma ?? ''} disabled={ocApi.saving}
+                            title="Forma de pagamento — salva ao sair do campo."
+                            onBlur={(e) => {
+                              const nova = e.target.value || null;
+                              if (nova === (p.forma ?? null) || !p.parcelaId || versao == null) return;
+                              void ocApi.alterarParcela(versao, p.parcelaId, { forma: nova });
+                            }}
+                            className="h-6 w-[104px] rounded border bg-card px-1 text-[10px]">
+                            <option value="">—</option>
+                            {/* ⚠ A FORMA GRAVADA ENTRA NA LISTA mesmo fora do vocabulário:
+                                a coluna é `text` sem CHECK, e uma parcela antiga com forma
+                                que não está no catálogo não pode perdê-la só por ser aberta. */}
+                            {(p.forma && !FORMAS_PAGAMENTO.includes(p.forma)
+                              ? [p.forma, ...FORMAS_PAGAMENTO] : FORMAS_PAGAMENTO)
+                              .map(f => <option key={f} value={f}>{f}</option>)}
+                          </select>
+                        ) : (
+                          <span title={motivoTravado} className="cursor-default text-[10px] text-muted-foreground">
+                            {p.forma ?? '—'}
+                          </span>
+                        )}
+                      </td>
                       <td className="py-0.5 pr-2">{(() => { const s = statusFinanceiroParcela(p); return (
                         <Badge variant={s.alerta ? 'destructive' : badgeStatusParcela(p.status)} className="text-[9px] px-1"
                           title={`${s.title} (estado interno: ${p.status})`}>{s.icon ? `${s.icon} ` : ''}{s.label}</Badge>

@@ -12913,6 +12913,17 @@ export type Database = {
         }
         Returns: Json
       }
+      oc_alterar_parcela_programacao: {
+        Args: {
+          p_cliente_id: string
+          p_forma?: string
+          p_operacao_id: string
+          p_parcela_id: string
+          p_vencimento?: string
+          p_versao_esperada: number
+        }
+        Returns: Json
+      }
       oc_alterar_parcelas: {
         Args: {
           p_cliente_id: string

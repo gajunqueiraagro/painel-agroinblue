@@ -177,6 +177,8 @@ export interface OcCompromissosApi {
   criarCompromisso: (versaoEsperada: number, payload: CriarCompromissoPayload) => Promise<CriarCompromissoResultado>;
   programarCompromisso: (versaoEsperada: number, compromissoId: string, payload: ProgramarCompromissoPayload) => Promise<ProgramarCompromissoResultado>;
   acrescentarParcelas: (versaoEsperada: number, compromissoId: string, payload: AcrescentarParcelasPayload) => Promise<AcrescentarParcelasResultado>;
+  /** Vencimento e/ou forma de uma parcela; `null` não mexe no campo. Devolve a versão nova. */
+  alterarParcela: (versaoEsperada: number, parcelaId: string, mudanca: { vencimento?: string | null; forma?: string | null }) => Promise<number>;
   materializarParcela: (versaoEsperada: number, programacaoId: string, parcelaId: string) => Promise<MaterializarResultado>;
   /* PR-OC-VENDA-FIN-PREVISAO-01D — ajusta o valor do compromisso ao REALIZADO, nos dois
      sentidos. `motivo` e' exigido pelo banco (guard P0001), como em todo estorno. */
@@ -571,6 +573,56 @@ export function useOcCompromissos(
     } finally { setSaving(false); }
   }, [operacaoId, clienteId, carregar]);
 
+  /**
+   * Vencimento e forma de uma parcela, sem estorno — OC-VENCIMENTO-EDITAVEL (125).
+   *
+   * ⚠ QUEM DECIDE SE PODE É O BANCO, e a tela só não oferece o que ele recusaria. As
+   * guardas vivem em `oc_alterar_parcela_programacao` (migration 20260906161022): parcela
+   * prevista, ou materializada cujo título vivo esteja em previsto/programado; realizado,
+   * agendado ou com `conciliado_em` recusam com mensagem em português. Repetir a regra
+   * aqui criaria a segunda definição de "pode editar", e a primeira divergência seria uma
+   * tela que oferece o que o banco nega — ou pior, que esconde o que ele permitiria.
+   * ⚠ `null` NÃO MEXE NO CAMPO. Mandar os dois sempre faria uma edição de data reescrever
+   * a forma com o valor que a tela tinha em memória, que pode estar velho.
+   * ⚠ E QUANDO MATERIALIZADA, O TÍTULO ACOMPANHA — isso é do writer, não daqui: mudar a
+   * parcela e deixar o lançamento com a data velha seria a divergência que a conciliação
+   * cobraria depois.
+   */
+  const alterarParcela = useCallback(async (
+    versaoEsperada: number, parcelaId: string,
+    mudanca: { vencimento?: string | null; forma?: string | null },
+  ): Promise<number> => {
+    if (!operacaoId || !clienteId) {
+      const err = new OcCompromissoError('operacao_inexistente', 'Operação não iniciada.');
+      toast.error(err.message); throw err;
+    }
+    exigirVersaoValida(versaoEsperada);
+    setSaving(true);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: RPC fora de types.ts
+      const { data, error } = await (supabase as any).rpc('oc_alterar_parcela_programacao', {
+        p_operacao_id: operacaoId, p_cliente_id: clienteId, p_versao_esperada: versaoEsperada,
+        p_parcela_id: parcelaId,
+        p_vencimento: mudanca.vencimento ?? null,
+        p_forma: mudanca.forma ?? null,
+      });
+      if (error) throw normalizarErroRpc(error);
+      const versaoNova = Number((data as { operacao_versao?: number })?.operacao_versao);
+      if (!Number.isFinite(versaoNova)) {
+        throw new OcCompromissoError('erro_desconhecido', 'A parcela foi alterada, mas a versão não voltou. Recarregue antes de continuar.');
+      }
+      avisarVersao(versaoNova);
+      toast.success('Parcela atualizada.');
+      await carregar();
+      return versaoNova;
+    } catch (e) {
+      const normalizado = e instanceof OcCompromissoError ? e : new OcCompromissoError('erro_desconhecido', e instanceof Error ? e.message : 'Falha ao alterar a parcela.');
+      toast.error(normalizado.message);
+      if (normalizado.code === 'versao_conflito') await carregar();
+      throw normalizado;
+    } finally { setSaving(false); }
+  }, [operacaoId, clienteId, carregar]);
+
   const materializarParcela = useCallback(async (versaoEsperada: number, programacaoId: string, parcelaId: string): Promise<MaterializarResultado> => {
     if (!operacaoId || !clienteId) {
       const err = new OcCompromissoError('operacao_inexistente', 'Operação não iniciada.');
@@ -634,9 +686,9 @@ export function useOcCompromissos(
 
   return useMemo(() => ({
     resumoOperacao, compromissos, parcelas, versao, loading, saving,
-    criarCompromisso, programarCompromisso, acrescentarParcelas, materializarParcela,
+    criarCompromisso, programarCompromisso, acrescentarParcelas, alterarParcela, materializarParcela,
     ajustarValorCompromisso, recarregar: carregar,
   }), [resumoOperacao, compromissos, parcelas, versao, loading, saving,
-    criarCompromisso, programarCompromisso, acrescentarParcelas, materializarParcela,
+    criarCompromisso, programarCompromisso, acrescentarParcelas, alterarParcela, materializarParcela,
     ajustarValorCompromisso, carregar]);
 }

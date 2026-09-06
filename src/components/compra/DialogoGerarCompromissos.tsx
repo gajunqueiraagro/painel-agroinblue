@@ -23,6 +23,7 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/compone
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DatePicker } from '@/components/ui/date-picker';
 import { X } from 'lucide-react';
+import { FORMAS_PAGAMENTO as FORMAS } from '@/lib/financeiro/formasPagamento';
 import { formatMoeda } from '@/lib/calculos/formatters';
 
 /** Uma linha proposta — já resolvida por quem tem os dados do tipo de operação. */
@@ -39,7 +40,7 @@ export interface PropostaCompromisso {
   componente: string;
 }
 
-const FORMAS = ['PIX', 'Transferência', 'Boleto', 'Dinheiro', 'Cheque'];
+
 
 /** Data da operação + 30 dias, em ISO — o default do acordo, editável. */
 export function vencimentoPadrao(dataOperacao: string | null): string {
