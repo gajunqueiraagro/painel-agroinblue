@@ -2,8 +2,10 @@ import { useState, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { FORMAS_PAGAMENTO } from '@/lib/financeiro/formasPagamento';
 import { useOperacaoEstornoFinanceiro } from '@/hooks/useOperacaoEstornoFinanceiro';
 import type { OcCompromissosApi, CompromissoResumo, ParcelaMaterializacao, CriarCompromissoPayload, ProgramarParcelaInput } from '@/hooks/useOcCompromissos';
+import { useReprogramarCompromissoLote } from '@/hooks/useReprogramarCompromissoLote';
+import { DialogoAtualizarCompromisso } from '@/components/compra/DialogoAtualizarCompromisso';
 import { DialogoGerarCompromissos, type PropostaCompromisso } from '@/components/compra/DialogoGerarCompromissos';
-import { classificarLotesPorLado, SUBCENTRO_OBRIGACAO_COMPRA, SUBCENTRO_DESPESA_VENDA, CENTRO_CUSTO_COMPRA_BOVINOS, type LoteOC } from '@/hooks/useOperacaoLiquidacao';
+import { classificarLotesPorLado, valorLoteOC, SUBCENTRO_OBRIGACAO_COMPRA, SUBCENTRO_DESPESA_VENDA, CENTRO_CUSTO_COMPRA_BOVINOS, type LoteOC } from '@/hooks/useOperacaoLiquidacao';
 import { usePlanoContasOC } from '@/hooks/usePlanoContasOC';
 import { useComponentesFinanceiros } from '@/hooks/useComponentesFinanceiros';
 import { useContasBancariasLeves } from '@/hooks/useContasBancariasLeves';
@@ -258,6 +260,10 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
   const [confirmarParcela, setConfirmarParcela] = useState<ParcelaMaterializacao | null>(null);
   /* A conta escolhida na hora de lançar, quando a parcela nasceu sem uma. */
   const [contaParaMaterializar, setContaParaMaterializar] = useState('');
+  /* O lote cujo compromisso está sendo atualizado — 128e. */
+  const [atualizandoLoteId, setAtualizandoLoteId] = useState<string | null>(null);
+  const reprogramarApi = useReprogramarCompromissoLote(resumoOperacao?.operacaoId ?? null, clienteId);
+
   /* PR-OC-UX-LOTE-B-01 — o detalhe virou MODAL. `selectedId` continua existindo e
      seguindo a regra de estabilidade apos refetch (ver acima): e' o que mantem o
      modal aberto e no mesmo compromisso quando uma acao interna recarrega os dados.
@@ -330,6 +336,31 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
   }, [compromissosVisiveis, selectedId]);
 
   const selecionado = useMemo(() => compromissos.find(c => c.compromissoId === selectedId) ?? null, [compromissos, selectedId]);
+
+  /**
+   * O compromisso selecionado está com valor diferente do lote dele?
+   *
+   * ⚠ A CONTA DO LOTE É `valorLoteOC`, a MESMA que monta as propostas nesta aba — e é o
+   * espelho de `_oc_valor_do_lote` no banco. Escrever uma terceira aqui faria a faixa
+   * discordar do que o botão vai gravar.
+   * ⚠ TOLERÂNCIA DE UM CENTAVO, como no resto da OC: arredondamento de multiplicação não
+   * é divergência, e uma faixa âmbar por R$ 0,001 ensinaria o operador a ignorá-la.
+   * ⚠ O QUE FILTRA É TER LOTE, não a natureza: frete e taxa não derivam de lote nenhum e
+   * por isso nascem sem `lote_id` — comparar um deles com um lote seria inventar uma
+   * divergência. Se algum dia um acessório passar a ter lote, ele entra aqui por
+   * construção, e é o comportamento certo: quem tem lote é comparado com o lote.
+   */
+  const divergenciaDoLote = useMemo(() => {
+    const loteId = selecionado?.loteId;
+    if (!selecionado || !loteId || selecionado.status === 'cancelado') return null;
+    const lote = lotes.find(l => l.id === loteId);
+    if (!lote) return null;
+    const doLote = lote.valorLiquidoAbate ?? valorLoteOC(lote);
+    if (doLote == null) return null;
+    const doCompromisso = selecionado.valorCompromisso;
+    if (Math.abs(doCompromisso - doLote) <= TOL_CENTAVO) return null;
+    return { loteId, doLote, doCompromisso };
+  }, [selecionado, lotes]);
 
   const parcelasDoComp = useMemo(
     () => parcelas
@@ -1365,6 +1396,29 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
             </div>
           )}
 
+          {/* ⚠ A DIVERGÊNCIA É DITA, NUNCA CORRIGIDA POR BAIXO — [OC-EDITAR-LOTE-FECHADA]
+              128b/128e. Editar o valor do lote de uma OC já programada deixava o
+              compromisso com o número velho, e a aba mostrava os dois lado a lado sem
+              dizer qual valia. Agora ela nomeia os dois e oferece o gesto — que cancela
+              parcela não paga e reprograma pelo valor novo, no banco, com motivo.
+              ⚠ TÍTULO PAGO NÃO É REFEITO: a RPC bloqueia, o diálogo mostra o motivo e a
+              divergência CONTINUA visível. Informar é melhor que mexer em dinheiro
+              realizado sem estorno. */}
+          {divergenciaDoLote && (
+            <div className="mb-1 flex flex-wrap items-center gap-2 rounded-md border border-amber-400 bg-amber-50 px-2 py-1 text-[10px] leading-tight text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+              <span>
+                compromisso <b className="tabular-nums">{brl(divergenciaDoLote.doCompromisso)}</b>
+                {' × '}lote <b className="tabular-nums">{brl(divergenciaDoLote.doLote)}</b>
+              </span>
+              <Button size="sm" variant="outline" className="ml-auto h-6 px-2 text-[10px]"
+                disabled={!podeEscrever || reprogramarApi.simulando || reprogramarApi.reprogramando}
+                title="Cancela as parcelas não pagas e reprograma pelo valor do lote"
+                onClick={() => setAtualizandoLoteId(divergenciaDoLote.loteId)}>
+                Atualizar compromisso
+              </Button>
+            </div>
+          )}
+
           {parcelasDoComp.length === 0 ? (
             <div className="py-3 text-center text-[11px] text-muted-foreground">
               {selecionado.status === 'aberto' ? 'Compromisso aberto — clique em "Programar".' : 'Sem programação ativa.'}
@@ -1626,6 +1680,31 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
           mostrarBaseOperacao={rotulos.mostrarBaseDaOperacao}
         />
       )}
+      {atualizandoLoteId && (
+        <DialogoAtualizarCompromisso
+          api={reprogramarApi}
+          loteId={atualizandoLoteId}
+          rotulo={(() => {
+            const l = lotes.find(x => x.id === atualizandoLoteId);
+            return l ? `${l.categoria} · ${l.qtd ?? '—'} cab` : 'lote';
+          })()}
+          versao={versao}
+          onFechar={() => setAtualizandoLoteId(null)}
+          onAtualizado={(versaoNova) => {
+            setAtualizandoLoteId(null);
+            /* ⚠ RELER É O BASTANTE, e a versão nova chega junto: `carregar` do
+               `useOcCompromissos` lê `zoo_operacoes_comerciais.versao` e a propaga pelo
+               `avisarVersao` — o mesmo caminho de todos os writers desta aba. Escrever a
+               versão daqui seria a segunda fonte para o mesmo número.
+               ⚠ `void versaoNova` porque ela é a prova de que gravou, não um valor a
+               guardar: quem guarda é o pai, pela releitura. */
+            void versaoNova;
+            void ocApi.recarregar();
+            void recarregarDados?.();
+          }}
+        />
+      )}
+
       {confirmarParcela && (
         <Dialog open onOpenChange={(o) => { if (!o) setConfirmarParcela(null); }}>
           <DialogContent className="max-w-sm">

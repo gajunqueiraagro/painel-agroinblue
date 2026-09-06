@@ -11005,6 +11005,7 @@ export type Database = {
           lanc_conta_destino_nome: string | null
           lanc_data_competencia: string | null
           lanc_data_pagamento: string | null
+          lanc_data_vencimento: string | null
           lanc_descricao: string | null
           lanc_favorecido_id_atual: string | null
           lanc_favorecido_nome_atual: string | null
@@ -11016,6 +11017,8 @@ export type Database = {
           lanc_numero_documento: string | null
           lanc_observacao: string | null
           lanc_plano_conta_id_atual: string | null
+          lanc_safra_codigo: string | null
+          lanc_safra_id: string | null
           lanc_sinal: string | null
           lanc_status: string | null
           lanc_subcentro_atual: string | null
@@ -11026,16 +11029,23 @@ export type Database = {
           motor_version: number | null
           proposto_alias_id: string | null
           proposto_categoria: string | null
+          proposto_conta_bancaria_id: string | null
+          proposto_data_competencia: string | null
+          proposto_data_pagamento: string | null
+          proposto_data_vencimento: string | null
           proposto_favorecido_id: string | null
           proposto_favorecido_nome: string | null
           proposto_fazenda_id: string | null
           proposto_fazenda_nome: string | null
           proposto_macro: string | null
           proposto_numero_documento: string | null
+          proposto_observacao: string | null
           proposto_origem_resolucao: string | null
           proposto_produto: string | null
           proposto_regra_id: string | null
           proposto_safra: string | null
+          proposto_safra_codigo: string | null
+          proposto_safra_id: string | null
           proposto_subcentro: string | null
           proposto_subcentro_existe_no_plano: boolean | null
           proposto_tier: string | null
@@ -11061,6 +11071,13 @@ export type Database = {
             columns: ["lanc_fazenda_id"]
             isOneToOne: false
             referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financeiro_lancamentos_v2_safra_id_fkey"
+            columns: ["lanc_safra_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_safras"
             referencedColumns: ["id"]
           },
         ]
@@ -13215,6 +13232,17 @@ export type Database = {
           p_peso_medio_kg: number
           p_peso_total_kg: number
           p_quantidade: number
+        }
+        Returns: Json
+      }
+      oc_reprogramar_compromisso_do_lote: {
+        Args: {
+          p_cliente_id: string
+          p_lote_id: string
+          p_motivo: string
+          p_operacao_id: string
+          p_simular?: boolean
+          p_versao_esperada: number
         }
         Returns: Json
       }
