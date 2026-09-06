@@ -1,7 +1,7 @@
 /**
  * Hook for financeiro_lancamentos_v2 CRUD with pagination and filters.
  */
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -210,12 +210,36 @@ function residualDimensaoTodosAnos(filtros: FiltrosV2): ((l: LancamentoV2) => bo
   return (l) => { const d = dataDaDimensao(l, dimensao); return !!d && set.has(d.substring(5, 7)); };
 }
 
+/**
+ * Quem está montado olhando a lista de lançamentos, por cliente — OC-CUSTEIO-REFETCH (121g).
+ *
+ * ⚠ ESTE HOOK NÃO USA REACT-QUERY: cada instância tem estado próprio, e não há cache
+ * comum para invalidar. O custeio e o Financeiro V2 montam instâncias DIFERENTES; criar
+ * um lançamento numa não tocava a outra, e os 43 do Raul só apareciam depois de sair e
+ * voltar da seção — o que remonta a tela e força o load.
+ * ⚠ O IDIOMA É O DO `usePastos`, não invenção: registro de módulo por cliente, cópia do
+ * Set na iteração (um callback pode desmontar no meio) e notificação DEPOIS da escrita,
+ * nunca antes — notificar antes faz o ouvinte reler o estado velho e concluir que nada
+ * mudou.
+ */
+const lancamentosSubscribers = new Map<string, Set<() => void>>();
+
+function notificarLancamentosMudaram(clienteId: string) {
+  const subs = lancamentosSubscribers.get(clienteId);
+  if (!subs) return;
+  for (const cb of [...subs]) cb();
+}
+
 export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
   const { clienteAtual } = useCliente();
   const { user } = useAuth();
   const clienteId = clienteAtual?.id;
 
   const [lancamentos, setLancamentos] = useState<LancamentoV2[]>([]);
+  /* O último recorte pedido e o loader corrente, para a inscrição não depender de
+     identidades que mudam a cada filtro — mesma razão do `loadPastosRef` do `usePastos`. */
+  const ultimosFiltrosRef = useRef<{ filtros: FiltrosV2; pageNum: number } | null>(null);
+  const loadLancamentosRef = useRef<((f: FiltrosV2, p?: number) => Promise<void>) | null>(null);
   const [contasBancarias, setContasBancarias] = useState<ContaBancariaV2[]>([]);
   const [fornecedores, setFornecedores] = useState<FornecedorV2[]>([]);
   const [classificacoes, setClassificacoes] = useState<ClassificacaoItem[]>([]);
@@ -431,6 +455,10 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
 
   const loadLancamentos = useCallback(async (filtros: FiltrosV2, pageNum: number = 0) => {
     if (!clienteId) return;
+    /* Guarda o último recorte pedido: quem recarrega por notificação precisa repetir
+       EXATAMENTE a mesma pergunta, senão a lista volta com outro filtro do que a do
+       operador — pior que não atualizar. */
+    ultimosFiltrosRef.current = { filtros, pageNum };
     // ano is optional now ('__todos__' means all years)
 
     setLoading(true);
@@ -506,6 +534,27 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     };
   };
 
+  useEffect(() => { loadLancamentosRef.current = loadLancamentos; }, [loadLancamentos]);
+
+  /* Inscrição por cliente: trocar de cliente sai do Set antigo pelo cleanup e entra no
+     novo. Só o `clienteId` na dependência — o callback alcança o loader corrente pelo ref,
+     então mudar de filtro não reinscreve. */
+  useEffect(() => {
+    if (!clienteId) return;
+    const cb = () => {
+      const ultimo = ultimosFiltrosRef.current;
+      if (!ultimo || !loadLancamentosRef.current) return;
+      void loadLancamentosRef.current(ultimo.filtros, ultimo.pageNum);
+    };
+    let set = lancamentosSubscribers.get(clienteId);
+    if (!set) { set = new Set(); lancamentosSubscribers.set(clienteId, set); }
+    set.add(cb);
+    return () => {
+      set.delete(cb);
+      if (set.size === 0) lancamentosSubscribers.delete(clienteId);
+    };
+  }, [clienteId]);
+
   const criarLancamento = useCallback(async (form: LancamentoV2Form) => {
     if (!clienteId || !user) return false;
 
@@ -517,6 +566,10 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       return false;
     }
     toast.success('Lançamento criado');
+    /* ⚠ DEPOIS DA ESCRITA, nunca antes: notificar antes faz quem ouve reler o estado
+       velho e concluir que nada mudou. Alcança as OUTRAS instâncias do hook — a do
+       Financeiro V2 quando o lançamento nasce no custeio, e vice-versa. */
+    notificarLancamentosMudaram(clienteId);
     return true;
   }, [clienteId, user]);
 
@@ -1063,6 +1116,8 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       return false;
     }
     toast.success(`${forms.length} lançamentos salvos`);
+    /* O lote do item 3 do 121 entra por aqui — a mesma notificação serve aos dois. */
+    notificarLancamentosMudaram(clienteId);
     return true;
   }, [clienteId, user]);
 
