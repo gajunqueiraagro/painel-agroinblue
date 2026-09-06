@@ -494,7 +494,12 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     return cls.escopo_negocio || null;
   }, [classificacoes]);
 
-  const buildInsertRow = (form: LancamentoV2Form, userId: string, origem: string = 'manual') => {
+  /* ⚠ `hashImportacao` É OPCIONAL E NASCE `null` — CUSTEIO-TXT-02 item 4. A coluna
+     `hash_importacao` já existe e já é usada por 73.582 lançamentos (importação de Excel
+     e OFX), mas nenhuma via do V2 a preenchia: era mais uma peça pronta e não ligada.
+     Quem não passa nada continua gravando `null`, exatamente como antes. */
+  const buildInsertRow = (form: LancamentoV2Form, userId: string, origem: string = 'manual',
+                          hashImportacao?: string | null) => {
     const anoMes = form.data_pagamento
       ? form.data_pagamento.substring(0, 7)
       : form.data_competencia.substring(0, 7);
@@ -531,6 +536,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       created_by: userId,
       sem_movimentacao_caixa: false,
       safra_id: form.safra_id || null,
+      hash_importacao: hashImportacao ?? null,
     };
   };
 
@@ -555,10 +561,13 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     };
   }, [clienteId]);
 
-  const criarLancamento = useCallback(async (form: LancamentoV2Form) => {
+  /* ⚠ O SEGUNDO ARGUMENTO É OPCIONAL DE PROPÓSITO: os 20 chamadores existentes seguem
+     idênticos, e só o custeio, que tem uma identidade de item para gravar, o usa. */
+  const criarLancamento = useCallback(async (form: LancamentoV2Form,
+                                             extras?: { hashImportacao?: string | null }) => {
     if (!clienteId || !user) return false;
 
-    const row = buildInsertRow(form, user.id);
+    const row = buildInsertRow(form, user.id, 'manual', extras?.hashImportacao);
     const { error } = await supabase.from('financeiro_lancamentos_v2').insert(row as any);
 
     if (error) {

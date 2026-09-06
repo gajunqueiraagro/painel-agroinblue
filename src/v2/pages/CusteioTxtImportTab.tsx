@@ -11,7 +11,10 @@
 //     macro/grupo/centro/subcentro continuam derivados pelo fluxo oficial.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { safraSugerida } from '@/lib/agri/safraSugerida';
+import { hashItemCusteio } from '@/v2/lib/custeio/hashItemCusteio';
+import { supabase } from '@/integrations/supabase/client';
 import { BlocoTopoAba } from '@/components/ui/bloco-topo-aba';
 import {
   parseCusteioTxtFile,
@@ -67,13 +70,25 @@ export default function CusteioTxtImportTab(
   // PR-RAUL-02A — linha selecionada que abre o modal oficial.
   const [dialogRow, setDialogRow] = useState<CusteioItem | null>(null);
 
-  // PR-RAUL-02B — linhas já gravadas (id estável = linha_num do parser).
-  // Previne duplicidade: após sucesso, a linha vira "Lançado" e perde o botão.
-  const [linhasLancadas, setLinhasLancadas] = useState<Set<number>>(new Set());
+  /* ⚠ O QUE JÁ FOI LANÇADO SAI DO BANCO, NÃO DA MEMÓRIA — CUSTEIO-TXT-02 item 4. Era um
+     `Set<number>` por número de linha do TXT: fechar a aba perdia tudo e o Raul recomeçava
+     do zero, e o número da linha nem serve como identidade — muda quando o relatório é
+     reimpresso com uma família a mais. Agora cada item tem um hash determinístico
+     (cliente + competência + valor + descrição normalizada), gravado em
+     `hash_importacao` no lançamento e reconsultado ao abrir a prévia.
+     ⚠ O MAPA GUARDA O ID, não um booleano: é ele que faz o "lançado" virar link para o
+     lançamento em vez de um carimbo sem destino. */
+  const [hashPorLinha, setHashPorLinha] = useState<Map<number, string>>(new Map());
+  const [lancadoPorHash, setLancadoPorHash] = useState<Map<string, string>>(new Map());
+  /* ⚠ FALHAR EM CONFERIR NÃO É "NADA FOI LANÇADO". Sem este estado, uma consulta que
+     falhasse pintaria os 43 itens como novos e o operador lançaria tudo em dobro — o
+     silêncio mais caro que esta tela pode produzir. */
+  const [erroConferencia, setErroConferencia] = useState(false);
 
   const { clienteAtual } = useCliente();
   const { fazendas } = useFazenda();
   const hookFin = useFinanceiroV2();
+  const navigate = useNavigate();
 
   // useFinanceiroV2 é lazy (PR-Mesa-A1): disparar loads de contas/fornecedores/
   // classificações quando o cliente estiver resolvido. Sem isso o modal abre vazio.
@@ -122,6 +137,53 @@ export default function CusteioTxtImportTab(
 
   const dataMes = ultimoDiaDoMes(resultado?.ano_mes);
 
+  const clienteId = clienteAtual?.id ?? null;
+  const competencia = resultado?.ano_mes ?? null;
+  const itens = resultado?.itens;
+
+  /* Recalcula os hashes do arquivo e pergunta ao banco quais deles já viraram lançamento.
+     ⚠ UMA CONSULTA SÓ, por `in (hashes)`: 43 itens fariam 43 idas se a pergunta fosse por
+     item, e o índice `idx_fin_v2_hash_importacao` atende a lista inteira de uma vez.
+     ⚠ CANCELADO NÃO CONTA COMO LANÇADO: quem cancelou o lançamento quer poder lançar de
+     novo, e esconder o item deixaria o custeio incompleto sem dizer por quê. */
+  const conferirLancados = useCallback(async () => {
+    if (!clienteId || !competencia || !itens || itens.length === 0) {
+      setHashPorLinha(new Map());
+      setLancadoPorHash(new Map());
+      setErroConferencia(false);
+      return;
+    }
+    try {
+      const pares = await Promise.all(itens.map(async (it) => [
+        it.linha_num,
+        await hashItemCusteio({ clienteId, competencia, valor: it.valor, descricao: it.produto_raw }),
+      ] as const));
+      setHashPorLinha(new Map(pares));
+
+      const hashes = Array.from(new Set(pares.map(([, h]) => h)));
+      const { data, error } = await supabase
+        .from('financeiro_lancamentos_v2')
+        .select('id, hash_importacao')
+        .eq('cliente_id', clienteId)
+        .eq('cancelado', false)
+        .in('hash_importacao', hashes);
+      if (error) throw error;
+
+      const mapa = new Map<string, string>();
+      for (const row of data ?? []) {
+        if (row.hash_importacao) mapa.set(row.hash_importacao, row.id);
+      }
+      setLancadoPorHash(mapa);
+      setErroConferencia(false);
+    } catch (err) {
+      console.error('[custeio] falha ao conferir o que já foi lançado', err);
+      setLancadoPorHash(new Map());
+      setErroConferencia(true);
+    }
+  }, [clienteId, competencia, itens]);
+
+  useEffect(() => { void conferirLancados(); }, [conferirLancados]);
+
   // Prefill ESTÁVEL por linha (memo) — evita re-init do form do modal a cada render do pai.
   const prefill = useMemo(() => {
     if (!dialogRow) return undefined;
@@ -169,7 +231,6 @@ export default function CusteioTxtImportTab(
     setParsing(true);
     setErro(null);
     setResultado(null);
-    setLinhasLancadas(new Set());
     setFileName(file.name);
     try {
       const res = await parseCusteioTxtFile(file);
@@ -358,6 +419,14 @@ export default function CusteioTxtImportTab(
                   habilita quando terminar.
                 </p>
               )}
+              {/* ⚠ "NÃO SEI" É DIFERENTE DE "NENHUM": sem esta faixa, a lista voltaria a
+                  parecer inteiramente nova e o operador lançaria em dobro sem aviso. */}
+              {erroConferencia && (
+                <p className="border-b border-amber-400 bg-amber-50 px-3 py-1 text-[10px] leading-tight text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+                  Não foi possível conferir o que já foi lançado deste relatório. Confira no
+                  Financeiro antes de lançar — os itens abaixo podem já existir.
+                </p>
+              )}
               {/* ⚠ LISTA DE DUAS ALTURAS, NÃO TABELA — CUSTEIO-TXT-02 (A18). Sete colunas
                   para quatro dados obrigavam a ler na horizontal item por item; o número
                   da linha do TXT e as duas colunas da hierarquia gastavam largura que a
@@ -374,7 +443,9 @@ export default function CusteioTxtImportTab(
               <div>
                 <div className="divide-y divide-border/70">
                   {resultado.itens.map((it) => {
-                    const lancada = linhasLancadas.has(it.linha_num);
+                    const hash = hashPorLinha.get(it.linha_num);
+                    const lancamentoId = hash ? lancadoPorHash.get(hash) : undefined;
+                    const lancada = !!lancamentoId;
                     return (
                       <div key={it.linha_num}
                            className={`px-3 py-[7px] leading-[1.35] ${lancada ? 'bg-emerald-50/40 dark:bg-emerald-950/20' : ''}`}>
@@ -382,9 +453,16 @@ export default function CusteioTxtImportTab(
                           <span className="min-w-0 flex-1 truncate text-[12px] font-medium">{it.produto_raw}</span>
                           <span className="shrink-0 text-[12px] font-medium tabular-nums">{brl(it.valor)}</span>
                           {lancada ? (
-                            <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-px text-[10px] text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                            /* ⚠ O CARIMBO VIRA ENDEREÇO. `?flancId=` é o drill que já existe
+                               (V2Index troca de seção e abre o modal oficial no lançamento):
+                               nenhuma rota nova, e o operador confere o que lançou sem
+                               refazer o caminho. */
+                            <button type="button"
+                              title="Abrir o lançamento no Financeiro"
+                              onClick={() => navigate(`/v2?section=financeiro-lanc&flancId=${lancamentoId}`)}
+                              className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-px text-[10px] text-emerald-700 underline-offset-2 hover:underline dark:bg-emerald-900/40 dark:text-emerald-300">
                               lançado
-                            </span>
+                            </button>
                           ) : (
                             <button type="button" disabled={!auxLoaded}
                               title={auxLoaded ? 'Abrir o formulário oficial de lançamento' : 'Carregando contas e classificações…'}
@@ -427,17 +505,16 @@ export default function CusteioTxtImportTab(
         onClose={() => setDialogRow(null)}
         onSave={async (form) => {
           const row = dialogRow;
-          const ok = await hookFin.criarLancamento(form);
+          /* ⚠ O HASH VAI JUNTO DA ESCRITA, não depois: um UPDATE em segundo gesto pode
+             falhar sozinho e deixar no banco um lançamento que a prévia nunca reconhece —
+             o item voltaria a ser proposto para sempre. */
+          const hash = row ? hashPorLinha.get(row.linha_num) : undefined;
+          const ok = await hookFin.criarLancamento(form, { hashImportacao: hash });
           if (ok) {
-            // marca a linha como lançada (id estável = linha_num do parser).
-            // O toast de sucesso é o do próprio hookFin.criarLancamento — não duplicar.
-            if (row) {
-              setLinhasLancadas((prev) => {
-                const next = new Set(prev);
-                next.add(row.linha_num);
-                return next;
-              });
-            }
+            /* Reconsulta em vez de marcar na memória: é a mesma pergunta da abertura, e a
+               resposta traz o id que o link precisa. O toast de sucesso é o do próprio
+               `criarLancamento` — não duplicar. */
+            await conferirLancados();
             setDialogRow(null);
           }
           return ok;
