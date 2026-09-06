@@ -149,6 +149,11 @@ export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
     mudaAlgo: row.will_change_anything,
     data: fmtData(row.excel_data ?? row.lanc_data_pagamento),
     valor: fmtBRL(row.excel_valor ?? row.lanc_valor),
+    /* ⚠ O NÚMERO AO LADO DO TEXTO — MESA-ENR-UX-01. O total por grupo é uma SOMA, e somar
+       "1.510,00" de volta a partir da string exigiria desformatar o que este adapter
+       acabou de formatar: duas conversões e um ponto onde o locale pode trair. A mesma
+       fonte da string, crua. `null` quando não há valor de nenhum dos dois lados. */
+    valorNum: row.excel_valor ?? row.lanc_valor ?? null,
     banco: fmtTexto(banco),
     fornecedor: fmtTexto(favSistema ?? favExcel),
     comparativo,

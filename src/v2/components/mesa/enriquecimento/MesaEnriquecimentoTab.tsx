@@ -310,6 +310,50 @@ export function MesaEnriquecimentoTab() {
     }
   }
 
+  /**
+   * Aplicar ao grupo — MESA-ENR-UX-01 (129).
+   *
+   * ⚠ MESMAS DUAS RPCs DO SALVAR, uma linha por vez: `editarProposto` grava a proposta e
+   * `applyRow` a aplica. Não há writer novo, e por isso cada linha rende o seu próprio
+   * evento — o que a auditoria precisa para dizer o que mudou em qual lançamento.
+   * ⚠ TRÊS CAMPOS, NÃO QUATRO. O envelope pede Fornecedor, Fazenda, Safra e Subcentro;
+   * `fn_classificacao_apply_row` não grava `safra_id`, então a safra fica de fora e o
+   * botão diz isso no título. Mandá-la no patch faria a RPC devolvê-la em
+   * `campos_rejeitados` e o operador veria um toast de erro no meio de um lote que deu
+   * certo.
+   * ⚠ SEQUENCIAL, NÃO EM PARALELO: são escritas na mesma sessão de staging, e o `await`
+   * em fila mantém a ordem dos eventos legível na auditoria. Um grupo tem unidades, não
+   * centenas — o custo é o do gesto.
+   * ⚠ FALHA DE UMA NÃO CANCELA AS OUTRAS, e o toast final diz quantas foram: parar no meio
+   * deixaria o grupo pela metade sem o operador saber quais.
+   */
+  const [aplicandoGrupo, setAplicandoGrupo] = useState(false);
+  async function handleAplicarAoGrupo(ids: string[]) {
+    if (!selecionado || ids.length === 0) return;
+    const patch = {
+      subcentro: selecionado.edicao.subcentro,
+      favorecido_id: selecionado.edicao.favorecidoId,
+      fazenda_id: selecionado.edicao.fazendaId,
+    };
+    setAplicandoGrupo(true);
+    let ok = 0; let falhas = 0;
+    try {
+      for (const id of ids) {
+        try {
+          await editarProposto({ staging_id: id, patch });
+          const res: any = await applyRow({ staging_id: id, overwrite: true });
+          if (res?.aplicado) { manterEmGraca(id); ok++; } else falhas++;
+        } catch { falhas++; }
+      }
+      toast[falhas === 0 ? 'success' : 'warning'](
+        falhas === 0
+          ? `${ok} ${ok === 1 ? 'linha aplicada' : 'linhas aplicadas'} ao grupo.`
+          : `${ok} aplicadas · ${falhas} não aplicadas.`);
+    } finally {
+      setAplicandoGrupo(false);
+    }
+  }
+
   // PR-UX-ENR-MODAL-01 — prop-bags únicos. A aba e o modal ampliado consomem
   // EXATAMENTE as mesmas props; a lista de props existe em UM lugar só.
   const listaProps: EnriquecimentoListaProps = {
@@ -473,6 +517,8 @@ export function MesaEnriquecimentoTab() {
         lista={listaProps}
         detalhe={detalheProps}
         actions={actionsProps}
+        onAplicarAoGrupo={handleAplicarAoGrupo}
+        aplicandoGrupo={aplicandoGrupo}
       />
 
       <EnriquecimentoImportarDialog

@@ -91,6 +91,8 @@ export interface EnriqRowVM {
   // LISTA (esquerda) — só o necessário para localizar o lançamento (lado SISTEMA).
   data: string;
   valor: string;
+  /** O mesmo valor da string acima, cru — para somar por grupo sem desformatar. */
+  valorNum: number | null;
   banco: string;
   fornecedor: string;
   // DETALHE (direita) — comparativo completo Sistema | Excel | Resultado.

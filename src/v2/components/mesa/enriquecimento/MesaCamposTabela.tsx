@@ -1,0 +1,160 @@
+/**
+ * A tabela de campos da Mesa de Revisão — MESA-ENR-UX-01 (129).
+ *
+ * Quatro colunas: campo · Excel (azul, leitura) · Sistema atual · Resultado. Seções em
+ * faixa. A ordem é a do mock, e ela não é estética: as três datas primeiro porque é o que
+ * o operador confere primeiro no extrato; depois quem é (produto, fornecedor, fazenda);
+ * depois onde entra (safra, subcentro, conta); e por último o papel.
+ *
+ * ⚠ CINCO CAMPOS GRAVAM, SEIS NÃO — e a tela DIZ isso, em vez de oferecer edição que o
+ * Salvar descarta. Medido em 06/09: `fn_classificacao_apply_row` escreve exatamente
+ * `subcentro, macro_custo, grupo_custo, centro_custo, plano_conta_id, favorecido_id,
+ * fazenda_id, descricao (de 'produto'), numero_documento`. Data de competência,
+ * vencimento e pagamento, safra, conta bancária e observação não são gravados por RPC
+ * nenhuma hoje. Um campo editável cujo valor some no Salvar é o silêncio mais caro que
+ * esta tela pode produzir — o operador escolhe, salva, a tela avança e nada aconteceu.
+ * ⚠ QUANDO O BANCO CHEGAR (129c), os seis viram editáveis TROCANDO `gravaHoje` para true
+ * e ligando o editor: a linha, a ordem e a seção já estão no lugar.
+ *
+ * ⚠ ESTE COMPONENTE NÃO SUBSTITUI `EnriquecimentoDetalhe`. Aquele é a aba, que segue
+ * intacta; este é a superfície ampla. Unificar os dois agora obrigaria a aba a herdar a
+ * ordem nova sem homologação.
+ */
+import type { EnriqRowVM, EnriqComparativoLinha } from './types';
+import type { ClassificacaoItem, FornecedorV2 } from '@/hooks/useFinanceiroV2';
+import type { Fazenda } from '@/contexts/FazendaContext';
+import { ResultadoSubcentroEditor } from './ResultadoSubcentroEditor';
+import { ResultadoFavorecidoEditor } from './ResultadoFavorecidoEditor';
+import { ResultadoFazendaEditor } from './ResultadoFazendaEditor';
+import { ResultadoProdutoEditor } from './ResultadoProdutoEditor';
+import { ResultadoDocumentoEditor } from './ResultadoDocumentoEditor';
+
+/** Por que um campo ainda não é editável aqui. Texto curto, mostrado ao lado do valor. */
+const MOTIVO_SEM_APPLY = 'o Salvar ainda não grava este campo';
+
+type Secao = 'Datas' | 'Identificação' | 'Classificação' | 'Documento';
+
+/**
+ * A ordem do mock, com a seção de cada linha e se o Salvar grava.
+ *
+ * `campo` casa com `EnriqComparativoLinha.campo` produzido pelo adapter. Quando o
+ * comparativo não traz a linha (Data venc., Safra, Conta bancária ainda não existem na
+ * view), ela aparece assim mesmo, com "—" nas três colunas: esconder faria a tela mentir
+ * por omissão sobre um campo que o operador procura.
+ */
+const ORDEM: Array<{ campo: string; rotulo: string; secao: Secao; gravaHoje: boolean }> = [
+  { campo: 'Data comp.', rotulo: 'Data comp.', secao: 'Datas', gravaHoje: false },
+  { campo: 'Data venc.', rotulo: 'Data venc.', secao: 'Datas', gravaHoje: false },
+  { campo: 'Data', rotulo: 'Data pgto.', secao: 'Datas', gravaHoje: false },
+  { campo: 'Produto / Descrição', rotulo: 'Produto / Descrição', secao: 'Identificação', gravaHoje: true },
+  { campo: 'Fornecedor', rotulo: 'Fornecedor', secao: 'Identificação', gravaHoje: true },
+  { campo: 'Fazenda', rotulo: 'Fazenda', secao: 'Identificação', gravaHoje: true },
+  { campo: 'Safra', rotulo: 'Safra', secao: 'Classificação', gravaHoje: false },
+  { campo: 'Subcentro', rotulo: 'Subcentro', secao: 'Classificação', gravaHoje: true },
+  { campo: 'Banco', rotulo: 'Conta bancária', secao: 'Classificação', gravaHoje: false },
+  { campo: 'Documento', rotulo: 'Documento', secao: 'Documento', gravaHoje: true },
+  { campo: 'OBS', rotulo: 'Observação', secao: 'Documento', gravaHoje: false },
+];
+
+const VAZIA: EnriqComparativoLinha = { campo: '', sistema: '—', excel: '—', resultado: '—', tom: 'neutro' };
+
+export interface MesaCamposTabelaProps {
+  row: EnriqRowVM;
+  classificacoes?: ClassificacaoItem[];
+  fornecedores?: FornecedorV2[];
+  fazendas?: Fazenda[];
+  clienteId?: string;
+  onEditar?: (patch: Record<string, unknown>) => Promise<void>;
+  onCriarFornecedor?: (nome: string, fazendaId: string | null, cpfCnpj?: string) => Promise<FornecedorV2 | null>;
+}
+
+export function MesaCamposTabela({
+  row, classificacoes, fornecedores, fazendas, clienteId, onEditar, onCriarFornecedor,
+}: MesaCamposTabelaProps) {
+  const porCampo = new Map(row.comparativo.map(c => [c.campo, c]));
+  const COLS = '120px minmax(0,1fr) minmax(0,1fr) minmax(0,1.3fr)';
+  let secaoAtual: Secao | null = null;
+
+  return (
+    <div className="flex-1 min-h-0 overflow-y-auto">
+      {/* ⚠ O CABEÇALHO DAS COLUNAS É STICKY DENTRO DESTE SCROLLPORT — A21. Ele mora no
+          mesmo elemento que rola; posto fora, subiria junto com a moldura. */}
+      <div className="sticky top-0 z-10 grid gap-2 border-b bg-card px-3 py-1.5 text-[10px] font-medium uppercase tracking-wide"
+        style={{ gridTemplateColumns: COLS }}>
+        <span />
+        <span className="text-blue-600">Excel</span>
+        <span className="text-muted-foreground">Sistema atual</span>
+        <span className="text-emerald-600">Resultado</span>
+      </div>
+
+      {ORDEM.map(({ campo, rotulo, secao, gravaHoje }) => {
+        const c = porCampo.get(campo) ?? VAZIA;
+        const abreSecao = secao !== secaoAtual;
+        secaoAtual = secao;
+        const igual = c.tom === 'ok';
+        const vaiMudar = c.tom === 'muda' || c.tom === 'difere';
+        const editavel = gravaHoje && !row.aplicado && !!onEditar;
+
+        return (
+          <div key={rotulo}>
+            {abreSecao && (
+              <div className="bg-muted px-3 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                {secao}
+              </div>
+            )}
+            <div className="grid items-center gap-2 border-b border-border/50 px-3 py-[3px] text-[11px]"
+              style={{ gridTemplateColumns: COLS }}>
+              <span className="truncate text-[10px] text-muted-foreground" title={rotulo}>{rotulo}</span>
+              {/* ⚠ O EXCEL É REFERÊNCIA, NUNCA GRAVADO DIRETO — por isso azul e sem controle. */}
+              <span className="truncate text-blue-700/90" title={c.excel}>{c.excel}</span>
+              <span className="truncate" title={c.sistema}>{c.sistema}</span>
+              <div className="min-w-0">
+                {editavel && campo === 'Subcentro' && classificacoes ? (
+                  <ResultadoSubcentroEditor value={row.edicao.subcentro} tipoOperacao={row.edicao.tipoOperacao}
+                    classificacoes={classificacoes} onEditar={onEditar} />
+                ) : editavel && campo === 'Fornecedor' && fornecedores && onCriarFornecedor ? (
+                  <ResultadoFavorecidoEditor value={row.edicao.favorecidoId} fornecedores={fornecedores}
+                    fazendaId={row.edicao.fazendaId} onEditar={onEditar} onCriarFornecedor={onCriarFornecedor} />
+                ) : editavel && campo === 'Fazenda' && fazendas ? (
+                  <ResultadoFazendaEditor value={row.edicao.fazendaId} fazendaIdAtual={row.edicao.fazendaIdAtual}
+                    fazendas={fazendas} forcaAdministrativo={row.edicao.macro === 'Dividendos'} onEditar={onEditar} />
+                ) : editavel && campo === 'Produto / Descrição' ? (
+                  <ResultadoProdutoEditor value={row.edicao.produto} descricaoAtual={row.edicao.descricaoAtual}
+                    clienteId={clienteId} onEditar={onEditar} />
+                ) : editavel && campo === 'Documento' ? (
+                  <ResultadoDocumentoEditor value={row.edicao.numeroDocumento}
+                    numeroDocumentoAtual={row.edicao.numeroDocumentoAtual} onEditar={onEditar} />
+                ) : (
+                  /* ⚠ LEITURA NÃO PODE PARECER CAMPO — medido na tela: com borda de input e
+                     altura de controle, as datas e a safra pareciam editáveis e vazias, e o
+                     operador tentaria clicar. Sem borda, fundo chapado e o motivo no
+                     `title`: é a mesma regra do botão desabilitado que diz por quê.
+                     ⚠ E SEM ÍCONE DE CALENDÁRIO: ele prometeria um DatePicker que não
+                     existe. O que confere ou muda continua com a cor de sempre. */
+                  <span
+                    title={gravaHoje ? c.resultado : `${c.resultado} — ${MOTIVO_SEM_APPLY}`}
+                    className={`flex h-6 items-center gap-1.5 truncate rounded px-2 ${
+                      igual ? 'border border-emerald-200 bg-emerald-50 text-emerald-700'
+                        : vaiMudar ? 'border border-amber-400 bg-amber-50 text-amber-800 dark:bg-amber-950/30 dark:text-amber-200'
+                        : 'bg-muted text-muted-foreground'}`}>
+                    {igual && <span aria-hidden>✓</span>}
+                    <span className="truncate">{c.resultado}</span>
+                    {!gravaHoje && (
+                      <span className="ml-auto shrink-0 text-[9px] italic opacity-70">leitura</span>
+                    )}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+
+      <p className="px-3 py-1.5 text-[10px] leading-tight text-muted-foreground">
+        ✓ confere · faixa âmbar = vai mudar · Excel em azul é referência, nunca gravado
+        direto. <b>Datas, safra, conta bancária e observação ainda não são gravadas pelo
+        Salvar</b> — aparecem em leitura até o banco aceitá-las.
+      </p>
+    </div>
+  );
+}
