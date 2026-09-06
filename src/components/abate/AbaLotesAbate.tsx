@@ -117,7 +117,7 @@ function ColunaTopo({ rotulo, valor, unidade, linhaAt, subs, evidente, extra }: 
 
 export function AbaLotesAbate({
   lotes, linhas, cenario, cenariosExistentes, onCenarioChange,
-  lotesApi, categoriasDisponiveis, somenteLeitura, onLinhaChange,
+  lotesApi, categoriasDisponiveis, somenteLeitura, fisicoBloqueado, onLinhaChange,
 }: {
   lotes: LoteAbate[];
   linhas: Map<string, LinhaAbate>;
@@ -127,6 +127,8 @@ export function AbaLotesAbate({
   lotesApi: CompraLotesApi;
   categoriasDisponiveis: { value: string; label: string }[];
   somenteLeitura?: boolean;
+  /** Já há movimentação de abate ativa: quantidade e peso do lote deixam de mudar. */
+  fisicoBloqueado?: boolean;
   /** O rascunho do pai — quem persiste é o rodapé do shell. */
   onLinhaChange: (loteId: string, proxima: LinhaAbate) => void;
 }) {
@@ -193,8 +195,14 @@ export function AbaLotesAbate({
             Resumo dos lotes <ChevronRight className="h-3.5 w-3.5" />
           </Button>
         )}
+        {/* A RPC recusa adicionar OU remover lote depois do recebimento ("nao e possivel
+            adicionar ou remover lotes. Estorne o recebimento primeiro"), e a recusa derruba
+            a operação inteira. Oferecer o que o banco recusa é pior que não oferecer. */}
         <Button type="button" size="sm" className="h-7 shrink-0 gap-1 px-2.5 text-[11px]"
-          disabled={somenteLeitura} onClick={abrirNovo}>
+          disabled={somenteLeitura || !!fisicoBloqueado}
+          title={fisicoBloqueado && !somenteLeitura
+            ? 'não se adiciona lote depois do recebimento; estorne o recebimento para alterar' : undefined}
+          onClick={abrirNovo}>
           <Plus className="h-3.5 w-3.5" /> Adicionar lote
         </Button>
       </div>
@@ -293,8 +301,11 @@ export function AbaLotesAbate({
                     className="flex h-6 w-6 shrink-0 items-center justify-center rounded border text-muted-foreground hover:text-foreground disabled:opacity-40">
                     <Pencil className="h-3 w-3" />
                   </button>
-                  <button type="button" title="Excluir lote" aria-label="Excluir lote"
-                    disabled={somenteLeitura} onClick={() => setRemovendoId(lote.id)}
+                  <button type="button" aria-label="Excluir lote"
+                    title={fisicoBloqueado && !somenteLeitura
+                      ? 'não se remove lote depois do recebimento; estorne o recebimento para alterar'
+                      : 'Excluir lote'}
+                    disabled={somenteLeitura || !!fisicoBloqueado} onClick={() => setRemovendoId(lote.id)}
                     className="flex h-6 w-6 shrink-0 items-center justify-center rounded border text-muted-foreground hover:text-destructive disabled:opacity-40">
                     <Ban className="h-3 w-3" />
                   </button>
@@ -350,7 +361,12 @@ export function AbaLotesAbate({
              rótulo pelo catálogo, e sem catálogo mostra o slug em vez de vazio. */
           rotuloCategoria={(slug: string) =>
             categoriasDisponiveis.find(c => c.value === slug)?.label || slug || 'Sem categoria'}
-          fisicoRO={false}
+          /* ⚠ ERA `false` FIXO, E A RPC RECUSAVA — OC-CORRIGIR-CATEGORIA. `oc_salvar_lotes`
+             entra no caminho com recebimento por `EXISTS(zoo_operacao_movimentacoes)`, que
+             vale para os três tipos, abate incluído: editar quantidade ou peso aqui derrubava
+             a gravação INTEIRA no rodapé, longe de onde se corrige. Agora o campo trava com o
+             motivo escrito, e categoria e observação seguem editáveis — que é o ponto. */
+          fisicoRO={!!fisicoBloqueado}
           /* ⚠ SEM CRITÉRIO E SEM VALOR no abate: o valor do lote nasce da carcaça, do
              preço da @ e dos bônus, na negociação — `oc_salvar_abate` soma os líquidos em
              `valor_acordado`. Pedir um valor aqui seria um segundo número para a mesma

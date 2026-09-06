@@ -586,7 +586,7 @@ export function VendaModalShell({
         salveIdentificacao: 'Salve a identificação da venda para adicionar os lotes da negociação.',
         voltarParaIdentificacao: 'Voltar para Venda',
         salveOperacaoPrimeiro: 'Salve a operação na aba Venda primeiro',
-        fisicoBloqueado: 'Esta venda já teve entrega: categoria, quantidade e peso ficam bloqueados. Critério e valor seguem editáveis.',
+        fisicoBloqueado: 'Esta venda já teve entrega: quantidade e peso não mudam. Categoria, observação, critério e valor seguem editáveis.',
       }}
     />
   );

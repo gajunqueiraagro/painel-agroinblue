@@ -511,6 +511,18 @@ export function LoteDialog({
     ? `Informe o peso médio do lote ${rotuloCategoria(categoria)}. Lote sem peso não pode ser salvo.`
     : undefined;
 
+  /* ⚠ CORRIGIR CATEGORIA NÃO É MUDAR O FÍSICO — OC-CORRIGIR-CATEGORIA.
+     `fisicoRO` travava categoria, quantidade e peso no mesmo gesto, e a única saída para
+     trocar novilhas por vacas era estornar o recebimento — desfazer a entrada do rebanho
+     para consertar um rótulo. `oc_salvar_lotes` (06/09) passou a aceitar categoria e
+     observação no caminho com recebimento, propagando a categoria para o lançamento
+     vinculado; quantidade e peso seguem travados, porque esses mudam o rebanho.
+     ⚠ `somenteLeitura` CONTINUA TRAVANDO TUDO: ele é a operação aberta em leitura, não o
+     recebimento registrado. A distinção é o que separa "não pode" de "não deve". */
+  const bloqueadoPorRecebimento = fisicoRO && !somenteLeitura;
+  const TITLE_POS_RECEBIMENTO = 'não muda depois do recebimento; estorne o recebimento para alterar';
+  const titleFisico = motivoBloqueio ?? (bloqueadoPorRecebimento ? TITLE_POS_RECEBIMENTO : undefined);
+
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onFechar(); }}>
       {/* Cabecalho AZUL, o mesmo dos demais modais do sistema (CompraModalShell).
@@ -520,9 +532,11 @@ export function LoteDialog({
         <DialogHeader className="bg-primary px-4 py-2.5 space-y-0.5">
           <DialogTitle className="text-[13px] text-primary-foreground">{rotuloCategoria(categoria)}</DialogTitle>
           <DialogDescription className="text-[11px] text-primary-foreground/80">
-            {fisicoRO
-              ? (rotulos?.fisicoBloqueado ?? 'Esta compra já teve recebimento: categoria, quantidade e peso ficam bloqueados. Critério e valor seguem editáveis.')
-              : 'Os campos do lote negociado.'}
+            {somenteLeitura
+              ? 'Operação aberta em leitura: nada aqui é editável.'
+              : bloqueadoPorRecebimento
+                ? (rotulos?.fisicoBloqueado ?? 'Recebimento registrado: quantidade e peso não mudam. Categoria, observação, critério e valor seguem editáveis.')
+                : 'Os campos do lote negociado.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -532,7 +546,7 @@ export function LoteDialog({
           <div className="grid grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] gap-2">
             <div>
               <Label className="text-[10px]">Categoria <span className="text-destructive">*</span></Label>
-              <Select value={categoria || undefined} onValueChange={setCategoria} disabled={fisicoRO}>
+              <Select value={categoria || undefined} onValueChange={setCategoria} disabled={somenteLeitura}>
                 <SelectTrigger className="h-8 text-[12px] mt-0.5"><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent className={`${darkSelectClass} max-h-[60vh] overflow-y-auto`}>
                   {categoriasDisponiveis.map(c => <SelectItem key={c.value} value={c.value} className="text-[12px]">{c.label}</SelectItem>)}
@@ -542,7 +556,8 @@ export function LoteDialog({
             <div>
               <Label className="text-[10px]">Quantidade <span className="text-destructive">*</span></Label>
               <Input inputMode="numeric" value={quantidade} onChange={e => setQuantidade(e.target.value)} placeholder="0"
-                disabled={fisicoRO} className="h-8 text-[12px] mt-0.5 text-right tabular-nums" />
+                disabled={fisicoRO} title={bloqueadoPorRecebimento ? TITLE_POS_RECEBIMENTO : undefined}
+                className="h-8 text-[12px] mt-0.5 text-right tabular-nums" />
             </div>
           </div>
 
@@ -551,7 +566,7 @@ export function LoteDialog({
               <Label className="text-[10px]">Peso méd. (kg) <span className="text-destructive">*</span></Label>
               <Input inputMode="decimal" value={pesoMedioKg} onChange={e => setPesoMedioKg(e.target.value)}
                 onBlur={() => { const n = parseNumericValue(pesoMedioKg); if (n) setPesoMedioKg(n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })); }}
-                placeholder="0,00" disabled={fisicoRO} title={motivoBloqueio}
+                placeholder="0,00" disabled={fisicoRO} title={titleFisico}
                 className={`h-8 text-[12px] mt-0.5 text-right tabular-nums ${semPeso ? 'border-destructive focus-visible:ring-destructive' : ''}`} />
             </div>
             {!semValor && (<>

@@ -661,6 +661,12 @@ export function AbateModalShell({
   /* ⚠ OS NUMEROS DE CADA ABA, DA MESMA FONTE QUE A ABA USA — nada recalculado aqui.
      Ausencia continua sendo `null`, que o bloco imprime como traco. */
   /* A data da ULTIMA saida registrada: e' a que responde "quando entregou". */
+  /* ⚠ MESMA LEITURA DA COMPRA (`CompraModalShell:194`): movimentação não cancelada é
+     recebimento ativo. `oc_salvar_lotes` decide o caminho por
+     `EXISTS(zoo_operacao_movimentacoes)` sem olhar o tipo — o abate sempre esteve sujeito
+     ao guard, e só o front é que não sabia. Movimentação CANCELADA não conta. */
+  const temAbateAtivo = (recebimentoApi?.movimentacoes ?? []).some(m => m.cancelado !== true);
+
   const dataEntrega = useMemo(() => {
     const datas = (recebimentoApi?.movimentacoes ?? [])
       .filter(m => !m.cancelado && m.data)
@@ -736,7 +742,7 @@ export function AbateModalShell({
         salveIdentificacao: 'Salve a identificação do abate para adicionar os lotes da negociação.',
         voltarParaIdentificacao: 'Voltar para Abate',
         salveOperacaoPrimeiro: 'Salve a operação na aba Abate primeiro',
-        fisicoBloqueado: 'Esta venda já teve entrega: categoria, quantidade e peso ficam bloqueados. Critério e valor seguem editáveis.',
+        fisicoBloqueado: 'Esta venda já teve entrega: quantidade e peso não mudam. Categoria, observação, critério e valor seguem editáveis.',
       }}
     />
   );
@@ -968,6 +974,7 @@ export function AbateModalShell({
                     lotesApi={lotesApi}
                     categoriasDisponiveis={categoriasDisponiveis}
                     somenteLeitura={ocStatusComercial === 'fechada' || ocStatusComercial === 'cancelada'}
+                    fisicoBloqueado={temAbateAtivo}
                     onLinhaChange={onAbateLinhaChange ?? (() => {})}
                   />
                 )}
