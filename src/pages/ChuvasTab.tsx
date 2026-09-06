@@ -38,8 +38,12 @@ interface Props {
 }
 
 export function ChuvasTab({ anoInicial, mode = 'operacional' }: Props = {}) {
-  const { chuvas, loading, salvarChuva } = useChuvas();
-  const { isGlobal } = useFazenda();
+  /* A fazenda escolhida NA TELA quando o filtro está em Global — 114c. `null` = ninguém
+     escolheu ainda, e é aí que a lista aparece. Sair dela volta para a lista, e o filtro
+     do app continua em Global o tempo todo. */
+  const [fazendaEscolhida, setFazendaEscolhida] = useState<string | null>(null);
+  const { chuvas, loading, salvarChuva } = useChuvas(fazendaEscolhida);
+  const { isGlobal, fazendas } = useFazenda();
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth() + 1;
   const [anoFiltro, setAnoFiltro] = useState(currentYear);
@@ -145,7 +149,10 @@ export function ChuvasTab({ anoInicial, mode = 'operacional' }: Props = {}) {
   const [editMm, setEditMm] = useState('');
 
   const handleCellClick = (dia: number, mes: number) => {
-    if (isGlobal) return;
+    /* ⚠ O QUE TRAVA A CÉLULA É NÃO HAVER ESTAÇÃO, não estar em Global — 114c. Sem esta
+       troca, a planilha abriria em Global com a fazenda escolhida e nenhuma célula
+       responderia ao clique: a tela pareceria quebrada. */
+    if (isGlobal && !fazendaEscolhida) return;
     const maxD = diasNoMes(mes + 1, anoFiltro);
     if (dia + 1 > maxD) return;
     const key = `${String(mes + 1).padStart(2, '0')}-${String(dia + 1).padStart(2, '0')}`;
@@ -178,9 +185,15 @@ export function ChuvasTab({ anoInicial, mode = 'operacional' }: Props = {}) {
   const isOperacional = mode === 'operacional';
   const isAnalitico   = mode === 'analitico';
   const mostrarFiltroMes = isAnalitico; // filtro mês só faz sentido em painel
-  const mostrarBotaoLancar = isOperacional && !isGlobal;
+  /* Em Global COM fazenda escolhida a planilha é a mesma de sempre: o que decide não é
+     mais o filtro, é haver uma estação definida. */
+  const comEstacao = !isGlobal || !!fazendaEscolhida;
+  const mostrarBotaoLancar = isOperacional && comEstacao;
+  const nomeEscolhida = fazendas.find(f => f.id === fazendaEscolhida)?.nome ?? null;
   const headerSub = isOperacional
-    ? (isGlobal ? 'Selecione uma fazenda para lançar' : `Total: ${yearTotal.toFixed(1)} mm`)
+    ? (comEstacao
+        ? `Total: ${yearTotal.toFixed(1)} mm${nomeEscolhida ? ` · ${nomeEscolhida}` : ''}`
+        : 'Escolha a fazenda para lançar')
     : (isGlobal
         ? `Comparativo entre fazendas — Jan a ${MESES[mesFiltro - 1]}/${anoFiltro}`
         : `Análise por fazenda — Jan a ${MESES[mesFiltro - 1]}/${anoFiltro}`);
@@ -256,8 +269,13 @@ export function ChuvasTab({ anoInicial, mode = 'operacional' }: Props = {}) {
           operacional + Fazenda  → planilha (heatmap editável)
           analítico   + Global   → ChuvasGlobalView
           analítico   + Fazenda  → placeholder (em construção) */}
-      {isOperacional && isGlobal && (
-        <BloqueioGlobalOperacional anoFiltro={anoFiltro} />
+      {/* ⚠ GLOBAL DEIXOU DE SER PORTA FECHADA — 114c. Antes, quem estava em Global via
+          "Selecione uma fazenda" e tinha de trocar o filtro do app (e perder a tela em que
+          estava) para lançar 3 mm. Agora escolhe a estação aqui, lança, e continua em
+          Global. A regra do banco não mudou: chuva é de UMA fazenda. */}
+      {isOperacional && isGlobal && !fazendaEscolhida && (
+        <EscolhaDaEstacao fazendas={fazendas.filter(f => f.id !== '__global__')}
+          anoFiltro={anoFiltro} onEscolher={setFazendaEscolhida} />
       )}
       {isAnalitico && isGlobal && (
         <ChuvasGlobalView anoFiltro={anoFiltro} mesFiltro={mesFiltro} />
@@ -265,8 +283,21 @@ export function ChuvasTab({ anoInicial, mode = 'operacional' }: Props = {}) {
       {isAnalitico && !isGlobal && (
         <PlaceholderAnaliticoFazenda />
       )}
-      {isOperacional && !isGlobal && (
+      {isOperacional && comEstacao && (
       <div className="px-2">{/* PLANILHA OPERACIONAL ─────────────────── */}
+
+      {/* A volta para a lista, e o nome de quem está sendo lançada — sem isso o operador
+          em Global não teria como saber de qual estação é a planilha aberta. */}
+      {isGlobal && fazendaEscolhida && (
+        <div className="mb-1.5 flex items-center gap-2 rounded-md border bg-muted/40 px-2.5 py-1">
+          <button type="button" onClick={() => setFazendaEscolhida(null)}
+            className="text-[11px] text-primary underline-offset-2 hover:underline">
+            ‹ Trocar fazenda
+          </button>
+          <span className="text-[11px] text-muted-foreground">Lançando em</span>
+          <span className="text-[12px] font-medium">{nomeEscolhida ?? '—'}</span>
+        </div>
+      )}
 
       {/* Grid anual — 12 blocos lado a lado, cada um com sub-colunas Dia|mm.
           24 colunas no corpo (12 meses × 2) + 1 coluna lateral de label para
@@ -447,19 +478,42 @@ export function ChuvasTab({ anoInicial, mode = 'operacional' }: Props = {}) {
 
 // ─── Subcomponentes ─────────────────────────────────────────────────
 
-function BloqueioGlobalOperacional({ anoFiltro }: { anoFiltro: number }) {
+/**
+ * A escolha da estação, no lugar do bloqueio — 114c.
+ *
+ * ⚠ MEDIDAS DO A18: rótulo 10px, identidade 12px/500. É uma lista de escolha, não um
+ * aviso de erro: o operador chegou aqui para lançar, e o que ele precisa é da porta, não
+ * da explicação de por que ela estava fechada.
+ */
+function EscolhaDaEstacao({ fazendas, anoFiltro, onEscolher }: {
+  fazendas: { id: string; nome: string }[];
+  anoFiltro: number;
+  onEscolher: (id: string) => void;
+}) {
   return (
-    <div className="px-4 py-12 flex flex-col items-center justify-center text-center gap-3">
-      <div className="rounded-full bg-blue-50 dark:bg-blue-950/30 p-4">
-        <CloudRain className="h-8 w-8 text-blue-500" />
+    <div className="px-3 py-4">
+      <div className="mb-2 flex items-baseline gap-2">
+        <CloudRain className="h-4 w-4 shrink-0 text-blue-500" />
+        <span className="text-[12px] font-medium">Em qual fazenda?</span>
+        <span className="text-[10px] text-muted-foreground">
+          A chuva é de uma estação. Escolha para lançar {anoFiltro} — o filtro continua em Global.
+        </span>
       </div>
-      <div className="text-base font-semibold text-foreground">
-        Selecione uma fazenda para lançar chuvas
-      </div>
-      <div className="text-sm text-muted-foreground max-w-md">
-        Lançamento de chuva é feito por estação/fazenda. No filtro Global não há edição
-        — alterne para uma fazenda específica no seletor acima para registrar mm em {anoFiltro}.
-      </div>
+      {fazendas.length === 0 ? (
+        <p className="py-6 text-center text-[11px] text-muted-foreground">
+          Nenhuma fazenda ativa neste cliente.
+        </p>
+      ) : (
+        <div className="divide-y rounded-md border">
+          {fazendas.map(f => (
+            <button type="button" key={f.id} onClick={() => onEscolher(f.id)}
+              className="flex w-full items-center gap-2 px-3 py-[7px] text-left hover:bg-muted/50">
+              <span className="min-w-0 flex-1 truncate text-[12px] font-medium">{f.nome}</span>
+              <span className="shrink-0 text-[10px] text-muted-foreground">lançar ›</span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

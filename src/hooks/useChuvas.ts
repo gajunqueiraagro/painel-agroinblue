@@ -11,18 +11,35 @@ export interface Chuva {
   observacao?: string;
 }
 
-export function useChuvas() {
+/**
+ * @param fazendaEscolhidaId Fazenda escolhida NA TELA, quando o filtro está em Global —
+ *   [OC-PADRAO-01] 114c.
+ *
+ * ⚠ ESCOLHER AQUI NÃO TROCA O FILTRO DO APP. O operador em Global que quer lançar chuva
+ * de uma fazenda escolhe qual, lança, e continua em Global — mudar o contexto por baixo
+ * dele o levaria para outra tela ao voltar. Por isso a fazenda entra por parâmetro, e não
+ * por `setFazendaAtual`.
+ * ⚠ E ELA NÃO É "A FAZENDA DO USUÁRIO": fora do Global o parâmetro é ignorado, porque lá
+ * quem manda é o filtro. Duas fontes para a mesma pergunta discordariam no primeiro
+ * gesto.
+ */
+export function useChuvas(fazendaEscolhidaId?: string | null) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const [chuvas, setChuvas] = useState<Chuva[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fazendaId = fazendaAtual?.id;
+  /* Em Global com escolha, ela manda; nos demais casos, o filtro. */
+  const escolhida = isGlobal && fazendaEscolhidaId ? fazendaEscolhidaId : null;
+  const fazendaId = escolhida ?? fazendaAtual?.id;
+  /* A leitura de TODAS as fazendas só vale no Global SEM escolha — com escolha, a
+     planilha é daquela fazenda e mostrar as outras seria a soma no lugar do dado. */
+  const lendoTodas = isGlobal && !escolhida;
 
   const loadData = useCallback(async () => {
     if (!fazendaId) { setChuvas([]); setLoading(false); return; }
     setLoading(true);
 
-    const query = isGlobal
+    const query = lendoTodas
       ? supabase.from('chuvas').select('*').in('fazenda_id', fazendas.map(f => f.id))
       : supabase.from('chuvas').select('*').eq('fazenda_id', fazendaId);
 
@@ -39,17 +56,21 @@ export function useChuvas() {
     }
     if (error) toast.error('Erro ao carregar chuvas');
     setLoading(false);
-  }, [fazendaId, isGlobal, fazendas]);
+  }, [fazendaId, lendoTodas, fazendas]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
   const salvarChuva = async (data: string, milimetros: number, observacao?: string) => {
-    // Hard-block: lançamento exige fazenda individual (regra do módulo Chuvas).
-    if (!fazendaId || fazendaId === '__global__' || isGlobal) {
-      toast.error('Selecione uma fazenda para lançar chuvas (Global não permite edição).');
+    /* ⚠ A REGRA CONTINUA: chuva é de UMA estação, e não se lança "no Global". O que mudou
+       é que agora existe um jeito de escolher a estação sem sair do Global — e o bloqueio
+       passa a valer só quando ninguém escolheu. */
+    if (!fazendaId || fazendaId === '__global__' || (isGlobal && !escolhida)) {
+      toast.error('Escolha a fazenda para lançar a chuva.');
       return;
     }
-    const clienteId = fazendaAtual?.cliente_id;
+    const clienteId = (escolhida
+      ? fazendas.find(f => f.id === escolhida)?.cliente_id
+      : fazendaAtual?.cliente_id);
     if (!clienteId) {
       console.error('[useChuvas] cliente_id ausente em fazendaAtual', { fazendaAtual });
       toast.error('Fazenda sem cliente vinculado — contate o suporte.');
