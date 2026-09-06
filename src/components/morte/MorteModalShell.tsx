@@ -1,17 +1,16 @@
 /**
  * MorteModalShell — o modal da Morte, um só, para registrar e para editar.
  *
- * ⚠ DIVIDA DECLARADA: O ENVELOPE ESTA EM TRES LUGARES.
- * O cabeçalho azul (`bg-primary px-6 py-2.5`), o corpo em
- * `grid lg:grid-cols-[1fr_280px]` com `h-[calc(69vh + 38px)]` e as duas colunas de
- * rolagem própria, e o rodapé azul (`bg-primary px-6 py-2`) são os MESMOS medidos em
- * PR-OC-MODAL-TAMANHO-01 e copiados em PR-UI-NASCIMENTO-SHELL-02. Esta é a terceira
- * cópia, e ela é deliberada: extrair o envelope agora exigiria mexer no shell do
- * Nascimento, que ainda não passou por homologação de tela.
- * Quando houver massa que justifique — um quarto tipo, ou o
- * PR-UI-LANCAMENTOS-SIMPLES-PADRAO-02, que leva os demais tipos a este padrão — o
- * envelope sai para um componente só e os três passam a consumi-lo. Até lá, mudança
- * de medida no envelope exige mexer NOS TRES.
+ * ⚠ DIVIDA PAGA — este cabeçalho descrevia o mundo anterior e ficou para trás.
+ * O envelope (cabeçalho azul, corpo `grid lg:grid-cols-[1fr_280px]` em
+ * `h-[calc(69vh + 38px)]`, rodapé azul) saiu para `LancamentoModalEnvelope` em
+ * PR-ZOO-META-ENVELOPE-01, e este shell o consome desde então — a medida mora num lugar
+ * só. Corrigido em [OC-PADRAO-01] 114c, quando o texto obsoleto quase fez alguém extrair
+ * de novo o que já estava extraído.
+ * ⚠ O QUE AINDA É CÓPIA aqui é o par `LinhaResumo`/`LinhaResumoFazenda`, agora também
+ * disponível em `@/components/lancamento/LinhaResumo`. Esta tela NÃO migrou de
+ * propósito: ela ainda não passou por homologação, e trocar o resumo dela junto com a
+ * criação de três telas novas misturaria duas mudanças num diff só.
  * ⚠ O que NÃO se copia é o miolo: campos, resumo e regras são por tipo, e é por isso
  * que o shell não virou um componente com prop de tipo — seriam quatro slots para
  * dois usuários.

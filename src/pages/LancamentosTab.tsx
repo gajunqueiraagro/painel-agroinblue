@@ -54,6 +54,9 @@ import { useOperacaoAbate, type LinhaAbate } from '@/hooks/useOperacaoAbate';
 import { useOperacaoEventos } from '@/hooks/useOperacaoEventos';
 import { useOperacaoLiquidacao } from '@/hooks/useOperacaoLiquidacao';
 import { useExcluirLoteOC } from '@/hooks/useExcluirLoteOC';
+import { CampoMoeda, brl as brlMoeda } from '@/components/ui/campo-moeda';
+import { usePrecoEstoqueCategoria } from '@/hooks/usePrecoEstoqueCategoria';
+import { gerarFinanceiroConsumo } from '@/components/consumo/gerarFinanceiroConsumo';
 import { AbateDetalhesDialog, AbateDetalhes, EMPTY_ABATE_DETALHES } from '@/components/abate/AbateDetalhesDialog';
 import { AbateResumoPanel } from '@/components/abate/AbateResumoPanel';
 import { TransferenciaDetalhesDialog, TransferenciaDetalhes, EMPTY_TRANSFERENCIA_DETALHES } from '@/components/transferencia/TransferenciaDetalhesDialog';
@@ -1082,6 +1085,49 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const isCompra = tipo === 'compra';
   const isVenda = tipo === 'venda';
   const isConsumo = tipo === 'consumo';
+
+  /* ── O PREÇO DE ESTOQUE (P0) DA CATEGORIA — 114c-3 ────────────────────────────
+     ⚠ `valor_rebanho_mensal`, a MESMA tabela que valora o rebanho no fechamento. Usar
+     outra faria o consumo sair do estoque por um preço e o estoque ser avaliado por
+     outro, e a diferença apareceria como resultado que ninguém lançou.
+     ⚠ A FAZENDA É A DO LANÇAMENTO (`fazendaOrigem`), não a do contexto: o preço é por
+     fazenda, e o operador em Global lança para uma que não é a do filtro. */
+  /* ── CONSUMO VALORADO — [OC-PADRAO-01] 114c ──────────────────────────────────
+     ⚠ A BASE NÃO É GUARDADA, como no Morte: ela é a lente da digitação, e o que se
+     grava é sempre o TOTAL. Derivar a base a partir do resultado seria adivinhar qual
+     divisão foi usada. */
+  const [consumoBase, setConsumoBase] = useState<'cab' | 'total'>('cab');
+  const [consumoValorDigitado, setConsumoValorDigitado] = useState<number | null>(null);
+  /* O total que será gravado. `null` enquanto não houver número — e `null` é o que faz o
+     financeiro NÃO nascer, em vez de nascer valendo zero.
+     ⚠ POR CABEÇA MULTIPLICA PELA QUANTIDADE; sem quantidade não há conta, e o resultado é
+     `null`, não zero: zero afirmaria um valor que ninguém informou. */
+  const consumoQtd = parseNumericValue(quantidade) || 0;
+  const consumoValorTotal = consumoValorDigitado == null ? null
+    : consumoBase === 'total' ? consumoValorDigitado
+    : (consumoQtd > 0 ? consumoValorDigitado * consumoQtd : null);
+
+  const { precoKg: consumoPrecoKg } = usePrecoEstoqueCategoria(
+    isConsumo ? clienteAtual?.id : null,
+    isConsumo ? (fazendaOrigem || fazendaAtual?.id) : null,
+    isConsumo && data ? data.slice(0, 7) : null,
+    isConsumo ? categoria : null,
+  );
+
+  /* ⚠ O PADRÃO SÓ ENTRA ENQUANTO O OPERADOR NÃO DIGITOU. Reaplicá-lo depois apagaria o
+     número dele a cada troca de peso — e o campo é editável de propósito. Trocar de
+     categoria, porém, muda o preço de estoque: aí o padrão volta a valer, porque o valor
+     antigo era de OUTRA categoria. */
+  const consumoTocadoRef = useRef(false);
+  useEffect(() => { consumoTocadoRef.current = false; }, [categoria, tipo]);
+  useEffect(() => {
+    if (!isConsumo || consumoTocadoRef.current) return;
+    const pesoUnit = parseNumericValue(pesoKg) || 0;
+    if (consumoPrecoKg == null || pesoUnit <= 0) return;
+    setConsumoBase('cab');
+    setConsumoValorDigitado(Number((consumoPrecoKg * pesoUnit).toFixed(2)));
+  }, [isConsumo, consumoPrecoKg, pesoKg]);
+
 
   /* ── A VENDA EM META NO ENVELOPE (PR-ZOO-VENDA-META-01) ──────────────────────
      ⚠ PREDICADO, E NAO LISTA. A pergunta tem TRES dimensoes — tipo, cenario e subtipo —
@@ -3936,7 +3982,22 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setLancModalOpen(false);
           restaurarContextoDoModal();
         } else if (isConsumo && returnedId) {
-          // Consumo NÃO gera lançamento financeiro — fluxo só zootécnico.
+          /* ⚠ CONSUMO VALORADO — 114c. Deixou de ser "só zootécnico": grava o financeiro
+             sem caixa (receita interna) DEPOIS do zootécnico, porque ele precisa do id da
+             movimentação para o vínculo. Falhar aqui não desfaz o consumo — o animal saiu
+             do rebanho de verdade —, e a função avisa o que faltou. */
+          if (consumoValorTotal != null && clienteAtual?.id) {
+            await gerarFinanceiroConsumo({
+              lancamentoId: returnedId,
+              clienteId: clienteAtual.id,
+              fazendaId: fazendaOrigem || fazendaAtual?.id || '',
+              quantidade: parseNumericValue(quantidade) || 0,
+              categoria,
+              data,
+              valorTotal: consumoValorTotal,
+            });
+          }
+          setConsumoValorDigitado(null); setConsumoBase('cab');
           setLastSavedLancamentoId(null);
           setQuantidade(''); setCategoria(''); setPesoKg('');
           setFazendaOrigem(''); setFazendaDestino('');
@@ -4460,21 +4521,54 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       );
     }
 
-    // Consumo: NÃO gera lançamento financeiro. Painel apenas informativo + botão.
+    /* ⚠ CONSUMO PASSOU A SER VALORADO — [OC-PADRAO-01] 114c. Ele tem VALOR e não tem
+       DINHEIRO: o animal sai do rebanho como sairia numa venda, e é assim que precisa
+       sair do estoque; o que não existe é caixa. O painel deixa de dizer "não gera
+       lançamento financeiro" — passava a ser falso — e pede o valor, com o preço de
+       estoque da categoria como padrão. */
     if (isConsumo) {
       return (
         <div className="bg-card rounded-md border shadow-sm p-3 space-y-2 self-start">
           <h3 className="text-[14px] font-semibold text-foreground">Detalhes Financeiros</h3>
           <Separator />
-          <div className="flex gap-2 items-start py-1">
-            <Info className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-            <div className="text-[11px] text-muted-foreground leading-relaxed">
-              <p className="font-semibold mb-1">Consumo não gera lançamento financeiro.</p>
-              <ul className="space-y-0.5 list-disc list-inside text-[10px]">
-                <li>Movimentação interna do rebanho</li>
-                <li>Não impacta fluxo de caixa</li>
-              </ul>
+          <div className="space-y-1.5 py-1">
+            <div className="flex items-baseline justify-between gap-2">
+              <Label className="text-[11px]">Valor do consumo</Label>
+              {/* Fonte única do padrão, do aviso e do que será gravado. */}
+              <span className="text-[10px] text-muted-foreground">
+                {consumoPrecoKg != null
+                  ? `estoque ${brlMoeda(consumoPrecoKg)}/kg`
+                  : 'sem preço de estoque'}
+              </span>
             </div>
+            <div className="flex items-center gap-1.5">
+              {(['cab', 'total'] as const).map(b => (
+                <button type="button" key={b} onClick={() => setConsumoBase(b)}
+                  className={`rounded-full border px-2 py-px text-[10px] ${
+                    consumoBase === b ? 'border-primary bg-primary text-primary-foreground' : 'text-muted-foreground'}`}>
+                  {b === 'cab' ? 'por cabeça' : 'total'}
+                </button>
+              ))}
+              <span className="ml-auto text-[10px] text-muted-foreground tabular-nums">
+                {consumoValorTotal != null ? `total ${brlMoeda(consumoValorTotal)}` : 'total —'}
+              </span>
+            </div>
+            {/* ⚠ DIGITAR MARCA O CAMPO COMO TOCADO: a partir daí o padrão do estoque não
+                volta por cima do número do operador. */}
+            <CampoMoeda valor={consumoValorDigitado}
+              onChange={(v) => { consumoTocadoRef.current = true; setConsumoValorDigitado(v); }}
+              className="h-8 text-[12px] text-right" />
+            {/* ⚠ AUSÊNCIA DE PREÇO É AUSÊNCIA, NUNCA ZERO — 114c-3. Um consumo a zero
+                diria na DRE que o animal não valia nada. */}
+            {consumoPrecoKg == null && (
+              <p className="rounded border border-amber-400 bg-amber-50 px-2 py-1 text-[10px] leading-tight text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+                Sem preço de estoque para {categoria || 'a categoria'} em {data ? data.slice(0, 7) : 'o mês'}; informe.
+              </p>
+            )}
+            <p className="text-[10px] leading-tight text-muted-foreground">
+              Entra na DRE como receita interna (Consumo Interno e Doações) e sai do estoque.
+              Não movimenta caixa nem conta bancária.
+            </p>
           </div>
           <Separator />
           <Button type="button" className="w-full h-10 text-[13px] font-bold" onClick={handleRequestRegister} disabled={submitting}>
