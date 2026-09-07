@@ -171,7 +171,12 @@ import { usePermissions } from '@/hooks/usePermissions';
    Migrar um tipo novo passa a ser ACRESCENTAR UMA LINHA AQUI. Se esquecer, o tipo
    nao lanca em Global e a mensagem diz o que fazer — em vez de uma negacao
    encadeada a mais. */
-const TIPOS_COM_SELETOR_DE_FAZENDA: TipoMovimentacao[] = ['nascimento', 'morte', 'compra'];
+/* ⚠ O CONSUMO ENTROU EM [OC-PADRAO-01] 114c-4. Ele mostrava "Global" como valor da
+   Fazenda Origem — um campo somente-leitura preenchido com o nome do FILTRO, não com uma
+   fazenda —, e o funil o barrava depois de a tela inteira estar preenchida. Pior: o preço
+   de estoque do consumo valorado é POR FAZENDA, então sem uma fazenda de verdade não há
+   preço a buscar. Com o seletor, o Global deixa de ser porta fechada aqui também. */
+const TIPOS_COM_SELETOR_DE_FAZENDA: TipoMovimentacao[] = ['nascimento', 'morte', 'compra', 'consumo'];
 /* ⚠ A COMPRA ENTROU EM PR-ZOO-META-COMPRA-FAZENDA-01, e so' alcanca a compra em META.
    A compra REALIZADA sai do funil antes da guarda: `if (modoOCCompra && isCompra)`
    termina em `return` (linha ~2259), e ela sempre roda em modo OC — o card so' aparece
@@ -691,6 +696,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
      (PR-UI-NASCIMENTO-PARIDADE-03): nasce com a do contexto quando ha uma, em Global
      nasce vazia e a tela diz isso ANTES de tentar gravar. */
   const [morteFazendaId, setMorteFazendaId] = useState<string>('');
+  /* A fazenda do consumo, escolhida na tela — 114c-4. Guarda o ID, e não o nome como o
+     `fazendaOrigem` legado: o preço de estoque casa por `fazenda_id`. */
+  const [consumoFazendaId, setConsumoFazendaId] = useState<string>('');
   /* ⚠ VALOR DA MORTE — campo NOVO na tela. Ate aqui `valor_total` da morte vinha do
      ramo generico de `valorTotalFinal` (`calc.valorLiquido`), e era isso que explicava
      894 das 1.678 mortes com valor gravado sem que existisse campo. Com o campo, a
@@ -1103,13 +1111,23 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
      ⚠ POR CABEÇA MULTIPLICA PELA QUANTIDADE; sem quantidade não há conta, e o resultado é
      `null`, não zero: zero afirmaria um valor que ninguém informou. */
   const consumoQtd = parseNumericValue(quantidade) || 0;
+  /* Os dois pedaços da frase do aviso — 114c-4. Vazio vira `null`, e a frase encurta em
+     vez de emendar "em o mês". O mês sai em MM/AAAA, que é como o operador o lê. */
+  const rotuloCategoriaConsumo = categoria
+    ? (CATEGORIAS.find(c => c.value === categoria)?.label ?? categoria) : null;
+  const mesAnoConsumo = data && /^\d{4}-\d{2}/.test(data)
+    ? `${data.slice(5, 7)}/${data.slice(0, 4)}` : null;
   const consumoValorTotal = consumoValorDigitado == null ? null
     : consumoBase === 'total' ? consumoValorDigitado
     : (consumoQtd > 0 ? consumoValorDigitado * consumoQtd : null);
 
   const { precoKg: consumoPrecoKg } = usePrecoEstoqueCategoria(
     isConsumo ? clienteAtual?.id : null,
-    isConsumo ? (fazendaOrigem || fazendaAtual?.id) : null,
+    /* ⚠ O ID, NUNCA `fazendaOrigem` — 114c-4. Aquele campo guarda o NOME da fazenda (o
+       Select da transferência grava `f.nome`), e passá-lo como id fazia a busca do preço
+       não achar linha nenhuma, sempre. Em Global vale o escolhido na tela; fora dele, a
+       fazenda do filtro. */
+    isConsumo ? (consumoFazendaId || fazendaAtual?.id) : null,
     isConsumo && data ? data.slice(0, 7) : null,
     isConsumo ? categoria : null,
   );
@@ -1253,6 +1271,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
      TIPOS_COM_SELETOR_DE_FAZENDA precisa de UMA linha aqui, e o resto acompanha. */
   const fazendaEscolhidaId = escolheFazenda
     ? (isNascimento ? nascFazendaId : isMorte ? morteFazendaId
+       : isConsumo ? consumoFazendaId
        : isVenda ? vendaFazendaId : compraFazendaId)
     : '';
   const fazendaEscolhidaNome = fazendasOC.find(f => f.id === fazendaEscolhidaId)?.nome ?? null;
@@ -3990,7 +4009,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             await gerarFinanceiroConsumo({
               lancamentoId: returnedId,
               clienteId: clienteAtual.id,
-              fazendaId: fazendaOrigem || fazendaAtual?.id || '',
+              /* ⚠ O MESMO ID DO PREÇO, e pelo mesmo motivo: `fazendaOrigem` é NOME. Gravar
+                 o nome numa coluna de id faria o lançamento financeiro nascer órfão de
+                 fazenda — e o consumo valorado entra na DRE por fazenda. */
+              fazendaId: consumoFazendaId || fazendaAtual?.id || '',
               quantidade: parseNumericValue(quantidade) || 0,
               categoria,
               data,
@@ -4528,12 +4550,26 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
        estoque da categoria como padrão. */
     if (isConsumo) {
       return (
+        /* ⚠ FORMATO DE BLOCO DO RESUMO, não de card — 114c-4. O conteúdo aqui é o que vai
+           virar o bloco lateral do `LancamentoModalEnvelope` quando o shell do Consumo
+           existir (parte 1 do 114c): identidade em cima, o número grande, a faixa embaixo.
+           Escrevê-lo já no formato final é o que faz aquela migração ser um MOVE, e não
+           uma reescrita.
+           ⚠ MEDIDAS A18, explícitas: rótulo 10px, valor 12px, o total em 18px. */
         <div className="bg-card rounded-md border shadow-sm p-3 space-y-2 self-start">
-          <h3 className="text-[14px] font-semibold text-foreground">Detalhes Financeiros</h3>
+          <h3 className="text-[11px] font-bold uppercase tracking-wide text-primary">Valor do consumo</h3>
           <Separator />
           <div className="space-y-1.5 py-1">
+            <div>
+              <div className="text-[10px] text-muted-foreground">Total</div>
+              <div className="text-[18px] font-medium leading-none tabular-nums">
+                {consumoValorTotal != null ? brlMoeda(consumoValorTotal) : '—'}
+              </div>
+            </div>
             <div className="flex items-baseline justify-between gap-2">
-              <Label className="text-[11px]">Valor do consumo</Label>
+              <Label className="text-[10px] text-muted-foreground">
+                {consumoBase === 'cab' ? 'Valor por cabeça' : 'Valor total'}
+              </Label>
               {/* Fonte única do padrão, do aviso e do que será gravado. */}
               <span className="text-[10px] text-muted-foreground">
                 {consumoPrecoKg != null
@@ -4549,9 +4585,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   {b === 'cab' ? 'por cabeça' : 'total'}
                 </button>
               ))}
-              <span className="ml-auto text-[10px] text-muted-foreground tabular-nums">
-                {consumoValorTotal != null ? `total ${brlMoeda(consumoValorTotal)}` : 'total —'}
-              </span>
             </div>
             {/* ⚠ DIGITAR MARCA O CAMPO COMO TOCADO: a partir daí o padrão do estoque não
                 volta por cima do número do operador. */}
@@ -4562,7 +4595,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                 diria na DRE que o animal não valia nada. */}
             {consumoPrecoKg == null && (
               <p className="rounded border border-amber-400 bg-amber-50 px-2 py-1 text-[10px] leading-tight text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
-                Sem preço de estoque para {categoria || 'a categoria'} em {data ? data.slice(0, 7) : 'o mês'}; informe.
+                {/* ⚠ A FRASE PRECISA SER LEGÍVEL EM PORTUGUÊS. Com os campos vazios ela
+                    saía "para a categoria em o mês", que é o que o print de 07/09 pegou.
+                    Agora o rótulo da categoria e o mês/ano vêm preenchidos, e sem eles a
+                    frase encurta em vez de emendar preposição com artigo. */}
+                Sem preço de estoque{rotuloCategoriaConsumo ? ` para ${rotuloCategoriaConsumo}` : ''}
+                {mesAnoConsumo ? ` em ${mesAnoConsumo}` : ''}. Informe o valor.
               </p>
             )}
             <p className="text-[10px] leading-tight text-muted-foreground">
@@ -4898,7 +4936,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         <div className="grid grid-cols-[1.2fr_1.5fr_0.8fr_1fr_2.5fr] gap-2 items-end">
           <div>
             <Label className="text-[10px] text-muted-foreground">Data</Label>
-            <Input tabIndex={1} type="date" value={data} onChange={e => setData(e.target.value)} className="mt-0.5 h-7 text-[11px]" />
+            {/* ⚠ DATEPICKER DA CASA, NUNCA O NATIVO — A20. O `<input type="date">` abre o
+                calendário do SISTEMA OPERACIONAL: outro idioma, outro formato por locale e
+                outra fonte em cada máquina. Este era o campo Data do modal antigo, o que o
+                Gabriel viu no Consumo em 07/09. */}
+            <DatePicker value={data} onChange={setData} size="compact" className="mt-0.5 h-7 text-[11px]" />
           </div>
           <div>
             <Label className="text-[10px] text-muted-foreground">Categoria</Label>
@@ -4928,7 +4970,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       <div className="grid grid-cols-[1.2fr_0.8fr_1fr_1.5fr_2.5fr] gap-2 items-end">
         <div>
           <Label className={`font-bold text-[11px] ${metaLabelClass}`}>{isAbate ? 'Data Abate' : 'Data'}</Label>
-          <Input tabIndex={1} type="date" value={data} onChange={e => setData(e.target.value)} className={`mt-0.5 h-7 text-[11px] ${metaInputClass}`} />
+          {/* Mesmo motivo do campo acima — A20. */}
+          <DatePicker value={data} onChange={setData} size="compact" className={`mt-0.5 h-7 text-[11px] ${metaInputClass}`} />
         </div>
         <div>
           <Label className={`font-bold text-[11px] whitespace-nowrap ${metaLabelClass}`}>Qtd. Cab.</Label>
@@ -4982,7 +5025,22 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           {campos.origem.show && (
             <div>
               <Label className="font-bold text-[11px]">{campos.origem.label}</Label>
-              {campos.origem.auto ? (
+              {isConsumo && isGlobal ? (
+                /* ⚠ EM GLOBAL, A FAZENDA É ESCOLHIDA — 114c-4. O campo era somente-leitura
+                    com o nome do FILTRO, e mostrava "Global": um valor que não é fazenda
+                    nenhuma. O preço de estoque do consumo é por fazenda, então sem uma de
+                    verdade não há o que buscar. Mesmo gesto das Chuvas em Global. */
+                <Select value={consumoFazendaId} onValueChange={setConsumoFazendaId}>
+                  <SelectTrigger className={`mt-0.5 h-7 text-[11px] ${consumoFazendaId ? '' : 'border-destructive'}`}>
+                    <SelectValue placeholder="Escolha a fazenda" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {fazendasOC.map(f => (
+                      <SelectItem key={f.id} value={f.id} className="text-[11px]">{f.nome}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : campos.origem.auto ? (
                 <Input value={campos.origem.value} readOnly className="mt-0.5 h-7 text-[11px] bg-muted cursor-not-allowed" />
               ) : (campos.origem as any).useSelect && outrasFazendas.length > 0 ? (
                 <Select value={fazendaOrigem} onValueChange={setFazendaOrigem}>

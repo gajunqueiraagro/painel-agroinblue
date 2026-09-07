@@ -50,7 +50,7 @@ const BASELINE = new Map(Object.entries({
   "src/pages/FinanceiroV2Tab.tsx": [1, 0],
   "src/pages/FinanciamentoCadastro.tsx": [3, 0],
   "src/pages/FinanciamentoDetalhe.tsx": [1, 0],
-  "src/pages/LancamentosTab.tsx": [5, 0],
+  "src/pages/LancamentosTab.tsx": [3, 0],   // 5 -> 3 em 114c-4: o campo Data do modal antigo virou DatePicker (os 3 restantes são de venda/parcelas)
   "src/pages/LayoutLab.tsx": [0, 2],
   "src/v2/components/edicao/_blocos/CompraDadosZootecnicos.tsx": [1, 0],
   "src/v2/components/edicao/_blocos/VendaDadosZootecnicos.tsx": [1, 0],
