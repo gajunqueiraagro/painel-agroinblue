@@ -146,6 +146,20 @@ export interface ClassificacaoStagingPreviewRow {
   lanc_fazenda_nome: string | null; // P0-4: nome real da fazenda do lançamento (Sistema Atual)
   lanc_numero_documento: string | null;      // P0-5: documento do lançamento (Sistema Atual)
   proposto_numero_documento: string | null;  // P0-5: documento proposto (editor)
+  /* ── 129c (view de 20260906195410): os seis campos que passaram a gravar ──────
+     ⚠ ESTE TIPO É ESCRITO À MÃO e não vem do `types.ts`. Acrescentar a coluna aqui é o
+     que a torna visível para o adapter — sem isso ela existe no banco, chega no JSON e o
+     TS diz que não existe. Foi assim que `Data venc.` e `Safra` ficaram em "—". */
+  lanc_data_vencimento: string | null;
+  lanc_safra_id: string | null;
+  lanc_safra_codigo: string | null;
+  proposto_safra_id: string | null;
+  proposto_safra_codigo: string | null;
+  proposto_data_competencia: string | null;
+  proposto_data_vencimento: string | null;
+  proposto_data_pagamento: string | null;
+  proposto_conta_bancaria_id: string | null;
+  proposto_observacao: string | null;
   /** P0-1A: fonte única "aplicável em lote" (calculada na view). */
   lote_aplicavel: boolean;
 }

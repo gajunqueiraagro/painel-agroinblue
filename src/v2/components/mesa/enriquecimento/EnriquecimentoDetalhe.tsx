@@ -4,7 +4,8 @@
 // (P0-9), receber select/autocomplete/input sem redesenhar a tela.
 import { TOM_BADGE } from './fmt';
 import type { EnriqRowVM } from './types';
-import type { ClassificacaoItem, FornecedorV2 } from '@/hooks/useFinanceiroV2';
+import type { ClassificacaoItem, FornecedorV2, Safra } from '@/hooks/useFinanceiroV2';
+import type { ContaSelecionavel } from '@/components/shared/ContaBancariaSelect';
 import type { Fazenda } from '@/contexts/FazendaContext';
 import { ResultadoSubcentroEditor } from './ResultadoSubcentroEditor';
 import { ResultadoFavorecidoEditor } from './ResultadoFavorecidoEditor';
@@ -18,6 +19,10 @@ export interface EnriquecimentoDetalheProps {
   classificacoes?: ClassificacaoItem[];
   fornecedores?: FornecedorV2[];
   fazendas?: Fazenda[];
+  /* 129c — listas dos campos que a Mesa ampla edita. A ABA não os usa (ela segue com o
+     comparativo de sempre); ficam no prop-bag porque ele é único para as duas. */
+  safras?: Safra[];
+  contas?: ContaSelecionavel[];
   clienteId?: string;
   hideBanco?: boolean;   // U2 — sob filtro por conta, a linha Banco some (redundante)
   onEditar?: (patch: Record<string, unknown>) => Promise<void>;

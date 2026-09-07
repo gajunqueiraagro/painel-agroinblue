@@ -76,6 +76,24 @@ export interface EnriqEdicao {
   numeroDocumento: string | null;      // P0-5: proposto_numero_documento
   numeroDocumentoAtual: string | null; // P0-5: lanc_numero_documento (fallback)
   fazendaIdAtual: string | null;       // BUG2: lanc_fazenda_id (valor efetivo p/ o Select não parecer vazio)
+  /* ── 129c: os seis que passaram a gravar ────────────────────────────────────
+     ⚠ `safraId` É O QUE GRAVA; o campo `safra` acima é o TEXTO do Excel e continua
+     carry-only. Guardar os dois não é redundância: um é o que o operador escolheu, o
+     outro é o que a planilha trouxe, e eles podem discordar. */
+  safraId: string | null;
+  contaBancariaId: string | null;
+  dataCompetencia: string | null;
+  dataVencimento: string | null;
+  dataPagamento: string | null;
+  observacao: string | null;
+  /* Os valores EFETIVOS do lançamento, para o editor não abrir vazio sobre um campo que
+     já tem valor — mesmo motivo do `fazendaIdAtual`. */
+  safraIdAtual: string | null;
+  contaBancariaIdAtual: string | null;
+  dataCompetenciaAtual: string | null;
+  dataVencimentoAtual: string | null;
+  dataPagamentoAtual: string | null;
+  observacaoAtual: string | null;
 }
 
 export interface EnriqRowVM {

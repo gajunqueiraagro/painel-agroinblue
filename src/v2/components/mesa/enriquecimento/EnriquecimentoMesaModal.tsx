@@ -264,6 +264,8 @@ export function EnriquecimentoMesaModal({
                   fornecedores={detalhe.fornecedores}
                   fazendas={detalhe.fazendas}
                   clienteId={detalhe.clienteId}
+                  safras={detalhe.safras}
+                  contas={detalhe.contas}
                   onEditar={detalhe.onEditar}
                   onCriarFornecedor={detalhe.onCriarFornecedor}
                 />

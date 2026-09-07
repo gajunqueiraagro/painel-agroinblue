@@ -86,13 +86,19 @@ export function MesaEnriquecimentoTab() {
 
   // PR-U2c-2A — data layer dos editores inline (fonte única: mesmos dados do
   // Lançamento oficial). Loaders manuais → só carrega o necessário.
-  const { classificacoes, fornecedores, loadClassificacoes, loadFornecedores, criarFornecedor } = useFinanceiroV2();
+  /* ⚠ SAFRAS E CONTAS ENTRARAM NO 129c, quando os seis campos passaram a gravar. Sem os
+     dois loaders o Select abre vazio e não há o que escolher — foi exatamente o defeito
+     do `loadSafras` que o 121e pagou no custeio. */
+  const { classificacoes, fornecedores, safras, contasBancarias,
+    loadClassificacoes, loadFornecedores, loadSafras, loadContas, criarFornecedor } = useFinanceiroV2();
   const { fazendas } = useFazenda();
   useEffect(() => {
     if (!clienteAtual?.id) return;
     loadClassificacoes();
     loadFornecedores();
-  }, [clienteAtual?.id, loadClassificacoes, loadFornecedores]);
+    loadSafras();
+    loadContas();
+  }, [clienteAtual?.id, loadClassificacoes, loadFornecedores, loadSafras, loadContas]);
 
   // ViewModels prontos (adapters/selectors puros).
   const sessoesVM = useMemo(() => toSessoesVM(sessoes), [sessoes]);
@@ -330,10 +336,15 @@ export function MesaEnriquecimentoTab() {
   const [aplicandoGrupo, setAplicandoGrupo] = useState(false);
   async function handleAplicarAoGrupo(ids: string[]) {
     if (!selecionado || ids.length === 0) return;
+    /* ⚠ A SAFRA ENTROU NO 129c. Antes ela ficava de fora porque o apply não a gravava e
+       mandá-la voltaria em `campos_rejeitados` — um toast de erro no meio de um lote que
+       deu certo. Agora `fn_classificacao_apply_row` grava `safra_id`, e o envelope pede
+       os quatro. `safra` (o texto do Excel) continua carry-only: quem grava é o id. */
     const patch = {
       subcentro: selecionado.edicao.subcentro,
       favorecido_id: selecionado.edicao.favorecidoId,
       fazenda_id: selecionado.edicao.fazendaId,
+      safra_id: selecionado.edicao.safraId,
     };
     setAplicandoGrupo(true);
     let ok = 0; let falhas = 0;
@@ -367,6 +378,8 @@ export function MesaEnriquecimentoTab() {
     classificacoes,
     fornecedores,
     fazendas,
+    safras,
+    contas: contasBancarias,
     clienteId: clienteAtual?.id,
     hideBanco: filtroConta !== 'todas',
     onEditar,

@@ -6,15 +6,16 @@
  * o operador confere primeiro no extrato; depois quem é (produto, fornecedor, fazenda);
  * depois onde entra (safra, subcentro, conta); e por último o papel.
  *
- * ⚠ CINCO CAMPOS GRAVAM, SEIS NÃO — e a tela DIZ isso, em vez de oferecer edição que o
- * Salvar descarta. Medido em 06/09: `fn_classificacao_apply_row` escreve exatamente
- * `subcentro, macro_custo, grupo_custo, centro_custo, plano_conta_id, favorecido_id,
- * fazenda_id, descricao (de 'produto'), numero_documento`. Data de competência,
- * vencimento e pagamento, safra, conta bancária e observação não são gravados por RPC
- * nenhuma hoje. Um campo editável cujo valor some no Salvar é o silêncio mais caro que
- * esta tela pode produzir — o operador escolhe, salva, a tela avança e nada aconteceu.
- * ⚠ QUANDO O BANCO CHEGAR (129c), os seis viram editáveis TROCANDO `gravaHoje` para true
- * e ligando o editor: a linha, a ordem e a seção já estão no lugar.
+ * ⚠ OS ONZE CAMPOS GRAVAM — desde o 129c (migration 20260906195410). Até ali eram cinco:
+ * `fn_classificacao_apply_row` escrevia só `subcentro, macro_custo, grupo_custo,
+ * centro_custo, plano_conta_id, favorecido_id, fazenda_id, descricao (de 'produto'),
+ * numero_documento`, e as datas, a safra, a conta e a observação apareciam em LEITURA com
+ * o motivo escrito — porque um campo editável cujo valor some no Salvar é o silêncio mais
+ * caro que esta tela pode produzir. Agora a RPC grava as seis, e a coluna `gravaHoje`
+ * passou a `true` em todas.
+ * ⚠ A COLUNA `gravaHoje` FICA. Ela não é resíduo: é o lugar onde a próxima diferença
+ * entre "a tela oferece" e "o banco aceita" volta a ser dita, em vez de virar um campo
+ * que engole o que o operador digitou.
  *
  * ⚠ ESTE COMPONENTE NÃO SUBSTITUI `EnriquecimentoDetalhe`. Aquele é a aba, que segue
  * intacta; este é a superfície ampla. Unificar os dois agora obrigaria a aba a herdar a
@@ -28,6 +29,11 @@ import { ResultadoFavorecidoEditor } from './ResultadoFavorecidoEditor';
 import { ResultadoFazendaEditor } from './ResultadoFazendaEditor';
 import { ResultadoProdutoEditor } from './ResultadoProdutoEditor';
 import { ResultadoDocumentoEditor } from './ResultadoDocumentoEditor';
+import {
+  ResultadoDataEditor, ResultadoSafraEditor, ResultadoContaEditor, ResultadoObservacaoEditor,
+} from './ResultadoCamposGravaveis';
+import type { ContaSelecionavel } from '@/components/shared/ContaBancariaSelect';
+import type { Safra } from '@/hooks/useFinanceiroV2';
 
 /** Por que um campo ainda não é editável aqui. Texto curto, mostrado ao lado do valor. */
 const MOTIVO_SEM_APPLY = 'o Salvar ainda não grava este campo';
@@ -43,17 +49,17 @@ type Secao = 'Datas' | 'Identificação' | 'Classificação' | 'Documento';
  * por omissão sobre um campo que o operador procura.
  */
 const ORDEM: Array<{ campo: string; rotulo: string; secao: Secao; gravaHoje: boolean }> = [
-  { campo: 'Data comp.', rotulo: 'Data comp.', secao: 'Datas', gravaHoje: false },
-  { campo: 'Data venc.', rotulo: 'Data venc.', secao: 'Datas', gravaHoje: false },
-  { campo: 'Data', rotulo: 'Data pgto.', secao: 'Datas', gravaHoje: false },
+  { campo: 'Data comp.', rotulo: 'Data comp.', secao: 'Datas', gravaHoje: true },
+  { campo: 'Data venc.', rotulo: 'Data venc.', secao: 'Datas', gravaHoje: true },
+  { campo: 'Data', rotulo: 'Data pgto.', secao: 'Datas', gravaHoje: true },
   { campo: 'Produto / Descrição', rotulo: 'Produto / Descrição', secao: 'Identificação', gravaHoje: true },
   { campo: 'Fornecedor', rotulo: 'Fornecedor', secao: 'Identificação', gravaHoje: true },
   { campo: 'Fazenda', rotulo: 'Fazenda', secao: 'Identificação', gravaHoje: true },
-  { campo: 'Safra', rotulo: 'Safra', secao: 'Classificação', gravaHoje: false },
+  { campo: 'Safra', rotulo: 'Safra', secao: 'Classificação', gravaHoje: true },
   { campo: 'Subcentro', rotulo: 'Subcentro', secao: 'Classificação', gravaHoje: true },
-  { campo: 'Banco', rotulo: 'Conta bancária', secao: 'Classificação', gravaHoje: false },
+  { campo: 'Banco', rotulo: 'Conta bancária', secao: 'Classificação', gravaHoje: true },
   { campo: 'Documento', rotulo: 'Documento', secao: 'Documento', gravaHoje: true },
-  { campo: 'OBS', rotulo: 'Observação', secao: 'Documento', gravaHoje: false },
+  { campo: 'OBS', rotulo: 'Observação', secao: 'Documento', gravaHoje: true },
 ];
 
 const VAZIA: EnriqComparativoLinha = { campo: '', sistema: '—', excel: '—', resultado: '—', tom: 'neutro' };
@@ -64,12 +70,15 @@ export interface MesaCamposTabelaProps {
   fornecedores?: FornecedorV2[];
   fazendas?: Fazenda[];
   clienteId?: string;
+  /** 129c — as listas dos seis campos que passaram a gravar. */
+  safras?: Safra[];
+  contas?: ContaSelecionavel[];
   onEditar?: (patch: Record<string, unknown>) => Promise<void>;
   onCriarFornecedor?: (nome: string, fazendaId: string | null, cpfCnpj?: string) => Promise<FornecedorV2 | null>;
 }
 
 export function MesaCamposTabela({
-  row, classificacoes, fornecedores, fazendas, clienteId, onEditar, onCriarFornecedor,
+  row, classificacoes, fornecedores, fazendas, clienteId, safras, contas, onEditar, onCriarFornecedor,
 }: MesaCamposTabelaProps) {
   const porCampo = new Map(row.comparativo.map(c => [c.campo, c]));
   const COLS = '120px minmax(0,1fr) minmax(0,1fr) minmax(0,1.3fr)';
@@ -124,6 +133,24 @@ export function MesaCamposTabela({
                 ) : editavel && campo === 'Documento' ? (
                   <ResultadoDocumentoEditor value={row.edicao.numeroDocumento}
                     numeroDocumentoAtual={row.edicao.numeroDocumentoAtual} onEditar={onEditar} />
+                ) : editavel && campo === 'Data comp.' ? (
+                  <ResultadoDataEditor value={row.edicao.dataCompetencia}
+                    valorAtual={row.edicao.dataCompetenciaAtual} campo="data_competencia" onEditar={onEditar} />
+                ) : editavel && campo === 'Data venc.' ? (
+                  <ResultadoDataEditor value={row.edicao.dataVencimento}
+                    valorAtual={row.edicao.dataVencimentoAtual} campo="data_vencimento" onEditar={onEditar} />
+                ) : editavel && campo === 'Data' ? (
+                  <ResultadoDataEditor value={row.edicao.dataPagamento}
+                    valorAtual={row.edicao.dataPagamentoAtual} campo="data_pagamento" onEditar={onEditar} />
+                ) : editavel && campo === 'Safra' && safras ? (
+                  <ResultadoSafraEditor value={row.edicao.safraId} valorAtual={row.edicao.safraIdAtual}
+                    safras={safras} onEditar={onEditar} />
+                ) : editavel && campo === 'Banco' && contas ? (
+                  <ResultadoContaEditor value={row.edicao.contaBancariaId}
+                    valorAtual={row.edicao.contaBancariaIdAtual} contas={contas} onEditar={onEditar} />
+                ) : editavel && campo === 'OBS' ? (
+                  <ResultadoObservacaoEditor value={row.edicao.observacao}
+                    valorAtual={row.edicao.observacaoAtual} onEditar={onEditar} />
                 ) : (
                   /* ⚠ LEITURA NÃO PODE PARECER CAMPO — medido na tela: com borda de input e
                      altura de controle, as datas e a safra pareciam editáveis e vazias, e o
@@ -152,8 +179,7 @@ export function MesaCamposTabela({
 
       <p className="px-3 py-1.5 text-[10px] leading-tight text-muted-foreground">
         ✓ confere · faixa âmbar = vai mudar · Excel em azul é referência, nunca gravado
-        direto. <b>Datas, safra, conta bancária e observação ainda não são gravadas pelo
-        Salvar</b> — aparecem em leitura até o banco aceitá-las.
+        direto. Deixar um campo vazio remove a proposta dele.
       </p>
     </div>
   );

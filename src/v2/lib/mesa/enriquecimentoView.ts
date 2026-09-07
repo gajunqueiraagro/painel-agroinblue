@@ -87,6 +87,11 @@ export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
     { campo: 'Fazenda', sistema: fmtTexto(row.lanc_fazenda_nome), excel: fmtTexto(row.excel_fazenda_codigo), ...resultadoEditavel(row.lanc_fazenda_nome, row.excel_fazenda_codigo, row.proposto_fazenda_nome) },
     { campo: 'Subcentro', sistema: fmtTexto(subSistema), excel: fmtTexto(subExcel), resultado: subRes, tom: subTom },
     refLinha('Data comp.', row.lanc_data_competencia, row.excel_data, fmtData(row.lanc_data_competencia), fmtData(row.excel_data)),
+    /* ── 129c: as linhas que faltavam para a Mesa mostrar os onze campos ─────────
+       ⚠ `Data venc.` e `Safra` NÃO TINHAM FONTE até a view de 20260906195410; a tabela
+       da Mesa já as listava com "—" para não mentir por omissão. Agora elas têm. */
+    refLinha('Data venc.', row.lanc_data_vencimento, null, fmtData(row.lanc_data_vencimento), '—'),
+    refLinha('Safra', row.lanc_safra_codigo, row.proposto_safra, fmtTexto(row.lanc_safra_codigo), fmtTexto(row.proposto_safra)),
     // P0-5 — Documento: Sistema = numero_documento do lançamento; Excel = excel_documento; Resultado = proposta.
     { campo: 'Documento', sistema: fmtTexto(row.lanc_numero_documento), excel: fmtTexto(row.excel_documento), ...resultadoEditavel(row.lanc_numero_documento, row.excel_documento, row.proposto_numero_documento) },
     // P0-3 — linha "Descrição" separada removida (unificada em "Produto / Descrição").
@@ -124,6 +129,19 @@ export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
     numeroDocumento: row.proposto_numero_documento,        // P0-5
     numeroDocumentoAtual: row.lanc_numero_documento,       // P0-5
     fazendaIdAtual: row.lanc_fazenda_id,                   // BUG2: fallback do Select da Fazenda
+    /* ── 129c: os seis que passaram a gravar ──────────────────────────────────── */
+    safraId: row.proposto_safra_id,
+    contaBancariaId: row.proposto_conta_bancaria_id,
+    dataCompetencia: row.proposto_data_competencia,
+    dataVencimento: row.proposto_data_vencimento,
+    dataPagamento: row.proposto_data_pagamento,
+    observacao: row.proposto_observacao,
+    safraIdAtual: row.lanc_safra_id,
+    contaBancariaIdAtual: row.lanc_conta_bancaria_id,
+    dataCompetenciaAtual: row.lanc_data_competencia,
+    dataVencimentoAtual: row.lanc_data_vencimento,
+    dataPagamentoAtual: row.lanc_data_pagamento,
+    observacaoAtual: row.lanc_observacao,
   };
 
   // PR-U2d-1 — estado operacional da linha (ordem: primeira condição que casar vence).
