@@ -127,6 +127,9 @@ export function useImportLancamentosExcel(somenteAtualizar = false) {
   const [aliasesSubcentro, setAliasesSubcentro] = useState<SubcentroAliasRef[]>([]);
   const [aliasesFornecedor, setAliasesFornecedor] = useState<Record<string, string[]>>({});
   const [aliasesConta, setAliasesConta] = useState<Record<string, string[]>>({});
+  /* 133b — os dois cadastros que ganharam `aliases` na migration 20260907134201. */
+  const [aliasesFazenda, setAliasesFazenda] = useState<Record<string, string[]>>({});
+  const [aliasesSafra, setAliasesSafra] = useState<Record<string, string[]>>({});
   const [fechados, setFechados] = useState<ReadonlySet<ChaveFechamento>>(() => new Set());
   /** subcentro → plano_conta_id (o alias aponta para o plano, não para o texto). */
   const [planoIdPorSubcentro, setPlanoIdPorSubcentro] = useState<Record<string, string>>({});
@@ -263,10 +266,15 @@ export function useImportLancamentosExcel(somenteAtualizar = false) {
       Array.isArray(row.aliases)
         ? row.aliases.filter((a): a is string => typeof a === 'string')
         : [];
+    /* ⚠ FAZENDA E SAFRA ENTRARAM NO MESMO `Promise.all` — 133b. Duas consultas a mais, em
+       paralelo, no lugar onde os outros aliases já eram lidos: um segundo efeito para o
+       mesmo assunto criaria duas ordens de chegada para o mesmo mapa. */
     void Promise.all([
       supabase.from('financeiro_fornecedores').select('id, aliases').eq('cliente_id', clienteId),
       supabase.from('financeiro_contas_bancarias').select('*').eq('cliente_id', clienteId),
-    ]).then(([fRes, cRes]) => {
+      supabase.from('fazendas').select('id, aliases').eq('cliente_id', clienteId),
+      supabase.from('financeiro_safras').select('id, aliases').eq('cliente_id', clienteId),
+    ]).then(([fRes, cRes, fazRes, safRes]) => {
       if (cancelado) return;
       const mapaForn: Record<string, string[]> = {};
       for (const r of fRes.data ?? []) mapaForn[r.id] = listaDeAliases(r);
@@ -275,6 +283,14 @@ export function useImportLancamentosExcel(somenteAtualizar = false) {
       const mapaConta: Record<string, string[]> = {};
       for (const r of cRes.data ?? []) mapaConta[r.id] = listaDeAliases(r);
       setAliasesConta(mapaConta);
+
+      const mapaFaz: Record<string, string[]> = {};
+      for (const r of fazRes.data ?? []) mapaFaz[r.id] = listaDeAliases(r);
+      setAliasesFazenda(mapaFaz);
+
+      const mapaSaf: Record<string, string[]> = {};
+      for (const r of safRes.data ?? []) mapaSaf[r.id] = listaDeAliases(r);
+      setAliasesSafra(mapaSaf);
     });
     return () => { cancelado = true; };
   }, [clienteId]);
@@ -390,7 +406,11 @@ export function useImportLancamentosExcel(somenteAtualizar = false) {
     campo: CampoDePara, texto: string, valor: string, rotulo: string | null,
   ) => {
     if (!clienteId) return;
-    if (campo !== 'subcentro' && campo !== 'fornecedor' && campo !== 'conta') return;
+    /* ⚠ FAZENDA E SAFRA ENTRARAM EM 133b. Antes o guard as excluía, e por isso o de-para
+       delas recomeçava do zero toda importação: a resposta era a mesma todo mês e morria
+       com o lote. */
+    if (campo !== 'subcentro' && campo !== 'fornecedor' && campo !== 'conta'
+        && campo !== 'fazenda' && campo !== 'safra') return;
     const item: DeParaItem = { texto, qtd: 1, valor, origem: 'manual', rotulo };
     const vazio: DeParaMap = {};
     try {
@@ -399,7 +419,10 @@ export function useImportLancamentosExcel(somenteAtualizar = false) {
         subcentro: campo === 'subcentro' ? { [texto]: item } : vazio,
         fornecedor: campo === 'fornecedor' ? { [texto]: item } : vazio,
         conta: campo === 'conta' ? { [texto]: item } : vazio,
+        fazenda: campo === 'fazenda' ? { [texto]: item } : vazio,
+        safra: campo === 'safra' ? { [texto]: item } : vazio,
         planoIdPorSubcentro, aliasIdPorTexto, aliasesFornecedor, aliasesConta,
+        aliasesFazenda, aliasesSafra,
       });
       /* O id recém-criado entra no mapa: o próximo remapeamento do mesmo texto
          vira UPDATE em vez de esbarrar no UNIQUE. */
@@ -410,7 +433,8 @@ export function useImportLancamentosExcel(somenteAtualizar = false) {
     } catch (e) {
       toast.warning(`Apelido não memorizado: ${e instanceof Error ? e.message : 'falha ao gravar.'}`);
     }
-  }, [clienteId, planoIdPorSubcentro, aliasIdPorTexto, aliasesFornecedor, aliasesConta]);
+  }, [clienteId, planoIdPorSubcentro, aliasIdPorTexto, aliasesFornecedor, aliasesConta,
+      aliasesFazenda, aliasesSafra]);
 
   // ── Passo 2: resolução manual de um item do de-para ──
   const resolverManualmente = useCallback((
@@ -1034,10 +1058,15 @@ export function useImportLancamentosExcel(somenteAtualizar = false) {
         subcentro: dePara.subcentro,
         fornecedor: dePara.fornecedor,
         conta: dePara.conta,
+        /* 133b — o confirmar memoriza os cinco campos, não três. */
+        fazenda: dePara.fazenda,
+        safra: dePara.safra,
         planoIdPorSubcentro,
         aliasIdPorTexto,
         aliasesFornecedor,
         aliasesConta,
+        aliasesFazenda,
+        aliasesSafra,
       });
       erros.push(...apelidos.erros);
 

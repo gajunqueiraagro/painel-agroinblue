@@ -31,6 +31,17 @@ import { decodeTxtParcial } from '@/v2/lib/custeio/parseCusteioTxt';
  * ⚠ O MODAL ANTIGO NÃO ABRE MAIS DESTA ABA. Ele segue existindo nas telas
  * velhas, que só morrem na rodada 2 — nada é derrubado antes da homologação.
  */
+/**
+ * Os quatro formatos que este hub aceita — 133b. Um lugar só: a lista alimenta as
+ * pílulas E o "?" que junta as quatro explicações.
+ */
+const FORMATOS: readonly { ext: string; dica: string }[] = [
+  { ext: '.ofx', dica: 'Extrato do banco. Lido aqui no navegador; a prévia mostra o que é novo e o que já existe antes de gravar.' },
+  { ext: '.xlsx', dica: 'Planilha de lançamentos, com de-para memorizado e atualização por ID.' },
+  { ext: '.csv/.txt', dica: 'Extrato em texto — mesmo fluxo do .ofx.' },
+  { ext: '.txt custeio', dica: 'Relatório de custeio: prévia e lançamento um a um pelo modal — conta, fornecedor e subcentro são escolha sua por linha.' },
+];
+
 interface Props {
   /* `tipo_conta` entrou em 132: é o que agrupa o dropdown como a aba Conciliação agrupa os
      saldos. Ausente, a conta cai em "Outros" — nunca some da lista. */
@@ -160,14 +171,22 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
             {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
             Escolher arquivo
           </Button>
-          {/* ⚠ O QUE CADA FORMATO FAZ, ESCRITO — o operador não deve adivinhar
-              qual arquivo serve para quê. Era essa a informação que morava na
-              cabeça de quem sabia em qual item de menu clicar. */}
-          <span className="min-w-0 flex-1 text-[10px] leading-tight text-muted-foreground"
-            title="O arquivo é lido aqui no navegador e não sai dele. Antes de gravar, você confere o que é novo e o que já existe.">
-            <b>.ofx</b> extrato do banco · <b>.xlsx</b> planilha de lançamentos, com de-para e
-            atualização por ID · <b>.csv/.txt</b> extrato em texto · <b>.txt do custeio</b>: prévia e
-            lançamento um a um pelo modal — conta, fornecedor e subcentro são escolha sua por linha.
+          {/* ⚠ QUATRO PÍLULAS NO LUGAR DO PARÁGRAFO — 133b. O texto dizia o que cada
+              formato faz e ocupava três linhas da largura útil em TODA abertura da aba,
+              inclusive nas dezenas em que o operador já sabe. A informação não some: cada
+              pílula é o formato, e a explicação de uma linha mora no `title` dela e no "?". */}
+          <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
+            {FORMATOS.map((f) => (
+              <span key={f.ext} title={f.dica}
+                className="cursor-help rounded border border-border bg-muted/60 px-1.5 py-[1px] font-mono text-[10px] leading-tight text-muted-foreground">
+                {f.ext}
+              </span>
+            ))}
+            <span
+              title={FORMATOS.map((f) => `${f.ext} — ${f.dica}`).join('\n')}
+              className="flex h-[15px] w-[15px] cursor-help items-center justify-center rounded-full border border-border text-[9px] font-semibold text-muted-foreground">
+              ?
+            </span>
           </span>
           {acoes}
         </div>
@@ -191,10 +210,11 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
               <X className="h-3 w-3" /> Trocar arquivo
             </Button>
           </div>
-          {/* ⚠ A TELA DA IMPORTAÇÃO INTEIRA, e o arquivo já escolhido aqui em
-              cima: ela tem seletor próprio, e o operador o usa para reenviar
-              depois de corrigir a planilha no Excel — que é o fluxo real. */}
-          <V2ImportLancamentosExcel />
+          {/* ⚠ O ARQUIVO DESCE — 133b. Ela tinha seletor próprio e chegava VAZIA: o
+              operador escolhia a planilha aqui em cima e precisava escolhê-la de novo lá
+              dentro. Agora vale o mesmo contrato do custeio (L~223): com `arquivoInicial`,
+              o seletor interno some e o "Trocar arquivo" desta linha é o único caminho. */}
+          <V2ImportLancamentosExcel arquivoInicial={arquivo} />
         </div>
       )}
 

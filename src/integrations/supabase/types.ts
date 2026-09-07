@@ -3647,6 +3647,7 @@ export type Database = {
       }
       fazendas: {
         Row: {
+          aliases: Json
           area_total: number | null
           cidade: string | null
           cliente_id: string
@@ -3661,6 +3662,7 @@ export type Database = {
           tem_pecuaria: boolean | null
         }
         Insert: {
+          aliases?: Json
           area_total?: number | null
           cidade?: string | null
           cliente_id: string
@@ -3675,6 +3677,7 @@ export type Database = {
           tem_pecuaria?: boolean | null
         }
         Update: {
+          aliases?: Json
           area_total?: number | null
           cidade?: string | null
           cliente_id?: string
@@ -6318,6 +6321,7 @@ export type Database = {
       }
       financeiro_safras: {
         Row: {
+          aliases: Json
           ativa: boolean
           cliente_id: string
           codigo: string | null
@@ -6331,6 +6335,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          aliases?: Json
           ativa?: boolean
           cliente_id: string
           codigo?: string | null
@@ -6344,6 +6349,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          aliases?: Json
           ativa?: boolean
           cliente_id?: string
           codigo?: string | null

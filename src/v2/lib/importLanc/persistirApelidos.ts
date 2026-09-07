@@ -31,6 +31,9 @@ export interface ResultadoApelidos {
   subcentro: number;
   fornecedor: number;
   conta: number;
+  /** 133b — quantos apelidos de fazenda e de safra foram memorizados. */
+  fazenda: number;
+  safra: number;
   erros: string[];
   /** Texto normalizado → id da linha de alias CRIADA agora (B-40 item 7). */
   idsSubcentroPorTexto: Record<string, string>;
@@ -140,7 +143,7 @@ async function persistirSubcentro(
  * entra no do novo dono. Sem isso a resolução por alias fica ambígua e degrada.
  */
 async function persistirJsonb(
-  tabela: 'financeiro_fornecedores' | 'financeiro_contas_bancarias',
+  tabela: 'financeiro_fornecedores' | 'financeiro_contas_bancarias' | 'fazendas' | 'financeiro_safras',
   mapa: DeParaMap,
   aliasesAtuais: Readonly<Record<string, string[]>>,
 ): Promise<{ n: number; erros: string[] }> {
@@ -192,6 +195,17 @@ export async function persistirApelidos(params: {
   subcentro: DeParaMap;
   fornecedor: DeParaMap;
   conta: DeParaMap;
+  /* ── 133b ────────────────────────────────────────────────────────────────────
+     ⚠ FAZENDA E SAFRA PASSARAM A TER MEMÓRIA. Sem elas, toda planilha repetia as
+     mesmas perguntas: "Despesas Pessoais" → qual fazenda? "Pecuária 2025/2026" →
+     qual safra? A resposta era a mesma todo mês e morria com a importação.
+     ⚠ O PADRÃO É O DO FORNECEDOR, não um novo: coluna `aliases` jsonb, append sem
+     duplicar, comparação normalizada, e o texto sai de quem o tinha antes. As duas
+     colunas nasceram na migration 20260907134201. */
+  fazenda?: DeParaMap;
+  safra?: DeParaMap;
+  aliasesFazenda?: Readonly<Record<string, string[]>>;
+  aliasesSafra?: Readonly<Record<string, string[]>>;
   planoIdPorSubcentro: Readonly<Record<string, string>>;
   aliasIdPorTexto: Readonly<Record<string, string>>;
   aliasesFornecedor: Readonly<Record<string, string[]>>;
@@ -203,12 +217,21 @@ export async function persistirApelidos(params: {
     'financeiro_fornecedores', params.fornecedor, params.aliasesFornecedor);
   const cta = await persistirJsonb(
     'financeiro_contas_bancarias', params.conta, params.aliasesConta);
+  /* Os dois novos usam o MESMO `persistirJsonb` — o que muda é a tabela. */
+  const faz = params.fazenda
+    ? await persistirJsonb('fazendas', params.fazenda, params.aliasesFazenda ?? {})
+    : { n: 0, erros: [] as string[] };
+  const saf = params.safra
+    ? await persistirJsonb('financeiro_safras', params.safra, params.aliasesSafra ?? {})
+    : { n: 0, erros: [] as string[] };
 
   return {
     subcentro: sub.n,
     fornecedor: forn.n,
     conta: cta.n,
-    erros: [...sub.erros, ...forn.erros, ...cta.erros],
+    fazenda: faz.n,
+    safra: saf.n,
+    erros: [...sub.erros, ...forn.erros, ...cta.erros, ...faz.erros, ...saf.erros],
     idsSubcentroPorTexto: sub.idsPorTexto,
   };
 }

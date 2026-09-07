@@ -83,11 +83,20 @@ export interface V2ImportLancamentosExcelProps {
   mesRef?: number;
   anoRef?: number;
   clienteNome?: string;
+  /**
+   * 133b — o modo HUB, copiado do `CusteioTxtImportTab`: quando o Importar Banco já
+   * escolheu o arquivo, ele chega por prop e o seletor próprio não é renderizado.
+   *
+   * ⚠ DOIS SELETORES NA MESMA TELA fariam o operador escolher duas vezes, e o segundo
+   * poderia contradizer o primeiro — era o que acontecia até aqui: escolher a planilha
+   * no Importar Banco montava esta tela VAZIA, com o arquivo já lido lá em cima.
+   */
+  arquivoInicial?: File;
 }
 
 export function V2ImportLancamentosExcel({
   movimentosDoExtrato, contaNome, sufixoArquivo, somenteAtualizar = false,
-  onVerNoFinanceiro, mesRef, anoRef, clienteNome,
+  onVerNoFinanceiro, mesRef, anoRef, clienteNome, arquivoInicial,
 }: V2ImportLancamentosExcelProps = {}) {
   const {
     classificacoes, fornecedores, fazendas, contasBancarias, safras, criarFornecedor,
@@ -123,6 +132,12 @@ export function V2ImportLancamentosExcel({
   /* ⚠ O GRUPO ABERTO É ESTADO DE UI e nasce no primeiro: sem escolha do
      operador, abrir onde o trabalho começa é melhor que abrir vazio. */
   const [grupoDePara, setGrupoDePara] = useState<CampoDePara>('subcentro');
+
+  /* No modo hub o arquivo já veio escolhido: ler assim que ele chega, e de novo quando o
+     operador trocar de arquivo lá em cima. Mesmo efeito do `CusteioTxtImportTab`. */
+  useEffect(() => {
+    if (arquivoInicial) void lerArquivo(arquivoInicial);
+  }, [arquivoInicial, lerArquivo]);
 
   const totalValoresDePara = useMemo(() => (dePara
     ? Object.keys(dePara.subcentro).length + Object.keys(dePara.fazenda).length
@@ -192,18 +207,22 @@ export function V2ImportLancamentosExcel({
         </div>
 
         <div className="flex items-end gap-2 flex-wrap">
-          <div className="min-w-[220px]">
-            <Label className="text-[10px]">Arquivo (.xlsx, .xls)</Label>
-            <Input
-              type="file"
-              accept=".xlsx,.xls"
-              className="h-8 text-xs"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) void lerArquivo(f);
-              }}
-            />
-          </div>
+          {/* No modo hub quem escolhe o arquivo é a aba de cima — e o "Trocar arquivo" dela
+              é o único caminho, para não haver duas verdades sobre qual planilha está lida. */}
+          {!arquivoInicial && (
+            <div className="min-w-[220px]">
+              <Label className="text-[10px]">Arquivo (.xlsx, .xls)</Label>
+              <Input
+                type="file"
+                accept=".xlsx,.xls"
+                className="h-8 text-xs"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void lerArquivo(f);
+                }}
+              />
+            </div>
+          )}
 
           <Button
             variant="outline"
@@ -231,7 +250,7 @@ export function V2ImportLancamentosExcel({
             </div>
           )}
 
-          {arquivo && (
+          {arquivo && !arquivoInicial && (
             <Button variant="ghost" className="h-8 text-[11px]" onClick={limpar} disabled={lendo}>
               Limpar
             </Button>
@@ -605,7 +624,18 @@ export function V2ImportLancamentosExcel({
                      número já está na tela, e o toast seria a segunda voz dizendo o mesmo.
                      Os 492 toasts de antes eram o defeito. */
                   if (!verProgressoRef.current) {
-                    toast.success(`${r.atualizados} atualizados · ${r.falhas} recusados`);
+                    /* ⚠ O QUE FICOU DE FORA ENTRA NO TOAST — 133b. Duas linhas de 59 saíam
+                       por duplicidade sem que o resumo final as mencionasse, e a falta só
+                       aparecia no fechamento. */
+                    const fora = previa?.totais.ficamDeFora.qtd ?? 0;
+                    toast.success(
+                      [
+                        r.criados > 0 ? `${r.criados} criadas` : null,
+                        `${r.atualizados} atualizados`,
+                        r.falhas > 0 ? `${r.falhas} recusados` : null,
+                        fora > 0 ? `${fora} ficaram de fora` : null,
+                      ].filter(Boolean).join(' · '),
+                    );
                   }
                 });
               }}

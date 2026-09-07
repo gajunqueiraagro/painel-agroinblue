@@ -59,6 +59,9 @@ export interface StagingRow {
   conta_resolvida_id?: string | null;
   conta_resolvida_score?: number | null;
   conta_resolvida_estrategia?:
+    /* 133b — `nome_exato` entrou como camada que RESOLVE; sem ele aqui, a auditoria da
+       resolução de conta recusaria o valor que o resolvedor devolve. */
+    | 'nome_exato'
     | 'agencia_numero'
     | 'substring_exibicao'
     | 'substring_banco'

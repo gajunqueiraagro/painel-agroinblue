@@ -579,6 +579,9 @@ export interface LinhaPrevia {
   subcentro: string | null;
   favorecidoId: string | null;
   contaBancariaId: string | null;
+  /** 133b — o NOME da conta resolvida, para a prévia poder mostrá-la e somar por ela.
+      `null` = o de-para não resolveu a conta desta linha. */
+  contaBancariaNome: string | null;
   /** B-22d — safra resolvida do cadastro; `null` = sem safra na planilha. */
   safraId: string | null;
   entra: boolean;
@@ -679,6 +682,7 @@ export function avaliarLinha(
     // conta bancária) — não é conta, e a despesa existe do mesmo jeito.
     favorecidoId: itForn?.valor ?? null,
     contaBancariaId: itConta?.valor ?? null,
+    contaBancariaNome: itConta?.rotulo ?? null,
     /* Safra é OPCIONAL: sem ela a linha entra, e o lançamento nasce sem safra —
        o mesmo tratamento de fornecedor e conta bancária. */
     safraId: itSafra?.valor ?? null,

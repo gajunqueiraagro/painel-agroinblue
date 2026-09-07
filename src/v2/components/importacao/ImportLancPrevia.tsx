@@ -81,6 +81,30 @@ export function ImportLancPrevia({
         .reduce((acc, l) => acc + Math.abs(Number(l.row.valor) || 0), 0)
     : 0;
 
+  /* ⚠ A SOMA POR CONTA BANCÁRIA — 133b. Uma planilha de 492 linhas costuma cobrir várias
+     contas, e o total geral não diz se o cartão entrou na conta corrente: só a soma POR
+     conta denuncia isso, e denuncia antes de gravar. Conta não resolvida vira uma faixa
+     própria com o rótulo "sem conta", que é ausência e não um destino. */
+  const porConta = useMemo(() => {
+    const mapa = new Map<string, { nome: string; qtd: number; valor: number }>();
+    for (const l of linhas) {
+      if (!l.entra) continue;
+      const chave = l.contaBancariaId ?? '__sem__';
+      const nome = l.contaBancariaNome ?? 'sem conta';
+      const at = mapa.get(chave) ?? { nome, qtd: 0, valor: 0 };
+      at.qtd += 1;
+      at.valor += Math.abs(Number(l.row.valor) || 0);
+      mapa.set(chave, at);
+    }
+    return [...mapa.values()].sort((a, b) => b.valor - a.valor);
+  }, [linhas]);
+
+  /* ⚠ QUEM FICOU DE FORA POR SER IGUAL A ALGO QUE JÁ EXISTE, NOMEADO — 133b. O contador
+     por motivo dizia "2"; duas linhas somem no meio de 59 sem que ninguém saiba QUAIS, e
+     o operador só descobre a falta quando o mês não fecha. */
+  const foraPorDuplicidade = useMemo(
+    () => linhas.filter((l) => !l.entra && l.motivo === 'ja_existe'), [linhas]);
+
   return (
     <div className="space-y-1.5">
       {/* ── Totais: o contrato do que o operador está prestes a confirmar ── */}
@@ -125,6 +149,55 @@ export function ImportLancPrevia({
                 </span>
               </div>
             ))}
+          </div>
+        )}
+
+        {foraPorDuplicidade.length > 0 && (
+          <div className="border-t px-3 py-1.5">
+            <p className="text-[10px] font-semibold text-red-700">
+              Idêntico a um lançamento existente — {foraPorDuplicidade.length} linha
+              {foraPorDuplicidade.length !== 1 ? 's' : ''} fora:
+            </p>
+            <div className="mt-0.5 max-h-24 space-y-0.5 overflow-y-auto">
+              {foraPorDuplicidade.map((l) => (
+                <div key={l.indice} className="flex items-baseline gap-1.5 text-[10px] leading-tight">
+                  <span className="shrink-0 font-mono text-muted-foreground">linha {l.row.linha}</span>
+                  <span className="min-w-0 flex-1 truncate" title={l.row.descricao ?? ''}>
+                    idêntico a um lançamento existente: {l.row.descricao || '—'} de{' '}
+                    {l.row.data_competencia ?? '—'}
+                  </span>
+                  <span className="shrink-0 tabular-nums font-mono text-muted-foreground">
+                    {formatMoeda(Math.abs(Number(l.row.valor) || 0))}
+                  </span>
+                  {aoReincluir && (
+                    <button type="button" onClick={() => aoReincluir(l.indice)}
+                      className="shrink-0 underline underline-offset-2 hover:text-red-900"
+                      title="Importar assim mesmo — use quando souber que são dois lançamentos diferentes.">
+                      importar mesmo assim
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ⚠ A SOMA POR CONTA BANCÁRIA fica JUNTO DOS TOTAIS, acima da tabela: é
+            conferência, e conferência que só aparece rolando não é conferida. */}
+        {porConta.length > 0 && (
+          <div className="border-t px-3 py-1.5">
+            <p className="text-[10px] font-semibold">Por conta bancária (linhas que entram)</p>
+            <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5">
+              {porConta.map((c) => (
+                <span key={c.nome} className="text-[10px] leading-tight">
+                  <span className={c.nome === 'sem conta' ? 'text-muted-foreground' : ''}>{c.nome}</span>
+                  <span className="text-muted-foreground"> · </span>
+                  <span className="tabular-nums font-mono">{c.qtd}</span>
+                  <span className="text-muted-foreground"> · </span>
+                  <span className="tabular-nums font-mono">{formatMoeda(c.valor)}</span>
+                </span>
+              ))}
+            </div>
           </div>
         )}
 
@@ -206,6 +279,7 @@ export function ImportLancPrevia({
             <col style={{ width: 44 }} />
             <col style={{ width: 74 }} />
             <col style={{ width: 90 }} />
+            <col style={{ width: 120 }} />
             <col />
             <col style={{ width: 150 }} />
             <col style={{ width: 100 }} />
@@ -213,7 +287,7 @@ export function ImportLancPrevia({
           </colgroup>
           <thead className="sticky top-0 z-10 bg-primary">
             <tr>
-              {['Linha', 'Competência', 'Fazenda', 'Descrição', 'Subcentro', 'Valor', 'Situação'].map((h) => (
+              {['Linha', 'Competência', 'Fazenda', 'Conta bancária', 'Descrição', 'Subcentro', 'Valor', 'Situação'].map((h) => (
                 <th key={h} className="px-1 py-1 text-[9px] uppercase font-semibold text-primary-foreground text-left">
                   {h}
                 </th>
@@ -223,7 +297,7 @@ export function ImportLancPrevia({
           <tbody>
             {visiveis.length === 0 && (
               <tr>
-                <td colSpan={7} className="text-center text-[11px] text-muted-foreground py-6">
+                <td colSpan={8} className="text-center text-[11px] text-muted-foreground py-6">
                   {filtro === null
                     ? 'Nenhuma linha lida da planilha.'
                     : `Nenhuma linha em "${FILTRO_LABEL[filtro]}".`}
@@ -241,6 +315,12 @@ export function ImportLancPrevia({
                 </td>
                 <td className="px-1 py-0.5 text-[10px] truncate" title={l.fazendaNome ?? ''}>
                   {l.fazendaNome ?? '—'}
+                </td>
+                {/* ⚠ ENTRE FAZENDA E DESCRIÇÃO — 133b. Era a coluna que faltava para o
+                    operador ver que "Cartao Sicredi..." tinha ido para a conta corrente. */}
+                <td className={`px-1 py-0.5 text-[10px] truncate ${l.contaBancariaNome ? '' : 'text-muted-foreground'}`}
+                  title={l.contaBancariaNome ?? 'A planilha não trouxe conta, ou o de-para ainda não a resolveu.'}>
+                  {l.contaBancariaNome ?? '—'}
                 </td>
                 <td className="px-1 py-0.5 text-[10px] truncate" title={l.row.descricao ?? ''}>
                   {l.row.descricao ?? '—'}
