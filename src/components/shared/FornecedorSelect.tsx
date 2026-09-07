@@ -366,7 +366,7 @@ export function FornecedorSelect({
                   className="h-8 text-[12px]"
                 />
                 <CommandList>
-                  <CommandEmpty className="py-3 text-[11px] text-center text-muted-foreground">
+                  <CommandEmpty className="py-3 text-center text-[11px] text-zinc-400">
                     Nenhum fornecedor encontrado.
                   </CommandEmpty>
                   {sugestaoLegado && (
@@ -458,7 +458,7 @@ export function FornecedorSelect({
                 className="h-8 text-[12px]"
               />
               <CommandList>
-                <CommandEmpty className="py-3 text-[11px] text-center text-muted-foreground">
+                <CommandEmpty className="py-3 text-center text-[11px] text-zinc-400">
                   Nenhum fornecedor encontrado.
                 </CommandEmpty>
                 <CommandGroup>

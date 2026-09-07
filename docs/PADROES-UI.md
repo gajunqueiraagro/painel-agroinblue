@@ -690,3 +690,41 @@ erro entra.
 **Onde nasceu:** o modal de negociar lote do abate (ABATE-UX-01g). Com um campo estreito
 ao lado do toggle de unidade, `R$ 306.520,00` quebrava em duas linhas e o campo crescia
 para 46px de altura, empurrando o resto.
+
+---
+
+## A23 — Uma lista suspensa só, para o sistema inteiro
+
+Toda lista suspensa — `Select`, `DropdownMenu`, `Command`, os combobox de `shared/` e o
+`SearchableSelect` no modo denso — abre com a **mesma** medida e o **mesmo** fundo. Não há
+escolha por componente.
+
+| elemento | medida |
+|---|---|
+| trigger (botão fechado) | `h-8`, `text-[12px]`, `font-normal`, `truncate` |
+| caixa aberta | `bg-zinc-950/55 backdrop-blur-xl border-zinc-700/40 text-zinc-100` |
+| input de busca | `h-8`, `text-[12px]`, `placeholder:text-zinc-400`, ícone `h-3.5 w-3.5` |
+| item | `text-[12px]`, `py-1 px-2`, `min-h-[26px]`, uma linha (`truncate`), check `h-3.5 w-3.5` |
+| item destacado | `bg-zinc-800/60` |
+| item selecionado | `bg-zinc-800/40` |
+| grupo / rótulo | `text-[10px] font-medium text-zinc-400`, **sem** uppercase |
+| vazio | `text-[11px] text-zinc-400`, `py-3` |
+| altura máxima da lista | `max-h-56`, e a rolagem só na lista |
+
+- **Piso 10px.** Nada em `text-sm`/`text-base` dentro de lista suspensa — 14px numa lista
+  de itens de 26px é o tamanho de um parágrafo dentro de um menu.
+- **O item nunca quebra em duas linhas.** `whitespace-nowrap overflow-hidden
+  text-ellipsis` no item e o texto completo no `title`: sem o `title`, truncar esconde a
+  identidade do item e o operador não tem como recuperá-la.
+- **O fundo mora no componente da lista**, não no `PopoverContent` que a envolve. Pintar
+  o `popover.tsx` escureceria todo popover do sistema — inclusive os que não são lista.
+  Quem embrulha um `Command` passa `p-0`, e a lista preenche a superfície.
+- **O `SearchableSelect` fora do modo denso é exceção declarada**: ele veste as grades
+  operacionais de Abate, Venda, Mapa e Financeiro em 24px/10px, medidas para caber sem
+  rolar (A18). Levá-las a 32px/12px tiraria linhas da tela. Está registrado como frente
+  [UI-DROPDOWN-HERANCA], não esquecido.
+
+**Onde nasceu:** UI-DROPDOWN-PADRAO-01 (134). O dropdown de fornecedor da Mesa abria em
+14px com itens de duas linhas, o `Select` em 12px, o `Command` base em 14px com input de
+44px; uns em cinza-escuro, outros em claro. Três tamanhos e dois fundos para o mesmo gesto,
+às vezes na mesma tela.

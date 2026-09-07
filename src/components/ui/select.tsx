@@ -95,7 +95,8 @@ const SelectContent = React.forwardRef<
         className={cn(
           "p-1",
           position === "popper" &&
-            "h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)]",
+            /* A23 — a lista rola em 224px; o `max-h` do content é o teto da moldura. */
+            "h-[var(--radix-select-trigger-height)] max-h-56 w-full min-w-[var(--radix-select-trigger-width)]",
         )}
       >
         {children}
@@ -110,7 +111,9 @@ const SelectLabel = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Label>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Label>
 >(({ className, ...props }, ref) => (
-  <SelectPrimitive.Label ref={ref} className={cn("py-1.5 pl-8 pr-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-400", className)} {...props} />
+  <SelectPrimitive.Label ref={ref} /* Rótulo de grupo do padrão A23: 10px/500, SEM uppercase — caixa alta em 10px custa
+       largura e não acrescenta hierarquia. */
+    className={cn("py-1 pl-8 pr-2 text-[10px] font-medium text-zinc-400", className)} {...props} />
 ));
 SelectLabel.displayName = SelectPrimitive.Label.displayName;
 
@@ -125,7 +128,9 @@ const SelectItem = React.forwardRef<
       // hover/focus com fundo escuro, selecionado (checked) com fundo mais escuro + texto branco
       // e check visível. Substitui o antigo focus:bg-accent/text-accent-foreground (que, sobre o
       // painel dark-glass, deixava o item selecionado ilegível — regressão do dropdown de Fazenda).
-      "relative flex w-full cursor-default select-none items-center rounded-sm py-1 pl-8 pr-2 text-xs outline-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 text-zinc-100 focus:bg-zinc-800/45 focus:text-zinc-100 data-[state=checked]:bg-zinc-800/55 data-[state=checked]:text-zinc-100",
+      /* ⚠ UMA LINHA, SEMPRE — A23: o item quebrava em duas com nome longo e a lista
+         desalinhava. `min-h` mantém os 26px com o texto truncado. */
+      "relative flex min-h-[26px] w-full cursor-default select-none items-center overflow-hidden text-ellipsis whitespace-nowrap rounded-sm py-1 pl-8 pr-2 text-[12px] outline-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 text-zinc-100 focus:bg-zinc-800/60 focus:text-zinc-100 data-[state=checked]:bg-zinc-800/40 data-[state=checked]:text-zinc-100",
       className,
     )}
     {...props}

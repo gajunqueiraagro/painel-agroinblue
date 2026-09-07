@@ -13,7 +13,14 @@ const Command = React.forwardRef<
   <CommandPrimitive
     ref={ref}
     className={cn(
-      "flex h-full w-full flex-col overflow-hidden rounded-md bg-popover text-popover-foreground",
+      /* ⚠ A CAIXA ABERTA É CINZA-ESCURA — A23 (134). Era `bg-popover`, e o resultado era
+         uma lista suspensa clara dentro de um sistema cujas outras listas (Select,
+         FavorecidoSelect) já eram escuras: dois fundos para o mesmo gesto.
+         ⚠ O FUNDO MORA AQUI, e não no `PopoverContent` que a envolve: os quatro
+         consumidores passam `p-0`, então o `Command` preenche a superfície inteira. Pintar
+         o `popover.tsx` escureceria TODO popover do sistema — inclusive os que não são
+         lista suspensa —, que é muito além do que este padrão governa. */
+      "flex h-full w-full flex-col overflow-hidden rounded-md border border-zinc-700/40 bg-zinc-950/55 text-zinc-100 backdrop-blur-xl",
       className,
     )}
     {...props}
@@ -44,7 +51,9 @@ const CommandInput = React.forwardRef<
     <CommandPrimitive.Input
       ref={ref}
       className={cn(
-        "flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50",
+        /* Input de busca do padrão: 32px, 12px, placeholder zinc-400. Era 44px e 14px — a
+           altura de um campo de formulário dentro de uma lista de itens de 26px. */
+        "flex h-8 w-full rounded-md bg-transparent py-1 text-[12px] text-zinc-100 outline-none placeholder:text-zinc-400 disabled:cursor-not-allowed disabled:opacity-50",
         className,
       )}
       {...props}
@@ -60,7 +69,9 @@ const CommandList = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <CommandPrimitive.List
     ref={ref}
-    className={cn("max-h-[300px] overflow-y-auto overflow-x-hidden", className)}
+    /* ⚠ `max-h-56` (224px) E A ROLAGEM SÓ AQUI — A23. Com 300px a lista passava da dobra
+       em tela baixa e o rodapé do formulário sumia atrás dela. */
+    className={cn("max-h-56 overflow-y-auto overflow-x-hidden", className)}
     {...props}
   />
 ));
@@ -70,7 +81,7 @@ CommandList.displayName = CommandPrimitive.List.displayName;
 const CommandEmpty = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive.Empty>,
   React.ComponentPropsWithoutRef<typeof CommandPrimitive.Empty>
->((props, ref) => <CommandPrimitive.Empty ref={ref} className="py-6 text-center text-sm" {...props} />);
+>((props, ref) => <CommandPrimitive.Empty ref={ref} className="py-3 text-center text-[11px] text-zinc-400" {...props} />);
 
 CommandEmpty.displayName = CommandPrimitive.Empty.displayName;
 
@@ -81,7 +92,9 @@ const CommandGroup = React.forwardRef<
   <CommandPrimitive.Group
     ref={ref}
     className={cn(
-      "overflow-hidden p-1 text-foreground [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground",
+      /* Rótulo de grupo: 10px/500 zinc-400, SEM uppercase — caixa alta em 10px sobre
+         nomes de grupo custa largura e não acrescenta hierarquia. */
+      "overflow-hidden p-1 text-zinc-100 [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-zinc-400",
       className,
     )}
     {...props}
@@ -105,7 +118,10 @@ const CommandItem = React.forwardRef<
   <CommandPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none data-[disabled=true]:pointer-events-none data-[selected='true']:bg-accent data-[selected=true]:text-accent-foreground data-[disabled=true]:opacity-50",
+      /* ⚠ UMA LINHA, SEMPRE — A23. O item quebrava em duas quando o nome era longo, e a
+         lista inteira desalinhava. `min-h` garante os 26px mesmo com o texto truncado; quem
+         precisa do texto completo o tem no `title` que o consumidor passa. */
+      "relative flex min-h-[26px] cursor-default select-none items-center gap-1.5 overflow-hidden text-ellipsis whitespace-nowrap rounded-sm px-2 py-1 text-[12px] text-zinc-100 outline-none data-[disabled=true]:pointer-events-none data-[selected='true']:bg-zinc-800/60 data-[selected=true]:text-zinc-100 data-[disabled=true]:opacity-50",
       className,
     )}
     {...props}
@@ -115,7 +131,7 @@ const CommandItem = React.forwardRef<
 CommandItem.displayName = CommandPrimitive.Item.displayName;
 
 const CommandShortcut = ({ className, ...props }: React.HTMLAttributes<HTMLSpanElement>) => {
-  return <span className={cn("ml-auto text-xs tracking-widest text-muted-foreground", className)} {...props} />;
+  return <span className={cn("ml-auto text-[10px] tracking-widest text-zinc-400", className)} {...props} />;
 };
 CommandShortcut.displayName = "CommandShortcut";
 

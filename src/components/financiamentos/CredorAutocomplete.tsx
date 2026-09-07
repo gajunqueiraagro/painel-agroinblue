@@ -196,7 +196,7 @@ export function CredorAutocomplete({ value, onChange, clienteId, placeholder = '
                 ))}
               </CommandGroup>
               {search.trim() && fornecedores.filter(f => f.nome.toLowerCase().includes(search.trim().toLowerCase())).length > 50 && (
-                <div className="px-2 py-1.5 text-[10px] text-muted-foreground">
+                <div className="px-2 py-1 text-[10px] text-zinc-400">
                   Refine a busca — mostrando os 50 primeiros resultados.
                 </div>
               )}

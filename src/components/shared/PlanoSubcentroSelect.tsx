@@ -134,17 +134,18 @@ export function PlanoSubcentroSelect({
       {label && <Label className="text-[10px]">{label}</Label>}
       <Popover open={open} onOpenChange={v => { setOpen(v); if (!v) { onSearchChange(''); setHighlight(0); } }}>
         <PopoverTrigger asChild>
-          <Button tabIndex={tabIndex} variant="outline" role="combobox" aria-expanded={open} disabled={disabled} className={cn("w-full h-8 justify-between font-normal text-xs", triggerClassName)}>
+          <Button tabIndex={tabIndex} variant="outline" role="combobox" aria-expanded={open} disabled={disabled} className={cn("w-full h-8 justify-between font-normal text-[12px]", triggerClassName)}>
             <span className="truncate" title={value || undefined}>{value || 'Selecione o subcentro...'}</span>
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
         <PopoverContent className={cn("w-[--radix-popover-trigger-width] p-0 bg-zinc-950/55 backdrop-blur-xl border-zinc-700/40 text-zinc-100", contentClassName)} align="start">
-          <div className="flex items-center border-b border-zinc-700/40 px-3 py-2">
-            <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+          {/* Input de busca do padrão A23: 32px, 12px, ícone 14px. */}
+          <div className="flex items-center border-b border-zinc-700/40 px-2">
+            <Search className="mr-2 h-3.5 w-3.5 shrink-0 opacity-50" />
             <input
               ref={searchInputRef}
-              className="flex h-7 w-full bg-transparent text-sm text-zinc-100 outline-none placeholder:text-zinc-400"
+              className="flex h-8 w-full bg-transparent text-[12px] text-zinc-100 outline-none placeholder:text-zinc-400"
               placeholder="Buscar subcentro..."
               value={search}
               onChange={e => { onSearchChange(e.target.value); setHighlight(0); }}
@@ -152,12 +153,12 @@ export function PlanoSubcentroSelect({
               autoFocus
             />
           </div>
-          <div className="max-h-48 overflow-y-auto p-1">
+          <div className="max-h-56 overflow-y-auto p-1">
             {/* ⚠ "NENHUM ENCONTRADO" SÓ QUANDO NÃO HÁ MESMO. Havendo do outro
                 lado, a mensagem diz quantos e oferece a porta — dizer "nenhum"
                 com dois escondidos é a tela mentindo sobre o próprio cadastro. */}
             {filtered.length === 0 && ocultosPorTipo === 0 && (
-              <p className="p-2 text-center text-sm text-zinc-400">Nenhum subcentro encontrado</p>
+              <p className="py-3 text-center text-[11px] text-zinc-400">Nenhum subcentro encontrado</p>
             )}
             {ocultosPorTipo > 0 && (
               <p className="px-2 py-1.5 text-center text-[11px] leading-snug text-zinc-400">
@@ -184,7 +185,9 @@ export function PlanoSubcentroSelect({
                 key={sc.subcentro || idx}
                 ref={el => { itemRefs.current[idx] = el; }}
                 className={cn(
-                  "relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none",
+                  /* ⚠ UMA LINHA, SEMPRE — A23: subcentro longo quebrava em duas e a lista
+                     desalinhava. O texto inteiro fica no `title`. */
+                  "relative flex min-h-[26px] w-full cursor-pointer select-none items-center rounded-sm px-2 py-1 text-[12px] outline-none",
                   "text-zinc-100",
                   idx === highlight ? "bg-zinc-800/60 text-zinc-100" : "hover:bg-zinc-800/45",
                   value === sc.subcentro && idx !== highlight && "bg-zinc-800/40",
@@ -193,8 +196,8 @@ export function PlanoSubcentroSelect({
                 onClick={() => handleSelect(sc.subcentro || '')}
                 onMouseEnter={() => setHighlight(idx)}
               >
-                <Check className={cn("mr-2 h-4 w-4", value === sc.subcentro ? "opacity-100" : "opacity-0")} />
-                <span className="truncate">{sc.subcentro}</span>
+                <Check className={cn("mr-2 h-3.5 w-3.5 shrink-0", value === sc.subcentro ? "opacity-100" : "opacity-0")} />
+                <span className="truncate" title={sc.subcentro ?? undefined}>{sc.subcentro}</span>
               </button>
             ))}
           </div>

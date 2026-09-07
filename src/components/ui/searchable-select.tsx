@@ -260,7 +260,12 @@ export function SearchableSelect({
         }}
         disabled={disabled}
         className={cn(
-          'flex h-6 w-full items-center justify-between rounded-md border border-input bg-background px-1.5 text-[10px] ring-offset-background',
+          'flex w-full items-center justify-between rounded-md border border-input bg-background ring-offset-background',
+          /* ⚠ O TRIGGER DO PADRÃO SÓ NO MODO DENSO — A23. O modo padrão é 24px/10px porque
+             veste as grades A18 de Abate, Venda, Mapa e Financeiro; levá-las a 32px/12px
+             tiraria linhas da tela em telas que foram medidas para caber sem rolar. Está
+             reportado como frente própria, não esquecido. */
+          dense ? 'h-8 px-2 text-[12px] font-normal' : 'h-6 px-1.5 text-[10px]',
           'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1',
           disabled && 'opacity-50 cursor-not-allowed',
         )}
@@ -288,7 +293,10 @@ export function SearchableSelect({
               placeholder={placeholder}
               className={cn(
                 'w-full rounded border border-input bg-background outline-none focus:ring-1 focus:ring-ring',
-                dense ? 'h-6 text-[11px] px-1.5' : 'h-4 text-[9px] px-1',
+                /* A23 — no modo denso, o input de busca é o do padrão: 32px e 12px. O modo
+                   padrão continua em 16px/9px: ele veste as grades operacionais de Abate,
+                   Venda, Mapa e Financeiro, que foram medidas para caber sem rolar. */
+                dense ? 'h-8 text-[12px] px-2' : 'h-4 text-[9px] px-1',
               )}
               onKeyDown={handleKeyDown}
               autoCorrect="off"
@@ -296,7 +304,8 @@ export function SearchableSelect({
               spellCheck={false}
             />
           </div>
-          <div ref={listRef} className={cn('overflow-y-auto', dense ? 'max-h-[300px] px-1 pb-1' : 'max-h-[120px] px-0.5 pb-0.5')}>
+          {/* A23 — 224px no modo denso: com 300px a lista passava da dobra em tela baixa. */}
+          <div ref={listRef} className={cn('overflow-y-auto', dense ? 'max-h-56 px-1 pb-1' : 'max-h-[120px] px-0.5 pb-0.5')}>
             {selectableItems.map((o, idx) => (
               <button
                 key={o.value}
@@ -306,7 +315,7 @@ export function SearchableSelect({
                 onMouseEnter={() => setHighlightIdx(idx)}
                 className={cn(
                   'w-full text-left leading-tight rounded-sm cursor-pointer',
-                  dense ? 'px-2 py-1 text-[12px]' : 'px-1 py-[1.5px] text-[9px]',
+                  dense ? 'min-h-[26px] px-2 py-1 text-[12px]' : 'px-1 py-[1.5px] text-[9px]',
                   idx === highlightIdx && 'bg-accent text-accent-foreground',
                   idx !== highlightIdx && 'hover:bg-accent/50',
                   value === o.value && 'font-semibold',
@@ -316,19 +325,22 @@ export function SearchableSelect({
                     numero seria a primeira coisa a sumir — e ele e' o motivo do
                     operador estar olhando. */}
                 <span className="flex items-center gap-1 min-w-0">
-                  <span className="truncate">{o.label}</span>
+                  {/* ⚠ O TEXTO INTEIRO NO `title` — A23. `truncate` sem ele esconde a
+                      identidade do item e o operador não tem como recuperá-la. */}
+                  <span className="truncate" title={o.label}>{o.label}</span>
                   {o.hint ? <span className="shrink-0 opacity-60">· {o.hint}</span> : null}
                 </span>
                 {o.sub ? (
                   <span className={cn('block truncate text-[10px]',
-                    o.subAlerta ? 'text-amber-700' : 'text-muted-foreground')}>
+                    o.subAlerta ? 'text-amber-700' : 'text-muted-foreground')} title={o.sub}>
                     {o.sub}
                   </span>
                 ) : null}
               </button>
             ))}
             {filtered.length === 0 && (
-              <div className="text-[9px] text-muted-foreground px-1 py-0.5">Nenhum resultado</div>
+              <div className={cn('text-muted-foreground',
+                dense ? 'px-2 py-3 text-center text-[11px]' : 'px-1 py-0.5 text-[9px]')}>Nenhum resultado</div>
             )}
             {excedente > 0 && (
               <div className="text-[9px] text-muted-foreground px-1 py-0.5 border-t border-border/50">
@@ -343,7 +355,7 @@ export function SearchableSelect({
               <button type="button" onMouseDown={e => e.preventDefault()}
                 onClick={() => { setOpen(false); acaoFinal.onSelect(); }}
                 className={cn('w-full text-left rounded-sm text-primary hover:bg-accent/50 border-t border-border/50',
-                  dense ? 'px-2 py-1 text-[12px]' : 'px-1 py-[1.5px] text-[9px]')}>
+                  dense ? 'min-h-[26px] px-2 py-1 text-[12px]' : 'px-1 py-[1.5px] text-[9px]')}>
                 {acaoFinal.label}
               </button>
             )}

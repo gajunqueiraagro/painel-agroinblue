@@ -1246,7 +1246,7 @@ export function MesaPareamentoModal({
                                 <SelectTrigger className="h-7 text-[11px]"><SelectValue placeholder="—" /></SelectTrigger>
                                 <SelectContent>
                                   {(catalogo?.fazendas ?? []).map((f) => (
-                                    <SelectItem key={f.id} value={f.nome} className="text-[11px]">{f.nome}</SelectItem>
+                                    <SelectItem key={f.id} value={f.nome} >{f.nome}</SelectItem>
                                   ))}
                                 </SelectContent>
                               </Select>
@@ -2436,14 +2436,14 @@ function FornecedorInline({ clienteId, valor, excelOriginal, marcadoNovo, vincul
       </PopoverTrigger>
       <PopoverContent className="w-[280px] p-0" align="start">
         <Command shouldFilter={false}>
-          <CommandInput value={busca} onValueChange={setBusca} placeholder="Buscar fornecedor…" className="text-[11px] h-7" />
+          <CommandInput value={busca} onValueChange={setBusca} placeholder="Buscar fornecedor…" className="h-8" />
           <CommandList className="max-h-44">
-            <CommandEmpty className="py-2 text-[10px] text-center text-muted-foreground">
+            <CommandEmpty className="py-3 text-center text-[11px] text-zinc-400">
               {busca.trim().length < 2 ? 'Digite ao menos 2 caracteres' : isFetching ? 'Buscando…' : 'Nenhum fornecedor encontrado'}
             </CommandEmpty>
             {mostrarExcel && excelOriginal && (
               <CommandGroup heading="Criar do Excel">
-                <CommandItem value={`excel|${excelOriginal}`} className="text-[11px]"
+                <CommandItem value={`excel|${excelOriginal}`} 
                   onSelect={() => { onPick({ fornecedorId: null, fornecedorNome: excelOriginal, fornecedorMarcadoNovo: true }); setOpen(false); }}>
                   <span className="text-amber-700 mr-2">+</span><span className="flex-1 truncate">Criar fornecedor: "{excelOriginal}"</span>
                 </CommandItem>
@@ -2452,7 +2452,7 @@ function FornecedorInline({ clienteId, valor, excelOriginal, marcadoNovo, vincul
             {filtrados.length > 0 && (
               <CommandGroup heading="Catálogo oficial">
                 {filtrados.map((f) => (
-                  <CommandItem key={f.id} value={f.nome} className="text-[11px]"
+                  <CommandItem key={f.id} value={f.nome} 
                     onSelect={() => { onPick({ fornecedorId: f.id, fornecedorNome: f.nome, fornecedorMarcadoNovo: false }); setOpen(false); }}>
                     <span className="text-emerald-700 mr-2">✓</span><span className="flex-1 truncate">{f.nome}</span>
                   </CommandItem>
@@ -2461,7 +2461,7 @@ function FornecedorInline({ clienteId, valor, excelOriginal, marcadoNovo, vincul
             )}
             {mostrarNovo && (
               <CommandGroup heading="Novo fornecedor">
-                <CommandItem value={`novo|${busca}`} className="text-[11px]"
+                <CommandItem value={`novo|${busca}`} 
                   onSelect={() => { onPick({ fornecedorId: null, fornecedorNome: busca.trim(), fornecedorMarcadoNovo: true }); setOpen(false); }}>
                   <span className="text-amber-700 mr-2">+</span><span className="flex-1 truncate">Marcar como novo: "{busca.trim()}"</span>
                 </CommandItem>
@@ -2512,16 +2512,16 @@ function SubcentroInline({ catalogo, valor, naturezaAlvo, disabled, onPick }: {
       </PopoverTrigger>
       <PopoverContent className="w-[300px] p-0" align="start">
         <Command shouldFilter={false}>
-          <CommandInput value={busca} onValueChange={setBusca} placeholder="Buscar subcentro…" className="text-[11px] h-7" />
+          <CommandInput value={busca} onValueChange={setBusca} placeholder="Buscar subcentro…" className="h-8" />
           <CommandList className="max-h-52">
-            <CommandEmpty className="py-2 text-[10px] text-center text-muted-foreground">Nenhum subcentro encontrado</CommandEmpty>
+            <CommandEmpty className="py-3 text-center text-[11px] text-zinc-400">Nenhum subcentro encontrado</CommandEmpty>
             {part.primarios.length > 0 && (
               <CommandGroup heading={naturezaAlvo ? `Da natureza ${labelNatureza(naturezaAlvo)}` : 'Subcentros'}>
                 {part.primarios.map((s) => {
                   const qt = !naturezaAlvo ? s.qt_uso : naturezaAlvo === 'entrada' ? s.qt_uso_entrada : naturezaAlvo === 'saida' ? s.qt_uso_saida : s.qt_uso_transferencia;
                   return (
                     <CommandItem key={`prim|${s.subcentro}|${s.macro_custo ?? ''}|${s.grupo_custo ?? ''}|${s.centro_custo ?? ''}`}
-                      value={s.subcentro} className="text-[11px]" onSelect={() => pick(s)}>
+                      value={s.subcentro}  onSelect={() => pick(s)}>
                       <span className="flex-1 truncate">{s.subcentro}</span>
                       {s.origem === 'historico' && <span className="text-[9px] text-amber-700 mr-2" title="Subcentro legado">⚠ legado</span>}
                       <span className="text-[9px] text-muted-foreground ml-2">({qt}x)</span>
@@ -2536,7 +2536,7 @@ function SubcentroInline({ catalogo, valor, naturezaAlvo, disabled, onPick }: {
                   const naturezasLabel = Array.from(s.naturezas).map((n) => labelNatureza(n)).join('/');
                   return (
                     <CommandItem key={`sec|${s.subcentro}|${s.macro_custo ?? ''}|${s.grupo_custo ?? ''}|${s.centro_custo ?? ''}`}
-                      value={`outras-${s.subcentro}`} className="text-[11px] opacity-60" onSelect={() => pick(s)}>
+                      value={`outras-${s.subcentro}`} className="opacity-60" onSelect={() => pick(s)}>
                       <span className="text-amber-700 mr-1">⚠</span>
                       <span className="flex-1 truncate text-muted-foreground">{s.subcentro}</span>
                       <span className="text-[9px] text-muted-foreground ml-2">({naturezasLabel || 's/ natureza'})</span>
@@ -2798,7 +2798,7 @@ function FormularioCorrecao({
           <SelectTrigger className="h-7 text-[11px]"><SelectValue placeholder="—" /></SelectTrigger>
           <SelectContent>
             {catalogo.fazendas.map((f) => (
-              <SelectItem key={f.id} value={f.id} className="text-[11px]">
+              <SelectItem key={f.id} value={f.id} >
                 {f.nome}
               </SelectItem>
             ))}
@@ -2821,10 +2821,10 @@ function FormularioCorrecao({
               }
             }}
             placeholder="Buscar fornecedor…"
-            className="text-[11px] h-7"
+            className="h-8"
           />
           <CommandList className="max-h-40">
-            <CommandEmpty className="py-2 text-[10px] text-center text-muted-foreground">
+            <CommandEmpty className="py-3 text-center text-[11px] text-zinc-400">
               Digite ao menos 2 caracteres
             </CommandEmpty>
             {mostrarGrupoExcel && fornecedorExcelOriginal && (
@@ -2832,7 +2832,7 @@ function FormularioCorrecao({
                 <CommandItem
                   value={`excel|${fornecedorExcelOriginal}`}
                   onSelect={() => escolherFornecedorExcel(fornecedorExcelOriginal)}
-                  className="text-[11px]"
+                  
                 >
                   <span className="text-blue-700 mr-2">📄</span>
                   <span className="flex-1 truncate">{fornecedorExcelOriginal}</span>
@@ -2846,7 +2846,7 @@ function FormularioCorrecao({
                     key={f.id}
                     value={f.nome}
                     onSelect={() => escolherFornecedor(f)}
-                    className="text-[11px]"
+                    
                   >
                     <span className="text-emerald-700 mr-2">✓</span>
                     <span className="flex-1 truncate">{f.nome}</span>
@@ -2859,7 +2859,7 @@ function FormularioCorrecao({
                 <CommandItem
                   value={`novo|${fornecedorBusca}`}
                   onSelect={marcarFornecedorNovo}
-                  className="text-[11px]"
+                  
                 >
                   <span className="text-amber-700 mr-2">+</span>
                   <span className="flex-1 truncate">
@@ -2892,10 +2892,10 @@ function FormularioCorrecao({
             value={subcentroBusca}
             onValueChange={setSubcentroBusca}
             placeholder="Buscar subcentro… (↑↓ Enter)"
-            className="text-[11px] h-7"
+            className="h-8"
           />
           <CommandList className="max-h-44">
-            <CommandEmpty className="py-2 text-[10px] text-center text-muted-foreground">
+            <CommandEmpty className="py-3 text-center text-[11px] text-zinc-400">
               Nenhum subcentro encontrado
             </CommandEmpty>
 
@@ -2917,7 +2917,7 @@ function FormularioCorrecao({
                       key={`prim|${s.subcentro}|${s.macro_custo ?? ''}|${s.grupo_custo ?? ''}|${s.centro_custo ?? ''}`}
                       value={s.subcentro}
                       onSelect={() => escolherSubcentro(s)}
-                      className="text-[11px]"
+                      
                     >
                       <span className="flex-1 truncate">{s.subcentro}</span>
                       {s.origem === 'historico' && (
@@ -2947,7 +2947,7 @@ function FormularioCorrecao({
                       key={`sec|${s.subcentro}|${s.macro_custo ?? ''}|${s.grupo_custo ?? ''}|${s.centro_custo ?? ''}`}
                       value={`outras-${s.subcentro}`}
                       onSelect={() => escolherSubcentro(s)}
-                      className="text-[11px] opacity-60"
+                      className="opacity-60"
                     >
                       <span className="text-amber-700 mr-1">⚠</span>
                       <span className="flex-1 truncate text-muted-foreground">{s.subcentro}</span>
