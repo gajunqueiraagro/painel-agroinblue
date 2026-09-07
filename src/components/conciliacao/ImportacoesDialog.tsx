@@ -50,7 +50,9 @@ export function ImportacoesDialog({
           ) : (
             <ul className="divide-y">
               {importacoes.map(imp => (
-                <li key={imp.id} className="flex items-center gap-2 px-4 py-1.5 text-[11px]">
+                <li key={imp.id}
+                  className={`flex items-center gap-2 px-4 py-1.5 text-[11px] ${
+                    imp.desfeitaEm ? 'text-muted-foreground' : ''}`}>
                   <FileText className="h-3 w-3 shrink-0 text-muted-foreground" />
                   <span className="truncate font-mono" title={imp.nomeArquivo}>{imp.nomeArquivo}</span>
                   <span className="shrink-0 text-muted-foreground">
@@ -62,6 +64,12 @@ export function ImportacoesDialog({
                     {/* ⚠ DE ONDE VEIO O VÍNCULO — 130 item 5. "Conciliado" não distingue o
                         lançamento que o sistema CRIOU do que já existia e foi ajustado, e
                         são coisas diferentes na hora de desfazer. */}
+                    {/* ⚠ DESFEITA CONTINUA NA LISTA, em cinza e com a data — 132. Sumir
+                        faria o operador reimportar o mesmo arquivo achando que nunca
+                        entrou. */}
+                    {imp.desfeitaEm && (
+                      <span> · desfeita em {imp.desfeitaEm.slice(0, 10).split('-').reverse().join('/')}</span>
+                    )}
                     {(imp.crus > 0 || imp.substituidos > 0) && (
                       <span className="text-muted-foreground/80">
                         {' ('}
@@ -76,6 +84,9 @@ export function ImportacoesDialog({
                   {/* ⚠ O BOTÃO DIZ POR QUE, quando não dá — a regra do B-09. Com
                       vínculo ativo ele não some: some a possibilidade, e a frase
                       explica qual é. */}
+                  {/* Arquivo já desfeito não tem o que desfazer: o botão SOME, em vez de
+                      ficar cinza pedindo um clique que não faria nada. */}
+                  {!imp.desfeitaEm && (
                   <Button
                     type="button" variant="ghost" size="sm"
                     className="h-6 shrink-0 gap-1 px-1.5 text-[10px] text-muted-foreground"
@@ -87,6 +98,7 @@ export function ImportacoesDialog({
                     {desfazendo ? <Loader2 className="h-3 w-3 animate-spin" /> : <Undo2 className="h-3 w-3" />}
                     Desfazer
                   </Button>
+                  )}
                 </li>
               ))}
             </ul>

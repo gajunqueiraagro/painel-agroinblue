@@ -69,6 +69,10 @@ export interface PreviaConciliarMes {
   simulado: boolean;
   movimentosExtrato: number;
   jaConciliados: number;
+  /** Quantos esta chamada gravou — 132. `0` na simulação. */
+  processados: number;
+  /** Quantos sobraram para a próxima chamada. `0` = acabou. */
+  restantes: number;
   crus: CruConciliar[];
   crusTotal: number;
   substituidos: SubstituidoConciliar[];
@@ -92,6 +96,31 @@ const txt = (j: Json | undefined): string | null => (typeof j === 'string' ? j :
 const lista = (j: Json | undefined): Record<string, Json>[] =>
   Array.isArray(j) ? j.flatMap(i => { const o = obj(i); return o ? [o] : []; }) : [];
 
+/**
+ * A mensagem do Postgres, inteira e sem traduzir — 132 item 2.
+ *
+ * ⚠ O TOAST GENÉRICO ESCONDEU O DEFEITO. Em 07/09 a gravação de 107 movimentos morreu em
+ * `57014 canceling statement due to statement timeout` e a tela disse "Falha ao conciliar
+ * o mês." — o operador não tinha como saber que era tempo, e o envelope 130 já mandava
+ * mostrar o erro cru. O PostgREST manda `message`, `details` e `hint` em campos separados,
+ * e cada um pode ser o que explica; juntam-se todos os que vierem.
+ * ⚠ AQUI É EXCEÇÃO CONSCIENTE AO `normalizarErro`: aquele existe para o operador comum, e
+ * descarta `details`/`hint` de propósito. Nesta tela quem lê está conciliando um mês e
+ * precisa do motivo exato — inclusive o código.
+ */
+function mensagemCrua(e: unknown): string {
+  if (e && typeof e === 'object') {
+    const o = e as { message?: unknown; details?: unknown; hint?: unknown; code?: unknown };
+    const partes = [o.message, o.details, o.hint]
+      .filter((x): x is string => typeof x === 'string' && x.trim() !== '');
+    if (partes.length > 0) {
+      const cod = typeof o.code === 'string' && o.code ? ` (${o.code})` : '';
+      return partes.join(' · ') + cod;
+    }
+  }
+  return e instanceof Error ? e.message : 'Falha ao conciliar o mês.';
+}
+
 function daPrevia(j: Json | null): PreviaConciliarMes | null {
   const e = obj(j);
   if (!e || e.ok !== true) return null;
@@ -100,6 +129,8 @@ function daPrevia(j: Json | null): PreviaConciliarMes | null {
     simulado: e.simulado === true,
     movimentosExtrato: num(e.movimentos_extrato),
     jaConciliados: num(e.ja_conciliados),
+    processados: num(e.processados),
+    restantes: num(e.restantes),
     crus: lista(e.crus).map(c => ({
       extratoId: String(c.extrato_id), lancamentoId: txt(c.lancamento_id),
       dataBanco: txt(c.data_banco), valorBanco: num(c.valor_banco),
@@ -141,6 +172,9 @@ function daPrevia(j: Json | null): PreviaConciliarMes | null {
   };
 }
 
+/** Quantos movimentos por chamada — 132. Medido: 30 leva ~3 s, e o teto é 8 s. */
+export const LOTE_CONCILIAR = 30;
+
 export interface ConciliarMesApi {
   simulando: boolean;
   gravando: boolean;
@@ -148,6 +182,8 @@ export interface ConciliarMesApi {
   gravar: (clienteId: string, contaId: string, anoMes: string) => Promise<PreviaConciliarMes | null>;
   /** A mensagem crua do Postgres quando a RPC recusou. `null` quando não houve erro. */
   erro: string | null;
+  /** Quantos já foram gravados no lote em curso — para o botão e o resumo. */
+  gravados: number;
 }
 
 export function useConciliarMes(): ConciliarMesApi {
@@ -155,13 +191,18 @@ export function useConciliarMes(): ConciliarMesApi {
   const [gravando, setGravando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
+  const [gravados, setGravados] = useState(0);
+
   const chamar = useCallback(async (
-    clienteId: string, contaId: string, anoMes: string, simular: boolean,
+    clienteId: string, contaId: string, anoMes: string, simular: boolean, limite?: number,
   ): Promise<PreviaConciliarMes | null> => {
     setErro(null);
     try {
       const { data, error } = await supabase.rpc('fn_extrato_conciliar_mes', {
         p_cliente_id: clienteId, p_conta_bancaria_id: contaId, p_ano_mes: anoMes, p_simular: simular,
+        /* `undefined` não vai no corpo — a RPC usa o default `NULL` (sem limite), que é o
+           que a simulação quer: ela sempre cobre o mês inteiro. */
+        ...(limite == null ? {} : { p_limite: limite }),
       });
       if (error) throw error;
       const p = daPrevia(data);
@@ -171,7 +212,7 @@ export function useConciliarMes(): ConciliarMesApi {
       /* ⚠ A MENSAGEM DO POSTGRES VAI SEM TRADUZIR — ela nomeia o invariante violado (mês
          fechado, conta sem fazenda, sem permissão) e é mais precisa que qualquer texto
          nosso. É a mesma decisão do `LancarMesEmMassa` que este fluxo substitui. */
-      setErro(e instanceof Error ? e.message : 'Falha ao conciliar o mês.');
+      setErro(mensagemCrua(e));
       return null;
     }
   }, []);
@@ -181,10 +222,54 @@ export function useConciliarMes(): ConciliarMesApi {
     try { return await chamar(clienteId, contaId, anoMes, true); } finally { setSimulando(false); }
   }, [chamar]);
 
+  /**
+   * Grava em LOTES de 30 até `restantes = 0` — 132.
+   *
+   * ⚠ 107 MOVIMENTOS NÃO CABEM EM UMA TRANSAÇÃO. Medido em 07/09: a gravação leva ~87 ms
+   * por linha (a RPC de criar mais os gatilhos de DRE, LCDPR e hash), e o
+   * `statement_timeout` do papel `authenticated` é 8 s — 9,3 s no total, morte por tempo,
+   * nada gravado. O Itaú, com 22 linhas, passava por ser menor. Com `p_limite = 30` são
+   * quatro chamadas de 3,1 / 2,9 / 2,4 / 1,6 s.
+   * ⚠ CADA CHAMADA É ATÔMICA, e é isso que torna o lote seguro: se a terceira falhar, as
+   * duas primeiras ficaram gravadas e a tela diz onde parou — em vez de perder tudo.
+   * ⚠ O ACUMULADO É DAS CHAMADAS; `sem_par` e `saldo` são os da ÚLTIMA. Antes de
+   * `restantes = 0`, o `sem_par` inclui lançamentos que ainda vão casar nas voltas
+   * seguintes — somá-los daria um número que nunca foi verdade.
+   * ⚠ TETO DE VOLTAS: `restantes` sempre cai, mas um `p_limite` que não avançasse faria
+   * laço infinito no navegador do produtor. O guarda para e diz.
+   */
   const gravar = useCallback(async (clienteId: string, contaId: string, anoMes: string) => {
     setGravando(true);
-    try { return await chamar(clienteId, contaId, anoMes, false); } finally { setGravando(false); }
+    setGravados(0);
+    try {
+      const crus: CruConciliar[] = [];
+      const substituidos: SubstituidoConciliar[] = [];
+      let ambiguos = 0;
+      let ultima: PreviaConciliarMes | null = null;
+      let voltas = 0;
+      for (;;) {
+        const r = await chamar(clienteId, contaId, anoMes, false, LOTE_CONCILIAR);
+        if (!r) return null;                       // o erro já está em `erro`
+        crus.push(...r.crus);
+        substituidos.push(...r.substituidos);
+        ambiguos += r.ambiguos;
+        ultima = r;
+        setGravados(crus.length + substituidos.length);
+        if (r.restantes <= 0) break;
+        if (r.processados <= 0) {
+          setErro(`A gravação parou com ${r.restantes} movimento(s) restante(s) e nenhum processado na última passada.`);
+          return null;
+        }
+        if (++voltas > 200) {
+          setErro('A gravação passou de 200 lotes — interrompida por segurança.');
+          return null;
+        }
+      }
+      return ultima && { ...ultima, crus, substituidos, ambiguos };
+    } finally {
+      setGravando(false);
+    }
   }, [chamar]);
 
-  return { simulando, gravando, simular, gravar, erro };
+  return { simulando, gravando, simular, gravar, erro, gravados };
 }

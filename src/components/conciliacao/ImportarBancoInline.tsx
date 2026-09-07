@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { agruparContasPorTipo } from '@/lib/financeiro/gruposDeConta';
 import { CheckCircle2, Loader2, Upload, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -31,7 +32,9 @@ import { decodeTxtParcial } from '@/v2/lib/custeio/parseCusteioTxt';
  * velhas, que só morrem na rodada 2 — nada é derrubado antes da homologação.
  */
 interface Props {
-  contas: { id: string; label: string }[];
+  /* `tipo_conta` entrou em 132: é o que agrupa o dropdown como a aba Conciliação agrupa os
+     saldos. Ausente, a conta cai em "Outros" — nunca some da lista. */
+  contas: { id: string; label: string; tipo_conta?: string | null }[];
   contaId: string;
   onContaChange: (id: string) => void;
   /** Recarrega a lista do mês depois de gravar. */
@@ -112,7 +115,19 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
       <Select value={contaId || '__none__'} onValueChange={v => onContaChange(v === '__none__' ? '' : v)}>
         <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Conta" /></SelectTrigger>
         <SelectContent>
-          {contas.map(c => <SelectItem key={c.id} value={c.id} className="text-xs">{c.label}</SelectItem>)}
+          {/* ⚠ MESMOS GRUPOS, MESMA ORDEM, MESMOS RÓTULOS da aba Conciliação — 132. A regra
+              mora em `gruposDeConta`; duas listas de rótulos divergiriam na primeira conta
+              nova. */}
+          {agruparContasPorTipo(contas).map(g => (
+            <SelectGroup key={g.chave}>
+              <SelectLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                {g.rotulo}
+              </SelectLabel>
+              {g.contas.map(c => (
+                <SelectItem key={c.id} value={c.id} className="text-xs">{c.label}</SelectItem>
+              ))}
+            </SelectGroup>
+          ))}
         </SelectContent>
       </Select>
     </div>

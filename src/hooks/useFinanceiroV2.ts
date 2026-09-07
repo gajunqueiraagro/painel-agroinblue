@@ -224,10 +224,34 @@ function residualDimensaoTodosAnos(filtros: FiltrosV2): ((l: LancamentoV2) => bo
  */
 const lancamentosSubscribers = new Map<string, Set<() => void>>();
 
-function notificarLancamentosMudaram(clienteId: string) {
+/**
+ * ⚠ EXPORTADA EM [CONCIL-MES-02] (132). Ela era privada porque só os writers deste hook a
+ * chamavam; o "Conciliar o mês" grava por RPC, POR FORA daqui, e sem avisar ninguém o card
+ * "Saldo no sistema" e a aba Conciliação ficavam com o número de antes até um F5 — medido
+ * pelo Gabriel em 07/09. Exportar é ligar o que já existe; um segundo mecanismo de
+ * notificação seria a segunda fonte da mesma pergunta.
+ * ⚠ CHAMAR DEPOIS DA ESCRITA, NUNCA ANTES — a regra que já valia aqui dentro.
+ */
+export function notificarLancamentosMudaram(clienteId: string) {
   const subs = lancamentosSubscribers.get(clienteId);
   if (!subs) return;
   for (const cb of [...subs]) cb();
+}
+
+/**
+ * Ouvir as mudanças de lançamento deste cliente — 132. Devolve o cancelamento.
+ *
+ * ⚠ QUEM SE INSCREVE RELÊ O QUE MOSTRA, e nada mais: o registro não carrega dado, só diz
+ * "mudou". Cada tela sabe o que precisa reler.
+ */
+export function inscreverEmLancamentos(clienteId: string, cb: () => void): () => void {
+  let set = lancamentosSubscribers.get(clienteId);
+  if (!set) { set = new Set(); lancamentosSubscribers.set(clienteId, set); }
+  set.add(cb);
+  return () => {
+    set.delete(cb);
+    if (set.size === 0) lancamentosSubscribers.delete(clienteId);
+  };
 }
 
 export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {

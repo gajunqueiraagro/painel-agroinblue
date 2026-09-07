@@ -8,6 +8,8 @@ import { fimDoMes } from '@/hooks/useExtratoDaConta';
 import { ImportarBancoInline } from '@/components/conciliacao/ImportarBancoInline';
 import { ExtratoGerencialTab } from '@/components/financeiro-v2/ExtratoGerencialTab';
 import { EnriquecerPorPlanilha } from '@/components/conciliacao/EnriquecerPorPlanilha';
+import { inscreverEmLancamentos } from '@/hooks/useFinanceiroV2';
+import { ORDEM_GRUPO_CONTA } from '@/lib/financeiro/gruposDeConta';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -139,14 +141,12 @@ const STATUS_META: Record<string, {label:string; Icon: typeof CheckCircle2; sub:
   pendente:       {label:'Pendente',        Icon:AlertTriangle, sub:'Informe o saldo do extrato'},
 };
 
-// PR-H1 — vocabulário oficial: corrente | investimento | cartao | caixa | outro.
-const CONTA_GROUP_ORDER: Record<string, number> = {
-  corrente: 0,
-  investimento: 1,
-  cartao: 2,
-  caixa: 3,
-  outro: 4,
-};
+/* ⚠ A ORDEM MUDOU DE CASA EM 132 — `@/lib/financeiro/gruposDeConta`. O valor é o mesmo,
+   byte a byte; o que mudou é que o dropdown do Importar Banco agora lê a MESMA fonte, em
+   vez de uma segunda lista de rótulos. As três faixas literais da tabela de saldos abaixo
+   ("Conta corrente", "Investimento", "Cartão") NÃO migraram: é tela homologada, e trocá-la
+   junto misturaria duas mudanças num diff só. */
+const CONTA_GROUP_ORDER = ORDEM_GRUPO_CONTA;
 
 /* ── Helpers ── */
 function fmtDate(d: string | null) {
@@ -507,6 +507,16 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   }, [clienteId, ano, contas]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  /* ⚠ E RELÊ QUANDO OS LANÇAMENTOS MUDAM — [CONCIL-MES-02] (132). O "Conciliar o mês"
+     grava por RPC, fora daqui; sem ouvir, o "Todos (12)" desta aba continuava em 12 depois
+     de 107 movimentos entrarem, até um F5 (medido em 07/09). O registro é o mesmo que o
+     `useFinanceiroV2` já usava internamente — inventar um segundo seria a segunda fonte
+     para a mesma pergunta. */
+  useEffect(() => {
+    if (!clienteId) return;
+    return inscreverEmLancamentos(clienteId, () => { void loadData(); });
+  }, [clienteId, loadData]);
 
   /* ── Month cards: two versions ── */
   // Month BAR always shows global status (all accounts)
@@ -928,7 +938,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                 nao e' desvio da portagem; e' a identidade desta casa, e cravar
                 cor num botao so' seria inventar. (Medido em B-26.) */}
             <ImportarBancoInline
-              contas={contas.map(c => ({ id: c.id, label: getContaLabel(c) }))}
+              contas={contas.map(c => ({ id: c.id, label: getContaLabel(c), tipo_conta: c.tipo_conta }))}
               contaId={selectedConta !== '__all__' ? selectedConta : ''}
               onContaChange={(id) => setSelectedConta(id || '__all__')}
               onImportado={() => { setRefreshExtrato(n => n + 1); queryClient.invalidateQueries({ queryKey: ['extrato-bancario-v2'] }); }}

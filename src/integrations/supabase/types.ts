@@ -12475,6 +12475,7 @@ export type Database = {
           p_ano_mes: string
           p_cliente_id: string
           p_conta_bancaria_id: string
+          p_limite?: number
           p_simular?: boolean
         }
         Returns: Json

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { inscreverEmLancamentos } from '@/hooks/useFinanceiroV2';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -178,6 +179,8 @@ export interface ImportacaoDaConta {
      tem `tipo_aprovacao` de OFX. */
   crus: number;
   substituidos: number;
+  /** Quando o arquivo foi desfeito por inteiro — `null` quando ainda tem linha viva. */
+  desfeitaEm: string | null;
 }
 
 /**
@@ -201,13 +204,18 @@ export function useImportacoesDaConta(clienteId: string | null, contaId: string 
     if (!clienteId || !contaId) { setImportacoes([]); return; }
     setLoading(true);
     try {
+      /* ⚠ `cancelado_em` ENTROU NO SELECT — [CONCIL-MES-02] (132). A consulta não o lia, e
+         por isso uma importação DESFEITA continuava contando movimentos vivos: o card a
+         listava igual às outras, com botão, e o Desfazer parecia não persistir. Medido em
+         07/09 no Cartão Sicredi Lavoura — as 51 linhas estavam canceladas no banco desde o
+         primeiro clique. */
       const { data: movs } = await supabase
         .from('extrato_bancario_v2')
-        .select('id, importacao_id')
+        .select('id, importacao_id, cancelado_em')
         .eq('cliente_id', clienteId)
         .eq('conta_bancaria_id', contaId)
         .not('importacao_id', 'is', null);
-      const linhas: { id: string; importacao_id: string }[] = movs ?? [];
+      const linhas: { id: string; importacao_id: string; cancelado_em: string | null }[] = movs ?? [];
       if (linhas.length === 0) { setImportacoes([]); return; }
 
       const ids = Array.from(new Set(linhas.map(l => l.importacao_id)));
@@ -227,9 +235,18 @@ export function useImportacoesDaConta(clienteId: string | null, contaId: string 
       const vincLista: ItemVinc[] = (vinc ?? []) as ItemVinc[];
       const comVinculo = new Set(vincLista.map(v => v.extrato_id));
       const tipoPorExtrato = new Map(vincLista.map(v => [v.extrato_id, v.tipo_aprovacao]));
-      const porImp: Record<string, { n: number; v: number; crus: number; subs: number }> = {};
+      const porImp: Record<string, { n: number; v: number; crus: number; subs: number; canceladas: number; desfeitaEm: string | null }> = {};
       for (const l of linhas) {
-        const acc = porImp[l.importacao_id] ?? { n: 0, v: 0, crus: 0, subs: 0 };
+        const acc = porImp[l.importacao_id] ?? { n: 0, v: 0, crus: 0, subs: 0, canceladas: 0, desfeitaEm: null };
+        /* ⚠ LINHA CANCELADA NÃO É VIVA. Ela conta para saber que a importação inteira foi
+           desfeita, e não entra em `importados` — que é o número que o operador lê como
+           "o que este arquivo trouxe e ainda está no sistema". */
+        if (l.cancelado_em) {
+          acc.canceladas += 1;
+          if (!acc.desfeitaEm || l.cancelado_em < acc.desfeitaEm) acc.desfeitaEm = l.cancelado_em;
+          porImp[l.importacao_id] = acc;
+          continue;
+        }
         acc.n += 1;
         if (comVinculo.has(l.id)) {
           acc.v += 1;
@@ -247,6 +264,11 @@ export function useImportacoesDaConta(clienteId: string | null, contaId: string 
         comVinculo: porImp[i.id]?.v ?? 0,
         crus: porImp[i.id]?.crus ?? 0,
         substituidos: porImp[i.id]?.subs ?? 0,
+        /* ⚠ DESFEITA É A QUE NÃO TEM NENHUMA LINHA VIVA — e ela CONTINUA NA LISTA, em
+           cinza. Esconder faria o operador reimportar o mesmo arquivo achando que nunca
+           entrou; lixo visível se conserta, invisível não. */
+        desfeitaEm: (porImp[i.id]?.n ?? 0) === 0 && (porImp[i.id]?.canceladas ?? 0) > 0
+          ? porImp[i.id]?.desfeitaEm ?? null : null,
       })).sort((a, b) => b.data.localeCompare(a.data)));
     } finally {
       setLoading(false);
@@ -269,12 +291,25 @@ export function useImportacoesDaConta(clienteId: string | null, contaId: string 
     }
     setDesfazendo(true);
     try {
+      const agora = new Date().toISOString();
       const { error } = await supabase
         .from('extrato_bancario_v2')
-        .update({ cancelado_em: new Date().toISOString(), cancelado_motivo: 'importacao_desfeita' })
+        .update({ cancelado_em: agora, cancelado_motivo: 'importacao_desfeita' })
         .eq('importacao_id', importacaoId)
         .is('cancelado_em', null);
       if (error) { toast.error(error.message); return; }
+      /* ⚠ E A IMPORTAÇÃO TAMBÉM É MARCADA — 132. Antes só as LINHAS eram canceladas, e o
+         registro do arquivo ficava com `status` de importação viva: quem lesse a tabela de
+         importações (não esta tela) via um arquivo que já não existe no extrato. As quatro
+         colunas foram conferidas em `information_schema` antes de escrever.
+         ⚠ FALHAR AQUI NÃO DESFAZ O QUE JÁ FOI: as linhas já estão canceladas, que é o que
+         importa para o extrato. O aviso é para o operador saber que o registro do arquivo
+         ficou para trás. */
+      const marca = await supabase
+        .from('financeiro_importacoes_v2')
+        .update({ status: 'cancelada', cancelado_em: agora, cancelado_motivo: 'importacao_desfeita' })
+        .eq('id', importacaoId);
+      if (marca.error) toast.warning(`Movimentos desfeitos, mas o registro do arquivo não foi marcado: ${marca.error.message}`);
       toast.success(`Importação desfeita — ${alvo.importados} movimento${alvo.importados === 1 ? '' : 's'}.`);
       await carregar();
     } finally {
@@ -392,6 +427,15 @@ export function useSaldoSistemaNaPosicao(
   /** Realizados DEPOIS da posição — o que o aviso conta. */
   const [aposPosicao, setAposPosicao] = useState(0);
   const [carregando, setCarregando] = useState(false);
+  /* ⚠ RELER QUANDO OS LANÇAMENTOS MUDAM — [CONCIL-MES-02] (132). O "Conciliar o mês" grava
+     por RPC, fora de qualquer hook desta tela; sem ouvir, este card seguia mostrando o
+     saldo de antes até um F5 (medido em 07/09). O gatilho é um contador: mudou, o efeito
+     abaixo roda de novo com as mesmas dependências. */
+  const [versao, setVersao] = useState(0);
+  useEffect(() => {
+    if (!clienteId) return;
+    return inscreverEmLancamentos(clienteId, () => setVersao(v => v + 1));
+  }, [clienteId]);
 
   useEffect(() => {
     let cancelado = false;
@@ -419,7 +463,7 @@ export function useSaldoSistemaNaPosicao(
       setCarregando(false);
     })();
     return () => { cancelado = true; setCarregando(false); };
-  }, [clienteId, contaId, anoMes, saldoInicial, posicaoEm]);
+  }, [clienteId, contaId, anoMes, saldoInicial, posicaoEm, versao]);
 
   return { saldoSistema, aposPosicao, carregando };
 }

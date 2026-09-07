@@ -21,6 +21,7 @@ import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { useConciliarMes, type PreviaConciliarMes } from '@/hooks/useConciliarMes';
+import { notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
 
 type Aba = 'crus' | 'substituidos' | 'sem_par' | 'ja';
 
@@ -95,6 +96,11 @@ export function ConciliarMesDialog({
     if (!r) { toast.error(api.erro ?? 'Falha ao conciliar o mês.'); return; }
     toast.success(
       `${r.crus.length} criado${r.crus.length === 1 ? '' : 's'} · ${r.substituidos.length} substituído${r.substituidos.length === 1 ? '' : 's'} · ${r.semPar.length} sem par no banco`);
+    /* ⚠ AVISAR DEPOIS DA ESCRITA, E ANTES DE FECHAR — 132. A RPC gravou por fora de todo
+       hook desta tela; sem a notificação, o card "Saldo no sistema" e a aba Conciliação
+       ficavam com o número de antes até um F5. `aoConcluir` recarrega a lista do extrato;
+       o registro alcança o resto. */
+    if (clienteId) notificarLancamentosMudaram(clienteId);
     await aoConcluir();
     onOpenChange(false);
   };
@@ -140,13 +146,13 @@ export function ConciliarMesDialog({
               <div className="grid shrink-0 grid-cols-2 gap-2 border-b bg-muted/40 px-3 py-2 sm:grid-cols-4">
                 <div>
                   <div className="text-[11px] text-muted-foreground">Saldo final no extrato</div>
-                  <div className="text-[20px] font-medium leading-tight tabular-nums">
+                  <div className="text-[18px] font-medium leading-tight tabular-nums">
                     {previa.saldo.finalDigitado == null ? '—' : formatMoeda(previa.saldo.finalDigitado)}
                   </div>
                 </div>
                 <div>
                   <div className="text-[11px] text-muted-foreground">Saldo do sistema hoje</div>
-                  <div className="text-[20px] font-medium leading-tight tabular-nums">
+                  <div className="text-[18px] font-medium leading-tight tabular-nums">
                     {saldoSistemaHoje == null ? '—' : formatMoeda(saldoSistemaHoje)}
                   </div>
                   {difSistema != null && Math.abs(difSistema) > 0.01 && (
@@ -157,7 +163,7 @@ export function ConciliarMesDialog({
                 </div>
                 <div>
                   <div className="text-[11px] text-muted-foreground">Saldo após conciliar</div>
-                  <div className="text-[20px] font-medium leading-tight tabular-nums">
+                  <div className="text-[18px] font-medium leading-tight tabular-nums">
                     {previa.saldo.finalCalculado == null ? '—' : formatMoeda(previa.saldo.finalCalculado)}
                   </div>
                   {/* ⚠ TRÊS ESTADOS, NÃO DOIS — a sentinela da casa: `null` é "não sei",
@@ -176,7 +182,7 @@ export function ConciliarMesDialog({
                 </div>
                 <div>
                   <div className="text-[11px] text-muted-foreground">Movimentos do banco</div>
-                  <div className="text-[20px] font-medium leading-tight tabular-nums">{previa.movimentosExtrato}</div>
+                  <div className="text-[18px] font-medium leading-tight tabular-nums">{previa.movimentosExtrato}</div>
                   <div className="text-[11px] text-muted-foreground">{previa.jaConciliados} já conciliados</div>
                 </div>
               </div>
@@ -310,7 +316,12 @@ export function ConciliarMesDialog({
               </div>
 
               <div className="rounded-lg border bg-muted/30 px-3 py-2 text-[10px] leading-relaxed text-muted-foreground">
-                {nadaAFazer ? (
+                {api.gravando ? (
+                  <span className="tabular-nums">
+                    Gravando em lotes de 30 — <b className="text-foreground">{api.gravados}</b> de {nCrus + nSubs}.
+                    Cada lote é gravado por inteiro; se um falhar, os anteriores ficam.
+                  </span>
+                ) : nadaAFazer ? (
                   'Nada a fazer: todos os movimentos já têm vínculo.'
                 ) : (
                   <>
@@ -329,6 +340,15 @@ export function ConciliarMesDialog({
         )}
 
         <div className="flex h-12 shrink-0 items-center justify-end gap-2 border-t px-3">
+          {/* ⚠ O ERRO DO BANCO FICA NA TELA, em vermelho, e não só num toast que some — 132.
+              Foi um toast genérico que escondeu o `57014` de 07/09 e fez a gravação de 107
+              movimentos parecer um defeito sem causa. */}
+          {api.erro && (
+            <span className="mr-auto min-w-0 flex-1 truncate text-[10px] text-red-600 dark:text-red-400"
+              title={api.erro}>
+              {api.erro}
+            </span>
+          )}
           <Button type="button" variant="ghost" size="sm" className="h-7 text-[11px]"
             onClick={() => onOpenChange(false)}>
             Fechar sem alterar
@@ -338,7 +358,11 @@ export function ConciliarMesDialog({
               className="h-7 bg-[#f3c84a] text-[11px] font-medium text-foreground hover:bg-[#e8bd3e]"
               disabled={api.gravando}
               onClick={() => { void confirmar(); }}>
-              {api.gravando ? 'Conciliando…' : rotuloBotao}
+              {api.gravando
+                /* ⚠ O NÚMERO SOBE PORQUE SÃO VÁRIAS CHAMADAS — 132. Um "Conciliando…" mudo
+                   por 10 s num lote de 107 é indistinguível de uma tela travada. */
+                ? `Gravando… ${api.gravados} de ${nCrus + nSubs}`
+                : rotuloBotao}
             </Button>
           )}
         </div>

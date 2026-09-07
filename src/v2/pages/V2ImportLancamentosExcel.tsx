@@ -558,7 +558,10 @@ export function V2ImportLancamentosExcel({
            simplesmente não aparece em vez de prometer uma navegação que não acontece. */
         onVerNoFinanceiro={onVerNoFinanceiro}
         arquivo={arquivo?.name ?? null}
-        aba={null}
+        /* ⚠ NÃO PRECISOU DE LINHA NENHUMA NO PARSER — 132 item 7. `nomeSheet` já vinha no
+           `LancamentosParseResult` desde sempre; o 131 mandou `null` por eu não ter
+           procurado. Décima segunda peça pronta-e-não-ligada desta série. */
+        aba={parse?.nomeSheet ?? null}
         linhasLidas={parse?.rows.length ?? 0}
         mes={mesRef ?? null}
         ano={anoRef ?? null}
