@@ -53,27 +53,30 @@ export function EnriquecimentoTransferencias({
   const grupoSel = grupos.find((g) => g.saida.saida_id === saidaSel) ?? null;
   const parSel = grupoSel?.candidatas.find((c) => c.entrada_id === entradaSel) ?? null;
 
-  /* Trocar de par zera a simulação: um número de vínculos de outro par seria pior que
-     nenhum — ele parece conferido. */
-  useEffect(() => { setSimulacao(null); }, [saidaSel, entradaSel]);
+  /**
+   * ⚠ A SIMULAÇÃO RODA AO ABRIR O PAR — 133d item 5b. Ela era um botão, e o botão era
+   * cerimônia: `p_simular=true` não escreve nada, e obrigar um clique para ver um número
+   * que a tela podia ter buscado sozinha fazia o operador escolher entre conferir e
+   * trabalhar. Trocar de par zera antes de buscar: um número de vínculos de OUTRO par é
+   * pior que nenhum, porque parece conferido.
+   */
+  useEffect(() => {
+    setSimulacao(null);
+    if (!saidaSel || !entradaSel) return;
+    let cancelado = false;
+    setSimulando(true);
+    simular(saidaSel, entradaSel)
+      .then((r) => { if (!cancelado) setSimulacao(r); })
+      .catch((e: unknown) => { if (!cancelado) onErro(e instanceof Error ? e.message : String(e)); })
+      .finally(() => { if (!cancelado) setSimulando(false); });
+    return () => { cancelado = true; };
+  }, [saidaSel, entradaSel, simular, onErro]);
 
   /* Com uma candidata só, a escolha já está feita — pedir um clique para confirmar o óbvio
      é o tipo de cerimônia que faz o operador parar de ler a tela. */
   useEffect(() => {
     if (grupoSel && grupoSel.candidatas.length === 1) setEntradaSel(grupoSel.candidatas[0].entrada_id);
   }, [grupoSel]);
-
-  async function handleSimular() {
-    if (!parSel) return;
-    setSimulando(true);
-    try {
-      setSimulacao(await simular(parSel.saida_id, parSel.entrada_id));
-    } catch (e: unknown) {
-      onErro(e instanceof Error ? e.message : String(e));
-    } finally {
-      setSimulando(false);
-    }
-  }
 
   async function handleUnir() {
     if (!parSel) return;
@@ -199,18 +202,15 @@ export function EnriquecimentoTransferencias({
               {/* ⚠ O MOTIVO DO DESABILITADO FICA ESCRITO, e é a fonte única do `disabled`. */}
               <span className="min-w-0 flex-1 text-[10px] leading-tight text-muted-foreground">
                 {!parSel ? 'Escolha a entrada correspondente para habilitar.'
+                  : simulando ? 'Conferindo o que a união move…'
                   : simulacao ? <>Vínculos a mover: <b className="tabular-nums">{simulacao.vinculos_a_mover}</b>. Nada foi gravado ainda.</>
-                  : 'Confira a simulação antes de unir — ela diz quantos vínculos do extrato mudam de dono.'}
+                  : 'Não foi possível conferir o que a união move.'}
               </span>
-              <Button type="button" size="sm" variant="outline" className="h-6 px-2 text-[10px]"
-                disabled={!parSel || simulando}
-                onClick={() => { void handleSimular(); }}>
-                {simulando ? 'Simulando…' : 'Simular'}
-              </Button>
               <Button type="button" size="sm" className="h-6 px-2 text-[10px]"
-                disabled={!parSel || !simulacao || unindo}
+                disabled={!parSel || !simulacao || unindo || simulando}
                 title={!parSel ? 'Escolha a entrada correspondente.'
-                  : !simulacao ? 'Simule primeiro: a simulação diz quantos vínculos do extrato serão movidos.'
+                  : simulando ? 'Conferindo…'
+                  : !simulacao ? 'A conferência prévia falhou — sem ela, unir gravaria às cegas.'
                   : undefined}
                 onClick={() => { void handleUnir(); }}>
                 {unindo ? 'Unindo…' : 'Unir como transferência'}

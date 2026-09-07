@@ -134,7 +134,11 @@ export function DeParaCampoModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[88vh] w-[96vw] max-w-[860px] flex-col gap-0 overflow-hidden p-0">
+      {/* ⚠ TAMANHO FIXO — 133d item 5c. Com `max-h`, o modal encolhia até a altura do
+          conteúdo: filtrar até sobrar um valor fazia a caixa saltar de 640px para 180px, e
+          o próximo chip clicado já não estava onde a mão foi. `h-[640px]` declara a altura
+          e o vazio ocupa o mesmo espaço da lista cheia. */}
+      <DialogContent className="flex h-[640px] max-h-[92vh] w-[900px] max-w-[96vw] flex-col gap-0 overflow-hidden p-0">
         <DialogHeader className="shrink-0 space-y-0.5 bg-primary px-3 py-2">
           <DialogTitle className="text-[13px] font-medium text-primary-foreground">
             De-para · {titulo}

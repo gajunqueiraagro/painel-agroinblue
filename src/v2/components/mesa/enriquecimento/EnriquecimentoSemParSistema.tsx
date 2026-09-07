@@ -78,9 +78,15 @@ export function EnriquecimentoSemParSistema({
                     title={l.descricao ?? ''}>
                     {l.descricao || l.favorecido_nome || '—'}
                   </span>
+                  {/* ⚠ O SUBCENTRO É O QUE SEPARA "sobra explicável" DE "sobra a resolver"
+                      — 133c-a. Dos 201 do mês medido, 40 estão sem; são esses que pedem
+                      trabalho. "sem subcentro" é ausência declarada, não um traço mudo. */}
                   <span className="block truncate text-[10px] leading-[1.3] text-muted-foreground"
-                    title={`${l.conta_nome ?? '—'} · doc ${l.documento ?? '—'}`}>
-                    {l.conta_nome ?? '—'} · doc {l.documento || '—'}
+                    title={`${l.conta_nome ?? '—'} · doc ${l.documento ?? '—'} · ${l.subcentro ?? 'sem subcentro'}`}>
+                    {l.conta_nome ?? '—'} · doc {l.documento || '—'} ·{' '}
+                    <span className={l.subcentro ? '' : 'text-amber-700 dark:text-amber-400'}>
+                      {l.subcentro || 'sem subcentro'}
+                    </span>
                   </span>
                 </span>
                 <span className="text-right text-[11px] font-medium tabular-nums">{fmtBRL(l.valor)}</span>

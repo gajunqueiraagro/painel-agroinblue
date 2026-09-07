@@ -15,7 +15,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useClassificacaoStaging, useSessoesClassificacao } from '@/v2/hooks/useClassificacaoStaging';
 import {
   toRowVM, toSessoesVM, contarAplicaveisExatos, filtrarPorModo, escolherMelhorSessaoId,
-  listarContas, filtrarPorConta, resumirGrupos, filtrarPorGrupo, GRUPO_DE_STATUS,
+  listarContas, filtrarPorConta, resumirGrupos, filtrarPorGrupo, grupoDaLinha,
   type EnriqGrupo,
 } from '@/v2/lib/mesa/enriquecimentoView';
 import { EnriquecimentoLista, type EnriquecimentoListaProps } from './EnriquecimentoLista';
@@ -138,6 +138,7 @@ export function MesaEnriquecimentoTab({
     editarProposto,
     resolverProximos, isResolvendoProximos, desfazerProximos,
     resolverGrupo, isResolvendoGrupo, desfazerGrupo,
+    splitSubstituir, isSubstituindo,
     casarSessao, isCasando,
   } = useClassificacaoStaging(sessaoId, clienteAtual?.id);
 
@@ -153,7 +154,8 @@ export function MesaEnriquecimentoTab({
   const transf = useTransferenciasEspelhadas(clienteAtual?.id, mesParaTransferencias);
   /* 133c item 4 — a visão inversa, no escopo da conta selecionada (null = todas). */
   const contaIdSel = (filtroConta === 'todas' || filtroConta === '__sem__') ? null : filtroConta;
-  const { data: semParSistema, isLoading: carregandoSemPar } = useSistemaNaoExplicado(sessaoId, contaIdSel);
+  const { data: semParSistema, isLoading: carregandoSemPar } =
+    useSistemaNaoExplicado(sessaoId, contaIdSel, mesParaTransferencias);
 
   /**
    * Recasar a sessão inteira — 133a.
@@ -280,6 +282,19 @@ export function MesaEnriquecimentoTab({
     [staging, selecionadoId],
   );
 
+  /**
+   * As `staging_ids` do grupo de split — 133c-a.
+   *
+   * ⚠ SAEM DO `casamento_meta.grupo_ids` QUE O CASADOR GRAVOU. Remontar o grupo aqui (por
+   * dia + conta + soma) seria a segunda resposta para "quais linhas compõem este movimento",
+   * e ela divergiria do banco na primeira mudança da regra do casador.
+   */
+  const gruposIdsDoSplit = useMemo((): string[] => {
+    const meta = linhaCrua?.casamento_meta;
+    const ids = meta && typeof meta === 'object' ? (meta as Record<string, unknown>).grupo_ids : null;
+    return Array.isArray(ids) ? ids.filter((x): x is string => typeof x === 'string') : [];
+  }, [linhaCrua]);
+
   // Navegação read-only entre linhas da lista (Anterior/Próximo) — só troca a seleção.
   const idx = rowsNaTela.findIndex((r) => r.id === selecionadoId);
   const canAnterior = idx > 0;
@@ -376,6 +391,35 @@ export function MesaEnriquecimentoTab({
       const res: any = await resolverGrupo({ staging_id: selecionadoId, lancamento_ids: lancIds });
       if (res?.ok) toast.success(`Grupo criado — ${lancIds.length} lançamentos nesta linha.`);
       else toast.error(res?.mensagem ?? MOTIVO_MSG[res?.motivo] ?? `Não agrupado (${res?.motivo ?? 'erro'}).`);
+    } catch (e: unknown) {
+      toast.error(`Erro ao agrupar: ${errMsg(e)}`);
+    }
+  }
+
+  /**
+   * N linhas = 1 lançamento — 133c-a, o caso `sugestao_split`.
+   *
+   * ⚠ OS IDS SÃO OS DE `casamento_meta.grupo_ids`, gravados pelo casador do 133a — não uma
+   * lista montada aqui. Reconstruir o grupo no front seria a segunda resposta para "quais
+   * linhas compõem este movimento", e ela divergiria do banco na primeira mudança da regra.
+   * ⚠ O EFEITO É PESADO E A RPC É ATÔMICA: cria N lançamentos, cancela o consolidado e
+   * religa o vínculo do extrato aos novos. Por isso a pergunta vem antes, na própria linha.
+   */
+  async function handleAgruparNesteLancamento(lancamentoId: string, stagingIds: string[]) {
+    if (!sessaoId || stagingIds.length < 2) return;
+    setConfirmandoGrupo(false);
+    try {
+      const res: any = await splitSubstituir({
+        lancamento_id: lancamentoId, sessao_id: sessaoId, staging_ids: stagingIds,
+      });
+      if (res?.ok) {
+        const n = Array.isArray(res.lancamentos_criados) ? res.lancamentos_criados.length : stagingIds.length;
+        toast.success(`${n} lançamentos criados no lugar do consolidado.`);
+        /* O extrato mudou de dono e o consolidado foi cancelado: o Financeiro precisa saber. */
+        if (clienteAtual?.id) notificarLancamentosMudaram(clienteAtual.id);
+      } else {
+        toast.error(res?.mensagem ?? MOTIVO_MSG[res?.motivo] ?? `Não agrupado (${res?.motivo ?? 'erro'}).`);
+      }
     } catch (e: unknown) {
       toast.error(`Erro ao agrupar: ${errMsg(e)}`);
     }
@@ -559,7 +603,11 @@ export function MesaEnriquecimentoTab({
   const listaProps: EnriquecimentoListaProps = {
     rows: rowsNaTela,
     selecionadoId,
-    onSelecionar: setSelecionadoId,
+    /* ⚠ SELECIONAR E ABRIR SÃO O MESMO GESTO — 133d item 3. Na tela principal não há mais
+       painel de detalhe: clicar numa linha só para vê-la "selecionada" não levaria a lugar
+       nenhum. A seleção continua sendo o estado (a Mesa abre nela e o Anterior/Próximo a
+       usam); o que mudou é que ela agora abre a Mesa junto. */
+    onSelecionar: (id: string) => { setSelecionadoId(id); setMesaAmpliadaOpen(true); },
     hideBanco: filtroConta !== 'todas',
     editadasIds,
   };
@@ -674,7 +722,9 @@ export function MesaEnriquecimentoTab({
     const ok = await excluirLancamento(lancId, motivo);
     if (ok) {
       if (clienteAtual?.id) notificarLancamentosMudaram(clienteAtual.id);
-      await qcMesa.invalidateQueries({ queryKey: ['sistema-nao-explicado', sessaoId, contaIdSel] });
+      await qcMesa.invalidateQueries({
+        queryKey: ['sistema-nao-explicado', sessaoId, contaIdSel, mesParaTransferencias],
+      });
     }
     return ok;
   }
@@ -682,7 +732,7 @@ export function MesaEnriquecimentoTab({
   function baixarSemPar() {
     const linhas = ['linha,data,conta,descricao,valor,motivo'];
     for (const r of stagingConta) {
-      if (GRUPO_DE_STATUS[r.match_status] !== 'sem_par') continue;
+      if (grupoDaLinha(r.match_status, r.aplicado) !== 'sem_par') continue;
       linhas.push([
         r.excel_linha_origem ?? '',
         csvCampo(fmtData(r.excel_data)),
@@ -694,6 +744,135 @@ export function MesaEnriquecimentoTab({
     }
     baixarCsv('enriquecer_sem_par_no_banco', linhas);
   }
+
+  /**
+   * As faixas de decisão da linha — 133d item 3, agora dentro da Mesa ampliada.
+   *
+   * ⚠ ELAS SEGUEM A TABELA, e é por isso que mudaram de casa junto com ela: "escolha o
+   * candidato" e "agrupe estas N linhas" são perguntas sobre a linha que se está olhando
+   * campo a campo. Na tela principal, sem a tabela ao lado, seriam perguntas no vazio.
+   */
+  const faixasDaLinha = !selecionado ? null : (
+    <>
+      {/* sobrescrever + desfazer — 10px, na mesma linha */}
+      {(selecionado.status === 'ja_classificado' || selecionado.status === 'resolvido_manual'
+        || selecionado.status === 'resolvido_grupo') && !selecionado.aplicado && (
+        <div className="flex shrink-0 items-center gap-2 border-t px-3 py-0.5">
+          {/* ⚠ SOBRESCREVER É POR LINHA E NASCE DESLIGADO — 133c item 1. Só aparece onde faz
+              diferença: a linha que o banco já classificou. Sem a marca ela nem entra na
+              fila do lote. */}
+          {selecionado.status === 'ja_classificado' && (
+            <label className="flex shrink-0 cursor-pointer items-center gap-1 text-[10px] text-muted-foreground"
+              title="O lançamento já tem classificação. Marcado, o Gravar troca o que está lá pelo Resultado desta linha.">
+              <input type="checkbox" className="h-3 w-3"
+                checked={sobrescreverIds.has(selecionado.id)}
+                onChange={() => alternarSobrescrever(selecionado.id)} />
+              sobrescrever
+            </label>
+          )}
+          {(selecionado.status === 'resolvido_manual' || selecionado.status === 'resolvido_grupo') && (
+            <Button type="button" size="sm" variant="outline" className="h-5 shrink-0 px-1.5 text-[10px]"
+              disabled={isResolvendoProximos || isResolvendoGrupo}
+              title={selecionado.status === 'resolvido_grupo'
+                ? 'Desfaz o agrupamento e devolve a linha à decisão.'
+                : 'Desfaz o candidato escolhido à mão e devolve a linha à decisão.'}
+              onClick={() => {
+                if (selecionado.status === 'resolvido_grupo') void handleDesfazerGrupo(selecionado.id);
+                else void handleDesfazerProximos(selecionado.id);
+              }}>
+              ↺ Desfazer
+            </Button>
+          )}
+        </div>
+      )}
+
+      {/* 1 linha = N lançamentos */}
+      {selecionado.status === 'sugestao_grupo' && !selecionado.aplicado && (
+        <div className="shrink-0 border-t border-violet-300 bg-violet-50/60 px-3 py-1 dark:border-violet-800 dark:bg-violet-950/20">
+          {!confirmandoGrupo ? (
+            <div className="flex items-center gap-2">
+              <span className="min-w-0 flex-1 text-[11px] text-violet-900 dark:text-violet-200">
+                {(linhaCrua?.match_lancamento_ids?.length ?? 0)} lançamentos do dia somam o valor desta linha.
+              </span>
+              <Button type="button" size="sm" className="h-6 shrink-0 px-2 text-[10px]"
+                disabled={isResolvendoGrupo || !(linhaCrua?.match_lancamento_ids?.length)}
+                onClick={() => setConfirmandoGrupo(true)}>
+                Juntar os {linhaCrua?.match_lancamento_ids?.length ?? 0} lançamentos nesta linha
+              </Button>
+            </div>
+          ) : (
+            /* ⚠ CONFIRMAÇÃO INLINE, NÃO MODAL — 133c. A pergunta é sobre a linha que está na
+               tela, e um segundo modal a cobriria justamente quando ela importa. */
+            <div className="flex items-center gap-2">
+              <span className="min-w-0 flex-1 text-[11px] text-amber-800 dark:text-amber-300">
+                Isso une {linhaCrua?.match_lancamento_ids?.length ?? 0} lançamentos nesta linha. Continuar?
+              </span>
+              <Button type="button" size="sm" className="h-6 shrink-0 px-2 text-[10px]"
+                disabled={isResolvendoGrupo}
+                onClick={() => { void handleJuntarNestaLinha(linhaCrua?.match_lancamento_ids ?? []); }}>
+                Sim
+              </Button>
+              <Button type="button" size="sm" variant="outline" className="h-6 shrink-0 px-2 text-[10px]"
+                onClick={() => setConfirmandoGrupo(false)}>
+                Não
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* N linhas = 1 lançamento — o botão nasceu em 133c-a, com a migration que soltou os
+          guards da RPC. */}
+      {selecionado.status === 'sugestao_split' && !selecionado.aplicado && (
+        <div className="shrink-0 border-t border-violet-300 bg-violet-50/60 px-3 py-1 dark:border-violet-800 dark:bg-violet-950/20">
+          {!confirmandoGrupo ? (
+            <div className="flex items-center gap-2">
+              <span className="min-w-0 flex-1 text-[11px] text-violet-900 dark:text-violet-200">
+                Esta linha e mais {Math.max(0, gruposIdsDoSplit.length - 1)} do mesmo dia somam um
+                único movimento do banco.
+              </span>
+              <Button type="button" size="sm" className="h-6 shrink-0 px-2 text-[10px]"
+                disabled={isSubstituindo || gruposIdsDoSplit.length < 2 || !linhaCrua?.lanc_id}
+                title={gruposIdsDoSplit.length < 2
+                  ? 'O casador não registrou as outras linhas deste grupo.'
+                  : 'Cria uma linha por item, cancela o consolidado e religa o vínculo do extrato.'}
+                onClick={() => setConfirmandoGrupo(true)}>
+                Agrupar {gruposIdsDoSplit.length} linhas neste lançamento
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="min-w-0 flex-1 text-[11px] text-amber-800 dark:text-amber-300">
+                Isso cria {gruposIdsDoSplit.length} lançamentos, cancela o consolidado e move o
+                vínculo do extrato. Continuar?
+              </span>
+              <Button type="button" size="sm" className="h-6 shrink-0 px-2 text-[10px]"
+                disabled={isSubstituindo}
+                onClick={() => { void handleAgruparNesteLancamento(linhaCrua?.lanc_id ?? '', gruposIdsDoSplit); }}>
+                {isSubstituindo ? 'Agrupando…' : 'Sim'}
+              </Button>
+              <Button type="button" size="sm" variant="outline" className="h-6 shrink-0 px-2 text-[10px]"
+                onClick={() => setConfirmandoGrupo(false)}>
+                Não
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {pedeDecisao && (
+        <EnriquecimentoCandidatosInline
+          stagingId={selecionado.id}
+          excelValor={linhaCrua?.excel_valor ?? null}
+          excelData={linhaCrua?.excel_data ?? null}
+          onEscolher={(lancId) => { void handleResolverProximos(lancId); }}
+          isResolvendo={isResolvendoProximos}
+          lancIdsUsados={lancIdsUsados}
+          temProxima={canProximo}
+        />
+      )}
+    </>
+  );
 
   return (
     <div className="flex flex-col gap-1 md:min-h-0 md:flex-1">
@@ -707,28 +886,34 @@ export function MesaEnriquecimentoTab({
         semParSistema={semParSistema?.length}
       />
 
-      {/* ═══ BARRA: sessão à esquerda · conta e ordenação à direita ════════════════ */}
-      <div className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border bg-card px-2 py-1">
-        <span className="text-[10px] text-muted-foreground">Importação</span>
+      {/* ═══ TOOLBAR — UMA LINHA DE 32px (133d item 2) ════════════════════════════
+          ⚠ SEM RÓTULO ACIMA DO CAMPO: o VALOR é o rótulo. "Todas as contas" e "Ordem da
+          planilha" dizem o que o campo é sem gastar uma palavra ao lado — e as palavras ao
+          lado eram o que fazia a barra quebrar em duas linhas.
+          ⚠ NADA OCUPA A LINHA INTEIRA: `flex-nowrap` e larguras fixas. Com `flex-wrap`, o
+          primeiro campo que não coubesse levava a barra para 64px e o topo para fora da
+          dobra. */}
+      <div className="flex h-8 shrink-0 flex-nowrap items-center gap-1.5 overflow-x-auto rounded-lg border bg-card px-2">
         {/* ⚠ `Select` DA CASA, NUNCA `<select>` NATIVO: o menu do sistema operacional abre
             com outra fonte e outro idioma em cada máquina. */}
         <Select value={sessaoId ?? ''}
           onValueChange={(id) => { setSessaoId(id); setFiltroConta('todas'); setSelecionadoId(null); }}>
-          <SelectTrigger className="h-6 min-w-[240px] text-[10px]">
+          <SelectTrigger className="h-6 w-[260px] shrink-0 text-[11px]">
             <SelectValue placeholder="— nenhuma importação —" />
           </SelectTrigger>
           <SelectContent>
             {sessoesVM.map((sv) => (
-              <SelectItem key={sv.id} value={sv.id} className="text-[10px]">{sv.label}</SelectItem>
+              <SelectItem key={sv.id} value={sv.id} className="text-[11px]">{sv.label}</SelectItem>
             ))}
           </SelectContent>
         </Select>
-        <Button size="sm" variant="outline" className="h-6 px-2 text-[10px]" onClick={() => setImportOpen(true)}>
+        <Button size="sm" variant="outline" className="h-6 shrink-0 px-2 text-[11px]"
+          onClick={() => setImportOpen(true)}>
           ⬆ Importar planilha
         </Button>
         {/* ⚠ RECASAR SEM REIMPORTAR — 133a. Resolver um ambíguo ou mapear uma conta no
             de-para muda o que casa; sem ele, ver o efeito custaria reimportar tudo. */}
-        <Button size="sm" variant="outline" className="h-6 px-2 text-[10px]"
+        <Button size="sm" variant="outline" className="h-6 shrink-0 px-2 text-[11px]"
           disabled={isCasando || !sessaoId}
           title={!sessaoId ? 'Escolha uma importação.' : 'Procura de novo o lançamento de cada linha, sem reimportar.'}
           onClick={() => { void recasar(); }}>
@@ -737,44 +922,39 @@ export function MesaEnriquecimentoTab({
 
         <div className="flex-1" />
 
-        <span className="text-[10px] text-muted-foreground">Conta</span>
         <Select value={filtroConta} onValueChange={(id) => { setFiltroConta(id); setSelecionadoId(null); }}>
-          <SelectTrigger className="h-6 min-w-[150px] text-[10px]"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="h-6 w-[180px] shrink-0 text-[11px]"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="todas" className="text-[10px]">Todas</SelectItem>
+            <SelectItem value="todas" className="text-[11px]">Todas as contas</SelectItem>
             {contas.map((c) => (
-              <SelectItem key={c.id} value={c.id} className="text-[10px]">{c.nome} ({c.total})</SelectItem>
+              <SelectItem key={c.id} value={c.id} className="text-[11px]">{c.nome} ({c.total})</SelectItem>
             ))}
           </SelectContent>
         </Select>
 
-        <span className="text-[10px] text-muted-foreground">Ordem</span>
         <Select value={ordenacao} onValueChange={(v) => setOrdenacao(v as Ordenacao)}>
-          <SelectTrigger className="h-6 min-w-[120px] text-[10px]"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="h-6 w-[160px] shrink-0 text-[11px]"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="planilha" className="text-[10px]">Ordem da planilha</SelectItem>
-            <SelectItem value="valor" className="text-[10px]">Maior valor</SelectItem>
-            <SelectItem value="data" className="text-[10px]">Data</SelectItem>
+            <SelectItem value="planilha" className="text-[11px]">Ordem da planilha</SelectItem>
+            <SelectItem value="valor" className="text-[11px]">Maior valor</SelectItem>
+            <SelectItem value="data" className="text-[11px]">Data</SelectItem>
           </SelectContent>
         </Select>
 
         {/* PR-U2d-1 — burn-down: "Pendentes" esconde o que já acabou. */}
-        <div className="flex overflow-hidden rounded border">
+        <div className="flex shrink-0 overflow-hidden rounded border">
           {(['todas', 'pendentes'] as const).map((m) => (
             <button key={m} type="button" onClick={() => setFiltroModo(m)}
-              className={`h-6 px-2 text-[10px] capitalize ${
+              className={`h-6 px-2 text-[11px] capitalize ${
                 filtroModo === m ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted/50'}`}>
               {m}
             </button>
           ))}
         </div>
 
-        <Button size="sm" variant="outline" className="h-6 px-2 text-[10px]"
+        <Button size="sm" variant="outline" className="h-6 shrink-0 px-2 text-[11px]"
           disabled={mesaAmpliadaVazia}
-          /* ⚠ A MESA AMPLIADA CONTINUA ALCANÇÁVEL, e não é resíduo: até a 133c dar ação ao
-             passo 3, ela é o ÚNICO lugar com Salvar, Reverter e "aplicar ao grupo". Tirá-la
-             daqui deixaria a aba sem nenhuma forma de gravar entre um envelope e o outro. */
-          title={mesaAmpliadaVazia ? 'Nenhuma linha neste recorte.' : 'Salvar, reverter e aplicar ao grupo — em tela cheia.'}
+          title={mesaAmpliadaVazia ? 'Nenhuma linha neste recorte.' : 'Revisar campo a campo e salvar — em tela cheia.'}
           onClick={() => setMesaAmpliadaOpen(true)}>
           Mesa ampliada
         </Button>
@@ -803,184 +983,24 @@ export function MesaEnriquecimentoTab({
           linhas={semParSistema ?? []}
           carregando={carregandoSemPar}
           onCancelar={handleCancelarDuplicado}
-          onAbrirNoFinanceiro={undefined}
+          onAbrirNoFinanceiro={onVerNoFinanceiro}
         />
       ) : (
-      <div className="grid min-h-0 grid-cols-1 items-start gap-1.5 md:flex-1 md:[grid-template-columns:400px_minmax(0,1fr)] md:[grid-template-rows:minmax(0,1fr)]">
-        <EnriquecimentoLista {...listaProps} />
-
-        <div className="flex min-h-0 flex-col gap-1 md:h-full">
-          {selecionado ? (
-            <>
-              <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border bg-card">
-                {/* ⚠ OS MESMOS QUATRO CARDS DE 44px DA MESA AMPLIADA — 133b-a pendente 3.
-                    A aba tinha um cabeçalho próprio (descrição + uma linha de contexto) e a
-                    ampliada tinha os quatro cards: dois desenhos para a mesma pergunta, e o
-                    operador que ia e voltava entre as duas relia a linha em dois formatos.
-                    ⚠ NÃO ROLA — A21: quem some ao rolar é a identidade da linha que se está
-                    conferindo. */}
-                <div className="flex h-11 shrink-0 items-center border-b bg-muted px-3">
-                  <div className="grid w-full grid-cols-4 gap-2">
-                    <div className="min-w-0">
-                      <div className="text-[10px] leading-tight text-muted-foreground">Linha</div>
-                      <div className="truncate text-[16px] font-medium leading-tight"
-                        title={selecionado.descricaoExcel}>{selecionado.linha ?? '—'}</div>
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-[10px] leading-tight text-muted-foreground">
-                        {selecionado.entradaOuSaida === 'saida' ? 'Saída'
-                          : selecionado.entradaOuSaida === 'entrada' ? 'Entrada' : '—'}
-                      </div>
-                      <div className={`truncate text-[16px] font-medium leading-tight tabular-nums ${
-                        selecionado.entradaOuSaida === 'saida' ? 'text-red-600 dark:text-red-400'
-                        : selecionado.entradaOuSaida === 'entrada' ? 'text-emerald-700 dark:text-emerald-400' : ''}`}>
-                        {selecionado.entradaOuSaida === 'saida' ? '−' : ''}{selecionado.valor}
-                      </div>
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-[10px] leading-tight text-muted-foreground">Conta bancária</div>
-                      <div className="truncate text-[16px] font-medium leading-tight" title={selecionado.banco}>
-                        {selecionado.banco}
-                      </div>
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-[10px] leading-tight text-muted-foreground">O que muda</div>
-                      <div className={`truncate text-[16px] font-medium leading-tight ${
-                        selecionado.mudaAlgo ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground'}`}
-                        title={selecionado.comparativo.filter((c) => c.tom === 'muda' || c.tom === 'difere')
-                          .map((c) => c.campo).join(' · ') || 'Nada muda: o Resultado já confere com o sistema.'}>
-                        {(() => {
-                          const n = selecionado.comparativo.filter((c) => c.tom === 'muda' || c.tom === 'difere').length;
-                          return n === 0 ? 'nada muda' : `${n} campo${n > 1 ? 's' : ''}`;
-                        })()}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* A descrição da planilha e o desfazer, na faixa de 10px logo abaixo dos
-                    quatro números — como o "Sugerido por" da ampliada. */}
-                <div className="shrink-0 border-b px-3 py-0.5">
-                  <div className="flex items-baseline gap-2">
-                    <span className="min-w-0 flex-1 truncate text-[10px] text-muted-foreground"
-                      title={selecionado.descricaoExcel}>
-                      {selecionado.descricaoExcel} · {selecionado.data}
-                    </span>
-                    {/* ⚠ O DESFAZER SOBREVIVEU ÀS FAIXAS — 133b. Ele morava em duas faixas
-                        coloridas que saíram; sem ele, uma escolha errada não teria volta
-                        pela tela, e a RPC de desfazer existe justamente para isso. */}
-                    {/* ⚠ SOBRESCREVER É POR LINHA E NASCE DESLIGADO — 133c item 1. Só
-                        aparece onde faz diferença: a linha que o banco já classificou. Sem
-                        a marca ela nem entra na fila do lote. */}
-                    {selecionado.status === 'ja_classificado' && !selecionado.aplicado && (
-                      <label className="flex shrink-0 cursor-pointer items-center gap-1 text-[10px] text-muted-foreground"
-                        title="O lançamento já tem classificação. Marcado, o Gravar troca o que está lá pelo Resultado desta linha.">
-                        <input type="checkbox" className="h-3 w-3"
-                          checked={sobrescreverIds.has(selecionado.id)}
-                          onChange={() => alternarSobrescrever(selecionado.id)} />
-                        sobrescrever
-                      </label>
-                    )}
-                    {(selecionado.status === 'resolvido_manual' || selecionado.status === 'resolvido_grupo') && (
-                      <Button type="button" size="sm" variant="outline" className="h-5 shrink-0 px-1.5 text-[10px]"
-                        disabled={isResolvendoProximos || isResolvendoGrupo}
-                        title={selecionado.status === 'resolvido_grupo'
-                          ? 'Desfaz o agrupamento e devolve a linha à decisão.'
-                          : 'Desfaz o candidato escolhido à mão e devolve a linha à decisão.'}
-                        onClick={() => {
-                          if (selecionado.status === 'resolvido_grupo') void handleDesfazerGrupo(selecionado.id);
-                          else void handleDesfazerProximos(selecionado.id);
-                        }}>
-                        ↺ Desfazer
-                      </Button>
-                    )}
-                  </div>
-                </div>
-                <MesaCamposTabela
-                  row={selecionado}
-                  classificacoes={classificacoes}
-                  fornecedores={fornecedores}
-                  fazendas={fazendas}
-                  safras={safras}
-                  contas={contasBancarias}
-                  clienteId={clienteAtual?.id}
-                  onEditar={onEditar}
-                  onCriarFornecedor={criarFornecedor}
-                />
-              </div>
-
-              {/* ═══ AGRUPAR — 133c item 2 ═══════════════════════════════════════ */}
-              {selecionado.status === 'sugestao_grupo' && !selecionado.aplicado && (
-                <div className="shrink-0 rounded-md border border-violet-300 bg-violet-50/60 px-2 py-1 dark:border-violet-800 dark:bg-violet-950/20">
-                  {!confirmandoGrupo ? (
-                    <div className="flex items-center gap-2">
-                      <span className="min-w-0 flex-1 text-[11px] text-violet-900 dark:text-violet-200">
-                        {(linhaCrua?.match_lancamento_ids?.length ?? 0)} lançamentos do dia somam o valor desta linha.
-                      </span>
-                      <Button type="button" size="sm" className="h-6 shrink-0 px-2 text-[10px]"
-                        disabled={isResolvendoGrupo || !(linhaCrua?.match_lancamento_ids?.length)}
-                        onClick={() => setConfirmandoGrupo(true)}>
-                        Juntar os {linhaCrua?.match_lancamento_ids?.length ?? 0} lançamentos nesta linha
-                      </Button>
-                    </div>
-                  ) : (
-                    /* ⚠ CONFIRMAÇÃO INLINE, NÃO MODAL — 133c. A pergunta é sobre a linha que
-                       está na tela, e um modal a cobriria justamente quando ela importa. */
-                    <div className="flex items-center gap-2">
-                      <span className="min-w-0 flex-1 text-[11px] text-amber-800 dark:text-amber-300">
-                        Isso une {linhaCrua?.match_lancamento_ids?.length ?? 0} lançamentos nesta linha. Continuar?
-                      </span>
-                      <Button type="button" size="sm" className="h-6 shrink-0 px-2 text-[10px]"
-                        disabled={isResolvendoGrupo}
-                        onClick={() => { void handleJuntarNestaLinha(linhaCrua?.match_lancamento_ids ?? []); }}>
-                        Sim
-                      </Button>
-                      <Button type="button" size="sm" variant="outline" className="h-6 shrink-0 px-2 text-[10px]"
-                        onClick={() => setConfirmandoGrupo(false)}>
-                        Não
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* ⚠ O SPLIT MOSTRA O GRUPO E NÃO OFERECE BOTÃO — 133c item 2, medido. A RPC
-                  `fn_classificacao_split_substituir` recusa estas linhas por construção
-                  (ver a nota em `handleJuntarNestaLinha`). Mostrar o grupo é útil; um botão
-                  que falha em todo clique, não. */}
-              {selecionado.status === 'sugestao_split' && (
-                <div className="shrink-0 rounded-md border border-violet-300 bg-violet-50/60 px-2 py-1 text-[11px] dark:border-violet-800 dark:bg-violet-950/20">
-                  <span className="text-violet-900 dark:text-violet-200">
-                    Esta linha compõe, com outras{' '}
-                    {Math.max(0, (Array.isArray(linhaCrua?.casamento_meta?.grupo_ids)
-                      ? (linhaCrua?.casamento_meta?.grupo_ids as unknown[]).length : 1) - 1)}
-                    {' '}do mesmo dia, um único movimento do banco.
-                  </span>
-                  <span className="ml-1 text-muted-foreground">
-                    Agrupar em um clique depende de um ajuste na função do banco — reportado.
-                  </span>
-                </div>
-              )}
-
-              {pedeDecisao && (
-                <EnriquecimentoCandidatosInline
-                  stagingId={selecionado.id}
-                  excelValor={linhaCrua?.excel_valor ?? null}
-                  excelData={linhaCrua?.excel_data ?? null}
-                  onEscolher={(lancId) => { void handleResolverProximos(lancId); }}
-                  isResolvendo={isResolvendoProximos}
-                  lancIdsUsados={lancIdsUsados}
-                  temProxima={canProximo}
-                />
-              )}
-            </>
-          ) : (
-            <div className="rounded-lg border bg-card p-4 text-center text-[11px] text-muted-foreground">
-              Escolha uma linha à esquerda para conferir campo a campo.
-            </div>
-          )}
+      <>
+        {/* ⚠ A TABELA SAIU DA TELA PRINCIPAL — 133d item 3. O passo 2 tinha lista de 400px
+            + tabela de 15 campos + candidatos + rodapé, e nada disso cabia em 900px: a
+            página rolava, e rolar a página tira o topo de 6 números da vista bem na hora
+            de conferir. Aqui ele é uma LISTA de largura total; revisar campo a campo é o
+            gesto da Mesa, e clicar na linha leva direto a ela.
+            ⚠ NÃO É PERDA DE CAMINHO: a Mesa ampliada tem a mesma tabela, os mesmos
+            candidatos e o Salvar — e agora abre NA LINHA que o operador escolheu. */}
+        <p className="shrink-0 px-1 text-[10px] text-muted-foreground">
+          Clique na linha para revisar e salvar na Mesa.
+        </p>
+        <div className="min-h-0 md:flex-1">
+          <EnriquecimentoLista {...listaProps} />
         </div>
-      </div>
+      </>
       )}
 
       {/* ═══ RODAPÉ FIXO ══════════════════════════════════════════════════════════ */}
@@ -1044,6 +1064,7 @@ export function MesaEnriquecimentoTab({
         actions={actionsProps}
         onAplicarAoGrupo={handleAplicarAoGrupo}
         aplicandoGrupo={aplicandoGrupo}
+        faixas={faixasDaLinha}
       />
 
       <EnriquecimentoImportarDialog

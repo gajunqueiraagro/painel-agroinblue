@@ -20,7 +20,7 @@ import type { EnriquecimentoDetalheProps } from './EnriquecimentoDetalhe';
 import type { EnriquecimentoActionsProps } from './EnriquecimentoActions';
 import { MesaCamposTabela } from './MesaCamposTabela';
 import { STATUS_META } from './fmt';
-import { GRUPO_DE_STATUS } from '@/v2/lib/mesa/enriquecimentoView';
+import { grupoDaLinha } from '@/v2/lib/mesa/enriquecimentoView';
 import type { EnriqRowVM } from './types';
 
 const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -58,10 +58,10 @@ const rotuloSentido = (s: 'entrada' | 'saida' | null) => (s === 'saida' ? 'Saíd
 function passaNoFiltro(r: EnriqRowVM, f: FiltroEstado): boolean {
   switch (f) {
     case 'revisar': return r.estado === 'revisar';
-    case 'atualizam': return GRUPO_DE_STATUS[r.status] === 'atualizam';
-    case 'decide': return GRUPO_DE_STATUS[r.status] === 'decide';
-    case 'agrupam': return GRUPO_DE_STATUS[r.status] === 'agrupam';
-    case 'sem_par': return GRUPO_DE_STATUS[r.status] === 'sem_par';
+    case 'atualizam': return grupoDaLinha(r.status, r.aplicado) === 'atualizam';
+    case 'decide': return grupoDaLinha(r.status, r.aplicado) === 'decide';
+    case 'agrupam': return grupoDaLinha(r.status, r.aplicado) === 'agrupam';
+    case 'sem_par': return grupoDaLinha(r.status, r.aplicado) === 'sem_par';
     /* 129d item 4 — o sentido é um recorte como os outros: o operador que confere o
        extrato olha um lado de cada vez. */
     case 'entradas': return r.entradaOuSaida === 'entrada';
@@ -87,10 +87,19 @@ export interface EnriquecimentoMesaModalProps {
    */
   onAplicarAoGrupo?: (ids: string[]) => Promise<void>;
   aplicandoGrupo?: boolean;
+  /**
+   * 133d item 3 — as faixas de decisão da linha (sobrescrever, desfazer, agrupar,
+   * candidatos), que saíram da tela principal do passo 2 e vivem aqui.
+   *
+   * ⚠ NÓ, E NÃO MAIS PROPS: elas dependem de oito handlers e cinco estados que já vivem no
+   * container. Passá-los um a um seria replicar o container inteiro no contrato deste
+   * componente — que é burro de propósito.
+   */
+  faixas?: React.ReactNode;
 }
 
 export function EnriquecimentoMesaModal({
-  open, onOpenChange, sessaoLabel, lista, detalhe, actions, onAplicarAoGrupo, aplicandoGrupo,
+  open, onOpenChange, sessaoLabel, lista, detalhe, actions, onAplicarAoGrupo, aplicandoGrupo, faixas,
 }: EnriquecimentoMesaModalProps) {
   const [agrupamento, setAgrupamento] = useState<Agrupamento>('lista');
   const [filtro, setFiltro] = useState<FiltroEstado>('todas');
@@ -98,10 +107,10 @@ export function EnriquecimentoMesaModal({
   const rows = lista.rows;
   const contagens = useMemo(() => ({
     revisar: rows.filter(r => r.estado === 'revisar').length,
-    atualizam: rows.filter(r => GRUPO_DE_STATUS[r.status] === 'atualizam').length,
-    decide: rows.filter(r => GRUPO_DE_STATUS[r.status] === 'decide').length,
-    agrupam: rows.filter(r => GRUPO_DE_STATUS[r.status] === 'agrupam').length,
-    sem_par: rows.filter(r => GRUPO_DE_STATUS[r.status] === 'sem_par').length,
+    atualizam: rows.filter(r => grupoDaLinha(r.status, r.aplicado) === 'atualizam').length,
+    decide: rows.filter(r => grupoDaLinha(r.status, r.aplicado) === 'decide').length,
+    agrupam: rows.filter(r => grupoDaLinha(r.status, r.aplicado) === 'agrupam').length,
+    sem_par: rows.filter(r => grupoDaLinha(r.status, r.aplicado) === 'sem_par').length,
     entradas: rows.filter(r => r.entradaOuSaida === 'entrada').length,
     saidas: rows.filter(r => r.entradaOuSaida === 'saida').length,
   }), [rows]);
@@ -174,8 +183,9 @@ export function EnriquecimentoMesaModal({
       <DialogContent className="flex h-[92vh] max-h-[92vh] w-[96vw] max-w-[1400px] flex-col gap-0 overflow-hidden p-0">
         {/* ⚠ 40px, 13px/500 e subtítulo 10px — 133b-a. Eram 44px e 14px/600: quatro pixels
             e um grau de peso que o corpo da tela não tem, num cabeçalho que só nomeia. */}
-        <DialogHeader className="h-10 shrink-0 flex-row items-center gap-2.5 space-y-0 bg-primary px-4">
-          <DialogTitle className="text-[13px] font-medium text-primary-foreground">
+        {/* 36px / 12px / 10px — 133d item 4. */}
+        <DialogHeader className="h-9 shrink-0 flex-row items-center gap-2.5 space-y-0 bg-primary px-4">
+          <DialogTitle className="text-[12px] font-medium text-primary-foreground">
             Mesa de revisão · Enriquecimento
           </DialogTitle>
           <span className="min-w-0 truncate text-[10px] text-primary-foreground/85" title={sessaoLabel ?? undefined}>
@@ -183,7 +193,7 @@ export function EnriquecimentoMesaModal({
           </span>
         </DialogHeader>
 
-        <div className="grid min-h-0 flex-1 gap-2.5 p-2.5 md:[grid-template-columns:340px_1fr]">
+        <div className="grid min-h-0 flex-1 gap-2.5 p-2.5 md:[grid-template-columns:380px_1fr]">
           {/* ═══ ESQUERDA: as linhas da sessão ═══════════════════════════════════ */}
           <div className="flex min-h-0 min-w-0 flex-col rounded-lg border bg-card">
             {/* ⚠ DUAS LINHAS, NÃO UMA. Medido: em 340px o título, a contagem e o seletor
@@ -206,7 +216,9 @@ export function EnriquecimentoMesaModal({
                 ))}
               </div>
             </div>
-            <div className="flex shrink-0 flex-wrap gap-1 border-b px-3 py-1.5">
+            {/* ⚠ UMA LINHA SÓ — 133d item 4. Com `flex-wrap` os sete chips viravam duas
+                linhas em 380px e o cabeçalho da esquerda crescia 22px. */}
+            <div className="flex shrink-0 flex-nowrap gap-1 overflow-x-auto border-b px-3 py-1">
               {chip('atualizam', 'Atualizam', contagens.atualizam)}
               {chip('decide', 'Você decide', contagens.decide)}
               {chip('agrupam', 'Agrupam', contagens.agrupam)}
@@ -248,7 +260,8 @@ export function EnriquecimentoMesaModal({
                       : { t: meta?.label ?? r.statusLabel, c: `bg-muted ${meta?.cls ?? 'text-muted-foreground'}` };
                     return (
                       <button type="button" key={r.id} onClick={() => lista.onSelecionar(r.id)}
-                        className={`grid w-full items-center gap-1.5 border-b border-border/60 py-1 pr-3 text-left ${
+                        /* 32px — 133d item 4: duas linhas de 11px/10px em `leading-[1.3]`. */
+                        className={`grid h-8 w-full items-center gap-1.5 border-b border-border/60 pr-3 text-left ${
                           sel ? 'border-l-[3px] border-l-primary bg-primary/[0.08] pl-[17px]' : 'pl-5'}`}
                         style={{ gridTemplateColumns: '52px minmax(0,1fr) 92px' }}>
                         <span className="text-[10px] text-muted-foreground">{r.data}</span>
@@ -301,11 +314,12 @@ export function EnriquecimentoMesaModal({
                     tabela em 360px, era o que faltava para os quinze campos caberem sem
                     rolar. Rótulo 10px, valor 16px/500, e o contexto que sobrava foi para o
                     `title` — continua disponível, deixa de custar altura. */}
-                <div className="flex h-11 shrink-0 items-center border-b bg-muted px-3">
+                {/* 36px — 133d item 4: quatro cards de uma linha, valor 14px/500. */}
+                <div className="flex h-9 shrink-0 items-center border-b bg-muted px-3">
                   <div className="grid w-full grid-cols-4 gap-2">
                     <div className="min-w-0">
                       <div className="text-[10px] leading-tight text-muted-foreground">Linha</div>
-                      <div className="truncate text-[16px] font-medium leading-tight"
+                      <div className="truncate text-[14px] font-medium leading-tight"
                         title={`${selecionada.fornecedor} · ${selecionada.data}`}>{actions.posicao}</div>
                     </div>
                     {/* ⚠ TIPO E VALOR JUNTOS — 129d item 7. Separados, o operador lia o número
@@ -314,7 +328,7 @@ export function EnriquecimentoMesaModal({
                       <div className="text-[10px] leading-tight text-muted-foreground">
                         {rotuloSentido(selecionada.entradaOuSaida)}
                       </div>
-                      <div className={`truncate text-[16px] font-medium leading-tight tabular-nums ${corDoSinal(selecionada.entradaOuSaida)}`}
+                      <div className={`truncate text-[14px] font-medium leading-tight tabular-nums ${corDoSinal(selecionada.entradaOuSaida)}`}
                         title={`Valor: ${selecionada.comparativo.find(c => c.campo === 'Valor')?.resultado ?? '—'}`}>
                         {sinalPrefixo(selecionada.entradaOuSaida)}{selecionada.valor}
                       </div>
@@ -323,13 +337,13 @@ export function EnriquecimentoMesaModal({
                         extrato que o operador tem na frente. */}
                     <div className="min-w-0">
                       <div className="text-[10px] leading-tight text-muted-foreground">Conta bancária</div>
-                      <div className="truncate text-[16px] font-medium leading-tight" title={selecionada.contaBancaria ?? undefined}>
+                      <div className="truncate text-[14px] font-medium leading-tight" title={selecionada.contaBancaria ?? undefined}>
                         {selecionada.contaBancaria ?? '—'}
                       </div>
                     </div>
                     <div className="min-w-0">
                       <div className="text-[10px] leading-tight text-muted-foreground">O que muda</div>
-                      <div className={`truncate text-[16px] font-medium leading-tight ${selecionada.mudaAlgo ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground'}`}
+                      <div className={`truncate text-[14px] font-medium leading-tight ${selecionada.mudaAlgo ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground'}`}
                         title={selecionada.comparativo.filter(c => c.tom === 'muda' || c.tom === 'difere')
                           .map(c => c.campo).join(' · ') || 'Nada muda: o Resultado já confere com o sistema.'}>
                         {(() => {
@@ -363,6 +377,7 @@ export function EnriquecimentoMesaModal({
                   onEditar={detalhe.onEditar}
                   onCriarFornecedor={detalhe.onCriarFornecedor}
                 />
+                {faixas}
               </>
             )}
 
@@ -372,7 +387,8 @@ export function EnriquecimentoMesaModal({
                 saía pela borda (overflowX de 62px). `gap-1.5`, `px-2` e `whitespace-nowrap`
                 em tudo, com o contador em `truncate`: quem cede é o texto, nunca o botão.
                 Em 1440 sobra folga; em 1168 encaixa. */}
-            <div className="flex h-11 shrink-0 items-center gap-1.5 border-t px-2">
+            {/* 32px — 133d item 4; os botões continuam h-7/11px. */}
+            <div className="flex h-8 shrink-0 items-center gap-1.5 border-t px-2">
               <Button size="sm" variant="ghost" className="h-7 shrink-0 whitespace-nowrap px-2 text-[11px]"
                 onClick={actions.onAnterior} disabled={!actions.canAnterior}>◀ Anterior</Button>
               <Button size="sm" variant="ghost" className="h-7 shrink-0 whitespace-nowrap px-2 text-[11px]"

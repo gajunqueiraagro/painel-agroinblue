@@ -428,6 +428,24 @@ export const GRUPO_DE_STATUS: Readonly<Record<string, EnriqGrupo>> = {
   resolvido_grupo: 'ja_gravadas',
 };
 
+/**
+ * O GRUPO DE UMA LINHA — e `aplicado` manda em tudo (133c-a).
+ *
+ * ⚠ MEDIDO NO PROTO, e o número assusta: 933 linhas `exato` JÁ APLICADAS, 150 `divergente`,
+ * 546 `sem_match` e 9 `sugestao_split`. Nenhuma RPC de gravação mexe em `match_status` —
+ * `apply_row` e `split_substituir` só ligam `aplicado = true`. Sem esta função, o topo
+ * continuaria contando as 933 em "Atualizam sem perguntar" DEPOIS de o operador gravá-las,
+ * e "Já gravadas" nunca subiria. O passo 3 do 133c tornaria isso gritante: gravar 337
+ * linhas e ver o mesmo número no topo.
+ * ⚠ E É O QUE MAPEIA O SPLIT. `fn_classificacao_split_substituir` deixa a linha em
+ * `sugestao_split` com `aplicado = true` (conferido no corpo da função, não suposto): o
+ * gesto acabou, e o vocabulário tem de dizer "Já gravadas".
+ */
+export function grupoDaLinha(status: string, aplicado: boolean): EnriqGrupo | undefined {
+  if (aplicado) return 'ja_gravadas';
+  return GRUPO_DE_STATUS[status];
+}
+
 export interface EnriqGrupoResumo {
   qtd: number;
   /** `sum(abs(excel_valor))` das linhas do grupo. */
@@ -451,7 +469,7 @@ export function resumirGrupos(staging: ClassificacaoStagingPreviewRow[]): EnriqR
     transferencia: zero(), sem_par: zero(), ja_gravadas: zero(),
   };
   for (const linha of staging) {
-    const g = GRUPO_DE_STATUS[linha.match_status];
+    const g = grupoDaLinha(linha.match_status, linha.aplicado);
     /* Status desconhecido não entra em grupo nenhum — some do topo, não vira número
        errado num grupo qualquer. A lista continua mostrando a linha. */
     if (!g) continue;
@@ -471,7 +489,7 @@ export function resumirGrupos(staging: ClassificacaoStagingPreviewRow[]): EnriqR
  * linha da planilha pertence àquele recorte.
  */
 export function filtrarPorGrupo(rows: EnriqRowVM[], grupo: string): EnriqRowVM[] {
-  return grupo === 'todas' ? rows : rows.filter((l) => GRUPO_DE_STATUS[l.status] === grupo);
+  return grupo === 'todas' ? rows : rows.filter((l) => grupoDaLinha(l.status, l.aplicado) === grupo);
 }
 
 // P0-1A: conceito "aplicável em lote" vem PRONTO da view (lote_aplicavel) —

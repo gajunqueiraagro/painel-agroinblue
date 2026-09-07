@@ -317,7 +317,22 @@ export function useClassificacaoStaging(
     },
   });
 
-  /** Grava `excel_data_pagamento` / `excel_data_vencimento` das linhas de uma fatia. */
+  /**
+   * Grava `excel_data_pagamento` / `excel_data_vencimento` das linhas de uma fatia.
+   *
+   * ⚠ ISTO NUNCA GRAVOU NADA, e o silêncio é a lição — [ENRIQUECER-TELA-02] (133d).
+   * Medido no Proto: `excel_data_pagamento` preenchida em 0 de 551 na sessão de 07/09, e em
+   * 0 de 492 em TODAS as sessões desde o 133a. A causa não é o parser nem a planilha:
+   * `financeiro_classificacao_staging` tem RLS ligada com UMA policy, de SELECT. Sem policy
+   * de UPDATE, o `update()` casa ZERO linhas — e o PostgREST devolve `error: null`, porque
+   * atualizar zero linhas não é erro. O `if (error)` abaixo nunca disparou.
+   * ⚠ O CONSERTO DE VERDADE É MIGRATION, e não mora aqui: `fn_classificacao_populate_staging`
+   * já recebe as duas datas dentro de `p_rows` e simplesmente não as insere. Quem escreve
+   * staging é a RPC (SECURITY DEFINER); abrir UPDATE direto para o front seria alargar a
+   * superfície de escrita de uma tabela que hoje só o banco escreve.
+   * ⚠ ATÉ LÁ, O SILÊNCIO ACABA. Contamos as linhas afetadas e dizemos quando são zero: é a
+   * diferença entre "não gravou" e "ninguém sabia que não gravava".
+   */
   async function gravarDatasDaFatia(sessaoId: string, fatia: ClassificacaoRow[]) {
     const porChave = new Map<string, number[]>();
     for (const r of fatia) {
@@ -326,20 +341,31 @@ export function useClassificacaoStaging(
       const atual = porChave.get(chave);
       if (atual) atual.push(r.linha); else porChave.set(chave, [r.linha]);
     }
+    let pedidas = 0; let afetadas = 0;
     for (const [chave, linhas] of porChave) {
       const [pag, venc] = chave.split('|');
-      const { error } = await supabase
+      pedidas += linhas.length;
+      /* `.select('staging_id')` é o que torna o resultado CONTÁVEL: sem ele o PostgREST
+         devolve `data: null` e não há como distinguir "gravou" de "não casou nada". */
+      const { data, error } = await supabase
         .from('financeiro_classificacao_staging')
         .update({
           excel_data_pagamento: pag || null,
           excel_data_vencimento: venc || null,
         })
         .eq('sessao_id', sessaoId)
-        .in('excel_linha_origem', linhas);
-      /* ⚠ FALHAR AQUI NÃO DERRUBA A IMPORTAÇÃO: as linhas já estão no staging, e o
-         casador simplesmente cai na regra do mês para elas. Some no console, não na cara
-         do operador, porque não há o que ele faça a respeito. */
-      if (error) console.error('[staging] falha ao gravar datas da fatia', error);
+        .in('excel_linha_origem', linhas)
+        .select('staging_id');
+      if (error) { console.error('[staging] falha ao gravar datas da fatia', error); continue; }
+      afetadas += (data ?? []).length;
+    }
+    if (pedidas > 0 && afetadas === 0) {
+      /* ⚠ UM AVISO POR FATIA, E ELE DIZ A CONSEQUÊNCIA: sem as datas o casador cai na regra
+         do mês, e o operador vê "você decide" onde a data resolveria. */
+      console.warn(
+        `[staging] as datas de ${pedidas} linha(s) NÃO foram gravadas (0 linhas afetadas). ` +
+        'A tabela não tem policy de UPDATE para o front — o casamento cairá na regra do mês.',
+      );
     }
   }
 
@@ -498,6 +524,30 @@ export function useClassificacaoStaging(
     onSuccess: invalidarSessaoAtual,
   });
 
+  /**
+   * N linhas = 1 lançamento — `fn_classificacao_split_substituir` (133c-a).
+   *
+   * ⚠ ELA FICOU CHAMÁVEL AGORA. Até a migration 20260907173019 os guards (c) e (d)
+   * recusavam por construção as linhas que o casador do 133a produz: elas têm
+   * `match_lancamento_id` preenchido e, por isso, o lançamento contava como "já
+   * referenciado". Ligar o botão antes disso teria dado 100% de `ja_referenciado`.
+   * ⚠ O QUE ELA FAZ É PESADO: cria N lançamentos, cancela o consolidado e move o vínculo
+   * do extrato. Por isso a tela pergunta antes, na própria linha.
+   */
+  const splitSubstituirMutation = useMutation({
+    mutationFn: async (p: { lancamento_id: string; sessao_id: string; staging_ids: string[] }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado do repo
+      const { data, error } = await (supabase as any).rpc('fn_classificacao_split_substituir', {
+        p_lancamento_id: p.lancamento_id, p_sessao_id: p.sessao_id, p_staging_ids: p.staging_ids,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeyStaging(sessaoId) });
+    },
+  });
+
   return {
     staging: stagingQuery.data ?? [],
     isLoading: stagingQuery.isLoading,
@@ -529,6 +579,9 @@ export function useClassificacaoStaging(
     isResolvendoGrupo: resolverGrupoMutation.isPending,
     desfazerGrupo: desfazerGrupoMutation.mutateAsync,
     isDesfazendoGrupo: desfazerGrupoMutation.isPending,
+    // 133c-a — N linhas = 1 lançamento.
+    splitSubstituir: splitSubstituirMutation.mutateAsync,
+    isSubstituindo: splitSubstituirMutation.isPending,
   };
 }
 

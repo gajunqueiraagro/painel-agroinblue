@@ -12317,7 +12317,7 @@ export type Database = {
         Returns: Json
       }
       fn_classificacao_sistema_nao_explicado: {
-        Args: { p_conta_id?: string; p_sessao_id: string }
+        Args: { p_ano_mes?: string; p_conta_id?: string; p_sessao_id: string }
         Returns: {
           conta_nome: string
           data_pagamento: string
@@ -12325,6 +12325,7 @@ export type Database = {
           documento: string
           favorecido_nome: string
           lanc_id: string
+          subcentro: string
           tipo_operacao: string
           valor: number
         }[]

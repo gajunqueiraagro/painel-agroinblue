@@ -126,15 +126,15 @@ export function MesaCamposTabela({
                 24px: as duas primeiras SALTAVAM, e a tela parecia desalinhada. O que
                 distingue é a COR (azul = referência, cinza = o que está gravado), não o
                 tamanho.
-                ⚠ 24px EXATOS — 133b-a: `padding 3px 12px` + `line-height 1.3` sobre 11px dá
-                3 + 18 + 3 = 24. Quinze campos = 360px, que cabem em 900 de altura com o topo
-                (44) e o rodapé (44) sem rolar. Trocar o padding por `items-center` num
-                container mais alto voltaria a estourar.
+                ⚠ 22px EXATOS — 133d item 4. Eram 24 (`py-[3px]` sobre 11px/1.3); com o painel
+                direito somando 470px, a altura da linha é o que decide se 15 campos cabem em
+                900 sem rolar. `h-[22px]` + `items-center` no lugar do padding: a medida passa
+                a ser declarada, não derivada.
                 ⚠ NUNCA QUEBRA: `truncate` em cada célula e o texto inteiro no `title`. */}
-            <div className={`grid items-center gap-2 border-b border-border/50 px-3 py-[3px] text-[11px] leading-[1.3] ${
+            <div className={`grid h-[22px] items-center gap-2 border-b border-border/50 px-3 text-[11px] leading-[1.3] ${
               zebra ? 'bg-muted/30' : ''}`}
               style={{ gridTemplateColumns: COLS }}>
-              <span className="truncate text-[11px] text-muted-foreground" title={rotulo}>{rotulo}</span>
+              <span className="truncate text-[10px] text-muted-foreground" title={rotulo}>{rotulo}</span>
               {/* ⚠ O EXCEL É REFERÊNCIA, NUNCA GRAVADO DIRETO — por isso azul e sem controle. */}
               <span className="truncate text-blue-700/90" title={c.excel}>{c.excel}</span>
               <span className="truncate text-slate-700 dark:text-slate-300" title={c.sistema}>{c.sistema}</span>

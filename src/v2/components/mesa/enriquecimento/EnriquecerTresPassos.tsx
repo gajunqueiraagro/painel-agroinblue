@@ -182,10 +182,25 @@ export function EnriquecerTresPassos({ ano, mes, clienteNome, contaNome, onVerNo
 
   /* O motivo do botão desabilitado é a fonte ÚNICA do `disabled`, do `title` e da dica —
      a regra do botão que diz por quê. */
+  /**
+   * ⚠ O GATE MEDIA O MAPA ERRADO — 133d item 5a, e por isso o botão ficava apagado com o
+   * de-para inteiro resolvido.
+   *
+   * Ele lia `imp.todasResolvidasOuIgnoradas`, que olha o `contaMap` do importador de
+   * staging — e esse mapa só é preenchido DENTRO de `irParaRevisao`, ou seja, depois da
+   * checagem. O operador respondia as contas nos cards do passo 1 (que escrevem
+   * `dePara.conta`), e a tela continuava dizendo "resolva as contas".
+   * ⚠ AGORA O GATE OLHA O QUE O OPERADOR VÊ. Descartado conta como resposta: "isto não é
+   * conta" é decisão tomada, não pendência.
+   */
+  const contasSemResposta = dePara
+    ? Object.values(dePara.conta).filter((i) => !i.valor && !i.descartado).length
+    : 0;
   const motivoIrRevisao =
     !clienteId ? 'Escolha um cliente.'
     : !imp.lote && !sessaoId ? 'Escolha a planilha do mês primeiro.'
-    : !imp.todasResolvidasOuIgnoradas && imp.lote ? 'Resolva ou ignore as contas da planilha no card Conta bancária.'
+    : imp.lote && contasSemResposta > 0
+      ? `${contasSemResposta} conta(s) bancária(s) da planilha sem resposta — abra o card Conta bancária.`
     : null;
 
   const carimbo = sessaoDaRegua ? dataHoraCurta(sessaoDaRegua.criada_em) : '';
