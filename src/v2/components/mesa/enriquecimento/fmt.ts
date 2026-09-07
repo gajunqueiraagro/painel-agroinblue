@@ -1,5 +1,5 @@
 // Formatação pura de apresentação (Mesa Global de Enriquecimento).
-import type { EnriqTom, EnriqEstado } from './types';
+import type { EnriqTom } from './types';
 
 export const TOM_CLS: Record<EnriqTom, string> = {
   neutro: 'text-muted-foreground',
@@ -77,12 +77,11 @@ export const STATUS_META: Record<string, { label: string; cls: string; dot: stri
   candidatos_proximos:{ label: 'Você decide', cls: 'text-amber-700', dot: 'bg-amber-500' },
 };
 
-// PR-U2d-1 — selo do estado operacional (leitura principal na Lista e no Detalhe).
-// `short` para a lista densa; `label` para o cabeçalho do Detalhe.
-export const ESTADO_META: Record<EnriqEstado, { label: string; short: string; cls: string; dot: string }> = {
-  pronto:      { label: 'Pronto para aplicar', short: 'Pronto',      cls: 'text-blue-700',         dot: 'bg-blue-500' },
-  revisar:     { label: 'A revisar',           short: 'Revisar',     cls: 'text-amber-700',        dot: 'bg-amber-500' },
-  aplicado:    { label: '✓ Aplicado',          short: '✓ Aplicado',  cls: 'text-emerald-700',      dot: 'bg-emerald-500' },
-  sem_vinculo: { label: 'Sem vínculo',         short: 'Sem vínculo', cls: 'text-rose-700',         dot: 'bg-rose-400' },
-  nada:        { label: 'Nada a fazer',        short: 'OK',          cls: 'text-muted-foreground',  dot: 'bg-muted-foreground/40' },
-};
+/* ⚠ `ESTADO_META` SAIU — 133b-a correção 5, e ele era a ORIGEM do defeito. O selo vinha do
+   `estado`, que colapsa "ambíguo" e "sem par no banco" no mesmo `sem_vinculo` (os dois têm
+   `lanc_id` nulo): a Mesa ampliada chamava um ambíguo de "Sem vínculo" enquanto o resto da
+   Mesa o chamava de "Você decide". Duas fontes para o mesmo rótulo é o defeito; apagar a
+   segunda é o conserto. `STATUS_META` acima é a única.
+   ⚠ O TIPO `EnriqEstado` FICA: `estado` continua sendo a leitura operacional que governa o
+   burn-down (`filtrarPorModo`) e o que pode ser salvo. O que saiu foi o VOCABULÁRIO dele
+   na tela. */

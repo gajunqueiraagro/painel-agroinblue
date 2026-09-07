@@ -5,6 +5,7 @@
 // atual do lançamento.
 import { useState, useEffect, useRef } from 'react';
 import { Input } from '@/components/ui/input';
+import { CELULA_EDITAVEL } from './medidasMesa';
 
 export interface ResultadoDocumentoEditorProps {
   value: string | null;                 // proposto_numero_documento
@@ -31,7 +32,7 @@ export function ResultadoDocumentoEditor({ value, numeroDocumentoAtual, onEditar
 
   return (
     <Input
-      className="h-6 text-[10px] px-2"
+      className={CELULA_EDITAVEL}
       value={text}
       onChange={(e) => setBoth(e.target.value)}
       onBlur={commitValue}

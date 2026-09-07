@@ -23,6 +23,7 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ContaBancariaSelect, type ContaSelecionavel } from '@/components/shared/ContaBancariaSelect';
+import { CELULA_EDITAVEL, CELULA_EDITAVEL_WRAPPER, ITEM_DROPDOWN } from './medidasMesa';
 
 type Editar = (patch: Record<string, unknown>) => Promise<void>;
 
@@ -39,7 +40,7 @@ export function ResultadoDataEditor({ value, valorAtual, campo, onEditar }: {
     <DatePicker
       value={efetivo}
       size="compact"
-      className="h-6 text-[10px]"
+      className={CELULA_EDITAVEL}
       onChange={(novo) => {
         /* Reabrir o calendário e escolher a mesma data não pode custar uma escrita. */
         if ((novo || '') === efetivo) return;
@@ -67,11 +68,11 @@ export function ResultadoSafraEditor({ value, valorAtual, safras, onEditar }: {
            `campos_rejeitados` e o operador veria erro num gesto que deu certo. */
         void onEditar({ safra_id: id });
       }}>
-      <SelectTrigger className="h-6 px-2 text-[10px]"><SelectValue placeholder="—" /></SelectTrigger>
+      <SelectTrigger className={CELULA_EDITAVEL}><SelectValue placeholder="—" /></SelectTrigger>
       <SelectContent>
-        <SelectItem value={SEM} className="text-[11px]">— sem safra</SelectItem>
+        <SelectItem value={SEM} className={ITEM_DROPDOWN}>— sem safra</SelectItem>
         {safras.map(s => (
-          <SelectItem key={s.id} value={s.id} className="text-[11px]">
+          <SelectItem key={s.id} value={s.id} className={ITEM_DROPDOWN}>
             {s.codigo || s.nome || s.id.slice(0, 8)}
           </SelectItem>
         ))}
@@ -92,7 +93,7 @@ export function ResultadoContaEditor({ value, valorAtual, contas, onEditar }: {
       value={efetivo}
       contas={contas}
       placeholder="—"
-      className="[&>button]:h-6 [&>button]:px-2 [&>button]:text-[10px]"
+      className={CELULA_EDITAVEL_WRAPPER}
       onValueChange={(id) => {
         if (id === efetivo) return;
         void onEditar({ conta_bancaria_id: id || null });
@@ -124,7 +125,7 @@ export function ResultadoObservacaoEditor({ value, valorAtual, onEditar }: {
 
   return (
     <Input
-      className="h-6 px-2 text-[10px]"
+      className={CELULA_EDITAVEL}
       value={texto}
       onChange={(e) => { textoRef.current = e.target.value; setTexto(e.target.value); }}
       onBlur={commit}

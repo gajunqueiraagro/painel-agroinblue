@@ -19,18 +19,18 @@ export interface FavorecidoSelectProps {
   fornecedores: FornecedorV2[];
   search: string;                         // busca CONTROLADA (o caller é dono)
   onSearchChange: (s: string) => void;
-  onCriarNovo: () => void;                // botão "+" → abrir cadastro de fornecedor
+  /**
+   * Botão "+" → abrir cadastro de fornecedor. OPCIONAL desde 133b-a: sem ele, o botão não
+   * é renderizado.
+   *
+   * ⚠ BOTÃO SEM DESTINO É PIOR QUE BOTÃO AUSENTE. O modal de de-para da aba Enriquecer
+   * ainda não tem o diálogo de criação (ele mora em `ImportLancDeParaPanel`), e um "+" que
+   * não abre nada gasta o gesto do operador uma vez e a confiança dele para sempre.
+   */
+  onCriarNovo?: () => void;
   /** Classe do botão "+". Default 'h-8 w-8' — telas existentes inalteradas.
    *  PR-IMPORT-EXCEL-LANC-02: a importação usa denso ('h-5 w-5'). */
   novoButtonClassName?: string;
-  /**
-   * 133b — o "+" só aparece depois de buscar e não achar.
-   *
-   * ⚠ SEMPRE VISÍVEL, ELE CONVIDA A DUPLICAR: são 107 cadastros de nome repetido no NJ
-   * ("Meta" 8×, "Rabobank" 5×), e cada um começou com alguém cadastrando sem procurar.
-   * ⚠ DEFAULT `false`: as telas que já existem não mudam em nada.
-   */
-  novoSomenteSemResultado?: boolean;
   label?: string;
   triggerClassName?: string;              // ex.: fieldBg
   tabIndex?: number;
@@ -51,7 +51,7 @@ function normalizeSearch(s: string): string {
 
 export function FavorecidoSelect({
   value, onChange, onSelected, fornecedores,
-  search, onSearchChange, onCriarNovo, novoButtonClassName, novoSomenteSemResultado = false,
+  search, onSearchChange, onCriarNovo, novoButtonClassName,
   label, triggerClassName, tabIndex, disabled, showCpfCnpj = false,
 }: FavorecidoSelectProps) {
   const [open, setOpen] = useState(false);
@@ -155,7 +155,7 @@ export function FavorecidoSelect({
             </div>
           </PopoverContent>
         </Popover>
-        {(!novoSomenteSemResultado || (search.trim() !== '' && filtered.length === 0)) && (
+        {onCriarNovo && (
           <Button variant="outline" size="icon" className={cn('shrink-0', novoButtonClassName ?? 'h-8 w-8')} onClick={onCriarNovo} title="Novo Fornecedor">
             <Plus className="h-3.5 w-3.5" />
           </Button>

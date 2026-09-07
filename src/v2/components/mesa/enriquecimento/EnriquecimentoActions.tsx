@@ -19,6 +19,18 @@ export interface EnriquecimentoActionsProps {
   onAplicarTodos: () => void;
   nAplicaveis: number;
   salvarDisabled?: boolean;        // Salvar / Salvar e Próximo
+  /**
+   * 133b-a correção 1 — POR QUE o Salvar está apagado. Fonte ÚNICA do `disabled`, do
+   * `title` e da frase ao lado: um botão apagado sem motivo faz o operador procurar o que
+   * consertar em campos que já estão certos.
+   */
+  salvarMotivo?: string | null;
+  /**
+   * A linha não tem nada a gravar (Resultado já confere com o sistema): o gesto vira
+   * "Confirmar e próximo" — marca revisado e avança, sem chamar o banco.
+   */
+  soConfirma?: boolean;
+  onConfirmarProximo?: () => void;
   reverterDisabled?: boolean;      // Reverter
   aplicarTodosDisabled?: boolean;  // acelerador em lote + Revisado
   isBusy?: boolean;                // uma escrita em andamento
@@ -27,7 +39,8 @@ export interface EnriquecimentoActionsProps {
 export function EnriquecimentoActions({
   posicao, onAnterior, onProximo, canAnterior, canProximo,
   revisado, onRevisado, onSalvar, onSalvarProximo, onReverter, onAplicarTodos, nAplicaveis,
-  salvarDisabled, reverterDisabled, aplicarTodosDisabled, isBusy,
+  salvarDisabled, salvarMotivo, soConfirma, onConfirmarProximo,
+  reverterDisabled, aplicarTodosDisabled, isBusy,
 }: EnriquecimentoActionsProps) {
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/30 px-2 py-1 md:shrink-0">
@@ -35,12 +48,19 @@ export function EnriquecimentoActions({
       <Button size="sm" variant="outline" className="h-6 text-[11px] px-2" onClick={onAnterior} disabled={!canAnterior}>
         ◀ Anterior
       </Button>
-      <Button size="sm" className="h-6 text-[11px] px-3" onClick={onSalvar} disabled={salvarDisabled || isBusy}>
+      <Button size="sm" className="h-6 text-[11px] px-3" onClick={onSalvar}
+        disabled={salvarDisabled || isBusy} title={salvarMotivo ?? undefined}>
         Salvar
       </Button>
-      <Button size="sm" className="h-6 text-[11px] px-3" onClick={onSalvarProximo} disabled={salvarDisabled || isBusy}>
-        Salvar e Próximo
+      <Button size="sm" className="h-6 text-[11px] px-3"
+        onClick={soConfirma ? onConfirmarProximo : onSalvarProximo}
+        disabled={(soConfirma ? false : salvarDisabled) || isBusy}
+        title={soConfirma ? 'O Resultado já confere com o sistema: nada a gravar. Marca como revisado e vai para a próxima.' : (salvarMotivo ?? undefined)}>
+        {soConfirma ? 'Confirmar e Próximo' : 'Salvar e Próximo'}
       </Button>
+      {salvarMotivo && !soConfirma && (
+        <span className="text-[10px] text-muted-foreground">{salvarMotivo}</span>
+      )}
       <Button size="sm" variant="outline" className="h-6 text-[11px] px-2" onClick={onReverter} disabled={reverterDisabled || isBusy}>
         ↺ Reverter
       </Button>

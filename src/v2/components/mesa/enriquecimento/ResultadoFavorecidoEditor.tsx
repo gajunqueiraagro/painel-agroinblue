@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { FavorecidoSelect } from '@/components/shared/FavorecidoSelect';
 import { NovoFornecedorDialog } from '@/components/financeiro-v2/NovoFornecedorDialog';
 import type { FornecedorV2 } from '@/hooks/useFinanceiroV2';
+import { CELULA_EDITAVEL } from './medidasMesa';
 
 export interface ResultadoFavorecidoEditorProps {
   value: string | null;
@@ -35,7 +36,7 @@ export function ResultadoFavorecidoEditor({
         onSearchChange={setSearch}
         onCriarNovo={() => { setDefaultNome(search); setDialogOpen(true); }}
         disabled={disabled}
-        triggerClassName="h-6 text-[10px] px-2"
+        triggerClassName={CELULA_EDITAVEL}
       />
       <NovoFornecedorDialog
         open={dialogOpen}

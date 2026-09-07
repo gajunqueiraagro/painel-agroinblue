@@ -5,6 +5,7 @@
 import { useState } from 'react';
 import { PlanoSubcentroSelect } from '@/components/shared/PlanoSubcentroSelect';
 import type { ClassificacaoItem } from '@/hooks/useFinanceiroV2';
+import { CELULA_EDITAVEL, ITEM_DROPDOWN } from './medidasMesa';
 
 export interface ResultadoSubcentroEditorProps {
   value: string | null;
@@ -27,9 +28,9 @@ export function ResultadoSubcentroEditor({
       search={search}
       onSearchChange={setSearch}
       disabled={disabled}
-      triggerClassName="h-6 text-[10px] px-2"
+      triggerClassName={CELULA_EDITAVEL}
       contentClassName="w-[22rem]"
-      itemClassName="text-[11px] py-1"
+      itemClassName={ITEM_DROPDOWN}
     />
   );
 }

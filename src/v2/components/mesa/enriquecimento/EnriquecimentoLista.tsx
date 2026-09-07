@@ -16,7 +16,7 @@
  */
 import { useMemo } from 'react';
 import { EnriquecimentoRow } from './EnriquecimentoRow';
-import { fmtData } from './fmt';
+
 import type { EnriqRowVM } from './types';
 
 export interface EnriquecimentoListaProps {
@@ -24,6 +24,8 @@ export interface EnriquecimentoListaProps {
   selecionadoId: string | null;
   onSelecionar: (id: string) => void;
   hideBanco?: boolean;   // U2 — sob filtro por conta, Banco é redundante na faixa
+  /** 133b-a correção 2 — linhas editadas e ainda não gravadas: ponto âmbar. */
+  editadasIds?: ReadonlySet<string>;
 }
 
 /**
@@ -45,7 +47,7 @@ function agrupar(rows: EnriqRowVM[], hideBanco: boolean): Array<{ chave: string;
   return ordem.map((chave) => ({ chave, ...mapa.get(chave)! }));
 }
 
-export function EnriquecimentoLista({ rows, selecionadoId, onSelecionar, hideBanco }: EnriquecimentoListaProps) {
+export function EnriquecimentoLista({ rows, selecionadoId, onSelecionar, hideBanco, editadasIds }: EnriquecimentoListaProps) {
   const grupos = useMemo(() => agrupar(rows, !!hideBanco), [rows, hideBanco]);
 
   return (
@@ -74,6 +76,7 @@ export function EnriquecimentoLista({ rows, selecionadoId, onSelecionar, hideBan
                     selecionado={r.id === selecionadoId}
                     onSelecionar={() => onSelecionar(r.id)}
                     hideBanco={hideBanco}
+                    editadaNaoGravada={editadasIds?.has(r.id)}
                   />
                 ))}
               </div>

@@ -5,6 +5,7 @@
 // ou, na ausência, a descrição atual do lançamento (edita a descrição existente).
 import { useState, useEffect, useRef } from 'react';
 import { ProdutoAutocomplete } from '@/components/shared/ProdutoAutocomplete';
+import { CELULA_EDITAVEL } from './medidasMesa';
 
 export interface ResultadoProdutoEditorProps {
   value: string | null;          // proposto_produto
@@ -36,7 +37,7 @@ export function ResultadoProdutoEditor({ value, descricaoAtual, clienteId, onEdi
   // declarado. Usa `text` — o que está na tela — e não `value` (proposta, frequentemente null).
   return (
     <div title={text} onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) commitValue(textRef.current); }}>
-      <ProdutoAutocomplete value={text} onChange={setBoth} onCommit={commitValue} clienteId={clienteId} inputClassName="h-6 text-[10px] px-2" />
+      <ProdutoAutocomplete value={text} onChange={setBoth} onCommit={commitValue} clienteId={clienteId} inputClassName={CELULA_EDITAVEL} />
     </div>
   );
 }

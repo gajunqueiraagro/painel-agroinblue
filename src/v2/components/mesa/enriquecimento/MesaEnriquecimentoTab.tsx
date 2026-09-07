@@ -80,6 +80,19 @@ export function MesaEnriquecimentoTab({ anoMesRegua, sessaoId: sessaoIdProp, onS
     graceTimers.current.push(t);
   }
   const [selecionadoId, setSelecionadoId] = useState<string | null>(null);
+  /**
+   * 133b-a correção 2 — as linhas editadas e ainda NÃO gravadas no lançamento.
+   *
+   * ⚠ A EDIÇÃO NÃO GRAVA NO LANÇAMENTO, grava a PROPOSTA (`fn_classificacao_editar_proposto`).
+   * A tela não dizia isso, e o operador que editava um campo via a linha mudar de estado
+   * e sumir do recorte — concluindo que tinha gravado. O ponto âmbar e o rodapé desfazem
+   * as duas confusões: o que ele mexeu está aqui, e ainda não foi para o lançamento.
+   */
+  const [editadasIds, setEditadasIds] = useState<ReadonlySet<string>>(() => new Set());
+  const marcarEditada = (id: string) =>
+    setEditadasIds((p) => { const n = new Set(p); n.add(id); return n; });
+  const limparEditada = (id: string) =>
+    setEditadasIds((p) => { if (!p.has(id)) return p; const n = new Set(p); n.delete(id); return n; });
   const [revisei, setRevisei] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   // PR-UX-ENR-MODAL-01 — superfície ampla da mesma mesa. Estado de UI puro:
@@ -179,7 +192,27 @@ export function MesaEnriquecimentoTab({ anoMesRegua, sessaoId: sessaoIdProp, onS
     }
     return copia;
   }, [rowsGrupo, ordenacao]);
-  const selecionado = rowsFiltradas.find((r) => r.id === selecionadoId) ?? null;
+
+  /**
+   * 133b-a correção 2 — a linha SELECIONADA nunca sai do recorte.
+   *
+   * ⚠ EDITAR MUDAVA O ESTADO DA LINHA E ELA SUMIA DEBAIXO DO CURSOR: o operador escolhia
+   * um subcentro, o `will_change_anything` virava, o filtro reavaliava e a linha que ele
+   * estava editando desaparecia — com o painel da direita esvaziando junto. O recorte só
+   * volta a valer para ela quando o operador troca de filtro ou vai para a próxima, que
+   * são os dois momentos em que ele já não está olhando para ela.
+   * ⚠ FIXADA NA POSIÇÃO ORIGINAL, não empurrada para o fim: `Anterior`/`Próximo` andam
+   * pela lista que está na tela, e realocá-la faria a navegação pular.
+   */
+  const rowsNaTela = useMemo(() => {
+    if (!selecionadoId || rowsFiltradas.some((r) => r.id === selecionadoId)) return rowsFiltradas;
+    const presa = rowsVM.find((r) => r.id === selecionadoId);
+    if (!presa) return rowsFiltradas;
+    const posicaoOriginal = rowsVM.findIndex((r) => r.id === selecionadoId);
+    const antes = rowsFiltradas.filter((r) => rowsVM.findIndex((x) => x.id === r.id) < posicaoOriginal);
+    return [...antes, presa, ...rowsFiltradas.slice(antes.length)];
+  }, [rowsFiltradas, rowsVM, selecionadoId]);
+  const selecionado = rowsNaTela.find((r) => r.id === selecionadoId) ?? null;
 
   // PR-MESA-RESOLUCAO-01 / PR-DRAWER-1TO1-01 — lançamentos já vinculados por QUALQUER linha
   // da sessão (lanc_id = match_lancamento_id via view) → o drawer os oculta (o guard
@@ -201,15 +234,15 @@ export function MesaEnriquecimentoTab({ anoMesRegua, sessaoId: sessaoIdProp, onS
   );
 
   // Navegação read-only entre linhas da lista (Anterior/Próximo) — só troca a seleção.
-  const idx = rowsFiltradas.findIndex((r) => r.id === selecionadoId);
+  const idx = rowsNaTela.findIndex((r) => r.id === selecionadoId);
   const canAnterior = idx > 0;
-  const canProximo = rowsFiltradas.length > 0 && idx < rowsFiltradas.length - 1;
-  const irAnterior = () => { if (canAnterior) setSelecionadoId(rowsFiltradas[idx - 1].id); };
+  const canProximo = rowsNaTela.length > 0 && idx < rowsNaTela.length - 1;
+  const irAnterior = () => { if (canAnterior) setSelecionadoId(rowsNaTela[idx - 1].id); };
   const irProximo = () => {
-    if (idx < 0) { if (rowsFiltradas.length) setSelecionadoId(rowsFiltradas[0].id); }
-    else if (canProximo) setSelecionadoId(rowsFiltradas[idx + 1].id);
+    if (idx < 0) { if (rowsNaTela.length) setSelecionadoId(rowsNaTela[0].id); }
+    else if (canProximo) setSelecionadoId(rowsNaTela[idx + 1].id);
   };
-  const posicao = `${idx >= 0 ? idx + 1 : '—'} / ${rowsFiltradas.length}`;
+  const posicao = `${idx >= 0 ? idx + 1 : '—'} / ${rowsNaTela.length}`;
 
   // R1 — Promise da edição em voo (commit-on-blur de Produto/Documento). salvar() a aguarda
   // antes do apply, para o apply_row NUNCA ler update_proposto antes do editar_proposto commitar.
@@ -221,6 +254,28 @@ export function MesaEnriquecimentoTab({ anoMesRegua, sessaoId: sessaoIdProp, onS
   // lançamento rejeita. Só será salvável após editar o subcentro (PR-U2).
   const podeSalvar = !!selecionado && !selecionado.aplicado && selecionado.temMatch && !selecionado.subcentroOrfao;
   const podeReverter = !!selecionado && selecionado.aplicado;
+  /**
+   * 133b-a correção 1 — POR QUE o Salvar está apagado, escrito ao lado.
+   *
+   * ⚠ SÃO DOIS MOTIVOS, E SÓ DOIS: a linha não tem lançamento vinculado, ou a proposta de
+   * subcentro está fora do plano oficial (a trigger do lançamento recusa). Nenhum deles é
+   * "falta revisar" — e era isso que a tela dava a entender, obrigando o operador a
+   * redigitar um subcentro que já estava certo para "liberar" o botão.
+   */
+  const motivoSalvar: string | null =
+    !selecionado ? 'Escolha uma linha.'
+    : selecionado.aplicado ? 'Esta linha já foi gravada — use Reverter para desfazer.'
+    : !selecionado.temMatch ? 'Sem lançamento vinculado: escolha um candidato antes de gravar.'
+    : selecionado.subcentroOrfao ? 'A conta do plano proposta não existe no plano oficial — escolha uma da lista.'
+    : null;
+  /**
+   * ⚠ NADA A GRAVAR NÃO É ERRO — 133b-a correção 1. Quando o Resultado já confere com o
+   * sistema, o apply não escreveria campo nenhum: o gesto que resta é CONFIRMAR que está
+   * conferido e seguir, e o botão passa a dizer isso em vez de prometer uma gravação que
+   * não acontece.
+   */
+  const soConfirma = !!selecionado && !selecionado.aplicado && selecionado.temMatch
+    && !selecionado.subcentroOrfao && !selecionado.mudaAlgo;
 
   // Extrai mensagem humana de qualquer erro (PostgrestError não é instanceof Error).
   const errMsg = (e: unknown): string => {
@@ -303,7 +358,7 @@ export function MesaEnriquecimentoTab({ anoMesRegua, sessaoId: sessaoIdProp, onS
       // (erro da edição já foi tratado no onEditar; aqui só garantimos a ordem.)
       try { await pendingEditRef.current; } catch { /* noop */ }
       const res: any = await applyRow({ staging_id: id, overwrite: true });
-      if (res?.aplicado) { manterEmGraca(id); toast.success('Lançamento salvo.'); return true; }
+      if (res?.aplicado) { manterEmGraca(id); limparEditada(id); toast.success('Lançamento salvo.'); return true; }
       toast.error(MOTIVO_MSG[res?.motivo] ?? `Não salvo (${res?.motivo ?? 'erro'}).`);
       return false;
     } catch (e: unknown) {
@@ -315,11 +370,24 @@ export function MesaEnriquecimentoTab({ anoMesRegua, sessaoId: sessaoIdProp, onS
     const ok = await salvar();
     if (ok) irProximo();
   }
+  /**
+   * Confirmar e próximo — 133b-a correção 1. NÃO chama o banco: não há o que gravar.
+   *
+   * ⚠ MARCA "REVISADO" E AVANÇA, que é exatamente o que o operador quis dizer. Chamar o
+   * `apply_row` aqui gastaria uma ida ao banco para receber `nada_a_gravar` e mostrar um
+   * toast de erro no fim de um gesto que deu certo.
+   */
+  function handleConfirmarProximo() {
+    if (!selecionado) return;
+    limparEditada(selecionado.id);
+    setRevisei(true);
+    irProximo();
+  }
   async function handleReverter() {
     if (!selecionado) return;
     try {
       const res: any = await reverterRow(selecionado.id);
-      if (res?.ok) toast.success('Revertido.');
+      if (res?.ok) { limparEditada(selecionado.id); toast.success('Revertido.'); }
       else toast.error(MOTIVO_MSG[res?.motivo] ?? `Não revertido (${res?.motivo ?? 'erro'}).`);
     } catch (e: unknown) {
       toast.error(`Erro ao reverter: ${errMsg(e)}`);
@@ -347,6 +415,9 @@ export function MesaEnriquecimentoTab({ anoMesRegua, sessaoId: sessaoIdProp, onS
     // salvar() disparado logo em seguida (blur→click) poder aguardá-la antes do apply.
     const p = editarProposto({ staging_id: selecionado.id, patch });
     pendingEditRef.current = p;
+    /* Marca ANTES do await: o ponto âmbar é sobre o gesto, não sobre a resposta do banco —
+       e o operador precisa vê-lo no mesmo render em que soltou o campo. */
+    marcarEditada(selecionado.id);
     try {
       const res: any = await p;
       if (res?.ok) {
@@ -416,10 +487,11 @@ export function MesaEnriquecimentoTab({ anoMesRegua, sessaoId: sessaoIdProp, onS
   // PR-UX-ENR-MODAL-01 — prop-bags únicos. A aba e o modal ampliado consomem
   // EXATAMENTE as mesmas props; a lista de props existe em UM lugar só.
   const listaProps: EnriquecimentoListaProps = {
-    rows: rowsFiltradas,
+    rows: rowsNaTela,
     selecionadoId,
     onSelecionar: setSelecionadoId,
     hideBanco: filtroConta !== 'todas',
+    editadasIds,
   };
   const detalheProps: EnriquecimentoDetalheProps = {
     row: selecionado,
@@ -447,12 +519,15 @@ export function MesaEnriquecimentoTab({ anoMesRegua, sessaoId: sessaoIdProp, onS
     onAplicarTodos: () => { void handleAplicarTodos(); },
     nAplicaveis,
     salvarDisabled: !podeSalvar,
+    salvarMotivo: motivoSalvar,
+    soConfirma,
+    onConfirmarProximo: handleConfirmarProximo,
     reverterDisabled: !podeReverter,
     aplicarTodosDisabled: !sessaoId || nAplicaveis === 0,
     isBusy,
   };
   // Contagem da mesa ampliada: reusa rowsFiltradas (sessão + filtros vigentes). Nada recalculado.
-  const mesaAmpliadaVazia = rowsFiltradas.length === 0;
+  const mesaAmpliadaVazia = rowsNaTela.length === 0;
   const sessaoLabel = sessoesVM.find((s) => s.id === sessaoId)?.label ?? null;
 
   /* ⚠ "VOCÊ DECIDE" É O ÚNICO ESTADO COM FAIXA DE CANDIDATOS — 133b. Os outros três avisos
@@ -649,8 +724,13 @@ export function MesaEnriquecimentoTab({ anoMesRegua, sessaoId: sessaoIdProp, onS
       {/* ═══ RODAPÉ FIXO ══════════════════════════════════════════════════════════ */}
       <div className="flex shrink-0 flex-wrap items-center gap-2 rounded-lg border bg-muted/30 px-2 py-1">
         <span className="min-w-0 flex-1 text-[10px] leading-tight text-muted-foreground">
-          Nada foi gravado. Gravar aplica os <b className="tabular-nums">{resumo.atualizam.qtd}</b> que
-          atualizam, os que você decidiu e os agrupamentos que você aceitou. Os sem par ficam no relatório.
+          Nada foi gravado no lançamento ainda. Gravar aplica os{' '}
+          <b className="tabular-nums">{resumo.atualizam.qtd}</b> que atualizam, os que você decidiu e os
+          agrupamentos que você aceitou. Os sem par ficam no relatório.
+          {editadasIds.size > 0 && (
+            <> · <b className="tabular-nums text-amber-700 dark:text-amber-400">{editadasIds.size}</b>{' '}
+              editada{editadasIds.size === 1 ? '' : 's'} nesta sessão, marcada{editadasIds.size === 1 ? '' : 's'} em âmbar.</>
+          )}
         </span>
         <Button type="button" size="sm" variant="outline" className="h-6 px-2 text-[10px]"
           disabled={resumo.sem_par.qtd === 0}

@@ -11,6 +11,7 @@
 // uma seleção real do operador → grava.
 import { FazendaSelect } from '@/components/shared/FazendaSelect';
 import type { Fazenda } from '@/contexts/FazendaContext';
+import { CELULA_EDITAVEL } from './medidasMesa';
 
 export interface ResultadoFazendaEditorProps {
   value: string | null;
@@ -35,7 +36,7 @@ export function ResultadoFazendaEditor({
       fazendas={fazendas}
       forcaAdministrativo={forcaAdministrativo}
       disabled={disabled}
-      triggerClassName="h-6 text-[10px] px-2"
+      triggerClassName={CELULA_EDITAVEL}
       hideAviso
     />
   );

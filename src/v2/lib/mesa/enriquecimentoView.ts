@@ -145,10 +145,12 @@ export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
     refLinha('Data vencimento', row.lanc_data_vencimento, row.excel_data_vencimento,
       fmtData(row.lanc_data_vencimento), fmtData(row.excel_data_vencimento)),
     refLinha('Competência', row.lanc_data_competencia, row.excel_data, fmtData(row.lanc_data_competencia), fmtData(row.excel_data)),
-    /* ── 129c: as linhas que faltavam para a Mesa mostrar os onze campos ─────────
-       ⚠ `Data venc.` e `Safra` NÃO TINHAM FONTE até a view de 20260906195410; a tabela
-       da Mesa já as listava com "—" para não mentir por omissão. Agora elas têm. */
-    refLinha('Data venc.', row.lanc_data_vencimento, null, fmtData(row.lanc_data_vencimento), '—'),
+    /* ⚠ A SEGUNDA LINHA DE VENCIMENTO SAIU — 133b-a item 3. O 129c criou `Data venc.`
+       (sistema × '—') quando a view ainda não trazia a data da planilha; o 133a criou
+       `Data vencimento` (sistema × planilha), que a substitui e compara o par certo. As
+       duas conviveram, saídas da MESMA coluna do banco, e qualquer tela que desenhasse o
+       comparativo inteiro mostrava vencimento duas vezes.
+       ⚠ `Safra` FICA: ela nasceu no mesmo bloco mas não tem irmã. */
     refLinha('Safra', row.lanc_safra_codigo, row.proposto_safra, fmtTexto(row.lanc_safra_codigo), fmtTexto(row.proposto_safra)),
     // P0-5 — Documento: Sistema = numero_documento do lançamento; Excel = excel_documento; Resultado = proposta.
     { campo: 'Documento', sistema: fmtTexto(row.lanc_numero_documento), excel: fmtTexto(row.excel_documento), ...resultadoEditavel(row.lanc_numero_documento, row.excel_documento, row.proposto_numero_documento) },
@@ -267,10 +269,18 @@ export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
   // PR-U2d-1 — estado operacional da linha (ordem: primeira condição que casar vence).
   const temMatch = row.lanc_id != null;
   const subcentroOrfao = row.will_create_subcentro_orfao || row.proposto_subcentro_existe_no_plano === false;
+  /* ⚠ "NADA MUDA" NÃO É "REVISAR" — 133b-a correção 1, e a diferença é um dia de trabalho
+     do operador. `will_change_anything` é a flag-mãe da view: falsa, o apply não escreveria
+     campo nenhum. A linha caía em `revisar` só porque o `match_status` era `divergente`, e
+     a tela pedia revisão de algo que já está igual ao sistema — obrigando a mexer no
+     subcentro para "liberar" um Salvar que não teria o que gravar.
+     ⚠ A ORDEM IMPORTA: a checagem vem DEPOIS do órfão (que bloqueia de verdade) e ANTES do
+     `divergente`, que é justamente o status que produzia o falso "revisar". */
   const estado: EnriqEstado =
     row.aplicado ? 'aplicado'
     : !temMatch ? 'sem_vinculo'                         // sem_match / ambíguo não resolvido
     : subcentroOrfao ? 'revisar'                        // proposta fora do plano → bloqueia apply
+    : !row.will_change_anything ? 'nada'                // nada a gravar: já confere com o sistema
     : row.match_status === 'divergente' ? 'revisar'     // lançamento já tem valor diferente
     : row.match_status === 'ja_classificado' ? 'nada'   // já == proposta
     : 'pronto';                                         // exato / ambiguo_resolvido

@@ -239,11 +239,13 @@ export function DeParaCampoModal({
                       fornecedores={fornecedores}
                       search={buscaPorTexto[it.texto] ?? ''}
                       onSearchChange={(s) => setBuscaDe(it.texto, s)}
-                      onCriarNovo={() => onCriarFornecedor?.()}
-                      /* ⚠ O "+" SÓ DEPOIS DE BUSCAR E NÃO ACHAR — 133b. Sempre visível, ele
-                         convidava a cadastrar de novo o que já existe: são 107 duplicados
-                         de nome no NJ, e cada um começou assim. */
-                      novoSomenteSemResultado
+                      /* ⚠ SEM "+" AQUI — 133b-a correção 4. O diálogo de cadastro de
+                         fornecedor mora em `ImportLancDeParaPanel` e ainda não foi trazido
+                         para este modal; o botão existia e não abria nada. Ele volta junto
+                         com o diálogo, e aí com a regra do 133b: só depois de buscar e não
+                         achar, porque sempre visível ele convida a duplicar — são 107
+                         cadastros de nome repetido no NJ, e cada um começou assim. */
+                      onCriarNovo={onCriarFornecedor}
                       triggerClassName="h-6 px-1.5 text-[10px]"
                       novoButtonClassName="h-6 w-6"
                       showCpfCnpj
