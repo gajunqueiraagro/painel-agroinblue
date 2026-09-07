@@ -63,6 +63,31 @@ export function comoFoiSugerido(origem: string | null | undefined, textoExcel: s
   }
 }
 
+/**
+ * Entrada ou saída — 129d item 4, extraída para o módulo em 133b porque a linha "Tipo"
+ * da tabela precisa da MESMA resposta que a lista mostra.
+ *
+ * `lanc_sinal` é TEXTO ('1' / '-1'); o `tipo_operacao` é o desempate quando o sinal não
+ * veio. Sem lançamento, `null`: a tela não afirma nenhum dos dois.
+ */
+function entradaOuSaidaDe(row: ClassificacaoStagingPreviewRow): 'entrada' | 'saida' | null {
+  if (row.lanc_sinal === '1') return 'entrada';
+  if (row.lanc_sinal === '-1') return 'saida';
+  const t = row.lanc_tipo_operacao ?? row.excel_tipo_operacao;
+  if (typeof t === 'string' && t.startsWith('1')) return 'entrada';
+  if (typeof t === 'string' && t.startsWith('2')) return 'saida';
+  return null;
+}
+
+const rotuloTipo = (v: 'entrada' | 'saida' | null): string | null =>
+  v === 'entrada' ? 'Entrada' : v === 'saida' ? 'Saída' : null;
+
+/** "Macro · Grupo · Centro" com os que existem; `null` quando nenhum existe. */
+function juntarTrilha(...partes: Array<string | null>): string | null {
+  const vivas = partes.filter((p): p is string => !!p && p.trim() !== '');
+  return vivas.length ? vivas.join(' · ') : null;
+}
+
 export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
   const statusLabel = STATUS_META[row.match_status]?.label ?? row.match_status;
 
@@ -131,6 +156,22 @@ export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
     // PR-ENR-01 — OBS read-only: observação do lançamento espelhada no Resultado. Não há fonte
     // Excel ('—') nem proposta/apply; Resultado preserva o valor do Sistema ('—' só quando vazio).
     { campo: 'OBS', sistema: fmtTexto(row.lanc_observacao), excel: '—', resultado: fmtTexto(row.lanc_observacao), tom: 'neutro' },
+    /* ── 133b: as três linhas que faltavam para os quinze campos do mock ──────────
+       ⚠ AS TRÊS SÃO LEITURA, e é isso que elas têm em comum: nenhuma é gravável pela
+       Mesa. Estão na tabela porque o operador confere por elas — "saiu ou entrou?",
+       "em que centro isto caiu?", "este lançamento ainda está vivo?" — e um campo que
+       ele procura e não acha vira uma volta ao Financeiro. */
+    { campo: 'Tipo', sistema: fmtTexto(rotuloTipo(entradaOuSaidaDe(row))), excel: fmtTexto(row.excel_tipo_operacao),
+      resultado: fmtTexto(rotuloTipo(entradaOuSaidaDe(row))), tom: 'neutro' },
+    { campo: 'Macro · Grupo · Centro',
+      sistema: fmtTexto(juntarTrilha(row.lanc_macro_atual, row.lanc_grupo_atual, row.lanc_centro_atual)),
+      excel: '—',
+      resultado: fmtTexto(juntarTrilha(row.lanc_macro_atual, row.lanc_grupo_atual, row.lanc_centro_atual)),
+      tom: 'neutro' },
+    /* ⚠ SITUAÇÃO É DO LANÇAMENTO, não da linha da planilha: `lanc_status`. Sem lançamento
+       vinculado não há situação, e o "—" diz exatamente isso. */
+    { campo: 'Situação', sistema: fmtTexto(row.lanc_status), excel: '—',
+      resultado: fmtTexto(row.lanc_status), tom: 'neutro' },
   ];
 
   // D3 — descritores LEGADO (PR-U2b), NÃO renderizados: o detalhe usa editores hardcoded
@@ -195,16 +236,7 @@ export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
     }
   })();
   // PR-U2c-2A — valores crus da proposta para os editores inline.
-  /* Entrada ou saída — 129d item 4. `lanc_sinal` é TEXTO ('1' / '-1'); o `tipo_operacao`
-     é o desempate quando o sinal não veio. Sem lançamento, `null`: a tela não afirma. */
-  const entradaOuSaida: 'entrada' | 'saida' | null = (() => {
-    if (row.lanc_sinal === '1') return 'entrada';
-    if (row.lanc_sinal === '-1') return 'saida';
-    const t = row.lanc_tipo_operacao ?? row.excel_tipo_operacao;
-    if (typeof t === 'string' && t.startsWith('1')) return 'entrada';
-    if (typeof t === 'string' && t.startsWith('2')) return 'saida';
-    return null;
-  })();
+  const entradaOuSaida = entradaOuSaidaDe(row);
 
   const edicao: EnriqEdicao = {
     subcentro: subcentroEfetivo,   // BUG — nunca a proposta órfã; proposta válida ou o Sistema soberano
@@ -262,6 +294,11 @@ export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
     valorNum: row.excel_valor ?? row.lanc_valor ?? null,
     entradaOuSaida,
     contaBancaria: banco,
+    /* ⚠ A IDENTIDADE DA LINHA É A DESCRIÇÃO DA PLANILHA — 133b. A lista do passo 2 mostra
+       o que o operador escreveu no Excel, não o que o banco importou: é por aquele texto
+       que ele reconhece a linha que está procurando. Sem descrição na planilha, cai no
+       fornecedor, e só então no "—". */
+    descricaoExcel: fmtTexto(row.excel_produto ?? row.excel_fornecedor),
     porQue,
     banco: fmtTexto(banco),
     fornecedor: fmtTexto(favSistema ?? favExcel),
@@ -349,6 +386,75 @@ export function contarContagens(staging: ClassificacaoStagingPreviewRow[]): Enri
     if (r.aplicado) aplicados++;
   }
   return { total: staging.length, status, aplicados };
+}
+
+/**
+ * Os SEIS grupos do topo do passo 2 — [ENRIQUECER-TELA-01] (133b).
+ *
+ * ⚠ GRUPO NÃO É STATUS. O banco tem treze `match_status`; o operador tem seis perguntas.
+ * O mapa abaixo é a única tradução, e é ele que faz o chip, o número do topo e o filtro
+ * concordarem — três lugares lendo três listas divergiriam na primeira regra nova.
+ * ⚠ `ja_classificado` MORA EM "Já gravadas" porque o gesto acabou: o lançamento já tem
+ * classificação e a linha não pede nada. Ele mantém o rótulo próprio na pílula da linha
+ * (STATUS_META), que é onde a distinção ainda informa.
+ * ⚠ "Transferência entre contas" NASCE VAZIO e assim fica até a 133c: nenhum status atual
+ * significa transferência, e inventar um agora produziria um número que não se explica.
+ */
+export type EnriqGrupo = 'atualizam' | 'decide' | 'agrupam' | 'transferencia' | 'sem_par' | 'ja_gravadas';
+
+export const GRUPO_DE_STATUS: Readonly<Record<string, EnriqGrupo>> = {
+  exato: 'atualizam',
+  divergente: 'atualizam',
+  ambiguo: 'decide',
+  candidatos_proximos: 'decide',
+  sugestao_grupo: 'agrupam',
+  sugestao_split: 'agrupam',
+  sem_match: 'sem_par',
+  sem_conta_para_match: 'sem_par',
+  ja_classificado: 'ja_gravadas',
+  ja_aplicado: 'ja_gravadas',
+  ambiguo_resolvido: 'ja_gravadas',
+  resolvido_manual: 'ja_gravadas',
+  resolvido_grupo: 'ja_gravadas',
+};
+
+export interface EnriqGrupoResumo {
+  qtd: number;
+  /** `sum(abs(excel_valor))` das linhas do grupo. */
+  soma: number;
+  /** Linhas do banco envolvidas — só faz sentido em "agrupam" (`match_lancamento_ids`). */
+  lancamentos: number;
+}
+
+export type EnriqResumoGrupos = Record<EnriqGrupo, EnriqGrupoResumo>;
+
+/**
+ * ⚠ A SOMA SAI DAS LINHAS JÁ CARREGADAS, não de uma consulta nova: a sessão inteira já é
+ * lida para os chips, e um segundo SELECT para somar o que está na memória seria uma ida
+ * ao banco para responder o que a tela já sabe — e uma segunda verdade quando as duas
+ * chegassem em ordens diferentes.
+ */
+export function resumirGrupos(staging: ClassificacaoStagingPreviewRow[]): EnriqResumoGrupos {
+  const zero = (): EnriqGrupoResumo => ({ qtd: 0, soma: 0, lancamentos: 0 });
+  const r: EnriqResumoGrupos = {
+    atualizam: zero(), decide: zero(), agrupam: zero(),
+    transferencia: zero(), sem_par: zero(), ja_gravadas: zero(),
+  };
+  for (const linha of staging) {
+    const g = GRUPO_DE_STATUS[linha.match_status];
+    /* Status desconhecido não entra em grupo nenhum — some do topo, não vira número
+       errado num grupo qualquer. A lista continua mostrando a linha. */
+    if (!g) continue;
+    r[g].qtd += 1;
+    r[g].soma += Math.abs(Number(linha.excel_valor) || 0);
+    r[g].lancamentos += Array.isArray(linha.match_lancamento_ids) ? linha.match_lancamento_ids.length : 0;
+  }
+  return r;
+}
+
+/** As linhas de um grupo — o filtro dos chips do passo 2. */
+export function filtrarPorGrupo(rows: EnriqRowVM[], grupo: EnriqGrupo | 'todas'): EnriqRowVM[] {
+  return grupo === 'todas' ? rows : rows.filter((l) => GRUPO_DE_STATUS[l.status] === grupo);
 }
 
 // P0-1A: conceito "aplicável em lote" vem PRONTO da view (lote_aplicavel) —

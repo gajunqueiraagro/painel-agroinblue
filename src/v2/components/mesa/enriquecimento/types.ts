@@ -133,6 +133,8 @@ export interface EnriqRowVM {
   entradaOuSaida: 'entrada' | 'saida' | null;
   /** A conta bancária do lançamento — contexto da lista (129d item 8). */
   contaBancaria: string | null;
+  /** A descrição que veio da PLANILHA — a identidade da linha na lista do passo 2 (133b). */
+  descricaoExcel: string;
   /**
    * Por que esta linha está no estado em que está — 133a item 5.
    *

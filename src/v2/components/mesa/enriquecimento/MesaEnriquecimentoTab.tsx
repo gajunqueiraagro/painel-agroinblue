@@ -13,31 +13,58 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { useFinanceiroV2 } from '@/hooks/useFinanceiroV2';
 import { useClassificacaoStaging, useSessoesClassificacao } from '@/v2/hooks/useClassificacaoStaging';
 import {
-  toRowVM, toSessoesVM, contarContagens, contarAplicaveisExatos, filtrarPorStatus, filtrarPorModo, escolherMelhorSessaoId,
-  listarContas, filtrarPorConta,
+  toRowVM, toSessoesVM, contarAplicaveisExatos, filtrarPorModo, escolherMelhorSessaoId,
+  listarContas, filtrarPorConta, resumirGrupos, filtrarPorGrupo, GRUPO_DE_STATUS,
+  type EnriqGrupo,
 } from '@/v2/lib/mesa/enriquecimentoView';
-import { EnriquecimentoToolbar } from './EnriquecimentoToolbar';
 import { EnriquecimentoLista, type EnriquecimentoListaProps } from './EnriquecimentoLista';
 import { EnriquecimentoDetalhe, type EnriquecimentoDetalheProps } from './EnriquecimentoDetalhe';
-import { EnriquecimentoActions, type EnriquecimentoActionsProps } from './EnriquecimentoActions';
+import { type EnriquecimentoActionsProps } from './EnriquecimentoActions';
 import { EnriquecimentoMesaModal } from './EnriquecimentoMesaModal';
 import { EnriquecimentoImportarDialog } from './EnriquecimentoImportarDialog';
-import { EnriquecimentoCandidatosDrawer } from './EnriquecimentoCandidatosDrawer';
-import { EnriquecimentoNaoExplicadoDrawer } from './EnriquecimentoNaoExplicadoDrawer';
-import { useSistemaNaoExplicado } from '@/v2/hooks/useSistemaNaoExplicado';
-import { mesAbrev } from './fmt';
+import { EnriquecimentoTopoNumeros } from './EnriquecimentoTopoNumeros';
+import { EnriquecimentoCandidatosInline } from './EnriquecimentoCandidatosInline';
+import { MesaCamposTabela } from './MesaCamposTabela';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { baixarCsv, csvCampo } from '@/lib/csv';
+import { fmtBRL, fmtData } from './fmt';
 import { Button } from '@/components/ui/button';
-import type { EnriqStatus } from './types';
 
-export function MesaEnriquecimentoTab({ anoMesRegua }: { anoMesRegua?: string } = {}) {
+/** Como a lista da esquerda é ordenada — 133b, o controle "ordenação" da direita. */
+type Ordenacao = 'planilha' | 'valor' | 'data';
+
+export interface MesaEnriquecimentoTabProps {
+  anoMesRegua?: string;
+  /**
+   * 133b — a sessão CONTROLADA pela casca de três passos, quando ela existe.
+   *
+   * ⚠ DOIS DONOS DA MESMA SESSÃO SERIA O DEFEITO DO B-25 DE VOLTA: a barra de passos
+   * mostra os números da sessão e esta tela mostra as linhas dela; se cada uma guardasse
+   * a sua, trocar a sessão aqui deixaria o topo falando de outra. Sem as props, a tela
+   * segue dona do próprio estado — é assim que ela funciona fora da casca.
+   */
+  sessaoId?: string | null;
+  onSessaoId?: (id: string | null) => void;
+}
+
+export function MesaEnriquecimentoTab({ anoMesRegua, sessaoId: sessaoIdProp, onSessaoId }: MesaEnriquecimentoTabProps = {}) {
   const { clienteAtual } = useCliente();
   const { data: sessoes } = useSessoesClassificacao(clienteAtual?.id ?? null);
 
   // Estado de UI apenas.
-  const [sessaoId, setSessaoId] = useState<string | null>(null);
+  const [sessaoIdLocal, setSessaoIdLocal] = useState<string | null>(null);
+  const controlada = sessaoIdProp !== undefined;
+  const sessaoId = controlada ? (sessaoIdProp ?? null) : sessaoIdLocal;
+  const setSessaoId = (id: string | null) => {
+    if (controlada) onSessaoId?.(id); else setSessaoIdLocal(id);
+  };
   const [filtroConta, setFiltroConta] = useState<string>('todas');
-  const [filtroStatus, setFiltroStatus] = useState<EnriqStatus | 'todos'>('todos');
-  const [filtroModo, setFiltroModo] = useState<'pendentes' | 'todas'>('pendentes');   // PR-U2d-1 — burn-down
+  /* ⚠ O FILTRO PASSOU A SER POR GRUPO — 133b. Eram treze `match_status`; os chips do topo
+     são seis, e filtrar por status enquanto o chip fala de grupo faria o número do chip e
+     o tamanho da lista discordarem. */
+  const [filtroGrupo, setFiltroGrupo] = useState<EnriqGrupo | 'todas'>('todas');
+  const [ordenacao, setOrdenacao] = useState<Ordenacao>('planilha');
+  const [filtroModo, setFiltroModo] = useState<'pendentes' | 'todas'>('todas');   // PR-U2d-1 — burn-down
 
   // PR-U2d-1 — janela de graça: ids recém-aplicados ficam visíveis ~1,4s antes do
   // burn-down (só timing de apresentação; nada de dados do VM aqui).
@@ -61,10 +88,10 @@ export function MesaEnriquecimentoTab({ anoMesRegua }: { anoMesRegua?: string } 
 
   // Auto-seleção da sessão mais útil na abertura (regra extraída para o módulo puro).
   useEffect(() => {
-    if (sessaoId) return;
+    if (sessaoId || controlada) return;
     const melhor = escolherMelhorSessaoId(sessoes);
-    if (melhor) setSessaoId(melhor);
-  }, [sessaoId, sessoes]);
+    if (melhor) setSessaoIdLocal(melhor);
+  }, [sessaoId, sessoes, controlada]);
 
   const {
     staging, isFetching,
@@ -72,7 +99,7 @@ export function MesaEnriquecimentoTab({ anoMesRegua }: { anoMesRegua?: string } 
     apply, isApplying,
     editarProposto,
     resolverProximos, isResolvendoProximos, desfazerProximos,
-    resolverGrupo, isResolvendoGrupo, desfazerGrupo,
+    isResolvendoGrupo, desfazerGrupo,
     casarSessao, isCasando,
   } = useClassificacaoStaging(sessaoId, clienteAtual?.id);
 
@@ -97,14 +124,9 @@ export function MesaEnriquecimentoTab({ anoMesRegua }: { anoMesRegua?: string } 
     }
   }
 
-  // PR-MESA-RESOLUCAO-01 — drawer de candidatos próximos (staging_id da linha aberta).
-  const [candDrawerId, setCandDrawerId] = useState<string | null>(null);
-  // PR-MESA-INVERSO-01/02 — visão read-only "sistema não explicado", NO ESCOPO da conta
-  // selecionada na toolbar (reusa `filtroConta`, a mesma fonte de estado do resto da Mesa;
-  // 'todas'/'__sem__' → null = todas as contas da sessão). Chip e drawer usam a mesma query.
-  const [naoExplicadoOpen, setNaoExplicadoOpen] = useState(false);
-  const contaIdSel = (filtroConta === 'todas' || filtroConta === '__sem__') ? null : filtroConta;
-  const { data: naoExplicados } = useSistemaNaoExplicado(sessaoId, contaIdSel);
+  /* ⚠ O DRAWER DE CANDIDATOS SAIU — 133b. Os candidatos moram embaixo da tabela, e a linha
+     a que eles se referem é a SELECIONADA: não há mais um segundo "id aberto" que pudesse
+     divergir da seleção. */
 
   // PR-U2c-2A — data layer dos editores inline (fonte única: mesmos dados do
   // Lançamento oficial). Loaders manuais → só carrega o necessário.
@@ -125,19 +147,38 @@ export function MesaEnriquecimentoTab({ anoMesRegua }: { anoMesRegua?: string } 
   // ViewModels prontos (adapters/selectors puros).
   const sessoesVM = useMemo(() => toSessoesVM(sessoes), [sessoes]);
   const contas = useMemo(() => listarContas(staging), [staging]);
-  // PR-MESA-INVERSO-02 — rótulos do drawer (conta/mês) para o texto de escopo verdadeiro.
-  const contaNomeSel = contaIdSel ? (contas.find((c) => c.id === contaIdSel)?.nome ?? null) : null;
+  /* O mês da sessão — o fallback do casador quando a régua não vem por prop. Os rótulos de
+     conta/mês do drawer "sistema não explicado" saíram com ele (133b). */
   const mesAtivo = sessoes?.find((s) => s.sessao_id === sessaoId)?.excel_ano_mes ?? null;
-  const mesLabelSel = mesAtivo ? mesAbrev(mesAtivo) : null;
   // Conta é a partição de trabalho: contadores, lista e fluxo derivam do staging DA CONTA.
   const stagingConta = useMemo(() => filtrarPorConta(staging, filtroConta), [staging, filtroConta]);
-  const contagens = useMemo(() => contarContagens(stagingConta), [stagingConta]);
+  /* 133b — os seis números do topo e as somas em R$, da MESMA lista que a tela desenha.
+     ⚠ `contarContagens` SAIU DAQUI: ele conta os treze `match_status`, e a tela agora fala
+     em seis grupos. Manter os dois faria dois números para a mesma pergunta. Ele continua
+     exportado e testado — a mesa ampliada e as telas legadas o usam. */
+  const resumo = useMemo(() => resumirGrupos(stagingConta), [stagingConta]);
   // P0-1A: o lote é da SESSÃO (todas as contas) — não pode depender do filtro de conta.
   const nAplicaveis = useMemo(() => contarAplicaveisExatos(staging), [staging]);
   const rowsVM = useMemo(() => stagingConta.map(toRowVM), [stagingConta]);
   // PR-U2d-1 — modo (pendentes/todas) é o gate; o filtro por status refina dentro dele.
   const rowsModo = useMemo(() => filtrarPorModo(rowsVM, filtroModo, graceIds), [rowsVM, filtroModo, graceIds]);
-  const rowsFiltradas = useMemo(() => filtrarPorStatus(rowsModo, filtroStatus), [rowsModo, filtroStatus]);
+  const rowsGrupo = useMemo(() => filtrarPorGrupo(rowsModo, filtroGrupo), [rowsModo, filtroGrupo]);
+  /* ⚠ A ORDENAÇÃO É DA APRESENTAÇÃO, e por isso é a ÚLTIMA: ordenar antes de filtrar daria
+     o mesmo resultado com mais trabalho, e ordenar dentro do filtro esconderia que a ordem
+     padrão é a da planilha — que é a que o operador tem aberta ao lado. */
+  const rowsFiltradas = useMemo(() => {
+    if (ordenacao === 'planilha') return rowsGrupo;
+    const copia = [...rowsGrupo];
+    if (ordenacao === 'valor') {
+      copia.sort((a, b) => Math.abs(b.valorNum ?? 0) - Math.abs(a.valorNum ?? 0));
+    } else {
+      /* `data` já vem "dd/mm/aaaa" do adapter; comparar strings nesse formato ordenaria por
+         dia. Os pedaços invertidos dão a ordem cronológica sem reconverter para Date. */
+      const chave = (d: string) => d.split('/').reverse().join('');
+      copia.sort((a, b) => chave(a.data).localeCompare(chave(b.data)));
+    }
+    return copia;
+  }, [rowsGrupo, ordenacao]);
   const selecionado = rowsFiltradas.find((r) => r.id === selecionadoId) ?? null;
 
   // PR-MESA-RESOLUCAO-01 / PR-DRAWER-1TO1-01 — lançamentos já vinculados por QUALQUER linha
@@ -153,19 +194,11 @@ export function MesaEnriquecimentoTab({ anoMesRegua }: { anoMesRegua?: string } 
     }
     return m;
   }, [staging]);
-  const candRow = useMemo(
-    () => staging.find((r) => r.staging_id === candDrawerId) ?? null,
-    [staging, candDrawerId],
+  /** A linha CRUA da selecionada — a faixa de candidatos precisa do valor e da data do Excel. */
+  const linhaCrua = useMemo(
+    () => staging.find((r) => r.staging_id === selecionadoId) ?? null,
+    [staging, selecionadoId],
   );
-  const candContexto = candRow
-    ? {
-        linha: candRow.excel_linha_origem,
-        data: candRow.excel_data,
-        valor: candRow.excel_valor,
-        tipo_operacao: candRow.excel_tipo_operacao,
-        fornecedor: candRow.excel_fornecedor,
-      }
-    : null;
 
   // Navegação read-only entre linhas da lista (Anterior/Próximo) — só troca a seleção.
   const idx = rowsFiltradas.findIndex((r) => r.id === selecionadoId);
@@ -216,22 +249,13 @@ export function MesaEnriquecimentoTab({ anoMesRegua }: { anoMesRegua?: string } 
     nao_resolvido_grupo: 'Linha não está resolvida como grupo.',
   };
 
-  // PR-MESA-GRUPO-01 — agrupa N lançamentos (resolver_grupo). O guard anti-duplo
-  // bidirecional e a soma são validados no banco; a `mensagem` cita a linha conflitante.
-  async function handleResolverGrupo(lancIds: string[]) {
-    if (!candDrawerId) return;
-    try {
-      const res: any = await resolverGrupo({ staging_id: candDrawerId, lancamento_ids: lancIds });
-      if (res?.ok) {
-        toast.success(`Grupo criado — ${lancIds.length} lançamentos.`);
-        setCandDrawerId(null);
-      } else {
-        toast.error(res?.mensagem ?? MOTIVO_MSG[res?.motivo] ?? `Não agrupado (${res?.motivo ?? 'erro'}).`);
-      }
-    } catch (e: unknown) {
-      toast.error(`Erro ao agrupar: ${errMsg(e)}`);
-    }
-  }
+  /* ⚠ CRIAR GRUPO SAIU DA TELA JUNTO COM O DRAWER — 133b, e é perda declarada, não
+     descuido: a composição por soma (N lançamentos = 1 linha da planilha) era a segunda
+     seção do `EnriquecimentoCandidatosDrawer`, com seleção múltipla e conferência de soma
+     ao vivo. Ela volta na 133c, que é onde o envelope pôs "agrupamento com ação".
+     ⚠ `fn_classificacao_resolver_grupo` e `fn_classificacao_candidatos_grupo` CONTINUAM
+     INTACTAS no banco, e `desfazerGrupo` segue ligado no botão da direita: as sessões que
+     já têm grupos resolvidos podem desfazê-los. O que falta é criar um novo. */
   async function handleDesfazerGrupo(stagingId: string) {
     try {
       const res: any = await desfazerGrupo(stagingId);
@@ -245,12 +269,14 @@ export function MesaEnriquecimentoTab({ anoMesRegua }: { anoMesRegua?: string } 
   // PR-MESA-RESOLUCAO-01 — escolhe UM candidato (resolver_proximos). O guard
   // anti-duplo-match responde com `mensagem` citando a linha conflitante.
   async function handleResolverProximos(lancId: string) {
-    if (!candDrawerId) return;
+    if (!selecionadoId) return;
     try {
-      const res: any = await resolverProximos({ staging_id: candDrawerId, lancamento_id: lancId });
+      const res: any = await resolverProximos({ staging_id: selecionadoId, lancamento_id: lancId });
       if (res?.ok) {
         toast.success('Candidato escolhido — vínculo gravado.');
-        setCandDrawerId(null);
+        /* ⚠ "E IR PARA A PRÓXIMA" É PARTE DO GESTO — 133b. O operador que decide um ambíguo
+           quer o seguinte; parar na mesma linha o obriga a um clique por decisão. */
+        irProximo();
       } else {
         toast.error(res?.mensagem ?? MOTIVO_MSG[res?.motivo] ?? `Não resolvido (${res?.motivo ?? 'erro'}).`);
       }
@@ -429,120 +455,216 @@ export function MesaEnriquecimentoTab({ anoMesRegua }: { anoMesRegua?: string } 
   const mesaAmpliadaVazia = rowsFiltradas.length === 0;
   const sessaoLabel = sessoesVM.find((s) => s.id === sessaoId)?.label ?? null;
 
+  /* ⚠ "VOCÊ DECIDE" É O ÚNICO ESTADO COM FAIXA DE CANDIDATOS — 133b. Os outros três avisos
+     coloridos que ficavam aqui ("sem match", "grupo resolvido", "escolhido manualmente")
+     diziam o que a pílula da linha já diz; o que eles tinham de próprio — desfazer grupo e
+     desfazer escolha — continua na mesa ampliada, onde o gesto é raro e cabe. */
+  const pedeDecisao = selecionado?.status === 'ambiguo' || selecionado?.status === 'candidatos_proximos';
+
+  /**
+   * O CSV do que não tem par — 133b, usando `src/lib/csv.ts` (o BOM que faz o Excel
+   * brasileiro abrir o acento certo mora lá).
+   *
+   * ⚠ SOBRE O RECORTE DE CONTA VIGENTE, não sobre a sessão inteira: o rodapé fala dos
+   * números que estão na tela, e um CSV maior que eles seria uma terceira contagem.
+   */
+  /* ⚠ RECEBE `string`, e não `MatchStatus`: o tipo escrito à mão é MENOR que o CHECK do
+     banco (ver a nota em useClassificacaoStaging), e comparar diretamente com ele faria o
+     TS acusar "comparação sem interseção" num status que existe de verdade. */
+  const motivoSemPar = (status: string): string =>
+    status === 'sem_conta_para_match'
+      ? 'sem conta bancária na planilha'
+      : 'nenhum movimento com este valor na conta';
+
+  function baixarSemPar() {
+    const linhas = ['linha,data,conta,descricao,valor,motivo'];
+    for (const r of stagingConta) {
+      if (GRUPO_DE_STATUS[r.match_status] !== 'sem_par') continue;
+      linhas.push([
+        r.excel_linha_origem ?? '',
+        csvCampo(fmtData(r.excel_data)),
+        csvCampo(r.conta_filtro_nome ?? r.excel_conta_origem ?? ''),
+        csvCampo(r.excel_produto ?? r.excel_fornecedor ?? ''),
+        csvCampo(fmtBRL(r.excel_valor)),
+        csvCampo(motivoSemPar(r.match_status)),
+      ].join(','));
+    }
+    baixarCsv('enriquecer_sem_par_no_banco', linhas);
+  }
+
   return (
-    <div className="space-y-1 md:space-y-0 md:flex-1 md:min-h-0 md:flex md:flex-col md:gap-1">
-      <EnriquecimentoToolbar
-        sessoes={sessoesVM}
-        sessaoAtivaId={sessaoId}
-        onSelecionarSessao={(id) => { setSessaoId(id); setFiltroConta('todas'); setSelecionadoId(null); }}
-        contas={contas}
-        contaAtivaId={filtroConta}
-        onSelecionarConta={(id) => { setFiltroConta(id); setSelecionadoId(null); }}
-        contagens={contagens}
-        filtroStatus={filtroStatus}
-        onFiltroStatus={setFiltroStatus}
-        filtroModo={filtroModo}
-        onFiltroModo={setFiltroModo}
-        onImportar={() => setImportOpen(true)}
-        onRecasar={() => { void recasar(); }}
-        isRecasando={isCasando}
+    <div className="flex flex-col gap-1 md:min-h-0 md:flex-1">
+      {/* ═══ TOPO: seis números + os mesmos seis como chips ════════════════════════ */}
+      <EnriquecimentoTopoNumeros
+        resumo={resumo}
+        total={rowsModo.length}
+        filtro={filtroGrupo}
+        onFiltro={(g) => { setFiltroGrupo(g); setSelecionadoId(null); }}
       />
 
-      {isFetching && <div className="text-[10px] text-muted-foreground px-1 md:shrink-0">Carregando…</div>}
+      {/* ═══ BARRA: sessão à esquerda · conta e ordenação à direita ════════════════ */}
+      <div className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border bg-card px-2 py-1">
+        <span className="text-[10px] text-muted-foreground">Importação</span>
+        {/* ⚠ `Select` DA CASA, NUNCA `<select>` NATIVO: o menu do sistema operacional abre
+            com outra fonte e outro idioma em cada máquina. */}
+        <Select value={sessaoId ?? ''}
+          onValueChange={(id) => { setSessaoId(id); setFiltroConta('todas'); setSelecionadoId(null); }}>
+          <SelectTrigger className="h-6 min-w-[240px] text-[10px]">
+            <SelectValue placeholder="— nenhuma importação —" />
+          </SelectTrigger>
+          <SelectContent>
+            {sessoesVM.map((sv) => (
+              <SelectItem key={sv.id} value={sv.id} className="text-[10px]">{sv.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button size="sm" variant="outline" className="h-6 px-2 text-[10px]" onClick={() => setImportOpen(true)}>
+          ⬆ Importar planilha
+        </Button>
+        {/* ⚠ RECASAR SEM REIMPORTAR — 133a. Resolver um ambíguo ou mapear uma conta no
+            de-para muda o que casa; sem ele, ver o efeito custaria reimportar tudo. */}
+        <Button size="sm" variant="outline" className="h-6 px-2 text-[10px]"
+          disabled={isCasando || !sessaoId}
+          title={!sessaoId ? 'Escolha uma importação.' : 'Procura de novo o lançamento de cada linha, sem reimportar.'}
+          onClick={() => { void recasar(); }}>
+          {isCasando ? 'Recasando…' : '↻ Recasar'}
+        </Button>
 
-      {/* PR-UX-ENR-MODAL-01 — entrada da mesa ampliada. Só apresentação: abre os MESMOS
-          componentes numa superfície larga. Nenhuma regra, nenhum recálculo. */}
-      <div
-        role={mesaAmpliadaVazia ? undefined : 'button'}
-        tabIndex={mesaAmpliadaVazia ? undefined : 0}
-        aria-disabled={mesaAmpliadaVazia || undefined}
-        onClick={mesaAmpliadaVazia ? undefined : () => setMesaAmpliadaOpen(true)}
-        onKeyDown={mesaAmpliadaVazia ? undefined : (e) => {
-          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setMesaAmpliadaOpen(true); }
-        }}
-        className={`flex items-center gap-2 rounded-lg border px-2 py-1 md:shrink-0 ${
-          mesaAmpliadaVazia
-            ? 'bg-muted/20 opacity-60'
-            : 'bg-card cursor-pointer transition-colors hover:bg-muted/40'
-        }`}
-      >
-        <div className="min-w-0 flex-1">
-          <div className="text-[11px] font-semibold leading-tight">Mesa de revisão ampliada</div>
-          <div className="text-[10px] text-muted-foreground leading-tight">
-            {mesaAmpliadaVazia
-              ? 'Nenhuma linha nesta sessão/filtro — não há o que revisar em tela cheia.'
-              : 'Abrir em tela cheia para revisar linha por linha com todos os campos visíveis.'}
-          </div>
+        <div className="flex-1" />
+
+        <span className="text-[10px] text-muted-foreground">Conta</span>
+        <Select value={filtroConta} onValueChange={(id) => { setFiltroConta(id); setSelecionadoId(null); }}>
+          <SelectTrigger className="h-6 min-w-[150px] text-[10px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todas" className="text-[10px]">Todas</SelectItem>
+            {contas.map((c) => (
+              <SelectItem key={c.id} value={c.id} className="text-[10px]">{c.nome} ({c.total})</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <span className="text-[10px] text-muted-foreground">Ordem</span>
+        <Select value={ordenacao} onValueChange={(v) => setOrdenacao(v as Ordenacao)}>
+          <SelectTrigger className="h-6 min-w-[120px] text-[10px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="planilha" className="text-[10px]">Ordem da planilha</SelectItem>
+            <SelectItem value="valor" className="text-[10px]">Maior valor</SelectItem>
+            <SelectItem value="data" className="text-[10px]">Data</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {/* PR-U2d-1 — burn-down: "Pendentes" esconde o que já acabou. */}
+        <div className="flex overflow-hidden rounded border">
+          {(['todas', 'pendentes'] as const).map((m) => (
+            <button key={m} type="button" onClick={() => setFiltroModo(m)}
+              className={`h-6 px-2 text-[10px] capitalize ${
+                filtroModo === m ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted/50'}`}>
+              {m}
+            </button>
+          ))}
         </div>
-        <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
-          {rowsFiltradas.length} linha{rowsFiltradas.length !== 1 ? 's' : ''}
-        </span>
-        <Button
-          size="sm"
-          variant="outline"
-          className="h-6 text-[11px] px-2 shrink-0"
+
+        <Button size="sm" variant="outline" className="h-6 px-2 text-[10px]"
           disabled={mesaAmpliadaVazia}
-          onClick={(e) => { e.stopPropagation(); setMesaAmpliadaOpen(true); }}
-        >
-          Abrir mesa ampliada
+          /* ⚠ A MESA AMPLIADA CONTINUA ALCANÇÁVEL, e não é resíduo: até a 133c dar ação ao
+             passo 3, ela é o ÚNICO lugar com Salvar, Reverter e "aplicar ao grupo". Tirá-la
+             daqui deixaria a aba sem nenhuma forma de gravar entre um envelope e o outro. */
+          title={mesaAmpliadaVazia ? 'Nenhuma linha neste recorte.' : 'Salvar, reverter e aplicar ao grupo — em tela cheia.'}
+          onClick={() => setMesaAmpliadaOpen(true)}>
+          Mesa ampliada
         </Button>
       </div>
 
-      {/* Hierarquia: ESQUERDA (~29%) só LOCALIZA o lançamento · DIREITA (~71%) é a área de
-          trabalho (foco). Desktop: grid ocupa o restante (flex-1) e só a lista rola. Mobile: empilha.
-          hideBanco: sob filtro por conta, Banco é redundante (some na lista e no detalhe). */}
-      <div className="grid gap-1.5 grid-cols-1 items-start md:[grid-template-columns:0.40fr_1fr] md:[grid-template-rows:minmax(0,1fr)] md:flex-1 md:min-h-0">
+      {isFetching && <div className="shrink-0 px-1 text-[10px] text-muted-foreground">Carregando…</div>}
+
+      {/* ═══ CORPO: lista 400px · tabela de 15 campos ══════════════════════════════ */}
+      <div className="grid min-h-0 grid-cols-1 items-start gap-1.5 md:flex-1 md:[grid-template-columns:400px_minmax(0,1fr)] md:[grid-template-rows:minmax(0,1fr)]">
         <EnriquecimentoLista {...listaProps} />
-        <EnriquecimentoDetalhe {...detalheProps} />
+
+        <div className="flex min-h-0 flex-col gap-1 md:h-full">
+          {selecionado ? (
+            <>
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border bg-card">
+                {/* ⚠ O CABEÇALHO DA DIREITA NÃO ROLA — A21: quem some ao rolar é a própria
+                    identidade da linha que se está conferindo. */}
+                <div className="shrink-0 border-b px-3 py-1">
+                  <div className="truncate text-[12px] font-medium" title={selecionado.descricaoExcel}>
+                    {selecionado.descricaoExcel}
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="min-w-0 flex-1 truncate text-[10px] text-muted-foreground">
+                      linha {selecionado.linha ?? '—'} da planilha · {selecionado.banco} · {selecionado.data}
+                    </span>
+                    {/* ⚠ O DESFAZER SOBREVIVEU ÀS FAIXAS — 133b. Ele morava em duas faixas
+                        coloridas que saíram; sem ele, uma escolha errada não teria volta
+                        pela tela, e a RPC de desfazer existe justamente para isso. */}
+                    {(selecionado.status === 'resolvido_manual' || selecionado.status === 'resolvido_grupo') && (
+                      <Button type="button" size="sm" variant="outline" className="h-5 shrink-0 px-1.5 text-[10px]"
+                        disabled={isResolvendoProximos || isResolvendoGrupo}
+                        title={selecionado.status === 'resolvido_grupo'
+                          ? 'Desfaz o agrupamento e devolve a linha à decisão.'
+                          : 'Desfaz o candidato escolhido à mão e devolve a linha à decisão.'}
+                        onClick={() => {
+                          if (selecionado.status === 'resolvido_grupo') void handleDesfazerGrupo(selecionado.id);
+                          else void handleDesfazerProximos(selecionado.id);
+                        }}>
+                        ↺ Desfazer
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                <MesaCamposTabela
+                  row={selecionado}
+                  classificacoes={classificacoes}
+                  fornecedores={fornecedores}
+                  fazendas={fazendas}
+                  safras={safras}
+                  contas={contasBancarias}
+                  clienteId={clienteAtual?.id}
+                  onEditar={onEditar}
+                  onCriarFornecedor={criarFornecedor}
+                />
+              </div>
+
+              {pedeDecisao && (
+                <EnriquecimentoCandidatosInline
+                  stagingId={selecionado.id}
+                  excelValor={linhaCrua?.excel_valor ?? null}
+                  excelData={linhaCrua?.excel_data ?? null}
+                  onEscolher={(lancId) => { void handleResolverProximos(lancId); }}
+                  isResolvendo={isResolvendoProximos}
+                  lancIdsUsados={lancIdsUsados}
+                  temProxima={canProximo}
+                />
+              )}
+            </>
+          ) : (
+            <div className="rounded-lg border bg-card p-4 text-center text-[11px] text-muted-foreground">
+              Escolha uma linha à esquerda para conferir campo a campo.
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* PR-MESA-RESOLUCAO-01 / -GRUPO-01 — faixa de decisão humana da linha selecionada. */}
-      {/* PR-ENR-01 — slot estrutural: min-height reserva o espaço da maior faixa e mantém a área
-          abaixo fixa mesmo sem faixa ativa (as 4 são mutuamente exclusivas). Sem cálculo de altura em JS. */}
-      <div className="md:shrink-0 min-h-[34px]">
-      {selecionado?.status === 'candidatos_proximos' && (
-        <div className="flex items-center justify-between gap-2 rounded-md border border-violet-300 bg-violet-50 px-2 py-1 text-[11px] md:shrink-0">
-          <span className="text-violet-800">
-            Esta linha tem <strong>candidatos próximos</strong> (±10 dias). Escolha um — ou agrupe vários que somem o valor. O sistema não decide sozinho.
-          </span>
-          <Button size="sm" variant="outline" className="h-6 text-[11px] shrink-0" onClick={() => setCandDrawerId(selecionado.id)}>
-            Ver candidatos
-          </Button>
-        </div>
-      )}
-      {selecionado?.status === 'sem_match' && (
-        <div className="flex items-center justify-between gap-2 rounded-md border border-slate-300 bg-slate-50 px-2 py-1 text-[11px] md:shrink-0">
-          <span className="text-slate-700">
-            Sem match direto. Você pode <strong>agrupar</strong> lançamentos da janela que somem o valor do Excel (match N:1).
-          </span>
-          <Button size="sm" variant="outline" className="h-6 text-[11px] shrink-0" onClick={() => setCandDrawerId(selecionado.id)}>
-            Agrupar candidatos
-          </Button>
-        </div>
-      )}
-      {selecionado?.status === 'resolvido_grupo' && (
-        <div className="flex items-center justify-between gap-2 rounded-md border border-indigo-300 bg-indigo-50 px-2 py-1 text-[11px] md:shrink-0">
-          <span className="text-indigo-800">
-            <strong>Grupo resolvido</strong> (N lançamentos ↔ 1 linha). Aplicação em lote não inclui grupos — desfaça se precisar reabrir.
-          </span>
-          <Button size="sm" variant="outline" className="h-6 text-[11px] shrink-0" disabled={isResolvendoGrupo} onClick={() => { void handleDesfazerGrupo(selecionado.id); }}>
-            Desfazer grupo
-          </Button>
-        </div>
-      )}
-      {selecionado?.status === 'resolvido_manual' && (
-        <div className="flex items-center justify-between gap-2 rounded-md border border-cyan-300 bg-cyan-50 px-2 py-1 text-[11px] md:shrink-0">
-          <span className="text-cyan-800">
-            Candidato <strong>escolhido manualmente</strong>. Salve para enriquecer o lançamento, ou desfaça a escolha.
-          </span>
-          <Button size="sm" variant="outline" className="h-6 text-[11px] shrink-0" disabled={isResolvendoProximos} onClick={() => { void handleDesfazerProximos(selecionado.id); }}>
-            Desfazer escolha
-          </Button>
-        </div>
-      )}
+      {/* ═══ RODAPÉ FIXO ══════════════════════════════════════════════════════════ */}
+      <div className="flex shrink-0 flex-wrap items-center gap-2 rounded-lg border bg-muted/30 px-2 py-1">
+        <span className="min-w-0 flex-1 text-[10px] leading-tight text-muted-foreground">
+          Nada foi gravado. Gravar aplica os <b className="tabular-nums">{resumo.atualizam.qtd}</b> que
+          atualizam, os que você decidiu e os agrupamentos que você aceitou. Os sem par ficam no relatório.
+        </span>
+        <Button type="button" size="sm" variant="outline" className="h-6 px-2 text-[10px]"
+          disabled={resumo.sem_par.qtd === 0}
+          title={resumo.sem_par.qtd === 0 ? 'Nenhuma linha sem par neste recorte.' : 'CSV com linha, data, conta, descrição, valor e motivo'}
+          onClick={baixarSemPar}>
+          Baixar sem par (CSV)
+        </Button>
+        {/* ⚠ DESABILITADO NESTE ENVELOPE, e o motivo está no `title` e ao lado: a gravação em
+            lote é a 133c. Um botão que grava metade seria pior que um botão que não grava. */}
+        <Button type="button" size="sm" className="h-6 px-2 text-[10px]" disabled
+          title="em construção — 133c">
+          Gravar {resumo.atualizam.qtd} + {resumo.decide.qtd} decididos
+        </Button>
       </div>
-
-      <EnriquecimentoActions {...actionsProps} />
 
       {/* PR-UX-ENR-MODAL-01 — mesma mesa, superfície ampla. Mesmos prop-bags. */}
       <EnriquecimentoMesaModal
@@ -560,35 +682,13 @@ export function MesaEnriquecimentoTab({ anoMesRegua }: { anoMesRegua?: string } 
         open={importOpen}
         onClose={() => setImportOpen(false)}
         clienteId={clienteAtual?.id ?? null}
-        onImportado={(sid) => { setSessaoId(sid); setFiltroConta('todas'); setFiltroStatus('todos'); setSelecionadoId(null); setImportOpen(false); }}
+        onImportado={(sid) => { setSessaoId(sid); setFiltroConta('todas'); setFiltroGrupo('todas'); setSelecionadoId(null); setImportOpen(false); }}
         /* ⚠ O MÊS É O DA RÉGUA — 133a. A competência das linhas do cliente vai de 10/2025 a
            09/2026; o mês que se está conciliando é o que a tela mostra, e é contra ele que
            o casador procura lançamento. Sem a régua, cai no mês da sessão. */
         anoMes={anoMesRegua ?? mesAtivo ?? ''}
       />
-
-      <EnriquecimentoCandidatosDrawer
-        stagingId={candDrawerId}
-        open={!!candDrawerId}
-        onOpenChange={(o) => { if (!o) setCandDrawerId(null); }}
-        contextoExcel={candContexto}
-        excelValor={candRow?.excel_valor ?? null}
-        statusLinha={candRow?.match_status ?? null}
-        onEscolher={(lancId) => { void handleResolverProximos(lancId); }}
-        onAgrupar={(lancIds) => { void handleResolverGrupo(lancIds); }}
-        isResolvendo={isResolvendoProximos}
-        isAgrupando={isResolvendoGrupo}
-        lancIdsUsados={lancIdsUsados}
-      />
-
-      <EnriquecimentoNaoExplicadoDrawer
-        sessaoId={sessaoId}
-        contaId={contaIdSel}
-        contaNome={contaNomeSel}
-        mesLabel={mesLabelSel}
-        open={naoExplicadoOpen}
-        onOpenChange={setNaoExplicadoOpen}
-      />
     </div>
   );
+
 }

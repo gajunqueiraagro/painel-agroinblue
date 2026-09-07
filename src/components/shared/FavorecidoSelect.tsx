@@ -23,6 +23,14 @@ export interface FavorecidoSelectProps {
   /** Classe do botão "+". Default 'h-8 w-8' — telas existentes inalteradas.
    *  PR-IMPORT-EXCEL-LANC-02: a importação usa denso ('h-5 w-5'). */
   novoButtonClassName?: string;
+  /**
+   * 133b — o "+" só aparece depois de buscar e não achar.
+   *
+   * ⚠ SEMPRE VISÍVEL, ELE CONVIDA A DUPLICAR: são 107 cadastros de nome repetido no NJ
+   * ("Meta" 8×, "Rabobank" 5×), e cada um começou com alguém cadastrando sem procurar.
+   * ⚠ DEFAULT `false`: as telas que já existem não mudam em nada.
+   */
+  novoSomenteSemResultado?: boolean;
   label?: string;
   triggerClassName?: string;              // ex.: fieldBg
   tabIndex?: number;
@@ -43,7 +51,7 @@ function normalizeSearch(s: string): string {
 
 export function FavorecidoSelect({
   value, onChange, onSelected, fornecedores,
-  search, onSearchChange, onCriarNovo, novoButtonClassName,
+  search, onSearchChange, onCriarNovo, novoButtonClassName, novoSomenteSemResultado = false,
   label, triggerClassName, tabIndex, disabled, showCpfCnpj = false,
 }: FavorecidoSelectProps) {
   const [open, setOpen] = useState(false);
@@ -147,9 +155,11 @@ export function FavorecidoSelect({
             </div>
           </PopoverContent>
         </Popover>
-        <Button variant="outline" size="icon" className={cn('shrink-0', novoButtonClassName ?? 'h-8 w-8')} onClick={onCriarNovo} title="Novo Fornecedor">
-          <Plus className="h-3.5 w-3.5" />
-        </Button>
+        {(!novoSomenteSemResultado || (search.trim() !== '' && filtered.length === 0)) && (
+          <Button variant="outline" size="icon" className={cn('shrink-0', novoButtonClassName ?? 'h-8 w-8')} onClick={onCriarNovo} title="Novo Fornecedor">
+            <Plus className="h-3.5 w-3.5" />
+          </Button>
+        )}
       </div>
     </div>
   );

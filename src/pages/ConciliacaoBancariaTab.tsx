@@ -33,7 +33,6 @@ import { detectarDuplicatasCrossOrigin, montarSituacaoFechamento, derivarPendenc
 import { buildUnifiedSaldos, type ContaSaldoRef, type SaldoV2SourceRow, type SaldoLegacySourceRow } from '@/lib/financeiro/saldosBancarios';
 import { ExtratoListaTab } from '@/components/financeiro-v2/ExtratoListaTab';
 // PR-MOS-2 — LotesExcelTab (Referências Operacionais antigas) desacoplado da aba Enriquecer (legado).
-import { MesaEnriquecimentoTab } from '@/v2/components/mesa/enriquecimento/MesaEnriquecimentoTab';
 
 /* ── Extended status type (adds 'parcial' to existing) ── */
 type MesStatusExt = ConciliacaoStatus | 'parcial';
@@ -973,11 +972,11 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
 
         {!loading && selectedCard && vistaExtrato === 'enriquecer' && (
           <div className="space-y-2 md:flex-1 md:min-h-0 md:overflow-y-auto">
-            {/* ⚠ A PLANILHA ENTRA AO LADO DA MESA, e não no lugar dela — B-22a.
-                São dois caminhos para o mesmo fim, e cada um serve a um volume:
-                a Mesa resolve linha a linha, na tela; a planilha resolve o mês
-                inteiro fora, no Excel que o operador já domina. Trocar um pelo
-                outro seria decisão de produto que este PR não recebeu. */}
+            {/* ⚠ OS DOIS CAMINHOS VIRARAM UM — 133b, e a decisão de produto veio no
+                envelope. O B-22a deixou a planilha AO LADO da Mesa justamente por não
+                ter recebido essa decisão; o custo medido foi o operador não saber qual
+                usar e os dois blocos responderem à mesma pergunta com números diferentes
+                (379 × 183 para a mesma planilha de 492 linhas). */}
             <EnriquecerPorPlanilha
               clienteId={clienteAtual?.id ?? null}
               contaId={selectedConta !== '__all__' ? selectedConta : null}
@@ -990,7 +989,9 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                 ? () => onNavigateToLancamentos(ano, Number(selectedMes)) : undefined}
               clienteNome={clienteAtual?.nome ?? undefined}
             />
-            <MesaEnriquecimentoTab anoMesRegua={`${ano}-${String(selectedMes).padStart(2, '0')}`} />
+            {/* ⚠ A MESA NÃO É MAIS UM SEGUNDO BLOCO — 133b. Ela virou o PASSO 2 de
+                `EnriquecerPorPlanilha`; montá-la aqui de novo poria duas instâncias da
+                mesma sessão na mesma tela, cada uma com o seu filtro. */}
             {/* PR-CLEANUP-MESA-CLASSIFICACAO-01 — o link para a Mesa de Classificação antiga
                 foi removido junto com o item de menu e a rota. A tela legada saiu de circulação;
                 o motor (staging + vw_classificacao_staging_preview + fn_classificacao_*) segue

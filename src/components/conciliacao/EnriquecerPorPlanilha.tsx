@@ -1,27 +1,23 @@
-import { useConciliacaoDoMes } from '@/hooks/useConciliacaoDoMes';
-import { V2ImportLancamentosExcel } from '@/v2/pages/V2ImportLancamentosExcel';
+import { EnriquecerTresPassos } from '@/v2/components/mesa/enriquecimento/EnriquecerTresPassos';
 
 /**
- * EnriquecerPorPlanilha — a planilha do mês, no modelo canônico da casa.
- * FIN-ENRIQUECER-EXCEL-01 (B-22a), primeira das três dores do Enriquecer.
+ * EnriquecerPorPlanilha — a aba Enriquecer da Conciliação.
  *
- * ⚠ A TELA É A DA IMPORTAÇÃO DE LANÇAMENTOS, INTEIRA. Nada do fluxo nasce aqui:
- * leitura do arquivo, de-para com memória de apelidos, prévia linha a linha,
- * confirmação e gravação são o motor de `useImportLancamentosExcel`, exercido
- * pelo mesmo componente que a rota do menu monta. Recriar o fluxo daria ao
- * operador dois formatos para a mesma planilha e ao repo dois lugares onde a
- * mesma regra pode divergir.
+ * ⚠ ELA DEIXOU DE SER "A TELA DA IMPORTAÇÃO INTEIRA" — [ENRIQUECER-TELA-01] (133b). Até
+ * aqui este componente montava `V2ImportLancamentosExcel` em modo veste, e a Mesa era um
+ * segundo bloco logo abaixo: dois motores respondendo à mesma pergunta com números
+ * diferentes, e o operador sem saber qual usar. Agora há uma tela em três passos, e ela
+ * usa o motor da Mesa (staging + casar_sessao + apply_row); o que sobrou do importador é
+ * a leitura do arquivo e o de-para com memória, dentro do passo 1.
  *
- * ⚠ A ÚNICA DIFERENÇA É O PONTO DE PARTIDA: o modelo baixa PRÉ-PREENCHIDO com os
- * movimentos do mês e da conta da régua. Data, valor, tipo, conta bancária,
- * descrição e documento vêm do extrato; conta do plano, fazenda, fornecedor e
- * safra saem vazias — são o que o operador completa fora, e é para isso que o
- * arquivo existe.
+ * ⚠ A ROTA DO MENU NÃO MUDOU. "Importação de lançamentos" segue com
+ * `V2ImportLancamentosExcel` completo — lá se CRIA lançamento; aqui só se veste o que já
+ * nasceu do OFX soberano. A diferença é de intenção, não de motor.
  *
- * ⚠ ESTE COMPONENTE EXISTE PARA QUE O HOOK NÃO RODE NAS OUTRAS ABAS. Montar
- * `useConciliacaoDoMes` no corpo da tela de Conciliação faria a consulta do mês
- * a cada render de qualquer aba; aqui ela acontece quando a aba Enriquecer está
- * na tela, e só.
+ * ⚠ `useConciliacaoDoMes` SAIU DAQUI JUNTO COM O "BAIXAR PREENCHIDO". Ele existia para
+ * montar o modelo pré-preenchido com os movimentos do mês, que era prop de
+ * `V2ImportLancamentosExcel`; sem aquele botão nesta aba, a consulta do mês seria uma ida
+ * ao banco cujo resultado ninguém lê. O download do modelo continua na rota do menu.
  */
 interface Props {
   clienteId: string | null;
@@ -29,61 +25,20 @@ interface Props {
   contaNome: string;
   ano: number;
   mes: number;
-  /* ── 131 ────────────────────────────────────────────────────────────────────
-     O destino do "Ver no Financeiro" do modal de progresso e o nome do cliente para o
-     cabeçalho dele. Sem o callback, o botão não aparece — a tela não promete navegação
-     que quem a monta não sabe fazer. */
+  /** Mantida no contrato: quem monta esta aba já a passa, e a 133c a usa no passo 3. */
   onVerNoFinanceiro?: () => void;
   clienteNome?: string;
 }
 
-export function EnriquecerPorPlanilha({
-  clienteId, contaId, contaNome, ano, mes, onVerNoFinanceiro, clienteNome,
-}: Props) {
-  const { movimentos, loading } = useConciliacaoDoMes(clienteId, contaId, ano, mes);
-
+export function EnriquecerPorPlanilha({ contaNome, ano, mes, clienteNome }: Props) {
   return (
-    <div className="space-y-1.5">
-      {/* ⚠ O ESTADO DA CARGA É DITO, e não escondido: sem esta linha, quem
-          apertasse "Baixar" durante a leitura levaria o modelo em branco sem
-          entender por quê — e o modelo em branco é um arquivo legítimo, então
-          nada pareceria errado. */}
-      {loading ? (
-        <p className="rounded border border-dashed px-3 py-2 text-[10px] text-muted-foreground">
-          Lendo os movimentos do mês…
-        </p>
-      ) : !contaId ? (
-        <p className="rounded border border-dashed px-3 py-2 text-[10px] text-muted-foreground">
-          Escolha uma conta na régua acima para baixar a planilha já preenchida. Sem conta, o botão
-          entrega o modelo em branco.
-        </p>
-      ) : movimentos.length === 0 ? (
-        <p className="rounded border border-dashed px-3 py-2 text-[10px] text-muted-foreground">
-          Nenhum movimento importado neste mês para esta conta — o botão entrega o modelo em branco,
-          que é o arquivo certo para digitar do zero.
-        </p>
-      ) : null}
-
-      {/* ⚠ MODO VESTE — ENRIQUECER-SO-VESTE-01. Esta aba ATUALIZA lançamentos que
-          já nasceram do OFX soberano; ela não cria. Linha sem par vira "sem par no
-          extrato": contada, com motivo, e sem botão. Criar por planilha aqui seria
-          inventar movimento bancário do lado errado da soberania — é intenção de
-          outra tela, onde é explícita.
-      
-          ⚠ E NADA AQUI TOCA O EXTRATO. Nenhum movimento é excluído, mascarado ou
-          reescrito por esta aba, hoje ou depois desta mudança; o extrato é fato do
-          banco e só o importador o escreve. Fica dito porque a ausência de uma
-          regra não é a mesma coisa que a regra escrita. */}
-      <V2ImportLancamentosExcel
-        somenteAtualizar
-        movimentosDoExtrato={movimentos}
-        contaNome={contaNome}
-        /* `2026-08` no nome do arquivo: o operador acaba com vários downloads na
-           pasta e a régua não viaja junto com o .xlsx. */
-        sufixoArquivo={`${ano}-${String(mes).padStart(2, '0')}`}
-        onVerNoFinanceiro={onVerNoFinanceiro}
-        mesRef={mes} anoRef={ano} clienteNome={clienteNome}
-      />
-    </div>
+    <EnriquecerTresPassos
+      ano={ano}
+      mes={mes}
+      clienteNome={clienteNome}
+      /* A conta da régua é CONTEXTO do cabeçalho; a partição de trabalho é a do passo 2,
+         que a lê do próprio staging — duas fontes para "qual conta" divergiriam. */
+      contaNome={contaNome || undefined}
+    />
   );
 }

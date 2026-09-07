@@ -38,7 +38,7 @@ import type { Safra } from '@/hooks/useFinanceiroV2';
 /** Por que um campo ainda não é editável aqui. Texto curto, mostrado ao lado do valor. */
 const MOTIVO_SEM_APPLY = 'o Salvar ainda não grava este campo';
 
-type Secao = 'Datas' | 'Identificação' | 'Classificação' | 'Documento';
+type Secao = 'Datas' | 'Movimento' | 'Identificação' | 'Classificação' | 'Documento';
 
 /**
  * A ordem do mock, com a seção de cada linha e se o Salvar grava.
@@ -51,18 +51,26 @@ type Secao = 'Datas' | 'Identificação' | 'Classificação' | 'Documento';
 const ORDEM: Array<{ campo: string; rotulo: string; secao: Secao; gravaHoje: boolean }> = [
   /* ⚠ OS NOMES SÃO OS DO ADAPTER, e mudaram em 133a: a linha única 'Data' virou três, uma
      por par (pagamento×pagamento, vencimento×vencimento, competência×competência). A ordem
-     é a do mock: o pagamento primeiro, porque é por ele que o casador procura. */
+     é a do mock: o pagamento primeiro, porque é por ele que o casador procura.
+     ⚠ QUINZE CAMPOS EM 133b, e os quatro que entraram são LEITURA: Valor e Tipo dizem o que
+     o movimento é (e é por eles que o operador reconhece a linha no extrato), Macro · Grupo
+     · Centro mostra onde a conta do plano cai, e Situação diz se o lançamento está vivo.
+     Nenhum deles é gravável pela Mesa — `gravaHoje: false` e a marca "leitura" ao lado. */
   { campo: 'Data pagamento', rotulo: 'Data pgto.', secao: 'Datas', gravaHoje: true },
   { campo: 'Data vencimento', rotulo: 'Data venc.', secao: 'Datas', gravaHoje: true },
   { campo: 'Competência', rotulo: 'Data comp.', secao: 'Datas', gravaHoje: true },
-  { campo: 'Produto / Descrição', rotulo: 'Produto / Descrição', secao: 'Identificação', gravaHoje: true },
+  { campo: 'Valor', rotulo: 'Valor', secao: 'Movimento', gravaHoje: false },
+  { campo: 'Tipo', rotulo: 'Tipo', secao: 'Movimento', gravaHoje: false },
+  { campo: 'Banco', rotulo: 'Conta bancária', secao: 'Movimento', gravaHoje: true },
+  { campo: 'Subcentro', rotulo: 'Conta do plano', secao: 'Classificação', gravaHoje: true },
+  { campo: 'Macro · Grupo · Centro', rotulo: 'Macro · Grupo · Centro', secao: 'Classificação', gravaHoje: false },
   { campo: 'Fornecedor', rotulo: 'Fornecedor', secao: 'Identificação', gravaHoje: true },
   { campo: 'Fazenda', rotulo: 'Fazenda', secao: 'Identificação', gravaHoje: true },
-  { campo: 'Safra', rotulo: 'Safra', secao: 'Classificação', gravaHoje: true },
-  { campo: 'Subcentro', rotulo: 'Subcentro', secao: 'Classificação', gravaHoje: true },
-  { campo: 'Banco', rotulo: 'Conta bancária', secao: 'Classificação', gravaHoje: true },
+  { campo: 'Safra', rotulo: 'Safra', secao: 'Identificação', gravaHoje: true },
+  { campo: 'Produto / Descrição', rotulo: 'Produto / descrição', secao: 'Identificação', gravaHoje: true },
   { campo: 'Documento', rotulo: 'Documento', secao: 'Documento', gravaHoje: true },
   { campo: 'OBS', rotulo: 'Observação', secao: 'Documento', gravaHoje: true },
+  { campo: 'Situação', rotulo: 'Situação', secao: 'Documento', gravaHoje: false },
 ];
 
 const VAZIA: EnriqComparativoLinha = { campo: '', sistema: '—', excel: '—', resultado: '—', tom: 'neutro' };
@@ -123,10 +131,12 @@ export function MesaCamposTabela({
                 têm 11px e altura de 24px; o que distingue é a COR (azul = referência, cinza =
                 o que está gravado, preto = o que vai valer), não o tamanho.
                 ⚠ ZEBRA LEVE E SEPARADOR DE 0,5px: densidade sem grade pesada. */}
+            {/* ⚠ LINHA DE 24px — 133b. Quinze campos numa tela de 900px de altura só cabem
+                sem rolar se a linha não crescer; `leading-6` sobre `py-0` é exatamente isso. */}
             <div className={`grid items-center gap-2 border-b border-border/50 px-3 text-[11px] ${
               zebra ? 'bg-muted/30' : ''}`}
               style={{ gridTemplateColumns: COLS }}>
-              <span className="truncate py-1 text-[10px] leading-6 text-muted-foreground" title={rotulo}>{rotulo}</span>
+              <span className="truncate text-[10px] leading-6 text-muted-foreground" title={rotulo}>{rotulo}</span>
               {/* ⚠ O EXCEL É REFERÊNCIA, NUNCA GRAVADO DIRETO — por isso azul e sem controle. */}
               <span className="truncate leading-6 text-blue-700/90" title={c.excel}>{c.excel}</span>
               <span className="truncate leading-6 text-slate-700 dark:text-slate-300" title={c.sistema}>{c.sistema}</span>
