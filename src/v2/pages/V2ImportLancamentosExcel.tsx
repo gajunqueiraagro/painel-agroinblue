@@ -8,7 +8,7 @@
 // NÃO envolve conciliação bancária: nada é escrito em conciliacao_bancaria_itens
 // nem em conciliado_em.
 // ============================================================================
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef, useEffect } from 'react';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { EnriquecerProgressoDialog } from '@/components/conciliacao/EnriquecerProgressoDialog';
 import { useImportLancamentosExcel } from '@/v2/hooks/useImportLancamentosExcel';
 import { ImportLancDeParaPanel } from '@/v2/components/importacao/ImportLancDeParaPanel';
 import { ImportLancPrevia } from '@/v2/components/importacao/ImportLancPrevia';
@@ -75,10 +76,18 @@ export interface V2ImportLancamentosExcelProps {
    * outra tela, onde é explícita.
    */
   somenteAtualizar?: boolean;
+  /* ── 131 ────────────────────────────────────────────────────────────────────
+     O destino do "Ver no Financeiro" e o cabeçalho do modal de progresso. Todos
+     opcionais: sem eles a tela é a de sempre, e o botão de navegar não aparece. */
+  onVerNoFinanceiro?: () => void;
+  mesRef?: number;
+  anoRef?: number;
+  clienteNome?: string;
 }
 
 export function V2ImportLancamentosExcel({
   movimentosDoExtrato, contaNome, sufixoArquivo, somenteAtualizar = false,
+  onVerNoFinanceiro, mesRef, anoRef, clienteNome,
 }: V2ImportLancamentosExcelProps = {}) {
   const {
     classificacoes, fornecedores, fazendas, contasBancarias, safras, criarFornecedor,
@@ -88,8 +97,16 @@ export function V2ImportLancamentosExcel({
     alternarSemClassificacao, limparSelecao, esquecerApelido, aliasIdPorTexto,
     criacoesAprovadas, alternarCriacao, marcarTodasCriacoes, contasComExtrato,
     confirmarImportacao, gravando, resultado,
+    progresso, pararImportacao,
   } = useImportLancamentosExcel(somenteAtualizar);
   const [confirmando, setConfirmando] = useState(false);
+  /* ⚠ O MODAL É INDEPENDENTE DA GRAVAÇÃO — [ENRIQUECER-PROGRESSO-01] (131). Fechá-lo não
+     cancela nada: o progresso mora no hook. Este estado só diz se ele está VISÍVEL. */
+  const [verProgresso, setVerProgresso] = useState(false);
+  /* O `then` do confirmar fecha sobre o valor do render em que começou; o ref é o que
+     entrega o estado do modal NO FIM do lote, que é quando a pergunta importa. */
+  const verProgressoRef = useRef(verProgresso);
+  useEffect(() => { verProgressoRef.current = verProgresso; }, [verProgresso]);
 
   /* ⚠ O PRÉ-PREENCHIDO SÓ EXISTE COM MOVIMENTO. Com a régua num mês sem extrato,
      o botão continua entregando o modelo em branco — que é o arquivo certo para
@@ -481,10 +498,16 @@ export function V2ImportLancamentosExcel({
               title={bloqueios[0] ?? (linhasPendentes > 0
                 ? `Importa as ${previa.totais.entram.qtd} linhas resolvidas. As ${linhasPendentes} pendentes continuam aqui — mapeie o valor, ou use "sem classificação" para elas entrarem cruas.`
                 : undefined)}
-              onClick={() => setConfirmando(true)}
+              onClick={() => {
+                /* Gravando ou terminado, o botão REABRE o modal em vez de recomeçar. */
+                if (gravando || resultado) { setVerProgresso(true); return; }
+                setConfirmando(true);
+              }}
             >
               {gravando
-                ? 'Gravando…'
+                ? `Gravando… ${progresso.feitas} de ${progresso.total}`
+                : resultado
+                ? 'Ver resultado'
                 /* O botão diz o que faz E o que deixa para trás, no próprio
                    rótulo: confirmar sem saber o que acontece é o que fazia o
                    operador descobrir a perda — ou a duplicata — depois. */
@@ -498,34 +521,49 @@ export function V2ImportLancamentosExcel({
         </div>
       )}
 
-      {/* ── Resultado da gravação ── */}
+      {/* ⚠ O BLOCO DE RESULTADO INLINE SAIU — 131. Ele aparecia depois que tudo já tinha
+          acontecido, abaixo do botão, enquanto a fila de toasts cobria a tela. O relatório
+          agora é o rodapé do modal, que fica no lugar onde o operador estava olhando; e o
+          botão "Importar outra planilha" voltou para cá, que é onde ele continua sendo
+          verdade mesmo com o modal fechado. */}
       {resultado && (
-        <div className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 space-y-1">
-          <div className="text-[12px] font-semibold text-emerald-900">
-            {resultado.criados} lançamento(s) criado(s)
-            {/* B-22b — o modo atualização só aparece quando aconteceu; no fluxo
-                de sempre a frase fica idêntica à de antes. */}
-            {resultado.atualizados > 0 && ` · ${resultado.atualizados} atualizado(s)`}
-            {resultado.falhas > 0 && ` · ${resultado.falhas} falha(s)`}
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 dark:border-emerald-800 dark:bg-emerald-950/30">
+          <span className="text-[12px] font-semibold text-emerald-900 dark:text-emerald-200">
+            {resultado.atualizados} atualizado(s)
+            {resultado.criados > 0 && ` · ${resultado.criados} criado(s)`}
+            {resultado.falhas > 0 && ` · ${resultado.falhas} recusado(s)`}
             {resultado.ignorados > 0 && ` · ${resultado.ignorados} fora da importação`}
-          </div>
-          <div className="text-[11px] text-emerald-800">
-            Apelidos memorizados: {resultado.apelidos.subcentro} de conta do plano ·{' '}
-            {resultado.apelidos.fornecedor} de fornecedor · {resultado.apelidos.conta} de conta bancária.
-            Eles valem para as PRÓXIMAS importações — nada já lançado foi reclassificado.
-          </div>
-          {resultado.erros.length > 0 && (
-            <div className="max-h-24 overflow-y-auto">
-              {resultado.erros.slice(0, 20).map((e, i) => (
-                <div key={i} className="text-[10px] text-red-800">{e}</div>
-              ))}
-            </div>
-          )}
+          </span>
+          <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={() => setVerProgresso(true)}>
+            Ver detalhes
+          </Button>
           <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={limpar}>
             Importar outra planilha
           </Button>
         </div>
       )}
+
+      {/* ⚠ MONTADO SEMPRE, visível por estado — 131. Desmontá-lo ao fechar perderia o
+          `scrollIntoView` do feed e faria o modal reabrir no topo; e o operador que fecha
+          no meio quer voltar ao PONTO, não ao começo. */}
+      <EnriquecerProgressoDialog
+        open={verProgresso}
+        onOpenChange={setVerProgresso}
+        progresso={progresso}
+        resultado={resultado}
+        gravando={gravando}
+        onParar={pararImportacao}
+        /* ⚠ SEM DESTINO, SEM BOTÃO — o "Ver no Financeiro" só existe quando quem monta esta
+           tela sabe para onde ir. A aba Enriquecer passa; a rota do menu não, e lá o botão
+           simplesmente não aparece em vez de prometer uma navegação que não acontece. */
+        onVerNoFinanceiro={onVerNoFinanceiro}
+        arquivo={arquivo?.name ?? null}
+        aba={null}
+        linhasLidas={parse?.rows.length ?? 0}
+        mes={mesRef ?? null}
+        ano={anoRef ?? null}
+        cliente={clienteNome ?? '—'}
+      />
 
       {/* ── Confirmação: o ponto sem volta ── */}
       <AlertDialog open={confirmando} onOpenChange={(v) => { if (!v) setConfirmando(false); }}>
@@ -557,14 +595,19 @@ export function V2ImportLancamentosExcel({
               disabled={gravando}
               onClick={() => {
                 setConfirmando(false);
+                setVerProgresso(true);
                 void confirmarImportacao().then((r) => {
                   if (!r) return;
-                  if (r.falhas > 0) toast.warning(`${r.criados} criado(s), ${r.falhas} falha(s).`);
-                  else toast.success(`${r.criados} lançamento(s) criado(s).`);
+                  /* ⚠ UM TOAST SÓ, E SÓ COM O MODAL FECHADO — 131. Com ele aberto o
+                     número já está na tela, e o toast seria a segunda voz dizendo o mesmo.
+                     Os 492 toasts de antes eram o defeito. */
+                  if (!verProgressoRef.current) {
+                    toast.success(`${r.atualizados} atualizados · ${r.falhas} recusados`);
+                  }
                 });
               }}
             >
-              {gravando ? 'Gravando…' : 'Confirmar e criar'}
+              {gravando ? `Gravando… ${progresso.feitas} de ${progresso.total}` : 'Confirmar e criar'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -973,6 +973,12 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
               contaId={selectedConta !== '__all__' ? selectedConta : null}
               contaNome={contaAtual}
               ano={Number(ano)} mes={Number(selectedMes)}
+              /* ⚠ O MESMO DESTINO DO "↗ Lançamentos" do topo — 131. Reusar a prop que já
+                 existe é o que garante que os dois cheguem ao mesmo lugar; uma rota
+                 própria aqui divergiria da outra no primeiro ajuste. */
+              onVerNoFinanceiro={onNavigateToLancamentos
+                ? () => onNavigateToLancamentos(ano, Number(selectedMes)) : undefined}
+              clienteNome={clienteAtual?.nome ?? undefined}
             />
             <MesaEnriquecimentoTab />
             {/* PR-CLEANUP-MESA-CLASSIFICACAO-01 — o link para a Mesa de Classificação antiga

@@ -590,7 +590,8 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
    */
   const criarLancamentoComId = useCallback(async (
     form: LancamentoV2Form,
-    opts?: { origem?: string; silent?: boolean },
+    /** `onErro` entrega a mensagem real da recusa — 131, mesma forma do `editarLancamento`. */
+    opts?: { origem?: string; silent?: boolean; onErro?: (msg: string) => void },
   ): Promise<string | null> => {
     if (!clienteId || !user) return null;
 
@@ -631,14 +632,29 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
 
     if (error) {
       // `silent` suprime o toast, nunca o diagnóstico: o console continua registrando.
-      reportarErro(error, 'criarLancamentoComId', opts?.silent ? () => {} : toast.error);
+      const n = reportarErro(error, 'criarLancamentoComId', opts?.silent ? () => {} : toast.error);
+      opts?.onErro?.(n.mensagem);
       return null;
     }
     if (!opts?.silent) toast.success('Lançamento criado');
     return data?.id ?? null;
   }, [clienteId, user]);
 
-  const editarLancamento = useCallback(async (id: string, form: LancamentoV2Form) => {
+  /**
+   * @param opts.silent  Não emite o toast de sucesso — [ENRIQUECER-PROGRESSO-01] (131).
+   * @param opts.onErro  Recebe a mensagem REAL da recusa (a normalizada do
+   *   `reportarErro`, que é a do Postgres sem os campos que vazam).
+   *
+   * ⚠ O RETORNO CONTINUA `boolean`, e isso é decisão. O envelope pediu `{ok, erro}`;
+   * trocar o tipo quebraria os chamadores que hoje fazem `if (ok)` — são vários, e nenhum
+   * deles precisa do erro. O callback entrega a mensagem a quem a quer sem mexer em quem
+   * não quer, e é a mesma forma do `silent` do `criarLancamentoComId`.
+   * ⚠ SEM O `silent`, NADA MUDA: 492 linhas gravando com um toast cada é o defeito que o
+   * 131 veio matar, mas o modal de edição avulso continua avisando como sempre.
+   */
+  const editarLancamento = useCallback(async (
+    id: string, form: LancamentoV2Form, opts?: { silent?: boolean; onErro?: (msg: string) => void },
+  ) => {
     if (!clienteId || !user) return false;
 
     // PR-SAFE-0 — proteção de títulos originados da Operação Comercial. Detecção
@@ -713,10 +729,11 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
 
         const { error } = await (supabase as any).from('financeiro_lancamentos_v2').update(restrito).eq('id', id);
         if (error) {
-          reportarErro(error, 'editarLancamento.OC', toast.error);
+          const n = reportarErro(error, 'editarLancamento.OC', opts?.silent ? () => {} : toast.error);
+          opts?.onErro?.(n.mensagem);
           return false;
         }
-        toast.success('Lançamento atualizado');
+        if (!opts?.silent) toast.success('Lançamento atualizado');
         return true;
       }
     }
@@ -786,7 +803,8 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     const { error } = await supabase.from('financeiro_lancamentos_v2').update(updatePayload as any).eq('id', id);
 
     if (error) {
-      reportarErro(error, 'editarLancamento', toast.error);
+      const n = reportarErro(error, 'editarLancamento', opts?.silent ? () => {} : toast.error);
+      opts?.onErro?.(n.mensagem);
       return false;
     }
 
@@ -814,7 +832,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       console.warn(normalizarErro(syncErr, 'sincronizarVinculosDoLancamento').diagnostico);
     }
 
-    toast.success('Lançamento atualizado');
+    if (!opts?.silent) toast.success('Lançamento atualizado');
     return true;
   }, [clienteId, user, classificacoes]);
 

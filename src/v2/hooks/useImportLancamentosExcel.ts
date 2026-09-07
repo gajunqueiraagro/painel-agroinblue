@@ -7,7 +7,7 @@
 // NÃO GRAVA NADA. Nem lançamento, nem apelido. A gravação é o passo 4 e entra
 // depois, no mesmo PR. Até o operador confirmar, tudo vive em memória.
 // ============================================================================
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -51,6 +51,37 @@ function normalizarAlias(bruto: unknown): (Omit<SubcentroAliasRef, 'subcentro'> 
 }
 
 /** Saldo da confirmação: o que entrou, o que falhou e quanta memória ficou. */
+/** Um evento do feed — 131. `linha` é a da PLANILHA, que é como o operador a chama. */
+export interface EventoProgresso {
+  linha: number;
+  tipo: 'ok' | 'sem_par' | 'recusado';
+  data: string;
+  valor: number;
+  titulo: string;
+  contexto: string;
+}
+
+export interface ProgressoImportacao {
+  total: number;
+  feitas: number;
+  atualizados: number;
+  criados: number;
+  semPar: number;
+  recusados: number;
+  /** "gravando {subcentro} · R$ {valor}" — `null` quando não há linha em curso. */
+  agora: string | null;
+  iniciadoEm: number | null;
+  terminadoEm: number | null;
+  /** `true` quando o operador mandou parar: o relatório diz "interrompido em N de M". */
+  interrompido: boolean;
+  feed: EventoProgresso[];
+}
+
+export const PROGRESSO_ZERO: ProgressoImportacao = {
+  total: 0, feitas: 0, atualizados: 0, criados: 0, semPar: 0, recusados: 0,
+  agora: null, iniciadoEm: null, terminadoEm: null, interrompido: false, feed: [],
+};
+
 export interface ResultadoImportacao {
   criados: number;
   /** B-22b — linhas que atualizaram lançamento existente pela coluna ID. */
@@ -141,6 +172,19 @@ export function useImportLancamentosExcel(somenteAtualizar = false) {
   const [candidatos, setCandidatos] = useState<CandidatoCasamento[]>([]);
   /** Resultado da gravação (passo 4). null = ainda não confirmada. */
   const [gravando, setGravando] = useState(false);
+
+  /* ── PROGRESSO AO VIVO — [ENRIQUECER-PROGRESSO-01] (131) ──────────────────────
+     ⚠ O ESTADO VIVE NO HOOK, não no modal. Confirmar 492 linhas leva minutos; se o
+     progresso morasse no diálogo, fechá-lo perderia a contagem e o operador não teria
+     como voltar a ver onde está. Fechar o modal não cancela nada — sair da tela, sim, e
+     é isso que o rodapé dele avisa.
+     ⚠ O `feed` GUARDA TUDO e o modal mostra os últimos nove: o CSV do fim precisa dos
+     recusados que já rolaram para fora da vista. */
+  const [progresso, setProgresso] = useState<ProgressoImportacao>(PROGRESSO_ZERO);
+  /* A flag do "Parar", lida a cada volta. Ref e não estado: o laço fecha sobre o valor do
+     render em que começou, e um `useState` só chegaria nele no render seguinte — ou seja,
+     nunca. */
+  const pararRef = useRef(false);
   const [resultado, setResultado] = useState<ResultadoImportacao | null>(null);
 
   useEffect(() => {
@@ -815,16 +859,67 @@ export function useImportLancamentosExcel(somenteAtualizar = false) {
   const confirmarImportacao = useCallback(async (): Promise<ResultadoImportacao | null> => {
     if (!clienteId || !previa || !dePara) return null;
     setGravando(true);
+    pararRef.current = false;
     const erros: string[] = [];
     let criados = 0;
     let atualizados = 0;
     let falhas = 0;
+
+    /* ⚠ AS QUE FICAM DE FORA ENTRAM NO FEED DE UMA VEZ, no começo. Elas não passam pelo
+       laço — nunca passaram —, e sem elas na conta o operador veria "480 de 492" no fim de
+       um lote que terminou. A contagem tem de bater com a prévia, que é onde ele já leu o
+       número. Não recalculo: leio `previa.totais.ficamDeFora`. */
+    const fora = previa.linhas.filter(l => !l.entra);
+    const feedInicial: EventoProgresso[] = fora.map(l => ({
+      linha: l.row.linha,
+      tipo: 'sem_par' as const,
+      data: l.row.data_pagamento ?? l.row.data_competencia ?? '',
+      valor: Math.abs(Number(l.row.valor) || 0),
+      titulo: l.row.descricao ?? '(sem descrição)',
+      contexto: 'sem par no extrato — nada gravado',
+    }));
+    const alvo = previa.linhas.filter(l => l.entra && l.fazendaId && l.subcentro && l.row.tipo_operacao);
+    setProgresso({
+      ...PROGRESSO_ZERO,
+      total: alvo.length + feedInicial.length,
+      feitas: feedInicial.length,
+      semPar: feedInicial.length,
+      iniciadoEm: Date.now(),
+      feed: feedInicial,
+    });
+
+    /* Um evento e os contadores num gesto só: dois `setProgresso` seguidos fariam o
+       React renderizar um estado onde o número e o feed discordam. */
+    const empurrar = (ev: EventoProgresso, delta: Partial<Pick<ProgressoImportacao, 'atualizados' | 'criados' | 'recusados'>>) => {
+      setProgresso(p => ({
+        ...p,
+        feitas: p.feitas + 1,
+        atualizados: p.atualizados + (delta.atualizados ?? 0),
+        criados: p.criados + (delta.criados ?? 0),
+        recusados: p.recusados + (delta.recusados ?? 0),
+        feed: [...p.feed, ev],
+      }));
+    };
 
     try {
       const clsPorSubcentro = new Map(classificacoes.map((c) => [c.subcentro, c]));
 
       for (const l of previa.linhas) {
         if (!l.entra || !l.fazendaId || !l.subcentro || !l.row.tipo_operacao) continue;
+        /* O "Parar" termina a linha corrente e para — nunca no meio de uma escrita. */
+        if (pararRef.current) break;
+        const valorLinha = Math.abs(Number(l.row.valor) || 0);
+        const dataLinha = l.row.data_pagamento ?? l.row.data_competencia ?? '';
+        setProgresso(p => ({ ...p, agora: `gravando ${l.subcentro} · ${valorLinha.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` }));
+        /* O contexto do evento: só o que a linha REALMENTE levou. Campo vazio não vira
+           "— " na tela; ele simplesmente não aparece. */
+        const contextoDaLinha = [
+          l.fazendaNome ?? null,
+          /* ⚠ O NOME SAI DO CADASTRO, não da linha: `LinhaPrevia` guarda `favorecidoId` e
+             `safraId` — os ids —, e mostrar UUID na tela é proibido. */
+          l.favorecidoId ? (fornecedores.find(f => f.id === l.favorecidoId)?.nome ?? null) : null,
+          l.safraId ? `safra ${safras.find(x => x.id === l.safraId)?.codigo ?? safras.find(x => x.id === l.safraId)?.nome ?? ''}`.trim() : null,
+        ].filter(Boolean).join(' · ');
         const cls = clsPorSubcentro.get(l.subcentro);
         const contas = montarPayloadConta(
           l.row.tipo_operacao as TipoOperacaoFinanceira,
@@ -889,9 +984,27 @@ export function useImportLancamentosExcel(somenteAtualizar = false) {
                lançamento fica com a que já tinha. */
             safra_id: l.safraId ?? alvo?.safraAtual ?? null,
           };
-          const ok = await editarLancamento(alvoId, formUpd);
-          if (ok) atualizados++;
-          else { falhas++; erros.push(`Linha ${l.row.linha}: falha ao atualizar o lançamento.`); }
+          /* ⚠ SEM TOAST POR LINHA — 131. Eram 492 toasts empilhados por minutos, e o
+             operador não via nem o que gravava nem quanto faltava.
+             ⚠ E O MOTIVO REAL DA RECUSA ENTRA NO FEED. Antes o erro virava "falha ao
+             atualizar o lançamento" — texto nosso, que não diz nada. A mensagem do banco
+             nomeia o invariante (mês fechado, conta de outro cliente) e é a única que
+             permite ao operador consertar. */
+          let motivo: string | null = null;
+          const ok = await editarLancamento(alvoId, formUpd, {
+            silent: true, onErro: (m) => { motivo = m; },
+          });
+          if (ok) {
+            atualizados++;
+            empurrar({ linha: l.row.linha, tipo: 'ok', data: dataLinha, valor: valorLinha,
+              titulo: l.subcentro, contexto: contextoDaLinha }, { atualizados: 1 });
+          } else {
+            falhas++;
+            const msg = motivo ?? 'falha ao atualizar o lançamento.';
+            erros.push(`Linha ${l.row.linha}: ${msg}`);
+            empurrar({ linha: l.row.linha, tipo: 'recusado', data: dataLinha, valor: valorLinha,
+              titulo: l.subcentro ?? '(sem subcentro)', contexto: msg }, { recusados: 1 });
+          }
           continue;
         }
         /* ⚠ CRIAÇÃO SEM APROVAÇÃO NÃO GRAVA — B-42. A prévia mostra a linha
@@ -899,9 +1012,21 @@ export function useImportLancamentosExcel(somenteAtualizar = false) {
            certo: a tela já disse quantas seriam criadas e o operador escolheu
            não aprovar estas. */
         if (!criacoesAprovadas.has(l.indice)) continue;
-        const id = await criarLancamentoComId(form, { origem: 'excel', silent: true });
-        if (id) criados++;
-        else { falhas++; erros.push(`Linha ${l.row.linha}: falha ao criar o lançamento.`); }
+        let motivoCriar: string | null = null;
+        const id = await criarLancamentoComId(form, {
+          origem: 'excel', silent: true, onErro: (m) => { motivoCriar = m; },
+        });
+        if (id) {
+          criados++;
+          empurrar({ linha: l.row.linha, tipo: 'ok', data: dataLinha, valor: valorLinha,
+            titulo: l.subcentro, contexto: contextoDaLinha }, { criados: 1 });
+        } else {
+          falhas++;
+          const msg = motivoCriar ?? 'falha ao criar o lançamento.';
+          erros.push(`Linha ${l.row.linha}: ${msg}`);
+          empurrar({ linha: l.row.linha, tipo: 'recusado', data: dataLinha, valor: valorLinha,
+            titulo: l.subcentro ?? '(sem subcentro)', contexto: msg }, { recusados: 1 });
+        }
       }
 
       const apelidos = await persistirApelidos({
@@ -925,6 +1050,7 @@ export function useImportLancamentosExcel(somenteAtualizar = false) {
       return r;
     } finally {
       setGravando(false);
+      setProgresso(p => ({ ...p, agora: null, terminadoEm: Date.now(), interrompido: pararRef.current }));
     }
   }, [
     clienteId, previa, dePara, classificacoes, criarLancamentoComId,
@@ -938,6 +1064,10 @@ export function useImportLancamentosExcel(somenteAtualizar = false) {
     /* B-42 — idem: o gravador precisa da aprovação vigente, não da de um render
        anterior; presa à antiga, ele criaria o que o operador acabou de desmarcar. */
     criacoesAprovadas,
+    /* 131 — os cadastros que dão NOME ao que o feed mostra. Sem eles na lista, o laço
+       ficaria preso à versão de um render anterior e o contexto sairia vazio na primeira
+       vez em que o cadastro chegasse depois do primeiro render. */
+    fornecedores, safras,
   ]);
 
   return {
@@ -958,5 +1088,8 @@ export function useImportLancamentosExcel(somenteAtualizar = false) {
     aliasIdPorTexto,
     // passo 4 — a ÚNICA que grava, e só por confirmação explícita
     confirmarImportacao, gravando, resultado,
+    /* 131 — o progresso ao vivo e o botão de parar. */
+    progresso,
+    pararImportacao: () => { pararRef.current = true; },
   };
 }

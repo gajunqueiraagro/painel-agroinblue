@@ -29,9 +29,17 @@ interface Props {
   contaNome: string;
   ano: number;
   mes: number;
+  /* ── 131 ────────────────────────────────────────────────────────────────────
+     O destino do "Ver no Financeiro" do modal de progresso e o nome do cliente para o
+     cabeçalho dele. Sem o callback, o botão não aparece — a tela não promete navegação
+     que quem a monta não sabe fazer. */
+  onVerNoFinanceiro?: () => void;
+  clienteNome?: string;
 }
 
-export function EnriquecerPorPlanilha({ clienteId, contaId, contaNome, ano, mes }: Props) {
+export function EnriquecerPorPlanilha({
+  clienteId, contaId, contaNome, ano, mes, onVerNoFinanceiro, clienteNome,
+}: Props) {
   const { movimentos, loading } = useConciliacaoDoMes(clienteId, contaId, ano, mes);
 
   return (
@@ -73,6 +81,8 @@ export function EnriquecerPorPlanilha({ clienteId, contaId, contaNome, ano, mes 
         /* `2026-08` no nome do arquivo: o operador acaba com vários downloads na
            pasta e a régua não viaja junto com o .xlsx. */
         sufixoArquivo={`${ano}-${String(mes).padStart(2, '0')}`}
+        onVerNoFinanceiro={onVerNoFinanceiro}
+        mesRef={mes} anoRef={ano} clienteNome={clienteNome}
       />
     </div>
   );
