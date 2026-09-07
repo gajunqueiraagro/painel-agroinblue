@@ -10,8 +10,12 @@
  * "Pronto", e não é dedução do front: veio do `casamento_meta` que o casador gravou.
  *
  * ⚠ 36px EXATOS — 133b-a: `padding 5px 12px` + 11px/1.3 + 10px/1.3 dá 5 + 14 + 13 + 5 ≈ 36.
- * A data volta como coluna FIXA de 64px, à esquerda, para o valor da direita alinhar em
- * todas as linhas — sem largura fixa ele dança conforme o tamanho da descrição.
+ *
+ * ⚠ A DATA SAIU DA LINHA — 133b-b. Ela viveu aqui por um envelope: a faixa do grupo já diz
+ * "dd/mm/aaaa · conta", e repetir a data em cada uma das linhas daquela faixa gastava 64px
+ * de largura para dizer quinze vezes o que estava escrito uma vez logo acima. O que a
+ * coluna fixa resolvia — o valor da direita dançando conforme o tamanho da descrição —
+ * resolve-se com a coluna de 96px do próprio valor.
  *
  * ⚠ SEM QUEBRA DE LINHA, NAS DUAS: `min-w-0` no filho flexível e `truncate` no texto. Sem
  * os dois, uma descrição longa empurra o valor para fora e a lista deixa de alinhar.
@@ -53,12 +57,8 @@ export function EnriquecimentoRow({ row, selecionado, onSelecionar, editadaNaoGr
           ? 'bg-primary/10 outline outline-1 outline-primary'
           : 'bg-card hover:bg-muted/50'
       }`}
-      style={{ gridTemplateColumns: '64px minmax(0,1fr) auto' }}
+      style={{ gridTemplateColumns: 'minmax(0,1fr) 96px' }}
     >
-      <span className="truncate text-[10px] leading-[1.3] text-muted-foreground tabular-nums" title={row.data}>
-        {row.data}
-      </span>
-
       <span className="min-w-0">
         <span className="flex items-center gap-1">
           <span className={`h-[7px] w-[7px] shrink-0 rounded-full ${editadaNaoGravada ? 'bg-amber-500' : meta.dot}`}
@@ -72,6 +72,8 @@ export function EnriquecimentoRow({ row, selecionado, onSelecionar, editadaNaoGr
         </span>
       </span>
 
+      {/* ⚠ 96px FIXOS — 133b-b: sem largura fixa o valor encosta na descrição e a coluna da
+          direita deixa de alinhar entre as linhas, que é justamente o que se confere. */}
       <span className="shrink-0 text-right">
         <span className={`block text-[11px] font-medium leading-[1.3] tabular-nums ${corValor}`} title={row.valor}>
           {sinal}{row.valor}

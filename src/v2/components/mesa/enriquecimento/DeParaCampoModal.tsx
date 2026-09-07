@@ -195,6 +195,15 @@ export function DeParaCampoModal({
                         {' '}· {nDup} cadastros com este nome — escolha um
                       </span>
                     )}
+                    {/* ⚠ A ESCOLHA VALE MESMO SEM MEMÓRIA — 133b-b regra 2. Ela continua na
+                        tela e entra na importação; o que não sobrevive ao reload é o
+                        APELIDO. O aviso mora na linha porque o toast some e o operador
+                        seguia adiante achando que tinha memorizado. */}
+                    {it.apelidoFalhou && (
+                      <span className="text-amber-700 dark:text-amber-400" title={it.apelidoFalhou}>
+                        {' '}· não memorizado — {it.apelidoFalhou}
+                      </span>
+                    )}
                   </span>
                 </span>
 

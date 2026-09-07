@@ -285,6 +285,15 @@ export function ImportLancDeParaPanel({
                   </span>
                   {/* Conflito de apelido: mostrar de onde o texto saiu ANTES de confirmar.
                       A troca só governa importações futuras — nada já criado é reclassificado. */}
+                  {/* ⚠ "NÃO MEMORIZADO" É DIFERENTE DE "NÃO ESCOLHIDO" — 133b-b regra 2. A
+                      escolha vale e entra na importação; o que falhou foi guardá-la para as
+                      próximas. O toast que dizia isso sumia em segundos. */}
+                  {it.apelidoFalhou && (
+                    <span className="text-[8px] text-amber-700 whitespace-nowrap"
+                          title={`A escolha vale para esta importação. Só o apelido não foi memorizado: ${it.apelidoFalhou}`}>
+                      não memorizado
+                    </span>
+                  )}
                   {it.origem === 'manual' && it.anterior && it.anterior !== it.rotulo && (
                     <span className="text-[8px] text-amber-700 whitespace-nowrap"
                           title={`Este apelido apontava para "${it.anterior}". A troca vale para as próximas importações; nada já lançado é reclassificado.`}>

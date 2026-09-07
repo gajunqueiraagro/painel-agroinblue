@@ -133,10 +133,22 @@ export function V2ImportLancamentosExcel({
      operador, abrir onde o trabalho começa é melhor que abrir vazio. */
   const [grupoDePara, setGrupoDePara] = useState<CampoDePara>('subcentro');
 
-  /* No modo hub o arquivo já veio escolhido: ler assim que ele chega, e de novo quando o
-     operador trocar de arquivo lá em cima. Mesmo efeito do `CusteioTxtImportTab`. */
+  /**
+   * No modo hub o arquivo já veio escolhido: ler assim que ele chega, e de novo quando o
+   * operador trocar de arquivo lá em cima.
+   *
+   * ⚠ UMA VEZ POR ARQUIVO, E O REF É O QUE GARANTE — [ENRIQUECER-DEPARA-ESTADO-01] (133b-b).
+   * O efeito tinha `lerArquivo` nas dependências (copiado do `CusteioTxtImportTab`, onde a
+   * função é estável): aqui ela dependia dos catálogos, então cada chegada de catálogo
+   * relia o arquivo e `montarDePara` refazia o mapa DO ZERO — meia hora de de-para de volta
+   * a pendente. `lerArquivo` passou a ser estável, e o ref é o cinto: mesmo que ela volte a
+   * mudar de identidade um dia, o MESMO arquivo não é lido duas vezes.
+   */
+  const arquivoLidoRef = useRef<File | null>(null);
   useEffect(() => {
-    if (arquivoInicial) void lerArquivo(arquivoInicial);
+    if (!arquivoInicial || arquivoLidoRef.current === arquivoInicial) return;
+    arquivoLidoRef.current = arquivoInicial;
+    void lerArquivo(arquivoInicial);
   }, [arquivoInicial, lerArquivo]);
 
   const totalValoresDePara = useMemo(() => (dePara

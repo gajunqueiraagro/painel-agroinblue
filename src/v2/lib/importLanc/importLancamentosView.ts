@@ -85,6 +85,14 @@ export interface DeParaItem<TValor = string> {
    * impossível de qualquer forma, porque `plano_conta_id` é NOT NULL.
    */
   semClassificacao?: boolean;
+  /**
+   * 133b-b regra 2 — a gravação do apelido FALHOU, e a escolha continua valendo na tela.
+   *
+   * ⚠ A ESCOLHA NÃO SE PERDE PORQUE A MEMÓRIA FALHOU: são duas coisas, e só uma é
+   * reversível. O texto do erro fica aqui para a linha poder dizer "não memorizado — {motivo}"
+   * em vez de um toast que some e deixa o operador achando que gravou.
+   */
+  apelidoFalhou?: string | null;
 }
 
 export type DeParaMap = Record<string, DeParaItem>;
@@ -97,6 +105,18 @@ export interface CatalogosImport {
   aliasesSubcentro: SubcentroAliasRef[];
   /** fornecedorId → aliases (coluna jsonb de financeiro_fornecedores). */
   aliasesFornecedor: Readonly<Record<string, string[]>>;
+  /**
+   * fazendaId → aliases e safraId → aliases — [ENRIQUECER-DEPARA-ESTADO-01] (133b-b).
+   *
+   * ⚠ A METADE QUE FALTAVA. O 133b criou as colunas (`fazendas.aliases`,
+   * `financeiro_safras.aliases`), ligou a ESCRITA (`persistirApelidos`) e carregou os dois
+   * mapas no hook — mas nunca os entregou ao de-para. O apelido gravava e, na leitura
+   * seguinte, `preResolverFazenda` continuava olhando só `codigo_importacao/codigo/nome`:
+   * o operador ensinava, o banco guardava, e a tela voltava a perguntar. Medido por Gabriel
+   * em 07/09 — 4 apelidos de fazenda e 4 de safra gravados, e os oito de volta a pendente.
+   */
+  aliasesFazenda: Readonly<Record<string, string[]>>;
+  aliasesSafra: Readonly<Record<string, string[]>>;
   /** Chaves de (fazenda, ano_mes) fechados. */
   fechados: ReadonlySet<ChaveFechamento>;
   /** B-22d — cadastro de safras do cliente, para o quinto campo do de-para. */
@@ -167,15 +187,23 @@ export function preResolverSubcentro(
 }
 
 /**
- * Fazenda. Sem memória própria por decisão do briefing — testa as DUAS chaves
- * do cadastro (codigo_importacao e codigo), que podem divergir entre si
- * (V2Fazendas atualiza só codigo_importacao). O que não resolver fica na sessão.
+ * Fazenda. Testa as DUAS chaves do cadastro (codigo_importacao e codigo), que podem
+ * divergir entre si (V2Fazendas atualiza só codigo_importacao), o nome — e, desde 133b-b,
+ * os APELIDOS memorizados.
+ *
+ * ⚠ O APELIDO VEM PRIMEIRO, e é o mesmo idioma do fornecedor: ele é resposta EXPLÍCITA do
+ * operador, e o cadastro é inferência nossa. Quando os dois discordam, quem ensinou ganha.
  */
 export function preResolverFazenda(
   texto: string,
   fazendas: Fazenda[],
+  aliasesPorFazenda: Readonly<Record<string, string[]>> = {},
 ): Pick<DeParaItem, 'valor' | 'origem' | 'rotulo'> {
   const alvo = normalizar(texto);
+  const porAlias = fazendas.find((f) =>
+    (aliasesPorFazenda[f.id] ?? []).some((a) => normalizar(String(a)) === alvo));
+  if (porAlias) return { valor: porAlias.id, origem: 'alias', rotulo: porAlias.nome };
+
   const achou = fazendas.find((f) =>
     (f.codigo_importacao ? normalizar(f.codigo_importacao) === alvo : false) ||
     (f.codigo ? normalizar(f.codigo) === alvo : false) ||
@@ -310,13 +338,13 @@ export function montarDePara(
       }),
       (t) => preResolverSubcentro(t, cat)),
     fazenda: montarMapa(distintos(rows, (r) => r.fazenda_texto), (t) =>
-      preResolverFazenda(t, cat.fazendas)),
+      preResolverFazenda(t, cat.fazendas, cat.aliasesFazenda)),
     fornecedor: montarMapa(distintos(rows, (r) => r.fornecedor_texto), (t) =>
       preResolverFornecedor(t, cat.fornecedores, cat.aliasesFornecedor)),
     conta: montarMapa(distintos(rows, (r) => r.conta_bancaria_texto), (t) =>
       preResolverConta(t, cat.contas)),
     safra: montarMapa(distintos(rows, (r) => r.safra_texto), (t) =>
-      preResolverSafra(t, cat.safras)),
+      preResolverSafra(t, cat.safras, cat.aliasesSafra)),
   };
 }
 
@@ -334,13 +362,81 @@ export function montarDePara(
 export function preResolverSafra(
   texto: string,
   safras: SafraRef[],
+  aliasesPorSafra: Readonly<Record<string, string[]>> = {},
 ): Pick<DeParaItem, 'valor' | 'origem' | 'rotulo'> {
   const alvo = normalizar(texto);
+  /* ⚠ APELIDO PRIMEIRO — 133b-b. O comentário acima previa que "se um dia incomodar, a
+     coluna `aliases` é migration aditiva e o quinto campo passa a memorizar como os outros
+     quatro": a migration veio no 133b, a gravação também, e só a leitura ficou. */
+  const porAlias = safras.find((sf) =>
+    (aliasesPorSafra[sf.id] ?? []).some((a) => normalizar(String(a)) === alvo));
+  if (porAlias) return { valor: porAlias.id, origem: 'alias', rotulo: porAlias.nome };
+
   const achou = safras.find((sf) =>
     normalizar(sf.nome) === alvo || (sf.codigo ? normalizar(sf.codigo) === alvo : false));
   return achou
     ? { valor: achou.id, origem: 'cadastro', rotulo: achou.nome }
     : { valor: null, origem: 'pendente', rotulo: null };
+}
+
+/**
+ * A MESCLAGEM DO DE-PARA — [ENRIQUECER-DEPARA-ESTADO-01] (133b-b).
+ *
+ * ⚠ O DE-PARA É CONSTRUÍDO UMA VEZ POR ARQUIVO. Catálogo que chega depois só PREENCHE o
+ * que ainda está vazio; ele nunca sobrescreve escolha do operador e nunca devolve um item
+ * resolvido a pendente. Era essa a regra, e ela estava escrita pela metade: a versão
+ * anterior preservava `valor` e `descartado` e ESQUECIA `semClassificacao` — a quarta
+ * saída do B-40, que é decisão tão explícita quanto as outras duas e voltava a pendente a
+ * cada chegada de catálogo.
+ *
+ * ⚠ FUNÇÃO PURA, E POR ISSO TESTÁVEL. Ela morava dentro de um `useEffect`, onde a única
+ * forma de conferir o comportamento era abrir a tela e resolver vinte itens à mão. Fora
+ * dali, a sessão inteira cabe num teste — e é o teste que mede as reconstruções.
+ *
+ * @param atual  o mapa que está na tela (pode ser null na primeira montagem)
+ * @param base   o mapa recém-construído do parse + catálogos
+ */
+export function mesclarDePara(
+  atual: DeParaCompleto | null,
+  base: DeParaCompleto,
+): DeParaCompleto {
+  if (!atual) return base;
+  const mesclarMapa = (a: DeParaMap, b: DeParaMap): DeParaMap => {
+    const out: DeParaMap = {};
+    for (const [k, novo] of Object.entries(b)) {
+      const anterior = a[k];
+      out[k] = anterior && decididoPeloOperador(anterior) ? anterior : novo;
+    }
+    /* ⚠ CHAVE QUE SÓ EXISTE NO ATUAL NÃO SE PERDE. Hoje as duas listas saem do mesmo
+       parse e isso não acontece; se um dia a origem mudar, o operador não perde a
+       resposta por causa de um recorte que ele não pediu. */
+    for (const [k, anterior] of Object.entries(a)) {
+      if (!(k in out) && decididoPeloOperador(anterior)) out[k] = anterior;
+    }
+    return out;
+  };
+  return {
+    subcentro: mesclarMapa(atual.subcentro, base.subcentro),
+    fazenda: mesclarMapa(atual.fazenda, base.fazenda),
+    fornecedor: mesclarMapa(atual.fornecedor, base.fornecedor),
+    conta: mesclarMapa(atual.conta, base.conta),
+    safra: mesclarMapa(atual.safra, base.safra),
+  };
+}
+
+/**
+ * As TRÊS respostas do operador — resolver, descartar e "entra sem classificação".
+ * Qualquer uma delas é decisão, e decisão não se desfaz por chegada de catálogo.
+ *
+ * ⚠ `apelidoFalhou` NÃO É UMA QUARTA: ele só existe sobre um item que acabou de ser
+ * resolvido, então já entra por `valor !== null`. Testá-lo aqui sugeriria um caminho em que
+ * a falha da memória, sozinha, decide algo — e não há.
+ * ⚠ "LIMPAR A SELEÇÃO" TAMBÉM NÃO ENTRA, de propósito: ela devolve o item a pendente, e
+ * pendente é o estado que o catálogo PODE preencher. É a única resposta do operador que
+ * não se defende — porque ela é justamente o pedido de reabrir a pergunta.
+ */
+export function decididoPeloOperador(item: DeParaItem): boolean {
+  return item.valor !== null || !!item.descartado || !!item.semClassificacao;
 }
 
 /** Quantos ainda faltam resolver, por painel e no total. */

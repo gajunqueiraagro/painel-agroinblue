@@ -22,7 +22,7 @@ import type { LancamentoV2Form } from '@/hooks/useFinanceiroV2';
 import { montarPayloadConta, type TipoOperacaoFinanceira } from '@/lib/financeiro/contaPayload';
 import { persistirApelidos, mapaDeRepontamento, type ResultadoApelidos } from '@/v2/lib/importLanc/persistirApelidos';
 import {
-  montarDePara, montarPrevia, contarPendentes, chaveFechamento,
+  montarDePara, mesclarDePara, montarPrevia, contarPendentes, chaveFechamento,
   normalizar as normalizarTexto,
   type CatalogosImport, type DeParaCompleto, type DeParaMap, type DeParaItem,
   type SubcentroAliasRef, type ChaveFechamento, type NivelDuplicidade, type AlvoAtualizacao,
@@ -336,7 +336,28 @@ export function useImportLancamentosExcel(somenteAtualizar = false) {
     classificacoes, fazendas, fornecedores,
     contas: contasResolviveis,
     aliasesSubcentro, aliasesFornecedor, fechados, safras,
-  }), [classificacoes, fazendas, fornecedores, contasResolviveis, aliasesSubcentro, aliasesFornecedor, fechados, safras]);
+    /* ⚠ OS DOIS MAPAS ESTAVAM CARREGADOS E NÃO ENTREGUES — 133b-b. O 133b os leu do banco
+       para `gravarApelidoNoAto` não duplicar apelido, e parou aí: o de-para nunca os viu.
+       Resultado medido por Gabriel: 4 fazendas e 8 safras memorizadas voltando a pendente
+       depois do reload, enquanto a conta do plano (23 → 1) voltava resolvida. */
+    aliasesFazenda, aliasesSafra,
+  }), [classificacoes, fazendas, fornecedores, contasResolviveis, aliasesSubcentro,
+       aliasesFornecedor, fechados, safras, aliasesFazenda, aliasesSafra]);
+
+  /**
+   * ⚠ O CATÁLOGO VIAJA POR REF — 133b-b, e esta é a raiz do defeito.
+   *
+   * `lerArquivo` tinha `[catalogos]` nas dependências, então TODA mudança de identidade do
+   * catálogo lhe dava uma função nova. `V2ImportLancamentosExcel` chama
+   * `useEffect(() => lerArquivo(arquivoInicial), [arquivoInicial, lerArquivo])`: com
+   * `lerArquivo` instável, o efeito redisparava e `setDePara(montarDePara(...))` refazia o
+   * mapa DO ZERO — meia hora de escolhas de volta a pendente, porque os apelidos recém-
+   * gravados ainda não estão nos catálogos em memória.
+   * ⚠ O `CusteioTxtImportTab`, de onde copiei o padrão em 133b, tem `lerArquivo` com deps
+   * VAZIAS. Copiei a forma e não a precondição — que é o que fazia a forma ser segura.
+   */
+  const catalogosRef = useRef(catalogos);
+  useEffect(() => { catalogosRef.current = catalogos; }, [catalogos]);
 
   // ── Passo 1: ler o arquivo ──
   const lerArquivo = useCallback(async (file: File) => {
@@ -346,7 +367,7 @@ export function useImportLancamentosExcel(somenteAtualizar = false) {
       const r = await parseExcelLancamentos(file);
       setArquivo(file);
       setParse(r);
-      setDePara(montarDePara(r.rows, catalogos));
+      setDePara(montarDePara(r.rows, catalogosRef.current));
     } catch (e: unknown) {
       setErro(e instanceof Error ? e.message : String(e));
       setParse(null);
@@ -354,36 +375,59 @@ export function useImportLancamentosExcel(somenteAtualizar = false) {
     } finally {
       setLendo(false);
     }
-  }, [catalogos]);
+  }, []);
 
-  // Recalcula a pré-resolução quando os catálogos terminam de carregar depois
-  // do parse (ordem de chegada das queries não é garantida). Preserva o que o
-  // operador já resolveu à mão: só reavalia os itens ainda pendentes.
+  /**
+   * Recalcula a pré-resolução quando os catálogos terminam de carregar depois do parse — a
+   * ordem de chegada das queries não é garantida.
+   *
+   * ⚠ SÓ PREENCHE O QUE ESTÁ VAZIO — regra 1 do 133b-b. A mesclagem é `mesclarDePara`, pura
+   * e testada: escolha do operador (resolver, descartar, "sem classificação") nunca é
+   * sobrescrita, e item resolvido nunca volta a pendente.
+   */
   useEffect(() => {
     if (!parse) return;
     const base = montarDePara(parse.rows, catalogos);
-    setDePara((atual) => {
-      if (!atual) return base;
-      const merge = (a: DeParaMap, b: DeParaMap): DeParaMap => {
-        const out: DeParaMap = {};
-        for (const [k, item] of Object.entries(b)) {
-          const anterior = a[k];
-          // Preserva tanto a resolução manual quanto o descarte: os dois são
-          // decisão do operador e não podem ser desfeitos por chegada de catálogo.
-          const decidido = anterior && (anterior.valor !== null || anterior.descartado);
-          out[k] = decidido ? anterior : item;
-        }
-        return out;
-      };
-      return {
-        subcentro: merge(atual.subcentro, base.subcentro),
-        fazenda: merge(atual.fazenda, base.fazenda),
-        fornecedor: merge(atual.fornecedor, base.fornecedor),
-        conta: merge(atual.conta, base.conta),
-        safra: merge(atual.safra, base.safra),
-      };
-    });
+    setDePara((atual) => mesclarDePara(atual, base));
   }, [parse, catalogos]);
+
+  /**
+   * Marca (ou limpa) o aviso "não memorizado" NA PRÓPRIA LINHA do de-para — 133b-b regra 2.
+   *
+   * ⚠ TOAST SOME, LINHA FICA. O aviso era um `toast.warning` que desaparecia em segundos;
+   * o operador seguia adiante achando que tinha memorizado, e descobria na importação
+   * seguinte. A escolha continua valendo na tela — o que ele precisa saber é que ela não
+   * vai sobreviver ao reload.
+   */
+  const marcarApelidoFalhou = useCallback((campo: CampoDePara, texto: string, motivo: string | null) => {
+    setDePara((atual) => {
+      if (!atual) return atual;
+      const item = atual[campo][texto];
+      if (!item || (item.apelidoFalhou ?? null) === motivo) return atual;
+      return { ...atual, [campo]: { ...atual[campo], [texto]: { ...item, apelidoFalhou: motivo } } };
+    });
+  }, []);
+
+  /** Acrescenta o texto ao mapa de aliases em memória do cadastro que acabou de recebê-lo. */
+  const aplicarApelidoNaMemoria = useCallback((campo: CampoDePara, texto: string, valor: string) => {
+    const acrescentar = (p: Record<string, string[]>): Record<string, string[]> => {
+      const alvo = normalizarTexto(texto);
+      const saida: Record<string, string[]> = {};
+      /* O texto sai de quem o tinha antes e entra no novo dono — o mesmo desempate que
+         `persistirApelidos` aplica no banco. Duas regras diferentes para o mesmo conflito
+         fariam a tela discordar do que foi gravado. */
+      for (const [id, arr] of Object.entries(p)) {
+        saida[id] = id === valor ? arr : arr.filter((a) => normalizarTexto(a) !== alvo);
+      }
+      const doAlvo = saida[valor] ?? [];
+      saida[valor] = doAlvo.some((a) => normalizarTexto(a) === alvo) ? doAlvo : [...doAlvo, texto];
+      return saida;
+    };
+    if (campo === 'fornecedor') setAliasesFornecedor(acrescentar);
+    else if (campo === 'conta') setAliasesConta(acrescentar);
+    else if (campo === 'fazenda') setAliasesFazenda(acrescentar);
+    else if (campo === 'safra') setAliasesSafra(acrescentar);
+  }, []);
 
   /**
    * B-40 item 7 — O APELIDO GRAVA NO ATO DO MAPEAMENTO, não só no confirmar.
@@ -429,12 +473,27 @@ export function useImportLancamentosExcel(somenteAtualizar = false) {
       if (Object.keys(r.idsSubcentroPorTexto).length > 0) {
         setAliasIdPorTexto((p) => ({ ...p, ...r.idsSubcentroPorTexto }));
       }
-      if (r.erros.length > 0) toast.warning(`Apelido não memorizado: ${r.erros[0]}`);
+      if (r.erros.length > 0) {
+        marcarApelidoFalhou(campo, texto, r.erros[0]);
+      } else {
+        /**
+         * ⚠ A MEMÓRIA RECÉM-ENSINADA ENTRA NO CATÁLOGO EM MEMÓRIA — 133b-b.
+         *
+         * Sem isto, o catálogo do navegador continuava sem o apelido que acabou de ser
+         * gravado, e QUALQUER reconstrução do de-para (a do efeito de catálogo, ou a de um
+         * arquivo relido) devolvia o item a pendente — o banco sabia, a tela não. É o
+         * mesmo idioma do `aliasIdPorTexto` logo acima, que já fazia isso para o id.
+         * ⚠ SÓ PARA OS QUATRO DE `aliases` JSONB. O subcentro tem tabela própria
+         * (`financeiro_subcentro_aliases`) e entra por `aliasesSubcentro`.
+         */
+        aplicarApelidoNaMemoria(campo, texto, valor);
+        marcarApelidoFalhou(campo, texto, null);
+      }
     } catch (e) {
-      toast.warning(`Apelido não memorizado: ${e instanceof Error ? e.message : 'falha ao gravar.'}`);
+      marcarApelidoFalhou(campo, texto, e instanceof Error ? e.message : 'falha ao gravar.');
     }
   }, [clienteId, planoIdPorSubcentro, aliasIdPorTexto, aliasesFornecedor, aliasesConta,
-      aliasesFazenda, aliasesSafra]);
+      aliasesFazenda, aliasesSafra, aplicarApelidoNaMemoria, marcarApelidoFalhou]);
 
   // ── Passo 2: resolução manual de um item do de-para ──
   const resolverManualmente = useCallback((

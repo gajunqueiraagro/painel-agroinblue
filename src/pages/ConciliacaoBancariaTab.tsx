@@ -970,7 +970,17 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
           </div>
         )}
 
-        {!loading && selectedCard && vistaExtrato === 'enriquecer' && (
+        {/* ⚠ SEM O GATE DE `loading` — [ENRIQUECER-DEPARA-ESTADO-01] (133b-b) regra 3, e é
+            perda de trabalho, não cosmética. `loadData` faz `setLoading(true)` e é
+            redisparada por `inscreverEmLancamentos`: a cada notificação de que os
+            lançamentos mudaram, esta aba DESMONTAVA — levando junto o arquivo lido e o
+            de-para inteiro, meia hora de escolhas, para redesenhar um número.
+            ⚠ E ELA NÃO DEPENDE DE `lancamentos`: o de-para é trabalho sobre o ARQUIVO, no
+            navegador. As outras três abas continuam com o gate porque leem o mês.
+            ⚠ `selectedCard` SOBREVIVE À RECARGA: `buildMonthCards` devolve os doze meses
+            sempre, mesmo com `lancamentos` vazio — conferido antes de tirar o `loading`,
+            porque tirar um dos dois guardas de nada adiantaria se o outro caísse junto. */}
+        {selectedCard && vistaExtrato === 'enriquecer' && (
           <div className="space-y-2 md:flex-1 md:min-h-0 md:overflow-y-auto">
             {/* ⚠ OS DOIS CAMINHOS VIRARAM UM — 133b, e a decisão de produto veio no
                 envelope. O B-22a deixou a planilha AO LADO da Mesa justamente por não

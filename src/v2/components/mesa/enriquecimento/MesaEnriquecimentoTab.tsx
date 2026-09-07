@@ -660,15 +660,58 @@ export function MesaEnriquecimentoTab({ anoMesRegua, sessaoId: sessaoIdProp, onS
           {selecionado ? (
             <>
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border bg-card">
-                {/* ⚠ O CABEÇALHO DA DIREITA NÃO ROLA — A21: quem some ao rolar é a própria
-                    identidade da linha que se está conferindo. */}
-                <div className="shrink-0 border-b px-3 py-1">
-                  <div className="truncate text-[12px] font-medium" title={selecionado.descricaoExcel}>
-                    {selecionado.descricaoExcel}
+                {/* ⚠ OS MESMOS QUATRO CARDS DE 44px DA MESA AMPLIADA — 133b-a pendente 3.
+                    A aba tinha um cabeçalho próprio (descrição + uma linha de contexto) e a
+                    ampliada tinha os quatro cards: dois desenhos para a mesma pergunta, e o
+                    operador que ia e voltava entre as duas relia a linha em dois formatos.
+                    ⚠ NÃO ROLA — A21: quem some ao rolar é a identidade da linha que se está
+                    conferindo. */}
+                <div className="flex h-11 shrink-0 items-center border-b bg-muted px-3">
+                  <div className="grid w-full grid-cols-4 gap-2">
+                    <div className="min-w-0">
+                      <div className="text-[10px] leading-tight text-muted-foreground">Linha</div>
+                      <div className="truncate text-[16px] font-medium leading-tight"
+                        title={selecionado.descricaoExcel}>{selecionado.linha ?? '—'}</div>
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-[10px] leading-tight text-muted-foreground">
+                        {selecionado.entradaOuSaida === 'saida' ? 'Saída'
+                          : selecionado.entradaOuSaida === 'entrada' ? 'Entrada' : '—'}
+                      </div>
+                      <div className={`truncate text-[16px] font-medium leading-tight tabular-nums ${
+                        selecionado.entradaOuSaida === 'saida' ? 'text-red-600 dark:text-red-400'
+                        : selecionado.entradaOuSaida === 'entrada' ? 'text-emerald-700 dark:text-emerald-400' : ''}`}>
+                        {selecionado.entradaOuSaida === 'saida' ? '−' : ''}{selecionado.valor}
+                      </div>
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-[10px] leading-tight text-muted-foreground">Conta bancária</div>
+                      <div className="truncate text-[16px] font-medium leading-tight" title={selecionado.banco}>
+                        {selecionado.banco}
+                      </div>
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-[10px] leading-tight text-muted-foreground">O que muda</div>
+                      <div className={`truncate text-[16px] font-medium leading-tight ${
+                        selecionado.mudaAlgo ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground'}`}
+                        title={selecionado.comparativo.filter((c) => c.tom === 'muda' || c.tom === 'difere')
+                          .map((c) => c.campo).join(' · ') || 'Nada muda: o Resultado já confere com o sistema.'}>
+                        {(() => {
+                          const n = selecionado.comparativo.filter((c) => c.tom === 'muda' || c.tom === 'difere').length;
+                          return n === 0 ? 'nada muda' : `${n} campo${n > 1 ? 's' : ''}`;
+                        })()}
+                      </div>
+                    </div>
                   </div>
+                </div>
+
+                {/* A descrição da planilha e o desfazer, na faixa de 10px logo abaixo dos
+                    quatro números — como o "Sugerido por" da ampliada. */}
+                <div className="shrink-0 border-b px-3 py-0.5">
                   <div className="flex items-baseline gap-2">
-                    <span className="min-w-0 flex-1 truncate text-[10px] text-muted-foreground">
-                      linha {selecionado.linha ?? '—'} da planilha · {selecionado.banco} · {selecionado.data}
+                    <span className="min-w-0 flex-1 truncate text-[10px] text-muted-foreground"
+                      title={selecionado.descricaoExcel}>
+                      {selecionado.descricaoExcel} · {selecionado.data}
                     </span>
                     {/* ⚠ O DESFAZER SOBREVIVEU ÀS FAIXAS — 133b. Ele morava em duas faixas
                         coloridas que saíram; sem ele, uma escolha errada não teria volta
