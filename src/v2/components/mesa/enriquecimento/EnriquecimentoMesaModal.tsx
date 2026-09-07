@@ -26,10 +26,20 @@ const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', curren
 /** Como a lista da esquerda é organizada. 'lista' = ordem original, sem grupos. */
 type Agrupamento = 'lista' | 'fornecedor' | 'subcentro';
 /** Os quatro recortes do mock. 'todas' quando nenhum chip está ligado. */
-type FiltroEstado = 'todas' | 'revisar' | 'sem_vinculo' | 'divergentes' | 'exatas';
+type FiltroEstado = 'todas' | 'revisar' | 'sem_vinculo' | 'divergentes' | 'exatas' | 'entradas' | 'saidas';
 
 /** O subcentro que a linha exibe como contexto — o proposto, que é o que se revisa. */
 const subcentroDa = (r: EnriqRowVM) => r.edicao.subcentro ?? '— sem subcentro';
+
+/* ⚠ COR E SINAL SAEM DO MESMO LUGAR — 129d item 4. Duas funções para a mesma pergunta
+   divergiriam no dia em que alguém trocasse uma delas. `null` (sem lançamento) não pinta
+   nem prefixa: a tela não afirma um sentido que não conhece. */
+const corDoSinal = (s: 'entrada' | 'saida' | null) =>
+  s === 'saida' ? 'text-red-600 dark:text-red-400'
+  : s === 'entrada' ? 'text-emerald-600 dark:text-emerald-400'
+  : '';
+const sinalPrefixo = (s: 'entrada' | 'saida' | null) => (s === 'saida' ? '−' : s === 'entrada' ? '+' : '');
+const rotuloSentido = (s: 'entrada' | 'saida' | null) => (s === 'saida' ? 'Saída' : s === 'entrada' ? 'Entrada' : '—');
 
 /**
  * ⚠ O RECORTE SAI DO ESTADO QUE O ADAPTER JÁ CALCULOU, não de uma regra nova aqui:
@@ -42,6 +52,10 @@ function passaNoFiltro(r: EnriqRowVM, f: FiltroEstado): boolean {
     case 'sem_vinculo': return r.estado === 'sem_vinculo';
     case 'divergentes': return r.status === 'divergente';
     case 'exatas': return r.status === 'exato';
+    /* 129d item 4 — o sentido é um recorte como os outros: o operador que confere o
+       extrato olha um lado de cada vez. */
+    case 'entradas': return r.entradaOuSaida === 'entrada';
+    case 'saidas': return r.entradaOuSaida === 'saida';
     default: return true;
   }
 }
@@ -77,6 +91,8 @@ export function EnriquecimentoMesaModal({
     sem_vinculo: rows.filter(r => r.estado === 'sem_vinculo').length,
     divergentes: rows.filter(r => r.status === 'divergente').length,
     exatas: rows.filter(r => r.status === 'exato').length,
+    entradas: rows.filter(r => r.entradaOuSaida === 'entrada').length,
+    saidas: rows.filter(r => r.entradaOuSaida === 'saida').length,
   }), [rows]);
 
   const visiveis = useMemo(() => rows.filter(r => passaNoFiltro(r, filtro)), [rows, filtro]);
@@ -156,6 +172,8 @@ export function EnriquecimentoMesaModal({
               {chip('sem_vinculo', 'Sem vínculo', contagens.sem_vinculo)}
               {chip('divergentes', 'Divergentes', contagens.divergentes)}
               {chip('exatas', 'Exatas', contagens.exatas)}
+              {chip('entradas', 'Entradas', contagens.entradas)}
+              {chip('saidas', 'Saídas', contagens.saidas)}
             </div>
 
             {/* ⚠ O ÚNICO SCROLLPORT DESTE LADO. Um `max-h` interno aqui criaria a segunda
@@ -187,16 +205,29 @@ export function EnriquecimentoMesaModal({
                       <button type="button" key={r.id} onClick={() => lista.onSelecionar(r.id)}
                         className={`grid w-full items-center gap-1.5 border-b border-border/60 py-1 pr-3 text-left ${
                           sel ? 'border-l-[3px] border-l-primary bg-primary/[0.08] pl-[17px]' : 'pl-5'}`}
-                        style={{ gridTemplateColumns: '52px minmax(0,1fr) 86px' }}>
+                        style={{ gridTemplateColumns: '52px minmax(0,1fr) 92px' }}>
                         <span className="text-[10px] text-muted-foreground">{r.data}</span>
                         <span className="min-w-0">
-                          <span className="block truncate text-[11px] font-medium" title={r.fornecedor}>{r.fornecedor}</span>
-                          <span className="block truncate text-[10px] text-muted-foreground" title={subcentroDa(r)}>
-                            {subcentroDa(r)}
+                          {/* ⚠ UMA LINHA, SEMPRE — 129d item 1. `truncate` sozinho não bastava:
+                              o `<span>` dentro de um grid sem `min-w-0` no pai crescia e o nome
+                              quebrava em duas linhas, desalinhando a lista inteira. O nome
+                              completo fica no `title`. */}
+                          <span className="block truncate text-[11px] font-medium leading-tight" title={r.fornecedor}>
+                            {r.fornecedor}
+                          </span>
+                          {/* Contexto: subcentro proposto e a CONTA (129d item 8). */}
+                          <span className="block truncate text-[10px] leading-tight text-muted-foreground"
+                            title={`${subcentroDa(r)}${r.contaBancaria ? ` · ${r.contaBancaria}` : ''}`}>
+                            {subcentroDa(r)}{r.contaBancaria ? ` · ${r.contaBancaria}` : ''}
                           </span>
                         </span>
                         <span className="text-right">
-                          <span className="block text-[11px] font-medium tabular-nums">{r.valor}</span>
+                          {/* ⚠ O SINAL É VISÍVEL — 129d item 4. Saída em vermelho com "−",
+                              entrada em verde com "+". Sem lançamento não há sinal, e a cor
+                              neutra é o que não afirma nem um nem outro. */}
+                          <span className={`block text-[11px] font-medium tabular-nums ${corDoSinal(r.entradaOuSaida)}`}>
+                            {sinalPrefixo(r.entradaOuSaida)}{r.valor}
+                          </span>
                           <span className={`inline-block rounded-full px-1.5 text-[9px] ${pill.c}`}>{pill.t}</span>
                         </span>
                       </button>
@@ -217,44 +248,57 @@ export function EnriquecimentoMesaModal({
               </p>
             ) : (
               <>
-                <div className="grid shrink-0 grid-cols-4 gap-2 border-b bg-muted px-3 py-2">
-                  <div>
-                    <div className="text-[10px] text-muted-foreground">Linha</div>
-                    <div className="text-[18px] font-medium leading-tight">{actions.posicao}</div>
-                    <div className="truncate text-[10px] text-muted-foreground" title={selecionada.fornecedor}>
-                      {selecionada.fornecedor} · {selecionada.data}
+                <div className="shrink-0 border-b bg-muted px-3 py-2">
+                  <div className="grid grid-cols-4 gap-2">
+                    <div>
+                      <div className="text-[10px] text-muted-foreground">Linha</div>
+                      <div className="text-[18px] font-medium leading-tight">{actions.posicao}</div>
+                      <div className="truncate text-[10px] text-muted-foreground" title={selecionada.fornecedor}>
+                        {selecionada.fornecedor} · {selecionada.data}
+                      </div>
+                    </div>
+                    {/* ⚠ TIPO E VALOR JUNTOS — 129d item 7. Separados, o operador lia o número
+                        sem saber se saiu ou entrou; e o extrato dele tem os dois. */}
+                    <div>
+                      <div className="text-[10px] text-muted-foreground">
+                        {rotuloSentido(selecionada.entradaOuSaida)}
+                      </div>
+                      <div className={`text-[18px] font-medium leading-tight tabular-nums ${corDoSinal(selecionada.entradaOuSaida)}`}>
+                        {sinalPrefixo(selecionada.entradaOuSaida)}{selecionada.valor}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground">
+                        {selecionada.comparativo.find(c => c.campo === 'Valor')?.resultado ?? '—'}
+                      </div>
+                    </div>
+                    {/* A conta bancária virou card — 129d item 8: é o que amarra a linha ao
+                        extrato que o operador tem na frente. */}
+                    <div className="min-w-0">
+                      <div className="text-[10px] text-muted-foreground">Conta bancária</div>
+                      <div className="truncate text-[13px] font-medium leading-tight" title={selecionada.contaBancaria ?? undefined}>
+                        {selecionada.contaBancaria ?? '—'}
+                      </div>
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-[10px] text-muted-foreground">O que muda</div>
+                      <div className={`text-[13px] font-medium leading-tight ${selecionada.mudaAlgo ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground'}`}>
+                        {(() => {
+                          const n = selecionada.comparativo.filter(c => c.tom === 'muda' || c.tom === 'difere').length;
+                          return n === 0 ? 'nada muda' : `${n} campo${n > 1 ? 's' : ''}`;
+                        })()}
+                      </div>
+                      <div className="truncate text-[10px] text-muted-foreground">
+                        {selecionada.comparativo.filter(c => c.tom === 'muda' || c.tom === 'difere')
+                          .map(c => c.campo).join(' · ') || '—'}
+                      </div>
                     </div>
                   </div>
-                  <div>
-                    <div className="text-[10px] text-muted-foreground">Valor</div>
-                    <div className="text-[18px] font-medium leading-tight tabular-nums">{selecionada.valor}</div>
-                    <div className="text-[10px] text-muted-foreground">
-                      {selecionada.comparativo.find(c => c.campo === 'Valor')?.resultado ?? '—'}
-                    </div>
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-[10px] text-muted-foreground">Resolução</div>
-                    <div className="truncate text-[13px] font-medium leading-tight">
-                      {selecionada.proveniencia.origem ?? '—'}
-                      {selecionada.proveniencia.motorVersion != null ? ` · motor v${selecionada.proveniencia.motorVersion}` : ''}
-                    </div>
-                    <div className="truncate text-[10px] text-muted-foreground">{subcentroDa(selecionada)}</div>
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-[10px] text-muted-foreground">O que muda</div>
-                    {/* ⚠ A CONTA VEM DO COMPARATIVO, que é onde os toms já foram decididos:
-                        contar "campos que mudam" de outro jeito daria dois números para a
-                        mesma pergunta na mesma tela. */}
-                    <div className={`text-[13px] font-medium leading-tight ${selecionada.mudaAlgo ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground'}`}>
-                      {(() => {
-                        const n = selecionada.comparativo.filter(c => c.tom === 'muda' || c.tom === 'difere').length;
-                        return n === 0 ? 'nada muda' : `${n} campo${n > 1 ? 's' : ''}`;
-                      })()}
-                    </div>
-                    <div className="truncate text-[10px] text-muted-foreground">
-                      {selecionada.comparativo.filter(c => c.tom === 'muda' || c.tom === 'difere')
-                        .map(c => c.campo).join(' · ') || '—'}
-                    </div>
+                  {/* ⚠ "Sugerido por", EM PORTUGUÊS DE CLIENTE — 129d item 3. "alias · motor v1"
+                      era jargão nosso: o operador não sabe o que é tier nem motor; ele sabe se
+                      ensinou um apelido. A frase vem pronta do adapter, e o subcentro embaixo
+                      pode quebrar em duas linhas em vez de ser cortado. */}
+                  <div className="mt-1.5 border-t pt-1 text-[10px] leading-tight text-muted-foreground">
+                    Sugerido por: <b className="font-medium text-foreground">{selecionada.proveniencia.comoFoiSugerido}</b>
+                    {' · '}<span className="break-words">{subcentroDa(selecionada)}</span>
                   </div>
                 </div>
 

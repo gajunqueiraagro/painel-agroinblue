@@ -62,6 +62,14 @@ export interface EnriqProveniencia {
   tier: string | null;
   origem: string | null;           // origem_resolucao (tier | 'manual' | 'orfao')
   motorVersion: number | null;
+  /**
+   * A mesma proveniência em português de cliente — MESA-ENR-UX-02 (129d).
+   *
+   * ⚠ "alias · motor v1" É JARGÃO NOSSO. O operador não sabe o que é tier, alias ou
+   * motor; ele sabe que ensinou um apelido, ou que não ensinou nada. A frase é montada no
+   * adapter, junto do resto — a UI é burra e não traduz vocabulário de banco.
+   */
+  comoFoiSugerido: string;
 }
 
 // PR-U2c-2A — valores crus da proposta que os editores inline (U2c-2B..2E) consomem.
@@ -111,6 +119,17 @@ export interface EnriqRowVM {
   valor: string;
   /** O mesmo valor da string acima, cru — para somar por grupo sem desformatar. */
   valorNum: number | null;
+  /**
+   * Entrada ou saída — 129d item 4.
+   *
+   * ⚠ O SINAL PRECISA SER VISÍVEL EM TODA LINHA. Uma lista onde saída e entrada têm a
+   * mesma cara faz o operador conferir R$ 164,38 sem saber se saiu ou entrou — e o
+   * extrato dele tem os dois. Sai de `lanc_sinal`/`lanc_tipo_operacao`; `null` quando o
+   * lançamento não existe (linha sem vínculo), e aí a tela não afirma nenhum dos dois.
+   */
+  entradaOuSaida: 'entrada' | 'saida' | null;
+  /** A conta bancária do lançamento — contexto da lista (129d item 8). */
+  contaBancaria: string | null;
   banco: string;
   fornecedor: string;
   // DETALHE (direita) — comparativo completo Sistema | Excel | Resultado.

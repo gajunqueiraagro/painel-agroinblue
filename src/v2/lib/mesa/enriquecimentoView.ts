@@ -37,6 +37,32 @@ function resultadoEditavel(sistema: string | null, excel: string | null, propost
   return { resultado: 'mantém', tom: 'neutro' };
 }
 
+/**
+ * A proveniência em português de cliente — 129d item 3.
+ *
+ * ⚠ OS SETE VALORES SÃO OS QUE O BANCO PRODUZ, contados na view em 07/09: `null` (24.856),
+ * `orfao` (11.845), `manual` (1.261), `alias` (907), `regra` (858), `plano_exato` (36) e
+ * `plano_folha` (28). Não é lista de desejo — é o que existe, e o `default` cobre o dia em
+ * que aparecer um oitavo, dizendo que não sabe em vez de inventar um nome.
+ * ⚠ O APELIDO GANHA O TEXTO DO EXCEL entre parênteses porque é ele que o operador
+ * reconhece: "apelido que você ensinou" sozinho não diz QUAL.
+ */
+export function comoFoiSugerido(origem: string | null | undefined, textoExcel: string | null | undefined): string {
+  const amostra = (textoExcel ?? '').trim();
+  const curto = amostra.length > 28 ? `${amostra.slice(0, 28)}…` : amostra;
+  switch (origem) {
+    case 'alias': return curto ? `apelido que você ensinou (${curto})` : 'apelido que você ensinou';
+    case 'regra': return 'regra automática';
+    case 'manual': return 'escolha sua, salva antes';
+    case 'plano_exato':
+    case 'plano_folha': return 'nome igual ao do plano de contas';
+    case 'orfao': return 'planilha (conta fora do plano)';
+    case null:
+    case undefined: return 'sem sugestão';
+    default: return 'origem não reconhecida';
+  }
+}
+
 export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
   const statusLabel = STATUS_META[row.match_status]?.label ?? row.match_status;
 
@@ -116,8 +142,20 @@ export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
     tier: row.proposto_tier,
     origem: row.proposto_origem_resolucao,
     motorVersion: row.motor_version,
+    comoFoiSugerido: comoFoiSugerido(row.proposto_origem_resolucao, row.excel_produto ?? row.excel_fornecedor),
   };
   // PR-U2c-2A — valores crus da proposta para os editores inline.
+  /* Entrada ou saída — 129d item 4. `lanc_sinal` é TEXTO ('1' / '-1'); o `tipo_operacao`
+     é o desempate quando o sinal não veio. Sem lançamento, `null`: a tela não afirma. */
+  const entradaOuSaida: 'entrada' | 'saida' | null = (() => {
+    if (row.lanc_sinal === '1') return 'entrada';
+    if (row.lanc_sinal === '-1') return 'saida';
+    const t = row.lanc_tipo_operacao ?? row.excel_tipo_operacao;
+    if (typeof t === 'string' && t.startsWith('1')) return 'entrada';
+    if (typeof t === 'string' && t.startsWith('2')) return 'saida';
+    return null;
+  })();
+
   const edicao: EnriqEdicao = {
     subcentro: subcentroEfetivo,   // BUG — nunca a proposta órfã; proposta válida ou o Sistema soberano
     favorecidoId: row.proposto_favorecido_id,
@@ -172,6 +210,8 @@ export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
        acabou de formatar: duas conversões e um ponto onde o locale pode trair. A mesma
        fonte da string, crua. `null` quando não há valor de nenhum dos dois lados. */
     valorNum: row.excel_valor ?? row.lanc_valor ?? null,
+    entradaOuSaida,
+    contaBancaria: banco,
     banco: fmtTexto(banco),
     fornecedor: fmtTexto(favSistema ?? favExcel),
     comparativo,

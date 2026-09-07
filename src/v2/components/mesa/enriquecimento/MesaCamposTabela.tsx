@@ -96,7 +96,10 @@ export function MesaCamposTabela({
         <span className="text-emerald-600">Resultado</span>
       </div>
 
-      {ORDEM.map(({ campo, rotulo, secao, gravaHoje }) => {
+      {ORDEM.map(({ campo, rotulo, secao, gravaHoje }, indice) => {
+        /* Zebra pela POSIÇÃO na tabela, não por seção: o olho segue a linha, e alternar
+           por bloco criaria faixas de tamanhos diferentes. */
+        const zebra = indice % 2 === 1;
         const c = porCampo.get(campo) ?? VAZIA;
         const abreSecao = secao !== secaoAtual;
         secaoAtual = secao;
@@ -111,12 +114,19 @@ export function MesaCamposTabela({
                 {secao}
               </div>
             )}
-            <div className="grid items-center gap-2 border-b border-border/50 px-3 py-[3px] text-[11px]"
+            {/* ⚠ AS TRÊS COLUNAS NA MESMA MEDIDA — 129d item 2. Excel e Sistema estavam em
+                11px sobre linha alta enquanto o Resultado ficava dentro de um controle de
+                24px: as duas primeiras SALTAVAM, e a tela parecia desalinhada. Agora as três
+                têm 11px e altura de 24px; o que distingue é a COR (azul = referência, cinza =
+                o que está gravado, preto = o que vai valer), não o tamanho.
+                ⚠ ZEBRA LEVE E SEPARADOR DE 0,5px: densidade sem grade pesada. */}
+            <div className={`grid items-center gap-2 border-b border-border/50 px-3 text-[11px] ${
+              zebra ? 'bg-muted/30' : ''}`}
               style={{ gridTemplateColumns: COLS }}>
-              <span className="truncate text-[10px] text-muted-foreground" title={rotulo}>{rotulo}</span>
+              <span className="truncate py-1 text-[10px] leading-6 text-muted-foreground" title={rotulo}>{rotulo}</span>
               {/* ⚠ O EXCEL É REFERÊNCIA, NUNCA GRAVADO DIRETO — por isso azul e sem controle. */}
-              <span className="truncate text-blue-700/90" title={c.excel}>{c.excel}</span>
-              <span className="truncate" title={c.sistema}>{c.sistema}</span>
+              <span className="truncate leading-6 text-blue-700/90" title={c.excel}>{c.excel}</span>
+              <span className="truncate leading-6 text-slate-700 dark:text-slate-300" title={c.sistema}>{c.sistema}</span>
               <div className="min-w-0">
                 {editavel && campo === 'Subcentro' && classificacoes ? (
                   <ResultadoSubcentroEditor value={row.edicao.subcentro} tipoOperacao={row.edicao.tipoOperacao}
