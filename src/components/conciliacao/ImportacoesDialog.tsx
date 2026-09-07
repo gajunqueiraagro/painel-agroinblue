@@ -59,6 +59,18 @@ export function ImportacoesDialog({
                   <span className="shrink-0 text-muted-foreground">
                     {imp.importados} importado{imp.importados === 1 ? '' : 's'}
                     {imp.comVinculo > 0 && ` · ${imp.comVinculo} conciliado(s)`}
+                    {/* ⚠ DE ONDE VEIO O VÍNCULO — 130 item 5. "Conciliado" não distingue o
+                        lançamento que o sistema CRIOU do que já existia e foi ajustado, e
+                        são coisas diferentes na hora de desfazer. */}
+                    {(imp.crus > 0 || imp.substituidos > 0) && (
+                      <span className="text-muted-foreground/80">
+                        {' ('}
+                        {imp.crus > 0 ? `${imp.crus} cru${imp.crus === 1 ? '' : 's'}` : ''}
+                        {imp.crus > 0 && imp.substituidos > 0 ? ' · ' : ''}
+                        {imp.substituidos > 0 ? `${imp.substituidos} substituído${imp.substituidos === 1 ? '' : 's'}` : ''}
+                        {')'}
+                      </span>
+                    )}
                   </span>
                   <div className="flex-1" />
                   {/* ⚠ O BOTÃO DIZ POR QUE, quando não dá — a regra do B-09. Com
@@ -81,9 +93,16 @@ export function ImportacoesDialog({
           )}
         </div>
 
+        {/* ⚠ O ALCANCE DO DESFAZER MUDOU DE ASSUNTO — 130 item 5. Antes o limite era só a
+            data de corte do rastreio; agora existe um segundo limite, maior: o Conciliar o
+            mês cria lançamentos e vínculos que este botão NÃO desfaz — ele recusa arquivo
+            com vínculo, e é só. Dizer "pode ser desfeito" sem o caminho existir seria a
+            tela prometendo o que ninguém entrega. */}
         <p className="shrink-0 border-t px-4 py-2 text-[9px] leading-snug text-muted-foreground">
           Importações anteriores a 25/08/2026 não são rastreadas — os movimentos delas entraram
           sem vínculo de arquivo, e o Desfazer não os alcança.
+          {' '}Desfazer só alcança arquivos sem vínculo. Os lançamentos crus e os vínculos criados
+          pelo Conciliar o mês serão desfeitos por um caminho próprio — em construção.
         </p>
       </DialogContent>
     </Dialog>

@@ -172,6 +172,12 @@ export interface ImportacaoDaConta {
   data: string;
   importados: number;
   comVinculo: number;
+  /* De onde os vínculos vieram — 130 item 5. `crus` são lançamentos que o Conciliar o mês
+     CRIOU; `substituidos`, lançamentos que já existiam e receberam data e valor do banco.
+     Os dois somados podem ser menores que `comVinculo`: vínculo feito à mão na estação não
+     tem `tipo_aprovacao` de OFX. */
+  crus: number;
+  substituidos: number;
 }
 
 /**
@@ -208,15 +214,29 @@ export function useImportacoesDaConta(clienteId: string | null, contaId: string 
       const [{ data: imps }, { data: vinc }] = await Promise.all([
         supabase.from('financeiro_importacoes_v2')
           .select('id, nome_arquivo, created_at').in('id', ids),
+        /* ⚠ `tipo_aprovacao` ENTROU NO SELECT — [CONCIL-MES-01] (130). O card contava
+           quantos movimentos do arquivo têm vínculo, mas não DE ONDE o vínculo veio; e o
+           "Conciliar o mês" produz dois tipos distintos, `ofx_cru` (lançamento novo) e
+           `ofx_substituiu` (lançamento que já existia e recebeu data e valor do banco).
+           São coisas diferentes na hora de desfazer, e o operador precisa vê-las
+           separadas. Mesma consulta, uma coluna a mais. */
         supabase.from('conciliacao_bancaria_itens')
-          .select('extrato_id').in('extrato_id', linhas.map(l => l.id)).is('desfeito_em', null),
+          .select('extrato_id, tipo_aprovacao').in('extrato_id', linhas.map(l => l.id)).is('desfeito_em', null),
       ]);
-      const comVinculo = new Set((vinc ?? []).map((v: { extrato_id: string }) => v.extrato_id));
-      const porImp: Record<string, { n: number; v: number }> = {};
+      type ItemVinc = { extrato_id: string; tipo_aprovacao: string | null };
+      const vincLista: ItemVinc[] = (vinc ?? []) as ItemVinc[];
+      const comVinculo = new Set(vincLista.map(v => v.extrato_id));
+      const tipoPorExtrato = new Map(vincLista.map(v => [v.extrato_id, v.tipo_aprovacao]));
+      const porImp: Record<string, { n: number; v: number; crus: number; subs: number }> = {};
       for (const l of linhas) {
-        const acc = porImp[l.importacao_id] ?? { n: 0, v: 0 };
+        const acc = porImp[l.importacao_id] ?? { n: 0, v: 0, crus: 0, subs: 0 };
         acc.n += 1;
-        if (comVinculo.has(l.id)) acc.v += 1;
+        if (comVinculo.has(l.id)) {
+          acc.v += 1;
+          const t = tipoPorExtrato.get(l.id);
+          if (t === 'ofx_cru') acc.crus += 1;
+          else if (t === 'ofx_substituiu') acc.subs += 1;
+        }
         porImp[l.importacao_id] = acc;
       }
       setImportacoes((imps ?? []).map(i => ({
@@ -225,6 +245,8 @@ export function useImportacoesDaConta(clienteId: string | null, contaId: string 
         data: (i.created_at ?? '').slice(0, 10),
         importados: porImp[i.id]?.n ?? 0,
         comVinculo: porImp[i.id]?.v ?? 0,
+        crus: porImp[i.id]?.crus ?? 0,
+        substituidos: porImp[i.id]?.subs ?? 0,
       })).sort((a, b) => b.data.localeCompare(a.data)));
     } finally {
       setLoading(false);
