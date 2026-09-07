@@ -22,6 +22,13 @@ export interface ClassificacaoRow {
   conta_destino: string | null;
   ano_mes: string | null;
   data: string | null;
+  /* ── 133a ────────────────────────────────────────────────────────────────────
+     ⚠ OPCIONAIS PORQUE ESTE CAMINHO NÃO OS PRODUZ. Este mapeador serve o lote antigo,
+     onde a data canônica já É a de pagamento; quem traz as três datas separadas é o
+     `parserClassificacao`, o caminho vivo da Mesa. Deixá-los obrigatórios obrigaria a
+     inventar valor aqui. */
+  data_pagamento?: string | null;
+  data_vencimento?: string | null;
   valor: number | null;
   tipo_operacao: string | null;
   fazenda_codigo: string | null;
@@ -53,6 +60,9 @@ export function loteExcelToClassificacaoRows(lote: LoteExcel): ClassificacaoRow[
     // ano_mes do Excel quando preenchido, senão derivado da data canônica.
     ano_mes: trimOrNull(l.raw.AnoMes) ?? (l.dataPagamento ? l.dataPagamento.slice(0, 7) : null),
     data: l.dataPagamento,
+    /* A data canônica DESTE caminho é a de pagamento — dizer isso explicitamente é o que
+       permite ao casador usar a regra exata também aqui. */
+    data_pagamento: l.dataPagamento,
     // valorCentavos é SEMPRE positivo (sinal vive em campo separado).
     valor: l.valorCentavos / 100,
     tipo_operacao: normalizeTipo(trimOrNull(l.raw.Tipo)),

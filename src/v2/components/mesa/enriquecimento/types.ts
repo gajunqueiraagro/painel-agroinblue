@@ -5,7 +5,10 @@
 // ============================================================================
 // PR-MESA-RESOLUCAO-01 — +'candidatos_proximos' (janela ±10d, PR-MESA-DATA-01) e
 // +'resolvido_manual' (escolha humana gravada por fn_classificacao_resolver_proximos).
-export type EnriqStatus = 'exato' | 'ambiguo' | 'sem_match' | 'ja_classificado' | 'divergente' | 'ambiguo_resolvido' | 'candidatos_proximos' | 'resolvido_manual' | 'resolvido_grupo';
+/* ⚠ `sugestao_grupo` e `sugestao_split` ENTRARAM EM 133a, com o casador do banco:
+   1 linha da planilha = N lançamentos, e N linhas = 1 movimento do banco. Os
+   identificadores são os do `match_status`; o que muda na tela é o rótulo ("Agrupam"). */
+export type EnriqStatus = 'exato' | 'ambiguo' | 'sem_match' | 'ja_classificado' | 'divergente' | 'ambiguo_resolvido' | 'candidatos_proximos' | 'resolvido_manual' | 'resolvido_grupo' | 'sugestao_grupo' | 'sugestao_split' | 'sem_conta_para_match' | 'ja_aplicado';
 
 // PR-U2d-1 — estado OPERACIONAL da linha (ciclo Editar → Aplicar → Resolvida).
 // Derivado do VM (aplicado/temMatch/órfão/match_status); é a leitura principal.
@@ -130,6 +133,15 @@ export interface EnriqRowVM {
   entradaOuSaida: 'entrada' | 'saida' | null;
   /** A conta bancária do lançamento — contexto da lista (129d item 8). */
   contaBancaria: string | null;
+  /**
+   * Por que esta linha está no estado em que está — 133a item 5.
+   *
+   * ⚠ VEM DO `casamento_meta` GRAVADO PELO BANCO, não de dedução no front: quem decidiu
+   * foi o casador, e ele registrou a regra. Uma frase montada aqui divergiria dele no dia
+   * em que a regra mudasse — e o operador leria uma explicação que não corresponde ao que
+   * aconteceu.
+   */
+  porQue: string;
   banco: string;
   fornecedor: string;
   // DETALHE (direita) — comparativo completo Sistema | Excel | Resultado.

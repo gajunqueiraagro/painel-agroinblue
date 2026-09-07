@@ -11,18 +11,22 @@ export interface EnriquecimentoResumoProps {
   onFiltro: (f: EnriqStatus | 'todos') => void;
 }
 
-// Ordem/rótulos da linha de status (a soma == Total). Cor vem do STATUS_META.
+/* ⚠ OS CHIPS FALAM A LÍNGUA DO OPERADOR — 133a. Eram nove, com os nomes do banco
+   ("Exatos", "Divergentes", "Sem match"); agora são os cinco gestos que existem, e cada um
+   soma os status que fazem a mesma coisa. A ordem é a do trabalho: o que anda sozinho
+   primeiro, o que exige decisão depois, o que não tem par por último. */
 const STATUS_CARDS: { key: EnriqStatus; label: string }[] = [
-  { key: 'exato',             label: 'Exatos' },
-  { key: 'divergente',        label: 'Divergentes' },
-  { key: 'ambiguo',           label: 'Ambíguos' },
-  { key: 'ambiguo_resolvido', label: 'Amb. resolvidos' },
-  { key: 'sem_match',         label: 'Sem match' },
-  { key: 'ja_classificado',   label: 'Já classificados' },
-  // PR-MESA-RESOLUCAO-01 — chip do fluxo de decisão humana por data (±10d) e seu resolvido.
-  { key: 'candidatos_proximos', label: 'Candidatos próximos' },
-  { key: 'resolvido_manual',    label: 'Resolvido manual' },
-  { key: 'resolvido_grupo',     label: 'Resolvido grupo' },   // PR-MESA-GRUPO-01
+  { key: 'exato',             label: 'Atualizam' },
+  { key: 'divergente',        label: 'Atualizam' },
+  { key: 'ambiguo',           label: 'Você decide' },
+  { key: 'sugestao_grupo',    label: 'Agrupam' },
+  { key: 'sugestao_split',    label: 'Agrupam' },
+  { key: 'sem_match',         label: 'Sem par no banco' },
+  { key: 'ja_classificado',   label: 'Já classificado' },
+  { key: 'ambiguo_resolvido', label: 'Já gravadas' },
+  { key: 'resolvido_manual',  label: 'Já gravadas' },
+  { key: 'resolvido_grupo',   label: 'Já gravadas' },
+  { key: 'candidatos_proximos', label: 'Você decide' },
 ];
 
 function CardFiltro({

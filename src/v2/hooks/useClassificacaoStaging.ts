@@ -14,6 +14,17 @@ import { supabase } from '@/integrations/supabase/client';
 import type { ClassificacaoRow } from '@/v2/lib/excelPreview/loteToClassificacao';
 
 // PR-M2: sincronizar com fn_classificacao_populate_staging quando types regenerarem.
+/**
+ * ⚠ ESTE TIPO É MENOR QUE O CHECK DO BANCO, e fica assim de propósito. A coluna aceita
+ * também `ambiguo_resolvido`, `candidatos_proximos`, `resolvido_manual`, `resolvido_grupo`,
+ * `ja_aplicado`, `sem_conta_para_match` e — desde 07/09 — `sugestao_grupo` e
+ * `sugestao_split`. Ampliá-lo aqui obriga a completar `Record<MatchStatus, …>` em
+ * `MesaClassificacaoTab` e `MesaRowCompact`, telas LEGADAS que saíram de circulação: seriam
+ * sete mapas a preencher com rótulos que ninguém vê. Quem precisa dos status novos (o
+ * adapter da Mesa nova) lê `match_status` como `string` e trata o desconhecido.
+ * ⚠ SE ESTE TIPO UM DIA FOR A FONTE DE VERDADE, o lugar de completá-lo é junto da remoção
+ * daquelas duas telas — não antes.
+ */
 export type MatchStatus =
   | 'exato'
   | 'ambiguo'
@@ -151,6 +162,11 @@ export interface ClassificacaoStagingPreviewRow {
      que a torna visível para o adapter — sem isso ela existe no banco, chega no JSON e o
      TS diz que não existe. Foi assim que `Data venc.` e `Safra` ficaram em "—". */
   lanc_data_vencimento: string | null;
+  /* 133a — as datas que o parser passou a ler da planilha, gravadas pelo front. */
+  excel_data_pagamento: string | null;
+  excel_data_vencimento: string | null;
+  casamento_meta: Record<string, unknown> | null;
+  match_lancamento_ids: string[] | null;
   lanc_safra_id: string | null;
   lanc_safra_codigo: string | null;
   proposto_safra_id: string | null;
@@ -162,6 +178,17 @@ export interface ClassificacaoStagingPreviewRow {
   proposto_observacao: string | null;
   /** P0-1A: fonte única "aplicável em lote" (calculada na view). */
   lote_aplicavel: boolean;
+}
+
+/** O que `fn_classificacao_casar_sessao` devolve — 133a. */
+export interface CasarSessaoResult {
+  casou: number;
+  ambiguo: number;
+  sugestaoGrupo: number;
+  sugestaoSplit: number;
+  semPar: number;
+  semConta: number;
+  naoTocadas: number;
 }
 
 export interface PopulateResult {
@@ -271,11 +298,75 @@ export function useClassificacaoStaging(
           const chave = k as MatchStatus;
           acumulado.counts_por_status[chave] = (acumulado.counts_por_status[chave] ?? 0) + (v ?? 0);
         }
+        /* ⚠ AS DATAS DE PAGAMENTO E VENCIMENTO ENTRAM AQUI, DEPOIS DA FATIA —
+           [ENRIQUECER-MOTOR-01] (133a). `fn_classificacao_populate_staging` lê só
+           `data` (competência) e NÃO se mexe nela; as duas colunas novas são gravadas
+           pelo front, sobre as linhas que a fatia acabou de inserir.
+           ⚠ O POPULATE NÃO DEVOLVE OS IDS — conferido no retorno (`total_linhas`,
+           `inseridas`, `counts_por_status`). O par é `sessao_id + excel_linha_origem`,
+           que é único por sessão e é a identidade que o operador também usa.
+           ⚠ AGRUPADO POR DATA, e não uma requisição por linha: 492 updates seriam 492
+           idas. As datas se repetem muito num mês, então são dezenas de chamadas. */
+        await gravarDatasDaFatia(params.sessao_id, fatia);
         params.onProgresso?.(Math.min(i + TAMANHO_LOTE, total), total);
       }
       return acumulado;
     },
     onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: queryKeyStaging(variables.sessao_id) });
+    },
+  });
+
+  /** Grava `excel_data_pagamento` / `excel_data_vencimento` das linhas de uma fatia. */
+  async function gravarDatasDaFatia(sessaoId: string, fatia: ClassificacaoRow[]) {
+    const porChave = new Map<string, number[]>();
+    for (const r of fatia) {
+      if (!r.data_pagamento && !r.data_vencimento) continue;
+      const chave = `${r.data_pagamento ?? ''}|${r.data_vencimento ?? ''}`;
+      const atual = porChave.get(chave);
+      if (atual) atual.push(r.linha); else porChave.set(chave, [r.linha]);
+    }
+    for (const [chave, linhas] of porChave) {
+      const [pag, venc] = chave.split('|');
+      const { error } = await supabase
+        .from('financeiro_classificacao_staging')
+        .update({
+          excel_data_pagamento: pag || null,
+          excel_data_vencimento: venc || null,
+        })
+        .eq('sessao_id', sessaoId)
+        .in('excel_linha_origem', linhas);
+      /* ⚠ FALHAR AQUI NÃO DERRUBA A IMPORTAÇÃO: as linhas já estão no staging, e o
+         casador simplesmente cai na regra do mês para elas. Some no console, não na cara
+         do operador, porque não há o que ele faça a respeito. */
+      if (error) console.error('[staging] falha ao gravar datas da fatia', error);
+    }
+  }
+
+  /**
+   * O casador do mês — 133a.
+   *
+   * ⚠ UM MOTOR SÓ. Antes havia dois respondendo "esta linha é qual lançamento?" com
+   * números diferentes: o bloco de cima dizia 379 atualizam, a Mesa dizia 183 sem match,
+   * na mesma planilha de 492 linhas. Agora o casamento mora no banco, e a Mesa lê.
+   * ⚠ O `ano_mes` É O DA RÉGUA, não o da planilha: a competência das linhas do cliente vai
+   * de 10/2025 a 09/2026, e o mês que se está conciliando é o que a tela mostra.
+   */
+  const casarSessaoMutation = useMutation({
+    mutationFn: async (params: { sessao_id: string; ano_mes: string }): Promise<CasarSessaoResult> => {
+      const { data, error } = await supabase.rpc('fn_classificacao_casar_sessao', {
+        p_sessao_id: params.sessao_id, p_ano_mes: params.ano_mes,
+      });
+      if (error) throw error;
+      const e = (data && typeof data === 'object' && !Array.isArray(data)) ? data as Record<string, unknown> : {};
+      const n = (k: string) => Number(e[k] ?? 0) || 0;
+      return {
+        casou: n('casou'), ambiguo: n('ambiguo'),
+        sugestaoGrupo: n('sugestao_grupo'), sugestaoSplit: n('sugestao_split'),
+        semPar: n('sem_par'), semConta: n('sem_conta'), naoTocadas: n('nao_tocadas'),
+      };
+    },
+    onSuccess: (_d, variables) => {
       qc.invalidateQueries({ queryKey: queryKeyStaging(variables.sessao_id) });
     },
   });
@@ -414,6 +505,9 @@ export function useClassificacaoStaging(
     populate: populateMutation.mutateAsync,
     isPopulating: populateMutation.isPending,
     populateResult: populateMutation.data ?? null,
+    /* 133a — o casador da sessão, e o "Recasar" da toolbar. */
+    casarSessao: casarSessaoMutation.mutateAsync,
+    isCasando: casarSessaoMutation.isPending,
     apply: applyMutation.mutateAsync,
     isApplying: applyMutation.isPending,
     applyResult: applyMutation.data ?? null,

@@ -990,7 +990,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                 ? () => onNavigateToLancamentos(ano, Number(selectedMes)) : undefined}
               clienteNome={clienteAtual?.nome ?? undefined}
             />
-            <MesaEnriquecimentoTab />
+            <MesaEnriquecimentoTab anoMesRegua={`${ano}-${String(selectedMes).padStart(2, '0')}`} />
             {/* PR-CLEANUP-MESA-CLASSIFICACAO-01 — o link para a Mesa de Classificação antiga
                 foi removido junto com o item de menu e a rota. A tela legada saiu de circulação;
                 o motor (staging + vw_classificacao_staging_preview + fn_classificacao_*) segue

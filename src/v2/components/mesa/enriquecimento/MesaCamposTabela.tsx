@@ -49,9 +49,12 @@ type Secao = 'Datas' | 'Identificação' | 'Classificação' | 'Documento';
  * por omissão sobre um campo que o operador procura.
  */
 const ORDEM: Array<{ campo: string; rotulo: string; secao: Secao; gravaHoje: boolean }> = [
-  { campo: 'Data comp.', rotulo: 'Data comp.', secao: 'Datas', gravaHoje: true },
-  { campo: 'Data venc.', rotulo: 'Data venc.', secao: 'Datas', gravaHoje: true },
-  { campo: 'Data', rotulo: 'Data pgto.', secao: 'Datas', gravaHoje: true },
+  /* ⚠ OS NOMES SÃO OS DO ADAPTER, e mudaram em 133a: a linha única 'Data' virou três, uma
+     por par (pagamento×pagamento, vencimento×vencimento, competência×competência). A ordem
+     é a do mock: o pagamento primeiro, porque é por ele que o casador procura. */
+  { campo: 'Data pagamento', rotulo: 'Data pgto.', secao: 'Datas', gravaHoje: true },
+  { campo: 'Data vencimento', rotulo: 'Data venc.', secao: 'Datas', gravaHoje: true },
+  { campo: 'Competência', rotulo: 'Data comp.', secao: 'Datas', gravaHoje: true },
   { campo: 'Produto / Descrição', rotulo: 'Produto / Descrição', secao: 'Identificação', gravaHoje: true },
   { campo: 'Fornecedor', rotulo: 'Fornecedor', secao: 'Identificação', gravaHoje: true },
   { campo: 'Fazenda', rotulo: 'Fazenda', secao: 'Identificação', gravaHoje: true },
@@ -143,13 +146,13 @@ export function MesaCamposTabela({
                 ) : editavel && campo === 'Documento' ? (
                   <ResultadoDocumentoEditor value={row.edicao.numeroDocumento}
                     numeroDocumentoAtual={row.edicao.numeroDocumentoAtual} onEditar={onEditar} />
-                ) : editavel && campo === 'Data comp.' ? (
+                ) : editavel && campo === 'Competência' ? (
                   <ResultadoDataEditor value={row.edicao.dataCompetencia}
                     valorAtual={row.edicao.dataCompetenciaAtual} campo="data_competencia" onEditar={onEditar} />
-                ) : editavel && campo === 'Data venc.' ? (
+                ) : editavel && campo === 'Data vencimento' ? (
                   <ResultadoDataEditor value={row.edicao.dataVencimento}
                     valorAtual={row.edicao.dataVencimentoAtual} campo="data_vencimento" onEditar={onEditar} />
-                ) : editavel && campo === 'Data' ? (
+                ) : editavel && campo === 'Data pagamento' ? (
                   <ResultadoDataEditor value={row.edicao.dataPagamento}
                     valorAtual={row.edicao.dataPagamentoAtual} campo="data_pagamento" onEditar={onEditar} />
                 ) : editavel && campo === 'Safra' && safras ? (

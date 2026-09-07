@@ -29,7 +29,7 @@ import * as XLSX from 'xlsx';
    `CUSTEIO_FORMAT`. O MECANISMO (localizar cabecalho) fica local de proposito:
    o briefing manda nao tocar no bloco de cima. */
 import {
-  COL_COMPETENCIA, COL_VALOR, COL_TIPO, COL_CONTA_PLANO, COL_FAZENDA,
+  COL_COMPETENCIA, COL_PAGAMENTO, COL_VENCIMENTO, COL_VALOR, COL_TIPO, COL_CONTA_PLANO, COL_FAZENDA,
   COL_FORNECEDOR, COL_CONTA_BANCARIA, COL_DESCRICAO, COL_DOCUMENTO, COL_OBSERVACAO,
 } from '@/v2/lib/excelPreview/colunasLancamento';
 
@@ -42,7 +42,10 @@ export interface ClassificacaoExcelRow {
   conta_origem: string | null;
   conta_destino: string | null;
   ano_mes: string | null;
-  data: string | null;       // 'YYYY-MM-DD'
+  data: string | null;       // 'YYYY-MM-DD' — competência
+  /** 133a — o que o casador usa primeiro. `null` = a planilha não trouxe a coluna. */
+  data_pagamento: string | null;
+  data_vencimento: string | null;
   valor: number | null;      // sempre absoluto (positivo)
   tipo_operacao: string | null;
   fazenda_codigo: string | null;
@@ -102,6 +105,15 @@ function pickBruto(raw: Record<string, unknown>, names: readonly string[]): unkn
 }
 
 const DATA_COLS = ['Data_Ref', ...COL_COMPETENCIA];
+/* ⚠ PAGAMENTO E VENCIMENTO ENTRARAM EM [ENRIQUECER-MOTOR-01] (133a). Este parser lia SÓ a
+   competência, e a Mesa casava por `data_pagamento` — a planilha do cliente traz
+   competências de 10/2025 a 09/2026 para pagamentos de agosto, e por isso 113 linhas com
+   lançamento do mesmo valor, na mesma conta, pago no mês, apareciam como "sem match".
+   ⚠ AS LISTAS SÃO AS DO IMPORTADOR DE LANÇAMENTOS (`colunasLancamento`), não uma terceira:
+   dois parsers com vocabulários diferentes leriam a MESMA planilha de dois jeitos, que é a
+   raiz do defeito que este envelope veio matar. */
+const PAGAMENTO_COLS = [...COL_PAGAMENTO];
+const VENCIMENTO_COLS = [...COL_VENCIMENTO];
 const VALOR_COLS = ['Valor', ...COL_VALOR];
 const TIPO_COLS = ['Tipo', ...COL_TIPO];
 const SUBCENTRO_COLS = ['Subcentro', ...COL_CONTA_PLANO];
@@ -301,6 +313,10 @@ function parseRow(
     conta_destino: pickCol(raw, CONTA_DESTINO_COLS),
     ano_mes: anoMesRaw ?? dataIso.slice(0, 7),
     data: dataIso,
+    /* `null` quando a planilha não traz a coluna — e aí o casador cai na regra do mês
+       ('valor_no_mes'), que é mais larga mas ainda verdadeira. */
+    data_pagamento: parseDataRef(pickBruto(raw, PAGAMENTO_COLS)),
+    data_vencimento: parseDataRef(pickBruto(raw, VENCIMENTO_COLS)),
     valor: valorAbs,
     tipo_operacao: normalizeTipo(tipo),
     fazenda_codigo: pickCol(raw, FAZENDA_COLS),

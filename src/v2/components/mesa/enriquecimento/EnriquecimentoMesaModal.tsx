@@ -216,9 +216,12 @@ export function EnriquecimentoMesaModal({
                             {r.fornecedor}
                           </span>
                           {/* Contexto: subcentro proposto e a CONTA (129d item 8). */}
+                          {/* ⚠ O PORQUÊ VEM ANTES DO CONTEXTO — 133a item 5. O operador
+                              não precisa saber que o status é "ambiguo": precisa saber que
+                              há dois lançamentos iguais no dia e que ele tem de escolher. */}
                           <span className="block truncate text-[10px] leading-tight text-muted-foreground"
-                            title={`${subcentroDa(r)}${r.contaBancaria ? ` · ${r.contaBancaria}` : ''}`}>
-                            {subcentroDa(r)}{r.contaBancaria ? ` · ${r.contaBancaria}` : ''}
+                            title={`${r.porQue || subcentroDa(r)}${r.contaBancaria ? ` · ${r.contaBancaria}` : ''}`}>
+                            {r.porQue || subcentroDa(r)}{r.contaBancaria ? ` · ${r.contaBancaria}` : ''}
                           </span>
                         </span>
                         <span className="text-right">

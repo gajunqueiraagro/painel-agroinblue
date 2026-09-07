@@ -18,6 +18,9 @@ export interface EnriquecimentoToolbarProps {
   onFiltroModo: (m: 'pendentes' | 'todas') => void;
   onImportar: () => void;
   isImporting?: boolean;
+  /** 133a — recasa a sessão inteira. Ausente esconde o botão. */
+  onRecasar?: () => void;
+  isRecasando?: boolean;
   sessaoDisabled?: boolean;
   importarDisabled?: boolean;
   // PR-MESA-INVERSO-01 — visão read-only "sistema não explicado".
@@ -28,7 +31,7 @@ export interface EnriquecimentoToolbarProps {
 export function EnriquecimentoToolbar({
   sessoes, sessaoAtivaId, onSelecionarSessao, contas, contaAtivaId, onSelecionarConta,
   contagens, filtroStatus, onFiltroStatus, filtroModo, onFiltroModo,
-  onImportar, isImporting, sessaoDisabled, importarDisabled,
+  onImportar, isImporting, onRecasar, isRecasando, sessaoDisabled, importarDisabled,
   naoExplicadoCount, onAbrirNaoExplicado,
 }: EnriquecimentoToolbarProps) {
   return (
@@ -49,6 +52,18 @@ export function EnriquecimentoToolbar({
         <Button size="sm" variant="outline" className="h-6 text-[11px] gap-1 px-2" disabled={isImporting || importarDisabled} onClick={onImportar}>
           ⬆ Importar Excel
         </Button>
+        {/* ⚠ RECASAR SEM REIMPORTAR — 133a. Resolver um ambíguo ou mapear uma conta no
+            de-para muda o que casa; sem este botão, o operador teria de reimportar a
+            planilha inteira para ver o efeito. Não apaga nada: a RPC não toca em linha
+            aplicada nem resolvida à mão. */}
+        {onRecasar && (
+          <Button size="sm" variant="outline" className="h-6 gap-1 px-2 text-[11px]"
+            disabled={isRecasando || !sessaoAtivaId}
+            title={!sessaoAtivaId ? 'Escolha uma sessão.' : 'Procura de novo o lançamento de cada linha, sem reimportar.'}
+            onClick={onRecasar}>
+            {isRecasando ? 'Recasando…' : '↻ Recasar'}
+          </Button>
+        )}
       </div>
 
       {/* Conta bancária — partição de trabalho: muda lista, contadores e fluxo. */}
@@ -83,19 +98,12 @@ export function EnriquecimentoToolbar({
       {/* Cards de contagem = filtro secundário por status (leitura). */}
       <EnriquecimentoResumo contagens={contagens} filtroAtivo={filtroStatus} onFiltro={onFiltroStatus} />
 
-      {/* PR-MESA-INVERSO-01 — chip read-only: abre a visão "sistema não explicado". */}
-      {onAbrirNaoExplicado && (
-        <button
-          type="button"
-          onClick={onAbrirNaoExplicado}
-          title="Lançamentos do sistema que nenhuma linha do Excel referencia"
-          className="flex items-center gap-1.5 rounded-md border border-dashed border-rose-300 bg-rose-50/60 px-1.5 py-0.5 text-rose-700 hover:bg-rose-50"
-        >
-          <span className="h-2 w-2 rounded-full bg-rose-500" />
-          <span className="text-[10px]">Sistema não explicado</span>
-          <span className="text-[11px] font-semibold tabular-nums">{naoExplicadoCount ?? 0}</span>
-        </button>
-      )}
+      {/* ⚠ O CHIP "SISTEMA NÃO EXPLICADO" SAIU — [ENRIQUECER-MOTOR-01] (133a). Ele mostrava
+          "1000", que é o TETO da contagem e não um número: o operador lia mil lançamentos
+          órfãos onde havia uma consulta truncada. O que ele tentava dizer — "lançamentos do
+          sistema no mês sem linha na planilha" — vira a lista "Sem par no sistema" do 133b,
+          lida por conta e mês, sem teto. As props seguem no contrato para o drawer, que
+          continua montado e alcançável pela Mesa até aquela lista existir. */}
     </div>
   );
 }

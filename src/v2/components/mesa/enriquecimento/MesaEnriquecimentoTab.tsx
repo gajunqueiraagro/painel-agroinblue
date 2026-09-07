@@ -29,7 +29,7 @@ import { mesAbrev } from './fmt';
 import { Button } from '@/components/ui/button';
 import type { EnriqStatus } from './types';
 
-export function MesaEnriquecimentoTab() {
+export function MesaEnriquecimentoTab({ anoMesRegua }: { anoMesRegua?: string } = {}) {
   const { clienteAtual } = useCliente();
   const { data: sessoes } = useSessoesClassificacao(clienteAtual?.id ?? null);
 
@@ -73,7 +73,29 @@ export function MesaEnriquecimentoTab() {
     editarProposto,
     resolverProximos, isResolvendoProximos, desfazerProximos,
     resolverGrupo, isResolvendoGrupo, desfazerGrupo,
+    casarSessao, isCasando,
   } = useClassificacaoStaging(sessaoId, clienteAtual?.id);
+
+  /**
+   * Recasar a sessão inteira — 133a.
+   *
+   * ⚠ SEM REIMPORTAR. Resolver um ambíguo ou mapear uma conta no de-para muda o que casa;
+   * antes disto, ver o efeito custava reimportar as 492 linhas. A RPC não toca em linha
+   * aplicada nem resolvida à mão, então rodar de novo é seguro por construção.
+   */
+  async function recasar() {
+    if (!sessaoId) return;
+    const mes = anoMesRegua ?? mesAtivo;
+    if (!mes) { toast.error('Escolha o mês na régua para recasar.'); return; }
+    try {
+      const r = await casarSessao({ sessao_id: sessaoId, ano_mes: mes });
+      const agrupam = r.sugestaoGrupo + r.sugestaoSplit;
+      toast.success(
+        `${r.casou} atualizam · ${r.ambiguo} você decide · ${agrupam} agrupam · ${r.semPar + r.semConta} sem par`);
+    } catch (e: unknown) {
+      toast.error(`Erro ao recasar: ${errMsg(e)}`);
+    }
+  }
 
   // PR-MESA-RESOLUCAO-01 — drawer de candidatos próximos (staging_id da linha aberta).
   const [candDrawerId, setCandDrawerId] = useState<string | null>(null);
@@ -422,8 +444,8 @@ export function MesaEnriquecimentoTab() {
         filtroModo={filtroModo}
         onFiltroModo={setFiltroModo}
         onImportar={() => setImportOpen(true)}
-        naoExplicadoCount={naoExplicados?.length ?? 0}
-        onAbrirNaoExplicado={() => setNaoExplicadoOpen(true)}
+        onRecasar={() => { void recasar(); }}
+        isRecasando={isCasando}
       />
 
       {isFetching && <div className="text-[10px] text-muted-foreground px-1 md:shrink-0">Carregando…</div>}
@@ -539,6 +561,10 @@ export function MesaEnriquecimentoTab() {
         onClose={() => setImportOpen(false)}
         clienteId={clienteAtual?.id ?? null}
         onImportado={(sid) => { setSessaoId(sid); setFiltroConta('todas'); setFiltroStatus('todos'); setSelecionadoId(null); setImportOpen(false); }}
+        /* ⚠ O MÊS É O DA RÉGUA — 133a. A competência das linhas do cliente vai de 10/2025 a
+           09/2026; o mês que se está conciliando é o que a tela mostra, e é contra ele que
+           o casador procura lançamento. Sem a régua, cai no mês da sessão. */
+        anoMes={anoMesRegua ?? mesAtivo ?? ''}
       />
 
       <EnriquecimentoCandidatosDrawer

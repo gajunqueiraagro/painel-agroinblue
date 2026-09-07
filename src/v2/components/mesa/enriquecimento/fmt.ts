@@ -48,18 +48,33 @@ export const dataHoraCurta = (iso: string | null | undefined): string => {
   return m ? `${m[3]}/${m[2]} ${m[4]}:${m[5]}` : '';
 };
 
+/**
+ * ⚠ O VOCABULÁRIO DA TELA É DO OPERADOR — [ENRIQUECER-MOTOR-01] (133a). "Match",
+ * "staging", "divergente" e "ambíguo" são nomes do banco: o produtor não sabe o que é
+ * match, ele sabe o que a linha VAI FAZER. Os identificadores (`match_status`, colunas,
+ * nomes de RPC) NÃO mudaram — só o texto.
+ * ⚠ ESTADOS DIFERENTES COM O MESMO RÓTULO É DE PROPÓSITO: `exato` e `divergente` fazem a
+ * mesma coisa na cabeça de quem opera — atualizam o lançamento —, e distinguir os dois na
+ * tela obrigava a explicar uma diferença que não muda o gesto.
+ */
 export const STATUS_META: Record<string, { label: string; cls: string; dot: string }> = {
-  exato:          { label: 'Exato',          cls: 'text-emerald-700', dot: 'bg-emerald-500' },
-  ambiguo:        { label: 'Ambíguo',        cls: 'text-amber-700',   dot: 'bg-amber-500' },
-  sem_match:      { label: 'Sem match',      cls: 'text-rose-700',    dot: 'bg-rose-500' },
+  exato:          { label: 'Atualizam',      cls: 'text-emerald-700', dot: 'bg-emerald-500' },
+  divergente:     { label: 'Atualizam',      cls: 'text-emerald-700', dot: 'bg-emerald-500' },
+  ambiguo:        { label: 'Você decide',    cls: 'text-amber-700',   dot: 'bg-amber-500' },
+  sugestao_grupo: { label: 'Agrupam',        cls: 'text-violet-700',  dot: 'bg-violet-500' },
+  sugestao_split: { label: 'Agrupam',        cls: 'text-violet-700',  dot: 'bg-violet-500' },
+  sem_match:      { label: 'Sem par no banco', cls: 'text-rose-700',  dot: 'bg-rose-500' },
+  sem_conta_para_match: { label: 'Sem par no banco', cls: 'text-rose-700', dot: 'bg-rose-500' },
   ja_classificado:{ label: 'Já classificado',cls: 'text-blue-700',    dot: 'bg-blue-500' },
-  divergente:     { label: 'Divergente',     cls: 'text-amber-700',   dot: 'bg-amber-500' },
-  ambiguo_resolvido:{ label: 'Ambíguo resolvido', cls: 'text-teal-700', dot: 'bg-teal-500' },
-  // PR-MESA-RESOLUCAO-01
-  candidatos_proximos:{ label: 'Candidatos próximos', cls: 'text-violet-700', dot: 'bg-violet-500' },
-  resolvido_manual: { label: 'Resolvido manual',   cls: 'text-cyan-700',   dot: 'bg-cyan-600' },
-  // PR-MESA-GRUPO-01
-  resolvido_grupo:  { label: 'Resolvido grupo',    cls: 'text-indigo-700', dot: 'bg-indigo-600' },
+  /* Os quatro "já gravadas": o gesto acabou, e a cor cinza diz isso melhor que quatro
+     nomes diferentes para o mesmo fim de linha. */
+  ja_aplicado:      { label: 'Já gravadas', cls: 'text-muted-foreground', dot: 'bg-muted-foreground' },
+  ambiguo_resolvido:{ label: 'Já gravadas', cls: 'text-muted-foreground', dot: 'bg-muted-foreground' },
+  resolvido_manual: { label: 'Já gravadas', cls: 'text-muted-foreground', dot: 'bg-muted-foreground' },
+  resolvido_grupo:  { label: 'Já gravadas', cls: 'text-muted-foreground', dot: 'bg-muted-foreground' },
+  /* ⚠ NÃO É MAIS SAÍDA DO CASADOR NOVO, mas sessões antigas ainda o têm — e uma linha sem
+     rótulo mostraria o identificador cru na tela. */
+  candidatos_proximos:{ label: 'Você decide', cls: 'text-amber-700', dot: 'bg-amber-500' },
 };
 
 // PR-U2d-1 — selo do estado operacional (leitura principal na Lista e no Detalhe).

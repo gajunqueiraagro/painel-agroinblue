@@ -95,7 +95,6 @@ export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
   const descricao = row.lanc_descricao ?? row.lanc_observacao;
 
   const comparativo: EnriqComparativoLinha[] = [
-    refLinha('Data', row.lanc_data_pagamento, row.excel_data, fmtData(row.lanc_data_pagamento), fmtData(row.excel_data)),
     {
       campo: 'Valor',
       sistema: fmtBRL(row.lanc_valor), excel: fmtBRL(row.excel_valor),
@@ -112,7 +111,15 @@ export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
     { campo: 'Fornecedor', sistema: fmtTexto(favSistema), excel: fmtTexto(favExcel), resultado: favRes, tom: favTom },
     { campo: 'Fazenda', sistema: fmtTexto(row.lanc_fazenda_nome), excel: fmtTexto(row.excel_fazenda_codigo), ...resultadoEditavel(row.lanc_fazenda_nome, row.excel_fazenda_codigo, row.proposto_fazenda_nome) },
     { campo: 'Subcentro', sistema: fmtTexto(subSistema), excel: fmtTexto(subExcel), resultado: subRes, tom: subTom },
-    refLinha('Data comp.', row.lanc_data_competencia, row.excel_data, fmtData(row.lanc_data_competencia), fmtData(row.excel_data)),
+    /* ⚠ TRÊS DATAS, TRÊS LINHAS — 133a. Havia uma só ("Data"), que comparava a
+       competência da planilha com o PAGAMENTO do lançamento: dois campos diferentes na
+       mesma linha, e era isso que fazia 113 linhas parecerem "sem par". Agora cada uma
+       compara o seu par, e o operador vê qual delas de fato diverge. */
+    refLinha('Data pagamento', row.lanc_data_pagamento, row.excel_data_pagamento,
+      fmtData(row.lanc_data_pagamento), fmtData(row.excel_data_pagamento)),
+    refLinha('Data vencimento', row.lanc_data_vencimento, row.excel_data_vencimento,
+      fmtData(row.lanc_data_vencimento), fmtData(row.excel_data_vencimento)),
+    refLinha('Competência', row.lanc_data_competencia, row.excel_data, fmtData(row.lanc_data_competencia), fmtData(row.excel_data)),
     /* ── 129c: as linhas que faltavam para a Mesa mostrar os onze campos ─────────
        ⚠ `Data venc.` e `Safra` NÃO TINHAM FONTE até a view de 20260906195410; a tabela
        da Mesa já as listava com "—" para não mentir por omissão. Agora elas têm. */
@@ -144,6 +151,49 @@ export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
     motorVersion: row.motor_version,
     comoFoiSugerido: comoFoiSugerido(row.proposto_origem_resolucao, row.excel_produto ?? row.excel_fornecedor),
   };
+
+  /**
+   * O PORQUÊ da linha, em uma frase — 133a item 5.
+   *
+   * ⚠ SAI DO `casamento_meta`, que é o que o casador do banco gravou: a regra que casou e
+   * quantos candidatos havia. Deduzir isso no front seria reconstruir a decisão da RPC por
+   * fora — e errar no dia em que ela mudasse.
+   */
+  const porQue = (() => {
+    const meta = (row.casamento_meta ?? {}) as Record<string, unknown>;
+    const regra = typeof meta.regra === 'string' ? meta.regra : null;
+    /* ⚠ `match_status` COMO STRING, e não como `MatchStatus`: o tipo escrito à mão é menor
+       que o CHECK do banco (ver a nota lá), e um `switch` tipado recusaria status
+       legítimos como `sugestao_split`. O `default` cobre o desconhecido. */
+    const st: string = row.match_status;
+    const cand = Number(meta.candidatos ?? 0) || 0;
+    switch (st) {
+      case 'exato':
+      case 'divergente':
+        if (regra === 'pagamento_exato') return `casou pelo pagamento de ${fmtData(row.excel_data_pagamento)}`;
+        if (regra === 'valor_no_mes') return 'valor único no mês';
+        return 'casou com um lançamento do mês';
+      case 'ambiguo':
+      case 'candidatos_proximos':
+        return cand > 0 ? `${cand} lançamentos iguais no dia — escolha` : 'mais de um lançamento igual — escolha';
+      case 'sugestao_split': {
+        const n = Array.isArray(meta.grupo_ids) ? meta.grupo_ids.length : 0;
+        return n > 1
+          ? `com mais ${n - 1} linha${n - 1 === 1 ? '' : 's'} do dia soma ${fmtBRL(row.excel_valor)} = 1 movimento do banco`
+          : 'junta com outras linhas do dia num movimento do banco';
+      }
+      case 'sugestao_grupo':
+        return 'soma de 2 lançamentos do dia';
+      case 'sem_conta_para_match':
+        return 'sem conta bancária na planilha';
+      case 'sem_match':
+        return `nenhum movimento de ${fmtBRL(row.excel_valor)} na ${fmtTexto(banco)}`;
+      case 'ja_classificado':
+        return `já tem ${fmtTexto(subSistema)}`;
+      default:
+        return '';
+    }
+  })();
   // PR-U2c-2A — valores crus da proposta para os editores inline.
   /* Entrada ou saída — 129d item 4. `lanc_sinal` é TEXTO ('1' / '-1'); o `tipo_operacao`
      é o desempate quando o sinal não veio. Sem lançamento, `null`: a tela não afirma. */
@@ -212,6 +262,7 @@ export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
     valorNum: row.excel_valor ?? row.lanc_valor ?? null,
     entradaOuSaida,
     contaBancaria: banco,
+    porQue,
     banco: fmtTexto(banco),
     fornecedor: fmtTexto(favSistema ?? favExcel),
     comparativo,
@@ -287,6 +338,9 @@ export function contarContagens(staging: ClassificacaoStagingPreviewRow[]): Enri
   const status: Record<EnriqStatus, number> = {
     exato: 0, ambiguo: 0, sem_match: 0, divergente: 0, ja_classificado: 0, ambiguo_resolvido: 0,
     candidatos_proximos: 0, resolvido_manual: 0, resolvido_grupo: 0,   // PR-MESA-GRUPO-01
+    /* ⚠ 133a — os quatro do casador novo. Sem a chave, o `if (k in status)` abaixo ignora
+       o status e o chip fica sempre zerado: foi o que aconteceria com "Agrupam". */
+    sugestao_grupo: 0, sugestao_split: 0, sem_conta_para_match: 0, ja_aplicado: 0,
   };
   let aplicados = 0;
   for (const r of staging) {

@@ -4697,6 +4697,7 @@ export type Database = {
           aplicado: boolean
           aplicado_em: string | null
           aplicado_por: string | null
+          casamento_meta: Json | null
           cliente_id: string
           conta_destino_id: string | null
           conta_origem_id: string | null
@@ -4707,6 +4708,8 @@ export type Database = {
           excel_conta_destino: string | null
           excel_conta_origem: string | null
           excel_data: string | null
+          excel_data_pagamento: string | null
+          excel_data_vencimento: string | null
           excel_documento: string | null
           excel_fazenda_codigo: string | null
           excel_fornecedor: string | null
@@ -4734,6 +4737,7 @@ export type Database = {
           aplicado?: boolean
           aplicado_em?: string | null
           aplicado_por?: string | null
+          casamento_meta?: Json | null
           cliente_id: string
           conta_destino_id?: string | null
           conta_origem_id?: string | null
@@ -4744,6 +4748,8 @@ export type Database = {
           excel_conta_destino?: string | null
           excel_conta_origem?: string | null
           excel_data?: string | null
+          excel_data_pagamento?: string | null
+          excel_data_vencimento?: string | null
           excel_documento?: string | null
           excel_fazenda_codigo?: string | null
           excel_fornecedor?: string | null
@@ -4771,6 +4777,7 @@ export type Database = {
           aplicado?: boolean
           aplicado_em?: string | null
           aplicado_por?: string | null
+          casamento_meta?: Json | null
           cliente_id?: string
           conta_destino_id?: string | null
           conta_origem_id?: string | null
@@ -4781,6 +4788,8 @@ export type Database = {
           excel_conta_destino?: string | null
           excel_conta_origem?: string | null
           excel_data?: string | null
+          excel_data_pagamento?: string | null
+          excel_data_vencimento?: string | null
           excel_documento?: string | null
           excel_fazenda_codigo?: string | null
           excel_fornecedor?: string | null
@@ -12226,6 +12235,10 @@ export type Database = {
           valor: number
         }[]
       }
+      fn_classificacao_casar_sessao: {
+        Args: { p_ano_mes: string; p_sessao_id: string }
+        Returns: Json
+      }
       fn_classificacao_composicao_sugerida: {
         Args: { p_lancamento_id: string; p_sessao_id: string }
         Returns: {
@@ -12772,6 +12785,14 @@ export type Database = {
           valor_aberto: string
           valor_conciliado: string
         }[]
+      }
+      fn_transferencia_unir: {
+        Args: { p_entrada_id: string; p_saida_id: string; p_simular?: boolean }
+        Returns: Json
+      }
+      fn_transferencias_espelhadas: {
+        Args: { p_ano_mes: string; p_cliente_id: string }
+        Returns: Json
       }
       fn_transferir_vinculo_extrato: {
         Args: {

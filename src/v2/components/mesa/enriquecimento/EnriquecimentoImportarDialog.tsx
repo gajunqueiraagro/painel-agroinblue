@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { reportarErro } from '@/lib/erroOperacional';
 import { useFinanceiroV2 } from '@/hooks/useFinanceiroV2';
 import { useImportarClassificacao } from '@/v2/hooks/useImportarClassificacao';
+import { useClassificacaoStaging } from '@/v2/hooks/useClassificacaoStaging';
 import { fmtBRL, fmtData } from './fmt';
 
 export interface EnriquecimentoImportarDialogProps {
@@ -17,11 +18,17 @@ export interface EnriquecimentoImportarDialogProps {
   onClose: () => void;
   clienteId: string | null;
   onImportado: (sessaoId: string) => void;
+  /** O mês da régua da tela, 'YYYY-MM' — é ele que o casador usa, não o da planilha. */
+  anoMes: string;
 }
 
-export function EnriquecimentoImportarDialog({ open, onClose, clienteId, onImportado }: EnriquecimentoImportarDialogProps) {
+export function EnriquecimentoImportarDialog({ open, onClose, clienteId, onImportado, anoMes }: EnriquecimentoImportarDialogProps) {
   const hookFin = useFinanceiroV2();
   const imp = useImportarClassificacao(clienteId);
+  /* ⚠ O CASADOR RODA DEPOIS DE TODAS AS FATIAS, uma vez, sobre a sessão inteira: ele
+     compara cada linha com os lançamentos do mês, e rodá-lo por fatia veria só um pedaço
+     do universo. O `sessao_id` vem do populate; o `ano_mes`, da régua da tela. */
+  const { casarSessao } = useClassificacaoStaging(null, clienteId);
 
   // Contas do cliente (lazy) para o DE/PARA — carrega ao abrir.
   useEffect(() => {
@@ -67,8 +74,14 @@ export function EnriquecimentoImportarDialog({ open, onClose, clienteId, onImpor
     try {
       const res = await imp.popular();
       if (!res) return;
-      const totais = Object.entries(res.counts).map(([k, v]) => `${k}: ${v}`).join(' · ');
-      toast.success(`Staging populada (${res.inseridas} linhas). ${totais}`);
+      /* ⚠ O TOAST TÉCNICO SAIU — [ENRIQUECER-MOTOR-01] (133a). "Staging populada (492
+         linhas). ambiguo: 26 · sem_match: 590" é o vocabulário do banco despejado na tela:
+         "staging" e "match" não são palavras do operador, e o número de status somava mais
+         que as linhas. Em vez dele, o resultado do CASADOR, em português. */
+      const r = await casarSessao({ sessao_id: res.sessaoId, ano_mes: anoMes });
+      const agrupam = r.sugestaoGrupo + r.sugestaoSplit;
+      toast.success(
+        `${r.casou} atualizam · ${r.ambiguo} você decide · ${agrupam} agrupam · ${r.semPar + r.semConta} sem par`);
       onImportado(res.sessaoId);
       imp.reset();
     } catch (e: unknown) {
