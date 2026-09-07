@@ -25,7 +25,7 @@ const dataBr = (iso: string) => (iso ? iso.slice(0, 10).split('-').reverse().joi
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
 export function EnriquecerProgressoDialog({
-  open, onOpenChange, progresso, resultado, gravando, onParar, onVerNoFinanceiro,
+  open, onOpenChange, progresso, resultado, gravando, onParar, onVerNoFinanceiro, onDesfazerLote,
   arquivo, aba, linhasLidas, mes, ano, cliente,
 }: {
   open: boolean;
@@ -36,6 +36,14 @@ export function EnriquecerProgressoDialog({
   onParar: () => void;
   /** `undefined` esconde o botão — não há destino a prometer. */
   onVerNoFinanceiro?: () => void;
+  /**
+   * 133c — "Desfazer o lote". `undefined` esconde o botão.
+   *
+   * ⚠ SÓ APARECE ENQUANTO O LOTE ESTÁ NA MEMÓRIA DA TELA: desfazer é o arrependimento de
+   * quem acabou de gravar. Um botão que sobrevivesse à navegação prometeria um desfazer
+   * que a tela não tem como cumprir — para isso existe o histórico do lançamento.
+   */
+  onDesfazerLote?: () => void;
   arquivo: string | null;
   aba: string | null;
   linhasLidas: number;
@@ -168,6 +176,16 @@ export function EnriquecerProgressoDialog({
                 className="h-7 bg-[#f3c84a] text-[11px] font-medium text-foreground hover:bg-[#e8bd3e]"
                 onClick={onVerNoFinanceiro}>
                 Ver no Financeiro
+              </Button>
+            )}
+            {/* ⚠ DESFAZER É DESTRUTIVO E DIZ ISSO NO `title`: ele devolve cada lançamento ao
+                estado anterior, um a um, no mesmo modal — e é a única saída para um lote
+                aplicado com a marca de sobrescrever errada. */}
+            {onDesfazerLote && terminou && (
+              <Button type="button" variant="outline" size="sm" className="h-7 text-[11px]"
+                title="Devolve cada lançamento deste lote ao estado anterior, um a um."
+                onClick={onDesfazerLote}>
+                ↺ Desfazer o lote
               </Button>
             )}
             <Button type="button" variant="outline" size="sm" className="h-7 text-[11px]"

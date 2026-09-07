@@ -10,7 +10,8 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
-import { useFinanceiroV2 } from '@/hooks/useFinanceiroV2';
+import { useFinanceiroV2, notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
+import { useQueryClient } from '@tanstack/react-query';
 import { useClassificacaoStaging, useSessoesClassificacao } from '@/v2/hooks/useClassificacaoStaging';
 import {
   toRowVM, toSessoesVM, contarAplicaveisExatos, filtrarPorModo, escolherMelhorSessaoId,
@@ -22,7 +23,13 @@ import { EnriquecimentoDetalhe, type EnriquecimentoDetalheProps } from './Enriqu
 import { type EnriquecimentoActionsProps } from './EnriquecimentoActions';
 import { EnriquecimentoMesaModal } from './EnriquecimentoMesaModal';
 import { EnriquecimentoImportarDialog } from './EnriquecimentoImportarDialog';
-import { EnriquecimentoTopoNumeros } from './EnriquecimentoTopoNumeros';
+import { EnriquecimentoTopoNumeros, type VistaPasso2 } from './EnriquecimentoTopoNumeros';
+import { EnriquecimentoTransferencias } from './EnriquecimentoTransferencias';
+import { EnriquecimentoSemParSistema } from './EnriquecimentoSemParSistema';
+import { useTransferenciasEspelhadas } from '@/v2/hooks/useTransferenciasEspelhadas';
+import { useSistemaNaoExplicado } from '@/v2/hooks/useSistemaNaoExplicado';
+import { EnriquecerProgressoDialog } from '@/components/conciliacao/EnriquecerProgressoDialog';
+import { useGravarLoteEnriquecimento, type LinhaParaGravar } from '@/v2/hooks/useGravarLoteEnriquecimento';
 import { EnriquecimentoCandidatosInline } from './EnriquecimentoCandidatosInline';
 import { MesaCamposTabela } from './MesaCamposTabela';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -45,9 +52,13 @@ export interface MesaEnriquecimentoTabProps {
    */
   sessaoId?: string | null;
   onSessaoId?: (id: string | null) => void;
+  /** 133c — o destino do "Ver no Financeiro" no relatório final do lote. */
+  onVerNoFinanceiro?: () => void;
 }
 
-export function MesaEnriquecimentoTab({ anoMesRegua, sessaoId: sessaoIdProp, onSessaoId }: MesaEnriquecimentoTabProps = {}) {
+export function MesaEnriquecimentoTab({
+  anoMesRegua, sessaoId: sessaoIdProp, onSessaoId, onVerNoFinanceiro,
+}: MesaEnriquecimentoTabProps = {}) {
   const { clienteAtual } = useCliente();
   const { data: sessoes } = useSessoesClassificacao(clienteAtual?.id ?? null);
 
@@ -62,7 +73,7 @@ export function MesaEnriquecimentoTab({ anoMesRegua, sessaoId: sessaoIdProp, onS
   /* ⚠ O FILTRO PASSOU A SER POR GRUPO — 133b. Eram treze `match_status`; os chips do topo
      são seis, e filtrar por status enquanto o chip fala de grupo faria o número do chip e
      o tamanho da lista discordarem. */
-  const [filtroGrupo, setFiltroGrupo] = useState<EnriqGrupo | 'todas'>('todas');
+  const [filtroGrupo, setFiltroGrupo] = useState<VistaPasso2>('todas');
   const [ordenacao, setOrdenacao] = useState<Ordenacao>('planilha');
   const [filtroModo, setFiltroModo] = useState<'pendentes' | 'todas'>('todas');   // PR-U2d-1 — burn-down
 
@@ -89,6 +100,20 @@ export function MesaEnriquecimentoTab({ anoMesRegua, sessaoId: sessaoIdProp, onS
    * as duas confusões: o que ele mexeu está aqui, e ainda não foi para o lançamento.
    */
   const [editadasIds, setEditadasIds] = useState<ReadonlySet<string>>(() => new Set());
+  /**
+   * 133c item 1 — as linhas que o operador liberou para SOBRESCREVER.
+   *
+   * ⚠ POR LINHA E DEFAULT DESLIGADO. `p_overwrite` ligado em lote passaria por cima de
+   * classificação que alguém fez à mão depois da importação; a RPC devolve
+   * `pulado_subcentro_preenchido` justamente para que isso seja decisão e não efeito.
+   */
+  const [sobrescreverIds, setSobrescreverIds] = useState<ReadonlySet<string>>(() => new Set());
+  const alternarSobrescrever = (id: string) =>
+    setSobrescreverIds((p) => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const [verProgresso, setVerProgresso] = useState(false);
+  /* A confirmação inline do agrupar — uma linha âmbar com Sim/Não, não um modal: a
+     pergunta é sobre a linha que está na tela, e um modal a cobriria. */
+  const [confirmandoGrupo, setConfirmandoGrupo] = useState(false);
   const marcarEditada = (id: string) =>
     setEditadasIds((p) => { const n = new Set(p); n.add(id); return n; });
   const limparEditada = (id: string) =>
@@ -112,9 +137,23 @@ export function MesaEnriquecimentoTab({ anoMesRegua, sessaoId: sessaoIdProp, onS
     apply, isApplying,
     editarProposto,
     resolverProximos, isResolvendoProximos, desfazerProximos,
-    isResolvendoGrupo, desfazerGrupo,
+    resolverGrupo, isResolvendoGrupo, desfazerGrupo,
     casarSessao, isCasando,
   } = useClassificacaoStaging(sessaoId, clienteAtual?.id);
+
+  /* 133c — o motor do passo 3. O progresso vive aqui (no hook), não no diálogo. */
+  const lote = useGravarLoteEnriquecimento(sessaoId, clienteAtual?.id);
+  /* 133c item 3 — os pares espelhados do MÊS DA RÉGUA (não da sessão): transferência é
+     fato do banco, e o mês que se está conciliando é o que a tela mostra. O mês da sessão
+     é o fallback, e ele é derivado aqui em cima para não depender de `mesAtivo`, que só
+     existe depois da lista de sessões. */
+  const mesParaTransferencias = anoMesRegua
+    ?? sessoes?.find((sv) => sv.sessao_id === sessaoId)?.excel_ano_mes
+    ?? null;
+  const transf = useTransferenciasEspelhadas(clienteAtual?.id, mesParaTransferencias);
+  /* 133c item 4 — a visão inversa, no escopo da conta selecionada (null = todas). */
+  const contaIdSel = (filtroConta === 'todas' || filtroConta === '__sem__') ? null : filtroConta;
+  const { data: semParSistema, isLoading: carregandoSemPar } = useSistemaNaoExplicado(sessaoId, contaIdSel);
 
   /**
    * Recasar a sessão inteira — 133a.
@@ -147,7 +186,9 @@ export function MesaEnriquecimentoTab({ anoMesRegua, sessaoId: sessaoIdProp, onS
      dois loaders o Select abre vazio e não há o que escolher — foi exatamente o defeito
      do `loadSafras` que o 121e pagou no custeio. */
   const { classificacoes, fornecedores, safras, contasBancarias,
-    loadClassificacoes, loadFornecedores, loadSafras, loadContas, criarFornecedor } = useFinanceiroV2();
+    loadClassificacoes, loadFornecedores, loadSafras, loadContas, criarFornecedor,
+    excluirLancamento } = useFinanceiroV2();
+  const qcMesa = useQueryClient();
   const { fazendas } = useFazenda();
   useEffect(() => {
     if (!clienteAtual?.id) return;
@@ -163,6 +204,12 @@ export function MesaEnriquecimentoTab({ anoMesRegua, sessaoId: sessaoIdProp, onS
   /* O mês da sessão — o fallback do casador quando a régua não vem por prop. Os rótulos de
      conta/mês do drawer "sistema não explicado" saíram com ele (133b). */
   const mesAtivo = sessoes?.find((s) => s.sessao_id === sessaoId)?.excel_ano_mes ?? null;
+  /* O cabeçalho do modal de progresso fala em mês/ano; a régua manda, e o mês da sessão é
+     o fallback — a mesma precedência do casador (133a). */
+  const [anoDaRegua, mesDaRegua] = (() => {
+    const m = /^(\d{4})-(\d{2})$/.exec(anoMesRegua ?? mesAtivo ?? '');
+    return m ? [Number(m[1]), Number(m[2])] : [null, null];
+  })();
   // Conta é a partição de trabalho: contadores, lista e fluxo derivam do staging DA CONTA.
   const stagingConta = useMemo(() => filtrarPorConta(staging, filtroConta), [staging, filtroConta]);
   /* 133b — os seis números do topo e as somas em R$, da MESMA lista que a tela desenha.
@@ -311,6 +358,29 @@ export function MesaEnriquecimentoTab({ anoMesRegua, sessaoId: sessaoIdProp, onS
      ⚠ `fn_classificacao_resolver_grupo` e `fn_classificacao_candidatos_grupo` CONTINUAM
      INTACTAS no banco, e `desfazerGrupo` segue ligado no botão da direita: as sessões que
      já têm grupos resolvidos podem desfazê-los. O que falta é criar um novo. */
+  /**
+   * Juntar N lançamentos NESTA linha — 133c item 2, o caso `sugestao_grupo`.
+   *
+   * ⚠ O CASO `sugestao_split` (N linhas = 1 lançamento) NÃO TEM BOTÃO, e a medição é a
+   * razão: `fn_classificacao_split_substituir` recusa por construção as linhas que o
+   * casador do 133a produz. Ela exige `match_lancamento_id IS NULL` (guard d) e recusa com
+   * `ja_referenciado` quando alguma linha da sessão aponta para o lançamento (guard c) —
+   * e as 16 linhas `sugestao_split` do Proto têm as duas coisas, porque o casador já lhes
+   * atribuiu o alvo. A RPC foi escrita para o fluxo ANTIGO, em que o operador escolhia o
+   * lançamento à mão no drawer. Um botão aqui falharia em 100% dos cliques. Reportado.
+   */
+  async function handleJuntarNestaLinha(lancIds: string[]) {
+    if (!selecionadoId || lancIds.length === 0) return;
+    setConfirmandoGrupo(false);
+    try {
+      const res: any = await resolverGrupo({ staging_id: selecionadoId, lancamento_ids: lancIds });
+      if (res?.ok) toast.success(`Grupo criado — ${lancIds.length} lançamentos nesta linha.`);
+      else toast.error(res?.mensagem ?? MOTIVO_MSG[res?.motivo] ?? `Não agrupado (${res?.motivo ?? 'erro'}).`);
+    } catch (e: unknown) {
+      toast.error(`Erro ao agrupar: ${errMsg(e)}`);
+    }
+  }
+
   async function handleDesfazerGrupo(stagingId: string) {
     try {
       const res: any = await desfazerGrupo(stagingId);
@@ -551,6 +621,64 @@ export function MesaEnriquecimentoTab({ anoMesRegua, sessaoId: sessaoIdProp, onS
       ? 'sem conta bancária na planilha'
       : 'nenhum movimento com este valor na conta';
 
+  /**
+   * O UNIVERSO DO LOTE — 133c item 1.
+   *
+   * ⚠ SAI DA SESSÃO INTEIRA, não do recorte da tela. O botão promete "gravar os que
+   * atualizam"; se ele obedecesse ao chip de conta, o número do rodapé e o número gravado
+   * seriam diferentes toda vez que houvesse filtro — e o operador só descobriria depois.
+   * ⚠ `ja_classificado` SÓ COM "SOBRESCREVER" MARCADO. Sem a marca ele nem entra na fila:
+   * mandá-lo para a RPC renderia `pulado_subcentro_preenchido` e um evento âmbar no feed
+   * para cada linha já resolvida — ruído sobre trabalho que já estava certo.
+   */
+  const linhasDoLote = useMemo((): LinhaParaGravar[] => {
+    const ELEGIVEIS = new Set(['exato', 'divergente', 'ambiguo_resolvido', 'resolvido_manual', 'resolvido_grupo']);
+    const out: LinhaParaGravar[] = [];
+    for (const r of staging) {
+      if (r.aplicado) continue;
+      const status: string = r.match_status;
+      const sobrescrever = sobrescreverIds.has(r.staging_id);
+      const entra = ELEGIVEIS.has(status) || (status === 'ja_classificado' && sobrescrever);
+      if (!entra) continue;
+      const vm = toRowVM(r);
+      out.push({
+        stagingId: r.staging_id,
+        linha: r.excel_linha_origem ?? 0,
+        data: r.excel_data ?? r.lanc_data_pagamento ?? '',
+        valor: Math.abs(Number(r.excel_valor) || 0),
+        titulo: vm.descricaoExcel,
+        camposQueMudam: vm.comparativo.filter((c) => c.tom === 'muda' || c.tom === 'difere').map((c) => c.campo),
+        sobrescrever,
+      });
+    }
+    return out;
+  }, [staging, sobrescreverIds]);
+
+  async function handleGravarLote() {
+    if (linhasDoLote.length === 0) return;
+    setVerProgresso(true);
+    await lote.gravar(linhasDoLote);
+  }
+
+  /**
+   * Cancelar como duplicado — 133c item 4.
+   *
+   * ⚠ PELO `excluirLancamento` DO HOOK OFICIAL, nunca por UPDATE direto: ele coleta os
+   * vínculos ativos ANTES (o trigger os desfaz no cancelamento) e recomputa o status de
+   * cada extrato depois. Um UPDATE cru deixaria o extrato marcado como conciliado contra
+   * um lançamento morto — e o mês fecharia mentindo.
+   * ⚠ O MOTIVO É OBRIGATÓRIO e vai para `cancelado_motivo`: é o que a próxima pessoa a
+   * olhar aquele lançamento vai ler.
+   */
+  async function handleCancelarDuplicado(lancId: string, motivo: string): Promise<boolean> {
+    const ok = await excluirLancamento(lancId, motivo);
+    if (ok) {
+      if (clienteAtual?.id) notificarLancamentosMudaram(clienteAtual.id);
+      await qcMesa.invalidateQueries({ queryKey: ['sistema-nao-explicado', sessaoId, contaIdSel] });
+    }
+    return ok;
+  }
+
   function baixarSemPar() {
     const linhas = ['linha,data,conta,descricao,valor,motivo'];
     for (const r of stagingConta) {
@@ -575,6 +703,8 @@ export function MesaEnriquecimentoTab({ anoMesRegua, sessaoId: sessaoIdProp, onS
         total={rowsModo.length}
         filtro={filtroGrupo}
         onFiltro={(g) => { setFiltroGrupo(g); setSelecionadoId(null); }}
+        transferencias={transf.carregando ? undefined : { total: transf.dados.total, unicos: transf.dados.unicos }}
+        semParSistema={semParSistema?.length}
       />
 
       {/* ═══ BARRA: sessão à esquerda · conta e ordenação à direita ════════════════ */}
@@ -652,7 +782,30 @@ export function MesaEnriquecimentoTab({ anoMesRegua, sessaoId: sessaoIdProp, onS
 
       {isFetching && <div className="shrink-0 px-1 text-[10px] text-muted-foreground">Carregando…</div>}
 
-      {/* ═══ CORPO: lista 400px · tabela de 15 campos ══════════════════════════════ */}
+      {/* ═══ CORPO ════════════════════════════════════════════════════════════════
+          ⚠ DOIS CHIPS TROCAM O CORPO INTEIRO — 133c. Transferência e "sem par no sistema"
+          não olham linhas da planilha: a unidade de um é o PAR de lançamentos, a do outro é
+          o lançamento órfão. Encaixá-los na lista de linhas faria o contador do chip e o
+          tamanho da lista falarem de coisas diferentes. */}
+      {filtroGrupo === 'transferencia' ? (
+        <EnriquecimentoTransferencias
+          pares={transf.dados.pares}
+          carregando={transf.carregando}
+          simular={transf.simular}
+          unir={transf.unir}
+          unindo={transf.unindo}
+          onErro={(m) => toast.error(`Não foi possível unir: ${m}`)}
+          onUnido={(n) => toast.success(
+            `Transferência unida — ${n} vínculo${n === 1 ? '' : 's'} do extrato movido${n === 1 ? '' : 's'}.`)}
+        />
+      ) : filtroGrupo === 'sem_par_sistema' ? (
+        <EnriquecimentoSemParSistema
+          linhas={semParSistema ?? []}
+          carregando={carregandoSemPar}
+          onCancelar={handleCancelarDuplicado}
+          onAbrirNoFinanceiro={undefined}
+        />
+      ) : (
       <div className="grid min-h-0 grid-cols-1 items-start gap-1.5 md:flex-1 md:[grid-template-columns:400px_minmax(0,1fr)] md:[grid-template-rows:minmax(0,1fr)]">
         <EnriquecimentoLista {...listaProps} />
 
@@ -716,6 +869,18 @@ export function MesaEnriquecimentoTab({ anoMesRegua, sessaoId: sessaoIdProp, onS
                     {/* ⚠ O DESFAZER SOBREVIVEU ÀS FAIXAS — 133b. Ele morava em duas faixas
                         coloridas que saíram; sem ele, uma escolha errada não teria volta
                         pela tela, e a RPC de desfazer existe justamente para isso. */}
+                    {/* ⚠ SOBRESCREVER É POR LINHA E NASCE DESLIGADO — 133c item 1. Só
+                        aparece onde faz diferença: a linha que o banco já classificou. Sem
+                        a marca ela nem entra na fila do lote. */}
+                    {selecionado.status === 'ja_classificado' && !selecionado.aplicado && (
+                      <label className="flex shrink-0 cursor-pointer items-center gap-1 text-[10px] text-muted-foreground"
+                        title="O lançamento já tem classificação. Marcado, o Gravar troca o que está lá pelo Resultado desta linha.">
+                        <input type="checkbox" className="h-3 w-3"
+                          checked={sobrescreverIds.has(selecionado.id)}
+                          onChange={() => alternarSobrescrever(selecionado.id)} />
+                        sobrescrever
+                      </label>
+                    )}
                     {(selecionado.status === 'resolvido_manual' || selecionado.status === 'resolvido_grupo') && (
                       <Button type="button" size="sm" variant="outline" className="h-5 shrink-0 px-1.5 text-[10px]"
                         disabled={isResolvendoProximos || isResolvendoGrupo}
@@ -744,6 +909,59 @@ export function MesaEnriquecimentoTab({ anoMesRegua, sessaoId: sessaoIdProp, onS
                 />
               </div>
 
+              {/* ═══ AGRUPAR — 133c item 2 ═══════════════════════════════════════ */}
+              {selecionado.status === 'sugestao_grupo' && !selecionado.aplicado && (
+                <div className="shrink-0 rounded-md border border-violet-300 bg-violet-50/60 px-2 py-1 dark:border-violet-800 dark:bg-violet-950/20">
+                  {!confirmandoGrupo ? (
+                    <div className="flex items-center gap-2">
+                      <span className="min-w-0 flex-1 text-[11px] text-violet-900 dark:text-violet-200">
+                        {(linhaCrua?.match_lancamento_ids?.length ?? 0)} lançamentos do dia somam o valor desta linha.
+                      </span>
+                      <Button type="button" size="sm" className="h-6 shrink-0 px-2 text-[10px]"
+                        disabled={isResolvendoGrupo || !(linhaCrua?.match_lancamento_ids?.length)}
+                        onClick={() => setConfirmandoGrupo(true)}>
+                        Juntar os {linhaCrua?.match_lancamento_ids?.length ?? 0} lançamentos nesta linha
+                      </Button>
+                    </div>
+                  ) : (
+                    /* ⚠ CONFIRMAÇÃO INLINE, NÃO MODAL — 133c. A pergunta é sobre a linha que
+                       está na tela, e um modal a cobriria justamente quando ela importa. */
+                    <div className="flex items-center gap-2">
+                      <span className="min-w-0 flex-1 text-[11px] text-amber-800 dark:text-amber-300">
+                        Isso une {linhaCrua?.match_lancamento_ids?.length ?? 0} lançamentos nesta linha. Continuar?
+                      </span>
+                      <Button type="button" size="sm" className="h-6 shrink-0 px-2 text-[10px]"
+                        disabled={isResolvendoGrupo}
+                        onClick={() => { void handleJuntarNestaLinha(linhaCrua?.match_lancamento_ids ?? []); }}>
+                        Sim
+                      </Button>
+                      <Button type="button" size="sm" variant="outline" className="h-6 shrink-0 px-2 text-[10px]"
+                        onClick={() => setConfirmandoGrupo(false)}>
+                        Não
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ⚠ O SPLIT MOSTRA O GRUPO E NÃO OFERECE BOTÃO — 133c item 2, medido. A RPC
+                  `fn_classificacao_split_substituir` recusa estas linhas por construção
+                  (ver a nota em `handleJuntarNestaLinha`). Mostrar o grupo é útil; um botão
+                  que falha em todo clique, não. */}
+              {selecionado.status === 'sugestao_split' && (
+                <div className="shrink-0 rounded-md border border-violet-300 bg-violet-50/60 px-2 py-1 text-[11px] dark:border-violet-800 dark:bg-violet-950/20">
+                  <span className="text-violet-900 dark:text-violet-200">
+                    Esta linha compõe, com outras{' '}
+                    {Math.max(0, (Array.isArray(linhaCrua?.casamento_meta?.grupo_ids)
+                      ? (linhaCrua?.casamento_meta?.grupo_ids as unknown[]).length : 1) - 1)}
+                    {' '}do mesmo dia, um único movimento do banco.
+                  </span>
+                  <span className="ml-1 text-muted-foreground">
+                    Agrupar em um clique depende de um ajuste na função do banco — reportado.
+                  </span>
+                </div>
+              )}
+
               {pedeDecisao && (
                 <EnriquecimentoCandidatosInline
                   stagingId={selecionado.id}
@@ -763,6 +981,7 @@ export function MesaEnriquecimentoTab({ anoMesRegua, sessaoId: sessaoIdProp, onS
           )}
         </div>
       </div>
+      )}
 
       {/* ═══ RODAPÉ FIXO ══════════════════════════════════════════════════════════ */}
       <div className="flex shrink-0 flex-wrap items-center gap-2 rounded-lg border bg-muted/30 px-2 py-1">
@@ -781,13 +1000,39 @@ export function MesaEnriquecimentoTab({ anoMesRegua, sessaoId: sessaoIdProp, onS
           onClick={baixarSemPar}>
           Baixar sem par (CSV)
         </Button>
-        {/* ⚠ DESABILITADO NESTE ENVELOPE, e o motivo está no `title` e ao lado: a gravação em
-            lote é a 133c. Um botão que grava metade seria pior que um botão que não grava. */}
-        <Button type="button" size="sm" className="h-6 px-2 text-[10px]" disabled
-          title="em construção — 133c">
-          Gravar {resumo.atualizam.qtd} + {resumo.decide.qtd} decididos
+        {/* ⚠ O NÚMERO DO BOTÃO É O DA FILA, não o do topo — 133c. O topo conta por grupo
+            dentro do recorte de conta; a fila é a sessão inteira, sem as já aplicadas e sem
+            as `ja_classificado` que ninguém liberou. Dois números diferentes com o mesmo
+            rótulo seria a tela discordando de si mesma. */}
+        <Button type="button" size="sm" className="h-6 px-2 text-[10px]"
+          disabled={linhasDoLote.length === 0 || lote.gravando}
+          title={linhasDoLote.length === 0
+            ? 'Nada a gravar: as linhas que atualizam já foram aplicadas, ou não há nenhuma.'
+            : `Aplica ${linhasDoLote.length} linha(s) uma a uma, com progresso. Nada é criado.`}
+          onClick={() => { void handleGravarLote(); }}>
+          {lote.gravando ? `Gravando… ${lote.progresso.feitas} de ${lote.progresso.total}` : `Gravar ${linhasDoLote.length}`}
         </Button>
       </div>
+
+      {/* ⚠ MONTADO SEMPRE, visível por estado — o idioma do 131. Desmontá-lo ao fechar
+          perderia o `scrollIntoView` do feed e faria o modal reabrir no topo; e quem fecha
+          no meio quer voltar ao PONTO, não ao começo. */}
+      <EnriquecerProgressoDialog
+        open={verProgresso}
+        onOpenChange={setVerProgresso}
+        progresso={lote.progresso}
+        resultado={lote.resultado}
+        gravando={lote.gravando}
+        onParar={lote.parar}
+        onVerNoFinanceiro={onVerNoFinanceiro}
+        onDesfazerLote={lote.podeDesfazer ? () => { void lote.desfazerLote(); } : undefined}
+        arquivo={sessaoLabel}
+        aba={null}
+        linhasLidas={staging.length}
+        mes={mesDaRegua}
+        ano={anoDaRegua}
+        cliente={clienteAtual?.nome ?? '—'}
+      />
 
       {/* PR-UX-ENR-MODAL-01 — mesma mesa, superfície ampla. Mesmos prop-bags. */}
       <EnriquecimentoMesaModal

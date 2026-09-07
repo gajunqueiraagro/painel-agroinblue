@@ -860,7 +860,17 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     return true;
   }, [clienteId, user, classificacoes]);
 
-  const excluirLancamento = useCallback(async (id: string) => {
+  /**
+   * Cancelamento lógico de UM lançamento.
+   *
+   * ⚠ `motivo` ENTROU EM 133c, e é aditivo: quem já chamava com um argumento não muda em
+   * nada. O "Cancelar como duplicado" do passo 3 precisa registrar POR QUE cancelou —
+   * `cancelado_motivo` existe na tabela desde sempre e ninguém a escrevia por esta porta.
+   * ⚠ E É POR AQUI QUE SE CANCELA, nunca por UPDATE direto do front: este caminho coleta os
+   * vínculos ativos ANTES (o trigger os desfaz) e recomputa o status de cada extrato depois.
+   * Um UPDATE cru deixaria o extrato marcado como conciliado contra um lançamento morto.
+   */
+  const excluirLancamento = useCallback(async (id: string, motivo?: string) => {
     // PR-STATUS-SYNC-01: ANTES de cancelar, coletar os extratos com vínculo ATIVO
     // deste lançamento (após o cancelamento o trigger trg_cbi_desfazer_on_cancelamento
     // desfaz os cbi, e ninguém recomputa o status neste caminho).
@@ -880,6 +890,9 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
         cancelado: true,
         cancelado_em: new Date().toISOString(),
         cancelado_por: user?.id ?? null,
+        /* Sem motivo, a coluna não é tocada: apagar um motivo anterior por omissão seria
+           perder auditoria num caminho que não pediu para mexer nela. */
+        ...(motivo ? { cancelado_motivo: motivo } : {}),
         updated_at: new Date().toISOString(),
         updated_by: user?.id ?? null,
       })

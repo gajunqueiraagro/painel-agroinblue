@@ -47,9 +47,11 @@ export interface EnriquecerTresPassosProps {
   clienteNome?: string;
   /** A conta da régua — só contexto do cabeçalho; a partição de trabalho é do passo 2. */
   contaNome?: string;
+  /** 133c — o destino do "Ver no Financeiro" no relatório final do lote. */
+  onVerNoFinanceiro?: () => void;
 }
 
-export function EnriquecerTresPassos({ ano, mes, clienteNome, contaNome }: EnriquecerTresPassosProps) {
+export function EnriquecerTresPassos({ ano, mes, clienteNome, contaNome, onVerNoFinanceiro }: EnriquecerTresPassosProps) {
   const { clienteAtual } = useCliente();
   const clienteId = clienteAtual?.id ?? null;
   const anoMesRegua = `${ano}-${String(mes).padStart(2, '0')}`;
@@ -299,6 +301,7 @@ export function EnriquecerTresPassos({ ano, mes, clienteNome, contaNome }: Enriq
           anoMesRegua={anoMesRegua}
           sessaoId={sessaoId}
           onSessaoId={setSessaoId}
+          onVerNoFinanceiro={onVerNoFinanceiro}
         />
       )}
 

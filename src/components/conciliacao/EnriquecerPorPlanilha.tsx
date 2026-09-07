@@ -25,17 +25,20 @@ interface Props {
   contaNome: string;
   ano: number;
   mes: number;
-  /** Mantida no contrato: quem monta esta aba já a passa, e a 133c a usa no passo 3. */
+  /** O destino do "Ver no Financeiro" do modal de progresso — ligado na 133c. */
   onVerNoFinanceiro?: () => void;
   clienteNome?: string;
 }
 
-export function EnriquecerPorPlanilha({ contaNome, ano, mes, clienteNome }: Props) {
+export function EnriquecerPorPlanilha({ contaNome, ano, mes, clienteNome, onVerNoFinanceiro }: Props) {
   return (
     <EnriquecerTresPassos
       ano={ano}
       mes={mes}
       clienteNome={clienteNome}
+      /* ⚠ ELE ESTAVA NO CONTRATO E NÃO DESCIA — 133b deixou a prop sem destino porque o
+         passo 3 ainda não gravava. Agora grava, e o relatório final oferece a navegação. */
+      onVerNoFinanceiro={onVerNoFinanceiro}
       /* A conta da régua é CONTEXTO do cabeçalho; a partição de trabalho é a do passo 2,
          que a lê do próprio staging — duas fontes para "qual conta" divergiriam. */
       contaNome={contaNome || undefined}

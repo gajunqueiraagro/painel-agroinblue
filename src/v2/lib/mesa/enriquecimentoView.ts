@@ -462,8 +462,15 @@ export function resumirGrupos(staging: ClassificacaoStagingPreviewRow[]): EnriqR
   return r;
 }
 
-/** As linhas de um grupo — o filtro dos chips do passo 2. */
-export function filtrarPorGrupo(rows: EnriqRowVM[], grupo: EnriqGrupo | 'todas'): EnriqRowVM[] {
+/**
+ * As linhas de um grupo — o filtro dos chips do passo 2.
+ *
+ * ⚠ ACEITA `string`, e não só `EnriqGrupo`: desde a 133c dois chips não contam linhas da
+ * planilha (transferência e "sem par no sistema" olham lançamentos do banco). Para eles a
+ * lista da esquerda é OUTRA, e o que esta função devolve — vazio — é a verdade: nenhuma
+ * linha da planilha pertence àquele recorte.
+ */
+export function filtrarPorGrupo(rows: EnriqRowVM[], grupo: string): EnriqRowVM[] {
   return grupo === 'todas' ? rows : rows.filter((l) => GRUPO_DE_STATUS[l.status] === grupo);
 }
 
