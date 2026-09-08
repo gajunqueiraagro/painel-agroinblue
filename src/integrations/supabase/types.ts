@@ -12342,6 +12342,7 @@ export type Database = {
       fn_classificacao_sistema_nao_explicado: {
         Args: { p_ano_mes?: string; p_conta_id?: string; p_sessao_id: string }
         Returns: {
+          conta_bancaria_id: string
           conta_nome: string
           data_pagamento: string
           descricao: string
@@ -12550,6 +12551,10 @@ export type Database = {
           p_simular?: boolean
         }
         Returns: Json
+      }
+      fn_financiamento_sincronizar_status: {
+        Args: { p_financiamento_id: string }
+        Returns: undefined
       }
       fn_fornecedores_com_uso: {
         Args: { p_cliente_id: string }
