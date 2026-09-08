@@ -11,9 +11,18 @@ import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter,
 } from '@/components/ui/table';
-import { useFinanciamentoCadastro, FinanciamentoForm } from '@/hooks/useFinanciamentoCadastro';
+import { useFinanciamentoCadastro, FinanciamentoForm, NaturezaContrato } from '@/hooks/useFinanciamentoCadastro';
 import { DestinacoesForm, DestinacaoItem } from '@/components/financiamentos/DestinacoesForm';
 import { CredorAutocomplete } from '@/components/financiamentos/CredorAutocomplete';
+
+/* 2a — a frase de apoio de cada natureza. Ela é o que separa "Empréstimo" de
+   "Financiamento" para quem não é do financeiro: a diferença é o bem vinculado,
+   e sem dizê-la o operador escolhe pelo nome que soa melhor. */
+const APOIO_NATUREZA: Record<NaturezaContrato, string> = {
+  financiamento: 'Crédito com bem vinculado',
+  parcelamento: 'Compra ou despesa dividida em N vezes, sem juros',
+  emprestimo: 'Crédito sem bem vinculado',
+};
 
 interface FinanciamentoCadastroProps {
   onVoltar?: () => void;
@@ -29,11 +38,15 @@ export default function FinanciamentoCadastro({ onVoltar, onSalvo }: Financiamen
     totalParcelas,
     salvar, saving,
     fornecedores, contas,
-    planosEntrada, planosSaida,
+    planosEntrada, planosSaida, planosParcelamento,
     clienteId,
   } = useFinanciamentoCadastro();
 
   const [destinacoes, setDestinacoes] = useState<DestinacaoItem[]>([]);
+
+  /* PR-PARC-02 — 2c/2d — a natureza decide o que a tela mostra. Um só booleano,
+     lido em todos os pontos, para não haver duas leituras da mesma decisão. */
+  const ehParcelamento = form.natureza === 'parcelamento';
 
   const set = useCallback(
     <K extends keyof FinanciamentoForm>(k: K, v: FinanciamentoForm[K]) =>
@@ -61,6 +74,13 @@ export default function FinanciamentoCadastro({ onVoltar, onSalvo }: Financiamen
     : !form.data_contrato ? 'Informe a data do contrato.'
     : !form.data_primeira_parcela ? 'Informe a data da 1ª parcela.'
     : !Number(form.total_parcelas) ? 'Informe o número de parcelas.'
+    /* ⚠ ÚLTIMA DA CADEIA PORQUE É A ÚLTIMA DO FORMULÁRIO: a classificação da
+       parcela mora na seção Plano de Contas, depois de todos os campos acima —
+       e a ordem desta cadeia é a ordem em que o operador percorre a tela.
+       Só vale para parcelamento: no financiamento a conta de amortização
+       continua opcional, como sempre foi. O toast do `salvar()` permanece como
+       segunda barreira — esta aqui evita a recusa, não a substitui. */
+    : (ehParcelamento && !form.plano_conta_parcela_id) ? 'Escolha a classificação da parcela'
     : null;
   
   const handleSalvar = async () => {
@@ -97,6 +117,22 @@ export default function FinanciamentoCadastro({ onVoltar, onSalvo }: Financiamen
           <CardTitle className="text-sm">Dados do Contrato</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
+          {/* ⚠ PRIMEIRO CAMPO DO FORMULÁRIO — PR-PARC-02 item 2a. Ele governa o
+              resto da tela (esconde juros e captação, troca a lista da
+              classificação da parcela), e um campo que muda os outros não pode
+              vir depois deles: o operador preencheria para ver sumir. */}
+          <div>
+            <Label className="text-xs">Natureza *</Label>
+            <Select value={form.natureza} onValueChange={v => set('natureza', v as NaturezaContrato)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="financiamento">Financiamento</SelectItem>
+                <SelectItem value="parcelamento">Parcelamento</SelectItem>
+                <SelectItem value="emprestimo">Empréstimo</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="mt-0.5 text-[10px] text-muted-foreground">{APOIO_NATUREZA[form.natureza]}</p>
+          </div>
           <div>
             <Label className="text-xs">Descrição *</Label>
             <Input
@@ -116,7 +152,10 @@ export default function FinanciamentoCadastro({ onVoltar, onSalvo }: Financiamen
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label className="text-xs">Tipo *</Label>
+              {/* PR-PARC-02 — 2b — "Escopo", não "Tipo": desde que a natureza
+                  existe, "tipo" ficou ambíguo. A coluna e os valores continuam
+                  `tipo_financiamento` / pecuaria|agricultura — muda o rótulo. */}
+              <Label className="text-xs">Escopo *</Label>
               <Select value={form.tipo_financiamento} onValueChange={v => set('tipo_financiamento', v as any)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -198,7 +237,11 @@ export default function FinanciamentoCadastro({ onVoltar, onSalvo }: Financiamen
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          {/* ⚠ A GRADE ENCOLHE DE 3 PARA 2 COLUNAS quando os juros somem — item 2c.
+              Esconder a terceira célula mantendo `grid-cols-3` deixaria um terço
+              da linha vazio à direita, e um buraco na grade lê-se como campo que
+              faltou carregar. */}
+          <div className={`grid gap-3 ${ehParcelamento ? 'grid-cols-2' : 'grid-cols-3'}`}>
             <div>
               <Label className="text-xs">Nº parcelas *</Label>
               <Input
@@ -221,29 +264,35 @@ export default function FinanciamentoCadastro({ onVoltar, onSalvo }: Financiamen
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label className="text-xs">Juros anual (%)</Label>
-              <Input
-                type="number"
-                min={0}
-                step={0.01}
-                value={form.taxa_juros_anual || ''}
-                onChange={e => set('taxa_juros_anual', Number(e.target.value))}
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                {form.taxa_juros_anual > 0
-                  ? `≈ ${((Math.pow(1 + form.taxa_juros_anual / 100, 1 / 12) - 1) * 100).toFixed(4)}% a.m.`
-                  : ''}
-              </p>
-            </div>
+            {!ehParcelamento && (
+              <div>
+                <Label className="text-xs">Juros anual (%)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  value={form.taxa_juros_anual || ''}
+                  onChange={e => set('taxa_juros_anual', Number(e.target.value))}
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  {form.taxa_juros_anual > 0
+                    ? `≈ ${((Math.pow(1 + form.taxa_juros_anual / 100, 1 / 12) - 1) * 100).toFixed(4)}% a.m.`
+                    : ''}
+                </p>
+              </div>
+            )}
           </div>
             {/* ⚠ A FRASE DO ARREDONDAMENTO, verbatim da referência: sem ela o
                 operador soma as parcelas na mão, acha centavos de diferença e
                 duvida do sistema. Dizer QUEM calcula e ONDE a sobra cai encerra a
                 dúvida antes dela nascer. */}
+            {/* 2e — a MESMA linha de apoio do bloco de parcelas, com o texto da
+                natureza: no parcelamento ela precisa dizer que não há juros, ou
+                a prévia com a coluna Juros zerada parece cálculo pendente. */}
             <p className="mt-1.5 text-[10px] text-muted-foreground">
-              O valor de cada parcela é calculado pelo sistema e aparece na prévia abaixo. A última
-              absorve o arredondamento.
+              {ehParcelamento
+                ? 'Sem juros. O valor de cada parcela é o total dividido por N; a última absorve o arredondamento.'
+                : 'O valor de cada parcela é calculado pelo sistema e aparece na prévia abaixo. A última absorve o arredondamento.'}
             </p>
 
           <div>
@@ -264,6 +313,10 @@ export default function FinanciamentoCadastro({ onVoltar, onSalvo }: Financiamen
           <CardTitle className="text-sm">Plano de Contas</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
+          {/* 2c — SEM CAPTAÇÃO NO PARCELAMENTO: o dinheiro não entra, a despesa é
+              que sai em N vezes. Escondido, não desabilitado — um campo cinza
+              ainda faz o operador procurar como habilitá-lo. */}
+          {!ehParcelamento && (
           <div>
             <Label className="text-xs">Conta de captação</Label>
             <Select value={form.plano_conta_captacao_id} onValueChange={v => set('plano_conta_captacao_id', v)}>
@@ -283,12 +336,20 @@ export default function FinanciamentoCadastro({ onVoltar, onSalvo }: Financiamen
                 mudaria o dado gravado, e este PR é roupa. */}
             <p className="mt-0.5 text-[10px] text-muted-foreground">Macro › Grupo › Centro</p>
           </div>
+          )}
+          {/* ⚠ 2d — O MESMO CAMPO, DOIS PAPÉIS. `plano_conta_parcela_id` não muda:
+              no financiamento ele é a conta de amortização (Saída Financeira);
+              no parcelamento é a classificação da DESPESA, e por isso a lista é
+              outra — `planosParcelamento`, saídas operacionais. Rótulo e lista
+              seguem a natureza; a coluna gravada é a mesma. */}
           <div>
-            <Label className="text-xs">Conta de amortização</Label>
+            <Label className="text-xs">
+              {ehParcelamento ? 'Classificação da parcela *' : 'Conta de amortização'}
+            </Label>
             <Select value={form.plano_conta_parcela_id} onValueChange={v => set('plano_conta_parcela_id', v)}>
               <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
               <SelectContent>
-                {planosSaida.map(p => (
+                {(ehParcelamento ? planosParcelamento : planosSaida).map(p => (
                   <SelectItem key={p.id} value={p.id}>
                     {p.subcentro || p.centro_custo}
                   </SelectItem>
@@ -300,12 +361,19 @@ export default function FinanciamentoCadastro({ onVoltar, onSalvo }: Financiamen
                 grava o ID do plano — por isso o seletor continua sendo o de IDs, e
                 não o `PlanoSubcentroSelect`, que grava subcentro por TEXTO: trocá-lo
                 mudaria o dado gravado, e este PR é roupa. */}
-            <p className="mt-0.5 text-[10px] text-muted-foreground">Macro › Grupo › Centro</p>
+            <p className="mt-0.5 text-[10px] text-muted-foreground">
+              {ehParcelamento
+                ? 'Cada parcela vira um lançamento nesta classificação'
+                : 'Macro › Grupo › Centro'}
+            </p>
           </div>
         </CardContent>
       </Card>
 
       {/* Seção 3 – Captação */}
+      {/* 2c — O CARD INTEIRO SOME NO PARCELAMENTO, não só o checkbox: um card
+          "Captação" vazio anuncia uma etapa que não existe neste contrato. */}
+      {!ehParcelamento && (
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm">Captação</CardTitle>
@@ -338,6 +406,7 @@ export default function FinanciamentoCadastro({ onVoltar, onSalvo }: Financiamen
           </div>
         </CardContent>
       </Card>
+      )}
 
       {/* Seção 5 – Destinações do contrato */}
       <div className="rounded-xl border border-border bg-card p-4 space-y-4">

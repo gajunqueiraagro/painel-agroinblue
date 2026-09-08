@@ -18,9 +18,20 @@ export interface ParcelaPreview {
 
 export type FrequenciaParcela = 'mensal' | 'bimestral' | 'trimestral' | 'semestral' | 'anual';
 
+export type NaturezaContrato = 'financiamento' | 'parcelamento' | 'emprestimo';
+
 export interface FinanciamentoForm {
+  /**
+   * PR-PARC-02 — a natureza do contrato. O banco ja distingue os tres
+   * (chk_financiamentos_natureza) e o motor
+   * `fn_reconciliar_parcela_financiamento` manda o principal do parcelamento
+   * para `plano_conta_parcela_id` sem gerar juros. Aqui e' onde o operador
+   * escolhe.
+   */
+  natureza: NaturezaContrato;
   descricao: string;
   numero_contrato: string;
+  /** Escopo do contrato na tela — decide 16020/7010 ou 16010/12010. */
   tipo_financiamento: 'pecuaria' | 'agricultura';
   credor_id: string;
   conta_bancaria_id: string;
@@ -38,6 +49,7 @@ export interface FinanciamentoForm {
 }
 
 const INITIAL: FinanciamentoForm = {
+  natureza: 'financiamento',
   descricao: '',
   numero_contrato: '',
   tipo_financiamento: 'pecuaria',
@@ -155,17 +167,55 @@ export function useFinanciamentoCadastro() {
     },
   });
 
+  /**
+   * PR-PARC-02 — 1d — CLASSIFICAÇÃO DA PARCELA DO PARCELAMENTO.
+   *
+   * ⚠ NÃO É A LISTA DE AMORTIZAÇÃO. Um parcelamento não amortiza dívida: ele
+   * divide uma DESPESA em N vezes, e cada parcela vira um lançamento no
+   * subcentro da despesa (IPTU em Tributos, seguro em Custeio Produção). Por
+   * isso a lista aqui é a de saídas OPERACIONAIS, e `Saída Financeira` —
+   * exatamente o que a amortização usa — fica de fora.
+   *
+   * ⚠ LITERAIS MEDIDOS NO BANCO PROTO, não supostos (types.ts tipa as duas
+   * colunas apenas como `string | null`): `tipo_operacao` = '2-Saídas' e
+   * `macro_custo` = 'Saída Financeira' / 'Transferências' — os três com acento.
+   * A grafia de `Saída Financeira` é a mesma que a query de amortização acima
+   * já usa.
+   */
+  const { data: planosParcelamento = [] } = useQuery({
+    queryKey: ['fin-plano-parcelamento', clienteId],
+    enabled: !!clienteId,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('financeiro_plano_contas')
+        .select('id, subcentro, centro_custo, macro_custo')
+        .eq('ativo', true)
+        .eq('tipo_operacao', '2-Saídas')
+        .neq('macro_custo', 'Saída Financeira')
+        .neq('macro_custo', 'Transferências')
+        .or(`cliente_id.eq.${clienteId},cliente_id.is.null`)
+        .order('ordem_exibicao');
+      return data ?? [];
+    },
+  });
+
   /* ── Geração de parcelas ── */
   const gerarParcelas = useCallback(() => {
-    const { valor_total, valor_entrada, total_parcelas, taxa_juros_anual, data_primeira_parcela, frequencia_parcela } = form;
+    const { valor_total, valor_entrada, total_parcelas, taxa_juros_anual, data_primeira_parcela, frequencia_parcela, natureza } = form;
     if (!valor_total || !total_parcelas || !data_primeira_parcela) return;
 
     const mesesPorParcela = MESES_POR_FREQUENCIA[frequencia_parcela] ?? 1;
     const base = (valor_total - valor_entrada) / total_parcelas;
 
+    /* PR-PARC-02 — 1c — PARCELAMENTO NÃO TEM JUROS. A taxa é forçada a 0 AQUI,
+       na origem do cálculo, e não escondendo o campo na tela: o campo escondido
+       continuaria com o valor que o operador digitou antes de trocar a natureza,
+       e as parcelas nasceriam com juros que ninguém vê. */
+    const taxaAnual = natureza === 'parcelamento' ? 0 : taxa_juros_anual;
+
     // Juros compostos: anual → mensal → período
-    const taxaMensal = taxa_juros_anual > 0
-      ? Math.pow(1 + taxa_juros_anual / 100, 1 / 12) - 1
+    const taxaMensal = taxaAnual > 0
+      ? Math.pow(1 + taxaAnual / 100, 1 / 12) - 1
       : 0;
     const taxaPeriodo = taxaMensal > 0
       ? Math.pow(1 + taxaMensal, mesesPorParcela) - 1
@@ -214,12 +264,28 @@ export function useFinanciamentoCadastro() {
       toast.error('Gere as parcelas antes de salvar');
       return false;
     }
+    /* PR-PARC-02 — 1c — no parcelamento a classificação da parcela é o ÚNICO
+       destino contábil do contrato: sem captação, é ela que diz em que
+       subcentro a despesa cai. Vazia, o contrato nasce mudo. */
+    if (form.natureza === 'parcelamento' && !form.plano_conta_parcela_id) {
+      toast.error('Escolha a classificação da parcela');
+      return false;
+    }
 
     setSaving(true);
     try {
+      /* PR-PARC-02 — 1c — o parcelamento não capta e não cobra juros. As três
+         decisões abaixo são tomadas no GRAVADOR, não na tela: esconder o campo
+         não apaga o valor que ficou no state, e o que chega ao banco é o que
+         vale. */
+      const ehParcelamento = form.natureza === 'parcelamento';
+      const taxaAnual = ehParcelamento ? 0 : form.taxa_juros_anual;
+      const gerarCaptacao = ehParcelamento ? false : form.gerar_lancamento_captacao;
+      const planoCaptacaoId = ehParcelamento ? null : (form.plano_conta_captacao_id || null);
+
       // Conversão juros compostos: anual → mensal
-      const taxaMensal = form.taxa_juros_anual > 0
-        ? (Math.pow(1 + form.taxa_juros_anual / 100, 1 / 12) - 1) * 100
+      const taxaMensal = taxaAnual > 0
+        ? (Math.pow(1 + taxaAnual / 100, 1 / 12) - 1) * 100
         : 0;
 
       // 1 – Insert financiamento
@@ -228,6 +294,7 @@ export function useFinanciamentoCadastro() {
         .insert({
           cliente_id: clienteId,
           fazenda_id: fazendaId,
+          natureza: form.natureza,
           descricao: form.descricao.trim(),
           numero_contrato: form.numero_contrato.trim() || null,
           tipo_financiamento: form.tipo_financiamento,
@@ -239,9 +306,9 @@ export function useFinanciamentoCadastro() {
           total_parcelas: form.total_parcelas,
           data_contrato: form.data_contrato,
           data_primeira_parcela: form.data_primeira_parcela,
-          plano_conta_captacao_id: form.plano_conta_captacao_id || null,
+          plano_conta_captacao_id: planoCaptacaoId,
           plano_conta_parcela_id: form.plano_conta_parcela_id || null,
-          gerar_lancamento_captacao: form.gerar_lancamento_captacao,
+          gerar_lancamento_captacao: gerarCaptacao,
           observacao: form.observacao || null,
           status: 'ativo',
           created_by: user.id,
@@ -294,7 +361,7 @@ export function useFinanciamentoCadastro() {
       // }
 
       // 3 – Lançamento de captação (opcional)
-      if (form.gerar_lancamento_captacao && form.plano_conta_captacao_id) {
+      if (gerarCaptacao && planoCaptacaoId) {
         const anoMes = format(new Date(form.data_contrato + 'T12:00:00'), 'yyyy-MM');
         // PR-K — conta_*_id via helper soberano: captação é entrada,
         // conta vai em conta_destino_id (não conta_bancaria_id).
@@ -316,7 +383,7 @@ export function useFinanciamentoCadastro() {
             ano_mes: anoMes,
             origem_lancamento: 'financiamento',
             origem_tipo: 'financiamento_captacao',
-            plano_conta_id: form.plano_conta_captacao_id,
+            plano_conta_id: planoCaptacaoId,
             descricao: `Captação: ${form.descricao.trim()}`,
             status_transacao: 'realizado',
             sem_movimentacao_caixa: false,
@@ -430,7 +497,7 @@ export function useFinanciamentoCadastro() {
     totalParcelas,
     salvar, saving,
     fornecedores, contas,
-    planosEntrada, planosSaida,
+    planosEntrada, planosSaida, planosParcelamento,
     clienteId,
   };
 }

@@ -24,6 +24,9 @@ interface FinanciamentoRow {
   descricao: string;
   numero_contrato: string | null;
   data_contrato: string | null;
+  /** PR-PARC-02 — financiamento | parcelamento | emprestimo. É o eixo da
+   *  pílula da primeira coluna; `tipo_financiamento` virou o ESCOPO. */
+  natureza: string;
   tipo_financiamento: string;
   credor_id: string | null;
   valor_total: number;
@@ -38,6 +41,20 @@ interface FinanciamentoRow {
 
 const fmt = (v: number) =>
   v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+/* ⚠ PR-PARC-02 — 3b — AS TRÊS PÍLULAS NUM LUGAR SÓ, e o motivo é o de sempre
+   nesta casa: a mesma natureza aparece na pílula, na busca e no filtro, e três
+   ternários espalhados divergem no primeiro PR que acrescentar a quarta. FIN e
+   PARC têm as cores medidas no Finanças; EMP é PROPOSTA deste PR — não existe
+   na referência. */
+const PILULA_NATUREZA: Record<string, { sigla: string; rotulo: string; classe: string }> = {
+  financiamento: { sigla: 'FIN',  rotulo: 'Financiamento', classe: 'border-violet-300 bg-violet-50 text-violet-700' },
+  parcelamento:  { sigla: 'PARC', rotulo: 'Parcelamento',  classe: 'border-sky-300 bg-sky-50 text-sky-700' },
+  emprestimo:    { sigla: 'EMP',  rotulo: 'Empréstimo',    classe: 'border-amber-300 bg-amber-50 text-amber-700' },
+};
+
+/** O escopo (`tipo_financiamento`), que saiu da pílula e virou sufixo da descrição. */
+const escopoSigla = (tipo: string) => (tipo === 'pecuaria' ? 'PEC' : 'AGR');
 
 const statusColor: Record<string, string> = {
   ativo: 'bg-emerald-100 text-emerald-800',
@@ -65,6 +82,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
 
   const [filtroStatus, setFiltroStatus] = useState(_sf?.status ?? 'ativo');
   const [filtroTipo, setFiltroTipo] = useState(_sf?.tipo ?? 'todos');
+  const [filtroNatureza, setFiltroNatureza] = useState(_sf?.natureza ?? 'todas');
   const [filtroDescricao, setFiltroDescricao] = useState(_sf?.descricao ?? '');
   const [filtroContrato, setFiltroContrato] = useState(_sf?.contrato ?? '');
   const [filtroCredor, setFiltroCredor] = useState(_sf?.credor ?? 'todos');
@@ -153,6 +171,10 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
           descricao: f.descricao,
           numero_contrato: f.numero_contrato ?? null,
           data_contrato: f.data_contrato ?? null,
+          /* Os 156 contratos anteriores ao PR-PARC-02 nasceram sem natureza
+             explícita; o default do banco é 'financiamento' e o fallback aqui
+             cobre a linha que ainda não tiver o valor materializado. */
+          natureza: f.natureza ?? 'financiamento',
           tipo_financiamento: f.tipo_financiamento,
           credor_id: f.credor_id,
           valor_total: Number(f.valor_total),
@@ -189,12 +211,18 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
     return financiamentos.filter(f => {
       if (filtroStatus !== 'todos' && f.status !== filtroStatus) return false;
       if (filtroTipo !== 'todos' && f.tipo_financiamento !== filtroTipo) return false;
+      if (filtroNatureza !== 'todas' && f.natureza !== filtroNatureza) return false;
       /* ⚠ A BUSCA ALCANÇA O QUE A LINHA MOSTRA, inclusive o que veio de outro
          cadastro — a regra da referência: procurar pelo credor e não achar a
          obrigação dele seria a busca mentindo sobre o próprio alcance. Antes
-         ela só olhava a descrição. */
+         ela só olhava a descrição.
+         PR-PARC-02: a linha passou a mostrar a NATUREZA, então a natureza entrou
+         aqui pela mesma regra — sem ela, procurar "parcelamento" não acharia os
+         parcelamentos. O escopo continua alcançável: ele não sumiu da linha,
+         mudou de lugar (pílula → sufixo da descrição). */
       if (descQ && ![f.descricao, f.credor_nome, f.numero_contrato ?? '',
-                     f.tipo_financiamento === 'pecuaria' ? 'PEC pecuária' : 'AGR agricultura']
+                     f.tipo_financiamento === 'pecuaria' ? 'PEC pecuária' : 'AGR agricultura',
+                     `${PILULA_NATUREZA[f.natureza]?.sigla ?? ''} ${PILULA_NATUREZA[f.natureza]?.rotulo ?? ''}`]
                      .join(' ').toLowerCase().includes(descQ)) return false;
       if (contQ && !(f.numero_contrato ?? '').toLowerCase().includes(contQ)) return false;
       if (filtroCredor !== 'todos' && f.credor_nome !== filtroCredor) return false;
@@ -208,7 +236,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
       if (isoVencAte && (f.prox_vencimento ?? '') > isoVencAte) return false;
       return true;
     });
-  }, [financiamentos, filtroStatus, filtroTipo, filtroDescricao, filtroContrato, filtroCredor,
+  }, [financiamentos, filtroStatus, filtroTipo, filtroNatureza, filtroDescricao, filtroContrato, filtroCredor,
       filtroDataContratoDe, filtroDataContratoAte, filtroVencDe, filtroVencAte]);
 
   const dadosOrdenados = [...filtered].sort((a: any, b: any) => {
@@ -358,12 +386,26 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
               <SelectItem value="cancelado">Cancelado</SelectItem>
             </SelectContent>
           </Select>
+          {/* ⚠ 3d — ESTE SELECT PASSOU A SER O "ESCOPO". Ele nunca teve rótulo:
+              filtra `tipo_financiamento`, e com a natureza ao lado um item
+              "Todos" solto não diria mais QUAL eixo. O item ganhou o nome do
+              eixo — o mesmo recurso que o select de credor já usa com "Todos
+              credores", e não uma segunda régua de rótulo nesta linha. */}
           <Select value={filtroTipo} onValueChange={setFiltroTipo}>
             <SelectTrigger className="h-7 w-24 text-[11px]"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="todos">Todos</SelectItem>
+              <SelectItem value="todos">Todos escopos</SelectItem>
               <SelectItem value="pecuaria">Pecuária</SelectItem>
               <SelectItem value="agricultura">Agricultura</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={filtroNatureza} onValueChange={setFiltroNatureza}>
+            <SelectTrigger className="h-7 w-28 text-[11px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todas">Todas</SelectItem>
+              <SelectItem value="financiamento">Financiamento</SelectItem>
+              <SelectItem value="parcelamento">Parcelamento</SelectItem>
+              <SelectItem value="emprestimo">Empréstimo</SelectItem>
             </SelectContent>
           </Select>
           <Select value={filtroCredor} onValueChange={setFiltroCredor}>
@@ -445,8 +487,15 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
             <Table className="table-fixed">
               <colgroup>
                 <col className="w-[6%]" />
-                <col className="w-[19%]" />
-                <col className="w-[14%]" />
+                {/* ⚠ DESCRIÇÃO 19% -> 22%, CREDOR 14% -> 11% (PR-PARC-02). A troca
+                    é de três pontos entre duas colunas vizinhas, e a soma segue
+                    em 100% — a regra do `table-fixed` herdada da referência.
+                    O motivo é MEDIDO, não estético: 64 dos 156 contratos (41%) já
+                    passavam de 30 caracteres em descrição + nº do contrato, e o
+                    sufixo de escopo entrou no fim dessa mesma célula. O credor
+                    cede porque é o texto mais curto e já tem `title`. */}
+                <col className="w-[22%]" />
+                <col className="w-[11%]" />
                 <col className="w-[12%]" />
                 <col className="w-[13%]" />
                 <col className="w-[11%]" />
@@ -456,8 +505,13 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
               </colgroup>
               <TableHeader className="sticky top-0 z-10 bg-muted/95 backdrop-blur">
                 <TableRow className="border-b">
-                  <CabecalhoOrdenavel rotulo="Tipo" ativo={sortCol === 'tipo'}
-                    direcao={sortDir} aoOrdenar={() => handleSort('tipo')} />
+                  {/* ⚠ 3e — ORDENA POR `natureza`, e a chave antiga era LETRA MORTA:
+                      `sortCol` era 'tipo', campo que nunca existiu na linha (a
+                      coluna é `tipo_financiamento`), então `a['tipo']` e
+                      `b['tipo']` eram ambos `undefined` e clicar no cabeçalho não
+                      reordenava nada. Agora a chave é a do dado exibido. */}
+                  <CabecalhoOrdenavel rotulo="Tipo" ativo={sortCol === 'natureza'}
+                    direcao={sortDir} aoOrdenar={() => handleSort('natureza')} />
                   <CabecalhoOrdenavel rotulo="Descrição" ativo={sortCol === 'descricao'}
                     direcao={sortDir} aoOrdenar={() => handleSort('descricao')} />
                   <CabecalhoOrdenavel rotulo="Credor" ativo={sortCol === 'credor_nome'}
@@ -480,24 +534,29 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
                   const encerrado = f.status !== 'ativo';
                   return (
                   <TableRow key={f.id} className={encerrado ? 'opacity-50' : ''}>
-                    {/* ⚠ PÍLULA DE TIPO com a linguagem da referência: `border`,
-                        9px bold, cores por tipo. Aqui o eixo é pecuária x
-                        agricultura (o nosso), não FIN/PARC (o de lá) — a forma é
-                        a mesma, o vocabulário é o nosso. */}
+                    {/* ⚠ PÍLULA DE NATUREZA — PR-PARC-02 item 3b. A forma é a da
+                        referência (`border`, 9px bold, `rounded`); o eixo deixou
+                        de ser pecuária x agricultura e passou a ser o que o
+                        contrato É. As cores FIN/PARC são as medidas no Finanças;
+                        EMP não existe lá e o âmbar é proposta deste PR. */}
                     <TableCell>
-                      <span className={`inline-flex items-center rounded border px-1 py-0 text-[9px] font-bold leading-tight ${
-                        f.tipo_financiamento === 'pecuaria'
-                          ? 'border-violet-300 bg-violet-50 text-violet-700'
-                          : 'border-sky-300 bg-sky-50 text-sky-700'}`}>
-                        {f.tipo_financiamento === 'pecuaria' ? 'PEC' : 'AGR'}
+                      <span className={`inline-flex items-center rounded border px-1 py-0 text-[9px] font-bold leading-tight ${PILULA_NATUREZA[f.natureza]?.classe ?? PILULA_NATUREZA.financiamento.classe}`}>
+                        {PILULA_NATUREZA[f.natureza]?.sigla ?? PILULA_NATUREZA.financiamento.sigla}
                       </span>
                     </TableCell>
-                    {/* A descrição é o caminho para o detalhe, como na referência. */}
-                    <TableCell className="truncate" title={f.descricao}>
+                    {/* A descrição é o caminho para o detalhe, como na referência.
+                        ⚠ 3c — O ESCOPO NÃO SOME COM A PÍLULA: ele vem aqui, como
+                        sufixo de 10px. O `title` carrega a linha inteira porque
+                        a coluna trunca mesmo depois do alargamento (22% ≈ 225px)
+                        e o sufixo é o primeiro pedaço a ser cortado — sem isso, o
+                        escopo ficaria ilegível nas descrições mais longas. */}
+                    <TableCell className="truncate"
+                      title={`${f.descricao}${f.numero_contrato ? ` ${f.numero_contrato}` : ''} · ${escopoSigla(f.tipo_financiamento)}`}>
                       <span className="font-semibold">{f.descricao}</span>
                       {f.numero_contrato && (
                         <span className="ml-1 text-[10px] text-muted-foreground">{f.numero_contrato}</span>
                       )}
+                      <span className="ml-1 text-[10px] text-muted-foreground">· {escopoSigla(f.tipo_financiamento)}</span>
                     </TableCell>
                     <TableCell className="truncate" title={f.credor_nome}>{f.credor_nome}</TableCell>
                     <TableCell className={NUM}>{fmt(f.valor_total)}</TableCell>
@@ -531,6 +590,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
                       try {
                         sessionStorage.setItem(STORAGE_KEY, JSON.stringify({
                           status: filtroStatus, tipo: filtroTipo,
+                          natureza: filtroNatureza,
                           descricao: filtroDescricao, contrato: filtroContrato,
                           credor: filtroCredor, dataContratoDe: filtroDataContratoDe,
                           dataContratoAte: filtroDataContratoAte,

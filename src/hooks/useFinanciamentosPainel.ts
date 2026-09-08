@@ -22,6 +22,8 @@ interface FinanciamentoRow {
   cliente_id: string;
   descricao: string;
   numero_contrato: string | null;
+  /** PR-PARC-02 — financiamento | parcelamento | emprestimo. */
+  natureza: string;
   tipo_financiamento: string;
   credor_id: string | null;
   credor_nome: string;
@@ -138,7 +140,7 @@ export function useFinanciamentosPainel(ano: number, tipoFiltro: TipoFin, mesRef
       // que ainda tinham dívida em aberto. O helper parcelaEmAbertoEm já isola por refDate.
       let q = supabase
         .from('financiamentos')
-        .select('id, cliente_id, descricao, numero_contrato, tipo_financiamento, credor_id, status, data_contrato, financeiro_fornecedores!financiamentos_credor_id_fkey(nome)')
+        .select('id, cliente_id, descricao, numero_contrato, natureza, tipo_financiamento, credor_id, status, data_contrato, financeiro_fornecedores!financiamentos_credor_id_fkey(nome)')
         .eq('cliente_id', clienteId!)
         .neq('status', 'cancelado');
       if (tipoFiltro !== 'todos') q = q.eq('tipo_financiamento', tipoFiltro);
@@ -149,6 +151,7 @@ export function useFinanciamentosPainel(ano: number, tipoFiltro: TipoFin, mesRef
         cliente_id: f.cliente_id,
         descricao: f.descricao,
         numero_contrato: f.numero_contrato ?? null,
+        natureza: f.natureza ?? 'financiamento',
         tipo_financiamento: f.tipo_financiamento,
         credor_id: f.credor_id ?? null,
         credor_nome: f.financeiro_fornecedores?.nome ?? '—',
