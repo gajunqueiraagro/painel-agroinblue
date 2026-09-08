@@ -9,8 +9,9 @@
  * ⚠ "NÃO CABE EM 10px" NÃO É EXCEÇÃO: ajusta-se o componente (o `DatePicker` tem
  * `size="compact"`), nunca se volta ao nativo.
  *
- * ⚠ BASELINE, COMO O TSC. O repo tem 47 `type="date"` e 25 `<select>` herdados, em 39 e 15
- * arquivos. Falhar por eles pararia todo PR e o gate seria desligado na primeira semana —
+ * ⚠ BASELINE, COMO O TSC. O repo tem 44 `type="date"` e 20 `<select>` herdados, em 30 e 10
+ * arquivos (39 no total; um arquivo tem os dois). Falhar por eles pararia todo PR e o gate
+ * seria desligado na primeira semana —
  * que é como um gate morre. Ele falha por ocorrência NOVA: arquivo fora da lista abaixo, ou
  * arquivo da lista com MAIS ocorrências do que a baseline registra. Reduzir é sempre aceito
  * e a baseline deve ser atualizada no mesmo PR.
@@ -18,7 +19,16 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-/** arquivo → [nDate, nSelect] medidos em 06/09/2026. Só diminui. */
+/**
+ * arquivo → [nDate, nSelect]. Só diminui.
+ *
+ * ⚠ REMEDIDO EM 08/09/2026: 42 → 39 arquivos, 25 → 20 `<select>`. Três saíram porque o
+ * seletor de conta virou um só (`ContaBancariaSelect`); a quarta entrada era do
+ * `EnriquecimentoToolbar`, apagado no 133b e esquecido aqui — baseline que sobrevive ao
+ * arquivo permite o que não existe mais.
+ * ⚠ E O CABEÇALHO ACIMA MENTIA desde a primeira medição: dizia "47 `type=\"date\"` em 39
+ * arquivos" enquanto o mapa registrava 44 em 30. O número de `<select>` era o único certo.
+ */
 const BASELINE = new Map(Object.entries({
   "src/components/AbateFinanceiroPanel.tsx": [1, 0],
   "src/components/BoitelPlanningDialog.tsx": [2, 0],
@@ -55,12 +65,9 @@ const BASELINE = new Map(Object.entries({
   "src/v2/components/edicao/_blocos/CompraDadosZootecnicos.tsx": [1, 0],
   "src/v2/components/edicao/_blocos/VendaDadosZootecnicos.tsx": [1, 0],
   "src/v2/components/importacao/ImportLancDeParaPanel.tsx": [0, 1],
-  "src/v2/components/mesa/MesaClassificacaoTab.tsx": [0, 1],
   "src/v2/components/mesa/MesaPareamentoModal.tsx": [2, 0],
-  "src/v2/components/mesa/enriquecimento/EnriquecimentoImportarDialog.tsx": [0, 1],
-  "src/v2/components/mesa/enriquecimento/EnriquecimentoToolbar.tsx": [0, 2],
   "src/v2/pages/V2Fazendas.tsx": [0, 1],
-  "src/v2/pages/V2MesaOperacional.tsx": [0, 2],
+  "src/v2/pages/V2MesaOperacional.tsx": [0, 1],
   "src/v3/components/V3TopBar.tsx": [0, 2],
 }));
 
