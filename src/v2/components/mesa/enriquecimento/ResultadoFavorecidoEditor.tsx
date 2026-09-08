@@ -38,6 +38,8 @@ export function ResultadoFavorecidoEditor({
         disabled={disabled}
         triggerClassName={CELULA_EDITAVEL}
         size="compact"
+        /* 133g item 3 — o "+" nunca é maior que o gatilho: 20px, ícone 12px. */
+        novoButtonClassName="h-5 w-5 [&_svg]:h-3 [&_svg]:w-3"
       />
       <NovoFornecedorDialog
         open={dialogOpen}

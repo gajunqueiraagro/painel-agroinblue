@@ -114,7 +114,11 @@ export function FavorecidoSelect({
   return (
     <div>
       {label && <Label className="text-[10px]">{label}</Label>}
-      <div className="flex gap-1">
+      {/* ⚠ `items-center` — 133g item 1. Sem ele o flex fica em `stretch`, e um "+" mais alto
+          que o gatilho torna a linha da altura DELE: o gatilho de 20px ia para o topo de um
+          bloco de 32px e descia 6px em relação aos outros campos da tabela. O `gap-1` são os
+          4px do item 3. */}
+      <div className="flex items-center gap-1">
         <Popover open={open} onOpenChange={v => { setOpen(v); if (!v) onSearchChange(''); }}>
           <PopoverTrigger asChild>
             <Button tabIndex={tabIndex} variant="outline" role="combobox" aria-expanded={open} disabled={disabled} className={cn("flex-1 min-w-0 h-8 justify-between font-normal text-[12px]", size === 'compact' && 'h-5 px-1.5 text-[11px] [&_svg]:h-3 [&_svg]:w-3', triggerClassName)}>
@@ -161,8 +165,12 @@ export function FavorecidoSelect({
           </PopoverContent>
         </Popover>
         {onCriarNovo && (
-          <Button variant="outline" size="icon" className={cn('shrink-0', novoButtonClassName ?? 'h-8 w-8')} onClick={onCriarNovo} title="Novo Fornecedor">
-            <Plus className="h-3.5 w-3.5" />
+          /* ⚠ O ÍCONE ACOMPANHA O BOTÃO — 133g item 3: num "+" de 20px, um ícone de 14px
+             ocupa a altura toda. `[&_svg]` do `novoButtonClassName` manda quando vem. */
+          <Button variant="outline" size="icon"
+            className={cn('shrink-0 [&_svg]:h-3.5 [&_svg]:w-3.5', novoButtonClassName ?? 'h-8 w-8')}
+            onClick={onCriarNovo} title="Novo Fornecedor">
+            <Plus />
           </Button>
         )}
       </div>

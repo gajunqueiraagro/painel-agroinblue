@@ -230,9 +230,11 @@ export function EnriquecimentoMesaModal({
           </span>
         </DialogHeader>
 
-        <div className="grid min-h-0 flex-1 gap-2.5 p-2.5 md:[grid-template-columns:260px_1fr]">
+        <div className="grid min-h-0 flex-1 gap-2.5 p-2.5 md:[grid-template-columns:220px_1fr]">
           {/* ═══ ESQUERDA: navegação, e só ═══════════════════════════════════════
-              ⚠ 260px E UMA ALTURA DE 28px — 133e item A. A coluna tinha descrição,
+              ⚠ 220px E UMA ALTURA DE 28px — 133e item A, estreitada em 133g item 2: só data e
+              valor cabem em 220, e os 40px que sobram vão para a tabela, onde a Conta do
+              plano e o Fornecedor truncavam. A coluna tinha descrição,
               fornecedor, contexto e pílula: quatro informações que o painel direito repete
               inteiras, ocupando 380px de largura e duas alturas por linha. Aqui ela é
               NAVEGAÇÃO — data, valor e a bolinha da situação —, e a largura que sobra vai

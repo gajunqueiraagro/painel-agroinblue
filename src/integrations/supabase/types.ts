@@ -10995,6 +10995,7 @@ export type Database = {
           aplicado: boolean | null
           aplicado_em: string | null
           aplicado_por: string | null
+          casamento_meta: Json | null
           cliente_id: string | null
           conflito_subcentro: boolean | null
           conta_filtro_id: string | null
@@ -11004,6 +11005,8 @@ export type Database = {
           excel_conta_destino: string | null
           excel_conta_origem: string | null
           excel_data: string | null
+          excel_data_pagamento: string | null
+          excel_data_vencimento: string | null
           excel_documento: string | null
           excel_fazenda_codigo: string | null
           excel_fornecedor: string | null
@@ -11040,6 +11043,7 @@ export type Database = {
           lanc_tipo_operacao: string | null
           lanc_valor: number | null
           lote_aplicavel: boolean | null
+          match_lancamento_ids: string[] | null
           match_status: string | null
           motor_version: number | null
           proposto_alias_id: string | null

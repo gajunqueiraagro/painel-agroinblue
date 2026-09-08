@@ -32,7 +32,7 @@ import { useSistemaNaoExplicado } from '@/v2/hooks/useSistemaNaoExplicado';
 import { EnriquecerProgressoDialog } from '@/components/conciliacao/EnriquecerProgressoDialog';
 import { useGravarLoteEnriquecimento, type LinhaParaGravar } from '@/v2/hooks/useGravarLoteEnriquecimento';
 import { EnriquecimentoCandidatosInline } from './EnriquecimentoCandidatosInline';
-import { MesaCamposTabela } from './MesaCamposTabela';
+import { MesaCamposTabela, CAMPOS_OBRIGATORIOS_MESA } from './MesaCamposTabela';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { baixarCsv, csvCampo } from '@/lib/csv';
 import { fmtBRL, fmtData } from './fmt';
@@ -347,7 +347,35 @@ export function MesaEnriquecimentoTab({
   const isBusy = isApplyingRow || isRevertingRow || isApplying;
   // Linha órfã (subcentro fora do plano) não pode ser aplicada — a trigger do
   // lançamento rejeita. Só será salvável após editar o subcentro (PR-U2).
-  const podeSalvar = !!selecionado && !selecionado.aplicado && selecionado.temMatch && !selecionado.subcentroOrfao;
+  /**
+   * 133g item 6 — os obrigatórios VAZIOS no Resultado, pelo nome.
+   *
+   * ⚠ A LISTA VEM DA TABELA, não de uma segunda lista aqui: `CAMPOS_OBRIGATORIOS_MESA` é a
+   * mesma `ORDEM` que desenha o asterisco vermelho. Duas listas divergiriam no dia em que um
+   * campo entrasse ou saísse, e o operador veria asterisco num campo que não trava — ou o
+   * contrário, que é pior.
+   */
+  const obrigatoriosVazios = useMemo(() => {
+    if (!selecionado) return [];
+    const porRotulo = new Map(selecionado.comparativo.map((c) => [c.campo, c]));
+    /* O `campo` do adapter e o `rotulo` da tabela não são o mesmo nome; a tabela exporta os
+       RÓTULOS, que é o que o operador lê no motivo. */
+    const paresCampoRotulo: Array<[string, string]> = [
+      ['Data pagamento', 'Data pgto.'], ['Valor', 'Valor'], ['Banco', 'Conta bancária'],
+      ['Fazenda', 'Fazenda'], ['Produto / Descrição', 'Produto / descr.'],
+      ['Subcentro', 'Conta do plano'],
+    ];
+    return paresCampoRotulo
+      .filter(([campo, rot]) => {
+        if (!CAMPOS_OBRIGATORIOS_MESA.includes(rot)) return false;
+        const c = porRotulo.get(campo);
+        return !c || c.resultado === '—' || c.resultado.trim() === '';
+      })
+      .map(([, rot]) => rot);
+  }, [selecionado]);
+
+  const podeSalvar = !!selecionado && !selecionado.aplicado && selecionado.temMatch
+    && obrigatoriosVazios.length === 0;
   const podeReverter = !!selecionado && selecionado.aplicado;
   /**
    * 133b-a correção 1 — POR QUE o Salvar está apagado, escrito ao lado.
@@ -357,11 +385,16 @@ export function MesaEnriquecimentoTab({
    * "falta revisar" — e era isso que a tela dava a entender, obrigando o operador a
    * redigitar um subcentro que já estava certo para "liberar" o botão.
    */
+  /**
+   * ⚠ SALVAR DESABILITA SÓ COM OBRIGATÓRIO VAZIO — 133g item 6. "Sem lançamento vinculado"
+   * continua sendo trava porque sem ele não há o que atualizar; o resto virou aviso.
+   */
   const motivoSalvar: string | null =
     !selecionado ? 'Escolha uma linha.'
     : selecionado.aplicado ? 'Esta linha já foi gravada — use Reverter para desfazer.'
     : !selecionado.temMatch ? 'Sem lançamento vinculado: escolha um candidato antes de gravar.'
-    : selecionado.subcentroOrfao ? 'O Resultado está sem conta do plano — escolha uma da lista.'
+    : obrigatoriosVazios.length > 0
+      ? `Falta preencher: ${obrigatoriosVazios.join(', ')}.`
     : null;
   /**
    * ⚠ NADA A GRAVAR NÃO É ERRO — 133b-a correção 1. Quando o Resultado já confere com o
@@ -370,7 +403,7 @@ export function MesaEnriquecimentoTab({
    * não acontece.
    */
   const soConfirma = !!selecionado && !selecionado.aplicado && selecionado.temMatch
-    && !selecionado.subcentroOrfao && !selecionado.mudaAlgo;
+    && obrigatoriosVazios.length === 0 && !selecionado.mudaAlgo;
 
   // Extrai mensagem humana de qualquer erro (PostgrestError não é instanceof Error).
   const errMsg = (e: unknown): string => {

@@ -182,6 +182,35 @@ export function filtrarPorCenario(
 // ── Badge config ──
 
 /** Badge config para exibição de status */
+/**
+ * A PÍLULA DE `status_transacao` — 133g item 7, fonte única.
+ *
+ * ⚠ NÃO É O `getStatusBadge`: aquele responde "meta ou realizado?" no vocabulário do
+ * zootécnico (o PR-0D tirou programado e agendado de lá). Este responde pelo campo
+ * `status_transacao` do lançamento financeiro, que no Proto tem CINCO valores medidos —
+ * realizado 80.094, programado 1.265, previsto 887, conciliado 574, agendado 119.
+ * ⚠ AS CORES SÃO AS DA CASA: verde e azul saem de `STATUS_OPTIONS_FINANCEIRO` (realizado e
+ * programado), roxo é o do agendado. `previsto` e `cancelado` não existiam no vocabulário
+ * oficial e ganham cinza e vermelho — declarados aqui, não espalhados por tela.
+ * ⚠ `cancelado` NÃO É `status_transacao`: é a coluna booleana. Fica no mapa porque quem
+ * mostra a pílula às vezes tem essa informação, e um vermelho combinado é melhor que cada
+ * tela inventando o seu.
+ */
+export const BADGE_STATUS_TRANSACAO: Record<string, { label: string; cls: string }> = {
+  realizado:  { label: 'Realizado',  cls: 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-400' },
+  conciliado: { label: 'Conciliado', cls: 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-400' },
+  agendado:   { label: 'Agendado',   cls: 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-400' },
+  programado: { label: 'Programado', cls: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400' },
+  previsto:   { label: 'Previsto',   cls: 'bg-muted text-muted-foreground' },
+  cancelado:  { label: 'Cancelado',  cls: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400' },
+};
+
+/** O badge de um `status_transacao`. Valor desconhecido volta em cinza, com o texto cru. */
+export function badgeDeStatusTransacao(status: string | null | undefined): { label: string; cls: string } {
+  const k = (status ?? '').toLowerCase().trim();
+  return BADGE_STATUS_TRANSACAO[k] ?? { label: status || '—', cls: 'bg-muted text-muted-foreground' };
+}
+
 export function getStatusBadge(l: Lancamento) {
   if (isMeta(l)) {
     return { label: 'Meta', cls: META_VISUAL.badgeCls };

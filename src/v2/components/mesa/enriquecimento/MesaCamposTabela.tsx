@@ -22,6 +22,7 @@
  * ordem nova sem homologação.
  */
 import type { EnriqRowVM, EnriqComparativoLinha } from './types';
+import { badgeDeStatusTransacao } from '@/lib/statusOperacional';
 import type { ClassificacaoItem, FornecedorV2 } from '@/hooks/useFinanceiroV2';
 import type { Fazenda } from '@/contexts/FazendaContext';
 import { ResultadoSubcentroEditor } from './ResultadoSubcentroEditor';
@@ -49,34 +50,47 @@ const MOTIVO_SEM_APPLY = 'o Salvar ainda não grava este campo';
 /** Os dois blocos do 133e item D. A faixa de 6px é o único separador; não há títulos. */
 type Bloco = 1 | 2;
 
-const ORDEM: Array<{ campo: string; rotulo: string; bloco: Bloco; gravaHoje: boolean }> = [
+const ORDEM: Array<{
+  campo: string; rotulo: string; bloco: Bloco; gravaHoje: boolean;
+  /** 133g item 5 — separador de 2px DEPOIS desta linha. São os quatro cortes do olho. */
+  corta?: boolean;
+  /**
+   * 133g item 6 — sem ele o lançamento não fecha, e o Salvar diz qual falta.
+   *
+   * ⚠ A LISTA É DE PRODUTO, não do banco: `Valor` e `Data pgto.` já vêm do extrato e nunca
+   * estão vazios; entram na lista porque, se um dia estiverem, o operador precisa ver o
+   * vermelho antes de gravar — e não descobrir no fechamento.
+   */
+  obrigatorio?: boolean;
+}> = [
   /* ⚠ A ORDEM É A DO OPERADOR — 133e item D, e ela não é estética: o bloco 1 é o MOVIMENTO
      (o que aconteceu no banco: quando, quanto, em que conta, se está vivo, em que fazenda),
      e é por ele que se reconhece a linha no extrato. O bloco 2 é a CLASSIFICAÇÃO — o que se
-     está aqui para decidir. Misturados, o olho ia e voltava entre conferir e decidir.
+     está aqui para decidir.
      ⚠ "MACRO · GRUPO · CENTRO" SAIU: os três derivam da conta do plano e mudam junto com
-     ela; repeti-los era gastar uma das 15 linhas para mostrar o que a linha de cima decide.
+     ela; repeti-los era gastar uma das linhas para mostrar o que a linha de cima decide.
      ⚠ "TIPO DE DOCUMENTO" FICA DE FORA até existir na view: `vw_classificacao_staging_preview`
      não o traz e o parser da Mesa não o lê, então a linha só saberia mostrar "—" nas três
-     colunas. Um campo mudo ocupando 22px é pior que a ausência dele — quando a view o
-     trouxer, ele entra aqui, no bloco 2, antes do Documento.
-     ⚠ QUATORZE LINHAS × 22px = 308px, mais 6px da faixa = 314. Medido no layout: 316px com
-     a borda. (O adendo do 133e falava em treze; são quatorze — oito no bloco 1 e seis no 2.) */
+     colunas. Um campo mudo ocupando 22px é pior que a ausência dele.
+     ⚠ QUATORZE LINHAS × 22px = 308px, mais 6 da faixa de bloco e 6 dos três separadores. */
   { campo: 'Tipo', rotulo: 'Tipo', bloco: 1, gravaHoje: false },
   { campo: 'Competência', rotulo: 'Competência', bloco: 1, gravaHoje: true },
   { campo: 'Data vencimento', rotulo: 'Data venc.', bloco: 1, gravaHoje: true },
-  { campo: 'Data pagamento', rotulo: 'Data pgto.', bloco: 1, gravaHoje: true },
-  { campo: 'Valor', rotulo: 'Valor', bloco: 1, gravaHoje: false },
-  { campo: 'Banco', rotulo: 'Conta bancária', bloco: 1, gravaHoje: true },
+  { campo: 'Data pagamento', rotulo: 'Data pgto.', bloco: 1, gravaHoje: true, obrigatorio: true },
+  { campo: 'Valor', rotulo: 'Valor', bloco: 1, gravaHoje: false, obrigatorio: true, corta: true },
+  { campo: 'Banco', rotulo: 'Conta bancária', bloco: 1, gravaHoje: true, obrigatorio: true },
   { campo: 'Situação', rotulo: 'Situação', bloco: 1, gravaHoje: false },
-  { campo: 'Fazenda', rotulo: 'Fazenda', bloco: 1, gravaHoje: true },
-  { campo: 'Produto / Descrição', rotulo: 'Produto / descr.', bloco: 2, gravaHoje: true },
+  { campo: 'Fazenda', rotulo: 'Fazenda', bloco: 1, gravaHoje: true, obrigatorio: true, corta: true },
+  { campo: 'Produto / Descrição', rotulo: 'Produto / descr.', bloco: 2, gravaHoje: true, obrigatorio: true },
   { campo: 'Fornecedor', rotulo: 'Fornecedor', bloco: 2, gravaHoje: true },
-  { campo: 'Subcentro', rotulo: 'Conta do plano', bloco: 2, gravaHoje: true },
-  { campo: 'Safra', rotulo: 'Safra', bloco: 2, gravaHoje: true },
+  { campo: 'Subcentro', rotulo: 'Conta do plano', bloco: 2, gravaHoje: true, obrigatorio: true },
+  { campo: 'Safra', rotulo: 'Safra', bloco: 2, gravaHoje: true, corta: true },
   { campo: 'Documento', rotulo: 'Documento', bloco: 2, gravaHoje: true },
   { campo: 'OBS', rotulo: 'Observação', bloco: 2, gravaHoje: true },
 ];
+
+/** Os campos que o Salvar exige — exportado porque o container monta o motivo com eles. */
+export const CAMPOS_OBRIGATORIOS_MESA = ORDEM.filter((o) => o.obrigatorio).map((o) => o.rotulo);
 
 const VAZIA: EnriqComparativoLinha = { campo: '', sistema: '—', excel: '—', resultado: '—', tom: 'neutro' };
 
@@ -119,7 +133,7 @@ export function MesaCamposTabela({
         <span className="text-emerald-600">Resultado</span>
       </div>
 
-      {ORDEM.map(({ campo, rotulo, bloco, gravaHoje }, indice) => {
+      {ORDEM.map(({ campo, rotulo, bloco, gravaHoje, corta, obrigatorio }, indice) => {
         /* Zebra pela POSIÇÃO na tabela: o olho segue a linha, e alternar por bloco criaria
            faixas de tamanhos diferentes. */
         const zebra = indice % 2 === 1;
@@ -128,6 +142,8 @@ export function MesaCamposTabela({
         const vaiMudar = c.tom === 'muda' || c.tom === 'difere';
         const editavel = gravaHoje && !row.aplicado && !!onEditar;
         const abreBloco2 = bloco === 2 && ORDEM[indice - 1]?.bloco === 1;
+        /* 133g item 6 — vazio no RESULTADO é o que importa: é ele que vai ser gravado. */
+        const faltando = !!obrigatorio && (c.resultado === '—' || c.resultado.trim() === '');
 
         return (
           <div key={rotulo}>
@@ -149,10 +165,15 @@ export function MesaCamposTabela({
                 saltavam porque o CONTROLE tinha altura própria e empurrava a linha; agora a
                 linha declara 22px e `items-center` centra o que estiver dentro, controle ou
                 texto. O controle mora dentro da linha, nunca a define (ver `medidasMesa`). */}
-            <div className={`grid h-[22px] items-center gap-2 border-b border-border/50 px-3 text-[11px] leading-[1.3] ${
+            <div className={`grid h-[22px] items-center gap-2 border-b border-border/50 px-3 text-[10px] leading-[1.3] ${
               zebra ? 'bg-muted/30' : ''}`}
               style={{ gridTemplateColumns: COLS }}>
-              <span className="truncate text-[10px] text-muted-foreground" title={rotulo}>{rotulo}</span>
+              <span className="truncate text-[10px] text-muted-foreground" title={rotulo}>
+                {rotulo}
+                {/* ⚠ ASTERISCO VERMELHO — 133g item 6. O operador não deve descobrir que um
+                    campo era obrigatório quando o Salvar recusa: ele vê antes de mexer. */}
+                {obrigatorio && <span className="text-red-600 dark:text-red-400"> *</span>}
+              </span>
               {/* ⚠ O EXCEL É REFERÊNCIA, NUNCA GRAVADO DIRETO — por isso azul e sem controle. */}
               <span className="truncate text-blue-700/90" title={c.excel}>{c.excel}</span>
               {/* ⚠ O TIPO É COLORIDO — 133e item D: "Saída" em vermelho, "Entrada" em verde.
@@ -208,21 +229,40 @@ export function MesaCamposTabela({
                      operador tentava clicar.
                      ⚠ O ÂMBAR DO "VAI MUDAR" FICA NO TEXTO, não na moldura: é o valor que
                      muda, não a célula. */
+                  /* ⚠ SITUAÇÃO É PÍLULA, NUNCA TEXTO SOLTO — 133g item 7. As cores são as da
+                     casa (`badgeDeStatusTransacao`, em `statusOperacional`), a mesma fonte da
+                     lista do Financeiro: realizado verde, programado azul, previsto cinza,
+                     cancelado vermelho. Cada tela inventando a sua seria o defeito do A23 de
+                     volta, num campo em que a cor É a informação. */
+                  campo === 'Situação' ? (
+                    <span className="flex h-[22px] items-center">
+                      <span className={`truncate rounded px-1.5 py-px text-[10px] font-medium ${badgeDeStatusTransacao(c.sistema === '—' ? null : c.sistema).cls}`}>
+                        {badgeDeStatusTransacao(c.sistema === '—' ? null : c.sistema).label}
+                      </span>
+                    </span>
+                  ) : (
                   <span
-                    title={gravaHoje ? c.resultado : `${c.resultado} — ${MOTIVO_SEM_APPLY}`}
-                    className={`flex h-[22px] items-center gap-1.5 truncate rounded border border-border/60 bg-muted px-1.5 ${
-                      igual ? 'text-emerald-700 dark:text-emerald-400'
-                        : vaiMudar ? 'bg-amber-50 text-amber-800 dark:bg-amber-950/30 dark:text-amber-200'
-                        : 'text-muted-foreground'}`}>
+                    title={faltando ? 'Obrigatório — o Salvar não grava sem ele.'
+                      : gravaHoje ? c.resultado : `${c.resultado} — ${MOTIVO_SEM_APPLY}`}
+                    className={`flex h-[22px] items-center gap-1.5 truncate rounded border px-1.5 ${
+                      faltando ? 'border-destructive/60 bg-destructive/5 text-destructive'
+                        : igual ? 'border-border/60 bg-muted text-emerald-700 dark:text-emerald-400'
+                        : vaiMudar ? 'border-border/60 bg-amber-50 text-amber-800 dark:bg-amber-950/30 dark:text-amber-200'
+                        : 'border-border/60 bg-muted text-muted-foreground'}`}>
                     {igual && <span aria-hidden>✓</span>}
-                    <span className="truncate">{c.resultado}</span>
-                    {!gravaHoje && (
+                    <span className="truncate">{faltando ? 'obrigatório' : c.resultado}</span>
+                    {!gravaHoje && !faltando && (
                       <span className="ml-auto shrink-0 text-[9px] italic opacity-70">leitura</span>
                     )}
                   </span>
+                  )
                 )}
               </div>
             </div>
+            {/* ⚠ 2px, NÃO 0,5 — 133g item 5. A linha de 0,5px separa CAMPOS; estes três
+                separam ASSUNTOS: dinheiro · onde · o que · papel. São os cortes por onde o
+                olho bate, e a 0,5px eles não existiam. */}
+            {corta && <div className="h-0.5 bg-border" />}
           </div>
         );
       })}
