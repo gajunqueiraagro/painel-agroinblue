@@ -134,6 +134,16 @@ export interface EnriqRowVM {
   /** O id do lançamento casado — 133h item 12, para saber se ele veio do extrato. */
   lancId: string | null;
   /**
+   * O que a planilha diz e o extrato desmente — 133h-b item 4, já peneirado.
+   *
+   * ⚠ VAZIO É O CASO NORMAL. A versão anterior comparava TEXTO com TEXTO e acendia âmbar em
+   * quase toda linha: "2-Saídas" ≠ "Saída", o nome longo da conta ≠ o nome do cadastro, e o
+   * valor de uma parte ≠ o do lançamento agrupado. Um aviso que aparece sempre não é aviso.
+   */
+  divergenciasBanco: ReadonlyArray<{ campo: string; rotulo: string; banco: string; planilha: string }>;
+  /** A linha é uma PARTE de um lançamento maior — 133h-b item 4c. */
+  parteDeAgrupamento: boolean;
+  /**
    * O RESULTADO não tem conta do plano — 133e item E. É a única trava de subcentro que
    * resta, e ela é sobre o que vai ser gravado, não sobre o que a planilha trouxe.
    */
@@ -184,8 +194,16 @@ export interface EnriqRowVM {
    * nenhum na lista — o operador reabria a sessão e não sabia onde tinha parado.
    */
   revisadaEm: string | null;
-  /** A descrição que veio da PLANILHA — a identidade da linha na lista do passo 2 (133b). */
+  /**
+   * A IDENTIDADE da linha na lista do passo 2 — 133h-b item 2.
+   *
+   * ⚠ O NOME FICOU, O CONTEÚDO MUDOU: era `excel_produto` sempre; passou a ser a descrição
+   * do LANÇAMENTO quando a linha tem um, porque é ela que reflete o que o operador salvou.
+   * Renomear o campo tocaria cinco arquivos para trocar uma palavra — o comentário resolve.
+   */
   descricaoExcel: string;
+  /** O texto da planilha quando ele DIFERE da identidade; `null` quando é o mesmo (133h-b item 2). */
+  contexto: string | null;
   /**
    * Por que esta linha está no estado em que está — 133a item 5.
    *

@@ -47,6 +47,15 @@ export interface LinhaParaGravar {
    * para que isso seja uma decisão, não um efeito.
    */
   sobrescrever: boolean;
+  /**
+   * A conta do plano a gravar no `update_proposto` ANTES do apply — 133h-b item 8.
+   *
+   * ⚠ O LOTE ERA O BURACO DO ITEM 13. A tela alinhava o proposto ao Resultado no Salvar de
+   * UMA linha; o lote chamava `apply_row` direto, e é ele que grava centenas — inclusive as
+   * 16.236 linhas do Raul cujo Resultado é "mantém" e cujo proposto guarda um texto que não
+   * existe no plano oficial. `null` = nada a alinhar, e aí nem se chama a RPC.
+   */
+  alinharSubcentro?: string | null;
 }
 
 /** As mensagens da RPC em português de operador. O identificador segue sendo o do banco. */
@@ -120,6 +129,16 @@ export function useGravarLoteEnriquecimento(sessaoId: string | null, clienteId: 
       }
       const base = { linha: l.linha, data: l.data, valor: l.valor, titulo: l.titulo };
       try {
+        /* ⚠ ALINHA ANTES DE APLICAR, e na MESMA ordem do Salvar de uma linha: o
+           `apply_row` lê `update_proposto`, então editá-lo depois não teria efeito. */
+        if (l.alinharSubcentro) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado do repo
+          const { error: erroEdit } = await (supabase as any).rpc('fn_classificacao_editar_proposto', {
+            p_staging_id: l.stagingId,
+            p_patch: { subcentro: l.alinharSubcentro },
+          });
+          if (erroEdit) throw erroEdit;
+        }
         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado do repo
         const { data, error } = await (supabase as any).rpc('fn_classificacao_apply_row', {
           p_staging_id: l.stagingId,

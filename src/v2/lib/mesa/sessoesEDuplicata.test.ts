@@ -9,7 +9,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   sessoesDoMes, temCandidatoDuplicata, contaEfetivaId, contaEfetivaNome, contasDoLancamento,
-  diferencasDoResultado,
+  diferencasDoResultado, normalizarTipo, parteDeAgrupamento, divergenciasComExtrato,
 } from './enriquecimentoView';
 import type { EnriqSessaoVM } from '@/v2/components/mesa/enriquecimento/types';
 
@@ -188,5 +188,99 @@ describe('diferencasDoResultado', () => {
       contaBancariaId: 'itau', contaBancariaIdAtual: 'bb',
       dataPagamento: '2026-08-12', dataPagamentoAtual: '2026-08-10',
     })).toEqual(['conta do plano', 'conta bancária', 'data de pagamento']);
+  });
+});
+
+/**
+ * A divergência com o extrato — 133h-b item 4. Os três primeiros testes são os três FALSOS
+ * POSITIVOS que o envelope nomeia; cada um deles acendia âmbar em milhares de linhas.
+ */
+describe('normalizarTipo / parteDeAgrupamento / divergenciasComExtrato', () => {
+  const CONTAS = [
+    { id: 'lavoura', nome_conta: 'Sicredi Lavoura', nome_exibicao: 'Sicredi Lavoura',
+      banco: 'Sicredi', agencia: '0903', numero_conta: '95982', aliases: null },
+    { id: 'cartao', nome_conta: 'Cartão Sicredi Lavoura', nome_exibicao: 'Cartão Sicredi Lavoura',
+      banco: 'Sicredi', agencia: null, numero_conta: null,
+      aliases: ['Cartão Sicredi Lavoura Ag. 0903 C/C 95982 3'] },
+  ];
+
+  const linha = (extra: Record<string, unknown> = {}) => ({
+    staging_id: 's1', sessao_id: 'x', cliente_id: 'c', match_status: 'exato', aplicado: false,
+    lanc_id: 'l1', lanc_valor: 100, excel_valor: 100,
+    lanc_data_pagamento: '2026-08-10', excel_data_pagamento: '2026-08-10',
+    lanc_tipo_operacao: '2-Saídas', excel_tipo_operacao: '2-Saídas', lanc_sinal: '-1',
+    lanc_conta_bancaria_id: 'lavoura', lanc_conta_destino_id: null,
+    lanc_conta_bancaria_nome: 'Sicredi Lavoura', lanc_conta_destino_nome: null,
+    excel_conta_origem: 'Sicredi Lavoura', casamento_meta: null,
+    ...extra,
+  }) as never;
+
+  it('tipo: "2-Saídas", "Saída" e sinal -1 são a MESMA coisa', () => {
+    expect(normalizarTipo('2-Saídas')).toBe('saida');
+    expect(normalizarTipo('Saída')).toBe('saida');
+    expect(normalizarTipo('saida')).toBe('saida');
+    expect(normalizarTipo('-1')).toBe('saida');
+    expect(normalizarTipo('1-Entradas')).toBe('entrada');
+    expect(normalizarTipo('Entrada')).toBe('entrada');
+    expect(normalizarTipo('3-Transferências')).toBe('transferencia');
+    expect(normalizarTipo('-')).toBeNull();
+    expect(normalizarTipo(null)).toBeNull();
+  });
+
+  it('4a — rótulo diferente NÃO vira divergência de tipo', () => {
+    const d = divergenciasComExtrato(linha({ excel_tipo_operacao: 'Saída' }), CONTAS);
+    expect(d.map((x) => x.campo)).not.toContain('Tipo');
+  });
+
+  it('4b — texto de conta diferente com o MESMO id confere', () => {
+    const d = divergenciasComExtrato(
+      linha({ excel_conta_origem: 'Sicredi Lavoura' }), CONTAS);
+    expect(d.map((x) => x.campo)).not.toContain('Banco');
+  });
+
+  it('4b — conta que resolve para OUTRO id é divergência de verdade', () => {
+    const d = divergenciasComExtrato(
+      linha({ excel_conta_origem: 'Cartão Sicredi Lavoura Ag. 0903 C/C 95982 3' }), CONTAS);
+    const banco = d.find((x) => x.campo === 'Banco');
+    expect(banco?.planilha).toBe('Cartão Sicredi Lavoura');
+    expect(banco?.banco).toBe('Sicredi Lavoura');
+  });
+
+  it('4b — texto que não resolve não vira divergência (ausência não é conflito)', () => {
+    const d = divergenciasComExtrato(linha({ excel_conta_origem: 'Banco Que Nao Existe' }), CONTAS);
+    expect(d.map((x) => x.campo)).not.toContain('Banco');
+  });
+
+  it('4c — valor menor numa linha de agrupamento NÃO é divergência', () => {
+    const meta = { grupo_ids: ['a', 'b'], soma: 100, linhas: 2 };
+    const d = divergenciasComExtrato(linha({ excel_valor: 40, casamento_meta: meta }), CONTAS);
+    expect(d.map((x) => x.campo)).not.toContain('Valor');
+    expect(parteDeAgrupamento(linha({ casamento_meta: meta }))).toBe(true);
+  });
+
+  it('4c — sem grupo, valor diferente CONTINUA divergência', () => {
+    const d = divergenciasComExtrato(linha({ excel_valor: 40 }), CONTAS);
+    expect(d.map((x) => x.campo)).toContain('Valor');
+  });
+
+  it('grupo de um id só não é agrupamento', () => {
+    expect(parteDeAgrupamento(linha({ casamento_meta: { grupo_ids: ['a'] } }))).toBe(false);
+    expect(parteDeAgrupamento(linha({ casamento_meta: null }))).toBe(false);
+  });
+
+  it('data de pagamento diferente é divergência, com as duas datas', () => {
+    const d = divergenciasComExtrato(linha({ excel_data_pagamento: '2026-08-12' }), CONTAS);
+    const dt = d.find((x) => x.campo === 'Data pagamento');
+    expect(dt?.banco).toBe('10/08/2026');
+    expect(dt?.planilha).toBe('12/08/2026');
+  });
+
+  it('linha certa dos dois lados não devolve divergência nenhuma', () => {
+    expect(divergenciasComExtrato(linha(), CONTAS)).toEqual([]);
+  });
+
+  it('centavos em inteiro — 0.1+0.2 contra 0.3 não acende', () => {
+    const d = divergenciasComExtrato(linha({ lanc_valor: 0.1 + 0.2, excel_valor: 0.3 }), CONTAS);
+    expect(d.map((x) => x.campo)).not.toContain('Valor');
   });
 });

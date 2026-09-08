@@ -31,6 +31,7 @@ import { EnriquecimentoSemParSistema } from './EnriquecimentoSemParSistema';
 import { useTransferenciasEspelhadas } from '@/v2/hooks/useTransferenciasEspelhadas';
 import { useSistemaNaoExplicado } from '@/v2/hooks/useSistemaNaoExplicado';
 import { useLancamentosConciliados } from '@/v2/hooks/useLancamentosConciliados';
+import type { ContaResolvivel } from '@/v2/lib/mesa/resolverConta';
 import { EnriquecerProgressoDialog } from '@/components/conciliacao/EnriquecerProgressoDialog';
 import { useGravarLoteEnriquecimento, type LinhaParaGravar } from '@/v2/hooks/useGravarLoteEnriquecimento';
 import { EnriquecimentoCandidatosInline } from './EnriquecimentoCandidatosInline';
@@ -341,7 +342,22 @@ export function MesaEnriquecimentoTab({
   const resumo = useMemo(() => resumirGrupos(stagingConta), [stagingConta]);
   // P0-1A: o lote é da SESSÃO (todas as contas) — não pode depender do filtro de conta.
   const nAplicaveis = useMemo(() => contarAplicaveisExatos(staging), [staging]);
-  const rowsVM = useMemo(() => stagingConta.map(toRowVM), [stagingConta]);
+  /**
+   * 133h-b item 4b — o cadastro entra no adapter para a conta ser comparada por ID.
+   *
+   * ⚠ `stagingConta.map(toRowVM)` NÃO SERVE MAIS: `Array.map` passa (item, índice, array),
+   * e o índice cairia no segundo parâmetro. É o mesmo tropeço clássico do
+   * `['1','2'].map(parseInt)`; aqui o TS o pegou, e a arrow explícita é o conserto.
+   */
+  const contasResolviveis = useMemo<ContaResolvivel[]>(
+    () => contasBancarias.map((c) => ({
+      id: c.id, nome_conta: c.nome_conta, nome_exibicao: c.nome_exibicao,
+      banco: c.banco, agencia: c.agencia, numero_conta: c.numero_conta, aliases: c.aliases,
+    })),
+    [contasBancarias]);
+  const rowsVM = useMemo(
+    () => stagingConta.map((r) => toRowVM(r, contasResolviveis)),
+    [stagingConta, contasResolviveis]);
   /* 133h item 3 — o único gate é o card do topo; `filtrarPorModo` saiu daqui com o
      "Todas | Pendentes". A função segue exportada e testada, para as telas legadas. */
   const rowsGrupo = useMemo(() => filtrarPorGrupo(rowsVM, filtroGrupo), [rowsVM, filtroGrupo]);
@@ -411,6 +427,53 @@ export function MesaEnriquecimentoTab({
     const ids = meta && typeof meta === 'object' ? (meta as Record<string, unknown>).grupo_ids : null;
     return Array.isArray(ids) ? ids.filter((x): x is string => typeof x === 'string') : [];
   }, [linhaCrua]);
+
+  /**
+   * A linha precisa que o proposto seja alinhado ao Resultado antes de gravar? — 133h-b item 8.
+   *
+   * ⚠ O 133h COBRIU SÓ A LINHA EDITADA, e a medição mostra o tamanho do buraco: das 27.153
+   * linhas do Raul com proposta fora do plano, 16.236 têm subcentro no sistema — nelas o
+   * Resultado é "mantém", `edicao.subcentro === subcentroAtual`, e a condição antiga
+   * (`!==`) as deixava passar com o texto cru no proposto. Eram justamente as linhas que o
+   * operador NÃO toca, isto é, quase todas as do lote.
+   * ⚠ AS 10.917 SEM SUBCENTRO NENHUM CONTINUAM DE FORA, e é o certo: não há Resultado a
+   * alinhar, e a trava do obrigatório ("falta: conta do plano") é quem responde por elas.
+   * ⚠ O BANCO JÁ SE DEFENDE desde a migration 20260908121828 — ele descarta a conta do
+   * plano fora do plano oficial em vez de deixar o trigger derrubar a transação. A tela
+   * alinha assim mesmo: deixar lixo no `update_proposto` faria o próximo leitor dele (uma
+   * RPC nova, um relatório) herdar um texto que não existe no plano.
+   */
+  const precisaAlinhar = (r: EnriqRowVM): boolean =>
+    !!r.avisoPlanilha && !!r.edicao.subcentro;
+
+  /**
+   * Os números do agrupamento — 133h-b item 3.
+   *
+   * ⚠ A FAIXA DIZIA "Esta linha e mais 2 do mesmo dia somam um único movimento" E NENHUM
+   * NÚMERO. O operador tinha de aceitar no escuro um gesto que CANCELA um lançamento e cria
+   * outros dois. Agora ela mostra os três lados: o que o extrato tem, o que a planilha
+   * soma, e se bate.
+   * ⚠ AS PARTES SAEM DO `staging` PELOS `grupo_ids` DO CASADOR — nunca remontadas por
+   * dia+conta+soma aqui, que seria a segunda resposta para a mesma pergunta.
+   * ⚠ CENTAVOS EM INTEIRO: a diferença é a razão de existir da faixa, e comparar float
+   * acenderia "passa R$ 0,00".
+   */
+  const grupoDoSplit = useMemo(() => {
+    if (gruposIdsDoSplit.length < 2) return null;
+    const ids = new Set(gruposIdsDoSplit);
+    const partes = staging.filter((r) => ids.has(r.staging_id));
+    const somaCent = partes.reduce((acc, r) => acc + Math.round((Number(r.excel_valor) || 0) * 100), 0);
+    const lancCent = Math.round((Number(linhaCrua?.lanc_valor) || 0) * 100);
+    return {
+      partes,
+      soma: somaCent / 100,
+      lancValor: lancCent / 100,
+      diferencaCent: lancCent - somaCent,
+      bate: lancCent === somaCent,
+      /* Faltam partes na sessão carregada? Aí a soma não representa o grupo. */
+      completo: partes.length === gruposIdsDoSplit.length,
+    };
+  }, [gruposIdsDoSplit, staging, linhaCrua]);
 
   /**
    * A lista pela qual se NAVEGA — 133e adendo item 3.
@@ -545,20 +608,11 @@ export function MesaEnriquecimentoTab({
    */
   const divergenciasDoExtrato = useMemo(() => {
     if (!selecionado || !selecionadoConciliado) return [] as string[];
-    const porCampo = new Map(selecionado.comparativo.map((c) => [c.campo, c]));
-    const alvo: Array<[string, string]> = [
-      ['Data pagamento', 'data de pagamento'],
-      ['Valor', 'valor'],
-      ['Banco', 'conta bancária'],
-      ['Tipo', 'tipo'],
-    ];
-    const fora: string[] = [];
-    for (const [campo, rotulo] of alvo) {
-      const c = porCampo.get(campo);
-      if (!c || c.excel === '—' || c.sistema === '—') continue;
-      if (c.excel !== c.sistema) fora.push(`${rotulo} (${c.sistema} × ${c.excel})`);
-    }
-    return fora;
+    /* ⚠ A COMPARAÇÃO SAIU DAQUI — 133h-b item 4e. Ela era feita por TEXTO sobre o
+       `comparativo` ("2-Saídas" × "Saída", nome longo da conta × nome do cadastro, valor da
+       parte × valor do agrupado) e o rodapé gritava divergência em quase toda linha. Agora
+       o adapter já entrega a lista peneirada, e o rodapé só existe quando ela sobra. */
+    return selecionado.divergenciasBanco.map((d) => `${d.rotulo} (${d.banco} × ${d.planilha})`);
   }, [selecionado, selecionadoConciliado]);
 
   // Extrai mensagem humana de qualquer erro (PostgrestError não é instanceof Error).
@@ -706,8 +760,7 @@ export function MesaEnriquecimentoTab({
        * ele é a defesa que impede subcentro inventado de entrar no plano. O texto da
        * planilha não some — continua no aviso "planilha dizia", que é o lugar dele.
        */
-      if (selecionado.avisoPlanilha && selecionado.edicao.subcentro
-          && selecionado.edicao.subcentro !== selecionado.edicao.subcentroAtual) {
+      if (precisaAlinhar(selecionado)) {
         await editarProposto({ staging_id: id, patch: { subcentro: selecionado.edicao.subcentro } });
       }
       const res: any = await applyRow({ staging_id: id, overwrite: true });
@@ -957,6 +1010,8 @@ export function MesaEnriquecimentoTab({
         titulo: vm.descricaoExcel,
         camposQueMudam: vm.comparativo.filter((c) => c.tom === 'muda' || c.tom === 'difere').map((c) => c.campo),
         sobrescrever,
+        /* 133h-b item 8 — o Resultado é a fonte do proposto também no lote. */
+        alinharSubcentro: precisaAlinhar(vm) ? vm.edicao.subcentro : null,
       });
     }
     return out;
@@ -1097,26 +1152,74 @@ export function MesaEnriquecimentoTab({
           guards da RPC. */}
       {selecionado.status === 'sugestao_split' && !selecionado.aplicado && (
         <div className="shrink-0 border-t border-violet-300 bg-violet-50/60 px-3 py-1 dark:border-violet-800 dark:bg-violet-950/20">
+          {/* ⚠ TRÊS LINHAS COM OS NÚMEROS — 133h-b item 3. A faixa dizia "esta linha e mais
+              2 do mesmo dia somam um único movimento" e nenhum valor: o operador aceitava
+              no escuro um gesto que CANCELA um lançamento. Extrato, planilha e resultado,
+              lado a lado, é o que permite conferir antes de aceitar. */}
+          <div className="text-[10px] leading-[1.35] text-violet-900 dark:text-violet-200">
+            <div className="truncate">
+              <b>Extrato:</b> {selecionado.comparativo.find((c) => c.campo === 'Produto / Descrição')?.sistema ?? '—'}
+              {' · '}{selecionado.data}{' · '}{fmtBRL(grupoDoSplit?.lancValor ?? null)}
+            </div>
+            <div className="truncate" title={grupoDoSplit?.partes.map((r) => `${fmtBRL(r.excel_valor)} ${r.excel_fornecedor ?? r.excel_produto ?? '—'}`).join(' · ')}>
+              <b>Planilha:</b> {gruposIdsDoSplit.length} linhas do dia = {fmtBRL(grupoDoSplit?.soma ?? null)}
+              {grupoDoSplit && grupoDoSplit.partes.length > 0 && (
+                <> ({grupoDoSplit.partes.map((r) => `${fmtBRL(r.excel_valor)} ${r.excel_fornecedor ?? r.excel_produto ?? '—'}`).join(' · ')})</>
+              )}
+            </div>
+            <div>
+              <b>Resultado:</b>{' '}
+              {!grupoDoSplit ? <span className="text-muted-foreground">apurando…</span>
+                : !grupoDoSplit.completo
+                  ? <span className="text-amber-700 dark:text-amber-400">
+                      {grupoDoSplit.partes.length} de {gruposIdsDoSplit.length} linhas carregadas — soma incompleta
+                    </span>
+                : grupoDoSplit.bate
+                  ? <span className="font-medium text-emerald-700 dark:text-emerald-400">bate ao centavo</span>
+                : grupoDoSplit.diferencaCent < 0
+                  ? <span className="font-medium text-amber-700 dark:text-amber-400">
+                      passa {fmtBRL(Math.abs(grupoDoSplit.diferencaCent) / 100)}
+                    </span>
+                  : <span className="font-medium text-amber-700 dark:text-amber-400">
+                      falta {fmtBRL(grupoDoSplit.diferencaCent / 100)}
+                    </span>}
+            </div>
+          </div>
+
           {!confirmandoGrupo ? (
-            <div className="flex items-center gap-2">
-              <span className="min-w-0 flex-1 text-[11px] text-violet-900 dark:text-violet-200">
-                Esta linha e mais {Math.max(0, gruposIdsDoSplit.length - 1)} do mesmo dia somam um
-                único movimento do banco.
-              </span>
+            <div className="mt-1 flex items-center gap-2">
+              {/* ⚠ O BOTÃO SÓ ABRE QUANDO BATE, e diz por que não abre — a regra do
+                  "botão desabilitado diz por quê". Agrupar com a soma errada criaria
+                  lançamentos que não somam o movimento do banco. */}
               <Button type="button" size="sm" className="h-6 shrink-0 px-2 text-[10px]"
-                disabled={isSubstituindo || gruposIdsDoSplit.length < 2 || !linhaCrua?.lanc_id}
-                title={gruposIdsDoSplit.length < 2
-                  ? 'O casador não registrou as outras linhas deste grupo.'
+                disabled={isSubstituindo || !grupoDoSplit || !grupoDoSplit.bate
+                  || !grupoDoSplit.completo || !linhaCrua?.lanc_id}
+                title={!grupoDoSplit ? 'O casador não registrou as outras linhas deste grupo.'
+                  : !grupoDoSplit.completo ? 'Nem todas as linhas do grupo estão nesta sessão.'
+                  : !grupoDoSplit.bate ? 'A soma da planilha não bate com o lançamento.'
                   : 'Cria uma linha por item, cancela o consolidado e religa o vínculo do extrato.'}
                 onClick={() => setConfirmandoGrupo(true)}>
                 Agrupar {gruposIdsDoSplit.length} linhas neste lançamento
               </Button>
+              {grupoDoSplit && !grupoDoSplit.bate && grupoDoSplit.completo && (
+                <span className="text-[10px] font-medium text-amber-700 dark:text-amber-400">
+                  a soma da planilha não bate com o lançamento — o agrupamento fica travado
+                </span>
+              )}
             </div>
           ) : (
-            <div className="flex items-center gap-2">
-              <span className="min-w-0 flex-1 text-[11px] text-amber-800 dark:text-amber-300">
-                Isso cria {gruposIdsDoSplit.length} lançamentos, cancela o consolidado e move o
-                vínculo do extrato. Continuar?
+            <div className="mt-1 flex items-start gap-2">
+              {/* ⚠ A CONFIRMAÇÃO NOMEIA O QUE VAI ACONTECER — 133h-b item 3. "Isso cria 2
+                  lançamentos, cancela o consolidado" não diz QUAIS, e o gesto é
+                  irreversível pela tela. */}
+              <span className="min-w-0 flex-1 text-[10px] leading-[1.35] text-amber-800 dark:text-amber-300">
+                Vai criar {gruposIdsDoSplit.length} lançamentos:{' '}
+                {(grupoDoSplit?.partes ?? []).map((r) =>
+                  `${fmtBRL(r.excel_valor)} ${r.excel_fornecedor ?? '—'} doc ${r.excel_documento ?? '—'}`).join('; ')}.
+                {' '}Vai cancelar o lançamento consolidado:{' '}
+                {selecionado.comparativo.find((c) => c.campo === 'Produto / Descrição')?.sistema ?? '—'}
+                {' · '}{fmtBRL(grupoDoSplit?.lancValor ?? null)} (motivo: agrupamento).
+                {' '}O vínculo com o extrato passa para os {gruposIdsDoSplit.length} novos. Continuar?
               </span>
               <Button type="button" size="sm" className="h-6 shrink-0 px-2 text-[10px]"
                 disabled={isSubstituindo}

@@ -169,9 +169,14 @@ export function MesaCamposTabela({
         const editavel = gravaHoje && !row.aplicado && !!onEditar && !travadoPeloBanco;
         /* ⚠ DIVERGÊNCIA É INFORMAÇÃO, NUNCA GRAVAÇÃO: a RPC já ignora o proposto nestes
            campos, então o que a planilha diz vira aviso — e o operador vê ANTES de salvar
-           que o arquivo dele discorda do extrato. */
-        const divergeDoBanco = travadoPeloBanco
-          && c.excel !== '—' && c.sistema !== '—' && c.excel !== c.sistema;
+           que o arquivo dele discorda do extrato.
+           ⚠ A LISTA VEM DO ADAPTER — 133h-b item 4. Comparar `c.excel !== c.sistema` aqui
+           era o falso positivo: os dois lados falam vocabulários diferentes ("2-Saídas" ×
+           "Saída") e o valor de uma parte de agrupamento é MENOR por definição. */
+        const dv = row.divergenciasBanco.find((d) => d.campo === campo);
+        const divergeDoBanco = travadoPeloBanco && !!dv;
+        /* 4c — a linha é parte de um agrupamento: o valor não diverge, ele é uma parte. */
+        const valorDeParte = campo === 'Valor' && row.parteDeAgrupamento;
         const abreBloco2 = bloco === 2 && ORDEM[indice - 1]?.bloco === 1;
         /* 133g item 6 — vazio no RESULTADO é o que importa: é ele que vai ser gravado. */
         const faltando = !!obrigatorio && (c.resultado === '—' || c.resultado.trim() === '');
@@ -281,6 +286,7 @@ export function MesaCamposTabela({
                       : gravaHoje ? c.resultado : `${c.resultado} — ${MOTIVO_SEM_APPLY}`}
                     className={`flex h-[22px] items-center gap-1.5 truncate rounded border px-1.5 ${
                       faltando ? 'border-destructive/60 bg-destructive/5 text-destructive'
+                        : valorDeParte ? 'border-violet-300 bg-violet-50/60 text-violet-800 dark:border-violet-800 dark:bg-violet-950/20 dark:text-violet-200'
                         : divergeDoBanco ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200'
                         : igual ? 'border-border/60 bg-muted text-emerald-700 dark:text-emerald-400'
                         : vaiMudar ? 'border-border/60 bg-amber-50 text-amber-800 dark:bg-amber-950/30 dark:text-amber-200'
@@ -292,13 +298,14 @@ export function MesaCamposTabela({
                     <span className="truncate">
                       {faltando ? 'obrigatório' : (travadoPeloBanco ? c.sistema : c.resultado)}
                     </span>
+                    {/* ⚠ O AVISO SAIU DE DENTRO DA CÉLULA — 133h-b item 4d. Ele não cabia
+                        em 22px ao lado do valor e saía cortado justamente na parte que
+                        importa (o que a planilha diz). Aqui fica só o ícone; o texto vai
+                        para a linha de contexto abaixo, onde pode quebrar. */}
                     {divergeDoBanco && (
-                      <span className="ml-auto shrink-0 truncate text-[9px] italic"
-                        title={`A planilha diz "${c.excel}".`}>
-                        difere do banco: planilha diz {c.excel}
-                      </span>
+                      <span className="ml-auto shrink-0 text-[9px]" aria-hidden title="Difere do extrato">⚠</span>
                     )}
-                    {!gravaHoje && !faltando && !divergeDoBanco && (
+                    {!gravaHoje && !faltando && !divergeDoBanco && !valorDeParte && (
                       <span className="ml-auto shrink-0 text-[9px] italic opacity-70">leitura</span>
                     )}
                     {travadoPeloBanco && gravaHoje && !divergeDoBanco && (
@@ -309,6 +316,24 @@ export function MesaCamposTabela({
                 )}
               </div>
             </div>
+            {/* ⚠ A LINHA DE CONTEXTO DO CAMPO — 133h-b item 4c/4d. Ela só existe quando há o
+                que dizer, e ocupa a COLUNA do Resultado: assim o texto se alinha ao valor a
+                que se refere, em vez de flutuar sob a tabela inteira. `wrap` permitido — é
+                aqui que a frase cabe. */}
+            {(divergeDoBanco || valorDeParte) && (
+              <div className="grid gap-2 px-3 pb-0.5" style={{ gridTemplateColumns: COLS }}>
+                <span /><span /><span />
+                {valorDeParte ? (
+                  <span className="text-[10px] leading-tight text-violet-700 dark:text-violet-400">
+                    parte de {c.sistema} (agrupamento)
+                  </span>
+                ) : (
+                  <span className="text-[10px] leading-tight text-amber-700 dark:text-amber-400">
+                    difere do banco: planilha diz {dv?.planilha}
+                  </span>
+                )}
+              </div>
+            )}
             {/* ⚠ 2px, NÃO 0,5 — 133g item 5. A linha de 0,5px separa CAMPOS; estes três
                 separam ASSUNTOS: dinheiro · onde · o que · papel. São os cortes por onde o
                 olho bate, e a 0,5px eles não existiam. */}

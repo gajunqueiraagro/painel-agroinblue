@@ -241,6 +241,43 @@ export function EnriquecimentoMesaModal({
     document.addEventListener('keydown', aoTeclar);
     return () => document.removeEventListener('keydown', aoTeclar);
   }, [open, actions]);
+
+  /**
+   * ArrowDown / ArrowUp trocam a linha — 133h-b item 7.
+   *
+   * ⚠ A MESA JÁ ERA NAVEGÁVEL PELO MOUSE E POR DOIS BOTÕES, e o teclado só sabia
+   * Ctrl/Cmd+Enter: revisar 300 linhas exigia tirar a mão do teclado a cada linha para
+   * clicar em "Próximo". As setas fazem o MESMO que os botões — `onProximo`/`onAnterior` —,
+   * então não há um segundo caminho de navegação que possa divergir do primeiro.
+   *
+   * ⚠ CAMPO DE TEXTO FOCADO MANDA. Dentro de um `input`, `textarea`, `select` ou
+   * `contenteditable` — e dentro de qualquer combobox aberto, que usa as setas para
+   * percorrer a lista — a seta é do campo. Roubá-la ali quebraria o `PlanoSubcentroSelect`
+   * e o `FavorecidoSelect`, que navegam por seta e confirmam com Enter.
+   *
+   * ⚠ PageDown/PageUp NÃO SÃO INTERCEPTADOS: rolar é do scrollport, e é o que o operador
+   * espera deles.
+   */
+  useEffect(() => {
+    if (!open) return;
+    const aoNavegar = (e: KeyboardEvent) => {
+      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const alvo = e.target;
+      if (alvo instanceof HTMLElement) {
+        const tag = alvo.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || alvo.isContentEditable) return;
+        /* Combobox/menu aberto navega por seta — o Radix marca com estes atributos. */
+        if (alvo.closest('[role="listbox"],[role="combobox"],[role="menu"],[cmdk-root]')) return;
+        if (alvo.getAttribute('aria-expanded') === 'true') return;
+      }
+      e.preventDefault();
+      if (e.key === 'ArrowDown') { if (actions.canProximo) actions.onProximo(); }
+      else if (actions.canAnterior) actions.onAnterior();
+    };
+    document.addEventListener('keydown', aoNavegar);
+    return () => document.removeEventListener('keydown', aoNavegar);
+  }, [open, actions]);
   /* As outras linhas do grupo da selecionada que ainda pedem revisão — o alvo do
      "aplicar ao grupo". Exatas e já revisadas ficam de fora, como o envelope manda. */
   /**

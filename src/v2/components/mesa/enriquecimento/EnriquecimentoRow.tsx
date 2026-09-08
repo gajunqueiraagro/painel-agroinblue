@@ -9,7 +9,11 @@
  * ⚠ O CONTEXTO É O `porQue` DO BANCO — 133a. "casou pelo pagamento de 12/08" diz mais que
  * "Pronto", e não é dedução do front: veio do `casamento_meta` que o casador gravou.
  *
- * ⚠ 36px EXATOS — 133b-a: `padding 5px 12px` + 11px/1.3 + 10px/1.3 dá 5 + 14 + 13 + 5 ≈ 36.
+ * ⚠ 22px EXATOS, UMA LINHA SÓ — 133h-b item 1b. Eram 36 (duas alturas de texto mais
+ * padding), e a lista mostrava ~18 linhas onde cabem 30: o operador rolava para conferir o
+ * que caberia na tela. As duas informações que ocupavam a segunda linha viraram COLUNAS —
+ * contexto elástico no meio, situação em 110px à direita —, e a altura passa a ser
+ * declarada (`h-[22px]` + `items-center`), não derivada de padding.
  *
  * ⚠ A DATA SAIU DA LINHA — 133b-b. Ela viveu aqui por um envelope: a faixa do grupo já diz
  * "dd/mm/aaaa · conta", e repetir a data em cada uma das linhas daquela faixa gastava 64px
@@ -52,47 +56,50 @@ export function EnriquecimentoRow({ row, selecionado, onSelecionar, editadaNaoGr
     <button
       type="button"
       onClick={onSelecionar}
-      className={`grid h-9 w-full items-center gap-1.5 rounded px-3 py-[5px] text-left transition-colors ${
+      className={`grid h-[22px] w-full items-center gap-1.5 rounded px-3 text-left transition-colors ${
         selecionado
           ? 'bg-primary/10 outline outline-1 outline-primary'
           : 'bg-card hover:bg-muted/50'
       }`}
-      style={{ gridTemplateColumns: 'minmax(0,1fr) 96px' }}
+      /* bolinha · identidade · contexto (elástico) · valor 96px · situação 110px */
+      style={{ gridTemplateColumns: '7px minmax(0,auto) minmax(0,1fr) 96px 110px' }}
     >
-      <span className="min-w-0">
-        <span className="flex items-center gap-1">
-          {/* ⚠ TRÊS ESTADOS, NESTA PRECEDÊNCIA — 133h item 9: gravada (verde) vence tudo,
-              porque é fim de linha; editada-e-não-gravada (âmbar) vem antes de revisada,
-              porque é a que ainda pede o gesto; revisada-não-gravada é azul; o resto segue
-              a cor do status. Sem o azul, conferir uma linha não deixava rastro. */}
-          <span className={`h-[7px] w-[7px] shrink-0 rounded-full ${
-            row.aplicado ? 'bg-emerald-500'
-            : editadaNaoGravada ? 'bg-amber-500'
-            : row.revisadaEm ? 'bg-sky-500'
-            : meta.dot}`}
-            title={
-              row.aplicado ? 'Gravada no lançamento.'
-              : editadaNaoGravada ? 'Editada e ainda não gravada no lançamento.'
-              : row.revisadaEm ? 'Revisada — ainda não gravada.'
-              : meta.label} />
-          <span className="min-w-0 flex-1 truncate text-[11px] font-medium leading-[1.3]" title={row.descricaoExcel}>
-            {row.descricaoExcel}
-          </span>
-        </span>
-        <span className="block truncate pl-[15px] text-[10px] leading-[1.3] text-muted-foreground" title={row.porQue}>
-          {row.porQue || '—'}
-        </span>
+      {/* ⚠ TRÊS ESTADOS, NESTA PRECEDÊNCIA — 133h item 9: gravada (verde) vence tudo,
+          porque é fim de linha; editada-e-não-gravada (âmbar) vem antes de revisada,
+          porque é a que ainda pede o gesto; revisada-não-gravada é azul; o resto segue
+          a cor do status. Sem o azul, conferir uma linha não deixava rastro. */}
+      <span className={`h-[7px] w-[7px] shrink-0 rounded-full ${
+        row.aplicado ? 'bg-emerald-500'
+        : editadaNaoGravada ? 'bg-amber-500'
+        : row.revisadaEm ? 'bg-sky-500'
+        : meta.dot}`}
+        title={
+          row.aplicado ? 'Gravada no lançamento.'
+          : editadaNaoGravada ? 'Editada e ainda não gravada no lançamento.'
+          : row.revisadaEm ? 'Revisada — ainda não gravada.'
+          : meta.label} />
+
+      {/* ⚠ A IDENTIDADE NÃO CEDE PRIMEIRO: `minmax(0,auto)` a deixa pedir o que precisa e o
+          contexto (`1fr`) é quem encolhe. Trocar os dois faria a descrição sumir para caber
+          um "casou pelo pagamento de 12/08" que ninguém procura. */}
+      <span className="min-w-0 truncate text-[11px] font-medium leading-[1.3]" title={row.descricaoExcel}>
+        {row.descricaoExcel}
+      </span>
+
+      <span className="min-w-0 truncate text-[10px] leading-[1.3] text-muted-foreground"
+        title={row.contexto ?? row.porQue}>
+        {row.contexto ?? row.porQue ?? ''}
       </span>
 
       {/* ⚠ 96px FIXOS — 133b-b: sem largura fixa o valor encosta na descrição e a coluna da
           direita deixa de alinhar entre as linhas, que é justamente o que se confere. */}
-      <span className="shrink-0 text-right">
-        <span className={`block text-[11px] font-medium leading-[1.3] tabular-nums ${corValor}`} title={row.valor}>
-          {sinal}{row.valor}
-        </span>
-        <span className={`block rounded text-[10px] leading-[1.3] ${meta.cls}`}>
-          {meta.label}
-        </span>
+      <span className={`truncate text-right text-[11px] font-medium leading-[1.3] tabular-nums ${corValor}`}
+        title={row.valor}>
+        {sinal}{row.valor}
+      </span>
+
+      <span className={`truncate text-right text-[10px] leading-[1.3] ${meta.cls}`} title={meta.label}>
+        {meta.label}
       </span>
     </button>
   );

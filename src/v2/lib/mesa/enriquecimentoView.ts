@@ -14,6 +14,7 @@ import type {
   EnriqCampoEditavel, EnriqProveniencia, EnriqEdicao, EnriqEstado,
 } from '@/v2/components/mesa/enriquecimento/types';
 import { fmtData, fmtBRL, fmtTexto, mesAbrev, dataHoraCurta, STATUS_META } from '@/v2/components/mesa/enriquecimento/fmt';
+import { resolverContaPorTexto, type ContaResolvivel } from '@/v2/lib/mesa/resolverConta';
 
 const vazio = (v: unknown): boolean => v === null || v === undefined || String(v).trim() === '';
 const norm = (v: unknown): string => String(v ?? '').trim().toLowerCase();
@@ -88,7 +89,17 @@ function juntarTrilha(...partes: Array<string | null>): string | null {
   return vivas.length ? vivas.join(' · ') : null;
 }
 
-export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
+export function toRowVM(
+  row: ClassificacaoStagingPreviewRow,
+  /**
+   * 133h-b item 4b — o cadastro de contas, para comparar conta por ID e não por texto.
+   *
+   * ⚠ OPCIONAL DE PROPÓSITO: sem o cadastro, a divergência de conta simplesmente não é
+   * afirmada. Um adapter que exigisse o catálogo obrigaria toda tela e todo teste a montá-lo
+   * para ler uma linha — e a ausência de catálogo não é conflito de conta.
+   */
+  contas: readonly ContaResolvivel[] = [],
+): EnriqRowVM {
   const statusLabel = STATUS_META[row.match_status]?.label ?? row.match_status;
 
   // Subcentro — campo GRAVADO pelo apply (usa flags da view).
@@ -126,6 +137,15 @@ export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
   // Descrição/Produto do Sistema = descricao do lançamento (unificado em "Produto / Descrição",
   // P0-3); fallback para observacao quando não há descricao.
   const descricao = row.lanc_descricao ?? row.lanc_observacao;
+
+  /* 133h-b item 2/5 — a identidade que a lista mostra, e o contexto que a acompanha. */
+  const textoPlanilha = row.excel_produto ?? row.excel_fornecedor;
+  const identidadeDaLinha = row.lanc_id
+    ? (row.lanc_descricao ?? textoPlanilha ?? row.lanc_observacao)
+    : textoPlanilha;
+  const diferemAsDuas = !!identidadeDaLinha && !!textoPlanilha
+    && identidadeDaLinha.trim() !== textoPlanilha.trim();
+  const contextoDaLinha = diferemAsDuas ? `planilha: ${textoPlanilha}` : null;
 
   const comparativo: EnriqComparativoLinha[] = [
     {
@@ -366,12 +386,22 @@ export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
     contaId: contaDaLinhaStaging(row).id,
     revisadaEm: row.revisado_em,
     lancId: row.lanc_id,
+    /* 133h-b item 4 — as divergências REAIS, já sem os três falsos positivos. */
+    divergenciasBanco: divergenciasComExtrato(row, contas),
+    parteDeAgrupamento: parteDeAgrupamento(row),
     contaBancaria: banco,
-    /* ⚠ A IDENTIDADE DA LINHA É A DESCRIÇÃO DA PLANILHA — 133b. A lista do passo 2 mostra
-       o que o operador escreveu no Excel, não o que o banco importou: é por aquele texto
-       que ele reconhece a linha que está procurando. Sem descrição na planilha, cai no
-       fornecedor, e só então no "—". */
-    descricaoExcel: fmtTexto(row.excel_produto ?? row.excel_fornecedor),
+    /* ⚠ A IDENTIDADE PASSOU A SER A DO LANÇAMENTO — 133h-b item 2, e a razão é o que
+       acontece DEPOIS de gravar. A lista mostrava `excel_produto` sempre: o operador
+       trocava "Parcela 1 - None" por um produto de verdade, salvava, a bolinha ficava verde
+       — e a linha continuava dizendo "Parcela 1 - None". Ele reimportou achando que o
+       Salvar não tinha pegado (Gabriel, 09:03).
+       ⚠ SÓ QUANDO HÁ LANÇAMENTO: linha sem par não tem descrição de banco, e aí a planilha
+       é a única identidade que existe. Sem nenhuma das duas, o fornecedor; só então "—".
+       ⚠ O TEXTO DA PLANILHA NÃO SOME — vai para o contexto, e só quando DIFERE: repeti-lo
+       quando é igual gastaria a única linha de contexto para dizer duas vezes a mesma
+       coisa. */
+    descricaoExcel: fmtTexto(identidadeDaLinha),
+    contexto: contextoDaLinha,
     porQue,
     banco: fmtTexto(banco),
     fornecedor: fmtTexto(favSistema ?? favExcel),
@@ -765,4 +795,141 @@ export function diferencasDoResultado(edicao: EnriqEdicao): string[] {
   cmp('data de pagamento', edicao.dataPagamento, edicao.dataPagamentoAtual);
   cmp('observação', edicao.observacao, edicao.observacaoAtual);
   return difs;
+}
+
+// ── 133h-b item 4: a divergência com o extrato, sem falso positivo ──────────────
+
+/**
+ * Um tipo de operação, normalizado — 133h-b item 4a.
+ *
+ * ⚠ TRÊS VOCABULÁRIOS PARA A MESMA COISA, e era isso que acendia o âmbar em TODA saída:
+ * a planilha diz "2-Saídas", o lançamento diz "2-Saídas" mas a tela mostra "Saída"
+ * (`rotuloTipo`), e o banco ainda guarda `sinal` -1/1. Comparar rótulo com rótulo fazia
+ * "2-Saídas" ≠ "Saída" em 17.732 linhas do Raul. Aqui os três viram uma coisa só.
+ */
+export function normalizarTipo(t: string | null | undefined): 'entrada' | 'saida' | 'transferencia' | null {
+  if (t === null || t === undefined) return null;
+  const v = String(t).trim().toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (v === '' || v === '-') return null;
+  if (v === '1' || v.startsWith('1') || v.startsWith('entrada')) return 'entrada';
+  if (v === '-1' || v.startsWith('2') || v.startsWith('saida')) return 'saida';
+  if (v.startsWith('3') || v.startsWith('transfer')) return 'transferencia';
+  return null;
+}
+
+/**
+ * A linha é uma PARTE de um lançamento maior? — 133h-b item 4c.
+ *
+ * ⚠ VALOR DIFERENTE AQUI NÃO É DIVERGÊNCIA, É A DEFINIÇÃO DO CASO: `sugestao_split`
+ * significa "N linhas da planilha = 1 movimento do banco", então cada linha vale menos que
+ * o lançamento por construção. Acender âmbar de "valor difere" em todas elas é dizer que o
+ * agrupamento que a própria tela sugere está errado.
+ * ⚠ LÊ O `casamento_meta` DO CASADOR, E SÓ ELE. Testar `match_status === 'sugestao_split'`
+ * seria a segunda resposta para "esta linha faz parte de um grupo?" — e, medido no Proto,
+ * a primeira já basta: das 63 linhas de grupo do Raul, 63 têm `grupo_ids` com mais de um
+ * id, nenhuma sem. É também o critério que o resto da tela usa (`gruposIdsDoSplit`).
+ * ⚠ E O TIPO `MatchStatus` NÃO DÁ PARA TESTAR HOJE: ele declara 5 valores e o banco grava
+ * 10 (medido). Comparar com 'sugestao_split' é TS2367. Ampliá-lo é o conserto de raiz e
+ * custa 7 erros novos em `Record<MatchStatus, …>` de duas telas legadas — fica registrado
+ * como dívida, fora deste PR.
+ */
+export function parteDeAgrupamento(row: ClassificacaoStagingPreviewRow): boolean {
+  const meta = row.casamento_meta;
+  if (!meta || typeof meta !== 'object') return false;
+  const ids = (meta as Record<string, unknown>).grupo_ids;
+  return Array.isArray(ids) && ids.length > 1;
+}
+
+/** Uma divergência real entre a planilha e o extrato, já peneirada. */
+export interface DivergenciaBanco {
+  /** A chave de `EnriqComparativoLinha.campo`, para a célula se achar. */
+  campo: string;
+  /** O nome em português de operador, para o rodapé. */
+  rotulo: string;
+  banco: string;
+  planilha: string;
+}
+
+/**
+ * O que a planilha diz e o extrato desmente — 133h-b item 4.
+ *
+ * ⚠ TRÊS FALSOS POSITIVOS SAÍRAM, e os três vinham de comparar TEXTO onde havia
+ * identidade: tipo por rótulo ("2-Saídas" × "Saída"), conta por nome ("Sicredi Lavoura Ag.
+ * 0903 C/C 95982 3" × "Sicredi Lavoura") e valor numa linha que é PARTE de um agrupamento.
+ * Com os três acesos, o rodapé gritava divergência em quase toda linha — e um aviso que
+ * aparece sempre é um aviso que ninguém lê.
+ *
+ * ⚠ A CONTA COMPARA POR ID, e o resolvedor é o soberano (`resolverContaPorTexto`): apelido,
+ * nome exato ou agência+número. Texto que não resolve não vira divergência — não saber a
+ * qual conta o texto se refere é ausência, e ausência não é conflito.
+ */
+export function divergenciasComExtrato(
+  row: ClassificacaoStagingPreviewRow,
+  contas: readonly ContaResolvivel[],
+): DivergenciaBanco[] {
+  const fora: DivergenciaBanco[] = [];
+
+  /* Data de pagamento: comparação de ISO com ISO, sem rótulo no meio. */
+  if (row.lanc_data_pagamento && row.excel_data_pagamento
+      && row.lanc_data_pagamento !== row.excel_data_pagamento) {
+    fora.push({
+      campo: 'Data pagamento', rotulo: 'data de pagamento',
+      banco: fmtData(row.lanc_data_pagamento), planilha: fmtData(row.excel_data_pagamento),
+    });
+  }
+
+  /* Valor: só quando a linha NÃO é parte de um agrupamento (item 4c). */
+  if (!parteDeAgrupamento(row)
+      && row.lanc_valor !== null && row.excel_valor !== null
+      && Math.round(Number(row.lanc_valor) * 100) !== Math.round(Number(row.excel_valor) * 100)) {
+    fora.push({
+      campo: 'Valor', rotulo: 'valor',
+      banco: fmtBRL(row.lanc_valor), planilha: fmtBRL(row.excel_valor),
+    });
+  }
+
+  /* Conta: por ID resolvido (item 4b). */
+  const idBanco = contaEfetivaId(row.lanc_tipo_operacao, row.lanc_conta_bancaria_id, row.lanc_conta_destino_id);
+  const textoPlanilha = row.excel_conta_origem;
+  if (idBanco && textoPlanilha) {
+    const resolvida = resolverContaPorTexto(textoPlanilha, contas);
+    if (resolvida && resolvida.id !== idBanco) {
+      fora.push({
+        campo: 'Banco', rotulo: 'conta bancária',
+        banco: contaEfetivaNome(row.lanc_tipo_operacao, row.lanc_conta_bancaria_nome, row.lanc_conta_destino_nome) ?? '—',
+        planilha: resolvida.nome_exibicao,
+      });
+    }
+  }
+
+  /* Tipo: normalizado (item 4a). */
+  const tipoBanco = normalizarTipo(row.lanc_sinal === '1' ? '1' : row.lanc_sinal === '-1' ? '2' : row.lanc_tipo_operacao);
+  const tipoPlanilha = normalizarTipo(row.excel_tipo_operacao);
+  if (tipoBanco && tipoPlanilha && tipoBanco !== tipoPlanilha) {
+    fora.push({ campo: 'Tipo', rotulo: 'tipo', banco: tipoBanco, planilha: tipoPlanilha });
+  }
+
+  return fora;
+}
+
+/**
+ * Um órfão do mês PRECISA de trabalho, ou já está explicado? — 133h-b item 6.
+ *
+ * ⚠ A LISTA MISTURAVA AS DUAS COISAS e por isso assustava: 201 lançamentos que a planilha
+ * não cita, todos com a mesma cara, quando só 40 pediam alguma coisa (medido em 133c-a). O
+ * resto é transferência entre contas, estorno, fatura de cartão e lançamento já
+ * classificado — coisas que a planilha do mês não explica POR DESIGN, não por falha.
+ *
+ * ⚠ O CRITÉRIO É "TEM SUBCENTRO?" MAIS "TEM SÓSIA?", e não uma lista de palavras: o
+ * subcentro é o que diz se alguém já classificou aquele lançamento, e o candidato a
+ * duplicata é a única outra razão para agir. Classificar por texto da descrição
+ * ("transferência", "estorno") seria adivinhar pela grafia do banco.
+ */
+export function precisaDeVoce(
+  l: { lanc_id: string; subcentro: string | null; valor: number | null; data_pagamento: string | null; conta_nome: string | null },
+  lista: readonly { lanc_id: string; valor: number | null; data_pagamento: string | null; conta_nome: string | null }[],
+): boolean {
+  if (!l.subcentro || l.subcentro.trim() === '') return true;
+  return temCandidatoDuplicata(l, lista);
 }
