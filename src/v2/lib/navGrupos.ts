@@ -165,7 +165,15 @@ export const NAV_GRUPOS: NavGrupo[] = [
           // FEATURE_FLAGS.MESA_OPERACIONAL_V2, que estava ATIVA no ambiente da Vercel apesar de
           // ausente nos .env do repo; sem este item a flag deixa de ter qualquer consumidor e
           // VITE_MESA_OPERACIONAL_V2=true nao reativa mais nada.
-          { id: 'financiamentos',      label: 'Financiamentos',          status: 'needs-wrapper' },
+          /* ⚠ ROTULO CURTO POR MEDIDA, nao por gosto. A tela se chama "Parcelamentos e
+             Financiamentos" (breadcrumb e titulo), mas o nome inteiro nao cabe aqui: o
+             drawer e' `w-60` (240px), menos `px-2` do nav e `px-3` do item sobram 200px, e
+             este item e' `needs-wrapper` — leva um ponto de 6px mais `gap-2`, entao sobram
+             186px. Sao 30 caracteres em 12px contra os 23 do item mais longo de hoje
+             ("Lançamentos Financeiros"), que dispoe de 200px por nao ter o ponto: 30% mais
+             texto em 7% menos espaco. O `truncate` do span cortaria justamente
+             "Financiamentos", a palavra pela qual o operador conhece a tela. */
+          { id: 'financiamentos',      label: 'Financ. e Parcelamentos', status: 'needs-wrapper' },
           { id: 'contratos',           label: 'Contratos',               status: 'needs-wrapper' },
           { id: 'recorrencias',        label: 'Recorrências',            status: 'ready' },
           // PR-IMPORT-EXCEL-LANC-01 — planilha no vocabulário DO CLIENTE (de-para de plano
