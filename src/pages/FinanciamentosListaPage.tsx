@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useCliente } from '@/contexts/ClienteContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { useState, useMemo } from 'react';
@@ -52,6 +53,7 @@ interface FinanciamentosListaProps {
 
 export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }: FinanciamentosListaProps = {}) {
   const { clienteAtual } = useCliente();
+  const { user } = useAuth();
   const clienteId = clienteAtual?.id;
 
   const STORAGE_KEY = `financiamentos_lista_filtros_${clienteAtual?.id ?? 'anon'}`;
@@ -234,12 +236,6 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
     aPagar: filtered.reduce((s, f) => s + f.total_pendente, 0),
   }), [filtered]);
 
-  const fmtCompact = (v: number) => {
-    if (Math.abs(v) >= 1_000_000) return `R$ ${(v / 1_000_000).toFixed(1)}M`;
-    if (Math.abs(v) >= 1_000) return `R$ ${(v / 1_000).toFixed(0)}k`;
-    return fmt(v);
-  };
-
   const hasExtraFilters = !!(filtroDescricao || filtroContrato || filtroCredor !== 'todos' ||
     filtroDataContratoDe || filtroDataContratoAte || filtroVencDe || filtroVencAte);
 
@@ -264,8 +260,29 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
 
   return (
     <div className="w-full max-w-5xl mx-auto flex flex-col bg-background" style={{ height: 'calc(100vh - 60px)' }}>
-      {/* Cabeçalho fixo: título + filtros + totalizadores inline */}
-      <div className="shrink-0 bg-background border-b shadow-sm px-4 pt-4 pb-2 space-y-2">
+      {/* ═══ BARRA SUPERIOR — PR-PARC-01 item 1 ═══════════════════════════════════
+          ⚠ SÓ NESTA TELA, e dentro do container que já desconta 60px: ela custa 32px
+          do corpo, e o envelope aceitou o preço. `sticky` aqui é redundante com o
+          `shrink-0` do flex — mantido porque é a classe da referência, e divergir dela
+          num PR de paridade seria criar a segunda régua que este PR veio apagar.
+          ⚠ SEM BOTÃO SAIR: o menu lateral já tem, e um segundo caminho para sair é um
+          caminho que ninguém testa. */}
+      <header className="sticky top-0 z-40 shrink-0 bg-primary shadow-md">
+        <div className="flex items-center justify-between gap-2 px-3 py-1">
+          <p className="min-w-0 truncate text-[11px] font-semibold tracking-wide text-primary-foreground">
+            Financeiro<span className="mx-1 text-primary-foreground/40">/</span>
+            <span className="font-normal text-primary-foreground/90">Parcelamentos e Financiamentos</span>
+          </p>
+          {/* ⚠ O EMAIL VEM DO `useAuth` QUE JÁ EXISTE (`contexts/AuthContext`), não de
+              um hook novo: o Header e outras telas já leem `user?.email` dali. */}
+          <span className="max-w-[220px] truncate text-[10px] text-primary-foreground/65">
+            {user?.email ?? ''}
+          </span>
+        </div>
+      </header>
+
+      {/* Cabeçalho fixo: título + totais + filtros */}
+      <div className="shrink-0 bg-background border-b shadow-sm px-4 pt-3 pb-2 space-y-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             {onVoltar && (
@@ -277,126 +294,133 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
                 ainda deve". Ele nomeia a pergunta que a tela responde, e a segunda
                 metade é exatamente a coluna que faltava. */}
             <div className="min-w-0">
-              <h1 className="text-lg font-bold leading-none text-foreground">Financiamentos</h1>
-              <p className="mt-1 text-[11px] text-muted-foreground">
+              <h1 className="text-xl font-bold tracking-tight leading-none text-foreground">
+                Parcelamentos e Financiamentos
+              </h1>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
                 O que você contratou — e quanto ainda deve
               </p>
             </div>
           </div>
-          <Button size="sm" className="gap-1" onClick={onNovo}>
-            <Plus className="h-4 w-4" /> Novo
+          {/* CTA da casa: o mesmo `bg-cta` do resto do sistema, em 28px. */}
+          <Button size="sm" className="h-7 gap-1 bg-cta px-2.5 text-xs font-semibold text-cta-foreground hover:bg-cta-hover"
+            onClick={onNovo}>
+            <Plus className="size-3.5" /> Novo
           </Button>
         </div>
 
-        <div className="flex items-center gap-3 flex-wrap">
+        {/* ═══ TOTAIS — PR-PARC-01 item 3 ══════════════════════════════════════════
+            ⚠ SAÍRAM DA LINHA DE FILTROS, onde eram dois pares de 10px espremidos
+            contra a borda direita: são os dois números que respondem à pergunta do
+            subtítulo, e ficavam menores que os rótulos dos filtros.
+            ⚠ E VOLTARAM A SER VALOR COMPLETO (A19). O `fmtCompact` local abreviava
+            "R$ 17.6M": abreviação esconde a ordem de grandeza exata justamente no
+            número que se confere contra o banco. Ele era local a este arquivo — não
+            um formatador compartilhado — e saiu junto. */}
+        <div className="flex items-baseline gap-6 px-0 py-1">
+          <div>
+            <div className="text-[11px] text-muted-foreground">Total financiado</div>
+            <div className="text-[20px] font-medium tabular-nums leading-tight">{fmt(totais.financiado)}</div>
+          </div>
+          <div>
+            <div className="text-[11px] text-muted-foreground">A pagar</div>
+            <div className="text-[20px] font-medium tabular-nums leading-tight">{fmt(totais.aPagar)}</div>
+          </div>
+        </div>
+
+        {/* ═══ FILTROS — PR-PARC-01 item 4 ════════════════════════════════════════
+            ⚠ DUAS LINHAS DE 28px, e os rótulos "Contrato de:" / "Venc. de:" saíram: em
+            24 caracteres de largura fixa cada, os quatro rótulos gastavam mais espaço
+            que os quatro campos. O contexto foi para o placeholder, que só aparece
+            quando o campo está vazio — que é justamente quando ele é preciso.
+            ⚠ `h-7` EM TUDO: o padrão da casa para linha densa. Antes eram `h-8` (32px)
+            em dois blocos com `space-y-2` e `flex-wrap`, e o topo inteiro passava de
+            400px numa tela cuja lista é o conteúdo. */}
+        <div className="flex items-center gap-1.5">
+          <Input
+            placeholder="Buscar descrição..."
+            value={filtroDescricao}
+            onChange={e => setFiltroDescricao(e.target.value)}
+            className="h-7 w-44 text-[11px]"
+          />
+          <Input
+            placeholder="Nº contrato..."
+            value={filtroContrato}
+            onChange={e => setFiltroContrato(e.target.value)}
+            className="h-7 w-28 text-[11px]"
+          />
           <Select value={filtroStatus} onValueChange={setFiltroStatus}>
-            <SelectTrigger className="w-36 h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-7 w-24 text-[11px]"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="todos">Todos status</SelectItem>
+              <SelectItem value="todos">Todos</SelectItem>
               <SelectItem value="ativo">Ativo</SelectItem>
               <SelectItem value="quitado">Quitado</SelectItem>
               <SelectItem value="cancelado">Cancelado</SelectItem>
             </SelectContent>
           </Select>
           <Select value={filtroTipo} onValueChange={setFiltroTipo}>
-            <SelectTrigger className="w-36 h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-7 w-24 text-[11px]"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="todos">Todos tipos</SelectItem>
+              <SelectItem value="todos">Todos</SelectItem>
               <SelectItem value="pecuaria">Pecuária</SelectItem>
               <SelectItem value="agricultura">Agricultura</SelectItem>
             </SelectContent>
           </Select>
-
-          <div className="flex-1" />
-
-          <div className="flex items-center gap-4 text-xs">
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-muted-foreground uppercase text-[10px]">Total financiado:</span>
-              <span className="font-bold tabular-nums text-foreground">{fmtCompact(totais.financiado)}</span>
-            </div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-muted-foreground uppercase text-[10px]">A pagar:</span>
-              <span className="font-bold tabular-nums text-foreground">{fmtCompact(totais.aPagar)}</span>
-            </div>
-          </div>
+          <Select value={filtroCredor} onValueChange={setFiltroCredor}>
+            <SelectTrigger className="h-7 w-40 text-[11px]"><SelectValue placeholder="Credor" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos credores</SelectItem>
+              {credores.map(cr => <SelectItem key={cr} value={cr}>{cr}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          {/* ⚠ O "Limpar" FICA, e fica na primeira linha: ele existe desde antes deste
+              PR e some sozinho quando não há filtro extra. Tirá-lo obrigaria a limpar
+              sete campos à mão. */}
+          {hasExtraFilters && (
+            <Button variant="ghost" size="sm" className="h-7 px-2 text-[11px]" onClick={clearExtraFilters}>
+              Limpar
+            </Button>
+          )}
         </div>
 
-        {/* Filtros linha 1: texto + credor | linha 2: datas em grid 2 colunas */}
-        <div className="space-y-2">
-          {/* Linha 1 */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <Input
-              placeholder="Buscar descrição..."
-              value={filtroDescricao}
-              onChange={e => setFiltroDescricao(e.target.value)}
-              className="h-8 text-xs w-44"
-            />
-            <Input
-              placeholder="Nº contrato..."
-              value={filtroContrato}
-              onChange={e => setFiltroContrato(e.target.value)}
-              className="h-8 text-xs w-36"
-            />
-            <Select value={filtroCredor} onValueChange={setFiltroCredor}>
-              <SelectTrigger className="w-40 h-8 text-xs"><SelectValue placeholder="Credor" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos credores</SelectItem>
-                {credores.map(cr => <SelectItem key={cr} value={cr}>{cr}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            {hasExtraFilters && (
-              <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={clearExtraFilters}>
-                Limpar
-              </Button>
-            )}
-          </div>
-          {/* Linha 2: grid 2×2 para datas */}
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1 w-fit">
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-muted-foreground w-24 shrink-0">Contrato de:</span>
-              <input
-                type="text"
-                value={filtroDataContratoDe}
-                onChange={e => setFiltroDataContratoDe(maskDate(e.target.value))}
-                placeholder="dd/mm/aaaa"
-                maxLength={10}
-                className="h-8 text-xs border rounded-md px-2 bg-background w-28 font-mono"
-              />
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-muted-foreground w-24 shrink-0">Contrato até:</span>
-              <input
-                type="text"
-                value={filtroDataContratoAte}
-                onChange={e => setFiltroDataContratoAte(maskDate(e.target.value))}
-                placeholder="dd/mm/aaaa"
-                maxLength={10}
-                className="h-8 text-xs border rounded-md px-2 bg-background w-28 font-mono"
-              />
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-muted-foreground w-24 shrink-0">Venc. de:</span>
-              <input
-                type="text"
-                value={filtroVencDe}
-                onChange={e => setFiltroVencDe(maskDate(e.target.value))}
-                placeholder="dd/mm/aaaa"
-                maxLength={10}
-                className="h-8 text-xs border rounded-md px-2 bg-background w-28 font-mono"
-              />
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-muted-foreground w-24 shrink-0">Venc. até:</span>
-              <input
-                type="text"
-                value={filtroVencAte}
-                onChange={e => setFiltroVencAte(maskDate(e.target.value))}
-                placeholder="dd/mm/aaaa"
-                maxLength={10}
-                className="h-8 text-xs border rounded-md px-2 bg-background w-28 font-mono"
-              />
-            </div>
-          </div>
+        {/* ⚠ AS DATAS CONTINUAM `input` DE TEXTO com `maxLength={10}` e `font-mono` — a
+            máscara (`maskDate`) já existe neste arquivo e não é `type="date"`, que o
+            gate de controle nativo proíbe. O que muda aqui é só a altura e o rótulo. */}
+        <div className="flex items-center gap-1.5">
+          <span className="w-14 shrink-0 text-[10px] text-muted-foreground">Contrato</span>
+          <input
+            type="text"
+            value={filtroDataContratoDe}
+            onChange={e => setFiltroDataContratoDe(maskDate(e.target.value))}
+            placeholder="de dd/mm/aaaa"
+            maxLength={10}
+            className="h-7 w-[92px] rounded-md border bg-background px-2 font-mono text-[11px]"
+          />
+          <input
+            type="text"
+            value={filtroDataContratoAte}
+            onChange={e => setFiltroDataContratoAte(maskDate(e.target.value))}
+            placeholder="até dd/mm/aaaa"
+            maxLength={10}
+            className="h-7 w-[92px] rounded-md border bg-background px-2 font-mono text-[11px]"
+          />
+          <span className="ml-3 w-16 shrink-0 text-[10px] text-muted-foreground">Vencimento</span>
+          <input
+            type="text"
+            value={filtroVencDe}
+            onChange={e => setFiltroVencDe(maskDate(e.target.value))}
+            placeholder="de dd/mm/aaaa"
+            maxLength={10}
+            className="h-7 w-[92px] rounded-md border bg-background px-2 font-mono text-[11px]"
+          />
+          <input
+            type="text"
+            value={filtroVencAte}
+            onChange={e => setFiltroVencAte(maskDate(e.target.value))}
+            placeholder="até dd/mm/aaaa"
+            maxLength={10}
+            className="h-7 w-[92px] rounded-md border bg-background px-2 font-mono text-[11px]"
+          />
         </div>
       </div>
 
