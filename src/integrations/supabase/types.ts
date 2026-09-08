@@ -4729,6 +4729,8 @@ export type Database = {
           match_status: string
           proposto_editado_em: string | null
           proposto_editado_por: string | null
+          revisado_em: string | null
+          revisado_por: string | null
           sessao_id: string
           staging_id: string
           update_proposto: Json | null
@@ -4769,6 +4771,8 @@ export type Database = {
           match_status: string
           proposto_editado_em?: string | null
           proposto_editado_por?: string | null
+          revisado_em?: string | null
+          revisado_por?: string | null
           sessao_id: string
           staging_id?: string
           update_proposto?: Json | null
@@ -4809,6 +4813,8 @@ export type Database = {
           match_status?: string
           proposto_editado_em?: string | null
           proposto_editado_por?: string | null
+          revisado_em?: string | null
+          revisado_por?: string | null
           sessao_id?: string
           staging_id?: string
           update_proposto?: Json | null
@@ -11068,6 +11074,8 @@ export type Database = {
           proposto_subcentro: string | null
           proposto_subcentro_existe_no_plano: boolean | null
           proposto_tier: string | null
+          revisado_em: string | null
+          revisado_por: string | null
           sessao_id: string | null
           staging_id: string | null
           updated_at: string | null
@@ -12273,6 +12281,14 @@ export type Database = {
       }
       fn_classificacao_editar_proposto: {
         Args: { p_patch: Json; p_staging_id: string }
+        Returns: Json
+      }
+      fn_classificacao_excluir_sessao: {
+        Args: { p_sessao_id: string; p_simular?: boolean }
+        Returns: Json
+      }
+      fn_classificacao_marcar_revisada: {
+        Args: { p_revisada?: boolean; p_staging_id: string }
         Returns: Json
       }
       fn_classificacao_meta: { Args: { p_motor: Json }; Returns: Json }
