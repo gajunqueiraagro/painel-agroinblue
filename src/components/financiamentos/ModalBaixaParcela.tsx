@@ -12,6 +12,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
+import { DatePicker } from '@/components/ui/date-picker';
+import { CampoMoeda } from '@/components/ui/campo-moeda';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -43,6 +45,8 @@ interface Financiamento {
   numero_contrato?: string | null;
   credor_id?: string | null;
   data_contrato?: string | null;
+  /** PR-PARC-05 — decide se a coluna/campo de Juros existe. Parcelamento nao tem juros. */
+  natureza?: string | null;
 }
 
 interface Props {
@@ -53,6 +57,28 @@ interface Props {
 }
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+/* Idioma canonico de campo travado (AbaLiquidacaoOC / CompraModalShell). */
+const CAMPO_TRAVADO = 'bg-muted border-border/60 text-muted-foreground';
+const CAMPO = 'h-8';                                   // A16 — tudo na mesma altura
+const ROTULO = 'text-[10px] font-normal text-muted-foreground';
+/* ⚠ O DROPDOWN TEM A LARGURA DO CAMPO. Sem `position="popper"` o Radix mede a caixa
+   pelo item mais longo e ela estoura para fora do modal de 448px; com ele, a variavel
+   `--radix-select-trigger-width` existe e a caixa nasce do tamanho do gatilho. */
+const SELECT_POPPER = 'w-[var(--radix-select-trigger-width)]';
+
+/* Vocabulario de tela — os identificadores gravados continuam pendente/pago/cancelado. */
+type Situacao = 'pendente' | 'pago' | 'cancelado';
+/* ⚠ GUARDA, NAO CAST (regra zero-cast). O `onValueChange` entrega `string`; `as any`
+   calaria o compilador sem olhar o valor. */
+const ehSituacao = (v: string): v is Situacao =>
+  v === 'pendente' || v === 'pago' || v === 'cancelado';
+
+const SITUACAO_LABEL: Record<string, string> = {
+  pendente: 'Pendente',
+  pago: 'Paga',
+  cancelado: 'Cancelada',
+};
 
 export default function ModalBaixaParcela({ parcela, financiamento, onClose, modo = 'registrar' }: Props) {
   const qc = useQueryClient();
@@ -139,6 +165,7 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
 
   const valorTotal = principal + juros;
   const isEditar = modo === 'editar';
+  const ehParcelamento = financiamento.natureza === 'parcelamento';
 
   const { data: contas = [] } = useQuery({
     queryKey: ['baixa-contas', financiamento.cliente_id],
@@ -497,13 +524,20 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
   return (
     <>
       <Dialog open={!!parcela} onOpenChange={(v) => { if (!v) handleRequestClose(); }}>
-        <DialogContent className={`max-w-md ${isEditar ? 'border-primary/60 border-2' : ''}`}>
-          <DialogHeader>
-            <DialogTitle className="text-sm">
-              {isEditar ? `Editar Parcela #${parcela.numero_parcela}` : `Registrar pagamento — Parcela ${parcela.numero_parcela}/${financiamento.total_parcelas}`}
+        {/* ⚠ ENVELOPE DAS CASCAS PROPRIAS (o mesmo do ObrigacaoDialog e do CompraModalShell):
+            `p-0 gap-0 overflow-hidden` e X nativo escondido — sem `gap-0` o DialogContent
+            injeta `gap-4` entre cabecalho, corpo e rodape. */}
+        <DialogContent className="max-w-md p-0 gap-0 overflow-hidden [&>button.absolute]:hidden">
+          <div className="bg-primary text-primary-foreground px-6 py-2.5">
+            <DialogTitle className="text-lg font-bold leading-tight">
+              Parcela {parcela.numero_parcela}/{financiamento.total_parcelas}
             </DialogTitle>
-            {isEditar && <div className="text-[10px] text-primary font-semibold uppercase">Modo edição</div>}
-          </DialogHeader>
+            {/* O contrato no subtitulo: aberto por dentro da tela do contrato, o modal
+                perdia a referencia de QUAL contrato se estava mexendo. */}
+            <p className="mt-1 text-xs text-white/80 truncate" title={financiamento.descricao}>
+              {financiamento.descricao}
+            </p>
+          </div>
 
           {/* REGISTRAR */}
           {modo === 'registrar' && (
@@ -545,76 +579,92 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
 
           {/* EDITAR */}
           {isEditar && (
-            <div className="space-y-3">
-              <div>
-                <Label className="text-xs">Data de vencimento *</Label>
-                <Input type="date" value={dataVencimento} onChange={e => setDataVencimento(e.target.value)} />
-                {erros.data_vencimento && <p className="text-[10px] text-destructive mt-0.5">{erros.data_vencimento}</p>}
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <Label className="text-xs">Principal *</Label>
-                  <Input type="number" step="0.01" value={principal} onChange={e => setPrincipal(Number(e.target.value))} />
-                  {erros.valor_principal && <p className="text-[10px] text-destructive mt-0.5">{erros.valor_principal}</p>}
-                </div>
-                <div>
-                  <Label className="text-xs">Juros *</Label>
-                  <Input type="number" step="0.01" value={juros} onChange={e => setJuros(Number(e.target.value))} />
-                  {erros.valor_juros && <p className="text-[10px] text-destructive mt-0.5">{erros.valor_juros}</p>}
-                </div>
-                <div>
-                  <Label className="text-xs">Total</Label>
-                  <Input type="text" value={fmt(valorTotal)} readOnly className="bg-muted font-semibold" />
-                </div>
-              </div>
+            <div className="p-4 space-y-2.5">
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <Label className="text-xs">Status *</Label>
-                  <Select value={status} onValueChange={(v) => setStatus(v as any)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="pendente">Pendente</SelectItem>
-                      <SelectItem value="pago">Pago</SelectItem>
-                      <SelectItem value="cancelado">Cancelado</SelectItem>
+                  <Label className={ROTULO}>Vencimento *</Label>
+                  <DatePicker value={dataVencimento} onChange={setDataVencimento} />
+                  {erros.data_vencimento && <p className="text-[10px] text-destructive mt-0.5">{erros.data_vencimento}</p>}
+                </div>
+                <div>
+                  <Label className={ROTULO}>Situação *</Label>
+                  <Select value={status} onValueChange={(v) => { if (ehSituacao(v)) setStatus(v); }}>
+                    <SelectTrigger className={CAMPO}><SelectValue /></SelectTrigger>
+                    <SelectContent position="popper" className={SELECT_POPPER}>
+                      <SelectItem value="pendente">{SITUACAO_LABEL.pendente}</SelectItem>
+                      <SelectItem value="pago">{SITUACAO_LABEL.pago}</SelectItem>
+                      <SelectItem value="cancelado">{SITUACAO_LABEL.cancelado}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-                {status === 'pago' && (
+              </div>
+
+              {/* ⚠ SEM COLUNA DE JUROS NO PARCELAMENTO — a grade encolhe para 2 colunas.
+                  Esconder a celula mantendo `grid-cols-3` deixaria um terco vazio, e buraco
+                  em grade le-se como campo que faltou carregar. */}
+              <div className={`grid gap-2 ${ehParcelamento ? 'grid-cols-2' : 'grid-cols-3'}`}>
+                <div>
+                  <Label className={ROTULO}>Principal *</Label>
+                  <CampoMoeda valor={principal} onChange={n => setPrincipal(n ?? 0)}
+                    placeholder="R$ 0,00" className={`${CAMPO} text-right font-mono tabular-nums`} />
+                  {erros.valor_principal && <p className="text-[10px] text-destructive mt-0.5">{erros.valor_principal}</p>}
+                </div>
+                {!ehParcelamento && (
                   <div>
-                    <Label className="text-xs">Data pagamento *</Label>
-                    <Input type="date" value={dataPagamento} onChange={e => setDataPagamento(e.target.value)} />
-                    {erros.data_pagamento && <p className="text-[10px] text-destructive mt-0.5">{erros.data_pagamento}</p>}
+                    <Label className={ROTULO}>Juros *</Label>
+                    <CampoMoeda valor={juros} onChange={n => setJuros(n ?? 0)}
+                      placeholder="R$ 0,00" className={`${CAMPO} text-right font-mono tabular-nums`} />
+                    {erros.valor_juros && <p className="text-[10px] text-destructive mt-0.5">{erros.valor_juros}</p>}
                   </div>
                 )}
-              </div>
-              {status === 'pago' && (
                 <div>
-                  <Label className="text-xs">Conta bancária *</Label>
-                  {/* PR-H2 — ContaBancariaSelect compartilhado. */}
+                  <Label className={ROTULO}>Total</Label>
+                  <Input readOnly tabIndex={-1} value={fmt(valorTotal)}
+                    className={`${CAMPO} text-right font-mono tabular-nums ${CAMPO_TRAVADO}`} />
+                </div>
+              </div>
+
+              {/* ⚠ OS DOIS CAMPOS DO PAGAMENTO EXISTEM SEMPRE, DESABILITADOS ATE' A PARCELA
+                  SER PAGA. Antes eles APARECIAM ao trocar a situacao: o modal mudava de
+                  altura debaixo do cursor e o rodape saia do lugar. Desabilitado tambem e'
+                  honesto — fora de "Paga" a conta nao e' lida pelo gravador. */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className={ROTULO}>Pago em {status === 'pago' && '*'}</Label>
+                  <DatePicker value={dataPagamento} onChange={setDataPagamento} disabled={status !== 'pago'} />
+                  {erros.data_pagamento && <p className="text-[10px] text-destructive mt-0.5">{erros.data_pagamento}</p>}
+                </div>
+                <div>
+                  <Label className={ROTULO}>Conta bancária {status === 'pago' && '*'}</Label>
                   <ContaBancariaSelect
                     value={contaBancariaId}
                     onValueChange={setContaBancariaId}
                     contas={contas}
                     placeholder="Selecione"
+                    disabled={status !== 'pago'}
+                    className={CAMPO}
                   />
                   {erros.conta_bancaria_id && <p className="text-[10px] text-destructive mt-0.5">{erros.conta_bancaria_id}</p>}
                 </div>
-              )}
+              </div>
+
               <div>
-                <Label className="text-xs">Observação</Label>
-                <Textarea value={observacao} onChange={e => setObservacao(e.target.value)} rows={2} placeholder="Opcional" />
+                <Label className={ROTULO}>Observação</Label>
+                <Input className={CAMPO} value={observacao} onChange={e => setObservacao(e.target.value)} placeholder="opcional" />
               </div>
             </div>
           )}
 
-          <DialogFooter>
-            <Button variant="outline" onClick={handleRequestClose} disabled={saving}>Cancelar</Button>
+          <DialogFooter className="border-t px-4 py-2.5 sm:justify-end">
+            <Button variant="outline" size="sm" className={CAMPO} onClick={handleRequestClose} disabled={saving}>Cancelar</Button>
             {isEditar ? (
-              <Button onClick={handleSalvarEdicao} disabled={saving || temErros}>
-                {saving ? 'Salvando…' : 'Salvar alterações'}
+              <Button size="sm" className={`${CAMPO} bg-cta text-cta-foreground hover:bg-cta-hover font-semibold`}
+                onClick={handleSalvarEdicao} disabled={saving || temErros}>
+                {saving ? 'Salvando…' : 'Salvar'}
               </Button>
             ) : (
-              <Button onClick={handleConfirmRegistrar} disabled={saving}>
+              <Button size="sm" className={`${CAMPO} bg-cta text-cta-foreground hover:bg-cta-hover font-semibold`}
+                onClick={handleConfirmRegistrar} disabled={saving}>
                 {saving ? 'Salvando…' : 'Confirmar pagamento'}
               </Button>
             )}

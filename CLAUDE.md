@@ -319,8 +319,14 @@ preview que o cabecalho nao sai da tela ao rolar.
   ⚠ "NAO CABE EM 10px" NAO E' EXCECAO: ajusta-se o componente, nunca se
   volta ao nativo. Ja foi corrigido uma vez (PR-OC-DATA-PADRAO-01) e
   voltou na linha da parcela em 06/09 — por isso virou gate.
-  ⚠ O GATE TEM BASELINE, como o TSC: 42 arquivos herdados (46 `type=date`,
-  25 `<select>`). Falhar por eles pararia todo PR e o gate seria desligado
+  ⚠ O GATE TEM BASELINE, como o TSC: 38 arquivos herdados (41 `type=date`,
+  20 `<select>`). Era 42 (46/25) e caiu para 39 sem que este numero fosse
+  atualizado; o PR-PARC-05 tirou mais 3 `type=date` (1 do
+  FinanciamentoDetalhe, que zerou e saiu da lista, e 2 do ModalBaixaParcela,
+  que foi de 3 para 1 — o restante mora no modo `registrar`, sem chamador).
+  Os tres numeros acima foram MEDIDOS com
+  `node scripts/check-ui-nativo.mjs --baseline` sobre a arvore, nao herdados
+  do texto anterior. Falhar por eles pararia todo PR e o gate seria desligado
   na primeira semana — que e' como um gate morre. Ele acusa ocorrencia
   NOVA: arquivo fora da lista, ou arquivo da lista com MAIS do que a
   baseline. Reduzir e' sempre aceito; atualize a baseline no mesmo PR com

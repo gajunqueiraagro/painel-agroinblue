@@ -1,29 +1,25 @@
 import { useState } from 'react';
 import ModalBaixaParcela from '@/components/financiamentos/ModalBaixaParcela';
 import DialogVerLancamentosOficiais from '@/components/financiamentos/DialogVerLancamentosOficiais';
-import { CredorAutocomplete } from '@/components/financiamentos/CredorAutocomplete';
-import { ArrowLeft, Pencil, Trash2, DollarSign, CheckCircle2, Clock, AlertTriangle, BarChart3 } from 'lucide-react';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Pencil, Trash2 } from 'lucide-react';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table';
 import { Progress } from '@/components/ui/progress';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useCliente } from '@/contexts/ClienteContext';
 import { supabase } from '@/integrations/supabase/client';
 import { montarPayloadConta } from '@/lib/financeiro/contaPayload';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import {
+  ObrigacaoDialog,
+  SUBCENTRO_AMORTIZACAO, SUBCENTRO_JUROS, NOME_NATUREZA, PILULA_NATUREZA,
+} from '@/components/financiamentos/ObrigacaoDialog';
+import { FinanciamentoForm } from '@/hooks/useFinanciamentoCadastro';
 
 const fmt = (v: number) =>
   v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -32,6 +28,10 @@ const fmtDate = (d: string | null) =>
   d ? format(new Date(d + 'T12:00:00'), 'dd/MM/yyyy') : '—';
 
 const today = () => format(new Date(), 'yyyy-MM-dd');
+
+/* Numero em tabela: fonte mono e digitos de largura fixa, para as colunas alinharem
+   entre linhas (A6/A10/A22). */
+const NUM = 'font-mono tabular-nums whitespace-nowrap';
 
 /* ================================================================ */
 
@@ -47,10 +47,6 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
   const clienteId = clienteAtual?.id;
 
   const [editOpen, setEditOpen] = useState(false);
-  const [editForm, setEditForm] = useState<Record<string, any>>({});
-  const [planosEntrada, setPlanosEntrada] = useState<Array<{id:string; subcentro:string}>>([]);
-  const [editingCell, setEditingCell] = useState<{ parcelaId: string; field: 'valor_principal' | 'valor_juros' } | null>(null);
-  const [editingValue, setEditingValue] = useState('');
   const [parcelaEdit, setParcelaEdit] = useState<any>(null);
   const [parcelaLancamentosOpen, setParcelaLancamentosOpen] = useState<any>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -63,7 +59,10 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
     queryFn: async () => {
       const { data, error } = await supabase
         .from('financiamentos')
-        .select('*, financeiro_fornecedores!financiamentos_credor_id_fkey(nome), financeiro_contas_bancarias!financiamentos_conta_bancaria_id_fkey(nome_conta, nome_exibicao)')
+        /* PR-PARC-05 — o subcentro da classificacao da parcela entra no MESMO select:
+           no parcelamento ele e' o unico destino contabil do contrato e precisa aparecer
+           nos Dados. Uma relacao a mais, nenhuma query a mais. */
+        .select('*, financeiro_fornecedores!financiamentos_credor_id_fkey(nome), financeiro_contas_bancarias!financiamentos_conta_bancaria_id_fkey(nome_conta, nome_exibicao), financeiro_plano_contas!financiamentos_plano_conta_parcela_id_fkey(subcentro)')
         .eq('id', id!)
         .single();
       if (error) throw error;
@@ -94,73 +93,50 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
   const aVencer = pendentes.filter(p => p.data_vencimento >= hj).reduce((s, p) => s + Number(p.valor_principal) + Number(p.valor_juros), 0);
   const vencido = pendentes.filter(p => p.data_vencimento < hj).reduce((s, p) => s + Number(p.valor_principal) + Number(p.valor_juros), 0);
   const progresso = parcelas.length > 0 ? (pagas.length / parcelas.length) * 100 : 0;
+  /* Juros previstos — a soma do que o contrato vai custar ALEM do principal. No
+     parcelamento nao existe (o motor grava valor_juros = 0), e ali o numero certo e' o
+     traco, nunca "R$ 0,00": zero afirma que se apurou e deu zero. */
+  const jurosPrevistos = parcelas.reduce((s2, p) => s2 + Number(p.valor_juros), 0);
 
-  /* ── Lookups for edit modal ── */
-  const { data: fornecedores = [] } = useQuery({
-    queryKey: ['fin-fornecedores', clienteId],
-    enabled: !!clienteId && editOpen,
-    queryFn: async () => {
-      const { data } = await supabase.from('financeiro_fornecedores').select('id, nome').eq('cliente_id', clienteId!).order('nome');
-      return data ?? [];
-    },
-  });
+  /* ⚠ O FORM DEIXOU DE SER SEMEADO AQUI. Quem carrega o contrato agora e' o
+     `ObrigacaoDialog` em `modo="editar"` (query propria por `financiamentoId`), e por
+     isso sairam daqui o `editForm` e os tres lookups que so' o modal antigo usava
+     (fornecedores, contas e planos de entrada). Abrir e' so' abrir. */
+  const openEdit = () => setEditOpen(true);
 
-  const { data: contas = [] } = useQuery({
-    queryKey: ['fin-contas', clienteId],
-    enabled: !!clienteId && editOpen,
-    queryFn: async () => {
-      const { data } = await supabase.from('financeiro_contas_bancarias').select('id, nome_conta, nome_exibicao').eq('cliente_id', clienteId!).eq('ativa', true).order('ordem_exibicao');
-      return data ?? [];
-    },
-  });
-
-  /* ── Edit financiamento ── */
-  const openEdit = () => {
-    if (!fin) return;
-    setEditForm({
-      descricao: fin.descricao,
-      numero_contrato: fin.numero_contrato ?? '',
-      tipo_financiamento: fin.tipo_financiamento,
-      credor_id: fin.credor_id ?? '',
-      conta_bancaria_id: fin.conta_bancaria_id ?? '',
-      valor_total: fin.valor_total,
-      valor_entrada: fin.valor_entrada,
-      taxa_juros_mensal: fin.taxa_juros_mensal,
-      data_contrato: fin.data_contrato,
-      observacao: fin.observacao ?? '',
-      status: fin.status,
-      gerar_lancamento_captacao: fin.gerar_lancamento_captacao ?? false,
-      plano_conta_captacao_id: fin.plano_conta_captacao_id ?? '',
-    });
-    setEditOpen(true);
-    if (planosEntrada.length === 0) {
-      supabase
-        .from('financeiro_plano_contas')
-        .select('id, subcentro')
-        .eq('tipo_operacao', '1-Entradas')
-        .eq('ativo', true)
-        .order('ordem_exibicao')
-        .then(({ data }) => { if (data) setPlanosEntrada(data as any); });
-    }
-  };
-
-  const saveEdit = async () => {
+  /* ⚠ MESMO ESCRITOR DE SEMPRE — mudou a FONTE, nao a logica. Ele continua sendo o
+     unico lugar que sincroniza o lancamento de captacao (cria / atualiza / cancela) e
+     que invalida as sete chaves de saldo e auditoria; o que era `editForm.<campo>`
+     (Record solto) passou a ser `form.<campo>` (FinanciamentoForm tipado). O dialogo
+     entrega o form e este metodo grava — ver `onSalvarEdicao` no ObrigacaoDialog. */
+  const saveEdit = async (form: FinanciamentoForm, extras: { status: string }): Promise<boolean> => {
+    /* O banco guarda a taxa MENSAL; o form fala em ANUAL. Mesma conversao de juros
+       compostos que o gravador de criacao usa. */
+    const taxaMensal = form.taxa_juros_anual > 0
+      ? (Math.pow(1 + form.taxa_juros_anual / 100, 1 / 12) - 1) * 100
+      : 0;
     const { error } = await supabase
       .from('financiamentos')
       .update({
-        descricao: editForm.descricao,
-        numero_contrato: editForm.numero_contrato?.trim() || null,
-        tipo_financiamento: editForm.tipo_financiamento,
-        credor_id: editForm.credor_id || null,
-        conta_bancaria_id: editForm.conta_bancaria_id || null,
-        valor_total: Number(editForm.valor_total),
-        valor_entrada: Number(editForm.valor_entrada),
-        taxa_juros_mensal: Number(editForm.taxa_juros_mensal),
-        data_contrato: editForm.data_contrato,
-        observacao: editForm.observacao || null,
-        status: editForm.status,
-        gerar_lancamento_captacao: !!editForm.gerar_lancamento_captacao,
-        plano_conta_captacao_id: editForm.plano_conta_captacao_id || null,
+        natureza: form.natureza,
+        descricao: form.descricao,
+        numero_contrato: form.numero_contrato?.trim() || null,
+        tipo_financiamento: form.tipo_financiamento,
+        credor_id: form.credor_id || null,
+        conta_bancaria_id: form.conta_bancaria_id || null,
+        valor_total: form.valor_total,
+        valor_entrada: form.valor_entrada,
+        taxa_juros_mensal: Math.round(taxaMensal * 10000) / 10000,
+        data_contrato: form.data_contrato,
+        data_primeira_parcela: form.data_primeira_parcela || null,
+        observacao: form.observacao || null,
+        /* A situacao do contrato volta a ser editavel — o seletor mora na aba Contrato do
+           ObrigacaoDialog, so' em modo editar, e chega aqui por `extras` porque nao e' campo
+           de criacao (todo contrato nasce 'ativo'). */
+        status: extras.status,
+        gerar_lancamento_captacao: !!form.gerar_lancamento_captacao,
+        plano_conta_captacao_id: form.plano_conta_captacao_id || null,
+        plano_conta_parcela_id: form.plano_conta_parcela_id || null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', id!);
@@ -170,20 +146,20 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
     }
 
     // ── Sync lançamento de captação ──────────────────────────────────
-    const novoGerar = !!editForm.gerar_lancamento_captacao;
-    const novoPlanoCap = editForm.plano_conta_captacao_id;
+    const novoGerar = !!form.gerar_lancamento_captacao;
+    const novoPlanoCap = form.plano_conta_captacao_id;
     const lancId: string | null = (fin as any)?.lancamento_captacao_id ?? null;
-    const anoMes = format(new Date(editForm.data_contrato + 'T12:00:00'), 'yyyy-MM');
+    const anoMes = format(new Date(form.data_contrato + 'T12:00:00'), 'yyyy-MM');
 
     if (novoGerar && novoPlanoCap) {
       if (lancId) {
         await supabase.from('financeiro_lancamentos_v2').update({
-          valor: Number(editForm.valor_total),
-          data_competencia: editForm.data_contrato,
-          data_pagamento: editForm.data_contrato,
+          valor: form.valor_total,
+          data_competencia: form.data_contrato,
+          data_pagamento: form.data_contrato,
           // Convenção soberana (PR-K): 1-Entradas → conta_destino_id; conta_bancaria_id null.
-          ...montarPayloadConta('1-Entradas', editForm.conta_bancaria_id || null),
-          favorecido_id: editForm.credor_id || null,
+          ...montarPayloadConta('1-Entradas', form.conta_bancaria_id || null),
+          favorecido_id: form.credor_id || null,
           plano_conta_id: novoPlanoCap,
           ano_mes: anoMes,
           cancelado: false,
@@ -200,18 +176,18 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
             fazenda_id: (fin as any)?.fazenda_id,
             financiamento_id: id!,
             // Convenção soberana (PR-K): 1-Entradas → conta_destino_id; conta_bancaria_id null.
-            ...montarPayloadConta('1-Entradas', editForm.conta_bancaria_id || null),
-            favorecido_id: editForm.credor_id || null,
+            ...montarPayloadConta('1-Entradas', form.conta_bancaria_id || null),
+            favorecido_id: form.credor_id || null,
             tipo_operacao: '1-Entradas',
             sinal: 1,
-            valor: Number(editForm.valor_total),
-            data_competencia: editForm.data_contrato,
-            data_pagamento: editForm.data_contrato,
+            valor: form.valor_total,
+            data_competencia: form.data_contrato,
+            data_pagamento: form.data_contrato,
             ano_mes: anoMes,
             origem_lancamento: 'financiamento',
             origem_tipo: 'financiamento_captacao',
             plano_conta_id: novoPlanoCap,
-            descricao: `Captação: ${(editForm.descricao ?? '').trim()}`,
+            descricao: `Captação: ${(form.descricao ?? '').trim()}`,
             status_transacao: 'realizado',
             sem_movimentacao_caixa: false,
             cancelado: false,
@@ -233,8 +209,7 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
     }
     // ─────────────────────────────────────────────────────────────────
 
-    toast.success('Financiamento atualizado');
-    setEditOpen(false);
+    toast.success('Obrigação atualizada');
     // Invalidações RQ pós-sucesso — atualização "sem F5" das superfícies React Query.
     // (Superfícies imperativas — modal Lançamentos/useFinanceiroV2 e Conciliação/
     // useConciliacaoBancariaItens — atualizam só no remount; ver gate inicial.)
@@ -305,75 +280,13 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
     }
   };
 
-  /* ── Inline edit parcela ── */
-  const startCellEdit = (parcelaId: string, field: 'valor_principal' | 'valor_juros', currentVal: number) => {
-    setEditingCell({ parcelaId, field });
-    setEditingValue(String(currentVal));
-  };
-
-  const commitCellEdit = async () => {
-    if (!editingCell) return;
-    const val = Number(editingValue);
-    if (isNaN(val) || val < 0) {
-      setEditingCell(null);
-      return;
-    }
-    const updatePayload = editingCell.field === 'valor_principal'
-      ? { valor_principal: val, updated_at: new Date().toISOString() }
-      : { valor_juros: val, updated_at: new Date().toISOString() };
-    const { error } = await supabase
-      .from('financiamento_parcelas')
-      .update(updatePayload)
-      .eq('id', editingCell.parcelaId);
-    if (error) {
-      toast.error(error.message);
-    } else {
-      // Buscar IDs oficiais para sincronizar o financeiro
-      const { data: parcelaAtualizada } = await supabase
-        .from('financiamento_parcelas')
-        .select('lancamento_id, lancamento_juros_id, valor_principal, valor_juros')
-        .eq('id', editingCell.parcelaId)
-        .maybeSingle();
-      if (parcelaAtualizada?.lancamento_id || parcelaAtualizada?.lancamento_juros_id) {
-        // DESATIVADO (Opção A — eliminar espelhos auto em planejamento_financeiro):
-        // const { atualizarValoresMirror } = await import('@/lib/financiamentos/parcelaMirror');
-        // await atualizarValoresMirror(
-        //   supabase as any,
-        //   parcelaAtualizada.lancamento_id ?? null,
-        //   parcelaAtualizada.lancamento_juros_id ?? null,
-        //   Number(parcelaAtualizada.valor_principal) || 0,
-        //   Number(parcelaAtualizada.valor_juros) || 0,
-        // );
-      }
-      // Aciona motor oficial de reconciliacao financeira (uma chamada por funcao,
-      // no estado final da parcela apos o UPDATE inline). Motor le parcela e
-      // reconcilia espelhos em financeiro_lancamentos_v2.
-      // Cast em supabase: fn_reconciliar_parcela_financiamento criada no banco;
-      // tipos gerados ainda nao incluem (regeneracao em frente separada).
-      // PR-K-bis: edicao inline na grid nao tem campo de conta — passa null
-      // explicitamente; RPC faz fallback em financiamentos.conta_bancaria_id.
-      const { error: motorError } = await (supabase as any).rpc(
-        'fn_reconciliar_parcela_financiamento',
-        {
-          p_parcela_id: editingCell.parcelaId,
-          p_dry_run: false,
-          p_recalcula_vt: true,
-          p_conta_bancaria_id: null,
-        },
-      );
-      if (motorError) {
-        toast.error(
-          'Parcela salva, mas sincronizacao financeira falhou: ' + motorError.message,
-        );
-      }
-      qc.invalidateQueries({ queryKey: ['financiamento-parcelas', id] });
-      qc.invalidateQueries({ queryKey: ['financeiro-lancamentos'] });
-      qc.invalidateQueries({ queryKey: ['financeiro-data'] });
-      qc.invalidateQueries({ queryKey: ['fluxoCaixaModalLancs'] });
-      qc.invalidateQueries({ queryKey: ['parcela-lancamentos-oficiais'] });
-    }
-    setEditingCell(null);
-  };
+  /* ⚠ A EDICAO INLINE DA GRADE SAIU (PR-PARC-05). Ela abria um `<input type="number">`
+     de 24px DENTRO de uma celula `py-0` de linha de 21px — exatamente o defeito que o
+     PR-PARC-04b acabou de consertar na lista, e que aqui esticaria todas as linhas. Os
+     mesmos dois campos (principal e juros) sao editados no modal da parcela, que ja'
+     chama a MESMA RPC de reconciliacao (`fn_reconciliar_parcela_financiamento`) e ainda
+     valida, mostra o total e trata a conta. Nenhuma capacidade se perdeu: mudou o lugar.
+     ⚠ Com ela saiu a ULTIMA entrada de dinheiro em `type="number"` desta tela. */
 
   /* ── Loading / not found ── */
   if (loadingFin || loadingP) {
@@ -395,80 +308,182 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
      e' `md:overflow-hidden`, entao a pagina nao rola mais por fora. Com `min-h-screen`
      (100vh, mais alto que a area util) o conteudo era CORTADO sem barra nenhuma. Agora a
      rolagem mora aqui dentro, como na lista. */
+  const ehParcelamento = fin.natureza === 'parcelamento';
+  const escopo = fin.tipo_financiamento === 'agricultura' ? 'agricultura' : 'pecuaria';
+  const nomeCredor = fin.financeiro_fornecedores?.nome ?? null;
+  const nomeConta = fin.financeiro_contas_bancarias?.nome_exibicao || fin.financeiro_contas_bancarias?.nome_conta || null;
+  const nomeParcela = fin.financeiro_plano_contas?.subcentro ?? null;
+
   return (
-    <div className="w-full min-w-0 h-full min-h-0 overflow-y-auto bg-background p-4 max-w-5xl mx-auto space-y-4 pb-20">
-      {/* Voltar */}
-      <Button variant="ghost" size="sm" onClick={onVoltar} className="gap-1">
-        <ArrowLeft className="h-4 w-4" /> {from === 'lancamentos' ? 'Voltar aos Lançamentos' : 'Voltar'}
-      </Button>
+    /* ⚠ COLUNA FLEX, NAO AREA QUE ROLA (mudou no PR-PARC-05). Ate' o 04c a raiz inteira
+       rolava; agora topo e dados sao fixos e QUEM ROLA E' A TABELA, como na lista. O
+       `h-full min-h-0` continua sendo o que faz a tela medir contra o pai nos dois shells
+       — e' o conserto do 04c, preservado. */
+    <div className="w-full min-w-0 h-full min-h-0 flex flex-col bg-background max-w-5xl mx-auto">
 
-      {/* ── Seção 3: Resumo financeiro ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-        {[
-          { icon: DollarSign, label: 'Valor financiado', value: fmt(Number(fin.valor_total)), color: 'text-primary' },
-          { icon: CheckCircle2, label: 'Total pago', value: fmt(totalPago), color: 'text-emerald-600' },
-          { icon: Clock, label: 'A vencer', value: fmt(aVencer), color: 'text-amber-600' },
-          { icon: AlertTriangle, label: 'Vencido', value: fmt(vencido), color: 'text-red-600' },
-          { icon: BarChart3, label: 'Progresso', value: `${pagas.length}/${parcelas.length}`, color: 'text-primary' },
-        ].map(c => (
-          <Card key={c.label}>
-            <CardContent className="p-2 text-center space-y-0.5">
-              <c.icon className={`h-4 w-4 mx-auto ${c.color}`} />
-              <p className="text-[10px] text-muted-foreground">{c.label}</p>
-              <p className="text-sm font-bold tabular-nums">{c.value}</p>
-            </CardContent>
-          </Card>
-        ))}
+      {/* ═══ 1 — BARRA AZUL, a mesma da lista ═══════════════════════════════════
+          ⚠ O "← Voltar" SOLTO SAIU e virou o elo do meio do caminho. Ele dizia para
+          onde ia, mas nao dizia ONDE SE ESTAVA; o breadcrumb diz as duas coisas na
+          mesma linha e devolve os 36px que o botao ocupava. */}
+      <header className="shrink-0 bg-primary shadow-md">
+        <div className="flex items-center gap-2 px-3 py-1">
+          <p className="min-w-0 truncate text-[11px] font-semibold tracking-wide text-primary-foreground">
+            Financeiro<span className="mx-1 text-primary-foreground/40">/</span>
+            {/* ⚠ MESMO `onVoltar` DE ANTES — e' ele que carrega o ramo
+                `from === 'lancamentos'` / `onVoltarParaOrigem` do wrapper. Aqui so' muda
+                o RO'TULO, para o elo dizer para onde leva. */}
+            <button type="button" onClick={onVoltar}
+              className="font-normal text-primary-foreground/90 hover:underline">
+              {from === 'lancamentos' ? 'Lançamentos' : 'Parcelamentos e Financiamentos'}
+            </button>
+            <span className="mx-1 text-primary-foreground/40">/</span>
+            <span className="font-normal text-primary-foreground/90">{fin.descricao}</span>
+          </p>
+        </div>
+      </header>
+
+      <div className="shrink-0 px-4 pt-2 pb-2 space-y-2">
+        {/* ═══ 1 — TITULO ══════════════════════════════════════════════════════ */}
+        <div className="flex items-center gap-2 min-w-0">
+          <h1 className="text-[20px] font-bold leading-none tracking-tight text-foreground truncate" title={fin.descricao}>
+            {fin.descricao}
+          </h1>
+          <span className="shrink-0 rounded border border-primary/40 bg-primary/10 px-1 text-[9px] font-bold text-primary">
+            {PILULA_NATUREZA[fin.natureza] ?? PILULA_NATUREZA.financiamento}
+          </span>
+          <span className={`shrink-0 inline-flex items-center rounded px-1 py-0 text-[9px] font-normal leading-tight ${
+            fin.status === 'ativo' ? 'bg-emerald-100 text-emerald-800'
+            : fin.status === 'quitado' ? 'bg-muted text-muted-foreground'
+            : 'bg-red-100 text-red-800'}`}>
+            {fin.status}
+          </span>
+        </div>
+        <p className="text-[11px] text-muted-foreground truncate">
+          {nomeCredor ?? '—'} · {escopo === 'pecuaria' ? 'Pecuária' : 'Agricultura'} · contratado em {fmtDate(fin.data_contrato)}
+        </p>
+
+        {/* ═══ 2 — DADOS DO CONTRATO, em colunas alinhadas (A17) ═══════════════
+            ⚠ NAO E' "Rotulo: valor" NUMA STRING. Cada grupo e' uma grade de duas
+            colunas: rotulos numa, valores noutra, todos comecando no MESMO x. Antes
+            eram pares corridos com dois-pontos, e comparar dois campos exigia LER a
+            linha inteira — o mesmo motivo do A17 no resumo do Novo Lancamento. */}
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-[12px] font-semibold text-foreground">Dados do contrato</h2>
+          <div className="flex items-center gap-1.5">
+            <Button variant="outline" size="sm" className="h-7 gap-1 text-[11px]" onClick={openEdit}>
+              <Pencil className="size-3.5" /> Editar
+            </Button>
+            {/* ⚠ "Excluir contrato" MORAVA NO RODAPE DO MODAL ANTIGO. O modal novo e' o
+                ObrigacaoDialog, que nao tem (nem deve ter) botao destrutivo; sem trazer o
+                gatilho para ca', a exclusao em cascata — com todo o bloqueio de conciliado
+                e editado a mao — ficaria sem porta de entrada. */}
+            <Button variant="ghost" size="sm"
+              className="h-7 gap-1 text-[11px] text-destructive hover:bg-destructive/10 hover:text-destructive"
+              onClick={() => setConfirmDelete(true)}>
+              <Trash2 className="size-3.5" /> Excluir
+            </Button>
+          </div>
+        </div>
+        <div className="grid grid-cols-4 gap-x-6 rounded-md border px-3 py-2">
+          <Grupo>
+            <Par rotulo="Descrição" valor={fin.descricao} />
+            <Par rotulo="Nº contrato" valor={fin.numero_contrato} />
+            <Par rotulo="Natureza" valor={NOME_NATUREZA[fin.natureza] ?? NOME_NATUREZA.financiamento} />
+            <Par rotulo="Escopo" valor={escopo === 'pecuaria' ? 'Pecuária' : 'Agricultura'} />
+          </Grupo>
+          <Grupo>
+            <Par rotulo="Credor" valor={nomeCredor} />
+            <Par rotulo="Conta" valor={nomeConta} />
+            <Par rotulo="Status">
+              <span className={`inline-flex items-center rounded px-1 py-0 text-[9px] font-normal leading-tight ${
+                fin.status === 'ativo' ? 'bg-emerald-100 text-emerald-800'
+                : fin.status === 'quitado' ? 'bg-muted text-muted-foreground'
+                : 'bg-red-100 text-red-800'}`}>
+                {fin.status}
+              </span>
+            </Par>
+            {/* ⚠ A CLASSIFICACAO MUDA COM A NATUREZA porque o destino contabil muda:
+                no parcelamento ha' UM (a despesa em N vezes); no credito ha' DOIS, e
+                quem os fixa e' o escopo, no banco. */}
+            {ehParcelamento
+              ? <Par rotulo="Parcela" valor={nomeParcela} />
+              : <>
+                  <Par rotulo="Amortização" valor={SUBCENTRO_AMORTIZACAO[escopo]} />
+                  <Par rotulo="Juros" valor={SUBCENTRO_JUROS[escopo]} />
+                </>}
+          </Grupo>
+          <Grupo>
+            <Par rotulo="Contrato em" valor={fmtDate(fin.data_contrato)} mono />
+            <Par rotulo="1ª parcela" valor={fmtDate(fin.data_primeira_parcela)} mono />
+            <Par rotulo="Parcelas" valor={String(fin.total_parcelas)} mono />
+            {!ehParcelamento && (
+              <Par rotulo="Taxa" valor={`${Number(fin.taxa_juros_mensal).toFixed(2)}% a.m.`} mono />
+            )}
+          </Grupo>
+          <Grupo>
+            <Par rotulo="Valor total" valor={fmt(Number(fin.valor_total))} mono />
+            <Par rotulo="Entrada" valor={Number(fin.valor_entrada) > 0 ? fmt(Number(fin.valor_entrada)) : null} mono />
+            <Par rotulo="Observação" valor={fin.observacao} />
+          </Grupo>
+        </div>
+
+        {/* ═══ 3 — CAIXAS DE NUMEROS, a forma do topo da lista ════════════════ */}
+        <div className="grid grid-cols-6 gap-2">
+          {([
+            { rotulo: 'Valor do contrato', valor: fmt(Number(fin.valor_total)), borda: 'border-l-muted-foreground/40' },
+            { rotulo: 'Pago',              valor: fmt(totalPago),               borda: 'border-l-emerald-500' },
+            { rotulo: 'A vencer',          valor: fmt(aVencer),                 borda: 'border-l-primary' },
+            /* Vencido so' fica vermelho QUANDO HA' VENCIDO: uma tarja de alerta acesa em
+               contrato em dia ensina a ignorar a cor. */
+            { rotulo: 'Vencido',           valor: fmt(vencido),                 borda: vencido > 0 ? 'border-l-destructive' : 'border-l-muted-foreground/40' },
+            { rotulo: 'Progresso',         valor: `${pagas.length}/${parcelas.length}`, borda: 'border-l-muted-foreground/40' },
+            { rotulo: 'Juros previstos',   valor: ehParcelamento ? '—' : fmt(jurosPrevistos), borda: 'border-l-amber-500' },
+          ] as const).map(c => (
+            <div key={c.rotulo} className={`h-[38px] rounded-md border border-l-[3px] px-3 py-1.5 ${c.borda}`}>
+              <div className="text-[10px] leading-none text-muted-foreground truncate">{c.rotulo}</div>
+              <div className="mt-0.5 text-[14px] font-semibold tabular-nums leading-tight truncate">{c.valor}</div>
+            </div>
+          ))}
+        </div>
+        <Progress value={progresso} className="h-1" />
       </div>
-      <Progress value={progresso} className="h-2" />
 
-      {/* ── Seção 1: Cabeçalho ── */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-sm">Dados do financiamento</CardTitle>
-          <Button variant="outline" size="sm" className="gap-1" onClick={openEdit}>
-            <Pencil className="h-3 w-3" /> Editar
-          </Button>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-xs pb-3">
-          <Info label="Descrição" value={fin.descricao} />
-          <Info label="Tipo" value={fin.tipo_financiamento === 'pecuaria' ? 'Pecuária' : 'Agricultura'} />
-          <Info label="Credor" value={fin.financeiro_fornecedores?.nome ?? '—'} />
-          <Info label="Status">
-            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${fin.status === 'ativo' ? 'bg-emerald-100 text-emerald-800' : fin.status === 'quitado' ? 'bg-muted text-muted-foreground' : 'bg-red-100 text-red-800'}`}>
-              {fin.status}
+      {/* ═══ 4 — PARCELAS, ate' o rodape ═══════════════════════════════════════
+          ⚠ A ROLAGEM MORA NO WRAPPER DA TABELA (A21), e e' nele que o `sticky` do
+          thead ancora. `min-h-0` nos dois niveis: sem ele o filho flex recusa-se a
+          encolher abaixo do conteudo e a rolagem escapa para a tela inteira. */}
+      <div className="min-h-0 flex-1 px-4 pb-1">
+        <div className="flex h-full min-h-0 flex-col rounded-lg border border-border bg-card px-3 pt-2 pb-0">
+          <div className="mb-1.5 flex shrink-0 items-baseline justify-between">
+            <h2 className="text-[12px] font-semibold text-foreground">Parcelas</h2>
+            <span className="text-[11px] text-muted-foreground">
+              {parcelas.length} {parcelas.length === 1 ? 'parcela' : 'parcelas'}
             </span>
-          </Info>
-          <Info label="Nº Contrato" value={fin.numero_contrato || '—'} />
-          <Info label="Taxa juros" value={`${Number(fin.taxa_juros_mensal).toFixed(2)}% a.m.`} />
-          <Info label="Data contrato" value={fmtDate(fin.data_contrato)} />
-          <Info label="Total parcelas" value={String(fin.total_parcelas)} />
-          <Info label="Valor total" value={fmt(Number(fin.valor_total))} />
-          <Info label="Conta bancária" value={(fin.financeiro_contas_bancarias as any)?.nome_exibicao || fin.financeiro_contas_bancarias?.nome_conta || '—'} />
-          <Info label="Valor entrada" value={fmt(Number(fin.valor_entrada))} />
-          <Info label="1ª parcela" value={fmtDate(fin.data_primeira_parcela)} />
-          {fin.observacao && <Info label="Observação" value={fin.observacao} className="col-span-1 sm:col-span-2" />}
-        </CardContent>
-      </Card>
-
-      {/* ── Seção 2: Tabela de Parcelas ── */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Parcelas</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
+          </div>
+          <div className="min-h-0 flex-1">
+            <Table density="dense" className="table-fixed" wrapperClassName="h-full overflow-x-hidden overflow-y-auto">
+              <colgroup>
+                <col className="w-[5%]" />
+                <col className="w-[13%]" />
+                {!ehParcelamento && <col className="w-[14%]" />}
+                {!ehParcelamento && <col className="w-[13%]" />}
+                <col className={ehParcelamento ? 'w-[24%]' : 'w-[14%]'} />
+                <col className="w-[12%]" />
+                <col className="w-[13%]" />
+                <col className="w-[12%]" />
+                <col className="w-[8%]" />
+              </colgroup>
+              <TableHeader className="sticky top-0 z-10 border-b border-border bg-card [&_tr]:border-b-0">
                 <TableRow>
-                  <TableHead className="w-10">#</TableHead>
-                  <TableHead>Vencimento</TableHead>
-                  <TableHead className="text-right">Principal</TableHead>
-                  <TableHead className="text-right">Juros</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Pago em</TableHead>
-                  <TableHead />
+                  <ThDet>N</ThDet>
+                  <ThDet>Vencimento</ThDet>
+                  {!ehParcelamento && <ThDet direita>Principal</ThDet>}
+                  {!ehParcelamento && <ThDet direita>Juros</ThDet>}
+                  <ThDet direita>{ehParcelamento ? 'Valor' : 'Total'}</ThDet>
+                  <ThDet>Situação</ThDet>
+                  <ThDet>Pago em</ThDet>
+                  <ThDet>Lançamento</ThDet>
+                  <ThDet />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -478,76 +493,47 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
                   const total = principal + juros;
                   const isPending = p.status === 'pendente';
                   const isOverdue = isPending && p.data_vencimento < hj;
-                  const statusLabel = isOverdue ? 'atrasado' : p.status;
-                  const statusClass = p.status === 'pago'
+                  /* Vocabulario de tela — os identificadores gravados nao mudam. */
+                  const situacaoLabel = p.status === 'pago' ? 'Paga'
+                    : p.status === 'cancelado' ? 'Cancelada'
+                    : isOverdue ? 'Vencida' : 'Pendente';
+                  const situacaoClass = p.status === 'pago'
                     ? 'bg-emerald-100 text-emerald-800'
                     : isOverdue
                       ? 'bg-red-100 text-red-800'
                       : 'bg-amber-100 text-amber-800';
-
-                  const renderEditable = (field: 'valor_principal' | 'valor_juros', val: number) => {
-                    if (editingCell?.parcelaId === p.id && editingCell.field === field) {
-                      return (
-                        <Input
-                          type="number"
-                          step="0.01"
-                          className="h-6 w-24 text-right text-[11px]"
-                          value={editingValue}
-                          onChange={e => setEditingValue(e.target.value)}
-                          onBlur={commitCellEdit}
-                          onKeyDown={e => e.key === 'Enter' && commitCellEdit()}
-                          autoFocus
-                        />
-                      );
-                    }
-                    if (isPending) {
-                      return (
-                        <span
-                          className="cursor-pointer hover:underline tabular-nums"
-                          onClick={() => startCellEdit(p.id, field, val)}
-                        >
-                          {fmt(val)}
-                        </span>
-                      );
-                    }
-                    return <span className="tabular-nums">{fmt(val)}</span>;
-                  };
+                  const temLancamento = !!(p.lancamento_id || p.lancamento_juros_id);
 
                   return (
                     <TableRow key={p.id}>
-                      <TableCell className="tabular-nums">{p.numero_parcela}</TableCell>
-                      <TableCell className="tabular-nums">{fmtDate(p.data_vencimento)}</TableCell>
-                      <TableCell className="text-right">{renderEditable('valor_principal', principal)}</TableCell>
-                      <TableCell className="text-right">{renderEditable('valor_juros', juros)}</TableCell>
-                      <TableCell className="text-right tabular-nums font-semibold">{fmt(total)}</TableCell>
+                      <TableCell className={NUM}>{p.numero_parcela}</TableCell>
+                      <TableCell className={NUM}>{fmtDate(p.data_vencimento)}</TableCell>
+                      {!ehParcelamento && <TableCell className={`text-right ${NUM}`}>{fmt(principal)}</TableCell>}
+                      {!ehParcelamento && <TableCell className={`text-right ${NUM}`}>{fmt(juros)}</TableCell>}
+                      <TableCell className={`text-right font-semibold ${NUM}`}>{fmt(total)}</TableCell>
                       <TableCell>
-                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${statusClass}`}>
-                          {statusLabel}
+                        <span className={`inline-flex items-center rounded px-1 py-0 text-[9px] font-normal leading-tight ${situacaoClass}`}>
+                          {situacaoLabel}
                         </span>
                       </TableCell>
-                      <TableCell className="tabular-nums">{fmtDate(p.data_pagamento)}</TableCell>
+                      <TableCell className={NUM}>{fmtDate(p.data_pagamento)}</TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-1">
-                          {(p.lancamento_id || (p as any).lancamento_juros_id) && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-[10px] h-6"
-                              onClick={() => setParcelaLancamentosOpen(p)}
-                            >
-                              Ver lançamento
-                            </Button>
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6"
-                            onClick={() => setParcelaEdit(p)}
-                            title="Editar parcela"
-                          >
-                            <Pencil className="h-3 w-3" />
-                          </Button>
-                        </div>
+                        {temLancamento ? (
+                          <button type="button"
+                            className="text-[10px] font-medium text-primary hover:underline"
+                            onClick={() => setParcelaLancamentosOpen(p)}>
+                            Ver
+                          </button>
+                        ) : <span className="text-muted-foreground">—</span>}
+                      </TableCell>
+                      <TableCell className="px-0 text-right select-none">
+                        {/* ⚠ h-5 (20px) DENTRO DE LINHA DE 21px — a mesma regra que o
+                            PR-PARC-04b fixou na lista: `py-0` na celula faz o filho mais
+                            alto mandar na altura de TODAS as linhas. */}
+                        <Button variant="ghost" size="icon" className="h-5 w-5 p-0"
+                          onClick={() => setParcelaEdit(p)} title="Editar parcela" aria-label="Editar parcela">
+                          <Pencil className="size-3.5" />
+                        </Button>
                       </TableCell>
                     </TableRow>
                   );
@@ -555,138 +541,25 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
               </TableBody>
             </Table>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
-      {/* ── Modal de edição do financiamento ── */}
-      <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Editar financiamento</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label className="text-xs">Descrição</Label>
-              <Input value={editForm.descricao ?? ''} onChange={e => setEditForm(p => ({ ...p, descricao: e.target.value }))} />
-            </div>
-            <div>
-              <Label className="text-xs">Nº Contrato</Label>
-              <Input value={editForm.numero_contrato ?? ''} onChange={e => setEditForm(p => ({ ...p, numero_contrato: e.target.value }))} placeholder="Ex: 0123456-78/2024" />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label className="text-xs">Tipo</Label>
-                <Select value={editForm.tipo_financiamento} onValueChange={v => setEditForm(p => ({ ...p, tipo_financiamento: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pecuaria">Pecuária</SelectItem>
-                    <SelectItem value="agricultura">Agricultura</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label className="text-xs">Status</Label>
-                <Select value={editForm.status} onValueChange={v => setEditForm(p => ({ ...p, status: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ativo">Ativo</SelectItem>
-                    <SelectItem value="quitado">Quitado</SelectItem>
-                    <SelectItem value="cancelado">Cancelado</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label className="text-xs">Credor</Label>
-                {clienteId && (
-                  <CredorAutocomplete
-                    value={editForm.credor_id || ''}
-                    onChange={(credorId) => setEditForm(p => ({ ...p, credor_id: credorId }))}
-                    clienteId={clienteId}
-                  />
-                )}
-              </div>
-              <div>
-                <Label className="text-xs">Conta bancária</Label>
-                <Select value={editForm.conta_bancaria_id} onValueChange={v => setEditForm(p => ({ ...p, conta_bancaria_id: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>
-                    {contas.map(c => <SelectItem key={c.id} value={c.id}>{(c as any).nome_exibicao || c.nome_conta}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              <div>
-                <Label className="text-xs">Valor total</Label>
-                <Input type="number" value={editForm.valor_total ?? 0} onChange={e => setEditForm(p => ({ ...p, valor_total: e.target.value }))} />
-              </div>
-              <div>
-                <Label className="text-xs">Entrada</Label>
-                <Input type="number" value={editForm.valor_entrada ?? 0} onChange={e => setEditForm(p => ({ ...p, valor_entrada: e.target.value }))} />
-              </div>
-              <div>
-                <Label className="text-xs">Juros % a.m.</Label>
-                <Input type="number" step="0.01" value={editForm.taxa_juros_mensal ?? 0} onChange={e => setEditForm(p => ({ ...p, taxa_juros_mensal: e.target.value }))} />
-              </div>
-            </div>
-            <div>
-              <Label className="text-xs">Data contrato</Label>
-              <Input type="date" value={editForm.data_contrato ?? ''} onChange={e => setEditForm(p => ({ ...p, data_contrato: e.target.value }))} />
-            </div>
-            <div>
-              <Label className="text-xs">Observação</Label>
-              <Textarea value={editForm.observacao ?? ''} onChange={e => setEditForm(p => ({ ...p, observacao: e.target.value }))} rows={2} />
-            </div>
-
-            {/* Captação */}
-            <div className="border border-amber-200 bg-amber-50 rounded-md p-3 space-y-2">
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="edit-captacao"
-                  checked={!!editForm.gerar_lancamento_captacao}
-                  onCheckedChange={v => setEditForm(p => ({ ...p, gerar_lancamento_captacao: !!v }))}
-                />
-                <Label htmlFor="edit-captacao" className="text-xs cursor-pointer font-medium text-amber-800">
-                  Registrar entrada da captação no fluxo de caixa
-                </Label>
-              </div>
-              {editForm.gerar_lancamento_captacao && (
-                <div>
-                  <Label className="text-xs">Conta de captação (plano)</Label>
-                  <Select
-                    value={editForm.plano_conta_captacao_id ?? ''}
-                    onValueChange={v => setEditForm(p => ({ ...p, plano_conta_captacao_id: v }))}
-                  >
-                    <SelectTrigger className="h-8 text-xs mt-0.5"><SelectValue placeholder="Selecione o plano" /></SelectTrigger>
-                    <SelectContent>
-                      {planosEntrada.map(p => (
-                        <SelectItem key={p.id} value={p.id} className="text-xs">{p.subcentro}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-            </div>
-          </div>
-          <DialogFooter className="flex sm:justify-between gap-2">
-            <Button
-              type="button"
-              variant="destructive"
-              size="sm"
-              className="gap-1"
-              onClick={() => setConfirmDelete(true)}
-            >
-              <Trash2 className="h-3.5 w-3.5" /> Excluir contrato
-            </Button>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setEditOpen(false)}>Cancelar</Button>
-              <Button onClick={saveEdit}>Salvar</Button>
-            </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* ═══ 6 — EDITAR OBRIGACAO: a MESMA casca do "Nova obrigacao" ═══════════
+          ⚠ MONTAGEM CONDICIONAL: o form vive dentro do dialogo, e mantido montado ele
+          guardaria o contrato anterior entre aberturas — mesmo motivo da lista.
+          ⚠ `onSalvarEdicao` recebe o `saveEdit` DESTA tela: o dialogo e' o formulario,
+          e quem grava continua sendo quem ja' gravava (com a sincronia do lancamento de
+          captacao intacta). */}
+      {editOpen && (
+        <ObrigacaoDialog
+          open
+          modo="editar"
+          financiamentoId={id}
+          onOpenChange={setEditOpen}
+          onSalvarEdicao={saveEdit}
+          onSalvo={() => setEditOpen(false)}
+        />
+      )}
 
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent>
@@ -733,12 +606,36 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
   );
 }
 
-/* ── Helper component ── */
-function Info({ label, value, children, className = '' }: { label: string; value?: string; children?: React.ReactNode; className?: string }) {
+/* ── Dados do contrato: par rotulo-valor em COLUNA alinhada (A17) ─────────────
+   ⚠ O `Par` devolve DOIS filhos soltos (fragmento), nao um `<div>`: eles precisam ser
+   itens diretos da grade `grid-cols-[auto_1fr]` do `Grupo` para que TODOS os rotulos
+   meçam a mesma largura e TODOS os valores comecem no mesmo x. Embrulhar cada par num
+   div devolveria o "Rotulo: valor" corrido que este PR veio desfazer. */
+function Grupo({ children }: { children: React.ReactNode }) {
+  return <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0 min-w-0 content-start">{children}</div>;
+}
+
+function Par({ rotulo, valor, children, mono }: {
+  rotulo: string; valor?: string | null; children?: React.ReactNode; mono?: boolean;
+}) {
   return (
-    <div className={`flex items-baseline gap-2 min-w-0 ${className}`}>
-      <span className="text-[11px] text-muted-foreground shrink-0">{label}:</span>
-      {children ?? <span className="font-medium truncate">{value}</span>}
-    </div>
+    <>
+      <div className="flex h-5 items-center text-[10px] leading-tight text-muted-foreground">{rotulo}</div>
+      <div className={`flex h-5 items-center min-w-0 text-[11px] font-medium leading-tight text-foreground ${mono ? 'font-mono tabular-nums' : ''}`}>
+        {children ?? <span className="truncate" title={valor ?? undefined}>{valor || '—'}</span>}
+      </div>
+    </>
+  );
+}
+
+/* Cabecalho da tabela do detalhe — MESMO override local da lista: o primitivo dense
+   entrega `uppercase tracking-wide` e `text-muted-foreground`; aqui o cabecalho e'
+   escuro e em caixa normal. Local de proposito — mudar o dense trocaria o cabecalho
+   de todas as tabelas densas do sistema. */
+function ThDet({ children, direita }: { children?: React.ReactNode; direita?: boolean }) {
+  return (
+    <TableHead className={`text-foreground normal-case tracking-normal ${direita ? 'text-right' : ''}`}>
+      {children}
+    </TableHead>
   );
 }

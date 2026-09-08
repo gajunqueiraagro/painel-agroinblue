@@ -43,7 +43,7 @@ const NUM = 'font-mono tabular-nums';
 const MIN_PARCELAS = 1;
 const MAX_PARCELAS = 360;
 
-type Escopo = 'pecuaria' | 'agricultura';
+export type Escopo = 'pecuaria' | 'agricultura';
 type Aba = 'contrato' | 'parcelas' | 'classificacao';
 type Frequencia = FinanciamentoForm['frequencia_parcela'];
 
@@ -52,6 +52,17 @@ type Frequencia = FinanciamentoForm['frequencia_parcela'];
    form como se fosse valido. O predicado confere de verdade e simplesmente ignora o que
    nao pertence ao conjunto. */
 const ehEscopo = (v: string): v is Escopo => v === 'pecuaria' || v === 'agricultura';
+const ehNatureza = (v: string): v is NaturezaContrato =>
+  v === 'financiamento' || v === 'parcelamento' || v === 'emprestimo';
+
+/* Situacao do CONTRATO (nao confundir com a situacao da parcela). Os identificadores
+   gravados continuam ativo/quitado/cancelado. */
+type StatusContrato = 'ativo' | 'quitado' | 'cancelado';
+const ehStatusContrato = (v: string): v is StatusContrato =>
+  v === 'ativo' || v === 'quitado' || v === 'cancelado';
+/* ⚠ O dropdown tem a largura do campo: sem `position="popper"` a variavel
+   `--radix-select-trigger-width` nao existe e a caixa e' medida pelo item mais longo. */
+const SELECT_POPPER = 'w-[var(--radix-select-trigger-width)]';
 const ehAba = (v: string): v is Aba => v === 'contrato' || v === 'parcelas' || v === 'classificacao';
 const FREQUENCIAS: Frequencia[] = ['mensal', 'bimestral', 'trimestral', 'semestral', 'anual'];
 const ehFrequencia = (v: string): v is Frequencia => FREQUENCIAS.some(f => f === v);
@@ -62,13 +73,13 @@ const APOIO_NATUREZA: Record<NaturezaContrato, string> = {
   emprestimo: 'Crédito sem bem vinculado',
 };
 
-const NOME_NATUREZA: Record<NaturezaContrato, string> = {
+export const NOME_NATUREZA: Record<NaturezaContrato, string> = {
   financiamento: 'Financiamento',
   parcelamento: 'Parcelamento',
   emprestimo: 'Empréstimo',
 };
 
-const PILULA_NATUREZA: Record<NaturezaContrato, string> = {
+export const PILULA_NATUREZA: Record<NaturezaContrato, string> = {
   financiamento: 'FIN',
   parcelamento: 'PARC',
   emprestimo: 'EMP',
@@ -82,11 +93,11 @@ const ORDEM_NATUREZA: NaturezaContrato[] = ['parcelamento', 'financiamento', 'em
    e por isso a tela os mostra travados: quem decide e' o escopo, nao o operador.
    ⚠ A ASSIMETRIA DO NOME E' DO BANCO: "Amortização Financiamento X" mas "Juros de
    Financiamento X". Nao uniformizar aqui — o nome exibido tem de ser o nome real. */
-const SUBCENTRO_AMORTIZACAO: Record<Escopo, string> = {
+export const SUBCENTRO_AMORTIZACAO: Record<Escopo, string> = {
   pecuaria: 'Amortização Financiamento Pecuária',
   agricultura: 'Amortização Financiamento Agricultura',
 };
-const SUBCENTRO_JUROS: Record<Escopo, string> = {
+export const SUBCENTRO_JUROS: Record<Escopo, string> = {
   pecuaria: 'Juros de Financiamento Pecuária',
   agricultura: 'Juros de Financiamento Agricultura',
 };
@@ -118,12 +129,26 @@ interface Props {
   onOpenChange: (v: boolean) => void;
   /** Chamado APOS a gravacao bem-sucedida — quem fecha, invalida e avisa e' o caller. */
   onSalvo?: () => void;
+  /** 'criar' (default) grava pelo hook; 'editar' carrega um contrato e grava pelo caller. */
+  modo?: 'criar' | 'editar';
+  /** Obrigatorio em modo editar. */
+  financiamentoId?: string;
+  /**
+   * ⚠ SO' EM MODO EDITAR, e POR INJECAO de proposito. A atualizacao de um contrato nao e'
+   * "o insert ao contrario": ela sincroniza o lancamento de captacao em
+   * `financeiro_lancamentos_v2` (criar / atualizar / cancelar conforme a captacao entrou
+   * ou saiu) e invalida sete chaves de saldo e auditoria. Esse escritor JA' EXISTE e roda
+   * em producao dentro do `FinanciamentoDetalhe`; traze-lo para ca' seria reescrever
+   * codigo que mexe em dinheiro para ganhar nada. O dialogo e' o FORMULARIO; quem grava
+   * continua sendo quem ja' gravava — o mesmo padrao de prop-bag do CompraModalShell.
+   */
+  onSalvarEdicao?: (form: FinanciamentoForm, extras: { status: StatusContrato }) => Promise<boolean>;
 }
 
-export function ObrigacaoDialog({ open, onOpenChange, onSalvo }: Props) {
+export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', financiamentoId, onSalvarEdicao }: Props) {
   const {
     form, setForm,
-    parcelas,
+    parcelas, setParcelas,
     gerarParcelas,
     updateParcela,
     totalParcelas,
@@ -135,8 +160,95 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo }: Props) {
 
   const [aba, setAba] = useState<Aba>('contrato');
   const [destinacoes, setDestinacoes] = useState<DestinacaoItem[]>([]);
+  const [carregado, setCarregado] = useState(false);
+  /* ⚠ FORA DO `FinanciamentoForm` DE PROPOSITO: `status` nao e' campo de CRIACAO (todo
+     contrato nasce 'ativo', o gravador fixa). Ele so' existe na edicao, e por isso viaja
+     em `extras` em vez de inchar o form que as duas telas compartilham. */
+  const [statusContrato, setStatusContrato] = useState<StatusContrato>('ativo');
+  const [salvandoEdicao, setSalvandoEdicao] = useState(false);
 
+  const ehEdicao = modo === 'editar';
   const ehParcelamento = form.natureza === 'parcelamento';
+
+  /* ── MODO EDITAR — o contrato existente e o cronograma que ele ja' tem ──────── */
+  const { data: contrato } = useQuery({
+    queryKey: ['obrigacao-edicao', financiamentoId],
+    enabled: ehEdicao && !!financiamentoId && open,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('financiamentos')
+        .select('*')
+        .eq('id', financiamentoId!)
+        .maybeSingle();
+      return data ?? null;
+    },
+  });
+
+  const { data: parcelasGravadas = [] } = useQuery({
+    queryKey: ['obrigacao-edicao-parcelas', financiamentoId],
+    enabled: ehEdicao && !!financiamentoId && open,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('financiamento_parcelas')
+        .select('id, numero_parcela, data_vencimento, valor_principal, valor_juros, status')
+        .eq('financiamento_id', financiamentoId!)
+        .order('numero_parcela');
+      return data ?? [];
+    },
+  });
+
+  const temParcelaPaga = parcelasGravadas.some(p => p.status === 'pago');
+
+  /* ⚠ CARREGA UMA VEZ (`carregado`), e nao a cada render: o form e' de escrita, e
+     re-semear a cada resposta de query apagaria o que o operador acabou de digitar. */
+  useEffect(() => {
+    if (!ehEdicao || !contrato || carregado) return;
+    /* O banco guarda a taxa MENSAL; a tela fala em ANUAL. A volta e' a inversa exata
+       da ida do gravador — juros compostos, nao 12x. */
+    const mensal = Number(contrato.taxa_juros_mensal) || 0;
+    const anual = mensal > 0 ? (Math.pow(1 + mensal / 100, 12) - 1) * 100 : 0;
+    /* O guarda estreita a EXPRESSAO, nao a propriedade: sem estas duas consts o TS
+       continua vendo `string` do outro lado do ternario. */
+    const naturezaBruta = contrato.natureza ?? '';
+    const escopoBruto = contrato.tipo_financiamento ?? '';
+    setForm({
+      natureza: ehNatureza(naturezaBruta) ? naturezaBruta : 'financiamento',
+      descricao: contrato.descricao ?? '',
+      numero_contrato: contrato.numero_contrato ?? '',
+      tipo_financiamento: ehEscopo(escopoBruto) ? escopoBruto : 'pecuaria',
+      credor_id: contrato.credor_id ?? '',
+      conta_bancaria_id: contrato.conta_bancaria_id ?? '',
+      valor_total: Number(contrato.valor_total) || 0,
+      valor_entrada: Number(contrato.valor_entrada) || 0,
+      data_contrato: contrato.data_contrato ?? '',
+      data_primeira_parcela: contrato.data_primeira_parcela ?? '',
+      total_parcelas: Number(contrato.total_parcelas) || 0,
+      taxa_juros_anual: Math.round(anual * 10000) / 10000,
+      /* ⚠ `frequencia_parcela` NAO EXISTE NA TABELA — conferido em types.ts. A frequencia
+         so' molda as datas na geracao e nunca e' persistida, entao aqui nao ha' o que
+         restaurar. Por isso o campo NAO aparece em modo editar: mostrar 'Mensal' para um
+         contrato semestral seria inventar um dado. */
+      frequencia_parcela: 'mensal',
+      observacao: contrato.observacao ?? '',
+      plano_conta_captacao_id: contrato.plano_conta_captacao_id ?? '',
+      plano_conta_parcela_id: contrato.plano_conta_parcela_id ?? '',
+      gerar_lancamento_captacao: !!contrato.gerar_lancamento_captacao,
+    });
+    const statusBruto = contrato.status ?? '';
+    setStatusContrato(ehStatusContrato(statusBruto) ? statusBruto : 'ativo');
+    setCarregado(true);
+  }, [ehEdicao, contrato, carregado, setForm]);
+
+  /* O cronograma gravado alimenta a previa em modo editar — ela e' so' leitura. */
+  useEffect(() => {
+    if (!ehEdicao || parcelasGravadas.length === 0) return;
+    setParcelas(parcelasGravadas.map(p => ({
+      numero: p.numero_parcela,
+      data_vencimento: p.data_vencimento,
+      valor_principal: Number(p.valor_principal) || 0,
+      valor_juros: Number(p.valor_juros) || 0,
+    })));
+  }, [ehEdicao, parcelasGravadas, setParcelas]);
 
   const set = useCallback(
     <K extends keyof FinanciamentoForm>(k: K, v: FinanciamentoForm[K]) =>
@@ -165,10 +277,14 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo }: Props) {
 
   /* Auto-gerar parcelas — mesma cadeia de dependencias da pagina. */
   useEffect(() => {
+    /* ⚠ EM EDICAO NAO SE REGERA NADA. As parcelas gravadas podem ter lancamento
+       vinculado (`lancamento_id` / `lancamento_juros_id`) mesmo ainda pendentes; refaze-las
+       a cada tecla no valor total orfanaria esses lancamentos em silencio. */
+    if (ehEdicao) return;
     if (form.valor_total > 0 && form.total_parcelas > 0 && form.data_primeira_parcela) {
       gerarParcelas();
     }
-  }, [form.valor_total, form.valor_entrada, form.total_parcelas, form.taxa_juros_anual, form.data_primeira_parcela, form.frequencia_parcela]);
+  }, [ehEdicao, form.valor_total, form.valor_entrada, form.total_parcelas, form.taxa_juros_anual, form.data_primeira_parcela, form.frequencia_parcela]);
 
   /* ── O plano de amortizacao do escopo ─────────────────────────────────────────
      ⚠ A TELA MOSTRA TRAVADO, MAS A COLUNA CONTINUA SENDO GRAVADA. `plano_conta_parcela_id`
@@ -192,10 +308,14 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo }: Props) {
       }
       return;
     }
+    /* ⚠ EM EDICAO SO' PREENCHE O VAZIO. Um contrato antigo pode apontar para outro plano,
+       e `usePlanejamentoFinanceiro` joga o principal no subcentro DESTA coluna: reescreve-la
+       ao abrir o modal mudaria de bucket um contrato que ninguem pediu para mudar. */
+    if (ehEdicao && form.plano_conta_parcela_id) return;
     if (idAmortizacaoEscopo && form.plano_conta_parcela_id !== idAmortizacaoEscopo) {
       set('plano_conta_parcela_id', idAmortizacaoEscopo);
     }
-  }, [ehParcelamento, idAmortizacaoEscopo, form.plano_conta_parcela_id, set]);
+  }, [ehEdicao, ehParcelamento, idAmortizacaoEscopo, form.plano_conta_parcela_id, set]);
 
   /* ── PENDENCIAS — a MESMA cadeia que ja desabilitava o botao, agora como lista ──
      ⚠ MESMAS REGRAS, MESMAS FRASES, MESMA ORDEM da pagina: o que muda e' que cada uma
@@ -250,9 +370,19 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo }: Props) {
   const ultimaParcela = parcelas.length > 0 ? parcelas[parcelas.length - 1].data_vencimento : '';
 
   const handleSalvar = async () => {
+    if (ehEdicao) {
+      if (!onSalvarEdicao) return;
+      setSalvandoEdicao(true);
+      const ok = await onSalvarEdicao(form, { status: statusContrato });
+      setSalvandoEdicao(false);
+      if (ok) onSalvo?.();
+      return;
+    }
     const ok = await salvar(destinacoes);
     if (ok) onSalvo?.();
   };
+
+  const gravando = saving || salvandoEdicao;
 
   const subtitulo = ehParcelamento
     ? 'Uma despesa paga em N vezes. Ela gera as parcelas, e as parcelas geram os lançamentos.'
@@ -275,7 +405,9 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo }: Props) {
           {/* ── CABECALHO ───────────────────────────────────────────────────────── */}
           <div className="bg-primary text-primary-foreground px-6 py-2.5 flex items-start justify-between">
             <div className="min-w-0">
-              <DialogTitle className="text-lg font-bold leading-tight">Nova obrigação</DialogTitle>
+              <DialogTitle className="text-lg font-bold leading-tight">
+              {ehEdicao ? 'Editar obrigação' : 'Nova obrigação'}
+            </DialogTitle>
               {/* A frase muda com a natureza porque a CADEIA muda: no parcelamento nao
                   existe captacao nem juros, e prometer "crédito contratado" ali ensina
                   errado o operador. */}
@@ -352,9 +484,18 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo }: Props) {
                         </button>
                       ))}
                     </div>
+                    {/* ⚠ AVISO, NAO TRAVA. Trocar a natureza muda para onde as PROXIMAS
+                        parcelas vao (o motor le' a natureza a cada reconciliacao), mas nao
+                        desfaz lancamento ja' gerado por parcela paga. Quem troca precisa
+                        saber disso ANTES, nao descobrir conferindo o caixa. */}
+                    {ehEdicao && temParcelaPaga && (
+                      <p className="mt-1 text-[10px] text-amber-600 dark:text-amber-500">
+                        Trocar a natureza não refaz parcelas pagas
+                      </p>
+                    )}
                   </div>
 
-                  <div className="grid grid-cols-[2fr_1fr_1fr] gap-2">
+                  <div className={`grid gap-2 ${ehEdicao ? 'grid-cols-[2fr_1fr_1fr_1fr]' : 'grid-cols-[2fr_1fr_1fr]'}`}>
                     <div>
                       <Label className={ROTULO}>Descrição *</Label>
                       <Input className={CAMPO} value={form.descricao}
@@ -373,12 +514,28 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo }: Props) {
                       <Label className={ROTULO}>Escopo *</Label>
                       <Select value={form.tipo_financiamento} onValueChange={v => { if (ehEscopo(v)) set('tipo_financiamento', v); }}>
                         <SelectTrigger className={CAMPO}><SelectValue /></SelectTrigger>
-                        <SelectContent>
+                        <SelectContent position="popper" className={SELECT_POPPER}>
                           <SelectItem value="pecuaria">Pecuária</SelectItem>
                           <SelectItem value="agricultura">Agricultura</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
+                    {/* ⚠ SO' NA EDICAO. Na criacao nao ha' o que escolher — todo contrato
+                        nasce 'ativo' e quem fixa isso e' o gravador; oferecer "Quitado" a um
+                        contrato que ainda nao existe seria um campo que nao decide nada. */}
+                    {ehEdicao && (
+                      <div>
+                        <Label className={ROTULO}>Situação do contrato</Label>
+                        <Select value={statusContrato} onValueChange={v => { if (ehStatusContrato(v)) setStatusContrato(v); }}>
+                          <SelectTrigger className={CAMPO}><SelectValue /></SelectTrigger>
+                          <SelectContent position="popper" className={SELECT_POPPER}>
+                            <SelectItem value="ativo">Ativo</SelectItem>
+                            <SelectItem value="quitado">Quitado</SelectItem>
+                            <SelectItem value="cancelado">Cancelado</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">
@@ -440,15 +597,29 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo }: Props) {
                     </div>
                     <div>
                       <Label className={ROTULO}>Nº de parcelas *</Label>
-                      <Input
-                        type="number" min={MIN_PARCELAS} max={MAX_PARCELAS}
-                        className={`${CAMPO} text-right ${NUM}`}
-                        value={parcelasTexto}
-                        onChange={e => setParcelasTexto(e.target.value)}
-                        onBlur={fecharParcelas}
-                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); fecharParcelas(); } }}
-                      />
-                      <p className={APOIO}>Mínimo {MIN_PARCELAS}, máximo {MAX_PARCELAS}</p>
+                      {/* ⚠ TRAVADO EM EDICAO, e nao aceito-e-ignorado. Mudar o numero aqui
+                          exigiria refazer o cronograma, e o cronograma nao se refaz (as
+                          parcelas ja' podem ter lancamento vinculado). Campo que aceita o
+                          que nao vai acontecer e' pior que campo travado. */}
+                      {ehEdicao ? (
+                        <>
+                          <Input readOnly tabIndex={-1} value={String(form.total_parcelas)}
+                            className={`${CAMPO} text-right ${NUM} ${CAMPO_TRAVADO}`} />
+                          <p className={APOIO}>O cronograma não é refeito aqui</p>
+                        </>
+                      ) : (
+                        <>
+                          <Input
+                            type="number" min={MIN_PARCELAS} max={MAX_PARCELAS}
+                            className={`${CAMPO} text-right ${NUM}`}
+                            value={parcelasTexto}
+                            onChange={e => setParcelasTexto(e.target.value)}
+                            onBlur={fecharParcelas}
+                            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); fecharParcelas(); } }}
+                          />
+                          <p className={APOIO}>Mínimo {MIN_PARCELAS}, máximo {MAX_PARCELAS}</p>
+                        </>
+                      )}
                     </div>
                   </div>
 
@@ -456,11 +627,22 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo }: Props) {
                       Esconder a terceira celula mantendo `grid-cols-3` deixaria um
                       terco vazio a' direita, e buraco em grade le-se como campo que
                       faltou carregar. */}
-                  <div className={`grid gap-2 ${ehParcelamento ? 'grid-cols-2' : 'grid-cols-3'}`}>
+                  <div className={`grid gap-2 ${(!ehEdicao && !ehParcelamento) ? 'grid-cols-3' : 'grid-cols-2'}`}>
                     <div>
                       <Label className={ROTULO}>1ª parcela *</Label>
-                      <DatePicker value={form.data_primeira_parcela} onChange={v => set('data_primeira_parcela', v)} />
+                      {ehEdicao ? (
+                        <Input readOnly tabIndex={-1}
+                          value={form.data_primeira_parcela ? form.data_primeira_parcela.split('-').reverse().join('/') : '—'}
+                          className={`${CAMPO} ${NUM} ${CAMPO_TRAVADO}`} />
+                      ) : (
+                        <DatePicker value={form.data_primeira_parcela} onChange={v => set('data_primeira_parcela', v)} />
+                      )}
                     </div>
+                    {/* ⚠ FREQUENCIA NAO APARECE EM EDICAO porque NAO E' PERSISTIDA: nao ha'
+                        coluna `frequencia_parcela` em `financiamentos` (conferido em
+                        types.ts). Ela so' molda as datas na geracao. Mostrar "Mensal" para
+                        um contrato semestral seria inventar um dado que o banco nao tem. */}
+                    {!ehEdicao && (
                     <div>
                       <Label className={ROTULO}>Frequência</Label>
                       <Select value={form.frequencia_parcela} onValueChange={v => { if (ehFrequencia(v)) set('frequencia_parcela', v); }}>
@@ -474,6 +656,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo }: Props) {
                         </SelectContent>
                       </Select>
                     </div>
+                    )}
                     {!ehParcelamento && (
                       <div>
                         <Label className={ROTULO}>Juros ao ano (%) *</Label>
@@ -504,7 +687,12 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo }: Props) {
                   )}
 
                   <div>
-                    <Label className={ROTULO}>Prévia das parcelas</Label>
+                    <Label className={ROTULO}>{ehEdicao ? 'Parcelas do contrato' : 'Prévia das parcelas'}</Label>
+                    {ehEdicao && (
+                      <p className="mb-0.5 text-[10px] text-amber-600 dark:text-amber-500">
+                        Somente leitura — alterar valor ou taxa não refaz o cronograma.
+                      </p>
+                    )}
                     {parcelas.length === 0 ? (
                       <p className="mt-0.5 rounded-md border border-dashed px-2 py-3 text-center text-[10px] text-muted-foreground">
                         Preencha valor total, nº de parcelas e data da 1ª parcela.
@@ -530,25 +718,37 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo }: Props) {
                           {parcelas.map((p, idx) => (
                             <TableRow key={idx}>
                               <TableCell className={`${NUM} text-[10px]`}>{p.numero}</TableCell>
+                              {/* Em edicao a grade e' LEITURA: quem mexe numa parcela e' o
+                                  modal da parcela, no detalhe, que reconcilia o financeiro. */}
                               <TableCell>
-                                <DatePicker
-                                  size="compact"
-                                  value={p.data_vencimento}
-                                  onChange={v => updateParcela(idx, 'data_vencimento', v)}
-                                />
+                                {ehEdicao ? (
+                                  <span className={`text-[11px] ${NUM}`}>
+                                    {p.data_vencimento.split('-').reverse().join('/')}
+                                  </span>
+                                ) : (
+                                  <DatePicker
+                                    size="compact"
+                                    value={p.data_vencimento}
+                                    onChange={v => updateParcela(idx, 'data_vencimento', v)}
+                                  />
+                                )}
                               </TableCell>
                               {!ehParcelamento && (
-                                <TableCell>
-                                  <CampoMoeda valor={p.valor_principal}
-                                    onChange={n => updateParcela(idx, 'valor_principal', n ?? 0)}
-                                    className={`${CAMPO_CELULA} text-right text-[11px] ${NUM}`} />
+                                <TableCell className={ehEdicao ? `text-right text-[11px] ${NUM}` : undefined}>
+                                  {ehEdicao ? brl(p.valor_principal) : (
+                                    <CampoMoeda valor={p.valor_principal}
+                                      onChange={n => updateParcela(idx, 'valor_principal', n ?? 0)}
+                                      className={`${CAMPO_CELULA} text-right text-[11px] ${NUM}`} />
+                                  )}
                                 </TableCell>
                               )}
                               {!ehParcelamento && (
-                                <TableCell>
-                                  <CampoMoeda valor={p.valor_juros}
-                                    onChange={n => updateParcela(idx, 'valor_juros', n ?? 0)}
-                                    className={`${CAMPO_CELULA} text-right text-[11px] ${NUM}`} />
+                                <TableCell className={ehEdicao ? `text-right text-[11px] ${NUM}` : undefined}>
+                                  {ehEdicao ? brl(p.valor_juros) : (
+                                    <CampoMoeda valor={p.valor_juros}
+                                      onChange={n => updateParcela(idx, 'valor_juros', n ?? 0)}
+                                      className={`${CAMPO_CELULA} text-right text-[11px] ${NUM}`} />
+                                  )}
                                 </TableCell>
                               )}
                               <TableCell className={`text-right text-[11px] font-semibold ${NUM}`}>
@@ -642,6 +842,12 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo }: Props) {
                         </div>
                       </div>
 
+                      {/* ⚠ DESTINACOES SO' NA CRIACAO. Em edicao elas nao sao carregadas do
+                          banco e o gravador de edicao nao as grava: o bloco apareceria VAZIO
+                          (sugerindo que o contrato nao tem nenhuma, quando pode ter) e o que
+                          fosse digitado ali sumiria no Salvar. Campo que perde o que recebe e'
+                          pior que campo ausente. Editar destinacao segue sendo frente propria. */}
+                      {!ehEdicao && (
                       <div className="rounded-md border bg-card p-2.5">
                         <p className="text-[10px] font-bold uppercase tracking-wide text-primary/90">Destinação do contrato</p>
                         <p className="mb-1.5 text-[10px] text-muted-foreground">
@@ -654,6 +860,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo }: Props) {
                           onChange={setDestinacoes}
                         />
                       </div>
+                      )}
                     </>
                   )}
                 </TabsContent>
@@ -748,17 +955,17 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo }: Props) {
               )}
             </p>
             <div className="flex items-center gap-2 shrink-0">
-              <Button variant="outline" size="sm" className="h-8" onClick={() => onOpenChange(false)} disabled={saving}>
+              <Button variant="outline" size="sm" className="h-8" onClick={() => onOpenChange(false)} disabled={gravando}>
                 Cancelar
               </Button>
               <Button
                 size="sm"
                 className="h-8 bg-cta text-cta-foreground hover:bg-cta-hover font-semibold"
                 onClick={handleSalvar}
-                disabled={saving || pendencias.length > 0}
+                disabled={gravando || pendencias.length > 0}
                 title={primeiraPendencia ?? undefined}
               >
-                {saving ? 'Salvando...' : 'Ver prévia e salvar'}
+                {gravando ? 'Salvando...' : ehEdicao ? 'Salvar alterações' : 'Ver prévia e salvar'}
               </Button>
             </div>
           </div>
