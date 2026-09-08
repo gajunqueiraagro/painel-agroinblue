@@ -2,10 +2,18 @@
  * ContaBancariaSelect — seletor unificado de conta bancária.
  *
  * PR-H2 — centraliza a UX de seleção de conta que estava duplicada em 9
- * callsites com shadcn Select. Agrupa por `tipo_conta` (vocabulário oficial
- * do PR-H1: corrente | investimento | cartao | caixa | outro), ordena
- * alfabético dentro de cada grupo e aplica visual dark/glass conservador
- * no SelectContent (preto translúcido + blur leve).
+ * callsites com shadcn Select. Agrupa por `tipo_conta`, ordena alfabético
+ * dentro de cada grupo e aplica visual dark/glass conservador no SelectContent
+ * (preto translúcido + blur leve).
+ *
+ * ⚠ O VOCABULÁRIO É `cc | inv | cartao | caixa | outro`, e este cabeçalho dizia
+ * "corrente | investimento" — nomes que a coluna `financeiro_contas_bancarias.tipo_conta`
+ * NUNCA guardou (medido em 133g: 35 `cc`, 25 `inv`, 9 `cartao`, zero `corrente`, zero
+ * `investimento`). A ordem e os rótulos vivem em `@/lib/financeiro/gruposDeConta`.
+ *
+ * ⚠ É O ÚNICO SELETOR DE CONTA DO SISTEMA — 133g item 9. Lista de contas montada à mão em
+ * `<Select>`/`<select>` é defeito, não estilo: cada uma reinventava a ordem e os rótulos
+ * das gavetas, e as que não agrupavam nada punham quinze contas numa fila só.
  *
  * NÃO faz heurística por nome.
  * NÃO inclui contas com IDs em `excluirIds` (usado para evitar conta_destino
@@ -22,6 +30,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { ORDEM_GRUPO_CONTA, ROTULO_GRUPO_CONTA, grupoDaConta } from '@/lib/financeiro/gruposDeConta';
 
 /**
  * Shape mínimo necessário para o componente. Aceita tanto `ContaBancariaV2`
@@ -81,18 +90,15 @@ interface Props {
   prependItems?: Array<{ value: string; label: string }>;
 }
 
-// PR-H1 — vocabulário oficial CURTO: cc | inv | cartao.
-type TipoOficial = 'cc' | 'inv' | 'cartao';
-
-const TIPO_ORDER: TipoOficial[] = ['cc', 'inv', 'cartao'];
-
-// Labels visuais para cabeçalho de grupo no dropdown. Plural intencional
-// porque agrupam múltiplas contas. Os valores internos permanecem curtos.
-const TIPO_LABEL: Record<TipoOficial, string> = {
-  cc: 'Contas Correntes',
-  inv: 'Investimentos',
-  cartao: 'Cartões',
-};
+/**
+ * ⚠ A ORDEM E OS RÓTULOS VÊM DE `gruposDeConta` — 133g item 9. Este arquivo tinha os seus
+ * ("Contas Correntes", "Cartões") e o `ImportarBancoInline` tinha outros ("Conta corrente",
+ * "Cartão"): dois vocabulários para as mesmas três gavetas, na mesma tela. A fonte é uma.
+ * ⚠ E O `caixa`/`outro` ENTRAM DE GRAÇA: a lista de grupos passa a ser a do mapa, então o
+ * dia em que uma conta nascer com um tipo novo ela aparece — em vez de sumir do dropdown.
+ */
+const TIPO_ORDER: string[] = Object.keys(ORDEM_GRUPO_CONTA)
+  .sort((a, b) => ORDEM_GRUPO_CONTA[a] - ORDEM_GRUPO_CONTA[b]);
 
 function buildLabel(c: ContaSelecionavel, mode: Props['showBankDetails']): string {
   const nome = c.nome_exibicao || c.nome_conta;
@@ -119,8 +125,8 @@ export const DARK_GLASS_CONTENT =
   '[&_[role=option]]:focus:text-zinc-100 ' +
   '[&_[role=option]]:data-[state=checked]:bg-zinc-800/55 ' +
   '[&_[role=option]]:data-[state=checked]:text-zinc-100';
-const GROUP_LABEL_CLS =
-  'text-zinc-400 text-[10px] font-semibold uppercase tracking-wide px-2 py-1';
+/* Rótulo de grupo do A23: 10px/500, SEM uppercase (133g item 9). */
+const GROUP_LABEL_CLS = 'text-zinc-400 text-[10px] font-medium px-2 py-1';
 const ITEM_CLS =
   'text-zinc-100 focus:bg-zinc-800/45 focus:text-zinc-100 ' +
   'data-[state=checked]:bg-zinc-800/55 data-[state=checked]:text-zinc-100';
@@ -146,9 +152,11 @@ export function ContaBancariaSelect({
   // populado em cc/inv/cartao e CHECK constraint enforce isso).
   const grupos = TIPO_ORDER.map((tipo) => ({
     tipo,
-    label: TIPO_LABEL[tipo],
+    label: ROTULO_GRUPO_CONTA[tipo] ?? 'Outros',
     items: visiveis
-      .filter((c) => (c.tipo_conta ?? 'cc') === tipo)
+      /* `grupoDaConta` normaliza e manda o desconhecido para `outro` — sem ele, uma conta
+         com tipo novo simplesmente não apareceria em grupo nenhum. */
+      .filter((c) => grupoDaConta(c.tipo_conta ?? 'cc') === tipo)
       .map((c) => ({ conta: c, label: buildLabel(c, showBankDetails) }))
       .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR')),
   })).filter((g) => g.items.length > 0);

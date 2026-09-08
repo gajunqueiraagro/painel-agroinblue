@@ -43,7 +43,7 @@ no mesmo arquivo.
   sai com codigo 0 e passa sempre. Era um gate vazio. O comando oficial
   varre os 671 arquivos .ts/.tsx em src/ e sai com codigo 2 enquanto
   houver erro.
-- TSC baseline: 153 erros (era 73 ate 2026-09-02 e 155 ate 09-03 — ver a regeneracao do
+- TSC baseline: 150 erros (era 73 ate 2026-09-02, 155 ate 09-03 e 153 ate 09-08 — ver a regeneracao do
   types.ts abaixo), medidos em ARVORE LIMPA — worktree em detached
   HEAD sobre o commit, NUNCA no checkout principal. Mesmo numero e mesmo
   conjunto de diagnosticos em c0fdb21b, 487fe1cf e c28de22a.
@@ -141,6 +141,24 @@ no mesmo arquivo.
   diagnostico gritava TS2551 em TODO relatorio desde que existe, dentro da
   baseline, e ninguem o leu — exatamente como os "~91 ms" de comentario. O que
   achou o defeito foi a FASE 0 de uma frente de performance, nao o gate.
+  De 153 para 150 em 2026-09-08, sobre 1db67f14, no 133g item 8. Sairam 3, todos o
+  MESMO erro em tres chamadores de `resolverContaPorTexto`/`classificarConta`:
+    2x TS2345 em src/v2/components/mesa/MesaPareamentoModal.tsx
+    1x TS2345 em src/v2/lib/staging/mutations.ts
+       — "Argument of type 'readonly { ... aliases: Json ... }[]' is not assignable
+          to parameter of type 'readonly ContaResolvivel[]'."
+  Os tres passavam a LINHA CRUA de `financeiro_contas_bancarias`, cuja coluna
+  `aliases` e' `Json`, para um tipo que exigia `string[] | null`. A queda veio de
+  CORRIGIR o tipo na origem: `ContaResolvivel.aliases` passou a ser `unknown`, que
+  e' o que um `jsonb` de fato promete. Nenhuma logica mudou — a camada 0 do
+  resolvedor JA validava em runtime (`Array.isArray` + `String(a)`); o tipo e' que
+  prometia mais que o banco. Nao houve supressao: zero `as`, zero `@ts-ignore`.
+  ⚠ E A DIVIDA DE TIPO ESCONDIA UMA SAIDA FACIL. Enquanto o tipo exigia `string[]`,
+  quem tinha a coluna crua so' tinha duas opcoes — cast ou nao passar os apelidos —
+  e `useFinanceiroV2.loadContas` tinha escolhido a segunda: `aliases` nem estava no
+  `select`. Sem ela, "Cartao Banco do Brasil - Pecuaria Ag. 8974 C/C 25367 7" pulava
+  a camada do apelido e casava pela agencia+numero com a CONTA CORRENTE de mesma
+  agencia. O `select` ganhou a coluna no mesmo PR.
   Como comparar antes (A) x depois (B), nesta ordem:
     1. CONTAGEM. B <= A, sempre. B > A reprova o PR.
     2. DIAGNOSTICOS. Comparar os conjuntos por
@@ -205,7 +223,7 @@ no mesmo arquivo.
   errar — o gate existe para o que quebra, nao para o que e' feio.
 
 ## RELATORIO DE EXECUCAO (formato obrigatorio, todo ciclo)
-1. TSC: N erros (baseline 73) — numero explicito, obtido com
+1. TSC: N erros (baseline 150) — numero explicito, obtido com
    `npx tsc -p tsconfig.app.json --noEmit`
 2. Build: OK/FALHOU + tempo
 3. git diff --stat completo

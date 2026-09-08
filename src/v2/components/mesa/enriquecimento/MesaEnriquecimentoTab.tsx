@@ -34,6 +34,7 @@ import { useGravarLoteEnriquecimento, type LinhaParaGravar } from '@/v2/hooks/us
 import { EnriquecimentoCandidatosInline } from './EnriquecimentoCandidatosInline';
 import { MesaCamposTabela, CAMPOS_OBRIGATORIOS_MESA } from './MesaCamposTabela';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ContaBancariaSelect, type ContaSelecionavel } from '@/components/shared/ContaBancariaSelect';
 import { baixarCsv, csvCampo } from '@/lib/csv';
 import { fmtBRL, fmtData } from './fmt';
 import { Button } from '@/components/ui/button';
@@ -217,6 +218,37 @@ export function MesaEnriquecimentoTab({
   // ViewModels prontos (adapters/selectors puros).
   const sessoesVM = useMemo(() => toSessoesVM(sessoes), [sessoes]);
   const contas = useMemo(() => listarContas(staging), [staging]);
+  /**
+   * As contas do filtro, com o `tipo_conta` do CADASTRO — 133g item 9.
+   *
+   * ⚠ O STAGING NÃO SABE O TIPO. `listarContas` devolve id, nome e total lidos de
+   * `conta_filtro_id`/`conta_filtro_nome` da view; o tipo mora em
+   * `financeiro_contas_bancarias`, e é o join com ele que permite agrupar. Conta que a
+   * sessão cita e o cadastro não tem cai em "Outros" — some do dropdown seria pior.
+   * ⚠ O NOME É O DO CADASTRO QUANDO EXISTE: o da sessão é um carimbo do dia da importação,
+   * e uma conta renomeada depois apareceria aqui com o nome velho.
+   */
+  const contasDoFiltro = useMemo<ContaSelecionavel[]>(
+    () => contas
+      .filter((c) => c.id !== '__sem__')
+      .map((c) => {
+        const cad = contasBancarias.find((cb) => cb.id === c.id);
+        return {
+          id: c.id,
+          nome_conta: `${cad ? (cad.nome_exibicao || cad.nome_conta) : c.nome} (${c.total})`,
+          nome_exibicao: null,
+          tipo_conta: cad?.tipo_conta ?? null,
+        };
+      }),
+    [contas, contasBancarias]);
+
+  /** "Todas as contas" sempre; "Sem conta" só quando a sessão tem linha sem conta. */
+  const itensFixosDoFiltro = useMemo(() => {
+    const semConta = contas.find((c) => c.id === '__sem__');
+    const itens = [{ value: 'todas', label: 'Todas as contas' }];
+    if (semConta) itens.push({ value: '__sem__', label: `Sem conta (${semConta.total})` });
+    return itens;
+  }, [contas]);
   /* O mês da sessão — o fallback do casador quando a régua não vem por prop. Os rótulos de
      conta/mês do drawer "sistema não explicado" saíram com ele (133b). */
   const mesAtivo = sessoes?.find((s) => s.sessao_id === sessaoId)?.excel_ano_mes ?? null;
@@ -1012,15 +1044,22 @@ export function MesaEnriquecimentoTab({
           {isCasando ? 'Recasando…' : '↻ Recasar'}
         </Button>
 
-        <Select value={filtroConta} onValueChange={(id) => { setFiltroConta(id); setSelecionadoId(null); }}>
-          <SelectTrigger className="h-6 w-[170px] shrink-0 text-[11px]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todas" className="text-[11px]">Todas as contas</SelectItem>
-            {contas.map((c) => (
-              <SelectItem key={c.id} value={c.id} className="text-[11px]">{c.nome} ({c.total})</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {/* ⚠ O SELETOR DE CONTA É UM SÓ NO SISTEMA — 133g item 9. Esta lista era montada à
+            mão e saía na ordem do VOLUME (a conta com mais linhas primeiro), sem gaveta
+            nenhuma: quinze contas correntes, investimentos e cartões embaralhados. Agora
+            agrupa por tipo como todo seletor de conta, e a CONTAGEM continua no rótulo —
+            ela é o que diz onde está o trabalho.
+            ⚠ "Todas" e "Sem conta" ENTRAM POR `prependItems`: são sentinelas do filtro, não
+            contas do cadastro, e um grupo com elas dentro seria mentira sobre o cadastro. */}
+        <div className="w-[170px] shrink-0">
+          <ContaBancariaSelect
+            value={filtroConta}
+            onValueChange={(id) => { setFiltroConta(id); setSelecionadoId(null); }}
+            contas={contasDoFiltro}
+            prependItems={itensFixosDoFiltro}
+            className="h-6 text-[11px]"
+          />
+        </div>
 
         <Select value={ordenacao} onValueChange={(v) => setOrdenacao(v as Ordenacao)}>
           <SelectTrigger className="h-6 w-[150px] shrink-0 text-[11px]"><SelectValue /></SelectTrigger>

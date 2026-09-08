@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import { Upload, Play, AlertTriangle, FileX, Trash2, ExternalLink, Check, Plus, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -1179,26 +1180,26 @@ export function MesaClassificacaoTab() {
                       ex: {ex.data ?? '—'} · {ex.valor != null ? formatMoeda(ex.valor) : '—'} · {ex.tipo_operacao ?? '—'}
                     </span>
                   </div>
-                  <select
-                    className="w-full rounded-md border px-2 py-1.5 text-xs disabled:opacity-50"
-                    value={item?.contaId ?? ''}
-                    disabled={ignorar}
-                    onChange={(e) => {
-                      const uuid = e.target.value || null;
+                  {/* ⚠ ERA UM `<select>` NATIVO — 133g item 9. Ele abria o menu do sistema
+                      operacional (outra fonte, outro idioma, outra aparência em cada
+                      máquina) e listava as contas numa fila só, sem gaveta. O seletor de
+                      conta do sistema é um, e agrupa por tipo por dentro. */}
+                  <ContaBancariaSelect
+                    /* `__none__`: valor sem item correspondente mantém o Select CONTROLADO
+                       e mostrando o placeholder — `''` o tornaria não-controlado. */
+                    value={item?.contaId || '__none__'}
+                    onValueChange={(uuid) => {
                       setContaMap((prev) => ({
                         ...prev,
-                        [c.texto]: { ...prev[c.texto], textoExcel: c.texto, contaId: uuid, ignorar: false },
+                        [c.texto]: { ...prev[c.texto], textoExcel: c.texto, contaId: uuid || null, ignorar: false },
                       }));
                     }}
-                  >
-                    <option value="">Selecione a conta bancária…</option>
-                    {hookFin.contasBancarias.map((cb) => (
-                      <option key={cb.id} value={cb.id}>
-                        {cb.nome_exibicao ?? cb.nome_conta}
-                        {cb.codigo_conta ? ` (${cb.codigo_conta})` : ''}
-                      </option>
-                    ))}
-                  </select>
+                    contas={hookFin.contasBancarias}
+                    placeholder="Selecione a conta bancária…"
+                    disabled={ignorar}
+                    showBankDetails="banco"
+                    className="h-8 text-xs"
+                  />
                   <div className="flex items-center gap-4 flex-wrap">
                     <label className="flex items-center gap-1.5 text-[11px] cursor-pointer select-none">
                       <Checkbox

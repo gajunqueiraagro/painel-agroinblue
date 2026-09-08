@@ -32,6 +32,7 @@ import { matchTodosLotes, type ExtratoMatcher } from '@/v2/lib/excelPreview/matc
 import type { LoteExcel, MatchResult } from '@/v2/lib/excelPreview/types';
 import { toast } from 'sonner';
 import { MesaPareamentoModal } from '@/v2/components/mesa/MesaPareamentoModal';
+import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import { useMesaSessao } from '@/v2/lib/mesaSessao/useMesaSessao';
 import { useTransferenciasDecididas } from '@/hooks/useTransferenciasDecididas';
 import { criarOuRecuperarSessao, descartarSessao } from '@/v2/lib/mesaSessao/mutations';
@@ -56,6 +57,9 @@ interface ContaBancaria {
   id: string;
   nome_exibicao: string;
   ativa: boolean;
+  /* 133g item 9 — a gaveta do dropdown. Sem ele o seletor agruparia tudo em "Outros". */
+  nome_conta: string;
+  tipo_conta: string | null;
 }
 
 interface ExtratoLinha {
@@ -150,7 +154,7 @@ function MesaConciliacaoView({ initialAno, initialMes }: V2MesaOperacionalProps)
       // de leitura; cast preserva runtime sem afetar tipos da UI (ContaBancaria etc).
       const { data } = await (supabase as any)
         .from('financeiro_contas_bancarias')
-        .select('id, nome_exibicao, ativa')
+        .select('id, nome_exibicao, ativa, nome_conta, tipo_conta')
         .eq('cliente_id', clienteAtual.id)
         .order('nome_exibicao');
       const lista = (data ?? []) as unknown as ContaBancaria[];
@@ -539,16 +543,20 @@ function MesaConciliacaoView({ initialAno, initialMes }: V2MesaOperacionalProps)
 
       {/* ── SELETORES ─────────────────────────────────────────────── */}
       <div className="flex items-center gap-3 flex-wrap">
-        <select
-          value={contaId ?? ''}
-          onChange={(e) => setContaId(e.target.value)}
-          className="text-xs h-8 px-2 rounded-md border border-input bg-background"
-          aria-label="Conta bancária"
-        >
-          {contas.filter((c) => c.ativa).map((c) => (
-            <option key={c.id} value={c.id}>{c.nome_exibicao}</option>
-          ))}
-        </select>
+        {/* ⚠ ERA UM `<select>` NATIVO — 133g item 9: menu do sistema operacional, sem
+            gaveta, com as contas correntes, os investimentos e os cartões na mesma fila.
+            O seletor de conta do sistema é um só, e agrupa por tipo por dentro. */}
+        <div className="w-[220px]">
+          <ContaBancariaSelect
+            /* `__none__`: valor sem item correspondente mantém o Select controlado no
+               placeholder — `''` o tornaria não-controlado. */
+            value={contaId || '__none__'}
+            onValueChange={(id) => setContaId(id)}
+            contas={contas.filter((c) => c.ativa)}
+            placeholder="Conta bancária"
+            className="h-8 text-xs"
+          />
+        </div>
 
         <select
           value={ano}

@@ -13,10 +13,21 @@
  * misturaria duas mudanças.
  */
 
-/** Ordem de exibição. Tipo desconhecido cai no fim, sem sumir da lista. */
+/**
+ * Ordem de exibição. Tipo desconhecido cai no fim, sem sumir da lista.
+ *
+ * ⚠ AS CHAVES SÃO AS DO BANCO, E ESTAVAM ERRADAS — 133g item 9. Este mapa nasceu no 132 com
+ * `corrente`/`investimento`, e a coluna `financeiro_contas_bancarias.tipo_conta` guarda
+ * `cc`/`inv`/`cartao` — medido: 35 `cc`, 25 `inv`, 9 `cartao`, e nenhuma `corrente` nem
+ * `investimento` em 69 contas. Com as chaves antigas, `grupoDaConta` devolvia `outro` para
+ * TODAS elas: o dropdown do Importar Banco exibia as 69 sob "Outros", e ninguém reparou
+ * porque uma faixa só continua parecendo uma lista.
+ * ⚠ `caixa` E `outro` FICAM: `caixa` está no vocabulário do produto e ainda não tem conta;
+ * `outro` é o destino honesto do tipo que não se reconhece.
+ */
 export const ORDEM_GRUPO_CONTA: Record<string, number> = {
-  corrente: 0,
-  investimento: 1,
+  cc: 0,
+  inv: 1,
   cartao: 2,
   caixa: 3,
   outro: 4,
@@ -24,8 +35,8 @@ export const ORDEM_GRUPO_CONTA: Record<string, number> = {
 
 /** O rótulo que o operador lê — o mesmo das faixas da tabela de saldos. */
 export const ROTULO_GRUPO_CONTA: Record<string, string> = {
-  corrente: 'Conta corrente',
-  investimento: 'Investimentos',
+  cc: 'Conta corrente',
+  inv: 'Investimentos',
   cartao: 'Cartão',
   caixa: 'Caixa',
   outro: 'Outros',

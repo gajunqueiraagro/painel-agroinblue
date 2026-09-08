@@ -157,6 +157,20 @@ export interface ContaBancariaV2 {
   agencia: string | null;
   numero_conta: string | null;
   conta_digito: string | null;
+  /**
+   * Apelidos memorizados da conta (coluna `aliases`, jsonb) — 133g item 8.
+   *
+   * ⚠ `unknown` DE PROPÓSITO: a coluna é `jsonb` e o banco não garante forma nenhuma.
+   * Quem precisa da lista valida em runtime (ver `apelidosDaConta` no diálogo de
+   * importação); tipá-la aqui como `string[]` seria uma promessa que a coluna não faz.
+   * ⚠ ELA FALTAVA NO SELECT, e a falta tinha consequência: `resolverContaPorTexto` testa
+   * o apelido ANTES da agência+número, e sem a coluna o texto
+   * "Cartão Banco do Brasil - Pecuária Ag. 8974 C/C 25367 7" caía na camada da
+   * agência e resolvia para a CONTA CORRENTE "Banco do Brasil" (agência 8974, conta
+   * 25367) — o mesmo engano que mandou 57 lançamentos de cartão para conta corrente
+   * em 07/09, por outro caminho.
+   */
+  aliases?: unknown;
 }
 
 export interface FornecedorV2 {
@@ -277,7 +291,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     if (!clienteId) return;
     const { data } = await supabase
       .from('financeiro_contas_bancarias')
-      .select('id, nome_conta, banco, fazenda_id, tipo_conta, codigo_conta, nome_exibicao, agencia, numero_conta, conta_digito')
+      .select('id, nome_conta, banco, fazenda_id, tipo_conta, codigo_conta, nome_exibicao, agencia, numero_conta, conta_digito, aliases')
       .eq('cliente_id', clienteId)
       .eq('ativa', true)
       .order('ordem_exibicao');

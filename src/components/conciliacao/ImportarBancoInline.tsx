@@ -1,8 +1,7 @@
 import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { agruparContasPorTipo } from '@/lib/financeiro/gruposDeConta';
+import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import { CheckCircle2, Loader2, Upload, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -121,26 +120,29 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
     }
   };
 
+  /* ⚠ UM COMPONENTE SÓ DE SELETOR DE CONTA — 133g item 9. Este dropdown montava a lista à
+     mão (chamando `agruparContasPorTipo` direto) enquanto o `ContaBancariaSelect` fazia o
+     MESMO agrupamento por dentro, com outro rótulo de grupo: dois vocabulários para as
+     mesmas gavetas, na mesma tela. A regra agora é uma — quem agrupa é o componente.
+     ⚠ O `label` DO CALLER VIRA `nome_conta`: esta tela já resolve o rótulo (`getContaLabel`)
+     antes de passar a lista, e o componente exibe `nome_exibicao || nome_conta`. Sem
+     `nome_exibicao`, o rótulo pronto do caller é o que aparece — sem reescrever regra de
+     nome em dois lugares. */
   const seletor = (
     <div className="w-[190px]">
-      <Select value={contaId || '__none__'} onValueChange={v => onContaChange(v === '__none__' ? '' : v)}>
-        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Conta" /></SelectTrigger>
-        <SelectContent>
-          {/* ⚠ MESMOS GRUPOS, MESMA ORDEM, MESMOS RÓTULOS da aba Conciliação — 132. A regra
-              mora em `gruposDeConta`; duas listas de rótulos divergiriam na primeira conta
-              nova. */}
-          {agruparContasPorTipo(contas).map(g => (
-            <SelectGroup key={g.chave}>
-              <SelectLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                {g.rotulo}
-              </SelectLabel>
-              {g.contas.map(c => (
-                <SelectItem key={c.id} value={c.id} className="text-xs">{c.label}</SelectItem>
-              ))}
-            </SelectGroup>
-          ))}
-        </SelectContent>
-      </Select>
+      <ContaBancariaSelect
+        /* ⚠ A SENTINELA `__none__` FICA, e não é sobra do código antigo: `value=""` faria o
+           Radix tratar o Select como NÃO-CONTROLADO, e voltar de uma conta para "todas"
+           deixaria a escolha anterior na tela. Um valor sem item correspondente é
+           controlado e mostra o placeholder — que é exatamente o comportamento de antes. */
+        value={contaId || '__none__'}
+        onValueChange={v => onContaChange(v === '__none__' ? '' : v)}
+        contas={contas.map(c => ({
+          id: c.id, nome_conta: c.label, nome_exibicao: null, tipo_conta: c.tipo_conta ?? null,
+        }))}
+        placeholder="Conta"
+        className="h-8 text-xs"
+      />
     </div>
   );
 

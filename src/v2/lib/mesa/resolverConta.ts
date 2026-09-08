@@ -27,7 +27,19 @@ export type ContaBancariaRow =
 export type ContaResolvivel = Pick<
   ContaBancariaRow,
   'id' | 'nome_conta' | 'nome_exibicao' | 'banco' | 'agencia' | 'numero_conta'
-> & { aliases?: string[] | null };
+> & {
+  /**
+   * Apelidos da conta — coluna `aliases`, `jsonb`.
+   *
+   * ⚠ `unknown`, E NÃO `string[] | null` — 133g item 8. A coluna é jsonb e não promete
+   * forma nenhuma; a camada 0 abaixo já valida em runtime (`Array.isArray` + `String(a)`),
+   * então a promessa no tipo era a única parte frágil. Com `string[]`, todo caller que
+   * tivesse a coluna crua precisava de um cast ou de uma segunda validação — e a saída
+   * fácil de ambos era não passar os apelidos, que é como `ContaBancariaV2` chegou aqui
+   * SEM eles e o cartão do BB foi parar na conta corrente de mesma agência.
+   */
+  aliases?: unknown;
+};
 
 export type EstrategiaResolucao =
   | 'alias'
