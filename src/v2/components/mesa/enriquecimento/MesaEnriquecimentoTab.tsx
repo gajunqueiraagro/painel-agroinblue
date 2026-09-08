@@ -328,7 +328,7 @@ export function MesaEnriquecimentoTab({
     !selecionado ? 'Escolha uma linha.'
     : selecionado.aplicado ? 'Esta linha já foi gravada — use Reverter para desfazer.'
     : !selecionado.temMatch ? 'Sem lançamento vinculado: escolha um candidato antes de gravar.'
-    : selecionado.subcentroOrfao ? 'A conta do plano proposta não existe no plano oficial — escolha uma da lista.'
+    : selecionado.subcentroOrfao ? 'O Resultado está sem conta do plano — escolha uma da lista.'
     : null;
   /**
    * ⚠ NADA A GRAVAR NÃO É ERRO — 133b-a correção 1. Quando o Resultado já confere com o
@@ -729,6 +729,18 @@ export function MesaEnriquecimentoTab({
     return ok;
   }
 
+  /**
+   * ⚠ O PAR PERTENCE ÀS DUAS CONTAS — 133e item G. O filtro comparava a conta selecionada
+   * com a da linha da planilha, e o par não é uma linha da planilha: ele é uma SAÍDA numa
+   * conta e uma ENTRADA em outra. Com o Itaú filtrado a lista mostrava 0 enquanto o topo
+   * dizia 7 — porque nenhum par "é" do Itaú; sete têm o Itaú de um dos lados.
+   */
+  const paresDaConta = useMemo(() => {
+    if (!contaIdSel) return transf.dados.pares;
+    return transf.dados.pares.filter(
+      (p) => p.conta_saida_id === contaIdSel || p.conta_entrada_id === contaIdSel);
+  }, [transf.dados.pares, contaIdSel]);
+
   function baixarSemPar() {
     const linhas = ['linha,data,conta,descricao,valor,motivo'];
     for (const r of stagingConta) {
@@ -882,7 +894,12 @@ export function MesaEnriquecimentoTab({
         total={rowsModo.length}
         filtro={filtroGrupo}
         onFiltro={(g) => { setFiltroGrupo(g); setSelecionadoId(null); }}
-        transferencias={transf.carregando ? undefined : { total: transf.dados.total, unicos: transf.dados.unicos }}
+        /* ⚠ O CHIP CONTA O QUE A LISTA MOSTRA — 133e item G. Com o total do mês no chip e o
+           recorte da conta na lista, os dois discordariam sempre que houvesse filtro. */
+        transferencias={transf.carregando ? undefined : {
+          total: paresDaConta.length,
+          unicos: paresDaConta.filter((p) => !p.ambiguo).length,
+        }}
         semParSistema={semParSistema?.length}
       />
 
@@ -893,12 +910,16 @@ export function MesaEnriquecimentoTab({
           ⚠ NADA OCUPA A LINHA INTEIRA: `flex-nowrap` e larguras fixas. Com `flex-wrap`, o
           primeiro campo que não coubesse levava a barra para 64px e o topo para fora da
           dobra. */}
-      <div className="flex h-8 shrink-0 flex-nowrap items-center gap-1.5 overflow-x-auto rounded-lg border bg-card px-2">
+      <div className="flex h-8 w-full shrink-0 flex-nowrap items-center gap-1.5 overflow-hidden rounded-lg border bg-card px-2">
         {/* ⚠ `Select` DA CASA, NUNCA `<select>` NATIVO: o menu do sistema operacional abre
             com outra fonte e outro idioma em cada máquina. */}
         <Select value={sessaoId ?? ''}
           onValueChange={(id) => { setSessaoId(id); setFiltroConta('todas'); setSelecionadoId(null); }}>
-          <SelectTrigger className="h-6 w-[260px] shrink-0 text-[11px]">
+          {/* ⚠ A SESSÃO É O QUE CEDE — 133e item C. Ela era 260px fixos e empurrava a barra
+              para além do container em 1280; agora ela ELÁSTICA entre 160 e 320 e trunca,
+              enquanto os controles de largura fixa (conta, ordem) e os botões não encolhem.
+              Quem cede é o texto mais longo, nunca o botão. */}
+          <SelectTrigger className="h-6 min-w-[160px] max-w-[320px] flex-1 text-[11px]">
             <SelectValue placeholder="— nenhuma importação —" />
           </SelectTrigger>
           <SelectContent>
@@ -920,10 +941,8 @@ export function MesaEnriquecimentoTab({
           {isCasando ? 'Recasando…' : '↻ Recasar'}
         </Button>
 
-        <div className="flex-1" />
-
         <Select value={filtroConta} onValueChange={(id) => { setFiltroConta(id); setSelecionadoId(null); }}>
-          <SelectTrigger className="h-6 w-[180px] shrink-0 text-[11px]"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="h-6 w-[170px] shrink-0 text-[11px]"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="todas" className="text-[11px]">Todas as contas</SelectItem>
             {contas.map((c) => (
@@ -933,7 +952,7 @@ export function MesaEnriquecimentoTab({
         </Select>
 
         <Select value={ordenacao} onValueChange={(v) => setOrdenacao(v as Ordenacao)}>
-          <SelectTrigger className="h-6 w-[160px] shrink-0 text-[11px]"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="h-6 w-[150px] shrink-0 text-[11px]"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="planilha" className="text-[11px]">Ordem da planilha</SelectItem>
             <SelectItem value="valor" className="text-[11px]">Maior valor</SelectItem>
@@ -969,7 +988,7 @@ export function MesaEnriquecimentoTab({
           tamanho da lista falarem de coisas diferentes. */}
       {filtroGrupo === 'transferencia' ? (
         <EnriquecimentoTransferencias
-          pares={transf.dados.pares}
+          pares={paresDaConta}
           carregando={transf.carregando}
           simular={transf.simular}
           unir={transf.unir}

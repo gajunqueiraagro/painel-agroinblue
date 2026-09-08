@@ -15,6 +15,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { EnriquecimentoListaProps } from './EnriquecimentoLista';
 import type { EnriquecimentoDetalheProps } from './EnriquecimentoDetalhe';
 import type { EnriquecimentoActionsProps } from './EnriquecimentoActions';
@@ -25,8 +26,8 @@ import type { EnriqRowVM } from './types';
 
 const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-/** Como a lista da esquerda é organizada. 'lista' = ordem original, sem grupos. */
-type Agrupamento = 'lista' | 'fornecedor' | 'subcentro';
+/** Como a lista da esquerda é organizada. Desde 133e a Mesa só agrupa por DIA. */
+type Agrupamento = 'dia';
 /**
  * Os recortes da mesa ampliada. 'todas' quando nenhum chip está ligado.
  *
@@ -101,8 +102,13 @@ export interface EnriquecimentoMesaModalProps {
 export function EnriquecimentoMesaModal({
   open, onOpenChange, sessaoLabel, lista, detalhe, actions, onAplicarAoGrupo, aplicandoGrupo, faixas,
 }: EnriquecimentoMesaModalProps) {
-  const [agrupamento, setAgrupamento] = useState<Agrupamento>('lista');
+  /* ⚠ O AGRUPAMENTO SAIU DA MESA — 133e item A: varrer a sessão por fornecedor/subcentro é
+     trabalho da tela principal do passo 2. Aqui a lista é sempre cronológica, agrupada por
+     dia, porque é assim que se navega enquanto se revisa uma linha. */
+  const agrupamento: Agrupamento = 'dia';
   const [filtro, setFiltro] = useState<FiltroEstado>('todas');
+  /** Filtro de conta PRÓPRIO da Mesa — o da tela principal não atravessa o modal. */
+  const [contaSel, setContaSel] = useState<string>('__todas__');
 
   const rows = lista.rows;
   const contagens = useMemo(() => ({
@@ -115,20 +121,29 @@ export function EnriquecimentoMesaModal({
     saidas: rows.filter(r => r.entradaOuSaida === 'saida').length,
   }), [rows]);
 
-  const visiveis = useMemo(() => rows.filter(r => passaNoFiltro(r, filtro)), [rows, filtro]);
+  /** As contas presentes na sessão — o select da esquerda. */
+  const contasDaSessao = useMemo(
+    () => [...new Set(rows.map(r => r.contaBancaria).filter((c): c is string => !!c))].sort(
+      (a, b) => a.localeCompare(b, 'pt-BR')),
+    [rows]);
+
+  const visiveis = useMemo(
+    () => rows.filter(r => passaNoFiltro(r, filtro)
+      && (contaSel === '__todas__' || r.contaBancaria === contaSel)),
+    [rows, filtro, contaSel]);
 
   /** Os grupos, na ordem em que aparecem na lista — sem reordenar o que veio do adapter. */
+  /** Faixa por DIA, na ordem em que as linhas chegaram — 133e item A. */
   const grupos = useMemo(() => {
-    if (agrupamento === 'lista') return [{ nome: null as string | null, linhas: visiveis }];
-    const chave = (r: EnriqRowVM) => (agrupamento === 'fornecedor' ? r.fornecedor : subcentroDa(r));
+    const ordem: string[] = [];
     const mapa = new Map<string, EnriqRowVM[]>();
     for (const r of visiveis) {
-      const k = chave(r) || '—';
+      const k = r.data || '—';
       const atual = mapa.get(k);
-      if (atual) atual.push(r); else mapa.set(k, [r]);
+      if (atual) atual.push(r); else { mapa.set(k, [r]); ordem.push(k); }
     }
-    return Array.from(mapa, ([nome, linhas]) => ({ nome, linhas }));
-  }, [visiveis, agrupamento]);
+    return ordem.map(nome => ({ nome: nome as string | null, linhas: mapa.get(nome)! }));
+  }, [visiveis]);
 
   const selecionada = rows.find(r => r.id === lista.selecionadoId) ?? null;
 
@@ -156,24 +171,18 @@ export function EnriquecimentoMesaModal({
   }, [open, actions]);
   /* As outras linhas do grupo da selecionada que ainda pedem revisão — o alvo do
      "aplicar ao grupo". Exatas e já revisadas ficam de fora, como o envelope manda. */
+  /**
+   * ⚠ O GRUPO DO "APLICAR AO GRUPO" PASSOU A SER O FORNECEDOR — 133e item A. Ele saía do
+   * seletor de agrupamento, que deixou de existir na Mesa; o fornecedor é o critério que o
+   * gesto sempre serviu ("este fornecedor cai sempre no mesmo subcentro"), e agora ele é
+   * explícito em vez de depender de um seletor escondido no cabeçalho.
+   */
   const alvosDoGrupo = useMemo(() => {
-    if (!selecionada || agrupamento === 'lista') return [];
-    const chave = (r: EnriqRowVM) => (agrupamento === 'fornecedor' ? r.fornecedor : subcentroDa(r));
-    const k = chave(selecionada);
-    return rows.filter(r => r.id !== selecionada.id && chave(r) === k && r.estado === 'revisar' && !r.aplicado);
-  }, [rows, selecionada, agrupamento]);
-
-  const chip = (id: FiltroEstado, rotulo: string, n: number) => (
-    <button type="button" key={id}
-      onClick={() => setFiltro(filtro === id ? 'todas' : id)}
-      /* ⚠ `padding 2px 8px` — 133b-a. Com `py-px` o chip tinha 14px de altura e a marca de
-         seleção quase não se via; 2px o levam a 18px, que é a altura de um chip legível
-         sem custar linha. */
-      className={`rounded-full border px-2 py-0.5 text-[10px] ${
-        filtro === id ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground'}`}>
-      {rotulo} · {n}
-    </button>
-  );
+    if (!selecionada) return [];
+    const k = selecionada.fornecedor;
+    if (!k || k === '—') return [];
+    return rows.filter(r => r.id !== selecionada.id && r.fornecedor === k && r.estado === 'revisar' && !r.aplicado);
+  }, [rows, selecionada]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -193,43 +202,44 @@ export function EnriquecimentoMesaModal({
           </span>
         </DialogHeader>
 
-        <div className="grid min-h-0 flex-1 gap-2.5 p-2.5 md:[grid-template-columns:380px_1fr]">
-          {/* ═══ ESQUERDA: as linhas da sessão ═══════════════════════════════════ */}
+        <div className="grid min-h-0 flex-1 gap-2.5 p-2.5 md:[grid-template-columns:260px_1fr]">
+          {/* ═══ ESQUERDA: navegação, e só ═══════════════════════════════════════
+              ⚠ 260px E UMA ALTURA DE 28px — 133e item A. A coluna tinha descrição,
+              fornecedor, contexto e pílula: quatro informações que o painel direito repete
+              inteiras, ocupando 380px de largura e duas alturas por linha. Aqui ela é
+              NAVEGAÇÃO — data, valor e a bolinha da situação —, e a largura que sobra vai
+              para a tabela, onde o trabalho acontece.
+              ⚠ O AGRUPAMENTO POR FORNECEDOR/SUBCENTRO SAIU DA MESA: ele serve para varrer a
+              sessão, e varrer é a tela principal do passo 2. Aqui se revisa uma linha. */}
           <div className="flex min-h-0 min-w-0 flex-col rounded-lg border bg-card">
-            {/* ⚠ DUAS LINHAS, NÃO UMA. Medido: em 340px o título, a contagem e o seletor
-                de três posições não cabem lado a lado — "Linhas da sessão" quebrava em três
-                linhas e o cabeçalho crescia. Título e contagem em cima, seletor embaixo. */}
-            <div className="shrink-0 space-y-1 border-b px-3 py-1.5">
-              <div className="flex items-baseline gap-2">
-                <span className="shrink-0 text-[11px] font-medium uppercase tracking-wide">Linhas da sessão</span>
-                <span className="truncate text-[10px] text-muted-foreground">
-                  {contagens.revisar} a revisar · {contagens.atualizam} atualizam
-                </span>
-              </div>
-              <div className="flex rounded-full border p-0.5">
-                {([['lista', 'Lista'], ['fornecedor', 'Fornecedor'], ['subcentro', 'Subcentro']] as const).map(([id, rot]) => (
-                  <button type="button" key={id} onClick={() => setAgrupamento(id)}
-                    className={`flex-1 rounded-full px-2 py-px text-[10px] ${
-                      agrupamento === id ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}>
-                    {rot}
-                  </button>
-                ))}
-              </div>
-            </div>
-            {/* ⚠ UMA LINHA SÓ — 133d item 4. Com `flex-wrap` os sete chips viravam duas
-                linhas em 380px e o cabeçalho da esquerda crescia 22px. */}
-            <div className="flex shrink-0 flex-nowrap gap-1 overflow-x-auto border-b px-3 py-1">
-              {chip('atualizam', 'Atualizam', contagens.atualizam)}
-              {chip('decide', 'Você decide', contagens.decide)}
-              {chip('agrupam', 'Agrupam', contagens.agrupam)}
-              {chip('sem_par', 'Sem par no banco', contagens.sem_par)}
-              {chip('revisar', 'A revisar', contagens.revisar)}
-              {chip('entradas', 'Entradas', contagens.entradas)}
-              {chip('saidas', 'Saídas', contagens.saidas)}
+            {/* Dois selects de 10px numa linha — os chips saíram (item A). */}
+            <div className="flex shrink-0 items-center gap-1 border-b px-2 py-1">
+              <Select value={contaSel} onValueChange={setContaSel}>
+                <SelectTrigger className="h-6 min-w-0 flex-1 text-[10px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__todas__" className="text-[10px]">Todas as contas</SelectItem>
+                  {contasDaSessao.map(c => (
+                    <SelectItem key={c} value={c} className="text-[10px]">{c}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={filtro} onValueChange={(v) => setFiltro(v as FiltroEstado)}>
+                <SelectTrigger className="h-6 min-w-0 flex-1 text-[10px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todas" className="text-[10px]">Todas ({rows.length})</SelectItem>
+                  <SelectItem value="atualizam" className="text-[10px]">Atualizam ({contagens.atualizam})</SelectItem>
+                  <SelectItem value="decide" className="text-[10px]">Você decide ({contagens.decide})</SelectItem>
+                  <SelectItem value="agrupam" className="text-[10px]">Agrupam ({contagens.agrupam})</SelectItem>
+                  <SelectItem value="sem_par" className="text-[10px]">Sem par no banco ({contagens.sem_par})</SelectItem>
+                  <SelectItem value="revisar" className="text-[10px]">A revisar ({contagens.revisar})</SelectItem>
+                  <SelectItem value="entradas" className="text-[10px]">Entradas ({contagens.entradas})</SelectItem>
+                  <SelectItem value="saidas" className="text-[10px]">Saídas ({contagens.saidas})</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
-            {/* ⚠ O ÚNICO SCROLLPORT DESTE LADO. Um `max-h` interno aqui criaria a segunda
-                barra que o A21 proíbe — e rolar a de dentro não moveria o cabeçalho. */}
+            {/* ⚠ O ÚNICO SCROLLPORT DESTE LADO. Um `max-h` interno criaria a segunda barra
+                que o A21 proíbe — e rolar a de dentro não moveria o cabeçalho. */}
             <div className="min-h-0 flex-1 overflow-y-auto">
               {visiveis.length === 0 ? (
                 <p className="py-8 text-center text-[11px] text-muted-foreground">Nenhuma linha neste recorte.</p>
@@ -237,60 +247,31 @@ export function EnriquecimentoMesaModal({
                 <div key={nome ?? '__lista__'}>
                   {nome !== null && (
                     /* ⚠ FUNDO OPACO E `z` ACIMA — A21. Transparente é pior que não fixar:
-                        as linhas passariam por baixo do total que se está conferindo. */
-                    <div className="sticky top-0 z-[2] flex items-center gap-1.5 border-b bg-muted px-3 py-1 text-[10px] font-medium">
+                        as linhas passariam por baixo da data que se está conferindo. */
+                    <div className="sticky top-0 z-[2] flex items-center gap-1.5 border-b bg-muted px-2 py-0.5 text-[10px] font-medium">
                       <span className="min-w-0 truncate">{nome}</span>
-                      <span className="shrink-0 font-normal text-muted-foreground">· {linhas.length} linhas</span>
-                      <span className="ml-auto shrink-0 tabular-nums">
-                        {brl(linhas.reduce((acc, r) => acc + (r.valorNum ?? 0), 0))}
-                      </span>
+                      <span className="ml-auto shrink-0 tabular-nums text-muted-foreground">{linhas.length}</span>
                     </div>
                   )}
                   {linhas.map(r => {
                     const sel = r.id === lista.selecionadoId;
-                    /* ⚠ A PÍLULA SAI DO `status`, NÃO DO `estado` — 133b-a correção 5. O
-                       `estado` colapsa "ambíguo" e "sem par no banco" no mesmo
-                       `sem_vinculo` (os dois têm `lanc_id` nulo), e a Mesa ampliada
-                       chamava um ambíguo de "Sem vínculo" enquanto o resto da Mesa o
-                       chamava de "Você decide" — dois nomes para a mesma linha, em duas
-                       telas do mesmo fluxo. `STATUS_META` é a fonte única desse rótulo. */
                     const meta = STATUS_META[r.status];
-                    const pill = r.aplicado
-                      ? { t: 'gravada', c: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' }
-                      : { t: meta?.label ?? r.statusLabel, c: `bg-muted ${meta?.cls ?? 'text-muted-foreground'}` };
                     return (
+                      /* ⚠ UMA ALTURA, 28px, E NADA QUEBRA — 133e item A. `whitespace-nowrap`
+                         na data e no valor: se não couber, quem cede é o padding, nunca a
+                         linha. O nome completo do estado fica no `title` da bolinha. */
                       <button type="button" key={r.id} onClick={() => lista.onSelecionar(r.id)}
-                        /* 32px — 133d item 4: duas linhas de 11px/10px em `leading-[1.3]`. */
-                        className={`grid h-8 w-full items-center gap-1.5 border-b border-border/60 pr-3 text-left ${
-                          sel ? 'border-l-[3px] border-l-primary bg-primary/[0.08] pl-[17px]' : 'pl-5'}`}
-                        style={{ gridTemplateColumns: '52px minmax(0,1fr) 92px' }}>
-                        <span className="text-[10px] text-muted-foreground">{r.data}</span>
-                        <span className="min-w-0">
-                          {/* ⚠ UMA LINHA, SEMPRE — 129d item 1. `truncate` sozinho não bastava:
-                              o `<span>` dentro de um grid sem `min-w-0` no pai crescia e o nome
-                              quebrava em duas linhas, desalinhando a lista inteira. O nome
-                              completo fica no `title`. */}
-                          <span className="block truncate text-[11px] font-medium leading-tight" title={r.fornecedor}>
-                            {r.fornecedor}
-                          </span>
-                          {/* Contexto: subcentro proposto e a CONTA (129d item 8). */}
-                          {/* ⚠ O PORQUÊ VEM ANTES DO CONTEXTO — 133a item 5. O operador
-                              não precisa saber que o status é "ambiguo": precisa saber que
-                              há dois lançamentos iguais no dia e que ele tem de escolher. */}
-                          <span className="block truncate text-[10px] leading-tight text-muted-foreground"
-                            title={`${r.porQue || subcentroDa(r)}${r.contaBancaria ? ` · ${r.contaBancaria}` : ''}`}>
-                            {r.porQue || subcentroDa(r)}{r.contaBancaria ? ` · ${r.contaBancaria}` : ''}
-                          </span>
+                        className={`flex h-7 w-full items-center gap-1.5 border-b border-border/60 px-2 text-left ${
+                          sel ? 'border-l-[3px] border-l-primary bg-primary/[0.08] pl-[5px]' : ''}`}>
+                        <span className="w-16 shrink-0 whitespace-nowrap text-[10px] tabular-nums text-muted-foreground">
+                          {r.data}
                         </span>
-                        <span className="text-right">
-                          {/* ⚠ O SINAL É VISÍVEL — 129d item 4. Saída em vermelho com "−",
-                              entrada em verde com "+". Sem lançamento não há sinal, e a cor
-                              neutra é o que não afirma nem um nem outro. */}
-                          <span className={`block text-[11px] font-medium tabular-nums ${corDoSinal(r.entradaOuSaida)}`}>
-                            {sinalPrefixo(r.entradaOuSaida)}{r.valor}
-                          </span>
-                          <span className={`inline-block rounded-full px-1.5 text-[9px] ${pill.c}`}>{pill.t}</span>
+                        <span className={`min-w-0 flex-1 whitespace-nowrap text-right text-[11px] font-medium tabular-nums ${corDoSinal(r.entradaOuSaida)}`}>
+                          {sinalPrefixo(r.entradaOuSaida)}{r.valor}
                         </span>
+                        <span className={`h-[7px] w-[7px] shrink-0 rounded-full ${
+                          r.aplicado ? 'bg-emerald-500' : (meta?.dot ?? 'bg-muted-foreground')}`}
+                          title={r.aplicado ? 'Gravada' : (meta?.label ?? r.statusLabel)} />
                       </button>
                     );
                   })}
@@ -412,13 +393,11 @@ export function EnriquecimentoMesaModal({
               {onAplicarAoGrupo && (
                 <Button size="sm" variant="outline" className="h-7 shrink-0 whitespace-nowrap px-2 text-[11px]"
                   disabled={alvosDoGrupo.length === 0 || !!aplicandoGrupo || actions.isBusy}
-                  title={agrupamento === 'lista'
-                    ? 'Agrupe por fornecedor ou subcentro para aplicar ao grupo.'
-                    : alvosDoGrupo.length === 0
-                      ? 'Nenhuma outra linha deste grupo pede revisão.'
-                      : 'Leva Fornecedor, Fazenda e Subcentro desta linha às outras do grupo. A safra NÃO vai junto — o Salvar ainda não grava safra.'}
+                  title={alvosDoGrupo.length === 0
+                    ? 'Nenhuma outra linha deste fornecedor pede revisão.'
+                    : `Leva Fornecedor, Fazenda, Subcentro e Safra desta linha às outras ${alvosDoGrupo.length} linha(s) do mesmo fornecedor.`}
                   onClick={() => { void onAplicarAoGrupo(alvosDoGrupo.map(r => r.id)); }}>
-                  {aplicandoGrupo ? 'Aplicando…' : `Ao grupo (${alvosDoGrupo.length})`}
+                  {aplicandoGrupo ? 'Aplicando…' : `Ao fornecedor (${alvosDoGrupo.length})`}
                 </Button>
               )}
               <Button size="sm" variant="outline" className="h-7 shrink-0 whitespace-nowrap px-2 text-[11px]"

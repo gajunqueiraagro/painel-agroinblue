@@ -46,31 +46,35 @@ const MOTIVO_SEM_APPLY = 'o Salvar ainda não grava este campo';
  * view), ela aparece assim mesmo, com "—" nas três colunas: esconder faria a tela mentir
  * por omissão sobre um campo que o operador procura.
  */
-const ORDEM: Array<{ campo: string; rotulo: string; gravaHoje: boolean }> = [
-  /* ⚠ OS NOMES SÃO OS DO ADAPTER, e mudaram em 133a: a linha única 'Data' virou três, uma
-     por par (pagamento×pagamento, vencimento×vencimento, competência×competência). O
-     pagamento vem primeiro porque é por ele que o casador procura.
-     ⚠ QUINZE CAMPOS EM 133b, e os quatro que entraram são LEITURA: Valor e Tipo dizem o que
-     o movimento é (e é por eles que o operador reconhece a linha no extrato), Macro · Grupo
-     · Centro mostra onde a conta do plano cai, e Situação diz se o lançamento está vivo.
-     ⚠ AS FAIXAS DE SEÇÃO SAÍRAM — 133b-a. DATAS, IDENTIFICAÇÃO e CLASSIFICAÇÃO custavam
-     três linhas inteiras para nomear o que a própria ORDEM já agrupa: as datas juntas, o
-     movimento junto, a classificação junta. Com elas, 15 campos não cabiam sem rolar. */
-  { campo: 'Data pagamento', rotulo: 'Data pgto.', gravaHoje: true },
-  { campo: 'Data vencimento', rotulo: 'Data venc.', gravaHoje: true },
-  { campo: 'Competência', rotulo: 'Competência', gravaHoje: true },
-  { campo: 'Valor', rotulo: 'Valor', gravaHoje: false },
-  { campo: 'Tipo', rotulo: 'Tipo', gravaHoje: false },
-  { campo: 'Banco', rotulo: 'Conta bancária', gravaHoje: true },
-  { campo: 'Subcentro', rotulo: 'Conta do plano', gravaHoje: true },
-  { campo: 'Macro · Grupo · Centro', rotulo: 'Macro·Grupo·Centro', gravaHoje: false },
-  { campo: 'Fornecedor', rotulo: 'Fornecedor', gravaHoje: true },
-  { campo: 'Fazenda', rotulo: 'Fazenda', gravaHoje: true },
-  { campo: 'Safra', rotulo: 'Safra', gravaHoje: true },
-  { campo: 'Produto / Descrição', rotulo: 'Produto / descr.', gravaHoje: true },
-  { campo: 'Documento', rotulo: 'Documento', gravaHoje: true },
-  { campo: 'OBS', rotulo: 'Observação', gravaHoje: true },
-  { campo: 'Situação', rotulo: 'Situação', gravaHoje: false },
+/** Os dois blocos do 133e item D. A faixa de 6px é o único separador; não há títulos. */
+type Bloco = 1 | 2;
+
+const ORDEM: Array<{ campo: string; rotulo: string; bloco: Bloco; gravaHoje: boolean }> = [
+  /* ⚠ A ORDEM É A DO OPERADOR — 133e item D, e ela não é estética: o bloco 1 é o MOVIMENTO
+     (o que aconteceu no banco: quando, quanto, em que conta, se está vivo, em que fazenda),
+     e é por ele que se reconhece a linha no extrato. O bloco 2 é a CLASSIFICAÇÃO — o que se
+     está aqui para decidir. Misturados, o olho ia e voltava entre conferir e decidir.
+     ⚠ "MACRO · GRUPO · CENTRO" SAIU: os três derivam da conta do plano e mudam junto com
+     ela; repeti-los era gastar uma das 15 linhas para mostrar o que a linha de cima decide.
+     ⚠ "TIPO DE DOCUMENTO" FICA DE FORA até existir na view: `vw_classificacao_staging_preview`
+     não o traz e o parser da Mesa não o lê, então a linha só saberia mostrar "—" nas três
+     colunas. Um campo mudo ocupando 22px é pior que a ausência dele — quando a view o
+     trouxer, ele entra aqui, no bloco 2, antes do Documento.
+     ⚠ TREZE LINHAS × 22px = 286px, mais 6px da faixa. */
+  { campo: 'Tipo', rotulo: 'Tipo', bloco: 1, gravaHoje: false },
+  { campo: 'Competência', rotulo: 'Competência', bloco: 1, gravaHoje: true },
+  { campo: 'Data vencimento', rotulo: 'Data venc.', bloco: 1, gravaHoje: true },
+  { campo: 'Data pagamento', rotulo: 'Data pgto.', bloco: 1, gravaHoje: true },
+  { campo: 'Valor', rotulo: 'Valor', bloco: 1, gravaHoje: false },
+  { campo: 'Banco', rotulo: 'Conta bancária', bloco: 1, gravaHoje: true },
+  { campo: 'Situação', rotulo: 'Situação', bloco: 1, gravaHoje: false },
+  { campo: 'Fazenda', rotulo: 'Fazenda', bloco: 1, gravaHoje: true },
+  { campo: 'Produto / Descrição', rotulo: 'Produto / descr.', bloco: 2, gravaHoje: true },
+  { campo: 'Fornecedor', rotulo: 'Fornecedor', bloco: 2, gravaHoje: true },
+  { campo: 'Subcentro', rotulo: 'Conta do plano', bloco: 2, gravaHoje: true },
+  { campo: 'Safra', rotulo: 'Safra', bloco: 2, gravaHoje: true },
+  { campo: 'Documento', rotulo: 'Documento', bloco: 2, gravaHoje: true },
+  { campo: 'OBS', rotulo: 'Observação', bloco: 2, gravaHoje: true },
 ];
 
 const VAZIA: EnriqComparativoLinha = { campo: '', sistema: '—', excel: '—', resultado: '—', tom: 'neutro' };
@@ -94,7 +98,11 @@ export function MesaCamposTabela({
   const porCampo = new Map(row.comparativo.map(c => [c.campo, c]));
   /* ⚠ RÓTULO EM 104px — 133b-a. Era 120px, e a coluna sobrava largura que faz falta às três
      colunas de conteúdo; nenhum dos quinze rótulos passa de 104px em 11px. */
-  const COLS = '104px minmax(0,1fr) minmax(0,1fr) minmax(0,1.3fr)';
+  /* ⚠ AS TRÊS COLUNAS DE CONTEÚDO EM `minmax(0,1fr)` — 133e item D. O Resultado tinha
+     1.3fr e comia a largura de "Sistema atual"; em 1440 a Conta do plano e o Fornecedor
+     truncavam de um lado enquanto sobrava espaço do outro. `minmax(0,…)` é o que permite a
+     célula ENCOLHER: sem o `0`, o `truncate` não tem em relação a quê truncar. */
+  const COLS = '104px minmax(0,1fr) minmax(0,1fr) minmax(0,1fr)';
 
   return (
     <div className="flex-1 min-h-0 overflow-y-auto">
@@ -110,7 +118,7 @@ export function MesaCamposTabela({
         <span className="text-emerald-600">Resultado</span>
       </div>
 
-      {ORDEM.map(({ campo, rotulo, gravaHoje }, indice) => {
+      {ORDEM.map(({ campo, rotulo, bloco, gravaHoje }, indice) => {
         /* Zebra pela POSIÇÃO na tabela: o olho segue a linha, e alternar por bloco criaria
            faixas de tamanhos diferentes. */
         const zebra = indice % 2 === 1;
@@ -118,9 +126,14 @@ export function MesaCamposTabela({
         const igual = c.tom === 'ok';
         const vaiMudar = c.tom === 'muda' || c.tom === 'difere';
         const editavel = gravaHoje && !row.aplicado && !!onEditar;
+        const abreBloco2 = bloco === 2 && ORDEM[indice - 1]?.bloco === 1;
 
         return (
           <div key={rotulo}>
+            {/* ⚠ 6px DE FAIXA, SEM TÍTULO — 133e item D. Os títulos de seção custavam uma
+                linha inteira cada para nomear o que a ordem já agrupa; a faixa separa sem
+                gastar altura, e 6px é o que o olho precisa para ver que mudou de assunto. */}
+            {abreBloco2 && <div className="h-1.5 bg-muted" />}
             {/* ⚠ AS TRÊS COLUNAS NA MESMA MEDIDA — 129d item 2. Excel e Sistema estavam em
                 11px sobre linha alta enquanto o Resultado ficava dentro de um controle de
                 24px: as duas primeiras SALTAVAM, e a tela parecia desalinhada. O que
@@ -131,13 +144,22 @@ export function MesaCamposTabela({
                 900 sem rolar. `h-[22px]` + `items-center` no lugar do padding: a medida passa
                 a ser declarada, não derivada.
                 ⚠ NUNCA QUEBRA: `truncate` em cada célula e o texto inteiro no `title`. */}
+            {/* ⚠ TODA LINHA COM A MESMA ALTURA — 133e item D. Conta bancária e Fornecedor
+                saltavam porque o CONTROLE tinha altura própria e empurrava a linha; agora a
+                linha declara 22px e `items-center` centra o que estiver dentro, controle ou
+                texto. O controle mora dentro da linha, nunca a define (ver `medidasMesa`). */}
             <div className={`grid h-[22px] items-center gap-2 border-b border-border/50 px-3 text-[11px] leading-[1.3] ${
               zebra ? 'bg-muted/30' : ''}`}
               style={{ gridTemplateColumns: COLS }}>
               <span className="truncate text-[10px] text-muted-foreground" title={rotulo}>{rotulo}</span>
               {/* ⚠ O EXCEL É REFERÊNCIA, NUNCA GRAVADO DIRETO — por isso azul e sem controle. */}
               <span className="truncate text-blue-700/90" title={c.excel}>{c.excel}</span>
-              <span className="truncate text-slate-700 dark:text-slate-300" title={c.sistema}>{c.sistema}</span>
+              {/* ⚠ O TIPO É COLORIDO — 133e item D: "Saída" em vermelho, "Entrada" em verde.
+                  É o campo que responde "saiu ou entrou?", e a cor responde antes da leitura. */}
+              <span className={`truncate ${
+                campo === 'Tipo' && c.sistema === 'Saída' ? 'text-red-600 dark:text-red-400'
+                : campo === 'Tipo' && c.sistema === 'Entrada' ? 'text-emerald-700 dark:text-emerald-400'
+                : 'text-slate-700 dark:text-slate-300'}`} title={c.sistema}>{c.sistema}</span>
               <div className="min-w-0">
                 {editavel && campo === 'Subcentro' && classificacoes ? (
                   <ResultadoSubcentroEditor value={row.edicao.subcentro} tipoOperacao={row.edicao.tipoOperacao}
@@ -204,6 +226,14 @@ export function MesaCamposTabela({
         );
       })}
 
+      {/* ⚠ AVISO, NÃO TRAVA — 133e item E. O texto da planilha fora do plano oficial travava
+          o Salvar; agora ele é uma linha de 10px âmbar, e o Salvar olha o RESULTADO. */}
+      {row.avisoPlanilha && (
+        <p className="truncate px-3 py-0.5 text-[10px] leading-tight text-amber-700 dark:text-amber-400"
+          title={`A planilha trouxe "${row.avisoPlanilha}", que não existe no plano oficial. O Resultado usa a conta do plano do sistema.`}>
+          planilha dizia: {row.avisoPlanilha}
+        </p>
+      )}
       <p className="px-3 py-1 text-[10px] leading-tight text-muted-foreground">
         ✓ confere · faixa âmbar = vai mudar · Excel em azul é referência, nunca gravado
         direto. Deixar um campo vazio remove a proposta dele.

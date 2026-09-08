@@ -215,6 +215,17 @@ export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
       case 'divergente':
         if (regra === 'pagamento_exato') return `casou pelo pagamento de ${fmtData(row.excel_data_pagamento)}`;
         if (regra === 'valor_no_mes') return 'valor único no mês';
+        /* ⚠ PAREADO POR ORDEM PEDE CONFERÊNCIA — 133e item F. A migration
+           20260907181314 passou a parear N linhas iguais com N lançamentos iguais na ordem
+           em que aparecem; é a melhor resposta possível sem mais dado, e continua sendo um
+           palpite. O texto diz quantos eram iguais e pede a conferência em vez de afirmar
+           que casou. `iguais` vem do `casamento_meta` que a própria RPC gravou. */
+        if (regra === 'pareado_por_ordem') {
+          const iguais = Number(meta.iguais ?? 0) || 0;
+          return iguais > 0
+            ? `${iguais} iguais no mês — pareado por ordem, confira`
+            : 'pareado por ordem, confira';
+        }
         return 'casou com um lançamento do mês';
       case 'ambiguo':
       case 'candidatos_proximos':
@@ -268,7 +279,22 @@ export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
 
   // PR-U2d-1 — estado operacional da linha (ordem: primeira condição que casar vence).
   const temMatch = row.lanc_id != null;
-  const subcentroOrfao = row.will_create_subcentro_orfao || row.proposto_subcentro_existe_no_plano === false;
+  /**
+   * ⚠ A TRAVA AVALIA O RESULTADO, NUNCA A ORIGEM — 133e item E.
+   *
+   * Ela lia `will_create_subcentro_orfao`, que é sobre a PROPOSTA vinda da planilha: um
+   * texto fora do plano oficial travava o Salvar mesmo quando o Resultado efetivo era o
+   * subcentro que o sistema já tinha — e o operador só destravava reabrindo a linha e
+   * redigitando a MESMA conta do plano que já estava lá (medido por Gabriel, 15:25).
+   * ⚠ O QUE VAI SER GRAVADO É `subcentroEfetivo`: a proposta quando ela é válida no plano,
+   * senão o subcentro soberano do sistema. Se ele existe, não há órfão a criar — a trigger
+   * do lançamento não tem o que recusar, e a trava não tem o que travar.
+   * ⚠ O TEXTO DA PLANILHA NÃO SOME: ele vira aviso (`avisoPlanilha`), porque saber que a
+   * planilha dizia outra coisa é útil; travar por isso é que não era.
+   */
+  const subcentroOrfao = !subcentroEfetivo;
+  /** O texto que a planilha trouxe e que NÃO existe no plano oficial. `null` quando não há. */
+  const avisoPlanilha = row.will_create_subcentro_orfao && !vazio(subExcel) ? subExcel : null;
   /* ⚠ "NADA MUDA" NÃO É "REVISAR" — 133b-a correção 1, e a diferença é um dia de trabalho
      do operador. `will_change_anything` é a flag-mãe da view: falsa, o apply não escreveria
      campo nenhum. A linha caía em `revisar` só porque o `match_status` era `divergente`, e
@@ -294,6 +320,7 @@ export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
     aplicado: row.aplicado,
     temMatch,
     subcentroOrfao,
+    avisoPlanilha,
     mudaAlgo: row.will_change_anything,
     data: fmtData(row.excel_data ?? row.lanc_data_pagamento),
     valor: fmtBRL(row.excel_valor ?? row.lanc_valor),

@@ -115,7 +115,18 @@ export interface EnriqRowVM {
   estado: EnriqEstado;       // PR-U2d-1 — estado operacional (leitura principal)
   aplicado: boolean;
   temMatch: boolean;        // lanc_id != null → pode Salvar (sem_match/ambíguo não resolvido = false)
-  subcentroOrfao: boolean;  // proposto fora do plano → NÃO pode Salvar (trigger rejeita); editar no PR-U2
+  /**
+   * O RESULTADO não tem conta do plano — 133e item E. É a única trava de subcentro que
+   * resta, e ela é sobre o que vai ser gravado, não sobre o que a planilha trouxe.
+   */
+  subcentroOrfao: boolean;
+  /**
+   * O texto que a planilha trouxe e que não existe no plano oficial. `null` quando não há.
+   *
+   * ⚠ AVISO, NÃO TRAVA — 133e item E. Ele travava o Salvar, e o operador destravava
+   * redigitando a MESMA conta do plano que o Resultado já mostrava.
+   */
+  avisoPlanilha: string | null;
   mudaAlgo: boolean;
   // LISTA (esquerda) — só o necessário para localizar o lançamento (lado SISTEMA).
   data: string;

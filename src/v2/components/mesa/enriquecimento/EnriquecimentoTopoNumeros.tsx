@@ -96,9 +96,13 @@ export function EnriquecimentoTopoNumeros({
         })}
       </div>
 
+      {/* ⚠ O CHIP NÃO QUEBRA POR DENTRO; O CONJUNTO QUEBRA — 133e item B. Sem
+          `whitespace-nowrap` no chip, "Transferência entre contas" virava três linhas dentro
+          da própria pílula e ela ficava oval. `flex-wrap` no container é o certo: quando não
+          cabe, o chip inteiro desce para a segunda linha. */}
       <div className="flex flex-wrap items-center gap-1 border-t px-2 py-1">
         <button type="button" onClick={() => onFiltro('todas')}
-          className={`rounded-md border px-1.5 py-0.5 text-[10px] transition-colors ${
+          className={`whitespace-nowrap rounded-md border px-1.5 py-0.5 text-[10px] transition-colors ${
             filtro === 'todas' ? 'border-primary bg-primary/10 text-foreground'
               : 'bg-card text-muted-foreground hover:bg-muted/60'}`}>
           Todas · <span className="tabular-nums font-medium">{total}</span>
@@ -113,12 +117,12 @@ export function EnriquecimentoTopoNumeros({
               disabled={desabilitado}
               title={desabilitado ? 'Apurando as transferências do mês…' : undefined}
               onClick={() => onFiltro(g.key)}
-              className={`flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] transition-colors ${
+              className={`flex items-center gap-1 whitespace-nowrap rounded-md border px-1.5 py-0.5 text-[10px] transition-colors ${
                 ativo ? 'border-primary bg-primary/10 text-foreground'
                   : 'bg-card text-muted-foreground hover:bg-muted/60'
               } ${desabilitado || (qtd === 0 && !ativo) ? 'opacity-45' : ''}`}>
-              <span className={`h-2 w-2 rounded-full ${g.dot}`} />
-              <span className="truncate">{g.rotulo}</span>
+              <span className={`h-2 w-2 shrink-0 rounded-full ${g.dot}`} />
+              <span>{g.rotulo}</span>
               <span className="tabular-nums font-medium">{desabilitado ? '—' : qtd}</span>
             </button>
           );
@@ -127,12 +131,12 @@ export function EnriquecimentoTopoNumeros({
             planilha, conta o que ela não explica — outra pergunta, outro universo. */}
         <button type="button"
           onClick={() => onFiltro('sem_par_sistema')}
-          className={`flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] transition-colors ${
+          className={`flex items-center gap-1 whitespace-nowrap rounded-md border px-1.5 py-0.5 text-[10px] transition-colors ${
             filtro === 'sem_par_sistema' ? 'border-primary bg-primary/10 text-foreground'
               : 'bg-card text-muted-foreground hover:bg-muted/60'
           } ${(semParSistema ?? 0) === 0 && filtro !== 'sem_par_sistema' ? 'opacity-45' : ''}`}>
-          <span className="h-2 w-2 rounded-full bg-muted-foreground" />
-          <span className="truncate">Sem par no sistema</span>
+          <span className="h-2 w-2 shrink-0 rounded-full bg-muted-foreground" />
+          <span>Sem par no sistema</span>
           <span className="tabular-nums font-medium">{semParSistema ?? '—'}</span>
         </button>
       </div>
