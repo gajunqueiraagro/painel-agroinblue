@@ -377,14 +377,26 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
 
   /* ── Loading / not found ── */
   if (loadingFin || loadingP) {
-    return <div className="min-h-screen bg-background flex items-center justify-center"><span className="text-3xl animate-pulse">💰</span></div>;
+    return <div className="w-full h-full min-h-0 bg-background flex items-center justify-center"><span className="text-3xl animate-pulse">💰</span></div>;
   }
   if (!fin) {
-    return <div className="min-h-screen bg-background flex items-center justify-center"><p className="text-sm text-muted-foreground">Financiamento não encontrado.</p></div>;
+    return <div className="w-full h-full min-h-0 bg-background flex items-center justify-center"><p className="text-sm text-muted-foreground">Financiamento não encontrado.</p></div>;
   }
 
+  /* ⚠ `w-full` NAO E' REDUNDANTE — ERA O QUE FALTAVA (PR-PARC-04c). Este bloco tinha
+     `max-w-5xl mx-auto` sem largura propria, e isso so' funcionava porque o pai era um
+     BLOCO: ai' `width:auto` preenche o espaco ate' o teto e `mx-auto` centraliza. Quando
+     'financiamentos' entrou no app-shell (df7f88e2), o pai virou COLUNA FLEX — e para um
+     item flex com margens laterais `auto` o `stretch` do eixo cruzado e' desligado por
+     regra: a largura passou a ser a do CONTEUDO (fit-content), e o detalhe abriu estreito
+     e centralizado. `w-full` devolve a largura definida e vale nos dois pais. E' o mesmo
+     idioma que a lista ja' usava — foi por ter `w-full` que ela nao regrediu.
+     ⚠ `h-full min-h-0 overflow-y-auto` NO LUGAR DE `min-h-screen`: no app-shell a section
+     e' `md:overflow-hidden`, entao a pagina nao rola mais por fora. Com `min-h-screen`
+     (100vh, mais alto que a area util) o conteudo era CORTADO sem barra nenhuma. Agora a
+     rolagem mora aqui dentro, como na lista. */
   return (
-    <div className="min-h-screen bg-background p-4 max-w-5xl mx-auto space-y-4 pb-20">
+    <div className="w-full min-w-0 h-full min-h-0 overflow-y-auto bg-background p-4 max-w-5xl mx-auto space-y-4 pb-20">
       {/* Voltar */}
       <Button variant="ghost" size="sm" onClick={onVoltar} className="gap-1">
         <ArrowLeft className="h-4 w-4" /> {from === 'lancamentos' ? 'Voltar aos Lançamentos' : 'Voltar'}
