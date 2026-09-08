@@ -15,6 +15,7 @@
  */
 import { useState, useMemo } from 'react';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -154,10 +155,9 @@ export function EditTransferenciaSheet({
           <div className="grid grid-cols-3 gap-2">
             <div>
               <Label className="text-[10px] font-bold text-foreground">Data</Label>
-              <Input
-                type="date"
+              <DatePicker
                 value={form.data}
-                onChange={e => setForm(f => ({ ...f, data: e.target.value }))}
+                onChange={v => setForm(f => ({ ...f, data: v }))}
                 className="mt-0.5 h-7 text-[11px]"
                 disabled={p1Oficial}
               />

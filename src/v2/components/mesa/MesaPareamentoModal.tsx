@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import {
   Command,
   CommandInput,
@@ -1273,8 +1274,8 @@ export function MesaPareamentoModal({
                           <MatrizLinha campo="Data Comp."
                             excel={fmtData(linhaAtiva.dataCompetencia)}
                             fin={
-                              <Input type="date" value={payloadAtivo.dataCompetencia ?? ''}
-                                     onChange={(e) => editarCorrecaoAtiva({ dataCompetencia: e.target.value || null })}
+                              <DatePicker value={payloadAtivo.dataCompetencia ?? ''}
+                                     onChange={(v) => editarCorrecaoAtiva({ dataCompetencia: v || null })}
                                      disabled={edicaoBloqueada}
                                      className="h-7 text-[11px]" />
                             } />
@@ -3008,10 +3009,9 @@ function FormularioCorrecao({
       {/* Data competência (editável pelo operador) */}
       <div className="space-y-0.5">
         <label className="text-[10px] text-muted-foreground">Data competência</label>
-        <Input
-          type="date"
+        <DatePicker
           value={rascunho.dataCompetencia ?? ''}
-          onChange={(e) => set('dataCompetencia', e.target.value || null)}
+          onChange={(v) => set('dataCompetencia', v || null)}
           className="h-7 text-[11px]"
         />
       </div>

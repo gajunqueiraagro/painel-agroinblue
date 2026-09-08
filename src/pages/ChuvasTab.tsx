@@ -15,6 +15,7 @@ import { useState, useMemo, useEffect, Fragment } from 'react';
 import { useChuvas } from '@/hooks/useChuvas';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -246,7 +247,7 @@ export function ChuvasTab({ anoInicial, mode = 'operacional' }: Props = {}) {
                 <div className="space-y-3">
                   <div>
                     <Label>Data</Label>
-                    <Input type="date" value={novaData} onChange={e => setNovaData(e.target.value)} />
+                    <DatePicker value={novaData} onChange={setNovaData} />
                   </div>
                   <div>
                     <Label>Milímetros (mm)</Label>

@@ -5,6 +5,7 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -258,19 +259,17 @@ export function AuditoriaTab() {
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="text-[10px] text-muted-foreground">De</label>
-                <Input
-                  type="date"
+                <DatePicker
                   value={filtroDataDe}
-                  onChange={e => setFiltroDataDe(e.target.value)}
+                  onChange={setFiltroDataDe}
                   className="h-8 text-xs"
                 />
               </div>
               <div>
                 <label className="text-[10px] text-muted-foreground">Até</label>
-                <Input
-                  type="date"
+                <DatePicker
                   value={filtroDataAte}
-                  onChange={e => setFiltroDataAte(e.target.value)}
+                  onChange={setFiltroDataAte}
                   className="h-8 text-xs"
                 />
               </div>

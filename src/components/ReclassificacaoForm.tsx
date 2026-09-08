@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { CATEGORIAS, Categoria, Lancamento, kgToArrobas } from '@/types/cattle';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format } from 'date-fns';
@@ -128,7 +129,7 @@ export function ReclassificacaoFormFields(props: FormFieldsProps) {
       <div className="grid grid-cols-[2fr_1fr_1fr] gap-2 items-end">
         <div>
           <Label className="text-[10px] font-semibold">Data</Label>
-          <Input type="date" value={data} onChange={e => setData(e.target.value)} className={`h-7 text-[11px] ${borderAccent}`} />
+          <DatePicker value={data} onChange={setData} className={`h-7 text-[11px] ${borderAccent}`} />
         </div>
         <div>
           <Label className="text-[10px] font-semibold">Qtd. Cab.</Label>

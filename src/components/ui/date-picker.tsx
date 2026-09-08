@@ -34,6 +34,13 @@ interface DatePickerProps {
    */
   onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
   /**
+   * 136d — `onFocus` do consumidor. Nasceu do `CadernoImportTab`, que faz
+   * `e.target.select()` para o operador sobrescrever a celula digitando direto. Sem o
+   * repasse, a troca do nativo custaria essa conveniencia em silencio — numa grade de
+   * digitacao, que e' onde ela mais vale.
+   */
+  onFocus?: React.FocusEventHandler<HTMLInputElement>;
+  /**
    * 136c item 0b — ArrowDown abre o calendario? Default `true` (o do 136a).
    * Em `false`, so' o icone abre — e a seta fica livre para a grade.
    */
@@ -172,7 +179,7 @@ export function parseBrDateToIso(text: string): ParseResult {
 
 export function DatePicker({
   value, onChange, className, placeholder = 'dd/mm/aaaa', disabled, tabIndex, size = 'default',
-  onKeyDown, abrirComSeta = true, ...rest
+  onKeyDown, onFocus, abrirComSeta = true, ...rest
 }: DatePickerProps) {
   /* Só `data-*` atravessa — o resto do prop-bag não vaza para o DOM (React avisaria, e um
      atributo desconhecido no input é ruído que ninguém pediu). */
@@ -235,6 +242,7 @@ export function DatePicker({
           }}
           onBlur={commit}
           {...dataAttrs}
+          onFocus={onFocus}
           onKeyDown={e => {
             /* O consumidor primeiro; `preventDefault()` dele encerra o assunto. */
             onKeyDown?.(e);

@@ -30,23 +30,13 @@ import { join } from 'node:path';
  * arquivos" enquanto o mapa registrava 44 em 30. O número de `<select>` era o único certo.
  */
 const BASELINE = new Map(Object.entries({
-  "src/components/LancamentoDetalhe.tsx": [1, 0],
-  "src/components/ReclassificacaoForm.tsx": [1, 0],
-  "src/components/edit/EditConsumoSheet.tsx": [1, 0],
-  "src/components/edit/EditTransferenciaSheet.tsx": [1, 0],
   "src/components/financeiro-v2/AuditoriaBancariaSoberana.tsx": [0, 3],
   "src/components/financeiro-v2/ModoRapidoGrid.tsx": [0, 4],
-  "src/components/mapa-geo/MovimentarLoteDialog.tsx": [1, 0],
   "src/pages/AnaliseTrimestralTab.tsx": [0, 3],
   "src/pages/AuditoriaDesfrutes.tsx": [0, 2],
-  "src/pages/AuditoriaTab.tsx": [2, 0],
-  "src/pages/CadernoImportTab.tsx": [1, 0],
-  "src/pages/ChuvasTab.tsx": [1, 0],
   "src/pages/FinV2SubcentroAliasesTab.tsx": [0, 1],
-  "src/pages/LancamentosTab.tsx": [3, 0],   // 5 -> 3 em 114c-4: o campo Data do modal antigo virou DatePicker (os 3 restantes são de venda/parcelas)
   "src/pages/LayoutLab.tsx": [0, 2],
   "src/v2/components/importacao/ImportLancDeParaPanel.tsx": [0, 1],
-  "src/v2/components/mesa/MesaPareamentoModal.tsx": [2, 0],
   "src/v2/pages/V2Fazendas.tsx": [0, 1],
   "src/v2/pages/V2MesaOperacional.tsx": [0, 1],
   "src/v3/components/V3TopBar.tsx": [0, 2],

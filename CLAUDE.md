@@ -319,8 +319,13 @@ preview que o cabecalho nao sai da tela ao rolar.
   ⚠ "NAO CABE EM 10px" NAO E' EXCECAO: ajusta-se o componente, nunca se
   volta ao nativo. Ja foi corrigido uma vez (PR-OC-DATA-PADRAO-01) e
   voltou na linha da parcela em 06/09 — por isso virou gate.
-  ⚠ O GATE TEM BASELINE, como o TSC: 20 arquivos herdados (14 `type=date`,
-  20 `<select>`). Era 42 (46/25) e caiu para 39 sem que este numero fosse
+  ⚠ O GATE TEM BASELINE, como o TSC: 10 arquivos herdados (0 `type=date`,
+  20 `<select>`).
+  ⚠ `type="date"` CHEGOU A ZERO no 136d — a frente [DATA-PADRAO-GLOBAL] esta'
+  FECHADA para datas. O que resta na baseline sao 20 `<select>` nativos, em 10
+  arquivos, e essa e' outra frente. Baseline de data em ZERO significa que
+  qualquer `type="date"` novo REPROVA o PR, em qualquer arquivo — nao ha' mais
+  heranca a proteger. Era 42 (46/25) e caiu para 39 sem que este numero fosse
   atualizado; o PR-PARC-05 tirou 3 `type=date` (1 do FinanciamentoDetalhe,
   que zerou e saiu da lista, e 2 do ModalBaixaParcela) e o 136a tirou o
   ultimo do ModalBaixaParcela, que saiu da lista tambem.
@@ -333,8 +338,8 @@ preview que o cabecalho nao sai da tela ao rolar.
   arquivos) e apagou a pagina orfa `FinanciamentoCadastro.tsx` (3 de uma vez).
   O 136c ampliou a API do componente (`onKeyDown` do consumidor ANTES do
   interno, `data-*` repassados, `abrirComSeta`) e fechou o ModoRapidoGrid mais
-  o lote compra/OC/zoot (10 arquivos, 15 ocorrencias).
-  Restam 14 `type=date` em 11 arquivos para o 136d. Falhar por eles pararia todo PR e o gate seria desligado
+  o lote compra/OC/zoot (10 arquivos, 15 ocorrencias). O 136d fechou os 14
+  ultimos (10 arquivos) e acrescentou o repasse de `onFocus`. Falhar por eles pararia todo PR e o gate seria desligado
   na primeira semana — que e' como um gate morre. Ele acusa ocorrencia
   NOVA: arquivo fora da lista, ou arquivo da lista com MAIS do que a
   baseline. Reduzir e' sempre aceito; atualize a baseline no mesmo PR com

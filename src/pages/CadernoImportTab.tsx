@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
@@ -512,11 +513,10 @@ export default function CadernoImportTab() {
                               if (c === 'data') {
                                 return (
                                   <TableCell key={c} className={cn(uncertain && 'bg-amber-100 dark:bg-amber-950/40')}>
-                                    <Input
-                                      type="date"
+                                    <DatePicker
                                       value={valorLimpo}
-                                      onChange={(e) => updateCell(idx, c, e.target.value)}
-                                      onFocus={(e) => e.target.select()}
+                                      onChange={(v) => updateCell(idx, c, v)}
+                                      onFocus={(e) => e.currentTarget.select()}
                                       className="h-7 text-xs"
                                     />
                                   </TableCell>

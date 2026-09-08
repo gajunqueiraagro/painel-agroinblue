@@ -4645,11 +4645,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           <div className="space-y-1.5">
             <div>
               <Label className="text-[11px]">Data da Venda</Label>
-              <Input type="date" value={dataVenda} onChange={e => setDataVenda(e.target.value)} className="h-8 text-[12px]" />
+              <DatePicker value={dataVenda} onChange={setDataVenda} className="h-8 text-[12px]" />
             </div>
             <div>
               <Label className="text-[11px]">Data Embarque</Label>
-              <Input type="date" value={dataEmbarque} onChange={e => setDataEmbarque(e.target.value)} className="h-8 text-[12px]" />
+              <DatePicker value={dataEmbarque} onChange={setDataEmbarque} className="h-8 text-[12px]" />
             </div>
           </div>
           <Separator />
@@ -4711,7 +4711,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                 <div key={i} className="grid grid-cols-2 gap-1.5 bg-muted/30 rounded p-1.5">
                   <div>
                     <Label className="text-[10px]">Parcela {i + 1} - Data</Label>
-                    <Input type="date" value={p.data} onChange={e => { const np = [...parcelas]; np[i] = { ...np[i], data: e.target.value }; setParcelas(np); }} className="h-7 text-[11px]" />
+                    <DatePicker value={p.data} onChange={v => { const np = [...parcelas]; np[i] = { ...np[i], data: v }; setParcelas(np); }} className="h-7 text-[11px]" />
                   </div>
                   <div>
                     <Label className="text-[10px]">Valor (R$)</Label>

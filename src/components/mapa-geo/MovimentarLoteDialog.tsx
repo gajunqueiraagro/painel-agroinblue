@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -79,7 +80,7 @@ export function MovimentarLoteDialog({ open, onOpenChange, pasto, anoMes, allPas
         <div className="flex-1 overflow-y-auto px-4 space-y-3 pb-4">
           <div>
             <Label>Data</Label>
-            <Input type="date" value={dataMov} onChange={e => setDataMov(e.target.value)} />
+            <DatePicker value={dataMov} onChange={setDataMov} />
           </div>
           <div>
             <Label>Tipo</Label>
