@@ -78,7 +78,12 @@ const SelectContent = React.forwardRef<
         // O fallback dentro do var() é OBRIGATÓRIO: quando position !== 'popper' a variável
         // não existe, min() fica inválido e a declaração INTEIRA cai — o painel voltaria a
         // não ter teto nenhum, silenciosamente.
-        "relative z-50 max-h-[min(24rem,var(--radix-select-content-available-height,24rem))] min-w-[8rem] overflow-hidden rounded-md border border-zinc-700/40 bg-zinc-950/55 backdrop-blur-xl text-zinc-100 shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
+        /* ⚠ LARGURA: PISO NO GATILHO, TETO EM 28rem — PR-UI-SELECT-04. Presa ao gatilho
+           (`w-[...]`, como estava no ContaBancariaSelect), ela CORTAVA "Banco do Brasil -
+           Agnaldo…"; livre, um nome muito longo esticaria a caixa pela tela. `min-w` garante
+           que nunca fique menor que o campo, `w-auto` deixa crescer ate o item mais longo e
+           `max-w` para antes do absurdo — so' ali o `text-ellipsis` do item entra. */
+        "relative z-50 max-h-[min(24rem,var(--radix-select-content-available-height,24rem))] min-w-[var(--radix-select-trigger-width)] w-auto max-w-[28rem] overflow-hidden rounded-md border border-zinc-700/40 bg-zinc-950/55 backdrop-blur-xl text-zinc-100 shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
         position === "popper" &&
           "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
         className,
@@ -101,7 +106,7 @@ const SelectContent = React.forwardRef<
           "p-1 rolagem-fina",
           position === "popper" &&
             /* A23 — a lista rola em 224px; o `max-h` do content é o teto da moldura. */
-            "h-[var(--radix-select-trigger-height)] max-h-56 w-full min-w-[var(--radix-select-trigger-width)]",
+            "h-[var(--radix-select-trigger-height)] max-h-56 w-full",
         )}
       >
         {children}
@@ -142,7 +147,7 @@ const SelectItem = React.forwardRef<
          tela virou a regua — entao o 10px desce para ca' e os overrides que pediam 10px
          viram redundancia. `min-h-[26px]` NAO muda: a altura da linha ja' era a mesma nos
          dois, e e' ela que da' o ritmo da lista. */
-      "relative flex min-h-[26px] w-full cursor-default select-none items-center overflow-hidden text-ellipsis whitespace-nowrap rounded-sm py-1 pl-8 pr-2 text-[10px] leading-[15px] outline-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 text-zinc-100 focus:bg-zinc-800/60 focus:text-zinc-100 data-[state=checked]:bg-zinc-800/40 data-[state=checked]:text-zinc-100",
+      "relative flex min-h-[22px] w-full cursor-default select-none items-center overflow-hidden text-ellipsis whitespace-nowrap rounded-sm py-1 pl-8 pr-2 text-[10px] leading-[14px] outline-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 text-zinc-100 focus:bg-zinc-800/60 focus:text-zinc-100 data-[state=checked]:bg-zinc-800/40 data-[state=checked]:text-zinc-100",
       className,
     )}
     {...props}

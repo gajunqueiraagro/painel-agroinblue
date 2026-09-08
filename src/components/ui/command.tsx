@@ -53,7 +53,7 @@ const CommandInput = React.forwardRef<
       className={cn(
         /* Input de busca do padrão: 32px, 12px, placeholder zinc-400. Era 44px e 14px — a
            altura de um campo de formulário dentro de uma lista de itens de 26px. */
-        "flex h-8 w-full rounded-md bg-transparent py-1 text-[12px] text-zinc-100 outline-none placeholder:text-zinc-400 disabled:cursor-not-allowed disabled:opacity-50",
+        "flex h-7 w-full rounded-md bg-zinc-900/60 px-2 py-1 text-[10px] text-zinc-100 outline-none placeholder:text-zinc-400 disabled:cursor-not-allowed disabled:opacity-50",
         className,
       )}
       {...props}
@@ -111,6 +111,21 @@ const CommandSeparator = React.forwardRef<
 ));
 CommandSeparator.displayName = CommandPrimitive.Separator.displayName;
 
+/**
+ * O PAINEL DE UM COMBOBOX DE BUSCA — PR-UI-SELECT-04.
+ *
+ * ⚠ NAO PODE MORAR NO `PopoverContent`: aquele primitivo serve tambem o calendario do
+ * DatePicker, o menu de exportacao e o KpiCard — pinta-lo de escuro escureceria os tres.
+ * A cor e' de quem monta um COMBOBOX, e por isso e' uma classe, nao um default.
+ * ⚠ MESMA PALETA DO `SelectContent`: os dois abrem lado a lado o tempo todo, e a unica
+ * forma de continuarem iguais e' a string ser uma so'.
+ * ⚠ LARGURA: piso no gatilho, cresce ate' o item mais longo, teto de 28rem — a mesma regra
+ * que o `SelectContent` passou a ter.
+ */
+export const COMBOBOX_CONTENT =
+  'p-0 min-w-[var(--radix-popover-trigger-width)] w-auto max-w-[28rem] ' +
+  'bg-zinc-950/55 backdrop-blur-xl border-zinc-700/40 text-zinc-100';
+
 const CommandItem = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive.Item>,
   React.ComponentPropsWithoutRef<typeof CommandPrimitive.Item>
@@ -121,7 +136,7 @@ const CommandItem = React.forwardRef<
       /* ⚠ UMA LINHA, SEMPRE — A23. O item quebrava em duas quando o nome era longo, e a
          lista inteira desalinhava. `min-h` garante os 26px mesmo com o texto truncado; quem
          precisa do texto completo o tem no `title` que o consumidor passa. */
-      "relative flex min-h-[26px] cursor-default select-none items-center gap-1.5 overflow-hidden text-ellipsis whitespace-nowrap rounded-sm px-2 py-1 text-[12px] text-zinc-100 outline-none data-[disabled=true]:pointer-events-none data-[selected='true']:bg-zinc-800/60 data-[selected=true]:text-zinc-100 data-[disabled=true]:opacity-50",
+      "relative flex min-h-[22px] cursor-default select-none items-center gap-1.5 overflow-hidden text-ellipsis whitespace-nowrap rounded-sm px-2 py-1 text-[10px] leading-[14px] text-zinc-100 outline-none data-[disabled=true]:pointer-events-none data-[selected='true']:bg-zinc-800/60 data-[selected=true]:text-zinc-100 data-[disabled=true]:opacity-50",
       className,
     )}
     {...props}

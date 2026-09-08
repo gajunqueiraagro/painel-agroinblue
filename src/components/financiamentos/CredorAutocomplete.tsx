@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/popover';
 import {
   Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList,
+  COMBOBOX_CONTENT,
 } from '@/components/ui/command';
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
@@ -21,6 +22,7 @@ import {
 import { ChevronsUpDown, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { normalizeFornecedorNome } from '@/lib/financeiro/normalizeFornecedorNome';
+import { cn } from '@/lib/utils';
 
 /* PR-PARC-04 item 5 — BUSCA NO SERVIDOR.
    ⚠ O DEFEITO QUE ISTO CORRIGE NAO ERA DE PERFORMANCE, ERA DE DADO SUMIDO. A query
@@ -243,7 +245,7 @@ export function CredorAutocomplete({ value, onChange, clienteId, placeholder = '
           </Button>
         </PopoverTrigger>
         <PopoverContent
-          className="w-[--radix-popover-trigger-width] p-0 z-[100]"
+          className={cn(COMBOBOX_CONTENT, 'z-[100]')}
           align="start"
           sideOffset={4}
         >

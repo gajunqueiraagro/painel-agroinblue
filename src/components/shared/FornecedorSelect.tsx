@@ -28,6 +28,7 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
+  COMBOBOX_CONTENT,
 } from '@/components/ui/command';
 import { Check, ChevronsUpDown, Plus, Link2, AlertTriangle, X } from 'lucide-react';
 import { FornecedorFormDialog } from '@/components/financeiro-v2/FornecedorFormDialog';
@@ -357,7 +358,7 @@ export function FornecedorSelect({
             <PopoverTrigger asChild>
               <span className="hidden" />
             </PopoverTrigger>
-            <PopoverContent className="w-[320px] p-0" align="start">
+            <PopoverContent className={COMBOBOX_CONTENT} align="start">
               <Command shouldFilter={false}>
                 <CommandInput
                   placeholder="Buscar fornecedor..."
@@ -449,7 +450,7 @@ export function FornecedorSelect({
               <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-[320px] p-0" align="start">
+          <PopoverContent className={COMBOBOX_CONTENT} align="start">
             <Command shouldFilter={false}>
               <CommandInput
                 placeholder="Buscar fornecedor..."

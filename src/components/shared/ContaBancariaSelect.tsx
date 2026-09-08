@@ -165,7 +165,12 @@ export const DARK_GLASS_CONTENT =
  *     custa largura e nao acrescenta hierarquia". Meu override punha `uppercase`,
  *     `tracking-wide` e `font-semibold` por cima disso: era o "CONTA CORRENTE grande".
  */
-const CONTENT_EXTRAS = 'w-[var(--radix-select-trigger-width)]';
+/* ⚠ VAZIO DE PROPOSITO (PR-UI-SELECT-04). A largura saiu daqui: presa ao gatilho ela
+   CORTAVA "Banco do Brasil - Agnaldo…", e o primitivo passou a resolver com piso no campo,
+   crescimento ate' o item mais longo e teto de 28rem. Nao ha' mais nada que este
+   componente precise acrescentar ao painel — a constante fica como marca de que a
+   ausencia e' decisao, nao esquecimento. */
+const CONTENT_EXTRAS = '';
 
 export function ContaBancariaSelect({
   value,

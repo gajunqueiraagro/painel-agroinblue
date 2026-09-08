@@ -11,6 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Search, Check, ChevronsUpDown, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { FornecedorV2 } from '@/hooks/useFinanceiroV2';
+import { COMBOBOX_CONTENT } from '@/components/ui/command';
 
 export interface FavorecidoSelectProps {
   value: string;                          // favorecidoId ('' = nenhum)
@@ -137,7 +138,7 @@ export function FavorecidoSelect({
               <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-[--radix-popover-trigger-width] p-0 bg-zinc-950/55 backdrop-blur-xl border-zinc-700/40 text-zinc-100" align="start">
+          <PopoverContent className={COMBOBOX_CONTENT} align="start">
             {/* Input de busca do padrão A23: 32px, 12px, ícone 14px. */}
             <div className="flex items-center border-b border-zinc-700/40 px-2">
               <Search className="mr-2 h-3.5 w-3.5 shrink-0 opacity-50" />

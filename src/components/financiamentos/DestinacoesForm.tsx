@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList , COMBOBOX_CONTENT } from '@/components/ui/command';
 
 export interface DestinacaoItem {
   id: string;
@@ -226,7 +226,7 @@ function DestinacaoCard({ item, idx, fornecedores, contas, planos, onUpdate, onR
                 <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-full p-0">
+            <PopoverContent className={COMBOBOX_CONTENT}>
               <Command>
                 <CommandInput placeholder="Buscar fornecedor..." />
                 <CommandEmpty>Nenhum encontrado.</CommandEmpty>

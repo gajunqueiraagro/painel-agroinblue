@@ -20,6 +20,7 @@ import {
   CommandItem,
   CommandEmpty,
   CommandGroup,
+  COMBOBOX_CONTENT,
 } from '@/components/ui/command';
 import { Check, X, ArrowLeftRight, ArrowRight, Undo2, AlertTriangle, Search, Pencil, Globe2, Building2, HelpCircle, Coins } from 'lucide-react';
 import {
@@ -2435,7 +2436,7 @@ function FornecedorInline({ clienteId, valor, excelOriginal, marcadoNovo, vincul
           </span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[280px] p-0" align="start">
+      <PopoverContent className={COMBOBOX_CONTENT} align="start">
         <Command shouldFilter={false}>
           <CommandInput value={busca} onValueChange={setBusca} placeholder="Buscar fornecedor…" className="h-8" />
           <CommandList className="max-h-44">
@@ -2511,7 +2512,7 @@ function SubcentroInline({ catalogo, valor, naturezaAlvo, disabled, onPick }: {
           <span className="ml-1 shrink-0 text-[9px] text-muted-foreground">▾</span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[300px] p-0" align="start">
+      <PopoverContent className={COMBOBOX_CONTENT} align="start">
         <Command shouldFilter={false}>
           <CommandInput value={busca} onValueChange={setBusca} placeholder="Buscar subcentro…" className="h-8" />
           <CommandList className="max-h-52">
