@@ -479,7 +479,10 @@ export function useFinanciamentoCadastro() {
         }
       }
 
-      toast.success('Financiamento cadastrado com sucesso!');
+      /* PR-PARC-04 — "obrigacao", e nao "financiamento": desde a natureza, o mesmo
+         gravador atende parcelamento, financiamento e emprestimo. E' o UNICO toast do
+         salvar — o modal nao emite o seu. */
+      toast.success('Obrigação criada');
       return true;
     } catch (err: any) {
       toast.error(err.message || 'Erro ao salvar');

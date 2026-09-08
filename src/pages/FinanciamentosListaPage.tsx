@@ -6,9 +6,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useCliente } from '@/contexts/ClienteContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, useMemo } from 'react';
 import { format } from 'date-fns';
+import { ObrigacaoDialog } from '@/components/financiamentos/ObrigacaoDialog';
 
 /* ── Types ── */
 /* ⚠ CLASSES LIDAS DO CÓDIGO DA REFERÊNCIA, não estimadas: `NUM` e `APOIO` são
@@ -74,6 +75,15 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
   const { clienteAtual } = useCliente();
   const { user } = useAuth();
   const clienteId = clienteAtual?.id;
+  const qc = useQueryClient();
+
+  /* PR-PARC-04 item 7 — "+ Nova obrigacao" abre um MODAL POR CIMA desta lista, e nao
+     mais a pagina de cadastro: a lista continua montada atras, entao ao fechar nao ha'
+     remontagem nem perda dos filtros.
+     ⚠ A PROP `onNovo` CONTINUA DECLARADA e deixou de ser chamada. O `Index.tsx` ainda a
+     passa (e o ramo `finView.mode === 'novo'` continua la', agora inalcancavel); remove-la
+     seria mexer em arquivo fora do escopo deste PR. */
+  const [novaObrigacaoAberta, setNovaObrigacaoAberta] = useState(false);
 
   const STORAGE_KEY = `financiamentos_lista_filtros_${clienteAtual?.id ?? 'anon'}`;
   const _sf = (() => {
@@ -360,7 +370,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
           </div>
           {/* CTA da casa: o mesmo `bg-cta` do resto do sistema, em 28px. */}
           <Button size="sm" className="h-7 gap-1 bg-cta px-2.5 text-xs font-semibold text-cta-foreground hover:bg-cta-hover"
-            onClick={onNovo}>
+            onClick={() => setNovaObrigacaoAberta(true)}>
             <Plus className="size-3.5" /> Nova obrigação
           </Button>
         </div>
@@ -695,6 +705,30 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
         </div>
         </div>
       </div>
+
+      {/* ⚠ INVALIDA AS DUAS FAMILIAS. `financiamentos-lista` e' a desta tela — sem ela a
+          obrigacao recem-criada so' apareceria recarregando a pagina. As duas do painel
+          (`painel-financiamentos` / `painel-parcelas`) sao de OUTRA tela, que le' os
+          mesmos contratos: deixa-las velhas faria o painel divergir da lista ate' o
+          proximo refetch. */}
+      {/* ⚠ MONTAGEM CONDICIONAL, e nao `open={...}` num modal sempre montado. O estado do
+          formulario mora no `useFinanciamentoCadastro`, DENTRO do dialogo: mantido montado,
+          ele guardaria o contrato anterior e o proximo "+ Nova obrigacao" abriria com os
+          dados do ultimo — a pagina que ele substitui remontava a cada entrada e nascia
+          limpa. De quebra, as 6 queries do hook (fazenda, fornecedores, contas e os tres
+          planos) so' saem quando o modal abre, e nao a cada render desta lista. */}
+      {novaObrigacaoAberta && (
+      <ObrigacaoDialog
+        open
+        onOpenChange={setNovaObrigacaoAberta}
+        onSalvo={() => {
+          setNovaObrigacaoAberta(false);
+          qc.invalidateQueries({ queryKey: ['financiamentos-lista', clienteId] });
+          qc.invalidateQueries({ queryKey: ['painel-financiamentos', clienteId] });
+          qc.invalidateQueries({ queryKey: ['painel-parcelas', clienteId] });
+        }}
+      />
+      )}
     </div>
   );
 }
