@@ -71,9 +71,20 @@ export function FavorecidoSelect({
     return fornecedoresList.filter(f => normalizeSearch(f.nome).includes(q));
   }, [fornecedoresList, search]);
 
+  /**
+   * Abre POSICIONADO no fornecedor atual — 133h adendo item 14.
+   *
+   * ⚠ ERA `setHighlight(0)` SEMPRE, e o Enter confirmava o PRIMEIRO da lista: abrir o
+   * seletor de uma linha que já tinha fornecedor e apertar Enter TROCAVA o fornecedor certo
+   * pelo primeiro do cadastro, sem aviso. Nunca abrir pedindo para redigitar o que já está
+   * escolhido.
+   * ⚠ `search` CONTINUA ZERANDO: quando o operador digita, a lista é outra e o valor antigo
+   * pode nem estar nela — aí o topo é o certo. É o mesmo efeito, com a posição certa.
+   */
   useEffect(() => {
-    setHighlight(0);
-  }, [search]);
+    const idx = value ? filtered.findIndex((f) => f.id === value) : -1;
+    setHighlight(idx >= 0 ? idx : 0);
+  }, [search, open, filtered, value]);
 
   useEffect(() => {
     const el = itemRefs.current[highlight];

@@ -12,11 +12,18 @@
  * ⚠ NADA DE LOTE AQUI, e é decisão: cancelar em massa o que a planilha não explica apagaria,
  * na primeira vez que a planilha viesse incompleta, o mês inteiro. Uma linha por vez, com
  * motivo escrito.
+ *
+ * ⚠ E O BOTÃO SÓ EXISTE ONDE HÁ O QUE DUPLICAR — 133h item 5. "Cancelar como duplicado"
+ * estava em TODA linha, e a lista é justamente a das sobras: oferecer o cancelamento como
+ * ação padrão de uma lista de sobras convida a usá-lo como faxina. Agora ele aparece quando
+ * a tela consegue APONTAR o par (mesmo valor, mesma conta, ±5 dias — `temCandidatoDuplicata`);
+ * onde não há par, sobra "Abrir no Financeiro", que é olhar antes de decidir.
  */
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { fmtBRL, fmtData } from './fmt';
+import { temCandidatoDuplicata } from '@/v2/lib/mesa/enriquecimentoView';
 import type { LancamentoNaoExplicado } from '@/v2/hooks/useSistemaNaoExplicado';
 
 export interface EnriquecimentoSemParSistemaProps {
@@ -36,6 +43,11 @@ export function EnriquecimentoSemParSistema({
   const [cancelandoId, setCancelandoId] = useState<string | null>(null);
   const [motivo, setMotivo] = useState('');
   const [gravando, setGravando] = useState(false);
+  /* ⚠ O CONJUNTO É CALCULADO UMA VEZ, não por linha: são N² comparações, e refazê-las a
+     cada render de cada linha é o que transforma 200 órfãos em uma tela travada. */
+  const comCandidato = useMemo(
+    () => new Set(linhas.filter((l) => temCandidatoDuplicata(l, linhas)).map((l) => l.lanc_id)),
+    [linhas]);
 
   async function confirmar(lancId: string) {
     const m = motivo.trim();
@@ -51,7 +63,7 @@ export function EnriquecimentoSemParSistema({
 
   return (
     <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border bg-card md:flex-1">
-      <div className="flex shrink-0 items-baseline justify-between border-b bg-muted/40 px-2 py-0.5">
+      <div className="flex shrink-0 items-baseline justify-between border-b bg-card px-2 py-0.5">
         <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
           Lançamentos do mês sem linha na planilha
         </span>
@@ -97,11 +109,14 @@ export function EnriquecimentoSemParSistema({
                       Abrir no Financeiro
                     </Button>
                   )}
-                  <Button type="button" size="sm" variant="outline" className="h-6 px-1.5 text-[10px]"
-                    disabled={gravando}
-                    onClick={() => { setCancelandoId(cancelandoId === l.lanc_id ? null : l.lanc_id); setMotivo(''); }}>
-                    Cancelar como duplicado
-                  </Button>
+                  {comCandidato.has(l.lanc_id) && (
+                    <Button type="button" size="sm" variant="outline" className="h-6 px-1.5 text-[10px]"
+                      disabled={gravando}
+                      title="Há outro lançamento de mesmo valor e conta a até 5 dias daqui."
+                      onClick={() => { setCancelandoId(cancelandoId === l.lanc_id ? null : l.lanc_id); setMotivo(''); }}>
+                      Cancelar como duplicado
+                    </Button>
+                  )}
                 </span>
               </div>
 

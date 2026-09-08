@@ -14,14 +14,15 @@ import { useFinanceiroV2, notificarLancamentosMudaram } from '@/hooks/useFinance
 import { useQueryClient } from '@tanstack/react-query';
 import { useClassificacaoStaging, useSessoesClassificacao } from '@/v2/hooks/useClassificacaoStaging';
 import {
-  toRowVM, toSessoesVM, contarAplicaveisExatos, filtrarPorModo, escolherMelhorSessaoId,
+  toRowVM, toSessoesVM, contarAplicaveisExatos, escolherMelhorSessaoId, diferencasDoResultado,
   listarContas, filtrarPorConta, resumirGrupos, filtrarPorGrupo, grupoDaLinha,
+  sessoesDoMes,
   type EnriqGrupo,
 } from '@/v2/lib/mesa/enriquecimentoView';
 import { EnriquecimentoLista, type EnriquecimentoListaProps } from './EnriquecimentoLista';
 import { EnriquecimentoDetalhe, type EnriquecimentoDetalheProps } from './EnriquecimentoDetalhe';
 import { type EnriquecimentoActionsProps } from './EnriquecimentoActions';
-import type { EnriqRowVM } from './types';
+import type { EnriqRowVM, EnriqSessaoVM } from './types';
 import { EnriquecimentoMesaModal } from './EnriquecimentoMesaModal';
 import { EnriquecimentoImportarDialog } from './EnriquecimentoImportarDialog';
 import { EnriquecimentoTopoNumeros, type VistaPasso2 } from './EnriquecimentoTopoNumeros';
@@ -29,18 +30,20 @@ import { EnriquecimentoTransferencias } from './EnriquecimentoTransferencias';
 import { EnriquecimentoSemParSistema } from './EnriquecimentoSemParSistema';
 import { useTransferenciasEspelhadas } from '@/v2/hooks/useTransferenciasEspelhadas';
 import { useSistemaNaoExplicado } from '@/v2/hooks/useSistemaNaoExplicado';
+import { useLancamentosConciliados } from '@/v2/hooks/useLancamentosConciliados';
 import { EnriquecerProgressoDialog } from '@/components/conciliacao/EnriquecerProgressoDialog';
 import { useGravarLoteEnriquecimento, type LinhaParaGravar } from '@/v2/hooks/useGravarLoteEnriquecimento';
 import { EnriquecimentoCandidatosInline } from './EnriquecimentoCandidatosInline';
 import { MesaCamposTabela, CAMPOS_OBRIGATORIOS_MESA } from './MesaCamposTabela';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { ChevronDown, Trash2 } from 'lucide-react';
 import { ContaBancariaSelect, type ContaSelecionavel } from '@/components/shared/ContaBancariaSelect';
 import { baixarCsv, csvCampo } from '@/lib/csv';
 import { fmtBRL, fmtData } from './fmt';
 import { Button } from '@/components/ui/button';
-
-/** Como a lista da esquerda é ordenada — 133b, o controle "ordenação" da direita. */
-type Ordenacao = 'planilha' | 'valor' | 'data';
 
 export interface MesaEnriquecimentoTabProps {
   anoMesRegua?: string;
@@ -76,25 +79,22 @@ export function MesaEnriquecimentoTab({
      são seis, e filtrar por status enquanto o chip fala de grupo faria o número do chip e
      o tamanho da lista discordarem. */
   const [filtroGrupo, setFiltroGrupo] = useState<VistaPasso2>('todas');
-  /* ⚠ A ORDEM PADRÃO É A DO CAIXA — 133e adendo item 5: pagamento decrescente, depois valor.
-     Era "ordem da planilha", que fazia sentido quando a tela era um espelho do arquivo; ela
-     continua no seletor, porque conferir contra o Excel aberto ao lado ainda é um gesto. */
-  const [ordenacao, setOrdenacao] = useState<Ordenacao>('data');
-  const [filtroModo, setFiltroModo] = useState<'pendentes' | 'todas'>('todas');   // PR-U2d-1 — burn-down
+  /**
+   * 133h item 3 — a ordem é FIXA: pagamento decrescente, depois valor. O seletor saiu.
+   *
+   * ⚠ "ORDEM DA PLANILHA" ERA UM CONTROLE PARA UM GESTO QUE ACABOU. Ele fazia sentido
+   * quando a tela era o espelho do arquivo e se conferia linha a linha contra o Excel
+   * aberto ao lado; desde o 133d a tela é a fila de trabalho do caixa, e ordenar por
+   * `excel_linha_origem` põe o de 02/08 depois do de 28/08 porque foi digitado antes.
+   * ⚠ E O "Todas | Pendentes" SAIU JUNTO — com os cards do topo virando o filtro (item 1),
+   * ele era um segundo recorte sobre o mesmo conjunto, e os dois se contradiziam: "Já
+   * gravadas" com "Pendentes" ligado mostrava uma lista vazia sem dizer por quê.
+   * ⚠ A JANELA DE GRAÇA MORREU COM ELE, e é remoção, não esquecimento: `graceIds` existia
+   * só para a linha recém-gravada não sumir debaixo do cursor sob "Pendentes". Sem o modo,
+   * nada some — e um `setState` a cada gravação para alimentar um filtro que não existe
+   * mais é o tipo de sobra que este repo já pagou caro.
+   */
 
-  // PR-U2d-1 — janela de graça: ids recém-aplicados ficam visíveis ~1,4s antes do
-  // burn-down (só timing de apresentação; nada de dados do VM aqui).
-  const GRACE_MS = 1400;
-  const [graceIds, setGraceIds] = useState<Set<string>>(() => new Set());
-  const graceTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
-  useEffect(() => () => { graceTimers.current.forEach(clearTimeout); }, []);
-  function manterEmGraca(id: string) {
-    setGraceIds((prev) => { const n = new Set(prev); n.add(id); return n; });
-    const t = setTimeout(() => {
-      setGraceIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
-    }, GRACE_MS);
-    graceTimers.current.push(t);
-  }
   const [selecionadoId, setSelecionadoId] = useState<string | null>(null);
   /**
    * 133b-a correção 2 — as linhas editadas e ainda NÃO gravadas no lançamento.
@@ -139,12 +139,18 @@ export function MesaEnriquecimentoTab({
   // não persiste, não sincroniza com URL, não altera nada do fluxo.
   const [mesaAmpliadaOpen, setMesaAmpliadaOpen] = useState(false);
 
-  // Auto-seleção da sessão mais útil na abertura (regra extraída para o módulo puro).
+  /* Auto-seleção da sessão mais útil na abertura (regra extraída para o módulo puro).
+     ⚠ DENTRO DO MÊS DA RÉGUA — 133h item 2. Com o seletor peneirado pelo mês, abrir numa
+     sessão de julho enquanto a lista só mostra agosto deixaria o rótulo do gatilho falando
+     de uma importação que não está na lista: a tela discordando de si mesma. Sem sessão no
+     mês, cai na regra antiga (a mais recente de todas) — melhor que abrir vazio. */
   useEffect(() => {
     if (sessaoId || controlada) return;
-    const melhor = escolherMelhorSessaoId(sessoes);
+    const mes = anoMesRegua ?? null;
+    const doMes = mes ? (sessoes ?? []).filter((x) => x.excel_ano_mes === mes) : [];
+    const melhor = escolherMelhorSessaoId(doMes.length > 0 ? doMes : sessoes);
     if (melhor) setSessaoIdLocal(melhor);
-  }, [sessaoId, sessoes, controlada]);
+  }, [sessaoId, sessoes, controlada, anoMesRegua]);
 
   const {
     staging, isFetching,
@@ -155,6 +161,8 @@ export function MesaEnriquecimentoTab({
     resolverGrupo, isResolvendoGrupo, desfazerGrupo,
     splitSubstituir, isSubstituindo,
     casarSessao, isCasando,
+    excluirSessao, isExcluindoSessao,
+    marcarRevisada,
   } = useClassificacaoStaging(sessaoId, clienteAtual?.id);
 
   /* 133c — o motor do passo 3. O progresso vive aqui (no hook), não no diálogo. */
@@ -258,6 +266,72 @@ export function MesaEnriquecimentoTab({
     const m = /^(\d{4})-(\d{2})$/.exec(anoMesRegua ?? mesAtivo ?? '');
     return m ? [Number(m[1]), Number(m[2])] : [null, null];
   })();
+
+  /**
+   * As importações que o seletor oferece — 133h item 2.
+   *
+   * ⚠ SÓ O MÊS DA RÉGUA, mais recente primeiro. Sem a peneira, o seletor era a história
+   * inteira do cliente (166 sessões no NJ) com rótulos que só diferem pelo carimbo — e a
+   * de maio ficava a um clique de distância de quem está conciliando agosto.
+   * ⚠ QUANDO NÃO HÁ RÉGUA, o mês da sessão ativa é o fallback: é a mesma precedência do
+   * casador, e não a de "mostre tudo".
+   */
+  const sessoesDoMesVM = useMemo(
+    () => sessoesDoMes(sessoesVM, anoMesRegua ?? mesAtivo),
+    [sessoesVM, anoMesRegua, mesAtivo]);
+
+  /**
+   * A exclusão de sessão, em dois tempos — 133h item 2.
+   *
+   * ⚠ O ENSAIO VEM DA MESMA RPC (`p_simular=true`), e é o que a confirmação mostra. Contar
+   * as linhas aqui seria uma segunda régua sobre a mesma pergunta; a que manda é a do
+   * banco, que também é quem recusa.
+   */
+  const [exclusaoPendente, setExclusaoPendente] = useState<
+    { id: string; label: string; linhas: number } | null>(null);
+
+  async function pedirExclusao(sv: EnriqSessaoVM) {
+    setExclusaoPendente(null);
+    try {
+      const r = await excluirSessao({ sessao_id: sv.id, simular: true });
+      if (!r.ok) {
+        toast.error(r.motivo === 'sessao_com_linhas_gravadas'
+          ? `${r.gravadas ?? 0} linha(s) gravada(s) — esta importação não pode ser excluída.`
+          : `Não foi possível excluir: ${r.motivo ?? 'motivo não informado'}.`);
+        return;
+      }
+      setExclusaoPendente({ id: sv.id, label: sv.label, linhas: r.linhas ?? sv.total });
+    } catch (e: unknown) {
+      toast.error(`Não foi possível excluir: ${errMsg(e)}`);
+    }
+  }
+
+  async function confirmarExclusao() {
+    const alvo = exclusaoPendente;
+    if (!alvo) return;
+    try {
+      const r = await excluirSessao({ sessao_id: alvo.id, simular: false });
+      if (!r.ok) {
+        toast.error(r.motivo === 'sessao_com_linhas_gravadas'
+          ? `${r.gravadas ?? 0} linha(s) gravada(s) — esta importação não pode ser excluída.`
+          : `Não foi possível excluir: ${r.motivo ?? 'motivo não informado'}.`);
+        return;
+      }
+      toast.success(`Importação excluída — ${r.apagadas ?? 0} linha(s).`);
+      setExclusaoPendente(null);
+      /* ⚠ A ATIVA VIRA A MAIS RECENTE DO MÊS, e não "nenhuma": quem apaga uma importação
+         velha quer continuar trabalhando no mês, não voltar à tela vazia. A lista ainda
+         não foi reconsultada, então a escolha exclui o id apagado à mão. */
+      if (alvo.id === sessaoId) {
+        const proxima = sessoesDoMesVM.find((x) => x.id !== alvo.id) ?? null;
+        setSessaoId(proxima?.id ?? null);
+        setFiltroConta('todas');
+        setSelecionadoId(null);
+      }
+    } catch (e: unknown) {
+      toast.error(`Não foi possível excluir: ${errMsg(e)}`);
+    }
+  }
   // Conta é a partição de trabalho: contadores, lista e fluxo derivam do staging DA CONTA.
   const stagingConta = useMemo(() => filtrarPorConta(staging, filtroConta), [staging, filtroConta]);
   /* 133b — os seis números do topo e as somas em R$, da MESMA lista que a tela desenha.
@@ -268,29 +342,22 @@ export function MesaEnriquecimentoTab({
   // P0-1A: o lote é da SESSÃO (todas as contas) — não pode depender do filtro de conta.
   const nAplicaveis = useMemo(() => contarAplicaveisExatos(staging), [staging]);
   const rowsVM = useMemo(() => stagingConta.map(toRowVM), [stagingConta]);
-  // PR-U2d-1 — modo (pendentes/todas) é o gate; o filtro por status refina dentro dele.
-  const rowsModo = useMemo(() => filtrarPorModo(rowsVM, filtroModo, graceIds), [rowsVM, filtroModo, graceIds]);
-  const rowsGrupo = useMemo(() => filtrarPorGrupo(rowsModo, filtroGrupo), [rowsModo, filtroGrupo]);
+  /* 133h item 3 — o único gate é o card do topo; `filtrarPorModo` saiu daqui com o
+     "Todas | Pendentes". A função segue exportada e testada, para as telas legadas. */
+  const rowsGrupo = useMemo(() => filtrarPorGrupo(rowsVM, filtroGrupo), [rowsVM, filtroGrupo]);
   /* ⚠ A ORDENAÇÃO É DA APRESENTAÇÃO, e por isso é a ÚLTIMA: ordenar antes de filtrar daria
      o mesmo resultado com mais trabalho, e ordenar dentro do filtro esconderia que a ordem
      padrão é a da planilha — que é a que o operador tem aberta ao lado. */
   const rowsFiltradas = useMemo(() => {
-    if (ordenacao === 'planilha') return rowsGrupo;
-    const copia = [...rowsGrupo];
-    if (ordenacao === 'valor') {
-      copia.sort((a, b) => Math.abs(b.valorNum ?? 0) - Math.abs(a.valorNum ?? 0));
-    } else {
-      /* ⚠ PAGAMENTO DECRESCENTE, DEPOIS VALOR — 133e adendo item 5. `dataIso` já vem do
-         adapter em `YYYY-MM-DD`: ordenar por ele é comparação de string, sem `Date` e sem
-         desformatar o que o adapter formatou. Linha sem data nenhuma vai para o fim. */
-      copia.sort((a, b) => {
-        const da = a.dataIso ?? ''; const db = b.dataIso ?? '';
-        if (da !== db) return db.localeCompare(da);
-        return Math.abs(b.valorNum ?? 0) - Math.abs(a.valorNum ?? 0);
-      });
-    }
-    return copia;
-  }, [rowsGrupo, ordenacao]);
+    /* ⚠ PAGAMENTO DECRESCENTE, DEPOIS VALOR — 133e adendo item 5, agora sem alternativa.
+       `dataIso` já vem do adapter em `YYYY-MM-DD`: ordenar por ele é comparação de string,
+       sem `Date` e sem desformatar o que o adapter formatou. Linha sem data vai para o fim. */
+    return [...rowsGrupo].sort((a, b) => {
+      const da = a.dataIso ?? ''; const db = b.dataIso ?? '';
+      if (da !== db) return db.localeCompare(da);
+      return Math.abs(b.valorNum ?? 0) - Math.abs(a.valorNum ?? 0);
+    });
+  }, [rowsGrupo]);
 
   /**
    * 133b-a correção 2 — a linha SELECIONADA nunca sai do recorte.
@@ -371,6 +438,14 @@ export function MesaEnriquecimentoTab({
      tela dizendo que faltam 200 quando o recorte tem 9. */
   const posicao = `${idx >= 0 ? idx + 1 : '—'} / ${ordemNavegacao.length}`;
 
+  /**
+   * 133h adendo item 15 — o erro do banco na ÚLTIMA gravação desta linha.
+   *
+   * ⚠ POR LINHA, e some ao trocar de linha ou ao gravar com sucesso: um erro que sobrevive
+   * à navegação acusa a linha errada, que é pior que não acusar.
+   */
+  const [erroBanco, setErroBanco] = useState<{ id: string; msg: string } | null>(null);
+
   // R1 — Promise da edição em voo (commit-on-blur de Produto/Documento). salvar() a aguarda
   // antes do apply, para o apply_row NUNCA ler update_proposto antes do editar_proposto commitar.
   const pendingEditRef = useRef<Promise<unknown> | null>(null);
@@ -434,8 +509,57 @@ export function MesaEnriquecimentoTab({
    * conferido e seguir, e o botão passa a dizer isso em vez de prometer uma gravação que
    * não acontece.
    */
+  /**
+   * 133h item 10 — as diferenças REAIS entre o Resultado e o lançamento.
+   *
+   * ⚠ `mudaAlgo` (a `will_change_anything` da view) SAIU DAQUI, e o envelope diz por quê:
+   * ela só olha subcentro e fornecedor, e só quando o lançamento está vazio neles. Uma
+   * linha cuja única mudança era a safra (25/26 -> 26/27) caía em `soConfirma`, o botão
+   * dizia "Confirmar e Próximo", o operador confirmava — e a safra nova nunca era gravada.
+   */
+  const diferencas = useMemo(
+    () => (selecionado ? diferencasDoResultado(selecionado.edicao) : []),
+    [selecionado]);
   const soConfirma = !!selecionado && !selecionado.aplicado && selecionado.temMatch
-    && obrigatoriosVazios.length === 0 && !selecionado.mudaAlgo;
+    && obrigatoriosVazios.length === 0 && diferencas.length === 0;
+
+  /* ⚠ 133h item 9 — "revisado" É `revisado_em` OU `aplicado`: gravar uma linha é a forma
+     mais forte de tê-la revisado, e contá-la como pendente faria o contador nunca fechar. */
+  const revisadas = useMemo(
+    () => rowsVM.filter((r) => !!r.revisadaEm || r.aplicado).length,
+    [rowsVM]);
+
+  /* 133h item 12 — quais lançamentos da sessão vieram do extrato. */
+  const lancIdsDaSessao = useMemo(
+    () => rowsVM.map((r) => r.lancId).filter((x): x is string => !!x),
+    [rowsVM]);
+  const { conciliados } = useLancamentosConciliados(lancIdsDaSessao);
+  const selecionadoConciliado = !!selecionado?.lancId && conciliados.has(selecionado.lancId);
+
+  /**
+   * O que a planilha diz e o extrato desmente — 133h item 12.
+   *
+   * ⚠ NUNCA VIRA GRAVAÇÃO, e por isso é uma lista e não um bloqueio: a RPC já ignora estes
+   * campos em linha conciliada. O que faltava era o operador SABER — "se salvar errado, tem
+   * que me mostrar a divergência".
+   */
+  const divergenciasDoExtrato = useMemo(() => {
+    if (!selecionado || !selecionadoConciliado) return [] as string[];
+    const porCampo = new Map(selecionado.comparativo.map((c) => [c.campo, c]));
+    const alvo: Array<[string, string]> = [
+      ['Data pagamento', 'data de pagamento'],
+      ['Valor', 'valor'],
+      ['Banco', 'conta bancária'],
+      ['Tipo', 'tipo'],
+    ];
+    const fora: string[] = [];
+    for (const [campo, rotulo] of alvo) {
+      const c = porCampo.get(campo);
+      if (!c || c.excel === '—' || c.sistema === '—') continue;
+      if (c.excel !== c.sistema) fora.push(`${rotulo} (${c.sistema} × ${c.excel})`);
+    }
+    return fora;
+  }, [selecionado, selecionadoConciliado]);
 
   // Extrai mensagem humana de qualquer erro (PostgrestError não é instanceof Error).
   const errMsg = (e: unknown): string => {
@@ -569,12 +693,37 @@ export function MesaEnriquecimentoTab({
       // antes de o apply_row ler update_proposto. Sem timeout/polling: só await da Promise.
       // (erro da edição já foi tratado no onEditar; aqui só garantimos a ordem.)
       try { await pendingEditRef.current; } catch { /* noop */ }
+      /**
+       * 133h item 13 — O RESULTADO É A FONTE DO PROPOSTO, SEMPRE.
+       *
+       * ⚠ O TEXTO FORA DO PLANO FICAVA NO `update_proposto` E BLOQUEAVA A GRAVAÇÃO. A tela
+       * já resolvia isso na apresentação (`subcentroEfetivo` nunca é a proposta órfã), mas
+       * o staging continuava com "Despesas Administrativas", que não existe no plano; o
+       * `apply_row` mandava esse texto ao lançamento e o TRIGGER
+       * `trg_resolve_classificacao_plano` derrubava a transação com "Subcentro ... nao
+       * existe no plano de contas" — medido em `resolve_classificacao_from_plano`.
+       * ⚠ O CONSERTO É ALINHAR O PROPOSTO AO QUE A TELA MOSTRA, e não silenciar o trigger:
+       * ele é a defesa que impede subcentro inventado de entrar no plano. O texto da
+       * planilha não some — continua no aviso "planilha dizia", que é o lugar dele.
+       */
+      if (selecionado.avisoPlanilha && selecionado.edicao.subcentro
+          && selecionado.edicao.subcentro !== selecionado.edicao.subcentroAtual) {
+        await editarProposto({ staging_id: id, patch: { subcentro: selecionado.edicao.subcentro } });
+      }
       const res: any = await applyRow({ staging_id: id, overwrite: true });
-      if (res?.aplicado) { manterEmGraca(id); limparEditada(id); toast.success('Lançamento salvo.'); return true; }
-      toast.error(MOTIVO_MSG[res?.motivo] ?? `Não salvo (${res?.motivo ?? 'erro'}).`);
+      if (res?.aplicado) { limparEditada(id); setErroBanco(null); toast.success('Lançamento salvo.'); return true; }
+      /* 133h item 8 — SALVAR NUNCA FALHA EM SILÊNCIO: sem tradução conhecida, o motivo
+         cru do banco vai para a tela. "Não salvo (undefined)" era o que aparecia quando a
+         RPC devolvia um motivo novo. */
+      const msg = MOTIVO_MSG[res?.motivo] ?? `o banco respondeu "${res?.motivo ?? 'sem motivo'}"`;
+      setErroBanco({ id, msg });
+      toast.error(`Não salvo — ${msg}`);
       return false;
     } catch (e: unknown) {
-      toast.error(`Erro ao salvar: ${errMsg(e)}`);
+      /* O erro do trigger/constraint chega por aqui, e é ele que o operador precisa ler. */
+      const msg = errMsg(e);
+      setErroBanco({ id, msg });
+      toast.error(`Não salvo — o banco recusou: ${msg}`);
       return false;
     }
   }
@@ -589,10 +738,21 @@ export function MesaEnriquecimentoTab({
    * `apply_row` aqui gastaria uma ida ao banco para receber `nada_a_gravar` e mostrar um
    * toast de erro no fim de um gesto que deu certo.
    */
-  function handleConfirmarProximo() {
+  async function handleConfirmarProximo() {
     if (!selecionado) return;
-    limparEditada(selecionado.id);
+    const id = selecionado.id;
+    limparEditada(id);
     setRevisei(true);
+    /* ⚠ 133h item 9 — A CONFIRMAÇÃO PERSISTE. Ela vivia num `useState` do container:
+       recarregar a página, trocar de sessão ou fechar a aba apagava tudo o que já tinha
+       sido conferido, sem aviso — e Gabriel refez linhas por causa disso (07:47).
+       ⚠ AVANÇA MESMO SE A MARCA FALHAR, e o erro aparece: travar a navegação por causa de
+       uma marca de revisão seria pior que a marca não existir. */
+    try {
+      await marcarRevisada({ staging_id: id, revisada: true });
+    } catch (e: unknown) {
+      toast.error(`Confirmado na tela, mas não foi possível marcar como revisada: ${errMsg(e)}`);
+    }
     irProximo();
   }
   async function handleReverter() {
@@ -684,7 +844,7 @@ export function MesaEnriquecimentoTab({
         try {
           await editarProposto({ staging_id: id, patch });
           const res: any = await applyRow({ staging_id: id, overwrite: true });
-          if (res?.aplicado) { manterEmGraca(id); ok++; } else falhas++;
+          if (res?.aplicado) { ok++; } else falhas++;
         } catch { falhas++; }
       }
       toast[falhas === 0 ? 'success' : 'warning'](
@@ -737,10 +897,12 @@ export function MesaEnriquecimentoTab({
     salvarDisabled: !podeSalvar,
     salvarMotivo: motivoSalvar,
     soConfirma,
-    onConfirmarProximo: handleConfirmarProximo,
+    onConfirmarProximo: () => { void handleConfirmarProximo(); },
     reverterDisabled: !podeReverter,
     aplicarTodosDisabled: !sessaoId || nAplicaveis === 0,
     isBusy,
+    divergenciasDoExtrato,
+    erroBanco: erroBanco && selecionado && erroBanco.id === selecionado.id ? erroBanco.msg : null,
   };
   // Contagem da mesa ampliada: reusa rowsFiltradas (sessão + filtros vigentes). Nada recalculado.
   const mesaAmpliadaVazia = rowsNaTela.length === 0;
@@ -989,7 +1151,7 @@ export function MesaEnriquecimentoTab({
       {/* ═══ TOPO: seis números + os mesmos seis como chips ════════════════════════ */}
       <EnriquecimentoTopoNumeros
         resumo={resumo}
-        total={rowsModo.length}
+        total={rowsVM.length}
         filtro={filtroGrupo}
         onFiltro={(g) => { setFiltroGrupo(g); setSelecionadoId(null); }}
         /* ⚠ O CHIP CONTA O QUE A LISTA MOSTRA — 133e item G. Com o total do mês no chip e o
@@ -1016,21 +1178,45 @@ export function MesaEnriquecimentoTab({
       <div className="flex h-8 w-full shrink-0 flex-nowrap items-center gap-1.5 overflow-hidden rounded-lg border bg-card px-2">
         {/* ⚠ `Select` DA CASA, NUNCA `<select>` NATIVO: o menu do sistema operacional abre
             com outra fonte e outro idioma em cada máquina. */}
-        <Select value={sessaoId ?? ''}
-          onValueChange={(id) => { setSessaoId(id); setFiltroConta('todas'); setSelecionadoId(null); }}>
-          {/* ⚠ A SESSÃO É O QUE CEDE — 133e item C. Ela era 260px fixos e empurrava a barra
-              para além do container em 1280; agora ela ELÁSTICA entre 160 e 320 e trunca,
-              enquanto os controles de largura fixa (conta, ordem) e os botões não encolhem.
-              Quem cede é o texto mais longo, nunca o botão. */}
-          <SelectTrigger className="h-6 min-w-[160px] max-w-[320px] flex-1 text-[11px]">
-            <SelectValue placeholder="— nenhuma importação —" />
-          </SelectTrigger>
-          <SelectContent>
-            {sessoesVM.map((sv) => (
-              <SelectItem key={sv.id} value={sv.id} className="text-[11px]">{sv.label}</SelectItem>
+        {/* ⚠ VIROU `DropdownMenu` PORQUE CADA ITEM GANHOU UM SEGUNDO GESTO — 133h item 2.
+            Um `SelectItem` do Radix engole o clique do que estiver dentro dele: o ícone de
+            excluir viraria "escolher esta sessão". O menu permite os dois — a linha escolhe,
+            o ícone pede a exclusão — e continua sendo controle da casa, nunca nativo.
+            ⚠ A SESSÃO É O QUE CEDE — 133e item C. Ela era 260px fixos e empurrava a barra
+            para além do container em 1280; agora é ELÁSTICA entre 160 e 320 e trunca,
+            enquanto os controles de largura fixa e os botões não encolhem. */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button type="button"
+              className="flex h-6 min-w-[160px] max-w-[320px] flex-1 items-center gap-1 rounded-md border border-input bg-background px-2 text-left text-[11px] hover:bg-muted/50">
+              <span className="min-w-0 flex-1 truncate" title={sessaoLabel ?? undefined}>
+                {sessaoLabel ?? '— nenhuma importação —'}
+              </span>
+              <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="max-h-[60vh] w-[340px] overflow-y-auto">
+            {sessoesDoMesVM.length === 0 ? (
+              <div className="px-2 py-3 text-center text-[10px] text-muted-foreground">
+                Nenhuma importação para {mesDaRegua && anoDaRegua ? `${String(mesDaRegua).padStart(2, '0')}/${anoDaRegua}` : 'este mês'}.
+              </div>
+            ) : sessoesDoMesVM.map((sv) => (
+              <DropdownMenuItem key={sv.id} className="gap-1 text-[11px]"
+                onSelect={() => { setSessaoId(sv.id); setFiltroConta('todas'); setSelecionadoId(null); }}>
+                <span className="min-w-0 flex-1 truncate" title={sv.label}>{sv.label}</span>
+                {/* ⚠ `preventDefault` NO ÍCONE: sem ele o menu fecha e a confirmação inline
+                    nasce sem que ninguém a veja — o gesto de pedir a exclusão não é o de
+                    escolher a sessão. */}
+                <button type="button"
+                  title={`Excluir a importação de ${sv.total} linha(s)`}
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); void pedirExclusao(sv); }}
+                  className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive">
+                  <Trash2 className="h-[14px] w-[14px]" />
+                </button>
+              </DropdownMenuItem>
             ))}
-          </SelectContent>
-        </Select>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <Button size="sm" variant="outline" className="h-6 shrink-0 px-2 text-[11px]"
           onClick={() => setImportOpen(true)}>
           ⬆ Importar planilha
@@ -1061,26 +1247,6 @@ export function MesaEnriquecimentoTab({
           />
         </div>
 
-        <Select value={ordenacao} onValueChange={(v) => setOrdenacao(v as Ordenacao)}>
-          <SelectTrigger className="h-6 w-[150px] shrink-0 text-[11px]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="planilha" className="text-[11px]">Ordem da planilha</SelectItem>
-            <SelectItem value="valor" className="text-[11px]">Maior valor</SelectItem>
-            <SelectItem value="data" className="text-[11px]">Pagamento (mais recente)</SelectItem>
-          </SelectContent>
-        </Select>
-
-        {/* PR-U2d-1 — burn-down: "Pendentes" esconde o que já acabou. */}
-        <div className="flex shrink-0 overflow-hidden rounded border">
-          {(['todas', 'pendentes'] as const).map((m) => (
-            <button key={m} type="button" onClick={() => setFiltroModo(m)}
-              className={`h-6 px-2 text-[11px] capitalize ${
-                filtroModo === m ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted/50'}`}>
-              {m}
-            </button>
-          ))}
-        </div>
-
         <Button size="sm" variant="outline" className="h-6 shrink-0 px-2 text-[11px]"
           disabled={mesaAmpliadaVazia}
           title={mesaAmpliadaVazia ? 'Nenhuma linha neste recorte.' : 'Revisar campo a campo e salvar — em tela cheia.'}
@@ -1088,6 +1254,29 @@ export function MesaEnriquecimentoTab({
           Mesa ampliada
         </Button>
       </div>
+
+      {/* ⚠ A CONFIRMAÇÃO É INLINE E EFÊMERA — 133h item 2: ela só ocupa altura enquanto
+          existe, e some no gesto seguinte. Um diálogo modal para apagar uma importação de
+          rascunho seria pesado demais para o que o banco já protege (linha gravada recusa),
+          e leve demais seria apagar no primeiro clique. */}
+      {exclusaoPendente && (
+        <div className="flex shrink-0 items-center gap-2 rounded-lg border border-amber-300 bg-amber-50/60 px-2 py-1 dark:border-amber-800 dark:bg-amber-950/20">
+          <span className="min-w-0 flex-1 truncate text-[10px] text-amber-900 dark:text-amber-200"
+            title={exclusaoPendente.label}>
+            <b className="tabular-nums">{exclusaoPendente.linhas}</b> linhas · nenhuma gravada — excluir{' '}
+            {exclusaoPendente.label}?
+          </span>
+          <Button type="button" size="sm" className="h-6 shrink-0 px-2 text-[10px]"
+            disabled={isExcluindoSessao}
+            onClick={() => { void confirmarExclusao(); }}>
+            {isExcluindoSessao ? 'Excluindo…' : 'Excluir'}
+          </Button>
+          <Button type="button" size="sm" variant="outline" className="h-6 shrink-0 px-2 text-[10px]"
+            onClick={() => setExclusaoPendente(null)}>
+            Não
+          </Button>
+        </div>
+      )}
 
       {isFetching && <div className="shrink-0 px-1 text-[10px] text-muted-foreground">Carregando…</div>}
 
@@ -1142,7 +1331,15 @@ export function MesaEnriquecimentoTab({
       {/* ═══ RODAPÉ FIXO ══════════════════════════════════════════════════════════ */}
       <div className="flex shrink-0 flex-wrap items-center gap-2 rounded-lg border bg-muted/30 px-2 py-1">
         <span className="min-w-0 flex-1 text-[10px] leading-tight text-muted-foreground">
-          Nada foi gravado no lançamento ainda. Gravar aplica os{' '}
+          {/* ⚠ 133h item 11 — O RODAPÉ DIZ QUAL DOS DOIS TOCA O FINANCEIRO. A tela tinha
+              "Salvar" e "Confirmar" lado a lado e não dizia em lugar nenhum que só um
+              deles grava; o operador confirmava a sessão inteira achando que estava
+              gravando, e nada chegava ao lançamento. */}
+          <b>Salvar</b> grava no lançamento agora. <b>Confirmar</b> só marca a linha como revisada.
+          {' · '}
+          <b className="tabular-nums">{revisadas}</b>/<b className="tabular-nums">{rowsVM.length}</b> revisado
+          {' · '}
+          Gravar aplica os{' '}
           <b className="tabular-nums">{resumo.atualizam.qtd}</b> que atualizam, os que você decidiu e os
           agrupamentos que você aceitou. Os sem par ficam no relatório.
           {editadasIds.size > 0 && (
@@ -1202,6 +1399,10 @@ export function MesaEnriquecimentoTab({
         aplicandoGrupo={aplicandoGrupo}
         faixas={faixasDaLinha}
         onOrdemVisivel={setOrdemDaMesa}
+        /* 133h item 6 — o cadastro, para o filtro de conta da Mesa agrupar por tipo. */
+        contas={contasBancarias}
+        /* 133h item 12 — quem veio do extrato tem campos que a RPC ignora. */
+        conciliadosIds={conciliados}
       />
 
       <EnriquecimentoImportarDialog

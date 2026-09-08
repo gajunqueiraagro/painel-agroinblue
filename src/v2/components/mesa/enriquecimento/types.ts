@@ -20,6 +20,19 @@ export interface EnriqSessaoVM {
   exatos: number;
   ambiguos: number;
   aplicados: number;
+  /**
+   * 133h item 2 — o mês da planilha e o carimbo, crus.
+   *
+   * ⚠ O `label` NÃO SERVE PARA FILTRAR. Ele é texto de apresentação ("Mai/2026 · Imp 02 ·
+   * …"), e peneirar o seletor pelo mês da régua lendo o rótulo seria voltar a comparar o
+   * que a tela escreveu em vez do que o banco guardou — o mesmo erro do `initialMes` que
+   * comparava `8` com `'08'`. `anoMes` é o `excel_ano_mes` da sessão, em 'YYYY-MM'.
+   */
+  anoMes: string | null;
+  /** ISO de `max(created_at)` — a ordem do seletor é por ele, mais recente primeiro. */
+  criadaEm: string;
+  /** Total de linhas da sessão — o número que a confirmação de exclusão mostra. */
+  total: number;
 }
 
 // PR-P0-2 — contadores cobrem TODOS os status e somam ao Total; `aplicados` é
@@ -100,6 +113,9 @@ export interface EnriqEdicao {
   /* Os valores EFETIVOS do lançamento, para o editor não abrir vazio sobre um campo que
      já tem valor — mesmo motivo do `fazendaIdAtual`. */
   safraIdAtual: string | null;
+  /* 133h item 10 — os dois que faltavam para saber se o Resultado difere do sistema. */
+  subcentroAtual: string | null;
+  favorecidoIdAtual: string | null;
   contaBancariaIdAtual: string | null;
   dataCompetenciaAtual: string | null;
   dataVencimentoAtual: string | null;
@@ -115,6 +131,8 @@ export interface EnriqRowVM {
   estado: EnriqEstado;       // PR-U2d-1 — estado operacional (leitura principal)
   aplicado: boolean;
   temMatch: boolean;        // lanc_id != null → pode Salvar (sem_match/ambíguo não resolvido = false)
+  /** O id do lançamento casado — 133h item 12, para saber se ele veio do extrato. */
+  lancId: string | null;
   /**
    * O RESULTADO não tem conta do plano — 133e item E. É a única trava de subcentro que
    * resta, e ela é sobre o que vai ser gravado, não sobre o que a planilha trouxe.
@@ -149,6 +167,23 @@ export interface EnriqRowVM {
   entradaOuSaida: 'entrada' | 'saida' | null;
   /** A conta bancária do lançamento — contexto da lista (129d item 8). */
   contaBancaria: string | null;
+  /**
+   * O ID da conta efetiva da linha — 133h item 6.
+   *
+   * ⚠ FILTRAR POR NOME ERA O DEFEITO. A Mesa ampliada peneirava por `contaBancaria`, e nome
+   * não é identidade: duas contas podem exibir o mesmo texto, uma renomeada muda o filtro
+   * debaixo do operador, e a lista não tinha como agrupar por tipo (o tipo mora no
+   * cadastro, e o cadastro se acha pelo id). `'__sem__'` quando a linha não tem conta.
+   */
+  contaId: string;
+  /**
+   * Quando esta linha foi confirmada como revisada — 133h item 9. `null` = ninguém marcou.
+   *
+   * ⚠ É O QUE DÁ TRÊS ESTADOS À BOLINHA: cinza (ninguém olhou), azul (revisada, ainda não
+   * gravada) e verde (gravada). Sem ela eram dois, e conferir uma linha não deixava rastro
+   * nenhum na lista — o operador reabria a sessão e não sabia onde tinha parado.
+   */
+  revisadaEm: string | null;
   /** A descrição que veio da PLANILHA — a identidade da linha na lista do passo 2 (133b). */
   descricaoExcel: string;
   /**

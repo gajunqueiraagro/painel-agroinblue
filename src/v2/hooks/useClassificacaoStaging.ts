@@ -117,6 +117,9 @@ export interface ClassificacaoStagingPreviewRow {
   lanc_favorecido_nome_atual: string | null;
   lanc_conta_bancaria_id: string | null;
   lanc_conta_bancaria_nome: string | null;
+  /* 133h item 9 — a marca de revisada, persistida (migration 20260908105039). */
+  revisado_em: string | null;
+  revisado_por: string | null;
   lanc_conta_destino_id: string | null;
   lanc_conta_destino_nome: string | null;
   lanc_fazenda_id: string | null;
@@ -548,6 +551,59 @@ export function useClassificacaoStaging(
     },
   });
 
+  /**
+   * Apagar uma sessão inteira do staging — 133h item 2 (migration 20260908101255).
+   *
+   * ⚠ QUEM DECIDE SE PODE É O BANCO, e por isso a tela não conta nada: a RPC recusa quando
+   * a sessão tem linha gravada (`aplicado` ou os quatro `match_status` de resolvida) e
+   * devolve `{ok:false, motivo:'sessao_com_linhas_gravadas'}`. Uma contagem no front seria
+   * uma segunda régua para a mesma pergunta, e as duas divergiriam na primeira regra nova.
+   *
+   * ⚠ `p_simular` É O ENSAIO: a mesma RPC responde quantas linhas sairiam SEM apagar nada,
+   * e é isso que a confirmação inline mostra. O gesto de apagar é o mesmo com
+   * `p_simular=false` — sem uma segunda função que pudesse divergir da primeira.
+   */
+  const excluirSessaoMutation = useMutation({
+    mutationFn: async (params: { sessao_id: string; simular: boolean }): Promise<ExcluirSessaoResult> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado do repo
+      const { data, error } = await (supabase as any).rpc('fn_classificacao_excluir_sessao', {
+        p_sessao_id: params.sessao_id,
+        p_simular: params.simular,
+      });
+      if (error) throw error;
+      return (data ?? {}) as ExcluirSessaoResult;
+    },
+    onSuccess: (_d, variables) => {
+      /* Só o que apagou de verdade mexe nas listas; o ensaio não muda nada. */
+      if (!variables.simular) {
+        qc.invalidateQueries({ queryKey: queryKeyStaging(variables.sessao_id) });
+        if (clienteId) qc.invalidateQueries({ queryKey: ['classificacao-sessoes', clienteId] });
+      }
+    },
+  });
+
+  /**
+   * "Confirmar" deixa de viver na memória da tela — 133h item 9 (migration 20260908105039).
+   *
+   * ⚠ ELE SUMIA NO RELOAD, e Gabriel refez linhas por causa disso (07:47). O `revisei` era
+   * um `useState` do container: fechar a aba, trocar de sessão ou recarregar apagava a
+   * revisão de tudo o que já tinha sido conferido — e nada na tela avisava.
+   * ⚠ NÃO É GRAVAÇÃO NO LANÇAMENTO: marca a LINHA da staging. Quem toca o Financeiro é o
+   * Salvar; esta RPC só escreve `revisado_em`/`revisado_por` no staging.
+   */
+  const marcarRevisadaMutation = useMutation({
+    mutationFn: async (params: { staging_id: string; revisada: boolean }): Promise<{ ok?: boolean }> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado do repo
+      const { data, error } = await (supabase as any).rpc('fn_classificacao_marcar_revisada', {
+        p_staging_id: params.staging_id,
+        p_revisada: params.revisada,
+      });
+      if (error) throw error;
+      return (data ?? {}) as { ok?: boolean };
+    },
+    onSuccess: invalidarSessaoAtual,
+  });
+
   return {
     staging: stagingQuery.data ?? [],
     isLoading: stagingQuery.isLoading,
@@ -582,7 +638,29 @@ export function useClassificacaoStaging(
     // 133c-a — N linhas = 1 lançamento.
     splitSubstituir: splitSubstituirMutation.mutateAsync,
     isSubstituindo: splitSubstituirMutation.isPending,
+    // 133h item 2 — apagar uma sessão sem linha gravada.
+    excluirSessao: excluirSessaoMutation.mutateAsync,
+    isExcluindoSessao: excluirSessaoMutation.isPending,
+    // 133h item 9 — "Confirmar" persistido.
+    marcarRevisada: marcarRevisadaMutation.mutateAsync,
+    isMarcandoRevisada: marcarRevisadaMutation.isPending,
   };
+}
+
+/**
+ * O que `fn_classificacao_excluir_sessao` devolve.
+ *
+ * ⚠ `ok:false` NÃO É ERRO DE REDE: é a recusa da regra, com o motivo e o número de linhas
+ * gravadas para a tela poder dizer POR QUE não dá. A RPC só lança em sessão inexistente e
+ * em falta de permissão.
+ */
+export interface ExcluirSessaoResult {
+  ok: boolean;
+  motivo?: string;
+  linhas?: number;
+  gravadas?: number;
+  apagadas?: number;
+  simulado?: boolean;
 }
 
 // ── PR-P4: listagem read-only de sessões de classificação (para reabrir/trocar) ──

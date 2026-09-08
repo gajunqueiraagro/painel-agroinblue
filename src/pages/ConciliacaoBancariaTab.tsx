@@ -981,7 +981,15 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
             sempre, mesmo com `lancamentos` vazio — conferido antes de tirar o `loading`,
             porque tirar um dos dois guardas de nada adiantaria se o outro caísse junto. */}
         {selectedCard && vistaExtrato === 'enriquecer' && (
-          <div className="space-y-2 md:flex-1 md:min-h-0 md:overflow-y-auto">
+          /* ⚠ ESTE DIV ERA O SCROLLPORT DA PÁGINA — 133h item 4, e era ELE que tirava o
+             cabeçalho, os cards e a toolbar da tela. O `EnriquecerTresPassos` já nasce
+             `flex-1 min-h-0` esperando um pai com altura; num pai que só rola, `flex-1` não
+             tem contra o que medir, tudo cresce e quem rola é a página inteira. Trocar
+             `overflow-y-auto` por uma coluna flex sem rolagem devolve a altura ao filho, e a
+             rolagem volta para dentro das listas — que é onde o A21 a quer.
+             ⚠ FIXAR CABEÇALHO É PÔR A ROLAGEM NO NÍVEL CERTO, não acrescentar `sticky`: um
+             `sticky` aqui ancoraria neste scrollport e subiria junto com ele. */
+          <div className="space-y-2 md:flex md:min-h-0 md:flex-1 md:flex-col md:overflow-hidden">
             {/* ⚠ OS DOIS CAMINHOS VIRARAM UM — 133b, e a decisão de produto veio no
                 envelope. O B-22a deixou a planilha AO LADO da Mesa justamente por não
                 ter recebido essa decisão; o custo medido foi o operador não saber qual

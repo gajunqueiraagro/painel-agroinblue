@@ -112,9 +112,17 @@ export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
   const favRes = row.will_set_favorecido ? 'grava' : 'mantém';
   const favTom: EnriqTom = row.will_set_favorecido ? 'muda' : 'neutro';
 
-  // C1 — Sistema do Banco = a MESMA conta que a lista mostra (COALESCE origem/staging/excel),
-  // não só conta_bancaria_nome; evita '—' no detalhe quando a lista já exibe a conta.
-  const banco = row.lanc_conta_bancaria_nome ?? row.conta_filtro_nome ?? row.excel_conta_origem;
+  /* ⚠ A CONTA DO SISTEMA SEGUE O CASE DO CONCILIAR — 133h item 7. Ela era
+     `lanc_conta_bancaria_nome ?? conta_filtro_nome ?? excel_conta_origem`, e as duas pontas
+     do fallback estavam erradas: a primeira é NULL em 426 das 481 entradas do Raul (a conta
+     de uma entrada mora em `conta_destino_id`), e a última exibia o TEXTO DA PLANILHA no
+     lugar do que o banco tem — a tela concordando consigo mesma por construção.
+     ⚠ `conta_filtro_nome` FICA COMO SEGUNDO RECURSO, e só ele: é a conta que a própria
+     staging resolveu (origem/destino do de-para), útil na linha sem lançamento. O texto do
+     Excel saiu do fallback — ele é a coluna "Excel" da comparação, não a do sistema. */
+  const contaSistema = contaEfetivaNome(
+    row.lanc_tipo_operacao, row.lanc_conta_bancaria_nome, row.lanc_conta_destino_nome);
+  const banco = contaSistema ?? row.conta_filtro_nome;
   // Descrição/Produto do Sistema = descricao do lançamento (unificado em "Produto / Descrição",
   // P0-3); fallback para observacao quando não há descricao.
   const descricao = row.lanc_descricao ?? row.lanc_observacao;
@@ -288,7 +296,11 @@ export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
     dataPagamento: row.proposto_data_pagamento,
     observacao: row.proposto_observacao,
     safraIdAtual: row.lanc_safra_id,
-    contaBancariaIdAtual: row.lanc_conta_bancaria_id,
+    subcentroAtual: row.lanc_subcentro_atual,
+    favorecidoIdAtual: row.lanc_favorecido_id_atual,
+    /* 133h item 7 — a conta EFETIVA, não a coluna crua: entrada lê o destino. */
+    contaBancariaIdAtual: contaEfetivaId(
+      row.lanc_tipo_operacao, row.lanc_conta_bancaria_id, row.lanc_conta_destino_id),
     dataCompetenciaAtual: row.lanc_data_competencia,
     dataVencimentoAtual: row.lanc_data_vencimento,
     dataPagamentoAtual: row.lanc_data_pagamento,
@@ -350,6 +362,10 @@ export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
        fonte da string, crua. `null` quando não há valor de nenhum dos dois lados. */
     valorNum: row.excel_valor ?? row.lanc_valor ?? null,
     entradaOuSaida,
+    /* 133h item 6 — a identidade da conta, para o filtro da Mesa deixar de comparar nome. */
+    contaId: contaDaLinhaStaging(row).id,
+    revisadaEm: row.revisado_em,
+    lancId: row.lanc_id,
     contaBancaria: banco,
     /* ⚠ A IDENTIDADE DA LINHA É A DESCRIÇÃO DA PLANILHA — 133b. A lista do passo 2 mostra
        o que o operador escreveu no Excel, não o que o banco importou: é por aquele texto
@@ -393,6 +409,9 @@ export function toSessoesVM(sessoes: SessaoClassificacaoResumo[] | undefined | n
       exatos: s.exatos,
       ambiguos: s.ambiguos,
       aplicados: s.aplicados,
+      anoMes: s.excel_ano_mes,
+      criadaEm: s.criada_em,
+      total: s.total,
     });
   }
   return [...asc].reverse().map((s) => vmById.get(s.sessao_id)!).filter(Boolean);
@@ -401,11 +420,33 @@ export function toSessoesVM(sessoes: SessaoClassificacaoResumo[] | undefined | n
 // ── Selectors (extração da lógica inline do MesaClassificacaoTab) ────────────
 
 // Contas presentes na sessão (para o filtro visual). '__sem__' = sem conta canônica.
+/**
+ * A conta pela qual uma linha do staging é filtrada — 133h item 6/7.
+ *
+ * ⚠ A VIEW JÁ FOI CONSERTADA (migration 20260908114919), E MESMO ASSIM A REGRA MORA AQUI.
+ * `conta_filtro_id` era `COALESCE(l.conta_bancaria_id, s.conta_origem_id, s.conta_destino_id)`
+ * e nunca olhava `l.conta_destino_id`, que é onde mora a conta de uma ENTRADA: 164 das 481
+ * entradas do Raul caíam em "Sem conta" com a conta gravada no lançamento. A migration
+ * acrescentou `l.conta_destino_id` ao COALESCE e as 164 viraram ZERO — medido.
+ * ⚠ MAS COALESCE NÃO É O `CASE` DO CONCILIAR. Numa entrada com as DUAS pontas preenchidas
+ * (55 no Raul), o COALESCE devolve `conta_bancaria_id` e a régua do Conciliar devolve o
+ * destino. Hoje isso não separa ninguém — nas 55, as duas colunas apontam para a mesma
+ * conta (medido: zero divergências) —, mas nada no banco garante que continuem iguais. O
+ * front fica com o `CASE`, que é a régua soberana, e usa `conta_filtro_id` só como segundo
+ * recurso: ele é quem responde pela linha SEM lançamento, onde a conta é a do de-para.
+ */
+export function contaDaLinhaStaging(r: ClassificacaoStagingPreviewRow): { id: string; nome: string } {
+  const idEfetivo = contaEfetivaId(r.lanc_tipo_operacao, r.lanc_conta_bancaria_id, r.lanc_conta_destino_id);
+  const nomeEfetivo = contaEfetivaNome(r.lanc_tipo_operacao, r.lanc_conta_bancaria_nome, r.lanc_conta_destino_nome);
+  const id = idEfetivo ?? r.conta_filtro_id ?? '__sem__';
+  const nome = (idEfetivo ? nomeEfetivo : r.conta_filtro_nome) ?? r.conta_filtro_nome ?? 'Sem conta';
+  return { id, nome };
+}
+
 export function listarContas(staging: ClassificacaoStagingPreviewRow[]): EnriqContaVM[] {
   const m = new Map<string, EnriqContaVM>();
   for (const r of staging) {
-    const id = r.conta_filtro_id ?? '__sem__';
-    const nome = r.conta_filtro_nome ?? 'Sem conta';
+    const { id, nome } = contaDaLinhaStaging(r);
     const cur = m.get(id) ?? { id, nome, total: 0 };
     cur.total++;
     m.set(id, cur);
@@ -422,7 +463,7 @@ export function filtrarPorConta(
 ): ClassificacaoStagingPreviewRow[] {
   return contaId === 'todas'
     ? staging
-    : staging.filter((r) => (r.conta_filtro_id ?? '__sem__') === contaId);
+    : staging.filter((r) => contaDaLinhaStaging(r).id === contaId);
 }
 
 export function contarContagens(staging: ClassificacaoStagingPreviewRow[]): EnriqContagensVM {
@@ -574,4 +615,154 @@ export function escolherMelhorSessaoId(sessoes: SessaoClassificacaoResumo[] | un
      O que mudou é que nenhuma delas se impõe sozinha na abertura. */
   const ordenadas = [...sessoes].sort((a, b) => b.criada_em.localeCompare(a.criada_em));
   return ordenadas[0]?.sessao_id ?? null;
+}
+
+/**
+ * As sessões do MÊS DA RÉGUA, mais recente primeiro — 133h item 2.
+ *
+ * ⚠ O SELETOR MOSTRAVA A HISTÓRIA INTEIRA. São 166 sessões acumuladas no NJ, e o operador
+ * que está conciliando agosto via as de maio, junho e julho na mesma lista — com rótulos
+ * quase iguais, porque o que muda entre elas é o carimbo. Peneirar pelo mês não esconde
+ * trabalho: sessão de outro mês é trabalho de outro mês.
+ *
+ * ⚠ `null` NA RÉGUA DEVOLVE TUDO, e é a saída honesta: sem mês não há como peneirar, e uma
+ * lista vazia diria "não há importação" onde o certo é "não sei qual mês você quer".
+ */
+export function sessoesDoMes(
+  sessoes: readonly EnriqSessaoVM[],
+  anoMesRegua: string | null | undefined,
+): EnriqSessaoVM[] {
+  const base = anoMesRegua
+    ? sessoes.filter((s) => s.anoMes === anoMesRegua)
+    : [...sessoes];
+  return base.sort((a, b) => b.criadaEm.localeCompare(a.criadaEm));
+}
+
+/**
+ * Um lançamento órfão tem candidato a duplicata? — 133h item 5.
+ *
+ * ⚠ MESMO VALOR, MESMA CONTA, ±5 DIAS, e nada além disso. "Cancelar como duplicado" apaga
+ * dinheiro do mês; oferecê-lo em toda linha convida a usá-lo como faxina, e a primeira
+ * planilha incompleta levaria o mês junto. O botão só existe quando a tela consegue APONTAR
+ * o par — se não há par, não há o que duplicar, e sobra "Abrir no Financeiro".
+ *
+ * ⚠ A COMPARAÇÃO É SOBRE A LISTA JÁ CARREGADA, sem ida ao banco: o universo é o dos órfãos
+ * do mês, que é justamente onde uma importação repetida deixa os dois lados do par.
+ *
+ * ⚠ CENTAVOS EM INTEIRO. Comparar `number` de ponto flutuante faria 165.88 !== 165.88 em
+ * casos que já mordem este repo.
+ */
+export function temCandidatoDuplicata(
+  alvo: { lanc_id: string; valor: number | null; data_pagamento: string | null; conta_nome: string | null },
+  lista: readonly { lanc_id: string; valor: number | null; data_pagamento: string | null; conta_nome: string | null }[],
+  diasTolerancia = 5,
+): boolean {
+  if (alvo.valor === null || !alvo.data_pagamento) return false;
+  const centavos = Math.round(alvo.valor * 100);
+  const dia = Date.parse(`${alvo.data_pagamento}T00:00:00Z`);
+  if (Number.isNaN(dia)) return false;
+  const janela = diasTolerancia * 86_400_000;
+  return lista.some((o) => {
+    if (o.lanc_id === alvo.lanc_id) return false;
+    if (o.valor === null || !o.data_pagamento) return false;
+    if (Math.round(o.valor * 100) !== centavos) return false;
+    if ((o.conta_nome ?? null) !== (alvo.conta_nome ?? null)) return false;
+    const d = Date.parse(`${o.data_pagamento}T00:00:00Z`);
+    return !Number.isNaN(d) && Math.abs(d - dia) <= janela;
+  });
+}
+
+/**
+ * A conta do lançamento, pela régua do Conciliar — 133h item 7.
+ *
+ * ⚠ ENTRADA MORA EM `conta_destino_id`, E ESTE É O DEFEITO QUE O ENVELOPE DESCREVE. Medido
+ * no Proto (cliente Raul, 18.256 linhas de staging com lançamento):
+ *     2-Saídas          17.732 linhas — 17.732 com conta_bancaria_id, 0 com destino
+ *     1-Entradas           481 linhas —     55 com conta_bancaria_id, 481 com destino
+ *                                          426 delas SÓ com destino
+ *     3-Transferências      43 linhas — as duas pontas preenchidas
+ * Ler só `conta_bancaria_id` devolvia `null` em 426 entradas: o Resultado mostrava "—" com
+ * a conta certa gravada dos dois lados, e "difere" quando a planilha trazia a conta.
+ *
+ * ⚠ É A MESMA REGRA DO CONCILIAR — `CASE tipo_operacao WHEN '1-Entradas' THEN
+ * conta_destino_id ELSE conta_bancaria_id`. Uma segunda régua aqui faria a Mesa e a
+ * conciliação discordarem sobre em que conta o dinheiro entrou.
+ *
+ * ⚠ TRANSFERÊNCIA TEM DUAS, e nenhuma das duas é "a" conta: quem precisa das duas usa
+ * `contasDoLancamento`. Aqui ela responde pela ORIGEM, que é de onde o dinheiro saiu — o
+ * mesmo lado que o `ELSE` do Conciliar escolhe.
+ */
+export function contaEfetivaId(
+  tipoOperacao: string | null | undefined,
+  contaBancariaId: string | null | undefined,
+  contaDestinoId: string | null | undefined,
+): string | null {
+  return (tipoOperacao === '1-Entradas' ? contaDestinoId : contaBancariaId) ?? null;
+}
+
+/** O par (origem, destino) de uma transferência; para os demais tipos, só a efetiva. */
+export function contasDoLancamento(
+  tipoOperacao: string | null | undefined,
+  contaBancariaId: string | null | undefined,
+  contaDestinoId: string | null | undefined,
+): string[] {
+  const ids = tipoOperacao === '3-Transferências'
+    ? [contaBancariaId, contaDestinoId]
+    : [contaEfetivaId(tipoOperacao, contaBancariaId, contaDestinoId)];
+  return ids.filter((x): x is string => !!x);
+}
+
+/**
+ * O NOME da conta efetiva, com o mesmo CASE — 133h item 7.
+ *
+ * ⚠ SÓ NOMES DO LANÇAMENTO, sem cair no texto da planilha. O fallback antigo terminava em
+ * `excel_conta_origem`, e era ele que fazia o campo do sistema exibir o que o operador
+ * escreveu no Excel como se fosse o que o banco tem — a tela concordando consigo mesma por
+ * construção. Sem conta no lançamento, `null`: traço é ausência, e é a verdade.
+ */
+export function contaEfetivaNome(
+  tipoOperacao: string | null | undefined,
+  contaBancariaNome: string | null | undefined,
+  contaDestinoNome: string | null | undefined,
+): string | null {
+  return (tipoOperacao === '1-Entradas' ? contaDestinoNome : contaBancariaNome) ?? null;
+}
+
+/**
+ * O que o Resultado muda no lançamento — 133h item 10.
+ *
+ * ⚠ `will_change_anything` DA VIEW NÃO RESPONDE ESTA PERGUNTA, e é medição no SQL dela:
+ * ela é `(lanc.subcentro IS NULL E há proposto) OU (lanc.favorecido_id IS NULL E há
+ * proposto)` — DOIS campos, e só quando o lançamento está VAZIO neles. Safra, conta, as
+ * três datas, documento e observação não entram. Era por isso que uma linha com safra
+ * 25/26 -> 26/27 mostrava "Confirmar e Próximo": a tela dizia que não havia nada a gravar,
+ * o operador confirmava, e a safra nova ficava no staging para sempre.
+ *
+ * ⚠ COMPARA O EFETIVO, NÃO A PROPOSTA CRUA. `edicao.subcentro` já é o Resultado (proposta
+ * válida no plano, ou o subcentro do sistema quando a proposta é órfã) — é o que a tela
+ * mostra, e o que o item 13 manda gravar.
+ *
+ * ⚠ CAMPO VAZIO NA PROPOSTA NÃO É DIFERENÇA. O gravador é COALESCE: proposta nula deixa o
+ * lançamento como está. Contá-la como divergência acenderia "Salvar" em toda linha.
+ *
+ * Devolve os RÓTULOS, em português de operador — a tela lista, o `soConfirma` só conta.
+ */
+export function diferencasDoResultado(edicao: EnriqEdicao): string[] {
+  const difs: string[] = [];
+  const cmp = (rotulo: string, proposto: string | null, atual: string | null) => {
+    if (proposto === null || proposto === '') return;
+    if (proposto !== atual) difs.push(rotulo);
+  };
+  cmp('conta do plano', edicao.subcentro, edicao.subcentroAtual);
+  cmp('fornecedor', edicao.favorecidoId, edicao.favorecidoIdAtual);
+  cmp('fazenda', edicao.fazendaId, edicao.fazendaIdAtual);
+  cmp('produto / descrição', edicao.produto, edicao.descricaoAtual);
+  cmp('documento', edicao.numeroDocumento, edicao.numeroDocumentoAtual);
+  cmp('safra', edicao.safraId, edicao.safraIdAtual);
+  cmp('conta bancária', edicao.contaBancariaId, edicao.contaBancariaIdAtual);
+  cmp('data de competência', edicao.dataCompetencia, edicao.dataCompetenciaAtual);
+  cmp('data de vencimento', edicao.dataVencimento, edicao.dataVencimentoAtual);
+  cmp('data de pagamento', edicao.dataPagamento, edicao.dataPagamentoAtual);
+  cmp('observação', edicao.observacao, edicao.observacaoAtual);
+  return difs;
 }

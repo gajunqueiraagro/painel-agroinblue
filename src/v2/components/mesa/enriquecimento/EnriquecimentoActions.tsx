@@ -34,13 +34,29 @@ export interface EnriquecimentoActionsProps {
   reverterDisabled?: boolean;      // Reverter
   aplicarTodosDisabled?: boolean;  // acelerador em lote + Revisado
   isBusy?: boolean;                // uma escrita em andamento
+  /**
+   * 133h item 12 — em que a planilha diverge do extrato, nesta linha.
+   *
+   * ⚠ AVISO, NUNCA TRAVA. A RPC já ignora estes campos quando o lançamento veio do extrato;
+   * o que faltava era o operador ver a divergência ANTES de salvar, em vez de descobrir no
+   * fechamento que o arquivo dele dizia outra data. Lista vazia = nada a dizer.
+   */
+  divergenciasDoExtrato?: readonly string[];
+  /**
+   * 133h adendo item 15 — o que o banco respondeu na ÚLTIMA tentativa de gravar esta linha.
+   *
+   * ⚠ O TOAST SOZINHO NÃO BASTA: ele some em segundos e o operador fica com um botão que
+   * "não fez nada" e nenhuma explicação na tela. O motivo fica escrito, em vermelho, ao
+   * lado do botão — até a próxima tentativa ou até trocar de linha.
+   */
+  erroBanco?: string | null;
 }
 
 export function EnriquecimentoActions({
   posicao, onAnterior, onProximo, canAnterior, canProximo,
   revisado, onRevisado, onSalvar, onSalvarProximo, onReverter, onAplicarTodos, nAplicaveis,
   salvarDisabled, salvarMotivo, soConfirma, onConfirmarProximo,
-  reverterDisabled, aplicarTodosDisabled, isBusy,
+  reverterDisabled, aplicarTodosDisabled, isBusy, divergenciasDoExtrato, erroBanco,
 }: EnriquecimentoActionsProps) {
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/30 px-2 py-1 md:shrink-0">
@@ -58,8 +74,11 @@ export function EnriquecimentoActions({
         title={soConfirma ? 'O Resultado já confere com o sistema: nada a gravar. Marca como revisado e vai para a próxima.' : (salvarMotivo ?? undefined)}>
         {soConfirma ? 'Confirmar e Próximo' : 'Salvar e Próximo'}
       </Button>
+      {/* ⚠ 133h item 8 — O MOTIVO EM ÂMBAR, NÃO EM CINZA. Ele estava na cor do texto
+          secundário, ao lado de um botão apagado: dois cinzas dizendo "não dá" sem que
+          nenhum chamasse o olho. Âmbar é a cor de "falta algo" no resto da tela. */}
       {salvarMotivo && !soConfirma && (
-        <span className="text-[10px] text-muted-foreground">{salvarMotivo}</span>
+        <span className="text-[10px] font-medium text-amber-700 dark:text-amber-400">{salvarMotivo}</span>
       )}
       <Button size="sm" variant="outline" className="h-6 text-[11px] px-2" onClick={onReverter} disabled={reverterDisabled || isBusy}>
         ↺ Reverter
@@ -74,6 +93,27 @@ export function EnriquecimentoActions({
       <span className="text-[10px] text-muted-foreground tabular-nums">{posicao}</span>
 
       <div className="flex-1" />
+
+      {/* 133h adendo item 15 — o erro do banco fica na tela, não só no toast. */}
+      {erroBanco && (
+        <span className="w-full text-[10px] font-medium text-red-700 dark:text-red-400"
+          title={erroBanco}>
+          Não gravou — o banco recusou: {erroBanco}
+        </span>
+      )}
+
+      {/* 133h item 12 — a divergência com o extrato, escrita, antes de gravar. */}
+      {divergenciasDoExtrato && divergenciasDoExtrato.length > 0 && (
+        <span className="w-full text-[10px] text-amber-700 dark:text-amber-400">
+          Planilha diverge do extrato em: {divergenciasDoExtrato.join(' · ')} — o extrato manda,
+          e estes campos não serão gravados.
+        </span>
+      )}
+
+      {/* 133h item 11 — a mesma frase do rodapé do passo 2: a Mesa também precisa dizê-la. */}
+      <span className="text-[10px] text-muted-foreground">
+        <b>Salvar</b> grava no lançamento agora. <b>Confirmar</b> só marca a linha como revisada.
+      </span>
 
       {/* ── Separador + acelerador secundário (lote) ── */}
       <div className="h-5 w-px bg-border" />

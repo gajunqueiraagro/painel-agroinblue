@@ -16,6 +16,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ContaBancariaSelect, type ContaSelecionavel } from '@/components/shared/ContaBancariaSelect';
 import type { EnriquecimentoListaProps } from './EnriquecimentoLista';
 import type { EnriquecimentoDetalheProps } from './EnriquecimentoDetalhe';
 import type { EnriquecimentoActionsProps } from './EnriquecimentoActions';
@@ -106,11 +107,28 @@ export interface EnriquecimentoMesaModalProps {
    * componente; quem sabe salvar é o pai. Então a ordem sobe, e a navegação desce.
    */
   onOrdemVisivel?: (ids: string[]) => void;
+  /**
+   * 133h item 6 — o cadastro de contas do cliente, para o filtro agrupar por tipo.
+   *
+   * ⚠ ELE VEM DE FORA porque o tipo NÃO está na sessão: o staging carimba id e nome, e a
+   * gaveta (`cc`/`inv`/`cartao`) mora em `financeiro_contas_bancarias`. Sem a lista, o
+   * filtro ainda funciona — só cai todo em "Outros", que é o comportamento honesto de quem
+   * não sabe o tipo, e não uma tela quebrada.
+   */
+  contas?: ContaSelecionavel[];
+  /**
+   * 133h item 12 — os lançamentos com vínculo ativo ao extrato, por id.
+   *
+   * ⚠ PASSA POR AQUI SEM SER LIDO por este componente: quem decide o que travar é a tabela
+   * de campos, que sabe QUAIS campos o extrato manda. Guardar a regra aqui espalharia a
+   * decisão por duas camadas.
+   */
+  conciliadosIds?: ReadonlySet<string>;
 }
 
 export function EnriquecimentoMesaModal({
   open, onOpenChange, sessaoLabel, lista, detalhe, actions, onAplicarAoGrupo, aplicandoGrupo, faixas,
-  onOrdemVisivel,
+  onOrdemVisivel, contas, conciliadosIds,
 }: EnriquecimentoMesaModalProps) {
   /* ⚠ O AGRUPAMENTO SAIU DA MESA — 133e item A: varrer a sessão por fornecedor/subcentro é
      trabalho da tela principal do passo 2. Aqui a lista é sempre cronológica, agrupada por
@@ -131,15 +149,41 @@ export function EnriquecimentoMesaModal({
     saidas: rows.filter(r => r.entradaOuSaida === 'saida').length,
   }), [rows]);
 
-  /** As contas presentes na sessão — o select da esquerda. */
-  const contasDaSessao = useMemo(
-    () => [...new Set(rows.map(r => r.contaBancaria).filter((c): c is string => !!c))].sort(
-      (a, b) => a.localeCompare(b, 'pt-BR')),
-    [rows]);
+  /**
+   * As contas presentes na sessão, POR ID — 133h item 6.
+   *
+   * ⚠ ERA UMA LISTA DE NOMES, e o filtro comparava `r.contaBancaria === contaSel`. Nome não
+   * é identidade: não dá para achar o `tipo_conta` no cadastro a partir dele (então a lista
+   * não agrupava), duas contas de mesmo rótulo se confundiriam, e renomear uma trocaria o
+   * recorte debaixo do operador. Agora a chave é o id, e o rótulo vem do CADASTRO quando
+   * ele existe — o nome carimbado na sessão é do dia da importação.
+   * ⚠ A CONTAGEM ENTRA NO RÓTULO, como no filtro do passo 2: é ela que diz onde está o
+   * trabalho, e sem ela o operador abre conta por conta para descobrir.
+   */
+  const contasDaSessao = useMemo(() => {
+    const conta = new Map<string, number>();
+    for (const r of rows) conta.set(r.contaId, (conta.get(r.contaId) ?? 0) + 1);
+    return [...conta.entries()]
+      .filter(([id]) => id !== '__sem__')
+      .map(([id, n]) => {
+        const cad = contas?.find((c) => c.id === id);
+        const nome = cad ? (cad.nome_exibicao || cad.nome_conta)
+          : (rows.find((r) => r.contaId === id)?.contaBancaria ?? 'Conta');
+        return { id, nome_conta: `${nome} (${n})`, nome_exibicao: null, tipo_conta: cad?.tipo_conta ?? null };
+      });
+  }, [rows, contas]);
+
+  /** "Todas" sempre; "Sem conta" só quando a sessão tem linha sem conta. */
+  const sentinelasDeConta = useMemo(() => {
+    const n = rows.filter((r) => r.contaId === '__sem__').length;
+    const itens = [{ value: '__todas__', label: 'Todas as contas' }];
+    if (n > 0) itens.push({ value: '__sem__', label: `Sem conta (${n})` });
+    return itens;
+  }, [rows]);
 
   const visiveis = useMemo(
     () => rows.filter(r => passaNoFiltro(r, filtro)
-      && (contaSel === '__todas__' || r.contaBancaria === contaSel)),
+      && (contaSel === '__todas__' || r.contaId === contaSel)),
     [rows, filtro, contaSel]);
 
   /** Os grupos, na ordem em que aparecem na lista — sem reordenar o que veio do adapter. */
@@ -244,15 +288,17 @@ export function EnriquecimentoMesaModal({
           <div className="flex min-h-0 min-w-0 flex-col rounded-lg border bg-card">
             {/* Dois selects de 10px numa linha — os chips saíram (item A). */}
             <div className="flex shrink-0 items-center gap-1 border-b px-2 py-1">
-              <Select value={contaSel} onValueChange={setContaSel}>
-                <SelectTrigger className="h-6 min-w-0 flex-1 text-[10px]"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__todas__" className="text-[10px]">Todas as contas</SelectItem>
-                  {contasDaSessao.map(c => (
-                    <SelectItem key={c} value={c} className="text-[10px]">{c}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {/* 133h item 6 — o seletor de conta do sistema, agrupado por tipo, compacto. */}
+              <div className="min-w-0 flex-1">
+                <ContaBancariaSelect
+                  value={contaSel}
+                  onValueChange={setContaSel}
+                  contas={contasDaSessao}
+                  prependItems={sentinelasDeConta}
+                  size="compact"
+                  className="h-6 text-[10px]"
+                />
+              </div>
               <Select value={filtro} onValueChange={(v) => setFiltro(v as FiltroEstado)}>
                 <SelectTrigger className="h-6 min-w-0 flex-1 text-[10px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -392,6 +438,7 @@ export function EnriquecimentoMesaModal({
                   contas={detalhe.contas}
                   onEditar={detalhe.onEditar}
                   onCriarFornecedor={detalhe.onCriarFornecedor}
+                  conciliado={selecionada.lancId ? conciliadosIds?.has(selecionada.lancId) : false}
                 />
                 {faixas}
               </>
@@ -403,6 +450,28 @@ export function EnriquecimentoMesaModal({
                 saía pela borda (overflowX de 62px). `gap-1.5`, `px-2` e `whitespace-nowrap`
                 em tudo, com o contador em `truncate`: quem cede é o texto, nunca o botão.
                 Em 1440 sobra folga; em 1168 encaixa. */}
+            {/* ⚠ 133h itens 11 e 12 — UMA LINHA ACIMA DO RODAPÉ, e só quando tem o que
+                dizer. Ela responde às duas perguntas que a Mesa não respondia: qual dos
+                dois botões toca o Financeiro, e em que a planilha discorda do extrato.
+                Fora do rodapé de 32px de propósito: ele não pode crescer nem cortar botão. */}
+            <div className="shrink-0 border-t px-2 py-0.5 text-[10px] leading-tight">
+              {actions.erroBanco ? (
+                /* 133h adendo item 15 — o erro do banco fica escrito, não só no toast. */
+                <span className="font-medium text-red-700 dark:text-red-400" title={actions.erroBanco}>
+                  Não gravou — o banco recusou: {actions.erroBanco}
+                </span>
+              ) : actions.divergenciasDoExtrato && actions.divergenciasDoExtrato.length > 0 ? (
+                <span className="text-amber-700 dark:text-amber-400">
+                  Planilha diverge do extrato em: {actions.divergenciasDoExtrato.join(' · ')} — o
+                  extrato manda, e estes campos não serão gravados.
+                </span>
+              ) : (
+                <span className="text-muted-foreground">
+                  <b>Salvar</b> grava no lançamento agora. <b>Confirmar</b> só marca a linha como revisada.
+                </span>
+              )}
+            </div>
+
             {/* 32px — 133d item 4; os botões continuam h-7/11px. */}
             <div className="flex h-8 shrink-0 items-center gap-1.5 border-t px-2">
               <Button size="sm" variant="ghost" className="h-7 shrink-0 whitespace-nowrap px-2 text-[11px]"

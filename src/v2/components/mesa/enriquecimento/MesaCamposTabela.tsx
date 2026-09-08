@@ -40,6 +40,20 @@ import type { Safra } from '@/hooks/useFinanceiroV2';
 const MOTIVO_SEM_APPLY = 'o Salvar ainda não grava este campo';
 
 /**
+ * Os campos que o EXTRATO manda — 133h item 12.
+ *
+ * ⚠ NÃO É PREFERÊNCIA DE TELA, É O QUE A RPC FAZ. Desde a migration 20260908110224,
+ * `fn_classificacao_apply_row` IGNORA `data_pagamento` e `conta_bancaria_id` do proposto
+ * quando o lançamento tem vínculo ativo com o extrato. Oferecer o campo editável seria a
+ * tela prometendo uma gravação que o banco descarta em silêncio — o defeito mais caro que
+ * esta Mesa pode ter, porque o operador vê o valor mudar e nada acontece.
+ * ⚠ `Valor` E `Tipo` JÁ ERAM LEITURA (`gravaHoje: false`); entram na lista porque o motivo
+ * passa a ser outro e o operador precisa ler o motivo certo.
+ */
+const CAMPOS_DO_BANCO = new Set(['Data pagamento', 'Valor', 'Banco', 'Tipo']);
+const MOTIVO_DO_BANCO = 'o extrato manda neste campo — conciliado';
+
+/**
  * A ordem do mock, com a seção de cada linha e se o Salvar grava.
  *
  * `campo` casa com `EnriqComparativoLinha.campo` produzido pelo adapter. Quando o
@@ -105,10 +119,20 @@ export interface MesaCamposTabelaProps {
   contas?: ContaSelecionavel[];
   onEditar?: (patch: Record<string, unknown>) => Promise<void>;
   onCriarFornecedor?: (nome: string, fazendaId: string | null, cpfCnpj?: string) => Promise<FornecedorV2 | null>;
+  /**
+   * 133h item 12 — o lançamento desta linha tem vínculo ATIVO com o extrato.
+   *
+   * ⚠ VEM DE FORA porque a view não o expõe: `vw_classificacao_staging_preview` não traz
+   * nenhuma coluna de conciliação (conferido nas 80 colunas dela), e `lanc_status` não
+   * serve — medido no Proto: 2.459 'realizado' COM vínculo e 27.212 'realizado' SEM.
+   * `undefined` = ainda não se sabe, e aí nada trava: travar por suposição seria pior.
+   */
+  conciliado?: boolean;
 }
 
 export function MesaCamposTabela({
   row, classificacoes, fornecedores, fazendas, clienteId, safras, contas, onEditar, onCriarFornecedor,
+  conciliado,
 }: MesaCamposTabelaProps) {
   const porCampo = new Map(row.comparativo.map(c => [c.campo, c]));
   /* ⚠ RÓTULO EM 104px — 133b-a. Era 120px, e a coluna sobrava largura que faz falta às três
@@ -140,7 +164,14 @@ export function MesaCamposTabela({
         const c = porCampo.get(campo) ?? VAZIA;
         const igual = c.tom === 'ok';
         const vaiMudar = c.tom === 'muda' || c.tom === 'difere';
-        const editavel = gravaHoje && !row.aplicado && !!onEditar;
+        /* 133h item 12 — campo do banco não se edita em linha conciliada. */
+        const travadoPeloBanco = !!conciliado && CAMPOS_DO_BANCO.has(campo);
+        const editavel = gravaHoje && !row.aplicado && !!onEditar && !travadoPeloBanco;
+        /* ⚠ DIVERGÊNCIA É INFORMAÇÃO, NUNCA GRAVAÇÃO: a RPC já ignora o proposto nestes
+           campos, então o que a planilha diz vira aviso — e o operador vê ANTES de salvar
+           que o arquivo dele discorda do extrato. */
+        const divergeDoBanco = travadoPeloBanco
+          && c.excel !== '—' && c.sistema !== '—' && c.excel !== c.sistema;
         const abreBloco2 = bloco === 2 && ORDEM[indice - 1]?.bloco === 1;
         /* 133g item 6 — vazio no RESULTADO é o que importa: é ele que vai ser gravado. */
         const faltando = !!obrigatorio && (c.resultado === '—' || c.resultado.trim() === '');
@@ -243,16 +274,35 @@ export function MesaCamposTabela({
                   ) : (
                   <span
                     title={faltando ? 'Obrigatório — o Salvar não grava sem ele.'
+                      : travadoPeloBanco
+                        ? (divergeDoBanco
+                            ? `${c.sistema} — ${MOTIVO_DO_BANCO}. A planilha diz "${c.excel}", e isso NÃO será gravado.`
+                            : `${c.sistema} — ${MOTIVO_DO_BANCO}`)
                       : gravaHoje ? c.resultado : `${c.resultado} — ${MOTIVO_SEM_APPLY}`}
                     className={`flex h-[22px] items-center gap-1.5 truncate rounded border px-1.5 ${
                       faltando ? 'border-destructive/60 bg-destructive/5 text-destructive'
+                        : divergeDoBanco ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200'
                         : igual ? 'border-border/60 bg-muted text-emerald-700 dark:text-emerald-400'
                         : vaiMudar ? 'border-border/60 bg-amber-50 text-amber-800 dark:bg-amber-950/30 dark:text-amber-200'
                         : 'border-border/60 bg-muted text-muted-foreground'}`}>
-                    {igual && <span aria-hidden>✓</span>}
-                    <span className="truncate">{faltando ? 'obrigatório' : c.resultado}</span>
-                    {!gravaHoje && !faltando && (
+                    {igual && !travadoPeloBanco && <span aria-hidden>✓</span>}
+                    {/* ⚠ EM LINHA CONCILIADA O RESULTADO É O DO BANCO, não o do proposto: a
+                        RPC ignora o proposto nestes campos, e mostrar o proposto aqui seria
+                        a tela anunciando um valor que nunca vai ser gravado. */}
+                    <span className="truncate">
+                      {faltando ? 'obrigatório' : (travadoPeloBanco ? c.sistema : c.resultado)}
+                    </span>
+                    {divergeDoBanco && (
+                      <span className="ml-auto shrink-0 truncate text-[9px] italic"
+                        title={`A planilha diz "${c.excel}".`}>
+                        difere do banco: planilha diz {c.excel}
+                      </span>
+                    )}
+                    {!gravaHoje && !faltando && !divergeDoBanco && (
                       <span className="ml-auto shrink-0 text-[9px] italic opacity-70">leitura</span>
+                    )}
+                    {travadoPeloBanco && gravaHoje && !divergeDoBanco && (
+                      <span className="ml-auto shrink-0 text-[9px] italic opacity-70">do extrato</span>
                     )}
                   </span>
                   )

@@ -1,12 +1,14 @@
 /**
- * O topo do passo 2 — [ENRIQUECER-TELA-01] (133b). DUMB.
+ * O topo do passo 2 — [ENRIQUECER-TELA-01] (133b), refeito no 133h item 1.
  *
- * Seis números com rótulo de 10px, e logo abaixo os MESMOS seis como chips de filtro,
- * mais "Todas".
+ * ⚠ OS CARDS SÃO O FILTRO, e a linha de chips SAIU. Eram os MESMOS sete recortes ditos
+ * duas vezes, um em cima do outro: número grande em cima, pílula com o mesmo número
+ * embaixo. O operador clicava na pílula e o card não reagia — porque só a pílula filtrava,
+ * e nada na tela dizia isso. Duas superfícies para a mesma pergunta é uma a mais.
  *
- * ⚠ OS NÚMEROS E OS CHIPS SÃO A MESMA FONTE (`resumirGrupos`), de propósito: quando o
- * número do topo vem de um lugar e o chip de outro, os dois divergem na primeira regra
- * nova e o operador passa a não confiar em nenhum dos dois.
+ * ⚠ CLICAR DE NOVO VOLTA A "Todas": o filtro é um alternador, não um estado sem saída. Sem
+ * isso, sair de um recorte exigia achar o "Todas" — que agora é um texto de 10px no canto,
+ * e não mais o primeiro de uma fila de oito pílulas.
  *
  * ⚠ ZERO NÃO SOME. Um grupo que desaparece faz o operador se perguntar se ele existia —
  * e "nenhuma linha para você decidir" é uma informação, não uma ausência de informação.
@@ -15,6 +17,10 @@
  * e continua não significando: o número chega por prop, de `fn_transferencias_espelhadas`,
  * que compara lançamentos do banco entre si. Enquanto a RPC não responde, "—" — o traço
  * diz "não sei ainda", e zero diria "não há nenhuma", que ninguém verificou.
+ *
+ * ⚠ "SEM PAR NO SISTEMA" É O SÉTIMO CARD, em cinza e por último — 133h item 1. Ele não
+ * conta linhas da planilha, conta o que ela NÃO explica: outra pergunta, outro universo, e
+ * a cor neutra é o que impede de somá-lo mentalmente aos outros seis.
  */
 import { fmtBRL } from './fmt';
 import type { EnriqGrupo, EnriqResumoGrupos } from '@/v2/lib/mesa/enriquecimentoView';
@@ -65,12 +71,31 @@ function detalheDe(d: (typeof GRUPOS)[number]['detalhe'], r: { qtd: number; soma
   }
 }
 
+/* A moldura do card. Ativo = borda do primary e fundo `bg-muted/40` — 133h item 1. */
+const CARD_BASE = 'min-w-0 rounded-md border px-1.5 py-1 text-left transition-colors';
+const CARD_ATIVO = 'border-primary bg-muted/40';
+const CARD_INERTE = 'border-transparent hover:bg-muted/30';
+
 export function EnriquecimentoTopoNumeros({
   resumo, total, filtro, onFiltro, transferencias, semParSistema,
 }: EnriquecimentoTopoNumerosProps) {
+  /* Clicar no card que já filtra volta a "Todas" — o filtro é alternador. */
+  const alternar = (g: VistaPasso2) => onFiltro(filtro === g ? 'todas' : g);
+
   return (
     <div className="shrink-0 rounded-lg border bg-card">
-      <div className="grid grid-cols-3 gap-x-3 gap-y-1 px-2 py-1.5 sm:grid-cols-6">
+      <div className="flex items-baseline justify-between px-2 pt-1">
+        <span className="text-[10px] text-muted-foreground">Clique num card para filtrar.</span>
+        {/* ⚠ "Todas" É TEXTO, NÃO CARD: ela não é um recorte a mais, é a ausência de
+            recorte — e um oitavo card do mesmo tamanho a faria parecer um. */}
+        <button type="button" onClick={() => onFiltro('todas')}
+          className={`text-[10px] transition-colors ${
+            filtro === 'todas' ? 'font-medium text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+          Todas · <span className="tabular-nums">{total}</span>
+        </button>
+      </div>
+
+      <div className="grid grid-cols-3 gap-1 px-1.5 pb-1.5 pt-1 sm:grid-cols-7">
         {GRUPOS.map((g) => {
           const r = resumo[g.key];
           /* ⚠ A TRANSFERÊNCIA VIROU NÚMERO EM 133c. Ela mostrava "—" porque nenhum
@@ -82,62 +107,42 @@ export function EnriquecimentoTopoNumeros({
           const detalhe = eTransf
             ? (transferencias ? `${transferencias.unicos} a fazer` : 'apurando…')
             : detalheDe(g.detalhe, r);
+          const ativo = filtro === g.key;
           return (
-            <div key={g.key} className="min-w-0">
-              <div className="truncate text-[10px] leading-tight text-muted-foreground" title={g.rotulo}>
-                {g.rotulo}
+            <button key={g.key} type="button"
+              disabled={vazio}
+              title={vazio ? 'Apurando as transferências do mês…' : (ativo ? 'Clique de novo para ver todas.' : `Filtrar: ${g.rotulo}`)}
+              onClick={() => alternar(g.key)}
+              className={`${CARD_BASE} ${ativo ? CARD_ATIVO : CARD_INERTE} ${vazio ? 'opacity-45' : ''}`}>
+              <div className="flex items-center gap-1">
+                <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${g.dot}`} />
+                <span className="truncate text-[10px] leading-tight text-muted-foreground" title={g.rotulo}>
+                  {g.rotulo}
+                </span>
               </div>
               <div className={`text-[16px] font-medium leading-tight tabular-nums ${vazio ? 'text-muted-foreground' : g.cls}`}>
                 {vazio ? '—' : qtd}
               </div>
               <div className="truncate text-[10px] leading-tight text-muted-foreground">{detalhe}</div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* ⚠ O CHIP NÃO QUEBRA POR DENTRO; O CONJUNTO QUEBRA — 133e item B. Sem
-          `whitespace-nowrap` no chip, "Transferência entre contas" virava três linhas dentro
-          da própria pílula e ela ficava oval. `flex-wrap` no container é o certo: quando não
-          cabe, o chip inteiro desce para a segunda linha. */}
-      <div className="flex flex-wrap items-center gap-1 border-t px-2 py-1">
-        <button type="button" onClick={() => onFiltro('todas')}
-          className={`whitespace-nowrap rounded-md border px-1.5 py-0.5 text-[10px] transition-colors ${
-            filtro === 'todas' ? 'border-primary bg-primary/10 text-foreground'
-              : 'bg-card text-muted-foreground hover:bg-muted/60'}`}>
-          Todas · <span className="tabular-nums font-medium">{total}</span>
-        </button>
-        {GRUPOS.map((g) => {
-          const eTransf = g.key === 'transferencia';
-          const qtd = eTransf ? (transferencias?.total ?? 0) : resumo[g.key].qtd;
-          const ativo = filtro === g.key;
-          const desabilitado = eTransf && !transferencias;
-          return (
-            <button key={g.key} type="button"
-              disabled={desabilitado}
-              title={desabilitado ? 'Apurando as transferências do mês…' : undefined}
-              onClick={() => onFiltro(g.key)}
-              className={`flex items-center gap-1 whitespace-nowrap rounded-md border px-1.5 py-0.5 text-[10px] transition-colors ${
-                ativo ? 'border-primary bg-primary/10 text-foreground'
-                  : 'bg-card text-muted-foreground hover:bg-muted/60'
-              } ${desabilitado || (qtd === 0 && !ativo) ? 'opacity-45' : ''}`}>
-              <span className={`h-2 w-2 shrink-0 rounded-full ${g.dot}`} />
-              <span>{g.rotulo}</span>
-              <span className="tabular-nums font-medium">{desabilitado ? '—' : qtd}</span>
             </button>
           );
         })}
-        {/* ⚠ O CHIP DA VISÃO INVERSA FICA POR ÚLTIMO E EM CINZA: ele não conta linhas da
-            planilha, conta o que ela não explica — outra pergunta, outro universo. */}
+
+        {/* O sétimo: a visão inversa. Cinza, e por último. */}
         <button type="button"
-          onClick={() => onFiltro('sem_par_sistema')}
-          className={`flex items-center gap-1 whitespace-nowrap rounded-md border px-1.5 py-0.5 text-[10px] transition-colors ${
-            filtro === 'sem_par_sistema' ? 'border-primary bg-primary/10 text-foreground'
-              : 'bg-card text-muted-foreground hover:bg-muted/60'
-          } ${(semParSistema ?? 0) === 0 && filtro !== 'sem_par_sistema' ? 'opacity-45' : ''}`}>
-          <span className="h-2 w-2 shrink-0 rounded-full bg-muted-foreground" />
-          <span>Sem par no sistema</span>
-          <span className="tabular-nums font-medium">{semParSistema ?? '—'}</span>
+          title={filtro === 'sem_par_sistema' ? 'Clique de novo para ver todas.' : 'Filtrar: lançamentos do mês sem linha na planilha'}
+          onClick={() => alternar('sem_par_sistema')}
+          className={`${CARD_BASE} ${filtro === 'sem_par_sistema' ? CARD_ATIVO : CARD_INERTE}`}>
+          <div className="flex items-center gap-1">
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground" />
+            <span className="truncate text-[10px] leading-tight text-muted-foreground">Sem par no sistema</span>
+          </div>
+          <div className="text-[16px] font-medium leading-tight tabular-nums text-muted-foreground">
+            {semParSistema ?? '—'}
+          </div>
+          <div className="truncate text-[10px] leading-tight text-muted-foreground">
+            {semParSistema === undefined ? 'apurando…' : 'a planilha não explica'}
+          </div>
         </button>
       </div>
     </div>

@@ -61,8 +61,20 @@ export function EnriquecimentoRow({ row, selecionado, onSelecionar, editadaNaoGr
     >
       <span className="min-w-0">
         <span className="flex items-center gap-1">
-          <span className={`h-[7px] w-[7px] shrink-0 rounded-full ${editadaNaoGravada ? 'bg-amber-500' : meta.dot}`}
-            title={editadaNaoGravada ? 'Editada e ainda não gravada no lançamento.' : meta.label} />
+          {/* ⚠ TRÊS ESTADOS, NESTA PRECEDÊNCIA — 133h item 9: gravada (verde) vence tudo,
+              porque é fim de linha; editada-e-não-gravada (âmbar) vem antes de revisada,
+              porque é a que ainda pede o gesto; revisada-não-gravada é azul; o resto segue
+              a cor do status. Sem o azul, conferir uma linha não deixava rastro. */}
+          <span className={`h-[7px] w-[7px] shrink-0 rounded-full ${
+            row.aplicado ? 'bg-emerald-500'
+            : editadaNaoGravada ? 'bg-amber-500'
+            : row.revisadaEm ? 'bg-sky-500'
+            : meta.dot}`}
+            title={
+              row.aplicado ? 'Gravada no lançamento.'
+              : editadaNaoGravada ? 'Editada e ainda não gravada no lançamento.'
+              : row.revisadaEm ? 'Revisada — ainda não gravada.'
+              : meta.label} />
           <span className="min-w-0 flex-1 truncate text-[11px] font-medium leading-[1.3]" title={row.descricaoExcel}>
             {row.descricaoExcel}
           </span>

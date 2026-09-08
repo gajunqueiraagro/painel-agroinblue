@@ -103,6 +103,26 @@ export function PlanoSubcentroSelect({
     onSelected?.(sub, cls);
   };
 
+  /**
+   * Abre POSICIONADO no valor atual — 133h adendo item 14.
+   *
+   * ⚠ O DESTAQUE NASCIA EM 0, E O ENTER CONFIRMAVA O PRIMEIRO DA LISTA. O gatilho já
+   * mostrava a conta escolhida e o item já tinha o ✓, mas o teclado ignorava as duas
+   * coisas: abrir e apertar Enter TROCAVA a conta certa pela primeira do filtro, em
+   * silêncio. Quem abre um seletor já preenchido quer conferir ou mudar de propósito —
+   * nunca redigitar o que já está escolhido.
+   * ⚠ RODA NA ABERTURA E QUANDO O FILTRO MUDA: digitar na busca reordena a lista, e um
+   * índice velho apontaria para outro item. Sem casar, cai em 0, que é o comportamento
+   * antigo — e é o certo quando o valor atual não está na lista visível.
+   */
+  useEffect(() => {
+    if (!open) return;
+    const idx = value ? filtered.findIndex((sc) => sc.subcentro === value) : -1;
+    const alvo = idx >= 0 ? idx : 0;
+    setHighlight(alvo);
+    if (idx >= 0) itemRefs.current[idx]?.scrollIntoView({ block: 'nearest' });
+  }, [open, filtered, value]);
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (filtered.length === 0) return;
     if (e.key === 'ArrowDown') {

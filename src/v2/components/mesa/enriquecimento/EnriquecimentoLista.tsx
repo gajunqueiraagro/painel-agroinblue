@@ -55,7 +55,7 @@ export function EnriquecimentoLista({ rows, selecionadoId, onSelecionar, hideBan
 
   return (
     <div className="flex max-h-[70vh] flex-col overflow-hidden rounded-lg border bg-card md:h-full md:max-h-[calc(100vh-13rem)] md:min-h-0 md:self-stretch">
-      <div className="flex shrink-0 items-baseline justify-between border-b bg-muted/40 px-2 py-0.5">
+      <div className="flex shrink-0 items-baseline justify-between border-b bg-card px-2 py-0.5">
         <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
           Linhas da planilha
         </span>
