@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -1088,7 +1089,7 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
             <div key={i} className="grid grid-cols-2 gap-2 bg-muted/30 rounded p-1.5">
               <div>
                 <Label className="text-[9px]">Parcela {i + 1}</Label>
-                <Input type="date" value={p.data} onChange={e => { const np = [...parcelas]; np[i] = { ...np[i], data: e.target.value }; setParcelas(np); markDirty(); }} className="h-7 text-[10px]" />
+                <DatePicker value={p.data} onChange={v => { const np = [...parcelas]; np[i] = { ...np[i], data: v }; setParcelas(np); markDirty(); }} className="h-7 text-[10px]" />
               </div>
               <div>
                 <Label className="text-[9px]">Valor</Label>
@@ -1112,17 +1113,17 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
       <div className="grid grid-cols-3 gap-2">
         <div>
           <Label className="text-[10px]">Data da Venda</Label>
-          <Input type="date" value={dataVendaAuto} onChange={e => { setDataVenda(e.target.value); markDirty(); }} className="h-7 text-[10px]" />
+          <DatePicker value={dataVendaAuto} onChange={v => { setDataVenda(v); markDirty(); }} className="h-7 text-[10px]" />
         </div>
         <div>
           <Label className="text-[10px]">
             {isProgramado ? 'Data embarque' : 'Data Embarque'}
           </Label>
-          <Input type="date" value={dataEmbarqueAuto} readOnly className="h-7 text-[10px] bg-muted cursor-not-allowed" />
+          <DatePicker value={dataEmbarqueAuto} onChange={() => {}} disabled className="h-7 text-[10px] bg-muted cursor-not-allowed" />
         </div>
         <div>
           <Label className="text-[10px]">Data Abate</Label>
-          <Input type="date" value={dataAbateAuto} readOnly className="h-7 text-[10px] bg-muted cursor-not-allowed" />
+          <DatePicker value={dataAbateAuto} onChange={() => {}} disabled className="h-7 text-[10px] bg-muted cursor-not-allowed" />
         </div>
       </div>
     </>

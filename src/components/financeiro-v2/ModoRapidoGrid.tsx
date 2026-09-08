@@ -6,6 +6,7 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Save, Plus, Trash2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import type { LancamentoV2Form, ContaBancariaV2, ClassificacaoItem } from '@/hooks/useFinanceiroV2';
@@ -270,26 +271,42 @@ export function ModoRapidoGrid({ fazendaId, contas, classificacoes, onSaveBatch,
                   </td>
                   {/* Data Competência */}
                   <td className="px-0.5 py-0.5">
-                    <input
-                      type="date"
+                    {/* ⚠ `abrirComSeta={false}` E `onKeyDown` NA MESMA TROCA (136c). A grade
+                        move o foco por setas; sem desligar o ArrowDown do componente, a tecla
+                        que descia uma linha passaria a abrir o calendario. O icone continua
+                        abrindo — o gesto do mouse nao se perde.
+                        ⚠ `pl-1 pr-7`, NAO `px-1`: `px-1` venceria o `pr-7` que reserva o espaco
+                        do icone (o `className` entra depois no `cn`), e o texto correria por
+                        baixo dele. Altura `h-7` e' a das outras celulas da linha (A16). */}
+                    <DatePicker
                       data-row={rowIdx}
                       data-col={0}
                       value={row.data_competencia}
-                      onChange={e => updateRow(row.id, 'data_competencia', e.target.value)}
+                      onChange={v => updateRow(row.id, 'data_competencia', v)}
                       onKeyDown={e => handleKeyDown(e, rowIdx, 0)}
-                      className="w-full h-7 px-1 text-[11px] bg-transparent border border-transparent focus:border-primary/40 rounded outline-none"
+                      abrirComSeta={false}
+                      size="compact"
+                      className="w-full h-7 pl-1 text-[11px] bg-transparent border border-transparent focus:border-primary/40 rounded outline-none"
                     />
                   </td>
                   {/* Data Pagamento */}
                   <td className="px-0.5 py-0.5">
-                    <input
-                      type="date"
+                    {/* ⚠ `abrirComSeta={false}` E `onKeyDown` NA MESMA TROCA (136c). A grade
+                        move o foco por setas; sem desligar o ArrowDown do componente, a tecla
+                        que descia uma linha passaria a abrir o calendario. O icone continua
+                        abrindo — o gesto do mouse nao se perde.
+                        ⚠ `pl-1 pr-7`, NAO `px-1`: `px-1` venceria o `pr-7` que reserva o espaco
+                        do icone (o `className` entra depois no `cn`), e o texto correria por
+                        baixo dele. Altura `h-7` e' a das outras celulas da linha (A16). */}
+                    <DatePicker
                       data-row={rowIdx}
                       data-col={1}
                       value={row.data_pagamento}
-                      onChange={e => updateRow(row.id, 'data_pagamento', e.target.value)}
+                      onChange={v => updateRow(row.id, 'data_pagamento', v)}
                       onKeyDown={e => handleKeyDown(e, rowIdx, 1)}
-                      className="w-full h-7 px-1 text-[11px] bg-transparent border border-transparent focus:border-primary/40 rounded outline-none"
+                      abrirComSeta={false}
+                      size="compact"
+                      className="w-full h-7 pl-1 text-[11px] bg-transparent border border-transparent focus:border-primary/40 rounded outline-none"
                     />
                   </td>
                   {/* Tipo Operação */}

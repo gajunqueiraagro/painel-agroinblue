@@ -319,7 +319,7 @@ preview que o cabecalho nao sai da tela ao rolar.
   ⚠ "NAO CABE EM 10px" NAO E' EXCECAO: ajusta-se o componente, nunca se
   volta ao nativo. Ja foi corrigido uma vez (PR-OC-DATA-PADRAO-01) e
   voltou na linha da parcela em 06/09 — por isso virou gate.
-  ⚠ O GATE TEM BASELINE, como o TSC: 29 arquivos herdados (29 `type=date`,
+  ⚠ O GATE TEM BASELINE, como o TSC: 20 arquivos herdados (14 `type=date`,
   20 `<select>`). Era 42 (46/25) e caiu para 39 sem que este numero fosse
   atualizado; o PR-PARC-05 tirou 3 `type=date` (1 do FinanciamentoDetalhe,
   que zerou e saiu da lista, e 2 do ModalBaixaParcela) e o 136a tirou o
@@ -331,13 +331,10 @@ preview que o cabecalho nao sai da tela ao rolar.
   componente (mascara de digitacao, colagem dos quatro formatos, Esc,
   ArrowDown, faixa de ano) e o piloto; o 136b fez o lote financeiro (7
   arquivos) e apagou a pagina orfa `FinanciamentoCadastro.tsx` (3 de uma vez).
-  Restam 29 arquivos com 29 `type=date` para o 136c em diante.
-  ⚠ `ModoRapidoGrid.tsx` (2) FICA POR ULTIMO, e nao por tamanho: os dois
-  `<input type=date>` dela carregam `data-row`/`data-col` e um
-  `onKeyDown={handleKeyDown}` que move o foco pela grade. O `DatePicker` nao
-  repassa `onKeyDown` nem `data-*`, e o ArrowDown dele — que abre o calendario
-  — colidiria com a navegacao por setas da propria grade. Trocar ali exige
-  ampliar a API do componente, o que e' briefing proprio. Falhar por eles pararia todo PR e o gate seria desligado
+  O 136c ampliou a API do componente (`onKeyDown` do consumidor ANTES do
+  interno, `data-*` repassados, `abrirComSeta`) e fechou o ModoRapidoGrid mais
+  o lote compra/OC/zoot (10 arquivos, 15 ocorrencias).
+  Restam 14 `type=date` em 11 arquivos para o 136d. Falhar por eles pararia todo PR e o gate seria desligado
   na primeira semana — que e' como um gate morre. Ele acusa ocorrencia
   NOVA: arquivo fora da lista, ou arquivo da lista com MAIS do que a
   baseline. Reduzir e' sempre aceito; atualize a baseline no mesmo PR com

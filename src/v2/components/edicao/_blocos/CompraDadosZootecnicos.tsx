@@ -3,6 +3,7 @@ import type { Lancamento, Categoria } from '@/types/cattle';
 import { CATEGORIAS } from '@/types/cattle';
 import { FornecedorSelect } from '@/components/shared/FornecedorSelect';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { Dispatch, SetStateAction } from 'react';
@@ -101,11 +102,14 @@ export function CompraDadosZootecnicos({
       {/* PR-V2E.2 Linha 1: Categoria limitada a 220px (não engole resto da linha) */}
       <div className="grid grid-cols-[110px_90px_220px] gap-1.5">
         <Campo label="Data">
-          <Input
-            type="date"
+          {/* ⚠ `pl-1.5 pr-7`, NAO `px-1.5`: o `className` entra depois no `cn` do
+              componente e `px-` venceria o `pr-` que reserva o espaco do icone — o texto
+              correria por baixo dele. Altura `h-6` e' a da linha (A16). */}
+          <DatePicker
+            size="compact"
             value={form.data}
-            onChange={e => onFormChange(f => ({ ...f, data: e.target.value }))}
-            className="h-6 text-[13px] px-1.5"
+            onChange={v => onFormChange(f => ({ ...f, data: v }))}
+            className="h-6 text-[13px] pl-1.5 pr-7"
           />
         </Campo>
         <Campo label="Tipo">

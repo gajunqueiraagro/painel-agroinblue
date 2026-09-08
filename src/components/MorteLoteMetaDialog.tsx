@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Plus, Trash2, Save, X } from 'lucide-react';
@@ -134,10 +135,9 @@ export function MorteLoteMetaDialog({ open, onClose, onAdicionar, dataInicial }:
               {linhas.map((linha) => (
                 <tr key={linha.id} className="border-b hover:bg-muted/20">
                   <td className="px-1 py-1">
-                    <Input
-                      type="date"
+                    <DatePicker
                       value={linha.data}
-                      onChange={(e) => atualizarLinha(linha.id, 'data', e.target.value)}
+                      onChange={(v) => atualizarLinha(linha.id, 'data', v)}
                       className="h-7 text-[11px]"
                     />
                   </td>

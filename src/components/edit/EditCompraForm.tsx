@@ -30,6 +30,7 @@ import { STATUS_OPTIONS_ZOOTECNICO_COM_META } from '@/lib/statusOperacional';
 import { FornecedorSelect } from '@/components/shared/FornecedorSelect';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertTriangle } from 'lucide-react';
@@ -118,10 +119,9 @@ export function EditCompraForm({
       <div className="grid grid-cols-3 gap-2">
         <div>
           <Label className="text-[10px] font-bold text-foreground">Data</Label>
-          <Input
-            type="date"
+          <DatePicker
             value={form.data}
-            onChange={e => onFormChange(f => ({ ...f, data: e.target.value }))}
+            onChange={v => onFormChange(f => ({ ...f, data: v }))}
             className="mt-0.5 h-7 text-[11px]"
           />
         </div>

@@ -23,6 +23,26 @@ interface DatePickerProps {
   // Variante COMPACTA (PR-FIN-MODAL-02C) para grids densos (parcelas/recorrência). SÓ apresentação:
   //   reduz altura do campo, padding, fonte e ícone. NÃO altera parsing/formatação/timezone/valor/handlers.
   size?: 'default' | 'compact';
+  /**
+   * 136c item 0a — o teclado do CONSUMIDOR, chamado ANTES do interno.
+   *
+   * ⚠ NASCEU DE UMA COLISAO MEDIDA (136b): o `ModoRapidoGrid` navega entre celulas por setas
+   * (`onKeyDown` + `data-row`/`data-col`), e o ArrowDown que este componente ganhou no 136a
+   * abre o calendario. As duas coisas queriam a mesma tecla.
+   * ⚠ A ORDEM E' O CONTRATO: o consumidor roda primeiro e, se chamar `preventDefault()`, o
+   * handler interno NAO roda. Quem conhece a grade decide; o campo obedece.
+   */
+  onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
+  /**
+   * 136c item 0b — ArrowDown abre o calendario? Default `true` (o do 136a).
+   * Em `false`, so' o icone abre — e a seta fica livre para a grade.
+   */
+  abrirComSeta?: boolean;
+  /**
+   * 136c item 0a — `data-*` repassados ao Input. Grades que acham a celula por atributo
+   * (`data-row`/`data-col`) precisam deles no elemento que RECEBE o foco.
+   */
+  [dataAttr: `data-${string}`]: unknown;
 }
 
 // ─── Funções puras (TZ-safe: só aritmética de calendário local, nunca toISOString) ───
@@ -150,7 +170,15 @@ export function parseBrDateToIso(text: string): ParseResult {
   return { status: 'valid', iso: `${y}-${pad2(mo)}-${pad2(d)}` };
 }
 
-export function DatePicker({ value, onChange, className, placeholder = 'dd/mm/aaaa', disabled, tabIndex, size = 'default' }: DatePickerProps) {
+export function DatePicker({
+  value, onChange, className, placeholder = 'dd/mm/aaaa', disabled, tabIndex, size = 'default',
+  onKeyDown, abrirComSeta = true, ...rest
+}: DatePickerProps) {
+  /* Só `data-*` atravessa — o resto do prop-bag não vaza para o DOM (React avisaria, e um
+     atributo desconhecido no input é ruído que ninguém pediu). */
+  const dataAttrs = Object.fromEntries(
+    Object.entries(rest).filter(([k]) => k.startsWith('data-')),
+  );
   const [open, setOpen] = useState(false);
   // Texto EDITÁVEL local (livre enquanto digita). Inicializa a partir do value válido.
   const [text, setText] = useState<string>(() => formatIsoToBr(value));
@@ -206,7 +234,11 @@ export function DatePicker({ value, onChange, className, placeholder = 'dd/mm/aa
             setError(false);
           }}
           onBlur={commit}
+          {...dataAttrs}
           onKeyDown={e => {
+            /* O consumidor primeiro; `preventDefault()` dele encerra o assunto. */
+            onKeyDown?.(e);
+            if (e.defaultPrevented) return;
             if (e.key === 'Enter') { e.preventDefault(); commit(); return; }
             /* Esc devolve o que estava — o operador desiste da edição sem perder o valor. */
             if (e.key === 'Escape') {
@@ -217,7 +249,7 @@ export function DatePicker({ value, onChange, className, placeholder = 'dd/mm/aa
             }
             /* ↓ abre o calendário, como em qualquer campo de data do sistema operacional —
                é o gesto que o teclado espera e o único caminho sem mouse até a grade. */
-            if (e.key === 'ArrowDown' && !disabled) { e.preventDefault(); setOpen(true); }
+            if (e.key === 'ArrowDown' && abrirComSeta && !disabled) { e.preventDefault(); setOpen(true); }
           }}
           disabled={disabled}
           tabIndex={tabIndex}

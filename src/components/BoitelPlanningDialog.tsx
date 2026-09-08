@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -248,7 +249,7 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
               {data.possuiAdiantamento && (
                 <div className="bg-blue-50 dark:bg-blue-950/40 rounded border border-blue-300 dark:border-blue-700 p-1 space-y-0.5">
                   <div className="grid grid-cols-2 gap-1">
-                    <F label="Data"><I type="date" value={data.dataAdiantamento} onChange={e => set('dataAdiantamento', e.target.value)} /></F>
+                    <F label="Data"><DataBoitel value={data.dataAdiantamento} onChange={v => set('dataAdiantamento', v)} /></F>
                     <F label="% diárias"><IP value={data.pctAdiantamentoDiarias} onChange={v => set('pctAdiantamentoDiarias', v)} step="0.1" /></F>
                   </div>
                   <div className="grid grid-cols-3 gap-1">
@@ -321,7 +322,7 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                   <div className="max-h-[120px] overflow-y-auto space-y-0.5">
                     {data.parcelas.map((p, i) => (
                       <div key={i} className="grid grid-cols-2 gap-1 bg-muted/40 rounded px-1 py-0.5">
-                        <div><Label className="text-[7px]">P{i + 1}</Label><I type="date" value={p.data} onChange={e => { const np = [...data.parcelas]; np[i] = { ...np[i], data: e.target.value }; set('parcelas', np); }} /></div>
+                        <div><Label className="text-[7px]">P{i + 1}</Label><DataBoitel value={p.data} onChange={v => { const np = [...data.parcelas]; np[i] = { ...np[i], data: v }; set('parcelas', np); }} /></div>
                         <div><Label className="text-[7px]">R$</Label><IM value={p.valor} onChange={v => { const np = [...data.parcelas]; np[i] = { ...np[i], valor: v }; set('parcelas', np); }} /></div>
                       </div>
                     ))}
@@ -423,6 +424,22 @@ function FH({ label, hint, children }: { label: string; hint?: string; children:
   return <div><Label className="text-[7px] leading-none font-semibold text-foreground/70">{label}</Label>{children}{hint && <span className="text-[6px] text-muted-foreground leading-none block mt-0.5">{hint}</span>}</div>;
 }
 function I(props: React.ComponentProps<typeof Input>) { return <Input {...props} className={`h-5 text-[9px] tabular-nums text-right bg-background border-border shadow-sm ${props.className || ''}`} />; }
+
+/* Data do Boitel — o `I` desta tela em forma de calendario do sistema (136c).
+   ⚠ MESMA ALTURA (`h-5`) E MESMA FONTE (9px) do resto da linha: o A16 manda a data caber
+   na regua que ja existe, e esta tela e' a mais densa do sistema.
+   ⚠ SEM `text-right`, ao contrario dos numeros ao lado: o icone do calendario mora a'
+   direita, e texto alinhado a' direita passaria por baixo dele. `pr-6` reserva o espaco. */
+function DataBoitel({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <DatePicker
+      value={value}
+      onChange={onChange}
+      size="compact"
+      className="h-5 pl-1 pr-6 text-[9px] tabular-nums bg-background border-border shadow-sm"
+    />
+  );
+}
 function CV({ children }: { children: React.ReactNode }) { return <div className="h-5 flex items-center px-1.5 rounded bg-muted/60 border border-border text-[9px] font-semibold tabular-nums text-foreground">{children}</div>; }
 function TB({ a, o, children, full }: { a: boolean; o: () => void; children: React.ReactNode; full?: boolean }) {
   return <button type="button" onClick={o} className={`h-5 px-2 rounded text-[8px] font-bold border transition-all ${full ? 'w-full' : ''} ${a ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground'}`}>{children}</button>;
