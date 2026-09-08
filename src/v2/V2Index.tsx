@@ -1357,7 +1357,7 @@ export default function V2Index() {
      linha — ela e' `flex-wrap` e vira duas em janela estreita, e ai' a tela nascia
      mais alta que a area util e a section rolava. Com a secao no app-shell o PAI da'
      a altura e a tela deixa de conhecer numero magico. */
-  const SECOES_APP_SHELL = new Set(['conciliacao', 'mapa-pastos', 'conferencia-lancamentos', 'financiamentos']);
+  const SECOES_APP_SHELL = new Set(['conciliacao', 'mapa-pastos', 'conferencia-lancamentos', 'financiamentos', 'recorrencias']);
   const appShell = SECOES_APP_SHELL.has(section);
 
   return (

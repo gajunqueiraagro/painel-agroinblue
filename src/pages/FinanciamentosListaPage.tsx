@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DatePicker } from '@/components/ui/date-picker';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { BarraSecao } from '@/v2/components/BarraSecao';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, useMemo } from 'react';
@@ -373,19 +374,9 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
           num PR de paridade seria criar a segunda régua que este PR veio apagar.
           ⚠ SEM BOTÃO SAIR: o menu lateral já tem, e um segundo caminho para sair é um
           caminho que ninguém testa. */}
-      <header className="sticky top-0 z-40 shrink-0 bg-primary shadow-md">
-        <div className="flex items-center justify-between gap-2 px-3 py-1">
-          <p className="min-w-0 truncate text-[11px] font-semibold tracking-wide text-primary-foreground">
-            Financeiro<span className="mx-1 text-primary-foreground/40">/</span>
-            <span className="font-normal text-primary-foreground/90">Parcelamentos e Financiamentos</span>
-          </p>
-          {/* ⚠ O EMAIL VEM DO `useAuth` QUE JÁ EXISTE (`contexts/AuthContext`), não de
-              um hook novo: o Header e outras telas já leem `user?.email` dali. */}
-          <span className="max-w-[220px] truncate text-[10px] text-primary-foreground/65">
-            {user?.email ?? ''}
-          </span>
-        </div>
-      </header>
+      {/* A faixa saiu daqui para `v2/components/BarraSecao` quando a Recorrências passou a
+          precisar da mesma — move verbatim, zero mudança visual. */}
+      <BarraSecao area="Financeiro" secao="Parcelamentos e Financiamentos" />
 
       {/* Cabeçalho fixo: título + totais. Os FILTROS desceram para dentro do card
           (PR-PARC-03 item 2).
