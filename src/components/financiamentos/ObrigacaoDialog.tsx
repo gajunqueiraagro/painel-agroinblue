@@ -14,6 +14,10 @@ import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import { CredorAutocomplete } from '@/components/financiamentos/CredorAutocomplete';
 import { DestinacoesForm, DestinacaoItem } from '@/components/financiamentos/DestinacoesForm';
 import { useFinanciamentoCadastro, FinanciamentoForm, NaturezaContrato } from '@/hooks/useFinanciamentoCadastro';
+import ModalBaixaParcela from '@/components/financiamentos/ModalBaixaParcela';
+import { TableFooter } from '@/components/ui/table';
+import { Pencil } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 
 /* ══ NOVA OBRIGACAO — a casca do CompraModalShell aplicada ao contrato ═══════════
    PR-PARC-04. Substitui a PAGINA `src/pages/FinanciamentoCadastro.tsx` como porta de
@@ -58,6 +62,20 @@ const ehNatureza = (v: string): v is NaturezaContrato =>
 /* Situacao do CONTRATO (nao confundir com a situacao da parcela). Os identificadores
    gravados continuam ativo/quitado/cancelado. */
 type StatusContrato = 'ativo' | 'quitado' | 'cancelado';
+
+/** A linha de `financiamento_parcelas` como a grade da aba a consome. */
+interface ParcelaGravada {
+  id: string;
+  numero_parcela: number | null;
+  data_vencimento: string | null;
+  valor_principal: number | null;
+  valor_juros: number | null;
+  status: string | null;
+  data_pagamento?: string | null;
+  observacao?: string | null;
+  lancamento_id?: string | null;
+  lancamento_juros_id?: string | null;
+}
 const ehStatusContrato = (v: string): v is StatusContrato =>
   v === 'ativo' || v === 'quitado' || v === 'cancelado';
 /* ⚠ O dropdown tem a largura do campo: sem `position="popper"` a variavel
@@ -164,6 +182,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
     clienteId,
   } = useFinanciamentoCadastro();
 
+  const qc = useQueryClient();
   const [aba, setAba] = useState<Aba>('contrato');
   const [destinacoes, setDestinacoes] = useState<DestinacaoItem[]>([]);
   const [carregado, setCarregado] = useState(false);
@@ -171,6 +190,9 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
      contrato nasce 'ativo', o gravador fixa). Ele so' existe na edicao, e por isso viaja
      em `extras` em vez de inchar o form que as duas telas compartilham. */
   const [statusContrato, setStatusContrato] = useState<StatusContrato>('ativo');
+  /* A grade da aba Parcelas abre o MESMO modal do detalhe — um editor de parcela so'
+     para o sistema, e ele ja' reconcilia o financeiro ao salvar. */
+  const [parcelaEdit, setParcelaEdit] = useState<ParcelaGravada | null>(null);
   const [salvandoEdicao, setSalvandoEdicao] = useState(false);
 
   const ehEdicao = modo === 'editar';
@@ -196,7 +218,9 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
     queryFn: async () => {
       const { data } = await supabase
         .from('financiamento_parcelas')
-        .select('id, numero_parcela, data_vencimento, valor_principal, valor_juros, status')
+        /* `*` porque a grade agora abre o MESMO ModalBaixaParcela do detalhe, e ele
+           consome data_pagamento, observacao e os dois ponteiros de lancamento. */
+        .select('*')
         .eq('financiamento_id', financiamentoId!)
         .order('numero_parcela');
       return data ?? [];
@@ -204,6 +228,14 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
   });
 
   const temParcelaPaga = parcelasGravadas.some(p => p.status === 'pago');
+  /* Somas do rodape da grade — sobre TODAS as parcelas gravadas, nao so' as visiveis na
+     rolagem. Mesmas linhas ja' carregadas; nenhuma consulta nova. */
+  const parcelasPagas = parcelasGravadas.filter(p => p.status === 'pago').length;
+  const somaPrincipalGravado = parcelasGravadas.reduce((a, p) => a + (Number(p.valor_principal) || 0), 0);
+  const somaJurosGravado = parcelasGravadas.reduce((a, p) => a + (Number(p.valor_juros) || 0), 0);
+  const somaPagoGravado = parcelasGravadas
+    .filter(p => p.status === 'pago')
+    .reduce((a, p) => a + (Number(p.valor_principal) || 0) + (Number(p.valor_juros) || 0), 0);
 
   /* ⚠ CARREGA UMA VEZ (`carregado`), e nao a cada render: o form e' de escrita, e
      re-semear a cada resposta de query apagaria o que o operador acabou de digitar. */
@@ -359,10 +391,51 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
     },
   });
 
+  /* ── GUARD: a conta do contrato pode nao estar na lista ──────────────────────
+     ⚠ CONTA QUE NAO APARECE E' CONTA QUE PARECE NAO EXISTIR. A lista traz so' as ATIVAS
+     dos quatro tipos; um contrato antigo pode apontar para uma conta desativada depois,
+     ou de um tipo que ainda nao entrou. Sem isto o seletor abre no placeholder e o
+     resumo diz "—" para um contrato que TEM conta — a mesma classe de defeito que o
+     PR-PARC-04 fechou no credor.
+     ⚠ O valor gravado nunca depende desta lista: `form.conta_bancaria_id` vem do
+     contrato e so' muda se o operador trocar. Ausencia na lista jamais vira `null`. */
+  const contaForaDaLista = !!form.conta_bancaria_id && !contas.some(c => c.id === form.conta_bancaria_id);
+
+  const { data: contaAvulsa } = useQuery({
+    queryKey: ['conta-por-id', clienteId, form.conta_bancaria_id],
+    enabled: contaForaDaLista && !!clienteId,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('financeiro_contas_bancarias')
+        .select('id, nome_conta, nome_exibicao, banco, tipo_conta, ativa')
+        .eq('cliente_id', clienteId)
+        .eq('id', form.conta_bancaria_id)
+        .maybeSingle();
+      return data ?? null;
+    },
+  });
+
+  /* A conta avulsa entra na lista do seletor com sufixo, para o operador entender por
+     que ela nao esta' entre as demais — e continuar podendo trocar. */
+  const contasComAtual = useMemo(() => {
+    if (!contaAvulsa) return contas;
+    const sufixo = contaAvulsa.ativa === false ? ' (inativa)' : '';
+    return [
+      ...contas,
+      {
+        id: contaAvulsa.id,
+        nome_conta: contaAvulsa.nome_conta,
+        nome_exibicao: (contaAvulsa.nome_exibicao || contaAvulsa.nome_conta) + sufixo,
+        banco: contaAvulsa.banco,
+        tipo_conta: contaAvulsa.tipo_conta,
+      },
+    ];
+  }, [contas, contaAvulsa]);
+
   const nomeConta = useMemo(() => {
-    const c = contas.find(x => x.id === form.conta_bancaria_id);
+    const c = contasComAtual.find(x => x.id === form.conta_bancaria_id);
     return c ? (c.nome_exibicao || c.nome_conta) : null;
-  }, [contas, form.conta_bancaria_id]);
+  }, [contasComAtual, form.conta_bancaria_id]);
 
   const nomePlano = (lista: Array<{ id: string; subcentro: string | null; centro_custo: string | null }>, id: string) => {
     const p = lista.find(x => x.id === id);
@@ -401,6 +474,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
   ];
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       {/* ⚠ ENVELOPE CANONICO DAS CASCAS PROPRIAS (LancamentosTab:5741, o mesmo que o
           CompraModalShell recebe): `p-0 gap-0 overflow-hidden` e o X nativo escondido.
@@ -560,7 +634,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                       <ContaBancariaSelect
                         value={form.conta_bancaria_id}
                         onValueChange={(v) => set('conta_bancaria_id', v)}
-                        contas={contas}
+                        contas={contasComAtual}
                         placeholder="Selecione"
                         showBankDetails="banco"
                         className={CAMPO}
@@ -616,6 +690,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                         <>
                           <Input readOnly tabIndex={-1} value={String(form.total_parcelas)}
                             className={`${CAMPO} text-right ${NUM} ${CAMPO_TRAVADO}`} />
+                          <p className={APOIO}>Para mudar a quantidade, edite ou cancele parcelas na tabela.</p>
                         </>
                       ) : (
                         <>
@@ -640,19 +715,16 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                   <div className={`grid gap-2 ${ehEdicao ? 'grid-cols-4 [&>div]:max-w-[200px]' : (!ehParcelamento ? 'grid-cols-3' : 'grid-cols-2')}`}>
                     <div>
                       <Label className={ROTULO}>1ª parcela *</Label>
-                      {ehEdicao ? (
-                        <>
-                          <Input readOnly tabIndex={-1}
-                            value={form.data_primeira_parcela ? form.data_primeira_parcela.split('-').reverse().join('/') : '—'}
-                            className={`${CAMPO} ${NUM} ${CAMPO_TRAVADO}`} />
-                          {/* ⚠ O APOIO MUDOU DE CAMPO. Ele explicava por que o Nº de parcelas
-                              esta' travado, mas a pergunta que o operador faz olhando um
-                              cronograma travado e' "entao onde eu mudo a data?" — a resposta
-                              mora aqui, ao lado da data. */}
-                          <p className={APOIO}>As datas se editam parcela a parcela, na tabela abaixo.</p>
-                        </>
-                      ) : (
-                        <DatePicker value={form.data_primeira_parcela} onChange={v => set('data_primeira_parcela', v)} />
+                      <DatePicker value={form.data_primeira_parcela} onChange={v => set('data_primeira_parcela', v)} />
+                      {/* ⚠ EDITAVEL, E COM CONSEQUENCIA ESCRITA. Mudar a 1a parcela DESLOCA
+                          os vencimentos das pendentes pelo mesmo numero de dias — quem
+                          renegocia a data de entrada espera que o resto ande junto. As PAGAS
+                          nao se movem: a data delas ja' virou lancamento no caixa, e reescreve-la
+                          seria mentir sobre um fato. O deslocamento roda no gravador. */}
+                      {ehEdicao && (
+                        <p className="mt-0.5 text-[10px] text-amber-600 dark:text-amber-500">
+                          Move os vencimentos das parcelas pendentes; as pagas não mudam.
+                        </p>
                       )}
                     </div>
                     {/* ⚠ FREQUENCIA NAO APARECE EM EDICAO porque NAO E' PERSISTIDA: nao ha'
@@ -707,13 +779,87 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                     <Label className={ROTULO}>{ehEdicao ? 'Parcelas do contrato' : 'Prévia das parcelas'}</Label>
                     {ehEdicao && (
                       <p className="mb-0.5 text-[10px] text-amber-600 dark:text-amber-500">
-                        Somente leitura — alterar valor ou taxa não refaz o cronograma.
+                        Cada parcela se edita pelo lápis. Valor total, nº e 1ª parcela não refazem o cronograma.
                       </p>
                     )}
                     {parcelas.length === 0 ? (
                       <p className="mt-0.5 rounded-md border border-dashed px-2 py-3 text-center text-[10px] text-muted-foreground">
-                        Preencha valor total, nº de parcelas e data da 1ª parcela.
+                        {ehEdicao ? 'Este contrato não tem parcelas.' : 'Preencha valor total, nº de parcelas e data da 1ª parcela.'}
                       </p>
+                    ) : ehEdicao ? (
+                      /* ═══ EDICAO — A MESMA TABELA DO DETALHE ═══════════════════════
+                         ⚠ MESMA GRADE, MESMO EDITOR, MESMO TOTAL. Duas tabelas para as
+                         mesmas parcelas divergem no primeiro ajuste que so' uma receber;
+                         aqui as colunas, o cabecalho preso, o rodape de total e o lapis
+                         sao os do detalhe, e o lapis abre o MESMO ModalBaixaParcela — que
+                         valida e chama a RPC de reconciliacao. */
+                      <Table
+                        density="dense"
+                        className="table-fixed"
+                        wrapperClassName={`mt-0.5 ${ALTURA_PREVIA} overflow-y-auto rounded-md border`}
+                      >
+                        <TableHeader className="sticky top-0 z-10 border-b border-border bg-card [&_tr]:border-b-0">
+                          <TableRow>
+                            <TableHead className={`w-8 ${TH_PREVIA}`}>N</TableHead>
+                            <TableHead className={`w-20 ${TH_PREVIA}`}>Vencimento</TableHead>
+                            {!ehParcelamento && <TableHead className={`text-right ${TH_PREVIA}`}>Principal</TableHead>}
+                            {!ehParcelamento && <TableHead className={`text-right ${TH_PREVIA}`}>Juros</TableHead>}
+                            <TableHead className={`text-right ${TH_PREVIA}`}>Total</TableHead>
+                            <TableHead className={`w-20 ${TH_PREVIA}`}>Situação</TableHead>
+                            <TableHead className={`w-20 ${TH_PREVIA}`}>Pago em</TableHead>
+                            <TableHead className={`w-8 ${TH_PREVIA}`} />
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {parcelasGravadas.map(pg => {
+                            const principal = Number(pg.valor_principal) || 0;
+                            const juros = Number(pg.valor_juros) || 0;
+                            const situacaoLabel = pg.status === 'pago' ? 'Paga'
+                              : pg.status === 'cancelado' ? 'Cancelada' : 'Pendente';
+                            const situacaoClass = pg.status === 'pago'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : pg.status === 'cancelado'
+                                ? 'bg-muted text-muted-foreground'
+                                : 'bg-amber-100 text-amber-800';
+                            return (
+                              <TableRow key={pg.id}>
+                                <TableCell className={NUM}>{pg.numero_parcela}</TableCell>
+                                <TableCell className={NUM}>{dataBR(pg.data_vencimento) ?? '—'}</TableCell>
+                                {!ehParcelamento && <TableCell className={`text-right ${NUM}`}>{brl(principal)}</TableCell>}
+                                {!ehParcelamento && <TableCell className={`text-right ${NUM}`}>{brl(juros)}</TableCell>}
+                                <TableCell className={`text-right font-semibold ${NUM}`}>{brl(principal + juros)}</TableCell>
+                                <TableCell>
+                                  <span className={`inline-flex items-center rounded px-1 py-0 text-[9px] font-normal leading-tight ${situacaoClass}`}>
+                                    {situacaoLabel}
+                                  </span>
+                                </TableCell>
+                                <TableCell className={NUM}>{dataBR(pg.data_pagamento) ?? '—'}</TableCell>
+                                <TableCell className="px-0 text-right select-none">
+                                  <Button variant="ghost" size="icon" className="h-5 w-5 p-0"
+                                    onClick={() => setParcelaEdit(pg)}
+                                    title="Editar parcela" aria-label="Editar parcela">
+                                    <Pencil className="size-3.5" />
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                        <TableFooter className="sticky bottom-0 z-10 border-t border-border bg-card [&>tr]:border-b-0">
+                          <TableRow>
+                            <TableCell className="font-semibold">Total</TableCell>
+                            <TableCell />
+                            {!ehParcelamento && <TableCell className={`text-right font-semibold ${NUM}`}>{brl(somaPrincipalGravado)}</TableCell>}
+                            {!ehParcelamento && <TableCell className={`text-right font-semibold ${NUM}`}>{brl(somaJurosGravado)}</TableCell>}
+                            <TableCell className={`text-right font-semibold ${NUM}`}>{brl(somaPrincipalGravado + somaJurosGravado)}</TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {parcelasPagas}/{parcelasGravadas.length} pagas
+                            </TableCell>
+                            <TableCell className={`font-semibold ${NUM}`}>{brl(somaPagoGravado)}</TableCell>
+                            <TableCell />
+                          </TableRow>
+                        </TableFooter>
+                      </Table>
                     ) : (
                       <Table
                         density="dense"
@@ -996,5 +1142,52 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
         </div>
       </DialogContent>
     </Dialog>
+
+    {/* ⚠ O EDITOR DE PARCELA E' O MESMO DO DETALHE, montado aqui como IRMAO do dialogo.
+        Ao fechar, invalida a grade desta aba E as consultas do detalhe atras: a parcela
+        que acabou de mudar aparece nos dois lugares sem F5. */}
+    {ehEdicao && parcelaEdit && contrato && (
+      <ModalBaixaParcela
+        /* ⚠ PROP-BAG EXPLICITO, e nao um cast do row. A linha do banco tem colunas
+           anulaveis (`descricao`, `total_parcelas`, `cliente_id`...) e o modal pede os
+           campos fechados; `as` calaria a diferenca em vez de resolve-la. Montado a mao,
+           cada coalescencia fica visivel — e a regra zero-cast continua de pe'. */
+        parcela={{
+          id: parcelaEdit.id,
+          numero_parcela: Number(parcelaEdit.numero_parcela) || 0,
+          valor_principal: Number(parcelaEdit.valor_principal) || 0,
+          valor_juros: Number(parcelaEdit.valor_juros) || 0,
+          data_vencimento: parcelaEdit.data_vencimento ?? '',
+          data_pagamento: parcelaEdit.data_pagamento,
+          status: parcelaEdit.status ?? 'pendente',
+          observacao: parcelaEdit.observacao,
+          lancamento_id: parcelaEdit.lancamento_id,
+          lancamento_juros_id: parcelaEdit.lancamento_juros_id,
+        }}
+        financiamento={{
+          id: contrato.id,
+          cliente_id: contrato.cliente_id ?? '',
+          fazenda_id: contrato.fazenda_id ?? null,
+          descricao: contrato.descricao ?? '',
+          total_parcelas: Number(contrato.total_parcelas) || parcelasGravadas.length,
+          tipo_financiamento: contrato.tipo_financiamento ?? undefined,
+          status: contrato.status ?? undefined,
+          plano_conta_parcela_id: contrato.plano_conta_parcela_id ?? null,
+          conta_bancaria_id: contrato.conta_bancaria_id ?? null,
+          numero_contrato: contrato.numero_contrato,
+          credor_id: contrato.credor_id,
+          data_contrato: contrato.data_contrato,
+          natureza: contrato.natureza,
+        }}
+        modo="editar"
+        onClose={() => {
+          setParcelaEdit(null);
+          qc.invalidateQueries({ queryKey: ['obrigacao-edicao-parcelas', financiamentoId] });
+          qc.invalidateQueries({ queryKey: ['financiamento-parcelas', financiamentoId] });
+          qc.invalidateQueries({ queryKey: ['financiamento-detalhe', financiamentoId] });
+        }}
+      />
+    )}
+    </>
   );
 }

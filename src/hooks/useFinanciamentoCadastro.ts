@@ -118,8 +118,17 @@ export function useFinanciamentoCadastro() {
     },
   });
 
+  /* ⚠ CARTAO E CAIXA ENTRAM (PR-PARC-05c item 1). O filtro `IN ('cc','inv')` nasceu da
+     CAPTACAO — "cartão não recebe captação" (PR-H1) — mas este campo nao e' o da captacao:
+     e' `conta_bancaria_id`, "de onde SAEM as parcelas". Parcelamento no cartao e' o caso
+     real e corriqueiro (Seguro Rural no Cartão BB - Visa Infinite, medido no proto), e com
+     o filtro velho a conta do contrato simplesmente NAO APARECIA na lista: o seletor abria
+     vazio e o resumo dizia "—" para um contrato que tem conta. Dado existente aparentando
+     ausencia — o que as sentinelas proibem.
+     ⚠ A CHAVE MUDOU DE NOME junto com o escopo. `fin-contas-bancarias` continuaria servindo
+     cache da lista ESTREITA para quem pedisse a larga. */
   const { data: contas = [] } = useQuery({
-    queryKey: ['fin-contas-bancarias', clienteId],
+    queryKey: ['fin-contas-parcelas', clienteId],
     enabled: !!clienteId,
     queryFn: async () => {
       const { data } = await supabase
@@ -128,10 +137,7 @@ export function useFinanciamentoCadastro() {
         .select('id, nome_conta, nome_exibicao, banco, tipo_conta')
         .eq('cliente_id', clienteId)
         .eq('ativa', true)
-        // PR-H1 — captação de financiamento aceita conta corrente OU
-        // investimento (CDB/corretora). Cartão fica fora — não recebe
-        // captação. Filtro estrutural de tipos compatíveis.
-        .in('tipo_conta', ['cc', 'inv'])
+        .in('tipo_conta', ['cc', 'inv', 'cartao', 'caixa'])
         .order('ordem_exibicao');
       return data ?? [];
     },

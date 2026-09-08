@@ -125,11 +125,29 @@ export const DARK_GLASS_CONTENT =
   '[&_[role=option]]:focus:text-zinc-100 ' +
   '[&_[role=option]]:data-[state=checked]:bg-zinc-800/55 ' +
   '[&_[role=option]]:data-[state=checked]:text-zinc-100';
-/* Rótulo de grupo do A23: 10px/500, SEM uppercase (133g item 9). */
-const GROUP_LABEL_CLS = 'text-zinc-400 text-[10px] font-medium px-2 py-1';
-const ITEM_CLS =
-  'text-zinc-100 focus:bg-zinc-800/45 focus:text-zinc-100 ' +
-  'data-[state=checked]:bg-zinc-800/55 data-[state=checked]:text-zinc-100';
+/* ⚠ `GROUP_LABEL_CLS` e `ITEM_CLS` (zinc) SAIRAM com a troca do default: eram internos e
+   so' o vidro escuro os usava. Quem pedir `DARK_GLASS_CONTENT` por `contentClassName`
+   continua atendido — aquele blob ja' carrega os seletores descendentes
+   `[&_[role=option]]:...`, entao pinta os itens sozinho. */
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   PR-PARC-05c item 2 — A CAIXA PASSA A SER A DO SISTEMA.
+
+   ⚠ O ESCURO NAO ERA CONTRASTE COM A TELA, ERA GOSTO: os modais que abrem este
+   seletor sao CLAROS — `LancamentoV2Dialog` e' `bg-card`, o `ObrigacaoDialog` e' o
+   mesmo. Um dropdown quase preto e translucido sobre um card claro le-se APAGADO:
+   texto cinza sobre cinza-chumbo, rotulo de grupo em `zinc-400` que some.
+   ⚠ `position="popper"` + `--radix-select-trigger-width`: sem popper a variavel nao
+   existe e a caixa e' medida pelo item mais longo — o nome de conta e' longo, e ela
+   estourava para fora do modal.
+   ⚠ `DARK_GLASS_CONTENT` continua EXPORTADO e nao foi apagado: quem quiser o vidro
+   escuro pede por `contentClassName`. O que mudou foi o DEFAULT.
+   ───────────────────────────────────────────────────────────────────────────── */
+const POPOVER_CONTENT =
+  'bg-popover text-popover-foreground border shadow-md max-h-64 overflow-y-auto rolagem-fina';
+const POPOVER_GROUP_LABEL_CLS =
+  'px-2 py-1 bg-muted/40 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground';
+const POPOVER_ITEM_CLS = 'h-7 text-[12px] text-foreground focus:bg-accent';
 
 export function ContaBancariaSelect({
   value,
@@ -176,17 +194,20 @@ export function ContaBancariaSelect({
       <SelectTrigger className={cn(size === 'compact' && 'h-5 px-1.5 text-[11px] [&_svg]:h-3 [&_svg]:w-3', className)}>
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
-      <SelectContent className={contentClassName ?? DARK_GLASS_CONTENT}>
+      <SelectContent
+        position="popper"
+        className={cn(POPOVER_CONTENT, 'w-[var(--radix-select-trigger-width)]', contentClassName)}
+      >
         {prependItems?.map((it) => (
-          <SelectItem key={it.value} value={it.value} className={ITEM_CLS}>
+          <SelectItem key={it.value} value={it.value} className={POPOVER_ITEM_CLS}>
             {it.label}
           </SelectItem>
         ))}
         {grupos.map((g) => (
           <SelectGroup key={g.tipo}>
-            <SelectLabel className={GROUP_LABEL_CLS}>{g.label}</SelectLabel>
+            <SelectLabel className={POPOVER_GROUP_LABEL_CLS}>{g.label}</SelectLabel>
             {g.items.map(({ conta, label }) => (
-              <SelectItem key={conta.id} value={conta.id} className={ITEM_CLS}>
+              <SelectItem key={conta.id} value={conta.id} className={POPOVER_ITEM_CLS}>
                 {label}
               </SelectItem>
             ))}

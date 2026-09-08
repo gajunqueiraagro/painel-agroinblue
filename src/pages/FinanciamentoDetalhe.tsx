@@ -150,6 +150,44 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
       return false;
     }
 
+    /* ── DESLOCAMENTO DO CRONOGRAMA (PR-PARC-05c item 3) ──────────────────────
+       ⚠ AQUI, E NAO NO DIALOGO: este e' o unico ponto do fluxo com acesso as parcelas
+       e ao estado ANTERIOR do contrato (`fin.data_primeira_parcela`) — o dialogo so'
+       conhece o form, e o form ja' e' o valor novo.
+       ⚠ SO' AS PENDENTES. A data de uma parcela paga ja' virou lancamento no caixa;
+       reescreve-la nao adia nada, so' desmente um fato registrado. O filtro e'
+       `status <> 'pago'` no proprio UPDATE, para nao depender do que o front carregou.
+       ⚠ DIAS, NAO MESES: o intervalo e' a diferenca em dias entre a data antiga e a
+       nova, aplicado igual a todas — assim uma frequencia semestral continua semestral,
+       e o dia do mes acompanha o que o operador escolheu. */
+    const dataAntiga: string | null = fin?.data_primeira_parcela ?? null;
+    const dataNova = form.data_primeira_parcela || null;
+    if (dataAntiga && dataNova && dataAntiga !== dataNova) {
+      const MS_DIA = 86400000;
+      const deltaDias = Math.round(
+        (new Date(dataNova + 'T12:00:00').getTime() - new Date(dataAntiga + 'T12:00:00').getTime()) / MS_DIA,
+      );
+      if (deltaDias !== 0) {
+        const { data: pendentes } = await supabase
+          .from('financiamento_parcelas')
+          .select('id, data_vencimento')
+          .eq('financiamento_id', id!)
+          .neq('status', 'pago');
+        for (const par of pendentes ?? []) {
+          if (!par.data_vencimento) continue;
+          const nova = new Date(par.data_vencimento + 'T12:00:00');
+          nova.setDate(nova.getDate() + deltaDias);
+          await supabase
+            .from('financiamento_parcelas')
+            .update({ data_vencimento: format(nova, 'yyyy-MM-dd'), updated_at: new Date().toISOString() })
+            .eq('id', par.id);
+        }
+        if ((pendentes?.length ?? 0) > 0) {
+          toast.info(`${pendentes!.length} parcela(s) pendente(s) deslocada(s) em ${deltaDias} dia(s).`);
+        }
+      }
+    }
+
     // ── Sync lançamento de captação ──────────────────────────────────
     const novoGerar = !!form.gerar_lancamento_captacao;
     const novoPlanoCap = form.plano_conta_captacao_id;
