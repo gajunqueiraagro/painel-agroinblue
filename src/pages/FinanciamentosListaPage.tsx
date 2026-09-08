@@ -85,6 +85,23 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
      seria mexer em arquivo fora do escopo deste PR. */
   const [novaObrigacaoAberta, setNovaObrigacaoAberta] = useState(false);
 
+  /* PR-PARC-04b item 3 — ABRIR O CONTRATO. Um caminho so', chamado pela linha inteira e
+     pelo olho: eram o mesmo gesto escrito duas vezes, e duas copias de "grava os filtros
+     antes de sair" divergem no primeiro filtro novo. */
+  const abrirContrato = (id: string) => {
+    try {
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify({
+        status: filtroStatus, tipo: filtroTipo,
+        natureza: filtroNatureza,
+        descricao: filtroDescricao, contrato: filtroContrato,
+        credor: filtroCredor, dataContratoDe: filtroDataContratoDe,
+        dataContratoAte: filtroDataContratoAte,
+        vencDe: filtroVencDe, vencAte: filtroVencAte,
+      }));
+    } catch {}
+    onDetalhe?.(id);
+  };
+
   const STORAGE_KEY = `financiamentos_lista_filtros_${clienteAtual?.id ?? 'anon'}`;
   const _sf = (() => {
     if (!clienteAtual?.id) return null;
@@ -320,7 +337,19 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
   }
 
   return (
-    <div className="w-full max-w-5xl mx-auto flex flex-col bg-background" style={{ height: 'calc(100vh - 60px)' }}>
+    /* ⚠ SEM NUMERO MAGICO: a altura vem do PAI. Antes era `calc(100vh - 60px)`, e os
+       60px eram o `Header` do shell ANTIGO (`pages/Index.tsx`) — no /v2 esse cabecalho
+       nao existe, e por isso a lista terminava dezenas de pixels acima do rodape. Trocar
+       por outra constante so' mudaria o erro de lugar: a `V2FilterBar` e' `flex-wrap` e
+       muda de altura conforme a largura da janela.
+       ⚠ `h-full`, E NAO `flex-1`, PORQUE ESTA TELA TEM DOIS PAIS. No /v2 o pai e' coluna
+       flex com altura (`V2Index:1465`, ja com 'financiamentos' no `SECOES_APP_SHELL`) e
+       os dois funcionariam; em `pages/Index.tsx:468` o pai tem altura mas NAO e' flex —
+       ali `flex-1` seria inerte e a tela perderia a altura, levando a rolagem de volta
+       para a pagina. `h-full` mede contra a caixa de conteudo nos dois casos: no v2
+       preenche a coluna; no Index preenche o espaco acima do `pb-20` reservado a'
+       BottomNav. Um conjunto de classes, dois pais, nenhuma ramificacao. */
+    <div className="w-full max-w-5xl mx-auto flex flex-col bg-background h-full min-h-0">
       {/* ═══ BARRA SUPERIOR — PR-PARC-01 item 1 ═══════════════════════════════════
           ⚠ SÓ NESTA TELA, e dentro do container que já desconta 60px: ela custa 32px
           do corpo, e o envelope aceitou o preço. `sticky` aqui é redundante com o
@@ -383,28 +412,28 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
             "R$ 17.6M": abreviação esconde a ordem de grandeza exata justamente no
             número que se confere contra o banco. Ele era local a este arquivo — não
             um formatador compartilhado — e saiu junto. */}
-        <div className="flex items-baseline gap-6 px-0 py-1">
-          <div>
-            <div className="text-[11px] text-muted-foreground">Total financiado</div>
-            <div className="text-[20px] font-medium tabular-nums leading-tight">{fmt(totais.financiado)}</div>
-          </div>
-          {/* ⚠ OS DOIS DO MEIO SÃO O PONTO — item 5. Sozinhos, "financiado 17,6M"
-              e "a pagar 22,2M" liam-se como erro de sistema. Com o principal em
-              aberto e os juros entre eles, a conta se fecha à vista de todos:
-              11,6M + 10,6M = 22,2M, e o que se deve a mais que o contratado É o
-              juro. Nenhum operador precisa abrir contrato para entender. */}
-          <div>
-            <div className="text-[11px] text-muted-foreground">Principal em aberto</div>
-            <div className="text-[20px] font-medium tabular-nums leading-tight">{fmt(totais.principalAberto)}</div>
-          </div>
-          <div>
-            <div className="text-[11px] text-muted-foreground">Juros a pagar</div>
-            <div className="text-[20px] font-medium tabular-nums leading-tight">{fmt(totais.juros)}</div>
-          </div>
-          <div>
-            <div className="text-[11px] text-muted-foreground">A pagar</div>
-            <div className="text-[20px] font-medium tabular-nums leading-tight">{fmt(totais.aPagar)}</div>
-          </div>
+        {/* ⚠ OS DOIS DO MEIO SÃO O PONTO — item 5. Sozinhos, "financiado 17,6M" e
+            "a pagar 22,2M" liam-se como erro de sistema. Com o principal em aberto e os
+            juros entre eles, a conta se fecha à vista de todos: 11,6M + 10,6M = 22,2M, e
+            o que se deve a mais que o contratado É o juro. Nenhum operador precisa abrir
+            contrato para entender. A ORDEM É A DA CONTA e não muda.
+            ⚠ CAIXAS, E MENORES QUE OS PARES SOLTOS (PR-PARC-04b item B): 38px contra os
+            ~46px de antes (11px de rótulo + 20px de valor + `py-1`). A cor à esquerda faz
+            o trabalho que o tamanho fazia — "A pagar" é a única com fundo, porque é a
+            resposta do subtítulo. */}
+        <div className="grid grid-cols-4 gap-2">
+          {([
+            { rotulo: 'Total financiado',    valor: totais.financiado,     borda: 'border-l-muted-foreground/40', fundo: '' },
+            { rotulo: 'Principal em aberto', valor: totais.principalAberto, borda: 'border-l-primary',             fundo: '' },
+            { rotulo: 'Juros a pagar',       valor: totais.juros,           borda: 'border-l-amber-500',           fundo: '' },
+            { rotulo: 'A pagar',             valor: totais.aPagar,          borda: 'border-l-primary',             fundo: 'bg-primary/5' },
+          ] as const).map(c => (
+            <div key={c.rotulo}
+              className={`h-[38px] rounded-md border border-l-[3px] px-3 py-1.5 ${c.borda} ${c.fundo}`}>
+              <div className="text-[10px] leading-none text-muted-foreground truncate">{c.rotulo}</div>
+              <div className="mt-0.5 text-[14px] font-semibold tabular-nums leading-tight truncate">{fmt(c.valor)}</div>
+            </div>
+          ))}
         </div>
 
       </div>
@@ -415,7 +444,10 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
           ⚠ `min-h-0` NOS DOIS NÍVEIS: sem ele um filho flex recusa-se a encolher
           abaixo do conteúdo, o card cresce além da tela e a rolagem escapa para a
           página — que é exatamente o defeito que este PR veio corrigir. */}
-      <div className="min-h-0 flex-1 px-4 pb-3">
+      {/* `pb-1` (4px) e nao `pb-3` (12px): com o container terminando rente ao rodape,
+          este recuo E' a distancia final da lista ate' a borda da tela — a regra da Mesa
+          pede 5px, e 12 devolviam parte da faixa que o item 1 acabou de recuperar. */}
+      <div className="min-h-0 flex-1 px-4 pb-1">
         <div className="flex h-full min-h-0 flex-col rounded-lg border border-border bg-card px-3 pt-2 pb-0 shadow-[0_1px_3px_0_rgb(0_0_0/0.04)]">
         <div className="relative mb-1.5 shrink-0 space-y-2">
         {/* ═══ FILTROS — PR-PARC-01 item 4 ════════════════════════════════════════
@@ -561,31 +593,37 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
                define; esta tela só ADERE. O fundo do cabeçalho deixou de ser
                `bg-muted/95 backdrop-blur` e virou `bg-card` opaco, porque dentro
                do card translúcido deixa a linha passar por baixo do número.
-               ⚠ A COLUNA DE STATUS TEM 13%, e o motivo está registrado lá: o
-               badge mais a fração "2/12" não cabiam em 8% e a fração saía
-               cortada. Copiei a largura com o motivo. */
+               ⚠ AS LARGURAS DIVERGIRAM DA REFERÊNCIA e o porquê está no colgroup
+               abaixo, coluna a coluna — esta tela tem duas colunas de texto que a
+               referência não tem (descrição com nº de contrato + escopo, e credor). */
             <Table
               density="dense"
               className="table-fixed"
               wrapperClassName="h-full overflow-x-hidden overflow-y-auto"
             >
+              {/* ⚠ A SOMA É 100 E ISSO NÃO É OPCIONAL: `table-fixed` + colgroup em
+                  PORCENTAGEM é o que impede rolagem horizontal e faz o `truncate` sair
+                  com reticências em vez de quebrar a linha.
+                  6 + 26 + 14 + 11 + 12 + 11 + 8 + 9 + 3 = 100
+                  ⚠ QUEM CEDEU (PR-PARC-04b item C): Principal 12->11, Saldo devedor
+                  13->12, Status 13->9 e ações 4->3 pagam os 4 pontos da Descrição
+                  (22->26) e os 3 do Credor (11->14) — os dois únicos campos de TEXTO da
+                  linha, e os únicos que truncam. Os números têm largura conhecida e não
+                  ganham nada com folga; texto ganha caractere por ponto.
+                  ⚠ STATUS VOLTOU A ENCOLHER, e o risco está medido: em 8% o badge mais a
+                  fração "2/12" saíam cortados, e foi por isso que ele tinha 13%. 9% é UM
+                  ponto acima do que já falhou — se a fração cortar de novo na homologação,
+                  é daqui que sai o ponto que falta. */}
               <colgroup>
                 <col className="w-[6%]" />
-                {/* ⚠ DESCRIÇÃO 19% -> 22%, CREDOR 14% -> 11% (PR-PARC-02). A troca
-                    é de três pontos entre duas colunas vizinhas, e a soma segue
-                    em 100% — a regra do `table-fixed` herdada da referência.
-                    O motivo é MEDIDO, não estético: 64 dos 156 contratos (41%) já
-                    passavam de 30 caracteres em descrição + nº do contrato, e o
-                    sufixo de escopo entrou no fim dessa mesma célula. O credor
-                    cede porque é o texto mais curto e já tem `title`. */}
-                <col className="w-[22%]" />
+                <col className="w-[26%]" />
+                <col className="w-[14%]" />
                 <col className="w-[11%]" />
                 <col className="w-[12%]" />
-                <col className="w-[13%]" />
                 <col className="w-[11%]" />
                 <col className="w-[8%]" />
-                <col className="w-[13%]" />
-                <col className="w-[4%]" />
+                <col className="w-[9%]" />
+                <col className="w-[3%]" />
               </colgroup>
               {/* ⚠ A BORDA MORA NO `thead`, NÃO NA LINHA — item 3. Na linha, ela
                   é filha do que rola e some por um instante a cada quadro do
@@ -625,8 +663,18 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
             <TableBody>
                 {dadosOrdenados.map(f => {
                   const encerrado = f.status !== 'ativo';
+                  /* ⚠ A LINHA INTEIRA ABRE O CONTRATO. O olho continua porque e' a
+                     affordance VISIVEL — quem nao sabe que a linha e' clicavel precisa
+                     de um alvo que se anuncie; quem ja sabe nao mira mais em 20px. */
                   return (
-                  <TableRow key={f.id} className={encerrado ? 'opacity-50' : ''}>
+                  <TableRow
+                    key={f.id}
+                    role="link"
+                    tabIndex={0}
+                    onClick={() => abrirContrato(f.id)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); abrirContrato(f.id); } }}
+                    className={`cursor-pointer hover:bg-muted/40 ${encerrado ? 'opacity-50' : ''}`}
+                  >
                     {/* ⚠ PÍLULA DE NATUREZA — PR-PARC-02 item 3b. A forma é a da
                         referência (`border`, 9px bold, `rounded`); o eixo deixou
                         de ser pecuária x agricultura e passou a ser o que o
@@ -645,7 +693,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
                         escopo ficaria ilegível nas descrições mais longas. */}
                     <TableCell className="truncate"
                       title={`${f.descricao}${f.numero_contrato ? ` ${f.numero_contrato}` : ''} · ${escopoSigla(f.tipo_financiamento)}`}>
-                      <span className="font-semibold">{f.descricao}</span>
+                      <span className="font-medium leading-tight">{f.descricao}</span>
                       {f.numero_contrato && (
                         <span className="ml-1 text-[10px] text-muted-foreground">{f.numero_contrato}</span>
                       )}
@@ -674,26 +722,24 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
                         {f.parcelas_pagas}/{f.total_parcelas}
                       </span>
                     </TableCell>
-                    <TableCell className="px-0 text-right">
+                    {/* ⚠ `select-none` SO' AQUI. Arrastar sobre a descricao continua
+                        selecionando texto — e' dado que se copia; o que nao pode e' o
+                        clique na coluna de acoes virar selecao. */}
+                    <TableCell className="px-0 text-right select-none">
+                    {/* ⚠ ERA ESTE O CULPADO DOS 26,5px. `h-6` sao 24px dentro de uma
+                        linha de 21px: a celula tem `py-0`, entao quem manda na altura e'
+                        o filho mais alto, e o botao esticava TODAS as linhas da tabela.
+                        `size="icon"` traz `h-8 w-8` — o `p-0` impede que o padding do
+                        variante volte a empurrar. */}
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-6 w-6"
-                      onClick={() => {
-                      try {
-                        sessionStorage.setItem(STORAGE_KEY, JSON.stringify({
-                          status: filtroStatus, tipo: filtroTipo,
-                          natureza: filtroNatureza,
-                          descricao: filtroDescricao, contrato: filtroContrato,
-                          credor: filtroCredor, dataContratoDe: filtroDataContratoDe,
-                          dataContratoAte: filtroDataContratoAte,
-                          vencDe: filtroVencDe, vencAte: filtroVencAte,
-                        }));
-                      } catch {}
-                      onDetalhe?.(f.id);
-                    }}
+                      className="h-5 w-5 p-0"
+                      title="Abrir"
+                      aria-label="Abrir"
+                      onClick={e => { e.stopPropagation(); abrirContrato(f.id); }}
                     >
-                      <Eye className="h-3.5 w-3.5" />
+                      <Eye className="size-3.5" />
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -754,8 +800,14 @@ function CabecalhoOrdenavel({ rotulo, ativo, direcao, aoOrdenar, direita }: {
          Gabriel pediu cabeçalho ESCURO. Fica no arquivo da tela, de propósito:
          mudar o primitivo escureceria o cabeçalho de 39 telas.
          O `hover:text-foreground` saiu por ter virado letra morta — a cor de
-         repouso já é essa. */
-      className={`cursor-pointer select-none text-foreground ${direita ? 'text-right' : ''}`}
+         repouso já é essa.
+         ⚠ `normal-case tracking-normal` PELO MESMO MOTIVO (PR-PARC-04b item D): o
+         primitivo dense entrega `uppercase tracking-wide`, e "SALDO DEVEDOR" em
+         versalete de 9px com espaçamento gasta mais largura do que "Saldo devedor"
+         e lê-se pior. O override é DESTA TELA — mudar o dense trocaria o cabeçalho
+         de todas as tabelas densas do sistema, e isso é decisão sua, não deste PR.
+         O 9px/600 do primitivo continua valendo. */
+      className={`cursor-pointer select-none text-foreground normal-case tracking-normal ${direita ? 'text-right' : ''}`}
       onClick={aoOrdenar}
       aria-sort={ativo ? (direcao === 'asc' ? 'ascending' : 'descending') : 'none'}
     >

@@ -1357,7 +1357,12 @@ export default function V2Index() {
      terceiro `||` já seria a forma de nunca mais alguém notar o padrão. Entrar aqui é a
      única coisa que uma seção nova precisa fazer para que a altura pare de vir de
      `calc(100vh - N)` chutado e passe a vir do flex. */
-  const SECOES_APP_SHELL = new Set(['conciliacao', 'mapa-pastos', 'conferencia-lancamentos']);
+  /* ⚠ 'financiamentos' ENTROU (PR-PARC-04b): a lista pedia altura com um
+     `calc(100dvh - Npx)` que so' acertava enquanto a `V2FilterBar` coubesse em uma
+     linha — ela e' `flex-wrap` e vira duas em janela estreita, e ai' a tela nascia
+     mais alta que a area util e a section rolava. Com a secao no app-shell o PAI da'
+     a altura e a tela deixa de conhecer numero magico. */
+  const SECOES_APP_SHELL = new Set(['conciliacao', 'mapa-pastos', 'conferencia-lancamentos', 'financiamentos']);
   const appShell = SECOES_APP_SHELL.has(section);
 
   return (
