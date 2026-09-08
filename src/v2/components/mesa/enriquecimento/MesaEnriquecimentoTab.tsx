@@ -16,12 +16,13 @@ import { useClassificacaoStaging, useSessoesClassificacao } from '@/v2/hooks/use
 import {
   toRowVM, toSessoesVM, contarAplicaveisExatos, escolherMelhorSessaoId, diferencasDoResultado,
   listarContas, filtrarPorConta, resumirGrupos, filtrarPorGrupo, grupoDaLinha,
-  sessoesDoMes, contaEfetivaNome, parteDeAgrupamento,
+  sessoesDoMes, contaEfetivaNome, parteDeAgrupamento, explicadoPorSiMesmo,
   type EnriqGrupo,
 } from '@/v2/lib/mesa/enriquecimentoView';
 import { EnriquecimentoLista, type EnriquecimentoListaProps } from './EnriquecimentoLista';
 import { EnriquecimentoDetalhe, type EnriquecimentoDetalheProps } from './EnriquecimentoDetalhe';
 import { type EnriquecimentoActionsProps } from './EnriquecimentoActions';
+import { AcaoEhTransferencia } from './AcaoEhTransferencia';
 import type { EnriqRowVM, EnriqSessaoVM } from './types';
 import { EnriquecimentoMesaModal } from './EnriquecimentoMesaModal';
 import { EnriquecimentoImportarDialog } from './EnriquecimentoImportarDialog';
@@ -661,6 +662,35 @@ export function MesaEnriquecimentoTab({
   const { conciliados } = useLancamentosConciliados(lancIdsDaSessao);
   const selecionadoConciliado = !!selecionado?.lancId && conciliados.has(selecionado.lancId);
 
+  /* ── 133i-c item 1 — quando a ação de transferência cabe nesta linha ──────────
+     O sentido sai do MESMO ternário da lista sem par: '3…' já é transferência (null),
+     '1…' entrada, '2…' saída. */
+  const sentidoDaLinha: 'entrada' | 'saida' | null = (() => {
+    const t = (selecionado?.edicao.tipoOperacao ?? '').trim();
+    if (t.startsWith('3')) return null;
+    if (t.startsWith('1')) return 'entrada';
+    if (t.startsWith('2')) return 'saida';
+    return null;
+  })();
+
+  const podeMarcarTransferencia = !!selecionado
+    && !!selecionado.lancId
+    && sentidoDaLinha !== null
+    && !explicadoPorSiMesmo({
+         tipo_operacao: selecionado.edicao.tipoOperacao,
+         subcentro: selecionado.edicao.subcentroAtual ?? null,
+       });
+
+  /* A lista de contas no formato do seletor — a MESMA que a aba já monta para os campos. */
+  const contasParaTransferencia = useMemo(
+    () => contasBancarias.map((c) => ({
+      id: c.id,
+      nome_conta: c.nome_conta,
+      nome_exibicao: c.nome_exibicao ?? null,
+      tipo_conta: c.tipo_conta ?? null,
+    })),
+    [contasBancarias]);
+
   /**
    * O que a planilha diz e o extrato desmente — 133h item 12.
    *
@@ -1014,6 +1044,29 @@ export function MesaEnriquecimentoTab({
     soConfirma,
     soAvanca,
     onConfirmarProximo: () => { void handleConfirmarProximo(); },
+    /* ── 133i-c item 1 — "É transferência para/de ▾" TAMBÉM NA MESA ──────────────
+       ⚠ MESMO COMPONENTE E MESMO HOOK da lista "Sem par no sistema"
+       (`EnriquecimentoSemParSistema:158`), montado aqui com a linha selecionada. Duas
+       cópias do mesmo gesto divergiriam na primeira regra nova — e este gesto reescreve
+       tipo e classificação de lançamento conciliado, que é o pior lugar para ter duas.
+       ⚠ SÓ APARECE QUANDO CABE: precisa de lançamento casado (`lancId`), de sentido
+       (entrada/saída — `3-Transferências` devolve `null`) e de a linha NÃO ser explicada
+       por si mesma. `explicadoPorSiMesmo` é o predicado que a própria frente já usa para
+       "transferência ou estorno nunca é pendência" — reusado em vez de reescrito. */
+    slotTransferencia: podeMarcarTransferencia && selecionado?.lancId ? (
+      <AcaoEhTransferencia
+        lancamentoId={selecionado.lancId}
+        sentido={sentidoDaLinha}
+        contaPropriaId={selecionado.edicao.contaBancariaIdAtual ?? null}
+        contas={contasParaTransferencia}
+        onAplicado={() => {
+          toast.success('Transferência aplicada.');
+          void qcMesa.invalidateQueries({ queryKey: ['classificacao-staging'] });
+          void qcMesa.invalidateQueries({ queryKey: ['sistema-nao-explicado'] });
+        }}
+        onErro={(m) => toast.error(m)}
+      />
+    ) : null,
     reverterDisabled: !podeReverter,
     aplicarTodosDisabled: !sessaoId || nAplicaveis === 0,
     isBusy,
@@ -1472,11 +1525,18 @@ export function MesaEnriquecimentoTab({
           onAbrirNoFinanceiro={onVerNoFinanceiro}
           /* 133i-b item 1 — o cadastro para a ação "É transferência para/de ▾". */
           contas={contasBancarias}
+          /* 133i-c item 3 — o cliente, para as parcelas pendentes de "É parcela de financiamento ▾". */
+          clienteId={clienteAtual?.id ?? null}
           onMudou={() => {
-            /* O lançamento virou transferência: sai desta lista e muda o mês inteiro. */
+            /* ⚠ AS DUAS ACOES DA LISTA CAEM AQUI, e as duas tiram a linha da lista: virar
+               transferencia e pagar parcela. Por isso a invalidacao e' a mesma, mais a
+               lista de financiamentos — que muda quando uma parcela e' paga. */
             qcMesa.invalidateQueries({ queryKey: ['sistema-nao-explicado'] });
+            qcMesa.invalidateQueries({ queryKey: ['parcelas-financiamento-pendentes'] });
+            qcMesa.invalidateQueries({ queryKey: ['financiamentos-lista', clienteAtual?.id] });
+            qcMesa.invalidateQueries({ queryKey: ['financiamento-parcelas'] });
             if (clienteAtual?.id) notificarLancamentosMudaram(clienteAtual.id);
-            toast.success('Virou transferência entre contas.');
+            toast.success('Aplicado.');
           }}
           onErro={(m) => toast.error(`Não foi possível: ${m}`)}
         />

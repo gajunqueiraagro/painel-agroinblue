@@ -19,6 +19,18 @@ export interface LancamentoNaoExplicado {
   documento: string | null;
   /** 133c-a (migration 20260907173022) — a classificação que o lançamento já tem. */
   subcentro: string | null;
+  /**
+   * 133i-c item 5 (migration 20260908203711) — a conta do lançamento POR ID.
+   *
+   * ⚠ ELE SUBSTITUI O CASAMENTO POR NOME. Até esta migration a RPC só devolvia
+   * `conta_nome`, e a tela achava a conta comparando string com
+   * `nome_exibicao || nome_conta` — frágil por construção: nome muda no cadastro,
+   * dois clientes repetem nome, e o `nome_exibicao` é editável.
+   * ⚠ OPCIONAL NO TIPO de propósito: a RPC nova já está no proto, mas a coluna chega
+   * `undefined` em qualquer resposta em cache do react-query anterior ao deploy. O
+   * chamador cai no nome quando ela não vier — ver `contaDoLancamento`.
+   */
+  conta_bancaria_id?: string | null;
 }
 
 // PR-MESA-INVERSO-02 — contaId = conta selecionada na toolbar (null = todas da sessão).

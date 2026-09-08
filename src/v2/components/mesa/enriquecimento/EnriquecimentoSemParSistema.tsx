@@ -27,6 +27,8 @@ import {
   temCandidatoDuplicata, precisaDeVoce, pareceCotaCapital, investimentoDoMesmoBanco,
 } from '@/v2/lib/mesa/enriquecimentoView';
 import { AcaoEhTransferencia } from './AcaoEhTransferencia';
+import { AcaoEhParcelaFinanciamento } from './AcaoEhParcelaFinanciamento';
+import { useParcelasFinanciamento, candidatasParaExtrato } from '@/v2/hooks/useParcelasFinanciamento';
 import type { ContaSelecionavel } from '@/components/shared/ContaBancariaSelect';
 import type { LancamentoNaoExplicado } from '@/v2/hooks/useSistemaNaoExplicado';
 
@@ -44,13 +46,20 @@ export interface EnriquecimentoSemParSistemaProps {
    * lista, e um botão que abre um seletor vazio é pior que botão nenhum.
    */
   contas?: readonly ContaSelecionavel[];
+  /**
+   * 133i-c item 3 — o cliente, para as parcelas pendentes de "É parcela de financiamento ▾".
+   *
+   * ⚠ MESMA REGRA DAS CONTAS: sem ele a ação não aparece. O componente é DUMB e não vai
+   * buscar o cliente no contexto — quem o tem é o container.
+   */
+  clienteId?: string | null;
   /** Recarrega a lista depois de aplicar — quem sabe recarregar é o container. */
   onMudou?: () => void;
   onErro?: (mensagem: string) => void;
 }
 
 export function EnriquecimentoSemParSistema({
-  linhas, carregando, onCancelar, onAbrirNoFinanceiro, contas, onMudou, onErro,
+  linhas, carregando, onCancelar, onAbrirNoFinanceiro, contas, clienteId, onMudou, onErro,
 }: EnriquecimentoSemParSistemaProps) {
   /* O id em cancelamento e o motivo digitado. Um por vez: cancelar é irreversível pela
      tela, e um formulário aberto por linha convidaria a confirmar o errado. */
@@ -72,16 +81,31 @@ export function EnriquecimentoSemParSistema({
   const [verExplicados, setVerExplicados] = useState(false);
 
   /**
-   * A conta do lançamento, achada pelo NOME — 133i-b item 1.
+   * A conta do lançamento — 133i-c item 5.
    *
-   * ⚠ É O ÚNICO ELO QUE A RPC DEVOLVE: `fn_classificacao_sistema_nao_explicado` traz
-   * `conta_nome`, não `conta_bancaria_id`. Comparar nome é frágil e eu preferiria o id —
-   * mas aqui a consequência de errar é só o seletor não esconder uma conta, e quem trava de
-   * verdade é o banco ("a outra conta tem de ser diferente da conta do lancamento"). Fica
-   * anotado: a RPC devolver o id resolveria isto de raiz.
+   * ⚠ O ID PRIMEIRO, O NOME SO' COMO RESERVA. Até a migration 20260908203711 a RPC devolvia
+   * apenas `conta_nome`, e esta função comparava string com `nome_exibicao || nome_conta`.
+   * O comentário anterior dizia que "a RPC devolver o id resolveria isto de raiz" — ela passou
+   * a devolver, e é o que se usa agora.
+   * ⚠ O RAMO DO NOME NÃO SAIU, e não é hesitação: uma resposta em cache do react-query
+   * gravada antes do deploy da RPC chega sem a coluna, e nesse minuto o `id` é `undefined`.
+   * Cair no nome ali é degradar para o comportamento de ontem, não quebrar.
    */
-  const contaDoLancamento = (nome: string | null) =>
-    (contas ?? []).find((c) => (c.nome_exibicao || c.nome_conta) === nome) ?? null;
+  const contaDoLancamento = (l: Pick<LancamentoNaoExplicado, 'conta_bancaria_id' | 'conta_nome'>) => {
+    if (l.conta_bancaria_id) {
+      return (contas ?? []).find((c) => c.id === l.conta_bancaria_id) ?? null;
+    }
+    return (contas ?? []).find((c) => (c.nome_exibicao || c.nome_conta) === l.conta_nome) ?? null;
+  };
+
+  /* ── 133i-c item 3 — parcelas pendentes do cliente, uma consulta para a lista toda ──
+     ⚠ A CONSULTA SO' SAI SE HOUVER LINHA SEM PAR: sem isso a aba pagaria a leitura de
+     parcelas em toda abertura, inclusive quando nao ha' nada a casar. */
+  const { data: parcelasPendentes = [] } = useParcelasFinanciamento(
+    clienteId ?? null, (linhas?.length ?? 0) > 0);
+
+  const candidatasDe = (l: LancamentoNaoExplicado) =>
+    candidatasParaExtrato({ data: l.data_pagamento, valor: l.valor }, parcelasPendentes);
 
   const sentidoDe = (l: LancamentoNaoExplicado): 'entrada' | 'saida' | null => {
     const t = (l.tipo_operacao ?? '').trim();
@@ -158,11 +182,21 @@ export function EnriquecimentoSemParSistema({
                   <AcaoEhTransferencia
                     lancamentoId={l.lanc_id}
                     sentido={sentidoDe(l)}
-                    contaPropriaId={contaDoLancamento(l.conta_nome)?.id ?? null}
+                    contaPropriaId={contaDoLancamento(l)?.id ?? null}
                     contas={contas}
                     contaSugeridaId={pareceCotaCapital(l.descricao)
-                      ? investimentoDoMesmoBanco(contaDoLancamento(l.conta_nome), contas)
+                      ? investimentoDoMesmoBanco(contaDoLancamento(l), contas)
                       : null}
+                    onAplicado={() => onMudou?.()}
+                    onErro={(m) => onErro?.(m)}
+                  />
+                )}
+                {/* ⚠ SO' EM SAIDA: pagar parcela e' dinheiro saindo. Numa entrada a acao
+                    nao existe, e oferece-la seria convidar a pagar com o que entrou. */}
+                {sentidoDe(l) === 'saida' && (
+                  <AcaoEhParcelaFinanciamento
+                    lancamentoCruId={l.lanc_id}
+                    candidatas={candidatasDe(l)}
                     onAplicado={() => onMudou?.()}
                     onErro={(m) => onErro?.(m)}
                   />

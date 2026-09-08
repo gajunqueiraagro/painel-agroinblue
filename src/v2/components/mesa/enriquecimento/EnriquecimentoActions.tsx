@@ -3,6 +3,7 @@
 // Bloco SECUNDÁRIO (após separador) = acelerador em lote "Aplicar todos os Exatos".
 // PR-U1: Salvar/Salvar e Próximo/Reverter ligados (flags granulares). P0-1A: "Aplicar
 // todos" e "Revisado" ligados — lote conservador da sessão (fn_classificacao_apply).
+import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 
 export interface EnriquecimentoActionsProps {
@@ -40,6 +41,16 @@ export interface EnriquecimentoActionsProps {
    * serve — não há o que confirmar em algo que já está no banco.
    */
   soAvanca?: boolean;
+  /**
+   * 133i-c item 1 — a ação "É transferência para/de ▾" da linha selecionada.
+   *
+   * ⚠ SLOT, E NÃO A AÇÃO EMBUTIDA. Este componente é DUMB (diz isso na primeira linha) e a
+   * ação precisa de RPC, de estado de simulação e da lista de contas. Recebê-la pronta
+   * mantém a barra sem saber o que é uma transferência; quem monta é a Mesa, que já tem
+   * as contas e a linha. `null` quando a ação não cabe naquela linha — e aí nada ocupa
+   * espaço na faixa.
+   */
+  slotTransferencia?: ReactNode;
   reverterDisabled?: boolean;      // Reverter
   aplicarTodosDisabled?: boolean;  // acelerador em lote + Revisado
   isBusy?: boolean;                // uma escrita em andamento
@@ -64,7 +75,7 @@ export interface EnriquecimentoActionsProps {
 export function EnriquecimentoActions({
   posicao, onAnterior, onProximo, canAnterior, canProximo,
   revisado, onRevisado, onSalvar, onSalvarProximo, onReverter, onAplicarTodos, nAplicaveis,
-  salvarDisabled, salvarMotivo, soConfirma, onConfirmarProximo, soAvanca,
+  salvarDisabled, salvarMotivo, soConfirma, onConfirmarProximo, soAvanca, slotTransferencia,
   reverterDisabled, aplicarTodosDisabled, isBusy, divergenciasDoExtrato, erroBanco,
 }: EnriquecimentoActionsProps) {
   return (
@@ -77,6 +88,10 @@ export function EnriquecimentoActions({
         disabled={salvarDisabled || isBusy} title={salvarMotivo ?? undefined}>
         Salvar
       </Button>
+      {/* ⚠ ANTES DO "Salvar e Próximo", como pedido: reclassificar como transferência vem
+          ANTES de gravar a linha — se ela for transferência, o que a Mesa ia gravar deixa
+          de fazer sentido. */}
+      {slotTransferencia}
       <Button size="sm" className="h-6 text-[11px] px-3"
         onClick={soAvanca ? onProximo : soConfirma ? onConfirmarProximo : onSalvarProximo}
         disabled={soAvanca ? !canProximo : ((soConfirma ? false : salvarDisabled) || isBusy)}
