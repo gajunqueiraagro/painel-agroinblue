@@ -1008,3 +1008,37 @@ export function precisaDeVoce(
   if (!l.subcentro || l.subcentro.trim() === '') return true;
   return temCandidatoDuplicata(l, lista);
 }
+
+/**
+ * "Isto parece cota-capital / aplicação" — 133i-b item 2.
+ *
+ * ⚠ `invest` SAIU DO REGEX, E A MEDIÇÃO É A RAZÃO. Com ele, o padrão pega 22 saídas de
+ * agosto no NJ e **21 são compras reais** — "Investimento em Máquinas Agrícolas",
+ * "Investimento Instalações Agricultura". Sugerir "isto é transferência" em 21 compras é o
+ * oposto do que a frente inteira busca: menos pendência falsa, não mais.
+ * ⚠ `integr`, E NÃO `integraliza`: o banco abrevia. "INTEGR.CAPITAL SUBSCRITO-1/23107170711"
+ * é um dos dois casos reais do mês e `integraliza` não o alcança. Com `integr`, os dois
+ * entram e nada mais entra — medido: 2 de 2, zero falso positivo.
+ */
+const PADRAO_COTA_CAPITAL = /integr|cota.?capital|aplica[cç][aã]o|resgate/i;
+
+export const pareceCotaCapital = (descricao: string | null | undefined): boolean =>
+  !!descricao && PADRAO_COTA_CAPITAL.test(descricao);
+
+/**
+ * A conta de investimento do MESMO banco — 133i-b item 2.
+ *
+ * ⚠ O BANCO É O ELO, e é o único que se pode afirmar: "Integralização de capital" numa conta
+ * do Sicredi vai para a conta de investimento do Sicredi. Cruzar bancos seria adivinhar.
+ * ⚠ MAIS DE UMA CANDIDATA NÃO ESCOLHE NENHUMA: o operador escolhe. Pré-selecionar a primeira
+ * seria a tela decidindo por sorteio de ordenação.
+ */
+export function investimentoDoMesmoBanco(
+  contaOrigem: { banco?: string | null; nome_conta?: string | null; nome_exibicao?: string | null } | null | undefined,
+  contas: readonly { id: string; tipo_conta?: string | null; banco?: string | null }[],
+): string | null {
+  const banco = (contaOrigem?.banco ?? '').trim().toLowerCase();
+  if (!banco) return null;
+  const cand = contas.filter((c) => c.tipo_conta === 'inv' && (c.banco ?? '').trim().toLowerCase() === banco);
+  return cand.length === 1 ? cand[0].id : null;
+}

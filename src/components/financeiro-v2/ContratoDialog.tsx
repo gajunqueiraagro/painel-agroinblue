@@ -55,7 +55,21 @@ export function ContratoDialog({
   const [frequencia, setFrequencia] = useState('mensal');
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
+  /**
+   * Dia do pagamento — 133i-b item 5, o mesmo defeito do Nº de parcelas.
+   *
+   * ⚠ O CLAMP POR TECLA TAMBÉM MORDE AQUI: apagar o campo para redigitar faz
+   * `parseInt('')` virar `NaN`, o `|| 1` o transforma em 1, e o campo nunca fica vazio —
+   * o operador digita "5" depois do 1 e obtém 15 em vez de 5. Texto enquanto digita,
+   * mínimo e máximo no blur.
+   */
   const [diaPagamento, setDiaPagamento] = useState(1);
+  const [diaPagamentoTexto, setDiaPagamentoTexto] = useState('1');
+  const fecharDiaPagamento = () => {
+    const n = Math.max(1, Math.min(31, parseInt(diaPagamentoTexto, 10) || 1));
+    setDiaPagamento(n);
+    setDiaPagamentoTexto(String(n));
+  };
   const [formaPgto, setFormaPgto] = useState('');
   const [dadosPagamento, setDadosPagamento] = useState('');
   const [contaBancariaId, setContaBancariaId] = useState('');
@@ -126,7 +140,7 @@ export function ContratoDialog({
       setFrequencia(contrato.frequencia);
       setDataInicio(contrato.data_inicio);
       setDataFim(contrato.data_fim || '');
-      setDiaPagamento(contrato.dia_pagamento);
+      setDiaPagamento(contrato.dia_pagamento); setDiaPagamentoTexto(String(contrato.dia_pagamento ?? 1));
       setFormaPgto(contrato.forma_pagamento || '');
       setDadosPagamento(contrato.dados_pagamento || '');
       setContaBancariaId(contrato.conta_bancaria_id || '');
@@ -144,7 +158,7 @@ export function ContratoDialog({
       setFrequencia('mensal');
       setDataInicio(today);
       setDataFim('');
-      setDiaPagamento(1);
+      setDiaPagamento(1); setDiaPagamentoTexto('1');
       setFormaPgto('');
       setDadosPagamento('');
       setContaBancariaId('');
@@ -366,7 +380,11 @@ export function ContratoDialog({
                 </div>
                 <div>
                   <Label className="text-xs">Dia Pgto</Label>
-                  <Input type="number" min={1} max={31} value={diaPagamento} onChange={e => setDiaPagamento(Math.max(1, Math.min(31, parseInt(e.target.value) || 1)))} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50" tabIndex={7} />
+                  <Input type="number" min={1} max={31} value={diaPagamentoTexto}
+                    onChange={e => setDiaPagamentoTexto(e.target.value)}
+                    onBlur={fecharDiaPagamento}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); fecharDiaPagamento(); } }}
+                    className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50" tabIndex={7} />
                 </div>
               </div>
             </div>

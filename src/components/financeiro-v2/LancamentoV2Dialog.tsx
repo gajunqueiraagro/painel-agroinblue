@@ -336,7 +336,27 @@ export function LancamentoV2Dialog({
 
   // Installment state
   const [formaPagamentoParc, setFormaPagamentoParc] = useState<'avista' | 'parcelada'>('avista');
+  /**
+   * Nº de parcelas — 133i-b item 5.
+   *
+   * ⚠ DOIS ESTADOS, E É O QUE PERMITE DIGITAR "10". O campo guardava só o número e o
+   * `onChange` clampava a CADA TECLA: para chegar a 10 o operador digita "1", que é menor
+   * que o mínimo 2, e o clamp o transformava em 2 antes do "0" existir. O 10 era
+   * inalcançável pelo teclado — só pelas setinhas, uma a uma.
+   * ⚠ O TEXTO É O QUE O CAMPO MOSTRA; o número é o que a grade usa, e ele só muda no
+   * blur/Enter. Assim a grade não se refaz a cada tecla sobre um valor intermediário.
+   * ⚠ O IDIOMA JÁ EXISTE NO REPO, em quatro telas (`AbateFinanceiroPanel`,
+   * `VendaFinanceiroPanel`, `CompraFinanceiroPanel`, `AbateDetalhesDialog`): elas guardam a
+   * string e derivam o número. Aqui é a mesma coisa, com o clamp adiado.
+   */
   const [numParcelas, setNumParcelas] = useState(2);
+  const [numParcelasTexto, setNumParcelasTexto] = useState('2');
+  /** Aplica o mínimo/máximo — só no blur/Enter, nunca a cada tecla. */
+  const fecharNumParcelas = () => {
+    const n = Math.max(2, Math.min(24, parseInt(numParcelasTexto, 10) || 2));
+    setNumParcelas(n);
+    setNumParcelasTexto(String(n));
+  };
   const [parcelaRows, setParcelaRows] = useState<ParcelaRow[]>([]);
 
   // Frequency state
@@ -435,7 +455,7 @@ export function LancamentoV2Dialog({
       setDadosPagamento(lancamento.dados_pagamento || '');
       // CRITICAL: reset parcela/recorrência when editing — prevents stale state from previous "new" dialog
       setFormaPagamentoParc('avista');
-      setNumParcelas(2);
+      setNumParcelas(2); setNumParcelasTexto('2');
       setParcelaRows([]);
     } else if (prefill) {
       // Modo "criar a partir de fonte externa" (OFX órfão, p.ex.) — campos
@@ -475,7 +495,7 @@ export function LancamentoV2Dialog({
       setTipoDocumento('');
       setObservacao('');
       setFormaPagamentoParc('avista');
-      setNumParcelas(2);
+      setNumParcelas(2); setNumParcelasTexto('2');
       setParcelaRows([]);
       setFormaPgto('');
       setDadosPagamento('');
@@ -503,7 +523,7 @@ export function LancamentoV2Dialog({
       setNotaFiscal('');
       setObservacao('');
       setFormaPagamentoParc('avista');
-      setNumParcelas(2);
+      setNumParcelas(2); setNumParcelasTexto('2');
       setParcelaRows([]);
       setFormaPgto('');
       setDadosPagamento('');
@@ -1482,8 +1502,10 @@ export function LancamentoV2Dialog({
                           type="number"
                           min={2}
                           max={24}
-                          value={numParcelas}
-                          onChange={e => setNumParcelas(Math.max(2, Math.min(24, parseInt(e.target.value) || 2)))}
+                          value={numParcelasTexto}
+                          onChange={e => setNumParcelasTexto(e.target.value)}
+                          onBlur={fecharNumParcelas}
+                          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); fecharNumParcelas(); } }}
                           className={cn("h-8", fieldBg)}
                         />
                       </div>

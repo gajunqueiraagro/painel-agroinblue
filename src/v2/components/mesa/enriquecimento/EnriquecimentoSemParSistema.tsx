@@ -23,7 +23,11 @@ import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { fmtBRL, fmtData } from './fmt';
-import { temCandidatoDuplicata, precisaDeVoce } from '@/v2/lib/mesa/enriquecimentoView';
+import {
+  temCandidatoDuplicata, precisaDeVoce, pareceCotaCapital, investimentoDoMesmoBanco,
+} from '@/v2/lib/mesa/enriquecimentoView';
+import { AcaoEhTransferencia } from './AcaoEhTransferencia';
+import type { ContaSelecionavel } from '@/components/shared/ContaBancariaSelect';
 import type { LancamentoNaoExplicado } from '@/v2/hooks/useSistemaNaoExplicado';
 
 export interface EnriquecimentoSemParSistemaProps {
@@ -33,10 +37,20 @@ export interface EnriquecimentoSemParSistemaProps {
   onCancelar: (lancId: string, motivo: string) => Promise<boolean>;
   /** `undefined` esconde o botão — a tela não promete navegação que ninguém sabe fazer. */
   onAbrirNoFinanceiro?: () => void;
+  /**
+   * 133i-b item 1 — o cadastro de contas, para a ação "É transferência para/de ▾".
+   *
+   * ⚠ SEM ELE A AÇÃO NÃO APARECE: não há como oferecer a escolha da outra conta sem a
+   * lista, e um botão que abre um seletor vazio é pior que botão nenhum.
+   */
+  contas?: readonly ContaSelecionavel[];
+  /** Recarrega a lista depois de aplicar — quem sabe recarregar é o container. */
+  onMudou?: () => void;
+  onErro?: (mensagem: string) => void;
 }
 
 export function EnriquecimentoSemParSistema({
-  linhas, carregando, onCancelar, onAbrirNoFinanceiro,
+  linhas, carregando, onCancelar, onAbrirNoFinanceiro, contas, onMudou, onErro,
 }: EnriquecimentoSemParSistemaProps) {
   /* O id em cancelamento e o motivo digitado. Um por vez: cancelar é irreversível pela
      tela, e um formulário aberto por linha convidaria a confirmar o errado. */
@@ -56,6 +70,26 @@ export function EnriquecimentoSemParSistema({
     return { pedem, explicados };
   }, [linhas]);
   const [verExplicados, setVerExplicados] = useState(false);
+
+  /**
+   * A conta do lançamento, achada pelo NOME — 133i-b item 1.
+   *
+   * ⚠ É O ÚNICO ELO QUE A RPC DEVOLVE: `fn_classificacao_sistema_nao_explicado` traz
+   * `conta_nome`, não `conta_bancaria_id`. Comparar nome é frágil e eu preferiria o id —
+   * mas aqui a consequência de errar é só o seletor não esconder uma conta, e quem trava de
+   * verdade é o banco ("a outra conta tem de ser diferente da conta do lancamento"). Fica
+   * anotado: a RPC devolver o id resolveria isto de raiz.
+   */
+  const contaDoLancamento = (nome: string | null) =>
+    (contas ?? []).find((c) => (c.nome_exibicao || c.nome_conta) === nome) ?? null;
+
+  const sentidoDe = (l: LancamentoNaoExplicado): 'entrada' | 'saida' | null => {
+    const t = (l.tipo_operacao ?? '').trim();
+    if (t.startsWith('3')) return null;          // já é transferência
+    if (t.startsWith('1')) return 'entrada';
+    if (t.startsWith('2')) return 'saida';
+    return null;
+  };
 
   async function confirmar(lancId: string) {
     const m = motivo.trim();
@@ -96,6 +130,12 @@ export function EnriquecimentoSemParSistema({
                   <span className={l.subcentro ? '' : 'text-amber-700 dark:text-amber-400'}>
                     {l.subcentro || 'sem subcentro'}
                   </span>
+                  {/* 133i-b item 2 — o rótulo do detector, sem prometer mais do que ele viu. */}
+                  {pareceCotaCapital(l.descricao) && (
+                    <span className="ml-1 rounded bg-sky-100 px-1 text-[9px] font-medium text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">
+                      cota-capital / aplicação
+                    </span>
+                  )}
                 </span>
               </span>
               <span className="text-right text-[11px] font-medium tabular-nums">{fmtBRL(l.valor)}</span>
@@ -107,6 +147,25 @@ export function EnriquecimentoSemParSistema({
                     onClick={onAbrirNoFinanceiro}>
                     Abrir no Financeiro
                   </Button>
+                )}
+                {/* ⚠ 133i-b item 1 — ESTA AÇÃO VALE NOS DOIS BLOCOS, e é a exceção
+                    deliberada ao item 6 do 133i. "Cancelar como duplicado" some em "já
+                    explicados" porque apaga dinheiro; "é transferência" CORRIGE a
+                    classificação — e o caso real é justamente um lançamento já
+                    classificado (a integralização de capital lançada como obra). Escondê-la
+                    ali seria esconder o gesto no único lugar onde ele é necessário. */}
+                {contas && contas.length > 0 && (
+                  <AcaoEhTransferencia
+                    lancamentoId={l.lanc_id}
+                    sentido={sentidoDe(l)}
+                    contaPropriaId={contaDoLancamento(l.conta_nome)?.id ?? null}
+                    contas={contas}
+                    contaSugeridaId={pareceCotaCapital(l.descricao)
+                      ? investimentoDoMesmoBanco(contaDoLancamento(l.conta_nome), contas)
+                      : null}
+                    onAplicado={() => onMudou?.()}
+                    onErro={(m) => onErro?.(m)}
+                  />
                 )}
                 {comAcoes && comCandidato.has(l.lanc_id) && (
                   <Button type="button" size="sm" variant="outline" className="h-6 px-1.5 text-[10px]"

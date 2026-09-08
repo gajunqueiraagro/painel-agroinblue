@@ -145,7 +145,17 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
   const saldoReceberBase = Math.round((calc.fba - calc.custoTotalBoitel - calc.cAb + valorTotalAntecipadoCalc) * 100) / 100;
 
   const handleForma = (f: 'avista' | 'prazo') => { set('formaReceb', f); if (f === 'avista') set('parcelas', []); else set('parcelas', gerarParcelas(data.qtdParcelas || 1, saldoReceberBase)); };
-  const handleQtdP = (v: string) => { const n = Math.max(1, Math.min(48, Number(v) || 1)); set('qtdParcelas', n); set('parcelas', gerarParcelas(n, saldoReceberBase)); };
+  /* ⚠ 133i-b item 5 — SEM CLAMP POR TECLA. `Math.max(1, …)` a cada tecla impede digitar
+     qualquer número que passe por um intermediário ilegal; o mínimo e o máximo entram no
+     blur. A grade segue o número válido, e enquanto o campo está sendo digitado ela fica
+     como estava — refazê-la sobre um valor intermediário é trabalho jogado fora. */
+  const [qtdParcelasTexto, setQtdParcelasTexto] = useState(String(data.qtdParcelas || 1));
+  const fecharQtdP = () => {
+    const n = Math.max(1, Math.min(48, parseInt(qtdParcelasTexto, 10) || 1));
+    setQtdParcelasTexto(String(n));
+    set('qtdParcelas', n);
+    set('parcelas', gerarParcelas(n, saldoReceberBase));
+  };
   const basePar = saldoReceberBase;
 
   useEffect(() => { if (data.formaReceb === 'prazo' && data.qtdParcelas > 0 && basePar > 0) setData(p => ({ ...p, parcelas: gerarParcelas(p.qtdParcelas, basePar) })); }, [basePar, data.formaReceb, data.qtdParcelas, dataAbateISO]);
@@ -304,7 +314,10 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
               </div>
               {data.formaReceb === 'prazo' && (
                 <div className="space-y-0.5">
-                  <F label="Parcelas"><I type="number" min="1" max="48" value={data.qtdParcelas} onChange={e => handleQtdP(e.target.value)} /></F>
+                  <F label="Parcelas"><I type="number" min="1" max="48" value={qtdParcelasTexto}
+                    onChange={e => setQtdParcelasTexto(e.target.value)}
+                    onBlur={fecharQtdP}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); fecharQtdP(); } }} /></F>
                   <div className="max-h-[120px] overflow-y-auto space-y-0.5">
                     {data.parcelas.map((p, i) => (
                       <div key={i} className="grid grid-cols-2 gap-1 bg-muted/40 rounded px-1 py-0.5">

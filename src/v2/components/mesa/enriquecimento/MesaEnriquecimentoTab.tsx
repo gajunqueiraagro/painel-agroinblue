@@ -1470,6 +1470,15 @@ export function MesaEnriquecimentoTab({
           carregando={carregandoSemPar}
           onCancelar={handleCancelarDuplicado}
           onAbrirNoFinanceiro={onVerNoFinanceiro}
+          /* 133i-b item 1 — o cadastro para a ação "É transferência para/de ▾". */
+          contas={contasBancarias}
+          onMudou={() => {
+            /* O lançamento virou transferência: sai desta lista e muda o mês inteiro. */
+            qcMesa.invalidateQueries({ queryKey: ['sistema-nao-explicado'] });
+            if (clienteAtual?.id) notificarLancamentosMudaram(clienteAtual.id);
+            toast.success('Virou transferência entre contas.');
+          }}
+          onErro={(m) => toast.error(`Não foi possível: ${m}`)}
         />
       ) : (
       <>
