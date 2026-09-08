@@ -929,9 +929,14 @@ export function MesaEnriquecimentoTab({
         onFiltro={(g) => { setFiltroGrupo(g); setSelecionadoId(null); }}
         /* ⚠ O CHIP CONTA O QUE A LISTA MOSTRA — 133e item G. Com o total do mês no chip e o
            recorte da conta na lista, os dois discordariam sempre que houvesse filtro. */
+        /* ⚠ O CARD SOMA AS TRÊS FAMÍLIAS — 133f item 2. Elas respondem à mesma pergunta
+           ("este dinheiro saiu mesmo?") e vivem no mesmo chip; um card que contasse só os
+           pares entre contas diria 7 enquanto a tela tem 14. `únicos` vira o que ainda
+           PEDE trabalho — o que está feito não é trabalho. */
         transferencias={transf.carregando ? undefined : {
-          total: paresDaConta.length,
-          unicos: paresDaConta.filter((p) => !p.ambiguo).length,
+          total: paresDaConta.length + transf.estornos.total + transf.faturas.total,
+          unicos: paresDaConta.filter((p) => !p.ambiguo).length
+            + transf.estornos.pendentes + transf.faturas.pendentes,
         }}
         semParSistema={semParSistema?.length}
       />
@@ -1026,9 +1031,16 @@ export function MesaEnriquecimentoTab({
           simular={transf.simular}
           unir={transf.unir}
           unindo={transf.unindo}
-          onErro={(m) => toast.error(`Não foi possível unir: ${m}`)}
-          onUnido={(n) => toast.success(
-            `Transferência unida — ${n} vínculo${n === 1 ? '' : 's'} do extrato movido${n === 1 ? '' : 's'}.`)}
+          estornos={transf.estornos.pares}
+          faturas={transf.faturas.faturas}
+          simularEstorno={transf.simularEstorno}
+          aplicarEstorno={transf.aplicarEstorno}
+          simularFatura={transf.simularFatura}
+          aplicarFatura={transf.aplicarFatura}
+          onErro={(m) => toast.error(`Não foi possível concluir: ${m}`)}
+          onUnido={(n) => toast.success(n > 0
+            ? `Transferência unida — ${n} vínculo${n === 1 ? '' : 's'} do extrato movido${n === 1 ? '' : 's'}.`
+            : 'Aplicado.')}
         />
       ) : filtroGrupo === 'sem_par_sistema' ? (
         <EnriquecimentoSemParSistema

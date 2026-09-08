@@ -80,7 +80,7 @@ export function EnriquecimentoTopoNumeros({
           const vazio = eTransf ? !transferencias : false;
           const qtd = eTransf ? (transferencias?.total ?? 0) : r.qtd;
           const detalhe = eTransf
-            ? (transferencias ? `${transferencias.unicos} únicos` : 'apurando…')
+            ? (transferencias ? `${transferencias.unicos} a fazer` : 'apurando…')
             : detalheDe(g.detalhe, r);
           return (
             <div key={g.key} className="min-w-0">

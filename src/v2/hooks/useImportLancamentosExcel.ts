@@ -698,6 +698,13 @@ export function useImportLancamentosExcel(somenteAtualizar = false) {
    * na planilha não tem contra o que casar e não é checada — não é ausência de
    * duplicata, é ausência de pergunta possível.
    */
+  /* ⚠ O DE-PARA VIAJA POR REF, e não por dependência: ele muda a cada escolha do operador,
+     e refazer a checagem de duplicidade inteira (uma RPC por candidato) a cada clique seria
+     centenas de idas ao banco enquanto ele mapeia. A checagem roda quando o ARQUIVO muda; o
+     que ela lê do de-para é o estado do momento em que rodou. */
+  const deParaRef = useRef<DeParaCompleto | null>(null);
+  useEffect(() => { deParaRef.current = dePara; }, [dePara]);
+
   useEffect(() => {
     let cancelado = false;
     const rows = parse?.rows;
@@ -724,16 +731,37 @@ export function useImportLancamentosExcel(somenteAtualizar = false) {
         await Promise.all(rows.map(async (r, i) => {
           if (!r.data_pagamento) return;
           const alvo = Math.round((Number(r.valor) || 0) * 100);
+          /* ⚠ A CONTA ENTRA NA CHAVE — [IMPORTACAO-DEDUP-01] (133f item 1a). Sem ela, a
+             mesma parcela de R$ 89,00 paga no mesmo dia em duas contas diferentes virava
+             candidata de si mesma. Quando o de-para ainda não resolveu a conta da linha,
+             não se filtra por ela: filtrar por um `null` não acharia candidato nenhum e o
+             dedup ficaria mudo justamente antes de o operador mapear. */
+          const contaDaLinha = r.conta_bancaria_texto
+            ? (deParaRef.current?.conta[r.conta_bancaria_texto.trim()]?.valor ?? null)
+            : null;
+          const subcentroDaLinha = r.conta_plano_texto
+            ? (deParaRef.current?.subcentro[r.conta_plano_texto.trim()]?.valor ?? null)
+            : null;
           const candidatos = existentes.filter((e) =>
             e.data_pagamento === r.data_pagamento
-            && Math.round((Number(e.valor) || 0) * 100) === alvo);
+            && Math.round((Number(e.valor) || 0) * 100) === alvo
+            && (contaDaLinha === null || e.conta_bancaria_id === contaDaLinha));
           for (const c of candidatos) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
             const { data: nivel } = await (supabase as any).rpc('classificar_nivel_duplicidade', {
               _new_data_pagamento: r.data_pagamento, _new_valor: Math.abs(Number(r.valor) || 0),
-              _new_tipo_operacao: r.tipo_operacao, _new_conta_bancaria_id: null,
+              /* ⚠ A RÉGUA PRECISA DOS DOIS LADOS — 133f item 1. O front mandava `null` em
+                 conta e subcentro e comparava contra os valores REAIS do existente: a regra
+                 7 (conta) e a 4 (subcentro) somavam +1 cada, sempre. Como `D1` exige
+                 `diff_count = 0`, o front NUNCA obtinha D1 — uma duplicata literal vinha
+                 como D2 e entrava com aviso. A régua do banco não mudou; quem a consultava
+                 é que a alimentava pela metade.
+                 ⚠ CONSEQUÊNCIA DECLARADA: com os campos certos, duplicata de verdade passa a
+                 dar D1 e a ser barrada — que é o que faz "reimportar o mesmo arquivo" dizer
+                 "já existe" em vez de recriar tudo. */
+              _new_tipo_operacao: r.tipo_operacao, _new_conta_bancaria_id: contaDaLinha,
               _new_favorecido_id: null, _new_descricao: r.descricao,
-              _new_numero_documento: r.numero_documento, _new_subcentro: null,
+              _new_numero_documento: r.numero_documento, _new_subcentro: subcentroDaLinha,
               _existing_data_pagamento: c.data_pagamento, _existing_valor: c.valor,
               _existing_tipo_operacao: c.tipo_operacao, _existing_conta_bancaria_id: c.conta_bancaria_id,
               _existing_favorecido_id: c.favorecido_id, _existing_descricao: c.descricao,

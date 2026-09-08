@@ -12488,6 +12488,14 @@ export type Database = {
           mes: number
         }[]
       }
+      fn_estorno_aplicar: {
+        Args: { p_entrada_id: string; p_saida_id: string; p_simular?: boolean }
+        Returns: Json
+      }
+      fn_estornos_espelhados: {
+        Args: { p_ano_mes: string; p_cliente_id: string }
+        Returns: Json
+      }
       fn_expirar_stagings_antigos: { Args: never; Returns: number }
       fn_extrato_chave_doc: { Args: { p_doc: string }; Returns: string }
       fn_extrato_conciliar_mes: {
@@ -12502,6 +12510,14 @@ export type Database = {
       }
       fn_extratos_espelhados: {
         Args: { p_cliente: string; p_conta: string; p_mes: string }
+        Returns: Json
+      }
+      fn_fatura_aplicar: {
+        Args: { p_cartao_id: string; p_saida_id: string; p_simular?: boolean }
+        Returns: Json
+      }
+      fn_faturas_cartao: {
+        Args: { p_ano_mes: string; p_cliente_id: string }
         Returns: Json
       }
       fn_fornecedores_com_uso: {
