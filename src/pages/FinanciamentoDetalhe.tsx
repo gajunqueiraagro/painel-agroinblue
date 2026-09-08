@@ -32,6 +32,9 @@ const today = () => format(new Date(), 'yyyy-MM-dd');
 /* Numero em tabela: fonte mono e digitos de largura fixa, para as colunas alinharem
    entre linhas (A6/A10/A22). */
 const NUM = 'font-mono tabular-nums whitespace-nowrap';
+/* 9px so' para numero monetario em mono — a mesma excecao registrada na lista
+   (PR-PARC-05d item 6b): abreviar viola o A19 e quebrar linha viola os 21px. */
+const MOEDA = 'text-right font-mono tabular-nums whitespace-nowrap text-[9px]';
 
 /* ================================================================ */
 
@@ -370,7 +373,14 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
        rolava; agora topo e dados sao fixos e QUEM ROLA E' A TABELA, como na lista. O
        `h-full min-h-0` continua sendo o que faz a tela medir contra o pai nos dois shells
        — e' o conserto do 04c, preservado. */
-    <div className="w-full min-w-0 h-full min-h-0 flex flex-col bg-background max-w-5xl mx-auto">
+    /* ⚠ `overflow-hidden` NA RAIZ (PR-PARC-05d item 9). O topo desta tela e' `shrink-0` e
+       NAO tem teto: barra + titulo + subtitulo + dados (98px no parcelamento, 118 no
+       credito) + seis caixas + progresso somam ~300px, contra ~160px da lista. Em janela
+       baixa o que sobra para o card encolhe, e como `shrink-0` se recusa a ceder o
+       conjunto passava do rodape em vez de parar nele. Com `overflow-hidden` o container
+       vira o limite de verdade e o card termina onde a tela termina — a rolagem util
+       continua existindo uma camada abaixo, no wrapper da tabela. */
+    <div className="w-full min-w-0 h-full min-h-0 flex flex-col overflow-hidden bg-background max-w-5xl mx-auto">
 
       {/* ═══ 1 — BARRA AZUL, a mesma da lista ═══════════════════════════════════
           ⚠ O "← Voltar" SOLTO SAIU e virou o elo do meio do caminho. Ele dizia para
@@ -504,7 +514,9 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
             { rotulo: 'Progresso',         valor: `${pagas.length}/${parcelas.length}`, borda: 'border-l-muted-foreground/40' },
             { rotulo: 'Juros previstos',   valor: ehParcelamento ? '—' : fmt(jurosPrevistos), borda: 'border-l-amber-500' },
           ] as const).map(c => (
-            <div key={c.rotulo} className={`h-[38px] rounded-md border border-l-[3px] px-3 py-1.5 ${c.borda}`}>
+            /* ⚠ 42px, E NAO 38 — mesma medida da lista: o conteudo sempre foi 43px
+               (rotulo 13 com o `mt-0.5`, valor 18, `py-1.5` 12) e o valor era cortado. */
+            <div key={c.rotulo} className={`h-[42px] rounded-md border border-l-[3px] px-3 py-1.5 ${c.borda}`}>
               <div className="text-[10px] leading-none text-muted-foreground truncate">{c.rotulo}</div>
               <div className="mt-0.5 text-[14px] font-semibold tabular-nums leading-tight truncate">{c.valor}</div>
             </div>
@@ -538,7 +550,9 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
                 <col className="w-[12%]" />
                 <col className="w-[8%]" />
               </colgroup>
-              <TableHeader className="sticky top-0 z-10 border-b border-border bg-card [&_tr]:border-b-0">
+              {/* Cabecalho azul — o mesmo da lista (item 3). Override local; o primitivo
+                  dense segue claro para as demais tabelas do sistema. */}
+              <TableHeader className="sticky top-0 z-10 bg-primary text-primary-foreground [&_tr]:border-b-0 [&_tr]:hover:bg-primary">
                 <TableRow>
                   <ThDet>N</ThDet>
                   <ThDet>Vencimento</ThDet>
@@ -573,9 +587,9 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
                     <TableRow key={p.id}>
                       <TableCell className={NUM}>{p.numero_parcela}</TableCell>
                       <TableCell className={NUM}>{fmtDate(p.data_vencimento)}</TableCell>
-                      {!ehParcelamento && <TableCell className={`text-right ${NUM}`}>{fmt(principal)}</TableCell>}
-                      {!ehParcelamento && <TableCell className={`text-right ${NUM}`}>{fmt(juros)}</TableCell>}
-                      <TableCell className={`text-right font-semibold ${NUM}`}>{fmt(total)}</TableCell>
+                      {!ehParcelamento && <TableCell className={MOEDA}>{fmt(principal)}</TableCell>}
+                      {!ehParcelamento && <TableCell className={MOEDA}>{fmt(juros)}</TableCell>}
+                      <TableCell className={`${MOEDA} font-semibold`}>{fmt(total)}</TableCell>
                       <TableCell>
                         <span className={`inline-flex items-center rounded px-1 py-0 text-[9px] font-normal leading-tight ${situacaoClass}`}>
                           {situacaoLabel}
@@ -613,13 +627,13 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
                 <TableRow>
                   <TableCell className="font-semibold">Total</TableCell>
                   <TableCell />
-                  {!ehParcelamento && <TableCell className={`text-right font-semibold ${NUM}`}>{fmt(somaPrincipal)}</TableCell>}
-                  {!ehParcelamento && <TableCell className={`text-right font-semibold ${NUM}`}>{fmt(jurosPrevistos)}</TableCell>}
-                  <TableCell className={`text-right font-semibold ${NUM}`}>{fmt(somaTotal)}</TableCell>
+                  {!ehParcelamento && <TableCell className={`${MOEDA} font-semibold`}>{fmt(somaPrincipal)}</TableCell>}
+                  {!ehParcelamento && <TableCell className={`${MOEDA} font-semibold`}>{fmt(jurosPrevistos)}</TableCell>}
+                  <TableCell className={`${MOEDA} font-semibold`}>{fmt(somaTotal)}</TableCell>
                   <TableCell className="text-muted-foreground">
                     {pagas.length}/{parcelas.length} pagas
                   </TableCell>
-                  <TableCell className={`font-semibold ${NUM}`}>{fmt(totalPago)}</TableCell>
+                  <TableCell className={`${MOEDA} font-semibold`}>{fmt(totalPago)}</TableCell>
                   <TableCell />
                   <TableCell />
                 </TableRow>
@@ -719,7 +733,7 @@ function Par({ rotulo, valor, children, mono }: {
    de todas as tabelas densas do sistema. */
 function ThDet({ children, direita }: { children?: React.ReactNode; direita?: boolean }) {
   return (
-    <TableHead className={`text-foreground normal-case tracking-normal ${direita ? 'text-right' : ''}`}>
+    <TableHead className={`text-primary-foreground normal-case tracking-normal ${direita ? 'text-right' : ''}`}>
       {children}
     </TableHead>
   );

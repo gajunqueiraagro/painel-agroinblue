@@ -44,6 +44,8 @@ const CAMPO_TRAVADO = 'bg-muted border-border/60 text-muted-foreground';
 const ROTULO = 'text-[10px] font-normal text-muted-foreground';
 const APOIO = 'mt-0.5 text-[10px] text-muted-foreground';
 const NUM = 'font-mono tabular-nums';
+/* 9px so' para numero monetario em mono — mesma excecao da lista e do detalhe. */
+const MOEDA = 'text-right font-mono tabular-nums whitespace-nowrap text-[9px]';
 const MIN_PARCELAS = 1;
 const MAX_PARCELAS = 360;
 
@@ -81,8 +83,9 @@ const ehStatusContrato = (v: string): v is StatusContrato =>
 /* ⚠ O dropdown tem a largura do campo: sem `position="popper"` a variavel
    `--radix-select-trigger-width` nao existe e a caixa e' medida pelo item mais longo. */
 const SELECT_POPPER = 'w-[var(--radix-select-trigger-width)]';
-/* Cabecalho da previa — override LOCAL, igual ao da lista e do detalhe. */
-const TH_PREVIA = 'text-foreground normal-case tracking-normal';
+/* Cabecalho da grade — override LOCAL, igual ao da lista e do detalhe: azul de fundo,
+   branco por cima, caixa normal. O primitivo dense nao muda. */
+const TH_PREVIA = 'text-primary-foreground normal-case tracking-normal';
 const ehAba = (v: string): v is Aba => v === 'contrato' || v === 'parcelas' || v === 'classificacao';
 const FREQUENCIAS: Frequencia[] = ['mensal', 'bimestral', 'trimestral', 'semestral', 'anual'];
 const ehFrequencia = (v: string): v is Frequencia => FREQUENCIAS.some(f => f === v);
@@ -798,7 +801,8 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                         className="table-fixed"
                         wrapperClassName={`mt-0.5 ${ALTURA_PREVIA} overflow-y-auto rounded-md border`}
                       >
-                        <TableHeader className="sticky top-0 z-10 border-b border-border bg-card [&_tr]:border-b-0">
+                        {/* Cabecalho azul — o mesmo da lista e do detalhe (item 3). */}
+                        <TableHeader className="sticky top-0 z-10 bg-primary text-primary-foreground [&_tr]:border-b-0 [&_tr]:hover:bg-primary">
                           <TableRow>
                             <TableHead className={`w-8 ${TH_PREVIA}`}>N</TableHead>
                             <TableHead className={`w-20 ${TH_PREVIA}`}>Vencimento</TableHead>
@@ -825,9 +829,9 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                               <TableRow key={pg.id}>
                                 <TableCell className={NUM}>{pg.numero_parcela}</TableCell>
                                 <TableCell className={NUM}>{dataBR(pg.data_vencimento) ?? '—'}</TableCell>
-                                {!ehParcelamento && <TableCell className={`text-right ${NUM}`}>{brl(principal)}</TableCell>}
-                                {!ehParcelamento && <TableCell className={`text-right ${NUM}`}>{brl(juros)}</TableCell>}
-                                <TableCell className={`text-right font-semibold ${NUM}`}>{brl(principal + juros)}</TableCell>
+                                {!ehParcelamento && <TableCell className={MOEDA}>{brl(principal)}</TableCell>}
+                                {!ehParcelamento && <TableCell className={MOEDA}>{brl(juros)}</TableCell>}
+                                <TableCell className={`${MOEDA} font-semibold`}>{brl(principal + juros)}</TableCell>
                                 <TableCell>
                                   <span className={`inline-flex items-center rounded px-1 py-0 text-[9px] font-normal leading-tight ${situacaoClass}`}>
                                     {situacaoLabel}
@@ -849,13 +853,13 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                           <TableRow>
                             <TableCell className="font-semibold">Total</TableCell>
                             <TableCell />
-                            {!ehParcelamento && <TableCell className={`text-right font-semibold ${NUM}`}>{brl(somaPrincipalGravado)}</TableCell>}
-                            {!ehParcelamento && <TableCell className={`text-right font-semibold ${NUM}`}>{brl(somaJurosGravado)}</TableCell>}
-                            <TableCell className={`text-right font-semibold ${NUM}`}>{brl(somaPrincipalGravado + somaJurosGravado)}</TableCell>
+                            {!ehParcelamento && <TableCell className={`${MOEDA} font-semibold`}>{brl(somaPrincipalGravado)}</TableCell>}
+                            {!ehParcelamento && <TableCell className={`${MOEDA} font-semibold`}>{brl(somaJurosGravado)}</TableCell>}
+                            <TableCell className={`${MOEDA} font-semibold`}>{brl(somaPrincipalGravado + somaJurosGravado)}</TableCell>
                             <TableCell className="text-muted-foreground">
                               {parcelasPagas}/{parcelasGravadas.length} pagas
                             </TableCell>
-                            <TableCell className={`font-semibold ${NUM}`}>{brl(somaPagoGravado)}</TableCell>
+                            <TableCell className={`${MOEDA} font-semibold`}>{brl(somaPagoGravado)}</TableCell>
                             <TableCell />
                           </TableRow>
                         </TableFooter>

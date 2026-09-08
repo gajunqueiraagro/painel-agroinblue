@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DatePicker } from '@/components/ui/date-picker';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -17,6 +18,16 @@ import { ObrigacaoDialog } from '@/components/financiamentos/ObrigacaoDialog';
    registrado lá — sem ele "−R$ 2.155,00" quebra em duas linhas e a altura da
    linha deixa de ser previsível. */
 const NUM = 'text-right font-mono tabular-nums whitespace-nowrap';
+/* ⚠ 9px — EXCECAO DELIBERADA AO PISO DE 10px, e SO' para numero monetario em fonte MONO
+   (decisao do Gabriel, PR-PARC-05d item 6b). Medido: "R$ 16.380.000,00" sao 16 caracteres;
+   em mono 10px (~0,6em = 6px por caractere) da' 96px + `px-2` da celula = 112px, contra os
+   ~116px que 12% de largura ofereciam — passava raspando e, com `whitespace-nowrap`,
+   invadia a coluna vizinha em vez de quebrar. As duas saidas obvias estao fechadas:
+   ABREVIAR viola o A19 (valor monetario nunca aparece cru nem abreviado) e QUEBRAR LINHA
+   viola a linha de 21px do dense. Sobra encolher o digito — e digito mono a 9px continua
+   legivel porque nao ha' ambiguidade de largura entre caracteres.
+   ⚠ NAO VALE PARA TEXTO: descricao, credor e rotulo seguem em 10px. */
+const MOEDA = 'text-right font-mono tabular-nums whitespace-nowrap text-[9px]';
 
 interface FinanciamentoRow {
   /** Valor da PRÓXIMA parcela pendente — a coluna "Parcela" da referência. */
@@ -142,11 +153,16 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
     return `${y}-${mo}-${d}`;
   };
   // Máscara automática: insere '/' ao digitar (dd/mm/aaaa)
-  const maskDate = (v: string): string => {
-    const d = v.replace(/\D/g, '').slice(0, 8);
-    if (d.length <= 2) return d;
-    if (d.length <= 4) return `${d.slice(0,2)}/${d.slice(2)}`;
-    return `${d.slice(0,2)}/${d.slice(2,4)}/${d.slice(4)}`;
+  /* ⚠ O ESTADO DOS FILTROS CONTINUA EM dd/mm/aaaa — e ISSO NAO E' DETALHE. Ele e' o que
+     vai para o `sessionStorage` (`STORAGE_KEY`), e ha' filtro salvo na maquina do operador
+     agora: trocar o formato guardado faria a proxima abertura ler '20/08/2026' como se
+     fosse ISO e devolver lista vazia, calada. O `DatePicker` fala 'yyyy-MM-dd', entao a
+     conversao acontece na FRONTEIRA do campo — `brToISO` na entrada, `isoParaBR` na
+     saida — e o resto do arquivo (o `brToISO` do filtro, a persistencia) nao muda.
+     ⚠ `maskDate` SAIU junto com os quatro `<input>` de texto: era o unico chamador. */
+  const isoParaBR = (v: string): string => {
+    const m = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    return m ? `${m[3]}/${m[2]}/${m[1]}` : '';
   };
 
   /* ── Query principal ── */
@@ -429,7 +445,11 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
             { rotulo: 'A pagar',             valor: totais.aPagar,          borda: 'border-l-primary',             fundo: 'bg-primary/5' },
           ] as const).map(c => (
             <div key={c.rotulo}
-              className={`h-[38px] rounded-md border border-l-[3px] px-3 py-1.5 ${c.borda} ${c.fundo}`}>
+              /* ⚠ 42px, E NAO 38: o conteudo sempre foi 43px — rotulo 10px/leading-none (13
+                 com o `mt-0.5`), valor 14px/leading-tight (18) e `py-1.5` (12). Em 38px o
+                 valor era CORTADO por baixo, e como a caixa nao tem `overflow-hidden` o
+                 corte aparecia como numero encostado na borda. */
+              className={`h-[42px] rounded-md border border-l-[3px] px-3 py-1.5 ${c.borda} ${c.fundo}`}>
               <div className="text-[10px] leading-none text-muted-foreground truncate">{c.rotulo}</div>
               <div className="mt-0.5 text-[14px] font-semibold tabular-nums leading-tight truncate">{fmt(c.valor)}</div>
             </div>
@@ -449,7 +469,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
           pede 5px, e 12 devolviam parte da faixa que o item 1 acabou de recuperar. */}
       <div className="min-h-0 flex-1 px-4 pb-1">
         <div className="flex h-full min-h-0 flex-col rounded-lg border border-border bg-card px-3 pt-2 pb-0 shadow-[0_1px_3px_0_rgb(0_0_0/0.04)]">
-        <div className="relative mb-1.5 shrink-0 space-y-2">
+        <div className="relative mb-1.5 shrink-0 flex flex-col gap-y-1.5">
         {/* ═══ FILTROS — PR-PARC-01 item 4 ════════════════════════════════════════
             ⚠ DUAS LINHAS DE 28px, e os rótulos "Contrato de:" / "Venc. de:" saíram: em
             24 caracteres de largura fixa cada, os quatro rótulos gastavam mais espaço
@@ -463,16 +483,16 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
             placeholder="Buscar descrição..."
             value={filtroDescricao}
             onChange={e => setFiltroDescricao(e.target.value)}
-            className="h-7 w-44 text-[11px]"
+            className="h-6 w-44 text-[11px]"
           />
           <Input
             placeholder="Nº contrato..."
             value={filtroContrato}
             onChange={e => setFiltroContrato(e.target.value)}
-            className="h-7 w-28 text-[11px]"
+            className="h-6 w-28 text-[11px]"
           />
           <Select value={filtroStatus} onValueChange={setFiltroStatus}>
-            <SelectTrigger className="h-7 w-24 text-[11px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-6 w-24 text-[11px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="todos">Todos</SelectItem>
               <SelectItem value="ativo">Ativo</SelectItem>
@@ -486,7 +506,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
               eixo — o mesmo recurso que o select de credor já usa com "Todos
               credores", e não uma segunda régua de rótulo nesta linha. */}
           <Select value={filtroTipo} onValueChange={setFiltroTipo}>
-            <SelectTrigger className="h-7 w-24 text-[11px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-6 w-24 text-[11px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="todos">Todos escopos</SelectItem>
               <SelectItem value="pecuaria">Pecuária</SelectItem>
@@ -494,7 +514,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
             </SelectContent>
           </Select>
           <Select value={filtroNatureza} onValueChange={setFiltroNatureza}>
-            <SelectTrigger className="h-7 w-28 text-[11px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-6 w-28 text-[11px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="todas">Todas</SelectItem>
               <SelectItem value="financiamento">Financiamento</SelectItem>
@@ -503,7 +523,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
             </SelectContent>
           </Select>
           <Select value={filtroCredor} onValueChange={setFiltroCredor}>
-            <SelectTrigger className="h-7 w-40 text-[11px]"><SelectValue placeholder="Credor" /></SelectTrigger>
+            <SelectTrigger className="h-6 w-40 text-[11px]"><SelectValue placeholder="Credor" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="todos">Todos credores</SelectItem>
               {credores.map(cr => <SelectItem key={cr} value={cr}>{cr}</SelectItem>)}
@@ -513,49 +533,48 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
               PR e some sozinho quando não há filtro extra. Tirá-lo obrigaria a limpar
               sete campos à mão. */}
           {hasExtraFilters && (
-            <Button variant="ghost" size="sm" className="h-7 px-2 text-[11px]" onClick={clearExtraFilters}>
+            <Button variant="ghost" size="sm" className="h-6 px-2 text-[11px]" onClick={clearExtraFilters}>
               Limpar
             </Button>
           )}
         </div>
 
-        {/* ⚠ AS DATAS CONTINUAM `input` DE TEXTO com `maxLength={10}` e `font-mono` — a
-            máscara (`maskDate`) já existe neste arquivo e não é `type="date"`, que o
-            gate de controle nativo proíbe. O que muda aqui é só a altura e o rótulo. */}
+        {/* ⚠ AS DATAS PASSARAM AO CALENDARIO DO SISTEMA (A20). A mascara de texto nao
+            era controle NATIVO — passava no gate — mas obrigava a digitar dd/mm/aaaa de
+            cabeca, sem ver o mes. O `DatePicker` em `size="compact"` (h-6) casa com a
+            altura nova dos filtros e nasce vazio com o placeholder "de"/"até".
+            ⚠ O ESTADO NAO MUDOU: os quatro filtros continuam guardando 'yyyy-MM-dd' e a
+            persistencia em sessionStorage segue lendo as mesmas chaves. */}
         <div className="flex items-center gap-1.5">
           <span className="w-14 shrink-0 text-[10px] text-muted-foreground">Contrato</span>
-          <input
-            type="text"
-            value={filtroDataContratoDe}
-            onChange={e => setFiltroDataContratoDe(maskDate(e.target.value))}
-            placeholder="de dd/mm/aaaa"
-            maxLength={10}
-            className="h-7 w-[92px] rounded-md border bg-background px-2 font-mono text-[11px]"
+          <DatePicker
+            value={brToISO(filtroDataContratoDe)}
+            onChange={iso => setFiltroDataContratoDe(isoParaBR(iso))}
+            size="compact"
+            placeholder="de"
+            className="w-[110px]"
           />
-          <input
-            type="text"
-            value={filtroDataContratoAte}
-            onChange={e => setFiltroDataContratoAte(maskDate(e.target.value))}
-            placeholder="até dd/mm/aaaa"
-            maxLength={10}
-            className="h-7 w-[92px] rounded-md border bg-background px-2 font-mono text-[11px]"
+          <DatePicker
+            value={brToISO(filtroDataContratoAte)}
+            onChange={iso => setFiltroDataContratoAte(isoParaBR(iso))}
+            size="compact"
+            placeholder="até"
+            className="w-[110px]"
           />
           <span className="ml-3 w-16 shrink-0 text-[10px] text-muted-foreground">Vencimento</span>
-          <input
-            type="text"
-            value={filtroVencDe}
-            onChange={e => setFiltroVencDe(maskDate(e.target.value))}
-            placeholder="de dd/mm/aaaa"
-            maxLength={10}
-            className="h-7 w-[92px] rounded-md border bg-background px-2 font-mono text-[11px]"
+          <DatePicker
+            value={brToISO(filtroVencDe)}
+            onChange={iso => setFiltroVencDe(isoParaBR(iso))}
+            size="compact"
+            placeholder="de"
+            className="w-[110px]"
           />
-          <input
-            type="text"
-            value={filtroVencAte}
-            onChange={e => setFiltroVencAte(maskDate(e.target.value))}
-            placeholder="até dd/mm/aaaa"
-            maxLength={10}
-            className="h-7 w-[92px] rounded-md border bg-background px-2 font-mono text-[11px]"
+          <DatePicker
+            value={brToISO(filtroVencAte)}
+            onChange={iso => setFiltroVencAte(isoParaBR(iso))}
+            size="compact"
+            placeholder="até"
+            className="w-[110px]"
           />
         </div>
       </div>
@@ -615,15 +634,17 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
                   ponto acima do que já falhou — se a fração cortar de novo na homologação,
                   é daqui que sai o ponto que falta. */}
               <colgroup>
-                <col className="w-[6%]" />
-                <col className="w-[26%]" />
-                <col className="w-[14%]" />
-                <col className="w-[11%]" />
+                {/* 5 + 23 + 12 + 7 + 12 + 13 + 12 + 7 + 7 + 2 = 100 */}
+                <col className="w-[5%]" />
+                <col className="w-[23%]" />
                 <col className="w-[12%]" />
-                <col className="w-[11%]" />
-                <col className="w-[8%]" />
-                <col className="w-[9%]" />
-                <col className="w-[3%]" />
+                <col className="w-[7%]" />
+                <col className="w-[12%]" />
+                <col className="w-[13%]" />
+                <col className="w-[12%]" />
+                <col className="w-[7%]" />
+                <col className="w-[7%]" />
+                <col className="w-[2%]" />
               </colgroup>
               {/* ⚠ A BORDA MORA NO `thead`, NÃO NA LINHA — item 3. Na linha, ela
                   é filha do que rola e some por um instante a cada quadro do
@@ -634,7 +655,11 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
                   card o fundo tem de ser o MESMO do card, ou aparece um degrau de
                   cor; e translúcido deixa a linha passar por baixo do número que
                   se está conferindo. */}
-              <TableHeader className="sticky top-0 z-10 border-b border-border bg-card [&_tr]:border-b-0">
+              {/* ⚠ CABECALHO AZUL (PR-PARC-05d item 3). O `border-b` SAIU: com fundo cheio,
+                  a regua vira segunda linha rente ao azul. Override LOCAL — o primitivo
+                  dense continua entregando o cabecalho claro para as outras 39 tabelas;
+                  se o azul vingar, vira A25 no dense, por decisao do Gabriel. */}
+              <TableHeader className="sticky top-0 z-10 bg-primary text-primary-foreground [&_tr]:border-b-0 [&_tr]:hover:bg-primary">
                 <TableRow>
                   {/* ⚠ 3e — ORDENA POR `natureza`, e a chave antiga era LETRA MORTA:
                       `sortCol` era 'tipo', campo que nunca existiu na linha (a
@@ -647,6 +672,10 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
                     direcao={sortDir} aoOrdenar={() => handleSort('descricao')} />
                   <CabecalhoOrdenavel rotulo="Credor" ativo={sortCol === 'credor_nome'}
                     direcao={sortDir} aoOrdenar={() => handleSort('credor_nome')} />
+                  {/* PR-PARC-05d item 4 — a data que responde "de quando e' esse contrato".
+                      A coluna JA' vinha na query e no tipo; so' nunca foi exibida. */}
+                  <CabecalhoOrdenavel rotulo="Contratado em" ativo={sortCol === 'data_contrato'}
+                    direcao={sortDir} aoOrdenar={() => handleSort('data_contrato')} />
                   <CabecalhoOrdenavel rotulo="Principal" ativo={sortCol === 'valor_total'}
                     direcao={sortDir} aoOrdenar={() => handleSort('valor_total')} direita />
                   <CabecalhoOrdenavel rotulo="Saldo devedor" ativo={sortCol === 'total_pendente'}
@@ -700,13 +729,16 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
                       <span className="ml-1 text-[10px] text-muted-foreground">· {escopoSigla(f.tipo_financiamento)}</span>
                     </TableCell>
                     <TableCell className="truncate" title={f.credor_nome}>{f.credor_nome}</TableCell>
-                    <TableCell className={NUM}>{fmt(f.valor_total)}</TableCell>
+                    <TableCell className="font-mono tabular-nums whitespace-nowrap">
+                      {f.data_contrato ? format(new Date(f.data_contrato + 'T12:00:00'), 'dd/MM/yy') : '—'}
+                    </TableCell>
+                    <TableCell className={MOEDA}>{fmt(f.valor_total)}</TableCell>
                     {/* ⚠ O NÚMERO QUE JUSTIFICA A TELA — e ele já existia: o
                         `total_pendente` era calculado no fetch e nunca exibido.
                         Foi por não estar na lista que os financiamentos do NJ
                         custaram uma semana de arqueologia. */}
-                    <TableCell className={`${NUM} font-semibold`}>{fmt(f.total_pendente)}</TableCell>
-                    <TableCell className={NUM}>
+                    <TableCell className={`${MOEDA} font-semibold`}>{fmt(f.total_pendente)}</TableCell>
+                    <TableCell className={MOEDA}>
                       {f.valor_parcela != null ? fmt(f.valor_parcela) : '—'}
                     </TableCell>
                     <TableCell className="font-mono tabular-nums">
@@ -807,13 +839,13 @@ function CabecalhoOrdenavel({ rotulo, ativo, direcao, aoOrdenar, direita }: {
          e lê-se pior. O override é DESTA TELA — mudar o dense trocaria o cabeçalho
          de todas as tabelas densas do sistema, e isso é decisão sua, não deste PR.
          O 9px/600 do primitivo continua valendo. */
-      className={`cursor-pointer select-none text-foreground normal-case tracking-normal ${direita ? 'text-right' : ''}`}
+      className={`cursor-pointer select-none text-primary-foreground normal-case tracking-normal ${direita ? 'text-right' : ''}`}
       onClick={aoOrdenar}
       aria-sort={ativo ? (direcao === 'asc' ? 'ascending' : 'descending') : 'none'}
     >
       <span className={`inline-flex items-center gap-0.5 ${direita ? 'flex-row-reverse' : ''}`}>
         {rotulo}
-        <Seta className={`h-2.5 w-2.5 shrink-0 ${ativo ? '' : 'opacity-30'}`} aria-hidden />
+        <Seta className={`h-2.5 w-2.5 shrink-0 ${ativo ? '' : 'text-primary-foreground/70'}`} aria-hidden />
       </span>
     </TableHead>
   );
