@@ -365,3 +365,34 @@ input[type='number'] {
     z-index: 5; pointer-events: none;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   A24 — BARRA DE ROLAGEM FINA E DISCRETA (docs/PADROES-UI.md)
+
+   ⚠ A ROLAGEM CONTINUA A MESMA; muda so' a BARRA. Numa lista densa de 21px por
+   linha, a barra grossa do sistema operacional come' ~15px da largura util e
+   desenha um trilho cinza colado ao numero que se esta' conferindo — dentro de um
+   card, le-se como uma segunda borda.
+   ⚠ `scrollbar-width`/`scrollbar-color` sao o padrao (Firefox e Chromium novo);
+   o bloco `::-webkit-scrollbar` cobre o Safari e o Chromium antigo. Os dois juntos,
+   porque nenhum dos dois cobre todos os navegadores da casa sozinho.
+   ⚠ TRILHO TRANSPARENTE: a barra some quando nao ha' overflow, entao lista curta
+   nao ganha uma faixa cinza anunciando uma rolagem que nao existe.
+   ───────────────────────────────────────────────────────────────────────────── */
+@layer utilities {
+  .rolagem-fina {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.35) transparent;
+  }
+  .rolagem-fina::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .rolagem-fina::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.35);
+    border-radius: 3px;
+  }
+  .rolagem-fina::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}

@@ -728,3 +728,40 @@ escolha por componente.
 14px com itens de duas linhas, o `Select` em 12px, o `Command` base em 14px com input de
 44px; uns em cinza-escuro, outros em claro. Três tamanhos e dois fundos para o mesmo gesto,
 às vezes na mesma tela.
+
+---
+
+## A24 — Barra de rolagem fina e discreta em qualquer lista
+
+**A rolagem continua a mesma; muda só a barra.** Toda área que rola dentro de um card ou
+de uma tabela usa a barra fina de 6px, com polegar translúcido e **trilho transparente**.
+
+```
+❌  ▐███▌  barra do sistema (~15px), trilho cinza colado ao número
+✅  ▕ ▏    6px, polegar em muted-foreground/35, trilho invisível
+```
+
+A razão não é enfeite: numa lista densa de 21px por linha, a barra grossa come ~15px da
+largura útil — que é largura de coluna — e desenha **um trilho cinza vertical rente ao
+número que se está conferindo**. Dentro de um card com borda, esse trilho lê-se como uma
+segunda moldura, e o olho passa a ver duas listas onde há uma.
+
+Trilho transparente é a outra metade do padrão: **a barra some quando não há overflow**.
+Lista curta não ganha uma faixa cinza anunciando uma rolagem que não existe.
+
+O utilitário é **`.rolagem-fina`, em `src/index.css`** (`@layer utilities`), e o
+**primitivo `ui/table.tsx` já o aplica no seu wrapper, nas duas densidades** — quem usa
+`<Table>` não pede nada. Para uma área que rola e *não* é tabela (um painel lateral, uma
+prévia), acrescente a classe ao elemento que tem o `overflow`.
+
+⚠ **São duas sintaxes e as duas são necessárias.** `scrollbar-width` / `scrollbar-color`
+são o padrão (Firefox, Chromium novo); `::-webkit-scrollbar` cobre Safari e Chromium
+antigo. Nenhuma das duas sozinha atende os navegadores da casa.
+
+⚠ **No primitivo, não no chamador.** "Toda tabela do sistema" é exatamente o que o
+primitivo representa. Aplicado por adesão em cada tela, a próxima tabela nasceria com a
+barra grossa de novo — que é como um padrão morre.
+
+**Onde nasceu:** PR-PARC-05b item 4. A tabela de parcelas do detalhe do contrato ficou com
+rolagem interna (A21) e a barra do sistema apareceu dentro do card, a 6px do valor da
+parcela.

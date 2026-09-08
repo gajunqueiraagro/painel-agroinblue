@@ -39,7 +39,11 @@ const Table = React.forwardRef<
   }
 >(({ className, density = "default", wrapperClassName, ...props }, ref) => (
   <TableDensityContext.Provider value={density}>
-    <div className={cn("relative w-full overflow-auto", wrapperClassName)}>
+    {/* ⚠ `rolagem-fina` SEMPRE, nas duas densidades (A24). E' so' a estetica da barra —
+        nao muda overflow, altura nem layout. Fica no PRIMITIVO e nao em cada chamador
+        porque "toda tabela do sistema" e' exatamente o que o primitivo representa; posto
+        por adesao, a proxima tabela nasceria com a barra grossa de novo. */}
+    <div className={cn("relative w-full overflow-auto rolagem-fina", wrapperClassName)}>
       <table ref={ref} className={cn("w-full caption-bottom text-sm", className)} {...props} />
     </div>
   </TableDensityContext.Provider>

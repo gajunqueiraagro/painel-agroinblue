@@ -63,6 +63,8 @@ const ehStatusContrato = (v: string): v is StatusContrato =>
 /* ⚠ O dropdown tem a largura do campo: sem `position="popper"` a variavel
    `--radix-select-trigger-width` nao existe e a caixa e' medida pelo item mais longo. */
 const SELECT_POPPER = 'w-[var(--radix-select-trigger-width)]';
+/* Cabecalho da previa — override LOCAL, igual ao da lista e do detalhe. */
+const TH_PREVIA = 'text-foreground normal-case tracking-normal';
 const ehAba = (v: string): v is Aba => v === 'contrato' || v === 'parcelas' || v === 'classificacao';
 const FREQUENCIAS: Frequencia[] = ['mensal', 'bimestral', 'trimestral', 'semestral', 'anual'];
 const ehFrequencia = (v: string): v is Frequencia => FREQUENCIAS.some(f => f === v);
@@ -113,9 +115,13 @@ function BlocoHead({ titulo }: { titulo: string }) {
     </div>
   );
 }
+/* ⚠ `h-6` (24px) e nao `h-5` — PR-PARC-05b item 1. Em 20px os pares do resumo ficavam
+   colados e o bloco lia-se como um paragrafo; 24px separa linha de linha sem custar
+   altura de tela, porque o resumo tem rolagem propria. `items-center` acompanha a troca:
+   com altura fixa, alinhar pela base deixava o valor flutuando. */
 function Linha({ rotulo, valor, valorClassName }: { rotulo: string; valor: string | null; valorClassName?: string }) {
   return (
-    <div className="flex items-baseline justify-between gap-1.5 leading-tight">
+    <div className="flex h-6 items-center justify-between gap-1.5 leading-tight">
       <span className="text-muted-foreground shrink-0">{rotulo}</span>
       <span className={`font-medium text-right truncate ${valorClassName ?? ''}`} title={valor ?? undefined}>
         {valor || '—'}
@@ -579,7 +585,12 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
 
                 {/* ══ ABA PARCELAS ══════════════════════════════════════════════ */}
                 <TabsContent value="parcelas" className="mt-0 space-y-2.5">
-                  <div className="grid grid-cols-3 gap-2">
+                  {/* ⚠ CAMPO NAO ESTICA PARA PREENCHER LINHA (PR-PARC-05b item 2). Um
+                      campo de valor com 300px de largura nao aceita mais digito nenhum —
+                      so' anuncia importancia que nao tem, e afasta o rotulo do numero. A
+                      grade e' de 4 colunas com teto de 200px por campo; a quarta fica
+                      VAZIA de proposito. */}
+                  <div className={`grid gap-2 ${ehEdicao ? 'grid-cols-4 [&>div]:max-w-[200px]' : 'grid-cols-3'}`}>
                     <div>
                       <Label className={ROTULO}>Valor total *</Label>
                       <CampoMoeda valor={form.valor_total || null}
@@ -605,7 +616,6 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                         <>
                           <Input readOnly tabIndex={-1} value={String(form.total_parcelas)}
                             className={`${CAMPO} text-right ${NUM} ${CAMPO_TRAVADO}`} />
-                          <p className={APOIO}>O cronograma não é refeito aqui</p>
                         </>
                       ) : (
                         <>
@@ -627,13 +637,20 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                       Esconder a terceira celula mantendo `grid-cols-3` deixaria um
                       terco vazio a' direita, e buraco em grade le-se como campo que
                       faltou carregar. */}
-                  <div className={`grid gap-2 ${(!ehEdicao && !ehParcelamento) ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                  <div className={`grid gap-2 ${ehEdicao ? 'grid-cols-4 [&>div]:max-w-[200px]' : (!ehParcelamento ? 'grid-cols-3' : 'grid-cols-2')}`}>
                     <div>
                       <Label className={ROTULO}>1ª parcela *</Label>
                       {ehEdicao ? (
-                        <Input readOnly tabIndex={-1}
-                          value={form.data_primeira_parcela ? form.data_primeira_parcela.split('-').reverse().join('/') : '—'}
-                          className={`${CAMPO} ${NUM} ${CAMPO_TRAVADO}`} />
+                        <>
+                          <Input readOnly tabIndex={-1}
+                            value={form.data_primeira_parcela ? form.data_primeira_parcela.split('-').reverse().join('/') : '—'}
+                            className={`${CAMPO} ${NUM} ${CAMPO_TRAVADO}`} />
+                          {/* ⚠ O APOIO MUDOU DE CAMPO. Ele explicava por que o Nº de parcelas
+                              esta' travado, mas a pergunta que o operador faz olhando um
+                              cronograma travado e' "entao onde eu mudo a data?" — a resposta
+                              mora aqui, ao lado da data. */}
+                          <p className={APOIO}>As datas se editam parcela a parcela, na tabela abaixo.</p>
+                        </>
                       ) : (
                         <DatePicker value={form.data_primeira_parcela} onChange={v => set('data_primeira_parcela', v)} />
                       )}
@@ -706,12 +723,15 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                             e' nele que o `sticky` ancora. Fundo OPACO e `z` acima das
                             linhas — transparente e' pior que nao fixar. */}
                         <TableHeader className="sticky top-0 z-10 bg-card">
+                          {/* Mesmo override local da lista e do detalhe: o primitivo dense
+                              entrega `uppercase tracking-wide` e cinza; aqui o cabecalho e'
+                              escuro e em caixa normal (A18/A24 nao mexem no primitivo). */}
                           <TableRow>
-                            <TableHead className="w-8">N</TableHead>
-                            <TableHead className="w-28">Vencimento</TableHead>
-                            {!ehParcelamento && <TableHead className="text-right">Amortização</TableHead>}
-                            {!ehParcelamento && <TableHead className="text-right">Juros</TableHead>}
-                            <TableHead className="text-right">Total</TableHead>
+                            <TableHead className={`w-8 ${TH_PREVIA}`}>N</TableHead>
+                            <TableHead className={`w-28 ${TH_PREVIA}`}>Vencimento</TableHead>
+                            {!ehParcelamento && <TableHead className={`text-right ${TH_PREVIA}`}>Amortização</TableHead>}
+                            {!ehParcelamento && <TableHead className={`text-right ${TH_PREVIA}`}>Juros</TableHead>}
+                            <TableHead className={`text-right ${TH_PREVIA}`}>Total</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -878,7 +898,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                   <div className="pb-1">
                     <BlocoHead titulo="Contrato" />
                     <div className="px-3 space-y-0.5">
-                      <div className="flex items-baseline justify-between gap-1.5 leading-tight">
+                      <div className="flex h-6 items-center justify-between gap-1.5 leading-tight">
                         <span className="text-muted-foreground shrink-0">Natureza</span>
                         <span className="flex items-center gap-1 min-w-0">
                           <span className="rounded border border-primary/40 bg-primary/10 px-1 text-[9px] font-bold text-primary">
@@ -887,6 +907,10 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                           <span className="font-medium truncate">{NOME_NATUREZA[form.natureza]}</span>
                         </span>
                       </div>
+                      {/* ⚠ A DESCRICAO E' O NOME DO CONTRATO e faltava no resumo: com tres
+                          abas e o formulario rolando, dava para estar preenchendo os juros
+                          de um contrato sem ter a menor pista de QUAL. */}
+                      <Linha rotulo="Descrição" valor={form.descricao || null} />
                       <Linha rotulo="Escopo" valor={form.tipo_financiamento === 'pecuaria' ? 'Pecuária' : 'Agricultura'} />
                       <Linha rotulo="Credor" valor={credor?.nome ?? null} />
                       <Linha rotulo="Conta" valor={nomeConta} />

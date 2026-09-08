@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import ModalBaixaParcela from '@/components/financiamentos/ModalBaixaParcela';
 import DialogVerLancamentosOficiais from '@/components/financiamentos/DialogVerLancamentosOficiais';
-import { Pencil, Trash2 } from 'lucide-react';
+import { ArrowLeft, Pencil, Trash2 } from 'lucide-react';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table';
+import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell, TableFooter } from '@/components/ui/table';
 import { Progress } from '@/components/ui/progress';
 import { useCliente } from '@/contexts/ClienteContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -97,6 +97,11 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
      parcelamento nao existe (o motor grava valor_juros = 0), e ali o numero certo e' o
      traco, nunca "R$ 0,00": zero afirma que se apurou e deu zero. */
   const jurosPrevistos = parcelas.reduce((s2, p) => s2 + Number(p.valor_juros), 0);
+  /* ⚠ SOMAS DA LINHA DE TOTAL — sobre TODAS as parcelas, nao so' as visiveis na rolagem.
+     Nao e' agregacao nova nem consulta nova: sao as mesmas linhas ja' carregadas por
+     `financiamento-parcelas`. Uma tabela que rola sem total obriga a somar no olho. */
+  const somaPrincipal = parcelas.reduce((s2, p) => s2 + Number(p.valor_principal), 0);
+  const somaTotal = somaPrincipal + jurosPrevistos;
 
   /* ⚠ O FORM DEIXOU DE SER SEMEADO AQUI. Quem carrega o contrato agora e' o
      `ObrigacaoDialog` em `modo="editar"` (query propria por `financiamentoId`), e por
@@ -142,7 +147,7 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
       .eq('id', id!);
     if (error) {
       toast.error('Erro ao salvar: ' + error.message);
-      return;
+      return false;
     }
 
     // ── Sync lançamento de captação ──────────────────────────────────
@@ -221,6 +226,14 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
     qc.invalidateQueries({ queryKey: ['painel-financiamentos'] });
     qc.invalidateQueries({ queryKey: ['auditoria-saldo-anterior'] });
     qc.invalidateQueries({ queryKey: ['auditoria-saldo-extrato-real'] });
+    /* ⚠ ERA ISTO QUE DEIXAVA O MODAL ABERTO (PR-PARC-05b item 3). A funcao e'
+       `Promise<boolean>` e caia no fim sem `return`, devolvendo `undefined`: o
+       `if (ok) onSalvo?.()` do dialogo nunca disparava, e o operador via o toast de
+       sucesso com o modal parado na tela — parecia que nao tinha salvo.
+       ⚠ O TSC FICOU MUDO porque `strict:false` desliga `noImplicitReturns`: assinatura
+       que promete `boolean` e caminho que nao devolve nada convivem sem uma linha de
+       aviso. Terceiro caso da familia registrada no CLAUDE.md (gate cego). */
+    return true;
   };
 
   const excluirFinanciamento = async () => {
@@ -327,16 +340,23 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
           mesma linha e devolve os 36px que o botao ocupava. */}
       <header className="shrink-0 bg-primary shadow-md">
         <div className="flex items-center gap-2 px-3 py-1">
+          {/* ⚠ A MIGALHA DO MEIO E' BOTAO DE VERDADE. `onVoltar` sempre esteve ligado —
+              conferi os dois pais, os dois o passam — mas um link BRANCO no meio de texto
+              BRANCO, sem icone e sem sublinhado em repouso, nao se anuncia: o operador
+              nao achou por onde voltar. `cursor-pointer` e `hover:underline` explicitos
+              (o `cursor` ja' vinha do preflight; fica escrito para nao depender dele) e,
+              acima de tudo, a seta do item abaixo. */}
           <p className="min-w-0 truncate text-[11px] font-semibold tracking-wide text-primary-foreground">
-            Financeiro<span className="mx-1 text-primary-foreground/40">/</span>
-            {/* ⚠ MESMO `onVoltar` DE ANTES — e' ele que carrega o ramo
-                `from === 'lancamentos'` / `onVoltarParaOrigem` do wrapper. Aqui so' muda
-                o RO'TULO, para o elo dizer para onde leva. */}
+            {/* ⚠ "Financeiro" E' TEXTO, NAO LINK — nao ha' destino proprio para ele, e
+                duas migalhas indo ao mesmo lugar mentem sobre a hierarquia. Igual a' lista. */}
+            Financeiro
+            <span className="mx-1 text-primary-foreground/40">/</span>
             <button type="button" onClick={onVoltar}
-              className="font-normal text-primary-foreground/90 hover:underline">
+              className="cursor-pointer font-normal text-primary-foreground/90 hover:underline">
               {from === 'lancamentos' ? 'Lançamentos' : 'Parcelamentos e Financiamentos'}
             </button>
             <span className="mx-1 text-primary-foreground/40">/</span>
+            {/* O ultimo nivel e' onde se esta': nao e' link. */}
             <span className="font-normal text-primary-foreground/90">{fin.descricao}</span>
           </p>
         </div>
@@ -345,6 +365,13 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
       <div className="shrink-0 px-4 pt-2 pb-2 space-y-2">
         {/* ═══ 1 — TITULO ══════════════════════════════════════════════════════ */}
         <div className="flex items-center gap-2 min-w-0">
+          {/* ⚠ A SETA VOLTOU, e nao e' redundancia com a migalha: sair de uma tela e' o
+              gesto mais frequente do detalhe, e ele precisa de um alvo que se veja de
+              relance. Mesmo `onVoltar` das migalhas — um caminho so'. */}
+          <Button variant="ghost" size="icon" className="h-7 w-7 p-0 shrink-0"
+            onClick={onVoltar} title="Voltar à lista" aria-label="Voltar à lista">
+            <ArrowLeft className="size-4" />
+          </Button>
           <h1 className="text-[20px] font-bold leading-none tracking-tight text-foreground truncate" title={fin.descricao}>
             {fin.descricao}
           </h1>
@@ -539,6 +566,26 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
                   );
                 })}
               </TableBody>
+              {/* ⚠ TOTAL PRESO EMBAIXO, mesma tecnica do thead preso em cima (A21): o
+                  `sticky` ancora no wrapper que rola, e a borda mora no `tfoot` — na
+                  linha ela e' filha do que rola e pisca a cada quadro. Fundo OPACO pelo
+                  mesmo motivo do cabecalho: translucido deixa a parcela passar por baixo
+                  do numero que se esta' conferindo. */}
+              <TableFooter className="sticky bottom-0 z-10 border-t border-border bg-card [&>tr]:border-b-0">
+                <TableRow>
+                  <TableCell className="font-semibold">Total</TableCell>
+                  <TableCell />
+                  {!ehParcelamento && <TableCell className={`text-right font-semibold ${NUM}`}>{fmt(somaPrincipal)}</TableCell>}
+                  {!ehParcelamento && <TableCell className={`text-right font-semibold ${NUM}`}>{fmt(jurosPrevistos)}</TableCell>}
+                  <TableCell className={`text-right font-semibold ${NUM}`}>{fmt(somaTotal)}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {pagas.length}/{parcelas.length} pagas
+                  </TableCell>
+                  <TableCell className={`font-semibold ${NUM}`}>{fmt(totalPago)}</TableCell>
+                  <TableCell />
+                  <TableCell />
+                </TableRow>
+              </TableFooter>
             </Table>
           </div>
         </div>
