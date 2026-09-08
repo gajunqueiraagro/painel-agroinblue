@@ -22,6 +22,8 @@ export interface PlanoSubcentroSelectProps {
   onSearchChange: (s: string) => void;
   label?: string;
   triggerClassName?: string;                                       // ex.: fieldBg
+  /** 133e adendo — gatilho compacto da Mesa (20px/11px). A caixa aberta segue o A23. */
+  size?: 'default' | 'compact';
   contentClassName?: string;                                       // dropdown: largura/densidade (Mesa = mais largo)
   itemClassName?: string;                                          // itens do dropdown: fonte/padding menores
   tabIndex?: number;
@@ -30,7 +32,7 @@ export interface PlanoSubcentroSelectProps {
 
 export function PlanoSubcentroSelect({
   value, onChange, onSelected, classificacoes, tipoOperacao,
-  search, onSearchChange, label, triggerClassName, contentClassName, itemClassName, tabIndex, disabled,
+  search, onSearchChange, label, triggerClassName, size = 'default', contentClassName, itemClassName, tabIndex, disabled,
 }: PlanoSubcentroSelectProps) {
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
@@ -134,7 +136,7 @@ export function PlanoSubcentroSelect({
       {label && <Label className="text-[10px]">{label}</Label>}
       <Popover open={open} onOpenChange={v => { setOpen(v); if (!v) { onSearchChange(''); setHighlight(0); } }}>
         <PopoverTrigger asChild>
-          <Button tabIndex={tabIndex} variant="outline" role="combobox" aria-expanded={open} disabled={disabled} className={cn("w-full h-8 justify-between font-normal text-[12px]", triggerClassName)}>
+          <Button tabIndex={tabIndex} variant="outline" role="combobox" aria-expanded={open} disabled={disabled} className={cn("w-full h-8 justify-between font-normal text-[12px]", size === 'compact' && 'h-5 px-1.5 text-[11px] [&_svg]:h-3 [&_svg]:w-3', triggerClassName)}>
             <span className="truncate" title={value || undefined}>{value || 'Selecione o subcentro...'}</span>
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>

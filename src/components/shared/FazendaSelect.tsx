@@ -18,6 +18,8 @@ export interface FazendaSelectProps {
   label?: string;
   className?: string;             // wrapper
   triggerClassName?: string;      // ex.: fieldBg
+  /** 133e adendo — gatilho compacto da Mesa (20px/11px). A caixa aberta segue o A23. */
+  size?: 'default' | 'compact';
   tabIndex?: number;
   disabled?: boolean;             // disabled adicional (além de forçado)
   hideAviso?: boolean;            // Mesa: suprime o texto "Dividendos são salvos..." (densidade)
@@ -25,7 +27,7 @@ export interface FazendaSelectProps {
 
 export function FazendaSelect({
   value, onChange, fazendas, forcaAdministrativo,
-  label, className, triggerClassName, tabIndex, disabled, hideAviso,
+  label, className, triggerClassName, size = 'default', tabIndex, disabled, hideAviso,
 }: FazendaSelectProps) {
   const fazOperacionais = fazendas.filter(f => f.id !== '__global__');
 
@@ -44,7 +46,7 @@ export function FazendaSelect({
     <div className={className}>
       {label && <Label className="text-[10px]">{label}</Label>}
       <Select value={value} onValueChange={onChange} disabled={forcaAdministrativo || disabled}>
-        <SelectTrigger tabIndex={tabIndex} className={cn('h-8', triggerClassName)}><SelectValue placeholder="Selecione" /></SelectTrigger>
+        <SelectTrigger tabIndex={tabIndex} className={cn('h-8', size === 'compact' && 'h-5 px-1.5 text-[11px] [&_svg]:h-3 [&_svg]:w-3', triggerClassName)}><SelectValue placeholder="Selecione" /></SelectTrigger>
         <SelectContent>
           {fazOperacionais.map(f => <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>)}
         </SelectContent>

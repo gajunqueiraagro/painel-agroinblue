@@ -251,6 +251,24 @@ export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
   // PR-U2c-2A — valores crus da proposta para os editores inline.
   const entradaOuSaida = entradaOuSaidaDe(row);
 
+  /**
+   * A DATA QUE A LISTA MOSTRA, AGRUPA E ORDENA — 133e adendo item 5.
+   *
+   * ⚠ É A DE PAGAMENTO, e a ordem das tentativas é a da soberania: o que o BANCO diz que
+   * aconteceu (`lanc_data_pagamento`) vem primeiro; sem lançamento casado, o que a planilha
+   * diz que foi pago (`excel_data_pagamento`); e só em último caso a competência.
+   * ⚠ ERA A COMPETÊNCIA PRIMEIRO (`excel_data ?? lanc_data_pagamento`), e isso é o inverso:
+   * a competência do cliente vai de out/2025 a set/2026 para pagamentos de agosto, então a
+   * lista de uma tela de CAIXA agrupava por um mês que não é o mês do dinheiro.
+   * ⚠ QUANDO SOBRA A COMPETÊNCIA, A TELA DIZ. `dataEhCompetencia` existe para o "comp." de
+   * 10px ao lado — uma data que não é de caixa numa tela de caixa precisa se identificar.
+   */
+  const dataDeCaixa = (() => {
+    if (row.lanc_data_pagamento) return { iso: row.lanc_data_pagamento, ehCompetencia: false };
+    if (row.excel_data_pagamento) return { iso: row.excel_data_pagamento, ehCompetencia: false };
+    return { iso: row.excel_data ?? row.lanc_data_competencia ?? null, ehCompetencia: true };
+  })();
+
   const edicao: EnriqEdicao = {
     subcentro: subcentroEfetivo,   // BUG — nunca a proposta órfã; proposta válida ou o Sistema soberano
     favorecidoId: row.proposto_favorecido_id,
@@ -322,7 +340,9 @@ export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
     subcentroOrfao,
     avisoPlanilha,
     mudaAlgo: row.will_change_anything,
-    data: fmtData(row.excel_data ?? row.lanc_data_pagamento),
+    data: fmtData(dataDeCaixa.iso),
+    dataIso: dataDeCaixa.iso,
+    dataEhCompetencia: dataDeCaixa.ehCompetencia,
     valor: fmtBRL(row.excel_valor ?? row.lanc_valor),
     /* ⚠ O NÚMERO AO LADO DO TEXTO — MESA-ENR-UX-01. O total por grupo é uma SOMA, e somar
        "1.510,00" de volta a partir da string exigiria desformatar o que este adapter

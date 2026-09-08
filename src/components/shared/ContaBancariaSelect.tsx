@@ -21,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { cn } from '@/lib/utils';
 
 /**
  * Shape mínimo necessário para o componente. Aceita tanto `ContaBancariaV2`
@@ -60,6 +61,17 @@ interface Props {
   excluirIds?: string[];
   /** Classes adicionais no SelectTrigger (input visível). */
   className?: string;
+  /**
+   * 133e adendo — o gatilho compacto da Mesa: 20px, 11px, ícone 12px.
+   *
+   * ⚠ SÓ O GATILHO ENCOLHE. A caixa aberta segue o padrão A23 (12px, itens de 26px): ela é
+   * lida com o olho parado, e encolhê-la para caber numa célula de tabela seria pagar a
+   * densidade de uma linha com a legibilidade de todas as opções.
+   * ⚠ POR PROP, NÃO POR `className`: a compactação declarada no componente não depende da
+   * ordem em que o `twMerge` resolve `h-8` contra `h-5` — e foi assim que a Conta bancária
+   * ficou de fora, recebendo um seletor de descendente numa prop que cai no próprio gatilho.
+   */
+  size?: 'default' | 'compact';
   /** Override do SelectContent (dropdown aberto). */
   contentClassName?: string;
   /**
@@ -122,6 +134,7 @@ export function ContaBancariaSelect({
   showBankDetails,
   excluirIds,
   className,
+  size = 'default',
   contentClassName,
   prependItems,
 }: Props) {
@@ -152,7 +165,7 @@ export function ContaBancariaSelect({
       onValueChange={onValueChange}
       disabled={disabled}
     >
-      <SelectTrigger className={className}>
+      <SelectTrigger className={cn(size === 'compact' && 'h-5 px-1.5 text-[11px] [&_svg]:h-3 [&_svg]:w-3', className)}>
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent className={contentClassName ?? DARK_GLASS_CONTENT}>

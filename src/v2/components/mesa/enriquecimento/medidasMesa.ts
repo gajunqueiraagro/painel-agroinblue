@@ -27,5 +27,16 @@ export const CELULA_EDITAVEL = 'h-5 px-1.5 py-0 text-[11px] [&_svg]:h-3 [&_svg]:
 export const CELULA_EDITAVEL_WRAPPER =
   '[&>button]:h-5 [&>button]:px-1.5 [&>button]:py-0 [&>button]:text-[11px] [&_svg]:h-3 [&_svg]:w-3';
 
+/**
+ * As três datas da tabela da Mesa — 133e adendo item 2: 10px nas TRÊS colunas, inclusive
+ * dentro do campo.
+ *
+ * ⚠ 10px É O PISO, e as datas são onde ele se justifica: `dd/mm/aaaa` em `tabular-nums` é
+ * um formato de largura fixa e leitura de relance — não é texto que se lê, é número que se
+ * confere. O ícone de calendário do `DatePicker` compacto já é 12px e fica absoluto à
+ * direita, então não come largura do valor.
+ */
+export const CELULA_EDITAVEL_DATA = 'h-5 pl-1.5 pr-6 py-0 text-[10px] tabular-nums';
+
 /** Item do dropdown — 11px, denso, para o menu não ficar maior que a tabela. */
 export const ITEM_DROPDOWN = 'text-[11px] py-0.5';

@@ -12,7 +12,7 @@
 // mais o que só a superfície ampla tem: agrupamento, filtros com contagem e "aplicar ao
 // grupo". Nada é buscado nem calculado aqui além de agrupar e somar o que já veio.
 // ============================================================================
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -97,10 +97,20 @@ export interface EnriquecimentoMesaModalProps {
    * componente — que é burro de propósito.
    */
   faixas?: React.ReactNode;
+  /**
+   * 133e adendo item 3 — a ORDEM VISÍVEL da Mesa, para o pai navegar por ela.
+   *
+   * ⚠ A MESA TEM FILTRO PRÓPRIO (conta + situação), e a navegação andava pela lista da ABA.
+   * Com a Lavoura filtrada aqui dentro, "Salvar e próximo" pulava para uma linha do Banco do
+   * Brasil — que está na lista da aba e não nesta. Quem sabe o que está visível é este
+   * componente; quem sabe salvar é o pai. Então a ordem sobe, e a navegação desce.
+   */
+  onOrdemVisivel?: (ids: string[]) => void;
 }
 
 export function EnriquecimentoMesaModal({
   open, onOpenChange, sessaoLabel, lista, detalhe, actions, onAplicarAoGrupo, aplicandoGrupo, faixas,
+  onOrdemVisivel,
 }: EnriquecimentoMesaModalProps) {
   /* ⚠ O AGRUPAMENTO SAIU DA MESA — 133e item A: varrer a sessão por fornecedor/subcentro é
      trabalho da tela principal do passo 2. Aqui a lista é sempre cronológica, agrupada por
@@ -138,7 +148,9 @@ export function EnriquecimentoMesaModal({
     const ordem: string[] = [];
     const mapa = new Map<string, EnriqRowVM[]>();
     for (const r of visiveis) {
-      const k = r.data || '—';
+      /* A faixa da Mesa segue a mesma data de caixa da tela principal, e marca a
+         competência quando é ela que sobrou (133e adendo item 5). */
+      const k = (r.dataEhCompetencia ? `${r.data} comp.` : r.data) || '—';
       const atual = mapa.get(k);
       if (atual) atual.push(r); else { mapa.set(k, [r]); ordem.push(k); }
     }
@@ -146,6 +158,22 @@ export function EnriquecimentoMesaModal({
   }, [visiveis]);
 
   const selecionada = rows.find(r => r.id === lista.selecionadoId) ?? null;
+
+  /* A ordem visível sobe a cada mudança de recorte; fechado, o pai volta à lista dele. */
+  useEffect(() => {
+    if (!open) return;
+    onOrdemVisivel?.(visiveis.map((r) => r.id));
+  }, [open, visiveis, onOrdemVisivel]);
+
+  /**
+   * ⚠ A LINHA SELECIONADA ACOMPANHA A NAVEGAÇÃO — 133e adendo item 4. Sem isto, "Salvar e
+   * próximo" mudava o painel da direita e a lista ficava parada: o operador perdia de vista
+   * onde estava. `block: 'nearest'` rola o mínimo — não recentra a lista a cada linha.
+   */
+  const selRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    if (open) selRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [open, lista.selecionadoId]);
 
   /**
    * Ctrl/Cmd+Enter = Salvar e próximo — 133b-a.
@@ -260,10 +288,15 @@ export function EnriquecimentoMesaModal({
                       /* ⚠ UMA ALTURA, 28px, E NADA QUEBRA — 133e item A. `whitespace-nowrap`
                          na data e no valor: se não couber, quem cede é o padding, nunca a
                          linha. O nome completo do estado fica no `title` da bolinha. */
-                      <button type="button" key={r.id} onClick={() => lista.onSelecionar(r.id)}
+                      <button type="button" key={r.id} ref={sel ? selRef : undefined}
+                        onClick={() => lista.onSelecionar(r.id)}
                         className={`flex h-7 w-full items-center gap-1.5 border-b border-border/60 px-2 text-left ${
                           sel ? 'border-l-[3px] border-l-primary bg-primary/[0.08] pl-[5px]' : ''}`}>
-                        <span className="w-16 shrink-0 whitespace-nowrap text-[10px] tabular-nums text-muted-foreground">
+                        <span className={`w-16 shrink-0 whitespace-nowrap text-[10px] tabular-nums ${
+                          r.dataEhCompetencia ? 'text-amber-700 dark:text-amber-400' : 'text-muted-foreground'}`}
+                          title={r.dataEhCompetencia
+                            ? 'Sem data de pagamento: esta é a competência.'
+                            : 'Data de pagamento.'}>
                           {r.data}
                         </span>
                         <span className={`min-w-0 flex-1 whitespace-nowrap text-right text-[11px] font-medium tabular-nums ${corDoSinal(r.entradaOuSaida)}`}>
@@ -421,7 +454,12 @@ export function EnriquecimentoMesaModal({
                 title={actions.soConfirma
                   ? 'O Resultado já confere com o sistema: nada a gravar. Marca como revisado e vai para a próxima. (Ctrl/Cmd+Enter)'
                   : `${actions.salvarMotivo ?? 'Grava esta linha no lançamento e vai para a próxima.'} (Ctrl/Cmd+Enter)`}>
-                {actions.soConfirma ? 'Confirmar e próximo' : 'Salvar e próximo'}
+                {/* ⚠ "FIM DA LISTA" EM VEZ DE PULAR — 133e adendo item 3. Chegando ao fim do
+                    recorte, o botão dizia "e próximo" e a próxima linha vinha de outra conta;
+                    agora ele grava e para, e o rótulo diz que parou. */}
+                {!actions.canProximo
+                  ? (actions.soConfirma ? 'Confirmar — fim da lista' : 'Salvar — fim da lista')
+                  : (actions.soConfirma ? 'Confirmar e próximo' : 'Salvar e próximo')}
               </Button>
             </div>
           </div>

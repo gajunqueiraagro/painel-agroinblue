@@ -38,8 +38,11 @@ function agrupar(rows: EnriqRowVM[], hideBanco: boolean): Array<{ chave: string;
   const mapa = new Map<string, { rotulo: string; linhas: EnriqRowVM[] }>();
   for (const r of rows) {
     const conta = r.contaBancaria ?? 'Sem conta';
-    const chave = hideBanco ? r.data : `${r.data}|${conta}`;
-    const rotulo = hideBanco ? r.data : `${r.data} · ${conta}`;
+    /* ⚠ A DATA É A DE CAIXA — 133e adendo item 5; quando sobra a competência, a faixa diz
+       "comp." para o operador não conferir um mês que não é o do dinheiro. */
+    const marca = r.dataEhCompetencia ? `${r.data} comp.` : r.data;
+    const chave = hideBanco ? marca : `${marca}|${conta}`;
+    const rotulo = hideBanco ? marca : `${marca} · ${conta}`;
     let g = mapa.get(chave);
     if (!g) { g = { rotulo, linhas: [] }; mapa.set(chave, g); ordem.push(chave); }
     g.linhas.push(r);

@@ -33,6 +33,8 @@ export interface FavorecidoSelectProps {
   novoButtonClassName?: string;
   label?: string;
   triggerClassName?: string;              // ex.: fieldBg
+  /** 133e adendo — gatilho compacto da Mesa (20px/11px). A caixa aberta segue o A23. */
+  size?: 'default' | 'compact';
   tabIndex?: number;
   disabled?: boolean;
   showCpfCnpj?: boolean;                  // exibe "Nome (CPF/CNPJ)" — default false (demais telas inalteradas)
@@ -52,7 +54,7 @@ function normalizeSearch(s: string): string {
 export function FavorecidoSelect({
   value, onChange, onSelected, fornecedores,
   search, onSearchChange, onCriarNovo, novoButtonClassName,
-  label, triggerClassName, tabIndex, disabled, showCpfCnpj = false,
+  label, triggerClassName, size = 'default', tabIndex, disabled, showCpfCnpj = false,
 }: FavorecidoSelectProps) {
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
@@ -115,7 +117,7 @@ export function FavorecidoSelect({
       <div className="flex gap-1">
         <Popover open={open} onOpenChange={v => { setOpen(v); if (!v) onSearchChange(''); }}>
           <PopoverTrigger asChild>
-            <Button tabIndex={tabIndex} variant="outline" role="combobox" aria-expanded={open} disabled={disabled} className={cn("flex-1 min-w-0 h-8 justify-between font-normal text-[12px]", triggerClassName)}>
+            <Button tabIndex={tabIndex} variant="outline" role="combobox" aria-expanded={open} disabled={disabled} className={cn("flex-1 min-w-0 h-8 justify-between font-normal text-[12px]", size === 'compact' && 'h-5 px-1.5 text-[11px] [&_svg]:h-3 [&_svg]:w-3', triggerClassName)}>
               <span className="truncate">{selectedNome || 'Selecione fornecedor...'}</span>
               <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
             </Button>

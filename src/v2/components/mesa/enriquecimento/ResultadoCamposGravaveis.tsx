@@ -23,7 +23,7 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ContaBancariaSelect, type ContaSelecionavel } from '@/components/shared/ContaBancariaSelect';
-import { CELULA_EDITAVEL, CELULA_EDITAVEL_WRAPPER, ITEM_DROPDOWN } from './medidasMesa';
+import { CELULA_EDITAVEL, CELULA_EDITAVEL_DATA, ITEM_DROPDOWN } from './medidasMesa';
 
 type Editar = (patch: Record<string, unknown>) => Promise<void>;
 
@@ -40,7 +40,7 @@ export function ResultadoDataEditor({ value, valorAtual, campo, onEditar }: {
     <DatePicker
       value={efetivo}
       size="compact"
-      className={CELULA_EDITAVEL}
+      className={CELULA_EDITAVEL_DATA}
       onChange={(novo) => {
         /* Reabrir o calendário e escolher a mesma data não pode custar uma escrita. */
         if ((novo || '') === efetivo) return;
@@ -93,7 +93,11 @@ export function ResultadoContaEditor({ value, valorAtual, contas, onEditar }: {
       value={efetivo}
       contas={contas}
       placeholder="—"
-      className={CELULA_EDITAVEL_WRAPPER}
+      /* ⚠ `CELULA_EDITAVEL_WRAPPER` NUNCA APLICOU — 133e adendo. Ele é um seletor de
+         DESCENDENTE (`[&>button]`), e `ContaBancariaSelect` entrega a `className` ao próprio
+         gatilho: a regra procurava um botão filho do botão. Era por isso que a Conta
+         bancária saltava na linha de 22px enquanto os outros campos obedeciam. */
+      size="compact"
       onValueChange={(id) => {
         if (id === efetivo) return;
         void onEditar({ conta_bancaria_id: id || null });

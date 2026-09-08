@@ -60,7 +60,8 @@ const ORDEM: Array<{ campo: string; rotulo: string; bloco: Bloco; gravaHoje: boo
      não o traz e o parser da Mesa não o lê, então a linha só saberia mostrar "—" nas três
      colunas. Um campo mudo ocupando 22px é pior que a ausência dele — quando a view o
      trouxer, ele entra aqui, no bloco 2, antes do Documento.
-     ⚠ TREZE LINHAS × 22px = 286px, mais 6px da faixa. */
+     ⚠ QUATORZE LINHAS × 22px = 308px, mais 6px da faixa = 314. Medido no layout: 316px com
+     a borda. (O adendo do 133e falava em treze; são quatorze — oito no bloco 1 e seis no 2.) */
   { campo: 'Tipo', rotulo: 'Tipo', bloco: 1, gravaHoje: false },
   { campo: 'Competência', rotulo: 'Competência', bloco: 1, gravaHoje: true },
   { campo: 'Data vencimento', rotulo: 'Data venc.', bloco: 1, gravaHoje: true },

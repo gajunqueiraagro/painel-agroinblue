@@ -29,6 +29,7 @@ export function ResultadoSubcentroEditor({
       onSearchChange={setSearch}
       disabled={disabled}
       triggerClassName={CELULA_EDITAVEL}
+      size="compact"
       contentClassName="w-[22rem]"
       itemClassName={ITEM_DROPDOWN}
     />

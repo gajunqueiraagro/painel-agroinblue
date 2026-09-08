@@ -21,6 +21,7 @@ import {
 import { EnriquecimentoLista, type EnriquecimentoListaProps } from './EnriquecimentoLista';
 import { EnriquecimentoDetalhe, type EnriquecimentoDetalheProps } from './EnriquecimentoDetalhe';
 import { type EnriquecimentoActionsProps } from './EnriquecimentoActions';
+import type { EnriqRowVM } from './types';
 import { EnriquecimentoMesaModal } from './EnriquecimentoMesaModal';
 import { EnriquecimentoImportarDialog } from './EnriquecimentoImportarDialog';
 import { EnriquecimentoTopoNumeros, type VistaPasso2 } from './EnriquecimentoTopoNumeros';
@@ -74,7 +75,10 @@ export function MesaEnriquecimentoTab({
      são seis, e filtrar por status enquanto o chip fala de grupo faria o número do chip e
      o tamanho da lista discordarem. */
   const [filtroGrupo, setFiltroGrupo] = useState<VistaPasso2>('todas');
-  const [ordenacao, setOrdenacao] = useState<Ordenacao>('planilha');
+  /* ⚠ A ORDEM PADRÃO É A DO CAIXA — 133e adendo item 5: pagamento decrescente, depois valor.
+     Era "ordem da planilha", que fazia sentido quando a tela era um espelho do arquivo; ela
+     continua no seletor, porque conferir contra o Excel aberto ao lado ainda é um gesto. */
+  const [ordenacao, setOrdenacao] = useState<Ordenacao>('data');
   const [filtroModo, setFiltroModo] = useState<'pendentes' | 'todas'>('todas');   // PR-U2d-1 — burn-down
 
   // PR-U2d-1 — janela de graça: ids recém-aplicados ficam visíveis ~1,4s antes do
@@ -114,6 +118,16 @@ export function MesaEnriquecimentoTab({
   /* A confirmação inline do agrupar — uma linha âmbar com Sim/Não, não um modal: a
      pergunta é sobre a linha que está na tela, e um modal a cobriria. */
   const [confirmandoGrupo, setConfirmandoGrupo] = useState(false);
+  /**
+   * 133e adendo item 3 — a ordem visível DENTRO da Mesa ampliada.
+   *
+   * ⚠ A MESA FILTRA POR CONTA E SITUAÇÃO POR CONTA PRÓPRIA, e a navegação daqui andava pela
+   * lista da aba: com a Lavoura filtrada lá dentro, "Salvar e próximo" pulava para o Banco
+   * do Brasil. Enquanto o modal está aberto, é a ordem DELE que manda — quem sabe o que está
+   * visível é ele; quem sabe salvar é esta tela.
+   * ⚠ FECHADO, VOLTA A SER A LISTA DA ABA. `null` não é "vazio": é "a Mesa não está mandando".
+   */
+  const [ordemDaMesa, setOrdemDaMesa] = useState<string[] | null>(null);
   const marcarEditada = (id: string) =>
     setEditadasIds((p) => { const n = new Set(p); n.add(id); return n; });
   const limparEditada = (id: string) =>
@@ -234,10 +248,14 @@ export function MesaEnriquecimentoTab({
     if (ordenacao === 'valor') {
       copia.sort((a, b) => Math.abs(b.valorNum ?? 0) - Math.abs(a.valorNum ?? 0));
     } else {
-      /* `data` já vem "dd/mm/aaaa" do adapter; comparar strings nesse formato ordenaria por
-         dia. Os pedaços invertidos dão a ordem cronológica sem reconverter para Date. */
-      const chave = (d: string) => d.split('/').reverse().join('');
-      copia.sort((a, b) => chave(a.data).localeCompare(chave(b.data)));
+      /* ⚠ PAGAMENTO DECRESCENTE, DEPOIS VALOR — 133e adendo item 5. `dataIso` já vem do
+         adapter em `YYYY-MM-DD`: ordenar por ele é comparação de string, sem `Date` e sem
+         desformatar o que o adapter formatou. Linha sem data nenhuma vai para o fim. */
+      copia.sort((a, b) => {
+        const da = a.dataIso ?? ''; const db = b.dataIso ?? '';
+        if (da !== db) return db.localeCompare(da);
+        return Math.abs(b.valorNum ?? 0) - Math.abs(a.valorNum ?? 0);
+      });
     }
     return copia;
   }, [rowsGrupo, ordenacao]);
@@ -295,16 +313,31 @@ export function MesaEnriquecimentoTab({
     return Array.isArray(ids) ? ids.filter((x): x is string => typeof x === 'string') : [];
   }, [linhaCrua]);
 
+  /**
+   * A lista pela qual se NAVEGA — 133e adendo item 3.
+   *
+   * ⚠ É A QUE ESTÁ NA TELA, sempre: a da Mesa quando ela está aberta (ela tem filtro
+   * próprio), a da aba quando não está. Navegar por um universo maior que o visível é o que
+   * fazia o "próximo" trocar de conta sem o operador pedir.
+   */
+  const ordemNavegacao = useMemo(() => {
+    if (!mesaAmpliadaOpen || !ordemDaMesa) return rowsNaTela;
+    const porId = new Map(rowsNaTela.map((r) => [r.id, r]));
+    return ordemDaMesa.map((id) => porId.get(id)).filter((r): r is EnriqRowVM => !!r);
+  }, [mesaAmpliadaOpen, ordemDaMesa, rowsNaTela]);
+
   // Navegação read-only entre linhas da lista (Anterior/Próximo) — só troca a seleção.
-  const idx = rowsNaTela.findIndex((r) => r.id === selecionadoId);
+  const idx = ordemNavegacao.findIndex((r) => r.id === selecionadoId);
   const canAnterior = idx > 0;
-  const canProximo = rowsNaTela.length > 0 && idx < rowsNaTela.length - 1;
-  const irAnterior = () => { if (canAnterior) setSelecionadoId(rowsNaTela[idx - 1].id); };
+  const canProximo = ordemNavegacao.length > 0 && idx < ordemNavegacao.length - 1;
+  const irAnterior = () => { if (canAnterior) setSelecionadoId(ordemNavegacao[idx - 1].id); };
   const irProximo = () => {
-    if (idx < 0) { if (rowsNaTela.length) setSelecionadoId(rowsNaTela[0].id); }
-    else if (canProximo) setSelecionadoId(rowsNaTela[idx + 1].id);
+    if (idx < 0) { if (ordemNavegacao.length) setSelecionadoId(ordemNavegacao[0].id); }
+    else if (canProximo) setSelecionadoId(ordemNavegacao[idx + 1].id);
   };
-  const posicao = `${idx >= 0 ? idx + 1 : '—'} / ${rowsNaTela.length}`;
+  /* "Linha n / N" no MESMO recorte da navegação — dois universos com um rótulo só seria a
+     tela dizendo que faltam 200 quando o recorte tem 9. */
+  const posicao = `${idx >= 0 ? idx + 1 : '—'} / ${ordemNavegacao.length}`;
 
   // R1 — Promise da edição em voo (commit-on-blur de Produto/Documento). salvar() a aguarda
   // antes do apply, para o apply_row NUNCA ler update_proposto antes do editar_proposto commitar.
@@ -956,7 +989,7 @@ export function MesaEnriquecimentoTab({
           <SelectContent>
             <SelectItem value="planilha" className="text-[11px]">Ordem da planilha</SelectItem>
             <SelectItem value="valor" className="text-[11px]">Maior valor</SelectItem>
-            <SelectItem value="data" className="text-[11px]">Data</SelectItem>
+            <SelectItem value="data" className="text-[11px]">Pagamento (mais recente)</SelectItem>
           </SelectContent>
         </Select>
 
@@ -1084,6 +1117,7 @@ export function MesaEnriquecimentoTab({
         onAplicarAoGrupo={handleAplicarAoGrupo}
         aplicandoGrupo={aplicandoGrupo}
         faixas={faixasDaLinha}
+        onOrdemVisivel={setOrdemDaMesa}
       />
 
       <EnriquecimentoImportarDialog

@@ -37,6 +37,7 @@ export function ResultadoFavorecidoEditor({
         onCriarNovo={() => { setDefaultNome(search); setDialogOpen(true); }}
         disabled={disabled}
         triggerClassName={CELULA_EDITAVEL}
+        size="compact"
       />
       <NovoFornecedorDialog
         open={dialogOpen}

@@ -129,7 +129,12 @@ export interface EnriqRowVM {
   avisoPlanilha: string | null;
   mudaAlgo: boolean;
   // LISTA (esquerda) — só o necessário para localizar o lançamento (lado SISTEMA).
+  /** A data de CAIXA, já formatada — pagamento do lançamento, ou da planilha, ou competência. */
   data: string;
+  /** A mesma data em ISO, para ordenar sem desformatar. `null` quando não há nenhuma. */
+  dataIso: string | null;
+  /** `true` quando sobrou a competência: a tela marca "comp." ao lado (133e adendo item 5). */
+  dataEhCompetencia: boolean;
   valor: string;
   /** O mesmo valor da string acima, cru — para somar por grupo sem desformatar. */
   valorNum: number | null;

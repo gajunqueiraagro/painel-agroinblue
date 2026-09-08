@@ -37,6 +37,7 @@ export function ResultadoFazendaEditor({
       forcaAdministrativo={forcaAdministrativo}
       disabled={disabled}
       triggerClassName={CELULA_EDITAVEL}
+      size="compact"
       hideAviso
     />
   );
