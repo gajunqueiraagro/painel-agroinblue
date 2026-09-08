@@ -375,7 +375,7 @@ export function FinV2SafrasTab() {
                   <SelectTrigger className="mt-0.5 h-8 text-[12px]"><SelectValue placeholder="Selecione" /></SelectTrigger>
                   <SelectContent>
                     {CULTURAS.map(c => (
-                      <SelectItem key={c.valor} value={c.valor} className="text-[12px]">
+                      <SelectItem key={c.valor} value={c.valor}>
                         {c.label} <span className="text-muted-foreground">({c.sigla})</span>
                       </SelectItem>
                     ))}
@@ -391,7 +391,7 @@ export function FinV2SafrasTab() {
                 <SelectTrigger className="mt-0.5 h-8 text-[12px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {temporadasDisponiveis(new Date()).map(t => (
-                    <SelectItem key={t} value={t} className="text-[12px]">{t}</SelectItem>
+                    <SelectItem key={t} value={t}>{t}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

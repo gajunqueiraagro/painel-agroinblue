@@ -801,7 +801,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
           <Select value={ano} onValueChange={setAno}>
             <SelectTrigger className="h-7 text-xs w-[68px]"><SelectValue /></SelectTrigger>
             <SelectContent>
-              {anos.map(a => <SelectItem key={a} value={a} className="text-xs">{a}</SelectItem>)}
+              {anos.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
             </SelectContent>
           </Select>
 

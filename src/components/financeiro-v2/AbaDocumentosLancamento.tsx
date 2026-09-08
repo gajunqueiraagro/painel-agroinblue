@@ -319,7 +319,7 @@ function FormDocumento({ api, documento, fornecedores, onFechar }: {
               <SelectTrigger className="h-8 text-[12px] mt-0.5"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {ESPECIES_LANC_DOC.map(e => (
-                  <SelectItem key={e.value} value={e.value} className="text-[12px]">{e.label}</SelectItem>
+                  <SelectItem key={e.value} value={e.value}>{e.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -372,9 +372,9 @@ function FormDocumento({ api, documento, fornecedores, onFechar }: {
               <SelectTrigger className="h-8 text-[12px] mt-0.5"><SelectValue placeholder="Selecione" /></SelectTrigger>
               <SelectContent>
                 {fornecedores.map(f => (
-                  <SelectItem key={f.id} value={f.id} className="text-[12px]">{f.nome}</SelectItem>
+                  <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>
                 ))}
-                <SelectItem value={OUTRO} className="text-[12px]">Outro (informar)</SelectItem>
+                <SelectItem value={OUTRO}>Outro (informar)</SelectItem>
               </SelectContent>
             </Select>
           </div>

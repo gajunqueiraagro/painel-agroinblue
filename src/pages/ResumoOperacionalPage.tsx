@@ -187,7 +187,7 @@ const ResumoOperacionalPage = () => {
             </SelectTrigger>
             <SelectContent>
               {anos.map(a => (
-                <SelectItem key={a} value={a} className="text-xs">{a}</SelectItem>
+                <SelectItem key={a} value={a}>{a}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -198,7 +198,7 @@ const ResumoOperacionalPage = () => {
             </SelectTrigger>
             <SelectContent>
               {MESES.map((m, i) => (
-                <SelectItem key={i + 1} value={String(i + 1)} className="text-xs">{m}</SelectItem>
+                <SelectItem key={i + 1} value={String(i + 1)}>{m}</SelectItem>
               ))}
             </SelectContent>
           </Select>

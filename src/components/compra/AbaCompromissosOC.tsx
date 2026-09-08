@@ -1500,13 +1500,13 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, f
                               <SelectValue placeholder="—" />
                             </SelectTrigger>
                             <SelectContent className={darkSelectClass}>
-                              <SelectItem value="__sem__" className="text-[11px]">—</SelectItem>
+                              <SelectItem value="__sem__">—</SelectItem>
                               {/* ⚠ A FORMA GRAVADA ENTRA NA LISTA mesmo fora do vocabulário:
                                   a coluna é `text` sem CHECK, e uma parcela antiga com forma
                                   fora do catálogo não pode perdê-la só por ser aberta. */}
                               {(p.forma && !FORMAS_PAGAMENTO.includes(p.forma)
                                 ? [p.forma, ...FORMAS_PAGAMENTO] : FORMAS_PAGAMENTO)
-                                .map(f => <SelectItem key={f} value={f} className="text-[11px]">{f}</SelectItem>)}
+                                .map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
                             </SelectContent>
                           </Select>
                         ) : (

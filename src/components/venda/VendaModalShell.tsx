@@ -912,7 +912,7 @@ export function VendaModalShell({
                     <SelectValue placeholder="Selecione a fazenda" />
                   </SelectTrigger>
                   <SelectContent>
-                    {fazendasOC.map(f => <SelectItem key={f.id} value={f.id} className="text-[12px]">{f.nome}</SelectItem>)}
+                    {fazendasOC.map(f => <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>)}
                   </SelectContent>
                 </Select>
                 {fazendaFalta && (
@@ -929,9 +929,9 @@ export function VendaModalShell({
                 <Select value={vendaTipoVenda} onValueChange={setVendaTipoVenda}>
                   <SelectTrigger className="mt-[3px] h-8 px-2.5 text-[12px]"><SelectValue placeholder="Selecione..." /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="gado_adulto" className="text-[12px]">Gado adulto</SelectItem>
-                    <SelectItem value="desmama" className="text-[12px]">Desmama</SelectItem>
-                    <SelectItem value="boitel" className="text-[12px]">Boitel</SelectItem>
+                    <SelectItem value="gado_adulto">Gado adulto</SelectItem>
+                    <SelectItem value="desmama">Desmama</SelectItem>
+                    <SelectItem value="boitel">Boitel</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

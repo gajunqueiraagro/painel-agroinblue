@@ -424,7 +424,7 @@ export default function CadernoImportTab() {
               </SelectTrigger>
               <SelectContent>
                 {fazendasList.map((f) => (
-                  <SelectItem key={f.id} value={f.id} className="text-xs">{f.nome}</SelectItem>
+                  <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -534,7 +534,7 @@ export default function CadernoImportTab() {
                                       </SelectTrigger>
                                       <SelectContent>
                                         {opcoes.map((o) => (
-                                          <SelectItem key={o} value={o} className="text-xs">{o}</SelectItem>
+                                          <SelectItem key={o} value={o}>{o}</SelectItem>
                                         ))}
                                       </SelectContent>
                                     </Select>
@@ -552,7 +552,7 @@ export default function CadernoImportTab() {
                                       </SelectTrigger>
                                       <SelectContent>
                                         {EVENTO_MORTES_CONSUMO_OPCOES.map((o) => (
-                                          <SelectItem key={o} value={o} className="text-xs">{o}</SelectItem>
+                                          <SelectItem key={o} value={o}>{o}</SelectItem>
                                         ))}
                                       </SelectContent>
                                     </Select>
@@ -569,7 +569,7 @@ export default function CadernoImportTab() {
                                       </SelectTrigger>
                                       <SelectContent>
                                         {CATEGORIA_OPCOES.map((o) => (
-                                          <SelectItem key={o} value={o} className="text-xs">{o}</SelectItem>
+                                          <SelectItem key={o} value={o}>{o}</SelectItem>
                                         ))}
                                       </SelectContent>
                                     </Select>
@@ -612,7 +612,7 @@ export default function CadernoImportTab() {
                                         </SelectTrigger>
                                         <SelectContent>
                                           {opcoesFazendas.map((f) => (
-                                            <SelectItem key={f.id} value={f.nome} className="text-xs">{f.nome}</SelectItem>
+                                            <SelectItem key={f.id} value={f.nome}>{f.nome}</SelectItem>
                                           ))}
                                         </SelectContent>
                                       </Select>
@@ -689,7 +689,7 @@ export default function CadernoImportTab() {
                                         </SelectTrigger>
                                         <SelectContent>
                                           {MOTIVOS_MORTE_OPCOES.map((o) => (
-                                            <SelectItem key={o} value={o} className="text-xs">{o}</SelectItem>
+                                            <SelectItem key={o} value={o}>{o}</SelectItem>
                                           ))}
                                         </SelectContent>
                                       </Select>

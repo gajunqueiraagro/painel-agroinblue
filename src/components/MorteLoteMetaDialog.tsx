@@ -158,7 +158,7 @@ export function MorteLoteMetaDialog({ open, onClose, onAdicionar, dataInicial }:
                       </SelectTrigger>
                       <SelectContent>
                         {CATEGORIAS.map(c => (
-                          <SelectItem key={c.value} value={c.value} className="text-[11px]">{c.label}</SelectItem>
+                          <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -181,9 +181,9 @@ export function MorteLoteMetaDialog({ open, onClose, onAdicionar, dataInicial }:
                         </SelectTrigger>
                         <SelectContent>
                           {MOTIVOS_MORTE.map(m => (
-                            <SelectItem key={m} value={m} className="text-[11px]">{m}</SelectItem>
+                            <SelectItem key={m} value={m}>{m}</SelectItem>
                           ))}
-                          <SelectItem value="__custom__" className="text-[11px]">Outro (digitar)</SelectItem>
+                          <SelectItem value="__custom__">Outro (digitar)</SelectItem>
                         </SelectContent>
                       </Select>
                       {linha.motivo === '__custom__' && (

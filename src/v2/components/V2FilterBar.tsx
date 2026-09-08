@@ -36,19 +36,19 @@ export function V2FilterBar({ ano, mes, onAnoChange, onMesChange, tipo = 'ano', 
       {showFazenda && fazendas.length > 1 && (
         <Select value={fazendaAtual?.id ?? '__global__'} onValueChange={(id) => { const f = fazendas.find(x => x.id === id); if (f) setFazendaAtual(f); }}>
           <SelectTrigger className="h-7 text-xs w-36 border-border"><SelectValue /></SelectTrigger>
-          <SelectContent>{fazendas.map(f => <SelectItem key={f.id} value={f.id} className="text-xs">{f.nome}</SelectItem>)}</SelectContent>
+          <SelectContent>{fazendas.map(f => <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>)}</SelectContent>
         </Select>
       )}
       {tipo !== 'nenhum' && (
         <Select value={ano} onValueChange={onAnoChange}>
           <SelectTrigger className="h-7 text-xs w-20 border-border"><SelectValue /></SelectTrigger>
-          <SelectContent>{anos.map(a => <SelectItem key={a} value={a} className="text-xs">{a}</SelectItem>)}</SelectContent>
+          <SelectContent>{anos.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
         </Select>
       )}
       {tipo === 'ano-mes' && (
         <Select value={mes} onValueChange={onMesChange}>
           <SelectTrigger className="h-7 text-xs w-28 border-border"><SelectValue /></SelectTrigger>
-          <SelectContent>{MESES.map(m => <SelectItem key={m.v} value={m.v} className="text-xs">{m.l}</SelectItem>)}</SelectContent>
+          <SelectContent>{MESES.map(m => <SelectItem key={m.v} value={m.v}>{m.l}</SelectItem>)}</SelectContent>
         </Select>
       )}
       {temPeriodo && (

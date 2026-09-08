@@ -236,9 +236,9 @@ export function FinV2FornecedoresTab() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="todos" className="text-xs">Todos</SelectItem>
-                <SelectItem value="ativos" className="text-xs">Ativos</SelectItem>
-                <SelectItem value="inativos" className="text-xs">Inativos</SelectItem>
+                <SelectItem value="todos">Todos</SelectItem>
+                <SelectItem value="ativos">Ativos</SelectItem>
+                <SelectItem value="inativos">Inativos</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -344,7 +344,7 @@ export function FinV2FornecedoresTab() {
                               </SelectTrigger>
                               <SelectContent>
                                 {p.suggestions.map(s => (
-                                  <SelectItem key={s.id} value={s.id} className="text-[10px] py-0.5">{s.nome}</SelectItem>
+                                  <SelectItem key={s.id} value={s.id} className="py-0.5">{s.nome}</SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>

@@ -4947,7 +4947,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             <Select value={categoria} onValueChange={v => setCategoria(v as Categoria)}>
               <SelectTrigger tabIndex={2} className="mt-0.5 h-7 text-[11px]"><SelectValue placeholder="Selecione..." /></SelectTrigger>
               <SelectContent className="max-h-52 overflow-y-auto">
-                {categoriasDisponiveis.map(c => <SelectItem key={c.value} value={c.value} className="text-[11px] py-1.5">{c.label}</SelectItem>)}
+                {categoriasDisponiveis.map(c => <SelectItem key={c.value} value={c.value} className="py-1.5">{c.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -4986,7 +4986,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           <Select value={categoria} onValueChange={v => setCategoria(v as Categoria)}>
             <SelectTrigger tabIndex={4} className="mt-0.5 h-7 text-[11px]"><SelectValue placeholder="Selecione..." /></SelectTrigger>
             <SelectContent className="max-h-52 overflow-y-auto">
-              {categoriasDisponiveis.map(c => <SelectItem key={c.value} value={c.value} className="text-[11px] py-1.5">{c.label}</SelectItem>)}
+              {categoriasDisponiveis.map(c => <SelectItem key={c.value} value={c.value} className="py-1.5">{c.label}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
@@ -5005,8 +5005,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           <Select value={motivoMorte} onValueChange={setMotivoMorte}>
             <SelectTrigger className="mt-0.5 h-8 text-[12px]"><SelectValue placeholder="Selecione o motivo" /></SelectTrigger>
             <SelectContent>
-              {MOTIVOS_MORTE.map(m => <SelectItem key={m} value={m} className="text-[12px]">{m}</SelectItem>)}
-              <SelectItem value="__custom__" className="text-[12px]">Outro (digitar)</SelectItem>
+              {MOTIVOS_MORTE.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+              <SelectItem value="__custom__">Outro (digitar)</SelectItem>
             </SelectContent>
           </Select>
           {motivoMorte === '__custom__' && (
@@ -5036,7 +5036,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   </SelectTrigger>
                   <SelectContent>
                     {fazendasOC.map(f => (
-                      <SelectItem key={f.id} value={f.id} className="text-[11px]">{f.nome}</SelectItem>
+                      <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -5045,7 +5045,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               ) : (campos.origem as any).useSelect && outrasFazendas.length > 0 ? (
                 <Select value={fazendaOrigem} onValueChange={setFazendaOrigem}>
                   <SelectTrigger className="mt-0.5 h-7 text-[11px]"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>{outrasFazendas.map(f => <SelectItem key={f.id} value={f.nome} className="text-[11px]">{f.nome}</SelectItem>)}</SelectContent>
+                  <SelectContent>{outrasFazendas.map(f => <SelectItem key={f.id} value={f.nome}>{f.nome}</SelectItem>)}</SelectContent>
                 </Select>
               ) : (
                 <Input value={fazendaOrigem} onChange={e => setFazendaOrigem(e.target.value)} placeholder="Ex: Faz. Boa Vista" className="mt-0.5 h-7 text-[11px]" />
@@ -5198,9 +5198,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               >
                 <SelectTrigger className="mt-0.5 h-7 text-[11px]"><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="desmama" className="text-[11px]">Desmama</SelectItem>
-                  <SelectItem value="gado_adulto" className="text-[11px]">Gado Adulto</SelectItem>
-                  <SelectItem value="boitel" className="text-[11px]">Boitel</SelectItem>
+                  <SelectItem value="desmama">Desmama</SelectItem>
+                  <SelectItem value="gado_adulto">Gado Adulto</SelectItem>
+                  <SelectItem value="boitel">Boitel</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -5214,7 +5214,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               ) : (campos.destino as any).useSelect && outrasFazendas.length > 0 ? (
                 <Select value={fazendaDestino} onValueChange={setFazendaDestino}>
                   <SelectTrigger className="mt-0.5 h-7 text-[11px]"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>{outrasFazendas.map(f => <SelectItem key={f.id} value={f.nome} className="text-[11px]">{f.nome}</SelectItem>)}</SelectContent>
+                  <SelectContent>{outrasFazendas.map(f => <SelectItem key={f.id} value={f.nome}>{f.nome}</SelectItem>)}</SelectContent>
                 </Select>
               ) : (
                 <Input value={fazendaDestino} onChange={e => setFazendaDestino(e.target.value)} placeholder={campos.destino.placeholder || 'Ex: Faz. Santa Cruz'} className="mt-0.5 h-7 text-[11px]" />
@@ -5388,11 +5388,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         <div className="flex gap-1.5">
           <Select value={anoFiltro} onValueChange={setAnoFiltro}>
             <SelectTrigger className="h-8 text-[12px] font-bold w-24"><SelectValue placeholder="Ano" /></SelectTrigger>
-            <SelectContent>{anosDisponiveis.map(a => <SelectItem key={a} value={a} className="text-[12px]">{a}</SelectItem>)}</SelectContent>
+            <SelectContent>{anosDisponiveis.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
           </Select>
           <Select value={mesFiltro} onValueChange={setMesFiltro}>
             <SelectTrigger className="h-8 text-[12px] font-bold flex-1"><SelectValue placeholder="Mês" /></SelectTrigger>
-            <SelectContent>{MESES.map(m => <SelectItem key={m.value} value={m.value} className="text-[12px]">{m.label}</SelectItem>)}</SelectContent>
+            <SelectContent>{MESES.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}</SelectContent>
           </Select>
         </div>
       </div>

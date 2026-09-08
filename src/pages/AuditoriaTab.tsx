@@ -213,7 +213,7 @@ export function AuditoriaTab() {
                 </SelectTrigger>
                 <SelectContent>
                   {MODULOS.map(m => (
-                    <SelectItem key={m.value} value={m.value} className="text-xs">{m.label}</SelectItem>
+                    <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -224,7 +224,7 @@ export function AuditoriaTab() {
                 </SelectTrigger>
                 <SelectContent>
                   {ACOES.map(a => (
-                    <SelectItem key={a.value} value={a.value} className="text-xs">{a.label}</SelectItem>
+                    <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -236,9 +236,9 @@ export function AuditoriaTab() {
                   <SelectValue placeholder="Fazenda" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all" className="text-xs">Todas</SelectItem>
+                  <SelectItem value="all">Todas</SelectItem>
                   {fazendas.map(f => (
-                    <SelectItem key={f.id} value={f.id} className="text-xs">{f.nome}</SelectItem>
+                    <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -248,9 +248,9 @@ export function AuditoriaTab() {
                   <SelectValue placeholder="Usuário" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all" className="text-xs">Todos</SelectItem>
+                  <SelectItem value="all">Todos</SelectItem>
                   {profiles.map(p => (
-                    <SelectItem key={p.user_id} value={p.user_id} className="text-xs">{p.nome}</SelectItem>
+                    <SelectItem key={p.user_id} value={p.user_id}>{p.nome}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

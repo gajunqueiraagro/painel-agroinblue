@@ -107,7 +107,7 @@ export function AcaoEhParcelaFinanciamento({
         </SelectTrigger>
         <SelectContent position="popper" className="max-h-64 overflow-y-auto rolagem-fina">
           {candidatas.map((c) => (
-            <SelectItem key={c.parcela_id} value={c.parcela_id} className="text-[11px]">
+            <SelectItem key={c.parcela_id} value={c.parcela_id}>
               {c.contrato_descricao} · parcela {c.numero_parcela}/{c.total_parcelas}
               {' · vence '}{dataBR(c.data_vencimento)}
               {' · principal '}{fmtBRL(c.valor_principal)}

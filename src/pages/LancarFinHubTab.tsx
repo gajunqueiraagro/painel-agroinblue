@@ -263,7 +263,7 @@ export function LancarFinHubTab({ onTabChange, filtroGlobal, lancamentosPecuario
             </SelectTrigger>
             <SelectContent>
               {anosDisponiveis.map(a => (
-                <SelectItem key={a} value={a} className="text-xs">{a}</SelectItem>
+                <SelectItem key={a} value={a}>{a}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -273,7 +273,7 @@ export function LancarFinHubTab({ onTabChange, filtroGlobal, lancamentosPecuario
             </SelectTrigger>
             <SelectContent>
               {MESES_FILTRO.map(m => (
-                <SelectItem key={m.value} value={m.value} className="text-xs">
+                <SelectItem key={m.value} value={m.value}>
                   Até {m.label}
                 </SelectItem>
               ))}

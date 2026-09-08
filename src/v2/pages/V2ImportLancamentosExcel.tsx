@@ -255,7 +255,7 @@ export function V2ImportLancamentosExcel({
                 <SelectTrigger className="h-8 text-[11px]"><SelectValue placeholder="Escolher fazenda" /></SelectTrigger>
                 <SelectContent>
                   {fazendas.filter((f) => f.id !== '__global__').map((f) => (
-                    <SelectItem key={f.id} value={f.id} className="text-[11px]">{f.nome}</SelectItem>
+                    <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

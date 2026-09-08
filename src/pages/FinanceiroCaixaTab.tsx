@@ -410,7 +410,7 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
             </SelectTrigger>
             <SelectContent side="bottom">
               {anosDisponiveis.map(a => (
-                <SelectItem key={a} value={a} className="text-xs">{a}</SelectItem>
+                <SelectItem key={a} value={a}>{a}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -420,7 +420,7 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
             </SelectTrigger>
             <SelectContent side="bottom">
               {MESES_FILTRO.map(m => (
-                <SelectItem key={m.value} value={m.value} className="text-xs">
+                <SelectItem key={m.value} value={m.value}>
                   Até {m.label}
                 </SelectItem>
               ))}

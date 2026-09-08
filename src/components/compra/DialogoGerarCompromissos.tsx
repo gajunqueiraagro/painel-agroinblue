@@ -117,7 +117,7 @@ export function DialogoGerarCompromissos({
               <Select value={forma} onValueChange={setForma}>
                 <SelectTrigger className="mt-[3px] h-8 text-[12px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {FORMAS.map(f => <SelectItem key={f} value={f} className="text-[12px]">{f}</SelectItem>)}
+                  {FORMAS.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>

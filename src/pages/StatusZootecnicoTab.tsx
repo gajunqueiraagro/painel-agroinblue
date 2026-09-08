@@ -548,7 +548,7 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {anosDisp.map(a => <SelectItem key={a} value={a} className="text-xs">{a}</SelectItem>)}
+              {anosDisp.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={String(mesFiltro)} onValueChange={v => setMesFiltro(Number(v))}>
@@ -557,7 +557,7 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
             </SelectTrigger>
             <SelectContent>
               {MESES_COLS.map((m, i) => (
-                <SelectItem key={m.key} value={String(i + 1)} className="text-xs">{m.label}</SelectItem>
+                <SelectItem key={m.key} value={String(i + 1)}>{m.label}</SelectItem>
               ))}
             </SelectContent>
           </Select>

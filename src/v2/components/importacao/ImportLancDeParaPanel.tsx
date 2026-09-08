@@ -162,7 +162,7 @@ export function ImportLancDeParaPanel({
                         {fazendas
                           .filter((f) => f.id !== '__global__')
                           .map((f) => (
-                            <SelectItem key={f.id} value={f.id} className="text-[10px]">{f.nome}</SelectItem>
+                            <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>
                           ))}
                       </SelectContent>
                     </Select>

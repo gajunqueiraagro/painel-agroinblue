@@ -339,14 +339,14 @@ export function EnriquecimentoMesaModal({
               <Select value={filtro} onValueChange={(v) => setFiltro(v as FiltroEstado)}>
                 <SelectTrigger className="h-6 min-w-0 flex-1 text-[10px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="todas" className="text-[10px]">Todas ({rows.length})</SelectItem>
-                  <SelectItem value="atualizam" className="text-[10px]">Atualizam ({contagens.atualizam})</SelectItem>
-                  <SelectItem value="decide" className="text-[10px]">Você decide ({contagens.decide})</SelectItem>
-                  <SelectItem value="agrupam" className="text-[10px]">Agrupam ({contagens.agrupam})</SelectItem>
-                  <SelectItem value="sem_par" className="text-[10px]">Sem par no banco ({contagens.sem_par})</SelectItem>
-                  <SelectItem value="revisar" className="text-[10px]">A revisar ({contagens.revisar})</SelectItem>
-                  <SelectItem value="entradas" className="text-[10px]">Entradas ({contagens.entradas})</SelectItem>
-                  <SelectItem value="saidas" className="text-[10px]">Saídas ({contagens.saidas})</SelectItem>
+                  <SelectItem value="todas">Todas ({rows.length})</SelectItem>
+                  <SelectItem value="atualizam">Atualizam ({contagens.atualizam})</SelectItem>
+                  <SelectItem value="decide">Você decide ({contagens.decide})</SelectItem>
+                  <SelectItem value="agrupam">Agrupam ({contagens.agrupam})</SelectItem>
+                  <SelectItem value="sem_par">Sem par no banco ({contagens.sem_par})</SelectItem>
+                  <SelectItem value="revisar">A revisar ({contagens.revisar})</SelectItem>
+                  <SelectItem value="entradas">Entradas ({contagens.entradas})</SelectItem>
+                  <SelectItem value="saidas">Saídas ({contagens.saidas})</SelectItem>
                 </SelectContent>
               </Select>
             </div>

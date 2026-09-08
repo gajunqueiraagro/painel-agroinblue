@@ -209,7 +209,12 @@ export function PlanoSubcentroSelect({
                 className={cn(
                   /* ⚠ UMA LINHA, SEMPRE — A23: subcentro longo quebrava em duas e a lista
                      desalinhava. O texto inteiro fica no `title`. */
-                  "relative flex min-h-[26px] w-full cursor-pointer select-none items-center rounded-sm px-2 py-1 text-[12px] outline-none",
+                  /* ⚠ 10px/15px — A MESMA REGUA DO `SelectItem` do primitivo (PR-UI-SELECT-03). Este
+     componente NAO e' um `Select`: e' Popover + lista propria, entao nao herda nada e
+     precisa da regua escrita. Sem isto, o Subcentro abriria 2px maior que todo o resto
+     do sistema — que e' exatamente a divergencia que o PR veio fechar, do outro lado.
+     `min-h-[26px]` fica: a altura da linha ja' era a mesma. */
+                  "relative flex min-h-[26px] w-full cursor-pointer select-none items-center rounded-sm px-2 py-1 text-[10px] leading-[15px] outline-none",
                   "text-zinc-100",
                   idx === highlight ? "bg-zinc-800/60 text-zinc-100" : "hover:bg-zinc-800/45",
                   value === sc.subcentro && idx !== highlight && "bg-zinc-800/40",

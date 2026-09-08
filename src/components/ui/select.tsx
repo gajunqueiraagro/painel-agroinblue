@@ -135,7 +135,14 @@ const SelectItem = React.forwardRef<
       // painel dark-glass, deixava o item selecionado ilegível — regressão do dropdown de Fazenda).
       /* ⚠ UMA LINHA, SEMPRE — A23: o item quebrava em duas com nome longo e a lista
          desalinhava. `min-h` mantém os 26px com o texto truncado. */
-      "relative flex min-h-[26px] w-full cursor-default select-none items-center overflow-hidden text-ellipsis whitespace-nowrap rounded-sm py-1 pl-8 pr-2 text-[12px] outline-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 text-zinc-100 focus:bg-zinc-800/60 focus:text-zinc-100 data-[state=checked]:bg-zinc-800/40 data-[state=checked]:text-zinc-100",
+      /* ⚠ 10px/15px E' O PADRAO DO SISTEMA — PR-UI-SELECT-03, medido com `getComputedStyle`
+         no proto: o "Data por" da barra de filtros abria com 10px/15px e o Conta Origem com
+         12px/18px, lado a lado. Os dois vinham do MESMO primitivo; a diferenca era um
+         `text-[10px]` que a barra de filtros passava por fora. O que era override de uma
+         tela virou a regua — entao o 10px desce para ca' e os overrides que pediam 10px
+         viram redundancia. `min-h-[26px]` NAO muda: a altura da linha ja' era a mesma nos
+         dois, e e' ela que da' o ritmo da lista. */
+      "relative flex min-h-[26px] w-full cursor-default select-none items-center overflow-hidden text-ellipsis whitespace-nowrap rounded-sm py-1 pl-8 pr-2 text-[10px] leading-[15px] outline-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 text-zinc-100 focus:bg-zinc-800/60 focus:text-zinc-100 data-[state=checked]:bg-zinc-800/40 data-[state=checked]:text-zinc-100",
       className,
     )}
     {...props}

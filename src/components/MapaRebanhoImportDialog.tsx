@@ -269,7 +269,7 @@ export function MapaRebanhoImportDialog({ open, onOpenChange, pastos, categorias
                 <SelectTrigger className="h-7 w-[72px] text-[11px] font-bold px-2"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {MESES_OPCOES.map(m => (
-                    <SelectItem key={m.value} value={m.value} className="text-[11px]">{m.label}</SelectItem>
+                    <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -277,7 +277,7 @@ export function MapaRebanhoImportDialog({ open, onOpenChange, pastos, categorias
                 <SelectTrigger className="h-7 w-[72px] text-[11px] font-bold px-2"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {anosOpcoes.map(a => (
-                    <SelectItem key={a} value={a} className="text-[11px]">{a}</SelectItem>
+                    <SelectItem key={a} value={a}>{a}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -355,9 +355,9 @@ export function MapaRebanhoImportDialog({ open, onOpenChange, pastos, categorias
                                 <SelectValue placeholder="Selecione o pasto do sistema" />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="__none__" className="text-[11px] text-muted-foreground">— sem match —</SelectItem>
+                                <SelectItem value="__none__" className="text-muted-foreground">— sem match —</SelectItem>
                                 {pastosOpts.map(po => (
-                                  <SelectItem key={po.id} value={po.id} className="text-[11px]">{po.nome}</SelectItem>
+                                  <SelectItem key={po.id} value={po.id}>{po.nome}</SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>

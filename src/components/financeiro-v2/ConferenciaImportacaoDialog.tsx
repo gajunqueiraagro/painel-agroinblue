@@ -729,7 +729,7 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
                     <p className="text-[10px] text-muted-foreground">Conta Destino (transferências):</p>
                     <Select onValueChange={bulkSetContaDestino}>
                       <SelectTrigger className="h-7 text-[11px]"><SelectValue placeholder="Selecionar..." /></SelectTrigger>
-                      <SelectContent>{contaOptions.map(c => <SelectItem key={c.value} value={c.value} className="text-xs">{c.label}</SelectItem>)}</SelectContent>
+                      <SelectContent>{contaOptions.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
                 )}
@@ -737,7 +737,7 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
                   <p className="text-[10px] text-muted-foreground">Tipo Documento em lote:</p>
                   <Select onValueChange={bulkSetTipoDocumento}>
                     <SelectTrigger className="h-7 text-[11px]"><SelectValue placeholder="Selecionar..." /></SelectTrigger>
-                    <SelectContent>{TIPOS_DOCUMENTO.map(t => <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>)}</SelectContent>
+                    <SelectContent>{TIPOS_DOCUMENTO.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 {negativeCount > 0 && (

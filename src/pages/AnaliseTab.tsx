@@ -78,7 +78,7 @@ export function AnaliseTab({ lancamentos, saldosIniciais, onTabChange, isGlobal 
         </SelectTrigger>
         <SelectContent>
           {anosDisponiveis.map(a => (
-            <SelectItem key={a} value={a} className="text-base">{a}</SelectItem>
+            <SelectItem key={a} value={a}>{a}</SelectItem>
           ))}
         </SelectContent>
       </Select>

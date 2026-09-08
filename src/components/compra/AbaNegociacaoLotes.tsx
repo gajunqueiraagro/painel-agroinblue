@@ -648,7 +648,7 @@ export function LoteDialog({
               <Select value={categoria || undefined} onValueChange={setCategoria} disabled={somenteLeitura}>
                 <SelectTrigger className="h-8 text-[12px] mt-0.5"><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent className={`${darkSelectClass} max-h-[60vh] overflow-y-auto`}>
-                  {categoriasDisponiveis.map(c => <SelectItem key={c.value} value={c.value} className="text-[12px]">{c.label}</SelectItem>)}
+                  {categoriasDisponiveis.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -681,7 +681,7 @@ export function LoteDialog({
               <Select value={criterioValor} onValueChange={v => setCriterioValor(v as CriterioValor)} disabled={somenteLeitura}>
                 <SelectTrigger className="h-8 text-[12px] mt-0.5"><SelectValue /></SelectTrigger>
                 <SelectContent className={darkSelectClass}>
-                  {CRITERIOS.map(c => <SelectItem key={c.value} value={c.value} className="text-[12px]">{c.label}</SelectItem>)}
+                  {CRITERIOS.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
                 </SelectContent>
               </Select>
               )}
@@ -786,7 +786,7 @@ function NegociacaoLegado({ categoria, categoriasDisponiveis, quantidadeNum, pes
               <Select value={criterio} onValueChange={v => setCriterio(v as CriterioValor)}>
                 <SelectTrigger className="h-6 text-[11px]"><SelectValue /></SelectTrigger>
                 <SelectContent className={darkSelectClass}>
-                  {CRITERIOS.map(c => <SelectItem key={c.value} value={c.value} className="text-[11px] py-1">{c.label}</SelectItem>)}
+                  {CRITERIOS.map(c => <SelectItem key={c.value} value={c.value} className="py-1">{c.label}</SelectItem>)}
                 </SelectContent>
               </Select>
               <Input value={valorInformado} onChange={e => setValorInformado(e.target.value)} inputMode="decimal" placeholder={unidade} className="h-6 text-[11px] text-right tabular-nums" />

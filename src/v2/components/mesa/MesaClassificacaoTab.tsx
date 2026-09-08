@@ -763,7 +763,7 @@ export function MesaClassificacaoTab() {
               </SelectTrigger>
               <SelectContent>
                 {[...sessoes].sort((a, b) => b.criada_em.localeCompare(a.criada_em)).map((s) => (
-                  <SelectItem key={s.sessao_id} value={s.sessao_id} className="text-[11px]">
+                  <SelectItem key={s.sessao_id} value={s.sessao_id}>
                     {(s.excel_ano_mes ?? '—')} · {s.total} · {s.exatos} exatos · {s.ambiguos} amb · {s.aplicados} aplic · {s.sessao_id.slice(0, 8)}
                   </SelectItem>
                 ))}

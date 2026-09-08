@@ -514,7 +514,7 @@ export function MetaPrecoTab({ onBack }: Props) {
           </SelectTrigger>
           <SelectContent>
             {anos.map(a => (
-              <SelectItem key={a} value={a} className="text-xs">{a}</SelectItem>
+              <SelectItem key={a} value={a}>{a}</SelectItem>
             ))}
           </SelectContent>
         </Select>

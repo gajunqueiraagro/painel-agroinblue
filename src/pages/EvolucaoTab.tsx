@@ -152,7 +152,7 @@ export function EvolucaoTab({ lancamentos, saldosIniciais, initialAno, ocultarFi
               </SelectTrigger>
               <SelectContent>
                 {anosDisponiveis.map(a => (
-                  <SelectItem key={a} value={a} className="text-base">{a}</SelectItem>
+                  <SelectItem key={a} value={a}>{a}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

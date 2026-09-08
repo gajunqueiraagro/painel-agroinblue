@@ -230,9 +230,9 @@ export function BoitelPlanningDialog({ open, onClose, onSave, initialData, quant
                   <Select value={data.modalidadeCusto} onValueChange={(v: any) => set('modalidadeCusto', v)}>
                     <SelectTrigger className="h-5 text-[9px]"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="diaria" className="text-[10px]">Diária</SelectItem>
-                      <SelectItem value="arroba" className="text-[10px]">Arroba</SelectItem>
-                      <SelectItem value="parceria" className="text-[10px]">Parceria</SelectItem>
+                      <SelectItem value="diaria">Diária</SelectItem>
+                      <SelectItem value="arroba">Arroba</SelectItem>
+                      <SelectItem value="parceria">Parceria</SelectItem>
                     </SelectContent>
                   </Select>
                 </F>

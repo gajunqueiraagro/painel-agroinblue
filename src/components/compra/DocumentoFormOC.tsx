@@ -485,7 +485,7 @@ export function DocumentoFormOC({ api, somenteLeitura, fornecedores, contraparte
           <label className="text-[10px] text-muted-foreground">Espécie</label>
           <Select value={form.especie} onValueChange={v => setForm(f => ({ ...f, especie: v as EspecieDoc }))}>
             <SelectTrigger className="h-7 text-[11px]"><SelectValue /></SelectTrigger>
-            <SelectContent>{ESPECIES.map(e => <SelectItem key={e} value={e} className="text-[11px]">{ESPECIE_LABEL[e]}</SelectItem>)}</SelectContent>
+            <SelectContent>{ESPECIES.map(e => <SelectItem key={e} value={e}>{ESPECIE_LABEL[e]}</SelectItem>)}</SelectContent>
           </Select>
         </div>
         <div>
@@ -569,7 +569,7 @@ export function DocumentoFormOC({ api, somenteLeitura, fornecedores, contraparte
               <SelectTrigger className="h-7 text-[11px]"><SelectValue placeholder="Selecione o documento original" /></SelectTrigger>
               <SelectContent>
                 {origensPossiveis.length === 0 && <div className="px-2 py-1 text-[11px] text-muted-foreground">Nenhum documento ativo</div>}
-                {origensPossiveis.map(d => <SelectItem key={d.documentoId} value={d.documentoId} className="text-[11px]">{ESPECIE_LABEL[d.especie]} {d.numero ?? d.documentoId.slice(0, 8)}</SelectItem>)}
+                {origensPossiveis.map(d => <SelectItem key={d.documentoId} value={d.documentoId}>{ESPECIE_LABEL[d.especie]} {d.numero ?? d.documentoId.slice(0, 8)}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -630,11 +630,11 @@ export function DocumentoFormOC({ api, somenteLeitura, fornecedores, contraparte
           <div key={i} className="grid grid-cols-[1.1fr_1.2fr_0.9fr_1.4fr_auto] gap-1 items-center">
             <Select value={c.tipo} onValueChange={v => setComp(i, { tipo: v })}>
               <SelectTrigger className="h-6 text-[11px]"><SelectValue /></SelectTrigger>
-              <SelectContent>{TIPOS.map(t => <SelectItem key={t.value} value={t.value} className="text-[11px]">{t.label}</SelectItem>)}</SelectContent>
+              <SelectContent>{TIPOS.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
             </Select>
             <Select value={c.natureza} onValueChange={v => setComp(i, { natureza: v as NaturezaComp })}>
               <SelectTrigger className="h-6 text-[11px]"><SelectValue /></SelectTrigger>
-              <SelectContent>{NATUREZAS.map(n => <SelectItem key={n} value={n} className="text-[11px]">{NATUREZA_LABEL[n]}</SelectItem>)}</SelectContent>
+              <SelectContent>{NATUREZAS.map(n => <SelectItem key={n} value={n}>{NATUREZA_LABEL[n]}</SelectItem>)}</SelectContent>
             </Select>
             {/* MESMO campo do total: e' o MESMO dado. Sem isto, o valor apareceria
                 formatado com a decomposicao fechada e cru com ela aberta. */}

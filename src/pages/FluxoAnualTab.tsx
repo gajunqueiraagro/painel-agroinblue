@@ -102,7 +102,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
             </SelectTrigger>
             <SelectContent>
               {anosDisponiveis.map(a => (
-                <SelectItem key={a} value={a} className="text-sm">{a}</SelectItem>
+                <SelectItem key={a} value={a}>{a}</SelectItem>
               ))}
             </SelectContent>
           </Select>

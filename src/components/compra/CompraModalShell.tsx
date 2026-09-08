@@ -509,7 +509,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
                       const ui = CENARIO_UI[v];
                       const disabled = (api.cenariosPermitidos ? !api.cenariosPermitidos.includes(v) : false)
                         || (v === 'meta' && !api.canEditMeta);
-                      return <SelectItem key={v} value={v} disabled={disabled} className="text-[12px]">{ui.icon} {ui.label}</SelectItem>;
+                      return <SelectItem key={v} value={v} disabled={disabled}>{ui.icon} {ui.label}</SelectItem>;
                     })}
                   </SelectContent>
                 </Select>
@@ -597,7 +597,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
                 <Select value={api.fazendaDestinoId} onValueChange={api.setFazendaDestinoId} disabled={permissoes.negociacaoReadOnly}>
                   <SelectTrigger className={`mt-[3px] h-8 px-2.5 text-[12px] ${permissoes.negociacaoReadOnly ? CAMPO_TRAVADO : ''}`}><SelectValue placeholder="Selecione a fazenda" /></SelectTrigger>
                   <SelectContent className={DARK_SELECT_CONTENT}>
-                    {api.fazendas.map(f => <SelectItem key={f.id} value={f.id} className="text-[12px]">{f.nome}</SelectItem>)}
+                    {api.fazendas.map(f => <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>)}
                   </SelectContent>
                 </Select>
                 {api.modoOC && !permissoes.negociacaoReadOnly && api.ocFazendaValida === false && (
@@ -663,7 +663,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
                   <Select value={api.categoria} onValueChange={v => api.setCategoria(v)}>
                     <SelectTrigger className="h-6 text-[11px]"><SelectValue placeholder="Selecione..." /></SelectTrigger>
                     <SelectContent className={`${DARK_SELECT_CONTENT} max-h-[70vh] overflow-y-auto`}>
-                      {api.categoriasDisponiveis.map(c => <SelectItem key={c.value} value={c.value} className="text-[11px] py-1">{c.label}</SelectItem>)}
+                      {api.categoriasDisponiveis.map(c => <SelectItem key={c.value} value={c.value} className="py-1">{c.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
                   <Input type="text" inputMode="numeric" value={api.qtdInput.displayValue} onChange={api.qtdInput.onChange} onBlur={api.qtdInput.onBlur} onFocus={api.qtdInput.onFocus} placeholder="0" className="h-6 text-[11px] text-right font-bold tabular-nums" />

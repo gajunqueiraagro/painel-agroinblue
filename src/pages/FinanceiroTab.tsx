@@ -773,17 +773,17 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
           <div className="flex flex-wrap items-center gap-1">
             {!filtroAnoInicial && (<Select value={anoFiltro} onValueChange={setAnoFiltro}>
               <SelectTrigger className="h-6 text-[10px] font-bold w-[68px] bg-card text-foreground border-border"><SelectValue placeholder="Ano" /></SelectTrigger>
-              <SelectContent side="bottom">{anosDisponiveis.map(a => <SelectItem key={a} value={a} className="text-sm">{a}</SelectItem>)}</SelectContent>
+              <SelectContent side="bottom">{anosDisponiveis.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
             </Select>)}
             <Select value={mesFiltro} onValueChange={setMesFiltro}>
               <SelectTrigger className="h-6 text-[10px] font-bold w-[110px] bg-card text-foreground border-border"><SelectValue placeholder="Mês" /></SelectTrigger>
-              <SelectContent side="bottom">{MESES_OPTIONS.map(m => <SelectItem key={m.value} value={m.value} className="text-sm">{m.label}</SelectItem>)}</SelectContent>
+              <SelectContent side="bottom">{MESES_OPTIONS.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}</SelectContent>
             </Select>
             <Select value={categoriaFiltro} onValueChange={setCategoriaFiltro}>
               <SelectTrigger className="h-6 text-[10px] font-bold w-[100px] bg-card text-foreground border-border"><SelectValue placeholder="Categoria" /></SelectTrigger>
               <SelectContent side="bottom">
-                <SelectItem value="todas" className="text-sm">Todas</SelectItem>
-                {reclassCatsDisponiveis.map(c => <SelectItem key={c.value} value={c.value} className="text-sm">{c.label}</SelectItem>)}
+                <SelectItem value="todas">Todas</SelectItem>
+                {reclassCatsDisponiveis.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
               </SelectContent>
             </Select>
             <div className="flex gap-px rounded border border-primary-foreground/20 bg-primary-foreground/5 p-px">
@@ -1015,7 +1015,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
             </SelectTrigger>
             <SelectContent side="bottom">
               {anosDisponiveis.map(a => (
-                <SelectItem key={a} value={a} className="text-sm">{a}</SelectItem>
+                <SelectItem key={a} value={a}>{a}</SelectItem>
               ))}
             </SelectContent>
           </Select>)}
@@ -1025,7 +1025,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
             </SelectTrigger>
             <SelectContent side="bottom">
               {MESES_OPTIONS.map(m => (
-                <SelectItem key={m.value} value={m.value} className="text-sm">{m.label}</SelectItem>
+                <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -1036,9 +1036,9 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
               <SelectValue placeholder="Categoria" />
             </SelectTrigger>
             <SelectContent side="bottom">
-              <SelectItem value="todas" className="text-sm">Todas</SelectItem>
+              <SelectItem value="todas">Todas</SelectItem>
               {categoriasDisponiveis.map(c => (
-                <SelectItem key={c.value} value={c.value} className="text-sm">{c.label}</SelectItem>
+                <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
               ))}
             </SelectContent>
           </Select>

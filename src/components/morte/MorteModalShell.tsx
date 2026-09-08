@@ -297,7 +297,7 @@ export function MorteModalShell({
                       <SelectValue placeholder="Selecione a fazenda" />
                     </SelectTrigger>
                     <SelectContent>
-                      {fazendasOC.map(f => <SelectItem key={f.id} value={f.id} className="text-[12px]">{f.nome}</SelectItem>)}
+                      {fazendasOC.map(f => <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 )}
@@ -327,7 +327,7 @@ export function MorteModalShell({
                 <Select value={categoria} onValueChange={v => setCategoria(v as Categoria)}>
                   <SelectTrigger className="mt-[3px] h-8 px-2.5 text-[12px]"><SelectValue placeholder="Selecione..." /></SelectTrigger>
                   <SelectContent className="max-h-52 overflow-y-auto">
-                    {categoriasDisponiveis.map(c => <SelectItem key={c.value} value={c.value} className="text-[12px]">{c.label}</SelectItem>)}
+                    {categoriasDisponiveis.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -349,8 +349,8 @@ export function MorteModalShell({
                     <SelectValue placeholder="Selecione o motivo" />
                   </SelectTrigger>
                   <SelectContent className="max-h-52 overflow-y-auto">
-                    {motivosDisponiveis.map(m => <SelectItem key={m} value={m} className="text-[12px]">{m}</SelectItem>)}
-                    <SelectItem value="__custom__" className="text-[12px]">Outro (digitar)</SelectItem>
+                    {motivosDisponiveis.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                    <SelectItem value="__custom__">Outro (digitar)</SelectItem>
                   </SelectContent>
                 </Select>
                 {motivoMorte === '__custom__' && (
@@ -366,9 +366,9 @@ export function MorteModalShell({
                 <Select value={baseValor} onValueChange={v => setBaseValor(v as 'kg' | 'cab' | 'total')}>
                   <SelectTrigger className="mt-[3px] h-8 px-2.5 text-[12px]"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="kg" className="text-[12px]">por kg</SelectItem>
-                    <SelectItem value="cab" className="text-[12px]">por cabeça</SelectItem>
-                    <SelectItem value="total" className="text-[12px]">total</SelectItem>
+                    <SelectItem value="kg">por kg</SelectItem>
+                    <SelectItem value="cab">por cabeça</SelectItem>
+                    <SelectItem value="total">total</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

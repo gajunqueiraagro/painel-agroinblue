@@ -122,14 +122,14 @@ export function VisaoConsolidadaTab({ clienteId }: { clienteId: string | null })
             <label className="text-[9px] font-semibold text-muted-foreground block mb-0.5">Ano</label>
             <Select value={String(ano)} onValueChange={(v) => setAno(Number(v))}>
               <SelectTrigger className="h-6 text-[10px] w-[72px]"><SelectValue /></SelectTrigger>
-              <SelectContent>{anos.map((a) => <SelectItem key={a} value={String(a)} className="text-[10px]">{a}</SelectItem>)}</SelectContent>
+              <SelectContent>{anos.map((a) => <SelectItem key={a} value={String(a)}>{a}</SelectItem>)}</SelectContent>
             </Select>
           </div>
           <div>
             <label className="text-[9px] font-semibold text-muted-foreground block mb-0.5">Mês</label>
             <Select value={String(mes)} onValueChange={(v) => setMes(Number(v))}>
               <SelectTrigger className="h-6 text-[10px] w-[76px]"><SelectValue /></SelectTrigger>
-              <SelectContent>{MESES.map((m, i) => <SelectItem key={m} value={String(i + 1)} className="text-[10px]">{m}</SelectItem>)}</SelectContent>
+              <SelectContent>{MESES.map((m, i) => <SelectItem key={m} value={String(i + 1)}>{m}</SelectItem>)}</SelectContent>
             </Select>
           </div>
         </div>

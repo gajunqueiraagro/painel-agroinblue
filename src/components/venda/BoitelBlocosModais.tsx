@@ -892,13 +892,13 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
             <Select value="diaria" onValueChange={() => { /* só diária — ver os itens desabilitados */ }} disabled={somenteLeitura}>
               <SelectTrigger className="h-8 px-2.5 text-[13px]"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="diaria" className="text-[12px]">Diária</SelectItem>
+                <SelectItem value="diaria">Diária</SelectItem>
                 {/* ⚠ APARECEM E DIZEM QUE NÃO DÁ. Sumir com elas faria o operador achar que
                     o sistema não conhece a modalidade; desabilitadas, ele sabe que existe e
                     que ainda não está pronta. O CHECK do banco recusa as duas de qualquer
                     forma — nenhuma rodou com dado real. */}
-                <SelectItem value="arroba" disabled className="text-[12px]">Arroba produzida — ainda não disponível</SelectItem>
-                <SelectItem value="parceria" disabled className="text-[12px]">Parceria — ainda não disponível</SelectItem>
+                <SelectItem value="arroba" disabled>Arroba produzida — ainda não disponível</SelectItem>
+                <SelectItem value="parceria" disabled>Parceria — ainda não disponível</SelectItem>
               </SelectContent>
             </Select>
           </LinhaCampo>

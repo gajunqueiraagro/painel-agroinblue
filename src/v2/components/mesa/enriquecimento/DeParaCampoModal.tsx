@@ -236,7 +236,7 @@ export function DeParaCampoModal({
                       <SelectTrigger className="h-6 text-[10px]"><SelectValue placeholder="Escolher fazenda" /></SelectTrigger>
                       <SelectContent>
                         {fazendas.filter((f) => f.id !== '__global__').map((f) => (
-                          <SelectItem key={f.id} value={f.id} className="text-[10px]">{f.nome}</SelectItem>
+                          <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -289,7 +289,7 @@ export function DeParaCampoModal({
                       <SelectTrigger className="h-6 text-[10px]"><SelectValue placeholder="Escolher safra" /></SelectTrigger>
                       <SelectContent>
                         {safras.map((sf) => (
-                          <SelectItem key={sf.id} value={sf.id} className="text-[10px]">
+                          <SelectItem key={sf.id} value={sf.id}>
                             {sf.nome}{sf.codigo ? ` · ${sf.codigo}` : ''}
                           </SelectItem>
                         ))}

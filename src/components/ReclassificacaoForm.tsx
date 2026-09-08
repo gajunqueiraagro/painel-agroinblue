@@ -106,7 +106,7 @@ export function ReclassificacaoFormFields(props: FormFieldsProps) {
           <Select value={categoriaOrigem} onValueChange={v => setCategoriaOrigem(v as Categoria)}>
             <SelectTrigger className={`h-7 text-[11px] ${borderAccent}`}><SelectValue placeholder="Categoria..." /></SelectTrigger>
             <SelectContent className="max-h-52 overflow-y-auto">
-              {CATEGORIAS.map(c => <SelectItem key={c.value} value={c.value} className="text-[11px] py-1.5">{c.label}</SelectItem>)}
+              {CATEGORIAS.map(c => <SelectItem key={c.value} value={c.value} className="py-1.5">{c.label}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
@@ -120,7 +120,7 @@ export function ReclassificacaoFormFields(props: FormFieldsProps) {
           <Select value={categoriaDestino} onValueChange={v => setCategoriaDestino(v as Categoria)}>
             <SelectTrigger className={`h-7 text-[11px] ${borderAccent}`}><SelectValue placeholder="Categoria..." /></SelectTrigger>
             <SelectContent className="max-h-52 overflow-y-auto">
-              {CATEGORIAS.filter(c => c.value !== categoriaOrigem).map(c => <SelectItem key={c.value} value={c.value} className="text-[11px] py-1.5">{c.label}</SelectItem>)}
+              {CATEGORIAS.filter(c => c.value !== categoriaOrigem).map(c => <SelectItem key={c.value} value={c.value} className="py-1.5">{c.label}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>

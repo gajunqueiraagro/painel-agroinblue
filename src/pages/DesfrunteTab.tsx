@@ -178,7 +178,7 @@ export function DesfrunteTab({ lancamentos, saldosIniciais, onTabChange, isGloba
           </SelectTrigger>
           <SelectContent>
             {anosDisponiveis.map(a => (
-              <SelectItem key={a} value={a} className="text-base">{a}</SelectItem>
+              <SelectItem key={a} value={a}>{a}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -188,7 +188,7 @@ export function DesfrunteTab({ lancamentos, saldosIniciais, onTabChange, isGloba
           </SelectTrigger>
           <SelectContent>
             {MESES_OPTIONS_ACUMULADO.map(m => (
-              <SelectItem key={m.value} value={m.value} className="text-base">{m.label}</SelectItem>
+              <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
             ))}
           </SelectContent>
         </Select>

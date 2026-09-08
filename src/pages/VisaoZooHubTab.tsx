@@ -330,14 +330,14 @@ export function VisaoZooHubTab({ lancamentos, saldosIniciais, onTabChange, filtr
           <Select value={anoFiltro} onValueChange={handleAnoChange}>
             <SelectTrigger className="w-[68px] h-6 text-[11px] font-bold px-2"><SelectValue /></SelectTrigger>
             <SelectContent side="bottom">
-              {anosDisp.map(a => <SelectItem key={a} value={a} className="text-[11px]">{a}</SelectItem>)}
+              {anosDisp.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={String(mesFiltro)} onValueChange={v => setMesFiltro(Number(v))}>
             <SelectTrigger className="w-[80px] h-6 text-[11px] font-bold px-2"><SelectValue /></SelectTrigger>
             <SelectContent side="bottom">
               {mesesOpt.map(m => (
-                <SelectItem key={m.value} value={String(m.value)} className="text-[11px]">{m.label}</SelectItem>
+                <SelectItem key={m.value} value={String(m.value)}>{m.label}</SelectItem>
               ))}
             </SelectContent>
           </Select>

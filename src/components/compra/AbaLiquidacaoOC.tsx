@@ -639,7 +639,7 @@ function RegistrarLiquidacaoDialog({ api, darkSelectClass, obr, onClose }: { api
             <Select value={forma} onValueChange={(v) => setForma(v as FormaLiquidacao)}>
               <SelectTrigger className="h-8 text-[12px]"><SelectValue /></SelectTrigger>
               <SelectContent className={darkSelectClass}>
-                {FORMAS.map(f => <SelectItem key={f.value} value={f.value} className="text-[12px]">{f.label}{f.naoMonetaria ? ' · não monetária' : ''}</SelectItem>)}
+                {FORMAS.map(f => <SelectItem key={f.value} value={f.value}>{f.label}{f.naoMonetaria ? ' · não monetária' : ''}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>

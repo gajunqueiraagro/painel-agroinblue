@@ -889,9 +889,9 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
           <Select value={tipoPeso || undefined} onValueChange={(v: any) => onTipoPesoChange(v)}>
             <SelectTrigger className="h-7 text-[11px] w-full"><SelectValue placeholder="Selecione..." /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="desmama" className="text-[11px]">Desmama</SelectItem>
-              <SelectItem value="gado_adulto" className="text-[11px]">Gado Adulto</SelectItem>
-              <SelectItem value="boitel" className="text-[11px]">Boitel</SelectItem>
+              <SelectItem value="desmama">Desmama</SelectItem>
+              <SelectItem value="gado_adulto">Gado Adulto</SelectItem>
+              <SelectItem value="boitel">Boitel</SelectItem>
             </SelectContent>
           </Select>
         </CollapsibleContent>

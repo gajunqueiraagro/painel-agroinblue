@@ -209,7 +209,7 @@ export function VendaMetaModalShell({
                   <SelectValue placeholder="Selecione a fazenda" />
                 </SelectTrigger>
                 <SelectContent>
-                  {fazendasOC.map(f => <SelectItem key={f.id} value={f.id} className="text-[12px]">{f.nome}</SelectItem>)}
+                  {fazendasOC.map(f => <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>)}
                 </SelectContent>
               </Select>
             )}
@@ -232,7 +232,7 @@ export function VendaMetaModalShell({
             <Select value={categoria} onValueChange={v => setCategoria(v as Categoria)}>
               <SelectTrigger className="mt-[3px] h-8 px-2.5 text-[12px]"><SelectValue placeholder="Selecione..." /></SelectTrigger>
               <SelectContent className="max-h-52 overflow-y-auto">
-                {categoriasDisponiveis.map(c => <SelectItem key={c.value} value={c.value} className="text-[12px]">{c.label}</SelectItem>)}
+                {categoriasDisponiveis.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -247,8 +247,8 @@ export function VendaMetaModalShell({
             <Select value={vendaTipoVenda} onValueChange={setVendaTipoVenda}>
               <SelectTrigger className="mt-[3px] h-8 px-2.5 text-[12px]"><SelectValue placeholder="Selecione..." /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="desmama" className="text-[12px]">Desmama</SelectItem>
-                <SelectItem value="gado_adulto" className="text-[12px]">Gado adulto</SelectItem>
+                <SelectItem value="desmama">Desmama</SelectItem>
+                <SelectItem value="gado_adulto">Gado adulto</SelectItem>
               </SelectContent>
             </Select>
           </div>

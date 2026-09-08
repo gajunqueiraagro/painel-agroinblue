@@ -315,9 +315,9 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, mesF
               <Select value={tipoImportacao} onValueChange={setTipoImportacao}>
                 <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="importacao_inicial" className="text-xs">📦 Importação Inicial (primeira carga)</SelectItem>
-                  <SelectItem value="importacao_historica" className="text-xs">📚 Histórico (2020–2024, somente leitura)</SelectItem>
-                  <SelectItem value="importacao_incremental" className="text-xs">➕ Incremental (novos dados)</SelectItem>
+                  <SelectItem value="importacao_inicial">📦 Importação Inicial (primeira carga)</SelectItem>
+                  <SelectItem value="importacao_historica">📚 Histórico (2020–2024, somente leitura)</SelectItem>
+                  <SelectItem value="importacao_incremental">➕ Incremental (novos dados)</SelectItem>
                 </SelectContent>
               </Select>
             </div>

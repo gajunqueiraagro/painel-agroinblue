@@ -72,7 +72,7 @@ export function FechamentoCategoriaTab({ lancamentos, saldosIniciais }: Props) {
             </SelectTrigger>
             <SelectContent>
               {anosDisponiveis.map(a => (
-                <SelectItem key={a} value={a} className="text-base">{a}</SelectItem>
+                <SelectItem key={a} value={a}>{a}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -82,7 +82,7 @@ export function FechamentoCategoriaTab({ lancamentos, saldosIniciais }: Props) {
             </SelectTrigger>
             <SelectContent>
               {MESES_COLS.map(m => (
-                <SelectItem key={m.key} value={m.key} className="text-base">{m.label}</SelectItem>
+                <SelectItem key={m.key} value={m.key}>{m.label}</SelectItem>
               ))}
             </SelectContent>
           </Select>

@@ -1025,7 +1025,7 @@ export function AbateModalShell({
                       <SelectValue placeholder="Selecione a fazenda" />
                     </SelectTrigger>
                     <SelectContent>
-                      {fazendasOC.map(f => <SelectItem key={f.id} value={f.id} className="text-[12px]">{f.nome}</SelectItem>)}
+                      {fazendasOC.map(f => <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>)}
                     </SelectContent>
                   </Select>
                   {fazendaFalta && (

@@ -21,7 +21,7 @@ export function ClienteSelector() {
       </SelectTrigger>
       <SelectContent>
         {clientes.map(c => (
-          <SelectItem key={c.id} value={c.id} className="text-sm">{c.nome}</SelectItem>
+          <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
         ))}
       </SelectContent>
     </Select>

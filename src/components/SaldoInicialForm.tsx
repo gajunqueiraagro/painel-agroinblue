@@ -321,7 +321,7 @@ function SaldoInicialDialogContent({
                 </SelectTrigger>
                 <SelectContent>
                   {mesOptions.map(m => (
-                    <SelectItem key={m.value} value={m.value} className="text-sm">{m.label}</SelectItem>
+                    <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -331,7 +331,7 @@ function SaldoInicialDialogContent({
                 </SelectTrigger>
                 <SelectContent>
                   {anoOptions.map(a => (
-                    <SelectItem key={a} value={a} className="text-sm">{a}</SelectItem>
+                    <SelectItem key={a} value={a}>{a}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

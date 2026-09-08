@@ -299,7 +299,7 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
               </SelectTrigger>
               <SelectContent side="bottom">
                 {anosDisponiveis.map(a => (
-                  <SelectItem key={a} value={a} className="text-xs">{a}</SelectItem>
+                  <SelectItem key={a} value={a}>{a}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -309,7 +309,7 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
               </SelectTrigger>
               <SelectContent side="bottom">
                 {MESES.map(m => (
-                  <SelectItem key={m.value} value={m.value} className="text-xs">{m.label}</SelectItem>
+                  <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

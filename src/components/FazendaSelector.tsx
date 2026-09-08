@@ -32,14 +32,14 @@ export function FazendaSelector() {
             </SelectTrigger>
             <SelectContent>
               {hasMultiple && (
-                <SelectItem value="__global__" className="text-sm font-bold">🌐 Global</SelectItem>
+                <SelectItem value="__global__" className="font-bold">🌐 Global</SelectItem>
               )}
               {[...fazendas].sort((a, b) => {
                 if (a.nome === 'Administrativo') return 1;
                 if (b.nome === 'Administrativo') return -1;
                 return a.nome.localeCompare(b.nome);
               }).map(f => (
-                <SelectItem key={f.id} value={f.id} className="text-sm">{f.nome}</SelectItem>
+                <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>
               ))}
             </SelectContent>
           </Select>

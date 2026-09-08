@@ -993,7 +993,7 @@ export function EstacaoConciliacao({ tipo, id, grupoSugerido, contaNome, contas,
                             <SelectTrigger className="h-7 text-[11px]"><SelectValue placeholder="Selecione…" /></SelectTrigger>
                             <SelectContent>
                               {(fazendasQ.data ?? []).map((f) => (
-                                <SelectItem key={f.id} value={f.id} className="text-[11px]">{f.nome}</SelectItem>
+                                <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
@@ -1004,7 +1004,7 @@ export function EstacaoConciliacao({ tipo, id, grupoSugerido, contaNome, contas,
                             <SelectTrigger className="h-7 text-[11px]"><SelectValue placeholder="—" /></SelectTrigger>
                             <SelectContent>
                               {(subcentrosQ.data ?? []).map((s) => (
-                                <SelectItem key={s} value={s} className="text-[11px]">{s}</SelectItem>
+                                <SelectItem key={s} value={s}>{s}</SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
@@ -1015,7 +1015,7 @@ export function EstacaoConciliacao({ tipo, id, grupoSugerido, contaNome, contas,
                             <SelectTrigger className="h-7 text-[11px]"><SelectValue placeholder="—" /></SelectTrigger>
                             <SelectContent>
                               {(fornecedoresQ.data ?? []).map((f) => (
-                                <SelectItem key={f.id} value={f.id} className="text-[11px]">{f.nome}</SelectItem>
+                                <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
@@ -1053,7 +1053,7 @@ export function EstacaoConciliacao({ tipo, id, grupoSugerido, contaNome, contas,
                               {(contas ?? [])
                                 .filter((c) => c.id !== contaExtratoId)
                                 .map((c) => (
-                                  <SelectItem key={c.id} value={c.id} className="text-[11px]">
+                                  <SelectItem key={c.id} value={c.id}>
                                     {c.nome_exibicao ?? c.nome_conta}
                                   </SelectItem>
                                 ))}
