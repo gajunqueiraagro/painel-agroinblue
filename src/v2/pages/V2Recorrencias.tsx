@@ -200,7 +200,10 @@ export default function V2Recorrencias() {
             {/* `table-fixed` com colgroup em PORCENTAGEM: é o que permite truncar
                 com reticências em vez de quebrar a linha em duas, e a soma fecha
                 em 100% — a tabela nunca gera rolagem horizontal. */}
-            <Table className="table-fixed">
+            {/* PR-PARC-03 — adere à régua 9/10/21 do primitivo. Esta tela não tem
+                nenhum override de fonte ou altura, então é o teste limpo da
+                densidade nova: o que se vê aqui é a régua, sem mistura. */}
+            <Table density="dense" className="table-fixed">
               <colgroup>
                 <col className="w-[22%]" /><col className="w-[16%]" /><col className="w-[14%]" />
                 <col className="w-[13%]" /><col className="w-[12%]" /><col className="w-[9%]" />

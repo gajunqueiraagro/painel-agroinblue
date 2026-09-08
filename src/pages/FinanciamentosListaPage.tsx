@@ -37,6 +37,8 @@ interface FinanciamentoRow {
   parcelas_pagas: number;
   prox_vencimento?: string;
   total_pendente: number;
+  /** PR-PARC-03 — a metade "juros" de `total_pendente`, para o total do topo. */
+  juros_pendente: number;
 }
 
 const fmt = (v: number) =>
@@ -159,6 +161,9 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
         const totalPendente = pendentes.reduce(
           (s, p) => s + Number(p.valor_principal) + Number(p.valor_juros), 0
         );
+        /* A mesma varredura, a mesma lista de pendentes: os dois números não
+           podem divergir porque saem do mesmo `pendentes`. */
+        const jurosPendente = pendentes.reduce((s, p) => s + Number(p.valor_juros), 0);
           /* A parcela da PRÓXIMA data — a mesma linha que `prox_vencimento`
              aponta. Principal + juros é o que o operador paga. */
           const proxParcela = pendentes.find(p => p.data_vencimento === proxVenc);
@@ -185,6 +190,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
           parcelas_pagas: pagas,
           prox_vencimento: proxVenc ?? undefined,
           total_pendente: totalPendente,
+          juros_pendente: jurosPendente,
             valor_parcela: valorParcela,
         };
       });
@@ -259,8 +265,25 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
   });
 
   /* ── Totalizadores (baseado na lista filtrada) ── */
+  /* ⚠ PR-PARC-03 item 5 — "Juros a pagar" SAI DA MESMA BASE de "A pagar", não de
+     uma segunda contagem: `total_pendente` é principal pendente + juros
+     pendentes, e `juros_pendente` é a segunda metade exata dessa soma. Conferido
+     no banco proto contra os números do briefing (NJ Pecuária, contratos
+     ativos): 11.610.096,80 de principal + 10.620.656,42 de juros =
+     22.230.753,22, que é o "A pagar" exibido hoje.
+     ⚠ E É POR ISSO QUE SÃO QUATRO, NÃO TRÊS. "Total financiado" é o valor_total
+     do contrato — inclui principal JÁ AMORTIZADO — então ele NUNCA fecharia com
+     "A pagar", e a conta parecia errada. Com "Principal em aberto" exibido, a
+     identidade fica visível na própria linha de números:
+         Principal em aberto + Juros a pagar = A pagar
+     e "Total financiado" fica ao lado como a referência do contratado. O
+     principal em aberto é derivado por SUBTRAÇÃO da mesma base
+     (`total_pendente - juros_pendente`), não por uma terceira varredura: assim
+     não há como os quatro divergirem entre si. */
   const totais = useMemo(() => ({
     financiado: filtered.reduce((s, f) => s + f.valor_total, 0),
+    principalAberto: filtered.reduce((s, f) => s + (f.total_pendente - f.juros_pendente), 0),
+    juros: filtered.reduce((s, f) => s + f.juros_pendente, 0),
     aPagar: filtered.reduce((s, f) => s + f.total_pendente, 0),
   }), [filtered]);
 
@@ -309,8 +332,13 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
         </div>
       </header>
 
-      {/* Cabeçalho fixo: título + totais + filtros */}
-      <div className="shrink-0 bg-background border-b shadow-sm px-4 pt-3 pb-2 space-y-2">
+      {/* Cabeçalho fixo: título + totais. Os FILTROS desceram para dentro do card
+          (PR-PARC-03 item 2).
+          ⚠ SAÍRAM O `border-b` E O `shadow-sm`: com o card logo abaixo, a régua
+          de largura total virava uma segunda linha horizontal a 8px da borda do
+          card — duas molduras para uma separação só. Quem separa o topo da lista
+          agora é a borda do card. */}
+      <div className="shrink-0 bg-background px-4 pt-3 pb-2 space-y-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             {onVoltar && (
@@ -333,7 +361,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
           {/* CTA da casa: o mesmo `bg-cta` do resto do sistema, em 28px. */}
           <Button size="sm" className="h-7 gap-1 bg-cta px-2.5 text-xs font-semibold text-cta-foreground hover:bg-cta-hover"
             onClick={onNovo}>
-            <Plus className="size-3.5" /> Novo
+            <Plus className="size-3.5" /> Nova obrigação
           </Button>
         </div>
 
@@ -350,12 +378,36 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
             <div className="text-[11px] text-muted-foreground">Total financiado</div>
             <div className="text-[20px] font-medium tabular-nums leading-tight">{fmt(totais.financiado)}</div>
           </div>
+          {/* ⚠ OS DOIS DO MEIO SÃO O PONTO — item 5. Sozinhos, "financiado 17,6M"
+              e "a pagar 22,2M" liam-se como erro de sistema. Com o principal em
+              aberto e os juros entre eles, a conta se fecha à vista de todos:
+              11,6M + 10,6M = 22,2M, e o que se deve a mais que o contratado É o
+              juro. Nenhum operador precisa abrir contrato para entender. */}
+          <div>
+            <div className="text-[11px] text-muted-foreground">Principal em aberto</div>
+            <div className="text-[20px] font-medium tabular-nums leading-tight">{fmt(totais.principalAberto)}</div>
+          </div>
+          <div>
+            <div className="text-[11px] text-muted-foreground">Juros a pagar</div>
+            <div className="text-[20px] font-medium tabular-nums leading-tight">{fmt(totais.juros)}</div>
+          </div>
           <div>
             <div className="text-[11px] text-muted-foreground">A pagar</div>
             <div className="text-[20px] font-medium tabular-nums leading-tight">{fmt(totais.aPagar)}</div>
           </div>
         </div>
 
+      </div>
+
+      {/* ═══ O CARD — PR-PARC-03 item 2 ═══════════════════════════════════════════
+          Busca e tabela vivem dentro de um card com recuo, como na referência do
+          Finanças. Título, subtítulo, botão e os três números ficam FORA.
+          ⚠ `min-h-0` NOS DOIS NÍVEIS: sem ele um filho flex recusa-se a encolher
+          abaixo do conteúdo, o card cresce além da tela e a rolagem escapa para a
+          página — que é exatamente o defeito que este PR veio corrigir. */}
+      <div className="min-h-0 flex-1 px-4 pb-3">
+        <div className="flex h-full min-h-0 flex-col rounded-lg border border-border bg-card px-3 pt-2 pb-0 shadow-[0_1px_3px_0_rgb(0_0_0/0.04)]">
+        <div className="relative mb-1.5 shrink-0 space-y-2">
         {/* ═══ FILTROS — PR-PARC-01 item 4 ════════════════════════════════════════
             ⚠ DUAS LINHAS DE 28px, e os rótulos "Contrato de:" / "Venc. de:" saíram: em
             24 caracteres de largura fixa cada, os quatro rótulos gastavam mais espaço
@@ -466,8 +518,22 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
         </div>
       </div>
 
-      {/* Área de rolagem com tabela — thead sticky DENTRO deste container */}
-      <div className="flex-1 overflow-auto">
+      {/* ═══ ROLAGEM — PR-PARC-03 item 3 ══════════════════════════════════════════
+          ⚠ AQUI ESTAVA O DEFEITO DO CABEÇALHO QUE SUMIA, e não era falta de
+          `sticky`: o `sticky` já existia. O primitivo embrulha a `<table>` num
+          div `overflow-auto` PRÓPRIO, e `overflow-auto` cria scrollport. O thead
+          ancora no scrollport MAIS PRÓXIMO — esse div — que não tinha altura
+          declarada, crescia com o conteúdo e nunca rolava; quem rolava era o
+          container de fora. O cabeçalho grudava num elemento que subia junto.
+          A correção é pôr a rolagem NO NÍVEL CERTO, e agora ela é declarada onde
+          mora: `wrapperClassName` leva altura e overflow para o div do primitivo,
+          que vira o scrollport de verdade e ancora o thead.
+          ⚠ UM SCROLLPORT SÓ: este container NÃO rola — ele só limita a altura
+          (`min-h-0`). Quem rola é o wrapper da tabela, uma camada abaixo.
+          ⚠ `overflow-x-hidden` porque `table-fixed` + colgroup somando 100% não
+          pode estourar na horizontal: se estourar é bug de largura para reportar,
+          não barra para rolar. */}
+      <div className="min-h-0 flex-1">
         {isLoading ? (
           <p className="text-sm text-muted-foreground p-4">Carregando…</p>
         ) : dadosOrdenados.length === 0 ? (
@@ -477,14 +543,22 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
                financas), não estimadas de print — FIN-OBRIGACOES-PARIDADE-01:
                `table-fixed` + colgroup em PORCENTAGEM somando 100% (nunca gera
                rolagem horizontal, e o truncate sai com reticências em vez de
-               quebrar a linha), cabeçalho `sticky` com `bg-muted/95 backdrop-blur`,
-               e NENHUM override de fonte — a densidade é o default do primitivo
-               `ui/table`. Lá o comentário é explícito: régua própria em arquivo
-               de tela é como a consistência se perde.
+               quebrar a linha) e NENHUM override de fonte na tela — a densidade
+               vem do primitivo. Lá o comentário é explícito: régua própria em
+               arquivo de tela é como a consistência se perde.
+               ⚠ PR-PARC-03: a densidade agora é pedida — `density="dense"`, a
+               régua 9/10/21 da referência. Continua sendo o primitivo quem a
+               define; esta tela só ADERE. O fundo do cabeçalho deixou de ser
+               `bg-muted/95 backdrop-blur` e virou `bg-card` opaco, porque dentro
+               do card translúcido deixa a linha passar por baixo do número.
                ⚠ A COLUNA DE STATUS TEM 13%, e o motivo está registrado lá: o
                badge mais a fração "2/12" não cabiam em 8% e a fração saía
                cortada. Copiei a largura com o motivo. */
-            <Table className="table-fixed">
+            <Table
+              density="dense"
+              className="table-fixed"
+              wrapperClassName="h-full overflow-x-hidden overflow-y-auto"
+            >
               <colgroup>
                 <col className="w-[6%]" />
                 {/* ⚠ DESCRIÇÃO 19% -> 22%, CREDOR 14% -> 11% (PR-PARC-02). A troca
@@ -503,8 +577,17 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
                 <col className="w-[13%]" />
                 <col className="w-[4%]" />
               </colgroup>
-              <TableHeader className="sticky top-0 z-10 bg-muted/95 backdrop-blur">
-                <TableRow className="border-b">
+              {/* ⚠ A BORDA MORA NO `thead`, NÃO NA LINHA — item 3. Na linha, ela
+                  é filha do que rola e some por um instante a cada quadro do
+                  scroll; no `thead` sticky ela viaja junto e o cabeçalho fica
+                  sempre fechado por baixo. Daí o `[&_tr]:border-b-0`, que desliga
+                  a borda que o primitivo põe na linha do cabeçalho.
+                  ⚠ `bg-card` OPACO, não `bg-muted/95 backdrop-blur`: dentro do
+                  card o fundo tem de ser o MESMO do card, ou aparece um degrau de
+                  cor; e translúcido deixa a linha passar por baixo do número que
+                  se está conferindo. */}
+              <TableHeader className="sticky top-0 z-10 border-b border-border bg-card [&_tr]:border-b-0">
+                <TableRow>
                   {/* ⚠ 3e — ORDENA POR `natureza`, e a chave antiga era LETRA MORTA:
                       `sortCol` era 'tipo', campo que nunca existiu na linha (a
                       coluna é `tipo_financiamento`), então `a['tipo']` e
@@ -609,6 +692,8 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
             </TableBody>
           </Table>
         )}
+        </div>
+        </div>
       </div>
     </div>
   );
@@ -630,7 +715,13 @@ function CabecalhoOrdenavel({ rotulo, ativo, direcao, aoOrdenar, direita }: {
   const Seta = !ativo ? ChevronsUpDown : direcao === 'asc' ? ChevronUp : ChevronDown;
   return (
     <TableHead
-      className={`cursor-pointer select-none hover:text-foreground ${direita ? 'text-right' : ''}`}
+      /* ⚠ `text-foreground` É OVERRIDE LOCAL DESTA TELA — item 3. O primitivo dá
+         `text-muted-foreground` e a referência do Finanças mantém o muted; aqui o
+         Gabriel pediu cabeçalho ESCURO. Fica no arquivo da tela, de propósito:
+         mudar o primitivo escureceria o cabeçalho de 39 telas.
+         O `hover:text-foreground` saiu por ter virado letra morta — a cor de
+         repouso já é essa. */
+      className={`cursor-pointer select-none text-foreground ${direita ? 'text-right' : ''}`}
       onClick={aoOrdenar}
       aria-sort={ativo ? (direcao === 'asc' ? 'ascending' : 'descending') : 'none'}
     >
