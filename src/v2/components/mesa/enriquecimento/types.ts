@@ -143,6 +143,8 @@ export interface EnriqRowVM {
   divergenciasBanco: ReadonlyArray<{ campo: string; rotulo: string; banco: string; planilha: string }>;
   /** A linha é uma PARTE de um lançamento maior — 133h-b item 4c. */
   parteDeAgrupamento: boolean;
+  /** O lançamento está classificado, mas sem produto ou sem fornecedor — 133i item 7. */
+  lancamentoIncompleto: boolean;
   /**
    * O RESULTADO não tem conta do plano — 133e item E. É a única trava de subcentro que
    * resta, e ela é sobre o que vai ser gravado, não sobre o que a planilha trouxe.

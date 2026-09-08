@@ -74,6 +74,14 @@ function trimOrNull(v: unknown): string | null {
 }
 
 // PR-MAP-0 — lê a 1ª coluna não-vazia dentre os cabeçalhos aceitos (tolerante a variações).
+/**
+ * O traço da planilha é ausência — 133i item 8.
+ *
+ * ⚠ SÓ O TRAÇO SOZINHO. "-" isolado é a convenção de "não se aplica" da planilha; um
+ * produto que legitimamente comece com traço ("- Adubo") continua passando inteiro.
+ */
+const semTraco = (v: string | null): string | null => (v !== null && v.trim() === '-' ? null : v);
+
 function pickCol(raw: Record<string, unknown>, names: string[]): string | null {
   for (const n of names) {
     const v = trimOrNull(raw[n]);
@@ -308,7 +316,12 @@ function parseRow(
     linha,
     subcentro,
     fornecedor: pickCol(raw, FORNECEDOR_COLS),
-    produto: pickCol(raw, PRODUTO_COLS),
+    /* ⚠ "-" É VAZIO, NÃO É PRODUTO — 133i item 8. A planilha usa o traço como "não se
+       aplica", e ele chegava como TEXTO até o lançamento: medido no NJ, dos 45 lançamentos
+       de agosto sem produto, 45 têm descrição `'-'` e ZERO têm descrição vazia. O gravador
+       ignora vazio (`NULLIF(...,'')`), mas o traço passava por ele e virava a descrição do
+       lançamento — que é a identidade que a lista mostra. */
+    produto: semTraco(pickCol(raw, PRODUTO_COLS)),
     conta_origem: pickCol(raw, CONTA_ORIGEM_COLS),
     conta_destino: pickCol(raw, CONTA_DESTINO_COLS),
     ano_mes: anoMesRaw ?? dataIso.slice(0, 7),

@@ -10,6 +10,7 @@ import { describe, it, expect } from 'vitest';
 import {
   sessoesDoMes, temCandidatoDuplicata, contaEfetivaId, contaEfetivaNome, contasDoLancamento,
   diferencasDoResultado, normalizarTipo, parteDeAgrupamento, divergenciasComExtrato,
+  precisaDeVoce, explicadoPorSiMesmo,
 } from './enriquecimentoView';
 import type { EnriqSessaoVM } from '@/v2/components/mesa/enriquecimento/types';
 
@@ -104,7 +105,7 @@ describe('temCandidatoDuplicata', () => {
 /**
  * A conta efetiva — 133h item 7. Os números do `describe` são os medidos no Proto, e é o
  * que torna este teste uma trava e não uma decoração: se alguém voltar a ler só
- * `conta_bancaria_id`, 426 entradas do Raul voltam a mostrar "—".
+ * `conta_bancaria_id`, 426 entradas do NJ Pecuária voltam a mostrar "—".
  */
 describe('contaEfetivaId / contaEfetivaNome / contasDoLancamento', () => {
   it('entrada lê o DESTINO — o caso das 426 linhas', () => {
@@ -282,5 +283,51 @@ describe('normalizarTipo / parteDeAgrupamento / divergenciasComExtrato', () => {
   it('centavos em inteiro — 0.1+0.2 contra 0.3 não acende', () => {
     const d = divergenciasComExtrato(linha({ lanc_valor: 0.1 + 0.2, excel_valor: 0.3 }), CONTAS);
     expect(d.map((x) => x.campo)).not.toContain('Valor');
+  });
+});
+
+/**
+ * Transferência e estorno nunca são pendência — 133i item 4. O primeiro teste é o caso
+ * medido: dois Pix de R$ 300.000 no mesmo dia viravam candidatos a duplicata um do outro.
+ */
+describe('explicadoPorSiMesmo / duplicata que ignora transferência e estorno', () => {
+  const l = (id: string, extra: Record<string, unknown> = {}) => ({
+    lanc_id: id, valor: 300000, data_pagamento: '2026-08-11', conta_nome: 'Itau BBA',
+    subcentro: 'Adiantamento a Fornecedores', tipo_operacao: '2-Saídas', ...extra,
+  });
+
+  it('os dois Pix de 300.000: como transferência, deixam de ser duplicata', () => {
+    const lista = [l('1', { tipo_operacao: '3-Transferências' }), l('2', { tipo_operacao: '3-Transferências' })];
+    expect(temCandidatoDuplicata(lista[0], lista)).toBe(false);
+  });
+
+  it('estorno pelo subcentro também sai da régua', () => {
+    const lista = [l('1', { subcentro: 'Pagamento Estornado' }), l('2', { subcentro: 'Estorno Recebido' })];
+    expect(temCandidatoDuplicata(lista[0], lista)).toBe(false);
+  });
+
+  it('o PAR ser transferência já basta para não haver duplicata', () => {
+    const lista = [l('1'), l('2', { tipo_operacao: '3-Transferências' })];
+    expect(temCandidatoDuplicata(lista[0], lista)).toBe(false);
+  });
+
+  it('duas saídas comuns iguais continuam sendo duplicata', () => {
+    expect(temCandidatoDuplicata(l('1'), [l('1'), l('2')])).toBe(true);
+  });
+
+  it('transferência sem subcentro vai para "já explicados", não para "precisam de você"', () => {
+    const t = l('1', { tipo_operacao: '3-Transferências', subcentro: null });
+    expect(precisaDeVoce(t, [t])).toBe(false);
+  });
+
+  it('sem subcentro e sem ser transferência continua pedindo trabalho', () => {
+    const x = l('1', { subcentro: null });
+    expect(precisaDeVoce(x, [x])).toBe(true);
+  });
+
+  it('explicadoPorSiMesmo reconhece os dois rótulos de tipo', () => {
+    expect(explicadoPorSiMesmo({ tipo_operacao: '3-Transferências', subcentro: null })).toBe(true);
+    expect(explicadoPorSiMesmo({ tipo_operacao: 'Transferência', subcentro: null })).toBe(true);
+    expect(explicadoPorSiMesmo({ tipo_operacao: '2-Saídas', subcentro: 'Salários' })).toBe(false);
   });
 });

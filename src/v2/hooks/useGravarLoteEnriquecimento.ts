@@ -52,7 +52,7 @@ export interface LinhaParaGravar {
    *
    * ⚠ O LOTE ERA O BURACO DO ITEM 13. A tela alinhava o proposto ao Resultado no Salvar de
    * UMA linha; o lote chamava `apply_row` direto, e é ele que grava centenas — inclusive as
-   * 16.236 linhas do Raul cujo Resultado é "mantém" e cujo proposto guarda um texto que não
+   * 16.236 linhas do NJ Pecuária cujo Resultado é "mantém" e cujo proposto guarda um texto que não
    * existe no plano oficial. `null` = nada a alinhar, e aí nem se chama a RPC.
    */
   alinharSubcentro?: string | null;

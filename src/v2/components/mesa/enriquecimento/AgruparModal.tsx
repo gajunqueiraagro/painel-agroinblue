@@ -8,7 +8,7 @@
  *
  * ⚠ A LISTA É O UNIVERSO, NÃO A SUGESTÃO: todas as linhas do MESMO DIA e da MESMA CONTA que
  * ainda não têm par. As sugeridas nascem marcadas; o resto, desmarcado. Medido no Proto: nos
- * grupos do Raul o universo é de 5 linhas contra grupos de 2 a 5 — pequeno o bastante para
+ * grupos do NJ Pecuária o universo é de 5 linhas contra grupos de 2 a 5 — pequeno o bastante para
  * caber na tela e grande o bastante para a escolha existir.
  *
  * ⚠ O FILTRO DAQUI ESPELHA OS GUARDS DA RPC (d) e (f), e é isso que impede a tela de

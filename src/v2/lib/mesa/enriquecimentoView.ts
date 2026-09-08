@@ -16,7 +16,17 @@ import type {
 import { fmtData, fmtBRL, fmtTexto, mesAbrev, dataHoraCurta, STATUS_META } from '@/v2/components/mesa/enriquecimento/fmt';
 import { resolverContaPorTexto, type ContaResolvivel } from '@/v2/lib/mesa/resolverConta';
 
-const vazio = (v: unknown): boolean => v === null || v === undefined || String(v).trim() === '';
+/**
+ * ⚠ O TRAÇO É VAZIO — 133i item 8. A planilha usa "-" como "não se aplica", e o adapter
+ * o tratava como conteúdo: um produto "-" virava identidade da linha, e o campo obrigatório
+ * "Produto / descr." parecia preenchido. O parser já o converte na leitura; aqui vale para
+ * as sessões que JÁ ESTÃO no staging com o traço gravado — e são 45 só em agosto.
+ */
+const vazio = (v: unknown): boolean => {
+  if (v === null || v === undefined) return true;
+  const t = String(v).trim();
+  return t === '' || t === '-';
+};
 const norm = (v: unknown): string => String(v ?? '').trim().toLowerCase();
 
 // Linha de comparação "de leitura" (Sistema x Excel): confere / difere / —.
@@ -134,7 +144,7 @@ export function toRowVM(
 
   /* ⚠ A CONTA DO SISTEMA SEGUE O CASE DO CONCILIAR — 133h item 7. Ela era
      `lanc_conta_bancaria_nome ?? conta_filtro_nome ?? excel_conta_origem`, e as duas pontas
-     do fallback estavam erradas: a primeira é NULL em 426 das 481 entradas do Raul (a conta
+     do fallback estavam erradas: a primeira é NULL em 426 das 481 entradas do NJ Pecuária (a conta
      de uma entrada mora em `conta_destino_id`), e a última exibia o TEXTO DA PLANILHA no
      lugar do que o banco tem — a tela concordando consigo mesma por construção.
      ⚠ `conta_filtro_nome` FICA COMO SEGUNDO RECURSO, e só ele: é a conta que a própria
@@ -395,6 +405,17 @@ export function toRowVM(
     contaId: contaDaLinhaStaging(row).id,
     revisadaEm: row.revisado_em,
     lancId: row.lanc_id,
+    /**
+     * 133i item 7 — o lançamento desta linha está classificado mas incompleto.
+     *
+     * ⚠ CLASSIFICADO E INCOMPLETO É O PIOR ESTADO: ele não aparece em "sem par" nem em
+     * "você decide" — está tudo certo, exceto que ninguém sabe o que foi comprado nem de
+     * quem. Medido no NJ em agosto: 84 lançamentos assim, dos quais os 45 sem produto têm
+     * `'-'` na descrição e nenhum tem descrição vazia.
+     * ⚠ O TRAÇO CONTA COMO VAZIO — `vazio()` já o trata, desde o item 8.
+     */
+    lancamentoIncompleto: !!row.lanc_id && !vazio(row.lanc_subcentro_atual)
+      && (vazio(row.lanc_descricao) || !row.lanc_favorecido_id_atual),
     /* 133h-b item 4 — as divergências REAIS, já sem os três falsos positivos. */
     divergenciasBanco: divergenciasComExtrato(row, contas),
     parteDeAgrupamento: parteDeAgrupamento(row),
@@ -465,10 +486,10 @@ export function toSessoesVM(sessoes: SessaoClassificacaoResumo[] | undefined | n
  * ⚠ A VIEW JÁ FOI CONSERTADA (migration 20260908114919), E MESMO ASSIM A REGRA MORA AQUI.
  * `conta_filtro_id` era `COALESCE(l.conta_bancaria_id, s.conta_origem_id, s.conta_destino_id)`
  * e nunca olhava `l.conta_destino_id`, que é onde mora a conta de uma ENTRADA: 164 das 481
- * entradas do Raul caíam em "Sem conta" com a conta gravada no lançamento. A migration
+ * entradas do NJ Pecuária caíam em "Sem conta" com a conta gravada no lançamento. A migration
  * acrescentou `l.conta_destino_id` ao COALESCE e as 164 viraram ZERO — medido.
  * ⚠ MAS COALESCE NÃO É O `CASE` DO CONCILIAR. Numa entrada com as DUAS pontas preenchidas
- * (55 no Raul), o COALESCE devolve `conta_bancaria_id` e a régua do Conciliar devolve o
+ * (55 no NJ Pecuária), o COALESCE devolve `conta_bancaria_id` e a régua do Conciliar devolve o
  * destino. Hoje isso não separa ninguém — nas 55, as duas colunas apontam para a mesma
  * conta (medido: zero divergências) —, mas nada no banco garante que continuem iguais. O
  * front fica com o `CASE`, que é a régua soberana, e usa `conta_filtro_id` só como segundo
@@ -616,7 +637,13 @@ export function resumirGrupos(staging: ClassificacaoStagingPreviewRow[]): EnriqR
  * linha da planilha pertence àquele recorte.
  */
 export function filtrarPorGrupo(rows: EnriqRowVM[], grupo: string): EnriqRowVM[] {
-  return grupo === 'todas' ? rows : rows.filter((l) => grupoDaLinha(l.status, l.aplicado) === grupo);
+  if (grupo === 'todas') return rows;
+  /* ⚠ "Incompletos" NÃO É UM GRUPO DE `match_status` — 133i item 7. Os outros seis saem de
+     `grupoDaLinha`, que classifica pelo casamento; este é uma propriedade do LANÇAMENTO
+     (classificado, mas sem produto ou sem fornecedor) e atravessa todos eles. Mandá-lo
+     para `grupoDaLinha` devolveria lista vazia, calada. */
+  if (grupo === 'incompletos') return rows.filter((l) => l.lancamentoIncompleto);
+  return rows.filter((l) => grupoDaLinha(l.status, l.aplicado) === grupo);
 }
 
 // P0-1A: conceito "aplicável em lote" vem PRONTO da view (lote_aplicavel) —
@@ -691,11 +718,42 @@ export function sessoesDoMes(
  * ⚠ CENTAVOS EM INTEIRO. Comparar `number` de ponto flutuante faria 165.88 !== 165.88 em
  * casos que já mordem este repo.
  */
+/**
+ * Os subcentros que dizem "isto é estorno" — 133i item 4.
+ *
+ * ⚠ SÃO NOMES DO PLANO, não palavras da descrição: classificar pela grafia do banco
+ * ("estorno", "devolução") seria adivinhar. Quem já classificou a linha respondeu.
+ */
+const SUBCENTROS_DE_ESTORNO: ReadonlySet<string> = new Set([
+  'Pagamento Estornado',
+  'Estorno Recebido',
+]);
+
+/**
+ * O lançamento é explicado por si mesmo? — 133i item 4.
+ *
+ * ⚠ TRANSFERÊNCIA E ESTORNO NUNCA SÃO PENDÊNCIA, e a razão é o defeito medido: dois Pix de
+ * R$ 300.000 do mesmo dia (doc 003 e 004) apareceram como candidatos a duplicata um do
+ * outro. Uma transferência tem duas pontas de mesmo valor por DEFINIÇÃO, e um estorno tem
+ * o par que ele estorna — oferecer "cancelar como duplicado" nesses casos é oferecer que
+ * se apague metade de um movimento que está certo.
+ */
+export function explicadoPorSiMesmo(
+  l: { tipo_operacao?: string | null; subcentro: string | null },
+): boolean {
+  if (normalizarTipo(l.tipo_operacao) === 'transferencia') return true;
+  return !!l.subcentro && SUBCENTROS_DE_ESTORNO.has(l.subcentro.trim());
+}
+
 export function temCandidatoDuplicata(
-  alvo: { lanc_id: string; valor: number | null; data_pagamento: string | null; conta_nome: string | null },
-  lista: readonly { lanc_id: string; valor: number | null; data_pagamento: string | null; conta_nome: string | null }[],
+  alvo: { lanc_id: string; valor: number | null; data_pagamento: string | null; conta_nome: string | null;
+          tipo_operacao?: string | null; subcentro?: string | null },
+  lista: readonly { lanc_id: string; valor: number | null; data_pagamento: string | null; conta_nome: string | null;
+                    tipo_operacao?: string | null; subcentro?: string | null }[],
   diasTolerancia = 5,
 ): boolean {
+  /* 133i item 4 — nem o alvo nem o par podem ser transferência ou estorno. */
+  if (explicadoPorSiMesmo({ tipo_operacao: alvo.tipo_operacao, subcentro: alvo.subcentro ?? null })) return false;
   if (alvo.valor === null || !alvo.data_pagamento) return false;
   const centavos = Math.round(alvo.valor * 100);
   const dia = Date.parse(`${alvo.data_pagamento}T00:00:00Z`);
@@ -703,6 +761,7 @@ export function temCandidatoDuplicata(
   const janela = diasTolerancia * 86_400_000;
   return lista.some((o) => {
     if (o.lanc_id === alvo.lanc_id) return false;
+    if (explicadoPorSiMesmo({ tipo_operacao: o.tipo_operacao, subcentro: o.subcentro ?? null })) return false;
     if (o.valor === null || !o.data_pagamento) return false;
     if (Math.round(o.valor * 100) !== centavos) return false;
     if ((o.conta_nome ?? null) !== (alvo.conta_nome ?? null)) return false;
@@ -715,7 +774,7 @@ export function temCandidatoDuplicata(
  * A conta do lançamento, pela régua do Conciliar — 133h item 7.
  *
  * ⚠ ENTRADA MORA EM `conta_destino_id`, E ESTE É O DEFEITO QUE O ENVELOPE DESCREVE. Medido
- * no Proto (cliente Raul, 18.256 linhas de staging com lançamento):
+ * no Proto (cliente NJ Pecuária, 18.256 linhas de staging com lançamento):
  *     2-Saídas          17.732 linhas — 17.732 com conta_bancaria_id, 0 com destino
  *     1-Entradas           481 linhas —     55 com conta_bancaria_id, 481 com destino
  *                                          426 delas SÓ com destino
@@ -814,7 +873,7 @@ export function diferencasDoResultado(edicao: EnriqEdicao): string[] {
  * ⚠ TRÊS VOCABULÁRIOS PARA A MESMA COISA, e era isso que acendia o âmbar em TODA saída:
  * a planilha diz "2-Saídas", o lançamento diz "2-Saídas" mas a tela mostra "Saída"
  * (`rotuloTipo`), e o banco ainda guarda `sinal` -1/1. Comparar rótulo com rótulo fazia
- * "2-Saídas" ≠ "Saída" em 17.732 linhas do Raul. Aqui os três viram uma coisa só.
+ * "2-Saídas" ≠ "Saída" em 17.732 linhas do NJ Pecuária. Aqui os três viram uma coisa só.
  */
 export function normalizarTipo(t: string | null | undefined): 'entrada' | 'saida' | 'transferencia' | null {
   if (t === null || t === undefined) return null;
@@ -836,7 +895,7 @@ export function normalizarTipo(t: string | null | undefined): 'entrada' | 'saida
  * agrupamento que a própria tela sugere está errado.
  * ⚠ LÊ O `casamento_meta` DO CASADOR, E SÓ ELE. Testar `match_status === 'sugestao_split'`
  * seria a segunda resposta para "esta linha faz parte de um grupo?" — e, medido no Proto,
- * a primeira já basta: das 63 linhas de grupo do Raul, 63 têm `grupo_ids` com mais de um
+ * a primeira já basta: das 63 linhas de grupo do NJ Pecuária, 63 têm `grupo_ids` com mais de um
  * id, nenhuma sem. É também o critério que o resto da tela usa (`gruposIdsDoSplit`).
  * ⚠ E O TIPO `MatchStatus` NÃO DÁ PARA TESTAR HOJE: ele declara 5 valores e o banco grava
  * 10 (medido). Comparar com 'sugestao_split' é TS2367. Ampliá-lo é o conserto de raiz e
@@ -936,9 +995,16 @@ export function divergenciasComExtrato(
  * ("transferência", "estorno") seria adivinhar pela grafia do banco.
  */
 export function precisaDeVoce(
-  l: { lanc_id: string; subcentro: string | null; valor: number | null; data_pagamento: string | null; conta_nome: string | null },
-  lista: readonly { lanc_id: string; valor: number | null; data_pagamento: string | null; conta_nome: string | null }[],
+  l: { lanc_id: string; subcentro: string | null; valor: number | null; data_pagamento: string | null;
+       conta_nome: string | null; tipo_operacao?: string | null },
+  lista: readonly { lanc_id: string; valor: number | null; data_pagamento: string | null; conta_nome: string | null;
+                    tipo_operacao?: string | null; subcentro?: string | null }[],
 ): boolean {
+  /* ⚠ 133i item 4 — TRANSFERÊNCIA E ESTORNO VÃO SEMPRE PARA "JÁ EXPLICADOS", mesmo sem
+     subcentro: a planilha do mês não os explica por design, e não é o operador que tem de
+     resolvê-los aqui. Sem esta linha, uma transferência sem classificação caía em
+     "precisam de você" e ganhava o botão de cancelar. */
+  if (explicadoPorSiMesmo(l)) return false;
   if (!l.subcentro || l.subcentro.trim() === '') return true;
   return temCandidatoDuplicata(l, lista);
 }

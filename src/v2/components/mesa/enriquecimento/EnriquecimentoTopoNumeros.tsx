@@ -26,7 +26,7 @@ import { fmtBRL } from './fmt';
 import type { EnriqGrupo, EnriqResumoGrupos } from '@/v2/lib/mesa/enriquecimentoView';
 
 /** 133c — o chip da visão inversa. Não é `match_status`: é o que a planilha NÃO explica. */
-export type VistaPasso2 = EnriqGrupo | 'todas' | 'sem_par_sistema';
+export type VistaPasso2 = EnriqGrupo | 'todas' | 'sem_par_sistema' | 'incompletos';
 
 export interface EnriquecimentoTopoNumerosProps {
   resumo: EnriqResumoGrupos;
@@ -43,6 +43,8 @@ export interface EnriquecimentoTopoNumerosProps {
   transferencias?: { total: number; unicos: number };
   /** 133c item 4 — quantos lançamentos do mês nenhuma linha da planilha referencia. */
   semParSistema?: number;
+  /** 133i item 7 — linhas cujo lançamento está classificado mas sem produto ou fornecedor. */
+  incompletos?: number;
 }
 
 /** Rótulo, cor e a segunda linha de cada um dos seis. A ordem é a do trabalho. */
@@ -77,7 +79,7 @@ const CARD_ATIVO = 'border-primary bg-muted/40';
 const CARD_INERTE = 'border-transparent hover:bg-muted/30';
 
 export function EnriquecimentoTopoNumeros({
-  resumo, total, filtro, onFiltro, transferencias, semParSistema,
+  resumo, total, filtro, onFiltro, transferencias, semParSistema, incompletos,
 }: EnriquecimentoTopoNumerosProps) {
   /* Clicar no card que já filtra volta a "Todas" — o filtro é alternador. */
   const alternar = (g: VistaPasso2) => onFiltro(filtro === g ? 'todas' : g);
@@ -95,7 +97,7 @@ export function EnriquecimentoTopoNumeros({
         </button>
       </div>
 
-      <div className="grid grid-cols-3 gap-1 px-1.5 pb-1.5 pt-1 sm:grid-cols-7">
+      <div className="grid grid-cols-3 gap-1 px-1.5 pb-1.5 pt-1 sm:grid-cols-8">
         {GRUPOS.map((g) => {
           const r = resumo[g.key];
           /* ⚠ A TRANSFERÊNCIA VIROU NÚMERO EM 133c. Ela mostrava "—" porque nenhum
@@ -142,6 +144,27 @@ export function EnriquecimentoTopoNumeros({
           </div>
           <div className="truncate text-[10px] leading-tight text-muted-foreground">
             {semParSistema === undefined ? 'apurando…' : 'a planilha não explica'}
+          </div>
+        </button>
+
+        {/* ⚠ O OITAVO: CLASSIFICADO, MAS INCOMPLETO — 133i item 7. Ele não cabe em nenhum
+            dos outros sete porque não é uma pergunta sobre o CASAMENTO: a linha casou, o
+            lançamento está classificado, e mesmo assim ninguém sabe o que foi comprado nem
+            de quem. Some de todos os recortes por estar "certo", e é por isso que precisa
+            de um card próprio. Cinza como o "Sem par no sistema": não é erro, é trabalho. */}
+        <button type="button"
+          title={filtro === 'incompletos' ? 'Clique de novo para ver todas.' : 'Filtrar: classificados sem produto ou sem fornecedor'}
+          onClick={() => alternar('incompletos')}
+          className={`${CARD_BASE} ${filtro === 'incompletos' ? CARD_ATIVO : CARD_INERTE}`}>
+          <div className="flex items-center gap-1">
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground" />
+            <span className="truncate text-[10px] leading-tight text-muted-foreground">Incompletos</span>
+          </div>
+          <div className="text-[16px] font-medium leading-tight tabular-nums text-muted-foreground">
+            {incompletos ?? 0}
+          </div>
+          <div className="truncate text-[10px] leading-tight text-muted-foreground">
+            sem produto ou fornecedor
           </div>
         </button>
       </div>

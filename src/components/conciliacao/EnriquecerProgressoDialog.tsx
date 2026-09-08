@@ -18,7 +18,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Check, AlertTriangle, X } from 'lucide-react';
 import { formatMoeda } from '@/lib/calculos/formatters';
-import { baixarCsv, csvCampo } from '@/lib/csv';
+import { baixarCsv, csvLinhaPt } from '@/lib/csv';
 import type { ProgressoImportacao, ResultadoImportacao } from '@/v2/hooks/useImportLancamentosExcel';
 
 const dataBr = (iso: string) => (iso ? iso.slice(0, 10).split('-').reverse().join('/') : '—');
@@ -68,11 +68,12 @@ export function EnriquecerProgressoDialog({
   useEffect(() => { fimRef.current?.scrollIntoView({ block: 'end' }); }, [visiveis.length]);
 
   const baixar = () => {
-    const linhas = ['linha,data,valor,descricao,motivo'];
+    const linhas = [csvLinhaPt(['linha', 'data', 'valor', 'descricao', 'motivo'])];
     for (const e of progresso.feed) {
       if (e.tipo === 'ok') continue;
-      linhas.push([e.linha, csvCampo(dataBr(e.data)), csvCampo(formatMoeda(e.valor)),
-        csvCampo(e.titulo), csvCampo(e.contexto)].join(','));
+      /* 133i item 13 — o mesmo separador do outro CSV desta tela: com `,`, o Excel
+         brasileiro abre o arquivo inteiro na coluna A. */
+      linhas.push(csvLinhaPt([e.linha, dataBr(e.data), formatMoeda(e.valor), e.titulo, e.contexto]));
     }
     baixarCsv('enriquecer_sem_par_e_recusados', linhas);
   };

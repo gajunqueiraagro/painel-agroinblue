@@ -16,7 +16,7 @@ import { useClassificacaoStaging, useSessoesClassificacao } from '@/v2/hooks/use
 import {
   toRowVM, toSessoesVM, contarAplicaveisExatos, escolherMelhorSessaoId, diferencasDoResultado,
   listarContas, filtrarPorConta, resumirGrupos, filtrarPorGrupo, grupoDaLinha,
-  sessoesDoMes, contaEfetivaNome,
+  sessoesDoMes, contaEfetivaNome, parteDeAgrupamento,
   type EnriqGrupo,
 } from '@/v2/lib/mesa/enriquecimentoView';
 import { EnriquecimentoLista, type EnriquecimentoListaProps } from './EnriquecimentoLista';
@@ -43,7 +43,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ChevronDown, Trash2 } from 'lucide-react';
 import { ContaBancariaSelect, type ContaSelecionavel } from '@/components/shared/ContaBancariaSelect';
-import { baixarCsv, csvCampo } from '@/lib/csv';
+import { baixarCsv, csvLinhaPt } from '@/lib/csv';
 import { fmtBRL, fmtData } from './fmt';
 import { Button } from '@/components/ui/button';
 
@@ -435,7 +435,7 @@ export function MesaEnriquecimentoTab({
    * A linha precisa que o proposto seja alinhado ao Resultado antes de gravar? — 133h-b item 8.
    *
    * ⚠ O 133h COBRIU SÓ A LINHA EDITADA, e a medição mostra o tamanho do buraco: das 27.153
-   * linhas do Raul com proposta fora do plano, 16.236 têm subcentro no sistema — nelas o
+   * linhas do NJ Pecuária com proposta fora do plano, 16.236 têm subcentro no sistema — nelas o
    * Resultado é "mantém", `edicao.subcentro === subcentroAtual`, e a condição antiga
    * (`!==`) as deixava passar com o texto cru no proposto. Eram justamente as linhas que o
    * operador NÃO toca, isto é, quase todas as do lote.
@@ -494,7 +494,7 @@ export function MesaEnriquecimentoTab({
    * o guard (f) lê. Com lançamento, ele traria a conta do lançamento e a comparação seria
    * outra.
    *
-   * ⚠ "MESMO DIA" É `excel_data`, medido: nos 20 grupos do Raul, todas as linhas de um
+   * ⚠ "MESMO DIA" É `excel_data`, medido: nos 20 grupos do NJ Pecuária, todas as linhas de um
    * grupo compartilham a mesma `excel_data` — nenhum grupo cruza dias.
    */
   const ELEGIVEL_PARA_GRUPO = useMemo(
@@ -592,6 +592,8 @@ export function MesaEnriquecimentoTab({
   }, [selecionado]);
 
   const podeSalvar = !!selecionado && !selecionado.aplicado && selecionado.temMatch
+    /* 133i item 11 — parte de agrupamento só entra no lançamento pelo Agrupar. */
+    && !selecionado.parteDeAgrupamento
     && obrigatoriosVazios.length === 0;
   const podeReverter = !!selecionado && selecionado.aplicado;
   /**
@@ -610,6 +612,14 @@ export function MesaEnriquecimentoTab({
     !selecionado ? 'Escolha uma linha.'
     : selecionado.aplicado ? 'Esta linha já foi gravada — use Reverter para desfazer.'
     : !selecionado.temMatch ? 'Sem lançamento vinculado: escolha um candidato antes de gravar.'
+    /* ⚠ 133i item 11 — PARTE DE AGRUPAMENTO NÃO SE GRAVA SOZINHA. O `apply_row` aplica a
+       linha por cima do lançamento CONSOLIDADO, e o consolidado vale a soma das partes:
+       gravar uma delas escreve a classificação de R$ 8.000 num lançamento de R$ 25.590,80,
+       e a segunda linha sobrescreve a primeira. Foi o que aconteceu no DARF de 25.590,80,
+       com duas linhas gravadas sobre o mesmo lançamento. O gesto certo é Agrupar, que
+       cria uma linha por parte. */
+    : selecionado.parteDeAgrupamento
+      ? 'Faz parte de um agrupamento — use Agrupar.'
     : obrigatoriosVazios.length > 0
       ? `Falta preencher: ${obrigatoriosVazios.join(', ')}.`
     : null;
@@ -631,6 +641,7 @@ export function MesaEnriquecimentoTab({
     () => (selecionado ? diferencasDoResultado(selecionado.edicao) : []),
     [selecionado]);
   const soConfirma = !!selecionado && !selecionado.aplicado && selecionado.temMatch
+    && !selecionado.parteDeAgrupamento
     && obrigatoriosVazios.length === 0 && diferencas.length === 0;
   /* 133i item 2c — já gravada e sem diferença: o gesto que resta é seguir. */
   const soAvanca = !!selecionado && selecionado.aplicado && diferencas.length === 0;
@@ -640,6 +651,8 @@ export function MesaEnriquecimentoTab({
   const revisadas = useMemo(
     () => rowsVM.filter((r) => !!r.revisadaEm || r.aplicado).length,
     [rowsVM]);
+  /* 133i item 7 — classificados sem produto ou sem fornecedor, no recorte da tela. */
+  const incompletos = useMemo(() => rowsVM.filter((r) => r.lancamentoIncompleto).length, [rowsVM]);
 
   /* 133h item 12 — quais lançamentos da sessão vieram do extrato. */
   const lancIdsDaSessao = useMemo(
@@ -1047,6 +1060,10 @@ export function MesaEnriquecimentoTab({
     const out: LinhaParaGravar[] = [];
     for (const r of staging) {
       if (r.aplicado) continue;
+      /* ⚠ 133i item 11 — O LOTE TAMBÉM NÃO PODE. Ele é o caminho que grava centenas: com a
+         parte de um agrupamento na fila, o `apply_row` a escreve por cima do consolidado
+         sem ninguém ver. Foi assim que o DARF de 25.590,80 recebeu duas classificações. */
+      if (parteDeAgrupamento(r)) continue;
       const status: string = r.match_status;
       const sobrescrever = sobrescreverIds.has(r.staging_id);
       const entra = ELEGIVEIS.has(status) || (status === 'ja_classificado' && sobrescrever);
@@ -1106,18 +1123,26 @@ export function MesaEnriquecimentoTab({
       (p) => p.conta_saida_id === contaIdSel || p.conta_entrada_id === contaIdSel);
   }, [transf.dados.pares, contaIdSel]);
 
+  /**
+   * O CSV do que ficou sem par — 133i item 13.
+   *
+   * ⚠ ABRIA EM UMA COLUNA SÓ NO EXCEL. Cada linha era um `join(',')` com TODO campo entre
+   * aspas; o Excel brasileiro usa `;` como separador de lista, então lia o arquivo inteiro
+   * como uma coluna de texto. `csvLinhaPt` põe o `;` e só usa aspas onde elas mudam o
+   * significado — o BOM continua, e é ele que salva o acento.
+   */
   function baixarSemPar() {
-    const linhas = ['linha,data,conta,descricao,valor,motivo'];
+    const linhas = [csvLinhaPt(['linha', 'data', 'conta', 'descricao', 'valor', 'motivo'])];
     for (const r of stagingConta) {
       if (grupoDaLinha(r.match_status, r.aplicado) !== 'sem_par') continue;
-      linhas.push([
+      linhas.push(csvLinhaPt([
         r.excel_linha_origem ?? '',
-        csvCampo(fmtData(r.excel_data)),
-        csvCampo(r.conta_filtro_nome ?? r.excel_conta_origem ?? ''),
-        csvCampo(r.excel_produto ?? r.excel_fornecedor ?? ''),
-        csvCampo(fmtBRL(r.excel_valor)),
-        csvCampo(motivoSemPar(r.match_status)),
-      ].join(','));
+        fmtData(r.excel_data),
+        r.conta_filtro_nome ?? r.excel_conta_origem ?? '',
+        r.excel_produto ?? r.excel_fornecedor ?? '',
+        fmtBRL(r.excel_valor),
+        motivoSemPar(r.match_status),
+      ]));
     }
     baixarCsv('enriquecer_sem_par_no_banco', linhas);
   }
@@ -1296,6 +1321,12 @@ export function MesaEnriquecimentoTab({
             + transf.estornos.pendentes + transf.faturas.pendentes,
         }}
         semParSistema={semParSistema?.length}
+        /* ⚠ 133i item 7 — O NÚMERO É O DA LISTA, e não o do mês. O envelope fala em
+           "lançamentos do mês"; medido no NJ agosto, são 84 lançamentos assim, e a sessão
+           aponta para 104 deles em 670 linhas. Contar o mês e filtrar a sessão faria o card
+           e a lista falarem de universos diferentes — o defeito que os outros sete cards
+           evitam por construção. Fica o da sessão; o do mês é decisão de produto. */
+        incompletos={incompletos}
       />
 
       {/* ═══ TOOLBAR — UMA LINHA DE 32px (133d item 2) ════════════════════════════
