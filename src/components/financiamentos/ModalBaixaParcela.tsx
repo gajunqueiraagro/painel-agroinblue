@@ -544,7 +544,10 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
             <div className="space-y-3">
               <div>
                 <Label className="text-xs">Data do pagamento</Label>
-                <Input type="date" value={dataPagamento} onChange={e => setDataPagamento(e.target.value)} />
+                {/* 136a item 2 — o último calendário nativo desta tela. O modo editar já
+                    abria o calendário azul; aqui o operador ainda via o do navegador, com
+                    "Limpar/Hoje" que não são nossos e o fuso que devolve o dia anterior. */}
+                <DatePicker value={dataPagamento} onChange={setDataPagamento} />
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <div>

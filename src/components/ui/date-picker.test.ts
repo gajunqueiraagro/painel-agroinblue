@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { parseBrDateToIso, formatIsoToBr, isoToDate, dateToIso } from './date-picker';
+import {
+  parseBrDateToIso, formatIsoToBr, isoToDate, dateToIso,
+  aplicarMascaraData, normalizarDataColada, ANO_MIN, ANO_MAX,
+} from './date-picker';
 
 // UI-CALENDARIO-02 — testes das funções puras (rede de segurança principal).
 // Comportamentos interativos (abrir no mês da data, digitar↔calendário, foco/teclado)
@@ -111,5 +114,96 @@ describe('round-trip TZ-safe (data civil não desloca 1 dia)', () => {
     // dateToIso usa componentes locais → sempre 2025-03-15.
     expect(dateToIso(new Date(2025, 2, 15))).toBe('2025-03-15');
     expect(dateToIso(new Date(2024, 1, 29))).toBe('2024-02-29');
+  });
+});
+
+/* ═══ 136a — MÁSCARA DE DIGITAÇÃO ═══════════════════════════════════════════════ */
+describe('aplicarMascaraData — as barras entram sozinhas', () => {
+  it('vai pondo a barra conforme os dígitos chegam', () => {
+    expect(aplicarMascaraData('2')).toBe('2');
+    expect(aplicarMascaraData('20')).toBe('20/');
+    expect(aplicarMascaraData('20/0')).toBe('20/0');
+    expect(aplicarMascaraData('20/08')).toBe('20/08/');
+    expect(aplicarMascaraData('20/08/2')).toBe('20/08/2');
+    expect(aplicarMascaraData('20/08/2026')).toBe('20/08/2026');
+  });
+
+  /** ⚠ A ARMADILHA DA MÁSCARA: sem a guarda, apagar "20/" recolocava a barra e o backspace
+      ficava preso. Apagando, a máscara não fecha grupo. */
+  it('backspace não é engolido pela barra automática', () => {
+    expect(aplicarMascaraData('20', '20/')).toBe('20');
+    expect(aplicarMascaraData('2', '20')).toBe('2');
+    expect(aplicarMascaraData('20/08', '20/08/')).toBe('20/08');
+  });
+
+  it('para nos 8 dígitos — o resto é descartado (maxLength no campo)', () => {
+    expect(aplicarMascaraData('20/08/20269999')).toBe('20/08/2026');
+  });
+
+  it('ignora letras e símbolos', () => {
+    expect(aplicarMascaraData('20/a08b2026')).toBe('20/08/2026');
+  });
+
+  /** O separador digitado FECHA o grupo: quem escreve 1/3/2025 continua sendo atendido. */
+  it('separador digitado completa o grupo com zero à esquerda', () => {
+    expect(aplicarMascaraData('1/')).toBe('01/');
+    expect(aplicarMascaraData('01/3/')).toBe('01/03/');
+    expect(aplicarMascaraData('01/03/2025')).toBe('01/03/2025');
+  });
+
+  it('aceita - e . como separadores digitados', () => {
+    expect(aplicarMascaraData('1-3-2025')).toBe('01/03/2025');
+    expect(aplicarMascaraData('1.3.2025')).toBe('01/03/2025');
+  });
+
+  /** ⚠ O estado transitório de quem digita "20/08/2026" com barras não pode virar 2020. */
+  it('NÃO expande ano de 2 dígitos durante a digitação', () => {
+    expect(aplicarMascaraData('20/08/20')).toBe('20/08/20');
+    expect(aplicarMascaraData('20/08/202')).toBe('20/08/202');
+    expect(aplicarMascaraData('20/08/2026')).toBe('20/08/2026');
+  });
+
+  it('vazio continua vazio', () => {
+    expect(aplicarMascaraData('')).toBe('');
+  });
+});
+
+/* ═══ 136a — COLAGEM: os quatro formatos ════════════════════════════════════════ */
+describe('normalizarDataColada — os quatro formatos do item 1e', () => {
+  it('20082026 → 20/08/2026', () => {
+    expect(normalizarDataColada('20082026')).toBe('20/08/2026');
+  });
+  it('20/08/2026 → 20/08/2026', () => {
+    expect(normalizarDataColada('20/08/2026')).toBe('20/08/2026');
+  });
+  it('2026-08-20 (ISO) → 20/08/2026', () => {
+    expect(normalizarDataColada('2026-08-20')).toBe('20/08/2026');
+  });
+  it('20-08-26 (ano curto) → 20/08/2026', () => {
+    expect(normalizarDataColada('20-08-26')).toBe('20/08/2026');
+  });
+  it('espaços em volta não atrapalham', () => {
+    expect(normalizarDataColada('  2026-08-20  ')).toBe('20/08/2026');
+  });
+  it('os quatro terminam no MESMO ISO depois do parse', () => {
+    for (const t of ['20082026', '20/08/2026', '2026-08-20', '20-08-26']) {
+      expect(parseBrDateToIso(normalizarDataColada(t))).toEqual({ status: 'valid', iso: '2026-08-20' });
+    }
+  });
+});
+
+/* ═══ 136a — FAIXA DE ANO ═══════════════════════════════════════════════════════ */
+describe('parseBrDateToIso — ano fora da faixa é dedo trocado', () => {
+  it(`ano abaixo de ${ANO_MIN} → invalid`, () => {
+    expect(parseBrDateToIso('20/08/0226')).toEqual({ status: 'invalid' });
+    expect(parseBrDateToIso('20/08/1899')).toEqual({ status: 'invalid' });
+  });
+  it(`ano acima de ${ANO_MAX} → invalid`, () => {
+    expect(parseBrDateToIso('20/08/2101')).toEqual({ status: 'invalid' });
+    expect(parseBrDateToIso('20/08/9999')).toEqual({ status: 'invalid' });
+  });
+  it('as bordas da faixa continuam válidas', () => {
+    expect(parseBrDateToIso(`20/08/${ANO_MIN}`)).toEqual({ status: 'valid', iso: '1900-08-20' });
+    expect(parseBrDateToIso(`20/08/${ANO_MAX}`)).toEqual({ status: 'valid', iso: '2100-08-20' });
   });
 });

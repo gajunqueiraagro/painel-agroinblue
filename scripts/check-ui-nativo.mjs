@@ -46,7 +46,6 @@ const BASELINE = new Map(Object.entries({
   "src/components/financeiro-v2/AuditoriaBancariaSoberana.tsx": [0, 3],
   "src/components/financeiro-v2/ContratoDialog.tsx": [2, 0],
   "src/components/financeiro-v2/ModoRapidoGrid.tsx": [2, 4],
-  "src/components/financiamentos/ModalBaixaParcela.tsx": [1, 0],
   "src/components/mapa-geo/MovimentarLoteDialog.tsx": [1, 0],
   "src/components/recorrencias/GerarLancamentosDialog.tsx": [1, 0],
   "src/components/venda/VendaDetalhesDialog.tsx": [1, 0],

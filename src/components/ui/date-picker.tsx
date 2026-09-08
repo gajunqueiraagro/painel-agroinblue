@@ -66,6 +66,70 @@ export type ParseResult =
  *   Datas impossíveis (31/02, 15/13, 00/10, 29/02 não-bissexto, 32/01…) → 'invalid'.
  *   Incompletos (ex.: '15/03', '15/') → 'invalid' (só relevam no commit). Vazio → 'empty'.
  */
+/** Ano fora deste intervalo é erro de digitação, não data (136a item 1b). */
+export const ANO_MIN = 1900;
+export const ANO_MAX = 2100;
+
+/**
+ * MÁSCARA DE DIGITAÇÃO — 136a item 1a. Pura: texto cru → texto exibido.
+ *
+ * ⚠ ELA NÃO EXPANDE ANO DE 2 DÍGITOS, e a razão é um conflito medido no desenho: quem
+ * digita "20/08/2026" com barras passa por "20/08/20" no caminho. Uma regra que virasse
+ * todo grupo de 2 dígitos em `20xx` transformaria esse estado transitório em "2020" e o
+ * operador veria o ano trocar debaixo do dedo. A expansão de `dd/mm/aa` mora no
+ * `normalizarDataColada`, chamada no `onPaste` — ali se SABE que o texto chegou inteiro.
+ *
+ * ⚠ SEPARADOR FECHA O GRUPO: digitar "1/" vira "01/". Sem isso, quem digita "1/3/2025"
+ * (que o parser sempre aceitou) veria a máscara montar "13/20/25".
+ */
+export function aplicarMascaraData(raw: string, anterior = ''): string {
+  /* ⚠ `anterior` EXISTE POR CAUSA DO BACKSPACE, e é a armadilha clássica da máscara: com a
+     barra entrando sozinha aos 2 dígitos, "20/" apagado vira "20", a máscara recoloca a
+     barra e o campo fica preso — o operador aperta backspace e nada acontece. Quando o
+     texto ENCOLHEU, a máscara não fecha grupo; só formata o que sobrou. */
+  const apagando = raw.length < anterior.length;
+  const norm = raw.replace(/[.\-]/g, '/');
+  let digitos: string;
+  if (norm.includes('/')) {
+    const partes = norm.split('/');
+    const d = (partes[0] ?? '').replace(/\D/g, '');
+    const m = (partes[1] ?? '').replace(/\D/g, '');
+    const a = (partes[2] ?? '').replace(/\D/g, '');
+    const dOk = partes.length >= 2 && d.length === 1 ? `0${d}` : d;
+    const mOk = partes.length >= 3 && m.length === 1 ? `0${m}` : m;
+    digitos = `${dOk}${mOk}${a}`.slice(0, 8);
+  } else {
+    digitos = norm.replace(/\D/g, '').slice(0, 8);
+  }
+  /* 2 dígitos -> "dd/", 4 -> "dd/mm/", 8 -> "dd/mm/aaaa" (item 1a). A barra de fechamento
+     só entra quando se está ESCREVENDO — ver `apagando` acima. */
+  if (digitos.length <= 2) return digitos.length === 2 && !apagando ? `${digitos}/` : digitos;
+  if (digitos.length <= 4) {
+    const base = `${digitos.slice(0, 2)}/${digitos.slice(2)}`;
+    return digitos.length === 4 && !apagando ? `${base}/` : base;
+  }
+  return `${digitos.slice(0, 2)}/${digitos.slice(2, 4)}/${digitos.slice(4)}`;
+}
+
+/**
+ * NORMALIZAÇÃO DE COLAGEM — 136a item 1e. Os quatro formatos que o operador cola viram
+ * `dd/mm/aaaa`: "20082026", "20/08/2026", "2026-08-20" e "20-08-26".
+ *
+ * ⚠ SÓ NA COLAGEM. É o único momento em que o texto chega COMPLETO, e por isso o único em
+ * que expandir "26" para "2026" não briga com a digitação em andamento.
+ */
+export function normalizarDataColada(texto: string): string {
+  const t = texto.trim();
+  // ISO: 2026-08-20 (ano na frente é o desempate — dd nunca tem 4 dígitos)
+  const iso = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/.exec(t);
+  if (iso) return `${pad2(+iso[3])}/${pad2(+iso[2])}/${iso[1]}`;
+  // dd/mm/aa → dd/mm/20aa
+  const curto = /^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2})$/.exec(t);
+  if (curto) return `${pad2(+curto[1])}/${pad2(+curto[2])}/20${curto[3]}`;
+  // o resto (8 dígitos corridos, dd/mm/aaaa, separadores mistos) a máscara resolve
+  return aplicarMascaraData(t);
+}
+
 export function parseBrDateToIso(text: string): ParseResult {
   const t = text.trim();
   if (t === '') return { status: 'empty' };
@@ -76,6 +140,9 @@ export function parseBrDateToIso(text: string): ParseResult {
     return { status: 'invalid' };
   }
   const d = +dd, mo = +mm, y = +yyyy;
+  /* 136a item 1b — ano fora de 1900..2100 é dedo trocado, não data. Antes qualquer ano de
+     4 dígitos passava, e "20/08/0226" virava uma data válida no ano 226. */
+  if (y < ANO_MIN || y > ANO_MAX) return { status: 'invalid' };
   const dt = new Date(y, mo - 1, d);
   if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) {
     return { status: 'invalid' };
@@ -128,18 +195,44 @@ export function DatePicker({ value, onChange, className, placeholder = 'dd/mm/aa
       <div className="relative">
         <Input
           value={text}
-          onChange={e => { setText(e.target.value); setError(false); }}
+          /* 136a item 1a — a máscara põe as barras; o operador só digita dígitos. */
+          onChange={e => { setText(aplicarMascaraData(e.target.value, text)); setError(false); }}
+          /* ⚠ COLAGEM TEM CAMINHO PRÓPRIO (item 1e): é o único momento em que o texto chega
+              inteiro, e por isso o único em que "20-08-26" pode virar 2026 sem atrapalhar
+              quem está digitando. `preventDefault` porque quem escreve o campo somos nós. */
+          onPaste={e => {
+            e.preventDefault();
+            setText(normalizarDataColada(e.clipboardData.getData('text')));
+            setError(false);
+          }}
           onBlur={commit}
-          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commit(); } }}
+          onKeyDown={e => {
+            if (e.key === 'Enter') { e.preventDefault(); commit(); return; }
+            /* Esc devolve o que estava — o operador desiste da edição sem perder o valor. */
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              setText(formatIsoToBr(value));
+              setError(false);
+              return;
+            }
+            /* ↓ abre o calendário, como em qualquer campo de data do sistema operacional —
+               é o gesto que o teclado espera e o único caminho sem mouse até a grade. */
+            if (e.key === 'ArrowDown' && !disabled) { e.preventDefault(); setOpen(true); }
+          }}
           disabled={disabled}
           tabIndex={tabIndex}
           placeholder={placeholder}
           inputMode="numeric"
+          maxLength={10}
           aria-invalid={error || undefined}
+          /* ⚠ ÂMBAR, NÃO VERMELHO (item 1b). Vermelho é a cor de "o banco recusou"; aqui
+              nada foi recusado — o campo está incompleto ou o dia não existe, e o valor
+              anterior continua de pé. O `title` diz o que a borda só insinua. */
+          title={error ? 'Data inválida' : undefined}
           className={cn(
             compact ? 'h-6 pl-2 pr-7 text-[11px]' : 'h-8 pr-8 text-[12px]',
             className,
-            error && 'border-destructive focus-visible:ring-destructive/40',
+            error && 'border-amber-500 focus-visible:ring-amber-500/40',
           )}
         />
         <PopoverTrigger asChild>
