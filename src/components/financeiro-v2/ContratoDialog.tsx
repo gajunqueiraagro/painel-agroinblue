@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -372,11 +373,11 @@ export function ContratoDialog({
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <Label className="text-xs">Início *</Label>
-                  <Input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50" tabIndex={5} />
+                  <DatePicker value={dataInicio} onChange={setDataInicio} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50" tabIndex={5} />
                 </div>
                 <div>
                   <Label className="text-xs">Fim (opc.)</Label>
-                  <Input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50" tabIndex={6} />
+                  <DatePicker value={dataFim} onChange={setDataFim} className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50" tabIndex={6} />
                 </div>
                 <div>
                   <Label className="text-xs">Dia Pgto</Label>

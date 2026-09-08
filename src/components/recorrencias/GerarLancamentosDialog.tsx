@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Label } from '@/components/ui/label';
 import { AlertTriangle, Loader2, Play } from 'lucide-react';
 import { toast } from 'sonner';
@@ -73,9 +74,14 @@ export function GerarLancamentosDialog({ recorrencia, aoFechar, aoGerar }: Props
         <div className="space-y-2.5 px-4 py-3">
           <div>
             <Label className="text-[10px]">Gerar até (competência)</Label>
-            <Input type="date" value={ate} onChange={e => { setAte(e.target.value); setPrevia(null); }}
-              className="h-8 text-xs"
-              title="Só ENCURTA: o teto é sempre a última competência da regra." />
+            {/* ⚠ O `title` MUDOU DE ELEMENTO, NAO SUMIU. O `DatePicker` usa o proprio `title`
+                para dizer "Data invalida" quando o campo esta em erro; passar outro por cima
+                apagaria esse aviso. A frase — que e' a unica explicacao de que o campo so'
+                ENCURTA — foi para o wrapper, e o hover continua a mostrando. */}
+            <span title="Só ENCURTA: o teto é sempre a última competência da regra." className="block">
+              <DatePicker value={ate} onChange={v => { setAte(v); setPrevia(null); }}
+                className="h-8 text-xs" />
+            </span>
           </div>
 
           {/* ⚠ O AVISO VEM ANTES DO BOTÃO, não depois do estrago. */}

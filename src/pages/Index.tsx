@@ -79,7 +79,6 @@ import ImportZootHistoricoTab from './ImportZootHistoricoTab';
 import HistoricoImportacoesZootTab from './HistoricoImportacoesZootTab';
 
 const FinanciamentosListaPage = lazy(() => import('./FinanciamentosListaPage'));
-const FinanciamentoCadastro = lazy(() => import('./FinanciamentoCadastro'));
 const FinanciamentoDetalhe = lazy(() => import('./FinanciamentoDetalhe'));
 const FinanciamentosPainelTab = lazy(() => import('./FinanciamentosPainelTab'));
 
@@ -177,7 +176,10 @@ const Index = () => {
   const [conciliacaoContext, setConciliacaoContext] = useState<{ ano: string; mes: string; contaId: string } | null>(null);
   const [finV2Intensivo, setFinV2Intensivo] = useState(false);
   const [finV2DrillFilters, setFinV2DrillFilters] = useState<import('./FinanceiroV2Tab').FinV2DrillFilters | null>(null);
-  const [finView, setFinView] = useState<{ mode: 'list' } | { mode: 'novo' } | { mode: 'detalhe'; id: string; from?: 'lancamentos' } | { mode: 'painel' } | null>(null);
+  /* ⚠ SEM `'novo'` (136b item 0): a lista abre o modal por dentro desde o PR-PARC-04, e o
+     ramo que renderizava a pagina de cadastro era inalcancavel. O modo saiu do TIPO junto
+     com o ramo — estado legal sem tela do outro lado e' convite a reintroduzir a pagina. */
+  const [finView, setFinView] = useState<{ mode: 'list' } | { mode: 'detalhe'; id: string; from?: 'lancamentos' } | { mode: 'painel' } | null>(null);
   const [fechamentoFromConciliacao, setFechamentoFromConciliacao] = useState(false);
   const [lancamentosFromFechamento, setLancamentosFromFechamento] = useState(false);
   const [lancamentosFromEvolCategoria, setLancamentosFromEvolCategoria] = useState(false);
@@ -748,15 +750,8 @@ const Index = () => {
         <Suspense fallback={<div className="flex items-center justify-center h-40"><span className="text-3xl animate-pulse">💰</span></div>}>
           {finView.mode === 'list' && (
             <FinanciamentosListaPage
-              onNovo={() => setFinView({ mode: 'novo' })}
               onDetalhe={(fid: string) => setFinView({ mode: 'detalhe', id: fid })}
               onVoltar={() => setFinView(null)}
-            />
-          )}
-          {finView.mode === 'novo' && (
-            <FinanciamentoCadastro
-              onVoltar={() => setFinView({ mode: 'list' })}
-              onSalvo={() => setFinView({ mode: 'list' })}
             />
           )}
           {finView.mode === 'detalhe' && (

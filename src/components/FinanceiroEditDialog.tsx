@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Lancamento, CATEGORIAS, Categoria } from '@/types/cattle';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -333,7 +334,7 @@ export function FinanceiroEditDialog({ lancamento, open, onClose, onSave, onDele
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label className="text-xs">Data</Label>
-              <Input type="date" value={data} onChange={e => setData(e.target.value)} className="h-9" />
+              <DatePicker value={data} onChange={setData} className="h-9" />
             </div>
             <div>
               <Label className="text-xs">Quantidade</Label>

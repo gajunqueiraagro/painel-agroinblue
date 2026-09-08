@@ -20,6 +20,7 @@ import { cn } from '@/lib/utils';
 import { SearchableSelect, limparBuscasLembradas } from '@/components/ui/searchable-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -2125,10 +2126,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     <span>Informar uma data única para todos</span>
                   </label>
                   {dataPagamentoModo === 'unica' && (
-                    <Input
-                      type="date"
+                    <DatePicker
                       value={dataPagamentoUnica}
-                      onChange={e => setDataPagamentoUnica(e.target.value)}
+                      onChange={setDataPagamentoUnica}
                       className="ml-6 h-8 w-44 text-xs"
                     />
                   )}

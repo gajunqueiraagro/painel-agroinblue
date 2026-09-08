@@ -55,7 +55,6 @@ import { FinV2SafrasTab } from '@/pages/FinV2SafrasTab';
 import { ContratosTab } from '@/pages/ContratosTab';
 import FinanciamentosListaPage from '@/pages/FinanciamentosListaPage';
 import FinanciamentoDetalhe from '@/pages/FinanciamentoDetalhe';
-import FinanciamentoCadastro from '@/pages/FinanciamentoCadastro';
 import FinanciamentosPainelTab from '@/pages/FinanciamentosPainelTab';
 import { ConciliacaoBancariaTab } from '@/pages/ConciliacaoBancariaTab';
 import V2Recorrencias from '@/v2/pages/V2Recorrencias';
@@ -88,7 +87,12 @@ import { Camera, Loader2 } from 'lucide-react';
  * externo, chama `onVoltarParaOrigem` para retornar à section de origem.
  * Cliques internos (lista → detalhe) seguem fluxo padrão e voltam para list.
  */
-type FinView = { mode: 'list' } | { mode: 'novo' } | { mode: 'detalhe'; id: string };
+/* ⚠ `'novo'` SAIU DA UNIAO (136b item 0). Desde o PR-PARC-04 a lista abre o
+   `ObrigacaoDialog` por dentro e nunca mais chamou `onNovo`: o modo existia, o ramo
+   renderizava, e nada levava ate' ele. Tirar do TIPO e' o que impede o ramo de voltar
+   por engano — enquanto `'novo'` fosse um estado legal, o proximo a mexer aqui teria
+   como cria-lo sem perceber que nao ha' tela do outro lado. */
+type FinView = { mode: 'list' } | { mode: 'detalhe'; id: string };
 interface FinanciamentosViewV2Props {
   initialFinanciamentoId?: string;
   onVoltarParaOrigem?: () => void;
@@ -120,17 +124,8 @@ function FinanciamentosViewV2({ initialFinanciamentoId, onVoltarParaOrigem }: Fi
       />
     );
   }
-  if (view.mode === 'novo') {
-    return (
-      <FinanciamentoCadastro
-        onVoltar={() => setView({ mode: 'list' })}
-        onSalvo={() => setView({ mode: 'list' })}
-      />
-    );
-  }
   return (
     <FinanciamentosListaPage
-      onNovo={() => setView({ mode: 'novo' })}
       onDetalhe={(id) => setView({ mode: 'detalhe', id })}
     />
   );

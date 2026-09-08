@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -632,7 +633,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
               <div key={i} className="grid grid-cols-2 gap-1 bg-muted/30 rounded p-1.5">
                 <div>
                   <Label className="text-[10px]">Parcela {i + 1}</Label>
-                  <Input type="date" value={p.data} onChange={e => { const np = [...parcelas]; np[i] = { ...np[i], data: e.target.value }; setParcelas(np); }} className="h-7 text-[10px]" />
+                  <DatePicker value={p.data} onChange={v => { const np = [...parcelas]; np[i] = { ...np[i], data: v }; setParcelas(np); }} className="h-7 text-[10px]" />
                 </div>
                 <div>
                   <Label className="text-[10px]">R$</Label>
