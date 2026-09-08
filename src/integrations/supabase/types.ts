@@ -12540,6 +12540,14 @@ export type Database = {
         Args: { p_ano_mes: string; p_cliente_id: string }
         Returns: Json
       }
+      fn_financiamento_pagar_pelo_extrato: {
+        Args: {
+          p_lancamento_cru_id: string
+          p_parcela_id: string
+          p_simular?: boolean
+        }
+        Returns: Json
+      }
       fn_fornecedores_com_uso: {
         Args: { p_cliente_id: string }
         Returns: {
@@ -12828,6 +12836,14 @@ export type Database = {
           valor_aberto: string
           valor_conciliado: string
         }[]
+      }
+      fn_transferencia_aplicar: {
+        Args: {
+          p_conta_outra_id: string
+          p_lancamento_id: string
+          p_simular?: boolean
+        }
+        Returns: Json
       }
       fn_transferencia_unir: {
         Args: { p_entrada_id: string; p_saida_id: string; p_simular?: boolean }
