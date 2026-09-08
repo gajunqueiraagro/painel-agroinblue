@@ -16,7 +16,7 @@ import { useClassificacaoStaging, useSessoesClassificacao } from '@/v2/hooks/use
 import {
   toRowVM, toSessoesVM, contarAplicaveisExatos, escolherMelhorSessaoId, diferencasDoResultado,
   listarContas, filtrarPorConta, resumirGrupos, filtrarPorGrupo, grupoDaLinha,
-  sessoesDoMes,
+  sessoesDoMes, contaEfetivaNome,
   type EnriqGrupo,
 } from '@/v2/lib/mesa/enriquecimentoView';
 import { EnriquecimentoLista, type EnriquecimentoListaProps } from './EnriquecimentoLista';
@@ -35,6 +35,7 @@ import type { ContaResolvivel } from '@/v2/lib/mesa/resolverConta';
 import { EnriquecerProgressoDialog } from '@/components/conciliacao/EnriquecerProgressoDialog';
 import { useGravarLoteEnriquecimento, type LinhaParaGravar } from '@/v2/hooks/useGravarLoteEnriquecimento';
 import { EnriquecimentoCandidatosInline } from './EnriquecimentoCandidatosInline';
+import { AgruparModal } from './AgruparModal';
 import { MesaCamposTabela, CAMPOS_OBRIGATORIOS_MESA } from './MesaCamposTabela';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
@@ -120,6 +121,8 @@ export function MesaEnriquecimentoTab({
   /* A confirmação inline do agrupar — uma linha âmbar com Sim/Não, não um modal: a
      pergunta é sobre a linha que está na tela, e um modal a cobriria. */
   const [confirmandoGrupo, setConfirmandoGrupo] = useState(false);
+  /* 133i item 1 — o modal onde o agrupamento é escolhido, não apenas aceito. */
+  const [agruparOpen, setAgruparOpen] = useState(false);
   /**
    * 133e adendo item 3 — a ordem visível DENTRO da Mesa ampliada.
    *
@@ -476,6 +479,50 @@ export function MesaEnriquecimentoTab({
   }, [gruposIdsDoSplit, staging, linhaCrua]);
 
   /**
+   * As linhas que PODEM compor este movimento — 133i item 1.
+   *
+   * ⚠ NÃO É O `grupo_ids`, É O UNIVERSO: todas as linhas do MESMO DIA e da MESMA CONTA que
+   * ainda não têm par. O casador acerta a maioria e erra na margem; com o conjunto fechado
+   * na sugestão, um acerto de 2 em 3 não tinha gesto de conserto.
+   *
+   * ⚠ ESPELHA OS GUARDS (d) e (f) DA RPC, e é por isso que a tela não oferece o que o banco
+   * recusa: mesmo `match_status` elegível, sem `match_lancamento_ids`, não aplicada, e conta
+   * compatível. Conferido na definição de `fn_classificacao_split_substituir`.
+   *
+   * ⚠ `conta_filtro_id` SERVE AQUI, e só aqui, porque a linha NÃO tem lançamento: nesse
+   * caso ele é `COALESCE(s.conta_origem_id, s.conta_destino_id)` — exatamente a coluna que
+   * o guard (f) lê. Com lançamento, ele traria a conta do lançamento e a comparação seria
+   * outra.
+   *
+   * ⚠ "MESMO DIA" É `excel_data`, medido: nos 20 grupos do Raul, todas as linhas de um
+   * grupo compartilham a mesma `excel_data` — nenhum grupo cruza dias.
+   */
+  const ELEGIVEL_PARA_GRUPO = useMemo(
+    () => new Set(['sem_match', 'sem_conta_para_match', 'candidatos_proximos', 'sugestao_split']),
+    []);
+  const candidatasDoGrupo = useMemo(() => {
+    if (!linhaCrua?.lanc_id) return [];
+    const dia = linhaCrua.excel_data;
+    if (!dia) return [];
+    const contasDoLanc = new Set(
+      [linhaCrua.lanc_conta_bancaria_id, linhaCrua.lanc_conta_destino_id].filter((x): x is string => !!x));
+    return staging.filter((r) => {
+      if (r.aplicado) return false;
+      if (r.excel_data !== dia) return false;
+      if (!ELEGIVEL_PARA_GRUPO.has(String(r.match_status))) return false;
+      if (r.match_lancamento_ids) return false;
+      /* ⚠ `lanc_id`, NÃO `match_lancamento_id`: a coluna crua não existe na view — ela é o
+         JOIN, e o que sobra é `l.id`. Canto conhecido: se o `match_lancamento_id` apontar
+         para um lançamento cancelado, o JOIN não traz e a linha aparece aqui como livre;
+         a RPC recusaria com `staging_invalido`, e o erro chega ao operador pelo toast. */
+      if (r.lanc_id && r.lanc_id !== linhaCrua.lanc_id) return false;
+      /* Sem conta na linha, o guard (f) aceita — a conta virá do lançamento. */
+      if (!r.conta_filtro_id) return true;
+      return contasDoLanc.size === 0 || contasDoLanc.has(r.conta_filtro_id);
+    });
+  }, [staging, linhaCrua, ELEGIVEL_PARA_GRUPO]);
+
+  /**
    * A lista pela qual se NAVEGA — 133e adendo item 3.
    *
    * ⚠ É A QUE ESTÁ NA TELA, sempre: a da Mesa quando ela está aberta (ela tem filtro
@@ -585,6 +632,8 @@ export function MesaEnriquecimentoTab({
     [selecionado]);
   const soConfirma = !!selecionado && !selecionado.aplicado && selecionado.temMatch
     && obrigatoriosVazios.length === 0 && diferencas.length === 0;
+  /* 133i item 2c — já gravada e sem diferença: o gesto que resta é seguir. */
+  const soAvanca = !!selecionado && selecionado.aplicado && diferencas.length === 0;
 
   /* ⚠ 133h item 9 — "revisado" É `revisado_em` OU `aplicado`: gravar uma linha é a forma
      mais forte de tê-la revisado, e contá-la como pendente faria o contador nunca fechar. */
@@ -950,6 +999,7 @@ export function MesaEnriquecimentoTab({
     salvarDisabled: !podeSalvar,
     salvarMotivo: motivoSalvar,
     soConfirma,
+    soAvanca,
     onConfirmarProximo: () => { void handleConfirmarProximo(); },
     reverterDisabled: !podeReverter,
     aplicarTodosDisabled: !sessaoId || nAplicaveis === 0,
@@ -1186,52 +1236,29 @@ export function MesaEnriquecimentoTab({
             </div>
           </div>
 
-          {!confirmandoGrupo ? (
-            <div className="mt-1 flex items-center gap-2">
-              {/* ⚠ O BOTÃO SÓ ABRE QUANDO BATE, e diz por que não abre — a regra do
-                  "botão desabilitado diz por quê". Agrupar com a soma errada criaria
-                  lançamentos que não somam o movimento do banco. */}
-              <Button type="button" size="sm" className="h-6 shrink-0 px-2 text-[10px]"
-                disabled={isSubstituindo || !grupoDoSplit || !grupoDoSplit.bate
-                  || !grupoDoSplit.completo || !linhaCrua?.lanc_id}
-                title={!grupoDoSplit ? 'O casador não registrou as outras linhas deste grupo.'
-                  : !grupoDoSplit.completo ? 'Nem todas as linhas do grupo estão nesta sessão.'
-                  : !grupoDoSplit.bate ? 'A soma da planilha não bate com o lançamento.'
-                  : 'Cria uma linha por item, cancela o consolidado e religa o vínculo do extrato.'}
-                onClick={() => setConfirmandoGrupo(true)}>
-                Agrupar {gruposIdsDoSplit.length} linhas neste lançamento
-              </Button>
-              {grupoDoSplit && !grupoDoSplit.bate && grupoDoSplit.completo && (
-                <span className="text-[10px] font-medium text-amber-700 dark:text-amber-400">
-                  a soma da planilha não bate com o lançamento — o agrupamento fica travado
-                </span>
-              )}
-            </div>
-          ) : (
-            <div className="mt-1 flex items-start gap-2">
-              {/* ⚠ A CONFIRMAÇÃO NOMEIA O QUE VAI ACONTECER — 133h-b item 3. "Isso cria 2
-                  lançamentos, cancela o consolidado" não diz QUAIS, e o gesto é
-                  irreversível pela tela. */}
-              <span className="min-w-0 flex-1 text-[10px] leading-[1.35] text-amber-800 dark:text-amber-300">
-                Vai criar {gruposIdsDoSplit.length} lançamentos:{' '}
-                {(grupoDoSplit?.partes ?? []).map((r) =>
-                  `${fmtBRL(r.excel_valor)} ${r.excel_fornecedor ?? '—'} doc ${r.excel_documento ?? '—'}`).join('; ')}.
-                {' '}Vai cancelar o lançamento consolidado:{' '}
-                {selecionado.comparativo.find((c) => c.campo === 'Produto / Descrição')?.sistema ?? '—'}
-                {' · '}{fmtBRL(grupoDoSplit?.lancValor ?? null)} (motivo: agrupamento).
-                {' '}O vínculo com o extrato passa para os {gruposIdsDoSplit.length} novos. Continuar?
+          <div className="mt-1 flex items-center gap-2">
+            {/* ⚠ O BOTÃO ABRE O MODAL — 133i item 1. Ele confirmava inline sobre um
+                conjunto FECHADO (o `grupo_ids` do casador); agora o conjunto é escolhido,
+                com os números na frente, antes de um gesto que cancela um lançamento.
+                ⚠ ELE NÃO EXIGE MAIS QUE A SUGESTÃO BATA: quem decide se bate é a soma das
+                MARCADAS, dentro do modal. Travá-lo aqui esconderia justamente o caso em que
+                o operador precisa entrar para consertar a sugestão. */}
+            <Button type="button" size="sm" className="h-6 shrink-0 px-2 text-[10px]"
+              disabled={isSubstituindo || !linhaCrua?.lanc_id || candidatasDoGrupo.length < 2}
+              title={!linhaCrua?.lanc_id
+                ? 'Esta linha não tem lançamento para agrupar.'
+                : candidatasDoGrupo.length < 2
+                  ? 'Não há duas linhas sem par no mesmo dia e conta.'
+                  : 'Escolher quais linhas compõem este movimento.'}
+              onClick={() => setAgruparOpen(true)}>
+              Agrupar {gruposIdsDoSplit.length} linhas neste lançamento
+            </Button>
+            {candidatasDoGrupo.length > gruposIdsDoSplit.length && (
+              <span className="text-[10px] text-violet-800 dark:text-violet-300">
+                {candidatasDoGrupo.length} linhas do dia sem par — dá para incluir ou tirar
               </span>
-              <Button type="button" size="sm" className="h-6 shrink-0 px-2 text-[10px]"
-                disabled={isSubstituindo}
-                onClick={() => { void handleAgruparNesteLancamento(linhaCrua?.lanc_id ?? '', gruposIdsDoSplit); }}>
-                {isSubstituindo ? 'Agrupando…' : 'Sim'}
-              </Button>
-              <Button type="button" size="sm" variant="outline" className="h-6 shrink-0 px-2 text-[10px]"
-                onClick={() => setConfirmandoGrupo(false)}>
-                Não
-              </Button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       )}
 
@@ -1506,6 +1533,32 @@ export function MesaEnriquecimentoTab({
         contas={contasBancarias}
         /* 133h item 12 — quem veio do extrato tem campos que a RPC ignora. */
         conciliadosIds={conciliados}
+      />
+
+      {/* 133i item 1 — o agrupamento vira escolha, com os números na frente. */}
+      <AgruparModal
+        open={agruparOpen}
+        onOpenChange={setAgruparOpen}
+        movimento={{
+          data: linhaCrua?.lanc_data_pagamento ?? linhaCrua?.excel_data ?? null,
+          descricao: linhaCrua?.lanc_descricao ?? linhaCrua?.lanc_observacao ?? null,
+          /* A conta pela régua do Conciliar — entrada lê o destino (133h item 7). */
+          contaNome: linhaCrua
+            ? contaEfetivaNome(linhaCrua.lanc_tipo_operacao, linhaCrua.lanc_conta_bancaria_nome, linhaCrua.lanc_conta_destino_nome)
+            : null,
+          valor: linhaCrua?.lanc_valor ?? null,
+          documento: linhaCrua?.lanc_numero_documento ?? null,
+        }}
+        candidatas={candidatasDoGrupo}
+        sugeridasIds={gruposIdsDoSplit}
+        agrupando={isSubstituindo}
+        onConfirmar={async (ids) => {
+          await handleAgruparNesteLancamento(linhaCrua?.lanc_id ?? '', ids);
+          setAgruparOpen(false);
+          /* ⚠ AVANÇA DEPOIS DE AGRUPAR: as linhas que entraram viraram lançamentos e saem
+             da fila; ficar parado na que acabou de sumir deixaria o painel vazio. */
+          irProximo();
+        }}
       />
 
       <EnriquecimentoImportarDialog

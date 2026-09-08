@@ -31,6 +31,15 @@ export interface EnriquecimentoActionsProps {
    */
   soConfirma?: boolean;
   onConfirmarProximo?: () => void;
+  /**
+   * 133i item 2c — a linha JÁ foi gravada e não há diferença: o gesto que resta é seguir.
+   *
+   * ⚠ "SALVAR E PRÓXIMO" NUMA LINHA GRAVADA PROMETE UMA GRAVAÇÃO QUE NÃO ACONTECE: o
+   * `apply_row` responde `pulado_subcentro_preenchido`, o operador vê um toast de recusa no
+   * fim de um gesto que estava certo, e passa a desconfiar do botão. "Confirmar" também não
+   * serve — não há o que confirmar em algo que já está no banco.
+   */
+  soAvanca?: boolean;
   reverterDisabled?: boolean;      // Reverter
   aplicarTodosDisabled?: boolean;  // acelerador em lote + Revisado
   isBusy?: boolean;                // uma escrita em andamento
@@ -55,7 +64,7 @@ export interface EnriquecimentoActionsProps {
 export function EnriquecimentoActions({
   posicao, onAnterior, onProximo, canAnterior, canProximo,
   revisado, onRevisado, onSalvar, onSalvarProximo, onReverter, onAplicarTodos, nAplicaveis,
-  salvarDisabled, salvarMotivo, soConfirma, onConfirmarProximo,
+  salvarDisabled, salvarMotivo, soConfirma, onConfirmarProximo, soAvanca,
   reverterDisabled, aplicarTodosDisabled, isBusy, divergenciasDoExtrato, erroBanco,
 }: EnriquecimentoActionsProps) {
   return (
@@ -69,15 +78,17 @@ export function EnriquecimentoActions({
         Salvar
       </Button>
       <Button size="sm" className="h-6 text-[11px] px-3"
-        onClick={soConfirma ? onConfirmarProximo : onSalvarProximo}
-        disabled={(soConfirma ? false : salvarDisabled) || isBusy}
-        title={soConfirma ? 'O Resultado já confere com o sistema: nada a gravar. Marca como revisado e vai para a próxima.' : (salvarMotivo ?? undefined)}>
-        {soConfirma ? 'Confirmar e Próximo' : 'Salvar e Próximo'}
+        onClick={soAvanca ? onProximo : soConfirma ? onConfirmarProximo : onSalvarProximo}
+        disabled={soAvanca ? !canProximo : ((soConfirma ? false : salvarDisabled) || isBusy)}
+        title={soAvanca ? 'Esta linha já está gravada e nada mudou: só seguir.'
+          : soConfirma ? 'O Resultado já confere com o sistema: nada a gravar. Marca como revisado e vai para a próxima.'
+          : (salvarMotivo ?? undefined)}>
+        {soAvanca ? 'Próximo' : soConfirma ? 'Confirmar e Próximo' : 'Salvar e Próximo'}
       </Button>
       {/* ⚠ 133h item 8 — O MOTIVO EM ÂMBAR, NÃO EM CINZA. Ele estava na cor do texto
           secundário, ao lado de um botão apagado: dois cinzas dizendo "não dá" sem que
           nenhum chamasse o olho. Âmbar é a cor de "falta algo" no resto da tela. */}
-      {salvarMotivo && !soConfirma && (
+      {salvarMotivo && !soConfirma && !soAvanca && (
         <span className="text-[10px] font-medium text-amber-700 dark:text-amber-400">{salvarMotivo}</span>
       )}
       <Button size="sm" variant="outline" className="h-6 text-[11px] px-2" onClick={onReverter} disabled={reverterDisabled || isBusy}>

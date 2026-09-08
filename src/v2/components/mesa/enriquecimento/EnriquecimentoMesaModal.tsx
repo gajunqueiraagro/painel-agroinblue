@@ -22,7 +22,7 @@ import type { EnriquecimentoDetalheProps } from './EnriquecimentoDetalhe';
 import type { EnriquecimentoActionsProps } from './EnriquecimentoActions';
 import { MesaCamposTabela } from './MesaCamposTabela';
 import { STATUS_META } from './fmt';
-import { grupoDaLinha } from '@/v2/lib/mesa/enriquecimentoView';
+import { grupoDaLinha, diferencasDoResultado } from '@/v2/lib/mesa/enriquecimentoView';
 import type { EnriqRowVM } from './types';
 
 const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -441,15 +441,22 @@ export function EnriquecimentoMesaModal({
                       </div>
                     </div>
                     <div className="min-w-0">
+                      {/* ⚠ CONTA AS DIFERENÇAS REAIS — 133i item 2b, a MESMA lista que decide o
+                          rótulo do botão (`diferencasDoResultado`). Antes contava linhas do
+                          comparativo com tom 'muda' ou 'difere', que inclui campo de LEITURA
+                          e campo que o extrato manda: uma linha inteira em "confere/mantém"
+                          dizia "1 campo" (Gabriel, 09:51). Duas contagens para a mesma
+                          pergunta é a tela discordando de si mesma. */}
                       <div className="text-[10px] leading-tight text-muted-foreground">O que muda</div>
-                      <div className={`truncate text-[14px] font-medium leading-tight ${selecionada.mudaAlgo ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground'}`}
-                        title={selecionada.comparativo.filter(c => c.tom === 'muda' || c.tom === 'difere')
-                          .map(c => c.campo).join(' · ') || 'Nada muda: o Resultado já confere com o sistema.'}>
-                        {(() => {
-                          const n = selecionada.comparativo.filter(c => c.tom === 'muda' || c.tom === 'difere').length;
-                          return n === 0 ? 'nada muda' : `${n} campo${n > 1 ? 's' : ''}`;
-                        })()}
-                      </div>
+                      {(() => {
+                        const difs = diferencasDoResultado(selecionada.edicao);
+                        return (
+                          <div className={`truncate text-[14px] font-medium leading-tight ${difs.length > 0 ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground'}`}
+                            title={difs.join(' · ') || 'Nada muda: o Resultado já confere com o sistema.'}>
+                            {difs.length === 0 ? 'nada muda' : `${difs.length} campo${difs.length > 1 ? 's' : ''}`}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>
@@ -521,7 +528,7 @@ export function EnriquecimentoMesaModal({
               {/* ⚠ O MOTIVO DO BLOQUEIO FICA ESCRITO, e não só no `title` — 133b-a
                   correção 1: o operador não passa o mouse num botão apagado, ele procura o
                   que consertar. Quando não há bloqueio, o espaço volta a ser o contador. */}
-              {actions.salvarMotivo && !actions.soConfirma ? (
+              {actions.salvarMotivo && !actions.soConfirma && !actions.soAvanca ? (
                 <span className="min-w-0 shrink truncate text-[10px] text-amber-700 dark:text-amber-400"
                   title={actions.salvarMotivo}>{actions.salvarMotivo}</span>
               ) : null}
@@ -557,17 +564,23 @@ export function EnriquecimentoMesaModal({
                   ⚠ "CONFIRMAR E PRÓXIMO" QUANDO NÃO HÁ O QUE GRAVAR — correção 1. O botão
                   deixa de prometer uma gravação que o `apply_row` não faria. */}
               <Button size="sm" className="h-7 shrink-0 whitespace-nowrap bg-cta px-2.5 text-[11px] font-semibold text-cta-foreground hover:bg-cta-hover"
-                onClick={actions.soConfirma ? actions.onConfirmarProximo : actions.onSalvarProximo}
-                disabled={(actions.soConfirma ? false : actions.salvarDisabled) || actions.isBusy}
-                title={actions.soConfirma
-                  ? 'O Resultado já confere com o sistema: nada a gravar. Marca como revisado e vai para a próxima. (Ctrl/Cmd+Enter)'
-                  : `${actions.salvarMotivo ?? 'Grava esta linha no lançamento e vai para a próxima.'} (Ctrl/Cmd+Enter)`}>
+                onClick={actions.soAvanca ? actions.onProximo
+                  : actions.soConfirma ? actions.onConfirmarProximo : actions.onSalvarProximo}
+                disabled={actions.soAvanca ? !actions.canProximo
+                  : ((actions.soConfirma ? false : actions.salvarDisabled) || actions.isBusy)}
+                title={actions.soAvanca
+                  ? 'Esta linha já está gravada e nada mudou: só seguir.'
+                  : actions.soConfirma
+                    ? 'O Resultado já confere com o sistema: nada a gravar. Marca como revisado e vai para a próxima. (Ctrl/Cmd+Enter)'
+                    : `${actions.salvarMotivo ?? 'Grava esta linha no lançamento e vai para a próxima.'} (Ctrl/Cmd+Enter)`}>
                 {/* ⚠ "FIM DA LISTA" EM VEZ DE PULAR — 133e adendo item 3. Chegando ao fim do
                     recorte, o botão dizia "e próximo" e a próxima linha vinha de outra conta;
-                    agora ele grava e para, e o rótulo diz que parou. */}
-                {!actions.canProximo
-                  ? (actions.soConfirma ? 'Confirmar — fim da lista' : 'Salvar — fim da lista')
-                  : (actions.soConfirma ? 'Confirmar e próximo' : 'Salvar e próximo')}
+                    agora ele grava e para, e o rótulo diz que parou.
+                    ⚠ 133i item 2c — linha já gravada e sem diferença não promete gravação. */}
+                {actions.soAvanca ? (actions.canProximo ? 'Próximo' : 'Fim da lista')
+                  : !actions.canProximo
+                    ? (actions.soConfirma ? 'Confirmar — fim da lista' : 'Salvar — fim da lista')
+                    : (actions.soConfirma ? 'Confirmar e próximo' : 'Salvar e próximo')}
               </Button>
             </div>
           </div>

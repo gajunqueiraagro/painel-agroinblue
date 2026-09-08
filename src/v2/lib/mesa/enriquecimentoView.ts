@@ -20,11 +20,20 @@ const vazio = (v: unknown): boolean => v === null || v === undefined || String(v
 const norm = (v: unknown): string => String(v ?? '').trim().toLowerCase();
 
 // Linha de comparação "de leitura" (Sistema x Excel): confere / difere / —.
+/**
+ * ⚠ "—" SÓ QUANDO NÃO HÁ VALOR EM LUGAR NENHUM — 133i item 2a, e é a mesma regra permanente
+ * do [[feedback-resultado-nunca-vazio]] que `resultadoEditavel` já cumpria. Aqui ela
+ * faltava: com um dos lados vazio, o Resultado caía em "—" mesmo com o sistema preenchido —
+ * e foi por isso que a Safra aparecia vazia numa linha que tem safra gravada. Traço é
+ * ausência de dado; ter dado e não ter proposta é "mantém".
+ */
 function refLinha(campo: string, sistema: string | null, excel: string | null, sFmt: string, eFmt: string): EnriqComparativoLinha {
   let resultado = '—'; let tom: EnriqTom = 'neutro';
   if (!vazio(sistema) && !vazio(excel)) {
     if (norm(sistema) === norm(excel)) { resultado = 'confere'; tom = 'ok'; }
     else { resultado = 'difere'; tom = 'difere'; }
+  } else if (!vazio(sistema) || !vazio(excel)) {
+    resultado = 'mantém';
   }
   return { campo, sistema: sFmt, excel: eFmt, resultado, tom };
 }
