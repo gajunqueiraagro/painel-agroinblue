@@ -6718,6 +6718,7 @@ export type Database = {
           gerar_lancamento_captacao: boolean | null
           id: string
           lancamento_captacao_id: string | null
+          natureza: string
           numero_contrato: string | null
           observacao: string | null
           plano_conta_captacao_id: string | null
@@ -6745,6 +6746,7 @@ export type Database = {
           gerar_lancamento_captacao?: boolean | null
           id?: string
           lancamento_captacao_id?: string | null
+          natureza?: string
           numero_contrato?: string | null
           observacao?: string | null
           plano_conta_captacao_id?: string | null
@@ -6772,6 +6774,7 @@ export type Database = {
           gerar_lancamento_captacao?: boolean | null
           id?: string
           lancamento_captacao_id?: string | null
+          natureza?: string
           numero_contrato?: string | null
           observacao?: string | null
           plano_conta_captacao_id?: string | null
