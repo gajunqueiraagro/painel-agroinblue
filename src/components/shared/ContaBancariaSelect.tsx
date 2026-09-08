@@ -149,9 +149,23 @@ export const DARK_GLASS_CONTENT =
        `text-muted-foreground` do 05c sumia.
    ⚠ `DARK_GLASS_CONTENT` continua exportado para quem pedir por `contentClassName`.
    ───────────────────────────────────────────────────────────────────────────── */
-const CONTENT_EXTRAS = 'w-[var(--radix-select-trigger-width)] overflow-y-auto rolagem-fina';
-/* Rotulo de grupo: 10px/600 versalete, cinza claro para nao sumir no painel escuro. */
-const GROUP_LABEL_CLS = 'px-2 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-400';
+/**
+ * A UNICA classe que este componente ainda acrescenta ao painel — PR-UI-SELECT-02.
+ *
+ * ⚠ `w-` E NAO `min-w-`: o Viewport do primitivo ja' traz
+ * `min-w-[var(--radix-select-trigger-width)]`, que garante o PISO mas deixa a caixa
+ * CRESCER com o item mais longo — e nome de conta e' longo, entao ela estourava para fora
+ * do modal. `w-` prende a largura na do campo.
+ * ⚠ O QUE SAIU DAQUI E POR QUE:
+ *   · `overflow-y-auto rolagem-fina` — INERTE no Content: ele e' `overflow-hidden` e quem
+ *     rola e' o Viewport (`max-h-56`). Barra fina em Select e' mudanca do PRIMITIVO, para
+ *     todos os Selects de uma vez; nao cabe num componente so'.
+ *   · `GROUP_LABEL_CLS` — o `SelectLabel` do primitivo JA' estiliza o rotulo de grupo, e
+ *     com uma decisao registrada do A23: "10px/500, SEM uppercase — caixa alta em 10px
+ *     custa largura e nao acrescenta hierarquia". Meu override punha `uppercase`,
+ *     `tracking-wide` e `font-semibold` por cima disso: era o "CONTA CORRENTE grande".
+ */
+const CONTENT_EXTRAS = 'w-[var(--radix-select-trigger-width)]';
 
 export function ContaBancariaSelect({
   value,
@@ -209,7 +223,7 @@ export function ContaBancariaSelect({
         ))}
         {grupos.map((g) => (
           <SelectGroup key={g.tipo}>
-            <SelectLabel className={GROUP_LABEL_CLS}>{g.label}</SelectLabel>
+            <SelectLabel>{g.label}</SelectLabel>
             {g.items.map(({ conta, label }) => (
               <SelectItem key={conta.id} value={conta.id}>
                 {label}

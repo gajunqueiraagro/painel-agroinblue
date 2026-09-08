@@ -93,7 +93,12 @@ const SelectContent = React.forwardRef<
       <SelectScrollUpButton />
       <SelectPrimitive.Viewport
         className={cn(
-          "p-1",
+          /* ⚠ A BARRA FINA MORA AQUI, e nao no Content — A24. O Content e'
+             `overflow-hidden`; quem rola e' o Viewport (`max-h-56` abaixo), e
+             pseudo-elemento de barra so' pinta no elemento que de fato rola. Posto no
+             PRIMITIVO vale para todo Select do sistema de uma vez: por adesao, o proximo
+             dropdown nasceria com a barra grossa de novo. */
+          "p-1 rolagem-fina",
           position === "popper" &&
             /* A23 — a lista rola em 224px; o `max-h` do content é o teto da moldura. */
             "h-[var(--radix-select-trigger-height)] max-h-56 w-full min-w-[var(--radix-select-trigger-width)]",
