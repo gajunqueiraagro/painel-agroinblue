@@ -131,23 +131,27 @@ export const DARK_GLASS_CONTENT =
    `[&_[role=option]]:...`, entao pinta os itens sozinho. */
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   PR-PARC-05c item 2 — A CAIXA PASSA A SER A DO SISTEMA.
+   PR-UI-SELECT-01 — O ESCURO VOLTA, E VOLTA PELO PRIMITIVO.
 
-   ⚠ O ESCURO NAO ERA CONTRASTE COM A TELA, ERA GOSTO: os modais que abrem este
-   seletor sao CLAROS — `LancamentoV2Dialog` e' `bg-card`, o `ObrigacaoDialog` e' o
-   mesmo. Um dropdown quase preto e translucido sobre um card claro le-se APAGADO:
-   texto cinza sobre cinza-chumbo, rotulo de grupo em `zinc-400` que some.
-   ⚠ `position="popper"` + `--radix-select-trigger-width`: sem popper a variavel nao
-   existe e a caixa e' medida pelo item mais longo — o nome de conta e' longo, e ela
-   estourava para fora do modal.
-   ⚠ `DARK_GLASS_CONTENT` continua EXPORTADO e nao foi apagado: quem quiser o vidro
-   escuro pede por `contentClassName`. O que mudou foi o DEFAULT.
+   ⚠ O 05c TROCOU O DEFAULT POR `bg-popover` E ISSO FOI A REGRESSAO. O diagnostico de
+   la' ("o escuro era gosto, os modais sao claros") estava errado num ponto que muda
+   tudo: o `SelectContent` de `components/ui/select` JA' E' o padrao dark-glass do
+   sistema — `bg-zinc-950/55 backdrop-blur-xl border-zinc-700/40 text-zinc-100`,
+   `position="popper"` por default e teto de altura ciente do viewport (A9). O
+   `SelectItem` tambem: 12px, `min-h-[26px]`, `pl-8` com o check a' ESQUERDA,
+   `focus:bg-zinc-800/60`. Nao era gosto de ninguem: era o PR-UI-CAMPOS-STD-01.
+   ⚠ POR ISSO A CORRECAO E' TIRAR O OVERRIDE, nao escrever outro. Repintar aqui
+   criaria a terceira regua de dropdown do sistema — o oposto do A23. O que fica sao
+   as tres coisas que o primitivo NAO da':
+     · largura = a do gatilho (senao a caixa e' medida pelo item mais longo);
+     · `rolagem-fina` (A24) na lista que rola;
+     · o rotulo de grupo em cinza CLARO — sobre o painel escuro, o
+       `text-muted-foreground` do 05c sumia.
+   ⚠ `DARK_GLASS_CONTENT` continua exportado para quem pedir por `contentClassName`.
    ───────────────────────────────────────────────────────────────────────────── */
-const POPOVER_CONTENT =
-  'bg-popover text-popover-foreground border shadow-md max-h-64 overflow-y-auto rolagem-fina';
-const POPOVER_GROUP_LABEL_CLS =
-  'px-2 py-1 bg-muted/40 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground';
-const POPOVER_ITEM_CLS = 'h-7 text-[12px] text-foreground focus:bg-accent';
+const CONTENT_EXTRAS = 'w-[var(--radix-select-trigger-width)] overflow-y-auto rolagem-fina';
+/* Rotulo de grupo: 10px/600 versalete, cinza claro para nao sumir no painel escuro. */
+const GROUP_LABEL_CLS = 'px-2 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-400';
 
 export function ContaBancariaSelect({
   value,
@@ -194,20 +198,20 @@ export function ContaBancariaSelect({
       <SelectTrigger className={cn(size === 'compact' && 'h-5 px-1.5 text-[11px] [&_svg]:h-3 [&_svg]:w-3', className)}>
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
-      <SelectContent
-        position="popper"
-        className={cn(POPOVER_CONTENT, 'w-[var(--radix-select-trigger-width)]', contentClassName)}
-      >
+      {/* ⚠ SEM `className` DE COR: o painel e os itens sao os do primitivo. O
+          `contentClassName` do chamador entra POR ULTIMO e continua podendo trocar a
+          largura (tres consumidores passam `w-[22rem]`) sem tocar na cor. */}
+      <SelectContent className={cn(CONTENT_EXTRAS, contentClassName)}>
         {prependItems?.map((it) => (
-          <SelectItem key={it.value} value={it.value} className={POPOVER_ITEM_CLS}>
+          <SelectItem key={it.value} value={it.value}>
             {it.label}
           </SelectItem>
         ))}
         {grupos.map((g) => (
           <SelectGroup key={g.tipo}>
-            <SelectLabel className={POPOVER_GROUP_LABEL_CLS}>{g.label}</SelectLabel>
+            <SelectLabel className={GROUP_LABEL_CLS}>{g.label}</SelectLabel>
             {g.items.map(({ conta, label }) => (
-              <SelectItem key={conta.id} value={conta.id} className={POPOVER_ITEM_CLS}>
+              <SelectItem key={conta.id} value={conta.id}>
                 {label}
               </SelectItem>
             ))}
