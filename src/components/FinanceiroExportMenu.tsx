@@ -8,6 +8,8 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { toast } from 'sonner';
 import logoUrl from '@/assets/logo.png';
+/* `addLogoToDoc` saiu daqui para `src/lib/pdf/` — PR-OC-RESUMO-01. */
+import { addLogoToDoc } from '@/lib/pdf/pdfChassi';
 import { fmtValor, formatMoeda, formatKg, formatArroba, formatPercent } from '@/lib/calculos/formatters';
 import { calcIndicadoresLancamento } from '@/lib/calculos/economicos';
 
@@ -27,13 +29,6 @@ function loadLogoBase64(): Promise<string> {
     img.onerror = reject;
     img.src = logoUrl;
   });
-}
-
-function addLogoToDoc(doc: jsPDF, logoData: string, y: number, centerX: number) {
-  const logoH = 12;
-  const logoW = logoH * 2;
-  doc.addImage(logoData, 'PNG', centerX - logoW / 2, y, logoW, logoH);
-  return y + logoH + 3;
 }
 
 type SubAba = 'abate' | 'compra' | 'venda';

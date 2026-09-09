@@ -60,6 +60,23 @@ export async function carregarLogoBase64(): Promise<string> {
 }
 
 /**
+ * Desenha a logo centrada em `centerX` e devolve o Y logo abaixo dela.
+ *
+ * ⚠ VEIO DE DENTRO DE `FinanceiroExportMenu` — PR-OC-RESUMO-01, a lição do A19. Era uma
+ * função local de um menu de exportação, e o segundo relatório que precisasse da mesma logo
+ * teria de copiá-la; a terceira cópia é onde as duas começam a divergir em 1mm.
+ *
+ * ⚠ NÃO PRESSUPÕE ORIENTAÇÃO: recebe `centerX`, então serve retrato (105) e paisagem (148,5).
+ * As medidas 12mm de altura e 2:1 de proporção são as do original, byte a byte.
+ */
+export function addLogoToDoc(doc: jsPDF, logoData: string, y: number, centerX: number): number {
+  const logoH = 12;
+  const logoW = logoH * 2;
+  doc.addImage(logoData, 'PNG', centerX - logoW / 2, y, logoW, logoH);
+  return y + logoH + 3;
+}
+
+/**
  * 1) Documento A4 retrato (mm). pageW=210, pageH=297, margem lateral=10mm.
  */
 export function criarDocRetratoA4(): jsPDF {

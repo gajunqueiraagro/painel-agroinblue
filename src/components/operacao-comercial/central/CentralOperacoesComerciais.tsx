@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { ResumoOperacoesModal, type FiltrosResumo } from '@/components/operacao-comercial/central/ResumoOperacoesModal';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -21,7 +22,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
 import { DatePicker } from '@/components/ui/date-picker';
-import { MoreVertical, Search, Eye, Filter, Ban, ArrowUp, ArrowDown, Lock, Trash2 } from 'lucide-react';
+import { MoreVertical, Search, Eye, Filter, Ban, ArrowUp, ArrowDown, Lock, Trash2, FileText } from 'lucide-react';
 import { normalizarErroRpc } from '@/hooks/useOcCompromissos';
 
 // Central de Operações Comerciais — PR-OC-CENTRAL-UX-01 (UX/operacional; sem backend novo).
@@ -388,6 +389,30 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
   /* null = ordem PADRAO (a que veio do banco, data_operacao desc) e TERCEIRO
      estado do ciclo asc -> desc -> padrao. Uma coluna ativa por vez. */
   const [ord, setOrd] = useFiltroUrl<Ordenacao | null>('f_ord', null, ORD.ler, ORD.escrever);
+  const [resumoAberto, setResumoAberto] = useState(false);
+
+  /* O que o cabeçalho do resumo escreve — os mesmos filtros da barra, em palavras. Sem
+     filtro de fazenda a resposta é "todas as fazendas", nunca em branco. */
+  const filtrosDoResumo: FiltrosResumo = useMemo(() => {
+    const chips: string[] = [];
+    if (busca.trim()) chips.push(`busca: ${busca.trim()}`);
+    if (fComercial !== '__all__') chips.push(`comercial: ${fComercial}`);
+    if (fLiquidacao !== '__all__') chips.push(`pagamento: ${fLiquidacao}`);
+    if (fRecebimento !== '__all__') chips.push(`recebimento: ${fRecebimento}`);
+    if (mostrarRascunhos) chips.push('inclui rascunhos');
+    const br = (iso: string) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '');
+    const nomeFaz = fFazenda !== '__all__'
+      ? (fazendas[fFazenda]?.nome ?? fFazenda)
+      : 'todas as fazendas';
+    return {
+      produtor: clienteAtual?.nome ?? '—',
+      fazenda: nomeFaz,
+      periodoIni: br(dtIni),
+      periodoFim: br(dtFim),
+      tipo: fTipo === '__all__' ? 'todas as operações' : (TIPO_LABEL[fTipo] ?? fTipo),
+      chips,
+    };
+  }, [busca, fComercial, fLiquidacao, fRecebimento, mostrarRascunhos, fFazenda, fazendas, dtIni, dtFim, fTipo, clienteAtual]);
   const [page, setPage] = useFiltroUrl('f_pag', 1, NUM.ler, NUM.escrever);
 
   // Ação de escrita (menu): cancelar/reabrir com motivo obrigatório e saving anti-duplo-clique.
@@ -730,6 +755,15 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
             onClick={() => setMostrarRascunhos(v => !v)}>
             <Filter className="h-3 w-3" /> Rascunhos
           </Button>
+          {/* ⚠ O RESUMO HERDA O RECORTE, e é por isso que mora aqui e não num menu: o botão
+              fica ao lado dos filtros que o alimentam. Vai `filtradas` — todas as linhas do
+              recorte —, não `pageRows`: um resumo da página 2 não resume nada. */}
+          <Button variant="outline" size="sm" className="h-8 gap-1 text-[11px]"
+            disabled={filtradas.length === 0}
+            title={filtradas.length === 0 ? 'Nenhuma operação no recorte' : 'Resumo do recorte atual'}
+            onClick={() => setResumoAberto(true)}>
+            <FileText className="h-3 w-3" /> Resumo
+          </Button>
         </div>
       </div>
 
@@ -1046,6 +1080,15 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <ResumoOperacoesModal
+        open={resumoAberto}
+        onClose={() => setResumoAberto(false)}
+        clienteId={clienteId}
+        operacoes={filtradas}
+        filtros={filtrosDoResumo}
+        nomeContraparte={(cid) => (cid ? contrapartes[cid] ?? '—' : '—')}
+      />
+
     </div>
   );
 }
