@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -63,12 +64,29 @@ interface RecLoteRow { operacao_id: string; estado_recebimento: string; }
 
 const TIPO_LABEL: Record<string, string> = { compra: 'Compra', venda: 'Venda em Pé', abate: 'Abate' };
 const PAGE_SIZE = 25;
-const fmtData = (iso: string): string => (iso ? iso.split('-').reverse().join('/') : '—');
+/* ⚠ ANO DE DOIS DÍGITOS NA LISTA, quatro no filtro e no modal. A lista é varredura: o
+   século não desambigua nada entre operações do mesmo ano, e custava 11px de coluna —
+   medido, `31/07/2026` pedia 71px numa coluna de 60. */
+const fmtData = (iso: string): string => {
+  if (!iso) return '—';
+  const [a, m, d] = iso.split('-');
+  return d ? `${d}/${m}/${a.slice(2)}` : iso;
+};
 const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0, maximumFractionDigits: 0 });
 const kg = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 0 });
 
-const TH = 'px-1.5 py-1 text-[9px] font-semibold uppercase tracking-wide text-primary-foreground whitespace-nowrap';
-const TD = 'px-1.5 py-1 text-[10px] align-middle';
+/* ⚠ A DIVISÓRIA VERTICAL É BORDA DE CÉLULA, em todo `th` e `td` menos o último: com ela a
+   linha de 26px deixa de ser uma faixa de texto solta e vira grade — o olho desce a coluna
+   sem perder a linha. `last:border-r-0` evita a borda dupla contra a borda da tabela. */
+const DIV = 'border-r border-border/60 last:border-r-0';
+const TH = `px-1.5 py-1 text-[9px] font-semibold uppercase tracking-wide text-primary-foreground whitespace-nowrap ${DIV}`;
+/* ⚠ `TD` NÃO DECLARA TAMANHO, de propósito. Com `text-[11px]` aqui, um `text-[10px]` na
+   célula NÃO vence: as duas são classes arbitrárias e quem ganha é a ordem no CSS gerado,
+   não a ordem na string — medido, as células de OC e Data saíam em 11px. A régua fica no
+   `<table>` e a célula que precisa de menos desce sozinha. */
+/* ⚠ `py-[3px]` E NÃO `py-1`: a pílula de 10px mede 19px de altura, e 4+4 de padding punham
+   a linha em 27 — um pixel acima da régua de 26. Com 3+3 fecha em 25, com folga de um. */
+const TD = `px-1.5 py-[3px] align-middle ${DIV}`;
 
 /* Rollup soberano do recebimento a partir do estado por lote (nunca soma quantidades).
    A coluna responde UMA pergunta: os animais chegaram?
@@ -94,6 +112,8 @@ function recStatus(estados: string[] | undefined): string | null {
    EXCEDENTE nao e' sucesso — e' divergencia, entao ganha o warning com enfase
    (peso + anel), e nao um verde que faria o operador ler "deu certo". */
 const PILULA = 'inline-block rounded px-1.5 py-0.5 text-[9px] whitespace-nowrap';
+/** A pílula da coluna Financeiro é a leitura principal da célula, não uma nota de rodapé. */
+const PILULA_10 = 'inline-block rounded px-1.5 py-0.5 text-[10px] whitespace-nowrap';
 const TOM_SUCESSO = 'bg-success text-success-foreground';
 const TOM_ATENCAO = 'bg-warning text-warning-foreground';
 const TOM_ATENCAO_FORTE = 'bg-warning text-warning-foreground font-semibold ring-1 ring-warning-foreground/40';
@@ -224,6 +244,62 @@ type ColunaOrd =
   | 'valor' | 'comercial' | 'recebimento' | 'financeiro' | 'liquidacao';
 interface Ordenacao { col: ColunaOrd; dir: 'asc' | 'desc'; }
 
+/**
+ * OS FILTROS VIVEM NA URL — PR-OC-LISTA-01 adendo.
+ *
+ * ⚠ NÃO HAVIA RESET A CORRIGIR: havia estado a mover. Abrir uma OC troca a seção do
+ * `V2Index` (`if (section === 'operacoes-comerciais') return …`), e a Central DESMONTA
+ * inteira; fechar monta uma instância nova, com todo `useState` no default. Guardar os
+ * filtros aqui dentro nunca funcionaria — não sobra componente vivo para guardá-los.
+ *
+ * ⚠ A URL JÁ É O MECANISMO DESTA TELA. `oc_compra`, `oc_id`, `oc_aba` e `oc_return` moram
+ * lá, e `fecharOperacaoOC` apaga SÓ os `oc_*` — então um parâmetro de filtro atravessa a
+ * ida e a volta sem que ninguém precise preservá-lo. De brinde, o F5 respeita o recorte e
+ * o link é compartilhável.
+ *
+ * ⚠ DEFAULT NÃO VAI PARA A URL. Escrever `f_tipo=__all__` encheria a barra de endereço de
+ * ruído e faria "URL limpa" deixar de significar "filtros padrão". Valor igual ao padrão
+ * apaga o parâmetro.
+ *
+ * ⚠ `replace`, NUNCA `push`: digitar oito letras na busca criaria oito entradas no
+ * histórico, e o "voltar" do navegador viraria um desfazer letra a letra.
+ */
+function useFiltroUrl<T>(
+  chave: string,
+  padrao: T,
+  ler: (bruto: string) => T,
+  escrever: (valor: T) => string,
+): [T, (valor: T | ((atual: T) => T)) => void] {
+  const [params, setParams] = useSearchParams();
+  const bruto = params.get(chave);
+  const valor = bruto === null ? padrao : ler(bruto);
+  /* ⚠ ACEITA A FORMA FUNCIONAL do `useState` — `setPage(p => p + 1)` e o toggle da
+     ordenação já a usam, e são idioma legítimo. O valor atual sai da URL na hora da
+     escrita, não de um closure: dois cliques seguidos não se atropelam. */
+  const definir = useCallback((novo: T | ((atual: T) => T)) => {
+    const p = new URLSearchParams(window.location.search);
+    const cru = p.get(chave);
+    const atual = cru === null ? padrao : ler(cru);
+    const alvo = typeof novo === 'function' ? (novo as (a: T) => T)(atual) : novo;
+    const texto = escrever(alvo);
+    if (texto === escrever(padrao)) p.delete(chave); else p.set(chave, texto);
+    setParams(p, { replace: true });
+  }, [chave, padrao, ler, escrever, setParams]);
+  return [valor, definir];
+}
+
+const TEXTO = { ler: (b: string) => b, escrever: (v: string) => v };
+const BOOL = { ler: (b: string) => b === '1', escrever: (v: boolean) => (v ? '1' : '0') };
+const NUM = { ler: (b: string) => Number(b) || 1, escrever: (v: number) => String(v) };
+/** A ordenação cabe num par "coluna:direção" — legível na barra de endereço. */
+const ORD = {
+  ler: (b: string): Ordenacao | null => {
+    const [col, dir] = b.split(':');
+    return col && (dir === 'asc' || dir === 'desc') ? { col: col as ColunaOrd, dir } : null;
+  },
+  escrever: (v: Ordenacao | null) => (v ? `${v.col}:${v.dir}` : ''),
+};
+
 /* Cabecalho ordenavel. O `th` INTEIRO e' a area de clique (o onClick no th pega
    tambem o padding, o que um button interno nao pegaria). A seta so aparece na
    coluna ativa; sobre o azul opaco ela herda text-primary-foreground, e o realce
@@ -293,10 +369,10 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
   const [recMap, setRecMap] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(false);
 
-  const [busca, setBusca] = useState('');
-  const [fTipo, setFTipo] = useState('__all__');
-  const [fComercial, setFComercial] = useState('__all__');
-  const [fFazenda, setFFazenda] = useState('__all__');
+  const [busca, setBusca] = useFiltroUrl('f_busca', '', TEXTO.ler, TEXTO.escrever);
+  const [fTipo, setFTipo] = useFiltroUrl('f_tipo', '__all__', TEXTO.ler, TEXTO.escrever);
+  const [fComercial, setFComercial] = useFiltroUrl('f_comercial', '__all__', TEXTO.ler, TEXTO.escrever);
+  const [fFazenda, setFFazenda] = useFiltroUrl('f_fazenda', '__all__', TEXTO.ler, TEXTO.escrever);
   /* ⚠ O FILTRO PROMETIA MAIS DO QUE ENTREGAVA. Rotulado "Situação", filtrava so
      `status_comercial` enquanto a tabela mostra QUATRO eixos: quem escolhia
      "Programada" achava que filtrava a operacao e filtrava um eixo so. Agora o
@@ -304,15 +380,15 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
      Recebimento ganhou o seu em PR-OC-CENTRAL-UX-03, sobre o MESMO rollup que
      pinta a coluna (recStatus), nunca sobre uma segunda leitura da view.
      Financeiro segue SEM filtro — pendencia registrada. */
-  const [fLiquidacao, setFLiquidacao] = useState('__all__');
-  const [fRecebimento, setFRecebimento] = useState('__all__');
-  const [dtIni, setDtIni] = useState('');   // '' = sem limite naquela ponta
-  const [dtFim, setDtFim] = useState('');
-  const [mostrarRascunhos, setMostrarRascunhos] = useState(false);
+  const [fLiquidacao, setFLiquidacao] = useFiltroUrl('f_liq', '__all__', TEXTO.ler, TEXTO.escrever);
+  const [fRecebimento, setFRecebimento] = useFiltroUrl('f_receb', '__all__', TEXTO.ler, TEXTO.escrever);
+  const [dtIni, setDtIni] = useFiltroUrl('f_ini', '', TEXTO.ler, TEXTO.escrever);   // '' = sem limite naquela ponta
+  const [dtFim, setDtFim] = useFiltroUrl('f_fim', '', TEXTO.ler, TEXTO.escrever);
+  const [mostrarRascunhos, setMostrarRascunhos] = useFiltroUrl('f_rasc', false, BOOL.ler, BOOL.escrever);
   /* null = ordem PADRAO (a que veio do banco, data_operacao desc) e TERCEIRO
      estado do ciclo asc -> desc -> padrao. Uma coluna ativa por vez. */
-  const [ord, setOrd] = useState<Ordenacao | null>(null);
-  const [page, setPage] = useState(1);
+  const [ord, setOrd] = useFiltroUrl<Ordenacao | null>('f_ord', null, ORD.ler, ORD.escrever);
+  const [page, setPage] = useFiltroUrl('f_pag', 1, NUM.ler, NUM.escrever);
 
   // Ação de escrita (menu): cancelar/reabrir com motivo obrigatório e saving anti-duplo-clique.
   /* PR-OC-EDICAO-POS-FECHAMENTO-02 — so 'cancelar'. "Reabrir recebimento" saiu daqui:
@@ -502,7 +578,21 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
   const pageRows = ordenadas.slice((pageSafe - 1) * PAGE_SIZE, pageSafe * PAGE_SIZE);
   // Reordenar volta para a pagina 1 pelo mesmo motivo que filtrar volta: pagina 3
   //   de uma lista reordenada e' um recorte sem sentido.
-  useEffect(() => { setPage(1); }, [busca, fTipo, fComercial, fFazenda, fLiquidacao, fRecebimento, dtIni, dtFim, mostrarRascunhos, ord]);
+  /* ⚠ NÃO NA PRIMEIRA MONTAGEM — adendo do PR-OC-LISTA-01. Todo `useEffect` roda depois do
+     primeiro render, e enquanto a página era `useState` isso era inofensivo: ela já valia 1.
+     Com a página na URL, voltar do modal em `f_pag=2` faria este efeito reescrever 1 e apagar
+     justamente o que se foi preservar. O filtro que MUDA continua zerando a página; a
+     montagem não é mudança. */
+  const primeiraMontagem = useRef(true);
+  useEffect(() => {
+    if (primeiraMontagem.current) { primeiraMontagem.current = false; return; }
+    setPage(1);
+    /* ⚠ `setPage` FICA FORA DAS DEPS DE PROPÓSITO. Ele deriva de `setSearchParams`, cuja
+       identidade muda a cada navegação do react-router; listado aqui, o efeito passaria a
+       rodar a cada mudança de URL — inclusive na que o próprio `setPage` provoca — e
+       zeraria a página que este PR existe para preservar. */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busca, fTipo, fComercial, fFazenda, fLiquidacao, fRecebimento, dtIni, dtFim, mostrarRascunhos, ord]);
 
   /* Abertura soberana por tipo. Compra e VENDA vao para o parent, cada uma para o seu
      modal; abate segue indisponivel na Central, como antes.
@@ -664,18 +754,26 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
           pt-3 12 + titulo 15 + space-y-2 8 + barra 76 (32+6+32+6) + space-y-2 8 = 164.
           Abaixo: space-y-2 8 + paginacao h-6 24 + respiro 8 = 40. Total 204. */}
       <div className="rounded-md border overflow-y-auto max-h-[calc(100vh-204px)]">
-        <table className="w-full table-fixed caption-bottom text-sm">
+        {/* ⚠ A RÉGUA É DO `<table>`, e `text-sm` eram 14px vazando para toda célula que não
+            declara tamanho — o mesmo defeito que a mesa do Espelho teve duas vezes hoje.
+            11px aqui é o piso de leitura; quem precisa de menos desce, ninguém sobe. */}
+        <table className="w-full table-fixed caption-bottom text-[11px]">
           <colgroup>
             {/* Medido no DOM (Chrome, 10px/9px desta tela), nao estimado: cada largura e' o
                 maior entre o rotulo do cabecalho e o conteudo mais largo do corpo. Quem
                 manda em Fazenda e Recebimento e' o CABECALHO ("FAZENDA", "RECEBIMENTO"),
                 nao a celula — por isso nao encolhem mais do que isto. */}
-            <col className="w-[62px]" />{/* OC — "#" + 8 hex mono */}
-            <col className="w-[72px]" />{/* Data — 31/07/2026 */}
-            <col className="w-[68px]" />{/* Tipo — "Venda em Pé" */}
+            <col className="w-[68px]" />{/* OC — "#" + 8 hex mono, 10px (em 64 raspava) */}
+            <col className="w-[60px]" />{/* Data — 31/07/26 em 10px */}
+            {/* ⚠ 96px PORQUE "Venda em Pé" NÃO PODE CORTAR: em 68px o rótulo virava
+                "Venda em…", e um tipo de operação truncado deixa de identificar a linha. */}
+            <col className="w-[96px]" />{/* Tipo */}
             <col />{/* Contraparte — TODA a sobra */}
-            <col className="w-[58px]" />{/* Fazenda — so o codigo; o rotulo e' que pede 56 */}
-            <col className="w-[66px]" />{/* Animais — cab + kg */}
+            <col className="w-[44px]" />{/* Fazenda — só a sigla (SM, ST, PUR) */}
+            {/* ⚠ 108px PORQUE AGORA É UMA LINHA SÓ: "24 cab · 10.240 kg" mede 94px e pedia
+                106 com o padding — em 66 cortava o peso. A sobra sai da Contraparte, que é
+                a coluna flexível e a única que aguenta ceder. */}
+            <col className="w-[108px]" />{/* Animais — cab · kg na mesma linha */}
             <col className="w-[80px]" />{/* Valor — R$ 1.234.567 */}
             <col className="w-[72px]" />{/* Comercial — pilula */}
             {/* 102 e nao 82: o item 3 do PR-OC-RECEB-UX-01 alargou o conteudo desta
@@ -689,8 +787,10 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
                 cadeado 10 = 90, mais 12 de padding = 102). O cabecalho encolheu 2px e
                 continua abaixo do conteudo. */}
             <col className="w-[102px]" />{/* Receb./Envio — pilula + cadeado */}
-            <col className="w-[88px]" />{/* Financeiro — valor + rotulo */}
-            <col className="w-[88px]" />{/* Liquidação — pilula */}
+            {/* ⚠ 140px PORQUE A PÍLULA FOI PARA O LADO: valor + "liquidado" medem 124px e
+                pedem 136 com o padding — em 88 o estágio sumia atrás do corte. */}
+            <col className="w-[140px]" />{/* Financeiro — valor · pílula na mesma linha */}
+            <col className="w-[100px]" />{/* Pagamento — "aguardando pgto" cabe */}
             <col className="w-[46px]" />{/* Ações */}
           </colgroup>
           <TableHeader className="sticky top-0 z-10 bg-primary">
@@ -739,18 +839,22 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
                      tres copias e' que fizeram o defeito. */
                   onClick={abrePorTipo(r.tipo_operacao) ? () => abrirOperacaoPorTipo(r) : undefined}
                   className={abrePorTipo(r.tipo_operacao) ? 'cursor-pointer' : undefined}>
-                  <TableCell className={`${TD} font-mono whitespace-nowrap`} title={r.id}>#{r.id.slice(0, 8)}</TableCell>
-                  <TableCell className={`${TD} whitespace-nowrap`}>{fmtData(r.data_operacao)}</TableCell>
+                  {/* Identificador e data são CONTEXTO, não conteúdo: quem varre a lista
+                      procura contraparte e valor. Recuam para 10px muted. */}
+                  <TableCell className={`${TD} font-mono whitespace-nowrap text-[10px] text-muted-foreground`} title={r.id}>#{r.id.slice(0, 8)}</TableCell>
+                  <TableCell className={`${TD} whitespace-nowrap text-[10px] text-muted-foreground`}>{fmtData(r.data_operacao)}</TableCell>
                   <TableCell className={`${TD} whitespace-nowrap`}>{TIPO_LABEL[r.tipo_operacao] ?? r.tipo_operacao}</TableCell>
                   <TableCell className={`${TD} truncate`} title={nomeContraparte(r)}>{nomeContraparte(r)}</TableCell>
                   <TableCell className={`${TD} truncate`} title={nomeFazenda(r)}>{siglaFazenda(r)}</TableCell>
                   <TableCell className={`${TD} text-right whitespace-nowrap tabular-nums`}>
-                    <div className="leading-tight">
-                      <div>{r.qtd_negociada != null ? `${r.qtd_negociada} cab` : '—'}</div>
+                    {/* Uma linha só, pelo mesmo motivo do Financeiro: cabeça e peso são a mesma
+                        resposta, e empilhá-los dobrava a altura da tabela inteira. */}
+                    <span className="whitespace-nowrap">
+                      <span className="text-[11px]">{r.qtd_negociada != null ? `${r.qtd_negociada} cab` : '—'}</span>
                       {r.peso_total_negociado_kg != null && r.peso_total_negociado_kg > 0 && (
-                        <div className="text-[9px] text-muted-foreground">{kg(r.peso_total_negociado_kg)} kg</div>
+                        <span className="text-[10px] text-muted-foreground">{' · '}{kg(r.peso_total_negociado_kg)} kg</span>
                       )}
-                    </div>
+                    </span>
                   </TableCell>
                   <TableCell className={`${TD} text-right whitespace-nowrap tabular-nums font-medium`}>{valorOp > 0 ? brl(valorOp) : '—'}</TableCell>
                   <TableCell className={TD}><BadgeComercial status={r.status_comercial} rascunho={r.rascunho} /></TableCell>
@@ -771,26 +875,51 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
                     </span>
                   </TableCell>
                   <TableCell className={`${TD} whitespace-nowrap`}>
+                    {/* ⚠ O SEGUNDO NÚMERO SAIU. Era "lançado R$ 1.234.567" em texto, e repetia
+                        em miniatura o valor de cima gastando a largura da coluna: quem lê a
+                        linha quer saber QUANTO e EM QUE PÉ, não os dois valores. Fica o valor
+                        e uma pílula com o estágio. */}
                     {fin && fin.rotulo
-                      ? (
-                        <div className="leading-tight">
-                          <div className="tabular-nums font-medium">{brl(fin.valor)}</div>
-                          {/* `modo` era diagnostico interno de migracao (novo_modelo / nova_vazia),
-                              sem valor para quem opera, e roubava a largura da coluna.
-                              ⚠ O PROGRESSO ENTRA AQUI — B-10 item 2: o nivel mais avancado e
-                              quanto ja andou nele. No nivel `obrigacao` sai so' a palavra,
-                              porque o numero seria o de cima outra vez. */}
-                          <div className="text-[9px] text-muted-foreground tabular-nums">
-                            {fin.rotulo}{fin.progresso == null ? '' : ` ${brl(fin.progresso)}`}
-                          </div>
-                        </div>
-                      )
-                      : <span className="text-muted-foreground">—</span>}
+                      ? (() => {
+                          const est = liqMap[r.id]?.estado_liquidacao;
+                          const pilula = est === 'parcial'
+                            ? { texto: 'parcial', tom: TOM_ATENCAO }
+                            : fin.rotulo === 'liquidado'
+                              ? { texto: 'liquidado', tom: TOM_SUCESSO }
+                              : { texto: fin.rotulo, tom: TOM_NEUTRO };
+                          /* ⚠ AO LADO, NÃO ABAIXO: empilhar dois textos põe a linha em 38px, e a
+                             régua é 26. Valor e estágio na mesma linha respondem juntos
+                             "quanto" e "em que pé" sem custar altura. */
+                          return (
+                            <span className="inline-flex items-baseline gap-1.5 whitespace-nowrap">
+                              <span className={`text-[11px] font-medium tabular-nums ${fin.valor < 0 ? 'text-destructive' : 'text-success'}`}>
+                                {brl(fin.valor)}
+                              </span>
+                              <span className={`${PILULA_10} ${pilula.tom}`}>{pilula.texto}</span>
+                            </span>
+                          );
+                        })()
+                      : <span className={`${PILULA_10} ${TOM_NEUTRO}`}>sem lançamento</span>}
                   </TableCell>
                   <TableCell className={`${TD} whitespace-nowrap`}>{(() => {
                     const est = liqMap[r.id]?.estado_liquidacao;
                     // Sem estado = a fonte não classifica: '—' de texto, NUNCA pílula colorida.
                     if (!est) return <span className="text-muted-foreground">—</span>;
+                    /* ⚠ "NÃO PAGA" ERA UMA ACUSAÇÃO onde havia só uma espera. A operação
+                        recém-fechada não está inadimplente: está aguardando. Texto muted, sem
+                        pílula — pílula é para estado que exige leitura, e esperar não exige. */
+                    if (est === 'nao_liquidada') {
+                      return <span className="text-[10px] text-muted-foreground">aguardando pgto</span>;
+                    }
+                    if (est === 'quitada') return <span className={`${PILULA} ${TOM_SUCESSO}`}>paga</span>;
+                    if (est === 'parcial') {
+                      /* A porcentagem sai do MESMO dado que a coluna Financeiro já leu — nenhuma
+                         consulta a mais. Sem obrigação conhecida, a pílula não inventa número. */
+                      const f = finMap[r.id];
+                      const pct = f && f.obrigacao_total > 0
+                        ? Math.round((f.total_liquidado / f.obrigacao_total) * 100) : null;
+                      return <span className={`${PILULA} ${TOM_ATENCAO}`}>{pct == null ? 'paga em parte' : `paga ${pct}%`}</span>;
+                    }
                     return <span className={`${PILULA} ${LIQ_TOM[est] ?? TOM_NEUTRO}`}>{liqLabel(est)}</span>;
                   })()}</TableCell>
                   {/* stopPropagation: sem isto, abrir o menu abriria a operacao junto. */}
