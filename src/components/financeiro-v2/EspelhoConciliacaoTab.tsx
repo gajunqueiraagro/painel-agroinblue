@@ -23,7 +23,7 @@ import { cn } from '@/lib/utils';
 import { iconeOrigemLancamento, LEGENDA_ICONES, rotuloOrigem, vinculoVencedor } from '@/v2/lib/origemLancamento';
 import { desfazerVinculo, desfazerGrupo } from '@/hooks/useConciliacaoDoMes';
 import { LancamentoLeituraDialog } from '@/components/financeiro-v2/LancamentoLeituraDialog';
-import { CasarComBancoModal, type ExtratoAlvo, type LevadoInicial } from '@/components/financeiro-v2/CasarComBancoModal';
+import { CasarComBancoModal, CasarN1Modal, type ExtratoAlvo, type LevadoInicial } from '@/components/financeiro-v2/CasarComBancoModal';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { X } from 'lucide-react';
 
@@ -190,9 +190,27 @@ interface Pareado {
   extrato: EspOfx; filhas: FilhaConf[]; grupoId: string | null;
   tipoVencedor: string | null; soma: number; diferenca: number;
 }
+/**
+ * O SENTIDO INVERSO — PR-ESPELHO-05. Um lançamento explicado por VÁRIOS extratos.
+ *
+ * ⚠ A MÃE TROCA DE LADO. No 1:N a âncora é o extrato e as filhas são lançamentos; aqui é o
+ * contrário, e a tela tem de dizer isso sem palavra nenhuma: a mãe aparece do lado do
+ * SISTEMA, as filhas do lado do BANCO, e a seta do meio vira `↰` — apontando para o OFX em
+ * vez de para o sistema. Desenhar os dois casos igual faria o operador ler "um extrato
+ * pagou N lançamentos" onde houve "N depósitos pagaram um título".
+ */
+interface ParedoN1 {
+  sis: EspSis;
+  extratos: { extrato: EspOfx; valorAplicado: number }[];
+  grupoId: string | null;
+  soma: number;
+  diferenca: number;
+}
+
 interface DiaConf {
   data: string | null;
   pareados: Pareado[];
+  paredosN1: ParedoN1[];
   extratosSemPar: EspOfx[];
   lancsSemPar: EspSis[];
   banco: number;
@@ -235,13 +253,47 @@ function montarMesa(data: EspelhadosReais) {
   const dia = (d: string | null): DiaConf => {
     const k = d ?? 'sem-data';
     let atual = dias.get(k);
-    if (!atual) { atual = { data: d, pareados: [], extratosSemPar: [], lancsSemPar: [], banco: 0, sistema: 0 }; dias.set(k, atual); }
+    if (!atual) { atual = { data: d, pareados: [], paredosN1: [], extratosSemPar: [], lancsSemPar: [], banco: 0, sistema: 0 }; dias.set(k, atual); }
     return atual;
   };
+
+  /* ⚠ O N:1 É DECIDIDO PELO VÍNCULO, NÃO PELO `grupo_id`. Um lançamento com dois vínculos
+     ativos em extratos diferentes É um N:1, tenha ou não grupo — e os 9 casos antigos da
+     base não têm. Ler o grupo primeiro deixaria esses nove desenhados como nove pares
+     independentes que repetem o mesmo lançamento. */
+  const porLanc = new Map<string, EspVinculo[]>();
+  for (const v of vinculos) {
+    const l = porLanc.get(v.lancamento_id);
+    if (l) l.push(v); else porLanc.set(v.lancamento_id, [v]);
+  }
+  const ofxPorId = new Map(data.ofx_completo.map((o) => [o.extrato_id, o]));
+  const consumidos = new Set<string>();
+
+  porLanc.forEach((vs, lancId) => {
+    if (vs.length < 2) return;
+    const sis = sisPorId.get(lancId);
+    if (!sis) return;
+    const extratos = vs
+      .map((v) => ({ extrato: ofxPorId.get(v.extrato_id), valorAplicado: Number(v.valor_aplicado ?? 0) }))
+      .filter((x): x is { extrato: EspOfx; valorAplicado: number } => !!x.extrato);
+    if (extratos.length < 2) return;
+    extratos.forEach((x) => consumidos.add(x.extrato.extrato_id));
+    const soma = extratos.reduce((a, x) => a + x.valorAplicado, 0);
+    const d = dia(sis.data);
+    d.sistema += sis.valor_assinado;
+    d.paredosN1.push({
+      sis, extratos,
+      grupoId: vs.find((v) => v.grupo_id)?.grupo_id ?? null,
+      soma,
+      diferenca: soma - Math.abs(sis.valor_assinado),
+    });
+  });
 
   for (const extrato of data.ofx_completo) {
     const d = dia(extrato.data);
     d.banco += extrato.valor;
+    /* Já contado no banco do dia, mas desenhado dentro do bloco N:1 — não vira linha aqui. */
+    if (consumidos.has(extrato.extrato_id)) continue;
     const vs = porExtrato.get(extrato.extrato_id) ?? [];
     if (vs.length === 0) { d.extratosSemPar.push(extrato); continue; }
     const soma = vs.reduce((a, v) => a + Number(v.valor_aplicado ?? 0), 0);
@@ -272,6 +324,7 @@ function montarMesa(data: EspelhadosReais) {
   const lista = [...dias.values()].sort((a, b) => (a.data ?? '') < (b.data ?? '') ? -1 : (a.data ?? '') > (b.data ?? '') ? 1 : 0);
   for (const d of lista) {
     d.pareados = ordenar(d.pareados, (p) => p.extrato.valor);
+    d.paredosN1 = ordenar(d.paredosN1, (p) => p.sis.valor_assinado);
     d.extratosSemPar = ordenar(d.extratosSemPar, (e) => e.valor);
     d.lancsSemPar = ordenar(d.lancsSemPar, (s) => s.valor_assinado);
   }
@@ -344,9 +397,12 @@ function textoFilha(s: EspSis | undefined) {
  * podem ser chamados dentro de um `.map()` — a regra dos hooks proíbe, e o React quebraria ao
  * mudar a contagem de linhas entre renders. Extrair não foi estética: era a única forma.
  */
-function LinhaExtratoSemPar({ e, marcado, onMarcar }: {
-  e: EspOfx; marcado: boolean; onMarcar: () => void;
+function LinhaExtratoSemPar({ e, marcado, onMarcar, onCriar }: {
+  e: EspOfx; marcado: boolean; onMarcar: () => void; onCriar: () => void;
 }) {
+  /* ⚠ A MESMA LINHA É ALVO E ORIGEM. Alvo quando um lançamento vem por cima (1:N); origem
+     quando ELA é arrastada sobre um lançamento (N:1). São dois nós do @dnd-kit no mesmo
+     `<tr>`: o droppable envolve a linha, o draggable mora só na alça. */
   const { isOver, setNodeRef } = useDroppable({ id: `ext:${e.extrato_id}` });
   return (
     <tr ref={setNodeRef} className={cn(H21, 'border-b border-border/50',
@@ -363,7 +419,13 @@ function LinhaExtratoSemPar({ e, marcado, onMarcar }: {
       <td />
       <td />
       <td className={cn(CEL, 'text-[10px] italic text-muted-foreground')}>— nenhum lançamento vinculado</td>
-      <td className={cn(CEL, 'text-right')} />
+      {/* ⚠ "criar" ABRE O MODAL COM A LISTA VAZIA, e não um formulário à parte: o caminho é o
+          mesmo do "criar pela diferença", só que a diferença é o valor inteiro. Um segundo
+          caminho para criar o mesmo lançamento seria a segunda forma. */}
+      <td className={cn(CEL, 'text-right whitespace-nowrap')}>
+        <Acao onClick={onCriar}>criar</Acao>
+        <Alca id={`dragExt:${e.extrato_id}`} />
+      </td>
     </tr>
   );
 }
@@ -371,8 +433,11 @@ function LinhaExtratoSemPar({ e, marcado, onMarcar }: {
 function LinhaLancSemPar({ s, mesDoRecorte, marcado, onMarcar, onAbrir }: {
   s: EspSis; mesDoRecorte: string; marcado: boolean; onMarcar: () => void; onAbrir?: (id: string) => void;
 }) {
+  const { isOver, setNodeRef } = useDroppable({ id: `lan:${s.lancamento_id}` });
   return (
-    <tr className={cn(H21, 'border-b border-border/50', marcado && 'bg-amber-500/10')}>
+    <tr ref={setNodeRef} className={cn(H21, 'border-b border-border/50',
+      marcado && 'bg-amber-500/10',
+      isOver && 'bg-emerald-500/10 outline-dashed outline-2 outline-emerald-500')}>
       <td />
       <td className={CEL_DATA}>{fmtData(s.data)}</td>
       <td className={cn(CEL, 'text-[10px] italic text-muted-foreground')}>— sem extrato correspondente</td>
@@ -386,7 +451,7 @@ function LinhaLancSemPar({ s, mesDoRecorte, marcado, onMarcar, onAbrir }: {
       <td className={CEL}>{textoLancamento(s, mesDoRecorte, true)}</td>
       <td className={cn(CEL, 'text-right whitespace-nowrap')}>
         {onAbrir && <Acao onClick={() => onAbrir(s.lancamento_id)}>abrir</Acao>}
-        <Alca id={`lan:${s.lancamento_id}`} />
+        <Alca id={`dragLan:${s.lancamento_id}`} />
       </td>
     </tr>
   );
@@ -421,6 +486,10 @@ export const MOTIVO_CASAR_LABEL: Readonly<Record<string, string>> = {
   lancamento_ja_conciliado: 'Um dos lançamentos já está conciliado.',
   valor_invalido: 'Valor inválido: precisa ser maior que zero.',
   soma_nao_bate: 'A soma dos lançamentos não bate com o valor do banco.',
+  /* Só do sentido N:1 (`fn_espelho_casar_n1`). */
+  minimo_dois_extratos: 'Marque ao menos dois movimentos do banco.',
+  contas_diferentes: 'Os movimentos são de contas diferentes.',
+  extrato_repetido: 'O mesmo movimento foi marcado duas vezes.',
 };
 
 interface EstadoSelecao { extratos: Set<string>; lancamentos: Set<string>; }
@@ -436,6 +505,8 @@ function AbaConferencia({ data, anoMes, nomeConta, contaId, onAbrir, onMudou }: 
 
   const [casar, setCasar] = useState<{ extrato: ExtratoAlvo; iniciais: LevadoInicial[] } | null>(null);
   const [arrastando, setArrastando] = useState<EspSis | null>(null);
+  const [arrastandoExt, setArrastandoExt] = useState<EspOfx | null>(null);
+  const [casarN1, setCasarN1] = useState<{ sis: EspSis; extratos: EspOfx[] } | null>(null);
   /* ⚠ 4px ANTES DE VIRAR ARRASTO: sem a distância, o clique no checkbox ao lado da alça já
      começaria um drag e o operador não conseguiria marcar nada. */
   const sensores = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
@@ -460,23 +531,36 @@ function AbaConferencia({ data, anoMes, nomeConta, contaId, onAbrir, onMudou }: 
   /* ⚠ A DIFERENÇA DA BARRA É SÓ PARA EXIBIR. Quem decide se pode conciliar é a RPC: ela
      revalida a soma no servidor, com os valores que estão lá e não os que a tela viu. */
   const difSel = somaExtratos - somaLancs;
-  const podeConciliar = sel.extratos.size === 1 && sel.lancamentos.size >= 1 && Math.abs(difSel) <= 0.01;
-  const motivoBloqueio = sel.extratos.size > 1 ? 'um extrato por vez'
-    : sel.extratos.size === 0 ? 'marque um extrato'
+  /* ⚠ DOIS SENTIDOS, UMA BARRA. 1 extrato : N lançamentos vai pela `fn_espelho_casar`;
+     N extratos : 1 lançamento pela `fn_espelho_casar_n1`. O que decide é a contagem dos dois
+     lados — não há botão para escolher, porque a marcação já disse o que se quer. */
+  const sentido: 'um_n' | 'n_um' | null =
+    sel.extratos.size === 1 && sel.lancamentos.size >= 1 ? 'um_n'
+    : sel.extratos.size >= 2 && sel.lancamentos.size === 1 ? 'n_um'
+    : null;
+  const podeConciliar = !!sentido && Math.abs(difSel) <= 0.01;
+  const motivoBloqueio = sentido ? (Math.abs(difSel) > 0.01 ? 'os valores não batem' : '')
+    : sel.extratos.size === 0 ? 'marque ao menos um extrato'
     : sel.lancamentos.size === 0 ? 'marque ao menos um lançamento'
-    : Math.abs(difSel) > 0.01 ? 'os valores não batem' : '';
+    : 'marque 1 extrato para N lançamentos, ou N extratos para 1 lançamento';
 
   const conciliar = async () => {
-    const extratoId = [...sel.extratos][0];
-    if (!extratoId) return;
+    if (!sentido) return;
     setGravando(true); setErro(null);
-    const itens = [...sel.lancamentos].map((id) => ({
-      lancamento_id: id, valor: Math.abs(sisIndex.get(id)?.valor_assinado ?? 0),
-    }));
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
-    const { data: r, error } = await (supabase as any).rpc('fn_espelho_casar', {
-      p_extrato_id: extratoId, p_itens: itens, p_simular: false, p_motivo: 'casado_no_espelho',
-    });
+    const rpc = (supabase as any).rpc;
+    const chamada = sentido === 'um_n'
+      ? rpc('fn_espelho_casar', {
+          p_extrato_id: [...sel.extratos][0],
+          p_itens: [...sel.lancamentos].map((id) => ({ lancamento_id: id, valor: Math.abs(sisIndex.get(id)?.valor_assinado ?? 0) })),
+          p_simular: false, p_motivo: 'casado_no_espelho',
+        })
+      : rpc('fn_espelho_casar_n1', {
+          p_lancamento_id: [...sel.lancamentos][0],
+          p_extratos: [...sel.extratos],
+          p_simular: false, p_motivo: 'casado_no_espelho_n1',
+        });
+    const { data: r, error } = await chamada;
     setGravando(false);
     if (error) { setErro(error.message); return; }
     const res = (r ?? {}) as { ok?: boolean; motivo?: string };
@@ -496,21 +580,45 @@ function AbaConferencia({ data, anoMes, nomeConta, contaId, onAbrir, onMudou }: 
      marcado leva a seleção inteira uma vez só, não ele duas. */
   const aoSoltar = (ev: DragEndEvent) => {
     setArrastando(null);
+    setArrastandoExt(null);
     const alvo = String(ev.over?.id ?? '');
     const origem = String(ev.active?.id ?? '');
-    if (!alvo.startsWith('ext:') || !origem.startsWith('lan:')) return;
-    const extrato = extratoIndex.get(alvo.slice(4));
-    if (!extrato) return;
-    const ids = new Set<string>([origem.slice(4), ...sel.lancamentos]);
-    const iniciais = [...ids].map((id) => sisIndex.get(id)).filter((x): x is EspSis => !!x).map(comoLevado);
-    if (iniciais.length === 0) return;
-    setCasar({
-      extrato: { extrato_id: extrato.extrato_id, data: extrato.data, historico: extrato.historico, valor: extrato.valor },
-      iniciais,
-    });
+
+    /* Lançamento sobre extrato — 1 extrato : N lançamentos. */
+    if (alvo.startsWith('ext:') && origem.startsWith('dragLan:')) {
+      const extrato = extratoIndex.get(alvo.slice(4));
+      if (!extrato) return;
+      const ids = new Set<string>([origem.slice(8), ...sel.lancamentos]);
+      const iniciais = [...ids].map((id) => sisIndex.get(id)).filter((x): x is EspSis => !!x).map(comoLevado);
+      if (iniciais.length === 0) return;
+      setCasar({
+        extrato: { extrato_id: extrato.extrato_id, data: extrato.data, historico: extrato.historico, valor: extrato.valor },
+        iniciais,
+      });
+      return;
+    }
+
+    /* ⚠ EXTRATO SOBRE LANÇAMENTO — o sentido inverso. Aqui o modal não é o mesmo: o que se
+       edita no 1:N é o valor do lançamento, e do lado do banco não há o que editar. Por isso
+       este ramo abre o modal N:1, e não o de sempre com os papéis trocados. */
+    if (alvo.startsWith('lan:') && origem.startsWith('dragExt:')) {
+      const sis = sisIndex.get(alvo.slice(4));
+      if (!sis) return;
+      const ids = new Set<string>([origem.slice(8), ...sel.extratos]);
+      const extratos = [...ids].map((id) => extratoIndex.get(id)).filter((x): x is EspOfx => !!x);
+      if (extratos.length === 0) return;
+      setCasarN1({ sis, extratos });
+    }
   };
 
+  /* O botão da barra abre o modal do SENTIDO que a marcação já declarou. */
   const abrirCasarDaBarra = () => {
+    if (sentido === 'n_um') {
+      const sis = sisIndex.get([...sel.lancamentos][0]);
+      const extratos = [...sel.extratos].map((id) => extratoIndex.get(id)).filter((x): x is EspOfx => !!x);
+      if (sis && extratos.length) setCasarN1({ sis, extratos });
+      return;
+    }
     const extratoId = [...sel.extratos][0];
     const extrato = extratoId ? extratoIndex.get(extratoId) : undefined;
     if (!extrato) return;
@@ -524,7 +632,11 @@ function AbaConferencia({ data, anoMes, nomeConta, contaId, onAbrir, onMudou }: 
 
   return (
     <DndContext sensors={sensores} onDragEnd={aoSoltar}
-      onDragStart={(ev) => setArrastando(sisIndex.get(String(ev.active.id).slice(4)) ?? null)}>
+      onDragStart={(ev) => {
+        const id = String(ev.active.id);
+        if (id.startsWith('dragLan:')) setArrastando(sisIndex.get(id.slice(8)) ?? null);
+        else if (id.startsWith('dragExt:')) setArrastandoExt(extratoIndex.get(id.slice(8)) ?? null);
+      }}>
     <div className="flex min-h-0 flex-1 flex-col">
       {/* ⚠ A MARGEM É DO CONTAINER, NÃO DA TABELA. As bordas e a divisória continuam de fora a
           fora DA TABELA; é ela que se afasta da borda do modal, e não as linhas que encurtam. */}
@@ -617,9 +729,59 @@ function AbaConferencia({ data, anoMes, nomeConta, contaId, onAbrir, onMudou }: 
                   );
                 })}
 
+                {/* ⚠ N:1 — a mãe do lado do SISTEMA. Ver `ParedoN1`. */}
+                {d.paredosN1.map((g) => {
+                  const icone = iconeDoLancamento('agrupamento_manual');
+                  const temDif = Math.abs(g.diferenca) > 0.01;
+                  const somaAssinada = Math.sign(g.sis.valor_assinado || 1) * g.soma;
+                  return (
+                    <React.Fragment key={g.sis.lancamento_id}>
+                      <tr className={cn(H21, 'border-b border-border/50 bg-muted/20')}>
+                        <td /><td /><td />
+                        <td className={cn(CEL, 'text-right text-[11px] font-medium tabular-nums', temDif ? 'text-amber-600' : corVal(somaAssinada))}
+                            title={temDif ? `os extratos somam ${fmtBRL(Math.abs(g.diferenca))} ${g.diferenca > 0 ? 'a mais' : 'a menos'} que o lançamento` : undefined}>
+                          {fmtBRL(somaAssinada)}
+                        </td>
+                        <td className={cn(MEIO, 'text-[12px] font-semibold', icone?.cor)} title={icone?.significado}>{icone?.simbolo}</td>
+                        <td />
+                        <td className={cn(CEL, 'text-left text-[11px] font-medium tabular-nums', corVal(g.sis.valor_assinado))}>{fmtBRL(g.sis.valor_assinado)}</td>
+                        <td className={CEL}>
+                          {textoLancamento(g.sis, mesDoRecorte)}
+                          <span className="text-[10px] text-muted-foreground">{' · '}{g.extratos.length} extratos</span>
+                        </td>
+                        <td className={cn(CEL, 'text-right whitespace-nowrap')}>
+                          {onAbrir && <Acao onClick={() => onAbrir(g.sis.lancamento_id)}>abrir</Acao>}
+                          {g.grupoId && (
+                            <Acao className="ml-1.5" onClick={async () => {
+                              const r = await desfazerGrupo(g.grupoId!, 'desfeito_no_espelho');
+                              if (r.ok) onMudou(); else setErro(r.erro ?? 'Não foi possível desconciliar.');
+                            }}>desconciliar grupo</Acao>
+                          )}
+                        </td>
+                      </tr>
+                      {/* ⚠ FILHAS DO LADO DO BANCO e `↰` no meio: a seta aponta para o OFX porque
+                          é ele que está sendo decomposto. Mesma régua das filhas do 1:N. */}
+                      {g.extratos.map((x) => (
+                        <tr key={x.extrato.extrato_id} className="h-[15px] bg-muted/40 border-b border-border/30">
+                          <td />
+                          <td className={CEL_DATA}>{fmtData(x.extrato.data)}</td>
+                          <td className={cn(CEL, 'text-[10px] font-normal text-muted-foreground')} title={x.extrato.historico ?? ''}>{x.extrato.historico ?? '—'}</td>
+                          <td className={cn(CEL, 'text-right text-[10px] font-normal tabular-nums', corVal(x.extrato.valor))}>{fmtBRL(x.extrato.valor)}</td>
+                          <td className={cn(MEIO, 'text-[11px] font-normal text-muted-foreground')}>↰</td>
+                          <td /><td /><td /><td />
+                        </tr>
+                      ))}
+                    </React.Fragment>
+                  );
+                })}
+
                 {d.extratosSemPar.map((e) => (
                   <LinhaExtratoSemPar key={e.extrato_id} e={e}
-                    marcado={marcado('extratos', e.extrato_id)} onMarcar={() => alterna('extratos', e.extrato_id)} />
+                    marcado={marcado('extratos', e.extrato_id)} onMarcar={() => alterna('extratos', e.extrato_id)}
+                    onCriar={() => setCasar({
+                      extrato: { extrato_id: e.extrato_id, data: e.data, historico: e.historico, valor: e.valor },
+                      iniciais: [],
+                    })} />
                 ))}
 
                 {d.lancsSemPar.map((sl) => (
@@ -669,6 +831,7 @@ function AbaConferencia({ data, anoMes, nomeConta, contaId, onAbrir, onMudou }: 
               <span className="tabular-nums">{fmtBRL(somaExtratos)}</span>
               {' · '}{sel.lancamentos.size} lançamento{sel.lancamentos.size === 1 ? '' : 's'}{' '}
               <span className="tabular-nums">{fmtBRL(somaLancs)}</span>
+              {sentido === 'n_um' && <span className="ml-2 opacity-80">N extratos → 1 lançamento</span>}
             </span>
             <span className="text-[#E7C873] tabular-nums">diferença {fmtBRL(difSel)}</span>
             {erro && <span className="text-[#F5B5B5]">{erro}</span>}
@@ -679,10 +842,10 @@ function AbaConferencia({ data, anoMes, nomeConta, contaId, onAbrir, onMudou }: 
                   podeConciliar && !gravando ? 'bg-[#E7C873] text-foreground hover:bg-[#D9B95F]' : 'bg-primary-foreground/20 text-primary-foreground/50 cursor-not-allowed')}>
                 {gravando ? 'Conciliando…' : 'Conciliar'}
               </button>
-              <button type="button" disabled={sel.extratos.size !== 1} onClick={abrirCasarDaBarra}
-                title={sel.extratos.size === 1 ? undefined : 'marque um extrato'}
+              <button type="button" disabled={!sentido} onClick={abrirCasarDaBarra}
+                title={sentido ? undefined : motivoBloqueio}
                 className={cn('rounded px-2 py-0.5 text-[11px]',
-                  sel.extratos.size === 1
+                  sentido
                     ? 'bg-primary-foreground/20 hover:bg-primary-foreground/30'
                     : 'bg-primary-foreground/20 text-primary-foreground/50 cursor-not-allowed')}>
                 Casar com o banco…
@@ -697,11 +860,12 @@ function AbaConferencia({ data, anoMes, nomeConta, contaId, onAbrir, onMudou }: 
 
       {/* O fantasma segue o cursor: quem arrasta precisa ver O QUE está arrastando. */}
       <DragOverlay dropAnimation={null}>
-        {arrastando && (
+        {(arrastando || arrastandoExt) && (
           <div className="rounded border bg-card px-2 py-0.5 text-[10px] shadow">
-            {arrastando.descricao ?? '—'}
-            <span className={cn('ml-2 font-medium tabular-nums', corVal(arrastando.valor_assinado))}>
-              {fmtBRL(arrastando.valor_assinado)}
+            {arrastando ? (arrastando.descricao ?? '—') : (arrastandoExt?.historico ?? '—')}
+            <span className={cn('ml-2 font-medium tabular-nums',
+              corVal(arrastando ? arrastando.valor_assinado : (arrastandoExt?.valor ?? 0)))}>
+              {fmtBRL(arrastando ? arrastando.valor_assinado : arrastandoExt?.valor)}
             </span>
           </div>
         )}
@@ -714,6 +878,17 @@ function AbaConferencia({ data, anoMes, nomeConta, contaId, onAbrir, onMudou }: 
         iniciais={casar?.iniciais ?? []}
         nomeConta={nomeConta}
         contaBancariaId={contaId}
+        onConciliado={() => { limpar(); onMudou(); }}
+      />
+
+      <CasarN1Modal
+        open={!!casarN1}
+        onClose={() => setCasarN1(null)}
+        sis={casarN1?.sis ?? null}
+        extratos={(casarN1?.extratos ?? []).map((e) => ({
+          extrato_id: e.extrato_id, data: e.data, historico: e.historico, valor: e.valor,
+        }))}
+        nomeConta={nomeConta}
         onConciliado={() => { limpar(); onMudou(); }}
       />
     </div>
