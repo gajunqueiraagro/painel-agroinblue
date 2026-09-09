@@ -48,6 +48,42 @@ function refLinha(campo: string, sistema: string | null, excel: string | null, s
   return { campo, sistema: sFmt, excel: eFmt, resultado, tom };
 }
 
+/**
+ * A comparação de CONTA — PR-MESA-SALVAR-UNICO-01 item 2.
+ *
+ * ⚠ CONTA SE COMPARA POR ID, NUNCA POR TEXTO. A planilha do cartão escreve
+ * "c.credito-001 | elo pecuaria" e o cadastro se chama "Cartão Elo": é a MESMA conta — a
+ * própria importação já a resolveu pelo apelido —, e comparar as duas cadeias dava "difere"
+ * em âmbar sobre uma linha que confere. O operador via um conflito inventado num campo que
+ * ele acabara de gravar certo.
+ * ⚠ O RESOLVEDOR É O SOBERANO (`resolverContaPorTexto`): apelido do cadastro, nome exato,
+ * agência+número. É o mesmo que `divergenciasComExtrato` já usava — esta linha do
+ * comparativo é que tinha ficado para trás com a régua antiga.
+ * ⚠ TEXTO SÓ QUANDO NÃO RESOLVE. Se o texto da planilha não aponta para conta nenhuma, não
+ * há id a comparar e a comparação textual é o que resta — melhor uma resposta fraca que
+ * nenhuma. Mas ela nunca vence um id.
+ */
+function refLinhaConta(
+  campo: string,
+  idSistema: string | null,
+  nomeSistema: string | null,
+  textoExcel: string | null,
+  contas: readonly ContaResolvivel[],
+): EnriqComparativoLinha {
+  const base = { campo, sistema: fmtTexto(nomeSistema), excel: fmtTexto(textoExcel) };
+  if (vazio(nomeSistema) && vazio(textoExcel)) return { ...base, resultado: '—', tom: 'neutro' };
+  if (vazio(nomeSistema) || vazio(textoExcel)) return { ...base, resultado: 'mantém', tom: 'neutro' };
+  const resolvida = resolverContaPorTexto(textoExcel, contas);
+  if (idSistema && resolvida) {
+    return resolvida.id === idSistema
+      ? { ...base, resultado: 'confere', tom: 'ok' }
+      : { ...base, resultado: 'difere', tom: 'difere' };
+  }
+  return norm(nomeSistema) === norm(textoExcel)
+    ? { ...base, resultado: 'confere', tom: 'ok' }
+    : { ...base, resultado: 'difere', tom: 'difere' };
+}
+
 // REGRA PERMANENTE [[feedback-resultado-nunca-vazio]] — Resultado de campo EDITÁVEL nunca
 // aparenta vazio: proposta → mostra a proposta ("muda"); sem proposta mas Sistema==Excel
 // → "confere"; sem proposta e sem conferir → "mantém". Jamais '—'.
@@ -205,7 +241,11 @@ export function toRowVM(
           : { resultado: 'difere', tom: 'difere' as EnriqTom }),
     },
     // C1 — Banco do Sistema via COALESCE (mesma conta da lista); não '—' quando a conta existe.
-    refLinha('Banco', banco, row.excel_conta_origem, fmtTexto(banco), fmtTexto(row.excel_conta_origem)),
+    /* ⚠ POR ID, DESDE O PR-MESA-SALVAR-UNICO-01 — era `refLinha`, que compara texto com
+       texto e acusava "difere" entre o apelido da planilha e o nome do cadastro. */
+    refLinhaConta('Banco',
+      contaEfetivaId(row.lanc_tipo_operacao, row.lanc_conta_bancaria_id, row.lanc_conta_destino_id),
+      banco, row.excel_conta_origem, contas),
     // P0-3 — linha única "Produto / Descrição" (Produto ≡ descricao no oficial). Sistema = descrição do lançamento.
     { campo: 'Produto / Descrição', sistema: fmtTexto(descricao), excel: fmtTexto(row.excel_produto), ...resultadoEditavel(descricao, row.excel_produto, row.proposto_produto) },
     { campo: 'Fornecedor', sistema: fmtTexto(favSistema), excel: fmtTexto(favExcel), resultado: favRes, tom: favTom },
@@ -260,11 +300,22 @@ export function toRowVM(
        ⚠ O EXCEL É O TEXTO CRU DA PLANILHA e o Resultado é o NOME DA CONTA proposta: são
        duas coisas diferentes de propósito — "Cartão ELO" (o que o cliente escreveu) × o
        nome de exibição do cadastro (o que vai ser gravado). */
-    { campo: 'Conta destino',
-      sistema: fmtTexto(row.lanc_conta_destino_nome),
-      excel: fmtTexto(row.excel_conta_destino),
-      ...resultadoEditavel(row.lanc_conta_destino_nome, row.excel_conta_destino,
-        nomeDaConta(row.proposto_conta_destino_id, contas)) },
+    /* ⚠ A MESMA RÉGUA DA CONTA BANCÁRIA — item 2. Com proposta, ela é o Resultado (é o que
+       vai ser gravado); sem proposta, a comparação é por id, e não pelo texto que o cliente
+       escreveu na coluna de destino. */
+    (() => {
+      const proposta = nomeDaConta(row.proposto_conta_destino_id, contas);
+      if (!vazio(proposta)) {
+        return {
+          campo: 'Conta destino',
+          sistema: fmtTexto(row.lanc_conta_destino_nome),
+          excel: fmtTexto(row.excel_conta_destino),
+          resultado: fmtTexto(proposta), tom: 'muda' as EnriqTom,
+        };
+      }
+      return refLinhaConta('Conta destino', row.lanc_conta_destino_id,
+        row.lanc_conta_destino_nome, row.excel_conta_destino, contas);
+    })(),
     { campo: 'Macro · Grupo · Centro',
       sistema: fmtTexto(juntarTrilha(row.lanc_macro_atual, row.lanc_grupo_atual, row.lanc_centro_atual)),
       excel: '—',
@@ -932,7 +983,8 @@ export function contaEfetivaNome(
  * ⚠ CAMPO VAZIO NA PROPOSTA NÃO É DIFERENÇA. O gravador é COALESCE: proposta nula deixa o
  * lançamento como está. Contá-la como divergência acenderia "Salvar" em toda linha.
  *
- * Devolve os RÓTULOS, em português de operador — a tela lista, o `soConfirma` só conta.
+ * Devolve os RÓTULOS, em português de operador — a tela lista; quem só precisa saber se
+ * há diferença lê o tamanho.
  */
 export function diferencasDoResultado(edicao: EnriqEdicao): string[] {
   const difs: string[] = [];
@@ -953,7 +1005,7 @@ export function diferencasDoResultado(edicao: EnriqEdicao): string[] {
   cmp('observação', edicao.observacao, edicao.observacaoAtual);
   /* ── PR-MESA-TRANSF-01 ───────────────────────────────────────────────────────────
      ⚠ SEM ESTAS DUAS, O BOTÃO MENTIA. Uma linha cuja única mudança fosse o tipo caía em
-     `soConfirma`: a tela dizia "nada a gravar", o operador confirmava, e a transferência
+     "nada a gravar": a tela dizia isso, o operador confirmava, e a transferência
      que ele acabou de classificar ficava só no staging — o MESMO defeito que a safra teve
      no 133h item 10. */
   cmp('tipo de operação', edicao.tipoOperacaoProposto, edicao.tipoOperacaoAtual);

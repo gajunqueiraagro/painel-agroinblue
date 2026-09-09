@@ -168,7 +168,12 @@ export function MesaEnriquecimentoTab({
     splitSubstituir, isSubstituindo,
     casarSessao, isCasando,
     excluirSessao, isExcluindoSessao,
-    marcarRevisada,
+    /* ⚠ `marcarRevisada` SAIU DAQUI — PR-MESA-SALVAR-UNICO-01 item 1. Ela tinha UM chamador
+       no front (o ramo "sem diferença" do Salvar e próximo), e ele deixou de existir: o
+       botão grava sempre. A RPC continua no banco e exportada pelo hook; o que não existe
+       mais é o gesto de marcar revisada SEM gravar. Quem quiser esse gesto de volta precisa
+       de uma porta própria — o checkbox "Revisado" desta barra nunca a chamou (ele é o
+       estado local que libera o "Aplicar todos os Exatos"). */
   } = useClassificacaoStaging(sessaoId, clienteAtual?.id);
 
   /* 133c — o motor do passo 3. O progresso vive aqui (no hook), não no diálogo. */
@@ -704,26 +709,26 @@ export function MesaEnriquecimentoTab({
       ? `Falta preencher: ${obrigatoriosVazios.join(', ')}.`
     : null;
   /**
-   * ⚠ NADA A GRAVAR NÃO É ERRO — 133b-a correção 1. Quando o Resultado já confere com o
-   * sistema, o apply não escreveria campo nenhum: o gesto que resta é CONFIRMAR que está
-   * conferido e seguir, e o botão passa a dizer isso em vez de prometer uma gravação que
-   * não acontece.
-   */
-  /**
    * 133h item 10 — as diferenças REAIS entre o Resultado e o lançamento.
    *
    * ⚠ `mudaAlgo` (a `will_change_anything` da view) SAIU DAQUI, e o envelope diz por quê:
    * ela só olha subcentro e fornecedor, e só quando o lançamento está vazio neles. Uma
-   * linha cuja única mudança era a safra (25/26 -> 26/27) caía em `soConfirma`, o botão
-   * dizia "Confirmar e Próximo", o operador confirmava — e a safra nova nunca era gravada.
+   * linha cuja única mudança era a safra (25/26 -> 26/27) era tratada como "nada a gravar",
+   * o operador confirmava — e a safra nova nunca era gravada.
+   * ⚠ ELA NÃO DECIDE MAIS SE O BOTÃO GRAVA — PR-MESA-SALVAR-UNICO-01 item 1. "Sem
+   * diferença" deixou de ser um caminho: o Salvar chama o `apply_row` sempre, e com
+   * proposta vazia ele é no-op que marca `aplicado`. `diferencas` segue viva porque `soAvanca`
+   * a usa, e porque é ela que diz se uma linha JÁ gravada voltou a divergir.
    */
   const diferencas = useMemo(
     () => (selecionado ? diferencasDoResultado(selecionado.edicao) : []),
     [selecionado]);
-  const soConfirma = !!selecionado && !selecionado.aplicado && selecionado.temMatch
-    && !selecionado.parteDeAgrupamento
-    && obrigatoriosVazios.length === 0 && diferencas.length === 0;
-  /* 133i item 2c — já gravada e sem diferença: o gesto que resta é seguir. */
+  /* 133i item 2c — já gravada e sem diferença: o gesto que resta é seguir.
+     ⚠ ESTE RAMO FICA, e não é a exceção que o item 1 mandou remover. Aquela era sobre uma
+     linha AINDA NÃO gravada, onde o botão fugia do `apply_row`; esta é sobre uma linha que
+     JÁ está no banco — `podeSalvar` é falso ("use Reverter") e gravar de novo não é gesto
+     que exista. Sem ele, o botão principal ficaria apagado numa linha correta e o operador
+     não teria como seguir por ele. */
   const soAvanca = !!selecionado && selecionado.aplicado && diferencas.length === 0;
 
   /* ⚠ 133h item 9 — "revisado" É `revisado_em` OU `aplicado`: gravar uma linha é a forma
@@ -951,33 +956,23 @@ export function MesaEnriquecimentoTab({
       return false;
     }
   }
+  /**
+   * Salvar e próximo — PR-MESA-SALVAR-UNICO-01 item 1.
+   *
+   * ⚠ É O `salvar()`, E SÓ DEPOIS O AVANÇO. Nada mais. O botão tinha um segundo caminho
+   * para a linha "sem diferença": marcava revisada e seguia, SEM chamar o `apply_row`. Dois
+   * resultados para o mesmo gesto — "Salvar" na mesma linha a deixava gravada e em leitura;
+   * "Salvar e próximo" a deixava editável, e ao voltar nela o operador via o trabalho
+   * desfeito. Medido por Gabriel no cartão de jul/26.
+   * ⚠ E O `apply_row` COM PROPOSTA VAZIA É SEGURO — conferido no `pg_proc`, não suposto: com
+   * `p_overwrite = true` o guard conservador (`pulado_subcentro_preenchido`) nem é
+   * alcançado, o UPDATE é COALESCE campo a campo (proposta nula deixa como está) e a função
+   * marca `aplicado = true` devolvendo `aplicado_overwrite`. Gravar "nada" é gravar que se
+   * conferiu — que é o que o operador quis dizer.
+   */
   async function handleSalvarProximo() {
     const ok = await salvar();
     if (ok) irProximo();
-  }
-  /**
-   * Confirmar e próximo — 133b-a correção 1. NÃO chama o banco: não há o que gravar.
-   *
-   * ⚠ MARCA "REVISADO" E AVANÇA, que é exatamente o que o operador quis dizer. Chamar o
-   * `apply_row` aqui gastaria uma ida ao banco para receber `nada_a_gravar` e mostrar um
-   * toast de erro no fim de um gesto que deu certo.
-   */
-  async function handleConfirmarProximo() {
-    if (!selecionado) return;
-    const id = selecionado.id;
-    limparEditada(id);
-    setRevisei(true);
-    /* ⚠ 133h item 9 — A CONFIRMAÇÃO PERSISTE. Ela vivia num `useState` do container:
-       recarregar a página, trocar de sessão ou fechar a aba apagava tudo o que já tinha
-       sido conferido, sem aviso — e Gabriel refez linhas por causa disso (07:47).
-       ⚠ AVANÇA MESMO SE A MARCA FALHAR, e o erro aparece: travar a navegação por causa de
-       uma marca de revisão seria pior que a marca não existir. */
-    try {
-      await marcarRevisada({ staging_id: id, revisada: true });
-    } catch (e: unknown) {
-      toast.error(`Confirmado na tela, mas não foi possível marcar como revisada: ${errMsg(e)}`);
-    }
-    irProximo();
   }
   async function handleReverter() {
     if (!selecionado) return;
@@ -1120,9 +1115,7 @@ export function MesaEnriquecimentoTab({
     nAplicaveis,
     salvarDisabled: !podeSalvar,
     salvarMotivo: motivoSalvar,
-    soConfirma,
     soAvanca,
-    onConfirmarProximo: () => { void handleConfirmarProximo(); },
     /* ── 133i-c item 1 — "É transferência para/de ▾" TAMBÉM NA MESA ──────────────
        ⚠ MESMO COMPONENTE E MESMO HOOK da lista "Sem par no sistema"
        (`EnriquecimentoSemParSistema:158`), montado aqui com a linha selecionada. Duas

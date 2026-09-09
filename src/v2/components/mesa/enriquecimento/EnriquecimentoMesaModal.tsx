@@ -233,11 +233,9 @@ export function EnriquecimentoMesaModal({
     const aoTeclar = (e: KeyboardEvent) => {
       if (e.key !== 'Enter' || !(e.metaKey || e.ctrlKey)) return;
       if (actions.isBusy) return;
-      /* O atalho segue o botão — adendo do PR-MESA-TRANSF-01: sem diferença (ou já gravada),
-         marca revisada e avança; com diferença, grava. */
-      if (actions.soConfirma || actions.soAvanca) {
-        e.preventDefault(); actions.onConfirmarProximo?.(); return;
-      }
+      /* O atalho segue o botão — PR-MESA-SALVAR-UNICO-01: grava e avança, sempre. A única
+         exceção é a linha já gravada e sem diferença, onde não há o que gravar. */
+      if (actions.soAvanca) { e.preventDefault(); actions.onProximo(); return; }
       if (actions.salvarDisabled) return;
       e.preventDefault();
       actions.onSalvarProximo();
@@ -515,7 +513,7 @@ export function EnriquecimentoMesaModal({
                 </span>
               ) : (
                 <span className="text-muted-foreground">
-                  <b>Salvar</b> grava no lançamento; sem mudança, só marca a linha como revisada.
+                  <b>Salvar</b> e <b>Salvar e próximo</b> gravam a mesma coisa; o segundo ainda avança.
                 </span>
               )}
             </div>
@@ -532,7 +530,7 @@ export function EnriquecimentoMesaModal({
               {/* ⚠ O MOTIVO DO BLOQUEIO FICA ESCRITO, e não só no `title` — 133b-a
                   correção 1: o operador não passa o mouse num botão apagado, ele procura o
                   que consertar. Quando não há bloqueio, o espaço volta a ser o contador. */}
-              {actions.salvarMotivo && !actions.soConfirma && !actions.soAvanca ? (
+              {actions.salvarMotivo && !actions.soAvanca ? (
                 <span className="min-w-0 shrink truncate text-[10px] text-amber-700 dark:text-amber-400"
                   title={actions.salvarMotivo}>{actions.salvarMotivo}</span>
               ) : null}
@@ -565,22 +563,18 @@ export function EnriquecimentoMesaModal({
               {/* ⚠ O CTA É O ÚLTIMO À DIREITA — 133b-a, e alinhado com a borda da tabela: é
                   onde o olho termina a linha e onde a mão volta depois de conferir os quinze
                   campos.
-                  ⚠ UM RÓTULO SÓ — adendo do PR-MESA-TRANSF-01. Ele alternava entre três
-                  ("Salvar e próximo", "Confirmar e próximo", "Próximo") conforme a linha
-                  tivesse ou não o que gravar, e isso obrigava a LER o botão antes de cada
-                  clique — trezentas vezes numa sessão de trezentas linhas. O gesto do
-                  operador é sempre o mesmo: "esta está conferida, vá". O que muda é o que
-                  acontece por baixo: com diferença grava; sem diferença marca revisada. */}
+                  ⚠ UM RÓTULO SÓ E UM CAMINHO SÓ — PR-MESA-SALVAR-UNICO-01. O rótulo já era
+                  único; o comportamento não era: numa linha sem diferença este botão fugia
+                  do `apply_row` e só marcava revisada, enquanto o "Salvar" ao lado gravava.
+                  Voltar na linha depois mostrava o trabalho desfeito. Agora ele é o Salvar
+                  mais o avanço, e nada mais. */}
               <Button size="sm" className="h-7 shrink-0 whitespace-nowrap bg-cta px-2.5 text-[11px] font-semibold text-cta-foreground hover:bg-cta-hover"
-                onClick={actions.soConfirma || actions.soAvanca
-                  ? actions.onConfirmarProximo : actions.onSalvarProximo}
-                disabled={actions.soConfirma || actions.soAvanca
-                  ? actions.isBusy : (actions.salvarDisabled || actions.isBusy)}
+                onClick={actions.soAvanca ? actions.onProximo : actions.onSalvarProximo}
+                disabled={actions.soAvanca
+                  ? !actions.canProximo : (actions.salvarDisabled || actions.isBusy)}
                 title={actions.soAvanca
-                  ? 'Esta linha já está gravada e nada mudou: marca como revisada e vai para a próxima. (Ctrl/Cmd+Enter)'
-                  : actions.soConfirma
-                    ? 'O Resultado já confere com o sistema: nada a gravar. Marca como revisada e vai para a próxima. (Ctrl/Cmd+Enter)'
-                    : `${actions.salvarMotivo ?? 'Grava esta linha no lançamento e vai para a próxima.'} (Ctrl/Cmd+Enter)`}>
+                  ? 'Esta linha já está gravada e nada mudou: só seguir. (Ctrl/Cmd+Enter)'
+                  : `${actions.salvarMotivo ?? 'Grava esta linha no lançamento e vai para a próxima.'} (Ctrl/Cmd+Enter)`}>
                 {/* ⚠ "FIM DA LISTA" EM VEZ DE PULAR — 133e adendo item 3. Chegando ao fim do
                     recorte, o botão dizia "e próximo" e a próxima linha vinha de outra conta;
                     agora ele grava e para, e o rótulo diz que parou. */}
