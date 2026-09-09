@@ -123,6 +123,29 @@ export async function desfazerGrupo(
   return { ok: r.ok !== false, itensDesfeitos: Number(r.itens_desfeitos ?? 0), erro: null };
 }
 
+/**
+ * DESFAZER UM VÍNCULO UNITÁRIO — `fn_desfazer_vinculo_extrato`.
+ *
+ * ⚠ IRMÃ DA `desfazerGrupo`, e nasce aqui pelo mesmo motivo que ela: a RPC já tinha três
+ * chamadores, cada um com o seu `.rpc` inline — `ExtratoListaTab`, `EstacaoConciliacao` e
+ * `EstacaoConciliar`. Um quarto seria a quarta cópia da mesma decisão. Os três antigos ficam
+ * como dívida nomeada [DESFAZER-VINCULO-UNICO]; o caminho novo passa por aqui.
+ *
+ * ⚠ RECUSA MEMBRO DE GRUPO, por segurança da própria RPC: quem tem `grupo_id` desfaz pelo
+ * grupo. O chamador escolhe pela coluna, não pela tentativa — ver `desfazerGrupo`.
+ */
+export async function desfazerVinculo(
+  extratoId: string, motivo = 'desfeito_manual',
+): Promise<{ ok: boolean; erro: string | null }> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+  const { error } = await (supabase as any).rpc('fn_desfazer_vinculo_extrato', {
+    p_extrato_id: extratoId,
+    p_motivo: motivo,
+  });
+  if (error) return { ok: false, erro: error.message };
+  return { ok: true, erro: null };
+}
+
 export interface ContagemBaldes {
   todos: number;
   conciliado: number;
@@ -578,6 +601,12 @@ export interface ConciliadoDoLancamento {
 export function useLancamentosConciliados(clienteId: string | null) {
   const [mapa, setMapa] = useState<ReadonlyMap<string, ConciliadoDoLancamento>>(new Map());
   const [carregando, setCarregando] = useState(false);
+  /* ⚠ CONTADOR, NÃO REESCRITA DO EFEITO — PR-CONC-B-2. Desfazer um vínculo tem de mudar o
+     ícone da linha sem F5, e este hook não é react-query: não há query a invalidar. Uma
+     dependência a mais relê tudo pelo caminho que já existia; converter o efeito em
+     `useCallback` mexeria em código que funciona para ganhar a mesma coisa. */
+  const [versao, setVersao] = useState(0);
+  const recarregar = useCallback(() => setVersao((v) => v + 1), []);
 
   useEffect(() => {
     let cancelado = false;
@@ -621,7 +650,7 @@ export function useLancamentosConciliados(clienteId: string | null) {
       if (!cancelado) { setMapa(m); setCarregando(false); }
     })();
     return () => { cancelado = true; };
-  }, [clienteId]);
+  }, [clienteId, versao]);
 
-  return { conciliados: mapa, carregando };
+  return { conciliados: mapa, carregando, recarregar };
 }

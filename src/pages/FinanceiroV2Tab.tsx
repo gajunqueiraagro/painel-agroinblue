@@ -9,7 +9,9 @@ import {
   type StatusFiltroFinanceiro,
 } from '@/lib/financeiro/statusFinanceiro';
 import { isTransferenciaTipo } from '@/lib/financeiro/v2Transferencia';
-import { useLancamentosConciliados, type ConciliadoDoLancamento } from '@/hooks/useConciliacaoDoMes';
+import { useLancamentosConciliados, desfazerVinculo, desfazerGrupo } from '@/hooks/useConciliacaoDoMes';
+import { iconeOrigemLancamento, LEGENDA_ICONES } from '@/v2/lib/origemLancamento';
+import { MinimodalOrigemLancamento } from '@/components/financeiro-v2/MinimodalOrigemLancamento';
 import { useCliente } from '@/contexts/ClienteContext';
 import { contaSimpleValid } from '@/components/financeiro-v2/lancamentoDialogTabs';
 import { validarLancamento } from '@/lib/financeiro/validacaoLancamento';
@@ -63,64 +65,6 @@ import {
  * sobreviveria ao Limpar em silêncio.
  */
 const PREFIXO_BUSCA = 'fin-v2-';
-/**
- * O ÍCONE DE ORIGEM — PR-CONC-B-1. Diz de onde o lançamento veio e se o banco o confirmou.
- *
- * ⚠ É ESTADO, NÃO ORIGEM. `origem_lancamento` tem 19 valores e NÃO entra aqui: o operador
- * não pergunta "que tela criou isto", pergunta "o banco confirmou?". A ordem abaixo é a
- * regra, e o primeiro que casa vence.
- *
- * ⚠ "!" SÓ QUANDO O BANCO TINHA COMO CONFIRMAR E NÃO CONFIRMOU. Conta de caixa, cartão ou
- * mês sem OFX carregado dá M, nunca "!": alarme que dispara onde não havia como acertar
- * ensina o operador a ignorar o alarme, e aí ele perde os 11 de julho que importam.
- *
- * ⚠ PREVISTO NÃO TEM ÍCONE. Dinheiro que ainda não andou não se concilia; a coluna fica
- * vazia, e ausência é traço, não símbolo.
- *
- * ⚠ SEM COBERTURA CARREGADA, SEM PALPITE: enquanto o mapa de extrato viaja, o não-vinculado
- * fica sem ícone em vez de afirmar "manual" — dizer M ali seria responder antes de olhar.
- */
-export interface IconeOrigemLancamento {
-  simbolo: string;
-  cor: string;
-  significado: string;
-}
-
-export function iconeOrigemLancamento(
-  l: Pick<LancamentoV2, 'status_transacao' | 'editado_manual' | 'conta_bancaria_id' | 'data_pagamento'>,
-  vinculo: ConciliadoDoLancamento | undefined,
-  coberturaExtrato: ReadonlySet<string> | undefined,
-): IconeOrigemLancamento | null {
-  if (vinculo) {
-    if (vinculo.tipoAprovacao === 'ofx_substituiu') {
-      return { simbolo: '\u21ba', cor: 'text-warning', significado: 'Substituído pelo banco' };
-    }
-    if (vinculo.tipoAprovacao === 'ofx_cru' && l.editado_manual !== true) {
-      return { simbolo: 'B', cor: 'text-primary', significado: 'Cru do banco' };
-    }
-    return { simbolo: '\u2713', cor: 'text-success', significado: 'Enriquecido / conciliado' };
-  }
-
-  if ((l.status_transacao || '').toLowerCase() !== 'realizado') return null;
-  if (!coberturaExtrato) return null;
-
-  const chave = l.conta_bancaria_id && l.data_pagamento
-    ? `${l.conta_bancaria_id}|${l.data_pagamento.slice(0, 7)}`
-    : null;
-
-  return chave && coberturaExtrato.has(chave)
-    ? { simbolo: '!', cor: 'text-destructive', significado: 'Sem par no banco' }
-    : { simbolo: 'M', cor: 'text-muted-foreground', significado: 'Manual (sem extrato para conferir)' };
-}
-
-const LEGENDA_ICONES: readonly { simbolo: string; cor: string; curto: string }[] = [
-  { simbolo: 'B', cor: 'text-primary', curto: 'cru do banco' },
-  { simbolo: '\u21ba', cor: 'text-warning', curto: 'substituído' },
-  { simbolo: '\u2713', cor: 'text-success', curto: 'enriquecido' },
-  { simbolo: 'M', cor: 'text-muted-foreground', curto: 'manual' },
-  { simbolo: '!', cor: 'text-destructive', curto: 'sem par no banco' },
-];
-
 const CHAVE_BUSCA_FORNECEDOR = `${PREFIXO_BUSCA}fornecedor`;
 const CHAVE_BUSCA_MACRO      = `${PREFIXO_BUSCA}macro`;
 const CHAVE_BUSCA_GRUPO      = `${PREFIXO_BUSCA}grupo`;
@@ -279,7 +223,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
      cliente. A lista carrega tudo em lote e pagina no cliente; um mapa completo
      é o que casa com ela, e trocar de página não repergunta nada. */
   const { clienteAtual } = useCliente();
-  const { conciliados } = useLancamentosConciliados(clienteAtual?.id ?? null);
+  const { conciliados, recarregar: recarregarVinculos } = useLancamentosConciliados(clienteAtual?.id ?? null);
 
   /**
    * EM QUE CONTA E EM QUE MÊS EXISTE EXTRATO CARREGADO — a régua do "!" (PR-CONC-B-1).
@@ -2047,13 +1991,22 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                         </td>
                         <td className="px-0 py-1 align-middle text-center sticky left-[28px] z-10 bg-background">
                           {icone && (
-                            <span
-                              className={cn('text-[14px] font-semibold leading-none not-italic', icone.cor)}
-                              title={icone.significado}
-                              aria-label={icone.significado}
+                            <MinimodalOrigemLancamento
+                              lancamento={l}
+                              icone={icone}
+                              nomeFavorecido={(id) => fornecedoresMap.get(id || '')}
+                              onAbrirLancamento={() => openEdit(l)}
+                              onVinculoDesfeito={recarregarVinculos}
                             >
-                              {icone.simbolo}
-                            </span>
+                              <button
+                                type="button"
+                                className={cn('text-[14px] font-semibold leading-none not-italic cursor-pointer', icone.cor)}
+                                title={icone.significado}
+                                aria-label={icone.significado}
+                              >
+                                {icone.simbolo}
+                              </button>
+                            </MinimodalOrigemLancamento>
                           )}
                         </td>
                         <td className="celula-data font-mono px-0.5 py-1 align-middle font-medium leading-tight sticky left-[50px] z-10 bg-background text-center">{fmtDate(l.data_competencia)}</td>

@@ -80,6 +80,10 @@ export interface LancamentoV2 {
   // usado para derivar o estado 'Conciliado' na grade e vetar reclassificação em lote.
   conciliado_em: string | null;
   editado_manual: boolean;
+  /* Quem criou a linha. A coluna sempre veio no payload (o select é `*`); só o tipo
+     não a declarava, e sem ela o minimodal de origem não teria como dizer "lançado
+     por quem" sem um cast ou um quinto select. Aditivo: nenhum writer mudou. */
+  created_by: string | null;
   created_at: string;
   updated_at: string;
   /** FK para `lancamentos.id` quando o registro foi gerado a partir de uma
