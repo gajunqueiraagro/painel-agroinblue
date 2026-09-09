@@ -16,12 +16,14 @@
  * de `AuditoriaBancariaSoberana` byte a byte — o que mudou foi a casa e a Conferência.
  */
 import React, { useEffect, useMemo, useState } from 'react';
+import { DndContext, DragOverlay, useDraggable, useDroppable, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 import { iconeOrigemLancamento, LEGENDA_ICONES, rotuloOrigem, vinculoVencedor } from '@/v2/lib/origemLancamento';
 import { desfazerVinculo, desfazerGrupo } from '@/hooks/useConciliacaoDoMes';
 import { LancamentoLeituraDialog } from '@/components/financeiro-v2/LancamentoLeituraDialog';
+import { CasarComBancoModal, type ExtratoAlvo, type LevadoInicial } from '@/components/financeiro-v2/CasarComBancoModal';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { X } from 'lucide-react';
 
@@ -301,12 +303,83 @@ function Acao({ children, onClick, className }: { children: React.ReactNode; onC
   );
 }
 
+/**
+ * A alça de arrasto do lançamento sem par.
+ *
+ * ⚠ ALÇA, NÃO A LINHA INTEIRA: a linha tem um checkbox e um "abrir", e tornar a linha
+ * arrastável roubaria o clique dos dois. A alça é o único ponto que só serve para arrastar,
+ * e o cursor anuncia isso antes de o operador tentar.
+ */
+function Alca({ id }: { id: string }) {
+  const { attributes, listeners, setNodeRef } = useDraggable({ id });
+  return (
+    <span ref={setNodeRef} {...listeners} {...attributes}
+      className="ml-1.5 inline-block cursor-grab select-none align-middle text-[12px] leading-none text-muted-foreground active:cursor-grabbing"
+      title="Arraste sobre um movimento do banco para casar" aria-label="Arrastar lançamento">
+      ⠿
+    </span>
+  );
+}
+
 /** A borda que separa os dois lados. Mesma célula em toda linha — é o que a faz contínua. */
 const MEIO = 'border-l border-r border-border text-center px-0';
 const CEL = 'px-[5px] overflow-hidden text-ellipsis whitespace-nowrap';
 const H21 = 'h-[21px]';
 
 const corVal = (v: number) => (v < 0 ? 'text-rose-600' : 'text-emerald-600');
+
+/**
+ * ⚠ CADA LINHA É UM COMPONENTE PORQUE O @dnd-kit É HOOK. `useDroppable`/`useDraggable` não
+ * podem ser chamados dentro de um `.map()` — a regra dos hooks proíbe, e o React quebraria ao
+ * mudar a contagem de linhas entre renders. Extrair não foi estética: era a única forma.
+ */
+function LinhaExtratoSemPar({ e, marcado, onMarcar }: {
+  e: EspOfx; marcado: boolean; onMarcar: () => void;
+}) {
+  const { isOver, setNodeRef } = useDroppable({ id: `ext:${e.extrato_id}` });
+  return (
+    <tr ref={setNodeRef} className={cn(H21, 'border-b border-border/50',
+      marcado && 'bg-amber-500/10',
+      isOver && 'bg-emerald-500/10 outline-dashed outline-2 outline-emerald-500')}>
+      <td className="text-center">
+        <input type="checkbox" className="h-3 w-3 align-middle" checked={marcado}
+          onChange={onMarcar} aria-label="Marcar movimento do banco" />
+      </td>
+      <td className={cn(CEL, 'text-[10px] text-muted-foreground')}>{fmtData(e.data)}</td>
+      <td className={cn(CEL, 'text-[10px] font-medium')} title={e.historico ?? ''}>{e.historico ?? '—'}</td>
+      <td className={cn(CEL, 'text-right text-[11px] font-medium tabular-nums', corVal(e.valor))}>{fmtBRL(e.valor)}</td>
+      <td className={cn(MEIO, 'text-[12px] text-muted-foreground')} title="sem correspondência">○</td>
+      <td />
+      <td />
+      <td className={cn(CEL, 'text-[10px] italic text-muted-foreground')}>— nenhum lançamento vinculado</td>
+      <td className={cn(CEL, 'text-right')} />
+    </tr>
+  );
+}
+
+function LinhaLancSemPar({ s, mesDoRecorte, marcado, onMarcar, onAbrir }: {
+  s: EspSis; mesDoRecorte: string; marcado: boolean; onMarcar: () => void; onAbrir?: (id: string) => void;
+}) {
+  return (
+    <tr className={cn(H21, 'border-b border-border/50', marcado && 'bg-amber-500/10')}>
+      <td />
+      <td className={cn(CEL, 'text-[10px] text-muted-foreground')}>{fmtData(s.data)}</td>
+      <td className={cn(CEL, 'text-[10px] italic text-muted-foreground')}>— sem extrato correspondente</td>
+      <td />
+      <td className={cn(MEIO, 'text-[12px] font-semibold text-destructive')} title="sem par no banco">!</td>
+      <td className="text-center">
+        <input type="checkbox" className="h-3 w-3 align-middle" checked={marcado}
+          onChange={onMarcar} aria-label="Marcar lançamento" />
+      </td>
+      <td className={cn(CEL, 'text-left text-[11px] font-medium tabular-nums', corVal(s.valor_assinado))}>{fmtBRL(s.valor_assinado)}</td>
+      <td className={CEL}>{textoLancamento(s, mesDoRecorte, true)}</td>
+      <td className={cn(CEL, 'text-right whitespace-nowrap')}>
+        {onAbrir && <Acao onClick={() => onAbrir(s.lancamento_id)}>abrir</Acao>}
+        <Alca id={`lan:${s.lancamento_id}`} />
+      </td>
+    </tr>
+  );
+}
 
 /** Descrição + fornecedor (+ competência quando difere, + origem quando sem par), UMA linha. */
 function textoLancamento(s: EspSis | undefined, mesDoRecorte: string, semPar = false) {
@@ -341,13 +414,20 @@ export const MOTIVO_CASAR_LABEL: Readonly<Record<string, string>> = {
 
 interface EstadoSelecao { extratos: Set<string>; lancamentos: Set<string>; }
 
-function AbaConferencia({ data, anoMes, onAbrir, onMudou }: {
-  data: EspelhadosReais; anoMes: string; onAbrir?: (id: string) => void; onMudou: () => void;
+function AbaConferencia({ data, anoMes, nomeConta, contaId, onAbrir, onMudou }: {
+  data: EspelhadosReais; anoMes: string; nomeConta?: string; contaId: string | null;
+  onAbrir?: (id: string) => void; onMudou: () => void;
 }) {
   const dias = useMemo(() => montarMesa(data), [data]);
   const [sel, setSel] = useState<EstadoSelecao>({ extratos: new Set(), lancamentos: new Set() });
   const [erro, setErro] = useState<string | null>(null);
   const [gravando, setGravando] = useState(false);
+
+  const [casar, setCasar] = useState<{ extrato: ExtratoAlvo; iniciais: LevadoInicial[] } | null>(null);
+  const [arrastando, setArrastando] = useState<EspSis | null>(null);
+  /* ⚠ 4px ANTES DE VIRAR ARRASTO: sem a distância, o clique no checkbox ao lado da alça já
+     começaria um drag e o operador não conseguiria marcar nada. */
+  const sensores = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
   const limpar = () => { setSel({ extratos: new Set(), lancamentos: new Set() }); setErro(null); };
   useEffect(() => {
@@ -395,9 +475,45 @@ function AbaConferencia({ data, anoMes, onAbrir, onMudou }: {
   };
 
   const mesDoRecorte = anoMes;
+
+  const comoLevado = (s: EspSis): LevadoInicial => ({
+    lancamento_id: s.lancamento_id, descricao: s.descricao,
+    fornecedor: s.fornecedor ?? null, valor_assinado: s.valor_assinado,
+  });
+
+  /* ⚠ O ARRASTADO ENTRA JUNTO COM OS MARCADOS, e sem duplicar: arrastar um que já estava
+     marcado leva a seleção inteira uma vez só, não ele duas. */
+  const aoSoltar = (ev: DragEndEvent) => {
+    setArrastando(null);
+    const alvo = String(ev.over?.id ?? '');
+    const origem = String(ev.active?.id ?? '');
+    if (!alvo.startsWith('ext:') || !origem.startsWith('lan:')) return;
+    const extrato = extratoIndex.get(alvo.slice(4));
+    if (!extrato) return;
+    const ids = new Set<string>([origem.slice(4), ...sel.lancamentos]);
+    const iniciais = [...ids].map((id) => sisIndex.get(id)).filter((x): x is EspSis => !!x).map(comoLevado);
+    if (iniciais.length === 0) return;
+    setCasar({
+      extrato: { extrato_id: extrato.extrato_id, data: extrato.data, historico: extrato.historico, valor: extrato.valor },
+      iniciais,
+    });
+  };
+
+  const abrirCasarDaBarra = () => {
+    const extratoId = [...sel.extratos][0];
+    const extrato = extratoId ? extratoIndex.get(extratoId) : undefined;
+    if (!extrato) return;
+    const iniciais = [...sel.lancamentos].map((id) => sisIndex.get(id)).filter((x): x is EspSis => !!x).map(comoLevado);
+    setCasar({
+      extrato: { extrato_id: extrato.extrato_id, data: extrato.data, historico: extrato.historico, valor: extrato.valor },
+      iniciais,
+    });
+  };
   const marcado = (lado: 'extratos' | 'lancamentos', id: string) => sel[lado].has(id);
 
   return (
+    <DndContext sensors={sensores} onDragEnd={aoSoltar}
+      onDragStart={(ev) => setArrastando(sisIndex.get(String(ev.active.id).slice(4)) ?? null)}>
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto border-t">
         {/* ⚠ A RÉGUA É O PADRÃO DA TABELA, não de cada célula. Sem isto, as células que não
@@ -483,37 +599,14 @@ function AbaConferencia({ data, anoMes, onAbrir, onMudou }: {
                 })}
 
                 {d.extratosSemPar.map((e) => (
-                  <tr key={e.extrato_id} className={cn(H21, 'border-b border-border/50', marcado('extratos', e.extrato_id) && 'bg-amber-500/10')}>
-                    <td className="text-center">
-                      <input type="checkbox" className="h-3 w-3 align-middle" checked={marcado('extratos', e.extrato_id)}
-                        onChange={() => alterna('extratos', e.extrato_id)} aria-label="Marcar movimento do banco" />
-                    </td>
-                    <td className={cn(CEL, 'text-[10px] text-muted-foreground')}>{fmtData(e.data)}</td>
-                    <td className={cn(CEL, 'text-[10px] font-medium')} title={e.historico ?? ''}>{e.historico ?? '—'}</td>
-                    <td className={cn(CEL, 'text-right text-[11px] font-medium tabular-nums', corVal(e.valor))}>{fmtBRL(e.valor)}</td>
-                    <td className={cn(MEIO, 'text-[12px] text-muted-foreground')} title="sem correspondência">○</td>
-                    <td />
-                    <td />
-                    <td className={cn(CEL, 'text-[10px] italic text-muted-foreground')}>— nenhum lançamento vinculado</td>
-                    <td className={cn(CEL, 'text-right')} />
-                  </tr>
+                  <LinhaExtratoSemPar key={e.extrato_id} e={e}
+                    marcado={marcado('extratos', e.extrato_id)} onMarcar={() => alterna('extratos', e.extrato_id)} />
                 ))}
 
-                {d.lancsSemPar.map((s) => (
-                  <tr key={s.lancamento_id} className={cn(H21, 'border-b border-border/50', marcado('lancamentos', s.lancamento_id) && 'bg-amber-500/10')}>
-                    <td />
-                    <td className={cn(CEL, 'text-[10px] text-muted-foreground')}>{fmtData(s.data)}</td>
-                    <td className={cn(CEL, 'text-[10px] italic text-muted-foreground')}>— sem extrato correspondente</td>
-                    <td />
-                    <td className={cn(MEIO, 'text-[12px] font-semibold text-destructive')} title="sem par no banco">!</td>
-                    <td className="text-center">
-                      <input type="checkbox" className="h-3 w-3 align-middle" checked={marcado('lancamentos', s.lancamento_id)}
-                        onChange={() => alterna('lancamentos', s.lancamento_id)} aria-label="Marcar lançamento" />
-                    </td>
-                    <td className={cn(CEL, 'text-left text-[11px] font-medium tabular-nums', corVal(s.valor_assinado))}>{fmtBRL(s.valor_assinado)}</td>
-                    <td className={CEL}>{textoLancamento(s, mesDoRecorte, true)}</td>
-                    <td className={cn(CEL, 'text-right')}>{onAbrir && <Acao onClick={() => onAbrir(s.lancamento_id)}>abrir</Acao>}</td>
-                  </tr>
+                {d.lancsSemPar.map((sl) => (
+                  <LinhaLancSemPar key={sl.lancamento_id} s={sl} mesDoRecorte={mesDoRecorte}
+                    marcado={marcado('lancamentos', sl.lancamento_id)}
+                    onMarcar={() => alterna('lancamentos', sl.lancamento_id)} onAbrir={onAbrir} />
                 ))}
 
                 <tr className="h-[22px] bg-primary/10 border-t border-b border-border">
@@ -566,8 +659,12 @@ function AbaConferencia({ data, anoMes, onAbrir, onMudou }: {
                   podeConciliar && !gravando ? 'bg-[#E7C873] text-foreground hover:bg-[#D9B95F]' : 'bg-primary-foreground/20 text-primary-foreground/50 cursor-not-allowed')}>
                 {gravando ? 'Conciliando…' : 'Conciliar'}
               </button>
-              <button type="button" disabled title="em breve"
-                className="rounded px-2 py-0.5 text-[11px] bg-primary-foreground/20 text-primary-foreground/50 cursor-not-allowed">
+              <button type="button" disabled={sel.extratos.size !== 1} onClick={abrirCasarDaBarra}
+                title={sel.extratos.size === 1 ? undefined : 'marque um extrato'}
+                className={cn('rounded px-2 py-0.5 text-[11px]',
+                  sel.extratos.size === 1
+                    ? 'bg-primary-foreground/20 hover:bg-primary-foreground/30'
+                    : 'bg-primary-foreground/20 text-primary-foreground/50 cursor-not-allowed')}>
                 Casar com o banco…
               </button>
               <button type="button" onClick={limpar} className="text-[11px] underline underline-offset-2 opacity-80 hover:opacity-100">
@@ -577,7 +674,30 @@ function AbaConferencia({ data, anoMes, onAbrir, onMudou }: {
           </div>
         </div>
       )}
+
+      {/* O fantasma segue o cursor: quem arrasta precisa ver O QUE está arrastando. */}
+      <DragOverlay dropAnimation={null}>
+        {arrastando && (
+          <div className="rounded border bg-card px-2 py-0.5 text-[10px] shadow">
+            {arrastando.descricao ?? '—'}
+            <span className={cn('ml-2 font-medium tabular-nums', corVal(arrastando.valor_assinado))}>
+              {fmtBRL(arrastando.valor_assinado)}
+            </span>
+          </div>
+        )}
+      </DragOverlay>
+
+      <CasarComBancoModal
+        open={!!casar}
+        onClose={() => setCasar(null)}
+        extrato={casar?.extrato ?? null}
+        iniciais={casar?.iniciais ?? []}
+        nomeConta={nomeConta}
+        contaBancariaId={contaId}
+        onConciliado={() => { limpar(); onMudou(); }}
+      />
     </div>
+    </DndContext>
   );
 }
 
@@ -742,7 +862,8 @@ export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes }: Props) {
       </div>
 
       {aba === 'conferencia' && (
-        <AbaConferencia data={data} anoMes={anoMes} onAbrir={onAbrirLancamento} onMudou={() => { void refetch(); }} />
+        <AbaConferencia data={data} anoMes={anoMes} nomeConta={data.escopo.nome_conta ?? undefined}
+          contaId={contaId} onAbrir={onAbrirLancamento} onMudou={() => { void refetch(); }} />
       )}
       {aba === 'ofx' && <AbaOfxReal ofx={data.ofx_completo} inicial={inicial} />}
       {aba === 'sistema' && <AbaSistemaReal sistema={data.sistema_completo} inicial={inicial} onAbrir={onAbrirLancamento} />}
