@@ -78,6 +78,7 @@ import { useFazenda, isFazendaPecuaria } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useIntegerInput, useDecimalInput, parseDecimalInput } from '@/hooks/useFormattedNumber';
 import { toast } from 'sonner';
+import { decidirHidratacao, vaiHidratar } from '@/lib/oc/hidratacaoOC';
 import { useMasterLock } from '@/hooks/useMasterLock';
 import { MasterLockBanner } from '@/components/MasterLockBanner';
 import { MorteLoteMetaDialog } from '@/components/MorteLoteMetaDialog';
@@ -416,7 +417,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     p.delete('oc_compra'); p.delete('oc_venda'); p.delete('oc_abate'); p.delete('oc_id');
     p.delete('oc_aba'); p.delete('oc_return');
     setOcSearchParams(p, { replace: true });
-    ocHidratadoRef.current = false;
+    ocHidratadoRef.current = null;
+    ocHidratandoRef.current = false;
   }, [setOcSearchParams]);
   const modoOCCompra = ocSearchParams.get('oc_compra') === '1';
   /* ⚠ SO O PARAMETRO, aqui em cima. O `modoOCVenda` completo mora la' embaixo porque
@@ -442,6 +444,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   //   abertura (não criação). ocAberturaExistente => cabeçalho SOMENTE LEITURA (writer não
   //   atualiza numero_documento/cenario; edição de programada é PR posterior).
   const ocIdParam = ocSearchParams.get('oc_id');
+
   const [ocAberturaExistente, setOcAberturaExistente] = useState<boolean>(false);
 
   /* PR-OC-EDICAO-POS-FECHAMENTO-02 (dirty tracking) — retrato dos DADOS DA OPERACAO
@@ -462,7 +465,35 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [acaoOcLoading, setAcaoOcLoading] = useState<null | 'confirmar' | 'cancelar' | 'reabrir'>(null);
   const [ocHidratando, setOcHidratando] = useState<boolean>(false);
   const [ocHidratacaoErro, setOcHidratacaoErro] = useState<string | null>(null);
-  const ocHidratadoRef = useRef<boolean>(false);
+  /**
+   * ⚠ DOIS REFS ONDE HAVIA UM BOOLEANO — PR-OC-LISTA-03. Ele respondia "já hidratou?" e
+   * servia a duas perguntas diferentes ao mesmo tempo: a proteção contra hidratação dupla
+   * CONCORRENTE (legítima) e o bloqueio da SEGUNDA abertura (defeito). Como só voltava a
+   * `false` no caminho de falha, a segunda OC aberta na mesma montagem da aba morria num
+   * `return` mudo — sem toast, sem modal, com os `oc_*` presos na URL. A regra que os
+   * separa é pura e testada: `decidirHidratacao`.
+   */
+  /** Uma hidratação está EM VOO — é contra a concorrência que o guard original nasceu. */
+  const ocHidratandoRef = useRef<boolean>(false);
+  /** QUAL operação já foi hidratada nesta montagem; `null` = nenhuma. */
+  const ocHidratadoRef = useRef<string | null>(null);
+  /**
+   * SEM `oc_id` NA URL, NENHUMA OPERAÇÃO ESTÁ ABERTA — PR-OC-LISTA-03 itens 2 e 3.
+   *
+   * ⚠ UMA REGRA PARA OS DOIS PEDIDOS, e é por isso que ela mora aqui e não em cada lugar
+   * que apaga os parâmetros. Quem os apaga hoje são TRÊS: `fecharOperacaoOC` (V2Index, ao
+   * fechar o modal), `limparParamsOC` (aqui, quando a hidratação falha) e `editarTitulo`
+   * (`AbaCompromissosOC:512-516`, que apaga os `oc_*` SEM trocar de seção — deixando esta
+   * aba montada). Pedir a cada um que lembre de zerar o ref é a lista que se esquece na
+   * quarta vez; observar o desaparecimento do parâmetro responde pelos três de uma vez, e
+   * responderá pelo quarto sem que ninguém precise saber que ele existe.
+   * ⚠ O `ocHidratando` NÃO É ZERADO AQUI: uma hidratação em voo continua em voo mesmo que a
+   * URL mude debaixo dela, e quem a solta é o `finally` dela — apagá-lo daqui reabriria a
+   * porta da leitura concorrente que o guard existe para fechar.
+   */
+  useEffect(() => {
+    if (!ocIdParam) ocHidratadoRef.current = null;
+  }, [ocIdParam]);
   // COM-3: estado/handlers dos lotes comerciais (só em modo OC; fonte única = camada OC).
   /* ⚠ PRIMEIRA CAUSA DO DEFEITO 1 (PR-OC-FIX-VENDA-NEGOCIACAO-NAO-GRAVA-01): estava
      `enabled: modoOCCompra`, entao numa VENDA o `carregar` do hook saia pela guarda
@@ -794,8 +825,15 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   //   As 4 subabas re-hidratam sozinhas por operacaoId (não duplicar leitura aqui).
   useEffect(() => {
     if (!modoOCCompra || !ocIdParam || !clienteAtual?.id) return;
-    if (ocHidratadoRef.current) return;
-    ocHidratadoRef.current = true;
+    /* ⚠ O GUARD DECIDE, NÃO BLOQUEIA — PR-OC-LISTA-03. Em voo, desiste (a proteção
+       original); mesma operação já aberta, nada a fazer; OUTRA operação na mesma montagem,
+       avisa e hidrata. Antes, este caso caía num `return` calado e a tela ficava parada em
+       Lançamentos com os parâmetros na URL. */
+    const decisao = decidirHidratacao(ocHidratandoRef.current, ocHidratadoRef.current, ocIdParam);
+    if (!vaiHidratar(decisao)) return;
+    if (decisao === 'reabrir') toast.info('Abrindo a operação…');
+    ocHidratandoRef.current = true;
+    ocHidratadoRef.current = ocIdParam;
     let cancelado = false;
     const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     (async () => {
@@ -850,6 +888,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         toast.error(msg);
         limparParamsOC();
       } finally {
+        /* ⚠ SOLTA O "EM VOO" EM TODA SAÍDA — PR-OC-LISTA-03. Sem isto, uma falha de rede
+           deixaria o marcador preso e NENHUMA abertura seguinte passaria: seria trocar um
+           bloqueio silencioso por outro. */
+        ocHidratandoRef.current = false;
         if (!cancelado) setOcHidratando(false);
       }
     })();
@@ -895,8 +937,15 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
      booleanos nunca coexistem, entao no maximo um dos dois effects roda por abertura. */
   useEffect(() => {
     if (!modoOCVenda || !ocIdParam || !clienteAtual?.id) return;
-    if (ocHidratadoRef.current) return;
-    ocHidratadoRef.current = true;
+    /* ⚠ O GUARD DECIDE, NÃO BLOQUEIA — PR-OC-LISTA-03. Em voo, desiste (a proteção
+       original); mesma operação já aberta, nada a fazer; OUTRA operação na mesma montagem,
+       avisa e hidrata. Antes, este caso caía num `return` calado e a tela ficava parada em
+       Lançamentos com os parâmetros na URL. */
+    const decisao = decidirHidratacao(ocHidratandoRef.current, ocHidratadoRef.current, ocIdParam);
+    if (!vaiHidratar(decisao)) return;
+    if (decisao === 'reabrir') toast.info('Abrindo a operação…');
+    ocHidratandoRef.current = true;
+    ocHidratadoRef.current = ocIdParam;
     let cancelado = false;
     const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     (async () => {
@@ -965,6 +1014,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         toast.error(msg);
         limparParamsOC();
       } finally {
+        /* ⚠ SOLTA O "EM VOO" EM TODA SAÍDA — PR-OC-LISTA-03. Sem isto, uma falha de rede
+           deixaria o marcador preso e NENHUMA abertura seguinte passaria: seria trocar um
+           bloqueio silencioso por outro. */
+        ocHidratandoRef.current = false;
         if (!cancelado) setOcHidratando(false);
       }
     })();
@@ -985,8 +1038,15 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
      booleanos nunca coexistem, entao no maximo um dos effects roda por abertura. */
   useEffect(() => {
     if (!modoOCAbate || !ocIdParam || !clienteAtual?.id) return;
-    if (ocHidratadoRef.current) return;
-    ocHidratadoRef.current = true;
+    /* ⚠ O GUARD DECIDE, NÃO BLOQUEIA — PR-OC-LISTA-03. Em voo, desiste (a proteção
+       original); mesma operação já aberta, nada a fazer; OUTRA operação na mesma montagem,
+       avisa e hidrata. Antes, este caso caía num `return` calado e a tela ficava parada em
+       Lançamentos com os parâmetros na URL. */
+    const decisao = decidirHidratacao(ocHidratandoRef.current, ocHidratadoRef.current, ocIdParam);
+    if (!vaiHidratar(decisao)) return;
+    if (decisao === 'reabrir') toast.info('Abrindo a operação…');
+    ocHidratandoRef.current = true;
+    ocHidratadoRef.current = ocIdParam;
     let cancelado = false;
     const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     (async () => {
@@ -1028,6 +1088,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         toast.error(msg);
         limparParamsOC();
       } finally {
+        /* ⚠ SOLTA O "EM VOO" EM TODA SAÍDA — PR-OC-LISTA-03. Sem isto, uma falha de rede
+           deixaria o marcador preso e NENHUMA abertura seguinte passaria: seria trocar um
+           bloqueio silencioso por outro. */
+        ocHidratandoRef.current = false;
         if (!cancelado) setOcHidratando(false);
       }
     })();
