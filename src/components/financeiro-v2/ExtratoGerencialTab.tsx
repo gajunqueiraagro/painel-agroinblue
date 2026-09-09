@@ -30,7 +30,7 @@ import { formatMoeda } from '@/lib/calculos/formatters';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useCoberturaExtrato } from '@/hooks/useCoberturaExtrato';
-import { iconeOrigemLancamento, LEGENDA_ICONES } from '@/v2/lib/origemLancamento';
+import { iconeOrigemLancamento, LEGENDA_ICONES, tipoMaisForte } from '@/v2/lib/origemLancamento';
 import { MinimodalOrigemLancamento } from '@/components/financeiro-v2/MinimodalOrigemLancamento';
 
 interface ContaRow extends ContaSelecionavel { fazenda_id: string | null; }
@@ -199,14 +199,13 @@ export function ExtratoGerencialTab({ periodo }: { periodo: PeriodoControlado })
         .select('lancamento_id, valor_aplicado, tipo_aprovacao').in('lancamento_id', lancIds).is('desfeito_em', null);
       const rows: { lancamento_id: string; valor_aplicado: number; tipo_aprovacao: string | null }[] = data ?? [];
       const aplicado = new Map<string, number>();
-      /* ⚠ MESMA PRECEDÊNCIA DO B-1, e por isso a tabela: com dois vínculos ativos o ícone não
-         pode depender de qual linha o PostgREST devolveu primeiro. */
-      const forca = (t: string | null) => (t === 'ofx_substituiu' ? 3 : t === 'ofx_cru' ? 2 : 1);
+      /* ⚠ MESMA PRECEDÊNCIA DO B-1, e agora literalmente a mesma função: com dois vínculos
+         ativos o ícone não pode depender de qual linha o PostgREST devolveu primeiro. */
       const tipo = new Map<string, string | null>();
       for (const r of rows) {
         aplicado.set(r.lancamento_id, (aplicado.get(r.lancamento_id) ?? 0) + Number(r.valor_aplicado));
         const atual = tipo.get(r.lancamento_id);
-        if (atual === undefined || forca(r.tipo_aprovacao) > forca(atual)) tipo.set(r.lancamento_id, r.tipo_aprovacao);
+        tipo.set(r.lancamento_id, atual === undefined ? r.tipo_aprovacao : tipoMaisForte(atual, r.tipo_aprovacao));
       }
       return { aplicado, tipo };
     },

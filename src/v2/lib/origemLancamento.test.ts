@@ -9,6 +9,9 @@
 import { describe, it, expect } from 'vitest';
 import {
   iconeOrigemLancamento,
+  vinculoVencedor,
+  tipoMaisForte,
+  forcaAprovacao,
   rotuloOrigem,
   ORIGEM_LANCAMENTO_LABEL,
   TITULO_ICONE,
@@ -114,20 +117,79 @@ describe('iconeOrigemLancamento — previsto', () => {
 });
 
 /**
- * ⚠ A PRECEDÊNCIA ENTRE DOIS VÍNCULOS NÃO PASSA POR AQUI, e é a lacuna que este arquivo
- * documenta em vez de fingir cobrir: `iconeOrigemLancamento` recebe UM vínculo, já resolvido.
- * A escolha do vencedor está escrita TRÊS VEZES, nenhuma exportada —
- * `useConciliacaoDoMes.ts:561` (`FORCA_APROVACAO`), `MinimodalOrigemLancamento.tsx:74`
- * (`FORCA`) e `ExtratoGerencialTab.tsx:204` (`forca` inline). Enquanto forem três, um teste
- * só não as protege; o que dá para fixar aqui é que, dado o vencedor, o ícone é o certo.
+ * A PRECEDÊNCIA, AGORA EXERCITADA DE VERDADE — PR-CONC-B-4. Até aqui a escolha do vínculo
+ * vencedor estava escrita três vezes, nenhuma exportada, e este bloco só sabia afirmar
+ * "dado o vencedor, o ícone é o certo". Com uma função só, dá para testar a escolha.
  */
-describe('iconeOrigemLancamento — dado o vencedor da precedência', () => {
-  it('manual + ofx_substituiu: o vencedor é ofx_substituiu e o ícone é ↺', () => {
-    expect(iconeOrigemLancamento(lanc(), { tipoAprovacao: 'ofx_substituiu' }, COM_EXTRATO)?.simbolo).toBe('↺');
+describe('vinculoVencedor', () => {
+  const t = (tipo: string | null) => ({ tipoAprovacao: tipo });
+  const tipoDe = (v: { tipoAprovacao: string | null }) => v.tipoAprovacao;
+
+  it('lista vazia não tem vencedor', () => {
+    expect(vinculoVencedor([], tipoDe)).toBeUndefined();
   });
 
-  it('manual + ofx_cru não editado: o vencedor é ofx_cru e o ícone é B', () => {
-    expect(iconeOrigemLancamento(lanc(), { tipoAprovacao: 'ofx_cru' }, COM_EXTRATO)?.simbolo).toBe('B');
+  it('um só vínculo vence sozinho', () => {
+    const unico = t('manual');
+    expect(vinculoVencedor([unico], tipoDe)).toBe(unico);
+  });
+
+  it('manual + ofx_substituiu vence ofx_substituiu NAS DUAS ORDENS', () => {
+    expect(vinculoVencedor([t('manual'), t('ofx_substituiu')], tipoDe)?.tipoAprovacao).toBe('ofx_substituiu');
+    expect(vinculoVencedor([t('ofx_substituiu'), t('manual')], tipoDe)?.tipoAprovacao).toBe('ofx_substituiu');
+  });
+
+  it('manual + ofx_cru vence ofx_cru NAS DUAS ORDENS', () => {
+    expect(vinculoVencedor([t('manual'), t('ofx_cru')], tipoDe)?.tipoAprovacao).toBe('ofx_cru');
+    expect(vinculoVencedor([t('ofx_cru'), t('manual')], tipoDe)?.tipoAprovacao).toBe('ofx_cru');
+  });
+
+  it('ofx_substituiu vence ofx_cru nas duas ordens', () => {
+    expect(vinculoVencedor([t('ofx_cru'), t('ofx_substituiu')], tipoDe)?.tipoAprovacao).toBe('ofx_substituiu');
+    expect(vinculoVencedor([t('ofx_substituiu'), t('ofx_cru')], tipoDe)?.tipoAprovacao).toBe('ofx_substituiu');
+  });
+
+  it('empate de força fica com o PRIMEIRO — são 4 lançamentos assim no proto', () => {
+    const primeiro = t('manual');
+    expect(vinculoVencedor([primeiro, t('agrupamento_legado')], tipoDe)).toBe(primeiro);
+    const outro = t('agrupamento_legado');
+    expect(vinculoVencedor([outro, t('manual')], tipoDe)).toBe(outro);
+  });
+
+  it('o acessor lê o nome que a fonte usa — snake_case da linha crua também', () => {
+    const linhas = [{ tipo_aprovacao: 'manual' }, { tipo_aprovacao: 'ofx_substituiu' }];
+    expect(vinculoVencedor(linhas, (v) => v.tipo_aprovacao)?.tipo_aprovacao).toBe('ofx_substituiu');
+  });
+
+  it('o vencedor alimenta o ícone: as duas ordens dão o mesmo símbolo', () => {
+    for (const lista of [[t('manual'), t('ofx_substituiu')], [t('ofx_substituiu'), t('manual')]]) {
+      const v = vinculoVencedor(lista, tipoDe);
+      expect(iconeOrigemLancamento(lanc(), v, COM_EXTRATO)?.simbolo).toBe('↺');
+    }
+  });
+});
+
+describe('tipoMaisForte e forcaAprovacao', () => {
+  it('a força é 3, 2 e 1 — e desconhecido vale 1, nunca 0', () => {
+    expect(forcaAprovacao('ofx_substituiu')).toBe(3);
+    expect(forcaAprovacao('ofx_cru')).toBe(2);
+    expect(forcaAprovacao('manual')).toBe(1);
+    expect(forcaAprovacao('tipo_que_nao_existe')).toBe(1);
+    expect(forcaAprovacao(null)).toBe(1);
+  });
+
+  it('desempata a favor do que já estava — é o que faz o acumulador ser estável', () => {
+    expect(tipoMaisForte('manual', 'agrupamento_legado')).toBe('manual');
+    expect(tipoMaisForte('manual', 'ofx_cru')).toBe('ofx_cru');
+    expect(tipoMaisForte('ofx_substituiu', 'ofx_cru')).toBe('ofx_substituiu');
+  });
+
+  /* ⚠ ESTE CASO É A ARMADILHA que o B-4 encontrou: com `a = null` e `b = 'manual'` ambos
+     valem 1, então o null PERMANECE. Quem acumula linha a linha precisa semear com a
+     primeira linha em vez de comparar contra null — ver `useLancamentosConciliados`. */
+  it('null contra manual mantém o null: quem acumula tem de semear', () => {
+    expect(tipoMaisForte(null, 'manual')).toBeNull();
+    expect(tipoMaisForte(null, 'ofx_cru')).toBe('ofx_cru');
   });
 });
 

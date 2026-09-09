@@ -27,6 +27,7 @@ import {
   type IconeOrigemLancamento,
   rotuloOrigem,
   TITULO_ICONE,
+  vinculoVencedor,
 } from '@/v2/lib/origemLancamento';
 
 /** A tolerância do dinheiro, a mesma do resto da conciliação: um centavo não é diferença. */
@@ -69,18 +70,6 @@ interface DadosMinimodal {
   extratos: Map<string, ExtratoDetalhe>;
   importacoes: Map<string, ImportacaoDetalhe>;
   nomes: Map<string, string>;
-}
-
-const FORCA: Readonly<Record<string, number>> = { ofx_substituiu: 3, ofx_cru: 2 };
-
-/** O vínculo que manda no bloco "mudou": a MESMA precedência do ícone (B-1). */
-function vinculoVencedor(vinculos: readonly VinculoDetalhe[]): VinculoDetalhe | null {
-  let melhor: VinculoDetalhe | null = null;
-  for (const v of vinculos) {
-    if (!melhor) { melhor = v; continue; }
-    if ((FORCA[v.tipo_aprovacao ?? ''] ?? 1) > (FORCA[melhor.tipo_aprovacao ?? ''] ?? 1)) melhor = v;
-  }
-  return melhor;
 }
 
 function fmtData(d: string | null | undefined): string {
@@ -192,7 +181,8 @@ export function MinimodalOrigemLancamento({
   }, [aberto, lancamento.id, lancamento.created_by]);
 
   const vinculos = dados?.vinculos ?? [];
-  const vencedor = vinculoVencedor(vinculos);
+  /* O bloco "mudou" sai do MESMO vínculo que decide o ícone — mesma função. */
+  const vencedor = vinculoVencedor(vinculos, (v) => v.tipo_aprovacao);
   const umVinculoSo = vinculos.length === 1;
   /* Desfazer só no ✓ e só com um vínculo: com dois, a RPC recusa e o botão prometeria
      uma ação que o banco nega. Botão que some é melhor que botão que erra. */

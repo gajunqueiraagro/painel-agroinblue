@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { tipoMaisForte } from '@/v2/lib/origemLancamento';
 
 /**
  * useConciliacaoDoMes — os dados da tela de conciliação do extrato.
@@ -550,22 +551,6 @@ export function useVinculosDoMovimento(extratoId: string | null) {
   return { vinculos, loading, recarregar: carregar };
 }
 
-/**
- * Precedência entre vínculos do MESMO lançamento — PR-CONC-B-1.
- *
- * ⚠ VENCE O MAIS FORTE, NÃO O PRIMEIRO. Um lançamento pode ter vários vínculos ativos
- * (parciais em movimentos diferentes), e guardar "o que chegou antes" faria o ícone de
- * origem depender da ordem da consulta — mesma linha, ícone diferente a cada carga.
- * `ofx_substituiu` > `ofx_cru` > o resto, que é a ordem em que a tela lê a regra.
- */
-const FORCA_APROVACAO: Readonly<Record<string, number>> = { ofx_substituiu: 3, ofx_cru: 2 };
-
-function tipoMaisForte(a: string | null, b: string | null): string | null {
-  if (!a) return b;
-  if (!b) return a;
-  return (FORCA_APROVACAO[b] ?? 1) > (FORCA_APROVACAO[a] ?? 1) ? b : a;
-}
-
 /** O vínculo ativo de um lançamento, como a lista precisa exibi-lo. */
 export interface ConciliadoDoLancamento {
   /** Data do movimento bancário — a prova de que o dinheiro andou. */
@@ -575,7 +560,8 @@ export interface ConciliadoDoLancamento {
   /**
    * Como o vínculo nasceu: `ofx_cru`, `ofx_substituiu`, `manual`, `agrupamento_manual`,
    * `agrupamento_legado`. É o que separa "o banco trouxe" de "alguém casou à mão", e
-   * com mais de um vínculo vale o mais forte — ver `FORCA_APROVACAO`.
+   * com mais de um vínculo vale o mais forte — a precedência mora em
+   * `@/v2/lib/origemLancamento`, junto da regra do ícone que a consome.
    */
   tipoAprovacao: string | null;
 }
@@ -641,7 +627,14 @@ export function useLancamentosConciliados(clienteId: string | null) {
             dataMovimento: atual?.dataMovimento ?? e?.data_movimento ?? null,
             descricaoMovimento: atual?.descricaoMovimento ?? e?.descricao ?? null,
             valorAplicado: (atual?.valorAplicado ?? 0) + Number(r.valor_aplicado ?? 0),
-            tipoAprovacao: tipoMaisForte(atual?.tipoAprovacao ?? null, r.tipo_aprovacao ?? null),
+            /* ⚠ A PRIMEIRA LINHA É SEMENTE, NÃO COMPARAÇÃO. `tipoMaisForte` desempata a favor
+               do que já estava; sem o `atual === undefined` explícito, o primeiro `manual`
+               (força 1) perderia para o `null` inicial (também força 1) e o vínculo nasceria
+               sem tipo. A cópia antiga resolvia isso com um `if (!a) return b` embutido no
+               desempate — que era justamente o ponto em que ela divergia das outras duas. */
+            tipoAprovacao: atual === undefined
+              ? (r.tipo_aprovacao ?? null)
+              : tipoMaisForte(atual.tipoAprovacao, r.tipo_aprovacao ?? null),
           });
         }
         if (rows.length < PAGE) break;

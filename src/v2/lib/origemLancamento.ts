@@ -11,6 +11,50 @@ import type { LancamentoV2 } from '@/hooks/useFinanceiroV2';
 import type { ConciliadoDoLancamento } from '@/hooks/useConciliacaoDoMes';
 
 /**
+ * QUAL VÍNCULO MANDA, QUANDO HÁ MAIS DE UM — PR-CONC-B-4.
+ *
+ * ⚠ ESTAVA ESCRITO TRÊS VEZES: no hook dos vínculos, no minimodal e no Extrato Gerencial,
+ * nenhuma exportada. As três concordavam — e era esse o perigo, porque nada além da
+ * coincidência as mantinha de acordo: quem mudasse uma não tinha como saber das outras.
+ * Um lançamento pode ter vários vínculos ativos (parciais em movimentos diferentes) e o
+ * ícone não pode depender de qual linha o PostgREST devolveu primeiro.
+ *
+ * ⚠ EMPATE FICA COM O PRIMEIRO, que é o que as três já faziam com o `>` estrito. Entre
+ * `manual` e `agrupamento_legado` não há hierarquia — os dois são "alguém casou à mão" e
+ * dão o mesmo ✓ —, então qualquer escolha serve desde que seja UMA. São 4 lançamentos no
+ * proto com força empatada, medidos em 09/09/2026.
+ */
+export const FORCA_APROVACAO: Readonly<Record<string, number>> = { ofx_substituiu: 3, ofx_cru: 2 };
+
+export function forcaAprovacao(tipo: string | null | undefined): number {
+  return FORCA_APROVACAO[tipo ?? ''] ?? 1;
+}
+
+/** O mais forte entre dois tipos. Para quem acumula linha a linha, sem montar lista. */
+export function tipoMaisForte(a: string | null, b: string | null): string | null {
+  return forcaAprovacao(b) > forcaAprovacao(a) ? b : a;
+}
+
+/**
+ * O vínculo vencedor de uma lista.
+ *
+ * ⚠ O ACESSOR NÃO É CERIMÔNIA: quem tem a linha crua do banco chama o campo
+ * `tipo_aprovacao` e quem tem o mapa da tela chama `tipoAprovacao`. Exigir um nome só
+ * obrigaria um dos dois a copiar o objeto inteiro para renomear um campo.
+ */
+export function vinculoVencedor<T>(
+  vinculos: readonly T[],
+  tipoDe: (v: T) => string | null,
+): T | undefined {
+  let melhor: T | undefined;
+  for (const v of vinculos) {
+    if (melhor === undefined) { melhor = v; continue; }
+    if (forcaAprovacao(tipoDe(v)) > forcaAprovacao(tipoDe(melhor))) melhor = v;
+  }
+  return melhor;
+}
+
+/**
  * O ÍCONE DE ORIGEM — PR-CONC-B-1. Diz de onde o lançamento veio e se o banco o confirmou.
  *
  * ⚠ É ESTADO, NÃO ORIGEM. `origem_lancamento` tem 19 valores e NÃO entra aqui: o operador
