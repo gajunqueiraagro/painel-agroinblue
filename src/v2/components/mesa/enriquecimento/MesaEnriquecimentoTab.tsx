@@ -495,8 +495,20 @@ export function MesaEnriquecimentoTab({
    * o guard (f) lê. Com lançamento, ele traria a conta do lançamento e a comparação seria
    * outra.
    *
-   * ⚠ "MESMO DIA" É `excel_data`, medido: nos 20 grupos do NJ Pecuária, todas as linhas de um
-   * grupo compartilham a mesma `excel_data` — nenhum grupo cruza dias.
+   * ⚠ O DIA SAIU DO FILTRO E VIROU ORDENAÇÃO — PR-ENRIQ-AGRUPAR-01. A versão anterior
+   * excluía quem tivesse `excel_data` diferente do dia do lançamento, medindo "nos 20 grupos
+   * do NJ Pecuária nenhum grupo cruza dias". A medida estava certa e a conclusão não: em
+   * Agnaldo o grupo de 03/08 tem quatro linhas de 31/07 e uma de 28/07 (DAEMS, R$ 33,61), e
+   * o filtro escondia justamente a que o casador já havia sugerido — o painel contava cinco,
+   * o modal mostrava quatro, e não havia gesto para trazê-la.
+   *
+   * ⚠ E A RPC NÃO TEM GUARD DE DATA. Os oito guards de `fn_classificacao_split_substituir`
+   * são permissão, lançamento vivo, não-referenciado, ids elegíveis, soma, conta, um extrato
+   * e subcentro canônico — `excel_data` não aparece em nenhum. O filtro do dia era MAIS
+   * restritivo que o banco, o contrário do que este bloco se propõe a fazer.
+   *
+   * A data continua mandando na ORDEM: as do dia do lançamento primeiro, depois as demais
+   * por data — o que é provável de compor vem antes, sem que nada fique inalcançável.
    */
   const ELEGIVEL_PARA_GRUPO = useMemo(
     () => new Set(['sem_match', 'sem_conta_para_match', 'candidatos_proximos', 'sugestao_split']),
@@ -507,9 +519,8 @@ export function MesaEnriquecimentoTab({
     if (!dia) return [];
     const contasDoLanc = new Set(
       [linhaCrua.lanc_conta_bancaria_id, linhaCrua.lanc_conta_destino_id].filter((x): x is string => !!x));
-    return staging.filter((r) => {
+    const elegiveis = staging.filter((r) => {
       if (r.aplicado) return false;
-      if (r.excel_data !== dia) return false;
       if (!ELEGIVEL_PARA_GRUPO.has(String(r.match_status))) return false;
       if (r.match_lancamento_ids) return false;
       /* ⚠ `lanc_id`, NÃO `match_lancamento_id`: a coluna crua não existe na view — ela é o
@@ -520,6 +531,13 @@ export function MesaEnriquecimentoTab({
       /* Sem conta na linha, o guard (f) aceita — a conta virá do lançamento. */
       if (!r.conta_filtro_id) return true;
       return contasDoLanc.size === 0 || contasDoLanc.has(r.conta_filtro_id);
+    });
+    /* Mesma data do lançamento primeiro; depois, as demais em ordem de data. */
+    return [...elegiveis].sort((a, b) => {
+      const pa = a.excel_data === dia ? 0 : 1;
+      const pb = b.excel_data === dia ? 0 : 1;
+      if (pa !== pb) return pa - pb;
+      return (a.excel_data ?? '') < (b.excel_data ?? '') ? -1 : (a.excel_data ?? '') > (b.excel_data ?? '') ? 1 : 0;
     });
   }, [staging, linhaCrua, ELEGIVEL_PARA_GRUPO]);
 
@@ -1333,7 +1351,7 @@ export function MesaEnriquecimentoTab({
             </Button>
             {candidatasDoGrupo.length > gruposIdsDoSplit.length && (
               <span className="text-[10px] text-violet-800 dark:text-violet-300">
-                {candidatasDoGrupo.length} linhas do dia sem par — dá para incluir ou tirar
+                {candidatasDoGrupo.length} linhas sem par — dá para incluir ou tirar
               </span>
             )}
           </div>

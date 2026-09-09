@@ -63,20 +63,41 @@ export function AgruparModal({
     if (open) setMarcadas(new Set(sugeridasIds));
   }, [open, sugeridasIds]);
 
-  const somaCent = useMemo(
-    () => candidatas.reduce((acc, r) => acc + (marcadas.has(r.staging_id) ? cent(r.excel_valor) : 0), 0),
+  /* ⚠ A CONTAGEM SAI DO MESMO CONJUNTO QUE A SOMA — PR-ENRIQ-AGRUPAR-01. Era
+     `marcadas.size`, e a soma reduzia sobre `candidatas`: quando uma sugerida ficava de fora
+     da lista, o cabeçalho dizia "5 marcadas" somando quatro, e a diferença de R$ 33,61
+     aparecia sem nada na tela que a explicasse. Contar o que não se soma é pior que não
+     contar. */
+  const marcadasVisiveis = useMemo(
+    () => candidatas.filter((r) => marcadas.has(r.staging_id)),
     [candidatas, marcadas]);
+  const somaCent = useMemo(
+    () => marcadasVisiveis.reduce((acc, r) => acc + cent(r.excel_valor), 0),
+    [marcadasVisiveis]);
   const extratoCent = cent(movimento.valor);
   const difCent = somaCent - extratoCent;
   /* ±0,005 é a tolerância da RPC; em centavos inteiros, isso é diferença zero. */
   const confere = difCent === 0;
-  const n = marcadas.size;
+  const n = marcadasVisiveis.length;
+
+  /* ⚠ BUSCA SOBRE A LISTA, NUNCA SOBRE A MARCAÇÃO: filtrar o que se vê não pode desmarcar o
+     que já foi escolhido, senão procurar a sexta linha desfaz as cinco primeiras. */
+  const [busca, setBusca] = useState('');
+  const visiveis = useMemo(() => {
+    const q = busca.trim().toLowerCase();
+    if (!q) return candidatas;
+    return candidatas.filter((r) =>
+      `${r.excel_fornecedor ?? ''} ${r.excel_produto ?? ''} ${r.excel_subcentro ?? ''} ${r.excel_valor ?? ''}`
+        .toLowerCase().includes(q));
+  }, [candidatas, busca]);
 
   const alternar = (id: string) => setMarcadas((prev) => {
     const s = new Set(prev);
     if (s.has(id)) s.delete(id); else s.add(id);
     return s;
   });
+
+  const idsParaAgrupar = useMemo(() => marcadasVisiveis.map((r) => r.staging_id), [marcadasVisiveis]);
 
   const motivoTravado = n < 2
     ? 'Marque pelo menos duas linhas.'
@@ -137,13 +158,28 @@ export function AgruparModal({
           <span className="shrink-0 text-[10px] text-muted-foreground">doc {movimento.documento || '—'}</span>
         </div>
 
+        {/* Busca — a sessão pode ter mais linhas do que cabem no olho. */}
+        <div className="shrink-0 border-b px-3 py-1">
+          <input
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Buscar por fornecedor, produto ou valor…"
+            className="h-6 w-full rounded border bg-background px-2 text-[10px] outline-none focus-visible:ring-1"
+            aria-label="Buscar linha da planilha"
+          />
+        </div>
+
         {/* ═══ AS CANDIDATAS — o único scrollport ════════════════════════════════════ */}
         <div className="min-h-0 flex-1 overflow-y-auto">
           {candidatas.length === 0 ? (
             <p className="px-3 py-8 text-center text-[11px] text-muted-foreground">
-              Nenhuma linha do mesmo dia e da mesma conta está sem par.
+              Nenhuma linha da mesma conta está sem par.
             </p>
-          ) : candidatas.map((r) => {
+          ) : visiveis.length === 0 ? (
+            <p className="px-3 py-8 text-center text-[11px] text-muted-foreground">
+              Nenhuma linha casa com “{busca.trim()}”. As marcadas continuam marcadas.
+            </p>
+          ) : visiveis.map((r) => {
             const marcada = marcadas.has(r.staging_id);
             const sugerida = sugeridasIds.includes(r.staging_id);
             return (
@@ -198,7 +234,10 @@ export function AgruparModal({
             className="h-7 bg-cta px-3 text-[11px] font-semibold text-cta-foreground hover:bg-cta-hover"
             disabled={!!motivoTravado || !!agrupando}
             title={motivoTravado ?? 'Cria uma linha por item, cancela o consolidado e religa o vínculo do extrato.'}
-            onClick={() => { void onConfirmar([...marcadas]); }}>
+            /* ⚠ MANDA O QUE FOI SOMADO, não o `marcadas` cru: se um id marcado tiver saído
+               da lista de candidatas, ele não entrou na conta e não pode entrar na gravação —
+               a RPC o recusaria com `staging_invalido` depois de um gesto irreversível. */
+            onClick={() => { void onConfirmar(idsParaAgrupar); }}>
             {agrupando ? 'Agrupando…' : `Agrupar ${n} linhas`}
           </Button>
         </div>
