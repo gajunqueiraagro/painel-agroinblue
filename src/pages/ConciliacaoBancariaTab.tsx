@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { PainelExtratoMes } from '@/components/conciliacao/PainelExtratoMes';
 import { SaldoRealDialog } from '@/components/conciliacao/SaldoRealDialog';
+import { EspelhoConciliacaoTab } from '@/components/financeiro-v2/EspelhoConciliacaoTab';
 import { fimDoMes } from '@/hooks/useExtratoDaConta';
 import { ImportarBancoInline } from '@/components/conciliacao/ImportarBancoInline';
 import { ExtratoGerencialTab } from '@/components/financeiro-v2/ExtratoGerencialTab';
@@ -412,12 +413,17 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   const [refreshExtrato, setRefreshExtrato] = useState(0);
   const [showPendencias, setShowPendencias] = useState(false);
   // PR-MOS-1 — 3 abas oficiais: Importar Banco · Enriquecer · Conciliação (só layout/roteamento).
+  /* ⚠ CINCO ABAS — PR-ESPELHO-01. "Espelho" entrou por último, e a decisão que a trouxe é
+     de fronteira: "Auditoria fica separada" continua valendo para a Auditoria Bancária, que
+     é leitura de fechamento; o espelho OFX × Sistema é FERRAMENTA DE TRABALHO — o operador
+     abre para conciliar, não para auditar — e por isso vive onde ele já está. A seção saiu
+     de `AuditoriaBancariaSoberana`, que ficou com uma linha apontando para cá. */
   /* ⚠ QUATRO ABAS — FIN-CONCIL-INTEGRAR-01. "Extrato Gerencial" entrou entre
      Enriquecer e Conciliação, na ordem do original. Os filtros do CABEÇALHO
      (ano, mês, conta) valem para todas e se mantêm ao trocar de aba: são estado
      desta tela, não de cada aba — trocar de aba nunca perde onde o operador
      estava. */
-  const [vistaExtrato, setVistaExtrato] = useState<'importar' | 'enriquecer' | 'gerencial' | 'conciliacao'>('conciliacao');
+  const [vistaExtrato, setVistaExtrato] = useState<'importar' | 'enriquecer' | 'gerencial' | 'conciliacao' | 'espelho'>('conciliacao');
 
   /* Edit saldo */
   /* SALDO-POSICAO-01c — o lápis abre o modal ÚNICO. `saldoData` viaja junto para
@@ -871,7 +877,8 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
           </div>
         )}
 
-        {/* PR-MOS-1 — 3 abas oficiais da Conciliação Bancária (Auditoria fica separada). */}
+        {/* PR-MOS-1 — abas da Conciliação Bancária. A Auditoria Bancária continua separada;
+            o Espelho não (PR-ESPELHO-01) — ver o comentário do `vistaExtrato`. */}
         {!loading && selectedCard && (
           <div className="flex gap-1 items-center pt-1">
             <button
@@ -897,6 +904,12 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
               className={`px-2.5 py-1 rounded text-[10px] font-bold transition-colors ${vistaExtrato === 'conciliacao' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
             >
               Conciliação
+            </button>
+            <button
+              onClick={() => setVistaExtrato('espelho')}
+              className={`px-2.5 py-1 rounded text-[10px] font-bold transition-colors ${vistaExtrato === 'espelho' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
+            >
+              Espelho
             </button>
           </div>
         )}
@@ -964,6 +977,19 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
             vencia — regua marcando Mai e extrato mostrando Jun (print de 15:39).
             Passando `periodo`, esta tela e' a dona: os selects nao sao renderizados
             e trocar o mes na regua chega na aba no mesmo render. */}
+        {/* ⚠ CONTA E MÊS VÊM DO CABEÇALHO, como nas demais: o espelho não tem seletor próprio,
+            e `__all__` vira o convite a escolher uma conta (a RPC compara UMA). */}
+        {!loading && selectedCard && vistaExtrato === 'espelho' && (
+          <div className="md:flex-1 md:min-h-0 md:overflow-y-auto">
+            <EspelhoConciliacaoTab
+              clienteId={clienteId}
+              contaId={selectedConta === '__all__' ? null : selectedConta}
+              ano={ano}
+              mes={selectedMes}
+            />
+          </div>
+        )}
+
         {!loading && selectedCard && vistaExtrato === 'gerencial' && (
           <div className="md:flex-1 md:min-h-0 md:overflow-y-auto">
             <ExtratoGerencialTab periodo={{ ano: Number(ano), mes: Number(selectedMes) }} />
