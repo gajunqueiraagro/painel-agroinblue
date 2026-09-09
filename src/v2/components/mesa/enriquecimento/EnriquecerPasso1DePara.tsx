@@ -46,7 +46,7 @@ export interface EnriquecerPasso1DeParaProps {
   candidatosPorTexto?: Readonly<Record<string, readonly CandidatoConta[]>>;
   onResolver: (campo: CampoDePara, texto: string, id: string | null, rotulo: string | null) => void;
   onDescartar: (campo: CampoDePara, texto: string) => void;
-  onCriarFornecedor?: () => void;
+  onCriarFornecedor?: (nomeSugerido: string) => void;
   /** "Ir para a Revisão" — popula o staging (ou recasa) e troca de passo. */
   onIrParaRevisao: () => void;
   irParaRevisaoOcupado?: boolean;

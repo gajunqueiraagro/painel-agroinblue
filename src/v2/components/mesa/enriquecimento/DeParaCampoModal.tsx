@@ -62,7 +62,11 @@ export interface DeParaCampoModalProps {
   onResolver: (texto: string, id: string | null, rotulo: string | null) => void;
   /** Marca/desmarca "não é nada". Ausente = o campo não oferece a saída. */
   onDescartar?: (texto: string) => void;
-  onCriarFornecedor?: () => void;
+  /* ⚠ RECEBE O NOME, e não um gesto vazio. O valor da planilha ("Casa das Capotas") é
+     exatamente o nome que o fornecedor novo deve ter; abrir o cadastro em branco obrigaria
+     o operador a redigitar o que está na tela na frente dele — e é assim que nascem os 107
+     cadastros de nome repetido do NJ, um por variação de digitação. */
+  onCriarFornecedor?: (nomeSugerido: string) => void;
   // Catálogos — os mesmos que o painel da rota do menu recebe.
   classificacoes?: ClassificacaoItem[];
   fazendas?: Fazenda[];
@@ -252,13 +256,13 @@ export function DeParaCampoModal({
                       fornecedores={fornecedores}
                       search={buscaPorTexto[it.texto] ?? ''}
                       onSearchChange={(s) => setBuscaDe(it.texto, s)}
-                      /* ⚠ SEM "+" AQUI — 133b-a correção 4. O diálogo de cadastro de
-                         fornecedor mora em `ImportLancDeParaPanel` e ainda não foi trazido
-                         para este modal; o botão existia e não abria nada. Ele volta junto
-                         com o diálogo, e aí com a regra do 133b: só depois de buscar e não
-                         achar, porque sempre visível ele convida a duplicar — são 107
-                         cadastros de nome repetido no NJ, e cada um começou assim. */
-                      onCriarNovo={onCriarFornecedor}
+                      /* ⚠ O "+" VOLTOU — PR-ENRIQ-FORN-CRIAR-01. O diálogo que faltava foi
+                         trazido para `EnriquecerTresPassos`, e o botão deixou de ser uma
+                         promessa vazia. O nome que ele leva é o que o operador digitou na
+                         busca; sem busca, o próprio texto da planilha. */
+                      onCriarNovo={onCriarFornecedor
+                        ? () => onCriarFornecedor((buscaPorTexto[it.texto] ?? '').trim() || it.texto)
+                        : undefined}
                       triggerClassName="h-6 px-1.5 text-[10px]"
                       novoButtonClassName="h-6 w-6"
                       showCpfCnpj

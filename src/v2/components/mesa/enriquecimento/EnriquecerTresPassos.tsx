@@ -28,6 +28,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { useImportLancamentosExcel } from '@/v2/hooks/useImportLancamentosExcel';
+import { useFinanceiroV2 } from '@/hooks/useFinanceiroV2';
+import { NovoFornecedorDialog } from '@/components/financeiro-v2/NovoFornecedorDialog';
 import { tipoPorContaPlano } from '@/v2/lib/importLanc/importLancamentosView';
 import { useImportarClassificacao } from '@/v2/hooks/useImportarClassificacao';
 import { useClassificacaoStaging, useSessoesClassificacao } from '@/v2/hooks/useClassificacaoStaging';
@@ -58,6 +60,8 @@ export function EnriquecerTresPassos({ ano, mes, clienteNome, contaNome, onVerNo
 
   const [passo, setPasso] = useState<Passo>(1);
   const [sessaoId, setSessaoId] = useState<string | null>(null);
+  /* O nome que o diálogo de cadastro abre preenchido; `null` = fechado. */
+  const [novoFornecedorPara, setNovoFornecedorPara] = useState<string | null>(null);
   /* Uma vez que o operador escolheu um passo à mão, a tela para de decidir por ele: abrir
      sozinha no 2 é conveniência da PRIMEIRA vez, não uma correção contínua. */
   const escolheuPasso = useRef(false);
@@ -68,6 +72,11 @@ export function EnriquecerTresPassos({ ano, mes, clienteNome, contaNome, onVerNo
     classificacoes, fornecedores, fazendas, contasBancarias, safras,
     lerArquivo, resolverManualmente, alternarDescarte, limpar,
   } = useImportLancamentosExcel(true);
+
+  /* ⚠ O CRIADOR É O CANÔNICO — `useFinanceiroV2().criarFornecedor`, o mesmo que a
+     importação e a Mesa usam. Inserir direto em `financeiro_fornecedores` daqui seria a
+     segunda forma de criar a mesma coisa. */
+  const { criarFornecedor } = useFinanceiroV2();
 
   // ── O mesmo arquivo, no motor que põe as linhas no staging ──
   const imp = useImportarClassificacao(clienteId);
@@ -282,10 +291,12 @@ export function EnriquecerTresPassos({ ano, mes, clienteNome, contaNome, onVerNo
               candidatosPorTexto={candidatosDeConta}
               onResolver={resolverManualmente}
               onDescartar={alternarDescarte}
-              /* ⚠ O CADASTRO DE FORNECEDOR NOVO AINDA NÃO ABRE DAQUI, e o botão só
-                 aparece depois de buscar e não achar. O diálogo de criação mora em
-                 `ImportLancDeParaPanel`; trazê-lo é trabalho próprio, e um "+" que não
-                 abre nada seria pior que nenhum. Reportado. */
+              /* ⚠ O CADASTRO ABRE DAQUI — PR-ENRIQ-FORN-CRIAR-01, o "trabalho próprio" que
+                 o comentário anterior registrou como pendente. Sem ele, o operador que
+                 encontrasse "Casa das Capotas" na planilha não tinha caminho nenhum: nem
+                 criar, nem resolver. O nome vem preenchido, e ao salvar a linha do de-para
+                 se resolve sozinha — mesmo fluxo do painel da importação. */
+              onCriarFornecedor={(nome) => setNovoFornecedorPara(nome)}
               onIrParaRevisao={() => { void irParaRevisao(); }}
               irParaRevisaoOcupado={preparando || imp.isPopulating || isCasando}
               irParaRevisaoMotivo={motivoIrRevisao}
@@ -337,6 +348,23 @@ export function EnriquecerTresPassos({ ano, mes, clienteNome, contaNome, onVerNo
           </div>
         </div>
       )}
+      {/* Criação inline de fornecedor — o mesmo diálogo oficial da importação e da Mesa.
+          `fazendaId` null: fornecedor é entidade do cliente e a fazenda é opcional desde o
+          PR-FORNECEDOR-FAZENDA-01. Ao salvar, a linha do de-para se resolve com o que
+          acabou de nascer — o operador não precisa voltar e escolher o que ele mesmo criou. */}
+      <NovoFornecedorDialog
+        open={novoFornecedorPara !== null}
+        onClose={() => setNovoFornecedorPara(null)}
+        defaultNome={novoFornecedorPara ?? ''}
+        onSave={async (nome, cpfCnpj) => {
+          const criado = await criarFornecedor(nome, null, cpfCnpj);
+          if (criado && novoFornecedorPara !== null) {
+            resolverManualmente('fornecedor', novoFornecedorPara, criado.id, criado.nome);
+          }
+          setNovoFornecedorPara(null);
+        }}
+      />
+
     </div>
   );
 }
