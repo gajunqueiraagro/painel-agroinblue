@@ -108,8 +108,20 @@ function Linha({ rotulo, children }: { rotulo: string; children: React.ReactNode
   );
 }
 
+/**
+ * ⚠ PEDE OS SETE CAMPOS QUE LÊ, NÃO A LINHA INTEIRA — PR-CONC-B-3. O Extrato Gerencial
+ * carrega uma projeção estreita de `financeiro_lancamentos_v2`, não um `LancamentoV2`
+ * completo, e exigir o tipo cheio obrigaria aquela tela a buscar vinte colunas que não usa
+ * — ou a fabricar um objeto com campos falsos só para satisfazer o compilador. A lista do
+ * Financeiro continua passando o `LancamentoV2` inteiro; nada mudou para ela.
+ */
+export type LancamentoDoMinimodal = Pick<
+  LancamentoV2,
+  'id' | 'created_by' | 'created_at' | 'origem_lancamento' | 'data_pagamento' | 'valor' | 'favorecido_id'
+>;
+
 interface Props {
-  lancamento: LancamentoV2;
+  lancamento: LancamentoDoMinimodal;
   icone: IconeOrigemLancamento;
   /** Nome do favorecido pelo catálogo que a lista já tem — nunca uma consulta a mais. */
   nomeFavorecido: (id: string | null | undefined) => string | undefined;

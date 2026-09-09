@@ -35,7 +35,9 @@ export interface IconeOrigemLancamento {
 
 export function iconeOrigemLancamento(
   l: Pick<LancamentoV2, 'status_transacao' | 'editado_manual' | 'conta_bancaria_id' | 'data_pagamento'>,
-  vinculo: ConciliadoDoLancamento | undefined,
+  /* Só `tipoAprovacao` decide o ícone. Pedir o objeto inteiro obrigaria quem tem apenas o
+     tipo — o Extrato Gerencial — a inventar `dataMovimento` e `valorAplicado` nulos. */
+  vinculo: Pick<ConciliadoDoLancamento, 'tipoAprovacao'> | undefined,
   coberturaExtrato: ReadonlySet<string> | undefined,
 ): IconeOrigemLancamento | null {
   if (vinculo) {

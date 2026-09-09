@@ -28,6 +28,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { STATUS_FILTRO_LABEL, STATUS_FILTRO_COR } from '@/lib/financeiro/statusFinanceiro';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { format, parseISO } from 'date-fns';
+import { cn } from '@/lib/utils';
+import { useCoberturaExtrato } from '@/hooks/useCoberturaExtrato';
+import { iconeOrigemLancamento, LEGENDA_ICONES } from '@/v2/lib/origemLancamento';
+import { MinimodalOrigemLancamento } from '@/components/financeiro-v2/MinimodalOrigemLancamento';
 
 interface ContaRow extends ContaSelecionavel { fazenda_id: string | null; }
 interface LancExtrato {
@@ -36,6 +40,10 @@ interface LancExtrato {
   favorecido_id: string | null; centro_custo: string | null; plano_conta_id: string | null; status_transacao: string | null;
   macro_custo: string | null; grupo_custo: string | null; subcentro: string | null; escopo_negocio: string | null;
   conta_bancaria_id: string | null; conta_destino_id: string | null;
+  /* PR-CONC-B-3 — `editado_manual` é regra do ícone (separa o cru do banco do já tocado);
+     os outros três são conteúdo do minimodal. Quatro colunas no select que já existia. */
+  editado_manual: boolean; origem_lancamento: string | null;
+  created_by: string | null; created_at: string;
 }
 interface SaldoRow { saldo_inicial: number | null; saldo_final: number | null; status_mes: string | null; }
 
@@ -152,7 +160,7 @@ export function ExtratoGerencialTab({ periodo }: { periodo: PeriodoControlado })
     enabled: !!clienteId && !!contaId,
     queryFn: async (): Promise<LancExtrato[]> => {
       let q = (supabase as any).from('financeiro_lancamentos_v2')
-        .select('id, data_pagamento, data_vencimento, valor, tipo_operacao, descricao, numero_documento, documento, tipo_documento, favorecido_id, macro_custo, grupo_custo, centro_custo, subcentro, escopo_negocio, plano_conta_id, status_transacao, conta_bancaria_id, conta_destino_id')
+        .select('id, data_pagamento, data_vencimento, valor, tipo_operacao, descricao, numero_documento, documento, tipo_documento, favorecido_id, macro_custo, grupo_custo, centro_custo, subcentro, escopo_negocio, plano_conta_id, status_transacao, conta_bancaria_id, conta_destino_id, editado_manual, origem_lancamento, created_by, created_at')
         .eq('cliente_id', clienteId).eq('cancelado', false)
         .or(`conta_bancaria_id.eq.${contaId},conta_destino_id.eq.${contaId}`)
         .or(`and(data_pagamento.gte.${ini},data_pagamento.lt.${fim}),and(data_pagamento.is.null,data_vencimento.gte.${ini},data_vencimento.lt.${fim})`);
@@ -179,17 +187,28 @@ export function ExtratoGerencialTab({ periodo }: { periodo: PeriodoControlado })
     },
   });
 
+  /* A régua do "!" — mesma fonte do Financeiro (PR-CONC-B-3), por hook e não por cópia. */
+  const coberturaExtrato = useCoberturaExtrato(clienteId);
+
   const lancIds = useMemo(() => lancs.map((l) => l.id), [lancs]);
-  const { data: concilMap } = useQuery({
+  const { data: concilMap, refetch: refetchConcil } = useQuery({
     queryKey: ['extrato-ger-concil', contaId, ini, lancIds.length],
     enabled: lancIds.length > 0,
-    queryFn: async (): Promise<Map<string, number>> => {
+    queryFn: async (): Promise<{ aplicado: Map<string, number>; tipo: Map<string, string | null> }> => {
       const { data } = await (supabase as any).from('conciliacao_bancaria_itens')
-        .select('lancamento_id, valor_aplicado').in('lancamento_id', lancIds).is('desfeito_em', null);
-      const rows: { lancamento_id: string; valor_aplicado: number }[] = data ?? [];
-      const m = new Map<string, number>();
-      for (const r of rows) m.set(r.lancamento_id, (m.get(r.lancamento_id) ?? 0) + Number(r.valor_aplicado));
-      return m;
+        .select('lancamento_id, valor_aplicado, tipo_aprovacao').in('lancamento_id', lancIds).is('desfeito_em', null);
+      const rows: { lancamento_id: string; valor_aplicado: number; tipo_aprovacao: string | null }[] = data ?? [];
+      const aplicado = new Map<string, number>();
+      /* ⚠ MESMA PRECEDÊNCIA DO B-1, e por isso a tabela: com dois vínculos ativos o ícone não
+         pode depender de qual linha o PostgREST devolveu primeiro. */
+      const forca = (t: string | null) => (t === 'ofx_substituiu' ? 3 : t === 'ofx_cru' ? 2 : 1);
+      const tipo = new Map<string, string | null>();
+      for (const r of rows) {
+        aplicado.set(r.lancamento_id, (aplicado.get(r.lancamento_id) ?? 0) + Number(r.valor_aplicado));
+        const atual = tipo.get(r.lancamento_id);
+        if (atual === undefined || forca(r.tipo_aprovacao) > forca(atual)) tipo.set(r.lancamento_id, r.tipo_aprovacao);
+      }
+      return { aplicado, tipo };
     },
   });
 
@@ -283,7 +302,7 @@ export function ExtratoGerencialTab({ periodo }: { periodo: PeriodoControlado })
   };
 
   function concStatus(l: LancExtrato): { txt: string; cls: string } {
-    const aplic = concilMap?.get(l.id) ?? 0;
+    const aplic = concilMap?.aplicado.get(l.id) ?? 0;
     if (aplic <= 0) return { txt: 'Sem vínculo', cls: 'text-muted-foreground' };
     if (aplic + 0.005 >= Math.abs(l.valor)) return { txt: 'Conciliado', cls: 'text-emerald-600' };
     return { txt: 'Parcial', cls: 'text-amber-600' };
@@ -386,11 +405,17 @@ export function ExtratoGerencialTab({ periodo }: { periodo: PeriodoControlado })
           )}
         </div>
       ) : (
-      /* Timeline — ocupa o espaço vertical restante; cabeçalho fixo; scroll interno */
+      /* Timeline — ocupa o espaço vertical restante; cabeçalho fixo; scroll interno.
+         ⚠ O FRAGMENTO É O QUE MANTÉM A LEGENDA FORA DA ROLAGEM: as duas ficam irmãs no
+         mesmo flex do pai, a tabela com `flex-1 min-h-0` e a legenda abaixo, fixa. */
+      <>
       <div className="rounded-lg border overflow-auto flex-1 min-h-0">
         <table className="w-full border-collapse">
           <thead className="sticky top-0 z-10">
             <tr className="bg-primary text-primary-foreground">
+              {/* PR-CONC-B-3 — sem rótulo, como no Financeiro: a legenda do rodapé explica.
+                  Fica FORA do map para não deslocar os índices que alinham Valor e Saldo. */}
+              <th className="px-0 py-1 w-[22px]" aria-label="Origem" />
               {['Data Movimento', 'Produto', 'Fornecedor', 'Centro', 'Valor', 'Saldo', 'Status', 'Doc'].map((h, i) => (
                 <th key={h} className={`px-1.5 py-1 text-[9px] uppercase font-semibold ${i === 4 || i === 5 ? 'text-right whitespace-nowrap' : 'text-left'}`}>{h}</th>
               ))}
@@ -399,21 +424,49 @@ export function ExtratoGerencialTab({ periodo }: { periodo: PeriodoControlado })
           <tbody>
             {/* Linha de Saldo Inicial (item #4/#5) — linha normal; valor na coluna Saldo. */}
             <tr className="border-b text-[10px] font-medium bg-muted/20">
+              <td />
               <td className="px-1.5 py-0.5 whitespace-nowrap">Saldo Inicial</td>
               <td /><td /><td /><td />
               <td className="px-1.5 py-0.5 text-right tabular-nums whitespace-nowrap min-w-[96px]">{saldoIni !== null ? formatMoeda(saldoIni) : 'Saldo não informado'}</td>
               <td /><td />
             </tr>
             {linhas.length === 0 ? (
-              <tr><td colSpan={8} className="text-center text-[10px] text-muted-foreground py-6">Nenhuma movimentação para esta conta no período.</td></tr>
+              <tr><td colSpan={9} className="text-center text-[10px] text-muted-foreground py-6">Nenhuma movimentação para esta conta no período.</td></tr>
             ) : linhas.map(({ l, mov, saldo: sAcc, data }, i) => {
               const stKey = (l.status_transacao || '').toLowerCase();
               const cs = concStatus(l);
+              /* O vínculo sai da consulta que a tela já fazia; só o tipo é novo. */
+              const tipoVinc = concilMap?.tipo.get(l.id);
+              const icone = iconeOrigemLancamento(
+                l, tipoVinc === undefined ? undefined : { tipoAprovacao: tipoVinc }, coberturaExtrato,
+              );
               // Último lançamento do dia (leitura da lista já ordenada) → destaque de fechamento diário.
               const ehFechamentoDia = i === linhas.length - 1 || linhas[i + 1].data !== data;
               return (
                 <tr key={l.id} onClick={() => setLancLeituraId(l.id)}
                     className="border-b cursor-pointer hover:bg-muted/50 text-[10px]">
+                  {/* ⚠ `stopPropagation`: a linha inteira já abre a leitura do lançamento, e sem
+                      isto o clique no ícone abriria o diálogo por baixo do minimodal. */}
+                  <td className="px-0 py-0.5 text-center align-middle" onClick={(e) => e.stopPropagation()}>
+                    {icone && (
+                      <MinimodalOrigemLancamento
+                        lancamento={l}
+                        icone={icone}
+                        nomeFavorecido={(id) => (id ? fornMap?.get(id) : undefined)}
+                        onAbrirLancamento={() => setLancLeituraId(l.id)}
+                        onVinculoDesfeito={() => { void refetchConcil(); }}
+                      >
+                        <button
+                          type="button"
+                          className={cn('text-[14px] font-semibold leading-none cursor-pointer', icone.cor)}
+                          title={icone.significado}
+                          aria-label={icone.significado}
+                        >
+                          {icone.simbolo}
+                        </button>
+                      </MinimodalOrigemLancamento>
+                    )}
+                  </td>
                   <td className={`px-1.5 py-0.5 whitespace-nowrap ${ehFechamentoDia ? 'font-bold text-foreground' : 'text-muted-foreground'}`}>{fmtData(data)}</td>
                   <td className="px-1.5 py-0.5 max-w-[200px] truncate" title={l.descricao ?? ''}>{l.descricao || '—'}</td>
                   <td className="px-1.5 py-0.5 max-w-[150px] truncate">{(l.favorecido_id && fornMap?.get(l.favorecido_id)) || '—'}</td>
@@ -433,6 +486,15 @@ export function ExtratoGerencialTab({ periodo }: { periodo: PeriodoControlado })
           </tbody>
         </table>
       </div>
+      <div className="flex flex-wrap items-center gap-x-2 px-1 py-1">
+        {LEGENDA_ICONES.map((ic, i) => (
+          <span key={ic.simbolo} className="whitespace-nowrap text-[10px] text-muted-foreground">
+            {i > 0 && <span className="mr-2 text-muted-foreground/60">·</span>}
+            <span className={cn('font-semibold', ic.cor)}>{ic.simbolo}</span>{' '}{ic.curto}
+          </span>
+        ))}
+      </div>
+      </>
       )}
 
       <LancamentoLeituraDialog open={!!lancLeituraId} lancamentoId={lancLeituraId} onClose={() => setLancLeituraId(null)} />

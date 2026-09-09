@@ -12,12 +12,12 @@ import { isTransferenciaTipo } from '@/lib/financeiro/v2Transferencia';
 import { useLancamentosConciliados, desfazerVinculo, desfazerGrupo } from '@/hooks/useConciliacaoDoMes';
 import { iconeOrigemLancamento, LEGENDA_ICONES } from '@/v2/lib/origemLancamento';
 import { MinimodalOrigemLancamento } from '@/components/financeiro-v2/MinimodalOrigemLancamento';
+import { useCoberturaExtrato } from '@/hooks/useCoberturaExtrato';
 import { useCliente } from '@/contexts/ClienteContext';
 import { contaSimpleValid } from '@/components/financeiro-v2/lancamentoDialogTabs';
 import { validarLancamento } from '@/lib/financeiro/validacaoLancamento';
 import { formatDocumento } from '@/lib/financeiro/documentoHelper';
 import { toast } from 'sonner';
-import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { SearchableSelect, limparBuscasLembradas } from '@/components/ui/searchable-select';
 import { Button } from '@/components/ui/button';
@@ -225,45 +225,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const { clienteAtual } = useCliente();
   const { conciliados, recarregar: recarregarVinculos } = useLancamentosConciliados(clienteAtual?.id ?? null);
 
-  /**
-   * EM QUE CONTA E EM QUE MÊS EXISTE EXTRATO CARREGADO — a régua do "!" (PR-CONC-B-1).
-   *
-   * ⚠ UMA CONSULTA POR CLIENTE, e o resultado é minúsculo: 2.650 linhas de extrato no NJ
-   * viram 30 pares conta|mês — medido em 09/09/2026. O PostgREST não faz DISTINCT, então a
-   * dedução acontece aqui; ainda assim são duas colunas estreitas, não a tabela inteira.
-   *
-   * ⚠ VIVO É O QUE NÃO FOI CANCELADO NEM IGNORADO, a mesma régua de `useConciliacaoDoMes`.
-   * Um mês cujas linhas foram todas ignoradas NÃO conta como coberto — e não deve mesmo:
-   * ali o banco não tinha como confirmar nada.
-   */
-  const { data: coberturaExtrato } = useQuery({
-    queryKey: ['extrato-cobertura-conta-mes', clienteAtual?.id],
-    enabled: !!clienteAtual?.id,
-    staleTime: 5 * 60 * 1000,
-    queryFn: async (): Promise<ReadonlySet<string>> => {
-      const PAGE = 1000;
-      const pares = new Set<string>();
-      for (let from = 0; ; from += PAGE) {
-        const { data, error } = await supabase
-          .from('extrato_bancario_v2')
-          .select('conta_bancaria_id, data_movimento')
-          .eq('cliente_id', clienteAtual!.id)
-          .is('cancelado_em', null)
-          .is('ignorado_em', null)
-          .range(from, from + PAGE - 1);
-        if (error) throw error;
-        const linhas = data ?? [];
-        for (const r of linhas) {
-          if (r.conta_bancaria_id && r.data_movimento) {
-            pares.add(`${r.conta_bancaria_id}|${r.data_movimento.slice(0, 7)}`);
-          }
-        }
-        if (linhas.length < PAGE) break;
-        if (from > 200_000) break; // salvaguarda anti-loop, igual à do hook dos vínculos
-      }
-      return pares;
-    },
-  });
+  const coberturaExtrato = useCoberturaExtrato(clienteAtual?.id);
 
   /**
    * PR-FORN-01 — as opções e a contagem saem do RECORTE CARREGADO, não do catálogo.
