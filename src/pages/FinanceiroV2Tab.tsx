@@ -9,12 +9,13 @@ import {
   type StatusFiltroFinanceiro,
 } from '@/lib/financeiro/statusFinanceiro';
 import { isTransferenciaTipo } from '@/lib/financeiro/v2Transferencia';
-import { useLancamentosConciliados } from '@/hooks/useConciliacaoDoMes';
+import { useLancamentosConciliados, type ConciliadoDoLancamento } from '@/hooks/useConciliacaoDoMes';
 import { useCliente } from '@/contexts/ClienteContext';
 import { contaSimpleValid } from '@/components/financeiro-v2/lancamentoDialogTabs';
 import { validarLancamento } from '@/lib/financeiro/validacaoLancamento';
 import { formatDocumento } from '@/lib/financeiro/documentoHelper';
 import { toast } from 'sonner';
+import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { SearchableSelect, limparBuscasLembradas } from '@/components/ui/searchable-select';
 import { Button } from '@/components/ui/button';
@@ -62,6 +63,64 @@ import {
  * sobreviveria ao Limpar em silêncio.
  */
 const PREFIXO_BUSCA = 'fin-v2-';
+/**
+ * O ÍCONE DE ORIGEM — PR-CONC-B-1. Diz de onde o lançamento veio e se o banco o confirmou.
+ *
+ * ⚠ É ESTADO, NÃO ORIGEM. `origem_lancamento` tem 19 valores e NÃO entra aqui: o operador
+ * não pergunta "que tela criou isto", pergunta "o banco confirmou?". A ordem abaixo é a
+ * regra, e o primeiro que casa vence.
+ *
+ * ⚠ "!" SÓ QUANDO O BANCO TINHA COMO CONFIRMAR E NÃO CONFIRMOU. Conta de caixa, cartão ou
+ * mês sem OFX carregado dá M, nunca "!": alarme que dispara onde não havia como acertar
+ * ensina o operador a ignorar o alarme, e aí ele perde os 11 de julho que importam.
+ *
+ * ⚠ PREVISTO NÃO TEM ÍCONE. Dinheiro que ainda não andou não se concilia; a coluna fica
+ * vazia, e ausência é traço, não símbolo.
+ *
+ * ⚠ SEM COBERTURA CARREGADA, SEM PALPITE: enquanto o mapa de extrato viaja, o não-vinculado
+ * fica sem ícone em vez de afirmar "manual" — dizer M ali seria responder antes de olhar.
+ */
+export interface IconeOrigemLancamento {
+  simbolo: string;
+  cor: string;
+  significado: string;
+}
+
+export function iconeOrigemLancamento(
+  l: Pick<LancamentoV2, 'status_transacao' | 'editado_manual' | 'conta_bancaria_id' | 'data_pagamento'>,
+  vinculo: ConciliadoDoLancamento | undefined,
+  coberturaExtrato: ReadonlySet<string> | undefined,
+): IconeOrigemLancamento | null {
+  if (vinculo) {
+    if (vinculo.tipoAprovacao === 'ofx_substituiu') {
+      return { simbolo: '\u21ba', cor: 'text-warning', significado: 'Substituído pelo banco' };
+    }
+    if (vinculo.tipoAprovacao === 'ofx_cru' && l.editado_manual !== true) {
+      return { simbolo: 'B', cor: 'text-primary', significado: 'Cru do banco' };
+    }
+    return { simbolo: '\u2713', cor: 'text-success', significado: 'Enriquecido / conciliado' };
+  }
+
+  if ((l.status_transacao || '').toLowerCase() !== 'realizado') return null;
+  if (!coberturaExtrato) return null;
+
+  const chave = l.conta_bancaria_id && l.data_pagamento
+    ? `${l.conta_bancaria_id}|${l.data_pagamento.slice(0, 7)}`
+    : null;
+
+  return chave && coberturaExtrato.has(chave)
+    ? { simbolo: '!', cor: 'text-destructive', significado: 'Sem par no banco' }
+    : { simbolo: 'M', cor: 'text-muted-foreground', significado: 'Manual (sem extrato para conferir)' };
+}
+
+const LEGENDA_ICONES: readonly { simbolo: string; cor: string; curto: string }[] = [
+  { simbolo: 'B', cor: 'text-primary', curto: 'cru do banco' },
+  { simbolo: '\u21ba', cor: 'text-warning', curto: 'substituído' },
+  { simbolo: '\u2713', cor: 'text-success', curto: 'enriquecido' },
+  { simbolo: 'M', cor: 'text-muted-foreground', curto: 'manual' },
+  { simbolo: '!', cor: 'text-destructive', curto: 'sem par no banco' },
+];
+
 const CHAVE_BUSCA_FORNECEDOR = `${PREFIXO_BUSCA}fornecedor`;
 const CHAVE_BUSCA_MACRO      = `${PREFIXO_BUSCA}macro`;
 const CHAVE_BUSCA_GRUPO      = `${PREFIXO_BUSCA}grupo`;
@@ -221,6 +280,46 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
      é o que casa com ela, e trocar de página não repergunta nada. */
   const { clienteAtual } = useCliente();
   const { conciliados } = useLancamentosConciliados(clienteAtual?.id ?? null);
+
+  /**
+   * EM QUE CONTA E EM QUE MÊS EXISTE EXTRATO CARREGADO — a régua do "!" (PR-CONC-B-1).
+   *
+   * ⚠ UMA CONSULTA POR CLIENTE, e o resultado é minúsculo: 2.650 linhas de extrato no NJ
+   * viram 30 pares conta|mês — medido em 09/09/2026. O PostgREST não faz DISTINCT, então a
+   * dedução acontece aqui; ainda assim são duas colunas estreitas, não a tabela inteira.
+   *
+   * ⚠ VIVO É O QUE NÃO FOI CANCELADO NEM IGNORADO, a mesma régua de `useConciliacaoDoMes`.
+   * Um mês cujas linhas foram todas ignoradas NÃO conta como coberto — e não deve mesmo:
+   * ali o banco não tinha como confirmar nada.
+   */
+  const { data: coberturaExtrato } = useQuery({
+    queryKey: ['extrato-cobertura-conta-mes', clienteAtual?.id],
+    enabled: !!clienteAtual?.id,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async (): Promise<ReadonlySet<string>> => {
+      const PAGE = 1000;
+      const pares = new Set<string>();
+      for (let from = 0; ; from += PAGE) {
+        const { data, error } = await supabase
+          .from('extrato_bancario_v2')
+          .select('conta_bancaria_id, data_movimento')
+          .eq('cliente_id', clienteAtual!.id)
+          .is('cancelado_em', null)
+          .is('ignorado_em', null)
+          .range(from, from + PAGE - 1);
+        if (error) throw error;
+        const linhas = data ?? [];
+        for (const r of linhas) {
+          if (r.conta_bancaria_id && r.data_movimento) {
+            pares.add(`${r.conta_bancaria_id}|${r.data_movimento.slice(0, 7)}`);
+          }
+        }
+        if (linhas.length < PAGE) break;
+        if (from > 200_000) break; // salvaguarda anti-loop, igual à do hook dos vínculos
+      }
+      return pares;
+    },
+  });
 
   /**
    * PR-FORN-01 — as opções e a contagem saem do RECORTE CARREGADO, não do catálogo.
@@ -1850,6 +1949,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
               */}
               <colgroup>
                 <col style={{ width: 28 }} />
+                {/* PR-CONC-B-1 — ícone de origem. 22px fixos; as demais larguras ficam
+                    intactas e a tabela apenas cresce 22px dentro do container que rola. */}
+                <col style={{ width: 22 }} />
                 {/* PR-FIN-GRADE-DATAS-03 — COMP. | VENC. | PGTO. (3 colunas de data, 45px cada).
                     Os ~45px da nova coluna VENC. são compensados SÓ em Produto (−35) e Fazenda (−10). */}
                 <col style={{ width: 45 }} />
@@ -1870,10 +1972,13 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                   <th className="px-1 py-[3px] text-center align-middle bg-primary sticky left-0 z-30">
                     <Checkbox checked={allSelected} onCheckedChange={toggleSelectAll} className="h-3 w-3 border-primary-foreground data-[state=checked]:bg-primary-foreground data-[state=checked]:text-primary" />
                   </th>
-                  <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[28px] z-30 bg-primary" onClick={() => toggleSort('data')}>Comp.<SortIndicator field="data" /></th>
+                  {/* PR-CONC-B-1 — sem rótulo: o cabeçalho de 8px não caberia e a legenda do
+                      rodapé é quem explica os cinco símbolos. */}
+                  <th className="px-0 py-[3px] text-center align-middle sticky left-[28px] z-30 bg-primary" aria-label="Origem" />
+                  <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[50px] z-30 bg-primary" onClick={() => toggleSort('data')}>Comp.<SortIndicator field="data" /></th>
                   {/* PR-FIN-GRADE-DATAS-03 — VENC. e PGTO. colunas independentes; sticky em 73px (28+45) e 118px (28+45+45). */}
-                  <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[73px] z-30 bg-primary" onClick={() => toggleSort('venc')}>Venc.<SortIndicator field="venc" /></th>
-                  <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[118px] z-30 bg-primary" onClick={() => toggleSort('pgto')}>Pgto.<SortIndicator field="pgto" /></th>
+                  <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[95px] z-30 bg-primary" onClick={() => toggleSort('venc')}>Venc.<SortIndicator field="venc" /></th>
+                  <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[140px] z-30 bg-primary" onClick={() => toggleSort('pgto')}>Pgto.<SortIndicator field="pgto" /></th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('produto')}>Produto<SortIndicator field="produto" /></th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('fornecedor')}>Fornecedor<SortIndicator field="fornecedor" /></th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground">Macro</th>
@@ -1888,7 +1993,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
               <tbody className="[&_tr:last-child]:border-0">
                 {linhasDaGrade.length === 0 ? (
                   <tr className="border-b">
-                    <td colSpan={13} className="text-center text-muted-foreground py-4 text-[10px]">
+                    <td colSpan={14} className="text-center text-muted-foreground py-4 text-[10px]">
                       Nenhum lançamento encontrado.
                     </td>
                   </tr>
@@ -1927,6 +2032,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                         + ` · ${vinculo.descricaoMovimento ?? 'movimento sem histórico'}`
                         + ` · aplicado ${formatMoeda(vinculo.valorAplicado)}`
                       : undefined;
+                    /* PR-CONC-B-1 — o mesmo `vinculo` que decide a pílula de status decide o
+                       ícone; nenhuma consulta a mais por linha. */
+                    const icone = iconeOrigemLancamento(l, vinculo, coberturaExtrato);
                     const isHistoricoReadOnly = l.origem_lancamento === 'importacao_historica';
                     const isParcelaFinanciamento = l.origem_lancamento === 'parcela_financiamento' || (l as any).origem_tipo === 'financiamento_captacao' || (l.origem_lancamento === 'financiamento' && !!(l as any).financiamento_id);
                     const isImported = !!l.lote_importacao_id;
@@ -1937,12 +2045,23 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                         <td className="px-1 py-1 align-middle text-center sticky left-0 z-10 bg-background">
                           <Checkbox checked={selectedIds.has(l.id)} onCheckedChange={() => toggleSelect(l.id)} disabled={isParcelaFinanciamento} className="h-3 w-3" />
                         </td>
-                        <td className="celula-data font-mono px-0.5 py-1 align-middle font-medium leading-tight sticky left-[28px] z-10 bg-background text-center">{fmtDate(l.data_competencia)}</td>
+                        <td className="px-0 py-1 align-middle text-center sticky left-[28px] z-10 bg-background">
+                          {icone && (
+                            <span
+                              className={cn('text-[14px] font-semibold leading-none not-italic', icone.cor)}
+                              title={icone.significado}
+                              aria-label={icone.significado}
+                            >
+                              {icone.simbolo}
+                            </span>
+                          )}
+                        </td>
+                        <td className="celula-data font-mono px-0.5 py-1 align-middle font-medium leading-tight sticky left-[50px] z-10 bg-background text-center">{fmtDate(l.data_competencia)}</td>
                         {/* PR-FIN-GRADE-DATAS-03 — VENC. e PGTO. em colunas separadas, cada uma a sua coluna real
                             (nunca fundidas, nunca a data financeira derivada). fmtDate(null) já rende o sentinela '-'.
                             VENC. permanece visível mesmo quando há PGTO. */}
-                        <td className="celula-data font-mono px-0.5 py-1 align-middle font-medium leading-tight sticky left-[73px] z-10 bg-background text-center">{fmtDate(l.data_vencimento)}</td>
-                        <td className="celula-data font-mono px-0.5 py-1 align-middle font-medium leading-tight sticky left-[118px] z-10 bg-background text-center">{fmtDate(l.data_pagamento)}</td>
+                        <td className="celula-data font-mono px-0.5 py-1 align-middle font-medium leading-tight sticky left-[95px] z-10 bg-background text-center">{fmtDate(l.data_vencimento)}</td>
+                        <td className="celula-data font-mono px-0.5 py-1 align-middle font-medium leading-tight sticky left-[140px] z-10 bg-background text-center">{fmtDate(l.data_pagamento)}</td>
                         <td className="truncate px-2 py-1 align-middle text-[12px] font-medium leading-tight" title={isParcelaFinanciamento ? `Parcela de financiamento (origem automática) — ${descExibida || ''}` : (descExibida || '')}>
                           {isParcelaFinanciamento && <span className="mr-1" title="Parcela de financiamento">🏦</span>}
                           {descExibida || '-'}
@@ -2034,10 +2153,21 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
             </div>
           )}
 
-          {/* Total count */}
-          <div className="flex items-center px-1 py-1">
+          {/* Total count + legenda dos ícones de origem (PR-CONC-B-1).
+              ⚠ FORA DA ÁREA QUE ROLA, de propósito: dentro da tabela a legenda custaria uma
+              linha de lista em cada tela, e some justamente quando o operador rola até o
+              lançamento que não entendeu. */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 py-1">
             <span className="text-[10px] text-muted-foreground">
               {totalLancamentosFiltrados} lançamento{totalLancamentosFiltrados !== 1 ? 's' : ''} encontrado{totalLancamentosFiltrados !== 1 ? 's' : ''}
+            </span>
+            <span className="flex flex-wrap items-center gap-x-2 text-[10px] text-muted-foreground">
+              {LEGENDA_ICONES.map((ic, i) => (
+                <span key={ic.simbolo} className="whitespace-nowrap">
+                  {i > 0 && <span className="mr-2 text-muted-foreground/60">·</span>}
+                  <span className={cn('font-semibold not-italic', ic.cor)}>{ic.simbolo}</span>{' '}{ic.curto}
+                </span>
+              ))}
             </span>
           </div>
         </>
