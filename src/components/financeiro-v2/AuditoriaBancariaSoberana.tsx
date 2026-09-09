@@ -1315,7 +1315,7 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
           <Card className="p-3">
             <span className="text-[11px] text-muted-foreground">
               Extratos espelhados agora vivem em{' '}
-              <span className="font-medium text-foreground">Conciliação Bancária › Espelho</span>
+              <span className="font-medium text-foreground">Conciliação › Importar Banco › Espelho</span>
               , com a conferência seguindo o vínculo.
             </span>
           </Card>

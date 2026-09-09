@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { PainelExtratoMes } from '@/components/conciliacao/PainelExtratoMes';
 import { SaldoRealDialog } from '@/components/conciliacao/SaldoRealDialog';
-import { EspelhoConciliacaoTab } from '@/components/financeiro-v2/EspelhoConciliacaoTab';
+import { EspelhoOfxSistemaModal } from '@/components/financeiro-v2/EspelhoConciliacaoTab';
 import { fimDoMes } from '@/hooks/useExtratoDaConta';
 import { ImportarBancoInline } from '@/components/conciliacao/ImportarBancoInline';
 import { ExtratoGerencialTab } from '@/components/financeiro-v2/ExtratoGerencialTab';
@@ -413,17 +413,18 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   const [refreshExtrato, setRefreshExtrato] = useState(0);
   const [showPendencias, setShowPendencias] = useState(false);
   // PR-MOS-1 — 3 abas oficiais: Importar Banco · Enriquecer · Conciliação (só layout/roteamento).
-  /* ⚠ CINCO ABAS — PR-ESPELHO-01. "Espelho" entrou por último, e a decisão que a trouxe é
-     de fronteira: "Auditoria fica separada" continua valendo para a Auditoria Bancária, que
-     é leitura de fechamento; o espelho OFX × Sistema é FERRAMENTA DE TRABALHO — o operador
-     abre para conciliar, não para auditar — e por isso vive onde ele já está. A seção saiu
-     de `AuditoriaBancariaSoberana`, que ficou com uma linha apontando para cá. */
+  /* ⚠ O ESPELHO NÃO É ABA — PR-ESPELHO-02. Chegou como quinta aba no 01 e virou MODAL no
+     mesmo dia, aberto por um botão dentro de "Importar Banco": é lá que o operador está
+     quando quer saber o que o arquivo deixou de fora, e uma aba o tiraria da tela em que
+     ele acabou de trabalhar. "Auditoria fica separada" continua valendo para a Auditoria
+     Bancária, que é leitura de fechamento; a seção saiu de lá e ficou o link. */
   /* ⚠ QUATRO ABAS — FIN-CONCIL-INTEGRAR-01. "Extrato Gerencial" entrou entre
      Enriquecer e Conciliação, na ordem do original. Os filtros do CABEÇALHO
      (ano, mês, conta) valem para todas e se mantêm ao trocar de aba: são estado
      desta tela, não de cada aba — trocar de aba nunca perde onde o operador
      estava. */
-  const [vistaExtrato, setVistaExtrato] = useState<'importar' | 'enriquecer' | 'gerencial' | 'conciliacao' | 'espelho'>('conciliacao');
+  const [vistaExtrato, setVistaExtrato] = useState<'importar' | 'enriquecer' | 'gerencial' | 'conciliacao'>('conciliacao');
+  const [espelhoAberto, setEspelhoAberto] = useState(false);
 
   /* Edit saldo */
   /* SALDO-POSICAO-01c — o lápis abre o modal ÚNICO. `saldoData` viaja junto para
@@ -878,7 +879,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
         )}
 
         {/* PR-MOS-1 — abas da Conciliação Bancária. A Auditoria Bancária continua separada;
-            o Espelho não (PR-ESPELHO-01) — ver o comentário do `vistaExtrato`. */}
+            o Espelho é modal, não aba (PR-ESPELHO-02) — ver o comentário do `vistaExtrato`. */}
         {!loading && selectedCard && (
           <div className="flex gap-1 items-center pt-1">
             <button
@@ -904,12 +905,6 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
               className={`px-2.5 py-1 rounded text-[10px] font-bold transition-colors ${vistaExtrato === 'conciliacao' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
             >
               Conciliação
-            </button>
-            <button
-              onClick={() => setVistaExtrato('espelho')}
-              className={`px-2.5 py-1 rounded text-[10px] font-bold transition-colors ${vistaExtrato === 'espelho' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
-            >
-              Espelho
             </button>
           </div>
         )}
@@ -949,6 +944,20 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                 registra "cta -> verde-agua (AGRO usa ambar 43 87% 63%)". O ambar
                 nao e' desvio da portagem; e' a identidade desta casa, e cravar
                 cor num botao so' seria inventar. (Medido em B-26.) */}
+            {/* ⚠ CONTA E MÊS VÊM DO CABEÇALHO: o espelho não tem seletor próprio, e com
+                "todas" o botão fica desabilitado dizendo por quê — a RPC compara UMA conta,
+                e somar o extrato de uma com o sistema de várias não é espelho nenhum. */}
+            <div className="flex justify-end">
+              <Button
+                variant="outline" size="sm" className="h-6 text-[10px]"
+                disabled={selectedConta === '__all__'}
+                title={selectedConta === '__all__' ? 'Escolha uma conta' : 'Comparar o extrato desta conta com o que o sistema pagou nela'}
+                onClick={() => setEspelhoAberto(true)}
+              >
+                Espelho OFX × Sistema
+              </Button>
+            </div>
+
             <ImportarBancoInline
               contas={contas.map(c => ({ id: c.id, label: getContaLabel(c), tipo_conta: c.tipo_conta }))}
               contaId={selectedConta !== '__all__' ? selectedConta : ''}
@@ -977,19 +986,6 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
             vencia — regua marcando Mai e extrato mostrando Jun (print de 15:39).
             Passando `periodo`, esta tela e' a dona: os selects nao sao renderizados
             e trocar o mes na regua chega na aba no mesmo render. */}
-        {/* ⚠ CONTA E MÊS VÊM DO CABEÇALHO, como nas demais: o espelho não tem seletor próprio,
-            e `__all__` vira o convite a escolher uma conta (a RPC compara UMA). */}
-        {!loading && selectedCard && vistaExtrato === 'espelho' && (
-          <div className="md:flex-1 md:min-h-0 md:overflow-y-auto">
-            <EspelhoConciliacaoTab
-              clienteId={clienteId}
-              contaId={selectedConta === '__all__' ? null : selectedConta}
-              ano={ano}
-              mes={selectedMes}
-            />
-          </div>
-        )}
-
         {!loading && selectedCard && vistaExtrato === 'gerencial' && (
           <div className="md:flex-1 md:min-h-0 md:overflow-y-auto">
             <ExtratoGerencialTab periodo={{ ano: Number(ano), mes: Number(selectedMes) }} />
@@ -1360,6 +1356,16 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
           </div>
         )}
       </div>
+
+      <EspelhoOfxSistemaModal
+        open={espelhoAberto}
+        onClose={() => setEspelhoAberto(false)}
+        clienteId={clienteId ?? null}
+        contaId={selectedConta === '__all__' ? null : selectedConta}
+        ano={ano}
+        mes={selectedMes}
+        nomeConta={contaAtual}
+      />
 
       {/* ════ LANÇAMENTOS MODAL ════ */}
       <Dialog open={showLancModal} onOpenChange={setShowLancModal}>
