@@ -10,7 +10,6 @@ import {
 } from '@/lib/financeiro/statusFinanceiro';
 import { isTransferenciaTipo } from '@/lib/financeiro/v2Transferencia';
 import { useLancamentosConciliados } from '@/hooks/useConciliacaoDoMes';
-import { useQuery } from '@tanstack/react-query';
 import { useCliente } from '@/contexts/ClienteContext';
 import { contaSimpleValid } from '@/components/financeiro-v2/lancamentoDialogTabs';
 import { validarLancamento } from '@/lib/financeiro/validacaoLancamento';
@@ -224,47 +223,48 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const { conciliados } = useLancamentosConciliados(clienteAtual?.id ?? null);
 
   /**
-   * Quantos lançamentos cada fornecedor tem — o número ao lado do nome no combobox.
+   * PR-FORN-01 — as opções e a contagem saem do RECORTE CARREGADO, não do catálogo.
    *
-   * ⚠ O OPERADOR ACHA O CERTO PELO USO, NAO PELA SORTE. São 3.361 fornecedores no
-   * NJ, seis deles chamados "Wilson", e 1.513 (45%) nunca tiveram um lançamento —
-   * medido em 04/09/2026. Sem a contagem, escolher entre homônimos é adivinhação.
+   * ⚠ FILTRO OFERECE O QUE EXISTE. São 2.554 fornecedores ativos no NJ e 274 com
+   * lançamento em julho/2026 — medido em 09/09/2026. Oferecer os 2.554 é oferecer
+   * 2.280 escolhas que devolvem lista vazia: isso não filtra, só afasta quem
+   * filtraria. Mostre o desvio, não o caminho.
    *
-   * ⚠ ZERO É RESPOSTA, e por isso aparece: `· 0` diz "existe e nunca foi usado",
-   * que é justamente o sinal de que aquele não é o fornecedor procurado. Omitir o
-   * hint diria "não perguntei", que é outra coisa.
+   * ⚠ SEM LÓGICA DE `ativo`: entra quem tem lançamento no recorte, e em julho/2026
+   * cinco deles estão inativos. Desativar um fornecedor não apaga o que ele
+   * movimentou — escondê-lo tornaria o lançamento inalcançável pelo filtro.
    *
-   * ⚠ UMA CHAMADA POR CLIENTE, e ela não é barata: o agregado equivalente custou
-   * 395 ms medidos. `staleTime: Infinity` porque a contagem muda devagar e a lista
-   * de fornecedores da tela já vem do mesmo lugar — não vale recarregar a cada
-   * troca de filtro.
+   * ⚠ LISTA E CONTAGEM VÊM DO MESMO RECORTE: o `· N` diz quantos lançamentos aquele
+   * fornecedor tem no que está na tela, e por isso nunca é zero nem contradiz a lista
+   * que aparece ao escolhê-lo. Também separa os seis "Wilson" do NJ, que era a razão
+   * de existir do número. Antes vinha de `fn_fornecedores_com_uso`, contando a base
+   * inteira: uma chamada de 395 ms por abertura para responder outra pergunta.
+   *
+   * ⚠ A LISTA NÃO ENCOLHE AO SELECIONAR, e isso é estrutural: `fornecedorFiltro` é
+   * filtro de memória (`filteredLancamentos`) e não entra no plano do servidor, então
+   * `hook.lancamentos` continua sendo o recorte inteiro depois da escolha. Se um dia
+   * esse filtro subir para a query, esta lista passa a ter uma opção só e vira
+   * armadilha: não dá para trocar de fornecedor sem antes voltar para "Todos".
+   *
+   * O nome vem do catálogo porque o lançamento carrega só o id. Id sem nome é omitido:
+   * órfão não existe no banco (medido: 0 em 09/09/2026), então o único caso é a corrida
+   * de carga — e ela se resolve sozinha quando `fornecedores` chega.
    */
-  const { data: usosPorFornecedor } = useQuery({
-    queryKey: ['fin-fornecedor-usos', clienteAtual?.id],
-    enabled: !!clienteAtual?.id,
-    staleTime: Infinity,
-    gcTime: 30 * 60 * 1000,
-    queryFn: async (): Promise<Map<string, number>> => {
-      const { data, error } = await supabase.rpc('fn_fornecedores_com_uso', {
-        p_cliente_id: clienteAtual!.id,
-      });
-      if (error) throw error;
-      const m = new Map<string, number>();
-      (data ?? []).forEach((r) => m.set(r.id, r.usos));
-      return m;
-    },
-  });
+  const opcoesFornecedor = useMemo(() => {
+    const nomePorId = new Map(hook.fornecedores.map((f) => [f.id, f.nome]));
+    const noRecorte = new Map<string, number>();
+    hook.lancamentos.forEach((l) => {
+      if (l.favorecido_id) noRecorte.set(l.favorecido_id, (noRecorte.get(l.favorecido_id) ?? 0) + 1);
+    });
 
-  /* O hint só existe quando a contagem chegou: enquanto ela viaja, o combobox
-     mostra os nomes sem número, em vez de piscar `· 0` para todo mundo. */
-  const opcoesFornecedor = useMemo(
-    () => hook.fornecedores.map((f) => ({
-      value: f.id,
-      label: f.nome,
-      hint: usosPorFornecedor ? String(usosPorFornecedor.get(f.id) ?? 0) : undefined,
-    })),
-    [hook.fornecedores, usosPorFornecedor],
-  );
+    const opcoes: { value: string; label: string; hint: string }[] = [];
+    noRecorte.forEach((usos, id) => {
+      const nome = nomePorId.get(id);
+      if (!nome) return;
+      opcoes.push({ value: id, label: nome, hint: String(usos) });
+    });
+    return opcoes.sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
+  }, [hook.lancamentos, hook.fornecedores]);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const currentYear = new Date().getFullYear();
