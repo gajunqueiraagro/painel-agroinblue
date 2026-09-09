@@ -2,6 +2,7 @@ import * as React from 'react';
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { ChevronsUpDown, X } from 'lucide-react';
+import { COMBOBOX_PALETA } from '@/components/ui/command';
 
 export interface OpcaoSearchable {
   value: string;
@@ -59,14 +60,15 @@ interface SearchableSelectProps {
   allValue?: string;
   disabled?: boolean;
   className?: string;
-  /** Densidade opt-in (usada só pela Compra): itens ~12px, busca sticky, lista mais alta.
-   *  Default false → visual idêntico ao atual nos demais fluxos (Abate/Venda/Mapa/FinV2). */
+  /** Densidade opt-in (usada só pela Compra): busca sticky e lista mais alta.
+   *  ⚠ NAO MEXE MAIS NO ITEM (PR-UI-SELECT-05): item, busca e painel sao os mesmos nos
+   *  dois modos — a regua do sistema. `dense` distingue o GATILHO (32px contra 24px) e a
+   *  altura da lista, que e' o que a grade densa de fato precisa. */
   dense?: boolean;
-  /** Classes extras no PAINEL aberto (dropdown), para o tema escuro do sistema.
-   *  ADITIVO: `undefined` mantém `bg-popover` e o visual de hoje — Abate, Venda, Mapa
-   *  e FinV2 não passam a prop e não mudam em nada. Quem quiser escurecer usa
-   *  seletores descendentes (`[&_input]`, `[&_button]`), porque os itens desta lista
-   *  são <button> e não `[role=option]`. */
+  /** Classes extras no PAINEL aberto (dropdown).
+   *  ⚠ O PAINEL JA' NASCE ESCURO desde o PR-UI-SELECT-05 — `COMBOBOX_PALETA`, a mesma do
+   *  `SelectContent` e dos comboboxes Radix. Esta prop deixou de ser o caminho para
+   *  escurecer e serve so' para ajuste pontual (largura, por exemplo). */
   contentClassName?: string;
   /**
    * Liga a MEMÓRIA DA BUSCA desta instância, gravada em `sessionStorage` sob esta
@@ -283,20 +285,30 @@ export function SearchableSelect({
         </span>
       </button>
 
+      {/* ⚠ PAINEL NO PADRAO DO SISTEMA (PR-UI-SELECT-05). Era `bg-popover` — branco — ao
+          lado do "Data por", que abre o dark-glass do primitivo. A paleta vem de
+          `COMBOBOX_PALETA` para nao virar uma terceira copia da string.
+          ⚠ LARGURA: `min-w-full` prende o PISO no gatilho, `w-auto` deixa crescer ate' o
+          item mais longo e `max-w-[28rem]` para antes do absurdo — a mesma regra que o
+          SelectContent e o COMBOBOX_CONTENT ganharam no SELECT-04. Era `w-full`, e por isso
+          nome longo era cortado num campo estreito. */}
       {open && (
-        <div className={cn("absolute z-50 w-full min-w-[140px] rounded-md border bg-popover shadow-md", openUp ? "bottom-full mb-0.5" : "top-full mt-0.5", contentClassName)}>
-          <div className={cn('px-0.5 pt-0.5 pb-0', dense && 'sticky top-0 z-10 bg-popover px-1 pt-1 pb-1')}>
+        <div className={cn("absolute z-50 min-w-full w-auto max-w-[28rem] rounded-md border shadow-md", COMBOBOX_PALETA, openUp ? "bottom-full mb-0.5" : "top-full mt-0.5", contentClassName)}>
+          <div className={cn('px-1 pt-1 pb-1', dense && 'sticky top-0 z-10 bg-zinc-950/80')}>
             <input
               ref={inputRef}
               value={search}
               onChange={e => alterarBusca(e.target.value)}
               placeholder={placeholder}
+              /* ⚠ O MESMO CAMPO DO `CommandInput` (PR-UI-SELECT-05), NOS DOIS MODOS. O modo
+                 padrao estava em `h-4 text-[9px]` — abaixo do piso de 10px da casa, e
+                 ilegivel sobre o painel escuro. O denso estava em 12px, a regua ANTES do
+                 SELECT-03. Agora e' um so': 28px de altura, 10px de texto, fundo
+                 `zinc-900/60`. Os 12px que o comentario antigo defendia eram do tempo em
+                 que o item tambem era 12px; hoje o sistema inteiro e' 10. */
               className={cn(
-                'w-full rounded border border-input bg-background outline-none focus:ring-1 focus:ring-ring',
-                /* A23 — no modo denso, o input de busca é o do padrão: 32px e 12px. O modo
-                   padrão continua em 16px/9px: ele veste as grades operacionais de Abate,
-                   Venda, Mapa e Financeiro, que foram medidas para caber sem rolar. */
-                dense ? 'h-8 text-[12px] px-2' : 'h-4 text-[9px] px-1',
+                'w-full rounded bg-zinc-900/60 border border-zinc-700/40 px-2 h-7 text-[10px]',
+                'text-zinc-100 placeholder:text-zinc-400 outline-none focus:ring-1 focus:ring-zinc-600',
               )}
               onKeyDown={handleKeyDown}
               autoCorrect="off"
@@ -313,11 +325,17 @@ export function SearchableSelect({
                 ref={el => { itemRefs.current[idx] = el; }}
                 onClick={() => handleSelect(o.value)}
                 onMouseEnter={() => setHighlightIdx(idx)}
+                /* ⚠ UMA REGUA SO' PARA OS DOIS MODOS (PR-UI-SELECT-05): 10px/14px, 22px de
+                   altura, `py-1` — a mesma do `SelectItem` e do `CommandItem` desde o
+                   SELECT-04. Antes o denso era 12px/26px (a regua ANTES do SELECT-03) e o
+                   padrao era 9px/1.5px, abaixo do piso da casa. O que distingue `dense`
+                   continua sendo o GATILHO e a altura da lista, nao o item.
+                   ⚠ REALCE ESCURO: `bg-accent` e' claro e sumia sobre o painel novo. */
                 className={cn(
-                  'w-full text-left leading-tight rounded-sm cursor-pointer',
-                  dense ? 'min-h-[26px] px-2 py-1 text-[12px]' : 'px-1 py-[1.5px] text-[9px]',
-                  idx === highlightIdx && 'bg-accent text-accent-foreground',
-                  idx !== highlightIdx && 'hover:bg-accent/50',
+                  'w-full text-left rounded-sm cursor-pointer text-zinc-100',
+                  'min-h-[22px] px-2 py-1 text-[10px] leading-[14px]',
+                  idx === highlightIdx && 'bg-zinc-800/60',
+                  idx !== highlightIdx && 'hover:bg-zinc-800/45',
                   value === o.value && 'font-semibold',
                 )}
               >
@@ -332,18 +350,17 @@ export function SearchableSelect({
                 </span>
                 {o.sub ? (
                   <span className={cn('block truncate text-[10px]',
-                    o.subAlerta ? 'text-amber-700' : 'text-muted-foreground')} title={o.sub}>
+                    o.subAlerta ? 'text-amber-500' : 'text-zinc-400')} title={o.sub}>
                     {o.sub}
                   </span>
                 ) : null}
               </button>
             ))}
             {filtered.length === 0 && (
-              <div className={cn('text-muted-foreground',
-                dense ? 'px-2 py-3 text-center text-[11px]' : 'px-1 py-0.5 text-[9px]')}>Nenhum resultado</div>
+              <div className="px-2 py-3 text-center text-[10px] text-zinc-400">Nenhum resultado</div>
             )}
             {excedente > 0 && (
-              <div className="text-[9px] text-muted-foreground px-1 py-0.5 border-t border-border/50">
+              <div className="text-[10px] text-zinc-400 px-2 py-1 border-t border-zinc-700/40">
                 +{excedente} resultado{excedente === 1 ? '' : 's'} — refine a busca
               </div>
             )}
@@ -354,8 +371,7 @@ export function SearchableSelect({
             {acaoFinal && (
               <button type="button" onMouseDown={e => e.preventDefault()}
                 onClick={() => { setOpen(false); acaoFinal.onSelect(); }}
-                className={cn('w-full text-left rounded-sm text-primary hover:bg-accent/50 border-t border-border/50',
-                  dense ? 'min-h-[26px] px-2 py-1 text-[12px]' : 'px-1 py-[1.5px] text-[9px]')}>
+                className="w-full text-left rounded-sm text-sky-300 hover:bg-zinc-800/45 border-t border-zinc-700/40 min-h-[22px] px-2 py-1 text-[10px] leading-[14px]">
                 {acaoFinal.label}
               </button>
             )}

@@ -91,11 +91,12 @@ interface Props {
    <button> e nao `[role=option]` — por isso os seletores descendentes apontam para
    `button` e `input` em vez de `[role=option]`. As cores sao as mesmas do
    DARK_GLASS_CONTENT, para as duas familias se lerem como uma so. */
-const DARK_SEARCHABLE_CONTENT =
-  'bg-zinc-950/85 backdrop-blur-xl border-zinc-700/40 text-zinc-100 ' +
-  '[&_input]:bg-zinc-900/60 [&_input]:border-zinc-700/50 [&_input]:text-zinc-100 [&_input]:placeholder:text-zinc-500 ' +
-  '[&_button]:text-zinc-100 [&_button:hover]:bg-zinc-800/45 ' +
-  '[&_.bg-accent]:bg-zinc-800/55 [&_.bg-accent]:text-zinc-100';
+/* ⚠ `DARK_SEARCHABLE_CONTENT` SAIU (PR-UI-SELECT-05). Ele escurecia o painel do
+   `SearchableSelect` por fora, com seletores descendentes, porque o componente nascia
+   branco. Agora ele nasce escuro (`COMBOBOX_PALETA`), e o blob virou duas coisas ruins:
+   redundante nos `[&_input]`/`[&_button]`, MORTO no `[&_.bg-accent]` (o item nao usa mais
+   `bg-accent`) e DIVERGENTE no fundo — pedia `zinc-950/85` contra os `/55` do resto do
+   sistema, o que deixaria so' a Compra mais escura que todo o resto. */
 
 const badgeStatusParcela = (s: string) => (s === 'materializada' ? 'default' : s === 'paga' ? 'default' : s === 'cancelada' ? 'destructive' : 'secondary');
 
@@ -2097,7 +2098,6 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
                 value={loteId || '__none__'} onValueChange={(v) => setLoteId(v === '__none__' ? '' : v)}
                 options={loteOptions} placeholder="Selecione o lote"
                 allLabel="— operação inteira —" allValue="__none__" dense className="[&>button]:h-8 [&>button]:text-[12px]"
-                contentClassName={DARK_SEARCHABLE_CONTENT}
               />
               {loteOptions.length > 1 && (
                 <label className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer">
@@ -2123,7 +2123,6 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
               value={subcentro || '__none__'} onValueChange={(v) => setSubcentro(v === '__none__' ? '' : v)}
               options={subcentroOptions} placeholder="Selecione o subcentro"
               allLabel="— selecione —" allValue="__none__" dense className="[&>button]:h-8 [&>button]:text-[12px]"
-              contentClassName={DARK_SEARCHABLE_CONTENT}
             />
           </div>
           <div className="grid grid-cols-2 gap-2">
@@ -2143,7 +2142,6 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
                     value={favorecidoId || '__none__'} onValueChange={(v) => setFavorecidoId(v === '__none__' ? '' : v)}
                     options={fornecedores.map(f => ({ value: f.id, label: f.nome }))} placeholder="Opcional"
                     allLabel="— nenhum —" allValue="__none__" dense className="[&>button]:h-8 [&>button]:text-[12px]"
-                    contentClassName={DARK_SEARCHABLE_CONTENT}
                   />
                 </div>
                 {onCriarFornecedor && (

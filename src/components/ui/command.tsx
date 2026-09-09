@@ -122,9 +122,19 @@ CommandSeparator.displayName = CommandPrimitive.Separator.displayName;
  * ⚠ LARGURA: piso no gatilho, cresce ate' o item mais longo, teto de 28rem — a mesma regra
  * que o `SelectContent` passou a ter.
  */
-export const COMBOBOX_CONTENT =
-  'p-0 min-w-[var(--radix-popover-trigger-width)] w-auto max-w-[28rem] ' +
+/**
+ * SO' A PALETA do painel de combobox — sem largura, sem posicionamento.
+ *
+ * ⚠ EXISTE SEPARADA porque nem todo combobox do sistema e' Radix: o `SearchableSelect`
+ * (`ui/searchable-select.tsx`, 27 superficies) e' lista propria com `absolute`, e nao tem
+ * a variavel `--radix-popover-trigger-width` para consumir. Ele precisa da COR sem a
+ * largura. Duas constantes, uma fonte: se a paleta mudar, muda nos dois.
+ */
+export const COMBOBOX_PALETA =
   'bg-zinc-950/55 backdrop-blur-xl border-zinc-700/40 text-zinc-100';
+
+export const COMBOBOX_CONTENT =
+  'p-0 min-w-[var(--radix-popover-trigger-width)] w-auto max-w-[28rem] ' + COMBOBOX_PALETA;
 
 const CommandItem = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive.Item>,
