@@ -28,6 +28,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { computeValidacaoModal, type AbaFinanceira } from './lancamentoDialogTabs';
+import { AbaAuditoriaLancamento } from '@/components/financeiro-v2/AbaAuditoriaLancamento';
 import { AlertCircle, AlertTriangle, Copy, KeyRound, RefreshCw, DollarSign, FileText, Beef, Repeat } from 'lucide-react';
 import { LancamentoZooModal } from '@/v2/components/edicao/LancamentoZooModal';
 import { toast } from 'sonner';
@@ -134,12 +135,17 @@ const TIPOS_OPERACAO = [
 // PR-FIN-MODAL-02E — a aba visual "Classificação" foi INCORPORADA à aba "Geral"
 // (Linha 4). A validação por aba (helper puro) segue com 'classificacao' como
 // dimensão lógica; aqui ela apenas não é mais uma aba visível. Evolução futura:
-// Geral | Pagamento | Documentos | Auditoria — a aba Auditoria só será criada
-// quando houver conteúdo real (nada de tab vazia agora).
-const ABAS_TAB: { value: AbaFinanceira; label: string }[] = [
+// Geral | Pagamento | Documentos | Auditoria.
+// PR-FIN-AUDIT-01 — a aba Auditoria deixou de ser promessa: o conteúdo real chegou e o
+// `<span>` inerte saiu. `'auditoria'` NÃO entra em `AbaFinanceira` de propósito — aquele
+// tipo é o da VALIDAÇÃO, e uma aba de leitura não tem campo para validar; incluí-la
+// obrigaria `validaPorAba` a inventar um `true` que não significa nada.
+type AbaVisual = AbaFinanceira | 'auditoria';
+const ABAS_TAB: { value: AbaVisual; label: string }[] = [
   { value: 'geral', label: 'Geral' },
   { value: 'pagamento', label: 'Pagamento' },
   { value: 'documentos', label: 'Documentos' },
+  { value: 'auditoria', label: 'Auditoria' },
 ];
 
 // PR-FIN-STATUS-UX-03A-1 — opções do modal e deriveStatus vêm do domínio único
@@ -316,7 +322,17 @@ export function LancamentoV2Dialog({
   const [saving, setSaving] = useState(false);
   // PR-FIN-MODAL-02B — aba ativa (Tabs controlado). Vive no pai; nenhum estado de campo é
   // duplicado por aba. Redefinida para 'geral' na hidratação (abrir/trocar de registro).
-  const [abaAtiva, setAbaAtiva] = useState<AbaFinanceira>('geral');
+  const [abaAtiva, setAbaAtiva] = useState<AbaVisual>('geral');
+
+  /* Os catálogos da trilha saem das props que o modal já recebe — nenhuma consulta a mais
+     para trocar um UUID por um nome. */
+  const catalogosAuditoria = useMemo(() => ({
+    fornecedor: (id: string) => fornecedores.find((f) => f.id === id)?.nome,
+    /* `nome_exibicao` é o rótulo que o operador vê nos seletores; `nome_conta` é o
+       cadastro. A frase usa o mesmo nome que a tela mostra em todo lugar. */
+    conta: (id: string) => { const c = contas.find((x) => x.id === id); return c?.nome_exibicao ?? c?.nome_conta; },
+    fazenda: (id: string) => fazendas.find((f) => f.id === id)?.nome,
+  }), [fornecedores, contas, fazendas]);
   const [fornecedorDialogOpen, setFornecedorDialogOpen] = useState(false);
   // FASE 1 zoo-fin: aviso de origem zootécnica + navegação para LancamentoZooModal.
   // zooModalId é capturado ao clicar no link âmbar; abre só após o V2Dialog
@@ -696,7 +712,7 @@ export function LancamentoV2Dialog({
   // critérios; muda apenas o DESTINO VISUAL: pendência de 'classificacao' aponta para
   // 'geral'. Colapso exclusivamente de apresentação (nenhuma regra nova).
   const abaVisual = (aba: AbaFinanceira): AbaFinanceira => (aba === 'classificacao' ? 'geral' : aba);
-  const abaComErro = (aba: AbaFinanceira) => validacao.abasInvalidas.some(a => abaVisual(a) === aba);
+  const abaComErro = (aba: AbaVisual) => validacao.abasInvalidas.some(a => abaVisual(a) === aba);
   const handleVerPendencia = () => {
     if (validacao.primeiraAbaInvalida) setAbaAtiva(abaVisual(validacao.primeiraAbaInvalida));
   };
@@ -1015,16 +1031,6 @@ export function LancamentoV2Dialog({
                   )}
                 </TabsTrigger>
               ))}
-              {/* PR-FIN-MODAL-02J — previsão visual da futura aba "Auditoria": elemento INERTE,
-                  FORA do maquinário do Tabs (sem value/ABAS_TAB/activeTab/abaComErro/badge/TabsContent).
-                  Aparência de aba desabilitada + tooltip nativo. Sem hook/consulta/dado. */}
-              <span
-                aria-disabled="true"
-                title="Disponível em breve"
-                className="h-6 px-3 inline-flex items-center text-[12px] font-medium text-muted-foreground/50 cursor-not-allowed select-none"
-              >
-                Auditoria
-              </span>
             </TabsList>
           {/* PR-Mesa-ExcelContext: com contexto Excel, corpo vira 2 colunas
               (form + painel). Sem contexto, wrapper usa `contents` (não gera
@@ -1602,6 +1608,20 @@ export function LancamentoV2Dialog({
             </section>
             </TabsContent>
             {/* ═══ fim ABA DOCUMENTOS ═══ */}
+
+            {/* ═══ ABA AUDITORIA (PR-FIN-AUDIT-01) — só leitura ═══
+                ⚠ `mountOnly` pela montagem do próprio Tabs: o Radix só renderiza o
+                TabsContent ativo, então a consulta da trilha nasce no primeiro clique na
+                aba e não na abertura do modal. */}
+            <TabsContent value="auditoria" className="mt-0 focus-visible:outline-none">
+              <AbaAuditoriaLancamento
+                lancamentoId={lancamento?.id ?? null}
+                criadoPor={lancamento?.created_by ?? null}
+                criadoEm={lancamento?.created_at ?? null}
+                descricao={lancamento?.descricao ?? null}
+                catalogos={catalogosAuditoria}
+              />
+            </TabsContent>
           </div>
           {/* PR-Mesa-ExcelContext: painel lateral read-only "Contexto Excel /
               Sugestão". Scroll próprio, não some ao rolar o formulário. */}
