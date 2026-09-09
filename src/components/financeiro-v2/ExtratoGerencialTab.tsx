@@ -29,6 +29,7 @@ import { STATUS_FILTRO_LABEL, STATUS_FILTRO_COR } from '@/lib/financeiro/statusF
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { sentidoNaConta, sinalDoSentido } from '@/lib/financeiro/sinalPorConta';
 import { useCoberturaExtrato } from '@/hooks/useCoberturaExtrato';
 import { iconeOrigemLancamento, LEGENDA_ICONES, tipoMaisForte } from '@/v2/lib/origemLancamento';
 import { MinimodalOrigemLancamento } from '@/components/financeiro-v2/MinimodalOrigemLancamento';
@@ -228,10 +229,14 @@ export function ExtratoGerencialTab({ periodo }: { periodo: PeriodoControlado })
 
     let acc: number | null = saldoIni;
     return visiveis.map((l) => {
-      // Sinal correto: 1-Entradas é SEMPRE entrada (+), mesmo com conta_bancaria_id preenchida; o lado
-      //   destino de uma transferência também entra (+). Demais (saída / transferência-origem) = saída (−).
-      const isEntrada = l.tipo_operacao.startsWith('1') || (l.conta_destino_id === contaId && l.conta_bancaria_id !== contaId);
-      const mov = isEntrada ? Math.abs(l.valor) : -Math.abs(l.valor);
+      /* Sinal correto: 1-Entradas é SEMPRE entrada (+), mesmo com conta_bancaria_id preenchida;
+         o lado destino de uma transferência também entra (+). Demais (saída /
+         transferência-origem) = saída (−).
+         ⚠ A REGRA SAIU DAQUI — PR-V2-TRANSF-DESTINO-01. Ela estava escrita inline nesta
+         linha e, com outra redação, na tabela de transferências do PDF logo abaixo; as duas
+         cópias já discordavam no caso da transferência de uma conta para ela mesma. Agora é
+         `sentidoNaConta`, uma função com nome, testada, e a lista do V2 usa a MESMA. */
+      const mov = sinalDoSentido(sentidoNaConta(l, contaId)) * Math.abs(l.valor);
       if (acc !== null) acc += mov;
       return { l, mov, saldo: acc, data: dataMov(l) };
     });
@@ -281,8 +286,13 @@ export function ExtratoGerencialTab({ periodo }: { periodo: PeriodoControlado })
     const transferencias = linhas
       .filter((x) => x.l.tipo_operacao.startsWith('3'))
       .map((x): TransfLinha | null => {
-        const sentido: 'entrada' | 'saida' | null = x.l.conta_destino_id === contaId ? 'entrada' : x.l.conta_bancaria_id === contaId ? 'saida' : null;
-        if (!sentido) return null;
+        /* ⚠ A MESMA FUNÇÃO DA LINHA DO SALDO, e não uma segunda leitura: era aqui que a
+           cópia divergia (não exigia `bancaria !== foco`). O `null` fica: uma transferência
+           que não toca a conta em foco não pertence a esta tabela — e isso é recorte, não
+           sinal. */
+        const tocaAConta = x.l.conta_destino_id === contaId || x.l.conta_bancaria_id === contaId;
+        if (!tocaAConta) return null;
+        const sentido = sentidoNaConta(x.l, contaId) === 'entrada' ? 'entrada' as const : 'saida' as const;
         const sk = (x.l.status_transacao || '').toLowerCase();
         return {
           data: x.data, sentido, descricao: x.l.descricao || '',

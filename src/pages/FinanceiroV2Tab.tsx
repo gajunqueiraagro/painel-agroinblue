@@ -9,6 +9,7 @@ import {
   type StatusFiltroFinanceiro,
 } from '@/lib/financeiro/statusFinanceiro';
 import { isTransferenciaTipo } from '@/lib/financeiro/v2Transferencia';
+import { sentidoNaConta, sinalDoSentido, contaEmFoco, type SentidoNaConta } from '@/lib/financeiro/sinalPorConta';
 import { useLancamentosConciliados, desfazerVinculo, desfazerGrupo } from '@/hooks/useConciliacaoDoMes';
 import { iconeOrigemLancamento, LEGENDA_ICONES } from '@/v2/lib/origemLancamento';
 import { MinimodalOrigemLancamento } from '@/components/financeiro-v2/MinimodalOrigemLancamento';
@@ -1131,16 +1132,39 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
       : <ArrowDown className="inline h-2.5 w-2.5 ml-0.5" />;
   };
 
-  const hasContaOrigemAtiva = contaOrigem && contaOrigem !== '__all__';
-  const hasContaDestinoAtiva = contaDestino && contaDestino !== '__all__';
+  /**
+   * O PONTO DE VISTA DA LISTA — PR-V2-TRANSF-DESTINO-01.
+   *
+   * ⚠ ELE DECIDE O SINAL DE TODA TRANSFERÊNCIA DA TELA. Filtrando por "Conta Destino =
+   * Bradesco", os resgates de LCA/CDB ENTRAM naquela conta e têm de aparecer positivos; a
+   * coluna `sinal` do lançamento só conhece o lado da origem.
+   */
+  const foco = contaEmFoco(contaOrigem, contaDestino);
 
-  const totalEntradas = (hasContaOrigemAtiva && !hasContaDestinoAtiva)
-    ? 0
-    : sortedLancamentos.filter(l => l.sinal > 0).reduce((s, l) => s + l.valor, 0);
-
-  const totalSaidas = (hasContaDestinoAtiva && !hasContaOrigemAtiva)
-    ? 0
-    : sortedLancamentos.filter(l => l.sinal < 0).reduce((s, l) => s + l.valor, 0);
+  /**
+   * ⚠ TRÊS BALDES, NÃO DOIS — e é o que conserta o "Entradas 961.008,30 · Saídas 0" com os
+   * cinco resgates sumidos. Os totais liam `l.sinal` e ainda ZERAVAM à força o lado oposto
+   * ao filtro (`hasContaDestinoAtiva ? 0 : …`): a transferência, negativa por `sinal`, não
+   * era contada como entrada — e a saída, forçada a zero, também não a contava. Ela caía
+   * fora dos dois. Agora o balde sai do SENTIDO, e o sentido sai da conta em foco.
+   * ⚠ O TERCEIRO SÓ EXISTE SEM FOCO: com uma conta escolhida, toda transferência é entrada
+   * ou saída dela. Sem foco, somá-la a qualquer lado inflaria o mês com dinheiro que apenas
+   * mudou de bolso — por isso ela fica à parte, e o rodapé a mostra à parte.
+   */
+  const totais = useMemo(() => {
+    const acc = { entradas: 0, saidas: 0, transferencias: 0 };
+    for (const l of sortedLancamentos) {
+      const s: SentidoNaConta = sentidoNaConta(l, foco);
+      const v = Math.abs(l.valor);
+      if (s === 'entrada') acc.entradas += v;
+      else if (s === 'saida') acc.saidas += v;
+      else acc.transferencias += v;
+    }
+    return acc;
+  }, [sortedLancamentos, foco]);
+  const totalEntradas = totais.entradas;
+  const totalSaidas = totais.saidas;
+  const totalTransferencias = totais.transferencias;
 
   const toggleMes = (val: string) => {
     setMesesSelecionados(prev =>
@@ -1553,6 +1577,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 <div className="flex gap-1.5 text-[9px] items-center">
                   <span className="text-success font-bold">{formatMoeda(totalEntradas)}</span>
                   <span className="text-destructive font-bold">{formatMoeda(totalSaidas)}</span>
+                  {totalTransferencias > 0 && (
+                    <span className="font-bold text-sky-700 dark:text-sky-400"
+                      title="Transferências entre contas do próprio cliente — fora dos dois totais.">
+                      {formatMoeda(totalTransferencias)}
+                    </span>
+                  )}
                   <span className="text-muted-foreground">{totalLancamentosFiltrados}</span>
                 </div>
               </div>
@@ -1803,6 +1833,16 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                   </Button>
                   <span className="text-[10px] text-success font-bold">Entradas: {formatMoeda(totalEntradas)}</span>
                   <span className="text-[10px] text-destructive font-bold">Saídas: {formatMoeda(totalSaidas)}</span>
+                  {/* ⚠ O TERCEIRO TOTAL SÓ APARECE QUANDO EXISTE — PR-V2-TRANSF-DESTINO-01.
+                      Com uma conta em foco não há transferência solta: ela é entrada ou
+                      saída daquela conta, o balde fica zerado e um "Transf.: R$ 0,00"
+                      permanente ensinaria a ignorar a linha. */}
+                  {totalTransferencias > 0 && (
+                    <span className="text-[10px] font-bold text-sky-700 dark:text-sky-400"
+                      title="Transferências entre contas do próprio cliente: não são entrada nem saída do caixa, por isso ficam fora dos dois totais.">
+                      Transf.: {formatMoeda(totalTransferencias)}
+                    </span>
+                  )}
                   <span className="text-[10px] text-muted-foreground">{totalLancamentosFiltrados} lanç.</span>
                 </div>
               </div>
@@ -2003,8 +2043,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                         <td className="truncate px-1 py-1 align-middle text-[11px] font-medium leading-tight text-muted-foreground" title={l.macro_custo || ''}>{l.macro_custo || '-'}</td>
                         <td className="truncate px-1 py-1 align-middle text-[11px] font-medium leading-tight" title={l.centro_custo || ''}>{l.centro_custo || '-'}</td>
                         <td className="truncate px-1 py-1 align-middle text-[11px] font-medium leading-tight text-muted-foreground" title={fazendaNameMap.get(l.fazenda_id) || ''}>{fazendaCodigoMap.get(l.fazenda_id) || '-'}</td>
-                        <td className={`celula-valor text-right font-semibold whitespace-nowrap px-1 py-1 align-middle text-[12px] leading-tight ${l.sinal > 0 ? 'text-success' : 'text-destructive'}`}>
-                          {fmtValor(l.valor, l.sinal)}
+                        {/* ⚠ O SINAL É O DA CONTA EM FOCO, não o da coluna `sinal` — que só
+                            conhece o lado da origem. Ver `sentidoNaConta`. */}
+                        <td className={`celula-valor text-right font-semibold whitespace-nowrap px-1 py-1 align-middle text-[12px] leading-tight ${sinalDoSentido(sentidoNaConta(l, foco)) > 0 ? 'text-success' : 'text-destructive'}`}>
+                          {fmtValor(l.valor, sinalDoSentido(sentidoNaConta(l, foco)))}
                         </td>
                         <td className="celula-doc font-mono text-muted-foreground text-center px-1 py-1 align-middle text-[10px] leading-tight truncate" title={formatDocCompleto(l)}>{formatNF(l)}</td>
                         <td className={`text-center px-1 py-1 align-middle text-[11px] leading-tight ${stColor}`}

@@ -1,0 +1,81 @@
+/**
+ * O SENTIDO DE UM LANÇAMENTO VISTO DE UMA CONTA — PR-V2-TRANSF-DESTINO-01.
+ *
+ * ⚠ TRANSFERÊNCIA NÃO TEM UM SINAL, TEM DOIS. Ela é saída na conta de origem e entrada na
+ * de destino — o mesmo dinheiro, dois lados. A coluna `sinal` do lançamento guarda apenas o
+ * lado da ORIGEM (-1), e quem lê a lista pela conta de DESTINO recebe o sinal errado: era
+ * por isso que os cinco resgates de LCA/CDB do Agnaldo apareciam em −R$ 1.180.941,36 numa
+ * lista filtrada por "Conta Destino = Bradesco", que é justamente a conta onde o dinheiro
+ * ENTROU.
+ *
+ * ⚠ A REGRA JÁ EXISTIA, SEM NOME E EM DUPLICATA. O Extrato Gerencial a escrevia inline duas
+ * vezes no mesmo arquivo (`ExtratoGerencialTab` :233 no cálculo do saldo e :284 na tabela de
+ * transferências do PDF) — e as duas cópias já divergiam entre si no caso da transferência
+ * de uma conta para ela mesma: a primeira exigia `bancaria !== foco`, a segunda não. Zero
+ * ocorrências desse caso na base hoje (medido), mas duas cópias de uma regra são duas
+ * respostas esperando a pergunta. Aqui ela tem um nome e um lugar.
+ *
+ * ⚠ SEM CONTA EM FOCO, TRANSFERÊNCIA NÃO É NEM ENTRADA NEM SAÍDA. Somá-la a qualquer um dos
+ * dois lados infla o total com dinheiro que só mudou de bolso: os R$ 2 milhões de um resgate
+ * apareceriam como receita do mês. Ela ganha eixo próprio — quem exibe decide se mostra.
+ */
+import { isTransferenciaTipo } from './v2Transferencia';
+
+export type SentidoNaConta = 'entrada' | 'saida' | 'transferencia';
+
+/** O mínimo que se precisa saber de um lançamento para lhe dar sentido. */
+export interface LancamentoDirecional {
+  tipo_operacao?: string | null;
+  conta_bancaria_id?: string | null;
+  conta_destino_id?: string | null;
+}
+
+/**
+ * @param contaFoco a conta pela qual se está olhando; `null` quando não há recorte de conta
+ *                  (ou quando origem E destino estão filtrados, que é olhar dos dois lados
+ *                  ao mesmo tempo — e aí nenhum é "o" ponto de vista).
+ */
+export function sentidoNaConta(
+  l: LancamentoDirecional,
+  contaFoco: string | null,
+): SentidoNaConta {
+  const transferencia = isTransferenciaTipo(l.tipo_operacao);
+  if (contaFoco) {
+    /* ⚠ `bancaria !== foco` NÃO É REDUNDANTE: sem ele, uma transferência de uma conta para
+       ela mesma seria lida como entrada, e o saldo dela subiria sozinho. É a cláusula que
+       a cópia do PDF não tinha. */
+    if (l.conta_destino_id === contaFoco && l.conta_bancaria_id !== contaFoco) return 'entrada';
+    if (transferencia) return 'saida';
+  }
+  if (transferencia) return 'transferencia';
+  return (l.tipo_operacao ?? '').startsWith('1') ? 'entrada' : 'saida';
+}
+
+/**
+ * O multiplicador do valor exibido.
+ *
+ * ⚠ TRANSFERÊNCIA SEM FOCO SAI NEGATIVA — decisão de produto deste envelope: fora de um
+ * recorte de conta, o ponto de vista padrão é o de quem paga.
+ */
+export function sinalDoSentido(s: SentidoNaConta): 1 | -1 {
+  return s === 'entrada' ? 1 : -1;
+}
+
+/**
+ * A conta pela qual a lista está olhando, a partir dos dois filtros.
+ *
+ * ⚠ OS DOIS FILTROS ATIVOS NÃO SOMAM UM PONTO DE VISTA, ANULAM-NO: quem filtra origem E
+ * destino está pedindo o movimento entre duas contas suas, e aí a transferência é o próprio
+ * assunto — não uma entrada nem uma saída de nenhuma das duas.
+ */
+export function contaEmFoco(
+  contaOrigem: string | null | undefined,
+  contaDestino: string | null | undefined,
+  semFiltro = '__all__',
+): string | null {
+  const origem = contaOrigem && contaOrigem !== semFiltro ? contaOrigem : null;
+  const destino = contaDestino && contaDestino !== semFiltro ? contaDestino : null;
+  if (destino && !origem) return destino;
+  if (origem && !destino) return origem;
+  return null;
+}
