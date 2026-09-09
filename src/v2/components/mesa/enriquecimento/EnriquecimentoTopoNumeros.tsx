@@ -26,7 +26,12 @@ import { fmtBRL } from './fmt';
 import type { EnriqGrupo, EnriqResumoGrupos } from '@/v2/lib/mesa/enriquecimentoView';
 
 /** 133c — o chip da visão inversa. Não é `match_status`: é o que a planilha NÃO explica. */
-export type VistaPasso2 = EnriqGrupo | 'todas' | 'sem_par_sistema' | 'incompletos';
+/**
+ * ⚠ `a_revisar` E `revisadas` SÃO EIXO DO TRABALHO, não do casamento — PR-MESA-ORDEM-REVISADO-01
+ * item C. Entram aqui porque a barra é uma só; mas, como `incompletos`, atravessam os seis
+ * grupos em vez de ser um deles.
+ */
+export type VistaPasso2 = EnriqGrupo | 'todas' | 'sem_par_sistema' | 'incompletos' | 'a_revisar' | 'revisadas';
 
 export interface EnriquecimentoTopoNumerosProps {
   resumo: EnriqResumoGrupos;
@@ -45,6 +50,14 @@ export interface EnriquecimentoTopoNumerosProps {
   semParSistema?: number;
   /** 133i item 7 — linhas cujo lançamento está classificado mas sem produto ou fornecedor. */
   incompletos?: number;
+  /**
+   * As duas contagens do trabalho — PR-MESA-ORDEM-REVISADO-01 item C.
+   *
+   * ⚠ VÊM PRONTAS E SOMAM `total`, porque saem da MESMA condição do contador do rodapé
+   * (`estaRevisada`). Recontá-las aqui abriria a porta para a barra dizer um número e o
+   * rodapé outro sobre a mesma lista.
+   */
+  revisao?: { aRevisar: number; revisadas: number };
 }
 
 /** Rótulo, cor e a segunda linha de cada um dos seis. A ordem é a do trabalho. */
@@ -79,7 +92,7 @@ const CARD_ATIVO = 'border-primary bg-muted/40';
 const CARD_INERTE = 'border-transparent hover:bg-muted/30';
 
 export function EnriquecimentoTopoNumeros({
-  resumo, total, filtro, onFiltro, transferencias, semParSistema, incompletos,
+  resumo, total, filtro, onFiltro, transferencias, semParSistema, incompletos, revisao,
 }: EnriquecimentoTopoNumerosProps) {
   /* Clicar no card que já filtra volta a "Todas" — o filtro é alternador. */
   const alternar = (g: VistaPasso2) => onFiltro(filtro === g ? 'todas' : g);
@@ -90,11 +103,32 @@ export function EnriquecimentoTopoNumeros({
         <span className="text-[10px] text-muted-foreground">Clique num card para filtrar.</span>
         {/* ⚠ "Todas" É TEXTO, NÃO CARD: ela não é um recorte a mais, é a ausência de
             recorte — e um oitavo card do mesmo tamanho a faria parecer um. */}
-        <button type="button" onClick={() => onFiltro('todas')}
-          className={`text-[10px] transition-colors ${
-            filtro === 'todas' ? 'font-medium text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
-          Todas · <span className="tabular-nums">{total}</span>
-        </button>
+        {/* ⚠ OS TRÊS SÃO TEXTO, PELA MESMA RAZÃO DO "Todas" — item C: nenhum deles é um
+            recorte do CASAMENTO, e um card do mesmo tamanho dos outros oito os faria
+            parecer um. "A revisar" e "Revisadas" somam exatamente o total. */}
+        <span className="flex items-baseline gap-2.5">
+          {revisao && (
+            <>
+              <button type="button" onClick={() => onFiltro('a_revisar')}
+                title="Filtrar: linhas que você ainda não conferiu"
+                className={`text-[10px] transition-colors ${
+                  filtro === 'a_revisar' ? 'font-medium text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+                A revisar · <span className="tabular-nums">{revisao.aRevisar}</span>
+              </button>
+              <button type="button" onClick={() => onFiltro('revisadas')}
+                title="Filtrar: linhas já conferidas ou gravadas"
+                className={`text-[10px] transition-colors ${
+                  filtro === 'revisadas' ? 'font-medium text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+                Revisadas · <span className="tabular-nums">{revisao.revisadas}</span>
+              </button>
+            </>
+          )}
+          <button type="button" onClick={() => onFiltro('todas')}
+            className={`text-[10px] transition-colors ${
+              filtro === 'todas' ? 'font-medium text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+            Todas · <span className="tabular-nums">{total}</span>
+          </button>
+        </span>
       </div>
 
       <div className="grid grid-cols-3 gap-1 px-1.5 pb-1.5 pt-1 sm:grid-cols-8">

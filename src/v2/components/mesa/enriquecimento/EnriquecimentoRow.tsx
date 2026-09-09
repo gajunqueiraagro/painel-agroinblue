@@ -25,6 +25,7 @@
  * os dois, uma descrição longa empurra o valor para fora e a lista deixa de alinhar.
  */
 import { STATUS_META } from './fmt';
+import { estaRevisada } from '@/v2/lib/mesa/enriquecimentoView';
 import type { EnriqRowVM } from './types';
 
 export interface EnriquecimentoRowProps {
@@ -51,6 +52,13 @@ export function EnriquecimentoRow({ row, selecionado, onSelecionar, editadaNaoGr
     : row.entradaOuSaida === 'entrada' ? 'text-emerald-700 dark:text-emerald-400'
     : '';
   const sinal = row.entradaOuSaida === 'saida' ? '−' : '';
+  /* ⚠ DOIS EIXOS, DOIS SINAIS — PR-MESA-ORDEM-REVISADO-01 item B. A bolinha responde "este
+     dinheiro achou par?"; o ✓ responde "eu já passei por aqui?". Elas são independentes: uma
+     linha sem par pode estar revisada (o operador olhou e decidiu deixar), e uma linha que
+     casou perfeitamente pode nunca ter sido olhada. Empilhar as duas respostas num único
+     ponto de 7px obrigava o operador a lembrar uma tabela de cores para ler o que agora se
+     lê de relance. */
+  const revisada = estaRevisada(row);
 
   return (
     <button
@@ -61,9 +69,21 @@ export function EnriquecimentoRow({ row, selecionado, onSelecionar, editadaNaoGr
           ? 'bg-primary/10 outline outline-1 outline-primary'
           : 'bg-card hover:bg-muted/50'
       }`}
-      /* bolinha · identidade · contexto (elástico) · valor 96px · situação 110px */
-      style={{ gridTemplateColumns: '7px minmax(0,auto) minmax(0,1fr) 96px 110px' }}
+      /* ✓ · bolinha · identidade · contexto (elástico) · valor 96px · situação 110px */
+      style={{ gridTemplateColumns: '10px 7px minmax(0,auto) minmax(0,1fr) 96px 110px' }}
     >
+      {/* ⚠ A COLUNA EXISTE SEMPRE, COM OU SEM ✓ — item B. Se ela nascesse só na linha
+          revisada, o texto de todas as outras andaria 10px para a esquerda e a lista
+          pareceria desalinhada a cada gravação. Espaço reservado é o que faz a marca
+          aparecer sem mover nada.
+          ⚠ A DATA NÃO MORA NA LINHA desde o 133b-b: ela é a faixa do grupo, logo acima.
+          "À esquerda da data" virou, então, a primeira coluna da linha — antes da bolinha,
+          que continua onde estava. */}
+      <span className={`text-[10px] leading-none ${revisada ? 'text-emerald-600 dark:text-emerald-400' : 'text-transparent'}`}
+        aria-hidden={!revisada}
+        title={revisada ? 'Revisada.' : undefined}>
+        {revisada ? '✓' : ''}
+      </span>
       {/* ⚠ TRÊS ESTADOS, NESTA PRECEDÊNCIA — 133h item 9: gravada (verde) vence tudo,
           porque é fim de linha; editada-e-não-gravada (âmbar) vem antes de revisada,
           porque é a que ainda pede o gesto; revisada-não-gravada é azul; o resto segue

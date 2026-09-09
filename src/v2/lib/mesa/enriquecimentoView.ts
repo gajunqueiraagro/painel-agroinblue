@@ -705,8 +705,28 @@ export function resumirGrupos(staging: ClassificacaoStagingPreviewRow[]): EnriqR
  * lista da esquerda é OUTRA, e o que esta função devolve — vazio — é a verdade: nenhuma
  * linha da planilha pertence àquele recorte.
  */
+/**
+ * A linha já foi revisada? — PR-MESA-ORDEM-REVISADO-01.
+ *
+ * ⚠ UMA CONDIÇÃO SÓ, PARA TRÊS LEITORES. O contador do rodapé ("Revisado N/96"), o ✓ da
+ * lista e os dois filtros novos respondem à MESMA pergunta; escrita três vezes, ela
+ * divergiria no dia em que um quarto estado entrasse — e o operador veria "Revisado 40/96"
+ * com 41 marcas de conferido na lista, sem saber em qual acreditar.
+ * ⚠ GRAVADA CONTA COMO REVISADA, e é a regra do 133h item 9: gravar é a forma mais forte de
+ * ter conferido. `revisado_em` só é escrito pelo caminho "sem mudança"; sem o `aplicado`, a
+ * linha que o operador salvou voltaria a aparecer em "A revisar".
+ */
+export function estaRevisada(r: { revisadaEm?: string | null; aplicado: boolean }): boolean {
+  return !!r.revisadaEm || r.aplicado;
+}
+
 export function filtrarPorGrupo(rows: EnriqRowVM[], grupo: string): EnriqRowVM[] {
   if (grupo === 'todas') return rows;
+  /* ⚠ OS DOIS RECORTES DE REVISÃO ATRAVESSAM OS OUTROS, como "incompletos": não são estados
+     do CASAMENTO, são do TRABALHO. Por isso saem antes do `grupoDaLinha`, que só sabe
+     responder sobre o casamento e devolveria lista vazia, calada. */
+  if (grupo === 'a_revisar') return rows.filter((l) => !estaRevisada(l));
+  if (grupo === 'revisadas') return rows.filter((l) => estaRevisada(l));
   /* ⚠ "Incompletos" NÃO É UM GRUPO DE `match_status` — 133i item 7. Os outros seis saem de
      `grupoDaLinha`, que classifica pelo casamento; este é uma propriedade do LANÇAMENTO
      (classificado, mas sem produto ou sem fornecedor) e atravessa todos eles. Mandá-lo

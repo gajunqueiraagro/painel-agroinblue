@@ -14,7 +14,7 @@ import { useFinanceiroV2, notificarLancamentosMudaram } from '@/hooks/useFinance
 import { useQueryClient } from '@tanstack/react-query';
 import { useClassificacaoStaging, useSessoesClassificacao } from '@/v2/hooks/useClassificacaoStaging';
 import {
-  toRowVM, toSessoesVM, contarAplicaveisExatos, escolherMelhorSessaoId, diferencasDoResultado,
+  toRowVM, toSessoesVM, contarAplicaveisExatos, escolherMelhorSessaoId, diferencasDoResultado, estaRevisada,
   listarContas, filtrarPorConta, resumirGrupos, filtrarPorGrupo, grupoDaLinha,
   sessoesDoMes, contaEfetivaNome, parteDeAgrupamento, explicadoPorSiMesmo,
   type EnriqGrupo,
@@ -365,17 +365,33 @@ export function MesaEnriquecimentoTab({
     [stagingConta, contasResolviveis]);
   /* 133h item 3 — o único gate é o card do topo; `filtrarPorModo` saiu daqui com o
      "Todas | Pendentes". A função segue exportada e testada, para as telas legadas. */
+  /* ⚠ AS DUAS CONTAGENS SAEM DE `rowsVM`, o recorte da CONTA — o mesmo universo do contador
+     "Revisado N/96" do rodapé e do "Todas · N" da barra. Contá-las sobre `rowsFiltradas`
+     daria o número do recorte de dentro do recorte, e os dois totais deixariam de somar. */
+  const revisao = useMemo(() => {
+    const revisadas = rowsVM.filter(estaRevisada).length;
+    return { aRevisar: rowsVM.length - revisadas, revisadas };
+  }, [rowsVM]);
+
   const rowsGrupo = useMemo(() => filtrarPorGrupo(rowsVM, filtroGrupo), [rowsVM, filtroGrupo]);
   /* ⚠ A ORDENAÇÃO É DA APRESENTAÇÃO, e por isso é a ÚLTIMA: ordenar antes de filtrar daria
      o mesmo resultado com mais trabalho, e ordenar dentro do filtro esconderia que a ordem
      padrão é a da planilha — que é a que o operador tem aberta ao lado. */
   const rowsFiltradas = useMemo(() => {
-    /* ⚠ PAGAMENTO DECRESCENTE, DEPOIS VALOR — 133e adendo item 5, agora sem alternativa.
-       `dataIso` já vem do adapter em `YYYY-MM-DD`: ordenar por ele é comparação de string,
-       sem `Date` e sem desformatar o que o adapter formatou. Linha sem data vai para o fim. */
+    /* ⚠ PAGAMENTO CRESCENTE — PR-MESA-ORDEM-REVISADO-01 item A. Era decrescente, e a lista
+       abria em 28/08 enquanto o operador trabalha do dia 1 para o 31: ele começava pelo fim
+       do mês e descia a lista de trás para frente, conferindo contra uma planilha que está
+       em ordem de calendário ao lado. O envelope 133e escolheu decrescente para pôr o
+       movimento mais recente no topo; a medição na mesa desfez a escolha.
+       ⚠ DENTRO DO DIA, A ORDEM É A DE ANTES: valor decrescente. Só o eixo do dia virou.
+       ⚠ LINHA SEM DATA CONTINUA NO FIM, e agora isso é explícito: em ordem crescente a
+       string vazia iria para o TOPO, e um punhado de linhas sem data abrindo o mês é o
+       oposto do que este item pede. `dataIso` vem `YYYY-MM-DD` do adapter — comparação de
+       string, sem `Date` e sem desformatar o que já foi formatado. */
     return [...rowsGrupo].sort((a, b) => {
       const da = a.dataIso ?? ''; const db = b.dataIso ?? '';
-      if (da !== db) return db.localeCompare(da);
+      if (!da !== !db) return da ? -1 : 1;
+      if (da !== db) return da.localeCompare(db);
       return Math.abs(b.valorNum ?? 0) - Math.abs(a.valorNum ?? 0);
     });
   }, [rowsGrupo]);
@@ -400,6 +416,40 @@ export function MesaEnriquecimentoTab({
     return [...antes, presa, ...rowsFiltradas.slice(antes.length)];
   }, [rowsFiltradas, rowsVM, selecionadoId]);
   const selecionado = rowsNaTela.find((r) => r.id === selecionadoId) ?? null;
+
+  /**
+   * "A revisar" é o default — PR-MESA-ORDEM-REVISADO-01 item C.
+   *
+   * ⚠ SÓ QUANDO HÁ OS DOIS. Com tudo revisado, "A revisar" abriria uma lista vazia; com
+   * nada revisado, ele seria idêntico a "Todas" com outro nome. Nos dois extremos o default
+   * é "Todas", que é o que descreve a lista de verdade.
+   * ⚠ UMA VEZ POR RECORTE, e é isso que a chave garante. Sem ela, cada refetch — e há um a
+   * cada gravação — reimporia o default por cima da escolha do operador: ele clicaria em
+   * "Todas", salvaria uma linha e a tela voltaria sozinha para "A revisar".
+   * ⚠ O EFEITO RODA NA MONTAGEM DE PROPÓSITO, ao contrário do que a regra do 133 pede em
+   * geral: aqui a montagem É o momento de escolher o recorte inicial.
+   */
+  const chaveRecorte = `${sessaoId ?? ''}|${filtroConta}`;
+  const recorteAplicado = useRef<string | null>(null);
+  useEffect(() => {
+    if (!sessaoId || rowsVM.length === 0) return;
+    if (recorteAplicado.current === chaveRecorte) return;
+    recorteAplicado.current = chaveRecorte;
+    const revisadas = rowsVM.filter(estaRevisada).length;
+    setFiltroGrupo(revisadas > 0 && revisadas < rowsVM.length ? 'a_revisar' : 'todas');
+  }, [chaveRecorte, sessaoId, rowsVM]);
+
+  /**
+   * A primeira linha que ainda pede trabalho, na ordem da tela — item A.
+   *
+   * ⚠ SAI DE `rowsNaTela`, e não de `rowsVM`: a Mesa abre na lista que está na tela, com o
+   * filtro e a conta que o operador escolheu. Apontar para uma linha fora do recorte faria
+   * a Mesa abrir numa linha que a lista atrás dela não mostra.
+   * ⚠ SEM NENHUMA A REVISAR, A PRIMEIRA DA LISTA. O mês fechado ainda se consulta.
+   */
+  const primeiraNaoRevisada = useMemo(
+    () => rowsNaTela.find((r) => !estaRevisada(r)) ?? rowsNaTela[0] ?? null,
+    [rowsNaTela]);
 
   // PR-MESA-RESOLUCAO-01 / PR-DRAWER-1TO1-01 — lançamentos já vinculados por QUALQUER linha
   // da sessão (lanc_id = match_lancamento_id via view) → o drawer os oculta (o guard
@@ -1391,6 +1441,7 @@ export function MesaEnriquecimentoTab({
         total={rowsVM.length}
         filtro={filtroGrupo}
         onFiltro={(g) => { setFiltroGrupo(g); setSelecionadoId(null); }}
+        revisao={revisao}
         /* ⚠ O CHIP CONTA O QUE A LISTA MOSTRA — 133e item G. Com o total do mês no chip e o
            recorte da conta na lista, os dois discordariam sempre que houvesse filtro. */
         /* ⚠ O CARD SOMA AS TRÊS FAMÍLIAS — 133f item 2. Elas respondem à mesma pergunta
@@ -1493,7 +1544,14 @@ export function MesaEnriquecimentoTab({
         <Button size="sm" variant="outline" className="h-6 shrink-0 px-2 text-[11px]"
           disabled={mesaAmpliadaVazia}
           title={mesaAmpliadaVazia ? 'Nenhuma linha neste recorte.' : 'Revisar campo a campo e salvar — em tela cheia.'}
-          onClick={() => setMesaAmpliadaOpen(true)}>
+          /* ⚠ ABRE NA PRIMEIRA QUE FALTA, NÃO NA PRIMEIRA DO MÊS — item A. Sem seleção, a
+             Mesa abria vazia e o operador tinha de achar onde parou; com a ordem crescente,
+             "a primeira" seria 03/08, que já está conferida há dias. Só decide quando não
+             há escolha vigente: a seleção do operador manda sempre. */
+          onClick={() => {
+            if (!selecionadoId && primeiraNaoRevisada) setSelecionadoId(primeiraNaoRevisada.id);
+            setMesaAmpliadaOpen(true);
+          }}>
           Mesa ampliada
         </Button>
       </div>
