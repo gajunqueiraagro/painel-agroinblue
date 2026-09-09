@@ -324,9 +324,20 @@ function Alca({ id }: { id: string }) {
 /** A borda que separa os dois lados. Mesma célula em toda linha — é o que a faz contínua. */
 const MEIO = 'border-l border-r border-border text-center px-0';
 const CEL = 'px-[5px] overflow-hidden text-ellipsis whitespace-nowrap';
+/* ⚠ A DATA NUNCA ENCOLHE. Com `text-ellipsis` numa coluna de 36px, "16/07" virava "16/…" —
+   e data cortada não é data. 44px cabe o formato inteiro, e a célula não corta. */
+const CEL_DATA = 'px-[5px] whitespace-nowrap text-[10px] text-muted-foreground';
 const H21 = 'h-[21px]';
 
 const corVal = (v: number) => (v < 0 ? 'text-rose-600' : 'text-emerald-600');
+/** O aplicado é magnitude; quem dá o sinal é o extrato que a filha explica. */
+const assinado = (valorExtrato: number, aplicado: number) => Math.sign(valorExtrato || 1) * aplicado;
+
+/** Na filha, descrição e fornecedor saem no mesmo tom — ela não repete competência nem origem. */
+function textoFilha(s: EspSis | undefined) {
+  if (!s) return '—';
+  return <>{s.descricao ?? '—'}{' · '}{s.fornecedor || '—'}</>;
+}
 
 /**
  * ⚠ CADA LINHA É UM COMPONENTE PORQUE O @dnd-kit É HOOK. `useDroppable`/`useDraggable` não
@@ -345,7 +356,7 @@ function LinhaExtratoSemPar({ e, marcado, onMarcar }: {
         <input type="checkbox" className="h-3 w-3 align-middle" checked={marcado}
           onChange={onMarcar} aria-label="Marcar movimento do banco" />
       </td>
-      <td className={cn(CEL, 'text-[10px] text-muted-foreground')}>{fmtData(e.data)}</td>
+      <td className={CEL_DATA}>{fmtData(e.data)}</td>
       <td className={cn(CEL, 'text-[10px] font-medium')} title={e.historico ?? ''}>{e.historico ?? '—'}</td>
       <td className={cn(CEL, 'text-right text-[11px] font-medium tabular-nums', corVal(e.valor))}>{fmtBRL(e.valor)}</td>
       <td className={cn(MEIO, 'text-[12px] text-muted-foreground')} title="sem correspondência">○</td>
@@ -363,7 +374,7 @@ function LinhaLancSemPar({ s, mesDoRecorte, marcado, onMarcar, onAbrir }: {
   return (
     <tr className={cn(H21, 'border-b border-border/50', marcado && 'bg-amber-500/10')}>
       <td />
-      <td className={cn(CEL, 'text-[10px] text-muted-foreground')}>{fmtData(s.data)}</td>
+      <td className={CEL_DATA}>{fmtData(s.data)}</td>
       <td className={cn(CEL, 'text-[10px] italic text-muted-foreground')}>— sem extrato correspondente</td>
       <td />
       <td className={cn(MEIO, 'text-[12px] font-semibold text-destructive')} title="sem par no banco">!</td>
@@ -515,24 +526,27 @@ function AbaConferencia({ data, anoMes, nomeConta, contaId, onAbrir, onMudou }: 
     <DndContext sensors={sensores} onDragEnd={aoSoltar}
       onDragStart={(ev) => setArrastando(sisIndex.get(String(ev.active.id).slice(4)) ?? null)}>
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="min-h-0 flex-1 overflow-y-auto border-t">
+      {/* ⚠ A MARGEM É DO CONTAINER, NÃO DA TABELA. As bordas e a divisória continuam de fora a
+          fora DA TABELA; é ela que se afasta da borda do modal, e não as linhas que encurtam. */}
+      <div className="min-h-0 flex-1 overflow-y-auto border-t px-3.5">
         {/* ⚠ A RÉGUA É O PADRÃO DA TABELA, não de cada célula. Sem isto, as células que não
             declaram tamanho — as dos checkboxes, a das ações, a do lançamento — herdam os
             16px/24px do documento e esticam a linha de 21px para 26,5px, mesmo com `h-[21px]`
             no `<tr>`: altura em tabela é mínimo, não teto. Medido em 09/09/2026. */}
         <table className="w-full border-collapse text-[11px] leading-[1.3]" style={{ tableLayout: 'fixed' }}>
           <colgroup>
-            <col style={{ width: 18 }} /><col style={{ width: 36 }} /><col />
+            <col style={{ width: 18 }} /><col style={{ width: 44 }} /><col />
             <col style={{ width: 92 }} /><col style={{ width: 26 }} />
             <col style={{ width: 18 }} /><col style={{ width: 92 }} /><col />
             <col style={{ width: 104 }} />
           </colgroup>
           <thead className="sticky top-0 z-10">
-            <tr className="bg-muted h-5">
+            <tr className="bg-primary h-[22px] text-primary-foreground">
               <th />
-              <th colSpan={3} className="px-[5px] text-left text-[10px] font-medium text-primary">BANCO (OFX)</th>
-              <th className={MEIO} />
-              <th colSpan={3} className="px-[5px] text-left text-[10px] font-medium text-primary">SISTEMA</th>
+              <th colSpan={3} className="px-[5px] text-left text-[10px] font-medium">BANCO (OFX)</th>
+              {/* A divisória atravessa o cabeçalho também — em branco, porque o fundo é azul. */}
+              <th className="border-l border-r border-primary-foreground/40 px-0" />
+              <th colSpan={3} className="px-[5px] text-left text-[10px] font-medium">SISTEMA</th>
               <th />
             </tr>
           </thead>
@@ -555,7 +569,7 @@ function AbaConferencia({ data, anoMes, nomeConta, contaId, onAbrir, onMudou }: 
                     <React.Fragment key={p.extrato.extrato_id}>
                       <tr className={cn(H21, 'border-b border-border/50', agrupado && 'bg-muted/20')}>
                         <td />
-                        <td className={cn(CEL, 'text-[10px] text-muted-foreground')}>{fmtData(p.extrato.data)}</td>
+                        <td className={CEL_DATA}>{fmtData(p.extrato.data)}</td>
                         <td className={cn(CEL, 'text-[10px] font-medium')} title={p.extrato.historico ?? ''}>{p.extrato.historico ?? '—'}</td>
                         <td className={cn(CEL, 'text-right text-[11px] font-medium tabular-nums', corVal(p.extrato.valor))}>{fmtBRL(p.extrato.valor)}</td>
                         <td className={cn(MEIO, 'text-[12px] font-semibold', icone?.cor)} title={icone?.significado}>{icone?.simbolo}</td>
@@ -584,13 +598,18 @@ function AbaConferencia({ data, anoMes, nomeConta, contaId, onAbrir, onMudou }: 
                         </td>
                       </tr>
 
+                      {/* ⚠ A FILHA É DETALHE DE COMPOSIÇÃO, e a tipografia diz isso: 10px, peso
+                          400 em tudo — inclusive no valor —, descrição em muted e borda mais
+                          fraca que a das linhas. Ela explica a mãe; não compete com ela. */}
                       {agrupado && p.filhas.map((f) => (
-                        <tr key={f.lancamento_id} className="h-[15px] bg-muted/40 border-b border-border/50">
+                        <tr key={f.lancamento_id} className="h-[15px] bg-muted/40 border-b border-border/30">
                           <td /><td /><td /><td />
                           <td className={cn(MEIO, 'text-[11px] font-normal text-muted-foreground')}>↳</td>
                           <td />
-                          <td className={cn(CEL, 'text-left text-[10px] tabular-nums', corVal(Math.sign(p.extrato.valor || 1) * f.valor_aplicado))}>{fmtBRL(f.valor_aplicado)}</td>
-                          <td className={cn(CEL, 'text-[10px]')}>{textoLancamento(f.sis, mesDoRecorte)}</td>
+                          <td className={cn(CEL, 'text-left text-[10px] font-normal tabular-nums', corVal(assinado(p.extrato.valor, f.valor_aplicado)))}>
+                            {fmtBRL(assinado(p.extrato.valor, f.valor_aplicado))}
+                          </td>
+                          <td className={cn(CEL, 'text-[10px] font-normal text-muted-foreground')}>{textoFilha(f.sis)}</td>
                           <td className={cn(CEL, 'text-right')}>{onAbrir && <Acao onClick={() => onAbrir(f.lancamento_id)}>abrir</Acao>}</td>
                         </tr>
                       ))}
@@ -611,10 +630,13 @@ function AbaConferencia({ data, anoMes, nomeConta, contaId, onAbrir, onMudou }: 
 
                 <tr className="h-[22px] bg-primary/10 border-t border-b border-border">
                   <td colSpan={3} className={cn(CEL, 'text-[11px] font-semibold text-primary')}>fechamento {fmtData(d.data)}</td>
-                  <td className={cn(CEL, 'text-right text-[11px] font-semibold tabular-nums', corVal(d.banco))}>{fmtBRL(d.banco)}</td>
+                  <td className={cn(CEL, 'text-right text-[11px] font-semibold tabular-nums text-primary')}>{fmtBRL(d.banco)}</td>
                   <td className={MEIO} />
                   <td />
-                  <td className={cn(CEL, 'text-left text-[11px] font-semibold tabular-nums', corVal(d.sistema))}>{fmtBRL(d.sistema)}</td>
+                  {/* ⚠ NO FECHAMENTO O AZUL VENCE O VERMELHO/VERDE: a linha inteira é subtotal, e o
+                      sinal já está no número. Colorir por sinal aqui faria o subtotal competir
+                      visualmente com os movimentos que ele resume. */}
+                  <td className={cn(CEL, 'text-left text-[11px] font-semibold tabular-nums text-primary')}>{fmtBRL(d.sistema)}</td>
                   <td />
                   <td className={cn(CEL, 'text-right text-[11px] font-semibold')}>
                     {Math.abs(d.banco - d.sistema) <= 0.01
@@ -627,8 +649,6 @@ function AbaConferencia({ data, anoMes, nomeConta, contaId, onAbrir, onMudou }: 
           </tbody>
         </table>
       </div>
-
-      <FechamentoDoMes data={data} dias={dias} />
 
       <div className="shrink-0 flex flex-wrap items-center gap-x-3 gap-y-1 border-t px-3.5 py-1 text-[10px] text-muted-foreground">
         <span><span className="text-muted-foreground">○</span> extrato sem par</span>
@@ -701,50 +721,6 @@ function AbaConferencia({ data, anoMes, nomeConta, contaId, onAbrir, onMudou }: 
   );
 }
 
-/**
- * O fechamento do mês — fora da tabela, abaixo dos dias.
- *
- * ⚠ SAÍDAS E ENTRADAS SEPARADAS, nunca o líquido. Um mês que recebeu 100 e pagou 100 fecha em
- * zero pelos dois lados e não diz nada; separado, ele mostra os dois movimentos que houve.
- */
-function FechamentoDoMes({ data, dias }: { data: EspelhadosReais; dias: readonly DiaConf[] }) {
-  const somaSe = (v: readonly number[], f: (n: number) => boolean) => v.filter(f).reduce((a, n) => a + n, 0);
-  const ofx = data.ofx_completo.map((o) => o.valor);
-  const sis = data.sistema_completo.map((s) => s.valor_assinado);
-  const vinculados = new Set((data.vinculos ?? []).map((v) => v.lancamento_id));
-  const extratosSemPar = dias.reduce((a, d) => a + d.extratosSemPar.length, 0);
-  const lancsSemPar = data.sistema_completo.filter((s) => !vinculados.has(s.lancamento_id));
-  const totalSemPar = lancsSemPar.reduce((a, s) => a + s.valor_assinado, 0);
-
-  const linha = (rot: string, f: (n: number) => boolean, cor: string) => {
-    const b = somaSe(ofx, f), s = somaSe(sis, f);
-    return (
-      <div className="grid grid-cols-[70px_1fr_1fr_1fr] gap-2 items-baseline">
-        <span className="text-[10px] text-muted-foreground">{rot}</span>
-        <span className={cn('text-[15px] font-medium tabular-nums', cor)}>{fmtBRL(b)}</span>
-        <span className={cn('text-[15px] font-medium tabular-nums', cor)}>{fmtBRL(s)}</span>
-        <span className={cn('text-[15px] font-medium tabular-nums', Math.abs(b - s) <= 0.01 ? 'text-muted-foreground' : 'text-amber-600')}>{fmtBRL(b - s)}</span>
-      </div>
-    );
-  };
-
-  return (
-    <div className="shrink-0 border-t bg-primary/10 px-3.5 py-1.5 space-y-1">
-      <div className="grid grid-cols-[70px_1fr_1fr_1fr] gap-2 text-[10px] text-muted-foreground">
-        <span />
-        <span>banco</span><span>sistema</span><span>diferença</span>
-      </div>
-      {linha('saídas', (n) => n < 0, 'text-rose-600')}
-      {linha('entradas', (n) => n > 0, 'text-emerald-600')}
-      <div className="text-[10px] text-muted-foreground">
-        sem par: {extratosSemPar} extrato{extratosSemPar === 1 ? '' : 's'} ·{' '}
-        {lancsSemPar.length} lançamento{lancsSemPar.length === 1 ? '' : 's'}
-        {lancsSemPar.length > 0 && <span className="text-destructive"> · {fmtBRL(totalSemPar)}</span>}
-      </div>
-    </div>
-  );
-}
-
 interface Props {
   clienteId: string | null;
   contaId: string | null;
@@ -796,7 +772,7 @@ export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes }: Props) {
   const saidasSistema = data.sistema_completo.filter((s) => s.valor_assinado < 0).reduce((a, s) => a + s.valor_assinado, 0);
   const entradasSistema = data.sistema_completo.filter((s) => s.valor_assinado > 0).reduce((a, s) => a + s.valor_assinado, 0);
   const difSaidas = saidasBanco - saidasSistema;
-  const confereSaidas = Math.abs(difSaidas) <= 0.01;
+  const difEntradas = entradasBanco - entradasSistema;
 
   const vinculados = new Set((data.vinculos ?? []).map((v) => v.lancamento_id));
   const extratosComVinculo = new Set((data.vinculos ?? []).map((v) => v.extrato_id));
@@ -815,39 +791,43 @@ export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes }: Props) {
     <div className="flex min-h-0 flex-1 flex-col">
       {/* A21 — os números não rolam; só a lista de dentro da sub-aba. O título e a conta
           moram no cabeçalho azul do modal, não aqui: repetir seria gastar altura duas vezes. */}
-      <div className="shrink-0 space-y-1.5 px-3.5 py-2">
+      {/* ⚠ TETO DE 96px NO CABEÇALHO. Cada pixel aqui é uma linha a menos na mesa, e a mesa é a
+          tela. O que cede é espaçamento — a informação fica inteira. */}
+      <div className="shrink-0 space-y-0.5 px-3.5 py-1">
         <div className="text-[10px] text-muted-foreground">
           {data.ofx_completo.length} movimento{data.ofx_completo.length === 1 ? '' : 's'} no extrato ·{' '}
           {noSistemaNaoNoBanco.length} lançamento{noSistemaNaoNoBanco.length === 1 ? '' : 's'} sem par no banco
         </div>
 
-        <div className="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-4">
-          <div>
-            <div className="text-[10px] text-muted-foreground">Saídas do banco</div>
-            <div className="text-[16px] font-medium tabular-nums leading-tight">{fmtBRL(saidasBanco)}</div>
-            {entradasBanco > 0 && <div className="text-[10px] text-muted-foreground">entradas {fmtBRL(entradasBanco)}</div>}
-          </div>
-          <div>
-            <div className="text-[10px] text-muted-foreground">Saídas do sistema</div>
-            <div className="text-[16px] font-medium tabular-nums leading-tight">{fmtBRL(saidasSistema)}</div>
-            {confereSaidas
-              ? <div className="text-[10px] text-emerald-600">confere</div>
-              : <div className="text-[10px] text-amber-600">diferença {fmtBRL(difSaidas)}</div>}
-            {entradasSistema > 0 && <div className="text-[10px] text-muted-foreground">entradas {fmtBRL(entradasSistema)}</div>}
-          </div>
-          <div>
-            <div className="text-[10px] text-muted-foreground">Extratos sem correspondência</div>
-            <div className="text-[16px] font-medium tabular-nums leading-tight">{semCorrespondencia.length}</div>
-          </div>
-          <div>
-            <div className="text-[10px] text-muted-foreground">No sistema e não no banco</div>
-            <div className={cn('text-[16px] font-medium tabular-nums leading-tight', noSistemaNaoNoBanco.length > 0 && 'text-destructive')}>
-              {noSistemaNaoNoBanco.length}
-            </div>
+        {/* ⚠ UMA GRADE, NÃO QUATRO CARTÕES. O bloco que ficava ABAIXO da lista dizia isto mesmo,
+            e ninguém rolava até lá para ver — enquanto o topo repetia dois dos quatro números
+            noutro arranjo. Uma leitura só, no lugar por onde o olho entra, e a altura que
+            sobrou foi inteira para a lista. */}
+        <div className="grid grid-cols-[54px_1fr_1fr_1fr_1.4fr] gap-x-3 items-baseline">
+          <span />
+          <span className="text-[10px] leading-[12px] text-muted-foreground">banco</span>
+          <span className="text-[10px] leading-[12px] text-muted-foreground">sistema</span>
+          <span className="text-[10px] leading-[12px] text-muted-foreground">diferença</span>
+          <span className="text-[10px] leading-[12px] text-muted-foreground">sem par</span>
+
+          <span className="text-[10px] text-muted-foreground">saídas</span>
+          <span className="text-[15px] font-medium tabular-nums leading-[16px] text-destructive">{fmtBRL(saidasBanco)}</span>
+          <span className="text-[15px] font-medium tabular-nums leading-[16px] text-destructive">{fmtBRL(saidasSistema)}</span>
+          <span className={cn('text-[15px] font-medium tabular-nums leading-[16px]',
+            Math.abs(difSaidas) <= 0.01 ? 'text-muted-foreground' : 'text-amber-600')}>{fmtBRL(difSaidas)}</span>
+          <span className="row-span-2 self-center text-[10px] text-muted-foreground leading-tight">
+            {semCorrespondencia.length} extrato{semCorrespondencia.length === 1 ? '' : 's'}
+            {' · '}{noSistemaNaoNoBanco.length} lançamento{noSistemaNaoNoBanco.length === 1 ? '' : 's'}
             {noSistemaNaoNoBanco.length > 0 && (
-              <div className="text-[10px] text-destructive">R$ {fmtBRL(totalNaoNoBanco)}</div>
+              <><br /><span className="text-destructive">{fmtBRL(totalNaoNoBanco)}</span></>
             )}
-          </div>
+          </span>
+
+          <span className="text-[10px] text-muted-foreground">entradas</span>
+          <span className="text-[15px] font-medium tabular-nums leading-[16px] text-emerald-600">{fmtBRL(entradasBanco)}</span>
+          <span className="text-[15px] font-medium tabular-nums leading-[16px] text-emerald-600">{fmtBRL(entradasSistema)}</span>
+          <span className={cn('text-[15px] font-medium tabular-nums leading-[16px]',
+            Math.abs(difEntradas) <= 0.01 ? 'text-muted-foreground' : 'text-amber-600')}>{fmtBRL(difEntradas)}</span>
         </div>
 
         <div className="flex flex-wrap gap-1">
