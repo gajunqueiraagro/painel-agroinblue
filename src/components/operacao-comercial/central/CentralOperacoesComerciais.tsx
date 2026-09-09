@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-  TableHeader, TableBody, TableRow, TableHead, TableCell,
+  TableHeader, TableBody, TableRow, TableHead, TableCell, TableDensityContext,
 } from '@/components/ui/table';
 import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
@@ -80,14 +80,29 @@ const kg = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 0 }
    linha de 26px deixa de ser uma faixa de texto solta e vira grade — o olho desce a coluna
    sem perder a linha. `last:border-r-0` evita a borda dupla contra a borda da tabela. */
 const DIV = 'border-r border-border/60 last:border-r-0';
-const TH = `px-1.5 py-1 text-[9px] font-semibold uppercase tracking-wide text-primary-foreground whitespace-nowrap ${DIV}`;
+/**
+ * ⚠ CAIXA NORMAL — PR-OC-LISTA-02 item 1. "CONTRAPARTE" em versalete gasta ~18% mais
+ * largura que "Contraparte" para dizer o mesmo, e nesta tabela largura é a moeda: era o
+ * cabeçalho, e não o conteúdo, que fixava o piso de Fazenda e de Receb./Envio.
+ * ⚠ `overflow-hidden` NÃO É ENFEITE, É A TRAVA DO DEFEITO A. Com `whitespace-nowrap` e sem
+ * ele, o rótulo de uma coluna sem largura transborda e PINTA POR CIMA da vizinha — foi
+ * exatamente o que se viu, "CONTRAPARTE" aparecendo sobre "FAZENDA". Cortado com
+ * reticências, o pior caso vira um rótulo curto; sem corte, vira uma tela que mente.
+ */
+/* ⚠ `normal-case` EXPLÍCITO: o `uppercase` não morava aqui, mora no primitivo
+   `TableHead` (ui/table.tsx). Só tirar a classe desta string deixaria o versalete intacto —
+   quem desfaz é a classe oposta, que o `twMerge` resolve a favor da última. */
+const TH = `px-1.5 py-1 text-[9px] font-medium normal-case tracking-wide text-primary-foreground whitespace-nowrap overflow-hidden text-ellipsis ${DIV}`;
 /* ⚠ `TD` NÃO DECLARA TAMANHO, de propósito. Com `text-[11px]` aqui, um `text-[10px]` na
    célula NÃO vence: as duas são classes arbitrárias e quem ganha é a ordem no CSS gerado,
    não a ordem na string — medido, as células de OC e Data saíam em 11px. A régua fica no
    `<table>` e a célula que precisa de menos desce sozinha. */
 /* ⚠ `py-[3px]` E NÃO `py-1`: a pílula de 10px mede 19px de altura, e 4+4 de padding punham
    a linha em 27 — um pixel acima da régua de 26. Com 3+3 fecha em 25, com folga de um. */
-const TD = `px-1.5 py-[3px] align-middle ${DIV}`;
+/* ⚠ `py-[2px]` E NÃO `py-[3px]` — PR-OC-LISTA-02 item 3, e a conta é a mesma de antes com
+   outra régua: a pílula caiu para 9px (17px de altura) e 2+2 fecham a linha em 21, dentro
+   dos 22 pedidos. Com 3+3 e a pílula de 10px eram 25/26. */
+const TD = `px-1.5 py-[2px] align-middle ${DIV}`;
 
 /* Rollup soberano do recebimento a partir do estado por lote (nunca soma quantidades).
    A coluna responde UMA pergunta: os animais chegaram?
@@ -112,9 +127,11 @@ function recStatus(estados: string[] | undefined): string | null {
    crua: a paleta literal acima e' idioma anterior desta tela e fica onde esta.
    EXCEDENTE nao e' sucesso — e' divergencia, entao ganha o warning com enfase
    (peso + anel), e nao um verde que faria o operador ler "deu certo". */
+/* ⚠ UMA PÍLULA SÓ, EM 9px — PR-OC-LISTA-02 item 3. Havia uma segunda (`PILULA_10`) criada
+   quando a do Financeiro precisava ser maior que as demais; com a régua nova todas as
+   pílulas da tabela são 9px, e duas constantes para o mesmo objeto é como uma delas fica
+   para trás na próxima mudança. */
 const PILULA = 'inline-block rounded px-1.5 py-0.5 text-[9px] whitespace-nowrap';
-/** A pílula da coluna Financeiro é a leitura principal da célula, não uma nota de rodapé. */
-const PILULA_10 = 'inline-block rounded px-1.5 py-0.5 text-[10px] whitespace-nowrap';
 const TOM_SUCESSO = 'bg-success text-success-foreground';
 const TOM_ATENCAO = 'bg-warning text-warning-foreground';
 const TOM_ATENCAO_FORTE = 'bg-warning text-warning-foreground font-semibold ring-1 ring-warning-foreground/40';
@@ -791,41 +808,47 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
         {/* ⚠ A RÉGUA É DO `<table>`, e `text-sm` eram 14px vazando para toda célula que não
             declara tamanho — o mesmo defeito que a mesa do Espelho teve duas vezes hoje.
             11px aqui é o piso de leitura; quem precisa de menos desce, ninguém sobe. */}
-        <table className="w-full table-fixed caption-bottom text-[11px]">
+        {/* ⚠ `min-w-[1000px]` É A CORREÇÃO DO DEFEITO A, e a causa é aritmética. Em
+            `table-fixed`, a coluna SEM largura fica com a SOBRA — e quando as onze larguras
+            fixas somam mais que a caixa, a sobra é ZERO. O PR-OC-LISTA-01 levou esse total
+            de 802px para 916px (Tipo +28, Animais +42, Financeiro +52, Pagamento +12, Data
+            −12, Fazenda −14): a Contraparte foi a única a pagar a conta e desapareceu,
+            enquanto o `th` dela transbordava sobre a Fazenda. A régua nova devolve 852px de
+            fixo, e o piso de 1000 garante ≥148px de Contraparte em QUALQUER janela — abaixo
+            disso o container rola na horizontal, que é o comportamento honesto: uma coluna
+            de 0px não é uma tabela mais estreita, é um dado que sumiu.
+            ⚠ A RÉGUA É 10px — item 3. Era 11px; o que precisa de menos (OC, data, pílulas)
+            desce na célula, e ninguém sobe. */}
+        {/* ⚠ A DENSIDADE ENTRA PELO CONTEXTO — item 3. Sem ela, o `<td>` do primitivo nasce
+            com `text-[11px]` e a régua declarada no `<table>` não pega: classe na célula
+            vence classe no pai. É a MESMA régua 9/10/21 de `<Table density="dense">`; a
+            tabela aqui é crua por causa do scrollport do `thead sticky`, não por régua. */}
+        <TableDensityContext.Provider value="dense">
+        <table className="w-full min-w-[1000px] table-fixed caption-bottom text-[10px]">
           <colgroup>
             {/* Medido no DOM (Chrome, 10px/9px desta tela), nao estimado: cada largura e' o
                 maior entre o rotulo do cabecalho e o conteudo mais largo do corpo. Quem
                 manda em Fazenda e Recebimento e' o CABECALHO ("FAZENDA", "RECEBIMENTO"),
                 nao a celula — por isso nao encolhem mais do que isto. */}
-            <col className="w-[68px]" />{/* OC — "#" + 8 hex mono, 10px (em 64 raspava) */}
-            <col className="w-[60px]" />{/* Data — 31/07/26 em 10px */}
-            {/* ⚠ 96px PORQUE "Venda em Pé" NÃO PODE CORTAR: em 68px o rótulo virava
-                "Venda em…", e um tipo de operação truncado deixa de identificar a linha. */}
-            <col className="w-[96px]" />{/* Tipo */}
-            <col />{/* Contraparte — TODA a sobra */}
-            <col className="w-[44px]" />{/* Fazenda — só a sigla (SM, ST, PUR) */}
-            {/* ⚠ 108px PORQUE AGORA É UMA LINHA SÓ: "24 cab · 10.240 kg" mede 94px e pedia
-                106 com o padding — em 66 cortava o peso. A sobra sai da Contraparte, que é
-                a coluna flexível e a única que aguenta ceder. */}
-            <col className="w-[108px]" />{/* Animais — cab · kg na mesma linha */}
-            <col className="w-[80px]" />{/* Valor — R$ 1.234.567 */}
-            <col className="w-[72px]" />{/* Comercial — pilula */}
-            {/* 102 e nao 82: o item 3 do PR-OC-RECEB-UX-01 alargou o conteudo desta
-                celula. Pior caso medido no DOM — pilula "Com diferença" (76) + gap (4)
-                + cadeado (10) = 90 de conteudo, mais 12 de padding. Os 82 antigos
-                cortariam justamente a divergencia, que e' o que nao pode sumir.
-                Os 20px saem de Contraparte, a coluna da sobra, que cai de 108 para 88. */}
-            {/* ⚠ A LARGURA NAO MUDA COM O ROTULO NOVO — B-08 item 5b, medido: "RECEBIMENTO"
-                em 10px uppercase tracking-wide da ~92px e "RECEB./ENVIO" da ~90px; quem
-                manda nesta coluna e' o CONTEUDO (pilula "Com diferença" 76 + gap 4 +
-                cadeado 10 = 90, mais 12 de padding = 102). O cabecalho encolheu 2px e
-                continua abaixo do conteudo. */}
-            <col className="w-[102px]" />{/* Receb./Envio — pilula + cadeado */}
-            {/* ⚠ 140px PORQUE A PÍLULA FOI PARA O LADO: valor + "liquidado" medem 124px e
-                pedem 136 com o padding — em 88 o estágio sumia atrás do corte. */}
-            <col className="w-[140px]" />{/* Financeiro — valor · pílula na mesma linha */}
-            <col className="w-[100px]" />{/* Pagamento — "aguardando pgto" cabe */}
-            <col className="w-[46px]" />{/* Ações */}
+            {/* ⚠ AS LARGURAS CAÍRAM COM A RÉGUA — item 3. Cada uma é o maior entre o rótulo
+                do cabeçalho (agora 9px em caixa normal, não versalete) e o conteúdo mais
+                largo do corpo em 10px. Somam 852px; com o piso de 1000px do `<table>`,
+                sobram ao menos 148 para a Contraparte, que é a coluna flexível. */}
+            <col className="w-[62px]" />{/* OC — "#" + 8 hex mono em 9px */}
+            <col className="w-[52px]" />{/* Data — 31/07/26 em 9px */}
+            <col className="w-[88px]" />{/* Tipo — "Venda em Pé" em 10px */}
+            <col />{/* Contraparte — TODA a sobra, e nunca menos que 148px */}
+            <col className="w-[48px]" />{/* Fazenda — a sigla cabe em 40; quem pede 48 é o rótulo */}
+            <col className="w-[96px]" />{/* Animais — "24 cab · 10.240 kg" em 10px */}
+            <col className="w-[72px]" />{/* Valor — R$ 1.234.567 */}
+            <col className="w-[64px]" />{/* Comercial — pílula de 9px */}
+            <col className="w-[92px]" />{/* Receb./Envio — pílula 9px + cadeado */}
+            {/* ⚠ 150px É A CONTA DO ITEM 2: 1fr para o valor + 76px fixos da pílula + 12 de
+                padding. A pílula deixa de flutuar atrás de um valor curto e passa a nascer
+                sempre na mesma coluna, linha após linha. */}
+            <col className="w-[150px]" />{/* Financeiro — valor à direita · pílula em coluna fixa */}
+            <col className="w-[88px]" />{/* Pagamento — "aguardando pgto" em 10px */}
+            <col className="w-[40px]" />{/* Ações */}
           </colgroup>
           <TableHeader className="sticky top-0 z-10 bg-primary">
             <TableRow className="hover:bg-primary">
@@ -875,8 +898,8 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
                   className={abrePorTipo(r.tipo_operacao) ? 'cursor-pointer' : undefined}>
                   {/* Identificador e data são CONTEXTO, não conteúdo: quem varre a lista
                       procura contraparte e valor. Recuam para 10px muted. */}
-                  <TableCell className={`${TD} font-mono whitespace-nowrap text-[10px] text-muted-foreground`} title={r.id}>#{r.id.slice(0, 8)}</TableCell>
-                  <TableCell className={`${TD} whitespace-nowrap text-[10px] text-muted-foreground`}>{fmtData(r.data_operacao)}</TableCell>
+                  <TableCell className={`${TD} font-mono whitespace-nowrap text-[9px] text-muted-foreground`} title={r.id}>#{r.id.slice(0, 8)}</TableCell>
+                  <TableCell className={`${TD} whitespace-nowrap text-[9px] text-muted-foreground`}>{fmtData(r.data_operacao)}</TableCell>
                   <TableCell className={`${TD} whitespace-nowrap`}>{TIPO_LABEL[r.tipo_operacao] ?? r.tipo_operacao}</TableCell>
                   <TableCell className={`${TD} truncate`} title={nomeContraparte(r)}>{nomeContraparte(r)}</TableCell>
                   <TableCell className={`${TD} truncate`} title={nomeFazenda(r)}>{siglaFazenda(r)}</TableCell>
@@ -884,9 +907,9 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
                     {/* Uma linha só, pelo mesmo motivo do Financeiro: cabeça e peso são a mesma
                         resposta, e empilhá-los dobrava a altura da tabela inteira. */}
                     <span className="whitespace-nowrap">
-                      <span className="text-[11px]">{r.qtd_negociada != null ? `${r.qtd_negociada} cab` : '—'}</span>
+                      <span className="text-[10px]">{r.qtd_negociada != null ? `${r.qtd_negociada} cab` : '—'}</span>
                       {r.peso_total_negociado_kg != null && r.peso_total_negociado_kg > 0 && (
-                        <span className="text-[10px] text-muted-foreground">{' · '}{kg(r.peso_total_negociado_kg)} kg</span>
+                        <span className="text-[9px] text-muted-foreground">{' · '}{kg(r.peso_total_negociado_kg)} kg</span>
                       )}
                     </span>
                   </TableCell>
@@ -924,16 +947,26 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
                           /* ⚠ AO LADO, NÃO ABAIXO: empilhar dois textos põe a linha em 38px, e a
                              régua é 26. Valor e estágio na mesma linha respondem juntos
                              "quanto" e "em que pé" sem custar altura. */
+                          /* ⚠ GRADE, NÃO `inline-flex` — item 2. Em linha, a pílula começava
+                             onde o valor terminava: com "R$ 8.100" ela nascia 40px à
+                             esquerda de onde nascia com "R$ 1.234.567", e a coluna inteira
+                             parecia desalinhada. Valor à direita do seu espaço, pílula numa
+                             faixa fixa de 76px — o olho desce a coluna em linha reta. */
                           return (
-                            <span className="inline-flex items-baseline gap-1.5 whitespace-nowrap">
-                              <span className={`text-[11px] font-medium tabular-nums ${fin.valor < 0 ? 'text-destructive' : 'text-success'}`}>
+                            <span className="grid grid-cols-[1fr_76px] items-baseline gap-1 whitespace-nowrap">
+                              <span className={`text-right text-[10px] font-medium tabular-nums ${fin.valor < 0 ? 'text-destructive' : 'text-success'}`}>
                                 {brl(fin.valor)}
                               </span>
-                              <span className={`${PILULA_10} ${pilula.tom}`}>{pilula.texto}</span>
+                              <span className={`${PILULA} ${pilula.tom} justify-self-start`}>{pilula.texto}</span>
                             </span>
                           );
                         })()
-                      : <span className={`${PILULA_10} ${TOM_NEUTRO}`}>sem lançamento</span>}
+                      : (
+                        <span className="grid grid-cols-[1fr_76px] items-baseline gap-1 whitespace-nowrap">
+                          <span />
+                          <span className={`${PILULA} ${TOM_NEUTRO} justify-self-start`}>sem lançamento</span>
+                        </span>
+                      )}
                   </TableCell>
                   <TableCell className={`${TD} whitespace-nowrap`}>{(() => {
                     const est = liqMap[r.id]?.estado_liquidacao;
@@ -943,7 +976,7 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
                         recém-fechada não está inadimplente: está aguardando. Texto muted, sem
                         pílula — pílula é para estado que exige leitura, e esperar não exige. */
                     if (est === 'nao_liquidada') {
-                      return <span className="text-[10px] text-muted-foreground">aguardando pgto</span>;
+                      return <span className="text-muted-foreground">aguardando pgto</span>;
                     }
                     if (est === 'quitada') return <span className={`${PILULA} ${TOM_SUCESSO}`}>paga</span>;
                     if (est === 'parcial') {
@@ -988,6 +1021,7 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
             })}
           </TableBody>
         </table>
+        </TableDensityContext.Provider>
       </div>
 
       {/* Paginação */}

@@ -134,4 +134,15 @@ const TableCaption = React.forwardRef<HTMLTableCaptionElement, React.HTMLAttribu
 );
 TableCaption.displayName = "TableCaption";
 
-export { Table, TableHeader, TableBody, TableFooter, TableHead, TableRow, TableCell, TableCaption };
+/**
+ * ⚠ O CONTEXTO SAI EXPORTADO — PR-OC-LISTA-02. Quem usa `<Table density="dense">` já tinha a
+ * régua 9/10/21; quem usa `<table>` CRU não tinha como pedi-la, e a Central das Operações
+ * Comerciais usa a tabela crua de propósito (o wrapper `overflow-auto` do primitivo roubava
+ * o scrollport do `thead sticky` — está escrito lá).
+ * ⚠ E SEM ELE A RÉGUA NO `<table>` NÃO PEGA: o `<td>` deste primitivo declara
+ * `text-[11px]` no modo 'default', e classe na célula vence classe no elemento pai. A tela
+ * que escrevesse `text-[10px]` no `<table>` continuaria em 11px sem entender por quê — o
+ * mesmo defeito que o comentário do `TD` da Central descreve. Provendo o contexto, a célula
+ * nasce em 10px e a régua volta a ser uma só.
+ */
+export { Table, TableHeader, TableBody, TableFooter, TableHead, TableRow, TableCell, TableCaption, TableDensityContext };

@@ -27,7 +27,9 @@ export interface OcResumoLinha {
   valor: number;
   pago: number;
   faltaPagar: number;
+  /** Já em português de operador — nunca o enum cru. */
   situacao: string;
+  tomSituacao: TomSituacao;
 }
 
 export interface OcResumoParcela {
@@ -41,6 +43,7 @@ export interface OcResumoParcela {
   gado: string;
   valor: number;
   situacao: string;
+  tomSituacao: TomSituacao;
   diasVencida: number;
 }
 
@@ -99,6 +102,64 @@ const dias = (deISO: string | null): number => {
 
 const ddmm = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '—');
 
+/**
+ * A cor da situação, como TOKEN e não como classe — PR-OC-RESUMO-02 item D/2.
+ *
+ * ⚠ TOKEN PORQUE SÃO TRÊS SAÍDAS. A mesma situação vira pílula na prévia, texto colorido no
+ * PDF e string crua no Excel; se a cor nascesse em classe Tailwind, o PDF teria de traduzir
+ * `bg-destructive` para RGB — e traduziria diferente no dia em que a paleta mudasse. O token
+ * é a resposta; cada saída sabe pintá-lo.
+ */
+export type TomSituacao = 'ok' | 'parcial' | 'aberto' | 'vencido' | 'ausente';
+
+export interface SituacaoLegivel { texto: string; tom: TomSituacao }
+
+/**
+ * O enum de liquidação em palavras — PR-OC-RESUMO-02 item D.
+ *
+ * ⚠ O PDF SAÍA COM "nao_liquidada" NA COLUNA SITUAÇÃO. Enum cru num documento que vai ao
+ * contador não é densidade, é vazamento: o nome da constante do banco não é resposta para
+ * ninguém fora do código.
+ * ⚠ VENCIDA VENCE TUDO. Uma operação parcialmente paga com parcela vencida é, antes de mais
+ * nada, uma pendência — e é isso que precisa saltar da folha.
+ * ⚠ DUAS DA LISTA DO MOCK NÃO ENTRARAM, e é melhor dizer do que inventar: "entrou X de Y" já
+ * é a coluna Gado da lista de parcelas (seria a mesma resposta em dois lugares), e "sinal
+ * pago" não tem fonte — nada nas views distingue um sinal de uma parcela qualquer paga.
+ */
+export function situacaoDaOperacao(
+  estado: string | null,
+  valor: number,
+  pago: number,
+  proximoVencimento: string | null,
+  diasVencida: number,
+): SituacaoLegivel {
+  if (diasVencida > 0) return { texto: `vencida há ${diasVencida} dias`, tom: 'vencido' };
+  switch (estado) {
+    case 'quitada': return { texto: 'paga', tom: 'ok' };
+    case 'excedente': return { texto: 'paga a mais', tom: 'ok' };
+    case 'parcial': {
+      /* A porcentagem é do que já saiu do caixa sobre o negociado. Sem valor não há
+         porcentagem — e "paga NaN%" seria pior que "paga em parte". */
+      const pct = valor > 0 ? Math.round((pago / valor) * 100) : null;
+      return { texto: pct === null ? 'paga em parte' : `paga ${pct}%`, tom: 'parcial' };
+    }
+    /* ⚠ `base_indefinida` É AUSÊNCIA, E O TRAÇO É A SENTINELA DA CASA: a view não soube dizer
+       qual é a dívida, e afirmar "a pagar" seria inventar uma resposta que ela não deu. */
+    case 'base_indefinida': return { texto: '—', tom: 'ausente' };
+    default:
+      return proximoVencimento
+        ? { texto: `a pagar ${ddmm(proximoVencimento)}`, tom: 'aberto' }
+        : { texto: 'a pagar', tom: 'aberto' };
+  }
+}
+
+/** A situação de UMA parcela — a mesma família de palavras da operação. */
+export function situacaoDaParcela(saldo: number, vencimento: string | null, diasVencida: number): SituacaoLegivel {
+  if (diasVencida > 0) return { texto: `vencida há ${diasVencida} dias`, tom: 'vencido' };
+  if (saldo <= 0.01) return { texto: 'paga', tom: 'ok' };
+  return { texto: `vence ${ddmm(vencimento)}`, tom: 'aberto' };
+}
+
 export async function carregarResumoOC(
   clienteId: string,
   operacoes: readonly OpBase[],
@@ -109,7 +170,7 @@ export async function carregarResumoOC(
 
   /* eslint-disable @typescript-eslint/no-explicit-any -- idioma documentado: as views não
      estão em types.ts (regeneração é frente própria). */
-  const [rLotes, rLiq, rParc, rMov] = await Promise.all([
+  const [rLotes, rLiq, rParc, rMov, rObr] = await Promise.all([
     (supabase as any).from('vw_oc_lotes_recebimento')
       .select('operacao_id, categoria_negociada, qtd_negociada, qtd_recebida').eq('cliente_id', clienteId).in('operacao_id', ids),
     (supabase as any).from('vw_oc_operacao_liquidacao')
@@ -120,6 +181,18 @@ export async function carregarResumoOC(
       .eq('cliente_id', clienteId).in('operacao_id', ids),
     (supabase as any).from('zoo_operacao_movimentacoes')
       .select('operacao_id, movimentacao_id').in('operacao_id', ids),
+    /* ⚠ A SEXTA CONSULTA EXISTE PORQUE A QUINTA MENTE NO VALOR — PR-OC-RESUMO-02 item C.
+       `vw_oc_operacao_liquidacao.valor_total` NÃO calcula nada: a view seleciona
+       `o.valor_total` cru de `zoo_operacoes_comerciais` (conferido no `pg_get_viewdef`), e
+       essa coluna denormalizada está em ZERO nas 14 operações do Agnaldo em ago→set —
+       enquanto `valor_acordado` traz o número certo. Era por isso que a coluna Valor saía
+       0,00 no PDF inteiro e "falta pagar" saía certo: o saldo vem de `_oc_base_divida_operacao`,
+       que lê a dívida viva, e o valor vinha da coluna morta.
+       ⚠ `obrigacao_total` É A FONTE, e ela confere: nas 14 operações medidas é idêntica ao
+       `valor_acordado`, inclusive na Compra de 110 (R$ 315.000). Ela é a obrigação que a
+       operação de fato gerou — a mesma que o Financeiro cobra. */
+    (supabase as any).from('vw_oc_operacao_compromissos_resumo')
+      .select('operacao_id, obrigacao_total').eq('cliente_id', clienteId).in('operacao_id', ids),
   ]);
 
   /* ⚠ A DATA VEM NUMA SEGUNDA VIAGEM, e não num embed. A coluna é `movimentacao_id` (não
@@ -148,6 +221,8 @@ export async function carregarResumoOC(
     saldo_titulo: number; status: string | null; titulo_status_transacao: string | null;
   }[];
   const movs = (rMov.data ?? []) as { operacao_id: string; movimentacao_id: string | null }[];
+  const obrigacoes = (rObr.data ?? []) as { operacao_id: string; obrigacao_total: number | null }[];
+  const obrPorOp = new Map(obrigacoes.map((o) => [o.operacao_id, Number(o.obrigacao_total ?? 0)]));
 
   /* Recebimento: a view é por LOTE; a operação soma os lotes dela. É contagem de cabeça,
      não de dinheiro — a regra que proíbe somar no React vale para valor, não para bicho. */
@@ -186,10 +261,47 @@ export async function carregarResumoOC(
     if (lista) lista.push(p); else parcPorOp.set(p.operacao_id, [p]);
   }
 
+  /**
+   * O VALOR NEGOCIADO DA OPERAÇÃO — PR-OC-RESUMO-02 item C.
+   *
+   * ⚠ `??` NÃO SERVIA, E ESSE ERA O DEFEITO INTEIRO. `l?.valor_total ?? op.valor_acordado`
+   * só cai para o segundo quando o primeiro é NULO; a view devolve ZERO, que é um número —
+   * então o zero vencia e o fallback nunca era exercido. A pergunta certa não é "veio?", é
+   * "veio com conteúdo?".
+   * ⚠ A ORDEM É A DA SOBERANIA: a obrigação que a operação gerou; senão o valor acordado —
+   * que é exatamente o que a coluna VALOR da lista de OC mostra (`valor_acordado ??
+   * valor_total`), e as duas telas têm de dizer o mesmo número para a mesma compra.
+   */
+  const valorDaOperacao = (op: OpBase): number => {
+    const obrigacao = obrPorOp.get(op.id) ?? 0;
+    if (obrigacao > 0) return obrigacao;
+    return Number(op.valor_acordado ?? op.valor_total ?? 0);
+  };
+
+  /** O vencimento em aberto mais próximo, e há quantos dias ele venceu (0 = não venceu). */
+  const proximoEmAberto = (opId: string): { vencimento: string | null; diasVencida: number } => {
+    const abertas = (parcPorOp.get(opId) ?? [])
+      .filter((p) => Number(p.saldo_titulo ?? 0) > 0 && p.vencimento)
+      .sort((a, b) => (a.vencimento ?? '') < (b.vencimento ?? '') ? -1 : 1);
+    const v = abertas[0]?.vencimento ?? null;
+    return { vencimento: v, diasVencida: Math.max(0, dias(v)) };
+  };
+
   const linhaDe = (op: OpBase): OcResumoLinha => {
     const rec = recebido.get(op.id) ?? { negociada: 0, recebida: 0 };
     const l = liqPorOp.get(op.id);
     const ds = (datasMov.get(op.id) ?? []).sort();
+    const valor = valorDaOperacao(op);
+    const pago = Number(l?.total_liquidado_valido ?? 0);
+    const saldo = Number(l?.saldo_operacao ?? 0);
+    /* ⚠ SALDO ZERO COM VALOR EM PÉ É SUSPEITA, NÃO RESPOSTA — item C. Quando a base da
+       dívida não responde, "falta pagar 0,00" ao lado de "valor 315.000,00 · pago 0,00"
+       diria que a operação está quitada. O que resta a pagar é então a subtração dos dois
+       números que a tela mostra — e nunca menos que zero, porque pagar a mais não é dever
+       negativo. Quando o saldo responde, ele manda: é a régua do banco. */
+    const faltaPagar = saldo !== 0 ? saldo : Math.max(0, valor - pago);
+    const prox = proximoEmAberto(op.id);
+    const sit = situacaoDaOperacao(l?.estado_liquidacao ?? null, valor, pago, prox.vencimento, prox.diasVencida);
     return {
       operacao_id: op.id,
       data: op.data_operacao,
@@ -199,10 +311,11 @@ export async function carregarResumoOC(
       qtdNegociada: op.qtd_negociada ?? (rec.negociada || null),
       qtdRecebida: rec.recebida,
       dataRecebimento: { primeira: ds[0] ?? null, n: ds.length },
-      valor: Number(l?.valor_total ?? op.valor_acordado ?? op.valor_total ?? 0),
-      pago: Number(l?.total_liquidado_valido ?? 0),
-      faltaPagar: Number(l?.saldo_operacao ?? 0),
-      situacao: l?.estado_liquidacao ?? op.status_comercial,
+      valor,
+      pago,
+      faltaPagar,
+      situacao: sit.texto,
+      tomSituacao: sit.tom,
     };
   };
 
@@ -228,6 +341,11 @@ export async function carregarResumoOC(
         : rec.negociada > 0 && rec.recebida < rec.negociada ? `entrou ${rec.recebida} de ${rec.negociada}`
         : `entrou ${ddmm(ds[0] ?? null)}`;
       for (const p of lista) {
+        const diasVencida = Math.max(0, dias(p.vencimento));
+        /* ⚠ A SITUAÇÃO SAI DA MESMA FAMÍLIA DE PALAVRAS DA OPERAÇÃO, e não do
+           `titulo_status_transacao` — que é o enum do título financeiro ('programado',
+           'realizado') e responde outra pergunta que não a desta coluna. */
+        const sit = situacaoDaParcela(Number(p.saldo_titulo ?? 0), p.vencimento, diasVencida);
         emAberto.push({
           operacao_id: op.id,
           vencimento: p.vencimento,
@@ -237,8 +355,9 @@ export async function carregarResumoOC(
           totalParcelas: total,
           gado,
           valor: Number(p.saldo_titulo ?? 0),
-          situacao: p.titulo_status_transacao ?? p.status ?? '—',
-          diasVencida: Math.max(0, dias(p.vencimento)),
+          situacao: sit.texto,
+          tomSituacao: sit.tom,
+          diasVencida,
         });
       }
     }
