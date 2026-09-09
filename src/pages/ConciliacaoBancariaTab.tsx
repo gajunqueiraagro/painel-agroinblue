@@ -5,6 +5,7 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { PainelExtratoMes } from '@/components/conciliacao/PainelExtratoMes';
 import { SaldoRealDialog } from '@/components/conciliacao/SaldoRealDialog';
 import { EspelhoOfxSistemaModal } from '@/components/financeiro-v2/EspelhoConciliacaoTab';
+import { ImportacoesDaConta } from '@/components/conciliacao/ImportacoesDaConta';
 import { fimDoMes } from '@/hooks/useExtratoDaConta';
 import { ImportarBancoInline } from '@/components/conciliacao/ImportarBancoInline';
 import { ExtratoGerencialTab } from '@/components/financeiro-v2/ExtratoGerencialTab';
@@ -963,6 +964,18 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
               contaId={selectedConta !== '__all__' ? selectedConta : ''}
               onContaChange={(id) => setSelectedConta(id || '__all__')}
               onImportado={() => { setRefreshExtrato(n => n + 1); queryClient.invalidateQueries({ queryKey: ['extrato-bancario-v2'] }); }}
+            />
+
+            {/* ⚠ ABAIXO DO IMPORTADOR, e não noutra aba: desfazer um arquivo é a operação
+                irmã de importá-lo, e quem acabou de subir o OFX errado está exatamente aqui. */}
+            <ImportacoesDaConta
+              clienteId={clienteId ?? null}
+              contaId={selectedConta !== '__all__' ? selectedConta : null}
+              onDesfeito={() => {
+                setRefreshExtrato(n => n + 1);
+                queryClient.invalidateQueries({ queryKey: ['extrato-bancario-v2'] });
+                queryClient.invalidateQueries({ queryKey: ['espelho-conciliacao'] });
+              }}
             />
 
             <PainelExtratoMes

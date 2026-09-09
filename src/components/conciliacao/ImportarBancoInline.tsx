@@ -244,7 +244,19 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
         </div>
       )}
 
-      {preview && (
+      {preview && (() => {
+        /* ⚠ UM ARQUIVO SÓ → A DATA DELE; VÁRIOS → A CONTAGEM. Uma data escolhida entre
+           três representaria mal o conjunto, e "já no extrato (arquivo de 18/08)" seria
+           falso para as outras duas. */
+        const datas = [...new Set(
+          preview.movimentos
+            .filter((m) => m.existeNoDB && m.criadoEmExistente)
+            .map((m) => (m.criadoEmExistente ?? '').slice(0, 10)),
+        )];
+        const origemDosExistentes = datas.length === 1
+          ? ` (arquivo de ${brData(datas[0])})`
+          : datas.length > 1 ? ` (${datas.length} arquivos)` : '';
+        return (
         <div className="rounded-lg border border-border bg-card">
           {/* cabeçalho da prévia — o seletor NÃO some: saber de qual conta é o
               arquivo prestes a ser gravado é o contexto mais importante agora */}
@@ -257,9 +269,14 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
               <CheckCircle2 className="h-2.5 w-2.5" />
               {preview.novosParaSalvar} novo{preview.novosParaSalvar === 1 ? '' : 's'}
             </Badge>
+            {/* ⚠ "JÁ EXISTE" ASSUSTAVA SEM INFORMAR — parte C. O operador lia como "o
+                sistema já lançou isto" e parava a importação; o fato é outro e é banal: a
+                linha já está no extrato, veio de um arquivo anterior, e não será duplicada.
+                Dizer QUANDO transforma o susto em informação. */}
             {preview.existentesNoBanco > 0 && (
-              <Badge variant="secondary" className="h-5 px-1.5 text-[9px]">
-                {preview.existentesNoBanco} já existe{preview.existentesNoBanco === 1 ? '' : 'm'}
+              <Badge variant="secondary" className="h-5 px-1.5 text-[9px]"
+                title="Estas linhas já estão no extrato; não serão duplicadas.">
+                {preview.existentesNoBanco} já no extrato{origemDosExistentes}
               </Badge>
             )}
           </div>
@@ -333,8 +350,11 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
                       </td>
                       <td className="px-2 py-0.5 text-center">
                         <span className={cn('rounded px-1 py-0 text-[9px] font-semibold uppercase',
-                          repetido ? 'bg-muted text-muted-foreground' : 'bg-success/15 text-success')}>
-                          {repetido ? 'já existe' : 'novo'}
+                          repetido ? 'bg-muted text-muted-foreground' : 'bg-success/15 text-success')}
+                          title={repetido ? 'esta linha já está no extrato; não será duplicada' : undefined}>
+                          {repetido
+                            ? (m.criadoEmExistente ? `já importado ${brData(m.criadoEmExistente.slice(0, 10))}` : 'já no extrato')
+                            : 'novo'}
                         </span>
                       </td>
                     </tr>
@@ -360,7 +380,8 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
             </Button>
           </div>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

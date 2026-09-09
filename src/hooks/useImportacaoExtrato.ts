@@ -89,6 +89,8 @@ export interface MovimentoPreview extends MovimentoBruto {
   jaExistenteChave?: boolean;
   /** id do registro em extrato_bancario_v2, quando existeNoDB=true. */
   extratoIdExistente: string | null;
+  /** Quando aquele registro entrou no extrato — o "já importado em dd/mm" da prévia. */
+  criadoEmExistente?: string | null;
   /** Status operacional do registro persistido (null se não existe). */
   statusPersistido: StatusPersistido | null;
   /** Score 0-100 do melhor candidato em financeiro_lancamentos_v2 (apenas visual). */
@@ -685,20 +687,24 @@ export function useImportacaoExtrato() {
       // request. Sem paginar, arquivos com >1000 movimentos já existentes vinham truncados,
       // as duplicatas escapavam para o INSERT e explodiam a unique idx_extrato_v2_hash_unico.
       // Mesmo padrão de useFinanceiroV2 / useSessoesClassificacao (.range em laço até < PAGE).
-      const persistidoPorHash = new Map<string, { id: string; status: StatusPersistido }>();
+      /* ⚠ `created_at` ENTRA AQUI — PR-IMPORT-DESFAZER-01 parte C. A prévia dizia "JÁ
+         EXISTE" sem dizer desde quando, e o operador lia como "o sistema já lançou isso".
+         Uma coluna a mais na consulta que já roda transforma o susto em fato: "já importado
+         em 18/08". Nenhuma lógica de dedupe muda. */
+      const persistidoPorHash = new Map<string, { id: string; status: StatusPersistido; criadoEm: string | null }>();
       const PAGE_DEDUP = 1000;
       for (let from = 0; ; from += PAGE_DEDUP) {
         const { data: existentes, error: errSel } = await supabase
           .from('extrato_bancario_v2' as any)
-          .select('id, hash_movimento, status')
+          .select('id, hash_movimento, status, created_at')
           .eq('cliente_id', clienteAtual.id)
           .in('hash_movimento', hashes)
           .order('id', { ascending: true })
           .range(from, from + PAGE_DEDUP - 1);
         if (errSel) throw errSel;
         const lote = (existentes as unknown as
-          { id: string; hash_movimento: string; status: StatusPersistido }[] ?? []);
-        for (const r of lote) persistidoPorHash.set(r.hash_movimento, { id: r.id, status: r.status });
+          { id: string; hash_movimento: string; status: StatusPersistido; created_at: string | null }[] ?? []);
+        for (const r of lote) persistidoPorHash.set(r.hash_movimento, { id: r.id, status: r.status, criadoEm: r.created_at });
         if (lote.length < PAGE_DEDUP) break;
         if (from > 500_000) break; // salvaguarda anti-loop
       }
@@ -948,6 +954,7 @@ export function useImportacaoExtrato() {
           ...m,
           existeNoDB: persistido !== null,
           extratoIdExistente: persistido?.id ?? null,
+          criadoEmExistente: persistido?.criadoEm ?? null,
           statusPersistido: persistido?.status ?? null,
           scoreMatch: melhorScore,
           // matchEncontrado=true quando há candidatos viáveis — inclui ambíguos
@@ -1292,12 +1299,12 @@ export function useImportacaoExtrato() {
 
     // BUG-CSV-DEDUP-01: mesma paginação obrigatória (PostgREST corta em ~1000) para os
     // contadores refletirem TODOS os hashes existentes, não só os 1000 primeiros.
-    const persistidoPorHash = new Map<string, { id: string; status: StatusPersistido }>();
+    const persistidoPorHash = new Map<string, { id: string; status: StatusPersistido; criadoEm: string | null }>();
     const PAGE_DEDUP = 1000;
     for (let from = 0; ; from += PAGE_DEDUP) {
       const { data, error } = await supabase
         .from('extrato_bancario_v2' as any)
-        .select('id, hash_movimento, status')
+        .select('id, hash_movimento, status, created_at')
         .eq('cliente_id', clienteAtual.id)
         .in('hash_movimento', hashes)
         .order('id', { ascending: true })
@@ -1307,8 +1314,8 @@ export function useImportacaoExtrato() {
         return;
       }
       const lote = (data as unknown as
-        { id: string; hash_movimento: string; status: StatusPersistido }[] ?? []);
-      for (const r of lote) persistidoPorHash.set(r.hash_movimento, { id: r.id, status: r.status });
+        { id: string; hash_movimento: string; status: StatusPersistido; created_at: string | null }[] ?? []);
+      for (const r of lote) persistidoPorHash.set(r.hash_movimento, { id: r.id, status: r.status, criadoEm: r.created_at });
       if (lote.length < PAGE_DEDUP) break;
       if (from > 500_000) break; // salvaguarda anti-loop
     }
@@ -1321,6 +1328,7 @@ export function useImportacaoExtrato() {
           ...m,
           existeNoDB: persistido !== null,
           extratoIdExistente: persistido?.id ?? null,
+          criadoEmExistente: persistido?.criadoEm ?? null,
           statusPersistido: persistido?.status ?? null,
         };
       });
