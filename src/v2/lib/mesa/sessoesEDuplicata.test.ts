@@ -157,6 +157,9 @@ describe('diferencasDoResultado', () => {
     safraIdAtual: null, subcentroAtual: null, favorecidoIdAtual: null,
     contaBancariaIdAtual: null, dataCompetenciaAtual: null, dataVencimentoAtual: null,
     dataPagamentoAtual: null, observacaoAtual: null,
+    /* PR-MESA-TRANSF-01 — o tipo e o destino também são Resultado. */
+    tipoOperacaoProposto: null, tipoOperacaoAtual: null, tipoOperacaoExcel: null,
+    contaDestinoId: null, contaDestinoIdAtual: null, contaDestinoSugeridaId: null,
   };
 
   it('safra 25/26 -> 26/27 É diferença (o caso que a view não via)', () => {
@@ -180,6 +183,26 @@ describe('diferencasDoResultado', () => {
   it('preencher campo vazio do lançamento é diferença', () => {
     expect(diferencasDoResultado({ ...base, subcentro: 'Salários', subcentroAtual: null }))
       .toEqual(['conta do plano']);
+  });
+
+  /**
+   * PR-MESA-TRANSF-01 — o defeito que estas duas travam.
+   *
+   * A linha do cartão (saída crua do OFX × "3-Transferências" na planilha) tinha o tipo
+   * como ÚNICA mudança. Sem estes dois `cmp`, `diferencasDoResultado` devolvia lista vazia,
+   * o botão caía em "nada a gravar" e a transferência morria no staging.
+   */
+  it('mudar o tipo de operação É diferença', () => {
+    expect(diferencasDoResultado({
+      ...base, tipoOperacaoProposto: '3-Transferências', tipoOperacaoAtual: '2-Saídas',
+    })).toEqual(['tipo de operação']);
+  });
+
+  it('conta destino nova É diferença; igual à do lançamento não é', () => {
+    expect(diferencasDoResultado({ ...base, contaDestinoId: 'elo', contaDestinoIdAtual: null }))
+      .toEqual(['conta destino']);
+    expect(diferencasDoResultado({ ...base, contaDestinoId: 'elo', contaDestinoIdAtual: 'elo' }))
+      .toEqual([]);
   });
 
   it('acumula e devolve os rótulos do operador', () => {
@@ -228,9 +251,19 @@ describe('normalizarTipo / parteDeAgrupamento / divergenciasComExtrato', () => {
     expect(normalizarTipo(null)).toBeNull();
   });
 
-  it('4a — rótulo diferente NÃO vira divergência de tipo', () => {
-    const d = divergenciasComExtrato(linha({ excel_tipo_operacao: 'Saída' }), CONTAS);
-    expect(d.map((x) => x.campo)).not.toContain('Tipo');
+  /* ⚠ A REGRA MUDOU EM PR-MESA-TRANSF-01, e o teste com ela. Antes o tipo entrava na lista
+     quando divergia de verdade ("Saída" x "Transferência") e ficava de fora só quando era o
+     mesmo tipo com outro rótulo. Agora NUNCA entra: o extrato manda em data, valor e conta,
+     e o tipo é classificação do sistema — quem resolve a diferença é o campo Tipo do
+     Resultado, não uma acusação de conflito. */
+  it('4a — tipo NUNCA vira divergência, nem com rótulo diferente nem com tipo diferente', () => {
+    const mesmoTipoOutroRotulo = divergenciasComExtrato(linha({ excel_tipo_operacao: 'Saída' }), CONTAS);
+    expect(mesmoTipoOutroRotulo.map((x) => x.campo)).not.toContain('Tipo');
+
+    /* O caso do Gabriel: planilha diz transferência, cru do OFX nasceu saída. */
+    const tipoRealmenteDiferente = divergenciasComExtrato(
+      linha({ excel_tipo_operacao: '3-Transferências' }), CONTAS);
+    expect(tipoRealmenteDiferente.map((x) => x.campo)).not.toContain('Tipo');
   });
 
   it('4b — texto de conta diferente com o MESMO id confere', () => {

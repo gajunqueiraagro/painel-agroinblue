@@ -1,5 +1,7 @@
 // EnriquecimentoActions — dumb. Barra operacional da Mesa de Revisão.
 // Bloco PRINCIPAL = revisão por lançamento (Anterior/Salvar/Salvar e Próximo/Reverter/Próximo).
+// O CTA se chama "Salvar e Próximo" SEMPRE (adendo PR-MESA-TRANSF-01); o que muda conforme
+// a linha é o que ele faz — grava e avança, ou marca revisada e avança.
 // Bloco SECUNDÁRIO (após separador) = acelerador em lote "Aplicar todos os Exatos".
 // PR-U1: Salvar/Salvar e Próximo/Reverter ligados (flags granulares). P0-1A: "Aplicar
 // todos" e "Revisado" ligados — lote conservador da sessão (fn_classificacao_apply).
@@ -27,18 +29,21 @@ export interface EnriquecimentoActionsProps {
    */
   salvarMotivo?: string | null;
   /**
-   * A linha não tem nada a gravar (Resultado já confere com o sistema): o gesto vira
-   * "Confirmar e próximo" — marca revisado e avança, sem chamar o banco.
+   * A linha não tem nada a gravar (Resultado já confere com o sistema): o botão continua
+   * dizendo "Salvar e Próximo" e marca revisada + avança, sem chamar o banco.
+   *
+   * ⚠ O RÓTULO NÃO MUDA MAIS — adendo do PR-MESA-TRANSF-01. Estas duas flags decidem o QUE
+   * o botão faz; o nome dele é um só, porque o gesto do operador é um só.
    */
   soConfirma?: boolean;
   onConfirmarProximo?: () => void;
   /**
-   * 133i item 2c — a linha JÁ foi gravada e não há diferença: o gesto que resta é seguir.
+   * 133i item 2c — a linha JÁ foi gravada e não há diferença: nada a gravar.
    *
-   * ⚠ "SALVAR E PRÓXIMO" NUMA LINHA GRAVADA PROMETE UMA GRAVAÇÃO QUE NÃO ACONTECE: o
-   * `apply_row` responde `pulado_subcentro_preenchido`, o operador vê um toast de recusa no
-   * fim de um gesto que estava certo, e passa a desconfiar do botão. "Confirmar" também não
-   * serve — não há o que confirmar em algo que já está no banco.
+   * ⚠ A RAZÃO DE ELA EXISTIR CONTINUA A MESMA: chamar o `apply_row` aqui devolveria
+   * `pulado_subcentro_preenchido` e o operador veria um toast de recusa no fim de um gesto
+   * que estava certo. O que mudou (adendo do PR-MESA-TRANSF-01) é que ela não troca mais o
+   * RÓTULO do botão — só o caminho: marca revisada e avança.
    */
   soAvanca?: boolean;
   /**
@@ -92,13 +97,23 @@ export function EnriquecimentoActions({
           ANTES de gravar a linha — se ela for transferência, o que a Mesa ia gravar deixa
           de fazer sentido. */}
       {slotTransferencia}
+      {/* ⚠ UM BOTÃO SÓ, E ELE SEMPRE SE CHAMA "SALVAR E PRÓXIMO" — adendo do
+          PR-MESA-TRANSF-01. O rótulo mudava sozinho entre "Salvar e Próximo", "Confirmar e
+          Próximo" e "Próximo" conforme a linha tivesse ou não o que gravar, e o operador
+          tinha de LER o botão antes de cada clique para saber se o gesto era o mesmo. Num
+          trabalho de trezentas linhas seguidas, ler o botão trezentas vezes é o custo; e
+          quando o rótulo dizia "Confirmar", parecia que ele estava deixando de gravar
+          alguma coisa.
+          ⚠ O QUE MUDA É O QUE ACONTECE, NÃO O NOME: com diferença, grava e avança; sem
+          diferença, marca a linha como revisada e avança. As duas coisas são "salvar" do
+          ponto de vista de quem opera — o que ele quer dizer é "esta está conferida, vá". */}
       <Button size="sm" className="h-6 text-[11px] px-3"
-        onClick={soAvanca ? onProximo : soConfirma ? onConfirmarProximo : onSalvarProximo}
-        disabled={soAvanca ? !canProximo : ((soConfirma ? false : salvarDisabled) || isBusy)}
-        title={soAvanca ? 'Esta linha já está gravada e nada mudou: só seguir.'
-          : soConfirma ? 'O Resultado já confere com o sistema: nada a gravar. Marca como revisado e vai para a próxima.'
-          : (salvarMotivo ?? undefined)}>
-        {soAvanca ? 'Próximo' : soConfirma ? 'Confirmar e Próximo' : 'Salvar e Próximo'}
+        onClick={soConfirma || soAvanca ? onConfirmarProximo : onSalvarProximo}
+        disabled={soConfirma || soAvanca ? isBusy : (salvarDisabled || isBusy)}
+        title={soAvanca ? 'Esta linha já está gravada e nada mudou: marca como revisada e vai para a próxima.'
+          : soConfirma ? 'O Resultado já confere com o sistema: nada a gravar. Marca como revisada e vai para a próxima.'
+          : (salvarMotivo ?? 'Grava esta linha no lançamento e vai para a próxima.')}>
+        Salvar e Próximo
       </Button>
       {/* ⚠ 133h item 8 — O MOTIVO EM ÂMBAR, NÃO EM CINZA. Ele estava na cor do texto
           secundário, ao lado de um botão apagado: dois cinzas dizendo "não dá" sem que
@@ -138,7 +153,7 @@ export function EnriquecimentoActions({
 
       {/* 133h item 11 — a mesma frase do rodapé do passo 2: a Mesa também precisa dizê-la. */}
       <span className="text-[10px] text-muted-foreground">
-        <b>Salvar</b> grava no lançamento agora. <b>Confirmar</b> só marca a linha como revisada.
+        <b>Salvar</b> grava no lançamento; sem mudança, só marca a linha como revisada.
       </span>
 
       {/* ── Separador + acelerador secundário (lote) ── */}

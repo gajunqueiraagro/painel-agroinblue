@@ -32,12 +32,19 @@ import { ResultadoProdutoEditor } from './ResultadoProdutoEditor';
 import { ResultadoDocumentoEditor } from './ResultadoDocumentoEditor';
 import {
   ResultadoDataEditor, ResultadoSafraEditor, ResultadoContaEditor, ResultadoObservacaoEditor,
+  ResultadoTipoEditor, ResultadoContaDestinoEditor,
 } from './ResultadoCamposGravaveis';
+import { ehTipoTransferencia, subcentroDeTransferencia } from '@/v2/lib/mesa/transferenciaPlano';
 import type { ContaSelecionavel } from '@/components/shared/ContaBancariaSelect';
 import type { Safra } from '@/hooks/useFinanceiroV2';
 
 /** Por que um campo ainda não é editável aqui. Texto curto, mostrado ao lado do valor. */
 const MOTIVO_SEM_APPLY = 'o Salvar ainda não grava este campo';
+
+/** Por que a conta do plano está travada numa transferência — PR-MESA-TRANSF-01 item 3. */
+const MOTIVO_TRANSFERENCIA =
+  'transferência entre contas usa esta conta do plano e nenhuma outra (fora da DRE); '
+  + 'troque o Tipo para liberar';
 
 /**
  * Os campos que o EXTRATO manda — 133h item 12.
@@ -50,7 +57,12 @@ const MOTIVO_SEM_APPLY = 'o Salvar ainda não grava este campo';
  * ⚠ `Valor` E `Tipo` JÁ ERAM LEITURA (`gravaHoje: false`); entram na lista porque o motivo
  * passa a ser outro e o operador precisa ler o motivo certo.
  */
-const CAMPOS_DO_BANCO = new Set(['Data pagamento', 'Valor', 'Banco', 'Tipo']);
+/* ⚠ `Tipo` SAIU DA LISTA — PR-MESA-TRANSF-01. Ele nunca foi campo do extrato: o OFX diz
+   quanto, quando e em que conta, e o tipo de operação é classificação do sistema. Enquanto
+   esteve aqui, a linha de uma fatura de cartão dizia "o extrato manda neste campo" sobre
+   um campo que a `fn_classificacao_apply_row` sequer escrevia — e o operador não tinha
+   como transformar a saída crua do OFX na transferência que ela é. */
+const CAMPOS_DO_BANCO = new Set(['Data pagamento', 'Valor', 'Banco']);
 const MOTIVO_DO_BANCO = 'o extrato manda neste campo — conciliado';
 
 /**
@@ -66,6 +78,16 @@ type Bloco = 1 | 2;
 
 const ORDEM: Array<{
   campo: string; rotulo: string; bloco: Bloco; gravaHoje: boolean;
+  /**
+   * A linha só existe quando o Resultado é transferência — PR-MESA-TRANSF-01.
+   *
+   * ⚠ NÃO É ESCONDER DADO, É NÃO INVENTAR CAMPO: uma saída não tem conta de destino, e uma
+   * linha "Conta destino: —" em 17.732 saídas ensinaria o operador a ignorar um campo que,
+   * nas 43 transferências, é o que impede o guard do banco de recusar a gravação.
+   */
+  soTransferencia?: boolean;
+  /** Obrigatório SÓ na transferência — o guard do banco recusa sem ele. */
+  obrigatorioSeTransferencia?: boolean;
   /** 133g item 5 — separador de 2px DEPOIS desta linha. São os quatro cortes do olho. */
   corta?: boolean;
   /**
@@ -86,13 +108,20 @@ const ORDEM: Array<{
      ⚠ "TIPO DE DOCUMENTO" FICA DE FORA até existir na view: `vw_classificacao_staging_preview`
      não o traz e o parser da Mesa não o lê, então a linha só saberia mostrar "—" nas três
      colunas. Um campo mudo ocupando 22px é pior que a ausência dele.
-     ⚠ QUATORZE LINHAS × 22px = 308px, mais 6 da faixa de bloco e 6 dos três separadores. */
-  { campo: 'Tipo', rotulo: 'Tipo', bloco: 1, gravaHoje: false },
+     ⚠ QUATORZE LINHAS × 22px = 308px, mais 6 da faixa de bloco e 6 dos três separadores.
+     A décima quinta (Conta destino) só aparece na transferência. */
+  /* ⚠ O TIPO GRAVA DESDE A MIGRATION 20260909180123 — PR-MESA-TRANSF-01. Era `false` com o
+     motivo certo ("o Salvar ainda não grava este campo"), e virou `true` no dia em que a
+     RPC passou a escrever `tipo_operacao`. Deixá-lo em leitura seria a tela mentindo na
+     direção oposta. */
+  { campo: 'Tipo', rotulo: 'Tipo', bloco: 1, gravaHoje: true, obrigatorio: true },
   { campo: 'Competência', rotulo: 'Competência', bloco: 1, gravaHoje: true },
   { campo: 'Data vencimento', rotulo: 'Data venc.', bloco: 1, gravaHoje: true },
   { campo: 'Data pagamento', rotulo: 'Data pgto.', bloco: 1, gravaHoje: true, obrigatorio: true },
   { campo: 'Valor', rotulo: 'Valor', bloco: 1, gravaHoje: false, obrigatorio: true, corta: true },
   { campo: 'Banco', rotulo: 'Conta bancária', bloco: 1, gravaHoje: true, obrigatorio: true },
+  { campo: 'Conta destino', rotulo: 'Conta destino', bloco: 1, gravaHoje: true,
+    soTransferencia: true, obrigatorioSeTransferencia: true },
   { campo: 'Situação', rotulo: 'Situação', bloco: 1, gravaHoje: false },
   { campo: 'Fazenda', rotulo: 'Fazenda', bloco: 1, gravaHoje: true, obrigatorio: true, corta: true },
   { campo: 'Produto / Descrição', rotulo: 'Produto / descr.', bloco: 2, gravaHoje: true, obrigatorio: true },
@@ -105,6 +134,16 @@ const ORDEM: Array<{
 
 /** Os campos que o Salvar exige — exportado porque o container monta o motivo com eles. */
 export const CAMPOS_OBRIGATORIOS_MESA = ORDEM.filter((o) => o.obrigatorio).map((o) => o.rotulo);
+
+/**
+ * Os que só são obrigatórios na transferência — PR-MESA-TRANSF-01.
+ *
+ * ⚠ LISTA SEPARADA, E NÃO UM `obrigatorio: true`: a conta de destino não existe numa saída,
+ * e entrar na lista única faria o Salvar de 17.732 saídas pedir um campo que a tela nem
+ * desenha. Sai da MESMA `ORDEM` que desenha o asterisco — duas listas divergiriam.
+ */
+export const CAMPOS_OBRIGATORIOS_SE_TRANSFERENCIA =
+  ORDEM.filter((o) => o.obrigatorioSeTransferencia).map((o) => o.rotulo);
 
 const VAZIA: EnriqComparativoLinha = { campo: '', sistema: '—', excel: '—', resultado: '—', tom: 'neutro' };
 
@@ -142,6 +181,18 @@ export function MesaCamposTabela({
      truncavam de um lado enquanto sobrava espaço do outro. `minmax(0,…)` é o que permite a
      célula ENCOLHER: sem o `0`, o `truncate` não tem em relação a quê truncar. */
   const COLS = '104px minmax(0,1fr) minmax(0,1fr) minmax(0,1fr)';
+  /* ⚠ O RESULTADO MANDA, NÃO O LANÇAMENTO — PR-MESA-TRANSF-01. `edicao.tipoOperacao` já é
+     "proposta, senão o que o lançamento é": é ele que decide se a linha do destino existe e
+     se a conta do plano está travada, porque é ele que vai ser gravado. */
+  const ehTransf = ehTipoTransferencia(row.edicao.tipoOperacao);
+  /* A linha 18010 do plano, pelo `ordem_exibicao`; `null` sem catálogo — e aí nada é
+     forçado, que é o certo: forçar por suposição gravaria um subcentro adivinhado. */
+  const subcentroTransferencia = subcentroDeTransferencia(classificacoes);
+  /* ⚠ FILTRA ANTES DE MAPEAR, e isso não é estilo: a zebra e a faixa do bloco 2 se decidem
+     pela POSIÇÃO da linha. Pulando a linha do destino dentro do `map`, o índice continuava
+     contando por ela — e nas 17.732 saídas duas linhas sombreadas ficavam coladas, no
+     lugar exato onde o campo não existe. */
+  const linhas = ORDEM.filter((o) => !o.soTransferencia || ehTransf);
 
   return (
     <div className="flex-1 min-h-0 overflow-y-auto">
@@ -157,7 +208,7 @@ export function MesaCamposTabela({
         <span className="text-emerald-600">Resultado</span>
       </div>
 
-      {ORDEM.map(({ campo, rotulo, bloco, gravaHoje, corta, obrigatorio }, indice) => {
+      {linhas.map(({ campo, rotulo, bloco, gravaHoje, corta, obrigatorio, obrigatorioSeTransferencia }, indice) => {
         /* Zebra pela POSIÇÃO na tabela: o olho segue a linha, e alternar por bloco criaria
            faixas de tamanhos diferentes. */
         const zebra = indice % 2 === 1;
@@ -166,7 +217,13 @@ export function MesaCamposTabela({
         const vaiMudar = c.tom === 'muda' || c.tom === 'difere';
         /* 133h item 12 — campo do banco não se edita em linha conciliada. */
         const travadoPeloBanco = !!conciliado && CAMPOS_DO_BANCO.has(campo);
-        const editavel = gravaHoje && !row.aplicado && !!onEditar && !travadoPeloBanco;
+        /* ⚠ EM TRANSFERÊNCIA A CONTA DO PLANO É UMA SÓ — PR-MESA-TRANSF-01 item 3. A 18010
+           mantém o movimento FORA da DRE; qualquer outra conta o traria de volta como
+           receita ou despesa, e o operador não teria como saber que foi isso que aconteceu.
+           O campo trava e o motivo fica escrito; sair de "Transferência" destrava. */
+        const travadoPorTransferencia = ehTransf && campo === 'Subcentro' && !!subcentroTransferencia;
+        const editavel = gravaHoje && !row.aplicado && !!onEditar
+          && !travadoPeloBanco && !travadoPorTransferencia;
         /* ⚠ DIVERGÊNCIA É INFORMAÇÃO, NUNCA GRAVAÇÃO: a RPC já ignora o proposto nestes
            campos, então o que a planilha diz vira aviso — e o operador vê ANTES de salvar
            que o arquivo dele discorda do extrato.
@@ -177,9 +234,10 @@ export function MesaCamposTabela({
         const divergeDoBanco = travadoPeloBanco && !!dv;
         /* 4c — a linha é parte de um agrupamento: o valor não diverge, ele é uma parte. */
         const valorDeParte = campo === 'Valor' && row.parteDeAgrupamento;
-        const abreBloco2 = bloco === 2 && ORDEM[indice - 1]?.bloco === 1;
+        const abreBloco2 = bloco === 2 && linhas[indice - 1]?.bloco === 1;
         /* 133g item 6 — vazio no RESULTADO é o que importa: é ele que vai ser gravado. */
-        const faltando = !!obrigatorio && (c.resultado === '—' || c.resultado.trim() === '');
+        const exigido = !!obrigatorio || (!!obrigatorioSeTransferencia && ehTransf);
+        const faltando = exigido && (c.resultado === '—' || c.resultado.trim() === '');
 
         return (
           <div key={rotulo}>
@@ -208,7 +266,7 @@ export function MesaCamposTabela({
                 {rotulo}
                 {/* ⚠ ASTERISCO VERMELHO — 133g item 6. O operador não deve descobrir que um
                     campo era obrigatório quando o Salvar recusa: ele vê antes de mexer. */}
-                {obrigatorio && <span className="text-red-600 dark:text-red-400"> *</span>}
+                {exigido && <span className="text-red-600 dark:text-red-400"> *</span>}
               </span>
               {/* ⚠ O EXCEL É REFERÊNCIA, NUNCA GRAVADO DIRETO — por isso azul e sem controle. */}
               <span className="truncate text-blue-700/90" title={c.excel}>{c.excel}</span>
@@ -221,7 +279,9 @@ export function MesaCamposTabela({
               <div className="min-w-0">
                 {editavel && campo === 'Subcentro' && classificacoes ? (
                   <ResultadoSubcentroEditor value={row.edicao.subcentro} tipoOperacao={row.edicao.tipoOperacao}
-                    classificacoes={classificacoes} onEditar={onEditar} />
+                    classificacoes={classificacoes} onEditar={onEditar}
+                    subcentroTransferencia={subcentroTransferencia}
+                    contaDestinoSugeridaId={row.edicao.contaDestinoSugeridaId} />
                 ) : editavel && campo === 'Fornecedor' && fornecedores && onCriarFornecedor ? (
                   <ResultadoFavorecidoEditor value={row.edicao.favorecidoId} fornecedores={fornecedores}
                     fazendaId={row.edicao.fazendaId} onEditar={onEditar} onCriarFornecedor={onCriarFornecedor} />
@@ -249,6 +309,18 @@ export function MesaCamposTabela({
                 ) : editavel && campo === 'Banco' && contas ? (
                   <ResultadoContaEditor value={row.edicao.contaBancariaId}
                     valorAtual={row.edicao.contaBancariaIdAtual} contas={contas} onEditar={onEditar} />
+                ) : editavel && campo === 'Tipo' ? (
+                  <ResultadoTipoEditor value={row.edicao.tipoOperacaoProposto}
+                    valorAtual={row.edicao.tipoOperacaoAtual ?? row.edicao.tipoOperacaoExcel}
+                    subcentroTransferencia={subcentroTransferencia}
+                    subcentroAtualProposto={row.edicao.subcentro}
+                    contaDestinoSugeridaId={row.edicao.contaDestinoSugeridaId}
+                    onEditar={onEditar} />
+                ) : editavel && campo === 'Conta destino' && contas ? (
+                  <ResultadoContaDestinoEditor value={row.edicao.contaDestinoId}
+                    valorAtual={row.edicao.contaDestinoIdAtual} contas={contas}
+                    contaOrigemId={row.edicao.contaBancariaId ?? row.edicao.contaBancariaIdAtual}
+                    onEditar={onEditar} />
                 ) : editavel && campo === 'OBS' ? (
                   <ResultadoObservacaoEditor value={row.edicao.observacao}
                     valorAtual={row.edicao.observacaoAtual} onEditar={onEditar} />
@@ -283,6 +355,7 @@ export function MesaCamposTabela({
                         ? (divergeDoBanco
                             ? `${c.sistema} — ${MOTIVO_DO_BANCO}. A planilha diz "${c.excel}", e isso NÃO será gravado.`
                             : `${c.sistema} — ${MOTIVO_DO_BANCO}`)
+                      : travadoPorTransferencia ? `${subcentroTransferencia} — ${MOTIVO_TRANSFERENCIA}`
                       : gravaHoje ? c.resultado : `${c.resultado} — ${MOTIVO_SEM_APPLY}`}
                     className={`flex h-[22px] items-center gap-1.5 truncate rounded border px-1.5 ${
                       faltando ? 'border-destructive/60 bg-destructive/5 text-destructive'
@@ -296,7 +369,10 @@ export function MesaCamposTabela({
                         RPC ignora o proposto nestes campos, e mostrar o proposto aqui seria
                         a tela anunciando um valor que nunca vai ser gravado. */}
                     <span className="truncate">
-                      {faltando ? 'obrigatório' : (travadoPeloBanco ? c.sistema : c.resultado)}
+                      {faltando ? 'obrigatório'
+                        : travadoPeloBanco ? c.sistema
+                        : travadoPorTransferencia ? subcentroTransferencia
+                        : c.resultado}
                     </span>
                     {/* ⚠ O AVISO SAIU DE DENTRO DA CÉLULA — 133h-b item 4d. Ele não cabia
                         em 22px ao lado do valor e saía cortado justamente na parte que
@@ -310,6 +386,11 @@ export function MesaCamposTabela({
                     )}
                     {travadoPeloBanco && gravaHoje && !divergeDoBanco && (
                       <span className="ml-auto shrink-0 text-[9px] italic opacity-70">do extrato</span>
+                    )}
+                    {/* ⚠ O CAMPO TRAVADO DIZ POR QUÊ, ao lado — a mesma regra do botão
+                        desabilitado. "Fixo" sem motivo faria o operador procurar o defeito. */}
+                    {travadoPorTransferencia && !faltando && (
+                      <span className="ml-auto shrink-0 text-[9px] italic opacity-70">transferência</span>
                     )}
                   </span>
                   )

@@ -202,6 +202,16 @@ export interface ClassificacaoItem {
   macro_custo: string;
   tipo_operacao: string;
   escopo_negocio: string;
+  /**
+   * A ordem de exibição da linha do plano — PR-MESA-TRANSF-01.
+   *
+   * ⚠ É COMO SE ACHA UMA CONTA DO PLANO SEM DEPENDER DO TEXTO. A "Transferência entre
+   * Contas Bancárias" é a linha de `ordem_exibicao` 18010; procurá-la pelo nome quebraria
+   * num acento corrigido, e pelo id fixo amarraria o front a um uuid de uma base.
+   * ⚠ OPCIONAL: as combinações que o hook acrescenta a partir dos lançamentos legados não
+   * têm linha no plano, logo não têm ordem. `undefined` ali é a verdade, não uma falta.
+   */
+  ordem_exibicao?: number;
 }
 
 const DEFAULT_PAGE_SIZE = 30;
@@ -347,7 +357,11 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
 
     const { loadPlanoContasCompleto, planoToClassificacoes, normalizeDividendoSubcentro } = await import('@/lib/financeiro/planoContasBuilder');
     const plano = await loadPlanoContasCompleto(clienteId);
-    const planoCls = planoToClassificacoes(plano);
+    /* ⚠ ANOTADO COMO `ClassificacaoItem[]` — PR-MESA-TRANSF-01. Sem a anotação, o TS infere
+       a forma exata do `map` (com `ordem_exibicao` obrigatório) e o `push` das combinações
+       legadas abaixo, que NÃO têm linha no plano, deixa de compilar. A anotação diz a
+       verdade: a lista é de `ClassificacaoItem`, onde a ordem é opcional. */
+    const planoCls: ClassificacaoItem[] = planoToClassificacoes(plano);
 
     // Enrich with distinct classification combos from actual lancamentos
     // so legacy records (not in plano) are still filterable

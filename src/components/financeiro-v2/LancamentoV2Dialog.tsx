@@ -38,6 +38,7 @@ import { NovoFornecedorDialog } from './NovoFornecedorDialog';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { cn } from '@/lib/utils';
 import type { ExcelContext } from '@/v2/lib/mesa/buildExcelContext';
+import { planoDeTransferencia, ehTipoTransferencia } from '@/v2/lib/mesa/transferenciaPlano';
 
 interface Props {
   open: boolean;
@@ -424,6 +425,45 @@ export function LancamentoV2Dialog({
 
   const isTransferencia = tipoOperacao === '3-Transferências';
   const isEntrada = tipoOperacao === '1-Entradas';
+
+  /**
+   * A conta do plano de uma transferência é uma só — PR-MESA-TRANSF-01 item 3.
+   *
+   * ⚠ O MESMO CONTRATO DA MESA, E ESSA É A RAZÃO DE EXISTIR. Aqui o campo era livre: dava
+   * para gravar uma transferência entre contas classificada em "Manutenção de Máquinas", e
+   * o movimento entrava na DRE como despesa — dinheiro que só mudou de conta virando
+   * resultado. A Mesa passou a forçar a 18010; se este modal continuasse livre, o mesmo
+   * lançamento teria duas regras conforme a porta por onde entrou.
+   * ⚠ SE O CATÁLOGO AINDA NÃO CHEGOU, NÃO FORÇA NADA (`null`): travar um campo sobre um
+   * valor que não se sabe qual é seria pior que deixá-lo livre.
+   */
+  const planoTransferencia = useMemo(
+    () => planoDeTransferencia(classificacoes), [classificacoes]);
+  const subcentroTravado = isTransferencia && !!planoTransferencia;
+
+  /**
+   * Trocar o tipo de operação — e o que isso arrasta.
+   *
+   * ⚠ ERA UMA LINHA DE CINCO `set` NO JSX, e ela zerava a classificação de propósito: cada
+   * tipo tem a sua subárvore no plano, e o subcentro do tipo anterior não vale no novo.
+   * O que mudou é que "Transferência" não zera — ela FIXA, porque só existe uma resposta.
+   * ⚠ ESCOPO SÓ NO RAMO DA TRANSFERÊNCIA: no ramo antigo ele nunca foi tocado, e mexer
+   * nele aqui seria mudar comportamento por fora do que este PR pede.
+   */
+  const aplicarTipoOperacao = (v: string) => {
+    setTipoOperacao(v);
+    setSubcentroSearch('');
+    const plano = ehTipoTransferencia(v) ? planoDeTransferencia(classificacoes) : null;
+    if (plano) {
+      setSubcentro(plano.subcentro);
+      setMacroCusto(plano.macro_custo);
+      setGrupoCusto(plano.grupo_custo || '');
+      setCentroCusto(plano.centro_custo);
+      setEscopoNegocio(plano.escopo_negocio || '');
+      return;
+    }
+    setSubcentro(''); setMacroCusto(''); setGrupoCusto(''); setCentroCusto('');
+  };
 
   // PR-U2c-1D: classMap + filteredSubcentros migraram para <PlanoSubcentroSelect />.
 
@@ -1178,7 +1218,7 @@ export function LancamentoV2Dialog({
             <div className="grid grid-cols-12 gap-2">
               <div className="col-span-3">
                 <Label className="text-[10px]">Tipo Operação *</Label>
-                <Select value={tipoOperacao} onValueChange={v => { setTipoOperacao(v); setSubcentro(''); setMacroCusto(''); setGrupoCusto(''); setCentroCusto(''); setSubcentroSearch(''); }} disabled={lockedFields?.includes('tipo_operacao') || isOCTitulo}>
+                <Select value={tipoOperacao} onValueChange={aplicarTipoOperacao} disabled={lockedFields?.includes('tipo_operacao') || isOCTitulo}>
                   <SelectTrigger ref={firstFieldRef} tabIndex={1} className={cn("h-8", fieldBg)}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {TIPOS_OPERACAO.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
@@ -1389,8 +1429,17 @@ export function LancamentoV2Dialog({
                   label="Subcentro *"
                   triggerClassName={fieldBg}
                   tabIndex={11}
-                  disabled={isOCTitulo}
+                  disabled={isOCTitulo || subcentroTravado}
                 />
+                {/* ⚠ CAMPO TRAVADO DIZ POR QUÊ, ao lado — a mesma regra do botão
+                    desabilitado. Sem a frase, o operador vê um select apagado com um valor
+                    que ele não escolheu e procura o defeito. */}
+                {subcentroTravado && (
+                  <div className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
+                    transferência entre contas usa esta conta do plano e nenhuma outra (fora
+                    da DRE); troque o Tipo Operação para liberar
+                  </div>
+                )}
                 {/* Resumo automático dos derivados (Macro › Grupo › Centro). Somente leitura;
                     sem estado novo, sem recálculo, sem edição. "—" quando não houver derivação. */}
                 <div className="mt-1 text-[10px] leading-snug text-muted-foreground">

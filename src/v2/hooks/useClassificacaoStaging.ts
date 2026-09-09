@@ -181,6 +181,12 @@ export interface ClassificacaoStagingPreviewRow {
   proposto_observacao: string | null;
   /** P0-1A: fonte única "aplicável em lote" (calculada na view). */
   lote_aplicavel: boolean;
+  /* ── PR-MESA-TRANSF-01 (migration 20260909180751): o tipo e a conta de destino ────
+     ⚠ AS DUAS ENTRAM AQUI PORQUE ESTE TIPO É ESCRITO À MÃO. A view já as devolve e o
+     `select('*')` já as traz; sem a linha aqui elas chegam no JSON e o TS diz que não
+     existem — foi assim que `Data venc.` e `Safra` ficaram em "—" no 129c. */
+  proposto_tipo_operacao: string | null;
+  proposto_conta_destino_id: string | null;
 }
 
 /** O que `fn_classificacao_casar_sessao` devolve — 133a. */

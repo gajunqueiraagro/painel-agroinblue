@@ -102,6 +102,34 @@ function entradaOuSaidaDe(row: ClassificacaoStagingPreviewRow): 'entrada' | 'sai
 const rotuloTipo = (v: 'entrada' | 'saida' | null): string | null =>
   v === 'entrada' ? 'Entrada' : v === 'saida' ? 'Saída' : null;
 
+/**
+ * O rótulo de um `tipo_operacao` do contrato — PR-MESA-TRANSF-01.
+ *
+ * ⚠ TRÊS VALORES, NÃO DOIS. `rotuloTipo` acima responde ao `entradaOuSaidaDe`, que nasceu
+ * do SINAL e por isso nunca soube dizer "transferência": um lançamento de transferência tem
+ * sinal, e a linha "Tipo" o exibia como Saída. Aqui a pergunta é sobre o campo, e a
+ * resposta usa o mesmo `normalizarTipo` que o resto do módulo — um vocabulário só.
+ */
+const rotuloTipoOperacao = (tipo: string | null | undefined): string | null => {
+  switch (normalizarTipo(tipo)) {
+    case 'entrada': return 'Entrada';
+    case 'saida': return 'Saída';
+    case 'transferencia': return 'Transferência';
+    default: return null;
+  }
+};
+
+/**
+ * O nome de exibição de uma conta do cadastro — PR-MESA-TRANSF-01.
+ *
+ * ⚠ SEM CADASTRO, `null`, e nunca o id. Um uuid na tela é o defeito que a régua da casa
+ * proíbe; e id sem nome é ausência de nome, que é o que o traço diz.
+ */
+function nomeDaConta(id: string | null, contas: readonly ContaResolvivel[]): string | null {
+  if (!id) return null;
+  return contas.find((c) => c.id === id)?.nome_exibicao ?? null;
+}
+
 /** "Macro · Grupo · Centro" com os que existem; `null` quando nenhum existe. */
 function juntarTrilha(...partes: Array<string | null>): string | null {
   const vivas = partes.filter((p): p is string => !!p && p.trim() !== '');
@@ -210,8 +238,33 @@ export function toRowVM(
        Mesa. Estão na tabela porque o operador confere por elas — "saiu ou entrou?",
        "em que centro isto caiu?", "este lançamento ainda está vivo?" — e um campo que
        ele procura e não acha vira uma volta ao Financeiro. */
-    { campo: 'Tipo', sistema: fmtTexto(rotuloTipo(entradaOuSaidaDe(row))), excel: fmtTexto(row.excel_tipo_operacao),
-      resultado: fmtTexto(rotuloTipo(entradaOuSaidaDe(row))), tom: 'neutro' },
+    /* ⚠ O TIPO VIROU CAMPO EDITÁVEL — PR-MESA-TRANSF-01. Ele era leitura com o rótulo do
+       SINAL dos dois lados, e por isso: (a) uma transferência aparecia como "Saída", porque
+       o sinal não sabe dizer transferência; (b) o Resultado repetia o Sistema, então a
+       planilha dizer "3-Transferências" não tinha para onde ir. Agora o Sistema é o campo
+       do lançamento, o Excel é a proposta da planilha e o Resultado é o que vai ser gravado
+       — a convenção de `resultadoEditavel`, a mesma dos outros onze.
+       ⚠ O SINAL FICA COMO SEGUNDO RECURSO no Sistema: lançamento sem `tipo_operacao`
+       preenchido ainda tem sinal, e "—" ali seria pior que a resposta parcial. */
+    { campo: 'Tipo',
+      sistema: fmtTexto(rotuloTipoOperacao(row.lanc_tipo_operacao) ?? rotuloTipo(entradaOuSaidaDe(row))),
+      excel: fmtTexto(rotuloTipoOperacao(row.excel_tipo_operacao) ?? row.excel_tipo_operacao),
+      ...resultadoEditavel(
+        rotuloTipoOperacao(row.lanc_tipo_operacao) ?? rotuloTipo(entradaOuSaidaDe(row)),
+        rotuloTipoOperacao(row.excel_tipo_operacao),
+        rotuloTipoOperacao(row.proposto_tipo_operacao)) },
+    /* ⚠ A CONTA DE DESTINO SÓ EXISTE NA TRANSFERÊNCIA, e quem decide se a linha aparece é a
+       tabela (`soTransferencia`), não o adapter: o comparativo é a lista completa do que se
+       sabe da linha, e esconder o dado aqui deixaria a tabela sem o que mostrar no instante
+       em que o operador escolhe "Transferência".
+       ⚠ O EXCEL É O TEXTO CRU DA PLANILHA e o Resultado é o NOME DA CONTA proposta: são
+       duas coisas diferentes de propósito — "Cartão ELO" (o que o cliente escreveu) × o
+       nome de exibição do cadastro (o que vai ser gravado). */
+    { campo: 'Conta destino',
+      sistema: fmtTexto(row.lanc_conta_destino_nome),
+      excel: fmtTexto(row.excel_conta_destino),
+      ...resultadoEditavel(row.lanc_conta_destino_nome, row.excel_conta_destino,
+        nomeDaConta(row.proposto_conta_destino_id, contas)) },
     { campo: 'Macro · Grupo · Centro',
       sistema: fmtTexto(juntarTrilha(row.lanc_macro_atual, row.lanc_grupo_atual, row.lanc_centro_atual)),
       excel: '—',
@@ -321,7 +374,12 @@ export function toRowVM(
     favorecidoId: row.proposto_favorecido_id,
     fazendaId: row.proposto_fazenda_id,
     produto: row.proposto_produto,
-    tipoOperacao: row.lanc_tipo_operacao ?? row.excel_tipo_operacao,
+    /* ⚠ O TIPO DO RESULTADO, NÃO O DO LANÇAMENTO — PR-MESA-TRANSF-01. Ele filtra a
+       subárvore do plano no `PlanoSubcentroSelect`; se o operador escolheu "Transferência"
+       e o filtro continuasse em "Saída", a única conta que serve (a 18010) não apareceria
+       na lista do campo que a tela acabou de travar nela. A proposta vem primeiro; sem
+       proposta, o que o lançamento já é; sem lançamento, o que a planilha diz. */
+    tipoOperacao: row.proposto_tipo_operacao ?? row.lanc_tipo_operacao ?? row.excel_tipo_operacao,
     macro: row.proposto_macro,
     descricaoAtual: descricao,   // P0-3: lanc_descricao (editor "Produto / Descrição")
     numeroDocumento: row.proposto_numero_documento,        // P0-5
@@ -344,6 +402,17 @@ export function toRowVM(
     dataVencimentoAtual: row.lanc_data_vencimento,
     dataPagamentoAtual: row.lanc_data_pagamento,
     observacaoAtual: row.lanc_observacao,
+    /* ── PR-MESA-TRANSF-01 ─────────────────────────────────────────────────────── */
+    tipoOperacaoProposto: row.proposto_tipo_operacao,
+    tipoOperacaoAtual: row.lanc_tipo_operacao,
+    tipoOperacaoExcel: row.excel_tipo_operacao,
+    contaDestinoId: row.proposto_conta_destino_id,
+    contaDestinoIdAtual: row.lanc_conta_destino_id,
+    /* ⚠ ITEM 4 — O APELIDO ENSINADO É QUEM RESPONDE. O texto da coluna de destino da
+       planilha passa pelo resolvedor soberano, que consulta os apelidos do cadastro de
+       contas antes de tentar nome e agência+número. Sem apelido e sem casamento, `null`:
+       não saber a qual conta o texto se refere é ausência, e ausência não vira proposta. */
+    contaDestinoSugeridaId: resolverContaPorTexto(row.excel_conta_destino, contas)?.id ?? null,
   };
 
   // PR-U2d-1 — estado operacional da linha (ordem: primeira condição que casar vence).
@@ -862,6 +931,13 @@ export function diferencasDoResultado(edicao: EnriqEdicao): string[] {
   cmp('data de vencimento', edicao.dataVencimento, edicao.dataVencimentoAtual);
   cmp('data de pagamento', edicao.dataPagamento, edicao.dataPagamentoAtual);
   cmp('observação', edicao.observacao, edicao.observacaoAtual);
+  /* ── PR-MESA-TRANSF-01 ───────────────────────────────────────────────────────────
+     ⚠ SEM ESTAS DUAS, O BOTÃO MENTIA. Uma linha cuja única mudança fosse o tipo caía em
+     `soConfirma`: a tela dizia "nada a gravar", o operador confirmava, e a transferência
+     que ele acabou de classificar ficava só no staging — o MESMO defeito que a safra teve
+     no 133h item 10. */
+  cmp('tipo de operação', edicao.tipoOperacaoProposto, edicao.tipoOperacaoAtual);
+  cmp('conta destino', edicao.contaDestinoId, edicao.contaDestinoIdAtual);
   return difs;
 }
 
@@ -971,12 +1047,15 @@ export function divergenciasComExtrato(
     }
   }
 
-  /* Tipo: normalizado (item 4a). */
-  const tipoBanco = normalizarTipo(row.lanc_sinal === '1' ? '1' : row.lanc_sinal === '-1' ? '2' : row.lanc_tipo_operacao);
-  const tipoPlanilha = normalizarTipo(row.excel_tipo_operacao);
-  if (tipoBanco && tipoPlanilha && tipoBanco !== tipoPlanilha) {
-    fora.push({ campo: 'Tipo', rotulo: 'tipo', banco: tipoBanco, planilha: tipoPlanilha });
-  }
+  /* ⚠ O TIPO SAIU DAQUI — PR-MESA-TRANSF-01. O extrato manda em data de pagamento, valor e
+     conta bancária, e em mais nada; `tipo_operacao` é classificação do sistema. A lista
+     acusava divergência de tipo e dizia "o extrato manda, e estes campos não serão
+     gravados" — duas afirmações erradas de uma vez: o extrato não manda no tipo, e a
+     `fn_classificacao_apply_row` sequer o escrevia (medido: a palavra não existia no corpo
+     da função até 20260909180123). O operador via um conflito inventado sobre um campo que
+     nada sobrescreveria.
+     A pergunta que sobra é legítima e agora tem gesto: a planilha diz "3-Transferências" e
+     o cru do OFX nasceu "Saída" — quem resolve é o campo Tipo do Resultado, editável. */
 
   return fora;
 }

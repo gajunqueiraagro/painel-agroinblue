@@ -121,6 +121,25 @@ export interface EnriqEdicao {
   dataVencimentoAtual: string | null;
   dataPagamentoAtual: string | null;
   observacaoAtual: string | null;
+  /* ── PR-MESA-TRANSF-01: o tipo e o destino, propostos e efetivos ──────────────
+     ⚠ `tipoOperacao` ACIMA CONTINUA SENDO O TIPO DO RESULTADO (é ele que filtra a
+     subárvore do plano); estes dois separam as duas metades da pergunta, que é o que
+     `diferencasDoResultado` precisa para dizer se há algo a gravar. */
+  tipoOperacaoProposto: string | null;
+  tipoOperacaoAtual: string | null;
+  /** O que a PLANILHA diz — a proposta que o operador confirma no dropdown. */
+  tipoOperacaoExcel: string | null;
+  contaDestinoId: string | null;
+  contaDestinoIdAtual: string | null;
+  /**
+   * A conta que o texto de destino da planilha resolve — PR-MESA-TRANSF-01 item 4.
+   *
+   * ⚠ É AQUI QUE O APELIDO ENSINADO VOLTA: o texto "Cartão ELO" da coluna de destino passa
+   * pelo resolvedor soberano (`resolverContaPorTexto`), que conhece os apelidos do cadastro.
+   * Ela NÃO é o Resultado — vira proposta no gesto de escolher "Transferência", que é o
+   * único momento em que a tela pode gravar sem o operador ter pedido.
+   */
+  contaDestinoSugeridaId: string | null;
 }
 
 export interface EnriqRowVM {

@@ -37,7 +37,8 @@ import { EnriquecerProgressoDialog } from '@/components/conciliacao/EnriquecerPr
 import { useGravarLoteEnriquecimento, type LinhaParaGravar } from '@/v2/hooks/useGravarLoteEnriquecimento';
 import { EnriquecimentoCandidatosInline } from './EnriquecimentoCandidatosInline';
 import { AgruparModal } from './AgruparModal';
-import { MesaCamposTabela, CAMPOS_OBRIGATORIOS_MESA } from './MesaCamposTabela';
+import { MesaCamposTabela, CAMPOS_OBRIGATORIOS_MESA, CAMPOS_OBRIGATORIOS_SE_TRANSFERENCIA } from './MesaCamposTabela';
+import { ehTipoTransferencia } from '@/v2/lib/mesa/transferenciaPlano';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -599,15 +600,25 @@ export function MesaEnriquecimentoTab({
     const paresCampoRotulo: Array<[string, string]> = [
       ['Data pagamento', 'Data pgto.'], ['Valor', 'Valor'], ['Banco', 'Conta bancária'],
       ['Fazenda', 'Fazenda'], ['Produto / Descrição', 'Produto / descr.'],
-      ['Subcentro', 'Conta do plano'],
+      ['Subcentro', 'Conta do plano'], ['Tipo', 'Tipo'],
     ];
-    return paresCampoRotulo
-      .filter(([campo, rot]) => {
-        if (!CAMPOS_OBRIGATORIOS_MESA.includes(rot)) return false;
-        const c = porRotulo.get(campo);
-        return !c || c.resultado === '—' || c.resultado.trim() === '';
-      })
+    const vazioNoResultado = (campo: string) => {
+      const c = porRotulo.get(campo);
+      return !c || c.resultado === '—' || c.resultado.trim() === '';
+    };
+    const faltando = paresCampoRotulo
+      .filter(([campo, rot]) => CAMPOS_OBRIGATORIOS_MESA.includes(rot) && vazioNoResultado(campo))
       .map(([, rot]) => rot);
+    /* ⚠ PR-MESA-TRANSF-01 — TRANSFERÊNCIA SEM DESTINO PARA AQUI, ANTES DA RPC. O guard
+       `trg_guard_transferencia_destino` recusa depois, e o operador leria um erro de
+       constraint no lugar do nome do campo que falta. A pergunta é sobre o RESULTADO
+       (`edicao.contaDestinoId` é a proposta; `contaDestinoIdAtual` é o que o lançamento já
+       tem), porque é o Resultado que vai ser gravado. */
+    if (ehTipoTransferencia(selecionado.edicao.tipoOperacao)
+        && !(selecionado.edicao.contaDestinoId ?? selecionado.edicao.contaDestinoIdAtual)) {
+      faltando.push(...CAMPOS_OBRIGATORIOS_SE_TRANSFERENCIA);
+    }
+    return faltando;
   }, [selecionado]);
 
   const podeSalvar = !!selecionado && !selecionado.aplicado && selecionado.temMatch
@@ -1579,11 +1590,15 @@ export function MesaEnriquecimentoTab({
       {/* ═══ RODAPÉ FIXO ══════════════════════════════════════════════════════════ */}
       <div className="flex shrink-0 flex-wrap items-center gap-2 rounded-lg border bg-muted/30 px-2 py-1">
         <span className="min-w-0 flex-1 text-[10px] leading-tight text-muted-foreground">
-          {/* ⚠ 133h item 11 — O RODAPÉ DIZ QUAL DOS DOIS TOCA O FINANCEIRO. A tela tinha
-              "Salvar" e "Confirmar" lado a lado e não dizia em lugar nenhum que só um
-              deles grava; o operador confirmava a sessão inteira achando que estava
-              gravando, e nada chegava ao lançamento. */}
-          <b>Salvar</b> grava no lançamento agora. <b>Confirmar</b> só marca a linha como revisada.
+          {/* ⚠ 133h item 11 — O RODAPÉ DIZ O QUE TOCA O FINANCEIRO. A tela tinha "Salvar" e
+              "Confirmar" lado a lado e não dizia em lugar nenhum que só um deles grava; o
+              operador confirmava a sessão inteira achando que estava gravando, e nada
+              chegava ao lançamento.
+              ⚠ "CONFIRMAR" SAIU DO TEXTO com o botão único (adendo PR-MESA-TRANSF-01): não
+              há mais dois nomes, há um gesto que grava quando há o que gravar. A frase
+              continua dizendo a mesma coisa — o que muda é que agora ela descreve o que
+              ACONTECE, não qual dos dois botões apertar. */}
+          <b>Salvar</b> grava no lançamento; sem mudança, só marca a linha como revisada.
           {' · '}
           <b className="tabular-nums">{revisadas}</b>/<b className="tabular-nums">{rowsVM.length}</b> revisado
           {' · '}

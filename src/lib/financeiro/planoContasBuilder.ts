@@ -191,5 +191,14 @@ export function planoToClassificacoes(items: PlanoContasItem[]) {
       macro_custo: i.macro_custo,
       tipo_operacao: i.tipo_operacao,
       escopo_negocio: i.escopo_negocio || '',
+      /* ⚠ A ORDEM VEM JUNTO — PR-MESA-TRANSF-01. Ela é a IDENTIDADE de uma linha do plano
+         para quem precisa achar uma conta específica sem depender do texto: a
+         "Transferência entre Contas Bancárias" é a de `ordem_exibicao` 18010, e resolvê-la
+         pelo nome quebraria no dia em que alguém corrigisse um acento. A coluna já vinha
+         no `select` de `loadPlanoContasCompleto`; só era descartada aqui.
+         ⚠ OPCIONAL PORQUE NEM TODA `ClassificacaoItem` NASCE DO PLANO: o
+         `useFinanceiroV2` acrescenta as combinações vivas dos lançamentos legados, que não
+         têm linha no plano e portanto não têm ordem. `undefined` ali é a verdade. */
+      ordem_exibicao: i.ordem_exibicao,
     }));
 }

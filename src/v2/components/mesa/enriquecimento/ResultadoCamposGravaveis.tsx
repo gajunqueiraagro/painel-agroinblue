@@ -24,6 +24,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ContaBancariaSelect, type ContaSelecionavel } from '@/components/shared/ContaBancariaSelect';
 import { CELULA_EDITAVEL, CELULA_EDITAVEL_DATA, ITEM_DROPDOWN } from './medidasMesa';
+import { TIPOS_OPERACAO_RESULTADO, ehTipoTransferencia } from '@/v2/lib/mesa/transferenciaPlano';
 
 type Editar = (patch: Record<string, unknown>) => Promise<void>;
 
@@ -101,6 +102,91 @@ export function ResultadoContaEditor({ value, valorAtual, contas, onEditar }: {
       onValueChange={(id) => {
         if (id === efetivo) return;
         void onEditar({ conta_bancaria_id: id || null });
+      }}
+    />
+  );
+}
+
+/**
+ * O TIPO da operação — PR-MESA-TRANSF-01 item 2/3.
+ *
+ * ⚠ ESCOLHER "TRANSFERÊNCIA" É UM GESTO SÓ, E ELE GRAVA TRÊS COISAS. O tipo sozinho
+ * deixaria a linha inválida por construção: o guard `trg_guard_transferencia_destino`
+ * recusa transferência sem destino, e uma transferência classificada em qualquer outra
+ * conta do plano entra na DRE. Então o mesmo patch leva o tipo, o subcentro 18010 e — se o
+ * apelido da planilha resolveu uma conta — o destino. Três idas ao banco para um gesto
+ * fariam três estados intermediários inválidos.
+ * ⚠ E SAIR DE TRANSFERÊNCIA DESFAZ SÓ O QUE ELA IMPÔS: o subcentro volta a ser proposta
+ * livre APENAS se o que estava lá era o 18010 forçado; uma conta escolhida antes pelo
+ * operador ou proposta pela planilha sobrevive. O destino sai sempre — a própria RPC o zera
+ * quando o tipo deixa de ser transferência, e mantê-lo na tela prometeria o contrário.
+ */
+export function ResultadoTipoEditor({ value, valorAtual, subcentroTransferencia, subcentroAtualProposto, contaDestinoSugeridaId, onEditar }: {
+  value: string | null;
+  valorAtual: string | null;
+  /** O subcentro da linha 18010 do plano; `null` quando o catálogo ainda não chegou. */
+  subcentroTransferencia: string | null;
+  /** O subcentro que o Resultado mostra agora — para saber se o 18010 foi imposto por aqui. */
+  subcentroAtualProposto: string | null;
+  /** A conta que o apelido da planilha resolveu para o destino, se resolveu. */
+  contaDestinoSugeridaId: string | null;
+  onEditar: Editar;
+}) {
+  const efetivo = value ?? valorAtual ?? '';
+  return (
+    <Select value={efetivo || undefined}
+      onValueChange={(novo) => {
+        if (novo === efetivo) return;
+        const patch: Record<string, unknown> = { tipo_operacao: novo };
+        if (ehTipoTransferencia(novo)) {
+          if (subcentroTransferencia) patch.subcentro = subcentroTransferencia;
+          if (contaDestinoSugeridaId) patch.conta_destino_id = contaDestinoSugeridaId;
+        } else {
+          patch.conta_destino_id = null;
+          if (subcentroTransferencia && subcentroAtualProposto === subcentroTransferencia) {
+            patch.subcentro = null;
+          }
+        }
+        void onEditar(patch);
+      }}>
+      <SelectTrigger className={CELULA_EDITAVEL}><SelectValue placeholder="—" /></SelectTrigger>
+      <SelectContent>
+        {TIPOS_OPERACAO_RESULTADO.map((t) => (
+          <SelectItem key={t.valor} value={t.valor} className={ITEM_DROPDOWN}>{t.rotulo}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+/**
+ * A CONTA DE DESTINO da transferência — PR-MESA-TRANSF-01 item 2.
+ *
+ * ⚠ A ORIGEM SAI DA LISTA. Transferir de uma conta para ela mesma não é movimento nenhum, e
+ * oferecer a opção é convidar o operador a criar um lançamento que o extrato nunca vai
+ * explicar.
+ * ⚠ SEM `valorAtual` COMO PLACEHOLDER SILENCIOSO: o destino do lançamento entra como valor
+ * efetivo (o campo não abre vazio sobre um destino que existe), mas o que se GRAVA é a
+ * proposta — é por isso que o container exige o campo antes de chamar a RPC.
+ */
+export function ResultadoContaDestinoEditor({ value, valorAtual, contas, contaOrigemId, onEditar }: {
+  value: string | null;
+  valorAtual: string | null;
+  contas: ContaSelecionavel[];
+  contaOrigemId: string | null;
+  onEditar: Editar;
+}) {
+  const efetivo = value ?? valorAtual ?? '';
+  const elegiveis = contaOrigemId ? contas.filter((c) => c.id !== contaOrigemId) : contas;
+  return (
+    <ContaBancariaSelect
+      value={efetivo}
+      contas={elegiveis}
+      placeholder="escolha a conta"
+      size="compact"
+      onValueChange={(id) => {
+        if (id === efetivo) return;
+        void onEditar({ conta_destino_id: id || null });
       }}
     />
   );
