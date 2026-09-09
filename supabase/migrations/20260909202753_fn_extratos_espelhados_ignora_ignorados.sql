@@ -1,0 +1,7 @@
+-- 20260909202753 fn_extratos_espelhados_ignora_ignorados
+-- Aplicada no banco as 20:27 UTC de 09/09/2026 e sobrescrita 24 minutos
+-- depois pela 20260909205118. A troca aplicada aqui estava errada:
+-- duplicou o filtro de data em vez de acrescentar "AND e.ignorado_em IS NULL"
+-- (medido: zero ignorado_em no corpo, filtro de data em dobro, delta de
+-- 49 caracteres). Este arquivo existe so para o historico local casar
+-- com o remoto; nao executa nada.
