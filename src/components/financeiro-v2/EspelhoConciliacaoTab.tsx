@@ -85,7 +85,14 @@ function AbaOfxReal({ ofx, inicial }: { ofx: EspOfx[]; inicial: number }) {
     return ofx.map((r) => { acc += r.valor; return { r, saldo: acc }; });
   }, [ofx, inicial]);
   return (
-    <div className="text-[10px] max-h-[55vh] overflow-y-auto">
+    /* ⚠ A LISTA OCUPA A ALTURA QUE SOBRA, E TEM A MARGEM DA CONFERÊNCIA — PR-ESPELHO-06 item C.
+       Era `max-h-[55vh]` sem padding lateral: a tabela parava no meio do modal de 92vh,
+       sobrava faixa morta até o rodapé, e o texto encostava na borda enquanto a Conferência
+       respirava em `px-3.5`. `min-h-0 flex-1` é a MESMA receita da Conferência — 55vh é uma
+       altura chutada; `flex-1` é a altura que existe.
+       ⚠ `min-h-0` NÃO É ENFEITE: sem ele o filho de um flex não encolhe abaixo do conteúdo e
+       o `overflow-y-auto` nunca ganha barra — a página inteira é que rolaria. */
+    <div className="min-h-0 flex-1 overflow-y-auto border-t px-3.5 text-[10px]">
       <div className="grid grid-cols-[44px_1fr_72px_92px_92px_92px] gap-1 font-semibold text-muted-foreground border-b pb-0.5 sticky top-0 bg-card">
         <span>Data</span><span>Histórico</span><span>Documento</span><span className="text-right">Valor</span><span className="text-right">Saldo</span><span>Status</span>
       </div>
@@ -113,7 +120,8 @@ function AbaSistemaReal({ sistema, inicial, onAbrir }: { sistema: EspSis[]; inic
     return sistema.map((r) => { acc += r.valor_assinado; return { r, saldo: acc }; });
   }, [sistema, inicial]);
   return (
-    <div className="text-[10px] max-h-[55vh] overflow-y-auto">
+    /* Mesma régua do Extrato acima — a lista é o scrollport, e ele é o modal inteiro. */
+    <div className="min-h-0 flex-1 overflow-y-auto border-t px-3.5 text-[10px]">
       <div className="grid grid-cols-[44px_1fr_130px_92px_92px_80px] gap-1 font-semibold text-muted-foreground border-b pb-0.5 sticky top-0 bg-card">
         <span>Data</span><span>Descrição</span><span>Centro/Subcentro</span><span className="text-right">Valor</span><span className="text-right">Saldo</span><span>Status</span>
       </div>
@@ -136,14 +144,35 @@ function AbaSistemaReal({ sistema, inicial, onAbrir }: { sistema: EspSis[]; inic
   );
 }
 
+/**
+ * A EVOLUÇÃO LÊ A MESMA MESA DA CONFERÊNCIA — PR-ESPELHO-06 item B. UMA RÉGUA.
+ *
+ * ⚠ ERAM DUAS LEITURAS DO MESMO DIA, e o caso medido mostra por quê. No Bradesco do Agnaldo,
+ * jul/26, o extrato de 29/07 "RENTAB.INVEST FACILCRED" de R$ 0,05 está conciliado com DOIS
+ * lançamentos de outros dias: 0,02 de 17/07 e 0,03 de 22/07. A Conferência põe o valor
+ * aplicado no dia do EXTRATO (é a mesa do dia: banco × sistema têm de fechar naquele dia);
+ * esta função somava `sistema_completo` pelo dia do LANÇAMENTO. Resultado medido, e é
+ * exatamente o que o Gabriel viu: 17/07 divergia 0,02, 22/07 divergia 0,03 e 29/07 divergia
+ * 0,05 — três dias, um único vínculo, e uma "Dif. Acum." que não era diferença nenhuma, só
+ * duas datas para o mesmo dinheiro.
+ * ⚠ QUEM MANDA É A CONFERÊNCIA, e não `sistema_completo` cru. A Evolução existe para
+ * comparar com o OFX dia a dia, e o dia do OFX é o do extrato: pôr o movimento do sistema
+ * no dia do lançamento faria a coluna "Dif. Acum." acender por um descasamento de data que
+ * a conciliação já resolveu. É também a leitura homologada.
+ * ⚠ E O `banco` VEM DA MESMA MESA, embora fosse igual: `montarMesa` soma todo extrato do dia
+ * uma vez só, inclusive os que desenha dentro de um bloco N:1. Ler os dois lados da mesma
+ * função é o que impede a próxima regra de entrar em um só.
+ */
 function montarEvolucao(data: EspelhadosReais) {
   const inicial = data.saldos.inicial ?? 0;
   const nDias = data.saldos.periodo_fim ? Number(data.saldos.periodo_fim.split('-')[2]) : 31;
   const dia = (s: string | null) => (s ? Number(s.split('-')[2]) : 0);
   const movOfx = Array(nDias + 1).fill(0);
   const movSis = Array(nDias + 1).fill(0);
-  for (const o of data.ofx_completo) { const d = dia(o.data); if (d >= 1 && d <= nDias) movOfx[d] += o.valor; }
-  for (const s of data.sistema_completo) { const d = dia(s.data); if (d >= 1 && d <= nDias) movSis[d] += s.valor_assinado; }
+  for (const d of montarMesa(data)) {
+    const n = dia(d.data);
+    if (n >= 1 && n <= nDias) { movOfx[n] += d.banco; movSis[n] += d.sistema; }
+  }
   const rows: { dia: number; movOfx: number; movSis: number; saldoOfx: number; saldoSis: number; dif: number; nasce: boolean }[] = [];
   let accO = inicial, accS = inicial, nasceu = false;
   for (let d = 1; d <= nDias; d++) {
@@ -159,8 +188,14 @@ function AbaEvolucaoReal({ data }: { data: EspelhadosReais }) {
   const rows = useMemo(() => montarEvolucao(data), [data]);
   const mm = data.saldos.periodo_ini ? data.saldos.periodo_ini.split('-')[1] : '';
   return (
-    <div className="space-y-2">
-      <div className="text-[10px] max-h-[50vh] overflow-y-auto">
+    /* ⚠ UM SCROLLPORT SÓ, E O RODAPÉ DENTRO DELE. Havia um `space-y-2` externo com a lista em
+       `max-h-[50vh]` e DOIS blocos abaixo — um aviso âmbar de 10px e um "Saldo final oficial"
+       de 11px em negrito. Os dois ocupavam duas linhas grandes de altura permanente para
+       dizer o que cabe numa; e a lista, limitada a metade da tela, terminava muito antes do
+       rodapé do modal. Agora a lista é o scrollport (a mesma receita das outras três) e as
+       duas frases viram UMA linha de 10px muted no fim dela. */
+    <div className="min-h-0 flex-1 overflow-y-auto border-t px-3.5 text-[10px]">
+      <div>
         <div className="grid grid-cols-[52px_1fr_1fr_1fr_1fr_1fr] gap-1 font-semibold text-muted-foreground border-b pb-0.5 sticky top-0 bg-card">
           <span>Data</span><span className="text-right">Mov. OFX</span><span className="text-right">Mov. Sist.</span><span className="text-right">Saldo OFX</span><span className="text-right">Saldo Sist.</span><span className="text-right">Dif. Acum.</span>
         </div>
@@ -178,8 +213,11 @@ function AbaEvolucaoReal({ data }: { data: EspelhadosReais }) {
           );
         })}
       </div>
-      <div className="text-[10px] text-amber-700">Extrato bancário importado contém movimentos até {fmtData(data.saldos.extrato_fim)}.</div>
-      <div className="text-[11px] font-semibold">Saldo final oficial (extrato): {fmtBRL(data.saldos.final_oficial)}</div>
+      <div className="py-1 text-[10px] leading-tight text-muted-foreground">
+        Extrato bancário importado contém movimentos até {fmtData(data.saldos.extrato_fim)}
+        {' · '}Saldo final oficial (extrato):{' '}
+        <span className="tabular-nums">{fmtBRL(data.saldos.final_oficial)}</span>
+      </div>
     </div>
   );
 }
@@ -494,6 +532,34 @@ export const MOTIVO_CASAR_LABEL: Readonly<Record<string, string>> = {
 
 interface EstadoSelecao { extratos: Set<string>; lancamentos: Set<string>; }
 
+/** O envelope que `fn_espelho_casar` / `fn_espelho_casar_n1` devolvem pelo PostgREST. */
+interface RespostaCasar {
+  data: { ok?: boolean; motivo?: string } | null;
+  error: { message: string } | null;
+}
+
+/** Quanto se espera por uma conciliação antes de devolver o botão ao operador. */
+const PRAZO_CONCILIAR_MS = 20_000;
+
+/**
+ * A promessa, com prazo — PR-ESPELHO-06 item A.
+ *
+ * ⚠ NÃO CANCELA A GRAVAÇÃO, e não pode fingir que cancela: a requisição segue no servidor e
+ * pode terminar bem. O que o prazo devolve é o CONTROLE — o botão volta e o operador lê que
+ * o banco não respondeu, em vez de olhar "Conciliando…" sem fim. Por isso a mensagem manda
+ * conferir antes de repetir: repetir uma conciliação que talvez tenha gravado é o único
+ * jeito de piorar este caso.
+ */
+function comPrazo<T>(promessa: PromiseLike<T>, ms: number): Promise<T> {
+  return Promise.race([
+    Promise.resolve(promessa),
+    new Promise<T>((_, rejeitar) => setTimeout(
+      () => rejeitar(new Error(
+        'O banco não respondeu a tempo. Confira se a conciliação foi feita antes de tentar de novo.')),
+      ms)),
+  ]);
+}
+
 function AbaConferencia({ data, anoMes, nomeConta, contaId, onAbrir, onMudou }: {
   data: EspelhadosReais; anoMes: string; nomeConta?: string; contaId: string | null;
   onAbrir?: (id: string) => void; onMudou: () => void;
@@ -544,29 +610,56 @@ function AbaConferencia({ data, anoMes, nomeConta, contaId, onAbrir, onMudou }: 
     : sel.lancamentos.size === 0 ? 'marque ao menos um lançamento'
     : 'marque 1 extrato para N lançamentos, ou N extratos para 1 lançamento';
 
+  /**
+   * Conciliar pela barra — os dois sentidos.
+   *
+   * ⚠ O MÉTODO NÃO SE EXTRAI PARA UMA VARIÁVEL. Esta função escrevia
+   * `const rpc = (supabase as any).rpc; rpc('fn_espelho_casar_n1', …)`, e o método arrancado
+   * do objeto perde o `this`: o corpo do `rpc` lê `this.rest`/`this.url` para montar a URL e
+   * lança `TypeError: Cannot read properties of undefined` SÍNCRONO, antes de qualquer
+   * rede. Era o defeito inteiro do 20/07 — a chamada nunca saiu (zero vínculo, zero audit,
+   * nenhuma requisição), e como o `throw` acontecia antes do `setGravando(false)` e não
+   * havia `try`, o botão ficava preso em "Conciliando…" para sempre. Medido: o mesmo
+   * cliente chamado como MÉTODO devolve o builder; extraído para variável, lança.
+   * ⚠ VALIA PARA OS DOIS SENTIDOS, não só o N:1. O 1:N parecia funcionar porque o caminho
+   * exercitado era o modal "Casar com o banco", que sempre chamou como método — os 105
+   * outros pontos do repo escrevem `(supabase as any).rpc(...)`, e este era o único que não.
+   *
+   * ⚠ E O BOTÃO VOLTA SEMPRE. `finally` devolve o estado aconteça o que acontecer, e o
+   * prazo impede o outro jeito de ficar preso: uma resposta que nunca chega. Um botão que
+   * não volta é pior que um erro — o operador não sabe se gravou.
+   */
   const conciliar = async () => {
     if (!sentido) return;
     setGravando(true); setErro(null);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
-    const rpc = (supabase as any).rpc;
-    const chamada = sentido === 'um_n'
-      ? rpc('fn_espelho_casar', {
-          p_extrato_id: [...sel.extratos][0],
-          p_itens: [...sel.lancamentos].map((id) => ({ lancamento_id: id, valor: Math.abs(sisIndex.get(id)?.valor_assinado ?? 0) })),
-          p_simular: false, p_motivo: 'casado_no_espelho',
-        })
-      : rpc('fn_espelho_casar_n1', {
-          p_lancamento_id: [...sel.lancamentos][0],
-          p_extratos: [...sel.extratos],
-          p_simular: false, p_motivo: 'casado_no_espelho_n1',
-        });
-    const { data: r, error } = await chamada;
-    setGravando(false);
-    if (error) { setErro(error.message); return; }
-    const res = (r ?? {}) as { ok?: boolean; motivo?: string };
-    if (res.ok === false) { setErro(MOTIVO_CASAR_LABEL[res.motivo ?? ''] ?? res.motivo ?? 'Não foi possível conciliar.'); return; }
-    limpar();
-    onMudou();
+    try {
+      const chamada = sentido === 'um_n'
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+        ? (supabase as any).rpc('fn_espelho_casar', {
+            p_extrato_id: [...sel.extratos][0],
+            p_itens: [...sel.lancamentos].map((id) => ({ lancamento_id: id, valor: Math.abs(sisIndex.get(id)?.valor_assinado ?? 0) })),
+            p_simular: false, p_motivo: 'casado_no_espelho',
+          })
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+        : (supabase as any).rpc('fn_espelho_casar_n1', {
+            p_lancamento_id: [...sel.lancamentos][0],
+            p_extratos: [...sel.extratos],
+            p_simular: false, p_motivo: 'casado_no_espelho_n1',
+          });
+      /* O argumento de tipo é explícito porque o `.rpc` do idioma devolve `any`, e sem ele o
+         `T` do `comPrazo` cairia em `unknown` — o envelope da resposta é o mesmo dos outros
+         chamadores desta RPC. Sem cast: é declaração, não conversão. */
+      const { data: r, error } = await comPrazo<RespostaCasar>(chamada, PRAZO_CONCILIAR_MS);
+      if (error) { setErro(error.message); return; }
+      const res = r ?? {};
+      if (res.ok === false) { setErro(MOTIVO_CASAR_LABEL[res.motivo ?? ''] ?? res.motivo ?? 'Não foi possível conciliar.'); return; }
+      limpar();
+      onMudou();
+    } catch (e: unknown) {
+      setErro(e instanceof Error ? e.message : 'Não foi possível conciliar.');
+    } finally {
+      setGravando(false);
+    }
   };
 
   const mesDoRecorte = anoMes;
