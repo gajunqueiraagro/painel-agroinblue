@@ -32,6 +32,7 @@ import { ModalAtividade, type IndicadorAtividade, type Assunto } from '@/v2/comp
 import { calcularRazaoEstoqueAcumulada, mediaIgnorandoZero } from '@/lib/calculos/eficienciaArea';
 import { BarChart3, ArrowLeftRight, Wallet } from 'lucide-react';
 import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
+import { anoInteiro } from '@/v2/lib/periodo';
 
 const fmtN = (v: number | null | undefined, dec = 0) =>
   v == null || isNaN(v) ? null
@@ -2546,7 +2547,13 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
   return (
     <>
       {onAnoChange && (
-        <div className="mb-2 px-1"><SeletorPeriodo modo="ano" ano={ano} onAnoChange={onAnoChange} /></div>
+        <div className="mb-2 px-1">
+          <SeletorPeriodo
+            modo="ano"
+            periodo={anoInteiro(Number(ano))}
+            onPeriodoChange={(p) => onAnoChange(String(p.de.ano))}
+          />
+        </div>
       )}
 
     <div className="px-4 pb-5 max-w-7xl">

@@ -30,8 +30,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { salvarValorRebanhoMeta, type ValorRebanhoMetaItem } from '@/hooks/useValorRebanhoMeta';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
-import { useFiltroUrl } from '@/v2/hooks/useFiltroUrl';
-import { ANO_URL } from '@/v2/lib/periodoUrl';
+import { usePeriodoUrl } from '@/v2/hooks/usePeriodoUrl';
+import { anoInteiro } from '@/v2/lib/periodo';
 
 interface Props {
   onBack?: () => void;
@@ -112,8 +112,8 @@ export function MetaPrecoTab({ onBack }: Props) {
   /* ⚠ O ANO MORA NA URL — PR-BARRA-UNICA-01c. O `mes` logo abaixo NÃO entra: ele não é o
      filtro de período desta tela (o seletor dela é só de ano), e escrevê-lo em `f_mes`
      faria a próxima tela abrir num mês que ninguém escolheu. */
-  const [ano, setAno] = useFiltroUrl(
-    'f_ano', String(now.getFullYear()), ANO_URL.ler, ANO_URL.escrever);
+  const [periodo, setPeriodo] = usePeriodoUrl(anoInteiro(now.getFullYear()));
+  const ano = String(periodo.de.ano);
   const [mes, setMes] = useState(String(now.getMonth() + 1).padStart(2, '0'));
   const anoMes = `${ano}-${mes}`;
 
@@ -516,7 +516,7 @@ export function MetaPrecoTab({ onBack }: Props) {
       {/* Toolbar — compact */}
       <div className="flex gap-1 items-center flex-wrap">
         {/* ⚠ O `<Select>` LOCAL SAIU — PR-BARRA-UNICA-01b: mesmo controle de toda tela. */}
-        <SeletorPeriodo modo="ano" anos={anos} ano={ano} onAnoChange={setAno} />
+        <SeletorPeriodo modo="ano" anos={anos} periodo={periodo} onPeriodoChange={setPeriodo} />
 
         <Badge variant="outline" className={`text-[9px] px-1.5 py-0 h-5 ${stCfg.color}`}>
           <StIcon className="h-2.5 w-2.5 mr-0.5" />

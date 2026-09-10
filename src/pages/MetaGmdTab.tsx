@@ -10,8 +10,8 @@ import { useMetaGmd } from '@/hooks/useMetaGmd';
 import { Save, ArrowLeft, CopyCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
-import { useFiltroUrl } from '@/v2/hooks/useFiltroUrl';
-import { ANO_URL } from '@/v2/lib/periodoUrl';
+import { usePeriodoUrl } from '@/v2/hooks/usePeriodoUrl';
+import { anoInteiro } from '@/v2/lib/periodo';
 
 interface Props {
   onBack?: () => void;
@@ -25,8 +25,12 @@ const MESES_SHORT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Se
 export function MetaGmdTab({ onBack, initialAno, backLabel, ocultarFiltroAno }: Props) {
   const now = new Date();
   /* ⚠ O ANO MORA NA URL — PR-BARRA-UNICA-01c; default inalterado. */
-  const [ano, setAno] = useFiltroUrl(
-    'f_ano', initialAno || String(now.getFullYear()), ANO_URL.ler, ANO_URL.escrever);
+  /* ⚠ SÓ O ANO IMPORTA AQUI, e o período desta tela É o ano inteiro. O seletor é `modo="ano"`
+     — não há fita de meses para recortar —, então guardar um mês seria guardar uma escolha
+     que a tela não oferece. */
+  const [periodo, setPeriodo] = usePeriodoUrl(anoInteiro(Number(initialAno) || now.getFullYear()));
+  const ano = String(periodo.de.ano);
+  const setAno = (v: string) => setPeriodo(anoInteiro(Number(v)));
   useEffect(() => {
     if (initialAno) setAno(initialAno);
   }, [initialAno]);
@@ -66,7 +70,7 @@ export function MetaGmdTab({ onBack, initialAno, backLabel, ocultarFiltroAno }: 
             <span className="text-[10px] font-semibold text-muted-foreground">Ano:</span>
             {/* ⚠ O `<Select>` LOCAL SAIU — PR-BARRA-UNICA-01b. O estado (`ano`) fica; o
                 controle passa a ser o mesmo de toda tela do /v2. */}
-            <SeletorPeriodo modo="ano" anos={anos} ano={ano} onAnoChange={setAno} />
+            <SeletorPeriodo modo="ano" anos={anos} periodo={periodo} onPeriodoChange={setPeriodo} />
             </>)}
             <Button
               size="sm"

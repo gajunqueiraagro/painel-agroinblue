@@ -398,6 +398,8 @@ export default function V2Index() {
   const [ano, setAno] = useState(anoMesAnterior);
   const [mes, setMes] = useState(String(mesAnterior));
   const [viewMode, setViewMode] = useState<'mes' | 'periodo'>('mes');
+  /* O mês do shell, já resolvido: `'0'` era o "ano inteiro" do 01b e não é um mês. */
+  const mesVisivel = mes === '0' ? new Date().getMonth() + 1 : Number(mes);
   const [modo, setModo] = useState<'mes' | 'acum'>('mes');
   // Período do Fechamento — state global para sobreviver à navegação entre
   // seções. Default vazio; V2FechamentoPeriodo popula via calcularDefaultPeriodo
@@ -1277,10 +1279,21 @@ export default function V2Index() {
     if (section === 'config-auditoria') return <AuditoriaTab />;
     if (section === 'config-fazendas') return <V2Fazendas />;
     if (section === 'rebanho-home') return (
+      /* ⚠ AS DUAS PROPS QUE FALTAVAM — PR-SELETOR-PERIODO-02. Esta montagem passava `ano` e
+         `mes` sem os respectivos `onChange`, e ambos eram opcionais na tela: o seletor de lá
+         caía no modo NÃO-CONTROLADO, escrevia na URL e a tela seguia lendo props que ninguém
+         atualizava. Clicar num mês na Visão Geral do Rebanho não mudava o dado. Agora o
+         período é uma prop obrigatória, e o compilador não deixa a omissão voltar. */
       <V2VisaoGeralRebanho
-        ano={Number(ano)}
-        mes={mes === '0' ? new Date().getMonth() + 1 : Number(mes)}
-        viewMode={viewMode}
+        periodo={{
+          de: { ano: Number(ano), mes: viewMode === 'periodo' ? 1 : mesVisivel },
+          ate: { ano: Number(ano), mes: mesVisivel },
+        }}
+        onPeriodoChange={(p) => {
+          setAno(String(p.de.ano));
+          setMes(String(p.ate.mes));
+          setViewMode(p.de.mes === p.ate.mes && p.de.ano === p.ate.ano ? 'mes' : 'periodo');
+        }}
       />
     );
 

@@ -18,6 +18,7 @@
 import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
 import { cn } from '@/lib/utils';
 import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
+import { anoInteiro } from '@/v2/lib/periodo';
 
 const MESES_LABEL = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
@@ -142,7 +143,13 @@ export function V2AuditoriaAnual({ ano, onAnoChange }: { ano: string; onAnoChang
       {/* ⚠ O PERÍODO VEIO PARA DENTRO — PR-BARRA-UNICA-01a: a barra global de ano saiu do
           shell, e esta tela é uma das que de fato liam aquele estado. */}
       {onAnoChange && (
-        <div className="mb-2 px-1"><SeletorPeriodo modo="ano" ano={ano} onAnoChange={onAnoChange} /></div>
+        <div className="mb-2 px-1">
+          <SeletorPeriodo
+            modo="ano"
+            periodo={anoInteiro(Number(ano))}
+            onPeriodoChange={(p) => onAnoChange(String(p.de.ano))}
+          />
+        </div>
       )}
 
     <div className="space-y-4 px-4 py-4">

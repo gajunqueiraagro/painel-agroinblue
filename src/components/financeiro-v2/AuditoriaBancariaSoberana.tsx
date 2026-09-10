@@ -23,8 +23,8 @@ import { EstacaoConciliacao, type GrupoSugerido } from '@/components/financeiro-
 import { LancamentoLeituraDialog } from '@/components/financeiro-v2/LancamentoLeituraDialog';
 import { toast } from 'sonner';
 import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
-import { useFiltroUrl } from '@/v2/hooks/useFiltroUrl';
-import { ANO_URL_NUM, MES_URL_NUM } from '@/v2/lib/periodoUrl';
+import { usePeriodoUrl } from '@/v2/hooks/usePeriodoUrl';
+import { mesUnico } from '@/v2/lib/periodo';
 
 interface Props {
   /* ⚠ OPCIONAL DESDE O PR-BARRA-UNICA-01a. Ela era obrigatória porque a barra global do
@@ -916,13 +916,16 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
   const queryClient = useQueryClient();
   const [contas, setContas] = useState<ContaSelecionavel[]>([]);
   const [contaId, setContaId] = useState<string | null>(null);
-  /* ⚠ O PERÍODO MORA NA URL — PR-BARRA-UNICA-01c. Esta tela guarda NÚMEROS, e é por isso
-     que o codec é outro: a tradução fica na borda e nada aqui dentro muda. Default igual —
-     ano e mês correntes. */
-  const [ano, setAno] = useFiltroUrl(
-    'f_ano', Number(initialAno) || new Date().getFullYear(), ANO_URL_NUM.ler, ANO_URL_NUM.escrever);
-  const [mes, setMes] = useFiltroUrl(
-    'f_mes', initialMes ?? new Date().getMonth() + 1, MES_URL_NUM.ler, MES_URL_NUM.escrever);
+  /* ⚠ UM MÊS, SEMPRE — `modoUnico`. Não é escolha de escopo: esta tela calcula o MÊS
+     ANTERIOR (`mPrev`/`aPrev`) para trazer o saldo de abertura e o ÚLTIMO DIA do mês para
+     fechar o extrato. As duas contas pressupõem um mês; num intervalo elas não têm resposta.
+     A tela continua guardando números, e a tradução mora na borda. */
+  const [periodo, setPeriodo] = usePeriodoUrl(mesUnico(
+    Number(initialAno) || new Date().getFullYear(),
+    initialMes ?? new Date().getMonth() + 1,
+  ));
+  const ano = periodo.de.ano;
+  const mes = periodo.de.mes;
   const [filtroAtivo, setFiltroAtivo] = useState<FiltroKey>('todos');
   const [importOpen, setImportOpen] = useState(false);
   const [cardsTopoAbertos, setCardsTopoAbertos] = useState(false);
@@ -1221,11 +1224,10 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
             estado fica onde está (`ano`/`mes` desta tela); o que muda é o controle. */}
         <SeletorPeriodo
           className="flex-1"
+          modoUnico
           anos={anos.map(String)}
-          ano={String(ano)}
-          onAnoChange={(v) => setAno(Number(v))}
-          mes={mes}
-          onMesChange={setMes}
+          periodo={periodo}
+          onPeriodoChange={setPeriodo}
         />
         {temExtrato && diag && (
           <span className="ml-auto">

@@ -7,7 +7,11 @@ import { ValorRebanhoTab } from './ValorRebanhoTab';
 import { EvolucaoCategoriaTab } from './EvolucaoCategoriaTab';
 import { Lancamento, SaldoInicial } from '@/types/cattle';
 import type { SubAba } from './FinanceiroTab';
+import type { Periodo } from '@/v2/lib/periodo';
 
+/* ⚠ O CONTEXTO DE EDIÇÃO CARREGA UM PERÍODO — PR-SELETOR-PERIODO-02. Esta tela só
+   REPASSA os callbacks para o `FinanceiroTab`; o tipo acompanha a origem para o repasse
+   continuar sendo repasse, e não uma tradução escondida no meio do caminho. */
 interface Props {
   lancamentos: Lancamento[];
   saldosIniciais: SaldoInicial[];
@@ -18,11 +22,11 @@ interface Props {
   filtroMesInicial?: number;
   onNavigateToReclass?: (filtro?: { ano: string; mes: number; cenario?: 'realizado' | 'meta' }) => void;
   onNavigateToMetaGmd?: (filtro: { ano: string; mes: number; cenario: 'realizado' | 'meta' }) => void;
-  onEditarAbate?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; anoFiltro: string; mesFiltro: string }) => void;
-  onEditarVenda?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; anoFiltro: string; mesFiltro: string }) => void;
-  onEditarCompra?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; anoFiltro: string; mesFiltro: string }) => void;
-  onEditarMorte?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; anoFiltro: string; mesFiltro: string }) => void;
-  onEditarConsumo?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; anoFiltro: string; mesFiltro: string }) => void;
+  onEditarAbate?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; periodo: Periodo }) => void;
+  onEditarVenda?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; periodo: Periodo }) => void;
+  onEditarCompra?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; periodo: Periodo }) => void;
+  onEditarMorte?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; periodo: Periodo }) => void;
+  onEditarConsumo?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; periodo: Periodo }) => void;
 }
 
 export function EvolucaoRebanhoHubTab({ lancamentos, saldosIniciais, onNavigateToMovimentacao, onEditar, onRemover, filtroAnoInicial, filtroMesInicial, onNavigateToReclass, onNavigateToMetaGmd, onEditarAbate, onEditarVenda, onEditarCompra, onEditarMorte, onEditarConsumo }: Props) {

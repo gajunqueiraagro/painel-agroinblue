@@ -86,6 +86,8 @@ interface Args {
   ano: number;
   mes: number; // 1..12
   viewMode: 'mes' | 'periodo';
+  /** Primeiro mês do intervalo quando `viewMode === 'periodo'`. Padrão 1 (o ano acumulado). */
+  mesInicial?: number;
   /** Quando true, Σ Entradas exclui transf entrada (movimentação interna do cliente). */
   isGlobal: boolean;
   /* OPCIONAL, default `true`: os tres consumidores que existiam antes de
@@ -302,8 +304,18 @@ function valorPorLente(
   }
 }
 
-function mesesDoModo(mes: number, viewMode: 'mes' | 'periodo'): number[] {
-  if (viewMode === 'periodo') return Array.from({ length: mes }, (_, i) => i + 1);
+/**
+ * ⚠ `mesInicial` É ADITIVO — PR-SELETOR-PERIODO-02. Antes, `'periodo'` significava sempre
+ * JANEIRO→mês, porque o único período que a tela sabia pedir era o acumulado do ano. Com o
+ * seletor de intervalo, a Visão Geral do Rebanho pode pedir fev→abr, e ler isso como
+ * jan→abr seria mostrar um número que não é o que a frase abaixo da fita promete.
+ * O padrão continua sendo 1: os outros três chamadores não mudam de comportamento.
+ */
+function mesesDoModo(mes: number, viewMode: 'mes' | 'periodo', mesInicial = 1): number[] {
+  if (viewMode === 'periodo') {
+    const de = Math.min(Math.max(mesInicial, 1), mes);
+    return Array.from({ length: mes - de + 1 }, (_, i) => de + i);
+  }
   return [mes];
 }
 
@@ -319,7 +331,7 @@ function calcularSaldoInicialAno(saldos: SaldoInicialLike[], ano: number): numbe
 
 // ─── HOOK ────────────────────────────────────────────────────────────────────
 
-export function useMovimentacoesAgregadas({ ano, mes, viewMode, isGlobal, enabled = true }: Args): MovimentacoesAgregadas {
+export function useMovimentacoesAgregadas({ ano, mes, viewMode, mesInicial = 1, isGlobal, enabled = true }: Args): MovimentacoesAgregadas {
   // 3 useLancamentos com queryKeys distintos (TanStack Query cacheia separado).
   const corr   = useLancamentos({ cenario: 'realizado', ano, enabled });
   const anoAnt = useLancamentos({ cenario: 'realizado', ano: ano - 1, enabled });
@@ -347,7 +359,7 @@ export function useMovimentacoesAgregadas({ ano, mes, viewMode, isGlobal, enable
     // META usa o mesmo saldo inicial do realizado — Gabriel planeja sobre o rebanho atual.
     const saldoInicialMeta    = saldoInicialAnoCorr;
 
-    const mesesPeriodo   = mesesDoModo(mes, viewMode);
+    const mesesPeriodo   = mesesDoModo(mes, viewMode, mesInicial);
     const mesAntNum      = mes > 1 ? mes - 1 : null;
     const mesesPeriodoAnt = mesAntNum ? mesesDoModo(mesAntNum, viewMode) : [];
 
@@ -455,7 +467,7 @@ export function useMovimentacoesAgregadas({ ano, mes, viewMode, isGlobal, enable
     }
 
     return result;
-  }, [lancCorr, lancAnoAnt, lancMeta, saldosCorr, saldosAnoAnt, ano, mes, viewMode, TIPOS_LANC_DE_MOV]);
+  }, [lancCorr, lancAnoAnt, lancMeta, saldosCorr, saldosAnoAnt, ano, mes, viewMode, mesInicial, TIPOS_LANC_DE_MOV]);
 
   const saldoInicialAnual = useMemo(
     () => calcularSaldoInicialAno(saldosCorr, ano),

@@ -156,6 +156,16 @@ const TITLES: Record<TabId, string> = {
   auditoria_tecnica: 'Auditoria Técnica',
 };
 
+/**
+ * ⚠ PONTE PARA O VOCABULÁRIO DESTA PÁGINA — PR-SELETOR-PERIODO-02. O contexto de edição do
+ * `FinanceiroTab` passou a carregar um PERÍODO; esta página guarda o mês como `'todos'` ou
+ * `'01'..'12'`, que é o formato que os filtros dela leem. A tradução mora aqui, na borda, e
+ * nada mais desta página muda.
+ */
+function mesFiltroDoPeriodo(p: { de: { mes: number }; ate: { mes: number } }): string {
+  return p.de.mes === p.ate.mes ? String(p.de.mes).padStart(2, '0') : 'todos';
+}
+
 const Index = () => {
   const [activeTab, setActiveTabRaw] = useState<TabId>(() => {
     const saved = sessionStorage.getItem('agroinblue_active_tab');
@@ -608,11 +618,11 @@ const Index = () => {
             setMetaGmdOrigin({ tab: 'evolucao_rebanho_hub', ano: filtro.ano, mes: filtro.mes, cenario: filtro.cenario });
             setActiveTab('meta_gmd');
           }}
-          onEditarAbate={(l, ctx) => { setEditOriginTab('evolucao_rebanho_hub'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(ctx.anoFiltro); setEditOriginMesFiltro(ctx.mesFiltro); } setAbateParaEditar(l); setActiveTab('lancamentos'); }}
-          onEditarVenda={(l, ctx) => { setEditOriginTab('evolucao_rebanho_hub'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(ctx.anoFiltro); setEditOriginMesFiltro(ctx.mesFiltro); } setVendaParaEditar(l); setActiveTab('lancamentos'); }}
-          onEditarCompra={(l, ctx) => { setEditOriginTab('evolucao_rebanho_hub'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(ctx.anoFiltro); setEditOriginMesFiltro(ctx.mesFiltro); } setCompraParaEditar(l); setActiveTab('lancamentos'); }}
-          onEditarMorte={(l, ctx) => { setEditOriginTab('evolucao_rebanho_hub'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(ctx.anoFiltro); setEditOriginMesFiltro(ctx.mesFiltro); } setMorteParaEditar(l); setActiveTab('lancamentos'); }}
-          onEditarConsumo={(l, ctx) => { setEditOriginTab('evolucao_rebanho_hub'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(ctx.anoFiltro); setEditOriginMesFiltro(ctx.mesFiltro); } setConsumoParaEditar(l); setActiveTab('lancamentos'); }}
+          onEditarAbate={(l, ctx) => { setEditOriginTab('evolucao_rebanho_hub'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(String(ctx.periodo.de.ano)); setEditOriginMesFiltro(mesFiltroDoPeriodo(ctx.periodo)); } setAbateParaEditar(l); setActiveTab('lancamentos'); }}
+          onEditarVenda={(l, ctx) => { setEditOriginTab('evolucao_rebanho_hub'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(String(ctx.periodo.de.ano)); setEditOriginMesFiltro(mesFiltroDoPeriodo(ctx.periodo)); } setVendaParaEditar(l); setActiveTab('lancamentos'); }}
+          onEditarCompra={(l, ctx) => { setEditOriginTab('evolucao_rebanho_hub'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(String(ctx.periodo.de.ano)); setEditOriginMesFiltro(mesFiltroDoPeriodo(ctx.periodo)); } setCompraParaEditar(l); setActiveTab('lancamentos'); }}
+          onEditarMorte={(l, ctx) => { setEditOriginTab('evolucao_rebanho_hub'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(String(ctx.periodo.de.ano)); setEditOriginMesFiltro(mesFiltroDoPeriodo(ctx.periodo)); } setMorteParaEditar(l); setActiveTab('lancamentos'); }}
+          onEditarConsumo={(l, ctx) => { setEditOriginTab('evolucao_rebanho_hub'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(String(ctx.periodo.de.ano)); setEditOriginMesFiltro(mesFiltroDoPeriodo(ctx.periodo)); } setConsumoParaEditar(l); setActiveTab('lancamentos'); }}
         />
       )}
       {activeTab === 'financeiro' && (
@@ -626,13 +636,13 @@ const Index = () => {
           drillDownLabel={movDrillLabel}
           onBack={movBackTab ? () => setActiveTab(movBackTab) : undefined}
           filtroStatusInicial={movFiltroStatus || (editOriginTab === 'financeiro' ? editOriginStatusFiltro : undefined)}
-          onEditarAbate={(l, ctx) => { setEditOriginTab('financeiro'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(ctx.anoFiltro); setEditOriginMesFiltro(ctx.mesFiltro); } setLancamentosFromFechamento(false); setLancamentosFromConciliacao(false); setLancamentosFromEvolCategoria(false); setLancamentosFromFluxoAnual(false); setAbateParaEditar(l); setActiveTab('lancamentos'); }}
-          onEditarVenda={(l, ctx) => { setEditOriginTab('financeiro'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(ctx.anoFiltro); setEditOriginMesFiltro(ctx.mesFiltro); } setLancamentosFromFechamento(false); setLancamentosFromConciliacao(false); setLancamentosFromEvolCategoria(false); setLancamentosFromFluxoAnual(false); setVendaParaEditar(l); setActiveTab('lancamentos'); }}
-          onEditarCompra={(l, ctx) => { setEditOriginTab('financeiro'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(ctx.anoFiltro); setEditOriginMesFiltro(ctx.mesFiltro); } setLancamentosFromFechamento(false); setLancamentosFromConciliacao(false); setLancamentosFromEvolCategoria(false); setLancamentosFromFluxoAnual(false); setCompraParaEditar(l); setActiveTab('lancamentos'); }}
-          onEditarTransferencia={(l, ctx) => { setEditOriginTab('financeiro'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(ctx.anoFiltro); setEditOriginMesFiltro(ctx.mesFiltro); } setLancamentosFromFechamento(false); setLancamentosFromConciliacao(false); setLancamentosFromEvolCategoria(false); setLancamentosFromFluxoAnual(false); setTransferenciaParaEditar(l); setActiveTab('lancamentos'); }}
-          onEditarReclass={(l, ctx) => { setEditOriginTab('financeiro'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(ctx.anoFiltro); setEditOriginMesFiltro(ctx.mesFiltro); } setReclassParaEditar(l); setActiveTab('lancamentos'); }}
-          onEditarMorte={(l, ctx) => { setEditOriginTab('financeiro'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(ctx.anoFiltro); setEditOriginMesFiltro(ctx.mesFiltro); } setLancamentosFromFechamento(false); setLancamentosFromConciliacao(false); setLancamentosFromEvolCategoria(false); setLancamentosFromFluxoAnual(false); setMorteParaEditar(l); setActiveTab('lancamentos'); }}
-          onEditarConsumo={(l, ctx) => { setEditOriginTab('financeiro'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(ctx.anoFiltro); setEditOriginMesFiltro(ctx.mesFiltro); } setLancamentosFromFechamento(false); setLancamentosFromConciliacao(false); setLancamentosFromEvolCategoria(false); setLancamentosFromFluxoAnual(false); setConsumoParaEditar(l); setActiveTab('lancamentos'); }}
+          onEditarAbate={(l, ctx) => { setEditOriginTab('financeiro'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(String(ctx.periodo.de.ano)); setEditOriginMesFiltro(mesFiltroDoPeriodo(ctx.periodo)); } setLancamentosFromFechamento(false); setLancamentosFromConciliacao(false); setLancamentosFromEvolCategoria(false); setLancamentosFromFluxoAnual(false); setAbateParaEditar(l); setActiveTab('lancamentos'); }}
+          onEditarVenda={(l, ctx) => { setEditOriginTab('financeiro'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(String(ctx.periodo.de.ano)); setEditOriginMesFiltro(mesFiltroDoPeriodo(ctx.periodo)); } setLancamentosFromFechamento(false); setLancamentosFromConciliacao(false); setLancamentosFromEvolCategoria(false); setLancamentosFromFluxoAnual(false); setVendaParaEditar(l); setActiveTab('lancamentos'); }}
+          onEditarCompra={(l, ctx) => { setEditOriginTab('financeiro'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(String(ctx.periodo.de.ano)); setEditOriginMesFiltro(mesFiltroDoPeriodo(ctx.periodo)); } setLancamentosFromFechamento(false); setLancamentosFromConciliacao(false); setLancamentosFromEvolCategoria(false); setLancamentosFromFluxoAnual(false); setCompraParaEditar(l); setActiveTab('lancamentos'); }}
+          onEditarTransferencia={(l, ctx) => { setEditOriginTab('financeiro'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(String(ctx.periodo.de.ano)); setEditOriginMesFiltro(mesFiltroDoPeriodo(ctx.periodo)); } setLancamentosFromFechamento(false); setLancamentosFromConciliacao(false); setLancamentosFromEvolCategoria(false); setLancamentosFromFluxoAnual(false); setTransferenciaParaEditar(l); setActiveTab('lancamentos'); }}
+          onEditarReclass={(l, ctx) => { setEditOriginTab('financeiro'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(String(ctx.periodo.de.ano)); setEditOriginMesFiltro(mesFiltroDoPeriodo(ctx.periodo)); } setReclassParaEditar(l); setActiveTab('lancamentos'); }}
+          onEditarMorte={(l, ctx) => { setEditOriginTab('financeiro'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(String(ctx.periodo.de.ano)); setEditOriginMesFiltro(mesFiltroDoPeriodo(ctx.periodo)); } setLancamentosFromFechamento(false); setLancamentosFromConciliacao(false); setLancamentosFromEvolCategoria(false); setLancamentosFromFluxoAnual(false); setMorteParaEditar(l); setActiveTab('lancamentos'); }}
+          onEditarConsumo={(l, ctx) => { setEditOriginTab('financeiro'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(String(ctx.periodo.de.ano)); setEditOriginMesFiltro(mesFiltroDoPeriodo(ctx.periodo)); } setLancamentosFromFechamento(false); setLancamentosFromConciliacao(false); setLancamentosFromEvolCategoria(false); setLancamentosFromFluxoAnual(false); setConsumoParaEditar(l); setActiveTab('lancamentos'); }}
         />
       )}
       {activeTab === 'acessos' && <AcessosTab />}

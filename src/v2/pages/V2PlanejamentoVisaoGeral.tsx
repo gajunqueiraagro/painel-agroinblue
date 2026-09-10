@@ -213,6 +213,7 @@ import { BlocoFinanceiroCapital } from './V2PlanejamentoVisaoGeral.parts/BlocoFi
 import { BlocoMovimentacaoRebanho } from './V2PlanejamentoVisaoGeral.parts/BlocoMovimentacaoRebanho';
 import { BlocoRateioAdministrativo } from './V2PlanejamentoVisaoGeral.parts/BlocoRateioAdministrativo';
 import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
+import { mesUnico } from '@/v2/lib/periodo';
 
 interface Props {
   ano: number;
@@ -433,7 +434,13 @@ export function V2PlanejamentoVisaoGeral({ ano, mes, onAnoChange, onMesChange }:
           esta é uma das telas que de fato liam aquele estado: sem o seletor aqui, ela
           ficaria sem como trocar de mês. O estado segue no `V2Index` porque é lá que os
           drills (`?fano=&fmes=`, retorno de pendência) o escrevem. */}
-      <div className="mb-2 px-1"><SeletorPeriodo ano={String(ano)} onAnoChange={onAnoChange} mes={mes} onMesChange={onMesChange} /></div>
+      <div className="mb-2 px-1">
+        <SeletorPeriodo
+          modoUnico
+          periodo={mesUnico(ano, mes)}
+          onPeriodoChange={(p) => { onAnoChange?.(String(p.de.ano)); onMesChange?.(p.de.mes); }}
+        />
+      </div>
 
     <V2PageContent>
       <header className="mb-4">

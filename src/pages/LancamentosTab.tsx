@@ -162,8 +162,8 @@ type Aba = 'entrada' | 'saida' | 'reclassificacao';
 import { STATUS_LABEL, STATUS_OPTIONS_ZOOTECNICO, META_VISUAL, getStatusBadge, type StatusOperacional } from '@/lib/statusOperacional';
 import { usePermissions } from '@/hooks/usePermissions';
 import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
-import { useFiltroUrl } from '@/v2/hooks/useFiltroUrl';
-import { ANO_URL, MES_URL_TODOS } from '@/v2/lib/periodoUrl';
+import { usePeriodoUrl } from '@/v2/hooks/usePeriodoUrl';
+import { anoInteiro, dentro, mesUnico, type Periodo } from '@/v2/lib/periodo';
 
 /* ⚠ QUEM ESCOLHE A PROPRIA FAZENDA. Em contexto Global, so' estes podem lancar: os
    demais herdam a fazenda do contexto, que em Global nao existe.
@@ -663,10 +663,13 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
      desmontava a tela e o mês voltava ao padrão; um F5 apagava a escolha. O DEFAULT NÃO
      MUDA — sem `f_ano`/`f_mes` a tela abre exatamente onde abria (ano corrente, "Todos os
      meses"); o que muda é que agora a escolha sobrevive. */
-  const [anoFiltro, setAnoFiltro] = useFiltroUrl(
-    'f_ano', initialAnoFiltro || String(new Date().getFullYear()), ANO_URL.ler, ANO_URL.escrever);
-  const [mesFiltro, setMesFiltro] = useFiltroUrl(
-    'f_mes', initialMesFiltro || 'todos', MES_URL_TODOS.ler, MES_URL_TODOS.escrever);
+  /* ⚠ "TODOS OS MESES" ERA O ANO INTEIRO — e agora se chama assim. O default não muda: sem
+     período no endereço a tela abre no ano corrente inteiro, exatamente onde abria. O que
+     some é o token `'todos'`, que era um mês fingindo não ser mês. */
+  const anoPadrao = Number(initialAnoFiltro) || new Date().getFullYear();
+  const [periodo, setPeriodo] = usePeriodoUrl(
+    initialMesFiltro ? mesUnico(anoPadrao, Number(initialMesFiltro)) : anoInteiro(anoPadrao));
+  const anoFiltro = String(periodo.de.ano);
 
   // ─── P1 governance: derive anoMes from form date ───
   const formAnoMes = useMemo(() => {
@@ -682,8 +685,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   // (cenário, tipo e filtros preservados — sem voltar para 'realizado'/data de hoje).
   const internalEditOrigin = useRef<{
     aba: Aba;
-    anoFiltro: string;
-    mesFiltro: string;
+    periodo: Periodo;
     statusOp: StatusOperacional | 'meta';
     tipo: TipoMovimentacao;
   } | null>(null);
@@ -710,14 +712,16 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialReclassCenario, abaInicial]);
 
-  // Sincronizar filtros de ano/mês com o filtro global do V2Index
+  /* Sincronizar o período com o que o V2Index manda (drill, retorno de pendência).
+     ⚠ UM EFEITO SÓ para as duas props: eram dois, e dois efeitos escrevendo o MESMO período
+     em sequência fariam o segundo ler o estado antes de o primeiro ter sido confirmado —
+     o ano entraria e o mês voltaria ao padrão. */
   useEffect(() => {
-    if (initialAnoFiltro) setAnoFiltro(String(initialAnoFiltro));
-  }, [initialAnoFiltro]);
-
-  useEffect(() => {
-    if (initialMesFiltro) setMesFiltro(String(initialMesFiltro));
-  }, [initialMesFiltro]);
+    if (!initialAnoFiltro && !initialMesFiltro) return;
+    const a = Number(initialAnoFiltro) || periodo.de.ano;
+    setPeriodo(initialMesFiltro ? mesUnico(a, Number(initialMesFiltro)) : anoInteiro(a));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialAnoFiltro, initialMesFiltro]);
   const [compraDetalhes, setCompraDetalhes] = useState<CompraDetalhes | null>(null);
   const [compraDialogOpen, setCompraDialogOpen] = useState(false);
   const [abateDetalhes, setAbateDetalhes] = useState<AbateDetalhes | null>(null);
@@ -1559,13 +1563,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const historicoFiltrado = useMemo(() => {
     return lancamentos.filter(l => {
       try {
-        const d = parseISO(l.data);
-        if (format(d, 'yyyy') !== anoFiltro) return false;
-        if (mesFiltro !== 'todos' && format(d, 'MM') !== mesFiltro) return false;
-        return true;
+        /* ⚠ O RECORTE É UM INTERVALO — comparar `'YYYY-MM'` como texto cobre o mês único
+           (de === ate), o ano inteiro e a virada de ano, sem três caminhos. */
+        return dentro(periodo, format(parseISO(l.data), 'yyyy-MM'));
       } catch { return false; }
     });
-  }, [lancamentos, anoFiltro, mesFiltro]);
+  }, [lancamentos, periodo]);
 
   const lancamentoDetalhe = detalheId ? lancamentos.find(l => l.id === detalheId) : null;
   const campos = useMemo(() => getCamposFazenda(tipo, nomeFazenda), [tipo, nomeFazenda]);
@@ -1667,8 +1670,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     const ctx = internalEditOrigin.current;
     if (ctx) {
       setAba(ctx.aba);
-      setAnoFiltro(ctx.anoFiltro);
-      setMesFiltro(ctx.mesFiltro);
+      setPeriodo(ctx.periodo);
       setStatusOp(ctx.statusOp);
       setTipo(ctx.tipo);
       internalEditOrigin.current = null;
@@ -1683,8 +1685,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     const ctx = internalEditOrigin.current;
     if (ctx) {
       setAba(ctx.aba);
-      setAnoFiltro(ctx.anoFiltro);
-      setMesFiltro(ctx.mesFiltro);
+      setPeriodo(ctx.periodo);
       setStatusOp(ctx.statusOp);
       setTipo(ctx.tipo);
       internalEditOrigin.current = null;
@@ -1709,7 +1710,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const loadAbateForEdit = useCallback((l: Lancamento) => {
     // Save current context before switching to edit mode
     if (!onReturnFromEdit) {
-      internalEditOrigin.current = { aba, anoFiltro, mesFiltro, statusOp, tipo };
+      internalEditOrigin.current = { aba, periodo, statusOp, tipo };
     }
     // 1. Set tab & type
     setAba('saida');
@@ -1909,7 +1910,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setEditingFazendaId(l.fazendaId ?? null);
     setDetalheId(null);
     setLastSavedLancamentoId(null);
-  }, [abateFornecedores, aba, anoFiltro, mesFiltro, onReturnFromEdit]);
+  }, [abateFornecedores, aba, periodo, onReturnFromEdit]);
 
   // Auto-load abate for editing when navigated from another tab
   useEffect(() => {
@@ -2016,7 +2017,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const loadVendaForEdit = useCallback(async (l: Lancamento) => {
     // Save current context before switching to edit mode
     if (!onReturnFromEdit) {
-      internalEditOrigin.current = { aba, anoFiltro, mesFiltro, statusOp, tipo };
+      internalEditOrigin.current = { aba, periodo, statusOp, tipo };
     }
     // 1. Set tab & type
     setAba('saida');
@@ -2198,7 +2199,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setEditingFazendaId(l.fazendaId ?? null);
     setDetalheId(null);
     setLastSavedLancamentoId(null);
-  }, [abateFornecedores, clienteAtual, fazendaAtual, aba, anoFiltro, mesFiltro, onReturnFromEdit]);
+  }, [abateFornecedores, clienteAtual, fazendaAtual, aba, periodo, onReturnFromEdit]);
 
   // Auto-load venda for editing when navigated from another tab
   useEffect(() => {
@@ -2212,7 +2213,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const loadCompraForEdit = useCallback(async (l: Lancamento) => {
     // Save current context before switching to edit mode
     if (!onReturnFromEdit) {
-      internalEditOrigin.current = { aba, anoFiltro, mesFiltro, statusOp, tipo };
+      internalEditOrigin.current = { aba, periodo, statusOp, tipo };
     }
     setAba('entrada');
     setTipo('compra');
@@ -2346,12 +2347,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setEditingFazendaId(l.fazendaId ?? null);
     setDetalheId(null);
     setLastSavedLancamentoId(null);
-  }, [abateFornecedores, aba, anoFiltro, mesFiltro, onReturnFromEdit]);
+  }, [abateFornecedores, aba, periodo, onReturnFromEdit]);
 
   // ── Transferência Saída — load for edit ──
   const loadTransferenciaForEdit = useCallback((l: Lancamento) => {
     if (!onReturnFromEdit) {
-      internalEditOrigin.current = { aba, anoFiltro, mesFiltro, statusOp, tipo };
+      internalEditOrigin.current = { aba, periodo, statusOp, tipo };
     }
     setAba('saida');
     setTipo('transferencia_saida');
@@ -2389,7 +2390,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setEditingFazendaId(l.fazendaId ?? null);
     setDetalheId(null);
     setLastSavedLancamentoId(null);
-  }, [aba, anoFiltro, mesFiltro, onReturnFromEdit]);
+  }, [aba, periodo, onReturnFromEdit]);
 
   // Auto-load compra for editing when navigated from another tab
   useEffect(() => {
@@ -2408,7 +2409,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   // ── Morte: load into form for editing ──
   const loadMorteForEdit = useCallback((l: Lancamento) => {
     if (!onReturnFromEdit) {
-      internalEditOrigin.current = { aba, anoFiltro, mesFiltro, statusOp, tipo };
+      internalEditOrigin.current = { aba, periodo, statusOp, tipo };
     }
     setAba('saida');
     setTipo('morte');
@@ -2430,7 +2431,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setEditingFazendaId(l.fazendaId ?? null);
     setDetalheId(null);
     setLastSavedLancamentoId(null);
-  }, [aba, anoFiltro, mesFiltro, onReturnFromEdit]);
+  }, [aba, periodo, onReturnFromEdit]);
 
   useEffect(() => {
     if (morteParaEditar) {
@@ -2441,7 +2442,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   // ── Consumo: load into form for editing ──
   const loadConsumoForEdit = useCallback((l: Lancamento) => {
     if (!onReturnFromEdit) {
-      internalEditOrigin.current = { aba, anoFiltro, mesFiltro, statusOp, tipo };
+      internalEditOrigin.current = { aba, periodo, statusOp, tipo };
     }
     setAba('saida');
     setTipo('consumo');
@@ -2460,7 +2461,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setEditingFazendaId(l.fazendaId ?? null);
     setDetalheId(null);
     setLastSavedLancamentoId(null);
-  }, [aba, anoFiltro, mesFiltro, onReturnFromEdit]);
+  }, [aba, periodo, onReturnFromEdit]);
 
   useEffect(() => {
     if (consumoParaEditar) {
@@ -5466,12 +5467,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               botão da fita. */}
           <SeletorPeriodo
             className="flex-1"
-            permiteAnoTodo
             anos={anosDisponiveis}
-            ano={anoFiltro}
-            onAnoChange={setAnoFiltro}
-            mes={mesFiltro === 'todos' ? 0 : Number(mesFiltro)}
-            onMesChange={(m) => setMesFiltro(m === 0 ? 'todos' : String(m).padStart(2, '0'))}
+            periodo={periodo}
+            onPeriodoChange={setPeriodo}
           />
         </div>
       </div>

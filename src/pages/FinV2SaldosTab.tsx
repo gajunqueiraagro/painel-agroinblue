@@ -35,8 +35,8 @@ import {
 } from '@/lib/financeiro/conciliacaoCalc';
 import { buildSaldosAnosDisponiveis, buildUnifiedSaldos } from '@/lib/financeiro/saldosBancarios';
 import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
-import { useFiltroUrl } from '@/v2/hooks/useFiltroUrl';
-import { ANO_URL, MES_URL_ALL } from '@/v2/lib/periodoUrl';
+import { usePeriodoUrl } from '@/v2/hooks/usePeriodoUrl';
+import { anoInteiro, anoMes as anoMesDo, ehMesUnico } from '@/v2/lib/periodo';
 
 /* ── types ── */
 interface SaldoBancario {
@@ -128,12 +128,14 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
   const [editing, setEditing] = useState<SaldoBancario | null>(null);
 
   const [anosDisponiveis, setAnosDisponiveis] = useState<string[]>([String(new Date().getFullYear())]);
-  /* ⚠ O PERÍODO MORA NA URL — PR-BARRA-UNICA-01c. Default idêntico: ano corrente e
-     "Todos" (`__all__`), que aqui governa o bloco de totais por tipo de conta. */
-  const [filtroAno, setFiltroAno] = useFiltroUrl(
-    'f_ano', String(new Date().getFullYear()), ANO_URL.ler, ANO_URL.escrever);
-  const [filtroMes, setFiltroMes] = useFiltroUrl(
-    'f_mes', '__all__', MES_URL_ALL.ler, MES_URL_ALL.escrever);
+  /* ⚠ O `__all__` ERA O ANO INTEIRO, e esta tela já filtrava por INTERVALO antes deste PR:
+     `>= ${ano}-01` e `<= ${ano}-12`. O token só existia para dizer "não é um mês"; com o
+     período sendo um intervalo de verdade, ele deixa de ser necessário e o filtro passa a
+     poder recortar qualquer faixa, não só o ano fechado. Default idêntico. */
+  const [periodo, setPeriodo] = usePeriodoUrl(anoInteiro(new Date().getFullYear()));
+  const filtroAno = String(periodo.de.ano);
+  const anoMesMin = anoMesDo(periodo.de);
+  const anoMesMax = anoMesDo(periodo.ate);
 
   // Load dynamic years from V2 + legado + lançamentos
   useEffect(() => {
@@ -226,15 +228,9 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
         movSummary: movSummaryData,
       }) as SaldoBancario[];
 
-      const filtered = unifiedAll.filter((saldo) => {
-        if (filtroMes === '__all__') {
-          return saldo.ano_mes >= `${filtroAno}-01` && saldo.ano_mes <= `${filtroAno}-12`;
-        }
-        return saldo.ano_mes === `${filtroAno}-${filtroMes}`;
-      });
+      const filtered = unifiedAll.filter(
+        (saldo) => saldo.ano_mes >= anoMesMin && saldo.ano_mes <= anoMesMax);
 
-      const anoMesMin = filtroMes === '__all__' ? `${filtroAno}-01` : `${filtroAno}-${filtroMes}`;
-      const anoMesMax = filtroMes === '__all__' ? `${filtroAno}-12` : `${filtroAno}-${filtroMes}`;
       const detailedLancamentos: ConciliacaoLancamentoBase[] = [];
       const batchSize = 1000;
       let from = 0;
@@ -265,7 +261,7 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
     } finally {
       setLoading(false);
     }
-  }, [clienteAtual?.id, filtroAno, filtroMes]);
+  }, [clienteAtual?.id, anoMesMin, anoMesMax, filtroAno]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -812,15 +808,12 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
                 `0` do componente; o resto da tela continua lendo `filtroMes` como sempre. */}
             <SeletorPeriodo
               className="flex-1"
-              permiteAnoTodo
               anos={anosDisponiveis}
-              ano={filtroAno}
-              onAnoChange={setFiltroAno}
-              mes={filtroMes === '__all__' ? 0 : Number(filtroMes)}
-              onMesChange={(m) => setFiltroMes(m === 0 ? '__all__' : String(m).padStart(2, '0'))}
+              periodo={periodo}
+              onPeriodoChange={setPeriodo}
             />
 
-            {!loading && saldos.length > 0 && filtroMes !== '__all__' && (
+            {!loading && saldos.length > 0 && ehMesUnico(periodo) && (
               <div className="flex items-center gap-2">
                 {grouped.map(g => (
                   <div key={g.tipo} className="border border-border rounded-md px-3 py-1">

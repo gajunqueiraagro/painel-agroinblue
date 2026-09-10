@@ -19,8 +19,8 @@ import { KpiCard } from '@/components/indicadores/KpiCard';
 import { GmdDetalheSheet } from '@/components/indicadores/GmdDetalheSheet';
 import { useFechamentoCompetencia } from '@/hooks/useFechamentoCompetencia';
 import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
-import { useFiltroUrl } from '@/v2/hooks/useFiltroUrl';
-import { ANO_URL, MES_URL_2D } from '@/v2/lib/periodoUrl';
+import { usePeriodoUrl } from '@/v2/hooks/usePeriodoUrl';
+import { mesUnico } from '@/v2/lib/periodo';
 
 
 interface Props {
@@ -54,11 +54,16 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
      arquivo que prometia no nome uma persistência que nunca teve: era `return useState(...)`
      e nada mais. Ele foi apagado junto — sem chamador, seria promessa órfã. O default é o
      mesmo: ano e mês correntes. */
-  const [anoFiltro, setAnoFiltro] = useFiltroUrl(
-    'f_ano', anoInicial || String(new Date().getFullYear()), ANO_URL.ler, ANO_URL.escrever);
-  const [mesFiltro, setMesFiltro] = useFiltroUrl(
-    'f_mes', mesInicial || String(new Date().getMonth() + 1).padStart(2, '0'),
-    MES_URL_2D.ler, MES_URL_2D.escrever);
+  /* ⚠ UM MÊS, SEMPRE — `modoUnico`. Esta tela manda `(ano, mes)` para dentro do
+     `useIndicadoresZootecnicos` e pergunta `mesFechado(mes)`: são perguntas de um mês só, e
+     um intervalo aqui seria um filtro que a tela não sabe honrar. O vocabulário `'01'..'12'`
+     continua sendo o dela; a tradução mora na borda. */
+  const [periodo, setPeriodo] = usePeriodoUrl(mesUnico(
+    Number(anoInicial) || new Date().getFullYear(),
+    Number(mesInicial) || new Date().getMonth() + 1,
+  ));
+  const anoFiltro = String(periodo.de.ano);
+  const mesFiltro = String(periodo.de.mes).padStart(2, '0');
 
   const ind = useIndicadoresZootecnicos(
     fazendaId, Number(anoFiltro), Number(mesFiltro),
@@ -107,11 +112,10 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
             componente fala acontece na borda, e o formato gravado não muda. */}
         <SeletorPeriodo
           className="flex-1"
+          modoUnico
           anos={anosDisponiveis}
-          ano={anoFiltro}
-          onAnoChange={setAnoFiltro}
-          mes={Number(mesFiltro)}
-          onMesChange={(m) => setMesFiltro(String(m).padStart(2, '0'))}
+          periodo={periodo}
+          onPeriodoChange={setPeriodo}
         />
         {!mesSelecionadoFechado && (
           <span className="text-amber-500 text-xs" title="Mês não fechado — dados estimados por lançamentos">⚠️</span>

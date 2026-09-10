@@ -56,6 +56,7 @@ import { warnIndicadoresSemCatalogo } from '@/lib/painelConsultor/validarIndicad
 import { agregaSnapshotsGlobal } from '@/lib/painelConsultor/consolidacaoGlobal';
 import { useCliente } from '@/contexts/ClienteContext';
 import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
+import { mesUnico } from '@/v2/lib/periodo';
 
 // ─── Constants ───
 const MESES_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -2702,10 +2703,9 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
       {onPeriodoChange && (
         <div className="mb-2 px-1">
           <SeletorPeriodo
-            ano={ano}
-            onAnoChange={(a) => onPeriodoChange(a, filtroGlobal?.mes ?? new Date().getMonth() + 1)}
-            mes={filtroGlobal?.mes ?? new Date().getMonth() + 1}
-            onMesChange={(m) => onPeriodoChange(ano, m)}
+            modoUnico
+            periodo={mesUnico(Number(ano), filtroGlobal?.mes ?? new Date().getMonth() + 1)}
+            onPeriodoChange={(p) => onPeriodoChange(String(p.de.ano), p.de.mes)}
           />
         </div>
       )}

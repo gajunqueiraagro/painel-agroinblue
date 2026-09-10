@@ -35,6 +35,7 @@ import { detectarDuplicatasCrossOrigin, montarSituacaoFechamento, derivarPendenc
 import { buildUnifiedSaldos, type ContaSaldoRef, type SaldoV2SourceRow, type SaldoLegacySourceRow } from '@/lib/financeiro/saldosBancarios';
 import { ExtratoListaTab } from '@/components/financeiro-v2/ExtratoListaTab';
 import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
+import { mesUnico } from '@/v2/lib/periodo';
 // PR-MOS-2 — LotesExcelTab (Referências Operacionais antigas) desacoplado da aba Enriquecer (legado).
 
 /* ── Extended status type (adds 'parcial' to existing) ── */
@@ -827,11 +828,13 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
               que só soubesse selecionar deixaria esta tela com um seletor só dela. */}
           <SeletorPeriodo
             modo="ano-mes"
+            modoUnico
             anos={anos}
-            ano={ano}
-            onAnoChange={setAno}
-            mes={Number(selectedMes)}
-            onMesChange={(m) => setSelectedMes(String(m).padStart(2, '0'))}
+            periodo={mesUnico(Number(ano), Number(selectedMes))}
+            onPeriodoChange={(p) => {
+              setAno(String(p.de.ano));
+              setSelectedMes(String(p.de.mes).padStart(2, '0'));
+            }}
             carregando={loading}
             className="flex-1"
             tomPorMes={tomDosMeses}

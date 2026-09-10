@@ -20,13 +20,23 @@ import {
 } from '@/v2/hooks/useMovimentacoesAgregadas';
 import { MovimentacaoHistoricoModal } from '@/v2/components/MovimentacaoHistoricoModal';
 import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
+import { ehMesUnico, mesUnico, type Periodo } from '@/v2/lib/periodo';
 
 interface Props {
-  ano: number;
-  mes: number; // 1..12
-  viewMode: 'mes' | 'periodo';
-  onAnoChange?: (v: string) => void;
-  onMesChange?: (v: number) => void;
+  /**
+   * ⚠ O PERÍODO SUBSTITUIU `ano`/`mes`/`viewMode` — PR-SELETOR-PERIODO-02, decisão 2. O
+   * `viewMode` desta tela ('mes' | 'periodo') sempre foi a MESMA pergunta que o seletor
+   * agora faz, e mantê-los separados era manter dois controles para um conceito: um mês
+   * único é `viewMode='mes'`, um intervalo é `viewMode='periodo'`. Deriva-se, não se guarda.
+   *
+   * ⚠ E `onPeriodoChange` NÃO É OPCIONAL, de propósito. Ele era — e o `V2Index` não o
+   * passava: o seletor caía no modo não-controlado, gravava na URL e a tela continuava
+   * lendo as props que ninguém atualizava. Clicar num mês aqui NÃO MUDAVA O DADO, e o
+   * seletor podia exibir um mês diferente do que a tela mostrava. Prop obrigatória é o
+   * compilador impedindo a próxima montagem esquecida.
+   */
+  periodo: Periodo;
+  onPeriodoChange: (p: Periodo) => void;
 }
 
 interface CardConfig {
@@ -140,7 +150,10 @@ function getCorPrincipal(tipo: TipoMov): 'azul' | 'vermelho' {
 
 // ─── Componente principal ───────────────────────────────────────────────────
 
-export default function V2VisaoGeralRebanho({ ano, mes, viewMode, onAnoChange, onMesChange }: Props) {
+export default function V2VisaoGeralRebanho({ periodo, onPeriodoChange }: Props) {
+  const ano = periodo.de.ano;
+  const mes = periodo.ate.mes;
+  const viewMode: 'mes' | 'periodo' = ehMesUnico(periodo) ? 'mes' : 'periodo';
   const [lente, setLente] = useState<Lente>('cab');
   const [modalAberto, setModalAberto] = useState<TipoMov | null>(null);
 
@@ -149,7 +162,9 @@ export default function V2VisaoGeralRebanho({ ano, mes, viewMode, onAnoChange, o
   // Transf. Entradas é ocultado.
   const { isGlobal } = useFazenda();
 
-  const { porTipo, loading } = useMovimentacoesAgregadas({ ano, mes, viewMode, isGlobal });
+  const { porTipo, loading } = useMovimentacoesAgregadas({
+    ano, mes, viewMode, mesInicial: periodo.de.mes, isGlobal,
+  });
 
   const abrirModal = (tipo: TipoMov) => {
     const cfg = CARDS.find(c => c.id === tipo);
@@ -175,7 +190,7 @@ export default function V2VisaoGeralRebanho({ ano, mes, viewMode, onAnoChange, o
           esta é uma das telas que de fato liam aquele estado: sem o seletor aqui, ela
           ficaria sem como trocar de mês. O estado segue no `V2Index` porque é lá que os
           drills (`?fano=&fmes=`, retorno de pendência) o escrevem. */}
-      <div className="mb-2 px-1"><SeletorPeriodo ano={String(ano)} onAnoChange={onAnoChange} mes={mes} onMesChange={onMesChange} /></div>
+      <div className="mb-2 px-1"><SeletorPeriodo periodo={periodo} onPeriodoChange={onPeriodoChange} /></div>
 
     <div className="px-4 py-3 space-y-3 max-w-7xl mx-auto">
       {/* FILTRO DE LENTE */}

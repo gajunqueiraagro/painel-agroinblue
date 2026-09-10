@@ -17,8 +17,8 @@ import { useAnosDisponiveis } from '@/hooks/useAnosDisponiveis';
 import { useOperacoesComerciaisEmAndamento } from '@/hooks/useOperacoesComerciaisEmAndamento';
 import { useValorEmProjecao } from '@/hooks/useValorEmProjecao';
 import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
-import { useFiltroUrl } from '@/v2/hooks/useFiltroUrl';
-import { ANO_URL, MES_URL_TODOS } from '@/v2/lib/periodoUrl';
+import { usePeriodoUrl } from '@/v2/hooks/usePeriodoUrl';
+import { anoInteiro, descreverPeriodo, dentro, mesUnico, type Periodo } from '@/v2/lib/periodo';
 
 type StatusFiltro = 'todos' | 'realizado' | 'meta';
 type SortDir = 'asc' | 'desc' | null;
@@ -36,13 +36,13 @@ interface Props {
   filtroCategoriaInicial?: string;
   onBack?: () => void;
   drillDownLabel?: string;
-  onEditarAbate?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; anoFiltro: string; mesFiltro: string }) => void;
-  onEditarVenda?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; anoFiltro: string; mesFiltro: string }) => void;
-  onEditarCompra?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; anoFiltro: string; mesFiltro: string }) => void;
-  onEditarTransferencia?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; anoFiltro: string; mesFiltro: string }) => void;
-  onEditarReclass?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; anoFiltro: string; mesFiltro: string }) => void;
-  onEditarMorte?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; anoFiltro: string; mesFiltro: string }) => void;
-  onEditarConsumo?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; anoFiltro: string; mesFiltro: string }) => void;
+  onEditarAbate?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; periodo: Periodo }) => void;
+  onEditarVenda?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; periodo: Periodo }) => void;
+  onEditarCompra?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; periodo: Periodo }) => void;
+  onEditarTransferencia?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; periodo: Periodo }) => void;
+  onEditarReclass?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; periodo: Periodo }) => void;
+  onEditarMorte?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; periodo: Periodo }) => void;
+  onEditarConsumo?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; periodo: Periodo }) => void;
   /** Alerta contextual → navega para a Central de Operações Comerciais. */
   onVerOperacoes?: () => void;
   /**
@@ -637,16 +637,22 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
 
   /* ⚠ O PERÍODO MORA NA URL — PR-BARRA-UNICA-01c. Mesmo default de antes; o que ganha é a
      sobrevivência ao F5 e à ida e volta de uma seção. */
-  const [anoFiltro, setAnoFiltro] = useFiltroUrl(
-    'f_ano', filtroAnoInicial || String(new Date().getFullYear()), ANO_URL.ler, ANO_URL.escrever);
-  const [mesFiltro, setMesFiltro] = useFiltroUrl(
-    'f_mes', filtroMesInicial || 'todos', MES_URL_TODOS.ler, MES_URL_TODOS.escrever);
+  /* ⚠ "TODOS OS MESES" ERA O ANO INTEIRO. Default inalterado: sem período no endereço a
+     tela abre no ano corrente inteiro, como sempre abriu. */
+  const anoPadrao = Number(filtroAnoInicial) || new Date().getFullYear();
+  const [periodo, setPeriodo] = usePeriodoUrl(
+    filtroMesInicial ? mesUnico(anoPadrao, Number(filtroMesInicial)) : anoInteiro(anoPadrao));
+  const anoFiltro = String(periodo.de.ano);
   const [statusFiltro, setStatusFiltro] = useState<StatusFiltro>(normalizeStatusFiltro(filtroStatusInicial));
   const [categoriaFiltro, setCategoriaFiltro] = useState(filtroCategoriaInicial || 'todas');
 
   useEffect(() => {
-    if (filtroAnoInicial) setAnoFiltro(filtroAnoInicial);
-    if (filtroMesInicial) setMesFiltro(filtroMesInicial);
+    /* ⚠ UMA ESCRITA SÓ para ano e mês: eram duas, e a segunda lia o estado antes de a
+       primeira ter sido confirmada — o ano entrava e o mês voltava ao padrão. */
+    if (filtroAnoInicial || filtroMesInicial) {
+      const a = Number(filtroAnoInicial) || periodo.de.ano;
+      setPeriodo(filtroMesInicial ? mesUnico(a, Number(filtroMesInicial)) : anoInteiro(a));
+    }
     if (filtroStatusInicial) setStatusFiltro(normalizeStatusFiltro(filtroStatusInicial));
     if (filtroCategoriaInicial) setCategoriaFiltro(filtroCategoriaInicial);
   }, [filtroAnoInicial, filtroMesInicial, filtroStatusInicial, filtroCategoriaInicial]);
@@ -665,8 +671,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
       .filter(l => {
         try {
           const d = parseISO(l.data);
-          if (format(d, 'yyyy') !== anoFiltro) return false;
-          if (mesFiltro !== 'todos' && format(d, 'MM') !== mesFiltro) return false;
+          if (!dentro(periodo, format(d, 'yyyy-MM'))) return false;
           if (!tiposFilter.includes(l.tipo)) return false;
           const st = l.statusOperacional || 'realizado';
           if (statusFiltro === 'realizado' && (l.cenario !== 'realizado' || st !== 'realizado')) return false;
@@ -676,7 +681,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
         } catch { return false; }
       })
       .sort((a, b) => a.data.localeCompare(b.data) || a.id.localeCompare(b.id));
-  }, [lancamentosNormalizados, anoFiltro, mesFiltro, topTab, subAba, statusFiltro, categoriaFiltro]);
+  }, [lancamentosNormalizados, periodo, topTab, subAba, statusFiltro, categoriaFiltro]);
 
   /* Categories available in current type */
   const categoriasDisponiveis = useMemo(() => {
@@ -695,13 +700,10 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
   const historicoFiltrado = useMemo(() => {
     return lancamentosNormalizados.filter(l => {
       try {
-        const d = parseISO(l.data);
-        if (format(d, 'yyyy') !== anoFiltro) return false;
-        if (mesFiltro !== 'todos' && format(d, 'MM') !== mesFiltro) return false;
-        return true;
+        return dentro(periodo, format(parseISO(l.data), 'yyyy-MM'));
       } catch { return false; }
     });
-  }, [lancamentosNormalizados, anoFiltro, mesFiltro]);
+  }, [lancamentosNormalizados, periodo]);
 
   const MESES_HIST = [
     { value: 'todos', label: 'Todos' },
@@ -754,7 +756,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
       return CATEGORIAS.filter(c => cats.has(c.value));
     })();
 
-    const mesLabelHist = mesFiltro === 'todos' ? 'Todos' : (MESES_OPTIONS.find(m => m.value === mesFiltro)?.label || mesFiltro);
+    const mesLabelHist = descreverPeriodo(periodo);
     const catLabelHist = categoriaFiltro === 'todas' ? 'Todas' : (CATEGORIAS.find(c => c.value === categoriaFiltro)?.label || categoriaFiltro);
     const statusLabelHist = getStatusFiltroLabel(statusFiltro);
 
@@ -783,12 +785,9 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
                 global parou de semear as telas. `todos` é o `0` do componente. */}
             <SeletorPeriodo
               className="flex-1"
-              permiteAnoTodo
               anos={anosDisponiveis}
-              ano={anoFiltro}
-              onAnoChange={setAnoFiltro}
-              mes={mesFiltro === 'todos' ? 0 : Number(mesFiltro)}
-              onMesChange={(m) => setMesFiltro(m === 0 ? 'todos' : String(m).padStart(2, '0'))}
+              periodo={periodo}
+              onPeriodoChange={setPeriodo}
             />
             <Select value={categoriaFiltro} onValueChange={setCategoriaFiltro}>
               <SelectTrigger className="h-6 text-[10px] font-bold w-[100px] bg-card text-foreground border-border"><SelectValue placeholder="Categoria" /></SelectTrigger>
@@ -899,13 +898,13 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
               onClose={() => setDetalheId(null)}
               onEditar={(id, dados) => { onEditar(id, dados); setDetalheId(null); }}
               onRemover={(id) => { onRemover(id); setDetalheId(null); }}
-              onEditarReclass={onEditarReclass ? (l) => { setDetalheId(null); onEditarReclass(l, { subAba: 'historico' as SubAba, statusFiltro, anoFiltro, mesFiltro }); } : undefined}
-              onEditarAbate={onEditarAbate ? (l) => { setDetalheId(null); onEditarAbate(l, { subAba: subAba, statusFiltro, anoFiltro, mesFiltro }); } : undefined}
-              onEditarVenda={onEditarVenda ? (l) => { setDetalheId(null); onEditarVenda(l, { subAba: subAba, statusFiltro, anoFiltro, mesFiltro }); } : undefined}
-              onEditarCompra={onEditarCompra ? (l) => { setDetalheId(null); onEditarCompra(l, { subAba: subAba, statusFiltro, anoFiltro, mesFiltro }); } : undefined}
-              onEditarTransferencia={onEditarTransferencia ? (l) => { setDetalheId(null); onEditarTransferencia(l, { subAba: subAba, statusFiltro, anoFiltro, mesFiltro }); } : undefined}
-              onEditarMorte={onEditarMorte ? (l) => { setDetalheId(null); onEditarMorte(l, { subAba: subAba, statusFiltro, anoFiltro, mesFiltro }); } : undefined}
-              onEditarConsumo={onEditarConsumo ? (l) => { setDetalheId(null); onEditarConsumo(l, { subAba: subAba, statusFiltro, anoFiltro, mesFiltro }); } : undefined}
+              onEditarReclass={onEditarReclass ? (l) => { setDetalheId(null); onEditarReclass(l, { subAba: 'historico' as SubAba, statusFiltro, periodo }); } : undefined}
+              onEditarAbate={onEditarAbate ? (l) => { setDetalheId(null); onEditarAbate(l, { subAba: subAba, statusFiltro, periodo }); } : undefined}
+              onEditarVenda={onEditarVenda ? (l) => { setDetalheId(null); onEditarVenda(l, { subAba: subAba, statusFiltro, periodo }); } : undefined}
+              onEditarCompra={onEditarCompra ? (l) => { setDetalheId(null); onEditarCompra(l, { subAba: subAba, statusFiltro, periodo }); } : undefined}
+              onEditarTransferencia={onEditarTransferencia ? (l) => { setDetalheId(null); onEditarTransferencia(l, { subAba: subAba, statusFiltro, periodo }); } : undefined}
+              onEditarMorte={onEditarMorte ? (l) => { setDetalheId(null); onEditarMorte(l, { subAba: subAba, statusFiltro, periodo }); } : undefined}
+              onEditarConsumo={onEditarConsumo ? (l) => { setDetalheId(null); onEditarConsumo(l, { subAba: subAba, statusFiltro, periodo }); } : undefined}
             />
           ) : null;
         })()}
@@ -1025,12 +1024,9 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
               global parou de semear as telas. `todos` é o `0` do componente. */}
           <SeletorPeriodo
             className="flex-1"
-            permiteAnoTodo
             anos={anosDisponiveis}
-            ano={anoFiltro}
-            onAnoChange={setAnoFiltro}
-            mes={mesFiltro === 'todos' ? 0 : Number(mesFiltro)}
-            onMesChange={(m) => setMesFiltro(m === 0 ? 'todos' : String(m).padStart(2, '0'))}
+            periodo={periodo}
+            onPeriodoChange={setPeriodo}
           />
 
           {/* Category filter */}
@@ -1127,13 +1123,13 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
             onClose={() => setDetalheId(null)}
             onEditar={(id, dados) => { onEditar(id, dados); setDetalheId(null); }}
             onRemover={(id) => { onRemover(id); setDetalheId(null); }}
-            onEditarAbate={onEditarAbate ? (l) => { setDetalheId(null); onEditarAbate(l, { subAba, statusFiltro, anoFiltro, mesFiltro }); } : undefined}
-            onEditarVenda={onEditarVenda ? (l) => { setDetalheId(null); onEditarVenda(l, { subAba, statusFiltro, anoFiltro, mesFiltro }); } : undefined}
-            onEditarCompra={onEditarCompra ? (l) => { setDetalheId(null); onEditarCompra(l, { subAba, statusFiltro, anoFiltro, mesFiltro }); } : undefined}
-            onEditarTransferencia={onEditarTransferencia ? (l) => { setDetalheId(null); onEditarTransferencia(l, { subAba, statusFiltro, anoFiltro, mesFiltro }); } : undefined}
-            onEditarReclass={onEditarReclass ? (l) => { setDetalheId(null); onEditarReclass(l, { subAba, statusFiltro, anoFiltro, mesFiltro }); } : undefined}
-            onEditarMorte={onEditarMorte ? (l) => { setDetalheId(null); onEditarMorte(l, { subAba, statusFiltro, anoFiltro, mesFiltro }); } : undefined}
-            onEditarConsumo={onEditarConsumo ? (l) => { setDetalheId(null); onEditarConsumo(l, { subAba, statusFiltro, anoFiltro, mesFiltro }); } : undefined}
+            onEditarAbate={onEditarAbate ? (l) => { setDetalheId(null); onEditarAbate(l, { subAba, statusFiltro, periodo }); } : undefined}
+            onEditarVenda={onEditarVenda ? (l) => { setDetalheId(null); onEditarVenda(l, { subAba, statusFiltro, periodo }); } : undefined}
+            onEditarCompra={onEditarCompra ? (l) => { setDetalheId(null); onEditarCompra(l, { subAba, statusFiltro, periodo }); } : undefined}
+            onEditarTransferencia={onEditarTransferencia ? (l) => { setDetalheId(null); onEditarTransferencia(l, { subAba, statusFiltro, periodo }); } : undefined}
+            onEditarReclass={onEditarReclass ? (l) => { setDetalheId(null); onEditarReclass(l, { subAba, statusFiltro, periodo }); } : undefined}
+            onEditarMorte={onEditarMorte ? (l) => { setDetalheId(null); onEditarMorte(l, { subAba, statusFiltro, periodo }); } : undefined}
+            onEditarConsumo={onEditarConsumo ? (l) => { setDetalheId(null); onEditarConsumo(l, { subAba, statusFiltro, periodo }); } : undefined}
           />
         ) : null;
       })()}
