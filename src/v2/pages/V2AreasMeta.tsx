@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, Globe, Loader2, Save } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useFazendaCadastro, useMatriculasDoCliente } from '@/hooks/useFazendaCadastro';
@@ -135,7 +135,6 @@ export function V2AreasMeta({ ano: anoInicial }: Props = {}) {
   const clienteId = clienteAtual?.id ?? null;
   const fazendaId = isGlobal ? null : (fazendaAtual?.id ?? null);
 
-  const { toast } = useToast();
 
   // Ano local da tela: prop é string (V2Index), hook espera number.
   const anoInicialNum = useMemo(() => {
@@ -334,7 +333,7 @@ export function V2AreasMeta({ ano: anoInicial }: Props = {}) {
   async function handleSalvar() {
     if (isGlobal) return;
     if (!clienteId || !fazendaId) {
-      toast({ title: 'Selecione cliente e fazenda', variant: 'destructive' });
+      toast.error('Selecione cliente e fazenda');
       return;
     }
     // Construir payload — só os meses preenchidos com pec OU agric
@@ -351,10 +350,10 @@ export function V2AreasMeta({ ano: anoInicial }: Props = {}) {
     }
     try {
       await upsertAno(payload);
-      toast({ title: 'Áreas META salvas', description: `${payload.length} mês(es) atualizado(s).` });
+      toast.success('Áreas META salvas', { description: `${payload.length} mês(es) atualizado(s).` });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Erro ao salvar';
-      toast({ title: 'Erro ao salvar', description: msg, variant: 'destructive' });
+      toast.error('Erro ao salvar', { description: msg });
     }
   }
 

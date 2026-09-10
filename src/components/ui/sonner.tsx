@@ -9,17 +9,23 @@ const Toaster = ({ ...props }: ToasterProps) => {
   return (
     <Sonner
       theme={theme as ToasterProps["theme"]}
-      /* PR-OC-UX-LOTE-A-01 — o default do sonner e' bottom-right, e ali o toast cai
-         EXATAMENTE sobre o rodape dos modais: enquanto ele estava na tela, os botoes
-         Salvar / Confirmar / Fechar ficavam inclicaveis. O toast tem z-index proprio,
-         bem acima do Dialog, entao nao ha camada que resolva — so mudar de canto.
-         `top-center` e nao `top-right`: o X de fechar dos modais mora no canto
-         superior DIREITO, entao top-right so trocaria de vitima. No topo ao centro o
-         toast cobre a faixa de titulo, que nao tem nada clicavel.
-         ⚠ E' GLOBAL: vale para o sistema inteiro, nao so para os modais da OC.
-         Fica como prop com default, entao qualquer tela pode sobrescrever — o
-         `{...props}` abaixo vem depois e vence. */
-      position="top-center"
+      /* ⚠ VOLTOU PARA `bottom-right` — PR-TOAST-POSICAO-01, decisão do Gabriel em
+         10/09/2026. E ISTO REVERTE UMA DECISÃO ANTERIOR, que fica registrada aqui em vez
+         de apagada: o PR-OC-UX-LOTE-A-01 tinha movido o toast para `top-center` porque em
+         `bottom-right` ele caía EXATAMENTE sobre o rodapé dos modais e deixava
+         Salvar / Confirmar / Fechar inclicáveis — o toast tem z-index próprio, acima do
+         Dialog, então não há camada que resolva. A troca de volta foi pedida porque no
+         topo ele cobre a fita de meses e os campos, que é o estorvo que se vê TODO DIA;
+         o do rodapé só aparece com um modal aberto.
+         ⚠ ENTÃO O DEFEITO ANTIGO PODE VOLTAR, e o `offset` de 16px não o resolve: o
+         rodapé de um modal é bem mais alto que 16px. Se ele reaparecer, o canto não é a
+         resposta — as duas pontas já foram tentadas — e a saída é o toast recuar quando
+         há Dialog aberto, ou o rodapé ganhar a camada. Quem for mexer nisso na terceira
+         vez começa sabendo que as duas primeiras foram estas.
+         Continua sendo prop com default: o `{...props}` abaixo vem depois e vence. */
+      position="bottom-right"
+      offset="16px"
+      duration={4000}
       className="toaster group"
       toastOptions={{
         classNames: {
