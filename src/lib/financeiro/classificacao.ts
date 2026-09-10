@@ -866,7 +866,12 @@ export const somaAbs = (lancs: LancamentoClassificavel[]) =>
 
 /**
  * Ordem oficial dos centros de custo do grupo "Receita Pecuária".
- * Fonte: plano de contas (financeiro_plano_contas, ordem_exibicao 1010-1140).
+ *
+ * Ordem de LEITURA do DRE de receita pecuária: decisão de produto
+ * (Abates e Venda Peso Vivo primeiro), NÃO segue a ordem_exibicao do
+ * plano, que é alfabética por centro desde PLANO-ORDEM-01 (10/09/2026).
+ * Centros fora da lista caem ao fim com aviso.
+ *
  * REGRA: qualquer breakdown que apresente centros de Receita Pecuária
  * DEVE usar esta constante para ordenação. Centros fora desta lista
  * caem ao final em ordem alfabética com console.warn — não silenciar.
