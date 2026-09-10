@@ -277,3 +277,102 @@ Saneamento dos 41 juros (AGRI-00), regra:
 - Saca equivalente para mandioca.
 - Depreciacao dentro do resultado (COT). Entra com a frente COT/CT.
 - Terra no patrimonio.
+
+---
+
+## 6. ADENDO 10/09/2026 — decisoes que alteram o item 0
+
+### D11 — Talhao volta (revoga a parte de D3 que o excluia)
+
+Em 30/07 o Gabriel ja tinha decidido talhao como unidade minima de custo e
+producao (planilha v2 do NJ; acerto com o parceiro Wilson, 40% sobre os
+talhoes da parceria; conciliacao carga a carga com a Casul). A spec de
+06/09 o excluiu por engano. Vale o desenho abaixo.
+
+- Talhao e OBRIGATORIO em area plantada e em colheita.
+- Talhao e OPCIONAL no lancamento financeiro. Quem sabe, marca; quem nao
+  sabe, deixa vazio. Nunca trava o lancamento.
+- Custo sem talhao se distribui, NA LEITURA, pelos talhoes da safra
+  proporcional ao hectare plantado. A tela mostra direto e rateado em
+  colunas separadas. Rateio nunca e gravado no lancamento (PR-RATEIO-01).
+
+Modelo:
+
+    agri_talhoes
+      id, cliente_id, fazenda_id
+      nome        text NOT NULL          -- "Talhao 05"
+      area_ha     numeric(10,2) NOT NULL -- area fisica, nao muda por safra
+      ativo       boolean default true
+      UNIQUE (fazenda_id, nome)
+
+    agri_safra_area   -> ganha talhao_id NOT NULL; UNIQUE (safra_id, talhao_id)
+    agri_colheita     -> ganha talhao_id NOT NULL
+    financeiro_lancamentos_v2 -> ganha talhao_id NULL (FIN-SAFRA-01)
+
+Fila (substitui a tabela do item 4 no que conflita):
+    AGRI-01  cultura + datas em financeiro_safras
+    AGRI-01b agri_talhoes + tela de cadastro
+    AGRI-02  agri_safra_area por talhao + tela
+    AGRI-03  agri_colheita por talhao + tela
+    o resto inalterado.
+
+Saca de amendoim = 25 kg (conferido nos relatorios da Casul, OC_013).
+
+### D12 — Plano de contas de lavoura (aprovado 10/09; substitui 2.6)
+
+Mantem natureza do gasto. Nada de etapa/talhao/operacao como conta.
+
+MOVER (3) — de Custo Fixo Agricultura para Custo Variavel Agricultura:
+    11030 Combustivel Maquinas Agricultura   -> centro Operacoes Mecanizadas
+    11120 Manutencao Maquinas Agricultura    -> centro Operacoes Mecanizadas
+    13010 Armazenagem Agricola               -> centro Pos-Colheita (ja variavel)
+
+CRIAR (9):
+    2070  Receita Agricola › Venda Producao     Venda de Mandioca
+    10030 Deducoes Agricultura › Impostos       Impostos e Despesas de Vendas Agricultura
+    13130 Variavel › Insumos                    Corretivos de Solo
+    13140 Variavel › Operacoes Mecanizadas      Servicos Mecanizados Terceirizados
+    13150 Variavel › Mao de Obra Direta         Diaristas e Empreita Lavoura
+    13160 Variavel › Pos-Colheita               Secagem e Beneficiamento
+    13170 Variavel › Terra                      Arrendamento de Area Agricola
+    13180 Variavel › Servicos                   Assistencia Tecnica Agricola
+    13190 Variavel › Insumos                    Manivas e Material de Propagacao
+Todos escopo agricultura, compoe_dre sim, gera_lcdpr conforme o padrao do
+grupo. Ordens conferidas no banco em 10/09: sem colisao. O .md do Knowledge esta
+com numeracao defasada; a migration referencia por nome de subcentro.
+
+Fixo x variavel: se dobrar a area plantada e o gasto dobra, e variavel.
+Diesel de preparo/plantio/tratos/colheita = variavel. Diesel de abertura
+de area nova = investimento (formacao). Diesel de caminhonete/sede = fixo.
+Na pecuaria combustivel e manutencao continuam em fixo (nao crescem com
+cabecas). Fixo x variavel nao muda o resultado; muda custo/ha e ponto de
+equilibrio.
+
+DRE agricola resultante (item 3.1 passa a ter Margem Bruta):
+    Receita liquida
+    - Insumos / Operacoes mecanizadas / Mao de obra direta /
+      Pos-colheita / Comercializacao / Terra, seguro, assistencia
+    = MARGEM BRUTA (por ha e por talhao)
+    - Custo fixo / Juros
+    = RESULTADO OPERACIONAL (COE)
+    - Investimentos (linha separada)
+    = Resultado apos investimentos
+
+Entrega: PLANO-01 (migration + regerar o .md do Knowledge a partir do
+banco) sobe na fila: e pre-requisito do saneamento AGRI-00, nao a ultima.
+
+### D13 — Card de Atividade no modal de lancamento
+
+escopo_negocio ja existe no lancamento como copia do plano. Passa a ser
+escolhido ANTES do subcentro: card "Atividade" com pilulas Pecuaria ·
+Lavoura · Silvicultura · Administrativo, pre-selecionado pela ultima usada.
+O combo de subcentro filtra pelo escopo escolhido. Administrativo nao
+recebe safra (OC_013). Nenhuma coluna nova. Entra no FIN-SAFRA-01, que ja
+mexe no mesmo modal.
+
+### Regra de codigo registrada em 10/09 (EXPORT-FINANCEIRO-02)
+
+Prop que alimenta tela e OBRIGATORIA. Opcional so quando a tela tem
+comportamento definido sem ela. Duas falhas na mesma sessao (SELETOR-
+PERIODO-02, EXPORT-FINANCEIRO-01) foram prop opcional que ninguem passou.
+Registrar em docs/PADROES-UI.md no proximo PR que o tocar.
