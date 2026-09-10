@@ -322,24 +322,42 @@ Saca de amendoim = 25 kg (conferido nos relatorios da Casul, OC_013).
 
 Mantem natureza do gasto. Nada de etapa/talhao/operacao como conta.
 
-MOVER (3) — de Custo Fixo Agricultura para Custo Variavel Agricultura:
-    11030 Combustivel Maquinas Agricultura   -> centro Operacoes Mecanizadas
-    11120 Manutencao Maquinas Agricultura    -> centro Operacoes Mecanizadas
-    13010 Armazenagem Agricola               -> centro Pos-Colheita (ja variavel)
+MOVER (3) — de Custo Fixo Agricultura para Custo Variavel Agricultura
+(aplicado em PLANO-01, 20260910150000; referencia por NOME de subcentro):
+    Combustivel Maquinas Agricultura   -> centro Operacoes Mecanizadas
+    Manutencao Maquinas Agricultura    -> centro Operacoes Mecanizadas
+    Armazenagem Agricola Agricultura   -> centro Pos-Colheita (ja variavel)
 
-CRIAR (9):
-    2070  Receita Agricola › Venda Producao     Venda de Mandioca
-    10030 Deducoes Agricultura › Impostos       Impostos e Despesas de Vendas Agricultura
-    13130 Variavel › Insumos                    Corretivos de Solo
-    13140 Variavel › Operacoes Mecanizadas      Servicos Mecanizados Terceirizados
-    13150 Variavel › Mao de Obra Direta         Diaristas e Empreita Lavoura
-    13160 Variavel › Pos-Colheita               Secagem e Beneficiamento
-    13170 Variavel › Terra                      Arrendamento de Area Agricola
-    13180 Variavel › Servicos                   Assistencia Tecnica Agricola
-    13190 Variavel › Insumos                    Manivas e Material de Propagacao
+CRIAR (9) (aplicado em PLANO-01):
+    Receita Agricola › Venda Producao       Venda de Mandioca
+    Deducoes Agricultura › Impostos         Impostos e Despesas de Vendas Agricultura
+    Variavel › Operacoes Mecanizadas        Servicos Mecanizados Terceirizados
+    Variavel › Insumos                      Corretivos de Solo
+    Variavel › Insumos                      Manivas e Material de Propagacao
+    Variavel › Mao de Obra Direta           Diaristas e Empreita Lavoura
+    Variavel › Pos-Colheita                 Secagem e Beneficiamento
+    Variavel › Terra                        Arrendamento de Area Agricola
+    Variavel › Servicos                     Assistencia Tecnica Agricola
 Todos escopo agricultura, compoe_dre sim, gera_lcdpr conforme o padrao do
-grupo. Ordens conferidas no banco em 10/09: sem colisao. O .md do Knowledge esta
-com numeracao defasada; a migration referencia por nome de subcentro.
+grupo.
+
+Ordens (ordem_exibicao) FINAIS apos PLANO-ORDEM-01 (20260910180000),
+que renumerou todos os grupos por centro a-z › subcentro a-z:
+    2040  Venda de Mandioca
+    10030 Impostos e Despesas de Vendas Agricultura
+    13020 Corretivos de Solo
+    13050 Manivas e Material de Propagacao
+    13100 Diaristas e Empreita Lavoura
+    13140 Combustivel Maquinas Agricultura
+    13150 Manutencao Maquinas Agricultura
+    13160 Servicos Mecanizados Terceirizados
+    13170 Armazenagem Agricola Agricultura
+    13180 Secagem e Beneficiamento
+    13190 Assistencia Tecnica Agricola
+    13200 Arrendamento de Area Agricola
+Regra permanente: migration referencia subcentro por NOME, nunca por
+ordem; a ordem e exibicao e pode ser renumerada. A fonte da numeracao e
+o banco; o .md do Knowledge e gerado dele.
 
 Fixo x variavel: se dobrar a area plantada e o gasto dobra, e variavel.
 Diesel de preparo/plantio/tratos/colheita = variavel. Diesel de abertura
