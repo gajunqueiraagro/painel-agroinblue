@@ -9,7 +9,7 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { SeletorPeriodo } from './SeletorPeriodo';
+import { CARA, SeletorPeriodo } from './SeletorPeriodo';
 import { mesUnico, type Periodo } from '@/v2/lib/periodo';
 
 /** As propriedades que MOVEM as coisas. Cor não está aqui, de propósito. */
@@ -72,21 +72,20 @@ describe('seleção', () => {
     expect(onPeriodoChange).toHaveBeenCalledWith(mesUnico(2026, 8));
   });
 
-  it('no modo Período, o primeiro clique não muda nada e o segundo fecha', () => {
+  it('NÃO existe toggle "Mês | Período" — clicar num mês é sempre um mês', () => {
+    /* ⚠ O toggle pedia a INTENÇÃO antes do gesto e cobrava esse preço em toda interação
+       para servir à minoria delas. Faixa se faz pelo "Personalizado…". */
     const { onPeriodoChange } = montar(mesUnico(2026, 3));
-    fireEvent.click(screen.getByText('Período'));
+    expect(screen.queryByText('Período')).toBeNull();
+    expect(screen.queryByText('Mês')).toBeNull();
     fireEvent.click(screen.getByText('Fev'));
-    expect(onPeriodoChange).not.toHaveBeenCalled();
-    expect(screen.getByText(/Início fev\/2026/)).toBeTruthy();
-    fireEvent.click(screen.getByText('Abr'));
-    expect(onPeriodoChange).toHaveBeenCalledWith({ de: { ano: 2026, mes: 2 }, ate: { ano: 2026, mes: 4 } });
+    expect(onPeriodoChange).toHaveBeenCalledWith(mesUnico(2026, 2));
   });
 
-  it('clicar o fim antes do início devolve o intervalo em ordem', () => {
+  it('clicar o fim antes do início devolve o intervalo em ordem (pelo shift)', () => {
     const { onPeriodoChange } = montar(mesUnico(2026, 3));
-    fireEvent.click(screen.getByText('Período'));
-    fireEvent.click(screen.getByText('Set'));
-    fireEvent.click(screen.getByText('Mar'));
+    fireEvent.click(screen.getByText('Set'), { shiftKey: true });
+    fireEvent.click(screen.getByText('Mar'), { shiftKey: true });
     expect(onPeriodoChange).toHaveBeenCalledWith({ de: { ano: 2026, mes: 3 }, ate: { ano: 2026, mes: 9 } });
   });
 
@@ -98,9 +97,9 @@ describe('seleção', () => {
     expect(onPeriodoChange).toHaveBeenCalledWith({ de: { ano: 2026, mes: 2 }, ate: { ano: 2026, mes: 5 } });
   });
 
-  it('em modoUnico não há toggle, e o shift não abre exceção', () => {
+  it('em modoUnico não há "Ano" nem "Personalizado…", e o shift não abre exceção', () => {
     const { onPeriodoChange } = montar(mesUnico(2026, 3), { modoUnico: true });
-    expect(screen.queryByText('Período')).toBeNull();
+    expect(screen.queryByText('Ano')).toBeNull();
     expect(screen.queryByText('Personalizado…')).toBeNull();
     fireEvent.click(screen.getByText('Jul'), { shiftKey: true });
     expect(onPeriodoChange).toHaveBeenCalledWith(mesUnico(2026, 7));
@@ -108,14 +107,15 @@ describe('seleção', () => {
 });
 
 describe('a frase', () => {
-  it('mês único se escreve por extenso', () => {
+  it('no mês único NÃO há frase — a fita já diz qual é', () => {
     montar(mesUnico(2026, 8));
-    expect(screen.getByText('Mostrando agosto/2026')).toBeTruthy();
+    expect(screen.queryByText(/Mostrando/)).toBeNull();
   });
 
-  it('intervalo no ano traz a contagem', () => {
+  it('intervalo traz a contagem, em cinza claro', () => {
     montar({ de: { ano: 2026, mes: 2 }, ate: { ano: 2026, mes: 4 } });
-    expect(screen.getByText('Mostrando fev → abr/2026 · 3 meses')).toBeTruthy();
+    const el = screen.getByText('Mostrando fev → abr/2026 · 3 meses');
+    expect(el.className).toContain('text-muted-foreground');
   });
 
   it('intervalo entre anos mostra os dois anos e desabilita a fita', () => {
@@ -132,3 +132,113 @@ describe('a frase', () => {
     expect(screen.getByLabelText('Voltar ao mês corrente')).toBeTruthy();
   });
 });
+
+describe('cores por estado — A24 corrigida', () => {
+  /* ⚠ O PAPEL, NÃO O CSS. Medido: o jsdom DESCARTA `background: hsl(var(--primary))` ao
+     parsear, e o valor nunca chega ao DOM — um teste que lesse `style.background` compararia
+     `''` com `'hsl(...)'`, e a versão negativa (`.not.toBe`) passaria sem olhar nada. Prende-se
+     a regra (`data-papel`) e, à parte, a tabela que a traduz em cor. */
+  const papel = (rotulo: string) => screen.getByText(rotulo).getAttribute('data-papel');
+
+  it('a tabela traduz papel em cor: quanto mais escolhido, mais escuro', () => {
+    expect(CARA.extremo.background).toBe('hsl(var(--primary))');
+    expect(CARA.extremo.color).toBe('#fff');
+    expect(CARA.meio.background).toBe('#dbe7f5');
+    expect(CARA.meio.color).toBe('hsl(var(--primary))');
+    expect(CARA.fora.background).toBe('hsl(var(--card))');
+    /* O defeito que o operador viu era exatamente estes dois trocados. */
+    expect(CARA.extremo.background).not.toBe(CARA.fora.background);
+    expect(CARA.meio.background).not.toBe(CARA.fora.background);
+  });
+
+  it('mês único: só o escolhido é extremo; o resto fica fora', () => {
+    montar(mesUnico(2026, 4));
+    expect(papel('Abr')).toBe('extremo');
+    expect(papel('Mai')).toBe('fora');
+    expect(screen.getByText('Abr').style.color).toBe('rgb(255, 255, 255)');
+  });
+
+  it('faixa: extremos nos dois cantos, meio no miolo, fora no resto', () => {
+    montar({ de: { ano: 2026, mes: 2 }, ate: { ano: 2026, mes: 4 } });
+    expect(papel('Fev')).toBe('extremo');
+    expect(papel('Abr')).toBe('extremo');
+    expect(papel('Mar')).toBe('meio');
+    expect(papel('Jan')).toBe('fora');
+    expect(papel('Mai')).toBe('fora');
+  });
+
+  it('NENHUM mês da faixa fica "fora" — é o defeito que o operador viu', () => {
+    montar({ de: { ano: 2026, mes: 1 }, ate: { ano: 2026, mes: 5 } });
+    for (const r of ['Jan', 'Fev', 'Mar', 'Abr', 'Mai']) {
+      expect(papel(r)).not.toBe('fora');
+    }
+  });
+});
+
+describe('"Ano" — o recorte que não tem extremos', () => {
+  it('existe, e um clique devolve janeiro a dezembro', () => {
+    const { onPeriodoChange } = montar(mesUnico(2026, 4));
+    fireEvent.click(screen.getByText('Ano'));
+    expect(onPeriodoChange).toHaveBeenCalledWith({ de: { ano: 2026, mes: 1 }, ate: { ano: 2026, mes: 12 } });
+  });
+
+  it('com o ano inteiro, os DOZE são "meio" e quem fica "extremo" é o botão "Ano"', () => {
+    /* ⚠ Pela regra geral, Jan e Dez seriam extremos — sugerindo que alguém escolheu janeiro
+       e dezembro. Ninguém escolheu: escolheu-se o ano. */
+    montar({ de: { ano: 2026, mes: 1 }, ate: { ano: 2026, mes: 12 } });
+    for (const r of ['Jan', 'Jun', 'Dez']) {
+      expect(screen.getByText(r).getAttribute('data-papel')).toBe('meio');
+    }
+    const botaoAno = screen.getByText('Ano');
+    expect(botaoAno.getAttribute('data-papel')).toBe('extremo');
+    expect(botaoAno.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('fora do ano inteiro, o "Ano" fica "fora"', () => {
+    montar(mesUnico(2026, 4));
+    expect(screen.getByText('Ano').getAttribute('data-papel')).toBe('fora');
+    expect(screen.getByText('Ano').getAttribute('aria-pressed')).toBe('false');
+  });
+});
+
+describe('nada por cima de nada — item C', () => {
+  /* ⚠ `getBoundingClientRect` devolve zero no jsdom: comparar retângulos ali provaria que
+     0 não sobrepõe 0. O que de fato garante a ausência de sobreposição é a ESTRUTURA — dois
+     itens flex irmãos não têm como se cobrir —, e é isso que se prende aqui. O teste de
+     retângulos no navegador confirma; não é ele que garante. */
+  it('"Ano" e "Personalizado…" ficam FORA do scrollport da fita', () => {
+    const { container } = render(
+      <SeletorPeriodo periodo={mesUnico(2026, 4)} onPeriodoChange={() => {}} />);
+    const fita = container.querySelector('.overflow-x-auto');
+    expect(fita).toBeTruthy();
+    expect(fita!.contains(screen.getByText('Jan'))).toBe(true);
+    expect(fita!.contains(screen.getByText('Ano'))).toBe(false);
+    expect(fita!.contains(screen.getByText('Personalizado…'))).toBe(false);
+  });
+
+  it('nenhum controle é posicionado absoluto — não há como um cobrir o outro', () => {
+    const { container } = render(
+      <SeletorPeriodo periodo={mesUnico(2026, 4)} onPeriodoChange={() => {}} />);
+    for (const el of Array.from(container.querySelectorAll('button, div'))) {
+      const pos = (el as HTMLElement).style.position;
+      expect(pos === '' || pos === 'relative' || pos === 'static').toBe(true);
+    }
+  });
+
+  it('a linha oferece os 15 controles: ano, os doze meses, Ano e Personalizado', () => {
+    const { container } = render(
+      <SeletorPeriodo periodo={mesUnico(2026, 4)} onPeriodoChange={() => {}} />);
+    expect(container.querySelectorAll('button').length).toBe(15);
+  });
+
+  it('altura 28px, e ela não muda ao selecionar', () => {
+    const { rerender } = montar(mesUnico(2026, 3));
+    const antes = screen.getByText('Abr').style.height;
+    rerender(mesUnico(2026, 4));
+    const depois = screen.getByText('Abr').style.height;
+    expect(antes).toBe('28px');
+    expect(depois).toBe('28px');
+    expect(screen.getByText('Ano').style.height).toBe('28px');
+  });
+});
+

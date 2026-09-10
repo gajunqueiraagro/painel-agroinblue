@@ -33,8 +33,8 @@ import { X } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  MESES_CURTOS, anoMes, contarMeses, descreverDias, descreverPeriodo, ehMesUnico,
-  mesCorrente, mesUnico, ordenar, type Periodo,
+  MESES_CURTOS, anoInteiro, anoMes, contarMeses, descreverDias, descreverPeriodo,
+  ehAnoInteiro, ehMesUnico, mesCorrente, mesUnico, ordenar, type Periodo,
 } from '@/v2/lib/periodo';
 
 export { MESES_CURTOS };
@@ -70,6 +70,29 @@ const MEIO_BG = '#dbe7f5';
 const MEIO_BORDA = '#b6cbe6';
 const CHIP_MARCADO_BG = '#eef3fa';
 
+const ALTURA = 28;
+
+/**
+ * As quatro caras de um botão da fita — A24 corrigida em PR-SELETOR-PERIODO-03.
+ *
+ * ⚠ ESTAVA INVERTIDO, e o efeito era o pior possível: o mês ESCOLHIDO saía BRANCO e o meio
+ * da faixa saía azul. Quem clicava em Abr via Abr virar fundo e o vizinho virar cor — o
+ * selecionado se confundindo com o que não foi selecionado. A regra é uma frase: quanto
+ * mais escolhido, mais escuro. Extremo azul cheio, meio azul claro, fora branco.
+ *
+ * ⚠ EXPORTADA, E CADA BOTÃO CARREGA `data-papel`, porque a cor NÃO SE PROVA no jsdom:
+ * medido, ele descarta `background: hsl(var(--primary))` na hora de parsear e o valor nunca
+ * chega ao DOM — um teste que lesse `style.background` afirmaria `'' !== branco` e passaria
+ * sem olhar nada. O que se prende então é o PAPEL (extremo / meio / fora), que é a regra de
+ * verdade, mais esta tabela, que é a tradução. O `data-papel` também dá ao navegador uma
+ * asa para a conferência visual da homologação.
+ */
+export const CARA = {
+  extremo: { background: 'hsl(var(--primary))', borderColor: 'hsl(var(--primary))', color: '#fff' },
+  meio: { background: MEIO_BG, borderColor: MEIO_BORDA, color: 'hsl(var(--primary))' },
+  fora: { background: 'hsl(var(--card))', borderColor: 'hsl(var(--border) / 0.6)', color: 'hsl(var(--foreground))' },
+} as const;
+
 /**
  * ⚠ A FITA — `min-w-0` E `overflow-x-auto` SÃO O MESMO PEDIDO POR DOIS LADOS. A linha não
  * quebra entre o ano e os meses (A25, estado 6), e para não quebrar ela precisa poder ser
@@ -79,12 +102,13 @@ const CHIP_MARCADO_BG = '#eef3fa';
 const FITA = 'flex min-w-0 flex-1 gap-1 overflow-x-auto';
 
 const BOTAO_BASE: React.CSSProperties = {
-  flex: '1 0 58px', height: 32, textAlign: 'center', padding: '0 4px',
-  fontSize: 12, fontWeight: 500, borderRadius: 8, borderWidth: 1, borderStyle: 'solid',
+  flex: '1 0 44px', height: ALTURA, textAlign: 'center', padding: '0 4px',
+  fontSize: 11, fontWeight: 500, borderRadius: 8, borderWidth: 1, borderStyle: 'solid',
   cursor: 'pointer', lineHeight: 1, transition: 'background-color .12s, border-color .12s',
 };
 
-type Segmento = 'mes' | 'periodo';
+/** "Ano" usa a MESMA régua dos meses — só a largura é fixa, porque ele não é um dos doze. */
+const BOTAO_ANO: React.CSSProperties = { ...BOTAO_BASE, flex: '0 0 44px' };
 
 export function SeletorPeriodo({
   modo = 'ano-mes', modoUnico, anos, periodo, onPeriodoChange, tomPorMes,
@@ -93,23 +117,24 @@ export function SeletorPeriodo({
   const hoje = new Date();
   const entreAnos = periodo.de.ano !== periodo.ate.ano;
 
-  /* ⚠ O SEGMENTO É DE QUEM OLHA, NÃO DO DADO. Um intervalo já escolhido abre em "Período"
-     porque é o que ele é; mas escolher "Período" e ainda não ter clicado nada não muda
-     período nenhum — por isso o modo é estado local, e o valor só sai daqui quando os dois
-     cliques acontecem. */
-  const [segmento, setSegmento] = useState<Segmento>(() => (ehMesUnico(periodo) ? 'mes' : 'periodo'));
+  /* ⚠ O TOGGLE "MÊS | PERÍODO" SAIU — PR-SELETOR-PERIODO-03. Ele pedia que o operador
+     declarasse a INTENÇÃO antes de agir, e cobrava esse preço em toda interação para servir
+     à minoria delas: clicar num mês é o gesto de sempre, e faixa se faz pelo
+     "Personalizado…". Ele ainda ocupava a ponta direita da linha, e a fita rolava POR BAIXO
+     — meses desapareciam atrás de um controle que existia para não ser usado.
+     ⚠ O estado do segmento morreu junto: não há mais o que lembrar entre renders. O que
+     resta é `inicioParcial`, e ele só existe pelo atalho do shift. */
   const [inicioParcial, setInicioParcial] = useState<{ ano: number; mes: number } | null>(null);
   const [popoverAberto, setPopoverAberto] = useState(false);
 
-  /* Um período que chega de fora (link, drill, F5) manda no segmento. */
+  /* Um período que chega de fora (link, drill, F5) descarta um shift pela metade. */
   const chave = `${anoMes(periodo.de)}|${anoMes(periodo.ate)}`;
   const chaveAnterior = useRef(chave);
   useEffect(() => {
     if (chaveAnterior.current === chave) return;
     chaveAnterior.current = chave;
     setInicioParcial(null);
-    if (!ehMesUnico(periodo)) setSegmento('periodo');
-  }, [chave, periodo]);
+  }, [chave]);
 
   const listaAnos = useMemo(() => {
     if (anos && anos.length) return anos;
@@ -133,9 +158,8 @@ export function SeletorPeriodo({
   const clicarMes = (m: number, comShift: boolean) => {
     const ano = periodo.de.ano;
     /* ⚠ SHIFT É ATALHO ESCONDIDO — não aparece na tela, de propósito: quem já sabe usa, e
-       quem não sabe tem o toggle, que ensina. Documentar os dois seria ensinar duas
-       maneiras de fazer a mesma coisa. */
-    const querPeriodo = !modoUnico && (segmento === 'periodo' || comShift);
+       quem não sabe tem o "Personalizado…", que mostra os dois extremos por escrito. */
+    const querPeriodo = !modoUnico && comShift;
     if (!querPeriodo) {
       setInicioParcial(null);
       onPeriodoChange(mesUnico(ano, m));
@@ -149,118 +173,126 @@ export function SeletorPeriodo({
     onPeriodoChange(ordenar({ de: inicioParcial, ate: { ano, mes: m } }));
   };
 
-  const mesesDoAnoVisivel = (m: number) => {
+  const anoTodo = ehAnoInteiro(periodo);
+
+  /* ⚠ O ANO INTEIRO NÃO TEM EXTREMOS — item B. Em jan→dez, Jan e Dez seriam "extremo" pela
+     regra geral e sairiam em azul cheio, sugerindo que ALGUÉM escolheu janeiro e dezembro.
+     Ninguém escolheu: escolheu-se o ano. Os doze saem iguais, em azul claro, e quem carrega
+     o azul cheio é o botão "Ano" — a cor mostra ONDE está a escolha. */
+  const papelDoMes = (m: number): keyof typeof CARA => {
+    if (anoTodo) return 'meio';
     const alvo = `${periodo.de.ano}-${String(m).padStart(2, '0')}`;
-    if (inicioParcial && inicioParcial.mes === m && inicioParcial.ano === periodo.de.ano) return 'extremo';
-    if (inicioParcial) return 'fora';
+    if (inicioParcial) {
+      return inicioParcial.mes === m && inicioParcial.ano === periodo.de.ano ? 'extremo' : 'fora';
+    }
     if (alvo === anoMes(periodo.de) || alvo === anoMes(periodo.ate)) return 'extremo';
     if (alvo > anoMes(periodo.de) && alvo < anoMes(periodo.ate)) return 'meio';
     return 'fora';
   };
 
+  /* ⚠ A FRASE SÓ APARECE QUANDO HÁ O QUE EXPLICAR — item D. Ela nasceu "sempre presente"
+     para o olho não aprender a ignorá-la; medida na tela, virou o contrário: repetir
+     "Mostrando agosto/2026" embaixo de um Ago já pintado de azul é ocupar uma linha para
+     dizer o que a fita já diz. Fica para o intervalo, que a fita sozinha não consegue
+     nomear — e para o shift pela metade, que sem ela pareceria um clique perdido. */
   const frase = (() => {
     if (inicioParcial) {
       return `Início ${MESES_CURTOS[inicioParcial.mes - 1].toLowerCase()}/${inicioParcial.ano} · agora clique no mês final`;
     }
-    const n = contarMeses(periodo);
-    return n === 1
-      ? `Mostrando ${descreverPeriodo(periodo)}`
-      : `Mostrando ${descreverPeriodo(periodo)} · ${n} meses`;
+    if (ehMesUnico(periodo)) return null;
+    return `Mostrando ${descreverPeriodo(periodo)} · ${contarMeses(periodo)} meses`;
   })();
 
   const podeLimpar = !inicioParcial && !ehMesUnico(periodo);
 
   return (
     <div className={className}>
-      {/* ⚠ A LINHA QUEBRA DEPOIS DA FITA, NUNCA DENTRO DELA — A25/estado 6. O ano e os meses
-          moram num grupo `flex-nowrap` próprio; o toggle e o chip são irmãos DESSE grupo, e
-          só eles descem para a segunda linha quando não cabem. */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-2">
-          {/* CARD DE ANO — A25: mesmo desenho dos meses, nunca cinza sobre cinza. */}
-          {entreAnos ? (
-            <div
-              className="flex shrink-0 items-center justify-center rounded-lg border bg-card text-foreground"
-              style={{ width: 74, height: 32, fontSize: 12, fontWeight: 500 }}
-              title="Período personalizado entre anos"
+      {/* ⚠ NADA POR CIMA DE NADA, E ISSO É ESTRUTURA, NÃO `z-index` — item C. A fita rolava
+          POR BAIXO do grupo da direita: os últimos meses passavam atrás de um botão opaco e
+          simplesmente sumiam. A correção não é empurrar com `padding-right` nem levantar
+          camada — é o grupo da direita ser IRMÃO do scrollport, não vizinho sobreposto. Dois
+          itens flex lado a lado não têm como se cobrir; a garantia vem da caixa, e o teste
+          de retângulos só confirma o que a estrutura já impede. */}
+      <div className="flex flex-nowrap items-center gap-2">
+        {/* CARD DE ANO — mesmo desenho dos meses, nunca cinza sobre cinza. */}
+        {entreAnos ? (
+          <div
+            className="flex shrink-0 items-center justify-center rounded-lg border bg-card text-foreground"
+            style={{ width: 68, height: ALTURA, fontSize: 11, fontWeight: 500 }}
+            title="Período personalizado entre anos"
+          >
+            {periodo.de.ano}–{periodo.ate.ano}
+          </div>
+        ) : (
+          <Select value={String(periodo.de.ano)} onValueChange={trocarAno}>
+            <SelectTrigger
+              className="shrink-0 rounded-lg border bg-card text-foreground [&>svg]:opacity-100"
+              style={{ width: 68, height: ALTURA, fontSize: 11, fontWeight: 500 }}
             >
-              {periodo.de.ano}–{periodo.ate.ano}
-            </div>
-          ) : (
-            <Select value={String(periodo.de.ano)} onValueChange={trocarAno}>
-              <SelectTrigger
-                className="shrink-0 rounded-lg border bg-card text-foreground [&>svg]:opacity-100"
-                style={{ width: 74, height: 32, fontSize: 12, fontWeight: 500 }}
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {listaAnos.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          )}
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {listaAnos.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        )}
 
-          {modo === 'ano-mes' && (carregando ? (
-            <div className={FITA}>
-              {Array.from({ length: 12 }).map((_, i) => (
-                <div key={i} className="h-8 min-w-[58px] flex-1 shrink-0 animate-pulse rounded-lg bg-muted" />
-              ))}
-            </div>
-          ) : (
-            <div className={FITA} style={entreAnos ? { opacity: 0.45, pointerEvents: 'none' } : undefined}>
-              {MESES_CURTOS.map((rotulo, i) => {
-                const m = i + 1;
-                const tom = tomPorMes?.[m];
-                const papel = mesesDoAnoVisivel(m);
-                /* ⚠ COM `tomPorMes`, O FUNDO É DA CONCILIAÇÃO E A SELEÇÃO É UM ANEL INTERNO.
-                   Sem ele, o extremo é azul cheio e o meio é o azul claro. */
-                const estilo: React.CSSProperties = tom
-                  ? {
-                      background: tom.bg, borderColor: tom.border, color: tom.txt,
-                      ...(papel !== 'fora' ? { boxShadow: 'inset 0 0 0 2px hsl(var(--primary))' } : {}),
-                    }
-                  : papel === 'extremo'
-                    ? { background: 'hsl(var(--primary))', borderColor: 'hsl(var(--primary))', color: '#fff' }
-                    : papel === 'meio'
-                      ? { background: MEIO_BG, borderColor: MEIO_BORDA, color: 'hsl(var(--primary))' }
-                      : { background: 'hsl(var(--card))', borderColor: 'hsl(var(--border) / 0.6)', color: 'hsl(var(--foreground))' };
-                return (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={(e) => clicarMes(m, e.shiftKey)}
-                    title={tom?.title}
-                    aria-pressed={papel !== 'fora'}
-                    className={papel === 'fora' && !tom ? 'hover:!bg-muted' : undefined}
-                    style={{ ...BOTAO_BASE, ...estilo }}
-                  >
-                    {rotulo}
-                  </button>
-                );
-              })}
-            </div>
-          ))}
-        </div>
+        {modo === 'ano-mes' && (carregando ? (
+          <div className={FITA}>
+            {Array.from({ length: 12 }).map((_, i) => (
+              <div key={i} className="h-7 min-w-[44px] flex-1 shrink-0 animate-pulse rounded-lg bg-muted" />
+            ))}
+          </div>
+        ) : (
+          <div className={FITA} style={entreAnos ? { opacity: 0.45, pointerEvents: 'none' } : undefined}>
+            {MESES_CURTOS.map((rotulo, i) => {
+              const m = i + 1;
+              const tom = tomPorMes?.[m];
+              const papel = papelDoMes(m);
+              /* ⚠ COM `tomPorMes`, O FUNDO É DA CONCILIAÇÃO E A SELEÇÃO É UM ANEL INTERNO:
+                 pintar o mês de azul apagaria o status — verde conciliado, âmbar parcial,
+                 vermelho divergente — que é o que aquela tela veio mostrar. */
+              const estilo: React.CSSProperties = tom
+                ? {
+                    background: tom.bg, borderColor: tom.border, color: tom.txt,
+                    ...(papel !== 'fora' ? { boxShadow: 'inset 0 0 0 2px hsl(var(--primary))' } : {}),
+                  }
+                : CARA[papel];
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={(e) => clicarMes(m, e.shiftKey)}
+                  title={tom?.title}
+                  aria-pressed={papel !== 'fora'}
+                  data-papel={papel}
+                  className={papel === 'fora' && !tom ? 'hover:!bg-muted' : undefined}
+                  style={{ ...BOTAO_BASE, ...estilo }}
+                >
+                  {rotulo}
+                </button>
+              );
+            })}
+          </div>
+        ))}
 
         {modo === 'ano-mes' && !modoUnico && (
-          <>
-            {/* TOGGLE "Mês | Período" — dois segmentos, o ativo em bg-primary. */}
-            <div className="flex shrink-0 overflow-hidden rounded-lg border" style={{ height: 32 }}>
-              {(['mes', 'periodo'] as const).map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => { setSegmento(s); setInicioParcial(null); }}
-                  style={{
-                    padding: '0 10px', fontSize: 12, fontWeight: 500, cursor: 'pointer', lineHeight: 1,
-                    background: segmento === s ? 'hsl(var(--primary))' : 'hsl(var(--card))',
-                    color: segmento === s ? '#fff' : 'hsl(var(--foreground))',
-                  }}
-                >
-                  {s === 'mes' ? 'Mês' : 'Período'}
-                </button>
-              ))}
-            </div>
+          /* ⚠ FORA DO SCROLLPORT, e opaco: estes dois não rolam com os meses porque não são
+             meses — são o que se faz com eles. O fundo próprio existe para o caso de alguém
+             um dia grudar este grupo; hoje ele é irmão, e irmão não cobre. */
+          <div className="flex shrink-0 items-center gap-1 bg-background">
+            {/* ⚠ "ANO" USA A RÉGUA DOS MESES de propósito: é um recorte, como eles, e não uma
+                ação. O que o distingue é a largura fixa — ele não disputa espaço com os doze. */}
+            <button
+              type="button"
+              onClick={() => { setInicioParcial(null); onPeriodoChange(anoInteiro(periodo.de.ano)); }}
+              title="O ano inteiro — janeiro a dezembro"
+              aria-pressed={anoTodo}
+              data-papel={anoTodo ? 'extremo' : 'fora'}
+              style={{ ...BOTAO_ANO, ...(anoTodo ? CARA.extremo : CARA.fora) }}
+            >
+              Ano
+            </button>
 
             <Popover open={popoverAberto} onOpenChange={setPopoverAberto}>
               <PopoverTrigger asChild>
@@ -268,7 +300,7 @@ export function SeletorPeriodo({
                   type="button"
                   className="shrink-0 rounded-full border"
                   style={{
-                    height: 28, padding: '0 12px', fontSize: 12, fontWeight: 500, cursor: 'pointer',
+                    height: 26, padding: '0 10px', fontSize: 11, fontWeight: 500, cursor: 'pointer',
                     background: entreAnos ? CHIP_MARCADO_BG : 'hsl(var(--card))',
                     borderColor: entreAnos ? MEIO_BORDA : 'hsl(var(--border) / 0.6)',
                     color: entreAnos ? 'hsl(var(--primary))' : 'hsl(var(--foreground))',
@@ -286,16 +318,13 @@ export function SeletorPeriodo({
                 />
               </PopoverContent>
             </Popover>
-          </>
+          </div>
         )}
       </div>
 
-      {/* ⚠ A FRASE ESTÁ SEMPRE PRESENTE, inclusive no mês único. Um texto que aparece só às
-          vezes é um texto que o olho aprende a não procurar — e é justamente quando o
-          recorte é incomum que ele precisa ser lido. */}
-      {modo === 'ano-mes' && (
-        <div className="mt-1 flex items-center gap-1.5" style={{ fontSize: 12 }}>
-          <span className="text-foreground">{frase}</span>
+      {modo === 'ano-mes' && frase && (
+        <div className="mt-1 flex items-center gap-1.5" style={{ fontSize: 11 }}>
+          <span className="text-muted-foreground">{frase}</span>
           {podeLimpar && (
             <button
               type="button"
@@ -304,7 +333,7 @@ export function SeletorPeriodo({
               aria-label="Voltar ao mês corrente"
               className="rounded p-0.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
-              <X style={{ width: 12, height: 12 }} />
+              <X style={{ width: 11, height: 11 }} />
             </button>
           )}
         </div>
