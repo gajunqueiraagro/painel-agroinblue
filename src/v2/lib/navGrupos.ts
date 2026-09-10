@@ -337,3 +337,54 @@ export const SECTION_TO_GROUP: Partial<Record<V2Section, string>> = {
   'config-bancario':  'configuracoes',
   'config-auditoria': 'configuracoes',
 };
+
+/**
+ * O CAMINHO DE CADA SEÇÃO — "Grupo / Tela" — PR-BARRA-UNICA-01a.
+ *
+ * ⚠ SAI DO PRÓPRIO `NAV_GRUPOS`, e é por isso que mora aqui: o topo e a lateral passam a
+ * dizer a mesma palavra por construção. Uma segunda tabela de rótulos divergiria do menu
+ * no primeiro item renomeado — e o operador leria um nome no menu e outro na barra.
+ */
+const ROTULOS_FORA_DO_MENU: Partial<Record<V2Section, { area: string; secao: string }>> = {
+  /* ⚠ AS DEZENOVE SEM ITEM DE MENU precisam de nome porque a barra é do SHELL: elas têm
+     tela e são alcançáveis (por URL, por drill ou por aba interna), e uma barra em branco
+     seria a única tela sem endereço. Nomeá-las aqui mantém a fonte única. */
+  'home':                   { area: 'Início',        secao: 'Visão Geral' },
+  'pastos':                 { area: 'Produção',      secao: 'Pastos' },
+  'chuvas-lancamento':      { area: 'Produção',      secao: 'Chuvas — lançar' },
+  /* ⚠ `'evolucao'` FICA DE FORA: ela tem ramo de render em `V2Index` mas NÃO existe na
+     união `V2Section` — é a origem de um dos erros da baseline do TSC. Acrescentá-la aqui
+     exigiria alargar o tipo, que é outro PR; ela cai no default e mostra o identificador. */
+  'evolucao-categoria':     { area: 'Produção',      secao: 'Evolução por Categoria' },
+  'resumo-pastos':          { area: 'Produção',      secao: 'Resumo de Pastos' },
+  'importacao-extratos':    { area: 'Financeiro',    secao: 'Importar Extratos' },
+  'importacao-custeio-txt': { area: 'Financeiro',    secao: 'Importar Custeio' },
+  'importacao-lanc-excel':  { area: 'Financeiro',    secao: 'Importar Lançamentos' },
+  'conciliacao-extrato':    { area: 'Financeiro',    secao: 'Extrato da Conta' },
+  'extrato-gerencial':      { area: 'Financeiro',    secao: 'Extrato Gerencial' },
+  'saldos-mensais':         { area: 'Financeiro',    secao: 'Saldos Mensais' },
+  'fluxo-caixa-meta':       { area: 'Planejamento',  secao: 'Fluxo de Caixa META' },
+  'auditoria-anual':        { area: 'Auditoria',     secao: 'Auditoria Anual' },
+  'executive-preview':      { area: 'Executivo',     secao: 'Preview' },
+  'configuracoes':          { area: 'Configurações', secao: 'Visão Geral' },
+  'config-clientes':        { area: 'Configurações', secao: 'Clientes' },
+  'config-bancario':        { area: 'Configurações', secao: 'Bancário' },
+  'config-auditoria':       { area: 'Configurações', secao: 'Auditoria' },
+};
+
+let mapaRotulos: Partial<Record<V2Section, { area: string; secao: string }>> | null = null;
+
+export function rotuloDaSecao(section: V2Section): { area: string; secao: string } {
+  if (!mapaRotulos) {
+    const m: Partial<Record<V2Section, { area: string; secao: string }>> = {};
+    for (const grupo of NAV_GRUPOS) {
+      for (const sec of grupo.drawer) {
+        for (const item of sec.itens) m[item.id] = { area: grupo.label, secao: item.label };
+      }
+    }
+    mapaRotulos = { ...m, ...ROTULOS_FORA_DO_MENU };
+  }
+  /* Seção sem nome em lugar nenhum: a barra não inventa — mostra só o grupo vazio e o
+     identificador, que ao menos diz onde se está. */
+  return mapaRotulos[section] ?? { area: '', secao: section };
+}

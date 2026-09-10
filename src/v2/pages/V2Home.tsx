@@ -31,6 +31,7 @@ import { useMovimentacoesAgregadas, type Lente, type TipoMov } from '@/v2/hooks/
 import { ModalAtividade, type IndicadorAtividade, type Assunto } from '@/v2/components/ModalAtividade';
 import { calcularRazaoEstoqueAcumulada, mediaIgnorandoZero } from '@/lib/calculos/eficienciaArea';
 import { BarChart3, ArrowLeftRight, Wallet } from 'lucide-react';
+import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
 
 const fmtN = (v: number | null | undefined, dec = 0) =>
   v == null || isNaN(v) ? null
@@ -507,7 +508,7 @@ function StatusFechamentoBanda({ status, isGlobal, loading, mesLabel, onIrPara }
   );
 }
 
-export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara, onMesChange }: {
+export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara, onMesChange, onAnoChange }: {
   ano: string;
   mes: string;
   viewMode?: 'mes' | 'periodo';
@@ -519,6 +520,10 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
      o que o V2FilterBar sempre mandou (MESES[].v). Zero a esquerda quebraria o filtro
      em silencio. */
   onMesChange?: (mes: string) => void;
+  /* ⚠ SÓ O ANO — PR-BARRA-UNICA-01a. A barra global saiu do shell e esta tela precisava
+     dela apenas para o ano: o MÊS ela já escolhe na régua de 12 do PR-HOME-REGUA-MESES-01,
+     e um segundo seletor de mês seria o filtro duplo que este envelope veio desmontar. */
+  onAnoChange?: (ano: string) => void;
 }) {
   const { clienteAtual } = useCliente();
   const { fazendaAtual, isGlobal, fazendasComPecuaria, fazendas } = useFazenda();
@@ -2539,6 +2544,11 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
   const resultadoTone = resultado == null ? 'default' : resultado >= 0 ? 'positive' : 'negative';
 
   return (
+    <>
+      {onAnoChange && (
+        <div className="mb-2 px-1"><SeletorPeriodo modo="ano" ano={ano} onAnoChange={onAnoChange} /></div>
+      )}
+
     <div className="px-4 pb-5 max-w-7xl">
       <div className="sticky top-0 z-30 -mx-4 px-4 py-3 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border/40 shadow-sm mb-2">
         <h2 className="text-sm font-semibold text-foreground">
@@ -4213,5 +4223,6 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange, onIrPara,
         />
       )}
     </div>
+    </>
   );
 }

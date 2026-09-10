@@ -24,7 +24,11 @@ import { LancamentoLeituraDialog } from '@/components/financeiro-v2/LancamentoLe
 import { toast } from 'sonner';
 
 interface Props {
-  initialAno: string | number;
+  /* ⚠ OPCIONAL DESDE O PR-BARRA-UNICA-01a. Ela era obrigatória porque a barra global do
+     shell sempre a mandava; a barra saiu, e a tela já sabia se virar — o `useState` abaixo
+     sempre teve `|| new Date().getFullYear()` como padrão. Exigi-la agora seria pedir um
+     valor que ninguém mais tem para dar. */
+  initialAno?: string | number;
   initialMes?: number;
   onNavigateToLancamentos?: (ano: number, mes: number) => void;
 }

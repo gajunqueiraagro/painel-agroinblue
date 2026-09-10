@@ -34,6 +34,7 @@ import {
 import { detectarDuplicatasCrossOrigin, montarSituacaoFechamento, derivarPendenciasGerenciais, derivarDetalhePendencias } from '@/lib/financeiro/fechamentoPendencias';
 import { buildUnifiedSaldos, type ContaSaldoRef, type SaldoV2SourceRow, type SaldoLegacySourceRow } from '@/lib/financeiro/saldosBancarios';
 import { ExtratoListaTab } from '@/components/financeiro-v2/ExtratoListaTab';
+import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
 // PR-MOS-2 — LotesExcelTab (Referências Operacionais antigas) desacoplado da aba Enriquecer (legado).
 
 /* ── Extended status type (adds 'parcial' to existing) ── */
@@ -531,6 +532,18 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
     () => buildMonthCards(ano, '__all__', saldos, lancamentos, contas),
     [ano, saldos, lancamentos, contas]
   );
+  /* ⚠ O MAPA DE TONS É A MESMA LEITURA DE ANTES, só com outro formato: `STATUS_COR` pela
+     cor e `STATUS_META` pelo rótulo do `title`, exatamente como o bloco inline fazia. O
+     `|| STATUS_COR.pendente` continua sendo o fallback de status desconhecido. */
+  const tomDosMeses = useMemo(() => {
+    const m: Record<number, { bg: string; border: string; txt: string; title?: string }> = {};
+    for (const c of monthBarCards) {
+      const cc = STATUS_COR[c.status] || STATUS_COR.pendente;
+      m[Number(c.mes)] = { ...cc, title: STATUS_META[c.status]?.label || c.status };
+    }
+    return m;
+  }, [monthBarCards]);
+
   // Detail cards: filtered by selectedConta
   const mesCards = useMemo(
     () => buildMonthCards(ano, selectedConta, saldos, lancamentos, contas),
@@ -806,48 +819,23 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
               <ArrowLeft className="h-4 w-4" />
             </Button>
           )}
-          <Select value={ano} onValueChange={setAno}>
-            <SelectTrigger className="h-7 text-xs w-[68px]"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {anos.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
-            </SelectContent>
-          </Select>
-
-          {/* 12 month cards — color = global status of ALL accounts */}
-          {loading ? (
-            <div className="flex flex-1 gap-0.5">
-              {Array.from({length: 12}).map((_, i) => (
-                <div key={i} className="flex-1 h-7 rounded bg-muted animate-pulse" />
-              ))}
-            </div>
-          ) : (
-            <div className="flex flex-1 gap-0.5">
-              {monthBarCards.map(c => {
-                const cc    = STATUS_COR[c.status] || STATUS_COR.pendente;
-                const isSel = selectedMes === c.mes;
-                return (
-                  <button
-                    key={c.mes}
-                    onClick={() => setSelectedMes(c.mes)}
-                    style={{
-                      flex:1, textAlign:'center', padding:'5px 3px',
-                      fontSize:'10px', borderRadius:'8px',
-                      border:`1.5px solid ${cc.border}`,
-                      cursor:'pointer', background:cc.bg, color:cc.txt,
-                      fontWeight: isSel ? 700 : 500,
-                      ...(isSel ? {
-                        outline:'2.5px solid #185FA5', outlineOffset:'2px',
-                        transform:'scale(1.09)', position:'relative', zIndex:1,
-                      } : {}),
-                    }}
-                    title={STATUS_META[c.status]?.label || c.status}
-                  >
-                    {c.label}
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          {/* ⚠ O BLOCO SAIU PARA `SeletorPeriodo` — PR-BARRA-UNICA-01a, e a troca é de casa,
+              não de comportamento: as mesmas cores (`STATUS_COR`), o mesmo `title`
+              (`STATUS_META`), o mesmo `outline`/`scale` do selecionado e o mesmo esqueleto
+              enquanto carrega. O componente nasceu com `tomPorMes` exatamente porque aqui a
+              COR É INFORMAÇÃO: cada mês é pintado pelo status de conciliação, e um seletor
+              que só soubesse selecionar deixaria esta tela com um seletor só dela. */}
+          <SeletorPeriodo
+            modo="ano-mes"
+            anos={anos}
+            ano={ano}
+            onAnoChange={setAno}
+            mes={Number(selectedMes)}
+            onMesChange={(m) => setSelectedMes(String(m).padStart(2, '0'))}
+            carregando={loading}
+            className="flex-1"
+            tomPorMes={tomDosMeses}
+          />
         </div>
 
         {/* Subtitle */}

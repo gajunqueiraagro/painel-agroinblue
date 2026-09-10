@@ -19,11 +19,14 @@ import {
   type CardData,
 } from '@/v2/hooks/useMovimentacoesAgregadas';
 import { MovimentacaoHistoricoModal } from '@/v2/components/MovimentacaoHistoricoModal';
+import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
 
 interface Props {
   ano: number;
   mes: number; // 1..12
   viewMode: 'mes' | 'periodo';
+  onAnoChange?: (v: string) => void;
+  onMesChange?: (v: number) => void;
 }
 
 interface CardConfig {
@@ -137,7 +140,7 @@ function getCorPrincipal(tipo: TipoMov): 'azul' | 'vermelho' {
 
 // ─── Componente principal ───────────────────────────────────────────────────
 
-export default function V2VisaoGeralRebanho({ ano, mes, viewMode }: Props) {
+export default function V2VisaoGeralRebanho({ ano, mes, viewMode, onAnoChange, onMesChange }: Props) {
   const [lente, setLente] = useState<Lente>('cab');
   const [modalAberto, setModalAberto] = useState<TipoMov | null>(null);
 
@@ -167,6 +170,13 @@ export default function V2VisaoGeralRebanho({ ano, mes, viewMode }: Props) {
   const cardModalData = modalAberto && porTipo?.[modalAberto] ? porTipo[modalAberto] : null;
 
   return (
+    <>
+      {/* ⚠ O PERÍODO É DA TELA — PR-BARRA-UNICA-01a. A fita de ano/mês do shell saiu, e
+          esta é uma das telas que de fato liam aquele estado: sem o seletor aqui, ela
+          ficaria sem como trocar de mês. O estado segue no `V2Index` porque é lá que os
+          drills (`?fano=&fmes=`, retorno de pendência) o escrevem. */}
+      <div className="mb-2 px-1"><SeletorPeriodo ano={String(ano)} onAnoChange={onAnoChange} mes={mes} onMesChange={onMesChange} /></div>
+
     <div className="px-4 py-3 space-y-3 max-w-7xl mx-auto">
       {/* FILTRO DE LENTE */}
       <div className="flex items-center gap-2 flex-wrap">
@@ -272,6 +282,7 @@ export default function V2VisaoGeralRebanho({ ano, mes, viewMode }: Props) {
         />
       )}
     </div>
+    </>
   );
 }
 

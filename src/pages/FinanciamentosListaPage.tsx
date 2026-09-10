@@ -6,7 +6,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DatePicker } from '@/components/ui/date-picker';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { BarraSecao } from '@/v2/components/BarraSecao';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, useMemo } from 'react';
@@ -376,7 +375,8 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
           caminho que ninguém testa. */}
       {/* A faixa saiu daqui para `v2/components/BarraSecao` quando a Recorrências passou a
           precisar da mesma — move verbatim, zero mudança visual. */}
-      <BarraSecao area="Financeiro" secao="Parcelamentos e Financiamentos" />
+      {/* ⚠ A FAIXA SAIU DAQUI — PR-BARRA-UNICA-01a: o `V2Index` monta a `BarraSecao`
+          uma vez, para todas as seções. Mantê-la aqui empilharia duas barras azuis. */}
 
       {/* Cabeçalho fixo: título + totais. Os FILTROS desceram para dentro do card
           (PR-PARC-03 item 2).

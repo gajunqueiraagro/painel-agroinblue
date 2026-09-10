@@ -22,7 +22,6 @@ import { useFinanceiroV2 } from '@/hooks/useFinanceiroV2';
 import { useRecorrencias, cancelarRecorrencia, type Recorrencia, type SituacaoRecorrencia } from '@/hooks/useRecorrencias';
 import { RecorrenciaDialog } from '@/components/recorrencias/RecorrenciaDialog';
 import { GerarLancamentosDialog } from '@/components/recorrencias/GerarLancamentosDialog';
-import { BarraSecao } from '@/v2/components/BarraSecao';
 
 /**
  * V2Recorrencias — as regras que se repetem todo mês.
@@ -192,7 +191,8 @@ export default function V2Recorrencias() {
        `/v2` so' da' altura porque `recorrencias` entrou em `SECOES_APP_SHELL`. `flex-1`
        seria inerte num pai que nao fosse flex. */
     <div className="w-full min-w-0 h-full min-h-0 flex flex-col bg-background max-w-5xl mx-auto">
-      <BarraSecao area="Financeiro" secao="Recorrências" />
+      {/* ⚠ A FAIXA SAIU DAQUI — PR-BARRA-UNICA-01a: o `V2Index` monta a `BarraSecao`
+          uma vez, para todas as seções. Mantê-la aqui empilharia duas barras azuis. */}
 
       <div className="shrink-0 px-4 pt-2 pb-2 space-y-2">
         {/* CABEÇALHO — título, o que a tela é, e a ação à direita. */}

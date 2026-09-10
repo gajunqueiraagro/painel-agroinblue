@@ -11,9 +11,9 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { V2Sidebar, type V2Section } from './components/V2Sidebar';
-import { SECTION_TO_GROUP } from './lib/navGrupos';
-import { getPeriodoTipo } from './lib/periodoConfig';
-import { V2FilterBar } from './components/V2FilterBar';
+import { SECTION_TO_GROUP, rotuloDaSecao } from './lib/navGrupos';
+
+import { BarraSecao } from './components/BarraSecao';
 import { V2MobileNav } from './components/V2MobileNav';
 import { V2ContextDrawer } from './components/V2ContextDrawer';
 import { V2Home } from './pages/V2Home';
@@ -778,7 +778,7 @@ export default function V2Index() {
       setDrillFiltro(null);
     }
   }, [section]); // eslint-disable-line react-hooks/exhaustive-deps
-  const periodoTipo = getPeriodoTipo(section);
+  const rotulo = rotuloDaSecao(section);
   const { clientes, clienteAtual } = useCliente();
   const { fazendas, isGlobal, setFazendaAtual } = useFazenda();
   const { canEditMeta } = usePermissions();
@@ -837,23 +837,22 @@ export default function V2Index() {
   };
 
   function renderContent() {
-    if (section === 'home') return <V2Home ano={ano} mes={mes} viewMode={viewMode} onViewModeChange={setViewMode} onIrPara={irParaPendencia} onMesChange={setMes} />;
+    if (section === 'home') return <V2Home ano={ano} mes={mes} viewMode={viewMode} onViewModeChange={setViewMode} onIrPara={irParaPendencia} onMesChange={setMes} onAnoChange={setAno} />;
     if (section === 'painel-consultor') return (
       <PainelConsultorTab
         onBack={() => setSection('home')}
         filtroGlobal={{ ano, mes: parseInt(mes) || new Date().getMonth() + 1 }}
+        onPeriodoChange={(a, m) => { setAno(a); setMes(String(m)); }}
       />
     );
-    if (section === 'auditoria-anual') return <V2AuditoriaAnual ano={ano} />;
+    if (section === 'auditoria-anual') return <V2AuditoriaAnual ano={ano} onAnoChange={setAno} />;
     if (section === 'conciliacao') return (
       <ConciliacaoBancariaTab
-        initialAno={ano}
         /* ⚠ `'08'`, NÃO `8` — dívida do B-26, paga aqui. A prop é `string` e o
            `selectedMes` é comparado com `c.mes`, que nasce
            `String(m).padStart(2,'0')` (`ConciliacaoBancariaTab:183`). Um
            `Number(mes)` nunca casava: a tela abria no mês corrente em vez do mês
            da régua, calada — e o TS acusava desde sempre, na baseline. */
-        initialMes={mes !== '0' ? String(mes).padStart(2, '0') : undefined}
         onNavigateToLancamentos={(a, m) => {
           setAno(String(a));
           setMes(String(m));
@@ -864,8 +863,6 @@ export default function V2Index() {
     );
     if (section === 'auditoria-bancaria') return (
       <AuditoriaBancariaSoberana
-        initialAno={ano}
-        initialMes={mes !== '0' ? Number(mes) : undefined}
         onNavigateToLancamentos={(a, m) => {
           setAno(String(a));
           setMes(String(m));
@@ -892,9 +889,7 @@ export default function V2Index() {
            Importar; os ids seguem chegando por favorito e estado salvo. */
         || section === 'importacao-custeio-txt' || section === 'importacao-lanc-excel') return (
       <ConciliacaoBancariaTab
-        initialAno={ano}
         /* Mesmo formato da rota principal: `'08'`, com padding. */
-        initialMes={mes !== '0' ? String(mes).padStart(2, '0') : undefined}
         onNavigateToLancamentos={(a, m) => {
           setAno(String(a));
           setMes(String(m));
@@ -913,7 +908,7 @@ export default function V2Index() {
     // Sem este ramo, um valor residual em sessionStorage 'v2:autoSection', um estado salvo ou
     // uma URL antiga caem no fallback generico da Fase 2 — nao renderizam a tela.
     if (section === 'painel-financiamentos') return (
-      <FinanciamentosPainelTab filtroAnoInicial={Number(ano)} />
+      <FinanciamentosPainelTab />
     );
     if (section === 'financiamentos') return (
       <FinanciamentosViewV2
@@ -954,13 +949,13 @@ export default function V2Index() {
     // (passo 4) entra depois, no mesmo PR; o botão fica desabilitado até lá.
 
     if (section === 'rateio-adm') return (
-      <FinanceiroCaixaTab initialTab="rateio" hideInternalTabs filtroAnoInicial={ano} filtroMesInicial={mes === '0' ? undefined : Number(mes)} />
+      <FinanceiroCaixaTab initialTab="rateio" hideInternalTabs  />
     );
     if (section === 'fluxo-caixa') return (
-      <FinanceiroCaixaTab initialTab="fluxo" hideInternalTabs filtroAnoInicial={ano} filtroMesInicial={mes === '0' ? undefined : Number(mes)} />
+      <FinanceiroCaixaTab initialTab="fluxo" hideInternalTabs  />
     );
     if (section === 'financeiro-dashboard') return (
-      <FinanceiroCaixaTab initialTab="dashboard" hideInternalTabs filtroAnoInicial={ano} filtroMesInicial={mes === '0' ? undefined : Number(mes)} modo={modo} />
+      <FinanceiroCaixaTab initialTab="dashboard" hideInternalTabs  modo={modo} />
     );
     if (section === 'indicadores-zoot') return (
       <V2ZootWrapper>
@@ -968,8 +963,6 @@ export default function V2Index() {
           <IndicadoresTab
             lancamentos={lancamentos}
             saldosIniciais={saldosIniciais}
-            anoInicial={ano}
-            mesInicial={mes === '0' ? undefined : Number(mes)}
           />
         )}
       </V2ZootWrapper>
@@ -981,7 +974,6 @@ export default function V2Index() {
             lancamentos={lancamentos}
             saldosIniciais={saldosIniciais}
             onBack={() => { const o = voltarParaOrigem(); setSection(o ?? 'rebanho-home'); }}
-            filtroAnoInicial={ano}
           />
         )}
       </V2ZootWrapper>
@@ -992,7 +984,6 @@ export default function V2Index() {
           <EvolucaoTab
             lancamentos={lancamentos}
             saldosIniciais={saldosIniciais}
-            initialAno={ano}
             ocultarFiltroAno
           />
         )}
@@ -1006,8 +997,6 @@ export default function V2Index() {
             lancamentos={lancamentosTodosCenarios}
             // drillFiltro presente → filtros vêm do drill da Conferência Categoria.
             // Caso contrário, comportamento legado (ano global, status realizado).
-            filtroAnoInicial={drillFiltro?.ano ?? ano}
-            filtroMesInicial={drillFiltro?.mes}
             filtroStatusInicial={drillFiltro?.cenario ?? 'realizado'}
             filtroCategoriaInicial={drillFiltro?.categoria}
             subAbaInicial={drillFiltro?.subAba}
@@ -1053,7 +1042,7 @@ export default function V2Index() {
       </V2ZootWrapper>
     );
     if (section === 'meta-gmd') return (
-      <MetaGmdTab initialAno={ano} ocultarFiltroAno />
+      <MetaGmdTab ocultarFiltroAno />
     );
     // ÓRFÃO NO /v2 desde PR-UI-FECHAMENTO-CARD-MAPA-01 (19/08/2026): a única porta
     // de entrada era o card "Mapa de Pastos" do Fechamento, que apontava para cá
@@ -1076,8 +1065,6 @@ export default function V2Index() {
     if (section === 'mapa-pastos') return (
       <MapaPastosTab
         onBack={mapaPastosOriginRef.current ? () => { mapaPastosOriginRef.current = false; setSection('fechamento'); } : undefined}
-        filtroAnoInicial={ano}
-        filtroMesInicial={mes === '0' ? undefined : Number(mes)}
       />
     );
     if (section === 'operacoes-comerciais') return (
@@ -1127,10 +1114,10 @@ export default function V2Index() {
       />
     );
     if (section === 'chuvas') return (
-      <ChuvasTab anoInicial={ano} mode="analitico" />
+      <ChuvasTab mode="analitico" />
     );
     if (section === 'chuvas-lancamento') return (
-      <ChuvasTab anoInicial={ano} mode="operacional" />
+      <ChuvasTab mode="operacional" />
     );
     if (section === 'pastos') return (
       <PastosTab />
@@ -1138,8 +1125,6 @@ export default function V2Index() {
     if (section === 'financeiro-lanc') return (
       <FinanceiroV2Tab
         onIntensiveToggle={setIntensivo}
-        filtroAnoInicial={ano}
-        filtroMesInicial={mes !== '0' ? Number(mes) : undefined}
         onAbrirFinanciamento={(id) => {
           // Ao redirecionar para Financiamentos, limpa o flag de retorno à Conciliação
           // para evitar que o "Voltar" do Detalhe → Lançamentos volte errado para Concilia.
@@ -1171,14 +1156,10 @@ export default function V2Index() {
         initialTab="fluxo"
         initialFluxoCenario="meta"
         hideInternalTabs
-        filtroAnoInicial={ano}
-        filtroMesInicial={mes === '0' ? undefined : Number(mes)}
       />
     );
     if (section === 'fechamento') return (
       <FechamentoTab
-        filtroAnoInicial={ano}
-        filtroMesInicial={mes === '0' ? undefined : Number(mes)}
         onBack={origemPendenciaRef.current
           ? () => { const o = voltarParaOrigem(); if (o) setSection(o); }
           : undefined}
@@ -1206,8 +1187,6 @@ export default function V2Index() {
     );
     if (section === 'evolucao-categoria') return (
       <EvolucaoCategoriaTab
-        initialAno={ano}
-        initialMes={mes === '0' ? undefined : mes.padStart(2, '0')}
         ocultarFiltrosPeriodo
         onNavigateToEvolCatLista={(filtro) => {
           // Drill da Conferência Categoria → 'conferencia-lancamentos'
@@ -1245,8 +1224,10 @@ export default function V2Index() {
         }}
       />
     );
-    if (section === 'areas-meta') return <V2AreasMeta ano={ano} />;
-    if (section === 'planejamento-home') return <V2PlanejamentoVisaoGeral ano={Number(ano)} mes={Number(mes)} />;
+    /* ⚠ `areas-meta` NÃO RECEBE MAIS O ANO — PR-BARRA-UNICA-01a. Medido: ela renomeia a prop
+   para `anoInicial` e mantém o próprio estado — era SEMEADA, não controlada. */
+    if (section === 'areas-meta') return <V2AreasMeta />;
+    if (section === 'planejamento-home') return <V2PlanejamentoVisaoGeral ano={Number(ano)} mes={Number(mes)} onAnoChange={setAno} onMesChange={(m) => setMes(String(m))} />;
     if (section === 'fechamento-periodo') return <V2FechamentoPeriodo periodo={periodo} onPeriodoChange={setPeriodo} />;
     if (section === 'executive-preview') return <V2ExecutivePreview />;
     if (section === 'meta-precos') {
@@ -1396,24 +1377,15 @@ export default function V2Index() {
           </div>
         </div>
 
-        {/* FILTER BAR — comum a ambos os layouts */}
-        <div className="shrink-0 no-print">
-          <V2FilterBar
-            ano={ano}
-            mes={mes}
-            onAnoChange={setAno}
-            onMesChange={setMes}
-            tipo={periodoTipo}
-            showFazenda={false}
-            className="shrink-0"
-            modo={section === 'financeiro-dashboard' ? modo : undefined}
-            onModoChange={section === 'financeiro-dashboard' ? setModo : undefined}
-            periodoInicio={section === 'fechamento-periodo' ? periodo.periodoInicio : undefined}
-            periodoFim={section === 'fechamento-periodo' ? periodo.periodoFim : undefined}
-            onPeriodoChange={section === 'fechamento-periodo' ? (ini, fim) => setPeriodo({ periodoInicio: ini, periodoFim: fim }) : undefined}
-            onImprimir={section === 'fechamento-periodo' ? () => window.print() : undefined}
-          />
-        </div>
+        {/* ⚠ BARRA ÚNICA — PR-BARRA-UNICA-01a. Aqui morava a `V2FilterBar`: uma fita de
+            ano/mês igual nas 58 seções, alimentando um estado que — medido — só CINCO telas
+            liam de verdade; vinte e quatro recebiam apenas o valor inicial e vinte e nove
+            não recebiam nada e mesmo assim exibiam o seletor. Um controle que a maioria das
+            telas ignora ensina que ele não faz nada, e foi por isso que cada tela acabou
+            criando o seu ao lado — o filtro duplo que este envelope veio desmontar.
+            ⚠ O QUE FICA É O ENDEREÇO: "Grupo / Tela", com os rótulos saindo do MESMO
+            `navGrupos` que desenha o menu. O período passou a ser da tela. */}
+        <BarraSecao area={rotulo.area} secao={rotulo.secao} />
 
         {/* SUB-NAV FINANCEIRO — desktop apenas */}
         {['financeiro-dashboard', 'fluxo-caixa', 'rateio-adm', 'importacao-extratos'].includes(section) && (

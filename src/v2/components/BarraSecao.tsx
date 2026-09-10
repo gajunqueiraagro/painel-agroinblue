@@ -6,11 +6,18 @@
  * um trecho vira componente, não a terceira — a terceira já é a divergência.
  * ⚠ MOVIDO VERBATIM: classes, ordem dos elementos e a fonte do e-mail são as mesmas. A
  * lista não muda um pixel; se mudar, o move está errado.
- * ⚠ O E-MAIL VEM DO `useAuth` QUE JÁ EXISTE (`contexts/AuthContext`), não de um hook novo:
- * o Header e outras telas já leem `user?.email` dali. Lê-lo AQUI evita que cada chamador
- * repita a mesma linha.
+ * ⚠ AGORA ELA É A BARRA DO SHELL — PR-BARRA-UNICA-01a. Deixou de ser a faixa de duas telas
+ * e passou a ser montada UMA vez no `V2Index`, com `area`/`secao` saindo do `navGrupos` —
+ * a mesma fonte dos rótulos do menu, para o topo nunca discordar da lateral. Os dois usos
+ * locais (Parcelamentos e Recorrências) saíram: com o shell montando a barra, eles
+ * empilhavam duas.
+ * ⚠ O E-MAIL VIROU NOME. Ele vinha do `useAuth` porque era o que existia; `profiles.nome`
+ * diz quem está operando, e o e-mail fica de fallback dentro do `useProfileAtual` — a
+ * decisão de qual mostrar não é desta barra.
+ * ⚠ "SAIR" NÃO MORA AQUI. Ele já existe no `V2Sidebar`, e um segundo botão de sair é a
+ * segunda porta para o mesmo ato: a que ninguém testa.
  */
-import { useAuth } from '@/contexts/AuthContext';
+import { useProfileAtual } from '@/v2/hooks/useProfileAtual';
 
 export interface BarraSecaoProps {
   /** O primeiro nível do caminho — "Financeiro", "Rebanho"… */
@@ -20,16 +27,18 @@ export interface BarraSecaoProps {
 }
 
 export function BarraSecao({ area, secao }: BarraSecaoProps) {
-  const { user } = useAuth();
+  const { nome } = useProfileAtual();
   return (
     <header className="sticky top-0 z-40 shrink-0 bg-primary shadow-md">
       <div className="flex items-center justify-between gap-2 px-3 py-1">
-        <p className="min-w-0 truncate text-[11px] font-semibold tracking-wide text-primary-foreground">
+        {/* 13px — a barra deixou de ser detalhe de tela e virou o topo do sistema. O grupo
+            recua (white/70, normal) e a tela é quem se afirma (white, 500). */}
+        <p className="min-w-0 truncate text-[13px] tracking-wide text-primary-foreground/70">
           {area}<span className="mx-1 text-primary-foreground/40">/</span>
-          <span className="font-normal text-primary-foreground/90">{secao}</span>
+          <span className="font-medium text-primary-foreground">{secao}</span>
         </p>
-        <span className="max-w-[220px] truncate text-[10px] text-primary-foreground/65">
-          {user?.email ?? ''}
+        <span className="max-w-[220px] truncate text-[12px] text-primary-foreground/80" title={nome}>
+          {nome}
         </span>
       </div>
     </header>

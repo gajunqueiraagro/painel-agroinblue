@@ -55,6 +55,7 @@ import type { DestinoArea } from '@/hooks/useFechamentoArea';
 import { warnIndicadoresSemCatalogo } from '@/lib/painelConsultor/validarIndicadores';
 import { agregaSnapshotsGlobal } from '@/lib/painelConsultor/consolidacaoGlobal';
 import { useCliente } from '@/contexts/ClienteContext';
+import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
 
 // ─── Constants ───
 const MESES_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -69,6 +70,10 @@ interface Props {
   onBack: () => void;
   onTabChange?: (tab: string) => void;
   filtroGlobal?: { ano: string; mes: number };
+  /* ⚠ O PERÍODO DESCE E VOLTA — PR-BARRA-UNICA-01a. A fita de ano/mês do shell saiu e esta
+     tela é uma das que a liam de verdade (por `filtroGlobal`); sem devolver a troca ao
+     `V2Index`, o seletor mudaria o número na tela e não o estado que os drills escrevem. */
+  onPeriodoChange?: (ano: string, mes: number) => void;
   metaConsolidacao?: MetaCategoriaMes[];
 }
 
@@ -1888,7 +1893,7 @@ function SourceInfoTooltip({ indicadorId, cenario }: { indicadorId?: string; cen
 }
 
 // ─── Component ───
-export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaConsolidacao }: Props) {
+export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaConsolidacao, onPeriodoChange }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const { pastos, categorias } = usePastos();
   /* `ano` e `anoNum` subiram para ca: as duas chamadas de `useLancamentos`
@@ -2693,6 +2698,18 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
   );
 
   return (
+    <>
+      {onPeriodoChange && (
+        <div className="mb-2 px-1">
+          <SeletorPeriodo
+            ano={ano}
+            onAnoChange={(a) => onPeriodoChange(a, filtroGlobal?.mes ?? new Date().getMonth() + 1)}
+            mes={filtroGlobal?.mes ?? new Date().getMonth() + 1}
+            onMesChange={(m) => onPeriodoChange(ano, m)}
+          />
+        </div>
+      )}
+
     <TooltipProvider delayDuration={200}>
       <div className="max-w-full mx-auto animate-fade-in pb-16 flex flex-col h-full">
         {/* ── Sticky toolbar + tabs ── */}
@@ -2879,5 +2896,6 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
         />
       )}
     </TooltipProvider>
+    </>
   );
 }

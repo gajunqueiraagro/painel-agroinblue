@@ -212,13 +212,16 @@ import { BlocoAnaliseEconomica } from './V2PlanejamentoVisaoGeral.parts/BlocoAna
 import { BlocoFinanceiroCapital } from './V2PlanejamentoVisaoGeral.parts/BlocoFinanceiroCapital';
 import { BlocoMovimentacaoRebanho } from './V2PlanejamentoVisaoGeral.parts/BlocoMovimentacaoRebanho';
 import { BlocoRateioAdministrativo } from './V2PlanejamentoVisaoGeral.parts/BlocoRateioAdministrativo';
+import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
 
 interface Props {
   ano: number;
   mes: number;
+  onAnoChange?: (v: string) => void;
+  onMesChange?: (v: number) => void;
 }
 
-export function V2PlanejamentoVisaoGeral({ ano, mes }: Props) {
+export function V2PlanejamentoVisaoGeral({ ano, mes, onAnoChange, onMesChange }: Props) {
   const { fazendaAtual, isGlobal } = useFazenda();
   const { clienteAtual } = useCliente();
   const clienteId = clienteAtual?.id;
@@ -425,6 +428,13 @@ export function V2PlanejamentoVisaoGeral({ ano, mes }: Props) {
   }
 
   return (
+    <>
+      {/* ⚠ O PERÍODO É DA TELA — PR-BARRA-UNICA-01a. A fita de ano/mês do shell saiu, e
+          esta é uma das telas que de fato liam aquele estado: sem o seletor aqui, ela
+          ficaria sem como trocar de mês. O estado segue no `V2Index` porque é lá que os
+          drills (`?fano=&fmes=`, retorno de pendência) o escrevem. */}
+      <div className="mb-2 px-1"><SeletorPeriodo ano={String(ano)} onAnoChange={onAnoChange} mes={mes} onMesChange={onMesChange} /></div>
+
     <V2PageContent>
       <header className="mb-4">
         <h1 className="text-xl font-bold text-foreground">Visão Geral Planejamento {ano}</h1>
@@ -493,5 +503,6 @@ export function V2PlanejamentoVisaoGeral({ ano, mes }: Props) {
         </details>
       )}
     </V2PageContent>
+    </>
   );
 }

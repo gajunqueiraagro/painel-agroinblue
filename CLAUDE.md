@@ -43,7 +43,7 @@ no mesmo arquivo.
   sai com codigo 0 e passa sempre. Era um gate vazio. O comando oficial
   varre os 671 arquivos .ts/.tsx em src/ e sai com codigo 2 enquanto
   houver erro.
-- TSC baseline: 150 erros (era 73 ate 2026-09-02, 155 ate 09-03 e 153 ate 09-08 — ver a regeneracao do
+- TSC baseline: 148 erros (era 73 ate 2026-09-02, 155 ate 09-03, 153 ate 09-08 e 150 ate 09-09 — ver a regeneracao do
   types.ts abaixo), medidos em ARVORE LIMPA — worktree em detached
   HEAD sobre o commit, NUNCA no checkout principal. Mesmo numero e mesmo
   conjunto de diagnosticos em c0fdb21b, 487fe1cf e c28de22a.
@@ -159,6 +159,23 @@ no mesmo arquivo.
   `select`. Sem ela, "Cartao Banco do Brasil - Pecuaria Ag. 8974 C/C 25367 7" pulava
   a camada do apelido e casava pela agencia+numero com a CONTA CORRENTE de mesma
   agencia. O `select` ganhou a coluna no mesmo PR.
+  De 150 para 148 em 2026-09-10, sobre 8a8a76be, no PR-BARRA-UNICA-01a. Sairam 2:
+    1x TS2322 em src/v2/V2Index.tsx — 'number' nao atribuivel a 'string', no
+       `mesInicial={Number(mes)}` que a montagem de `IndicadoresTab` passava;
+    1x TS2353 em src/v2/lib/periodoConfig.ts — ''evolucao'' nao existe em
+       `Partial<Record<V2Section, PeriodoTipo>>`. Este saiu com o ARQUIVO: `periodoConfig`
+       ficou sem importador quando a `V2FilterBar` deixou o layout, e os dois foram
+       apagados. A secao 'evolucao' continua tendo ramo de render em V2Index sem existir
+       na uniao `V2Section` — o TS2367 que denuncia isso SEGUE na baseline, e agora e' o
+       unico rastro dela.
+  E' EXATAMENTE o erro que a RODADA-2 deixou anotado aqui como "o MESMO PADRAO CONTINUA em
+  V2Index ... quem for reduzir de novo comeca por ali". Ele saiu por REMOCAO da prop, nao
+  por conserto de tipo: a `V2FilterBar` global foi desmontada e as 32 props de valor
+  INICIAL (`initialAno`, `filtroAnoInicial`, `anoInicial`, `mesInicial`) que ela semeava
+  desapareceram com ela — a de `IndicadoresTab` entre elas.
+  ⚠ A LICAO E' A MESMA DAS OUTRAS: o diagnostico dizia, desde sempre, que a tela abria no
+  mes errado; o que o apagou foi uma frente de LAYOUT, nao uma de tipos. Baseline e' divida
+  conhecida, e ela sai quando a causa some — nao quando alguem a persegue.
   Como comparar antes (A) x depois (B), nesta ordem:
     1. CONTAGEM. B <= A, sempre. B > A reprova o PR.
     2. DIAGNOSTICOS. Comparar os conjuntos por

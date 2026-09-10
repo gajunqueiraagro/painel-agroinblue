@@ -27,7 +27,8 @@ import {
 // internamente para number (que é o que useAreaPlanejamento espera).
 
 interface Props {
-  ano: string;
+  /** Ano de PARTIDA. Sem ele, o corrente — a tela guarda o seu depois disso. */
+  ano?: string;
 }
 
 const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
@@ -120,7 +121,10 @@ function media(arr: (number | null)[]): number | null {
   return v.reduce((s, n) => s + n, 0) / v.length;
 }
 
-export function V2AreasMeta({ ano: anoInicial }: Props) {
+/* ⚠ `ano` VIROU OPCIONAL — PR-BARRA-UNICA-01a. Ele nunca foi controlado: a assinatura já o
+   renomeava para `anoInicial` e a tela mantinha o próprio estado. Com a barra global fora,
+   o valor inicial passa a ser o ano corrente, e a tela segue dona do seu período. */
+export function V2AreasMeta({ ano: anoInicial }: Props = {}) {
   // Contexts (API real — ver comentário acima)
   const { clienteAtual } = useCliente();
   /* `fazendas`, nao `fazendasComPecuaria`: a Retiro Agricultura tem
