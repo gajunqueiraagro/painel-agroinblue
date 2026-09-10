@@ -10,7 +10,7 @@
  * revisa um campo que já veio preenchido.
  */
 import { describe, it, expect } from 'vitest';
-import { safraSugerida, type SafraCandidata } from './safraSugerida';
+import { safraSugerida, safrasCandidatas, type SafraCandidata } from './safraSugerida';
 
 const PEC_2526: SafraCandidata = { id: 'p1', codigo: '25/26-Pec', escopo_negocio: 'pecuaria', ativa: true };
 const PEC_2627: SafraCandidata = { id: 'p2', codigo: '26/27-Pec', escopo_negocio: 'pecuaria', ativa: true };
@@ -62,3 +62,60 @@ describe('safraSugerida', () => {
     expect(safraSugerida('2026-08-31', 'agricultura', [MAND_2627])).toBe('a2');
   });
 });
+
+describe('duas políticas para o empate — PR-FIN-ATIVIDADE-01b', () => {
+  /* ⚠ O caso real do NJ: Amendoim e Mandioca na mesma temporada. Import em lote desempata
+     porque campo vazio ali vira lançamento sem safra que ninguém revisa; o modal NÃO
+     desempata porque o operador está com os olhos no campo. */
+  const DUAS: SafraCandidata[] = [
+    { id: 'amd', codigo: '25/26-AMD', escopo_negocio: 'agricultura', ativa: true },
+    { id: 'mand', codigo: '25/26-MAND', escopo_negocio: 'agricultura', ativa: true },
+  ];
+
+  it('padrão (import): desempata pela cultura principal', () => {
+    expect(safraSugerida('2025-11-14', 'agricultura', DUAS)).toBe('amd');
+  });
+
+  it('`desempatar: false` (modal): não escolhe nenhuma', () => {
+    expect(safraSugerida('2025-11-14', 'agricultura', DUAS, { desempatar: false })).toBeNull();
+  });
+
+  it('com UMA candidata as duas políticas concordam', () => {
+    const UMA = [DUAS[0]];
+    expect(safraSugerida('2025-11-14', 'agricultura', UMA)).toBe('amd');
+    expect(safraSugerida('2025-11-14', 'agricultura', UMA, { desempatar: false })).toBe('amd');
+  });
+});
+
+describe('as candidatas que a tela mostra', () => {
+  const CADASTRO: SafraCandidata[] = [
+    { id: 'amd', codigo: '25/26-AMD', escopo_negocio: 'agricultura', ativa: true },
+    { id: 'mand', codigo: '25/26-MAND', escopo_negocio: 'agricultura', ativa: true },
+    { id: 'pec', codigo: '25/26-Pec', escopo_negocio: 'pecuaria', ativa: true },
+    { id: 'velha', codigo: '24/25-AMD', escopo_negocio: 'agricultura', ativa: true },
+    { id: 'inativa', codigo: '25/26-SOJ', escopo_negocio: 'agricultura', ativa: false },
+  ];
+
+  it('são as da temporada e do escopo, sem as inativas', () => {
+    expect(safrasCandidatas('2025-11-14', 'agricultura', CADASTRO).map(s => s.id))
+      .toEqual(['amd', 'mand']);
+  });
+
+  it('a temporada vira em julho', () => {
+    expect(safrasCandidatas('2026-06-30', 'agricultura', CADASTRO).map(s => s.id)).toEqual(['amd', 'mand']);
+    expect(safrasCandidatas('2026-07-01', 'agricultura', CADASTRO).map(s => s.id)).toEqual([]);
+  });
+
+  it('o conjunto é o MESMO que a sugestão considera', () => {
+    /* Se divergirem, o operador vê uma safra sugerida que não está no topo da lista. */
+    const cands = safrasCandidatas('2025-11-14', 'agricultura', CADASTRO);
+    const sugerida = safraSugerida('2025-11-14', 'agricultura', CADASTRO);
+    expect(cands.some(c => c.id === sugerida)).toBe(true);
+  });
+
+  it('sem data ou sem escopo, nenhuma', () => {
+    expect(safrasCandidatas(null, 'agricultura', CADASTRO)).toEqual([]);
+    expect(safrasCandidatas('2025-11-14', null, CADASTRO)).toEqual([]);
+  });
+});
+

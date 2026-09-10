@@ -40,6 +40,7 @@ import { cn } from '@/lib/utils';
 import type { ExcelContext } from '@/v2/lib/mesa/buildExcelContext';
 import { planoDeTransferencia, ehTipoTransferencia } from '@/v2/lib/mesa/transferenciaPlano';
 import { ATIVIDADES, lembrarAtividade, ultimaAtividade, type Atividade } from '@/lib/financeiro/ultimaAtividade';
+import { safraSugerida, safrasCandidatas } from '@/lib/agri/safraSugerida';
 
 interface Props {
   open: boolean;
@@ -394,6 +395,18 @@ export function LancamentoV2Dialog({
    */
   const [atividade, setAtividade] = useState<Atividade | null>(null);
   const [subcentroLimpoPelaAtividade, setSubcentroLimpoPelaAtividade] = useState(false);
+  /**
+   * A SAFRA SE SUGERE, MAS NÃO SE IMPÕE — PR-FIN-ATIVIDADE-01b.
+   *
+   * ⚠ DOIS ESTADOS PARA UMA COISA SÓ, e cada um responde uma pergunta diferente:
+   * `safraSugeridaId` é "este valor foi posto por mim ou escolhido por ele?" — é o que
+   * permite substituir a sugestão quando a data muda sem apagar uma escolha; e
+   * `safraEditadaAMao` é "ele já disse o que quer?" — a partir daí a sugestão cala até o
+   * modal fechar. Sem o segundo, escolher a safra e depois corrigir a data desfaria a
+   * escolha, e o operador teria de escolher de novo sem entender por quê.
+   */
+  const [safraSugeridaId, setSafraSugeridaId] = useState<string | null>(null);
+  const [safraEditadaAMao, setSafraEditadaAMao] = useState(false);
 
   /* O plano tem escopos que o card não oferece (vazio, e os legados). Marcar uma pílula que
      não existe deixaria o card em branco filtrando por algo — pior que não filtrar. */
@@ -517,6 +530,35 @@ export function LancamentoV2Dialog({
     }
   };
 
+  /* As candidatas da competência e da atividade — a MESMA função que a sugestão usa. */
+  const candidatasDeSafra = useMemo(
+    () => (atividade && atividade !== 'administrativo'
+      ? safrasCandidatas(dataCompetencia, atividade, safras ?? [])
+      : []),
+    [atividade, dataCompetencia, safras]);
+
+  const safraNome = (id: string) => (safras ?? []).find((s) => s.id === id)?.nome ?? id;
+
+  /**
+   * ⚠ SUGERE AO MUDAR ATIVIDADE OU COMPETÊNCIA, e só quando o campo está livre: vazio, ou
+   * ainda com a sugestão anterior. Um campo escolhido à mão é decisão tomada.
+   * ⚠ ADMINISTRATIVO NUNCA SUGERE (OC_013): safra em administrativo é regra do backfill,
+   * pelo que o plano aponta — não do modal.
+   * ⚠ E COM EMPATE NÃO ESCOLHE (`desempatar: false`). No import em lote a política é outra,
+   * e é por isso que ela é opção da função e não regra dela: lá campo vazio vira lançamento
+   * sem safra que ninguém revisa; aqui o operador está olhando o campo.
+   */
+  useEffect(() => {
+    if (safraEditadaAMao) return;
+    if (safraId && safraId !== safraSugeridaId) return;
+    const nova = atividade && atividade !== 'administrativo'
+      ? safraSugerida(dataCompetencia, atividade, safras ?? [], { desempatar: false })
+      : null;
+    setSafraId(nova ?? '');
+    setSafraSugeridaId(nova);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [atividade, dataCompetencia, safras, safraEditadaAMao]);
+
   const aplicarTipoOperacao = (v: string) => {
     setTipoOperacao(v);
     setSubcentroSearch('');
@@ -566,6 +608,11 @@ export function LancamentoV2Dialog({
       /* O card segue o lançamento — e o lançamento segue o plano. */
       setAtividade(atividadeValida(planoTransfAoAbrir?.escopo_negocio ?? lancamento.escopo_negocio));
       setSubcentroLimpoPelaAtividade(false);
+      setSafraSugeridaId(null);
+      /* ⚠ LANÇAMENTO GRAVADO COM SAFRA NÃO RECEBE SUGESTÃO. O que está no banco é decisão
+         de alguém, ainda que de outro dia; sobrescrevê-la ao abrir seria reclassificar sem
+         pedir licença. */
+      setSafraEditadaAMao(!!lancamento.safra_id);
       setTipoOperacao(lancamento.tipo_operacao);
       setStatusTransacao(normalizeStatusModal(lancamento.status_transacao));   // PR-FIN-STATUS-UX-03A-1 — legado 'meta' exibe como 'previsto' (sem gravar)
       setValorDisplay(toBRL(Math.abs(lancamento.valor)));
@@ -655,6 +702,8 @@ export function LancamentoV2Dialog({
          é `null`, e aí a lista é a completa, como sempre foi. */
       setAtividade(ultimaAtividade());
       setSubcentroLimpoPelaAtividade(false);
+      setSafraSugeridaId(null);
+      setSafraEditadaAMao(false);
       setTipoOperacao('2-Saídas');
       setStatusTransacao(STATUS_FINANCEIRO_INICIAL);   // PR-FIN-STATUS-UX-03A-1 — era 'meta'
       setValorDisplay('0,00');
@@ -1478,20 +1527,6 @@ export function LancamentoV2Dialog({
                 a partir dos derivados já existentes. Mesmos estados/ids/handlers/validação da
                 antiga aba Classificação (movida verbatim). */}
             <div className="grid grid-cols-12 gap-2 items-start">
-              {/* Safra (opcional) — NÃO gera pendência. Mesmo safraId/opções/payload. */}
-              <div className="col-span-3">
-                <Label className="text-[10px]">Safra</Label>
-                <Select
-                  value={safraId || '__none_safra__'}
-                  onValueChange={v => setSafraId(v === '__none_safra__' ? '' : v)}
-                >
-                  <SelectTrigger className={cn("h-8", fieldBg)}><SelectValue placeholder="Sem safra" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none_safra__">Sem safra</SelectItem>
-                    {(safras ?? []).map(s => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
               {/* ── Atividade — PR-FIN-ATIVIDADE-01 (D13). Vem ANTES do Subcentro porque é o
                      que encolhe a lista dele: o plano passou de 137 para 206 subcentros em
                      10/09 e continua crescendo; digitar "combust" devolvia pecuária,
@@ -1501,7 +1536,12 @@ export function LancamentoV2Dialog({
                      da A16. Rolar horizontalmente mantém a altura fixa sempre. */}
               <div className="col-span-4">
                 <Label className="text-[10px]">Atividade</Label>
-                <div className="flex h-8 items-center gap-1 overflow-x-auto">
+                {/* ⚠ 2×2 EM 32px, COM A ALTURA DA LINHA DECLARADA — medido: com o
+                    `line-height` padrão (1,5) cada pílula mede 19px e as duas fileiras
+                    somam 40, oito a mais que o campo ao lado; com 11px de linha a pílula
+                    mede 15 e o conjunto fecha em 32 exatos. A fonte NÃO desce de 10px — o
+                    piso é inviolável, e quem cede é a entrelinha. */}
+                <div className="grid h-8 grid-cols-2 content-center gap-0.5">
                   {ATIVIDADES.map((a) => {
                     const marcada = atividade === a.valor;
                     return (
@@ -1512,8 +1552,9 @@ export function LancamentoV2Dialog({
                         onClick={() => aplicarAtividade(a.valor)}
                         aria-pressed={marcada}
                         className={cn(
-                          'shrink-0 rounded-full border px-2 py-0.5 text-[10px] transition-colors',
+                          'rounded-full border text-center text-[10px] transition-colors',
                           subcentroTravado && 'opacity-45',
+                          'px-1.5 py-px leading-[11px]',
                           marcada
                             ? 'border-primary bg-primary text-primary-foreground'
                             : 'border-border bg-card text-muted-foreground hover:bg-muted',
@@ -1526,7 +1567,7 @@ export function LancamentoV2Dialog({
                 </div>
               </div>
               {/* Subcentro — PR-U2c-1D: <PlanoSubcentroSelect /> (fonte única) */}
-              <div className="col-span-5">
+              <div className="col-span-8">
                 <PlanoSubcentroSelect
                   value={subcentro}
                   onChange={setSubcentro}
@@ -1584,6 +1625,43 @@ export function LancamentoV2Dialog({
                     </>
                   ) : '—'}
                 </div>
+              </div>
+            </div>
+
+            {/* ── LINHA B — Safra. Desceu da linha da classificação (PR-FIN-ATIVIDADE-01b):
+                 lá ela dividia doze colunas com Atividade e Subcentro, e o Subcentro tem os
+                 nomes mais longos do formulário. Aqui ela tem a MESMA largura do Tipo
+                 Operação, que é o campo com que se parece. */}
+            <div className="grid grid-cols-12 gap-2 items-start">
+              <div className="col-span-3">
+                <Label className="text-[10px]">Safra</Label>
+                <Select
+                  value={safraId || '__none_safra__'}
+                  onValueChange={v => { setSafraId(v === '__none_safra__' ? '' : v); setSafraEditadaAMao(true); setSafraSugeridaId(null); }}
+                >
+                  <SelectTrigger className={cn('h-8', fieldBg, safraSugeridaId && safraId === safraSugeridaId && 'border-dashed border-primary')}>
+                    <SelectValue placeholder="Sem safra" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none_safra__">Sem safra</SelectItem>
+                    {/* ⚠ AS CANDIDATAS VÊM PRIMEIRO, e são exatamente as que a sugestão
+                        considerou — a mesma função devolve as duas coisas. Quando há empate
+                        (Amendoim e Mandioca na mesma temporada) ninguém escolhe por quem
+                        lança; o que se faz é pôr as duas onde a mão alcança. */}
+                    {candidatasDeSafra.map(s => (
+                      <SelectItem key={s.id} value={s.id}>{safraNome(s.id)}</SelectItem>
+                    ))}
+                    {(safras ?? [])
+                      .filter(s => !candidatasDeSafra.some(c => c.id === s.id))
+                      .map(s => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                {/* ⚠ SUGERIDA DIZ QUE É SUGERIDA. Um campo que se preenche sozinho e não
+                    avisa é um campo que ninguém confere — e safra errada só aparece no
+                    fechamento, meses depois. */}
+                {safraSugeridaId && safraId === safraSugeridaId && (
+                  <div className="mt-0.5 text-[10px] leading-snug text-primary">sugerida</div>
+                )}
               </div>
             </div>
 
