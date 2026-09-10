@@ -19,6 +19,8 @@ import { KpiCard } from '@/components/indicadores/KpiCard';
 import { GmdDetalheSheet } from '@/components/indicadores/GmdDetalheSheet';
 import { useFechamentoCompetencia } from '@/hooks/useFechamentoCompetencia';
 import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
+import { useFiltroUrl } from '@/v2/hooks/useFiltroUrl';
+import { ANO_URL, MES_URL_2D } from '@/v2/lib/periodoUrl';
 
 
 interface Props {
@@ -48,8 +50,15 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
     return Array.from(anos).sort().reverse();
   }, [lancamentos, saldosIniciais]);
 
-  const [anoFiltro, setAnoFiltro] = useStickyState(anoInicial || String(new Date().getFullYear()));
-  const [mesFiltro, setMesFiltro] = useStickyState(mesInicial || String(new Date().getMonth() + 1).padStart(2, '0'));
+  /* ⚠ O PERÍODO MORA NA URL — PR-BARRA-UNICA-01c. Saiu do `useStickyState`, um helper deste
+     arquivo que prometia no nome uma persistência que nunca teve: era `return useState(...)`
+     e nada mais. Ele foi apagado junto — sem chamador, seria promessa órfã. O default é o
+     mesmo: ano e mês correntes. */
+  const [anoFiltro, setAnoFiltro] = useFiltroUrl(
+    'f_ano', anoInicial || String(new Date().getFullYear()), ANO_URL.ler, ANO_URL.escrever);
+  const [mesFiltro, setMesFiltro] = useFiltroUrl(
+    'f_mes', mesInicial || String(new Date().getMonth() + 1).padStart(2, '0'),
+    MES_URL_2D.ler, MES_URL_2D.escrever);
 
   const ind = useIndicadoresZootecnicos(
     fazendaId, Number(anoFiltro), Number(mesFiltro),
@@ -321,10 +330,6 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function useStickyState(initial: string): [string, (v: string) => void] {
-  return useState(initial);
-}
 
 function formatMoedaCompacto(val: number): string {
   if (val >= 1_000_000) return `R$ ${formatNum(val / 1_000_000, 2)}M`;

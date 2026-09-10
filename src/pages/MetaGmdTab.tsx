@@ -10,6 +10,8 @@ import { useMetaGmd } from '@/hooks/useMetaGmd';
 import { Save, ArrowLeft, CopyCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
+import { useFiltroUrl } from '@/v2/hooks/useFiltroUrl';
+import { ANO_URL } from '@/v2/lib/periodoUrl';
 
 interface Props {
   onBack?: () => void;
@@ -22,7 +24,9 @@ const MESES_SHORT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Se
 
 export function MetaGmdTab({ onBack, initialAno, backLabel, ocultarFiltroAno }: Props) {
   const now = new Date();
-  const [ano, setAno] = useState(initialAno || String(now.getFullYear()));
+  /* ⚠ O ANO MORA NA URL — PR-BARRA-UNICA-01c; default inalterado. */
+  const [ano, setAno] = useFiltroUrl(
+    'f_ano', initialAno || String(now.getFullYear()), ANO_URL.ler, ANO_URL.escrever);
   useEffect(() => {
     if (initialAno) setAno(initialAno);
   }, [initialAno]);

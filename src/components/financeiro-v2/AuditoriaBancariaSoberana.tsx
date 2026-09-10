@@ -23,6 +23,8 @@ import { EstacaoConciliacao, type GrupoSugerido } from '@/components/financeiro-
 import { LancamentoLeituraDialog } from '@/components/financeiro-v2/LancamentoLeituraDialog';
 import { toast } from 'sonner';
 import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
+import { useFiltroUrl } from '@/v2/hooks/useFiltroUrl';
+import { ANO_URL_NUM, MES_URL_NUM } from '@/v2/lib/periodoUrl';
 
 interface Props {
   /* ⚠ OPCIONAL DESDE O PR-BARRA-UNICA-01a. Ela era obrigatória porque a barra global do
@@ -914,8 +916,13 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
   const queryClient = useQueryClient();
   const [contas, setContas] = useState<ContaSelecionavel[]>([]);
   const [contaId, setContaId] = useState<string | null>(null);
-  const [ano, setAno] = useState<number>(Number(initialAno) || new Date().getFullYear());
-  const [mes, setMes] = useState<number>(initialMes ?? new Date().getMonth() + 1);
+  /* ⚠ O PERÍODO MORA NA URL — PR-BARRA-UNICA-01c. Esta tela guarda NÚMEROS, e é por isso
+     que o codec é outro: a tradução fica na borda e nada aqui dentro muda. Default igual —
+     ano e mês correntes. */
+  const [ano, setAno] = useFiltroUrl(
+    'f_ano', Number(initialAno) || new Date().getFullYear(), ANO_URL_NUM.ler, ANO_URL_NUM.escrever);
+  const [mes, setMes] = useFiltroUrl(
+    'f_mes', initialMes ?? new Date().getMonth() + 1, MES_URL_NUM.ler, MES_URL_NUM.escrever);
   const [filtroAtivo, setFiltroAtivo] = useState<FiltroKey>('todos');
   const [importOpen, setImportOpen] = useState(false);
   const [cardsTopoAbertos, setCardsTopoAbertos] = useState(false);

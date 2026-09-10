@@ -17,6 +17,8 @@ import { useAnosDisponiveis } from '@/hooks/useAnosDisponiveis';
 import { useOperacoesComerciaisEmAndamento } from '@/hooks/useOperacoesComerciaisEmAndamento';
 import { useValorEmProjecao } from '@/hooks/useValorEmProjecao';
 import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
+import { useFiltroUrl } from '@/v2/hooks/useFiltroUrl';
+import { ANO_URL, MES_URL_TODOS } from '@/v2/lib/periodoUrl';
 
 type StatusFiltro = 'todos' | 'realizado' | 'meta';
 type SortDir = 'asc' | 'desc' | null;
@@ -633,8 +635,12 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
 
   const { data: anosDisponiveis = [String(new Date().getFullYear())] } = useAnosDisponiveis();
 
-  const [anoFiltro, setAnoFiltro] = useState(filtroAnoInicial || String(new Date().getFullYear()));
-  const [mesFiltro, setMesFiltro] = useState(filtroMesInicial || 'todos');
+  /* ⚠ O PERÍODO MORA NA URL — PR-BARRA-UNICA-01c. Mesmo default de antes; o que ganha é a
+     sobrevivência ao F5 e à ida e volta de uma seção. */
+  const [anoFiltro, setAnoFiltro] = useFiltroUrl(
+    'f_ano', filtroAnoInicial || String(new Date().getFullYear()), ANO_URL.ler, ANO_URL.escrever);
+  const [mesFiltro, setMesFiltro] = useFiltroUrl(
+    'f_mes', filtroMesInicial || 'todos', MES_URL_TODOS.ler, MES_URL_TODOS.escrever);
   const [statusFiltro, setStatusFiltro] = useState<StatusFiltro>(normalizeStatusFiltro(filtroStatusInicial));
   const [categoriaFiltro, setCategoriaFiltro] = useState(filtroCategoriaInicial || 'todas');
 

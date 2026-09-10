@@ -30,6 +30,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { salvarValorRebanhoMeta, type ValorRebanhoMetaItem } from '@/hooks/useValorRebanhoMeta';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
+import { useFiltroUrl } from '@/v2/hooks/useFiltroUrl';
+import { ANO_URL } from '@/v2/lib/periodoUrl';
 
 interface Props {
   onBack?: () => void;
@@ -107,7 +109,11 @@ function MiniChart({ data, color, title }: { data: { label: string; value: numbe
 
 export function MetaPrecoTab({ onBack }: Props) {
   const now = new Date();
-  const [ano, setAno] = useState(String(now.getFullYear()));
+  /* ⚠ O ANO MORA NA URL — PR-BARRA-UNICA-01c. O `mes` logo abaixo NÃO entra: ele não é o
+     filtro de período desta tela (o seletor dela é só de ano), e escrevê-lo em `f_mes`
+     faria a próxima tela abrir num mês que ninguém escolheu. */
+  const [ano, setAno] = useFiltroUrl(
+    'f_ano', String(now.getFullYear()), ANO_URL.ler, ANO_URL.escrever);
   const [mes, setMes] = useState(String(now.getMonth() + 1).padStart(2, '0'));
   const anoMes = `${ano}-${mes}`;
 

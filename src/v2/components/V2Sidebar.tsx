@@ -14,11 +14,10 @@
 import { ReactNode } from 'react';
 import {
   LayoutDashboard, Beef, DollarSign, Target,
-  Settings, LogOut, KeyRound, ChevronRight,
+  Settings, KeyRound, ChevronRight,
   Briefcase, ShieldCheck, Folder,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { AlterarSenhaDialog } from '@/components/AlterarSenhaDialog';
 import logo from '@/assets/logo.png';
@@ -61,7 +60,6 @@ export function V2Sidebar({
   fazendaSelector,
   className,
 }: V2SidebarProps) {
-  const { signOut } = useAuth();
   const activeGroup = SECTION_TO_GROUP[activeSection] ?? null;
 
   function handleGroup(groupId: string) {
@@ -176,14 +174,10 @@ export function V2Sidebar({
             </Button>
           }
         />
-        <Button
-          variant="ghost" size="icon"
-          onClick={signOut}
-          className="h-7 w-7 text-primary-foreground/60 hover:text-primary-foreground hover:bg-primary-foreground/10"
-          title="Sair"
-        >
-          <LogOut className="h-3.5 w-3.5" />
-        </Button>
+        {/* ⚠ O "SAIR" SAIU DAQUI — adendo do PR-BARRA-UNICA-01c. Ele foi para a
+            `BarraSecao`, que existe no desktop E no mobile; aqui ele só existia no
+            desktop, e no celular não havia por onde sair. Uma porta só, e agora ela
+            aparece nos dois. */}
       </div>
 
     </aside>

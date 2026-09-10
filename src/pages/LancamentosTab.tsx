@@ -162,6 +162,8 @@ type Aba = 'entrada' | 'saida' | 'reclassificacao';
 import { STATUS_LABEL, STATUS_OPTIONS_ZOOTECNICO, META_VISUAL, getStatusBadge, type StatusOperacional } from '@/lib/statusOperacional';
 import { usePermissions } from '@/hooks/usePermissions';
 import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
+import { useFiltroUrl } from '@/v2/hooks/useFiltroUrl';
+import { ANO_URL, MES_URL_TODOS } from '@/v2/lib/periodoUrl';
 
 /* ⚠ QUEM ESCOLHE A PROPRIA FAZENDA. Em contexto Global, so' estes podem lancar: os
    demais herdam a fazenda do contexto, que em Global nao existe.
@@ -657,8 +659,14 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const vendaFinanceiroRef = useRef<VendaFinanceiroPanelRef>(null);
   const [abateFinanceiroMissing, setAbateFinanceiroMissing] = useState(false);
   const [gerandoFinanceiroFallback, setGerandoFinanceiroFallback] = useState(false);
-  const [anoFiltro, setAnoFiltro] = useState(initialAnoFiltro || String(new Date().getFullYear()));
-  const [mesFiltro, setMesFiltro] = useState(initialMesFiltro || 'todos');
+  /* ⚠ O PERÍODO MORA NA URL — PR-BARRA-UNICA-01c. Era `useState`: trocar de seção
+     desmontava a tela e o mês voltava ao padrão; um F5 apagava a escolha. O DEFAULT NÃO
+     MUDA — sem `f_ano`/`f_mes` a tela abre exatamente onde abria (ano corrente, "Todos os
+     meses"); o que muda é que agora a escolha sobrevive. */
+  const [anoFiltro, setAnoFiltro] = useFiltroUrl(
+    'f_ano', initialAnoFiltro || String(new Date().getFullYear()), ANO_URL.ler, ANO_URL.escrever);
+  const [mesFiltro, setMesFiltro] = useFiltroUrl(
+    'f_mes', initialMesFiltro || 'todos', MES_URL_TODOS.ler, MES_URL_TODOS.escrever);
 
   // ─── P1 governance: derive anoMes from form date ───
   const formAnoMes = useMemo(() => {

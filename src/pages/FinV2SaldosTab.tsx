@@ -35,6 +35,8 @@ import {
 } from '@/lib/financeiro/conciliacaoCalc';
 import { buildSaldosAnosDisponiveis, buildUnifiedSaldos } from '@/lib/financeiro/saldosBancarios';
 import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
+import { useFiltroUrl } from '@/v2/hooks/useFiltroUrl';
+import { ANO_URL, MES_URL_ALL } from '@/v2/lib/periodoUrl';
 
 /* ── types ── */
 interface SaldoBancario {
@@ -126,8 +128,12 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
   const [editing, setEditing] = useState<SaldoBancario | null>(null);
 
   const [anosDisponiveis, setAnosDisponiveis] = useState<string[]>([String(new Date().getFullYear())]);
-  const [filtroAno, setFiltroAno] = useState(String(new Date().getFullYear()));
-  const [filtroMes, setFiltroMes] = useState('__all__');
+  /* ⚠ O PERÍODO MORA NA URL — PR-BARRA-UNICA-01c. Default idêntico: ano corrente e
+     "Todos" (`__all__`), que aqui governa o bloco de totais por tipo de conta. */
+  const [filtroAno, setFiltroAno] = useFiltroUrl(
+    'f_ano', String(new Date().getFullYear()), ANO_URL.ler, ANO_URL.escrever);
+  const [filtroMes, setFiltroMes] = useFiltroUrl(
+    'f_mes', '__all__', MES_URL_ALL.ler, MES_URL_ALL.escrever);
 
   // Load dynamic years from V2 + legado + lançamentos
   useEffect(() => {
