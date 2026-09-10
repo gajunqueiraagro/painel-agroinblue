@@ -39,6 +39,7 @@ import { formatMoeda } from '@/lib/calculos/formatters';
 import { cn } from '@/lib/utils';
 import type { ExcelContext } from '@/v2/lib/mesa/buildExcelContext';
 import { planoDeTransferencia, ehTipoTransferencia } from '@/v2/lib/mesa/transferenciaPlano';
+import { ATIVIDADES, lembrarAtividade, ultimaAtividade, type Atividade } from '@/lib/financeiro/ultimaAtividade';
 
 interface Props {
   open: boolean;
@@ -380,6 +381,24 @@ export function LancamentoV2Dialog({
 
   const [fazendaId, setFazendaId] = useState('');
   const [safraId, setSafraId] = useState('');
+  /**
+   * O CARD "ATIVIDADE" É PRÉ-FILTRO, NÃO DADO — PR-FIN-ATIVIDADE-01 (decisão D13).
+   *
+   * ⚠ NÃO GRAVA NADA. O `escopo_negocio` do lançamento continua vindo do plano, pelo
+   * trigger `resolve_classificacao_from_plano`. Este estado só encolhe a lista do subcentro.
+   * ⚠ ESTE É O PONTO EM QUE O ESCOPO PASSA A TER DUAS ORIGENS, e a precedência é fixa: o
+   * card FILTRA, o plano MANDA. Quem escolhe um subcentro leva o escopo dele — e o card se
+   * ajusta ao que veio. Nunca o contrário. Acontece com a lista completa (sem card) e ao
+   * editar um lançamento cujo plano mudou de escopo depois de gravado; nos dois casos o
+   * dado gravado vence a preferência de quem está olhando.
+   */
+  const [atividade, setAtividade] = useState<Atividade | null>(null);
+  const [subcentroLimpoPelaAtividade, setSubcentroLimpoPelaAtividade] = useState(false);
+
+  /* O plano tem escopos que o card não oferece (vazio, e os legados). Marcar uma pílula que
+     não existe deixaria o card em branco filtrando por algo — pior que não filtrar. */
+  const atividadeValida = (v: string | null | undefined): Atividade | null =>
+    ATIVIDADES.some((a) => a.valor === v) ? (v as Atividade) : null;
   const [dataCompetencia, setDataCompetencia] = useState('');
   const [dataVencimento, setDataVencimento] = useState('');   // PR-FIN-MODAL-VENCIMENTO-02B
   const [dataPagamento, setDataPagamento] = useState('');
@@ -442,6 +461,33 @@ export function LancamentoV2Dialog({
   const subcentroTravado = isTransferencia && !!planoTransferencia;
 
   /**
+   * A classificação que VAI NO PAYLOAD — PR-FIN-TRANSF-SUBCENTRO-01.
+   *
+   * ⚠ CINTO E SUSPENSÓRIO, e de propósito. O estado já é normalizado ao abrir e ao trocar o
+   * tipo, mas as duas dependem de `classificacoes` estar carregada — e ela chega assíncrona.
+   * Abrir o modal antes do plano terminar de carregar deixaria o estado com o valor velho e
+   * nenhum dos dois caminhos o corrigiria. Aqui é o último ponto antes de gravar, e a
+   * verdade da transferência é uma só.
+   * ⚠ RESOLVIDA POR `ordem_exibicao` (18010), nunca pelo texto: o nome tem acentos e um dia
+   * alguém os corrige.
+   */
+  const classificacaoParaGravar = () => {
+    if (!isTransferencia || !planoTransferencia) {
+      return {
+        subcentro, macro_custo: macroCusto, grupo_custo: grupoCusto,
+        centro_custo: centroCusto, escopo_negocio: escopoNegocio || undefined,
+      };
+    }
+    return {
+      subcentro: planoTransferencia.subcentro,
+      macro_custo: planoTransferencia.macro_custo,
+      grupo_custo: planoTransferencia.grupo_custo || '',
+      centro_custo: planoTransferencia.centro_custo,
+      escopo_negocio: planoTransferencia.escopo_negocio || undefined,
+    };
+  };
+
+  /**
    * Trocar o tipo de operação — e o que isso arrasta.
    *
    * ⚠ ERA UMA LINHA DE CINCO `set` NO JSX, e ela zerava a classificação de propósito: cada
@@ -450,6 +496,27 @@ export function LancamentoV2Dialog({
    * ⚠ ESCOPO SÓ NO RAMO DA TRANSFERÊNCIA: no ramo antigo ele nunca foi tocado, e mexer
    * nele aqui seria mudar comportamento por fora do que este PR pede.
    */
+  /**
+   * ⚠ TROCAR A ATIVIDADE LIMPA O SUBCENTRO DE OUTRO ESCOPO, e não escolhe outro no lugar.
+   * Escolher por conta própria seria classificar o lançamento por dedução — e uma
+   * classificação que ninguém conferiu é pior que um campo vazio, porque não pede
+   * conferência. O campo fica destacado dizendo o que aconteceu.
+   */
+  const aplicarAtividade = (v: Atividade) => {
+    const nova = atividade === v ? null : v;
+    setAtividade(nova);
+    lembrarAtividade(nova);
+    if (!nova) { setSubcentroLimpoPelaAtividade(false); return; }
+    /* Mesma comparação do save: aparar e ignorar caixa. */
+    const alvo = (subcentro || '').trim().toLowerCase();
+    const atual = classificacoes.find((c) => (c.subcentro || '').trim().toLowerCase() === alvo);
+    const escopoAtual = (atual?.escopo_negocio || '').trim();
+    if (atual && escopoAtual && escopoAtual !== nova) {
+      setSubcentro(''); setMacroCusto(''); setGrupoCusto(''); setCentroCusto(''); setEscopoNegocio('');
+      setSubcentroLimpoPelaAtividade(true);
+    }
+  };
+
   const aplicarTipoOperacao = (v: string) => {
     setTipoOperacao(v);
     setSubcentroSearch('');
@@ -481,11 +548,24 @@ export function LancamentoV2Dialog({
       setDataPagamento(lancamento.data_pagamento || '');
       setDescricao(lancamento.descricao || '');
       setFavorecidoId(lancamento.favorecido_id || '');
-      setSubcentro(lancamento.subcentro || '');
-      setMacroCusto(lancamento.macro_custo || '');
-      setGrupoCusto(lancamento.grupo_custo || '');
-      setCentroCusto(lancamento.centro_custo || '');
-      setEscopoNegocio(lancamento.escopo_negocio || '');
+      /* ⚠ TRANSFERÊNCIA NÃO CARREGA O QUE ESTÁ GRAVADO — PR-FIN-TRANSF-SUBCENTRO-01. Seis
+         lançamentos de fatura de cartão (NJ e Santa Rita) tinham tipo `3-Transferências` e
+         subcentro "Outras Desp. Administrativas" no banco. O campo aparecia TRAVADO na
+         conta certa — a lista dele, filtrada por `3-`, só tem a 18010 — e o estado ficava
+         com o valor errado. Salvar mandava o estado, o trigger via que nada mudou e o banco
+         não corrigia: a tela dizia uma coisa e o banco outra, e salvar não resolvia.
+         ⚠ `aplicarTipoOperacao` JÁ FAZIA ISSO ao TROCAR o tipo. Faltava o caminho de abrir —
+         a assimetria era o defeito inteiro. */
+      const planoTransfAoAbrir = ehTipoTransferencia(lancamento.tipo_operacao)
+        ? planoDeTransferencia(classificacoes) : null;
+      setSubcentro(planoTransfAoAbrir?.subcentro ?? (lancamento.subcentro || ''));
+      setMacroCusto(planoTransfAoAbrir?.macro_custo ?? (lancamento.macro_custo || ''));
+      setGrupoCusto(planoTransfAoAbrir?.grupo_custo ?? (lancamento.grupo_custo || ''));
+      setCentroCusto(planoTransfAoAbrir?.centro_custo ?? (lancamento.centro_custo || ''));
+      setEscopoNegocio(planoTransfAoAbrir?.escopo_negocio ?? (lancamento.escopo_negocio || ''));
+      /* O card segue o lançamento — e o lançamento segue o plano. */
+      setAtividade(atividadeValida(planoTransfAoAbrir?.escopo_negocio ?? lancamento.escopo_negocio));
+      setSubcentroLimpoPelaAtividade(false);
       setTipoOperacao(lancamento.tipo_operacao);
       setStatusTransacao(normalizeStatusModal(lancamento.status_transacao));   // PR-FIN-STATUS-UX-03A-1 — legado 'meta' exibe como 'previsto' (sem gravar)
       setValorDisplay(toBRL(Math.abs(lancamento.valor)));
@@ -570,6 +650,11 @@ export function LancamentoV2Dialog({
       setGrupoCusto('');
       setCentroCusto('');
       setEscopoNegocio('');
+      /* ⚠ LANÇAMENTO NOVO HERDA A ÚLTIMA ATIVIDADE DA SESSÃO — quem classifica quatrocentos
+         lançamentos de lavoura não quer marcar "Lavoura" quatrocentas vezes. No primeiro uso
+         é `null`, e aí a lista é a completa, como sempre foi. */
+      setAtividade(ultimaAtividade());
+      setSubcentroLimpoPelaAtividade(false);
       setTipoOperacao('2-Saídas');
       setStatusTransacao(STATUS_FINANCEIRO_INICIAL);   // PR-FIN-STATUS-UX-03A-1 — era 'meta'
       setValorDisplay('0,00');
@@ -892,9 +977,10 @@ export function LancamentoV2Dialog({
           tipo_operacao: tipoOperacao,
           status_transacao: 'programado',
           descricao: parcelaDesc,
-          macro_custo: macroCusto,
-          centro_custo: centroCusto,
-          subcentro,
+          /* ⚠ MESMA REGRA DO OUTRO SAVE — o caminho das parcelas grava tantos lançamentos
+             quantas forem, e um deles com a classificação errada é o mesmo defeito
+             multiplicado. */
+          ...classificacaoParaGravar(),
           observacao,
            numero_documento: notaFiscal || null,
            tipo_documento: tipoDocumento || null,
@@ -933,11 +1019,8 @@ export function LancamentoV2Dialog({
       tipo_operacao: tipoOperacao,
       status_transacao: statusPersistido,
       descricao,
-      macro_custo: macroCusto,
-      grupo_custo: grupoCusto,   // PR-OC-FIN-EDIT-FIX-01 — enviar grupo_custo evita falso-positivo de "classificação" na proteção OC
-      centro_custo: centroCusto,
-      subcentro,
-      escopo_negocio: escopoNegocio || undefined,
+      // PR-OC-FIN-EDIT-FIX-01 — enviar grupo_custo evita falso-positivo de "classificação" na proteção OC
+      ...classificacaoParaGravar(),
       observacao,
       numero_documento: notaFiscal || null,
       tipo_documento: tipoDocumento || null,
@@ -1396,7 +1479,7 @@ export function LancamentoV2Dialog({
                 antiga aba Classificação (movida verbatim). */}
             <div className="grid grid-cols-12 gap-2 items-start">
               {/* Safra (opcional) — NÃO gera pendência. Mesmo safraId/opções/payload. */}
-              <div className="col-span-4">
+              <div className="col-span-3">
                 <Label className="text-[10px]">Safra</Label>
                 <Select
                   value={safraId || '__none_safra__'}
@@ -1409,8 +1492,41 @@ export function LancamentoV2Dialog({
                   </SelectContent>
                 </Select>
               </div>
+              {/* ── Atividade — PR-FIN-ATIVIDADE-01 (D13). Vem ANTES do Subcentro porque é o
+                     que encolhe a lista dele: o plano passou de 137 para 206 subcentros em
+                     10/09 e continua crescendo; digitar "combust" devolvia pecuária,
+                     agricultura e silvicultura juntas.
+                     ⚠ NÃO QUEBRA LINHA, ROLA: quatro pílulas numa coluna estreita quebrariam
+                     em duas linhas e a altura do campo mudaria conforme o rótulo — o oposto
+                     da A16. Rolar horizontalmente mantém a altura fixa sempre. */}
+              <div className="col-span-4">
+                <Label className="text-[10px]">Atividade</Label>
+                <div className="flex h-8 items-center gap-1 overflow-x-auto">
+                  {ATIVIDADES.map((a) => {
+                    const marcada = atividade === a.valor;
+                    return (
+                      <button
+                        key={a.valor}
+                        type="button"
+                        disabled={subcentroTravado}
+                        onClick={() => aplicarAtividade(a.valor)}
+                        aria-pressed={marcada}
+                        className={cn(
+                          'shrink-0 rounded-full border px-2 py-0.5 text-[10px] transition-colors',
+                          subcentroTravado && 'opacity-45',
+                          marcada
+                            ? 'border-primary bg-primary text-primary-foreground'
+                            : 'border-border bg-card text-muted-foreground hover:bg-muted',
+                        )}
+                      >
+                        {a.rotulo}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
               {/* Subcentro — PR-U2c-1D: <PlanoSubcentroSelect /> (fonte única) */}
-              <div className="col-span-8">
+              <div className="col-span-5">
                 <PlanoSubcentroSelect
                   value={subcentro}
                   onChange={setSubcentro}
@@ -1420,8 +1536,15 @@ export function LancamentoV2Dialog({
                       setGrupoCusto(cls.grupo_custo || '');
                       setCentroCusto(cls.centro_custo);
                       setEscopoNegocio(cls.escopo_negocio || '');
+                      /* ⚠ O PLANO MANDA — a precedência do card. Escolher um subcentro de
+                         outro escopo (possível com a lista completa, ou com "Mostrar todos")
+                         move a pílula para o escopo que veio. O card é preferência de quem
+                         olha; o plano é o dado. */
+                      setAtividade(atividadeValida(cls.escopo_negocio));
+                      setSubcentroLimpoPelaAtividade(false);
                     }
                   }}
+                  escopoNegocio={atividade ?? undefined}
                   classificacoes={classificacoes}
                   tipoOperacao={tipoOperacao}
                   search={subcentroSearch}
@@ -1431,6 +1554,16 @@ export function LancamentoV2Dialog({
                   tabIndex={11}
                   disabled={isOCTitulo || subcentroTravado}
                 />
+                {/* ⚠ CAMPO LIMPO DIZ POR QUÊ — mesma regra do campo travado abaixo. Trocar a
+                    atividade apaga um subcentro de outro escopo, e um campo que esvazia
+                    sozinho sem explicação parece defeito. Este modal não tem idioma de
+                    "obrigatório vazio" (a validação é por toast no save), então a frase ao
+                    lado é o idioma que existe aqui. */}
+                {subcentroLimpoPelaAtividade && !subcentro && (
+                  <div className="mt-0.5 text-[10px] leading-snug text-destructive">
+                    o subcentro anterior era de outra atividade — escolha um novo
+                  </div>
+                )}
                 {/* ⚠ CAMPO TRAVADO DIZ POR QUÊ, ao lado — a mesma regra do botão
                     desabilitado. Sem a frase, o operador vê um select apagado com um valor
                     que ele não escolheu e procura o defeito. */}

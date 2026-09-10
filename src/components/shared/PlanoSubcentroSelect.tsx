@@ -19,6 +19,16 @@ export interface PlanoSubcentroSelectProps {
   onSelected?: (subcentro: string, cls?: ClassificacaoItem) => void; // side effect: macro/centro/escopo
   classificacoes: ClassificacaoItem[];
   tipoOperacao: string;                                            // filtra a subárvore por tipo
+  /**
+   * Pré-filtro por atividade — PR-FIN-ATIVIDADE-01. Vazio = lista completa, que é o
+   * comportamento de sempre e o de todos os outros chamadores.
+   *
+   * ⚠ NASCEU DE UM NÚMERO: o plano passou de 137 para 206 subcentros em 10/09/2026 e
+   * continua crescendo. Digitar "combust" devolvia pecuária, agricultura e silvicultura
+   * juntas, e quem classifica quatrocentos lançamentos escolhe errado por cansaço, não por
+   * ignorância. O filtro não esconde nada: "Mostrar todos" continua ali.
+   */
+  escopoNegocio?: string;
   search: string;                                                  // busca CONTROLADA (o caller é dono)
   onSearchChange: (s: string) => void;
   label?: string;
@@ -32,7 +42,7 @@ export interface PlanoSubcentroSelectProps {
 }
 
 export function PlanoSubcentroSelect({
-  value, onChange, onSelected, classificacoes, tipoOperacao,
+  value, onChange, onSelected, classificacoes, tipoOperacao, escopoNegocio,
   search, onSearchChange, label, triggerClassName, size = 'default', contentClassName, itemClassName, tabIndex, disabled,
 }: PlanoSubcentroSelectProps) {
   const [open, setOpen] = useState(false);
@@ -70,16 +80,25 @@ export function PlanoSubcentroSelect({
     return c.tipo_operacao === tipoOperacao;
   };
 
+  /* ⚠ SEM ESCOPO, PASSA TUDO — e é isso que mantém os outros três chamadores intactos. A
+     comparação é frouxa de propósito: o plano tem linhas com escopo vazio, e escondê-las de
+     quem escolheu uma atividade tiraria da lista contas que servem a todas. */
+  const combinaEscopo = (c: ClassificacaoItem) => {
+    if (!escopoNegocio) return true;
+    const e = (c.escopo_negocio || '').trim();
+    return e === '' || e === escopoNegocio;
+  };
+
   /** Subcentros filtered by tipo_operacao then by search text.
    *  Uses the selected tipoOperacao directly – each type has its own subtree. */
   const filtered = useMemo(() => {
     const unique = Array.from(classMap.values());
-    const byTipo = mostrarTodos ? unique : unique.filter(combinaTipo);
+    const byTipo = mostrarTodos ? unique : unique.filter((c) => combinaTipo(c) && combinaEscopo(c));
     if (!search.trim()) return byTipo;
     const term = search.toLowerCase();
     return byTipo.filter(c => c.subcentro.toLowerCase().includes(term));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [classMap, search, tipoOperacao, mostrarTodos]);
+  }, [classMap, search, tipoOperacao, escopoNegocio, mostrarTodos]);
 
   /**
    * Quantos a busca ACHOU do outro lado da árvore, e que o filtro escondeu.
