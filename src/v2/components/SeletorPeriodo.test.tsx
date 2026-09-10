@@ -116,11 +116,18 @@ describe('a frase', () => {
     expect(linha).toBeTruthy();
   });
 
-  it('intervalo traz a contagem', () => {
+  it('intervalo traz a contagem, num chip verde de 18px', () => {
+    /* ⚠ Em texto escuro sobre o fundo da tela a frase não se lia. Branco sobre branco não
+       existe, então o branco trouxe o fundo junto — e o verde é o MESMO da seleção. */
     montar({ de: { ano: 2026, mes: 2 }, ate: { ano: 2026, mes: 4 } });
-    const el = screen.getByText('Mostrando fev → abr/2026 · 3 meses');
-    expect(el.className).toContain('text-foreground');
-    expect(el.className).toContain('font-medium');
+    /* ⚠ A COR NÃO SE LÊ AQUI — o jsdom descarta `hsl(var(...))` ao parsear, e o valor não
+       chega nem ao atributo. Prende-se a GEOMETRIA, que ele guarda, e a cor fica provada no
+       harness de navegador (medida: #28AF60 sobre branco). */
+    const chip = screen.getByText(/Mostrando fev → abr\/2026/);
+    expect(chip.style.height).toBe('18px');
+    expect(chip.style.borderRadius).toBe('8px');
+    expect(chip.style.padding).toBe('0px 8px');
+    expect(chip.style.display).toBe('inline-flex');
   });
 
   it('intervalo entre anos mostra os dois anos e desabilita a fita', () => {

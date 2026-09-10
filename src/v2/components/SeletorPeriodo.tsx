@@ -359,19 +359,40 @@ export function SeletorPeriodo({
           garantem que a linha vazia meça o mesmo que a preenchida. Medida que depende do
           texto volta a mover a tabela no dia em que a frase ganhar uma palavra a mais. */}
       {modo === 'ano-mes' && (
-        <div className="mt-1 flex items-center gap-1.5"
+        <div className="mt-1 flex items-center"
           style={{ fontSize: 11, minHeight: 18, lineHeight: '18px' }}>
-          <span className="font-medium text-foreground">{frase || '\u00A0'}</span>
-          {podeLimpar && (
-            <button
-              type="button"
-              onClick={() => onPeriodoChange(mesCorrente())}
-              title="Voltar ao mês corrente"
-              aria-label="Voltar ao mês corrente"
-              className="rounded p-0.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          {/* ⚠ A FRASE VIROU CHIP PORQUE ELA PRECISAVA SER BRANCA. Em texto escuro sobre o
+              fundo da tela ela não se lia; branco sobre branco não existe, então o branco
+              trouxe o fundo junto. O verde é o MESMO da seleção — o chip não é um aviso, é
+              a escolha escrita por extenso, e usar outra cor faria parecer um terceiro
+              estado.
+              ⚠ O CHIP NÃO EXISTE VAZIO, mas a LINHA existe sempre: quem reserva os 18px é o
+              `minHeight` da div de fora, não o conteúdo. Um chip vazio seria uma mancha
+              verde dizendo nada; uma linha que some leva a tabela junto (A23). */}
+          {frase && (
+            <span
+              style={{
+                background: 'hsl(var(--success))',
+                color: 'hsl(var(--success-foreground))',
+                fontSize: 11, fontWeight: 500, height: 18, lineHeight: '18px',
+                padding: '0 8px', borderRadius: 8,
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+              }}
             >
-              <X style={{ width: 11, height: 11 }} />
-            </button>
+              {frase}
+              {podeLimpar && (
+                <button
+                  type="button"
+                  onClick={() => onPeriodoChange(mesCorrente())}
+                  title="Voltar ao mês corrente"
+                  aria-label="Voltar ao mês corrente"
+                  className="shrink-0 transition-opacity hover:opacity-80"
+                  style={{ color: 'inherit', cursor: 'pointer', lineHeight: 0 }}
+                >
+                  <X style={{ width: 11, height: 11 }} />
+                </button>
+              )}
+            </span>
           )}
         </div>
       )}
