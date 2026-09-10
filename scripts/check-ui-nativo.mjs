@@ -9,7 +9,7 @@
  * ⚠ "NÃO CABE EM 10px" NÃO É EXCEÇÃO: ajusta-se o componente (o `DatePicker` tem
  * `size="compact"`), nunca se volta ao nativo.
  *
- * ⚠ BASELINE, COMO O TSC. O repo tem 0 `type="date"` e 18 `<select>` herdados, em 10
+ * ⚠ BASELINE, COMO O TSC. O repo tem 0 `type="date"` e 17 `<select>` herdados, em 9
  * arquivos (39 no total; um arquivo tem os dois). Falhar por eles pararia todo PR e o gate
  * seria desligado na primeira semana —
  * que é como um gate morre. Ele falha por ocorrência NOVA: arquivo fora da lista abaixo, ou
@@ -30,10 +30,6 @@ import { join } from 'node:path';
  * arquivos" enquanto o mapa registrava 44 em 30. O número de `<select>` era o único certo.
  */
 const BASELINE = new Map(Object.entries({
-  "src/components/financeiro-v2/AuditoriaBancariaSoberana.tsx": [
-    0,
-    1
-  ],
   "src/components/financeiro-v2/ModoRapidoGrid.tsx": [
     0,
     4

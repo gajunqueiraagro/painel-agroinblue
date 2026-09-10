@@ -129,8 +129,11 @@ export async function desfazerGrupo(
  *
  * ⚠ IRMÃ DA `desfazerGrupo`, e nasce aqui pelo mesmo motivo que ela: a RPC já tinha três
  * chamadores, cada um com o seu `.rpc` inline — `ExtratoListaTab`, `EstacaoConciliacao` e
- * `EstacaoConciliar`. Um quarto seria a quarta cópia da mesma decisão. Os três antigos ficam
- * como dívida nomeada [DESFAZER-VINCULO-UNICO]; o caminho novo passa por aqui.
+ * `EstacaoConciliar`. Um quarto seria a quarta cópia da mesma decisão. Ficam como dívida
+ * nomeada [DESFAZER-VINCULO-UNICO]; o caminho novo passa por aqui.
+ * ⚠ SÃO DOIS DESDE 2026-09-10: a `EstacaoConciliacao` foi apagada junto com a Auditoria
+ * Bancária, que era quem a montava (PR-REMOVE-AUDITORIA-BANCARIA-01). A dívida encolheu sem
+ * que ninguém a pagasse — o terceiro chamador não foi corrigido, deixou de existir.
  *
  * ⚠ RECUSA MEMBRO DE GRUPO, por segurança da própria RPC: quem tem `grupo_id` desfaz pelo
  * grupo. O chamador escolhe pela coluna, não pela tentativa — ver `desfazerGrupo`.

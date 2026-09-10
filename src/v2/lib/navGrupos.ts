@@ -21,7 +21,7 @@ export type V2Section =
   // financeiro — lançamentos
   | 'financeiro-lanc' | 'contratos'
   // financeiro — conciliação
-  | 'conciliacao' | 'conciliacao-extrato' | 'auditoria-bancaria' | 'extrato-gerencial' | 'visao-consolidada' | 'saldos-mensais'
+  | 'conciliacao' | 'conciliacao-extrato' | 'extrato-gerencial' | 'visao-consolidada' | 'saldos-mensais'
   // financeiro — financiamentos
   | 'financiamentos' | 'painel-financiamentos'
   // financeiro — cadastros
@@ -163,7 +163,6 @@ export const NAV_GRUPOS: NavGrupo[] = [
         itens: [
           { id: 'financeiro-lanc',     label: 'Lançamentos Financeiros', status: 'ready' },
           { id: 'conciliacao',         label: 'Conciliação Bancária',    status: 'ready' },
-          { id: 'auditoria-bancaria',  label: 'Auditoria Bancária',      status: 'ready' },
           /* ⚠ A TELA NOVA ENTRA AO LADO DAS VELHAS, e nao no lugar delas —
              FIN-CONCIL-PORTAR-01, rodada 1. Ela leva "(novo)" no rotulo porque
              conviver sem dizer qual e' qual faria o operador escolher no escuro.
@@ -329,7 +328,7 @@ export const SECTION_TO_GROUP: Partial<Record<V2Section, string>> = {
   'recorrencias': 'financeiro',
   'conciliacao-extrato': 'financeiro',
   'importacao-lanc-excel': 'financeiro',
-  'contratos': 'financeiro', 'conciliacao': 'financeiro', 'auditoria-bancaria': 'financeiro',
+  'contratos': 'financeiro', 'conciliacao': 'financeiro',
   'saldos-mensais': 'financeiro', 'financiamentos': 'financeiro',
   'painel-financiamentos': 'financeiro',
   'analise-trimestral': 'financeiro',

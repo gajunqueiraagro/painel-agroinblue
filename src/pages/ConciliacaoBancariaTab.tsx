@@ -1568,10 +1568,14 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
       {/* ⚠ O `ExtratoImportPreview` SAIU DAQUI — B-24. Com a unica porta que o
           abria removida do cabecalho, ele ficaria montado com `open` sempre
           falso: codigo morto disfarcado de funcionalidade, que e' o que o
-          `BoitelPainelResultado` ja custou uma vez. O componente CONTINUA VIVO —
-          `AuditoriaBancariaSoberana` o monta e o usa —, e o MOTOR dele
+          `BoitelPainelResultado` ja custou uma vez. O MOTOR dele
           (`useImportacaoExtrato`) e' exatamente o que a previa inline desta aba
-          passou a consumir. Nada foi perdido; mudou quem apresenta. */}
+          passou a consumir. Nada foi perdido; mudou quem apresenta.
+          ⚠ O COMPONENTE NAO EXISTE MAIS — PR-REMOVE-AUDITORIA-BANCARIA-01,
+          2026-09-10. Este comentario dizia "continua vivo, a Auditoria Bancaria o
+          monta"; com a Auditoria apagada ele ficou sem nenhuma porta, e a previsao
+          que ele mesmo fazia se cumpriu — virou o codigo morto que descrevia. O
+          motor segue vivo e e' o desta aba. */}
     </div>
   );
 }

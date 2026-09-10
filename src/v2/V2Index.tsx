@@ -63,7 +63,6 @@ import FinanciamentoDetalhe from '@/pages/FinanciamentoDetalhe';
 import FinanciamentosPainelTab from '@/pages/FinanciamentosPainelTab';
 import { ConciliacaoBancariaTab } from '@/pages/ConciliacaoBancariaTab';
 import V2Recorrencias from '@/v2/pages/V2Recorrencias';
-import { AuditoriaBancariaSoberana } from '@/components/financeiro-v2/AuditoriaBancariaSoberana';
 import { ExtratoGerencialTab } from '@/components/financeiro-v2/ExtratoGerencialTab';
 import { VisaoConsolidadaTab } from '@/components/financeiro-v2/VisaoConsolidadaTab';
 // PR-CLEANUP-REFERENCIAS-OPERACIONAIS-01 — import de V2MesaOperacional removido: a tela saiu
@@ -864,15 +863,6 @@ export default function V2Index() {
           setAno(String(a));
           setMes(String(m));
           setVoltarParaConciliacao(true);
-          setSection('financeiro-lanc');
-        }}
-      />
-    );
-    if (section === 'auditoria-bancaria') return (
-      <AuditoriaBancariaSoberana
-        onNavigateToLancamentos={(a, m) => {
-          setAno(String(a));
-          setMes(String(m));
           setSection('financeiro-lanc');
         }}
       />

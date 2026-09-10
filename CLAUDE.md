@@ -43,7 +43,7 @@ no mesmo arquivo.
   sai com codigo 0 e passa sempre. Era um gate vazio. O comando oficial
   varre os 671 arquivos .ts/.tsx em src/ e sai com codigo 2 enquanto
   houver erro.
-- TSC baseline: 148 erros (era 73 ate 2026-09-02, 155 ate 09-03, 153 ate 09-08 e 150 ate 09-09 — ver a regeneracao do
+- TSC baseline: 143 erros (era 73 ate 2026-09-02, 155 ate 09-03, 153 ate 09-08, 150 ate 09-09 e 148 ate 09-10 — ver a regeneracao do
   types.ts abaixo), medidos em ARVORE LIMPA — worktree em detached
   HEAD sobre o commit, NUNCA no checkout principal. Mesmo numero e mesmo
   conjunto de diagnosticos em c0fdb21b, 487fe1cf e c28de22a.
@@ -176,6 +176,36 @@ no mesmo arquivo.
   ⚠ A LICAO E' A MESMA DAS OUTRAS: o diagnostico dizia, desde sempre, que a tela abria no
   mes errado; o que o apagou foi uma frente de LAYOUT, nao uma de tipos. Baseline e' divida
   conhecida, e ela sai quando a causa some — nao quando alguem a persegue.
+  De 148 para 143 em 2026-09-10, sobre dbf1ad68, no PR-REMOVE-AUDITORIA-BANCARIA-01. Sairam
+  5, TODOS com o ARQUIVO em que moravam, em DUAS camadas de orfandade:
+    3x em src/components/financeiro-v2/ExtratoImportPreview.tsx —
+       1x TS2322 (uniao 'CandidatoPossivel | { id; data; fornecedor; ... }' nao atribuivel a
+          'CandidatoPossivel') e 2x TS2352 (conversao de SelectQueryError<"Invalid
+          Relationships/RelationName cannot infer result type"> para
+          '{ lancamento_id; valor_aplicado }[]' e para '{ id }');
+    1x TS2352 em src/components/financeiro-v2/DivergenciaDialog.tsx — mesma familia, para
+       '{ extrato_id; valor_aplicado }[]';
+    1x TS2345 em src/hooks/useBaixaViaExtrato.ts — 'Record<string, unknown>' nao atribuivel
+       ao RejectExcessProperties de financeiro_lancamentos_v2.
+  A CAMADA IMPORTA: o `ExtratoImportPreview` ficou sem nenhum importador quando a Auditoria
+  Bancaria foi apagada — era ela, e so' ela, que o montava. Os outros dois cairam na camada
+  SEGUINTE, quando o proprio Preview saiu e levou os tres dialogos e o hook da baixa via
+  extrato, que so' ele chamava. Nao houve conserto de tipo nem supressao: os cinco erros
+  descreviam codigo que deixou de existir.
+  ⚠ E A SEGUNDA CAMADA SO' APARECEU PORQUE O GREP MUDOU. A primeira varredura procurou
+  `from '@/...'` e disse que o Preview tinha dois consumidores — os dois eram COMENTARIO, um
+  deles justamente o que afirmava "o componente continua vivo". E os tres dialogos usavam
+  import RELATIVO (`./RevisarMatchDialog`), invisivel para um grep ancorado em `@/`. Contar
+  chamador por substring conta prosa; a busca tem de ser por import.
+  ⚠ TERCEIRA MANEIRA DE A BASELINE CAIR, e vale distingui-la das outras duas. Ate' aqui ela
+  caiu por CONSERTO (o `initialMes`, o `aliases: unknown`) e por APAGAR CODIGO MORTO que o
+  compilador denunciava (os `.catch` do PostgrestBuilder, as gavetas do zoot). Aqui a peca
+  inteira saiu porque OUTRA TELA passou a responder a mesma pergunta — o Espelho —, e a
+  divida foi junto de carona. Ninguem perseguiu estes tres erros; eles nao tinham mais onde
+  morar.
+  ⚠ E OS TS2352 ERAM O IDIOMA DOS DOIS CASTS. Sairam de graca, mas a divida que eles
+  representam — `select` que o PostgREST nao consegue tipar — CONTINUA no repo em outros
+  arquivos. A queda aqui nao mede progresso nessa frente.
   Como comparar antes (A) x depois (B), nesta ordem:
     1. CONTAGEM. B <= A, sempre. B > A reprova o PR.
     2. DIAGNOSTICOS. Comparar os conjuntos por
@@ -240,7 +270,7 @@ no mesmo arquivo.
   errar — o gate existe para o que quebra, nao para o que e' feio.
 
 ## RELATORIO DE EXECUCAO (formato obrigatorio, todo ciclo)
-1. TSC: N erros (baseline 150) — numero explicito, obtido com
+1. TSC: N erros (baseline 143) — numero explicito, obtido com
    `npx tsc -p tsconfig.app.json --noEmit`
 2. Build: OK/FALHOU + tempo
 3. git diff --stat completo
@@ -336,12 +366,17 @@ preview que o cabecalho nao sai da tela ao rolar.
   ⚠ "NAO CABE EM 10px" NAO E' EXCECAO: ajusta-se o componente, nunca se
   volta ao nativo. Ja foi corrigido uma vez (PR-OC-DATA-PADRAO-01) e
   voltou na linha da parcela em 06/09 — por isso virou gate.
-  ⚠ O GATE TEM BASELINE, como o TSC: 10 arquivos herdados (0 `type=date`,
-  18 `<select>`). Eram 20 ate' 2026-09-10; o PR-BARRA-UNICA-01b tirou 2 —
+  ⚠ O GATE TEM BASELINE, como o TSC: 9 arquivos herdados (0 `type=date`,
+  17 `<select>`). Eram 20 ate' 2026-09-10; o PR-BARRA-UNICA-01b tirou 2 —
   os seletores nativos de mes e ano da `AuditoriaBancariaSoberana`, que
-  viraram o `SeletorPeriodo` compartilhado. Ela caiu de 3 para 1.
+  viraram o `SeletorPeriodo` compartilhado. Ela caiu de 3 para 1, e o
+  ultimo saiu com o ARQUIVO no PR-REMOVE-AUDITORIA-BANCARIA-01 (2026-09-10):
+  a tela inteira foi apagada porque o Espelho responde a mesma pergunta.
+  ⚠ E ESSA E' A TERCEIRA MANEIRA DE UM NUMERO DE BASELINE CAIR, ao lado de
+  consertar e de apagar codigo morto: a peca deixa de existir porque outra
+  ja fazia o mesmo. Nao houve conserto de `<select>` nenhum aqui.
   ⚠ `type="date"` CHEGOU A ZERO no 136d — a frente [DATA-PADRAO-GLOBAL] esta'
-  FECHADA para datas. O que resta na baseline sao 20 `<select>` nativos, em 10
+  FECHADA para datas. O que resta na baseline sao 17 `<select>` nativos, em 9
   arquivos, e essa e' outra frente. Baseline de data em ZERO significa que
   qualquer `type="date"` novo REPROVA o PR, em qualquer arquivo — nao ha' mais
   heranca a proteger. Era 42 (46/25) e caiu para 39 sem que este numero fosse
