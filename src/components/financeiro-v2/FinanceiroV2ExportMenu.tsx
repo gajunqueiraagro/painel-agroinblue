@@ -13,6 +13,7 @@ import { triggerXlsxDownload } from '@/lib/xlsxDownload';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { formatDocumento } from '@/lib/financeiro/documentoHelper';
 import { normalizarAtividade } from '@/lib/financeiro/filtrosListaV2';
+import { contasExibidasDoLancamento, type ContasExibidas } from '@/lib/financeiro/contaPayload';
 import { ErroConjuntoIncompleto } from '@/lib/financeiro/listaPaginadaV2';
 import { normalizarErro } from '@/lib/erroOperacional';
 
@@ -29,6 +30,23 @@ export interface NomePorId {
 
 const nomeDe = (lista: readonly NomePorId[] | undefined, id: string | null | undefined) =>
   (id ? lista?.find((x) => x.id === id)?.nome : '') || '';
+
+/**
+ * ⚠ A TRANSFERÊNCIA MOSTRA AS DUAS PONTAS na mesma célula, com a seta apontando o caminho do
+ * dinheiro. Uma ponta só esconderia metade do fato — quem confere extrato precisa saber de
+ * onde saiu E onde entrou.
+ * ⚠ NOME DESCONHECIDO VIRA VAZIO, NUNCA O UUID: um identificador numa planilha é ruído que
+ * o operador não tem como interpretar, e ainda entra no filtro do Excel como uma opção.
+ */
+function nomeDaConta(contas: ContasExibidas, mapa: readonly NomePorId[] | undefined): string {
+  if (contas.forma === 'par') {
+    const origem = nomeDe(mapa, contas.origemId);
+    const destino = nomeDe(mapa, contas.destinoId);
+    if (origem && destino) return `${origem} → ${destino}`;
+    return origem || destino;
+  }
+  return nomeDe(mapa, contas.contaId);
+}
 
 /**
  * ⚠ O PREFIXO NUMÉRICO DE `tipo_operacao` É CHAVE DE ORDENAÇÃO, NÃO NOME. O banco guarda
@@ -129,7 +147,14 @@ function buildRows(
       atividade: ATIVIDADE_LABEL[normalizarAtividade(l.escopo_negocio)] ?? '',
       safra: nomeDe(cadastros.safras, l.safra_id),
       fazenda: nomeDe(cadastros.fazendas, l.fazenda_id),
-      contaBancaria: nomeDe(cadastros.contas, l.conta_bancaria_id),
+      /* ⚠ A CONTA DEPENDE DO TIPO DA LINHA, e ler `conta_bancaria_id` direto deixava TODA
+         entrada sem conta: a convenção do repo guarda em `conta_destino_id` a conta que
+         RECEBEU. A regra mora em `contaPayload`, ao lado da de escrita — aqui só se
+         traduzem os ids em nomes. */
+      contaBancaria: nomeDaConta(
+        contasExibidasDoLancamento(l.tipo_operacao, l.conta_bancaria_id, l.conta_destino_id),
+        cadastros.contas,
+      ),
     };
   });
 }

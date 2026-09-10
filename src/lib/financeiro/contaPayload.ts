@@ -13,6 +13,7 @@
  *
  * Strings de tipo_operacao EXATAS — plural com S, acento em Saídas.
  */
+import { isTransferenciaTipo } from './v2Transferencia';
 
 export type TipoOperacaoFinanceira = '1-Entradas' | '2-Saídas' | '3-Transferências';
 
@@ -52,4 +53,43 @@ export function montarPayloadConta(
     conta_bancaria_id: contaPrincipalId,
     conta_destino_id: null,
   };
+}
+
+/**
+ * O INVERSO DE `montarPayloadConta`: qual conta um lançamento MOSTRA — PR-EXPORT-FINANCEIRO-03.
+ *
+ * ⚠ ESTE MÓDULO SÓ SABIA ESCREVER, e por isso quem lia inventava. A convenção acima diz que
+ * a entrada guarda a conta em `conta_destino_id`; quem lesse `conta_bancaria_id` direto veria
+ * vazio em toda entrada — foi exatamente o que aconteceu na exportação do Financeiro, onde
+ * 246 das 262 entradas de 2026 do NJ saíram sem conta. A regra de leitura mora aqui, ao lado
+ * da de escrita, para as duas não poderem divergir.
+ *
+ * ⚠ TRANSFERÊNCIA TEM DUAS CONTAS E É ASSIM QUE ELA DEVE APARECER. Escolher uma das pontas
+ * seria esconder metade do fato: "saiu do Itaú" e "entrou no Sicredi" são a mesma linha, e
+ * quem confere extrato precisa das duas. Quem chama decide como junta os nomes.
+ *
+ * ⚠ DEVOLVE ID, NUNCA NOME. Este módulo não conhece o cadastro de contas — e não deve: o
+ * chamador tem o mapa e sabe o que fazer quando o id não está nele (célula vazia, jamais o
+ * UUID).
+ */
+export type ContasExibidas =
+  | { forma: 'unica'; contaId: string | null }
+  | { forma: 'par'; origemId: string | null; destinoId: string | null };
+
+export function contasExibidasDoLancamento(
+  tipo: string | null | undefined,
+  contaBancariaId: string | null | undefined,
+  contaDestinoId: string | null | undefined,
+): ContasExibidas {
+  if (isTransferenciaTipo(tipo)) {
+    return { forma: 'par', origemId: contaBancariaId ?? null, destinoId: contaDestinoId ?? null };
+  }
+  if ((tipo || '').trim() === '1-Entradas') {
+    /* ⚠ O FALLBACK NÃO É ZELO EXCESSIVO: 25 das 262 entradas de 2026 do NJ têm
+       `conta_bancaria_id` e não `conta_destino_id` — linhas antigas, gravadas antes de o
+       helper existir. Sem ele, essas 25 sairiam vazias por fidelidade a uma convenção que
+       elas nunca seguiram. */
+    return { forma: 'unica', contaId: contaDestinoId ?? contaBancariaId ?? null };
+  }
+  return { forma: 'unica', contaId: contaBancariaId ?? null };
 }
