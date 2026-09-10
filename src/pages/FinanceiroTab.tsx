@@ -611,8 +611,15 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
     () => lancamentos.map(normalizeZooLancamento),
     [lancamentos],
   );
-  const [topTab, setTopTab] = useState<TopTab>(subAbaInicial ? getTopTabFromSubAba(subAbaInicial) : 'entradas');
-  const [subAba, setSubAba] = useState<SubAba>(subAbaInicial || 'abate');
+  /* ⚠ OS DOIS PADRÕES DISCORDAVAM — PR-SELETOR-PERIODO-04. `subAba` abria em `'abate'` e
+     `topTab` em `'entradas'`: a tela subia mostrando a aba de ENTRADAS com uma SAÍDA
+     selecionada por baixo. Não era uma escolha de produto, eram dois `useState` escritos em
+     momentos diferentes, cada um com o seu default. Agora os dois saem da MESMA origem, e a
+     aba de cima passa a ser consequência da sub-aba — que é a relação que
+     `getTopTabFromSubAba` já descrevia e ninguém aplicava ao caso sem drill. */
+  const subAbaPadrao: SubAba = subAbaInicial || 'abate';
+  const [topTab, setTopTab] = useState<TopTab>(getTopTabFromSubAba(subAbaPadrao));
+  const [subAba, setSubAba] = useState<SubAba>(subAbaPadrao);
   const [detalheId, setDetalheId] = useState<string | null>(null);
 
   useEffect(() => {

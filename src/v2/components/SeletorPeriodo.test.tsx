@@ -107,15 +107,19 @@ describe('seleção', () => {
 });
 
 describe('a frase', () => {
-  it('no mês único NÃO há frase — a fita já diz qual é', () => {
-    montar(mesUnico(2026, 8));
+  it('no mês único não há TEXTO, mas a linha continua lá', () => {
+    /* ⚠ A distinção é o adendo inteiro: o texto some, o espaço não. */
+    const { container } = render(
+      <SeletorPeriodo periodo={mesUnico(2026, 8)} onPeriodoChange={() => {}} />);
     expect(screen.queryByText(/Mostrando/)).toBeNull();
+    const linha = container.querySelector('[style*="min-height: 18px"]');
+    expect(linha).toBeTruthy();
   });
 
-  it('intervalo traz a contagem, em cinza claro', () => {
+  it('intervalo traz a contagem', () => {
     montar({ de: { ano: 2026, mes: 2 }, ate: { ano: 2026, mes: 4 } });
     const el = screen.getByText('Mostrando fev → abr/2026 · 3 meses');
-    expect(el.className).toContain('text-muted-foreground');
+    expect(el.className).toContain('text-foreground/70');
   });
 
   it('intervalo entre anos mostra os dois anos e desabilita a fita', () => {
@@ -145,7 +149,7 @@ describe('cores por estado — A24 corrigida', () => {
     expect(CARA.extremo.color).toBe('#fff');
     expect(CARA.meio.background).toBe('#dbe7f5');
     expect(CARA.meio.color).toBe('hsl(var(--primary))');
-    expect(CARA.fora.background).toBe('hsl(var(--card))');
+    expect(CARA.fora.background).toBe('#eef0f3');
     /* O defeito que o operador viu era exatamente estes dois trocados. */
     expect(CARA.extremo.background).not.toBe(CARA.fora.background);
     expect(CARA.meio.background).not.toBe(CARA.fora.background);
@@ -239,6 +243,58 @@ describe('nada por cima de nada — item C', () => {
     expect(antes).toBe('28px');
     expect(depois).toBe('28px');
     expect(screen.getByText('Ano').style.height).toBe('28px');
+  });
+});
+
+describe('A23 ampliada — nada abaixo do seletor se desloca', () => {
+  /* ⚠ `getBoundingClientRect` devolve zero no jsdom, então comparar `.top` do que vem
+     depois provaria que 0 === 0 — e passaria mesmo com a linha sumindo. O que de fato
+     garante o não-deslocamento é a linha da frase EXISTIR sempre, com altura declarada; é
+     isso que se prende aqui, e é isso que o navegador confirma na homologação. */
+  function montarComVizinho(periodo: Periodo) {
+    const r = render(
+      <div>
+        <SeletorPeriodo periodo={periodo} onPeriodoChange={() => {}} />
+        <table data-testid="tabela"><tbody><tr><td>linha</td></tr></tbody></table>
+      </div>,
+    );
+    return {
+      rerender: (p: Periodo) => r.rerender(
+        <div>
+          <SeletorPeriodo periodo={p} onPeriodoChange={() => {}} />
+          <table data-testid="tabela"><tbody><tr><td>linha</td></tr></tbody></table>
+        </div>,
+      ),
+      container: r.container,
+    };
+  }
+
+  const alturaDaLinha = (c: HTMLElement) => {
+    const el = c.querySelector('[style*="min-height: 18px"]') as HTMLElement | null;
+    return el ? `${el.style.minHeight}|${el.style.lineHeight}` : null;
+  };
+
+  it('a linha da frase mede o mesmo com mês único, com faixa e com o ano inteiro', () => {
+    const { rerender, container } = montarComVizinho(mesUnico(2026, 4));
+    const comMes = alturaDaLinha(container);
+    rerender({ de: { ano: 2026, mes: 2 }, ate: { ano: 2026, mes: 4 } });
+    const comFaixa = alturaDaLinha(container);
+    rerender({ de: { ano: 2026, mes: 1 }, ate: { ano: 2026, mes: 12 } });
+    const comAno = alturaDaLinha(container);
+    expect(comMes).toBe('18px|18px');
+    expect(comFaixa).toBe(comMes);
+    expect(comAno).toBe(comMes);
+  });
+
+  it('o número de elementos entre o seletor e a tabela não muda', () => {
+    /* Um irmão a mais ou a menos acima da tabela é exatamente o que a empurra. */
+    const contar = (c: HTMLElement) => c.firstElementChild!.children.length;
+    const { rerender, container } = montarComVizinho(mesUnico(2026, 4));
+    const antes = contar(container);
+    rerender({ de: { ano: 2026, mes: 2 }, ate: { ano: 2026, mes: 4 } });
+    expect(contar(container)).toBe(antes);
+    rerender({ de: { ano: 2026, mes: 1 }, ate: { ano: 2026, mes: 12 } });
+    expect(contar(container)).toBe(antes);
   });
 });
 

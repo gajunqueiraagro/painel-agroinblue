@@ -70,6 +70,16 @@ const MEIO_BG = '#dbe7f5';
 const MEIO_BORDA = '#b6cbe6';
 const CHIP_MARCADO_BG = '#eef3fa';
 
+/* ⚠ O NÃO-SELECIONADO DEIXOU DE SER BRANCO — A24, revisão final. Em branco ele se confundia
+   com o fundo da tela: doze retângulos que só se distinguiam pela borda, e o operador não
+   via a fita como uma fita. Cinza claro faz o conjunto existir, e o azul do escolhido passa
+   a ter contra o que contrastar.
+   ⚠ LITERAL, COMO OS AZUIS ACIMA, e pela mesma razão: `bg-muted` é #F6F7F9 — medido —, mais
+   claro que o #EEF0F3 pedido, e trocar o token da paleta por causa de um controle sairia
+   caro no resto do sistema. Se uma segunda peça precisar deste cinza, ele vira token. */
+const FORA_BG = '#eef0f3';
+const FORA_HOVER = '#e3e6ea';
+
 const ALTURA = 28;
 
 /**
@@ -90,7 +100,7 @@ const ALTURA = 28;
 export const CARA = {
   extremo: { background: 'hsl(var(--primary))', borderColor: 'hsl(var(--primary))', color: '#fff' },
   meio: { background: MEIO_BG, borderColor: MEIO_BORDA, color: 'hsl(var(--primary))' },
-  fora: { background: 'hsl(var(--card))', borderColor: 'hsl(var(--border) / 0.6)', color: 'hsl(var(--foreground))' },
+  fora: { background: FORA_BG, borderColor: 'hsl(var(--border) / 0.6)', color: 'hsl(var(--muted-foreground))' },
 } as const;
 
 /**
@@ -217,8 +227,8 @@ export function SeletorPeriodo({
         {/* CARD DE ANO — mesmo desenho dos meses, nunca cinza sobre cinza. */}
         {entreAnos ? (
           <div
-            className="flex shrink-0 items-center justify-center rounded-lg border bg-card text-foreground"
-            style={{ width: 68, height: ALTURA, fontSize: 11, fontWeight: 500 }}
+            className="flex shrink-0 items-center justify-center rounded-lg border"
+            style={{ width: 68, height: ALTURA, fontSize: 11, fontWeight: 500, ...CARA.fora }}
             title="Período personalizado entre anos"
           >
             {periodo.de.ano}–{periodo.ate.ano}
@@ -226,8 +236,8 @@ export function SeletorPeriodo({
         ) : (
           <Select value={String(periodo.de.ano)} onValueChange={trocarAno}>
             <SelectTrigger
-              className="shrink-0 rounded-lg border bg-card text-foreground [&>svg]:opacity-100"
-              style={{ width: 68, height: ALTURA, fontSize: 11, fontWeight: 500 }}
+              className="shrink-0 rounded-lg border [&>svg]:opacity-100"
+              style={{ width: 68, height: ALTURA, fontSize: 11, fontWeight: 500, ...CARA.fora }}
             >
               <SelectValue />
             </SelectTrigger>
@@ -266,7 +276,7 @@ export function SeletorPeriodo({
                   title={tom?.title}
                   aria-pressed={papel !== 'fora'}
                   data-papel={papel}
-                  className={papel === 'fora' && !tom ? 'hover:!bg-muted' : undefined}
+                  className={papel === 'fora' && !tom ? 'hover:!bg-[#e3e6ea]' : undefined}
                   style={{ ...BOTAO_BASE, ...estilo }}
                 >
                   {rotulo}
@@ -277,10 +287,12 @@ export function SeletorPeriodo({
         ))}
 
         {modo === 'ano-mes' && !modoUnico && (
-          /* ⚠ FORA DO SCROLLPORT, e opaco: estes dois não rolam com os meses porque não são
-             meses — são o que se faz com eles. O fundo próprio existe para o caso de alguém
-             um dia grudar este grupo; hoje ele é irmão, e irmão não cobre. */
-          <div className="flex shrink-0 items-center gap-1 bg-background">
+          /* ⚠ FORA DO SCROLLPORT, e SEM fundo próprio. O fundo branco que estava aqui existia
+             como seguro contra uma sobreposição que a estrutura já impede — e o seguro cobrava
+             caro: desenhava uma caixa branca no meio de uma linha que não tem caixa nenhuma,
+             e o grupo parecia outro controle. Irmão de flex não cobre ninguém; não há o que
+             segurar. */
+          <div className="flex shrink-0 items-center gap-1">
             {/* ⚠ "ANO" USA A RÉGUA DOS MESES de propósito: é um recorte, como eles, e não uma
                 ação. O que o distingue é a largura fixa — ele não disputa espaço com os doze. */}
             <button
@@ -301,9 +313,9 @@ export function SeletorPeriodo({
                   className="shrink-0 rounded-full border"
                   style={{
                     height: 26, padding: '0 10px', fontSize: 11, fontWeight: 500, cursor: 'pointer',
-                    background: entreAnos ? CHIP_MARCADO_BG : 'hsl(var(--card))',
-                    borderColor: entreAnos ? MEIO_BORDA : 'hsl(var(--border) / 0.6)',
-                    color: entreAnos ? 'hsl(var(--primary))' : 'hsl(var(--foreground))',
+                    background: entreAnos ? CHIP_MARCADO_BG : CARA.fora.background,
+                    borderColor: entreAnos ? MEIO_BORDA : CARA.fora.borderColor,
+                    color: entreAnos ? 'hsl(var(--primary))' : CARA.fora.color,
                   }}
                 >
                   Personalizado…
@@ -322,9 +334,19 @@ export function SeletorPeriodo({
         )}
       </div>
 
-      {modo === 'ano-mes' && frase && (
-        <div className="mt-1 flex items-center gap-1.5" style={{ fontSize: 11 }}>
-          <span className="text-muted-foreground">{frase}</span>
+      {/* ⚠ A LINHA EXISTE SEMPRE, MESMO VAZIA — A23 ampliada, adendo do PR-SELETOR-PERIODO-04.
+          A frase aparecia só no intervalo, e por isso TODO conteúdo abaixo do seletor —
+          a tabela inteira — subia 18px ao clicar num mês e descia 18px ao voltar para uma
+          faixa. Nada muda de tamanho ao selecionar vale para a tela, não só para o botão: o
+          operador que estava lendo uma linha da tabela a perdia de vista por causa de um
+          texto que apareceu acima dela. O espaço fica reservado; só o texto entra e sai.
+          ⚠ ALTURA DECLARADA, não derivada do conteúdo: `minHeight` mais `lineHeight` iguais
+          garantem que a linha vazia meça o mesmo que a preenchida. Medida que depende do
+          texto volta a mover a tabela no dia em que a frase ganhar uma palavra a mais. */}
+      {modo === 'ano-mes' && (
+        <div className="mt-1 flex items-center gap-1.5"
+          style={{ fontSize: 11, minHeight: 18, lineHeight: '18px' }}>
+          <span className="text-foreground/70">{frase || '\u00A0'}</span>
           {podeLimpar && (
             <button
               type="button"
