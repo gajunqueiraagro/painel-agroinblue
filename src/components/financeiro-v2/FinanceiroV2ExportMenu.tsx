@@ -12,6 +12,7 @@ import type { LancamentoV2, DimensaoDataFinanceiro } from '@/hooks/useFinanceiro
 import { triggerXlsxDownload } from '@/lib/xlsxDownload';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { formatDocumento } from '@/lib/financeiro/documentoHelper';
+import { normalizarAtividade } from '@/lib/financeiro/filtrosListaV2';
 import { ErroConjuntoIncompleto } from '@/lib/financeiro/listaPaginadaV2';
 import { normalizarErro } from '@/lib/erroOperacional';
 
@@ -19,6 +20,31 @@ interface FornecedorMap {
   id: string;
   nome: string;
 }
+
+/** Qualquer cadastro que o exportador só precisa traduzir de id para nome. */
+export interface NomePorId {
+  id: string;
+  nome: string;
+}
+
+const nomeDe = (lista: readonly NomePorId[] | undefined, id: string | null | undefined) =>
+  (id ? lista?.find((x) => x.id === id)?.nome : '') || '';
+
+/**
+ * ⚠ O PREFIXO NUMÉRICO DE `tipo_operacao` É CHAVE DE ORDENAÇÃO, NÃO NOME. O banco guarda
+ * `1-Entradas`, `2-Saídas` e `3-Transferências` (medido em 10/09/2026, mais 7 linhas legadas
+ * em `3-Transferência`), e o número existe para ordenar. Numa planilha ele vira ruído na
+ * frente de toda linha e atrapalha o filtro do Excel, que passa a ordenar por dígito.
+ */
+const semPrefixo = (t: string | null | undefined) => (t || '').replace(/^\d+-/, '');
+
+/** Os mesmos rótulos do filtro "Atividade" da tela (`FinanceiroV2Tab`). */
+const ATIVIDADE_LABEL: Record<string, string> = {
+  pecuaria: 'Pecuária',
+  agricultura: 'Agricultura',
+  administrativo: 'Administrativo',
+  outros: '',
+};
 
 // PR-FIN-GRADE-DATAS-03 — rótulo humano da dimensão temporal soberana usada no recorte da grade.
 const DIMENSAO_LABEL: Record<DimensaoDataFinanceiro, string> = {
@@ -43,6 +69,13 @@ interface Props {
    */
   carregarConjunto: () => Promise<LancamentoV2[]>;
   fornecedores: FornecedorMap[];
+  /* ⚠ OS TRÊS CADASTROS VÊM DA TELA, e não de uma busca nova: ela já os tem em memória para
+     desenhar a lista e os filtros (`fazendas`, `hook.contasBancarias`, `hook.safras`). Uma
+     segunda leitura aqui daria a chance de o arquivo discordar da tela sobre o nome de uma
+     safra — e o operador conferiria a planilha contra a tela sem entender a diferença. */
+  fazendas?: readonly NomePorId[];
+  contas?: readonly NomePorId[];
+  safras?: readonly NomePorId[];
   ano: string;
   fazendaNome?: string;
   totalCount: number;
@@ -57,7 +90,10 @@ function fmtDate(d: string | null) {
 
 
 
-function buildRows(lancamentos: LancamentoV2[], fornecedores: FornecedorMap[]) {
+function buildRows(
+  lancamentos: LancamentoV2[], fornecedores: FornecedorMap[],
+  cadastros: { fazendas?: readonly NomePorId[]; contas?: readonly NomePorId[]; safras?: readonly NomePorId[] } = {},
+) {
   return lancamentos.map(l => {
     const forn = fornecedores.find(f => f.id === l.favorecido_id)?.nome || '';
     const valor = l.sinal >= 0 ? l.valor : -l.valor;
@@ -78,22 +114,49 @@ function buildRows(lancamentos: LancamentoV2[], fornecedores: FornecedorMap[]) {
       centro: l.centro_custo || '',
       subcentro: l.subcentro || '',
       sinal: l.sinal,
+      /* ⚠ AUSÊNCIA É VAZIO, NUNCA "-": numa planilha o traço é um VALOR — ele entra no
+         filtro do Excel como uma opção a mais e quebra a soma de quem seleciona a coluna.
+         Célula vazia é o que o Excel entende como "não tem". */
+      tipo: semPrefixo(l.tipo_operacao),
+      tipoDocumento: (l as any).tipo_documento || '',
+      numeroDocumento: l.numero_documento || '',
+      atividade: ATIVIDADE_LABEL[normalizarAtividade(l.escopo_negocio)] ?? '',
+      safra: nomeDe(cadastros.safras, l.safra_id),
+      fazenda: nomeDe(cadastros.fazendas, l.fazenda_id),
+      contaBancaria: nomeDe(cadastros.contas, l.conta_bancaria_id),
     };
   });
 }
 
-function exportExcel(lancamentos: LancamentoV2[], fornecedores: FornecedorMap[], ano: string, dimensao: DimensaoDataFinanceiro, fazendaNome?: string) {
-  const rows = buildRows(lancamentos, fornecedores);
+function exportExcel(
+  lancamentos: LancamentoV2[], fornecedores: FornecedorMap[], ano: string,
+  dimensao: DimensaoDataFinanceiro, fazendaNome?: string,
+  cadastros: { fazendas?: readonly NomePorId[]; contas?: readonly NomePorId[]; safras?: readonly NomePorId[] } = {},
+) {
+  const rows = buildRows(lancamentos, fornecedores, cadastros);
+  /* ⚠ AS COLUNAS SAÍRAM DE 11 PARA 17 — PR-EXPORT-FINANCEIRO-01. O que faltava não era
+     enfeite: sem Safra, Fazenda e Conta o cliente não fecha custo de lavoura com o parceiro,
+     e a planilha voltava para a tela para ser completada à mão.
+     ⚠ E "Documento" VIROU DUAS. Ela era `formatDocumento(tipo, numero)` — "NF 1234" numa
+     célula só —, o que impede filtrar por tipo e ordenar por número no Excel. Agora são o
+     tipo e o número crus, cada um na sua coluna; quem quiser a forma composta a monta com
+     uma fórmula, o que o caminho inverso não permitia. */
   const data = rows.map(r => ({
     // PR-FIN-GRADE-DATAS-03 — Comp. | Venc. | Pgto. em colunas separadas.
     'Comp.': r.comp,
     'Venc.': r.venc,
     'Pgto.': r.pgto,
-    'Produto': r.produto,
+    'Descrição': r.produto,
     'Fornecedor': r.fornecedor,
     'Valor': r.valor,
-    'Documento': r.documento,
+    'Tipo': r.tipo,
+    'Tipo de documento': r.tipoDocumento,
+    'Número documento': r.numeroDocumento,
     'Status': r.status,
+    'Atividade': r.atividade,
+    'Safra': r.safra,
+    'Fazenda': r.fazenda,
+    'Conta bancária': r.contaBancaria,
     'Macro': r.macro,
     'Centro': r.centro,
     'Subcentro': r.subcentro,
@@ -107,9 +170,12 @@ function exportExcel(lancamentos: LancamentoV2[], fornecedores: FornecedorMap[],
         name: 'Lançamentos',
         rows: data,
         cols: [
-          { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 30 }, { wch: 25 },
-          { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 20 },
-          { wch: 18 }, { wch: 18 },
+          { wch: 12 }, { wch: 12 }, { wch: 12 },   // Comp. · Venc. · Pgto.
+          { wch: 30 }, { wch: 25 }, { wch: 14 },   // Descrição · Fornecedor · Valor
+          { wch: 16 }, { wch: 18 }, { wch: 18 },   // Tipo · Tipo de documento · Número documento
+          { wch: 12 }, { wch: 14 }, { wch: 16 },   // Status · Atividade · Safra
+          { wch: 22 }, { wch: 24 },                // Fazenda · Conta bancária
+          { wch: 20 }, { wch: 18 }, { wch: 18 },   // Macro · Centro · Subcentro
         ],
       },
       // PR-FIN-GRADE-DATAS-03 — aba de metadado simples identificando a dimensão temporal do recorte.
@@ -190,7 +256,7 @@ async function exportPDF(lancamentos: LancamentoV2[], fornecedores: FornecedorMa
   doc.save(`financeiro_v2_${ano}${faz}.pdf`);
 }
 
-export function FinanceiroV2ExportMenu({ carregarConjunto, fornecedores, ano, fazendaNome, totalCount, dimensao }: Props) {
+export function FinanceiroV2ExportMenu({ carregarConjunto, fornecedores, ano, fazendaNome, totalCount, dimensao, fazendas, contas, safras }: Props) {
   const [open, setOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
 
@@ -208,7 +274,7 @@ export function FinanceiroV2ExportMenu({ carregarConjunto, fornecedores, ano, fa
         return;
       }
       if (type === 'excel') {
-        exportExcel(lancamentos, fornecedores, ano, dimensao, fazendaNome);
+        exportExcel(lancamentos, fornecedores, ano, dimensao, fazendaNome, { fazendas, contas, safras });
         toast.success(`Excel exportado! (${lancamentos.length} lançamentos)`);
       } else {
         await exportPDF(lancamentos, fornecedores, ano, dimensao, fazendaNome);

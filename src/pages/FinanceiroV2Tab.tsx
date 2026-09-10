@@ -1267,6 +1267,16 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
           fazendaNome={fazOperacionais.find(f => f.id === fazendaId)?.nome}
           totalCount={hook.listaTotal}
           dimensao={dataPor}
+          /* ⚠ OS TRÊS CADASTROS QUE A TELA JÁ TEM. Nada é buscado por causa da exportação:
+             `fazendas` desenha o seletor, `contasBancarias` a coluna de conta e `safras` o
+             filtro de safra. O arquivo passa a nomear pelo MESMO cadastro que a tela usa —
+             se um dia divergirem, divergem juntos, e não um contra o outro. */
+          fazendas={fazendas}
+          /* ⚠ A CONTA TEM DOIS NOMES no cadastro, e o exportador não escolhe por conta
+             própria: `nome_exibicao` é o que o operador lê nas telas, `nome_conta` é o
+             interno. A precedência fica aqui, à vista, e é a mesma do resto do repo. */
+          contas={hook.contasBancarias.map(c => ({ id: c.id, nome: c.nome_exibicao || c.nome_conta }))}
+          safras={hook.safras}
         />
       )}
       modoIntensivo={modoIntensivo}
