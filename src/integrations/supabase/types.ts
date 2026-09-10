@@ -4957,6 +4957,7 @@ export type Database = {
           banco: string | null
           cliente_id: string | null
           codigo_conta: string | null
+          consolida_em_conta_id: string | null
           conta_digito: string | null
           created_at: string | null
           fazenda_id: string | null
@@ -4977,6 +4978,7 @@ export type Database = {
           banco?: string | null
           cliente_id?: string | null
           codigo_conta?: string | null
+          consolida_em_conta_id?: string | null
           conta_digito?: string | null
           created_at?: string | null
           fazenda_id?: string | null
@@ -4997,6 +4999,7 @@ export type Database = {
           banco?: string | null
           cliente_id?: string | null
           codigo_conta?: string | null
+          consolida_em_conta_id?: string | null
           conta_digito?: string | null
           created_at?: string | null
           fazenda_id?: string | null

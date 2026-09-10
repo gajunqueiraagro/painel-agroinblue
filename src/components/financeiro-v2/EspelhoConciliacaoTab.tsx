@@ -25,6 +25,9 @@ import { desfazerVinculo, desfazerGrupo } from '@/hooks/useConciliacaoDoMes';
 import { LancamentoLeituraDialog } from '@/components/financeiro-v2/LancamentoLeituraDialog';
 import { CasarComBancoModal, CasarN1Modal, type ExtratoAlvo, type LevadoInicial } from '@/components/financeiro-v2/CasarComBancoModal';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { DecisaoDerivadosDialog } from '@/components/financeiro-v2/DecisaoDerivadosDialog';
+import { useEspelhoInternas, type EspelhoInternas } from '@/hooks/useEspelhoInternas';
+import { toast } from 'sonner';
 import { X } from 'lucide-react';
 
 const MESES_CURTOS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
@@ -79,11 +82,32 @@ function EspStatusCell({ status }: { status: string }) {
   return <span className="text-amber-700 text-[10px] shrink-0">⚠ sem vínculo</span>;
 }
 
-function AbaOfxReal({ ofx, inicial }: { ofx: EspOfx[]; inicial: number }) {
+/**
+ * A aba do extrato, com as duas pontas do saldo — PR-ESPELHO-07 item C.
+ *
+ * ⚠ O SALDO DO EXTRATO É CONSOLIDADO, e é isso que a lista precisava dizer. O extrato do
+ * Bradesco mostra a conta corrente JUNTO com a Invest Fácil, que o banco consolida nela:
+ * 1,00 + 238.790,26 = 238.791,26 em 31/07. Abrir a lista pelo saldo da conta sozinha —
+ * 1,00 — faria a última linha fechar 238 mil longe do papel do banco, e o operador
+ * procuraria por semanas um erro que não existe.
+ *
+ * ⚠ O FINAL É CALCULADO, O INFORMADO É LIDO, e os dois aparecem lado a lado. Exibir só um
+ * deles obrigaria a confiar: com os dois, "confere" é uma afirmação verificável, e a
+ * diferença — quando existe — é o próprio número que falta explicar.
+ */
+function AbaOfxReal({ ofx, inicial, internas }: { ofx: EspOfx[]; inicial: number; internas: EspelhoInternas }) {
+  /* ⚠ O CONSOLIDADO MANDA QUANDO EXISTE; sem ele, o saldo da própria conta, que é o que a
+     lista sempre usou. Nunca um zero no lugar do desconhecido: `??` não cai em 0. */
+  const abertura = internas.saldoInicialConsolidado ?? inicial;
   const rows = useMemo(() => {
-    let acc = inicial;
+    let acc = abertura;
     return ofx.map((r) => { acc += r.valor; return { r, saldo: acc }; });
-  }, [ofx, inicial]);
+  }, [ofx, abertura]);
+  const movimentos = ofx.reduce((a, r) => a + r.valor, 0);
+  const fechamento = abertura + movimentos;
+  const informado = internas.saldoInformadoConsolidado;
+  const difere = informado == null ? null : fechamento - informado;
+  const SALDO_LINHA = 'grid grid-cols-[44px_1fr_72px_92px_92px_92px] gap-1 py-0.5 bg-muted/40 text-[11px] font-semibold';
   return (
     /* ⚠ A LISTA OCUPA A ALTURA QUE SOBRA, E TEM A MARGEM DA CONFERÊNCIA — PR-ESPELHO-06 item C.
        Era `max-h-[55vh]` sem padding lateral: a tabela parava no meio do modal de 92vh,
@@ -95,6 +119,12 @@ function AbaOfxReal({ ofx, inicial }: { ofx: EspOfx[]; inicial: number }) {
     <div className="min-h-0 flex-1 overflow-y-auto border-t px-3.5 text-[10px]">
       <div className="grid grid-cols-[44px_1fr_72px_92px_92px_92px] gap-1 font-semibold text-muted-foreground border-b pb-0.5 sticky top-0 bg-card">
         <span>Data</span><span>Histórico</span><span>Documento</span><span className="text-right">Valor</span><span className="text-right">Saldo</span><span>Status</span>
+      </div>
+      <div className={cn(SALDO_LINHA, 'border-b')}>
+        <span className="col-span-3">Saldo inicial (extrato)</span>
+        <span />
+        <span className={cn('text-right tabular-nums', corValReal(abertura))}>{fmtBRL(abertura)}</span>
+        <span />
       </div>
       {rows.map(({ r, saldo }) => (
         <div key={r.extrato_id} className="grid grid-cols-[44px_1fr_72px_92px_92px_92px] gap-1 py-0.5 border-b last:border-b-0 items-center">
@@ -110,6 +140,24 @@ function AbaOfxReal({ ofx, inicial }: { ofx: EspOfx[]; inicial: number }) {
           <EspStatusCell status={r.status} />
         </div>
       ))}
+      <div className={cn(SALDO_LINHA, 'border-t')}>
+        <span className="col-span-3">Saldo final (extrato)</span>
+        <span />
+        <span className={cn('text-right tabular-nums', corValReal(fechamento))}>{fmtBRL(fechamento)}</span>
+        {/* ⚠ "—" QUANDO FALTA SALDO INFORMADO, nunca "difere R$ 0,00": a sentinela do
+            CLAUDE.md diz que ausência é traço, e um "confere" sobre dado que não existe é a
+            pior das duas mentiras possíveis aqui. */}
+        <span className="text-[10px] font-normal text-muted-foreground truncate"
+          title={informado == null ? 'sem saldo informado para o mês' : undefined}>
+          {informado == null
+            ? '—'
+            : <>informado: {fmtBRL(informado)}{' · '}
+                {Math.abs(difere ?? 0) <= 0.01
+                  ? <span className="text-success">confere</span>
+                  : <span className="text-amber-600">difere R$ {fmtBRL(Math.abs(difere ?? 0))}</span>}
+              </>}
+        </span>
+      </div>
     </div>
   );
 }
@@ -163,13 +211,13 @@ function AbaSistemaReal({ sistema, inicial, onAbrir }: { sistema: EspSis[]; inic
  * uma vez só, inclusive os que desenha dentro de um bloco N:1. Ler os dois lados da mesma
  * função é o que impede a próxima regra de entrar em um só.
  */
-function montarEvolucao(data: EspelhadosReais) {
+function montarEvolucao(data: EspelhadosReais, internos: ReadonlySet<string>) {
   const inicial = data.saldos.inicial ?? 0;
   const nDias = data.saldos.periodo_fim ? Number(data.saldos.periodo_fim.split('-')[2]) : 31;
   const dia = (s: string | null) => (s ? Number(s.split('-')[2]) : 0);
   const movOfx = Array(nDias + 1).fill(0);
   const movSis = Array(nDias + 1).fill(0);
-  for (const d of montarMesa(data)) {
+  for (const d of montarMesa(data, internos)) {
     const n = dia(d.data);
     if (n >= 1 && n <= nDias) { movOfx[n] += d.banco; movSis[n] += d.sistema; }
   }
@@ -184,8 +232,12 @@ function montarEvolucao(data: EspelhadosReais) {
   }
   return rows;
 }
-function AbaEvolucaoReal({ data }: { data: EspelhadosReais }) {
-  const rows = useMemo(() => montarEvolucao(data), [data]);
+function AbaEvolucaoReal({ data, internos }: { data: EspelhadosReais; internos: ReadonlySet<string> }) {
+  /* ⚠ A EVOLUÇÃO LÊ A MESMA MESA, e por isso herda a regra da conta interna sem repeti-la.
+     Se lesse `sistema_completo` cru, a curva do sistema descolaria da do banco exatamente
+     nos dias em que houve transferência interna — e o gráfico acusaria uma divergência que
+     o fechamento por dia, ao lado, diz não existir. */
+  const rows = useMemo(() => montarEvolucao(data, internos), [data, internos]);
   const mm = data.saldos.periodo_ini ? data.saldos.periodo_ini.split('-')[1] : '';
   return (
     /* ⚠ UM SCROLLPORT SÓ, E O RODAPÉ DENTRO DELE. Havia um `space-y-2` externo com a lista em
@@ -251,6 +303,15 @@ interface DiaConf {
   paredosN1: ParedoN1[];
   extratosSemPar: EspOfx[];
   lancsSemPar: EspSis[];
+  /**
+   * ⚠ TRANSFERÊNCIA COM CONTA INTERNA NÃO É "SEM PAR" — PR-ESPELHO-07 item D. O banco
+   * consolida a interna nesta conta e NÃO exporta o movimento entre as duas: cobrar par de
+   * um movimento que o extrato nunca teve é alarme onde não havia como acertar, e alarme
+   * assim ensina a ignorar o alarme. Ela sai do contador, sai da soma do dia e aparece no
+   * fim com sinal próprio — visível, porque o dinheiro andou; fora da conta, porque o banco
+   * não a mostra.
+   */
+  internas: EspSis[];
   banco: number;
   sistema: number;
 }
@@ -274,7 +335,33 @@ function ordenar<T>(itens: T[], valor: (t: T) => number): T[] {
  * "falta alguém" sem ver ao lado de quê. Dentro do dia, o extrato órfão e o lançamento órfão
  * aparecem a três linhas um do outro, que é como se descobre que são o mesmo dinheiro.
  */
-function montarMesa(data: EspelhadosReais) {
+/**
+ * Os quatro números do topo.
+ *
+ * ⚠ FUNÇÃO, E EXPORTADA, PARA PODER SER PROVADA. Isto era um cálculo solto no corpo do
+ * componente, e foi por isso que ninguém percebeu que ele somava um conjunto diferente do
+ * fechamento por dia logo abaixo: não havia onde escrever o teste que os compara. O
+ * `internos` é o MESMO que a mesa recebe — é o que faz "o mesmo conjunto" ser verdade por
+ * construção, e não por coincidência mantida à mão em dois lugares.
+ */
+export function totaisDoEspelho(data: EspelhadosReais, internos: ReadonlySet<string>) {
+  const doSistema = data.sistema_completo.filter((s) => !internos.has(s.lancamento_id));
+  const soma = (xs: number[], positivo: boolean) =>
+    xs.filter((v) => (positivo ? v > 0 : v < 0)).reduce((a, v) => a + v, 0);
+  const banco = data.ofx_completo.map((o) => o.valor);
+  const sistema = doSistema.map((s) => s.valor_assinado);
+  const entradasBanco = soma(banco, true);
+  const entradasSistema = soma(sistema, true);
+  const saidasBanco = soma(banco, false);
+  const saidasSistema = soma(sistema, false);
+  return {
+    entradasBanco, entradasSistema, saidasBanco, saidasSistema,
+    difEntradas: entradasBanco - entradasSistema,
+    difSaidas: saidasBanco - saidasSistema,
+  };
+}
+
+export function montarMesa(data: EspelhadosReais, internos: ReadonlySet<string>) {
   const vinculos = data.vinculos ?? [];
   const sisPorId = new Map(data.sistema_completo.map((s) => [s.lancamento_id, s]));
   const extratosPorLanc = new Map<string, number>();
@@ -291,7 +378,7 @@ function montarMesa(data: EspelhadosReais) {
   const dia = (d: string | null): DiaConf => {
     const k = d ?? 'sem-data';
     let atual = dias.get(k);
-    if (!atual) { atual = { data: d, pareados: [], paredosN1: [], extratosSemPar: [], lancsSemPar: [], banco: 0, sistema: 0 }; dias.set(k, atual); }
+    if (!atual) { atual = { data: d, pareados: [], paredosN1: [], extratosSemPar: [], lancsSemPar: [], internas: [], banco: 0, sistema: 0 }; dias.set(k, atual); }
     return atual;
   };
 
@@ -355,6 +442,11 @@ function montarMesa(data: EspelhadosReais) {
   for (const s of data.sistema_completo) {
     if (comVinculo.has(s.lancamento_id)) continue;
     const d = dia(s.data);
+    /* ⚠ FORA DA SOMA, E É O `continue` QUE FAZ O CABEÇALHO FECHAR. Medido em agosto/2026 no
+       Bradesco do Agnaldo: as 17 transferências da Invest Fácil valem 1.206.567,85 de
+       entrada e 1.022.515,14 de saída — exatamente a distância entre o sistema e o banco nos
+       dois lados. Somá-las é comparar o que o banco tem com o que ele nunca exportou. */
+    if (internos.has(s.lancamento_id)) { d.internas.push(s); continue; }
     d.lancsSemPar.push(s);
     d.sistema += s.valor_assinado;
   }
@@ -365,6 +457,7 @@ function montarMesa(data: EspelhadosReais) {
     d.paredosN1 = ordenar(d.paredosN1, (p) => p.sis.valor_assinado);
     d.extratosSemPar = ordenar(d.extratosSemPar, (e) => e.valor);
     d.lancsSemPar = ordenar(d.lancsSemPar, (s) => s.valor_assinado);
+    d.internas = ordenar(d.internas, (s) => s.valor_assinado);
   }
   return lista;
 }
@@ -382,6 +475,32 @@ function iconeDoLancamento(tipo: string | null) {
     { status_transacao: 'realizado', editado_manual: false, conta_bancaria_id: null, data_pagamento: null },
     { tipoAprovacao: tipo },
     undefined,
+  );
+}
+
+/**
+ * ⚠ A COLUNA DO MEIO RESPONDE UMA PERGUNTA SÓ — PR-ESPELHO-07 item A. Ela mostrava o ÍCONE
+ * DE ORIGEM nos pareados (B / ↺ / ✓) e o estado nos sem-par (○ / !), então o mesmo lugar
+ * respondia "de onde veio" numa linha e "está casado?" na linha de baixo. Quem varre a
+ * coluna de cima a baixo procurando o que falta tinha de saber, símbolo a símbolo, qual das
+ * duas perguntas aquele estava respondendo. Agora o meio diz UMA coisa — casou, não casou,
+ * ou é filha — e a origem desce para um marcador ao lado da descrição.
+ */
+const SINAL_CASADO = { simbolo: '\u2713', cor: 'text-success', titulo: 'extrato e lançamento casados' };
+
+/**
+ * A origem, discreta, depois da descrição do sistema.
+ *
+ * ⚠ 10px E MUTED MESMO PARA `!` E `↺`: a cor saiu junto com a coluna. O que colore agora é o
+ * ESTADO, no meio; a origem é anotação, e anotação que grita disputa a atenção com o número.
+ * O `title` é o mesmo `significado` do classificador — a régua continua sendo
+ * `iconeOrigemLancamento`, e este arquivo não reescreve nenhuma parte dela.
+ */
+function MarcadorOrigem({ tipo }: { tipo: string | null }) {
+  const icone = iconeDoLancamento(tipo);
+  if (!icone) return null;
+  return (
+    <span className="ml-1.5 text-[10px] text-muted-foreground" title={icone.significado}>{icone.simbolo}</span>
   );
 }
 
@@ -435,8 +554,8 @@ function textoFilha(s: EspSis | undefined) {
  * podem ser chamados dentro de um `.map()` — a regra dos hooks proíbe, e o React quebraria ao
  * mudar a contagem de linhas entre renders. Extrair não foi estética: era a única forma.
  */
-function LinhaExtratoSemPar({ e, marcado, onMarcar, onCriar }: {
-  e: EspOfx; marcado: boolean; onMarcar: () => void; onCriar: () => void;
+function LinhaExtratoSemPar({ e, marcado, onMarcar, onCriar, onIgnorar }: {
+  e: EspOfx; marcado: boolean; onMarcar: () => void; onCriar: () => void; onIgnorar: () => void;
 }) {
   /* ⚠ A MESMA LINHA É ALVO E ORIGEM. Alvo quando um lançamento vem por cima (1:N); origem
      quando ELA é arrastada sobre um lançamento (N:1). São dois nós do @dnd-kit no mesmo
@@ -462,6 +581,12 @@ function LinhaExtratoSemPar({ e, marcado, onMarcar, onCriar }: {
           caminho para criar o mesmo lançamento seria a segunda forma. */}
       <td className={cn(CEL, 'text-right whitespace-nowrap')}>
         <Acao onClick={onCriar}>criar</Acao>
+        {/* ⚠ "IGNORAR" É A ÚLTIMA FUNÇÃO QUE SÓ EXISTIA NA AUDITORIA BANCÁRIA. O operador via
+            aqui a linha que o banco trouxe e não tinha o que fazer com ela; para desconsiderá-la
+            precisava sair do espelho, achar a mesma linha noutra tela e voltar. O fluxo inteiro
+            — listar derivados, decidir um a um, exigir motivo — já é o `DecisaoDerivadosDialog`:
+            esta tela o INSTANCIA, não o reescreve. */}
+        <Acao className="ml-1.5" onClick={onIgnorar}>ignorar</Acao>
         <Alca id={`dragExt:${e.extrato_id}`} />
       </td>
     </tr>
@@ -532,6 +657,9 @@ export const MOTIVO_CASAR_LABEL: Readonly<Record<string, string>> = {
 
 interface EstadoSelecao { extratos: Set<string>; lancamentos: Set<string>; }
 
+/** Um extrato desconsiderado — o que a lista do rodapé precisa para oferecer o "reverter". */
+interface ExtratoIgnorado { extrato_id: string; data: string | null; historico: string | null; valor: number; motivo: string | null; }
+
 /** O envelope que `fn_espelho_casar` / `fn_espelho_casar_n1` devolvem pelo PostgREST. */
 interface RespostaCasar {
   data: { ok?: boolean; motivo?: string } | null;
@@ -560,14 +688,64 @@ function comPrazo<T>(promessa: PromiseLike<T>, ms: number): Promise<T> {
   ]);
 }
 
-function AbaConferencia({ data, anoMes, nomeConta, contaId, onAbrir, onMudou }: {
-  data: EspelhadosReais; anoMes: string; nomeConta?: string; contaId: string | null;
-  onAbrir?: (id: string) => void; onMudou: () => void;
+function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos, onAbrir, onMudou }: {
+  data: EspelhadosReais; anoMes: string; nomeConta?: string; clienteId: string; contaId: string | null;
+  internos: ReadonlySet<string>; onAbrir?: (id: string) => void; onMudou: () => void;
 }) {
-  const dias = useMemo(() => montarMesa(data), [data]);
+  const dias = useMemo(() => montarMesa(data, internos), [data, internos]);
   const [sel, setSel] = useState<EstadoSelecao>({ extratos: new Set(), lancamentos: new Set() });
   const [erro, setErro] = useState<string | null>(null);
   const [gravando, setGravando] = useState(false);
+
+  /* ⚠ O IGNORADO NÃO ESTÁ NO ESPELHO, e é por isso que precisa de leitura própria: a RPC
+     filtra `ignorado_em IS NULL` (é o que faz a linha sumir ao ignorar). Sem esta consulta,
+     desconsiderar seria uma porta sem volta dentro desta tela — e uma decisão que não se
+     desfaz onde foi tomada é uma decisão que o operador evita tomar. */
+  const [verIgnorados, setVerIgnorados] = useState(false);
+  const [ignorarId, setIgnorarId] = useState<string | null>(null);
+  const [revertendoId, setRevertendoId] = useState<string | null>(null);
+  const { data: ignorados, refetch: refetchIgnorados } = useQuery({
+    queryKey: ['espelho-ignorados', clienteId, contaId, anoMes],
+    enabled: !!clienteId && !!contaId,
+    queryFn: async (): Promise<ExtratoIgnorado[]> => {
+      const [ano, mes] = anoMes.split('-');
+      const d1 = `${anoMes}-01`;
+      const d2 = new Date(Number(ano), Number(mes), 0).toISOString().slice(0, 10);
+      const { data: linhas, error } = await supabase
+        .from('extrato_bancario_v2')
+        .select('id, data_movimento, descricao, valor, ignorado_motivo, ignorado_em')
+        .eq('cliente_id', clienteId)
+        .eq('conta_bancaria_id', contaId ?? '')
+        .gte('data_movimento', d1)
+        .lte('data_movimento', d2)
+        .is('cancelado_em', null)
+        .not('ignorado_em', 'is', null)
+        .order('data_movimento');
+      if (error) throw error;
+      return (linhas ?? []).map((l) => ({
+        extrato_id: l.id, data: l.data_movimento, historico: l.descricao,
+        valor: Number(l.valor ?? 0), motivo: l.ignorado_motivo ?? null,
+      }));
+    },
+  });
+
+  const reverterIgnorado = async (extratoId: string) => {
+    if (revertendoId) return;
+    setRevertendoId(extratoId);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+      const { error } = await (supabase as any).rpc('fn_reverter_desconsideracao_extrato', { p_extrato_id: extratoId });
+      if (error) throw error;
+      toast.success('Desconsideração revertida.');
+      void refetchIgnorados();
+      onMudou();
+    } catch (e) {
+      /* PostgrestError é objeto, não Error: a mensagem real do PostgreSQL vem em `.message`. */
+      toast.error((e as { message?: string } | null)?.message || 'Falha ao reverter.');
+    } finally {
+      setRevertendoId(null);
+    }
+  };
 
   const [casar, setCasar] = useState<{ extrato: ExtratoAlvo; iniciais: LevadoInicial[] } | null>(null);
   const [arrastando, setArrastando] = useState<EspSis | null>(null);
@@ -777,7 +955,7 @@ function AbaConferencia({ data, anoMes, nomeConta, contaId, onAbrir, onMudou }: 
                         <td className={CEL_DATA}>{fmtData(p.extrato.data)}</td>
                         <td className={cn(CEL, 'text-[10px] font-medium')} title={p.extrato.historico ?? ''}>{p.extrato.historico ?? '—'}</td>
                         <td className={cn(CEL, 'text-right text-[11px] font-medium tabular-nums', corVal(p.extrato.valor))}>{fmtBRL(p.extrato.valor)}</td>
-                        <td className={cn(MEIO, 'text-[12px] font-semibold', icone?.cor)} title={icone?.significado}>{icone?.simbolo}</td>
+                        <td className={cn(MEIO, 'text-[12px] font-semibold', SINAL_CASADO.cor)} title={SINAL_CASADO.titulo}>{SINAL_CASADO.simbolo}</td>
                         <td />
                         <td className={cn(CEL, 'text-left text-[11px] font-medium tabular-nums', temDif ? 'text-amber-600' : corVal(somaAssinada))}
                             title={temDif ? `banco ${fmtBRL(Math.abs(p.diferenca))} ${p.diferenca > 0 ? 'a mais' : 'a menos'} que a soma` : undefined}>
@@ -789,6 +967,7 @@ function AbaConferencia({ data, anoMes, nomeConta, contaId, onAbrir, onMudou }: 
                                 <span className="text-[10px] text-muted-foreground">{' · '}{p.grupoId ? 'agrupados' : `${p.filhas.length} vínculos`}</span></>
                             : textoLancamento(unica?.sis, mesDoRecorte)}
                           {unica && unica.deN > 1 && <span className="text-[10px] text-muted-foreground">{' · '}1 de {unica.deN}</span>}
+                          <MarcadorOrigem tipo={p.tipoVencedor} />
                         </td>
                         <td className={cn(CEL, 'text-right')}>
                           {unica && onAbrir && <Acao onClick={() => onAbrir(unica.lancamento_id)}>abrir</Acao>}
@@ -824,7 +1003,6 @@ function AbaConferencia({ data, anoMes, nomeConta, contaId, onAbrir, onMudou }: 
 
                 {/* ⚠ N:1 — a mãe do lado do SISTEMA. Ver `ParedoN1`. */}
                 {d.paredosN1.map((g) => {
-                  const icone = iconeDoLancamento('agrupamento_manual');
                   const temDif = Math.abs(g.diferenca) > 0.01;
                   const somaAssinada = Math.sign(g.sis.valor_assinado || 1) * g.soma;
                   return (
@@ -835,12 +1013,13 @@ function AbaConferencia({ data, anoMes, nomeConta, contaId, onAbrir, onMudou }: 
                             title={temDif ? `os extratos somam ${fmtBRL(Math.abs(g.diferenca))} ${g.diferenca > 0 ? 'a mais' : 'a menos'} que o lançamento` : undefined}>
                           {fmtBRL(somaAssinada)}
                         </td>
-                        <td className={cn(MEIO, 'text-[12px] font-semibold', icone?.cor)} title={icone?.significado}>{icone?.simbolo}</td>
+                        <td className={cn(MEIO, 'text-[12px] font-semibold', SINAL_CASADO.cor)} title={SINAL_CASADO.titulo}>{SINAL_CASADO.simbolo}</td>
                         <td />
                         <td className={cn(CEL, 'text-left text-[11px] font-medium tabular-nums', corVal(g.sis.valor_assinado))}>{fmtBRL(g.sis.valor_assinado)}</td>
                         <td className={CEL}>
                           {textoLancamento(g.sis, mesDoRecorte)}
                           <span className="text-[10px] text-muted-foreground">{' · '}{g.extratos.length} extratos</span>
+                          <MarcadorOrigem tipo="agrupamento_manual" />
                         </td>
                         <td className={cn(CEL, 'text-right whitespace-nowrap')}>
                           {onAbrir && <Acao onClick={() => onAbrir(g.sis.lancamento_id)}>abrir</Acao>}
@@ -874,7 +1053,29 @@ function AbaConferencia({ data, anoMes, nomeConta, contaId, onAbrir, onMudou }: 
                     onCriar={() => setCasar({
                       extrato: { extrato_id: e.extrato_id, data: e.data, historico: e.historico, valor: e.valor },
                       iniciais: [],
-                    })} />
+                    })}
+                    onIgnorar={() => setIgnorarId(e.extrato_id)} />
+                ))}
+
+                {/* ⚠ NO FIM DO DIA, e depois do sem par: a ordem é a da atenção. O que falta
+                    vem antes; o que está explicado e fora do extrato vem depois. */}
+                {d.internas.map((si) => (
+                  <tr key={si.lancamento_id} className={cn(H21, 'border-b border-border/50 bg-muted/20')}>
+                    <td />
+                    <td className={CEL_DATA}>{fmtData(si.data)}</td>
+                    <td className={cn(CEL, 'text-[10px] italic text-muted-foreground')}>— o banco não exporta este movimento</td>
+                    <td />
+                    <td className={cn(MEIO, 'text-[12px] text-muted-foreground')} title="transferência com conta interna">⇄</td>
+                    <td />
+                    <td className={cn(CEL, 'text-left text-[11px] font-medium tabular-nums text-muted-foreground')}>{fmtBRL(si.valor_assinado)}</td>
+                    <td className={CEL}>
+                      <span className="text-[11px] font-medium text-muted-foreground">{si.descricao ?? '—'}</span>
+                      <span className="text-[10px] text-muted-foreground">{' · '}transferência interna · fora do extrato</span>
+                    </td>
+                    <td className={cn(CEL, 'text-right whitespace-nowrap')}>
+                      {onAbrir && <Acao onClick={() => onAbrir(si.lancamento_id)}>abrir</Acao>}
+                    </td>
+                  </tr>
                 ))}
 
                 {d.lancsSemPar.map((sl) => (
@@ -906,13 +1107,64 @@ function AbaConferencia({ data, anoMes, nomeConta, contaId, onAbrir, onMudou }: 
       </div>
 
       <div className="shrink-0 flex flex-wrap items-center gap-x-3 gap-y-1 border-t px-3.5 py-1 text-[10px] text-muted-foreground">
+        {/* ⚠ A LEGENDA SEGUE A COLUNA: primeiro os quatro sinais do meio, que são um
+            vocabulário fechado, e depois a origem, que é outro. Misturá-los numa fila só era
+            o que fazia o operador procurar `B` na coluna do estado. */}
+        <span><span className={cn('font-semibold', SINAL_CASADO.cor)}>{SINAL_CASADO.simbolo}</span> casados</span>
         <span><span className="text-muted-foreground">○</span> extrato sem par</span>
         <span><span className="text-destructive font-semibold">!</span> lançamento sem par</span>
-        {LEGENDA_ICONES.map((ic) => (
-          <span key={ic.simbolo}><span className={cn('font-semibold', ic.cor)}>{ic.simbolo}</span> {ic.curto}</span>
-        ))}
         <span>↳ dentro de um agrupamento</span>
+        <span><span className="text-muted-foreground">⇄</span> transferência interna</span>
+        <span className="opacity-60">|</span>
+        <span>origem:</span>
+        {LEGENDA_ICONES.map((ic) => (
+          <span key={ic.simbolo}><span className="text-muted-foreground">{ic.simbolo}</span> {ic.curto}</span>
+        ))}
+        {!!ignorados?.length && (
+          <span className="ml-auto">
+            {ignorados.length} ignorado{ignorados.length === 1 ? '' : 's'} neste mês{' · '}
+            <Acao onClick={() => setVerIgnorados((v) => !v)}>{verIgnorados ? 'ocultar' : 'ver'}</Acao>
+          </span>
+        )}
       </div>
+
+      {/* ⚠ A LISTA FICA FORA DA MESA, e não como mais um bloco de dia: o ignorado não está no
+          fechamento — ele saiu de lá, é isso que ignorar significa. Mostrá-lo entre os dias
+          convidaria a somá-lo de novo com os olhos. */}
+      {verIgnorados && !!ignorados?.length && (
+        <div className="shrink-0 max-h-[132px] overflow-y-auto border-t bg-muted/20 px-3.5 py-1">
+          <table className="w-full table-fixed">
+            <tbody>
+              {ignorados.map((ig) => (
+                <tr key={ig.extrato_id} className="h-[19px] border-b border-border/30">
+                  <td className={cn(CEL_DATA, 'w-[44px]')}>{fmtData(ig.data)}</td>
+                  <td className={cn(CEL, 'text-[10px]')} title={ig.historico ?? ''}>{ig.historico ?? '—'}</td>
+                  <td className={cn(CEL, 'w-[96px] text-right text-[10px] tabular-nums', corVal(ig.valor))}>{fmtBRL(ig.valor)}</td>
+                  <td className={cn(CEL, 'w-[38%] text-[10px] italic text-muted-foreground')} title={ig.motivo ?? ''}>
+                    {ig.motivo || '—'}
+                  </td>
+                  <td className={cn(CEL, 'w-[62px] text-right')}>
+                    <Acao onClick={() => void reverterIgnorado(ig.extrato_id)}>
+                      {revertendoId === ig.extrato_id ? 'revertendo…' : 'reverter'}
+                    </Acao>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* ⚠ INSTANCIADO, NÃO REESCRITO — o mesmo diálogo da Auditoria Bancária, com o mesmo
+          motivo obrigatório e a mesma decisão por derivado. A "simulação" é a primeira
+          chamada da própria RPC com motivo vazio: o banco recusa e devolve os derivados. */}
+      <DecisaoDerivadosDialog
+        extratoId={ignorarId}
+        aberto={!!ignorarId}
+        modo="ignorar"
+        onClose={() => setIgnorarId(null)}
+        onConcluido={() => { setIgnorarId(null); void refetchIgnorados(); onMudou(); }}
+      />
 
       {/* ⚠ A BARRA SÓ EXISTE COM SELEÇÃO, e some ao limpar: uma barra permanente vazia
           ocuparia 30px de mesa para não dizer nada. Esc limpa. */}
@@ -1004,6 +1256,8 @@ export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes }: Props) {
   const [lancLeituraId, setLancLeituraId] = useState<string | null>(null);
   const onAbrirLancamento = (id: string) => setLancLeituraId(id);
 
+  const internas = useEspelhoInternas(clienteId, contaId, anoMes);
+
   const { data, refetch } = useQuery({
     queryKey: ['espelho-conciliacao', clienteId, contaId, anoMes],
     enabled: !!clienteId && !!contaId,
@@ -1035,17 +1289,24 @@ export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes }: Props) {
 
   /* Os quatro números do topo (A18). "Saídas" = soma dos negativos de cada lado; entradas
      aparecem à parte quando existem, porque somá-las esconderia as duas metades. */
-  const saidasBanco = data.ofx_completo.filter((o) => o.valor < 0).reduce((a, o) => a + o.valor, 0);
-  const entradasBanco = data.ofx_completo.filter((o) => o.valor > 0).reduce((a, o) => a + o.valor, 0);
-  const saidasSistema = data.sistema_completo.filter((s) => s.valor_assinado < 0).reduce((a, s) => a + s.valor_assinado, 0);
-  const entradasSistema = data.sistema_completo.filter((s) => s.valor_assinado > 0).reduce((a, s) => a + s.valor_assinado, 0);
-  const difSaidas = saidasBanco - saidasSistema;
-  const difEntradas = entradasBanco - entradasSistema;
+  /* ⚠ O SISTEMA EXCLUI AS INTERNAS, E É SÓ ISSO QUE FALTAVA — itens B e D. O cabeçalho nunca
+     filtrou por origem: os crus de entrada (21.513,03 em agosto) sempre estiveram dentro. O
+     que ele somava A MAIS eram as transferências que o banco consolida e não exporta. Medido
+     no Bradesco do Agnaldo, agosto/2026: 4.204.804,10 − 1.206.567,85 = 2.998.236,25, o mesmo
+     do banco; −4.204.804,10 + 1.022.515,14 = −3.182.288,96, idem. E é o MESMO conjunto do
+     fechamento por dia por construção — os dois pulam os mesmos lançamentos. */
+  const { entradasBanco, entradasSistema, saidasBanco, saidasSistema, difEntradas, difSaidas } =
+    totaisDoEspelho(data, internas.lancamentosInternos);
 
   const vinculados = new Set((data.vinculos ?? []).map((v) => v.lancamento_id));
   const extratosComVinculo = new Set((data.vinculos ?? []).map((v) => v.extrato_id));
   const semCorrespondencia = data.ofx_completo.filter((o) => !extratosComVinculo.has(o.extrato_id));
-  const noSistemaNaoNoBanco = data.sistema_completo.filter((s) => !vinculados.has(s.lancamento_id));
+  /* ⚠ A INTERNA SAI DO CONTADOR — item D. Ela não tem par porque o banco não exportou o
+     movimento, não porque falta conciliar; contá-la aqui é pedir ao operador que procure no
+     extrato uma linha que o extrato nunca teve. No Bradesco do Agnaldo em agosto isso são 17
+     linhas, e eram 17 das 17 do contador. */
+  const noSistemaNaoNoBanco = data.sistema_completo.filter(
+    (s) => !vinculados.has(s.lancamento_id) && !internas.lancamentosInternos.has(s.lancamento_id));
   const totalNaoNoBanco = noSistemaNaoNoBanco.reduce((a, s) => a + s.valor_assinado, 0);
 
   const abas = [
@@ -1111,11 +1372,12 @@ export function EspelhoConciliacaoTab({ clienteId, contaId, ano, mes }: Props) {
 
       {aba === 'conferencia' && (
         <AbaConferencia data={data} anoMes={anoMes} nomeConta={data.escopo.nome_conta ?? undefined}
-          contaId={contaId} onAbrir={onAbrirLancamento} onMudou={() => { void refetch(); }} />
+          clienteId={clienteId} contaId={contaId} internos={internas.lancamentosInternos}
+          onAbrir={onAbrirLancamento} onMudou={() => { void refetch(); }} />
       )}
-      {aba === 'ofx' && <AbaOfxReal ofx={data.ofx_completo} inicial={inicial} />}
+      {aba === 'ofx' && <AbaOfxReal ofx={data.ofx_completo} inicial={inicial} internas={internas} />}
       {aba === 'sistema' && <AbaSistemaReal sistema={data.sistema_completo} inicial={inicial} onAbrir={onAbrirLancamento} />}
-      {aba === 'evolucao' && <AbaEvolucaoReal data={data} />}
+      {aba === 'evolucao' && <AbaEvolucaoReal data={data} internos={internas.lancamentosInternos} />}
 
       <LancamentoLeituraDialog open={!!lancLeituraId} lancamentoId={lancLeituraId} onClose={() => setLancLeituraId(null)} />
     </div>
