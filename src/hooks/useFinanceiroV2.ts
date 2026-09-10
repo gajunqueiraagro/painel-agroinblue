@@ -91,6 +91,15 @@ export interface LancamentoV2 {
    *  indicador visual e roteamento para LancamentoZooModal. */
   movimentacao_rebanho_id: string | null;
   safra_id?: string | null;
+  /**
+   * Se o lançamento entra na DRE — materializado pela trigger a partir do plano.
+   *
+   * ⚠ OPCIONAL PORQUE NEM TODA LEITURA O TRAZ: a view `vw_financeiro_lancamentos_v2_doc`,
+   * que alimenta a lista do Financeiro, NÃO tem esta coluna (medido em 10/09/2026). Quem
+   * vem por ali chega sem a flag, e `undefined` ali é a verdade — o badge mostra traço em
+   * vez de afirmar "não compõe" sobre o que ninguém leu.
+   */
+  compoe_dre?: boolean | null;
 }
 
 export interface Safra {
@@ -202,6 +211,8 @@ export interface ClassificacaoItem {
   macro_custo: string;
   tipo_operacao: string;
   escopo_negocio: string;
+  /** Se a conta entra na DRE — PR-FIN-DRE-BADGE-01. `undefined` nas combinações legadas. */
+  compoe_dre?: boolean | null;
   /**
    * A ordem de exibição da linha do plano — PR-MESA-TRANSF-01.
    *

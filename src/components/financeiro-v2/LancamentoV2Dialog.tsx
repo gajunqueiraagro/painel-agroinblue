@@ -41,6 +41,7 @@ import type { ExcelContext } from '@/v2/lib/mesa/buildExcelContext';
 import { planoDeTransferencia, ehTipoTransferencia } from '@/v2/lib/mesa/transferenciaPlano';
 import { ATIVIDADES, lembrarAtividade, ultimaAtividade, type Atividade } from '@/lib/financeiro/ultimaAtividade';
 import { safraSugerida, safrasCandidatas } from '@/lib/agri/safraSugerida';
+import { conflitoSafraEscopo, mensagemConflitoSafraEscopo } from '@/lib/financeiro/safraEscopo';
 
 interface Props {
   open: boolean;
@@ -405,6 +406,14 @@ export function LancamentoV2Dialog({
    * modal fechar. Sem o segundo, escolher a safra e depois corrigir a data desfaria a
    * escolha, e o operador teria de escolher de novo sem entender por quê.
    */
+  /**
+   * O subcentro com que o modal ABRIU — PR-FIN-DRE-BADGE-01.
+   *
+   * ⚠ NÃO É REDUNDANTE COM `lancamento.subcentro`: o valor de abertura pode vir do plano da
+   * transferência (que o modal resolve ao abrir) e não do que está gravado. O badge precisa
+   * saber se o operador MEXEU, e mexer é diferente de divergir do banco.
+   */
+  const [subcentroDeAbertura, setSubcentroDeAbertura] = useState('');
   const [safraSugeridaId, setSafraSugeridaId] = useState<string | null>(null);
   const [safraEditadaAMao, setSafraEditadaAMao] = useState(false);
 
@@ -528,6 +537,17 @@ export function LancamentoV2Dialog({
       setSubcentro(''); setMacroCusto(''); setGrupoCusto(''); setCentroCusto(''); setEscopoNegocio('');
       setSubcentroLimpoPelaAtividade(true);
     }
+    /* ⚠ A SAFRA DE OUTRA ATIVIDADE TAMBÉM SAI, e volta a ser sugerida — PR-FIN-SAFRA-ESCOPO-01.
+       Mantê-la seria guardar o conflito para o operador descobrir no save, depois de ter
+       preenchido o resto. Limpar aqui devolve o campo ao ciclo da sugestão, que é onde ele
+       estava antes de a atividade mudar. */
+    const safraAtual = (safras ?? []).find((sf) => sf.id === safraId);
+    const escopoSafra = (safraAtual?.escopo_negocio || '').trim();
+    if (safraAtual && escopoSafra && escopoSafra !== nova) {
+      setSafraId('');
+      setSafraSugeridaId(null);
+      setSafraEditadaAMao(false);
+    }
   };
 
   /* As candidatas da competência e da atividade — a MESMA função que a sugestão usa. */
@@ -606,6 +626,7 @@ export function LancamentoV2Dialog({
       setCentroCusto(planoTransfAoAbrir?.centro_custo ?? (lancamento.centro_custo || ''));
       setEscopoNegocio(planoTransfAoAbrir?.escopo_negocio ?? (lancamento.escopo_negocio || ''));
       /* O card segue o lançamento — e o lançamento segue o plano. */
+      setSubcentroDeAbertura(planoTransfAoAbrir?.subcentro ?? (lancamento.subcentro || ''));
       setAtividade(atividadeValida(planoTransfAoAbrir?.escopo_negocio ?? lancamento.escopo_negocio));
       setSubcentroLimpoPelaAtividade(false);
       setSafraSugeridaId(null);
@@ -700,6 +721,7 @@ export function LancamentoV2Dialog({
       /* ⚠ LANÇAMENTO NOVO HERDA A ÚLTIMA ATIVIDADE DA SESSÃO — quem classifica quatrocentos
          lançamentos de lavoura não quer marcar "Lavoura" quatrocentas vezes. No primeiro uso
          é `null`, e aí a lista é a completa, como sempre foi. */
+      setSubcentroDeAbertura('');
       setAtividade(ultimaAtividade());
       setSubcentroLimpoPelaAtividade(false);
       setSafraSugeridaId(null);
@@ -926,6 +948,21 @@ export function LancamentoV2Dialog({
     const classifEncontrada = classificacoes.find(c => eq(c.subcentro, subcentroTrim));
     if (subcentroTrim && !classifEncontrada) {
       toast.error('Selecione um subcentro oficial do plano de contas antes de salvar.');
+      return;
+    }
+
+    /* 1b. Safra e subcentro têm de falar da mesma atividade — PR-FIN-SAFRA-ESCOPO-01.
+       ⚠ AQUI, E NÃO SÓ NA TELA: a tela limpa a safra quando a ATIVIDADE muda, mas o
+       conflito também nasce pelo outro lado — trocar o subcentro sem tocar no card, ou
+       abrir um lançamento antigo já gravado torto. Este é o ponto por onde passam os DOIS
+       caminhos de save, o normal e o das parcelas, e é o último antes de gravar.
+       ⚠ O ESCOPO VEM DO PLANO, não do estado `escopoNegocio`: o estado é cópia, e cópia
+       pode estar velha se o plano mudou desde que o lançamento foi aberto. */
+    const safraEscolhida = (safras ?? []).find(sf => sf.id === safraId);
+    const conflito = conflitoSafraEscopo(
+      classifEncontrada?.escopo_negocio ?? escopoNegocio, safraEscolhida?.escopo_negocio);
+    if (conflito) {
+      toast.error(mensagemConflitoSafraEscopo(conflito));
       return;
     }
 
@@ -1665,16 +1702,34 @@ export function LancamentoV2Dialog({
               </div>
             </div>
 
-            {/* PR-FIN-MODAL-02C #6 — "Compõe DRE" (SOMENTE LEITURA), preservado da antiga aba
-                Classificação. Consome apenas a flag já materializada (compoe_dre). Só na EDIÇÃO —
-                na criação a flag ainda não existe. Não cria regra nem recalcula. */}
-            {isEdit && (() => {
-              const cd = (lancamento as any)?.compoe_dre;
+            {/* "Compõe DRE" (SOMENTE LEITURA) — PR-FIN-MODAL-02C #6, corrigido em PR-FIN-DRE-BADGE-01.
+                ⚠ ELE MOSTRAVA O PASSADO ENQUANTO O OPERADOR MUDAVA O PRESENTE. Lia só
+                `lancamento.compoe_dre`, a flag gravada; trocar o subcentro no modal não o
+                movia. O caso medido: um lançamento de custeio (DRE sim) teve o subcentro
+                trocado para "Adiantamento a Parceiro - Lavoura" (DRE não) e o badge seguiu
+                dizendo Sim até salvar — afirmando sobre uma conta que já não era a escolhida.
+                ⚠ NENHUMA REGRA NOVA, NENHUMA MATRIZ: só a escolha de QUAL fonte mostrar.
+                Enquanto o subcentro é o da abertura, vale o que está gravado; assim que ele
+                muda — e sempre, num lançamento novo — vale o que o plano diz, com o sufixo
+                "ao salvar", porque é o que a trigger vai gravar e ainda não gravou.
+                ⚠ AUSENTE É TRAÇO, nunca "Não". A view da lista do Financeiro não traz
+                `compoe_dre` (medido), então o lançamento chega sem a flag; dizer "Não" ali
+                seria afirmar o que ninguém sabe. */}
+            {(() => {
+              const doPlano = classificacoes.find(
+                (c) => (c.subcentro || '').trim().toLowerCase() === (subcentro || '').trim().toLowerCase(),
+              )?.compoe_dre;
+              const usaPlano = !isEdit || subcentro !== subcentroDeAbertura;
+              const cd = usaPlano ? doPlano : lancamento?.compoe_dre;
+              if (!isEdit && !subcentro) return null;
               const label = cd === true ? '✔ Sim' : cd === false ? 'Não' : '—';
               return (
                 <div className="flex items-center gap-2 rounded-md border border-border/40 bg-muted/30 px-2.5 py-1">
                   <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Compõe DRE</span>
                   <span className={cn("text-[11px] font-medium", cd === true ? "text-success" : "text-muted-foreground")}>{label}</span>
+                  {usaPlano && cd != null && (
+                    <span className="text-[10px] text-muted-foreground">ao salvar</span>
+                  )}
                 </div>
               );
             })()}

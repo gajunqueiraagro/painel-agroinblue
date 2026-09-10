@@ -106,6 +106,14 @@ export interface PlanoContasItem {
   escopo_negocio?: string | null;
   ativo: boolean;
   ordem_exibicao: number;
+  /**
+   * ⚠ ADITIVO — PR-FIN-DRE-BADGE-01. O modal mostra "Compõe DRE", e enquanto a coluna não
+   * chegava aqui ele só sabia o que estava GRAVADO no lançamento: trocar o subcentro na
+   * sessão não mexia no badge, e o operador via "Sim" depois de escolher uma conta que não
+   * compõe. Opcional porque as linhas legadas que o hook acrescenta a partir dos
+   * lançamentos não têm linha no plano — e `undefined` ali é a verdade, não uma falta.
+   */
+  compoe_dre?: boolean | null;
   is_dividendo?: boolean;
 }
 
@@ -160,7 +168,7 @@ export async function loadPlanoContasCompleto(clienteId: string): Promise<PlanoC
   const [planoRes, dividendos] = await Promise.all([
     supabase
       .from('financeiro_plano_contas')
-      .select('id, tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro, escopo_negocio, ativo, ordem_exibicao')
+      .select('id, tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro, escopo_negocio, ativo, ordem_exibicao, compoe_dre')
       .eq('ativo', true)
       .neq('macro_custo', DIVIDENDO_MACRO)
       .order('ordem_exibicao'),
@@ -191,6 +199,10 @@ export function planoToClassificacoes(items: PlanoContasItem[]) {
       macro_custo: i.macro_custo,
       tipo_operacao: i.tipo_operacao,
       escopo_negocio: i.escopo_negocio || '',
+      /* ⚠ NÃO É `|| false`: `undefined` significa "esta linha não sabe", e o badge mostra
+         traço. Um `false` inventado diria "não compõe" sobre uma conta que ninguém
+         classificou — que é a mentira mais fácil de acreditar. */
+      compoe_dre: i.compoe_dre,
       /* ⚠ A ORDEM VEM JUNTO — PR-MESA-TRANSF-01. Ela é a IDENTIDADE de uma linha do plano
          para quem precisa achar uma conta específica sem depender do texto: a
          "Transferência entre Contas Bancárias" é a de `ordem_exibicao` 18010, e resolvê-la
