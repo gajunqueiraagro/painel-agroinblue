@@ -119,7 +119,8 @@ describe('a frase', () => {
   it('intervalo traz a contagem', () => {
     montar({ de: { ano: 2026, mes: 2 }, ate: { ano: 2026, mes: 4 } });
     const el = screen.getByText('Mostrando fev → abr/2026 · 3 meses');
-    expect(el.className).toContain('text-foreground/70');
+    expect(el.className).toContain('text-foreground');
+    expect(el.className).toContain('font-medium');
   });
 
   it('intervalo entre anos mostra os dois anos e desabilita a fita', () => {
@@ -145,10 +146,12 @@ describe('cores por estado — A24 corrigida', () => {
   const papel = (rotulo: string) => screen.getByText(rotulo).getAttribute('data-papel');
 
   it('a tabela traduz papel em cor: quanto mais escolhido, mais escuro', () => {
-    expect(CARA.extremo.background).toBe('hsl(var(--primary))');
-    expect(CARA.extremo.color).toBe('#fff');
-    expect(CARA.meio.background).toBe('#dbe7f5');
-    expect(CARA.meio.color).toBe('hsl(var(--primary))');
+    /* ⚠ VERDE, não azul: azul é a cor da barra e da lateral, e o mês escolhido dizia a
+       mesma coisa que o topo da tela. Verde é a cor que só a escolha usa. */
+    expect(CARA.extremo.background).toBe('hsl(var(--success))');
+    expect(CARA.extremo.color).toBe('hsl(var(--success-foreground))');
+    expect(CARA.meio.background).toBe('#dff3e7');
+    expect(CARA.meio.color).toBe('#1a7540');
     expect(CARA.fora.background).toBe('#eef0f3');
     /* O defeito que o operador viu era exatamente estes dois trocados. */
     expect(CARA.extremo.background).not.toBe(CARA.fora.background);
@@ -159,7 +162,8 @@ describe('cores por estado — A24 corrigida', () => {
     montar(mesUnico(2026, 4));
     expect(papel('Abr')).toBe('extremo');
     expect(papel('Mai')).toBe('fora');
-    expect(screen.getByText('Abr').style.color).toBe('rgb(255, 255, 255)');
+    /* A cor em si não se lê no jsdom (ele descarta `hsl(var(...))`); quem a prende é o
+       teste da tabela acima. Aqui vale o papel. */
   });
 
   it('faixa: extremos nos dois cantos, meio no miolo, fora no resto', () => {

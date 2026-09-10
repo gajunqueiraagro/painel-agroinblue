@@ -66,9 +66,18 @@ export interface SeletorPeriodoProps {
    você clicou". Inventá-las como token novo obrigaria a mexer na paleta que o sistema todo
    usa, por causa de um estado de um controle. Se uma segunda peça precisar do mesmo azul,
    aí vira token — a segunda cópia é o momento, não a primeira. */
-const MEIO_BG = '#dbe7f5';
-const MEIO_BORDA = '#b6cbe6';
-const CHIP_MARCADO_BG = '#eef3fa';
+/* ⚠ O SELECIONADO É VERDE — decisão do Gabriel, 10/09/2026. Era azul, e azul é a cor da
+   BARRA e da lateral: o mês escolhido dizia a mesma coisa que o topo da tela, e o olho não
+   tinha como separar "onde estou" de "o que escolhi". Verde é a cor que só a escolha usa.
+   ⚠ O CLARO É HEX, o cheio é token, e a mistura é a razão: `--success` existe na paleta
+   (`hsl(145 63% 42%)` = #28AF60, conferido), mas o tom claro é ele a 15% SOBRE BRANCO, e
+   isso não se escreve com `hsl(var(--success))` — precisaria de `color-mix`, que trocaria
+   uma cor legível por uma expressão que ninguém lê no meio de um estilo inline. Os três
+   valores abaixo foram conferidos contra a derivação: #dff3e7 é exatamente 15% e #1a7540
+   difere do `hsl(145 63% 28%)` calculado em um ponto de 255, invisível. */
+const MEIO_BG = '#dff3e7';
+const MEIO_BORDA = '#bfe7cf';
+const MEIO_TXT = '#1a7540';
 
 /* ⚠ O NÃO-SELECIONADO DEIXOU DE SER BRANCO — A24, revisão final. Em branco ele se confundia
    com o fundo da tela: doze retângulos que só se distinguiam pela borda, e o operador não
@@ -98,8 +107,12 @@ const ALTURA = 28;
  * asa para a conferência visual da homologação.
  */
 export const CARA = {
-  extremo: { background: 'hsl(var(--primary))', borderColor: 'hsl(var(--primary))', color: '#fff' },
-  meio: { background: MEIO_BG, borderColor: MEIO_BORDA, color: 'hsl(var(--primary))' },
+  extremo: {
+    background: 'hsl(var(--success))',
+    borderColor: 'hsl(var(--success))',
+    color: 'hsl(var(--success-foreground))',
+  },
+  meio: { background: MEIO_BG, borderColor: MEIO_BORDA, color: MEIO_TXT },
   fora: { background: FORA_BG, borderColor: 'hsl(var(--border) / 0.6)', color: 'hsl(var(--muted-foreground))' },
 } as const;
 
@@ -265,7 +278,7 @@ export function SeletorPeriodo({
               const estilo: React.CSSProperties = tom
                 ? {
                     background: tom.bg, borderColor: tom.border, color: tom.txt,
-                    ...(papel !== 'fora' ? { boxShadow: 'inset 0 0 0 2px hsl(var(--primary))' } : {}),
+                    ...(papel !== 'fora' ? { boxShadow: 'inset 0 0 0 2px hsl(var(--success))' } : {}),
                   }
                 : CARA[papel];
               return (
@@ -311,11 +324,13 @@ export function SeletorPeriodo({
                 <button
                   type="button"
                   className="shrink-0 rounded-full border"
+                  /* ⚠ ATIVO É "EXTREMO", igual ao Ano: quando o recorte veio DAQUI, é este
+                     botão que carrega a escolha. Ele tinha uma cara própria — azul claro
+                     marcado —, e uma terceira cara para o mesmo estado é uma terceira coisa
+                     a aprender. */
                   style={{
                     height: 26, padding: '0 10px', fontSize: 11, fontWeight: 500, cursor: 'pointer',
-                    background: entreAnos ? CHIP_MARCADO_BG : CARA.fora.background,
-                    borderColor: entreAnos ? MEIO_BORDA : CARA.fora.borderColor,
-                    color: entreAnos ? 'hsl(var(--primary))' : CARA.fora.color,
+                    ...(entreAnos ? CARA.extremo : CARA.fora),
                   }}
                 >
                   Personalizado…
@@ -346,7 +361,7 @@ export function SeletorPeriodo({
       {modo === 'ano-mes' && (
         <div className="mt-1 flex items-center gap-1.5"
           style={{ fontSize: 11, minHeight: 18, lineHeight: '18px' }}>
-          <span className="text-foreground/70">{frase || '\u00A0'}</span>
+          <span className="font-medium text-foreground">{frase || '\u00A0'}</span>
           {podeLimpar && (
             <button
               type="button"
