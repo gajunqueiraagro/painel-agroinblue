@@ -17,6 +17,7 @@ import { useAnosDisponiveis } from '@/hooks/useAnosDisponiveis';
 import { useOperacoesComerciaisEmAndamento } from '@/hooks/useOperacoesComerciaisEmAndamento';
 import { useValorEmProjecao } from '@/hooks/useValorEmProjecao';
 import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
+import { FiltroMultiplo } from '@/v2/components/FiltroMultiplo';
 import { usePeriodoUrl } from '@/v2/hooks/usePeriodoUrl';
 import { anoInteiro, descreverPeriodo, dentro, mesUnico, type Periodo } from '@/v2/lib/periodo';
 
@@ -61,6 +62,15 @@ interface Props {
 export type SubAba = 'nascimento' | 'compra' | 'transferencia_entrada' | 'abate' | 'venda' | 'transferencia_saida' | 'consumo' | 'morte' | 'historico';
 
 type TopTab = 'todas' | 'entradas' | 'saidas' | 'chuvas' | 'historico';
+
+/* ⚠ AS MESMAS CLASSES DO `<Select>` QUE SAIU, letra por letra — A23. O gatilho muda de
+   componente, não de tamanho: `h-6` e `w-[100px]` são o que impede a linha de filtros de se
+   reorganizar no momento em que o operador troca o filtro. `justify-between` vem do padrão
+   do Financeiro, para a seta ficar na borda. */
+const CLASSE_GATILHO_CATEGORIA =
+  'h-6 w-[100px] justify-between px-1.5 text-[10px] font-bold bg-card text-foreground border-border';
+
+const ROTULO_CATEGORIA = { todos: 'Categorias', um: 'categoria', varios: 'categorias' };
 
 const ENTRY_TYPES: SubAba[] = ['nascimento', 'compra', 'transferencia_entrada'];
 const EXIT_TYPES: SubAba[] = ['abate', 'venda', 'transferencia_saida', 'consumo', 'morte'];
@@ -651,7 +661,17 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
     filtroMesInicial ? mesUnico(anoPadrao, Number(filtroMesInicial)) : anoInteiro(anoPadrao));
   const anoFiltro = String(periodo.de.ano);
   const [statusFiltro, setStatusFiltro] = useState<StatusFiltro>(normalizeStatusFiltro(filtroStatusInicial));
-  const [categoriaFiltro, setCategoriaFiltro] = useState(filtroCategoriaInicial || 'todas');
+  /* ⚠ VIROU LISTA, E O VAZIO É QUE MUDOU DE NOME. Era um valor único com `'todas'` de
+     sentinela — um select de uma opção só, cujo gatilho dizia "Todas" e não deixava marcar
+     duas. Agora `[]` é o mesmo "todas", e o sentinela sai do vocabulário: não existe estado
+     que signifique "nenhuma", porque um filtro que esconde tudo é um filtro que o operador
+     aprende a temer.
+     ⚠ A PROP NÃO MUDOU DE ASSINATURA: `filtroCategoriaInicial` continua um valor único — é o
+     que o drill da Conferência Categoria manda — e semeia uma lista de um. */
+  const [categoriaFiltro, setCategoriaFiltro] = useState<string[]>(
+    filtroCategoriaInicial ? [filtroCategoriaInicial] : []);
+  /** Vazio não filtra: é o estado de abertura, não uma lista de exclusão. */
+  const passaCategoria = (c: string) => categoriaFiltro.length === 0 || categoriaFiltro.includes(c);
 
   useEffect(() => {
     /* ⚠ UMA ESCRITA SÓ para ano e mês: eram duas, e a segunda lia o estado antes de a
@@ -661,7 +681,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
       setPeriodo(filtroMesInicial ? mesUnico(a, Number(filtroMesInicial)) : anoInteiro(a));
     }
     if (filtroStatusInicial) setStatusFiltro(normalizeStatusFiltro(filtroStatusInicial));
-    if (filtroCategoriaInicial) setCategoriaFiltro(filtroCategoriaInicial);
+    if (filtroCategoriaInicial) setCategoriaFiltro([filtroCategoriaInicial]);
   }, [filtroAnoInicial, filtroMesInicial, filtroStatusInicial, filtroCategoriaInicial]);
 
   const filtrados = useMemo(() => {
@@ -683,7 +703,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
           const st = l.statusOperacional || 'realizado';
           if (statusFiltro === 'realizado' && (l.cenario !== 'realizado' || st !== 'realizado')) return false;
           if (statusFiltro === 'meta' && l.cenario !== 'meta') return false;
-          if (categoriaFiltro !== 'todas' && l.categoria !== categoriaFiltro) return false;
+          if (!passaCategoria(l.categoria)) return false;
           return true;
         } catch { return false; }
       })
@@ -741,7 +761,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
         const st = l.statusOperacional || 'realizado';
         if (statusFiltro === 'realizado' && (l.cenario !== 'realizado' || st !== 'realizado')) return false;
         if (statusFiltro === 'meta' && l.cenario !== 'meta') return false;
-        if (categoriaFiltro !== 'todas' && l.categoria !== categoriaFiltro) return false;
+        if (!passaCategoria(l.categoria)) return false;
         return true;
       })
       .sort((a, b) => a.data.localeCompare(b.data) || a.id.localeCompare(b.id));
@@ -764,7 +784,9 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
     })();
 
     const mesLabelHist = descreverPeriodo(periodo);
-    const catLabelHist = categoriaFiltro === 'todas' ? 'Todas' : (CATEGORIAS.find(c => c.value === categoriaFiltro)?.label || categoriaFiltro);
+    const catLabelHist = categoriaFiltro.length === 0
+      ? 'Todas'
+      : categoriaFiltro.map(v => CATEGORIAS.find(c => c.value === v)?.label || v).join(', ');
     const statusLabelHist = getStatusFiltroLabel(statusFiltro);
 
     return (
@@ -796,13 +818,13 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
               periodo={periodo}
               onPeriodoChange={setPeriodo}
             />
-            <Select value={categoriaFiltro} onValueChange={setCategoriaFiltro}>
-              <SelectTrigger className="h-6 text-[10px] font-bold w-[100px] bg-card text-foreground border-border"><SelectValue placeholder="Categoria" /></SelectTrigger>
-              <SelectContent side="bottom">
-                <SelectItem value="todas">Todas</SelectItem>
-                {reclassCatsDisponiveis.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <FiltroMultiplo
+              opcoes={reclassCatsDisponiveis}
+              selecionadas={categoriaFiltro}
+              onChange={setCategoriaFiltro}
+              rotulo={ROTULO_CATEGORIA}
+              className={CLASSE_GATILHO_CATEGORIA}
+            />
             <div className="flex gap-px rounded border border-primary-foreground/20 bg-primary-foreground/5 p-px">
               {([
                 { value: 'realizado' as StatusFiltro, label: 'Realizado', activeClass: 'bg-success text-success-foreground' },
@@ -1037,17 +1059,13 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
           />
 
           {/* Category filter */}
-          <Select value={categoriaFiltro} onValueChange={setCategoriaFiltro}>
-            <SelectTrigger className="h-6 text-[10px] font-bold w-[100px] bg-card text-foreground border-border">
-              <SelectValue placeholder="Categoria" />
-            </SelectTrigger>
-            <SelectContent side="bottom">
-              <SelectItem value="todas">Todas</SelectItem>
-              {categoriasDisponiveis.map(c => (
-                <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <FiltroMultiplo
+            opcoes={categoriasDisponiveis}
+            selecionadas={categoriaFiltro}
+            onChange={setCategoriaFiltro}
+            rotulo={ROTULO_CATEGORIA}
+            className={CLASSE_GATILHO_CATEGORIA}
+          />
 
           {/* Status filter buttons */}
           <div className="flex gap-px rounded border border-primary-foreground/20 bg-primary-foreground/5 p-px">
