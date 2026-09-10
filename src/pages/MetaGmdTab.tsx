@@ -9,6 +9,7 @@ import { CATEGORIAS } from '@/types/cattle';
 import { useMetaGmd } from '@/hooks/useMetaGmd';
 import { Save, ArrowLeft, CopyCheck } from 'lucide-react';
 import { toast } from 'sonner';
+import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
 
 interface Props {
   onBack?: () => void;
@@ -59,16 +60,9 @@ export function MetaGmdTab({ onBack, initialAno, backLabel, ocultarFiltroAno }: 
           <div className="ml-auto flex items-center gap-2">
             {!ocultarFiltroAno && (<>
             <span className="text-[10px] font-semibold text-muted-foreground">Ano:</span>
-            <Select value={ano} onValueChange={setAno}>
-              <SelectTrigger className="w-18 h-6 text-[10px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {anos.map(a => (
-                  <SelectItem key={a} value={a}>{a}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {/* ⚠ O `<Select>` LOCAL SAIU — PR-BARRA-UNICA-01b. O estado (`ano`) fica; o
+                controle passa a ser o mesmo de toda tela do /v2. */}
+            <SeletorPeriodo modo="ano" anos={anos} ano={ano} onAnoChange={setAno} />
             </>)}
             <Button
               size="sm"

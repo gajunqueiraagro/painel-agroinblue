@@ -16,6 +16,7 @@ import { calcIndicadoresLancamento, calcValorTotal } from '@/lib/calculos/econom
 import { useAnosDisponiveis } from '@/hooks/useAnosDisponiveis';
 import { useOperacoesComerciaisEmAndamento } from '@/hooks/useOperacoesComerciaisEmAndamento';
 import { useValorEmProjecao } from '@/hooks/useValorEmProjecao';
+import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
 
 type StatusFiltro = 'todos' | 'realizado' | 'meta';
 type SortDir = 'asc' | 'desc' | null;
@@ -771,14 +772,18 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
 
           {/* Filters row */}
           <div className="flex flex-wrap items-center gap-1">
-            {!filtroAnoInicial && (<Select value={anoFiltro} onValueChange={setAnoFiltro}>
-              <SelectTrigger className="h-6 text-[10px] font-bold w-[68px] bg-card text-foreground border-border"><SelectValue placeholder="Ano" /></SelectTrigger>
-              <SelectContent side="bottom">{anosDisponiveis.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
-            </Select>)}
-            <Select value={mesFiltro} onValueChange={setMesFiltro}>
-              <SelectTrigger className="h-6 text-[10px] font-bold w-[110px] bg-card text-foreground border-border"><SelectValue placeholder="Mês" /></SelectTrigger>
-              <SelectContent side="bottom">{MESES_OPTIONS.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}</SelectContent>
-            </Select>
+            {/* ⚠ ANO E MÊS NUM CONTROLE SÓ — PR-BARRA-UNICA-01b. O `!filtroAnoInicial` que
+                escondia o ano saiu junto: a prop deixou de existir no 01a, quando a barra
+                global parou de semear as telas. `todos` é o `0` do componente. */}
+            <SeletorPeriodo
+              className="flex-1"
+              permiteAnoTodo
+              anos={anosDisponiveis}
+              ano={anoFiltro}
+              onAnoChange={setAnoFiltro}
+              mes={mesFiltro === 'todos' ? 0 : Number(mesFiltro)}
+              onMesChange={(m) => setMesFiltro(m === 0 ? 'todos' : String(m).padStart(2, '0'))}
+            />
             <Select value={categoriaFiltro} onValueChange={setCategoriaFiltro}>
               <SelectTrigger className="h-6 text-[10px] font-bold w-[100px] bg-card text-foreground border-border"><SelectValue placeholder="Categoria" /></SelectTrigger>
               <SelectContent side="bottom">
@@ -1009,26 +1014,18 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
 
         {/* Filters row */}
         <div className="flex flex-wrap items-center gap-1">
-          {!filtroAnoInicial && (<Select value={anoFiltro} onValueChange={setAnoFiltro}>
-            <SelectTrigger className="h-6 text-[10px] font-bold w-[68px] bg-card text-foreground border-border">
-              <SelectValue placeholder="Ano" />
-            </SelectTrigger>
-            <SelectContent side="bottom">
-              {anosDisponiveis.map(a => (
-                <SelectItem key={a} value={a}>{a}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>)}
-          <Select value={mesFiltro} onValueChange={setMesFiltro}>
-            <SelectTrigger className="h-6 text-[10px] font-bold w-[110px] bg-card text-foreground border-border">
-              <SelectValue placeholder="Mês" />
-            </SelectTrigger>
-            <SelectContent side="bottom">
-              {MESES_OPTIONS.map(m => (
-                <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            {/* ⚠ ANO E MÊS NUM CONTROLE SÓ — PR-BARRA-UNICA-01b. O `!filtroAnoInicial` que
+              escondia o ano saiu junto: a prop deixou de existir no 01a, quando a barra
+              global parou de semear as telas. `todos` é o `0` do componente. */}
+          <SeletorPeriodo
+            className="flex-1"
+            permiteAnoTodo
+            anos={anosDisponiveis}
+            ano={anoFiltro}
+            onAnoChange={setAnoFiltro}
+            mes={mesFiltro === 'todos' ? 0 : Number(mesFiltro)}
+            onMesChange={(m) => setMesFiltro(m === 0 ? 'todos' : String(m).padStart(2, '0'))}
+          />
 
           {/* Category filter */}
           <Select value={categoriaFiltro} onValueChange={setCategoriaFiltro}>

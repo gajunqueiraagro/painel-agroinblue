@@ -161,6 +161,7 @@ interface Props {
 type Aba = 'entrada' | 'saida' | 'reclassificacao';
 import { STATUS_LABEL, STATUS_OPTIONS_ZOOTECNICO, META_VISUAL, getStatusBadge, type StatusOperacional } from '@/lib/statusOperacional';
 import { usePermissions } from '@/hooks/usePermissions';
+import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
 
 /* ⚠ QUEM ESCOLHE A PROPRIA FAZENDA. Em contexto Global, so' estes podem lancar: os
    demais herdam a fazenda do contexto, que em Global nao existe.
@@ -5450,14 +5451,20 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     <div className="flex-1 self-start">
       <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-3 py-1.5 rounded-t-md">
         <div className="flex gap-1.5">
-          <Select value={anoFiltro} onValueChange={setAnoFiltro}>
-            <SelectTrigger className="h-8 text-[12px] font-bold w-24"><SelectValue placeholder="Ano" /></SelectTrigger>
-            <SelectContent>{anosDisponiveis.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
-          </Select>
-          <Select value={mesFiltro} onValueChange={setMesFiltro}>
-            <SelectTrigger className="h-8 text-[12px] font-bold flex-1"><SelectValue placeholder="Mês" /></SelectTrigger>
-            <SelectContent>{MESES.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}</SelectContent>
-          </Select>
+          {/* ⚠ OS DOIS `<Select>` VIRARAM UM — PR-BARRA-UNICA-01b. O estado fica onde estava
+              (`anoFiltro`/`mesFiltro`, este em 'todos' | '01'..'12') e a conversão mora na
+              borda: o componente fala mês como número, e `0` é o ano inteiro — que aqui
+              existia como a opção "Todos" e continua existindo, agora como o primeiro
+              botão da fita. */}
+          <SeletorPeriodo
+            className="flex-1"
+            permiteAnoTodo
+            anos={anosDisponiveis}
+            ano={anoFiltro}
+            onAnoChange={setAnoFiltro}
+            mes={mesFiltro === 'todos' ? 0 : Number(mesFiltro)}
+            onMesChange={(m) => setMesFiltro(m === 0 ? 'todos' : String(m).padStart(2, '0'))}
+          />
         </div>
       </div>
       <div className="space-y-1.5 pt-1.5">

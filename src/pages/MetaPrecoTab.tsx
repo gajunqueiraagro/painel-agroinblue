@@ -29,6 +29,7 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { salvarValorRebanhoMeta, type ValorRebanhoMetaItem } from '@/hooks/useValorRebanhoMeta';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
 
 interface Props {
   onBack?: () => void;
@@ -508,16 +509,8 @@ export function MetaPrecoTab({ onBack }: Props) {
 
       {/* Toolbar — compact */}
       <div className="flex gap-1 items-center flex-wrap">
-        <Select value={ano} onValueChange={setAno}>
-          <SelectTrigger className="w-[68px] h-6 text-[10px] font-bold border-orange-300">
-            <SelectValue placeholder="Ano" />
-          </SelectTrigger>
-          <SelectContent>
-            {anos.map(a => (
-              <SelectItem key={a} value={a}>{a}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {/* ⚠ O `<Select>` LOCAL SAIU — PR-BARRA-UNICA-01b: mesmo controle de toda tela. */}
+        <SeletorPeriodo modo="ano" anos={anos} ano={ano} onAnoChange={setAno} />
 
         <Badge variant="outline" className={`text-[9px] px-1.5 py-0 h-5 ${stCfg.color}`}>
           <StIcon className="h-2.5 w-2.5 mr-0.5" />

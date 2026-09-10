@@ -46,6 +46,18 @@ export interface SeletorPeriodoProps {
   onMesChange?: (v: number) => void;
   /** A cor de cada mês (1..12) quando ela significa algo. */
   tomPorMes?: Readonly<Record<number, TomDoMes>>;
+  /**
+   * Oferece "Ano" antes dos doze — PR-BARRA-UNICA-01b.
+   *
+   * ⚠ NÃO É ENFEITE, É CAPACIDADE. Três das telas que adotam este componente tinham "Todos
+   * os meses" no seletor que ele substitui (Lançamentos zoot, Conferência de Lançamentos e
+   * Saldos Mensais), e nelas ver o ano inteiro é leitura de rotina — trocar o controle sem
+   * isso não seria unificar, seria tirar uma resposta que o operador tem hoje.
+   * ⚠ O ANO TODO É `mes === 0`. Zero não é mês nenhum, e é justamente por isso que serve:
+   * quem recebe converte para o vocabulário da sua tela ('todos', '__all__'), e quem não
+   * habilita a opção nunca vê o valor.
+   */
+  permiteAnoTodo?: boolean;
   /** Enquanto carrega os tons, a fita vira esqueleto — não some. */
   carregando?: boolean;
   className?: string;
@@ -55,7 +67,8 @@ const NUM = { ler: (b: string) => Number(b) || 0, escrever: (v: number) => Strin
 const TXT = { ler: (b: string) => b, escrever: (v: string) => v };
 
 export function SeletorPeriodo({
-  modo = 'ano-mes', anos, ano, onAnoChange, mes, onMesChange, tomPorMes, carregando, className,
+  modo = 'ano-mes', anos, ano, onAnoChange, mes, onMesChange, tomPorMes, permiteAnoTodo,
+  carregando, className,
 }: SeletorPeriodoProps) {
   const hoje = new Date();
   const anoPadrao = String(hoje.getFullYear());
@@ -96,6 +109,28 @@ export function SeletorPeriodo({
         </div>
       ) : (
         <div className="flex flex-1 gap-0.5">
+          {permiteAnoTodo && (
+            /* ⚠ ELE VEM ANTES DOS DOZE e é mais estreito: é o recorte que CONTÉM os outros,
+               não um deles. Mesmo desenho de selecionado, para o olho não aprender dois. */
+            <button
+              type="button"
+              onClick={() => trocarMes(0)}
+              title="O ano inteiro"
+              style={{
+                flex: '0 0 34px', textAlign: 'center', padding: '5px 3px',
+                fontSize: '10px', borderRadius: '8px',
+                border: '1.5px solid hsl(var(--border))', cursor: 'pointer',
+                background: 'hsl(var(--card))', color: 'hsl(var(--muted-foreground))',
+                fontWeight: mesAtivo === 0 ? 700 : 500,
+                ...(mesAtivo === 0 ? {
+                  outline: '2.5px solid #185FA5', outlineOffset: '2px',
+                  transform: 'scale(1.09)', position: 'relative', zIndex: 1,
+                } : {}),
+              }}
+            >
+              Ano
+            </button>
+          )}
           {MESES_CURTOS.map((rotulo, i) => {
             const m = i + 1;
             const tom = tomPorMes?.[m];

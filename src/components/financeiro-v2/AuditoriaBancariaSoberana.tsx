@@ -22,6 +22,7 @@ import { ExtratoImportPreview } from '@/components/financeiro-v2/ExtratoImportPr
 import { EstacaoConciliacao, type GrupoSugerido } from '@/components/financeiro-v2/EstacaoConciliacao';
 import { LancamentoLeituraDialog } from '@/components/financeiro-v2/LancamentoLeituraDialog';
 import { toast } from 'sonner';
+import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
 
 interface Props {
   /* ⚠ OPCIONAL DESDE O PR-BARRA-UNICA-01a. Ela era obrigatória porque a barra global do
@@ -1207,12 +1208,18 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
           placeholder="Selecionar conta"
           className="h-7 text-xs w-[200px]"
         />
-        <select className="text-xs border rounded px-2 py-0.5 h-7 bg-background" value={mes} onChange={(e) => setMes(Number(e.target.value))}>
-          {MESES.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
-        </select>
-        <select className="text-xs border rounded px-2 py-0.5 h-7 bg-background" value={ano} onChange={(e) => setAno(Number(e.target.value))}>
-          {anos.map((a) => <option key={a} value={a}>{a}</option>)}
-        </select>
+        {/* ⚠ DOIS `<select>` NATIVOS SAÍRAM DAQUI — PR-BARRA-UNICA-01b. Eles abriam o menu do
+            SISTEMA OPERACIONAL: outra fonte, outro idioma, outro desenho em cada máquina —
+            e eram dois dos vinte que a baseline do `check:ui-nativo` ainda carregava. O
+            estado fica onde está (`ano`/`mes` desta tela); o que muda é o controle. */}
+        <SeletorPeriodo
+          className="flex-1"
+          anos={anos.map(String)}
+          ano={String(ano)}
+          onAnoChange={(v) => setAno(Number(v))}
+          mes={mes}
+          onMesChange={setMes}
+        />
         {temExtrato && diag && (
           <span className="ml-auto">
             {diag.veredito.conciliado

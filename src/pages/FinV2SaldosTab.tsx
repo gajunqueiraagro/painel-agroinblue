@@ -34,6 +34,7 @@ import {
   type MovimentoResumo,
 } from '@/lib/financeiro/conciliacaoCalc';
 import { buildSaldosAnosDisponiveis, buildUnifiedSaldos } from '@/lib/financeiro/saldosBancarios';
+import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
 
 /* ── types ── */
 interface SaldoBancario {
@@ -801,18 +802,17 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
         {/* Filters + Summary + Table Header — all sticky */}
         <div className="sticky top-0 z-20 bg-background pb-0">
           <div className="py-2 flex items-center gap-3 flex-wrap">
-            <Select value={filtroAno} onValueChange={setFiltroAno}>
-              <SelectTrigger className="w-24 h-8 text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {anosDisponiveis.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={filtroMes} onValueChange={setFiltroMes}>
-              <SelectTrigger className="w-24 h-8 text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent className="max-h-[260px] overflow-y-auto">
-                {MESES.map(m => <SelectItem key={m.v} value={m.v} className="py-1">{m.l}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            {/* ⚠ Um controle só — PR-BARRA-UNICA-01b. `__all__` (o "Todos" desta tela) é o
+                `0` do componente; o resto da tela continua lendo `filtroMes` como sempre. */}
+            <SeletorPeriodo
+              className="flex-1"
+              permiteAnoTodo
+              anos={anosDisponiveis}
+              ano={filtroAno}
+              onAnoChange={setFiltroAno}
+              mes={filtroMes === '__all__' ? 0 : Number(filtroMes)}
+              onMesChange={(m) => setFiltroMes(m === 0 ? '__all__' : String(m).padStart(2, '0'))}
+            />
 
             {!loading && saldos.length > 0 && filtroMes !== '__all__' && (
               <div className="flex items-center gap-2">

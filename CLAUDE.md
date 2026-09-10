@@ -337,7 +337,9 @@ preview que o cabecalho nao sai da tela ao rolar.
   volta ao nativo. Ja foi corrigido uma vez (PR-OC-DATA-PADRAO-01) e
   voltou na linha da parcela em 06/09 — por isso virou gate.
   ⚠ O GATE TEM BASELINE, como o TSC: 10 arquivos herdados (0 `type=date`,
-  20 `<select>`).
+  18 `<select>`). Eram 20 ate' 2026-09-10; o PR-BARRA-UNICA-01b tirou 2 —
+  os seletores nativos de mes e ano da `AuditoriaBancariaSoberana`, que
+  viraram o `SeletorPeriodo` compartilhado. Ela caiu de 3 para 1.
   ⚠ `type="date"` CHEGOU A ZERO no 136d — a frente [DATA-PADRAO-GLOBAL] esta'
   FECHADA para datas. O que resta na baseline sao 20 `<select>` nativos, em 10
   arquivos, e essa e' outra frente. Baseline de data em ZERO significa que

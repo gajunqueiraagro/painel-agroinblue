@@ -18,6 +18,7 @@ import { MESES_COLS } from '@/lib/calculos/labels';
 import { KpiCard } from '@/components/indicadores/KpiCard';
 import { GmdDetalheSheet } from '@/components/indicadores/GmdDetalheSheet';
 import { useFechamentoCompetencia } from '@/hooks/useFechamentoCompetencia';
+import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
 
 
 interface Props {
@@ -92,22 +93,17 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
     <div className="p-4 w-full animate-fade-in pb-20 space-y-4">
       {/* Seletores */}
       <div className="flex gap-2 items-center">
-        <Select value={anoFiltro} onValueChange={setAnoFiltro}>
-          <SelectTrigger className="w-24 touch-target text-base font-bold">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {anosDisponiveis.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={mesFiltro} onValueChange={setMesFiltro}>
-          <SelectTrigger className="w-28 touch-target text-base font-bold">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {MESES_COLS.map(m => <SelectItem key={m.key} value={m.key}>{m.label}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        {/* ⚠ UM CONTROLE, O MESMO DE TODA TELA — PR-BARRA-UNICA-01b. O estado continua aqui
+            (`anoFiltro`/`mesFiltro`, este em '01'..'12'); a conversão para o número que o
+            componente fala acontece na borda, e o formato gravado não muda. */}
+        <SeletorPeriodo
+          className="flex-1"
+          anos={anosDisponiveis}
+          ano={anoFiltro}
+          onAnoChange={setAnoFiltro}
+          mes={Number(mesFiltro)}
+          onMesChange={(m) => setMesFiltro(String(m).padStart(2, '0'))}
+        />
         {!mesSelecionadoFechado && (
           <span className="text-amber-500 text-xs" title="Mês não fechado — dados estimados por lançamentos">⚠️</span>
         )}
