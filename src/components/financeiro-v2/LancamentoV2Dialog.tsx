@@ -1568,17 +1568,19 @@ export function LancamentoV2Dialog({
                      que encolhe a lista dele: o plano passou de 137 para 206 subcentros em
                      10/09 e continua crescendo; digitar "combust" devolvia pecuária,
                      agricultura e silvicultura juntas.
-                     ⚠ NÃO QUEBRA LINHA, ROLA: quatro pílulas numa coluna estreita quebrariam
-                     em duas linhas e a altura do campo mudaria conforme o rótulo — o oposto
-                     da A16. Rolar horizontalmente mantém a altura fixa sempre. */}
+                     ⚠ A VERSÃO QUE ROLAVA NUMA LINHA SÓ MORREU na homologação de 10/09: em
+                     coluna estreita as quatro pílulas saíam ilegíveis ou cortadas. Viraram
+                     grade 2×2 de 50px, e a altura do campo é DECLARADA pela grade — não
+                     depende do rótulo, que é o que a A16 pede. */}
               <div className="col-span-4">
                 <Label className="text-[10px]">Atividade</Label>
-                {/* ⚠ 2×2 EM 32px, COM A ALTURA DA LINHA DECLARADA — medido: com o
-                    `line-height` padrão (1,5) cada pílula mede 19px e as duas fileiras
-                    somam 40, oito a mais que o campo ao lado; com 11px de linha a pílula
-                    mede 15 e o conjunto fecha em 32 exatos. A fonte NÃO desce de 10px — o
-                    piso é inviolável, e quem cede é a entrelinha. */}
-                <div className="grid h-8 grid-cols-2 content-center gap-0.5">
+                {/* ⚠ 2×2 EM 50px, E ESTA É A ÚNICA LINHA DO MODAL MAIS ALTA QUE 32 — decisão
+                    do Gabriel na homologação de 10/09. A versão anterior espremia as quatro
+                    pílulas em 32px com entrelinha de 11: cabia, mas ninguém lia. Aqui a
+                    pílula tem 24px de altura e 11px de texto, e a linha cresce para 50 —
+                    os vizinhos alinham pelo topo (`items-start`), então os rótulos ficam na
+                    mesma altura e só o campo da atividade é mais alto. */}
+                <div className="grid grid-cols-2 gap-0.5">
                   {ATIVIDADES.map((a) => {
                     const marcada = atividade === a.valor;
                     return (
@@ -1589,9 +1591,9 @@ export function LancamentoV2Dialog({
                         onClick={() => aplicarAtividade(a.valor)}
                         aria-pressed={marcada}
                         className={cn(
-                          'rounded-full border text-center text-[10px] transition-colors',
+                          'h-6 rounded-full border text-center text-[11px] transition-colors',
                           subcentroTravado && 'opacity-45',
-                          'px-1.5 py-px leading-[11px]',
+                          'truncate px-2',
                           marcada
                             ? 'border-primary bg-primary text-primary-foreground'
                             : 'border-border bg-card text-muted-foreground hover:bg-muted',
@@ -1665,18 +1667,24 @@ export function LancamentoV2Dialog({
               </div>
             </div>
 
-            {/* ── LINHA B — Safra. Desceu da linha da classificação (PR-FIN-ATIVIDADE-01b):
-                 lá ela dividia doze colunas com Atividade e Subcentro, e o Subcentro tem os
-                 nomes mais longos do formulário. Aqui ela tem a MESMA largura do Tipo
-                 Operação, que é o campo com que se parece. */}
+            {/* ── LINHA B — Safra. Ela não cabe na linha da classificação: medido, o nome
+                 mais longo do subcentro pede 291,5px e a pílula "Administrativo" 90,4, e as
+                 doze colunas de 666px não comportam os três inteiros (4+6+4 = 14). Entre
+                 truncar dois nomes e usar uma linha a mais, a linha a mais é mais barata. */}
             <div className="grid grid-cols-12 gap-2 items-start">
-              <div className="col-span-3">
+              <div className="col-span-4">
                 <Label className="text-[10px]">Safra</Label>
                 <Select
                   value={safraId || '__none_safra__'}
                   onValueChange={v => { setSafraId(v === '__none_safra__' ? '' : v); setSafraEditadaAMao(true); setSafraSugeridaId(null); }}
                 >
-                  <SelectTrigger className={cn('h-8', fieldBg, safraSugeridaId && safraId === safraSugeridaId && 'border-dashed border-primary')}>
+                  {/* ⚠ 12px E `truncate` COM `title` — o nome inteiro cabe nesta largura
+                      (medido: "Safra 26/27 Amendoim" pede 132,9px e a coluna dá 216,7),
+                      mas nomes futuros podem não caber, e aí o title é quem responde. */}
+                  <SelectTrigger
+                    title={safraId ? safraNome(safraId) : undefined}
+                    className={cn('h-8 text-xs [&>span]:truncate', fieldBg,
+                      safraSugeridaId && safraId === safraSugeridaId && 'border-dashed border-primary')}>
                     <SelectValue placeholder="Sem safra" />
                   </SelectTrigger>
                   <SelectContent>
