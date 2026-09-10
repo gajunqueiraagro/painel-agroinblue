@@ -14,6 +14,15 @@
     --popover-foreground: 222 47% 11%;
     --primary: 213 52% 24%;
     --primary-foreground: 0 0% 100%;
+    /* A barra de topo do sistema — PR-BARRA-FINANCAS-01. Medido em getComputedStyle no
+       Financas (10/09/2026): rgb(8, 76, 125) = #084C7D. Escrito em HSL porque e' a forma que
+       o resto da paleta usa e que o `hsl(var(--x))` do Tailwind le' — `8 76 125` e' RGB e
+       nao passa por `hsl()`. A conversao NAO perde nada: hsl(205 88% 26%) volta a #084C7D
+       exato, conferido no round-trip.
+       ⚠ TOKEN PROPRIO, E NAO `--primary`: a barra e' a mesma dos dois produtos, a sidebar do
+       Agro nao e'. Pintar as duas com o mesmo token faria a proxima mudanca numa arrastar a
+       outra — foi o que ja aconteceu quando a barra usava `bg-primary`. */
+    --barra: 205 88% 26%;
     --secondary: 209 49% 36%;
     --secondary-foreground: 0 0% 100%;
     --muted: 220 17% 97%;
