@@ -21,6 +21,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { AlterarSenhaDialog } from '@/components/AlterarSenhaDialog';
 import logo from '@/assets/logo.png';
+import { useCliente } from '@/contexts/ClienteContext';
 import { NAV_GRUPOS, SECTION_TO_GROUP } from '@/v2/lib/navGrupos';
 
 // Re-export V2Section para compatibilidade com V2Index e V2MobileNav
@@ -44,6 +45,7 @@ const GRUPO_ICONS: Record<string, React.ComponentType<{ className?: string }>> =
   rebanho:      Beef,
   financeiro:   DollarSign,
   planejamento: Target,
+  validar:      ShieldCheck,
   executivo:    Briefcase,
   auditoria:    ShieldCheck,
   cadastros:    Folder,
@@ -60,6 +62,7 @@ export function V2Sidebar({
   fazendaSelector,
   className,
 }: V2SidebarProps) {
+  const { isAdmin } = useCliente();
   const activeGroup = SECTION_TO_GROUP[activeSection] ?? null;
 
   function handleGroup(groupId: string) {
@@ -116,7 +119,10 @@ export function V2Sidebar({
         </button>
 
         {/* Grupos com drawer — Rebanho, Financeiro, Planejamento */}
-        {NAV_GRUPOS.map((grupo) => {
+        {/* ⚠ O GRUPO "Validar" SO' APARECE PARA O ADMIN — PR-VALIDAR-01. `isAdmin` ja'
+            existe no `ClienteContext` (RPC `is_admin_agroinblue`, com cache por usuario),
+            entao nao ha hook novo: o front ja sabia, faltava perguntar. */}
+        {NAV_GRUPOS.filter((g) => !g.soAdmin || isAdmin).map((grupo) => {
           const Icon = GRUPO_ICONS[grupo.id] ?? Target;
           const isDrawerOpen  = drawerAtivo === grupo.id;
           const isGroupActive = activeGroup  === grupo.id;

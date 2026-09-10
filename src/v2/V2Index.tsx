@@ -8,6 +8,11 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { ClienteSelector } from '@/components/ClienteSelector';
 import { FazendaSelector } from '@/components/FazendaSelector';
 import { useCliente } from '@/contexts/ClienteContext';
+/* PR-VALIDAR-01 — as tres telas da bancada do admin, embutidas como estao. */
+import { AnaliseTrimestralTab } from '@/pages/AnaliseTrimestralTab';
+import { AnaliseOperacionalTab } from '@/pages/AnaliseOperacionalTab';
+import { PrecoMercadoTab } from '@/pages/PrecoMercadoTab';
+import V2NaoEncontrada from '@/v2/pages/V2NaoEncontrada';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { V2Sidebar, type V2Section } from './components/V2Sidebar';
@@ -779,7 +784,7 @@ export default function V2Index() {
     }
   }, [section]); // eslint-disable-line react-hooks/exhaustive-deps
   const rotulo = rotuloDaSecao(section);
-  const { clientes, clienteAtual } = useCliente();
+  const { clientes, clienteAtual, isAdmin } = useCliente();
   const { fazendas, isGlobal, setFazendaAtual } = useFazenda();
   const { canEditMeta } = usePermissions();
 
@@ -1252,6 +1257,19 @@ export default function V2Index() {
         );
       }
       return <MetaPrecoTab onBack={() => setSection('planejamento-home')} />;
+    }
+    /* ── VALIDAR — PR-VALIDAR-01 ──────────────────────────────────────────────
+       ⚠ A GUARDA REPETE O MENU, e é de propósito: esconder o item impede o clique, não a
+       URL. Sem ela, quem soubesse o endereço abriria a tela — e ela mostraria o que a RLS
+       deixar, que é outra pergunta. Esconder E recusar não é redundância: são as duas
+       metades de "isto não é para você".
+       ⚠ AS TRÊS ENTRAM COMO ESTÃO, sem retrabalho: props todas opcionais, e a barra azul do
+       layout já lhes dá o endereço ("Validar / …") a partir do `navGrupos`. */
+    if (section === 'validar-trimestral' || section === 'validar-operacao' || section === 'validar-precos') {
+      if (!isAdmin) return <V2NaoEncontrada />;
+      if (section === 'validar-trimestral') return <AnaliseTrimestralTab />;
+      if (section === 'validar-operacao') return <AnaliseOperacionalTab />;
+      return <PrecoMercadoTab />;
     }
     if (section === 'configuracoes') return <V2Configuracoes onNavigate={setSection} />;
     if (section === 'config-clientes') return <ClientesTab />;

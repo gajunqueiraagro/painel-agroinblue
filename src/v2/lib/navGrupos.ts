@@ -56,6 +56,10 @@ export type V2Section =
      entao ausencia ali nao quebra nada. */
   | 'lancamentos-agricultura' | 'lancamentos-silvicultura'
   | 'agricultura-home' | 'silvicultura-home'
+  /* ── VALIDAR — PR-VALIDAR-01. Tres telas do v1 embutidas como estao, visiveis so' para
+     quem e' admin do AGROinBLUE. Elas nao sao produto do cliente: sao a bancada de quem
+     confere o produto, e por isso vivem num grupo proprio em vez de espalhadas. */
+  | 'validar-trimestral' | 'validar-operacao' | 'validar-precos'
   | 'fechamento-periodo'    // Marco 2.4 — cockpit Fechamento do Período
   | 'executive-preview';    // FASE 3 / PR3.3A — sandbox isolado do ExecutiveSlide (fake data)
 
@@ -83,6 +87,14 @@ export interface NavGrupo {
   id: string;
   label: string;
   drawer: NavSecao[];
+  /**
+   * O grupo só existe para o admin do AGROinBLUE — PR-VALIDAR-01.
+   *
+   * ⚠ VISIBILIDADE NÃO É PERMISSÃO, e as duas moram em lugares diferentes: quem decide o
+   * que pode ser lido é a RLS do banco; isto aqui decide o que se OFERECE. Um menu que
+   * anuncia uma tela que o banco recusaria seria pior que não anunciá-la.
+   */
+  soAdmin?: boolean;
 }
 
 export const NAV_GRUPOS: NavGrupo[] = [
@@ -273,9 +285,34 @@ export const NAV_GRUPOS: NavGrupo[] = [
       },
     ],
   },
+
+  /* ── VALIDAR — PR-VALIDAR-01 ────────────────────────────────────────────────
+     ⚠ O ULTIMO GRUPO, E SO' PARA O ADMIN. Sao tres telas do v1 embutidas como
+     estao: a bancada de quem confere o produto, nao o produto. Ficam juntas
+     porque respondem a mesma pergunta — "os numeros que a tela mostra batem?" —
+     e espalha-las pelos grupos do cliente faria o menu dele crescer com telas
+     que nao sao para ele. */
+  {
+    id: 'validar',
+    label: 'Validar',
+    soAdmin: true,
+    drawer: [
+      {
+        titulo: 'Validar',
+        itens: [
+          { id: 'validar-trimestral', label: 'Análise Trimestral',    status: 'ready' },
+          { id: 'validar-operacao',   label: 'Operação / Indicadores', status: 'ready' },
+          { id: 'validar-precos',     label: 'Preços de Mercado',      status: 'ready' },
+        ],
+      },
+    ],
+  },
 ];
 
 export const SECTION_TO_GROUP: Partial<Record<V2Section, string>> = {
+  'validar-trimestral': 'validar',
+  'validar-operacao':   'validar',
+  'validar-precos':     'validar',
   // ── rebanho ──
   'rebanho-home': 'rebanho', 'pastos': 'rebanho', 'chuvas': 'rebanho',
   'chuvas-lancamento': 'rebanho',
