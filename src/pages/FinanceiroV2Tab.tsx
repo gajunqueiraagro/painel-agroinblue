@@ -458,6 +458,13 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const fazOperacionais = useMemo(() => sortFazendas(fazendas.filter(f => f.id !== '__global__')), [fazendas]);
 
   const sortedContas = useMemo(() => sortContas(hook.contasBancarias), [hook.contasBancarias]);
+  /* ⚠ A CONTA TEM DOIS NOMES no cadastro: `nome_exibicao` é o que o operador lê nas telas e
+     `nome_conta` é o interno. A precedência é a mesma do resto do repo, e fica AQUI porque
+     as duas montagens do menu de exportar precisam dela — inline nas duas, seria a chance de
+     divergirem. */
+  const contasParaExportar = useMemo(
+    () => hook.contasBancarias.map(c => ({ id: c.id, nome: c.nome_exibicao || c.nome_conta })),
+    [hook.contasBancarias]);
 
   const isEntrada = tipoOperacao === '1-Entradas';
   const isSaida = tipoOperacao === '2-Saídas';
@@ -1272,10 +1279,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
              filtro de safra. O arquivo passa a nomear pelo MESMO cadastro que a tela usa —
              se um dia divergirem, divergem juntos, e não um contra o outro. */
           fazendas={fazendas}
-          /* ⚠ A CONTA TEM DOIS NOMES no cadastro, e o exportador não escolhe por conta
-             própria: `nome_exibicao` é o que o operador lê nas telas, `nome_conta` é o
-             interno. A precedência fica aqui, à vista, e é a mesma do resto do repo. */
-          contas={hook.contasBancarias.map(c => ({ id: c.id, nome: c.nome_exibicao || c.nome_conta }))}
+          contas={contasParaExportar}
           safras={hook.safras}
         />
       )}
@@ -1303,6 +1307,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
           fazendaNome={fazOperacionais.find(f => f.id === fazendaId)?.nome}
           totalCount={totalLancamentosFiltrados}
           dimensao={dataPor}
+          fazendas={fazendas}
+          contas={contasParaExportar}
+          safras={hook.safras}
         />
       </div>
       <div className="flex items-center gap-1">

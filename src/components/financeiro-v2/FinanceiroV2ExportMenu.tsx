@@ -72,10 +72,16 @@ interface Props {
   /* ⚠ OS TRÊS CADASTROS VÊM DA TELA, e não de uma busca nova: ela já os tem em memória para
      desenhar a lista e os filtros (`fazendas`, `hook.contasBancarias`, `hook.safras`). Uma
      segunda leitura aqui daria a chance de o arquivo discordar da tela sobre o nome de uma
-     safra — e o operador conferiria a planilha contra a tela sem entender a diferença. */
-  fazendas?: readonly NomePorId[];
-  contas?: readonly NomePorId[];
-  safras?: readonly NomePorId[];
+     safra — e o operador conferiria a planilha contra a tela sem entender a diferença.
+     ⚠ OBRIGATÓRIAS, e isso é o conserto — PR-EXPORT-FINANCEIRO-02. Elas nasceram opcionais
+     no 01, e a tela monta este menu DUAS vezes (`:1263` e `:1299`, desktop e a barra
+     compacta). Liguei a primeira e não vi a segunda; o compilador ficou calado porque
+     opcional é exatamente a permissão de esquecer. Quem exportava pela segunda recebia as
+     três colunas VAZIAS — nome nenhum para cruzar. Prop obrigatória é o compilador
+     impedindo a próxima montagem esquecida. */
+  fazendas: readonly NomePorId[];
+  contas: readonly NomePorId[];
+  safras: readonly NomePorId[];
   ano: string;
   fazendaNome?: string;
   totalCount: number;
@@ -148,7 +154,11 @@ function exportExcel(
     'Pgto.': r.pgto,
     'Descrição': r.produto,
     'Fornecedor': r.fornecedor,
-    'Valor': r.valor,
+    /* ⚠ MÓDULO, e a direção fica na coluna "Tipo". O sinal negativo em toda saída fazia a
+       soma da coluna dar a diferença entre entradas e saídas em vez do total gasto — e quem
+       abre a planilha para fechar custo quer o total. Aplicado SÓ aqui: o `buildRows`
+       continua devolvendo o valor com sinal, que é o que o PDF usa. */
+    'Valor': Math.abs(r.valor),
     'Tipo': r.tipo,
     'Tipo de documento': r.tipoDocumento,
     'Número documento': r.numeroDocumento,
