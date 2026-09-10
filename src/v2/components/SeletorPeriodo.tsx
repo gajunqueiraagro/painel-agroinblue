@@ -8,7 +8,7 @@
  * exibiam o seletor. Um controle que a maioria das telas ignora ensina que ele não faz nada.
  *
  * ⚠ A GEOMETRIA É A DA CONCILIAÇÃO, e é a única do repo que o operador já usa há meses:
- * um seletor de ano à esquerda e doze botões em `flex-1` ocupando a largura. Copiá-la em
+ * um seletor de ano à esquerda e doze botões ocupando a largura. Copiá-la em
  * vez de inventar outra é o que faz esta troca ser invisível para quem já sabe usar.
  *
  * ⚠ `tomPorMes` EXISTE PORQUE A COR É INFORMAÇÃO NA CONCILIAÇÃO. Lá cada mês é pintado pelo
@@ -63,6 +63,23 @@ export interface SeletorPeriodoProps {
   className?: string;
 }
 
+/**
+ * A fita — PR-SELETOR-PERIODO-02.
+ *
+ * ⚠ `flex-nowrap` NO PAI E `min-w-0` AQUI SÃO O MESMO PEDIDO por dois lados: a linha não
+ * quebra, e para não quebrar ela precisa poder ser mais estreita que o próprio conteúdo.
+ * Sem o `min-w-0`, um filho flex se recusa a encolher abaixo do conteúdo (`min-width: auto`),
+ * a largura mínima do seletor inteiro cresce, e quem espreme não é a fita — é a linha do
+ * chamador, que passa a quebrar. Foi o que a homologação viu na tela de Financeiro, cujo
+ * `flex-wrap` divide a linha com os outros filtros.
+ * ⚠ O `-my-1.5 py-1.5` NÃO É RESPIRO, É ESPAÇO PARA O SELECIONADO. `overflow-x` diferente de
+ * `visible` obriga o eixo Y a também recortar, e o mês escolhido passa da própria caixa:
+ * `scale(1.09)` mais `outline` de 2,5px com `offset` 2. Sem a folga, o realce do mês ativo
+ * é justamente o que a rolagem corta. A margem negativa devolve os 6px ao layout, então a
+ * altura da linha não muda em tela nenhuma.
+ */
+const FITA = 'flex min-w-0 flex-1 gap-0.5 overflow-x-auto -my-1.5 py-1.5';
+
 const NUM = { ler: (b: string) => Number(b) || 0, escrever: (v: number) => String(v) };
 const TXT = { ler: (b: string) => b, escrever: (v: string) => v };
 
@@ -93,7 +110,7 @@ export function SeletorPeriodo({
   }, [anos]);
 
   return (
-    <div className={`flex items-center gap-1.5 ${className ?? ''}`}>
+    <div className={`flex flex-nowrap items-center gap-1.5 ${className ?? ''}`}>
       <Select value={anoAtivo} onValueChange={trocarAno}>
         <SelectTrigger className="h-7 w-[68px] text-xs"><SelectValue /></SelectTrigger>
         <SelectContent>
@@ -102,13 +119,13 @@ export function SeletorPeriodo({
       </Select>
 
       {modo === 'ano-mes' && (carregando ? (
-        <div className="flex flex-1 gap-0.5">
+        <div className={FITA}>
           {Array.from({ length: 12 }).map((_, i) => (
-            <div key={i} className="h-7 flex-1 animate-pulse rounded bg-muted" />
+            <div key={i} className="h-7 min-w-[58px] flex-1 shrink-0 animate-pulse rounded bg-muted" />
           ))}
         </div>
       ) : (
-        <div className="flex flex-1 gap-0.5">
+        <div className={FITA}>
           {permiteAnoTodo && (
             /* ⚠ ELE VEM ANTES DOS DOZE e é mais estreito: é o recorte que CONTÉM os outros,
                não um deles. Mesmo desenho de selecionado, para o olho não aprender dois. */
@@ -145,7 +162,7 @@ export function SeletorPeriodo({
                 onClick={() => trocarMes(m)}
                 title={tom?.title}
                 style={{
-                  flex: 1, textAlign: 'center', padding: '5px 3px',
+                  flex: '1 0 58px', textAlign: 'center', padding: '5px 3px',
                   fontSize: '10px', borderRadius: '8px',
                   border: `1.5px solid ${tom?.border ?? 'hsl(var(--border))'}`,
                   cursor: 'pointer',
