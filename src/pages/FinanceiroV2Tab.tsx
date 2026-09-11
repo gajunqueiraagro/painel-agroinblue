@@ -1577,11 +1577,16 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   return (
     /* ⚠ O AFASTAMENTO MORA AQUI, NO RAIZ — FIN-LISTA-VISUAL-03. A seção do /v2 não tem
        padding lateral (`w-full min-w-0 pb-16`), então tudo encostava na borda da tela. Pôr
-       `px-4` aqui empurra a barra de filtros, a tabela e o rodapé JUNTOS: os três alinham na
+       `px-3` aqui empurra a barra de filtros, a tabela e o rodapé JUNTOS: os três alinham na
        mesma linha vertical por construção, e nenhum deles precisa conhecer a medida.
        ⚠ E O CARD RECUA COM A BORDA, que era o pedido: antes o padding estava dentro do
-       scrollport, então o conteúdo recuava e o traço do card continuava colado. */
-    <div className={cn("relative px-4", modoIntensivo ? "flex flex-col h-[calc(100vh-8px)]" : "space-y-1 pb-20")}>
+       scrollport, então o conteúdo recuava e o traço do card continuava colado.
+       ⚠ 12px E NÃO 16 — FIN-LISTA-VISUAL-04: é o `px-3` da `BarraSecao`, a faixa azul do
+       "Financeiro / Lançamentos" logo acima. Com a mesma medida, a borda dos dois cards cai
+       na vertical em que o título começa, e a coluna inteira da tela fica alinhada. Um número
+       escolhido aqui sem olhar o de cima deixaria a página com dois recuos parecidos e
+       diferentes, que é pior que um recuo errado. */
+    <div className={cn("relative px-3", modoIntensivo ? "flex flex-col h-[calc(100vh-8px)]" : "space-y-1 pb-20")}>
       {/* FILTERS */}
       <Card className="rounded-lg bg-white shrink-0" style={{ border: '1px solid #D6DEE8', boxShadow: '0 2px 6px rgba(0,0,0,0.04)' }}>
         {/* Padding interno pequeno: o afastamento da borda da tela é do container raiz. */}

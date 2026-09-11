@@ -427,7 +427,16 @@ input[type='number'] {
      que ancora na CAIXA DE PADDING do scrollport — e o cabecalho fixo e' o A21.
      ───────────────────────────────────────────────────────────────────────────── */
   .rolagem-sem-tampar {
-    scrollbar-gutter: stable both-edges;
+    /* ⚠ `stable`, NAO `stable both-edges` — FIN-LISTA-VISUAL-04. Com `both-edges` o
+       navegador reserva o espaco da barra dos DOIS lados do scrollport quando a barra
+       e' CLASSICA (Windows/Linux, e macOS com "mostrar sempre"): a tabela ganhava ~15px
+       de recuo A ESQUERDA que a barra de filtros nao tinha, e as duas colunas de
+       conteudo deixavam de cair na mesma vertical. As BORDAS dos dois cards sempre
+       coincidiram; o que se via desalinhado era o conteudo de dentro.
+       ⚠ Em overlay (o padrao do macOS) `scrollbar-gutter` nao faz nada nos dois modos —
+       la' quem impede a barra de tampar a ultima coluna e' o `padding-right` do
+       `.respiro-lista`, que continua. */
+    scrollbar-gutter: stable;
     padding-bottom: 10px;
   }
 
