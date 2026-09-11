@@ -56,10 +56,21 @@ function nomeDaConta(contas: ContasExibidas, mapa: readonly NomePorId[] | undefi
  */
 const semPrefixo = (t: string | null | undefined) => (t || '').replace(/^\d+-/, '');
 
-/** Os mesmos rótulos do filtro "Atividade" da tela (`FinanceiroV2Tab`). */
+/**
+ * O rótulo da atividade na planilha.
+ *
+ * ⚠ SILVICULTURA FALTAVA, e a falta era invisível: sem a chave o `?? ''` devolvia célula
+ * vazia, exatamente como para 'outros' — os 35 lançamentos de silvicultura do proto saíam
+ * sem atividade, e ninguém tinha como notar que era omissão e não ausência de dado.
+ * ⚠ AQUI DIZ "Agricultura" E A TELA DIZ "Lavoura", DE PROPÓSITO ATÉ SEGUNDA ORDEM. O adendo
+ * do PR-FIN-SAFRA-ADM-01 trocou o rótulo do FILTRO para o do card; trocar também o da
+ * planilha mudaria o conteúdo de uma coluna que já circula em arquivos exportados, e isso
+ * é decisão de quem lê os relatórios, não efeito colateral de um PR de filtro.
+ */
 const ATIVIDADE_LABEL: Record<string, string> = {
   pecuaria: 'Pecuária',
   agricultura: 'Agricultura',
+  silvicultura: 'Silvicultura',
   administrativo: 'Administrativo',
   outros: '',
 };

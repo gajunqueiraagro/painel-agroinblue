@@ -45,6 +45,10 @@ import { CorrecaoTransferenciasBanner } from '@/components/financeiro-v2/Correca
 import { format, parseISO } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { normalizarAtividade } from '@/lib/financeiro/filtrosListaV2';
+/* ⚠ A LISTA DE ATIVIDADES É A DO CARD DO MODAL — adendo do PR-FIN-SAFRA-ADM-01. Duplicá-la
+   aqui é como o filtro ficou dois anos oferecendo Pecuária e Agricultura enquanto o resto do
+   sistema já conhecia quatro: uma lista escrita à mão não sabe quando a outra cresce. */
+import { ATIVIDADES } from '@/lib/financeiro/ultimaAtividade';
 import { filtrosAplicadosDaLista, TAMANHO_PAGINA_LISTA } from '@/lib/financeiro/listaPaginadaV2';
 import { FEATURE_FLAGS } from '@/lib/featureFlags';
 import { FinanceiroV2ControlesLista, BotaoAplicarFiltros } from '@/components/financeiro-v2/FinanceiroV2ControlesLista';
@@ -1562,9 +1566,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       <Select value={atividadeFiltro} onValueChange={setAtividadeFiltro}>
                         <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2]`}><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="__all__" className={itemCls}>Todos</SelectItem>
-                          <SelectItem value="pecuaria" className={itemCls}>Pecuária</SelectItem>
-                          <SelectItem value="agricultura" className={itemCls}>Agricultura</SelectItem>
+                          <SelectItem value="__all__" className={itemCls}>Todas</SelectItem>
+                          {/* ⚠ O VALOR É O `escopo_negocio`, o texto é o do card. A comparação
+                              em `getAtividade` é sempre pelo valor — rótulo é para ler. */}
+                          {ATIVIDADES.map((a) => (
+                            <SelectItem key={a.valor} value={a.valor} className={itemCls}>{a.rotulo}</SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
@@ -1712,9 +1719,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                   <Select value={atividadeFiltro} onValueChange={setAtividadeFiltro}>
                     <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F]`}><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__all__" className={itemCls}>Todos</SelectItem>
-                      <SelectItem value="pecuaria" className={itemCls}>Pecuária</SelectItem>
-                      <SelectItem value="agricultura" className={itemCls}>Agricultura</SelectItem>
+                      <SelectItem value="__all__" className={itemCls}>Todas</SelectItem>
+                      {/* Mesma fonte do painel mobile, dez linhas acima — e do card do modal. */}
+                      {ATIVIDADES.map((a) => (
+                        <SelectItem key={a.valor} value={a.valor} className={itemCls}>{a.rotulo}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>

@@ -28,12 +28,24 @@ export interface FiltrosListaV2 {
   lista_fornecedor_id?: string;
   /** Igualdade sobre grupo_custo. */
   lista_grupo_custo?: string;
-  /** Atividade normalizada: 'pecuaria' | 'agricultura' | 'administrativo' | 'outros'. */
+  /** Atividade normalizada: 'pecuaria' | 'agricultura' | 'silvicultura' | 'administrativo' | 'outros'. */
   lista_atividade?: string;
 }
 
-/** Os escopos que a normalização reconhece como atividade própria. */
-export const ESCOPOS_CANONICOS = ['pecuaria', 'agricultura', 'administrativo'] as const;
+/**
+ * Os escopos que a normalização reconhece como atividade própria.
+ *
+ * ⚠ SILVICULTURA ENTROU NO ADENDO DO PR-FIN-SAFRA-ADM-01, e ela já era atividade em todo o
+ * resto do sistema: está em `ATIVIDADES` (o card do modal) desde o PR-FIN-ATIVIDADE-01 e é
+ * valor de `escopo_negocio` no plano. Aqui ela caía em 'outros' — um lançamento de
+ * silvicultura era contado junto com os de escopo nulo.
+ * ⚠ A ORDEM É A DO CARD, e não é cosmética: esta lista vira a negação do ramo 'outros', e
+ * lê-la ao lado de `ATIVIDADES` é como se confere que as duas não divergiram.
+ * ⚠ `financeiro` NÃO ENTRA — medido no proto: 242 lançamentos o usam, e ele não é atividade
+ * nenhuma, é o escopo das linhas de movimentação financeira pura. Continua em 'outros',
+ * onde sempre esteve.
+ */
+export const ESCOPOS_CANONICOS = ['pecuaria', 'agricultura', 'silvicultura', 'administrativo'] as const;
 
 /**
  * Escapa os metacaracteres de expressao regular POSIX, para que o termo digitado
@@ -79,6 +91,7 @@ export function normalizarAtividade(escopoNegocio?: string | null): string {
   const escopo = (escopoNegocio || '').toLowerCase().trim();
   if (escopo === 'pecuaria' || escopo === 'pecuária') return 'pecuaria';
   if (escopo === 'agricultura' || escopo === 'agri') return 'agricultura';
+  if (escopo === 'silvicultura') return 'silvicultura';
   if (escopo === 'administrativo') return 'administrativo';
   return 'outros';
 }

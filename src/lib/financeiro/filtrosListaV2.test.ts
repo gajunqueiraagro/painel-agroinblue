@@ -99,7 +99,10 @@ describe('normalizarAtividade', () => {
   it.each([
     ['pecuaria', 'pecuaria'], ['pecuária', 'pecuaria'], ['  PECUARIA ', 'pecuaria'],
     ['agricultura', 'agricultura'], ['agri', 'agricultura'],
+    ['silvicultura', 'silvicultura'],
     ['administrativo', 'administrativo'],
+    /* ⚠ `financeiro` SEGUE EM 'outros', e é decisão: 242 lançamentos do proto o usam, e ele
+       não é atividade — é o escopo da movimentação financeira pura. */
     ['financeiro', 'outros'], ['', 'outros'],
   ])('%s -> %s', (entrada, esperado) => {
     expect(normalizarAtividade(entrada)).toBe(esperado);
@@ -122,7 +125,7 @@ describe('escopoCanonicoAtividade e ramoAtividadeOutros são complementares', ()
   it('outros gera ramo e não gera escopo', () => {
     expect(escopoCanonicoAtividade('outros')).toBeNull();
     expect(ramoAtividadeOutros('outros'))
-      .toBe('escopo_negocio.is.null,escopo_negocio.not.in.(pecuaria,agricultura,administrativo)');
+      .toBe('escopo_negocio.is.null,escopo_negocio.not.in.(pecuaria,agricultura,silvicultura,administrativo)');
   });
 
   it('ausência não gera nenhum dos dois', () => {
