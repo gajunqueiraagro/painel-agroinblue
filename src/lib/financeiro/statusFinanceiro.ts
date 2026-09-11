@@ -36,10 +36,18 @@ export const STATUS_FINANCEIRO_LABEL: Record<StatusFinanceiro, string> = {
 };
 
 /** Cores de texto na grade (padrão cromático atual preservado). */
+/**
+ * ⚠ `programado` SAIU DO AZUL — FIN-LISTA-LAYOUT-02, e é correção de um bug, não de gosto.
+ * Ele e `conciliado_real` tinham a MESMA string (`text-blue-600 dark:text-blue-400`), byte a
+ * byte, enquanto o comentário de `STATUS_FILTRO_COR` prometia, três linhas abaixo, que "o
+ * azul fica reservado ao conciliado DE VERDADE — duas coisas diferentes não podem ter a
+ * mesma cor". O `...STATUS_FINANCEIRO_COR` espalhado ali já trazia o azul do programado, e a
+ * reserva nunca valeu. Agora o azul é do conciliado e o programado é âmbar.
+ */
 export const STATUS_FINANCEIRO_COR: Record<StatusFinanceiro, string> = {
   previsto: 'text-cyan-600 dark:text-cyan-400',
   agendado: 'text-purple-600 dark:text-purple-400',
-  programado: 'text-blue-600 dark:text-blue-400',
+  programado: 'text-amber-600 dark:text-amber-400',
   realizado: 'text-green-700 dark:text-green-400 font-bold',
 };
 
@@ -119,9 +127,34 @@ export const STATUS_FILTRO_COR: Record<string, string> = {
   ...STATUS_FINANCEIRO_COR,
   meta: 'text-muted-foreground',
   /* Muted como o `meta`: o azul fica reservado ao conciliado DE VERDADE, o que
-     tem vínculo. Duas coisas diferentes não podem ter a mesma cor. */
+     tem vínculo. Duas coisas diferentes não podem ter a mesma cor — e desde o
+     FIN-LISTA-LAYOUT-02 essa reserva é verdade: o `programado` foi para o âmbar. */
   conciliado: 'text-muted-foreground',
   conciliado_real: 'text-blue-600 dark:text-blue-400',
+};
+
+/**
+ * A PÍLULA DO STATUS NA LISTA — FIN-LISTA-LAYOUT-02.
+ *
+ * ⚠ A FORMA CARREGA SIGNIFICADO, e não é decoração: o que JÁ ACONTECEU (realizado,
+ * conciliado) vem em pílula de BORDA, o que ainda vai acontecer (previsto, programado,
+ * agendado) vem em fundo suave. Quem varre a coluna separa passado de futuro pelo contorno,
+ * antes de ler a palavra — e cada um dos cinco tem cor própria, que era a queixa.
+ * ⚠ E O LEGADO FICA CINZA DE PROPÓSITO: `meta` e o `conciliado` antigo (sem vínculo) não são
+ * estados da régua atual; pintá-los de qualquer cor viva os poria a competir com os cinco que
+ * são.
+ * ⚠ `STATUS_FILTRO_COR` CONTINUA EXISTINDO e é usado pelo Extrato Gerencial, que exibe o
+ * status como texto solto dentro de uma linha densa — pílula ali brigaria com o resto. Duas
+ * apresentações, uma régua de cor.
+ */
+export const STATUS_FILTRO_PILULA: Record<string, string> = {
+  realizado: 'border border-green-600/70 text-green-700 dark:border-green-400/60 dark:text-green-400',
+  conciliado_real: 'border border-blue-600/70 text-blue-700 dark:border-blue-400/60 dark:text-blue-400',
+  programado: 'bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300',
+  agendado: 'bg-purple-100 text-purple-800 dark:bg-purple-500/15 dark:text-purple-300',
+  previsto: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-500/15 dark:text-cyan-300',
+  meta: 'bg-muted text-muted-foreground',
+  conciliado: 'bg-muted text-muted-foreground',
 };
 
 // ── Writers ──

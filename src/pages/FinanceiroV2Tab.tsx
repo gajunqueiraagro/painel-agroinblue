@@ -5,6 +5,7 @@ import {
   STATUS_FINANCEIRO_OPCOES_FILTRO,
   STATUS_FILTRO_LABEL,
   STATUS_FILTRO_COR,
+  STATUS_FILTRO_PILULA,
   isStatusFiltroFinanceiro,
   type StatusFiltroFinanceiro,
 } from '@/lib/financeiro/statusFinanceiro';
@@ -819,6 +820,33 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     () => new Map((hook.contasBancarias ?? []).map(c => [c.id, c.nome_exibicao || c.nome_conta])),
     [hook.contasBancarias],
   );
+
+  /**
+   * As safras que o filtro oferece — FIN-LISTA-LAYOUT-02 item 3.
+   *
+   * ⚠ O DROPDOWN SEGUE A ATIVIDADE, como a lista de subcentros do modal segue o card: com
+   * "Pecuária" escolhida, uma safra de amendoim na lista é uma combinação que a tela sabe
+   * que devolve zero. Mostrar o impossível é convidar a testá-lo.
+   * ⚠ "Todas" NÃO FILTRA NADA, e é o estado em que se vê tudo — inclusive para caçar o
+   * cruzado (safra de lavoura em lançamento de pecuária), que é um uso real.
+   */
+  const safrasDoFiltro = useMemo(() => {
+    const todas = hook.safras ?? [];
+    if (atividadeFiltro === '__all__') return todas;
+    return todas.filter(sf => (sf.escopo_negocio || '') === atividadeFiltro);
+  }, [hook.safras, atividadeFiltro]);
+
+  /**
+   * ⚠ TROCAR A ATIVIDADE LIMPA A SAFRA QUE DEIXOU DE PERTENCER. Um filtro ativo apontando
+   * para uma opção que sumiu do dropdown é estado fantasma: a lista vem vazia e o motivo não
+   * está em lugar nenhum da tela. É a mesma regra do card do modal, que apaga o subcentro de
+   * outro escopo em vez de escondê-lo.
+   * ⚠ "Sem safra" SOBREVIVE A QUALQUER ATIVIDADE: ele não é uma safra, é a ausência delas.
+   */
+  useEffect(() => {
+    if (safraFiltro === '__all__' || safraFiltro === SEM_SAFRA) return;
+    if (!safrasDoFiltro.some(sf => sf.id === safraFiltro)) setSafraFiltro('__all__');
+  }, [safrasDoFiltro, safraFiltro]);
 
   const safraCodigoMap = useMemo(
     () => new Map((hook.safras ?? []).map(s => [s.id, s.codigo || s.nome])),
@@ -1703,7 +1731,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                           {/* ⚠ "Sem safra" NÃO é "Todas": é a pergunta oposta, e é a que acha o
                               torto — financiamento e administrativo não têm safra por regra. */}
                           <SelectItem value={SEM_SAFRA} className={itemCls}>Sem safra</SelectItem>
-                          {(hook.safras ?? []).map(sf => (
+                          {safrasDoFiltro.map(sf => (
                             <SelectItem key={sf.id} value={sf.id} className={itemCls}>
                               {sf.codigo || sf.nome}
                               {sf.escopo_negocio && (
@@ -1768,7 +1796,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     3: Macro 3 · Grupo 3 · Centro 3 · Subcentro 3
                     4: Produto 4 · Fornecedor 4 · Documento 4 */}
               <div className="grid grid-cols-12 gap-1.5 items-end">
-                  <div className="col-span-1 min-w-0">
+                  {/* Ano 1→2 faixas: "2026" + chevron não cabiam em ~55px e o valor cortava.
+                      O Mês devolve a faixa — ele mostra "Todos" ou "N meses", que é curto. */}
+                  <div className="col-span-2 min-w-0">
                   <label className={lblCls}>Ano</label>
                   <Select value={ano} onValueChange={setAno}>
                     <SelectTrigger className={`${selCls} w-full bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F]`}><SelectValue /></SelectTrigger>
@@ -1778,7 +1808,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     </SelectContent>
                   </Select>
                 </div>
-                  <div className="col-span-2 min-w-0">
+                  <div className="col-span-1 min-w-0">
                   <label className={lblCls}>Mês</label>
                   <Popover open={mesPopoverOpen} onOpenChange={setMesPopoverOpen}>
                     <PopoverTrigger asChild>
@@ -1885,7 +1915,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       {/* ⚠ "Sem safra" NÃO é "Todas": é a pergunta oposta, e é a que acha o
                           torto — financiamento e administrativo não têm safra por regra. */}
                       <SelectItem value={SEM_SAFRA} className={itemCls}>Sem safra</SelectItem>
-                      {(hook.safras ?? []).map(sf => (
+                      {safrasDoFiltro.map(sf => (
                         <SelectItem key={sf.id} value={sf.id} className={itemCls}>
                           {sf.codigo || sf.nome}
                           {sf.escopo_negocio && (
@@ -2070,7 +2100,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
               onFixed={() => hook.loadLancamentos(filtros, hook.page)}
             />
           )}
-           <div ref={scrollContainerRef} className={cn("rounded-lg border border-[hsl(var(--border))] overflow-auto relative", modoIntensivo && "flex-1")} style={modoIntensivo ? undefined : { maxHeight: 'calc(100vh - 200px)' }}>
+           <div ref={scrollContainerRef} className={cn("rounded-lg border border-[hsl(var(--border))] overflow-auto relative", modoIntensivo && "flex-1")} style={modoIntensivo ? undefined : { maxHeight: 'calc(100vh - 300px)' }}>
             <table className="table-financeiro w-full caption-bottom text-sm border-collapse" style={{ tableLayout: 'fixed' }}>
               {/*
                 Larguras das colunas:
@@ -2082,7 +2112,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 <col style={{ width: 28 }} />
                 {/* PR-CONC-B-1 — ícone de origem. 22px fixos; as demais larguras ficam
                     intactas e a tabela apenas cresce 22px dentro do container que rola. */}
-                <col style={{ width: 22 }} />
+                <col style={{ width: 18 }} />
                 {/* PR-FIN-GRADE-DATAS-03 — COMP. | VENC. | PGTO. (3 colunas de data, 45px cada).
                     Os ~45px da nova coluna VENC. são compensados SÓ em Produto (−35) e Fazenda (−10). */}
                 <col style={{ width: 45 }} />
@@ -2090,25 +2120,27 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 <col style={{ width: 45 }} />
                 {/* Produto 175→150 na lista normal — FIN-LISTA-LAYOUT-01. É a coluna mais
                     larga e a que mais tolera truncar: o texto inteiro está no `title`. */}
-                <col style={{ width: modoIntensivo ? 245 : 150 }} />
+                <col style={{ width: modoIntensivo ? 220 : 150 }} />
                 <col style={{ width: 140 }} />
                 <col style={{ width: 80 }} />
                 <col style={{ width: 80 }} />
                 {/* Fazenda 50→44: o rótulo virou "Faz." e a célula mostra o CÓDIGO, nunca o
                     nome — o nome inteiro está no `title`. */}
-                <col style={{ width: 44 }} />
+                <col style={{ width: 38 }} />
                 {/* Safra 75→62 com fonte 10px: "25/26-MAND" cabe, e é o código mais longo do
                     cadastro. O nome completo continua no `title`. */}
-                <col style={{ width: 62 }} />
+                <col style={{ width: 56 }} />
                 {/* As duas contas só no Ampliado: 150px cada, que é o mínimo em que
                     "Cartão Banco do Brasil - Pecuária" trunca sem virar reticências puras. */}
-                {modoIntensivo && <col style={{ width: 150 }} />}
-                {modoIntensivo && <col style={{ width: 150 }} />}
+                {modoIntensivo && <col style={{ width: 130 }} />}
+                {modoIntensivo && <col style={{ width: 130 }} />}
                 <col style={{ width: 90 }} />
                 {/* Doc 70→55 com fonte 10px na lista normal; no Ampliado segue 110, onde a
                     NF inteira com série é o ponto. */}
-                <col style={{ width: modoIntensivo ? 110 : 55 }} />
-                <col style={{ width: 58 }} />
+                <col style={{ width: modoIntensivo ? 90 : 55 }} />
+                {/* 58→64: a pílula ganhou borda e padding lateral; sem os 6px "Realizado"
+                    truncaria dentro dela — que é pior que não ter pílula. */}
+                <col style={{ width: 64 }} />
                 {/* Ações 36→28: um botão "…" em vez de dois ícones. */}
                 <col style={{ width: 28 }} />
               </colgroup>
@@ -2177,6 +2209,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     const stKey = vinculo && stCru === 'realizado' ? 'conciliado_real' : stCru;
                     const stLabel = STATUS_FILTRO_LABEL[stKey] || l.status_transacao || '-';
                     const stColor = STATUS_FILTRO_COR[stKey] || 'text-muted-foreground';
+                    const stPilula = STATUS_FILTRO_PILULA[stKey] || 'bg-muted text-muted-foreground';
                     /* A EVIDÊNCIA, sem UUID: o operador confere pelo que
                        reconhece — a data e o histórico do extrato. */
                     const stTitle = vinculo
@@ -2277,13 +2310,21 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                         <td className={`celula-valor text-right font-semibold whitespace-nowrap px-1 py-1 align-middle text-[12px] leading-tight ${valorDaLinha(l).classe}`}>
                           {valorDaLinha(l).texto}
                         </td>
-                        <td className="celula-doc font-mono text-muted-foreground text-center px-1 py-1 align-middle text-[10px] leading-tight truncate" title={formatDocCompleto(l)}>{formatNF(l)}</td>
+                        {/* Doc. à direita: é número, e número se lê alinhado pela unidade. */}
+                        <td className="celula-doc font-mono text-muted-foreground text-right px-1 py-1 align-middle text-[10px] leading-tight truncate" title={formatDocCompleto(l)}>{formatNF(l)}</td>
                         {/* `truncate` também aqui: a tabela é `tableLayout: fixed`, então a
                             faixa não cede — sem truncar, "Realizado" transbordaria a célula em
                             vez de a alargar. É o mesmo raciocínio do `min-w-0` da barra, do
                             outro lado da mesma regra. */}
-                        <td className={`truncate text-center px-1 py-1 align-middle text-[11px] leading-tight ${stColor}`}
-                          title={stTitle}>{stLabel}</td>
+                        {/* ⚠ A PÍLULA MORA NUM `span`, não na `td`: a célula é `truncate` e
+                            `tableLayout: fixed`, e uma borda na própria célula viraria uma
+                            caixa colada nas vizinhas. O `span` `inline-block` se ajusta ao
+                            texto e respeita o truncar da célula. */}
+                        <td className="truncate px-1 py-1 text-center align-middle leading-tight" title={stTitle}>
+                          <span className={`inline-block max-w-full truncate rounded px-1 py-[1px] text-[10px] font-medium ${stPilula}`}>
+                            {stLabel}
+                          </span>
+                        </td>
                         {/* ⚠ UM BOTÃO "…" NO LUGAR DE DOIS ÍCONES — FIN-LISTA-LAYOUT-01. Dois
                             botões de 20px numa coluna de 36 disputavam espaço com a tabela
                             inteira, e o que eles faziam só se descobria no `title`. O menu diz
