@@ -17,7 +17,7 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('@/integrations/supabase/client', () => ({ supabase: {} }));
 
 import {
-  planoToClassificacoes, buildDividendoEntries,
+  planoToClassificacoes, buildDividendoEntries, DIVIDENDO_ESCOPO, DIVIDENDO_MACRO,
   type PlanoContasItem, type Dividendo,
 } from './planoContasBuilder';
 
@@ -68,5 +68,38 @@ describe('a chave do plano chega ao catálogo do front', () => {
     const entradas = buildDividendoEntries(dividendos);
     const cls = planoToClassificacoes([linhaDoPlano, ...entradas]);
     expect(cls.map(c => c.id)).toEqual(['11111111-1111-1111-1111-111111111111', undefined]);
+  });
+});
+
+/**
+ * O ESCOPO DO DIVIDENDO — FIN-DIVIDENDO-ESCOPO-01.
+ *
+ * ⚠ ESTE BLOCO EXISTE PORQUE A CONSTANTE JÁ ESTEVE ERRADA, e o erro era invisível: dizia
+ * `'pecuaria'`, e nenhum teste, gate ou compilador tinha como discordar. Quem notou foi o
+ * operador, abrindo um lançamento de dividendo e vendo o card Pecuária marcado sobre um
+ * lançamento que o banco inteiro classifica como administrativo.
+ * ⚠ O FRONT NÃO LÊ O PLANO PARA DIVIDENDO: `loadPlanoContasCompleto` exclui o macro
+ * 'Dividendos' do `select` e repõe as entradas sintetizadas por cliente. Então a única
+ * guarda possível é esta — prender a constante ao valor que o plano usa.
+ */
+describe('dividendo é administrativo, não pecuária', () => {
+  const dividendos: Dividendo[] = [
+    { id: '44444444-4444-4444-4444-444444444444', cliente_id: 'cli', nome: 'Despesas Pessoais', ativo: true, ordem_exibicao: 1 },
+  ];
+
+  it('a constante do escopo é administrativo', () => {
+    /* As 23 linhas de macro 'Dividendos' do plano do proto são administrativo, sem exceção. */
+    expect(DIVIDENDO_ESCOPO).toBe('administrativo');
+  });
+
+  it('a entrada sintetizada nasce administrativa', () => {
+    const [e] = buildDividendoEntries(dividendos);
+    expect(e.escopo_negocio).toBe('administrativo');
+    expect(e.macro_custo).toBe(DIVIDENDO_MACRO);
+  });
+
+  it('e chega assim ao catálogo que o modal lê — é o que marca o card e desliga a safra', () => {
+    const [cls] = planoToClassificacoes(buildDividendoEntries(dividendos));
+    expect(cls.escopo_negocio).toBe('administrativo');
   });
 });

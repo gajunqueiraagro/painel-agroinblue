@@ -19,7 +19,23 @@ export const DIVIDENDO_TIPO = '2-Saídas';
 export const DIVIDENDO_MACRO = 'Dividendos';
 export const DIVIDENDO_GRUPO = 'Dividendos';
 export const DIVIDENDO_CENTRO = 'Dividendos';
-export const DIVIDENDO_ESCOPO = 'pecuaria';
+/**
+ * ⚠ ERA `'pecuaria'`, E ERA UM VALOR ERRADO — NÃO UMA AUSÊNCIA (FIN-DIVIDENDO-ESCOPO-01).
+ *
+ * Dividendo é distribuição ao produtor: não é custo de pecuária, de lavoura nem de
+ * silvicultura. O PLANO sempre soube disso — as 23 linhas de `macro_custo = 'Dividendos'` do
+ * proto são `administrativo`, sem uma exceção —, mas o front nunca as lê: o
+ * `loadPlanoContasCompleto` EXCLUI o macro 'Dividendos' do `select` (para não vazar o
+ * dividendo de um cliente no seletor de outro) e as repõe sintetizadas a partir de
+ * `financeiro_dividendos`, com estas constantes. Era aqui, e só aqui, que o escopo virava
+ * pecuária.
+ * ⚠ O EFEITO ERA CALADO E ERRADO NOS DOIS SENTIDOS: abrir um lançamento de dividendo marcava
+ * o card Pecuária, sugeria safra de pecuária e não mostrava o aviso de safra administrativa —
+ * enquanto o banco, a lista e o fechamento diziam administrativo. A tela discordava de tudo.
+ * ⚠ CONSUMIDOR ÚNICO: `buildDividendoEntries`. Trocar aqui não alcança nada além do catálogo
+ * do front — nenhum dado gravado muda.
+ */
+export const DIVIDENDO_ESCOPO = 'administrativo';
 
 /** Prefixo NOVO (padrão oficial) */
 export const DIVIDENDO_SUBCENTRO_PREFIX = 'Dividendos';
