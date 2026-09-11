@@ -2173,7 +2173,14 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
               onFixed={() => hook.loadLancamentos(filtros, hook.page)}
             />
           )}
-           <div ref={scrollContainerRef} className={cn("rounded-lg border border-[hsl(var(--border))] overflow-auto relative", modoIntensivo && "flex-1")} style={modoIntensivo ? undefined : { maxHeight: 'calc(100vh - 300px)' }}>
+           {/* ⚠ `rolagem-fina rolagem-sem-tampar` — FIN-LISTA-SCROLLBAR-01. A barra desenhava
+                POR CIMA da última linha e da coluna de ações, e clicar no lançamento de baixo
+                virava clicar na barra. As duas classes resolvem coisas diferentes: a fina é a
+                estética (A24), a "sem tampar" reserva o gutter E faz o conteúdo terminar antes
+                da borda — que é o único jeito de escapar da barra em overlay do macOS, que não
+                obedece a `scrollbar-gutter`. Ver o bloco no `index.css`.
+                ⚠ VALE NOS DOIS MODOS: é o mesmo container no normal e no Ampliado. */}
+           <div ref={scrollContainerRef} className={cn("rounded-lg border border-[hsl(var(--border))] overflow-auto relative rolagem-fina rolagem-sem-tampar", modoIntensivo && "flex-1")} style={modoIntensivo ? undefined : { maxHeight: 'calc(100vh - 300px)' }}>
             <table className="table-financeiro w-full caption-bottom text-sm border-collapse" style={{ tableLayout: 'fixed' }}>
               {/*
                 Larguras das colunas:

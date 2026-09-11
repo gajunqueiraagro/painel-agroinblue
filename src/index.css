@@ -404,4 +404,31 @@ input[type='number'] {
   .rolagem-fina::-webkit-scrollbar-track {
     background: transparent;
   }
+
+  /* ─────────────────────────────────────────────────────────────────────────────
+     A BARRA NAO TAPA DADO — FIN-LISTA-SCROLLBAR-01.
+
+     ⚠ SAO TRES PROBLEMAS DIFERENTES, e um so' nao resolve:
+
+     1. BARRA CLASSICA (Windows, Linux, e macOS com "mostrar sempre"): ela OCUPA
+        largura, e sem gutter reservado o conteudo se mexe quando a barra aparece.
+        `scrollbar-gutter: stable both-edges` reserva o espaco dos DOIS lados, entao
+        a tabela nao pula ao ganhar rolagem.
+
+     2. BARRA EM OVERLAY (o padrao do macOS): ela nao ocupa largura NENHUMA — e' 
+        desenhada POR CIMA do conteudo, e `scrollbar-gutter` nao tem efeito sobre ela.
+        Nenhuma propriedade de CSS a tira de cima; o unico jeito de a ultima linha
+        nao ficar debaixo dela e' o conteudo TERMINAR antes da borda. Por isso o
+        `padding` no fim e' parte do conserto, nao enfeite.
+
+     3. A BARRA FINA (A24) deixa o rastro menor, mas nao muda nem 1 nem 2.
+
+     ⚠ SO' `bottom` E `right`: `padding-top` deslocaria o cabecalho `sticky top-0`,
+     que ancora na CAIXA DE PADDING do scrollport — e o cabecalho fixo e' o A21.
+     ───────────────────────────────────────────────────────────────────────────── */
+  .rolagem-sem-tampar {
+    scrollbar-gutter: stable both-edges;
+    padding-bottom: 10px;
+    padding-right: 10px;
+  }
 }
