@@ -31,9 +31,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Plus, Pencil, Copy, ChevronLeft, ChevronRight, Zap, List, ChevronsUpDown, FilterX, Download, ArrowUp, ArrowDown, ArrowUpDown, Trash2, X, SlidersHorizontal, Maximize2, Minimize2, ExternalLink, Beef, CheckCircle2 } from 'lucide-react';
+import { Plus, Pencil, Copy, MoreHorizontal, ChevronLeft, ChevronRight, Zap, List, ChevronsUpDown, FilterX, Download, ArrowUp, ArrowDown, ArrowUpDown, Trash2, X, SlidersHorizontal, Maximize2, Minimize2, ExternalLink, Beef, CheckCircle2 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -1752,12 +1753,22 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                   | AÇÕES (shrink-0, não encolhe). Impede os filtros de comprimirem/quebrarem os botões. */}
               <div className="flex items-start gap-1.5">
                 <div className="flex-1 min-w-0 space-y-1">
-              {/* DESKTOP: LINE 1 — Ano | Mês | Data por | Tipo | Status | Fazenda | Atividade
-                  PR-FIN-V2-FILTROS-DENSIDADE-01 (revisão) — Fazenda volta a largura compacta fixa (120px),
-                  em família com Tipo/Status (106px) e Atividade (110px); truncate/ellipsis segue como fallback.
-                  Removido o minmax(150px,1.4fr) que esticava a coluna e quebrava a densidade da linha. */}
-              <div className="grid grid-cols-[62px_77px_92px_106px_106px_120px_110px] gap-1.5 items-end">
-                <div>
+              {/* ⚠ UMA GRADE SÓ, DOZE COLUNAS, QUATRO LINHAS — FIN-LISTA-LAYOUT-01.
+                  Eram três grades independentes com faixas próprias (`62px 77px …`,
+                  `minmax(150px,1.4fr) …`, `180px 260px 180px`), e por isso nada se alinhava
+                  na vertical: cada linha decidia as suas colunas sozinha.
+                  ⚠ E O `min-w-0` EM CADA CÉLULA É A CORREÇÃO DE FUNDO, não a grade. Item de
+                  grid nasce com `min-width: auto`: um valor selecionado longo fazia a faixa
+                  CRESCER além dos 62/106/120px e empurrava os vizinhos — a barra se mexia a
+                  cada filtro. Com `min-w-0` a faixa manda e o texto trunca, que é o que o
+                  `line-clamp-1` do `SelectTrigger` sempre quis fazer e não conseguia.
+                  Distribuição (12 faixas por linha):
+                    1: Ano 1 · Mês 2 · Data por 2 · Tipo 2 · Status 2 · Fazenda 3
+                    2: Atividade 2 · Safra 3 · C. Origem 3 · C. Destino 4
+                    3: Macro 3 · Grupo 3 · Centro 3 · Subcentro 3
+                    4: Produto 4 · Fornecedor 4 · Documento 4 */}
+              <div className="grid grid-cols-12 gap-1.5 items-end">
+                  <div className="col-span-1 min-w-0">
                   <label className={lblCls}>Ano</label>
                   <Select value={ano} onValueChange={setAno}>
                     <SelectTrigger className={`${selCls} w-full bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F]`}><SelectValue /></SelectTrigger>
@@ -1767,7 +1778,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     </SelectContent>
                   </Select>
                 </div>
-                <div>
+                  <div className="col-span-2 min-w-0">
                   <label className={lblCls}>Mês</label>
                   <Popover open={mesPopoverOpen} onOpenChange={setMesPopoverOpen}>
                     <PopoverTrigger asChild>
@@ -1792,9 +1803,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     </PopoverContent>
                   </Popover>
                 </div>
-                {/* PR-FIN-GRADE-DATAS-03 — Data por: dimensão temporal soberana da grade. Trocar preserva
-                    Ano/Mês/demais filtros; recarrega pela nova dimensão sem redefinir o período. */}
-                <div>
+                  <div className="col-span-2 min-w-0">
                   <label className={lblCls}>Data por</label>
                   <Select value={dataPor} onValueChange={handleDataPorChange}>
                     <SelectTrigger className={`${selCls} w-full bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F]`}><SelectValue /></SelectTrigger>
@@ -1806,7 +1815,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     </SelectContent>
                   </Select>
                 </div>
-                <div>
+                  <div className="col-span-2 min-w-0">
                   <label className={lblCls}>Tipo</label>
                   <Select value={tipoOperacao} onValueChange={v => { setTipoOperacao(v); setContaOrigem('__all__'); setContaDestino('__all__'); setMacroLocked(false); }}>
                     <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F]`}><SelectValue /></SelectTrigger>
@@ -1818,7 +1827,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     </SelectContent>
                   </Select>
                 </div>
-                <div>
+                  <div className="col-span-2 min-w-0">
                   <label className={lblCls}>Status</label>
                   {/* PR-FIN-STATUS-UX-03A-1 — Status multisseleção (mesmo padrão do filtro de meses). */}
                   <Popover open={statusPopoverOpen} onOpenChange={setStatusPopoverOpen}>
@@ -1844,7 +1853,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     </PopoverContent>
                   </Popover>
                 </div>
-                <div>
+                  <div className="col-span-3 min-w-0">
                   <label className={lblCls}>Fazenda</label>
                   <Select value={fazendaId} onValueChange={setFazendaId}>
                     <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F]`}><SelectValue placeholder="Selecione" /></SelectTrigger>
@@ -1854,7 +1863,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     </SelectContent>
                   </Select>
                 </div>
-                <div>
+                  <div className="col-span-2 min-w-0">
                   <label className={lblCls}>Atividade</label>
                   <Select value={atividadeFiltro} onValueChange={setAtividadeFiltro}>
                     <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F]`}><SelectValue /></SelectTrigger>
@@ -1867,7 +1876,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     </SelectContent>
                   </Select>
                 </div>
-                <div>
+                  <div className="col-span-3 min-w-0">
                   <label className={lblCls}>Safra</label>
                   <Select value={safraFiltro} onValueChange={setSafraFiltro}>
                     <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2]`}><SelectValue /></SelectTrigger>
@@ -1889,21 +1898,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     </SelectContent>
                   </Select>
                 </div>
-                {/* 2C-4 — Aplicar filtros no FIM da mesma fileira de Atividade. */}
-                {LISTA_V2 && (
-                  <div className="flex items-end shrink-0">
-                    <BotaoAplicarFiltros pendente={pendenteAplicar} onAplicar={handleAplicarFiltros} />
-                  </div>
-                )}
-              </div>
-
-              {/* DESKTOP: LINE 2 — Conta Origem | Conta Destino | Macro | Grupo | Centro | Subcentro + Action Buttons */}
-              <div className="flex items-end gap-1.5">
-                {/* PR-FIN-V2-FILTROS-DENSIDADE-01 — Conta Origem/Destino (nomes longos) priorizadas com min 150px
-                    e maior fração; Macro/Grupo/Centro/Subcentro com min 115px. Todas crescem via fr para preencher
-                    o espaço; truncate/ellipsis permanece como proteção para nomes extremos. */}
-                <div className="grid grid-cols-[minmax(150px,1.4fr)_minmax(150px,1.4fr)_minmax(115px,1fr)_minmax(115px,1fr)_minmax(115px,1fr)_minmax(115px,1fr)] gap-1 items-end flex-1 min-w-0">
-                  <div>
+                  <div className="col-span-3 min-w-0">
                     <label className={lblCls}>Conta Origem</label>
                     {/* PR-H2 — ContaBancariaSelect compartilhado. */}
                     <ContaBancariaSelect
@@ -1917,7 +1912,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       className={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F] ${isEntrada ? 'opacity-40' : ''}`}
                     />
                   </div>
-                  <div>
+                  <div className="col-span-4 min-w-0">
                     <label className={lblCls}>Conta Destino</label>
                     <ContaBancariaSelect
                       value={contaDestino}
@@ -1930,7 +1925,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       className={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F] ${isSaida ? 'opacity-40' : ''}`}
                     />
                   </div>
-                  <div>
+                  <div className="col-span-3 min-w-0">
                     <label className={lblCls}>Macro</label>
                     <SearchableSelect
                       value={macroFiltro}
@@ -1941,7 +1936,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       placeholder="Buscar macro..."
                     />
                   </div>
-                  <div>
+                  <div className="col-span-3 min-w-0">
                     <label className={lblCls}>Grupo</label>
                     <SearchableSelect
                       value={grupoFiltro}
@@ -1952,7 +1947,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       placeholder="Buscar grupo..."
                     />
                   </div>
-                  <div>
+                  <div className="col-span-3 min-w-0">
                     <label className={lblCls}>Centro</label>
                     <SearchableSelect
                       value={centroFiltro}
@@ -1963,7 +1958,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       placeholder="Buscar centro..."
                     />
                   </div>
-                  <div>
+                  <div className="col-span-3 min-w-0">
                     <label className={lblCls}>Subcentro</label>
                     <SearchableSelect
                       value={subcentroFiltro}
@@ -1973,13 +1968,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       placeholder="Buscar subcentro..."
                     />
                   </div>
-                </div>
-              </div>
-
-              {/* DESKTOP: LINE 3 — Produto | Fornecedor | Documento + Limpar + Summary */}
-              <div className="flex items-end gap-1.5">
-                <div className="grid grid-cols-[180px_260px_180px] gap-1.5 items-end">
-                  <div>
+                  <div className="col-span-4 min-w-0">
                     <label className={lblCls}>Produto</label>
                     <Input
                       value={produtoFiltro}
@@ -1989,7 +1978,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       autoCorrect="off" autoCapitalize="none" spellCheck={false}
                     />
                   </div>
-                  <div>
+                  <div className="col-span-4 min-w-0">
                     <label className={lblCls}>Fornecedor</label>
                     <SearchableSelect
                       value={fornecedorFiltro}
@@ -1999,7 +1988,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       persistKey={CHAVE_BUSCA_FORNECEDOR}
                     />
                   </div>
-                  <div>
+                  <div className="col-span-4 min-w-0">
                     <label className={lblCls}>Documento</label>
                     <Input
                       value={documentoFiltro}
@@ -2009,30 +1998,43 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       autoCorrect="off" autoCapitalize="none" spellCheck={false}
                     />
                   </div>
+              </div>
+
+              {/* O "Aplicar" só existe com a lista paginada; fora dela a barra filtra ao vivo. */}
+              {LISTA_V2 && (
+                <div className="flex items-end pt-1">
+                  <BotaoAplicarFiltros pendente={pendenteAplicar} onAplicar={handleAplicarFiltros} />
                 </div>
-                <div className="flex gap-2 items-center ml-auto pb-[1px]">
-                  <Button size="sm" variant="ghost" onClick={handleLimparFiltros} className="h-6 text-[10px] gap-0.5 px-1.5 text-muted-foreground">
+              )}
+                </div>
+                {/* ⚠ AÇÕES E TOTAIS NA MESMA COLUNA À DIREITA — FIN-LISTA-LAYOUT-01. Os totais
+                    moravam no fim da terceira linha de filtros, então mudavam de lugar toda vez
+                    que uma linha de filtro crescia. Aqui, ao lado dos botões e fora da grade,
+                    eles ficam onde o olho aprendeu a procurá-los.
+                    ⚠ `shrink-0` E LARGURA FIXA: sem os dois, "Entradas: R$ 12.345.678,90"
+                    empurraria a grade de filtros para a esquerda — o mesmo reflow, por outra
+                    porta. */}
+                <div className="flex w-[190px] shrink-0 flex-col items-end gap-1 pb-[1px]">
+                  {actionButtons}
+                  <Button size="sm" variant="ghost" onClick={handleLimparFiltros}
+                    className="h-6 gap-0.5 px-1.5 text-[10px] text-muted-foreground">
                     <FilterX className="h-3 w-3" /> Limpar
                   </Button>
-                  <span className="text-[10px] text-success font-bold">Entradas: {formatMoeda(totalEntradas)}</span>
-                  <span className="text-[10px] text-destructive font-bold">Saídas: {formatMoeda(totalSaidas)}</span>
-                  {/* ⚠ O TERCEIRO TOTAL SÓ APARECE QUANDO EXISTE — PR-V2-TRANSF-DESTINO-01.
-                      Com uma conta em foco não há transferência solta: ela é entrada ou
-                      saída daquela conta, o balde fica zerado e um "Transf.: R$ 0,00"
-                      permanente ensinaria a ignorar a linha. */}
-                  {totalTransferencias > 0 && (
-                    <span className="text-[10px] font-bold text-sky-700 dark:text-sky-400"
-                      title="Transferências entre contas do próprio cliente: não são entrada nem saída do caixa, por isso ficam fora dos dois totais.">
-                      Transf.: {formatMoeda(totalTransferencias)}
-                    </span>
-                  )}
-                  <span className="text-[10px] text-muted-foreground">{totalLancamentosFiltrados} lanç.</span>
-                </div>
-              </div>
-                </div>
-                {/* AÇÕES — coluna fixa à direita; shrink-0 para nunca encolher/quebrar. */}
-                <div className="shrink-0 pb-[1px]">
-                  {actionButtons}
+                  <div className="flex w-full flex-col items-end gap-0 text-right tabular-nums">
+                    <span className="text-[10px] font-bold text-success">Entradas: {formatMoeda(totalEntradas)}</span>
+                    <span className="text-[10px] font-bold text-destructive">Saídas: {formatMoeda(totalSaidas)}</span>
+                    {/* ⚠ O TERCEIRO TOTAL SÓ APARECE QUANDO EXISTE — PR-V2-TRANSF-DESTINO-01.
+                        Com uma conta em foco não há transferência solta: ela é entrada ou
+                        saída daquela conta, o balde fica zerado e um "Transf.: R$ 0,00"
+                        permanente ensinaria a ignorar a linha. */}
+                    {totalTransferencias > 0 && (
+                      <span className="text-[10px] font-bold text-sky-700 dark:text-sky-400"
+                        title="Transferências entre contas do próprio cliente: não são entrada nem saída do caixa, por isso ficam fora dos dois totais.">
+                        Transf.: {formatMoeda(totalTransferencias)}
+                      </span>
+                    )}
+                    <span className="text-[10px] text-muted-foreground">{totalLancamentosFiltrados} lanç.</span>
+                  </div>
                 </div>
               </div>
             </>
@@ -2086,23 +2088,29 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 <col style={{ width: 45 }} />
                 <col style={{ width: 45 }} />
                 <col style={{ width: 45 }} />
-                <col style={{ width: modoIntensivo ? 245 : 175 }} />
+                {/* Produto 175→150 na lista normal — FIN-LISTA-LAYOUT-01. É a coluna mais
+                    larga e a que mais tolera truncar: o texto inteiro está no `title`. */}
+                <col style={{ width: modoIntensivo ? 245 : 150 }} />
                 <col style={{ width: 140 }} />
                 <col style={{ width: 80 }} />
                 <col style={{ width: 80 }} />
-                <col style={{ width: 50 }} />
-                {/* Safra — FIN-LISTA-FILTROS-01b. 75px comporta "25/26-MAND", o código mais
-                    longo do cadastro. A tabela vai a 1.039px e continua dentro dos ~1.160
-                    úteis de uma janela de 1440 com a barra lateral aberta. */}
-                <col style={{ width: 75 }} />
+                {/* Fazenda 50→44: o rótulo virou "Faz." e a célula mostra o CÓDIGO, nunca o
+                    nome — o nome inteiro está no `title`. */}
+                <col style={{ width: 44 }} />
+                {/* Safra 75→62 com fonte 10px: "25/26-MAND" cabe, e é o código mais longo do
+                    cadastro. O nome completo continua no `title`. */}
+                <col style={{ width: 62 }} />
                 {/* As duas contas só no Ampliado: 150px cada, que é o mínimo em que
                     "Cartão Banco do Brasil - Pecuária" trunca sem virar reticências puras. */}
                 {modoIntensivo && <col style={{ width: 150 }} />}
                 {modoIntensivo && <col style={{ width: 150 }} />}
                 <col style={{ width: 90 }} />
-                <col style={{ width: modoIntensivo ? 110 : 70 }} />
+                {/* Doc 70→55 com fonte 10px na lista normal; no Ampliado segue 110, onde a
+                    NF inteira com série é o ponto. */}
+                <col style={{ width: modoIntensivo ? 110 : 55 }} />
                 <col style={{ width: 58 }} />
-                <col style={{ width: 36 }} />
+                {/* Ações 36→28: um botão "…" em vez de dois ícones. */}
+                <col style={{ width: 28 }} />
               </colgroup>
               <thead className="[&_tr]:border-b sticky top-0 z-20 bg-primary">
                 <tr className="border-b !h-auto">
@@ -2120,7 +2128,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('fornecedor')}>Fornecedor<SortIndicator field="fornecedor" /></th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground">Macro</th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('centro')}>Centro<SortIndicator field="centro" /></th>
-                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground">Fazenda</th>
+                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground" title="Fazenda">Faz.</th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('safra')}>Safra<SortIndicator field="safra" /></th>
                   {modoIntensivo && (
                     <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground">C. Origem</th>
@@ -2244,7 +2252,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                         {/* ⚠ "—" É AUSÊNCIA, e aqui ela é informação: financiamento de
                             investimento e administrativo NÃO têm safra por regra. Um traço
                             nessas linhas é o esperado; um código é o que se veio caçar. */}
-                        <td className="truncate px-1 py-1 align-middle text-[11px] font-medium leading-tight text-muted-foreground"
+                        <td className="truncate px-1 py-1 align-middle text-[10px] font-medium leading-tight text-muted-foreground"
                           title={l.safra_id ? (safraCodigoMap.get(l.safra_id) || '') : 'Sem safra'}>
                           {l.safra_id ? (safraCodigoMap.get(l.safra_id) || '—') : '—'}
                         </td>
@@ -2270,32 +2278,48 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                           {valorDaLinha(l).texto}
                         </td>
                         <td className="celula-doc font-mono text-muted-foreground text-center px-1 py-1 align-middle text-[10px] leading-tight truncate" title={formatDocCompleto(l)}>{formatNF(l)}</td>
-                        <td className={`text-center px-1 py-1 align-middle text-[11px] leading-tight ${stColor}`}
+                        {/* `truncate` também aqui: a tabela é `tableLayout: fixed`, então a
+                            faixa não cede — sem truncar, "Realizado" transbordaria a célula em
+                            vez de a alargar. É o mesmo raciocínio do `min-w-0` da barra, do
+                            outro lado da mesma regra. */}
+                        <td className={`truncate text-center px-1 py-1 align-middle text-[11px] leading-tight ${stColor}`}
                           title={stTitle}>{stLabel}</td>
-                        <td className="!py-0 px-0 w-[40px] align-middle">
-                          <div className="flex items-center justify-center gap-0.5">
-                            {isParcelaFinanciamento ? (
-                              <button
-                                  type="button"
-                                  className="h-5 w-5 flex items-center justify-center text-blue-600 hover:text-blue-800"
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    console.log('CLICK HARD', l.id);
-                                    abrirFinanciamentoDaParcela(l);
-                                  }}
-                                  title="Ver contrato de financiamento"
-                                >
-                                  <ExternalLink className="h-4 w-4" />
-                                </button>
-                            ) : (
-                              <Button variant="ghost" size="icon" className="h-5 w-5 rounded-sm" onClick={() => openEdit(l)} disabled={!canEditRow} title={isHistoricoReadOnly ? 'Histórico antigo: somente leitura' : 'Editar'}>
-                                <Pencil className="h-2.5 w-2.5" />
-                              </Button>
-                            )}
-                            <Button variant="ghost" size="icon" className="h-5 w-5 rounded-sm" onClick={() => handleDuplicate(l)} disabled={isParcelaFinanciamento} title={isParcelaFinanciamento ? 'Parcela de financiamento — não duplicável' : 'Duplicar'}>
-                              <Copy className="h-2.5 w-2.5" />
-                            </Button>
+                        {/* ⚠ UM BOTÃO "…" NO LUGAR DE DOIS ÍCONES — FIN-LISTA-LAYOUT-01. Dois
+                            botões de 20px numa coluna de 36 disputavam espaço com a tabela
+                            inteira, e o que eles faziam só se descobria no `title`. O menu diz
+                            o nome de cada ação e devolve 8px à largura.
+                            ⚠ TRÊS OPÇÕES, NÃO DUAS: parcela de financiamento troca "Editar" por
+                            "Ver contrato" — ela não se edita aqui, edita-se no contrato. E
+                            "Duplicar" continua desabilitado nela, com o motivo escrito no item,
+                            que é a regra da casa para botão cinza. */}
+                        <td className="!py-0 px-0 align-middle">
+                          <div className="flex items-center justify-center">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-5 w-5 rounded-sm" title="Ações">
+                                  <MoreHorizontal className="h-3 w-3" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="min-w-[150px]">
+                                {isParcelaFinanciamento ? (
+                                  <DropdownMenuItem className="text-[11px]"
+                                    onClick={() => abrirFinanciamentoDaParcela(l)}>
+                                    <ExternalLink className="mr-1.5 h-3 w-3" /> Ver contrato
+                                  </DropdownMenuItem>
+                                ) : (
+                                  <DropdownMenuItem className="text-[11px]" disabled={!canEditRow}
+                                    title={isHistoricoReadOnly ? 'Histórico antigo: somente leitura' : undefined}
+                                    onClick={() => openEdit(l)}>
+                                    <Pencil className="mr-1.5 h-3 w-3" /> Editar
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuItem className="text-[11px]" disabled={isParcelaFinanciamento}
+                                  title={isParcelaFinanciamento ? 'Parcela de financiamento — não duplicável' : undefined}
+                                  onClick={() => handleDuplicate(l)}>
+                                  <Copy className="mr-1.5 h-3 w-3" /> Duplicar
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                         </td>
                       </tr>
