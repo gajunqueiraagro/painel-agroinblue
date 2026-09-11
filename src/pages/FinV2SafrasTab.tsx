@@ -418,8 +418,15 @@ export function FinV2SafrasTab() {
             quem já sabe o que quer, e mostrá-los sempre faria os cinco campos que importam
             parecerem oito. Ele deixou de ser a defesa contra a quebra e voltou a ser o que
             dizia ser — densidade.
-            Medidas do A18: rótulo 10px, campo h-8, cabeçalho azul. */}
-        <DialogContent className="flex max-h-[85vh] max-w-md flex-col gap-0 overflow-hidden p-0">
+            Medidas do A18: rótulo 10px, campo h-8, cabeçalho azul.
+            ⚠ `max-w-2xl` (672px) DESDE O AGRI-CADASTRO-SAFRA-02, era `max-w-md` (448). O modal
+            nasceu com cinco campos e passou a ter oito: em coluna única, cada campo novo virava
+            altura, e a rolagem — que é rede de segurança — passou a ser o estado NORMAL de
+            abrir o cadastro. Largura é o que se troca por altura aqui; o conteúdo é o mesmo.
+            ⚠ A ROLAGEM FICA, e continua sendo o certo: em tela baixa (ou com o "Mais…" aberto)
+            o corpo rola e cabeçalho e rodapé seguem presos — A21. O que muda é a rolagem
+            deixar de aparecer na altura normal. */}
+        <DialogContent className="flex max-h-[85vh] max-w-2xl flex-col gap-0 overflow-hidden p-0">
           <DialogHeader className="shrink-0 bg-primary px-4 py-2.5">
             <DialogTitle className="text-[13px] text-primary-foreground">
               {editing ? 'Editar safra' : 'Nova safra'}
@@ -427,73 +434,85 @@ export function FinV2SafrasTab() {
           </DialogHeader>
 
           <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto px-4 py-3">
-            {/* 1. ESCOPO — pílulas, porque são dois e a escolha muda o resto do formulário. */}
-            <div>
-              <Label className="text-[10px]">Escopo <span className="text-destructive">*</span></Label>
-              <div className="mt-0.5 flex gap-1">
-                {(['pecuaria', 'agricultura'] as const).map(v => (
-                  <button key={v} type="button"
-                    onClick={() => setEscopo(v)}
-                    className={`h-8 flex-1 rounded-md border text-[12px] transition-colors ${
-                      escopo === v ? 'border-primary bg-primary text-primary-foreground'
-                                   : 'bg-card hover:bg-muted/50'}`}>
-                    {/* ⚠ O RÓTULO É "Lavoura", O VALOR CONTINUA `agricultura` — a mesma regra
-                        do card do modal de lançamento (`ATIVIDADES`): o produtor diz lavoura,
-                        o plano de contas e a coluna dizem agricultura. Trocar o identificador
-                        custaria migration e quebraria tudo que já grava. */}
-                    {v === 'pecuaria' ? 'Pecuária' : 'Lavoura'}
-                  </button>
-                ))}
-              </div>
-              {escopo && <p className="mt-1 text-[10px] text-muted-foreground">{ESCOPO_AJUDA[escopo]}</p>}
-            </div>
-
-            {/* 2. CICLO — AGRI-CADASTRO-SAFRA-01. Ele decide o resto do formulário, como o
-                 escopo, e por isso vem logo depois dele e usa o mesmo desenho de pílulas.
-                 ⚠ NÃO É DETALHE DE CADASTRO: anual é a temporada de julho a junho; perene é a
-                 lavoura que fica seis, sete anos no chão — o eucalipto planta em 2020 e corta
-                 em 2027. Tratar as duas com a mesma pergunta obrigava a inventar uma
-                 temporada para o eucalipto. */}
-            <div>
-              <Label className="text-[10px]">Ciclo <span className="text-destructive">*</span></Label>
-              <div className="mt-0.5 flex gap-1">
-                {(['anual', 'perene'] as const).map(c => (
-                  <button key={c} type="button" onClick={() => trocarCiclo(c)}
-                    className={`h-8 flex-1 rounded-md border text-[12px] transition-colors ${
-                      ciclo === c ? 'border-primary bg-primary text-primary-foreground'
-                                  : 'bg-card hover:bg-muted/50'}`}>
-                    {c === 'anual' ? 'Anual' : 'Perene'}
-                  </button>
-                ))}
-              </div>
-              <p className="mt-1 text-[10px] text-muted-foreground">
-                {ciclo === 'anual'
-                  ? 'Anual — temporada de julho a junho; as datas vêm preenchidas e podem ser ajustadas.'
-                  : 'Perene — plantio e corte previsto podem estar a vários anos de distância.'}
-              </p>
-            </div>
-
-            {/* 3. TEMPORADA — só no anual; no perene a pergunta não existe. */}
-            {ciclo === 'anual' && (
+            {/* ⚠ ESCOPO E CICLO NA MESMA LINHA — AGRI-CADASTRO-SAFRA-02. Eles são o par que
+                decide o resto do formulário, têm o mesmo desenho (duas pílulas) e a mesma
+                altura; empilhá-los gastava duas vezes a altura para dizer a mesma coisa.
+                ⚠ `items-start` PORQUE AS AJUDAS TÊM ALTURAS DIFERENTES: a do ciclo ocupa duas
+                linhas e a do escopo uma. Sem isto, o alinhamento vertical esticaria o bloco
+                mais curto e as duas fileiras de pílulas deixariam de casar. */}
+            <div className="grid grid-cols-2 items-start gap-3">
+              {/* 1. ESCOPO — pílulas, porque são dois e a escolha muda o resto do formulário. */}
               <div>
-                <Label className="text-[10px]">Temporada <span className="text-destructive">*</span></Label>
-                <Select value={temporada} onValueChange={escolherTemporada}>
-                  <SelectTrigger className="mt-0.5 h-8 text-[12px]"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {temporadasDisponiveis(new Date()).map(t => (
-                      <SelectItem key={t} value={t}>{t}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label className="text-[10px]">Escopo <span className="text-destructive">*</span></Label>
+                <div className="mt-0.5 flex gap-1">
+                  {(['pecuaria', 'agricultura'] as const).map(v => (
+                    <button key={v} type="button"
+                      onClick={() => setEscopo(v)}
+                      className={`h-8 flex-1 rounded-md border text-[12px] transition-colors ${
+                        escopo === v ? 'border-primary bg-primary text-primary-foreground'
+                                     : 'bg-card hover:bg-muted/50'}`}>
+                      {/* ⚠ O RÓTULO É "Lavoura", O VALOR CONTINUA `agricultura` — a mesma regra
+                          do card do modal de lançamento (`ATIVIDADES`): o produtor diz lavoura,
+                          o plano de contas e a coluna dizem agricultura. Trocar o identificador
+                          custaria migration e quebraria tudo que já grava. */}
+                      {v === 'pecuaria' ? 'Pecuária' : 'Lavoura'}
+                    </button>
+                  ))}
+                </div>
+                {escopo && <p className="mt-1 text-[10px] text-muted-foreground">{ESCOPO_AJUDA[escopo]}</p>}
               </div>
-            )}
 
-            {/* 4. AS DATAS — colunas de verdade desde o AGRI-01, editáveis nos dois ciclos.
+              {/* 2. CICLO — AGRI-CADASTRO-SAFRA-01. Ele decide o resto do formulário, como o
+                   escopo, e por isso vem logo depois dele e usa o mesmo desenho de pílulas.
+                   ⚠ NÃO É DETALHE DE CADASTRO: anual é a temporada de julho a junho; perene é a
+                   lavoura que fica seis, sete anos no chão — o eucalipto planta em 2020 e corta
+                   em 2027. Tratar as duas com a mesma pergunta obrigava a inventar uma
+                   temporada para o eucalipto. */}
+              <div>
+                <Label className="text-[10px]">Ciclo <span className="text-destructive">*</span></Label>
+                <div className="mt-0.5 flex gap-1">
+                  {(['anual', 'perene'] as const).map(c => (
+                    <button key={c} type="button" onClick={() => trocarCiclo(c)}
+                      className={`h-8 flex-1 rounded-md border text-[12px] transition-colors ${
+                        ciclo === c ? 'border-primary bg-primary text-primary-foreground'
+                                    : 'bg-card hover:bg-muted/50'}`}>
+                      {c === 'anual' ? 'Anual' : 'Perene'}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-1 text-[10px] text-muted-foreground">
+                  {ciclo === 'anual'
+                    ? 'Anual — temporada de julho a junho; as datas vêm preenchidas e podem ser ajustadas.'
+                    : 'Perene — plantio e corte previsto podem estar a vários anos de distância.'}
+                </p>
+              </div>
+            </div>
+
+            {/* 3+4. TEMPORADA E AS DUAS DATAS NUMA LINHA — AGRI-CADASTRO-SAFRA-02. Elas são a
+                 mesma pergunta em três campos: QUANDO. Separá-las em duas linhas obrigava o
+                 olho a descer para conferir se as datas batem com a temporada que acabou de
+                 ser escolhida — e é justamente esse par que o operador ajusta à mão.
+                 ⚠ NO PERENE NÃO SOBRA BURACO NA ESQUERDA: sem a temporada, plantio e corte
+                 ocupam as duas primeiras colunas e a terceira fica vazia. Uma célula vazia no
+                 COMEÇO da linha se lê como campo faltando; no fim, como espaço.
                  ⚠ `DatePicker`, NUNCA `<input type="date">`: o nativo abre o calendário do
                  sistema operacional, com outro idioma e outro formato por máquina. É gate.
                  ⚠ OS RÓTULOS MUDAM COM O CICLO porque as perguntas são outras: no anual são
                  os extremos da temporada; no perene são o plantio e o corte previsto. */}
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
+              {ciclo === 'anual' && (
+                <div>
+                  <Label className="text-[10px]">Temporada <span className="text-destructive">*</span></Label>
+                  <Select value={temporada} onValueChange={escolherTemporada}>
+                    <SelectTrigger className="mt-0.5 h-8 text-[12px]"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {temporadasDisponiveis(new Date()).map(t => (
+                        <SelectItem key={t} value={t}>{t}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div>
                 <Label className="text-[10px]">{ciclo === 'perene' ? 'Plantio' : 'Início'}</Label>
                 <DatePicker value={dataInicio} onChange={setDataInicio} className="mt-0.5" />
@@ -544,13 +563,17 @@ export function FinV2SafrasTab() {
               className="text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground">
               {maisAberto ? 'Menos' : 'Mais…'}
             </button>
+            {/* ⚠ OS TRÊS EXTRAS NUMA LINHA SÓ — AGRI-CADASTRO-SAFRA-02. Abrir o "Mais…"
+                acrescentava três alturas de campo e era o que empurrava o rodapé para fora da
+                tela; em 672px eles cabem lado a lado. A ordem é um número curto e ganha faixa
+                fixa de 150px; as duas caixas de texto dividem o que sobra. */}
             {maisAberto && (
-              <div className="space-y-2.5 border-t pt-2.5">
+              <div className="grid grid-cols-[minmax(0,150px)_minmax(0,1fr)_minmax(0,1fr)] items-start gap-2 border-t pt-2.5">
                 <div>
-                  <Label className="text-[10px]">Ordem de exibição</Label>
+                  <Label className="text-[10px]">Ordem</Label>
                   <Input value={ordemRaw} onChange={e => setOrdemRaw(e.target.value)} inputMode="numeric"
                     placeholder="0" className="mt-0.5 h-8 font-mono text-[12px]" />
-                  <p className="mt-1 text-[10px] text-muted-foreground">0 = ordem padrão · 1, 2, 3… = prioridade manual</p>
+                  <p className="mt-1 text-[10px] leading-tight text-muted-foreground">0 = padrão · 1, 2, 3… = manual</p>
                 </div>
                 <div>
                   <Label className="text-[10px]">Descrição</Label>
