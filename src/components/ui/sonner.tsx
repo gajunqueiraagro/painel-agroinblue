@@ -22,6 +22,15 @@ const Toaster = ({ ...props }: ToasterProps) => {
          resposta — as duas pontas já foram tentadas — e a saída é o toast recuar quando
          há Dialog aberto, ou o rodapé ganhar a camada. Quem for mexer nisso na terceira
          vez começa sabendo que as duas primeiras foram estas.
+         ⚠ E ELE VOLTOU, em 11/09/2026 — na Mesa de Revisão, tapando "Salvar e próximo" e
+         "Revisado N/27" (TOAST-MESA-01). O aviso acima foi seguido: o canto NÃO mudou pela
+         terceira vez. O que se fez foi tirar o toast de onde ele não informava nada — o
+         "Salvar e próximo" avança a linha, e avançar já é a confirmação — e encurtar o do
+         "Salvar" simples para 1,5s.
+         ⚠ MAS ISSO É LOCAL, E O PROBLEMA É GLOBAL: qualquer modal com rodapé continua
+         exposto a qualquer toast de 4s. As duas saídas estruturais seguem valendo, e
+         nenhuma delas é mexer no canto de novo. A terceira vez não gastou a solução;
+         adiou.
          Continua sendo prop com default: o `{...props}` abaixo vem depois e vence. */
       position="bottom-right"
       offset="16px"

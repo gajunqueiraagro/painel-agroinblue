@@ -915,7 +915,19 @@ export function MesaEnriquecimentoTab({
     }
   }
 
-  async function salvar(): Promise<boolean> {
+  /**
+   * ⚠ `silencioso` EXISTE PORQUE O TOAST TAPA OS CONTROLES — TOAST-MESA-01. O container é
+   * `bottom-right` (decisão do PR-TOAST-POSICAO-01), e é exatamente onde moram "Salvar e
+   * próximo", "Revisado N/27" e a navegação: o aviso de que deu certo cobria o botão que se
+   * usa em seguida, numa tela cujo gesto é repetir esse botão dezenas de vezes.
+   * ⚠ E NO "SALVAR E PRÓXIMO" O TOAST NÃO INFORMA NADA: a linha avança na hora, e avançar É
+   * a confirmação de que salvou. Um aviso que repete o que a tela já mostrou, tapando o
+   * próximo clique, é custo sem contrapartida.
+   * ⚠ O TOAST DE ERRO NUNCA É SILENCIADO, em nenhum dos dois caminhos. Ele é a única
+   * notícia de que o banco recusou, e a linha NÃO avança quando isso acontece — então ele
+   * não tapa o botão de um gesto que continua.
+   */
+  async function salvar(opts?: { silencioso?: boolean }): Promise<boolean> {
     if (!selecionado) return false;
     const id = selecionado.id;                       // captura antes do await (seleção pode mudar)
     try {
@@ -940,7 +952,14 @@ export function MesaEnriquecimentoTab({
         await editarProposto({ staging_id: id, patch: { subcentro: selecionado.edicao.subcentro } });
       }
       const res: any = await applyRow({ staging_id: id, overwrite: true });
-      if (res?.aplicado) { limparEditada(id); setErroBanco(null); toast.success('Lançamento salvo.'); return true; }
+      if (res?.aplicado) {
+        limparEditada(id);
+        setErroBanco(null);
+        /* Curto de propósito no "Salvar" simples: ele confirma e sai de cena antes de o
+           operador voltar ao rodapé. O padrão do app são 4s. */
+        if (!opts?.silencioso) toast.success('Lançamento salvo.', { duration: 1500 });
+        return true;
+      }
       /* 133h item 8 — SALVAR NUNCA FALHA EM SILÊNCIO: sem tradução conhecida, o motivo
          cru do banco vai para a tela. "Não salvo (undefined)" era o que aparecia quando a
          RPC devolvia um motivo novo. */
@@ -971,7 +990,7 @@ export function MesaEnriquecimentoTab({
    * conferiu — que é o que o operador quis dizer.
    */
   async function handleSalvarProximo() {
-    const ok = await salvar();
+    const ok = await salvar({ silencioso: true });
     if (ok) irProximo();
   }
   async function handleReverter() {
