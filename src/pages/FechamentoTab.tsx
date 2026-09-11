@@ -1017,7 +1017,35 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
 
           {/* ── COL 2: Cards de mês + Tabela Conciliação ── */}
           <div className="flex flex-col gap-2 min-w-0">
-            <div className="grid grid-cols-12 gap-0.5 max-w-[400px] mx-auto">
+            {/**
+              * ANO + FITA NA MESMA LINHA — FECH-AREA-ANO-01 (Gabriel, 11/09/2026).
+              *
+              * ⚠ O SELETOR NÃO É NOVO, É O QUE VOLTOU. O estado `anoFiltro` e a lista
+              * `anosDisp` sempre estiveram aqui; o que sumiu foi a PORTA. Ela vinha da
+              * `V2FilterBar` do shell, que desmontou no PR-BARRA-UNICA-01a levando junto as
+              * props de valor inicial — `filtroAnoInicial` entre elas. Desde então
+              * `setAnoFiltro` não tinha nenhum chamador e a tela vivia presa no ano corrente:
+              * quem quisesse ver amendoim em 2023 não tinha por onde pedir.
+              * ⚠ A FITA NÃO SE MEXE — regra A23. O card de ano tem largura FIXA (56px) e há
+              * um espelho da mesma largura do outro lado: a fita continua centrada
+              * exatamente onde estava, e trocar 2026 por 2023 não muda nada de tamanho.
+              * Sem o espelho, os doze meses andariam 30px para a direita.
+              */}
+            <div className="flex items-center gap-1.5">
+              <Select value={anoFiltro} onValueChange={setAnoFiltro}>
+                <SelectTrigger
+                  className="h-6 w-[56px] shrink-0 justify-center gap-0.5 rounded border border-border bg-muted px-1 text-[10px] font-bold text-muted-foreground [&>svg]:h-3 [&>svg]:w-3 [&>svg]:opacity-100"
+                  title="Ano do fechamento"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {anosDisp.map(a => (
+                    <SelectItem key={a} value={a} className="text-[11px]">{a}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <div className="grid grid-cols-12 gap-0.5 w-full max-w-[400px] mx-auto">
               {MESES_COLS.map((m, idx) => {
                 const mesNum = idx + 1;
                 const status = statusPorMes[mesNum] || 'vazio';
@@ -1049,6 +1077,10 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                   </button>
                 );
               })}
+              </div>
+              {/* O espelho do card de ano: existe para a fita não se deslocar. Não é
+                  decoração — é a metade direita da conta que a mantém centrada. */}
+              <div className="h-6 w-[56px] shrink-0" aria-hidden="true" />
             </div>
 
             <div className="flex justify-center overflow-x-auto">
