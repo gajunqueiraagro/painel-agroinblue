@@ -19,6 +19,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { formatAnoMes } from '@/lib/dateUtils';
 import { MESES_COLS } from '@/lib/calculos/labels';
 import { isPastoPecuario, isPastoOperacional, getTipoUsoEfetivo, isPastoDivergencia } from '@/lib/classificacaoArea';
+import { grupoDoTipoUso } from '@/lib/pastos/tiposUso';
 import { FechamentoPastoDialog } from '@/components/FechamentoPastoDialog';
 import { useReclassificacaoState, ReclassificacaoFormFields } from '@/components/ReclassificacaoForm';
 import { ReclassificacaoResumoPanel } from '@/components/ReclassificacaoResumoPanel';
@@ -1253,6 +1254,26 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                 const tipoNorm = normalizeTipoUso(tipoUsoEfetivo);
 
                 const isDivergencia = isPastoDivergencia(tipoUsoEfetivo);
+                /**
+                 * O PASTO DE LAVOURA SE DISTINGUE NA GRADE — AGRI-AREA-PLANTADA-01.
+                 *
+                 * ⚠ A BORDA, NÃO O FUNDO, e essa é a parte que não pode ser trocada por
+                 * engano: neste card o FUNDO carrega o STATUS (verde = fechado, azul = em
+                 * edição, âmbar = conciliado, laranja = inconsistente). Pintar o fundo por
+                 * atividade apagaria o status — um pasto agrícola fechado deixaria de parecer
+                 * fechado. A borda estava livre e passa a dizer a atividade.
+                 * ⚠ VIOLETA PORQUE AS OUTRAS ESTÃO OCUPADAS, e isto foi conferido antes de
+                 * escolher: verde é `fechado`, azul é `em_edicao`, âmbar é `conciliado` E a
+                 * divergência, laranja é `inconsistente`, vermelho é erro. Violeta é a única
+                 * família livre nas duas paletas.
+                 * ⚠ E A PALETA CANÔNICA DIZ OUTRA COISA — `corDoTipoUso('agricultura')` em
+                 * `lib/pastos/tiposUso.ts` é AZUL. Não foi ignorada por descuido: azul, neste
+                 * card, já significa "em edição", e obedecê-la aqui produziria azul sobre azul.
+                 * Este card já mantém uma paleta própria (nele recria é esmeralda e engorda é
+                 * azul, contra laranja e índigo da canônica) — a reconciliação é a frente
+                 * PR-UI-PASTO-CORES-03, e ela decide as três telas de uma vez.
+                 */
+                const ehLavoura = grupoDoTipoUso(tipoUsoEfetivo) === 'agricultura';
 
                 return (
                   <Tooltip key={p.id}>
@@ -1262,6 +1283,8 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                         className={`w-full rounded-lg border px-2 py-1.5 text-left hover:ring-1 hover:ring-primary/40 transition-all ${
                           isDivergencia
                             ? 'bg-amber-100 dark:bg-amber-950/40 border-amber-500 dark:border-amber-600 border-2'
+                            : ehLavoura
+                            ? `${STATUS_CARD_CLASSES[pastoStatus]} !border-violet-500 dark:!border-violet-400 border-2`
                             : STATUS_CARD_CLASSES[pastoStatus]
                         }`}
                       >
@@ -1291,7 +1314,8 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                           ) : <span />}
                           {!isDivergencia && tipoUsoEfetivo && (
                             <span className={`text-[7px] font-bold uppercase tracking-wider leading-none ${
-                              tipoNorm === 'recria' ? 'text-emerald-700 dark:text-emerald-400'
+                              ehLavoura ? 'text-violet-700 dark:text-violet-300'
+                              : tipoNorm === 'recria' ? 'text-emerald-700 dark:text-emerald-400'
                               : tipoNorm === 'engorda' ? 'text-blue-700 dark:text-blue-400'
                               : tipoNorm === 'cria' ? 'text-orange-700 dark:text-orange-400'
                               : 'text-muted-foreground'

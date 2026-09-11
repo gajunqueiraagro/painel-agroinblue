@@ -7,7 +7,9 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { TIPOS_USO_OPTIONS_AGRUPADAS, TIPOS_USO_EXIGEM_REBANHO, labelDoTipoUso } from '@/lib/pastos/tiposUso';
+import { TIPOS_USO_OPTIONS_AGRUPADAS, TIPOS_USO_EXIGEM_REBANHO, labelDoTipoUso, grupoDoTipoUso } from '@/lib/pastos/tiposUso';
+import { AreaPlantadaPanel } from '@/components/agri/AreaPlantadaPanel';
+import { useCliente } from '@/contexts/ClienteContext';
 import { Label } from '@/components/ui/label';
 import { AlertTriangle, Lock, Copy, Save, LockOpen } from 'lucide-react';
 import { calcUA } from '@/lib/calculos/zootecnicos';
@@ -147,6 +149,7 @@ export function FechamentoPastoDialog({
   open, onOpenChange, pasto, fechamento,
   categorias, onSave, onFechar, onReabrir, onCopiar
 }: Props) {
+  const { clienteAtual } = useCliente();
   const [itens, setItens] = useState<FechamentoItem[]>([]);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState(fechamento.status);
@@ -295,6 +298,16 @@ export function FechamentoPastoDialog({
   const totalFemeas = catsFemeas.reduce((s, c) => s + (getItem(c.id)?.quantidade || 0), 0);
 
   const exigeRebanho = (TIPOS_USO_EXIGEM_REBANHO as readonly string[]).includes(tipoUsoMes);
+  /**
+   * O PASTO DE LAVOURA NÃO RESPONDE PERGUNTA DE GADO — AGRI-AREA-PLANTADA-01.
+   *
+   * ⚠ A PERGUNTA É PELO GRUPO, não pelo texto: `grupoDoTipoUso` é a fonte única, e é ela que
+   * sabe que `agricultura` é lavoura e que `eucalipto` é SILVICULTURA — família própria desde
+   * 19/08/2026, que terá a porta dela e não entra por esta.
+   * ⚠ E O QUE MANDA É O `tipo_uso_mes`, o mesmo que o resto do modal usa: reclassificar o mês
+   * para Agricultura troca o painel na hora, sem precisar salvar antes.
+   */
+  const ehLavoura = grupoDoTipoUso(tipoUsoMes) === 'agricultura';
   const isDivergencia = pasto.tipo_uso === 'divergencia' || tipoUsoMes === 'divergencia';
   const itensComQtd = itens.filter(i => i.quantidade > 0).map(item => ({ ...item, cat: categorias.find(c => c.id === item.categoria_id) }));
 
@@ -410,7 +423,18 @@ export function FechamentoPastoDialog({
             </div>
           </div>
 
-          {/* Row 3: Resumo */}
+          {/* Row 3: Resumo
+              ⚠ NA LAVOURA O RESUMO DE GADO SOME INTEIRO — AGRI-AREA-PLANTADA-01. "Machos: 0 ·
+              Fêmeas: 0 · Total: 0 cab" num talhão de amendoim não é um zero informativo: é uma
+              pergunta errada respondida com um número que parece dado. A área plantada, que é
+              o que importa ali, o painel de baixo mostra ao lado da área do pasto. */}
+          {ehLavoura ? (
+            <div className="flex items-center gap-3 rounded bg-white/8 px-3 py-2 text-xs">
+              <span className="text-white/50 font-medium">Lavoura</span>
+              <div className="h-3 w-px bg-white/15" />
+              <span className="text-white/70">Área e culturas da safra abaixo</span>
+            </div>
+          ) : (
           <div className="flex items-center gap-3 rounded bg-white/8 px-3 py-2 text-xs">
             <div className="flex items-center gap-1">
               <span className="text-white/50 font-medium">Machos:</span>
@@ -441,20 +465,38 @@ export function FechamentoPastoDialog({
               </>
             )}
           </div>
+          )}
         </div>
 
         {/* ── GRADE PRINCIPAL ── */}
         <div className="overflow-y-auto flex-1 px-5 py-3 space-y-4 bg-background">
           <MasterLockBanner anoMes={fechamento.ano_mes} />
-          {renderGrupo('MACHOS', catsMachos, 'text-blue-600 dark:text-blue-400', 100)}
-          {renderGrupo('FÊMEAS', catsFemeas, 'text-pink-600 dark:text-pink-400', 200)}
+          {ehLavoura ? (
+            /* ⚠ O PAINEL SUBSTITUI A GRADE, não convive com ela: as categorias de gado não são
+               "opcionais" num talhão de amendoim — são a pergunta errada. Deixá-las abaixo
+               ensinaria que existe rebanho a informar. */
+            <AreaPlantadaPanel
+              clienteId={clienteAtual?.id ?? null}
+              pastoId={pasto.id}
+              pastoNome={pasto.nome}
+              areaProdutivaHa={pasto.area_produtiva_ha ?? null}
+              somenteLeitura={inputsDisabled}
+            />
+          ) : (
+            <>
+              {renderGrupo('MACHOS', catsMachos, 'text-blue-600 dark:text-blue-400', 100)}
+              {renderGrupo('FÊMEAS', catsFemeas, 'text-pink-600 dark:text-pink-400', 200)}
+            </>
+          )}
         </div>
 
         {/* ── FOOTER ── */}
         <div className="shrink-0 border-t bg-muted/30 px-4 py-1.5 flex items-center gap-3">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span className="font-medium">Total:</span>
-            <span className="font-extrabold text-foreground tabular-nums text-sm">{total} cab</span>
+            {/* Na lavoura o rodapé não conta cabeças — o painel tem o Salvar dele, e o total
+                que interessa (hectares) fica ao lado da área do pasto, onde se confere. */}
+            <span className="font-medium">{ehLavoura ? 'Lavoura' : 'Total:'}</span>
+            {!ehLavoura && <span className="font-extrabold text-foreground tabular-nums text-sm">{total} cab</span>}
             {pesoMedioPonderado > 0 && (
               <>
                 <span>·</span>
