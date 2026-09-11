@@ -571,6 +571,9 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
    * e o filtro é do chamador — julgar aqui seria uma segunda régua para a mesma pergunta.
    * Devolve `false` quando não achou, e aí quem chamou resolve.
    */
+  /** Token monotônico da carga da lista — ver o aviso dentro de `loadLancamentos`. */
+  const tokenLancamentosRef = useRef(0);
+
   const loadLancamentos = useCallback(async (filtros: FiltrosV2, pageNum: number = 0) => {
     if (!clienteId) return;
     /* Guarda o último recorte pedido: quem recarrega por notificação precisa repetir
@@ -579,16 +582,43 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     ultimosFiltrosRef.current = { filtros, pageNum };
     // ano is optional now ('__todos__' means all years)
 
+    /**
+     * ⚠ GUARDA DE CORRIDA — FIN-LISTA-FILTRO-FONTE-01, e ela já existia neste arquivo,
+     * oitocentas linhas abaixo, protegendo o caminho PAGINADO (`carregarPagina`, atrás de
+     * `LISTA_PAGINADA_V2`, que não está ligada em `.env` nenhum). O caminho que a tela usa
+     * não a tinha.
+     *
+     * ⚠ O QUE ACONTECIA, e explica TRÊS relatos diferentes do operador: duas cargas ficam em
+     * voo na montagem — a do padrão (ano corrente, 4 mil linhas em cinco idas em série) e a
+     * do filtro restaurado do `sessionStorage`, que é menor e volta ANTES. A resposta grande
+     * chega depois e sobrescreve a pequena. O resultado é a tela mais confusa possível: o
+     * Select mostra o filtro CERTO (o estado nunca errou) e a lista mostra o dado de OUTRO
+     * filtro. Foi visto como "Tipo = Transferências trazendo 3.726 saídas", como "ordenar
+     * traz 9.366 de dois anos" e como "Ano 2023 com linhas de 2026" — um defeito, três
+     * sintomas, nenhum deles reproduzível olhando o predicado, que estava sempre correto.
+     *
+     * ⚠ `AbortController` NÃO RESOLVERIA SOZINHO, e é o que o comentário do caminho paginado
+     * já dizia: ele cancela a requisição, mas não a janela entre o `await` que já resolveu e
+     * o `setState` que ainda vai rodar. O token fecha essa janela.
+     *
+     * ⚠ O `finally` TAMBÉM É GUARDADO: sem isso, a resposta velha desligaria o `loading` da
+     * busca nova, e a tela diria "pronto" no meio de uma carga em andamento.
+     */
+    const token = ++tokenLancamentosRef.current;
+    const vivo = () => token === tokenLancamentosRef.current;
+
     setLoading(true);
     try {
       const data = await fetchAllLancamentos(filtros);
+      if (!vivo()) return;
       setLancamentos(data);
       setTotal(data.length);
       setPage(pageNum);
     } catch (err: any) {
+      if (!vivo()) return;
       reportarErro(err, 'carregarLancamentos', toast.error);
     } finally {
-      setLoading(false);
+      if (vivo()) setLoading(false);
     }
   }, [clienteId, PAGE_SIZE]);
 

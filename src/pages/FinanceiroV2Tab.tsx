@@ -381,6 +381,25 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     }
   };
 
+  /**
+   * ⚠ O ANO GLOBAL PASSA A MOVER A LISTA — FIN-LISTA-FILTRO-FONTE-01 (defeito 3).
+   *
+   * `filtroAnoInicial` era lido SÓ no inicializador do `useState`, então trocar o ano na barra
+   * global não movia esta tela — ela ficava no ano em que foi montada. Onze outras telas
+   * (`FechamentoTab`, `MapaPastosTab`, `ConciliacaoTab`, `FinanceiroCaixaTab`, …) já têm
+   * exatamente este efeito; esta era a exceção, e a exceção não estava escrita em lugar nenhum.
+   * ⚠ SÓ A ROTA `/` PASSA A PROP. O `/v2` monta sem ela, e lá o período do cabeçalho
+   * (`f_de`/`f_ate`) não comanda a lista — são modelos que não se tocam, e amarrá-los é
+   * decisão de produto, não conserto.
+   */
+  useEffect(() => {
+    if (filtroAnoInicial) setAnosSelecionados([filtroAnoInicial]);
+  }, [filtroAnoInicial]);
+
+  useEffect(() => {
+    if (filtroMesInicial) setMesesSelecionados([String(filtroMesInicial).padStart(2, '0')]);
+  }, [filtroMesInicial]);
+
   // ── Restauração de filtros ao voltar de FinanciamentoDetalhe ──
   useEffect(() => {
     /* ⚠ DUAS FONTES, UMA PRECEDÊNCIA — FIN-LISTA-FILTROS-01a. O `return_filters` é o
