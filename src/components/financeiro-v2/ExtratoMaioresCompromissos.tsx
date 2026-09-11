@@ -20,6 +20,8 @@ import { AnaliseDrawer } from '@/components/financeiro-v2/AnaliseDrawer';
    centro dentro do bucket "Demais" avaliaria o lado direito do `||` — ReferenceError, drawer
    em branco. O curto-circuito do `||` é o único motivo de ninguém ter batido nele ainda. */
 import { maioresCompromissos, TOP_N, SEM_CENTRO } from '@/lib/analise/analiseAgregacoes';
+import { TabelaLancamentosCompacta } from '@/components/financeiro-v2/TabelaLancamentosCompacta';
+import { ordenarLancamentos, type CampoOrdemLanc, type Direcao } from '@/lib/analise/drillEconomico';
 
 interface ItemCompromisso {
   id: string; data: string; mov: number; tipo: string;
@@ -30,7 +32,6 @@ const COR_DEMAIS = '#94a3b8';
 // Paleta ordinal só para distinguir fatias do donut / pontos da tabela (apoio visual; não é classificação).
 const PALETA = ['#1e3a5f', '#2f6f4f', '#b7791f', '#7c3aad', '#0e7490', '#9d174d', '#3f6212', '#a16207', '#155e75', '#5b21b6'];
 const corLinha = (i: number, ehDemais?: boolean) => (ehDemais ? COR_DEMAIS : PALETA[i % PALETA.length]);
-const diaBR = (iso: string) => (iso.length >= 10 ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '—');
 
 export function ExtratoMaioresCompromissos({ itens, contaNome, periodoLabel, onAbrirLancamento }: {
   itens: ItemCompromisso[];
@@ -40,6 +41,14 @@ export function ExtratoMaioresCompromissos({ itens, contaNome, periodoLabel, onA
   onAbrirLancamento?: (id: string) => void;
 }) {
   const [drawer, setDrawer] = useState<string | null>(null);
+  /* ⚠ A ORDENAÇÃO VIVE AQUI, e não dentro da tabela, porque ela precisa SOBREVIVER ao modal de
+     edição: abrir um lançamento e voltar tem de encontrar a mesma lista na mesma ordem. Uma
+     ordenação interna da tabela sobreviveria também (o modal é irmão do drawer), mas ficaria
+     fora do alcance de quem monta — e o dia em que o drawer fechar ao salvar, some. */
+  const [ordem, setOrdem] = useState<{ campo: CampoOrdemLanc; direcao: Direcao }>({ campo: 'data', direcao: 'asc' });
+  const trocarOrdem = (campo: CampoOrdemLanc) => setOrdem((o) => (
+    o.campo === campo ? { campo, direcao: o.direcao === 'asc' ? 'desc' : 'asc' }
+      : { campo, direcao: campo === 'mov' ? 'desc' : 'asc' }));
 
   const { linhas, totalGeral, top, demais } = useMemo(() => maioresCompromissos(itens), [itens]);
 
@@ -61,6 +70,11 @@ export function ExtratoMaioresCompromissos({ itens, contaNome, periodoLabel, onA
     return aberto.itens.slice().sort((a, b) =>
       a.data < b.data ? -1 : a.data > b.data ? 1 : Math.abs(b.mov) - Math.abs(a.mov));
   }, [aberto]);
+  /* ⚠ A ORDENAÇÃO É A MESMA RÉGUA DO DRILL-DOWN (`ordenarLancamentos`), não uma cópia: as duas
+     listas são a mesma coisa vista por caminhos diferentes, e ordená-las com critérios
+     próprios faria a linha trocar de lugar conforme a porta por onde o operador entrou. */
+  const itensOrdenados = useMemo(
+    () => ordenarLancamentos(itensAberto, ordem.campo, ordem.direcao), [itensAberto, ordem]);
   // Mini-ranking do drawer: favorecidos (centro normal) ou centros da cauda (Demais). Só detalhe.
   const miniRank = useMemo(() => {
     if (!aberto) return [];
@@ -188,31 +202,24 @@ export function ExtratoMaioresCompromissos({ itens, contaNome, periodoLabel, onA
             </div>
           </div>
 
-          {/* Lançamentos — dentro do centro, "Centro" é redundante; mantém Favorecido + Doc.
-              Mesmo acabamento visual da TabelaLancamentosCompacta (zebra/hover/separadores/header institucional). */}
-          <table className="w-full border-collapse text-[10px]">
-            <thead className="sticky top-0 bg-[#1e3a5f]/[0.06]">
-              <tr>
-                {[{ h: 'Data', a: 'text-left' }, { h: 'Favorecido', a: 'text-left' }, { h: 'Descrição', a: 'text-left' }, { h: 'Doc', a: 'text-center' }, { h: 'Valor', a: 'text-right' }].map((c, i) => (
-                  <th key={c.h} className={`px-1.5 py-1 font-semibold uppercase text-[8px] text-[#1e3a5f] ${c.a} ${i < 4 ? 'border-r border-slate-100' : ''}`}>{c.h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {itensAberto.map((it) => (
-                <tr key={it.id}
-                  className={`border-t border-slate-100 odd:bg-[#1e3a5f]/[0.03] hover:bg-[#1e3a5f]/[0.06]${onAbrirLancamento ? ' cursor-pointer' : ''}`}
-                  title={onAbrirLancamento ? 'Abrir o lançamento para corrigir' : undefined}
-                  onClick={onAbrirLancamento ? () => onAbrirLancamento(it.id) : undefined}>
-                  <td className="px-1.5 py-1 whitespace-nowrap tabular-nums border-r border-slate-100">{diaBR(it.data)}</td>
-                  <td className="px-1.5 py-1 max-w-[120px] truncate border-r border-slate-100" title={it.fornecedor || '—'}>{it.fornecedor || '—'}</td>
-                  <td className="px-1.5 py-1 max-w-[130px] truncate border-r border-slate-100" title={it.produto || '—'}>{it.produto || '—'}</td>
-                  <td className="px-1.5 py-1 max-w-[80px] truncate text-center text-muted-foreground border-r border-slate-100" title={it.doc || '—'}>{it.doc || '—'}</td>
-                  <td className="px-1.5 py-1 text-right tabular-nums whitespace-nowrap">{formatMoeda(Math.abs(it.mov))}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {/* ⚠ ERA UMA CÓPIA DA `TabelaLancamentosCompacta`, e o comentário antigo dizia isso
+              com todas as letras ("mesmo acabamento visual"). Duas tabelas iguais são duas
+              respostas esperando a pergunta: a ordem das colunas pedida em B2 (Data ·
+              Descrição · Favorecido · Doc · Valor) já era a da compartilhada — a cópia é que
+              tinha trocado Favorecido com Descrição. Agora é uma tabela só, e a ordenação de
+              B3 chegou junto para as duas telas que a usam.
+              ⚠ "Centro" CONTINUA FORA: aqui o drawer É um centro, e repeti-lo em toda linha
+              gastaria 100px para dizer o que o título já diz. */}
+          <TabelaLancamentosCompacta
+            itens={itensOrdenados.map((it) => ({
+              id: it.id, data: it.data, produto: it.produto, fornecedor: it.fornecedor,
+              centro: it.centroPlano, doc: it.doc, mov: it.mov,
+            }))}
+            mostrarCentro={false}
+            ordem={ordem}
+            onOrdenar={trocarOrdem}
+            onAbrir={onAbrirLancamento}
+          />
         </AnaliseDrawer>
       )}
     </div>

@@ -6,7 +6,9 @@
  * SOMENTE apresentação — nenhuma regra de classificação/cálculo. Densa: corpo text-[10px],
  * cabeçalho text-[8px] uppercase, linhas py-1, valor à direita.
  */
+import { ArrowDown, ArrowUp } from 'lucide-react';
 import { formatMoeda } from '@/lib/calculos/formatters';
+import type { CampoOrdemLanc, Direcao } from '@/lib/analise/drillEconomico';
 
 export interface LancamentoLinha {
   id: string;
@@ -18,14 +20,15 @@ export interface LancamentoLinha {
   mov: number;
 }
 const diaBR = (iso: string) => (iso.length >= 10 ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '—');
-// Alinhamento por coluna (Data/Descrição/Favorecido/Centro à esquerda; Doc centralizado; Valor à direita).
-const COLS: { h: string; align: string }[] = [
-  { h: 'Data', align: 'text-left' },
-  { h: 'Descrição', align: 'text-left' },
-  { h: 'Favorecido', align: 'text-left' },
-  { h: 'Centro', align: 'text-left' },
-  { h: 'Doc', align: 'text-center' },
-  { h: 'Valor', align: 'text-right' },
+/* Alinhamento e campo de ordenação por coluna. O `campo` é o que liga o cabeçalho à régua de
+   `drillEconomico`: sem ele o cabeçalho seria decorativo, com ele o clique tem para onde ir. */
+const COLS: { h: string; align: string; campo: CampoOrdemLanc; centro?: true }[] = [
+  { h: 'Data', align: 'text-left', campo: 'data' },
+  { h: 'Descrição', align: 'text-left', campo: 'produto' },
+  { h: 'Favorecido', align: 'text-left', campo: 'fornecedor' },
+  { h: 'Centro', align: 'text-left', campo: 'produto', centro: true },
+  { h: 'Doc', align: 'text-center', campo: 'doc' },
+  { h: 'Valor', align: 'text-right', campo: 'mov' },
 ];
 const SEP = 'border-r border-slate-100';
 
@@ -37,17 +40,45 @@ const SEP = 'border-r border-slate-100';
  * para corrigir. Sem callback, a linha continua exatamente como era — sem cursor, sem hover
  * de clique, sem `onClick`.
  */
-export function TabelaLancamentosCompacta({ itens, onAbrir }: {
+export function TabelaLancamentosCompacta({
+  itens, onAbrir, mostrarCentro = true, ordem, onOrdenar,
+}: {
   itens: LancamentoLinha[];
   onAbrir?: (id: string) => void;
+  /**
+   * ⚠ A COLUNA "CENTRO" SAI ONDE ELA JÁ É O CONTEXTO. Nos Maiores compromissos o drawer É um
+   * centro, e repeti-lo em toda linha gasta 100px para dizer o que o título já disse; no
+   * nível folha do drill-down, idem. Onde o recorte não fixa o centro, ele volta.
+   */
+  mostrarCentro?: boolean;
+  /** Ordenação CONTROLADA: quem monta é dono, para que abrir um lançamento e voltar não a perca. */
+  ordem?: { campo: CampoOrdemLanc; direcao: Direcao };
+  onOrdenar?: (campo: CampoOrdemLanc) => void;
 }) {
+  const cols = mostrarCentro ? COLS : COLS.filter((c) => !c.centro);
+  const ordenavel = !!onOrdenar && !!ordem;
   return (
     <table className="w-full border-collapse text-[10px]">
       <thead className="sticky top-0 bg-[#1e3a5f]/[0.06]">
         <tr>
-          {COLS.map((c, i) => (
-            <th key={c.h} className={`px-1.5 py-1 font-semibold uppercase text-[8px] text-[#1e3a5f] ${c.align} ${i < COLS.length - 1 ? SEP : ''}`}>{c.h}</th>
-          ))}
+          {cols.map((c, i) => {
+            const ativo = ordenavel && ordem.campo === c.campo;
+            return (
+              <th key={c.h}
+                className={`px-1.5 py-1 font-semibold uppercase text-[8px] text-[#1e3a5f] ${c.align}`
+                  + `${i < cols.length - 1 ? ` ${SEP}` : ''}${ordenavel ? ' cursor-pointer select-none' : ''}`}
+                title={ordenavel ? `Ordenar por ${c.h}` : undefined}
+                onClick={ordenavel ? () => onOrdenar(c.campo) : undefined}>
+                <span className={`inline-flex items-center gap-0.5 ${c.align === 'text-right' ? 'flex-row-reverse' : ''}`}>
+                  {c.h}
+                  {/* A seta só aparece na coluna ativa — seis setas cinzas competem com o dado. */}
+                  {ativo && (ordem.direcao === 'asc'
+                    ? <ArrowUp className="h-2.5 w-2.5" />
+                    : <ArrowDown className="h-2.5 w-2.5" />)}
+                </span>
+              </th>
+            );
+          })}
         </tr>
       </thead>
       <tbody>
@@ -59,7 +90,9 @@ export function TabelaLancamentosCompacta({ itens, onAbrir }: {
             <td className={`px-1.5 py-1 whitespace-nowrap tabular-nums ${SEP}`}>{diaBR(it.data)}</td>
             <td className={`px-1.5 py-1 max-w-[140px] truncate ${SEP}`} title={it.produto || '—'}>{it.produto || '—'}</td>
             <td className={`px-1.5 py-1 max-w-[120px] truncate ${SEP}`} title={it.fornecedor || '—'}>{it.fornecedor || '—'}</td>
-            <td className={`px-1.5 py-1 max-w-[100px] truncate text-muted-foreground ${SEP}`} title={it.centro || '—'}>{it.centro || '—'}</td>
+            {mostrarCentro && (
+              <td className={`px-1.5 py-1 max-w-[100px] truncate text-muted-foreground ${SEP}`} title={it.centro || '—'}>{it.centro || '—'}</td>
+            )}
             <td className={`px-1.5 py-1 max-w-[80px] truncate text-center text-muted-foreground ${SEP}`} title={it.doc || '—'}>{it.doc || '—'}</td>
             <td className="px-1.5 py-1 text-right tabular-nums whitespace-nowrap">{formatMoeda(Math.abs(it.mov))}</td>
           </tr>

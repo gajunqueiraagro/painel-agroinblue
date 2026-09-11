@@ -13,12 +13,14 @@
  * Frontend puro. Fontes existentes (sem hook/RPC/tabela nova). Zero-cast (só idioma supabase).
  */
 import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { ContaBancariaSelect, type ContaSelecionavel } from '@/components/shared/ContaBancariaSelect';
 import { LancamentoLeituraDialog } from '@/components/financeiro-v2/LancamentoLeituraDialog';
+import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
+import { useFinanceiroV2, type LancamentoV2 } from '@/hooks/useFinanceiroV2';
 import { ExtratoAnaliseFluxo } from '@/components/financeiro-v2/ExtratoAnaliseFluxo';
 import { ExtratoOrganizacaoPagamentos } from '@/components/financeiro-v2/ExtratoOrganizacaoPagamentos';
 import { ExtratoDistribuicaoEconomica } from '@/components/financeiro-v2/ExtratoDistribuicaoEconomica';
@@ -94,6 +96,25 @@ export function ExtratoGerencialTab({ periodo }: { periodo: PeriodoControlado })
   const [modo, setModo] = useState<'extrato' | 'analise'>('extrato');
   const [analiseView, setAnaliseView] = useState<AnaliseView>('evolucao');
   const [lancLeituraId, setLancLeituraId] = useState<string | null>(null);
+  /**
+   * ⚠ DUAS PORTAS, DE PROPÓSITO — FIN-PAINEL-SAFRA-02 (B4). A LINHA do extrato continua
+   * abrindo o diálogo de LEITURA: esta tela é conferência de conta, e clicar numa linha para
+   * ler o que ela é não pode virar clicar para editar sem querer. O que passa a EDITAR é o
+   * drill-down dos painéis laterais, onde o operador já foi procurar o errado.
+   * ⚠ E A TELA NÃO RECARREGA AO SALVAR: o `queryClient` troca a linha no cache das cinco
+   * consultas desta aba, e os painéis continuam abertos no mesmo nível.
+   */
+  const [lancEdicao, setLancEdicao] = useState<LancamentoV2 | null>(null);
+  const fin = useFinanceiroV2();
+  const { fazendas } = useFazenda();
+  const queryClient = useQueryClient();
+
+  const abrirParaEditar = async (id: string) => {
+    const { data } = await (supabase as any).from('financeiro_lancamentos_v2')
+      .select('*').eq('id', id).maybeSingle();
+    const linha: LancamentoV2 | null = data ?? null;
+    if (linha) setLancEdicao(linha);
+  };
 
   const ini = `${ano}-${pad(mes)}-01`;
   const fim = mes === 12 ? `${ano + 1}-01-01` : `${ano}-${pad(mes + 1)}-01`;
@@ -258,6 +279,8 @@ export function ExtratoGerencialTab({ periodo }: { periodo: PeriodoControlado })
     macro: x.l.macro_custo ?? null,
     grupo: x.l.grupo_custo ?? null,
     centroPlano: x.l.centro_custo ?? null,
+    /* O quarto degrau do drill-down — a coluna já vinha no `select`, só não era repassada. */
+    subcentro: x.l.subcentro ?? null,
     // Dimensão de negócio = escopo_negocio persistido no lançamento (soberano; nunca conta/texto).
     escopo: x.l.escopo_negocio ?? null,
   })), [linhas, fornMap]);
@@ -411,9 +434,11 @@ export function ExtratoGerencialTab({ periodo }: { periodo: PeriodoControlado })
             <ExtratoOrganizacaoPagamentos itens={dadosOrg} diasNoEixo={new Date(ano, mes, 0).getDate()}
               contaNome={contaNome} periodoLabel={`${MESES[mes - 1]}/${ano}`} />
           ) : analiseView === 'economica' ? (
-            <ExtratoDistribuicaoEconomica itens={dadosOrg} contaNome={contaNome} periodoLabel={`${MESES[mes - 1]}/${ano}`} />
+            <ExtratoDistribuicaoEconomica itens={dadosOrg} contaNome={contaNome} periodoLabel={`${MESES[mes - 1]}/${ano}`}
+              onAbrirLancamento={(id) => { void abrirParaEditar(id); }} />
           ) : (
-            <ExtratoMaioresCompromissos itens={dadosOrg} contaNome={contaNome} periodoLabel={`${MESES[mes - 1]}/${ano}`} />
+            <ExtratoMaioresCompromissos itens={dadosOrg} contaNome={contaNome} periodoLabel={`${MESES[mes - 1]}/${ano}`}
+              onAbrirLancamento={(id) => { void abrirParaEditar(id); }} />
           )}
         </div>
       ) : (
@@ -510,6 +535,26 @@ export function ExtratoGerencialTab({ periodo }: { periodo: PeriodoControlado })
       )}
 
       <LancamentoLeituraDialog open={!!lancLeituraId} lancamentoId={lancLeituraId} onClose={() => setLancLeituraId(null)} />
+
+      <LancamentoV2Dialog
+        open={!!lancEdicao}
+        onClose={() => setLancEdicao(null)}
+        onSave={async (form, id) => {
+          const ok = id ? await fin.editarLancamento(id, form) : await fin.criarLancamento(form);
+          /* Invalida as consultas desta aba: a linha mudou e o saldo corrido depende dela.
+             `invalidateQueries` refaz o `select` do mês — 1 conta × 1 mês, barato —, e os
+             painéis laterais não desmontam, então o drill-down fica onde estava. */
+          if (ok) await queryClient.invalidateQueries({ queryKey: ['extrato-ger-lancs'] });
+          return ok;
+        }}
+        lancamento={lancEdicao}
+        fazendas={fazendas}
+        contas={fin.contasBancarias}
+        classificacoes={fin.classificacoes}
+        fornecedores={fin.fornecedores}
+        safras={fin.safras}
+        onCriarFornecedor={fin.criarFornecedor}
+      />
     </div>
   );
 }

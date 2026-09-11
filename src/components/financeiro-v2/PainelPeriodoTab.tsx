@@ -17,7 +17,7 @@
  * número do fechamento. Somar os dois diria seis vezes mais e pareceria certo.
  */
 import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
@@ -87,9 +87,35 @@ export function PainelPeriodoTab() {
    * operador abrir uma.
    */
   const fin = useFinanceiroV2();
+  const queryClient = useQueryClient();
   const { fazendas } = useFazendaCtx();
   const [editando, setEditando] = useState<LancamentoV2 | null>(null);
   const [abrindo, setAbrindo] = useState(false);
+
+  /**
+   * A LINHA VOLTA DO BANCO, SÓ ELA — FIN-PAINEL-SAFRA-02 (B4).
+   *
+   * ⚠ NÃO DÁ PARA PINTAR O FORM DE VOLTA: os triggers reescrevem a classificação a partir da
+   * chave do plano, e o que o operador digitou não é o que ficou gravado. É a mesma razão
+   * pela qual o `editarLancamento` relê a linha depois do update.
+   * ⚠ E NÃO SE RECARREGA O RECORTE: são até quatro mil linhas em levas de mil, e o drawer
+   * fecharia embaixo do operador. Trocar uma linha no cache do React Query mantém o painel
+   * lateral aberto, no mesmo degrau do drill-down e na mesma ordenação — que é o pedido.
+   * ⚠ A LINHA PODE SAIR DO RECORTE, e isso é verdade e não defeito: trocar o subcentro para
+   * outra atividade tira o lançamento do filtro "Lavoura". Ele some do nó em que estava
+   * porque mudou de lugar de verdade; o que NÃO acontece é a tela mentir mostrando o valor
+   * antigo. Sair do recorte por inteiro só aparece na próxima carga.
+   */
+  const recarregarLinha = async (id: string) => {
+    const { data } = await (supabase as any).from('financeiro_lancamentos_v2')
+      .select(COLUNAS).eq('id', id).maybeSingle();
+    const nova: LancRecorte | null = data ?? null;
+    if (!nova) return;
+    queryClient.setQueryData<LancRecorte[]>(
+      ['painel-periodo-lancs', clienteId, recorte],
+      (atual) => (atual ? atual.map((l) => (l.id === id ? nova : l)) : atual),
+    );
+  };
 
   const abrirLancamento = async (id: string) => {
     setAbrindo(true);
@@ -199,6 +225,7 @@ export function PainelPeriodoTab() {
     grupo: l.grupo_custo ?? null,
     centro: l.centro_custo ?? null,
     centroPlano: l.centro_custo ?? null,
+    subcentro: l.subcentro ?? null,
     escopo: l.escopo_negocio ?? null,
   })), [lancs, fornMap]);
 
@@ -402,7 +429,11 @@ export function PainelPeriodoTab() {
       <LancamentoV2Dialog
         open={!!editando}
         onClose={() => setEditando(null)}
-        onSave={async (form, id) => (id ? fin.editarLancamento(id, form) : fin.criarLancamento(form))}
+        onSave={async (form, id) => {
+          const ok = id ? await fin.editarLancamento(id, form) : await fin.criarLancamento(form);
+          if (ok && id) await recarregarLinha(id);
+          return ok;
+        }}
         lancamento={editando}
         fazendas={fazendas}
         contas={fin.contasBancarias}

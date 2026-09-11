@@ -27,6 +27,9 @@ interface ItemAnalise {
   id: string; data: string; mov: number; tipo: string;
   centro: string | null; produto: string | null; fornecedor: string; doc: string;
   macro: string | null; grupo: string | null; centroPlano: string | null; escopo: string | null;
+  /* O quarto degrau do drill-down. O PDF não navega — captura o estado inicial de cada bloco —,
+     mas o tipo é o mesmo da tela, e quem monta `DadosCaptura` já tem a coluna em mãos. */
+  subcentro: string | null;
 }
 // Props espelham a tela (mesmos dados/helpers).
 export interface DadosCaptura {

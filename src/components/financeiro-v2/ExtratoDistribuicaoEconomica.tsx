@@ -19,13 +19,16 @@ import { useEffect, useMemo, useState } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { AnaliseDrawer } from '@/components/financeiro-v2/AnaliseDrawer';
-import { TabelaLancamentosCompacta } from '@/components/financeiro-v2/TabelaLancamentosCompacta';
+import { DrillDownEconomico } from '@/components/financeiro-v2/DrillDownEconomico';
+import { NIVEIS_DRILL, type NivelDrill } from '@/lib/analise/drillEconomico';
 import { distribuicaoEconomica, semLabelEcon, type DimensaoEcon, type LadoDoCaixa } from '@/lib/analise/analiseAgregacoes';
 
 interface ItemEcon {
   id: string; data: string; mov: number; tipo: string;
   produto: string | null; fornecedor: string; doc: string;
   macro: string | null; grupo: string | null; centroPlano: string | null;
+  /** O quarto degrau do drill-down — FIN-PAINEL-SAFRA-02 (B1). */
+  subcentro: string | null;
   escopo: string | null;
 }
 type Dimensao = DimensaoEcon;
@@ -206,9 +209,18 @@ export function ExtratoDistribuicaoEconomica({ itens, contaNome, periodoLabel, o
           totalLabel={`TOTAL${aberto.chave === SEM ? ' (sem classificação)' : ''}`}
           onClose={() => setDrawer(null)}
         >
-          <TabelaLancamentosCompacta onAbrir={onAbrirLancamento} itens={itensAberto.map((it) => ({
-            id: it.id, data: it.data, produto: it.produto, fornecedor: it.fornecedor, centro: it.centroPlano, doc: it.doc, mov: it.mov,
-          }))} />
+          {/* ⚠ O DRILL SUBSTITUI A LISTA DIRETA — FIN-PAINEL-SAFRA-02 (B1). Clicar em "Custeio
+              Produção" abria 429 lançamentos de uma vez: não é conferência, é despejo. Agora
+              abre os GRUPOS, e a pergunta seguinte é escolhível.
+              ⚠ OS DEGRAUS DEPENDEM DA DIMENSÃO, e é o que mantém o breadcrumb honesto: em
+              "Por natureza" a fatia JÁ É o macro, então restam grupo → centro → subcentro; em
+              "Por negócio" a fatia é a atividade, e o macro ainda está por descer. */}
+          <DrillDownEconomico
+            itens={itensAberto}
+            raiz={aberto.chave}
+            niveis={dimensao === 'macro' ? NIVEIS_DRILL.slice(1) : NIVEIS_DRILL}
+            onAbrirLancamento={onAbrirLancamento}
+          />
         </AnaliseDrawer>
       )}
     </div>
