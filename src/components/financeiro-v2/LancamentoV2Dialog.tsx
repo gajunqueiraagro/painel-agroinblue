@@ -580,6 +580,45 @@ export function LancamentoV2Dialog({
   const safraNome = (id: string) => (safras ?? []).find((s) => s.id === id)?.nome ?? id;
 
   /**
+   * O escopo que o PLANO diz sobre o subcentro escolhido — PR-FIN-SAFRA-ADM-01.
+   *
+   * ⚠ O PLANO, NÃO O ESTADO `escopoNegocio`. O estado é cópia do que veio na abertura, e
+   * cópia pode estar velha se o plano mudou desde então — é a mesma razão pela qual a
+   * validação do save já resolvia o escopo assim. Aqui a resolução vira uma só, e a tela
+   * passa a decidir pela mesma fonte que o save.
+   * ⚠ O FALLBACK PARA O ESTADO É PARA O SUBCENTRO LEGADO, que não tem linha no plano: ali o
+   * que está gravado é tudo que se sabe.
+   */
+  const escopoDoPlano = useMemo(() => {
+    const alvo = (subcentro || '').trim().toLowerCase();
+    const cls = classificacoes.find((c) => (c.subcentro || '').trim().toLowerCase() === alvo);
+    return (cls?.escopo_negocio ?? escopoNegocio ?? '').trim();
+  }, [subcentro, classificacoes, escopoNegocio]);
+
+  /**
+   * ADMINISTRATIVO NÃO TEM SAFRA — PR-FIN-SAFRA-ADM-01 (decisão do Gabriel, 11/09/2026).
+   *
+   * ⚠ AS DUAS PORTAS CONTAM, e por isso o `||`: o card sozinho basta (marcar Administrativo
+   * antes de escolher a conta já desabilita o campo), e o plano sozinho também (escolher uma
+   * conta administrativa com a lista completa move o card e desabilita junto — a precedência
+   * do plano sobre o card, que já valia para o escopo).
+   * ⚠ MEDIDO NO PROTO: 2.143 dos 21.368 lançamentos administrativos ainda têm safra. São
+   * eles que abrem com o campo riscado, e a limpeza em massa é frente do banco.
+   */
+  const ehAdministrativo = escopoDoPlano === 'administrativo' || atividade === 'administrativo';
+
+  /**
+   * A safra que VAI NO PAYLOAD — e é o mesmo par do `classificacaoParaGravar`.
+   *
+   * ⚠ OS DOIS SAVES PASSAM POR AQUI (o à vista/edição e o laço das parcelas), e a VALIDAÇÃO
+   * confere ESTE valor, não o estado. A diferença importa no caso 3 do briefing: um
+   * lançamento administrativo gravado COM safra abre mostrando a safra riscada — o estado
+   * continua preenchido de propósito, para o operador ver o que vai sair —, e validar o
+   * estado recusaria justamente a gravação que corrige o dado.
+   */
+  const safraParaGravar = (): string | null => (ehAdministrativo ? null : (safraId || null));
+
+  /**
    * ⚠ SUGERE AO MUDAR ATIVIDADE OU COMPETÊNCIA, e só quando o campo está livre: vazio, ou
    * ainda com a sugestão anterior. Um campo escolhido à mão é decisão tomada.
    * ⚠ ADMINISTRATIVO NUNCA SUGERE (OC_013): safra em administrativo é regra do backfill,
@@ -990,7 +1029,7 @@ export function LancamentoV2Dialog({
        caminhos de save, o normal e o das parcelas, e é o último antes de gravar.
        ⚠ O ESCOPO VEM DO PLANO, não do estado `escopoNegocio`: o estado é cópia, e cópia
        pode estar velha se o plano mudou desde que o lançamento foi aberto. */
-    const safraEscolhida = (safras ?? []).find(sf => sf.id === safraId);
+    const safraEscolhida = (safras ?? []).find(sf => sf.id === safraParaGravar());
     const conflito = conflitoSafraEscopo(
       classifEncontrada?.escopo_negocio ?? escopoNegocio, safraEscolhida?.escopo_negocio);
     if (conflito) {
@@ -1105,7 +1144,7 @@ export function LancamentoV2Dialog({
           favorecido_id: favorecidoForForm,
           forma_pagamento: formaPgto || null,
           dados_pagamento: dadosPagamento || null,
-          safra_id: safraId || null,
+          safra_id: safraParaGravar(),
         };
 
         const ok = await onSave(form);
@@ -1145,7 +1184,7 @@ export function LancamentoV2Dialog({
       favorecido_id: favorecidoForForm,
       forma_pagamento: formaPgto || null,
       dados_pagamento: dadosPagamento || null,
-      safra_id: safraId || null,
+      safra_id: safraParaGravar(),
     };
 
       console.log('[FinV2] SUBMIT STATE', {
@@ -1657,6 +1696,15 @@ export function LancamentoV2Dialog({
                          olha; o plano é o dado. */
                       setAtividade(atividadeValida(cls.escopo_negocio));
                       setSubcentroLimpoPelaAtividade(false);
+                      /* ⚠ CONTA ADMINISTRATIVA LIMPA A SAFRA NA HORA — PR-FIN-SAFRA-ADM-01.
+                         É o mesmo gesto de quando o card muda: escolher no meio da sessão é
+                         decisão de agora, e o campo esvazia. O RISCADO fica reservado para o
+                         que já estava gravado — ali o operador precisa ver o que vai sair. */
+                      if ((cls.escopo_negocio || '').trim() === 'administrativo') {
+                        setSafraId('');
+                        setSafraSugeridaId(null);
+                        setSafraEditadaAMao(false);
+                      }
                     } else {
                       /* ⚠ SEM ITEM, SEM CHAVE — nunca a anterior. Hoje não acontece (o
                          seletor só oferece o que está no seu próprio mapa), mas um `id`
@@ -1717,6 +1765,7 @@ export function LancamentoV2Dialog({
                 <Label className="text-[10px]">Safra</Label>
                 <Select
                   value={safraId || '__none_safra__'}
+                  disabled={ehAdministrativo}
                   onValueChange={v => { setSafraId(v === '__none_safra__' ? '' : v); setSafraEditadaAMao(true); setSafraSugeridaId(null); }}
                 >
                   {/* ⚠ 12px E `truncate` COM `title` — o nome inteiro cabe nesta largura
@@ -1725,7 +1774,10 @@ export function LancamentoV2Dialog({
                   <SelectTrigger
                     title={safraId ? safraNome(safraId) : undefined}
                     className={cn('h-8 text-xs [&>span]:truncate', fieldBg,
-                      safraSugeridaId && safraId === safraSugeridaId && 'border-dashed border-primary')}>
+                      safraSugeridaId && safraId === safraSugeridaId && 'border-dashed border-primary',
+                      /* ⚠ RISCADO SÓ QUANDO HÁ O QUE RISCAR. O traço diz "este valor não vai
+                         sobreviver ao save"; num campo vazio ele não diria nada. */
+                      ehAdministrativo && safraId && 'line-through opacity-60')}>
                     <SelectValue placeholder="Sem safra" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1745,8 +1797,21 @@ export function LancamentoV2Dialog({
                 {/* ⚠ SUGERIDA DIZ QUE É SUGERIDA. Um campo que se preenche sozinho e não
                     avisa é um campo que ninguém confere — e safra errada só aparece no
                     fechamento, meses depois. */}
-                {safraSugeridaId && safraId === safraSugeridaId && (
+                {safraSugeridaId && safraId === safraSugeridaId && !ehAdministrativo && (
                   <div className="mt-0.5 text-[10px] leading-snug text-primary">sugerida</div>
+                )}
+                {/* ⚠ CAMPO DESABILITADO DIZ POR QUÊ — mesmo idioma do subcentro travado da
+                    transferência, dez linhas acima. Um campo que apaga sozinho e fica cinza
+                    sem explicação parece defeito, e o operador vai procurá-lo em outro lugar.
+                    ⚠ DUAS FRASES PORQUE SÃO DOIS FATOS: com safra, o que importa é avisar que
+                    ela SAI ao salvar; sem safra, o que importa é dizer que o campo não se
+                    aplica. Uma frase só teria de mentir num dos dois casos. */}
+                {ehAdministrativo && (
+                  <div className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
+                    {safraId
+                      ? 'safra será removida ao salvar — administrativo não tem safra'
+                      : 'administrativo não tem safra'}
+                  </div>
                 )}
               </div>
             </div>

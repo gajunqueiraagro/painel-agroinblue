@@ -18,13 +18,6 @@ describe('o que nunca é conflito', () => {
     expect(conflitoSafraEscopo('agricultura', '')).toBeNull();
   });
 
-  it('administrativo aceita qualquer safra', () => {
-    /* ⚠ Rateio, energia e escritório servem a todas as atividades. Recusar aqui obrigaria a
-       criar uma conta administrativa por atividade — o oposto do que o plano faz. */
-    expect(conflitoSafraEscopo('administrativo', 'pecuaria')).toBeNull();
-    expect(conflitoSafraEscopo('administrativo', 'agricultura')).toBeNull();
-  });
-
   it('plano sem escopo serve a qualquer safra', () => {
     expect(conflitoSafraEscopo(null, 'pecuaria')).toBeNull();
     expect(conflitoSafraEscopo('', 'pecuaria')).toBeNull();
@@ -32,6 +25,37 @@ describe('o que nunca é conflito', () => {
 
   it('espaços em volta não inventam divergência', () => {
     expect(conflitoSafraEscopo(' agricultura ', 'agricultura')).toBeNull();
+  });
+});
+
+describe('administrativo não recebe safra', () => {
+  /* ⚠ A REGRA VIROU — PR-FIN-SAFRA-ADM-01. Este bloco substitui um teste que afirmava o
+     CONTRÁRIO ("administrativo aceita qualquer safra"), e o par fica registrado de
+     propósito: quem reabrir o arquivo tem de ver que a mudança foi de decisão, não de
+     descuido. Justamente por servir a todas as atividades, a despesa administrativa não
+     pertence a nenhuma; o rateio é conta do resultado por atividade. */
+  it('recusa administrativo com safra de pecuária', () => {
+    expect(conflitoSafraEscopo('administrativo', 'pecuaria'))
+      .toEqual({ escopoPlano: 'administrativo', escopoSafra: 'pecuaria' });
+  });
+
+  it('recusa administrativo com safra de lavoura', () => {
+    expect(conflitoSafraEscopo('administrativo', 'agricultura'))
+      .toEqual({ escopoPlano: 'administrativo', escopoSafra: 'agricultura' });
+  });
+
+  it('administrativo SEM safra passa — é o estado que a tela força', () => {
+    expect(conflitoSafraEscopo('administrativo', null)).toBeNull();
+    expect(conflitoSafraEscopo('administrativo', '')).toBeNull();
+  });
+
+  it('a frase manda esvaziar, não "trocar um dos dois"', () => {
+    /* ⚠ Não existe safra de escopo administrativo no cadastro (medido: 19 de pecuária, 4 de
+       lavoura, zero administrativas). Mandar "trocar" poria o operador a procurar uma
+       opção que a lista não tem. */
+    const msg = mensagemConflitoSafraEscopo({ escopoPlano: 'administrativo', escopoSafra: 'pecuaria' });
+    expect(msg).toBe('Lançamento administrativo não recebe safra — deixe a safra vazia.');
+    expect(msg).not.toContain('Troque');
   });
 });
 
