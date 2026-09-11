@@ -63,3 +63,30 @@ describe('a ida e a volta do storage', () => {
     expect(lerFiltros()).toBeNull();
   });
 });
+
+/**
+ * A SAFRA NA PERSISTÊNCIA — FIN-LISTA-FILTROS-01b.
+ *
+ * ⚠ "Sem safra" É UM FILTRO ATIVO, e é o caso que quase se perde: ele não é o padrão nem é
+ * vazio — é uma escolha, e das mais úteis (acha financiamento e administrativo carimbados
+ * com safra, que é o que os dois PRs de financiamento de hoje corrigiram no dado). Se a
+ * persistência o tratasse como ausência, sair da tela e voltar desfaria a busca.
+ */
+describe('o filtro de safra persiste como qualquer outro', () => {
+  const PADRAO = { safraFiltro: '__all__' };
+
+  it('"Todas" é o padrão e não é guardado', () => {
+    expect(apenasAtivos({ safraFiltro: '__all__' }, PADRAO)).toEqual({});
+  });
+
+  it('uma safra escolhida é guardada', () => {
+    expect(apenasAtivos({ safraFiltro: 'abc-123' }, PADRAO)).toEqual({ safraFiltro: 'abc-123' });
+  });
+
+  it('"Sem safra" é escolha, não ausência — e sobrevive à ida e volta', () => {
+    const ativos = apenasAtivos({ safraFiltro: '__sem_safra__' }, PADRAO);
+    expect(ativos).toEqual({ safraFiltro: '__sem_safra__' });
+    guardarFiltros(ativos);
+    expect(lerFiltros()).toEqual({ safraFiltro: '__sem_safra__' });
+  });
+});

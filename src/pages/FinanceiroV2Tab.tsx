@@ -320,6 +320,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     documentoFiltro: '',
     fornecedorFiltro: '__all__',
     atividadeFiltro: '__all__',
+    safraFiltro: '__all__',
   });
 
   const defaults = getDefaults();
@@ -339,6 +340,19 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const [documentoFiltro, setDocumentoFiltro] = useState(defaults.documentoFiltro);
   const [fornecedorFiltro, setFornecedorFiltro] = useState(defaults.fornecedorFiltro);
   const [atividadeFiltro, setAtividadeFiltro] = useState(defaults.atividadeFiltro);
+  /**
+   * O filtro de Safra — FIN-LISTA-FILTROS-01b.
+   *
+   * ⚠ TRÊS ESTADOS, NÃO DOIS: `__all__` (todas), `SEM_SAFRA` (só as linhas sem safra) e um
+   * id. "Sem safra" precisa de sentinela própria porque `safra_id === null` não cabe num
+   * `value` de `Select`, e reaproveitar `__all__` faria "todas" e "nenhuma" serem a mesma
+   * escolha — que é exatamente o que se quer distinguir ao caçar financiamento e
+   * administrativo, os dois grupos que NÃO devem ter safra.
+   * ⚠ E ESCOLHER UMA SAFRA NÃO MEXE NA ATIVIDADE. No modal, a safra e o card falam da mesma
+   * decisão e um segue o outro; aqui são dois filtros soltos, e amarrar um ao outro tiraria
+   * do operador a pergunta que ele veio fazer — "o que de pecuária está na safra da lavoura?".
+   */
+  const [safraFiltro, setSafraFiltro] = useState(defaults.safraFiltro);
   // PR-FIN-GRADE-DATAS-03 — dimensão temporal soberana da grade. Estado dura só enquanto a tela está
   //   montada (sem localStorage/sessionStorage/URL/preferência persistida). Padrão 'financeira'.
   const [dataPor, setDataPor] = useState<DimensaoDataFinanceiro>('financeira');
@@ -380,6 +394,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
       if (f.documentoFiltro !== undefined) setDocumentoFiltro(f.documentoFiltro);
       if (f.fornecedorFiltro !== undefined) setFornecedorFiltro(f.fornecedorFiltro);
       if (f.atividadeFiltro !== undefined) setAtividadeFiltro(f.atividadeFiltro);
+      if (f.safraFiltro !== undefined) setSafraFiltro(f.safraFiltro);
     } catch (e) {
       console.error('[FinanceiroV2Tab] erro ao restaurar filtros:', e);
     } finally {
@@ -404,6 +419,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         fazendaId, ano, mesesSelecionados, statusSelecionados, tipoOperacao,
         contaOrigem, contaDestino, macroFiltro, grupoFiltro, centroFiltro,
         subcentroFiltro, produtoFiltro, documentoFiltro, fornecedorFiltro, atividadeFiltro,
+        safraFiltro,
       },
       {
         fazendaId: p.fazendaId, ano: p.ano, mesesSelecionados: p.mesesSelecionados,
@@ -412,12 +428,13 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         grupoFiltro: p.grupoFiltro, centroFiltro: p.centroFiltro, subcentroFiltro: p.subcentroFiltro,
         produtoFiltro: p.produtoFiltro, documentoFiltro: p.documentoFiltro,
         fornecedorFiltro: p.fornecedorFiltro, atividadeFiltro: p.atividadeFiltro,
+        safraFiltro: p.safraFiltro,
       },
     ));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fazendaId, ano, mesesSelecionados, statusSelecionados, tipoOperacao, contaOrigem,
       contaDestino, macroFiltro, grupoFiltro, centroFiltro, subcentroFiltro, produtoFiltro,
-      documentoFiltro, fornecedorFiltro, atividadeFiltro]);
+      documentoFiltro, fornecedorFiltro, atividadeFiltro, safraFiltro]);
 
   const abrirFinanciamentoDaParcela = async (l: any) => {
     const salvarEstado = () => sessionStorage.setItem('financeiro_v2_state', JSON.stringify({
@@ -493,7 +510,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
 
   // Sorting state
    // PR-FIN-GRADE-DATAS-03 — 'data' = competência; 'venc' e 'pgto' são colunas independentes (nunca fundidas).
-   type SortField = 'default' | 'data' | 'venc' | 'pgto' | 'valor' | 'produto' | 'fornecedor' | 'centro' | 'status' | 'doc';
+   type SortField = 'default' | 'data' | 'venc' | 'pgto' | 'valor' | 'produto' | 'fornecedor' | 'centro' | 'status' | 'doc' | 'safra';
   type SortDir = 'asc' | 'desc';
    const [sortField, setSortField] = useState<SortField>('default');
    const [sortDir, setSortDir] = useState<SortDir>('asc');
@@ -782,13 +799,30 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
       sessionStorage.setItem('financeirov2_return_filters', JSON.stringify({
         fazendaId, ano, mesesSelecionados, statusSelecionados, tipoOperacao,
         contaOrigem, contaDestino, macroFiltro, grupoFiltro, centroFiltro,
-        subcentroFiltro, produtoFiltro, documentoFiltro, fornecedorFiltro, atividadeFiltro,
+        subcentroFiltro, produtoFiltro, documentoFiltro, fornecedorFiltro, atividadeFiltro, safraFiltro,
       }));
     } catch (e) {
       console.error('[FinanceiroV2Tab] erro ao salvar filtros de retorno:', e);
     }
     onAbrirOperacaoOCFinanceiro?.(operacaoId);
   };
+
+  /** A sentinela do "sem safra" — ver o aviso no estado `safraFiltro`. */
+  const SEM_SAFRA = '__sem_safra__';
+
+  /* O código da safra por id, como a fazenda e o fornecedor: mapa dos catálogos já
+     carregados, resolvido no RENDER. A linha carrega o id; o texto é da tela. */
+  /* Nome curto da conta, para as duas colunas do modo Ampliado. Mesma via da fazenda: mapa
+     do catálogo já carregado, resolvido no render. */
+  const contaNomeMap = useMemo(
+    () => new Map((hook.contasBancarias ?? []).map(c => [c.id, c.nome_exibicao || c.nome_conta])),
+    [hook.contasBancarias],
+  );
+
+  const safraCodigoMap = useMemo(
+    () => new Map((hook.safras ?? []).map(s => [s.id, s.codigo || s.nome])),
+    [hook.safras],
+  );
 
   const fornecedoresMap = useMemo(
     () => new Map(hook.fornecedores.map(f => [f.id, f.nome])),
@@ -849,6 +883,14 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     if (atividadeFiltro !== '__all__') {
       items = items.filter(l => getAtividade(l) === atividadeFiltro);
     }
+    /* ⚠ "Sem safra" NÃO É "todas": é a pergunta oposta, e é a que acha o que está torto.
+       Financiamento de investimento e administrativo não têm safra por regra (FIN-SAFRA-ADM-01,
+       FIN-FINANCIAMENTO-SAFRA-01); quem aparecer AQUI com safra é candidato a correção. */
+    if (safraFiltro === SEM_SAFRA) {
+      items = items.filter(l => !l.safra_id);
+    } else if (safraFiltro !== '__all__') {
+      items = items.filter(l => l.safra_id === safraFiltro);
+    }
     // grupo_custo now is a DB column — filter directly
     if (grupoFiltro !== '__all__') {
       items = items.filter(l => (l as any).grupo_custo === grupoFiltro);
@@ -877,7 +919,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     }
 
     return items;
-  }, [hook.lancamentos, contaOrigem, contaDestino, produtoFiltro, documentoFiltro, fornecedorFiltro, atividadeFiltro, grupoFiltro, centroToGrupo, statusSelecionados, conciliados]);
+  }, [hook.lancamentos, contaOrigem, contaDestino, produtoFiltro, documentoFiltro, fornecedorFiltro, atividadeFiltro, safraFiltro, grupoFiltro, centroToGrupo, statusSelecionados, conciliados]);
 
   const compareDefaultOrder = useCallback((a: LancamentoV2, b: LancamentoV2) => {
     // PR-FIN-GRADE-DATAS-03 — a ordenação padrão acompanha a dimensão selecionada (Data por). Chave
@@ -930,6 +972,20 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
           primary = dir * nA.localeCompare(nB, 'pt-BR');
           break;
         }
+        case 'safra': {
+          /* ⚠ ORDENA PELO CÓDIGO EXIBIDO, não pelo id: "25/26-AMD" ordena como texto e
+             agrupa por temporada, que é como o operador lê a coluna. Ordenar por uuid
+             agruparia por nada.
+             ⚠ E O "SEM SAFRA" VAI PARA O FIM nos dois sentidos, como o "(Sem X)" do
+             drill-down: ele é o resto, não o primeiro nem o último alfabético. */
+          const cA = a.safra_id ? (safraCodigoMap.get(a.safra_id) || '') : '';
+          const cB = b.safra_id ? (safraCodigoMap.get(b.safra_id) || '') : '';
+          if (!cA && !cB) primary = 0;
+          else if (!cA) primary = 1;
+          else if (!cB) primary = -1;
+          else primary = dir * cA.localeCompare(cB, 'pt-BR');
+          break;
+        }
         case 'centro':
           primary = dir * (a.centro_custo || '').localeCompare(b.centro_custo || '', 'pt-BR');
           break;
@@ -948,7 +1004,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
       return compareDefaultOrder(a, b);
     });
     return items;
-  }, [filteredLancamentos, sortField, sortDir, compareDefaultOrder, fornecedoresMap]);
+  }, [filteredLancamentos, sortField, sortDir, compareDefaultOrder, fornecedoresMap, safraCodigoMap]);
 
   const totalLancamentosFiltrados = sortedLancamentos.length;
 
@@ -1261,6 +1317,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     setDocumentoFiltro('');
     setFornecedorFiltro('__all__');
     setAtividadeFiltro('__all__');
+    setSafraFiltro('__all__');
     setMacroLocked(false);
     setDataPor('financeira');   // PR-FIN-GRADE-DATAS-03 — volta à dimensão padrão ao limpar filtros
     setSortField('default');
@@ -1310,6 +1367,15 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     onIntensiveToggle?.(next);
   }, [modoIntensivo, onIntensiveToggle]);
 
+/* ⚠ ESTE BOTÃO EXISTE EM DOIS LUGARES, E A FLAG DECIDE QUAL APARECE — e é a TERCEIRA vez
+   que o mount duplo morde (a primeira foi o menu de exportação, a segunda a coluna de
+   atividade). `actionButtons = LISTA_V2 ? <FinanceiroV2ControlesLista/> : <div>…inline…</div>`,
+   e `LISTA_V2` é `FEATURE_FLAGS.LISTA_PAGINADA_V2`, que vem de `VITE_LISTA_PAGINADA_V2` —
+   uma variável que NÃO ESTÁ EM NENHUM `.env` do repo (medido em 11/09/2026). Logo:
+     • o ramo que RENDERIZA hoje é o INLINE, aqui embaixo;
+     • o ramo com TESTE é o `FinanceiroV2ControlesLista`, que ninguém vê.
+   Quem mexer em um tem de mexer no outro, ou a tela e o teste passam a discordar em
+   silêncio — foi exatamente assim que o menu de exportação ficou meio ligado. */
   const actionButtons = LISTA_V2 ? (
     <FinanceiroV2ControlesLista
       pendente={pendenteAplicar}
@@ -1372,10 +1438,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
           variant={modoIntensivo ? "default" : "outline"}
           onClick={() => toggleIntensivo()}
           className={cn("h-6 text-[10px] gap-0.5 px-1.5", modoIntensivo && "bg-primary text-primary-foreground")}
-          title={modoIntensivo ? "Sair do Modo Intensivo" : "Modo Intensivo"}
+          title={modoIntensivo ? "Retornar à lista normal" : "Ampliar a lista (mais colunas)"}
         >
           {modoIntensivo ? <Minimize2 className="h-3 w-3" /> : <Maximize2 className="h-3 w-3" />}
-          {modoIntensivo ? 'Sair' : 'Intensivo'}
+          {/* "Ampliar"/"Retornar" — FIN-LISTA-FILTROS-01b. "Intensivo" não dizia o que o
+              botão faz; "Ampliar" diz, e o par com "Retornar" fecha o gesto. */}
+          {modoIntensivo ? 'Retornar' : 'Ampliar'}
         </Button>
       </div>
     </div>
@@ -1625,6 +1693,28 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                         </SelectContent>
                       </Select>
                     </div>
+                    <div>
+                      <label className={lblCls}>Safra</label>
+                      <Select value={safraFiltro} onValueChange={setSafraFiltro}>
+                        <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2]`}><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__all__" className={itemCls}>Todas</SelectItem>
+                          {/* ⚠ "Sem safra" NÃO é "Todas": é a pergunta oposta, e é a que acha o
+                              torto — financiamento e administrativo não têm safra por regra. */}
+                          <SelectItem value={SEM_SAFRA} className={itemCls}>Sem safra</SelectItem>
+                          {(hook.safras ?? []).map(sf => (
+                            <SelectItem key={sf.id} value={sf.id} className={itemCls}>
+                              {sf.codigo || sf.nome}
+                              {sf.escopo_negocio && (
+                                <span className="text-muted-foreground">
+                                  {' · '}{ATIVIDADES.find(a => a.valor === sf.escopo_negocio)?.rotulo ?? sf.escopo_negocio}
+                                </span>
+                              )}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                     {/* 2C-4 — Aplicar filtros junto de Atividade, dentro do painel. */}
                     {LISTA_V2 && (
                       <div className="flex items-end">
@@ -1773,6 +1863,28 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       {/* Mesma fonte do painel mobile, dez linhas acima — e do card do modal. */}
                       {ATIVIDADES.map((a) => (
                         <SelectItem key={a.valor} value={a.valor} className={itemCls}>{a.rotulo}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className={lblCls}>Safra</label>
+                  <Select value={safraFiltro} onValueChange={setSafraFiltro}>
+                    <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2]`}><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all__" className={itemCls}>Todas</SelectItem>
+                      {/* ⚠ "Sem safra" NÃO é "Todas": é a pergunta oposta, e é a que acha o
+                          torto — financiamento e administrativo não têm safra por regra. */}
+                      <SelectItem value={SEM_SAFRA} className={itemCls}>Sem safra</SelectItem>
+                      {(hook.safras ?? []).map(sf => (
+                        <SelectItem key={sf.id} value={sf.id} className={itemCls}>
+                          {sf.codigo || sf.nome}
+                          {sf.escopo_negocio && (
+                            <span className="text-muted-foreground">
+                              {' · '}{ATIVIDADES.find(a => a.valor === sf.escopo_negocio)?.rotulo ?? sf.escopo_negocio}
+                            </span>
+                          )}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -1979,6 +2091,14 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 <col style={{ width: 80 }} />
                 <col style={{ width: 80 }} />
                 <col style={{ width: 50 }} />
+                {/* Safra — FIN-LISTA-FILTROS-01b. 75px comporta "25/26-MAND", o código mais
+                    longo do cadastro. A tabela vai a 1.039px e continua dentro dos ~1.160
+                    úteis de uma janela de 1440 com a barra lateral aberta. */}
+                <col style={{ width: 75 }} />
+                {/* As duas contas só no Ampliado: 150px cada, que é o mínimo em que
+                    "Cartão Banco do Brasil - Pecuária" trunca sem virar reticências puras. */}
+                {modoIntensivo && <col style={{ width: 150 }} />}
+                {modoIntensivo && <col style={{ width: 150 }} />}
                 <col style={{ width: 90 }} />
                 <col style={{ width: modoIntensivo ? 110 : 70 }} />
                 <col style={{ width: 58 }} />
@@ -2001,6 +2121,13 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground">Macro</th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('centro')}>Centro<SortIndicator field="centro" /></th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground">Fazenda</th>
+                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('safra')}>Safra<SortIndicator field="safra" /></th>
+                  {modoIntensivo && (
+                    <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground">C. Origem</th>
+                  )}
+                  {modoIntensivo && (
+                    <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground">C. Destino</th>
+                  )}
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('valor')}>Valor<SortIndicator field="valor" /></th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('doc')}>Doc.<SortIndicator field="doc" /></th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('status')}>Status<SortIndicator field="status" /></th>
@@ -2114,6 +2241,25 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                         <td className="truncate px-1 py-1 align-middle text-[11px] font-medium leading-tight text-muted-foreground" title={l.macro_custo || ''}>{l.macro_custo || '-'}</td>
                         <td className="truncate px-1 py-1 align-middle text-[11px] font-medium leading-tight" title={l.centro_custo || ''}>{l.centro_custo || '-'}</td>
                         <td className="truncate px-1 py-1 align-middle text-[11px] font-medium leading-tight text-muted-foreground" title={fazendaNameMap.get(l.fazenda_id) || ''}>{fazendaCodigoMap.get(l.fazenda_id) || '-'}</td>
+                        {/* ⚠ "—" É AUSÊNCIA, e aqui ela é informação: financiamento de
+                            investimento e administrativo NÃO têm safra por regra. Um traço
+                            nessas linhas é o esperado; um código é o que se veio caçar. */}
+                        <td className="truncate px-1 py-1 align-middle text-[11px] font-medium leading-tight text-muted-foreground"
+                          title={l.safra_id ? (safraCodigoMap.get(l.safra_id) || '') : 'Sem safra'}>
+                          {l.safra_id ? (safraCodigoMap.get(l.safra_id) || '—') : '—'}
+                        </td>
+                        {modoIntensivo && (
+                          <td className="truncate px-1 py-1 align-middle text-[10px] leading-tight text-muted-foreground"
+                            title={l.conta_bancaria_id ? (contaNomeMap.get(l.conta_bancaria_id) || '') : ''}>
+                            {l.conta_bancaria_id ? (contaNomeMap.get(l.conta_bancaria_id) || '—') : '—'}
+                          </td>
+                        )}
+                        {modoIntensivo && (
+                          <td className="truncate px-1 py-1 align-middle text-[10px] leading-tight text-muted-foreground"
+                            title={l.conta_destino_id ? (contaNomeMap.get(l.conta_destino_id) || '') : ''}>
+                            {l.conta_destino_id ? (contaNomeMap.get(l.conta_destino_id) || '—') : '—'}
+                          </td>
+                        )}
                         {/* ⚠ O SINAL É O DA CONTA EM FOCO, não o da coluna `sinal` — que só
                             conhece o lado da origem. Ver `sentidoNaConta`.
                             ⚠ E TEXTO E COR VÊM DA MESMA CHAMADA — FIN-LISTA-TRANSF-SINAL-01.

@@ -117,10 +117,14 @@ export function FinanceiroV2ControlesLista({
             data-testid="btn-intensivo"
             onClick={onToggleIntensivo}
             className={cn('h-6 text-[10px] gap-0.5 px-1.5', modoIntensivo && 'bg-primary text-primary-foreground')}
-            title={modoIntensivo ? 'Sair do Modo Intensivo' : 'Modo Intensivo'}
+            title={modoIntensivo ? 'Retornar à lista normal' : 'Ampliar a lista (mais colunas)'}
           >
             {modoIntensivo ? <Minimize2 className="h-3 w-3" /> : <Maximize2 className="h-3 w-3" />}
-            {modoIntensivo ? 'Sair' : 'Intensivo'}
+            {/* ⚠ ESTE COMPONENTE SÓ RENDERIZA COM `VITE_LISTA_PAGINADA_V2` LIGADA, e ela não
+                está em nenhum `.env` do repo (medido em 11/09/2026) — então hoje quem aparece
+                é a cópia INLINE do `FinanceiroV2Tab`, e é ESTE aqui que tem teste. Os dois
+                mudam juntos ou a tela e o teste discordam em silêncio. */}
+            {modoIntensivo ? 'Retornar' : 'Ampliar'}
           </Button>
         </div>
       </div>

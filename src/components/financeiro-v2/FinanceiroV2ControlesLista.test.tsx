@@ -34,12 +34,12 @@ describe('contrato visual dos controles', () => {
     montar();
     const bloco = screen.getByTestId('bloco-acoes');
     expect(bloco.className).toContain('grid-cols-2');
-    // ordem no DOM = ordem visual do grid: Novo, Exportar, Limpar, Intensivo
+    // ordem no DOM = ordem visual do grid: Novo, Exportar, Limpar, Ampliar
     const rotulos = Array.from(bloco.children).map((c) => c.textContent?.trim());
     expect(rotulos[0]).toContain('Novo');
     expect(rotulos[1]).toContain('Exportar');
     expect(rotulos[2]).toContain('Limpar');
-    expect(rotulos[3]).toContain('Intensivo');
+    expect(rotulos[3]).toContain('Ampliar');
   });
 
   it('Novo é amarelo e Aplicar é azul', () => {
@@ -55,7 +55,7 @@ describe('contrato visual dos controles', () => {
     expect(within(screen.getByTestId('bloco-acoes')).queryByTestId('btn-aplicar')).toBeNull();
   });
 
-  it('Limpar e Intensivo são neutros', () => {
+  it('Limpar e Ampliar são neutros', () => {
     montar();
     for (const id of ['btn-limpar', 'btn-intensivo']) {
       const c = screen.getByTestId(id).className;
