@@ -75,12 +75,17 @@ interface SearchableSelectProps {
    * chave. Sem ela o componente se comporta exatamente como antes — as outras 24
    * montagens do app (26 no total, em 11 arquivos) não mudam em nada.
    *
-   * ⚠ COM MEMÓRIA, FECHAR NÃO ESQUECE. Clicar fora, apertar Esc, escolher um item
-   * ou sair com Tab preservam o texto digitado e a lista filtrada. Quem esquece é
-   * o X do campo e o "Limpar" da tela — e só eles.
-   *
    * Nasceu de uma lista de 3.361 fornecedores: achar "Wilson" entre seis homônimos
    * custava seis reaberturas, e cada reabertura fazia o operador digitar de novo.
+   *
+   * ⚠ A MEMÓRIA SÓ VALE ENQUANTO O FILTRO ESTÁ ATIVO — FIN-LISTA-FILTROS-01a, e isto
+   * REVERTE metade do comportamento original. Antes, fechar nunca esquecia; o efeito é que
+   * um texto digitado e ABANDONADO ressuscitava horas depois, num campo que dizia "Todos".
+   * O operador via seis nomes numa lista que ele não filtrou e procurava o defeito.
+   * ⚠ O CASO QUE A MEMÓRIA VEIO SERVIR CONTINUA SERVIDO, e é a razão de não a apagar: quem
+   * digita "wilson" e ESCOLHE um dos seis tem `value` ativo, e reabrir mantém o texto para
+   * escolher outro. Quem digita e não escolhe não filtrou nada — e nada é o que se lembra.
+   * ⚠ ATIVO É `value !== allValue`, a mesma sentinela que o gatilho usa para exibir "Todos".
    */
   persistKey?: string;
 }
@@ -100,9 +105,14 @@ export function SearchableSelect({
   persistKey,
 }: SearchableSelectProps) {
   const [open, setOpen] = useState(false);
+  /* "Ativo" = o campo está filtrando alguma coisa. É a mesma pergunta que decide se o
+     gatilho mostra "Todos", então não há como a memória e o rótulo discordarem. */
+  const filtroAtivo = value !== allValue && value !== '';
   const chave = persistKey ? PREFIXO + persistKey : null;
+  /* Lembra na montagem SÓ se o campo chegou filtrando: um texto guardado ao lado de um
+     campo "Todos" é a memória de uma busca que não virou filtro. */
   const [search, setSearch] = useState(() => {
-    if (!chave) return '';
+    if (!chave || !filtroAtivo) return '';
     try { return sessionStorage.getItem(chave) ?? ''; } catch { return ''; }
   });
 
@@ -112,15 +122,19 @@ export function SearchableSelect({
     setSearch(txt);
     if (!chave) return;
     try {
-      if (txt) sessionStorage.setItem(chave, txt);
+      if (txt && filtroAtivo) sessionStorage.setItem(chave, txt);
       else sessionStorage.removeItem(chave);
     } catch { /* storage bloqueado — segue sem memória */ }
-  }, [chave]);
+  }, [chave, filtroAtivo]);
 
-  /* Fechar só esquece quando NÃO há memória. Com `persistKey`, fechar é fechar. */
+  /* Fechar esquece quando não há memória OU quando não há filtro para lembrar. Com um valor
+     escolhido, fechar é fechar — que é o caso dos seis "Wilson". */
   const esquecerAoFechar = useCallback(() => {
-    if (!chave) setSearch('');
-  }, [chave]);
+    if (!chave || !filtroAtivo) {
+      setSearch('');
+      if (chave) { try { sessionStorage.removeItem(chave); } catch { /* idem */ } }
+    }
+  }, [chave, filtroAtivo]);
   const [highlightIdx, setHighlightIdx] = useState(0);
   const [openUp, setOpenUp] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);

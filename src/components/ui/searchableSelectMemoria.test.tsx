@@ -20,15 +20,15 @@ const OPCOES = [
   { value: 'c', label: 'Outro Fulano' },
 ];
 
-function montar(persistKey?: string) {
+function montar(persistKey?: string, value = '__all__') {
   const onValueChange = vi.fn();
   const r = render(
-    <SearchableSelect value="__all__" onValueChange={onValueChange} options={OPCOES} persistKey={persistKey} />,
+    <SearchableSelect value={value} onValueChange={onValueChange} options={OPCOES} persistKey={persistKey} />,
   );
   return { onValueChange, ...r };
 }
 
-const abrir = () => fireEvent.click(screen.getByRole('button', { name: /Todos/i }));
+const abrir = (rotulo: RegExp = /Todos/i) => fireEvent.click(screen.getByRole('button', { name: rotulo }));
 const caixa = () => screen.getByPlaceholderText('Buscar...');
 
 beforeEach(() => {
@@ -40,29 +40,57 @@ beforeEach(() => {
 });
 
 describe('SearchableSelect — memória da busca', () => {
-  it('com persistKey: escolher um item NÃO esquece a busca', () => {
-    const { unmount } = montar('teste');
-    abrir();
+  /**
+   * ⚠ ESTES DOIS BLOCOS MUDARAM DE REGRA EM FIN-LISTA-FILTROS-01a, e o par fica visível de
+   * propósito. A memória não é mais incondicional: ela vale enquanto o campo está FILTRANDO.
+   * O que a reverteu foi o relato do operador — "valdei" ressuscitando horas depois num campo
+   * que dizia "Todos" — e a regra que saiu dele: persistir só o que está ativo.
+   * ⚠ O `value` É O QUE DECIDE, e por isso ele agora varia no fixture. Com `__all__` o campo
+   * não filtra nada, e uma busca guardada ali é a memória de algo que não aconteceu.
+   */
+  it('com valor escolhido: reabrir MANTÉM a busca — é o caso dos seis homônimos', () => {
+    const { unmount } = montar('teste', 'a');
+    abrir(/Wilson Zaplana/);
     fireEvent.change(caixa(), { target: { value: 'wilson' } });
-    fireEvent.click(screen.getByText('Wilson Zaplana'));
     unmount();
 
-    montar('teste');
-    abrir();
+    montar('teste', 'a');
+    abrir(/Wilson Zaplana/);
     expect(caixa()).toHaveValue('wilson');
     /* A lista volta filtrada, não inteira: é isso que poupa a redigitação. */
     expect(screen.queryByText('Outro Fulano')).not.toBeInTheDocument();
   });
 
-  it('com persistKey: Escape não esquece', () => {
+  it('sem valor escolhido: o texto abandonado NÃO ressuscita', () => {
+    /* O defeito relatado, em teste: digitar e não escolher não é filtrar. */
     const { unmount } = montar('teste');
     abrir();
-    fireEvent.change(caixa(), { target: { value: 'zap' } });
-    fireEvent.keyDown(caixa(), { key: 'Escape' });
+    fireEvent.change(caixa(), { target: { value: 'valdei' } });
     unmount();
 
     montar('teste');
     abrir();
+    expect(caixa()).toHaveValue('');
+    expect(screen.getByText('Outro Fulano')).toBeInTheDocument();
+  });
+
+  it('sem valor escolhido: fechar com Escape já limpa a memória', () => {
+    montar('teste');
+    abrir();
+    fireEvent.change(caixa(), { target: { value: 'zap' } });
+    fireEvent.keyDown(caixa(), { key: 'Escape' });
+    expect(sessionStorage.getItem('ss-busca:teste')).toBeNull();
+  });
+
+  it('com valor escolhido: Escape não esquece', () => {
+    const { unmount } = montar('teste', 'a');
+    abrir(/Wilson Zaplana/);
+    fireEvent.change(caixa(), { target: { value: 'zap' } });
+    fireEvent.keyDown(caixa(), { key: 'Escape' });
+    unmount();
+
+    montar('teste', 'a');
+    abrir(/Wilson Zaplana/);
     expect(caixa()).toHaveValue('zap');
   });
 

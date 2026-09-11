@@ -21,6 +21,7 @@ import { formatDocumento } from '@/lib/financeiro/documentoHelper';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { SearchableSelect, limparBuscasLembradas } from '@/components/ui/searchable-select';
+import { apenasAtivos, guardarFiltros, lerFiltros, esquecerFiltros } from '@/lib/financeiro/filtrosPersistidos';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -353,7 +354,17 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
 
   // ── Restauração de filtros ao voltar de FinanciamentoDetalhe ──
   useEffect(() => {
-    const raw = sessionStorage.getItem('financeirov2_return_filters');
+    /* ⚠ DUAS FONTES, UMA PRECEDÊNCIA — FIN-LISTA-FILTROS-01a. O `return_filters` é o
+       instantâneo de uma ida e volta declarada (abrir a OC e voltar), e leva TUDO, inclusive
+       o que está no padrão: ele restaura uma tela específica. Os filtros ATIVOS da sessão são
+       a memória geral, e só guardam o que difere do padrão. Quando os dois existem, o
+       instantâneo vence — ele descreve a tela de onde o operador saiu há dois cliques.
+       ⚠ E É UM EFEITO SÓ, de propósito: dois efeitos de restauração competindo pela mesma
+       montagem dependeriam da ordem de declaração para decidir quem escreve por último. */
+    const raw = sessionStorage.getItem('financeirov2_return_filters') ?? (() => {
+      const ativos = lerFiltros();
+      return ativos ? JSON.stringify(ativos) : null;
+    })();
     if (!raw) return;
     try {
       const f = JSON.parse(raw);
@@ -379,6 +390,37 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /**
+   * ⚠ GUARDA SÓ O QUE ESTÁ ATIVO, a cada mudança — FIN-LISTA-FILTROS-01a.
+   *
+   * ⚠ ESTE EFEITO PRECISA VIR DEPOIS DO DE RESTAURAÇÃO, e a ordem é a correção inteira: os
+   * dois rodam na montagem, e efeitos disparam na ordem em que são DECLARADOS. Declarado
+   * antes, este veria o estado ainda no padrão, gravaria `{}` — que é o mesmo que apagar — e
+   * a restauração leria um storage que ele acabou de limpar. O filtro guardado sumiria
+   * exatamente no momento de ser usado, e o sintoma seria "nunca lembra".
+   */
+  useEffect(() => {
+    const p = getDefaults();
+    guardarFiltros(apenasAtivos(
+      {
+        fazendaId, ano, mesesSelecionados, statusSelecionados, tipoOperacao,
+        contaOrigem, contaDestino, macroFiltro, grupoFiltro, centroFiltro,
+        subcentroFiltro, produtoFiltro, documentoFiltro, fornecedorFiltro, atividadeFiltro,
+      },
+      {
+        fazendaId: p.fazendaId, ano: p.ano, mesesSelecionados: p.mesesSelecionados,
+        statusSelecionados: p.statusSelecionados, tipoOperacao: p.tipoOperacao,
+        contaOrigem: p.contaOrigem, contaDestino: p.contaDestino, macroFiltro: p.macroFiltro,
+        grupoFiltro: p.grupoFiltro, centroFiltro: p.centroFiltro, subcentroFiltro: p.subcentroFiltro,
+        produtoFiltro: p.produtoFiltro, documentoFiltro: p.documentoFiltro,
+        fornecedorFiltro: p.fornecedorFiltro, atividadeFiltro: p.atividadeFiltro,
+      },
+    ));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fazendaId, ano, mesesSelecionados, statusSelecionados, tipoOperacao, contaOrigem,
+      contaDestino, macroFiltro, grupoFiltro, centroFiltro, subcentroFiltro, produtoFiltro,
+      documentoFiltro, fornecedorFiltro, atividadeFiltro]);
 
   const abrirFinanciamentoDaParcela = async (l: any) => {
     const salvarEstado = () => sessionStorage.setItem('financeiro_v2_state', JSON.stringify({
@@ -552,12 +594,16 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         setMacroLocked(true);
       }
     } else {
-      if (macroLocked) {
-        setMacroFiltro('__all__');
-        setGrupoFiltro('__all__');
-        setCentroFiltro('__all__');
-        setMacroLocked(false);
-      }
+      /* ⚠ LIMPAR O FILHO NUNCA SOBE — FIN-LISTA-FILTROS-01a. Aqui o "x" do Subcentro apagava
+         Macro, Grupo e Centro junto, e a justificativa era simétrica: escolher um subcentro
+         PREENCHE os três, então limpá-lo os desfaria. O erro está em supor que os três eram
+         dele: se o operador escolheu o Macro à mão e só depois o subcentro, a auto-seleção
+         sobrescreveu a escolha dele — e o "x" apagava a escolha, não o preenchimento.
+         ⚠ O QUE PERMANECE É SÓ A DESTRAVA. `macroLocked` desabilita os três campos enquanto o
+         subcentro manda; sem soltá-la, limpar o subcentro deixaria três campos cinzas sem
+         nada que os explicasse. A cascata para baixo (o "x" do Macro limpa os filhos) não
+         muda: o pai pode limpar os filhos, o filho nunca limpa o pai. */
+      setMacroLocked(false);
     }
   };
 
@@ -1223,6 +1269,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
        "wilson" digitado no combobox deixaria a tela dizendo "Todos" com uma lista
        de seis nomes — o filtro limpo e a busca suja. */
     limparBuscasLembradas(PREFIXO_BUSCA);
+    /* ⚠ "Limpar" APAGA A MEMÓRIA, não só os campos. Zerar a tela e deixar o filtro guardado
+       faria o próximo retorno ressuscitar exatamente o que o operador acabou de limpar. */
+    esquecerFiltros();
   };
 
   // Determine which fazenda_id to pass to loadLancamentos
