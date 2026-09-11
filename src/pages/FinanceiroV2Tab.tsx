@@ -9,7 +9,7 @@ import {
   type StatusFiltroFinanceiro,
 } from '@/lib/financeiro/statusFinanceiro';
 import { isTransferenciaTipo } from '@/lib/financeiro/v2Transferencia';
-import { sentidoNaConta, sinalDoSentido, contaEmFoco, type SentidoNaConta } from '@/lib/financeiro/sinalPorConta';
+import { sentidoNaConta, contaEmFoco, formatarValorLinha, type SentidoNaConta } from '@/lib/financeiro/sinalPorConta';
 import { useLancamentosConciliados, desfazerVinculo, desfazerGrupo } from '@/hooks/useConciliacaoDoMes';
 import { iconeOrigemLancamento, LEGENDA_ICONES } from '@/v2/lib/origemLancamento';
 import { MinimodalOrigemLancamento } from '@/components/financeiro-v2/MinimodalOrigemLancamento';
@@ -157,9 +157,6 @@ const MESES_LIST = [
 //   (statusFinanceiro.ts): STATUS_FILTRO_LABEL / STATUS_FILTRO_COR. 'meta' legado exibe
 //   "Meta (legado)" muted (valor persistido NÃO é mascarado nem agrupado em Previsto).
 
-function fmtValor(v: number, sinal: number) {
-  return formatMoeda(Math.abs(v) * (sinal >= 0 ? 1 : -1));
-}
 function fmtDate(d: string | null) {
   if (!d) return '-';
   try { return format(parseISO(d), 'dd/MM/yy'); } catch { return d; }
@@ -1214,6 +1211,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     }
     return acc;
   }, [sortedLancamentos, foco]);
+  /* O `foco` é o mesmo dos totais: a linha e o rodapé não podem discordar sobre o que é
+     entrada. Uma função só, um foco só. */
+  const valorDaLinha = (l: LancamentoV2) => formatarValorLinha(l, foco);
+
   const totalEntradas = totais.entradas;
   const totalSaidas = totais.saidas;
   const totalTransferencias = totais.transferencias;
@@ -2114,9 +2115,13 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                         <td className="truncate px-1 py-1 align-middle text-[11px] font-medium leading-tight" title={l.centro_custo || ''}>{l.centro_custo || '-'}</td>
                         <td className="truncate px-1 py-1 align-middle text-[11px] font-medium leading-tight text-muted-foreground" title={fazendaNameMap.get(l.fazenda_id) || ''}>{fazendaCodigoMap.get(l.fazenda_id) || '-'}</td>
                         {/* ⚠ O SINAL É O DA CONTA EM FOCO, não o da coluna `sinal` — que só
-                            conhece o lado da origem. Ver `sentidoNaConta`. */}
-                        <td className={`celula-valor text-right font-semibold whitespace-nowrap px-1 py-1 align-middle text-[12px] leading-tight ${sinalDoSentido(sentidoNaConta(l, foco)) > 0 ? 'text-success' : 'text-destructive'}`}>
-                          {fmtValor(l.valor, sinalDoSentido(sentidoNaConta(l, foco)))}
+                            conhece o lado da origem. Ver `sentidoNaConta`.
+                            ⚠ E TEXTO E COR VÊM DA MESMA CHAMADA — FIN-LISTA-TRANSF-SINAL-01.
+                            Eram duas expressões, cada uma reavaliando `sentidoNaConta`, e
+                            entre elas cabia o estado impossível: valor em módulo pintado de
+                            vermelho. Uma chamada, uma decisão. */}
+                        <td className={`celula-valor text-right font-semibold whitespace-nowrap px-1 py-1 align-middle text-[12px] leading-tight ${valorDaLinha(l).classe}`}>
+                          {valorDaLinha(l).texto}
                         </td>
                         <td className="celula-doc font-mono text-muted-foreground text-center px-1 py-1 align-middle text-[10px] leading-tight truncate" title={formatDocCompleto(l)}>{formatNF(l)}</td>
                         <td className={`text-center px-1 py-1 align-middle text-[11px] leading-tight ${stColor}`}

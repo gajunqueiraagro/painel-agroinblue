@@ -20,6 +20,7 @@
  * apareceriam como receita do mês. Ela ganha eixo próprio — quem exibe decide se mostra.
  */
 import { isTransferenciaTipo } from './v2Transferencia';
+import { formatMoeda } from '@/lib/calculos/formatters';
 
 export type SentidoNaConta = 'entrada' | 'saida' | 'transferencia';
 
@@ -52,13 +53,61 @@ export function sentidoNaConta(
 }
 
 /**
- * O multiplicador do valor exibido.
+ * O multiplicador do valor em CÁLCULO — soma, saldo corrido, série.
  *
- * ⚠ TRANSFERÊNCIA SEM FOCO SAI NEGATIVA — decisão de produto deste envelope: fora de um
- * recorte de conta, o ponto de vista padrão é o de quem paga.
+ * ⚠ ELE NÃO É MAIS O DA EXIBIÇÃO, e a distinção nasceu do FIN-LISTA-TRANSF-SINAL-01. A
+ * assinatura obriga a escolher um dos dois lados, então transferência sem foco cai em −1:
+ * serve a quem SOMA num contexto que já tem ponto de vista (o Extrato Gerencial soma sempre
+ * de dentro de uma conta), e mente para quem EXIBE numa lista sem recorte de conta. Quem
+ * exibe usa `formatarValorLinha`, que tem um terceiro caso porque não precisa devolver
+ * número.
+ * ⚠ O COMENTÁRIO ANTERIOR DIZIA "decisão de produto: fora de um recorte de conta, o ponto de
+ * vista padrão é o de quem paga". A decisão foi REVERTIDA para a exibição em 11/09/2026: o
+ * operador lia "−R$" em vermelho num movimento que não saiu do negócio, e concluía prejuízo
+ * onde houve mudança de bolso. Para o cálculo, o −1 continua — e continua correto, porque
+ * quem chama já filtrou a transferência fora ou já tem conta em foco.
  */
 export function sinalDoSentido(s: SentidoNaConta): 1 | -1 {
   return s === 'entrada' ? 1 : -1;
+}
+
+/** O valor de uma linha de lista: o texto e a cor, decididos juntos. */
+export interface ValorDaLinha {
+  texto: string;
+  /** Classe Tailwind de cor. `text-foreground` é o "sem sinal" — nem ganho, nem perda. */
+  classe: string;
+  sentido: SentidoNaConta;
+}
+
+/**
+ * COMO UMA LINHA DE LISTA MOSTRA O VALOR — FIN-LISTA-TRANSF-SINAL-01.
+ *
+ * ⚠ TEXTO E COR SAEM JUNTOS PORQUE SÃO A MESMA DECISÃO. Enquanto eram duas expressões no
+ * JSX, a lista conseguia o estado impossível de um valor sem sinal pintado de vermelho —
+ * e foi exatamente o que o operador viu: a transferência já vinha em módulo em algumas
+ * telas e em vermelho em todas.
+ * ⚠ TRANSFERÊNCIA SEM FOCO NÃO É ENTRADA NEM SAÍDA DO NEGÓCIO: o dinheiro mudou de bolso,
+ * não de dono. Módulo e cor padrão são a única leitura honesta — "−R$ 1,1 mi" em vermelho
+ * diz que o mês foi pior, e não foi.
+ * ⚠ COM CONTA EM FOCO ELA VOLTA A TER LADO, e deve ter: filtrando por "Conta Destino =
+ * Bradesco", o resgate ENTROU ali, e some-se em verde com sinal. É `sentidoNaConta` quem
+ * resolve isso — aqui só se obedece.
+ */
+export function formatarValorLinha(
+  l: LancamentoDirecional & { valor: number },
+  contaFoco: string | null,
+): ValorDaLinha {
+  const sentido = sentidoNaConta(l, contaFoco);
+  const absoluto = Math.abs(l.valor);
+  if (sentido === 'transferencia') {
+    return { texto: formatMoeda(absoluto), classe: 'text-foreground', sentido };
+  }
+  const entrada = sentido === 'entrada';
+  return {
+    texto: formatMoeda(entrada ? absoluto : -absoluto),
+    classe: entrada ? 'text-success' : 'text-destructive',
+    sentido,
+  };
 }
 
 /**

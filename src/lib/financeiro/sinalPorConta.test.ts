@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sentidoNaConta, sinalDoSentido, contaEmFoco } from './sinalPorConta';
+import { sentidoNaConta, sinalDoSentido, contaEmFoco, formatarValorLinha } from './sinalPorConta';
 
 const BRADESCO = 'bradesco-id';
 const CDB = 'cdb-id';
@@ -63,5 +63,60 @@ describe('contaEmFoco', () => {
   it('nenhum filtrado: sem ponto de vista', () => {
     expect(contaEmFoco('__all__', '__all__')).toBeNull();
     expect(contaEmFoco(null, undefined)).toBeNull();
+  });
+});
+
+/**
+ * COMO A LISTA MOSTRA O VALOR — FIN-LISTA-TRANSF-SINAL-01.
+ *
+ * ⚠ ESTE BLOCO NASCE DE UM RELATO: "transferência aparece com −R$ e em vermelho, como se
+ * fosse saída". Não era erro de conta — era a decisão anterior, registrada em `sinalDoSentido`
+ * ("fora de um recorte de conta, o ponto de vista padrão é o de quem paga"). O operador lia
+ * prejuízo onde houve mudança de bolso, e a decisão foi revertida para a EXIBIÇÃO.
+ */
+describe('formatarValorLinha', () => {
+  const transf = { tipo_operacao: '3-Transferências', conta_bancaria_id: 'origem', conta_destino_id: 'destino', valor: 1000 };
+
+  it('transferência SEM foco: módulo e cor padrão — não é ganho nem perda', () => {
+    const v = formatarValorLinha(transf, null);
+    expect(v.sentido).toBe('transferencia');
+    expect(v.classe).toBe('text-foreground');
+    expect(v.texto).not.toContain('-');
+  });
+
+  it('a grafia legada no singular também', () => {
+    /* O banco tem 593 linhas em '3-Transferência'. Reconhecer o legado não é perpetuá-lo. */
+    const v = formatarValorLinha({ ...transf, tipo_operacao: '3-Transferência' }, null);
+    expect(v.classe).toBe('text-foreground');
+  });
+
+  it('transferência COM foco no destino volta a ser entrada, verde e positiva', () => {
+    /* É o caso dos cinco resgates do Agnaldo: filtrando pela conta que RECEBEU, entrou. */
+    const v = formatarValorLinha(transf, 'destino');
+    expect(v.sentido).toBe('entrada');
+    expect(v.classe).toBe('text-success');
+    expect(v.texto).not.toContain('-');
+  });
+
+  it('transferência COM foco na origem é saída, vermelha e negativa', () => {
+    const v = formatarValorLinha(transf, 'origem');
+    expect(v.sentido).toBe('saida');
+    expect(v.classe).toBe('text-destructive');
+    expect(v.texto).toContain('-');
+  });
+
+  it('entrada e saída comuns não mudaram', () => {
+    const entrada = formatarValorLinha({ tipo_operacao: '1-Entradas', valor: 500 }, null);
+    expect(entrada.classe).toBe('text-success');
+    expect(entrada.texto).not.toContain('-');
+    const saida = formatarValorLinha({ tipo_operacao: '2-Saídas', valor: 500 }, null);
+    expect(saida.classe).toBe('text-destructive');
+    expect(saida.texto).toContain('-');
+  });
+
+  it('valor já negativo no banco não vira positivo por acidente', () => {
+    /* A coluna guarda módulo, mas nem sempre guardou: o `abs` é o que torna a regra estável. */
+    expect(formatarValorLinha({ tipo_operacao: '2-Saídas', valor: -500 }, null).texto)
+      .toBe(formatarValorLinha({ tipo_operacao: '2-Saídas', valor: 500 }, null).texto);
   });
 });
