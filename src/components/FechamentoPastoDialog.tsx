@@ -480,6 +480,11 @@ export function FechamentoPastoDialog({
               pastoId={pasto.id}
               pastoNome={pasto.nome}
               areaProdutivaHa={pasto.area_produtiva_ha ?? null}
+              /* ⚠ O MÊS ENTRA SÓ PARA ACHAR A SAFRA — AGRI-AREA-POR-SAFRA-01. A área plantada
+                 continua sem mês nenhum no banco; o que a competência responde é "qual safra
+                 cobre este mês", e é por isso que abrir novembro mostra o que foi cadastrado
+                 em outubro: é a mesma safra, o mesmo dado. */
+              anoMes={fechamento.ano_mes}
               somenteLeitura={inputsDisabled}
             />
           ) : (

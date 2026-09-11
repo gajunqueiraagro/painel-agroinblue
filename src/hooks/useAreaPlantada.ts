@@ -146,3 +146,51 @@ export function useAreaPlantada(safraId: string | null, pastoId: string | null) 
 
   return { areas, carregando, erro, carregar, salvar };
 }
+
+/**
+ * AS ÁREAS DE VÁRIAS SAFRAS DE UMA VEZ, POR PASTO — AGRI-AREA-POR-SAFRA-01.
+ *
+ * ⚠ É O QUE O CARD DA GRADE PRECISA: ele desenha 80 pastos e não pode perguntar um a um. Uma
+ * consulta por safra_id `in`, e o resultado vira mapa.
+ * ⚠ E SÃO VÁRIAS SAFRAS PORQUE A JANELA TEM VÁRIAS: 25/26-AMD, 25/26-Lav e 25/26-MAND cobrem
+ * o mesmo período no NJ. O card soma o que está plantado naquela janela, sem escolher entre
+ * rótulos que dizem a mesma temporada.
+ */
+export interface AreaDoPastoNaJanela {
+  totalHa: number;
+  culturas: string[];
+  /** EM QUAIS safras da janela este pasto tem área — é o que desempata o seletor do painel. */
+  safraIds: string[];
+}
+
+export function useAreasPorPastoNaJanela(safraIds: readonly string[]) {
+  const [mapa, setMapa] = useState<Map<string, AreaDoPastoNaJanela>>(new Map());
+  /* A chave evita recarregar quando o array muda de identidade mas não de conteúdo — a grade
+     recalcula a lista de safras a cada render do mês. */
+  const chave = [...safraIds].sort().join(',');
+
+  useEffect(() => {
+    if (!chave) { setMapa(new Map()); return; }
+    let vivo = true;
+    const db = supabase as any;
+    db.from('agri_safra_area')
+      .select('pasto_id, safra_id, cultura, area_plantada_ha')
+      .in('safra_id', chave.split(','))
+      .eq('ativo', true)
+      .then(({ data }: { data: Array<{ pasto_id: string; safra_id: string; cultura: string; area_plantada_ha: number }> | null }) => {
+        if (!vivo) return;
+        const m = new Map<string, AreaDoPastoNaJanela>();
+        (data ?? []).forEach(r => {
+          const atual = m.get(r.pasto_id) ?? { totalHa: 0, culturas: [], safraIds: [] };
+          atual.totalHa += Number(r.area_plantada_ha) || 0;
+          if (!atual.culturas.includes(r.cultura)) atual.culturas.push(r.cultura);
+          if (!atual.safraIds.includes(r.safra_id)) atual.safraIds.push(r.safra_id);
+          m.set(r.pasto_id, atual);
+        });
+        setMapa(m);
+      });
+    return () => { vivo = false; };
+  }, [chave]);
+
+  return mapa;
+}

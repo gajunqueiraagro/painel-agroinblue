@@ -20,6 +20,9 @@ import { formatAnoMes } from '@/lib/dateUtils';
 import { MESES_COLS } from '@/lib/calculos/labels';
 import { isPastoPecuario, isPastoOperacional, getTipoUsoEfetivo, isPastoDivergencia } from '@/lib/classificacaoArea';
 import { grupoDoTipoUso } from '@/lib/pastos/tiposUso';
+import { useCliente } from '@/contexts/ClienteContext';
+import { useSafrasLavoura, useAreasPorPastoNaJanela } from '@/hooks/useAreaPlantada';
+import { safrasQueCobremOMes, labelDaCultura } from '@/lib/agri/areaPlantada';
 import { FechamentoPastoDialog } from '@/components/FechamentoPastoDialog';
 import { useReclassificacaoState, ReclassificacaoFormFields } from '@/components/ReclassificacaoForm';
 import { ReclassificacaoResumoPanel } from '@/components/ReclassificacaoResumoPanel';
@@ -171,6 +174,7 @@ function gmdColor(gmd: number | null): string {
 
 export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConciliacao, onNavigateToReclass, onNavigateToValorRebanho, onNavigateToConferenciaGmd, onNavigateToMapaPastos, onBack }: Props = {}) {
   const { isGlobal, fazendaAtual } = useFazenda();
+  const { clienteAtual } = useCliente();
   const { canEdit } = usePermissions();
 
   const { pastos, categorias } = usePastos();
@@ -192,6 +196,22 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   const mesDefault = filtroMesInicial || (anoNum2 === new Date().getFullYear() ? new Date().getMonth() + 1 : 12);
   const [mesFiltro, setMesFiltro] = useState(mesDefault);
   const anoMes = `${anoFiltro}-${String(mesFiltro).padStart(2, '0')}`;
+
+  /**
+   * A LAVOURA DO MÊS VEM DA SAFRA, NÃO DO FECHAMENTO — AGRI-AREA-POR-SAFRA-01.
+   *
+   * ⚠ O CARD AGRÍCOLA MOSTRAVA "—", sempre, em todo mês: ele lê `resumo.totalCabecas`, e num
+   * talhão de amendoim não há cabeça nenhuma. Parecia pasto por lançar, e era o que fazia o
+   * operador reabrir o modal a cada mês para "cadastrar de novo" o que já estava cadastrado.
+   * ⚠ A ÁREA NÃO TEM MÊS. Ela vale da semeadura à colheita, e o mês só serve para escolher a
+   * safra cuja janela o contém — por isso o card de novembro mostra o que foi digitado em
+   * outubro: é o mesmo dado, não uma cópia.
+   */
+  const { safras: safrasLavoura } = useSafrasLavoura(clienteAtual?.id ?? null);
+  const idsSafraDaJanela = useMemo(
+    () => safrasQueCobremOMes(safrasLavoura, anoMes).map(sf => sf.id),
+    [safrasLavoura, anoMes]);
+  const areaLavouraPorPasto = useAreasPorPastoNaJanela(idsSafraDaJanela);
 
   // FONTE OFICIAL: view zootécnica para saldo por movimentações (conciliação)
   const { data: viewDataForConcil } = useZootCategoriaMensal({ ano: anoNum2, cenario: 'realizado' });
@@ -1274,6 +1294,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                  * PR-UI-PASTO-CORES-03, e ela decide as três telas de uma vez.
                  */
                 const ehLavoura = grupoDoTipoUso(tipoUsoEfetivo) === 'agricultura';
+                const lavoura = ehLavoura ? areaLavouraPorPasto.get(p.id) : undefined;
 
                 return (
                   <Tooltip key={p.id}>
@@ -1295,16 +1316,26 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                             {STATUS_ICON[pastoStatus]}
                           </span>
                         </div>
-                        {/* Cabeças */}
+                        {/* Cabeças — ou hectares plantados, quando o pasto é de lavoura. */}
                         <div className="font-extrabold text-[13px] tabular-nums text-foreground leading-tight mt-0.5">
-                          {resumo.totalCabecas > 0 ? `${formatNum(resumo.totalCabecas, 0)} cab` : '—'}
+                          {ehLavoura
+                            ? (lavoura ? `${formatNum(lavoura.totalHa, 1)} ha` : '—')
+                            : resumo.totalCabecas > 0 ? `${formatNum(resumo.totalCabecas, 0)} cab` : '—'}
                         </div>
-                        {/* Peso médio */}
-                        {resumo.pesoMedio && (
+                        {/* Peso médio — na lavoura, a(s) cultura(s) da safra ocupam a linha:
+                            "kg" num talhão de amendoim seria a resposta de outra pergunta. */}
+                        {ehLavoura ? (
+                          lavoura && lavoura.culturas.length > 0 && (
+                            <div className="text-[8px] text-muted-foreground leading-none mt-0.5 truncate"
+                              title={lavoura.culturas.map(labelDaCultura).join(' · ')}>
+                              {lavoura.culturas.map(labelDaCultura).join(' · ')}
+                            </div>
+                          )
+                        ) : resumo.pesoMedio ? (
                           <div className="text-[8px] text-muted-foreground leading-none mt-0.5 tabular-nums">
                             {formatNum(resumo.pesoMedio, 1)} kg
                           </div>
-                        )}
+                        ) : null}
                         {/* Área + Tipo uso (área omitida em pastos de divergência) */}
                         <div className="flex items-center justify-between mt-0.5">
                           {isDivergencia ? (

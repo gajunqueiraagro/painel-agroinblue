@@ -23,15 +23,18 @@ import { toast } from 'sonner';
 import { formatNum } from '@/lib/calculos/formatters';
 import {
   CULTURAS_AREA, validarAreaPlantada, culturaDuplicada, somaAreas, labelDaCultura,
+  safrasQueCobremOMes, safraInicialDoMes,
   type AreaPlantadaForm,
 } from '@/lib/agri/areaPlantada';
-import { useAreaPlantada, useSafrasLavoura } from '@/hooks/useAreaPlantada';
+import { useAreaPlantada, useSafrasLavoura, useAreasPorPastoNaJanela } from '@/hooks/useAreaPlantada';
 
 interface Props {
   clienteId: string | null | undefined;
   pastoId: string;
   pastoNome: string;
   areaProdutivaHa: number | null;
+  /** A competência aberta, 'yyyy-MM' — só para achar a safra da janela. */
+  anoMes: string;
   /** Mês fechado ou trava mestre: a lista vira leitura. */
   somenteLeitura: boolean;
 }
@@ -40,26 +43,47 @@ const linhaVazia = (): AreaPlantadaForm => ({
   id: null, cultura: '', areaHa: '', dataPlantio: '', dataColheitaPrevista: '',
 });
 
-export function AreaPlantadaPanel({ clienteId, pastoId, pastoNome, areaProdutivaHa, somenteLeitura }: Props) {
+export function AreaPlantadaPanel({ clienteId, pastoId, pastoNome, areaProdutivaHa, anoMes, somenteLeitura }: Props) {
   const { safras, carregando: carregandoSafras } = useSafrasLavoura(clienteId);
   const [safraId, setSafraId] = useState<string>('');
   const { areas, carregando, salvar } = useAreaPlantada(safraId || null, pastoId);
   const [linhas, setLinhas] = useState<AreaPlantadaForm[]>([]);
   const [salvando, setSalvando] = useState(false);
 
-  /* ⚠ A PRIMEIRA SAFRA DA LISTA É A ESCOLHA INICIAL, e não "a mais recente" nem "a do mês":
-     a lista já vem na ordem do cadastro, e quem manda nela é o `ordem_exibicao` que o
-     operador controla. Inventar aqui uma segunda regra de "safra corrente" criaria duas
-     respostas para a mesma pergunta. */
+  /**
+   * A SAFRA QUE COBRE O MÊS ABERTO — AGRI-AREA-POR-SAFRA-01.
+   *
+   * ⚠ ERA "A PRIMEIRA DA LISTA", e estava errado. As sete safras de lavoura do NJ têm
+   * `ordem_exibicao = 0`; o desempate por nome punha "Safra 23/24 Amendoim" na frente, e o
+   * painel abria nela SEMPRE — em outubro de 2025 como em qualquer outro mês. A área gravada
+   * em 25/26-Lav não reaparecia nem no mês em que tinha sido salva, e editar virava
+   * recadastrar. O mês não era o culpado; a escolha inicial era.
+   * ⚠ E A PREFERÊNCIA É PELA SAFRA QUE JÁ TEM ÁREA DESTE PASTO, porque três safras cobrem a
+   * mesma janela (25/26-AMD, 25/26-Lav, 25/26-MAND são a mesma temporada com rótulos de
+   * quando a cultura morava no código). Sem essa preferência, reabrir o pasto cairia numa
+   * irmã vazia.
+   * ⚠ SÓ ESCOLHE SOZINHO ENQUANTO NINGUÉM ESCOLHEU: trocar de safra à mão é decisão tomada, e
+   * o efeito não pode desfazê-la no render seguinte.
+   */
+  const safrasDaJanela = useMemo(() => safrasQueCobremOMes(safras, anoMes), [safras, anoMes]);
+  const idsDaJanela = useMemo(() => safrasDaJanela.map(s => s.id), [safrasDaJanela]);
+  const comDados = useAreasPorPastoNaJanela(idsDaJanela);
+  const safrasComDadosDoPasto = useMemo(
+    () => new Set(comDados.get(pastoId)?.safraIds ?? []),
+    [comDados, pastoId]);
+
   useEffect(() => {
-    if (!safraId && safras.length > 0) setSafraId(safras[0].id);
-  }, [safras, safraId]);
+    if (safraId) return;
+    const inicial = safraInicialDoMes(safras, anoMes, safrasComDadosDoPasto);
+    if (inicial) setSafraId(inicial.id);
+  }, [safras, anoMes, safraId, safrasComDadosDoPasto]);
 
   /* O que está no banco vira o que está na tela — inclusive a lista vazia, que abre com UMA
      linha em branco para o operador não precisar clicar em "Adicionar" antes de digitar. */
+  const [gravado, setGravado] = useState('');
   useEffect(() => {
     if (carregando) return;
-    setLinhas(areas.length > 0
+    const doBanco = areas.length > 0
       ? areas.map(a => ({
           id: a.id,
           cultura: a.cultura,
@@ -67,11 +91,26 @@ export function AreaPlantadaPanel({ clienteId, pastoId, pastoNome, areaProdutiva
           dataPlantio: a.data_plantio ?? '',
           dataColheitaPrevista: a.data_colheita_prevista ?? '',
         }))
-      : [linhaVazia()]);
+      : [linhaVazia()];
+    setLinhas(doBanco);
+    /* ⚠ A FOTO DO QUE ESTÁ GRAVADO, para o botão saber se há o que salvar. Ela é tirada aqui
+       e SÓ aqui: depois do salvar, o `carregar()` do hook devolve as linhas novas e passa por
+       este mesmo efeito — a foto se atualiza sozinha e o botão volta a repousar. */
+    setGravado(JSON.stringify(doBanco));
   }, [areas, carregando]);
 
   const total = useMemo(() => somaAreas(linhas), [linhas]);
   const duplicada = useMemo(() => culturaDuplicada(linhas), [linhas]);
+  /**
+   * ⚠ O BOTÃO SÓ SE ACENDE QUANDO HÁ O QUE SALVAR — AGRI-AREA-POR-SAFRA-01 item 4. Ele ficava
+   * em destaque para sempre depois de gravar, e um botão que parece pedir ação quando não há
+   * ação pendente ensina a clicá-lo por via das dúvidas — que é como se grava duas vezes o
+   * mesmo dado e se desconfia da tela.
+   * ⚠ COMPARAÇÃO POR TEXTO, e serve porque a lista é curta e as chaves saem sempre na mesma
+   * ordem (é o mesmo `map` que a montou). Não é igualdade profunda genérica; é a foto contra
+   * o estado atual.
+   */
+  const sujo = JSON.stringify(linhas) !== gravado;
 
   const editar = (idx: number, campo: keyof AreaPlantadaForm, valor: string) => {
     setLinhas(prev => prev.map((l, i) => (i === idx ? { ...l, [campo]: valor } : l)));
@@ -106,6 +145,19 @@ export function AreaPlantadaPanel({ clienteId, pastoId, pastoNome, areaProdutiva
     }
   };
 
+  if (!carregandoSafras && safras.length > 0 && safrasDaJanela.length === 0) {
+    /* ⚠ NÃO ABRE NUMA SAFRA DE OUTRO ANO. Sem safra cobrindo o mês, o certo é dizer isso: o
+       contrário seria oferecer o seletor com 23/24 e convidar a gravar no lugar errado. */
+    return (
+      <div className="rounded-md border border-dashed p-4 text-center text-[12px] text-muted-foreground">
+        Nenhuma safra de <b>Lavoura</b> cobre este mês.
+        <div className="mt-1 text-[11px]">
+          A janela sai de <b>Cadastros → Safras</b> (início e fim da safra). A virada é em julho.
+        </div>
+      </div>
+    );
+  }
+
   if (!carregandoSafras && safras.length === 0) {
     return (
       <div className="rounded-md border border-dashed p-4 text-center text-[12px] text-muted-foreground">
@@ -123,7 +175,9 @@ export function AreaPlantadaPanel({ clienteId, pastoId, pastoNome, areaProdutiva
           <Select value={safraId} onValueChange={setSafraId} disabled={somenteLeitura}>
             <SelectTrigger className="mt-0.5 h-8 text-[12px]"><SelectValue placeholder="Selecione" /></SelectTrigger>
             <SelectContent>
-              {safras.map(s => (
+              {/* ⚠ SÓ AS SAFRAS DA JANELA. Oferecer as sete faria o operador gravar amendoim de
+                  25/26 numa safra de 2023 com dois cliques — e o dado não teria como avisar. */}
+              {safrasDaJanela.map(s => (
                 <SelectItem key={s.id} value={s.id} className="text-[12px]">{s.codigo || s.nome}</SelectItem>
               ))}
             </SelectContent>
@@ -195,8 +249,12 @@ export function AreaPlantadaPanel({ clienteId, pastoId, pastoNome, areaProdutiva
           Duas culturas na mesma safra é a safrinha — cada uma com a sua área.
         </span>
         <div className="flex-1" />
-        <Button size="sm" className="h-7 gap-1 text-[11px]"
-          disabled={somenteLeitura || salvando || !safraId} onClick={handleSalvar}>
+        {/* Botão desabilitado diz por quê, ao lado — a regra da casa. */}
+        {!sujo && !somenteLeitura && safraId && (
+          <span className="text-[10px] text-muted-foreground">sem alterações</span>
+        )}
+        <Button size="sm" variant={sujo ? 'default' : 'outline'} className="h-7 gap-1 text-[11px]"
+          disabled={somenteLeitura || salvando || !safraId || !sujo} onClick={handleSalvar}>
           <Save className="h-3 w-3" /> {salvando ? 'Salvando…' : 'Salvar lavoura'}
         </Button>
       </div>
