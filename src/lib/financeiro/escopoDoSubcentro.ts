@@ -76,6 +76,30 @@ export function ehLinhaAdministrativa(
 }
 
 /**
+ * A FAZENDA DO ADMINISTRATIVO — FIN-FAZENDA-ADM-01.
+ *
+ * ⚠ NÃO É NULO, É UMA FAZENDA DE VERDADE. Medido no proto em 11/09/2026: dos 22.331
+ * lançamentos de escopo administrativo, ZERO têm `fazenda_id` nulo; 17.896 apontam para uma
+ * fazenda chamada "Administrativo" e os 4.435 restantes para fazendas operacionais — que é o
+ * defeito. Os 7 clientes têm exatamente uma "Administrativo" cadastrada cada.
+ * ⚠ E O MODAL EXIGE FAZENDA para salvar (`computeValidacaoModal`), então nulo não seria só
+ * uma convenção diferente: seria um lançamento que não salva.
+ * ⚠ A BUSCA POR NOME JÁ ERA A REGRA, em dois lugares (`FazendaSelect` e o `fazendaIdEfetivo`
+ * do modal, idênticos). Aqui ela vira uma só. Não há coluna que marque a fazenda
+ * administrativa — se um dia houver, é AQUI que se troca.
+ */
+export function fazendaAdministrativa<T extends { id: string; nome?: string | null }>(
+  fazendas: readonly T[] | null | undefined,
+): T | null {
+  return (fazendas ?? []).find((f) => (f.nome || '').toLowerCase().includes('administrat')) ?? null;
+}
+
+/** O aviso do campo travado — o irmão de `AVISO_ADMIN_SEM_SAFRA`, para a fazenda. */
+export function avisoFazendaAdministrativa(nome?: string | null): string {
+  return `administrativo não tem fazenda específica — salvo em ${nome || 'Administrativo'}`;
+}
+
+/**
  * A frase do campo desabilitado — uma só, para as duas telas.
  *
  * ⚠ DUAS FRASES PORQUE SÃO DOIS FATOS: com safra, o que importa é avisar que ela SAI; sem

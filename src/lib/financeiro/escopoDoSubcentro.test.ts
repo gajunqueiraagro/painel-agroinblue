@@ -10,6 +10,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   escopoDoSubcentro, ehSubcentroAdministrativo, ehLinhaAdministrativa, ESCOPO_ADMINISTRATIVO,
+  fazendaAdministrativa, avisoFazendaAdministrativa,
   AVISO_ADMIN_SEM_SAFRA, AVISO_ADMIN_SAFRA_SAI,
 } from './escopoDoSubcentro';
 
@@ -108,5 +109,42 @@ describe('a segunda porta: o dividendo fora do plano', () => {
   it('macro que não é dividendo não abre porta nenhuma', () => {
     expect(ehLinhaAdministrativa(PLANO, 'Fertilizantes', 'Custo Variável')).toBe(false);
     expect(ehLinhaAdministrativa(PLANO, null, null)).toBe(false);
+  });
+});
+
+describe('a fazenda do administrativo — FIN-FAZENDA-ADM-01', () => {
+  const FAZENDAS = [
+    { id: 'g', nome: 'Global' },
+    { id: 'p', nome: 'Faz. Pureza' },
+    { id: 'a', nome: 'Administrativo' },
+    { id: 'r', nome: 'Faz. Sta. Rita' },
+  ];
+
+  it('acha a Administrativo do cliente', () => {
+    expect(fazendaAdministrativa(FAZENDAS)?.id).toBe('a');
+  });
+
+  it('acha por trecho e sem caixa — o cadastro não promete o nome exato', () => {
+    expect(fazendaAdministrativa([{ id: 'x', nome: 'Setor administrativo' }])?.id).toBe('x');
+    expect(fazendaAdministrativa([{ id: 'x', nome: 'ADMINISTRATIVO' }])?.id).toBe('x');
+  });
+
+  it('⚠ devolve null quando não existe, para o chamador NÃO inventar fazenda', () => {
+    /* Sem a fazenda cadastrada, o certo é deixar como está: apagar seria pior que errar o
+       lugar, porque o save exige fazenda. */
+    expect(fazendaAdministrativa([{ id: 'p', nome: 'Faz. Pureza' }])).toBeNull();
+    expect(fazendaAdministrativa([])).toBeNull();
+    expect(fazendaAdministrativa(null)).toBeNull();
+  });
+
+  it('nome sem valor não quebra a busca', () => {
+    expect(fazendaAdministrativa([{ id: 'x', nome: null }, { id: 'a', nome: 'Administrativo' }])?.id)
+      .toBe('a');
+  });
+
+  it('o aviso nomeia a fazenda, e tem texto mesmo sem ela', () => {
+    expect(avisoFazendaAdministrativa('Administrativo'))
+      .toBe('administrativo não tem fazenda específica — salvo em Administrativo');
+    expect(avisoFazendaAdministrativa(null)).toContain('Administrativo');
   });
 });

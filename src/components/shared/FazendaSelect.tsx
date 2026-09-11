@@ -9,12 +9,18 @@ import { Label } from '@/components/ui/label';
 import { AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Fazenda } from '@/contexts/FazendaContext';
+import { fazendaAdministrativa, avisoFazendaAdministrativa } from '@/lib/financeiro/escopoDoSubcentro';
 
 export interface FazendaSelectProps {
   value: string;
   onChange: (id: string) => void;
   fazendas: Fazenda[];
-  forcaAdministrativo: boolean;   // = macroCusto === 'Dividendos'
+  /**
+   * ⚠ DEIXOU DE SER SÓ DIVIDENDOS — FIN-FAZENDA-ADM-01. A pergunta passou a ser a mesma da
+   * safra: o ESCOPO da conta é administrativo? Dividendos continua entrando (é uma das duas
+   * portas), agora como caso particular de uma regra maior. O nome da prop já era o certo.
+   */
+  forcaAdministrativo: boolean;
   label?: string;
   className?: string;             // wrapper
   triggerClassName?: string;      // ex.: fieldBg
@@ -31,11 +37,8 @@ export function FazendaSelect({
 }: FazendaSelectProps) {
   const fazOperacionais = fazendas.filter(f => f.id !== '__global__');
 
-  // Dividendos sempre na fazenda Administrativo do cliente.
-  const fazendaAdm = useMemo(
-    () => fazendas.find(f => f.nome?.toLowerCase().includes('administrat')),
-    [fazendas],
-  );
+  // Administrativo sempre na fazenda Administrativo do cliente — a busca mora na lib.
+  const fazendaAdm = useMemo(() => fazendaAdministrativa(fazendas), [fazendas]);
   useEffect(() => {
     if (forcaAdministrativo && fazendaAdm && value !== fazendaAdm.id) {
       onChange(fazendaAdm.id);
@@ -54,7 +57,7 @@ export function FazendaSelect({
       {!hideAviso && forcaAdministrativo && fazendaAdm && (
         <p className="text-[10px] text-amber-600 flex items-center gap-1 mt-1">
           <AlertTriangle className="h-3 w-3" />
-          Dividendos são salvos automaticamente em {fazendaAdm.nome}
+          {avisoFazendaAdministrativa(fazendaAdm.nome)}
         </p>
       )}
     </div>

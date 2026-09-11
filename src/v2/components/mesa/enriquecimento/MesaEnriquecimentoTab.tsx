@@ -39,7 +39,7 @@ import { EnriquecimentoCandidatosInline } from './EnriquecimentoCandidatosInline
 import { AgruparModal } from './AgruparModal';
 import { MesaCamposTabela, CAMPOS_OBRIGATORIOS_MESA, CAMPOS_OBRIGATORIOS_SE_TRANSFERENCIA } from './MesaCamposTabela';
 import { ehTipoTransferencia } from '@/v2/lib/mesa/transferenciaPlano';
-import { ehLinhaAdministrativa } from '@/lib/financeiro/escopoDoSubcentro';
+import { ehLinhaAdministrativa, fazendaAdministrativa } from '@/lib/financeiro/escopoDoSubcentro';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -1037,19 +1037,34 @@ export function MesaEnriquecimentoTab({
       : (row.edicao.subcentro ?? row.edicao.subcentroAtual ?? null);
     return ehLinhaAdministrativa(classificacoes, sub, row.edicao.macro);
   }
-  function semSafraSeAdministrativo(patch: Record<string, unknown>, row: EnriqRowVM) {
+  function ajustarSeAdministrativo(patch: Record<string, unknown>, row: EnriqRowVM) {
     if (!contaAdministrativa(row, patch.subcentro)) return patch;
+    const ajustado = { ...patch };
     /* Só acrescenta a chave quando há o que zerar: patch sem safra e linha sem safra não
        precisa de `safra_id: null` — seria ruído no evento da auditoria. */
-    if (!('safra_id' in patch) && !row.edicao.safraId && !row.edicao.safraIdAtual) return patch;
-    return { ...patch, safra_id: null };
+    if ('safra_id' in patch || row.edicao.safraId || row.edicao.safraIdAtual) ajustado.safra_id = null;
+    /**
+     * A FAZENDA, PELO MESMO CAMINHO — FIN-FAZENDA-ADM-01.
+     *
+     * ⚠ E AQUI ELA FALTAVA DE VERDADE, não só na aparência: o `ResultadoFazendaEditor` chama
+     * `onEditar` apenas quando NÃO está forçado (`if (!forcaAdministrativo)`), então o
+     * `FazendaSelect` mostrava "Administrativo" e a proposta nunca recebia nada — a tela
+     * dizia uma fazenda e o apply gravava outra. Forçar no payload fecha isso.
+     * ⚠ VAI PARA A FAZENDA "Administrativo", não para nulo: zero lançamentos administrativos
+     * têm fazenda nula (medido), e a fazenda é campo exigido no save do modal.
+     * ⚠ SEM A FAZENDA CADASTRADA, NÃO INVENTA: se o cliente não tiver uma "Administrativo",
+     * o patch segue sem `fazenda_id` — melhor manter o que está do que apagar.
+     */
+    const adm = fazendaAdministrativa(fazendas);
+    if (adm && (row.edicao.fazendaId ?? row.edicao.fazendaIdAtual) !== adm.id) ajustado.fazenda_id = adm.id;
+    return ajustado;
   }
 
   // PR-U2c-2A — edição da proposta via editarProposto (os editores dos passos
   // 2B..2E chamam isto). patch = { subcentro | favorecido_id | fazenda_id | produto | ... }.
   async function onEditar(patchOriginal: Record<string, unknown>): Promise<void> {
     if (!selecionado) return;
-    const patch = semSafraSeAdministrativo(patchOriginal, selecionado);
+    const patch = ajustarSeAdministrativo(patchOriginal, selecionado);
     // R1 — dispara a edição e registra a Promise SINCRONAMENTE (antes do 1º await), para o
     // salvar() disparado logo em seguida (blur→click) poder aguardá-la antes do apply.
     const p = editarProposto({ staging_id: selecionado.id, patch });
@@ -1098,10 +1113,15 @@ export function MesaEnriquecimentoTab({
        mandá-la voltaria em `campos_rejeitados` — um toast de erro no meio de um lote que
        deu certo. Agora `fn_classificacao_apply_row` grava `safra_id`, e o envelope pede
        os quatro. `safra` (o texto do Excel) continua carry-only: quem grava é o id. */
+    /* ⚠ O GRUPO HERDA A REGRA DO ADMINISTRATIVO, e aqui ela é EXPLÍCITA em vez de passar pelo
+       `ajustarSeAdministrativo`: lá o ajuste é incremental (só mexe no que a linha tem de
+       errado), e um patch de grupo precisa dizer o valor para TODAS as linhas, inclusive as
+       que já estavam certas. Mesma decisão, dois usos diferentes. */
+    const admDoGrupo = contaAdministrativa(selecionado) ? fazendaAdministrativa(fazendas) : null;
     const patch = {
       subcentro: selecionado.edicao.subcentro,
       favorecido_id: selecionado.edicao.favorecidoId,
-      fazenda_id: selecionado.edicao.fazendaId,
+      fazenda_id: admDoGrupo ? admDoGrupo.id : selecionado.edicao.fazendaId,
       safra_id: contaAdministrativa(selecionado) ? null : selecionado.edicao.safraId,
     };
     setAplicandoGrupo(true);

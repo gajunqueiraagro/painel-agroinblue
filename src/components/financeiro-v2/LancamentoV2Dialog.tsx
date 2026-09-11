@@ -42,7 +42,7 @@ import { planoDeTransferencia, ehTipoTransferencia } from '@/v2/lib/mesa/transfe
 import { ATIVIDADES, lembrarAtividade, ultimaAtividade, type Atividade } from '@/lib/financeiro/ultimaAtividade';
 import { safraSugerida } from '@/lib/agri/safraSugerida';
 import { conflitoSafraEscopo, mensagemConflitoSafraEscopo } from '@/lib/financeiro/safraEscopo';
-import { escopoDoSubcentro, AVISO_ADMIN_SEM_SAFRA, AVISO_ADMIN_SAFRA_SAI } from '@/lib/financeiro/escopoDoSubcentro';
+import { escopoDoSubcentro, fazendaAdministrativa, AVISO_ADMIN_SEM_SAFRA, AVISO_ADMIN_SAFRA_SAI } from '@/lib/financeiro/escopoDoSubcentro';
 
 interface Props {
   open: boolean;
@@ -618,6 +618,19 @@ export function LancamentoV2Dialog({
   const safraParaGravar = (): string | null => (ehAdministrativo ? null : (safraId || null));
 
   /**
+   * ADMINISTRATIVO NÃO TEM FAZENDA ESPECÍFICA — FIN-FAZENDA-ADM-01 (Gabriel, 11/09/2026).
+   *
+   * ⚠ MESMO CRITÉRIO DA SAFRA, uma linha abaixo dela de propósito: quem serve a empresa toda
+   * não se aloca numa fazenda. O que muda entre os dois campos é o destino — a safra vai a
+   * NULO e a fazenda vai à fazenda "Administrativo" do cliente, porque é o que o dado diz
+   * (zero administrativos com fazenda nula, medido) e porque o save EXIGE fazenda.
+   * ⚠ DIVIDENDOS CONTINUA ENTRANDO, agora pela porta de cima: o `macroCusto === 'Dividendos'`
+   * que estava aqui sozinho vira a segunda porta, para o dividendo cujo subcentro é por
+   * cliente e não tem linha no plano.
+   */
+  const fazendaTravadaAdm = ehAdministrativo || macroCusto === 'Dividendos';
+
+  /**
    * ⚠ SUGERE AO MUDAR ATIVIDADE OU COMPETÊNCIA, e só quando o campo está livre: vazio, ou
    * ainda com a sugestão anterior. Um campo escolhido à mão é decisão tomada.
    * ⚠ ADMINISTRATIVO NUNCA SUGERE (OC_013): safra em administrativo é regra do backfill,
@@ -955,10 +968,7 @@ export function LancamentoV2Dialog({
 
   // PR-U2c-1B: Select de Fazenda + regra Dividendos migraram para <FazendaSelect />.
   // fazendaAdm permanece aqui pois o SAVE (fazendaIdEfetivo) também o usa.
-  const fazendaAdm = useMemo(
-    () => fazendas.find(f => f.nome?.toLowerCase().includes('administrat')),
-    [fazendas],
-  );
+  const fazendaAdm = useMemo(() => fazendaAdministrativa(fazendas), [fazendas]);
 
   // Validation — FONTE ÚNICA via helper puro (PR-FIN-MODAL-02B). Reproduz EXATAMENTE as
   // fórmulas anteriores (contaSimpleValid/parceladaValid/recorrenteValid/canSave) e expõe
@@ -990,8 +1000,10 @@ export function LancamentoV2Dialog({
       toast.error('Status "Realizado" exige data de pagamento.');
       return;
     }
-    // Dividendos sempre na fazenda Administrativo (defesa caso useEffect não tenha disparado).
-    const fazendaIdEfetivo = (macroCusto === 'Dividendos' && fazendaAdm) ? fazendaAdm.id : fazendaId;
+    /* Administrativo sempre na fazenda Administrativo (defesa caso o useEffect do
+       `FazendaSelect` não tenha disparado) — FIN-FAZENDA-ADM-01 ampliou de Dividendos para
+       todo escopo administrativo, pelo mesmo par tela+payload da safra. */
+    const fazendaIdEfetivo = (fazendaTravadaAdm && fazendaAdm) ? fazendaAdm.id : fazendaId;
     // Extra validation for transfers
     if (isTransferencia) {
       if (!contaOrigemId || contaOrigemId === '__none__' || !contaDestinoId || contaDestinoId === '__none__') {
@@ -1563,7 +1575,7 @@ export function LancamentoV2Dialog({
                 value={fazendaId}
                 onChange={setFazendaId}
                 fazendas={fazendas}
-                forcaAdministrativo={macroCusto === 'Dividendos'}
+                forcaAdministrativo={fazendaTravadaAdm}
                 label="Fazenda *"
                 className="col-span-4"
                 triggerClassName={fieldBg}

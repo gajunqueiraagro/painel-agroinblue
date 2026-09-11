@@ -198,6 +198,9 @@ export function MesaCamposTabela({
    * a pergunta é sobre o que ela vai virar, não sobre o que ela era.
    */
   const subcentroEfetivoResultado = row.edicao.subcentro ?? row.edicao.subcentroAtual ?? null;
+  /* ⚠ A MESMA RESPOSTA GOVERNA SAFRA E FAZENDA — FIN-FAZENDA-ADM-01. Eram duas perguntas
+     diferentes na tela (a safra pelo escopo, a fazenda só por `macro === 'Dividendos'`), e
+     por isso a linha do print aparecia com a safra travada e a fazenda editável. */
   const contaEhAdministrativa = ehLinhaAdministrativa(classificacoes, subcentroEfetivoResultado, row.edicao.macro);
   /* ⚠ FILTRA ANTES DE MAPEAR, e isso não é estilo: a zebra e a faixa do bloco 2 se decidem
      pela POSIÇÃO da linha. Pulando a linha do destino dentro do `map`, o índice continuava
@@ -298,7 +301,7 @@ export function MesaCamposTabela({
                     fazendaId={row.edicao.fazendaId} onEditar={onEditar} onCriarFornecedor={onCriarFornecedor} />
                 ) : editavel && campo === 'Fazenda' && fazendas ? (
                   <ResultadoFazendaEditor value={row.edicao.fazendaId} fazendaIdAtual={row.edicao.fazendaIdAtual}
-                    fazendas={fazendas} forcaAdministrativo={row.edicao.macro === 'Dividendos'} onEditar={onEditar} />
+                    fazendas={fazendas} forcaAdministrativo={contaEhAdministrativa} onEditar={onEditar} />
                 ) : editavel && campo === 'Produto / Descrição' ? (
                   <ResultadoProdutoEditor value={row.edicao.produto} descricaoAtual={row.edicao.descricaoAtual}
                     clienteId={clienteId} onEditar={onEditar} />
