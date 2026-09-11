@@ -47,7 +47,7 @@ import { FinanceiroV2ExportMenu } from '@/components/financeiro-v2/FinanceiroV2E
 import { CorrecaoTransferenciasBanner } from '@/components/financeiro-v2/CorrecaoTransferenciasBanner';
 import { format, parseISO } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
-import { normalizarAtividade } from '@/lib/financeiro/filtrosListaV2';
+import { normalizarAtividade, casaTipoOperacao } from '@/lib/financeiro/filtrosListaV2';
 /* ⚠ A LISTA DE ATIVIDADES É A DO CARD DO MODAL — adendo do PR-FIN-SAFRA-ADM-01. Duplicá-la
    aqui é como o filtro ficou dois anos oferecendo Pecuária e Agricultura enquanto o resto do
    sistema já conhecia quatro: uma lista escrita à mão não sabe quando a outra cresce. */
@@ -932,6 +932,18 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     if (fornecedorFiltro !== '__all__') {
       items = items.filter(l => l.favorecido_id === fornecedorFiltro);
     }
+    /* ⚠ O TIPO PASSA A SER CONFERIDO AQUI TAMBÉM — FIN-LISTA-ORDENA-FILTRO-01. Ele era o
+       ÚNICO filtro da barra aplicado só no servidor: conta, produto, documento, fornecedor,
+       atividade, safra, grupo e status já eram reconferidos em memória. A assimetria era
+       invisível até uma carga chegar sem o predicado — e aí a tela mostrava, sob "Tipo =
+       Transferências", 9.366 linhas de dois anos inteiros, entre elas amortização e ajuste de
+       caixa. Com a conferência dos dois lados, nenhum gesto da tela (ordenar, paginar,
+       recarregar por notificação) consegue trazer de volta o que o filtro excluiu.
+       ⚠ E A REGRA É A MESMA DO SERVIDOR, `casaTipoOperacao`, não uma segunda comparação: duas
+       definições de "isto é transferência?" divergiriam na grafia legada. */
+    if (tipoOperacao !== '__all__') {
+      items = items.filter(l => casaTipoOperacao(tipoOperacao, l.tipo_operacao));
+    }
     if (atividadeFiltro !== '__all__') {
       items = items.filter(l => getAtividade(l) === atividadeFiltro);
     }
@@ -971,7 +983,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     }
 
     return items;
-  }, [hook.lancamentos, contaOrigem, contaDestino, produtoFiltro, documentoFiltro, fornecedorFiltro, atividadeFiltro, safraFiltro, grupoFiltro, centroToGrupo, statusSelecionados, conciliados]);
+  }, [hook.lancamentos, contaOrigem, contaDestino, produtoFiltro, documentoFiltro, fornecedorFiltro, tipoOperacao, atividadeFiltro, safraFiltro, grupoFiltro, centroToGrupo, statusSelecionados, conciliados]);
 
   const compareDefaultOrder = useCallback((a: LancamentoV2, b: LancamentoV2) => {
     // PR-FIN-GRADE-DATAS-03 — a ordenação padrão acompanha a dimensão selecionada (Data por). Chave
@@ -1837,8 +1849,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     3: Macro 3 · Grupo 3 · Centro 3 · Subcentro 3
                     4: Produto 4 · Fornecedor 4 · Documento 4 */}
               <div className="grid grid-cols-12 gap-1.5 items-end">
-                  {/* Ano 1→2 faixas: "2026" + chevron não cabiam em ~55px e o valor cortava.
-                      O Mês devolve a faixa — ele mostra "Todos" ou "N meses", que é curto. */}
+                  {/* ⚠ DUAS FAIXAS ERAM DEMAIS E UMA ERA DE MENOS, e a segunda tentativa é o
+                      meio: o Ano mostra "2026" ou "2 anos" e o Mês mostra "12 meses" — os dois
+                      são curtos, e o que quebrava era a faixa de ~55px, não o conteúdo. Com a
+                      grade de 12 não há meia faixa, então os dois ficam com 2 e o Fazenda
+                      devolve a que sobrava (de 3 para 2: ele trunca e tem `title`). */}
                   <div className="col-span-2 min-w-0">
                   <label className={lblCls}>Ano</label>
                   {/* ⚠ MESMO PADRÃO DO MÊS — Popover + Checkbox, não um Select novo. Os dois
@@ -1866,7 +1881,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     </PopoverContent>
                   </Popover>
                 </div>
-                  <div className="col-span-1 min-w-0">
+                  <div className="col-span-2 min-w-0">
                   <label className={lblCls}>Mês</label>
                   <Popover open={mesPopoverOpen} onOpenChange={setMesPopoverOpen}>
                     <PopoverTrigger asChild>
@@ -1941,7 +1956,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     </PopoverContent>
                   </Popover>
                 </div>
-                  <div className="col-span-3 min-w-0">
+                  <div className="col-span-2 min-w-0">
                   <label className={lblCls}>Fazenda</label>
                   <Select value={fazendaId} onValueChange={setFazendaId}>
                     <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F]`}><SelectValue placeholder="Selecione" /></SelectTrigger>

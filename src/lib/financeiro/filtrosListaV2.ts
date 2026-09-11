@@ -96,6 +96,24 @@ export function normalizarAtividade(escopoNegocio?: string | null): string {
   return 'outros';
 }
 
+/**
+ * O tipo da linha casa com o tipo escolhido no filtro? — FIN-LISTA-ORDENA-FILTRO-01.
+ *
+ * ⚠ REGRA ÚNICA PARA OS DOIS LADOS. O predicado do servidor (`montarPlanoBaseV2`) e o recorte
+ * em memória da lista precisam responder a MESMA pergunta: enquanto o tipo era filtrado só no
+ * servidor, qualquer recarga que perdesse o predicado enchia a tela de linhas que o filtro
+ * dizia ter excluído — e ordenar, paginar ou qualquer outro gesto passava a "mudar o
+ * conjunto" aos olhos de quem olha.
+ * ⚠ TRANSFERÊNCIA É AS DUAS GRAFIAS, aqui como lá: o banco tem 822 no plural e 7 no singular.
+ */
+export function casaTipoOperacao(tipoFiltro: string | null | undefined, tipoDaLinha: string | null | undefined): boolean {
+  const alvo = (tipoFiltro ?? '').trim();
+  if (!alvo || alvo === '__all__') return true;
+  const linha = (tipoDaLinha ?? '').trim();
+  if (ehTransferencia(alvo)) return ehTransferencia(linha);
+  return linha === alvo;
+}
+
 /** Verdadeiro para os tipos de operação considerados transferência. */
 export function ehTransferencia(tipoOperacao?: string | null): boolean {
   const t = (tipoOperacao || '').trim();
