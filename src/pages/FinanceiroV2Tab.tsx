@@ -2288,31 +2288,44 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 {/* 18→14: a coluna do marcador de origem carrega UM ícone; o checkbox tem
                     coluna própria, de 28px. */}
                 <col style={{ width: 14 }} />
-                {/* PR-FIN-GRADE-DATAS-03 — COMP. | VENC. | PGTO. (3 colunas de data, 45px cada).
-                    Os ~45px da nova coluna VENC. são compensados SÓ em Produto (−35) e Fazenda (−10). */}
-                <col style={{ width: 45 }} />
-                <col style={{ width: 45 }} />
-                <col style={{ width: 45 }} />
+                {/* PR-FIN-GRADE-DATAS-03 — COMP. | VENC. | PGTO. (3 colunas de data).
+                    45→40 cada em FIN-LISTA-VISUAL-06: a data renderiza a 8px com
+                    `letter-spacing: -0.4px` (regra `.celula-data` do index.css), e "31/12/26"
+                    pede ~32px — 40 ainda sobra para o padding de 1px de cada lado. */}
+                <col style={{ width: 40 }} />
+                <col style={{ width: 40 }} />
+                <col style={{ width: 40 }} />
                 {/* Produto 175→150 na lista normal — FIN-LISTA-LAYOUT-01. É a coluna mais
                     larga e a que mais tolera truncar: o texto inteiro está no `title`. */}
-                <col style={{ width: modoIntensivo ? 220 : 150 }} />
-                <col style={{ width: 140 }} />
+                <col style={{ width: modoIntensivo ? 170 : 150 }} />
+                {/* Fornecedor 140→120 — FIN-LISTA-VISUAL-06. Trunca com o nome inteiro no `title`. */}
+                <col style={{ width: 120 }} />
                 <col style={{ width: 80 }} />
                 <col style={{ width: 80 }} />
                 {/* Fazenda 50→44: o rótulo virou "Faz." e a célula mostra o CÓDIGO, nunca o
                     nome — o nome inteiro está no `title`. */}
                 <col style={{ width: 38 }} />
-                {/* Safra 75→62 com fonte 10px: "25/26-MAND" cabe, e é o código mais longo do
-                    cadastro. O nome completo continua no `title`. */}
-                <col style={{ width: 56 }} />
-                {/* As duas contas só no Ampliado: 150px cada, que é o mínimo em que
-                    "Cartão Banco do Brasil - Pecuária" trunca sem virar reticências puras. */}
-                {modoIntensivo && <col style={{ width: 130 }} />}
-                {modoIntensivo && <col style={{ width: 130 }} />}
+                {/* Safra 56→66 — FIN-LISTA-VISUAL-06, a ÚNICA coluna que CRESCE neste corte.
+                    ⚠ NO AMPLIADO NÃO HÁ ESTICAMENTO: a tabela transborda o container, então
+                    cada faixa vale exatamente o que está escrito aqui — e "25/26-MAND", o
+                    código mais longo do cadastro (medido: 10 caracteres, os demais têm 9),
+                    não cabia nos 56 e saía "25/26-M…". Na lista normal a diferença é nenhuma,
+                    porque lá as faixas esticam. */}
+                <col style={{ width: 66 }} />
+                {/* As duas contas só no Ampliado: 130→105 cada em FIN-LISTA-VISUAL-06.
+                    ⚠ O COMENTÁRIO ANTIGO DIZIA 150 E A LARGURA ERA 130 — o texto ficou para
+                    trás de um corte anterior. Agora são 105, e o nome longo ("Cartão Banco do
+                    Brasil - Pecuária") passa a truncar mais cedo; o nome inteiro está no
+                    `title`, e o que a coluna precisa responder é QUAL conta, não o nome todo. */}
+                {modoIntensivo && <col style={{ width: 105 }} />}
+                {modoIntensivo && <col style={{ width: 105 }} />}
                 <col style={{ width: 90 }} />
-                {/* Doc 70→55 com fonte 10px na lista normal; no Ampliado segue 110, onde a
-                    NF inteira com série é o ponto. */}
-                <col style={{ width: modoIntensivo ? 90 : 55 }} />
+                {/* Doc: 55 na normal, 90→60 no Ampliado — FIN-LISTA-VISUAL-06.
+                    ⚠ A FONTE NÃO MUDA, e o briefing pedia 10px: a célula JÁ renderiza a 9px,
+                    porque `.celula-doc` no index.css tem `font-size: 9px !important` e vence
+                    o `text-[10px]` do JSX. Subir para 10 seria AUMENTAR a fonte dentro de uma
+                    coluna que está encolhendo 30px — o contrário do pedido. */}
+                <col style={{ width: modoIntensivo ? 60 : 55 }} />
                 {/* 58→64: a pílula ganhou borda e padding lateral; sem os 6px "Realizado"
                     truncaria dentro dela — que é pior que não ter pílula. */}
                 <col style={{ width: 64 }} />
@@ -2327,10 +2340,20 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                   {/* PR-CONC-B-1 — sem rótulo: o cabeçalho de 8px não caberia e a legenda do
                       rodapé é quem explica os cinco símbolos. */}
                   <th className="px-0 py-[3px] text-center align-middle sticky left-[28px] z-30 bg-primary" aria-label="Origem" />
-                  <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[50px] z-30 bg-primary" onClick={() => toggleSort('data')}>Comp.<SortIndicator field="data" /></th>
-                  {/* PR-FIN-GRADE-DATAS-03 — VENC. e PGTO. colunas independentes; sticky em 73px (28+45) e 118px (28+45+45). */}
-                  <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[95px] z-30 bg-primary" onClick={() => toggleSort('venc')}>Venc.<SortIndicator field="venc" /></th>
-                  <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[140px] z-30 bg-primary" onClick={() => toggleSort('pgto')}>Pgto.<SortIndicator field="pgto" /></th>
+                  <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[42px] z-30 bg-primary" onClick={() => toggleSort('data')}>Comp.<SortIndicator field="data" /></th>
+                  {/* ⚠ A CADEIA DE `sticky left` É A SOMA DAS COLUNAS ANTERIORES, e agora bate —
+                      FIN-LISTA-VISUAL-06: 0 (check 28) → 28 (origem 14) → 42 (comp. 40) →
+                      82 (venc. 40) → 122. Estava 0/28/50/95/140 contra colunas de 28+14+45+45:
+                      8px de sobra na primeira data e 5 e 10 nas outras, herdados de um corte
+                      anterior que mexeu na largura e não na cadeia.
+                      ⚠ ISSO SÓ APARECE NO AMPLIADO, que é o único modo que rola na horizontal:
+                      cada folga vira uma fresta por onde passa o conteúdo que está rolando por
+                      baixo das colunas congeladas. Na lista normal não há rolagem lateral, e por
+                      isso o defeito viveu escondido.
+                      ⚠ QUEM MEXER NA LARGURA DE UMA DESTAS CINCO refaz a conta aqui. São quatro
+                      números em oito lugares (th + td). */}
+                  <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[82px] z-30 bg-primary" onClick={() => toggleSort('venc')}>Venc.<SortIndicator field="venc" /></th>
+                  <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[122px] z-30 bg-primary" onClick={() => toggleSort('pgto')}>Pgto.<SortIndicator field="pgto" /></th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('produto')}>Produto<SortIndicator field="produto" /></th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('fornecedor')}>Fornecedor<SortIndicator field="fornecedor" /></th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground">Macro</th>
@@ -2443,13 +2466,13 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                             o status, que são o que se lê primeiro. Vencido = tem vencimento no
                             passado E não tem pagamento; um lançamento pago ontem com
                             vencimento anteontem não está atrasado, está resolvido. */}
-                        <td className="celula-data font-mono px-0.5 py-1 align-middle leading-tight sticky left-[50px] z-10 bg-background text-center text-muted-foreground">{fmtDate(l.data_competencia)}</td>
+                        <td className="celula-data font-mono px-0.5 py-1 align-middle leading-tight sticky left-[42px] z-10 bg-background text-center text-muted-foreground">{fmtDate(l.data_competencia)}</td>
                         {/* PR-FIN-GRADE-DATAS-03 — VENC. e PGTO. em colunas separadas, cada uma a sua coluna real
                             (nunca fundidas, nunca a data financeira derivada). fmtDate(null) já rende o sentinela '-'.
                             VENC. permanece visível mesmo quando há PGTO. */}
-                        <td className={`celula-data font-mono px-0.5 py-1 align-middle leading-tight sticky left-[95px] z-10 bg-background text-center ${vencido ? 'font-semibold text-destructive' : 'text-muted-foreground'}`}
+                        <td className={`celula-data font-mono px-0.5 py-1 align-middle leading-tight sticky left-[82px] z-10 bg-background text-center ${vencido ? 'font-semibold text-destructive' : 'text-muted-foreground'}`}
                           title={vencido ? 'Vencido e não pago' : undefined}>{fmtDate(l.data_vencimento)}</td>
-                        <td className="celula-data font-mono px-0.5 py-1 align-middle leading-tight sticky left-[140px] z-10 bg-background text-center text-muted-foreground">{fmtDate(l.data_pagamento)}</td>
+                        <td className="celula-data font-mono px-0.5 py-1 align-middle leading-tight sticky left-[122px] z-10 bg-background text-center text-muted-foreground">{fmtDate(l.data_pagamento)}</td>
                         <td className="truncate px-1 py-1 align-middle text-[12px] font-medium leading-tight" title={isParcelaFinanciamento ? `Parcela de financiamento (origem automática) — ${descExibida || ''}` : (descExibida || '')}>
                           {isParcelaFinanciamento && <span className="mr-1" title="Parcela de financiamento">🏦</span>}
                           {descExibida || '-'}

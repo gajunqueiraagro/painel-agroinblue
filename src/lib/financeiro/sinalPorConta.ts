@@ -71,6 +71,20 @@ export function sinalDoSentido(s: SentidoNaConta): 1 | -1 {
   return s === 'entrada' ? 1 : -1;
 }
 
+/**
+ * A COR DO VALOR NA LISTA — FIN-LISTA-VISUAL-06 (Gabriel, 11/09/2026), para alinhar ao
+ * Finanças: cinza nos três casos, entrada, saída e transferência.
+ *
+ * ⚠ O SINAL NÃO SAIU, SÓ A COR. A saída continua saindo com "−" no texto — quem precisa
+ * distinguir lê o sinal, que é o dado, em vez da cor, que era o reforço. Verde e vermelho em
+ * toda linha de uma lista densa disputavam a atenção com o status, que é a coluna que existe
+ * para ser lida de relance.
+ * ⚠ UMA CONSTANTE, E NÃO TRÊS LITERAIS IGUAIS: se o vermelho do negativo voltar — e o
+ * briefing prevê que possa —, volta aqui, num lugar só, com `sentido` ainda na mão para
+ * decidir. Nada foi apagado: `sentido` continua sendo devolvido intacto.
+ */
+const COR_VALOR = 'text-muted-foreground';
+
 /** O valor de uma linha de lista: o texto e a cor, decididos juntos. */
 export interface ValorDaLinha {
   texto: string;
@@ -100,12 +114,12 @@ export function formatarValorLinha(
   const sentido = sentidoNaConta(l, contaFoco);
   const absoluto = Math.abs(l.valor);
   if (sentido === 'transferencia') {
-    return { texto: formatMoeda(absoluto), classe: 'text-foreground', sentido };
+    return { texto: formatMoeda(absoluto), classe: COR_VALOR, sentido };
   }
   const entrada = sentido === 'entrada';
   return {
     texto: formatMoeda(entrada ? absoluto : -absoluto),
-    classe: entrada ? 'text-success' : 'text-destructive',
+    classe: COR_VALOR,
     sentido,
   };
 }
