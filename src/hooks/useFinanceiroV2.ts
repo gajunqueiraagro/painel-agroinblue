@@ -965,28 +965,61 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
        que a chave do plano resolveu, nem o macro/grupo/centro que vieram com ele; pintar o
        form de volta mostraria o que foi digitado, e a diferença só apareceria no F5. */
     if (verify) {
-      setLancamentos((atual) => atual.map((l) => (l.id !== id ? l : {
-        ...l,
-        subcentro: verify.subcentro ?? l.subcentro,
-        macro_custo: verify.macro_custo ?? l.macro_custo,
-        grupo_custo: verify.grupo_custo ?? l.grupo_custo,
-        centro_custo: verify.centro_custo ?? l.centro_custo,
-        escopo_negocio: verify.escopo_negocio ?? l.escopo_negocio,
-        plano_conta_id: verify.plano_conta_id ?? l.plano_conta_id,
-        compoe_dre: verify.compoe_dre ?? l.compoe_dre,
-        safra_id: verify.safra_id ?? l.safra_id,
-        valor: verify.valor ?? l.valor,
-        descricao: verify.descricao ?? l.descricao,
-        data_competencia: verify.data_competencia ?? l.data_competencia,
-        data_vencimento: verify.data_vencimento ?? l.data_vencimento,
-        data_pagamento: verify.data_pagamento ?? l.data_pagamento,
-        status_transacao: verify.status_transacao ?? l.status_transacao,
-        tipo_operacao: verify.tipo_operacao ?? l.tipo_operacao,
-        conta_bancaria_id: verify.conta_bancaria_id ?? l.conta_bancaria_id,
-        conta_destino_id: verify.conta_destino_id ?? l.conta_destino_id,
-        favorecido_id: verify.favorecido_id ?? l.favorecido_id,
-        updated_at: verify.updated_at ?? l.updated_at,
-      })));
+      /* ⚠ O TIPO É `Omit<LancamentoV2, 'dados_pagamento'>` DE PROPÓSITO, e é a peça inteira
+         desta correção. Antes isto era uma lista de dezenove campos ESCOLHIDOS, e uma lista
+         escolhida esquece: `fazenda_id` ficou de fora, então trocar a fazenda gravava no
+         banco e a lista seguia mostrando a anterior até o F5 (caso Vera, 11/09, "Seguro
+         Hilux"). Com a anotação, esquecer um campo é ERRO DE COMPILAÇÃO — o defeito deixa
+         de depender de alguém lembrar.
+         ⚠ `dados_pagamento` É A ÚNICA EXCEÇÃO, e sai por mentira de tipo: `jsonb` no banco,
+         `string | null` aqui. Não é lida na lista; converter exigiria decidir uma
+         serialização, que é outra frente. Fica a de `l`, como já ficava.
+         ⚠ `?? l.x` SÓ ONDE O NOSSO TIPO NÃO ACEITA NULO. Nos campos que aceitam, o valor vem
+         DIRETO: `verify.safra_id ?? l.safra_id` manteria a safra anterior quando o operador
+         a apaga — e apagar safra é exatamente o que o FIN-SAFRA-ADM-01 faz em todo
+         lançamento administrativo. O `??` defensivo escondia a própria gravação. */
+      const doBanco: Omit<LancamentoV2, 'dados_pagamento'> = {
+        id: verify.id ?? id,
+        cliente_id: verify.cliente_id ?? clienteId,
+        fazenda_id: verify.fazenda_id ?? form.fazenda_id,
+        conta_bancaria_id: verify.conta_bancaria_id,
+        data_competencia: verify.data_competencia ?? form.data_competencia,
+        data_pagamento: verify.data_pagamento,
+        data_vencimento: verify.data_vencimento,
+        valor: verify.valor,
+        /* Texto no banco ('-1' | '0' | '1'), número aqui. A conversão é explícita e o nulo
+           não vira zero: sem valor, fica o que a linha já tinha. */
+        sinal: verify.sinal != null ? Number(verify.sinal) : sinal,
+        tipo_operacao: verify.tipo_operacao ?? form.tipo_operacao,
+        status_transacao: verify.status_transacao,
+        descricao: verify.descricao,
+        macro_custo: verify.macro_custo,
+        grupo_custo: verify.grupo_custo,
+        centro_custo: verify.centro_custo,
+        subcentro: verify.subcentro,
+        escopo_negocio: verify.escopo_negocio,
+        observacao: verify.observacao,
+        ano_mes: verify.ano_mes ?? anoMes,
+        documento: verify.documento,
+        historico: verify.historico,
+        numero_documento: verify.numero_documento,
+        favorecido_id: verify.favorecido_id,
+        conta_destino_id: verify.conta_destino_id,
+        origem_lancamento: verify.origem_lancamento ?? 'manual',
+        lote_importacao_id: verify.lote_importacao_id,
+        forma_pagamento: verify.forma_pagamento,
+        cancelado: verify.cancelado ?? false,
+        conciliado_em: verify.conciliado_em,
+        editado_manual: verify.editado_manual ?? true,
+        created_by: verify.created_by,
+        created_at: verify.created_at,
+        updated_at: verify.updated_at,
+        movimentacao_rebanho_id: verify.movimentacao_rebanho_id,
+        safra_id: verify.safra_id,
+        plano_conta_id: verify.plano_conta_id,
+        compoe_dre: verify.compoe_dre,
+      };
+      setLancamentos((atual) => atual.map((l) => (l.id !== id ? l : { ...l, ...doBanco })));
     }
     return true;
   }, [clienteId, user, classificacoes]);
