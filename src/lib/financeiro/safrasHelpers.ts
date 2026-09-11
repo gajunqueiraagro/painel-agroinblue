@@ -3,6 +3,8 @@
 //   rótulos de escopo, indicador "Em uso" e mapeamento amigável de erros.
 //   `ordem_exibicao` honra o schema real: integer NOT NULL DEFAULT 0 (Opção A).
 
+import type { CicloSafra } from '@/lib/agri/culturas';
+
 export type EscopoNegocio = 'pecuaria' | 'agricultura' | 'administrativo';
 
 /** Linha soberana de financeiro_safras consumida pela tela.
@@ -17,6 +19,15 @@ export interface FinanceiroSafra {
   descricao: string | null;
   observacoes: string | null;
   ativa: boolean;
+  /**
+   * ⚠ AS TRÊS COLUNAS DO AGRI-01, e elas mudam o que a safra É. `ciclo` é NOT NULL com
+   * default 'anual' no banco, então linha antiga nunca vem nula; `data_inicio`/`data_fim`
+   * podem vir nulas nas safras anteriores ao backfill, e a tela mostra o campo vazio em vez
+   * de inventar a convenção julho–junho por cima de um dado que ninguém conferiu.
+   */
+  ciclo: CicloSafra;
+  data_inicio: string | null;
+  data_fim: string | null;
 }
 
 /**
@@ -84,6 +95,10 @@ export interface SafraFormInput {
   descricao: string;
   observacoes: string;
   ativa: boolean;
+  ciclo: CicloSafra;
+  /** 'yyyy-MM-dd' ou '' — o campo vazio é ausência, não erro. */
+  dataInicio: string;
+  dataFim: string;
 }
 
 /** Payload validado (sem cliente_id) — campos soberanos editáveis da Safra. */
@@ -95,6 +110,9 @@ export interface SafraPayload {
   descricao: string | null;
   observacoes: string | null;
   ativa: boolean;
+  ciclo: CicloSafra;
+  data_inicio: string | null;
+  data_fim: string | null;
 }
 
 export type ValidacaoSafra = { ok: true; payload: SafraPayload } | { ok: false; erro: string };
@@ -117,6 +135,18 @@ export function validarSafra(input: SafraFormInput): ValidacaoSafra {
   }
   const ordem = parseOrdemExibicao(input.ordemRaw);
   if (!ordem.ok) return { ok: false, erro: ordem.erro };
+  const dataInicio = input.dataInicio.trim() || null;
+  const dataFim = input.dataFim.trim() || null;
+  /**
+   * ⚠ FIM ANTES DO INÍCIO É ERRO, E O PERENE É QUEM O TORNA POSSÍVEL: no anual as duas datas
+   * nascem da temporada e já vêm na ordem; no perene o operador digita as duas, com seis ou
+   * sete anos entre elas, e trocar plantio por corte é o engano natural desse campo.
+   * ⚠ SÓ COM AS DUAS PRESENTES. Uma safra com só o início preenchido é incompleta, não
+   * inválida — e recusar a gravação obrigaria a inventar a outra ponta para poder salvar.
+   */
+  if (dataInicio && dataFim && dataFim < dataInicio) {
+    return { ok: false, erro: 'A data final não pode ser anterior à data inicial.' };
+  }
   return {
     ok: true,
     payload: {
@@ -127,6 +157,9 @@ export function validarSafra(input: SafraFormInput): ValidacaoSafra {
       descricao: input.descricao.trim() || null,
       observacoes: input.observacoes.trim() || null,
       ativa: input.ativa,
+      ciclo: input.ciclo,
+      data_inicio: dataInicio,
+      data_fim: dataFim,
     },
   };
 }

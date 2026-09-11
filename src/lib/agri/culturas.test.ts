@@ -9,6 +9,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   CULTURAS, codigoDaSafra, nomeDaSafra, temporadaDeReferencia, temporadasDisponiveis,
+  periodoDaTemporada, codigoSafraPerene, nomeSafraPerene,
 } from './culturas';
 
 describe('código e nome da safra', () => {
@@ -28,8 +29,11 @@ describe('código e nome da safra', () => {
   it('⚠ agricultura SEM cultura não gera código — vazio é melhor que um código errado', () => {
     /* Um `25/26-` ou `25/26-undefined` gravado seria um código único e sem sentido, e a
        unicidade (cliente_id, codigo) o aceitaria sem reclamar. */
-    expect(codigoDaSafra('25/26', 'agricultura', null)).toBe('');
-    expect(nomeDaSafra('25/26', 'agricultura', null)).toBe('');
+    /* ⚠ ERA '' ATÉ O AGRI-CADASTRO-SAFRA-01, e o vazio era o que segurava o botão Criar
+       enquanto a cultura não fosse escolhida. A cultura saiu do cadastro da safra (foi para a
+       área plantada), então a lavoura passou a ter sigla própria e o código nasce completo. */
+    expect(codigoDaSafra('25/26', 'agricultura', null)).toBe('25/26-Lav');
+    expect(nomeDaSafra('25/26', 'agricultura', null)).toBe('Safra 25/26 Lavoura');
   });
 
   it('as seis culturas têm sigla própria, sem colisão', () => {
@@ -82,5 +86,47 @@ describe('código e nome da safra', () => {
     expect(temporadaDeReferencia(new Date(2029, 8, 1))).toBe('29/30');
     expect(temporadaDeReferencia(new Date(2030, 8, 1))).toBe('30/31');
     expect(codigoDaSafra(temporadaDeReferencia(new Date(2099, 8, 1)), 'pecuaria')).toBe('99/00-Pec');
+  });
+});
+
+describe('as datas da temporada — AGRI-CADASTRO-SAFRA-01', () => {
+  it('julho a junho, a mesma convenção de temporadaDeReferencia', () => {
+    expect(periodoDaTemporada('25/26')).toEqual({ inicio: '2025-07-01', fim: '2026-06-30' });
+    expect(periodoDaTemporada('20/21')).toEqual({ inicio: '2020-07-01', fim: '2021-06-30' });
+  });
+
+  it('a virada do século segue o módulo 100 do resto da lib', () => {
+    expect(periodoDaTemporada('99/00')).toEqual({ inicio: '2099-07-01', fim: '2100-06-30' });
+  });
+
+  it('texto que não é temporada devolve null — não se inventa período', () => {
+    expect(periodoDaTemporada('')).toBeNull();
+    expect(periodoDaTemporada('2025/2026')).toBeNull();
+    expect(periodoDaTemporada('abc')).toBeNull();
+  });
+});
+
+describe('o código da safra perene', () => {
+  it('nasce dos dois anos: eucalipto de 2020 a 2027', () => {
+    expect(codigoSafraPerene('2020-03-10', '2027-08-01', 'agricultura')).toBe('20/27-Lav');
+    expect(nomeSafraPerene('2020-03-10', '2027-08-01')).toBe('Safra perene 2020–2027');
+  });
+
+  it('pecuária perene também tem forma, ainda que rara', () => {
+    expect(codigoSafraPerene('2020-01-01', '2025-01-01', 'pecuaria')).toBe('20/25-Pec');
+  });
+
+  it('sem as duas datas não há código — e vazio é o que segura o botão', () => {
+    expect(codigoSafraPerene('2020-03-10', null, 'agricultura')).toBe('');
+    expect(codigoSafraPerene(null, '2027-08-01', 'agricultura')).toBe('');
+    expect(codigoSafraPerene('', '', 'agricultura')).toBe('');
+    expect(nomeSafraPerene('2020-03-10', null)).toBe('');
+  });
+
+  it('⚠ um perene de um ano colide com o anual da mesma temporada, e isso é sabido', () => {
+    /* Não há desempate automático: quem avisa é o alerta de código repetido do cadastro, e no
+       perene o código é editável justamente para o operador resolver. */
+    expect(codigoSafraPerene('2020-07-01', '2021-06-30', 'agricultura'))
+      .toBe(codigoDaSafra('20/21', 'agricultura'));
   });
 });

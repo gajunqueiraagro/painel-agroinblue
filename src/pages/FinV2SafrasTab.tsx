@@ -1,5 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { CULTURAS, codigoDaSafra, nomeDaSafra, temporadaDeReferencia, temporadasDisponiveis } from '@/lib/agri/culturas';
+import {
+  codigoDaSafra, nomeDaSafra, temporadaDeReferencia, temporadasDisponiveis,
+  periodoDaTemporada, codigoSafraPerene, nomeSafraPerene, type CicloSafra,
+} from '@/lib/agri/culturas';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { Card, CardContent } from '@/components/ui/card';
@@ -9,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -27,10 +31,15 @@ import {
   type EscopoNegocio,
 } from '@/lib/financeiro/safrasHelpers';
 
-// Colunas soberanas lidas de financeiro_safras (types.ts ainda não conhece a tabela;
-// regen separado). Cast único e localizado no query builder — resultado convertido
-// imediatamente para o tipo local FinanceiroSafra. Mesmo idioma de useFinanceiroV2.ts.
-const SAFRA_COLS = 'id, cliente_id, nome, codigo, escopo_negocio, ordem_exibicao, descricao, observacoes, ativa';
+/* Colunas soberanas lidas de financeiro_safras. Cast único e localizado no query builder —
+   resultado convertido imediatamente para o tipo local FinanceiroSafra. Mesmo idioma de
+   useFinanceiroV2.ts.
+   ⚠ O COMENTÁRIO ANTIGO DIZIA QUE `types.ts` NÃO CONHECIA A TABELA, e isso envelheceu: a
+   regeneração de 02/09 trouxe `financeiro_safras` (types.ts:6331). O que ele ainda não
+   conhece são as TRÊS COLUNAS do AGRI-01 — `ciclo`, `data_inicio`, `data_fim` —, porque a
+   migration é posterior ao regen. O cast continua sendo o mesmo de sempre, então nada de
+   novo entra aqui por causa disto; o dia do próximo regen é o dia de tirá-lo. */
+const SAFRA_COLS = 'id, cliente_id, nome, codigo, escopo_negocio, ordem_exibicao, descricao, observacoes, ativa, ciclo, data_inicio, data_fim';
 
 export function FinV2SafrasTab() {
   const { clienteAtual } = useCliente();
@@ -55,13 +64,19 @@ export function FinV2SafrasTab() {
   const [descricao, setDescricao] = useState('');
   const [observacoes, setObservacoes] = useState('');
   const [ativa, setAtiva] = useState(true);
-  /* ⚠ CULTURA E TEMPORADA NÃO SÃO COLUNAS — SAFRA-CADASTRO-01. Hoje elas vivem no CÓDIGO
-     (`25/26-AMD`), que é como as safras do banco já se chamam; a coluna `cultura` é a
-     migration AGRI-01 da spec, ainda não aplicada. Enquanto isso, os dois campos existem
-     na TELA para gerar código e nome sem digitação livre — e o dia em que a coluna vier,
-     o backfill lê o mesmo mapa de siglas (lib/agri/culturas) que estes campos usam. */
-  const [cultura, setCultura] = useState('');
+  /* ⚠ A CULTURA SAIU DAQUI — AGRI-CADASTRO-SAFRA-01. Ela era um campo da safra e virou
+     atributo da ÁREA PLANTADA (frente AGRI-03-AREA): amendoim e mandioca na mesma temporada
+     são dois talhões, não duas safras. O estado `cultura` foi removido junto com o campo; o
+     mapa `CULTURAS` continua na lib, que é quem lê o sufixo das safras antigas.
+     ⚠ A TEMPORADA CONTINUA SENDO DA TELA, não coluna: ela gera o código e, agora, o PADRÃO
+     das datas — que são colunas de verdade desde o AGRI-01. */
   const [temporada, setTemporada] = useState(() => temporadaDeReferencia(new Date()));
+  /* ⚠ O CICLO É COLUNA, COM DEFAULT 'anual' NO BANCO — e o default aqui é o mesmo de lá, de
+     propósito: a tela não pode discordar do que a linha nasce sendo quando alguém insere por
+     fora. */
+  const [ciclo, setCiclo] = useState<CicloSafra>('anual');
+  const [dataInicio, setDataInicio] = useState('');
+  const [dataFim, setDataFim] = useState('');
   const [maisAberto, setMaisAberto] = useState(false);
 
   const load = useCallback(async () => {
@@ -122,18 +137,62 @@ export function FinV2SafrasTab() {
      precisa de um apelido ("Safra 25/26 Amendoim — Pureza"), então só se sugere.
      ⚠ NA EDIÇÃO NÃO SE REESCREVE O NOME: quem já batizou a safra não perde o nome porque
      abriu o modal para mudar a ordem de exibição. */
-  const codigoGerado = codigoDaSafra(temporada, escopo, cultura);
-  const nomeGerado = nomeDaSafra(temporada, escopo, cultura);
+  /* ⚠ DOIS GERADORES, UM POR CICLO. O anual sai da temporada (`25/26-Lav`); o perene sai das
+     DATAS (`20/27-Lav`), porque perene não tem temporada — o que o identifica é o intervalo
+     entre o plantio e o corte previsto. */
+  const codigoGerado = ciclo === 'perene'
+    ? codigoSafraPerene(dataInicio || null, dataFim || null, escopo)
+    : codigoDaSafra(temporada, escopo);
+  const nomeGerado = ciclo === 'perene'
+    ? nomeSafraPerene(dataInicio || null, dataFim || null)
+    : nomeDaSafra(temporada, escopo);
   useEffect(() => {
     if (editing) return;
     setCodigo(codigoGerado);
     setNome(nomeGerado);
   }, [editing, codigoGerado, nomeGerado]);
 
+  /**
+   * A TEMPORADA PREENCHE AS DATAS — e só preenche, nunca manda.
+   *
+   * ⚠ É GESTO, NÃO EFEITO. Escolher 25/26 escreve 01/07/2025 e 30/06/2026 nos dois campos;
+   * daí em diante eles são do operador. Um `useEffect` sobre `[temporada, dataInicio]`
+   * desfaria a edição manual no render seguinte — e um sobre `[temporada]` ainda dispararia
+   * ao ABRIR a edição de uma safra antiga, apagando as datas do backfill com a convenção.
+   * ⚠ VOLTAR PARA ANUAL TAMBÉM PREENCHE: quem estava em perene com datas de eucalipto e
+   * troca o ciclo espera o padrão da temporada de volta, não os anos de lá.
+   */
+  const aplicarPeriodoDaTemporada = (t: string) => {
+    const p = periodoDaTemporada(t);
+    if (!p) return;
+    setDataInicio(p.inicio);
+    setDataFim(p.fim);
+  };
+  const escolherTemporada = (t: string) => {
+    setTemporada(t);
+    if (ciclo === 'anual') aplicarPeriodoDaTemporada(t);
+  };
+  /**
+   * ⚠ TROCAR PARA PERENE LIMPA AS DATAS, e isso é deliberado: as de julho–junho vieram de uma
+   * convenção que o perene não segue, e deixá-las ali faria o operador salvar um eucalipto
+   * com um ano de vida por distração. Campo vazio pede a digitação que o ciclo exige.
+   */
+  const trocarCiclo = (c: CicloSafra) => {
+    setCiclo(c);
+    if (c === 'perene') { setDataInicio(''); setDataFim(''); return; }
+    aplicarPeriodoDaTemporada(temporada);
+  };
+
   /* ⚠ A SAFRA JÁ EXISTENTE NÃO É ERRO A DESCOBRIR NO SALVAR. `cliente_id + codigo` é
      UNIQUE; sem este aviso, o operador preenche tudo e leva um erro de banco no fim.
      ⚠ E TAMBÉM SE ESTIVER INATIVA — é o caso mais comum: a safra do ano passado foi
      inativada e agora se quer a nova. Reativar é diferente de criar duplicada. */
+  /** O que impede o Criar, em uma frase — a mesma que o botão mostra ao lado. */
+  const motivoBloqueio = editing ? null
+    : !escopo ? 'Escolha o escopo.'
+    : !codigo ? 'Informe o plantio e o corte previsto.'
+    : null;
+
   const safraExistente = !editing && codigoGerado
     ? safras.find(x => (x.codigo ?? '') === codigoGerado) ?? null
     : null;
@@ -143,8 +202,12 @@ export function FinV2SafrasTab() {
     setNome('');
     setCodigo('');
     setEscopo('');
-    setCultura('');
-    setTemporada(temporadaDeReferencia(new Date()));
+    const t = temporadaDeReferencia(new Date());
+    setTemporada(t);
+    setCiclo('anual');
+    const p = periodoDaTemporada(t);
+    setDataInicio(p?.inicio ?? '');
+    setDataFim(p?.fim ?? '');
     setMaisAberto(false);
     setOrdemRaw('');
     setDescricao('');
@@ -164,7 +227,12 @@ export function FinV2SafrasTab() {
        — que continua travado — passaria a discordar dos campos que o geraram. */
     const m = /^(\d{2}\/\d{2})-(.+)$/.exec(s.codigo ?? '');
     setTemporada(m ? m[1] : temporadaDeReferencia(new Date()));
-    setCultura(m ? (CULTURAS.find(c => c.sigla === m[2])?.valor ?? '') : '');
+    /* ⚠ AS DATAS VÊM DO BANCO COMO ESTÃO, inclusive vazias. Safra anterior ao backfill abre
+       com os campos em branco — que é a verdade — em vez de receber a convenção julho–junho
+       por cima de um período que ninguém conferiu. */
+    setCiclo(s.ciclo === 'perene' ? 'perene' : 'anual');
+    setDataInicio(s.data_inicio ?? '');
+    setDataFim(s.data_fim ?? '');
     setMaisAberto(false);
     setOrdemRaw(String(s.ordem_exibicao)); // integer real (distingue 0 explícito)
     setDescricao(s.descricao ?? '');
@@ -176,7 +244,10 @@ export function FinV2SafrasTab() {
   const save = async () => {
     if (isSaving) return;
     if (!clienteAtual?.id) return;
-    const v = validarSafra({ nome, codigo, escopo_negocio: escopo, ordemRaw, descricao, observacoes, ativa });
+    const v = validarSafra({
+      nome, codigo, escopo_negocio: escopo, ordemRaw, descricao, observacoes, ativa,
+      ciclo, dataInicio, dataFim,
+    });
     if (!v.ok) { toast.error(v.erro); return; }
 
     setIsSaving(true);
@@ -362,7 +433,7 @@ export function FinV2SafrasTab() {
               <div className="mt-0.5 flex gap-1">
                 {(['pecuaria', 'agricultura'] as const).map(v => (
                   <button key={v} type="button"
-                    onClick={() => { setEscopo(v); if (v === 'pecuaria') setCultura(''); }}
+                    onClick={() => setEscopo(v)}
                     className={`h-8 flex-1 rounded-md border text-[12px] transition-colors ${
                       escopo === v ? 'border-primary bg-primary text-primary-foreground'
                                    : 'bg-card hover:bg-muted/50'}`}>
@@ -377,43 +448,77 @@ export function FinV2SafrasTab() {
               {escopo && <p className="mt-1 text-[10px] text-muted-foreground">{ESCOPO_AJUDA[escopo]}</p>}
             </div>
 
-            {/* 2. CULTURA — só na agricultura; na pecuária a pergunta não existe. */}
-            {escopo === 'agricultura' && (
+            {/* 2. CICLO — AGRI-CADASTRO-SAFRA-01. Ele decide o resto do formulário, como o
+                 escopo, e por isso vem logo depois dele e usa o mesmo desenho de pílulas.
+                 ⚠ NÃO É DETALHE DE CADASTRO: anual é a temporada de julho a junho; perene é a
+                 lavoura que fica seis, sete anos no chão — o eucalipto planta em 2020 e corta
+                 em 2027. Tratar as duas com a mesma pergunta obrigava a inventar uma
+                 temporada para o eucalipto. */}
+            <div>
+              <Label className="text-[10px]">Ciclo <span className="text-destructive">*</span></Label>
+              <div className="mt-0.5 flex gap-1">
+                {(['anual', 'perene'] as const).map(c => (
+                  <button key={c} type="button" onClick={() => trocarCiclo(c)}
+                    className={`h-8 flex-1 rounded-md border text-[12px] transition-colors ${
+                      ciclo === c ? 'border-primary bg-primary text-primary-foreground'
+                                  : 'bg-card hover:bg-muted/50'}`}>
+                    {c === 'anual' ? 'Anual' : 'Perene'}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1 text-[10px] text-muted-foreground">
+                {ciclo === 'anual'
+                  ? 'Anual — temporada de julho a junho; as datas vêm preenchidas e podem ser ajustadas.'
+                  : 'Perene — plantio e corte previsto podem estar a vários anos de distância.'}
+              </p>
+            </div>
+
+            {/* 3. TEMPORADA — só no anual; no perene a pergunta não existe. */}
+            {ciclo === 'anual' && (
               <div>
-                <Label className="text-[10px]">Cultura <span className="text-destructive">*</span></Label>
-                <Select value={cultura} onValueChange={setCultura}>
-                  <SelectTrigger className="mt-0.5 h-8 text-[12px]"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <Label className="text-[10px]">Temporada <span className="text-destructive">*</span></Label>
+                <Select value={temporada} onValueChange={escolherTemporada}>
+                  <SelectTrigger className="mt-0.5 h-8 text-[12px]"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {CULTURAS.map(c => (
-                      <SelectItem key={c.valor} value={c.valor}>
-                        {c.label} <span className="text-muted-foreground">({c.sigla})</span>
-                      </SelectItem>
+                    {temporadasDisponiveis(new Date()).map(t => (
+                      <SelectItem key={t} value={t}>{t}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
             )}
 
-            {/* 3. TEMPORADA — julho a junho; a lista sai da mesma lib do código. */}
-            <div>
-              <Label className="text-[10px]">Temporada <span className="text-destructive">*</span></Label>
-              <Select value={temporada} onValueChange={setTemporada}>
-                <SelectTrigger className="mt-0.5 h-8 text-[12px]"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {temporadasDisponiveis(new Date()).map(t => (
-                    <SelectItem key={t} value={t}>{t}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            {/* 4. AS DATAS — colunas de verdade desde o AGRI-01, editáveis nos dois ciclos.
+                 ⚠ `DatePicker`, NUNCA `<input type="date">`: o nativo abre o calendário do
+                 sistema operacional, com outro idioma e outro formato por máquina. É gate.
+                 ⚠ OS RÓTULOS MUDAM COM O CICLO porque as perguntas são outras: no anual são
+                 os extremos da temporada; no perene são o plantio e o corte previsto. */}
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="text-[10px]">{ciclo === 'perene' ? 'Plantio' : 'Início'}</Label>
+                <DatePicker value={dataInicio} onChange={setDataInicio} className="mt-0.5" />
+              </div>
+              <div>
+                <Label className="text-[10px]">{ciclo === 'perene' ? 'Corte previsto' : 'Fim'}</Label>
+                <DatePicker value={dataFim} onChange={setDataFim} className="mt-0.5" />
+              </div>
             </div>
 
-            {/* 4. CÓDIGO travado + NOME sugerido. */}
+            {/* 5. CÓDIGO + NOME sugerido.
+                 ⚠ TRAVADO NO ANUAL, LIVRE NO PERENE. No anual o código é função da temporada e
+                 do escopo, e deixá-lo livre convidaria `25/26 Lav`, `2025/26-Lav` e três
+                 grafias para a mesma safra. No perene ele nasce das datas, e duas plantações
+                 com o mesmo intervalo de anos geram o MESMO código — ali o operador precisa
+                 poder desempatar à mão. */}
             <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)] gap-2">
               <div>
                 <Label className="text-[10px]">Código</Label>
-                <Input value={codigo} readOnly tabIndex={-1}
-                  title="Gerado pela temporada e pelo escopo — é a chave da safra e não se digita."
-                  className="mt-0.5 h-8 cursor-default bg-muted font-mono text-[12px]" />
+                <Input value={codigo} readOnly={ciclo === 'anual'} tabIndex={ciclo === 'anual' ? -1 : undefined}
+                  onChange={e => setCodigo(e.target.value)}
+                  title={ciclo === 'anual'
+                    ? 'Gerado pela temporada e pelo escopo — é a chave da safra e não se digita.'
+                    : 'Sugerido pelas datas — pode ser editado; é a chave da safra.'}
+                  className={`mt-0.5 h-8 font-mono text-[12px] ${ciclo === 'anual' ? 'cursor-default bg-muted' : ''}`} />
               </div>
               <div>
                 <Label className="text-[10px]">Nome <span className="text-destructive">*</span></Label>
@@ -434,7 +539,7 @@ export function FinV2SafrasTab() {
               </div>
             )}
 
-            {/* 5. MAIS — o que quase ninguém mexe fica fora do caminho. */}
+            {/* 6. MAIS — o que quase ninguém mexe fica fora do caminho. */}
             <button type="button" onClick={() => setMaisAberto(v => !v)}
               className="text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground">
               {maisAberto ? 'Menos' : 'Mais…'}
@@ -466,14 +571,16 @@ export function FinV2SafrasTab() {
             </div>
           </div>
           <DialogFooter className="shrink-0 items-center gap-2 border-t bg-background px-4 py-2.5">
-            {/* O botão desabilitado diz por quê, ao lado — regra da casa. */}
-            {!editing && !codigo && (
-              <span className="mr-auto text-[10px] leading-tight text-muted-foreground">
-                {escopo === 'agricultura' ? 'Escolha a cultura.' : 'Escolha o escopo.'}
-              </span>
+            {/* ⚠ O BOTÃO DESABILITADO DIZ POR QUÊ, e é UMA fonte só para o texto e para o
+                `disabled` — regra da casa. A condição era `!codigo`, e ela deixou de bastar
+                quando a lavoura ganhou sigla: no anual o código nunca mais é vazio, então o
+                aviso "Escolha o escopo" ficaria inalcançável e o botão convidaria a um erro
+                que só o save recusaria. */}
+            {motivoBloqueio && (
+              <span className="mr-auto text-[10px] leading-tight text-muted-foreground">{motivoBloqueio}</span>
             )}
             <Button variant="outline" size="sm" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button size="sm" onClick={save} disabled={isSaving || (!editing && !codigo)}>
+            <Button size="sm" onClick={save} disabled={isSaving || !!motivoBloqueio}>
               {isSaving ? 'Salvando...' : (editing ? 'Salvar' : 'Criar')}
             </Button>
           </DialogFooter>

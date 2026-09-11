@@ -69,9 +69,51 @@ describe('ordenarSafras — ordem crescente e depois nome pt-BR', () => {
 
 describe('validarSafra — criação/edição exige nome, código e escopo', () => {
   const base: SafraFormInput = {
-    nome: 'Safra 26/27 Soja', codigo: '26/27-SOJ', escopo_negocio: 'agricultura',
+    nome: 'Safra 26/27 Lavoura', codigo: '26/27-Lav', escopo_negocio: 'agricultura',
     ordemRaw: '1', descricao: '  detalhe  ', observacoes: '', ativa: true,
+    ciclo: 'anual', dataInicio: '2026-07-01', dataFim: '2027-06-30',
   };
+
+  /* AGRI-CADASTRO-SAFRA-01 — as três colunas novas. */
+  it('ciclo e datas entram no payload como estão', () => {
+    const r = validarSafra(base);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.payload.ciclo).toBe('anual');
+      expect(r.payload.data_inicio).toBe('2026-07-01');
+      expect(r.payload.data_fim).toBe('2027-06-30');
+    }
+  });
+
+  it('data vazia vira NULL — ausência, não string vazia', () => {
+    /* Safra anterior ao backfill abre com os campos em branco, e salvar não pode inventar
+       período para ela. */
+    const r = validarSafra({ ...base, dataInicio: '', dataFim: '   ' });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.payload.data_inicio).toBeNull();
+      expect(r.payload.data_fim).toBeNull();
+    }
+  });
+
+  it('perene guarda o ciclo e os anos distantes', () => {
+    const r = validarSafra({ ...base, ciclo: 'perene', dataInicio: '2020-03-10', dataFim: '2027-08-01' });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.payload.ciclo).toBe('perene');
+      expect(r.payload.data_fim).toBe('2027-08-01');
+    }
+  });
+
+  it('⚠ fim antes do início é recusado — o engano natural do perene', () => {
+    const r = validarSafra({ ...base, ciclo: 'perene', dataInicio: '2027-08-01', dataFim: '2020-03-10' });
+    expect(r.ok).toBe(false);
+  });
+
+  it('mas uma data só não é erro: incompleto não é inválido', () => {
+    expect(validarSafra({ ...base, dataFim: '' }).ok).toBe(true);
+    expect(validarSafra({ ...base, dataInicio: '' }).ok).toBe(true);
+  });
 
   it('caminho feliz: trim de nome/código e vazios → NULL', () => {
     const r = validarSafra({ ...base, nome: '  Safra X ', codigo: ' CX ', observacoes: '   ' });
