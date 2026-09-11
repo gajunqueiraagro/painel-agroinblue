@@ -10,7 +10,7 @@ import { sincronizarVinculosDoLancamento, recomputarStatusExtrato } from '@/lib/
 import { isTituloOC, detectarViolacoesEstruturaisOC } from '@/lib/financeiro/protecaoTituloOC';
 import { STATUS_FINANCEIRO_INICIAL, type StatusFiltroFinanceiro } from '@/lib/financeiro/statusFinanceiro';
 import { reportarErro, normalizarErro, ErroUsuarioSeguro } from '@/lib/erroOperacional';
-import { montarPlanoBaseV2, mesesDoRecorte } from '@/lib/financeiro/filtrosBaseV2';
+import { montarPlanoBaseV2, mesesDoRecorte, anosDoRecorte } from '@/lib/financeiro/filtrosBaseV2';
 import { FEATURE_FLAGS } from '@/lib/featureFlags';
 import {
   consultarPagina,
@@ -275,9 +275,10 @@ export function dataDaDimensao(l: LancamentoV2, dimensao: DimensaoDataFinanceiro
 // Resíduo client-side APENAS para "Todos os anos + meses específicos": "mês em qualquer ano" não é
 //   expressável como faixa contínua. Usa a data da dimensão selecionada; linhas sem essa data ficam fora.
 function residualDimensaoTodosAnos(filtros: FiltrosV2): ((l: LancamentoV2) => boolean) | null {
-  const isTodosAnos = !filtros.ano || filtros.ano === '__todos__';
+  /* A MESMA definição de "que anos?" do plano — FIN-LISTA-MULTIANO-01. Era a expressão
+     copiada; com a multisseleção no meio, cópia viraria divergência. */
   const meses = mesesDoRecorte(filtros);
-  if (!isTodosAnos || meses.length === 0) return null;
+  if (anosDoRecorte(filtros).length > 0 || meses.length === 0) return null;
   const dimensao = filtros.dimensao ?? 'financeira';
   const set = new Set(meses.map(m => m.padStart(2, '0')));
   return (l) => { const d = dataDaDimensao(l, dimensao); return !!d && set.has(d.substring(5, 7)); };

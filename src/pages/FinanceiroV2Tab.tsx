@@ -290,7 +290,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     if (!saved) return;
     try {
       const state = JSON.parse(saved);
-      if (state.ano) setAno(state.ano);
+      if (state.ano) setAnosSelecionados(state.ano === '__todos__' ? [] : [state.ano]);
       if (Array.isArray(state.mesesSelecionados)) setMesesSelecionados(state.mesesSelecionados);
       if (state.contaOrigem) setContaOrigem(state.contaOrigem);
       if (state.contaDestino) setContaDestino(state.contaDestino);
@@ -308,7 +308,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
 
   const getDefaults = () => ({
     fazendaId: defaultFazendaId,
-    ano: filtroAnoInicial || String(currentYear),
+    /* ⚠ O PADRÃO É UM ANO SÓ, não "todos": abrir a lista com dez anos de lançamentos é a
+       consulta mais cara do sistema, e ninguém pediu por ela. */
+    anosSelecionados: [filtroAnoInicial || String(currentYear)],
     mesesSelecionados: filtroMesInicial ? [String(filtroMesInicial).padStart(2, '0')] : [] as string[],
     statusSelecionados: [],   // PR-FIN-STATUS-UX-03A-1 — multisseleção; vazio = Todos (never[] → StatusFiltroFinanceiro[])
     tipoOperacao: '__all__',
@@ -327,7 +329,22 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
 
   const defaults = getDefaults();
   const [fazendaId, setFazendaId] = useState(defaults.fazendaId);
-  const [ano, setAno] = useState(defaults.ano);
+  /**
+   * ⚠ O ANO VIROU LISTA — FIN-LISTA-MULTIANO-01, e `ano` continua existindo como DERIVADO.
+   * Ele alimenta a exportação e o guard "selecione uma fazenda e um ano"; trocá-los por array
+   * num PR de filtro seria arrastar duas telas junto. Lista vazia = "Todos", que é o mesmo
+   * que o `'__todos__'` sempre significou.
+   */
+  const [anosSelecionados, setAnosSelecionados] = useState<string[]>(defaults.anosSelecionados);
+  const [anoPopoverOpen, setAnoPopoverOpen] = useState(false);
+  const ano = anosSelecionados.length === 1 ? anosSelecionados[0] : (anosSelecionados.length === 0 ? '__todos__' : anosSelecionados[0]);
+  const anoLabel = anosSelecionados.length === 0
+    ? 'Todos'
+    : anosSelecionados.length === 1
+      ? anosSelecionados[0]
+      : `${anosSelecionados.length} anos`;
+  const toggleAno = (val: string) => setAnosSelecionados(prev =>
+    prev.includes(val) ? prev.filter(a => a !== val) : [...prev, val].sort());
   const [mesesSelecionados, setMesesSelecionados] = useState<string[]>(defaults.mesesSelecionados);
   const [statusSelecionados, setStatusSelecionados] = useState<StatusFiltroFinanceiro[]>(defaults.statusSelecionados);
   const [statusPopoverOpen, setStatusPopoverOpen] = useState(false);
@@ -382,7 +399,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     try {
       const f = JSON.parse(raw);
       if (f.fazendaId !== undefined) setFazendaId(f.fazendaId);
-      if (f.ano !== undefined) setAno(f.ano);
+      /* Compatibilidade com o que foi guardado antes da multisseleção: um `ano` solto vira
+         lista de um. Sem isto, quem tem sessão aberta volta com a lista vazia = "Todos". */
+      if (Array.isArray(f.anosSelecionados)) setAnosSelecionados(f.anosSelecionados);
+      else if (f.ano !== undefined) setAnosSelecionados(f.ano === '__todos__' ? [] : [f.ano]);
       if (Array.isArray(f.mesesSelecionados)) setMesesSelecionados(f.mesesSelecionados);
       if (Array.isArray(f.statusSelecionados)) setStatusSelecionados(f.statusSelecionados.filter(isStatusFiltroFinanceiro));
       if (f.tipoOperacao !== undefined) setTipoOperacao(f.tipoOperacao);
@@ -418,13 +438,13 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     const p = getDefaults();
     guardarFiltros(apenasAtivos(
       {
-        fazendaId, ano, mesesSelecionados, statusSelecionados, tipoOperacao,
+        fazendaId, anosSelecionados, mesesSelecionados, statusSelecionados, tipoOperacao,
         contaOrigem, contaDestino, macroFiltro, grupoFiltro, centroFiltro,
         subcentroFiltro, produtoFiltro, documentoFiltro, fornecedorFiltro, atividadeFiltro,
         safraFiltro,
       },
       {
-        fazendaId: p.fazendaId, ano: p.ano, mesesSelecionados: p.mesesSelecionados,
+        fazendaId: p.fazendaId, anosSelecionados: p.anosSelecionados, mesesSelecionados: p.mesesSelecionados,
         statusSelecionados: p.statusSelecionados, tipoOperacao: p.tipoOperacao,
         contaOrigem: p.contaOrigem, contaDestino: p.contaDestino, macroFiltro: p.macroFiltro,
         grupoFiltro: p.grupoFiltro, centroFiltro: p.centroFiltro, subcentroFiltro: p.subcentroFiltro,
@@ -434,7 +454,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
       },
     ));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fazendaId, ano, mesesSelecionados, statusSelecionados, tipoOperacao, contaOrigem,
+  }, [fazendaId, anosSelecionados, mesesSelecionados, statusSelecionados, tipoOperacao, contaOrigem,
       contaDestino, macroFiltro, grupoFiltro, centroFiltro, subcentroFiltro, produtoFiltro,
       documentoFiltro, fornecedorFiltro, atividadeFiltro, safraFiltro]);
 
@@ -626,7 +646,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   // Apply drill filters from FluxoCaixa navigation
   useEffect(() => {
     if (!drillFilters) return;
-    if (drillFilters.ano) setAno(drillFilters.ano);
+    /* O drill do Fluxo de Caixa manda UM ano — vira lista de um. */
+    if (drillFilters.ano) setAnosSelecionados([String(drillFilters.ano)]);
     if (drillFilters.mes) setMesesSelecionados([String(drillFilters.mes).padStart(2, '0')]);
     if (drillFilters.tipo) setTipoOperacao(drillFilters.tipo);
     if (drillFilters.statusTransacao && isStatusFiltroFinanceiro(drillFilters.statusTransacao)) setStatusSelecionados([drillFilters.statusTransacao]);
@@ -677,7 +698,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   
   const filtros: FiltrosV2 = useMemo(() => ({
     fazenda_id: fazendaId !== '__all__' ? fazendaId : undefined,
-    ano: ano,
+    ano,
+    /* `anos` tem precedência no plano; `ano` segue indo para quem ainda o lê. */
+    anos: anosSelecionados.length > 0 ? anosSelecionados : undefined,
     mes: mesesSelecionados.length === 0 ? 'todos' : undefined,
     meses: mesesSelecionados.length > 0 ? mesesSelecionados : undefined,
     conta_bancaria_id: contaOrigem !== '__all__' ? contaOrigem : undefined,
@@ -693,7 +716,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     centro_custo: centroFiltro !== '__all__' ? centroFiltro : undefined,
     subcentro: subcentroFiltro !== '__all__' ? subcentroFiltro : undefined,
     dimensao: dataPor,   // PR-FIN-GRADE-DATAS-03 — dimensão temporal soberana (default 'financeira')
-  }), [fazendaId, ano, mesesSelecionados, contaOrigem, contaDestino, tipoOperacao, statusParaBanco, macroFiltro, grupoFiltro, centroFiltro, subcentroFiltro, dataPor]);
+  }), [fazendaId, ano, anosSelecionados, mesesSelecionados, contaOrigem, contaDestino, tipoOperacao, statusParaBanco, macroFiltro, grupoFiltro, centroFiltro, subcentroFiltro, dataPor]);
 
   useEffect(() => {
     hook.loadLancamentos(filtros, 0);
@@ -799,7 +822,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const abrirOCFinanceiro = (operacaoId: string) => {
     try {
       sessionStorage.setItem('financeirov2_return_filters', JSON.stringify({
-        fazendaId, ano, mesesSelecionados, statusSelecionados, tipoOperacao,
+        fazendaId, anosSelecionados, mesesSelecionados, statusSelecionados, tipoOperacao,
         contaOrigem, contaDestino, macroFiltro, grupoFiltro, centroFiltro,
         subcentroFiltro, produtoFiltro, documentoFiltro, fornecedorFiltro, atividadeFiltro, safraFiltro,
       }));
@@ -1331,7 +1354,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
 
   const handleLimparFiltros = () => {
     const d = getDefaults();
-    setAno(d.ano);
+    setAnosSelecionados(d.anosSelecionados);
     setMesesSelecionados([]);
     setStatusSelecionados([]);   // PR-FIN-STATUS-UX-03A-1 — Todos
     setFazendaId(d.fazendaId);
@@ -1347,6 +1370,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     setFornecedorFiltro('__all__');
     setAtividadeFiltro('__all__');
     setSafraFiltro('__all__');
+    setAnosSelecionados([String(currentYear)]);
     setMacroLocked(false);
     setDataPor('financeira');   // PR-FIN-GRADE-DATAS-03 — volta à dimensão padrão ao limpar filtros
     setSortField('default');
@@ -1489,13 +1513,30 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
               <div className="grid grid-cols-5 gap-1 items-end">
                 <div>
                   <label className={lblCls}>Ano</label>
-                  <Select value={ano} onValueChange={setAno}>
-                    <SelectTrigger className={`${selCls} w-full bg-white border-[#C9D4E2]`}><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__todos__" className={itemCls}>Todos</SelectItem>
-                      {anos.map(a => <SelectItem key={a} value={a} className={itemCls}>{a}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  {/* ⚠ MESMO PADRÃO DO MÊS — Popover + Checkbox, não um Select novo. Os dois
+                      respondem a mesma pergunta ("quais?") e um Select multi seria um terceiro
+                      idioma de multisseleção na mesma barra. */}
+                  <Popover open={anoPopoverOpen} onOpenChange={setAnoPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="h-6 w-full justify-between truncate bg-white px-1.5 text-[10px] font-normal border-[#C9D4E2] hover:border-[#AFC2D8]">
+                        {anoLabel}
+                        <ChevronsUpDown className="h-2.5 w-2.5 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-32 p-1.5" align="start">
+                      <div className="mb-0.5 flex justify-between">
+                        <button className="text-[9px] text-primary hover:underline" onClick={() => setAnosSelecionados([])}>Todos</button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-0.5">
+                        {anos.map(a => (
+                          <label key={a} className="flex cursor-pointer items-center gap-0.5 rounded px-0.5 py-0.5 text-[10px] hover:bg-muted">
+                            <Checkbox checked={anosSelecionados.includes(a)} onCheckedChange={() => toggleAno(a)} className="h-2.5 w-2.5" />
+                            {a}
+                          </label>
+                        ))}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                 </div>
                 <div>
                   <label className={lblCls}>Mês</label>
@@ -1800,13 +1841,30 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       O Mês devolve a faixa — ele mostra "Todos" ou "N meses", que é curto. */}
                   <div className="col-span-2 min-w-0">
                   <label className={lblCls}>Ano</label>
-                  <Select value={ano} onValueChange={setAno}>
-                    <SelectTrigger className={`${selCls} w-full bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F]`}><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__todos__" className={itemCls}>Todos</SelectItem>
-                      {anos.map(a => <SelectItem key={a} value={a} className={itemCls}>{a}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  {/* ⚠ MESMO PADRÃO DO MÊS — Popover + Checkbox, não um Select novo. Os dois
+                      respondem a mesma pergunta ("quais?") e um Select multi seria um terceiro
+                      idioma de multisseleção na mesma barra. */}
+                  <Popover open={anoPopoverOpen} onOpenChange={setAnoPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="h-6 w-full justify-between truncate bg-white px-1.5 text-[10px] font-normal border-[#C9D4E2] hover:border-[#AFC2D8]">
+                        {anoLabel}
+                        <ChevronsUpDown className="h-2.5 w-2.5 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-32 p-1.5" align="start">
+                      <div className="mb-0.5 flex justify-between">
+                        <button className="text-[9px] text-primary hover:underline" onClick={() => setAnosSelecionados([])}>Todos</button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-0.5">
+                        {anos.map(a => (
+                          <label key={a} className="flex cursor-pointer items-center gap-0.5 rounded px-0.5 py-0.5 text-[10px] hover:bg-muted">
+                            <Checkbox checked={anosSelecionados.includes(a)} onCheckedChange={() => toggleAno(a)} className="h-2.5 w-2.5" />
+                            {a}
+                          </label>
+                        ))}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                 </div>
                   <div className="col-span-1 min-w-0">
                   <label className={lblCls}>Mês</label>

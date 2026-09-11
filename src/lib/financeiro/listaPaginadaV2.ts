@@ -22,6 +22,7 @@ import { filtrarListaV2NoCliente, ramoImatch, type LinhaFiltravel } from './filt
 import { formatDocumento } from './documentoHelper';
 import {
   montarPlanoBaseV2,
+  anosDoRecorte,
   mesesDoRecorte,
   faixaMes,
   semRecorteDePeriodo,
@@ -552,17 +553,21 @@ export interface ParamsTotais {
 
 /** Faixas `[ini,fim)` do recorte, no formato `daterange` do Postgres. */
 export function faixasDoRecorte(filtros: FiltrosV2): string[] | null {
-  const isTodosAnos = !filtros.ano || filtros.ano === '__todos__';
+  /* ⚠ A MULTISSELEÇÃO DE ANOS NÃO PEDIU NADA AO BANCO — FIN-LISTA-MULTIANO-01. `p_faixas` já
+     é uma LISTA de intervalos, porque os meses sempre puderam ser vários; anos são mais
+     intervalos na mesma lista. A RPC dos totais não mudou, e é por isso que os totais não
+     têm como divergir da lista: as duas leem a mesma função. */
+  const anos = anosDoRecorte(filtros);
   const meses = mesesDoRecorte(filtros);
-  if (isTodosAnos) return null;
-  const ano = Number(filtros.ano);
+  if (anos.length === 0) return null;
   if (meses.length > 0) {
-    return meses.map((m) => {
+    /* Produto cartesiano, como no plano: dois anos × três meses = seis faixas. */
+    return anos.flatMap((ano) => meses.map((m) => {
       const [ini, fim] = faixaMes(ano, Number(m));
       return `[${ini},${fim})`;
-    });
+    }));
   }
-  return [`[${ano}-01-01,${ano + 1}-01-01)`];
+  return anos.map((ano) => `[${ano}-01-01,${ano + 1}-01-01)`);
 }
 
 /**
@@ -576,7 +581,7 @@ export function paramsDosTotais(
   opcoes: OpcoesPagina = {},
 ): ParamsTotais {
   const dimensao: DimensaoDataFinanceiro = filtros.dimensao ?? 'financeira';
-  const isTodosAnos = !filtros.ano || filtros.ano === '__todos__';
+  const isTodosAnos = anosDoRecorte(filtros).length === 0;
   const meses = mesesDoRecorte(filtros);
   const contaOrigem = filtros.conta_bancaria_id?.trim() || null;
   const contaDestino = filtros.conta_destino_id?.trim() || null;

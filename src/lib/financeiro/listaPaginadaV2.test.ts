@@ -355,7 +355,7 @@ describe('E3/E4 — contagem e totais vêm da RPC, não de varredura', () => {
   it('TODO campo de FiltrosV2 chega à RPC — nenhum filtro fica fora dos totais', () => {
     // Se alguém acrescentar um filtro e esquecer dos totais, este teste quebra.
     const completo: Required<Omit<FiltrosV2, 'meses'>> & { meses?: string[] } = {
-      ano: '2026', mes: '03', fazenda_id: 'f-1', dimensao: 'vencimento',
+      ano: '2026', anos: ['2026'], mes: '03', fazenda_id: 'f-1', dimensao: 'vencimento',
       conta_bancaria_id: 'cb', conta_destino_id: 'cd', tipo_operacao: '2-Saídas',
       status_transacoes: ['previsto', 'conciliado'],
       macro_custo: 'M', grupo_custo: 'G', centro_custo: 'C', subcentro: 'S',
