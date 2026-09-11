@@ -42,8 +42,14 @@ export function BarraSecao({ area, secao }: BarraSecaoProps) {
        ⚠ 32px DECLARADOS, não derivados de padding: a barra é o topo de TODAS as telas, e a
        altura dela entra na conta de altura útil de cada lista abaixo. Medida declarada é
        medida que não muda quando o conteúdo muda. */
+    /* ⚠ px-2 (8px), ERA px-3 — FIN-LISTA-VISUAL-05. A barra desceu JUNTO com a lista de
+       Lançamentos para as duas continuarem na mesma vertical; mover só a lista desfaria o
+       alinhamento que o VISUAL-04 acabara de acertar.
+       ⚠ E ELA É A BARRA DE TODAS AS SEÇÕES: o título de qualquer tela do /v2 andou 4px para
+       a esquerda junto. Não havia lei única de recuo para quebrar — medido, 51 telas usam
+       px-3 e 53 usam px-4 —, mas quem for alinhar outra tela alinha com 8, não com 12. */
     <header
-      className="sticky top-0 z-40 flex h-8 shrink-0 items-center justify-between gap-2 px-3 shadow-md"
+      className="sticky top-0 z-40 flex h-8 shrink-0 items-center justify-between gap-2 px-2 shadow-md"
       style={{ background: 'hsl(var(--barra))' }}
     >
       {/* ⚠ 11px NOS TRÊS, e a hierarquia é só de PESO e de opacidade: o grupo se afirma

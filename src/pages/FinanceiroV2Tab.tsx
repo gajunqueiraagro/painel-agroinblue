@@ -1581,14 +1581,19 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
        mesma linha vertical por construção, e nenhum deles precisa conhecer a medida.
        ⚠ E O CARD RECUA COM A BORDA, que era o pedido: antes o padding estava dentro do
        scrollport, então o conteúdo recuava e o traço do card continuava colado.
-       ⚠ 12px E NÃO 16 — FIN-LISTA-VISUAL-04: é o `px-3` da `BarraSecao`, a faixa azul do
-       "Financeiro / Lançamentos" logo acima. Com a mesma medida, a borda dos dois cards cai
-       na vertical em que o título começa, e a coluna inteira da tela fica alinhada. Um número
-       escolhido aqui sem olhar o de cima deixaria a página com dois recuos parecidos e
-       diferentes, que é pior que um recuo errado. */
-    <div className={cn("relative px-3", modoIntensivo ? "flex flex-col h-[calc(100vh-8px)]" : "space-y-1 pb-20")}>
+       ⚠ 8px, E O MESMO DA `BarraSecao` — FIN-LISTA-VISUAL-05 (o VISUAL-04 fixou 12). O que
+       não muda é a REGRA: o recuo da lista é o recuo da faixa azul do "Financeiro /
+       Lançamentos", senão a página fica com dois recuos parecidos e diferentes, que é pior
+       que um recuo errado. O que mudou foi o número dos DOIS, juntos, no mesmo PR.
+       ⚠ 8 E NÃO 4: com `px-1` o traço do card fica a um fio da borda da tela e a sombra do
+       card não tem onde cair. 8px é o menor recuo em que ainda se vê que é um card. */
+    <div className={cn("relative px-2", modoIntensivo ? "flex flex-col h-[calc(100vh-8px)]" : "space-y-1 pb-20")}>
       {/* FILTERS */}
-      <Card className="rounded-lg bg-white shrink-0" style={{ border: '1px solid #D6DEE8', boxShadow: '0 2px 6px rgba(0,0,0,0.04)' }}>
+      {/* ⚠ CANTO RETO NOS DOIS CARDS — FIN-LISTA-VISUAL-05. O raio de 8px comia a largura
+          justamente nas pontas, onde moram a primeira e a última coluna, e um card
+          arredondado sobre uma tabela de cantos vivos parecia dois desenhos. Se um dia
+          voltar o raio, volta nos dois — meio arredondado é a única saída errada. */}
+      <Card className="rounded-none bg-white shrink-0" style={{ border: '1px solid #D6DEE8', boxShadow: '0 2px 6px rgba(0,0,0,0.04)' }}>
         {/* Padding interno pequeno: o afastamento da borda da tela é do container raiz. */}
         <CardContent className="p-2 space-y-1">
           {isMobile ? (
@@ -2268,7 +2273,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 da borda — que é o único jeito de escapar da barra em overlay do macOS, que não
                 obedece a `scrollbar-gutter`. Ver o bloco no `index.css`.
                 ⚠ VALE NOS DOIS MODOS: é o mesmo container no normal e no Ampliado. */}
-           <div ref={scrollContainerRef} className={cn("rounded-lg border border-[hsl(var(--border))] overflow-auto relative rolagem-fina rolagem-sem-tampar respiro-lista", modoIntensivo && "flex-1")} style={modoIntensivo ? undefined : { maxHeight: 'calc(100vh - 240px)' }}>
+           <div ref={scrollContainerRef} className={cn("rounded-none border border-[hsl(var(--border))] overflow-auto relative rolagem-fina rolagem-sem-tampar respiro-lista", modoIntensivo && "flex-1")} style={modoIntensivo ? undefined : { maxHeight: 'calc(100vh - 240px)' }}>
             <table className="table-financeiro w-full caption-bottom text-sm border-collapse" style={{ tableLayout: 'fixed' }}>
               {/*
                 Larguras das colunas:
@@ -2445,7 +2450,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                         <td className={`celula-data font-mono px-0.5 py-1 align-middle leading-tight sticky left-[95px] z-10 bg-background text-center ${vencido ? 'font-semibold text-destructive' : 'text-muted-foreground'}`}
                           title={vencido ? 'Vencido e não pago' : undefined}>{fmtDate(l.data_vencimento)}</td>
                         <td className="celula-data font-mono px-0.5 py-1 align-middle leading-tight sticky left-[140px] z-10 bg-background text-center text-muted-foreground">{fmtDate(l.data_pagamento)}</td>
-                        <td className="truncate px-2 py-1 align-middle text-[12px] font-medium leading-tight" title={isParcelaFinanciamento ? `Parcela de financiamento (origem automática) — ${descExibida || ''}` : (descExibida || '')}>
+                        <td className="truncate px-1 py-1 align-middle text-[12px] font-medium leading-tight" title={isParcelaFinanciamento ? `Parcela de financiamento (origem automática) — ${descExibida || ''}` : (descExibida || '')}>
                           {isParcelaFinanciamento && <span className="mr-1" title="Parcela de financiamento">🏦</span>}
                           {descExibida || '-'}
                           {l.movimentacao_rebanho_id && (
@@ -2465,11 +2470,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                             </Tooltip>
                           )}
                         </td>
-                        <td className="truncate px-2 py-1 align-middle text-[12px] leading-tight text-muted-foreground" title={fornNome || ''}>
+                        <td className="truncate px-1 py-1 align-middle text-[12px] leading-tight text-muted-foreground" title={fornNome || ''}>
                           {fornNome || (!l.favorecido_id ? '-' : <span className="text-warning">n/c</span>)}
                         </td>
                         <td className="truncate px-1 py-1 align-middle text-[11px] font-medium leading-tight text-muted-foreground" title={l.macro_custo || ''}>{l.macro_custo || '-'}</td>
-                        <td className="truncate px-2 py-1 align-middle text-[11px] leading-tight text-muted-foreground" title={l.centro_custo || ''}>{l.centro_custo || '-'}</td>
+                        <td className="truncate px-1 py-1 align-middle text-[11px] leading-tight text-muted-foreground" title={l.centro_custo || ''}>{l.centro_custo || '-'}</td>
                         <td className="truncate px-1 py-1 align-middle text-[11px] font-medium leading-tight text-muted-foreground" title={fazendaNameMap.get(l.fazenda_id) || ''}>{fazendaCodigoMap.get(l.fazenda_id) || '-'}</td>
                         {/* ⚠ "—" É AUSÊNCIA, e aqui ela é informação: financiamento de
                             investimento e administrativo NÃO têm safra por regra. Um traço
@@ -2512,7 +2517,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                             ⚠ O QUE NÃO VOLTA É A COLISÃO DE COR: `programado` continua âmbar e
                             o azul segue reservado ao conciliado com vínculo. Aquela correção era
                             de bug, não de estilo — e sobrevive à reversão do estilo. */}
-                        <td className={`truncate px-2 py-1 text-center align-middle text-[10px] leading-tight ${stColor}`}
+                        <td className={`truncate px-1 py-1 text-center align-middle text-[10px] leading-tight ${stColor}`}
                           title={stTitle}>{stLabel}</td>
                         {/* ⚠ UM BOTÃO "…" NO LUGAR DE DOIS ÍCONES — FIN-LISTA-LAYOUT-01. Dois
                             botões de 20px numa coluna de 36 disputavam espaço com a tabela
