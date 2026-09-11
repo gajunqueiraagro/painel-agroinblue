@@ -5,7 +5,6 @@ import {
   STATUS_FINANCEIRO_OPCOES_FILTRO,
   STATUS_FILTRO_LABEL,
   STATUS_FILTRO_COR,
-  STATUS_FILTRO_PILULA,
   isStatusFiltroFinanceiro,
   type StatusFiltroFinanceiro,
 } from '@/lib/financeiro/statusFinanceiro';
@@ -1404,6 +1403,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
 
   const queryFazendaId = fazendaId !== '__all__' ? fazendaId : undefined;
 
+  /* ⚠ UMA LEITURA POR RENDER, não uma por linha: `new Date()` dentro do `map` de quatro mil
+     linhas seria quatro mil objetos por render, e — pior — a lista poderia virar o dia no meio
+     da varredura, com as primeiras linhas comparadas contra ontem e as últimas contra hoje. */
+  const hojeISO = new Date().toISOString().slice(0, 10);
+
   const selCls = "h-6 text-[10px]";
   const itemCls = "text-[10px] py-0.5";
   const lblCls = "text-[9px] font-semibold leading-none mb-0.5 block text-[hsl(213_52%_24%)]";
@@ -2180,7 +2184,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 da borda — que é o único jeito de escapar da barra em overlay do macOS, que não
                 obedece a `scrollbar-gutter`. Ver o bloco no `index.css`.
                 ⚠ VALE NOS DOIS MODOS: é o mesmo container no normal e no Ampliado. */}
-           <div ref={scrollContainerRef} className={cn("rounded-lg border border-[hsl(var(--border))] overflow-auto relative rolagem-fina rolagem-sem-tampar", modoIntensivo && "flex-1")} style={modoIntensivo ? undefined : { maxHeight: 'calc(100vh - 300px)' }}>
+           <div ref={scrollContainerRef} className={cn("mx-0.5 rounded-lg border border-[hsl(var(--border))] overflow-auto relative rolagem-fina rolagem-sem-tampar", modoIntensivo && "flex-1")} style={modoIntensivo ? undefined : { maxHeight: 'calc(100vh - 240px)' }}>
             <table className="table-financeiro w-full caption-bottom text-sm border-collapse" style={{ tableLayout: 'fixed' }}>
               {/*
                 Larguras das colunas:
@@ -2192,7 +2196,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 <col style={{ width: 28 }} />
                 {/* PR-CONC-B-1 — ícone de origem. 22px fixos; as demais larguras ficam
                     intactas e a tabela apenas cresce 22px dentro do container que rola. */}
-                <col style={{ width: 18 }} />
+                {/* 18→14: a coluna do marcador de origem carrega UM ícone; o checkbox tem
+                    coluna própria, de 28px. */}
+                <col style={{ width: 14 }} />
                 {/* PR-FIN-GRADE-DATAS-03 — COMP. | VENC. | PGTO. (3 colunas de data, 45px cada).
                     Os ~45px da nova coluna VENC. são compensados SÓ em Produto (−35) e Fazenda (−10). */}
                 <col style={{ width: 45 }} />
@@ -2289,7 +2295,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     const stKey = vinculo && stCru === 'realizado' ? 'conciliado_real' : stCru;
                     const stLabel = STATUS_FILTRO_LABEL[stKey] || l.status_transacao || '-';
                     const stColor = STATUS_FILTRO_COR[stKey] || 'text-muted-foreground';
-                    const stPilula = STATUS_FILTRO_PILULA[stKey] || 'bg-muted text-muted-foreground';
+                    /* Vencido é fato de duas colunas: venceu no passado E não foi pago. */
+                    const vencido = !!l.data_vencimento && !l.data_pagamento && l.data_vencimento < hojeISO;
                     /* A EVIDÊNCIA, sem UUID: o operador confere pelo que
                        reconhece — a data e o histórico do extrato. */
                     const stTitle = vinculo
@@ -2305,9 +2312,21 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     const isImported = !!l.lote_importacao_id;
                     const canEditRow = !isHistoricoReadOnly && !isParcelaFinanciamento;
 
+                    /* ⚠ A LINHA INTEIRA ABRE O LANÇAMENTO — FIN-LISTA-VISUAL-01. O alvo de
+                       clique era um ícone de 20px no fim de uma linha de 21px de altura, e
+                       errar a mira custava uma rolagem para reencontrar a linha.
+                       ⚠ O CHECKBOX E O MENU PARAM O CLIQUE (`stopPropagation` nas células
+                       deles): marcar para excluir em lote e abrir para editar são gestos
+                       opostos, e um não pode disparar o outro por vizinhança.
+                       ⚠ E A LINHA QUE NÃO PODE SER EDITADA NÃO VIRA BOTÃO: parcela de
+                       financiamento e histórico antigo ficam sem cursor e sem `onClick` —
+                       um clique que não faz nada ensina a desconfiar do resto da tela. */
                     return (
-                      <tr key={l.id} className={`border-b italic !h-auto hover:bg-muted/50 transition-colors ${selectedIds.has(l.id) ? 'bg-primary/5' : ''}`}>
-                        <td className="px-1 py-1 align-middle text-center sticky left-0 z-10 bg-background">
+                      <tr key={l.id}
+                        className={`border-b italic !h-auto hover:bg-muted/50 transition-colors${canEditRow ? ' cursor-pointer' : ''} ${selectedIds.has(l.id) ? 'bg-primary/5' : ''}`}
+                        onClick={canEditRow ? () => openEdit(l) : undefined}>
+                        <td className="px-1 py-1 align-middle text-center sticky left-0 z-10 bg-background"
+                          onClick={(e) => e.stopPropagation()}>
                           <Checkbox checked={selectedIds.has(l.id)} onCheckedChange={() => toggleSelect(l.id)} disabled={isParcelaFinanciamento} className="h-3 w-3" />
                         </td>
                         <td className="px-0 py-1 align-middle text-center sticky left-[28px] z-10 bg-background">
@@ -2321,7 +2340,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                             >
                               <button
                                 type="button"
-                                className={cn('text-[14px] font-semibold leading-none not-italic cursor-pointer', icone.cor)}
+                                className={cn('text-[11px] font-semibold leading-none not-italic cursor-pointer', icone.cor)}
                                 title={icone.significado}
                                 aria-label={icone.significado}
                               >
@@ -2330,12 +2349,18 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                             </MinimodalOrigemLancamento>
                           )}
                         </td>
-                        <td className="celula-data font-mono px-0.5 py-1 align-middle font-medium leading-tight sticky left-[50px] z-10 bg-background text-center">{fmtDate(l.data_competencia)}</td>
+                        {/* ⚠ DATA CINZA POR PADRÃO, VENCIDA EM VERMELHO — e só a data, não a
+                            linha: pintar a linha inteira faria o atraso competir com o valor e
+                            o status, que são o que se lê primeiro. Vencido = tem vencimento no
+                            passado E não tem pagamento; um lançamento pago ontem com
+                            vencimento anteontem não está atrasado, está resolvido. */}
+                        <td className="celula-data font-mono px-0.5 py-1 align-middle leading-tight sticky left-[50px] z-10 bg-background text-center text-muted-foreground">{fmtDate(l.data_competencia)}</td>
                         {/* PR-FIN-GRADE-DATAS-03 — VENC. e PGTO. em colunas separadas, cada uma a sua coluna real
                             (nunca fundidas, nunca a data financeira derivada). fmtDate(null) já rende o sentinela '-'.
                             VENC. permanece visível mesmo quando há PGTO. */}
-                        <td className="celula-data font-mono px-0.5 py-1 align-middle font-medium leading-tight sticky left-[95px] z-10 bg-background text-center">{fmtDate(l.data_vencimento)}</td>
-                        <td className="celula-data font-mono px-0.5 py-1 align-middle font-medium leading-tight sticky left-[140px] z-10 bg-background text-center">{fmtDate(l.data_pagamento)}</td>
+                        <td className={`celula-data font-mono px-0.5 py-1 align-middle leading-tight sticky left-[95px] z-10 bg-background text-center ${vencido ? 'font-semibold text-destructive' : 'text-muted-foreground'}`}
+                          title={vencido ? 'Vencido e não pago' : undefined}>{fmtDate(l.data_vencimento)}</td>
+                        <td className="celula-data font-mono px-0.5 py-1 align-middle leading-tight sticky left-[140px] z-10 bg-background text-center text-muted-foreground">{fmtDate(l.data_pagamento)}</td>
                         <td className="truncate px-2 py-1 align-middle text-[12px] font-medium leading-tight" title={isParcelaFinanciamento ? `Parcela de financiamento (origem automática) — ${descExibida || ''}` : (descExibida || '')}>
                           {isParcelaFinanciamento && <span className="mr-1" title="Parcela de financiamento">🏦</span>}
                           {descExibida || '-'}
@@ -2356,11 +2381,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                             </Tooltip>
                           )}
                         </td>
-                        <td className="truncate px-2 py-1 align-middle text-[12px] font-medium leading-tight" title={fornNome || ''}>
+                        <td className="truncate px-2 py-1 align-middle text-[12px] leading-tight text-muted-foreground" title={fornNome || ''}>
                           {fornNome || (!l.favorecido_id ? '-' : <span className="text-warning">n/c</span>)}
                         </td>
                         <td className="truncate px-1 py-1 align-middle text-[11px] font-medium leading-tight text-muted-foreground" title={l.macro_custo || ''}>{l.macro_custo || '-'}</td>
-                        <td className="truncate px-1 py-1 align-middle text-[11px] font-medium leading-tight" title={l.centro_custo || ''}>{l.centro_custo || '-'}</td>
+                        <td className="truncate px-2 py-1 align-middle text-[11px] leading-tight text-muted-foreground" title={l.centro_custo || ''}>{l.centro_custo || '-'}</td>
                         <td className="truncate px-1 py-1 align-middle text-[11px] font-medium leading-tight text-muted-foreground" title={fazendaNameMap.get(l.fazenda_id) || ''}>{fazendaCodigoMap.get(l.fazenda_id) || '-'}</td>
                         {/* ⚠ "—" É AUSÊNCIA, e aqui ela é informação: financiamento de
                             investimento e administrativo NÃO têm safra por regra. Um traço
@@ -2396,15 +2421,15 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                             faixa não cede — sem truncar, "Realizado" transbordaria a célula em
                             vez de a alargar. É o mesmo raciocínio do `min-w-0` da barra, do
                             outro lado da mesma regra. */}
-                        {/* ⚠ A PÍLULA MORA NUM `span`, não na `td`: a célula é `truncate` e
-                            `tableLayout: fixed`, e uma borda na própria célula viraria uma
-                            caixa colada nas vizinhas. O `span` `inline-block` se ajusta ao
-                            texto e respeita o truncar da célula. */}
-                        <td className="truncate px-1 py-1 text-center align-middle leading-tight" title={stTitle}>
-                          <span className={`inline-block max-w-full truncate rounded px-1 py-[1px] text-[10px] font-medium ${stPilula}`}>
-                            {stLabel}
-                          </span>
-                        </td>
+                        {/* ⚠ A PÍLULA COM BORDA FOI REVERTIDA — FIN-LISTA-VISUAL-01. Ela durou
+                            um PR: a caixa em toda linha competia com o valor numa lista densa,
+                            e o que se quer da coluna é reconhecer o estado de relance, não lê-lo
+                            emoldurado. Volta a ser TEXTO colorido, que é o que era antes.
+                            ⚠ O QUE NÃO VOLTA É A COLISÃO DE COR: `programado` continua âmbar e
+                            o azul segue reservado ao conciliado com vínculo. Aquela correção era
+                            de bug, não de estilo — e sobrevive à reversão do estilo. */}
+                        <td className={`truncate px-2 py-1 text-center align-middle text-[10px] leading-tight ${stColor}`}
+                          title={stTitle}>{stLabel}</td>
                         {/* ⚠ UM BOTÃO "…" NO LUGAR DE DOIS ÍCONES — FIN-LISTA-LAYOUT-01. Dois
                             botões de 20px numa coluna de 36 disputavam espaço com a tabela
                             inteira, e o que eles faziam só se descobria no `title`. O menu diz
@@ -2413,7 +2438,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                             "Ver contrato" — ela não se edita aqui, edita-se no contrato. E
                             "Duplicar" continua desabilitado nela, com o motivo escrito no item,
                             que é a regra da casa para botão cinza. */}
-                        <td className="!py-0 px-0 align-middle">
+                        <td className="!py-0 px-0 align-middle" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-center">
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>

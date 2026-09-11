@@ -128,34 +128,16 @@ export const STATUS_FILTRO_COR: Record<string, string> = {
   meta: 'text-muted-foreground',
   /* Muted como o `meta`: o azul fica reservado ao conciliado DE VERDADE, o que
      tem vínculo. Duas coisas diferentes não podem ter a mesma cor — e desde o
-     FIN-LISTA-LAYOUT-02 essa reserva é verdade: o `programado` foi para o âmbar. */
+     FIN-LISTA-LAYOUT-02 essa reserva é verdade: o `programado` foi para o âmbar.
+     ⚠ A PÍLULA COM BORDA QUE ACOMPANHAVA ESTE MAPA DUROU UM PR e foi revertida em
+     FIN-LISTA-VISUAL-01 — a caixa em toda linha competia com o valor numa lista densa. O
+     mapa de COR ficou, porque corrigia um bug (dois status com a mesma string); a FORMA
+     saiu, porque era estilo. Vale a distinção: nem toda reversão leva junto o que veio na
+     mesma carona. */
   conciliado: 'text-muted-foreground',
   conciliado_real: 'text-blue-600 dark:text-blue-400',
 };
 
-/**
- * A PÍLULA DO STATUS NA LISTA — FIN-LISTA-LAYOUT-02.
- *
- * ⚠ A FORMA CARREGA SIGNIFICADO, e não é decoração: o que JÁ ACONTECEU (realizado,
- * conciliado) vem em pílula de BORDA, o que ainda vai acontecer (previsto, programado,
- * agendado) vem em fundo suave. Quem varre a coluna separa passado de futuro pelo contorno,
- * antes de ler a palavra — e cada um dos cinco tem cor própria, que era a queixa.
- * ⚠ E O LEGADO FICA CINZA DE PROPÓSITO: `meta` e o `conciliado` antigo (sem vínculo) não são
- * estados da régua atual; pintá-los de qualquer cor viva os poria a competir com os cinco que
- * são.
- * ⚠ `STATUS_FILTRO_COR` CONTINUA EXISTINDO e é usado pelo Extrato Gerencial, que exibe o
- * status como texto solto dentro de uma linha densa — pílula ali brigaria com o resto. Duas
- * apresentações, uma régua de cor.
- */
-export const STATUS_FILTRO_PILULA: Record<string, string> = {
-  realizado: 'border border-green-600/70 text-green-700 dark:border-green-400/60 dark:text-green-400',
-  conciliado_real: 'border border-blue-600/70 text-blue-700 dark:border-blue-400/60 dark:text-blue-400',
-  programado: 'bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300',
-  agendado: 'bg-purple-100 text-purple-800 dark:bg-purple-500/15 dark:text-purple-300',
-  previsto: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-500/15 dark:text-cyan-300',
-  meta: 'bg-muted text-muted-foreground',
-  conciliado: 'bg-muted text-muted-foreground',
-};
 
 // ── Writers ──
 
