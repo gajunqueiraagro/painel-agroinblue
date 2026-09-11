@@ -72,10 +72,11 @@ export function safraSugerida(
 /**
  * As candidatas, sem escolher nenhuma — PR-FIN-ATIVIDADE-01b.
  *
- * ⚠ MESMO FILTRO DA `safraSugerida`, e é por isso que mora aqui: a tela que mostra as
- * candidatas no topo da lista tem de mostrar EXATAMENTE as que a sugestão considerou. Duas
- * definições do mesmo conjunto divergiriam no dia em que alguém mexesse numa só — e o
- * operador veria uma safra sugerida que não está no topo, ou o contrário.
+ * ⚠ NENHUMA TELA A CHAMA MAIS — FIN-SAFRA-ORDEM-02. Ela existia para que o dropdown do modal
+ * mostrasse no topo EXATAMENTE as que a sugestão considerou; o topo acabou (a lista voltou à
+ * ordem cronológica pura) e o único chamador que resta é a `safraSugerida` aqui em cima.
+ * Continua exportada de propósito: é o conjunto "temporada + escopo", que é uma pergunta
+ * legítima, e apagá-la agora seria apagar a definição junto com o consumidor.
  */
 export function safrasCandidatas(
   dataISO: string | null | undefined,

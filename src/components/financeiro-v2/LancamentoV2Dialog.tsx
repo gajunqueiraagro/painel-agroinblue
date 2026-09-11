@@ -40,7 +40,7 @@ import { cn } from '@/lib/utils';
 import type { ExcelContext } from '@/v2/lib/mesa/buildExcelContext';
 import { planoDeTransferencia, ehTipoTransferencia } from '@/v2/lib/mesa/transferenciaPlano';
 import { ATIVIDADES, lembrarAtividade, ultimaAtividade, type Atividade } from '@/lib/financeiro/ultimaAtividade';
-import { safraSugerida, safrasCandidatas } from '@/lib/agri/safraSugerida';
+import { safraSugerida } from '@/lib/agri/safraSugerida';
 import { conflitoSafraEscopo, mensagemConflitoSafraEscopo } from '@/lib/financeiro/safraEscopo';
 import { escopoDoSubcentro, AVISO_ADMIN_SEM_SAFRA, AVISO_ADMIN_SAFRA_SAI } from '@/lib/financeiro/escopoDoSubcentro';
 
@@ -571,12 +571,9 @@ export function LancamentoV2Dialog({
     }
   };
 
-  /* As candidatas da competência e da atividade — a MESMA função que a sugestão usa. */
-  const candidatasDeSafra = useMemo(
-    () => (atividade && atividade !== 'administrativo'
-      ? safrasCandidatas(dataCompetencia, atividade, safras ?? [])
-      : []),
-    [atividade, dataCompetencia, safras]);
+  /* ⚠ AS CANDIDATAS SAÍRAM DAQUI — FIN-SAFRA-ORDEM-02. Elas existiam só para serem
+     empilhadas no topo do dropdown; a SUGESTÃO nunca dependeu desta lista: `safraSugerida`
+     chama `safrasCandidatas` por dentro, e continua. */
 
   const safraNome = (id: string) => (safras ?? []).find((s) => s.id === id)?.nome ?? id;
 
@@ -1784,16 +1781,21 @@ export function LancamentoV2Dialog({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__none_safra__">Sem safra</SelectItem>
-                    {/* ⚠ AS CANDIDATAS VÊM PRIMEIRO, e são exatamente as que a sugestão
-                        considerou — a mesma função devolve as duas coisas. Quando há empate
-                        (Amendoim e Mandioca na mesma temporada) ninguém escolhe por quem
-                        lança; o que se faz é pôr as duas onde a mão alcança. */}
-                    {candidatasDeSafra.map(s => (
-                      <SelectItem key={s.id} value={s.id}>{safraNome(s.id)}</SelectItem>
+                    {/* ⚠ ORDEM CRONOLÓGICA PURA — FIN-SAFRA-ORDEM-02 (decisão do Gabriel,
+                        11/09/2026), desfazendo o "candidatas primeiro" do FIN-ATIVIDADE-01b.
+                        A lista sai na ordem em que a fonte a entrega (`ordem_exibicao` asc,
+                        desempate por `nome`, em `loadSafras`): 21/22 no topo, 26/27 embaixo,
+                        em qualquer competência.
+                        ⚠ PÔR DUAS SAFRAS AO ALCANCE DA MÃO CUSTOU A ORDEM DE TODAS. Com
+                        25/26 Amendoim e Mandioca no topo e 21/22 logo abaixo, quem procura
+                        uma safra pela posição não acha nenhuma — e procurar pela posição é o
+                        que se faz numa lista que já está ordenada.
+                        ⚠ A SUGESTÃO NÃO MUDOU: a safra sugerida continua pré-selecionada e
+                        marcada (borda tracejada + "sugerida"), agora no seu lugar
+                        cronológico. O que saiu foi o empilhamento, não a sugestão. */}
+                    {(safras ?? []).map(s => (
+                      <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>
                     ))}
-                    {(safras ?? [])
-                      .filter(s => !candidatasDeSafra.some(c => c.id === s.id))
-                      .map(s => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}
                   </SelectContent>
                 </Select>
                 {/* ⚠ SUGERIDA DIZ QUE É SUGERIDA. Um campo que se preenche sozinho e não
