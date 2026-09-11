@@ -16,9 +16,10 @@ import { FavorecidoSelect } from '@/components/shared/FavorecidoSelect';
 import { PlanoSubcentroSelect } from '@/components/shared/PlanoSubcentroSelect';
 import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import {
-  resumoVivo, primeiroVencimentoDe, mesDoFatoDe,
-  type Recorrencia, type MesDoFato,
+  resumoVivo, primeiroVencimentoDe, mesDoFatoDe, propagarRecorrencia,
+  type Recorrencia, type MesDoFato, type ResultadoPropagacao,
 } from '@/hooks/useRecorrencias';
+import { PropagarRecorrenciaDialog } from './PropagarRecorrenciaDialog';
 import { cn } from '@/lib/utils';
 
 /** As duas respostas. O rótulo diz o QUE, o exemplo diz QUANDO usar. */
@@ -98,6 +99,25 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
   );
   const [dataFim, setDataFim] = useState(ed?.dataFim?.slice(0, 10) ?? '');
   const [salvando, setSalvando] = useState(false);
+  /* A regra já gravada, esperando a decisão de até onde alcançar o que ela gerou. */
+  const [propagar, setPropagar] = useState<{ previa: ResultadoPropagacao | null; recusa: string | null } | null>(null);
+
+  /**
+   * ADMINISTRATIVO NÃO TEM SAFRA — FIN-SAFRA-ADM-01, agora também na regra.
+   *
+   * ⚠ AQUI SÓ O PLANO DECIDE. O modal de lançamento tem o card de Atividade e por isso
+   * pergunta aos dois; a recorrência não tem card, então a única fonte é o escopo da linha
+   * do plano do subcentro escolhido.
+   * ⚠ E QUEM GARANTE É O TRIGGER, não esta linha. Desde o FIN-SAFRA-ADM-03 o
+   * `resolve_classificacao_from_plano` zera a safra de qualquer lançamento administrativo —
+   * inclusive os que a propagação escrever. O front avisa para o operador não gravar uma
+   * regra que promete uma safra que os lançamentos nunca terão.
+   */
+  const ehAdministrativo = (() => {
+    const alvo = (subcentro || '').trim().toLowerCase();
+    const cls = classificacoes.find(c => (c.subcentro || '').trim().toLowerCase() === alvo);
+    return (cls?.escopo_negocio || '').trim() === 'administrativo';
+  })();
 
   const valorNum = Number(valorTexto.replace(/\./g, '').replace(',', '.')) || 0;
   /* Uma conta só, usada pela frase E pela gravação: se divergissem, a tela
@@ -120,6 +140,25 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
 
   const salvar = async () => {
     if (impedimento || !clienteId) return;
+    /**
+     * ⚠ SINAL TROCADO COM GERADOS EXISTENTES NÃO SALVA — FIN-RECORR-PROPAGA-01 (ajuste).
+     *
+     * A RPC já recusava a PROPAGAÇÃO, e isso não bastava: a regra salva de qualquer forma, e
+     * o estrago não é a divergência, é a próxima geração. Uma regra que virou Entrada com
+     * quatro lançamentos de Saída gerados cria os de Entrada ao lado dos antigos — o mês
+     * aparece dobrado, com sinais opostos, e nada na tela diz que foram a mesma conta.
+     * ⚠ COM ZERO GERADOS O SINAL MUDA À VONTADE: não há com o que divergir, e uma regra
+     * recém-criada que nasceu no tipo errado tem de poder ser corrigida.
+     * ⚠ A RECUSA DA RPC CONTINUA, como segunda barreira: esta checagem lê `ed.gerados`, que é
+     * a contagem da última carga da lista; a da RPC é feita na transação, com `FOR UPDATE`.
+     */
+    if (ed && (ed.valorBase < 0) !== ehSaida && ed.gerados > 0) {
+      toast.error(
+        'Trocar entrada por saída exige nova recorrência. Cancele esta regra e crie outra; '
+        + `os ${ed.gerados} lançamentos gerados ficam como estão.`,
+      );
+      return;
+    }
     setSalvando(true);
     try {
       const payload = {
@@ -129,7 +168,9 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
         favorecido_id: favorecidoId || null,
         conta_bancaria_id: contaId,
         subcentro,
-        safra_id: safraId || null,
+        /* O trigger zeraria de qualquer forma; mandar já nulo evita gravar na REGRA uma
+           safra que nenhum lançamento dela vai ter. */
+        safra_id: ehAdministrativo ? null : (safraId || null),
         forma_pagamento: formaPgto || null,
         observacao: observacao.trim() || null,
         /* ⚠ O SINAL É O ÚNICO CANAL, e `tipo_operacao` NÃO entra no payload: a
@@ -152,12 +193,39 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
          cuidam de dia válido, período coerente e periodicidade. */
       if (error) { toast.error(error.message ?? 'O banco recusou a regra.'); return; }
       toast.success(ed ? 'Recorrência atualizada.' : 'Recorrência criada.');
+      /* ⚠ SÓ A EDIÇÃO PROPAGA. Uma regra recém-criada não gerou nada — perguntar "até onde
+         propagar?" sobre zero lançamentos seria um passo a mais para dizer "nenhum".
+         ⚠ E A SIMULAÇÃO USA `'futuros'`, não `'nenhum'`: é o escopo que faz a RPC recusar
+         sinal trocado ANTES de escrever. A recusa chega aqui como erro e vira a mensagem do
+         diálogo — a regra já está salva, e não se chama de novo. */
+      if (ed) {
+        const sim = await propagarRecorrencia(ed.id, 'futuros', true);
+        if (!sim.ok) { setPropagar({ previa: null, recusa: sim.erro ?? 'O banco recusou a propagação.' }); return; }
+        if (sim.dados && sim.dados.futuros + sim.dados.passados > 0) {
+          setPropagar({ previa: sim.dados, recusa: null });
+          return;
+        }
+      }
       await aoSalvar();
       aoFechar();
     } finally {
       setSalvando(false);
     }
   };
+
+  /* ⚠ O DIÁLOGO DA PROPAGAÇÃO SUBSTITUI ESTE, não o cobre: a regra já foi gravada, e deixar
+     o formulário visível atrás convidaria a editá-lo de novo sobre um estado já salvo. */
+  if (propagar) {
+    return (
+      <PropagarRecorrenciaDialog
+        recorrenciaId={ed?.id ?? ''}
+        descricao={descricao.trim()}
+        previa={propagar.previa}
+        recusa={propagar.recusa}
+        aoFechar={() => { setPropagar(null); void (async () => { await aoSalvar(); aoFechar(); })(); }}
+      />
+    );
+  }
 
   return (
     <Dialog open onOpenChange={o => !o && aoFechar()}>
@@ -289,13 +357,26 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
 
             <div className="col-span-2">
               <Label className="text-[10px]">Safra</Label>
-              <Select value={safraId || '__none__'} onValueChange={v => setSafraId(v === '__none__' ? '' : v)}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="—" /></SelectTrigger>
+              <Select value={safraId || '__none__'} disabled={ehAdministrativo}
+                onValueChange={v => setSafraId(v === '__none__' ? '' : v)}>
+                <SelectTrigger className={cn('h-8 text-xs',
+                  ehAdministrativo && safraId && 'line-through opacity-60')}>
+                  <SelectValue placeholder="—" />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">Sem safra</SelectItem>
                   {(safras ?? []).map(s => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}
                 </SelectContent>
               </Select>
+              {/* Mesmo idioma do modal de lançamento: campo desabilitado diz por quê, e
+                  quando há valor a perder o aviso é sobre a perda, não sobre a regra. */}
+              {ehAdministrativo && (
+                <div className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
+                  {safraId
+                    ? 'safra será removida ao salvar — administrativo não tem safra'
+                    : 'administrativo não tem safra'}
+                </div>
+              )}
             </div>
           </div>
 

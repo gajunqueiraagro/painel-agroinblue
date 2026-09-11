@@ -242,6 +242,57 @@ export async function gerarRecorrencia(
   return { ok: r.ok !== false, gerados: Number(r.gerados ?? 0), de: r.de ?? null, ate: r.ate ?? null, erro: null };
 }
 
+/** Até onde a edição da regra alcança os lançamentos que ela gerou. */
+export type EscopoPropagacao = 'futuros' | 'todos' | 'nenhum';
+
+export interface ResultadoPropagacao {
+  /** Quantos se enquadram em cada grupo — a contagem é do banco, nunca da tela. */
+  futuros: number;
+  passados: number;
+  aplicadosFuturos: number;
+  aplicadosPassados: number;
+  simulado: boolean;
+}
+
+/**
+ * Propagar a regra aos lançamentos gerados — FIN-RECORR-PROPAGA-01.
+ *
+ * ⚠ A CONTAGEM E A GRAVAÇÃO SÃO A MESMA CONSULTA, e é por isso que isto é uma RPC e não
+ * dois `update` do front. Se o diálogo dissesse "12 futuros" com um predicado e o update
+ * usasse outro, a tela prometeria um número e faria outro — e ninguém descobriria.
+ * ⚠ E É UMA TRANSAÇÃO SÓ. "Valor apenas nos futuros" são dois `update` com recortes
+ * diferentes; pelo PostgREST seriam duas requisições, e falhar na segunda deixaria metade
+ * propagado, sem como desfazer.
+ * ⚠ SIMULAR COM `'futuros'` É DE PROPÓSITO, e não com `'nenhum'`: a recusa de sinal trocado
+ * acontece ANTES do desvio de simulação, então simular assim é o que faz a recusa aparecer
+ * na tela antes de qualquer escrita. Com `'nenhum'` a RPC devolveria as contagens e calaria
+ * sobre o sinal — que é a única coisa que o operador precisa saber antes de escolher.
+ */
+export async function propagarRecorrencia(
+  recorrenciaId: string, escopo: EscopoPropagacao, simular: boolean,
+): Promise<{ ok: boolean; dados: ResultadoPropagacao | null; erro: string | null }> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+  const { data, error } = await (supabase as any).rpc('fn_recorrencia_propagar', {
+    p_recorrencia_id: recorrenciaId,
+    p_escopo: escopo,
+    p_simular: simular,
+  });
+  if (error) return { ok: false, dados: null, erro: error.message };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- jsonb da RPC
+  const r: any = data ?? {};
+  return {
+    ok: true,
+    dados: {
+      futuros: Number(r.futuros ?? 0),
+      passados: Number(r.passados ?? 0),
+      aplicadosFuturos: Number(r.aplicados_futuros ?? 0),
+      aplicadosPassados: Number(r.aplicados_passados ?? 0),
+      simulado: r.simulado === true,
+    },
+    erro: null,
+  };
+}
+
 /** Cancelar é `ativo = false` — e NÃO apaga o que já foi gerado. */
 export async function cancelarRecorrencia(recorrenciaId: string): Promise<{ ok: boolean; erro: string | null }> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo

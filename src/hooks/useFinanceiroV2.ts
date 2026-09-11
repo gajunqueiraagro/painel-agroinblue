@@ -90,6 +90,15 @@ export interface LancamentoV2 {
    *  movimentação zootécnica (compra/abate/venda). Read-only — usado para
    *  indicador visual e roteamento para LancamentoZooModal. */
   movimentacao_rebanho_id: string | null;
+  /**
+   * A regra que gerou este lançamento — FIN-RECORR-PROPAGA-01.
+   *
+   * ⚠ A COLUNA EXISTE DESDE O FIN-RECORRENCIA-01 e o tipo não a declarava: 460 linhas do
+   * proto a usam, e o único leitor era a contagem de gerados por regra. Sem ela a lista não
+   * sabe de que recorrência veio um lançamento — e quem propaga precisa saber que a linha
+   * que acabou de mudar tem dono.
+   */
+  recorrencia_id: string | null;
   safra_id?: string | null;
   /** A conta do plano — desde FIN-PLANO-CHAVE-02 é ela que manda, e o texto é cache. */
   plano_conta_id?: string | null;
@@ -1015,6 +1024,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
         created_at: verify.created_at,
         updated_at: verify.updated_at,
         movimentacao_rebanho_id: verify.movimentacao_rebanho_id,
+        recorrencia_id: verify.recorrencia_id,
         safra_id: verify.safra_id,
         plano_conta_id: verify.plano_conta_id,
         compoe_dre: verify.compoe_dre,
