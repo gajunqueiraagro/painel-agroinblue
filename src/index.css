@@ -432,22 +432,27 @@ input[type='number'] {
   }
 
   /* ─────────────────────────────────────────────────────────────────────────────
-     RESPIRO LATERAL DA LISTA — FIN-LISTA-VISUAL-02.
+     RESPIRO INTERNO DA LISTA — FIN-LISTA-VISUAL-03 (corrige o VISUAL-02).
 
-     ⚠ SAO DOIS TRABALHOS NUMA MEDIDA SO', e por isso ela e' 16px e nao 4: da' a
-     margem que o conteudo pedia (o checkbox e o Produto encostavam na borda) E
-     cobre a barra vertical em overlay do macOS, que sao ~7px desenhados por cima.
-     O `padding-right` de 10px que o `rolagem-sem-tampar` tinha saiu daqui — este
-     o substitui com folga, e uma medida so' e' mais facil de ajustar que duas
-     somadas.
+     ⚠ A TENTATIVA ANTERIOR ERRAVA O ALVO. Eram 16px de padding NO SCROLLPORT: o
+     conteudo recuava e a BORDA do card continuava colada na margem da tela. O que
+     se queria era o contrario — o card inteiro, com a sua borda, afastado da
+     borda da pagina, e a tabela proxima da borda INTERNA dele.
+     O afastamento virou `px-4` no container raiz da tela, que empurra a barra de
+     filtros, a tabela e o rodape JUNTOS: os tres alinham por construcao, sem
+     nenhum deles precisar saber a medida.
+
+     ⚠ O QUE SOBRA AQUI E' SO' O QUE A BARRA DE ROLAGEM PEDE, e ele nao pode virar
+     margem: a barra em overlay do macOS desenha DENTRO do scrollport, entao so
+     padding a tira de cima da ultima coluna. 8px a esquerda (cosmetico, nao
+     colar no traco) e 12px a direita (os ~7px da barra, com folga).
 
      ⚠ NO SCROLLPORT, NAO NA TABELA: as cinco colunas fixas (`sticky left-*`)
-     ancoram na CAIXA DE PADDING do container que rola, entao elas se afastam da
-     borda junto com o resto. Padding na `<table>` deixaria as fixas coladas e o
-     resto recuado — pior que nao ter recuo.
+     ancoram na CAIXA DE PADDING do container que rola. Padding na `<table>`
+     deixaria as fixas coladas e o resto recuado — pior que nao ter recuo.
      ───────────────────────────────────────────────────────────────────────────── */
   .respiro-lista {
-    padding-left: 16px;
-    padding-right: 16px;
+    padding-left: 8px;
+    padding-right: 12px;
   }
 }

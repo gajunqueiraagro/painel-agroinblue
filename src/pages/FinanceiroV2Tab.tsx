@@ -47,7 +47,7 @@ import { CorrecaoTransferenciasBanner } from '@/components/financeiro-v2/Correca
 import { format, parseISO } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { normalizarAtividade, casaTipoOperacao } from '@/lib/financeiro/filtrosListaV2';
-import { temFiltroLimitante, FRASE_SEM_FILTRO } from '@/lib/financeiro/filtroLimitante';
+import { temFiltroLimitante, FRASE_SEM_FILTRO, SEM_SAFRA } from '@/lib/financeiro/filtroLimitante';
 /* ⚠ A LISTA DE ATIVIDADES É A DO CARD DO MODAL — adendo do PR-FIN-SAFRA-ADM-01. Duplicá-la
    aqui é como o filtro ficou dois anos oferecendo Pecuária e Agricultura enquanto o resto do
    sistema já conhecia quatro: uma lista escrita à mão não sabe quando a outra cresce. */
@@ -362,6 +362,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   /**
    * O filtro de Safra — FIN-LISTA-FILTROS-01b.
    *
+   * ⚠ A SENTINELA VEM DO MÓDULO DA REGRA, não de um `const` aqui dentro — FIN-LISTA-CRASH-
+   * SAFRA-01. Ela era declarada NO CORPO do componente, depois do `useMemo` que a usava, e o
+   * callback do `useMemo` RODA NO RENDER: a constante estava na zona morta temporal e a tela
+   * inteira caía com `Cannot access 'SEM_SAFRA' before initialization`. Importada, não há
+   * ordem a respeitar — e a sentinela passa a ter uma definição só, ao lado da regra que
+   * decide se ela limita.
    * ⚠ TRÊS ESTADOS, NÃO DOIS: `__all__` (todas), `SEM_SAFRA` (só as linhas sem safra) e um
    * id. "Sem safra" precisa de sentinela própria porque `safra_id === null` não cabe num
    * `value` de `Select`, e reaproveitar `__all__` faria "todas" e "nenhuma" serem a mesma
@@ -883,9 +889,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     }
     onAbrirOperacaoOCFinanceiro?.(operacaoId);
   };
-
-  /** A sentinela do "sem safra" — ver o aviso no estado `safraFiltro`. */
-  const SEM_SAFRA = '__sem_safra__';
 
   /* O código da safra por id, como a fazenda e o fornecedor: mapa dos catálogos já
      carregados, resolvido no RENDER. A linha carrega o id; o texto é da tela. */
@@ -1572,12 +1575,17 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   );
 
   return (
-    <div className={cn("relative", modoIntensivo ? "flex flex-col h-[calc(100vh-8px)]" : "space-y-1 pb-20")}>
+    /* ⚠ O AFASTAMENTO MORA AQUI, NO RAIZ — FIN-LISTA-VISUAL-03. A seção do /v2 não tem
+       padding lateral (`w-full min-w-0 pb-16`), então tudo encostava na borda da tela. Pôr
+       `px-4` aqui empurra a barra de filtros, a tabela e o rodapé JUNTOS: os três alinham na
+       mesma linha vertical por construção, e nenhum deles precisa conhecer a medida.
+       ⚠ E O CARD RECUA COM A BORDA, que era o pedido: antes o padding estava dentro do
+       scrollport, então o conteúdo recuava e o traço do card continuava colado. */
+    <div className={cn("relative px-4", modoIntensivo ? "flex flex-col h-[calc(100vh-8px)]" : "space-y-1 pb-20")}>
       {/* FILTERS */}
       <Card className="rounded-lg bg-white shrink-0" style={{ border: '1px solid #D6DEE8', boxShadow: '0 2px 6px rgba(0,0,0,0.04)' }}>
-        {/* O mesmo respiro lateral da tabela (16px), para a barra e a lista começarem
-            na mesma linha vertical — FIN-LISTA-VISUAL-02. */}
-        <CardContent className="px-4 py-2 space-y-1">
+        {/* Padding interno pequeno: o afastamento da borda da tela é do container raiz. */}
+        <CardContent className="p-2 space-y-1">
           {isMobile ? (
             <>
               {/* MOBILE: Row 1 — Ano | Mês | Data por | Tipo | Status */}
@@ -2255,7 +2263,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 da borda — que é o único jeito de escapar da barra em overlay do macOS, que não
                 obedece a `scrollbar-gutter`. Ver o bloco no `index.css`.
                 ⚠ VALE NOS DOIS MODOS: é o mesmo container no normal e no Ampliado. */}
-           <div ref={scrollContainerRef} className={cn("mx-0.5 rounded-lg border border-[hsl(var(--border))] overflow-auto relative rolagem-fina rolagem-sem-tampar respiro-lista", modoIntensivo && "flex-1")} style={modoIntensivo ? undefined : { maxHeight: 'calc(100vh - 240px)' }}>
+           <div ref={scrollContainerRef} className={cn("rounded-lg border border-[hsl(var(--border))] overflow-auto relative rolagem-fina rolagem-sem-tampar respiro-lista", modoIntensivo && "flex-1")} style={modoIntensivo ? undefined : { maxHeight: 'calc(100vh - 240px)' }}>
             <table className="table-financeiro w-full caption-bottom text-sm border-collapse" style={{ tableLayout: 'fixed' }}>
               {/*
                 Larguras das colunas:
@@ -2576,8 +2584,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
               ⚠ FORA DA ÁREA QUE ROLA, de propósito: dentro da tabela a legenda custaria uma
               linha de lista em cada tela, e some justamente quando o operador rola até o
               lançamento que não entendeu. */}
-          {/* O rodapé alinha com a tabela e a barra: as três linhas verticais coincidem. */}
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-1">
+          {/* 8px = o padding interno do scrollport, para o rodapé alinhar com a PRIMEIRA
+              COLUNA da tabela, não com a borda do card. */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-2 py-1">
             <span className="text-[10px] text-muted-foreground">
               {totalLancamentosFiltrados} lançamento{totalLancamentosFiltrados !== 1 ? 's' : ''} encontrado{totalLancamentosFiltrados !== 1 ? 's' : ''}
             </span>
