@@ -492,6 +492,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     if (plano.grupoCusto) query = query.eq('grupo_custo', plano.grupoCusto);
     if (plano.centroCusto) query = query.eq('centro_custo', plano.centroCusto);
     if (plano.subcentro) query = query.eq('subcentro', plano.subcentro);
+    if (plano.safraId) query = query.eq('safra_id', plano.safraId);
     if (plano.orDirecao) query = query.or(plano.orDirecao);
     if (plano.orDescricao) query = query.or(plano.orDescricao);
     if (plano.favorecidoId) query = query.eq('favorecido_id', plano.favorecidoId);
@@ -621,6 +622,21 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       if (vivo()) setLoading(false);
     }
   }, [clienteId, PAGE_SIZE]);
+
+  /**
+   * Esvazia a lista sem consultar — FIN-LISTA-PERF-01.
+   *
+   * ⚠ E INCREMENTA O TOKEN, que é o ponto: se uma carga estiver em voo quando o operador
+   * limpar o último filtro limitante, a resposta dela chegaria depois e repovoaria uma tela
+   * que já decidiu não mostrar nada. Esvaziar sem invalidar seria esvaziar por um instante.
+   */
+  const limparLancamentos = useCallback(() => {
+    tokenLancamentosRef.current += 1;
+    setLancamentos([]);
+    setTotal(0);
+    setPage(0);
+    setLoading(false);
+  }, []);
 
   /** Fetch ALL lancamentos matching filters (no pagination) — used for export */
   const loadAllForExport = useCallback(async (filtros: FiltrosV2): Promise<LancamentoV2[]> => {
@@ -1622,6 +1638,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     loadSafras,
     criarFornecedor,
     loadLancamentos,
+    limparLancamentos,
     loadAllForExport,
     criarLancamento,
     criarLancamentoComId,

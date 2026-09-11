@@ -188,6 +188,7 @@ export function aplicarPlanoNaView(inicial: BuilderView, plano: PlanoBaseV2): Bu
   if (plano.grupoCusto) q = q.eq('grupo_custo', plano.grupoCusto);
   if (plano.centroCusto) q = q.eq('centro_custo', plano.centroCusto);
   if (plano.subcentro) q = q.eq('subcentro', plano.subcentro);
+  if (plano.safraId) q = q.eq('safra_id', plano.safraId);
   if (plano.orDirecao) q = q.or(plano.orDirecao);
   if (plano.orDescricao) q = q.or(plano.orDescricao);
   if (plano.favorecidoId) q = q.eq('favorecido_id', plano.favorecidoId);

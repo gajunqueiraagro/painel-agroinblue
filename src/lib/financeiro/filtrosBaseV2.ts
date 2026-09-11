@@ -65,6 +65,17 @@ export interface FiltrosV2 extends FiltrosListaV2 {
   grupo_custo?: string;
   centro_custo?: string;
   subcentro?: string;
+  /**
+   * A safra do lançamento — FIN-LISTA-PERF-01.
+   *
+   * ⚠ ELA NÃO IA AO SERVIDOR, e essa era a razão de "Safra 23/24 + Ano = Todos" ser tão lenta
+   * quanto não filtrar nada: as 30 mil linhas vinham para a memória peneirar ~200. A safra é o
+   * recorte principal do produtor e atravessa dois anos civis de propósito — exigir um ano
+   * junto seria pedir que ele desfizesse a própria pergunta.
+   * ⚠ SÓ O ID. "Sem safra" (`safra_id IS NULL`) continua peneirado em memória: ele é a maioria
+   * da base e não limita nada, então mandá-lo ao servidor não pouparia uma linha sequer.
+   */
+  safra_id?: string;
   dimensao?: DimensaoDataFinanceiro;   // PR-FIN-GRADE-DATAS-03 — default 'financeira'
   /** Sexto filtro da lista. Só é expressável sobre a view (documento_formatado). */
   lista_documento?: string;
@@ -120,6 +131,7 @@ export interface PlanoBaseV2 {
   readonly grupoCusto?: string;
   readonly centroCusto?: string;
   readonly subcentro?: string;
+  readonly safraId?: string;
   readonly orDirecao?: string;
   readonly orDescricao?: string;
   readonly favorecidoId?: string;
@@ -312,6 +324,8 @@ export function montarPlanoBaseV2(
 
   if (filtros.lista_fornecedor_id) plano.favorecidoId = filtros.lista_fornecedor_id;
   if (filtros.lista_grupo_custo) plano.listaGrupoCusto = filtros.lista_grupo_custo;
+
+  if (filtros.safra_id) plano.safraId = filtros.safra_id;
 
   const escopoAtividade = escopoCanonicoAtividade(filtros.lista_atividade);
   if (escopoAtividade) plano.escopoNegocio = escopoAtividade;

@@ -429,6 +429,25 @@ input[type='number'] {
   .rolagem-sem-tampar {
     scrollbar-gutter: stable both-edges;
     padding-bottom: 10px;
-    padding-right: 10px;
+  }
+
+  /* ─────────────────────────────────────────────────────────────────────────────
+     RESPIRO LATERAL DA LISTA — FIN-LISTA-VISUAL-02.
+
+     ⚠ SAO DOIS TRABALHOS NUMA MEDIDA SO', e por isso ela e' 16px e nao 4: da' a
+     margem que o conteudo pedia (o checkbox e o Produto encostavam na borda) E
+     cobre a barra vertical em overlay do macOS, que sao ~7px desenhados por cima.
+     O `padding-right` de 10px que o `rolagem-sem-tampar` tinha saiu daqui — este
+     o substitui com folga, e uma medida so' e' mais facil de ajustar que duas
+     somadas.
+
+     ⚠ NO SCROLLPORT, NAO NA TABELA: as cinco colunas fixas (`sticky left-*`)
+     ancoram na CAIXA DE PADDING do container que rola, entao elas se afastam da
+     borda junto com o resto. Padding na `<table>` deixaria as fixas coladas e o
+     resto recuado — pior que nao ter recuo.
+     ───────────────────────────────────────────────────────────────────────────── */
+  .respiro-lista {
+    padding-left: 16px;
+    padding-right: 16px;
   }
 }

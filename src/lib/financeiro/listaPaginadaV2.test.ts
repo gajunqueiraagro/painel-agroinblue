@@ -352,9 +352,16 @@ describe('E3/E4 — contagem e totais vêm da RPC, não de varredura', () => {
     expect(p.p_lista_documento).toBe('9876');
   });
 
+  /**
+   * ⚠ ESTE TESTE JÁ COBROU DUAS VEZES HOJE, e é o que impede a lista somar um período e o
+   * rodapé somar outro. A primeira foi `anos` (FIN-LISTA-MULTIANO-01), que passou a chegar à
+   * RPC sem nada ser pedido ao banco — `p_faixas` já era uma lista. A segunda é `safra_id`
+   * abaixo, e essa NÃO passou: a RPC não tem onde recebê-la.
+   */
   it('TODO campo de FiltrosV2 chega à RPC — nenhum filtro fica fora dos totais', () => {
     // Se alguém acrescentar um filtro e esquecer dos totais, este teste quebra.
     const completo: Required<Omit<FiltrosV2, 'meses'>> & { meses?: string[] } = {
+      safra_id: 'sf-1',
       ano: '2026', anos: ['2026'], mes: '03', fazenda_id: 'f-1', dimensao: 'vencimento',
       conta_bancaria_id: 'cb', conta_destino_id: 'cd', tipo_operacao: '2-Saídas',
       status_transacoes: ['previsto', 'conciliado'],
@@ -364,8 +371,17 @@ describe('E3/E4 — contagem e totais vêm da RPC, não de varredura', () => {
     };
     const p = paramsDosTotais(CLIENTE, completo);
     const semValor = Object.entries(p).filter(([, v]) => v === null || v === undefined);
-    // Só p_meses fica nulo: "mês em qualquer ano" exige ano '__todos__'.
-    // p_tipo_operacao é nulo de propósito quando há origem E destino (vira transferência).
+    /* Só p_meses fica nulo: "mês em qualquer ano" exige ano '__todos__'.
+       p_tipo_operacao é nulo de propósito quando há origem E destino (vira transferência).
+       ⚠ E `safra_id` NÃO APARECE AQUI — não por esquecimento, e a distinção importa: a RPC
+       `fn_lista_v2_totais` NÃO TEM o parâmetro (conferido em `pg_get_function_arguments`,
+       11/09/2026). O filtro existe, vai ao `WHERE` da consulta (o caminho vivo soma em
+       memória, então hoje lista e totais concordam), mas o caminho PAGINADO somaria sem a
+       safra se fosse ligado.
+       ⚠ DÍVIDA BLOQUEANTE PARA `LISTA_PAGINADA_V2`: ligar a flag sem `p_safra_id` na RPC faz
+       a lista mostrar a safra e o rodapé somar o período inteiro. A correção é migration —
+       do arquiteto, não daqui. Registrado em vez de silenciado, porque um gate que aprende a
+       aceitar exceção deixa de ser gate. */
     expect(semValor.map(([k]) => k).sort()).toEqual(['p_meses', 'p_tipo_operacao']);
     expect(p.p_faixas).toEqual(['[2026-03-01,2026-04-01)']);
     expect(p.p_status_transacoes).toEqual(['previsto']);

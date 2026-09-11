@@ -47,6 +47,7 @@ import { CorrecaoTransferenciasBanner } from '@/components/financeiro-v2/Correca
 import { format, parseISO } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { normalizarAtividade, casaTipoOperacao } from '@/lib/financeiro/filtrosListaV2';
+import { temFiltroLimitante, FRASE_SEM_FILTRO } from '@/lib/financeiro/filtroLimitante';
 /* ⚠ A LISTA DE ATIVIDADES É A DO CARD DO MODAL — adendo do PR-FIN-SAFRA-ADM-01. Duplicá-la
    aqui é como o filtro ficou dois anos oferecendo Pecuária e Agricultura enquanto o resto do
    sistema já conhecia quatro: uma lista escrita à mão não sabe quando a outra cresce. */
@@ -733,12 +734,45 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     grupo_custo: grupoFiltro !== '__all__' ? grupoFiltro : undefined,
     centro_custo: centroFiltro !== '__all__' ? centroFiltro : undefined,
     subcentro: subcentroFiltro !== '__all__' ? subcentroFiltro : undefined,
+    /* ⚠ TRÊS FILTROS QUE ERAM SÓ DE MEMÓRIA PASSAM A IR AO `WHERE` — FIN-LISTA-PERF-01. Sem
+       isto, "Wilson + Todos os anos" lia as 30 mil linhas para mostrar trinta: o filtro
+       parecia rápido porque a lista era curta, e o custo estava todo na ida.
+       ⚠ OS SLOTS JÁ EXISTIAM (`lista_fornecedor_id`, `lista_produto`) e os dois builders já os
+       aplicavam — eram dos "seis filtros" do caminho paginado. Faltava a tela preenchê-los.
+       ⚠ `safra_id` SÓ QUANDO É UM ID: "sem safra" fica em memória, porque `safra_id IS NULL` é
+       a maioria da base e mandá-lo não pouparia uma linha.
+       ⚠ E OS TRÊS CONTINUAM SENDO RECONFERIDOS EM MEMÓRIA, como todos os outros — é a mesma
+       simetria do `casaTipoOperacao`: o servidor recorta, a tela confere. */
+    lista_fornecedor_id: fornecedorFiltro !== '__all__' ? fornecedorFiltro : undefined,
+    lista_produto: produtoFiltro.trim() || undefined,
+    safra_id: (safraFiltro !== '__all__' && safraFiltro !== SEM_SAFRA) ? safraFiltro : undefined,
     dimensao: dataPor,   // PR-FIN-GRADE-DATAS-03 — dimensão temporal soberana (default 'financeira')
-  }), [fazendaId, ano, anosSelecionados, mesesSelecionados, contaOrigem, contaDestino, tipoOperacao, statusParaBanco, macroFiltro, grupoFiltro, centroFiltro, subcentroFiltro, dataPor]);
+  }), [fazendaId, ano, anosSelecionados, mesesSelecionados, contaOrigem, contaDestino, tipoOperacao, statusParaBanco, macroFiltro, grupoFiltro, centroFiltro, subcentroFiltro, fornecedorFiltro, produtoFiltro, safraFiltro, dataPor]);
+
+  /**
+   * ⚠ A CONSULTA QUE NINGUÉM PEDE NÃO ACONTECE — FIN-LISTA-PERF-01.
+   *
+   * Sem nenhum filtro que corte de verdade, a lista leria 30.065 linhas do NJ em 31
+   * requisições em série. O operador nunca quer isso: ele cai nisso ao limpar o Ano para
+   * procurar outra coisa, e a tela trava antes de ele chegar ao filtro seguinte.
+   * ⚠ A REGRA MORA EM `filtroLimitante`, fora da tela, porque ela precisa concordar com o
+   * `WHERE`: só conta o que vai ao servidor. Uma regra escrita aqui divergiria do predicado
+   * no primeiro filtro novo, e a defesa viraria teatro.
+   */
+  const podeConsultar = useMemo(() => temFiltroLimitante({
+    anos: anosSelecionados, meses: mesesSelecionados, safra: safraFiltro,
+    fornecedor: fornecedorFiltro, produto: produtoFiltro,
+    contaOrigem, contaDestino, centro: centroFiltro, subcentro: subcentroFiltro,
+  }), [anosSelecionados, mesesSelecionados, safraFiltro, fornecedorFiltro, produtoFiltro,
+       contaOrigem, contaDestino, centroFiltro, subcentroFiltro]);
 
   useEffect(() => {
+    /* ⚠ NÃO CONSULTAR É UMA DECISÃO, e ela precisa LIMPAR a lista: deixar as linhas do filtro
+       anterior na tela enquanto a frase pede um filtro novo seria a mesma mentira que o token
+       monotônico acabou de matar — a tela dizendo uma coisa e mostrando outra. */
+    if (!podeConsultar) { hook.limparLancamentos(); return; }
     hook.loadLancamentos(filtros, 0);
-  }, [filtros]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [filtros, podeConsultar]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     setCurrentPage(0);
@@ -1541,7 +1575,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     <div className={cn("relative", modoIntensivo ? "flex flex-col h-[calc(100vh-8px)]" : "space-y-1 pb-20")}>
       {/* FILTERS */}
       <Card className="rounded-lg bg-white shrink-0" style={{ border: '1px solid #D6DEE8', boxShadow: '0 2px 6px rgba(0,0,0,0.04)' }}>
-        <CardContent className="p-2 space-y-1">
+        {/* O mesmo respiro lateral da tabela (16px), para a barra e a lista começarem
+            na mesma linha vertical — FIN-LISTA-VISUAL-02. */}
+        <CardContent className="px-4 py-2 space-y-1">
           {isMobile ? (
             <>
               {/* MOBILE: Row 1 — Ano | Mês | Data por | Tipo | Status */}
@@ -2174,6 +2210,22 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         </div>
       )}
 
+      {/* ⚠ ESTADO VAZIO QUE PEDE, EM VEZ DE TRAVAR — FIN-LISTA-PERF-01. Sem filtro limitante a
+          consulta leria 30.065 linhas do NJ em 31 idas em série, e a tela ficava presa até o
+          fim de uma busca que ninguém pediu. Agora ela não sai, e diz o que falta.
+          ⚠ A FRASE NOMEIA QUATRO DOS NOVE CAMINHOS, de propósito: listar os nove viraria um
+          parágrafo que ninguém lê. Período, safra, fornecedor e conta são os que o operador
+          usa; produto, centro e subcentro também destravam, e quem os usa já sabe. */}
+      {mode === 'list' && podeConsultar === false && (
+        <div className="rounded-lg border border-dashed py-10 text-center">
+          <div className="text-[12px] font-medium text-foreground">{FRASE_SEM_FILTRO}</div>
+          <div className="mt-1 text-[10px] text-muted-foreground">
+            Sem nenhum recorte, a lista precisaria ler a base inteira — e o que se procura
+            quase nunca está nela toda.
+          </div>
+        </div>
+      )}
+
       {hook.loading && (
         <div className="text-center text-muted-foreground py-4 text-[10px] animate-pulse">Carregando...</div>
       )}
@@ -2188,7 +2240,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         />
       )}
 
-      {mode === 'list' && !hook.loading && ano && (
+      {mode === 'list' && !hook.loading && podeConsultar && (
         <>
           {!modoIntensivo && (
             <CorrecaoTransferenciasBanner
@@ -2203,7 +2255,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 da borda — que é o único jeito de escapar da barra em overlay do macOS, que não
                 obedece a `scrollbar-gutter`. Ver o bloco no `index.css`.
                 ⚠ VALE NOS DOIS MODOS: é o mesmo container no normal e no Ampliado. */}
-           <div ref={scrollContainerRef} className={cn("mx-0.5 rounded-lg border border-[hsl(var(--border))] overflow-auto relative rolagem-fina rolagem-sem-tampar", modoIntensivo && "flex-1")} style={modoIntensivo ? undefined : { maxHeight: 'calc(100vh - 240px)' }}>
+           <div ref={scrollContainerRef} className={cn("mx-0.5 rounded-lg border border-[hsl(var(--border))] overflow-auto relative rolagem-fina rolagem-sem-tampar respiro-lista", modoIntensivo && "flex-1")} style={modoIntensivo ? undefined : { maxHeight: 'calc(100vh - 240px)' }}>
             <table className="table-financeiro w-full caption-bottom text-sm border-collapse" style={{ tableLayout: 'fixed' }}>
               {/*
                 Larguras das colunas:
@@ -2524,7 +2576,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
               ⚠ FORA DA ÁREA QUE ROLA, de propósito: dentro da tabela a legenda custaria uma
               linha de lista em cada tela, e some justamente quando o operador rola até o
               lançamento que não entendeu. */}
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 py-1">
+          {/* O rodapé alinha com a tabela e a barra: as três linhas verticais coincidem. */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-1">
             <span className="text-[10px] text-muted-foreground">
               {totalLancamentosFiltrados} lançamento{totalLancamentosFiltrados !== 1 ? 's' : ''} encontrado{totalLancamentosFiltrados !== 1 ? 's' : ''}
             </span>
