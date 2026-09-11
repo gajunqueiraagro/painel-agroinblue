@@ -654,37 +654,32 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
       return false;
     }
 
-    let ok: boolean;
-    if (id) {
-      console.log('[FinV2] before save', {
-        id,
-        tipo_operacao: editingLanc?.tipo_operacao,
-        conta_bancaria_id: editingLanc?.conta_bancaria_id,
-        conta_destino_id: editingLanc?.conta_destino_id,
-        status_transacao: editingLanc?.status_transacao,
-      });
-      console.log('[FinV2] UPDATE lancamento id=', id);
-      ok = await hook.editarLancamento(id, form);
-    } else {
-      console.log('[FinV2] INSERT new lancamento');
-      ok = await hook.criarLancamento(form);
-    }
-    if (ok) {
+    /* ⚠ SALVAR NÃO RECARREGA MAIS A LISTA — PR-FIN-SAVE-LENTO-01. O `loadLancamentos` que
+       morava aqui relia TUDO o que casa o filtro, em levas de 1.000: cinco idas em série
+       para os 4.850 lançamentos de 2026 do NJ, e o modal só fechava depois da última. O
+       UPDATE leva 20ms; o resto era espera pura.
+       ⚠ E O `hook.lancamentos.find(...)` QUE HAVIA AQUI LIA O ESTADO VELHO. Ele rodava logo
+       depois do `await loadLancamentos`, e `useState` não atualiza de forma síncrona — o
+       log sempre mostrou o lançamento ANTERIOR, desde que foi escrito. Saiu com a recarga. */
+    const salvo = id ? await hook.editarLancamento(id, form) : await hook.criarLancamento(form);
+    if (!salvo) return false;
+
+    /* ⚠ EDITAR NÃO RECARREGA NADA — e é o gesto de todo dia, o que motivou este PR. O
+       `editarLancamento` já trocou a linha no estado com o que os TRIGGERS gravaram: o hook
+       lê a linha de volta no mesmo `select` de verificação que sempre existiu ali, e aplica
+       os campos sobre a linha da lista. Zero requisições além do save.
+       ⚠ CRIAR CONTINUA RECARREGANDO, e de propósito. A linha nova pode ou não entrar no
+       recorte, e quem sabe isso é o filtro — mas o `criarLancamento` não devolve o id, então
+       não há o que perguntar. Recarregar é o certo aqui: criar é raro, o resultado tem de
+       aparecer na posição certa da ordenação, e errar por omissão seria a linha sumir. */
+    if (!id) {
       const scrollTop = scrollContainerRef.current?.scrollTop ?? 0;
       await hook.loadLancamentos(filtros, hook.page);
       requestAnimationFrame(() => {
         if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = scrollTop;
       });
-      const refreshed = hook.lancamentos.find(l => l.id === id);
-      console.log('[FinV2] after save reload', {
-        id,
-        tipo_operacao: refreshed?.tipo_operacao,
-        conta_bancaria_id: refreshed?.conta_bancaria_id,
-        conta_destino_id: refreshed?.conta_destino_id,
-        status_transacao: refreshed?.status_transacao,
-      });
     }
-    return ok;
+    return true;
   };
   const handleDelete = async (id: string) => {
     const ok = await hook.excluirLancamento(id);

@@ -91,6 +91,8 @@ export interface LancamentoV2 {
    *  indicador visual e roteamento para LancamentoZooModal. */
   movimentacao_rebanho_id: string | null;
   safra_id?: string | null;
+  /** A conta do plano — desde FIN-PLANO-CHAVE-02 é ela que manda, e o texto é cache. */
+  plano_conta_id?: string | null;
   /**
    * Se o lançamento entra na DRE — materializado pela trigger a partir do plano.
    *
@@ -520,6 +522,23 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     return all;
   }, [buildLancamentosQuery, clienteId]);
 
+  /**
+   * TROCA UMA LINHA NO ESTADO, SEM RECARREGAR — PR-FIN-SAVE-LENTO-01.
+   *
+   * ⚠ SALVAR UM LANÇAMENTO CUSTAVA A LISTA INTEIRA. O `handleSave` chamava
+   * `loadLancamentos`, que relê TUDO o que casa o filtro em levas de 1.000 — cinco idas em
+   * série para os 4.850 lançamentos de 2026 do NJ, todas ANTES de o modal fechar. O UPDATE
+   * leva 20ms (medido no banco); o resto era a tela relendo o que já sabia.
+   *
+   * ⚠ A LINHA VEM DO BANCO, NUNCA DO FORM. Os triggers reescrevem subcentro, macro, grupo,
+   * centro, escopo, `plano_conta_id` e `compoe_dre` — desde o FIN-PLANO-CHAVE-02 a chave do
+   * plano manda no texto. Pintar o form de volta mostraria o que o operador digitou, não o
+   * que ficou gravado, e a diferença só apareceria no F5.
+   *
+   * ⚠ NÃO INSERE LINHA QUE NÃO ESTÁ NA LISTA. Quem decide se ela cabe no recorte é o filtro,
+   * e o filtro é do chamador — julgar aqui seria uma segunda régua para a mesma pergunta.
+   * Devolve `false` quando não achou, e aí quem chamou resolve.
+   */
   const loadLancamentos = useCallback(async (filtros: FiltrosV2, pageNum: number = 0) => {
     if (!clienteId) return;
     /* Guarda o último recorte pedido: quem recarrega por notificação precisa repetir
@@ -875,9 +894,12 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       return false;
     }
 
-    // Post-save verification
+    /* ⚠ O SELECT DE VERIFICAÇÃO PASSOU A TRAZER A LINHA INTEIRA — PR-FIN-SAVE-LENTO-01, e
+       NÃO custa uma requisição nova: ele já existia aqui, lendo quatro colunas. Devolvê-lo
+       ao chamador deixa a tela atualizar a linha sem recarregar a lista, e com o que os
+       TRIGGERS gravaram — o form não sabe o subcentro que a chave do plano resolveu. */
     const { data: verify } = await supabase.from('financeiro_lancamentos_v2')
-      .select('id, conta_destino_id, conta_bancaria_id, tipo_operacao')
+      .select('*')
       .eq('id', id)
       .single();
     // Antes imprimia a linha inteira relida do banco (id + duas contas, todos
@@ -900,6 +922,38 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     }
 
     if (!opts?.silent) toast.success('Lançamento atualizado');
+    /* ⚠ O PATCH MORA AQUI, NÃO NO CHAMADOR — PR-FIN-SAVE-LENTO-01. A tela não pode receber
+       a linha crua: o `LancamentoV2` MENTE sobre a tabela em `sinal` (`text` no banco,
+       `number` no tipo) e `dados_pagamento` (`jsonb` × `string`), e devolvê-la alargaria o
+       contrato `onSave: Promise<boolean>` de outras três montagens do modal. Dentro do hook
+       o estado é local e os campos abaixo são todos texto ou booleano — nenhum cast.
+       ⚠ E SÃO EXATAMENTE OS CAMPOS QUE OS TRIGGERS REESCREVEM. O form não sabe o subcentro
+       que a chave do plano resolveu, nem o macro/grupo/centro que vieram com ele; pintar o
+       form de volta mostraria o que foi digitado, e a diferença só apareceria no F5. */
+    if (verify) {
+      setLancamentos((atual) => atual.map((l) => (l.id !== id ? l : {
+        ...l,
+        subcentro: verify.subcentro ?? l.subcentro,
+        macro_custo: verify.macro_custo ?? l.macro_custo,
+        grupo_custo: verify.grupo_custo ?? l.grupo_custo,
+        centro_custo: verify.centro_custo ?? l.centro_custo,
+        escopo_negocio: verify.escopo_negocio ?? l.escopo_negocio,
+        plano_conta_id: verify.plano_conta_id ?? l.plano_conta_id,
+        compoe_dre: verify.compoe_dre ?? l.compoe_dre,
+        safra_id: verify.safra_id ?? l.safra_id,
+        valor: verify.valor ?? l.valor,
+        descricao: verify.descricao ?? l.descricao,
+        data_competencia: verify.data_competencia ?? l.data_competencia,
+        data_vencimento: verify.data_vencimento ?? l.data_vencimento,
+        data_pagamento: verify.data_pagamento ?? l.data_pagamento,
+        status_transacao: verify.status_transacao ?? l.status_transacao,
+        tipo_operacao: verify.tipo_operacao ?? l.tipo_operacao,
+        conta_bancaria_id: verify.conta_bancaria_id ?? l.conta_bancaria_id,
+        conta_destino_id: verify.conta_destino_id ?? l.conta_destino_id,
+        favorecido_id: verify.favorecido_id ?? l.favorecido_id,
+        updated_at: verify.updated_at ?? l.updated_at,
+      })));
+    }
     return true;
   }, [clienteId, user, classificacoes]);
 
