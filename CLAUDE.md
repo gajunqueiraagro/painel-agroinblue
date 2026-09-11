@@ -43,7 +43,7 @@ no mesmo arquivo.
   sai com codigo 0 e passa sempre. Era um gate vazio. O comando oficial
   varre os 671 arquivos .ts/.tsx em src/ e sai com codigo 2 enquanto
   houver erro.
-- TSC baseline: 143 erros (era 73 ate 2026-09-02, 155 ate 09-03, 153 ate 09-08, 150 ate 09-09 e 148 ate 09-10 — ver a regeneracao do
+- TSC baseline: 142 erros (era 73 ate 2026-09-02, 155 ate 09-03, 153 ate 09-08, 150 ate 09-09, 148 ate 09-10 e 143 ate 09-11 — ver a regeneracao do
   types.ts abaixo), medidos em ARVORE LIMPA — worktree em detached
   HEAD sobre o commit, NUNCA no checkout principal. Mesmo numero e mesmo
   conjunto de diagnosticos em c0fdb21b, 487fe1cf e c28de22a.
@@ -206,6 +206,21 @@ no mesmo arquivo.
   ⚠ E OS TS2352 ERAM O IDIOMA DOS DOIS CASTS. Sairam de graca, mas a divida que eles
   representam — `select` que o PostgREST nao consegue tipar — CONTINUA no repo em outros
   arquivos. A queda aqui nao mede progresso nessa frente.
+  De 143 para 142 em 2026-09-11, sobre 6f7ed4fe, no FIN-PAINEL-SAFRA-01. Saiu 1:
+    1x TS2304 em src/components/financeiro-v2/ExtratoMaioresCompromissos.tsx —
+       "Cannot find name 'SEM_CENTRO'".
+  A constante existe e e' EXPORTADA por src/lib/analise/analiseAgregacoes.ts; o import do
+  componente trazia `maioresCompromissos, TOP_N` e nunca a trouxe. Saiu com UMA PALAVRA no
+  import — a menor correcao que ja tirou um erro desta lista.
+  ⚠ E ERA DEFEITO ALCANCAVEL, NAO ERRO COSMETICO. A constante e' avaliada no mini-ranking do
+  drawer, em `it.centroPlano || SEM_CENTRO`: um item SEM centro dentro do bucket "Demais"
+  avalia o lado direito do `||` e estoura ReferenceError — drawer em branco. O que segurou
+  ate' hoje foi o curto-circuito do `||`, ou seja, a sorte de todo item da cauda ter centro.
+  ⚠ A LICAO E' A MESMA DOS `.catch` DO POSTGRESTBUILDER, e por isso ela se repete aqui: o
+  diagnostico nomeava um crash em linguagem clara, em TODO relatorio, e ninguem o leu porque
+  "estava na baseline". Quem o achou foi um PR de FEATURE que por acaso tocou o arquivo — nao
+  o gate, nao uma frente de tipos. Ler os erros de baseline dos arquivos tocados NAO e'
+  burocracia do relatorio: e' a unica leitura que estes erros recebem.
   Como comparar antes (A) x depois (B), nesta ordem:
     1. CONTAGEM. B <= A, sempre. B > A reprova o PR.
     2. DIAGNOSTICOS. Comparar os conjuntos por
@@ -270,7 +285,7 @@ no mesmo arquivo.
   errar — o gate existe para o que quebra, nao para o que e' feio.
 
 ## RELATORIO DE EXECUCAO (formato obrigatorio, todo ciclo)
-1. TSC: N erros (baseline 143) — numero explicito, obtido com
+1. TSC: N erros (baseline 142) — numero explicito, obtido com
    `npx tsc -p tsconfig.app.json --noEmit`
 2. Build: OK/FALHOU + tempo
 3. git diff --stat completo

@@ -29,7 +29,18 @@ const COLS: { h: string; align: string }[] = [
 ];
 const SEP = 'border-r border-slate-100';
 
-export function TabelaLancamentosCompacta({ itens }: { itens: LancamentoLinha[] }) {
+/**
+ * ⚠ `onAbrir` É OPCIONAL POR NECESSIDADE, NÃO POR CONVENIÊNCIA — e a distinção importa, porque
+ * "prop opcional que ninguém passa" já foi defeito duas vezes neste repo. Aqui o Extrato
+ * Gerencial DELIBERADAMENTE não a passa: ele tem o seu próprio diálogo de leitura, e a linha
+ * do drawer lá não abre nada. Quem passa é o Painel por período, onde o drill-down existe
+ * para corrigir. Sem callback, a linha continua exatamente como era — sem cursor, sem hover
+ * de clique, sem `onClick`.
+ */
+export function TabelaLancamentosCompacta({ itens, onAbrir }: {
+  itens: LancamentoLinha[];
+  onAbrir?: (id: string) => void;
+}) {
   return (
     <table className="w-full border-collapse text-[10px]">
       <thead className="sticky top-0 bg-[#1e3a5f]/[0.06]">
@@ -41,7 +52,10 @@ export function TabelaLancamentosCompacta({ itens }: { itens: LancamentoLinha[] 
       </thead>
       <tbody>
         {itens.map((it) => (
-          <tr key={it.id} className="border-t border-slate-100 odd:bg-[#1e3a5f]/[0.03] hover:bg-[#1e3a5f]/[0.06]">
+          <tr key={it.id}
+            className={`border-t border-slate-100 odd:bg-[#1e3a5f]/[0.03] hover:bg-[#1e3a5f]/[0.06]${onAbrir ? ' cursor-pointer' : ''}`}
+            title={onAbrir ? 'Abrir o lançamento para corrigir' : undefined}
+            onClick={onAbrir ? () => onAbrir(it.id) : undefined}>
             <td className={`px-1.5 py-1 whitespace-nowrap tabular-nums ${SEP}`}>{diaBR(it.data)}</td>
             <td className={`px-1.5 py-1 max-w-[140px] truncate ${SEP}`} title={it.produto || '—'}>{it.produto || '—'}</td>
             <td className={`px-1.5 py-1 max-w-[120px] truncate ${SEP}`} title={it.fornecedor || '—'}>{it.fornecedor || '—'}</td>

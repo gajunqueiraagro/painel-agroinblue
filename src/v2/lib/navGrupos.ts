@@ -17,6 +17,7 @@ export type V2Section =
   // financeiro — visão geral
   | 'financeiro-home' | 'financeiro-dashboard' | 'fluxo-caixa'
   | 'rateio-adm' | 'importacao-extratos' | 'importacao-custeio-txt' | 'recorrencias'
+  | 'painel-periodo'
   | 'importacao-lanc-excel'
   // financeiro — lançamentos
   | 'financeiro-lanc' | 'contratos'
@@ -197,6 +198,10 @@ export const NAV_GRUPOS: NavGrupo[] = [
           { id: 'financeiro-dashboard',  label: 'Dashboard Financeiro',  status: 'needs-wrapper' },
           { id: 'fluxo-caixa',           label: 'Fluxo Caixa',           status: 'needs-wrapper' },
           { id: 'rateio-adm',            label: 'Rateio ADM',            status: 'needs-wrapper' },
+          /* A mesma leitura do Extrato Gerencial, com o recorte do fechamento — FIN-PAINEL-SAFRA-01.
+             Fica em Gestão, e não em Conciliação, porque Conciliação é operação de UMA conta num
+             mês; aqui a pergunta é por safra, ano ou datas, com todas as contas. */
+          { id: 'painel-periodo',        label: 'Painel por Período',    status: 'ready' },
           { id: 'painel-financiamentos', label: 'Painel Financiamentos', status: 'needs-wrapper' },
         ],
       },
@@ -323,7 +328,7 @@ export const SECTION_TO_GROUP: Partial<Record<V2Section, string>> = {
 
   // ── financeiro ──
   'financeiro-home': 'financeiro', 'financeiro-dashboard': 'financeiro',
-  'fluxo-caixa': 'financeiro', 'rateio-adm': 'financeiro',
+  'fluxo-caixa': 'financeiro', 'rateio-adm': 'financeiro', 'painel-periodo': 'financeiro',
   'importacao-extratos': 'financeiro', 'importacao-custeio-txt': 'financeiro', 'financeiro-lanc': 'financeiro',
   'recorrencias': 'financeiro',
   'conciliacao-extrato': 'financeiro',

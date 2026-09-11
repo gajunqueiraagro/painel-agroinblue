@@ -35,10 +35,12 @@ const COR_NAO_OPER = '#d97706';
 const COR_SEM = '#94a3b8';
 const COBERTURA_MIN = 0.6; // abaixo disto → banner de ranking parcial
 
-export function ExtratoDistribuicaoEconomica({ itens, contaNome, periodoLabel }: {
+export function ExtratoDistribuicaoEconomica({ itens, contaNome, periodoLabel, onAbrirLancamento }: {
   itens: ItemEcon[];
   contaNome: string;
   periodoLabel: string;
+  /** Repassado à tabela do drawer — ver o aviso em `TabelaLancamentosCompacta`. */
+  onAbrirLancamento?: (id: string) => void;
 }) {
   const [dimensao, setDimensao] = useState<Dimensao>('macro');
   const [drawer, setDrawer] = useState<string | null>(null);
@@ -190,7 +192,7 @@ export function ExtratoDistribuicaoEconomica({ itens, contaNome, periodoLabel }:
           totalLabel={`TOTAL${aberto.chave === SEM ? ' (sem classificação)' : ''}`}
           onClose={() => setDrawer(null)}
         >
-          <TabelaLancamentosCompacta itens={itensAberto.map((it) => ({
+          <TabelaLancamentosCompacta onAbrir={onAbrirLancamento} itens={itensAberto.map((it) => ({
             id: it.id, data: it.data, produto: it.produto, fornecedor: it.fornecedor, centro: it.centroPlano, doc: it.doc, mov: it.mov,
           }))} />
         </AnaliseDrawer>

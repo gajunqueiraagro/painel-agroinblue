@@ -70,8 +70,19 @@ export function etapasPagamento<T extends ItemEtapa>(itens: T[]): {
 
 /* ────────────────────── 3) Distribuição econômica ────────────────────── */
 export type DimensaoEcon = 'macro' | 'negocio';
+/**
+ * ⚠ SILVICULTURA FALTAVA, e a falta não aparecia: sem a chave o rótulo cai no fallback
+ * (`escopo` capitalizado), que por acaso dá "Silvicultura" — a tela acertava por sorte, não
+ * por cadastro. É o mesmo buraco do rótulo do export, e a fonte é a mesma dos dois: as
+ * quatro atividades do card (`ATIVIDADES`).
+ * ⚠ `financeiro` SAIU PORQUE O DADO SAIU. Eram 242 lançamentos, todos realinhados ao plano na
+ * limpeza de 11/09/2026 (FIN-ESCOPO-CACHE-01); hoje há ZERO no banco. Um rótulo para um valor
+ * que não existe mais é código morto que parece cadastro, e quem o ler vai procurar onde ele
+ * se aplica. Se o valor voltar, o fallback o exibe capitalizado até alguém decidir o rótulo.
+ */
 export const NEGOCIO_LABEL: Record<string, string> = {
-  pecuaria: 'Pecuária', agricultura: 'Agricultura', administrativo: 'Administrativo', financeiro: 'Financeiro/Outros',
+  pecuaria: 'Pecuária', agricultura: 'Agricultura',
+  silvicultura: 'Silvicultura', administrativo: 'Administrativo',
 };
 export const semLabelEcon = (dim: DimensaoEcon) => (dim === 'macro' ? 'Sem classificação no plano' : 'Sem classificação');
 

@@ -41,6 +41,7 @@ import {
 //   usa. Reexportados aqui para que nenhum consumidor precise mudar de import.
 export type { FiltrosV2, DimensaoDataFinanceiro } from '@/lib/financeiro/filtrosBaseV2';
 import type { FiltrosV2, DimensaoDataFinanceiro } from '@/lib/financeiro/filtrosBaseV2';
+import { paginarTudo } from '@/lib/financeiro/paginarTudo';
 
 
 export interface LancamentoV2 {
@@ -513,22 +514,22 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
   const fetchAllLancamentos = useCallback(async (filtros: FiltrosV2): Promise<LancamentoV2[]> => {
     if (!clienteId) return [];
 
-    const all: LancamentoV2[] = [];
-    let from = 0;
-    const batchSize = 1000;
     // PR-FIN-GRADE-DATAS-03 — resíduo pela data da dimensão só para "Todos os anos + meses" (ver hook util).
     const residual = residualDimensaoTodosAnos(filtros);
 
-    while (true) {
+    /* ⚠ O LAÇO SAIU DAQUI — PR-FIN-PAINEL-SAFRA-01. Ele virou `paginarTudo`, porque o painel
+       por período precisa do MESMO laço sobre outra consulta, e duas cópias do "enquanto a
+       leva vier cheia, continue" divergem no dia em que uma delas ganhar um `break` novo.
+       O que este chamador tem de próprio — o filtro residual e a instrumentação — continua
+       aqui; o helper só sabe parar na hora certa. */
+    return paginarTudo<LancamentoV2>(async (de, tamanho) => {
       const { data, error } = await buildLancamentosQuery(filtros)
         .order('created_at', { ascending: true })
         .order('id', { ascending: true })
-        .range(from, from + batchSize - 1);
+        .range(de, de + tamanho - 1);
 
       if (error) throw error;
-      if (!data || data.length === 0) break;
-
-      const mapped = data as LancamentoV2[];
+      const mapped = (data ?? []) as LancamentoV2[];
 
       // Instrumentação de '3-Transferências'. Antes despejava, POR LINHA e em
       // duas passadas, `id`, `conta_bancaria_id` e `conta_destino_id` — UUID de
@@ -545,12 +546,10 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
         );
       }
 
-      all.push(...(residual ? mapped.filter(residual) : mapped));
-      if (data.length < batchSize) break;
-      from += batchSize;
-    }
-
-    return all;
+      /* `brutas` é o tamanho da leva ANTES do residual — quem decide parar é o banco, não o
+         filtro. Ver o aviso em `paginarTudo`. */
+      return { linhas: residual ? mapped.filter(residual) : mapped, brutas: mapped.length };
+    });
   }, [buildLancamentosQuery, clienteId]);
 
   /**

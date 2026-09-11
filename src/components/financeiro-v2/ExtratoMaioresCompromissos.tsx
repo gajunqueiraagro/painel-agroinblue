@@ -15,7 +15,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { AnaliseDrawer } from '@/components/financeiro-v2/AnaliseDrawer';
-import { maioresCompromissos, TOP_N } from '@/lib/analise/analiseAgregacoes';
+/* ⚠ `SEM_CENTRO` ESTAVA FALTANDO NO IMPORT, e o TS2304 vivia na baseline. Não era ruído: a
+   constante é usada no mini-ranking do drawer (`it.centroPlano || SEM_CENTRO`), e um item sem
+   centro dentro do bucket "Demais" avaliaria o lado direito do `||` — ReferenceError, drawer
+   em branco. O curto-circuito do `||` é o único motivo de ninguém ter batido nele ainda. */
+import { maioresCompromissos, TOP_N, SEM_CENTRO } from '@/lib/analise/analiseAgregacoes';
 
 interface ItemCompromisso {
   id: string; data: string; mov: number; tipo: string;
@@ -28,10 +32,12 @@ const PALETA = ['#1e3a5f', '#2f6f4f', '#b7791f', '#7c3aad', '#0e7490', '#9d174d'
 const corLinha = (i: number, ehDemais?: boolean) => (ehDemais ? COR_DEMAIS : PALETA[i % PALETA.length]);
 const diaBR = (iso: string) => (iso.length >= 10 ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '—');
 
-export function ExtratoMaioresCompromissos({ itens, contaNome, periodoLabel }: {
+export function ExtratoMaioresCompromissos({ itens, contaNome, periodoLabel, onAbrirLancamento }: {
   itens: ItemCompromisso[];
   contaNome: string;
   periodoLabel: string;
+  /** Mesma regra da `TabelaLancamentosCompacta`: sem callback, a linha não abre nada. */
+  onAbrirLancamento?: (id: string) => void;
 }) {
   const [drawer, setDrawer] = useState<string | null>(null);
 
@@ -194,7 +200,10 @@ export function ExtratoMaioresCompromissos({ itens, contaNome, periodoLabel }: {
             </thead>
             <tbody>
               {itensAberto.map((it) => (
-                <tr key={it.id} className="border-t border-slate-100 odd:bg-[#1e3a5f]/[0.03] hover:bg-[#1e3a5f]/[0.06]">
+                <tr key={it.id}
+                  className={`border-t border-slate-100 odd:bg-[#1e3a5f]/[0.03] hover:bg-[#1e3a5f]/[0.06]${onAbrirLancamento ? ' cursor-pointer' : ''}`}
+                  title={onAbrirLancamento ? 'Abrir o lançamento para corrigir' : undefined}
+                  onClick={onAbrirLancamento ? () => onAbrirLancamento(it.id) : undefined}>
                   <td className="px-1.5 py-1 whitespace-nowrap tabular-nums border-r border-slate-100">{diaBR(it.data)}</td>
                   <td className="px-1.5 py-1 max-w-[120px] truncate border-r border-slate-100" title={it.fornecedor || '—'}>{it.fornecedor || '—'}</td>
                   <td className="px-1.5 py-1 max-w-[130px] truncate border-r border-slate-100" title={it.produto || '—'}>{it.produto || '—'}</td>
