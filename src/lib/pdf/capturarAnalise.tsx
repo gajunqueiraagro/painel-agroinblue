@@ -69,7 +69,9 @@ export async function capturarAnalise(d: DadosCaptura): Promise<ImagensAnalise> 
   const roots: Root[] = [];
   const render = (box: HTMLElement, node: ReactElement) => { const r = createRoot(box); r.render(node); roots.push(r); };
   render(boxEvo, <ExtratoAnaliseFluxo linhas={d.linhas} saldoIni={d.saldoIni} contaNome={d.contaNome} periodoLabel={d.periodoLabel} ano={d.ano} mes={d.mes} />);
-  render(boxOrg, <ExtratoOrganizacaoPagamentos itens={d.itens} ano={d.ano} mes={d.mes} contaNome={d.contaNome} periodoLabel={d.periodoLabel} />);
+  /* O PDF é sempre de UM mês — `d.ano`/`d.mes` continuam sendo a fonte; o que mudou é quem
+     faz a conta dos dias. Ver o aviso na prop `diasNoEixo`. */
+  render(boxOrg, <ExtratoOrganizacaoPagamentos itens={d.itens} diasNoEixo={new Date(d.ano, d.mes, 0).getDate()} contaNome={d.contaNome} periodoLabel={d.periodoLabel} />);
   render(boxDist, <ExtratoDistribuicaoEconomica itens={d.itens} contaNome={d.contaNome} periodoLabel={d.periodoLabel} />);
   render(boxComp, <ExtratoMaioresCompromissos itens={d.itens} contaNome={d.contaNome} periodoLabel={d.periodoLabel} />);
 

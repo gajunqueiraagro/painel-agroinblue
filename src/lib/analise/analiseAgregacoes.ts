@@ -87,7 +87,19 @@ export const NEGOCIO_LABEL: Record<string, string> = {
 export const semLabelEcon = (dim: DimensaoEcon) => (dim === 'macro' ? 'Sem classificação no plano' : 'Sem classificação');
 
 interface ItemEconAgg { mov: number; tipo: string; macro: string | null; escopo: string | null; centroPlano: string | null; }
-export function distribuicaoEconomica<T extends ItemEconAgg>(itens: T[], dimensao: DimensaoEcon): {
+/**
+ * Qual lado do caixa a distribuição descreve — FIN-PAINEL-SAFRA-02.
+ *
+ * ⚠ A FUNÇÃO SEMPRE FOI SÓ DE SAÍDAS, e o `lado` é o que torna isso explícito em vez de
+ * implícito. O painel precisava responder por que "Entradas 4,99 mi" não bate com "Receita
+ * 2,74 mi" — a diferença é captação —, e a resposta é a MESMA distribuição olhando para o
+ * outro lado. Duplicar a função para o outro sinal daria duas contas para a mesma pergunta.
+ */
+export type LadoDoCaixa = 'saida' | 'entrada';
+
+export function distribuicaoEconomica<T extends ItemEconAgg>(
+  itens: T[], dimensao: DimensaoEcon, lado: LadoDoCaixa = 'saida',
+): {
   ranking: { chave: string; total: number; count: number; itens: T[] }[];
   totalGeral: number;
   totalClass: number;
@@ -102,13 +114,19 @@ export function distribuicaoEconomica<T extends ItemEconAgg>(itens: T[], dimensa
   const map = new Map<string, { chave: string; total: number; count: number; itens: T[] }>();
   let totalGeral = 0, totalClass = 0, folhaCusteio = 0;
   for (const it of itens) {
-    if (it.mov >= 0) continue; // só saídas de caixa
+    /* `mov === 0` fica fora dos DOIS lados: um lançamento de valor zero não é entrada nem
+       saída de nada, e contá-lo em algum lugar só inflaria a contagem de linhas. */
+    if (lado === 'saida' ? it.mov >= 0 : it.mov <= 0) continue;
     if (isTransferencia(it.tipo)) continue; // exclui tesouraria (tipo '3-%')
     const valor = Math.abs(it.mov);
     totalGeral += valor;
     const classif = rotulo(it);
     if (classif) totalClass += valor;
-    if (dimensao === 'macro' && it.macro === 'Custeio Produção' && it.centroPlano === 'Mão de Obra') folhaCusteio += valor;
+    /* ⚠ A FOLHA SÓ EXISTE DO LADO DA SAÍDA. Ela é um recorte do custeio — "quanto do custo é
+       mão de obra" —, e a pergunta não tem sentido sobre o que entrou. Do lado da entrada
+       ela fica em zero, que é a verdade, e não um número que ninguém pediu. */
+    if (lado === 'saida' && dimensao === 'macro'
+        && it.macro === 'Custeio Produção' && it.centroPlano === 'Mão de Obra') folhaCusteio += valor;
     const chave = classif ?? SEM;
     const e = map.get(chave) ?? { chave, total: 0, count: 0, itens: [] };
     e.total += valor; e.count += 1; e.itens.push(it);

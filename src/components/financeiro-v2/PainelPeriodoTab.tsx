@@ -26,6 +26,7 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { Label } from '@/components/ui/label';
 import { ExtratoDistribuicaoEconomica } from '@/components/financeiro-v2/ExtratoDistribuicaoEconomica';
 import { ExtratoMaioresCompromissos } from '@/components/financeiro-v2/ExtratoMaioresCompromissos';
+import { ExtratoOrganizacaoPagamentos } from '@/components/financeiro-v2/ExtratoOrganizacaoPagamentos';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
 import { useFinanceiroV2, type LancamentoV2 } from '@/hooks/useFinanceiroV2';
 import { useFazenda as useFazendaCtx } from '@/contexts/FazendaContext';
@@ -196,6 +197,7 @@ export function PainelPeriodoTab() {
     doc: l.numero_documento || l.documento || '',
     macro: l.macro_custo ?? null,
     grupo: l.grupo_custo ?? null,
+    centro: l.centro_custo ?? null,
     centroPlano: l.centro_custo ?? null,
     escopo: l.escopo_negocio ?? null,
   })), [lancs, fornMap]);
@@ -370,10 +372,30 @@ export function PainelPeriodoTab() {
 
       {!impedimento && (
         <>
-          <ExtratoDistribuicaoEconomica itens={itens} contaNome={contaNome} periodoLabel={periodoLabel}
-            onAbrirLancamento={(id) => { void abrirLancamento(id); }} />
-          <ExtratoMaioresCompromissos itens={itens} contaNome={contaNome} periodoLabel={periodoLabel}
-            onAbrirLancamento={(id) => { void abrirLancamento(id); }} />
+          {/* ⚠ ENTRADAS À ESQUERDA, SAÍDAS À DIREITA, e a razão é uma pergunta que a tela
+              criava sem responder: "Entradas 4,99 mi" ao lado de "Receita 2,74 mi" parece
+              erro de conta até alguém mostrar que o resto é captação. O bloco da esquerda é
+              a resposta, e é o MESMO componente — só o lado do caixa muda. */}
+          <div className="grid gap-2 xl:grid-cols-2">
+            <ExtratoDistribuicaoEconomica lado="entrada" itens={itens}
+              contaNome={contaNome} periodoLabel={periodoLabel}
+              onAbrirLancamento={(id) => { void abrirLancamento(id); }} />
+            <ExtratoDistribuicaoEconomica itens={itens}
+              contaNome={contaNome} periodoLabel={periodoLabel}
+              onAbrirLancamento={(id) => { void abrirLancamento(id); }} />
+          </div>
+
+          <div className="grid gap-2 xl:grid-cols-2">
+            <ExtratoMaioresCompromissos itens={itens} contaNome={contaNome} periodoLabel={periodoLabel}
+              onAbrirLancamento={(id) => { void abrirLancamento(id); }} />
+            {/* ⚠ O EIXO É SEMPRE DE 31 DIAS AQUI, e é o que torna a leitura honesta num
+                recorte de vários meses: a pergunta é "em que dia do mês o dinheiro sai",
+                somando todos os meses do período. Passar o mês corrente cortaria o eixo em
+                28 ou 30 e esconderia os dias finais de todos os outros meses. */}
+            <ExtratoOrganizacaoPagamentos itens={itens} diasNoEixo={31}
+              contaNome={contaNome} periodoLabel={periodoLabel}
+              onAbrirLancamento={(id) => { void abrirLancamento(id); }} />
+          </div>
         </>
       )}
 

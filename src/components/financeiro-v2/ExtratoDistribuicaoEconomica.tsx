@@ -20,7 +20,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { AnaliseDrawer } from '@/components/financeiro-v2/AnaliseDrawer';
 import { TabelaLancamentosCompacta } from '@/components/financeiro-v2/TabelaLancamentosCompacta';
-import { distribuicaoEconomica, semLabelEcon, type DimensaoEcon } from '@/lib/analise/analiseAgregacoes';
+import { distribuicaoEconomica, semLabelEcon, type DimensaoEcon, type LadoDoCaixa } from '@/lib/analise/analiseAgregacoes';
 
 interface ItemEcon {
   id: string; data: string; mov: number; tipo: string;
@@ -35,12 +35,21 @@ const COR_NAO_OPER = '#d97706';
 const COR_SEM = '#94a3b8';
 const COBERTURA_MIN = 0.6; // abaixo disto → banner de ranking parcial
 
-export function ExtratoDistribuicaoEconomica({ itens, contaNome, periodoLabel, onAbrirLancamento }: {
+export function ExtratoDistribuicaoEconomica({ itens, contaNome, periodoLabel, onAbrirLancamento, lado = 'saida' }: {
   itens: ItemEcon[];
   contaNome: string;
   periodoLabel: string;
   /** Repassado à tabela do drawer — ver o aviso em `TabelaLancamentosCompacta`. */
   onAbrirLancamento?: (id: string) => void;
+  /**
+   * Qual lado do caixa — FIN-PAINEL-SAFRA-02. `'saida'` é o de sempre, e o Extrato Gerencial
+   * não passa nada: para ele nada muda.
+   *
+   * ⚠ O LADO DA ENTRADA EXISTE PARA RESPONDER UMA PERGUNTA CONCRETA: "Entradas 4,99 mi" ao
+   * lado de "Receita Operacional 2,74 mi" parece erro até alguém mostrar que os outros
+   * 2,25 mi são captação de financiamento. O número não estava errado; faltava a quebra.
+   */
+  lado?: LadoDoCaixa;
 }) {
   const [dimensao, setDimensao] = useState<Dimensao>('macro');
   const [drawer, setDrawer] = useState<string | null>(null);
@@ -49,7 +58,8 @@ export function ExtratoDistribuicaoEconomica({ itens, contaNome, periodoLabel, o
   const ehNaoOper = (chave: string) => dimensao === 'macro' && NAO_OPERACIONAL.has(chave);
   const corDoBucket = (chave: string) => (chave === SEM ? COR_SEM : ehNaoOper(chave) ? COR_NAO_OPER : COR_OPER);
 
-  const { ranking, totalGeral, totalClass, folhaCusteio } = useMemo(() => distribuicaoEconomica(itens, dimensao), [itens, dimensao]);
+  const { ranking, totalGeral, totalClass, folhaCusteio } = useMemo(
+    () => distribuicaoEconomica(itens, dimensao, lado), [itens, dimensao, lado]);
 
   const cobertura = totalGeral > 0 ? totalClass / totalGeral : 0;
   const pct = (v: number) => (totalGeral > 0 ? Math.round((v / totalGeral) * 100) : 0);
@@ -74,7 +84,11 @@ export function ExtratoDistribuicaoEconomica({ itens, contaNome, periodoLabel, o
   return (
     <div className="w-full max-w-[620px] mx-auto rounded-lg border px-3 py-2 space-y-2">
       <div className="flex items-baseline justify-between gap-2">
-        <div className="text-[12px] font-semibold">Distribuição econômica</div>
+        {/* O título diz de que lado se está olhando: dois blocos iguais lado a lado, com
+            números diferentes e o mesmo rótulo, seriam dois gráficos sem explicação. */}
+        <div className="text-[12px] font-semibold">
+          {lado === 'entrada' ? 'Distribuição das entradas' : 'Distribuição econômica'}
+        </div>
         <div className="text-[9px] text-muted-foreground">
           {dimensao === 'macro' ? 'Classificação pelo plano de contas' : 'Por negócio (escopo do lançamento)'} · {contaNome} · {periodoLabel}
         </div>
@@ -172,7 +186,7 @@ export function ExtratoDistribuicaoEconomica({ itens, contaNome, periodoLabel, o
           </div>
 
           <div className="text-[9px] text-muted-foreground space-y-0.5">
-            <div>Total de saídas: <span className="font-semibold text-foreground">{formatMoeda(totalGeral)}</span> · reage a conta/mês/status · exclui tesouraria (transferências '3-%').</div>
+            <div>Total de {lado === 'entrada' ? 'entradas' : 'saídas'}: <span className="font-semibold text-foreground">{formatMoeda(totalGeral)}</span> · reage a conta/mês/status · exclui tesouraria (transferências '3-%').</div>
             <div>
               {dimensao === 'macro'
                 ? 'Classificação exclusiva do plano de contas oficial (macro_custo). Investimentos e Dividendos são saída de caixa não operacional.'

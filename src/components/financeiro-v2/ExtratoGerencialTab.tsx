@@ -406,7 +406,10 @@ export function ExtratoGerencialTab({ periodo }: { periodo: PeriodoControlado })
           {analiseView === 'evolucao' ? (
             <ExtratoAnaliseFluxo linhas={linhas} saldoIni={saldoIni} contaNome={contaNome} periodoLabel={`${MESES[mes - 1]}/${ano}`} ano={ano} mes={mes} />
           ) : analiseView === 'organizacao' ? (
-            <ExtratoOrganizacaoPagamentos itens={dadosOrg} ano={ano} mes={mes} contaNome={contaNome} periodoLabel={`${MESES[mes - 1]}/${ano}`} />
+            /* O mês desta tela tem tamanho conhecido: a conta que a prop fazia por dentro
+               passou para cá, onde `ano` e `mes` de fato moram. */
+            <ExtratoOrganizacaoPagamentos itens={dadosOrg} diasNoEixo={new Date(ano, mes, 0).getDate()}
+              contaNome={contaNome} periodoLabel={`${MESES[mes - 1]}/${ano}`} />
           ) : analiseView === 'economica' ? (
             <ExtratoDistribuicaoEconomica itens={dadosOrg} contaNome={contaNome} periodoLabel={`${MESES[mes - 1]}/${ano}`} />
           ) : (

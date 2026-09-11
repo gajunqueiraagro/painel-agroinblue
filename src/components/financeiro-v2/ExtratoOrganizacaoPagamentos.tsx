@@ -40,15 +40,26 @@ const JANELAS: { id: JanelaId; nome: string; faixa: string; cor: string }[] = [
 const COR_FORA = '#94a3b8';
 const pad2 = (n: number) => String(n).padStart(2, '0');
 
-export function ExtratoOrganizacaoPagamentos({ itens, ano, mes, contaNome, periodoLabel }: {
+export function ExtratoOrganizacaoPagamentos({ itens, diasNoEixo, contaNome, periodoLabel, onAbrirLancamento }: {
   itens: ItemPag[];
-  ano: number;
-  mes: number;
+  /**
+   * Quantos dias o eixo tem.
+   *
+   * ⚠ ERAM `ano` E `mes`, E SERVIAM A ISTO E A MAIS NADA — `new Date(ano, mes, 0).getDate()`.
+   * O Painel por Período recorta vários meses ao mesmo tempo, e não existe "o mês" dele:
+   * passar um par qualquer só para extrair 31 seria uma prop que mente para quem lê. Quem
+   * tem um mês manda o tamanho dele; quem tem um período manda 31.
+   * ⚠ E A AGREGAÇÃO JÁ ERA AGNÓSTICA: `etapasPagamento` só olha o DIA da data, nunca o mês.
+   * Não houve conta nova — só um eixo que precisava saber o próprio tamanho.
+   */
+  diasNoEixo: number;
   contaNome: string;
   periodoLabel: string;
+  /** Mesma regra da `TabelaLancamentosCompacta`: sem callback, a linha não abre nada. */
+  onAbrirLancamento?: (id: string) => void;
 }) {
   const [drawer, setDrawer] = useState<BucketId | null>(null);
-  const diasNoMes = useMemo(() => new Date(ano, mes, 0).getDate(), [ano, mes]);
+  const diasNoMes = diasNoEixo;
 
   const { buckets, totalGeral } = useMemo(() => etapasPagamento(itens), [itens]);
 
@@ -141,7 +152,7 @@ export function ExtratoOrganizacaoPagamentos({ itens, ano, mes, contaNome, perio
           totalLabel="TOTAL DA ETAPA"
           onClose={() => setDrawer(null)}
         >
-          <TabelaLancamentosCompacta itens={itensAberto} />
+          <TabelaLancamentosCompacta itens={itensAberto} onAbrir={onAbrirLancamento} />
         </AnaliseDrawer>
       )}
     </div>
