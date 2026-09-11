@@ -19,9 +19,17 @@ export interface FinanceiroSafra {
   ativa: boolean;
 }
 
+/**
+ * ⚠ `agricultura` SE LÊ "LAVOURA" — FIN-SAFRA-CADASTRO-01. É a mesma regra do card do modal
+ * de lançamento (`ATIVIDADES`) e do filtro da lista: o produtor diz lavoura; o plano de
+ * contas, a coluna `escopo_negocio` e o banco dizem agricultura. Trocar o identificador
+ * custaria migration e quebraria tudo que já grava; trocar o texto custa esta linha.
+ * ⚠ E ELE ESTAVA DESALINHADO com as outras duas telas, não só com a fala do produtor: o
+ * cadastro de safras era o último lugar que ainda dizia "Agricultura".
+ */
 export const ESCOPO_LABEL: Record<EscopoNegocio, string> = {
   pecuaria: 'Pecuária',
-  agricultura: 'Agricultura',
+  agricultura: 'Lavoura',
   administrativo: 'Administrativo',
 };
 
@@ -34,7 +42,7 @@ export function escopoLabel(e: string | null | undefined): string {
 /** Ajuda por escopo, exibida sob o Select do formulário. */
 export const ESCOPO_AJUDA: Record<EscopoNegocio, string> = {
   pecuaria: 'Pecuária — ciclos, operações e análises pecuárias.',
-  agricultura: 'Agricultura — safras agrícolas e análises relacionadas.',
+  agricultura: 'Lavoura — safras agrícolas e análises relacionadas.',
   administrativo: 'Administrativo — receitas e despesas administrativas por exercício.',
 };
 

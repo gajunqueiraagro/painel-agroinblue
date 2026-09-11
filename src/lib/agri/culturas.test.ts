@@ -45,10 +45,37 @@ describe('código e nome da safra', () => {
     expect(temporadaDeReferencia(new Date(2026, 6, 1))).toBe('26/27');
   });
 
-  it('o select oferece cinco temporadas, com a de hoje no meio', () => {
+  /**
+   * ⚠ ESTE BLOCO SUBSTITUI "cinco temporadas, com a de hoje no meio" — FIN-SAFRA-CADASTRO-01.
+   * Cinco eram duas para trás, e as duas eram um PISO INVISÍVEL: o NJ tem pecuária lançada
+   * desde 2020 e o cadastro simplesmente não oferecia 20/21. O limite não vinha do dado.
+   */
+  it('vai de cinco à frente até vinte atrás, da mais recente para a mais antiga', () => {
     const lista = temporadasDisponiveis(new Date(2026, 8, 6));
-    expect(lista).toEqual(['24/25', '25/26', '26/27', '27/28', '28/29']);
-    expect(lista[2]).toBe(temporadaDeReferencia(new Date(2026, 8, 6)));
+    expect(lista[0]).toBe('31/32');
+    expect(lista.at(-1)).toBe('15/16');
+    expect(lista).toContain('20/21');
+    expect(lista).toContain('23/24');
+    expect(lista).toContain(temporadaDeReferencia(new Date(2026, 8, 6)));
+  });
+
+  it('o piso de 2015/16 corta antes dos vinte anos, e a lista não cresce sem fim', () => {
+    /* Em 2026 os vinte anos iriam a 2006; o piso manda. É convenção, não dado — está dito
+       na constante, para ninguém procurar no banco de onde ele veio. */
+    const lista = temporadasDisponiveis(new Date(2026, 8, 6));
+    expect(lista).toHaveLength(17);
+    expect(lista).not.toContain('06/07');
+  });
+
+  it('quando o piso não alcança, valem os vinte anos cheios', () => {
+    const lista = temporadasDisponiveis(new Date(2040, 8, 6));
+    expect(lista[0]).toBe('45/46');
+    expect(lista.at(-1)).toBe('20/21');
+    expect(lista).toHaveLength(26);
+  });
+
+  it('antes de julho, a temporada corrente ainda é a anterior — e a lista acompanha', () => {
+    expect(temporadasDisponiveis(new Date(2026, 5, 30))[0]).toBe('30/31');
   });
 
   it('a virada de década não quebra o formato de dois dígitos', () => {

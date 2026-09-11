@@ -338,18 +338,24 @@ export function FinV2SafrasTab() {
 
       {/* ─── Dialog Criar/Editar ─── */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        {/* ⚠ SEM ROLAGEM, e é por isso que o "Mais…" existe: com os seis campos abertos o
-            modal passava da tela e o botão Criar caía abaixo da dobra. Cinco campos é o
-            que o cadastro pede de verdade; ordem, descrição e observações são de quem já
-            sabe o que quer. Medidas do A18: rótulo 10px, campo h-8, cabeçalho azul. */}
-        <DialogContent className="max-w-md gap-0 overflow-hidden p-0">
-          <DialogHeader className="bg-primary px-4 py-2.5">
+        {/* ⚠ O "Mais…" NÃO BASTAVA, e a promessa do comentário antigo ("sem rolagem") era
+            justamente o defeito: com os três campos extras abertos o modal passava da tela e
+            o botão Criar caía abaixo da dobra — sem rolagem, ele ficava inalcançável, não
+            apenas escondido. Agora o CORPO rola e cabeçalho e rodapé ficam presos (A21), que
+            é a regra da casa para qualquer superfície com conteúdo variável.
+            ⚠ E O "Mais…" CONTINUA, por outro motivo: ordem, descrição e observações são de
+            quem já sabe o que quer, e mostrá-los sempre faria os cinco campos que importam
+            parecerem oito. Ele deixou de ser a defesa contra a quebra e voltou a ser o que
+            dizia ser — densidade.
+            Medidas do A18: rótulo 10px, campo h-8, cabeçalho azul. */}
+        <DialogContent className="flex max-h-[85vh] max-w-md flex-col gap-0 overflow-hidden p-0">
+          <DialogHeader className="shrink-0 bg-primary px-4 py-2.5">
             <DialogTitle className="text-[13px] text-primary-foreground">
               {editing ? 'Editar safra' : 'Nova safra'}
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-2.5 px-4 py-3">
+          <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto px-4 py-3">
             {/* 1. ESCOPO — pílulas, porque são dois e a escolha muda o resto do formulário. */}
             <div>
               <Label className="text-[10px]">Escopo <span className="text-destructive">*</span></Label>
@@ -360,7 +366,11 @@ export function FinV2SafrasTab() {
                     className={`h-8 flex-1 rounded-md border text-[12px] transition-colors ${
                       escopo === v ? 'border-primary bg-primary text-primary-foreground'
                                    : 'bg-card hover:bg-muted/50'}`}>
-                    {v === 'pecuaria' ? 'Pecuária' : 'Agricultura'}
+                    {/* ⚠ O RÓTULO É "Lavoura", O VALOR CONTINUA `agricultura` — a mesma regra
+                        do card do modal de lançamento (`ATIVIDADES`): o produtor diz lavoura,
+                        o plano de contas e a coluna dizem agricultura. Trocar o identificador
+                        custaria migration e quebraria tudo que já grava. */}
+                    {v === 'pecuaria' ? 'Pecuária' : 'Lavoura'}
                   </button>
                 ))}
               </div>
@@ -455,7 +465,7 @@ export function FinV2SafrasTab() {
               <Label className="text-[11px]">Safra ativa</Label>
             </div>
           </div>
-          <DialogFooter className="items-center gap-2 border-t px-4 py-2.5">
+          <DialogFooter className="shrink-0 items-center gap-2 border-t bg-background px-4 py-2.5">
             {/* O botão desabilitado diz por quê, ao lado — regra da casa. */}
             {!editing && !codigo && (
               <span className="mr-auto text-[10px] leading-tight text-muted-foreground">

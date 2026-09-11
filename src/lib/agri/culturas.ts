@@ -47,13 +47,39 @@ export function temporadaDeReferencia(hoje: Date): string {
   return `${String(inicio % 100).padStart(2, '0')}/${String((inicio + 1) % 100).padStart(2, '0')}`;
 }
 
-/** As temporadas oferecidas no select: de dois anos atrás a dois à frente. */
+/**
+ * O piso absoluto da lista de temporadas.
+ *
+ * ⚠ ELE É CONVENÇÃO, E ISSO PRECISA FICAR DITO: não há nada no banco que comece em 2015 —
+ * é só um fundo de poço razoável para a lista não ser infinita. O piso ANTERIOR era pior
+ * porque era invisível: a função oferecia dois anos para trás e ninguém sabia que era um
+ * limite, então o NJ, com pecuária lançada desde 2020, simplesmente não tinha como cadastrar
+ * 20/21 — o cadastro recusava um dado que existe.
+ */
+export const TEMPORADA_PISO = 2015;
+/** Quantos anos à frente a lista vai além da temporada corrente. */
+export const TEMPORADAS_A_FRENTE = 5;
+/** Quantos anos para trás, quando o piso não corta antes. */
+export const TEMPORADAS_ATRAS = 20;
+
+/**
+ * As temporadas oferecidas no select — FIN-SAFRA-CADASTRO-01.
+ *
+ * ⚠ DA MAIS RECENTE PARA A MAIS ANTIGA. Com cinco itens a ordem não importava; com dezessete,
+ * importa: quem cadastra está quase sempre na temporada corrente ou na seguinte, e quem
+ * procura 20/21 sabe que vai rolar. Crescente poria os anos vivos no fim da lista.
+ * ⚠ A CORRENTE NÃO É A PRIMEIRA, e é de propósito: as futuras vêm antes dela porque planejar
+ * a safra que vem é uso real (é o que o `data_fim` das recorrências já faz).
+ */
 export function temporadasDisponiveis(hoje: Date): string[] {
   const atual = hoje.getMonth() >= 6 ? hoje.getFullYear() : hoje.getFullYear() - 1;
-  return Array.from({ length: 5 }, (_, i) => {
-    const ini = atual - 2 + i;
-    return `${String(ini % 100).padStart(2, '0')}/${String((ini + 1) % 100).padStart(2, '0')}`;
-  });
+  const teto = atual + TEMPORADAS_A_FRENTE;
+  const piso = Math.max(TEMPORADA_PISO, atual - TEMPORADAS_ATRAS);
+  const lista: string[] = [];
+  for (let ini = teto; ini >= piso; ini--) {
+    lista.push(`${String(ini % 100).padStart(2, '0')}/${String((ini + 1) % 100).padStart(2, '0')}`);
+  }
+  return lista;
 }
 
 /** O código travado: `25/26-Pec` ou `25/26-AMD`. */

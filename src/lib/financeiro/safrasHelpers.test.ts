@@ -10,9 +10,13 @@ import {
 } from './safrasHelpers';
 
 describe('escopoLabel — rótulo de escopo (legado NULL → "Não definido")', () => {
-  it('mapeia os três escopos oficiais', () => {
+  it('mapeia os três escopos oficiais — e `agricultura` se lê "Lavoura"', () => {
+    /* ⚠ ERA "Agricultura" ATÉ FIN-SAFRA-CADASTRO-01, e a troca é de vocabulário, não de
+       dado: o valor gravado continua `agricultura`. O cadastro de safras era o último lugar
+       do sistema que ainda dizia Agricultura na tela — o card do modal de lançamento e o
+       filtro da lista já diziam Lavoura. */
     expect(escopoLabel('pecuaria')).toBe('Pecuária');
-    expect(escopoLabel('agricultura')).toBe('Agricultura');
+    expect(escopoLabel('agricultura')).toBe('Lavoura');
     expect(escopoLabel('administrativo')).toBe('Administrativo');
   });
   it('NULL/indefinido/valor estranho → "Não definido"', () => {
