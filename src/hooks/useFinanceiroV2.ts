@@ -484,6 +484,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     if (plano.contaBancariaId) query = query.eq('conta_bancaria_id', plano.contaBancariaId);
     if (plano.contaDestinoId) query = query.eq('conta_destino_id', plano.contaDestinoId);
     if (plano.tipoOperacao) query = query.eq('tipo_operacao', plano.tipoOperacao);
+    if (plano.orTipoOperacao) query = query.or(plano.orTipoOperacao);
     if (plano.orStatus) query = query.or(plano.orStatus);
     if (plano.statusIn) query = query.in('status_transacao', plano.statusIn as string[]);
     if (plano.conciliadoNaoNulo) query = query.not('conciliado_em', 'is', null);

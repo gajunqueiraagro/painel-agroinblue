@@ -28,8 +28,10 @@ import type { StatusFiltroFinanceiro } from './statusFinanceiro';
 import {
   ramoContaDirecao,
   escopoCanonicoAtividade,
+  ehTransferencia,
   ramoAtividadeOutros,
   ramoImatch,
+  TIPOS_TRANSFERENCIA,
   type FiltrosListaV2,
 } from './filtrosListaV2';
 
@@ -99,6 +101,18 @@ export interface PlanoBaseV2 {
   readonly contaBancariaId?: string;
   readonly contaDestinoId?: string;
   readonly tipoOperacao?: string;
+  /**
+   * Transferência: as DUAS grafias — FIN-LISTA-FILTRO-TIPO-01.
+   *
+   * ⚠ `tipoOperacao` É IGUALDADE, e igualdade não cobre o legado: o banco tem 822 linhas em
+   * `'3-Transferências'` e 7 em `'3-Transferência'` (singular, medido no proto). Filtrar por
+   * "Transferências" escondia as sete — poucas, e por isso invisíveis: ninguém confere um
+   * total contra outro que não sabe que existe.
+   * ⚠ E É A MESMA LISTA QUE O RESTO DO SISTEMA JÁ USA (`TIPOS_TRANSFERENCIA`), a mesma de
+   * `ramoContaDirecao` e de `isTransferenciaTipo`. Reconhecer o legado não é perpetuá-lo: a
+   * escrita continua sendo só o plural.
+   */
+  readonly orTipoOperacao?: string;
   readonly orStatus?: string;
   readonly statusIn?: readonly string[];
   readonly conciliadoNaoNulo?: boolean;
@@ -260,7 +274,14 @@ export function montarPlanoBaseV2(
   } else {
     if (contaOrigemId) plano.contaBancariaId = contaOrigemId;
     if (contaDestinoId) plano.contaDestinoId = contaDestinoId;
-    if (filtros.tipo_operacao) plano.tipoOperacao = filtros.tipo_operacao;
+    if (filtros.tipo_operacao) {
+      if (ehTransferencia(filtros.tipo_operacao)) {
+        const tipos = TIPOS_TRANSFERENCIA.map((t) => `"${t}"`).join(',');
+        plano.orTipoOperacao = `tipo_operacao.in.(${tipos})`;
+      } else {
+        plano.tipoOperacao = filtros.tipo_operacao;
+      }
+    }
   }
 
   // ── status ────────────────────────────────────────────────────────────────

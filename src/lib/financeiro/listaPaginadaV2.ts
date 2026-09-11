@@ -177,6 +177,10 @@ export function aplicarPlanoNaView(inicial: BuilderView, plano: PlanoBaseV2): Bu
   if (plano.contaBancariaId) q = q.eq('conta_bancaria_id', plano.contaBancariaId);
   if (plano.contaDestinoId) q = q.eq('conta_destino_id', plano.contaDestinoId);
   if (plano.tipoOperacao) q = q.eq('tipo_operacao', plano.tipoOperacao);
+  /* As duas grafias da transferência — FIN-LISTA-FILTRO-TIPO-01. O caminho da VIEW aplica o
+     mesmo slot do plano que o da tabela; fosse só num deles, a lista paginada e a normal
+     dariam números diferentes para o mesmo filtro. */
+  if (plano.orTipoOperacao) q = q.or(plano.orTipoOperacao);
   if (plano.orStatus) q = q.or(plano.orStatus);
   if (plano.statusIn) q = q.in('status_transacao', plano.statusIn);
   if (plano.conciliadoNaoNulo) q = q.not('conciliado_em', 'is', null);
