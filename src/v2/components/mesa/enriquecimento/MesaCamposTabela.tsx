@@ -35,6 +35,7 @@ import {
   ResultadoTipoEditor, ResultadoContaDestinoEditor,
 } from './ResultadoCamposGravaveis';
 import { ehTipoTransferencia, subcentroDeTransferencia } from '@/v2/lib/mesa/transferenciaPlano';
+import { ehLinhaAdministrativa } from '@/lib/financeiro/escopoDoSubcentro';
 import type { ContaSelecionavel } from '@/components/shared/ContaBancariaSelect';
 import type { Safra } from '@/hooks/useFinanceiroV2';
 
@@ -188,6 +189,16 @@ export function MesaCamposTabela({
   /* A linha 18010 do plano, pelo `ordem_exibicao`; `null` sem catálogo — e aí nada é
      forçado, que é o certo: forçar por suposição gravaria um subcentro adivinhado. */
   const subcentroTransferencia = subcentroDeTransferencia(classificacoes);
+
+  /**
+   * ⚠ A CONTA DO PLANO DECIDE A SAFRA — MESA-SAFRA-ADM-01, pela MESMA função do modal de
+   * lançamento (`ehSubcentroAdministrativo`), não por uma cópia: no dia em que um subcentro
+   * mudar de escopo no plano — e quatro mudaram em 11/09/2026 — as duas telas mudam juntas.
+   * ⚠ O SUBCENTRO EFETIVO É O PROPOSTO OU O ATUAL, nessa ordem: é o que a linha vai gravar, e
+   * a pergunta é sobre o que ela vai virar, não sobre o que ela era.
+   */
+  const subcentroEfetivoResultado = row.edicao.subcentro ?? row.edicao.subcentroAtual ?? null;
+  const contaEhAdministrativa = ehLinhaAdministrativa(classificacoes, subcentroEfetivoResultado, row.edicao.macro);
   /* ⚠ FILTRA ANTES DE MAPEAR, e isso não é estilo: a zebra e a faixa do bloco 2 se decidem
      pela POSIÇÃO da linha. Pulando a linha do destino dentro do `map`, o índice continuava
      contando por ela — e nas 17.732 saídas duas linhas sombreadas ficavam coladas, no
@@ -305,7 +316,7 @@ export function MesaCamposTabela({
                     valorAtual={row.edicao.dataPagamentoAtual} campo="data_pagamento" onEditar={onEditar} />
                 ) : editavel && campo === 'Safra' && safras ? (
                   <ResultadoSafraEditor value={row.edicao.safraId} valorAtual={row.edicao.safraIdAtual}
-                    safras={safras} onEditar={onEditar} />
+                    safras={safras} onEditar={onEditar} administrativo={contaEhAdministrativa} />
                 ) : editavel && campo === 'Banco' && contas ? (
                   <ResultadoContaEditor value={row.edicao.contaBancariaId}
                     valorAtual={row.edicao.contaBancariaIdAtual} contas={contas} onEditar={onEditar} />

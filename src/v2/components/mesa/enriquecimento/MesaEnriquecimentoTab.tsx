@@ -39,6 +39,7 @@ import { EnriquecimentoCandidatosInline } from './EnriquecimentoCandidatosInline
 import { AgruparModal } from './AgruparModal';
 import { MesaCamposTabela, CAMPOS_OBRIGATORIOS_MESA, CAMPOS_OBRIGATORIOS_SE_TRANSFERENCIA } from './MesaCamposTabela';
 import { ehTipoTransferencia } from '@/v2/lib/mesa/transferenciaPlano';
+import { ehLinhaAdministrativa } from '@/lib/financeiro/escopoDoSubcentro';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -1017,10 +1018,38 @@ export function MesaEnriquecimentoTab({
     }
   }
 
+  /**
+   * ADMINISTRATIVO NÃO TEM SAFRA, TAMBÉM AQUI — MESA-SAFRA-ADM-01.
+   *
+   * ⚠ A REGRA É A DO MODAL, PELA MESMA FUNÇÃO (`ehSubcentroAdministrativo`), não por uma
+   * cópia: os subcentros mudam de escopo no plano — quatro mudaram em 11/09/2026 — e uma
+   * segunda lista aqui envelheceria calada.
+   * ⚠ O SUBCENTRO QUE VALE É O DO PRÓPRIO PATCH, quando ele traz um: escolher uma conta
+   * administrativa e a safra saírem juntas é UM gesto, e a decisão tem de olhar o que a
+   * linha VAI virar, não o que ela era.
+   * ⚠ ZERAR NO PAYLOAD, E NÃO SÓ DESABILITAR O CAMPO: o trigger
+   * `resolve_classificacao_from_plano` já zera a safra ao aplicar, então mandá-la era
+   * gravar uma proposta que o banco descartava — a Mesa exibia 25/26-AMD numa linha que
+   * ia para o lançamento sem safra nenhuma.
+   */
+  function contaAdministrativa(row: EnriqRowVM, subcentroDoPatch?: unknown): boolean {
+    const sub = typeof subcentroDoPatch === 'string' ? subcentroDoPatch
+      : (row.edicao.subcentro ?? row.edicao.subcentroAtual ?? null);
+    return ehLinhaAdministrativa(classificacoes, sub, row.edicao.macro);
+  }
+  function semSafraSeAdministrativo(patch: Record<string, unknown>, row: EnriqRowVM) {
+    if (!contaAdministrativa(row, patch.subcentro)) return patch;
+    /* Só acrescenta a chave quando há o que zerar: patch sem safra e linha sem safra não
+       precisa de `safra_id: null` — seria ruído no evento da auditoria. */
+    if (!('safra_id' in patch) && !row.edicao.safraId && !row.edicao.safraIdAtual) return patch;
+    return { ...patch, safra_id: null };
+  }
+
   // PR-U2c-2A — edição da proposta via editarProposto (os editores dos passos
   // 2B..2E chamam isto). patch = { subcentro | favorecido_id | fazenda_id | produto | ... }.
-  async function onEditar(patch: Record<string, unknown>): Promise<void> {
+  async function onEditar(patchOriginal: Record<string, unknown>): Promise<void> {
     if (!selecionado) return;
+    const patch = semSafraSeAdministrativo(patchOriginal, selecionado);
     // R1 — dispara a edição e registra a Promise SINCRONAMENTE (antes do 1º await), para o
     // salvar() disparado logo em seguida (blur→click) poder aguardá-la antes do apply.
     const p = editarProposto({ staging_id: selecionado.id, patch });
@@ -1073,7 +1102,7 @@ export function MesaEnriquecimentoTab({
       subcentro: selecionado.edicao.subcentro,
       favorecido_id: selecionado.edicao.favorecidoId,
       fazenda_id: selecionado.edicao.fazendaId,
-      safra_id: selecionado.edicao.safraId,
+      safra_id: contaAdministrativa(selecionado) ? null : selecionado.edicao.safraId,
     };
     setAplicandoGrupo(true);
     let ok = 0; let falhas = 0;

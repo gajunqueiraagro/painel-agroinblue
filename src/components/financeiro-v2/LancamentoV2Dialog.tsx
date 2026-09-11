@@ -42,6 +42,7 @@ import { planoDeTransferencia, ehTipoTransferencia } from '@/v2/lib/mesa/transfe
 import { ATIVIDADES, lembrarAtividade, ultimaAtividade, type Atividade } from '@/lib/financeiro/ultimaAtividade';
 import { safraSugerida, safrasCandidatas } from '@/lib/agri/safraSugerida';
 import { conflitoSafraEscopo, mensagemConflitoSafraEscopo } from '@/lib/financeiro/safraEscopo';
+import { escopoDoSubcentro, AVISO_ADMIN_SEM_SAFRA, AVISO_ADMIN_SAFRA_SAI } from '@/lib/financeiro/escopoDoSubcentro';
 
 interface Props {
   open: boolean;
@@ -589,11 +590,12 @@ export function LancamentoV2Dialog({
    * ⚠ O FALLBACK PARA O ESTADO É PARA O SUBCENTRO LEGADO, que não tem linha no plano: ali o
    * que está gravado é tudo que se sabe.
    */
-  const escopoDoPlano = useMemo(() => {
-    const alvo = (subcentro || '').trim().toLowerCase();
-    const cls = classificacoes.find((c) => (c.subcentro || '').trim().toLowerCase() === alvo);
-    return (cls?.escopo_negocio ?? escopoNegocio ?? '').trim();
-  }, [subcentro, classificacoes, escopoNegocio]);
+  /* ⚠ A CONTA SAIU DAQUI para `escopoDoSubcentro` — MESA-SAFRA-ADM-01. Ela era um `useMemo`
+     local, e por isso a Mesa de Enriquecimento não a tinha: a mesma regra valia numa tela e
+     não na outra. O comportamento aqui não mudou em nada. */
+  const escopoDoPlano = useMemo(
+    () => escopoDoSubcentro(classificacoes, subcentro, escopoNegocio),
+    [subcentro, classificacoes, escopoNegocio]);
 
   /**
    * ADMINISTRATIVO NÃO TEM SAFRA — PR-FIN-SAFRA-ADM-01 (decisão do Gabriel, 11/09/2026).
@@ -1808,9 +1810,7 @@ export function LancamentoV2Dialog({
                     aplica. Uma frase só teria de mentir num dos dois casos. */}
                 {ehAdministrativo && (
                   <div className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
-                    {safraId
-                      ? 'safra será removida ao salvar — administrativo não tem safra'
-                      : 'administrativo não tem safra'}
+                    {safraId ? AVISO_ADMIN_SAFRA_SAI : AVISO_ADMIN_SEM_SAFRA}
                   </div>
                 )}
               </div>

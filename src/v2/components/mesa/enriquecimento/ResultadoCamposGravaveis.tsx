@@ -25,6 +25,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ContaBancariaSelect, type ContaSelecionavel } from '@/components/shared/ContaBancariaSelect';
 import { CELULA_EDITAVEL, CELULA_EDITAVEL_DATA, ITEM_DROPDOWN } from './medidasMesa';
 import { TIPOS_OPERACAO_RESULTADO, ehTipoTransferencia } from '@/v2/lib/mesa/transferenciaPlano';
+import { AVISO_ADMIN_SEM_SAFRA, AVISO_ADMIN_SAFRA_SAI } from '@/lib/financeiro/escopoDoSubcentro';
 
 type Editar = (patch: Record<string, unknown>) => Promise<void>;
 
@@ -51,14 +52,33 @@ export function ResultadoDataEditor({ value, valorAtual, campo, onEditar }: {
   );
 }
 
-export function ResultadoSafraEditor({ value, valorAtual, safras, onEditar }: {
+export function ResultadoSafraEditor({ value, valorAtual, safras, onEditar, administrativo = false }: {
   value: string | null;
   valorAtual: string | null;
   safras: { id: string; codigo?: string | null; nome?: string | null }[];
   onEditar: Editar;
+  /**
+   * ⚠ ADMINISTRATIVO NÃO TEM SAFRA — MESA-SAFRA-ADM-01, a mesma regra do modal de lançamento,
+   * pela mesma função (`ehSubcentroAdministrativo`). Aqui ela faltava, e o efeito era pior que
+   * um campo errado: o dropdown ficava ABERTO, o operador clicava para tirar a safra e nada
+   * mudava — porque o `update_proposto` gravava, e o trigger do banco zerava depois. A tela
+   * parecia quebrada num gesto que o sistema já cumpria por baixo.
+   */
+  administrativo?: boolean;
 }) {
   const SEM = '__sem__';
   const efetivo = value ?? valorAtual ?? '';
+  if (administrativo) {
+    /* ⚠ NÃO É UM SELECT DESABILITADO, é a leitura do fato: o campo não se aplica. Um `Select`
+       cinza ainda convida ao clique — e foi clicando que o operador descobriu que não mudava. */
+    return (
+      <span className="block truncate text-[10px] leading-tight text-muted-foreground"
+        title={efetivo ? AVISO_ADMIN_SAFRA_SAI : AVISO_ADMIN_SEM_SAFRA}>
+        {efetivo ? <s>{safras.find(s2 => s2.id === efetivo)?.codigo || '—'}</s> : '—'}
+        <span className="ml-1">· {AVISO_ADMIN_SEM_SAFRA}</span>
+      </span>
+    );
+  }
   return (
     <Select value={efetivo || SEM}
       onValueChange={(v) => {
