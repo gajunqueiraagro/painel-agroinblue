@@ -128,12 +128,16 @@ export function ExtratoDistribuicaoEconomica({ itens, contaNome, periodoLabel, o
             </div>
           )}
 
-          {/* Pizza (apoio visual, centralizada) à esquerda · tabela compacta à direita. */}
+          {/* Pizza (apoio visual, centralizada) à esquerda · tabela compacta à direita.
+              ⚠ O DONUT ENCOLHEU ~20% (200→160px, raios 52/86→42/69) — FIN-PAINEL-SAFRA-03.
+              Ele é APOIO VISUAL: quem lê o número lê a tabela ao lado. Num painel que precisa
+              mostrar entradas e saídas lado a lado sem rolar, 40px de rosca valem menos que
+              as duas colunas caberem. Nenhum número mudou — só o raio. */}
           <div className="flex flex-wrap gap-1 items-center justify-center">
-            <div className="w-[200px] h-[200px] shrink-0">
+            <div className="w-[160px] h-[160px] shrink-0">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={ranking} dataKey="total" nameKey="chave" cx="50%" cy="50%" innerRadius={52} outerRadius={86} paddingAngle={1} isAnimationActive={false}
+                  <Pie data={ranking} dataKey="total" nameKey="chave" cx="50%" cy="50%" innerRadius={42} outerRadius={69} paddingAngle={1} isAnimationActive={false}
                        onClick={(_, idx) => setDrawer(ranking[idx].chave)}>
                     {ranking.map((r) => <Cell key={r.chave} fill={corDoBucket(r.chave)} stroke="#fff" strokeWidth={1} cursor="pointer" />)}
                   </Pie>
@@ -142,8 +146,11 @@ export function ExtratoDistribuicaoEconomica({ itens, contaNome, periodoLabel, o
               </ResponsiveContainer>
             </div>
 
-            <div className="w-[360px] max-w-full">
-              <table className="w-full border-collapse text-[11px]">
+            {/* ⚠ 300px E NÃO 360: a tabela é o que precisa caber ao lado do gêmeo da direita.
+                O `max-w-full` continua garantindo que ela encolha antes de estourar. */}
+            <div className="w-[300px] max-w-full">
+              {/* Um degrau menor (11→10px), que é o PISO da tela — A18. */}
+              <table className="w-full border-collapse text-[10px]">
                 <thead>
                   <tr className="text-[9px] uppercase text-muted-foreground">
                     <th className="text-left py-0.5 font-semibold">Categoria</th>

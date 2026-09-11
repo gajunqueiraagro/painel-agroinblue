@@ -12,7 +12,7 @@
  *
  * Frontend puro. Fontes existentes (sem hook/RPC/tabela nova). Zero-cast (só idioma supabase).
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -108,6 +108,24 @@ export function ExtratoGerencialTab({ periodo }: { periodo: PeriodoControlado })
   const fin = useFinanceiroV2();
   const { fazendas } = useFazenda();
   const queryClient = useQueryClient();
+
+  /**
+   * ⚠ O HOOK NÃO CARREGA NADA SOZINHO, e foi isto que abriu o modal vazio — não as 17
+   * colunas. A linha SEMPRE veio inteira (`select('*')` por id); o que estava vazio eram os
+   * CATÁLOGOS: sem `fornecedores`, o select do favorecido não acha o nome do `favorecido_id`
+   * e mostra em branco; sem `safras` e `contasBancarias`, idem; sem `classificacoes`, o
+   * subcentro e o card de atividade ficam mudos.
+   * ⚠ O `FinanceiroV2Tab` SEMPRE FEZ ISSO (os quatro `load*` num efeito), e é por isso que
+   * pela lista o modal abre completo. Montar o modal em outra tela sem trazer os catálogos
+   * junto é o defeito — e ele não aparece em tipo nenhum, porque lista vazia é lista válida.
+   */
+  useEffect(() => {
+    void fin.loadContas();
+    void fin.loadClassificacoes();
+    void fin.loadFornecedores();
+    void fin.loadSafras();
+  }, [fin.loadContas, fin.loadClassificacoes, fin.loadFornecedores, fin.loadSafras]);
+
 
   const abrirParaEditar = async (id: string) => {
     const { data } = await (supabase as any).from('financeiro_lancamentos_v2')

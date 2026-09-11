@@ -16,7 +16,7 @@
  * `programado` somam R$ 9,74 mi de Custeio contra R$ 1,88 mi dos 392 `realizado`, que é o
  * número do fechamento. Somar os dois diria seis vezes mais e pareceria certo.
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -88,6 +88,24 @@ export function PainelPeriodoTab() {
    */
   const fin = useFinanceiroV2();
   const queryClient = useQueryClient();
+
+  /**
+   * ⚠ O HOOK NÃO CARREGA NADA SOZINHO, e foi isto que abriu o modal vazio — não as 17
+   * colunas. A linha SEMPRE veio inteira (`select('*')` por id); o que estava vazio eram os
+   * CATÁLOGOS: sem `fornecedores`, o select do favorecido não acha o nome do `favorecido_id`
+   * e mostra em branco; sem `safras` e `contasBancarias`, idem; sem `classificacoes`, o
+   * subcentro e o card de atividade ficam mudos.
+   * ⚠ O `FinanceiroV2Tab` SEMPRE FEZ ISSO (os quatro `load*` num efeito), e é por isso que
+   * pela lista o modal abre completo. Montar o modal em outra tela sem trazer os catálogos
+   * junto é o defeito — e ele não aparece em tipo nenhum, porque lista vazia é lista válida.
+   */
+  useEffect(() => {
+    void fin.loadContas();
+    void fin.loadClassificacoes();
+    void fin.loadFornecedores();
+    void fin.loadSafras();
+  }, [fin.loadContas, fin.loadClassificacoes, fin.loadFornecedores, fin.loadSafras]);
+
   const { fazendas } = useFazendaCtx();
   const [editando, setEditando] = useState<LancamentoV2 | null>(null);
   const [abrindo, setAbrindo] = useState(false);
@@ -403,7 +421,14 @@ export function PainelPeriodoTab() {
               criava sem responder: "Entradas 4,99 mi" ao lado de "Receita 2,74 mi" parece
               erro de conta até alguém mostrar que o resto é captação. O bloco da esquerda é
               a resposta, e é o MESMO componente — só o lado do caixa muda. */}
-          <div className="grid gap-2 xl:grid-cols-2">
+          {/* ⚠ O BREAKPOINT OLHA A JANELA, E A SIDEBAR COME ~280px — FIN-PAINEL-SAFRA-03. Com
+              `xl` (1280px de JANELA) sobravam ~1000px de conteúdo e os blocos empilhavam
+              justamente nas telas em que caberiam. `min-[1180px]` é o ponto em que o
+              conteúdo passa dos ~900px que os dois blocos pedem, com a sidebar aberta.
+              ⚠ CONTAINER QUERY SERIA O CERTO e não está disponível: o plugin
+              `@tailwindcss/container-queries` não está instalado, e instalá-lo para uma
+              grade é mudar a base do projeto por um PR de densidade. Fica anotado. */}
+          <div className="grid gap-1.5 min-[1180px]:grid-cols-2">
             <ExtratoDistribuicaoEconomica lado="entrada" itens={itens}
               contaNome={contaNome} periodoLabel={periodoLabel}
               onAbrirLancamento={(id) => { void abrirLancamento(id); }} />
@@ -412,7 +437,7 @@ export function PainelPeriodoTab() {
               onAbrirLancamento={(id) => { void abrirLancamento(id); }} />
           </div>
 
-          <div className="grid gap-2 xl:grid-cols-2">
+          <div className="grid gap-1.5 min-[1180px]:grid-cols-2">
             <ExtratoMaioresCompromissos itens={itens} contaNome={contaNome} periodoLabel={periodoLabel}
               onAbrirLancamento={(id) => { void abrirLancamento(id); }} />
             {/* ⚠ O EIXO É SEMPRE DE 31 DIAS AQUI, e é o que torna a leitura honesta num
