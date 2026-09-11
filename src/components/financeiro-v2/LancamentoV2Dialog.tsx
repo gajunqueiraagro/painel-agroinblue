@@ -427,6 +427,17 @@ export function LancamentoV2Dialog({
   const [descricao, setDescricao] = useState('');
   const [favorecidoId, setFavorecidoId] = useState('');
   const [subcentro, setSubcentro] = useState('');
+  /**
+   * A chave da linha do plano escolhida — PR-FIN-PLANO-CHAVE-02 (front).
+   *
+   * ⚠ ANDA COLADO NO `subcentro`: todo ponto que mexe num mexe no outro (escolher no
+   * seletor, trocar o tipo, trocar a atividade, abrir para editar, prefill, reset). Mandar
+   * a chave de uma conta com o texto de outra é o único jeito de este PR fazer estrago —
+   * o trigger obedece à chave quando ela muda, e reescreveria o texto por cima.
+   * ⚠ `null` É VÁLIDO E ACONTECE: subcentro legado (sem linha no plano) e dividendo (cuja
+   * entrada é sintetizada por cliente) não têm chave. O trigger resolve os dois pelo texto.
+   */
+  const [planoContaId, setPlanoContaId] = useState<string | null>(null);
   const [macroCusto, setMacroCusto] = useState('');
   const [grupoCusto, setGrupoCusto] = useState('');
   const [centroCusto, setCentroCusto] = useState('');
@@ -498,6 +509,11 @@ export function LancamentoV2Dialog({
       return {
         subcentro, macro_custo: macroCusto, grupo_custo: grupoCusto,
         centro_custo: centroCusto, escopo_negocio: escopoNegocio || undefined,
+        /* ⚠ A CHAVE SAI DAQUI, e só daqui — PR-FIN-PLANO-CHAVE-02 (front). Os DOIS saves
+           deste modal (o à vista/edição e o laço das parcelas) montam o form com
+           `...classificacaoParaGravar()`, então a chave e o texto nascem do mesmo lugar e
+           não há como um caminho mandar um par que não combina. */
+        plano_conta_id: planoContaId,
       };
     }
     return {
@@ -506,6 +522,9 @@ export function LancamentoV2Dialog({
       grupo_custo: planoTransferencia.grupo_custo || '',
       centro_custo: planoTransferencia.centro_custo,
       escopo_negocio: planoTransferencia.escopo_negocio || undefined,
+      /* A chave da 18010, pela mesma razão que o texto dela: a transferência tem uma
+         resposta só, e ela é a linha do plano — não o que estava gravado. */
+      plano_conta_id: planoTransferencia.id ?? null,
     };
   };
 
@@ -535,6 +554,7 @@ export function LancamentoV2Dialog({
     const escopoAtual = (atual?.escopo_negocio || '').trim();
     if (atual && escopoAtual && escopoAtual !== nova) {
       setSubcentro(''); setMacroCusto(''); setGrupoCusto(''); setCentroCusto(''); setEscopoNegocio('');
+      setPlanoContaId(null);
       setSubcentroLimpoPelaAtividade(true);
     }
     /* ⚠ A SAFRA DE OUTRA ATIVIDADE TAMBÉM SAI, e volta a ser sugerida — PR-FIN-SAFRA-ESCOPO-01.
@@ -589,9 +609,11 @@ export function LancamentoV2Dialog({
       setGrupoCusto(plano.grupo_custo || '');
       setCentroCusto(plano.centro_custo);
       setEscopoNegocio(plano.escopo_negocio || '');
+      setPlanoContaId(plano.id ?? null);
       return;
     }
     setSubcentro(''); setMacroCusto(''); setGrupoCusto(''); setCentroCusto('');
+    setPlanoContaId(null);
   };
 
   // PR-U2c-1D: classMap + filteredSubcentros migraram para <PlanoSubcentroSelect />.
@@ -625,6 +647,10 @@ export function LancamentoV2Dialog({
       setGrupoCusto(planoTransfAoAbrir?.grupo_custo ?? (lancamento.grupo_custo || ''));
       setCentroCusto(planoTransfAoAbrir?.centro_custo ?? (lancamento.centro_custo || ''));
       setEscopoNegocio(planoTransfAoAbrir?.escopo_negocio ?? (lancamento.escopo_negocio || ''));
+      /* ⚠ A CHAVE GRAVADA ABRE COM O LANÇAMENTO, e a da transferência tem precedência pela
+         mesma razão que o texto dela (os seis lançamentos de fatura de cartão do
+         PR-FIN-TRANSF-SUBCENTRO-01): o que vale é a 18010, não o que ficou no banco. */
+      setPlanoContaId(planoTransfAoAbrir?.id ?? lancamento.plano_conta_id ?? null);
       /* O card segue o lançamento — e o lançamento segue o plano. */
       setSubcentroDeAbertura(planoTransfAoAbrir?.subcentro ?? (lancamento.subcentro || ''));
       setAtividade(atividadeValida(planoTransfAoAbrir?.escopo_negocio ?? lancamento.escopo_negocio));
@@ -695,6 +721,11 @@ export function LancamentoV2Dialog({
       setMacroCusto(prefill.macro_custo ?? '');
       setGrupoCusto(prefill.grupo_custo ?? '');
       setCentroCusto(prefill.centro_custo ?? '');
+      /* ⚠ A PROP `prefill.plano_conta_id` EXISTIA E NINGUÉM A LIA NEM A PASSAVA — declarada
+         no PR-Mesa-CreateFromExcel-A junto da hierarquia, e esquecida. Ler aqui não muda
+         nada hoje (medido: zero chamadores a passam) e fecha o par: quem um dia mandar a
+         hierarquia manda a chave junto, da MESMA fonte, e não um par que não combina. */
+      setPlanoContaId(prefill.plano_conta_id ?? null);
       setEscopoNegocio('');
       setTipoDocumento('');
       setObservacao('');
@@ -718,6 +749,7 @@ export function LancamentoV2Dialog({
       setGrupoCusto('');
       setCentroCusto('');
       setEscopoNegocio('');
+      setPlanoContaId(null);
       /* ⚠ LANÇAMENTO NOVO HERDA A ÚLTIMA ATIVIDADE DA SESSÃO — quem classifica quatrocentos
          lançamentos de lavoura não quer marcar "Lavoura" quatrocentas vezes. No primeiro uso
          é `null`, e aí a lista é a completa, como sempre foi. */
@@ -1616,12 +1648,21 @@ export function LancamentoV2Dialog({
                       setGrupoCusto(cls.grupo_custo || '');
                       setCentroCusto(cls.centro_custo);
                       setEscopoNegocio(cls.escopo_negocio || '');
+                      /* A chave da linha ESCOLHIDA. `?? null` porque nem toda entrada da
+                         lista tem uma: as combinações legadas e os dividendos não têm. */
+                      setPlanoContaId(cls.id ?? null);
                       /* ⚠ O PLANO MANDA — a precedência do card. Escolher um subcentro de
                          outro escopo (possível com a lista completa, ou com "Mostrar todos")
                          move a pílula para o escopo que veio. O card é preferência de quem
                          olha; o plano é o dado. */
                       setAtividade(atividadeValida(cls.escopo_negocio));
                       setSubcentroLimpoPelaAtividade(false);
+                    } else {
+                      /* ⚠ SEM ITEM, SEM CHAVE — nunca a anterior. Hoje não acontece (o
+                         seletor só oferece o que está no seu próprio mapa), mas um `id`
+                         velho ao lado de um subcentro novo é o único par que o trigger
+                         resolveria para o lado errado, e ele obedece à chave. */
+                      setPlanoContaId(null);
                     }
                   }}
                   escopoNegocio={atividade ?? undefined}

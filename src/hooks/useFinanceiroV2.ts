@@ -140,6 +140,16 @@ export interface LancamentoV2Form {
   centro_custo?: string;
   subcentro?: string;
   escopo_negocio?: string;
+  /**
+   * A chave do plano — PR-FIN-PLANO-CHAVE-02 (front).
+   *
+   * ⚠ VAI JUNTO DO TEXTO, nunca no lugar dele: o trigger decide quem manda pelo que MUDOU
+   * na gravação, e o texto continua sendo o caminho de quem não tem a chave.
+   * ⚠ `undefined` E `null` NÃO SÃO A MESMA COISA AQUI. `null` é "não tem chave" e vai no
+   * payload (o trigger resolve pelo texto); `undefined` é "este chamador não fala de
+   * chave", e o UPDATE OMITE a coluna — ver o payload em `editarLancamento`.
+   */
+  plano_conta_id?: string | null;
   observacao?: string;
   numero_documento?: string | null;
   tipo_documento?: string | null;
@@ -207,6 +217,18 @@ export interface FornecedorV2 {
 }
 
 export interface ClassificacaoItem {
+  /**
+   * A chave da linha do plano — PR-FIN-PLANO-CHAVE-02 (front).
+   *
+   * ⚠ É O QUE O PAYLOAD MANDA. O trigger `resolve_classificacao_from_plano` trata
+   * `plano_conta_id` como FONTE e o texto como cache; enquanto o front só mandava o texto,
+   * renomear uma conta do plano obrigava a reclassificar todo lançamento que a usava.
+   * ⚠ OPCIONAL, e por DUAS razões distintas: as combinações que o hook acrescenta a partir
+   * dos lançamentos legados não têm linha no plano, e as entradas de dividendo são
+   * sintetizadas por cliente com um `id` que não é de `financeiro_plano_contas`. Nos dois
+   * casos `undefined` é a verdade, e quem grava manda `null` — o trigger cai para o texto.
+   */
+  id?: string;
   subcentro: string;
   centro_custo: string;
   grupo_custo: string;
@@ -610,6 +632,9 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       macro_custo: form.macro_custo || null,
       centro_custo: form.centro_custo || null,
       subcentro: form.subcentro || null,
+      /* ⚠ A CHAVE ENTRA NO INSERT — PR-FIN-PLANO-CHAVE-02 (front). Quem não a passa grava
+         `null`, que é exatamente o que a coluna já recebia quando ela não estava aqui. */
+      plano_conta_id: form.plano_conta_id || null,
       escopo_negocio: escopo,
       observacao: form.observacao || null,
       numero_documento: form.numero_documento || null,
@@ -864,6 +889,15 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       grupo_custo: resolvedGrupo,
       centro_custo: resolvedCentro,
       subcentro: resolvedSubcentro,
+      /* ⚠ A CHAVE SÓ ENTRA SE O CHAMADOR FALAR DELA — PR-FIN-PLANO-CHAVE-02 (front), e a
+         omissão é a decisão. Mandá-la sempre significaria mandar `null` pelos writers que
+         não a conhecem (as quatro portas do zoot e o UPDATE da importação de Excel), e
+         `null` onde havia chave faz o guard do trigger ver mudança e reprocessar uma
+         gravação que hoje sai pela porta rápida. Medido no proto: 69.369 lançamentos têm
+         chave e 364 não têm; os 359 com subcentro fora do plano são TODOS dividendos, que
+         o trigger isenta — então o estrago seria reprocessamento, não recusa. Ainda assim,
+         quem não fala de classificação não deve reescrever a chave. */
+      ...(form.plano_conta_id !== undefined ? { plano_conta_id: form.plano_conta_id || null } : {}),
       escopo_negocio: escopo,
       observacao: form.observacao || null,
       numero_documento: form.numero_documento || null,

@@ -193,6 +193,18 @@ export function planoToClassificacoes(items: PlanoContasItem[]) {
   return items
     .filter(i => i.subcentro)
     .map(i => ({
+      /* ⚠ A CHAVE DO PLANO VEM JUNTO — PR-FIN-PLANO-CHAVE-02 (front). O `select` de
+         `loadPlanoContasCompleto` sempre trouxe `id`; era descartado aqui, e por isso o
+         modal só sabia o texto. Com ela o payload manda a chave, que o trigger
+         `resolve_classificacao_from_plano` trata como fonte.
+         ⚠ DIVIDENDO NÃO TEM CHAVE, E MANDAR A DELE QUEBRARIA O SAVE. As entradas de
+         dividendo são SINTETIZADAS por `buildDividendoEntries` a partir de
+         `financeiro_dividendos`: o `id` delas é a string `dividendo-<uuid>`, que não é
+         linha de `financeiro_plano_contas` nem sequer um uuid válido — e
+         `financeiro_lancamentos_v2.plano_conta_id` é `uuid`. `undefined` aqui é a verdade,
+         e o trigger resolve dividendo pelo texto (ele isenta `macro_custo = 'Dividendos'`
+         do bloqueio de subcentro fora do plano). */
+      id: i.is_dividendo ? undefined : i.id,
       subcentro: i.subcentro!,
       centro_custo: i.centro_custo,
       grupo_custo: i.grupo_custo || '',
