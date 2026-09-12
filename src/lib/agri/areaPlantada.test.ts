@@ -9,11 +9,13 @@ import { describe, it, expect } from 'vitest';
 import {
   validarAreaPlantada, culturaDuplicada, somaAreas, labelDaCultura, CULTURAS_AREA,
   primeiroDiaDoMes, safrasQueCobremOMes, safraInicialDoMes,
+  ehAbertura, STATUS_AREA, AVISO_ABERTURA,
   type AreaPlantadaForm,
 } from './areaPlantada';
 
 const base: AreaPlantadaForm = {
-  id: null, cultura: 'amendoim', areaHa: '96,4', dataPlantio: '', dataColheitaPrevista: '',
+  id: null, cultura: 'amendoim', status: 'plantada', areaHa: '96,4',
+  dataPlantio: '', dataColheitaPrevista: '',
 };
 
 describe('validarAreaPlantada', () => {
@@ -180,5 +182,79 @@ describe('a safra que cobre o mês — AGRI-AREA-POR-SAFRA-01', () => {
     it('mês fora de qualquer janela devolve null — o painel diz isso em vez de gravar no ano errado', () => {
       expect(safraInicialDoMes(SAFRAS, '2019-03')).toBeNull();
     });
+  });
+});
+
+describe('⚠ a janela SUGERE, nunca limita — AGRI-AREA-ABERTURA-01', () => {
+  /* O AGRI-AREA-POR-SAFRA-01 usou `safrasQueCobremOMes` para FILTRAR o dropdown, e isso
+     escondeu a safra 26/27 de quem abre a área do P5 em fev/26 para plantar em out/26. A
+     função continua igual — o que mudou foi o papel dela na tela: sugerir e marcar.
+     É a mesma lição do dropdown de cultura, duas frentes antes. */
+  const SAFRAS = [
+    { id: 'l25', data_inicio: '2025-07-01', data_fim: '2026-06-30' },
+    { id: 'l26', data_inicio: '2026-07-01', data_fim: '2027-06-30' },
+  ];
+
+  it('fev/26 é coberto por 25/26, e é só isso que a função afirma', () => {
+    expect(safrasQueCobremOMes(SAFRAS, '2026-02').map(s => s.id)).toEqual(['l25']);
+  });
+
+  it('a safra 26/27 existe e continua escolhível — a função não a apaga da lista', () => {
+    /* A lista da tela é `safras`, não `safrasQueCobremOMes`: a cobertura vira só a marca
+       "· do mês". */
+    expect(SAFRAS.some(s => s.id === 'l26')).toBe(true);
+    expect(safrasQueCobremOMes(SAFRAS, '2026-02').some(s => s.id === 'l26')).toBe(false);
+  });
+
+  it('o default do mês continua sendo a que cobre — sugestão é sugestão', () => {
+    expect(safraInicialDoMes(SAFRAS, '2026-02')?.id).toBe('l25');
+  });
+});
+
+describe('o estado da área — AGRI-AREA-ABERTURA-01', () => {
+  it('os dois estados do CHECK do banco, nesta ordem', () => {
+    expect(STATUS_AREA.map(s2 => s2.valor)).toEqual(['abertura', 'plantada']);
+  });
+
+  it('reconhece a abertura e trata o resto como plantada', () => {
+    expect(ehAbertura('abertura')).toBe(true);
+    expect(ehAbertura('plantada')).toBe(false);
+    expect(ehAbertura(null)).toBe(false);
+    expect(ehAbertura('')).toBe(false);
+  });
+
+  it('em abertura grava o status e ZERA as datas', () => {
+    /* ⚠ O que a tela esconde ela não pode continuar gravando por baixo: virar de Plantada
+       para Em abertura precisa APAGAR o plantio que ficou para trás — dado invisível é dado
+       que ninguém confere. */
+    const r = validarAreaPlantada({
+      ...base, status: 'abertura', dataPlantio: '2025-10-10', dataColheitaPrevista: '2026-02-10',
+    });
+    expect(r.ok).toBe(true);
+    expect(r.payload?.status).toBe('abertura');
+    expect(r.payload?.data_plantio).toBeNull();
+    expect(r.payload?.data_colheita_prevista).toBeNull();
+  });
+
+  it('em abertura NÃO exige plantio — é a área que ainda não plantou', () => {
+    expect(validarAreaPlantada({ ...base, status: 'abertura' }).ok).toBe(true);
+  });
+
+  it('⚠ cultura e hectares CONTINUAM obrigatórios em abertura', () => {
+    /* Declarar a cultura pretendida e o tamanho é o mínimo que faz a área existir; sem isso
+       ela não entra em denominador nenhum. */
+    expect(validarAreaPlantada({ ...base, status: 'abertura', cultura: '' }).ok).toBe(false);
+    expect(validarAreaPlantada({ ...base, status: 'abertura', areaHa: '' }).ok).toBe(false);
+  });
+
+  it('estado desconhecido cai em plantada, nunca num terceiro valor', () => {
+    /* O CHECK do banco só admite dois; inventar um terceiro trocaria erro de tela por 23514. */
+    expect(validarAreaPlantada({ ...base, status: 'qualquer' }).payload?.status).toBe('plantada');
+  });
+
+  it('a frase diz o que muda no dinheiro, não o que muda na tela', () => {
+    expect(AVISO_ABERTURA).toContain('investimento de formação de área');
+    expect(AVISO_ABERTURA).toContain('não vira custo da safra');
+    expect(AVISO_ABERTURA).toContain('Plantada');
   });
 });

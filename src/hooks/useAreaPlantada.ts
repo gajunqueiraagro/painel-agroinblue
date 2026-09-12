@@ -18,6 +18,8 @@ export interface AreaPlantadaRow {
   safra_id: string;
   pasto_id: string;
   cultura: string;
+  /** 'abertura' | 'plantada' — AGRI-AREA-ABERTURA-01. NOT NULL no banco, default 'plantada'. */
+  status: string;
   area_plantada_ha: number;
   data_plantio: string | null;
   data_colheita_prevista: string | null;
@@ -25,7 +27,7 @@ export interface AreaPlantadaRow {
   observacoes: string | null;
 }
 
-const COLS = 'id, safra_id, pasto_id, cultura, area_plantada_ha, data_plantio, data_colheita_prevista, data_colheita_real, observacoes';
+const COLS = 'id, safra_id, pasto_id, cultura, status, area_plantada_ha, data_plantio, data_colheita_prevista, data_colheita_real, observacoes';
 
 /** A safra de lavoura como o seletor do painel a lê. */
 export interface SafraLavoura {
@@ -123,7 +125,13 @@ export function useAreaPlantada(safraId: string | null, pastoId: string | null) 
     for (const l of linhas) {
       const payload = {
         cultura: l.cultura,
+        status: l.status,
         area_plantada_ha: l.area_plantada_ha,
+        /* ⚠ EM ABERTURA AS DATAS VÃO NULAS, e isso é gravação, não omissão: virar de
+           "Plantada" para "Em abertura" precisa APAGAR o plantio que ficou para trás, senão a
+           área carrega uma data que a tela não mostra mais — dado invisível é dado que
+           ninguém confere. O caminho de volta (marcar Plantada) pede tudo de novo, que é o
+           correto: se voltou para abertura, o que havia não valia. */
         data_plantio: l.data_plantio,
         data_colheita_prevista: l.data_colheita_prevista,
       };

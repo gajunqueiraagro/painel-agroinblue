@@ -21,10 +21,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Plus, Trash2, Save, Sprout } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatNum } from '@/lib/calculos/formatters';
+import { cn } from '@/lib/utils';
 import {
   CULTURAS_AREA, validarAreaPlantada, culturaDuplicada, somaAreas, labelDaCultura,
-  safrasQueCobremOMes, safraInicialDoMes,
-  type AreaPlantadaForm,
+  safrasQueCobremOMes, safraInicialDoMes, ehAbertura, STATUS_AREA, STATUS_AREA_PADRAO,
+  AVISO_ABERTURA,
+  type AreaPlantadaForm, type AreaPlantadaPayload,
 } from '@/lib/agri/areaPlantada';
 import { useAreaPlantada, useSafrasLavoura, useAreasPorPastoNaJanela } from '@/hooks/useAreaPlantada';
 import { ColheitaPanel } from './ColheitaPanel';
@@ -41,8 +43,12 @@ interface Props {
   somenteLeitura: boolean;
 }
 
+/* ⚠ LINHA NOVA NASCE EM ABERTURA — AGRI-AREA-ABERTURA-01. É o estado de quem está
+   cadastrando a área ANTES de plantar, que é o caso que motivou a frente; quem já plantou
+   troca para "Plantada" num clique e ganha os campos de volta. O contrário — nascer plantada
+   — é o que hoje pede plantio de uma área que ainda não existe no chão. */
 const linhaVazia = (): AreaPlantadaForm => ({
-  id: null, cultura: '', areaHa: '', dataPlantio: '', dataColheitaPrevista: '',
+  id: null, cultura: '', status: 'abertura', areaHa: '', dataPlantio: '', dataColheitaPrevista: '',
 });
 
 export function AreaPlantadaPanel({ clienteId, pastoId, pastoNome, areaProdutivaHa, anoMes, somenteLeitura }: Props) {
@@ -89,6 +95,7 @@ export function AreaPlantadaPanel({ clienteId, pastoId, pastoNome, areaProdutiva
       ? areas.map(a => ({
           id: a.id,
           cultura: a.cultura,
+          status: a.status || STATUS_AREA_PADRAO,
           areaHa: String(a.area_plantada_ha).replace('.', ','),
           dataPlantio: a.data_plantio ?? '',
           dataColheitaPrevista: a.data_colheita_prevista ?? '',
@@ -151,7 +158,9 @@ export function AreaPlantadaPanel({ clienteId, pastoId, pastoNome, areaProdutiva
     /* Linha totalmente em branco não é erro: é a linha que o painel abre sozinho. Ela sai da
        gravação em silêncio; o que não se faz é gravar cultura sem área nem área sem cultura. */
     const preenchidas = linhas.filter(l => l.cultura.trim() || l.areaHa.trim());
-    const payloads: Array<{ id: string | null; cultura: string; area_plantada_ha: number; data_plantio: string | null; data_colheita_prevista: string | null }> = [];
+    /* ⚠ O TIPO SAI DA LIB, não de uma lista de campos repetida aqui: foi assim que `status`
+       quase entrou no formulário sem entrar no payload. O compilador cobra o campo novo. */
+    const payloads: Array<AreaPlantadaPayload & { id: string | null }> = [];
     for (const l of preenchidas) {
       const v = validarAreaPlantada(l, areaProdutivaHa);
       if (!v.ok || !v.payload) { toast.error(v.erro ?? 'Linha inválida.'); return; }
@@ -168,19 +177,6 @@ export function AreaPlantadaPanel({ clienteId, pastoId, pastoNome, areaProdutiva
       setSalvando(false);
     }
   };
-
-  if (!carregandoSafras && safras.length > 0 && safrasDaJanela.length === 0) {
-    /* ⚠ NÃO ABRE NUMA SAFRA DE OUTRO ANO. Sem safra cobrindo o mês, o certo é dizer isso: o
-       contrário seria oferecer o seletor com 23/24 e convidar a gravar no lugar errado. */
-    return (
-      <div className="rounded-md border border-dashed p-4 text-center text-[12px] text-muted-foreground">
-        Nenhuma safra de <b>Lavoura</b> cobre este mês.
-        <div className="mt-1 text-[11px]">
-          A janela sai de <b>Cadastros → Safras</b> (início e fim da safra). A virada é em julho.
-        </div>
-      </div>
-    );
-  }
 
   if (!carregandoSafras && safras.length === 0) {
     return (
@@ -199,10 +195,31 @@ export function AreaPlantadaPanel({ clienteId, pastoId, pastoNome, areaProdutiva
           <Select value={safraId} onValueChange={setSafraId} disabled={somenteLeitura}>
             <SelectTrigger className="mt-0.5 h-8 text-[12px]"><SelectValue placeholder="Selecione" /></SelectTrigger>
             <SelectContent>
-              {/* ⚠ SÓ AS SAFRAS DA JANELA. Oferecer as sete faria o operador gravar amendoim de
-                  25/26 numa safra de 2023 com dois cliques — e o dado não teria como avisar. */}
-              {safrasDaJanela.map(s => (
-                <SelectItem key={s.id} value={s.id} className="text-[12px]">{s.codigo || s.nome}</SelectItem>
+              {/**
+                * ⚠ TODAS AS SAFRAS, SEMPRE — AGRI-AREA-ABERTURA-01, e isto DESFAZ a decisão que
+                * eu tomei no AGRI-AREA-POR-SAFRA-01 ("só as safras da janela").
+                *
+                * O motivo de lá parecia bom: não deixar gravar amendoim de 25/26 numa safra de
+                * 2023. O custo foi maior que o risco — a lista escondeu escolhas LEGÍTIMAS.
+                * O caso que o provou: o P5 está em abertura desde fev/26 para plantar em
+                * out/26; olhando fevereiro, a safra certa é a 26/27, e ela não estava na lista.
+                * ⚠ E ESTA É A SEGUNDA VEZ QUE ESTREITAR UMA LISTA ESCONDEU O CERTO: a primeira
+                * foi o dropdown de cultura, que sumiu com "Mandioca" porque a safra só tinha
+                * área de amendoim (FIN-AUDITORIA-CULTURA-02). A regra que fica: lista de
+                * escolha ORDENA e MARCA; quem filtra é filtro, e filtro é outro campo.
+                * ⚠ A SAFRA É DADO DECLARADO, NUNCA DEDUZIDO DA DATA (regra congelada do
+                * AGRI-01). A janela do mês entra como SUGESTÃO — e a marca "· do mês" diz de
+                * onde ela veio, para a sugestão não se passar por regra.
+                * ⚠ ORDEM CRONOLÓGICA, sem reordenar por relevância: é a régua que o
+                * FIN-SAFRA-ORDEM-02 fixou depois de ela ter sido quebrada uma vez.
+                */}
+              {safras.map(s => (
+                <SelectItem key={s.id} value={s.id} className="text-[12px]">
+                  {s.codigo || s.nome}
+                  {idsDaJanela.includes(s.id) && (
+                    <span className="ml-1 text-[10px] text-muted-foreground">· do mês</span>
+                  )}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -212,13 +229,32 @@ export function AreaPlantadaPanel({ clienteId, pastoId, pastoNome, areaProdutiva
         <div className="flex-1 text-[11px] text-muted-foreground">
           Plantado: <b className="text-foreground tabular-nums">{formatNum(total, 1)} ha</b>
           {areaProdutivaHa ? <> de <span className="tabular-nums">{formatNum(areaProdutivaHa, 1)} ha</span> do pasto</> : null}
+          {/* ⚠ INFORMA, NUNCA IMPEDE. Plantar em out/26 olhando fevereiro é uso real (a área em
+              abertura); o que a tela deve fazer é confirmar em voz alta a escolha incomum, para
+              ela ser deliberada e não distração. */}
+          {safraId && idsDaJanela.length > 0 && !idsDaJanela.includes(safraId) && (
+            <div className="mt-0.5 text-[10px] leading-snug text-amber-600">
+              Esta safra não cobre o mês aberto — a área fica na safra que você escolheu.
+            </div>
+          )}
         </div>
       </div>
 
       <div className="space-y-1.5">
-        {linhas.map((l, idx) => (
+        {linhas.map((l, idx) => {
+        const emAbertura = ehAbertura(l.status);
+        return (
+          /**
+           * ⚠ BORDA VIOLETA TRACEJADA = EM ABERTURA (aprovado por Gabriel, 12/09/2026). O
+           * tracejado já significa "provisório" neste sistema — é a borda da safra sugerida no
+           * modal de lançamento —, e violeta é a família da lavoura desde o card do pasto.
+           * Violeta mais claro foi descartado: brigaria com o `muted` das linhas desabilitadas.
+           */
           <div key={l.id ?? `nova-${idx}`}
-            className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1fr)_auto] items-end gap-2 rounded-md border bg-card px-2 py-1.5">
+            className={cn(
+              'grid grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1fr)_auto] items-end gap-2 rounded-md border bg-card px-2 py-1.5',
+              emAbertura && 'border-dashed border-violet-500 dark:border-violet-400',
+            )}>
             <div>
               <Label className="text-[10px]">Cultura <span className="text-destructive">*</span></Label>
               <Select value={l.cultura} onValueChange={v => editar(idx, 'cultura', v)} disabled={somenteLeitura}>
@@ -237,23 +273,58 @@ export function AreaPlantadaPanel({ clienteId, pastoId, pastoNome, areaProdutiva
                 disabled={somenteLeitura}
                 className="mt-0.5 h-8 text-right font-mono text-[12px]" />
             </div>
-            <div>
-              <Label className="text-[10px]">Plantio</Label>
-              <DatePicker value={l.dataPlantio} onChange={v => editar(idx, 'dataPlantio', v)}
-                disabled={somenteLeitura} className="mt-0.5" />
-            </div>
-            <div>
-              <Label className="text-[10px]">Colheita prevista</Label>
-              <DatePicker value={l.dataColheitaPrevista} onChange={v => editar(idx, 'dataColheitaPrevista', v)}
-                disabled={somenteLeitura} className="mt-0.5" />
-            </div>
+            {/* ⚠ EM ABERTURA OS CAMPOS SOMEM, NÃO FICAM CINZAS — AGRI-AREA-ABERTURA-01. Campo
+                desabilitado ainda pergunta; o P5 não tem plantio porque a área não foi
+                plantada, e a resposta certa é "a definir", não um calendário travado. */}
+            {emAbertura ? (
+              <div className="col-span-2 text-[10px] leading-snug text-muted-foreground">
+                Plantio e colheita: <b>a definir</b>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <Label className="text-[10px]">Plantio</Label>
+                  <DatePicker value={l.dataPlantio} onChange={v => editar(idx, 'dataPlantio', v)}
+                    disabled={somenteLeitura} className="mt-0.5" />
+                </div>
+                <div>
+                  <Label className="text-[10px]">Colheita prevista</Label>
+                  <DatePicker value={l.dataColheitaPrevista} onChange={v => editar(idx, 'dataColheitaPrevista', v)}
+                    disabled={somenteLeitura} className="mt-0.5" />
+                </div>
+              </>
+            )}
             <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive"
               disabled={somenteLeitura} onClick={() => remover(idx)}
               title="Remover esta cultura">
               <Trash2 className="h-3.5 w-3.5" />
             </Button>
+
+            {/* ⚠ O ESTADO OCUPA A LINHA INTEIRA ABAIXO DOS CAMPOS, e não uma coluna: ele muda
+                o que a linha PERGUNTA, então precisa ser lido antes de responder — e a frase
+                que o explica não caberia numa coluna de grade. */}
+            <div className="col-span-full flex flex-wrap items-center gap-x-2 gap-y-1 border-t pt-1.5">
+              <div className="flex gap-1">
+                {STATUS_AREA.map(st => (
+                  <button key={st.valor} type="button" disabled={somenteLeitura}
+                    onClick={() => editar(idx, 'status', st.valor)}
+                    className={cn(
+                      'h-6 rounded-md border px-2 text-[11px] transition-colors',
+                      l.status === st.valor
+                        ? 'border-violet-500 bg-violet-500 text-white dark:border-violet-400 dark:bg-violet-500'
+                        : 'bg-card hover:bg-muted/50',
+                    )}>
+                    {st.rotulo}
+                  </button>
+                ))}
+              </div>
+              {emAbertura && (
+                <span className="flex-1 text-[10px] leading-snug text-muted-foreground">{AVISO_ABERTURA}</span>
+              )}
+            </div>
           </div>
-        ))}
+        );
+        })}
       </div>
 
       {duplicada && (
@@ -286,7 +357,12 @@ export function AreaPlantadaPanel({ clienteId, pastoId, pastoNome, areaProdutiva
       {/* ⚠ A COLHEITA VÊM DAS ÁREAS GRAVADAS (`areas`), NUNCA DAS LINHAS EM EDIÇÃO: o romaneio
           aponta para `agri_safra_area.id`, e uma linha que o operador acabou de digitar ainda
           não tem id. Pendurar colheita em rascunho seria prometer um vínculo inexistente. */}
-      <ColheitaPanel clienteId={clienteId} areas={areas} somenteLeitura={somenteLeitura} />
+      {/* ⚠ ÁREA EM ABERTURA NÃO TEM COLHEITA — não se colhe o que não se plantou, e um bloco
+          de romaneios vazio ali ensinaria que falta lançar algo. O filtro é sobre as áreas
+          GRAVADAS, que é o que o painel de colheita já consome. */}
+      <ColheitaPanel clienteId={clienteId}
+        areas={areas.filter(a => !ehAbertura(a.status))}
+        somenteLeitura={somenteLeitura} />
     </div>
   );
 }

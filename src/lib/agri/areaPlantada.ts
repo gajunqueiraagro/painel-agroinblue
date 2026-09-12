@@ -26,11 +26,52 @@ import { parseNumericValue } from '@/lib/calculos/abate';
  */
 export const CULTURAS_AREA: readonly Cultura[] = CULTURAS;
 
+/* ───────────────────────────────────────────────────────────────────────────────
+   O ESTADO DA ÁREA — AGRI-AREA-ABERTURA-01.
+
+   ⚠ "EM ABERTURA" É ÁREA QUE AINDA NÃO PLANTOU, e existe para a tela parar de pedir o que
+   não existe. O P5 está em abertura desde fev/2026 para plantar em out/2026: não há data de
+   plantio, variedade, densidade nem colheita, e um formulário que insiste faz o operador
+   inventar dado ou desistir. A casa não inventa dado.
+   ⚠ O ESTADO NÃO MUDA CONTA NENHUMA. Em abertura, o que se gasta é FORMAÇÃO DE ÁREA, que já
+   é investimento pelo grupo de conta, e o DRE já o põe abaixo da linha de resultado
+   (AGRI-04C). Este campo é cadastro e apresentação — a RPC não o lê, e não deve.
+   ⚠ VIRAR PARA "PLANTADA" NÃO REDIGITA NADA: safra, cultura e hectares já estão lá; o que
+   aparece são os campos que faltavam.
+   ─────────────────────────────────────────────────────────────────────────────── */
+
+export type StatusArea = 'abertura' | 'plantada';
+
+export const STATUS_AREA = [
+  { valor: 'abertura', rotulo: 'Em abertura' },
+  { valor: 'plantada', rotulo: 'Plantada' },
+] as const;
+
+/** O default do banco é `plantada`, e o da tela é o mesmo — um não pode discordar do outro. */
+export const STATUS_AREA_PADRAO: StatusArea = 'plantada';
+
+export function ehAbertura(status: string | null | undefined): boolean {
+  return (status || '').trim() === 'abertura';
+}
+
+/**
+ * A frase que ensina, aprovada pelo Gabriel em 12/09/2026.
+ *
+ * ⚠ ELA DIZ O QUE MUDA NO DINHEIRO, não o que muda na tela. "Em abertura" sem explicação
+ * parece um rótulo administrativo; o que o operador precisa saber é que ali o gasto é
+ * investimento e não entra no custo da safra — e quando isso passa a valer.
+ */
+export const AVISO_ABERTURA =
+  'Em abertura — aqui entra só investimento de formação de área; não vira custo da safra. '
+  + 'O custeio começa quando você marcar Plantada.';
+
 /** Uma linha da lista, como a tela a edita — tudo texto, porque campo é texto. */
 export interface AreaPlantadaForm {
   /** Vazio numa linha nova que ainda não foi gravada. */
   id: string | null;
   cultura: string;
+  /** 'abertura' | 'plantada' — AGRI-AREA-ABERTURA-01. */
+  status: string;
   /** Texto digitado, em pt-BR ("96,4"). */
   areaHa: string;
   dataPlantio: string;
@@ -40,6 +81,7 @@ export interface AreaPlantadaForm {
 /** O que vai ao banco depois de validado. */
 export interface AreaPlantadaPayload {
   cultura: string;
+  status: string;
   area_plantada_ha: number;
   data_plantio: string | null;
   data_colheita_prevista: string | null;
@@ -87,8 +129,14 @@ export function validarAreaPlantada(form: AreaPlantadaForm, areaDoPastoHa?: numb
     return { ok: false, erro: `A área plantada (${area} ha) é maior que a área do pasto (${areaDoPastoHa} ha).` };
   }
 
-  const plantio = (form.dataPlantio || '').trim() || null;
-  const colheita = (form.dataColheitaPrevista || '').trim() || null;
+  /**
+   * ⚠ EM ABERTURA, AS DATAS SAEM DO PAYLOAD — AGRI-AREA-ABERTURA-01. A área que ainda não
+   * plantou não tem plantio nem colheita, e o que a tela esconde ela não pode continuar
+   * gravando por baixo: "a definir" é ausência declarada, não um valor guardado fora de vista.
+   */
+  const emAbertura = ehAbertura(form.status);
+  const plantio = emAbertura ? null : ((form.dataPlantio || '').trim() || null);
+  const colheita = emAbertura ? null : ((form.dataColheitaPrevista || '').trim() || null);
   /* Mesma regra do cadastro de safra: fim antes do início é engano de digitação, e uma data
      sozinha é dado incompleto, não inválido. */
   if (plantio && colheita && colheita < plantio) {
@@ -99,6 +147,9 @@ export function validarAreaPlantada(form: AreaPlantadaForm, areaDoPastoHa?: numb
     ok: true,
     payload: {
       cultura,
+      /* O estado desconhecido cai no default do banco, nunca num terceiro valor: o CHECK só
+         admite dois, e inventar um terceiro seria trocar um erro de tela por um 23514. */
+      status: emAbertura ? 'abertura' : STATUS_AREA_PADRAO,
       area_plantada_ha: area,
       data_plantio: plantio,
       data_colheita_prevista: colheita,
@@ -201,3 +252,4 @@ export function safraInicialDoMes<T extends SafraComJanela>(
     : undefined;
   return comDado ?? cobrem[0];
 }
+
