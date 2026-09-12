@@ -27,7 +27,7 @@ export type V2Section =
   | 'financiamentos' | 'painel-financiamentos'
   // financeiro — cadastros
   | 'contas-bancarias' | 'fornecedores' | 'plano-contas' | 'dividendos'
-  | 'subcentro-aliases' | 'safras'
+  | 'subcentro-aliases' | 'safras' | 'rateio-admin'
   // financeiro — análise
   | 'analise-trimestral' | 'financeiro-caixa' | 'fluxo-anual'
   // planejamento (IDs legados preservados)
@@ -283,6 +283,11 @@ export const NAV_GRUPOS: NavGrupo[] = [
           { id: 'fornecedores',      label: 'Fornecedores',        status: 'needs-wrapper' },
           { id: 'plano-contas',      label: 'Plano de Contas',     status: 'needs-wrapper' },
           { id: 'safras',            label: 'Safras',              status: 'ready' },
+          /* ⚠ "Rateio administrativo" NÃO É o "Rateio ADM" do Financeiro, e os nomes vão
+             conviver: aquele distribui o administrativo entre FAZENDAS pelo rebanho médio
+             (derivado, tela de conferência); este declara quanto do administrativo é de cada
+             ATIVIDADE, por ano — cadastro, decisão do produtor. */
+          { id: 'rateio-admin',      label: 'Rateio administrativo', status: 'ready' },
           { id: 'subcentro-aliases', label: 'Aliases de Subcentro', status: 'needs-wrapper' },
           { id: 'dividendos',        label: 'Dividendos',          status: 'needs-wrapper' },
         ],
@@ -370,6 +375,7 @@ export const SECTION_TO_GROUP: Partial<Record<V2Section, string>> = {
   'fornecedores':      'cadastros',
   'plano-contas':      'cadastros',
   'safras':            'cadastros',
+  'rateio-admin':      'cadastros',
   'subcentro-aliases': 'cadastros',
   'dividendos':        'cadastros',
 

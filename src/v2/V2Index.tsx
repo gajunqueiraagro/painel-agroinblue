@@ -57,6 +57,7 @@ import { FinV2ContasTab } from '@/pages/FinV2ContasTab';
 import { FinV2FornecedoresTab } from '@/pages/FinV2FornecedoresTab';
 import { FinV2SubcentroAliasesTab } from '@/pages/FinV2SubcentroAliasesTab';
 import { FinV2SafrasTab } from '@/pages/FinV2SafrasTab';
+import { FinV2RateioAdminTab } from '@/pages/FinV2RateioAdminTab';
 import { ContratosTab } from '@/pages/ContratosTab';
 import FinanciamentosListaPage from '@/pages/FinanciamentosListaPage';
 import FinanciamentoDetalhe from '@/pages/FinanciamentoDetalhe';
@@ -928,6 +929,9 @@ export default function V2Index() {
     );
     if (section === 'safras') return (
       <FinV2SafrasTab />
+    );
+    if (section === 'rateio-admin') return (
+      <FinV2RateioAdminTab />
     );
     if (section === 'fornecedores') return (
       <FinV2FornecedoresTab />
