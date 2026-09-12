@@ -652,27 +652,48 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     }
   }, [subcentrosUnicos, subcentroFiltro]);
 
+  /**
+   * O QUE DEVOLVER AOS PAIS QUANDO O SUBCENTRO SAIR — FIN-CABECALHO-CASCATA-01.
+   *
+   * ⚠ ESTA É A PEÇA QUE FALTAVA NO FIN-LISTA-FILTROS-01a, e o comentário de lá enunciou o
+   * problema sem resolvê-lo: limpar o subcentro NÃO podia apagar Macro/Grupo/Centro às cegas,
+   * porque eles podiam ter sido escolhidos à mão — mas também não podia deixá-los presos,
+   * porque na maioria das vezes foi o próprio subcentro que os trouxe. Faltava saber QUEM
+   * PREENCHEU QUEM.
+   * ⚠ UM RETRATO, NÃO TRÊS FLAGS. Em vez de marcar cada campo como manual ou automático,
+   * guarda-se o que os três valiam ANTES do auto-preenchimento: cancelar devolve o retrato.
+   * Se não havia nada, os três voltam a "Todos" — que é o caso 1 da homologação; se o Macro
+   * estava escolhido à mão, ele volta — que é o caso 2. Uma estrutura, dois comportamentos,
+   * nenhum estado a manter sincronizado.
+   * ⚠ O RETRATO SÓ SE TIRA UMA VEZ: trocar de subcentro A para B não o sobrescreve, senão o
+   * segundo salvaria o auto-preenchimento do primeiro como se fosse escolha do operador.
+   */
+  const restaurarPlanoRef = useRef<{ macro: string; grupo: string; centro: string } | null>(null);
+
   // Subcentro selection: auto-fill macro + grupo + centro
   const handleSubcentroChange = (val: string) => {
     setSubcentroFiltro(val);
     if (val !== '__all__') {
       const match = hook.classificacoes.find(c => c.subcentro === val);
       if (match) {
+        if (!restaurarPlanoRef.current) {
+          restaurarPlanoRef.current = { macro: macroFiltro, grupo: grupoFiltro, centro: centroFiltro };
+        }
         setMacroFiltro(match.macro_custo || '__all__');
         setGrupoFiltro(match.grupo_custo || '__all__');
         setCentroFiltro(match.centro_custo || '__all__');
         setMacroLocked(true);
       }
     } else {
-      /* ⚠ LIMPAR O FILHO NUNCA SOBE — FIN-LISTA-FILTROS-01a. Aqui o "x" do Subcentro apagava
-         Macro, Grupo e Centro junto, e a justificativa era simétrica: escolher um subcentro
-         PREENCHE os três, então limpá-lo os desfaria. O erro está em supor que os três eram
-         dele: se o operador escolheu o Macro à mão e só depois o subcentro, a auto-seleção
-         sobrescreveu a escolha dele — e o "x" apagava a escolha, não o preenchimento.
-         ⚠ O QUE PERMANECE É SÓ A DESTRAVA. `macroLocked` desabilita os três campos enquanto o
-         subcentro manda; sem soltá-la, limpar o subcentro deixaria três campos cinzas sem
-         nada que os explicasse. A cascata para baixo (o "x" do Macro limpa os filhos) não
-         muda: o pai pode limpar os filhos, o filho nunca limpa o pai. */
+      /* ⚠ CANCELAR REVERTE O QUE AQUELA ESCOLHA CAUSOU, e só isso: os pais voltam ao que
+         eram antes do subcentro entrar. O que ele trouxe some com ele; o que o operador
+         tinha fixado à mão fica. A cascata para baixo (o "x" do Macro limpa os filhos) não
+         muda. */
+      const anterior = restaurarPlanoRef.current;
+      setMacroFiltro(anterior?.macro ?? '__all__');
+      setGrupoFiltro(anterior?.grupo ?? '__all__');
+      setCentroFiltro(anterior?.centro ?? '__all__');
+      restaurarPlanoRef.current = null;
       setMacroLocked(false);
     }
   };
@@ -1467,8 +1488,13 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     setFornecedorFiltro('__all__');
     setAtividadeFiltro('__all__');
     setSafraFiltro('__all__');
+    setCulturaFiltro('__all__');
     setAnosSelecionados([String(currentYear)]);
     setMacroLocked(false);
+    /* ⚠ O RETRATO DOS PAIS TAMBÉM SE APAGA — FIN-CABECALHO-CASCATA-01. Sem isto, "Limpar"
+       zeraria a tela e deixaria guardado o que os filtros valiam antes de um subcentro que
+       não existe mais: o próximo cancelamento devolveria valores de outra sessão de filtro. */
+    restaurarPlanoRef.current = null;
     setDataPor('financeira');   // PR-FIN-GRADE-DATAS-03 — volta à dimensão padrão ao limpar filtros
     setSortField('default');
     setSortDir('asc');
@@ -2157,6 +2183,16 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     />
                   </div>
                   <div className="col-span-2 min-w-0">
+                    <label className={lblCls}>Documento</label>
+                    <Input
+                      value={documentoFiltro}
+                      onChange={e => setDocumentoFiltro(e.target.value)}
+                      placeholder="NF, recibo, rateio..."
+                      className="h-6 !text-[8px] placeholder:!text-[8px] leading-tight px-1.5 bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus-visible:ring-[#1E3A5F]"
+                      autoCorrect="off" autoCapitalize="none" spellCheck={false}
+                    />
+                  </div>
+                  <div className="col-span-2 min-w-0">
                     <label className={lblCls}>Macro</label>
                     <SearchableSelect
                       value={macroFiltro}
@@ -2219,16 +2255,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       persistKey={CHAVE_BUSCA_FORNECEDOR}
                     />
                   </div>
-                  <div className="col-span-2 min-w-0">
-                    <label className={lblCls}>Documento</label>
-                    <Input
-                      value={documentoFiltro}
-                      onChange={e => setDocumentoFiltro(e.target.value)}
-                      placeholder="NF, recibo, rateio..."
-                      className="h-6 !text-[8px] placeholder:!text-[8px] leading-tight px-1.5 bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus-visible:ring-[#1E3A5F]"
-                      autoCorrect="off" autoCapitalize="none" spellCheck={false}
-                    />
-                  </div>
+                  
               </div>
 
               {/* O "Aplicar" só existe com a lista paginada; fora dela a barra filtra ao vivo. */}
@@ -2346,12 +2373,15 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     coluna própria, de 28px. */}
                 <col style={{ width: 14 }} />
                 {/* PR-FIN-GRADE-DATAS-03 — COMP. | VENC. | PGTO. (3 colunas de data).
-                    45→40 cada em FIN-LISTA-VISUAL-06: a data renderiza a 8px com
+                    45→40 no VISUAL-06 e 40→34 no FIN-TABELA-GEOMETRIA-01, acompanhando a
+                    fonte que desceu a 7px: "31/12/26" pede ~28px ali, e 34 deixa 3px de cada
+                    lado. Mais estreito que isso encosta o texto na borda da célula.
+                    A data renderiza com
                     `letter-spacing: -0.4px` (regra `.celula-data` do index.css), e "31/12/26"
                     pede ~32px — 40 ainda sobra para o padding de 1px de cada lado. */}
-                <col style={{ width: 40 }} />
-                <col style={{ width: 40 }} />
-                <col style={{ width: 40 }} />
+                <col style={{ width: 34 }} />
+                <col style={{ width: 34 }} />
+                <col style={{ width: 34 }} />
                 {/* Produto 175→150 na lista normal — FIN-LISTA-LAYOUT-01. É a coluna mais
                     larga e a que mais tolera truncar: o texto inteiro está no `title`. */}
                 <col style={{ width: modoIntensivo ? 170 : 150 }} />
@@ -2359,9 +2389,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 <col style={{ width: 120 }} />
                 <col style={{ width: 80 }} />
                 <col style={{ width: 80 }} />
-                {/* Fazenda 50→44: o rótulo virou "Faz." e a célula mostra o CÓDIGO, nunca o
-                    nome — o nome inteiro está no `title`. */}
-                <col style={{ width: 38 }} />
+                {/* Fazenda 50→44→38→30: a célula mostra o CÓDIGO (PUR, RET, ADM), nunca o
+                    nome — três letras a 9px pedem ~20px, e o `title` guarda o nome inteiro.
+                    O rótulo "FAZ." do cabeçalho, a 8px, é o que fixa o piso aqui. */}
+                <col style={{ width: 30 }} />
                 {/* Safra 56→66 — FIN-LISTA-VISUAL-06, a ÚNICA coluna que CRESCE neste corte.
                     ⚠ NO AMPLIADO NÃO HÁ ESTICAMENTO: a tabela transborda o container, então
                     cada faixa vale exatamente o que está escrito aqui — e "25/26-MAND", o
@@ -2369,13 +2400,17 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     não cabia nos 56 e saía "25/26-M…". Na lista normal a diferença é nenhuma,
                     porque lá as faixas esticam. */}
                 <col style={{ width: 66 }} />
-                {/* As duas contas só no Ampliado: 130→105 cada em FIN-LISTA-VISUAL-06.
+                {/* As duas contas só no Ampliado: 130→105→78 cada (FIN-TABELA-GEOMETRIA-01).
+                    ⚠ AQUI O TRUNCAR É A DECISÃO, não o efeito colateral: a coluna responde
+                    QUAL conta, e o banco já se reconhece nas primeiras letras ("Bradesco…",
+                    "Cartão…"). O nome inteiro fica no `title`, e os 54px que sobram das duas
+                    somados é o que tira o Ampliado da rolagem horizontal.
                     ⚠ O COMENTÁRIO ANTIGO DIZIA 150 E A LARGURA ERA 130 — o texto ficou para
                     trás de um corte anterior. Agora são 105, e o nome longo ("Cartão Banco do
                     Brasil - Pecuária") passa a truncar mais cedo; o nome inteiro está no
                     `title`, e o que a coluna precisa responder é QUAL conta, não o nome todo. */}
-                {modoIntensivo && <col style={{ width: 105 }} />}
-                {modoIntensivo && <col style={{ width: 105 }} />}
+                {modoIntensivo && <col style={{ width: 78 }} />}
+                {modoIntensivo && <col style={{ width: 78 }} />}
                 <col style={{ width: 90 }} />
                 {/* Doc: 55 na normal, 90→60 no Ampliado — FIN-LISTA-VISUAL-06.
                     ⚠ A FONTE NÃO MUDA, e o briefing pedia 10px: a célula JÁ renderiza a 9px,
