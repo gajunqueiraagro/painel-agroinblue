@@ -58,6 +58,7 @@ import { FinV2FornecedoresTab } from '@/pages/FinV2FornecedoresTab';
 import { FinV2SubcentroAliasesTab } from '@/pages/FinV2SubcentroAliasesTab';
 import { FinV2SafrasTab } from '@/pages/FinV2SafrasTab';
 import { FinV2RateioAdminTab } from '@/pages/FinV2RateioAdminTab';
+import { AgriDreCulturaTab } from '@/pages/AgriDreCulturaTab';
 import { ContratosTab } from '@/pages/ContratosTab';
 import FinanciamentosListaPage from '@/pages/FinanciamentosListaPage';
 import FinanciamentoDetalhe from '@/pages/FinanciamentoDetalhe';
@@ -846,6 +847,9 @@ export default function V2Index() {
 
   function renderContent() {
     if (section === 'home') return <V2Home ano={ano} mes={mes} viewMode={viewMode} onViewModeChange={setViewMode} onIrPara={irParaPendencia} onMesChange={setMes} onAnoChange={setAno} />;
+    if (section === 'dre-cultura') return (
+      <AgriDreCulturaTab />
+    );
     if (section === 'painel-consultor') return (
       <PainelConsultorTab
         onBack={() => setSection('home')}

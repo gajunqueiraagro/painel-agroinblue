@@ -47,6 +47,7 @@ export type V2Section =
   | 'lancamentos-meta-zoo'   // (em construção) — futura variante de lancamentos-zoot filtrada por META
   | 'lancamentos-meta-fin'   // (em construção) — futura variante de financeiro-lanc filtrada por META
   | 'dre-executivo'          // (em construção)
+  | 'dre-cultura'            // PR-AGRI-DRE-01 — DRE de caixa por cultura da safra
   | 'divergencias'           // (em construção)
   | 'logs'                   // (em construção)
   | 'validacoes'             // (em construção)
@@ -244,6 +245,11 @@ export const NAV_GRUPOS: NavGrupo[] = [
           { id: 'fechamento-periodo',  label: 'Fechamento do Período',        status: 'ready' },
           { id: 'indicadores-zoot',    label: 'Indicadores',                  status: 'needs-wrapper' },
           { id: 'valor-rebanho',       label: 'Evolução Patrimonial',         status: 'needs-wrapper' },
+          /* ⚠ NÃO É O "DRE Executivo" ACIMA, e por isso entra como item próprio: aquele é o
+             gerencial, por competência, e continua placeholder. Este é o DRE de CAIXA por
+             cultura de uma safra, lido da fn_dre_agricola_por_safra. Ocupar a rota do outro
+             faria a tela em construção parecer pronta. */
+          { id: 'dre-cultura',         label: 'DRE por cultura',              status: 'ready' },
           { id: 'dre-executivo',       label: 'DRE Executivo (em construção)', status: 'needs-wrapper' },
         ],
       },
@@ -355,6 +361,7 @@ export const SECTION_TO_GROUP: Partial<Record<V2Section, string>> = {
 
   // ── executivo ──
   'painel-consultor':    'executivo',
+  'dre-cultura':         'executivo',
   'painel-anual':        'executivo',
   'auditoria-anual':     'executivo',
   'indicadores-zoot':    'executivo',
