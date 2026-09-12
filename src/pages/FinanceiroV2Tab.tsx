@@ -1592,7 +1592,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
           size="sm"
           variant={modoIntensivo ? "default" : "outline"}
           onClick={() => toggleIntensivo()}
-          className={cn("h-6 text-[10px] gap-0.5 px-1.5", modoIntensivo && "bg-primary text-primary-foreground")}
+          /* ⚠ LARGURA FIXA — A23. "Ampliar" e "Retornar" não têm o mesmo comprimento, e sem
+             `w-[84px]` o botão encolhe e cresce ao ser clicado, empurrando o que está à
+             esquerda. O gesto de ampliar não pode mexer no lugar do botão que o fez. */
+          className={cn("h-6 w-[84px] justify-center text-[10px] gap-0.5 px-1.5", modoIntensivo && "bg-primary text-primary-foreground")}
           title={modoIntensivo ? "Retornar à lista normal" : "Ampliar a lista (mais colunas)"}
         >
           {modoIntensivo ? <Minimize2 className="h-3 w-3" /> : <Maximize2 className="h-3 w-3" />}

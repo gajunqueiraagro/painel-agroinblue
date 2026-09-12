@@ -281,7 +281,14 @@ export function SearchableSelect({
              veste as grades A18 de Abate, Venda, Mapa e Financeiro; levá-las a 32px/12px
              tiraria linhas da tela em telas que foram medidas para caber sem rolar. Está
              reportado como frente própria, não esquecido. */
-          dense ? 'h-8 px-2 text-[12px] font-normal' : 'h-6 px-1.5 text-[10px]',
+          /* ⚠ `px-2.5` NO MODO PADRÃO — FIN-LISTA-ESTAVEL-A23-01, e o número não é escolha: é o
+             MESMO padding do `SelectTrigger` primitivo (`ui/select.tsx`, `px-2.5`). Os dois
+             convivem lado a lado no cabeçalho de filtros do Financeiro — Cultura é `Select` e
+             Macro é este — e 6px contra 10px desalinhava o texto de campos vizinhos em 4px.
+             O operador leu isso como "o campo com valor recua"; o que recuava era o outro.
+             ⚠ NO MODO DENSO NADA MUDA (`px-2`): lá o gatilho veste as grades A18, que foram
+             medidas para caber sem rolar. */
+          dense ? 'h-8 px-2 text-[12px] font-normal' : 'h-6 px-2.5 text-[10px]',
           'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1',
           disabled && 'opacity-50 cursor-not-allowed',
         )}
@@ -290,11 +297,24 @@ export function SearchableSelect({
           {open ? '' : selectedLabel}
         </span>
         <span className="flex items-center gap-0">
-          {value !== allValue && !disabled && (
-            <span onClick={handleClear} className="cursor-pointer hover:text-destructive p-0.5">
-              <X className="h-2.5 w-2.5" />
-            </span>
-          )}
+          {/* ⚠ O "X" OCUPA O LUGAR DELE SEMPRE — A23. Antes ele só existia com valor
+              escolhido, e aparecer roubava ~14px do texto: o rótulo truncava no ato de
+              selecionar, e o campo parecia encolher sozinho. Agora o espaço é reservado e
+              só a VISIBILIDADE muda — nada se move ao escolher.
+              ⚠ `invisible`, não `opacity-0`: além de sumir, ele para de receber clique
+              (`pointer-events-none`), senão haveria um botão de limpar invisível e clicável
+              num campo que não tem o que limpar. */}
+          <span
+            onClick={value !== allValue && !disabled ? handleClear : undefined}
+            className={cn(
+              'p-0.5',
+              value !== allValue && !disabled
+                ? 'cursor-pointer hover:text-destructive'
+                : 'invisible pointer-events-none',
+            )}
+          >
+            <X className="h-2.5 w-2.5" />
+          </span>
           <ChevronsUpDown className="h-2.5 w-2.5 opacity-50 shrink-0" />
         </span>
       </button>

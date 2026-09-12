@@ -306,7 +306,15 @@ export function FinanceiroV2ExportMenu({ carregarConjunto, fornecedores, ano, fa
   const [open, setOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
 
-  if (totalCount === 0) return null;
+  /**
+   * ⚠ ELE NÃO SOME MAIS COM A LISTA VAZIA — FIN-LISTA-ESTAVEL-A23-01, e era `if (totalCount
+   * === 0) return null`. Sumir não é "limpar a tela": o botão que desaparece LEVA CONSIGO a
+   * posição de todos os que estão à direita — Ampliar e Voltar andavam sozinhos sempre que
+   * um filtro zerava o resultado. Para quem olha, o sistema se reorganizou por conta própria.
+   * ⚠ DESABILITADO DIZ POR QUÊ, que é a regra da casa para botão cinza: o `title` nomeia o
+   * motivo em vez de deixar o operador clicar e não entender.
+   */
+  const vazio = totalCount === 0;
 
   const handleExport = async (type: 'excel' | 'pdf') => {
     setExporting(true);
@@ -340,9 +348,11 @@ export function FinanceiroV2ExportMenu({ carregarConjunto, fornecedores, ano, fa
   };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open && !vazio} onOpenChange={(o) => { if (!vazio) setOpen(o); }}>
       <PopoverTrigger asChild>
-        <Button size="sm" variant="outline" className="h-6 text-[10px] gap-0.5 px-2" disabled={exporting}>
+        <Button size="sm" variant="outline" className="h-6 text-[10px] gap-0.5 px-2"
+          disabled={exporting || vazio}
+          title={vazio ? 'Nada para exportar com estes filtros' : undefined}>
           {exporting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />} Exportar
         </Button>
       </PopoverTrigger>
