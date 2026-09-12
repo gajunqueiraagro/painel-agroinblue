@@ -2383,8 +2383,16 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 <col style={{ width: 40 }} />
                 <col style={{ width: 40 }} />
                 {/* Produto 175→150 na lista normal — FIN-LISTA-LAYOUT-01. É a coluna mais
-                    larga e a que mais tolera truncar: o texto inteiro está no `title`. */}
-                <col style={{ width: modoIntensivo ? 170 : 150 }} />
+                    larga e a que mais tolera truncar: o texto inteiro está no `title`.
+                    ⚠ NO AMPLIADO, 170→140: a célula renderiza a 9px (`.table-financeiro td`
+                    vence o `text-[12px]` do JSX), e os nomes típicos — "Encerramento Conta -
+                    Manual", "Seguro de Vida Colaboradores", 28 caracteres — pedem ~132px com o
+                    padding. 140 mostra os dois inteiros e devolve 30px à grade.
+                    ⚠ E ELA NÃO É CONGELADA: Produto é a 6ª coluna, depois das cinco `sticky`
+                    (check, origem, Comp., Venc., Pgto.). Mexer nela NÃO desloca nenhum offset —
+                    conferido antes de aplicar, porque foi exatamente o oposto disso que
+                    quebrou a lista hoje. */}
+                <col style={{ width: modoIntensivo ? 140 : 150 }} />
                 {/* Fornecedor 140→120 — FIN-LISTA-VISUAL-06. Trunca com o nome inteiro no `title`. */}
                 <col style={{ width: 120 }} />
                 <col style={{ width: 80 }} />
