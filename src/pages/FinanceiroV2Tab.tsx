@@ -1618,10 +1618,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
           size="sm"
           variant={modoIntensivo ? "default" : "outline"}
           onClick={() => toggleIntensivo()}
-          /* ⚠ LARGURA FIXA — A23. "Ampliar" e "Retornar" não têm o mesmo comprimento, e sem
-             `w-[84px]` o botão encolhe e cresce ao ser clicado, empurrando o que está à
-             esquerda. O gesto de ampliar não pode mexer no lugar do botão que o fez. */
-          className={cn("h-6 w-[84px] justify-center text-[10px] gap-0.5 px-1.5", modoIntensivo && "bg-primary text-primary-foreground")}
+          className={cn("h-6 text-[10px] gap-0.5 px-1.5", modoIntensivo && "bg-primary text-primary-foreground")}
           title={modoIntensivo ? "Retornar à lista normal" : "Ampliar a lista (mais colunas)"}
         >
           {modoIntensivo ? <Minimize2 className="h-3 w-3" /> : <Maximize2 className="h-3 w-3" />}
@@ -2373,15 +2370,18 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     coluna própria, de 28px. */}
                 <col style={{ width: 14 }} />
                 {/* PR-FIN-GRADE-DATAS-03 — COMP. | VENC. | PGTO. (3 colunas de data).
-                    45→40 no VISUAL-06 e 40→34 no FIN-TABELA-GEOMETRIA-01, acompanhando a
-                    fonte que desceu a 7px: "31/12/26" pede ~28px ali, e 34 deixa 3px de cada
-                    lado. Mais estreito que isso encosta o texto na borda da célula.
+                    45→40 cada em FIN-LISTA-VISUAL-06. Foram a 34 no FIN-TABELA-GEOMETRIA-01
+                    e VOLTARAM: a fonte de 7px que justificava os 34 foi revertida, e — o que
+                    importa mais — os 34 quebraram a CADEIA das colunas congeladas, que
+                    continuou em 0/28/42/82/122. Sobravam 12px entre a última data e o
+                    Produto: faixa branca parada, e o começo do texto coberto ao rolar
+                    ("iuste Manual"). Com 40, a cadeia fecha exata.
                     A data renderiza com
                     `letter-spacing: -0.4px` (regra `.celula-data` do index.css), e "31/12/26"
                     pede ~32px — 40 ainda sobra para o padding de 1px de cada lado. */}
-                <col style={{ width: 34 }} />
-                <col style={{ width: 34 }} />
-                <col style={{ width: 34 }} />
+                <col style={{ width: 40 }} />
+                <col style={{ width: 40 }} />
+                <col style={{ width: 40 }} />
                 {/* Produto 175→150 na lista normal — FIN-LISTA-LAYOUT-01. É a coluna mais
                     larga e a que mais tolera truncar: o texto inteiro está no `title`. */}
                 <col style={{ width: modoIntensivo ? 170 : 150 }} />
@@ -2389,10 +2389,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 <col style={{ width: 120 }} />
                 <col style={{ width: 80 }} />
                 <col style={{ width: 80 }} />
-                {/* Fazenda 50→44→38→30: a célula mostra o CÓDIGO (PUR, RET, ADM), nunca o
-                    nome — três letras a 9px pedem ~20px, e o `title` guarda o nome inteiro.
-                    O rótulo "FAZ." do cabeçalho, a 8px, é o que fixa o piso aqui. */}
-                <col style={{ width: 30 }} />
+                {/* Fazenda 50→44→38: a célula mostra o CÓDIGO (PUR, RET, ADM), nunca o nome —
+                    o nome inteiro está no `title`. Chegou a 30 no FIN-TABELA-GEOMETRIA-01 e
+                    voltou junto com as datas, no mesmo revert de geometria. */}
+                <col style={{ width: 38 }} />
                 {/* Safra 56→66 — FIN-LISTA-VISUAL-06, a ÚNICA coluna que CRESCE neste corte.
                     ⚠ NO AMPLIADO NÃO HÁ ESTICAMENTO: a tabela transborda o container, então
                     cada faixa vale exatamente o que está escrito aqui — e "25/26-MAND", o
@@ -2400,17 +2400,14 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     não cabia nos 56 e saía "25/26-M…". Na lista normal a diferença é nenhuma,
                     porque lá as faixas esticam. */}
                 <col style={{ width: 66 }} />
-                {/* As duas contas só no Ampliado: 130→105→78 cada (FIN-TABELA-GEOMETRIA-01).
-                    ⚠ AQUI O TRUNCAR É A DECISÃO, não o efeito colateral: a coluna responde
-                    QUAL conta, e o banco já se reconhece nas primeiras letras ("Bradesco…",
-                    "Cartão…"). O nome inteiro fica no `title`, e os 54px que sobram das duas
-                    somados é o que tira o Ampliado da rolagem horizontal.
+                {/* As duas contas só no Ampliado: 130→105 cada em FIN-LISTA-VISUAL-06.
+                    Foram a 78 no FIN-TABELA-GEOMETRIA-01 e voltaram com o resto da geometria.
                     ⚠ O COMENTÁRIO ANTIGO DIZIA 150 E A LARGURA ERA 130 — o texto ficou para
                     trás de um corte anterior. Agora são 105, e o nome longo ("Cartão Banco do
                     Brasil - Pecuária") passa a truncar mais cedo; o nome inteiro está no
                     `title`, e o que a coluna precisa responder é QUAL conta, não o nome todo. */}
-                {modoIntensivo && <col style={{ width: 78 }} />}
-                {modoIntensivo && <col style={{ width: 78 }} />}
+                {modoIntensivo && <col style={{ width: 105 }} />}
+                {modoIntensivo && <col style={{ width: 105 }} />}
                 <col style={{ width: 90 }} />
                 {/* Doc: 55 na normal, 90→60 no Ampliado — FIN-LISTA-VISUAL-06.
                     ⚠ A FONTE NÃO MUDA, e o briefing pedia 10px: a célula JÁ renderiza a 9px,
