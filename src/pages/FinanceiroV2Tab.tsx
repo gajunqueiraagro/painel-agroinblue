@@ -1951,12 +1951,14 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 <div className="flex gap-1.5 text-[9px] items-center">
                   <span className="text-success font-bold">{formatMoeda(totalEntradas)}</span>
                   <span className="text-destructive font-bold">{formatMoeda(totalSaidas)}</span>
-                  {totalTransferencias > 0 && (
-                    <span className="font-bold text-sky-700 dark:text-sky-400"
-                      title="Transferências entre contas do próprio cliente — fora dos dois totais.">
-                      {formatMoeda(totalTransferencias)}
-                    </span>
-                  )}
+                  {/* ⚠ NO MOBILE A REGRA É A MESMA — FIN-LISTA-TOTAIS-FAIXA-01: o terceiro
+                      total não some quando zera. A linha é horizontal aqui desde sempre, então
+                      o sumiço não movia a tabela; movia os números ao lado, que é o mesmo
+                      defeito em escala menor. */}
+                  <span className="font-bold text-sky-700 dark:text-sky-400"
+                    title="Transferências entre contas do próprio cliente — fora dos dois totais.">
+                    {formatMoeda(totalTransferencias)}
+                  </span>
                   <span className="text-muted-foreground">{totalLancamentosFiltrados}</span>
                 </div>
               </div>
@@ -2275,27 +2277,46 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     className="h-6 gap-0.5 px-1.5 text-[10px] text-muted-foreground">
                     <FilterX className="h-3 w-3" /> Limpar
                   </Button>
-                  <div className="flex w-full flex-col items-end gap-0 text-right tabular-nums">
-                    <span className="text-[10px] font-bold text-success">Entradas: {formatMoeda(totalEntradas)}</span>
-                    <span className="text-[10px] font-bold text-destructive">Saídas: {formatMoeda(totalSaidas)}</span>
-                    {/* ⚠ O TERCEIRO TOTAL SÓ APARECE QUANDO EXISTE — PR-V2-TRANSF-DESTINO-01.
-                        Com uma conta em foco não há transferência solta: ela é entrada ou
-                        saída daquela conta, o balde fica zerado e um "Transf.: R$ 0,00"
-                        permanente ensinaria a ignorar a linha. */}
-                    {totalTransferencias > 0 && (
-                      <span className="text-[10px] font-bold text-sky-700 dark:text-sky-400"
-                        title="Transferências entre contas do próprio cliente: não são entrada nem saída do caixa, por isso ficam fora dos dois totais.">
-                        Transf.: {formatMoeda(totalTransferencias)}
-                      </span>
-                    )}
-                    <span className="text-[10px] text-muted-foreground">{totalLancamentosFiltrados} lanç.</span>
-                  </div>
+                  {/* ⚠ OS TOTAIS SAÍRAM DAQUI — FIN-LISTA-TOTAIS-FAIXA-01. Empilhados nesta
+                      coluna, eles cresciam e encolhiam com o filtro (o "Transf." só existia
+                      quando havia transferência), e a tabela subia e descia junto. Agora vivem
+                      numa faixa de altura fixa acima da lista. */}
                 </div>
               </div>
             </>
           )}
         </CardContent>
       </Card>
+
+      {/**
+        * A FAIXA DE TOTAIS — FIN-LISTA-TOTAIS-FAIXA-01.
+        *
+        * ⚠ ALTURA FIXA E PRESENÇA FIXA, e é o ponto inteiro desta faixa: ela ocupa o mesmo
+        * espaço com qualquer filtro, inclusive com zero lançamentos. Antes os totais eram uma
+        * coluna empilhada ao lado dos botões, e o terceiro deles só existia quando havia
+        * transferência — filtrar algo sem transferência encolhia o bloco e a TABELA SUBIA.
+        * ⚠ "Transf." NÃO SOME MAIS, e isto DESFAZ a decisão do PR-V2-TRANSF-DESTINO-01, que
+        * argumentava que um "R$ 0,00" permanente ensinaria a ignorar a linha. O argumento é
+        * bom e perde para a A23: um número que se lê e se ignora custa menos que uma tela que
+        * se move sozinha — e quem procura o total aprende a posição, não o valor.
+        * ⚠ FORA DE TODO CONDICIONAL de carregamento, filtro ou resultado: ela é desenhada
+        * sempre que a tela está no modo lista. É a única forma de a tabela ter sempre o mesmo
+        * ponto de partida vertical.
+        */}
+      {mode === 'list' && (
+        <div className="flex h-6 shrink-0 flex-wrap items-center gap-x-2 px-1 text-[10px] tabular-nums">
+          <span className="font-bold text-success">Entradas: {formatMoeda(totalEntradas)}</span>
+          <span className="text-muted-foreground/40">|</span>
+          <span className="font-bold text-destructive">Saídas: {formatMoeda(totalSaidas)}</span>
+          <span className="text-muted-foreground/40">|</span>
+          <span className="font-bold text-sky-700 dark:text-sky-400"
+            title="Transferências entre contas do próprio cliente: não são entrada nem saída do caixa, por isso ficam fora dos dois totais.">
+            Transf.: {formatMoeda(totalTransferencias)}
+          </span>
+          <span className="text-muted-foreground/40">|</span>
+          <span className="text-muted-foreground">{totalLancamentosFiltrados} lanç.</span>
+        </div>
+      )}
 
       {(!queryFazendaId && fazendaId !== '__all__') && (
         <div className="text-center text-muted-foreground py-6 text-[10px]">
