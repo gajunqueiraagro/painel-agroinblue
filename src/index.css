@@ -127,9 +127,14 @@
    o `font-semibold` do JSX de 600 para 500 — mudança de peso fora do escopo deste PR,
    que é só igualar as três colunas de data. Valor segue mandado pelo JSX (font-semibold, 600). */
 /* Datas (Comp., Venc., Pgto.) – ultra compactas */
+/* ⚠ 7px É OVERRIDE CONSCIENTE DO PISO A18 (8px) — FIN-TABELA-GEOMETRIA-01, autorizado pelo
+   Gabriel para JULGAR NA TELA. A data é o campo mais tabular da grade: formato fixo,
+   `dd/mm/aa`, lido por posição e não por leitura corrida — é onde 1px custa menos. Se na tela
+   ficar ilegível, o caminho de volta é esta linha, e só ela.
+   ⚠ E ELA É GLOBAL: vale para a lista normal e para a ampliada, que compartilham a classe. */
 .table-financeiro td.celula-data,
 .table-financeiro td.celula-data * {
-  font-size: 8px !important;
+  font-size: 7px !important;
   line-height: 1 !important;
   letter-spacing: -0.4px !important;
 }
@@ -464,7 +469,15 @@ input[type='number'] {
      deixaria as fixas coladas e o resto recuado — pior que nao ter recuo.
      ───────────────────────────────────────────────────────────────────────────── */
   .respiro-lista {
-    padding-left: 8px;
+    /* ⚠ ZERO À ESQUERDA — FIN-TABELA-GEOMETRIA-01. Os 8px eram "respiro" e viraram a faixa
+       vazia entre a barra lateral escura e a primeira coluna: com a tabela dentro de um card
+       que já tem borda, o espaço dentro do card não separa nada de nada — só empurra a grade
+       para longe da sidebar.
+       ⚠ O `padding-right` FICA, e não é simetria perdida: ele é funcional. Na barra de
+       rolagem em overlay do macOS, `scrollbar-gutter` não faz efeito, e são estes 12px que
+       impedem a barra de cobrir a última coluna (FIN-LISTA-SCROLLBAR-01). Tirá-lo por
+       simetria devolveria o defeito que ele conserta. */
+    padding-left: 0;
     padding-right: 12px;
   }
 }
