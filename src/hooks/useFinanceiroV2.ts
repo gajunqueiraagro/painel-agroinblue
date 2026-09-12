@@ -101,6 +101,12 @@ export interface LancamentoV2 {
    */
   recorrencia_id: string | null;
   safra_id?: string | null;
+  /**
+   * Cultura e fase do rateio — AGRI-04A. Nulo é "compartilhado", e é o estado normal: a
+   * coluna nasceu vazia em 100% das linhas. O `select('*')` da lista já as traz.
+   */
+  cultura?: string | null;
+  fase?: string | null;
   /** A conta do plano — desde FIN-PLANO-CHAVE-02 é ela que manda, e o texto é cache. */
   plano_conta_id?: string | null;
   /**
@@ -160,6 +166,20 @@ export interface LancamentoV2Form {
    * chave", e o UPDATE OMITE a coluna — ver o payload em `editarLancamento`.
    */
   plano_conta_id?: string | null;
+  /**
+   * CULTURA E FASE — AGRI-04A/AGRI-MODAL-CULTURA-01.
+   *
+   * ⚠ PREENCHIDO É CUSTO DIRETO, NULO É COMPARTILHADO (rateia). Não são campos de
+   * classificação: a conta do plano continua sendo o subcentro. Estes dizem a QUEM o custo
+   * pertence dentro da atividade — a cultura na lavoura, a fase na pecuária.
+   * ⚠ `undefined` E `null` DIFEREM AQUI, pelo mesmo motivo do `plano_conta_id` logo acima:
+   * `null` é "compartilhado" e vai no payload; `undefined` é "este chamador não fala disso",
+   * e o UPDATE OMITE a coluna. Sem essa distinção, qualquer writer que edite um lançamento
+   * por outro motivo (zoot, importação, baixa) apagaria a cultura que o operador escolheu no
+   * modal — e ninguém saberia por quê.
+   */
+  cultura?: string | null;
+  fase?: string | null;
   observacao?: string;
   numero_documento?: string | null;
   tipo_documento?: string | null;
@@ -703,6 +723,10 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       created_by: userId,
       sem_movimentacao_caixa: false,
       safra_id: form.safra_id || null,
+      /* No INSERT não há valor anterior a proteger: ausente vira `null`, que é o
+         "compartilhado" — o estado em que todo lançamento nasce. */
+      cultura: form.cultura || null,
+      fase: form.fase || null,
       hash_importacao: hashImportacao ?? null,
     };
   };
@@ -965,6 +989,10 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       editado_manual: true,
       updated_by: user.id,
       safra_id: form.safra_id || null,
+      /* ⚠ OMITE QUANDO O CHAMADOR NÃO FALA — o mesmo cuidado do `plano_conta_id`: mandar
+         `null` por quem não conhece o campo apagaria a escolha feita no modal. */
+      ...(form.cultura !== undefined ? { cultura: form.cultura || null } : {}),
+      ...(form.fase !== undefined ? { fase: form.fase || null } : {}),
     };
 
     // Antes imprimia `id` e os dois `conta_destino_id` — UUIDs. O que a

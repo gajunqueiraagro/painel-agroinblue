@@ -43,6 +43,11 @@ import { ATIVIDADES, lembrarAtividade, ultimaAtividade, type Atividade } from '@
 import { safraSugerida } from '@/lib/agri/safraSugerida';
 import { conflitoSafraEscopo, mensagemConflitoSafraEscopo } from '@/lib/financeiro/safraEscopo';
 import { escopoDoSubcentro, fazendaAdministrativa, AVISO_ADMIN_SEM_SAFRA, AVISO_ADMIN_SAFRA_SAI } from '@/lib/financeiro/escopoDoSubcentro';
+import {
+  CULTURAS_LANCAMENTO, FASES, SEM_CULTURA, avisoCultura, avisoFase,
+  culturaParaGravar, faseParaGravar,
+} from '@/lib/agri/rateioLancamento';
+import { useCulturasDaSafra } from '@/hooks/useAreaPlantada';
 
 interface Props {
   open: boolean;
@@ -396,6 +401,10 @@ export function LancamentoV2Dialog({
    * dado gravado vence a preferência de quem está olhando.
    */
   const [atividade, setAtividade] = useState<Atividade | null>(null);
+  /* CULTURA (lavoura) e FASE (pecuária) — AGRI-MODAL-CULTURA-01. Vazio é escolha: significa
+     compartilhado, e a frase abaixo do campo diz isso. */
+  const [cultura, setCultura] = useState('');
+  const [fase, setFase] = useState('');
   const [subcentroLimpoPelaAtividade, setSubcentroLimpoPelaAtividade] = useState(false);
   /**
    * A SAFRA SE SUGERE, MAS NÃO SE IMPÕE — PR-FIN-ATIVIDADE-01b.
@@ -548,6 +557,12 @@ export function LancamentoV2Dialog({
     const nova = atividade === v ? null : v;
     setAtividade(nova);
     lembrarAtividade(nova);
+    /* ⚠ O EIXO DA OUTRA ATIVIDADE SAI NA HORA — AGRI-MODAL-CULTURA-01. Escolher Amendoim e
+       depois trocar para Pecuária deixaria um custo de pecuária marcado como custo direto de
+       amendoim no DRE da lavoura. O `culturaParaGravar`/`faseParaGravar` também protege o
+       payload; limpar aqui é para a TELA não mostrar o que não vai gravar. */
+    if (nova !== 'agricultura') setCultura('');
+    if (nova !== 'pecuaria') setFase('');
     if (!nova) { setSubcentroLimpoPelaAtividade(false); return; }
     /* Mesma comparação do save: aparar e ignorar caixa. */
     const alvo = (subcentro || '').trim().toLowerCase();
@@ -570,6 +585,21 @@ export function LancamentoV2Dialog({
       setSafraEditadaAMao(false);
     }
   };
+
+  /**
+   * As culturas que existem em campo naquela safra — AGRI-MODAL-CULTURA-01.
+   *
+   * ⚠ ESTREITA A PERGUNTA, NÃO LIMITA O DADO: sem nenhuma área cadastrada, o dropdown volta à
+   * lista completa. O custo chega antes do cadastro do talhão com frequência (o adubo é
+   * comprado em agosto, o talhão se cadastra em outubro), e uma lista vazia ali obrigaria a
+   * sair do modal para poder classificar.
+   */
+  const culturasDaSafra = useCulturasDaSafra(safraId || null);
+  const culturasOferecidas = useMemo(() => (
+    culturasDaSafra.length > 0
+      ? CULTURAS_LANCAMENTO.filter(c => culturasDaSafra.includes(c.valor))
+      : CULTURAS_LANCAMENTO
+  ), [culturasDaSafra]);
 
   /* ⚠ AS CANDIDATAS SAÍRAM DAQUI — FIN-SAFRA-ORDEM-02. Elas existiam só para serem
      empilhadas no topo do dropdown; a SUGESTÃO nunca dependeu desta lista: `safraSugerida`
@@ -678,6 +708,8 @@ export function LancamentoV2Dialog({
     if (lancamento) {
       setFazendaId(lancamento.fazenda_id);
       setSafraId(lancamento.safra_id ?? '');
+      setCultura(lancamento.cultura ?? '');
+      setFase(lancamento.fase ?? '');
       setDataCompetencia(lancamento.data_competencia);
       setDataVencimento(lancamento.data_vencimento || '');   // PR-FIN-MODAL-VENCIMENTO-02B — carrega o vencimento real
       setDataPagamento(lancamento.data_pagamento || '');
@@ -1156,6 +1188,8 @@ export function LancamentoV2Dialog({
           forma_pagamento: formaPgto || null,
           dados_pagamento: dadosPagamento || null,
           safra_id: safraParaGravar(),
+          cultura: culturaParaGravar(atividade, cultura),
+          fase: faseParaGravar(atividade, fase),
         };
 
         const ok = await onSave(form);
@@ -1196,6 +1230,8 @@ export function LancamentoV2Dialog({
       forma_pagamento: formaPgto || null,
       dados_pagamento: dadosPagamento || null,
       safra_id: safraParaGravar(),
+      cultura: culturaParaGravar(atividade, cultura),
+      fase: faseParaGravar(atividade, fase),
     };
 
       console.log('[FinV2] SUBMIT STATE', {
@@ -1828,6 +1864,59 @@ export function LancamentoV2Dialog({
                   </div>
                 )}
               </div>
+
+              {/* ── CULTURA (lavoura) ou FASE (pecuária) — AGRI-MODAL-CULTURA-01.
+                   ⚠ AO LADO DA SAFRA, e não numa linha nova: safra e cultura são a mesma
+                   pergunta em dois níveis ("de qual ciclo" e "de qual parte dele"), e quem
+                   preenche uma confere a outra.
+                   ⚠ SILVICULTURA E ADMINISTRATIVO NÃO TÊM CAMPO NENHUM: eucalipto não é
+                   cultura de lavoura (é atividade própria) e administrativo não é de
+                   ninguém. Campo que não se aplica não fica cinza — não existe.
+                   ⚠ E A FRASE É O PULO DO GATO: "vazio" aqui não é esquecimento, é a escolha
+                   de ratear. Sem ela, o operador leria o campo em branco como pendência e
+                   preencheria por via das dúvidas — transformando custo compartilhado em
+                   custo direto da primeira cultura da lista. */}
+              {atividade === 'agricultura' && (
+                <div className="col-span-4">
+                  <Label className="text-[10px]">Cultura</Label>
+                  <Select value={cultura || SEM_CULTURA}
+                    onValueChange={v => setCultura(v === SEM_CULTURA ? '' : v)}>
+                    <SelectTrigger className={cn('h-8 text-xs [&>span]:truncate', fieldBg)}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={SEM_CULTURA}>Todas (rateia)</SelectItem>
+                      {culturasOferecidas.map(c => (
+                        <SelectItem key={c.valor} value={c.valor}>{c.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className={cn('mt-0.5 text-[10px] leading-snug', avisoCultura(cultura, culturasDaSafra).classe)}>
+                    {avisoCultura(cultura, culturasDaSafra).texto}
+                  </div>
+                </div>
+              )}
+
+              {atividade === 'pecuaria' && (
+                <div className="col-span-4">
+                  <Label className="text-[10px]">Fase</Label>
+                  <Select value={fase || SEM_CULTURA}
+                    onValueChange={v => setFase(v === SEM_CULTURA ? '' : v)}>
+                    <SelectTrigger className={cn('h-8 text-xs [&>span]:truncate', fieldBg)}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={SEM_CULTURA}>Todas (rateia)</SelectItem>
+                      {FASES.map(f => (
+                        <SelectItem key={f.valor} value={f.valor}>{f.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className={cn('mt-0.5 text-[10px] leading-snug', avisoFase(fase).classe)}>
+                    {avisoFase(fase).texto}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* "Compõe DRE" (SOMENTE LEITURA) — PR-FIN-MODAL-02C #6, corrigido em PR-FIN-DRE-BADGE-01.

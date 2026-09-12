@@ -194,3 +194,31 @@ export function useAreasPorPastoNaJanela(safraIds: readonly string[]) {
 
   return mapa;
 }
+
+/**
+ * AS CULTURAS EFETIVAMENTE PLANTADAS NUMA SAFRA — AGRI-MODAL-CULTURA-01.
+ *
+ * ⚠ SERVE PARA ESTREITAR A PERGUNTA, não para limitar o dado: o modal oferece estas primeiro
+ * porque são as que existem em campo naquela safra; sem nenhuma área cadastrada, ele volta à
+ * lista completa em vez de ficar sem opção — o custo pode chegar antes do cadastro do talhão.
+ */
+export function useCulturasDaSafra(safraId: string | null | undefined) {
+  const [culturas, setCulturas] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!safraId) { setCulturas([]); return; }
+    let vivo = true;
+    const db = supabase as any;
+    db.from('agri_safra_area')
+      .select('cultura')
+      .eq('safra_id', safraId)
+      .eq('ativo', true)
+      .then(({ data }: { data: Array<{ cultura: string }> | null }) => {
+        if (!vivo) return;
+        setCulturas([...new Set((data ?? []).map(r => r.cultura))].sort());
+      });
+    return () => { vivo = false; };
+  }, [safraId]);
+
+  return culturas;
+}
