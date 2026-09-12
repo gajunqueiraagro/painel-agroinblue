@@ -35,14 +35,34 @@
 --   APLICADOS no proto em 2026-09-12 pelo Chat via MCP (status 201, `indisvalid = true`
 --   conferido nos dois). Este arquivo e' o registro, nao a aplicacao.
 --
---   ⚠ E ELES AINDA NAO ESTAO SENDO USADOS — medido logo apos criar, nas DUAS dimensoes:
---   o planner continua escolhendo `idx_fin_lanc_v2_cliente` e descartando as mesmas 26.907
---   linhas. `CREATE INDEX CONCURRENTLY` NAO atualiza as estatisticas da tabela, e sem elas o
---   planner nao sabe o que o indice novo custa. Falta rodar, uma vez, fora desta migration:
---       analyze financeiro_lancamentos_v2;
---   Barato e sem bloqueio de escrita. So depois disso vale remedir o EXPLAIN — e se o plano
---   nao mudar nem assim, os indices nao servem para estas consultas e a conclusao honesta e'
---   derruba-los, nao mante-los por terem custado um PR.
+--   ⚠ CRIAR OS INDICES NAO BASTOU, E ESSE E' O PASSO QUE QUASE FICOU DE FORA. Medido logo
+--   apos o CREATE, nas duas dimensoes, o planner IGNOROU os dois e seguiu no
+--   `idx_fin_lanc_v2_cliente`, descartando as mesmas 26.907 linhas: `CREATE INDEX
+--   CONCURRENTLY` nao atualiza as estatisticas da tabela, e sem elas o planner nao sabe o que
+--   o indice novo custa. O `analyze` no fim deste arquivo e' o que fecha a conta.
+--
+--   DEPOIS DO ANALYZE os dois indices passaram a ser escolhidos — mas SO' para quem escreve o
+--   filtro de cancelado do mesmo jeito que o predicado parcial. Medido no proto, mesma
+--   consulta, mudando UMA palavra:
+--     ... and cancelado is not true ... -> Index Only Scan em idx_flv2_cliente_data_comp,
+--                                          "Rows Removed by Filter" 26.907 -> 0 ...... 9,6 ms
+--     ... and cancelado = false ....... -> Bitmap por idx_fin_lanc_v2_cliente,
+--                                          26.907 descartadas de novo ............... 225 ms
+--
+--   ⚠ E O APP MANDA `cancelado = false` (`.eq('cancelado', false)`, useFinanceiroV2.ts:438,
+--   492 e 803). O Postgres NAO prova que `cancelado = false` implica `cancelado IS NOT TRUE`
+--   numa coluna NULAVEL, entao o indice parcial fica inelegivel para a consulta da TELA —
+--   conferido tambem com `enable_bitmapscan = off`, onde o planner preferiu Seq Scan a usar
+--   o indice. Os 9,6 ms sao reais e nao chegam ao operador.
+--
+--   ⚠ A ESCOLHA DO PREDICADO FOI MINHA, e o argumento ("casar com os indices vizinhos") nao
+--   foi testado contra o que o app de fato envia. O conserto e' recriar os dois com
+--   `where cancelado = false` — DDL, do arquiteto, em PR proprio. Enquanto isso, os indices
+--   ocupam 792 kB cada e nao servem a tela.
+--
+--   (Antes do ANALYZE houve um 637 ms -> 57 ms na dimensao financeira que ERA cache: o plano
+--   tinha ficado identico, linha por linha. Fica registrado para ninguem reler aquele numero
+--   como ganho de indice.)
 create index concurrently if not exists idx_flv2_cliente_data_pag
   on financeiro_lancamentos_v2 (cliente_id, data_pagamento)
   where cancelado is not true;
@@ -50,3 +70,8 @@ create index concurrently if not exists idx_flv2_cliente_data_pag
 create index concurrently if not exists idx_flv2_cliente_data_comp
   on financeiro_lancamentos_v2 (cliente_id, data_competencia)
   where cancelado is not true;
+
+-- ⚠ O PASSO QUE FALTAVA, E ELE E' PARTE DA MIGRATION. `CREATE INDEX CONCURRENTLY` deixa a
+-- tabela sem estatisticas dos indices novos, e sem elas o planner nao os escolhe — medido
+-- acima. Rodar UMA vez, depois dos dois CREATE:
+analyze financeiro_lancamentos_v2;
