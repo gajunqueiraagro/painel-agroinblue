@@ -2086,7 +2086,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     </SelectContent>
                   </Select>
                 </div>
-                  <div className="col-span-3 min-w-0">
+                  <div className="col-span-2 min-w-0">
                   <label className={lblCls}>Safra</label>
                   <Select value={safraFiltro} onValueChange={setSafraFiltro}>
                     <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2]`}><SelectValue /></SelectTrigger>
@@ -2109,7 +2109,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                   </Select>
                 </div>
                 {mostraCultura && (
-                  <div className="col-span-3 min-w-0">
+                  <div className="col-span-2 min-w-0">
                     <label className={lblCls}>Cultura</label>
                     <Select value={culturaFiltro} onValueChange={setCulturaFiltro}>
                       <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2]`}><SelectValue /></SelectTrigger>
@@ -2126,7 +2126,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     </Select>
                   </div>
                 )}
-                  <div className="col-span-3 min-w-0">
+                  <div className="col-span-2 min-w-0">
                     <label className={lblCls}>Conta Origem</label>
                     {/* PR-H2 — ContaBancariaSelect compartilhado. */}
                     <ContaBancariaSelect
@@ -2140,7 +2140,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       className={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F] ${isEntrada ? 'opacity-40' : ''}`}
                     />
                   </div>
-                  <div className="col-span-4 min-w-0">
+                  <div className="col-span-2 min-w-0">
                     <label className={lblCls}>Conta Destino</label>
                     <ContaBancariaSelect
                       value={contaDestino}
@@ -2153,7 +2153,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       className={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F] ${isSaida ? 'opacity-40' : ''}`}
                     />
                   </div>
-                  <div className="col-span-3 min-w-0">
+                  <div className="col-span-2 min-w-0">
                     <label className={lblCls}>Macro</label>
                     <SearchableSelect
                       value={macroFiltro}
@@ -2164,7 +2164,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       placeholder="Buscar macro..."
                     />
                   </div>
-                  <div className="col-span-3 min-w-0">
+                  <div className="col-span-2 min-w-0">
                     <label className={lblCls}>Grupo</label>
                     <SearchableSelect
                       value={grupoFiltro}
@@ -2175,7 +2175,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       placeholder="Buscar grupo..."
                     />
                   </div>
-                  <div className="col-span-3 min-w-0">
+                  <div className="col-span-2 min-w-0">
                     <label className={lblCls}>Centro</label>
                     <SearchableSelect
                       value={centroFiltro}
@@ -2186,7 +2186,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       placeholder="Buscar centro..."
                     />
                   </div>
-                  <div className="col-span-3 min-w-0">
+                  <div className="col-span-2 min-w-0">
                     <label className={lblCls}>Subcentro</label>
                     <SearchableSelect
                       value={subcentroFiltro}
@@ -2196,7 +2196,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       placeholder="Buscar subcentro..."
                     />
                   </div>
-                  <div className="col-span-4 min-w-0">
+                  <div className="col-span-2 min-w-0">
                     <label className={lblCls}>Produto</label>
                     <Input
                       value={produtoFiltro}
@@ -2206,7 +2206,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       autoCorrect="off" autoCapitalize="none" spellCheck={false}
                     />
                   </div>
-                  <div className="col-span-4 min-w-0">
+                  <div className="col-span-2 min-w-0">
                     <label className={lblCls}>Fornecedor</label>
                     <SearchableSelect
                       value={fornecedorFiltro}
@@ -2216,7 +2216,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       persistKey={CHAVE_BUSCA_FORNECEDOR}
                     />
                   </div>
-                  <div className="col-span-4 min-w-0">
+                  <div className="col-span-2 min-w-0">
                     <label className={lblCls}>Documento</label>
                     <Input
                       value={documentoFiltro}
@@ -2491,14 +2491,17 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       <tr key={l.id}
                         className={`border-b italic !h-auto hover:bg-muted/50 transition-colors${canEditRow ? ' cursor-pointer' : ''} ${selectedIds.has(l.id) ? 'bg-primary/5' : ''}`}
                         onClick={canEditRow ? () => openEdit(l) : undefined}>
-                        {/* Congeladas seguem o fundo do CARD, não o da página: sobre branco, um
-                            `bg-background` deixaria as duas primeiras colunas cinza. As três de
-                            DATA são a exceção deliberada — ver a célula de valor. */}
-                        <td className="px-1 py-1 align-middle text-center sticky left-0 z-10 bg-card"
+                        {/* ⚠ A FAIXA CINZA COMEÇA NA BORDA — FIN-LISTA-DENSIDADE-01, e isto
+                            DESFAZ o `bg-card` que estas duas células ganharam no c9cefcf3.
+                            Lá o objetivo era não ter cinza avulso sobre o card branco; aqui o
+                            cinza passa a ser uma FAIXA CONTÍNUA, da borda esquerda até o fim
+                            das datas — checkbox, ícone de origem e as três datas no mesmo tom.
+                            Faixa inteira se lê como bloco; retalho se lê como defeito. */}
+                        <td className="px-1 py-1 align-middle text-center sticky left-0 z-10 bg-background"
                           onClick={(e) => e.stopPropagation()}>
                           <Checkbox checked={selectedIds.has(l.id)} onCheckedChange={() => toggleSelect(l.id)} disabled={isParcelaFinanciamento} className="h-3 w-3" />
                         </td>
-                        <td className="px-0 py-1 align-middle text-center sticky left-[28px] z-10 bg-card">
+                        <td className="px-0 py-1 align-middle text-center sticky left-[28px] z-10 bg-background">
                           {icone && (
                             <MinimodalOrigemLancamento
                               lancamento={l}
