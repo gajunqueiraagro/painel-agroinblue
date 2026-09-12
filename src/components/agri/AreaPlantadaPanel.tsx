@@ -27,6 +27,8 @@ import {
   type AreaPlantadaForm,
 } from '@/lib/agri/areaPlantada';
 import { useAreaPlantada, useSafrasLavoura, useAreasPorPastoNaJanela } from '@/hooks/useAreaPlantada';
+import { ColheitaPanel } from './ColheitaPanel';
+import { useColheita } from '@/hooks/useColheita';
 
 interface Props {
   clienteId: string | null | undefined;
@@ -99,6 +101,13 @@ export function AreaPlantadaPanel({ clienteId, pastoId, pastoNome, areaProdutiva
     setGravado(JSON.stringify(doBanco));
   }, [areas, carregando]);
 
+  /* Quais talhões já têm romaneio — o que impede a remoção silenciosa em cascata. A mesma
+     consulta que o bloco de colheita faz; o hook a devolve uma vez e os dois a usam. */
+  const { linhas: colheitasDasAreas } = useColheita(useMemo(() => areas.map(a => a.id), [areas]));
+  const areasComColheita = useMemo(
+    () => new Set(colheitasDasAreas.map(c => c.safra_area_id)),
+    [colheitasDasAreas]);
+
   const total = useMemo(() => somaAreas(linhas), [linhas]);
   const duplicada = useMemo(() => culturaDuplicada(linhas), [linhas]);
   /**
@@ -119,7 +128,22 @@ export function AreaPlantadaPanel({ clienteId, pastoId, pastoNome, areaProdutiva
   /* ⚠ A ÁREA DO PASTO É A SUGESTÃO DA PRIMEIRA CULTURA, e só dela: quem acrescenta a segunda
      está dividindo o mesmo pasto, e repetir o total ali faria a soma dobrar em silêncio. */
   const adicionar = () => setLinhas(prev => [...prev, linhaVazia()]);
-  const remover = (idx: number) => setLinhas(prev => (prev.length === 1 ? [linhaVazia()] : prev.filter((_, i) => i !== idx)));
+  /**
+   * ⚠ REMOVER ÁREA COM COLHEITA APAGARIA OS ROMANEIOS — a FK de `agri_colheita` é
+   * `ON DELETE CASCADE` (conferido no `pg_constraint`). Em silêncio, e sem desfazer: o
+   * operador tiraria a cultura para corrigir um hectare e perderia as entregas do talhão.
+   * ⚠ POR ISSO O CAMINHO É INVERTIDO: apaga-se a colheita primeiro, onde ela aparece. A tela
+   * diz isso em vez de pedir confirmação — confirmação de perda irreversível é convite a
+   * clicar "sim" por hábito.
+   */
+  const remover = (idx: number) => {
+    const alvo = linhas[idx];
+    if (alvo?.id && areasComColheita.has(alvo.id)) {
+      toast.error('Este talhão tem romaneios lançados. Apague a colheita dele antes de remover a área.');
+      return;
+    }
+    setLinhas(prev => (prev.length === 1 ? [linhaVazia()] : prev.filter((_, i) => i !== idx)));
+  };
 
   const handleSalvar = async () => {
     if (!clienteId || !safraId) { toast.error('Escolha a safra.'); return; }
@@ -258,6 +282,11 @@ export function AreaPlantadaPanel({ clienteId, pastoId, pastoNome, areaProdutiva
           <Save className="h-3 w-3" /> {salvando ? 'Salvando…' : 'Salvar lavoura'}
         </Button>
       </div>
+
+      {/* ⚠ A COLHEITA VÊM DAS ÁREAS GRAVADAS (`areas`), NUNCA DAS LINHAS EM EDIÇÃO: o romaneio
+          aponta para `agri_safra_area.id`, e uma linha que o operador acabou de digitar ainda
+          não tem id. Pendurar colheita em rascunho seria prometer um vínculo inexistente. */}
+      <ColheitaPanel clienteId={clienteId} areas={areas} somenteLeitura={somenteLeitura} />
     </div>
   );
 }
