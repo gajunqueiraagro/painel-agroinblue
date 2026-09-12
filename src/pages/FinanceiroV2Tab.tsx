@@ -2408,14 +2408,24 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     não cabia nos 56 e saía "25/26-M…". Na lista normal a diferença é nenhuma,
                     porque lá as faixas esticam. */}
                 <col style={{ width: 66 }} />
-                {/* As duas contas só no Ampliado: 130→105 cada em FIN-LISTA-VISUAL-06.
-                    Foram a 78 no FIN-TABELA-GEOMETRIA-01 e voltaram com o resto da geometria.
+                {/* As duas contas só no Ampliado: 130→105 (VISUAL-06), 78 e de volta a 105 no
+                    revert da geometria, agora 92 — e o 92 sai dos NOMES REAIS, medidos no
+                    proto, não de estimativa: a célula renderiza a 9px, e dos nomes do NJ os
+                    típicos têm 15 a 19 caracteres ("Banco do Brasil", "Sicredi PJ Pecuária"),
+                    que pedem ~79 a 97px com o padding. 92 mostra os curtos inteiros e corta os
+                    de 19+ por uma letra ou duas, com o nome completo no `title`.
+                    ⚠ OS DE 32 CARACTERES SEMPRE TRUNCARAM ("Investimento Sicredi Agricultura"
+                    pede ~158px): a coluna responde QUAL conta, e o banco se reconhece nas
+                    primeiras palavras. Alargar até caber o maior custaria 60px de grade para
+                    um caso que o hover já resolve.
+                    ⚠ E ELAS NÃO SÃO CONGELADAS: vêm depois das cinco `sticky`, então a largura
+                    não desloca offset nenhum — conferido antes e depois da edição.
                     ⚠ O COMENTÁRIO ANTIGO DIZIA 150 E A LARGURA ERA 130 — o texto ficou para
                     trás de um corte anterior. Agora são 105, e o nome longo ("Cartão Banco do
                     Brasil - Pecuária") passa a truncar mais cedo; o nome inteiro está no
                     `title`, e o que a coluna precisa responder é QUAL conta, não o nome todo. */}
-                {modoIntensivo && <col style={{ width: 105 }} />}
-                {modoIntensivo && <col style={{ width: 105 }} />}
+                {modoIntensivo && <col style={{ width: 92 }} />}
+                {modoIntensivo && <col style={{ width: 92 }} />}
                 <col style={{ width: 90 }} />
                 {/* Doc: 55 na normal, 90→60 no Ampliado — FIN-LISTA-VISUAL-06.
                     ⚠ A FONTE NÃO MUDA, e o briefing pedia 10px: a célula JÁ renderiza a 9px,
