@@ -587,19 +587,46 @@ export function LancamentoV2Dialog({
   };
 
   /**
-   * As culturas que existem em campo naquela safra — AGRI-MODAL-CULTURA-01.
+   * As culturas que existem em campo naquela safra — AGRI-MODAL-CULTURA-01/02.
    *
-   * ⚠ ESTREITA A PERGUNTA, NÃO LIMITA O DADO: sem nenhuma área cadastrada, o dropdown volta à
-   * lista completa. O custo chega antes do cadastro do talhão com frequência (o adubo é
-   * comprado em agosto, o talhão se cadastra em outubro), e uma lista vazia ali obrigaria a
-   * sair do modal para poder classificar.
+   * ⚠ ELAS ORDENAM, NUNCA FILTRAM — e o 01 errou nisso. Filtrar pela área cadastrada escondeu
+   * "Mandioca" de um lançamento de "Catação de Raiz - Mandioca" na 25/26, porque a única área
+   * plantada da safra era de amendoim: o operador ficou sem como classificar um custo que
+   * existe. O custo chega ANTES do talhão — o adubo é comprado em agosto e a área se cadastra
+   * em outubro —, então a lista de escolha é sempre a completa.
+   * ⚠ O QUE SOBRA DO ESTREITAMENTO É O ATALHO: quem já tem área na safra vem primeiro, com a
+   * marca de plantada. A informação era útil; o que não podia era virar filtro.
+   * ⚠ E A FRASE DO RATEIO CONTINUA NOMEANDO SÓ AS PLANTADAS, porque ali o recorte é correto:
+   * o rateio distribui entre as culturas que têm área, não entre as que se pode escolher.
    */
+  /**
+   * AS SAFRAS DA ATIVIDADE ESCOLHIDA — AGRI-MODAL-CULTURA-02 item 1.
+   *
+   * ⚠ O DROPDOWN MOSTRAVA AS 46, MISTURADAS: um lançamento de Lavoura oferecia "21/22
+   * Pecuária" ao lado de "23/24 Lavoura". Não era só ruído — o save RECUSA a combinação
+   * (PR-FIN-SAFRA-ESCOPO-01 valida safra × escopo), então a lista oferecia opções que o
+   * sistema depois rejeitava. Mostrar o impossível é convidar a testá-lo, e é a mesma regra
+   * que o filtro da lista já aplica.
+   * ⚠ SEM ATIVIDADE ESCOLHIDA, A LISTA É INTEIRA: o card vazio não é um recorte, é a ausência
+   * dele.
+   * ⚠ A SAFRA JÁ SELECIONADA NUNCA SOME, ainda que seja de outro escopo. Abrir um lançamento
+   * antigo com a combinação cruzada e ver o campo em branco faria parecer que o dado se
+   * perdeu — e o que se quer ali é justamente VER o que está gravado para poder corrigir.
+   * (Medido: hoje nenhuma safra tem escopo nulo; 37 são de pecuária e 9 de lavoura.)
+   */
+  const safrasDoCard = useMemo(() => {
+    const todas = safras ?? [];
+    if (!atividade) return todas;
+    return todas.filter(sf =>
+      (sf.escopo_negocio || '').trim() === atividade || sf.id === safraId);
+  }, [safras, atividade, safraId]);
+
   const culturasDaSafra = useCulturasDaSafra(safraId || null);
-  const culturasOferecidas = useMemo(() => (
-    culturasDaSafra.length > 0
-      ? CULTURAS_LANCAMENTO.filter(c => culturasDaSafra.includes(c.valor))
-      : CULTURAS_LANCAMENTO
-  ), [culturasDaSafra]);
+  const culturasOferecidas = useMemo(() => {
+    const plantadas = CULTURAS_LANCAMENTO.filter(c => culturasDaSafra.includes(c.valor));
+    const demais = CULTURAS_LANCAMENTO.filter(c => !culturasDaSafra.includes(c.valor));
+    return [...plantadas, ...demais];
+  }, [culturasDaSafra]);
 
   /* ⚠ AS CANDIDATAS SAÍRAM DAQUI — FIN-SAFRA-ORDEM-02. Elas existiam só para serem
      empilhadas no topo do dropdown; a SUGESTÃO nunca dependeu desta lista: `safraSugerida`
@@ -1841,7 +1868,7 @@ export function LancamentoV2Dialog({
                         ⚠ A SUGESTÃO NÃO MUDOU: a safra sugerida continua pré-selecionada e
                         marcada (borda tracejada + "sugerida"), agora no seu lugar
                         cronológico. O que saiu foi o empilhamento, não a sugestão. */}
-                    {(safras ?? []).map(s => (
+                    {safrasDoCard.map(s => (
                       <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>
                     ))}
                   </SelectContent>
@@ -1851,6 +1878,15 @@ export function LancamentoV2Dialog({
                     fechamento, meses depois. */}
                 {safraSugeridaId && safraId === safraSugeridaId && !ehAdministrativo && (
                   <div className="mt-0.5 text-[10px] leading-snug text-primary">sugerida</div>
+                )}
+                {/* ⚠ LISTA VAZIA DIZ POR QUÊ. Silvicultura não tem nenhuma safra cadastrada
+                    hoje (medido: 37 de pecuária, 9 de lavoura, zero de silvicultura), e um
+                    dropdown só com "Sem safra" parece defeito da tela em vez de ausência no
+                    cadastro. */}
+                {!ehAdministrativo && atividade && safrasDoCard.length === 0 && (
+                  <div className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
+                    Nenhuma safra de {ATIVIDADES.find(a => a.valor === atividade)?.rotulo} cadastrada.
+                  </div>
                 )}
                 {/* ⚠ CAMPO DESABILITADO DIZ POR QUÊ — mesmo idioma do subcentro travado da
                     transferência, dez linhas acima. Um campo que apaga sozinho e fica cinza
@@ -1887,7 +1923,14 @@ export function LancamentoV2Dialog({
                     <SelectContent>
                       <SelectItem value={SEM_CULTURA}>Todas (rateia)</SelectItem>
                       {culturasOferecidas.map(c => (
-                        <SelectItem key={c.valor} value={c.valor}>{c.label}</SelectItem>
+                        <SelectItem key={c.valor} value={c.valor}>
+                          {c.label}
+                          {/* A marca diz por que ela está no topo — sem ela, a ordem pareceria
+                              arbitrária, e ordem sem motivo se lê como bug. */}
+                          {culturasDaSafra.includes(c.valor) && (
+                            <span className="ml-1 text-[10px] text-muted-foreground">· plantada</span>
+                          )}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -1940,8 +1983,13 @@ export function LancamentoV2Dialog({
               const cd = usaPlano ? doPlano : lancamento?.compoe_dre;
               if (!isEdit && !subcentro) return null;
               const label = cd === true ? '✔ Sim' : cd === false ? 'Não' : '—';
+              /* ⚠ LINHA, NÃO CARD — AGRI-MODAL-CULTURA-02. A caixa com borda e fundo próprios
+                 dava a um dado de LEITURA o mesmo peso visual dos campos que se preenchem, e
+                 a altura que ela acrescentava empurrava o rodapé: era preciso rolar para ver
+                 se o lançamento compõe o DRE. Como linha no fluxo, ela tem o peso do que é —
+                 uma consequência da conta escolhida, não uma decisão a tomar. */
               return (
-                <div className="flex items-center gap-2 rounded-md border border-border/40 bg-muted/30 px-2.5 py-1">
+                <div className="flex items-center gap-2 pt-0.5">
                   <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Compõe DRE</span>
                   <span className={cn("text-[11px] font-medium", cd === true ? "text-success" : "text-muted-foreground")}>{label}</span>
                   {usaPlano && cd != null && (

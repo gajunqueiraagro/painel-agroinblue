@@ -97,3 +97,34 @@ describe('as listas', () => {
     expect(valores).not.toContain(SEM_CULTURA);
   });
 });
+
+describe('⚠ a lista de escolha NUNCA se estreita — AGRI-MODAL-CULTURA-02', () => {
+  /* O 01 filtrava o dropdown pelas culturas com área cadastrada na safra, e isso escondeu
+     "Mandioca" de um lançamento de catação de raiz: a única área da 25/26 era de amendoim.
+     Custo chega antes de talhão, então a escolha é sempre sobre a lista inteira — o que as
+     áreas fazem é ORDENAR. Estes testes guardam a distinção entre os dois papéis. */
+  const ordenarPorPlantadas = (plantadas: string[]) => [
+    ...CULTURAS_LANCAMENTO.filter(c => plantadas.includes(c.valor)),
+    ...CULTURAS_LANCAMENTO.filter(c => !plantadas.includes(c.valor)),
+  ];
+
+  it('a lista ordenada tem SEMPRE as seis, qualquer que seja a área cadastrada', () => {
+    expect(ordenarPorPlantadas(['amendoim'])).toHaveLength(CULTURAS_LANCAMENTO.length);
+    expect(ordenarPorPlantadas([]).map(c => c.valor)).toEqual(CULTURAS_LANCAMENTO.map(c => c.valor));
+  });
+
+  it('mandioca continua escolhível numa safra que só tem área de amendoim', () => {
+    expect(ordenarPorPlantadas(['amendoim']).some(c => c.valor === 'mandioca')).toBe(true);
+  });
+
+  it('quem tem área vem primeiro — o atalho que sobrou do estreitamento', () => {
+    expect(ordenarPorPlantadas(['mandioca'])[0].valor).toBe('mandioca');
+  });
+
+  it('a frase do rateio, essa sim, nomeia só as plantadas', () => {
+    /* Aqui o recorte é correto: o rateio distribui entre quem tem área, não entre quem se
+       pode escolher. É a distinção que o bug embaralhou. */
+    expect(avisoCultura(null, ['amendoim']).texto).toContain('entre Amendoim no fechamento');
+    expect(avisoCultura(null, ['amendoim']).texto).not.toContain('Mandioca');
+  });
+});
