@@ -47,7 +47,9 @@ import { CorrecaoTransferenciasBanner } from '@/components/financeiro-v2/Correca
 import { format, parseISO } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { normalizarAtividade, casaTipoOperacao } from '@/lib/financeiro/filtrosListaV2';
-import { temFiltroLimitante, FRASE_SEM_FILTRO, SEM_SAFRA } from '@/lib/financeiro/filtroLimitante';
+import { temFiltroLimitante, FRASE_SEM_FILTRO, SEM_SAFRA, SEM_CULTURA } from '@/lib/financeiro/filtroLimitante';
+import { CULTURAS_LANCAMENTO } from '@/lib/agri/rateioLancamento';
+import { labelDaCultura } from '@/lib/agri/areaPlantada';
 /* ⚠ A LISTA DE ATIVIDADES É A DO CARD DO MODAL — adendo do PR-FIN-SAFRA-ADM-01. Duplicá-la
    aqui é como o filtro ficou dois anos oferecendo Pecuária e Agricultura enquanto o resto do
    sistema já conhecia quatro: uma lista escrita à mão não sabe quando a outra cresce. */
@@ -325,6 +327,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     fornecedorFiltro: '__all__',
     atividadeFiltro: '__all__',
     safraFiltro: '__all__',
+    culturaFiltro: '__all__',
   });
 
   const defaults = getDefaults();
@@ -378,6 +381,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
    * do operador a pergunta que ele veio fazer — "o que de pecuária está na safra da lavoura?".
    */
   const [safraFiltro, setSafraFiltro] = useState(defaults.safraFiltro);
+  /* FIN-AUDITORIA-CULTURA-01 — a pergunta "quais lançamentos são de mandioca", que antes só
+     se respondia abrindo um por um. */
+  const [culturaFiltro, setCulturaFiltro] = useState(defaults.culturaFiltro);
   // PR-FIN-GRADE-DATAS-03 — dimensão temporal soberana da grade. Estado dura só enquanto a tela está
   //   montada (sem localStorage/sessionStorage/URL/preferência persistida). Padrão 'financeira'.
   const [dataPor, setDataPor] = useState<DimensaoDataFinanceiro>('financeira');
@@ -442,6 +448,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
       if (f.fornecedorFiltro !== undefined) setFornecedorFiltro(f.fornecedorFiltro);
       if (f.atividadeFiltro !== undefined) setAtividadeFiltro(f.atividadeFiltro);
       if (f.safraFiltro !== undefined) setSafraFiltro(f.safraFiltro);
+      if (f.culturaFiltro !== undefined) setCulturaFiltro(f.culturaFiltro);
     } catch (e) {
       console.error('[FinanceiroV2Tab] erro ao restaurar filtros:', e);
     } finally {
@@ -467,6 +474,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         contaOrigem, contaDestino, macroFiltro, grupoFiltro, centroFiltro,
         subcentroFiltro, produtoFiltro, documentoFiltro, fornecedorFiltro, atividadeFiltro,
         safraFiltro,
+        culturaFiltro,
       },
       {
         fazendaId: p.fazendaId, anosSelecionados: p.anosSelecionados, mesesSelecionados: p.mesesSelecionados,
@@ -476,12 +484,13 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         produtoFiltro: p.produtoFiltro, documentoFiltro: p.documentoFiltro,
         fornecedorFiltro: p.fornecedorFiltro, atividadeFiltro: p.atividadeFiltro,
         safraFiltro: p.safraFiltro,
+        culturaFiltro: p.culturaFiltro,
       },
     ));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fazendaId, anosSelecionados, mesesSelecionados, statusSelecionados, tipoOperacao, contaOrigem,
       contaDestino, macroFiltro, grupoFiltro, centroFiltro, subcentroFiltro, produtoFiltro,
-      documentoFiltro, fornecedorFiltro, atividadeFiltro, safraFiltro]);
+      documentoFiltro, fornecedorFiltro, atividadeFiltro, safraFiltro, culturaFiltro]);
 
   const abrirFinanciamentoDaParcela = async (l: any) => {
     const salvarEstado = () => sessionStorage.setItem('financeiro_v2_state', JSON.stringify({
@@ -752,8 +761,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     lista_fornecedor_id: fornecedorFiltro !== '__all__' ? fornecedorFiltro : undefined,
     lista_produto: produtoFiltro.trim() || undefined,
     safra_id: (safraFiltro !== '__all__' && safraFiltro !== SEM_SAFRA) ? safraFiltro : undefined,
+    /* ⚠ MESMA REGRA DA SAFRA: só o valor vai ao servidor; "Sem cultura" (`IS NULL`) é a base
+       inteira hoje e fica peneirado em memória. */
+    cultura: (culturaFiltro !== '__all__' && culturaFiltro !== SEM_CULTURA) ? culturaFiltro : undefined,
     dimensao: dataPor,   // PR-FIN-GRADE-DATAS-03 — dimensão temporal soberana (default 'financeira')
-  }), [fazendaId, ano, anosSelecionados, mesesSelecionados, contaOrigem, contaDestino, tipoOperacao, statusParaBanco, macroFiltro, grupoFiltro, centroFiltro, subcentroFiltro, fornecedorFiltro, produtoFiltro, safraFiltro, dataPor]);
+  }), [fazendaId, ano, anosSelecionados, mesesSelecionados, contaOrigem, contaDestino, tipoOperacao, statusParaBanco, macroFiltro, grupoFiltro, centroFiltro, subcentroFiltro, fornecedorFiltro, produtoFiltro, safraFiltro, culturaFiltro, dataPor]);
 
   /**
    * ⚠ A CONSULTA QUE NINGUÉM PEDE NÃO ACONTECE — FIN-LISTA-PERF-01.
@@ -766,10 +778,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
    * no primeiro filtro novo, e a defesa viraria teatro.
    */
   const podeConsultar = useMemo(() => temFiltroLimitante({
-    anos: anosSelecionados, meses: mesesSelecionados, safra: safraFiltro,
+    anos: anosSelecionados, meses: mesesSelecionados, safra: safraFiltro, cultura: culturaFiltro,
     fornecedor: fornecedorFiltro, produto: produtoFiltro,
     contaOrigem, contaDestino, centro: centroFiltro, subcentro: subcentroFiltro,
-  }), [anosSelecionados, mesesSelecionados, safraFiltro, fornecedorFiltro, produtoFiltro,
+  }), [anosSelecionados, mesesSelecionados, safraFiltro, culturaFiltro, fornecedorFiltro, produtoFiltro,
        contaOrigem, contaDestino, centroFiltro, subcentroFiltro]);
 
   useEffect(() => {
@@ -926,6 +938,17 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     if (!safrasDoFiltro.some(sf => sf.id === safraFiltro)) setSafraFiltro('__all__');
   }, [safrasDoFiltro, safraFiltro]);
 
+  /**
+   * ⚠ A CULTURA SÓ EXISTE NA LAVOURA — FIN-AUDITORIA-CULTURA-01. Escolher "Pecuária" com
+   * "Mandioca" ativo devolveria zero linhas e a tela não teria como explicar por quê: o campo
+   * nem estaria visível para o operador desfazer. Mesma regra do subcentro de outro escopo no
+   * modal — limpar é a única saída que não deixa estado fantasma.
+   */
+  const mostraCultura = atividadeFiltro === '__all__' || atividadeFiltro === 'agricultura';
+  useEffect(() => {
+    if (!mostraCultura && culturaFiltro !== '__all__') setCulturaFiltro('__all__');
+  }, [mostraCultura, culturaFiltro]);
+
   const safraCodigoMap = useMemo(
     () => new Map((hook.safras ?? []).map(s => [s.id, s.codigo || s.nome])),
     [hook.safras],
@@ -1010,6 +1033,13 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     } else if (safraFiltro !== '__all__') {
       items = items.filter(l => l.safra_id === safraFiltro);
     }
+    /* ⚠ O SERVIDOR RECORTA, A TELA CONFERE — a mesma simetria da safra e do `casaTipoOperacao`.
+       "Sem cultura" é peneirado SÓ aqui, porque `cultura IS NULL` não vai ao `WHERE`. */
+    if (culturaFiltro === SEM_CULTURA) {
+      items = items.filter(l => !l.cultura);
+    } else if (culturaFiltro !== '__all__') {
+      items = items.filter(l => l.cultura === culturaFiltro);
+    }
     // grupo_custo now is a DB column — filter directly
     if (grupoFiltro !== '__all__') {
       items = items.filter(l => (l as any).grupo_custo === grupoFiltro);
@@ -1038,7 +1068,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     }
 
     return items;
-  }, [hook.lancamentos, contaOrigem, contaDestino, produtoFiltro, documentoFiltro, fornecedorFiltro, tipoOperacao, atividadeFiltro, safraFiltro, grupoFiltro, centroToGrupo, statusSelecionados, conciliados]);
+  }, [hook.lancamentos, contaOrigem, contaDestino, produtoFiltro, documentoFiltro, fornecedorFiltro, tipoOperacao, atividadeFiltro, safraFiltro, culturaFiltro, grupoFiltro, centroToGrupo, statusSelecionados, conciliados]);
 
   const compareDefaultOrder = useCallback((a: LancamentoV2, b: LancamentoV2) => {
     // PR-FIN-GRADE-DATAS-03 — a ordenação padrão acompanha a dimensão selecionada (Data por). Chave
@@ -2078,6 +2108,24 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     </SelectContent>
                   </Select>
                 </div>
+                {mostraCultura && (
+                  <div className="col-span-3 min-w-0">
+                    <label className={lblCls}>Cultura</label>
+                    <Select value={culturaFiltro} onValueChange={setCulturaFiltro}>
+                      <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2]`}><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__all__" className={itemCls}>Todas</SelectItem>
+                        {/* ⚠ "Sem cultura" É A PERGUNTA DA AUDITORIA: são os compartilhados, os
+                            que vão ratear — e, hoje, também todos os que ninguém classificou
+                            ainda. Achá-los é o primeiro passo para classificar. */}
+                        <SelectItem value={SEM_CULTURA} className={itemCls}>Sem cultura (rateia)</SelectItem>
+                        {CULTURAS_LANCAMENTO.map(c => (
+                          <SelectItem key={c.valor} value={c.valor} className={itemCls}>{c.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                   <div className="col-span-3 min-w-0">
                     <label className={lblCls}>Conta Origem</label>
                     {/* PR-H2 — ContaBancariaSelect compartilhado. */}
@@ -2502,9 +2550,28 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                         {/* ⚠ "—" É AUSÊNCIA, e aqui ela é informação: financiamento de
                             investimento e administrativo NÃO têm safra por regra. Um traço
                             nessas linhas é o esperado; um código é o que se veio caçar. */}
+                        {/* ⚠ A CULTURA MORA NA COLUNA DA SAFRA — FIN-AUDITORIA-CULTURA-01, e não
+                            numa coluna nova: medida a grade, o Ampliado já soma 1.168px contra
+                            1.194 disponíveis em 1440, e uma faixa de 60px o faria rolar de novo
+                            (o FIN-LISTA-VISUAL-06 acabou de tirá-lo de lá). Safra e cultura são
+                            o mesmo assunto em dois níveis — o ciclo e o que se plantou nele.
+                            ⚠ A SEGUNDA LINHA SÓ EXISTE QUANDO HÁ CULTURA. Reservá-la sempre
+                            somaria ~8px em TODA linha de uma lista de 21px — 38% de altura para
+                            um dado que hoje quase nenhuma linha tem. O preço é a linha com
+                            cultura ficar mais alta que as vizinhas; é o menor dos dois. */}
                         <td className="truncate px-1 py-1 align-middle text-[10px] font-medium leading-tight text-muted-foreground"
-                          title={l.safra_id ? (safraCodigoMap.get(l.safra_id) || '') : 'Sem safra'}>
-                          {l.safra_id ? (safraCodigoMap.get(l.safra_id) || '—') : '—'}
+                          title={[
+                            l.safra_id ? (safraCodigoMap.get(l.safra_id) || '') : 'Sem safra',
+                            l.cultura ? labelDaCultura(l.cultura) : null,
+                          ].filter(Boolean).join(' · ')}>
+                          <span className="block truncate">
+                            {l.safra_id ? (safraCodigoMap.get(l.safra_id) || '—') : '—'}
+                          </span>
+                          {l.cultura && (
+                            <span className="block truncate text-[8px] font-normal leading-none text-muted-foreground/80">
+                              {labelDaCultura(l.cultura)}
+                            </span>
+                          )}
                         </td>
                         {modoIntensivo && (
                           <td className="truncate px-1 py-1 align-middle text-[10px] leading-tight text-muted-foreground"

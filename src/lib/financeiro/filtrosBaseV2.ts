@@ -76,6 +76,17 @@ export interface FiltrosV2 extends FiltrosListaV2 {
    * da base e não limita nada, então mandá-lo ao servidor não pouparia uma linha sequer.
    */
   safra_id?: string;
+  /**
+   * A CULTURA DO LANÇAMENTO — FIN-AUDITORIA-CULTURA-01.
+   *
+   * ⚠ VAI AO SERVIDOR PELA MESMA RAZÃO DA SAFRA: a pergunta "quais lançamentos são de
+   * mandioca" atravessa o ano inteiro, e peneirar 30 mil linhas em memória para mostrar
+   * cinquenta é o que fazia o filtro parecer rápido enquanto o custo estava todo na ida.
+   * ⚠ SÓ O VALOR, NUNCA O "SEM CULTURA": `cultura IS NULL` é hoje a base inteira (a coluna
+   * nasceu no AGRI-04A e só o modal a preenche), então mandá-lo ao servidor não pouparia uma
+   * linha. É a mesma decisão, escrita no mesmo lugar, que a de "Sem safra".
+   */
+  cultura?: string;
   dimensao?: DimensaoDataFinanceiro;   // PR-FIN-GRADE-DATAS-03 — default 'financeira'
   /** Sexto filtro da lista. Só é expressável sobre a view (documento_formatado). */
   lista_documento?: string;
@@ -132,6 +143,19 @@ export interface PlanoBaseV2 {
   readonly centroCusto?: string;
   readonly subcentro?: string;
   readonly safraId?: string;
+  /**
+   * ⚠ RAMO `or`, NÃO `eq`, E ISSO É SOBRE O TIPO GERADO — FIN-AUDITORIA-CULTURA-01. A coluna
+   * `cultura` existe no banco desde o AGRI-04A, mas `types.ts` é anterior a ela: o builder
+   * tipado de `buildLancamentosQuery` recusa `.eq('cultura', …)` em tempo de compilação.
+   * O `.or()` recebe string e é a porta que o repo JÁ usa para predicados que o tipo não
+   * expressa (`orDirecao`, `orDescricao`, `orAtividadeOutros` são os vizinhos). Um termo só
+   * dentro de um `or` é exatamente um `eq` para o PostgREST.
+   * ⚠ ISSO EVITA O CAST. A alternativa seria `(query as any).eq(...)`, que apagaria a
+   * conferência de TODAS as outras colunas naquele builder — o comentário dele diz, com
+   * razão, que é isso que um cast amplo custa. A correção de raiz é regenerar o `types.ts`,
+   * e é frente própria.
+   */
+  readonly orCultura?: string;
   readonly orDirecao?: string;
   readonly orDescricao?: string;
   readonly favorecidoId?: string;
@@ -326,6 +350,18 @@ export function montarPlanoBaseV2(
   if (filtros.lista_grupo_custo) plano.listaGrupoCusto = filtros.lista_grupo_custo;
 
   if (filtros.safra_id) plano.safraId = filtros.safra_id;
+  /**
+   * ⚠ SÓ NO PLANO DA TABELA — FIN-AUDITORIA-CULTURA-01, e a exceção é medida, não preferência:
+   * `vw_financeiro_lancamentos_v2_doc` NÃO tem a coluna `cultura` (conferido no
+   * `information_schema` em 12/09/2026 — ela tem `safra_id` e não tem `cultura` nem `fase`).
+   * Mandar o predicado pelo caminho da view seria pedir uma coluna que não existe.
+   * ⚠ E O CAMINHO DA VIEW NÃO FICA MENTINDO: sem o predicado, ele traz a mais e a TELA peneira
+   * em memória, que é o que ela já faz com todos os filtros. Lista maior é lentidão; lista
+   * filtrada pela metade seria erro.
+   * ⚠ QUANDO A VIEW GANHAR A COLUNA (frente do arquiteto), esta condição sai e o `if` volta a
+   * ser como o da safra, duas linhas acima.
+   */
+  if (filtros.cultura && opcoes.relacao !== 'view') plano.orCultura = `cultura.eq.${filtros.cultura}`;
 
   const escopoAtividade = escopoCanonicoAtividade(filtros.lista_atividade);
   if (escopoAtividade) plano.escopoNegocio = escopoAtividade;

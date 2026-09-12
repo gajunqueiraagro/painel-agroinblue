@@ -20,6 +20,14 @@ export interface FiltrosDaTela {
   meses: string[];
   /** O id da safra, ou a sentinela de "sem safra" — que não limita. */
   safra: string;
+  /**
+   * A cultura escolhida, ou a sentinela de "sem cultura" — que não limita.
+   * ⚠ HOJE ELA LIMITA MUITO: a coluna nasceu no AGRI-04A e quase toda linha ainda é nula,
+   * então "mandioca" devolve dezenas. É exatamente por isso que ela precisa ir ao `WHERE` —
+   * peneirar 30 mil em memória para mostrar dezenas é o custo que este filtro existe para
+   * evitar.
+   */
+  cultura?: string;
   fornecedor: string;
   produto: string;
   contaOrigem: string;
@@ -30,6 +38,8 @@ export interface FiltrosDaTela {
 
 export const TODOS = '__all__';
 export const SEM_SAFRA = '__sem_safra__';
+/** "Sem cultura (rateia)" — a pergunta oposta, e a que acha o que ainda não foi classificado. */
+export const SEM_CULTURA = '__sem_cultura__';
 
 /** Um campo de seleção está escolhido? (`''` e a sentinela de "todos" não contam.) */
 const escolhido = (v: string | undefined): boolean => !!v && v.trim() !== '' && v !== TODOS;
@@ -47,6 +57,9 @@ export function temFiltroLimitante(f: FiltrosDaTela): boolean {
   /* A safra atravessa dois anos civis de propósito — exigir um ano junto seria pedir ao
      produtor que desfizesse a própria pergunta. */
   if (escolhido(f.safra) && f.safra !== SEM_SAFRA) return true;
+  /* ⚠ "SEM CULTURA" NÃO LIMITA, pelo mesmo motivo de "sem safra": `cultura IS NULL` é a base
+     inteira hoje, e o predicado não vai ao servidor (a decisão está em `filtrosBaseV2`). */
+  if (escolhido(f.cultura) && f.cultura !== SEM_CULTURA) return true;
   if (escolhido(f.fornecedor)) return true;
   if (escolhido(f.produto)) return true;
   if (escolhido(f.contaOrigem)) return true;

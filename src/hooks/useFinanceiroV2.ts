@@ -513,6 +513,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     if (plano.centroCusto) query = query.eq('centro_custo', plano.centroCusto);
     if (plano.subcentro) query = query.eq('subcentro', plano.subcentro);
     if (plano.safraId) query = query.eq('safra_id', plano.safraId);
+    if (plano.orCultura) query = query.or(plano.orCultura);
     if (plano.orDirecao) query = query.or(plano.orDirecao);
     if (plano.orDescricao) query = query.or(plano.orDescricao);
     if (plano.favorecidoId) query = query.eq('favorecido_id', plano.favorecidoId);

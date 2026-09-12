@@ -632,7 +632,16 @@ export function LancamentoV2Dialog({
      empilhadas no topo do dropdown; a SUGESTÃO nunca dependeu desta lista: `safraSugerida`
      chama `safrasCandidatas` por dentro, e continua. */
 
-  const safraNome = (id: string) => (safras ?? []).find((s) => s.id === id)?.nome ?? id;
+  /**
+   * ⚠ NUNCA DEVOLVE O UUID — FIN-AUDITORIA-CULTURA-01 item 2. Ele devolvia: `?? id`. E o
+   * caminho não era teórico — ficou provável HOJE: `loadSafras` só traz `ativa = true`, e a
+   * consolidação de 12/09 inativou cinco safras por cultura. Qualquer lançamento que ainda
+   * aponte para uma delas não acha o nome, e o `title` do campo passava a exibir
+   * "5df2fb02-d2df-…" para o operador — regra da casa: UUID não vai à tela.
+   * ⚠ E O RÓTULO DIZ O QUE HOUVE, em vez de um traço mudo: "safra inativa" explica por que o
+   * campo parece vazio num lançamento que tem safra gravada.
+   */
+  const safraNome = (id: string) => (safras ?? []).find((s) => s.id === id)?.nome ?? 'safra inativa';
 
   /**
    * O escopo que o PLANO diz sobre o subcentro escolhido — PR-FIN-SAFRA-ADM-01.

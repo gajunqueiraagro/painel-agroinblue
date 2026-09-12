@@ -93,15 +93,17 @@ describe('validarRateio', () => {
 });
 
 describe('os anos dos cards', () => {
-  it('cinco atrás, o corrente e um à frente, do mais novo para o mais velho', () => {
-    expect(anosDoRateio(2026)).toEqual([2027, 2026, 2025, 2024, 2023, 2022, 2021]);
+  it('cinco atrás, o corrente e um à frente, em ordem cronológica crescente', () => {
+    /* ⚠ Crescente desde o item 3 do FIN-AUDITORIA-CULTURA-01: o mais antigo à esquerda, como
+       a régua de meses (Jan à esquerda). Era decrescente e contrariava a leitura. */
+    expect(anosDoRateio(2026)).toEqual([2021, 2022, 2023, 2024, 2025, 2026, 2027]);
   });
 
   it('⚠ ano com chave gravada NUNCA some, ainda que fora da janela', () => {
     /* Uma chave de 2018 invisível é uma chave que ninguém consegue abrir para corrigir — e
        ela continua valendo no DRE daquele ano. */
     expect(anosDoRateio(2026, [2018])).toContain(2018);
-    expect(anosDoRateio(2026, [2018])[anosDoRateio(2026, [2018]).length - 1]).toBe(2018);
+    expect(anosDoRateio(2026, [2018])[0]).toBe(2018);
   });
 
   it('ano com chave dentro da janela não duplica', () => {

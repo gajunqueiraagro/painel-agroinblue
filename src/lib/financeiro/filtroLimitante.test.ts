@@ -9,10 +9,10 @@
  * seu contrário — "Documento 123 + Todos os anos" leria 30 mil para mostrar uma linha.
  */
 import { describe, it, expect } from 'vitest';
-import { temFiltroLimitante, FRASE_SEM_FILTRO, TODOS, SEM_SAFRA, type FiltrosDaTela } from './filtroLimitante';
+import { temFiltroLimitante, FRASE_SEM_FILTRO, TODOS, SEM_SAFRA, SEM_CULTURA, type FiltrosDaTela } from './filtroLimitante';
 
 const vazio: FiltrosDaTela = {
-  anos: [], meses: [], safra: TODOS, fornecedor: TODOS, produto: '',
+  anos: [], meses: [], safra: TODOS, cultura: TODOS, fornecedor: TODOS, produto: '',
   contaOrigem: TODOS, contaDestino: TODOS, centro: TODOS, subcentro: TODOS,
 };
 const com = (p: Partial<FiltrosDaTela>): FiltrosDaTela => ({ ...vazio, ...p });
@@ -33,6 +33,7 @@ describe('o que limita', () => {
     ['dois anos', { anos: ['2025', '2026'] }],
     ['um mês em qualquer ano', { meses: ['08'] }],
     ['uma safra', { safra: 'sf-1' }],
+    ['uma cultura', { cultura: 'mandioca' }],
     ['um fornecedor', { fornecedor: 'forn-1' }],
     ['um produto', { produto: 'ureia' }],
     ['conta de origem', { contaOrigem: 'cb-1' }],
@@ -41,6 +42,16 @@ describe('o que limita', () => {
     ['um subcentro', { subcentro: 'Fertilizantes' }],
   ])('%s basta', (_rotulo, p) => {
     expect(temFiltroLimitante(com(p))).toBe(true);
+  });
+
+  it('⚠ "Sem cultura" NÃO limita — é a base inteira, e não vai ao servidor', () => {
+    /* Mesma regra de "Sem safra": a coluna nasceu no AGRI-04A e quase toda linha é nula.
+       Deixá-la contar como limitante seria a permissão para puxar as 30 mil. */
+    expect(temFiltroLimitante(com({ cultura: SEM_CULTURA }))).toBe(false);
+  });
+
+  it('a cultura sozinha basta — é a pergunta da auditoria por lavoura', () => {
+    expect(temFiltroLimitante(com({ cultura: 'amendoim', anos: [] }))).toBe(true);
   });
 
   it('a safra sozinha basta — ela atravessa dois anos civis de propósito', () => {

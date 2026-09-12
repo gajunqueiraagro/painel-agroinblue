@@ -353,10 +353,12 @@ describe('E3/E4 — contagem e totais vêm da RPC, não de varredura', () => {
   });
 
   /**
-   * ⚠ ESTE TESTE JÁ COBROU DUAS VEZES HOJE, e é o que impede a lista somar um período e o
-   * rodapé somar outro. A primeira foi `anos` (FIN-LISTA-MULTIANO-01), que passou a chegar à
-   * RPC sem nada ser pedido ao banco — `p_faixas` já era uma lista. A segunda é `safra_id`
-   * abaixo, e essa NÃO passou: a RPC não tem onde recebê-la.
+   * ⚠ ESTE TESTE JÁ COBROU TRÊS VEZES, e é o que impede a lista somar um período e o rodapé
+   * somar outro. A primeira foi `anos` (FIN-LISTA-MULTIANO-01), que passou a chegar à RPC sem
+   * nada ser pedido ao banco — `p_faixas` já era uma lista. A segunda é `safra_id` abaixo, e
+   * essa NÃO passou: a RPC não tem onde recebê-la. A terceira é `cultura`
+   * (FIN-AUDITORIA-CULTURA-01), e ela cobrou no COMPILADOR antes de rodar — o
+   * `Required<Omit<FiltrosV2,'meses'>>` recusou o objeto no dia em que o campo nasceu.
    */
   it('TODO campo de FiltrosV2 chega à RPC — nenhum filtro fica fora dos totais', () => {
     // Se alguém acrescentar um filtro e esquecer dos totais, este teste quebra.
@@ -368,6 +370,7 @@ describe('E3/E4 — contagem e totais vêm da RPC, não de varredura', () => {
       macro_custo: 'M', grupo_custo: 'G', centro_custo: 'C', subcentro: 'S',
       lista_conta_direcao: 'origem', lista_produto: 'p', lista_fornecedor_id: 'ff',
       lista_grupo_custo: 'lg', lista_atividade: 'pecuaria', lista_documento: 'd',
+      cultura: 'mandioca',
     };
     const p = paramsDosTotais(CLIENTE, completo);
     const semValor = Object.entries(p).filter(([, v]) => v === null || v === undefined);
@@ -381,7 +384,12 @@ describe('E3/E4 — contagem e totais vêm da RPC, não de varredura', () => {
        ⚠ DÍVIDA BLOQUEANTE PARA `LISTA_PAGINADA_V2`: ligar a flag sem `p_safra_id` na RPC faz
        a lista mostrar a safra e o rodapé somar o período inteiro. A correção é migration —
        do arquiteto, não daqui. Registrado em vez de silenciado, porque um gate que aprende a
-       aceitar exceção deixa de ser gate. */
+       aceitar exceção deixa de ser gate.
+       ⚠ E `cultura` ENTRA NA MESMA DÍVIDA, POR DOIS MOTIVOS MEDIDOS EM 12/09/2026: a RPC dos
+       totais não tem `p_cultura`, e a view `vw_financeiro_lancamentos_v2_doc` não tem a
+       COLUNA `cultura` (tem `safra_id`; não tem `cultura` nem `fase`). No caminho vivo o
+       filtro vai ao `WHERE` e os totais somam em memória, então lista e rodapé concordam;
+       no paginado, a view nem saberia filtrar. Duas migrations, do arquiteto. */
     expect(semValor.map(([k]) => k).sort()).toEqual(['p_meses', 'p_tipo_operacao']);
     expect(p.p_faixas).toEqual(['[2026-03-01,2026-04-01)']);
     expect(p.p_status_transacoes).toEqual(['previsto']);

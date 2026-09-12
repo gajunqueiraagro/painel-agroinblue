@@ -97,5 +97,8 @@ export function anosDoRateio(anoCorrente: number, anosComChave: readonly number[
   const set = new Set<number>();
   for (let a = anoCorrente - 5; a <= anoCorrente + 1; a++) set.add(a);
   anosComChave.forEach(a => set.add(a));
-  return [...set].sort((a, b) => b - a);
+  /* ⚠ CRESCENTE: o mais ANTIGO à esquerda — FIN-AUDITORIA-CULTURA-01 item 3. A fita nasceu
+     decrescente ("o mais usado primeiro"), e ler tempo da direita para a esquerda contraria a
+     régua de meses da casa (Jan à esquerda, Dez à direita) e a própria leitura. */
+  return [...set].sort((a, b) => a - b);
 }
