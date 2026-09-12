@@ -1934,9 +1934,6 @@ export function LancamentoV2Dialog({
                       ))}
                     </SelectContent>
                   </Select>
-                  <div className={cn('mt-0.5 text-[10px] leading-snug', avisoCultura(cultura, culturasDaSafra).classe)}>
-                    {avisoCultura(cultura, culturasDaSafra).texto}
-                  </div>
                 </div>
               )}
 
@@ -1955,9 +1952,6 @@ export function LancamentoV2Dialog({
                       ))}
                     </SelectContent>
                   </Select>
-                  <div className={cn('mt-0.5 text-[10px] leading-snug', avisoFase(fase).classe)}>
-                    {avisoFase(fase).texto}
-                  </div>
                 </div>
               )}
             </div>
@@ -1975,25 +1969,37 @@ export function LancamentoV2Dialog({
                 ⚠ AUSENTE É TRAÇO, nunca "Não". A view da lista do Financeiro não traz
                 `compoe_dre` (medido), então o lançamento chega sem a flag; dizer "Não" ali
                 seria afirmar o que ninguém sabe. */}
+            {/* ── A FAIXA DE LEITURA — AGRI-MODAL-CULTURA-02/03.
+                 ⚠ AS DUAS INFORMAÇÕES SÃO A MESMA COISA: consequências do que foi escolhido
+                 acima. O rateio sai da cultura/fase e o DRE sai da conta — nenhuma das duas
+                 se preenche, as duas se leem. Separá-las em blocos (o card do DRE, depois uma
+                 linha solta) dava a cada uma um peso de seção e empurrava o rodapé.
+                 ⚠ NA MESMA LINHA QUANDO CABEM, empilhadas quando não — `flex-wrap` sem
+                 espaçamento vertical extra. O ponto do meio é o que diz que são irmãs.
+                 ⚠ 10px E COR SECUNDÁRIA NOS DOIS, com a cor viva reservada ao que ela informa:
+                 verde/âmbar no rateio (direto × compartilhado) e verde no "Sim" do DRE. */}
             {(() => {
               const doPlano = classificacoes.find(
                 (c) => (c.subcentro || '').trim().toLowerCase() === (subcentro || '').trim().toLowerCase(),
               )?.compoe_dre;
               const usaPlano = !isEdit || subcentro !== subcentroDeAbertura;
               const cd = usaPlano ? doPlano : lancamento?.compoe_dre;
-              if (!isEdit && !subcentro) return null;
+              const mostraDre = isEdit || !!subcentro;
+              const aviso = atividade === 'agricultura' ? avisoCultura(cultura, culturasDaSafra)
+                : atividade === 'pecuaria' ? avisoFase(fase)
+                : null;
+              if (!mostraDre && !aviso) return null;
               const label = cd === true ? '✔ Sim' : cd === false ? 'Não' : '—';
-              /* ⚠ LINHA, NÃO CARD — AGRI-MODAL-CULTURA-02. A caixa com borda e fundo próprios
-                 dava a um dado de LEITURA o mesmo peso visual dos campos que se preenchem, e
-                 a altura que ela acrescentava empurrava o rodapé: era preciso rolar para ver
-                 se o lançamento compõe o DRE. Como linha no fluxo, ela tem o peso do que é —
-                 uma consequência da conta escolhida, não uma decisão a tomar. */
               return (
-                <div className="flex items-center gap-2 pt-0.5">
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Compõe DRE</span>
-                  <span className={cn("text-[11px] font-medium", cd === true ? "text-success" : "text-muted-foreground")}>{label}</span>
-                  {usaPlano && cd != null && (
-                    <span className="text-[10px] text-muted-foreground">ao salvar</span>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] leading-snug">
+                  {aviso && <span className={aviso.classe}>{aviso.texto}</span>}
+                  {aviso && mostraDre && <span className="text-muted-foreground/50">·</span>}
+                  {mostraDre && (
+                    <span className="text-muted-foreground">
+                      Compõe DRE:{' '}
+                      <span className={cn('font-medium', cd === true ? 'text-success' : 'text-muted-foreground')}>{label}</span>
+                      {usaPlano && cd != null && <span className="ml-1">ao salvar</span>}
+                    </span>
                   )}
                 </div>
               );

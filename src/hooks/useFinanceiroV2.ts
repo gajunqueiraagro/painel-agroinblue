@@ -1104,7 +1104,30 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
         plano_conta_id: verify.plano_conta_id,
         compoe_dre: verify.compoe_dre,
       };
-      setLancamentos((atual) => atual.map((l) => (l.id !== id ? l : { ...l, ...doBanco })));
+      /**
+       * ⚠ CULTURA E FASE VÊM DO FORM, NÃO DO `verify` — AGRI-MODAL-CULTURA-04.
+       *
+       * A falta delas era um defeito de EXIBIÇÃO com cara de defeito de gravação: o banco
+       * recebia `cultura = 'mandioca'`, a linha em memória seguia com o valor antigo, e
+       * reabrir o modal — que lê da LISTA, não do banco — mostrava "Todas (rateia)". O
+       * operador via o próprio trabalho desaparecer.
+       * ⚠ DO FORM PORQUE O `verify` NÃO AS TEM NO TIPO: `types.ts` é anterior ao AGRI-04A e
+       * não conhece as duas colunas, então `verify.cultura` não compila. Ler do form é fiel
+       * aqui — ao contrário de subcentro/macro/grupo, nenhum trigger reescreve estas duas.
+       * ⚠ E A REGRA É A MESMA DO UPDATE: quem não fala do campo (`undefined`) PRESERVA o que
+       * a linha já tinha. Escrever `null` cegamente apagaria da tela um valor que continua no
+       * banco — o defeito de origem ao contrário.
+       * ⚠ O `Omit<LancamentoV2, 'dados_pagamento'>` NÃO COBROU A FALTA, e vale saber por quê:
+       * ele obriga a listar os campos OBRIGATÓRIOS, e `cultura?`/`fase?` são opcionais, como
+       * `safra_id?` e `plano_conta_id?`. Campo opcional ausente não é erro — a proteção do
+       * tipo é real, mas alcança menos do que o comentário dela promete.
+       */
+      setLancamentos((atual) => atual.map((l) => (l.id !== id ? l : {
+        ...l,
+        ...doBanco,
+        cultura: form.cultura !== undefined ? (form.cultura || null) : l.cultura,
+        fase: form.fase !== undefined ? (form.fase || null) : l.fase,
+      })));
     }
     return true;
   }, [clienteId, user, classificacoes]);
