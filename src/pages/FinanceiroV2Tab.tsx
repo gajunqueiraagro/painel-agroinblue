@@ -2321,7 +2321,13 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 da borda — que é o único jeito de escapar da barra em overlay do macOS, que não
                 obedece a `scrollbar-gutter`. Ver o bloco no `index.css`.
                 ⚠ VALE NOS DOIS MODOS: é o mesmo container no normal e no Ampliado. */}
-           <div ref={scrollContainerRef} className={cn("rounded-none border border-[hsl(var(--border))] overflow-auto relative rolagem-fina rolagem-sem-tampar respiro-lista", modoIntensivo && "flex-1")} style={modoIntensivo ? undefined : { maxHeight: 'calc(100vh - 240px)' }}>
+           {/* ⚠ `bg-card` — FIN-LISTA-VISUAL-IGUAL-FINANCAS-01, e a ausência dele era a causa do
+                "as linhas perderam o fundo branco". No Finanças a tabela vive dentro de um
+                `<Card>` (`bg-card`), e aqui o container não tinha fundo nenhum: herdava a
+                `--background` da página. Medido, os dois repos têm os MESMOS tokens —
+                `--background: 220 17% 97%` (cinza) e `--card: 0 0% 100%` (branco) —, então a
+                diferença não era de tema, era o card que faltava. */}
+           <div ref={scrollContainerRef} className={cn("rounded-none border border-[hsl(var(--border))] bg-card overflow-auto relative rolagem-fina rolagem-sem-tampar respiro-lista", modoIntensivo && "flex-1")} style={modoIntensivo ? undefined : { maxHeight: 'calc(100vh - 240px)' }}>
             <table className="table-financeiro w-full caption-bottom text-sm border-collapse" style={{ tableLayout: 'fixed' }}>
               {/*
                 Larguras das colunas:
@@ -2485,11 +2491,14 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       <tr key={l.id}
                         className={`border-b italic !h-auto hover:bg-muted/50 transition-colors${canEditRow ? ' cursor-pointer' : ''} ${selectedIds.has(l.id) ? 'bg-primary/5' : ''}`}
                         onClick={canEditRow ? () => openEdit(l) : undefined}>
-                        <td className="px-1 py-1 align-middle text-center sticky left-0 z-10 bg-background"
+                        {/* Congeladas seguem o fundo do CARD, não o da página: sobre branco, um
+                            `bg-background` deixaria as duas primeiras colunas cinza. As três de
+                            DATA são a exceção deliberada — ver a célula de valor. */}
+                        <td className="px-1 py-1 align-middle text-center sticky left-0 z-10 bg-card"
                           onClick={(e) => e.stopPropagation()}>
                           <Checkbox checked={selectedIds.has(l.id)} onCheckedChange={() => toggleSelect(l.id)} disabled={isParcelaFinanciamento} className="h-3 w-3" />
                         </td>
-                        <td className="px-0 py-1 align-middle text-center sticky left-[28px] z-10 bg-background">
+                        <td className="px-0 py-1 align-middle text-center sticky left-[28px] z-10 bg-card">
                           {icone && (
                             <MinimodalOrigemLancamento
                               lancamento={l}
@@ -2591,7 +2600,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                             Eram duas expressões, cada uma reavaliando `sentidoNaConta`, e
                             entre elas cabia o estado impossível: valor em módulo pintado de
                             vermelho. Uma chamada, uma decisão. */}
-                        <td className={`celula-valor text-right font-semibold whitespace-nowrap px-1 py-1 align-middle text-[12px] leading-tight ${valorDaLinha(l).classe}`}>
+                        {/* ⚠ A ÚNICA DIFERENÇA DELIBERADA EM RELAÇÃO AO FINANÇAS: a coluna Valor
+                            ganha o MESMO fundo das colunas de data — `bg-background`, medido no
+                            `LancamentosTabela.tsx` da referência, que é o cinza
+                            `--background: 220 17% 97%` sobre o branco do card. */}
+                        <td className={`celula-valor text-right font-semibold whitespace-nowrap px-1 py-1 align-middle text-[12px] leading-tight bg-background ${valorDaLinha(l).classe}`}>
                           {valorDaLinha(l).texto}
                         </td>
                         {/* Doc. à direita: é número, e número se lê alinhado pela unidade. */}

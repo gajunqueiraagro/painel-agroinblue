@@ -138,9 +138,12 @@
   font-size: 9px !important;
 }
 /* Doc./NF */
+/* ⚠ 8px — FIN-LISTA-VISUAL-IGUAL-FINANCAS-01. O documento é o que menos se lê de relance
+   nesta grade: ele se confere quando já se achou a linha. Fica um degrau abaixo das demais
+   (9px), no mesmo tamanho das datas — que é o piso já usado aqui. */
 .table-financeiro td.celula-doc,
 .table-financeiro td.celula-doc * {
-  font-size: 9px !important;
+  font-size: 8px !important;
 }
 /* Forçar herança em elementos internos */
 .table-financeiro td span,

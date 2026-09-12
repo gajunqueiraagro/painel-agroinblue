@@ -72,18 +72,20 @@ export function sinalDoSentido(s: SentidoNaConta): 1 | -1 {
 }
 
 /**
- * A COR DO VALOR NA LISTA — FIN-LISTA-VISUAL-06 (Gabriel, 11/09/2026), para alinhar ao
- * Finanças: cinza nos três casos, entrada, saída e transferência.
+ * A COR DO VALOR NA LISTA — FIN-LISTA-VISUAL-IGUAL-FINANCAS-01 (12/09/2026).
  *
- * ⚠ O SINAL NÃO SAIU, SÓ A COR. A saída continua saindo com "−" no texto — quem precisa
- * distinguir lê o sinal, que é o dado, em vez da cor, que era o reforço. Verde e vermelho em
- * toda linha de uma lista densa disputavam a atenção com o status, que é a coluna que existe
- * para ser lida de relance.
- * ⚠ UMA CONSTANTE, E NÃO TRÊS LITERAIS IGUAIS: se o vermelho do negativo voltar — e o
- * briefing prevê que possa —, volta aqui, num lugar só, com `sentido` ainda na mão para
- * decidir. Nada foi apagado: `sentido` continua sendo devolvido intacto.
+ * ⚠ ELA VOLTOU A SER POR TIPO, e o cinza único do FIN-LISTA-VISUAL-06 foi um mal-entendido:
+ * o pedido era fundo cinza na coluna, e a cor do VALOR foi para cinza por engano. Aqui as
+ * classes são LITERALMENTE as do app Finanças, que é a referência aprovada
+ * (`LancamentosTabela.tsx:365-369`): transferência `text-foreground`, negativo
+ * `text-destructive`, o resto `text-success`.
+ * ⚠ TRANSFERÊNCIA EM COR NEUTRA continua sendo a decisão de sempre (FIN-LISTA-TRANSF-SINAL-01,
+ * e o Finanças diz o mesmo no comentário dele): verde ou vermelho afirmariam que o patrimônio
+ * mudou, e numa transferência ele não mudou — o dinheiro trocou de bolso.
  */
-const COR_VALOR = 'text-muted-foreground';
+const COR_TRANSFERENCIA = 'text-foreground';
+const COR_SAIDA = 'text-destructive';
+const COR_ENTRADA = 'text-success';
 
 /** O valor de uma linha de lista: o texto e a cor, decididos juntos. */
 export interface ValorDaLinha {
@@ -114,12 +116,12 @@ export function formatarValorLinha(
   const sentido = sentidoNaConta(l, contaFoco);
   const absoluto = Math.abs(l.valor);
   if (sentido === 'transferencia') {
-    return { texto: formatMoeda(absoluto), classe: COR_VALOR, sentido };
+    return { texto: formatMoeda(absoluto), classe: COR_TRANSFERENCIA, sentido };
   }
   const entrada = sentido === 'entrada';
   return {
     texto: formatMoeda(entrada ? absoluto : -absoluto),
-    classe: COR_VALOR,
+    classe: entrada ? COR_ENTRADA : COR_SAIDA,
     sentido,
   };
 }

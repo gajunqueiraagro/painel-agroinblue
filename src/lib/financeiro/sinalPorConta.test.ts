@@ -75,17 +75,18 @@ describe('contaEmFoco', () => {
  * prejuízo onde houve mudança de bolso, e a decisão foi revertida para a EXIBIÇÃO.
  */
 describe('formatarValorLinha', () => {
-  /* ⚠ A COR SAIU DOS CASOS E VIROU UM TESTE SÓ — FIN-LISTA-VISUAL-06. O que cada caso
-     asserta agora é o SENTIDO e o SINAL DO TEXTO, que é o que distingue entrada de saída
-     desde que a cor virou cinza nos três. Manter `expect(classe)` em cada caso faria quatro
-     testes dizerem a mesma coisa e nenhum dizer o que mudou. */
-  it('a cor é cinza nos três sentidos — entrada, saída e transferência', () => {
-    const cinza = 'text-muted-foreground';
-    expect(formatarValorLinha({ tipo_operacao: '1-Entradas', valor: 500 }, null).classe).toBe(cinza);
-    expect(formatarValorLinha({ tipo_operacao: '2-Saídas', valor: 500 }, null).classe).toBe(cinza);
+  /* ⚠ A COR VOLTOU A SER POR TIPO — FIN-LISTA-VISUAL-IGUAL-FINANCAS-01, e as classes são
+     literalmente as do app Finanças (`LancamentosTabela.tsx:365-369`), que é a referência
+     aprovada. O cinza único do VISUAL-06 veio de um mal-entendido: o pedido era fundo cinza
+     na coluna, não cor cinza no número. */
+  it('a cor é a do Finanças: saída vermelha, entrada verde, transferência neutra', () => {
+    expect(formatarValorLinha({ tipo_operacao: '1-Entradas', valor: 500 }, null).classe)
+      .toBe('text-success');
+    expect(formatarValorLinha({ tipo_operacao: '2-Saídas', valor: 500 }, null).classe)
+      .toBe('text-destructive');
     expect(formatarValorLinha(
       { tipo_operacao: '3-Transferências', conta_bancaria_id: 'o', conta_destino_id: 'd', valor: 10 },
-      null).classe).toBe(cinza);
+      null).classe).toBe('text-foreground');
   });
 
   const transf = { tipo_operacao: '3-Transferências', conta_bancaria_id: 'origem', conta_destino_id: 'destino', valor: 1000 };
@@ -93,28 +94,28 @@ describe('formatarValorLinha', () => {
   it('transferência SEM foco: módulo e cor padrão — não é ganho nem perda', () => {
     const v = formatarValorLinha(transf, null);
     expect(v.sentido).toBe('transferencia');
-    expect(v.classe).toBe('text-muted-foreground');
+    expect(v.classe).toBe('text-foreground');
     expect(v.texto).not.toContain('-');
   });
 
   it('a grafia legada no singular também', () => {
     /* O banco tem 593 linhas em '3-Transferência'. Reconhecer o legado não é perpetuá-lo. */
     const v = formatarValorLinha({ ...transf, tipo_operacao: '3-Transferência' }, null);
-    expect(v.classe).toBe('text-muted-foreground');
+    expect(v.classe).toBe('text-foreground');
   });
 
   it('transferência COM foco no destino volta a ser entrada, verde e positiva', () => {
     /* É o caso dos cinco resgates do Agnaldo: filtrando pela conta que RECEBEU, entrou. */
     const v = formatarValorLinha(transf, 'destino');
     expect(v.sentido).toBe('entrada');
-    expect(v.classe).toBe('text-muted-foreground');
+    expect(v.classe).toBe('text-success');
     expect(v.texto).not.toContain('-');
   });
 
   it('transferência COM foco na origem é saída, vermelha e negativa', () => {
     const v = formatarValorLinha(transf, 'origem');
     expect(v.sentido).toBe('saida');
-    expect(v.classe).toBe('text-muted-foreground');
+    expect(v.classe).toBe('text-destructive');
     expect(v.texto).toContain('-');
   });
 
