@@ -19,12 +19,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, ArrowLeft, Handshake, Save, Pencil, Trash2, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { formatMoeda } from '@/lib/calculos/formatters';
-import { useBarterContratos, useFornecedoresDoCliente, type ContratoNaLista } from '@/hooks/useBarterContratos';
+import { useBarterContratos, type ContratoNaLista } from '@/hooks/useBarterContratos';
+import { FornecedorSelect } from '@/components/shared/FornecedorSelect';
 import { useBarterInsumos, type BarterInsumo, type InsumoPayload } from '@/hooks/useBarterInsumos';
 import { BarterInsumoModal } from '@/components/agri/BarterInsumoModal';
 import { useFinanceiroV2 } from '@/hooks/useFinanceiroV2';
@@ -59,11 +59,13 @@ export function AgriBarterTab() {
   const { fazendaAtual } = useFazenda();
   const clienteId = clienteAtual?.id ?? null;
   const { contratos, carregando, abrir } = useBarterContratos(clienteId);
-  const fornecedores = useFornecedoresDoCliente(clienteId);
 
   const [abertoId, setAbertoId] = useState<string | null>(null);
   const [novoAberto, setNovoAberto] = useState(false);
   const [parceiroId, setParceiroId] = useState('');
+  /* ⚠ O NOME VEM DO SELETOR, não de uma segunda leitura. O `FornecedorSelect` entrega
+     `(id, nome)` no mesmo gesto, e é esse nome que a mensagem da conta de permuta usa. */
+  const [parceiroNome, setParceiroNome] = useState('');
   const [nome, setNome] = useState('');
   const [descricao, setDescricao] = useState('');
   const [salvando, setSalvando] = useState(false);
@@ -136,12 +138,12 @@ export function AgriBarterTab() {
       /* ⚠ A MENSAGEM SEGUE `conta_criada`, que agora diz a verdade (AGRI-BARTER-03C): anunciar
          "conta criada" ao reusar a do parceiro faria o operador procurar uma segunda conta que
          não existe — e a trava do banco garante que ela não exista mesmo. */
-      const parceiro = fornecedores.find(f => f.id === parceiroId)?.nome ?? 'parceiro';
+      const parceiro = parceiroNome || 'parceiro';
       toast.success(r.abertura?.conta_criada
         ? `Contrato aberto. A conta "Permuta · ${parceiro}" foi criada.`
         : `Contrato aberto na conta de permuta que já existia com ${parceiro}.`);
       setNovoAberto(false);
-      setParceiroId(''); setNome(''); setDescricao('');
+      setParceiroId(''); setParceiroNome(''); setNome(''); setDescricao('');
       if (r.abertura?.contrato_id) setAbertoId(r.abertura.contrato_id);
     } finally {
       setSalvando(false);
@@ -351,19 +353,19 @@ export function AgriBarterTab() {
             </p>
           </div>
           <div className="space-y-2 p-4">
-            <div>
-              <Label className="text-[10px]">Parceiro <span className="text-destructive">*</span></Label>
-              <Select value={parceiroId} onValueChange={setParceiroId}>
-                <SelectTrigger className="mt-0.5 h-8 text-[12px]">
-                  <SelectValue placeholder="Escolha o fornecedor parceiro" />
-                </SelectTrigger>
-                <SelectContent>
-                  {fornecedores.map(f => (
-                    <SelectItem key={f.id} value={f.id} className="text-[12px]">{f.nome}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {/* ⚠ O SELETOR É O DA CASA, e a troca não é estética. O dropdown próprio que estava
+                aqui despejava TODOS os fornecedores do cliente sem busca e sem filtro de ativo —
+                medido no Proto em 13/09/2026: 3.390 linhas no maior cliente, 838 delas INATIVAS.
+                O `FornecedorSelect` busca no servidor (ilike com debounce de 300ms, teto de 50),
+                filtra `ativo = true` na própria query e ainda traz o "+" de cadastrar novo. */}
+            <FornecedorSelect
+              label="Parceiro"
+              required
+              fornecedorId={parceiroId || null}
+              onFornecedorChange={(id, n) => { setParceiroId(id ?? ''); setParceiroNome(n ?? ''); }}
+              clienteId={clienteId ?? ''}
+              placeholder="Escolha o fornecedor parceiro"
+            />
             <div>
               <Label className="text-[10px]">Nome do contrato <span className="text-destructive">*</span></Label>
               <Input value={nome} onChange={e => setNome(e.target.value)}

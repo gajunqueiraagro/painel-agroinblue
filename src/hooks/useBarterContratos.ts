@@ -108,16 +108,13 @@ export function useBarterContratos(clienteId: string | null | undefined) {
   return { contratos: data ?? [], carregando: isLoading, abrir };
 }
 
-/** Os parceiros possíveis — os fornecedores do cliente. */
-export function useFornecedoresDoCliente(clienteId: string | null | undefined) {
-  const { data } = useQuery({
-    queryKey: ['barter-fornecedores', clienteId ?? ''],
-    enabled: !!clienteId,
-    queryFn: async (): Promise<Array<{ id: string; nome: string }>> => {
-      const { data: fs } = await (supabase as any).from('financeiro_fornecedores')
-        .select('id, nome').eq('cliente_id', clienteId).order('nome');
-      return (fs ?? []) as Array<{ id: string; nome: string }>;
-    },
-  });
-  return data ?? [];
-}
+/*
+ * ⚠ AQUI MORAVA `useFornecedoresDoCliente`, e ele saiu porque ESTAVA ERRADO — não porque
+ * ficou sem uso. Lia `financeiro_fornecedores` sem `.eq('ativo', true)` e sem teto, e o
+ * dropdown do modal despejava a lista inteira: 3.390 linhas no maior cliente do Proto, 838
+ * delas inativas (medido em 13/09/2026). O parceiro do barter agora sai do `FornecedorSelect`
+ * compartilhado, que filtra ativo e busca no servidor.
+ * ⚠ E A LIÇÃO É A REGRA QUE FOI QUEBRADA: seletor de entidade se REUSA, não se escreve. Uma
+ * segunda leitura de fornecedores era, por construção, uma segunda definição de "quem pode
+ * ser parceiro" — e a que esquece o `ativo` é a que chega na tela do operador.
+ */
