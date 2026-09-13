@@ -14,9 +14,14 @@
  * ⚠ CLICAR NA CÉLULA ABRE OS LANÇAMENTOS DELA, no mesmo drawer/árvore do Painel por período.
  * As duas linhas de RATEIO não abrem: o valor chegou ali por peso de área, não por lançamento
  * — não há o que listar, e fingir que há seria mentir sobre a origem do número.
+ * ⚠ E O LANÇAMENTO ABRE PARA EDIÇÃO, no MESMO `LancamentoV2Dialog` do Painel por período. O
+ * clique na linha já existia no `DrillDownEconomico` (prop `onAbrirLancamento`); esta tela é
+ * que não o ligava. Nada de modal novo: de onde se enxerga o número, corrige-se o número.
  */
 import { useMemo, useState, useEffect } from 'react';
 import { useCliente } from '@/contexts/ClienteContext';
+import { useFazenda } from '@/contexts/FazendaContext';
+import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
@@ -28,6 +33,8 @@ import { useSafrasLavoura } from '@/hooks/useAreaPlantada';
 import { useDreAgricola } from '@/hooks/useDreAgricola';
 import { useLancamentosDaSafra } from '@/hooks/useLancamentosDaSafra';
 import { AnaliseDrawer } from '@/components/financeiro-v2/AnaliseDrawer';
+import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
+import { useFinanceiroV2, type LancamentoV2 } from '@/hooks/useFinanceiroV2';
 import { DrillDownEconomico } from '@/components/financeiro-v2/DrillDownEconomico';
 import { NIVEIS_DRILL, type ItemDrill } from '@/lib/analise/drillEconomico';
 import {
@@ -63,9 +70,41 @@ export function AgriDreCulturaTab() {
     if (!safraId && safras.length > 0) setSafraId(safras[safras.length - 1].id);
   }, [safras, safraId]);
 
-  const { linhas, carregando, erro } = useDreAgricola(clienteAtual?.id ?? null, safraId || null);
+  const { linhas, carregando, erro, recarregar: recarregarDre } = useDreAgricola(clienteAtual?.id ?? null, safraId || null);
   const m = useMemo(() => montarMatriz(linhas), [linhas]);
-  const { lancamentos, fornecedores } = useLancamentosDaSafra(clienteAtual?.id ?? null, safraId || null);
+  const {
+    lancamentos, fornecedores, recarregar: recarregarLancamentos,
+  } = useLancamentosDaSafra(clienteAtual?.id ?? null, safraId || null);
+
+  /* ── A EDIÇÃO, igual à do Painel por período ────────────────────────────────────────── */
+  const fin = useFinanceiroV2();
+  const { fazendas } = useFazenda();
+  const [editando, setEditando] = useState<LancamentoV2 | null>(null);
+
+  /**
+   * ⚠ OS QUATRO CATÁLOGOS SÃO OBRIGATÓRIOS, e a lição é do `PainelPeriodoTab`: o hook não
+   * carrega nada sozinho, e sem eles o modal abre com os selects VAZIOS — favorecido em
+   * branco, safra em branco, subcentro mudo. Nenhum tipo acusa isso, porque lista vazia é
+   * lista válida; só aparece na tela do operador.
+   */
+  useEffect(() => {
+    void fin.loadContas();
+    void fin.loadClassificacoes();
+    void fin.loadFornecedores();
+    void fin.loadSafras();
+  }, [fin.loadContas, fin.loadClassificacoes, fin.loadFornecedores, fin.loadSafras]);
+
+  /**
+   * ⚠ A LINHA VEM INTEIRA DO BANCO (`select('*')`), como no Painel por período: a lista do
+   * drill carrega quinze colunas, e o modal precisa das sessenta e cinco. Buscar uma linha ao
+   * clicar é mais barato que trazer tudo para o caso de o operador abrir uma.
+   */
+  const abrirLancamento = async (id: string) => {
+    const { data } = await (supabase as any).from('financeiro_lancamentos_v2')
+      .select('*').eq('id', id).maybeSingle();
+    const linha: LancamentoV2 | null = data ?? null;
+    if (linha) setEditando(linha);
+  };
 
   const resultadoTotal = valorDe(m, COL_TOTAL, LINHA.resultadoCaixa);
   const porHaTotal = resultadoPorHa(m, COL_TOTAL);
@@ -431,9 +470,37 @@ export function AgriDreCulturaTab() {
           <DrillDownEconomico
             itens={itensDoDrill}
             raiz={GRUPO_DA_LINHA[drill.ordem] ?? ''}
-            niveis={NIVEIS_DRILL.slice(2)} />
+            niveis={NIVEIS_DRILL.slice(2)}
+            onAbrirLancamento={(id) => { void abrirLancamento(id); }} />
         </AnaliseDrawer>
       )}
+
+      {/* ⚠ O MODAL É IRMÃO DO DRAWER, NUNCA FILHO — é o que faz a volta funcionar de graça:
+          fechar a edição não desmonta o drawer, então o breadcrumb, a ordenação e o degrau
+          continuam onde estavam. Aninhá-lo dentro do drawer reconstruiria a árvore a cada
+          abertura e devolveria o operador à raiz. */}
+      <LancamentoV2Dialog
+        open={!!editando}
+        onClose={() => setEditando(null)}
+        onSave={async (form, id) => {
+          const ok = id ? await fin.editarLancamento(id, form) : await fin.criarLancamento(form);
+          /* ⚠ AS DUAS FONTES RECARREGAM, e nenhuma das duas é opcional: a matriz é somada no
+             banco e a lista do drill é lida do PostgREST. Atualizar só uma deixaria a célula
+             dizendo um número e o detalhe dela outro — na mesma tela, ao mesmo tempo. */
+          if (ok && id) {
+            await recarregarLancamentos();
+            await recarregarDre();
+          }
+          return ok;
+        }}
+        lancamento={editando}
+        fazendas={fazendas}
+        contas={fin.contasBancarias}
+        classificacoes={fin.classificacoes}
+        fornecedores={fin.fornecedores}
+        safras={fin.safras}
+        onCriarFornecedor={fin.criarFornecedor}
+      />
     </div>
   );
 }
