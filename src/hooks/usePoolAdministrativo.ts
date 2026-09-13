@@ -23,6 +23,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { paginarTudo } from '@/lib/financeiro/paginarTudo';
+import { useNomesDeFornecedores } from '@/hooks/useNomesDeFornecedores';
 import type { LancamentoDaSafra } from '@/hooks/useLancamentosDaSafra';
 
 /** Os macros que a RPC exclui do custo administrativo. */
@@ -93,6 +94,14 @@ export function usePoolAdministrativo(
     },
   });
 
+  /**
+   * ⚠ OS FAVORECIDOS DAQUI NÃO ESTÃO NO MAPA DA SAFRA, e foi esse o defeito: o administrativo
+   * tem `safra_id` NULO — ele entra pela janela de datas —, então nenhum dos ids dele aparecia
+   * entre os favorecidos dos lançamentos da safra, e a coluna saía "—" em toda a seção
+   * rateada. O hook é o mesmo do drill direto; muda só quem entrega os ids.
+   */
+  const fornecedores = useNomesDeFornecedores((lancamentos ?? []).map(l => l.favorecido_id));
+
   /* O mesmo `group by ano` da RPC, para o cabeçalho poder dizer com que percentual cada ano
      entrou — dois anos da janela podem ter percentuais diferentes, e uma nota única mentiria. */
   const porAno: AnoDoPoolAdmin[] = [];
@@ -110,6 +119,7 @@ export function usePoolAdministrativo(
 
   return {
     lancamentos: lancamentos ?? [],
+    fornecedores,
     porAno,
     totalDoPool: porAno.reduce((s, a) => s + a.total, 0),
     carregando: ativo && !lancamentos,

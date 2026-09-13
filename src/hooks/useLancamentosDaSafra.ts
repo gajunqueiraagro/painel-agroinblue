@@ -14,6 +14,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { paginarTudo } from '@/lib/financeiro/paginarTudo';
+import { useNomesDeFornecedores } from '@/hooks/useNomesDeFornecedores';
 
 export interface LancamentoDaSafra {
   id: string;
@@ -59,24 +60,8 @@ export function useLancamentosDaSafra(clienteId: string | null | undefined, safr
       }),
   });
 
-  const ids = (data ?? []).map(l => l.favorecido_id).filter((v): v is string => !!v);
-  const favIds = Array.from(new Set(ids)).sort();
-
-  /* Os nomes vêm em levas pela mesma razão dos lançamentos: `.in()` também tem teto. */
-  const { data: fornMap } = useQuery({
-    queryKey: ['dre-agri-forn', favIds.length, favIds[0] ?? ''],
-    enabled: favIds.length > 0,
-    queryFn: async (): Promise<Map<string, string>> => {
-      const nomes = await paginarTudo<{ id: string; nome: string }>(async (de, tamanho) => {
-        const fatia = favIds.slice(de, de + tamanho);
-        if (fatia.length === 0) return { linhas: [], brutas: 0 };
-        const { data: linhas } = await (supabase as any)
-          .from('financeiro_fornecedores').select('id, nome').in('id', fatia);
-        return { linhas: (linhas ?? []) as { id: string; nome: string }[], brutas: fatia.length };
-      });
-      return new Map(nomes.map(f => [f.id, f.nome]));
-    },
-  });
+  /* Os nomes saem do mesmo hook que o pool administrativo usa — um caminho só. */
+  const fornMap = useNomesDeFornecedores((data ?? []).map(l => l.favorecido_id));
 
   /**
    * ⚠ RECARREGA A SAFRA INTEIRA, e não só a linha editada como faz o Painel por período.
@@ -92,7 +77,7 @@ export function useLancamentosDaSafra(clienteId: string | null | undefined, safr
 
   return {
     lancamentos: data ?? [],
-    fornecedores: fornMap ?? new Map<string, string>(),
+    fornecedores: fornMap,
     carregando: isLoading,
     recarregar,
   };

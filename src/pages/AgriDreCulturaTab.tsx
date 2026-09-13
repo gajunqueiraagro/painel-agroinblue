@@ -131,19 +131,29 @@ export function AgriDreCulturaTab() {
     return labelDaCultura(c);
   };
 
+  /**
+   * ⚠ OS DOIS MAPAS DE NOME SE SOMAM, e a ordem importa pouco porque um id não aparece nos
+   * dois com nomes diferentes: são a mesma tabela, consultada por quem tem os ids. O da safra
+   * cobre o drill direto e os pools de custo e investimento; o do administrativo cobre a
+   * seção rateada da linha 8, cujos lançamentos não são da safra.
+   */
+  const nomesDeFavorecidos = useMemo(
+    () => new Map([...fornecedores, ...poolAdmin.fornecedores]),
+    [fornecedores, poolAdmin.fornecedores]);
+
   const paraItemDrill = useMemo(() => (l: LancamentoDaSafra): ItemDrill => ({
     id: l.id,
     data: l.data_pagamento || l.data_vencimento || l.data_competencia || '',
     mov: ((l.tipo_operacao || '').startsWith('1') ? 1 : -1) * Math.abs(Number(l.valor) || 0),
     tipo: l.tipo_operacao ?? '',
     produto: l.descricao,
-    fornecedor: (l.favorecido_id && fornecedores.get(l.favorecido_id)) || '',
+    fornecedor: (l.favorecido_id && nomesDeFavorecidos.get(l.favorecido_id)) || '',
     doc: l.numero_documento || l.documento || '',
     macro: l.macro_custo ?? null,
     grupo: l.grupo_custo ?? null,
     centroPlano: l.centro_custo ?? null,
     subcentro: l.subcentro ?? null,
-  }), [fornecedores]);
+  }), [nomesDeFavorecidos]);
 
   /* ⚠ OS ITENS DO DRILL SAEM DO MESMO `bucketDaLinha` QUE A RPC USA. Agrupar pela coluna
      `cultura` crua faria a lista discordar da célula clicada em toda safra que tenha
