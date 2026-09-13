@@ -8,9 +8,13 @@
  * daquela tela.
  *
  * ⚠ O ESTILO VEM DE FORA, e é isso que o torna reusável. Cada tabela da casa tem o seu
- * cabeçalho — sticky, fundo opaco, tamanho próprio — e este componente não impõe nenhum: ele
- * recebe `className` e acrescenta só o que é da ORDENAÇÃO (cursor, seleção, hover). Impor um
- * fundo aqui quebraria o cabeçalho fixo da colheita no primeiro uso.
+ * cabeçalho — sticky, fundo, tamanho — e este componente não impõe nenhum: ele recebe
+ * `className` e acrescenta só o que é da ORDENAÇÃO (cursor e seleção de texto). Impor um fundo
+ * aqui quebraria o cabeçalho fixo da colheita no primeiro uso.
+ * ⚠ O HOVER TAMBÉM VEM DE FORA, e a razão é concreta: um `hover:bg-black/…` desaparece sobre
+ * cabeçalho escuro, e um `hover:bg-white/…` some sobre o claro. Quem sabe a cor do fundo é a
+ * tabela — a Central usa `hover:bg-primary-foreground/10` sobre o azul, e é o que a colheita
+ * passa também.
  */
 import { ArrowUp, ArrowDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -30,7 +34,7 @@ export function ThOrdenavel<C extends string>({
   const ativa = ordem.coluna === coluna;
   return (
     <th
-      className={cn(className, 'cursor-pointer select-none hover:bg-black/[0.04]',
+      className={cn(className, 'cursor-pointer select-none',
         alinhaDireita ? 'text-right' : 'text-left')}
       onClick={() => onOrdenar(coluna)}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOrdenar(coluna); } }}

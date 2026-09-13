@@ -155,9 +155,13 @@ export function AgriColheitaTab() {
               contra o romaneio, e não entra no DRE — ver PR-COLHEITA-SECAGEM-FINANCEIRO. */}
           <Metrica rotulo="Secagem"
             valor={totais.valorSecagem > 0 ? `R$ ${formatNum(totais.valorSecagem, 2)}` : '—'} />
+          {/* ⚠ "LÍQUIDA" NO RÓTULO, e não é detalhe: este número é só de SACAS BOAS. A
+              produtividade FINAL — boas mais grão de roça — é outra, maior, e é a que o
+              produtor usa para comparar talhão. Sem a palavra, as duas se confundem, e a
+              diferença é o refugo inteiro da safra. */}
           <Metrica rotulo="Produtividade"
             valor={totais.produtividade != null ? formatNum(totais.produtividade, 2) : '—'}
-            sufixo={totais.produtividade != null ? unidade.unidadeProdutividade : undefined} />
+            sufixo={totais.produtividade != null ? `${unidade.unidadeProdutividade} líquida` : undefined} />
         </div>
         {/* ⚠ A FAIXA VEM DO ppb DE CADA CARGA, e o grão de roça fica FORA das duas: ele já é
             refugo, e somá-lo a qualquer faixa faria o lote bom parecer maior do que a
@@ -167,14 +171,17 @@ export function AgriColheitaTab() {
             Classificação
           </span>
           <span className="text-muted-foreground">
-            até {LIMITE_AFLATOXINA} ppb: <b className="tabular-nums text-foreground">{formatNum(totais.sacasAteLimite, 2)} sc</b>
+            até {LIMITE_AFLATOXINA} ppb: <b className="tabular-nums text-success">{formatNum(totais.sacasAteLimite, 2)} sc</b>
+          </span>
+          {/* ⚠ VERMELHO ONDE O GRÃO NÃO VALE O PREÇO CHEIO — acima do corte e roça. O verde da
+              primeira faixa e o vermelho destas duas saem do MESMO `LIMITE_AFLATOXINA` que
+              separa as sacas; se o corte mudar, a cor e a conta mudam juntas. */}
+          <span className="text-muted-foreground">
+            acima de {LIMITE_AFLATOXINA} ppb: <b className="tabular-nums text-destructive">{formatNum(totais.sacasAcimaLimite, 2)} sc</b>
           </span>
           <span className="text-muted-foreground">
-            acima de {LIMITE_AFLATOXINA} ppb: <b className="tabular-nums text-foreground">{formatNum(totais.sacasAcimaLimite, 2)} sc</b>
-          </span>
-          <span className="text-muted-foreground">
-            grão de roça: <b className="tabular-nums text-foreground">{formatNum(totais.graoRocaSacas, 2)} sc</b>
-            {totais.graoRocaKg > 0 && <span className="text-muted-foreground"> ({formatNum(totais.graoRocaKg, 2)} kg)</span>}
+            grão de roça: <b className="tabular-nums text-destructive">{formatNum(totais.graoRocaSacas, 2)} sc</b>
+            {totais.graoRocaKg > 0 && <span className="text-destructive"> ({formatNum(totais.graoRocaKg, 2)} kg)</span>}
           </span>
           {/* ⚠ SEM ppb NÃO É "ATÉ 20": a carga que ainda não voltou do laudo aparece à parte,
               porque somá-la ao lote bom venderia um número que não existe. */}

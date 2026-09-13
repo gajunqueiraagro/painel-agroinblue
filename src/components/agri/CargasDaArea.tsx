@@ -85,12 +85,20 @@ const COLUNAS: ReadonlyArray<ColunaOrdenavel<ColheitaRow, string> & { h: string;
   { coluna: 'roca', h: 'Roça (sc)', tipo: 'numero', direita: true, valor: l => l.grao_roca_sacas },
 ];
 
-const TH = 'sticky top-0 z-10 bg-[#f1f3f5] shadow-[inset_0_-1px_0_#e2e8f0] px-1.5 py-1'
-  + ' text-[9px] font-semibold uppercase tracking-wide text-[#1e3a5f]';
+/**
+ * ⚠ CABEÇALHO ESCURO, COMO O DA CENTRAL DE OPERAÇÕES — `bg-primary` com
+ * `text-primary-foreground`, o padrão que a casa já usa em tabela densa
+ * (`CentralOperacoesComerciais:811`). Não é cor solta: é o mesmo azul do cabeçalho dos modais.
+ * Sobre ele o hover é `primary-foreground/10`, também de lá — um hover escuro sumiria.
+ * ⚠ O FUNDO PRECISA SER OPACO porque o cabeçalho gruda: translúcido, as linhas passariam por
+ * baixo do nome da coluna. `bg-primary` é sólido.
+ */
+const TH = 'sticky top-0 z-10 bg-primary px-1.5 py-1 text-[9px] font-semibold uppercase'
+  + ' tracking-wide text-primary-foreground hover:bg-primary-foreground/10';
 
-/** O rodapé de totais: mesma técnica do cabeçalho, grudado embaixo. */
-const TFOOT = 'sticky bottom-0 z-10 bg-[#f1f3f5] shadow-[inset_0_1px_0_#cbd5e1] px-1.5 py-1'
-  + ' text-[10px] font-bold tabular-nums text-[#1e3a5f]';
+/** O rodapé de totais: mesmo fundo do cabeçalho, para as duas bordas da lista se lerem juntas. */
+const TFOOT = 'sticky bottom-0 z-10 bg-primary px-1.5 py-1 text-[10px] font-bold tabular-nums'
+  + ' text-primary-foreground';
 
 export function CargasDaArea({
   clienteId, safraAreaId, cultura, areaHa, pastoNome, fazendaNome, safraRotulo,
@@ -221,18 +229,18 @@ export function CargasDaArea({
             )}
             {ordenadas.map(l => (
               <tr key={l.id} className="border-t border-slate-100 odd:bg-[#1e3a5f]/[0.03]">
-                <td className="whitespace-nowrap px-1.5 py-0.5 tabular-nums">{dataBR(l.data_colheita)}</td>
-                <td className="whitespace-nowrap px-1.5 py-0.5 tabular-nums">{(l.hora_chegada ?? '').slice(0, 5) || '—'}</td>
-                <td className="px-1.5 py-0.5">{l.ticket_balanca || '—'}</td>
-                <td className="px-1.5 py-0.5 text-right tabular-nums">{l.peso_verde_kg != null ? formatNum(l.peso_verde_kg, 2) : '—'}</td>
-                <td className="px-1.5 py-0.5 text-right tabular-nums">{l.peso_seco_kg != null ? formatNum(l.peso_seco_kg, 2) : '—'}</td>
-                <td className="px-1.5 py-0.5 text-right tabular-nums">{l.umidade_pct != null ? formatNum(l.umidade_pct, 2) : '—'}</td>
+                <td className="whitespace-nowrap px-1.5 py-[1px] tabular-nums">{dataBR(l.data_colheita)}</td>
+                <td className="whitespace-nowrap px-1.5 py-[1px] tabular-nums">{(l.hora_chegada ?? '').slice(0, 5) || '—'}</td>
+                <td className="px-1.5 py-[1px]">{l.ticket_balanca || '—'}</td>
+                <td className="px-1.5 py-[1px] text-right tabular-nums">{l.peso_verde_kg != null ? formatNum(l.peso_verde_kg, 2) : '—'}</td>
+                <td className="px-1.5 py-[1px] text-right tabular-nums">{l.peso_seco_kg != null ? formatNum(l.peso_seco_kg, 2) : '—'}</td>
+                <td className="px-1.5 py-[1px] text-right tabular-nums">{l.umidade_pct != null ? formatNum(l.umidade_pct, 2) : '—'}</td>
                 {/* ⚠ A COR SAI DE `faixaAflatoxina`, o MESMO corte que o consolidado usa — nunca
                     de um `> 20` escrito aqui. No dia em que a cooperativa mudar o limite, a
                     célula e o total têm de mudar juntos, senão a lista pinta de verde a carga
                     que o rodapé conta como fora de faixa.
                     ⚠ SEM LAUDO CONTINUA CINZA: ausência não é aprovação. */}
-                <td className={cn('px-1.5 py-0.5 text-right tabular-nums',
+                <td className={cn('px-1.5 py-[1px] text-right tabular-nums',
                   faixaAflatoxina(l.aflatoxina_ppb) === 'ate' ? 'text-success'
                     : faixaAflatoxina(l.aflatoxina_ppb) === 'acima' ? 'text-destructive'
                       : 'text-muted-foreground')}>
@@ -241,9 +249,16 @@ export function CargasDaArea({
                 {/* ⚠ SACA INTEIRA NA CÉLULA, DECIMAL NO BANCO — é o que a Casul faz, e é o que
                     faz o consolidado fechar: cada carga se lê arredondada, o total soma o valor
                     cheio. Somar os arredondados perderia centésimos a cada linha. */}
-                <td className="px-1.5 py-0.5 text-right tabular-nums" title={l.sacas_boas != null ? `${formatNum(l.sacas_boas, 2)} sc` : undefined}>{l.sacas_boas != null ? formatNum(l.sacas_boas, 0) : '—'}</td>
-                <td className="px-1.5 py-0.5 text-right tabular-nums" title={l.grao_roca_sacas != null ? `${formatNum(l.grao_roca_sacas, 2)} sc` : undefined}>{l.grao_roca_sacas != null ? formatNum(l.grao_roca_sacas, 0) : '—'}</td>
-                <td className="whitespace-nowrap px-1.5 py-0.5 text-right">
+                <td className="px-1.5 py-[1px] text-right tabular-nums" title={l.sacas_boas != null ? `${formatNum(l.sacas_boas, 2)} sc` : undefined}>{l.sacas_boas != null ? formatNum(l.sacas_boas, 0) : '—'}</td>
+                {/* ⚠ ROÇA É SEMPRE VERMELHO: ela é refugo, e o vermelho aqui não julga uma
+                    faixa — diz o que aquele grão é. Vale onde ele aparecer, na lista e no
+                    consolidado. */}
+                <td className={cn('px-1.5 py-[1px] text-right tabular-nums',
+                  l.grao_roca_sacas ? 'text-destructive' : 'text-muted-foreground')}
+                  title={l.grao_roca_sacas != null ? `${formatNum(l.grao_roca_sacas, 2)} sc` : undefined}>
+                  {l.grao_roca_sacas != null ? formatNum(l.grao_roca_sacas, 0) : '—'}
+                </td>
+                <td className="whitespace-nowrap px-1.5 py-[1px] text-right">
                   <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground"
                     disabled={somenteLeitura} title="Editar esta carga"
                     /* A carga abre com os valores salvos; nada é recalculado só por abrir. */
