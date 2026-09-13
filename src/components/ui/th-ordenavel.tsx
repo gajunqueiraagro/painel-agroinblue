@@ -41,14 +41,18 @@ export function ThOrdenavel<C extends string>({
       tabIndex={0}
       title={`Ordenar por ${rotulo}`}
       aria-sort={ativa ? (ordem.direcao === 'asc' ? 'ascending' : 'descending') : 'none'}>
-      {/* ⚠ A SETA SÓ NA COLUNA ATIVA: dez setas cinzas competem com os dez rótulos, e o que se
-          precisa saber é por qual coluna a lista está ordenada — não que todas ordenam.
+      {/* ⚠ O ESPAÇO DA SETA EXISTE SEMPRE, ativa ou não — `invisible`, NUNCA condicional de
+          render. Com a seta entrando e saindo do fluxo, cada ordenação empurrava o rótulo e a
+          tabela inteira se remexia: o operador clicava numa coluna e a de baixo mudava de
+          lugar. Reservar 10px em cada cabeçalho é o preço de a tela ficar parada.
+          ⚠ SÓ SE VÊ NA COLUNA ATIVA, e isso não muda: dez setas competiriam com os dez
+          rótulos. O que muda é que as nove invisíveis continuam ocupando o lugar delas.
           `flex-row-reverse` à direita para a seta não separar o número da borda. */}
       <span className={cn('inline-flex items-center gap-0.5', alinhaDireita && 'flex-row-reverse')}>
-        {rotulo}
-        {ativa && (ordem.direcao === 'asc'
-          ? <ArrowUp className="h-2.5 w-2.5" />
-          : <ArrowDown className="h-2.5 w-2.5" />)}
+        <span className="truncate">{rotulo}</span>
+        {ordem.direcao === 'asc' || !ativa
+          ? <ArrowUp className={cn('h-2.5 w-2.5 shrink-0', !ativa && 'invisible')} />
+          : <ArrowDown className="h-2.5 w-2.5 shrink-0" />}
       </span>
     </th>
   );

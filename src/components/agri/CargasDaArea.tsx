@@ -95,6 +95,18 @@ const COLUNAS_BASE: ReadonlyArray<ColunaOrdenavel<ColheitaRow, string> & { h: st
  * ⚠ ELA ORDENA PELO NOME DO PASTO, que é o que se vê — não pelo id, que ninguém lê. Ordenar
  * por ela agrupa a cultura visualmente em "Todos os talhões".
  */
+/**
+ * ⚠ A LARGURA DE CADA COLUNA, EM %, E ELA NÃO DEPENDE DO DADO — PR-TABELA-ESTAVEL.
+ *
+ * Com `table-auto`, o navegador remede as colunas a cada render: ordenar por Verde trazia para
+ * cima a linha de 227.500,00 e a coluna inteira alargava, empurrando todas as outras. Ordenar
+ * é mudar a ORDEM DAS LINHAS; não pode mudar o desenho da tabela.
+ * ⚠ EM `%` E NÃO EM `px`: com `table-layout: fixed`, o excedente de uma tabela `w-full` é
+ * distribuído entre as colunas — em pixels a soma sobraria ou faltaria conforme a janela, e a
+ * proporção entre as colunas mudaria com ela. A soma aqui é 100.
+ */
+const LARGURAS = ['5%', '8%', '8%', '5%', '7%', '6%', '11%', '11%', '7%', '8%', '9%', '8%', '7%'];
+
 const colunasCom = (nomePorId: Map<string, string>, fazPorId: Map<string, string>) => ([
   {
     coluna: 'fazenda', h: 'Faz', tipo: 'texto' as const,
@@ -123,7 +135,7 @@ const colunasCom = (nomePorId: Map<string, string>, fazPorId: Map<string, string
  * ⚠ SEM `uppercase`: "Primeira maiúscula, resto minúsculo" (decisão do Gabriel) — e o rótulo
  * já vem escrito assim em `COLUNAS`, então a classe é que sobrava.
  */
-const TH = 'sticky top-0 z-10 bg-primary px-1 py-0.5 text-[9px] font-semibold'
+const TH = 'sticky top-0 z-10 overflow-hidden bg-primary px-1 py-0.5 text-[9px] font-semibold'
   + ' text-primary-foreground transition-[filter] hover:brightness-110';
 
 /** O rodapé de totais: mesmo fundo do cabeçalho, para as duas bordas da lista se lerem juntas. */
@@ -307,7 +319,14 @@ export function CargasDaArea({
         {/* ⚠ `leading-tight` NA TABELA, junto do tamanho: a altura da linha vinha da
             entrelinha padrão, não do padding — que já estava em zero. Um lugar só governa os
             dois, e nenhuma célula repete tamanho (a lição do `TD` da Central). */}
-        <table className="w-full border-collapse text-[10px] leading-tight">
+        <table className="w-full table-fixed border-collapse text-[10px] leading-tight">
+          {/* ⚠ `colgroup` E NÃO largura nos `th`: a largura declarada na célula vale só
+              enquanto aquela célula existe, e o `tfoot` usa `colSpan` — sem o colgroup, o
+              rodapé mediria as colunas por conta própria. Aqui as três partes obedecem à
+              mesma régua. */}
+          <colgroup>
+            {LARGURAS.map((w, i) => <col key={i} style={{ width: w }} />)}
+          </colgroup>
           <thead>
             <tr>
               {COLUNAS.map(c => (
@@ -326,17 +345,19 @@ export function CargasDaArea({
             )}
             {ordenadas.map(l => (
               <tr key={l.id} className="border-t border-slate-100 odd:bg-[#1e3a5f]/[0.03]">
-                <td className="whitespace-nowrap px-1 py-0">{fazPorId.get(l.safra_area_id) || '—'}</td>
-                <td className="whitespace-nowrap px-1 py-0">{nomePorId.get(l.safra_area_id) ?? '—'}</td>
+                {/* ⚠ `truncate` EM TODA CÉLULA DE TEXTO: com largura fixa, o conteúdo longo
+                    não pode alargar a coluna — ele corta, e o `title` guarda o inteiro. */}
+                <td className="truncate px-1 py-0" title={fazPorId.get(l.safra_area_id) || undefined}>{fazPorId.get(l.safra_area_id) || '—'}</td>
+                <td className="truncate px-1 py-0" title={nomePorId.get(l.safra_area_id) || undefined}>{nomePorId.get(l.safra_area_id) ?? '—'}</td>
                 <td className="whitespace-nowrap px-1 py-0 tabular-nums">{dataBR(l.data_colheita)}</td>
                 <td className="whitespace-nowrap px-1 py-0 tabular-nums">{(l.hora_chegada ?? '').slice(0, 5) || '—'}</td>
-                <td className="px-1 py-0">{l.ticket_balanca || '—'}</td>
+                <td className="truncate px-1 py-0" title={l.ticket_balanca || undefined}>{l.ticket_balanca || '—'}</td>
                 {/* ⚠ A NF FALTAVA AQUI, e era o bug do cabeçalho deslocado: no PR-SORT-01 a
                     coluna entrou no cabeçalho e não na linha, então o `<thead>` tinha onze
                     células e o `<tbody>` dez — cada rótulo caía uma coluna adiante e "Roça"
                     aparecia sobre os botões de ação. Os dados sempre estiveram certos; o que
                     estava errado era a contagem. */}
-                <td className="px-1 py-0">{l.nf_produtor || '—'}</td>
+                <td className="truncate px-1 py-0" title={l.nf_produtor || undefined}>{l.nf_produtor || '—'}</td>
                 <td className="px-1 py-0 text-right tabular-nums">{l.peso_verde_kg != null ? formatNum(l.peso_verde_kg, 2) : '—'}</td>
                 <td className="px-1 py-0 text-right tabular-nums">{l.peso_seco_kg != null ? formatNum(l.peso_seco_kg, 2) : '—'}</td>
                 <td className="px-1 py-0 text-right tabular-nums">{l.umidade_pct != null ? formatNum(l.umidade_pct, 2) : '—'}</td>
