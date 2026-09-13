@@ -37,8 +37,12 @@ export function AnaliseDrawer({ titulo, subtitulo, corAccent = '#1e3a5f', total,
       <div className="absolute inset-0 bg-black/20" />
       {/* Solto das bordas, o painel deixa de ser um recorte da tela e vira uma peça — por isso
           borda e canto nos quatro lados, no lugar da `border-l` de quando ele colava.
-          O `max-w` guarda o mesmo recuo dos dois lados em tela estreita. */}
-      <div className="fixed inset-y-3 right-3 w-[560px] max-w-[calc(100vw-1.5rem)] bg-white border rounded-md shadow-2xl flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+          O `max-w` guarda o mesmo recuo dos dois lados em tela estreita.
+          ⚠ OS SUBLINHADOS DO `calc` NÃO SÃO ENFEITE: o Tailwind os troca por espaço, e sem eles
+          sai `calc(100vw-1.5rem)` — que é CSS INVÁLIDO (o `-` precisa de espaço dos dois lados)
+          e o navegador DESCARTA a declaração em silêncio. Medido no CSS compilado: a regra
+          existia na folha e o `max-width` computado era `none`. Erro escrito no PR-08. */}
+      <div className="fixed inset-y-3 right-3 w-[560px] max-w-[calc(100vw_-_1.5rem)] bg-white border rounded-md shadow-2xl flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
         {/* Faixa superior de identidade (accent contextual, detalhe). */}
         <div className="h-[3px] shrink-0" style={{ background: corAccent }} />
         <div className="flex items-start justify-between gap-2 px-3 py-2 border-b bg-[#1e3a5f]/[0.04]">
