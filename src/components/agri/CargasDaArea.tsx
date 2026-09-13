@@ -125,7 +125,7 @@ export interface TalhaoDaLista {
 }
 
 export function CargasDaArea({
-  clienteId, talhoes, talhaoDestino, cultura, safraRotulo,
+  clienteId, talhoes, talhoesDaCultura, talhaoDestino, cultura, safraRotulo,
   linhas, salvarCarga, excluirCarga, somenteLeitura, rotuloTotal,
 }: {
   clienteId: string | null | undefined;
@@ -136,6 +136,15 @@ export function CargasDaArea({
    * cabeçalho — e a ordenação por data deixaria de existir entre elas.
    */
   talhoes: readonly TalhaoDaLista[];
+  /**
+   * TODAS as áreas da cultura — o que o seletor do modal oferece (PR-TALHAO-NO-MODAL-12).
+   *
+   * ⚠ SEPARADA DE `talhoes` DE PROPÓSITO: aquela é o RECORTE (o que a lista mostra e o que o
+   * rodapé soma); esta é o universo para onde a carga pode ir. Com um talhão selecionado, o
+   * recorte tem um e o universo tem todos — e é só por isso que dá para mover a carga para
+   * fora da lista que se está vendo.
+   */
+  talhoesDaCultura?: readonly TalhaoDaLista[];
   /**
    * Onde uma carga NOVA cai. `null` em "Todos os talhões" — e aí não há como lançar.
    *
@@ -156,8 +165,11 @@ export function CargasDaArea({
 }) {
   /** `null` = modal fechado. */
   const [form, setForm] = useState<CargaForm | null>(null);
+  /** A área da carga aberta. `''` em "Todos os talhões" antes de o operador escolher. */
+  const [areaId, setAreaId] = useState('');
   const [salvando, setSalvando] = useState(false);
   const temSaca = unidadeDaCultura(cultura).kgPorSaca != null;
+  const areasParaEscolha = talhoesDaCultura ?? talhoes;
   const nomePorId = useMemo(
     () => new Map(talhoes.map(t => [t.id, t.pastoNome])), [talhoes]);
   const COLUNAS = useMemo(() => colunasCom(nomePorId), [nomePorId]);
@@ -196,12 +208,11 @@ export function CargasDaArea({
 
   const gravar = async () => {
     if (!form || !clienteId) return;
-    /* ⚠ EDITAR SABE DE ONDE É; CRIAR PRECISA DO DESTINO. A carga gravada carrega o próprio
-       `safra_area_id`, então editar funciona mesmo em "Todos"; criar sem destino, não. */
-    const destino = form.id
-      ? (linhas.find(l => l.id === form.id)?.safra_area_id ?? talhaoDestino?.id)
-      : talhaoDestino?.id;
-    if (!destino) { toast.error('Escolha um talhão antes de lançar a carga.'); return; }
+    /* ⚠ O DESTINO É O QUE O SELETOR DIZ, e não mais o contexto da tela: é isso que permite
+       corrigir uma carga lançada no talhão errado sem apagá-la. Vazio não grava — carga sem
+       talhão não tem onde existir (a FK é obrigatória). */
+    const destino = areaId;
+    if (!destino) { toast.error('Escolha o talhão desta carga antes de salvar.'); return; }
     const v = validarCarga(form);
     /* ⚠ O ERRO APARECE, SEMPRE. Botão que diz "salvo" sem gravar é o pior defeito que esta
        tela poderia ter: o romaneio é documento, e o operador não tem como desconfiar. */
@@ -253,18 +264,12 @@ export function CargasDaArea({
           {' · '}{linhas.length} {linhas.length === 1 ? 'carga' : 'cargas'}
         </span>
         <div className="flex-1" />
-        {/* ⚠ O MOTIVO FICA ESCRITO AO LADO, não só no `title`: é a regra da OC, e aqui ela
-            resolve um impasse real — a FK da carga aponta para UM talhão, e em "Todos" não há
-            qual escolher. Botão apagado sem explicação lê como defeito. */}
-        {!talhaoDestino && !somenteLeitura && (
-          <span className="text-[10px] text-muted-foreground">
-            escolha um talhão para lançar
-          </span>
-        )}
+        {/* ⚠ O BOTÃO VOLTOU A FICAR LIGADO EM "TODOS OS TALHÕES" — PR-TALHAO-NO-MODAL-12. Ele
+            ficava apagado porque a FK precisa de UM talhão e o contexto não tinha qual; agora
+            quem responde isso é o seletor do modal, que abre vazio e exige escolha. */}
         <Button variant="outline" size="sm" className="h-7 gap-1 text-[11px]"
-          disabled={somenteLeitura || !talhaoDestino}
-          title={talhaoDestino ? undefined : 'Em "Todos os talhões" não há onde gravar a carga.'}
-          onClick={() => setForm(cargaVazia())}>
+          disabled={somenteLeitura}
+          onClick={() => { setAreaId(talhaoDestino?.id ?? ''); setForm(cargaVazia()); }}>
           <Plus className="h-3 w-3" /> Nova carga
         </Button>
       </div>
@@ -329,8 +334,9 @@ export function CargasDaArea({
                 <td className="whitespace-nowrap px-1.5 py-[1px] text-right">
                   <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground"
                     disabled={somenteLeitura} title="Editar esta carga"
-                    /* A carga abre com os valores salvos; nada é recalculado só por abrir. */
-                    onClick={() => setForm(doBanco(l))}>
+                    /* A carga abre com os valores salvos — inclusive o talhão dela, que agora
+                       é campo editável e não mais o contexto da tela. */
+                    onClick={() => { setAreaId(l.safra_area_id); setForm(doBanco(l)); }}>
                     <Pencil className="h-3 w-3" />
                   </Button>
                   <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive"
@@ -381,6 +387,9 @@ export function CargasDaArea({
         aberto={!!form}
         form={form}
         cultura={cultura}
+        areas={areasParaEscolha}
+        areaId={areaId}
+        onAreaChange={setAreaId}
         talhaoRotulo={talhaoDestino
           ? `${talhaoDestino.pastoNome} · ${formatNum(talhaoDestino.area_plantada_ha, 2)} ha`
           : (nomePorId.get(linhas.find(l => l.id === form?.id)?.safra_area_id ?? '') ?? '—')}

@@ -20,6 +20,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Save } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatNum } from '@/lib/calculos/formatters';
@@ -135,7 +136,7 @@ function Par({ rotulo, valor, forte }: { rotulo: string; valor: string; forte?: 
 
 export function CargaModal({
   aberto, form, cultura, talhaoRotulo, safraRotulo, fazendaNome, salvando,
-  onChange, onFechar, onSalvar,
+  areas, areaId, onAreaChange, onChange, onFechar, onSalvar,
 }: {
   aberto: boolean;
   /** `null` quando não há carga aberta — o modal não monta. */
@@ -146,6 +147,18 @@ export function CargaModal({
   safraRotulo: string;
   fazendaNome: string | null;
   salvando: boolean;
+  /**
+   * AS ÁREAS ENTRE AS QUAIS A CARGA PODE ANDAR — PR-TALHAO-NO-MODAL-12.
+   *
+   * ⚠ SÓ AS DA CULTURA CORRENTE, e é decisão de produto: `safra_area_id` amarra safra, cultura
+   * e talhão numa FK só, então mover a carga para outra cultura mudaria o que ela é — e o
+   * rateio de área, a produtividade e a classificação junto. Corrigir o talhão é rotina;
+   * trocar a cultura é outro gesto, e ele não deve caber num dropdown de correção.
+   */
+  areas: readonly { id: string; pastoNome: string; area_plantada_ha: number }[];
+  /** `''` quando ainda não se escolheu — em "Todos os talhões" a carga nova começa assim. */
+  areaId: string;
+  onAreaChange: (id: string) => void;
   onChange: (campo: keyof CargaForm, valor: string) => void;
   onFechar: () => void;
   onSalvar: () => void;
@@ -198,7 +211,9 @@ export function CargaModal({
                 <div className="px-3 pb-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
                   Talhão
                 </div>
-                <Par rotulo="Área" valor={talhaoRotulo} />
+                <Par rotulo="Área" valor={areas.find(a => a.id === areaId)
+                  ? `${areas.find(a => a.id === areaId)?.pastoNome} · ${formatNum(areas.find(a => a.id === areaId)?.area_plantada_ha ?? 0, 2)} ha`
+                  : talhaoRotulo} />
                 <Par rotulo="Ticket" valor={form.ticketBalanca.trim() || '—'} />
               </div>
               <div className="py-1">
@@ -262,6 +277,26 @@ export function CargaModal({
                 Foi o defeito do drawer do DRE, medido e corrigido no PR-DRILL-14. */}
             <TabsContent value="cadastro"
               className="mt-2 flex-col gap-2 data-[state=active]:flex data-[state=inactive]:hidden">
+              {/* ⚠ O TALHÃO É CAMPO DA CARGA, não do contexto — e era a peça que faltava para
+                  corrigir um lançamento errado sem apagá-lo. Mudar aqui troca o
+                  `safra_area_id`: a carga sai de um talhão e entra no outro, e os dois
+                  consolidados se ajustam na mesma gravação. */}
+              <div>
+                <Label className="text-[10px]">Talhão <span className="text-destructive">*</span></Label>
+                <Select value={areaId} onValueChange={onAreaChange}>
+                  <SelectTrigger className="mt-0.5 h-8 text-[12px]">
+                    <SelectValue placeholder="Escolha o talhão desta carga" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {areas.map(a => (
+                      <SelectItem key={a.id} value={a.id} className="text-[12px]">
+                        {safraRotulo && `${safraRotulo} · `}{labelDaCultura(cultura)} · {a.pastoNome}
+                        {' · '}{formatNum(a.area_plantada_ha, 2)} ha
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <Label className="text-[10px]">Data <span className="text-destructive">*</span></Label>

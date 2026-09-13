@@ -62,7 +62,15 @@ export function useColheita(safraAreaIds: readonly string[]) {
 
   useEffect(() => { void carregar(); }, [carregar]);
 
-  /** Grava UMA carga — insere quando `id` é nulo, atualiza quando não é. */
+  /**
+   * Grava UMA carga — insere quando `id` é nulo, atualiza quando não é.
+   *
+   * ⚠ O `safra_area_id` VAI NO UPDATE TAMBÉM, e não só no insert. Até o
+   * PR-TALHAO-NO-MODAL-12 o talhão era o contexto da tela e nunca mudava numa edição; agora
+   * ele é campo do modal, e sem esta linha mover a carga de talhão diria "Carga atualizada" e
+   * não moveria nada — o pior defeito que esta tela pode ter, porque o operador não tem como
+   * desconfiar. Reinserir o mesmo valor quando não mudou é inofensivo.
+   */
   const salvarCarga = useCallback(async (
     safraAreaId: string,
     id: string | null,
@@ -71,7 +79,7 @@ export function useColheita(safraAreaIds: readonly string[]) {
   ): Promise<{ ok: boolean; erro?: string }> => {
     const db = supabase as any;
     const { error } = id
-      ? await db.from('agri_colheita').update(payload).eq('id', id)
+      ? await db.from('agri_colheita').update({ ...payload, safra_area_id: safraAreaId }).eq('id', id)
       : await db.from('agri_colheita')
         .insert({ ...payload, cliente_id: clienteId, safra_area_id: safraAreaId });
     /* ⚠ O ERRO DO BANCO VAI INTEIRO PARA A TELA. "Não foi possível salvar" sozinho manda o

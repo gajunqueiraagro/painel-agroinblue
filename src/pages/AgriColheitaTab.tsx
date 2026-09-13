@@ -285,6 +285,9 @@ export function AgriColheitaTab() {
           key={`${culturaSel}-${talhaoId}`}
           clienteId={clienteId}
           talhoes={talhoesDaLista}
+          /* ⚠ O UNIVERSO É A CULTURA: a lista mostra o recorte, mas a carga pode ser movida
+             para qualquer talhão da mesma cultura — inclusive um que não está na tela. */
+          talhoesDaCultura={talhoesDaCultura}
           talhaoDestino={talhaoSel}
           cultura={culturaSel}
           rotuloTotal={talhaoSel ? 'Total do talhão' : 'Total da cultura'}
