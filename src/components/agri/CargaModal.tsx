@@ -122,7 +122,9 @@ function CampoPeso({ rotulo, valorKg, onChangeKg, cultura, dica }: {
 /** Um par rótulo–valor do resumo lateral, no idioma do `ResumoLateralOC`. */
 function Par({ rotulo, valor, forte }: { rotulo: string; valor: string; forte?: boolean }) {
   return (
-    <div className="flex items-baseline justify-between gap-2 px-3 py-1">
+    /* ⚠ `py-0.5`: com `py-1` os dezesseis pares não cabiam e a Renda líquida ficava cortada
+       embaixo — o resumo lateral não rola, ele cabe. */
+    <div className="flex items-baseline justify-between gap-2 px-3 py-0.5">
       <span className="text-[10px] text-muted-foreground">{rotulo}</span>
       <span className={cn('tabular-nums', forte ? 'text-[12px] font-bold text-foreground' : 'text-[11px] text-foreground')}>
         {valor}
@@ -132,13 +134,16 @@ function Par({ rotulo, valor, forte }: { rotulo: string; valor: string; forte?: 
 }
 
 export function CargaModal({
-  aberto, form, cultura, talhaoRotulo, fazendaNome, salvando, onChange, onFechar, onSalvar,
+  aberto, form, cultura, talhaoRotulo, safraRotulo, fazendaNome, salvando,
+  onChange, onFechar, onSalvar,
 }: {
   aberto: boolean;
   /** `null` quando não há carga aberta — o modal não monta. */
   form: CargaForm | null;
   cultura: string;
   talhaoRotulo: string;
+  /** O código da safra — ela amarra o lançamento, e o cabeçalho tem de dizê-la. */
+  safraRotulo: string;
   fazendaNome: string | null;
   salvando: boolean;
   onChange: (campo: keyof CargaForm, valor: string) => void;
@@ -157,13 +162,27 @@ export function CargaModal({
 
   return (
     <Dialog open={aberto} onOpenChange={o => { if (!o) onFechar(); }}>
-      {/* ⚠ `p-0` É REQUISITO, NÃO ESTILO: sem ele o `DialogContent` genérico entra com
-          `overflow-y-auto p-4` e o modal INTEIRO rola — cabeçalho, corpo e rodapé —,
-          anulando a estrutura do envelope. Está escrito em `LancamentosTab`, onde o
-          defeito já foi pago duas vezes. */}
-      <DialogContent className="max-w-4xl gap-0 overflow-hidden p-0">
+      {/* ⚠ ESTA CLASSE É A CANÔNICA DA CASA, copiada de `LancamentosTab` (o ramo
+          `usaEnvelopeProprio`), e cada pedaço dela conserta um defeito medido:
+          · `p-0 gap-0 overflow-hidden` — sem eles o `DialogContent` entra com
+            `overflow-y-auto p-4` e o modal INTEIRO rola, rodapé incluído;
+          · `[&>button.absolute]:hidden` — o `DialogContent` EMBUTE um `<Close>` com X em
+            `absolute right-4 top-4`, e o envelope tem o dele no cabeçalho. Eram os DOIS X
+            sobrepostos. Quem fecha é o do cabeçalho, o padrão da casa;
+          · `max-w-5xl` (1024px) é o teto dos modais de lançamento — eu havia escrito
+            `max-w-4xl`, 128px a menos que o resto do sistema, e com o resumo lateral de
+            280px o que sobrava para os campos não cabia.
+          ⚠ CLIQUE FORA NÃO FECHA, como nos outros modais de lançamento: aqui há treze
+          campos digitados do romaneio, e perdê-los por um clique ao lado é caro. */}
+      <DialogContent
+        onPointerDownOutside={e => e.preventDefault()}
+        onInteractOutside={e => e.preventDefault()}
+        className="max-w-5xl gap-0 overflow-hidden p-0 [&>button.absolute]:hidden">
         <LancamentoModalEnvelope
-          titulo={`Carga · ${labelDaCultura(cultura)}`}
+          /* ⚠ A SAFRA NO TÍTULO, e não só no resumo: é ela que amarra a carga — a mesma
+             cultura no mesmo talhão existe em safras diferentes, e o cabeçalho era a única
+             parte do modal que não dizia em qual se está gravando. */
+          titulo={`Carga · ${labelDaCultura(cultura)}${safraRotulo ? ` · Safra ${safraRotulo}` : ''}`}
           data={form.dataColheita}
           fazendaNome={fazendaNome}
           onFechar={onFechar}
@@ -213,10 +232,19 @@ export function CargaModal({
           )}>
 
           <Tabs defaultValue="cadastro" className="flex min-h-0 flex-col">
+            {/* ⚠ O DESTAQUE VEM DO `data-[state=active]` DO PRÓPRIO PRIMITIVO, reforçado —
+                não de um estilo novo. O padrão já traz `bg-background` e `shadow-sm`; sobre o
+                `bg-muted` da faixa isso é uma diferença de dois tons, e não se via qual aba
+                estava aberta. Aqui o ativo ganha também a cor e o peso do texto, que é o que
+                a casa usa para "selecionado" no resto das telas. */}
             <TabsList className="grid h-8 w-full shrink-0 grid-cols-3">
-              <TabsTrigger value="cadastro" className="text-[11px]">Cadastro</TabsTrigger>
-              <TabsTrigger value="producao" className="text-[11px]">Produção</TabsTrigger>
-              <TabsTrigger value="classificacao" className="text-[11px]">Classificação</TabsTrigger>
+              {([['cadastro', 'Cadastro'], ['producao', 'Produção'], ['classificacao', 'Classificação']] as const)
+                .map(([valor, rotulo]) => (
+                  <TabsTrigger key={valor} value={valor}
+                    className="text-[11px] data-[state=active]:font-bold data-[state=active]:text-primary data-[state=active]:shadow">
+                    {rotulo}
+                  </TabsTrigger>
+                ))}
             </TabsList>
 
             {/* ⚠ `data-[state=…]` NO DISPLAY, nunca `flex` solto: o Radix deixa o painel

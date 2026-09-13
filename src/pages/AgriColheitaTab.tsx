@@ -201,6 +201,7 @@ export function AgriColheitaTab() {
           areaHa={talhao.area_plantada_ha}
           pastoNome={talhao.pastoNome}
           fazendaNome={talhao.fazendaNome}
+          safraRotulo={safraLabel?.codigo || safraLabel?.nome || ''}
           linhas={doTalhao}
           salvarCarga={salvarCarga}
           excluirCarga={excluirCarga}

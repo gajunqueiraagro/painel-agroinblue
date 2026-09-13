@@ -13,7 +13,7 @@
  * ⚠ CABEÇALHO FIXO, SÓ AS LINHAS ROLAM (A21). A rolagem está no container da tabela, não na
  * página: quem confere uma carga precisa do nome da coluna à vista.
  */
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Plus, Trash2, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
@@ -25,7 +25,8 @@ import { parseMoeda } from '@/lib/calculos/numeroBR';
 import { labelDaCultura } from '@/lib/agri/areaPlantada';
 import { CargaModal } from '@/components/agri/CargaModal';
 import {
-  cargaVazia, validarCarga, sacasDoPeso, unidadeDaCultura, faixaAflatoxina, type CargaForm,
+  cargaVazia, validarCarga, sacasDoPeso, unidadeDaCultura, faixaAflatoxina, totaisColheita,
+  type CargaForm,
 } from '@/lib/agri/colheita';
 import type { ColheitaRow, useColheita } from '@/hooks/useColheita';
 
@@ -66,7 +67,7 @@ const TH = 'sticky top-0 z-10 bg-[#f1f3f5] shadow-[inset_0_-1px_0_#e2e8f0] px-1.
   + ' text-[9px] font-semibold uppercase tracking-wide text-[#1e3a5f]';
 
 export function CargasDaArea({
-  clienteId, safraAreaId, cultura, areaHa, pastoNome, fazendaNome,
+  clienteId, safraAreaId, cultura, areaHa, pastoNome, fazendaNome, safraRotulo,
   linhas, salvarCarga, excluirCarga, somenteLeitura,
 }: {
   clienteId: string | null | undefined;
@@ -75,6 +76,7 @@ export function CargasDaArea({
   areaHa: number;
   pastoNome?: string;
   fazendaNome?: string | null;
+  safraRotulo?: string;
   /** Só as cargas DESTE talhão — quem filtra é quem chama, que é dono da leitura. */
   linhas: readonly ColheitaRow[];
   salvarCarga: ReturnType<typeof useColheita>['salvarCarga'];
@@ -137,6 +139,15 @@ export function CargasDaArea({
     toast.success('Carga excluída.');
     if (form?.id === l.id) setForm(null);
   };
+
+  /**
+   * ⚠ A MESMA FUNÇÃO DO CONSOLIDADO, sobre as linhas DESTE talhão. O rodapé da lista e a faixa
+   * de métricas respondem perguntas diferentes — um talhão contra a safra —, mas pela MESMA
+   * régua: somar à mão aqui criaria um segundo total, e seria ele que o operador compararia
+   * com o papel.
+   */
+  const totaisDoTalhao = useMemo(
+    () => totaisColheita(linhas.map(doBanco), cultura, areaHa), [linhas, cultura, areaHa]);
 
   const dataBR = (iso: string | null) => (iso && iso.length >= 10
     ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(2, 4)}` : '—');
@@ -217,6 +228,29 @@ export function CargasDaArea({
         </table>
       </div>
 
+      {/* ── FIXO: a linha de totais, fora da área que rola ──
+          ⚠ ELA NÃO ROLA COM AS LINHAS, e é o mesmo arranjo do TOTAL do drill do DRE: quem
+          confere uma lista de trinta cargas precisa do total à vista enquanto percorre o
+          meio dela. As colunas alinham com as da tabela acima. */}
+      <div className="mt-1 flex shrink-0 items-center gap-3 rounded-md border bg-muted/40 px-2 py-1 text-[10px]">
+        <span className="font-semibold uppercase tracking-wide text-muted-foreground">Total do talhão</span>
+        <div className="flex-1" />
+        <span className="text-muted-foreground">
+          verde <b className="tabular-nums text-foreground">{formatNum(totaisDoTalhao.verdeKg, 2)} kg</b>
+        </span>
+        <span className="text-muted-foreground">
+          seco <b className="tabular-nums text-foreground">
+            {totaisDoTalhao.secoKg > 0 ? `${formatNum(totaisDoTalhao.secoKg, 2)} kg` : '—'}
+          </b>
+        </span>
+        <span className="text-muted-foreground">
+          sacas boas <b className="tabular-nums text-foreground">{formatNum(totaisDoTalhao.sacasBoas, 2)}</b>
+        </span>
+        <span className="text-muted-foreground">
+          roça <b className="tabular-nums text-foreground">{formatNum(totaisDoTalhao.graoRocaSacas, 2)} sc</b>
+        </span>
+      </div>
+
       {/* ⚠ O MODAL É IRMÃO DA LISTA, nunca filho de uma linha: assim editar e criar são o
           mesmo componente, e fechar não desmonta a tabela por baixo. */}
       <CargaModal
@@ -224,6 +258,7 @@ export function CargasDaArea({
         form={form}
         cultura={cultura}
         talhaoRotulo={`${pastoNome ?? '—'} · ${formatNum(areaHa, 2)} ha`}
+        safraRotulo={safraRotulo ?? ''}
         fazendaNome={fazendaNome ?? null}
         salvando={salvando}
         onChange={editar}
