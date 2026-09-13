@@ -145,6 +145,23 @@ export function exportarColheitaXlsx(
 /** Quantas cargas cabem numa página sem empurrar a análise para a segunda. */
 const MAX_LINHAS_PDF = 22;
 
+/**
+ * ALINHA À DIREITA AS COLUNAS DE NÚMERO, INCLUSIVE NO TOTAL.
+ *
+ * ⚠ `columnStyles` NÃO CHEGA AO `foot`, e isso não é precedência: está escrito no
+ * `jspdf-autotable` instalado — `var colStyles = sectionName === 'body' ? columnStyles : {}`.
+ * Ele é DESCARTADO fora do corpo. O cabeçalho escapa porque o chassi define `halign: 'center'`
+ * no `headStyles`; a linha de total caía no `left` padrão e desalinhava das colunas que soma.
+ * ⚠ O `didParseCell` É A VIA CERTA, e não mexer no chassi: `footStyles` lá dentro serve todos
+ * os PDFs da casa, e alinhar tudo à direita quebraria a primeira coluna de rótulo de cada um.
+ */
+const alinharNumerosADireita = (colunas: readonly number[]) => (d: {
+  section: string; column: { index: number }; cell: { styles: { halign?: string } };
+}) => {
+  if (d.section !== 'body' && d.section !== 'foot') return;
+  if (colunas.includes(d.column.index)) d.cell.styles.halign = 'right';
+};
+
 export async function exportarColheitaPdf(
   linhas: readonly LinhaExport[], totais: TotaisColheita, ctx: ContextoExport,
 ): Promise<void> {
@@ -208,6 +225,7 @@ export async function exportarColheitaPdf(
       /* ⚠ AS MESMAS CORES DA TELA: acima do corte e roça em vermelho. O papel e a tela têm de
          apontar o mesmo grão — o corte vem do `LIMITE_AFLATOXINA`, nunca de um 20 escrito aqui. */
       didParseCell: (d) => {
+        alinharNumerosADireita([4, 5, 6, 7, 8, 9])(d);
         if (d.section !== 'body') return;
         if (d.column.index === 7) {
           const ppb = mostradas[d.row.index]?.aflatoxinaPpb;
@@ -239,6 +257,7 @@ export async function exportarColheitaPdf(
         foot: [['TOTAL', formatNum(totais.sacasFinais, 2), '100,0%']],
         columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' } },
         didParseCell: (d) => {
+          alinharNumerosADireita([1, 2])(d);
           /* Linha 1 é "acima do corte" e linha 2 é a roça — as duas em vermelho, como na tela. */
           if (d.section === 'body' && (d.row.index === 1 || d.row.index === 2)) {
             d.cell.styles.textColor = [190, 40, 40];
@@ -260,7 +279,11 @@ export async function exportarColheitaPdf(
         [`Produtividade líquida (${unidade.unidadeProdutividade})`,
           totais.produtividade != null ? formatNum(totais.produtividade, 2) : '—'],
       ],
-      opts: { fontSize: 7, cellPadding: 1, columnStyles: { 1: { halign: 'right' } } },
+      opts: {
+        fontSize: 7, cellPadding: 1,
+        columnStyles: { 1: { halign: 'right' } },
+        didParseCell: alinharNumerosADireita([1]),
+      },
     });
   }
 
